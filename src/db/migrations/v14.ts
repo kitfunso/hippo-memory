@@ -42,9 +42,8 @@ const CREATE_TRIGGER_TRG_MEMORIES_KIND_CHECK_UPDATE_SQL = `
 export const v14: Migration = {
     version: 14,
     up: (db) => {
-      // Provenance envelope: kind, scope, owner, artifact_ref.
-      // SQLite ALTER TABLE ADD COLUMN cannot add CHECK; CHECK enforcement lives
-      // in INSERT/UPDATE triggers added later in this migration.
+      // Provenance envelope: kind, scope, owner, artifact_ref. ALTER TABLE ADD COLUMN cannot add CHECK,
+      // so enforcement lives in the INSERT/UPDATE triggers added later in this migration.
       if (!tableHasColumn(db, 'memories', 'kind')) {
         db.exec(`ALTER TABLE memories ADD COLUMN kind TEXT DEFAULT 'distilled'`);
       }

@@ -1,21 +1,5 @@
-/**
- * Single source of truth for the hippo-memory binary's package version.
- *
- * Written by `npm version <x> --no-git-tag-version` through
- * scripts/sync-version.mjs, with the three plugin manifests; never edit it by
- * hand. scripts/check-manifest-versions.mjs gates publish on all seven sites.
- *
- * Used by:
- *   - src/db/migrate.ts rollback-safety guard (refuses to open a DB stamped with
- *     min_compatible_binary newer than this).
- *   - src/server.ts HTTP /health.
- *   - src/mcp/server.ts MCP serverInfo.
- *
- * Why not read package.json at runtime: the npm-published bundle ships
- * compiled `dist/` files that may not have package.json on a relative path
- * an ESM `import` can resolve cleanly, and a hardcoded constant survives
- * any packager that drops .json files.
- */
+/** Single source of truth for the package version, written by scripts/sync-version.mjs; never edit by hand. Read by the db rollback guard, /health, MCP.
+ * A constant, not a runtime package.json read: the published bundle may lack package.json on a path ESM can resolve. */
 export const PACKAGE_VERSION = '1.70.0';
 
 /** The floor a store takes on its first expiring key: the first release with schema

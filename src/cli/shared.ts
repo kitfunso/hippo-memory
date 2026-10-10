@@ -19,11 +19,7 @@ import { printError } from './output.js';
 import type { JsonObject } from '../store/working-memory.js';
 import type { CliFlags } from './flag-values.js';
 
-/**
- * Emit an audit event against `hippoRoot`'s db. Opens its own short-lived
- * connection so callers don't have to thread a db handle. Swallows all errors
- * — audit must never crash a CLI command.
- */
+/** Emit an audit event on its own short-lived connection to `hippoRoot`'s db; swallows all errors, since audit must never crash a CLI command. */
 export function emitCliAudit(
   hippoRoot: string,
   op: AuditOp,
@@ -69,13 +65,8 @@ export function runChurnStaleForRepo(hippoRoot: string, dryRun: boolean): { root
   });
 }
 
-/**
- * When HIPPO_REQUIRE_SERVER is set, the CLI must not silently fall back to
- * direct DB mode — a missing server then masks a real misconfiguration (the
- * configured HIPPO_API_KEY is also silently discarded on fallback). Throws a
- * clear error then. It guards only the routed writes (remember, forget, archive,
- * promote); every other command opens the store directly, knob or not.
- */
+/** With HIPPO_REQUIRE_SERVER set, throw rather than fall back to direct DB mode, which would mask a misconfiguration and discard HIPPO_API_KEY.
+ * Guards only the routed writes (remember, forget, archive, promote). */
 function failIfServerRequired(reason: string): void {
   if (envRequireServer()) {
     throw new Error(
@@ -85,21 +76,8 @@ function failIfServerRequired(reason: string): void {
   }
 }
 
-/**
- * Run an HTTP-routed command if a `hippo serve` instance is detected for
- * `hippoRoot`. Returns:
- *   - true  if the HTTP path ran (success OR a structured server error that
- *           was already surfaced to stdout/stderr by `httpFn`),
- *   - false if no server was detected, or if the detected pidfile turned out
- *           to be stale (connection refused). On stale, the pidfile is removed
- *           if it still names that dead server (a newer one may have replaced
- *           it) and the caller should fall back to the direct path.
- *
- * Stale pidfiles must self-heal, not crash.
- * When HIPPO_REQUIRE_SERVER is set, both fallback paths throw instead of
- * returning false, so a missing server fails loudly rather than silently
- * degrading to direct mode.
- */
+/** Run an HTTP-routed command if a `hippo serve` is detected: true if it ran, false on no server or a stale pidfile (removed if it names the dead server).
+ * With HIPPO_REQUIRE_SERVER set both fallbacks throw; a stale pidfile must self-heal, not crash. */
 export async function runViaServerIfAvailable(
   hippoRoot: string,
   httpFn: (info: ServerInfo, apiKey: string | undefined) => Promise<void>,
@@ -124,9 +102,8 @@ export async function runViaServerIfAvailable(
       return false;
     }
     if (failure === 'delivery-unknown') {
-      // Every caller of this helper is a non-idempotent write, so replaying on
-      // the direct path would store a row the server may already have committed.
-      // Leave the pidfile alone: the next command's connect-phase failure heals it.
+      // Every caller is a non-idempotent write, so replaying on the direct path would store a row the server may already have committed;
+      // leave the pidfile alone: the next command's connect-phase failure heals it.
       printError(
         `hippo: the connection to ${info.url} dropped or timed out mid-request, so the write may already have been applied. Not retrying locally. Check with \`hippo recall\` before running this again.`,
       );

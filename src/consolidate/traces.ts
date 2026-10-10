@@ -12,14 +12,8 @@ import { REPLAY_COUNT_DEFAULT, type SleepRun } from './run.js';
 import { type JsonValue, isJsonString } from '../util/json.js';
 import { DAY_MS } from '../util/time.js';
 
-// -------------------------------------------------------------------------
-// 1.4. Auto-promote complete sessions to traces
-// -------------------------------------------------------------------------
-//
-// For each session within the configured window that has a `session_complete`
-// event and no existing trace (idempotency via the source_session_id column),
-// render the action sequence as markdown and persist a Layer.Trace memory.
-// Traces inherit decay, search, replay, and physics from the base MemoryEntry.
+// 1.4. Auto-promote complete sessions to traces: each session in the window with a `session_complete` event and no trace (idempotent via source_session_id)
+// is rendered as markdown and persisted as a Layer.Trace memory, which inherits decay, search, replay and physics.
 export function promoteSessionTraces(run: SleepRun): void {
   const { result } = run;
   if (run.dryRun || run.config.autoTraceCapture === false) return;
@@ -148,23 +142,13 @@ function traceRejected(run: SleepRun, trace: MemoryEntry, sessionId: string): bo
   return true;
 }
 
-// -------------------------------------------------------------------------
-// 1.5. Replay pass — rehearse high-value survivors
-// -------------------------------------------------------------------------
-//
-// Biologically-inspired counterpart to hippocampal replay during slow-wave
-// sleep: sample N memories weighted by outcome + valence + under-rehearsal
-// + idle time, then apply the same retrieval-strengthening `markRetrieved`
-// applies to real queries. Distinct from decay (removal), physics (motion),
-// and merge (compression) — this is the "rehearse the important stuff so
-// it doesn't fade" pass.
+// 1.5. Replay pass: rehearse high-value survivors by sampling N memories weighted by outcome, valence, under-rehearsal and idle time,
+// then applying the `markRetrieved` strengthening, so important memories don't fade.
 export function replayPass(run: SleepRun): void {
   const { survivors, now } = run;
   const replayCount = run.config.replay?.count ?? REPLAY_COUNT_DEFAULT;
-  // EVAL-ONLY ablation (see ablation.ts): replay rehearsal IS recall
-  // strengthening (same markRetrieved dynamics), so the strengthen-off arm
-  // silences the whole pass - markRetrieved would return unmutated entries
-  // and persisting them anyway would still refresh updated_at / mirrors.
+  // EVAL-ONLY ablation (see ablation.ts): replay rehearsal is recall strengthening, so the strengthen-off arm silences the whole pass;
+  // persisting unmutated entries anyway would still refresh updated_at and mirrors.
   if (!(replayCount > 0 && survivors.length > 0 && !isRecallBoostAblated())) return;
   const seed = Math.floor(now.getTime() / 1000) & 0xffffffff;
   const picked = sampleForReplay(survivors, replayCount, now, seed);

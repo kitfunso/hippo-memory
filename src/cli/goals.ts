@@ -8,9 +8,7 @@ import { printError } from './output.js';
 import { type CliFlags, boolFlag, flagIsTrue, isStringFlag, stringFlag, type CommandContext } from './flag-values.js';
 import { CliExit } from './exit.js';
 
-// ---------------------------------------------------------------------------
 // `hippo goal <push|list|complete|suspend|resume>`
-// ---------------------------------------------------------------------------
 
 const GOAL_POLICY_TYPES: ReadonlyArray<PolicyType> = [
   'schema-fit-biased',
@@ -127,10 +125,7 @@ function cmdGoalList(hippoRoot: string, defaultTenantId: string, flags: CliFlags
     return;
   }
 
-  // 4-column table: id, status, goal_name, outcome. Plan calls it a "2-column"
-  // table but the assertion list (id, status, goal_name, outcome) needs four;
-  // tests check for substrings ('active', '0.9', name) so column count is
-  // observably four but not asserted.
+  // Four columns (id, status, goal_name, outcome); tests only check substrings, so the count is not asserted.
   const rows = goals.map(g => ({
     id: g.id,
     status: g.status,

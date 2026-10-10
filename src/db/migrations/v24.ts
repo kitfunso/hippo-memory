@@ -74,10 +74,8 @@ export const v24: Migration = {
 
       db.exec(CREATE_TABLE_GITHUB_INSTALLATIONS_SQL);
 
-      // PAT-mode multi-tenant routing. Maps repo_full_name to
-      // tenant when the webhook envelope has no `installation` field. Composite
-      // PK so the same repo can intentionally be visible to multiple tenants
-      // (e.g., shared tooling accounts) — collision is on (repo, tenant) pair.
+      // PAT-mode multi-tenant routing: maps repo_full_name to a tenant when the webhook envelope has no `installation` field.
+      // Composite PK so one repo can be visible to several tenants; the collision is on the (repo, tenant) pair.
       db.exec(CREATE_TABLE_GITHUB_REPOSITORIES_SQL);
 
       // Rollback-safety guard: an older binary lacks the *:private:* default-deny and would leak

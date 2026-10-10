@@ -8,25 +8,17 @@ import type { Migration } from './types.js';
 export const v39: Migration = {
     version: 39,
     up: (db, ctx) => {
-      // Memory scope isolation.
-      // origin_project: '<name>' = owned by that project, '' = user-global,
+      // Memory scope isolation. origin_project: '<name>' = owned by that project, '' = user-global,
       // NULL = legacy/unknown (ambient context treats NULL as deny).
       if (!tableHasColumn(db, 'memories', 'origin_project')) {
         db.exec(`ALTER TABLE memories ADD COLUMN origin_project TEXT`);
       }
-      // Backfill on store-location evidence only (no path-tag guessing):
-      // 1. Rows shared from a project carry source 'shared:<project>:<ts>' -
-      //    take <project>; a share whose <project> is the home dir basename
-      //    maps to '' (user-global).
-      // 2. Every other row was written into THIS store, so it takes the
-      //    store's own origin: `<project>/.hippo` -> '<project>', the
-      //    home/global store -> '' (user-global).
-      // Rows stay NULL only when no hippoRoot was provided.
+      // Backfill from store location only (no path-tag guessing): 'shared:<project>:<ts>' rows take <project> (home-dir basename maps to '' user-global);
+      // every other row takes this store's origin (`<project>/.hippo` -> '<project>', global store -> ''). Rows stay NULL only when no hippoRoot was provided.
       const hippoRoot = ctx?.hippoRoot;
       if (hippoRoot) {
-        // Provenance-source evidence first (shared:<project>: / promoted:<localRoot>,
-        // parsed by the same helper the markdown-import stamp uses), then the
-        // store's own location for everything else.
+        // Provenance-source evidence first (shared:<project>: / promoted:<localRoot>, parsed by the markdown-import stamp's helper),
+        // then the store's own location for everything else.
         const homeName = path.basename(os.homedir()).toLowerCase();
         // SAFETY: sourcedRows' shape matches the two columns (id, source)
         // named in the SELECT above.
@@ -39,18 +31,15 @@ export const v39: Migration = {
           if (origin === null) continue;
           setOrigin.run(origin, row.id);
         }
-        // The global root itself is ALWAYS user-global (''), regardless of
-        // what surrounds it on disk - a HIPPO_HOME inside a dotfiles git
-        // repo must not stamp the whole corpus with that repo's name.
+        // The global root itself is always user-global (''), whatever surrounds it on disk: a HIPPO_HOME inside a dotfiles git repo
+        // must not stamp the whole corpus with that repo's name.
         const storeOrigin = isGlobalStoreRoot(hippoRoot)
           ? ''
           : deriveOriginProject(path.dirname(hippoRoot));
         db.prepare(`UPDATE memories SET origin_project = ? WHERE origin_project IS NULL`).run(storeOrigin);
       }
-      // Rollback-safety guard (v24 precedent): a pre-isolation binary opening
-      // this DB would ignore origin_project and the secret veto and resume
-      // injecting cross-project rows. 1.24.0 is the first version with the
-      // isolation behavior. Forward-only - never lower an existing minimum.
+      // Rollback-safety guard: a pre-isolation binary would ignore origin_project and the secret veto and resume injecting cross-project rows.
+      // 1.24.0 is the first version with isolation; forward-only, never lower an existing minimum.
       raiseMinBinary(db, '1.24.0');
     },
 };

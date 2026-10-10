@@ -1,24 +1,5 @@
-/**
- * Moving a store's memories to a new default half-life.
- *
- * Each memory stores its own `half_life_days`, set at write from the
- * default base and a few write-time multipliers (`deriveHalfLife`). Changing
- * the default therefore reaches only new memories; without this migration a
- * store would mix old-base and new-base memories, a state the decay
- * evaluation never tested. The rule, declared before any run:
- *
- * - only a memory still on the old base is rescaled: its half-life is
- *   `deriveHalfLife(from, entry)` plus its recall bonus. A memory hippo shortened since
- *   (invalidated, superseded, a merge source, marked bad) or one with its own
- *   fixed half-life (decisions, incidents, customer notes) keeps its value;
- * - every rescale is written to the audit log with the ids, so it can be
- *   undone, and the store records the base it is on (`meta`), so the
- *   migration runs once.
- *
- * `hippo sleep` runs it before its decay pass, from the base the store is on
- * (7 days when never recorded) to the configured `defaultHalfLifeDays`. Once per store it also
- * moves memories of live decisions, incidents and other objects off the flat 90 days they used to get.
- */
+/** Moves a store's memories to a new default half-life: only memories still on the old base are rescaled (`deriveHalfLife(from, entry)` plus recall bonus).
+ * Memories hippo shortened since, or with their own fixed half-life, keep theirs; rescales are audit-logged and `meta` records the base, so it runs once. */
 import { deriveHalfLife, type MemoryEntry } from '../core/memory.js';
 import { HALF_LIFE_BASE_META_KEY, LEGACY_TYPED_HALF_LIFE } from '../store/open.js';
 import { moveHalfLives, recordedHalfLifeBase, type HalfLifeRows } from '../store/half-life.js';
@@ -75,11 +56,7 @@ export function storeHalfLifeBase(hippoRoot: string): number {
   return recordedHalfLifeBase(hippoRoot);
 }
 
-/**
- * Move the store's memories from the base they are on, and those of objects from
- * the old flat 90 days, to `to`, once. Under `dryRun` nothing is written, the recorded
- * base included.
- */
+/** Move the store's memories, and those of objects on the old flat 90 days, from their recorded base to `to`, once; `dryRun` writes nothing. */
 export function migrateDefaultHalfLife(hippoRoot: string, to: number, opts: { dryRun?: boolean; actor?: string } = {}): HalfLifeMigrationResult {
   const dryRun = opts.dryRun ?? false;
   const { from, outcome } = moveHalfLives(hippoRoot, to, { dryRun, actor: opts.actor ?? 'system' }, (rows) => {

@@ -4,18 +4,16 @@ import type { JsonObject } from '../store/working-memory.js';
 
 const DEFAULT_STDIN_WAIT_MS = 1000;
 
-/** `timedOut` means the window closed with stdin still open, so absent
- * `text` is "unknown", not "none", and present `text` may be truncated.
- * Treating absence as a manual run is only safe when it is false. */
+/** `timedOut` means the window closed with stdin still open, so absent `text` is "unknown", not "none", and present `text` may be truncated;
+ * treating absence as a manual run is only safe when it is false. */
 export interface BoundedStdin { text?: string; timedOut: boolean; }
 
 function defaultWaitMs(): number {
   return envStdinWaitMs() ?? DEFAULT_STDIN_WAIT_MS;
 }
 
-/** Never blocks: a TTY resolves at once, otherwise waits up to `waitMs` of
- * idle (default 1000ms, or `HIPPO_STDIN_WAIT_MS`), refreshed on each chunk
- * so a slow but real write is not cut off, and capped at `waitMs * 10`. */
+/** Never blocks: a TTY resolves at once, otherwise waits up to `waitMs` of idle (default 1000ms, or `HIPPO_STDIN_WAIT_MS`),
+ * refreshed on each chunk so a slow real write is not cut off, capped at `waitMs * 10`. */
 export function readStdinBounded(waitMs: number = defaultWaitMs()): Promise<BoundedStdin> {
   let stdin: NodeJS.ReadStream;
   try {

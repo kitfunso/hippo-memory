@@ -38,12 +38,8 @@ const RELATIONS_TABLE = `
         )
       `;
 
-// entities guard (dual-provenance): at least one valid provenance, no raw.
-//  - all-null  -> ABORT.
-//  - memory path (memory_id NOT NULL): source_kind == the FK'd memory's kind
-//    (raw / lying source_kind ABORT) AND tenant-match.
-//  - object path (memory_id NULL): the (type,id) points at an EXISTING same-tenant
-//    object row whose status is active|superseded (explicit 4-way CASE per table).
+// entities guard (dual-provenance): at least one valid provenance, no raw. Memory path: source_kind must equal the FK'd memory's kind, plus tenant-match.
+// Object path (memory_id NULL): (type,id) must point at an existing same-tenant object with status active|superseded (4-way CASE per table); all-null aborts.
 const TRG_ENTITIES_CONSOLIDATED_ONLY_INSERT = `
         CREATE TRIGGER IF NOT EXISTS trg_entities_consolidated_only_insert
         BEFORE INSERT ON entities
@@ -210,10 +206,7 @@ const TRG_RELATIONS_CONSOLIDATED_ONLY_UPDATE = `
         END
       `;
 
-// Recreated VERBATIM from v37 (logic unchanged): an entity that is a relation
-// endpoint cannot be moved cross-tenant while referenced. trg_memories_graph_referenced_guard
-// (on memories) and trg_graph_queue_* (on graph_extraction_queue) are NOT recreated
-// here: those tables are not dropped by v38, so the triggers survive.
+// Recreated verbatim from v37 (relation endpoints cannot move cross-tenant). The memories and graph queue triggers survive: those tables are not dropped.
 const TRG_ENTITIES_NO_TENANT_MOVE_WHEN_REFERENCED = `
         CREATE TRIGGER IF NOT EXISTS trg_entities_no_tenant_move_when_referenced
         BEFORE UPDATE ON entities
@@ -227,34 +220,8 @@ const TRG_ENTITIES_NO_TENANT_MOVE_WHEN_REFERENCED = `
 export const v38: Migration = {
     version: 38,
     up: (db) => {
-      // Object provenance: anchor graph entity/relation provenance to the authoritative
-      // first-class object (decision/policy/customer-note/project-brief) instead of the
-      // decaying memory mirror. An in-force object must STAY in the graph after its mirror memory is forgotten or
-      // consolidation-pruned. The graph is a PURE DERIVED CACHE (clearGraph + rebuild on
-      // every `graph extract` / `sleep`), so v38 DROPs+recreates entities/relations (no
-      // data copy) and the next extract repopulates. graph_extraction_queue is untouched.
-      //
-      // Two provenance paths, "at least one, no raw":
-      //  - memory path (memory_id NOT NULL): source_kind must equal the FK'd memory's live
-      //    kind and that kind is distilled|superseded (raw still ABORTs) + tenant-match.
-      //  - object path (memory_id NULL): source_object_type/id must reference an EXISTING
-      //    same-tenant object row whose status is active|superseded (not closed). Such objects
-      //    are consolidated BY CONSTRUCTION, so the no-raw invariant still holds.
-      //  - all-null is rejected.
-      //
-      // memory_id is now NULLABLE with ON DELETE SET NULL (was NOT NULL / CASCADE), so a
-      // mirror forget/consolidate nulls the recall pointer without dropping the row. NOTE
-      // (empirically verified, contradicts the SQLite docs): node:sqlite DOES fire the
-      // BEFORE UPDATE guard from the FK SET NULL action even with recursive_triggers OFF.
-      // So the *_consolidated_only_UPDATE triggers deliberately OMIT the all-null ABORT
-      // (kept on INSERT) - otherwise a mirror delete of a memory-only row would be blocked.
-      // See the per-trigger comments below. A SET NULL leaves source_kind at its old value
-      // by design (the object path is distilled-by-construction; source_kind is only
-      // re-checked when memory_id NOT NULL).
-      // source_object_id is a SOFT (type,id) pointer (no hard FK) the rebuild re-validates,
-      // so a legitimate object hard-delete is never blocked; a `closed` object row drops at next
-      // extract. SQLite cannot parametrize a table name in a trigger, so the object-path
-      // validation is an explicit 4-way CASE (one arm per object table).
+      // Anchor graph provenance to the authoritative object, not the decaying mirror memory; the graph is a derived cache, so entities/relations are recreated.
+      // memory_id is NULLABLE ON DELETE SET NULL; node:sqlite fires the BEFORE UPDATE guard on that SET NULL, so the UPDATE triggers omit the all-null ABORT.
       recreateGraphTables(db);
       createGraphGuards(db);
     },

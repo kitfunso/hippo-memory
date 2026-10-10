@@ -64,7 +64,7 @@ const CARDS_SCHEMA_SQL = `
 export const v43: Migration = {
     version: 43,
     up: (db) => {
-      // W2a work-queue cards (trajectories/01M2D5VSYJFK4YXQ0RG2NGCPYJ/plan.md). Additive only, v41 precedent.
+      // W2a work-queue cards. Additive only, v41 precedent.
       db.exec(CARDS_SCHEMA_SQL);
     },
 };

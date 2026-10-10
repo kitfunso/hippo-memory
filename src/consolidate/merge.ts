@@ -15,11 +15,8 @@ const MERGE_OVERLAP_THRESHOLD = 0.35;  // Jaccard similarity for "related"
 const MERGE_MIN_CLUSTER = 2;            // minimum cluster size to merge
 const MERGE_MAX_SOURCES = 5;            // with MERGE_MAX_CHARS, keeps a merged row near 500 tokens, a third of the 1,500-token context budget
 const MERGE_MAX_CHARS = 2000;           // total source text; sources past either cap stay unmerged and keep their half-life
-// Half-life scale for merged source episodics. Demotion must go through
-// half_life_days: calculateStrength() recomputes live strength from
-// last_retrieved/half_life and never reads the stored strength field, so a
-// stored-strength write is inert for ranking and gets overwritten by the
-// next sleep's decay pass anyway.
+// Half-life scale for merged source episodics. Demote via half_life_days: calculateStrength() recomputes live strength and never reads the stored field,
+// so a stored-strength write is inert for ranking and overwritten by the next decay pass.
 const MERGE_SOURCE_HALF_LIFE_FACTOR = 0.3;
 
 export function retireHeldTexts(run: SleepRun): void {
@@ -73,9 +70,7 @@ function partitionMergeCandidates(survivors: readonly MemoryEntry[]): Map<string
   return mergeCandidatesByTenant;
 }
 
-// -------------------------------------------------------------------------
 // 3. Merge pass  - episodic entries only
-// -------------------------------------------------------------------------
 /** Returns how many clusters were skipped because their merged text matches a rejected value. */
 export function mergePass(run: SleepRun): number {
   const used = new Set<string>();
@@ -140,16 +135,8 @@ function mergeCluster(run: SleepRun, partition: MergePartition, cluster: MemoryE
     run.units.push([semantic.id, ...cluster.map((e) => e.id)]);
     result.semanticCreated++;
 
-    // Demote source episodics (they've been compressed into neocortex):
-    // scale half_life_days so they decay sooner while staying recoverable.
-    // Immediate ranking is deliberately unchanged: dropping children below a
-    // worse-retrieving summary regresses budget-bounded QA. The stored
-    // strength is refreshed to the live value so inspect, replay sampling,
-    // and strength-sorted assembly see the truth instead of a fake 0.3.
-    // Mutate in place (not a copy): `cluster` holds the same object
-    // references as `survivors`, and the later detectConflicts(survivors)
-    // pass in this same run must see the post-demotion half-life, or it
-    // can persist conflicts for entries the just-written state excludes.
+    // Scale half_life_days so merged sources decay sooner but stay recoverable; ranking is unchanged on purpose (demoting children regresses QA).
+    // Mutate in place: `cluster` shares references with `survivors`, and the later detectConflicts(survivors) must see the post-demotion half-life.
     demoteMergedSources(run, cluster);
   }
   return true;
@@ -183,14 +170,8 @@ function demoteMergedSources(run: SleepRun, cluster: MemoryEntry[]): void {
   }
 }
 
-// mergeContents is DETERMINISTIC CONCATENATION (not an LLM paraphrase)
-// — if a human rejected exactly this byte-identical rollup before, an
-// unguarded sleep would regenerate it every cycle and
-// batchWriteAndDelete's guard bypass (store.ts) would silently
-// re-assert it forever. This producer-side check is what makes that
-// bypass safe. A hit skips the WHOLE cluster: sources stay unmerged —
-// not demoted, not deleted — so a later sleep gets another chance if
-// the tombstone is lifted.
+// mergeContents is deterministic, so a rollup a human already rejected would regenerate each cycle and batchWriteAndDelete's guard bypass would re-assert it;
+// this producer-side check makes that bypass safe. A hit skips the whole cluster (no demote, no delete) so a later sleep can retry.
 function mergeRejected(run: SleepRun, semantic: MemoryEntry, cluster: MemoryEntry[], related: MemoryEntry[], used: Set<string>): boolean {
   const { tombstones } = run;
   const newDigest = rejectionDigest(semantic.content);
@@ -199,9 +180,7 @@ function mergeRejected(run: SleepRun, semantic: MemoryEntry, cluster: MemoryEntr
   const tombstone = newHit ?? tombstones.find(semantic.tenantId, oldDigest);
   const mergeDigest = newHit ? newDigest : oldDigest;
   if (!tombstone) return false;
-  // Still mark used — these members are not re-tried against a
-  // DIFFERENT cluster within this same pass; next sleep re-clusters
-  // them fresh.
+  // Still mark used: these members are not re-tried against a different cluster in this pass; the next sleep re-clusters them fresh.
   const rejected = newHit ? cluster : related; // the old format digested the uncapped list, so rows past the cap were rejected too
   for (const e of rejected) used.add(e.id);
   try {
@@ -221,9 +200,7 @@ function mergeRejected(run: SleepRun, semantic: MemoryEntry, cluster: MemoryEntr
   return true;
 }
 
-// ---------------------------------------------------------------------------
 // Helpers
-// ---------------------------------------------------------------------------
 
 function mergeContents(entries: MemoryEntry[]): string {
   // Each distinct text goes in once and in full (the merge demotes every source), one bullet with its lines indented, so heldTextKeys can read it back.

@@ -1,27 +1,5 @@
-/**
- * Replay — biologically-inspired rehearsal during consolidation.
- *
- * Hippocampal replay is internally-driven reactivation of memories during
- * slow-wave sleep: the brain picks important recent experiences and "plays
- * them back" without external input, strengthening them before they decay.
- * In McClelland's complementary-learning-systems framing, replay is also
- * how episodic memories train the neocortex (interleaved rehearsal); in
- * reward-modulated STDP, replay is gated by dopamine so rewarded
- * experiences get preferentially consolidated.
- *
- * This module implements a lightweight, deterministic analog. During each
- * `hippo sleep`, we sample N surviving memories by a priority score that
- * weighs reward feedback, emotional valence, under-rehearsal, and age —
- * then apply the same retrieval-strengthening dynamics `markRetrieved`
- * applies to real queries. The effect is that important memories stay
- * strong even when the user hasn't explicitly queried them recently.
- *
- * Distinct from the other consolidation passes:
- *   - decay: removes what's too weak
- *   - physics: moves particles in embedding space
- *   - merge: collapses near-duplicate episodics into semantics
- *   - REPLAY: picks winners and rehearses them (this file)
- */
+/** Replay: during `hippo sleep`, sample N survivors weighted by reward, valence, under-rehearsal and age, then apply the `markRetrieved` strengthening.
+ * A lightweight deterministic analog of hippocampal replay, so important memories stay strong without being queried; distinct from decay, physics and merge. */
 
 import { isOutcomeSlowAblated } from '../core/ablation.js';
 import { resolveConfidence, type MemoryEntry, type EmotionalValence } from '../core/memory.js';
@@ -33,17 +11,12 @@ const VALENCE_WEIGHT = {
   critical: 2.0,
 } satisfies Record<EmotionalValence, number>;
 
-/**
- * Priority score used to rank survivors for replay. Higher = more likely
- * to be sampled. Pure function of the entry and current time.
- */
+/** Priority score for ranking survivors for replay (higher = more likely sampled); pure in the entry and current time. */
 export function replayPriority(entry: MemoryEntry, now: Date, outcomeAblated: boolean): number {
   const pos = entry.outcome_positive ?? 0;
   const neg = entry.outcome_negative ?? 0;
-  // Reward signal: neutral memories get 1, strongly-rewarded memories > 1,
-  // negative-dominated memories floor at 0.1 (so they're still eligible, just
-  // much less likely to be sampled than neutral peers). Clamp is required
-  // because sampleForReplay depends on all weights being positive.
+  // Reward signal: neutral = 1, strongly rewarded > 1, negative-dominated floors at 0.1 (still eligible, just unlikely).
+  // The clamp is required because sampleForReplay needs all weights positive.
   const rewardSignal = outcomeAblated
     ? 1.0 // EVAL-ONLY ablation (see ablation.ts): outcome-off also silences replay's reward bias
     : Math.max(0.1, 1 + pos * 0.5 + (pos - neg) * 0.25);
@@ -66,11 +39,7 @@ export function replayPriority(entry: MemoryEntry, now: Date, outcomeAblated: bo
   return rewardSignal * valence * underRehearsed * idleBoost * strengthFloor;
 }
 
-/**
- * Deterministic 32-bit RNG (Mulberry32). Same seed → same sequence.
- * Keeps replay reproducible for tests and audit runs without bringing
- * in a random-number dependency.
- */
+/** Deterministic 32-bit RNG (Mulberry32): same seed, same sequence, so replay is reproducible without a random-number dependency. */
 function mulberry32(seed: number): () => number {
   let s = seed >>> 0;
   return () => {
@@ -81,15 +50,8 @@ function mulberry32(seed: number): () => number {
   };
 }
 
-/**
- * Pick `count` memories for replay, weighted by `replayPriority`, without
- * replacement. Deterministic given the same seed.
- *
- * The sampler is weighted but not greedy — picking by priority alone would
- * always pick the top-N, which overfits. Biological replay shows both
- * preferential-for-reward AND stochastic-exploration characteristics; we
- * keep the stochastic element so adjacent survivors aren't always ignored.
- */
+/** Pick `count` memories for replay, weighted by `replayPriority`, without replacement; deterministic for a seed.
+ * Weighted but not greedy: always taking the top-N overfits, so a stochastic element keeps adjacent survivors in play. */
 export function sampleForReplay(
   survivors: MemoryEntry[],
   count: number,
@@ -99,9 +61,8 @@ export function sampleForReplay(
   if (count <= 0 || survivors.length === 0) return [];
   const rng = mulberry32(seed);
 
-  // Deliberately-marked and aged-out memories are both untrusted; rehearsing
-  // them would defeat the purpose of staleness, so derive rather than trust
-  // the stored value (it no longer carries the age-out case, see memory.ts).
+  // Deliberately-marked and aged-out memories are both untrusted and rehearsing them defeats staleness, so derive rather than trust
+  // the stored value (it no longer carries the age-out case).
   const eligible = survivors.filter((e) => resolveConfidence(e, now) !== 'stale');
   if (eligible.length === 0) return [];
 

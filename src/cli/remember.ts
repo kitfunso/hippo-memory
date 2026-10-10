@@ -79,11 +79,8 @@ type UserVisibleKind = (typeof USER_VISIBLE_KINDS)[number];
 function parseKindFlag(flags: CliFlags): UserVisibleKind | undefined {
   const kindFlagRaw = stringFlag(flags, 'kind');
   const kindFlag = kindFlagRaw === undefined ? undefined : kindFlagRaw.toLowerCase();
-  // CLI surface intentionally restricted: 'raw' is reserved for ingestion connectors
-  // that route deletions through archiveRawMemory. Existing
-  // forget/consolidate/conflict-resolve paths abort on kind='raw' via the append-only
-  // trigger, so exposing --kind raw here would create unforgettable memories.
-  // 'archived' is an internal sentinel set only inside archiveRawMemory's transaction.
+  // 'raw' is reserved for ingestion connectors (deletions go through archiveRawMemory); the append-only trigger aborts forget/consolidate on raw rows,
+  // so exposing --kind raw would create unforgettable memories. 'archived' is an internal sentinel set only in that transaction.
   if (kindFlag !== undefined && !isOneOf(USER_VISIBLE_KINDS, kindFlag)) {
     printError(`Invalid --kind: "${kindFlagRaw}". Must be one of: ${USER_VISIBLE_KINDS.join(', ')}`);
     printError(`(kind='raw' is reserved for ingestion connectors; kind='archived' is internal.)`);
@@ -448,12 +445,8 @@ export async function handleRemember({ hippoRoot, tenantId, args, flags }: Comma
     printError('Memory content too short (minimum 3 characters).');
     throw new CliExit(1);
   }
-  // Thin-client routing. When a server is up, simple `remember` calls go
-  // over HTTP so the daemon stays single-writer (footgun #2). Rich CLI
-  // flags (--pin, --layer, --extract, --global) still need the direct
-  // path; we only intercept the minimal envelope. The salience gate is
-  // NOT in richFlag and the route does not apply it, so a routed remember
-  // stores what a direct one would skip; do not read this list as covering salience.
+  // Thin-client routing: simple `remember` calls go over HTTP so the daemon stays the single writer; rich flags need the direct path.
+  // The salience gate is not in richFlag and the route does not apply it, so a routed remember stores what a direct one would skip.
   const richFlag =
     flags['pin'] || flags['global'] || flags['extract'] || flags['force'] ||
     flags['observed'] || flags['inferred'] || flags['verified'] ||

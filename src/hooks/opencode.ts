@@ -7,43 +7,8 @@ import { type JsonValue, isJsonString, isJsonObjectLiteral } from '../util/json.
 
 const HIPPO_OPENCODE_PLUGIN_MARKER = 'HIPPO_OPENCODE_PLUGIN_V1';
 
-/**
- * The opencode plugin file we install at ~/.config/opencode/plugins/hippo.ts.
- *
- * Per https://opencode.ai/docs/plugins/, plugins are TS/JS modules exporting an
- * async function returning hooks. We subscribe to `event` and route:
- *   session.idle    → `hippo session-end` (Claude Code's SessionEnd equiv)
- *   session.created → `hippo last-sleep` (Claude Code's SessionStart equiv)
- *
- * Design choices:
- *
- * 1. No `import type { Plugin } from "@opencode-ai/plugin"`. The package's npm
- *    publication status was unverifiable from the build sandbox (npmjs.com
- *    returned 403); an unresolved type-only import would still crash the TS
- *    runtime opencode uses to load the plugin. opencode infers plugin shape
- *    from the returned object, so the type was convenience-only.
- *
- * 2. Defensive `typeof $ !== 'function'` guard. opencode runs in Bun (where
- *    `$` is the shell-template helper), but a future Node-mode deployment
- *    would have `$` undefined in the destructured context and the plugin
- *    would throw on every session.idle, killing opencode sessions in a
- *    hard-to-recover way (the idempotence marker prevents auto-reinstall).
- *    Fail closed, let opencode continue.
- *
- * 3. `.quiet().nothrow()` on each `$\`...\`` so a missing hippo binary
- *    (e.g. PATH-misconfigured user) does NOT throw out of the event handler.
- *    The surrounding try/catch is belt-and-braces.
- *
- * 4. UserPromptSubmit equivalent NOT wired. opencode's `message.updated`
- *    fires per-token, not per-prompt-submit; no clean per-prompt event.
- *    Users wanting pinned-context auto-injection can call `hippo context`
- *    via the MCP server (`hippo mcp`).
- *
- * 5. Versioned marker `HIPPO_OPENCODE_PLUGIN_V1` allows future versions to
- *    overwrite cleanly. The installer's idempotence check requires BOTH
- *    marker match AND content equality, so a plugin-source revision under
- *    the same V1 marker re-writes the file on next install.
- */
+/** The opencode plugin installed at ~/.config/opencode/plugins/hippo.ts: session.idle runs `hippo session-end`, session.created runs `hippo last-sleep`.
+ * No `@opencode-ai/plugin` type import (unresolved, it would crash the loader); `$` is guarded and `.nothrow()` keeps a missing hippo binary from throwing. */
 const OPENCODE_PLUGIN_SOURCE = `// ${HIPPO_OPENCODE_PLUGIN_MARKER}
 // hippo-memory opencode plugin. DO NOT EDIT — regenerated on every
 // \`hippo hook install opencode\` from src/hooks.ts OPENCODE_PLUGIN_SOURCE
@@ -90,23 +55,8 @@ function resolveOpencodeConfigPath(): string {
   return path.join(homeDir(), '.config', 'opencode', 'opencode.json');
 }
 
-/**
- * Return true iff a single hook-array entry's command string starts with
- * `hippo ` (the verb-prefix). Used to surgically remove only hippo-owned
- * commands when migrating an opencode.json. We own the install side, so only
- * the canonical `hippo <verb>` form needs to match — and only canonical verbs
- * hippo itself installs (session-end, last-sleep, sleep, capture, context),
- * not any third-party tool that happens to be named `hippo`.
- *
- * Structural check: substring matching against
- * arbitrary user content is unsafe — a user's
- * `echo "remember to hippo sleep your laptop"` is not a hippo-owned hook.
- *
- * Per-hook (not per-entry) granularity: an entry whose inner
- * hooks array mixes hippo-installed commands with user-authored commands
- * must NOT lose the user-authored commands. The migration filters the inner
- * array per-hook, then drops the entry only when its inner array is empty.
- */
+/** True iff a hook entry's command starts with `hippo ` plus a verb hippo itself installs (session-end, last-sleep, sleep, capture, context).
+ * Structural, not substring (`echo "remember to hippo sleep"` is not ours), and per hook so user-authored hooks in the same entry survive. */
 const HIPPO_OWNED_COMMAND_RE = /^\s*hippo\s+(session-end|last-sleep|sleep|capture|context)(?=\s|$)/;
 
 function hookIsHippoOwned(hook: JsonValue | undefined): boolean {
@@ -115,23 +65,8 @@ function hookIsHippoOwned(hook: JsonValue | undefined): boolean {
   return isJsonString(cmd) && HIPPO_OWNED_COMMAND_RE.test(cmd);
 }
 
-/**
- * Structurally strip every hippo-owned hook from opencode.json's hooks key.
- * Returns one of:
- *   { migrated: true,  jsonRepairFailed: false } — at least one hook removed.
- *   { migrated: false, jsonRepairFailed: false } — file fine, nothing to do.
- *   { migrated: false, jsonRepairFailed: true  } — file present but unparseable.
- *
- * Per-hook surgery:
- *   - For each entry in each event-key array, filter the inner `hooks` array
- *     to remove hippo-owned hooks only. User-authored hooks in the same
- *     inner array are preserved.
- *   - When an entry's inner `hooks` array becomes empty, that entry is
- *     removed from the outer array.
- *   - When an event-key array becomes empty, the key is deleted.
- *   - When the top-level `hooks` object becomes empty, it is deleted.
- *   - Other keys (theme, etc.) are always preserved.
- */
+/** Strip every hippo-owned hook from opencode.json's `hooks` key, deleting entries, keys and the object as they empty; user-authored hooks and other keys stay.
+ * Returns `{ migrated, jsonRepairFailed }`; jsonRepairFailed means the file is present but unparseable. */
 function migrateLegacyOpencodeHooksBlock() {
   const configPath = resolveOpencodeConfigPath();
   if (!fs.existsSync(configPath)) return { migrated: false, jsonRepairFailed: false };
@@ -196,10 +131,8 @@ export function installOpencodePlugin(): OpencodePluginInstallResult {
   const pluginPath = resolveOpencodePluginPath();
   const { migrated, jsonRepairFailed } = migrateLegacyOpencodeHooksBlock();
 
-  // Idempotence: skip the write only if BOTH the marker is present AND the
-  // content matches the current source. Marker-only matches (with stale
-  // content) overwrite cleanly so future plugin-source patches reach
-  // existing installs.
+  // Skip the write only if BOTH the marker is present and the content matches; a marker-only match with stale
+  // content is rewritten so plugin-source patches reach existing installs.
   if (fs.existsSync(pluginPath)) {
     const existing = fs.readFileSync(pluginPath, 'utf8');
     if (existing.includes(HIPPO_OPENCODE_PLUGIN_MARKER) && existing === OPENCODE_PLUGIN_SOURCE) {

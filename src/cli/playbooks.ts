@@ -64,9 +64,8 @@ function processSupersede(hippoRoot: string, tenantId: string, args: string[], f
     printError('hippo process supersede requires at least one --step "<text>" for the new version.');
     throw new CliExit(1);
   }
-  // A supersession is a new version of the SAME process, so the new row reuses the predecessor's name (stable identity
-  // across versions). loadProcessById gives an early not-found before the write; saveProcess's in-SAVEPOINT preflight
-  // is the authoritative active-state check.
+  // A supersession is a new version of the SAME process, so the new row reuses the predecessor's name; loadProcessById gives an early not-found,
+  // and saveProcess's in-SAVEPOINT preflight is the authoritative active-state check.
   const existing = foundOrExit(processesModule.loadProcessById(hippoRoot, tenantId, id), PROCESS.noun, id);
   const changeSummary = nonEmptyStringFlag(flags, 'change');
   const description = nonEmptyStringFlag(flags, 'description');
@@ -95,9 +94,8 @@ export function handleProcess({ hippoRoot, tenantId, args, flags }: CommandConte
   if (subcommand === 'supersede') return processSupersede(hippoRoot, tenantId, args, flags);
   if (subcommand === 'close') return processClose(hippoRoot, tenantId, args);
 
-  // Default subcommand: new (create). Accept both the documented
-  // `process new "<name>"` form and the bare `process "<name>"` form: for the
-  // `new` keyword the name is args[1], otherwise args[0] IS the name.
+  // Default subcommand is new (create): accept both `process new "<name>"` and bare `process "<name>"`;
+  // for the `new` keyword the name is args[1], otherwise args[0] is the name.
   processCreate(hippoRoot, tenantId, subcommand === 'new' ? (args[1] ?? '') : subcommand, flags);
 }
 

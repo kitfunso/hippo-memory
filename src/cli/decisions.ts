@@ -29,9 +29,7 @@ function parseObjectId(idRaw: string, noun: string): number {
   return id;
 }
 
-// ---------------------------------------------------------------------------
 // Prediction first-class object
-// ---------------------------------------------------------------------------
 
 function predictClose(hippoRoot: string, tenantId: string, args: string[], flags: CliFlags): void {
   const id = idArgOrExit(args, 'Usage: hippo predict close <id> --state <closed|closed-unknown> [--actual <v>] [--note "..."]', 'prediction', parseObjectId);
@@ -238,11 +236,8 @@ async function decideCreate(hippoRoot: string, tenantId: string, decisionText: s
   }
   const supersedesMemId = stringFlag(flags, 'supersedes') ?? null;
 
-  // Backward-compat: --supersedes takes a MEMORY id. Validate it exists and
-  // resolve it to the active decision row (if any). Commit the
-  // canonical table create+supersede FIRST (inside saveDecision's SAVEPOINT),
-  // weaken the old memory LAST (best-effort) so a memory-write failure cannot
-  // leave the memory stale without the table reflecting the supersession.
+  // Commit the table create+supersede first (inside saveDecision's SAVEPOINT) and weaken the old memory last, best-effort,
+  // so a memory-write failure cannot leave the memory stale while the table shows the supersession.
   let supersedesDecisionId: number | undefined;
   let oldEntry: MemoryEntry | null = null;
   if (supersedesMemId) {
@@ -352,9 +347,8 @@ export function handleIncident({ hippoRoot, tenantId, args, flags }: CommandCont
   if (subcommand === 'resolve') return incidentResolve(hippoRoot, tenantId, args, flags);
   if (subcommand === 'close') return incidentClose(hippoRoot, tenantId, args);
 
-  // Default subcommand: open (create). Accept both the documented
-  // `incident open "<text>"` form and the bare `incident "<text>"` form: for the
-  // `open` keyword the text is args[1], otherwise args[0] IS the text.
+  // Default subcommand is open (create): accept both `incident open "<text>"` and bare `incident "<text>"`;
+  // for the `open` keyword the text is args[1], otherwise args[0] is the text.
   incidentCreate(hippoRoot, tenantId, subcommand === 'open' ? (args[1] ?? '') : subcommand, flags);
 }
 

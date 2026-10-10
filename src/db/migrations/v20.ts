@@ -4,13 +4,8 @@ import { warnDamagedColumn } from '../../util/stored-json.js';
 export const v20: Migration = {
     version: 20,
     up: (db) => {
-      // GDPR Path A backfill: redact every existing
-      // raw_archive.payload_json so historical archives match the new
-      // metadata-only contract from src/store/raw-archive.ts. Read each row, parse
-      // the existing JSON to extract tenant_id and kind (best effort), then
-      // UPDATE with the redacted shape. Rows with unparseable legacy JSON get
-      // redacted with tenant_id='unknown', kind='unknown'. The audit_log
-      // remains the compliance record.
+      // GDPR Path A backfill: redact every existing raw_archive.payload_json to the metadata-only shape (store/raw-archive.ts); unparseable legacy JSON
+      // gets tenant_id='unknown', kind='unknown'. The audit_log remains the compliance record.
       // SAFETY: rows' shape matches the four columns named in the SELECT above.
       const rows = db
         .prepare(`SELECT id, archived_at, reason, payload_json FROM raw_archive`)

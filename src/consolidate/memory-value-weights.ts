@@ -1,16 +1,5 @@
-/**
- * Frozen learned memory-value weight vector.
- *
- * GENERATED FROM the frozen artifact
- * (benchmarks/memory-value/weights-learned.json +
- * benchmarks/memory-value/weights-learned.meta.json). NEVER EDIT BY HAND —
- * tests/memory-value-wiring.test.ts's weights-sync test asserts this constant
- * equals the committed JSON artifact (value equality + digest match), so
- * drift between the artifact and this file fails CI.
- *
- * CAVEAT: usage-feature signs reflect an anti-oracle simulation, NOT real usage
- * value. Never read this as production ranking advice.
- */
+/** Frozen learned memory-value weight vector, GENERATED from benchmarks/memory-value/weights-learned.json; never edit by hand (a sync test fails CI on drift).
+ * CAVEAT: usage-feature signs come from an anti-oracle simulation, not real usage value; never read this as production ranking advice. */
 
 /** The 8 live feature dims the fitter optimized over (FIT_DIMS). */
 export const MEMORY_VALUE_WEIGHTS: Readonly<Record<string, number>> = Object.freeze({

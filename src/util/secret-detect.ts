@@ -1,22 +1,5 @@
-/**
- * Secret detection for memory content (memory scope isolation).
- *
- * Conservative, provider-bounded patterns only - a bare `sk-` in prose must
- * NOT flag. Detection gates two surfaces:
- *  - producer: shareMemory/autoShare never promote flagged rows to the
- *    global store;
- *  - consumer: ambient context (getContext) never injects a flagged row
- *    outside its owning project, and never anywhere when the row has no
- *    project origin. Explicit recall is unaffected - recalling a secret is
- *    a deliberate act.
- *
- * This is deliberately a thin slice of lifecycle compliance
- * (no PII detection). Write-time scrubbing covers only text no person
- * typed into hippo; see `vetSecrets`.
- *
- * Leaf module: keep free of imports from store/api/shared so all of them
- * can import it without cycles.
- */
+/** Secret detection for memory content: conservative provider-bounded patterns (a bare `sk-` in prose must not flag). Flagged rows are never shared to
+ * the global store or injected as ambient context outside their project; explicit recall is unaffected. Leaf module: no imports from store/api/shared. */
 
 /** Result of scanning one memory. `reason` names the tag or pattern that fired. */
 export interface SecretDetection {
@@ -47,17 +30,12 @@ const SECRET_PATTERNS: ReadonlyArray<{ name: string; re: RegExp }> = [
   { name: 'google-oauth-token', re: /\bya29\.[\w-]{20,}/ },
   { name: 'slack-webhook', re: /\bhooks\.slack\.com\/(?:services|workflows|triggers)\/[A-Za-z0-9+/]{43,56}/ },
   { name: 'private-key-block', re: /-----BEGIN [A-Z ]*PRIVATE KEY-----/ },
-  // sk-... (OpenAI/Anthropic style) and sk_<vendor>_... shapes. Both require
-  // a key-ish noun somewhere in the content (co-occurrence guard) so prose
-  // like "the sk- prefix identifies API keys" without an actual long token
-  // does not flag, but a stored key ("prod API key sk_live_...")
-  // does.
+  // sk-... (OpenAI/Anthropic) and sk_<vendor>_... shapes; both need a key-ish noun in the content (co-occurrence guard), so prose
+  // like "the sk- prefix identifies API keys" does not flag but "prod API key sk_live_..." does.
   { name: 'sk-style-key', re: /\bsk-[A-Za-z0-9_-]{20,}/ },
   { name: 'sk-underscore-key', re: /\bsk_[A-Za-z0-9]+_[A-Za-z0-9_]{6,}\b/ },
-  // The value needs 12+ token-safe chars and a digit, or `token = estimateTokens(...)`
-  // and doc templates like user:password@ would hide code lessons from ambient context.
-  // Secret names end in the keyword (dbPassword, PGPASSWORD) and token_url does not, so the match
-  // opens there and scans no prefix; pwd and pass need a _ as OLDPWD and bypass are not secrets.
+  // Value needs 12+ token-safe chars and a digit, or `token = estimateTokens(...)` and user:password@ templates would hide code lessons from ambient context.
+  // Secret names end in the keyword (dbPassword), so the match opens there, no prefix scan; pwd and pass need a _ (OLDPWD, bypass are not secrets).
   { name: 'secret-assignment', re: /(?:(?:api[_-]?key|access[_-]?key|private[_-]?key|secret|token|passw(?:or)?d|(?<=_)(?:pwd|pass))(?:[_-]?(?:key(?:[_-]?base)?|value|secret))?['"]?\s*(?::=?|=>?)\s*['"]?|(?<=--)password(?:=|\s+))(?=[A-Za-z0-9_\-+/]*\d)[A-Za-z0-9_\-+/=]{12,}/i },
   { name: 'url-password', re: /(?<=[A-Za-z0-9]:\/\/)[^\s/:@?#]*:(?=[^\s/@?#]*\d)[^\s/@?#]+(?=@)/ },
 ];
@@ -73,10 +51,7 @@ const STRICT_ONLY_PATTERNS: readonly RegExp[] = [
   /(?<=[A-Za-z0-9]:\/\/)[^\s/:@?#]*:[^\s/@?#]+(?=@)/g,
 ];
 
-/**
- * Scan a memory's tags + content for secret material.
- * Pure and deterministic; no filesystem or store access.
- */
+/** Scan a memory's tags + content for secret material; pure and deterministic, no filesystem or store access. */
 export function detectSecret(entry: { content: string; tags: string[] }): SecretDetection {
   for (const tag of entry.tags) {
     if (SECRET_TAGS.has(tag.toLowerCase())) {
@@ -91,13 +66,8 @@ export function detectSecret(entry: { content: string; tags: string[] }): Secret
   return { flagged: false, reason: null };
 }
 
-/**
- * Replace secret-shaped substrings in free text with a redaction marker.
- * Reuses the same `SECRET_PATTERNS` / co-occurrence guard as `detectSecret`
- * (which only flags whole-entry content) so callers that must persist raw
- * text that never passes through the normal capture content gate (e.g. the
- * pre-compact snapshot fields) can scrub it in place instead.
- */
+/** Replace secret-shaped substrings in free text with a redaction marker, using the same `SECRET_PATTERNS` and co-occurrence guard as `detectSecret`;
+ * for callers persisting text that skips the capture content gate (e.g. pre-compact snapshot fields). */
 export function redactSecrets(text: string): string {
   return redactText(text, false);
 }

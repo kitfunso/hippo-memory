@@ -71,8 +71,7 @@ export interface DagBuildResult {
   rejected: number;
 }
 
-// Partition BEFORE clustering so one LLM summary never mixes facts from different tenants.
-// Map keeps insertion order, so a single-tenant store iterates in its original order.
+// Partition before clustering so one LLM summary never mixes tenants; Map keeps insertion order, so a single-tenant store iterates as before.
 // buildEntityProfiles partitions its L2s with this same key.
 function partitionFactsByTenant(unparented: MemoryEntry[]): Map<string, MemoryEntry[]> {
   const unparentedByTenant = new Map<string, MemoryEntry[]>();
@@ -96,10 +95,7 @@ interface PartitionHome {
 /** The L2 summary entry for one cluster, landing in the facts' own tenant and scope. */
 function createClusterSummaryEntry(summary: string, cluster: FactCluster, home: PartitionHome): MemoryEntry {
   const memberCreatedAts = cluster.members.map((m) => m.created).sort();
-  // Every member of `cluster` shares home.tenantId by construction (the
-  // tenant partition above), so the summary lands in the same tenant
-  // as the facts it summarizes instead of always 'default'
-  // (memory.ts:535 defaults tenantId when the option is omitted).
+    // Every cluster member shares home.tenantId (tenant partition above), so the summary lands in the facts' tenant, not 'default'.
   const summaryEntry = createMemory(summary, {
     layer: Layer.Semantic,
     tags: [...cluster.entityTags, ...neverAutoShareTags(cluster.members), 'dag-summary'],
@@ -185,9 +181,7 @@ export async function buildDag(
   return result;
 }
 
-// ---------------------------------------------------------------------------
 // rebuildDirtySummaries orchestrator
-// ---------------------------------------------------------------------------
 
 export interface DagRebuildResult {
   attempted: number;            // summaries we tried (<= cap)
@@ -255,9 +249,8 @@ function clearZeroChildSummary(hippoRoot: string, summary: MemoryEntry, result: 
     actor: 'sleep',
   });
   if (changed) result.zeroChildSkipped++;
-  // changed=false → race lost / row vanished; silently skip. `refused`
-  // is always false here — applyRebuildResult only checks the
-  // tombstone when bumpRebuildCount is true (store/summaries.ts).
+  // changed=false means race lost or row vanished: skip silently. `refused` is always false here, as applyRebuildResult
+  // checks the tombstone only when bumpRebuildCount is true.
 }
 
 // Derive label from summary's existing entity tags (mirrors clusterFacts)
@@ -270,19 +263,8 @@ function summaryLabel(summary: MemoryEntry): string {
     : summary.content.slice(0, SUMMARY_FALLBACK_CHARS);
 }
 
-/**
- * Sleep-cycle phase that drains the dirty L2 summary queue.
- * Thin orchestrator; the heavy lifting lives in store.ts (load + apply)
- * and dag.ts:generateDagSummary (LLM call).
- *
- * Per-summary try/catch: one throwing rebuild does NOT abort the rest of the queue.
- *
- * Race-loser handling: applyRebuildResult's UPDATE WHERE includes
- * AND summary_dirty=1, so concurrent sleep's second writer returns
- * changed=false. Silent skip (neither rebuilt++ nor refused++ nor failed++).
- *
- * A tombstone hit counts as `refused`, not `rebuilt`; dirty clears either way.
- */
+/** Sleep-cycle phase draining the dirty L2 summary queue; one throwing rebuild does not abort the rest.
+ * A concurrent sleep's second writer gets changed=false (UPDATE requires summary_dirty=1) and is skipped silently; a tombstone hit counts as `refused`. */
 export async function rebuildDirtySummaries(
   hippoRoot: string,
   opts: DagSummaryOptions & { cap?: number },
@@ -302,12 +284,8 @@ export async function rebuildDirtySummaries(
   };
 
   for (const [index, summary] of queue.entries()) {
-    // Yield the macrotask queue every 25 summaries. The cap can reach 1000,
-    // and each iteration is synchronous SQLite (the LLM await resolves as a
-    // microtask when the response is cached/mocked), so a large batch would
-    // otherwise starve timers and IPC for the whole rebuild: server
-    // keep-alive pings in production, Vitest's birpc heartbeat in tests
-    // (hardcoded 60s upstream, vitest-dev/vitest#8164).
+    // Yield the macrotask queue every 25 summaries: each iteration is synchronous SQLite, so a batch of up to 1000
+    // would starve timers and IPC (server keep-alives, Vitest's birpc heartbeat).
     if (index > 0 && index % 25 === 0) {
       await new Promise((resolve) => setImmediate(resolve));
     }
@@ -329,9 +307,7 @@ export async function rebuildDirtySummaries(
   return result;
 }
 
-// ---------------------------------------------------------------------------
 // L3 entity profile build path
-// ---------------------------------------------------------------------------
 
 export interface EntityProfilesBuildResult {
   candidateClusters: number;
@@ -409,14 +385,8 @@ async function profileCluster(
   );
 }
 
-/**
- * Build L3 entity profiles by clustering L2 summaries with
- * shared entity tags. Threshold 2+ L2s per entity. Mirrors buildDag L1->L2
- * pattern, one level up.
- *
- * Born-dirty cancellation: each L2 link write marks the new L3 dirty, so clear it
- * or the same sleep cycle's rebuild re-rebuilds the freshly built L3.
- */
+/** Build L3 entity profiles by clustering L2 summaries sharing entity tags (2+ L2s per entity).
+ * Each L2 link write marks the new L3 dirty, so clear it or the same cycle re-rebuilds it. */
 export async function buildEntityProfiles(
   hippoRoot: string,
   l2Summaries: MemoryEntry[],

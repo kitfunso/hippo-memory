@@ -6,23 +6,8 @@ import { errorMessage, log } from '../util/log.js';
 const LAYERS = ['episodic', 'buffer', 'semantic'] as const;
 const MAX_WARN_LOGS = 5;
 
-/**
- * Path A backfill cleanup: existing raw_archive rows that were archived BEFORE
- * commit 70180b5 left their markdown mirrors at <hippoRoot>/<layer>/<id>.md
- * with original content intact. The DB is already redacted via migration v20;
- * this function deletes those filesystem mirrors so RTBF holds for historical
- * archives too.
- *
- * Per-row tracking via raw_archive.mirror_cleaned_at (added in v21):
- *   - SELECT only rows WHERE mirror_cleaned_at IS NULL.
- *   - On success (every layer either deleted or didn't exist), UPDATE the row
- *     with the cleanup timestamp.
- *   - On any unlink failure, leave mirror_cleaned_at NULL so the next
- *     connection retries. Warn (capped at MAX_WARN_LOGS rows per call).
- *
- * Returns whether every pending row was cleaned; the SELECT has no index to
- * use, so a connection runs it only when the archive has changed since.
- */
+/** Path A backfill cleanup: delete markdown mirrors (<hippoRoot>/<layer>/<id>.md) of rows archived before redaction, so RTBF holds for historical archives.
+ * Tracked by raw_archive.mirror_cleaned_at: set only on success, so a failed unlink retries next connection. Returns whether all pending rows were cleaned. */
 export function cleanupArchivedMirrors(hippoRoot: string, db: DatabaseSyncLike): boolean {
   // SAFETY: the SELECT above names exactly one column, memory_id (raw_archive.memory_id
   // is NOT NULL TEXT), so the row shape matches this assertion.

@@ -1,17 +1,5 @@
-/**
- * LLM-powered refinement of consolidated semantic memories.
- *
- * The rule-based `mergeContents` in consolidate.ts produces functional but
- * ugly semantic memories — typically "[Consolidated from N related memories]"
- * prepended to the longest source, or a bulleted list. `hippo refine` takes
- * those and asks Claude to synthesize a clean, generalized principle.
- *
- * Design choices:
- * - Separate command (not baked into `hippo sleep`) so API-key users opt in.
- * - Idempotent via the `llm-refined` tag — re-running skips already-refined.
- * - Uses fetch directly so no SDK dependency.
- * - On failure (API error, bad response), the original memory is untouched.
- */
+/** LLM refinement of consolidated semantic memories (`hippo refine`): a separate command so API-key users opt in; idempotent via the `llm-refined` tag.
+ * Uses fetch directly (no SDK dependency); on any failure the original memory is untouched. */
 
 import { MemoryEntry, Layer } from '../core/memory.js';
 import { REFINED_TAG, storeRefinement } from '../api/index.js';
@@ -41,13 +29,7 @@ export interface RefineOptions {
   all?: boolean;
   /** Injected for testing — defaults to the real fetch. */
   fetcher?: typeof fetch;
-  /**
-   * Tenant scope. When provided, refineStore only scans consolidated
-   * entries belonging to this tenant, and parent lookups are scoped to the
-   * same tenant. Cross-tenant parents return null from readEntry and are
-   * silently skipped (refine still produces output from merged content).
-   * Undefined preserves pre-1.12.1 host-wide scan behaviour.
-   */
+  /** Tenant scope: only that tenant's consolidated entries are scanned; cross-tenant parents return null and are skipped. */
   tenantId?: string;
 }
 
@@ -59,11 +41,7 @@ export interface RefineResult {
   details: Array<{ id: string; status: 'refined' | 'skipped' | 'failed'; reason?: string }>;
 }
 
-/**
- * Ask Claude to synthesize a clean semantic memory from the merged content
- * plus the original source memories. Returns the refined content string or
- * `null` when the API call failed.
- */
+/** Ask Claude to synthesize a clean semantic memory from the merged content and its sources; returns null when the API call failed. */
 export async function refineSemanticMemory(
   merged: string,
   sources: MemoryEntry[],
@@ -120,11 +98,7 @@ function isConsolidated(entry: MemoryEntry): boolean {
   return CONSOLIDATED_MARKERS.some((m) => entry.content.startsWith(m));
 }
 
-/**
- * Scan the store for consolidated semantic memories, refine each with the
- * LLM, and write the refined content back. Tags with `llm-refined` so
- * repeated runs are idempotent (unless `all` is set).
- */
+/** Refine each consolidated semantic memory with the LLM and write it back, tagging `llm-refined` so reruns skip it (unless `all`). */
 export async function refineStore(
   hippoRoot: string,
   opts: RefineOptions,
@@ -172,10 +146,8 @@ async function refineOneEntry(
   const sources: MemoryEntry[] = [];
   const parentIds = Array.isArray(entry.parents) ? entry.parents : [];
   for (const pid of parentIds) {
-    // Parent lookup scoped by opts.tenantId when provided.
-    // Cross-tenant parents return null and are silently skipped — refine
-    // still produces output from the merged content alone (graceful
-    // degradation rather than refuse-to-refine).
+    // Parent lookup is tenant-scoped; cross-tenant parents return null and are skipped,
+    // so refine still works from the merged content alone.
     const p = readEntry(hippoRoot, pid, opts.tenantId);
     if (p) sources.push(p);
   }

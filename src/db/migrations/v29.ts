@@ -59,28 +59,14 @@ const CREATE_TRIGGER_TRG_PREDICTIONS_TENANT_MATCH_UPDATE_SQL = `
 export const v29: Migration = {
     version: 29,
     up: (db) => {
-      // Prediction first-class object: a predictions table for the reference-class /
-      // planning-fallacy detector. Predictions
-      // duplicate claim_text in the table itself so memory deletion
-      // (forget/consolidate/archive) does not lose prediction data; FK
-      // memory_id is NULLABLE with ON DELETE SET NULL.
-      //
-      // Cross-tenant safety: BEFORE INSERT + BEFORE UPDATE triggers
-      // enforce tenant_id match against the referenced memory. SQLite's
-      // ON DELETE SET NULL is incompatible with composite FK where one
-      // side is NOT NULL, so the trigger pattern replaces a composite
-      // FK target. Precedent: v14 memories.kind trigger pair at db.ts:298-322.
-      //
-      // CHECK constraint pins closure_state to (open|closed|closed-unknown).
-      // Accuracy (clean vs regressed) is computed from (estimate_value,
-      // actual_value) at query time.
+      // Prediction first-class object: claim_text is duplicated so deleting the memory loses nothing; memory_id is NULLABLE ON DELETE SET NULL.
+      // Tenant-match triggers replace a composite FK, which is incompatible with ON DELETE SET NULL; closure_state is CHECKed to open|closed|closed-unknown.
       if (!tableExists(db, 'predictions')) {
         db.exec(CREATE_TABLE_PREDICTIONS_SQL);
         db.exec(CREATE_INDEX_IDX_PREDICTIONS_TENANT_CLASS_SQL);
         db.exec(CREATE_INDEX_IDX_PREDICTIONS_MEMORY_SQL);
-        // Cross-tenant safety: tenant_id must match the referenced memory's
-        // tenant_id when memory_id IS NOT NULL. INSERT + UPDATE pair, mirroring
-        // v14 memories.kind enforcement (db.ts:298-322).
+        // Cross-tenant safety: tenant_id must match the referenced memory's tenant_id when memory_id IS NOT NULL;
+        // INSERT + UPDATE pair, mirroring the v14 memories.kind enforcement.
         db.exec(CREATE_TRIGGER_TRG_PREDICTIONS_TENANT_MATCH_INSERT_SQL);
         db.exec(CREATE_TRIGGER_TRG_PREDICTIONS_TENANT_MATCH_UPDATE_SQL);
       }

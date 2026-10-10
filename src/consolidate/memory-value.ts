@@ -1,23 +1,5 @@
-/**
- * Learned memory-value scorer, wired into the sleep decay pass as a
- * rescue-only veto.
- *
- * computeMvFeatures mirrors benchmarks/memory-value/extract.mjs's
- * computeFeatures for the 8 live dims the fitter optimized over
- * (FIT_DIMS) — the only dims MEMORY_VALUE_WEIGHTS carries a weight for.
- * Any future edit to either side must keep them byte-equivalent; the parity
- * test in tests/memory-value-wiring.test.ts enforces this.
- *
- * scoreEntries mirrors benchmarks/memory-value/evaluate.mjs's per-store
- * min-max normalization + weighted scorer (no additional orientation
- * multiply — the frozen weights already encode sign/orientation).
- *
- * rescueSet implements rescue-only semantics: a condemned entry is
- * rescued iff its learned score ranks in the top 30% (RESCUE_BUDGET, the
- * measured keep-budget operating point) of its own tenant's non-pinned
- * candidate set. Deletes(flag-on) subset Deletes(flag-off) by construction — this
- * function can only ever shrink the condemned set, never grow it.
- */
+/** Learned memory-value scorer, a rescue-only veto in the sleep decay pass (it can only shrink the condemned set); mirrors benchmarks/memory-value/*.mjs.
+ * rescueSet rescues a condemned entry iff it ranks in the top 30% (RESCUE_BUDGET) of its tenant's non-pinned set; memory-value-wiring.test.ts guards parity. */
 
 import { DEFAULT_TENANT_ID } from '../util/env.js';
 import { type MemoryEntry, calculateStrength } from '../core/memory.js';
@@ -41,18 +23,8 @@ export const MV_FEATURE_NAMES: ReadonlyArray<keyof MvFeatureVector> = [
  *  evidence): a code constant tied to that evidence, not user-tunable. */
 const RESCUE_BUDGET = 0.3;
 
-/**
- * Small-tenant degeneracy: below this per-tenant non-pinned candidate-set
- * size, a rank statistic is noise (the measured evidence says nothing about
- * tiny scale), and the floor prevents immortal-entry
- * convergence: keepN=ceil(0.3*N) guarantees >=1 rescue at N=1, so without a
- * floor a condemned-only 1-entry tenant would be rescued every single sleep
- * forever. A condemned-only tenant below the floor instead drains normally
- * as entries are deleted: the surviving rescued subset only ever shrinks
- * toward 0, never regrows past 10 to regain eligibility on its own. Code
- * constant tied to that reasoning, not user-tunable (same posture as
- * RESCUE_BUDGET).
- */
+/** Per-tenant floor on the non-pinned candidate set: below it ranks are noise, and keepN=ceil(0.3*N) would rescue a 1-entry tenant's entry every sleep forever.
+ * A code constant tied to that reasoning, not user-tunable (like RESCUE_BUDGET). */
 const MIN_RESCUE_GROUP = 10;
 
 export interface MvFeatureVector {
@@ -66,19 +38,8 @@ export interface MvFeatureVector {
   content_length: number;
 }
 
-/**
- * Blind v1 feature dict for one MemoryEntry, restricted to the 8 dims the
- * frozen weights carry (mirrors extract.mjs's computeFeatures).
- *
- * CRITICAL: `strength` is CLOCK-BASIS `calculateStrength(entry, now)` with
- * NO DecayOptions — that is how the frozen weights' training features were
- * computed (extract.mjs never passes decayOpts). Passing the production
- * decay basis (config.decayBasis via consolidate.ts's decayOpts) into this
- * feature would silently break parity with the frozen weight vector. This
- * is an intentional divergence from the condemnation TRIGGER in
- * consolidate.ts, which keeps using decayOpts as today — only the rescue
- * FEATURE is clock-basis.
- */
+/** Blind v1 feature dict for one entry, restricted to the 8 dims the frozen weights carry. `strength` is CLOCK-BASIS `calculateStrength(entry, now)` with no
+ * DecayOptions, as in the weights' training; passing the production decay basis would silently break parity with the frozen weights. */
 export function computeMvFeatures(entry: MemoryEntry, now: Date): MvFeatureVector {
   const ageDays = (now.getTime() - Date.parse(entry.created)) / DAY_MS;
   const pos = entry.outcome_positive ?? 0;
@@ -95,16 +56,8 @@ export function computeMvFeatures(entry: MemoryEntry, now: Date): MvFeatureVecto
   };
 }
 
-/**
- * Throws if the weight constant is malformed: fewer/extra dims, a
- * non-finite weight value, or a missing source digest. Flag-on + a broken
- * constant must THROW, never silently behave as flag-off.
- *
- * Parameterized (defaults to the real frozen singleton) so the throw
- * conditions are directly unit-testable without mutating the frozen
- * MEMORY_VALUE_WEIGHTS export — mirrors fit.mjs's verifyFrozenWeights
- * (see tests/memory-value-fit.test.ts's `describe('verifyFrozenWeights')`).
- */
+/** Throws on a malformed weight constant (wrong dims, non-finite weight, missing digest): flag-on with a broken constant must throw, never act as flag-off.
+ * Parameterized (default: the frozen singleton) so the throw paths are unit-testable. */
 function isFiniteWeightValue(value: number): value is number {
   return typeof value === 'number' && Number.isFinite(value);
 }
@@ -133,25 +86,8 @@ export function validateWeights(
   }
 }
 
-/**
- * Min-max normalize each of the 8 features over the given entry set
- * (constant feature -> 0, matching evaluate.mjs), then score = dot(weights,
- * normalized). The normalization context is exactly the entries passed in —
- * callers control the bounded scope (per-tenant, non-pinned).
- *
- * `weights` defaults to the real frozen singleton; parameterized (like
- * validateWeights) so callers/tests can score against an explicit vector
- * without touching the module singleton.
- *
- * Non-finite features: Date.parse on a malformed `created`
- * string yields NaN, and NaN would silently corrupt every OTHER entry's
- * min-max in the same group. An entry with ANY non-finite computed feature
- * is excluded from the normalization context entirely (its raw values never
- * touch min/max) and always scores -Infinity — the lowest possible score, so
- * it sorts to the bottom of its tenant deterministically and (via rescueSet's
- * explicit finite-score guard below) can never be rescued. Conservative
- * direction: deletes(flag-on) subset deletes(flag-off) still holds.
- */
+/** Min-max normalize the 8 features over the given entries (constant -> 0), then score = dot(weights, normalized); callers set the scope.
+ * An entry with any non-finite feature (NaN from a malformed `created`) is excluded from normalization and scores -Infinity, so it can never be rescued. */
 export function scoreEntries(
   entries: MemoryEntry[],
   now: Date,
@@ -197,9 +133,7 @@ export function scoreEntries(
   return scores;
 }
 
-/** Per-entry rank context within its tenant's non-pinned candidate set —
- *  the score-rank basis both rescueSet's rescue decision and consolidate.ts's
- *  audit-row metadata read from. */
+/** Per-entry rank context within its tenant's non-pinned candidate set: the basis both rescueSet and the consolidate audit-row metadata read. */
 export interface MvRankInfo {
   tenantId: string;
   score: number;
@@ -211,17 +145,8 @@ export interface MvRankInfo {
   keepN: number;
 }
 
-/**
- * Groups non-pinned entries by tenantId, scores + ranks each tenant's
- * group independently, and returns per-entry rank context for every
- * non-pinned entry (not just condemned ones) — the shared basis for both
- * rescueSet's rescue decision and consolidate.ts's audit-row rank context,
- * so the two never compute the ranking differently.
- *
- * `weights`/`digest` default to the real frozen singleton — parameterized
- * (like validateWeights/scoreEntries) purely for direct unit-testability of
- * the fail-loud path, never overridden by production callers.
- */
+/** Group non-pinned entries by tenantId, score and rank each group independently, and return rank context for every non-pinned entry;
+ * rescueSet and the consolidate audit rows share it so they never compute the ranking differently. */
 export function rankNonPinnedByTenant(
   entries: MemoryEntry[],
   now: Date,
@@ -273,24 +198,8 @@ export interface RescueSetOptions {
   readonly precomputedRanks?: Map<string, MvRankInfo>;
 }
 
-/**
- * Rescue decision: a condemned entry is rescued iff it ranks in the top
- * 30% of its tenant's non-pinned candidate set by learned score. Returns the
- * subset of condemnedIds that are rescued — the caller filters commits
- * (rescued -> survivors) and threads the same set into detectConflicts.
- *
- * `weights`/`digest` default to the real frozen singleton; production
- * callers (consolidate.ts) never pass overrides — the params exist purely so
- * "flag on + a broken constant throws" is directly testable end-to-end
- * through this function without mutating the frozen module singleton.
- *
- * `precomputedRanks`: when the caller has already
- * computed the per-tenant ranking (e.g. consolidate.ts needs it separately
- * for detail/audit rank context), pass it here to skip the internal
- * rankNonPinnedByTenant call — the whole-store ranking pass then runs
- * exactly once per sleep instead of twice. Omitted (the default), rescueSet
- * computes it internally as before — existing callers/tests are unaffected.
- */
+/** Rescue decision: the subset of condemnedIds ranking in the top 30% of their tenant's non-pinned set by learned score.
+ * Pass `precomputedRanks` to skip the internal ranking so the whole-store pass runs once per sleep; `weights`/`digest` overrides exist for tests only. */
 export function rescueSet(
   entries: MemoryEntry[],
   condemnedIds: Set<string>,

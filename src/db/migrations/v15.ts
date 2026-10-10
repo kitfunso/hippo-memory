@@ -3,14 +3,8 @@ import type { Migration } from './types.js';
 export const v15: Migration = {
     version: 15,
     up: (db) => {
-      // Close the NULL-kind bypass and add raw_archive dedup safety.
-      //
-      // (1) Original v14 triggers used `WHEN NEW.kind IS NOT NULL AND NEW.kind NOT IN (...)`.
-      //     A direct INSERT/UPDATE setting kind=NULL bypassed the CHECK substitute. Replace
-      //     with `WHEN NEW.kind IS NULL OR NEW.kind NOT IN (...)` so NULL is rejected too.
-      // (2) Add UNIQUE(memory_id, archived_at) to raw_archive so re-archiving the same id
-      //     in the same instant cannot produce ambiguous audit rows. Per-id history is still
-      //     allowed (different timestamps).
+      // Close the NULL-kind bypass: v14 triggers used `WHEN NEW.kind IS NOT NULL AND ...`, so kind=NULL slipped past; now `IS NULL OR NOT IN (...)` rejects it.
+      // Add UNIQUE(memory_id, archived_at) to raw_archive so re-archiving in the same instant cannot yield ambiguous audit rows (per-id history stays allowed).
       db.exec(`DROP TRIGGER IF EXISTS trg_memories_kind_check_insert`);
       db.exec(`DROP TRIGGER IF EXISTS trg_memories_kind_check_update`);
       db.exec(`

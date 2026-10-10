@@ -81,17 +81,8 @@ const TRG_PROJECT_BRIEFS_SUPERSEDE_TENANT_MATCH_UPDATE = `
 export const v35: Migration = {
     version: 35,
     up: (db) => {
-      // project_brief first-class object. A project_brief is the
-      // living, repo-scoped summary of a repository's state: a `summary` body
-      // scoped to a `repo`, evolving via the v34 skills supersede machinery
-      // (superseded_by self-FK + supersede tenant-match trigger + version +
-      // change_summary). This table = the v34 skills table with
-      // skill_name/trigger_text replaced by `repo` (the repo-scoping dimension)
-      // PLUS `summary` (the brief body). The distinguishing op (refreshBrief, in
-      // src/objects/project-briefs.ts) auto-assembles the summary from the repo's receipts
-      // (memory rows tagged path:<repo>); it needs no schema support beyond `repo`.
-      // All column names were checked against SQLite reserved words:
-      // repo/summary/version/status/etc. are non-reserved.
+      // project_brief first-class object: repo-scoped `summary` superseding like v34 skills; refreshBrief (objects/project-briefs.ts) builds it from receipts.
+      // The schema needs only `repo`; column names were checked against SQLite reserved words.
       if (!tableExists(db, 'project_briefs')) {
         db.exec(PROJECT_BRIEFS_TABLE);
         db.exec(IDX_PROJECT_BRIEFS_TENANT_STATUS);

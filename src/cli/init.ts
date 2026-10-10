@@ -115,10 +115,7 @@ function cmdInitScan(scanDir: string, flags: CliFlags): void {
   const globalRoot = initGlobalFirst();
 
   let totalLessons = 0;
-  // Rolled up so the cross-repo summary reports the gate too. Each repo
-  // already prints its own count inside learnFromRepo, but the aggregate
-  // line showed only what was ADDED - and the point of this change is
-  // that a dropped subject is never invisible.
+  // Rolled up so the cross-repo summary reports the gate too: a dropped subject is never invisible.
   let totalLowInfo = 0;
   const seedDays = parseInt(String(flags['days'] ?? '365'), 10);
   const machine = currentMachine();
@@ -323,9 +320,7 @@ function installClaudeCodeSettingsHooks(hook: 'claude-code'): void {
 }
 
 function installOpencodeUserPlugin(): void {
-  // opencode uses a TS plugin, not Claude Code's JSON-hook schema.
-  // See OPENCODE_PLUGIN_SOURCE in src/hooks.ts for the plugin file
-  // content + design rationale.
+  // opencode uses a TS plugin, not Claude Code's JSON-hook schema (see OPENCODE_PLUGIN_SOURCE in src/hooks/opencode.ts).
   const result = installOpencodePlugin();
   if (result.installed) {
     console.log(`   Auto-installed hippo opencode plugin -> ${result.pluginPath}`);
@@ -348,9 +343,8 @@ function installUserLevelHooks(agents: readonly string[], codexHint: boolean): v
     // Checked first so init never creates ~/.codex on a machine without Codex.
     if (hook === 'codex' && isCodexPresent()) installCodexMemoryHooks('   ');
 
-    // For Claude Code, also install SessionEnd+SessionStart entries in its
-    // settings.json. Keeps `hippo init` in lockstep with `hippo hook install
-    // claude-code` and `hippo setup`.
+    // For Claude Code, also install SessionEnd+SessionStart entries in settings.json, keeping `hippo init` in lockstep with
+    // `hippo hook install claude-code` and `hippo setup`.
     if (hook === 'claude-code') installClaudeCodeSettingsHooks(hook);
     else if (hook === 'opencode') installOpencodeUserPlugin();
   }

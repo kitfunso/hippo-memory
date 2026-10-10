@@ -15,13 +15,8 @@ export interface DecayOutcome {
   rankById: Map<string, MvRankInfo>;
 }
 
-// A faded, unpinned, unrescued memory leaves active memory one of three
-// ways. A raw receipt is append-only: trg_memories_raw_append_only aborts
-// a DELETE, and with it this whole cycle's batch and every later sleep,
-// so it stays where it is (stored strength refreshed) but sits out the
-// rest of this cycle the way a deleted row would. Anything else goes
-// dormant when config.dormant is on, and is deleted otherwise.
-// Only called for rows `retirable` allows (never pinned, raw, kept for good or backing a first-class object).
+// Leaving active memory: a raw receipt stays (the append-only trigger aborts DELETE for the whole batch; stored strength refreshed) but sits out this cycle;
+// others go dormant when config.dormant is on, else are deleted. Only called for rows `retirable` allows.
 function retireFaded(run: SleepRun, entry: MemoryEntry, strength: number): void {
   const { result } = run;
   const why = `(strength ${strength.toFixed(STRENGTH_DECIMALS)} < ${DECAY_THRESHOLD})`;
@@ -49,11 +44,8 @@ function keepSurvivor(run: SleepRun, entry: MemoryEntry, strength: number): Memo
   return updated;
 }
 
-// -------------------------------------------------------------------------
-// 1. Decay pass
-// -------------------------------------------------------------------------
-// Memory-value flag OFF runs the single-phase loop below. Flag ON classifies every entry with ZERO commits,
-// runs rescueSet per tenant, then commits; rescued entries stay full survivors for this cycle's later passes.
+// 1. Decay pass. Memory-value flag OFF runs the single-phase loop below; ON classifies every entry with zero commits, runs rescueSet per tenant, then commits.
+// Rescued entries stay full survivors for this cycle's later passes.
 export function decayPass(run: SleepRun): DecayOutcome {
   if (run.config.memoryValue.enabled) return decayWithMemoryValue(run);
   for (const entry of run.all) {
@@ -113,10 +105,7 @@ function decayWithMemoryValue(run: SleepRun): DecayOutcome {
 
   const { strengthById, condemnedIds } = classifyByStrength(run);
 
-  // --- Phase 2a: rescue decision (pure compute) ---
-  // Runs under --dry-run too (only the pendingDeletes flush and the audit write in
-  // logRun stay !dryRun-gated), so the preview matches what a
-  // real run would decide.
+  // Phase 2a: rescue decision (pure compute); runs under --dry-run too (only the pendingDeletes flush and the logRun audit write are !dryRun-gated).
 
   // Fail-loud must not depend on condemnation traffic: validate the frozen weights even when nothing is condemned.
   validateWeights();
@@ -134,9 +123,8 @@ function decayWithMemoryValue(run: SleepRun): DecayOutcome {
     const strength = strengthById.get(entry.id)!;
     if (run.retirable(entry) && strength < DECAY_THRESHOLD) {
       if (rescuedIds.has(entry.id)) {
-        // Rescued: standard survivor stored-strength refresh.
-        // Confidence is left alone here: it is an epistemic tier, not a
-        // cached computation, so resolveConfidence derives it on read.
+        // Rescued: standard survivor stored-strength refresh. Confidence is left alone: it is an epistemic tier, not a cached
+        // computation, so resolveConfidence derives it on read.
         rescuedEntries.push(keepSurvivor(run, entry, strength));
         reportRescue(result, entry, strength, rankById.get(entry.id));
       } else {

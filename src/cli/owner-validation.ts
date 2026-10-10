@@ -1,14 +1,5 @@
-/**
- * --owner format validation.
- *
- * Documented MEMORY_ENVELOPE.md contract: owner = `user:<id>` | `agent:<id>`
- * with id ∈ `[A-Za-z0-9_-]+`.
- *
- * Default: WARN-ONLY (log + accept) to preserve back-compat with existing
- * scripted callers passing legacy owner strings. Set `HIPPO_STRICT_OWNER=1`
- * to reject + exit. Strict mode will become the default once real auth replaces
- * the stub (see `TODOS.md` for the migration path).
- */
+/** --owner validation per MEMORY_ENVELOPE.md: `user:<id>` | `agent:<id>`, id in `[A-Za-z0-9_-]+`.
+ * Warn-only by default for legacy scripted callers; `HIPPO_STRICT_OWNER=1` rejects and exits. */
 
 import { processEnv } from '../util/env.js';
 
@@ -24,19 +15,8 @@ export interface OwnerValidation {
   message: string;
 }
 
-/**
- * Pure validator. Returns `{ ok, value, message }`. Does NOT print or
- * `process.exit`. The CLI wrapper below handles side effects so this is
- * unit-testable.
- *
- * Behaviour:
- *   - owner undefined → ok=true, value=undefined, no message.
- *   - owner matches OWNER_RE → ok=true, value=owner.
- *   - owner doesn't match + strict=false → ok=true, value=owner (accept),
- *     message contains the warning text.
- *   - owner doesn't match + strict=true → ok=false, value=owner (echoed),
- *     message contains the error text.
- */
+/** Pure validator returning `{ ok, value, message }`; never prints or exits, so it is unit-testable.
+ * A non-matching owner is accepted with a warning unless strict, where ok=false with an error message. */
 export function validateOwner(
   owner: string | null | undefined,
   opts: { strict?: boolean } = {},
@@ -63,10 +43,7 @@ export function validateOwner(
   };
 }
 
-/**
- * Returns true when strict-owner enforcement is enabled via env var.
- * Centralised here so any future bump to default-strict is one edit.
- */
+/** True when strict-owner enforcement is enabled via env var. */
 export function isStrictOwnerEnv(env: NodeJS.ProcessEnv = processEnv()): boolean {
   return env.HIPPO_STRICT_OWNER === '1';
 }

@@ -46,9 +46,8 @@ const GRAPH_EXTRACTION_QUEUE_TABLE = `
           )
         `;
 
-// entities guard: source_kind must equal the FK'd memory's actual kind (so a
-// raw memory or a lying source_kind both ABORT), and tenant must match. Both
-// INSERT and UPDATE (UPDATE fires when memory_id/source_kind/tenant_id change).
+// entities guard: source_kind must equal the FK'd memory's actual kind (raw or a lying source_kind ABORTs) and tenant must match,
+// on INSERT and on UPDATE (when memory_id/source_kind/tenant_id change).
 const TRG_ENTITIES_CONSOLIDATED_ONLY_INSERT = `
           CREATE TRIGGER IF NOT EXISTS trg_entities_consolidated_only_insert
           BEFORE INSERT ON entities
@@ -150,16 +149,8 @@ const TRG_GRAPH_QUEUE_CONSOLIDATED_ONLY_UPDATE = `
           END
         `;
 
-// Reverse guard: the graph-table triggers
-// only fire on writes to the GRAPH tables. They do NOT fire when an
-// already-indexed memory is later mutated. So 'UPDATE memories SET kind=raw'
-// (or a tenant change) on a memory the graph references would silently leave
-// entity/relation/queue rows pointing at a raw / cross-tenant memory while
-// their source_kind stays 'distilled' - bypassing the central 'graph never
-// indexes raw' invariant after insertion. This trigger closes that direction:
-// a memory cannot be reclassified to raw, nor moved cross-tenant, WHILE the
-// graph references it (rebuild/remove the graph rows first). Cheap: the EXISTS
-// checks are only evaluated when kind actually becomes raw or tenant changes.
+// Reverse guard: graph triggers fire only on graph-table writes, so reclassifying an indexed memory to raw (or tenant) would break the no-raw invariant.
+// Block both while the graph references the memory; the EXISTS checks run only when kind becomes raw or tenant changes.
 const TRG_MEMORIES_GRAPH_REFERENCED_GUARD = `
           CREATE TRIGGER IF NOT EXISTS trg_memories_graph_referenced_guard
           BEFORE UPDATE ON memories
@@ -174,13 +165,8 @@ const TRG_MEMORIES_GRAPH_REFERENCED_GUARD = `
           END
         `;
 
-// Second reverse guard: an entity that is
-// a relation endpoint cannot be moved cross-tenant. The entity UPDATE trigger
-// validates the entity against its source memory, but an existing relation
-// pointing at the entity is NOT re-validated, so a raw 'UPDATE entities SET
-// tenant_id=?, memory_id=?' to another tenant would leave a tenant-A relation
-// pointing at a tenant-B entity. Block the tenant move while the entity is
-// referenced by any relation (rebuild the relations first).
+// Second reverse guard: the entity UPDATE trigger does not re-validate existing relations, so a cross-tenant entity move would leave a tenant-A relation
+// pointing at a tenant-B entity. Block the tenant move while any relation references the entity.
 const TRG_ENTITIES_NO_TENANT_MOVE_WHEN_REFERENCED = `
           CREATE TRIGGER IF NOT EXISTS trg_entities_no_tenant_move_when_referenced
           BEFORE UPDATE ON entities
@@ -194,19 +180,8 @@ const TRG_ENTITIES_NO_TENANT_MOVE_WHEN_REFERENCED = `
 export const v37: Migration = {
     version: 37,
     up: (db) => {
-      // Graph-on-consolidated guard.
-      // The graph layer (entities + relations) sits ON TOP OF consolidated state and
-      // must NEVER index the raw layer. The substrate: entities + relations +
-      // graph_extraction_queue, each FK-ing to memories and guarded so they can only
-      // reference CONSOLIDATED memories (kind IN ('distilled','superseded')), never
-      // kind='raw'. New tables -> real CHECK constraints (unlike the ALTER'd memories,
-      // whose kind CHECK lives in triggers). The kind/source MATCH (source_kind ==
-      // the FK'd memory's actual kind) cannot be a CHECK (CHECK can't subquery), so it
-      // is a BEFORE INSERT *and* BEFORE UPDATE trigger (the subquery-capable pattern
-      // from the v30 decisions / predictions tenant-match triggers). Both INSERT and
-      // UPDATE are guarded: an INSERT-only guard is bypassable via a raw SQL UPDATE
-      // that moves a row onto a raw memory. All column
-      // names checked vs SQL reserved words: rel_type avoids REFERENCES.
+      // Graph-on-consolidated guard: entities, relations and graph_extraction_queue may reference only consolidated memories (distilled|superseded), never raw.
+      // The kind match needs a subquery, so it is a BEFORE INSERT and UPDATE trigger (INSERT-only is bypassable). rel_type avoids the reserved word REFERENCES.
       if (!tableExists(db, 'entities')) {
         db.exec(ENTITIES_TABLE);
         db.exec(`CREATE INDEX IF NOT EXISTS idx_entities_tenant ON entities(tenant_id)`);

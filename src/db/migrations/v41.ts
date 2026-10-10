@@ -3,30 +3,8 @@ import type { Migration } from './types.js';
 export const v41: Migration = {
     version: 41,
     up: (db) => {
-      // Rejected-value tombstone.
-      // Additive table, template = v40 above. A human who rejects a fact gets
-      // a durable say: the write-path guard in upsertEntryRow refuses any
-      // write that would re-introduce a value whose normalized digest
-      // matches a row here.
-      //
-      // No raw content and no preview stored. Follows the raw_archive
-      // redaction precedent (raw-archive.ts payload is {redacted:true, ...}):
-      // a rejected value may itself be a secret or PII ("never store my key
-      // again") — persisting it in the tombstone would defeat the point. The
-      // human sees the content at reject time (CLI echoes it); afterwards
-      // `reason` is the human-readable identity.
-      //
-      // No FK on source_memory_id (v40 precedent above: tombstone outlives
-      // the row it was sourced from) — provenance only.
-      //
-      // Reserved-word check on column names:
-      // tenant/digest/reason/rejected/source/normalized/chars are non-reserved.
-      //
-      // No min_compatible_binary bump, a deliberate tradeoff: an old binary sharing a synced store
-      // writes WITHOUT the guard until upgraded; documented in
-      // MEMORY_ENVELOPE.md rather than hard-locking every old binary out of
-      // the store, which is disproportionate for the dominant single-user
-      // single-binary deployment.
+      // Rejected-value tombstone: upsertEntryRow refuses writes matching a row's digest. No raw content stored (may be secret); no FK: it outlives its row.
+      // No min_compatible_binary bump, a deliberate tradeoff: an old binary writes without the guard until upgraded (see MEMORY_ENVELOPE.md).
       db.exec(`
         CREATE TABLE IF NOT EXISTS rejected_values (
           tenant_id  TEXT NOT NULL,

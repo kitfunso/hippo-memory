@@ -31,20 +31,8 @@ function percentile(sorted: number[], q: number): number {
   return sorted[lo] + (sorted[hi] - sorted[lo]) * (idx - lo);
 }
 
-/**
- * Correction latency = wall-clock delta between when hippo first saw the
- * change-of-truth and when the supersession actually landed.
- *
- * For each (old, new) chain via `old.superseded_by = new.id`:
- *   - `correctedAt` = `new.created` (always)
- *   - `observedAt`  = source row's `created` if `new.extracted_from` is set,
- *                     else `new.created` (no earlier observation possible)
- *
- * Pairs split into two cohorts:
- *   - `extraction` — derived from a raw receipt; latency is meaningful
- *   - `manual`     — direct supersede call; latency is trivially 0 and
- *                    excluded from percentiles to avoid masking real lag
- */
+/** Correction latency = `new.created` minus the observation time (the extracted-from row's `created`, else `new.created`).
+ * Manual supersedes have latency 0 and are excluded from percentiles so they do not mask real lag. */
 export function buildCorrectionLatency(entries: MemoryEntry[]): CorrectionLatencyReport {
   const byId = new Map<string, MemoryEntry>();
   for (const e of entries) byId.set(e.id, e);

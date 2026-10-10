@@ -51,15 +51,8 @@ const RECALL_TRACES_SCHEMA_SQL = `
 export const v40: Migration = {
     version: 40,
     up: (db) => {
-      // Retrieval-trace persistence.
-      // Follows the v18 goal_recall_log style: one parent trace row per
-      // recall, a WITHOUT ROWID child table for the ranked results, and a
-      // separate append-only outcomes table so audit_log pruning can never
-      // erase training data.
-      //
-      // No min_compatible_binary bump, on purpose: an old binary ignores these tables and
-      // recordTraceOutcome re-validates trace ids, so its stale writes are skipped; a bump
-      // would lock old binaries out of the whole store for an observability feature.
+      // Retrieval-trace persistence: one trace row per recall, a WITHOUT ROWID results table, append-only outcomes (audit_log pruning must not erase them).
+      // No min_compatible_binary bump on purpose: old binaries ignore these tables and recordTraceOutcome re-validates trace ids; a bump would lock them out.
       db.exec(RECALL_TRACES_SCHEMA_SQL);
     },
 };

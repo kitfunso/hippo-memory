@@ -14,9 +14,7 @@ import { getGlobalRoot } from '../sharing/global-store.js';
 import { errorMessage } from '../util/log.js';
 import { CliExit } from './exit.js';
 
-// ---------------------------------------------------------------------------
 // Audit log subcommands (`hippo audit list`)
-// ---------------------------------------------------------------------------
 
 const VALID_AUDIT_OPS: ReadonlySet<AuditOp> = new Set<AuditOp>(AUDIT_OPS);
 
@@ -171,9 +169,7 @@ export async function handleAudit({ hippoRoot, tenantId, args, flags }: CommandC
     auditRepair(hippoRoot, tenantId, flags);
     return;
   }
-  // `audit list` and `audit prune` -> audit-log subcommands.
-  // Other forms (no sub, --fix) keep the existing memory-quality auditor
-  // for backwards compatibility.
+  // `audit list` and `audit prune` are the audit-log subcommands; other forms (no sub, --fix) keep the memory-quality auditor.
   if (args[0] === 'list' || args[0] === 'prune') {
     await cmdAuditLog(hippoRoot, tenantId, args, flags);
     return;

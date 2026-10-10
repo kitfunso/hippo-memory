@@ -81,17 +81,8 @@ const TRG_CUSTOMER_NOTES_SUPERSEDE_TENANT_MATCH_UPDATE = `
 export const v36: Migration = {
     version: 36,
     up: (db) => {
-      // customer_note first-class object. A customer_note is a
-      // discrete note recorded against an account/customer entity, evolving via the
-      // v35 project_briefs supersede machinery (superseded_by self-FK + supersede
-      // tenant-match trigger + version + change_summary). This table = the v35
-      // project_briefs table with repo/summary replaced by `customer` (the
-      // entity-scoping dimension; a free-form account/customer id - the entities
-      // table is unbuilt, so a FK is deferred) PLUS `note` (the note body).
-      // MANY notes per customer (each its own supersede chain), unlike the
-      // one-summary-per-repo project_brief. All column names checked against SQLite
-      // reserved words: customer/note/
-      // version/status/etc. are non-reserved.
+      // customer_note first-class object: a note on a customer, superseding like v35 project_briefs; `customer` is a free-form id (no FK: no entities table).
+      // Many notes per customer, each its own supersede chain. Column names were checked against SQLite reserved words.
       if (!tableExists(db, 'customer_notes')) {
         db.exec(CUSTOMER_NOTES_TABLE);
         db.exec(IDX_CUSTOMER_NOTES_TENANT_STATUS);

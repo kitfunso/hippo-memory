@@ -1,11 +1,4 @@
-/**
- * Consolidation engine ("Sleep") for Hippo.
- *
- * Steps:
- * 1. Decay pass  - remove entries below strength threshold
- * 2. Merge pass  - find episodic entries with high text overlap, create semantic summaries
- * 3. Stats tracking
- */
+/** Consolidation engine ("Sleep"): decay pass (drop entries below the strength threshold), merge pass (semantic summaries of overlapping episodics), stats. */
 
 import { evalNow } from '../core/ablation.js';
 import { MemoryEntry, canAutoDelete, type DecayOptions } from '../core/memory.js';
@@ -138,10 +131,8 @@ async function flushPending(run: SleepRun, snapshot: LoadedRows, budget: WriteBu
   result.dormant = pendingDormant.filter((m) => left.has(m.entry.id)).length;
 }
 
-// Dormant retention: a dormant memory nobody restored within
-// dormant.retentionDays is deleted for good (0 keeps them forever). Runs
-// even when dormant.enabled is off, so turning it off still ages out what
-// earlier sleeps kept.
+// Dormant retention: a dormant memory nobody restored within dormant.retentionDays is deleted for good (0 keeps forever);
+// runs even when dormant.enabled is off, so turning it off still ages out what earlier sleeps kept.
 async function expireDormant(run: SleepRun, budget: WriteBudget): Promise<void> {
   const { config, result, dryRun } = run;
   if (!(config.dormant.retentionDays > 0)) return;
@@ -152,9 +143,7 @@ async function expireDormant(run: SleepRun, budget: WriteBudget): Promise<void> 
   }
 }
 
-// -------------------------------------------------------------------------
 // 4. Log run
-// -------------------------------------------------------------------------
 function logRun(run: SleepRun, decay: DecayOutcome): void {
   const { hippoRoot, now, result } = run;
   const detectedConflicts = detectConflicts(run.survivors, now, run.decayOpts, decay.rescuedIds);

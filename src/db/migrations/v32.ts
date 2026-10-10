@@ -59,10 +59,8 @@ const TRG_PROCESSES_TENANT_MATCH_UPDATE = `
           END
         `;
 
-// Cross-tenant safety vs the successor process (self-FK; verbatim mirror
-// of the v30 decisions supersede trigger). superseded_by is set only via
-// the supersede UPDATE; the successor must share the tenant. The successor
-// row already exists in the same transaction when this fires.
+// Cross-tenant safety vs the successor process (self-FK; mirrors the v30 supersede trigger): superseded_by is set only via the supersede UPDATE
+// and the successor, already present in the same transaction, must share the tenant.
 const TRG_PROCESSES_SUPERSEDE_TENANT_MATCH_UPDATE = `
           CREATE TRIGGER IF NOT EXISTS trg_processes_supersede_tenant_match_update
           BEFORE UPDATE ON processes
@@ -79,24 +77,8 @@ const TRG_PROCESSES_SUPERSEDE_TENANT_MATCH_UPDATE = `
 export const v32: Migration = {
     version: 32,
     up: (db) => {
-      // Process first-class object.
-      // A process is a "living process map": a named, ordered list of steps that
-      // evolves. Unlike incident (open->resolved->closed, no supersede), process
-      // REUSES the v30 decisions supersede path as its delta mechanism: a process
-      // evolves by being superseded by a NEW VERSION that records what changed
-      // (change_summary) and the full new state (steps), carrying a derived
-      // version counter. So this table combines the v31 incidents tenant-match
-      // trigger pair (vs the referenced memory) WITH the v30 decisions
-      // superseded_by self-FK + supersede tenant-match trigger.
-      //
-      // status (active|superseded|closed): superseded carries a self-FK
-      // superseded_by to the successor version; closed is a terminal
-      // retire-without-successor (only an active head closes). The memory mirror
-      // is kept for recall but is not authoritative; memory_id is NULLABLE with
-      // ON DELETE SET NULL so forget/consolidate/archive does not lose a process.
-      // steps is a JSON-encoded array of step strings (scoped v1; a normalized
-      // process_steps table is deferred). version is server-derived
-      // (predecessor.version + 1); change_summary is set on a successor row only.
+      // Process first-class object (living process map): it evolves via the v30 supersede path, each version recording change_summary and full steps (JSON).
+      // Combines the v31 tenant-match trigger pair with the v30 superseded_by self-FK; version is server-derived (predecessor + 1); only an active head closes.
       if (!tableExists(db, 'processes')) {
         db.exec(PROCESSES_TABLE);
         db.exec(IDX_PROCESSES_TENANT_STATUS);

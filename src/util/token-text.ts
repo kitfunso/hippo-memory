@@ -11,10 +11,7 @@ export const DATE_PREFIX_CHARS = 10;
 /** Characters of memory content shown as a one-line preview. */
 export const CONTENT_PREVIEW_CHARS = 80;
 
-/**
- * Rough token estimate: characters / 4. The single estimate behind every
- * token budget and ledger count in hippo.
- */
+/** Rough token estimate: characters / 4, the single estimate behind every token budget and ledger count. */
 export function estimateTokens(text: string): number {
   return Math.ceil(text.length / 4);
 }

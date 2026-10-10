@@ -56,18 +56,8 @@ import {
 import type { JsonValue } from '../util/json.js';
 import { CliExit } from './exit.js';
 
-/**
- * SessionStart(compact) injector. Prints the active task snapshot + recent
- * session trail so working state that would otherwise be lost to
- * compaction summarisation survives into the new context window. No pinned
- * memories here — the UserPromptSubmit hook already re-injects those every
- * turn, so duplicating them here would double token cost for nothing.
- *
- * Same exit-0/crash-safety contract as `hippo pre-compact`: every path
- * exits 0. A malformed payload or a store read failure
- * degrades to empty stdout, never a thrown error — a failing SessionStart
- * hook must not pollute session startup.
- */
+/** SessionStart(compact) injector: prints the task snapshot and session trail lost to compaction; no pinned memories (UserPromptSubmit re-injects them).
+ * Every path exits 0: a malformed payload or store read failure degrades to empty stdout, never a throw. */
 function cmdCompactResume(hippoRoot: string, tenantId: string, stdinText: string | undefined, stdinTimedOut: boolean): void {
   let rec: DeliveryRecorder | null = null;
   try {
@@ -135,17 +125,8 @@ function restoreCompactSnapshot(hippoRoot: string, tenantId: string, payloadSess
   });
 }
 
-/**
- * SessionEnd entry point. Claude Code / OpenCode fire this on /exit while
- * tearing down the TUI, which kills any child that is still running when
- * the parent returns. Running sleep + capture synchronously here means both
- * get SIGTERM'd mid-consolidation.
- *
- * So we do the minimum inline (read stdin for transcript_path), then spawn
- * a fully detached Node child that runs sleep → capture and exit the parent
- * immediately. The child writes to the log file and survives TUI teardown;
- * the next SessionStart reads the log via `hippo last-sleep`.
- */
+/** SessionEnd entry: TUI teardown kills children still running, so read stdin inline, spawn a detached child that runs sleep then capture, and exit.
+ * The child logs to a file that the next SessionStart reads via `hippo last-sleep`. */
 export async function handleSessionEnd({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
   const runtime = hookRuntime(flags);
   const turn = flagIsTrue(flags, 'turn');
@@ -271,9 +252,8 @@ async function sessionEndWork(
     log: digestLog,
   });
 
-  // Close only this session's snapshot, after sleep+capture: no snapshot producer runs in session-end, and since
-  // session-end may never fire (crash, kill -9) the freshness bound in loadFreshActiveTaskSnapshot is the backstop.
-  // The handoff is written first, while the snapshot writeSessionEndHandoff reads is still active.
+  // Close only this session's snapshot, after sleep+capture; if session-end never fires (crash, kill -9) the freshness bound in
+  // loadFreshActiveTaskSnapshot is the backstop. The handoff is written first, while the snapshot writeSessionEndHandoff reads is active.
   if (closeSessionId) writeEndHandoff(store, tenantId, closeSessionId, transcriptPath, closeLogFile, mode === 'turn');
   if (mode === 'turn') {
     // The chat goes on after a reply, so its snapshot stays for the next compaction to restore.
@@ -707,7 +687,7 @@ export async function handlePostCompact({ hippoRoot, flags }: CommandContext): P
     stdinText: text,
     stdinTimedOut: timedOut,
     logFile: logFlag === true || logFlag === false || Array.isArray(logFlag) ? undefined : logFlag,
-    // Passed in, since capture.ts importing the sync would close an import cycle.
+    // Passed in, since src/capture/ importing the sync would close an import cycle.
     afterSave: (transcriptPath, cwd, log) => {
       const report = importSessionFolder(store, transcriptPath, cwd, { machine: currentMachine(), busyWaitMs: COMPACTION_DB_WAIT_MS });
       const summary = summaryLine(report);
@@ -764,7 +744,7 @@ export async function handleCapture({ hippoRoot, tenantId, flags }: CommandConte
   }
 
   // Bounded, and only when last-session has no explicit path: the
-  // --stdin source keeps its own blocking read in capture.ts by design.
+  // --stdin source keeps its own blocking read in src/capture/ by design.
   const bounded = captureSource === 'last-session' && !transcriptPath
     ? await readHookStdin()
     : { text: undefined, timedOut: false };

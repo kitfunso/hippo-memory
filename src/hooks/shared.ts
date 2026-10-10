@@ -78,21 +78,13 @@ export function isCopilotPresent(home: string = os.homedir()): boolean {
 export const CODEX_TRUST_LINE =
   "The per-prompt hook sends your pinned memories plus up to 5 that match the prompt. Codex runs hippo's hooks only after you trust them once in `/hooks`.";
 
-/**
- * Default log path consumed by `hippo last-sleep`. Shared fallback when
- * a caller doesn't pass --path explicitly.
- */
+/** Default log path consumed by `hippo last-sleep` when a caller passes no --path. */
 export function defaultSleepLogPath(): string {
   return path.join(homeDir(), '.hippo', 'logs', 'last-sleep.log');
 }
 
-/**
- * Diagnostic-only log path for `hippo pre-compact`. Deliberately separate
- * from the SessionEnd sleep log: `hippo last-sleep` truncates that file on
- * every SessionStart, which would wipe pre-compact lines before anyone
- * could read them. Nothing consumes this file programmatically — it exists
- * for manual troubleshooting only. Overridden by `--log-file`.
- */
+/** Diagnostic-only log path for `hippo pre-compact`, kept apart from the SessionEnd sleep log because `hippo last-sleep` truncates that one every SessionStart.
+ * Nothing reads it programmatically; overridden by `--log-file`. */
 export function defaultPreCompactLogPath(): string {
   return path.join(homeDir(), '.hippo', 'logs', 'pre-compact.log');
 }
@@ -101,10 +93,7 @@ export function ensureDir(dir: string): void {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 }
 
-/**
- * Detect which AI coding tools are installed based on config directory presence.
- * Used by `hippo setup` to decide which JSON-hook installs to run.
- */
+/** Detect which AI coding tools are installed from config directory presence; `hippo setup` uses it to pick JSON-hook installs. */
 export function detectInstalledTools(): ToolDetection[] {
   const home = homeDir();
   const exists = (...parts: string[]) => fs.existsSync(path.join(home, ...parts));

@@ -24,9 +24,7 @@ function sleepLlm(run: SleepRun, fetcher: typeof fetch | undefined) {
 type SleepLlm = ReturnType<typeof sleepLlm>;
 
 export async function llmPasses(run: SleepRun, fetcher: typeof fetch | undefined): Promise<void> {
-  // -------------------------------------------------------------------------
   // 1.6. Batch extraction — extract facts from episodic memories missing them
-  // -------------------------------------------------------------------------
   const extractedFromIds = new Set(
     run.survivors.filter((e) => e.extracted_from).map((e) => e.extracted_from!),
   );
@@ -61,9 +59,7 @@ export async function llmPasses(run: SleepRun, fetcher: typeof fetch | undefined
   }
 }
 
-// -------------------------------------------------------------------------
 // 1.7. DAG summarization — cluster extracted facts and generate summaries
-// -------------------------------------------------------------------------
 async function dagBuildPass(run: SleepRun, { apiKey, llmError, llmOpts }: SleepLlm): Promise<void> {
   const extractedFacts = run.survivors.filter(
     (e) => e.tags.includes('extracted') && e.dag_level === 1 && !e.superseded_by && isReusable(e),
@@ -82,14 +78,8 @@ async function dagBuildPass(run: SleepRun, { apiKey, llmError, llmOpts }: SleepL
   }
 }
 
-// -------------------------------------------------------------------------
-// 1.8. DAG summary rebuild — drain dirty queue from the child-write hooks
-// -------------------------------------------------------------------------
-// Consumer of the summary_dirty flag. Walks dirty L2 summaries, regenerates
-// each via generateDagSummary, atomically refreshes content + 6 metadata
-// columns + clears summary_dirty (with FTS sync). Same apiKey/dryRun gate
-// as buildDag above. Cap HIPPO_DAG_REBUILD_CAP (default 20, hard ceiling
-// 1000) prevents runaway LLM cost.
+// 1.8. DAG summary rebuild: drain the summary_dirty queue set by child-write hooks; same apiKey/dryRun gate as buildDag.
+// Cap HIPPO_DAG_REBUILD_CAP (default 20, hard ceiling 1000) prevents runaway LLM cost.
 async function dagRebuildPass(run: SleepRun, { llmError, llmOpts }: SleepLlm): Promise<void> {
   const { result } = run;
   try {
@@ -117,15 +107,8 @@ async function dagRebuildPass(run: SleepRun, { llmError, llmOpts }: SleepLlm): P
   }
 }
 
-// -------------------------------------------------------------------------
-// 1.9. DAG entity profiles — cluster L2 topic summaries into L3 profiles
-// -------------------------------------------------------------------------
-// Aggregate per-entity L2 summaries (e.g. all the speaker:Alice
-// topic summaries) into a single L3 entity profile. Runs even when phase
-// 1.7 buildDag was skipped (re-clusters existing L2s every sleep).
-//
-// Uses loadAllL2Summaries (not `survivors`) because phase 1.7 wrote new
-// L2s directly via writeEntry without pushing back into survivors.
+// 1.9. DAG entity profiles: cluster L2 summaries into per-entity L3 profiles; runs even when 1.7 was skipped (re-clusters existing L2s every sleep).
+// Uses loadAllL2Summaries, not `survivors`: phase 1.7 wrote new L2s via writeEntry without pushing them into survivors.
 async function entityProfilePass(run: SleepRun, { llmError, llmOpts }: SleepLlm): Promise<void> {
   try {
     const { buildEntityProfiles } = await import('./dag.js');

@@ -1,28 +1,5 @@
-/**
- * Audit log retention pruning.
- *
- * The `audit_log` table grows unbounded by default — every recall, write,
- * outcome, sleep, supersede, promote, forget, archive_raw, auth_revoke,
- * and auth_create emits a row. On a long-running deployment, this can
- * accumulate to millions of rows and slow down both audit queries and
- * incremental SQLite VACUUMs.
- *
- * Regulatory retention floors (HIPAA, SOX, GDPR) are why the prune is opt-in
- * per tenant and emits its own audit trail event.
- *
- * Design notes:
- *   - Per-tenant by default (matches existing audit CLI conventions).
- *   - The prune itself emits an `audit_prune` audit row with metadata
- *     `{cutoff, count, dryRun}`, recursively recording the maintenance op
- *     in the audit trail. Operators investigating "where did old rows go"
- *     have one row left to find regardless of retention floor.
- *   - Dry-run mode returns the count without deleting — first-time
- *     operator safety.
- *   - DELETE is wrapped in a transaction so a mid-operation crash leaves
- *     audit_log in a consistent state.
- *   - The audit_prune row itself is NEVER pruned by the same call (it's
- *     written AFTER the DELETE WHERE ts < cutoff, so ts > cutoff).
- */
+/** Audit log retention pruning: opt-in per tenant because retention floors (HIPAA, SOX, GDPR) apply.
+ * The audit_prune row is written after the DELETE, so a call never prunes its own record. */
 
 import { pruneAuditRows } from '../store/audit.js';
 import { DAY_MS } from '../util/time.js';
@@ -47,10 +24,7 @@ export interface PruneAuditResult {
   dryRun: boolean;
 }
 
-/**
- * Compute the cutoff ISO timestamp for an N-days-ago cutoff. Exported for
- * testability so tests can pin "now" without mocking Date.
- */
+/** Cutoff ISO timestamp for N days ago; exported so tests can pin "now" without mocking Date. */
 export function computeCutoff(days: number, now: Date = new Date()): string {
   const cutoff = new Date(now.getTime() - days * DAY_MS);
   return cutoff.toISOString();
@@ -60,12 +34,8 @@ function isTenantIdString(value: string): value is string {
   return typeof value === 'string';
 }
 
-/**
- * Delete audit_log rows older than `olderThanDays` days for `tenantId`.
- * Emits an `audit_prune` event with metadata `{cutoff, count, dryRun}`.
- *
- * Throws on invalid inputs (non-positive days, missing tenantId).
- */
+/** Delete audit_log rows older than `olderThanDays` for `tenantId`, emitting an `audit_prune` event.
+ * Throws on non-positive days or a missing tenantId. */
 export function pruneAuditLog(
   hippoRoot: string,
   opts: PruneAuditOpts,
@@ -84,10 +54,7 @@ export function pruneAuditLog(
   return { cutoff, count, dryRun };
 }
 
-/**
- * Parse the `--older-than <value>` flag. Accepts either bare integer days
- * (`30`) or integer with `d` suffix (`30d`). Throws on invalid format.
- */
+/** Parse `--older-than`: bare integer days (`30`) or with a `d` suffix (`30d`); throws on any other format. */
 export function parseOlderThanFlag(raw: string): number {
   const m = raw.match(/^(\d+)(d)?$/i);
   if (!m) {

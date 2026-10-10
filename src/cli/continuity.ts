@@ -458,9 +458,7 @@ export function handleCurrent({ hippoRoot, tenantId, args, flags }: CommandConte
   throw new CliExit(1);
 }
 
-// ---------------------------------------------------------------------------
 // Working Memory
-// ---------------------------------------------------------------------------
 
 export function handleWm({ hippoRoot, args, flags }: CommandContext): void {
   requireInit(hippoRoot);

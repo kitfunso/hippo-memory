@@ -18,9 +18,7 @@ import { VERB_USAGE, USAGE_HEADER, USAGE_EXAMPLES, printAuditPruneUsage, printSl
 import { type FlagKind, type VerbFlags, VERB_FLAGS, flagKind, isKnownFlag, undeclaredFlags } from './cli/flags.js';
 import { CliExit } from './cli/exit.js';
 
-// ---------------------------------------------------------------------------
 // Helpers
-// ---------------------------------------------------------------------------
 
 // Commands that delete or hide memories: an unknown flag here stops the run instead of being ignored.
 const DESTRUCTIVE_COMMANDS: ReadonlySet<string> = new Set([
@@ -125,11 +123,8 @@ export function shouldAutoRepairCodexWrapper(currentCommand: string, flags: CliF
   return true;
 }
 
-// Repair-only: keeps the wrapper healthy for users who opted in via `hippo
-// hook install codex` (a Codex update can restore the real binary over our
-// shim). Never first-installs — silently swapping the codex binary on routine
-// commands is a consent violation and reads as binary hijacking to
-// supply-chain scanners.
+// Repair-only: never first-installs, because silently swapping the codex binary on routine commands
+// is a consent violation and reads as binary hijacking to supply-chain scanners.
 function maybeRepairCodexWrapper(currentCommand: string, flags: CliFlags): void {
   if (!shouldAutoRepairCodexWrapper(currentCommand, flags)) return;
   try {
@@ -480,9 +475,7 @@ function printHelp(command: string, args: string[]): void {
   else console.log(verbUsage(command) ?? usageText());
 }
 
-// ---------------------------------------------------------------------------
 // Entry point
-// ---------------------------------------------------------------------------
 
 function printVersion(): never {
   const __filename_local = fileURLToPath(import.meta.url);

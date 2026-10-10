@@ -1,14 +1,5 @@
-/**
- * Implementation of `hippo github` CLI subcommands. Extracted from the main
- * cli.ts so unit tests can import these functions directly without triggering
- * the cli.ts main() side effects. The cli.ts dispatcher re-exports the
- * top-level handleGitHub.
- *
- * Subcommands mirror the Slack connector shape (cli.ts §Slack subcommands):
- *   - hippo github backfill --repo <owner/name> [--since ISO] [--max <N>]
- *   - hippo github dlq list
- *   - hippo github dlq replay <id> [--force]
- */
+/** `hippo github` subcommands, split out of cli.ts so tests can import them without triggering main().
+ * The dispatcher in cli.ts re-exports handleGitHub. */
 
 import { envGitHubToken, envGitHubWebhookSecret, envGitHubWebhookSecretPrevious } from '../util/env.js';
 import { type Context, adminActor } from '../api/index.js';
@@ -37,9 +28,7 @@ function isFlagString(value: FlagValue): value is string {
   return typeof value === 'string';
 }
 
-// FlagValue never includes `number` (see its declaration above), so a
-// `value is number` predicate directly on FlagValue would not type-check —
-// the generic wrapper narrows a value of any type T instead.
+// FlagValue never includes `number`, so a `value is number` predicate on it would not type-check; the generic wrapper narrows any type T instead.
 function isNumberLike<T>(value: T): value is T & number {
   return typeof value === 'number';
 }
@@ -48,11 +37,7 @@ function isFlagValueNumberLike(value: FlagValue): boolean {
   return isNumberLike(value);
 }
 
-/**
- * Map a parsed envelope + eventName header to an IngestEvent discriminated
- * union. Returns null for unknown event types or shapes that don't pass the
- * type guards.
- */
+/** Map a parsed envelope + eventName header to an IngestEvent; null for unknown event types or shapes failing the type guards. */
 function parsedToIngestEvent(parsed: JsonValue, eventName: string): IngestEvent | null {
   if (eventName === 'issues' && isGitHubIssueEvent(parsed, eventName)) {
     return { eventName: 'issues', payload: parsed };
@@ -92,10 +77,7 @@ function maxPerStreamFlag(maxRaw: FlagValue): number | undefined {
   return undefined;
 }
 
-/**
- * `hippo github backfill`. The fetcher is injectable so tests can drive the
- * code path without hitting the network. Defaults to `realGitHubFetcher`.
- */
+/** `hippo github backfill`; the fetcher is injectable so tests avoid the network (default `realGitHubFetcher`). */
 export async function cmdGitHubBackfill(
   hippoRoot: string,
   tenantId: string,
@@ -174,9 +156,8 @@ const reingestParkedDelivery: IngestHook = async (innerCtx, args) => {
       deliveryId: args.deliveryId,
       eventName: event.eventName,
     });
-    // archivedCount maps to memoryId only loosely — return null since the
-    // archive operation can affect multiple rows. The replay-result audit
-    // trail is in github_dlq.retry_count + retried_at.
+    // archivedCount maps to memoryId only loosely (the archive can affect multiple rows), so return null;
+    // the replay audit trail is github_dlq.retry_count + retried_at.
     return { memoryId: r.archivedCount > 0 ? 'archived' : null };
   }
   const r = await ingestEvent(innerCtx, {

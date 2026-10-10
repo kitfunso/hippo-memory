@@ -84,21 +84,8 @@ const TRG_POLICIES_SUPERSEDE_TENANT_MATCH_UPDATE = `
 export const v33: Migration = {
     version: 33,
     up: (db) => {
-      // Policy first-class object.
-      // The "bi-temporal-first" object type: a named rule/statement that is in
-      // force over an EFFECTIVE-TIME range (valid_from required, valid_to nullable
-      // = open-ended) and evolves via the v32 processes supersede machinery
-      // (superseded_by self-FK + supersede tenant-match trigger + version +
-      // change_summary). This table = the v32 processes table MINUS `steps`
-      // (a policy has policy_text, not an ordered step list) PLUS the first-class
-      // effective-time columns valid_from/valid_to. Valid-time is the queryable
-      // axis (the as-of query loadPoliciesAsOf); transaction-time is present via
-      // created_at + the supersede chain's superseded_at (time-travel deferred).
-      //
-      // All date inputs are normalized to standard ISO-8601 datetime
-      // (toISOString) at the store boundary before persist/compare, so the
-      // fixed-width values sort lexically and the half-open [valid_from, valid_to)
-      // as-of comparison is correct.
+      // Policy first-class object: a rule in force over an effective-time range (valid_to nullable = open-ended); supersedes like v32 processes.
+      // Dates are ISO-8601 (toISOString) at the store boundary so values sort lexically and the half-open [valid_from, valid_to) as-of comparison is correct.
       if (!tableExists(db, 'policies')) {
         db.exec(POLICIES_TABLE);
         db.exec(IDX_POLICIES_TENANT_STATUS);

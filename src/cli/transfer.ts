@@ -37,9 +37,7 @@ import { CliExit } from './exit.js';
 const STDERR_PREVIEW_CHARS = 80;
 const MAX_ENTRIES_SHOWN = 10;
 
-// ---------------------------------------------------------------------------
 // Watch command
-// ---------------------------------------------------------------------------
 
 async function cmdWatch(command: string, hippoRoot: string, tenantId: string): Promise<void> {
   if (!command) {
@@ -87,9 +85,7 @@ async function cmdWatch(command: string, hippoRoot: string, tenantId: string): P
   throw new CliExit(exitCode);
 }
 
-// ---------------------------------------------------------------------------
 // Learn command
-// ---------------------------------------------------------------------------
 
 export function handleLearn({ hippoRoot, flags }: CommandContext): void {
   requireInit(hippoRoot);
@@ -123,9 +119,7 @@ export function handleLearn({ hippoRoot, flags }: CommandContext): void {
   }
 }
 
-// ---------------------------------------------------------------------------
 // Import command
-// ---------------------------------------------------------------------------
 
 /** The rows are saved either way; a failed backfill only delays vectors, so it warns with how many wait and the command that finishes them. */
 function warnBackfillFailed<E>(root: string, embedCommand: string, err: E): void {
@@ -169,12 +163,8 @@ export function handleImport({ hippoRoot, tenantId, args, flags }: CommandContex
     hippoRoot,
   };
 
-  // Vault import: a FOLDER importer that mirrors the connector pattern
-  // (kind='raw' + tag provenance + archiveRaw deletions), so it dispatches
-  // separately from the single-file `importer` function-pointer slot below.
-  // It writes through api.remember/archiveRaw which are tenant-scoped, so we
-  // resolve the tenant and pass it through. --global is not supported for
-  // vault import (the connector raw-archive path is tenant-local).
+  // Vault import is a FOLDER importer that dispatches apart from the single-file slot below; it writes through tenant-scoped api calls,
+  // so the tenant is resolved and passed through. --global is unsupported (the connector raw-archive path is tenant-local).
   if (flags['vault']) return importVaultFolder(hippoRoot, tenantId, flags, importOptions, useGlobal, dryRun);
   importFromFile(targetRoot, args, flags, { importOptions, useGlobal, dryRun });
 }
@@ -221,12 +211,8 @@ function importFromFile(targetRoot: string, args: string[], flags: CliFlags, opt
 
   const result = importer(filePath, importOptions);
 
-  // Batch producer: embed newly-imported rows on targetRoot in one pass
-  // rather than per-row (importers.ts writeEntry sites don't embed). The
-  // floating promise is deliberate: libuv keeps the process alive until it
-  // settles, so it is not dropped on process exit; `hippo embed --global` (or
-  // a local `hippo embed`) is the backstop if it does get interrupted. Do not
-  // "fix" this by awaiting it, that would block the CLI on model load/backfill.
+  // Batch-embed newly imported rows in one pass (the importers' writeEntry sites don't embed). The floating promise is deliberate: libuv keeps the process
+  // alive until it settles; do not await it, that would block the CLI on model load. `hippo embed` is the backstop if interrupted.
   if (!dryRun && result.imported >= 1) {
     void embedAll(targetRoot).catch((err) => warnBackfillFailed(targetRoot, useGlobal ? 'hippo embed --global' : 'hippo embed', err));
   }
@@ -312,9 +298,8 @@ function checkVaultArgs(folderPath: string, flags: CliFlags, useGlobal: boolean)
     throw new CliExit(1);
   }
   if (flags['scope'] !== undefined && (!isStringFlag(flags['scope']) || !flags['scope'].trim())) {
-    // Same valueless-flag trap: a bare `--scope` must not become scope "true".
-    // Example uses the source-prefixed private form, since a bare `private` scope
-    // is NOT treated as private by recall and importVault rejects it.
+    // Same valueless-flag trap: a bare `--scope` must not become scope "true". The example uses the source-prefixed private form,
+    // since a bare `private` scope is not treated as private by recall and importVault rejects it.
     printError('hippo import --vault: --scope requires a value (e.g. --scope vault:private:notes).');
     throw new CliExit(1);
   }
@@ -331,17 +316,14 @@ function printVaultSummary(vaultResult: ImportResult, folderPath: string, hippoR
   warnRedacted(vaultResult.redacted);
   console.log(`  ${dryRun ? 'Would archive:        ' : 'Archived (removed):   '}${vaultResult.archived ?? 0}`);
   console.log(`  Store:                 ${hippoRoot}`);
-  // Batch producer, same contract as the single-file import above: vault rows
-  // write through api.remember (which never embeds), so backfill them here.
-  // Floating promise is deliberate; see the comment at the single-file site.
+  // Batch producer, same contract as the single-file import above: vault rows write through api.remember (which never embeds), so backfill them here.
+  // The floating promise is deliberate; see the single-file site.
   if (!dryRun && vaultResult.imported >= 1) {
     void embedAll(hippoRoot).catch((err) => warnBackfillFailed(hippoRoot, 'hippo embed', err));
   }
 }
 
-// ---------------------------------------------------------------------------
 // Promote command
-// ---------------------------------------------------------------------------
 
 function cmdPromote(hippoRoot: string, tenantId: string, id: string): void {
   requireInit(hippoRoot);
@@ -362,9 +344,7 @@ function cmdPromote(hippoRoot: string, tenantId: string, id: string): void {
   }
 }
 
-// ---------------------------------------------------------------------------
 // Sync command
-// ---------------------------------------------------------------------------
 
 export function handleSync({ hippoRoot, flags }: CommandContext): void {
   requireInit(hippoRoot);

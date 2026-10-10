@@ -1,9 +1,5 @@
-/**
- * `hippo doctor`: a health check people and agents can run after installing
- * hippo, or when something seems off. Read-only: it never creates a store,
- * installs a hook or migrates a database. Every non-passing check names the
- * command that fixes it, so an agent can act on the `--json` output.
- */
+/** `hippo doctor`: a read-only health check (never creates a store, installs a hook or migrates a database).
+ * Every non-passing check names the command that fixes it, so an agent can act on the `--json` output. */
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';

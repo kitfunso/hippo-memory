@@ -3,14 +3,8 @@ import type { Migration } from './types.js';
 export const v44: Migration = {
     version: 44,
     up: (db) => {
-      // Dormant memories (src/store/dormant.ts): with `dormant.enabled`, the sleep
-      // decay pass moves a faded memory here instead of deleting it. The row
-      // leaves `memories` in the same transaction, so recall, context and
-      // every sleep pass stop seeing it; entry_json is the full MemoryEntry
-      // snapshot `hippo dormant restore` writes back. No FK to memories (the
-      // memories row is gone by design). Additive only, v41 precedent: no
-      // min_compatible_binary bump. An older binary ignores the table and
-      // keeps deleting faded memories as it always did.
+      // Dormant memories (src/store/dormant.ts): with `dormant.enabled`, sleep moves a faded memory here; `hippo dormant restore` writes entry_json back.
+      // No FK to memories (the row is gone by design). Additive only: no min_compatible_binary bump, an older binary ignores the table and keeps deleting.
       db.exec(`
         CREATE TABLE IF NOT EXISTS dormant_memories (
           tenant_id  TEXT NOT NULL DEFAULT 'default',

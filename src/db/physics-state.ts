@@ -1,8 +1,4 @@
-/**
- * Physics state persistence for Hippo.
- * Stores and loads particle state (position, velocity, mass, charge, temperature)
- * in SQLite using BLOB columns for 384-dim vectors.
- */
+/** Physics state persistence: particle state (position, velocity, mass, charge, temperature) in SQLite, with BLOB columns for 384-dim vectors. */
 
 import { evalNow } from '../core/ablation.js';
 import type { DatabaseSyncLike } from './index.js';
@@ -13,9 +9,7 @@ import { computeMass, computeCharge, computeTemperature, vecZero } from '../core
 import { calculateStrength } from '../core/memory.js';
 import { DAY_MS } from '../util/time.js';
 
-// ---------------------------------------------------------------------------
 // Float32Array <-> Buffer serialization
-// ---------------------------------------------------------------------------
 
 export function float32ToBuffer(arr: number[]): Buffer {
   const f32 = new Float32Array(arr);
@@ -31,14 +25,9 @@ export function bufferToFloat32(buf: Buffer | Uint8Array): number[] {
   return Array.from(new Float32Array(aligned));
 }
 
-// ---------------------------------------------------------------------------
 // Schema migration
-// ---------------------------------------------------------------------------
 
-/**
- * Create the memory_physics table (migration v8).
- * Call this from db.ts MIGRATIONS array.
- */
+/** Create the memory_physics table (migration v8). */
 export function createPhysicsTable(db: DatabaseSyncLike): void {
   db.exec(`
     CREATE TABLE IF NOT EXISTS memory_physics (
@@ -57,9 +46,7 @@ export function createPhysicsTable(db: DatabaseSyncLike): void {
   `);
 }
 
-// ---------------------------------------------------------------------------
 // Load / Save
-// ---------------------------------------------------------------------------
 
 interface PhysicsRow {
   memory_id: string;
@@ -155,10 +142,7 @@ export function savePhysicsState(
   });
 }
 
-/**
- * Initialize physics state for a memory from its embedding vector.
- * Returns the new particle (does not persist — caller must save).
- */
+/** Initialize physics state for a memory from its embedding vector; returns the new particle without persisting (the caller must save). */
 export function initializeParticle(
   entry: MemoryEntry,
   embedding: number[],
@@ -208,10 +192,7 @@ export function resetAllPhysicsState(
   });
 }
 
-/**
- * Refresh mass, charge, and temperature for existing particles
- * based on current memory attributes (called during consolidation).
- */
+/** Refresh mass, charge and temperature for existing particles from current memory attributes (called during consolidation). */
 export function refreshParticleProperties(
   particles: PhysicsParticle[],
   entries: Map<string, MemoryEntry>,

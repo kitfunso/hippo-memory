@@ -57,21 +57,8 @@ const CREATE_TRIGGER_TRG_INCIDENTS_TENANT_MATCH_UPDATE_SQL = `
 export const v31: Migration = {
     version: 31,
     up: (db) => {
-      // Incident first-class object.
-      // Mirrors the v30 decisions block but for an open -> resolved -> closed
-      // lifecycle (NOT supersede): there is no superseded_by self-FK and no
-      // supersede trigger. An incident is a postmortem capsule: a recorded
-      // operational event with a lifecycle and optional linked receipts (the
-      // memories that are its evidence, stored as a JSON array of ids in
-      // linked_memory_ids). The memory mirror is kept for recall but is not
-      // authoritative; memory_id is NULLABLE with ON DELETE SET NULL so
-      // forget/consolidate/archive does not lose an incident.
-      //
-      // status (open|resolved|closed): resolved records a resolution_text +
-      // resolved_at and stays on record; closed is a terminal retire reachable
-      // from open or resolved. Cross-tenant safety: BEFORE INSERT + BEFORE
-      // UPDATE triggers enforce incidents.tenant_id == the referenced memory's
-      // tenant_id (verbatim mirror of the v30 decisions tenant-match triggers).
+      // Incident first-class object: a postmortem capsule with an open -> resolved -> closed lifecycle (no supersede) and linked receipts (JSON ids).
+      // Memory mirror is for recall only (memory_id NULLABLE ON DELETE SET NULL); BEFORE INSERT/UPDATE triggers mirror the v30 tenant-match triggers.
       if (!tableExists(db, 'incidents')) {
         db.exec(CREATE_TABLE_INCIDENTS_SQL);
         db.exec(CREATE_INDEX_IDX_INCIDENTS_TENANT_STATUS_SQL);

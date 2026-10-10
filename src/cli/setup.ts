@@ -50,9 +50,7 @@ import { HOOK_MARKERS, HOOKS, hippoBlock, withoutHookBlock } from '../hooks/hook
 import { escapeRegex } from '../util/escape.js';
 import { CliExit } from './exit.js';
 
-// ---------------------------------------------------------------------------
 // Hook install/uninstall
-// ---------------------------------------------------------------------------
 
 export function handleHook({ args }: CommandContext): void {
   const subcommand = args[0];
@@ -136,9 +134,8 @@ function patchAgentFile(hook: HookSpec, target: string): void {
       console.log(`Installed Hippo hook in ${hook.file} (appended)`);
     }
   } else {
-    // Do not create a new agent-instructions file (CLAUDE.md, AGENTS.md, etc.) in directories that don't already have one —
-    // avoids polluting cwd with files the user didn't ask for. The settings.json hook below is still installed for
-    // claude-code, so the consolidation hook still runs.
+    // Do not create an agent-instructions file (CLAUDE.md, AGENTS.md, etc.) in directories without one, to avoid polluting cwd;
+    // the settings.json hook below is still installed for claude-code.
     console.log(
       `${hook.file} not found in ${process.cwd()} — skipping agent-instructions patch.`,
     );
@@ -180,7 +177,7 @@ function printClaudeHookInstall(result: ReturnType<typeof installJsonHooks>): vo
 }
 
 function installOpencodeHook(): void {
-  // opencode uses a TS plugin, not JSON hooks. See src/hooks.ts.
+  // opencode uses a TS plugin, not JSON hooks. See src/hooks/opencode.ts.
   const result = installOpencodePlugin();
   if (result.installed) {
     console.log(`Installed hippo opencode plugin at ${result.pluginPath}`);
@@ -304,9 +301,7 @@ function hookUninstall(target: string | undefined): void {
       warnClaudeSettingsUnusable(checkUninstallable(target), '', 'uninstall');
     }
   } else if (target === 'opencode') {
-    // opencode uses a TS plugin; uninstall removes the plugin file AND
-    // also runs the legacy-hooks migration so the downgrade/remove path
-    // leaves opencode launchable.
+    // opencode uses a TS plugin; uninstall removes the plugin file and also runs the legacy-hooks migration, so remove leaves opencode launchable.
     if (uninstallOpencodePlugin()) {
       console.log(`Removed hippo opencode plugin (and any legacy hooks block from opencode.json)`);
     }
@@ -389,7 +384,7 @@ function setupDetectedTools(tools: ReturnType<typeof detectInstalledTools>, forc
 }
 
 // `hippo setup` -- one-shot configuration for every AI coding tool on the box.
-// Detection and install logic live in ./hooks.ts.
+// Detection and install logic live in src/hooks/.
 
 export function handleSetup({ flags }: CommandContext): void {
   const dryRun = boolFlag(flags, 'dry-run');

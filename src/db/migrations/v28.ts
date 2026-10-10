@@ -4,20 +4,8 @@ import type { Migration } from './types.js';
 export const v28: Migration = {
     version: 28,
     up: (db) => {
-      // Dirty-flag persistence for level-2 DAG summaries, so child-write propagation and the
-      // sleep-cycle rebuild can write + read the staleness signal. dag_level_3_built_at lands
-      // now so the entity-profile build path needs no second migration.
-      //
-      // All columns are additive + DEFAULTed/nullable, so backfill is
-      // automatic for existing rows. No min_compatible_binary bump: old
-      // binaries ignore the columns on SELECTs that don't name
-      // them; new binaries on old data hit this migration at openHippoDb
-      // time before any DAG path touches summary_dirty.
-      //
-      // Precedent for column-only guards on memories: v25 (db.ts:827),
-      // which added the DAG cache columns the same way. memories table
-      // itself comes from v1 and is always present, so the tableExists
-      // half of the v26/v27 guard pattern isn't load-bearing here.
+      // Dirty-flag persistence for level-2 DAG summaries; dag_level_3_built_at lands now so the entity-profile path needs no second migration.
+      // Columns are additive and DEFAULTed/nullable, so no min_compatible_binary bump. Column-only guard: memories comes from v1 and always exists.
       if (!tableHasColumn(db, 'memories', 'summary_dirty')) {
         db.exec(`ALTER TABLE memories ADD COLUMN summary_dirty INTEGER NOT NULL DEFAULT 0`);
       }

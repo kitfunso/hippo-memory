@@ -156,9 +156,8 @@ function importLegacyVectors(db: DatabaseSyncLike, hippoRoot: string): void {
 }
 
 function ensureMetaDefaults(db: DatabaseSyncLike): void {
-  // Read-first: an already-current store has all 7 keys, so this is one
-  // SELECT and zero writes instead of 7 no-op INSERT OR IGNOREs, each of
-  // which takes a RESERVED lock even when nothing changes.
+  // Read-first: an already-current store has all 7 keys, so this is one SELECT and zero writes instead of 7 no-op
+  // INSERT OR IGNOREs, each of which takes a RESERVED lock even when nothing changes.
   const keys = META_DEFAULTS.map(([key]) => key);
   // SAFETY: the statement selects only the `key` column of `meta`, which is TEXT NOT NULL, so each row is { key: string }.
   const present = new Set(

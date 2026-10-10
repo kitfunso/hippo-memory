@@ -30,13 +30,7 @@ export function warnClaudeSettingsUnusable(result: Pick<InstallResult, 'settings
   return true;
 }
 
-/**
- * Set up a machine-level daily runner that sweeps all registered Hippo
- * workspaces.
- * Linux/macOS: writes to user crontab.
- * Windows: creates a scheduled task.
- * Skips if already installed.
- */
+/** Machine-level daily runner sweeping all registered workspaces: user crontab on Linux/macOS, a scheduled task on Windows; skips if installed. */
 /** Bound on each schtasks and crontab call, so a scheduler that never answers cannot hang `hippo init` or `hippo setup`. */
 const SCHEDULER_CALL_TIMEOUT_MS = 30_000;
 

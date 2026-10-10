@@ -1,18 +1,5 @@
-/**
- * HTTP client wrapper for `hippo serve`.
- *
- * Only the writes the CLI routes (remember, forget, archive, promote), which are
- * also all HIPPO_REQUIRE_SERVER covers; every other command opens the store
- * directly. Each call returns the same shape that api.ts would.
- *
- * Errors from the server (4xx/5xx) are mapped back into thrown Errors with
- * the server's `error` message preserved verbatim so existing CLI handlers
- * that match on substrings (e.g. "not found", "already superseded") still
- * work unchanged.
- *
- * Network errors (ECONNREFUSED on a stale pidfile, etc.) propagate as the
- * native fetch failure so the caller can detect them and self-heal.
- */
+/** HTTP client wrapper for `hippo serve`: only the routed writes (remember, forget, archive, promote); every other command opens the store directly.
+ * Server errors rethrow with the message verbatim so CLI substring matches still work; network errors propagate as the native fetch failure. */
 
 import type { RememberOpts, RememberResult } from '../api/index.js';
 import { fetchWithRetry } from '../util/http-retry.js';
@@ -45,9 +32,8 @@ function buildHeaders(apiKey: string | undefined, withBody: boolean) {
   return headers;
 }
 
-/** An error the server answered with, not one the transport raised. The
- *  refused-connection classifier sniffs message text, and a server message
- *  quotes the caller's own id or content back verbatim. */
+/** An error the server answered with, not one the transport raised: the refused-connection classifier sniffs message text,
+ *  and a server message quotes the caller's own id or content back verbatim. */
 export class HttpResponseError extends Error {
   constructor(message: string, readonly status: number) {
     super(message);
@@ -55,12 +41,8 @@ export class HttpResponseError extends Error {
   }
 }
 
-/**
- * Throw an Error matching the server's error message. Keeps message strings
- * intact so cli.ts handlers can match on the same substrings ("not found",
- * "already superseded", "Unknown key_id") whether the call went through
- * api.ts or client.ts.
- */
+/** Throw an Error carrying the server's message verbatim, so cli.ts handlers can match the same substrings
+ * ("not found", "already superseded") as on the direct path. */
 async function throwForStatus(res: Response): Promise<never> {
   let message = `${res.status} ${res.statusText}`;
   try {
@@ -135,20 +117,13 @@ export async function archiveRaw(
   return readReply<{ ok: true; archivedAt: string }>(res);
 }
 
-/**
- * How far a request got before the transport failed.
- *
- * 'never-sent' means the connection never opened, so the caller may safely
- * replay the call locally. 'delivery-unknown' means the socket broke with the
- * request already on the wire: the server may have committed it, so replaying a
- * write would store it twice. 'none' means this was not a transport failure.
- */
+/** 'never-sent': connection never opened, safe to replay locally. 'delivery-unknown': the request was on the wire and may have
+ * committed, so never replay a write. 'none': not a transport failure. */
 export type TransportFailure = 'none' | 'never-sent' | 'delivery-unknown';
 
 function hasObjectCause(e: Error): e is Error & { cause: { code?: unknown } } {
-  // Node's fs/net system errors (ECONNREFUSED, ECONNRESET) attach the syscall
-  // code on a non-null object `cause`; the strict-equality checks below
-  // validate the code value before it is used for anything.
+  // Node's fs/net system errors (ECONNREFUSED, ECONNRESET) attach the syscall code on a non-null object `cause`;
+  // the strict-equality checks below validate it before use.
   return typeof e.cause === 'object' && e.cause !== null;
 }
 

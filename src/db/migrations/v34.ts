@@ -77,17 +77,8 @@ const TRG_SKILLS_SUPERSEDE_TENANT_MATCH_UPDATE = `
 export const v34: Migration = {
     version: 34,
     up: (db) => {
-      // Skill first-class object.
-      // A skill is a reusable, agent-followable capability: an `instructions` body
-      // + an optional `trigger_text` (when to apply), evolving via the v32
-      // processes supersede machinery (superseded_by self-FK + supersede
-      // tenant-match trigger + version + change_summary). This table = the v32
-      // processes table MINUS `steps` (a skill's content is a single instructions
-      // body) PLUS `instructions` (NOT NULL) and `trigger_text`. "Executable" is
-      // scoped to an agent-followable instruction that EXPORTS into the agent's
-      // in-force rules (AGENTS.md / CLAUDE.md) via exportSkills; literal code
-      // execution is deferred. NOTE: the column is `trigger_text`, NOT `trigger`,
-      // because TRIGGER is a SQLite reserved keyword.
+      // Skill first-class object: `instructions` plus optional `trigger_text`, superseding like v32 processes; exportSkills writes it to AGENTS.md / CLAUDE.md.
+      // The column is `trigger_text`, not `trigger`, because TRIGGER is a SQLite reserved keyword.
       if (!tableExists(db, 'skills')) {
         db.exec(SKILLS_TABLE);
         db.exec(IDX_SKILLS_TENANT_STATUS);

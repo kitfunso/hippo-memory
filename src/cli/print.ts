@@ -72,10 +72,7 @@ export function printHandoff(handoff: SessionHandoff): void {
   console.log(handoffText(handoff));
 }
 
-/**
- * Run `fn` with console.log captured; returns the captured lines joined by
- * newlines (what the same calls would have printed, minus the final newline).
- */
+/** Run `fn` with console.log captured; returns the captured lines joined by newlines (no final newline). */
 export function captureConsole(fn: () => void): string {
   const lines: string[] = [];
   const realLog = console.log;

@@ -21,11 +21,7 @@ import { resolveTenantId } from '../store/tenant.js';
 import { errorMessage, log } from '../util/log.js';
 import type { CliFlags } from './flag-values.js';
 
-/**
- * Detached worker that counts re-reads, runs sleep, then capture. Invoked via the internal
- * `__session-end-worker` subcommand (not user-facing). Failures in one stage
- * do not block the other.
- */
+/** Detached worker (internal `__session-end-worker`): counts re-reads, runs sleep, then capture; one stage failing does not block the other. */
 /** A folder without its own store never sleeps at session end, so its project's agent notes go to the global store here. */
 export function logSessionEndImport(logFile: string | null, transcriptPath: string | undefined): void {
   try {
@@ -38,14 +34,8 @@ export function logSessionEndImport(logFile: string | null, transcriptPath: stri
   }
 }
 
-/**
- * Best-effort log line for the snapshot-close step in
- * `cmdSessionEndWorker`. `cmdSleep`/`cmdCapture` each tee console output to
- * `logFile` only for their own duration (the tee is restored before this
- * runs), so a plain `console.log` here would be silently discarded under
- * the detached worker's `stdio: 'ignore'` — write straight to the file
- * instead, matching capture.ts's `appendPreCompactLog` convention.
- */
+/** Best-effort log line for the cmdSessionEndWorker snapshot-close step: cmdSleep/cmdCapture restore their console tee before this runs,
+ * so console.log would be lost under the worker's `stdio: 'ignore'`; write to the file directly. */
 export function appendSessionEndCloseLog(logFile: string | null, message: string, opts: { startFresh?: boolean } = {}): void {
   if (!logFile) return;
   try {
@@ -72,13 +62,8 @@ export function hostSessionId(): string | undefined {
   return envHippoSessionId() ?? envClaudeCodeSessionId();
 }
 
-/**
- * Compaction drops the pinned blocks the per-prompt hook injected
- * earlier, so record a `reset` for the payload's session and the next prompt
- * injects again even if nothing changed. `requiredSource` limits it to hook
- * payloads with that `source` (SessionStart fires for other reasons too).
- * Best-effort and silent: a malformed payload records nothing.
- */
+/** Compaction drops the pinned blocks the per-prompt hook injected, so record a `reset` for the payload's session and the next prompt injects again.
+ * `requiredSource` limits it to payloads with that `source`; best-effort and silent on a malformed payload. */
 export function resetHookInjection(hippoRoot: string, stdinText: string | undefined, requiredSource: string | null): void {
   const sessionId = hookPayloadSessionId(stdinText, requiredSource);
   // A sub-agent's compaction leaves its parent's context, and the blocks in it, as they were.
@@ -88,13 +73,8 @@ export function resetHookInjection(hippoRoot: string, stdinText: string | undefi
   });
 }
 
-/**
- * The store a Claude Code hook writes to: the project store when there is
- * one, else an existing global store, else the project path (which the hook
- * then skips, since hooks fire in every directory and must not create one).
- * Pre-compact and compact-resume must agree, or a snapshot saved to one store
- * is looked for in the other.
- */
+/** Store a hook writes to: the project store, else an existing global one, else the project path (skipped: hooks must not create a store).
+ * Pre-compact and compact-resume must agree, or a snapshot is looked for in the other store. */
 export function hookStoreRoot(hippoRoot: string): string {
   if (isInitialized(hippoRoot)) return hippoRoot;
   const globalRoot = getGlobalRoot();

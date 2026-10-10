@@ -4,11 +4,8 @@ import type { Migration } from './types.js';
 export const v25: Migration = {
     version: 25,
     up: (db) => {
-      // DAG-aware recall: cache summary metadata so the assembler can
-      // reason about scope without re-walking the DAG. Three additive,
-      // optional columns. No min_compatible_binary bump: these columns are
-      // pure metadata; older binaries opening this DB will see them as NULL
-      // / 0 and behave as before.
+      // DAG-aware recall: three additive optional columns cache summary metadata so the assembler need not re-walk the DAG.
+      // No min_compatible_binary bump: older binaries see them as NULL / 0 and behave as before.
       if (!tableHasColumn(db, 'memories', 'descendant_count')) {
         db.exec(`ALTER TABLE memories ADD COLUMN descendant_count INTEGER NOT NULL DEFAULT 0`);
       }
@@ -18,9 +15,7 @@ export const v25: Migration = {
       if (!tableHasColumn(db, 'memories', 'latest_at')) {
         db.exec(`ALTER TABLE memories ADD COLUMN latest_at TEXT`);
       }
-      // Backfill descendant_count for existing level-2 summary rows. Use
-      // dag_parent_id pointing at the summary id. Level-3 (entity profiles)
-      // not built today; their descendant_count stays at default 0.
+      // Backfill descendant_count for existing level-2 summary rows via dag_parent_id = summary id; level-3 (entity profiles) is not built, so it stays 0.
       db.exec(`
         UPDATE memories
            SET descendant_count = (

@@ -120,22 +120,18 @@ function printDedupPairs(result: DedupResult, dryRun: boolean): void {
   }
 }
 
-// ---------------------------------------------------------------------------
 // Embed command
-// ---------------------------------------------------------------------------
 
 export async function handleEmbed(
   { hippoRoot, flags }: CommandContext,
   given?: EmbeddingProvider,
 ): Promise<void> {
-  // --global mirrors resolveAuthRoot (cli.ts:6900): initGlobal() + the global
-  // root, skipping the local requireInit entirely, so this is the healing
-  // path for pre-1.27.0 global stores from a directory with no local .hippo.
+  // --global mirrors resolveAuthRoot: initGlobal() + the global root, skipping the local requireInit,
+  // so it heals pre-1.27.0 global stores from a directory with no local .hippo.
   const root = resolveAuthRoot(hippoRoot, flags);
 
-  // --status and --reset-physics only read cached state, so they must work even
-  // when no provider key is present (e.g. embedded earlier with a key that was
-  // later removed). The provider-availability gate is deferred to the embed path.
+  // --status and --reset-physics only read cached state, so they must work with no provider key (e.g. removed after an earlier embed);
+  // the provider-availability gate is deferred to the embed path.
   if (flags['reset-physics']) {
     resetPhysics(root);
     return;

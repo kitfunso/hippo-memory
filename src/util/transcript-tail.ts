@@ -1,4 +1,4 @@
-// Transcript reads shared by capture.ts and compaction-record.ts; a leaf so neither has to import the other.
+// Transcript reads shared by src/capture/ and compaction-record.ts; a leaf so neither has to import the other.
 import * as fs from 'fs';
 
 /** Never read the whole transcript: PreCompact fires exactly when it's largest. */

@@ -69,9 +69,8 @@ function cmdForget(
 
   const ctx = cliApiContext(hippoRoot, tenantId);
 
-  // Raw memories (Slack / GitHub connector ingestion) are append-only: a
-  // BEFORE-DELETE trigger aborts any delete. archiveRaw is the sanctioned
-  // removal path; it records ctx.actor as the archiver for provenance.
+  // Raw memories (connector ingestion) are append-only: a BEFORE-DELETE trigger aborts any delete,
+  // so archiveRaw is the sanctioned removal path and records ctx.actor as the archiver.
   if (flagIsTrue(flags, 'archive')) {
     archiveForgottenRaw(ctx, id, stringFlag(flags, 'reason') ?? null);
     return;
@@ -233,9 +232,7 @@ export async function handleResolve({ hippoRoot, tenantId, args, flags }: Comman
   console.log(`Resolved conflict ${conflictId}: kept ${keepId}, ${action} ${result.loserId}`);
 }
 
-// ---------------------------------------------------------------------------
 // reject / rejections / unreject
-// ---------------------------------------------------------------------------
 
 export function handleReject({ hippoRoot, tenantId, args, flags }: CommandContext): void {
   // Store resolution mirrors `hippo remember`: --global writes to the
@@ -347,12 +344,8 @@ export function handleUnreject({ hippoRoot, tenantId, args, flags }: CommandCont
   console.log(`Unrejected [${outcome.digest.slice(0, DIGEST_DISPLAY_CHARS)}...] (was: ${outcome.reason ?? 'none given'})`);
 }
 
-/**
- * `hippo dormant [list] [<query>...] [--limit <n>] [--json] [--global]`,
- * `hippo dormant restore <id>`, `hippo dormant forget <id>`.
- * Dormant memories are what sleep keeps instead of deleting (on by default;
- * `"dormant": { "enabled": false }` in .hippo/config.json deletes instead).
- */
+/** `hippo dormant [list|restore <id>|forget <id>]`: dormant memories are what sleep keeps instead of deleting
+ * (on by default; `"dormant": { "enabled": false }` in .hippo/config.json deletes instead). */
 export function handleDormant({ hippoRoot, tenantId, args, flags }: CommandContext): void {
   const root = resolveAuthRoot(hippoRoot, flags);
   const ctx = cliApiContext(root, tenantId);

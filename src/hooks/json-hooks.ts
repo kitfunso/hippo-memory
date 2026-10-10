@@ -1,38 +1,5 @@
-/**
- * Hook install/uninstall for AI coding tools.
- *
- * Two integration models live in this file:
- *
- * 1. JSON-hook install (Claude Code only). Writes a `hooks` block into the
- *    tool's settings.json with two entries:
- *      - SessionEnd: `hippo session-end --log-file <path>` - spawns a detached
- *        child that runs `hippo sleep` then `hippo capture --last-session` in
- *        sequence, writing both outputs to the log file. The parent returns in
- *        <100ms so the TUI teardown can't kill the child before it finishes.
- *      - SessionStart: `hippo last-sleep --path <path>` - prints the log
- *        written by the previous session's detached worker on stderr and
- *        clears it. Stdout carries only a `systemMessage` problems line,
- *        because Claude Code shows that to the user, not the model.
- *    Earlier Claude Code forms are detected and migrated automatically:
- *      - < 0.20.2: `Stop` hook firing `hippo sleep` on every assistant turn.
- *      - < 0.21.0: bare `hippo sleep` in SessionEnd, no `--log-file`.
- *      - 0.22.x: separate sleep + capture SessionEnd entries.
- *    PreCompact and PostCompact entries go in too: the first records the compaction and
- *    asks the summariser for a "Memories for hippo" list, the second saves that list.
- *    Codex's hooks.json gets only two groups (per-prompt memory and
- *    compact-resume); see installCodexHooks. Copilot gets a file of its own; see installCopilotHooks.
- *
- * 2. Plugin install (OpenCode only). OpenCode does NOT share Claude Code's
- *    JSON-hook schema — its config has `additionalProperties: false` and no
- *    `hooks` key, so a JSON-hook install breaks opencode launch. Hippo
- *    installs a TypeScript plugin at
- *    `~/.config/opencode/plugins/hippo.ts` subscribing to opencode's
- *    `session.idle` (→ `hippo session-end`) and `session.created` (→
- *    `hippo last-sleep`) events. See OPENCODE_PLUGIN_SOURCE below for the
- *    plugin file content + design rationale; see installOpencodePlugin for
- *    the installer + the migration that removes any pre-existing broken
- *    `hooks` block from opencode.json.
- */
+/** Hook install/uninstall for AI coding tools. Claude Code gets a JSON `hooks` block in settings.json; older forms are migrated automatically.
+ * OpenCode rejects the JSON-hook schema (no `hooks` key), so it gets a TS plugin (OPENCODE_PLUGIN_SOURCE); see installCodexHooks, installCopilotHooks. */
 
 import * as fs from 'fs';
 import * as path from 'path';
@@ -371,11 +338,8 @@ function appendSessionHooks(hooks: ClaudeHooks, logFile: string) {
   const installedSessionStart = appendHookIfMissing(hooks, 'SessionStart', HIPPO_LAST_SLEEP_MARKER,
     claudeCommandGroup(`hippo last-sleep --path "${logFile}"`, 5));
 
-  // Mid-session pinned-rule re-injection: UserPromptSubmit runs every turn,
-  // so pinned memories stay in context even after the model would otherwise
-  // "forget" them in a long session. Include the fresh write tail so lessons
-  // saved earlier in the same session become visible on the next prompt even
-  // before the user pins them explicitly.
+  // Mid-session pinned-rule re-injection: UserPromptSubmit runs every turn, so pinned memories stay in context; the fresh write tail
+  // makes lessons saved earlier in the session visible on the next prompt even before they are pinned.
   const migratedPinnedInjectRecent = migratePinnedInjectRecentCommands(hooks.UserPromptSubmit);
   const installedUserPromptSubmit = appendHookIfMissing(hooks, 'UserPromptSubmit', HIPPO_PINNED_INJECT_MARKER,
     claudeCommandGroup(HIPPO_PINNED_INJECT_COMMAND, 5));
@@ -383,19 +347,13 @@ function appendSessionHooks(hooks: ClaudeHooks, logFile: string) {
 }
 
 function appendCompactionHooks(hooks: ClaudeHooks) {
-  // PreCompact: fires on manual AND auto compaction (no matcher). Records the compaction, asks the
-  // summariser for a "Memories for hippo" list and saves a working-state snapshot before the summary drops detail.
-  // Exit-0 contract lives in the verb itself (src/capture.ts cmdPreCompact),
-  // not here — this is install-time wiring only.
+  // PreCompact: fires on manual AND auto compaction (no matcher); records it, asks the summariser for a "Memories for hippo" list and saves a snapshot.
+  // The exit-0 contract lives in the verb itself (cmdPreCompact, src/capture/compact.ts), not in this install-time wiring.
   const installedPreCompact = appendHookIfMissing(hooks, 'PreCompact', HIPPO_PRE_COMPACT_MARKER,
     claudeCommandGroup(`hippo pre-compact --log-file "${defaultPreCompactLogPath()}"`, 30));
 
-  // SessionStart(compact): a SECOND SessionStart entry alongside the
-  // un-matched last-sleep entry above. The matcher is an optimization, not
-  // a dependency — compact-resume itself checks payload.source too, so an
-  // older Claude Code that ignores the matcher just runs a silent no-op on
-  // normal starts. Marker check keys on the command string, so this stays
-  // idempotent alongside the sibling last-sleep entry.
+  // SessionStart(compact): a second SessionStart entry beside the unmatched last-sleep one. The matcher is an optimization, not a dependency:
+  // compact-resume checks payload.source itself, and the marker check keys on the command string, so this stays idempotent.
   const installedCompactResume = appendHookIfMissing(hooks, 'SessionStart', HIPPO_COMPACT_RESUME_MARKER,
     claudeCommandGroup('hippo compact-resume', 10, 'compact'));
 
@@ -417,9 +375,8 @@ function installClaudeCodeHooks(settingsPath: string, settings: JsonObject, logF
     appendSessionHooks(hooks, logFile);
   const { installedPreCompact, installedCompactResume, installedPostCompact } = appendCompactionHooks(hooks);
 
-  // PostToolUseFailure: a failed tool call becomes an error memory, after
-  // `hippo capture-error` drops routine failures (interrupts, declined
-  // permissions, empty searches) and repeats. Same hook the plugin ships.
+  // PostToolUseFailure: a failed tool call becomes an error memory, after `hippo capture-error` drops routine failures
+  // (interrupts, declined permissions, empty searches) and repeats. Same hook the plugin ships.
   const installedCaptureError = appendHookIfMissing(hooks, 'PostToolUseFailure', HIPPO_CAPTURE_ERROR_MARKER,
     claudeCommandGroup('hippo capture-error', 10, '.*'));
 

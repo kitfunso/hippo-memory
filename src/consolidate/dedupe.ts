@@ -1,25 +1,5 @@
-/**
- * Store-level deduplication. Scans for memories with the same text apart
- * from spacing, keeps the stronger copy (by strength + retrieval count),
- * removes the rest.
- *
- * Extracted from cli.ts in Episode A (v1.11.3) so `api.sleep` can dedupe
- * during the consolidation pipeline without violating the cli -> api
- * dependency direction. `handleDedup` in cli.ts continues to import and use
- * this function unchanged.
- *
- * Survivor selection is a total order as of v1.26.3
- * (docs/plans/2026-07-16-dedupe-survivor-determinism.md): strength bucket
- * desc -> retrieval_count desc -> compareEntryIdentity (content asc ->
- * layer rank -> tags -> source -> id asc; the metadata keys arrived in
- * v1.38.1, docs/plans/2026-09-04-dedupe-survivor-metadata.md). Previously
- * the strength/retrieval-count comparator could tie exactly with no terminal
- * key, so the survivor fell to load order (arrival-order-dependent); see
- * `strengthBucket` below for the bucket encoding. As of the tenant-partition
- * fix (docs/plans/2026-08-15-dedupe-tenant-partition.md) the order is scoped
- * WITHIN each tenant group; cross-tenant pairs are never compared. Raw and
- * superseded rows are not candidates at all (v1.38.1).
- */
+/** Store-level dedup: same text apart from spacing, keeping the stronger copy; split out so `api.sleep` can dedupe without cli -> api imports.
+ * Survivor order is total and tenant-scoped: strength bucket, retrieval_count, then compareEntryIdentity; raw and superseded rows are not candidates. */
 
 import { textOverlap } from '../util/tokenize.js';
 import { loadCurrentDistilledEntries } from '../store/entry-reads.js';
@@ -47,42 +27,18 @@ export interface DedupResult {
   pairs: DedupPair[];
 }
 
-/** Quantization step for strength-tie comparisons. The historical 0.01
- *  epsilon (see `strengthBucket` below) applied via rounding instead of a
- *  raw abs-diff threshold, so the tiebreak is transitive. */
+/** Quantization step for strength-tie comparisons: the 0.01 epsilon applied by rounding instead of an abs-diff threshold, so the tiebreak is transitive. */
 const STRENGTH_TIE_EPSILON = 0.01;
 
-/**
- * Quantize a strength value into an integer "bucket" for tie comparison.
- *
- * Encodes the historical 0.01 epsilon transitively: two strengths compare
- * equal here iff they round to the same multiple of `STRENGTH_TIE_EPSILON`,
- * which (unlike a raw `Math.abs(a - b) > epsilon` check) is a genuine
- * equivalence relation — no more "A ties B, B ties C, but A beats C"
- * (see the file-level history note above).
- *
- * Non-finite input (`NaN`, `+/-Infinity`) maps to bucket `0` rather than
- * propagating: a NaN bucket would make the sort comparator return NaN,
- * silently reintroducing the non-total-order class this fix exists to kill.
- * (`null`/`undefined` already default to strength `0` via `?? 0`, same as
- * before this change.)
- *
- * Bucket-edge nuance: two strengths straddling a bucket edge (e.g. 0.0049 vs
- * 0.0051) now compare as different, where the old raw-epsilon check called
- * them tied. The flip always favors the not-weaker entry, and the OLD
- * behavior at such pairs was itself order/engine-dependent (the defect this
- * fix exists to kill) — so there is no stable prior behavior being broken.
- */
+/** Quantize strength to an integer bucket so ties are a true equivalence relation (equal iff same multiple of `STRENGTH_TIE_EPSILON`).
+ * Non-finite input maps to 0: a NaN bucket would make the comparator return NaN and break the total order. */
 export function strengthBucket(strength: number | null | undefined): number {
   const s = strength ?? 0;
   return Number.isFinite(s) ? Math.round(s / STRENGTH_TIE_EPSILON) : 0;
 }
 
-// finiteCount mirrors strengthBucket's non-finite hardening on the
-// retrieval leg: a NaN retrieval_count would make the comparator return
-// NaN and break the total order the same way a NaN bucket would.
-// Unreachable via the schema (non-nullable INTEGER column), so this is
-// symmetry, not a live bug.
+// finiteCount hardens the retrieval leg like strengthBucket: a NaN would break the total order.
+// Unreachable via the schema (non-nullable INTEGER column); kept for symmetry.
 const finiteCount = (n: number | null | undefined): number =>
   Number.isFinite(n ?? 0) ? (n ?? 0) : 0;
 
@@ -95,12 +51,8 @@ function survivorOrder(a: MemoryEntry, b: MemoryEntry): number {
   return compareEntryIdentity(a, b);
 }
 
-// Tenant partition (mirrors consolidate.ts mergeCandidatesByTenant and
-// dag.ts unparentedByTenant): group by tenantId BEFORE the sort so a
-// duplicate pair can never form across tenants. Map preserves insertion
-// order, so a single-tenant store (every row 'default') gets exactly one
-// group and the sort plus pair loop below run byte-identical to the
-// pre-fix global pass.
+// Tenant partition: group by tenantId before sorting so a duplicate pair never forms across tenants; Map keeps insertion order,
+// so a single-tenant store gets one group and the same result as a global pass.
 function entriesByPartition(entries: readonly MemoryEntry[]): Map<string, MemoryEntry[]> {
   const entriesByTenant = new Map<string, MemoryEntry[]>();
   for (const entry of entries) {
@@ -144,29 +96,19 @@ function partitionPairs(tenantEntries: readonly MemoryEntry[], removed: Set<stri
   return [...groups.values()].flatMap((group) => group.pairs);
 }
 
-/**
- * Scan the store for duplicates and remove the weaker copy: same text apart
- * from spacing, since a near-duplicate can differ in a value (port, version,
- * path, name), AND the same tenant: the scan is partitioned by
- * tenantId, so byte-identical content in two tenants is never a duplicate
- * pair (the tenant boundary is an isolation boundary; cross-tenant removal
- * was the v1.32.0 known-issue data-loss bug).
- * Keeps the one with higher strength (or more retrievals if tied). `threshold` is accepted for old callers and ignored.
- */
+/** Remove the weaker copy of same-text (apart from spacing) memories within one tenant; cross-tenant pairs are never duplicates (isolation boundary).
+ * Higher strength wins, then more retrievals; `threshold` is accepted for old callers and ignored. */
 export function deduplicateStore(
   hippoRoot: string,
   options: { threshold?: number; dryRun?: boolean; actor?: string } = {}
 ): DedupResult {
   const dryRun = options.dryRun ?? false;
   // Only current distilled rows compete: raw rows are append-only (the delete
-  // trigger would abort sleep mid-loop) and superseded rows are history, as in consolidate.ts.
+  // trigger would abort sleep mid-loop) and superseded rows are history.
   const entries = loadCurrentDistilledEntries(hippoRoot);
   const entriesByTenant = entriesByPartition(entries);
 
-  // Shared across tenant groups: safe because memory ids are globally
-  // unique (crypto.randomUUID at creation), so an id in `removed` can never
-  // collide with another tenant's row, and deleteEntry below deletes by
-  // primary-key id alone.
+  // Shared across tenant groups: ids are globally unique UUIDs, so `removed` cannot collide across tenants and deleteEntry deletes by primary key alone.
   const removed = new Set<string>();
   const pairs: DedupPair[] = [];
   const backing = memoriesBackingObjects(hippoRoot);

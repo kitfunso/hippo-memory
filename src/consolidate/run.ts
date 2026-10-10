@@ -29,9 +29,8 @@ export interface ConsolidationResult {
   summariesRebuilt: number;
   summariesRebuildFailed: number;
   summariesZeroChildSkipped: number;
-  // Hardening pass: tombstone-refused rebuilds split out of `rebuilt` so the
-  // stat no longer silently absorbs refusals (metadata still applied, dirty
-  // still cleared - counters only; see applyRebuildResult's return contract).
+  // Hardening pass: tombstone-refused rebuilds are split out of `rebuilt` so the stat does not absorb refusals
+  // (metadata is still applied and dirty cleared; counters only, see applyRebuildResult's return contract).
   summariesRebuildRefused: number;
   summariesRebuildCapped: boolean;
   entityProfilesCreated: number;

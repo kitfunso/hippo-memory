@@ -204,9 +204,8 @@ function openInBrowser(out: string): void {
           ? ['open', [out]]
           : ['xdg-open', [out]];
     const child = spawn(cmd, cmdArgs, { detached: true, stdio: 'ignore', windowsHide: true });
-    // A missing launcher (e.g. xdg-open absent) emits 'error' asynchronously;
-    // an unhandled 'error' event would throw, so swallow it — the file is
-    // already written and its path printed above.
+    // A missing launcher (e.g. xdg-open absent) emits 'error' asynchronously; unhandled, it would throw,
+    // so swallow it: the file is already written and its path printed above.
     child.on('error', () => { /* best-effort launch */ });
     child.unref();
   } catch (err) {

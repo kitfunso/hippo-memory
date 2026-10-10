@@ -4,12 +4,8 @@ import { isQuarantineScope } from '../trust/quarantine.js';
 import { isPersonalScope } from '../store/recall-scope.js';
 import { DECAY_THRESHOLD } from './decay.js';
 
-// Contradictions should be gated by content overlap, not shared tags. Tags like
-// `feedback` / `policy` are too coarse and can make unrelated rules look like
-// conflicts before the polarity heuristics run.
-// Jaccard threshold on stopword-filtered tokens. Only applied after a polarity
-// signal has already been detected (explicit pair or inferred negation), so
-// this just filters out drive-by topic similarity, not semantic drift.
+// Gate contradictions on content overlap, not shared tags (`feedback`/`policy` are too coarse). The Jaccard threshold on stopword-filtered tokens
+// only applies after a polarity signal, so it filters drive-by topic similarity, not semantic drift.
 const CONFLICT_OVERLAP_THRESHOLD = 0.5;
 // Minimum distinctive shared tokens before we trust an overlap score. Filters
 // out cases where two memories share only common English + a project name.
@@ -55,9 +51,8 @@ export function detectConflicts(
 
   for (let i = 0; i < survivors.length; i++) {
     for (const j of partnersOf(i)) {
-      // Traces are variants of each other, not contradictions. Two
-      // strategies for the same task can both be valid; conflict detection
-      // exists for stated-rule disagreement, not strategy diversity.
+      // Traces are variants of each other, not contradictions: two strategies for the same task can both be valid,
+      // and conflict detection is for stated-rule disagreement, not strategy diversity.
       if (survivors[i].layer === Layer.Trace && survivors[j].layer === Layer.Trace) continue;
       if (survivors[i].superseded_by || survivors[j].superseded_by) continue;
       if (!recalledTogether(survivors[i], survivors[j])) continue;
@@ -96,8 +91,7 @@ interface ConflictProfile {
 
 function conflictProfile(text: string): ConflictProfile {
   const opening = openingWindow(text);
-  // Polarity is measured only in the first POLARITY_WINDOW_WORDS, so a stray
-  // negation deep in a prose memory doesn't flip the intent.
+  // Polarity is measured only in the first POLARITY_WINDOW_WORDS, so a stray negation deep in a prose memory doesn't flip the intent.
   // Pad with spaces so space-delimited patterns match words at the start/end.
   return { distinct: distinctiveTokens(text), polarity: inferConflictPolarity(opening), window: ' ' + opening.toLowerCase() + ' ' };
 }
@@ -154,9 +148,7 @@ function classifyConflictType(
   aPolarity: ConflictPolarity,
   bPolarity: ConflictPolarity,
 ): string | null {
-  // Tightened tokens: require whole-word boundaries so " on " alone doesn't
-  // match "on/off". Pair only `enabled` ↔ `disabled` and explicit on/off in
-  // imperative context.
+  // Whole-word boundaries so " on " alone doesn't match "on/off"; pair only `enabled` <-> `disabled` and explicit on/off in imperative context.
   const enabledDisabled =
     (containsAny(a, [' enabled ', ' enable ']) && containsAny(b, [' disabled ', ' disable ']))
     || (containsAny(b, [' enabled ', ' enable ']) && containsAny(a, [' disabled ', ' disable ']));

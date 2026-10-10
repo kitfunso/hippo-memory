@@ -6,9 +6,7 @@ import { errorMessage } from '../util/log.js';
 
 const STATS_DECIMALS = 4;
 
-// -------------------------------------------------------------------------
 // 2. Physics simulation pass
-// -------------------------------------------------------------------------
 export function physicsPass(run: SleepRun): void {
   if (run.dryRun) return;
   const { config, result } = run;

@@ -184,13 +184,8 @@ async function cmdInspect(hippoRoot: string, tenantId: string, id: string): Prom
   console.log(entry.content);
 }
 
-/**
- * `hippo tokens [--days <n>] [--json] [--global]`: the token ledger.
- * Tokens of memory text handed to agents per surface, blocks
- * the per-prompt hook skipped as unchanged and the tokens that saved,
- * and the hook blocks' tokens later model calls re-read, counted when each session ends.
- * Counts are estimates (characters / 4), the same estimate every budget uses.
- */
+/** `hippo tokens [--days <n>] [--json] [--global]`: the token ledger per surface, tokens saved by skipped unchanged blocks, and re-read hook tokens.
+ * Counts are estimates (characters / 4), the same estimate every budget uses. */
 export function handleTokens({ hippoRoot, tenantId, flags }: CommandContext): void {
   const root = resolveAuthRoot(hippoRoot, flags);
   const ctx = cliApiContext(root, tenantId);
