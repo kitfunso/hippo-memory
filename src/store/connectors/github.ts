@@ -3,6 +3,7 @@
 import { withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
 import { archiveRawMemory } from '../raw-archive.js';
 import { onHandle } from '../open.js';
+import type { ConnectorEventRecord } from '../port.js';
 
 /** One github_event_log row to write; `memoryId` is null for an event that produced no memory. */
 export interface GitHubEventLogEntry {
@@ -12,12 +13,12 @@ export interface GitHubEventLogEntry {
   memoryId: string | null;
 }
 
-export function eventSeenAt(db: DatabaseSyncLike, idempotencyKey: string): boolean {
+export function githubEventSeenAt(db: DatabaseSyncLike, idempotencyKey: string): boolean {
   const row = db.prepare(`SELECT 1 FROM github_event_log WHERE idempotency_key = ?`).get(idempotencyKey);
   return !!row;
 }
 
-export function eventMemoryAt(db: DatabaseSyncLike, idempotencyKey: string): string | null {
+export function githubEventMemoryAt(db: DatabaseSyncLike, idempotencyKey: string): string | null {
   // SAFETY: the SELECT projects exactly the memory_id column of github_event_log.
   const row = db.prepare(`SELECT memory_id FROM github_event_log WHERE idempotency_key = ?`).get(idempotencyKey) as
     | { memory_id: string | null }
@@ -26,21 +27,20 @@ export function eventMemoryAt(db: DatabaseSyncLike, idempotencyKey: string): str
 }
 
 /** False when the key was already logged, so a caller inside a write scope can roll its own row back. */
-export function logEventAt(db: DatabaseSyncLike, entry: GitHubEventLogEntry): boolean {
+export function markGitHubEventSeenAt(db: DatabaseSyncLike, entry: GitHubEventLogEntry): boolean {
   const inserted = db.prepare(
     `INSERT OR IGNORE INTO github_event_log (idempotency_key, delivery_id, event_name, ingested_at, memory_id) VALUES (?, ?, ?, ?, ?)`,
   ).run(entry.idempotencyKey, entry.deliveryId, entry.eventName, new Date().toISOString(), entry.memoryId);
   return Number(inserted.changes ?? 0) !== 0;
 }
 
-/** The memory an already-seen key points at, or null when the key is new. */
-export function seenEvent(hippoRoot: string, idempotencyKey: string): { memoryId: string | null } | null {
-  return onHandle(hippoRoot, (db) =>
-    eventSeenAt(db, idempotencyKey) ? { memoryId: eventMemoryAt(db, idempotencyKey) } : null);
+export function githubEventRecord(hippoRoot: string, idempotencyKey: string): ConnectorEventRecord {
+  return onHandle(hippoRoot, (db): ConnectorEventRecord =>
+    githubEventSeenAt(db, idempotencyKey) ? { seen: true, memoryId: githubEventMemoryAt(db, idempotencyKey) } : { seen: false });
 }
 
-export function logEvent(hippoRoot: string, entry: GitHubEventLogEntry): void {
-  onHandle(hippoRoot, (db) => { logEventAt(db, entry); });
+export function markGitHubEventSeen(hippoRoot: string, entry: GitHubEventLogEntry): void {
+  onHandle(hippoRoot, (db) => { markGitHubEventSeenAt(db, entry); });
 }
 
 export interface ArtifactDeletion {
@@ -56,7 +56,7 @@ export interface ArtifactDeletion {
 /** Archives every active raw row of one tenant's artifact and logs the delete event; a failed archive rolls back the batch and the log row. */
 export function archiveDeletedArtifact(hippoRoot: string, del: ArtifactDeletion): { duplicate: boolean; archived: number } {
   return onHandle(hippoRoot, (db) => {
-    if (eventSeenAt(db, del.idempotencyKey)) return { duplicate: true, archived: 0 };
+    if (githubEventSeenAt(db, del.idempotencyKey)) return { duplicate: true, archived: 0 };
     const logged = { idempotencyKey: del.idempotencyKey, deliveryId: del.deliveryId, eventName: del.eventName };
 
     // SAFETY: the SELECT projects only the `id` column.
@@ -69,13 +69,13 @@ export function archiveDeletedArtifact(hippoRoot: string, del: ArtifactDeletion)
 
     if (memoryIds.length === 0) {
       // Still logged, so a retry of the same delete answers 'duplicate'.
-      logEventAt(db, { ...logged, memoryId: null });
+      markGitHubEventSeenAt(db, { ...logged, memoryId: null });
       return { duplicate: false, archived: 0 };
     }
 
     withWriteScope(db, 'github_delete_all', () => {
       for (const id of memoryIds) archiveRawMemory(db, id, { reason: del.reason, who: del.who });
-      logEventAt(db, { ...logged, memoryId: memoryIds[0]! });
+      markGitHubEventSeenAt(db, { ...logged, memoryId: memoryIds[0]! });
     });
     return { duplicate: false, archived: memoryIds.length };
   });
@@ -213,7 +213,7 @@ export function githubDlqEntry(hippoRoot: string, id: number): DlqItem | null {
   return onHandle(hippoRoot, (db) => githubDlqEntryAt(db, id));
 }
 
-export function bumpGitHubDlqRetryCount(hippoRoot: string, id: number): void {
+export function markGitHubDlqRetried(hippoRoot: string, id: number): void {
   onHandle(hippoRoot, (db) => {
     db.prepare(
       `UPDATE github_dlq
