@@ -55,6 +55,8 @@ export interface HybridSearchOptions {
   vectorCandidates?: HybridVectorCandidates;
   /** Where vectors are read; hippo.db under `hippoRoot` when unset. */
   store?: HippoStore;
+  /** The deadline a caller already started for this recall's query embedding; a fresh budget when unset. */
+  queryEmbedDeadline?: AbortSignal;
 }
 
 // Share of the blended score that cosine takes, and the relevance side of the MMR relevance-versus-diversity trade.

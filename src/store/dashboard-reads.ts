@@ -49,7 +49,7 @@ function toDashboardRow(row: LiveRow): DashboardRow {
     retrieval_count: Number(row.retrieval_count ?? 0),
     half_life_days: Number(row.half_life_days ?? 7),
     layer: row.layer as Layer,
-    tags: parseJsonArray(row.tags_json),
+    tags: parseJsonArray(row.tags_json, { table: 'memories', id: row.id, column: 'tags_json' }),
     emotional_valence: row.emotional_valence ?? 'neutral',
     outcome_positive: Number(row.outcome_positive ?? 0),
     outcome_negative: Number(row.outcome_negative ?? 0),

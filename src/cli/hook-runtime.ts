@@ -60,6 +60,13 @@ export function appendSessionEndCloseLog(logFile: string | null, message: string
   }
 }
 
+/** A session-end step that failed: one warn line, and the same text in the session log, the only place a detached worker's output survives. */
+export function reportSessionEndFailure<E>(logFile: string | null, step: string, err: E): void {
+  const line = `${step} failed: ${errorMessage(err)}`;
+  log.warn(line);
+  appendSessionEndCloseLog(logFile, line);
+}
+
 // Claude Code exports its own session var, not ours; without the fallback agent-run recalls trace with no session.
 export function hostSessionId(): string | undefined {
   return envHippoSessionId() ?? envClaudeCodeSessionId();

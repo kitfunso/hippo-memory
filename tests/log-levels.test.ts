@@ -71,6 +71,35 @@ describe('log level filtering', () => {
     log.once('other', 'warn', 'third');
     expect(lines()).toEqual([`[hippo] warn: first ts=${AT}\n`, `[hippo] warn: third ts=${AT}\n`]);
   });
+
+  it('caps the once-only keys at 1,000: the next new key writes one cap line, and new keys then log at debug unrecorded', () => {
+    process.env.HIPPO_LOG = 'debug';
+    for (let i = 0; i < 1_000; i++) log.warnThenDebug(`row-${i}`, `damaged ${i}`);
+    expect(lines().filter((line) => line.startsWith('[hippo] warn: damaged '))).toHaveLength(1_000);
+    expect(lines()).toHaveLength(1_000);
+    stderrSpy.mockClear();
+
+    log.warnThenDebug('row-1000', 'damaged 1000');
+    log.warnThenDebug('row-1001', 'damaged 1001');
+    log.once('row-1002', 'warn', 'once past the cap');
+    log.once('row-1002', 'warn', 'once past the cap');
+    log.warnThenDebug('row-0', 'damaged 0');
+    log.once('row-0', 'warn', 'a recorded key');
+    expect(lines()).toEqual([
+      `[hippo] warn: log: 1000 once-only warnings were written; further new ones in this process log at debug ts=${AT}\n`,
+      `[hippo] debug: damaged 1000 ts=${AT}\n`,
+      `[hippo] debug: damaged 1001 ts=${AT}\n`,
+      // The set did not grow: a recorded key would have dropped the second call, as it does for row-0 below.
+      `[hippo] debug: once past the cap ts=${AT}\n`,
+      `[hippo] debug: once past the cap ts=${AT}\n`,
+      `[hippo] debug: damaged 0 ts=${AT}\n`,
+    ]);
+    stderrSpy.mockClear();
+
+    resetLogOnce();
+    log.warnThenDebug('row-1000', 'damaged 1000');
+    expect(lines()).toEqual([`[hippo] warn: damaged 1000 ts=${AT}\n`]);
+  });
 });
 
 describe('log fields', () => {

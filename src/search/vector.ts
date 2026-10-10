@@ -2,9 +2,10 @@ import type { MemoryEntry } from '../core/memory.js';
 import { cosineOf, indexNeedsRebuild } from '../store/embeddings/index.js';
 import { indexedModel } from '../store/vector-index.js';
 import type { VectorCandidateSpec } from '../store/search-rows.js';
-import { resolveEmbeddingProvider } from '../store/embeddings/provider.js';
+import { resolveEmbeddingProvider, type EmbeddingProvider } from '../store/embeddings/provider.js';
 import { rethrowIfSqliteBlocked } from '../db/index.js';
 import { errorMessage, log } from '../util/log.js';
+import { envQueryEmbedTimeoutMs } from '../util/env.js';
 import { requireGroup, sqliteStore, type HippoStore, type VectorReads } from '../store/index.js';
 import { redactSecretsStrict } from '../util/secret-detect.js';
 import { currentEntries, type CurrentnessOptions } from './as-of.js';
@@ -26,6 +27,33 @@ export interface VectorArmOptions extends CurrentnessOptions {
   vectorCandidates?: HybridVectorCandidates;
   /** Where vectors are read; hippo.db under `hippoRoot` when unset. */
   store?: HippoStore;
+  /** The deadline a caller already started for this recall's query embedding; a fresh budget when unset. */
+  queryEmbedDeadline?: AbortSignal;
+}
+
+// Jev's default budget (rerankers/jev.ts): each is one off-box call that a recall waits on.
+const QUERY_EMBED_BUDGET_MS = 5_000;
+
+/** How long one recall waits for its query vector, retries included; HIPPO_QUERY_EMBED_TIMEOUT_MS overrides the default. */
+function queryEmbedBudgetMs(): number {
+  return envQueryEmbedTimeoutMs() ?? QUERY_EMBED_BUDGET_MS;
+}
+
+/** One deadline for every query embedding a recall makes, so two stores or a physics fallback share the budget. */
+export function startQueryEmbedDeadline(): AbortSignal {
+  return AbortSignal.timeout(queryEmbedBudgetMs());
+}
+
+/** The query's vector, or null when an API provider outlasts `deadline`; any other provider failure throws as before. */
+export async function embedQueryBy(deadline: AbortSignal, provider: EmbeddingProvider, query: string): Promise<number[] | null> {
+  // No signal stops an in-process model, so the local provider is not held to the deadline.
+  if (provider.kind === 'local') return (await provider.embed([query], 'query'))[0] ?? [];
+  try {
+    return (await provider.embed([query], 'query', { signal: deadline }))[0] ?? [];
+  } catch (err) {
+    if (deadline.aborted) return null;
+    throw err;
+  }
 }
 
 // Search runs on every hook prompt, so one line per reason per process says why vectors went unused without flooding stderr.
@@ -88,8 +116,12 @@ async function fillVectorArm(arm: VectorArm, query: string, root: string, option
   const vectors = await storedVectorsOf(store, reads, arm.entries.map((e) => e.id));
   // Only spend a (possibly paid, off-box) query embedding when there is a stored vector this search can use.
   if (vectors.size === 0 && !(spec !== undefined && index.hasVectors)) return;
-  const [vec] = await provider.embed([query], 'query');
-  arm.queryVector = vec ?? [];
+  const vec = await embedQueryBy(options.queryEmbedDeadline ?? startQueryEmbedDeadline(), provider, query);
+  if (vec === null) {
+    warnBm25Fallback('query-embed-budget', `the ${provider.kind} embedding provider gave no query vector within ${queryEmbedBudgetMs()} ms`);
+    return;
+  }
+  arm.queryVector = vec;
   if (arm.queryVector.length === 0) {
     warnBm25Fallback('empty-query-vector', 'the embedding provider returned no vector for the query');
     return;

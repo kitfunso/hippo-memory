@@ -22,27 +22,43 @@ export interface HashedEmbeddings {
   readonly url: string;
   /** Embedding requests received so far, failed ones included. */
   requests(): number;
-  /** Answer every later request with `status`; 200 serves vectors again. */
-  setStatus(status: number): void;
+  /** Answer every later request with `status`; 200 serves vectors again. A failure asks for `retryAfterSec` (0 unless given). */
+  setStatus(status: number, retryAfterSec?: number): void;
+  /** 'stall' never answers; 'reset' drops the next request's socket unanswered, then serves again; a number answers after that many ms; null serves at once. */
+  setFault(fault: EmbeddingFault): void;
   close(): Promise<void>;
 }
+
+export type EmbeddingFault = 'stall' | 'reset' | number | null;
 
 export async function startHashedEmbeddings(): Promise<HashedEmbeddings> {
   let received = 0;
   let status = 200;
+  let retryAfter = '0';
+  let fault: EmbeddingFault = null;
   const server = createServer((req, res) => {
     const chunks: Buffer[] = [];
     req.on('data', (chunk: Buffer) => chunks.push(chunk));
     req.on('end', () => {
       received += 1;
+      if (fault === 'stall') return;
+      if (fault === 'reset') {
+        fault = null;
+        req.socket.destroy();
+        return;
+      }
       if (status !== 200) {
-        // Retry-After 0 lets the provider's three attempts run without a wait.
-        res.writeHead(status, { 'content-type': 'application/json', 'retry-after': '0' }).end('{"error":"injected"}');
+        // Retry-After 0, the default, lets the provider's three attempts run without a wait.
+        res.writeHead(status, { 'content-type': 'application/json', 'retry-after': retryAfter }).end('{"error":"injected"}');
         return;
       }
       // SAFETY: the openai provider posts {model, input: string[]} here.
       const body = JSON.parse(Buffer.concat(chunks).toString('utf8')) as { input: string[] };
-      res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ data: body.input.map((t) => ({ embedding: hashedVector(t) })) }));
+      const answer = (): void => {
+        res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ data: body.input.map((t) => ({ embedding: hashedVector(t) })) }));
+      };
+      if (fault === null) answer();
+      else setTimeout(answer, fault);
     });
   });
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
@@ -51,7 +67,11 @@ export async function startHashedEmbeddings(): Promise<HashedEmbeddings> {
   return {
     url: `http://127.0.0.1:${port}/v1`,
     requests: () => received,
-    setStatus: (next) => { status = next; },
+    setStatus: (next, retryAfterSec = 0) => {
+      status = next;
+      retryAfter = String(retryAfterSec);
+    },
+    setFault: (next) => { fault = next; },
     close: () => new Promise<void>((resolve, reject) => {
       server.closeAllConnections();
       server.close((err) => (err ? reject(err) : resolve()));
