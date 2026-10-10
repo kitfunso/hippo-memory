@@ -12,9 +12,8 @@ export type OpPlaces<G> = { readonly [M in keyof G]: OpPlace };
 
 type BaseMethods = Omit<HippoStore, keyof StoreGroups | 'kind' | 'close'>;
 
-/** The store methods that answer from a worker, the base ones under `base`. Tagged by effect, not by name: predictionBaserate appends an audit row and
- * bumpRecallStats rewrites stats.json, so both are writes. A read that opens through
- * `openStore` is a read: the writer runs that open's setup before any reader serves. */
+/** Store methods answered by a worker, base ones under `base`. Tagged by effect, not name: predictionBaserate (audit row) and bumpRecallStats
+ * (stats.json) are writes. A read that opens through `openStore` is a read: the writer runs that open's setup before any reader serves. */
 export const WORKER_OPS = {
   base: {
     findApiKey: 'read',

@@ -74,12 +74,8 @@ export const TYPED_HALF_LIFE_META_KEY = 'typed_half_life_on_default';
 /** The flat half-life the decision, incident and other object writers gave their memories before they took the default. */
 export const LEGACY_TYPED_HALF_LIFE = 90;
 
-/**
- * A store with no memories starts on the current default half-life base, so
- * `hippo sleep` never migrates it. A store that already holds memories and
- * no recorded base predates the record, and keeps reading as the legacy
- * 7-day base until sleep migrates it.
- */
+/** A store with no memories starts on the current default half-life base so `hippo sleep` never migrates it; one that holds memories but no recorded base
+ * predates the record and keeps the legacy 7-day base until sleep migrates it. */
 function recordHalfLifeBaseForNewStore(db: DatabaseSyncLike): void {
   if (getMeta(db, HALF_LIFE_BASE_META_KEY, '') !== '') return;
   if (db.prepare(`SELECT 1 AS x FROM memories LIMIT 1`).get() !== undefined) return;
@@ -181,9 +177,8 @@ function loadLegacyIndexFile(hippoRoot: string): HippoIndex {
   }
 
   try {
-    // SAFETY: index.json is only ever written by writeIndexMirror below,
-    // which always serializes a HippoIndex; a hand-edited or corrupted file
-    // that violates the shape falls through to the catch block's fallback.
+    // SAFETY: index.json is only written by writeIndexMirror below, which serializes a HippoIndex;
+    // a hand-edited file that violates the shape falls through to the catch block's fallback.
     return JSON.parse(fs.readFileSync(indexPath, 'utf8')) as HippoIndex;
   } catch (err) {
     log.debug(`store: unreadable index.json read as empty: ${errorMessage(err)}`);
@@ -203,10 +198,8 @@ function loadLegacyStatsFile(hippoRoot: string): LegacyStats {
   }
 
   try {
-    // SAFETY: stats.json is only ever written by writeStatsMirror below,
-    // which always emits exactly these four fields; callers additionally
-    // guard every read with `?? 0` / `Array.isArray`, tolerating a
-    // hand-edited or corrupted file even if this optimistic cast is wrong.
+    // SAFETY: stats.json is only written by writeStatsMirror below with exactly these four fields; callers also guard every read with `?? 0` / `Array.isArray`,
+    // so a hand-edited file is tolerated even if this cast is wrong.
     return JSON.parse(fs.readFileSync(statsPath, 'utf8')) as LegacyStats;
   } catch (err) {
     log.debug(`store: unreadable stats.json read as zero: ${errorMessage(err)}`);

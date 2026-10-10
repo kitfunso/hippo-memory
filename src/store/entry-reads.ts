@@ -11,13 +11,7 @@ const MAX_IDS_PER_READ = 500;
 // The plus keeps SQLite on the primary key for an id list: with a bare tenant_id it walks every row of the tenant instead.
 export const TENANT_IS = '+tenant_id = ?';
 
-/**
- * Read a memory entry by ID.
- *
- * When `tenantId` is provided, the read is scoped to that tenant (cross-tenant
- * lookups return null). When omitted, no tenant filter is applied — preserves
- * legacy single-tenant callers and the writeEntry/readEntry round-trip.
- */
+/** Read a memory entry by ID. With `tenantId` the read is tenant-scoped (cross-tenant returns null); omitted, no tenant filter is applied. */
 export function readEntry(hippoRoot: string, id: string, tenantId?: string): MemoryEntry | null {
   return onHandle(hippoRoot, (db) => {
     // SAFETY: both branches select exactly MEMORY_SELECT_COLUMNS, matching
@@ -111,11 +105,7 @@ export function selectChildrenByParent(
   return byParent;
 }
 
-/**
- * Batched lookup. Caps at 500 ids per call to keep the IN(?,?,...) clause
- * within SQLite limits. Tenant filter is enforced when `tenantId` is passed.
- * Used by DAG-aware recall to fetch parent summaries for a set of overflowed leaves.
- */
+/** Batched lookup, capped at 500 ids per call to keep IN(?,?,...) within SQLite limits; tenant filter enforced when `tenantId` is passed. */
 export function loadEntriesByIds(
   hippoRoot: string,
   ids: readonly string[],
@@ -125,9 +115,8 @@ export function loadEntriesByIds(
   const capped = ids.slice(0, MAX_IDS_PER_READ);
   return onHandle(hippoRoot, (db) => {
     const placeholders = capped.map(() => '?').join(',');
-    // Without ORDER BY, rows follow SQLite's IN(...) scan order, which is undefined w.r.t. `ids`.
-    // SAFETY: both branches select exactly MEMORY_SELECT_COLUMNS, matching
-    // MemoryRow's field set.
+    // Without ORDER BY, rows follow SQLite's IN(...) scan order, undefined w.r.t. `ids`.
+    // SAFETY: both branches select exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
     const rows = tenantId !== undefined
       ? db.prepare(
           `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id IN (${placeholders}) AND ${TENANT_IS} ORDER BY created ASC, content ASC, id ASC`,
@@ -143,16 +132,8 @@ function originClause(origins: readonly string[] | undefined): string {
   return origins === undefined ? '' : ` AND (origin_project = '' OR ${originInSql(origins)})`;
 }
 
-/**
- * All `kind='raw'` rows for a given session, tenant-scoped, returned
- * oldest-first. Used by `api.assemble` to walk a session's chronological
- * context. Excludes superseded rows.
- *
- * Cap semantics: when `cap` is provided, the NEWEST `cap` rows are loaded (DESC LIMIT server-side,
- * reversed client-side); ASC + LIMIT would drop the newest rows and break fresh-tail in assemble.
- *
- * Returns `[]` for an empty sessionId. Final order: `created ASC, id ASC`.
- */
+/** All `kind='raw'` rows for a session, tenant-scoped, oldest-first, excluding superseded; `[]` for an empty sessionId.
+ * With `cap`, the NEWEST rows are loaded (DESC LIMIT, reversed client-side); ASC + LIMIT would drop the newest and break fresh-tail in assemble. */
 export function loadSessionRawMemories(
   hippoRoot: string,
   sessionId: string,
@@ -185,19 +166,8 @@ export function loadSessionRawMemories(
   }, openStore);
 }
 
-/**
- * Pre-cap, scope-aware row count for a session. Lets `assemble` report
- * the full session size even when `rowCap` truncates the loaded window,
- * WITHOUT leaking rows the caller wouldn't have been allowed to load.
- *
- * An unscoped COUNT would let a no-scope caller infer private rows by comparing `totalRaw`
- * against `items.length`, so this SQL-encodes the default-deny rule `passesScopeFilterForRecall` applies in TS:
- *   - explicit scope passed: exact-match
- *   - no scope: `scopeAdmitSql`'s default deny, which admits `ownScope`, the caller's personal scope.
- *
- * `tenantId` is optional for back-compat. Pass `undefined` only when
- * intentionally counting cross-tenant; `assemble()` passes `ctx.tenantId`.
- */
+/** Pre-cap, scope-aware row count for a session, so `assemble` reports the full size without leaking rows the caller could not load. Mirrors
+ * `passesScopeFilterForRecall`'s default-deny: explicit scope matches exactly, none admits only `ownScope`. `tenantId` undefined counts cross-tenant. */
 export function countSessionRawMemories(
   hippoRoot: string,
   sessionId: string,
@@ -231,20 +201,8 @@ export function countSessionRawMemories(
   }, openStore);
 }
 
-/**
- * Last N kind='raw' memories by `created` desc. Tenant scoped. When
- * `sessionId` is supplied, also constrains to a specific session — that
- * is the correct shape for "what did I just see in THIS session."
- *
- * Without `sessionId`, concurrent sessions in a tenant surface each other's rows as fresh tail;
- * pass undefined only for "anything new across the whole tenant".
- *
- * Bounded count cap at 200 — beyond that the caller should filter via
- * tags/scope rather than time-windowed recall.
- *
- * The tenant-wide shape is the back-compat default but discouraged; `api.recall` throws
- * `RecallContractError` for it when `HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL=1` is set.
- */
+/** Last N kind='raw' memories by `created` desc, tenant-scoped, max 200; pass `sessionId` or concurrent sessions show up in each other's fresh tail.
+ * The tenant-wide shape is discouraged: `api.recall` throws `RecallContractError` for it when `HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL=1`. */
 export function loadFreshRawMemories(
   hippoRoot: string,
   count: number,
@@ -277,13 +235,7 @@ export function loadFreshRawMemories(
   }, openStore);
 }
 
-/**
- * Load all entries from SQLite.
- *
- * When `tenantId` is provided, results are scoped to that tenant. Omitting it
- * yields all rows (legacy behavior used by consolidate/autolearn etc.). Recall
- * paths that surface results to a user MUST pass a resolved tenant.
- */
+/** Load all entries from SQLite; omitting `tenantId` yields all rows (legacy). Recall paths that surface results to a user MUST pass a resolved tenant. */
 export function loadAllEntries(hippoRoot: string, tenantId?: string): MemoryEntry[] {
   return onHandle(hippoRoot, (db) => {
     return selectAllEntries(db, tenantId);

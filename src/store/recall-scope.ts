@@ -1,36 +1,15 @@
-/**
- * Recall-side scope predicates, in a leaf module so shared.ts (which api.ts
- * imports) can apply the same default-deny rule to searchBothHybrid's internal
- * candidate loads without an import cycle. api.ts imports
- * these for its own call sites AND re-exports them for back-compat
- * (`api.isPrivateScope`, test imports of `passesScopeFilterForRecall`).
- */
+/** Recall-side scope predicates, in a leaf module so search-both.ts can apply the same default-deny rule to searchBothHybrid's candidate loads without an
+ * import cycle. src/api/index.ts imports these and re-exports them for back-compat (`api.isPrivateScope`, tests importing `passesScopeFilterForRecall`). */
 
 import { BadRequestError, ForbiddenError } from '../core/api-errors.js';
 import { MAX_ID_LEN } from '../util/http-util.js';
 
-/**
- * Literal scopes excluded from recall by default-deny when the
- * caller passes no `scope`. The SQL clause in `loadSearchRows` and the JS
- * helper `passesScopeFilterForRecall` (src/api/index.ts) both read from this
- * constant. Adding a deny scope is a one-place change.
- *
- * Regex-based denies (e.g. `<source>:private:*`) stay in
- * `passesScopeFilterForRecall` as a separate JS step — they don't translate
- * cleanly to SQL.
- *
- * Invariant: never empty. An empty array would silently allow quarantine
- * scopes through both paths (SQL clause omitted, JS check vacuous). The
- * module-load assertion below pins this loudly.
- */
+/** Literal scopes excluded from recall by default-deny when the caller passes no `scope`; read by the SQL clause in `loadSearchRows` and by
+ * `passesScopeFilterForRecall`. Invariant: never empty, or quarantine scopes would pass both paths silently (the module-load assertion below pins this). */
 export const RECALL_DEFAULT_DENY_SCOPES = ['unknown:legacy'] as const;
 
-/**
- * @internal Runtime guard against a future maintainer blanking a
- * load-bearing literal array. Extracted from the inline guard so the throw
- * path is directly testable. `as const` arrays widen via `readonly T[]` at
- * the call site so the empty case is reachable at runtime.
- */
+/** @internal Runtime guard against blanking a load-bearing literal array; `as const` arrays widen via `readonly T[]` at the call site, so the empty case
+ * is reachable and testable. */
 export function assertNonEmpty<T>(arr: readonly T[], name: string): void {
   if (arr.length === 0) {
     throw new Error(
@@ -41,21 +20,8 @@ export function assertNonEmpty<T>(arr: readonly T[], name: string): void {
 
 assertNonEmpty(RECALL_DEFAULT_DENY_SCOPES, 'RECALL_DEFAULT_DENY_SCOPES');
 
-/**
- * Source-agnostic private-scope detector. A scope string is treated
- * as private when it has the shape `<lowercase-source>:private:<rest>`.
- *
- * Examples that match:
- *   slack:private:Cabc, github:private:owner/repo, jira:private:PROJ-1
- * Examples that DO NOT match:
- *   slack:public:Cgeneral, acme:public:my-private-channel, null, '',
- *   'unknown:legacy', 'private' (alone), 'private:foo' (no source prefix).
- *
- * Used by api.recall, mcp/server.ts (hippo_recall + hippo_context),
- * cli.ts (cmdRecall + cmdExplain + continuity), shared.ts (searchBothHybrid
- * recall mode). Keep these in sync — the export is the single source of
- * truth so connector work cannot drift.
- */
+/** Source-agnostic private-scope detector: private means `<lowercase-source>:private:<rest>` (`slack:private:Cabc`; not `slack:public:x`, null, '',
+ * 'private:foo'). The single source of truth for api.recall, the MCP server, the CLI and search-both.ts, so connector work cannot drift. */
 export const PRIVATE_SCOPE_RE = /^[a-z][a-z0-9_-]*:private:/;
 
 function isScopeString(value: string | null | undefined): value is string {
@@ -102,15 +68,8 @@ export function ownScopeTouches(ownScope: string | null, scope: string | null): 
   return !isPersonalScope(scope) || scope === ownScope;
 }
 
-/**
- * Recall-side scope filter — the canonical JS half of the recall default-deny
- * rule (the SQL half lives in `loadSearchRows` via `loadRecallSearchEntries`).
- *
- * - When `requested` is set and non-empty: exact match required.
- * - When `requested` is undefined/empty: default-deny on any
- *   `<source>:private:*` scope and on the `RECALL_DEFAULT_DENY_SCOPES`
- *   quarantine buckets. `null` and public scopes pass, and so does `ownScope`, the caller's own personal scope.
- */
+/** JS half of the recall default-deny rule (SQL half: `loadSearchRows`). A non-empty `requested` needs an exact match;
+ * otherwise `<source>:private:*` and `RECALL_DEFAULT_DENY_SCOPES` buckets are denied, while null, public scopes and the caller's `ownScope` pass. */
 export function passesScopeFilterForRecall(
   scope: string | null,
   requested: string | undefined,
@@ -144,23 +103,8 @@ export function touchableScopeSql(col: '' | 'm.', ownScope?: string | null): Sql
   return { sql: `(${notPersonal} OR ${col}scope = ?)`, params: [ownScope] };
 }
 
-/**
- * The CLI `--scope` variant of the recall filter (JS half of the
- * SQL 'default-deny-or-exact' mode in loadSearchRows).
- *
- * The CLI flag predates the envelope column as a TAG-boost ranking hint
- * (`scope:<v>` tags, HIPPO_SCOPE, detectScope()), so an explicit `--scope X`
- * UNLOCKS envelope scope X in addition to the default-admitted set — it does
- * NOT narrow the result to X (that would return zero rows for every
- * tag-scoped workflow, whose envelope scope is NULL). api.recall keeps the
- * narrowing 'exact' semantics via `passesScopeFilterForRecall`.
- *
- * Note the unlock applies to whatever scope was explicitly named — including
- * a private scope or a quarantine bucket (`--scope unknown:legacy`). That is
- * deliberate owner access, identical in reach to api.recall's exact-match
- * for the same input; only NON-requested private/quarantine scopes stay
- * denied. A named personal scope never unlocks: the CLI has no caller identity to check it against.
- */
+/** CLI `--scope` variant: an explicit `--scope X` UNLOCKS scope X on top of the default-admitted set rather than narrowing to X (api.recall keeps 'exact').
+ * Includes private/quarantine scopes (owner access); a named personal scope never unlocks: the CLI has no caller identity. */
 export function passesCliRecallScopeFilter(
   scope: string | null,
   requested: string | undefined,
@@ -171,10 +115,7 @@ export function passesCliRecallScopeFilter(
   return passesScopeFilterForRecall(scope, undefined);
 }
 
-/**
- * Thrown when a caller requests a scope its role may not read. The HTTP layer
- * maps it to 403.
- */
+/** Thrown when a caller requests a scope its role may not read; the HTTP layer maps it to 403. */
 export class ScopeForbiddenError extends ForbiddenError {
   readonly scope: string;
 
@@ -185,16 +126,12 @@ export class ScopeForbiddenError extends ForbiddenError {
   }
 }
 
-/**
- * True for scopes that default-deny hides: `<source>:private:*` and the
- * quarantine buckets. Naming one explicitly is what unlocks it, so naming one
- * is the act that needs authorization.
- */
+/** True for scopes default-deny hides (`<source>:private:*` and the quarantine buckets); naming one explicitly unlocks it, so naming one needs
+ * authorization. */
 export function isRestrictedScope(scope: string | null | undefined): boolean {
   if (!isScopeString(scope)) return false;
-  // SAFETY: RECALL_DEFAULT_DENY_SCOPES is a readonly tuple of string
-  // literals; widening the array (not the input) lets .includes() take any scope.
-  // `:private:` anywhere, any case, matches the store's SQL default-deny (store/search-rows.ts) so JS never admits what SQL hides.
+  // SAFETY: RECALL_DEFAULT_DENY_SCOPES is a readonly tuple of string literals; widening the array lets .includes() take any scope.
+  // `:private:` anywhere, any case, matches the SQL default-deny in src/store/search-rows.ts so JS never admits what SQL hides.
   return isPrivateScope(scope) || /:private:/i.test(scope) || (RECALL_DEFAULT_DENY_SCOPES as readonly string[]).includes(scope);
 }
 

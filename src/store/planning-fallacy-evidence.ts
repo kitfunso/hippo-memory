@@ -3,10 +3,8 @@ import { computePredictionBaserate, type PredictionBaserate } from './prediction
 
 export interface ClassResolution {
   classTag: string | null;
-  /** True when ≥2 classes tied at the best overlap score AND best ≥ 1.
-   *  Caller emits `recall_autodebias_hint_tiebreak` audit and returns
-   *  null hint (silent — prevents the "show wrong class half the time"
-   *  failure mode the alphabetical-tiebreak alternative would create). */
+  /** True when >=2 classes tied at the best overlap score AND best >= 1. Caller emits `recall_autodebias_hint_tiebreak` and returns a null hint
+   * (silent: an alphabetical tiebreak would show the wrong class half the time). */
   tiebreak: boolean;
 }
 
@@ -15,31 +13,8 @@ export interface PlanningFallacyEvidence extends ClassResolution {
   readonly baserate: PredictionBaserate | null;
 }
 
-/**
- * Resolve a query-token set to a unique best-matching class_tag for the
- * tenant. Scores by lower-cased token overlap; requires best score ≥ 1
- * AND strictly greater than the 2nd-best score.
- *
- * Indexed via idx_predictions_tenant_class (db.ts:1015) → O(log n) seek
- * plus a small DISTINCT scan over the per-tenant class-tag set.
- *
- * Scope behaviour (deliberate): class_tag selection is TENANT-GLOBAL,
- * NOT scope-filtered against
- * the recall's opts.scope. The class_tag is an aggregator label across
- * historical predictions in the class, not a per-memory scope-bound
- * property. A no-scope recall CAN surface a class_tag from a privately-
- * scoped prediction's class in PlanningFallacyHint.classTag — by design,
- * because base-rate reasoning needs the full historical sample.
- * Implications:
- *   - The hint payload itself carries no memory content (only the aggregate
- *     summary string + numeric stats), so memory bodies do not leak.
- *   - The class_tag NAME is the side-channel. If sensitive labels are a
- *     concern, callers should either use opaque class names (e.g. hashes
- *     or numeric tokens) or set HIPPO_AUTODEBIAS=off.
- *   - tests/api-recall-autodebias.test.ts locks this with an explicit
- *     test asserting that scope-set predictions surface via no-scope
- *     recalls (so future "fix" attempts that scope-filter trip CI).
- */
+/** Resolve a query-token set to a unique best-matching class_tag for the tenant: lower-cased token overlap, best score >= 1 AND above the 2nd-best.
+ * TENANT-GLOBAL by design, not scope-filtered (base rates need the full sample): class_tag NAMES can cross scopes; use opaque names or HIPPO_AUTODEBIAS=off. */
 function resolveClassFromTokens(
   hippoRoot: string,
   tenantId: string,
@@ -68,10 +43,8 @@ function resolveClassFromTokens(
         bestScore = score;
         bestClass = class_tag;
       } else if (score === bestScore && score > 0) {
-        // Tie at current best — bump secondBest. Do NOT update bestClass
-        // (alphabetical tiebreak would pick wrong class on ambiguous query
-        // like "migration will take 3 days" between migration-effort vs
-        // migration-risk; silent on tie instead).
+        // Tie at current best: bump secondBest, do NOT update bestClass (an alphabetical tiebreak would pick the wrong class on ambiguous queries; stay silent
+        // on tie).
         secondBest = score;
       } else if (score > secondBest) {
         secondBest = score;

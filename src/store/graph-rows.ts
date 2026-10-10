@@ -12,9 +12,8 @@ export const GRAPH_ENTITY_TYPES: ReadonlySet<EntityType> = new Set<EntityType>([
   'person', 'project', 'customer', 'system', 'policy', 'decision',
 ]);
 
-/** A soft (type,id) pointer to the authoritative object row a graph row descends from.
- *  Survives a mirror memory forget/prune (memory_id may go NULL); the rebuild
- *  re-validates it (it is not a hard FK). */
+/** A soft (type,id) pointer to the authoritative object row a graph row descends from; survives a mirror forget/prune
+ * (memory_id may go NULL) and is re-validated by the rebuild, not a hard FK. */
 export interface SourceObjectRef {
   type: SourceObjectType;
   id: number;
@@ -36,9 +35,7 @@ export interface Entity {
   tenantId: string;
   entityType: EntityType;
   name: string;
-  /** The consolidated source memory this entity was extracted from. NULL once the
-   *  mirror is forgotten/pruned (ON DELETE SET NULL) - the entity then survives via
-   *  its source_object provenance. */
+  /** The consolidated source memory this entity came from; NULL once the mirror is forgotten/pruned (ON DELETE SET NULL), then provenance is source_object. */
   memoryId: string | null;
   sourceKind: SourceKind;
   /** The authoritative object this entity is anchored to (object-provenance path).
@@ -87,9 +84,8 @@ export interface RelationRow {
 }
 
 export function rowToEntity(row: EntityRow): Entity {
-  // SAFETY: entity_type/source_kind/source_object_type are DB CHECK-constrained
-  // (see db.ts CREATE TABLE entities) to exactly the EntityType/SourceKind/
-  // SourceObjectType enum values, so the row's column values match those types.
+  // SAFETY: entity_type/source_kind/source_object_type are DB CHECK-constrained to exactly the EntityType/SourceKind/SourceObjectType enum values,
+  // so the row's column values match those types.
   return {
     id: row.id,
     tenantId: row.tenant_id,
@@ -103,9 +99,8 @@ export function rowToEntity(row: EntityRow): Entity {
   };
 }
 export function rowToRelation(row: RelationRow): Relation {
-  // SAFETY: rel_type/source_kind/source_object_type are DB CHECK-constrained
-  // (see db.ts CREATE TABLE relations) to exactly the RelationType/SourceKind/
-  // SourceObjectType enum values, so the row's column values match those types.
+  // SAFETY: rel_type/source_kind/source_object_type are DB CHECK-constrained to exactly the RelationType/SourceKind/SourceObjectType enum values,
+  // so the row's column values match those types.
   return {
     id: row.id,
     tenantId: row.tenant_id,
@@ -144,9 +139,8 @@ export interface QueueRow {
 }
 
 export function rowToQueueItem(row: QueueRow): GraphQueueItem {
-  // SAFETY: kind/status are DB CHECK-constrained (see db.ts CREATE TABLE
-  // graph_extraction_queue) to exactly the SourceKind/GraphQueueStatus enum
-  // values, so the row's column values match those types.
+  // SAFETY: kind/status are DB CHECK-constrained to exactly the SourceKind/GraphQueueStatus enum values,
+  // so the row's column values match those types.
   return {
     id: row.id,
     tenantId: row.tenant_id,

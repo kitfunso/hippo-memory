@@ -11,11 +11,8 @@ export interface AuditOptions {
   readonly tenantId?: string;
 }
 
-/**
- * Emit an audit event for a mutation against `db`. Wrapped so a broken audit
- * log can never crash the surrounding mutation — the SQLite store is still the
- * source of truth and audit failures are diagnosable from the missing rows.
- */
+/** Emit an audit event for a mutation. Never throws: the SQLite store stays the source of truth,
+ * and a failed audit write shows up as missing rows. */
 export function audit(db: ReturnType<typeof openHippoDb>, op: AuditOp, options: AuditOptions = {}): void {
   const { targetId, metadata, actor = 'cli', tenantId } = options;
   try {
@@ -32,13 +29,8 @@ export function audit(db: ReturnType<typeof openHippoDb>, op: AuditOp, options: 
   }
 }
 
-/**
- * Refusal audit for the rejected-value guard. Written by the
- * transaction OWNER post-rollback — writeEntry's catch (no outer tx exists
- * there, so this lands in a fresh implicit transaction) and commitSupersede's
- * catch (after its own ROLLBACK) — never inside a scope the caller's own
- * rollback could claw back. Best-effort `audit()` semantics: never throws.
- */
+/** Refusal audit for the rejected-value guard, written by the transaction owner after rollback so the caller's own rollback cannot claw it back.
+ * Best-effort like `audit()`: never throws. */
 export function auditRejectionRefusal(
   db: ReturnType<typeof openHippoDb>,
   err: RejectedValueError,

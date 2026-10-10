@@ -9,26 +9,11 @@ import { syncFtsRow } from './entry-row.js';
 import { onHandle, openStore } from './open.js';
 import { DIGEST_DISPLAY_CHARS } from '../util/token-text.js';
 
-// ---------------------------------------------------------------------------
-// Sleep-cycle rebuild surface.
-//
-// loadAllDirtySummaries / loadChildrenOfSummary / applyRebuildResult /
-// clearSummaryDirtyAfterBuild live HERE (not in dag.ts) because they need
-// module-private MEMORY_SELECT_COLUMNS, MemoryRow, rowToEntry, audit,
-// syncFtsRow, assertTenantId. dag.ts owns only the thin orchestrator
-// rebuildDirtySummaries() that calls into these.
-// ---------------------------------------------------------------------------
+// Sleep-cycle rebuild surface: lives here, not in src/consolidate/dag.ts, because it needs module-private MEMORY_SELECT_COLUMNS, MemoryRow, rowToEntry,
+// audit, syncFtsRow and assertTenantId. dag.ts keeps only the thin orchestrator rebuildDirtySummaries().
 
-/**
- * Host-wide loader for L2 topic summaries without an L3 parent.
- * Used by consolidate phase 1.9 (buildEntityProfiles) to cluster L2s into
- * L3 entity profiles. Mirrors loadAllDirtySummaries: SQL-level
- * filter is cheaper than reusing in-memory `survivors` (which doesn't
- * contain L2s freshly created by phase 1.7 buildDag).
- *
- * Returns entries with tenantId attached so per-cluster writes stay
- * tenant-scoped via summary.tenantId.
- */
+/** Host-wide loader for L2 topic summaries without an L3 parent, for consolidate phase 1.9 (buildEntityProfiles); SQL-level filter, since in-memory
+ * `survivors` lacks L2s created by phase 1.7. Entries carry tenantId so per-cluster writes stay tenant-scoped. */
 export function loadAllL2Summaries(hippoRoot: string): MemoryEntry[] {
   return onHandle(hippoRoot, (db) => {
     // SAFETY: this query selects exactly MEMORY_SELECT_COLUMNS, matching
@@ -46,15 +31,8 @@ export function loadAllL2Summaries(hippoRoot: string): MemoryEntry[] {
   }, openStore);
 }
 
-/**
- * Dirty summaries, newest change first. Iterates all tenants
- * in one query so consolidate.ts (host-wide per L106-109) does not need a
- * per-tenant loop. Each returned MemoryEntry carries its own tenantId (via
- * rowToEntry), so per-summary children + rebuild UPDATE stay tenant-scoped.
- *
- * Sort: latest_at DESC NULLS LAST, id ASC — same as per-tenant variant so
- * HIPPO_DAG_REBUILD_CAP takes most-recently-changed summaries first.
- */
+/** Dirty summaries across all tenants in one query, newest change first (latest_at DESC NULLS LAST, id ASC) so HIPPO_DAG_REBUILD_CAP takes the most
+ * recently changed. Each entry carries its own tenantId so the children read and rebuild UPDATE stay tenant-scoped. */
 export function loadAllDirtySummaries(hippoRoot: string): MemoryEntry[] {
   return onHandle(hippoRoot, (db) => {
     // SAFETY: this query selects exactly MEMORY_SELECT_COLUMNS, matching
@@ -70,13 +48,7 @@ export function loadAllDirtySummaries(hippoRoot: string): MemoryEntry[] {
   }, openStore);
 }
 
-/**
- * Load live children of a DAG summary. Used by
- * rebuildDirtySummaries to regenerate content from the CURRENT child set
- * (not the children at create-time). Skips archived. Tenant-scoped
- * (defence in depth — dag_parent_id is unique-ish but tenant guard is
- * cheap). created column is TEXT NOT NULL since db.ts schema v1.
- */
+/** Live (non-archived) children of a DAG summary, so a rebuild regenerates from the CURRENT child set; tenant-scoped as defence in depth. */
 export function loadChildrenOfSummary(
   hippoRoot: string,
   summaryId: string,
@@ -99,10 +71,7 @@ export function loadChildrenOfSummary(
   }, openStore);
 }
 
-/**
- * Patch applied by applyRebuildResult. Two-branch shape
- * (bumpRebuildCount false for zero-child case, true for normal rebuild).
- */
+/** Patch applied by applyRebuildResult; `bumpRebuildCount` is false for the zero-child case, true for a normal rebuild. */
 export interface RebuildPatch {
   content: string;            // new content for normal rebuild; summary.content for zero-child
   descendant_count: number;
@@ -113,18 +82,8 @@ export interface RebuildPatch {
   actor: string;
 }
 
-/**
- * Apply a rebuild result to a dirty summary. Atomic: one
- * prepared UPDATE statement plus syncFtsRow inside one write scope.
- * WHERE includes `AND summary_dirty = 1` so concurrent sleep's race-loser
- * becomes a no-op (no rebuild_count bump, no audit row).
- *
- * Returns `{ changed, refused }`. `changed` is true when this call's UPDATE
- * (content or metadata-only) affected a row; false on race-loss / unknown id
- * / archived / wrong dag_level. `refused` is true only when a tombstone hit
- * suppressed the content write AND the metadata UPDATE still landed — see
- * the return-semantics comment below for the full contract.
- */
+/** Apply a rebuild result to a dirty summary in one write scope (UPDATE plus syncFtsRow); `AND summary_dirty = 1` makes a concurrent race-loser a no-op.
+ * Returns `{ changed, refused }`: `refused` only when a tombstone hit suppressed the content write while the metadata UPDATE still landed. */
 export function applyRebuildResult(
   hippoRoot: string,
   summary: MemoryEntry,
@@ -173,13 +132,8 @@ function applyRebuildInSavepoint(
   const tombstone = patch.bumpRebuildCount
     ? findRejectedValue(db, summary.tenantId, rejectionDigest(patch.content))
     : null;
-  // On a hit: do NOT write the new content. Fall through to the SAME
-  // metadata-only behavior the zero-child branch already has —
-  // descendant_count/earliest_at/latest_at update + summary_dirty
-  // cleared, no content write, no rebuild_count bump. Clearing dirty
-  // (rather than leaving it set) is deliberate: leaving it dirty would
-  // make every following sleep cycle re-attempt and re-refuse the
-  // identical rebuild forever (the DAG-loop this fix closes).
+  // On a tombstone hit, write no content: take the zero-child metadata-only path (descendant_count/earliest_at/latest_at, summary_dirty cleared, no
+  // rebuild_count bump). Clearing dirty is deliberate: leaving it set would make every later sleep re-attempt and re-refuse the same rebuild forever.
   const applyContentWrite = patch.bumpRebuildCount && !tombstone;
 
   const result = applyContentWrite
@@ -218,13 +172,8 @@ function auditRefusedRebuild(
   patch: RebuildPatch,
   tombstone: NonNullable<ReturnType<typeof findRejectedValue>>,
 ): void {
-  // refused === true here (same condition, narrowed for the tombstone.*
-  // access below). Best-effort refusal audit, written INLINE inside
-  // this still-open SAVEPOINT — nothing here rolls back on a refusal
-  // (the metadata UPDATE above already committed to this savepoint), so the
-  // post-rollback auditRejectionRefusal helper (writeEntry/supersede's
-  // tool) is the wrong one here; a direct audit() call is correct and
-  // commits with the rest of this savepoint.
+  // refused === true here (narrowed for the tombstone.* access). Best-effort refusal audit written INLINE in this still-open SAVEPOINT (the metadata
+  // UPDATE already committed to it), so a direct audit() call is correct, not the post-rollback auditRejectionRefusal.
   audit(db, 'reject_refusal', {
     targetId: summary.id,
     metadata: { digest: tombstone.digest, reason: tombstone.reason },
@@ -269,13 +218,8 @@ function syncRebuiltSummary(
     }, actor: patch.actor, tenantId: summary.tenantId });
 }
 
-/**
- * Clear summary_dirty on a freshly-built summary. Called by buildDag right after the child-link loop:
- * each member's writeEntry marks the new parent dirty, so the same cycle's rebuild would redo every new summary.
- *
- * Idempotent: no-op + no audit if summary isn't dirty. Audit
- * source='buildDag-clean' distinguishes it from the rebuild's source.
- */
+/** Clear summary_dirty on a new summary after buildDag's child-link loop (each member's writeEntry marks the parent dirty, so the same cycle would rebuild it).
+ * Idempotent (no-op, no audit if not dirty); audit source='buildDag-clean' distinguishes it from the rebuild's. */
 export function clearSummaryDirtyAfterBuild(
   hippoRoot: string,
   summaryId: string,
@@ -286,8 +230,7 @@ export function clearSummaryDirtyAfterBuild(
   assertTenantId('clearSummaryDirtyAfterBuild', tenantId);
   onHandle(hippoRoot, (db) => {
     // RETURNING dag_level reads the actual level so audit metadata stays accurate without an extra SELECT.
-    // SAFETY: result's shape matches the single `dag_level` column returned
-    // below.
+    // SAFETY: result's shape matches the single `dag_level` column returned below.
     const result = db.prepare(`
       UPDATE memories
          SET summary_dirty = 0

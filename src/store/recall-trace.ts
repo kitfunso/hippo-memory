@@ -1,19 +1,6 @@
-/**
- * Retrieval-trace persistence.
- *
- * Single producer for the `recall_traces` / `recall_trace_results` /
- * `recall_trace_outcomes` tables (schema v40). Every recall on the three
- * wired paths (api.recall, api.getContext, CLI cmdRecall) writes a trace
- * row: the ids + ranks + scores actually returned. Outcome events that
- * resolve their targets from last-retrieval state link back to the trace
- * they judge via `recordTraceOutcome`. This is the (query, shown, outcome)
- * training triple every Track LC learned component needs.
- *
- * All writes here are fail-soft: a broken trace write must never break the
- * surrounding recall or outcome call. Failures are logged to stderr and
- * swallowed (matches the api.ts ~2843 "audit emit failed" precedent — no
- * new debug env var).
- */
+/** Retrieval-trace persistence: the single producer for `recall_traces`, `recall_trace_results` and `recall_trace_outcomes`.
+ * One trace row per recall on api.recall, api.getContext and CLI cmdRecall: the (query, shown, outcome) triple the learned components train on.
+ * All writes are fail-soft: a failed trace write is logged to stderr and swallowed, never breaking the surrounding call. */
 
 import { openHippoDb, closeHippoDb, rethrowIfSqliteBlocked, withWriteScope, type DatabaseSyncLike } from '../db/index.js';
 import type { RerankStep } from '../core/search-types.js';
@@ -37,7 +24,7 @@ export interface RecallTraceInput {
   sessionId?: string | null;
   pipeline: 'api' | 'cli' | 'context' | 'mcp';
   /** Raw query text. NEVER persisted — only its sha256/16 hash + length are
-   *  stored (GDPR Path A / audit convention, cli.ts:1532). */
+   *  stored (GDPR Path A / audit convention, CLI). */
   query: string;
   /** True when the caller ran with explain/--why (per-result rerank steps
    *  may be present). Defaults to false. */
@@ -46,15 +33,8 @@ export interface RecallTraceInput {
   results: RecallTraceResultInput[];
 }
 
-/**
- * Strip a RerankStep down to {stage, multiplier, scoreBefore, scoreAfter}
- * before persisting. `note` is
- * free-form human text — the CLI's goal-boost step embeds matched goal tag
- * text there, so persisting it verbatim would leak raw user content into
- * training data via `rerank_json`. Only the four structured fields survive;
- * any other/future free-form field is dropped by construction (allowlist,
- * not a denylist).
- */
+/** Strip a RerankStep to {stage, multiplier, scoreBefore, scoreAfter}: `note` is free-form (the CLI goal-boost step embeds goal tag text) and would leak
+ * user content into `rerank_json`; an allowlist, so any future free-form field is dropped too. */
 function sanitizeRerankSteps(
   steps: RerankStep[],
 ): Array<Pick<RerankStep, 'stage' | 'multiplier' | 'scoreBefore' | 'scoreAfter'>> {
@@ -66,16 +46,8 @@ function sanitizeRerankSteps(
   }));
 }
 
-/**
- * Insert a `recall_traces` row + its `recall_trace_results` rows in ONE
- * transaction, on the connection handed in. Fail-soft: never throws —
- * logs to stderr and returns null on any failure.
- *
- * Connection policy: api.recall and api.getContext reach this through
- * `finishRecallAt`, on the handle that recall's other writes use. CLI
- * cmdRecall goes through `writeRecallTraceAtRoot` instead, since its audit
- * handle is already closed by the time tracing runs.
- */
+/** Insert a `recall_traces` row and its results rows in ONE transaction on the given connection. Fail-soft: logs to stderr and returns null on failure.
+ * api.recall/getContext reach this via `finishRecallAt` on their own handle; CLI cmdRecall uses `writeRecallTraceAtRoot` (its audit handle is closed). */
 export function writeRecallTrace(db: DatabaseSyncLike, input: RecallTraceInput): number | null {
   try {
     const queryHash = blockHash(input.query);
@@ -120,28 +92,8 @@ export function writeRecallTrace(db: DatabaseSyncLike, input: RecallTraceInput):
   }
 }
 
-/**
- * Convenience wrapper: opens a fresh short-lived connection at `root`,
- * writes the trace, and closes. Returns the new trace id, or null on any
- * failure (fail-soft).
- *
- * Used at CLI cmdRecall, where the block's own convention is per-call
- * handles (writeEntry, saveIndex) and the earlier audit handle is already
- * closed. NOT used by api.recall, which must reuse the caller's open handle
- * (no-side-effects contract, tests/api-recall-no-side-effects.test.ts).
- *
- * This function does NOT touch the `last_trace_id` meta key: its own connection
- * would commit apart from `saveIndex`, so a crash could advance one key alone. LOCKSTEP
- * INVARIANT: `last_trace_id` must only ever advance in the SAME write as
- * `last_retrieval_ids`. The caller now does: call this function FIRST, set
- * `localIndex.last_trace_id` from the returned id, THEN call `saveIndex`
- * once — `saveIndex` persists both meta keys in one transaction
- * (store.ts). Call sites that trace WITHOUT advancing `last_retrieval_ids`
- * (CLI cmdRecall's zero-result path) simply never touch `localIndex` at
- * all, so they can't desync by construction.
- *
- * Fail-soft: never throws, including on connection failure.
- */
+/** Short-lived connection at `root`: writes the trace, closes; returns the id or null (fail-soft). For CLI cmdRecall; api.recall must reuse its open handle.
+ * LOCKSTEP: never touches `last_trace_id`, which advances only in the same `saveIndex` write as `last_retrieval_ids`; the caller sets it from the id. */
 export function writeRecallTraceAtRoot(root: string, input: RecallTraceInput): number | null {
   let db: DatabaseSyncLike;
   try {
@@ -167,34 +119,8 @@ export interface RecordTraceOutcomeInput {
   memoryIds: string[];
 }
 
-/**
- * Record an outcome event against a trace, linking the (query, shown,
- * outcome) triple. Called ONLY where the credited ids actually come from
- * the last-retrieval mechanism (api.outcomeForLastRecall and any outcome
- * flow that resolves its targets from last-retrieval state) or from an
- * SDK caller's explicit `traceId` opt — never unconditionally from
- * api.outcome, which would mislink an explicit-id caller to a stale,
- * unrelated trace.
- *
- * Lives in its own append-only table, not audit_log metadata: audit_log is
- * pruned by `pruneAuditLog`, and pruning must never erase training data.
- *
- * Validation: `traceId`/`memoryIds` reach
- * this function from caller-side state (`last_trace_id` / applied outcome
- * ids) that can go stale relative to the trace it names — a forgotten
- * memory, a tenant switch mid-session, or a race between two callers. Two
- * checks run before the insert, both skip with one log.warn line
- * rather than throw:
- *   1. The named trace must exist and belong to `input.tenantId` — a
- *      tenant mismatch or a dangling id (deleted trace) skips.
- *   2. `input.memoryIds` is intersected against the trace's OWN
- *      `recall_trace_results.memory_id` set — only ids that trace actually
- *      returned are recorded. An id that was never in this trace's result
- *      set (stale caller state) is silently dropped rather than recorded
- *      as a false credit. If the intersection is empty, no row is written.
- *
- * Fail-soft: never throws.
- */
+/** Record an outcome against a trace; call ONLY with ids from last-retrieval state or an SDK `traceId`, never from api.outcome (stale-trace mislink).
+ * Skips (log.warn) unless the trace is in `input.tenantId`; keeps only memoryIds it returned. Own table so `pruneAuditLog` cannot erase training data. */
 export function recordTraceOutcome(db: DatabaseSyncLike, input: RecordTraceOutcomeInput): void {
   try {
     // SAFETY: row shape matches the single `tenant_id` column named in the

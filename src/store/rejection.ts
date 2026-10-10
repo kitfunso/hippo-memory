@@ -1,48 +1,24 @@
-/**
- * Rejected-value tombstone: core invariant.
- *
- * Exact-normalized-value semantics: a human who rejects a fact can refuse
- * byte-stable re-ingestion of the same value across remember/capture/import/
- * sync surfaces. Paraphrase/semantic matching is explicitly out of scope
- * (documented limitation, plan "Design").
- *
- * Kept db-agnostic (helpers take a `DatabaseSyncLike` handle) and does NOT
- * import from store.ts — store.ts imports from here, and the reverse would
- * be a cycle.
- */
+/** Rejected-value tombstone: a human can refuse byte-stable re-ingestion of a rejected fact (exact normalized value); paraphrase matching is out of scope.
+ * db-agnostic (helpers take a `DatabaseSyncLike`) and imports nothing from the store layer above it, which imports this (the reverse is a cycle). */
 
 import { createHash } from 'node:crypto';
 import type { DatabaseSyncLike } from '../db/index.js';
 import { BadRequestError } from '../core/api-errors.js';
 import { DIGEST_DISPLAY_CHARS } from '../util/token-text.js';
 
-/**
- * Normalize content for rejection-digest comparisons: Unicode NFC →
- * lowercase → collapse whitespace runs to a single space → trim. No
- * punctuation stripping — over-normalization creates false refusals, which
- * are worse than misses (plan §1).
- */
+/** Normalize content for rejection digests: NFC, lowercase, collapse whitespace runs, trim. No punctuation stripping: over-normalizing causes false
+ * refusals, worse than misses. */
 export function normalizeValueForRejection(content: string): string {
   return content.normalize('NFC').toLowerCase().replace(/\s+/g, ' ').trim();
 }
 
-/**
- * Full sha256 hex (64 chars) of the normalized content. Reuses the strong-
- * identity convention (importers.ts:814 content-hash tag), NOT the privacy-
- * lossy 16-char convention (recall-trace query hashing) — a tombstone lookup
- * key needs collision resistance, not redaction (plan §1).
- */
+/** Full 64-char sha256 hex of the normalized content: a tombstone key needs collision resistance, not the 16-char redaction hash used for query hashing. */
 export function rejectionDigest(content: string): string {
   return createHash('sha256').update(normalizeValueForRejection(content)).digest('hex');
 }
 
-/**
- * Thrown by the write-path guard (checkRejectionGuard, called from
- * upsertEntryRow) when an incoming write would introduce a value matching a
- * tombstoned digest. Carries enough context for the transaction-owner catch
- * blocks (writeEntry, api.supersede) to write a post-rollback
- * `reject_refusal` audit row via `auditRejectionRefusal` (plan §3).
- */
+/** Thrown by the write-path guard (checkRejectionGuard, via upsertEntryRow) when a write would introduce a tombstoned value; carries what the
+ * transaction-owner catch blocks (writeEntry, api.supersede) need to write the post-rollback `reject_refusal` audit row via `auditRejectionRefusal`. */
 export class RejectedValueError extends BadRequestError {
   readonly digest: string;
   readonly tenantId: string;
@@ -102,10 +78,7 @@ function rowToRejectedValue(row: RawRejectedValueRow): RejectedValueRow {
   };
 }
 
-/**
- * Look up a tombstone by tenant + digest. One indexed point query — the
- * guard's common-case cost, a miss ends the guard (plan §3).
- */
+/** Look up a tombstone by tenant + digest: one indexed point query, the guard's common-case cost; a miss ends the guard. */
 export function findRejectedValue(
   db: DatabaseSyncLike,
   tenantId: string,
@@ -121,10 +94,7 @@ export function findRejectedValue(
   return row ? rowToRejectedValue(row) : null;
 }
 
-/**
- * Insert (or refresh) a tombstone row. Caller owns the transaction — used by
- * the `reject` verb and `resolveConflict`'s `rejectLoserValue` path.
- */
+/** Insert (or refresh) a tombstone row; the caller owns the transaction (used by the `reject` verb and `resolveConflict`'s `rejectLoserValue`). */
 export function insertRejectedValue(
   db: DatabaseSyncLike,
   opts: {
@@ -157,10 +127,7 @@ export function insertRejectedValue(
   );
 }
 
-/**
- * Delete a tombstone by tenant + exact digest: the `unreject` verb, the
- * only escape hatch.
- */
+/** Delete a tombstone by tenant + exact digest: the `unreject` verb, the only escape hatch. */
 export function deleteRejectedValue(db: DatabaseSyncLike, tenantId: string, digest: string): boolean {
   const result = db.prepare(`DELETE FROM rejected_values WHERE tenant_id = ? AND digest = ?`).run(tenantId, digest);
   return (result.changes ?? 0) > 0;
@@ -178,21 +145,8 @@ export function listRejectedValues(db: DatabaseSyncLike, tenantId: string): Reje
   return rows.map(rowToRejectedValue);
 }
 
-/**
- * The write-path guard's check helper, called from `upsertEntryRow`
- * (store.ts). Fires when the incoming content's digest matches a tombstone
- * AND the write *introduces* that content: the row is new, OR the stored
- * row's content digest differs from the incoming one — an UPSERT editing a
- * same-id row TO a rejected value is a content introduction and must be
- * refused. Unchanged same-id re-persists (recall boost, decay, star toggle)
- * are exempt by construction (plan §3).
- *
- * Ordering minimizes queries on the common (miss) path: (a) caller has
- * already computed nothing yet — this does the digest + point lookup first;
- * (b) a miss returns immediately (ONE indexed point query); (c) only on a
- * tombstone hit does it SELECT the stored row's content to classify
- * new-row vs content-introduction (+1 query, rare path).
- */
+/** Write-path guard check: fires when the digest matches a tombstone AND the write introduces that content (a new row, or a same-id UPSERT changing it).
+ * Unchanged same-id re-persists (recall boost, decay, star toggle) are exempt. A miss costs ONE indexed point query; only a hit SELECTs the stored row. */
 export function checkRejectionGuard(
   db: DatabaseSyncLike,
   tenantId: string,
@@ -203,13 +157,7 @@ export function checkRejectionGuard(
   const tombstone = findRejectedValue(db, tenantId, incomingDigest);
   if (!tombstone) return; // miss ends the guard — the overwhelmingly common case
 
-  // Deliberately id-only (no tenant filter): memory ids are globally unique
-  // ULIDs, this lookup only classifies new-row vs same-id re-persist for the
-  // id the caller is already writing, and the tombstone lookup above is the
-  // tenant-scoped decision. Matches deleteEntry's own by-id SELECT.
-  //
-  // Also read tenant_id: a same-id upsert that only changes tenantId introduces the
-  // content into the destination tenant, exactly as if the row were new there.
+  // Id-only on purpose (ids are global ULIDs; the tombstone lookup is tenant-scoped); tenant_id is read as a tenantId-only upsert introduces content there.
   // SAFETY: storedRow's shape matches the two columns named in the SELECT above.
   const storedRow = db.prepare(`SELECT content, tenant_id FROM memories WHERE id = ?`).get(entryId) as
     | { content: string; tenant_id: string }

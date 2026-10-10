@@ -168,11 +168,8 @@ export const MEMORY_SEARCH_COLUMNS = [
   ...MEMORY_COLUMN_NAMES.map((c) => `m.${c} AS ${c}`),
   'bm25(memories_fts) AS bm25_score',
 ].join(', ');
-/**
- * Default candidate-pool size for `loadSearchEntries` when called with
- * `limit === undefined`. Single source of truth; `api.recall` imports
- * this for `RecallResult.windowSize` reporting so the two cannot drift.
- */
+/** Default candidate-pool size for `loadSearchEntries` when `limit` is undefined; `api.recall` imports it for `RecallResult.windowSize` so the two cannot
+ * drift. */
 export const DEFAULT_SEARCH_CANDIDATE_LIMIT = 200;
 
 type RetrievalFields = Pick<
@@ -189,10 +186,8 @@ type PlacementFields = Pick<
 >;
 
 function rowToRetrievalFields(row: MemoryRow): RetrievalFields {
-  // SAFETY: every `as X` below narrows a SQLite column value to an
-  // enum/union member of MemoryEntry; `row` comes from MEMORY_SELECT_COLUMNS
-  // / MEMORY_SEARCH_COLUMNS, which are the only queries producing MemoryRow,
-  // and the DB layer only ever writes these columns from the same enums.
+  // SAFETY: every `as X` narrows a SQLite column to a MemoryEntry enum/union member; `row` comes from MEMORY_SELECT_COLUMNS / MEMORY_SEARCH_COLUMNS,
+  // the only queries producing MemoryRow, and the DB layer writes these columns only from the same enums.
   return {
     id: row.id,
     created: row.created,
@@ -266,17 +261,8 @@ export function parseJsonArray(raw: string | null | undefined, site?: StoredJson
   }
 }
 
-/**
- * Strict parse for the `last_trace_id` meta value.
- * A bare Number(raw) would turn '', whitespace, or garbage into a
- * usable-looking 0/NaN — a consumer INSERTing recall_trace_outcomes with
- * trace_id=0 would hit a masked FK violation (row id 0 never exists).
- * Require a clean positive integer string; anything else is treated as
- * unset. This is the ONE place that decides "clean" — every consumer of
- * `HippoIndex.last_trace_id` (outcomeForLastRecall, tests) reads the
- * already-validated value out of `buildIndexFromDb`'s result and never
- * re-parses the raw meta string itself.
- */
+/** Strict parse for `last_trace_id`: Number(raw) turns '' or garbage into 0/NaN (a masked FK violation); require a clean positive integer string, else unset.
+ * The ONE place that decides 'clean'; consumers read the validated value from `buildIndexFromDb`'s result and never re-parse. */
 export function parseLastTraceId(raw: string | null | undefined): string | null {
   const trimmed = (raw ?? '').trim();
   if (!/^\d+$/.test(trimmed) || Number(trimmed) <= 0) return null;

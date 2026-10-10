@@ -1,4 +1,4 @@
-// Leaf module so store.ts and raw-archive.ts can both mark a parent summary dirty without importing each other.
+// Leaf module so entry-writes.ts and raw-archive.ts can both mark a parent summary dirty without importing each other.
 import { appendAuditEvent, reportAuditWriteFailure } from './audit.js';
 import type { DatabaseSyncLike } from '../db/index.js';
 

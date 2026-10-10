@@ -1,22 +1,6 @@
-/**
- * Dormant memories: what sleep does with a faded memory instead of deleting
- * it (config `dormant.enabled`, on by default; `retentionDays` bounds how
- * long one is kept).
- *
- * A dormant memory keeps its full content in `dormant_memories` (schema v44)
- * but is no longer a `memories` row, so recall, context, every sleep pass and
- * every other reader of `memories` stop seeing it exactly as if it had been
- * deleted. `hippo dormant` lists and searches them, `hippo dormant restore`
- * brings one back, `hippo dormant forget` deletes one for good.
- *
- * Not to be confused with the raw archive (`raw_archive`, `archiveRawMemory`,
- * `hippo forget --archive`): that path removes a raw receipt's content and
- * keeps only its metadata. A dormant memory keeps its content.
- *
- * The db-taking helpers leave the handle and any transaction to the caller.
- * The hippoRoot-taking functions at the end open one of their own, for
- * api.listDormant / restoreDormant / forgetDormant / isDormant.
- */
+/** Dormant memories: what sleep does with a faded memory instead of deleting it (config `dormant.enabled`; `retentionDays` bounds how long one is kept).
+ * Content stays in `dormant_memories` (schema v44) and the `memories` row goes, so every reader of `memories` stops seeing it, as if deleted.
+ * Not the raw archive (`raw_archive`, `archiveRawMemory`), which keeps metadata only. db-taking helpers leave the handle and transaction to the caller. */
 import { closeHippoDb, openHippoDb, withWriteScope, withWriteScopeOr, type DatabaseSyncLike } from '../db/index.js';
 import { onHandle } from './open.js';
 import type { MemoryEntry } from '../core/memory.js';
@@ -80,11 +64,7 @@ interface DormantRow {
 
 const DEFAULT_LIST_LIMIT = 20;
 
-/**
- * Insert (or refresh) the dormant snapshot for `move.entry`. Does not touch
- * the `memories` row: the caller deletes it in the same transaction, so the
- * memory is never in both places or in neither.
- */
+/** Insert (or refresh) the dormant snapshot for `move.entry`; the caller deletes the `memories` row in the same transaction. */
 export function insertDormantRow(db: DatabaseSyncLike, move: DormantMove): void {
   db.prepare(`
     INSERT INTO dormant_memories (tenant_id, id, content, entry_json, reason, strength, dormant_at)
@@ -106,10 +86,7 @@ export function insertDormantRow(db: DatabaseSyncLike, move: DormantMove): void 
   );
 }
 
-/**
- * Parse a stored snapshot back into a MemoryEntry, or null when the row no
- * longer matches the snapshot it carries (edited by hand, or truncated).
- */
+/** Parse a stored snapshot back into a MemoryEntry, or null when the row no longer matches it (edited by hand, or truncated). */
 function parseSnapshot(row: DormantRow): MemoryEntry | null {
   try {
     // SAFETY: entry_json is only written by insertDormantRow from a MemoryEntry;
@@ -169,10 +146,7 @@ export interface DormantSnapshot {
   dormantAt: string;
 }
 
-/**
- * The stored snapshot for a tenant's dormant memory, or null when the tenant
- * has no dormant memory with that id (another tenant's id reads as absent).
- */
+/** A tenant's stored dormant snapshot, or null when it has none with that id (another tenant's id reads as absent). */
 export function readDormantSnapshot(db: DatabaseSyncLike, tenantId: string, id: string): DormantSnapshot | null {
   // SAFETY: row's shape matches the seven columns named in the SELECT.
   const row = db.prepare(

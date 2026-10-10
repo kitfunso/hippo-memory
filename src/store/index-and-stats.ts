@@ -22,12 +22,8 @@ export function loadLastRecall(hippoRoot: string): Pick<HippoIndex, 'last_retrie
   }, openStore);
 }
 
-/**
- * Persist mutable index metadata. Entry rows themselves are derived from SQLite.
- *
- * `last_retrieval_ids` and `last_trace_id` commit in one transaction: callers fold a fresh trace id
- * into the index and rely on both keys moving together. index.json is left to `rebuildIndex`.
- */
+/** Persist mutable index metadata (entry rows are derived from SQLite); `last_retrieval_ids` and `last_trace_id` commit in one transaction, as callers
+ * rely on both moving together. index.json is left to `rebuildIndex`. */
 export function saveIndex(hippoRoot: string, index: Pick<HippoIndex, 'last_retrieval_ids' | 'last_trace_id'>): void {
   onHandle(hippoRoot, (db) => {
     withWriteScope(db, 'save_index', () => {
@@ -37,9 +33,7 @@ export function saveIndex(hippoRoot: string, index: Pick<HippoIndex, 'last_retri
   }, openStore);
 }
 
-/**
- * Rebuild mirrors from SQLite, importing any legacy markdown files not already present.
- */
+/** Rebuild mirrors from SQLite, importing any legacy markdown files not already present. */
 export function rebuildIndex(hippoRoot: string): HippoIndex {
   return onHandle(hippoRoot, (db) => {
     // SAFETY: rows' shape matches the single `id` column selected above.
@@ -95,9 +89,7 @@ export function updateStats(
 
 /** updateStats on the caller's open store, so a loop of writes opens the store once. */
 export function updateStatsOn(db: DatabaseSyncLike, hippoRoot: string, delta: Parameters<typeof updateStats>[1]): void {
-  // One atomic statement per counter, and only for counters the caller
-  // named: the read-modify-write this replaces both lost increments to a
-  // concurrent writer and stamped stale values over the untouched two.
+  // One atomic statement per named counter: a read-modify-write loses concurrent increments and stamps stale values over the untouched two.
   const increments: ReadonlyArray<readonly [string, number]> = [
     ['total_remembered', delta.remembered ?? 0],
     ['total_recalled', delta.recalled ?? 0],
@@ -159,9 +151,7 @@ export function countCreatedSinceLastSleep(hippoRoot: string, tenantId: string, 
   }, openStore);
 }
 
-/**
- * Session decay context: provides the data needed for session-based and adaptive decay.
- */
+/** Session decay context: the data needed for session-based and adaptive decay. */
 export interface SessionDecayContext {
   /** Total number of sleep (consolidation) cycles completed. */
   sleepCount: number;
@@ -176,10 +166,7 @@ export function lastConsolidationAt(db: DatabaseSyncLike): string | undefined {
   return row?.timestamp;
 }
 
-/**
- * Load the session decay context from the store.
- * Uses consolidation_runs timestamps to compute session intervals.
- */
+/** Load the session decay context; session intervals come from consolidation_runs timestamps. */
 export function loadSessionDecayContext(hippoRoot: string): SessionDecayContext {
   return onHandle(hippoRoot, (db) => {
     // Get recent consolidation timestamps (last 20)
@@ -207,9 +194,7 @@ export function loadSessionDecayContext(hippoRoot: string): SessionDecayContext 
   }, openStore);
 }
 
-/**
- * Increment the sleep counter. Called after each consolidation run.
- */
+/** Increment the sleep counter after each consolidation run. */
 export function incrementSleepCount(hippoRoot: string): void {
   onHandle(hippoRoot, (db) => {
     const current = Number(getMeta(db, 'sleep_count', '0')) || 0;

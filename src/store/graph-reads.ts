@@ -21,10 +21,8 @@ import {
 const DEFAULT_GRAPH_PAGE_SIZE = 100;
 const DEFAULT_GRAPH_SCAN_LIMIT = 1000;
 
-/** Entities with an exact `name` (read), bounded by `limit` in SQL with a
- *  deterministic order. Lets the graph-view focus query find the `--entity NAME`
- *  entity DIRECTLY (not from a globally-capped list) WITHOUT materializing every
- *  same-name row when a name maps to many entities. */
+/** Entities with an exact `name`, bounded by `limit` in SQL with a deterministic order, so graph-view focus finds `--entity NAME` directly
+ * without materializing every same-name row. */
 export function loadEntitiesByName(
   hippoRoot: string,
   tenantId: string,
@@ -120,10 +118,7 @@ export function loadRelations(
  *  (leaves headroom for the tenant_id param + the doubled list in neighbour lookups). */
 export const IN_LIST_CHUNK = 400;
 
-/**
- * Load entities by their primary ids. Resolves the entity rows reached during the BFS
- * (whose `memory_id` maps back to a recall result). Tenant-scoped, read-only.
- */
+/** Load entities by primary id (the BFS-reached rows whose `memory_id` maps back to a recall result). Tenant-scoped, read-only. */
 export function loadEntitiesByIds(
   hippoRoot: string,
   tenantId: string,
@@ -152,13 +147,8 @@ export function loadEntitiesByIds(
   }
 }
 
-/**
- * All relations touching ANY of `entityIds` in EITHER direction (from OR to): the
- * per-hop neighbour query for multi-hop traversal. ONE query for the whole frontier
- * (not one per node): this is the bidirectional read `loadRelations` (from-only) lacks,
- * and avoids an N+1 across BFS frontier nodes. `limit` caps rows for the frontier and
- * must be a non-negative integer (the raw `LIMIT ?` rejects a fractional value).
- */
+/** All relations touching ANY of `entityIds` in EITHER direction: the per-hop neighbour query for multi-hop traversal, one query for the whole frontier
+ * (no N+1). `limit` caps rows and must be a non-negative integer (raw `LIMIT ?` rejects a fraction). */
 export function loadNeighborRelations(
   hippoRoot: string,
   tenantId: string,
@@ -175,11 +165,8 @@ export function loadNeighborRelations(
   const ownDb = txDb ? null : openHippoDb(hippoRoot);
   const db = txDb ?? ownDb!;
   try {
-    // `limit` is applied PER CHUNK; a frontier spanning >IN_LIST_CHUNK ids could return
-    // up to limit*chunks rows before the by-id dedup below. Harmless for multi-hop recall (the
-    // frontier is bounded by maxNeighbors <= 200 << IN_LIST_CHUNK, so a single chunk,
-    // and the BFS re-enforces the per-hop fanout cap), but note the semantics if a
-    // tighter total cap is ever needed.
+    // `limit` applies PER CHUNK, so a frontier over IN_LIST_CHUNK ids could return limit*chunks rows before the dedup below;
+    // harmless today (frontier <= maxNeighbors 200, one chunk, BFS re-enforces the fanout cap).
     const byId = new Map<number, Relation>();
     for (let i = 0; i < entityIds.length; i += IN_LIST_CHUNK) {
       const slice = entityIds.slice(i, i + IN_LIST_CHUNK);
@@ -199,13 +186,8 @@ export function loadNeighborRelations(
   }
 }
 
-/**
- * Relations with BOTH endpoints in `entityIds` (edges AMONG the set, not merely
- * touching it). Read. Used by the graph-view focus subgraph so the displayed
- * edges are exactly the intra-union edges: the `LIMIT` only caps genuinely-many
- * intra-union edges: no out-of-union row can evict a valid in-set edge. The
- * caller bounds `entityIds` (<= the view limit), so a single query is safe.
- */
+/** Relations with BOTH endpoints in `entityIds` (edges AMONG the set), for the graph-view focus subgraph; `LIMIT` caps only intra-union edges,
+ * so no out-of-union row evicts a valid one. The caller bounds `entityIds` (<= view limit), so a single query is safe. */
 export function loadRelationsAmong(
   hippoRoot: string,
   tenantId: string,
@@ -236,11 +218,8 @@ export function loadRelationsAmong(
   }
 }
 
-/**
- * Map consolidated source memory ids -> their graph entities. The SEED step of
- * multi-hop recall (recall result memory ids -> entities to traverse from). Tenant-
- * scoped, read-only; chunks the IN-list under the SQLite variable cap.
- */
+/** Map consolidated source memory ids to their graph entities: the SEED step of multi-hop recall. Tenant-scoped, read-only; chunks the IN-list under the
+ * SQLite variable cap. */
 export function loadEntitiesByMemoryId(
   hippoRoot: string,
   tenantId: string,
@@ -295,14 +274,8 @@ export function loadStoredGraph(hippoRoot: string, tenantId: string, memoryIds: 
   });
 }
 
-/**
- * Run `fn` inside ONE read transaction (a single WAL snapshot) so every graph read
- * it performs (pass the supplied `txDb` to the `load*` functions) sees a consistent
- * view, even if a `graph extract` / sleep-drain rebuild commits concurrently between
- * reads (the rebuild clears + reinserts entities, so separate reads could otherwise
- * mix old entity ids with new relation ids). Reads only; the connection is opened
- * once and closed after.
- */
+/** Run `fn` in ONE read transaction (a single WAL snapshot) so every `load*` read via `txDb` sees a consistent view
+ * even if a rebuild commits concurrently (it clears and reinserts entities, so separate reads could mix old entity ids with new relation ids). */
 export function withGraphReadSnapshot<T>(
   hippoRoot: string,
   fn: (txDb: DatabaseSyncLike) => T,

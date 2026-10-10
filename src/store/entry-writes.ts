@@ -16,6 +16,8 @@ export interface WriteEntryOptions {
   afterCommit?: () => void;
 }
 
+/** Write an entry to SQLite and refresh mirrors; `opts.afterWrite` runs in the same SAVEPOINT as the INSERT, so a throw rolls the row back.
+ * `opts.actor` defaults to 'cli'; the api layer passes the resolved actor so the audit log gets one row per write. */
 export function writeEntry(hippoRoot: string, entry: MemoryEntry, opts?: WriteEntryOptions): void {
   onHandle(hippoRoot, (db) => {
     writeEntryOn(db, hippoRoot, entry, opts);
@@ -81,19 +83,8 @@ function writeEntryOn(db: DatabaseSyncLike, hippoRoot: string, entry: MemoryEntr
   }
 }
 
-/**
- * DB-only write path. Caller owns the open `db` handle. Runs upsert +
- * afterWrite hook + audit row inside one withWriteScope. Caller
- * is responsible for opening `db`, optionally wrapping in a larger BEGIN/
- * COMMIT (e.g. supersede's BEGIN IMMEDIATE), closing `db`, AND calling
- * `writeEntryMirrors` after the larger tx commits — mirrors must run
- * post-commit so a rolled-back tx never leaves orphan markdown.
- *
- * Audit-order note: the audit row is emitted INSIDE the write scope, so audit
- * commits atomically with the row INSERT. A subsequent mirror failure cannot
- * leave a recorded audit entry without its corresponding DB row. This is a
- * documented hardening over the prior writeEntry-as-monolith ordering.
- */
+/** DB-only write path: upsert, afterWrite hook and audit row inside one withWriteScope; the caller owns `db` and must call `writeEntryMirrors` after any
+ * outer tx commits, so a rolled-back tx never leaves orphan markdown. The audit row commits atomically with the INSERT. */
 export function writeEntryDbOnly(
   db: DatabaseSyncLike,
   entry: MemoryEntry,

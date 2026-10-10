@@ -1,10 +1,4 @@
-/**
- * Working Memory — bounded buffer for current-state notes.
- *
- * Separate from long-term semantic memory. Entries are scoped,
- * importance-ranked, and automatically evicted when the buffer
- * exceeds WM_MAX_ENTRIES per scope.
- */
+/** Working Memory: bounded buffer for current-state notes, separate from long-term memory; scoped, importance-ranked, evicted past WM_MAX_ENTRIES per scope. */
 
 import { withWriteScope } from '../db/index.js';
 import { onHandle, openStore } from './open.js';
@@ -43,9 +37,8 @@ interface WorkingMemoryRow {
 function rowToItem(row: WorkingMemoryRow): WorkingMemoryItem {
   let metadata: JsonObject = {};
   try {
-    // SAFETY: metadata_json is always written by wmPush via
-    // JSON.stringify(opts.metadata ?? {}), so a successful parse yields a
-    // plain JSON object; malformed content falls through to the catch below.
+    // SAFETY: metadata_json is always written by wmPush via JSON.stringify(opts.metadata ?? {}), so a successful parse yields a plain JSON object;
+    // malformed content falls through to the catch below.
     metadata = JSON.parse(row.metadata_json) as JsonObject;
   } catch {
     // The item still lists with its content; only its metadata reads as empty.
@@ -64,12 +57,8 @@ function rowToItem(row: WorkingMemoryRow): WorkingMemoryItem {
   };
 }
 
-/**
- * Push a new entry into working memory.
- * If the scope exceeds WM_MAX_ENTRIES, the lowest-importance entry
- * is evicted (ties broken by oldest created_at).
- * Returns the new row ID.
- */
+/** Push a new entry into working memory; past WM_MAX_ENTRIES the scope's lowest-importance entry is evicted (ties: oldest created_at). Returns the new
+ * row ID. */
 export function wmPush(hippoRoot: string, opts: {
   scope: string;
   content: string;
@@ -110,10 +99,8 @@ export function wmPush(hippoRoot: string, opts: {
 }
 
 function evictOverCapacity(db: ReturnType<typeof openStore>, scope: string, tenantId: string): void {
-  // Evict if over capacity for this scope
-  // SAFETY: `COUNT(*) AS cnt` on a scoped query always returns exactly
-  // one row shaped { cnt }; .get() returns undefined only if the driver
-  // yields no row, which COUNT(*) never does.
+  // Evict if over capacity for this scope.
+  // SAFETY: `COUNT(*) AS cnt` always returns exactly one row { cnt }, so `.get()` never yields undefined.
   const countRow = db.prepare(`
     SELECT COUNT(*) AS cnt FROM working_memory WHERE scope = ? AND tenant_id = ?
   `).get(scope, tenantId) as { cnt: number } | undefined;
@@ -133,9 +120,7 @@ function evictOverCapacity(db: ReturnType<typeof openStore>, scope: string, tena
   }
 }
 
-/**
- * Read working memory entries, sorted by importance DESC.
- */
+/** Read working memory entries, sorted by importance DESC. */
 export function wmRead(hippoRoot: string, opts?: {
   scope?: string;
   sessionId?: string;
@@ -173,9 +158,7 @@ export function wmRead(hippoRoot: string, opts?: {
   }, openStore);
 }
 
-/**
- * Clear (delete) working memory entries. Returns the count deleted.
- */
+/** Clear (delete) working memory entries. Returns the count deleted. */
 export function wmClear(hippoRoot: string, opts?: {
   scope?: string;
   sessionId?: string;
@@ -200,12 +183,7 @@ export function wmClear(hippoRoot: string, opts?: {
   }, openStore);
 }
 
-/**
- * Flush working memory — delete entries after session end.
- * Functionally identical to wmClear but semantically distinct:
- * used at session boundaries to discard ephemeral state.
- * Returns the count flushed.
- */
+/** Flush working memory after session end: same as wmClear, but marks the session-boundary discard of ephemeral state. Returns the count flushed. */
 export function wmFlush(hippoRoot: string, opts?: {
   scope?: string;
   sessionId?: string;

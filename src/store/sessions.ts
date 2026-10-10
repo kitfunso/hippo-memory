@@ -148,44 +148,17 @@ export function loadActiveTaskSnapshot(hippoRoot: string, tenantId: string, key?
   }, openStore);
 }
 
-/**
- * Default freshness bound for AMBIENT active-task-snapshot reads: 72h, chosen over 48h so
- * a Friday-evening orphan still offers continuity on Monday morning.
- * Exported so callers can override via `loadFreshActiveTaskSnapshot`'s
- * `opts.maxAgeMs`; deliberately no env knob (Simplicity First).
- */
+/** Default freshness bound for AMBIENT active-task-snapshot reads: 72h rather than 48h so a Friday-evening orphan still offers continuity on Monday;
+ * override via `loadFreshActiveTaskSnapshot`'s `opts.maxAgeMs`; deliberately no env knob. */
 export const SNAPSHOT_AMBIENT_MAX_AGE_MS = 72 * 60 * 60 * 1000;
 
-/** A usable session id: non-null, non-empty string. Named predicate (not an
- * inline `typeof` check) so the owner-match rule in
- * `loadFreshActiveTaskSnapshot` states its contract once. */
+/** A usable session id: non-null, non-empty string; named so the owner-match rule in `loadFreshActiveTaskSnapshot` states its contract once. */
 function isNonEmptySessionId(value: string | null | undefined): value is string {
   return typeof value === 'string' && value.length > 0;
 }
 
-/**
- * Bounded read for AMBIENT active-task-snapshot surfaces (UserPromptSubmit
- * hook context, MCP recall block), so snapshots expire. A
- * snapshot written by `hippo pre-compact` has no death path tied to the
- * session that owns it, so an orphaned row would otherwise inject into
- * every prompt of every later session forever. Wraps `loadActiveTaskSnapshot`
- * (unchanged, still the source of truth for explicit continuity surfaces),
- * then applies, in order:
- *
- * 1. Owner match — ONLY when both `opts.sessionId` and the snapshot's
- *    `session_id` are non-null, non-empty strings and strictly equal
- *    (`===`). Owner reads are unbounded: the session that owns the snapshot
- *    can always see its own working state, regardless of age.
- * 2. Age check — everything else, including absent-vs-absent ids. A
- *    null/undefined/empty id on EITHER side never counts as an owner match;
- *    it falls through here instead. (`runPreCompact` can legitimately save a
- *    snapshot with `session_id = null`; a null-equals-null "match" would
- *    reopen indefinite ambient injection for exactly those rows.) Returns
- *    the snapshot only when `age(updated_at) <= maxAgeMs` (default
- *    `SNAPSHOT_AMBIENT_MAX_AGE_MS`); otherwise null.
- *
- * No SQL change — age derives from the existing `updated_at` column.
- */
+/** Bounded read for AMBIENT snapshot surfaces so orphaned snapshots expire. The owner (both session ids non-empty and `===`) always sees its own state;
+ * all others, null ids included (null === null is no match), get it only if age(updated_at) <= maxAgeMs (default `SNAPSHOT_AMBIENT_MAX_AGE_MS`), else null. */
 export function loadFreshActiveTaskSnapshot(
   hippoRoot: string,
   tenantId: string,
@@ -236,15 +209,8 @@ export function clearActiveTaskSnapshot(hippoRoot: string, tenantId: string, cle
   }
 }
 
-/**
- * Close the `active` task snapshot(s) owned by `sessionId`, for the
- * session-end death path.
- * Only one `active` row exists per tenant (per owner and project when keyed) in practice (supersession happens
- * at save), but the WHERE clause scopes on `session_id` too — not just
- * `status='active' AND tenant_id=?` — so an ending session can never close a
- * different, newer session's active snapshot. Returns the number of rows
- * closed (0 when no active row is owned by `sessionId`).
- */
+/** Close the `active` task snapshot(s) owned by `sessionId` at session end; the WHERE scopes on `session_id` too so an ending session can never close a
+ * newer session's snapshot. Returns the number of rows closed. */
 export function closeTaskSnapshotsForSession(
   hippoRoot: string,
   tenantId: string,
@@ -380,10 +346,7 @@ export function listSessionEvents(
   }, openStore);
 }
 
-/**
- * Return session_ids with a `session_complete` event newer than `sinceMs`.
- * Used by the sleep auto-promotion pass to bound scanning to a fixed window.
- */
+/** Session_ids with a `session_complete` event newer than `sinceMs`; bounds the sleep auto-promotion scan to a fixed window. */
 export function findPromotableSessions(
   hippoRoot: string,
   tenantId: string,
@@ -401,10 +364,7 @@ export function findPromotableSessions(
   }, openStore);
 }
 
-/**
- * Idempotency guard — true if a trace-layer memory with this source_session_id
- * already exists.
- */
+/** Idempotency guard: true if a trace-layer memory with this source_session_id already exists. */
 export function traceExistsForSession(hippoRoot: string, tenantId: string, session_id: string): boolean {
   assertTenantId('traceExistsForSession', tenantId);
   return onHandle(hippoRoot, (db) => {

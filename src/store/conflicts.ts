@@ -24,9 +24,7 @@ function canonicalConflictPair(aId: string, bId: string): { memory_a_id: string;
 }
 
 function selectConflictRowsInTenant(db: DatabaseSyncLike, status: string, allStatuses: boolean, tenantId: string): MemoryConflictRow[] {
-  // Tenanted query — JOIN to memories on both conflict members and require
-  // each in-tenant, so neither a normal cross-tenant pair nor a stale
-  // pre-fix row surfaces (consistent with resolveConflict).
+  // Tenanted query: JOIN memories on both members and require each in-tenant, so no cross-tenant or stale pre-fix pair surfaces.
   // SAFETY: both branches select CONFLICT_COLS_MC, MemoryConflictRow's columns.
   return allStatuses
     ? db.prepare(`
@@ -70,10 +68,7 @@ export function listMemoryConflicts(
   tenantId?: string,
 ): MemoryConflict[] {
   return onHandle(hippoRoot, (db) => {
-    // v0.28 — '*' is a sentinel meaning "no status filter, return all rows".
-    // Pre-v0.28 callers (cli/mcp/dashboard) always passed 'open' or default,
-    // so this sentinel is purely additive. The 4 SQL branches below cover
-    // {tenanted | unscoped} × {all-statuses | specific-status}.
+    // '*' is a sentinel for no status filter; the 4 SQL branches below cover {tenanted | unscoped} x {all-statuses | specific-status}.
     const allStatuses = status === '*';
     const rows = tenantId !== undefined
       ? selectConflictRowsInTenant(db, status, allStatuses, tenantId)
@@ -213,11 +208,7 @@ function resolveStaleOpenConflicts(
   for (const row of openRows) {
     const key = `${row.memory_a_id}::${row.memory_b_id}`;
     const stale = !detectedKeys.has(key);
-    // v1.11.0 residue: auto-resolve any open cross-tenant row. The insert
-    // loop in upsertDetectedConflicts and the refMap rebuild skip
-    // cross-tenant pairs, but the resolve-stale loop previously left
-    // re-detected cross-tenant rows lingering status='open'. The
-    // sameTenant() helper is already built one block up; no extra query.
+    // Auto-resolve any open cross-tenant row: the insert loop and refMap rebuild skip those pairs, so re-detected ones would linger as 'open'.
     const crossTenant = !sameTenant(row.memory_a_id, row.memory_b_id);
     if (stale || crossTenant) resolve.run(detectedAt, row.id);
   }
@@ -284,11 +275,7 @@ function rebuildConflictsWithJson(db: DatabaseSyncLike, { sameTenant, storedRefs
   return changedIds;
 }
 
-/**
- * AT1 (plan §5): additive-optional opts for resolveConflict.
- * `rejectLoserValue` implies removal of the loser regardless of
- * `forgetLoser` — you cannot tombstone a value and leave it live.
- */
+/** `rejectLoserValue` implies removal of the loser regardless of `forgetLoser`: a tombstoned value cannot stay live. */
 export interface ResolveConflictOpts {
   /** Tombstone the loser's normalized digest + kind-aware remove it. */
   rejectLoserValue?: boolean;
@@ -299,9 +286,7 @@ export interface ResolveConflictOpts {
   reason?: string;
 }
 
-/** AT1 (plan §5): the `conflict_resolve` audit row's metadata shape —
- *  every resolveConflict path writes exactly these fields (rejectedDigest
- *  only when the loser's value was also tombstoned). */
+/** Metadata shape of the `conflict_resolve` audit row; rejectedDigest is set only when the loser's value was also tombstoned. */
 interface ConflictResolveMeta {
   conflictId: number;
   keepId: string;
@@ -312,10 +297,8 @@ interface ConflictResolveMeta {
   rejectedDigest?: string;
 }
 
-// When tenantId is set, the conflict lookup requires BOTH members in-tenant
-// and every memories mutation carries AND tenant_id = ?. A cross-tenant probe
-// then returns null, indistinguishable from a bad id. Omitted tenantId =
-// legacy unscoped behaviour (CLI direct mode, tests, consolidate.ts).
+// With tenantId, both members must be in-tenant and every memories mutation carries AND tenant_id = ?; a cross-tenant probe returns null like a bad id.
+// Omitted tenantId = unscoped (CLI direct mode, tests).
 function conflictMemScope(tenantId?: string): MemScope {
   return {
     memScope: tenantId !== undefined ? ' AND tenant_id = ?' : '',
@@ -345,21 +328,8 @@ function findResolvableConflict(
   return { conflict, loserId };
 }
 
-/**
- * Resolve a conflict by keeping one memory and weakening the other.
- * Sets conflict status to 'resolved' and halves the loser's half-life.
- * If --forget is used, the loser is removed entirely (kind-aware: raw rows
- * are archived via archiveRawMemory, others deleted via deleteEntryCore —
- * AT1 fix for the pre-existing crash where a raw loser aborted the whole
- * resolve transaction against the append-only trigger). `opts.rejectLoserValue`
- * additionally tombstones the loser's normalized digest so it cannot be
- * re-asserted later.
- *
- * Every resolution path (weaken / forget / reject) emits a `conflict_resolve`
- * audit row (AT1 — previously resolveConflict wrote zero audit rows on any path).
- *
- * Returns the resolved conflict, or null if not found.
- */
+/** Resolve a conflict by keeping one memory and halving the loser's half-life; `--forget` removes the loser, `opts.rejectLoserValue` also tombstones its
+ * digest. Every path emits a `conflict_resolve` audit row. Returns the resolved conflict, or null if not found. */
 export function resolveConflict(
   hippoRoot: string,
   conflictId: number,
@@ -449,21 +419,13 @@ function weakenConflictLoser(db: DatabaseSyncLike, t: ResolveTarget): LoserRemov
 }
 
 function removeConflictLoser(db: DatabaseSyncLike, t: ResolveTarget): LoserRemoval {
-  // AT1 (plan §5): removal (forgetLoser OR rejectLoserValue — a tombstoned
-  // value cannot be left live) is now kind-aware. The old bare
-  // `DELETE FROM memories WHERE id = ?` aborted the whole transaction when
-  // the loser was kind='raw' (append-only trigger fires); route through
-  // the same helpers the reject verb uses (both db-scoped, both compose
-  // inside this BEGIN/COMMIT). loserRemoved / loserWasRaw drive both the
-  // conflicts_with_json skip below and the post-commit mirror purge.
+  // Removal is kind-aware: a bare DELETE on a raw loser fires the append-only trigger, so use the same helpers as the reject verb.
+  // loserRemoved / loserWasRaw drive the conflicts_with_json skip below and the post-commit mirror purge.
   const removal: LoserRemoval = {
     loserRemoved: false,
     loserWasRaw: false,
     rejectedDigest: undefined,
-    // AT1 P1 fix (codex): same-tenant duplicates of the loser's content that
-    // rejectLoserValue also removes (see below) — separate from loserId so
-    // the audit + post-commit mirror purge can cover ALL of them, not just
-    // loserId.
+    // Same-tenant duplicates of the loser's content that rejectLoserValue also removes; kept apart from loserId so audit and mirror purge cover all of them.
     extraRemovedIds: [],
     extraRemovedRawIds: [],
   };
@@ -529,18 +491,8 @@ function tombstoneLoserValue(
   const rejectedDigest = rejectionDigest(loserRow.content);
   recordRejectedLoserValue(db, t, loserRow, rejectedDigest, who);
 
-  // AT1 P1 fix (codex): reject-flow.ts's `rejectValue` removes ALL
-  // live same-tenant rows whose normalized digest matches, not just
-  // the one id passed — but this branch only ever removed loserId,
-  // leaving same-TENANT duplicates live while their shared content
-  // was tombstoned. Same O(N) scan pattern as reject-flow.ts (human-
-  // triggered command, tenant's row count is human-scale). CRITICAL
-  // BOUNDARY: tenant-scoped ONLY — tombstones are tenant-scoped by
-  // design, so a same-content row in ANOTHER tenant is legitimately
-  // live and must NOT be touched here. `keepId` is excluded even if
-  // its content coincidentally matches: the human explicitly chose
-  // to keep it in this same resolution, and this branch must not
-  // undo that choice in the same transaction.
+  // Remove ALL live same-tenant rows whose digest matches (as reject-flow.ts rejectValue does), not just loserId; the O(N) scan is human-scale.
+  // Tenant-scoped ONLY, since tombstones are; `keepId` is excluded even if its content matches, because the human chose to keep it.
   const loserTenantId = loserRow.tenant_id ?? DEFAULT_TENANT_ID;
   // SAFETY: dupRows' shape matches the four columns named in the SELECT above.
   const dupRows = db
@@ -564,9 +516,8 @@ function tombstoneLoserValue(
 function stripConflictRefs(db: DatabaseSyncLike, t: ResolveTarget, loserRemoved: boolean): void {
   const { memScope, memArgs } = t.scope;
   const { keepId, loserId } = t;
-  // Clean up conflicts_with references
-  // SAFETY: keepRow's shape matches the single `conflicts_with_json`
-  // column selected above.
+  // Clean up conflicts_with references.
+  // SAFETY: keepRow's shape matches the single `conflicts_with_json` column selected above.
   const keepRow = db.prepare(`SELECT conflicts_with_json FROM memories WHERE id = ?${memScope}`).get(
     keepId,
     ...memArgs
@@ -601,27 +552,20 @@ function auditConflictResolve(
   tenantId: string | undefined,
 ): void {
   const { loserRemoved, loserWasRaw, rejectedDigest, extraRemovedIds } = removal;
-  // AT1: the missing audit (plan §5 — resolveConflict wrote ZERO audit_log
-  // rows on any path before this). Every path — weaken, forget, reject —
-  // lands exactly one conflict_resolve row.
+  // Every path (weaken, forget, reject) lands exactly one conflict_resolve audit row.
   const conflictResolveMeta: ConflictResolveMeta = {
     conflictId: t.conflictId,
     keepId: t.keepId,
     loserId: t.loserId,
     disposition: loserRemoved ? (loserWasRaw ? 'archived_raw' : 'deleted') : 'weakened',
     rejected: Boolean(t.opts?.rejectLoserValue),
-    // AT1 P1 fix: every row this call removed, not just loserId — the
-    // same-tenant duplicate sweep above (extraRemovedIds) needs an
-    // audit trail too.
+    // Every row this call removed, not just loserId, so the duplicate sweep (extraRemovedIds) is audited too.
     removedIds: loserRemoved ? [t.loserId, ...extraRemovedIds] : [],
   };
   // Assigned only when present so the serialized audit payload keeps
   // omitting the key, exactly as the pre-migration object literal did.
   if (rejectedDigest !== undefined) conflictResolveMeta.rejectedDigest = rejectedDigest;
-  // Fresh spread literal: ConflictResolveMeta is a closed interface (no
-  // index signature) and isn't directly assignable to audit()'s
-  // Record<string, JsonValue> metadata param; a spread into a fresh
-  // object literal satisfies it without widening the declared type above.
+  // Fresh spread literal: ConflictResolveMeta is a closed interface, not assignable to audit()'s Record<string, JsonValue> metadata otherwise.
   audit(db, 'conflict_resolve', { targetId: t.keepId, metadata: { ...conflictResolveMeta }, actor: t.opts?.rejectedBy ?? 'cli', tenantId });
 }
 
@@ -631,31 +575,11 @@ function purgeRemovedLoserMirrors(
   loserId: string,
   removal: LoserRemoval,
 ): void {
-  // AT1 P1b fix: mirror purge + reaper stamp for EVERY removed loser, not
-  // just the rejectLoserValue path. Pre-AT1, the plain forgetLoser path on
-  // a raw loser crashed outright (bare DELETE FROM memories hit the
-  // append-only trigger) — there is no legacy "successful forget, no
-  // purge" behavior to preserve for that case. Post-AT1's kind-aware
-  // removal (archiveRawMemory / deleteEntryCore above) makes plain
-  // --forget succeed on every kind, but until this fix the mirror was
-  // only purged when rejectLoserValue was ALSO set: a plain raw --forget
-  // left its markdown mirror orphaned (the reaper still catches it
-  // eventually, since archiveRawMemory's own raw_archive insert leaves
-  // mirror_cleaned_at NULL) and a plain non-raw --forget left its mirror
-  // orphaned FOREVER (no reaper exists for non-raw rows). Same post-commit
-  // purge+reaper pattern as the reject verb (src/trust/reject-flow.ts) and
-  // api.archiveRaw — reusing removeEntryMirrors + raw_archive bookkeeping.
-  // AT1 P1 fix: loop over loserId AND every same-tenant duplicate the
-  // rejectLoserValue sweep above removed (extraRemovedIds) — previously
-  // only loserId's mirror was purged, leaving duplicate mirrors orphaned
-  // despite their rows being gone.
+  // Mirror purge and reaper stamp for EVERY removed loser (loserId and each extraRemovedIds duplicate), post-commit like the reject verb.
+  // A non-raw mirror has no reaper, so skipping the purge would orphan it forever.
   for (const removedId of [loserId, ...removal.extraRemovedIds]) {
     const isRaw = removedId === loserId ? removal.loserWasRaw : removal.extraRemovedRawIds.includes(removedId);
-    // AT1 fix: purgeMirrorBestEffort retries once, then — for non-raw ids,
-    // which cleanupArchivedMirrors' reaper never scans — reports the
-    // EXPLICIT leftover path(s) instead of the false "will retry via
-    // reaper" claim. See its own doc comment (store.ts, near
-    // removeEntryMirrors) for the full rationale.
+    // purgeMirrorBestEffort retries once, then reports the explicit leftover paths for non-raw ids, which the cleanupArchivedMirrors reaper never scans.
     const mirrorOk = purgeMirrorBestEffort(hippoRoot, removedId, isRaw, 'resolveConflict');
     if (mirrorOk && isRaw) {
       db.prepare(`UPDATE raw_archive SET mirror_cleaned_at = ? WHERE memory_id = ?`).run(
@@ -668,7 +592,7 @@ function purgeRemovedLoserMirrors(
 
 /** The conflict and loser ids every conflict_resolve audit row names. */
 export function conflictResolveAuditsAt(db: DatabaseSyncLike): Array<{ conflictId: number; loserId: string }> {
-  // SAFETY: SELECT of two fields every conflict_resolve audit row carries (ConflictResolveMeta in store.ts).
+  // SAFETY: SELECT of two fields every conflict_resolve audit row carries (ConflictResolveMeta above).
   return db.prepare(`SELECT json_extract(metadata_json, '$.conflictId') AS conflictId, json_extract(metadata_json, '$.loserId') AS loserId FROM audit_log WHERE op = 'conflict_resolve'`).all() as { conflictId: number; loserId: string }[];
 }
 

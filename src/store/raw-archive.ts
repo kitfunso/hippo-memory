@@ -8,13 +8,8 @@ import { markSummaryDirtyInTx } from './summary-dirty.js';
 export interface ArchiveOpts {
   reason: string;
   who: string;
-  /**
-   * Optional hook invoked inside the same SAVEPOINT as the archive INSERT/DELETE,
-   * after the audit row is appended and before RELEASE. Used by the Slack
-   * deletion connector to mark the deletion event seen atomically — a crash
-   * mid-archive must not leave the deletion event untracked. Throwing rolls
-   * back the entire archive (including the audit row).
-   */
+  /** Hook run inside the archive SAVEPOINT after the audit row and before RELEASE (the Slack deletion connector marks the event seen atomically);
+   * throwing rolls back the whole archive, audit row included. */
   afterArchive?: (db: DatabaseSyncLike, archivedMemoryId: string) => void;
 }
 
@@ -31,9 +26,8 @@ export function markMirrorCleaned(db: DatabaseSyncLike, memoryId: string, at: st
 }
 
 function loadRawRow(db: DatabaseSyncLike, id: string): ArchivedMemoryRow {
-  // SAFETY: SELECT * FROM memories returns every column of the memories table; only
-  // kind, tenant_id, and dag_parent_id are read below, all guaranteed present (possibly
-  // null) by the memories schema.
+  // SAFETY: SELECT * returns every memories column; only kind, tenant_id and dag_parent_id are read below, all guaranteed present (possibly null) by the
+  // schema.
   const row = db.prepare(`SELECT * FROM memories WHERE id = ?`).get(id) as
     | ArchivedMemoryRow
     | undefined;
@@ -45,10 +39,8 @@ function loadRawRow(db: DatabaseSyncLike, id: string): ArchivedMemoryRow {
 }
 
 function moveRowToArchive(db: DatabaseSyncLike, id: string, row: ArchivedMemoryRow, opts: ArchiveOpts): string {
-  // GDPR: raw_archive stores ONLY metadata, not the original
-  // memory content. The audit_log row appended below carries op='archive_raw'
-  // for the compliance audit trail. True right-to-be-forgotten — the original
-  // content is unrecoverable from raw_archive after this point.
+  // GDPR: raw_archive stores ONLY metadata, never the original content; the archive_raw audit row is the compliance trail,
+  // so the content is unrecoverable from here on.
   const archivedAt = new Date().toISOString();
   const redactedPayload = JSON.stringify({
     redacted: true,
@@ -68,11 +60,8 @@ function moveRowToArchive(db: DatabaseSyncLike, id: string, row: ArchivedMemoryR
   return archivedAt;
 }
 
-// Emit the archive_raw audit event inside the SAVEPOINT so the audit row is
-// committed atomically with the row deletion. Use the row's own tenant_id
-// (fetched above as part of SELECT *), not the env. Archives must be
-// attributed to the tenant that owns the row, not whatever HIPPO_TENANT
-// happens to be set to in the calling shell.
+// Emit the archive_raw audit inside the SAVEPOINT so it commits atomically with the row deletion, attributed to the row's own tenant_id,
+// not whatever HIPPO_TENANT the calling shell has set.
 function auditArchive(db: DatabaseSyncLike, id: string, row: ArchivedMemoryRow, opts: ArchiveOpts): void {
   try {
     appendAuditEvent(db, {
@@ -88,15 +77,8 @@ function auditArchive(db: DatabaseSyncLike, id: string, row: ArchivedMemoryRow, 
   }
 }
 
-/**
- * The only legitimate path to remove a `kind='raw'` row from `memories`.
- *
- * Snapshots the full row into `raw_archive`, flips `kind` to `'archived'` so the
- * append-only trigger lets the delete through, then deletes the row. All in one
- * write scope, which nests inside an outer transaction (e.g. batchWriteAndDelete).
- *
- * Throws if the row does not exist or is not `kind='raw'`. Returns the archived_at it wrote.
- */
+/** The only way to remove a `kind='raw'` row: snapshots it into `raw_archive`, flips `kind` to 'archived' so the append-only trigger allows the delete,
+ * all in one write scope that nests in an outer transaction. Throws if the row is missing or not raw; returns the archived_at. */
 export function archiveRawMemory(db: DatabaseSyncLike, id: string, opts: ArchiveOpts): string {
   const row = loadRawRow(db, id);
 
@@ -115,11 +97,8 @@ export function archiveRawMemory(db: DatabaseSyncLike, id: string, opts: Archive
         opts.who || 'cli',
       );
     }
-    // afterArchive hook: connector-level idempotency markers
-    // (e.g. slack_event_log) must commit atomically with the archive itself.
-    // Throwing here rolls back the entire SAVEPOINT — both the archive and any
-    // hook side effects. The hook runs INSIDE the SAVEPOINT so its writes
-    // share the archive's transactional fate.
+    // afterArchive hook: connector idempotency markers (e.g. slack_event_log) must commit atomically with the archive, so it runs INSIDE the SAVEPOINT;
+    // throwing rolls back both.
     if (opts.afterArchive) {
       opts.afterArchive(db, id);
     }

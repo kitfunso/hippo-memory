@@ -185,45 +185,15 @@ export function ftsDrift(hippoRoot: string, repair: boolean): { memories: number
   }
 }
 
-/**
- * Write a memory entry to SQLite and refresh compatibility mirrors.
- *
- * `opts.actor` defaults to 'cli' so unauthenticated direct-CLI callers still
- * get the right audit attribution. The HTTP server and api.* layer pass
- * the resolved actor (`api_key:<key_id>` / `localhost:cli`) so audit events
- * land with one row per write, no double-emit.
- *
- * `opts.afterWrite` is invoked inside the same SAVEPOINT as the memories
- * INSERT (mirrors archiveRawMemory's shape in raw-archive.ts). On callback
- * throw, the SAVEPOINT rolls back — the memory row never lands, and the
- * filesystem mirrors / audit emit never run. Used by connectors to
- * stamp idempotency rows atomically with the memory write.
- */
-/**
- * Stamp origin_project from the store's own location when the entry has
- * never been stamped (v39 memory scope isolation). The store dir is
- * `<project>/.hippo`, so its parent resolves to the owning project; the
- * home/global store resolves to '' (user-global). Callers that know a better
- * origin (shareMemory, syncGlobalToLocal) set entry.origin_project before
- * writing and this is a no-op. Returns a stamped copy; never mutates.
- *
- * NULL is PRESERVED, not re-stamped: it means no known project (a legacy row with no evidence, or a write to a
- * shared store that named none) and ambient context denies it, so a writeback must not launder it.
- */
+/** Stamp origin_project from the store's own location (parent of `<project>/.hippo`; the home store is '' = user-global) when never stamped; returns a copy.
+ * NULL is PRESERVED: it means no known project and ambient context denies it, so a writeback must not launder it. */
 export function stampOriginProject(hippoRoot: string, entry: MemoryEntry): MemoryEntry {
   if (entry.origin_project !== undefined) return entry;
   return { ...entry, origin_project: fallbackOrigin(hippoRoot) };
 }
 
-/**
- * Import-time variant for a mirror with no origin field (an explicit null stays null): used only where evidence exists
- * for rows that predate the origin column - the legacy-markdown bootstrap and
- * rebuildIndex import, which are the markdown-store equivalent of the v39 SQL
- * backfill. Same evidence order as the migration: the provenance source
- * (`shared:<project>:` / `promoted:<localRoot>`) wins over the destination
- * store's location, so a shared row imported into the global store keeps its
- * owning project instead of becoming user-global.
- */
+/** Import-time variant for a mirror with no origin field (an explicit null stays null), for rows predating the origin column.
+ * Like the v39 backfill, the provenance source (`shared:<project>:` / `promoted:<localRoot>`) wins over the destination store's location. */
 export function stampOriginProjectForImport(hippoRoot: string, entry: MemoryEntry): MemoryEntry {
   if (entry.origin_project !== undefined) return entry;
   const fromSource = originFromSource(entry.source);

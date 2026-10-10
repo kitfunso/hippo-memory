@@ -5,10 +5,7 @@ import { errorMessage, log } from '../util/log.js';
 import { type GraphQueueItem, type QueueRow, rowToQueueItem, QUEUE_COLS } from './graph-rows.js';
 import { resolveConsolidatedSource } from './graph-writes.js';
 
-/**
- * Enqueue a consolidated memory for later graph extraction. Rejects a raw / missing /
- * cross-tenant memory (the DB trigger is the backstop).
- */
+/** Enqueue a consolidated memory for later graph extraction; rejects a raw / missing / cross-tenant memory (the DB trigger is the backstop). */
 function enqueueExtraction(
   hippoRoot: string,
   tenantId: string,
@@ -32,15 +29,8 @@ function enqueueExtraction(
   });
 }
 
-/**
- * Fail-soft producer hook: mark a tenant dirty for graph re-extraction by
- * enqueuing its consolidated mirror memory. NEVER throws into the caller — a
- * graph-dirty signal failing must not abort a core object write. Graph staleness is
- * recoverable (next sleep / manual `graph extract`); a broken `hippo decide` is
- * not. Called POST-COMMIT from the graph-source save/close mutations of
- * decision, policy, customer_note and project_brief. A null memoryId (a
- * forgotten mirror) is a no-op.
- */
+/** Fail-soft producer hook: mark a tenant dirty for graph re-extraction by enqueuing its consolidated mirror memory. NEVER throws: a failed dirty signal
+ * must not abort an object write. Call POST-COMMIT from the graph-source save/close mutations; a null memoryId (forgotten mirror) is a no-op. */
 export function markGraphDirty(hippoRoot: string, tenantId: string, memoryId: string | null): void {
   if (!memoryId) return;
   try {
@@ -54,12 +44,8 @@ export function markGraphDirty(hippoRoot: string, tenantId: string, memoryId: st
   }
 }
 
-/**
- * Mark every pending queue item for a tenant with `id <= maxId` processed, in
- * one UPDATE. Status/processed_at only, so the consolidated-source guard trigger
- * is not involved. Returns the count marked.
- * The `<= maxId` watermark excludes items enqueued after the drain snapshot.
- */
+/** Mark every pending item for a tenant with `id <= maxId` processed in one UPDATE (status/processed_at only, so the source guard trigger is not involved).
+ * The watermark excludes items enqueued after the drain snapshot. Returns the count marked. */
 export function markPendingProcessedUpTo(
   hippoRoot: string,
   tenantId: string,
@@ -77,13 +63,8 @@ export function markPendingProcessedUpTo(
   });
 }
 
-/**
- * The dirty tenants awaiting graph re-extraction, each with the MAX pending
- * queue id at read time (a watermark). The sleep drain rebuilds each tenant's
- * graph, then marks only items at or below the watermark processed, so items
- * enqueued DURING the rebuild stay pending for the next sleep (no lost-update
- * race). Host-wide read (the queue is per-tenant but sleep is cross-tenant).
- */
+/** Dirty tenants awaiting graph re-extraction, each with the MAX pending queue id at read time (a watermark); host-wide, as sleep is cross-tenant.
+ * The drain marks only items at or below it processed, so items enqueued DURING the rebuild stay pending (no lost update). */
 export function loadPendingExtractionTenants(
   hippoRoot: string,
 ): { tenantId: string; maxPendingId: number }[] {

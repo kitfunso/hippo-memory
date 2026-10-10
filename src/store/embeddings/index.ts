@@ -1,8 +1,5 @@
-/**
- * Optional embedding-based semantic search for Hippo.
- * Uses @huggingface/transformers (local, zero API keys, ~22MB model).
- * Falls back silently if the library is not installed.
- */
+/** Optional embedding-based semantic search for Hippo.
+ * Uses @huggingface/transformers (local, no API keys, ~22MB model); falls back silently if not installed. */
 
 import { envByName } from '../../util/env.js';
 import * as fs from 'fs';
@@ -26,56 +23,18 @@ import type { HippoStore, VectorReads, VectorRowWrite, VectorWrite, VectorWriteR
 
 export { EMBEDDING_MODEL_META_KEY };
 
-/**
- * Bump whenever `embeddingInputText`'s composition changes in a way that
- * changes the resulting vectors for existing entries. Folded into the stored
- * index identity (see `embeddingIndexIdentity`) so a text-format change is
- * treated exactly like an embedding-model change: the next embed-touching
- * operation detects the mismatch and reindexes automatically. Format 2 =
- * `path:*` tags excluded (see `embeddingInputText`); format 1 (implicit, no
- * suffix) = `${content} ${tags.join(' ')}` including path tags.
- */
+/** Bump when `embeddingInputText` changes existing vectors; folded into the stored index identity (`embeddingIndexIdentity`) so it reindexes like a model
+ * change. Format 2 = `path:*` tags excluded; format 1 (implicit, no suffix) included them. */
 export const EMBED_TEXT_FORMAT = 2;
 
-/**
- * The stored-index identity for a given embedding provider id: folds
- * `EMBED_TEXT_FORMAT` into the provider id so index-identity comparisons
- * automatically invalidate on either a model change OR a text-format change.
- * This is the ONE choke point both `embeddingModelRequiresReindex` (compare
- * side) and `saveStoredEmbeddingModel` (save side) go through — they MUST
- * version identically, or every call reindexes in a loop (or none ever do).
- */
+/** Stored-index identity for a provider id: folds `EMBED_TEXT_FORMAT` in so a model or text-format change invalidates the index. The ONE choke point for
+ * compare (`embeddingModelRequiresReindex`) and save (`saveStoredEmbeddingModel`); they MUST version identically or every call reindexes. */
 export function embeddingIndexIdentity(providerId: string): string {
   return `${providerId}#t${EMBED_TEXT_FORMAT}`;
 }
 
-/**
- * Build the text embedded for a memory entry: content plus its tags, joined
- * by a space and trimmed — the same shape as the legacy
- * `` `${e.content} ${e.tags.join(' ')}`.trim() `` composition, minus `path:*`
- * tags.
- *
- * `path:*` tags are excluded because they are auto-derived from
- * `process.cwd()` (see `extractPathTags` in cli.ts) and carry every path
- * component of the store's location, INCLUDING the store directory name
- * itself. That means identical content embeds to a DIFFERENT vector
- * depending on WHERE the store happens to live — e.g. a fresh benchmark run
- * under `tempfile.mkdtemp()` gets a new directory name (hence new path
- * tokens, hence a new vector) every single run, even with byte-identical
- * content ingested in byte-identical order. This was diagnosed as the
- * DOMINANT root cause of cross-fresh-ingest recall-rank variance measured on
- * LoCoMo (mean evidence-recall@5 stdev 0.0175 across 4 fresh re-ingests of
- * identical data; see `benchmarks/LOCOMO_INVESTIGATION.md`, "Determinism
- * characterization"). It is a real product defect beyond benchmarks too:
- * retrieval semantics should not depend on a project directory's name.
- *
- * Only `path:*` is excluded. Other tags (`conv:`, `session:`, `speaker:`,
- * `dia:`, `error`, `scope:`, etc.) remain embedded — they carry semantic
- * meaning. Path relevance at recall time is already handled explicitly by
- * the v39 scope-isolation layer (`origin_project`, `pathOverlapScore`), so
- * embedding-level path tokens are redundant with a dedicated mechanism
- * rather than a feature.
- */
+/** Text embedded for an entry: content plus tags, space-joined and trimmed, minus `path:*` tags.
+ * `path:*` tags derive from cwd, so identical content would embed differently per store location; path relevance is handled by `pathOverlapScore`. */
 export function embeddingInputText(entry: { content: string; tags: string[] }): string {
   const tags = entry.tags.filter((t) => !t.startsWith('path:'));
   return `${entry.content} ${tags.join(' ')}`.trim();
@@ -91,12 +50,8 @@ function loadStoredEmbeddingModel(hippoRoot: string): string | null {
   }
 }
 
-/**
- * Persist the stored-index identity for `model` (see `embeddingIndexIdentity`).
- * Versioning happens INSIDE this function, not at call sites, so every caller
- * — current and future — gets the identity format for free. Must stay
- * consistent with the compare side in `embeddingModelRequiresReindex`.
- */
+/** Persist the stored-index identity for `model` (see `embeddingIndexIdentity`); versioning happens here, not at call sites,
+ * and must stay consistent with the compare side in `embeddingModelRequiresReindex`. */
 export function saveStoredEmbeddingModel(hippoRoot: string, model: string): void {
   saveIndexIdentity(hippoRoot, embeddingIndexIdentity(model));
 }
@@ -175,10 +130,7 @@ function noteSkippedEmbedding(id: string): void {
   log.warn('memory not embedded; the next embed run retries it', { id });
 }
 
-/**
- * Cosine similarity between two vectors. Handles unnormalized vectors.
- * Returns 0 for empty or mismatched vectors.
- */
+/** Cosine similarity; handles unnormalized vectors, returns 0 for empty or mismatched vectors. */
 export function cosineSimilarity(a: number[], b: number[]): number {
   return cosineOf(a, b);
 }
@@ -300,7 +252,7 @@ function warnEmbedFailureOnce(source: string, rawMessage: string): void {
   log.warn(`embedding failed (${source}): ${message}. Memories are stored without embeddings until this is fixed.`);
 }
 
-// store-port.ts imports this module, so its requireGroup would close an import cycle.
+// requireGroup (src/store/port.ts) would close an import cycle with this module.
 function vectorGroups(store: HippoStore): readonly [VectorReads, VectorWrites] {
   if (store.vectors === undefined) throw new StoreNotPortedError(store.kind, 'vectors');
   if (store.vectorWrites === undefined) throw new StoreNotPortedError(store.kind, 'vectorWrites');
@@ -395,10 +347,8 @@ export async function embedMemory(
   if (store) return embedMemoryInStore(store, provider, entry);
 
   return withEmbedLock(hippoRoot, async () => {
-    // embedMemory is best-effort: an embedding failure (API down / bad key / 5xx)
-    // must not reject the caller's write — `getEmbedding` historically swallowed
-    // failures and returned []. The explicit `hippo embed` / `embedAll` path is
-    // where failures surface. On any failure we leave the existing index as-is.
+    // Best-effort: an embedding failure (API down, bad key, 5xx) must not reject the caller's write; the existing index is left as-is.
+    // Failures surface on the explicit `hippo embed` / `embedAll` path.
     try {
       const identity = provider.id;
 
@@ -429,10 +379,7 @@ export async function embedMemory(
 // at any earlier point leaves the old identity, so embeddingModelRequiresReindex has the next run rebuild from the start.
 async function rebuildIndexForProvider(hippoRoot: string, provider: EmbeddingProvider): Promise<number> {
   const identity = provider.id;
-  // Host-wide rebuild. The embedding index is keyed by entry.id
-  // (which is tenant-scoped) but the index itself is one per hippoRoot.
-  // Cross-tenant content equivalence is visible at the vector level.
-  // Per-tenant indices would be a larger architecture change.
+  // Host-wide rebuild: one embedding index per hippoRoot, keyed by tenant-scoped entry.id; per-tenant indices would be a larger architecture change.
   const ids = loadAllEntryIds(hippoRoot);
   const rebuiltIndex = await rebuildEmbeddingIndex(hippoRoot, ids, provider);
   saveEmbeddingIndex(hippoRoot, rebuiltIndex, embeddingIndexIdentity(identity));
@@ -452,10 +399,8 @@ function initializePhysicsIfMissing(hippoRoot: string, entry: MemoryEntry, vecto
 
 /** Throws when an unavailable provider is a misconfiguration rather than an intentional no-op. */
 function throwIfProviderKeyMissing(hippoRoot: string, provider: EmbeddingProvider): void {
-  // A configured (non-disabled) API provider with a missing key is a
-  // misconfiguration, not a no-op: surface it so programmatic callers of the
-  // exported embedAll() learn nothing was written. Local-not-installed and an
-  // explicit enabled=false stay silent no-ops (best-effort / intentional).
+  // A configured API provider with a missing key is a misconfiguration: surface it so callers of the exported embedAll() learn nothing was written.
+  // Local-not-installed and an explicit enabled=false stay silent no-ops.
   const cfg = loadConfig(hippoRoot).embeddings;
   if (
     provider.kind !== 'local' &&
@@ -469,12 +414,8 @@ function throwIfProviderKeyMissing(hippoRoot: string, provider: EmbeddingProvide
   }
 }
 
-// Embed entries without a cached vector in save-checkpointed chunks.
-// provider.embed batches internally (one HTTP request per batchSize for API
-// providers; sequential for local). A `[]` row means that single item could
-// not be embedded and is left for a later run (resumable). On a hard provider
-// failure mid-backfill we persist the chunks already embedded this run rather
-// than discarding paid progress, then stop and resume on the next run.
+// Embeds entries without a cached vector in save-checkpointed chunks; a `[]` row means that item could not be embedded and is retried next run.
+// On a hard provider failure mid-backfill the chunks already embedded are persisted (paid progress), then it stops and resumes next run.
 async function backfillPending(
   hippoRoot: string,
   provider: EmbeddingProvider,
@@ -482,9 +423,7 @@ async function backfillPending(
   model: string,
 ): Promise<{ count: number; backfillError: unknown }> {
   let count = 0;
-  // Initialized to `undefined` (not a known-evidence literal like `null`) so
-  // it stays a plain `unknown` binding for the arbitrary caught value below;
-  // falsy either way, so `if (backfillError)` behaves identically.
+  // Initialized to `undefined` so it stays a plain `unknown` binding for the arbitrary caught value; falsy either way.
   let backfillError: unknown = undefined;
   for (const chunk of entryPages(hippoRoot, pending)) {
     let vectors: number[][];
@@ -528,9 +467,8 @@ export async function embedAll(
     const identity = provider.id;
     if (embeddingModelRequiresReindex(hippoRoot, identity)) return rebuildIndexForProvider(hippoRoot, provider);
 
-    // Host-wide by design. embedAll backfills vectors for all tenants'
-    // entries into the per-host embedding index. Per-tenant filtering would
-    // produce partial indices and break recall.
+    // Host-wide by design: embedAll backfills all tenants' entries into the per-host index; per-tenant filtering would produce partial indices and break
+    // recall.
     const embedded = pruneStoredVectors(hippoRoot);
     const pending = loadAllEntryIds(hippoRoot).filter((id) => !embedded.has(id));
     const { count, backfillError } = await backfillPending(hippoRoot, provider, pending, embeddingIndexIdentity(identity));

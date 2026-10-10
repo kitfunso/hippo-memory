@@ -1,27 +1,6 @@
-/**
- * Prediction first-class object.
- *
- * Canonical store for ex-ante claims that can be closed against ex-post
- * outcomes. The `predictions` table holds every field (including
- * `claim_text`); a memory row mirrors the claim for recall/inspect surfaces
- * but is NOT the source of truth — ON DELETE SET NULL on memory_id means
- * memory deletion gracefully orphans the prediction without losing data.
- *
- * Tenant scoping: every helper requires tenantId. The schema's BEFORE INSERT
- * + BEFORE UPDATE triggers (`trg_predictions_tenant_match_*`) enforce that
- * `predictions.tenant_id` matches the referenced memory's tenant_id when
- * `memory_id IS NOT NULL`. Cross-tenant references are unrepresentable at
- * the schema level.
- *
- * Dual-write atomicity: `savePrediction` writes the memory + predictions
- * row inside `writeEntry`'s SAVEPOINT 'write_entry' (store/entry-writes.ts). The
- * afterWrite hook (store/entry-writes.ts) runs inside the same SAVEPOINT, so
- * a failure in either step rolls back both. Pattern matches supersede
- * (api.ts:1486) and the Slack/GitHub connectors.
- *
- * The planning-fallacy detector reads `loadPredictionsByClass` and computes
- * per-class base rates from (estimate_value, actual_value) at query time.
- */
+/** First-class prediction: an ex-ante claim closed against an outcome. The `predictions` table is the source of truth; the memory row only mirrors the claim.
+ * Every helper requires tenantId; `trg_predictions_tenant_match_*` triggers enforce the prediction's tenant matches the referenced memory's.
+ * `savePrediction` writes memory and prediction inside `writeEntry`'s SAVEPOINT (via afterWrite), so a failure in either rolls back both. */
 
 import { BadRequestError, NotFoundError } from '../core/api-errors.js';
 import { withWriteScope, type DatabaseSyncLike } from '../db/index.js';
@@ -39,10 +18,6 @@ const DEFAULT_PREDICTION_PAGE_SIZE = 100;
 const SELECT_COLUMNS = `id, memory_id, tenant_id, class_tag, claim_text,
   estimate_value, estimate_unit, target_date,
   actual_value, closure_state, closed_at, closure_note, created_at`;
-
-// ---------------------------------------------------------------------------
-// Domain types
-// ---------------------------------------------------------------------------
 
 export type ClosureState = 'open' | 'closed' | 'closed-unknown';
 
@@ -91,10 +66,6 @@ export interface ListPredictionsOpts {
   after?: KeysetPosition;
 }
 
-// ---------------------------------------------------------------------------
-// Row <-> domain mapping
-// ---------------------------------------------------------------------------
-
 interface PredictionRow {
   id: number;
   memory_id: string | null;
@@ -131,21 +102,8 @@ function rowToPrediction(row: PredictionRow): Prediction {
   };
 }
 
-// ---------------------------------------------------------------------------
-// Public API
-// ---------------------------------------------------------------------------
-
-/**
- * Create a new prediction. Writes a memory mirror + a predictions table
- * row atomically inside `writeEntry`'s SAVEPOINT 'write_entry'. On any
- * failure (audit write, predictions INSERT, trigger ABORT), the SAVEPOINT
- * rolls back — neither the memory row nor the predictions row lands.
- *
- * The memory is tagged `['prediction', classTag]` with `source='prediction'`
- * and `kind='distilled'`. It surfaces in `hippo recall` so the agent can
- * see open predictions naturally; the predictions table is the canonical
- * structured store used by the planning-fallacy detector.
- */
+/** Create a prediction: memory mirror and predictions row land atomically inside `writeEntry`'s SAVEPOINT; any failure rolls back both.
+ * The memory (tags `['prediction', classTag]`, kind 'distilled') surfaces in `hippo recall`; the predictions table feeds the planning-fallacy detector. */
 export function savePrediction(
   hippoRoot: string,
   tenantId: string,
@@ -263,11 +221,8 @@ function auditPredictionCreate(
   });
 }
 
-/**
- * Close an existing open prediction. Updates the predictions row only;
- * the memory mirror is NOT mutated in v1 (predictions table is canonical).
- * Accuracy is computed from (estimateValue, actualValue) at query time.
- */
+/** Close an open prediction. Updates the predictions row only; the memory mirror is not mutated (the predictions table is the source of truth).
+ * Accuracy is computed from (estimateValue, actualValue) at query time. */
 export function closePrediction(
   hippoRoot: string,
   tenantId: string,
@@ -340,10 +295,8 @@ function closeOpenPredictionRow(
 }
 
 function throwCloseMiss(db: DatabaseSyncLike, tenantId: string, id: number): never {
-  // Distinguish "not found" from "already closed" so callers (CLI, HTTP)
-  // can surface the right error to the user.
-  // SAFETY: row shape matches the single `closure_state` column named
-  // in the SELECT above.
+  // Distinguish 'not found' from 'already closed' so callers (CLI, HTTP) surface the right error.
+  // SAFETY: row shape matches the single `closure_state` column named in the SELECT above.
   const existing = db.prepare(`
           SELECT closure_state FROM predictions WHERE id = ? AND tenant_id = ?
         `).get(id, tenantId) as { closure_state: string } | undefined;
@@ -432,10 +385,6 @@ export function loadAllPredictions(
   });
 }
 
-// ---------------------------------------------------------------------------
-// Reference-class / planning-fallacy detector
-// ---------------------------------------------------------------------------
-
 export interface PredictionBaserate {
   classTag: string;
   /** Count of closed predictions with a numeric actual_value (excludes
@@ -464,16 +413,8 @@ export interface BaserateRow {
   actual_value: number;
 }
 
-/**
- * Compute base-rate stats for closed predictions in a class for the
- * planning-fallacy detector: Lovallo-Kahneman (2003) inside-vs-outside view.
- *
- * Filter: closure_state='closed' AND estimate_value IS NOT NULL AND
- * actual_value IS NOT NULL. Excludes closed-unknown (no actual to
- * compare against) and open (not yet resolved).
- *
- * Audit-emit is built in here, not at the 3 call sites, so callers cannot drift.
- */
+/** Base-rate stats for closed predictions in a class (Lovallo-Kahneman inside-vs-outside view): closure_state='closed' with estimate and actual non-null;
+ * closed-unknown and open are excluded. Audit-emit is built in here, not at the 3 call sites, so callers cannot drift. */
 export function computePredictionBaserate(
   hippoRoot: string,
   tenantId: string,

@@ -43,10 +43,8 @@ export function ensureMirrorDirectories(hippoRoot: string): void {
   });
 }
 
-// Tenant-scoped mirror file paths. The single-tenant 'default' deployment
-// keeps the original `active-task.md` / `recent-session.md` filenames for
-// on-disk back-compat; multi-tenant deployments get a `.<tenantId>` suffix
-// so tenant B saving cannot overwrite tenant A's mirror file.
+// Tenant-scoped mirror paths: the 'default' tenant keeps the original `active-task.md` / `recent-session.md` names;
+// other tenants get a `.<tenantId>` suffix so one cannot overwrite another's mirror.
 function activeTaskMirrorPath(hippoRoot: string, tenantId: string): string {
   const file = tenantId === DEFAULT_TENANT_ID ? 'active-task.md' : `active-task.${tenantId}.md`;
   return path.join(hippoRoot, 'buffer', file);
@@ -197,10 +195,7 @@ export function removeEntryMirrors(hippoRoot: string, id: string): void {
   }
 }
 
-/**
- * Mirror paths for `id` still on disk, walked like `removeEntryMirrors`, so a failed purge
- * with no reaper to retry it can name the stuck file.
- */
+/** Mirror paths for `id` still on disk, walked like `removeEntryMirrors`, so a failed purge with no reaper to retry it can name the stuck file. */
 function getExistingEntryMirrorPaths(hippoRoot: string, id: string): string[] {
   // Layer list kept in lockstep with removeEntryMirrors.
   return [Layer.Buffer, Layer.Episodic, Layer.Semantic, Layer.Trace]
@@ -208,12 +203,8 @@ function getExistingEntryMirrorPaths(hippoRoot: string, id: string): string[] {
     .filter((file) => fs.existsSync(file));
 }
 
-/**
- * Best-effort mirror purge. Retries the unlink once (most failures are transient locks); the reaper only
- * scans `raw_archive`, so a non-raw id's second failure logs the leftover path(s) to delete by hand.
- *
- * Returns true if the mirror ended up purged (first or second attempt).
- */
+/** Best-effort mirror purge: retries the unlink once (most failures are transient locks); the reaper only scans `raw_archive`,
+ * so a non-raw id's second failure logs the leftover path(s) to delete by hand. Returns true if the mirror ended up purged. */
 export function purgeMirrorBestEffort(
   hippoRoot: string,
   id: string,
@@ -284,8 +275,7 @@ export function buildIndexFromDb(db: ReturnType<typeof openHippoDb>): HippoIndex
 
 /** The last recall's ids and its trace, the two meta keys saveIndex writes together. */
 export function readLastRecall(db: ReturnType<typeof openHippoDb>): Pick<HippoIndex, 'last_retrieval_ids' | 'last_trace_id'> {
-  // Read both lockstep keys in ONE statement: two autocommit SELECTs could straddle a concurrent
-  // saveIndex and hand back a mismatched last_retrieval_ids / last_trace_id pair.
+  // Read both lockstep keys in ONE statement: two autocommit SELECTs could straddle a concurrent saveIndex and return a mismatched pair.
   // SAFETY: lockstepRows' shape matches the key/value columns named above.
   const lockstepRows = db.prepare(
     `SELECT key, value FROM meta WHERE key IN ('last_retrieval_ids', 'last_trace_id')`,

@@ -1,31 +1,6 @@
-/**
- * Pluggable embedding providers for Hippo.
- *
- * The local `@huggingface/transformers` path stays the zero-DEPENDENCY DEFAULT. Opt-in
- * API providers (OpenAI / Voyage / Cohere) let a user bring a frontier embedder
- * (e.g. text-embedding-3-large) for frontier-class retrieval. They use the native
- * `fetch` global (Node >= 22.16, see package.json engines; NO new dependency) and
- * read their key from a conventional env var. The provider is selected by
- * `config.embeddings.provider` (default `'local'`).
- *
- * Design contract:
- *   - Local provider `id` is the BARE model string; the STORED identity adds a `#t<N>`
- *     embed-text-format suffix (`embeddingIndexIdentity`), so older stores reindex once:
- *     their vectors were computed over path-contaminated text.
- *   - API provider `id` is `${kind}:${model}`; switching to/from an API embedder
- *     (or a dimension change) flips the identity and triggers the existing
- *     reindex-on-change path.
- *   - `resolveEmbeddingProvider` throws on an invalid config (unknown provider,
- *     bad apiBaseUrl); `embedMemory` turns that into a warning. `isAvailable()` is provider-aware
- *     (local -> dependency installed; api -> key present). `embed()` MAY throw on
- *     a hard transport/auth failure so a reindex can abort atomically; hot paths
- *     wrap it and fall back to BM25.
- *
- * The exact request/response shapes for the API providers are documented from each
- * vendor's public embeddings API; they are unit-tested here against a mocked
- * `fetch` and are integration-verified in Workstream C (real API calls are
- * egress-blocked in the build sandbox).
- */
+/** Pluggable embedding providers; local `@huggingface/transformers` is the zero-dependency default, OpenAI / Voyage / Cohere are opt-in via native `fetch`.
+ * Local `id` is the bare model string, API `id` is `${kind}:${model}`; the stored identity adds `#t<N>` (`embeddingIndexIdentity`), so changes reindex.
+ * `embed()` MAY throw on hard transport/auth failure so a reindex aborts atomically; hot paths wrap it and fall back to BM25. */
 
 import { envByName } from '../../util/env.js';
 import {
@@ -73,10 +48,7 @@ export interface EmbedCallOptions {
 export interface EmbeddingProvider {
   readonly kind: EmbeddingProviderKind;
   readonly model: string;
-  /**
-   * Identity recorded in DB meta to drive reindex-on-change.
-   * local -> bare model string (back-compat); api -> `${kind}:${model}`.
-   */
+  /** Identity recorded in DB meta to drive reindex-on-change: bare model string for local, `${kind}:${model}` for api. */
   readonly id: string;
   /** Known fixed output dimension, if any (undefined for local / unknown). */
   readonly dimensions?: number;
@@ -84,17 +56,10 @@ export interface EmbeddingProvider {
   readonly keyEnv?: string;
   /** local -> dependency installed; api -> key present. NEVER throws. */
   isAvailable(): boolean;
-  /**
-   * Batch-embed. Returns one row per input in order; a row is `[]` when that
-   * single item could not be embedded. MAY throw on a hard transport/auth
-   * failure (so a reindex aborts before saving a partial index).
-   */
+  /** Batch-embed: one row per input in order, `[]` when that item could not be embedded.
+   * MAY throw on a hard transport/auth failure so a reindex aborts before saving a partial index. */
   embed(texts: string[], role?: EmbeddingRole, call?: EmbedCallOptions): Promise<number[][]>;
 }
-
-// ---------------------------------------------------------------------------
-// Local provider — wraps the existing zero-dep transformers.js path.
-// ---------------------------------------------------------------------------
 
 class LocalEmbeddingProvider implements EmbeddingProvider {
   readonly kind = 'local' as const;
@@ -115,10 +80,6 @@ class LocalEmbeddingProvider implements EmbeddingProvider {
     return out;
   }
 }
-
-// ---------------------------------------------------------------------------
-// API providers — OpenAI / Voyage / Cohere over native fetch.
-// ---------------------------------------------------------------------------
 
 /** POST body for an embeddings request. Each provider's `buildBody` populates
  *  only the fields its API expects; the rest stay unset. */
@@ -162,8 +123,7 @@ const API_PROVIDER_SPECS = {
     // OpenAI has no asymmetric query/passage input type for embeddings.
     buildBody: (model, texts) => ({ model, input: texts }),
     extractVectors: (json) => {
-      // SAFETY: OpenAI's documented embeddings response envelope; embedChunk
-      // validates vector count/non-emptiness against the request afterward,
+      // SAFETY: OpenAI's documented embeddings envelope; embedChunk validates vector count and non-emptiness afterward,
       // so a malformed response degrades to [] here and throws there.
       const data = (json as VectorArrayResponse).data ?? [];
       return data.map((d) => d.embedding ?? []);
@@ -180,8 +140,7 @@ const API_PROVIDER_SPECS = {
       return body;
     },
     extractVectors: (json) => {
-      // SAFETY: Voyage's documented embeddings response envelope; embedChunk
-      // validates vector count/non-emptiness against the request afterward,
+      // SAFETY: Voyage's documented embeddings envelope; embedChunk validates vector count and non-emptiness afterward,
       // so a malformed response degrades to [] here and throws there.
       const data = (json as VectorArrayResponse).data ?? [];
       return data.map((d) => d.embedding ?? []);
@@ -199,10 +158,8 @@ const API_PROVIDER_SPECS = {
       embedding_types: ['float'],
     }),
     extractVectors: (json) => {
-      // Cohere v2: { embeddings: { float: number[][] } }
-      // SAFETY: matches Cohere's documented v2 response envelope; embedChunk
-      // validates vector count/non-emptiness against the request afterward,
-      // so a malformed response degrades to [] here and throws there.
+      // Cohere v2 shape: { embeddings: { float: number[][] } }
+      // SAFETY: documented v2 envelope; embedChunk validates the vectors afterward, so a malformed response degrades to [] here and throws there.
       const emb = (json as CohereEmbeddingsResponse).embeddings;
       return emb?.float ?? [];
     },
@@ -277,10 +234,8 @@ class ApiEmbeddingProvider implements EmbeddingProvider {
     const json = await this.responseJson(resp, key, chunk.length);
 
     const vectors = spec.extractVectors(json);
-    // A 200 response with the wrong number of vectors (or any empty/malformed
-    // vector) is a provider/proxy contract violation, NOT a per-item miss. Throw
-    // so a reindex aborts atomically (preserving the prior usable index) and the
-    // explicit backfill surfaces it, instead of silently saving []-padded rows.
+    // A 200 with the wrong vector count (or any empty/malformed vector) is a provider contract violation, not a per-item miss:
+    // throw so a reindex aborts atomically and the explicit backfill surfaces it, instead of saving []-padded rows.
     if (vectors.length !== chunk.length) {
       throw new Error(
         redact(`${this.kind} embeddings returned ${vectors.length} vectors for ${chunk.length} inputs`, key),
@@ -343,10 +298,6 @@ class ApiEmbeddingProvider implements EmbeddingProvider {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Resolution
-// ---------------------------------------------------------------------------
-
 interface EmbeddingsConfigValues {
   enabled?: boolean | 'auto';
   provider?: string;
@@ -391,13 +342,8 @@ export interface ResolveProviderOptions {
   provider?: EmbeddingProviderKind;
 }
 
-/**
- * Build the active embedding provider from config (or an explicit override).
- * Never throws for a missing key — that surfaces via `isAvailable()` on the hot
- * paths and as a hard error only from the explicit `hippo embed` command. The
- * only hard throw is an invalid config (e.g. an insecure apiBaseUrl), a
- * deliberate loud failure; hot-path callers (search) wrap this in try/catch.
- */
+/** Build the active embedding provider from config (or an explicit override). A missing key never throws here (it surfaces via `isAvailable()`);
+ * only an invalid config (e.g. insecure apiBaseUrl) throws, deliberately loud, so hot-path callers wrap it. */
 export function resolveEmbeddingProvider(
   hippoRoot: string,
   opts: ResolveProviderOptions = {},
@@ -434,18 +380,13 @@ export function resolveEmbeddingProvider(
   return new ApiEmbeddingProvider(kind, model, baseUrl, batchSize, enabled);
 }
 
-/**
- * The reindex identity for the active provider. Use this (NOT resolveEmbeddingModel)
- * everywhere `embeddingModelRequiresReindex` / stored-model comparisons happen.
- */
+/** The reindex identity for the active provider; use it, NOT resolveEmbeddingModel, wherever `embeddingModelRequiresReindex` / stored-model comparisons
+ * happen. */
 export function resolveEmbeddingIdentity(hippoRoot: string, opts: ResolveProviderOptions = {}): string {
   return resolveEmbeddingProvider(hippoRoot, opts).id;
 }
 
-/**
- * Provider-aware availability for a store: local -> dependency installed;
- * api -> key present. Use at the call sites that decide whether to embed.
- */
+/** Provider-aware availability for a store (local: dependency installed; api: key present); use where the decision to embed is made. */
 export function isEmbeddingConfigured(hippoRoot: string): boolean {
   try {
     return resolveEmbeddingProvider(hippoRoot).isAvailable();

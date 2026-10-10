@@ -7,10 +7,6 @@ import { onHandle, openStore } from './open.js';
 import { chunked } from './entry-reads.js';
 import { HANDOFF_COLUMNS } from './handoffs.js';
 
-// ---------------------------------------------------------------------------
-// W2a work-queue cards (trajectories/01M2D5VSYJFK4YXQ0RG2NGCPYJ/plan.md).
-// ---------------------------------------------------------------------------
-
 interface CardRow {
   id: string;
   title: string;
@@ -400,7 +396,8 @@ export function reviewCard(hippoRoot: string, tenantId: string, id: string, runI
   }, openStore);
 }
 
-/** Requires the card be in review; closes the live run with outcome. Outcome 'success' moves the card to done and, in the same transaction, promotes any child whose parents are now all done; 'failure' or 'partial' moves it to shelved and promotes nothing. Throws on an unknown card id; returns null for a card not in review. When runId is given, returns null unless it is the card's live run. */
+/** Closes the live run of a card in review: 'success' moves it to done and promotes children whose parents are all done; 'failure'/'partial' shelves it.
+ * Throws on an unknown card id; returns null for a card not in review, or when `runId` is given and is not the card's live run. */
 export function completeCard(
   hippoRoot: string,
   tenantId: string,

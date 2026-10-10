@@ -4,9 +4,7 @@ import { dumpFrontmatter, parseFrontmatter } from './yaml.js';
 
 type FrontmatterValue = string | number | boolean | null | string[] | number[];
 
-/** Named field set for `serializeEntry`'s frontmatter — a fixed-shape owner
- * contract (not an open dictionary), with tenant_id/origin_project optional
- * so they can stay entirely absent from the YAML output when not set. */
+/** Fixed-shape field set for `serializeEntry`'s frontmatter; tenant_id/origin_project are optional so they stay absent from the YAML when unset. */
 interface EntryFrontmatterFields {
   id: FrontmatterValue;
   created: FrontmatterValue;
@@ -79,9 +77,7 @@ function entryFrontmatter(entry: MemoryEntry): EntryFrontmatterFields {
   };
 }
 
-/**
- * Serialize a MemoryEntry to markdown with YAML frontmatter.
- */
+/** Serialize a MemoryEntry to markdown with YAML frontmatter. */
 export function serializeEntry(entry: MemoryEntry): string {
   const frontmatter = entryFrontmatter(entry);
   // Emit tenant_id only when not 'default' to keep diffs clean for the dominant
@@ -95,27 +91,19 @@ export function serializeEntry(entry: MemoryEntry): string {
   if (entry.origin_project !== undefined) {
     frontmatter['origin_project'] = entry.origin_project;
   }
-  // Spread into a fresh object literal: dumpFrontmatter's Record<string,
-  // YamlValue> parameter needs an index signature, which a named interface
-  // reference (EntryFrontmatterFields) doesn't structurally provide even
-  // though every property's value type already matches.
+  // Spread into a fresh literal: dumpFrontmatter's Record<string, YamlValue> needs an index signature, which the named interface does not structurally provide.
   const fm = dumpFrontmatter({ ...frontmatter });
   return `${fm}\n\n${entry.content}\n`;
 }
 
-/**
- * Deserialize a markdown file to a MemoryEntry.
- */
+/** Deserialize a markdown file to a MemoryEntry. */
 export function deserializeEntry(raw: string): MemoryEntry | null {
   const { data, content } = parseFrontmatter(raw);
 
   if (!data['id'] || !data['layer']) return null;
 
-  // SAFETY: every `as X` below narrows a raw YAML frontmatter field to an
-  // enum/union member of MemoryEntry; frontmatter is only ever written by
-  // serializeEntry (whose own fields are typed), so out-of-range values here
-  // would indicate hand-edited files, which this parser is not required to
-  // reject — matches the pre-existing permissive-parse behavior.
+  // SAFETY: each `as X` narrows a raw YAML field to a MemoryEntry union member; frontmatter is only written by serializeEntry,
+  // so out-of-range values mean hand-edited files, which this parser may accept (permissive parse).
   return {
     id: String(data['id']),
     created: String(data['created'] ?? new Date().toISOString()),

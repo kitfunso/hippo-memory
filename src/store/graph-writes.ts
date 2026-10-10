@@ -41,17 +41,8 @@ const SOURCE_OBJECT_TABLE: SourceObjectTableMap = {
   project: 'project_briefs',
 };
 
-/**
- * Resolve the `source_kind` for a graph row from AT LEAST ONE valid provenance path,
- * with the no-raw invariant intact. The code-level mirror of the DB trigger guard (the
- * trigger is the unbypassable backstop). Two paths:
- *  - MEMORY path (`memoryId` not null): the memory must exist, be same-tenant, and be
- *    consolidated (distilled/superseded); raw is rejected. Returns its kind.
- *  - OBJECT path (`memoryId` null, `sourceObject` set): the object row must exist, be
- *    same-tenant, and have status active|superseded (4-way per object table). Objects are
- *    consolidated BY CONSTRUCTION, so this returns 'distilled'.
- * All-null (no memory AND no source object) is rejected.
- */
+/** Resolve `source_kind` for a graph row from AT LEAST ONE valid provenance path, mirroring the DB trigger guard; raw is rejected.
+ * MEMORY path: exists, same-tenant, consolidated. OBJECT path (`memoryId` null): same-tenant, active|superseded, yields 'distilled'. All-null is rejected. */
 interface ResolvedGraphSource {
   sourceKind: SourceKind;
   memoryId: string | null;
@@ -94,10 +85,8 @@ function checkSourceMemory(
       | { kind: string; tenant_id: string }
       | undefined;
     if (!row) {
-      // Stale / forgotten mirror. Tolerate it IFF a valid source object provides provenance:
-      // graph-extract reads object rows then inserts, and a mirror forgotten/pruned in that window
-      // must NOT roll back the whole tenant rebuild - the active object survives mirror loss.
-      // Anchor to the object; drop the dead memory pointer.
+      // Stale/forgotten mirror: tolerate it IFF a valid source object gives provenance, so a mirror pruned mid graph-extract does not roll back the tenant
+      // rebuild; anchor to the object and drop the dead memory pointer.
       if (sourceObject == null) {
         throw new Error(`${label}: source memory ${memoryId} not found`);
       }
@@ -116,18 +105,15 @@ function checkSourceMemory(
 }
 
 function assertSourceObjectUsable(db: DatabaseSyncLike, tenantId: string, sourceObject: SourceObjectRef | null, label: string): void {
-  // Validate the object pointer WHENEVER it is provided, not only when memory is null:
-  // a dual-set row whose object is wrong/closed/cross-tenant would become
-  // the active provenance after ON DELETE SET NULL and could then block the memory delete.
+  // Validate the object pointer WHENEVER provided: a dual-set row with a bad object would become the provenance after ON DELETE SET NULL and could block
+  // the memory delete.
   if (sourceObject != null) {
     const table = SOURCE_OBJECT_TABLE[sourceObject.type];
     if (!table) {
       throw new Error(`${label}: unsupported source_object_type '${sourceObject.type}'`);
     }
-    // `table` is a fixed value from the SOURCE_OBJECT_TABLE map (never user-supplied), so
-    // this string interpolation is safe; `id`/`tenant_id` stay parametrized.
-    // SAFETY: row's shape matches the single `status` column named in the
-    // SELECT above.
+    // `table` is a fixed SOURCE_OBJECT_TABLE value (never user-supplied), so interpolation is safe; `id`/`tenant_id` stay parametrized.
+    // SAFETY: row's shape matches the single `status` column named in the SELECT above.
     const row = db.prepare(
       `SELECT status FROM ${table} WHERE id = ? AND tenant_id = ?`,
     ).get(sourceObject.id, tenantId) as { status: string } | undefined;
@@ -140,10 +126,7 @@ function assertSourceObjectUsable(db: DatabaseSyncLike, tenantId: string, source
   }
 }
 
-/**
- * Insert a graph entity extracted from a consolidated memory. Throws if the source
- * memory is missing / cross-tenant / raw (the DB trigger is the backstop).
- */
+/** Insert a graph entity extracted from a consolidated memory; throws if the source memory is missing / cross-tenant / raw (the DB trigger is the backstop). */
 export function insertEntity(
   hippoRoot: string,
   tenantId: string,
@@ -214,10 +197,7 @@ export function updateEntity(
   }
 }
 
-/**
- * Insert a graph relation between two entities, sourced from a consolidated memory.
- * Both entities must exist in the same tenant; the source memory must be consolidated.
- */
+/** Insert a graph relation between two same-tenant entities, sourced from a consolidated memory. */
 export function insertRelation(
   hippoRoot: string,
   tenantId: string,
@@ -319,18 +299,8 @@ export function runGraphRebuildTransaction<T>(
   }
 }
 
-/**
- * Remove the graph rows sourced from one first-class object, by its (type, id). Used when a
- * MIRRORLESS object is closed: it has no mirror memory, so `markGraphDirty` cannot
- * enqueue a rebuild (the queue is memory-keyed). Closing must still drop the object's
- * now-stale entity + edges from the graph, so we remove them directly here. Fail-soft
- * like `markGraphDirty` (never throws into the object close caller; graph staleness is
- * recoverable). Deleting the entity cascade-deletes any relation where it is an endpoint
- * (relations FK entities ON DELETE CASCADE); the explicit relations DELETE also covers a
- * relation whose OWN provenance is this object (defensive — every such edge has the object
- * as an endpoint today, so the cascade already covers it). DELETE fires no BEFORE
- * INSERT/UPDATE guard trigger.
- */
+/** Remove graph rows sourced from one MIRRORLESS object by (type, id) on close: with no mirror memory `markGraphDirty` cannot enqueue a rebuild.
+ * Fail-soft like `markGraphDirty`; the explicit relations DELETE also covers a relation whose OWN provenance is this object. */
 export function removeGraphEntitiesForObject(
   hippoRoot: string,
   tenantId: string,

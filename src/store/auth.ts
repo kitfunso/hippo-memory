@@ -111,9 +111,8 @@ export interface NewApiKey {
 }
 
 export function insertApiKey(db: DatabaseSyncLike, key: NewApiKey): void {
-  // openHippoDb runs runMigrations synchronously before returning the db handle,
-  // so migration v26 (adds role column) is in place before this INSERT runs.
-  // An older binary ignores expires_at and would honour an expired key, so the store shuts it out before the first one exists.
+  // Migration v26 (role column) has already run; an older binary ignores expires_at and would honour an expired key,
+  // so the store shuts it out before the first one exists.
   if (key.expiresAt !== null) raiseMinBinary(db, EXPIRING_KEYS_MIN_BINARY);
   db.prepare(
     `INSERT INTO api_keys (key_id, key_hash, tenant_id, label, created_at, role, owner_subject, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -163,9 +162,8 @@ export interface ApiKeyRecord {
 
 /** The api_keys row for `keyId` with its scope grants; null when no row matches. */
 export function readApiKeyRecord(db: DatabaseSyncLike, keyId: string): ApiKeyRecord | null {
-  // SAFETY: row comes from the SELECT above, which projects exactly
-  // key_hash, tenant_id, revoked_at, role, expires_at, owner_subject; `.get` returns undefined when no
-  // row matches key_id.
+  // SAFETY: row comes from the SELECT above, which projects exactly key_hash, tenant_id, revoked_at, role, expires_at, owner_subject;
+  // `.get` returns undefined when no row matches key_id.
   const row = db
     .prepare(`SELECT key_hash, tenant_id, revoked_at, role, expires_at, owner_subject FROM api_keys WHERE key_id = ?`)
     .get(keyId) as {
@@ -342,10 +340,8 @@ export interface ApiKeyListItem {
   label: string | null;
   createdAt: string;
   revokedAt: string | null;
-  /**
-   * Authorization role bound to the key, from the `role` column (schema migration v26).
-   * Fail-safe-to-member cast: any non-'admin' value reads as 'member'.
-   */
+  /** Authorization role from the `role` column (schema migration v26).
+   * Fail-safe cast: any non-'admin' value reads as 'member'. */
   role: 'admin' | 'member';
   /** Restricted scopes this key may read. */
   scopes: string[];

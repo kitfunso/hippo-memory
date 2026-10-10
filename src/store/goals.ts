@@ -87,18 +87,8 @@ export function pushGoal(hippoRoot: string, opts: PushGoalOpts): Goal {
   });
 }
 
-/**
- * Depth-cap enforcer shared by pushGoalWithDb and resumeGoal.
- * If the (tenant, session) has >= MAX_ACTIVE_GOAL_DEPTH active goals,
- * suspend the oldest `overflow` ones.
- *
- * **Precondition: caller MUST already be inside a `BEGIN IMMEDIATE`
- * transaction.** Helper does not open or commit -- name reflects this so it
- * is impossible to misread the contract at a call site. Both existing call
- * sites (pushGoalWithDb, resumeGoal) wrap in `BEGIN IMMEDIATE` already.
- *
- * @internal Internal goal-stack invariant. Subject to change.
- */
+/** Depth-cap enforcer for pushGoalWithDb and resumeGoal: suspends the oldest `overflow` goals; **caller MUST be inside a `BEGIN IMMEDIATE` transaction**.
+ * @internal Internal goal-stack invariant. Subject to change. */
 function enforceDepthCapWithinTx(
   db: DatabaseSyncLike,
   tenantId: string,
@@ -272,10 +262,7 @@ export interface GoalRecallLogRow {
   score: number;
 }
 
-// Load retrieval_policy rows for active goals so per-policy multipliers
-// can compose onto the base goal-tag boost. Composed result is hard-capped
-// at MAX_FINAL_MULTIPLIER (3.0x) BEFORE applying to score -- even an
-// `errorPriority: 9.0` policy cannot exceed 3.0x.
+// Per-goal retrieval_policy multipliers compose onto the base goal-tag boost and are hard-capped at MAX_FINAL_MULTIPLIER (3.0x) before scoring.
 function loadGoalPolicies(db: DatabaseSyncLike, active: readonly Goal[]): Map<string, RetrievalPolicy> {
   const policiesByGoalId = new Map<string, RetrievalPolicy>();
   for (const g of active) {
@@ -320,10 +307,7 @@ export function localGoalRecallRows(db: DatabaseSyncLike, rows: readonly GoalRec
   return rows.filter((r) => localIds.has(r.memoryId));
 }
 
-/**
- * Writes goal-boost log rows. INSERT OR IGNORE because UNIQUE(memory_id, goal_id)
- * makes a re-recall during the same goal life a no-op for outcome attribution.
- */
+/** INSERT OR IGNORE: UNIQUE(memory_id, goal_id) makes a re-recall during the same goal life a no-op for outcome attribution. */
 export function writeGoalRecallLog(db: DatabaseSyncLike, rows: readonly GoalRecallLogRow[]): void {
   if (rows.length === 0) return;
   const insertLog = db.prepare(`
@@ -343,17 +327,8 @@ const STRENGTH_DECAY = 0.85;
 
 export interface CompleteGoalOpts {
   outcomeScore?: number;
-  /**
-   * When true, skip the strength-multiplier propagation block.
-   * Default false (propagate). The goal's status still transitions to
-   * 'completed' and `outcome_score` is still recorded; only the side-effect
-   * on recalled memories' strength is suppressed.
-   *
-   * Note: the status-check idempotency guard short-circuits a second
-   * `completeGoal` call BEFORE this flag is read, so a noPropagate=true
-   * second call after a propagating first call is a true no-op (propagation
-   * already happened on call 1; call 2 returns early regardless).
-   */
+  /** When true, skip the strength-multiplier propagation (default false); status still goes to 'completed' and `outcome_score` is still recorded.
+   * The idempotency guard returns early on a second `completeGoal` call before this flag is read. */
   noPropagate?: boolean;
 }
 
@@ -386,9 +361,7 @@ export function completeGoal(hippoRoot: string, goalId: string, opts: CompleteGo
         else if (score < NEGATIVE_OUTCOME_THRESHOLD) multiplier = STRENGTH_DECAY;
 
         if (multiplier !== 1) {
-          // Lifespan window: only memories whose recall happened during this
-          // goal's active life. UNIQUE(memory_id, goal_id) guarantees one
-          // adjustment per (memory, goal) pair.
+          // Lifespan window: only recalls during this goal's active life; UNIQUE(memory_id, goal_id) gives one adjustment per pair.
           db.prepare(`
             UPDATE memories
             SET strength = MIN(1.0, MAX(0.0, strength * ?))

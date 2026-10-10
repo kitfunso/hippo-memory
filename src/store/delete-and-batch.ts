@@ -60,16 +60,8 @@ function deleteMemoryRow(db: ReturnType<typeof openHippoDb>, sql: string, id: st
   }
 }
 
-/**
- * db-scoped delete core, so a delete can compose inside a caller's transaction.
- * NO filesystem I/O: the caller's transaction may still roll back, and mirrors are written post-commit.
- *
- * `opts.suppressForgetAudit` (default false): `rejectValue` and `resolveConflict` set it because each
- * writes its own aggregate audit row, so a removed row must not ALSO emit a `forget` row.
- *
- * Returns `{tenantId, dagParentId}` for the removed row, or `null` if no row with `id`
- * existed or `automatic` refused it (pinned, raw, kept for good or backing an object at DELETE time, so a late pin wins).
- */
+/** db-scoped delete core, composable inside a caller's transaction; NO filesystem I/O, mirrors are written post-commit. `suppressForgetAudit` is set by
+ * rejectValue and resolveConflict (own audit row). Returns `{tenantId, dagParentId}`, or null if absent or `automatic` refused it. */
 export function deleteEntryCore(
   db: ReturnType<typeof openHippoDb>,
   id: string,
@@ -95,17 +87,8 @@ export function deleteEntryCore(
   return { tenantId: row.tenant_id ?? DEFAULT_TENANT_ID, dagParentId: row.dag_parent_id ?? null };
 }
 
-/**
- * Delete an entry from SQLite and mirrors.
- *
- * `opts.actor` defaults to 'cli'. The api.* layer threads `ctx.actor` so HTTP
- * callers land with `api_key:<key_id>` in the audit log without a duplicate
- * emit from the api wrapper.
- *
- * Thin wrapper over `deleteEntryCore` (open → core → mirrors → close);
- * behavior is byte-identical to the pre-split implementation for every
- * existing caller.
- */
+/** Delete an entry from SQLite and mirrors; thin wrapper over `deleteEntryCore` (open, core, mirrors, close).
+ * `opts.actor` defaults to 'cli'; the api layer threads `ctx.actor` so HTTP callers land as `api_key:<key_id>` in the audit log. */
 export function deleteEntry(
   hippoRoot: string,
   id: string,
@@ -145,13 +128,8 @@ function mergeOwnChanges(base: MemoryEntry, ours: MemoryEntry, live: MemoryEntry
   return row;
 }
 
-/** Writes, deletes and dormant moves in one transaction. With `snapshot` (rows as the caller loaded them), a write keeps only
- *  the fields the caller changed, takes the rest from the live row, and never resurrects a row that is gone.
- *
- *  `dormant` (src/store/dormant.ts): each move's snapshot is inserted into `dormant_memories` and its `memories` row
- *  leaves exactly like a delete (FTS row, DAG parent dirty-mark, mirrors), in the same transaction, so a memory
- *  is never in both places or in neither. Deletes and moves both skip rows that are no longer auto-deletable
- *  (pinned, raw, kept for good or backing an object since the caller decided). Returns the ids that left `memories`, deleted or moved. */
+/** Writes, deletes and dormant moves in one transaction. With `snapshot`, a write keeps only the fields the caller changed and never resurrects a gone row.
+ * Dormant moves (src/store/dormant.ts) leave `memories` like a delete; both skip rows no longer auto-deletable. Returns ids that left `memories`. */
 export function batchWriteAndDelete(
   hippoRoot: string,
   toWrite: MemoryEntry[],
@@ -404,9 +382,8 @@ export function deleteEntriesOneByOne(
   }, openStore);
 }
 
-/** Commits whole components in transactions of about `budget.holdMs` on one store
- * handle, letting other writers in between; returns the ids that left `memories`.
- *  The snapshot keeps what other writers changed after the caller loaded its rows. */
+/** Commits whole components in transactions of about `budget.holdMs`, letting other writers in between; returns the ids that left `memories`.
+ * The snapshot keeps what other writers changed after the caller loaded its rows. */
 export async function commitInChunks(
   hippoRoot: string,
   components: readonly FlushComponent[],

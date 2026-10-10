@@ -19,9 +19,9 @@ export interface AmbientLoadResult {
 }
 
 const AMBIENT_SCOPED = 'superseded_by IS NULL AND tenant_id = ?';
-/** idx_memories_pinned (db.ts v51) serves it. */
+/** idx_memories_pinned (migration v51) serves it. */
 const AMBIENT_PINNED_WHERE = `pinned = 1 AND ${AMBIENT_SCOPED} ORDER BY created ASC, id ASC`;
-/** idx_memories_created_drift (db.ts v51) serves it. */
+/** idx_memories_created_drift (migration v51) serves it. */
 const AMBIENT_DRIFT_SQL =
   `SELECT 1 FROM memories WHERE ${AMBIENT_SCOPED} AND (length(created) <> 24 OR created NOT LIKE '%Z') LIMIT 1`;
 
@@ -170,9 +170,8 @@ const TEAM_VISIBLE = scopeAdmitSql('');
 /** Admits every scope, for a reader that sees the whole store, such as the CLI on its own machine. */
 export const EVERY_SCOPE: SqlFragment = Object.freeze({ sql: '1', params: [] });
 
-/** Text, source and origin of tenant rows holding any of `words` that `admit` passes, by
- * default the team-visible ones; a row equal to a text apart from spacing holds its every word.
- *  With `project`, only rows carrying one of those names and user-global rows, as loadContextCandidates' filter. No `tenantId` reads every tenant. */
+/** Tenant rows holding any of `words` that `admit` passes (default: team-visible); a row equal to a text apart from spacing holds its every word.
+ * With `project`, only rows carrying one of those names plus user-global rows, as loadContextCandidates' filter. No `tenantId` reads every tenant. */
 export function loadTextsHoldingWords(
   hippoRoot: string, tenantId: string | undefined, words: readonly string[], project?: readonly string[], admit: SqlFragment = TEAM_VISIBLE,
 ): HeldText[] {

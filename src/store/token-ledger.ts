@@ -1,29 +1,6 @@
-/**
- * Token ledger: what memory text hippo hands agents,
- * and how many tokens it costs.
- *
- * One row per block of memory text sent to an agent, on every surface: the
- * per-prompt hook, the block `hippo compact-resume` restores after compaction,
- * `hippo context`, `hippo recall`, the MCP tools and the HTTP API. The ledger
- * answers the question a buyer asks first ("what does this cost me per
- * session?") and is the input for the token-savings evals.
- *
- * Every later model call re-reads a sent block until the host compacts; at session end the worker counts
- * those calls from the transcript as `reread` rows for the {@link REREAD_SURFACES} blocks, dated by call day.
- *
- * It also backs inject-only-on-change: the per-prompt hook compares the
- * hash of the block it is about to send with the last block it sent in the
- * same session and records a `skip` instead of sending it again.
- *
- * Token counts use {@link estimateTokens} (characters / 4), the same estimate
- * every budget in hippo uses. Rows hold counts, surfaces, session ids and
- * hashes, never memory content or query text.
- *
- * DB helpers take the caller's handle, {@link recordRereads} opens the store
- * it is given, and {@link readApiCalls} streams one
- * transcript file. Writes are best-effort at the call sites; a ledger failure
- * must never break recall.
- */
+/** Token ledger: one row per block of memory text sent to an agent on any surface, with its token cost; the input for the token-savings evals.
+ * Backs inject-only-on-change: the hook records a `skip` when the block hash matches the session's last; `reread` rows cover {@link REREAD_SURFACES} blocks.
+ * Counts use {@link estimateTokens} (chars / 4); rows never hold content or query text. Writes are best-effort: a ledger failure must not break recall. */
 import { open } from 'node:fs/promises';
 import { withWriteScope, type DatabaseSyncLike } from '../db/index.js';
 import { onHandle } from './open.js';
@@ -36,16 +13,8 @@ import {
 } from './token-ledger-rows.js';
 import { DATE_PREFIX_CHARS } from '../util/token-text.js';
 
-/**
- * Where a block of memory text was sent.
- * - `hook`: the per-prompt `UserPromptSubmit` hook (`hippo context --pinned-only`).
- * - `hook_recall`: the same hook's prompt-recall section.
- * - `compact_resume`: the snapshot the SessionStart(compact) hook prints (`hippo compact-resume`).
- * - `context`, `recall`: the CLI commands.
- * - `mcp_recall`, `mcp_context`: the MCP tools.
- * - `http_recall`, `http_context`, `http_assemble`: the HTTP API.
- * - `pilot`: the session's pilot arm row (src/api/pilot-arm.ts); not a send, so it is in no surface list.
- */
+/** Where a block was sent: `hook`/`hook_recall` (per-prompt hook), `compact_resume`, `context`/`recall` (CLI), `mcp_*`, `http_*`,
+ * and `pilot` (session pilot arm row, src/api/pilot-arm.ts; not a send, so in no surface list). */
 export type TokenSurface =
   | 'hook'
   | 'hook_recall'
@@ -68,14 +37,8 @@ export const TOKEN_SURFACES: readonly TokenSurface[] = [
 /** Surfaces whose re-reads are counted: only a hook payload tells a sub-agent's block from its parent's, as both carry one session id. */
 export const REREAD_SURFACES: readonly TokenSurface[] = ['hook', 'hook_recall', 'compact_resume'];
 
-/**
- * What happened to a block.
- * - `inject`: sent to the agent.
- * - `skip`: identical to the session's last injected block, so not sent again.
- * - `reset`: the host compacted its context, so the next block must be sent.
- * - `reread`: tokens later calls read again, booked at session end as one row per session, hook surface and UTC day of the calls.
- * - `arm`: the pilot assignment; `block_hash` is `hippo` or `holdout`, `items` the holdout rate in basis points.
- */
+/** What happened to a block: `inject` (sent), `skip` (identical to the last injected block), `reset` (host compacted, next must send), `reread` (tokens
+ * later calls read again, booked at session end), `arm` (pilot assignment; `block_hash` is `hippo` or `holdout`, `items` the holdout rate in bp). */
 export type TokenEvent = 'inject' | 'skip' | 'reset' | 'reread' | 'arm';
 
 /** Rows older than this are pruned on write. */
@@ -98,9 +61,7 @@ export interface TokenUse {
   now?: string;
 }
 
-/**
- * Append one ledger row and prune rows past {@link TOKEN_LEDGER_RETENTION_DAYS}.
- */
+/** Append one ledger row and prune rows past {@link TOKEN_LEDGER_RETENTION_DAYS}. */
 export function recordTokenUse(db: DatabaseSyncLike, use: TokenUse): void {
   const now = use.now ?? new Date().toISOString();
   insertTokenRow(db, {
@@ -125,11 +86,7 @@ export interface LastSent {
   skipsSince: number;
 }
 
-/**
- * The last block this session injected on `surface`, or null when the
- * session has injected nothing, a `reset` came after it, or there is no
- * session id (without one, the caller always injects).
- */
+/** The last block this session injected on `surface`, or null if none, a `reset` came after it, or there is no session id (the caller then always injects). */
 export function lastSentState(
   db: DatabaseSyncLike,
   tenantId: string,
@@ -143,12 +100,8 @@ export function lastSentState(
   return { hash: anchor.block_hash, skipsSince: Number(skips?.n ?? 0) };
 }
 
-/**
- * Whether a block identical to the session's last injection should be
- * skipped. `refreshTurns` resends an unchanged block after that many
- * consecutive skips, so a long session still sees its pinned rules near the
- * latest turn; 0 never resends an unchanged block.
- */
+/** Whether a block identical to the session's last injection should be skipped; `refreshTurns` resends it after that many consecutive skips so a long
+ * session still sees its pinned rules, 0 never resends. */
 export function shouldSkipUnchanged(last: LastSent | null, hash: string, refreshTurns: number): boolean {
   if (!last || last.hash !== hash) return false;
   if (refreshTurns > 0 && last.skipsSince >= refreshTurns) return false;
@@ -190,10 +143,7 @@ export interface TokenSummary {
   rereadSessions: number;
 }
 
-/**
- * Sum the ledger for one tenant since `sinceIso`. Surfaces with no rows are
- * omitted.
- */
+/** Sum the ledger for one tenant since `sinceIso`; surfaces with no rows are omitted. */
 export function summarizeTokenUse(db: DatabaseSyncLike, tenantId: string, sinceIso: string): TokenSummary {
   const rows = surfaceTotals(db, tenantId, sinceIso);
   const bySurface = new Map(rows.map((r) => [r.surface, r]));
@@ -283,11 +233,8 @@ export interface SessionTokens {
   injections: number;
 }
 
-/**
- * Ledger totals per session id since `sinceIso`, across every surface.
- * Claude Code hook rows carry the host's session id, which is also the
- * transcript file name, so these join to the host's own usage records.
- */
+/** Ledger totals per session id since `sinceIso`, across surfaces; hook rows carry the host's session id (the transcript file name), so they join to its
+ * usage records. */
 export function tokensBySession(db: DatabaseSyncLike, tenantId: string, sinceIso: string): SessionTokens[] {
   return sessionTokenRows(db, tenantId, sinceIso).map((r) => ({
     sessionId: r.session_id,

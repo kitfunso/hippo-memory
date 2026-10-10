@@ -85,10 +85,6 @@ export function auditMemories(entries: MemoryEntry[], backing: ReadonlySet<strin
   };
 }
 
-// ---------------------------------------------------------------------------
-// Audit log primitives (append-only mutation trail)
-// ---------------------------------------------------------------------------
-
 // The one list of audit ops: the AuditOp type, `hippo audit list --op` and GET /v1/audit?op= all read it.
 export const AUDIT_OPS = [
   'remember',
@@ -162,22 +158,13 @@ export interface AppendAuditOpts {
   actor: string; // 'cli' | 'api_key:hk_...' | 'system'
   op: AuditOp;
   targetId?: string;
-  // Callers attach arbitrary contextual data here (out-of-scope src/cli.ts's
-  // emitCliAudit still types this Record<string, unknown>); appendAuditEvent
-  // never reads a field off it, only JSON.stringify's it wholesale below, so
-  // it stays genuinely opaque rather than claiming a parsed contract it can't
-  // enforce at every call site.
+  // Opaque on purpose: appendAuditEvent only JSON.stringify's it wholesale and never reads a field,
+  // so no parsed contract is claimed.
   metadata?: unknown;
 }
 
-// node:sqlite returns INTEGER columns as bigint when the value exceeds
-// Number.MAX_SAFE_INTEGER. Audit metadata can carry such values (row ids,
-// counts), and JSON.stringify cannot serialize bigint without a replacer.
-// Mirrors the bigintSafeReplacer in src/store/raw-archive.ts.
-// `JsonValueWithBigInt` stands in for JSON.stringify's own `(key: string,
-// value: any) => any` replacer contract without exposing `any`/`unknown` at
-// this function's boundary; it is still assignable where JSON.stringify
-// expects a replacer.
+// node:sqlite returns INTEGER as bigint above MAX_SAFE_INTEGER, which JSON.stringify cannot serialize without a replacer.
+// `JsonValueWithBigInt` keeps `any` out of this boundary and stays assignable as a JSON.stringify replacer.
 type JsonValueWithBigInt = JsonValue | bigint;
 
 function isBigIntValue(value: JsonValueWithBigInt): value is bigint {
@@ -292,11 +279,8 @@ export interface ListAuditAfterOpts {
   tenantId?: string;
 }
 
-/**
- * Cursor read: events with id > afterId, ascending by id. Ids are AUTOINCREMENT
- * and never reused, but deletes (retention prune) leave gaps, so resume from
- * the last id returned, never from a count.
- */
+/** Cursor read: events with id > afterId, ascending. Retention prune leaves gaps in the ids,
+ * so resume from the last id returned, never from a count. */
 export function listAuditEventsAfter(db: DatabaseSyncLike, opts: ListAuditAfterOpts): AuditEvent[] {
   if (!Number.isInteger(opts.afterId) || opts.afterId < 0) {
     throw new RangeError('afterId must be a non-negative integer');
@@ -382,10 +366,8 @@ function rowToAuditEvent(r: AuditRow): AuditEvent {
 function safeJsonParse(raw: string, id: number): JsonObject {
   try {
     const v = JSON.parse(raw);
-    // SAFETY: JSON.parse only ever returns a plain object, array, string, number,
-    // boolean, or null; `v instanceof Object` is true for exactly the first two
-    // (both are valid JsonObject shapes for our purposes), matching the prior
-    // `typeof v === 'object' && v !== null` check without using typeof.
+    // SAFETY: JSON.parse returns only an object, array or primitive; `instanceof Object` is true for the first two,
+    // both valid JsonObject shapes here.
     return v instanceof Object ? (v as JsonObject) : {};
   } catch {
     // Malformed metadata reads as empty so the audit row itself stays listable.

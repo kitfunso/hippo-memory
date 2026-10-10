@@ -13,12 +13,10 @@ import type { TaskSnapshot } from './rows.js';
 import { onHandle, openStore } from './open.js';
 import { type ContinuityKey, continuityStamp, continuityWhere, loadActiveTaskSnapshot } from './sessions.js';
 
-/** Column list shared by every session_handoffs SELECT; store-cards.ts reuses it for the card handoff lookup. */
+/** Column list shared by every session_handoffs SELECT; cards.ts reuses it for the card handoff lookup. */
 export const HANDOFF_COLUMNS = 'id, session_id, repo_root, task_id, summary, next_action, artifacts_json, scope, created_at, constraints_json, evidence_json, outcome, target_runtime, card_id';
 
-/**
- * Save a session handoff record. Returns the persisted handoff.
- */
+/** Save a session handoff record; returns the persisted handoff. */
 export function saveSessionHandoff(
   hippoRoot: string,
   tenantId: string,
@@ -87,8 +85,7 @@ function handoffConditions(tenantId: string, sessionId: string | undefined, opts
     params.push(opts.excludeSessionId);
   }
   if (opts.unfinishedOnly) {
-    // Restrict to each session's newest revision first: stampHandoffOutcome
-    // only stamps the newest row, so an older null-outcome revision must not resurrect.
+    // Restrict to each session's newest revision first: stampHandoffOutcome only stamps the newest row, so an older null-outcome revision must not resurrect.
     // Keyed, the newest is the owner's own, so another owner's newer revision cannot hide it.
     conditions.push(`id IN (SELECT MAX(id) FROM session_handoffs WHERE tenant_id = ?${owned ? ` AND ${owned.sql}` : ''} GROUP BY session_id)`);
     params.push(tenantId, ...(owned?.params ?? []));
@@ -135,9 +132,7 @@ export function loadLatestHandoff(
   }
 }
 
-/**
- * Load a specific handoff by its row ID.
- */
+/** Load a specific handoff by its row ID. */
 export function loadHandoffById(hippoRoot: string, tenantId: string, id: number): SessionHandoff | null {
   assertTenantId('loadHandoffById', tenantId);
   const db = openStore(hippoRoot);
@@ -173,7 +168,8 @@ export function stampHandoffOutcome(hippoRoot: string, tenantId: string, session
   }, openStore);
 }
 
-/** Rewrites the session's newest handoff when it is still a transcript read, in one statement so a handoff written meanwhile is never overwritten; null when none was rewritten. */
+/** Rewrites the session's newest handoff when it is still a transcript read, in one statement so a handoff written meanwhile is never overwritten; null
+ * when none was rewritten. */
 function replaceTranscriptHandoff(
   hippoRoot: string,
   tenantId: string,
@@ -255,10 +251,8 @@ function buildSessionEndHandoff(
   };
 }
 
-/** Auto-write a handoff at session-end from the session's active snapshot, else from `derived`, its transcript state.
- * @param evidence best-effort git state; outcome comes from the newest session_complete event.
- * @param options.inPlace rewrite an earlier transcript read instead of adding a revision, for a close that runs after every reply.
- * @returns null when neither source is the session's, a newer handoff covers the snapshot, the session's latest handoff was not read off its transcript or already holds `derived`, or, in place, a handoff landed after the read. */
+/** Session-end handoff from the active snapshot, else `derived` transcript state; `inPlace` rewrites an earlier transcript read instead of adding a revision.
+ * Returns null when no source is the session's, a newer handoff covers it, or the latest one is not transcript-derived or already holds `derived`. */
 export function writeSessionEndHandoff(
   hippoRoot: string,
   tenantId: string,

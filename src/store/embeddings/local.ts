@@ -1,4 +1,4 @@
-// The local Transformers.js embedder, a leaf so embedding-provider.ts can wrap it without importing embeddings.ts.
+// The local Transformers.js embedder, a leaf so provider.ts can wrap it without importing index.ts.
 import { envModelCache } from '../../util/env.js';
 import * as fs from 'fs';
 import * as path from 'path';
