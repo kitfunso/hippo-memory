@@ -18,7 +18,7 @@ import { countSessionRawMemories, loadAllEntries, loadContentsWithTag } from '..
 import { canReadScope, personalScopeOf, touchableScopeSql, type ScopeActor } from '../src/store/recall-scope.js';
 import { loadLatestHandoff, saveSessionHandoff } from '../src/store/handoffs.js';
 import { assembleBriefFromReceipts } from '../src/objects/project-briefs.js';
-import { saveItems, type ItemContext } from '../src/store/compaction-record.js';
+import { saveItems, type ItemContext } from '../src/store/compactions-record.js';
 import { _resetSharedStoreCacheForTests } from '../src/core/config.js';
 import { clearProjectIdentityCache } from '../src/core/project-identity.js';
 

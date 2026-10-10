@@ -105,6 +105,12 @@ export function errorMessage(cause: unknown): string {
   return cause instanceof Error ? cause.message : String(cause);
 }
 
+/** One post-compact failure, told once to the hook's output (`say`) and once to the structured log. */
+export function reportCompactionFailure(say: (message: string) => void, step: string, reason: string): void {
+  say(`${step} failed: ${reason}`);
+  log.error(`post-compact: ${step} failed: ${reason}`);
+}
+
 /** Test hook: forget which once-keys have fired. */
 export function resetLogOnce(): void {
   onceKeys.clear();

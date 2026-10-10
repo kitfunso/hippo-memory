@@ -3,15 +3,9 @@ import * as path from 'path';
 import { type TaskSnapshot } from '../store/rows.js';
 import { isInitialized } from '../store/open.js';
 import { saveActiveTaskSnapshot, loadActiveTaskSnapshot } from '../store/sessions.js';
-import {
-  PRE_COMPACT_INSTRUCTION,
-  postCompactLine,
-  recordCompactionStart,
-  recordSnapshotSaved,
-  saveCompaction,
-  replayCompactionsAt,
-  COMPACTION_DB_WAIT_MS,
-} from '../store/compaction-record.js';
+import { PRE_COMPACT_INSTRUCTION, postCompactLine, saveCompaction, replayCompactionsAt } from './compaction-record.js';
+import { recordCompactionStart, recordSnapshotSaved } from '../store/compactions-record.js';
+import { COMPACTION_DB_WAIT_MS } from '../core/compaction-timing.js';
 import { resolveTenantId } from '../store/tenant.js';
 import { defaultPreCompactLogPath, vscodeUserHooksFile } from '../hooks/shared.js';
 import { readClaudeCodePostCompact, readClaudeCodePreCompact, type CaptureInput, type HookRuntime } from '../core/capture-contract.js';

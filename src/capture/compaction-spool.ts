@@ -3,7 +3,8 @@ import { randomBytes } from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 import { isObjectLike, isStringValue } from '../core/capture-contract.js';
-import type { CompactionText, Log, PostCompactPayload } from './compaction-record.js';
+import type { CompactionText, Log } from '../store/compactions-record.js';
+import type { PostCompactPayload } from './compaction-record.js';
 import { isSqliteBusy } from '../db/busy.js';
 import { errorMessage } from '../util/log.js';
 

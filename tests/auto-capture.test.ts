@@ -12,7 +12,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { extractFromText } from '../src/capture/extract.js';
-import { PRE_COMPACT_INSTRUCTION } from '../src/store/compaction-record.js';
+import { PRE_COMPACT_INSTRUCTION } from '../src/capture/compaction-record.js';
 import { captureToolFailure } from '../src/capture/capture-error.js';
 import { lessonFromFailure, failureSignature } from '../src/capture/failure-reading.js';
 import { initStore, getHippoRoot } from '../src/store/open.js';

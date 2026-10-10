@@ -5,7 +5,7 @@ import { dirname, join } from 'node:path';
 import { getContext } from '../src/api/index.js';
 import { containerId, containerPrefix } from '../src/agent-memories/source.js';
 import { importAtSessionEnd } from '../src/agent-memories/sync.js';
-import { saveItems } from '../src/store/compaction-record.js';
+import { saveItems } from '../src/store/compactions-record.js';
 import { listDormantSnapshots } from '../src/store/dormant.js';
 import { runDoctor } from '../src/doctor.js';
 import { createMemory, type MemoryEntry } from '../src/core/memory.js';

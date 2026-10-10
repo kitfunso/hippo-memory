@@ -1,8 +1,8 @@
 // A caller's compaction calls on a handle of its own, for code that has a folder and no connection.
 import { onHandle } from './open.js';
 import {
-  compactionByRequest, markSnapshotSaved, recordSummary, saveItems, scrubCompactionItems, startCompaction, type CompactionStart, type Log,
-} from './compaction-record.js';
+  compactionByRequest, markSnapshotSaved, recordSummary, saveItems, startCompaction, type CompactionStart, type Log,
+} from './compactions-record.js';
 
 /** {@link startCompaction} on a handle of its own, for a caller's request. */
 export function startCompactionAt(hippoRoot: string, tenantId: string, start: CompactionStart): string {
@@ -25,13 +25,13 @@ export interface CallerItems {
   readonly origins: readonly string[];
 }
 
-/** A caller's items under its record: a retry of a finished request answers with the first count, and a `summarised` one is reused. */
+/** A caller's items, already scrubbed, under its record: a retry of a finished request answers with the first count, and a `summarised` one is reused. */
 export function saveCallerItems(hippoRoot: string, tenantId: string, req: CallerItems, log: Log): number {
   return onHandle(hippoRoot, (db) => {
     const earlier = compactionByRequest(db, tenantId, req.requestId, req.sessionId);
     if (earlier !== null && earlier.status !== 'summarised') return earlier.itemsWritten;
     const meta = { sessionId: req.sessionId, trigger: req.trigger, cwd: null, transcriptPath: null };
-    const text = { summary: '', items: scrubCompactionItems(req.items) };
+    const text = { summary: '', items: [...req.items] };
     const record = earlier ?? recordSummary(db, hippoRoot, tenantId, {
       meta, text, at: new Date(), caller: { originProject: req.project, requestId: req.requestId },
     });

@@ -3,6 +3,7 @@ import { BadRequestError } from '../core/api-errors.js';
 import type { Context } from '../api/types.js';
 import { COMPACTION_ITEM_MAX_CHARS } from '../util/compaction-items.js';
 import { saveCallerItems } from '../store/compaction-caller.js';
+import { scrubCompactionItems } from './compaction-record.js';
 import { log } from '../util/log.js';
 import type { CallerProject } from '../api/prompt-hook.js';
 import { assertRequestId, assertTrigger, bindCaller, callerInHoldout } from './caller-session.js';
@@ -29,7 +30,7 @@ export function saveCompactionItemsForCaller(ctx: Context, req: CallerItemsReque
   const key = bindCaller(ctx, req.sessionId, req.project);
   if (callerInHoldout(ctx, req.sessionId)) return { written: 0 };
   const written = saveCallerItems(ctx.hippoRoot, ctx.tenantId, {
-    sessionId: req.sessionId, trigger: req.trigger, requestId: req.requestId, project: req.project.name, items: req.items,
+    sessionId: req.sessionId, trigger: req.trigger, requestId: req.requestId, project: req.project.name, items: scrubCompactionItems(req.items),
     owner: key.owner, origins: key.project,
   }, (message) => log.info(`post-compact: ${message}`));
   return { written };

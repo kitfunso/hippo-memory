@@ -1,16 +1,14 @@
-// One record per Claude Code compaction, and what turns its summary into kept memories.
-import * as fs from 'fs';
+// The compaction record's SQL: one record per Claude Code compaction, and the rows its summary's items become.
 import * as path from 'path';
 import { ConflictError } from '../core/api-errors.js';
+import { COMPACTION_DB_WAIT_MS, REPLAY_AFTER_MS, TRANSCRIPT_FILL_WINDOW_MS } from '../core/compaction-timing.js';
 import { isStringValue } from '../core/capture-contract.js';
-import { COMPACTION_ITEM_MAX_CHARS, compactSummaryBody, parseCompactionItems, selectItemRows } from '../util/compaction-items.js';
-import { importSpool, spool, type SpoolImporter } from './compaction-spool.js';
+import { selectItemRows } from '../util/compaction-items.js';
 import { isSharedStore, loadConfig } from '../core/config.js';
 import { closeHippoDb, isSqliteBusy, openHippoDb, withWriteScopeOr, type DatabaseSyncLike } from '../db/index.js';
 import { gatedWrite } from './gated-write.js';
 import { COMPACTION_MEMORY_TAG, COMPACTION_SOURCE_PREFIX, Layer, createMemory, generateId, type MemoryEntry } from '../core/memory.js';
 import { fallbackOrigin, isGlobalStoreRoot, projectId, projectNames, resolveProjectIdentity, type ProjectRef } from '../core/project-identity.js';
-import { maskEmails, redactSecretsStrict } from '../util/secret-detect.js';
 import {
   closeStartedWithoutSummary, compactionProgress, compactionRowsByRequest, heldMemoryRows, insertStartedCompaction, insertSummarisedCompaction,
   latestCompactionRows, latestStartedRows, markCompactionDone, markCompactionSummarised, markSnapshotSavedRow, nextCompactionStart, openTranscriptRows,
@@ -21,22 +19,8 @@ import { strengthenRetrievedOn, writeEntryMirrors } from './entry-writes.js';
 import { isRecallBoostAblated } from '../core/ablation.js';
 import { updateStats } from './index-and-stats.js';
 import { resolveTenantId } from './tenant.js';
-import { errorMessage, log as logger } from '../util/log.js';
-import { readTranscriptTail, truncateCodePointSafe } from '../util/transcript-tail.js';
+import { errorMessage, reportCompactionFailure } from '../util/log.js';
 
-/** PostCompact has 10 s in all (PreCompact 30 s), so a locked store must be given up on early. */
-export const COMPACTION_DB_WAIT_MS = 2000;
-
-/** Tested verbatim: Claude Code hands PreCompact stdout to the summariser as instructions. */
-export const PRE_COMPACT_INSTRUCTION =
-  "In your summary, add a last section titled 'Memories for hippo'. List, one per line starting with '- ', each lesson learned, decision made (with its reason) and correction the user gave in this session that should outlive it. Write each as a standalone sentence that names its subject. Leave out anything an earlier summary already listed under 'Memories for hippo', and anything this session already saved with `hippo remember`. Write '- none' if nothing new remains.";
-
-const SUMMARY_MAX_CHARS = 256 * 1024;
-/** Long enough that a live hook has finished with its own record. */
-export const REPLAY_AFTER_MS = 10 * 60_000;
-/** Claude Code deletes transcripts after 30 days, so an older gap can never be filled. */
-export const TRANSCRIPT_FILL_WINDOW_MS = 30 * 24 * 60 * 60_000;
-const TRANSCRIPT_TAIL_CAPS = [1 << 20, 8 << 20, 64 << 20];
 /** The marker redactSecretsStrict writes; an item holding it was a secret before it was stored. */
 const REDACTED = '[REDACTED]';
 
@@ -83,29 +67,6 @@ function heldOrigins(hippoRoot: string, cwd: string | null, originProject: strin
   return names.includes(originProject) ? names : [originProject];
 }
 
-function scrub(text: string): string {
-  return maskEmails(redactSecretsStrict(text));
-}
-
-interface ScrubbedSummary {
-  summary: string;
-  items: string[];
-  /** False when the summary has no memories section. */
-  found: boolean;
-}
-
-/** What the record keeps of a compact_summary: the scrubbed body, and every parsed item scrubbed. */
-export function readCompactionText(compactSummary: string): ScrubbedSummary {
-  const body = compactSummaryBody(compactSummary);
-  const parsed = parseCompactionItems(body);
-  return { summary: truncateCodePointSafe(scrub(body), SUMMARY_MAX_CHARS), items: parsed.items.map(scrub), found: parsed.found };
-}
-
-/** A caller's items scrubbed as readCompactionText scrubs a summary's, since another machine's scrub is not trusted; cut after it, as a mask can run longer than what it hides. */
-export function scrubCompactionItems(items: readonly string[]): string[] {
-  return items.map((item) => truncateCodePointSafe(scrub(item), COMPACTION_ITEM_MAX_CHARS));
-}
-
 function toRecord(row: CompactionRow): CompactionRecord {
   const listed: unknown = row.items_json === null ? [] : JSON.parse(row.items_json);
   return {
@@ -145,7 +106,8 @@ export function latestCompaction(db: DatabaseSyncLike, tenantId: string, session
   return latestCompactionRows(db, tenantId, sessionId).map(toRecord)[0] ?? null;
 }
 
-/** The record a caller's request made, whatever state it reached, so a retry neither writes its items twice nor starts a second record; another session's id is a ConflictError. */
+/** The record a caller's request made, whatever state it reached, so a retry neither writes its items twice nor starts a second record.
+ * Another session's id is a ConflictError. */
 export function compactionByRequest(db: DatabaseSyncLike, tenantId: string, requestId: string, sessionId: string): CompactionRecord | null {
   const record = compactionRowsByRequest(db, tenantId, requestId).map(toRecord)[0] ?? null;
   // Sessions are owner-bound, so this also keeps one owner from reading or finishing another's record.
@@ -153,12 +115,14 @@ export function compactionByRequest(db: DatabaseSyncLike, tenantId: string, requ
   return record;
 }
 
-/** Pre-compact's record for the compaction that is ending: the session's newest `started` one within REPLAY_AFTER_MS before `at`, so an older one is left for the transcript fill. */
+/** Pre-compact's record for the compaction that is ending: the session's newest `started` one within REPLAY_AFTER_MS before `at`.
+ * An older one is left for the transcript fill. */
 function latestStarted(db: DatabaseSyncLike, tenantId: string, sessionId: string, at: Date): CompactionRecord | null {
   return latestStartedRows(db, tenantId, sessionId, at.toISOString(), new Date(at.getTime() - REPLAY_AFTER_MS).toISOString()).map(toRecord)[0] ?? null;
 }
 
-/** Moves a `started` record to `summarised`; false when another process already moved it. The request id lands in the same statement, so no crash leaves the record unfindable by its retry. */
+/** Moves a `started` record to `summarised`; false when another process already moved it.
+ * The request id lands in the same statement, so no crash leaves the record unfindable by its retry. */
 interface MarkSummarisedOptions {
   readonly text: CompactionText;
   readonly summarisedAt: string;
@@ -236,7 +200,9 @@ export function recordSummary(
   }
   const originProject = caller.originProject ?? compactionOrigin(hippoRoot, meta.cwd);
   const id = generateId('cmp');
-  insertSummarisedCompaction(db, tenantId, { ...meta, originProject, startedAt: at.toISOString() }, { id, summary: text.summary, itemsJson, summarisedAt: now, requestId });
+  insertSummarisedCompaction(
+    db, tenantId, { ...meta, originProject, startedAt: at.toISOString() }, { id, summary: text.summary, itemsJson, summarisedAt: now, requestId },
+  );
   return {
     id, tenantId, sessionId: meta.sessionId, originProject, trigger: meta.trigger, cwd: meta.cwd, transcriptPath: meta.transcriptPath,
     snapshotSaved: false, startedAt: at.toISOString(), summarisedAt: now, summary: text.summary, items: text.items, itemsWritten: 0, status: 'summarised',
@@ -393,15 +359,6 @@ export function saveItems(db: DatabaseSyncLike, hippoRoot: string, ctx: ItemCont
   return writes.written.length;
 }
 
-export interface PostCompactPayload {
-  sessionId: string;
-  trigger: string | null;
-  cwd: string | null;
-  transcriptPath: string | null;
-  /** null when Claude Code sent none; the transcript fills the record later. */
-  compactSummary: string | null;
-}
-
 export interface CompactionSaveResult {
   /** Memories written; null when neither the record nor the items could be saved. */
   written: number | null;
@@ -410,17 +367,17 @@ export interface CompactionSaveResult {
   snapshotSaved: boolean;
 }
 
-/** One failure, told once to the hook's output and once to the structured log. */
-function reportFailure(log: Log, step: string, reason: string): void {
-  log(`${step} failed: ${reason}`);
-  logger.error(`post-compact: ${step} failed: ${reason}`);
+/** What one PostCompact save did; `spoolReason` is set when the store was busy or would not open, so the caller keeps the summary on disk. */
+export interface CompactionSaveOutcome {
+  result: CompactionSaveResult;
+  spoolReason: string | null;
 }
 
 interface SaveStep {
   db: DatabaseSyncLike;
   hippoRoot: string;
   tenantId: string;
-  payload: PostCompactPayload;
+  meta: Omit<CompactionStart, 'originProject'>;
   text: CompactionText;
   at: Date;
   result: CompactionSaveResult;
@@ -429,26 +386,26 @@ interface SaveStep {
 
 function recordStep(step: SaveStep): CompactionRecord | null {
   try {
-    const record = recordSummary(step.db, step.hippoRoot, step.tenantId, { meta: step.payload, text: step.text, at: step.at });
+    const record = recordSummary(step.db, step.hippoRoot, step.tenantId, { meta: step.meta, text: step.text, at: step.at });
     step.result.snapshotSaved = record.snapshotSaved;
     return record;
   } catch (err) {
     if (isSqliteBusy(err)) throw err;
-    reportFailure(step.log, 'record step', errorMessage(err));
+    reportCompactionFailure(step.log, 'record step', errorMessage(err));
     return null;
   }
 }
 
 /** Busy with a saved record defers to sleep; any other failure goes to the caller. */
 function itemsStep(step: SaveStep, record: CompactionRecord | null): void {
-  const { payload, hippoRoot, log } = step;
+  const { meta, hippoRoot, log } = step;
   try {
     step.result.written = saveItems(step.db, hippoRoot, {
       tenantId: step.tenantId,
       recordId: record?.id ?? null,
-      sessionId: payload.sessionId,
-      originProject: record?.originProject ?? compactionOrigin(hippoRoot, payload.cwd),
-      cwd: payload.cwd,
+      sessionId: meta.sessionId,
+      originProject: record?.originProject ?? compactionOrigin(hippoRoot, meta.cwd),
+      cwd: meta.cwd,
       items: step.text.items,
     }, log);
   } catch (err) {
@@ -459,82 +416,53 @@ function itemsStep(step: SaveStep, record: CompactionRecord | null): void {
   }
 }
 
-function spoolSummary(hippoRoot: string, payload: PostCompactPayload, text: CompactionText, at: Date, reason: string, result: CompactionSaveResult, log: Log): void {
-  try {
-    spool(hippoRoot, resolveTenantId({}), payload, text, at);
-    result.deferred = true;
-    log(`store busy, summary spooled: ${reason}`);
-  } catch (spoolErr) {
-    reportFailure(log, 'spool', errorMessage(spoolErr));
-  }
-}
-
-/** The PostCompact work: record the summary, then write its items. Each step is independent; a busy store spools or defers. Never throws. */
-export function saveCompaction(hippoRoot: string, payload: PostCompactPayload, log: Log): CompactionSaveResult {
+/** The PostCompact store work, on a handle of its own: record the summary, then write its items. Each step is independent. Never throws. */
+export function saveCompactionAt(
+  hippoRoot: string,
+  meta: Omit<CompactionStart, 'originProject'>,
+  text: CompactionText,
+  at: Date,
+  log: Log,
+): CompactionSaveOutcome {
   const result: CompactionSaveResult = { written: null, deferred: false, snapshotSaved: false };
-  if (payload.compactSummary === null) {
-    log('skip: payload has no compact_summary');
-    return result;
-  }
-  const at = new Date();
-  const { found, ...text } = readCompactionText(payload.compactSummary);
-  if (!found) log('no memories section');
-
   let db: DatabaseSyncLike | undefined;
   try {
     db = openHippoDb(hippoRoot, { busyWaitMs: COMPACTION_DB_WAIT_MS });
-    const step: SaveStep = { db, hippoRoot, tenantId: resolveTenantId({}), payload, text, at, result, log };
+    const step: SaveStep = { db, hippoRoot, tenantId: resolveTenantId({}), meta, text, at, result, log };
     itemsStep(step, recordStep(step));
   } catch (err) {
-    if (isSqliteBusy(err) || db === undefined) spoolSummary(hippoRoot, payload, text, at, errorMessage(err), result, log);
-    else reportFailure(log, 'items step', errorMessage(err));
+    if (isSqliteBusy(err) || db === undefined) return { result, spoolReason: errorMessage(err) };
+    reportCompactionFailure(log, 'items step', errorMessage(err));
   } finally {
     if (db) closeHippoDb(db);
   }
-  return result;
+  return { result, spoolReason: null };
 }
 
-/** The one line PostCompact prints, or null when nothing was saved. */
-export function postCompactLine(result: CompactionSaveResult): string | null {
-  if (result.deferred) return 'Hippo will finish saving this compaction at the next sleep.';
-  if (result.written === null) return null;
-  if (result.written === 0) return "Hippo kept this compaction's summary; it listed no new memories.";
-  const noun = result.written === 1 ? 'memory' : 'memories';
-  return `Hippo saved ${result.written} ${noun} from this compaction${result.snapshotSaved ? ' and restored your task snapshot' : ''}.`;
+/** One spooled summary, as plain data. */
+export interface SpooledSummary {
+  tenantId: string;
+  payload: Omit<CompactionStart, 'originProject'>;
+  text: CompactionText;
+  at: Date;
 }
 
-interface TranscriptLine {
-  isCompactSummary?: boolean;
-  timestamp?: string;
-  message?: { content?: string | Array<{ type?: string; text?: string }> };
+/** Records one spooled summary; it calls `recorded` once the store holds it, so the file is done even if a later step throws. */
+export type SpoolRecorder = (spooled: SpooledSummary, recorded: () => void) => void;
+
+/** A summary read out of a transcript, scrubbed; `listed` is false when it had no memories section. */
+export interface TranscriptText {
+  text: CompactionText;
+  listed: boolean;
 }
 
-function lineText(line: TranscriptLine): string {
-  const content = line.message?.content;
-  if (isStringValue(content)) return content;
-  if (!Array.isArray(content)) return '';
-  return content.map((block) => (isStringValue(block.text) ? block.text : '')).join('\n');
-}
-
-/** The summary Claude Code wrote into a transcript between two moments; null when it is not (yet) there or the window cannot reach back that far. */
-function transcriptSummary(transcriptPath: string, afterMs: number, beforeMs: number): string | null {
-  const size = fs.statSync(transcriptPath).size;
-  for (const cap of TRANSCRIPT_TAIL_CAPS) {
-    const lines: TranscriptLine[] = [];
-    for (const raw of readTranscriptTail(transcriptPath, cap).split('\n')) {
-      try {
-        lines.push(JSON.parse(raw));
-      } catch {
-        continue; // the tail can start mid-line; a torn line holds no summary
-      }
-    }
-    const stamp = (line: TranscriptLine): number => (isStringValue(line.timestamp) ? Date.parse(line.timestamp) : Number.NaN);
-    const first = lines.map(stamp).find((ms) => !Number.isNaN(ms));
-    const hit = lines.find((line) => line.isCompactSummary === true && stamp(line) > afterMs && stamp(line) < beforeMs);
-    if (hit) return lineText(hit);
-    if (size <= cap || (first !== undefined && first <= afterMs)) return null;
-  }
-  return null;
+/** The file work a replay needs, handed in by the caller so the store holds none of it. */
+export interface ReplaySources {
+  /** Feeds each spooled summary to `record`; returns how many it imported. */
+  importSpool(tenantId: string, deadline: number, record: SpoolRecorder): number;
+  transcriptExists(transcriptPath: string): boolean;
+  /** The summary a transcript holds between two moments, or null when it is not (yet) there. */
+  transcriptText(transcriptPath: string, afterMs: number, beforeMs: number): TranscriptText | null;
 }
 
 function closeWithoutSummary(db: DatabaseSyncLike, tenantId: string, id: string, log: Log): void {
@@ -551,7 +479,7 @@ function itemContext(tenantId: string, record: CompactionRecord, items: string[]
 }
 
 /** Records a spooled summary, then writes its items. */
-function spoolImporter(db: DatabaseSyncLike, hippoRoot: string, log: Log): SpoolImporter {
+function spoolRecorder(db: DatabaseSyncLike, hippoRoot: string, log: Log): SpoolRecorder {
   return (spooled, recorded) => {
     const record = recordSummary(db, hippoRoot, spooled.tenantId, { meta: spooled.payload, text: spooled.text, at: spooled.at });
     // The record holds the items now, so the file is done even if the write below fails.
@@ -575,9 +503,9 @@ function replayStalled(db: DatabaseSyncLike, hippoRoot: string, tenantId: string
   return finished;
 }
 
-function replaySpool(db: DatabaseSyncLike, hippoRoot: string, tenantId: string, log: Log, deadline: number): number {
+function replaySpool(db: DatabaseSyncLike, hippoRoot: string, tenantId: string, sources: ReplaySources, log: Log, deadline: number): number {
   try {
-    return importSpool(hippoRoot, tenantId, log, deadline, spoolImporter(db, hippoRoot, log));
+    return sources.importSpool(tenantId, deadline, spoolRecorder(db, hippoRoot, log));
   } catch (err) {
     log(`spool import failed: ${errorMessage(err)}`);
     return 0;
@@ -585,16 +513,16 @@ function replaySpool(db: DatabaseSyncLike, hippoRoot: string, tenantId: string, 
 }
 
 /** Fills one open record from its transcript; true when it saved items. */
-function fillFromTranscript(db: DatabaseSyncLike, hippoRoot: string, tenantId: string, record: CompactionRecord, log: Log): boolean {
-  if (record.transcriptPath === null || !fs.existsSync(record.transcriptPath)) return false;
+function fillFromTranscript(db: DatabaseSyncLike, hippoRoot: string, tenantId: string, record: CompactionRecord, sources: ReplaySources, log: Log): boolean {
+  if (record.transcriptPath === null || !sources.transcriptExists(record.transcriptPath)) return false;
   const next = nextStartedAt(db, record);
-  const found = transcriptSummary(record.transcriptPath, Date.parse(record.startedAt), next === null ? Number.POSITIVE_INFINITY : Date.parse(next));
+  const found = sources.transcriptText(record.transcriptPath, Date.parse(record.startedAt), next === null ? Number.POSITIVE_INFINITY : Date.parse(next));
   if (found === null) {
     // The record is past REPLAY_AFTER_MS, so a window that is fully scanned or out of reach stays empty.
     closeWithoutSummary(db, tenantId, record.id, log);
     return false;
   }
-  const { found: listed, ...text } = readCompactionText(found);
+  const { text, listed } = found;
   if (!listed) log(`no memories section in the transcript summary for ${record.id}`);
   if (!markSummarised(db, tenantId, record.id, { text, summarisedAt: new Date().toISOString() })) {
     log(`${record.id} was filled by another process`);
@@ -604,7 +532,7 @@ function fillFromTranscript(db: DatabaseSyncLike, hippoRoot: string, tenantId: s
   return true;
 }
 
-function replayOpen(db: DatabaseSyncLike, hippoRoot: string, tenantId: string, now: number, log: Log, deadline: number): number {
+function replayOpen(db: DatabaseSyncLike, hippoRoot: string, tenantId: string, now: number, sources: ReplaySources, log: Log, deadline: number): number {
   let finished = 0;
   const open = openTranscriptRows(
     db,
@@ -615,7 +543,7 @@ function replayOpen(db: DatabaseSyncLike, hippoRoot: string, tenantId: string, n
   for (const record of open) {
     if (Date.now() > deadline) break;
     try {
-      if (fillFromTranscript(db, hippoRoot, tenantId, record, log)) finished++;
+      if (fillFromTranscript(db, hippoRoot, tenantId, record, sources, log)) finished++;
     } catch (err) {
       log(`transcript fill of ${record.id} failed: ${errorMessage(err)}`);
     }
@@ -623,21 +551,27 @@ function replayOpen(db: DatabaseSyncLike, hippoRoot: string, tenantId: string, n
   return finished;
 }
 
-/** Finishes what a killed hook or a busy store left: `summarised` records, spool files, and `started` records the transcript can fill. Returns how many compactions it saved. */
-export function replayCompactions(db: DatabaseSyncLike, hippoRoot: string, log: Log, deadline: number = Number.POSITIVE_INFINITY): number {
+/** Finishes what a killed hook or a busy store left: `summarised` records, spool files, and `started` records the transcript can fill.
+ * Returns how many compactions it saved. */
+function replayCompactions(db: DatabaseSyncLike, hippoRoot: string, sources: ReplaySources, log: Log, deadline: number): number {
   const tenantId = resolveTenantId({});
   const now = Date.now();
   return replayStalled(db, hippoRoot, tenantId, now, log, deadline)
-    + replaySpool(db, hippoRoot, tenantId, log, deadline)
-    + replayOpen(db, hippoRoot, tenantId, now, log, deadline);
+    + replaySpool(db, hippoRoot, tenantId, sources, log, deadline)
+    + replayOpen(db, hippoRoot, tenantId, now, sources, log, deadline);
+}
+
+export interface ReplayOptions {
+  busyWaitMs?: number;
+  deadline?: number;
 }
 
 /** For `hippo sleep` and post-compact: opens the store itself and never throws. */
-export function replayCompactionsAt(hippoRoot: string, log: Log, opts: { busyWaitMs?: number; deadline?: number } = {}): number {
+export function replayStoredCompactions(hippoRoot: string, sources: ReplaySources, log: Log, opts: ReplayOptions = {}): number {
   let db: DatabaseSyncLike | undefined;
   try {
     db = openHippoDb(hippoRoot, { busyWaitMs: opts.busyWaitMs });
-    return replayCompactions(db, hippoRoot, log, opts.deadline);
+    return replayCompactions(db, hippoRoot, sources, log, opts.deadline ?? Number.POSITIVE_INFINITY);
   } catch (err) {
     log(`replay failed: ${errorMessage(err)}`);
     return 0;

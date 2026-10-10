@@ -10,7 +10,8 @@ import { closeHippoDb, isStoreBusy, openHippoDb, runWithRequestStores, type Data
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { _resetSharedStoreCacheForTests } from '../src/core/config.js';
 import { clearProjectIdentityCache } from '../src/core/project-identity.js';
-import { markSnapshotSaved, PRE_COMPACT_INSTRUCTION, recordSnapshotSaved, recordSummary, saveItems, startCompaction, type ItemContext } from '../src/store/compaction-record.js';
+import { PRE_COMPACT_INSTRUCTION } from '../src/capture/compaction-record.js';
+import { markSnapshotSaved, recordSnapshotSaved, recordSummary, saveItems, startCompaction, type ItemContext } from '../src/store/compactions-record.js';
 import { captureToolFailure, storeLesson } from '../src/capture/capture-error.js';
 import { failureHash, failureReport } from '../src/capture/failure-reading.js';
 import { WORKING_STATE_CAPS } from '../src/capture/working-state.js';
