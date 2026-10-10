@@ -1,7 +1,7 @@
 // The sleep pipeline behind `sleep`, with its phase dependencies injectable; kept out of the package root.
 
 import { loadAllEntries } from '../store/entry-reads.js';
-import { deleteEntry, memoriesBackingObjects } from '../store/delete-and-batch.js';
+import { memoriesBackingObjects } from '../store/delete-and-batch.js';
 import { reportAuditWriteFailure, auditMemories } from '../store/audit.js';
 import { sqliteSyncStore } from '../store/sqlite/store.js';
 import { autoShare } from '../sharing/share.js';
@@ -14,6 +14,7 @@ import { loadPendingExtractionTenants, markPendingProcessedUpTo } from '../store
 import { extractGraphChunked, type ExtractResult } from '../graph/extract.js';
 import type { MemoryEntry } from '../core/memory.js';
 import type { Context } from './types.js';
+import { removeAuditErrors } from './audit.js';
 import type { SleepOpts, SleepResult } from './sleep.js';
 import { errorMessage } from '../util/log.js';
 
@@ -24,7 +25,6 @@ export interface SleepPhases {
   auditMemories: typeof auditMemories;
   autoShare: typeof autoShare;
   loadAllEntries: typeof loadAllEntries;
-  deleteEntry: typeof deleteEntry;
   computeAmbientState: typeof computeAmbientState;
   loadConfig: typeof loadConfig;
   loadPendingExtractionTenants: typeof loadPendingExtractionTenants;
@@ -37,7 +37,6 @@ const DEFAULT_SLEEP_PHASES: SleepPhases = {
   auditMemories,
   autoShare,
   loadAllEntries,
-  deleteEntry,
   computeAmbientState,
   loadConfig,
   loadPendingExtractionTenants,
@@ -196,15 +195,9 @@ function runQualityAudit(ctx: Context, phases: SleepPhases, options: QualityAudi
   if (auditOut.issues.length === 0) return { removed: 0, remaining: allEntries };
   const errors = auditOut.issues.filter((i) => i.severity === 'error');
   const warnings = auditOut.issues.filter((i) => i.severity === 'warning');
-  let removed = 0;
-  const deleted = new Set<string>();
-  for (const issue of errors) {
-    const reason = `sleep-audit: ${issue.reason}`;
-    if (dryRun || phases.deleteEntry(ctx.hippoRoot, issue.memoryId, { actor: ctx.actor.subject, reason, automatic: true })) {
-      removed++;
-      deleted.add(issue.memoryId);
-    }
-  }
+  const gone = dryRun ? errors.map((issue) => issue.memoryId) : removeAuditErrors(ctx, 'sleep-audit', errors);
+  const removed = gone.length;
+  const deleted = new Set(gone);
   if (removed > 0 || warnings.length > 0) {
     result.audit = {
       errorsRemoved: removed,

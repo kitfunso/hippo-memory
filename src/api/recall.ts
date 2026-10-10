@@ -31,6 +31,7 @@ import type { RecallSuppressionSummary, RecallOpts, RecallResult, RecallResultIt
 import { type Context, ownerOrSubject, RecallContractError } from './types.js';
 import { anchoringRows, availabilityRows, callerOf, recallAuditMetadata, recallAuditRow, strengthenOf } from './recall-record.js';
 import { retrieveWithCliCore } from './recall-core.js';
+import { recallLead, recordShownRecall, type ShownList } from './recall-finish.js';
 
 const DEFAULT_RECALL_LIMIT = 10;
 
@@ -57,7 +58,8 @@ function inCallerProject(entry: MemoryEntry, opts: RecallOpts): boolean {
   return !opts.project || classifyOriginProject(entry.origin_project, opts.project) !== 'cross-project';
 }
 
-/** The one recall entry: ranks with the ranker `opts` names, then writes the recall. Only the CLI core ranker writes last_retrieval_ids (contract lock). */
+/** The one recall entry: ranks with the ranker `opts` names, then writes the recall, and records it in full for a surface that sets `recordAs`.
+ *  Only the CLI core ranker writes last_retrieval_ids (contract lock). */
 export async function retrieve(ctx: Context, opts: RecallOpts): Promise<RecallResult> {
   assertScopeRequestAllowed(ctx.actor, opts.scope);
   if (opts.cliCore) return retrieveWithCliCore(ctx, opts, opts.cliCore);
@@ -66,6 +68,29 @@ export async function retrieve(ctx: Context, opts: RecallOpts): Promise<RecallRe
   const own = personalScopeOf(ctx.actor) ?? undefined;
   if (opts.showRanked) return retrieveFromStore(ctx, opts, windowSize, opts.showRanked, own);
   const store = storeFor(ctx);
+  const how = opts.recordAs;
+  if (!how) return retrieveBand(ctx, store, opts, windowSize, own);
+  const result = await retrieveBand(ctx, store, { ...opts, ...recallLead(ctx, how, opts.query, opts.sessionId) }, windowSize, own);
+  await recordShownRecall(ctx, store, how, shownBand(opts, result));
+  return result;
+}
+
+/** What the band ranker hands to the record: the rows it returns, and the continuity block the reply carries beside them. */
+function shownBand(opts: RecallOpts, result: RecallResult): ShownList {
+  return {
+    query: opts.query,
+    sessionId: opts.sessionId,
+    topId: result.results[0]?.id ?? null,
+    anchoredOn: result.anchoringHint?.memoryId,
+    items: result.results.length,
+    tokens: result.tokens + (result.continuityTokens ?? 0),
+    ledgerSessionId: opts.sessionId ?? null,
+    written: true, // a failed audit write throws out of the band ranker, so this point is never reached without the rows
+  };
+}
+
+/** The default ranker: the SQL BM25 band, reordered by hybrid or physics search when `mode` asks. */
+async function retrieveBand(ctx: Context, store: HippoStore, opts: RecallOpts, windowSize: number, own: string | undefined): Promise<RecallResult> {
   let candidates = await store.searchRecallEntries(opts.query, recallSearchArgs(ctx, opts, windowSize, own));
   if (opts.mode === 'hybrid' || opts.mode === 'physics') {
     const searchOpts = { budget: Infinity, hippoRoot: ctx.hippoRoot, scope: opts.scope ?? null, vectorCandidates: recallVectorSpec(ctx, opts, own), store };
@@ -75,7 +100,9 @@ export async function retrieve(ctx: Context, opts: RecallOpts): Promise<RecallRe
   }
   const plan = planRecall(ctx, opts, candidates, own);
   const { result, writes } = composeRecall(ctx, opts, { windowSize, all: candidates, plan, reads: await readRecall(store, ctx, opts, plan) });
-  await store.finishRecall({ ...writes, audit: [...(opts.leadingAudit ?? []), ...writes.audit], strengthen: strengthenOf(ctx, result.results.map((r) => r.id)) });
+  await store.finishRecall({
+    ...writes, audit: [...(opts.leadingAudit ?? []), ...writes.audit], strengthen: strengthenOf(ctx, result.results.map((r) => r.id))
+  });
   return result;
 }
 
@@ -138,7 +165,9 @@ async function retrieveFromStore(
   const window = ranked.slice(0, windowSize).map((r) => r.entry);
   const bandOpts = { ...opts, suppressRecallTrace: true };
   const plan = planRecall(ctx, bandOpts, window, own);
-  const { result, writes } = composeRecall(ctx, bandOpts, { windowSize, all: window, plan, reads: await readRecall(store, ctx, bandOpts, plan, goals), auditBand: false });
+  const { result, writes } = composeRecall(ctx, bandOpts, {
+    windowSize, all: window, plan, reads: await readRecall(store, ctx, bandOpts, plan, goals), auditBand: false
+  });
   // Rows the vector arm added count as candidates too.
   const inPool = new Set(pool.map((e) => e.id));
   const candidates = [...pool, ...ranked.map((r) => r.entry).filter((e) => !inPool.has(e.id))];

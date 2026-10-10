@@ -16,7 +16,6 @@ import {
 import { isHandoffOutcome } from '../core/handoff.js';
 import { type Card, isCardStatus } from '../core/card.js';
 import { loadCardDetail, type CardDetail } from '../store/card-detail.js';
-import { resolveTenantId } from '../store/tenant.js';
 import { printError } from './output.js';
 import { type CliFlags, stringFlagOrExit, type CommandContext } from './flag-values.js';
 import { requireInit } from './shared.js';
@@ -102,9 +101,8 @@ const CARD_SUBCOMMAND_FLAGS = {
 type CardHandler = (hippoRoot: string, tenantId: string, args: string[], flags: CliFlags) => void;
 
 /** Runs `hippo card <subcommand>`: rejects flags the subcommand never reads, then hands off to its handler. */
-export function handleCard({ hippoRoot, args, flags }: CommandContext): void {
+export function handleCard({ hippoRoot, tenantId, args, flags }: CommandContext): void {
   requireInit(hippoRoot);
-  const tenantId = resolveTenantId({});
   const subcommand = args[0] ?? '';
 
   if (!Object.hasOwn(CARD_SUBCOMMAND_FLAGS, subcommand)) {

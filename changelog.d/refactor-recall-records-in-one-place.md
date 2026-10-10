@@ -1,0 +1,3 @@
+### Changed
+
+- **Internal:** what a recall records after it ranks (the anchor-skipped audit row, the session ring, the recalled counter and the token ledger row) is now written once, in `src/api/recall-finish.ts`, for `GET /v1/memories` and `hippo recall`. The HTTP route passes `recordAs` to `retrieve` and the CLI verb no longer feeds its ring. `RecallOpts` gains the optional `recordAs` and `ShownCliCore` the optional `anchoredOn`. No surface records anything different; MCP still records its own and is next. `scripts/check-store-port.mjs` now fails when a route or CLI file records a recall itself.

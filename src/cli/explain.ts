@@ -11,6 +11,7 @@ import { detectScope } from '../sharing/scope.js';
 import { getGlobalRoot } from '../sharing/global-store.js';
 import * as api from '../api/index.js';
 import { resolveTenantId } from '../store/tenant.js';
+import { cliApiContext } from './api-context.js';
 import type { RankRecallResult } from '../api/recall-pipeline.js';
 import { printedTokens } from '../api/context-render.js';
 import { printError } from './output.js';
@@ -66,7 +67,7 @@ export async function cmdExplain(
 
   const slot: InspectedSlot = {};
   await api.retrieve(
-    { hippoRoot, tenantId, actor: api.adminActor('cli') },
+    cliApiContext(hippoRoot, tenantId),
     {
       query,
       cliCore: {

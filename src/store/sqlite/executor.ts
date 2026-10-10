@@ -338,7 +338,8 @@ class WorkerPool implements SqliteExecutor {
   }
 }
 
-/** Threads for the hippo.db under `hippoRoot`: one writer and two readers. The first call starts the writer for the store's setup; a reader starts at its own first call. */
+/** Threads for the hippo.db under `hippoRoot`: one writer and two readers. The first
+ * call starts the writer for the store's setup; a reader starts at its own first call. */
 export function createSqliteExecutor(hippoRoot: string, opts: ExecutorOptions = {}): SqliteExecutor {
   return new WorkerPool(hippoRoot, opts);
 }

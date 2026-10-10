@@ -29,7 +29,7 @@ import { assertClientScope } from '../store/recall-scope.js';
 import { getGlobalRoot, initGlobal } from '../sharing/global-store.js';
 import { vetSecrets } from '../util/secret-detect.js';
 import * as client from './client.js';
-import { resolveTenantId } from '../store/tenant.js';
+import { cliApiContext } from './api-context.js';
 import { computeSalience } from '../core/salience.js';
 import { validateOwner, isStrictOwnerEnv } from './owner-validation.js';
 import { printError } from './output.js';
@@ -119,6 +119,7 @@ function parseRememberEnvelope(flags: CliFlags): RememberEnvelope {
 
 async function cmdRemember(
   hippoRoot: string,
+  tenantId: string,
   text: string,
   flags: CliFlags
 ): Promise<void> {
@@ -134,11 +135,8 @@ async function cmdRemember(
   const { requested: requestedTags, all: allTags } = rememberTags(flags, process.cwd());
 
   // Schema fit needs the store, which the routed request has no access to, so it stays here.
-  const schemaFit = schemaFitInStore(targetRoot, resolveTenantId({}), text, requestedTags);
+  const schemaFit = schemaFitInStore(targetRoot, tenantId, text, requestedTags);
   const envelope = parseRememberEnvelope(flags);
-
-  // Stamp tenant_id from env (HIPPO_TENANT) so recall isolation can filter on this row; unauthenticated CLI gets 'default'.
-  const tenantId = resolveTenantId({});
 
   const gate = salienceGate(text, allTags, targetRoot, tenantId, flags);
   if (gate.skip) return;
@@ -168,7 +166,7 @@ async function cmdRemember(
 
 /** The row as the store holds it after the write: the printout, the embedding and the extraction work on that. */
 function writeRemembered(targetRoot: string, tenantId: string, opts: api.RememberOpts): MemoryEntry {
-  const { id } = api.remember({ hippoRoot: targetRoot, tenantId, actor: api.adminActor('cli') }, opts);
+  const { id } = api.remember(cliApiContext(targetRoot, tenantId), opts);
   const entry = readEntry(targetRoot, id, tenantId);
   if (!entry) throw new Error(`memory ${id} was written but cannot be read back`);
   return entry;
@@ -263,13 +261,13 @@ function alreadySupersededLine(hippoRoot: string, oldId: string, tenantId: strin
 
 function cmdSupersede(
   hippoRoot: string,
+  tenantId: string,
   oldId: string,
   newContent: string,
   flags: CliFlags,
 ): void {
   requireInit(hippoRoot);
 
-  const tenantId = resolveTenantId({});
   const overrides = {
     layer: stringFlag(flags, 'layer') as Layer | undefined,
     tags: supersedeTags(flags),
@@ -279,7 +277,7 @@ function cmdSupersede(
 
   let newId: string;
   try {
-    ({ newId } = api.supersede({ hippoRoot, tenantId, actor: api.adminActor('cli') }, oldId, newContent, overrides));
+    ({ newId } = api.supersede(cliApiContext(hippoRoot, tenantId), oldId, newContent, overrides));
   } catch (err) {
     if (err instanceof NotFoundError) printError(`Error: memory ${oldId} not found.`);
     else if (err instanceof RejectedValueError) printError(`Error: ${err.message}`);
@@ -310,6 +308,7 @@ function traceTags(flags: CliFlags): string[] {
 
 function cmdTraceRecord(
   hippoRoot: string,
+  tenantId: string,
   flags: CliFlags,
 ): void {
   requireInit(hippoRoot);
@@ -339,7 +338,7 @@ function cmdTraceRecord(
     outcome: outcome as 'success' | 'failure' | 'partial',
   });
 
-  const { id } = api.remember({ hippoRoot, tenantId: resolveTenantId({}), actor: api.adminActor('cli') }, {
+  const { id } = api.remember(cliApiContext(hippoRoot, tenantId), {
     content,
     tags,
     local: {
@@ -355,12 +354,12 @@ function cmdTraceRecord(
 
 function cmdTrace(
   hippoRoot: string,
+  tenantId: string,
   id: string,
   flags: CliFlags,
 ): void {
   requireInit(hippoRoot);
   const asJson = boolFlag(flags, 'json');
-  const tenantId = resolveTenantId({});
 
   // Look in local store first, then global.
   let entry = readEntry(hippoRoot, id, tenantId);
@@ -497,7 +496,7 @@ function printTraceText(t: TraceView): void {
   }
 }
 
-export async function handleRemember({ hippoRoot, args, flags }: CommandContext): Promise<void> {
+export async function handleRemember({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
   let text: string;
   if (args.length === 1 && args[0] === '-') {
     text = fs.readFileSync(0, 'utf-8').trim();
@@ -519,7 +518,7 @@ export async function handleRemember({ hippoRoot, args, flags }: CommandContext)
     flags['observed'] || flags['inferred'] || flags['verified'] ||
     flags['layer'] !== undefined;
   if (!richFlag && await rememberViaThinClient(hippoRoot, text, flags)) return;
-  await cmdRemember(hippoRoot, text, flags);
+  await cmdRemember(hippoRoot, tenantId, text, flags);
 }
 
 async function rememberViaThinClient(hippoRoot: string, text: string, flags: CliFlags): Promise<boolean> {
@@ -550,25 +549,25 @@ async function rememberViaThinClient(hippoRoot: string, text: string, flags: Cli
   });
 }
 
-export function handleSupersede({ hippoRoot, args, flags }: CommandContext): void {
+export function handleSupersede({ hippoRoot, tenantId, args, flags }: CommandContext): void {
   const oldId = args[0];
   const newContent = args.slice(1).join(' ').trim();
   if (!oldId || !newContent) {
     printError('Usage: hippo supersede <old-id> "<new content>" [--layer L] [--tag T] [--pin]');
     process.exit(1);
   }
-  cmdSupersede(hippoRoot, oldId, newContent, flags);
+  cmdSupersede(hippoRoot, tenantId, oldId, newContent, flags);
 }
 
-export function handleTrace({ hippoRoot, args, flags }: CommandContext): void {
+export function handleTrace({ hippoRoot, tenantId, args, flags }: CommandContext): void {
   const sub = args[0] ? String(args[0]) : '';
   if (sub === 'record') {
-    cmdTraceRecord(hippoRoot, flags);
+    cmdTraceRecord(hippoRoot, tenantId, flags);
     return;
   }
   if (!sub) {
     printError('Usage: hippo trace <memory-id> | hippo trace record --task <t> --steps <json> --outcome <o>');
     process.exit(1);
   }
-  cmdTrace(hippoRoot, sub, flags);
+  cmdTrace(hippoRoot, tenantId, sub, flags);
 }

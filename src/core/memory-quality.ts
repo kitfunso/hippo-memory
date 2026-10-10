@@ -58,7 +58,8 @@ function isRoutineReleaseActivity(text: string): boolean {
   // "Deploy only after the migration has run" is a rule about releases, not a log line.
   if (RELATION_WORD.test(text) || RULE_WORD.test(text)) return false;
   const subject = text.replace(/^(?:chore|ci|build)(?:\([^)]*\))?:\s*/i, '');
-  if (/^(?:bump|increment|increase|update|set)\s+(?:(?:ios|android|app)\s+)?(?:build(?:\s+number)?|version|release)\s+(?:to\s+)?(?:v?\d|#\d)/i.test(subject)) return true;
+  if (/^(?:bump|increment|increase|update|set)\s+(?:(?:ios|android|app)\s+)?(?:build(?:\s+number)?|version|release)\s+(?:to\s+)?(?:v?\d|#\d)/i.test(subject))
+    return true;
   return /^(?:deploy(?:ed|ing)?|ship(?:ped|ping)?|release(?:d|ing)?)\s+(?:the\s+)?(?:build|release|version|v?\d)\s*(?:v?\d|#\d|\.\d)/i.test(subject)
     || /^(?:deployment|release|build)\s+(?:succeeded|completed|finished)\b/i.test(subject);
 }
@@ -77,7 +78,8 @@ function isDanglingAssertion(text: string): boolean {
   // Only a lowercase start is a cut: "To rebuild the index, run ..." opens an instruction.
   if (/^(?:to|and|for)\s/.test(bare) && bare.length < 50) return true;
   // Prepositions, modals and "is" can end a whole sentence ("the branch it merges into"), so only cut-off endings count.
-  if (/\b(?:to be|has been|will be|instead of|rather than|such as|than|because|if|unless|when|until|and|or|but)$/i.test(bare) || /\b(?:the|a|an)$/.test(bare)) return true;
+  if (/\b(?:to be|has been|will be|instead of|rather than|such as|than|because|if|unless|when|until|and|or|but)$/i.test(bare) || /\b(?:the|a|an)$/.test(bare))
+    return true;
   return /^(?:if|unless|when|while|until)\b/.test(bare) && isBareCondition(bare);
 }
 

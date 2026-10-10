@@ -32,7 +32,8 @@ export function replyFor<E>(err: E): { status: number; message: string } {
 // Above the 30 s body deadline and the 5 s resolver deadline, so a request those govern is answered before it is called slow.
 const SLOW_REQUEST_WARN_MS = 60_000;
 
-/** Logs one warn when `res` has sent nothing after `afterMs`. It never ends the request or touches the reply; the timer goes when the reply finishes or the socket closes. */
+/** Logs one warn when `res` has sent nothing after `afterMs`. It never ends the request
+ * or touches the reply; the timer goes when the reply finishes or the socket closes. */
 function watchSlowRequest(req: IncomingMessage, res: ServerResponse, requestId: string, afterMs: number = SLOW_REQUEST_WARN_MS): void {
   const startedAt = Date.now();
   const timer = setTimeout(() => {

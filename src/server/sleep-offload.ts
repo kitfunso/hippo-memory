@@ -36,7 +36,10 @@ function runInChild(job: SleepJob): Promise<SleepResult> {
   const deadlineMs = envSleepTimeoutMs() ?? DEFAULT_SLEEP_DEADLINE_MS;
   return new Promise((resolve, reject) => {
     // The child's stderr is the server's log, so Node's SQLite notice would repeat there on every sleep.
-    const child = spawn(process.execPath, ['--disable-warning=ExperimentalWarning', CHILD_ENTRY], { stdio: ['ignore', 'inherit', 'inherit', 'ipc'], windowsHide: true });
+    const child = spawn(process.execPath, ['--disable-warning=ExperimentalWarning', CHILD_ENTRY], {
+      stdio: ['ignore', 'inherit', 'inherit', 'ipc'],
+      windowsHide: true
+    });
     let reply: SleepReply | undefined;
     let timedOut = false;
     // SIGKILL because the child is inside synchronous SQLite work and cannot run a handler; the OS drops its write lock.

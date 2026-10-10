@@ -6,10 +6,10 @@ import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
 import { fileURLToPath } from 'node:url';
-import { calculateStrength, calculateRewardFactor, resolveConfidence, confidenceFacets, Layer, type MemoryEntry } from '../core/memory.js';
+import { calculateStrength, calculateRewardFactor, resolveConfidence, Layer } from '../core/memory.js';
 import { readEntry, loadAllEntries } from '../store/entry-reads.js';
 import { loadStats } from '../store/index-and-stats.js';
-import { listMemoryConflicts } from '../store/conflicts.js';
+import { loadStatusCounts, type StatusCounts } from '../store/candidates.js';
 import { embeddingModelRequiresReindex } from '../store/embeddings/index.js';
 import { resolveEmbeddingProvider } from '../store/embeddings/provider.js';
 import { loadStoredParticles, storedVectorSummary } from '../store/vector-index.js';
@@ -23,7 +23,7 @@ import { getGlobalRoot } from '../sharing/global-store.js';
 import { buildProvenanceCoverage } from './provenance-coverage.js';
 import { buildCorrectionLatency } from './correction-latency.js';
 import * as api from '../api/index.js';
-import { resolveTenantId } from '../store/tenant.js';
+import { cliApiContext } from './api-context.js';
 import { errorMessage, log } from '../util/log.js';
 import { printError } from './output.js';
 import { parseCountFlag, type CommandContext, stringFlagOrExit, flagIsTrue } from './flag-values.js';
@@ -35,23 +35,20 @@ import { DAY_MS } from '../util/time.js';
 export function handleStatus({ hippoRoot }: CommandContext): void {
   requireInit(hippoRoot);
 
-  const entries = loadAllEntries(hippoRoot);
   const stats = loadStats(hippoRoot);
-  const now = evalNow();
-  const { byLayer, byConfidence, pinned, atRisk, agedOut, avgStrength } = tallyStatus(entries, now);
+  const counts = loadStatusCounts(hippoRoot, evalNow(), 0.2);
+  const { byLayer, byConfidence, pinned, atRisk, agedOut, avgStrength } = counts;
 
   console.log('Hippo Status');
   console.log('---------------------------');
-  console.log(`Total memories:    ${entries.length}`);
+  console.log(`Total memories:    ${counts.total}`);
   console.log(`  Buffer:          ${byLayer[Layer.Buffer]}`);
   console.log(`  Episodic:        ${byLayer[Layer.Episodic]}`);
   console.log(`  Semantic:        ${byLayer[Layer.Semantic]}`);
   console.log(`  Trace:           ${byLayer[Layer.Trace]}`);
-  const conflictCount = listMemoryConflicts(hippoRoot).length;
-
   console.log(`Pinned:            ${pinned}`);
   console.log(`At risk (<0.2):    ${atRisk}`);
-  console.log(`Open conflicts:    ${conflictCount}`);
+  console.log(`Open conflicts:    ${counts.openConflicts}`);
   console.log(`Avg strength:      ${fmt(avgStrength)}`);
   console.log('');
   console.log('Confidence breakdown:');
@@ -73,47 +70,12 @@ export function handleStatus({ hippoRoot }: CommandContext): void {
     console.log(`Last sleep:        never`);
   }
 
-  printEmbeddingStatus(hippoRoot, entries);
+  printEmbeddingStatus(hippoRoot, counts);
   printPhysicsStatus(hippoRoot);
 }
 
-function tallyStatus(entries: MemoryEntry[], now: Date) {
-  const byLayer = {
-    [Layer.Buffer]: 0,
-    [Layer.Episodic]: 0,
-    [Layer.Semantic]: 0,
-    [Layer.Trace]: 0,
-  };
-
-  const byConfidence: Record<string, number> = {
-    verified: 0,
-    observed: 0,
-    inferred: 0,
-    stale: 0,
-  };
-
-  let totalStrength = 0;
-  let pinned = 0;
-  let atRisk = 0; // strength < 0.2
-  let agedOut = 0;
-
-  for (const e of entries) {
-    const s = calculateStrength(e, now);
-    byLayer[e.layer] = (byLayer[e.layer] ?? 0) + 1;
-    totalStrength += s;
-    if (e.pinned) pinned++;
-    if (s < 0.2) atRisk++;
-    const facets = confidenceFacets(e, now);
-    byConfidence[facets.tier] = (byConfidence[facets.tier] ?? 0) + 1;
-    if (facets.agedOut) agedOut++;
-  }
-
-  const avgStrength = entries.length > 0 ? totalStrength / entries.length : 0;
-  return { byLayer, byConfidence, pinned, atRisk, agedOut, avgStrength };
-}
-
 // Embedding status (provider-aware)
-function printEmbeddingStatus(hippoRoot: string, entries: MemoryEntry[]): void {
+function printEmbeddingStatus(hippoRoot: string, counts: Pick<StatusCounts, 'total' | 'embedded'>): void {
   const embedProvider = (() => {
     try {
       return resolveEmbeddingProvider(hippoRoot);
@@ -142,10 +104,8 @@ function printEmbeddingStatus(hippoRoot: string, entries: MemoryEntry[]): void {
   // the key was removed), so the user still sees what is already indexed.
   const { ids: embeddedIds, dims } = storedVectorSummary(hippoRoot);
   if (!embAvail && embeddedIds.size === 0) return;
-  const activeIds = new Set(entries.map((e) => e.id));
-  const activeEmbedded = [...embeddedIds].filter((id) => activeIds.has(id)).length;
-  const orphaned = embeddedIds.size - activeEmbedded;
-  let line = `Embedded:          ${activeEmbedded}/${entries.length} memories`;
+  const orphaned = embeddedIds.size - counts.embedded;
+  let line = `Embedded:          ${counts.embedded}/${counts.total} memories`;
   if (dims) line += ` (${dims}-dim)`;
   if (orphaned > 0) line += ` (${orphaned} orphaned, run \`hippo embed\` to prune)`;
   console.log(line);
@@ -174,10 +134,10 @@ function printPhysicsStatus(hippoRoot: string): void {
   }
 }
 
-function cmdInspect(hippoRoot: string, id: string): void {
+function cmdInspect(hippoRoot: string, tenantId: string, id: string): void {
   requireInit(hippoRoot);
 
-  const entry = readEntry(hippoRoot, id, resolveTenantId({}));
+  const entry = readEntry(hippoRoot, id, tenantId);
   if (!entry) {
     printError(`Memory not found: ${id}`);
     process.exit(1);
@@ -228,13 +188,9 @@ function cmdInspect(hippoRoot: string, id: string): void {
  * and the hook blocks' tokens later model calls re-read, counted when each session ends.
  * Counts are estimates (characters / 4), the same estimate every budget uses.
  */
-export function handleTokens({ hippoRoot, flags }: CommandContext): void {
+export function handleTokens({ hippoRoot, tenantId, flags }: CommandContext): void {
   const root = resolveAuthRoot(hippoRoot, flags);
-  const ctx: api.Context = {
-    hippoRoot: root,
-    tenantId: resolveTenantId({}),
-    actor: api.adminActor('cli'),
-  };
+  const ctx = cliApiContext(root, tenantId);
   const days = parseCountFlag(flags['days']);
   const summary = api.tokenSummary(ctx, { days: days > 0 ? days : undefined });
   if (flags['json']) {
@@ -271,15 +227,11 @@ export function handleTokens({ hippoRoot, flags }: CommandContext): void {
 }
 
 /** `hippo failures [--days <n>] [--json] [--global]`: failed tool calls by outcome, and repeats across sessions. */
-export function handleFailures({ hippoRoot, flags }: CommandContext): void {
+export function handleFailures({ hippoRoot, tenantId, flags }: CommandContext): void {
   // The store the capture-error hook writes to; a report never creates one.
   const root = flags['global'] ? getGlobalRoot() : hookStoreRoot(hippoRoot);
   requireInit(root);
-  const ctx: api.Context = {
-    hippoRoot: root,
-    tenantId: resolveTenantId({}),
-    actor: api.adminActor('cli'),
-  };
+  const ctx = cliApiContext(root, tenantId);
   const days = parseCountFlag(flags['days']);
   const summary = api.failureSummary(ctx, { days: days > 0 ? days : undefined });
   if (flags['json']) {
@@ -399,11 +351,11 @@ export function handleSupportBundle({ flags }: CommandContext): void {
     : 'It holds versions, doctor checks, config with secrets removed, store counts and log file names. It never holds memory text. Read it before you attach it to a ticket.');
 }
 
-export function handleInspect({ hippoRoot, args }: CommandContext): void {
+export function handleInspect({ hippoRoot, tenantId, args }: CommandContext): void {
   const id = args[0];
   if (!id) {
     printError('Please provide a memory ID.');
     process.exit(1);
   }
-  cmdInspect(hippoRoot, id);
+  cmdInspect(hippoRoot, tenantId, id);
 }

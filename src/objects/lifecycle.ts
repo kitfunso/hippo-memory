@@ -25,7 +25,12 @@ export function listObjectsAt<K extends ObjectKind>(hippoRoot: string, d: Object
   return sqliteObjects(hippoRoot).listObjects(tenantId, d.kind, listQuery(d, tenantId, opts));
 }
 
-export async function listObjects<K extends ObjectKind>(objects: Objects, d: ObjectDescriptor<K>, tenantId: string, opts: ObjectListOpts<K>): Promise<ObjectByKind[K][]> {
+export async function listObjects<K extends ObjectKind>(
+  objects: Objects,
+  d: ObjectDescriptor<K>,
+  tenantId: string,
+  opts: ObjectListOpts<K>
+): Promise<ObjectByKind[K][]> {
   return objects.listObjects(tenantId, d.kind, listQuery(d, tenantId, opts));
 }
 
@@ -34,7 +39,12 @@ export function objectByIdAt<K extends ObjectKind>(hippoRoot: string, d: ObjectD
   return sqliteObjects(hippoRoot).objectById(tenantId, d.kind, id);
 }
 
-export async function objectById<K extends ObjectKind>(objects: Objects, d: ObjectDescriptor<K>, tenantId: string, id: number): Promise<ObjectByKind[K] | null> {
+export async function objectById<K extends ObjectKind>(
+  objects: Objects,
+  d: ObjectDescriptor<K>,
+  tenantId: string,
+  id: number
+): Promise<ObjectByKind[K] | null> {
   assertTenantId(d.fn.get, tenantId);
   return objects.objectById(tenantId, d.kind, id);
 }
@@ -60,13 +70,24 @@ export function closeObjectAt<K extends ObjectKind>(hippoRoot: string, d: Object
   return closed(d, tenantId, id, sqliteObjects(hippoRoot).closeObject(tenantId, d.kind, id, close));
 }
 
-export async function closeObject<K extends ObjectKind>(objects: Objects, d: ObjectDescriptor<K>, tenantId: string, id: number, actor: string): Promise<ObjectByKind[K]> {
+export async function closeObject<K extends ObjectKind>(
+  objects: Objects,
+  d: ObjectDescriptor<K>,
+  tenantId: string,
+  id: number,
+  actor: string
+): Promise<ObjectByKind[K]> {
   const close = closing(d, tenantId, actor);
   return closed(d, tenantId, id, await objects.closeObject(tenantId, d.kind, id, close));
 }
 
 /** The memory a typed object writes beside its row, so recall finds the object. */
-export function objectMirror(hippoRoot: string, tenantId: string, source: ObjectKind, text: { readonly content: string; readonly tags: readonly string[] }): MemoryEntry {
+export function objectMirror(
+  hippoRoot: string,
+  tenantId: string,
+  source: ObjectKind,
+  text: { readonly content: string; readonly tags: readonly string[] }
+): MemoryEntry {
   return createMemory(text.content, {
     tags: [source, ...text.tags],
     layer: Layer.Semantic,
@@ -89,7 +110,12 @@ function objectSave<K extends SavableKind>(site: ObjectSaveSite, kind: K, draft:
   return { mirror, fields: draft.fields, supersedesId: draft.supersedesId, changeSummary: draft.changeSummary, actor: site.actor, at: draft.at };
 }
 
-function saved<K extends SavableKind, W>(d: SavableDescriptor<K, W>, tenantId: string, replaced: number | undefined, written: ObjectByKind[K] | ObjectRefusal): ObjectByKind[K] {
+function saved<K extends SavableKind, W>(
+  d: SavableDescriptor<K, W>,
+  tenantId: string,
+  replaced: number | undefined,
+  written: ObjectByKind[K] | ObjectRefusal
+): ObjectByKind[K] {
   if (!isObjectRefusal(written)) return written;
   switch (written.refused) {
     case 'missing':
@@ -110,7 +136,12 @@ export function saveObjectAt<K extends SavableKind, W>(d: SavableDescriptor<K, W
   return saved(d, site.tenantId, draft.supersedesId, sqliteObjects(site.hippoRoot).saveObject(site.tenantId, d.kind, objectSave(site, d.kind, draft)));
 }
 
-export async function saveObject<K extends SavableKind, W>(objects: Objects, d: SavableDescriptor<K, W>, site: ObjectSaveSite, opts: W): Promise<ObjectByKind[K]> {
+export async function saveObject<K extends SavableKind, W>(
+  objects: Objects,
+  d: SavableDescriptor<K, W>,
+  site: ObjectSaveSite,
+  opts: W
+): Promise<ObjectByKind[K]> {
   assertTenantId(d.fn.save, site.tenantId);
   const draft = d.draft(opts);
   return saved(d, site.tenantId, draft.supersedesId, await objects.saveObject(site.tenantId, d.kind, objectSave(site, d.kind, draft)));

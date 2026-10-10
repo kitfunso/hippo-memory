@@ -4,7 +4,17 @@ import { HttpError, sendJson } from '../../util/http-util.js';
 import { buildContextWithAuth } from '../auth.js';
 import type { RouteRequest } from '../types.js';
 import { MAX_SHORT_FIELD_LEN, parseJsonBody } from '../validation.js';
-import { closeRoute, getRoute, listRoute, objectsOf, optionalString, requiredString, saveFor, supersedeRoute, type VersionedRouteConfig } from './object-routes.js';
+import {
+  closeRoute,
+  getRoute,
+  listRoute,
+  objectsOf,
+  optionalString,
+  requiredString,
+  saveFor,
+  supersedeRoute,
+  type VersionedRouteConfig
+} from './object-routes.js';
 
 // The date fields get a type and length check only: the store parses the date, and the cap bounds a junk string before it reaches the Date parser.
 const MAX_DATE_LEN = 64;

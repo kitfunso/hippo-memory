@@ -200,11 +200,11 @@ describe('key lists', () => {
 
   it('hippo auth list prints each expiry and leaves out expired keys unless --all', async () => {
     const keys = threeKeys();
-    const active = await runInProcess(() => handleAuth({ hippoRoot: home, args: ['list'], flags: {} }));
+    const active = await runInProcess(() => handleAuth({ hippoRoot: home, tenantId: 'default', args: ['list'], flags: {} }));
     expect(active.stdout).toContain('created  expires  revoked');
     expect(active.stdout).toContain(keys.liveExpiry);
     expect(active.stdout).not.toContain(keys.expired);
-    expect((await runInProcess(() => handleAuth({ hippoRoot: home, args: ['list'], flags: { all: true } }))).stdout).toContain(keys.expired);
+    expect((await runInProcess(() => handleAuth({ hippoRoot: home, tenantId: 'default', args: ['list'], flags: { all: true } }))).stdout).toContain(keys.expired);
   });
 });
 

@@ -112,7 +112,9 @@ async function runPassesAfterDecay(run: SleepRun, fetcher: typeof fetch | undefi
 function migrateHalfLives(hippoRoot: string, dryRun: boolean, result: ConsolidationResult): ReturnType<typeof migrateDefaultHalfLife> {
   const halfLife = migrateDefaultHalfLife(hippoRoot, loadConfig(hippoRoot).defaultHalfLifeDays, { dryRun });
   if (halfLife.rescaled > 0) {
-    result.details.push(`  ⏳ ${dryRun ? 'would move' : 'moved'} ${halfLife.rescaled} memories from the ${halfLife.from}-day to the ${halfLife.to}-day half-life`);
+    result.details.push(
+      `  ⏳ ${dryRun ? 'would move' : 'moved'} ${halfLife.rescaled} memories from the ${halfLife.from}-day to the ${halfLife.to}-day half-life`
+    );
   }
   if (halfLife.typed > 0) {
     result.details.push(`  ⏳ ${dryRun ? 'would move' : 'moved'} ${halfLife.typed} memories of decisions, incidents and other objects from the ${LEGACY_TYPED_HALF_LIFE}-day to the ${halfLife.to}-day half-life`);

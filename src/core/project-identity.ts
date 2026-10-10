@@ -37,7 +37,8 @@ export interface ProjectIdentity {
   name: string;
   /** The folder rule rows written before ids carry: the root's lowercased basename, or its repo's for a linked worktree with no `.hippo`. */
   legacyName: string;
-  /** Every other name this root resolves to (the project file id, the origin remote even with the rule off, legacyName), so rows written under an earlier id stay readable. */
+  /** Every other name this root resolves to (the project file id, the origin remote even
+   * with the rule off, legacyName), so rows written under an earlier id stay readable. */
   aliases?: readonly string[];
   /** True when the directory resolves to the user home working set. */
   isHome: boolean;
@@ -72,7 +73,8 @@ function remoteRuleOn(): boolean {
   return remoteSwitch.on;
 }
 
-/** The id a root names itself by plus every rung that resolves; only the root's own `.git` is read, so a store nested in another checkout keeps its folder name. */
+/** The id a root names itself by plus every rung that resolves; only the root's own
+ * `.git` is read, so a store nested in another checkout keeps its folder name. */
 function namesAt(root: string, legacyName: string): Pick<ProjectIdentity, 'name' | 'aliases'> {
   const fileId = projectFileId(root);
   const remoteId = originRemoteId(root);
@@ -149,7 +151,8 @@ export function resolveProjectIdentity(
   return identity;
 }
 
-/** The repo name a linked worktree shares with its main checkout (`repo.git` or `repo/.bare` for a bare repo), so one repo is one project; null for any other checkout. */
+/** The repo name a linked worktree shares with its main checkout (`repo.git` or
+ * `repo/.bare` for a bare repo), so one repo is one project; null for any other checkout. */
 function linkedWorktreeRepoName(gitRoot: string, home: string): string | null {
   const marker = path.join(gitRoot, '.git');
   if (!fs.existsSync(marker) || isDirectoryAt(marker)) return null;
@@ -233,7 +236,8 @@ export function projectNames(project: ProjectRef): readonly string[] {
 export const MAX_PROJECT_ALIASES = 10;
 export const MCP_PROJECT_SCOPED_HEADER = 'X-Hippo-Project-Scoped';
 
-/** Refuses a caller's project that is blank (it would stamp user-global), past the caps, or unlike the resolver's ids: rows match verbatim, so a rewrite would split a project. Inner spaces pass, since a checkout with no remote is named by its folder. */
+/** Refuses a caller's project that is blank (it would stamp user-global), past the caps, or unlike the resolver's ids: rows match
+ * verbatim, so a rewrite would split a project. Inner spaces pass, since a checkout with no remote is named by its folder. */
 export function assertCallerProject(project: { readonly name: string; readonly aliases?: readonly string[] }): void {
   const { name, aliases = [] } = project;
   if (name.trim() === '') throw new BadRequestError('project name must not be blank');

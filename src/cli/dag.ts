@@ -3,7 +3,6 @@
 import { loadAllEntries } from '../store/entry-reads.js';
 import type { MemoryEntry } from '../core/memory.js';
 import * as api from '../api/index.js';
-import { resolveTenantId } from '../store/tenant.js';
 import { assembleCost, assembleHeading, drillCost, settleTokens } from '../api/context-render.js';
 import { printError } from './output.js';
 import { type CliFlags, parseBudgetFlag, type CommandContext, flagIsTrue, stringFlag, numberFlag } from './flag-values.js';
@@ -95,7 +94,7 @@ function printDagTree(entries: readonly MemoryEntry[]): void {
   }
 }
 
-async function cmdAssemble(hippoRoot: string, sessionId: string, flags: CliFlags): Promise<void> {
+async function cmdAssemble(hippoRoot: string, tenantId: string, sessionId: string, flags: CliFlags): Promise<void> {
   requireInit(hippoRoot);
   // Absent stays undefined so the api default applies; the 0 fallback is unreachable.
   const budget = flags['budget'] === undefined ? undefined : parseBudgetFlag(flags['budget'], 0);
@@ -104,7 +103,7 @@ async function cmdAssemble(hippoRoot: string, sessionId: string, flags: CliFlags
   const scope = stringFlag(flags, 'scope') || undefined;
   const ctx: api.Context = {
     hippoRoot,
-    tenantId: resolveTenantId({}),
+    tenantId,
     actor: api.adminActor('cli:assemble'),
   };
   const r = await api.assemble(ctx, sessionId, {
@@ -128,7 +127,7 @@ async function cmdAssemble(hippoRoot: string, sessionId: string, flags: CliFlags
   })));
 }
 
-async function cmdDrillDown(hippoRoot: string, summaryId: string, flags: CliFlags): Promise<void> {
+async function cmdDrillDown(hippoRoot: string, tenantId: string, summaryId: string, flags: CliFlags): Promise<void> {
   requireInit(hippoRoot);
   const limit = numberFlag(flags, 'limit');
   // Absent stays undefined so the api default applies; the 0 fallback is unreachable.
@@ -145,7 +144,7 @@ async function cmdDrillDown(hippoRoot: string, summaryId: string, flags: CliFlag
   }
   const ctx: api.Context = {
     hippoRoot,
-    tenantId: resolveTenantId({}),
+    tenantId,
     actor: api.adminActor('cli:drill'),
   };
   const r = await api.drillDown(ctx, summaryId, {
@@ -176,20 +175,20 @@ async function cmdDrillDown(hippoRoot: string, summaryId: string, flags: CliFlag
   }
 }
 
-export async function handleDrill({ hippoRoot, args, flags }: CommandContext): Promise<void> {
+export async function handleDrill({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
   const summaryId = args[0];
   if (!summaryId) {
     printError('Usage: hippo drill <summary-id> [--limit N] [--budget N]');
     process.exit(1);
   }
-  await cmdDrillDown(hippoRoot, summaryId, flags);
+  await cmdDrillDown(hippoRoot, tenantId, summaryId, flags);
 }
 
-export async function handleAssemble({ hippoRoot, args, flags }: CommandContext): Promise<void> {
+export async function handleAssemble({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
   const sessionId = stringFlag(flags, 'session') ?? args[0];
   if (!sessionId) {
     printError('Usage: hippo assemble --session <id> [--budget N] [--fresh-tail N] [--no-summarize-older] [--json]');
     process.exit(1);
   }
-  await cmdAssemble(hippoRoot, sessionId, flags);
+  await cmdAssemble(hippoRoot, tenantId, sessionId, flags);
 }

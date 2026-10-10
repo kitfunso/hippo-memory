@@ -8,7 +8,7 @@ import { validateTasks } from './ab-run.mjs';
 import { parseZ0Records } from './z0-records.mjs';
 import { listGrades, runRegrade } from './regrade.mjs';
 import { flipsOf } from './g5-flips.mjs';
-import { drawReader, readerSummary, scoreReader } from './reader-sample.mjs';
+import { assertCheckersJudged, drawReader, readerSummary, scoreReader } from './reader-sample.mjs';
 import { drawStored, scoreStored, storedSummary } from './stored-sample.mjs';
 
 const USAGE = [
@@ -82,7 +82,9 @@ function regradeMode(args, out, cwd, log) {
   const runsFile = args.runs ? path.resolve(cwd, args.runs) : path.join(out, 'runs.jsonl');
   const { records } = parseZ0Records(fs.readFileSync(runsFile, 'utf8'), runsFile);
   const pass = args.postFix ? 'postfix' : 'repro';
-  const tally = runRegrade({ out, spec, records, runsFile, pass, cells: args.cell, baseEnv: process.env, log });
+  // Passed in, since reader-sample.mjs imports regrade.mjs and the regrade must not import it back.
+  const assertCheckers = (pairs) => assertCheckersJudged(out, pairs);
+  const tally = runRegrade({ out, spec, records, runsFile, pass, cells: args.cell, baseEnv: process.env, log, assertCheckers });
   const wrote = tally.regraded ? `; wrote ${tally.regraded}` : '';
   return `${pass}: regraded ${tally.ran} cells (${tally.errors} with errors), skipped ${tally.skipped} done ones${wrote}\n`;
 }
@@ -133,8 +135,10 @@ function storedMode(args, out, cwd) {
 }
 
 function gradingMode(args, out) {
-  const grading = buildGrading(out, { flipErrors: args.flipErrors === true });
   const file = path.join(out, 'grading.json');
+  // Removed first, so a refused grading leaves no older file for the analyzer to read as this one's.
+  fs.rmSync(file, { force: true });
+  const grading = buildGrading(out, { flipErrors: args.flipErrors === true });
   fs.writeFileSync(file, `${JSON.stringify(grading, null, 2)}\n`);
   return `wrote ${file}: ${grading.flippedLessons.length} flipped lessons, ${grading.acceptanceFlips} acceptance flips\n`;
 }

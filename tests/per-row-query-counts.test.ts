@@ -373,7 +373,7 @@ describe('cmdRemember', () => {
   async function remember(root: string, text: string) {
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
     try {
-      const { statements } = await recordStatementsAsync(() => handleRemember({ hippoRoot: root, args: [text], flags: { tag: ['topic:cache'] } }));
+      const { statements } = await recordStatementsAsync(() => handleRemember({ hippoRoot: root, tenantId: 'default', args: [text], flags: { tag: ['topic:cache'] } }));
       return { statements, printed: log.mock.calls.map((call) => String(call[0])) };
     } finally {
       log.mockRestore();

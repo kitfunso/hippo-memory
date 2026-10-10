@@ -42,7 +42,7 @@ describe('hippo card output (in process)', () => {
     const transcript: string[] = [];
     const ids: string[] = [];
     const step = async (label: string, args: string[], flags: Flags = {}): Promise<string> => {
-      const r = await runInProcess(() => handleCard({ hippoRoot: store, args, flags }));
+      const r = await runInProcess(() => handleCard({ hippoRoot: store, tenantId: 'default', args, flags }));
       transcript.push(`$ card ${label} -> ${r.status}\n--- stdout\n${mask(r.stdout)}--- stderr\n${mask(r.stderr)}`);
       return r.stdout;
     };

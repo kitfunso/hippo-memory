@@ -4,7 +4,18 @@ import { sendJson } from '../../util/http-util.js';
 import { buildContextWithAuth } from '../auth.js';
 import type { RouteRequest } from '../types.js';
 import { MAX_SHORT_FIELD_LEN, parseJsonBody } from '../validation.js';
-import { closeRoute, getRoute, listRoute, objectsOf, optionalString, type RequiredStringRule, requiredString, saveFor, supersedeRoute, type VersionedRouteConfig } from './object-routes.js';
+import {
+  closeRoute,
+  getRoute,
+  listRoute,
+  objectsOf,
+  optionalString,
+  type RequiredStringRule,
+  requiredString,
+  saveFor,
+  supersedeRoute,
+  type VersionedRouteConfig
+} from './object-routes.js';
 
 const INSTRUCTIONS: RequiredStringRule = { max: 8192, plural: true };
 

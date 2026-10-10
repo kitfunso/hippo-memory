@@ -34,7 +34,8 @@ export function parseListLimit(limitRaw: string | null, defaultLimit = 100, maxL
   return limit;
 }
 
-/** `_authed` is proof the caller passed auth, so a full-size body is read only for an authenticated caller; the key mint reads first under its own small cap. */
+/** `_authed` is proof the caller passed auth, so a full-size body is read only for
+ * an authenticated caller; the key mint reads first under its own small cap. */
 export async function parseJsonBody(req: IncomingMessage, _authed: Context): Promise<Record<string, JsonValue>> {
   return parseJsonObjectText(await readBody(req));
 }

@@ -63,7 +63,7 @@ describe('hippo auth revoke, grant and ungrant (in process)', () => {
 
     const transcript: string[] = [];
     const step = async (label: string, args: string[], flags: Flags = {}): Promise<void> => {
-      const r = await runInProcess(() => handleAuth({ hippoRoot: root, args, flags }));
+      const r = await runInProcess(() => handleAuth({ hippoRoot: root, tenantId: 'default', args, flags }));
       transcript.push(`$ auth ${label} -> ${r.status}\n--- stdout\n${mask(r.stdout)}--- stderr\n${mask(r.stderr)}`);
     };
 
@@ -98,7 +98,7 @@ describe('hippo goal (in process)', () => {
     const mask = masker(/\b(?:g|rp)_[0-9a-f]{16}\b/g, 'id');
     const transcript: string[] = [];
     const step = async (label: string, args: string[], flags: Flags = {}): Promise<string> => {
-      const r = await runInProcess(() => handleGoal({ hippoRoot: root, args, flags }));
+      const r = await runInProcess(() => handleGoal({ hippoRoot: root, tenantId: 'default', args, flags }));
       transcript.push(`$ goal ${label} -> ${r.status}\n--- stdout\n${mask(r.stdout)}--- stderr\n${mask(r.stderr)}`);
       return r.stdout.trim();
     };

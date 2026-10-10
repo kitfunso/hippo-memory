@@ -262,6 +262,8 @@ function regradedRecord(r, row) {
 /** A record the run had to save a grade.json for: valid and not a screen. */
 export const isGraded = (r) => (r.invalid === null || r.invalid === undefined) && r.screen !== true;
 
+const regradedFile = (runsFile) => path.join(path.dirname(runsFile), 'runs.regraded.jsonl');
+
 /** `runs.regraded.jsonl` beside runs.jsonl; refused while a valid non-screen record has no done post-fix row. */
 export function writeRegraded(runsFile, rows) {
   const lines = fs.readFileSync(runsFile, 'utf8').split('\n').filter((l) => l.trim());
@@ -274,7 +276,7 @@ export function writeRegraded(runsFile, rows) {
     return row?.status === 'done' ? JSON.stringify(regradedRecord(r, row)) : line;
   });
   if (missing.length) throw new Error(`runs.regraded.jsonl not written: ${missing.length} valid cells lack a done post-fix row (${missing.slice(0, 5).join(', ')})`);
-  const target = path.join(path.dirname(runsFile), 'runs.regraded.jsonl');
+  const target = regradedFile(runsFile);
   const text = `${out.join('\n')}\n`;
   parseZ0Records(text, target);
   fs.writeFileSync(target, text);
@@ -351,6 +353,8 @@ export function runRegrade(opts) {
   if (unknown.length) throw new Error(`--cell ${unknown.join(', ')}: no such cell under ${path.join(out, 'grading')}`);
   const entries = all.filter((e) => cells.length === 0 || cells.includes(e.key)).map((e) => ({ ...e, t: taskOf(opts.spec, e.grade) }));
   const ctx = regradeContext(opts, entries);
+  // Asked before any cell runs or any row is written, so a fix the reader rounds do not allow leaves the out dir as it was.
+  if (pass === 'postfix') opts.assertCheckers?.([...new Set(entries.flatMap((e) => Object.keys(e.grade.checkers)))].sort().map((id) => [id, ctx.checkerId(id)]));
   const file = rowsFile(out, pass);
   fs.mkdirSync(path.dirname(file), { recursive: true });
   const { rows, torn, whole } = readRows(file);
@@ -358,6 +362,9 @@ export function runRegrade(opts) {
     log(`${file}: dropped a torn last line left by a cut-off regrade`);
     fs.truncateSync(file, whole);
   }
+  // An older pass's outputs would read as this pass's, so they go before the first cell; only `grading` and a full post-fix pass write them again.
+  fs.rmSync(path.join(out, 'grading.json'), { force: true });
+  if (pass === 'postfix') fs.rmSync(regradedFile(opts.runsFile), { force: true });
   const tally = { ran: 0, skipped: 0, errors: 0, regraded: null };
   for (const entry of entries) {
     const checkers = Object.fromEntries(Object.keys(entry.grade.checkers).sort().map((id) => [id, ctx.checkerId(id)]));

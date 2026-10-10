@@ -4,7 +4,6 @@ import { extractPathTags } from '../search/path-context.js';
 import * as processesModule from '../objects/processes.js';
 import * as policiesModule from '../objects/policies.js';
 import * as skillsModule from '../objects/skills.js';
-import { resolveTenantId } from '../store/tenant.js';
 import { printError } from './output.js';
 import { nonEmptyStringFlag, stringFlag, type CliFlags, type CommandContext } from './flag-values.js';
 import { requireInit } from './shared.js';
@@ -87,9 +86,8 @@ function processClose(hippoRoot: string, tenantId: string, args: string[]): void
   closeObject(args, PROCESS, (id) => processesModule.closeProcess(hippoRoot, tenantId, id));
 }
 
-export function handleProcess({ hippoRoot, args, flags }: CommandContext): void {
+export function handleProcess({ hippoRoot, tenantId, args, flags }: CommandContext): void {
   requireInit(hippoRoot);
-  const tenantId = resolveTenantId({});
   const subcommand = args[0] ?? '';
   if (subcommand === 'list') return processList(hippoRoot, tenantId, flags);
   if (subcommand === 'get') return processGet(hippoRoot, tenantId, args);
@@ -205,9 +203,8 @@ function policyClose(hippoRoot: string, tenantId: string, args: string[]): void 
   closeObject(args, POLICY, (id) => policiesModule.closePolicy(hippoRoot, tenantId, id));
 }
 
-export function handlePolicy({ hippoRoot, args, flags }: CommandContext): void {
+export function handlePolicy({ hippoRoot, tenantId, args, flags }: CommandContext): void {
   requireInit(hippoRoot);
-  const tenantId = resolveTenantId({});
   const subcommand = args[0] ?? '';
   if (subcommand === 'list') return policyList(hippoRoot, tenantId, flags);
   if (subcommand === 'asof') return policyAsOf(hippoRoot, tenantId, args, flags);
@@ -315,9 +312,8 @@ function skillClose(hippoRoot: string, tenantId: string, args: string[]): void {
   closeObject(args, SKILL, (id) => skillsModule.closeSkill(hippoRoot, tenantId, id));
 }
 
-export function handleSkill({ hippoRoot, args, flags }: CommandContext): void {
+export function handleSkill({ hippoRoot, tenantId, args, flags }: CommandContext): void {
   requireInit(hippoRoot);
-  const tenantId = resolveTenantId({});
   const subcommand = args[0] ?? '';
   if (subcommand === 'list') return skillList(hippoRoot, tenantId, flags);
   if (subcommand === 'export') return skillExport(hippoRoot, tenantId);

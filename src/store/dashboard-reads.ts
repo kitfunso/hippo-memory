@@ -27,7 +27,11 @@ export interface DashboardRows {
 }
 
 const LIVE_COLUMNS = 'id, created, last_retrieved, retrieval_count, half_life_days, layer, tags_json, emotional_valence, outcome_positive, outcome_negative, pinned, confidence, content, superseded_by, kind, scope, origin_project';
-type LiveRow = Pick<MemoryRow, 'id' | 'created' | 'last_retrieved' | 'retrieval_count' | 'half_life_days' | 'layer' | 'tags_json' | 'emotional_valence' | 'outcome_positive' | 'outcome_negative' | 'pinned' | 'confidence' | 'content' | 'superseded_by' | 'kind' | 'scope' | 'origin_project'>;
+type LiveRow = Pick<
+  MemoryRow,
+  'id' | 'created' | 'last_retrieved' | 'retrieval_count' | 'half_life_days' | 'layer' | 'tags_json' | 'emotional_valence' | 'outcome_positive'
+  | 'outcome_negative' | 'pinned' | 'confidence' | 'content' | 'superseded_by' | 'kind' | 'scope' | 'origin_project'
+>;
 
 // SQL twins of isQuarantineScope and of the two halves of isLiveMemory; substr compares bytes, as startsWith does, where LIKE would fold case.
 const QUARANTINED = `(scope IS NOT NULL AND substr(scope, 1, ${QUARANTINE_SCOPE_PREFIX.length}) = '${QUARANTINE_SCOPE_PREFIX}')`;

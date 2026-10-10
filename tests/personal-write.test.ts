@@ -117,9 +117,9 @@ describe('client scopes', () => {
   it('CLI remember --scope refuses a personal scope', async () => {
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
     try {
-      await expect(handleRemember({ hippoRoot: root, args: ['cli personal attempt'], flags: { force: true, scope: 'personal:private:b' } })).rejects.toThrow(BadRequestError);
+      await expect(handleRemember({ hippoRoot: root, tenantId: 'default', args: ['cli personal attempt'], flags: { force: true, scope: 'personal:private:b' } })).rejects.toThrow(BadRequestError);
       expect(loadAllEntries(root)).toHaveLength(0);
-      await handleRemember({ hippoRoot: root, args: ['cli team note'], flags: { force: true, scope: 'team' } });
+      await handleRemember({ hippoRoot: root, tenantId: 'default', args: ['cli team note'], flags: { force: true, scope: 'team' } });
     } finally {
       log.mockRestore();
     }

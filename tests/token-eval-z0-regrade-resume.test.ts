@@ -150,7 +150,11 @@ describe('z0-regrade resume, guards and post-fix', () => {
 
   it('under --post-fix, a checker that did not change flips when its verdict differs from the saved one (R2)', async () => {
     const c = copyOut(shared);
+    const older = [join(c.out, 'grading.json'), join(c.out, 'runs.regraded.jsonl')];
+    for (const f of older) writeFileSync(f, 'from an older pass\n');
     expect(await regrade(c, ['--post-fix', '--cell', keyOf('a1')], { Z0_TOGGLE: 'regrade' })).toMatchObject({ code: 0 });
+    // A pass that starts removes an older pass's outputs, and a --cell pass writes neither again.
+    expect(older.map((f) => existsSync(f))).toEqual([false, false]);
     expect(rowFor(c.out, 'a1', 'postfix').checks[0]).toMatchObject({ saved: 'pass', regraded: 'fail', second: 'fail', flip: true, reason: 'verdict' });
   }, 300_000);
 

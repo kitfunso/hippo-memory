@@ -3,11 +3,10 @@ import { dirname, resolve } from 'node:path';
 import { assertCallerProject, resolveProjectIdentity, type ProjectRef } from '../../core/project-identity.js';
 import { isSharedStore } from '../../core/config.js';
 import { assembleCost, contextCost, drillCost } from '../../api/context-render.js';
-import { storeFor } from '../../store/index.js';
-import { biasHintEnabled, type RecallHistorySnapshot } from '../../api/recall-history.js';
-import { assemble, type AssembleOpts, type Context, drillDown, type DrillDownOpts, getContext, recordTokens, retrieve } from '../../api/index.js';
+import { assemble, type AssembleOpts, drillDown, type DrillDownOpts, getContext, recordTokens, retrieve } from '../../api/index.js';
+import { RECALL_RECORDING } from '../../api/recall-finish.js';
 import { httpParams, parseContextRequest, parseRecallRequest } from '../../api/recall-request.js';
-import { anchorSkippedRows, noteRecall, peekSessionRing, resetSessionRings, sessionRing } from '../../api/recall-record.js';
+import { resetSessionRings } from '../../api/recall-record.js';
 import { HttpError, sendJson } from '../../util/http-util.js';
 import { buildContextWithAuth } from '../auth.js';
 import type { RouteRequest } from '../types.js';
@@ -18,35 +17,17 @@ export function __resetSessionRecallHistoryHttp(): void {
   resetSessionRings('http');
 }
 
-// HTTP threads the ring through opts.recallHistory, so the hint retrieve() returns is the one the caller sees.
-function recallHistoryFor(ctx: Context, sessionId: string | undefined): RecallHistorySnapshot | undefined {
-  return sessionId && biasHintEnabled('anchoring') ? peekSessionRing('http', ctx.tenantId, sessionId) : undefined;
-}
-
 // GET /v1/memories?q=...&limit=...&mode=...&scope=...&include_continuity=1
 export async function handleRecallMemories({ req, res, opts, query }: RouteRequest): Promise<void> {
   const { opts: recallOpts, limit, mode, explain } = parseRecallRequest(httpParams(query));
-  const { query: q, includeContinuity, sessionId } = recallOpts;
   const ctx = await buildContextWithAuth(req, opts);
-
-  const recallHistory = recallHistoryFor(ctx, sessionId);
-  // Written first in the recall's own write, so a recall that fails leaves no row.
-  const leadingAudit = sessionId ? [] : anchorSkippedRows({ tenantId: ctx.tenantId, actor: ctx.actor.subject }, q);
-  const result = await retrieve(ctx, { ...recallOpts, limit, mode, explain, recallHistory, leadingAudit });
-
-  // The ring is created only after recall succeeds, so a 400 cannot LRU-evict a live session.
-  const ring = sessionRing('http', ctx.tenantId, sessionId);
-  if (ring) noteRecall(ring, q, result.results[0]?.id ?? null, result.anchoringHint?.memoryId);
-
-  // HTTP counts the rows it returns here; `retrieve` cannot count for every ranker, since MCP shows a different band and counts none.
-  await storeFor(ctx).bumpRecallStats(result.results.length);
+  const result = await retrieve(ctx, { ...recallOpts, limit, mode, explain, recordAs: RECALL_RECORDING.http });
 
   // Continuity payloads should never be cached. The caller is asking for
   // session-state-aware data; intermediaries must not reuse it across users.
-  if (includeContinuity) {
+  if (recallOpts.includeContinuity) {
     res.setHeader('Cache-Control', 'no-store');
   }
-  await recordTokens(ctx, 'http_recall', { items: result.results.length, tokens: result.tokens + (result.continuityTokens ?? 0), sessionId: sessionId ?? null });
   sendJson(res, 200, result);
   return;
 }

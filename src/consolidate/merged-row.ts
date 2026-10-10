@@ -1,5 +1,6 @@
 // A sleep-merged row copies its sources' texts, so retiring a text (reject, or superseding its source) must reach the row too.
-// SHORTCUT: reject rewrites merged rows at once, live and dormant; supersede and `resolve --reject-loser` wait for the next sleep's check, which sees a dormant row only once restored.
+// SHORTCUT: reject rewrites merged rows at once, live and dormant; supersede and `resolve
+// --reject-loser` wait for the next sleep's check, which sees a dormant row only once restored.
 import { generateId, type MemoryEntry } from '../core/memory.js';
 import { duplicateKey, heldTexts, mergedText } from '../util/same-text.js';
 

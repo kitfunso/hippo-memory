@@ -1,0 +1,3186 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`__session-end-worker re-read count (built CLI, no server) > a folder with no store, here or globally > audit rows 1`] = `
+"{
+ "local": [],
+ "global": []
+}"
+`;
+
+exports[`__session-end-worker re-read count (built CLI, no server) > a folder with no store, here or globally > memory rows 1`] = `
+"{
+ "local": [],
+ "global": []
+}"
+`;
+
+exports[`__session-end-worker re-read count (built CLI, no server) > a folder with no store, here or globally > other state 1`] = `
+"{
+ "storeMade": false,
+ "meta": [],
+ "rereadLog": [
+  "[hippo] <ts> re-read 0 tokens over 3 model calls for session sess-maint-parity"
+ ],
+ "ledger": {
+  "local": [],
+  "global": []
+ }
+}"
+`;
+
+exports[`__session-end-worker re-read count (built CLI, no server) > a folder with no store, here or globally > output 1`] = `
+"$ hippo __session-end-worker --log-file <tmp>/session-end.log --transcript <tmp>/sess-maint-parity.jsonl --session-id sess-maint-parity -> 0
+--- stdout
+--- stderr
+"
+`;
+
+exports[`__session-end-worker re-read count (built CLI, no server) > a store that refuses the rows is logged, and the other store is still counted > audit rows 1`] = `
+"{
+ "local": [
+  {
+   "tenant_id": "__host__",
+   "actor": "cli",
+   "op": "consolidate",
+   "target_id": null,
+   "metadata_json": "{\\"consolidationCount\\":0,\\"dedupCount\\":0,\\"auditDeletedCount\\":0,\\"ambientTotal\\":0,\\"dryRun\\":false,\\"noShare\\":false,\\"partial\\":false,\\"triggeredByTenant\\":\\"default\\"}"
+  }
+ ],
+ "global": []
+}"
+`;
+
+exports[`__session-end-worker re-read count (built CLI, no server) > a store that refuses the rows is logged, and the other store is still counted > memory rows 1`] = `
+"{
+ "local": [],
+ "global": []
+}"
+`;
+
+exports[`__session-end-worker re-read count (built CLI, no server) > a store that refuses the rows is logged, and the other store is still counted > other state 1`] = `
+"{
+ "storeMade": true,
+ "meta": [
+  {
+   "key": "project_repair_auto",
+   "value": "1"
+  },
+  {
+   "key": "quality_repair_auto",
+   "value": "1"
+  },
+  {
+   "key": "total_forgotten",
+   "value": "0"
+  },
+  {
+   "key": "total_remembered",
+   "value": "0"
+  }
+ ],
+ "rereadLog": [
+  "[hippo] <ts> re-read count failed: refused",
+  "[hippo] <ts> re-read 60 tokens over 3 model calls for session sess-maint-parity"
+ ],
+ "ledger": {
+  "local": [
+   {
+    "tenant_id": "default",
+    "session_id": "sess-maint-parity",
+    "surface": "hook",
+    "event": "inject",
+    "items": 1,
+    "tokens": 100
+   }
+  ],
+  "global": [
+   {
+    "tenant_id": "default",
+    "session_id": "sess-maint-parity",
+    "surface": "hook_recall",
+    "event": "inject",
+    "items": 1,
+    "tokens": 30
+   },
+   {
+    "tenant_id": "default",
+    "session_id": "sess-maint-parity",
+    "surface": "hook_recall",
+    "event": "reread",
+    "items": 2,
+    "tokens": 60
+   }
+  ]
+ }
+}"
+`;
+
+exports[`__session-end-worker re-read count (built CLI, no server) > a store that refuses the rows is logged, and the other store is still counted > output 1`] = `
+"$ hippo __session-end-worker --log-file <tmp>/session-end.log --transcript <tmp>/sess-maint-parity.jsonl --session-id sess-maint-parity -> 0
+--- stdout
+Running consolidation...
+
+Results:
+   Active memories:  0
+   Removed (decayed): 0
+   Merged episodic:   0
+   New semantic:      0
+[hippo] sleep complete
+No actionable items found in the input.
+[hippo] capture complete
+--- stderr
+"
+`;
+
+exports[`__session-end-worker re-read count (built CLI, no server) > books the project store and the global store, and a second pass leaves the same rows > audit rows 1`] = `
+"{
+ "local": [
+  {
+   "tenant_id": "__host__",
+   "actor": "cli",
+   "op": "consolidate",
+   "target_id": null,
+   "metadata_json": "{\\"consolidationCount\\":0,\\"dedupCount\\":0,\\"auditDeletedCount\\":0,\\"ambientTotal\\":0,\\"dryRun\\":false,\\"noShare\\":false,\\"partial\\":false,\\"triggeredByTenant\\":\\"default\\"}"
+  },
+  {
+   "tenant_id": "__host__",
+   "actor": "cli",
+   "op": "consolidate",
+   "target_id": null,
+   "metadata_json": "{\\"consolidationCount\\":0,\\"dedupCount\\":0,\\"auditDeletedCount\\":0,\\"ambientTotal\\":0,\\"dryRun\\":false,\\"noShare\\":false,\\"partial\\":false,\\"triggeredByTenant\\":\\"default\\"}"
+  }
+ ],
+ "global": []
+}"
+`;
+
+exports[`__session-end-worker re-read count (built CLI, no server) > books the project store and the global store, and a second pass leaves the same rows > memory rows 1`] = `
+"{
+ "local": [],
+ "global": []
+}"
+`;
+
+exports[`__session-end-worker re-read count (built CLI, no server) > books the project store and the global store, and a second pass leaves the same rows > other state 1`] = `
+"{
+ "storeMade": true,
+ "meta": [
+  {
+   "key": "project_repair_auto",
+   "value": "1"
+  },
+  {
+   "key": "quality_repair_auto",
+   "value": "1"
+  },
+  {
+   "key": "total_forgotten",
+   "value": "0"
+  },
+  {
+   "key": "total_remembered",
+   "value": "0"
+  }
+ ],
+ "rereadLog": [
+  "[hippo] <ts> re-read 260 tokens over 3 model calls for session sess-maint-parity"
+ ],
+ "ledger": {
+  "local": [
+   {
+    "tenant_id": "default",
+    "session_id": "sess-maint-parity",
+    "surface": "hook",
+    "event": "inject",
+    "items": 1,
+    "tokens": 100
+   },
+   {
+    "tenant_id": "default",
+    "session_id": "sess-maint-parity",
+    "surface": "hook",
+    "event": "reread",
+    "items": 2,
+    "tokens": 200
+   }
+  ],
+  "global": [
+   {
+    "tenant_id": "default",
+    "session_id": "sess-maint-parity",
+    "surface": "hook_recall",
+    "event": "inject",
+    "items": 1,
+    "tokens": 30
+   },
+   {
+    "tenant_id": "default",
+    "session_id": "sess-maint-parity",
+    "surface": "hook_recall",
+    "event": "reread",
+    "items": 2,
+    "tokens": 60
+   }
+  ]
+ }
+}"
+`;
+
+exports[`__session-end-worker re-read count (built CLI, no server) > books the project store and the global store, and a second pass leaves the same rows > output 1`] = `
+"$ hippo __session-end-worker --log-file <tmp>/session-end.log --transcript <tmp>/sess-maint-parity.jsonl --session-id sess-maint-parity -> 0
+--- stdout
+Running consolidation...
+
+Results:
+   Active memories:  0
+   Removed (decayed): 0
+   Merged episodic:   0
+   New semantic:      0
+[hippo] sleep complete
+No actionable items found in the input.
+[hippo] capture complete
+--- stderr
+
+$ hippo __session-end-worker --log-file <tmp>/session-end.log --transcript <tmp>/sess-maint-parity.jsonl --session-id sess-maint-parity -> 0
+--- stdout
+Running consolidation...
+
+Results:
+   Active memories:  0
+   Removed (decayed): 0
+   Merged episodic:   0
+   New semantic:      0
+[hippo] sleep complete
+No actionable items found in the input.
+[hippo] capture complete
+--- stderr
+"
+`;
+
+exports[`hippo audit --fix (built CLI, no server) > --dry-run removes nothing, and neither does a run without --fix > audit rows 1`] = `
+"{
+ "local": [],
+ "global": []
+}"
+`;
+
+exports[`hippo audit --fix (built CLI, no server) > --dry-run removes nothing, and neither does a run without --fix > memory rows 1`] = `
+"{
+ "local": [
+  {
+   "id": "id#5",
+   "retrieval_count": 0,
+   "strength": 1,
+   "half_life_days": 365,
+   "layer": "episodic",
+   "tags_json": "[]",
+   "emotional_valence": "neutral",
+   "schema_fit": 0.5,
+   "source": "cli",
+   "outcome_score": null,
+   "conflicts_with_json": "[]",
+   "pinned": 0,
+   "confidence": "verified",
+   "content": "the billing service retries a failed charge three times",
+   "outcome_positive": 0,
+   "outcome_negative": 0,
+   "parents_json": "[]",
+   "starred": 0,
+   "trace_outcome": null,
+   "source_session_id": null,
+   "superseded_by": null,
+   "extracted_from": null,
+   "dag_level": 0,
+   "dag_parent_id": null,
+   "kind": "distilled",
+   "scope": null,
+   "owner": null,
+   "artifact_ref": null,
+   "tenant_id": "default",
+   "descendant_count": 0,
+   "earliest_at": null,
+   "latest_at": null,
+   "summary_dirty": 0,
+   "last_rebuilt_at": null,
+   "rebuild_count": 0,
+   "dag_level_3_built_at": null,
+   "origin_project": "app"
+  },
+  {
+   "id": "id#1",
+   "retrieval_count": 0,
+   "strength": 1,
+   "half_life_days": 365,
+   "layer": "episodic",
+   "tags_json": "[]",
+   "emotional_valence": "neutral",
+   "schema_fit": 0.5,
+   "source": "cli",
+   "outcome_score": null,
+   "conflicts_with_json": "[]",
+   "pinned": 0,
+   "confidence": "verified",
+   "content": "to fix the retry loop",
+   "outcome_positive": 0,
+   "outcome_negative": 0,
+   "parents_json": "[]",
+   "starred": 0,
+   "trace_outcome": null,
+   "source_session_id": null,
+   "superseded_by": null,
+   "extracted_from": null,
+   "dag_level": 0,
+   "dag_parent_id": null,
+   "kind": "distilled",
+   "scope": null,
+   "owner": null,
+   "artifact_ref": null,
+   "tenant_id": "default",
+   "descendant_count": 0,
+   "earliest_at": null,
+   "latest_at": null,
+   "summary_dirty": 0,
+   "last_rebuilt_at": null,
+   "rebuild_count": 0,
+   "dag_level_3_built_at": null,
+   "origin_project": "app"
+  },
+  {
+   "id": "id#2",
+   "retrieval_count": 0,
+   "strength": 1,
+   "half_life_days": 365,
+   "layer": "episodic",
+   "tags_json": "[]",
+   "emotional_valence": "neutral",
+   "schema_fit": 0.5,
+   "source": "cli",
+   "outcome_score": null,
+   "conflicts_with_json": "[]",
+   "pinned": 0,
+   "confidence": "verified",
+   "content": "too small",
+   "outcome_positive": 0,
+   "outcome_negative": 0,
+   "parents_json": "[]",
+   "starred": 0,
+   "trace_outcome": null,
+   "source_session_id": null,
+   "superseded_by": null,
+   "extracted_from": null,
+   "dag_level": 0,
+   "dag_parent_id": null,
+   "kind": "distilled",
+   "scope": null,
+   "owner": null,
+   "artifact_ref": null,
+   "tenant_id": "default",
+   "descendant_count": 0,
+   "earliest_at": null,
+   "latest_at": null,
+   "summary_dirty": 0,
+   "last_rebuilt_at": null,
+   "rebuild_count": 0,
+   "dag_level_3_built_at": null,
+   "origin_project": "app"
+  },
+  {
+   "id": "id#3",
+   "retrieval_count": 0,
+   "strength": 1,
+   "half_life_days": 365,
+   "layer": "episodic",
+   "tags_json": "[]",
+   "emotional_valence": "neutral",
+   "schema_fit": 0.5,
+   "source": "cli",
+   "outcome_score": null,
+   "conflicts_with_json": "[]",
+   "pinned": 0,
+   "confidence": "verified",
+   "content": "Merge branch feature/billing into main",
+   "outcome_positive": 0,
+   "outcome_negative": 0,
+   "parents_json": "[]",
+   "starred": 0,
+   "trace_outcome": null,
+   "source_session_id": null,
+   "superseded_by": null,
+   "extracted_from": null,
+   "dag_level": 0,
+   "dag_parent_id": null,
+   "kind": "distilled",
+   "scope": null,
+   "owner": null,
+   "artifact_ref": null,
+   "tenant_id": "default",
+   "descendant_count": 0,
+   "earliest_at": null,
+   "latest_at": null,
+   "summary_dirty": 0,
+   "last_rebuilt_at": null,
+   "rebuild_count": 0,
+   "dag_level_3_built_at": null,
+   "origin_project": "app"
+  },
+  {
+   "id": "id#4",
+   "retrieval_count": 0,
+   "strength": 1,
+   "half_life_days": 365,
+   "layer": "episodic",
+   "tags_json": "[]",
+   "emotional_valence": "neutral",
+   "schema_fit": 0.5,
+   "source": "cli",
+   "outcome_score": null,
+   "conflicts_with_json": "[]",
+   "pinned": 1,
+   "confidence": "verified",
+   "content": "pinned ok",
+   "outcome_positive": 0,
+   "outcome_negative": 0,
+   "parents_json": "[]",
+   "starred": 0,
+   "trace_outcome": null,
+   "source_session_id": null,
+   "superseded_by": null,
+   "extracted_from": null,
+   "dag_level": 0,
+   "dag_parent_id": null,
+   "kind": "distilled",
+   "scope": null,
+   "owner": null,
+   "artifact_ref": null,
+   "tenant_id": "default",
+   "descendant_count": 0,
+   "earliest_at": null,
+   "latest_at": null,
+   "summary_dirty": 0,
+   "last_rebuilt_at": null,
+   "rebuild_count": 0,
+   "dag_level_3_built_at": null,
+   "origin_project": "app"
+  }
+ ],
+ "global": []
+}"
+`;
+
+exports[`hippo audit --fix (built CLI, no server) > --dry-run removes nothing, and neither does a run without --fix > other state 1`] = `
+"{
+ "storeMade": true,
+ "meta": [
+  {
+   "key": "total_forgotten",
+   "value": "0"
+  },
+  {
+   "key": "total_remembered",
+   "value": "0"
+  }
+ ]
+}"
+`;
+
+exports[`hippo audit --fix (built CLI, no server) > --dry-run removes nothing, and neither does a run without --fix > output 1`] = `
+"$ hippo audit -> 0
+--- stdout
+Audited 5 memories: 1 clean, 4 issues
+
+  [WARN] id#1: sentence fragment — lacks context
+         "to fix the retry loop"
+  [ERR] id#2: too short (< 10 chars)
+         "too small"
+  [ERR] id#3: release/commit noise, not a useful memory
+         "Merge branch feature/billing into main"
+  [WARN] id#4: too short (< 10 chars) (pinned, kept)
+         "pinned ok"
+
+Run with --fix to auto-remove error-severity issues.
+--- stderr
+
+$ hippo audit --fix --dry-run -> 0
+--- stdout
+Audited 5 memories: 1 clean, 4 issues
+
+  [WARN] id#1: sentence fragment — lacks context
+         "to fix the retry loop"
+  [ERR] id#2: too short (< 10 chars)
+         "too small"
+  [ERR] id#3: release/commit noise, not a useful memory
+         "Merge branch feature/billing into main"
+  [WARN] id#4: too short (< 10 chars) (pinned, kept)
+         "pinned ok"
+
+Would remove 2 error-severity memories (dry run, nothing deleted).
+2 warnings would remain (review manually).
+--- stderr
+"
+`;
+
+exports[`hippo audit --fix (built CLI, no server) > a folder with no store > audit rows 1`] = `
+"{
+ "local": [],
+ "global": []
+}"
+`;
+
+exports[`hippo audit --fix (built CLI, no server) > a folder with no store > memory rows 1`] = `
+"{
+ "local": [],
+ "global": []
+}"
+`;
+
+exports[`hippo audit --fix (built CLI, no server) > a folder with no store > other state 1`] = `
+"{
+ "storeMade": false,
+ "meta": []
+}"
+`;
+
+exports[`hippo audit --fix (built CLI, no server) > a folder with no store > output 1`] = `
+"$ hippo audit --fix -> 1
+--- stdout
+--- stderr
+No hippo store at <tmp>/acme/billing/ledger/app/.hippo (searched <tmp>/acme/billing/ledger/app and its parents up to your home directory). Run \`hippo init\` first.
+"
+`;
+
+exports[`hippo audit --fix (built CLI, no server) > a store where every row passes > audit rows 1`] = `
+"{
+ "local": [],
+ "global": []
+}"
+`;
+
+exports[`hippo audit --fix (built CLI, no server) > a store where every row passes > memory rows 1`] = `
+"{
+ "local": [
+  {
+   "id": "id#1",
+   "retrieval_count": 0,
+   "strength": 1,
+   "half_life_days": 365,
+   "layer": "episodic",
+   "tags_json": "[]",
+   "emotional_valence": "neutral",
+   "schema_fit": 0.5,
+   "source": "cli",
+   "outcome_score": null,
+   "conflicts_with_json": "[]",
+   "pinned": 0,
+   "confidence": "verified",
+   "content": "the billing service retries a failed charge three times",
+   "outcome_positive": 0,
+   "outcome_negative": 0,
+   "parents_json": "[]",
+   "starred": 0,
+   "trace_outcome": null,
+   "source_session_id": null,
+   "superseded_by": null,
+   "extracted_from": null,
+   "dag_level": 0,
+   "dag_parent_id": null,
+   "kind": "distilled",
+   "scope": null,
+   "owner": null,
+   "artifact_ref": null,
+   "tenant_id": "default",
+   "descendant_count": 0,
+   "earliest_at": null,
+   "latest_at": null,
+   "summary_dirty": 0,
+   "last_rebuilt_at": null,
+   "rebuild_count": 0,
+   "dag_level_3_built_at": null,
+   "origin_project": "app"
+  }
+ ],
+ "global": []
+}"
+`;
+
+exports[`hippo audit --fix (built CLI, no server) > a store where every row passes > other state 1`] = `
+"{
+ "storeMade": true,
+ "meta": [
+  {
+   "key": "total_forgotten",
+   "value": "0"
+  },
+  {
+   "key": "total_remembered",
+   "value": "0"
+  }
+ ]
+}"
+`;
+
+exports[`hippo audit --fix (built CLI, no server) > a store where every row passes > output 1`] = `
+"$ hippo audit --fix -> 0
+--- stdout
+All 1 memories passed quality checks.
+--- stderr
+"
+`;
+
+exports[`hippo audit --fix (built CLI, no server) > no errors, only warnings > audit rows 1`] = `
+"{
+ "local": [],
+ "global": []
+}"
+`;
+
+exports[`hippo audit --fix (built CLI, no server) > no errors, only warnings > memory rows 1`] = `
+"{
+ "local": [
+  {
+   "id": "id#2",
+   "retrieval_count": 0,
+   "strength": 1,
+   "half_life_days": 365,
+   "layer": "episodic",
+   "tags_json": "[]",
+   "emotional_valence": "neutral",
+   "schema_fit": 0.5,
+   "source": "cli",
+   "outcome_score": null,
+   "conflicts_with_json": "[]",
+   "pinned": 0,
+   "confidence": "verified",
+   "content": "the billing service retries a failed charge three times",
+   "outcome_positive": 0,
+   "outcome_negative": 0,
+   "parents_json": "[]",
+   "starred": 0,
+   "trace_outcome": null,
+   "source_session_id": null,
+   "superseded_by": null,
+   "extracted_from": null,
+   "dag_level": 0,
+   "dag_parent_id": null,
+   "kind": "distilled",
+   "scope": null,
+   "owner": null,
+   "artifact_ref": null,
+   "tenant_id": "default",
+   "descendant_count": 0,
+   "earliest_at": null,
+   "latest_at": null,
+   "summary_dirty": 0,
+   "last_rebuilt_at": null,
+   "rebuild_count": 0,
+   "dag_level_3_built_at": null,
+   "origin_project": "app"
+  },
+  {
+   "id": "id#1",
+   "retrieval_count": 0,
+   "strength": 1,
+   "half_life_days": 365,
+   "layer": "episodic",
+   "tags_json": "[]",
+   "emotional_valence": "neutral",
+   "schema_fit": 0.5,
+   "source": "cli",
+   "outcome_score": null,
+   "conflicts_with_json": "[]",
+   "pinned": 0,
+   "confidence": "verified",
+   "content": "to fix the retry loop",
+   "outcome_positive": 0,
+   "outcome_negative": 0,
+   "parents_json": "[]",
+   "starred": 0,
+   "trace_outcome": null,
+   "source_session_id": null,
+   "superseded_by": null,
+   "extracted_from": null,
+   "dag_level": 0,
+   "dag_parent_id": null,
+   "kind": "distilled",
+   "scope": null,
+   "owner": null,
+   "artifact_ref": null,
+   "tenant_id": "default",
+   "descendant_count": 0,
+   "earliest_at": null,
+   "latest_at": null,
+   "summary_dirty": 0,
+   "last_rebuilt_at": null,
+   "rebuild_count": 0,
+   "dag_level_3_built_at": null,
+   "origin_project": "app"
+  }
+ ],
+ "global": []
+}"
+`;
+
+exports[`hippo audit --fix (built CLI, no server) > no errors, only warnings > other state 1`] = `
+"{
+ "storeMade": true,
+ "meta": [
+  {
+   "key": "total_forgotten",
+   "value": "0"
+  },
+  {
+   "key": "total_remembered",
+   "value": "0"
+  }
+ ]
+}"
+`;
+
+exports[`hippo audit --fix (built CLI, no server) > no errors, only warnings > output 1`] = `
+"$ hippo audit --fix -> 0
+--- stdout
+Audited 2 memories: 1 clean, 1 issues
+
+  [WARN] id#1: sentence fragment — lacks context
+         "to fix the retry loop"
+
+No error-severity issues. Warnings require manual review.
+--- stderr
+"
+`;
+
+exports[`hippo audit --fix (built CLI, no server) > removes each error and leaves the warnings > audit rows 1`] = `
+"{
+ "local": [
+  {
+   "tenant_id": "default",
+   "actor": "cli",
+   "op": "forget",
+   "target_id": "id#2",
+   "metadata_json": "{\\"reason\\":\\"audit --fix: too short (< 10 chars)\\"}"
+  },
+  {
+   "tenant_id": "default",
+   "actor": "cli",
+   "op": "forget",
+   "target_id": "id#3",
+   "metadata_json": "{\\"reason\\":\\"audit --fix: release/commit noise, not a useful memory\\"}"
+  }
+ ],
+ "global": []
+}"
+`;
+
+exports[`hippo audit --fix (built CLI, no server) > removes each error and leaves the warnings > memory rows 1`] = `
+"{
+ "local": [
+  {
+   "id": "id#5",
+   "retrieval_count": 0,
+   "strength": 1,
+   "half_life_days": 365,
+   "layer": "episodic",
+   "tags_json": "[]",
+   "emotional_valence": "neutral",
+   "schema_fit": 0.5,
+   "source": "cli",
+   "outcome_score": null,
+   "conflicts_with_json": "[]",
+   "pinned": 0,
+   "confidence": "verified",
+   "content": "the billing service retries a failed charge three times",
+   "outcome_positive": 0,
+   "outcome_negative": 0,
+   "parents_json": "[]",
+   "starred": 0,
+   "trace_outcome": null,
+   "source_session_id": null,
+   "superseded_by": null,
+   "extracted_from": null,
+   "dag_level": 0,
+   "dag_parent_id": null,
+   "kind": "distilled",
+   "scope": null,
+   "owner": null,
+   "artifact_ref": null,
+   "tenant_id": "default",
+   "descendant_count": 0,
+   "earliest_at": null,
+   "latest_at": null,
+   "summary_dirty": 0,
+   "last_rebuilt_at": null,
+   "rebuild_count": 0,
+   "dag_level_3_built_at": null,
+   "origin_project": "app"
+  },
+  {
+   "id": "id#1",
+   "retrieval_count": 0,
+   "strength": 1,
+   "half_life_days": 365,
+   "layer": "episodic",
+   "tags_json": "[]",
+   "emotional_valence": "neutral",
+   "schema_fit": 0.5,
+   "source": "cli",
+   "outcome_score": null,
+   "conflicts_with_json": "[]",
+   "pinned": 0,
+   "confidence": "verified",
+   "content": "to fix the retry loop",
+   "outcome_positive": 0,
+   "outcome_negative": 0,
+   "parents_json": "[]",
+   "starred": 0,
+   "trace_outcome": null,
+   "source_session_id": null,
+   "superseded_by": null,
+   "extracted_from": null,
+   "dag_level": 0,
+   "dag_parent_id": null,
+   "kind": "distilled",
+   "scope": null,
+   "owner": null,
+   "artifact_ref": null,
+   "tenant_id": "default",
+   "descendant_count": 0,
+   "earliest_at": null,
+   "latest_at": null,
+   "summary_dirty": 0,
+   "last_rebuilt_at": null,
+   "rebuild_count": 0,
+   "dag_level_3_built_at": null,
+   "origin_project": "app"
+  },
+  {
+   "id": "id#4",
+   "retrieval_count": 0,
+   "strength": 1,
+   "half_life_days": 365,
+   "layer": "episodic",
+   "tags_json": "[]",
+   "emotional_valence": "neutral",
+   "schema_fit": 0.5,
+   "source": "cli",
+   "outcome_score": null,
+   "conflicts_with_json": "[]",
+   "pinned": 1,
+   "confidence": "verified",
+   "content": "pinned ok",
+   "outcome_positive": 0,
+   "outcome_negative": 0,
+   "parents_json": "[]",
+   "starred": 0,
+   "trace_outcome": null,
+   "source_session_id": null,
+   "superseded_by": null,
+   "extracted_from": null,
+   "dag_level": 0,
+   "dag_parent_id": null,
+   "kind": "distilled",
+   "scope": null,
+   "owner": null,
+   "artifact_ref": null,
+   "tenant_id": "default",
+   "descendant_count": 0,
+   "earliest_at": null,
+   "latest_at": null,
+   "summary_dirty": 0,
+   "last_rebuilt_at": null,
+   "rebuild_count": 0,
+   "dag_level_3_built_at": null,
+   "origin_project": "app"
+  }
+ ],
+ "global": []
+}"
+`;
+
+exports[`hippo audit --fix (built CLI, no server) > removes each error and leaves the warnings > other state 1`] = `
+"{
+ "storeMade": true,
+ "meta": [
+  {
+   "key": "total_forgotten",
+   "value": "0"
+  },
+  {
+   "key": "total_remembered",
+   "value": "0"
+  }
+ ]
+}"
+`;
+
+exports[`hippo audit --fix (built CLI, no server) > removes each error and leaves the warnings > output 1`] = `
+"$ hippo audit --fix -> 0
+--- stdout
+Audited 5 memories: 1 clean, 4 issues
+
+  [WARN] id#1: sentence fragment — lacks context
+         "to fix the retry loop"
+  [ERR] id#2: too short (< 10 chars)
+         "too small"
+  [ERR] id#3: release/commit noise, not a useful memory
+         "Merge branch feature/billing into main"
+  [WARN] id#4: too short (< 10 chars) (pinned, kept)
+         "pinned ok"
+
+Removed 2 error-severity memories.
+2 warnings remain (review manually).
+--- stderr
+
+$ hippo audit --fix -> 0
+--- stdout
+Audited 3 memories: 1 clean, 2 issues
+
+  [WARN] id#1: sentence fragment — lacks context
+         "to fix the retry loop"
+  [WARN] id#4: too short (< 10 chars) (pinned, kept)
+         "pinned ok"
+
+No error-severity issues. Warnings require manual review.
+--- stderr
+"
+`;
+
+exports[`hippo decide --supersedes (built CLI, no server) > a weaken the store refuses still records the decision, with a warning > audit rows 1`] = `
+"{
+ "local": [
+  {
+   "tenant_id": "default",
+   "actor": "cli",
+   "op": "decision_create",
+   "target_id": "1",
+   "metadata_json": "{\\"decision_id\\":1,\\"has_context\\":false}"
+  },
+  {
+   "tenant_id": "default",
+   "actor": "cli",
+   "op": "remember",
+   "target_id": "id#2",
+   "metadata_json": "{\\"kind\\":\\"distilled\\",\\"scope\\":null}"
+  }
+ ],
+ "global": []
+}"
+`;
+
+exports[`hippo decide --supersedes (built CLI, no server) > a weaken the store refuses still records the decision, with a warning > memory rows 1`] = `
+"{
+ "local": [
+  {
+   "id": "id#1",
+   "retrieval_count": 0,
+   "strength": 1,
+   "half_life_days": 365,
+   "layer": "episodic",
+   "tags_json": "[\\"billing\\"]",
+   "emotional_valence": "neutral",
+   "schema_fit": 0.5,
+   "source": "cli",
+   "outcome_score": null,
+   "conflicts_with_json": "[]",
+   "pinned": 0,
+   "confidence": "verified",
+   "content": "the billing service retries a failed charge three times",
+   "outcome_positive": 0,
+   "outcome_negative": 0,
+   "parents_json": "[]",
+   "starred": 0,
+   "trace_outcome": null,
+   "source_session_id": null,
+   "superseded_by": null,
+   "extracted_from": null,
+   "dag_level": 0,
+   "dag_parent_id": null,
+   "kind": "distilled",
+   "scope": null,
+   "owner": null,
+   "artifact_ref": null,
+   "tenant_id": "default",
+   "descendant_count": 0,
+   "earliest_at": null,
+   "latest_at": null,
+   "summary_dirty": 0,
+   "last_rebuilt_at": null,
+   "rebuild_count": 0,
+   "dag_level_3_built_at": null,
+   "origin_project": "app"
+  },
+  {
+   "id": "id#2",
+   "retrieval_count": 0,
+   "strength": 1,
+   "half_life_days": 365,
+   "layer": "semantic",
+   "tags_json": "[\\"decision\\",\\"path:acme\\",\\"path:billing\\",\\"path:ledger\\",\\"path:app\\"]",
+   "emotional_valence": "neutral",
+   "schema_fit": 0.5,
+   "source": "decision",
+   "outcome_score": null,
+   "conflicts_with_json": "[]",
+   "pinned": 0,
+   "confidence": "verified",
+   "content": "the billing service retries a failed charge five times",
+   "outcome_positive": 0,
+   "outcome_negative": 0,
+   "parents_json": "[]",
+   "starred": 0,
+   "trace_outcome": null,
+   "source_session_id": null,
+   "superseded_by": null,
+   "extracted_from": null,
+   "dag_level": 0,
+   "dag_parent_id": null,
+   "kind": "distilled",
+   "scope": null,
+   "owner": null,
+   "artifact_ref": null,
+   "tenant_id": "default",
+   "descendant_count": 0,
+   "earliest_at": null,
+   "latest_at": null,
+   "summary_dirty": 0,
+   "last_rebuilt_at": null,
+   "rebuild_count": 0,
+   "dag_level_3_built_at": null,
+   "origin_project": "app"
+  }
+ ],
+ "global": []
+}"
+`;
+
+exports[`hippo decide --supersedes (built CLI, no server) > a weaken the store refuses still records the decision, with a warning > other state 1`] = `
+"{
+ "storeMade": true,
+ "meta": [
+  {
+   "key": "total_forgotten",
+   "value": "0"
+  },
+  {
+   "key": "total_remembered",
+   "value": "0"
+  }
+ ],
+ "decisions": [
+  {
+   "id": 1,
+   "memory_id": "id#2",
+   "decision_text": "the billing service retries a failed charge five times",
+   "context": null,
+   "status": "active",
+   "superseded_by": null,
+   "superseded_at": null,
+   "closed_at": null
+  }
+ ]
+}"
+`;
+
+exports[`hippo decide --supersedes (built CLI, no server) > a weaken the store refuses still records the decision, with a warning > output 1`] = `
+"$ hippo decide the billing service retries a failed charge five times --supersedes id#1 -> 0
+--- stdout
+Decision recorded: #1
+  memory: id#2
+  supersedes memory: id#1 (no active decision row; memory weakened only)
+--- stderr
+  warning: decision recorded and superseded, but failed to weaken the prior memory id#1: refused
+"
+`;
+
+exports[`hippo decide --supersedes (built CLI, no server) > an unknown memory id, and --supersedes with no id > audit rows 1`] = `
+"{
+ "local": [],
+ "global": []
+}"
+`;
+
+exports[`hippo decide --supersedes (built CLI, no server) > an unknown memory id, and --supersedes with no id > memory rows 1`] = `
+"{
+ "local": [],
+ "global": []
+}"
+`;
+
+exports[`hippo decide --supersedes (built CLI, no server) > an unknown memory id, and --supersedes with no id > other state 1`] = `
+"{
+ "storeMade": true,
+ "meta": [
+  {
+   "key": "total_forgotten",
+   "value": "0"
+  },
+  {
+   "key": "total_remembered",
+   "value": "0"
+  }
+ ],
+ "decisions": []
+}"
+`;
+
+exports[`hippo decide --supersedes (built CLI, no server) > an unknown memory id, and --supersedes with no id > output 1`] = `
+"$ hippo decide use sqlite for the ledger --supersedes mem_does_not_exist -> 1
+--- stdout
+--- stderr
+Memory mem_does_not_exist not found.
+
+$ hippo decide use sqlite for the ledger --supersedes -> 1
+--- stdout
+--- stderr
+--supersedes requires a memory id, e.g. hippo decide "<text>" --supersedes mem_abc123.
+"
+`;
+
+exports[`hippo decide --supersedes (built CLI, no server) > weakens a plain memory that no decision row names > audit rows 1`] = `
+"{
+ "local": [
+  {
+   "tenant_id": "default",
+   "actor": "cli",
+   "op": "decision_create",
+   "target_id": "1",
+   "metadata_json": "{\\"decision_id\\":1,\\"has_context\\":false}"
+  },
+  {
+   "tenant_id": "default",
+   "actor": "cli",
+   "op": "remember",
+   "target_id": "id#2",
+   "metadata_json": "{\\"kind\\":\\"distilled\\",\\"scope\\":null}"
+  },
+  {
+   "tenant_id": "default",
+   "actor": "cli",
+   "op": "remember",
+   "target_id": "id#1",
+   "metadata_json": "{\\"kind\\":\\"distilled\\",\\"scope\\":null}"
+  }
+ ],
+ "global": []
+}"
+`;
+
+exports[`hippo decide --supersedes (built CLI, no server) > weakens a plain memory that no decision row names > memory rows 1`] = `
+"{
+ "local": [
+  {
+   "id": "id#1",
+   "retrieval_count": 0,
+   "strength": 1,
+   "half_life_days": 182,
+   "layer": "episodic",
+   "tags_json": "[\\"billing\\",\\"superseded\\"]",
+   "emotional_valence": "neutral",
+   "schema_fit": 0.5,
+   "source": "cli",
+   "outcome_score": null,
+   "conflicts_with_json": "[]",
+   "pinned": 0,
+   "confidence": "stale",
+   "content": "the billing service retries a failed charge three times",
+   "outcome_positive": 0,
+   "outcome_negative": 0,
+   "parents_json": "[]",
+   "starred": 0,
+   "trace_outcome": null,
+   "source_session_id": null,
+   "superseded_by": null,
+   "extracted_from": null,
+   "dag_level": 0,
+   "dag_parent_id": null,
+   "kind": "distilled",
+   "scope": null,
+   "owner": null,
+   "artifact_ref": null,
+   "tenant_id": "default",
+   "descendant_count": 0,
+   "earliest_at": null,
+   "latest_at": null,
+   "summary_dirty": 0,
+   "last_rebuilt_at": null,
+   "rebuild_count": 0,
+   "dag_level_3_built_at": null,
+   "origin_project": "app"
+  },
+  {
+   "id": "id#2",
+   "retrieval_count": 0,
+   "strength": 1,
+   "half_life_days": 365,
+   "layer": "semantic",
+   "tags_json": "[\\"decision\\",\\"path:acme\\",\\"path:billing\\",\\"path:ledger\\",\\"path:app\\"]",
+   "emotional_valence": "neutral",
+   "schema_fit": 0.5,
+   "source": "decision",
+   "outcome_score": null,
+   "conflicts_with_json": "[]",
+   "pinned": 0,
+   "confidence": "verified",
+   "content": "the billing service retries a failed charge five times",
+   "outcome_positive": 0,
+   "outcome_negative": 0,
+   "parents_json": "[]",
+   "starred": 0,
+   "trace_outcome": null,
+   "source_session_id": null,
+   "superseded_by": null,
+   "extracted_from": null,
+   "dag_level": 0,
+   "dag_parent_id": null,
+   "kind": "distilled",
+   "scope": null,
+   "owner": null,
+   "artifact_ref": null,
+   "tenant_id": "default",
+   "descendant_count": 0,
+   "earliest_at": null,
+   "latest_at": null,
+   "summary_dirty": 0,
+   "last_rebuilt_at": null,
+   "rebuild_count": 0,
+   "dag_level_3_built_at": null,
+   "origin_project": "app"
+  }
+ ],
+ "global": []
+}"
+`;
+
+exports[`hippo decide --supersedes (built CLI, no server) > weakens a plain memory that no decision row names > other state 1`] = `
+"{
+ "storeMade": true,
+ "meta": [
+  {
+   "key": "total_forgotten",
+   "value": "0"
+  },
+  {
+   "key": "total_remembered",
+   "value": "0"
+  }
+ ],
+ "decisions": [
+  {
+   "id": 1,
+   "memory_id": "id#2",
+   "decision_text": "the billing service retries a failed charge five times",
+   "context": null,
+   "status": "active",
+   "superseded_by": null,
+   "superseded_at": null,
+   "closed_at": null
+  }
+ ]
+}"
+`;
+
+exports[`hippo decide --supersedes (built CLI, no server) > weakens a plain memory that no decision row names > output 1`] = `
+"$ hippo decide the billing service retries a failed charge five times --supersedes id#1 -> 0
+--- stdout
+Decision recorded: #1
+  memory: id#2
+  supersedes memory: id#1 (no active decision row; memory weakened only)
+--- stderr
+"
+`;
+
+exports[`hippo decide --supersedes (built CLI, no server) > weakens the memory of an earlier decision, and again on a second supersede > audit rows 1`] = `
+"{
+ "local": [
+  {
+   "tenant_id": "default",
+   "actor": "cli",
+   "op": "decision_create",
+   "target_id": "1",
+   "metadata_json": "{\\"decision_id\\":1,\\"has_context\\":true}"
+  },
+  {
+   "tenant_id": "default",
+   "actor": "cli",
+   "op": "remember",
+   "target_id": "id#1",
+   "metadata_json": "{\\"kind\\":\\"distilled\\",\\"scope\\":null}"
+  },
+  {
+   "tenant_id": "default",
+   "actor": "cli",
+   "op": "decision_supersede",
+   "target_id": "1",
+   "metadata_json": "{\\"decision_id\\":1,\\"superseded_by\\":2}"
+  },
+  {
+   "tenant_id": "default",
+   "actor": "cli",
+   "op": "decision_create",
+   "target_id": "2",
+   "metadata_json": "{\\"decision_id\\":2,\\"has_context\\":false}"
+  },
+  {
+   "tenant_id": "default",
+   "actor": "cli",
+   "op": "remember",
+   "target_id": "id#2",
+   "metadata_json": "{\\"kind\\":\\"distilled\\",\\"scope\\":null}"
+  },
+  {
+   "tenant_id": "default",
+   "actor": "cli",
+   "op": "remember",
+   "target_id": "id#1",
+   "metadata_json": "{\\"kind\\":\\"distilled\\",\\"scope\\":null}"
+  },
+  {
+   "tenant_id": "default",
+   "actor": "cli",
+   "op": "decision_create",
+   "target_id": "3",
+   "metadata_json": "{\\"decision_id\\":3,\\"has_context\\":false}"
+  },
+  {
+   "tenant_id": "default",
+   "actor": "cli",
+   "op": "remember",
+   "target_id": "id#3",
+   "metadata_json": "{\\"kind\\":\\"distilled\\",\\"scope\\":null}"
+  },
+  {
+   "tenant_id": "default",
+   "actor": "cli",
+   "op": "remember",
+   "target_id": "id#1",
+   "metadata_json": "{\\"kind\\":\\"distilled\\",\\"scope\\":null}"
+  }
+ ],
+ "global": []
+}"
+`;
+
+exports[`hippo decide --supersedes (built CLI, no server) > weakens the memory of an earlier decision, and again on a second supersede > memory rows 1`] = `
+"{
+ "local": [
+  {
+   "id": "id#1",
+   "retrieval_count": 0,
+   "strength": 1,
+   "half_life_days": 91,
+   "layer": "semantic",
+   "tags_json": "[\\"decision\\",\\"path:acme\\",\\"path:billing\\",\\"path:ledger\\",\\"path:app\\",\\"superseded\\"]",
+   "emotional_valence": "neutral",
+   "schema_fit": 0.5,
+   "source": "decision",
+   "outcome_score": null,
+   "conflicts_with_json": "[]",
+   "pinned": 0,
+   "confidence": "stale",
+   "content": "use postgres for the ledger\\n\\nContext: it handles the join load",
+   "outcome_positive": 0,
+   "outcome_negative": 0,
+   "parents_json": "[]",
+   "starred": 0,
+   "trace_outcome": null,
+   "source_session_id": null,
+   "superseded_by": null,
+   "extracted_from": null,
+   "dag_level": 0,
+   "dag_parent_id": null,
+   "kind": "distilled",
+   "scope": null,
+   "owner": null,
+   "artifact_ref": null,
+   "tenant_id": "default",
+   "descendant_count": 0,
+   "earliest_at": null,
+   "latest_at": null,
+   "summary_dirty": 0,
+   "last_rebuilt_at": null,
+   "rebuild_count": 0,
+   "dag_level_3_built_at": null,
+   "origin_project": "app"
+  },
+  {
+   "id": "id#2",
+   "retrieval_count": 0,
+   "strength": 1,
+   "half_life_days": 365,
+   "layer": "semantic",
+   "tags_json": "[\\"decision\\",\\"path:acme\\",\\"path:billing\\",\\"path:ledger\\",\\"path:app\\"]",
+   "emotional_valence": "neutral",
+   "schema_fit": 0.5,
+   "source": "decision",
+   "outcome_score": null,
+   "conflicts_with_json": "[]",
+   "pinned": 0,
+   "confidence": "verified",
+   "content": "use sqlite for the ledger",
+   "outcome_positive": 0,
+   "outcome_negative": 0,
+   "parents_json": "[]",
+   "starred": 0,
+   "trace_outcome": null,
+   "source_session_id": null,
+   "superseded_by": null,
+   "extracted_from": null,
+   "dag_level": 0,
+   "dag_parent_id": null,
+   "kind": "distilled",
+   "scope": null,
+   "owner": null,
+   "artifact_ref": null,
+   "tenant_id": "default",
+   "descendant_count": 0,
+   "earliest_at": null,
+   "latest_at": null,
+   "summary_dirty": 0,
+   "last_rebuilt_at": null,
+   "rebuild_count": 0,
+   "dag_level_3_built_at": null,
+   "origin_project": "app"
+  },
+  {
+   "id": "id#3",
+   "retrieval_count": 0,
+   "strength": 1,
+   "half_life_days": 365,
+   "layer": "semantic",
+   "tags_json": "[\\"decision\\",\\"path:acme\\",\\"path:billing\\",\\"path:ledger\\",\\"path:app\\"]",
+   "emotional_valence": "neutral",
+   "schema_fit": 0.5,
+   "source": "decision",
+   "outcome_score": null,
+   "conflicts_with_json": "[]",
+   "pinned": 0,
+   "confidence": "verified",
+   "content": "use duckdb for the ledger",
+   "outcome_positive": 0,
+   "outcome_negative": 0,
+   "parents_json": "[]",
+   "starred": 0,
+   "trace_outcome": null,
+   "source_session_id": null,
+   "superseded_by": null,
+   "extracted_from": null,
+   "dag_level": 0,
+   "dag_parent_id": null,
+   "kind": "distilled",
+   "scope": null,
+   "owner": null,
+   "artifact_ref": null,
+   "tenant_id": "default",
+   "descendant_count": 0,
+   "earliest_at": null,
+   "latest_at": null,
+   "summary_dirty": 0,
+   "last_rebuilt_at": null,
+   "rebuild_count": 0,
+   "dag_level_3_built_at": null,
+   "origin_project": "app"
+  }
+ ],
+ "global": []
+}"
+`;
+
+exports[`hippo decide --supersedes (built CLI, no server) > weakens the memory of an earlier decision, and again on a second supersede > other state 1`] = `
+"{
+ "storeMade": true,
+ "meta": [
+  {
+   "key": "total_forgotten",
+   "value": "0"
+  },
+  {
+   "key": "total_remembered",
+   "value": "0"
+  }
+ ],
+ "decisions": [
+  {
+   "id": 1,
+   "memory_id": "id#1",
+   "decision_text": "use postgres for the ledger",
+   "context": "it handles the join load",
+   "status": "superseded",
+   "superseded_by": 2,
+   "superseded_at": "<ts>",
+   "closed_at": null
+  },
+  {
+   "id": 2,
+   "memory_id": "id#2",
+   "decision_text": "use sqlite for the ledger",
+   "context": null,
+   "status": "active",
+   "superseded_by": null,
+   "superseded_at": null,
+   "closed_at": null
+  },
+  {
+   "id": 3,
+   "memory_id": "id#3",
+   "decision_text": "use duckdb for the ledger",
+   "context": null,
+   "status": "active",
+   "superseded_by": null,
+   "superseded_at": null,
+   "closed_at": null
+  }
+ ]
+}"
+`;
+
+exports[`hippo decide --supersedes (built CLI, no server) > weakens the memory of an earlier decision, and again on a second supersede > output 1`] = `
+"$ hippo decide use postgres for the ledger --context it handles the join load -> 0
+--- stdout
+Decision recorded: #1
+  memory: id#1
+--- stderr
+
+$ hippo decide use sqlite for the ledger --supersedes id#1 -> 0
+--- stdout
+Decision recorded: #2
+  memory: id#2
+  supersedes memory: id#1 (decision #1 superseded)
+--- stderr
+
+$ hippo decide use duckdb for the ledger --supersedes id#1 -> 0
+--- stdout
+Decision recorded: #3
+  memory: id#3
+  supersedes memory: id#1 (no active decision row; memory weakened only)
+--- stderr
+"
+`;
+
+exports[`hippo projects (built CLI, no server) > a folder with no store > audit rows 1`] = `
+"{
+ "local": [],
+ "global": []
+}"
+`;
+
+exports[`hippo projects (built CLI, no server) > a folder with no store > memory rows 1`] = `
+"{
+ "local": [],
+ "global": []
+}"
+`;
+
+exports[`hippo projects (built CLI, no server) > a folder with no store > other state 1`] = `
+"{
+ "storeMade": false,
+ "meta": []
+}"
+`;
+
+exports[`hippo projects (built CLI, no server) > a folder with no store > output 1`] = `
+"$ hippo projects -> 1
+--- stdout
+--- stderr
+No hippo store at <tmp>/acme/billing/ledger/app/.hippo (searched <tmp>/acme/billing/ledger/app and its parents up to your home directory). Run \`hippo init\` first.
+"
+`;
+
+exports[`hippo projects (built CLI, no server) > lists two project names, and previews a merge and a repair > audit rows 1`] = `
+"{
+ "local": [],
+ "global": []
+}"
+`;
+
+exports[`hippo projects (built CLI, no server) > lists two project names, and previews a merge and a repair > memory rows 1`] = `
+"{
+ "local": [
+  {
+   "id": "id#1",
+   "retrieval_count": 0,
+   "strength": 1,
+   "half_life_days": 365,
+   "layer": "episodic",
+   "tags_json": "[]",
+   "emotional_valence": "neutral",
+   "schema_fit": 0.5,
+   "source": "cli",
+   "outcome_score": null,
+   "conflicts_with_json": "[]",
+   "pinned": 0,
+   "confidence": "verified",
+   "content": "the billing service retries a failed charge three times",
+   "outcome_positive": 0,
+   "outcome_negative": 0,
+   "parents_json": "[]",
+   "starred": 0,
+   "trace_outcome": null,
+   "source_session_id": null,
+   "superseded_by": null,
+   "extracted_from": null,
+   "dag_level": 0,
+   "dag_parent_id": null,
+   "kind": "distilled",
+   "scope": null,
+   "owner": null,
+   "artifact_ref": null,
+   "tenant_id": "default",
+   "descendant_count": 0,
+   "earliest_at": null,
+   "latest_at": null,
+   "summary_dirty": 0,
+   "last_rebuilt_at": null,
+   "rebuild_count": 0,
+   "dag_level_3_built_at": null,
+   "origin_project": "app"
+  },
+  {
+   "id": "id#2",
+   "retrieval_count": 0,
+   "strength": 1,
+   "half_life_days": 365,
+   "layer": "episodic",
+   "tags_json": "[]",
+   "emotional_valence": "neutral",
+   "schema_fit": 0.5,
+   "source": "cli",
+   "outcome_score": null,
+   "conflicts_with_json": "[]",
+   "pinned": 0,
+   "confidence": "verified",
+   "content": "the checkout page caches the cart total for sixty seconds",
+   "outcome_positive": 0,
+   "outcome_negative": 0,
+   "parents_json": "[]",
+   "starred": 0,
+   "trace_outcome": null,
+   "source_session_id": null,
+   "superseded_by": null,
+   "extracted_from": null,
+   "dag_level": 0,
+   "dag_parent_id": null,
+   "kind": "distilled",
+   "scope": null,
+   "owner": null,
+   "artifact_ref": null,
+   "tenant_id": "default",
+   "descendant_count": 0,
+   "earliest_at": null,
+   "latest_at": null,
+   "summary_dirty": 0,
+   "last_rebuilt_at": null,
+   "rebuild_count": 0,
+   "dag_level_3_built_at": null,
+   "origin_project": "web"
+  }
+ ],
+ "global": []
+}"
+`;
+
+exports[`hippo projects (built CLI, no server) > lists two project names, and previews a merge and a repair > other state 1`] = `
+"{
+ "storeMade": true,
+ "meta": [
+  {
+   "key": "total_forgotten",
+   "value": "0"
+  },
+  {
+   "key": "total_remembered",
+   "value": "0"
+  }
+ ]
+}"
+`;
+
+exports[`hippo projects (built CLI, no server) > lists two project names, and previews a merge and a repair > output 1`] = `
+"$ hippo projects -> 0
+--- stdout
+2 project names in <tmp>/acme/billing/ledger/app/.hippo (newest write first):
+
+web  1 memory, 0 imported from agent notes, newest <date>
+app  1 memory, 0 imported from agent notes, newest <date>
+--- stderr
+
+$ hippo projects --json -> 0
+--- stdout
+{
+  "store": "<tmp>/acme/billing/ledger/app/.hippo",
+  "projects": [
+    {
+      "origin": "web",
+      "live": 1,
+      "imported": 0,
+      "newest": "<ts>",
+      "copiesElsewhere": 0
+    },
+    {
+      "origin": "app",
+      "live": 1,
+      "imported": 0,
+      "newest": "<ts>",
+      "copiesElsewhere": 0
+    }
+  ]
+}
+--- stderr
+
+$ hippo projects merge web app -> 0
+--- stdout
+Dry run: would merge web into app:
+  0 imported note copies set aside (app already holds the same note; the rest move under app on the next sync)
+  1 memory re-tagged, plus 0 dormant and 0 compaction records
+Nothing written. Add --apply to run it.
+--- stderr
+
+$ hippo projects repair -> 0
+--- stdout
+Dry run: would repair <tmp>/acme/billing/ledger/app/.hippo:
+  0 imported note copies under the wrong project set aside (the note stays under its own, or user-global)
+  sleep's user-global merged rows: 0 re-tagged to their parents' project
+  0 set aside (parents in two projects; sleep re-merges them per project)
+  0 left as they are (no parent left to show which project; check them with hippo inspect <id>)
+Nothing written. Add --apply to run it.
+--- stderr
+
+$ hippo projects rename -> 1
+--- stdout
+--- stderr
+Usage: hippo projects [list] [--json] | merge <from> <into> [--apply] | repair [--apply]  [--global]
+"
+`;
+
+exports[`hippo refine (verb function, injected fetcher, no model) > a failed model call leaves the row as it was > audit rows 1`] = `
+"{
+ "local": [],
+ "global": []
+}"
+`;
+
+exports[`hippo refine (verb function, injected fetcher, no model) > a failed model call leaves the row as it was > memory rows 1`] = `
+"{
+ "local": [
+  {
+   "id": "id#1",
+   "retrieval_count": 0,
+   "strength": 1,
+   "half_life_days": 365,
+   "layer": "semantic",
+   "tags_json": "[\\"billing\\"]",
+   "emotional_valence": "neutral",
+   "schema_fit": 0.5,
+   "source": "cli",
+   "outcome_score": null,
+   "conflicts_with_json": "[]",
+   "pinned": 0,
+   "confidence": "verified",
+   "content": "[Consolidated from 2 related memories]\\n\\nthe billing service retries a failed charge, three times in a row",
+   "outcome_positive": 0,
+   "outcome_negative": 0,
+   "parents_json": "[]",
+   "starred": 0,
+   "trace_outcome": null,
+   "source_session_id": null,
+   "superseded_by": null,
+   "extracted_from": null,
+   "dag_level": 0,
+   "dag_parent_id": null,
+   "kind": "distilled",
+   "scope": null,
+   "owner": null,
+   "artifact_ref": null,
+   "tenant_id": "default",
+   "descendant_count": 0,
+   "earliest_at": null,
+   "latest_at": null,
+   "summary_dirty": 0,
+   "last_rebuilt_at": null,
+   "rebuild_count": 0,
+   "dag_level_3_built_at": null,
+   "origin_project": "app"
+  },
+  {
+   "id": "id#2",
+   "retrieval_count": 0,
+   "strength": 1,
+   "half_life_days": 365,
+   "layer": "semantic",
+   "tags_json": "[\\"llm-refined\\",\\"billing\\"]",
+   "emotional_valence": "neutral",
+   "schema_fit": 0.5,
+   "source": "cli",
+   "outcome_score": null,
+   "conflicts_with_json": "[]",
+   "pinned": 0,
+   "confidence": "verified",
+   "content": "[Consolidated from 2 related memories]\\n\\nthe invoice worker sends a receipt after each charge",
+   "outcome_positive": 0,
+   "outcome_negative": 0,
+   "parents_json": "[]",
+   "starred": 0,
+   "trace_outcome": null,
+   "source_session_id": null,
+   "superseded_by": null,
+   "extracted_from": null,
+   "dag_level": 0,
+   "dag_parent_id": null,
+   "kind": "distilled",
+   "scope": null,
+   "owner": null,
+   "artifact_ref": null,
+   "tenant_id": "default",
+   "descendant_count": 0,
+   "earliest_at": null,
+   "latest_at": null,
+   "summary_dirty": 0,
+   "last_rebuilt_at": null,
+   "rebuild_count": 0,
+   "dag_level_3_built_at": null,
+   "origin_project": "app"
+  },
+  {
+   "id": "id#3",
+   "retrieval_count": 0,
+   "strength": 1,
+   "half_life_days": 365,
+   "layer": "semantic",
+   "tags_json": "[]",
+   "emotional_valence": "neutral",
+   "schema_fit": 0.5,
+   "source": "cli",
+   "outcome_score": null,
+   "conflicts_with_json": "[]",
+   "pinned": 0,
+   "confidence": "verified",
+   "content": "the billing service retries a failed charge three times",
+   "outcome_positive": 0,
+   "outcome_negative": 0,
+   "parents_json": "[]",
+   "starred": 0,
+   "trace_outcome": null,
+   "source_session_id": null,
+   "superseded_by": null,
+   "extracted_from": null,
+   "dag_level": 0,
+   "dag_parent_id": null,
+   "kind": "distilled",
+   "scope": null,
+   "owner": null,
+   "artifact_ref": null,
+   "tenant_id": "default",
+   "descendant_count": 0,
+   "earliest_at": null,
+   "latest_at": null,
+   "summary_dirty": 0,
+   "last_rebuilt_at": null,
+   "rebuild_count": 0,
+   "dag_level_3_built_at": null,
+   "origin_project": "app"
+  }
+ ],
+ "global": []
+}"
+`;
+
+exports[`hippo refine (verb function, injected fetcher, no model) > a failed model call leaves the row as it was > other state 1`] = `
+"{
+ "storeMade": true,
+ "meta": [
+  {
+   "key": "total_forgotten",
+   "value": "0"
+  },
+  {
+   "key": "total_remembered",
+   "value": "0"
+  }
+ ]
+}"
+`;
+
+exports[`hippo refine (verb function, injected fetcher, no model) > a failed model call leaves the row as it was > output 1`] = `
+"$ refineStore -> 0
+--- stdout
+--- stderr
+[hippo] warn: refine: API answered HTTP 500 ts=<ts>
+--- result
+{
+ "scanned": 2,
+ "refined": 0,
+ "skipped": 1,
+ "failed": 1,
+ "details": [
+  {
+   "id": "id#1",
+   "status": "failed",
+   "reason": "api error or empty response"
+  },
+  {
+   "id": "id#2",
+   "status": "skipped",
+   "reason": "already refined"
+  }
+ ]
+}
+"
+`;
+
+exports[`hippo refine (verb function, injected fetcher, no model) > dryRun writes nothing > audit rows 1`] = `
+"{
+ "local": [],
+ "global": []
+}"
+`;
+
+exports[`hippo refine (verb function, injected fetcher, no model) > dryRun writes nothing > memory rows 1`] = `
+"{
+ "local": [
+  {
+   "id": "id#1",
+   "retrieval_count": 0,
+   "strength": 1,
+   "half_life_days": 365,
+   "layer": "semantic",
+   "tags_json": "[\\"billing\\"]",
+   "emotional_valence": "neutral",
+   "schema_fit": 0.5,
+   "source": "cli",
+   "outcome_score": null,
+   "conflicts_with_json": "[]",
+   "pinned": 0,
+   "confidence": "verified",
+   "content": "[Consolidated from 2 related memories]\\n\\nthe billing service retries a failed charge, three times in a row",
+   "outcome_positive": 0,
+   "outcome_negative": 0,
+   "parents_json": "[]",
+   "starred": 0,
+   "trace_outcome": null,
+   "source_session_id": null,
+   "superseded_by": null,
+   "extracted_from": null,
+   "dag_level": 0,
+   "dag_parent_id": null,
+   "kind": "distilled",
+   "scope": null,
+   "owner": null,
+   "artifact_ref": null,
+   "tenant_id": "default",
+   "descendant_count": 0,
+   "earliest_at": null,
+   "latest_at": null,
+   "summary_dirty": 0,
+   "last_rebuilt_at": null,
+   "rebuild_count": 0,
+   "dag_level_3_built_at": null,
+   "origin_project": "app"
+  },
+  {
+   "id": "id#2",
+   "retrieval_count": 0,
+   "strength": 1,
+   "half_life_days": 365,
+   "layer": "semantic",
+   "tags_json": "[\\"llm-refined\\",\\"billing\\"]",
+   "emotional_valence": "neutral",
+   "schema_fit": 0.5,
+   "source": "cli",
+   "outcome_score": null,
+   "conflicts_with_json": "[]",
+   "pinned": 0,
+   "confidence": "verified",
+   "content": "[Consolidated from 2 related memories]\\n\\nthe invoice worker sends a receipt after each charge",
+   "outcome_positive": 0,
+   "outcome_negative": 0,
+   "parents_json": "[]",
+   "starred": 0,
+   "trace_outcome": null,
+   "source_session_id": null,
+   "superseded_by": null,
+   "extracted_from": null,
+   "dag_level": 0,
+   "dag_parent_id": null,
+   "kind": "distilled",
+   "scope": null,
+   "owner": null,
+   "artifact_ref": null,
+   "tenant_id": "default",
+   "descendant_count": 0,
+   "earliest_at": null,
+   "latest_at": null,
+   "summary_dirty": 0,
+   "last_rebuilt_at": null,
+   "rebuild_count": 0,
+   "dag_level_3_built_at": null,
+   "origin_project": "app"
+  },
+  {
+   "id": "id#3",
+   "retrieval_count": 0,
+   "strength": 1,
+   "half_life_days": 365,
+   "layer": "semantic",
+   "tags_json": "[]",
+   "emotional_valence": "neutral",
+   "schema_fit": 0.5,
+   "source": "cli",
+   "outcome_score": null,
+   "conflicts_with_json": "[]",
+   "pinned": 0,
+   "confidence": "verified",
+   "content": "the billing service retries a failed charge three times",
+   "outcome_positive": 0,
+   "outcome_negative": 0,
+   "parents_json": "[]",
+   "starred": 0,
+   "trace_outcome": null,
+   "source_session_id": null,
+   "superseded_by": null,
+   "extracted_from": null,
+   "dag_level": 0,
+   "dag_parent_id": null,
+   "kind": "distilled",
+   "scope": null,
+   "owner": null,
+   "artifact_ref": null,
+   "tenant_id": "default",
+   "descendant_count": 0,
+   "earliest_at": null,
+   "latest_at": null,
+   "summary_dirty": 0,
+   "last_rebuilt_at": null,
+   "rebuild_count": 0,
+   "dag_level_3_built_at": null,
+   "origin_project": "app"
+  }
+ ],
+ "global": []
+}"
+`;
+
+exports[`hippo refine (verb function, injected fetcher, no model) > dryRun writes nothing > other state 1`] = `
+"{
+ "storeMade": true,
+ "meta": [
+  {
+   "key": "total_forgotten",
+   "value": "0"
+  },
+  {
+   "key": "total_remembered",
+   "value": "0"
+  }
+ ]
+}"
+`;
+
+exports[`hippo refine (verb function, injected fetcher, no model) > dryRun writes nothing > output 1`] = `
+"$ refineStore dryRun -> 0
+--- stdout
+--- stderr
+--- result
+{
+ "scanned": 2,
+ "refined": 1,
+ "skipped": 1,
+ "failed": 0,
+ "details": [
+  {
+   "id": "id#1",
+   "status": "refined",
+   "reason": "dry-run (no write)"
+  },
+  {
+   "id": "id#2",
+   "status": "skipped",
+   "reason": "already refined"
+  }
+ ]
+}
+"
+`;
+
+exports[`hippo refine (verb function, injected fetcher, no model) > rewrites a merged row and tags it, skips a refined one, and rewrites both under all > audit rows 1`] = `
+"{
+ "local": [
+  {
+   "tenant_id": "default",
+   "actor": "cli",
+   "op": "remember",
+   "target_id": "id#1",
+   "metadata_json": "{\\"kind\\":\\"distilled\\",\\"scope\\":null}"
+  },
+  {
+   "tenant_id": "default",
+   "actor": "cli",
+   "op": "remember",
+   "target_id": "id#2",
+   "metadata_json": "{\\"kind\\":\\"distilled\\",\\"scope\\":null}"
+  }
+ ],
+ "global": []
+}"
+`;
+
+exports[`hippo refine (verb function, injected fetcher, no model) > rewrites a merged row and tags it, skips a refined one, and rewrites both under all > memory rows 1`] = `
+"{
+ "local": [
+  {
+   "id": "id#1",
+   "retrieval_count": 0,
+   "strength": 1,
+   "half_life_days": 365,
+   "layer": "semantic",
+   "tags_json": "[\\"billing\\",\\"llm-refined\\"]",
+   "emotional_valence": "neutral",
+   "schema_fit": 0.5,
+   "source": "cli",
+   "outcome_score": null,
+   "conflicts_with_json": "[]",
+   "pinned": 0,
+   "confidence": "verified",
+   "content": "Failed charges are retried three times.",
+   "outcome_positive": 0,
+   "outcome_negative": 0,
+   "parents_json": "[]",
+   "starred": 0,
+   "trace_outcome": null,
+   "source_session_id": null,
+   "superseded_by": null,
+   "extracted_from": null,
+   "dag_level": 0,
+   "dag_parent_id": null,
+   "kind": "distilled",
+   "scope": null,
+   "owner": null,
+   "artifact_ref": null,
+   "tenant_id": "default",
+   "descendant_count": 0,
+   "earliest_at": null,
+   "latest_at": null,
+   "summary_dirty": 0,
+   "last_rebuilt_at": null,
+   "rebuild_count": 0,
+   "dag_level_3_built_at": null,
+   "origin_project": "app"
+  },
+  {
+   "id": "id#2",
+   "retrieval_count": 0,
+   "strength": 1,
+   "half_life_days": 365,
+   "layer": "semantic",
+   "tags_json": "[\\"llm-refined\\",\\"billing\\"]",
+   "emotional_valence": "neutral",
+   "schema_fit": 0.5,
+   "source": "cli",
+   "outcome_score": null,
+   "conflicts_with_json": "[]",
+   "pinned": 0,
+   "confidence": "verified",
+   "content": "Each charge is retried, then a receipt is sent.",
+   "outcome_positive": 0,
+   "outcome_negative": 0,
+   "parents_json": "[]",
+   "starred": 0,
+   "trace_outcome": null,
+   "source_session_id": null,
+   "superseded_by": null,
+   "extracted_from": null,
+   "dag_level": 0,
+   "dag_parent_id": null,
+   "kind": "distilled",
+   "scope": null,
+   "owner": null,
+   "artifact_ref": null,
+   "tenant_id": "default",
+   "descendant_count": 0,
+   "earliest_at": null,
+   "latest_at": null,
+   "summary_dirty": 0,
+   "last_rebuilt_at": null,
+   "rebuild_count": 0,
+   "dag_level_3_built_at": null,
+   "origin_project": "app"
+  },
+  {
+   "id": "id#3",
+   "retrieval_count": 0,
+   "strength": 1,
+   "half_life_days": 365,
+   "layer": "semantic",
+   "tags_json": "[]",
+   "emotional_valence": "neutral",
+   "schema_fit": 0.5,
+   "source": "cli",
+   "outcome_score": null,
+   "conflicts_with_json": "[]",
+   "pinned": 0,
+   "confidence": "verified",
+   "content": "the billing service retries a failed charge three times",
+   "outcome_positive": 0,
+   "outcome_negative": 0,
+   "parents_json": "[]",
+   "starred": 0,
+   "trace_outcome": null,
+   "source_session_id": null,
+   "superseded_by": null,
+   "extracted_from": null,
+   "dag_level": 0,
+   "dag_parent_id": null,
+   "kind": "distilled",
+   "scope": null,
+   "owner": null,
+   "artifact_ref": null,
+   "tenant_id": "default",
+   "descendant_count": 0,
+   "earliest_at": null,
+   "latest_at": null,
+   "summary_dirty": 0,
+   "last_rebuilt_at": null,
+   "rebuild_count": 0,
+   "dag_level_3_built_at": null,
+   "origin_project": "app"
+  }
+ ],
+ "global": []
+}"
+`;
+
+exports[`hippo refine (verb function, injected fetcher, no model) > rewrites a merged row and tags it, skips a refined one, and rewrites both under all > other state 1`] = `
+"{
+ "storeMade": true,
+ "meta": [
+  {
+   "key": "total_forgotten",
+   "value": "0"
+  },
+  {
+   "key": "total_remembered",
+   "value": "0"
+  }
+ ]
+}"
+`;
+
+exports[`hippo refine (verb function, injected fetcher, no model) > rewrites a merged row and tags it, skips a refined one, and rewrites both under all > output 1`] = `
+"$ refineStore -> 0
+--- stdout
+--- stderr
+--- result
+{
+ "scanned": 2,
+ "refined": 1,
+ "skipped": 1,
+ "failed": 0,
+ "details": [
+  {
+   "id": "id#1",
+   "status": "refined"
+  },
+  {
+   "id": "id#2",
+   "status": "skipped",
+   "reason": "already refined"
+  }
+ ]
+}
+
+$ refineStore all -> 0
+--- stdout
+--- stderr
+--- result
+{
+ "scanned": 1,
+ "refined": 1,
+ "skipped": 0,
+ "failed": 0,
+ "details": [
+  {
+   "id": "id#2",
+   "status": "refined"
+  }
+ ]
+}
+"
+`;
+
+exports[`hippo sleep (built CLI, no server) > --dry-run counts the errors and removes nothing > audit rows 1`] = `
+"{
+ "local": [
+  {
+   "tenant_id": "__host__",
+   "actor": "cli",
+   "op": "consolidate",
+   "target_id": null,
+   "metadata_json": "{\\"consolidationCount\\":0,\\"dedupCount\\":0,\\"auditDeletedCount\\":2,\\"ambientTotal\\":0,\\"dryRun\\":true,\\"noShare\\":true,\\"partial\\":false,\\"triggeredByTenant\\":\\"default\\"}"
+  }
+ ],
+ "global": []
+}"
+`;
+
+exports[`hippo sleep (built CLI, no server) > --dry-run counts the errors and removes nothing > memory rows 1`] = `
+"{
+ "local": [
+  {
+   "id": "mem_sleep_app",
+   "retrieval_count": 0,
+   "strength": 1,
+   "half_life_days": 365,
+   "layer": "episodic",
+   "tags_json": "[\\"deploy\\"]",
+   "emotional_valence": "neutral",
+   "schema_fit": 0.5,
+   "source": "cli",
+   "outcome_score": null,
+   "conflicts_with_json": "[]",
+   "pinned": 0,
+   "confidence": "verified",
+   "content": "deploy rollback needs the database migration reverted before the api restarts",
+   "outcome_positive": 0,
+   "outcome_negative": 0,
+   "parents_json": "[]",
+   "starred": 0,
+   "trace_outcome": null,
+   "source_session_id": null,
+   "superseded_by": null,
+   "extracted_from": null,
+   "dag_level": 0,
+   "dag_parent_id": null,
+   "kind": "distilled",
+   "scope": null,
+   "owner": null,
+   "artifact_ref": null,
+   "tenant_id": "default",
+   "descendant_count": 0,
+   "earliest_at": null,
+   "latest_at": null,
+   "summary_dirty": 0,
+   "last_rebuilt_at": null,
+   "rebuild_count": 0,
+   "dag_level_3_built_at": null,
+   "origin_project": "app"
+  },
+  {
+   "id": "mem_sleep_web",
+   "retrieval_count": 0,
+   "strength": 1,
+   "half_life_days": 365,
+   "layer": "episodic",
+   "tags_json": "[\\"web\\"]",
+   "emotional_valence": "neutral",
+   "schema_fit": 0.5,
+   "source": "cli",
+   "outcome_score": null,
+   "conflicts_with_json": "[]",
+   "pinned": 0,
+   "confidence": "verified",
+   "content": "the checkout page caches the cart total for sixty seconds",
+   "outcome_positive": 0,
+   "outcome_negative": 0,
+   "parents_json": "[]",
+   "starred": 0,
+   "trace_outcome": null,
+   "source_session_id": null,
+   "superseded_by": null,
+   "extracted_from": null,
+   "dag_level": 0,
+   "dag_parent_id": null,
+   "kind": "distilled",
+   "scope": null,
+   "owner": null,
+   "artifact_ref": null,
+   "tenant_id": "default",
+   "descendant_count": 0,
+   "earliest_at": null,
+   "latest_at": null,
+   "summary_dirty": 0,
+   "last_rebuilt_at": null,
+   "rebuild_count": 0,
+   "dag_level_3_built_at": null,
+   "origin_project": "web"
+  },
+  {
+   "id": "mem_sleep_short",
+   "retrieval_count": 0,
+   "strength": 1,
+   "half_life_days": 365,
+   "layer": "episodic",
+   "tags_json": "[]",
+   "emotional_valence": "neutral",
+   "schema_fit": 0.5,
+   "source": "cli",
+   "outcome_score": null,
+   "conflicts_with_json": "[]",
+   "pinned": 0,
+   "confidence": "verified",
+   "content": "too small",
+   "outcome_positive": 0,
+   "outcome_negative": 0,
+   "parents_json": "[]",
+   "starred": 0,
+   "trace_outcome": null,
+   "source_session_id": null,
+   "superseded_by": null,
+   "extracted_from": null,
+   "dag_level": 0,
+   "dag_parent_id": null,
+   "kind": "distilled",
+   "scope": null,
+   "owner": null,
+   "artifact_ref": null,
+   "tenant_id": "default",
+   "descendant_count": 0,
+   "earliest_at": null,
+   "latest_at": null,
+   "summary_dirty": 0,
+   "last_rebuilt_at": null,
+   "rebuild_count": 0,
+   "dag_level_3_built_at": null,
+   "origin_project": "app"
+  },
+  {
+   "id": "mem_sleep_noise",
+   "retrieval_count": 0,
+   "strength": 1,
+   "half_life_days": 365,
+   "layer": "episodic",
+   "tags_json": "[]",
+   "emotional_valence": "neutral",
+   "schema_fit": 0.5,
+   "source": "cli",
+   "outcome_score": null,
+   "conflicts_with_json": "[]",
+   "pinned": 0,
+   "confidence": "verified",
+   "content": "Merge branch feature/billing into main",
+   "outcome_positive": 0,
+   "outcome_negative": 0,
+   "parents_json": "[]",
+   "starred": 0,
+   "trace_outcome": null,
+   "source_session_id": null,
+   "superseded_by": null,
+   "extracted_from": null,
+   "dag_level": 0,
+   "dag_parent_id": null,
+   "kind": "distilled",
+   "scope": null,
+   "owner": null,
+   "artifact_ref": null,
+   "tenant_id": "default",
+   "descendant_count": 0,
+   "earliest_at": null,
+   "latest_at": null,
+   "summary_dirty": 0,
+   "last_rebuilt_at": null,
+   "rebuild_count": 0,
+   "dag_level_3_built_at": null,
+   "origin_project": "app"
+  },
+  {
+   "id": "mem_sleep_pinned",
+   "retrieval_count": 0,
+   "strength": 1,
+   "half_life_days": 365,
+   "layer": "episodic",
+   "tags_json": "[]",
+   "emotional_valence": "neutral",
+   "schema_fit": 0.5,
+   "source": "cli",
+   "outcome_score": null,
+   "conflicts_with_json": "[]",
+   "pinned": 1,
+   "confidence": "verified",
+   "content": "pinned ok",
+   "outcome_positive": 0,
+   "outcome_negative": 0,
+   "parents_json": "[]",
+   "starred": 0,
+   "trace_outcome": null,
+   "source_session_id": null,
+   "superseded_by": null,
+   "extracted_from": null,
+   "dag_level": 0,
+   "dag_parent_id": null,
+   "kind": "distilled",
+   "scope": null,
+   "owner": null,
+   "artifact_ref": null,
+   "tenant_id": "default",
+   "descendant_count": 0,
+   "earliest_at": null,
+   "latest_at": null,
+   "summary_dirty": 0,
+   "last_rebuilt_at": null,
+   "rebuild_count": 0,
+   "dag_level_3_built_at": null,
+   "origin_project": "app"
+  },
+  {
+   "id": "mem_sleep_warn",
+   "retrieval_count": 0,
+   "strength": 1,
+   "half_life_days": 365,
+   "layer": "episodic",
+   "tags_json": "[]",
+   "emotional_valence": "neutral",
+   "schema_fit": 0.5,
+   "source": "cli",
+   "outcome_score": null,
+   "conflicts_with_json": "[]",
+   "pinned": 0,
+   "confidence": "verified",
+   "content": "to fix the retry loop",
+   "outcome_positive": 0,
+   "outcome_negative": 0,
+   "parents_json": "[]",
+   "starred": 0,
+   "trace_outcome": null,
+   "source_session_id": null,
+   "superseded_by": null,
+   "extracted_from": null,
+   "dag_level": 0,
+   "dag_parent_id": null,
+   "kind": "distilled",
+   "scope": null,
+   "owner": null,
+   "artifact_ref": null,
+   "tenant_id": "default",
+   "descendant_count": 0,
+   "earliest_at": null,
+   "latest_at": null,
+   "summary_dirty": 0,
+   "last_rebuilt_at": null,
+   "rebuild_count": 0,
+   "dag_level_3_built_at": null,
+   "origin_project": "app"
+  }
+ ],
+ "global": []
+}"
+`;
+
+exports[`hippo sleep (built CLI, no server) > --dry-run counts the errors and removes nothing > other state 1`] = `
+"{
+ "storeMade": true,
+ "meta": [
+  {
+   "key": "total_forgotten",
+   "value": "0"
+  },
+  {
+   "key": "total_remembered",
+   "value": "0"
+  }
+ ]
+}"
+`;
+
+exports[`hippo sleep (built CLI, no server) > --dry-run counts the errors and removes nothing > output 1`] = `
+"$ hippo sleep --dry-run --no-learn --no-share -> 0
+--- stdout
+Running consolidation (dry run)...
+
+Results:
+   Active memories:  6
+   Removed (decayed): 0
+   Merged episodic:   0
+   New semantic:      0
+
+Details:
+  💭 replayed 5 memories: mem_sleep_short, mem_sleep_pinned, mem_sleep_noise, mem_sleep_web, mem_sleep_warn
+
+(dry run  - nothing written)
+
+Audit: would remove 2 junk memories (too short/empty).
+Audit: 2 low-quality memories detected (run \`hippo audit\` for details).
+--- stderr
+"
+`;
+
+exports[`hippo sleep (built CLI, no server) > a folder with no store > audit rows 1`] = `
+"{
+ "local": [],
+ "global": []
+}"
+`;
+
+exports[`hippo sleep (built CLI, no server) > a folder with no store > memory rows 1`] = `
+"{
+ "local": [],
+ "global": []
+}"
+`;
+
+exports[`hippo sleep (built CLI, no server) > a folder with no store > other state 1`] = `
+"{
+ "storeMade": false,
+ "meta": []
+}"
+`;
+
+exports[`hippo sleep (built CLI, no server) > a folder with no store > output 1`] = `
+"$ hippo sleep --no-learn --no-share -> 1
+--- stdout
+--- stderr
+No hippo store at <tmp>/acme/billing/ledger/app/.hippo (searched <tmp>/acme/billing/ledger/app and its parents up to your home directory). Run \`hippo init\` first.
+"
+`;
+
+exports[`hippo sleep (built CLI, no server) > removes audit errors on a store with two project names, and a second sleep finds none > audit rows 1`] = `
+"{
+ "local": [
+  {
+   "tenant_id": "default",
+   "actor": "cli",
+   "op": "forget",
+   "target_id": "mem_sleep_short",
+   "metadata_json": "{\\"reason\\":\\"sleep-audit: too short (< 10 chars)\\"}"
+  },
+  {
+   "tenant_id": "default",
+   "actor": "cli",
+   "op": "forget",
+   "target_id": "mem_sleep_noise",
+   "metadata_json": "{\\"reason\\":\\"sleep-audit: release/commit noise, not a useful memory\\"}"
+  },
+  {
+   "tenant_id": "__host__",
+   "actor": "cli",
+   "op": "consolidate",
+   "target_id": null,
+   "metadata_json": "{\\"consolidationCount\\":0,\\"dedupCount\\":0,\\"auditDeletedCount\\":2,\\"ambientTotal\\":4,\\"dryRun\\":false,\\"noShare\\":true,\\"partial\\":false,\\"triggeredByTenant\\":\\"default\\"}"
+  },
+  {
+   "tenant_id": "__host__",
+   "actor": "cli",
+   "op": "consolidate",
+   "target_id": null,
+   "metadata_json": "{\\"consolidationCount\\":0,\\"dedupCount\\":0,\\"auditDeletedCount\\":0,\\"ambientTotal\\":4,\\"dryRun\\":false,\\"noShare\\":true,\\"partial\\":false,\\"triggeredByTenant\\":\\"default\\"}"
+  }
+ ],
+ "global": []
+}"
+`;
+
+exports[`hippo sleep (built CLI, no server) > removes audit errors on a store with two project names, and a second sleep finds none > memory rows 1`] = `
+"{
+ "local": [
+  {
+   "id": "mem_sleep_app",
+   "retrieval_count": 1,
+   "strength": 1,
+   "half_life_days": 367,
+   "layer": "episodic",
+   "tags_json": "[\\"deploy\\"]",
+   "emotional_valence": "neutral",
+   "schema_fit": 0.5,
+   "source": "cli",
+   "outcome_score": null,
+   "conflicts_with_json": "[]",
+   "pinned": 0,
+   "confidence": "verified",
+   "content": "deploy rollback needs the database migration reverted before the api restarts",
+   "outcome_positive": 0,
+   "outcome_negative": 0,
+   "parents_json": "[]",
+   "starred": 0,
+   "trace_outcome": null,
+   "source_session_id": null,
+   "superseded_by": null,
+   "extracted_from": null,
+   "dag_level": 0,
+   "dag_parent_id": null,
+   "kind": "distilled",
+   "scope": null,
+   "owner": null,
+   "artifact_ref": null,
+   "tenant_id": "default",
+   "descendant_count": 0,
+   "earliest_at": null,
+   "latest_at": null,
+   "summary_dirty": 0,
+   "last_rebuilt_at": null,
+   "rebuild_count": 0,
+   "dag_level_3_built_at": null,
+   "origin_project": "app"
+  },
+  {
+   "id": "mem_sleep_web",
+   "retrieval_count": 2,
+   "strength": 1,
+   "half_life_days": 369,
+   "layer": "episodic",
+   "tags_json": "[\\"web\\"]",
+   "emotional_valence": "neutral",
+   "schema_fit": 0.5,
+   "source": "cli",
+   "outcome_score": null,
+   "conflicts_with_json": "[]",
+   "pinned": 0,
+   "confidence": "verified",
+   "content": "the checkout page caches the cart total for sixty seconds",
+   "outcome_positive": 0,
+   "outcome_negative": 0,
+   "parents_json": "[]",
+   "starred": 0,
+   "trace_outcome": null,
+   "source_session_id": null,
+   "superseded_by": null,
+   "extracted_from": null,
+   "dag_level": 0,
+   "dag_parent_id": null,
+   "kind": "distilled",
+   "scope": null,
+   "owner": null,
+   "artifact_ref": null,
+   "tenant_id": "default",
+   "descendant_count": 0,
+   "earliest_at": null,
+   "latest_at": null,
+   "summary_dirty": 0,
+   "last_rebuilt_at": null,
+   "rebuild_count": 0,
+   "dag_level_3_built_at": null,
+   "origin_project": "web"
+  },
+  {
+   "id": "mem_sleep_pinned",
+   "retrieval_count": 2,
+   "strength": 1,
+   "half_life_days": 369,
+   "layer": "episodic",
+   "tags_json": "[]",
+   "emotional_valence": "neutral",
+   "schema_fit": 0.5,
+   "source": "cli",
+   "outcome_score": null,
+   "conflicts_with_json": "[]",
+   "pinned": 1,
+   "confidence": "verified",
+   "content": "pinned ok",
+   "outcome_positive": 0,
+   "outcome_negative": 0,
+   "parents_json": "[]",
+   "starred": 0,
+   "trace_outcome": null,
+   "source_session_id": null,
+   "superseded_by": null,
+   "extracted_from": null,
+   "dag_level": 0,
+   "dag_parent_id": null,
+   "kind": "distilled",
+   "scope": null,
+   "owner": null,
+   "artifact_ref": null,
+   "tenant_id": "default",
+   "descendant_count": 0,
+   "earliest_at": null,
+   "latest_at": null,
+   "summary_dirty": 0,
+   "last_rebuilt_at": null,
+   "rebuild_count": 0,
+   "dag_level_3_built_at": null,
+   "origin_project": "app"
+  },
+  {
+   "id": "mem_sleep_warn",
+   "retrieval_count": 2,
+   "strength": 1,
+   "half_life_days": 369,
+   "layer": "episodic",
+   "tags_json": "[]",
+   "emotional_valence": "neutral",
+   "schema_fit": 0.5,
+   "source": "cli",
+   "outcome_score": null,
+   "conflicts_with_json": "[]",
+   "pinned": 0,
+   "confidence": "verified",
+   "content": "to fix the retry loop",
+   "outcome_positive": 0,
+   "outcome_negative": 0,
+   "parents_json": "[]",
+   "starred": 0,
+   "trace_outcome": null,
+   "source_session_id": null,
+   "superseded_by": null,
+   "extracted_from": null,
+   "dag_level": 0,
+   "dag_parent_id": null,
+   "kind": "distilled",
+   "scope": null,
+   "owner": null,
+   "artifact_ref": null,
+   "tenant_id": "default",
+   "descendant_count": 0,
+   "earliest_at": null,
+   "latest_at": null,
+   "summary_dirty": 0,
+   "last_rebuilt_at": null,
+   "rebuild_count": 0,
+   "dag_level_3_built_at": null,
+   "origin_project": "app"
+  }
+ ],
+ "global": []
+}"
+`;
+
+exports[`hippo sleep (built CLI, no server) > removes audit errors on a store with two project names, and a second sleep finds none > other state 1`] = `
+"{
+ "storeMade": true,
+ "meta": [
+  {
+   "key": "project_repair_auto",
+   "value": "1"
+  },
+  {
+   "key": "quality_repair_auto",
+   "value": "1"
+  },
+  {
+   "key": "total_forgotten",
+   "value": "0"
+  },
+  {
+   "key": "total_remembered",
+   "value": "0"
+  }
+ ]
+}"
+`;
+
+exports[`hippo sleep (built CLI, no server) > removes audit errors on a store with two project names, and a second sleep finds none > output 1`] = `
+"$ hippo sleep --no-learn --no-share -> 0
+--- stdout
+Running consolidation...
+
+Results:
+   Active memories:  6
+   Removed (decayed): 0
+   Merged episodic:   0
+   New semantic:      0
+
+Details:
+  💭 replayed 5 memories: mem_sleep_short, mem_sleep_pinned, mem_sleep_noise, mem_sleep_web, mem_sleep_warn
+
+Audit: removed 2 junk memories (too short/empty).
+Audit: 2 low-quality memories detected (run \`hippo audit\` for details).
+
+Memory state: 4 memories, mostly aged, steady operation, mostly episodic, high avg strength, diverse topics.
+--- stderr
+
+$ hippo sleep --no-learn --no-share -> 0
+--- stdout
+Running consolidation...
+
+Results:
+   Active memories:  4
+   Removed (decayed): 0
+   Merged episodic:   0
+   New semantic:      0
+
+Details:
+  💭 replayed 4 memories: mem_sleep_app, mem_sleep_pinned, mem_sleep_warn, mem_sleep_web
+Audit: 2 low-quality memories detected (run \`hippo audit\` for details).
+
+Memory state: 4 memories, mostly aged, steady operation, mostly episodic, high avg strength, diverse topics.
+--- stderr
+"
+`;
+
+exports[`hippo watch (built CLI, no server) > a command that succeeds stores nothing > audit rows 1`] = `
+"{
+ "local": [],
+ "global": []
+}"
+`;
+
+exports[`hippo watch (built CLI, no server) > a command that succeeds stores nothing > memory rows 1`] = `
+"{
+ "local": [],
+ "global": []
+}"
+`;
+
+exports[`hippo watch (built CLI, no server) > a command that succeeds stores nothing > other state 1`] = `
+"{
+ "storeMade": true,
+ "meta": [
+  {
+   "key": "total_forgotten",
+   "value": "0"
+  },
+  {
+   "key": "total_remembered",
+   "value": "0"
+  }
+ ]
+}"
+`;
+
+exports[`hippo watch (built CLI, no server) > a command that succeeds stores nothing > output 1`] = `
+"$ hippo watch node ok.js -> 0
+--- stdout
+done
+--- stderr
+"
+`;
+
+exports[`hippo watch (built CLI, no server) > a failure that matches a rejected value is not stored > audit rows 1`] = `
+"{
+ "local": [
+  {
+   "tenant_id": "default",
+   "actor": "cli",
+   "op": "reject_refusal",
+   "target_id": "id#1",
+   "metadata_json": "{\\"digest\\":\\"006fffb8b6c614e497fc6a768eec0f288ebc776e0d604b7d3bdfa92ea1775ea7\\",\\"reason\\":\\"wrong\\"}"
+  }
+ ],
+ "global": []
+}"
+`;
+
+exports[`hippo watch (built CLI, no server) > a failure that matches a rejected value is not stored > memory rows 1`] = `
+"{
+ "local": [],
+ "global": []
+}"
+`;
+
+exports[`hippo watch (built CLI, no server) > a failure that matches a rejected value is not stored > other state 1`] = `
+"{
+ "storeMade": true,
+ "meta": [
+  {
+   "key": "total_forgotten",
+   "value": "0"
+  },
+  {
+   "key": "total_remembered",
+   "value": "0"
+  }
+ ]
+}"
+`;
+
+exports[`hippo watch (built CLI, no server) > a failure that matches a rejected value is not stored > output 1`] = `
+"$ hippo watch node fail.js -> 3
+--- stdout
+--- stderr
+connection refused on port 5432
+
+Hippo: this failure matches a rejected value (wrong); not stored.
+"
+`;
+
+exports[`hippo watch (built CLI, no server) > a folder with no store > audit rows 1`] = `
+"{
+ "local": [],
+ "global": []
+}"
+`;
+
+exports[`hippo watch (built CLI, no server) > a folder with no store > memory rows 1`] = `
+"{
+ "local": [],
+ "global": []
+}"
+`;
+
+exports[`hippo watch (built CLI, no server) > a folder with no store > other state 1`] = `
+"{
+ "storeMade": false,
+ "meta": []
+}"
+`;
+
+exports[`hippo watch (built CLI, no server) > a folder with no store > output 1`] = `
+"$ hippo watch node fail.js -> 3
+--- stdout
+--- stderr
+connection refused on port 5432
+Command failed but .hippo not initialized. Run \`hippo init\` to enable auto-learn.
+"
+`;
+
+exports[`hippo watch (built CLI, no server) > no command > audit rows 1`] = `
+"{
+ "local": [],
+ "global": []
+}"
+`;
+
+exports[`hippo watch (built CLI, no server) > no command > memory rows 1`] = `
+"{
+ "local": [],
+ "global": []
+}"
+`;
+
+exports[`hippo watch (built CLI, no server) > no command > other state 1`] = `
+"{
+ "storeMade": true,
+ "meta": [
+  {
+   "key": "total_forgotten",
+   "value": "0"
+  },
+  {
+   "key": "total_remembered",
+   "value": "0"
+  }
+ ]
+}"
+`;
+
+exports[`hippo watch (built CLI, no server) > no command > output 1`] = `
+"$ hippo watch -> 1
+--- stdout
+--- stderr
+Usage: hippo watch "<command>"
+"
+`;
+
+exports[`hippo watch (built CLI, no server) > stores a failed command, and a second failure of it beside the first > audit rows 1`] = `
+"{
+ "local": [
+  {
+   "tenant_id": "default",
+   "actor": "cli",
+   "op": "remember",
+   "target_id": "id#1",
+   "metadata_json": "{\\"kind\\":\\"distilled\\",\\"scope\\":null}"
+  },
+  {
+   "tenant_id": "default",
+   "actor": "cli",
+   "op": "remember",
+   "target_id": "id#2",
+   "metadata_json": "{\\"kind\\":\\"distilled\\",\\"scope\\":null}"
+  }
+ ],
+ "global": []
+}"
+`;
+
+exports[`hippo watch (built CLI, no server) > stores a failed command, and a second failure of it beside the first > memory rows 1`] = `
+"{
+ "local": [
+  {
+   "id": "id#1",
+   "retrieval_count": 0,
+   "strength": 1,
+   "half_life_days": 730,
+   "layer": "episodic",
+   "tags_json": "[\\"error\\",\\"autolearn\\",\\"node\\"]",
+   "emotional_valence": "negative",
+   "schema_fit": 0.5,
+   "source": "autolearn",
+   "outcome_score": null,
+   "conflicts_with_json": "[]",
+   "pinned": 0,
+   "confidence": "observed",
+   "content": "Command 'node fail.js' failed (exit 3): connection refused on port 5432",
+   "outcome_positive": 0,
+   "outcome_negative": 0,
+   "parents_json": "[]",
+   "starred": 0,
+   "trace_outcome": null,
+   "source_session_id": null,
+   "superseded_by": null,
+   "extracted_from": null,
+   "dag_level": 0,
+   "dag_parent_id": null,
+   "kind": "distilled",
+   "scope": null,
+   "owner": null,
+   "artifact_ref": null,
+   "tenant_id": "default",
+   "descendant_count": 0,
+   "earliest_at": null,
+   "latest_at": null,
+   "summary_dirty": 0,
+   "last_rebuilt_at": null,
+   "rebuild_count": 0,
+   "dag_level_3_built_at": null,
+   "origin_project": "app"
+  },
+  {
+   "id": "id#2",
+   "retrieval_count": 0,
+   "strength": 1,
+   "half_life_days": 730,
+   "layer": "episodic",
+   "tags_json": "[\\"error\\",\\"autolearn\\",\\"node\\"]",
+   "emotional_valence": "negative",
+   "schema_fit": 0.6799999999999999,
+   "source": "autolearn",
+   "outcome_score": null,
+   "conflicts_with_json": "[]",
+   "pinned": 0,
+   "confidence": "observed",
+   "content": "Command 'node fail.js' failed (exit 3): connection refused on port 5432",
+   "outcome_positive": 0,
+   "outcome_negative": 0,
+   "parents_json": "[]",
+   "starred": 0,
+   "trace_outcome": null,
+   "source_session_id": null,
+   "superseded_by": null,
+   "extracted_from": null,
+   "dag_level": 0,
+   "dag_parent_id": null,
+   "kind": "distilled",
+   "scope": null,
+   "owner": null,
+   "artifact_ref": null,
+   "tenant_id": "default",
+   "descendant_count": 0,
+   "earliest_at": null,
+   "latest_at": null,
+   "summary_dirty": 0,
+   "last_rebuilt_at": null,
+   "rebuild_count": 0,
+   "dag_level_3_built_at": null,
+   "origin_project": "app"
+  }
+ ],
+ "global": []
+}"
+`;
+
+exports[`hippo watch (built CLI, no server) > stores a failed command, and a second failure of it beside the first > other state 1`] = `
+"{
+ "storeMade": true,
+ "meta": [
+  {
+   "key": "total_forgotten",
+   "value": "0"
+  },
+  {
+   "key": "total_remembered",
+   "value": "2"
+  }
+ ]
+}"
+`;
+
+exports[`hippo watch (built CLI, no server) > stores a failed command, and a second failure of it beside the first > output 1`] = `
+"$ hippo watch node fail.js -> 3
+--- stdout
+--- stderr
+connection refused on port 5432
+
+Hippo learned from failure: "connection refused on port 5432"
+
+$ hippo watch node fail.js -> 3
+--- stdout
+--- stderr
+connection refused on port 5432
+
+Hippo learned from failure: "connection refused on port 5432"
+"
+`;

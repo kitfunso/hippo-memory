@@ -71,7 +71,8 @@ function focusRows({ hippoRoot, db, tenantId }: GraphSource, name: string, limit
   return { entities, relations, truncated };
 }
 
-/** What `GraphReads.graphRows` answers, read on `db`: the caller opens the one snapshot that keeps entity ids and relation ids from two different rebuilds apart. */
+/** What `GraphReads.graphRows` answers, read on `db`: the caller opens the one
+ * snapshot that keeps entity ids and relation ids from two different rebuilds apart. */
 export function graphViewRows(hippoRoot: string, db: DatabaseSyncLike, tenantId: string, spec: GraphViewSpec): GraphRows {
   const source = { hippoRoot, db, tenantId };
   const raw = spec.entity !== undefined ? focusRows(source, spec.entity, spec.limit, spec.canRead) : wholeGraphRows(source, spec.limit);

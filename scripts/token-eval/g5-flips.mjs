@@ -9,6 +9,25 @@ function assertNoOrphans(rows, entries, pass) {
   if (orphan) throw new Error(`${orphan} has regrade rows but no grade.json (${pass}); restore it from the run before grading`);
 }
 
+/** `[lessonId, sha]` of each checker behind the latest done post-fix rows; two versions for one lesson are refused, since no single fix gave those verdicts. */
+export function postfixCheckers(rows) {
+  const byLesson = new Map();
+  for (const row of rows.values()) {
+    if (row.status !== 'done') continue;
+    for (const c of row.checks) {
+      if (!byLesson.has(c.lessonId)) byLesson.set(c.lessonId, new Map());
+      const cells = byLesson.get(c.lessonId);
+      cells.set(c.checkerSha, (cells.get(c.checkerSha) ?? new Set()).add(row.key));
+    }
+  }
+  for (const [id, cells] of byLesson) {
+    if (cells.size === 1) continue;
+    const rest = [...cells.values()].sort((a, b) => b.size - a.size).slice(1).flatMap((keys) => [...keys]);
+    throw new Error(`the post-fix rows hold ${cells.size} versions of the checker for ${id}: ${rest.length} cells were graded by another version than most (${rest.slice(0, 5).join(', ')}); run regrade --post-fix with no --cell, so one version grades every cell`);
+  }
+  return [...byLesson].map(([id, cells]) => [id, cells.keys().next().value]);
+}
+
 /** Flips from every row each cell ever wrote, so a re-run cannot erase one; errors from the latest row refuse unless --flip-errors drops their lessons. */
 export function flipsOf(out, entries, flipErrors) {
   const passes = fs.existsSync(rowsFile(out, 'postfix')) ? ['repro', 'postfix'] : ['repro'];
@@ -20,6 +39,7 @@ export function flipsOf(out, entries, flipErrors) {
   for (const pass of passes) {
     const { rows, history } = readRows(rowsFile(out, pass));
     assertNoOrphans(rows, entries, pass);
+    if (pass === 'postfix') postfixCheckers(rows);
     for (const e of entries) {
       const row = rows.get(e.key);
       if (!row) throw new Error(`cell ${e.key} has no ${pass} row; run regrade${pass === 'postfix' ? ' --post-fix' : ''} first`);

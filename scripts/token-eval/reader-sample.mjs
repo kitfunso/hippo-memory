@@ -6,7 +6,7 @@ import { agentGit } from './checks.mjs';
 import { readerDiff } from './grading.mjs';
 import { lessonIndex } from './lessons.mjs';
 import { listGrades, readRows, rowsFile } from './regrade.mjs';
-import { flipsOf } from './g5-flips.mjs';
+import { flipsOf, postfixCheckers } from './g5-flips.mjs';
 import { FORBIDDEN, isHiddenCommand, blindLeaks, equalShares, fenced, fillStrata, labelsTemplate, parseLabels, proportional, redactor, seededOrder } from './g5-draw.mjs';
 
 const VERDICTS = ['pass', 'fail', 'na'];
@@ -119,22 +119,34 @@ function readerGroups(seed, n, pool, arms) {
 
 /** The `lessonId:sha` of every checker a round's verdicts came from: the run's in round 1, the post-fix rows' after. */
 function verdictShas(out, round) {
-  const pairs = round === 1
-    ? listGrades(out).flatMap((e) => Object.entries(e.grade.checkers))
-    : [...readRows(rowsFile(out, 'postfix')).rows.values()].filter((r) => r.status === 'done').flatMap((r) => r.checks.map((c) => [c.lessonId, c.checkerSha]));
+  const pairs = round === 1 ? listGrades(out).flatMap((e) => Object.entries(e.grade.checkers)) : postfixCheckers(readRows(rowsFile(out, 'postfix')).rows);
   return [...new Set(pairs.map(([id, sha]) => `${id}:${sha}`))].sort();
 }
+
+// G5's 10% test from z0-gates.mjs without its size test, so a short round with few disagreements also counts as passed.
+const passed = ({ n, disagreements }) => !(disagreements * 10 > n);
 
 /** Prereg 166: round K only once round K-1 was scored with more than 10% disagreeing and a checker changed since its draw. */
 function assertNewRound(out, round) {
   const prev = round - 1;
   if (!fs.existsSync(keyFile(out, prev))) throw new Error(`reader round ${prev} is not drawn; draw rounds in order`);
   if (!fs.existsSync(scoreFile(out, prev))) throw new Error(`reader round ${prev} is not scored; score it before drawing round ${round}`);
-  const { n, disagreements } = readJson(scoreFile(out, prev));
-  // The same test as G5 in z0-gates.mjs, so a round the gate passes can never be redrawn.
-  if (!(disagreements * 10 > n)) throw new Error(`reader round ${prev} passed (${disagreements} of ${n} disagree); prereg 166 allows a new round only after more than 10% disagree`);
+  const score = readJson(scoreFile(out, prev));
+  if (passed(score)) throw new Error(`reader round ${prev} passed (${score.disagreements} of ${score.n} disagree); prereg 166 allows a new round only after more than 10% disagree`);
   const seen = new Set(readJson(keyFile(out, prev)).checkers);
   if (!verdictShas(out, round).some((s) => !seen.has(s))) throw new Error(`no checker changed since reader round ${prev}; fix the checker and run regrade --post-fix before round ${round}`);
+}
+
+/** A passing round freezes the checkers (reading 19): a `[lessonId, sha]` its key does not list was never judged, so it is refused. */
+export function assertCheckersJudged(out, pairs, whose = 'the current') {
+  const k = readerRounds(out).filter((r) => fs.existsSync(scoreFile(out, r))).at(-1);
+  if (k === undefined) return;
+  const score = readJson(scoreFile(out, k));
+  if (!passed(score)) return;
+  const judged = new Set(readJson(keyFile(out, k)).checkers);
+  const ids = [...new Set(pairs.filter(([id, sha]) => !judged.has(`${id}:${sha}`)).map(([id]) => id))].sort();
+  if (ids.length === 0) return;
+  throw new Error(`reader round ${k} passed (${score.disagreements} of ${score.n} disagree), and prereg 166 allows a checker fix only after more than 10% disagree, but ${whose} checker for ${ids.join(', ')} is not the one that round judged; restore the judged checker and run regrade --post-fix again`);
 }
 
 function existingDraw(out, round, args) {
@@ -228,6 +240,8 @@ export function readerSummary(out) {
   if (!fs.existsSync(scoreFile(out, k))) throw new Error(`reader round ${k} is drawn but not scored; run reader --round ${k} --labels FILE first`);
   const key = readJson(keyFile(out, k));
   const score = readJson(scoreFile(out, k));
+  // The score stands only for the verdicts its round judged, so post-fix rows from another checker cannot borrow it.
+  assertCheckersJudged(out, postfixCheckers(readRows(rowsFile(out, 'postfix')).rows), "the post-fix rows'");
   return {
     readerSample: { n: score.n, disagreements: score.disagreements },
     g5: { readerRound: k, readerEligible: key.eligible, readerIneligible: key.ineligible, unblindable: key.unblindable, readerRound1Rescored: rescoreRound1(out) },

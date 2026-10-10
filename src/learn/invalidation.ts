@@ -529,7 +529,8 @@ function recordChurnEvidence(
   return toTag;
 }
 
-/** Flags memories whose named file/symbol/script changed or disappeared since storage (or last confirmation); only adds/removes CHURN_STALE_TAG, never confidence/half-life/strength. */
+/** Flags memories whose named file/symbol/script changed or disappeared since storage (or last
+ * confirmation); only adds/removes CHURN_STALE_TAG, never confidence/half-life/strength. */
 export function detectChurnStale(
   hippoRoot: string,
   repoRoot: string,
