@@ -1,3 +1,3 @@
 ### Changed
 
-- **Internal:** four capture opens (failure log, compaction start, snapshot mark, dry-run rejection probe) now live in src/store functions that take a folder and plain values.
+- **Internal:** capture code no longer opens the store or names a connection type. The write gate (`gated-write`) and the compaction record, spool and replay moved into `src/store`, and capture calls store functions that take a folder and plain values.

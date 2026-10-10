@@ -38,7 +38,7 @@ import { isStringValue, readSessionEnd, readVscodeStop, type CaptureInput, type 
 import { loadConfig } from '../core/config.js';
 import { autoSleepDue } from '../api/auto-sleep.js';
 import { truncateCodePointSafe } from '../util/transcript-tail.js';
-import { COMPACTION_DB_WAIT_MS } from '../capture/compaction-record.js';
+import { COMPACTION_DB_WAIT_MS } from '../store/compaction-record.js';
 import { COMPACT_RESUME_EVENT_CONTENT_CAP, COMPACT_RESUME_MAX_AGE_MS, compactResumeText } from '../api/context-render.js';
 import { normaliseHookPayload, readHookStdin, readStdinBounded, type BoundedStdin } from './stdin.js';
 import { errorMessage, log } from '../util/log.js';

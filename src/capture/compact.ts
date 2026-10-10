@@ -11,7 +11,7 @@ import {
   saveCompaction,
   replayCompactionsAt,
   COMPACTION_DB_WAIT_MS,
-} from './compaction-record.js';
+} from '../store/compaction-record.js';
 import { resolveTenantId } from '../store/tenant.js';
 import { defaultPreCompactLogPath, vscodeUserHooksFile } from '../hooks/shared.js';
 import { readClaudeCodePostCompact, readClaudeCodePreCompact, type CaptureInput, type HookRuntime } from '../core/capture-contract.js';

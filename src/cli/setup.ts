@@ -37,7 +37,7 @@ import { isInitialized } from '../store/open.js';
 import { currentMachine, importUserMemories } from '../agent-memories/sync.js';
 import { getGlobalRoot } from '../sharing/global-store.js';
 import { listRegisteredWorkspaces, runDailyMaintenance } from './scheduler.js';
-import { replayCompactionsAt } from '../capture/compaction-record.js';
+import { replayCompactionsAt } from '../store/compaction-record.js';
 import { errorFields, errorMessage, log } from '../util/log.js';
 import { envDailyStepTimeoutMs } from '../util/env.js';
 import { writeFileAtomic } from '../util/atomic-write.js';

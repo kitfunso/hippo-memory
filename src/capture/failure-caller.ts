@@ -2,13 +2,14 @@
 import { BadRequestError } from '../core/api-errors.js';
 import type { Context } from '../api/types.js';
 import { storeLesson } from './capture-error.js';
-import { recordFailure, requestOutcome, settleFailureOutcome, type CaptureErrorOutcome, type FailureOutcome, type RoutineRule } from '../store/failure-log.js';
+import { recordFailureAt, requestOutcomeAt, settleFailureOutcomeAt } from '../store/failure-log-at.js';
+import type { CaptureErrorOutcome, FailureOutcome, RoutineRule } from '../store/failure-log.js';
 import { errorMessage, log } from '../util/log.js';
 import type { CallerProject } from '../api/prompt-hook.js';
 import { scrubForSharing } from './share-scrub.js';
 import type { ContinuityKey } from '../store/sessions.js';
 import { truncateCodePointSafe } from '../util/transcript-tail.js';
-import { assertRequestId, bindCaller, withCallerDb } from './caller-session.js';
+import { assertRequestId, bindCaller } from './caller-session.js';
 import { FAILURE_TEXT_MAX_CHARS, failureHash } from './failure-reading.js';
 
 type FailureSkip = Exclude<CaptureErrorOutcome, 'stored' | 'duplicate'>;
@@ -56,7 +57,7 @@ function checkedFailure(req: CallerFailureRequest): CheckedFailure {
 export function captureFailureForCaller(ctx: Context, req: CallerFailureRequest): CallerFailureResult {
   const failure = checkedFailure(req);
   const key = bindCaller(ctx, req.sessionId, req.project);
-  const earlier = withCallerDb(ctx, (db) => requestOutcome(db, ctx.tenantId, req.requestId, req.sessionId));
+  const earlier = requestOutcomeAt(ctx.hippoRoot, ctx.tenantId, req.requestId, req.sessionId);
   // A retry after a lost reply gets the first answer and writes nothing; one whose store failed tries the store again.
   if (earlier !== null && earlier !== 'store-failed') return { outcome: earlier };
   let logged: FailureOutcome = 'store-failed';
@@ -74,17 +75,15 @@ export function captureFailureForCaller(ctx: Context, req: CallerFailureRequest)
 /** Runs after the outcome in its own try, so a log error never hides the store's error or its outcome. */
 function logOutcome(ctx: Context, req: CallerFailureRequest, key: ContinuityKey, outcome: FailureOutcome, retried: boolean): void {
   try {
-    withCallerDb(ctx, (db) => {
-      // The request id allows one row, so a retry rewrites the first try's outcome.
-      if (retried) {
-        settleFailureOutcome(db, ctx.tenantId, req.requestId, outcome);
-        return;
-      }
-      recordFailure(db, {
-        tenantId: ctx.tenantId, sessionId: req.sessionId, tool: req.tool, outcome, rule: req.rule,
-        sigHash: req.text?.trim() ? failureHash(req.text) : null, detailHash: req.detailHash,
-        ownerSubject: key.owner, originProject: req.project.name, requestId: req.requestId,
-      });
+    // The request id allows one row, so a retry rewrites the first try's outcome.
+    if (retried) {
+      settleFailureOutcomeAt(ctx.hippoRoot, ctx.tenantId, req.requestId, outcome);
+      return;
+    }
+    recordFailureAt(ctx.hippoRoot, {
+      tenantId: ctx.tenantId, sessionId: req.sessionId, tool: req.tool, outcome, rule: req.rule,
+      sigHash: req.text?.trim() ? failureHash(req.text) : null, detailHash: req.detailHash,
+      ownerSubject: key.owner, originProject: req.project.name, requestId: req.requestId,
     });
   } catch (err) {
     log.warn(`capture-error: failure not logged: ${errorMessage(err)}`);

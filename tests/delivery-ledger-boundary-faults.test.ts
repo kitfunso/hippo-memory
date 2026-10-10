@@ -3,7 +3,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { cmdPreCompact } from '../src/capture/compact.js';
-import { PRE_COMPACT_INSTRUCTION } from '../src/capture/compaction-record.js';
+import { PRE_COMPACT_INSTRUCTION } from '../src/store/compaction-record.js';
 import { loadActiveTaskSnapshot } from '../src/store/sessions.js';
 import { normaliseHookPayload } from '../src/cli/stdin.js';
 import type { DeliveryFault } from '../src/store/delivery-recorder.js';

@@ -7,7 +7,7 @@ import { initStore } from '../src/store/open.js';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
 import { _resetSharedStoreCacheForTests } from '../src/core/config.js';
 import { clearProjectIdentityCache } from '../src/core/project-identity.js';
-import { PRE_COMPACT_INSTRUCTION } from '../src/capture/compaction-record.js';
+import { PRE_COMPACT_INSTRUCTION } from '../src/store/compaction-record.js';
 import type { Context } from '../src/api/types.js';
 import {
   captureFailureForCaller,

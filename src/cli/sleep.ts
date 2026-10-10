@@ -5,7 +5,7 @@ import * as fs from 'fs';
 import { loadConfig } from '../core/config.js';
 import { isGitRepo } from '../learn/autolearn.js';
 import { importForStore, currentMachine } from '../agent-memories/sync.js';
-import { replayCompactionsAt } from '../capture/compaction-record.js';
+import { replayCompactionsAt } from '../store/compaction-record.js';
 import * as api from '../api/index.js';
 import { cliApiContext } from './api-context.js';
 import { sleepResultLines } from './sleep-render.js';

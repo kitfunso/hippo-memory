@@ -5,7 +5,7 @@ import { queryAuditEvents } from '../src/store/audit.js';
 import { extractFromText } from '../src/capture/extract.js';
 import { loadConfig } from '../src/core/config.js';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
-import { gatedWrite } from '../src/trust/gated-write.js';
+import { gatedWrite } from '../src/store/gated-write.js';
 import { createMemory, Layer, type MemoryEntry } from '../src/core/memory.js';
 import { insertRejectedValue, normalizeValueForRejection, rejectionDigest } from '../src/store/rejection.js';
 import { openStore, initStore } from '../src/store/open.js';

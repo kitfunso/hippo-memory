@@ -3,24 +3,24 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { ConflictError } from '../core/api-errors.js';
 import { isStringValue } from '../core/capture-contract.js';
-import { COMPACTION_ITEM_MAX_CHARS, compactSummaryBody, parseCompactionItems, selectItemRows } from './compaction-items.js';
+import { COMPACTION_ITEM_MAX_CHARS, compactSummaryBody, parseCompactionItems, selectItemRows } from '../util/compaction-items.js';
 import { importSpool, spool, type SpoolImporter } from './compaction-spool.js';
 import { isSharedStore, loadConfig } from '../core/config.js';
 import { closeHippoDb, isSqliteBusy, openHippoDb, withWriteScopeOr, type DatabaseSyncLike } from '../db/index.js';
-import { gatedWrite } from '../trust/gated-write.js';
+import { gatedWrite } from './gated-write.js';
 import { COMPACTION_MEMORY_TAG, COMPACTION_SOURCE_PREFIX, Layer, createMemory, generateId, type MemoryEntry } from '../core/memory.js';
 import { fallbackOrigin, isGlobalStoreRoot, projectId, projectNames, resolveProjectIdentity, type ProjectRef } from '../core/project-identity.js';
 import { maskEmails, redactSecretsStrict } from '../util/secret-detect.js';
 import {
-  closeStartedWithoutSummary, compactionProgress, compactionRowsByRequest, heldMemoryRows, insertStartedCompaction, insertStartedCompactionAt,
-  insertSummarisedCompaction, latestCompactionRows, latestStartedRows, markCompactionDone, markCompactionSummarised, markSnapshotSavedAt,
-  markSnapshotSavedRow, nextCompactionStart, openTranscriptRows, stalledSummarisedRows,
+  closeStartedWithoutSummary, compactionProgress, compactionRowsByRequest, heldMemoryRows, insertStartedCompaction, insertSummarisedCompaction,
+  latestCompactionRows, latestStartedRows, markCompactionDone, markCompactionSummarised, markSnapshotSavedRow, nextCompactionStart, openTranscriptRows,
+  stalledSummarisedRows,
   type CompactionRow, type CompactionStatus,
-} from '../store/compactions.js';
-import { strengthenRetrievedOn, writeEntryMirrors } from '../store/entry-writes.js';
+} from './compactions.js';
+import { strengthenRetrievedOn, writeEntryMirrors } from './entry-writes.js';
 import { isRecallBoostAblated } from '../core/ablation.js';
-import { updateStats } from '../store/index-and-stats.js';
-import { resolveTenantId } from '../store/tenant.js';
+import { updateStats } from './index-and-stats.js';
+import { resolveTenantId } from './tenant.js';
 import { errorMessage, log as logger } from '../util/log.js';
 import { readTranscriptTail, truncateCodePointSafe } from '../util/transcript-tail.js';
 
@@ -172,18 +172,15 @@ function markSummarised(db: DatabaseSyncLike, tenantId: string, id: string, opti
 
 /** Best effort, never throws: a compaction must not fail because its record could not be written. */
 export function recordCompactionStart(hippoRoot: string, start: Omit<CompactionStart, 'originProject'>, log: Log): string | null {
+  let db: DatabaseSyncLike | undefined;
   try {
-    const id = generateId('cmp');
-    insertStartedCompactionAt(
-      hippoRoot,
-      resolveTenantId({}),
-      { id, ...start, originProject: compactionOrigin(hippoRoot, start.cwd), startedAt: new Date().toISOString() },
-      COMPACTION_DB_WAIT_MS,
-    );
-    return id;
+    db = openHippoDb(hippoRoot, { busyWaitMs: COMPACTION_DB_WAIT_MS });
+    return startCompaction(db, resolveTenantId({}), { ...start, originProject: compactionOrigin(hippoRoot, start.cwd) });
   } catch (err) {
     log(`compaction record not started: ${errorMessage(err)}`);
     return null;
+  } finally {
+    if (db) closeHippoDb(db);
   }
 }
 
@@ -193,10 +190,14 @@ export function markSnapshotSaved(db: DatabaseSyncLike, tenantId: string, record
 }
 
 export function recordSnapshotSaved(hippoRoot: string, tenantId: string, recordId: string, log: Log): void {
+  let db: DatabaseSyncLike | undefined;
   try {
-    markSnapshotSavedAt(hippoRoot, tenantId, recordId, COMPACTION_DB_WAIT_MS);
+    db = openHippoDb(hippoRoot, { busyWaitMs: COMPACTION_DB_WAIT_MS });
+    markSnapshotSaved(db, tenantId, recordId);
   } catch (err) {
     log(`compaction record not marked with its snapshot: ${errorMessage(err)}`);
+  } finally {
+    if (db) closeHippoDb(db);
   }
 }
 

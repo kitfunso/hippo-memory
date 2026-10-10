@@ -1,7 +1,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { COMPACTION_DB_WAIT_MS } from '../src/capture/compaction-record.js';
+import { COMPACTION_DB_WAIT_MS } from '../src/store/compaction-record.js';
 import { closeHippoDb, HOOK_DB_WAIT_MS, openHippoDb } from '../src/db/index.js';
 import { loadActiveTaskSnapshot } from '../src/store/sessions.js';
 import {

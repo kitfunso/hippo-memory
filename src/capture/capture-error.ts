@@ -5,7 +5,8 @@ import { createMemory } from '../core/memory.js';
 import { writeEntry } from '../store/entry-writes.js';
 import { loadContentsWithTag } from '../store/entry-reads.js';
 import { loadConfig } from '../core/config.js';
-import { recordFailureAt, type CaptureErrorOutcome, type FailureOutcome } from '../store/failure-log.js';
+import { recordFailureAt } from '../store/failure-log-at.js';
+import type { CaptureErrorOutcome, FailureOutcome } from '../store/failure-log.js';
 import {
   failureHash,
   failureSignature,

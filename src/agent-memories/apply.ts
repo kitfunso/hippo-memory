@@ -2,7 +2,7 @@
 import { appendAuditEvent } from '../store/audit.js';
 import { withTrialScope, withWriteScope, type DatabaseSyncLike } from '../db/index.js';
 import { deleteDormantRow, dormantSnapshotsBySourcePrefix, insertDormantRow, readDormantSnapshot, replaceDormantEntry } from '../store/dormant.js';
-import { gatedWrite } from '../trust/gated-write.js';
+import { gatedWrite } from '../store/gated-write.js';
 import { Layer, calculateStrength, createMemory, type MemoryEntry } from '../core/memory.js';
 import { findRejectedValue, rejectionDigest } from '../store/rejection.js';
 import { redactSecretsStrict } from '../util/secret-detect.js';

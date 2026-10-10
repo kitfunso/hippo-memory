@@ -2,7 +2,6 @@
 import { ConflictError } from '../core/api-errors.js';
 import type { DatabaseSyncLike } from '../db/index.js';
 import { DAY_MS } from '../util/time.js';
-import { onHandle } from './open.js';
 
 /** Why a failure was not stored, or `stored`. */
 export type CaptureErrorOutcome = 'stored' | 'duplicate' | 'skipped-interrupt' | 'skipped-routine' | 'skipped-invalid';
@@ -154,9 +153,4 @@ export function summarizeFailures(db: DatabaseSyncLike, tenantId: string, sinceI
     repeats: sessions.reduce((sum, s) => sum + s.repeats, 0),
     sessions: sessions.length,
   };
-}
-
-/** {@link recordFailure} on a handle of its own. */
-export function recordFailureAt(hippoRoot: string, event: FailureEvent): void {
-  onHandle(hippoRoot, (db) => recordFailure(db, event));
 }

@@ -1,7 +1,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { saveCompaction, type PostCompactPayload } from '../src/capture/compaction-record.js';
+import { saveCompaction, type PostCompactPayload } from '../src/store/compaction-record.js';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
 import { initStore } from '../src/store/open.js';
 import { log as logger } from '../src/util/log.js';

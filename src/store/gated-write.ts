@@ -2,11 +2,11 @@
 import { isContentWorthStoring } from '../core/memory-quality.js';
 import type { DatabaseSyncLike } from '../db/index.js';
 import type { MemoryEntry } from '../core/memory.js';
-import { RejectedValueError } from '../store/rejection.js';
+import { RejectedValueError } from './rejection.js';
 import { detectSecret } from '../util/secret-detect.js';
-import { auditRejectionRefusal } from '../store/audit-event.js';
-import { stampOriginProject } from '../store/entry-row.js';
-import { writeEntryDbOnly } from '../store/entry-writes.js';
+import { auditRejectionRefusal } from './audit-event.js';
+import { stampOriginProject } from './entry-row.js';
+import { writeEntryDbOnly } from './entry-writes.js';
 
 export type GatedWriteResult = 'written' | 'skipped:not-worth-storing' | 'skipped:secret' | 'skipped:rejected';
 

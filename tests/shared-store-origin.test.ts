@@ -17,7 +17,7 @@ import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { clearProjectIdentityCache, originFromSource } from '../src/core/project-identity.js';
 import { _resetSharedStoreCacheForTests } from '../src/core/config.js';
 import { repairOnceOnSleep } from '../src/sharing/project-merge.js';
-import { saveCompaction } from '../src/capture/compaction-record.js';
+import { saveCompaction } from '../src/store/compaction-record.js';
 import { COMPACTION_MEMORY_TAG } from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { summaryWith } from './_helpers/compaction-hooks.js';

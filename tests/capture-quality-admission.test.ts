@@ -10,7 +10,7 @@ import { getContext, type Context } from '../src/api/index.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, Layer } from '../src/core/memory.js';
 import { initStore, openStore } from '../src/store/open.js';
 import { closeHippoDb } from '../src/db/index.js';
-import { gatedWrite } from '../src/trust/gated-write.js';
+import { gatedWrite } from '../src/store/gated-write.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 

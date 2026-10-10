@@ -1,11 +1,11 @@
 // PostCompact for a caller on another machine: the items it parsed become rows under its owner and project, and a retried request id writes nothing twice.
 import { BadRequestError } from '../core/api-errors.js';
 import type { Context } from '../api/types.js';
-import { COMPACTION_ITEM_MAX_CHARS } from './compaction-items.js';
-import { compactionByRequest, recordSummary, saveItems, scrubCompactionItems } from './compaction-record.js';
+import { COMPACTION_ITEM_MAX_CHARS } from '../util/compaction-items.js';
+import { saveCallerItems } from '../store/compaction-caller.js';
 import { log } from '../util/log.js';
 import type { CallerProject } from '../api/prompt-hook.js';
-import { assertRequestId, assertTrigger, bindCaller, callerInHoldout, withCallerDb } from './caller-session.js';
+import { assertRequestId, assertTrigger, bindCaller, callerInHoldout } from './caller-session.js';
 
 export interface CallerItemsRequest {
   readonly sessionId: string;
@@ -28,19 +28,9 @@ export function saveCompactionItemsForCaller(ctx: Context, req: CallerItemsReque
   if (req.items.some((item) => item.length > COMPACTION_ITEM_MAX_CHARS)) throw new BadRequestError(`items: each at most ${COMPACTION_ITEM_MAX_CHARS} characters`);
   const key = bindCaller(ctx, req.sessionId, req.project);
   if (callerInHoldout(ctx, req.sessionId)) return { written: 0 };
-  return withCallerDb(ctx, (db) => {
-    const earlier = compactionByRequest(db, ctx.tenantId, req.requestId, req.sessionId);
-    // Past `summarised` the first try finished, so its count is the answer; a `summarised` one failed at the items and is reused.
-    if (earlier !== null && earlier.status !== 'summarised') return { written: earlier.itemsWritten };
-    const meta = { sessionId: req.sessionId, trigger: req.trigger, cwd: null, transcriptPath: null };
-    const text = { summary: '', items: scrubCompactionItems(req.items) };
-    const record = earlier ?? recordSummary(db, ctx.hippoRoot, ctx.tenantId, {
-      meta, text, at: new Date(), caller: { originProject: req.project.name, requestId: req.requestId },
-    });
-    const written = saveItems(db, ctx.hippoRoot, {
-      tenantId: ctx.tenantId, recordId: record.id, sessionId: req.sessionId, originProject: record.originProject, cwd: null,
-      items: record.items, caller: { actor: key.owner, origins: key.project },
-    }, (message) => log.info(`post-compact: ${message}`));
-    return { written };
-  });
+  const written = saveCallerItems(ctx.hippoRoot, ctx.tenantId, {
+    sessionId: req.sessionId, trigger: req.trigger, requestId: req.requestId, project: req.project.name, items: req.items,
+    owner: key.owner, origins: key.project,
+  }, (message) => log.info(`post-compact: ${message}`));
+  return { written };
 }

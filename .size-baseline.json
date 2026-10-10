@@ -18,8 +18,8 @@
     "src/capture/codex-patch.ts": 1,
     "src/capture/compact.ts": 3,
     "src/capture/compaction-items-caller.ts": 1,
-    "src/capture/compaction-record.ts": 8,
-    "src/capture/compaction-spool.ts": 4,
+    "src/store/compaction-record.ts": 8,
+    "src/store/compaction-spool.ts": 4,
     "src/capture/copilot-transcript.ts": 1,
     "src/capture/failure-caller.ts": 2,
     "src/capture/failure-reading.ts": 1,
@@ -85,7 +85,7 @@
     "src/store/rule-sql.ts": 1,
     "src/store/search-rows.ts": 3,
     "src/store/sessions.ts": 3,
-    "src/trust/gated-write.ts": 1,
+    "src/store/gated-write.ts": 1,
     "src/util/secret-detect.ts": 1
   }
 }

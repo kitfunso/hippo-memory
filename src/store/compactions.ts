@@ -1,6 +1,5 @@
 // The `compactions` table: one row per Claude Code compaction, and the reads project merge makes over it.
-import { openHippoDb, type DatabaseSyncLike } from '../db/index.js';
-import { onHandle } from './open.js';
+import type { DatabaseSyncLike } from '../db/index.js';
 import { originInSql } from '../core/project-identity.js';
 import { scopeAdmitSql } from './recall-scope.js';
 
@@ -194,14 +193,4 @@ export function compactionOriginsWithCwd(db: DatabaseSyncLike, tenantId: string)
 /** True when `table` holds a row of this tenant under the project name. */
 export function holdsOrigin(db: DatabaseSyncLike, table: 'memories' | 'compactions', tenantId: string, name: string): boolean {
   return db.prepare(`SELECT 1 FROM ${table} WHERE tenant_id = ? AND origin_project = ? LIMIT 1`).get(tenantId, name) !== undefined;
-}
-
-/** {@link insertStartedCompaction} on a handle of its own, with the caller's lock wait. */
-export function insertStartedCompactionAt(hippoRoot: string, tenantId: string, start: StartedCompactionInput, busyWaitMs: number): void {
-  onHandle(hippoRoot, (db) => insertStartedCompaction(db, tenantId, start), (root) => openHippoDb(root, { busyWaitMs }));
-}
-
-/** {@link markSnapshotSavedRow} on a handle of its own, with the caller's lock wait. */
-export function markSnapshotSavedAt(hippoRoot: string, tenantId: string, recordId: string, busyWaitMs: number): void {
-  onHandle(hippoRoot, (db) => markSnapshotSavedRow(db, tenantId, recordId), (root) => openHippoDb(root, { busyWaitMs }));
 }

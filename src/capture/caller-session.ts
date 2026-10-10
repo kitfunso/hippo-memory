@@ -1,7 +1,6 @@
 // The checks every caller call shares: ids, project, the session's owner and the pilot arm, all from the request, never the server's env or folder.
 import { BadRequestError } from '../core/api-errors.js';
 import { ownerOrSubject, type Context } from '../api/types.js';
-import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../db/index.js';
 import { MAX_ID_LEN } from '../util/http-util.js';
 import { sessionPilotArm } from '../api/pilot-arm.js';
 import { assertCallerIds, type CallerProject } from '../api/prompt-hook.js';
@@ -44,14 +43,4 @@ export function assertTrigger(trigger: string | null): void {
 export function assertRequestId(requestId: string): void {
   if (requestId.trim() === '') throw new BadRequestError('request id: required');
   if (requestId.length > MAX_ID_LEN) throw new BadRequestError(`request id: at most ${MAX_ID_LEN} characters`);
-}
-
-/** Opens with the request's own lock wait, so a busy store becomes a 503 rather than a long stall. */
-export function withCallerDb<T>(ctx: Context, fn: (db: DatabaseSyncLike) => T): T {
-  const db = openHippoDb(ctx.hippoRoot);
-  try {
-    return fn(db);
-  } finally {
-    closeHippoDb(db);
-  }
 }

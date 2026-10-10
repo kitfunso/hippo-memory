@@ -5,4 +5,4 @@ export { scrubForSharing } from '../capture/share-scrub.js';
 export { transcriptWorkingState, WORKING_STATE_CAPS } from '../capture/working-state.js';
 export { lessonFromFailure, failureReport, type FailureReport } from '../capture/failure-reading.js';
 export { collectHandoffEvidence } from '../capture/handoff-evidence.js';
-export { compactSummaryBody, parseCompactionItems, COMPACTION_ITEM_MAX_CHARS, COMPACTION_ITEM_ROW_CAP } from '../capture/compaction-items.js';
+export { compactSummaryBody, parseCompactionItems, COMPACTION_ITEM_MAX_CHARS, COMPACTION_ITEM_ROW_CAP } from '../util/compaction-items.js';
