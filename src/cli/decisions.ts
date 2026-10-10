@@ -56,7 +56,7 @@ function predictClose(hippoRoot: string, tenantId: string, args: string[], flags
   console.log(`Prediction ${closed.id} closed: state=${closed.closureState}${closed.actualValue !== null ? ` actual=${closed.actualValue}` : ''}`);
 }
 
-function loadPredictionList(hippoRoot: string, tenantId: string, status: string, classTag: string, limit: number) {
+function loadPredictionList(hippoRoot: string, tenantId: string, status: string, classTag: string, limit: number): predictionsModule.Prediction[] {
   if (status === 'open') {
     return predictionsModule.loadOpenPredictions(hippoRoot, tenantId, {
       classTag: classTag || undefined,

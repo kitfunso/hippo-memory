@@ -358,7 +358,8 @@ export function handleSync({ hippoRoot, flags }: CommandContext): void {
   // v39: other-project rows are skipped by default; secrets always are.
   const includeCrossProject = flagIsTrue(flags, 'cross-project');
   const count = syncGlobalToLocal(hippoRoot, globalRoot, { includeCrossProject });
-  console.log(`Synced ${count} global memories into local project.${includeCrossProject ? '' : ' (other-project rows skipped; use --cross-project to include them)'}`);
+  console.log(`Synced ${count} global memories into local project.${includeCrossProject ? '' : ' (other-project rows skipped; use --cross-project to ' +
+    'include them)'}`);
 }
 
 export async function handleWatch({ hippoRoot, tenantId, args }: CommandContext): Promise<void> {

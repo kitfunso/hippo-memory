@@ -11,7 +11,8 @@ import { errorMessage } from '../util/log.js';
 const STAMP_DIGITS = 13;
 
 export const SPOOL_DIR = 'compactions-spool';
-/** Starts the log line of a step that broke with an unexpected error, so the session-start banner counts it; a set-aside file is counted by its `.bad` name instead. */
+/** Starts the log line of a step that broke with an unexpected error, so the session-start banner counts it; a set-aside file is counted
+ * by its `.bad` name instead. */
 export const SPOOL_PROBLEM = 'spool problem: ';
 const LOCK = 'replay.lock';
 /** Long enough that a live replayer has finished with its claim. */

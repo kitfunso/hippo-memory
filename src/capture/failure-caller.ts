@@ -1,4 +1,5 @@
-// PostToolUseFailure for a caller on another machine: the lesson and its log row carry the caller's owner and project, and a retried request id gets the first answer.
+// PostToolUseFailure for a caller on another machine: the lesson and its log row carry the caller's owner and project, and a retried
+// request id gets the first answer.
 import { BadRequestError } from '../core/api-errors.js';
 import type { Context } from '../api/types.js';
 import { storeLesson } from './capture-error.js';

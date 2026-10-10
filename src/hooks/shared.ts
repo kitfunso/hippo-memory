@@ -100,7 +100,8 @@ export function detectInstalledTools(): ToolDetection[] {
       kind: 'wrapper',
       notes: 'memory hooks in hooks.json, and wraps the detected codex launcher for session-end consolidation'
     },
-    { name: 'copilot', configDir: copilotHomeDir(), detected: isCopilotPresent(), kind: 'json-hook', notes: 'hooks in hooks/hippo.json, the MCP server in mcp-config.json and a block in copilot-instructions.md; for VS Code, the server in each User mcp.json and prompts/hippo.instructions.md' },
+    { name: 'copilot', configDir: copilotHomeDir(), detected: isCopilotPresent(), kind: 'json-hook', notes: 'hooks in hooks/hippo.json, the MCP server in ' +
+      'mcp-config.json and a block in copilot-instructions.md; for VS Code, the server in each User mcp.json and prompts/hippo.instructions.md' },
     {
       name: 'cursor',
       configDir: '~/.cursor',

@@ -58,7 +58,8 @@ function processGet(hippoRoot: string, tenantId: string, args: string[]): void {
 }
 
 function processSupersede(hippoRoot: string, tenantId: string, args: string[], flags: CliFlags): void {
-  const id = idArgOrExit(args, 'Usage: hippo process supersede <id> --step "<text>" [--step ...] [--change "<summary>"] [--description "<text>"]', PROCESS.idLabel);
+  const id = idArgOrExit(args, 'Usage: hippo process supersede <id> --step "<text>" [--step ...] [--change "<summary>"] [--description ' +
+    '"<text>"]', PROCESS.idLabel);
   const steps = collectProcessSteps(flags['step']);
   if (steps.length === 0) {
     printError('hippo process supersede requires at least one --step "<text>" for the new version.');

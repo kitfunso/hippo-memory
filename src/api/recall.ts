@@ -596,20 +596,20 @@ function scopeContinuity(block: ContinuityBlock, opts: RecallOpts, own: string |
 function continuityTokensOf(c: ContinuityBlock): number {
   const filteredSnapshot = c.activeSnapshot;
   const filteredHandoff = c.sessionHandoff;
-  const tokenize = (s?: string | null): number =>
+  const tokenCount = (s?: string | null): number =>
     s ? estimateTokens(s) : 0;
-  return tokenize(filteredSnapshot?.task) +
-    tokenize(filteredSnapshot?.summary) +
-    tokenize(filteredSnapshot?.next_step) +
-    tokenize(filteredHandoff?.summary) +
-    tokenize(filteredHandoff?.nextAction) +
-    (filteredHandoff?.artifacts ?? []).reduce((acc, a) => acc + tokenize(a), 0) +
-    (filteredHandoff?.constraints ?? []).reduce((acc, c) => acc + tokenize(c), 0) +
-    tokenize(filteredHandoff?.evidence ? formatHandoffEvidenceLine(filteredHandoff.evidence) : null) +
-    tokenize(filteredHandoff?.outcome) +
-    tokenize(filteredHandoff?.targetRuntime) +
-    tokenize(filteredHandoff?.cardId) +
-    c.recentSessionEvents.reduce((acc, e) => acc + tokenize(e.content), 0);
+  return tokenCount(filteredSnapshot?.task) +
+    tokenCount(filteredSnapshot?.summary) +
+    tokenCount(filteredSnapshot?.next_step) +
+    tokenCount(filteredHandoff?.summary) +
+    tokenCount(filteredHandoff?.nextAction) +
+    (filteredHandoff?.artifacts ?? []).reduce((acc, a) => acc + tokenCount(a), 0) +
+    (filteredHandoff?.constraints ?? []).reduce((acc, c) => acc + tokenCount(c), 0) +
+    tokenCount(filteredHandoff?.evidence ? formatHandoffEvidenceLine(filteredHandoff.evidence) : null) +
+    tokenCount(filteredHandoff?.outcome) +
+    tokenCount(filteredHandoff?.targetRuntime) +
+    tokenCount(filteredHandoff?.cardId) +
+    c.recentSessionEvents.reduce((acc, e) => acc + tokenCount(e.content), 0);
 }
 
 // A pure read of the caller's recallHistory snapshot against this top-1. HIPPO_ANCHORING=off skips even the detect

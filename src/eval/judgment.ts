@@ -47,7 +47,9 @@ const QUESTIONS = {
   durable: {
     type: 'noul',
     instructions:
-      'This text was extracted from an AI coding agent transcript as a candidate memory. It is worth storing long-term only if it would still be useful to a future agent working on this codebase weeks from now: a durable preference, a convention, a decision with a reason, or a gotcha that will recur. Transient chatter, one-off status, restatements of code already in the repo, and anything only true inside this one session are not worth storing.',
+      'This text was extracted from an AI coding agent transcript as a candidate memory. It is worth storing long-term only if it would still be useful to ' +
+        'a future agent working on this codebase weeks from now: a durable preference, a convention, a decision with a reason, or a gotcha that will recur. ' +
+          'Transient chatter, one-off status, restatements of code already in the repo, and anything only true inside this one session are not worth storing.',
   },
   kind: {
     type: 'choice',

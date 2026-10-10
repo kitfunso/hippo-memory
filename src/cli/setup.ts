@@ -230,7 +230,8 @@ const VSCODE_INSTRUCTIONS_REMOVE_LINES = {
   kept: (file: string) => `Left ${file}: it is not the text hippo wrote. Delete it by hand if no agent needs it.`,
 } as const satisfies Record<VscodeInstructionsRemoveStatus, (file: string) => string>;
 
-const VSCODE_HOOKS_LINE = 'VS Code: hooks need VS Code 1.109.3 or later with chat.useHooks on (the default); older versions get the MCP server and the instructions file only.';
+const VSCODE_HOOKS_LINE = 'VS Code: hooks need VS Code 1.109.3 or later with chat.useHooks on (the default); older versions get the MCP server and the ' +
+  'instructions file only.';
 
 function mcpInstallLine(file: string, mcp: McpMergeStatus | McpFailure, host: McpHost): string {
   return isMcpFailure(mcp) ? mcpFailureLine(file, mcp, addByHand(host)) : MCP_MERGE_LINES[mcp](file, host);

@@ -51,7 +51,8 @@ export interface SummarisedInsert extends SummarisedUpdate {
 
 export type SummarisedInsertMeta = Omit<StartedCompactionInput, 'id'>;
 
-const COLUMNS = 'tenant_id, id, session_id, origin_project, compact_trigger, cwd, transcript_path, snapshot_saved, started_at, summarised_at, summary, items_json, items_written, status';
+const COLUMNS = 'tenant_id, id, session_id, origin_project, compact_trigger, cwd, transcript_path, snapshot_saved, started_at, summarised_at, summary, ' +
+  'items_json, items_written, status';
 
 function selectRows(db: DatabaseSyncLike, where: string, ...params: Array<string | number>): CompactionRow[] {
   // SAFETY: the SELECT names exactly COLUMNS, matching CompactionRow's field set.

@@ -138,24 +138,29 @@ function addDirectRecall(entries: MemoryEntry[], cases: FeatureTestCase[]): void
 /** Extraction preference: extracted facts should rank above raw source. */
 function addExtractionPreference(entries: MemoryEntry[], cases: FeatureTestCase[]): void {
   entries.push(
-    mem('ep-src-1', 'speaker:Alice: So we had this big meeting yesterday about the deployment pipeline and Bob mentioned that the staging environment is using Kubernetes 1.28 and we should upgrade to 1.30 before the end of Q2 because of the security patches', {
+    mem('ep-src-1', 'speaker:Alice: So we had this big meeting yesterday about the deployment pipeline and Bob mentioned that the staging environment is ' +
+      'using Kubernetes 1.28 and we should upgrade to 1.30 before the end of Q2 because of the security patches', {
       created: dateOffset(10), tags: ['speaker:Alice', 'topic:infrastructure', 'session:meeting-1'],
     }),
     mem('ep-ext-1', 'The staging environment runs Kubernetes 1.28 and needs to be upgraded to 1.30 before end of Q2 for security patches', {
       created: dateOffset(10), layer: Layer.Semantic, tags: ['speaker:Alice', 'topic:infrastructure', 'extracted'],
       extracted_from: 'ep-src-1',
     }),
-    mem('ep-src-2', 'speaker:Bob: Yeah and the thing about the monitoring is that we switched from Datadog to Grafana last month and the alerting rules still need to be migrated, Carol was supposed to handle that but she has been busy with the frontend rewrite', {
+    mem('ep-src-2', 'speaker:Bob: Yeah and the thing about the monitoring is that we switched from Datadog to Grafana last month and the alerting rules ' +
+      'still need to be migrated, Carol was supposed to handle that but she has been busy with the frontend rewrite', {
       created: dateOffset(11), tags: ['speaker:Bob', 'topic:monitoring', 'session:meeting-1'],
     }),
-    mem('ep-ext-2', 'The team switched from Datadog to Grafana last month but alerting rules have not been migrated yet. Carol is responsible but blocked by the frontend rewrite.', {
+    mem('ep-ext-2', 'The team switched from Datadog to Grafana last month but alerting rules have not been migrated yet. Carol is responsible but blocked ' +
+      'by the frontend rewrite.', {
       created: dateOffset(11), layer: Layer.Semantic, tags: ['speaker:Bob', 'topic:monitoring', 'extracted'],
       extracted_from: 'ep-src-2',
     }),
-    mem('ep-src-3', 'speaker:Carol: The login page redesign is almost done, I just need to wire up the OAuth2 PKCE flow with the new identity provider and write the integration tests', {
+    mem('ep-src-3', 'speaker:Carol: The login page redesign is almost done, I just need to wire up the OAuth2 PKCE flow with the new identity provider and ' +
+      'write the integration tests', {
       created: dateOffset(12), tags: ['speaker:Carol', 'topic:auth', 'session:meeting-2'],
     }),
-    mem('ep-ext-3', 'Carol is nearly done with the login page redesign. Remaining work: wire up OAuth2 PKCE flow with the new identity provider and write integration tests.', {
+    mem('ep-ext-3', 'Carol is nearly done with the login page redesign. Remaining work: wire up OAuth2 PKCE flow with the new identity provider and write ' +
+      'integration tests.', {
       created: dateOffset(12), layer: Layer.Semantic, tags: ['speaker:Carol', 'topic:auth', 'extracted'],
       extracted_from: 'ep-src-3',
     }),
@@ -192,7 +197,8 @@ function addDagDrilldown(entries: MemoryEntry[], cases: FeatureTestCase[]): void
       created: dateOffset(15), layer: Layer.Semantic, tags: ['topic:api-performance', 'extracted'],
       dag_level: 1,
     }),
-    mem('dag-summary-1', 'API performance issues: /users degraded to 300ms (permissions check), /orders spiked to 500ms (missing index), /reports takes 8s (needs job queue)', {
+    mem('dag-summary-1', 'API performance issues: /users degraded to 300ms (permissions check), /orders spiked to 500ms (missing index), /reports takes 8s ' +
+      '(needs job queue)', {
       created: dateOffset(16), layer: Layer.Semantic, tags: ['topic:api-performance'],
       dag_level: 2, dag_parent_id: undefined,
     }),
@@ -307,7 +313,8 @@ function addMultiHop(entries: MemoryEntry[], cases: FeatureTestCase[]): void {
     mem('mh-3', 'speaker:Alice fixed the Stripe webhook by switching to the production secret key. Payment confirmations now arrive within 2 seconds.', {
       created: dateOffset(27), tags: ['speaker:Alice', 'topic:payments'],
     }),
-    mem('mh-4', 'speaker:Carol reported that the billing dashboard shows incorrect revenue numbers because it reads from the payments_raw table instead of payments_reconciled.', {
+    mem('mh-4', 'speaker:Carol reported that the billing dashboard shows incorrect revenue numbers because it reads from the payments_raw table instead of ' +
+      'payments_reconciled.', {
       created: dateOffset(28), tags: ['speaker:Carol', 'topic:billing'],
     }),
   );

@@ -121,7 +121,8 @@ function vaultIdentityOrThrow(options: ImportOptions): VaultIdentity {
   const vaultName = options.name?.trim();
   if (!vaultName) {
     throw new Error(
-      'importVault requires an explicit vault name (options.name): it is the identity key for source-deletion sync and must not be inferred from the folder basename.',
+      'importVault requires an explicit vault name (options.name): it is the identity key for source-deletion sync and must not be inferred from the folder ' +
+        'basename.',
     );
   }
   if (vaultName.includes(':')) {

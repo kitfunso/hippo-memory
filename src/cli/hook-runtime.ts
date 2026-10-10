@@ -127,7 +127,8 @@ export function payloadCwdRoot(hippoRoot: string, stdinText: string | undefined,
   return getHippoRoot(process.cwd());
 }
 
-/** Hook commands share one handle per store and wait at most HOOK_DB_WAIT_MS for a lock; a store still busy after that skips the hook's work with one warning, exit 0. */
+/** Hook commands share one handle per store and wait at most HOOK_DB_WAIT_MS for a lock; a store still busy after that skips the hook's
+ * work with one warning, exit 0. */
 export async function runHookWithStores<T>(fn: () => T | Promise<T>): Promise<T | undefined> {
   try {
     return await runWithRequestStores(fn, { busyWaitMs: HOOK_DB_WAIT_MS, failFastWhenBusy: true });

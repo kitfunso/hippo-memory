@@ -82,7 +82,8 @@ function callName(req: McpRequest): string {
   return isJsonString(tool) ? `${req.method} ${tool.slice(0, 128)}` : req.method;
 }
 
-/** Answers `req` with one timeout error at the deadline a served request has. The returned function stops the timer and says whether that answer went out, so a later reply is dropped. */
+/** Answers `req` with one timeout error at the deadline a served request has. The returned function stops the timer and says whether that
+ * answer went out, so a later reply is dropped. */
 function watchDeadline(req: McpRequest, owedReply: boolean): () => boolean {
   const ms = requestDeadlineMs();
   if (ms === 0) return () => false;

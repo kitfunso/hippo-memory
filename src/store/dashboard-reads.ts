@@ -26,7 +26,8 @@ export interface DashboardRows {
   readonly excluded: ExcludedCounts;
 }
 
-const LIVE_COLUMNS = 'id, created, last_retrieved, retrieval_count, half_life_days, layer, tags_json, emotional_valence, outcome_positive, outcome_negative, pinned, confidence, content, superseded_by, kind, scope, origin_project';
+const LIVE_COLUMNS = 'id, created, last_retrieved, retrieval_count, half_life_days, layer, tags_json, emotional_valence, outcome_positive, ' +
+  'outcome_negative, pinned, confidence, content, superseded_by, kind, scope, origin_project';
 type LiveRow = Pick<
   MemoryRow,
   'id' | 'created' | 'last_retrieved' | 'retrieval_count' | 'half_life_days' | 'layer' | 'tags_json' | 'emotional_valence' | 'outcome_positive'

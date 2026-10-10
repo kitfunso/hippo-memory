@@ -2,6 +2,9 @@
 
 import { TAIL_MAX_LINES } from '../support-bundle.js';
 import { DEFAULT_LOCAL_BUMP, DEFAULT_RECALL_BUDGET } from '../core/search-types.js';
+import { DEFAULT_EMBEDDING_WEIGHT, DEFAULT_MMR_LAMBDA } from '../search/hybrid.js';
+import { DEFAULT_GRAPH_HOPS, DEFAULT_GRAPH_SEED_COUNT } from '../graph/stream.js';
+import { DEFAULT_KEY_TTL_DAYS, MAX_TTL_DAYS } from '../api/auth.js';
 import { DEFAULT_ASSEMBLE_BUDGET } from '../api/assemble.js';
 import { DEFAULT_SERVER_HOST, DEFAULT_SERVER_PORT } from '../server/defaults.js';
 
@@ -128,12 +131,12 @@ export const VERB_USAGE = {
                            seeds. Implies rrf scoring (default is blend). Local store
                            only. Distinct from --hops (which injects out-of-pool
                            neighbours); this re-ranks within the candidate pool.
-    --graph-hops <n>       Hops for --graph-stream (1..3, default 2).
-    --graph-seeds <n>      Lexical anchors for --graph-stream (default 10). The stream
+    --graph-hops <n>       Hops for --graph-stream (1..3, default ${DEFAULT_GRAPH_HOPS}).
+    --graph-seeds <n>      Lexical anchors for --graph-stream (default ${DEFAULT_GRAPH_SEED_COUNT}). The stream
                            re-ranks the rank>seeds tail; on a pool with <= n candidates
                            every candidate is a seed and the stream is inert.
     --no-mmr               Disable MMR diversity re-ranking
-    --mmr-lambda <f>       MMR balance 0..1 (default: 0.7, 1.0 = pure relevance)
+    --mmr-lambda <f>       MMR balance 0..1 (default: ${DEFAULT_MMR_LAMBDA}, 1.0 = pure relevance)
     --evc-adaptive         ACC-style: when top-K shows high inter-item overlap
                            (= conflict cluster), expand pool and re-rank by
                            recency. Default off. RESEARCH.md §PFC.ACC.
@@ -220,7 +223,7 @@ export const VERB_USAGE = {
     --json                 Output as JSON
     --physics | --classic  Force search mode (default: from config)
     --no-mmr               Disable MMR diversity re-ranking
-    --mmr-lambda <f>       MMR balance 0..1 (default: 0.7, 1.0 = pure relevance)`],
+    --mmr-lambda <f>       MMR balance 0..1 (default: ${DEFAULT_MMR_LAMBDA}, 1.0 = pure relevance)`],
   eval: [`
   eval [<corpus.json>]     Measure recall quality against a test corpus
     --bootstrap            Generate a synthetic corpus from current memories
@@ -230,7 +233,7 @@ export const VERB_USAGE = {
     --compare <path>       JSON from a prior \`eval --json\` run; print deltas
     --no-mmr               Disable MMR for this eval run
     --mmr-lambda <f>       Override MMR lambda for this run
-    --embedding-weight <f> Override cosine weight (default: 0.6)
+    --embedding-weight <f> Override cosine weight (default: ${DEFAULT_EMBEDDING_WEIGHT})
     --local-bump <f>       Local-over-global priority multiplier (default: ${DEFAULT_LOCAL_BUMP})
     --equal-sources        Shortcut for --local-bump 1.0
     --min-mrr <f>          Exit non-zero if mean MRR falls below this
@@ -300,7 +303,7 @@ export const VERB_USAGE = {
     auth create            Mint a new API key (plaintext shown ONCE)
       --label <s>          Optional human label
       --role <r>           admin | member (default: member; member blocked from /v1/sleep)
-      --ttl-days <n>       Days until the key expires (default: 90, at most 3650)
+      --ttl-days <n>       Days until the key expires (default: ${DEFAULT_KEY_TTL_DAYS}, at most ${MAX_TTL_DAYS})
       --no-expiry          Mint a key that never expires
       --tenant <id>        Override tenant (defaults to HIPPO_TENANT)
       --json               Output as JSON

@@ -56,7 +56,8 @@ function isInjectedUserMessage(data: CopilotMessageData): boolean {
   return isStringValue(source) && INJECTED_SOURCE_PREFIXES.some((prefix) => source.startsWith(prefix));
 }
 
-/** The turn one Copilot event-log line carries: the text of a human user.message or of an assistant.message; null for any other line, a sub-agent's included. */
+/** The turn one Copilot event-log line carries: the text of a human user.message or of an assistant.message; null for any other line, a
+ * sub-agent's included. */
 export function copilotTurn(line: CopilotEventLine): CopilotTurn | null {
   const role = line.type === 'user.message' ? 'user' : line.type === 'assistant.message' ? 'assistant' : null;
   const data: CopilotMessageData | null = isObjectLike(line.data) ? line.data : null;

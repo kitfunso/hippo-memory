@@ -53,7 +53,8 @@ function isReadableFile(filePath: string): boolean {
   }
 }
 
-/** PreCompact stdout is the summariser's instructions; sent before the snapshot work because a locked store can run the hook past its 30 s limit, and via writeSync because process.exit drops buffered pipe output. */
+/** PreCompact stdout is the summariser's instructions; sent before the snapshot work because a locked store can run the hook past its 30
+ * s limit, and via writeSync because process.exit drops buffered pipe output. */
 function printPreCompactInstruction(logFile: string): string | null {
   const text = `${PRE_COMPACT_INSTRUCTION}\n`;
   try {
@@ -74,7 +75,8 @@ function snapshotJustSaved(hippoRoot: string, sessionId: string | null): boolean
   return active?.session_id === sessionId && active.source === 'pre-compact' && Date.now() - Date.parse(active.updated_at) < TWIN_FIRE_MS;
 }
 
-/** Runs the PreCompact producer: records the compaction, asks the summariser for memories, saves a working-state snapshot. Never extracts memories itself; SessionEnd capture owns that. */
+/** Runs the PreCompact producer: records the compaction, asks the summariser for memories, saves a working-state snapshot. Never extracts
+ * memories itself; SessionEnd capture owns that. */
 function runPreCompact(hippoRoot: string, options: PreCompactOptions, logFile: string): void {
   const { stdinText, stdinTimedOut = false, runtime = 'claude-code' } = options;
   // PreCompact fires in every Claude Code project, including ones that never ran `hippo init`; gate before any call that would create a store.
@@ -112,7 +114,8 @@ function runPreCompact(hippoRoot: string, options: PreCompactOptions, logFile: s
   saveDerivedSnapshot(hippoRoot, logFile, sessionId, recordId, derived);
 }
 
-/** Starts the compaction record when the host will close one (`closable`), then tells `onBoundary` what was printed; the record id, or null without a record. */
+/** Starts the compaction record when the host will close one (`closable`), then tells `onBoundary` what was printed; the record id, or
+ * null without a record. */
 function markCompactionBoundary(hippoRoot: string, options: PreCompactOptions, logFile: string, input: CaptureInput, closable: boolean): string | null {
   const { sessionId } = input;
   // The record is the "something saved before every compaction", so it lands even when no snapshot is derivable later.

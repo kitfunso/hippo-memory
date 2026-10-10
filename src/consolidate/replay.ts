@@ -11,6 +11,13 @@ const VALENCE_WEIGHT = {
   critical: 2.0,
 } satisfies Record<EmotionalValence, number>;
 
+// Floor keeps every weight positive for sampleForReplay; the rest scale reward and idle boosts.
+const REWARD_FLOOR = 0.1;
+const REWARD_POSITIVE_GAIN = 0.5;
+const REWARD_NET_GAIN = 0.25;
+const IDLE_BOOST_GAIN = 0.1;
+const STRENGTH_FLOOR = 0.1;
+
 /** Priority score for ranking survivors for replay (higher = more likely sampled); pure in the entry and current time. */
 export function replayPriority(entry: MemoryEntry, now: Date, outcomeAblated: boolean): number {
   const pos = entry.outcome_positive ?? 0;
@@ -19,7 +26,7 @@ export function replayPriority(entry: MemoryEntry, now: Date, outcomeAblated: bo
   // The clamp is required because sampleForReplay needs all weights positive.
   const rewardSignal = outcomeAblated
     ? 1.0 // EVAL-ONLY ablation (see ablation.ts): outcome-off also silences replay's reward bias
-    : Math.max(0.1, 1 + pos * 0.5 + (pos - neg) * 0.25);
+    : Math.max(REWARD_FLOOR, 1 + pos * REWARD_POSITIVE_GAIN + (pos - neg) * REWARD_NET_GAIN);
 
   const valence = VALENCE_WEIGHT[entry.emotional_valence] ?? 1.0;
 
@@ -30,11 +37,11 @@ export function replayPriority(entry: MemoryEntry, now: Date, outcomeAblated: bo
   const lastRetrieved = new Date(entry.last_retrieved);
   const deltaMs = now.getTime() - lastRetrieved.getTime();
   const ageHours = Number.isFinite(deltaMs) ? Math.max(0, deltaMs / 3_600_000) : 0;
-  const idleBoost = 1 + Math.log1p(ageHours) * 0.1;
+  const idleBoost = 1 + Math.log1p(ageHours) * IDLE_BOOST_GAIN;
 
   // Weight by current strength so dead-and-decaying memories don't waste replay slots.
   const rawStrength = Number.isFinite(entry.strength) ? entry.strength : 0;
-  const strengthFloor = Math.max(0.1, rawStrength);
+  const strengthFloor = Math.max(STRENGTH_FLOOR, rawStrength);
 
   return rewardSignal * valence * underRehearsed * idleBoost * strengthFloor;
 }

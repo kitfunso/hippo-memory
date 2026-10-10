@@ -35,7 +35,8 @@ interface TranscriptMessage {
 
 const NON_HUMAN_BLOCK_PREFIXES = ['<ide_', '[Request interrupted by user'];
 
-/** The human's words on a Claude Code user line, '' when none; VS Code stores prompts as text blocks, beside its own open-file, selection and interrupt blocks. */
+/** The human's words on a Claude Code user line, '' when none; VS Code stores prompts as text blocks, beside its own open-file, selection
+ * and interrupt blocks. */
 export function humanUserText(entry: TranscriptLineFlags, message: TranscriptMessage): string {
   const content = message.content;
   let text = '';

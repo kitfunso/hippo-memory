@@ -351,7 +351,8 @@ export function handleSupportBundle({ flags }: CommandContext): void {
   console.log(`Wrote ${file} (${kb} KB).`);
   console.log(includeLogs
     ? `It holds versions, doctor checks, config with secrets removed, store counts, and the last ${TAIL_MAX_LINES} lines of each hippo log with known secret shapes removed. Those log lines can quote memory text. Read it before you attach it to a ticket.`
-    : 'It holds versions, doctor checks, config with secrets removed, store counts and log file names. It never holds memory text. Read it before you attach it to a ticket.');
+    : 'It holds versions, doctor checks, config with secrets removed, store counts and log file names. It never holds memory text. Read it before you ' +
+      'attach it to a ticket.');
 }
 
 export async function handleInspect({ hippoRoot, tenantId, args }: CommandContext): Promise<void> {
