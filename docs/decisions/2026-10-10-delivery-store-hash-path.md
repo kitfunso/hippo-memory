@@ -26,7 +26,7 @@ R26 to R28 drive the real hook through linked folders, and each fails under the 
 - **Accept any of several hashes** (the second codex review's suggestion): this still misses rows written through other aliases, and it moves the M7 mutant's target.
 
 ## Consequences
-- A project whose `.hippo` is a link to the global store writes rows under the project path. The reader sees a global store and reads them as foreign. The read is `indeterminate`, never a wrong class.
+- A project whose `.hippo` is a link to the global store writes rows under the project path. The reader sees a global store and reads them as foreign. If every row of the session came that way, the read is `indeterminate`. If only some did, the class comes from the rows kept and can understate the delivery, never overstate it.
 - A future reader of `store_hash` must copy these two rules too, or it will misread linked stores the same way.
 
 ## Reconsider when

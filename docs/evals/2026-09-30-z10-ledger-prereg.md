@@ -181,11 +181,15 @@ This section settles the engineering part of the Z10 exit. It covers three check
   - A memory that is gone with no forget row, but whose id appears in any candidate or trace row, is `indeterminate` `forgotten`, never not-written. Several delete paths write no forget row.
   - A label on any class other than application-unknown is noted, including the early returns.
   - A second review round passed. From it, the reader notes transcript lines it cannot read, and a duplicate of a row that never became a turn. A line that parses to anything but an object no longer stops the read. The parser keeps `promptSource: 'system'` lines: 430 of the 547 such lines in 18 distinct transcripts on this machine were followed by a hook attachment. Those transcripts hold no sidechain lines, so none are skipped.
-- **Corpus record, added after the scored run at the codex review's request.** The host corpus was copied outside the repo before any scored run but not named here. It is now frozen in `hippo-archive/z10-exit-host/`, with a README and the outside-repo scripts as run:
+- **Corpus record, added after the scored run at the codex review's request.** The host corpus was copied outside the repo before any scored run but not named here. It is now frozen in `C:/Users/skf_s/hippo-archive/z10-exit-host/` on the machine that ran the check, with a README and the outside-repo scripts as run:
   - `real-a.jsonl`, SHA-256 `06f8bd5bfd88bc729fbee9a4199539fd527f2704cec022371406749fc106900a`;
   - `real-b.jsonl`, SHA-256 `18ff8b5f80f903e78e545a0303190e65bfcf804f226932662e6381434fdfc1bd`;
   - `real-c.jsonl`, SHA-256 `211a528f50369bc10889bb169369d07d17b0c245dd3d93d1bce4c947e3186e4b`;
   - `live.jsonl`, the live session, SHA-256 `e909b74d889d77ae9999b18940a4e765dc34f5a8d96fd8cffd4d1751f1fe7bb9`, with its scratch project in `live-project/`.
+- **Amendment 3, after the scored run, from the final review before the PR left draft.** Three reader rules changed. The 34 class reads, the 12 controls and their class, reason, turn, stage, tenant, session and lesson oracles did not. Changes:
+  - A copy of a lesson keeps its source's `created`: `hippo share`, promotion to the global store and sync-down all copy it. So a row whose `source` starts with `shared:` or `promoted:` is present in its store from its earliest `remember` audit row there. A lesson held by several stores is present from the earliest of them. A copy with no `remember` row has no known presence time, and a turn with no candidate row for it reads as a range from not-written up, with the reason `presence-unknown`. This replaces the presence sentence under "Reader" for copies.
+  - A read run with `--no-global` that finds the lesson in no store and in no candidate row is `indeterminate` `global-unread`, not not-written, unless the store read is itself the global store. X1 now reads with the project's global root, which holds no store, so it still proves not-written.
+  - The eight-field check takes the expected store hash from the session's last ledger row, the hash the hook wrote, not from the reader's own formula. A session with no row keeps the formula.
 
 ## Controls and failure cases
 

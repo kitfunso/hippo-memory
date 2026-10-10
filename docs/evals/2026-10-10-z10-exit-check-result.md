@@ -2,7 +2,7 @@
 
 **Date:** 2026-10-10  
 **Scope:** the engineering part of the Z10 exit, as registered in the [Z10 draft](./2026-09-30-z10-ledger-prereg.md) under "Exit check: engineering scope", with Amendments 1 and 2. No task or efficacy claim.  
-**Verdict:** the engineering part passes at `639be66a`. All 34 class reads and 12 negative controls match their oracles on all eight fields, and each of the 11 reader mutants fails at least one case. The parser's counts match an independent count on three real transcripts, and a live session reads as delivered with application unknown. Recall decisions are unchanged on three surfaces. The ledger's in-process cost meets Amendment 1. The review then found five defects, listed under "Review fixes after the scored run"; with them fixed, the exit tests, the mutants and the live read pass again at `a82bc723`.  
+**Verdict:** the engineering part passes at `639be66a`. All 34 class reads and 12 negative controls match their oracles on all eight fields, and each of the 11 reader mutants fails at least one case. The parser's counts match an independent count on three real transcripts, and a live session reads as delivered with application unknown. Recall decisions are unchanged on three surfaces. The ledger's in-process cost meets Amendment 1. The reviews then found eight defects, listed under "Review fixes after the scored run"; with them fixed, the exit tests, the mutants and the live read pass again at `9f04b580`.  
 **Status:** the delivery ledger stays off by default behind `deliveryLedger.enabled`. Z10's exit stays open until tool-failure rows exist, which need a schema change.
 
 ## What was built
@@ -42,7 +42,7 @@ npm --prefix C:/Users/skf_s/hippo-wt-z10x run test:delivery-ledger
 
 ## Mutants
 
-Script: `mutate.mjs`, outside the repo (archived in `hippo-archive/z10-exit-host/scripts/`). It edits one source string in a clean worktree at `639be66a`, runs the three exit files, records the failing tests, and restores the file. Every mutant failed at least one case:
+Script: `mutate.mjs`, outside the repo (archived in `C:/Users/skf_s/hippo-archive/z10-exit-host/scripts/`). It edits one source string in a clean worktree at `639be66a`, runs the three exit files, records the failing tests, and restores the file. Every mutant failed at least one case:
 
 | Mutant | Caught by |
 |---|---|
@@ -62,7 +62,7 @@ M9's first run was invalid, not a survivor. Its edit replaced an `else if` with 
 
 ## Real host
 
-- **Parser on real transcripts.** Three transcripts copied from this machine, outside the repo, with SHA-256 checked at the run. They are frozen in `hippo-archive/z10-exit-host/` with the scripts as run, and the prereg's corpus record gives each full hash:
+- **Parser on real transcripts.** Three transcripts copied from this machine, outside the repo, with SHA-256 checked at the run. They are frozen in `C:/Users/skf_s/hippo-archive/z10-exit-host/` with the scripts as run, and the prereg's corpus record gives each full hash:
 
 | Copy | SHA-256 | Prompts | Fired | Queued | Task notifications | Other kinds |
 |---|---|---|---|---|---|---|
@@ -70,7 +70,7 @@ M9's first run was invalid, not a survivor. Its edit replaced an `else if` with 
 | real-b | `18ff8b5f…4fdfc1bd` | 21 | 13 | 4 | 1 | 1 image, 2 command, 1 command stdout |
 | real-c | `211a528f…e3186e4b` | 10 | 22 | 16 | 13 | 1 cross-session, 2 agent message, 2 command, 2 command stdout |
 
-  Each count equals the independent count in `tally.mjs` (archived in `hippo-archive/z10-exit-host/scripts/`). The reader reads each one against a store whose ledger was never on as `indeterminate` `no-event-row`, with one gap per fired prompt.
+  Each count equals the independent count in `tally.mjs` (archived in `C:/Users/skf_s/hippo-archive/z10-exit-host/scripts/`). The reader reads each one against a store whose ledger was never on as `indeterminate` `no-event-row`, with one gap per fired prompt.
 - **Live session.** Claude Code on a scratch store with the ledger on, two turns, the second with an unchanged block. Transcript SHA-256 `e909b74d…f1fe7bb9`. The reader returns `application-unknown`: turn 1 `sent`, paired by prompt and confirmed on its attachment; turn 2 `reused`, paired by prompt and confirmed through turn 1. The read at `639be66a` is byte-identical to the first read, taken at `cfeefd0f` before the review fixes.
 
 ## Recall decisions
@@ -110,22 +110,28 @@ Attempt 2 started on a probe that passed two seconds before a fresh probe that r
 
 ## Review fixes after the scored run
 
-The review stage ran after the scored run. Codex found four defects, each checked against the source before it was fixed, and the macOS CI job found a fifth. The fixes left the 34 class reads and 12 controls and their oracles unchanged, and every one still passes with the fixed reader:
+The review stage ran after the scored run. Codex found four defects, the macOS CI job found a fifth, and a final review before the PR left draft found three more. Each was checked against the source before it was fixed. The class, reason, turn, stage, tenant, session and lesson oracles of the 34 class reads and 12 controls are unchanged, and every case still passes with the fixed reader. The store-hash oracle is not unchanged: it recomputed the reader's own formula, so it changed with the reader in `ead586f5` and `6b9205b4`, and a formula bug in both could pass. It now reads the hash from the hook's own rows (item 8).
 
 1. **A disabled block read as rejected before the lesson existed.** The reader returned `rejected` `block-disabled` before it checked when the lesson was written. A lesson written after a disabled turn now reads `not-written` `written-after` (R24). Commit `f8c09a3f`.
 2. **A reuse after a sent duplicate found no origin.** The reader took the origin of a reused block only from a group whose main row was `sent`. A group whose `sent` row is a duplicate that emitted the lesson now counts as the origin too (R25). Commit `f8c09a3f`.
 3. **A store without the ledger dropped the lesson id.** A `--memory` read on a store with no `delivery_events` table returned `memory_id: null`. It now keeps the id (R8). Commit `f8c09a3f`.
-4. **The host corpus was not named in the registration.** The copies were made before the scored run but not recorded. They are now frozen in `hippo-archive/z10-exit-host/`, and the prereg's corpus record gives each full hash. Commit `37ad59a3`.
+4. **The host corpus was not named in the registration.** The copies were made before the scored run but not recorded. They are now frozen in `C:/Users/skf_s/hippo-archive/z10-exit-host/`, and the prereg's corpus record gives each full hash. Commit `37ad59a3`.
 5. **On macOS every row read as another store's.** The hook hashes a project store under its resolved project folder, and on macOS the temp folder is a link from `/var` to `/private/var`. The reader and the test oracle hashed the path as given, so every negative control read `indeterminate` `foreign-store`. The first fix resolved the whole path. That broke the other rule: the hook hashes the global store under `HIPPO_HOME` as given, never resolved. The reader now follows both rules, and decides which store is global from `HIPPO_HOME` even when told not to join global lessons. R26 fires the hook from a linked project folder and reads the store by both paths. R27 and R28 fire it with `HIPPO_HOME` under a link, and R28 reads with `--no-global`. Commits `ead586f5`, `6b9205b4` and `a82bc723`.
+6. **A copied lesson read as present before it was copied.** `hippo share`, promotion and sync-down keep the source's `created`, and `hippo sleep` shares routinely. So a lesson shared after a turn read as present at that turn, and could read `rejected` or `not-retrieved` where the truth is not-written. A copy is now dated by its earliest `remember` audit row in its store (Amendment 3). R29 shares a lesson through the built CLI after turn 1 and reads `not-written` `written-after`. R30 reads a copy with no audit row as `indeterminate` `presence-unknown`. Commit `9f04b580`.
+7. **A read that skipped the global store claimed not-written.** Under `--no-global`, a lesson that lives only in the global store read `not-written` `no-row`. It is now `indeterminate` `global-unread` (R31). X1 now reads with the project's global root, which holds no store, and its oracle is unchanged. Commit `9f04b580`.
+8. **The store-hash oracle could not catch a formula bug.** It recomputed the reader's own formula. It now takes the hash from the session's last ledger row, the hash the hook wrote. N7 is the one case whose rows carry two hashes, and its last row is the copy's own. Commit `9f04b580`.
 
-Again at `a82bc723`, rebased on master `6005960d`:
+The final review also corrected two claims in this document: that every oracle was unchanged (item 8 shows the store-hash oracle was not), and that the linked-store limit never gives a wrong class (see Limits). It tightened N4 to assert its one gap, and removed a ticket code from five header comments.
 
-- The build, and `test:delivery-ledger`: 10 files, 218 tests, all pass.
-- The three exit files: 78 tests, all pass, none skipped. R26 to R28 ran through Windows junctions on this machine.
+Again at `9f04b580`, on master `6005960d`:
+
+- The build, and `test:delivery-ledger`: 10 files, 221 tests, all pass.
+- The three exit files: 81 tests, all pass, none skipped. R26 to R28 ran through Windows junctions on this machine.
 - The lint, size, test-only-export, comment and roadmap checks each exit 0, and `npm run typecheck:tests` is clean.
-- The 11 mutants each fail at least one case, caught by the same tests as in the table above. They ran at `4af54482`, the same commit before the rebase; the reader, parser, helpers and exit tests are byte-identical between the two.
+- The 11 mutants each fail at least one case, caught by the same tests as in the table above, and N4 now also catches M10.
 - The live read is byte-identical to the archived verdict, SHA-256 `4db9beac…d7765602`.
-- A second codex pass on these fixes raised one more case, listed under Limits: a project whose `.hippo` is a link to the global store.
+- A second codex pass raised one more case, listed under Limits: a project whose `.hippo` is a link to the global store.
+- The scored commit `639be66a` predates two rebases. It is kept on the local branch `archive/z10-exit-scored` of the machine that ran the check. Its rebased twin `b042bdd1` has the same reader, parser, helper and exit-test files.
 
 ## Findings
 
@@ -144,7 +150,7 @@ Again at `a82bc723`, rebased on master `6005960d`:
 - On a `key-ambiguous` read, two valid labels for two different memories report `label-error:duplicate`. The class stays indeterminate.
 - When no row in a duplicate group emitted the lesson, the turn's stage comes from the main row only, so a parallel fire's rejection is not shown.
 - The sub-agent's own transcript and Codex transcripts are not joined. A missing row is a gap, never evidence.
-- The hook hashes the path it took to the store, not the store itself. So a project whose `.hippo` is a link to the global store writes rows under the project path, and the reader, which sees a global store, reads them as another store's. The read is `indeterminate`, never a wrong class. Rows written through any other alias of a store read the same way.
+- The hook hashes the path it took to the store, not the store itself. So a project whose `.hippo` is a link to the global store writes rows under the project path, and the reader, which sees a global store, reads them as another store's. Rows written through any other alias of a store read the same way. When every row of the session came by another path, the read is `indeterminate`. When only some did, the class comes from the rows kept, as the registration says, and can understate what was delivered, never overstate it: N7 reads `delivery-unconfirmed` although its dropped turn 1 sent the pin.
 
 ## Out
 
