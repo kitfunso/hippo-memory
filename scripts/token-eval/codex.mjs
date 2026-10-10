@@ -8,12 +8,15 @@ import { pathKey } from './exec.mjs';
 import { childEnv } from './arms.mjs';
 import { untilNotLimited } from './turns.mjs';
 import { CODEX_INTERNAL_SOURCES, listRollouts, sessionRollouts, rolloutUsage, parseRollouts, threadIdFrom, failureText } from './codex-rollout.mjs';
-import { CODEX_TOKEN_FILES, CODEX_AUTH_RE, defaultAuthFile, openAuthVault, authIn, authOut, redact, removeTokenFiles } from './codex-auth.mjs';
+import { CODEX_TOKEN_FILES, CODEX_AUTH_RE, defaultAuthFile, openAuthVault, authIn, authOut, redact, removeTokenFiles, readIfPresent } from './codex-auth.mjs';
 
 export const WRAPPER_MARK = 'hippo codex wrapper';
 export const CODEX_LIMIT_RE = /usage limit|hit your (?:usage )?limit|rate[_ ]limit|too many requests/i;
 const DEFAULT_WAIT = 'poll:30000:600000';
 const HOME_KEYS = new Set(['HOME', 'USERPROFILE', 'APPDATA', 'LOCALAPPDATA']);
+
+/** hippo's Codex session-end worker log in a run's home. */
+export const wrapperLog = (run) => path.join(run.dirs.home, '.hippo', 'logs', 'codex-sleep.log');
 
 const sha256 = (file) => createHash('sha256').update(fs.readFileSync(file)).digest('hex');
 const isBareName = (cmd) => /^[\w.-]+$/.test(cmd);
@@ -198,9 +201,12 @@ export async function runCodexSession(ctx, run, t, reset) {
   const { codexHome } = run.dirs;
   const vault = ctx.codexVault;
   let before = new Set(listRollouts(codexHome));
+  let priorLog = '';
   const command = () => {
     // Taken per attempt, so a cut-off attempt's rollout stays on disk (prereg 113) but is never priced.
     before = new Set(listRollouts(codexHome));
+    // A finished worker log from an earlier apply or attempt stays until this attempt's worker truncates it.
+    priorLog = readIfPresent(wrapperLog(run))?.toString('utf8') ?? '';
     return `${quoteArg(run.codexLauncher)} ${codexArgs(ctx, run).map(quoteArg).join(' ')}`;
   };
   try {
@@ -215,7 +221,7 @@ export async function runCodexSession(ctx, run, t, reset) {
     const rollouts = sessionRollouts(codexHome, before, threadId, ctx.codexInternalSources);
     assertNoMcp(run, t, [...rollouts.agent, ...rollouts.internal, ...rollouts.stray]);
     const cc = { ...session.cc, stdout: redact(vault, codexHome, session.cc.stdout), stderr: redact(vault, codexHome, session.cc.stderr) };
-    return { ...session, cc, threadId, rollouts, wait, usage: rolloutUsage(rollouts.agent), internalUsage: rolloutUsage(rollouts.internal) };
+    return { ...session, cc, threadId, rollouts, wait, priorLog, usage: rolloutUsage(rollouts.agent), internalUsage: rolloutUsage(rollouts.internal) };
   } finally {
     authOut(vault, codexHome);
     removeTokenFiles(codexHome, ctx.codexTokenFiles);

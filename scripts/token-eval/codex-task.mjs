@@ -3,7 +3,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { HIPPO_ARMS } from './arms.mjs';
 import { toolInputs, toolResultTexts, hookContexts, commandLog, transcriptWork } from './records.mjs';
-import { runCodexSession, codexEnv } from './codex.mjs';
+import { runCodexSession, codexEnv, wrapperLog } from './codex.mjs';
 import { codexAdapter, parseRollouts, streamEvents } from './codex-rollout.mjs';
 import { authOut, tokenSweep, closeVault, readIfPresent, errNote } from './codex-auth.mjs';
 import { sessionVoid, byPrecedence } from './readcheck.mjs';
@@ -60,11 +60,12 @@ export function wrapperVerdict(logText, threadId) {
 }
 
 /** Poll the worker's log until its end line, so no snapshot or sweep runs under a live worker; `ms` goes in the record, never in wallMs. */
-export async function wrapperWait(ctx, run, cell, threadId) {
-  const log = path.join(run.dirs.home, '.hippo', 'logs', 'codex-sleep.log');
+export async function wrapperWait(ctx, run, cell, threadId, priorLog = '') {
+  const log = wrapperLog(run);
   const start = performance.now();
   for (;;) {
-    const verdict = wrapperVerdict(readIfPresent(log)?.toString('utf8') ?? '', threadId);
+    const text = readIfPresent(log)?.toString('utf8') ?? '';
+    const verdict = wrapperVerdict(text === priorLog ? '' : text, threadId);
     const ms = Math.round(performance.now() - start);
     if (verdict.done) return { captured: verdict.captured, wait: { ms, timedOut: false, end: verdict.end } };
     if (ms >= ctx.codexWrapperWaitMs) {

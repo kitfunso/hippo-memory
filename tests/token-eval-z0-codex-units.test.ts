@@ -1,6 +1,7 @@
 // Z0 set X units: the tasks file, the plan, arm settings and env, the Codex args, rollout parser, waits and auth.
 import { describe, it, expect, afterEach } from 'vitest';
-import { delimiter, join } from 'node:path';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { delimiter, dirname, join } from 'node:path';
 import { validateTasks, planRuns } from '../scripts/token-eval/ab-run.mjs';
 import { armEnv, armSettings, ARM_SEEDS, HIPPO_ARMS, CARRY_ARMS } from '../scripts/token-eval/arms.mjs';
 import { runDirs } from '../scripts/token-eval/homes.mjs';
@@ -158,6 +159,19 @@ describe('the wrapper\'s end line (R17)', () => {
     expect(got.wait.ms).toBeGreaterThanOrEqual(300);
     expect(said).toHaveLength(1);
     expect(said[0]).toMatch(/seqX a-xa X2 seed1.*300 ms/);
+  });
+
+  it('is not done on a finished log an earlier apply left in the home, until the log changes', async () => {
+    const home = tmp('z0-wrapstale-');
+    const log = join(home, '.hippo', 'logs', 'codex-sleep.log');
+    mkdirSync(dirname(log), { recursive: true });
+    const prior = [START, wrote('earlier-thread'), ''].join('\n');
+    writeFileSync(log, prior);
+    const run = { s: { id: 'seqX' }, arm: 'X2', seed: 1, dirs: { home } };
+    const ctx = { codexWrapperWaitMs: 300, log: () => {} };
+    expect((await wrapperWait(ctx, run, 'a-xa', ID, prior)).captured).toBeNull();
+    writeFileSync(log, [START, wrote(ID), ''].join('\n'));
+    expect(await wrapperWait(ctx, run, 'a-xa', ID, prior)).toMatchObject({ captured: true, wait: { timedOut: false } });
   });
 
   it('takes the bound from --codex-wrapper-wait-ms, 120 s unless set, and refuses a value that is not a whole number', () => {

@@ -355,7 +355,7 @@ async function runTurns(ctx, run, step, stage, base) {
   // Before the end hooks and the hidden tests, so the final tree is the agent's alone.
   if (!stage.fault) stage.finalPost = guarded(run, t, stage, () => stateCommit(work, stage.pre));
   await settle(ctx, run, t.id, 'end');
-  if (step.driver === CODEX_DRIVER && run.arm === 'X2') session.wrapper = await wrapperWait(ctx, run, t.id, session.threadId);
+  if (step.driver === CODEX_DRIVER && run.arm === 'X2') session.wrapper = await wrapperWait(ctx, run, t.id, session.threadId, session.priorLog);
   snapshotSurfaces(ctx, run, 'end', step);
   if (HIPPO_ARMS.has(run.arm)) stage.injected = hippoEnd(ctx, run, step, stage, sessionIds);
   guarded(run, t, stage, () => noteWorktrees(ctx, run, step));

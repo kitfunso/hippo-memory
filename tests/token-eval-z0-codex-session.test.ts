@@ -5,7 +5,7 @@ import { join, dirname } from 'node:path';
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { finishCodex } from '../scripts/token-eval/codex-task.mjs';
-import { codexArgs, resolveCodex, runCodexSession } from '../scripts/token-eval/codex.mjs';
+import { codexArgs, resolveCodex, runCodexSession, wrapperLog } from '../scripts/token-eval/codex.mjs';
 import { codexAdapter, parseRollouts } from '../scripts/token-eval/codex-rollout.mjs';
 import { tokenSweep, closeVault } from '../scripts/token-eval/codex-auth.mjs';
 import { codexPreflight, chooseArms } from '../scripts/token-eval/ab-run.mjs';
@@ -113,6 +113,14 @@ describe('the rollout parser (test 5)', () => {
       expect(tools.every((x: { input: { cwd: string } }) => foldPath(x.input.cwd) === foldPath(run.dirs.work)), form).toBe(true);
       expect(codexAdapter.toolResultTexts(s.rollouts.agent).map((o: { text: string }) => o.text)[1]).toMatch(/No such file/);
     }
+  });
+
+  it('hands back the worker log as it stood when the attempt started, for the wrapper wait to skip (R17)', async () => {
+    const { run, ctx } = setup('priorlog');
+    mkdirSync(dirname(wrapperLog(run)), { recursive: true });
+    writeFileSync(wrapperLog(run), 'an earlier apply\n');
+    const s = await runCodexSession(ctx, run, xTask('READ:{RUN}/work/lib.js'), () => false);
+    expect(s.priorLog).toBe('an earlier apply\n');
   });
 
   it('maps apply_patch, js cells and write_stdin, skips a poll and counts a non-literal cmd as unparsed', () => {
