@@ -30,7 +30,7 @@ import { validateOwner, isStrictOwnerEnv } from './owner-validation.js';
 import { printError } from './output.js';
 import { requireInit, runViaServerIfAvailable } from './shared.js';
 import { fmt } from './print.js';
-import { type CliFlags, type CommandContext, boolFlag, flagIsTrue, stringFlag } from './flag-values.js';
+import { type CliFlags, type CommandContext, boolFlag, flagIsTrue, isOneOf, stringFlag, stringListFlag } from './flag-values.js';
 import { DAY_MS } from '../util/time.js';
 import { errorMessage } from '../util/log.js';
 import { CliExit } from './exit.js';
@@ -49,7 +49,7 @@ function rememberTags(
   flags: CliFlags,
   cwd: string,
 ): RememberTags {
-  const requested: string[] = Array.isArray(flags['tag']) ? [...(flags['tag'] as string[])] : [];
+  const requested: string[] = Array.isArray(flags['tag']) ? [...flags['tag']] : [];
   if (flags['error']) requested.push('error');
   const all = [...requested];
   for (const pt of extractPathTags(cwd)) {
@@ -73,7 +73,10 @@ function rememberConfidence(flags: CliFlags): ConfidenceLevel {
   return confidence;
 }
 
-function parseKindFlag(flags: CliFlags): string | undefined {
+const USER_VISIBLE_KINDS = ['distilled', 'superseded'] as const;
+type UserVisibleKind = (typeof USER_VISIBLE_KINDS)[number];
+
+function parseKindFlag(flags: CliFlags): UserVisibleKind | undefined {
   const kindFlagRaw = stringFlag(flags, 'kind');
   const kindFlag = kindFlagRaw === undefined ? undefined : kindFlagRaw.toLowerCase();
   // CLI surface intentionally restricted: 'raw' is reserved for ingestion connectors
@@ -81,9 +84,8 @@ function parseKindFlag(flags: CliFlags): string | undefined {
   // forget/consolidate/conflict-resolve paths abort on kind='raw' via the append-only
   // trigger, so exposing --kind raw here would create unforgettable memories.
   // 'archived' is an internal sentinel set only inside archiveRawMemory's transaction.
-  const userVisibleKinds = ['distilled', 'superseded'] as const;
-  if (kindFlag !== undefined && !(userVisibleKinds as readonly string[]).includes(kindFlag)) {
-    printError(`Invalid --kind: "${kindFlagRaw}". Must be one of: ${userVisibleKinds.join(', ')}`);
+  if (kindFlag !== undefined && !isOneOf(USER_VISIBLE_KINDS, kindFlag)) {
+    printError(`Invalid --kind: "${kindFlagRaw}". Must be one of: ${USER_VISIBLE_KINDS.join(', ')}`);
     printError(`(kind='raw' is reserved for ingestion connectors; kind='archived' is internal.)`);
     throw new CliExit(1);
   }
@@ -91,7 +93,7 @@ function parseKindFlag(flags: CliFlags): string | undefined {
 }
 
 interface RememberEnvelope {
-  kind: string | undefined;
+  kind: UserVisibleKind | undefined;
   owner: string | null;
   artifactRef: string | null;
   scope: string | null;
@@ -134,7 +136,7 @@ async function cmdRemember(
   const ctx = cliApiContext(targetRoot, tenantId);
   const outcome = api.rememberLocally(ctx, {
     content: text,
-    kind: envelope.kind as ('raw' | 'distilled' | 'superseded' | 'archived' | undefined),
+    kind: envelope.kind,
     scope: envelope.scope ?? undefined,
     owner: envelope.owner ?? undefined,
     artifactRef: envelope.artifactRef ?? undefined,
@@ -176,18 +178,24 @@ function printExtraction(extraction: api.FactExtraction): void {
 }
 
 function supersedeTags(flags: CliFlags): string[] | undefined {
-  const rawTags = flags['tag'];
-  return Array.isArray(rawTags)
-    ? (rawTags as string[]).map((t) => String(t))
-    : typeof rawTags === 'string'
-      ? rawTags.split(',').map((t) => t.trim()).filter(Boolean)
-      : undefined;
+  return stringListFlag(flags, 'tag');
 }
 
 /** The api's conflict text differs by which writer lost; the row itself names its successor either way. */
 async function alreadySupersededLine(hippoRoot: string, oldId: string, tenantId: string, conflict: ConflictError): Promise<string> {
   const by = (await getMemory(cliApiContext(hippoRoot, tenantId), oldId))?.superseded_by;
   return by ? `Error: memory ${oldId} is already superseded by ${by}. Supersede that one instead.` : `Error: ${conflict.message}`;
+}
+
+function parseLayerFlag(flags: CliFlags): Layer | undefined {
+  const raw = stringFlag(flags, 'layer');
+  if (raw === undefined) return undefined;
+  const layer = Object.values(Layer).find((l) => l === raw);
+  if (layer === undefined) {
+    printError(`Invalid --layer: "${raw}". Must be one of: ${Object.values(Layer).join(', ')}`);
+    throw new CliExit(1);
+  }
+  return layer;
 }
 
 async function cmdSupersede(
@@ -200,7 +208,7 @@ async function cmdSupersede(
   requireInit(hippoRoot);
 
   const overrides = {
-    layer: stringFlag(flags, 'layer') as Layer | undefined,
+    layer: parseLayerFlag(flags),
     tags: supersedeTags(flags),
     // Without --pin the successor keeps the old row's pin.
     pinned: flagIsTrue(flags, 'pin') ? true : undefined,
@@ -247,13 +255,13 @@ function cmdTraceRecord(
   const task = String(flags['task'] ?? '').trim();
   const stepsJson = String(flags['steps'] ?? '').trim();
   const outcome = String(flags['outcome'] ?? '').trim();
-  const validOutcomes = ['success', 'failure', 'partial'];
+  const validOutcomes = ['success', 'failure', 'partial'] as const;
 
   if (!task || !stepsJson || !outcome) {
     printError('Usage: hippo trace record --task <t> --steps <json> --outcome <success|failure|partial> [--session <id>] [--tag <t>]');
     throw new CliExit(1);
   }
-  if (!validOutcomes.includes(outcome)) {
+  if (!isOneOf(validOutcomes, outcome)) {
     printError(`Invalid outcome: "${outcome}". Must be one of: ${validOutcomes.join(', ')}.`);
     throw new CliExit(1);
   }
@@ -266,7 +274,7 @@ function cmdTraceRecord(
   const content = renderTraceContent({
     task,
     steps,
-    outcome: outcome as 'success' | 'failure' | 'partial',
+    outcome,
   });
 
   const { id } = api.remember(cliApiContext(hippoRoot, tenantId), {
@@ -275,7 +283,7 @@ function cmdTraceRecord(
     local: {
       layer: Layer.Trace,
       source: String(flags['source'] ?? 'cli'),
-      traceOutcome: outcome as 'success' | 'failure' | 'partial',
+      traceOutcome: outcome,
       sourceSessionId: sessionId,
     },
   });
@@ -456,8 +464,7 @@ export async function handleRemember({ hippoRoot, tenantId, args, flags }: Comma
 
 async function rememberViaThinClient(hippoRoot: string, text: string, flags: CliFlags): Promise<boolean> {
   const rememberKindRaw = stringFlag(flags, 'kind')?.toLowerCase();
-  const rememberKindAllowed = ['distilled', 'superseded'] as const;
-  if (rememberKindRaw !== undefined && !(rememberKindAllowed as readonly string[]).includes(rememberKindRaw)) return false;
+  if (rememberKindRaw !== undefined && !isOneOf(USER_VISIBLE_KINDS, rememberKindRaw)) return false;
   const tags = rememberTags(flags, process.cwd()).all;
   // Validate --owner on the thin-client path too, so validation is the same whether or not a server is up.
   const thinOwnerRaw = stringFlag(flags, 'owner');
@@ -470,7 +477,7 @@ async function rememberViaThinClient(hippoRoot: string, text: string, flags: Cli
   return runViaServerIfAvailable(hippoRoot, async (info, apiKey) => {
     const result = await client.remember(info.url, apiKey, {
       content: text,
-      kind: rememberKindRaw as ('distilled' | 'superseded' | undefined),
+      kind: rememberKindRaw,
       scope: stringFlag(flags, 'scope'),
       owner: thinOwnerCheck.value,
       artifactRef: stringFlag(flags, 'artifact-ref'),

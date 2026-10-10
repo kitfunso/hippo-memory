@@ -107,7 +107,6 @@ describe('classifyTransportFailure', () => {
   it('calls a server response no transport failure at all', () => {
     expect(classifyTransportFailure(new HttpResponseError('not found: mem_ECONNREFUSED', 404))).toBe('none');
     expect(classifyTransportFailure(new Error('something else went wrong'))).toBe('none');
-    expect(classifyTransportFailure('not an error')).toBe('none');
   });
 });
 

@@ -75,6 +75,17 @@ export function nonEmptyStringFlag(flags: CliFlags, name: string): string | unde
   return stringFlag(flags, name) || undefined;
 }
 
+// A repeated flag is already a list; a single value is a comma-separated list.
+export function stringListFlag(flags: CliFlags, name: string): string[] | undefined {
+  const v = flags[name];
+  if (Array.isArray(v)) return v;
+  return isStringFlag(v) ? v.split(',').map((t) => t.trim()).filter(Boolean) : undefined;
+}
+
+export function isOneOf<T extends string>(allowed: readonly T[], value: string): value is T {
+  return allowed.some((a) => a === value);
+}
+
 export function numberFlag(flags: CliFlags, name: string): number | undefined {
   const v = flags[name];
   return isStringFlag(v) ? Number(v) : undefined;
