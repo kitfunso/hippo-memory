@@ -1,18 +1,11 @@
 // Store health and admin tool handlers: base rates, status, conflicts, resolve, share and peers.
 
 import { evalNow } from '../core/ablation.js';
-import { loadStrengthTallies } from '../store/candidates.js';
-import { countOpenConflicts, listTouchableConflicts } from '../store/conflicts.js';
 import { shareMemory, listPeers } from '../sharing/share.js';
-import { requireGroup, storeFor } from '../store/index.js';
 import { ConflictError, NotFoundError } from '../core/api-errors.js';
-import { resolveMemoryConflict } from '../api/conflicts.js';
-import { getMemory } from '../api/memories.js';
-import { classifyOriginProject } from '../core/project-identity.js';
-import type { CallerProject } from '../api/prompt-hook.js';
-import { canTouchScope, passesScopeFilterForRecall, personalScopeOf } from '../store/recall-scope.js';
-import { chunked, loadEntriesByIds } from '../store/entry-reads.js';
-import type { MemoryConflict } from '../store/rows.js';
+import { predictionBaserate } from '../api/predictions.js';
+import { listOpenConflicts, resolveMemoryConflict } from '../api/conflicts.js';
+import { getMemoryStatus, getTouchableMemory } from '../api/memories.js';
 import { mcpActor, type ToolCall } from './protocol.js';
 import { isJsonString } from '../util/json.js';
 import { DATE_PREFIX_CHARS } from '../util/token-text.js';
@@ -25,7 +18,7 @@ export async function runPredictBaserateTool({ args, ctx, hippoRoot, tenantId }:
   // Text-only reply, matching the other MCP tools; the group's read writes the audit row, so no surface can skip it.
   const classTag = String(args.class_tag || '').trim();
   if (!classTag) return 'No class_tag provided. Usage: pass class_tag matching a class used in past predictions (e.g. "migration-effort").';
-  const baserate = await requireGroup(storeFor({ hippoRoot, store: ctx?.store }), 'predictions').predictionBaserate(tenantId, classTag, ctx?.actor ?? 'mcp');
+  const baserate = await predictionBaserate({ hippoRoot, tenantId, actor: mcpActor(ctx), store: ctx?.store }, classTag);
   if (baserate.nClosed === 0) {
     return `No closed predictions in class "${classTag}" yet. Create one via hippo_predict (or 'hippo predict ...' CLI) and close it with hippo_predict_close once the actual outcome is known. Base rates need closed predictions with numeric actual_value to compute.`;
   }
@@ -40,38 +33,22 @@ export async function runPredictBaserateTool({ args, ctx, hippoRoot, tenantId }:
   return lines.join('\n');
 }
 
-export function runStatusTool({ hippoRoot, config, tenantId }: ToolCall): string {
+export function runStatusTool({ ctx, hippoRoot, config, tenantId }: ToolCall): string {
   // honors HIPPO_FAKE_NOW (eval-only; see ablation.ts)
-  const tallies = loadStrengthTallies(hippoRoot, tenantId, evalNow(), 0.1);
+  const tallies = getMemoryStatus({ hippoRoot, tenantId, actor: mcpActor(ctx), store: ctx?.store }, evalNow(), 0.1);
   const avgStrength = tallies.total > 0 ? (tallies.strengthSum / tallies.total).toFixed(2) : '0';
-  const conflicts = countOpenConflicts(hippoRoot, tenantId);
-  return [
+    return [
     `Memories: ${tallies.total} (${tallies.pinned} pinned, ${tallies.errors} errors)`,
     `Avg strength: ${avgStrength}`,
     `At risk (<0.1): ${tallies.atRisk}`,
-    `Open conflicts: ${conflicts}`,
+    `Open conflicts: ${tallies.openConflicts}`,
     `Half-life default: ${config.defaultHalfLifeDays}d`,
   ].join('\n');
 }
 
-/** Pairs whose two rows the caller could recall: its repo or user-global, and no scope it was not asked for. */
-function recallablePairs(call: ToolCall, conflicts: MemoryConflict[], project: CallerProject): MemoryConflict[] {
-  const own = personalScopeOf(mcpActor(call.ctx));
-  const ids = [...new Set(conflicts.flatMap((c) => [c.memory_a_id, c.memory_b_id]))];
-  // loadEntriesByIds reads at most one chunk of ids per call.
-  const rows = new Map(chunked(ids).flatMap((chunk) => loadEntriesByIds(call.hippoRoot, chunk, call.tenantId)).map((row) => [row.id, row]));
-  const shown = (id: string): boolean => {
-    const row = rows.get(id);
-    return row !== undefined && classifyOriginProject(row.origin_project, project) !== 'cross-project'
-      && passesScopeFilterForRecall(row.scope ?? null, undefined, own);
-  };
-  return conflicts.filter((c) => shown(c.memory_a_id) && shown(c.memory_b_id));
-}
-
 export function runConflictsTool(call: ToolCall): string {
   const { ctx, hippoRoot, tenantId } = call;
-  const touchable = listTouchableConflicts(hippoRoot, 'open', tenantId, mcpActor(ctx));
-  const conflicts = ctx?.project ? recallablePairs(call, touchable, ctx.project) : touchable;
+  const conflicts = listOpenConflicts({ hippoRoot, tenantId, actor: mcpActor(ctx), store: ctx?.store }, ctx?.project);
   if (conflicts.length === 0) return 'No open conflicts.';
   return conflicts.map((c) =>
     `conflict_${c.id}: ${c.memory_a_id} <-> ${c.memory_b_id} (score=${c.score.toFixed(2)}) — ${c.reason}`
@@ -103,9 +80,8 @@ export async function runShareTool({ args, ctx, hippoRoot, tenantId }: ToolCall)
   if (!shareId) return 'Required: id (memory ID to share).';
   const force = Boolean(args.force);
   const actor = mcpActor(ctx);
-  const entry = await getMemory({ hippoRoot, tenantId, actor, store: ctx?.store }, shareId);
   // Checked before shareMemory, whose personal-row refusal would tell another person the id exists.
-  if (!canTouchScope(actor, entry?.scope ?? null)) throw new NotFoundError(`Memory not found: ${shareId}`);
+  await getTouchableMemory({ hippoRoot, tenantId, actor, store: ctx?.store }, shareId);
   // Pass tenantId so shareMemory's readEntry filters by tenant; otherwise a Bearer for tenant A could share tenant B's id to the global store.
   // The 'Memory not found' error matches the cross-tenant deny shape elsewhere.
   const shared = shareMemory(hippoRoot, shareId, { force, tenantId });

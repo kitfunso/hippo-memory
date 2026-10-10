@@ -3,7 +3,11 @@
 import { BadRequestError, ConflictError, NotFoundError } from '../core/api-errors.js';
 import type { MemoryEntry } from '../core/memory.js';
 import { listTouchableConflicts, resolveConflict } from '../store/conflicts.js';
-import { loadEntriesByIds } from '../store/entry-reads.js';
+import { chunked, loadEntriesByIds } from '../store/entry-reads.js';
+import { passesScopeFilterForRecall, personalScopeOf } from '../store/recall-scope.js';
+import type { MemoryConflict } from '../store/rows.js';
+import { classifyOriginProject } from '../core/project-identity.js';
+import type { CallerProject } from './prompt-hook.js';
 import { isQuarantineScope } from '../trust/quarantine.js';
 import type { Context } from './types.js';
 
@@ -48,4 +52,21 @@ export function resolveMemoryConflict(ctx: Context, conflictId: number, opts: Re
   // Every check passed above, so null here is another resolver getting there first.
   if (resolved === null) throw new ConflictError(`conflict ${conflictId} is already resolved`);
   return { conflictId, keptId: opts.keepId, loserId: resolved.loserId };
+}
+
+/** Open conflicts whose two rows the caller may touch; with `project`, only pairs it could also recall:
+ *  its repo or user-global, and no scope it was not asked for. */
+export function listOpenConflicts(ctx: Context, project?: CallerProject): MemoryConflict[] {
+  const touchable = listTouchableConflicts(ctx.hippoRoot, 'open', ctx.tenantId, ctx.actor);
+  if (!project) return touchable;
+  const own = personalScopeOf(ctx.actor);
+  const ids = [...new Set(touchable.flatMap((c) => [c.memory_a_id, c.memory_b_id]))];
+  // loadEntriesByIds reads at most one chunk of ids per call.
+  const rows = new Map(chunked(ids).flatMap((chunk) => loadEntriesByIds(ctx.hippoRoot, chunk, ctx.tenantId)).map((row) => [row.id, row]));
+  const shown = (id: string): boolean => {
+    const row = rows.get(id);
+    return row !== undefined && classifyOriginProject(row.origin_project, project) !== 'cross-project'
+      && passesScopeFilterForRecall(row.scope ?? null, undefined, own);
+  };
+  return touchable.filter((c) => shown(c.memory_a_id) && shown(c.memory_b_id));
 }
