@@ -6,9 +6,9 @@ import {
   applyRebuildResult,
   clearSummaryDirtyAfterBuild,
 } from '../store/summaries.js';
-import { RejectedValueError } from '../store/rejection.js';
+import { RejectedValueError } from '../core/api-errors.js';
 import { generateDagSummary, type DagSummaryOptions } from './dag-summary.js';
-import { derivationScope, derivationPartitionKey } from '../store/recall-scope.js';
+import { derivationScope, derivationPartitionKey } from '../core/recall-scope.js';
 import { loadConfig } from '../core/config.js';
 import { neverAutoShareTags } from '../sharing/share.js';
 import { errorFields, errorMessage, log } from '../util/log.js';

@@ -4,7 +4,8 @@ import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry, parseJsonArray } fro
 import { onHandle, openStore } from './open.js';
 import { escapeLike } from '../util/escape.js';
 import { originInSql } from '../core/project-identity.js';
-import { scopeAdmitSql } from './recall-scope.js';
+import { scopeAdmitSql } from './rule-sql.js';
+import { chunked } from '../util/chunked.js';
 
 const MAX_IDS_PER_READ = 500;
 
@@ -25,16 +26,6 @@ export function readEntry(hippoRoot: string, id: string, tenantId?: string): Mem
         ).get(id) as MemoryRow | undefined;
     return row ? rowToEntry(row) : null;
   }, openStore);
-}
-
-/** Ids per `IN (...)` list: far under SQLite's bound-parameter limit, with room for the tenant filter. */
-export const ID_CHUNK = 500;
-
-/** `items` in consecutive slices of at most `size`. */
-export function chunked<T>(items: readonly T[], size: number = ID_CHUNK): T[][] {
-  const out: T[][] = [];
-  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
-  return out;
 }
 
 /** Answers whether a tenant's rows in this store hold an id: `ids` are looked up now, one query per chunk, and any other id on its first ask. */

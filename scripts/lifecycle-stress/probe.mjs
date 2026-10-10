@@ -20,7 +20,7 @@ import { writeEntry } from '../../dist/store/entry-writes.js';
 import { loadAllEntries } from '../../dist/store/entry-reads.js';
 import { embedMemory } from '../../dist/store/embeddings/index.js';
 import { loadEmbeddingIndex } from '../../dist/store/vector-index.js';
-import { isEmbeddingAvailable } from '../../dist/store/embeddings/local.js';
+import { isEmbeddingAvailable } from '../../dist/embeddings/local.js';
 import { physicsSearch } from '../../dist/search/physics-search.js';
 import { consolidate } from '../../dist/consolidate/sleep.js';
 import { resetAllPhysicsState, loadPhysicsState } from '../../dist/db/physics-state.js';

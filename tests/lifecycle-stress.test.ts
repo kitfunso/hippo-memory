@@ -23,7 +23,7 @@ import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { embedMemory } from '../src/store/embeddings/index.js';
-import { isEmbeddingAvailable } from '../src/store/embeddings/local.js';
+import { isEmbeddingAvailable } from '../src/embeddings/local.js';
 import { loadEmbeddingIndex } from '../src/store/vector-index.js';
 import { skipWithoutEmbeddings } from './_helpers/embedding-backend.js';
 import { physicsSearch } from '../src/search/physics-search.js';

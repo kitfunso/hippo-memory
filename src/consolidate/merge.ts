@@ -6,7 +6,7 @@ import { duplicateKey, mergedText } from '../util/same-text.js';
 import { successorAfterRetirement } from '../util/merged-row.js';
 import { rejectionDigest } from '../store/rejection.js';
 import { reportAuditWriteFailure } from '../store/audit.js';
-import { derivationScope, derivationPartitionKey } from '../store/recall-scope.js';
+import { derivationScope, derivationPartitionKey } from '../core/recall-scope.js';
 import { jaccardSets } from './conflicts.js';
 import { keptAsWritten, type SleepRun } from './run.js';
 import { isReusable } from '../core/memory-quality.js';

@@ -1,5 +1,5 @@
 import { type DatabaseSyncLike, withWriteScope, setMeta, isSqliteBusy, pruneConsolidationRuns, getMeta } from '../db/index.js';
-import { RejectedValueError } from './rejection.js';
+import { RejectedValueError } from '../core/api-errors.js';
 import { log } from '../util/log.js';
 import type { HippoIndex, LegacyStats } from './rows.js';
 import { audit } from './audit-event.js';

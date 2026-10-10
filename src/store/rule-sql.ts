@@ -1,10 +1,11 @@
-// The SQL twins of the model's strength and keep rules (src/core/memory.ts); keep in step with calculateStrength and canAutoDelete.
+// The SQL twins of the model's rules in src/core: strength and keep (memory.ts), recall scope (recall-scope.ts); keep each in step with its JS half.
 import { DAY_MS } from '../util/time.js';
 import { isDecayAblated, isOutcomeSlowAblated, isRecallBoostAblated } from '../core/ablation.js';
 import {
   DECAY_BASE, EMOTIONAL_MULTIPLIERS, FALLBACK_HALF_LIFE_DAYS, KEEP_PAIRS, MAX_WRONG_HALVINGS, RETRIEVAL_BOOST_SLOPE, REWARD_SLOPE,
   applyLossAversionRatio, type EmotionalValence, type KeepPair,
 } from '../core/memory.js';
+import { PERSONAL_SCOPE_PREFIX, RECALL_DEFAULT_DENY_SCOPES } from '../core/recall-scope.js';
 
 const UNIX_EPOCH_JULIAN_DAY = 2440587.5;
 
@@ -42,3 +43,25 @@ const keepPairSql = (p: KeepPair): string =>
 // Pinned and kept rows stay (a superseded row is not kept: its successor carries the tag and
 // source); raw rows leave only through archiveRawMemory. The SQL twin guards the DELETE itself.
 export const AUTO_DELETABLE_SQL = `pinned = 0 AND kind != 'raw'${KEEP_PAIRS.map((p) => ` AND NOT ${keepPairSql(p)}`).join('')}`;
+
+export interface SqlFragment {
+  sql: string;
+  params: string[];
+}
+
+/** SQL twin of the no-request arm of passesScopeFilterForRecall; `ownScope` is bound and compared with `=`, so `%` or `_` in an owner match nothing extra. */
+export function scopeAdmitSql(col: '' | 'm.', ownScope?: string | null): SqlFragment {
+  const placeholders = RECALL_DEFAULT_DENY_SCOPES.map(() => '?').join(', ');
+  const admitted = `${col}scope IS NULL OR (${col}scope NOT IN (${placeholders}) AND ${col}scope NOT LIKE '%:private:%')`;
+  if (ownScope == null) return { sql: `(${admitted})`, params: [...RECALL_DEFAULT_DENY_SCOPES] };
+  // The own arm sits inside the outer parentheses so a caller's `AND ${sql}` cannot split it off.
+  return { sql: `(${admitted} OR ${col}scope = ?)`, params: [...RECALL_DEFAULT_DENY_SCOPES, ownScope] };
+}
+
+/** SQL twin of canTouchScope, which is also canReadScope for an admin: every row but
+ * another person's personal one. LIKE folds ASCII case as isPersonalScope's /i does. */
+export function touchableScopeSql(col: '' | 'm.', ownScope?: string | null): SqlFragment {
+  const notPersonal = `${col}scope IS NULL OR ${col}scope NOT LIKE '${PERSONAL_SCOPE_PREFIX}%'`;
+  if (ownScope == null) return { sql: `(${notPersonal})`, params: [] };
+  return { sql: `(${notPersonal} OR ${col}scope = ?)`, params: [ownScope] };
+}

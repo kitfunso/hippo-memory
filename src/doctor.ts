@@ -11,7 +11,7 @@ import { loadConfig } from './core/config.js';
 import { openHippoDbReadOnly, closeHippoDb, getCurrentSchemaVersion, IncompatibleBinaryError, type DatabaseSyncLike } from './db/index.js';
 import { REPLAY_AFTER_MS, TRANSCRIPT_FILL_WINDOW_MS } from './core/compaction-timing.js';
 import { SPOOL_DIR, spoolCounts, type SpoolCounts } from './capture/compaction-spool.js';
-import { isEmbeddingAvailable } from './store/embeddings/local.js';
+import { isEmbeddingAvailable } from './embeddings/local.js';
 import { CODEX_TRUST_LINE, isCodexPresent } from './hooks/shared.js';
 import { claudeConfigDir, codexHomeDir } from './util/agent-homes.js';
 import { planProjectRepair } from './sharing/project-merge.js';

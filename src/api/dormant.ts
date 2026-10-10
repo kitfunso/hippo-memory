@@ -14,7 +14,8 @@ import {
 } from '../store/dormant.js';
 import { createMemory, calculateStrength, type MemoryEntry } from '../core/memory.js';
 import { loadConfig } from '../core/config.js';
-import { canTouchScope, personalScopeOf, touchableScopeSql, type SqlFragment } from '../store/recall-scope.js';
+import { canTouchScope, personalScopeOf } from '../core/recall-scope.js';
+import { touchableScopeSql, type SqlFragment } from '../store/rule-sql.js';
 import type { Context } from './types.js';
 
 const touchable = (ctx: Context): SqlFragment => touchableScopeSql('', personalScopeOf(ctx.actor));

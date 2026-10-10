@@ -10,7 +10,7 @@ import { USER_SEGMENT } from '../util/home-path.js';
 import { errorMessage } from '../util/log.js';
 import { SESSION_DIGEST_TAG } from '../core/session-digest-row.js';
 import { createMemory, Layer, type MemoryEntry } from '../core/memory.js';
-import { RejectedValueError } from '../store/rejection.js';
+import { RejectedValueError } from '../core/api-errors.js';
 import { maskEmails, redactSecretsStrict } from '../util/secret-detect.js';
 import { isInitialized } from '../store/open.js';
 import { writeEntry } from '../store/entry-writes.js';

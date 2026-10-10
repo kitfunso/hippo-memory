@@ -1,10 +1,10 @@
 // The local Transformers.js embedder, a leaf so provider.ts can wrap it without importing index.ts.
-import { envModelCache } from '../../util/env.js';
+import { envModelCache } from '../util/env.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import { createRequire } from 'module';
-import { loadConfig } from '../../core/config.js';
-import { errorMessage, log } from '../../util/log.js';
+import { loadConfig } from '../core/config.js';
+import { errorMessage, log } from '../util/log.js';
 
 const _require = createRequire(import.meta.url);
 

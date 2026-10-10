@@ -13,7 +13,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { RECALL_DEFAULT_DENY_SCOPES } from '../src/store/recall-scope.js';
+import { RECALL_DEFAULT_DENY_SCOPES } from '../src/core/recall-scope.js';
 import { passesScopeFilterForRecall } from '../src/api/index.js';
 
 describe('RECALL_DEFAULT_DENY_SCOPES: single source of truth', () => {

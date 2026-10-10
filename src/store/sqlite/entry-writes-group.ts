@@ -5,9 +5,9 @@ import { isSqliteBusy, withWriteScope, type DatabaseSyncLike } from '../../db/in
 import { errorFields, errorMessage, log } from '../../util/log.js';
 import { entryAfterOutcome, type MemoryEntry } from '../../core/memory.js';
 import { archiveRawMemory, type ArchiveOpts } from '../raw-archive.js';
-import { ownScopeTouches } from '../recall-scope.js';
+import { ownScopeTouches } from '../../core/recall-scope.js';
 import { recordTraceOutcome } from '../recall-trace.js';
-import { RejectedValueError } from '../rejection.js';
+import { RejectedValueError } from '../../core/api-errors.js';
 import type { EntryTarget, EntryWrite, EntryWrites, OutcomeWrite, RawArchive, SupersedeWrite, Sync } from '../port.js';
 import { markSummaryDirtyInTx } from '../summary-dirty.js';
 import { auditRejectionRefusal } from '../audit-event.js';

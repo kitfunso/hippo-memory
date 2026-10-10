@@ -10,7 +10,7 @@ import { schemaFitInStore } from '../src/store/candidates.js';
 import { loadAllEntries, readEntry } from '../src/store/entry-reads.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadStats } from '../src/store/index-and-stats.js';
-import { RejectedValueError } from '../src/store/rejection.js';
+import { RejectedValueError } from '../src/core/api-errors.js';
 import { loadEmbeddingIndex } from '../src/store/vector-index.js';
 import { startHashedEmbeddings, type HashedEmbeddings } from './_helpers/hashed-embedding-server.js';
 import { makeRoot, type MakeRootOptions } from './_helpers/make-root.js';

@@ -6,11 +6,12 @@ import { archiveRawMemory } from './raw-archive.js';
 import { type MemoryConflict, type MemoryConflictRow, rowToMemoryConflict } from './rows.js';
 import { audit } from './audit-event.js';
 import { syncChangedMirrors, purgeMirrorBestEffort } from './mirrors.js';
-import { chunked, selectEntriesByIds } from './entry-reads.js';
+import { selectEntriesByIds } from './entry-reads.js';
+import { chunked } from '../util/chunked.js';
 import { onHandle, openStore } from './open.js';
 import { deleteEntryCore } from './delete-and-batch.js';
 import { BadRequestError } from '../core/api-errors.js';
-import { canTouchScope, isPersonalScope } from './recall-scope.js';
+import { canTouchScope, isPersonalScope } from '../core/recall-scope.js';
 import { selectMemoryReach } from './tenant-lookup.js';
 
 // The one place MemoryConflictRow's columns are listed; CONFLICT_COLS_MC is the same list under the `mc` alias.

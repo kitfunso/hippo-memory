@@ -7,7 +7,7 @@ import { assemble, recall, type Context } from '../src/api/index.js';
 import { createApiKey } from '../src/store/auth.js';
 import { _resetSharedStoreCacheForTests } from '../src/core/config.js';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
-import { resolveEmbeddingProvider } from '../src/store/embeddings/provider.js';
+import { resolveEmbeddingProvider } from '../src/embeddings/provider.js';
 import { saveStoredEmbeddingModel } from '../src/store/embeddings/index.js';
 import { saveEmbeddingIndex } from '../src/store/vector-index.js';
 import type { JsonValue } from '../src/util/json.js';

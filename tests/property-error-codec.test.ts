@@ -4,8 +4,8 @@ import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '.
 import { RawAppendOnlyError } from '../src/core/raw-append-only.js';
 import { IncompatibleBinaryError, StoreBusyError } from '../src/db/index.js';
 import { BodyTimeoutError, BodyTooLargeError, HttpError } from '../src/util/http-util.js';
-import { ScopeForbiddenError } from '../src/store/recall-scope.js';
-import { RejectedValueError } from '../src/store/rejection.js';
+import { ScopeForbiddenError } from '../src/core/recall-scope.js';
+import { RejectedValueError } from '../src/core/api-errors.js';
 import { decodeError, encodeError } from '../src/store/sqlite/error-codec.js';
 import { OtherStoreFolderError, SqliteBlockedError, StoreNotPortedError } from '../src/util/sqlite-blocked.js';
 import { arr, both, forAll, int, map, pick, str, type Gen } from './_helpers/property.js';

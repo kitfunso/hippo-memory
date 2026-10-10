@@ -16,6 +16,7 @@
     "core": "base",
     "consolidate": "domain",
     "dashboard": "surface",
+    "embeddings": "base",
     "db": "db",
     "entry": "surface",
     "eval": "domain",

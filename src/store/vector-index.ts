@@ -1,7 +1,7 @@
 // Owns hippo.db's stored vectors, the identity of the model that built them, and the particle rows: every read and write of the three.
 import { getMeta, setMeta, withWriteScope, type DatabaseSyncLike } from '../db/index.js';
 import { onHandle } from './open.js';
-import { DEFAULT_EMBEDDING_MODEL } from './embeddings/local.js';
+import { DEFAULT_EMBEDDING_MODEL } from '../embeddings/local.js';
 import type { MemoryEntry } from '../core/memory.js';
 import type { PhysicsParticle } from '../core/physics.js';
 import { float32ToBuffer, initializeParticle, loadPhysicsState, resetAllPhysicsState, savePhysicsState } from '../db/physics-state.js';
@@ -10,7 +10,8 @@ import {
   EMBEDDING_MODEL_META_KEY, deleteOrphanVectors, hasStoredVectors, loadVectors, loadVectorViews, replaceAllVectors, storedVectorDims, storedVectorIds,
   upsertVectors,
 } from '../db/vector-store.js';
-import { chunked, selectEntriesByIds } from './entry-reads.js';
+import { selectEntriesByIds } from './entry-reads.js';
+import { chunked } from '../util/chunked.js';
 import { MEMORY_SELECT_COLUMNS, rowToEntry, type MemoryRow } from './rows.js';
 
 const MAX_BACKFILL_PAGE = 500;

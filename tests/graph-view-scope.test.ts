@@ -6,7 +6,7 @@ import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '.
 import { insertEntity, insertRelation } from '../src/store/graph-writes.js';
 import { savePolicy } from '../src/objects/policies.js';
 import { buildGraphModel } from '../src/graph/view.js';
-import { canReadScope } from '../src/store/recall-scope.js';
+import { canReadScope } from '../src/core/recall-scope.js';
 import { makeRoot } from './_helpers/make-root.js';
 
 const T = 'default';

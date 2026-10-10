@@ -1,7 +1,7 @@
 import { type MemoryEntry, type ConfidenceLevel, FALLBACK_HALF_LIFE_DAYS, Layer, calculateStrength, facetsOf, schemaFitFrom } from '../core/memory.js';
 import { strengthSql } from './rule-sql.js';
 import { withReadSnapshot } from '../db/index.js';
-import { scopeAdmitSql, type SqlFragment } from './recall-scope.js';
+import { scopeAdmitSql, type SqlFragment } from './rule-sql.js';
 import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry, parseJsonArray } from './rows.js';
 import { onHandle, openStore } from './open.js';
 import { originInSql } from '../core/project-identity.js';

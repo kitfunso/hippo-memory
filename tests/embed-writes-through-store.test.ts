@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { _resetAblationCacheForTests } from '../src/core/ablation.js';
 import { closeHippoDb, getMeta, openHippoDb, withSqliteBlocked } from '../src/db/index.js';
 import { StoreNotPortedError } from '../src/util/sqlite-blocked.js';
-import type { EmbeddingProvider } from '../src/store/embeddings/provider.js';
+import type { EmbeddingProvider } from '../src/embeddings/provider.js';
 import { embedAll, embeddingIndexIdentity, embeddingInputText, embedMemory } from '../src/store/embeddings/index.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../src/core/memory.js';
 import { loadPhysicsState } from '../src/db/physics-state.js';

@@ -5,7 +5,7 @@
 import { remember, type Context, type RememberOpts } from '../../api/index.js';
 import { requireGroup, storeFor } from '../../store/index.js';
 import type { ConnectorEvent } from '../../store/port.js';
-import { RejectedValueError } from '../../store/rejection.js';
+import { RejectedValueError } from '../../core/api-errors.js';
 import { computeIdempotencyKey } from './signature.js';
 import {
   issueEventToRememberOpts,

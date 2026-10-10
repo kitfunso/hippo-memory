@@ -9,7 +9,7 @@ import { loadAllEntries } from '../src/store/entry-reads.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../src/core/memory.js';
 import { embedMemory, saveStoredEmbeddingModel } from '../src/store/embeddings/index.js';
 import { loadEmbeddingIndex, saveEmbeddingIndex } from '../src/store/vector-index.js';
-import { resolveEmbeddingProvider, type EmbeddingProvider } from '../src/store/embeddings/provider.js';
+import { resolveEmbeddingProvider, type EmbeddingProvider } from '../src/embeddings/provider.js';
 import { retrieve } from '../src/api/index.js';
 import { physicsSearch } from '../src/search/physics-search.js';
 import { embedQueryBy } from '../src/search/vector.js';

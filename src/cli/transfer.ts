@@ -4,7 +4,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { isInitialized } from '../store/open.js';
 import { loadAllEntries } from '../store/entry-reads.js';
-import { RejectedValueError } from '../store/rejection.js';
+import { RejectedValueError } from '../core/api-errors.js';
 import { embedAll } from '../store/embeddings/index.js';
 import { loadEmbeddingIndex } from '../store/vector-index.js';
 import { captureError, runWatched } from '../learn/autolearn.js';

@@ -4,7 +4,7 @@
 import { evalNow } from '../core/ablation.js';
 import { oneCopyPerMemory } from './context-select.js';
 import { compareEntryIdentity, compareScoresDesc } from '../core/compare.js';
-import { isEmbeddingAvailable } from '../store/embeddings/local.js';
+import { isEmbeddingAvailable } from '../embeddings/local.js';
 import { activeGoalsWithPolicies, type GoalRecallLogRow } from '../store/goals.js';
 import { boostByGoals } from '../search/goal-boost.js';
 import { graphExpandRecall } from '../graph/recall.js';
@@ -12,7 +12,7 @@ import { DEFAULT_GRAPH_STREAM_WEIGHT } from '../graph/stream.js';
 import { Layer, type MemoryEntry } from '../core/memory.js';
 import { multihopSearch } from '../search/multihop.js';
 import type { PhysicsConfig } from '../core/physics-config.js';
-import { passesCliRecallScopeFilter } from '../store/recall-scope.js';
+import { passesCliRecallScopeFilter } from '../core/recall-scope.js';
 import type { RerankerFn } from '../rerankers/types.js';
 import { currentEntries } from '../search/as-of.js';
 import { STRENGTH_RANK_FLOOR, STRENGTH_RANK_SPAN } from '../search/boosts.js';

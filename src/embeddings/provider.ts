@@ -2,7 +2,7 @@
  * Local `id` is the bare model string, API `id` is `${kind}:${model}`; the stored identity adds `#t<N>` (`embeddingIndexIdentity`), so changes reindex.
  * `embed()` MAY throw on hard transport/auth failure so a reindex aborts atomically; hot paths wrap it and fall back to BM25. */
 
-import { envByName } from '../../util/env.js';
+import { envByName } from '../util/env.js';
 import {
   type EmbeddingRole,
   getEmbedding,
@@ -11,12 +11,12 @@ import {
   resolveEmbeddingModel,
   DEFAULT_EMBEDDING_MODEL,
 } from './local.js';
-import { loadConfig } from '../../core/config.js';
-import { errorMessage, log } from '../../util/log.js';
-import { redactSecretsStrict } from '../../util/secret-detect.js';
-import { fetchWithRetry } from '../../util/http-retry.js';
-import type { JsonValue } from '../../util/json.js';
-import { readCappedJson, readCappedText } from '../../util/capped-json.js';
+import { loadConfig } from '../core/config.js';
+import { errorMessage, log } from '../util/log.js';
+import { redactSecretsStrict } from '../util/secret-detect.js';
+import { fetchWithRetry } from '../util/http-retry.js';
+import type { JsonValue } from '../util/json.js';
+import { readCappedJson, readCappedText } from '../util/capped-json.js';
 
 const ERROR_DETAIL_CHARS = 300;
 // An error body is read for its first lines only; 4x leaves room for multi-byte text.

@@ -9,8 +9,14 @@
   "sqlOutside": 0,
   "txLiterals": 0,
   "tenantResolvesInCli": 8,
-  "storeImportsInCli": 64,
+  "storeImportsInCli": 55,
   "handleHoldersOutside": 12,
+  "storeFilesWithoutSql": 3,
+  "storeFilesWithoutSqlList": [
+    "src/store/card-detail.ts",
+    "src/store/delivery-recorder.ts",
+    "src/store/embeddings/index.ts"
+  ],
   "openersOutsideByFile": {
     "src/agent-memories/sync.ts": 3,
     "src/api/ledger-db.ts": 1,

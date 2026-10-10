@@ -4,7 +4,7 @@ import { vi } from 'vitest';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
 import { savePolicy } from '../../src/objects/policies.js';
-import { canReadScope } from '../../src/store/recall-scope.js';
+import { canReadScope } from '../../src/core/recall-scope.js';
 import { withSqliteAllowed, type HippoStore } from '../../src/server.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
 import { ENTITY_COLS, RELATION_COLS, rowToEntity, rowToRelation, type Entity, type EntityRow, type EntityType, type Relation, type RelationRow } from '../../src/store/graph-rows.js';

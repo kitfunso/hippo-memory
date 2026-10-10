@@ -9,7 +9,7 @@ import { loadConfig } from '../core/config.js';
 import { vetSecrets } from '../util/secret-detect.js';
 import { assertCallerProject } from '../core/project-identity.js';
 import { BadRequestError } from '../core/api-errors.js';
-import { assertClientScope, personalScopeOf } from '../store/recall-scope.js';
+import { assertClientScope, personalScopeOf } from '../core/recall-scope.js';
 import { andThen, notPorted, onStore } from './on-store.js';
 import type { Context, StoreReply } from './types.js';
 

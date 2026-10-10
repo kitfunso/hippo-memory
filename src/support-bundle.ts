@@ -31,7 +31,7 @@ const TAIL_MAX_LINE_CHARS = 2000;
 // Greedy on purpose: complete key blocks are redacted first, so any END left is an orphan and what precedes it may be key body.
 const ORPHAN_KEY_END_RE = /^[\s\S]*-----END [A-Z ]*PRIVATE KEY-----/;
 
-// The other env vars hippo reads outside the HIPPO_ prefix (src/store/embeddings/provider.ts, connectors/*).
+// The other env vars hippo reads outside the HIPPO_ prefix (src/embeddings/provider.ts, connectors/*).
 const OTHER_ENV_NAMES: readonly string[] = [
   'ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'VOYAGE_API_KEY', 'COHERE_API_KEY', 'TYPESAFE_API_KEY',
   'GITHUB_TOKEN', 'GITHUB_WEBHOOK_SECRET', 'GITHUB_WEBHOOK_SECRET_PREVIOUS',

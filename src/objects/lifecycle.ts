@@ -5,7 +5,7 @@
 import { BadRequestError, ConflictError, NotFoundError } from '../core/api-errors.js';
 import { loadConfig } from '../core/config.js';
 import { createMemory, Layer, type MemoryEntry } from '../core/memory.js';
-import type { ObjectByKind, ObjectKind, SavableKind } from '../store/object-types.js';
+import type { ObjectByKind, ObjectKind, SavableKind } from '../core/object-types.js';
 import { isObjectRefusal, type ObjectClose, type ObjectListQuery, type ObjectRefusal, type Objects, type ObjectSave } from '../store/port.js';
 import { sqliteObjects } from '../store/sqlite/objects-group.js';
 import { assertTenantId } from '../store/tenant.js';

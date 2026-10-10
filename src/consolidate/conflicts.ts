@@ -1,7 +1,7 @@
 import { MemoryEntry, Layer, calculateStrength, type DecayOptions } from '../core/memory.js';
 import { jaccardMinShared, overlapPartners } from './overlap-index.js';
 import { isQuarantineScope } from '../trust/quarantine.js';
-import { isPersonalScope } from '../store/recall-scope.js';
+import { isPersonalScope } from '../core/recall-scope.js';
 import { DECAY_THRESHOLD } from './decay.js';
 
 // Gate contradictions on content overlap, not shared tags (`feedback`/`policy` are too coarse). The Jaccard threshold on stopword-filtered tokens

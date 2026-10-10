@@ -13,7 +13,7 @@ import { pushGoal } from '../src/store/goals.js';
 import { saveActiveTaskSnapshot, appendSessionEvent } from '../src/store/sessions.js';
 import { saveStoredEmbeddingModel } from '../src/store/embeddings/index.js';
 import { saveEmbeddingIndex } from '../src/store/vector-index.js';
-import { resolveEmbeddingProvider } from '../src/store/embeddings/provider.js';
+import { resolveEmbeddingProvider } from '../src/embeddings/provider.js';
 import { _resetAblationCacheForTests } from '../src/core/ablation.js';
 import { openHippoDb, closeHippoDb, withSharedStoreHandles } from '../src/db/index.js';
 

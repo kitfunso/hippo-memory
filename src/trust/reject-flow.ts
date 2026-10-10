@@ -2,7 +2,7 @@
 // and src/store/rejected-values.ts runs each one on a single handle.
 
 import { BadRequestError } from '../core/api-errors.js';
-import { isPersonalScope } from '../store/recall-scope.js';
+import { isPersonalScope } from '../core/recall-scope.js';
 import { mergedSuccessor } from '../util/merged-row.js';
 import { normalizeValueForRejection, type RejectedValueRow } from '../store/rejection.js';
 import {

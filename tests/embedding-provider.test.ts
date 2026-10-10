@@ -6,7 +6,7 @@ import {
   resolveEmbeddingProvider,
   resolveEmbeddingIdentity,
   isEmbeddingConfigured,
-} from '../src/store/embeddings/provider.js';
+} from '../src/embeddings/provider.js';
 import { embeddingModelRequiresReindex, saveStoredEmbeddingModel } from '../src/store/embeddings/index.js';
 import { saveEmbeddingIndex } from '../src/store/vector-index.js';
 

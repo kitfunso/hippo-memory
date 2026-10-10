@@ -6,7 +6,7 @@ import { loadCurrentDistilledEntries } from '../store/entry-reads.js';
 import { deleteEntriesOneByOne, memoriesBackingObjects } from '../store/delete-and-batch.js';
 import { compareEntryIdentity } from '../core/compare.js';
 import { canAutoDelete, type MemoryEntry } from '../core/memory.js';
-import { derivationPartitionKey } from '../store/recall-scope.js';
+import { derivationPartitionKey } from '../core/recall-scope.js';
 import { duplicateKey } from '../util/same-text.js';
 
 export interface DedupPair {

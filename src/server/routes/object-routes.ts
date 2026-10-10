@@ -4,7 +4,7 @@ import { type JsonValue, isJsonString } from '../../util/json.js';
 import type { ObjectDescriptor, ObjectListOpts, SavableDescriptor } from '../../objects/descriptor.js';
 import { objectsOf, saveFor } from '../../api/objects.js';
 import { closeObject, listObjects, objectById } from '../../objects/lifecycle.js';
-import type { ObjectByKind, ObjectKind, SavableKind } from '../../store/object-types.js';
+import type { ObjectByKind, ObjectKind, SavableKind } from '../../core/object-types.js';
 import type { Objects } from '../../store/port.js';
 import { buildContextWithAuth } from '../auth.js';
 import { byCreatedAt, pageOf, parseCursor } from '../cursor.js';

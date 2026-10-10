@@ -14,13 +14,8 @@ import { sessionPilotArm, type PilotArm } from './pilot-arm.js';
 import { assertCallerProject, MAX_PROJECT_ALIASES } from '../core/project-identity.js';
 import type { DeliveryWrite } from '../store/ledger-turn.js';
 import { writeDeliveryEventAtRoot } from '../store/recall-trace.js';
-import {
-  hookPayloadString,
-  isSubagentPayload,
-  shouldSkipUnchanged,
-  type TokenSurface,
-  type TokenUse,
-} from '../store/token-ledger.js';
+import { shouldSkipUnchanged, type TokenSurface, type TokenUse } from '../store/token-ledger.js';
+import { hookPayloadString, isSubagentPayload } from '../util/hook-payload.js';
 import { blockHash, estimateTokens } from '../util/token-text.js';
 import { errorMessage, log } from '../util/log.js';
 import { DEFAULT_CONTEXT_BUDGET } from './context.js';

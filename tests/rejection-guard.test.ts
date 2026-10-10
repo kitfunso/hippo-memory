@@ -11,12 +11,8 @@ import { applyRebuildResult } from '../src/store/summaries.js';
 import { Layer} from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { queryAuditEvents } from '../src/store/audit.js';
-import {
-  insertRejectedValue,
-  rejectionDigest,
-  normalizeValueForRejection,
-  RejectedValueError,
-} from '../src/store/rejection.js';
+import { insertRejectedValue, rejectionDigest, normalizeValueForRejection } from '../src/store/rejection.js';
+import { RejectedValueError } from '../src/core/api-errors.js';
 import { LATEST_SCHEMA_VERSION } from './_helpers/schema-version.js';
 
 function tmpHome(): string {

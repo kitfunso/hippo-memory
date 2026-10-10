@@ -7,8 +7,8 @@ import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { loadEmbeddingIndex } from '../src/store/vector-index.js';
-import { resolveEmbeddingProvider, type EmbeddingProvider } from '../src/store/embeddings/provider.js';
-import { requireLocalPipeline } from '../src/store/embeddings/local.js';
+import { resolveEmbeddingProvider, type EmbeddingProvider } from '../src/embeddings/provider.js';
+import { requireLocalPipeline } from '../src/embeddings/local.js';
 import { handleEmbed } from '../src/cli/maintenance.js';
 
 /** A local provider that answers every text with `vector`, or fails the whole call as an unloadable model does. */

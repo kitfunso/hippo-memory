@@ -10,7 +10,7 @@ import { loadAllEntries } from '../store/entry-reads.js';
 import { classifyOriginProject, resolveProjectIdentity } from '../core/project-identity.js';
 import { isSharedStore } from '../core/config.js';
 import { detectSecret } from '../util/secret-detect.js';
-import { RejectedValueError } from '../store/rejection.js';
+import { RejectedValueError } from '../core/api-errors.js';
 import { embedAll } from '../store/embeddings/index.js';
 import { log } from '../util/log.js';
 import { logEmbedAllFailure } from './search-both.js';

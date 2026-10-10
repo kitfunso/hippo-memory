@@ -3,8 +3,9 @@
 import { BadRequestError, ConflictError, NotFoundError } from '../core/api-errors.js';
 import type { MemoryEntry } from '../core/memory.js';
 import { listTouchableConflicts, resolveConflict } from '../store/conflicts.js';
-import { chunked, loadEntriesByIds } from '../store/entry-reads.js';
-import { passesScopeFilterForRecall, personalScopeOf } from '../store/recall-scope.js';
+import { loadEntriesByIds } from '../store/entry-reads.js';
+import { chunked } from '../util/chunked.js';
+import { passesScopeFilterForRecall, personalScopeOf } from '../core/recall-scope.js';
 import type { MemoryConflict } from '../store/rows.js';
 import { classifyOriginProject } from '../core/project-identity.js';
 import type { CallerProject } from './prompt-hook.js';

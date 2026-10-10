@@ -7,11 +7,11 @@ import { assertTenantId } from '../store/tenant.js';
 import type { KeysetPosition } from '../util/keyset.js';
 import type { ObjectDescriptor } from './descriptor.js';
 import { closeObjectAt, listObjectsAt, objectByIdAt, objectMirror } from './lifecycle.js';
-import type { Incident, IncidentStatus } from '../store/object-types.js';
+import type { Incident, IncidentStatus } from '../core/object-types.js';
 import { isObjectRefusal, type IncidentOpen, type IncidentOpenRefusal, type IncidentResolve, type ObjectRefusal, type Objects } from '../store/port.js';
 import { objectIdByMemory, sqliteObjects } from '../store/sqlite/objects-group.js';
 
-export type { Incident, IncidentStatus } from '../store/object-types.js';
+export type { Incident, IncidentStatus } from '../core/object-types.js';
 
 export const VALID_INCIDENT_STATES: ReadonlySet<IncidentStatus> = new Set<IncidentStatus>([
   'open',

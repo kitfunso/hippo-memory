@@ -2,7 +2,7 @@
 
 ## Layers
 
-Six layers, lowest first: base (pure helpers and core types), db (SQLite connection and schema), store (persistence and embeddings), domain (recall, graph, consolidation, hooks), api (operations over the store), surface (CLI, server, MCP, importers, dashboard).
+Six layers, lowest first: base (pure helpers, core types, embedding providers), db (SQLite connection and schema), store (code that runs SQL on hippo.db, plus its row shapes, SQL text and adapter), domain (recall, graph, consolidation, hooks), api (operations over the store), surface (CLI, server, MCP, importers, dashboard).
 A file imports only from its own layer or a lower one. `layers.json` is the map and `scripts/check-layers.mjs` enforces it against `.layers-baseline.json`.
 
 ## Store port
@@ -10,6 +10,10 @@ A file imports only from its own layer or a lower one. `layers.json` is the map 
 ### Sync core, async port
 
 node:sqlite is synchronous, and the store port is async so another store can do I/O. `authCreate`, `authCreateSelf` and `authRevoke` from `./server` return a value when the context has no store and a Promise when it has one. `importVault` from `.` is synchronous and calls `remember` and `archiveRaw` with no store. `Reply<T>` and `andThen` in `src/api/on-store.ts` carry that for exactly these functions and what they call. Every other operation is async and goes through `storeFor(ctx)`. Removing the carrier means making those published functions async, which is a breaking change. `scripts/check-store-port.mjs` counts the files that use the carrier so the list cannot grow.
+
+### What lives in src/store
+
+A file belongs in `src/store` only if it runs SQL on hippo.db, holds or opens a handle, or is one of the row-shape, SQL-text and adapter files named in `DB_DEFINITION_FILES` in `scripts/check-store-port.mjs`. Scope predicates, the markdown mirror format, typed-object shapes, embedding providers and hook payload parsing live in `src/core`, `src/util` and `src/embeddings`. The same script pins `storeFilesWithoutSqlList`, the files still under `src/store` that run no SQL, so a new pure helper filed there fails CI.
 
 ## Test-only exports
 
@@ -500,7 +504,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - module header: E2 decision first-class object (docs/plans/2026-05-28-e2-decision-object.md).
 - module header: Mirrors the v0.31 predictions pattern (src/predictions.ts).
 
-### src/store/embeddings/provider.ts
+### src/embeddings/provider.ts
 - module header: Design contract (see docs/plans/2026-06-08-b-pluggable-embedding-provider.md):
 - module header: Local provider `id` is the BARE model string. (Historical note: this originally guaranteed NO identity change on upgrade; since the embed-text-format versioning in embeddings.ts (`embeddingIndexIdentity`, `${id}#t2`, docs/plans/2026-07-09-recall-determinism.md T1), the STORED identity carries a `#t<N>` suffix and pre-#t2 stores get exactly one forced reindex on their next embed-touching operation — deliberate, because their vectors were computed over path-contaminated text.)
 
@@ -735,7 +739,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `RecallHistoryEntry` / `DetectAnchoringOpts` / `detectAnchoring`: rule labels R1 (query_repeat) and R2 (memory_dominance) renamed to their reason strings in comments.
 - `hashQueryText`: Token sort + dedup means semantically-equivalent queries with reordered words collide intentionally (the roadmap's "semantically-distinct" v1 uses textual normalization; embedding-based distinctness is J1-v2).
 
-### src/store/recall-scope.ts
+### src/core/recall-scope.ts
 - `module header`: v1.25.0 — recall-side scope predicates, extracted from api.ts into a leaf module so shared.ts (which api.ts imports) can apply the same default-deny rule to searchBothHybrid's internal candidate loads without an import cycle. Mirrors the v39 `project-identity.ts` precedent.
 - `isPrivateScope`: v1.2.1: source-agnostic private-scope detector.
 - `passesScopeFilterForRecall`: @internal v1.7.2 — exported for test parity with `RECALL_DEFAULT_DENY_SCOPES` (single-source-of-truth verification).
