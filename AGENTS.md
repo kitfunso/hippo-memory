@@ -9,7 +9,7 @@
 ```bash
 npm run build
 npm test
-npm run test:eval   # the four slow token-eval harness tests, which npm test skips
+npm run test:eval   # the eight slow token-eval harness tests, which npm test skips; --project codex runs the four Codex ones
 npm run build:ui
 npm run build:all
 npm run smoke:pack

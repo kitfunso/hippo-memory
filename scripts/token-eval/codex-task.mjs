@@ -125,7 +125,7 @@ export function sweepCell(ctx, run) {
   const cell = [run.runName, run.arm, `seed${run.seed}`];
   const roots = [run.dirs.root, path.join(ctx.snapDir, ...cell), run.rawDir, path.join(ctx.outDir, 'grading', ...cell), ctx.ledgerFile];
   const hits = tokenSweep(ctx.codexVault, roots, ctx.outDir);
-  if (hits.length) throw new Error(`${run.s.id} ${run.arm} seed${run.seed}: a Codex login token was in ${hits.join(', ')}; files listed without a note are deleted, and the run stops`);
+  if (hits.length) throw new Error(`${run.s.id} ${run.arm} seed${run.seed}: the sweep found a Codex login token in, or could not check, ${hits.join(', ')}; files listed without a note are deleted, and the run stops`);
 }
 
 /** End of a run with Codex: take back every run login copy, sweep the out dir, then remove the vault; returns the hit paths, a path that could not be handled carrying a note. */

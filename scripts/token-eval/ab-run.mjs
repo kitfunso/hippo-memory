@@ -125,14 +125,14 @@ export async function runAll(opts) {
     // The run's own error stands; the sweep's hits or failure are added to it, never put in its place (E6 plan R24).
     try {
       const hits = finishCodex(ctx);
-      if (hits.length) err.message += `; the final sweep also found login tokens in ${hits.join(', ')} (files listed without a note are deleted)`;
+      if (hits.length) err.message += `; the final sweep also found login tokens in, or could not check, ${hits.join(', ')} (files listed without a note are deleted)`;
     } catch (sweepErr) {
       err.message += `; the final sweep also failed: ${sweepErr.message}`;
     }
     throw err;
   }
   const hits = finishCodex(ctx);
-  if (hits.length) throw new Error(`a Codex login token was left in ${hits.join(', ')}; files listed without a note are deleted, and the run is void`);
+  if (hits.length) throw new Error(`the final sweep found a Codex login token in, or could not check, ${hits.join(', ')}; files listed without a note are deleted, and the run is void`);
   return records;
 }
 

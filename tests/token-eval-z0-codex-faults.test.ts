@@ -61,12 +61,19 @@ describe('timeout in a Codex apply (test 21)', () => {
 describe('memory wait and memories switch through the runner (tests 13, 14)', () => {
   it('records the wait, leaves it out of wallMs, and records memories off', async () => {
     const { out, op, codexLog } = xIsolate('wait');
-    // Writes for 20 s keep one cell's wait long, so wallMs < wait shows the wait is left out without racing that cell's git checks under load.
+    // Writes for 20 s keep one cell's wait long; a wallMs that held the wait would count it twice inside the cell's own step.
     await xRun(xTrio(makeRepo(), { 'a-xa': 'MEMWRITE:500x40' }), ['X1'], out, op, { codexMemoryWait: 'poll:3000:60000', codexMemories: 'off' });
     const a = find(records(out), 'X1', 'a-xa');
-    expect(a.codexMemoryWait?.ms).toBeGreaterThanOrEqual(8000);
+    const waitMs = a.codexMemoryWait?.ms ?? 0;
+    expect(waitMs).toBeGreaterThanOrEqual(8000);
     expect(a.codexMemoryWait?.timedOut).toBe(false);
-    expect(a.wallMs).toBeLessThan(a.codexMemoryWait?.ms ?? 0);
+    // a-xa's step runs from its start to the next cell's start, which load only stretches.
+    const starts = readFileSync(join(out, 'runs.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l)).map((rec) => [rec.taskId, Date.parse(rec.startedAt)] as const);
+    const aStart = starts.find(([id]) => id === 'a-xa')![1];
+    const stepMs = Math.min(...starts.map(([, t]) => t).filter((t) => t > aStart)) - aStart;
+    const wallMs = a.wallMs ?? -1;
+    expect(Number.isInteger(wallMs) && wallMs >= 0).toBe(true);
+    expect(wallMs + waitMs).toBeLessThanOrEqual(stepMs);
     expect(a.codexMemories).toBe(false);
     expect(fakeSeen(codexLog)[0].config).toContain('memories = false');
   }, xLimit());

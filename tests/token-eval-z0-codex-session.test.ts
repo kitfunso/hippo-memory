@@ -3,8 +3,8 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { readFileSync, existsSync, writeFileSync, mkdirSync, readdirSync, copyFileSync, chmodSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { spawn } from 'node:child_process';
-import { finishCodex } from '../scripts/token-eval/codex-task.mjs';
 import { createHash } from 'node:crypto';
+import { finishCodex } from '../scripts/token-eval/codex-task.mjs';
 import { codexArgs, resolveCodex, runCodexSession } from '../scripts/token-eval/codex.mjs';
 import { codexAdapter, parseRollouts } from '../scripts/token-eval/codex-rollout.mjs';
 import { tokenSweep, closeVault } from '../scripts/token-eval/codex-auth.mjs';
@@ -29,12 +29,16 @@ async function withUnreadable<T>(file: string, fn: () => T): Promise<T | null> {
     const ready = `${file}.held`;
     const script = `$h = [IO.File]::Open('${file}', 'Open', 'ReadWrite', 'None'); Set-Content '${ready}' x; Start-Sleep 300`;
     const child = spawn('powershell', ['-NoProfile', '-Command', script], { stdio: 'ignore' });
+    // Taken at spawn, so a child that failed to start or already exited cannot leave the wait below hanging.
+    const gone = new Promise((r) => {
+      child.once('exit', r);
+      child.once('error', r);
+    });
     try {
       for (let i = 0; i < 300 && !existsSync(ready); i++) await new Promise((r) => setTimeout(r, 50));
       expect(existsSync(ready)).toBe(true);
       return fn();
     } finally {
-      const gone = new Promise((r) => child.once('exit', r));
       child.kill();
       await gone;
     }
@@ -206,8 +210,9 @@ describe('the Codex login (test 15)', () => {
   it('keeps sweeping past a file it cannot read, and names it without any token text', async () => {
     const { out, op, ctx } = setup('sweepfault');
     const dir = join(out, 'sweep');
-    mkdirSync(dir, { recursive: true });
-    const bad = join(dir, 'a-locked.json');
+    // Its own dir, since on POSIX withUnreadable makes the locked file's dir read-only and the good file must stay deletable.
+    mkdirSync(join(dir, 'locked'), { recursive: true });
+    const bad = join(dir, 'locked', 'a-locked.json');
     const good = join(dir, 'b-plain.json');
     writeFileSync(bad, op.tokens[1]);
     writeFileSync(good, op.tokens[2]);
@@ -215,7 +220,7 @@ describe('the Codex login (test 15)', () => {
     if (hits === null) return;
     expect(existsSync(good)).toBe(false);
     expect(hits).toContain('sweep/b-plain.json');
-    expect(hits).toContain(`sweep/a-locked.json (unreadable: ${LOCK_CODE})`);
+    expect(hits).toContain(`sweep/locked/a-locked.json (unreadable: ${LOCK_CODE})`);
     for (const h of hits) for (const tok of op.tokens) expect(h).not.toContain(tok);
   });
 

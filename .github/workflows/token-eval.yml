@@ -40,6 +40,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest]
         # One Codex file per runner: each runs set X end to end many times, and together they overran one 30-minute job.
+        # One shard per -z0-codex- file in EVAL_TESTS; a new file there needs a new shard here.
         part:
           - { name: harness, args: --project harness }
           - { name: codex 1/4, args: --project codex --shard=1/4 }

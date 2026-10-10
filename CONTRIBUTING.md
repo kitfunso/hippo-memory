@@ -1,6 +1,6 @@
 # Contributing
 
-Issues and pull requests are welcome. Run `npm test` before opening a PR (it skips the four slow token-eval harness tests; run `npm run test:eval` when you change `scripts/token-eval/`), and see the Contributing section of the README for the open problems.
+Issues and pull requests are welcome. Run `npm test` before opening a PR (it skips the eight slow token-eval harness tests; run `npm run test:eval` when you change `scripts/token-eval/`), and see the Contributing section of the README for the open problems.
 
 ## Sign your commits (DCO)
 

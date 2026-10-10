@@ -1,6 +1,6 @@
 # Token-efficiency evals (ROADMAP Part IX, Track TE)
 
-Three harnesses, from cheapest to most convincing. Build first with `npm run build`. Their tests (`tests/token-eval*`) run with `npm test`, except the four that build real git repositories per case (ab-run, make-tasks, z0-homes, z0-turns): those run with `npm run test:eval`, and CI runs them in `token-eval.yml`.
+Three harnesses, from cheapest to most convincing. Build first with `npm run build`. Their tests (`tests/token-eval*`) run with `npm test`, except the eight that build real git repositories per case (ab-run, make-tasks, z0-homes, z0-turns and the four z0-codex run, guards, faults and install files): those run with `npm run test:eval`, and CI runs them in `token-eval.yml`, each Codex file on its own runner.
 
 | Harness | Roadmap | Needs | What it answers |
 |---|---|---|---|
