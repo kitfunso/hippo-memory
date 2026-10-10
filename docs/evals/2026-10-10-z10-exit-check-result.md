@@ -2,7 +2,7 @@
 
 **Date:** 2026-10-10  
 **Scope:** the engineering part of the Z10 exit, as registered in the [Z10 draft](./2026-09-30-z10-ledger-prereg.md) under "Exit check: engineering scope", with Amendments 1 and 2. No task or efficacy claim.  
-**Verdict:** the engineering part passes at `639be66a`. All 34 class reads and 12 negative controls match their oracles on all eight fields, and each of the 11 reader mutants fails at least one case. The parser's counts match an independent count on three real transcripts, and a live session reads as delivered with application unknown. Recall decisions are unchanged on three surfaces. The ledger's in-process cost meets Amendment 1.  
+**Verdict:** the engineering part passes at `639be66a`. All 34 class reads and 12 negative controls match their oracles on all eight fields, and each of the 11 reader mutants fails at least one case. The parser's counts match an independent count on three real transcripts, and a live session reads as delivered with application unknown. Recall decisions are unchanged on three surfaces. The ledger's in-process cost meets Amendment 1. The review then found five defects, listed under "Review fixes after the scored run"; with them fixed, the exit tests, the mutants and the live read pass again at `a82bc723`.  
 **Status:** the delivery ledger stays off by default behind `deliveryLedger.enabled`. Z10's exit stays open until tool-failure rows exist, which need a schema change.
 
 ## What was built
@@ -108,6 +108,25 @@ Attempt 3 passes the bounds it is gated on: identical stdout, a zero token delta
 
 Attempt 2 started on a probe that passed two seconds before a fresh probe that read 108 ms. Attempt 3 used its passing gate probe as the registered probe, with no gap between them.
 
+## Review fixes after the scored run
+
+The review stage ran after the scored run. Codex found four defects, each checked against the source before it was fixed, and the macOS CI job found a fifth. The fixes left the 34 class reads and 12 controls and their oracles unchanged, and every one still passes with the fixed reader:
+
+1. **A disabled block read as rejected before the lesson existed.** The reader returned `rejected` `block-disabled` before it checked when the lesson was written. A lesson written after a disabled turn now reads `not-written` `written-after` (R24). Commit `f8c09a3f`.
+2. **A reuse after a sent duplicate found no origin.** The reader took the origin of a reused block only from a group whose main row was `sent`. A group whose `sent` row is a duplicate that emitted the lesson now counts as the origin too (R25). Commit `f8c09a3f`.
+3. **A store without the ledger dropped the lesson id.** A `--memory` read on a store with no `delivery_events` table returned `memory_id: null`. It now keeps the id (R8). Commit `f8c09a3f`.
+4. **The host corpus was not named in the registration.** The copies were made before the scored run but not recorded. They are now frozen in `hippo-archive/z10-exit-host/`, and the prereg's corpus record gives each full hash. Commit `37ad59a3`.
+5. **On macOS every row read as another store's.** The hook hashes a project store under its resolved project folder, and on macOS the temp folder is a link from `/var` to `/private/var`. The reader and the test oracle hashed the path as given, so every negative control read `indeterminate` `foreign-store`. The first fix resolved the whole path. That broke the other rule: the hook hashes the global store under `HIPPO_HOME` as given, never resolved. The reader now follows both rules, and decides which store is global from `HIPPO_HOME` even when told not to join global lessons. R26 fires the hook from a linked project folder and reads the store by both paths. R27 and R28 fire it with `HIPPO_HOME` under a link, and R28 reads with `--no-global`. Commits `ead586f5`, `6b9205b4` and `a82bc723`.
+
+Again at `a82bc723`, rebased on master `6005960d`:
+
+- The build, and `test:delivery-ledger`: 10 files, 218 tests, all pass.
+- The three exit files: 78 tests, all pass, none skipped. R26 to R28 ran through Windows junctions on this machine.
+- The lint, size, test-only-export, comment and roadmap checks each exit 0, and `npm run typecheck:tests` is clean.
+- The 11 mutants each fail at least one case, caught by the same tests as in the table above. They ran at `4af54482`, the same commit before the rebase; the reader, parser, helpers and exit tests are byte-identical between the two.
+- The live read is byte-identical to the archived verdict, SHA-256 `4db9beac…d7765602`.
+- A second codex pass on these fixes raised one more case, listed under Limits: a project whose `.hippo` is a link to the global store.
+
 ## Findings
 
 1. **Not-retrieved is provable only for a memory the loader refuses.** The recent load offers a window of up to 32 rows but judges only five with prompt recall off, and only the recall pool with it on. A row that is offered and never judged writes no candidate row and only adds to `rejected_unlisted`. In a store with more than five unpinned rows, the ledger cannot tell "never loaded" from "loaded and never judged". The reader returns `indeterminate` `undecided` there (X2b), and `unlisted` when the rejected list is full (X5). A later slice can close this by recording the window cut as a `limit` rejection.
@@ -125,9 +144,11 @@ Attempt 2 started on a probe that passed two seconds before a fresh probe that r
 - On a `key-ambiguous` read, two valid labels for two different memories report `label-error:duplicate`. The class stays indeterminate.
 - When no row in a duplicate group emitted the lesson, the turn's stage comes from the main row only, so a parallel fire's rejection is not shown.
 - The sub-agent's own transcript and Codex transcripts are not joined. A missing row is a gap, never evidence.
+- The hook hashes the path it took to the store, not the store itself. So a project whose `.hippo` is a link to the global store writes rows under the project path, and the reader, which sees a global store, reads them as another store's. The read is `indeterminate`, never a wrong class. Rows written through any other alias of a store read the same way.
 
 ## Out
 
 - Tool-failure rows, which need a schema change and wait on an explicit yes.
 - The server context surfaces and `hippo recall`.
 - Listing undecided rows, which is a `src` change.
+- One store hash per store. The writer would hash the store's resolved path (`src/cli/hook-runtime.ts:102`), so every alias gives one hash and the reader needs one rule. This changes a ledger field, so it waits on an explicit yes.
