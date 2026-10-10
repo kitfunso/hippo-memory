@@ -42,7 +42,7 @@ const PROVIDER_ENV_KEYS = ['ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'VOYAGE_API_KE
 for (const k of PROVIDER_ENV_KEYS) delete process.env[k];
 
 // Each of these builds real git repositories and worktrees per case, too slow for every shard; token-eval.yml runs them.
-export const EVAL_TESTS = ['ab-run', 'make-tasks', 'z0-homes', 'z0-turns'].map((name) => `tests/token-eval-${name}.test.ts`);
+export const EVAL_TESTS = ['ab-run', 'make-tasks', 'z0-homes', 'z0-turns', 'z0-codex-run', 'z0-codex-guards', 'z0-codex-faults', 'z0-codex-install'].map((name) => `tests/token-eval-${name}.test.ts`);
 
 const TEST_GLOBS = ['tests/**/*.test.ts', 'tests/**/*.test.mjs'];
 const SKIPPED = [...configDefaults.exclude, ...EVAL_TESTS];
