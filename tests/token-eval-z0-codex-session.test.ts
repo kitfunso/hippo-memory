@@ -223,6 +223,7 @@ describe('the memory wait and the memories switch (tests 13, 14)', () => {
       const { run, ctx, log } = setup(`mem${flag}`, { codexMemories: flag });
       await runCodexSession(ctx, run, xTask('plain'), () => false);
       expect(fakeSeen(log)[0].config).toContain(want);
+      expect(fakeSeen(log)[0].config).toContain('[memories]\nmin_rollout_idle_hours = 1');
     }
   }, 30_000);
 });

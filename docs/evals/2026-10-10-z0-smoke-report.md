@@ -33,5 +33,5 @@ The Codex model is passed explicitly. The operator's `~/.codex/config.toml` name
 
 ## Runner changes these findings need
 
-- The run's `config.toml` should set `memories.min_rollout_idle_hours = 1`, the documented floor. At the default of 6 hours, almost no apply ends early enough in a run to feed a later apply's memories. The setting applies to X1 to X4 alike, so it moves no arm against another.
+- Done: the run's `config.toml` sets `memories.min_rollout_idle_hours = 1`, the documented floor (`scripts/token-eval/codex.mjs`, pinned in `tests/token-eval-z0-codex-session.test.ts`). At the default of 6 hours, almost no apply ends early enough in a run to feed a later apply's memories. The setting applies to X1 to X4 alike, so it moves no arm against another. `--strict-config` makes the first live session fail if Codex does not know the key.
 - The memory wait has to come from the startup pass, not from a poll after each session.

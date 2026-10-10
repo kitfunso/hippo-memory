@@ -117,7 +117,8 @@ export function writeCodexHome(ctx, run) {
   fs.mkdirSync(path.join(home, 'appdata'), { recursive: true });
   const trust = ctx.codexHookTrust.kind === 'file' ? ctx.codexHookTrust.text.replaceAll('{hooksJson}', path.join(codexHome, 'hooks.json')) : '';
   // The file store pins the login to auth.json, so the run copy is the only one Codex reads or refreshes (plan R14).
-  const toml = ['cli_auth_credentials_store = "file"', 'check_for_update_on_startup = false', '', trust.trimEnd(), '', '[features]', `memories = ${ctx.codexMemories}`, ''];
+  // Idle hours at the documented floor of 1: at the default 6, almost no apply idles long enough to feed a later one (smoke report).
+  const toml = ['cli_auth_credentials_store = "file"', 'check_for_update_on_startup = false', '', trust.trimEnd(), '', '[features]', `memories = ${ctx.codexMemories}`, '', '[memories]', 'min_rollout_idle_hours = 1', ''];
   fs.writeFileSync(path.join(codexHome, 'config.toml'), toml.filter((l, i) => l !== '' || toml[i - 1] !== '').join('\n'));
   run.codexLauncher = writeLauncher(bin, ctx.codexLauncher.path);
   return run.codexLauncher;
