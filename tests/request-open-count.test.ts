@@ -133,7 +133,7 @@ describe('store opens per request', () => {
 
 describe('stdio MCP tool calls', () => {
   it('interleaved calls each open and close their own handle', async () => {
-    const ctx = { hippoRoot: root, tenantId: 'default', actor: 'mcp' };
+    const ctx = { hippoRoot: root, tenantId: 'default', actor: 'mcp', role: 'admin' as const, hostAdmin: true as const };
     const reply = (id: number, query: string) =>
       handleMcpRequest({ ...recallOverMcp, id, params: { name: 'hippo_recall', arguments: { query } } }, ctx);
     let replies: Array<McpResponse | null> = [];

@@ -47,7 +47,7 @@ beforeEach(() => {
   vi.stubEnv('ANTHROPIC_API_KEY', '');
   // The context tool's auto query reads the checkout's git state, which differs between a dev branch and CI.
   vi.stubEnv('GIT_DIR', join(home, 'no-repo'));
-  ctx = { hippoRoot: root, tenantId: 'default', actor: 'tester', clientKey: 'client-1' };
+  ctx = { hippoRoot: root, tenantId: 'default', actor: 'tester', role: 'admin', hostAdmin: true, clientKey: 'client-1' };
 });
 
 afterEach(() => {

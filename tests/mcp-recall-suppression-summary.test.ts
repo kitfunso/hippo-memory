@@ -86,6 +86,8 @@ describe('mcp hippo_recall Cutoff suppressionSummary', () => {
       hippoRoot: home,
       tenantId: 'default',
       actor: 'mcp:test',
+      role: 'admin',
+      hostAdmin: true,
     });
     const text = extractText(res);
     // v1.13.3: format is "## Cutoff\nShowing N of M candidates; ..." (was
@@ -111,6 +113,8 @@ describe('mcp hippo_recall Cutoff suppressionSummary', () => {
       hippoRoot: home,
       tenantId: 'default',
       actor: 'mcp:test',
+      role: 'admin',
+      hostAdmin: true,
     });
     const text = extractText(res);
     // Extract Cutoff totalCandidates value via regex.
@@ -134,6 +138,8 @@ describe('mcp hippo_recall Cutoff suppressionSummary', () => {
       hippoRoot: home,
       tenantId: 'default',
       actor: 'mcp:test',
+      role: 'admin',
+      hostAdmin: true,
     });
     const text = extractText(res);
     expect(text).not.toMatch(/## Cutoff/);
@@ -158,6 +164,8 @@ describe('mcp hippo_recall Cutoff suppressionSummary', () => {
       hippoRoot: home,
       tenantId: 'default',
       actor: 'mcp:test',
+      role: 'admin',
+      hostAdmin: true,
     });
     const text = extractText(res);
     const cutoffIdx = text.indexOf('## Cutoff');

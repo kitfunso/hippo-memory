@@ -257,12 +257,18 @@ function chargeCaller(tenantId: string, actor: Actor, opts: AuthOpts): void {
  * Reads the store only for an API-key-shaped Bearer (or any Bearer when no auth resolver is registered), so keyless local requests stay cheap. */
 export async function buildContextWithAuth(req: IncomingMessage, opts: AuthOpts): Promise<Context> {
   const id = await checkAuth(req, opts);
-  if (id !== null) {
-    const actor = bearerActor(id);
-    chargeCaller(id.tenantId, actor, opts);
-    return { hippoRoot: opts.hippoRoot, tenantId: id.tenantId, actor, store: opts.store };
-  }
+  const ctx = contextFor(id, opts);
+  if (id !== null) chargeCaller(id.tenantId, ctx.actor, opts);
+  return ctx;
+}
 
+/** The auth check again, uncharged, for a handler that authenticated with requireAuth before a slow body read and must re-check right before it acts. */
+export async function recheckContextWithAuth(req: IncomingMessage, opts: AuthOpts): Promise<Context> {
+  return contextFor(await checkAuth(req, opts), opts);
+}
+
+function contextFor(id: BearerIdentity | null, opts: AuthOpts): Context {
+  if (id !== null) return { hippoRoot: opts.hippoRoot, tenantId: id.tenantId, actor: bearerActor(id), store: opts.store };
   // The keyless local fallback (HIPPO_ALLOW_KEYLESS_LOCAL=1) is this machine's own user, so it is host admin.
   return {
     hippoRoot: opts.hippoRoot,
