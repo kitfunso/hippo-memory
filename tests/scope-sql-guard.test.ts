@@ -12,7 +12,7 @@ const ALLOWED = new Set([SCOPE_MODULE]);
 const EXEMPT_DIR = `db${sep}migrations${sep}`;
 // Doc lines that name the rule; exempt by file and exact text, so an edited or added line is read again.
 const DOC_LINES = new Set([
-  'api/assemble.ts: * `unknown:legacy` rows.',
+  "api/assemble.ts: * When undefined, default-deny applies to every `<source>:private:*` and `unknown:legacy` row. */",
   "store/handoffs.ts: // continuity excludes slack:private:* and 'unknown:legacy'.",
   "store/sessions.ts: // continuity reads applies to slack:private:* and 'unknown:legacy' rows.",
   "store/search-rows.ts: /** Recall-mode loader: scope predicate in SQL so `unknown:legacy` cannot leak. Empty `requestedScope` default-denies (admits `ownScope`); else exact match.",
