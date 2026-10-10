@@ -2,8 +2,8 @@
 
 import * as path from 'path';
 import { execFileSync } from 'child_process';
-import { closeHippoDb, openHippoDb } from '../db/index.js';
-import { listProjects, mergeProjects, repairProjects, type ProjectSummary } from '../sharing/project-merge.js';
+import * as api from '../api/index.js';
+import { cliApiContext } from './api-context.js';
 import { type CliFlags, flagIsTrue, type CommandContext } from './flag-values.js';
 import { resolveAuthRoot } from './shared.js';
 import { printError } from './output.js';
@@ -27,7 +27,7 @@ function label(origin: string | null): string {
   return origin === null ? '(unknown)' : origin === '' ? '(user-global)' : origin;
 }
 
-function hint(p: ProjectSummary, worktrees: Map<string, string>): string {
+function hint(p: api.ProjectSummary, worktrees: Map<string, string>): string {
   const main = p.origin ? worktrees.get(p.origin) : undefined;
   if (main) return `\n    a worktree of ${main}: hippo projects merge ${p.origin} ${main}`;
   return p.copiesElsewhere > 0 ? `\n    ${p.copiesElsewhere} of its imported notes are copies also held under another name` : '';
@@ -37,10 +37,9 @@ function count(n: number, one: string, many = `${one}s`): string {
   return `${n} ${n === 1 ? one : many}`;
 }
 
-type ProjectsDb = Parameters<typeof listProjects>[0];
-
-function projectsList(db: ProjectsDb, tenantId: string, root: string, flags: CliFlags): void {
-  const projects = listProjects(db, tenantId);
+function projectsList(ctx: api.Context, flags: CliFlags): void {
+  const root = ctx.hippoRoot;
+  const projects = api.listProjectNames(ctx);
   if (flags['json']) {
     console.log(JSON.stringify({ store: root, projects }, null, 2));
     return;
@@ -52,10 +51,10 @@ function projectsList(db: ProjectsDb, tenantId: string, root: string, flags: Cli
   }
 }
 
-function projectsMerge(db: ProjectsDb, tenantId: string, root: string, args: string[], flags: CliFlags): void {
+function projectsMerge(ctx: api.Context, args: string[], flags: CliFlags): void {
   const apply = flagIsTrue(flags, 'apply');
   const [from, into] = [args[1] ?? '', args[2] ?? ''];
-  const r = mergeProjects(db, root, { tenantId, from, into, dryRun: !apply });
+  const r = api.mergeProjectNames(ctx, { from, into, dryRun: !apply });
   if (flags['json']) {
     console.log(JSON.stringify(r, null, 2));
     return;
@@ -67,9 +66,10 @@ function projectsMerge(db: ProjectsDb, tenantId: string, root: string, args: str
   console.log(apply ? `Backup: ${r.backup}\nEvery id is in the audit log: hippo audit list --op project_merge` : 'Nothing written. Add --apply to run it.');
 }
 
-function projectsRepair(db: ProjectsDb, tenantId: string, root: string, flags: CliFlags): void {
+function projectsRepair(ctx: api.Context, flags: CliFlags): void {
+  const root = ctx.hippoRoot;
   const apply = flagIsTrue(flags, 'apply');
-  const r = repairProjects(db, root, { tenantId, dryRun: !apply });
+  const r = api.repairProjectNames(ctx, { dryRun: !apply });
   if (flags['json']) {
     console.log(JSON.stringify(r, null, 2));
     return;
@@ -86,19 +86,16 @@ function projectsRepair(db: ProjectsDb, tenantId: string, root: string, flags: C
 }
 
 export function handleProjects({ hippoRoot, tenantId, args, flags }: CommandContext): void {
-  const root = resolveAuthRoot(hippoRoot, flags);
+  const ctx = cliApiContext(resolveAuthRoot(hippoRoot, flags), tenantId);
   const sub = args[0] ?? 'list';
-  const db = openHippoDb(root);
   try {
-    if (sub === 'list') return projectsList(db, tenantId, root, flags);
-    if (sub === 'merge') return projectsMerge(db, tenantId, root, args, flags);
-    if (sub === 'repair') return projectsRepair(db, tenantId, root, flags);
+    if (sub === 'list') return projectsList(ctx, flags);
+    if (sub === 'merge') return projectsMerge(ctx, args, flags);
+    if (sub === 'repair') return projectsRepair(ctx, flags);
     printError('Usage: hippo projects [list] [--json] | merge <from> <into> [--apply] | repair [--apply]  [--global]');
     process.exitCode = 1;
   } catch (err) {
     printError(errorMessage(err));
     process.exitCode = 1;
-  } finally {
-    closeHippoDb(db);
   }
 }

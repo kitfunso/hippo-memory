@@ -16,7 +16,8 @@ import { BadRequestError } from '../src/core/api-errors.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { clearProjectIdentityCache, originFromSource } from '../src/core/project-identity.js';
 import { _resetSharedStoreCacheForTests } from '../src/core/config.js';
-import { repairOnceOnSleep } from '../src/sharing/project-merge.js';
+import { repairProjectNamesOnce } from '../src/api/projects.js';
+import { cliApiContext } from '../src/cli/api-context.js';
 import { saveCompaction } from '../src/capture/compaction-record.js';
 import { COMPACTION_MEMORY_TAG } from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
@@ -179,12 +180,7 @@ function storeWithFoldableTag(flagged: boolean): TaggedStore {
 }
 
 function repairOnce(store: string): void {
-  const db = openHippoDb(store);
-  try {
-    repairOnceOnSleep(db, store, 'default');
-  } finally {
-    closeHippoDb(db);
-  }
+  repairProjectNamesOnce(cliApiContext(store, 'default'));
 }
 
 describe('the one-time sleep repair', () => {
