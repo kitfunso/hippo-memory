@@ -90,16 +90,16 @@ describe('writing the digest row', () => {
     expect(digests()).toEqual([]);
   });
 
-  it('skips a digest whose text was rejected', () => {
+  it('skips a digest whose text was rejected', async () => {
     write('s1', scan(REPLY));
-    reject({ hippoRoot, tenantId: 'default', actor: adminActor('test') }, { memoryId: sessionDigestId('default', 's1'), reason: 'not useful' });
+    await reject({ hippoRoot, tenantId: 'default', actor: adminActor('test') }, { memoryId: sessionDigestId('default', 's1'), reason: 'not useful' });
     expect(write('s1', scan(REPLY))).toMatchObject({ written: false, reason: 'it matches a rejected value' });
     expect(digests()).toEqual([]);
   });
 
-  it('a reject blocks that text only, so a re-run with a new reply writes the row again', () => {
+  it('a reject blocks that text only, so a re-run with a new reply writes the row again', async () => {
     write('s1', scan(REPLY));
-    reject({ hippoRoot, tenantId: 'default', actor: adminActor('test') }, { memoryId: sessionDigestId('default', 's1'), reason: 'not useful' });
+    await reject({ hippoRoot, tenantId: 'default', actor: adminActor('test') }, { memoryId: sessionDigestId('default', 's1'), reason: 'not useful' });
     expect(write('s1', scan('Pinned `retry()` to three attempts because the queue backs up.')).written).toBe(true);
     expect(digests()).toHaveLength(1);
   });

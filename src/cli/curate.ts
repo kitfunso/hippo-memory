@@ -1,7 +1,7 @@
 // Verbs that weaken, suppress or retire memories: outcome, forget, conflicts, reject, dormant, quarantine, invalidate.
 
 import * as path from 'path';
-import { listMemoryConflicts, resolveConflict } from '../store/conflicts.js';
+import { listMemoryConflicts } from '../store/conflicts.js';
 import { rejectValue, unrejectValue, listRejectionsForTenant } from '../trust/reject-flow.js';
 import { RejectedValueError } from '../store/rejection.js';
 import { loadConfig } from '../core/config.js';
@@ -214,15 +214,12 @@ export async function handleResolve({ hippoRoot, tenantId, args, flags }: Comman
   // --reason is optional here, unlike `hippo reject`: resolve already has the conflict id and keepId.
   const rejectLoser = boolFlag(flags, 'reject-loser');
   const reasonFlag = stringFlag(flags, 'reason');
-  const result = resolveConflict(hippoRoot, conflictId, keepId, forgetLoser, tenantId, {
-    rejectLoserValue: rejectLoser,
+  const result = api.resolveMemoryConflict(cliApiContext(hippoRoot, tenantId), conflictId, {
+    keepId,
+    forget: forgetLoser,
+    rejectLoser,
     reason: reasonFlag,
   });
-
-  if (!result) {
-    printError(`Could not resolve conflict ${conflictId}. Check the ID and --keep value.`);
-    throw new CliExit(1);
-  }
 
   const action = rejectLoser
     ? 'rejected (tombstoned) and removed'

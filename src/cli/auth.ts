@@ -110,9 +110,9 @@ function cmdAuthList(hippoRoot: string, flags: CliFlags): void {
 }
 
 // The local CLI owns every tenant, so revoke and grant run in the key's own tenant.
-function keyContext(root: string, tenantId: string, keyId: string): api.HippoDbContext {
+async function keyContext(root: string, tenantId: string, keyId: string): Promise<api.HippoDbContext> {
   const hostCtx = cliApiContext(root, tenantId);
-  const keyTenant = api.authKeyTenant(hostCtx, keyId);
+  const keyTenant = await api.authKeyTenant(hostCtx, keyId);
   if (keyTenant === undefined) {
     printError(`Unknown key_id: ${keyId}`);
     throw new CliExit(1);
@@ -120,8 +120,8 @@ function keyContext(root: string, tenantId: string, keyId: string): api.HippoDbC
   return { ...hostCtx, tenantId: keyTenant };
 }
 
-function cmdAuthRevoke(hippoRoot: string, tenantId: string, keyId: string, flags: CliFlags): void {
-  const ctx = keyContext(resolveAuthRoot(hippoRoot, flags), tenantId, keyId);
+async function cmdAuthRevoke(hippoRoot: string, tenantId: string, keyId: string, flags: CliFlags): Promise<void> {
+  const ctx = await keyContext(resolveAuthRoot(hippoRoot, flags), tenantId, keyId);
   let revokedAt: string;
   try {
     revokedAt = api.authRevoke(ctx, keyId).revokedAt;
@@ -137,8 +137,8 @@ function cmdAuthRevoke(hippoRoot: string, tenantId: string, keyId: string, flags
 }
 
 /** `hippo auth grant|ungrant <key_id> <scope>`, routed through api so the tenant, restricted-scope and audit checks live in one place. */
-function cmdAuthScopeGrant(hippoRoot: string, tenantId: string, keyId: string, scope: string, grant: boolean, flags: CliFlags): void {
-  const ctx = keyContext(resolveAuthRoot(hippoRoot, flags), tenantId, keyId);
+async function cmdAuthScopeGrant(hippoRoot: string, tenantId: string, keyId: string, scope: string, grant: boolean, flags: CliFlags): Promise<void> {
+  const ctx = await keyContext(resolveAuthRoot(hippoRoot, flags), tenantId, keyId);
   try {
     if (grant) api.authGrant(ctx, keyId, scope);
     else api.authUngrant(ctx, keyId, scope);
@@ -153,7 +153,7 @@ function cmdAuthScopeGrant(hippoRoot: string, tenantId: string, keyId: string, s
   console.log(grant ? `Granted ${keyId} read access to ${scope}` : `Removed ${keyId}'s grant on ${scope}`);
 }
 
-export function handleAuth({ hippoRoot, tenantId, args, flags }: CommandContext): void {
+export async function handleAuth({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
   const sub = args[0];
   if (!sub) {
     printError('Usage: hippo auth <create|list|revoke|grant|ungrant> [options]');
@@ -173,7 +173,7 @@ export function handleAuth({ hippoRoot, tenantId, args, flags }: CommandContext)
         printError('Usage: hippo auth revoke <key_id>');
         throw new CliExit(1);
       }
-      cmdAuthRevoke(hippoRoot, tenantId, keyId, flags);
+      await cmdAuthRevoke(hippoRoot, tenantId, keyId, flags);
       return;
     }
     case 'grant':
@@ -183,7 +183,7 @@ export function handleAuth({ hippoRoot, tenantId, args, flags }: CommandContext)
         printError(`Usage: hippo auth ${sub} <key_id> <scope>`);
         throw new CliExit(1);
       }
-      cmdAuthScopeGrant(hippoRoot, tenantId, keyId, scope, sub === 'grant', flags);
+      await cmdAuthScopeGrant(hippoRoot, tenantId, keyId, scope, sub === 'grant', flags);
       return;
     }
     default:

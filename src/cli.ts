@@ -226,7 +226,7 @@ export const VERB_HANDLERS = {
     run: async (c) => { (await import('./cli/dag.js')).handleDag(c); },
   },
   auth: {
-    run: async (c) => { (await import('./cli/auth.js')).handleAuth(c); },
+    run: async (c) => { await (await import('./cli/auth.js')).handleAuth(c); },
     scoped: true,
   },
   goal: {

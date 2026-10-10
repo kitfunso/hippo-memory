@@ -45,11 +45,11 @@ describe('hippo watch (built CLI, no server)', () => {
     s.expectPinned();
   }, CASE_MS);
 
-  it('a failure that matches a rejected value is not stored', () => {
+  it('a failure that matches a rejected value is not stored', async () => {
     const s = new Store();
     scripts(s);
     const value = captureError(3, STDERR, 'node fail.js').content;
-    reject({ hippoRoot: s.root, tenantId: 'default', actor: adminActor('cli') }, { value, reason: 'wrong' });
+    await reject({ hippoRoot: s.root, tenantId: 'default', actor: adminActor('cli') }, { value, reason: 'wrong' });
     s.settle();
     s.run('watch', 'node fail.js');
     s.expectPinned();

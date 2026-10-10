@@ -1,7 +1,7 @@
 // A by-id write on another person's personal row answers exactly as a missing id does (D6, F13), the owner still gets through, and no reject sweep reaches another person's row.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
-import { reject, remember, supersede, type Actor, type HippoDbContext } from '../src/api/index.js';
+import { reject, remember, supersede, type Actor, type HippoDbContext, type RejectResult } from '../src/api/index.js';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
 import { insertDormantRow, readDormantSnapshot } from '../src/store/dormant.js';
 import { mapApiError } from '../src/util/http-util.js';
@@ -19,7 +19,7 @@ const actorB: Actor = { subject: 'api_key:hk_b', role: 'member', owner: 'b' };
 const unownedAdmin: Actor = { subject: 'api_key:hk_admin', role: 'admin' };
 const outsiders: ReadonlyArray<[string, Actor]> = [['another owner', actorB], ['an unowned admin', unownedAdmin]];
 
-type ByIdCall = () => void | Promise<McpResponse | null>;
+type ByIdCall = () => void | Promise<McpResponse | RejectResult | null>;
 
 function ctxFor(actor: Actor): HippoDbContext {
   return { hippoRoot: root, tenantId: 'default', actor };
@@ -96,19 +96,19 @@ describe('reject next to personal rows', () => {
   it('reject by id: another owner and an unowned admin get the missing-id 404, the owner and the CLI get a 400, and no tombstone is made', async () => {
     const id = personalRow();
     for (const [, actor] of outsiders) {
-      await expectMissingIdAnswer(id, (target) => { reject(ctxFor(actor), { memoryId: target, reason: 'wrong' }); });
+      await expectMissingIdAnswer(id, (target) => reject(ctxFor(actor), { memoryId: target, reason: 'wrong' }));
     }
-    expect(await masked(id, () => { reject(ctxFor(actorA), { memoryId: id, reason: 'wrong' }); })).toEqual({ status: 400, message: PERSONAL_REFUSAL });
+    expect(await masked(id, () => reject(ctxFor(actorA), { memoryId: id, reason: 'wrong' }))).toEqual({ status: 400, message: PERSONAL_REFUSAL });
     expect(() => rejectValue({ hippoRoot: root, tenantId: 'default', actor: 'cli', reason: 'wrong', memoryId: id })).toThrow(PERSONAL_REFUSAL);
     expect(listRejectionsForTenant(root, 'default')).toHaveLength(0);
     expect(readEntry(root, id, 'default')?.scope).toBe('personal:private:a');
   });
 
-  it('reject by value removes team copies and the caller\'s own personal copy, never another person\'s', () => {
+  it('reject by value removes team copies and the caller\'s own personal copy, never another person\'s', async () => {
     const mineA = remember(ctxFor(actorA), { content: SHARED_TEXT, personal: true }).id;
     const mineB = remember(ctxFor(actorB), { content: SHARED_TEXT, personal: true }).id;
     const team = remember(ctxFor(actorB), { content: SHARED_TEXT }).id;
-    const { removedIds } = reject(ctxFor(actorB), { value: SHARED_TEXT, reason: 'stale' });
+    const { removedIds } = await reject(ctxFor(actorB), { value: SHARED_TEXT, reason: 'stale' });
     expect([...removedIds].sort()).toEqual([mineB, team].sort());
     expect(readEntry(root, mineA, 'default')?.scope).toBe('personal:private:a');
     expect(readEntry(root, mineB, 'default')).toBeNull();
@@ -123,7 +123,7 @@ describe('reject next to personal rows', () => {
     expect(readEntry(root, mineA, 'default')?.scope).toBe('personal:private:a');
   });
 
-  it('reject by value leaves another person\'s dormant personal copy and removes a dormant team copy', () => {
+  it('reject by value leaves another person\'s dormant personal copy and removes a dormant team copy', async () => {
     const personal = createMemory(SHARED_TEXT, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, scope: 'personal:private:a' });
     const team = createMemory(SHARED_TEXT, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     const db = openHippoDb(root);
@@ -132,7 +132,7 @@ describe('reject next to personal rows', () => {
     } finally {
       closeHippoDb(db);
     }
-    expect(reject(ctxFor(actorB), { value: SHARED_TEXT, reason: 'stale' }).removedIds).toEqual([team.id]);
+    expect((await reject(ctxFor(actorB), { value: SHARED_TEXT, reason: 'stale' })).removedIds).toEqual([team.id]);
     const after = openHippoDb(root);
     try {
       expect(readDormantSnapshot(after, 'default', personal.id)?.entry.scope).toBe('personal:private:a');

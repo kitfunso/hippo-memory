@@ -493,7 +493,7 @@ describe('listing, restoring and forgetting dormant memories', () => {
       'the staging api key lives in the shared vault entry',
     ]);
     try {
-      api.reject(ctxFor(home), { value: 'the staging api key lives in the shared vault entry', reason: 'stale secret pointer' });
+      await api.reject(ctxFor(home), { value: 'the staging api key lives in the shared vault entry', reason: 'stale secret pointer' });
       // A rejected value may not linger in dormant storage either.
       expect(api.listDormant(ctxFor(home))).toEqual([]);
       expect(() => api.restoreDormant(ctxFor(home), ids[0])).toThrow(/dormant memory not found/);

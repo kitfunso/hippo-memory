@@ -2,14 +2,16 @@
 
 import { evalNow } from '../core/ablation.js';
 import { loadStrengthTallies } from '../store/candidates.js';
-import { countOpenConflicts, listTouchableConflicts, resolveConflict } from '../store/conflicts.js';
+import { countOpenConflicts, listTouchableConflicts } from '../store/conflicts.js';
 import { shareMemory, listPeers } from '../sharing/share.js';
 import { requireGroup, storeFor } from '../store/index.js';
-import { NotFoundError } from '../core/api-errors.js';
+import { ConflictError, NotFoundError } from '../core/api-errors.js';
+import { resolveMemoryConflict } from '../api/conflicts.js';
+import { getMemory } from '../api/memories.js';
 import { classifyOriginProject } from '../core/project-identity.js';
 import type { CallerProject } from '../api/prompt-hook.js';
 import { canTouchScope, passesScopeFilterForRecall, personalScopeOf } from '../store/recall-scope.js';
-import { chunked, loadEntriesByIds, readEntry } from '../store/entry-reads.js';
+import { chunked, loadEntriesByIds } from '../store/entry-reads.js';
 import type { MemoryConflict } from '../store/rows.js';
 import { mcpActor, type ToolCall } from './protocol.js';
 import { isJsonString } from '../util/json.js';
@@ -18,11 +20,6 @@ import { DATE_PREFIX_CHARS } from '../util/token-text.js';
 const BASERATE_DECIMALS = 3;
 
 const NOT_RESOLVED = 'Could not resolve. Check the conflict ID and --keep value.';
-
-/** The scope of memory `id`, null when it has none or does not exist. */
-function memoryScope(hippoRoot: string, id: string): string | null {
-  return readEntry(hippoRoot, id)?.scope ?? null;
-}
 
 export async function runPredictBaserateTool({ args, ctx, hippoRoot, tenantId }: ToolCall): Promise<string> {
   // Text-only reply, matching the other MCP tools; the group's read writes the audit row, so no surface can skip it.
@@ -85,29 +82,30 @@ export function runResolveTool({ args, ctx, hippoRoot, tenantId }: ToolCall): st
   const conflictId = Number(args.conflict_id);
   const keepId = String(args.keep || '');
   const forget = Boolean(args.forget);
-  // Optional rejectLoser + reason pass straight to resolveConflict, as the CLI's --reject-loser does.
   const rejectLoser = Boolean(args.rejectLoser);
   const reason = isJsonString(args.reason) ? args.reason : undefined;
   if (isNaN(conflictId) || !keepId) return 'Required: conflict_id and keep.';
-  if (!listTouchableConflicts(hippoRoot, 'open', tenantId, mcpActor(ctx)).some((c) => c.id === conflictId)) return NOT_RESOLVED;
-  const result = resolveConflict(hippoRoot, conflictId, keepId, forget, tenantId, {
-    rejectLoserValue: rejectLoser,
-    reason,
-    // rejectedBy defaults to 'cli', so name the real actor for the tombstone and audit:
-    // ctx.actor for HTTP-MCP, 'mcp' for stdio callers, which pass no ctx.
-    rejectedBy: ctx?.actor ?? 'mcp',
-  });
-  if (!result) return NOT_RESOLVED;
+  let loserId: string;
+  try {
+    const apiCtx = { hippoRoot, tenantId, actor: mcpActor(ctx), store: ctx?.store };
+    ({ loserId } = resolveMemoryConflict(apiCtx, conflictId, { keepId, forget, rejectLoser, reason }));
+  } catch (err) {
+    // A missing, unreachable or settled conflict answers alike, so the reply says nothing of a pair the caller cannot touch.
+    if (err instanceof NotFoundError || err instanceof ConflictError) return NOT_RESOLVED;
+    throw err;
+  }
   const action = rejectLoser ? 'rejected (tombstoned) and removed' : forget ? 'deleted' : 'weakened';
-  return `Resolved conflict ${conflictId}: kept ${keepId}, ${action} ${result.loserId}`;
+  return `Resolved conflict ${conflictId}: kept ${keepId}, ${action} ${loserId}`;
 }
 
-export function runShareTool({ args, ctx, hippoRoot, tenantId }: ToolCall): string {
+export async function runShareTool({ args, ctx, hippoRoot, tenantId }: ToolCall): Promise<string> {
   const shareId = String(args.id || '');
   if (!shareId) return 'Required: id (memory ID to share).';
   const force = Boolean(args.force);
+  const actor = mcpActor(ctx);
+  const entry = await getMemory({ hippoRoot, tenantId, actor, store: ctx?.store }, shareId);
   // Checked before shareMemory, whose personal-row refusal would tell another person the id exists.
-  if (!canTouchScope(mcpActor(ctx), memoryScope(hippoRoot, shareId))) throw new NotFoundError(`Memory not found: ${shareId}`);
+  if (!canTouchScope(actor, entry?.scope ?? null)) throw new NotFoundError(`Memory not found: ${shareId}`);
   // Pass tenantId so shareMemory's readEntry filters by tenant; otherwise a Bearer for tenant A could share tenant B's id to the global store.
   // The 'Memory not found' error matches the cross-tenant deny shape elsewhere.
   const shared = shareMemory(hippoRoot, shareId, { force, tenantId });

@@ -53,7 +53,7 @@ function ctx(hippoRoot: string, tenantId: string = 'default'): api.HippoDbContex
 }
 
 describe('case 1: acceptance (roadmap-verbatim)', () => {
-  it('reject X by id -> capture re-assertion refused, 2 siblings written, one reject_refusal audit row, extraction does not throw; supersession unchanged', () => {
+  it('reject X by id -> capture re-assertion refused, 2 siblings written, one reject_refusal audit row, extraction does not throw; supersession unchanged', async () => {
     const home = tmpHome();
     try {
       initStore(home);
@@ -62,7 +62,7 @@ describe('case 1: acceptance (roadmap-verbatim)', () => {
       const xContent = 'use bearer tokens for outbound api calls';
       const x = createMemory(xContent, { layer: Layer.Episodic });
       writeEntry(home, x);
-      api.reject(ctx(home), { memoryId: x.id, reason: 'no longer approved for outbound calls' });
+      await api.reject(ctx(home), { memoryId: x.id, reason: 'no longer approved for outbound calls' });
       expect(readEntry(home, x.id)).toBeNull();
 
       // A transcript re-asserting X among 3 extractable decision items.
@@ -127,7 +127,7 @@ describe('case 1: acceptance (roadmap-verbatim)', () => {
 });
 
 describe('case 2: refused supersede audit surface', () => {
-  it('api.supersede onto a rejected successor value throws, CAS rolls back (superseded_by unchanged), one reject_refusal audit row', () => {
+  it('api.supersede onto a rejected successor value throws, CAS rolls back (superseded_by unchanged), one reject_refusal audit row', async () => {
     const home = tmpHome();
     try {
       initStore(home);
@@ -135,7 +135,7 @@ describe('case 2: refused supersede audit surface', () => {
       writeEntry(home, old);
 
       const yContent = 'rejected successor content for supersede';
-      api.reject(ctx(home), { value: yContent, reason: 'pre-emptively rejected successor' });
+      await api.reject(ctx(home), { value: yContent, reason: 'pre-emptively rejected successor' });
 
       expect(() => api.supersede(ctx(home), old.id, yContent)).toThrow(RejectedValueError);
 
@@ -159,7 +159,7 @@ describe('case 2: refused supersede audit surface', () => {
 });
 
 describe('case 3: copy-path refusal (syncGlobalToLocal)', () => {
-  it('global store holds Z; local store rejects Z; sync skips Z, syncs siblings, and counts the skip', () => {
+  it('global store holds Z; local store rejects Z; sync skips Z, syncs siblings, and counts the skip', async () => {
     const globalRoot = tmpHome('hippo-rejection-acceptance-global-');
     const localRoot = tmpHome('hippo-rejection-acceptance-local-');
     try {
@@ -174,7 +174,7 @@ describe('case 3: copy-path refusal (syncGlobalToLocal)', () => {
       writeEntry(globalRoot, s1);
       writeEntry(globalRoot, s2);
 
-      api.reject(ctx(localRoot), { value: zContent, reason: 'rejected locally, must not sync from global' });
+      await api.reject(ctx(localRoot), { value: zContent, reason: 'rejected locally, must not sync from global' });
 
       // mockRestore() (unlike a bare unspy) also clears recorded call
       // history, so every assertion against errorSpy must run BEFORE it —
@@ -198,7 +198,7 @@ describe('case 3: copy-path refusal (syncGlobalToLocal)', () => {
 });
 
 describe('case 4: rebuild resurrection pin', () => {
-  it('a stale markdown mirror of a rejected raw row is skipped on rebuildIndex, not resurrected', () => {
+  it('a stale markdown mirror of a rejected raw row is skipped on rebuildIndex, not resurrected', async () => {
     const home = tmpHome();
     try {
       initStore(home);
@@ -225,7 +225,7 @@ describe('case 4: rebuild resurrection pin', () => {
       expect(existsSync(mirrorPath)).toBe(true);
       const mirrorSnapshot = readFileSync(mirrorPath, 'utf8');
 
-      api.reject(ctx(home), { memoryId: rawEntry.id, reason: 'raw content rejected' });
+      await api.reject(ctx(home), { memoryId: rawEntry.id, reason: 'raw content rejected' });
       expect(readEntry(home, rawEntry.id)).toBeNull();
       // Post-commit purge removed the mirror (reuses the api.archiveRaw pattern).
       expect(existsSync(mirrorPath)).toBe(false);
@@ -357,7 +357,7 @@ describe('case 5: migration v41 idempotence', () => {
 });
 
 describe('case 6: reject removes a value from recall, permanently', () => {
-  it('reject removes a value from recall; re-remember attempt is refused; recall stays clean', () => {
+  it('reject removes a value from recall; re-remember attempt is refused; recall stays clean', async () => {
     const home = tmpHome();
     try {
       initStore(home);
@@ -367,7 +367,7 @@ describe('case 6: reject removes a value from recall, permanently', () => {
       const before = api.recall(ctx(home), { query: 'zynthkey', limit: 5 });
       expect(before.results.some((r) => r.id === remembered.id)).toBe(true);
 
-      api.reject(ctx(home), { memoryId: remembered.id, reason: 'staging creds process changed' });
+      await api.reject(ctx(home), { memoryId: remembered.id, reason: 'staging creds process changed' });
 
       const afterReject = api.recall(ctx(home), { query: 'zynthkey', limit: 5 });
       expect(afterReject.results.some((r) => r.content === wContent)).toBe(false);
@@ -461,13 +461,13 @@ describe('consolidation-loop fix: merge tombstone check', () => {
 });
 
 describe('import dry-run tombstone accuracy', () => {
-  it('importEntries dry-run counts a tombstoned chunk as rejected (not imported), writes nothing, and agrees with a real run', () => {
+  it('importEntries dry-run counts a tombstoned chunk as rejected (not imported), writes nothing, and agrees with a real run', async () => {
     const home = tmpHome('hippo-rejection-acceptance-import-dryrun-');
     try {
       initStore(home);
       const rejectedChunk = 'never re-import this specific chunk of text again please';
       const otherChunk = 'a completely different unrelated chunk of text here';
-      api.reject(ctx(home), { value: rejectedChunk, reason: 'pre-emptive dry-run test tombstone' });
+      await api.reject(ctx(home), { value: rejectedChunk, reason: 'pre-emptive dry-run test tombstone' });
 
       const dryResult = importEntries([rejectedChunk, otherChunk], 'import:test', [], {
         hippoRoot: home,
@@ -491,7 +491,7 @@ describe('import dry-run tombstone accuracy', () => {
     }
   });
 
-  it('importVault dry-run counts a tombstoned note as rejected (not imported), writes nothing, and agrees with a real run', () => {
+  it('importVault dry-run counts a tombstoned note as rejected (not imported), writes nothing, and agrees with a real run', async () => {
     const home = tmpHome('hippo-rejection-acceptance-vault-dryrun-');
     const vault = tmpHome('hippo-rejection-acceptance-vault-notes-');
     try {
@@ -500,7 +500,7 @@ describe('import dry-run tombstone accuracy', () => {
       const otherNote = 'a completely different unrelated vault note body here';
       writeFileSync(join(vault, 'rejected.md'), rejectedNote);
       writeFileSync(join(vault, 'other.md'), otherNote);
-      api.reject(ctx(home), { value: rejectedNote, reason: 'pre-emptive dry-run vault tombstone' });
+      await api.reject(ctx(home), { value: rejectedNote, reason: 'pre-emptive dry-run vault tombstone' });
 
       const dryResult = importVault(vault, { hippoRoot: home, tenantId: 'default', name: 'notes', dryRun: true });
       expect(dryResult.rejected).toBe(1);
@@ -521,7 +521,7 @@ describe('import dry-run tombstone accuracy', () => {
 });
 
 describe('capture dry-run tombstone accuracy', () => {
-  it('capture dry-run reports a tombstoned extraction as rejected and writes nothing, agreeing with a real run', () => {
+  it('capture dry-run reports a tombstoned extraction as rejected and writes nothing, agreeing with a real run', async () => {
     const home = tmpHome('hippo-rejection-acceptance-capture-dryrun-');
     try {
       initStore(home);
@@ -529,7 +529,7 @@ describe('capture dry-run tombstone accuracy', () => {
       // (hasNoSpecificity) doesn't filter these before they ever reach the
       // rejection guard — same fixture-construction rule as case 1 above.
       const rejectedContent = 'use bearer tokens for outbound api calls to port 8443';
-      api.reject(ctx(home), { value: rejectedContent, reason: 'pre-emptive dry-run capture tombstone' });
+      await api.reject(ctx(home), { value: rejectedContent, reason: 'pre-emptive dry-run capture tombstone' });
 
       const fixturePath = join(home, 'capture-dryrun-fixture.txt');
       writeFileSync(
@@ -583,7 +583,7 @@ describe('auto-promoted trace tombstone check', () => {
       const traceBefore = loadAllEntries(home).find((e) => e.layer === Layer.Trace);
       expect(traceBefore).toBeDefined();
 
-      api.reject(ctx(home), { memoryId: traceBefore!.id, reason: 'trace content was wrong' });
+      await api.reject(ctx(home), { memoryId: traceBefore!.id, reason: 'trace content was wrong' });
       expect(readEntry(home, traceBefore!.id)).toBeNull();
 
       const errorSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
@@ -720,7 +720,7 @@ describe('merge tombstone check uses the destination tenant', () => {
 });
 
 describe('autoShare per-candidate rejection containment', () => {
-  it('one rejected + one clean candidate: the sleep-facing autoShare call completes, the clean one shares, the rejected one is counted', () => {
+  it('one rejected + one clean candidate: the sleep-facing autoShare call completes, the clean one shares, the rejected one is counted', async () => {
     const localRoot = tmpHome('hippo-rejection-acceptance-autoshare-local-');
     const globalRoot = tmpHome('hippo-rejection-acceptance-autoshare-global-');
     const prevHippoHome = process.env.HIPPO_HOME;
@@ -741,7 +741,7 @@ describe('autoShare per-candidate rejection containment', () => {
 
       // Reject in the GLOBAL store — the store shareMemory -> writeEntry
       // actually writes into.
-      api.reject(ctx(globalRoot), { value: rejectedContent, reason: 'must not be shared globally' });
+      await api.reject(ctx(globalRoot), { value: rejectedContent, reason: 'must not be shared globally' });
 
       const stats = { secretSkipped: 0, rejectedSkipped: 0 };
       const errorSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);

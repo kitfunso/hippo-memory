@@ -4,7 +4,7 @@ import { BadRequestError, NotFoundError } from '../core/api-errors.js';
 import { rejectValue, unrejectValue } from '../trust/reject-flow.js';
 import { andThen, notPorted, onStore } from './on-store.js';
 import type { Context, StoreReply } from './types.js';
-import { readEntry } from '../store/entry-reads.js';
+import { getMemory } from './memories.js';
 import { canTouchScope, personalScopeOf } from '../store/recall-scope.js';
 
 /** Delete a memory by id. Reach is checked inside the delete's write scope, and a
@@ -39,14 +39,15 @@ export interface RejectResult {
 
 /** Tombstones a value's normalized digest so a matching write is refused everywhere until `unreject`; pass exactly one of `memoryId` or `value`.
  * `memoryId` also removes every live tenant row with that digest (not others' personal rows); `reason` is required. Throws on an unknown id or both/neither. */
-export function reject(ctx: Context, opts: RejectOpts): RejectResult {
+export async function reject(ctx: Context, opts: RejectOpts): Promise<RejectResult> {
   if (opts.memoryId !== undefined) {
     // Tenant scope: same not-found-shaped denial as forget/promote; rejectValue tenant-checks too, but pre-checking keeps the error message consistent.
-    const entry = readEntry(ctx.hippoRoot, opts.memoryId);
-    if (entry?.tenantId !== ctx.tenantId || !canTouchScope(ctx.actor, entry.scope)) {
+    const entry = await getMemory(ctx, opts.memoryId);
+    if (entry === null || !canTouchScope(ctx.actor, entry.scope)) {
       throw new NotFoundError(`memory not found: ${opts.memoryId}`);
     }
   }
+  // SHORTCUT: the tombstone write is hippo.db only, as the port has no rejection group; one when a served store needs reject.
   const result = rejectValue({
     hippoRoot: ctx.hippoRoot,
     tenantId: ctx.tenantId,

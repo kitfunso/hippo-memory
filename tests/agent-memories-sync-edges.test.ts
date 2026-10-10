@@ -189,14 +189,14 @@ describe('agent memory sync: the Added list', () => {
     expect(only().id).toBe(id);
   });
 
-  it('a refused item (edited to hold a secret, cut under 10 characters, or rejected) sets its tagged row aside', () => {
+  it('a refused item (edited to hold a secret, cut under 10 characters, or rejected) sets its tagged row aside', async () => {
     const REJECTED = 'The release branch is cut every second Thursday.';
     note(dir, 'secret.md', A);
     note(dir, 'short.md', B);
     note(dir, 'rejected.md', 'The release branch is cut on the first Monday.');
     sync();
     expect(liveRows(w.local)).toHaveLength(3);
-    reject(ctxFor(w.local), { value: REJECTED, reason: 'wrong cadence' });
+    await reject(ctxFor(w.local), { value: REJECTED, reason: 'wrong cadence' });
 
     note(dir, 'secret.md', `Deploys sign in with ${FAKE_KEY} on the build box.`);
     note(dir, 'short.md', 'tiny note');
@@ -215,9 +215,9 @@ describe('agent memory sync: the Added list', () => {
     expect(liveTexts(w.local)).toEqual(['Send the release notes to [email] before tagging.']);
   });
 
-  it('a rejected value is counted with no write and no audit row, at every sync', () => {
+  it('a rejected value is counted with no write and no audit row, at every sync', async () => {
     const REJECTED = 'The release branch is cut every second Thursday.';
-    reject(ctxFor(w.local), { value: REJECTED, reason: 'wrong cadence' });
+    await reject(ctxFor(w.local), { value: REJECTED, reason: 'wrong cadence' });
     note(dir, 'release.md', REJECTED);
 
     for (let i = 0; i < 2; i++) {

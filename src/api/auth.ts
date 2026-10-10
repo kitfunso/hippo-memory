@@ -6,9 +6,8 @@ import {
   type ApiKeyListRow, type ApiKeyRecord, type ListApiKeysOpts, type NewApiKey,
 } from '../store/auth.js';
 import type { KeysetPosition } from '../util/keyset.js';
-import type { KeyMint, SelfKeyMint } from '../store/index.js';
+import { storeFor, type KeyMint, type SelfKeyMint } from '../store/index.js';
 import { changeScopeGrant } from '../store/sqlite/local.js';
-import { sqliteSyncStore } from '../store/sqlite/store.js';
 import type { ApiKeyOwner } from '../store/tenant-lookup.js';
 import { DAY_MS } from '../util/time.js';
 import { andThen, notPorted, onStore, type Reply, type StorePort } from './on-store.js';
@@ -241,12 +240,11 @@ function keyOwnerOf(record: ApiKeyRecord | null): ApiKeyOwner | undefined {
 
 /** The tenant that owns `keyId`, or undefined for an unknown key. Host admin only: it reads across tenants,
  * so the local CLI can run revoke and grant in the key's own tenant. */
-export function authKeyTenant(ctx: Context, keyId: string): string | undefined {
+export async function authKeyTenant(ctx: Context, keyId: string): Promise<string | undefined> {
   if (!ctx.actor.hostAdmin) {
     throw new ForbiddenError('Only the host admin can look up a key across tenants');
   }
-  // Synchronous for the CLI, so it reads hippo.db whatever store ctx names.
-  return sqliteSyncStore(ctx.hippoRoot).findApiKey(keyId)?.tenantId;
+  return (await storeFor(ctx).findApiKey(keyId))?.tenantId;
 }
 
 /** Shared result shape for authGrant/authUngrant, named per the file's oxlint anti-slop rule. */

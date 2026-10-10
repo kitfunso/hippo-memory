@@ -68,9 +68,9 @@ describe('hippo remember counts each stored row once (built CLI, no server)', ()
     s.expectPinned();
   }, CASE_MS);
 
-  it('a rejected value is refused and not counted', () => {
+  it('a rejected value is refused and not counted', async () => {
     const s = new Store();
-    reject({ hippoRoot: s.root, tenantId: 'default', actor: adminActor('cli') }, { value: REJECTED, reason: 'wrong' });
+    await reject({ hippoRoot: s.root, tenantId: 'default', actor: adminActor('cli') }, { value: REJECTED, reason: 'wrong' });
     s.settle();
     s.run('remember', REJECTED);
     s.expectPinned();

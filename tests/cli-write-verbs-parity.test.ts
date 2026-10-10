@@ -162,9 +162,9 @@ describe('hippo remember (built CLI, no server)', () => {
     s.expectPinned();
   }, CASE_MS);
 
-  it('a rejected value is refused', () => {
+  it('a rejected value is refused', async () => {
     const s = new Store();
-    reject({ hippoRoot: s.root, tenantId: 'default', actor: adminActor('cli') }, { value: 'the billing service retries a failed charge nine times', reason: 'wrong' });
+    await reject({ hippoRoot: s.root, tenantId: 'default', actor: adminActor('cli') }, { value: 'the billing service retries a failed charge nine times', reason: 'wrong' });
     s.settle();
     s.run('remember', 'the billing service retries a failed charge nine times');
     s.expectPinned();
@@ -203,9 +203,9 @@ describe('hippo supersede (built CLI, no server)', () => {
     s.expectPinned();
   }, CASE_MS);
 
-  it('new content that is a rejected value', () => {
+  it('new content that is a rejected value', async () => {
     const s = new Store();
-    reject({ hippoRoot: s.root, tenantId: 'default', actor: adminActor('cli') }, { value: 'the billing service retries a failed charge nine times', reason: 'wrong' });
+    await reject({ hippoRoot: s.root, tenantId: 'default', actor: adminActor('cli') }, { value: 'the billing service retries a failed charge nine times', reason: 'wrong' });
     s.settle();
     s.run('remember', 'the billing service retries a failed charge three times');
     s.run('supersede', s.lastId(), 'the billing service retries a failed charge nine times');

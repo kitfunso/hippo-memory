@@ -37,7 +37,7 @@ let fixture: TwoTenantFixture;
 let seeded: Seeded;
 let baseline: Side;
 
-function seed(dir: string): Seeded {
+async function seed(dir: string): Promise<Seeded> {
   const a = (content: string, extra: Parameters<typeof createMemory>[1] = {}): MemoryEntry => createMemory(content, { tenantId: TENANT_A, ...extra });
   const rows = {
     note: a('deploys go out on tuesdays'),
@@ -53,7 +53,7 @@ function seed(dir: string): Seeded {
   const rawChild = a('raw standup transcript about releases', { kind: 'raw', dag_parent_id: summary.id });
   for (const entry of [...Object.values(rows), child, rawChild, summary]) writeEntry(dir, entry, { actor: 'cli' });
   const ctx: HippoDbContext = { hippoRoot: dir, tenantId: TENANT_A, actor: { subject: 'cli', role: 'admin' } };
-  reject(ctx, { value: BANNED, reason: 'wrong date' });
+  await reject(ctx, { value: BANNED, reason: 'wrong date' });
   return { ...rows, summary, child, rawChild };
 }
 
@@ -88,7 +88,7 @@ const remembered = (e: MemoryEntry) => ({ tenantId: e.tenantId, actor: ACTOR, op
 
 beforeAll(async () => {
   fixture = seedTwoTenants();
-  seeded = seed(fixture.dir);
+  seeded = await seed(fixture.dir);
   baseline = await conforms([]);
 });
 

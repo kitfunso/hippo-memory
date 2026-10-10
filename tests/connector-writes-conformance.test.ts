@@ -49,7 +49,7 @@ let seeded: Seeded;
 let baseline: Side;
 let copies = 0;
 
-function seed(dir: string): Seeded {
+async function seed(dir: string): Promise<Seeded> {
   const rows = {
     note: createMemory('deploys go out on tuesdays', { tenantId: TENANT_A }),
     raw: createMemory('raw slack message about the outage', { tenantId: TENANT_A, kind: 'raw' }),
@@ -59,7 +59,7 @@ function seed(dir: string): Seeded {
   };
   for (const entry of Object.values(rows)) writeEntry(dir, entry, { actor: 'cli' });
   const ctx: HippoDbContext = { hippoRoot: dir, tenantId: TENANT_A, actor: { subject: 'cli', role: 'admin' } };
-  reject(ctx, { value: BANNED, reason: 'wrong date' });
+  await reject(ctx, { value: BANNED, reason: 'wrong date' });
   markSlackEventSeen(dir, EMPTY_EVENT, null);
   return rows;
 }
@@ -114,7 +114,7 @@ const WRITTEN = { value: { outcome: 'written' } };
 beforeAll(async () => {
   fixture = seedTwoTenants();
   home = mkdtempSync(join(tmpdir(), 'hippo-connector-writes-'));
-  seeded = seed(fixture.dir);
+  seeded = await seed(fixture.dir);
   baseline = await conforms([]);
 });
 

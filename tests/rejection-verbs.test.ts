@@ -32,7 +32,7 @@ function ctx(tenantId: string = 'default'): api.Context {
 }
 
 describe('api.reject / api.unreject / listRejectionsForTenant', () => {
-  it('reject by id removes the row + all same-digest duplicates, one reject_value audit, zero forget audits', () => {
+  it('reject by id removes the row + all same-digest duplicates, one reject_value audit, zero forget audits', async () => {
     const a = createMemory('duplicate offending value', { tags: ['x'] });
     const b = createMemory('DUPLICATE OFFENDING VALUE', { tags: ['y'] }); // same normalized digest
     const unrelated = createMemory('unrelated safe value', { tags: ['z'] });
@@ -40,7 +40,7 @@ describe('api.reject / api.unreject / listRejectionsForTenant', () => {
     writeEntry(tmpDir, b);
     writeEntry(tmpDir, unrelated);
 
-    const result = api.reject(ctx(), { memoryId: a.id, reason: 'test rejection' });
+    const result = await api.reject(ctx(), { memoryId: a.id, reason: 'test rejection' });
     expect(result.removedIds.slice().sort()).toEqual([a.id, b.id].sort());
 
     expect(readEntry(tmpDir, a.id)).toBeNull();
@@ -61,7 +61,7 @@ describe('api.reject / api.unreject / listRejectionsForTenant', () => {
     }
   });
 
-  it('reject purges the trace-layer markdown mirror (P1 fix: removeEntryMirrors previously skipped Layer.Trace)', () => {
+  it('reject purges the trace-layer markdown mirror (P1 fix: removeEntryMirrors previously skipped Layer.Trace)', async () => {
     const trace = createMemory('trace: read config.ts -> rotated the deploy key -> success', {
       layer: Layer.Trace,
       trace_outcome: 'success',
@@ -70,15 +70,15 @@ describe('api.reject / api.unreject / listRejectionsForTenant', () => {
     const mirrorPath = path.join(tmpDir, Layer.Trace, `${trace.id}.md`);
     expect(fs.existsSync(mirrorPath)).toBe(true);
 
-    api.reject(ctx(), { memoryId: trace.id, reason: 'trace content was wrong' });
+    await api.reject(ctx(), { memoryId: trace.id, reason: 'trace content was wrong' });
     expect(readEntry(tmpDir, trace.id)).toBeNull();
     expect(fs.existsSync(mirrorPath)).toBe(false);
   });
 
-  it('rejections lists the tombstone', () => {
+  it('rejections lists the tombstone', async () => {
     const a = createMemory('to be rejected', { tags: [] });
     writeEntry(tmpDir, a);
-    api.reject(ctx(), { memoryId: a.id, reason: 'listed test' });
+    await api.reject(ctx(), { memoryId: a.id, reason: 'listed test' });
 
     const rows = listRejectionsForTenant(tmpDir, 'default');
     expect(rows.length).toBe(1);
@@ -86,18 +86,18 @@ describe('api.reject / api.unreject / listRejectionsForTenant', () => {
     expect(rows[0]!.sourceMemoryId).toBe(a.id);
   });
 
-  it('re-remember of the rejected value is refused', () => {
+  it('re-remember of the rejected value is refused', async () => {
     const a = createMemory('refuse me please', { tags: [] });
     writeEntry(tmpDir, a);
-    api.reject(ctx(), { memoryId: a.id, reason: 'refused' });
+    await api.reject(ctx(), { memoryId: a.id, reason: 'refused' });
 
     expect(() => api.remember(ctx(), { content: 'refuse me please' })).toThrow(RejectedValueError);
   });
 
-  it('unreject then re-remember succeeds', () => {
+  it('unreject then re-remember succeeds', async () => {
     const a = createMemory('temporarily rejected', { tags: [] });
     writeEntry(tmpDir, a);
-    const rejectResult = api.reject(ctx(), { memoryId: a.id, reason: 'temp' });
+    const rejectResult = await api.reject(ctx(), { memoryId: a.id, reason: 'temp' });
 
     const unrejectResult = api.unreject(ctx(), rejectResult.digest);
     expect(unrejectResult.ok).toBe(true);
@@ -106,31 +106,31 @@ describe('api.reject / api.unreject / listRejectionsForTenant', () => {
     expect(() => api.remember(ctx(), { content: 'temporarily rejected' })).not.toThrow();
   });
 
-  it('reject --value pre-emptive path: zero removals, still refuses a later write', () => {
-    const result = api.reject(ctx(), { value: 'never seen before value', reason: 'pre-emptive' });
+  it('reject --value pre-emptive path: zero removals, still refuses a later write', async () => {
+    const result = await api.reject(ctx(), { value: 'never seen before value', reason: 'pre-emptive' });
     expect(result.removedIds.length).toBe(0);
 
     expect(() => api.remember(ctx(), { content: 'never seen before value' })).toThrow(RejectedValueError);
   });
 
-  it('reject requires a non-empty reason', () => {
+  it('reject requires a non-empty reason', async () => {
     const a = createMemory('needs a reason', { tags: [] });
     writeEntry(tmpDir, a);
-    expect(() => api.reject(ctx(), { memoryId: a.id, reason: '' })).toThrow();
+    await expect(api.reject(ctx(), { memoryId: a.id, reason: '' })).rejects.toThrow();
   });
 
-  it('reject throws when both memoryId and value are given (P2 fix)', () => {
+  it('reject throws when both memoryId and value are given (P2 fix)', async () => {
     const a = createMemory('both forms supplied at once', { tags: [] });
     writeEntry(tmpDir, a);
-    expect(() =>
+    await expect(
       api.reject(ctx(), { memoryId: a.id, value: 'a different value entirely', reason: 'ambiguous' }),
-    ).toThrow();
+    ).rejects.toThrow();
   });
 
-  it('unreject throws on a blank digest/prefix instead of matching every tombstone (P2 fix)', () => {
+  it('unreject throws on a blank digest/prefix instead of matching every tombstone (P2 fix)', async () => {
     const a = createMemory('to be rejected for the blank-unreject test', { tags: [] });
     writeEntry(tmpDir, a);
-    api.reject(ctx(), { memoryId: a.id, reason: 'setup for blank-unreject test' });
+    await api.reject(ctx(), { memoryId: a.id, reason: 'setup for blank-unreject test' });
     expect(listRejectionsForTenant(tmpDir, 'default').length).toBe(1);
 
     expect(() => api.unreject(ctx(), '')).toThrow();
@@ -368,7 +368,7 @@ describe('resolveConflict rejection wiring', () => {
 });
 
 describe('cmdSupersede write-order contract (code-review round-1 high)', () => {
-  it('a refused successor write leaves the old row without a dangling superseded_by pointer', () => {
+  it('a refused successor write leaves the old row without a dangling superseded_by pointer', async () => {
     // Replicates cmdSupersede's REORDERED two-write flow (cli.ts): the
     // successor is written FIRST so the rejection guard fires before any
     // mutation of the old row. The old ordering committed
@@ -377,7 +377,7 @@ describe('cmdSupersede write-order contract (code-review round-1 high)', () => {
     const old = createMemory('the old belief to correct', { tags: ['s'] });
     writeEntry(tmpDir, old);
 
-    api.reject(ctx(), { value: 'the corrected but rejected belief', reason: 'known-bad correction' });
+    await api.reject(ctx(), { value: 'the corrected but rejected belief', reason: 'known-bad correction' });
 
     const newEntry = createMemory('the corrected but rejected belief', {
       tags: ['s'],
