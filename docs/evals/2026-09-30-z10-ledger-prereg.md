@@ -167,6 +167,13 @@ This section settles the engineering part of the Z10 exit. It covers three check
   - listing undecided rows, which is a src change.
 - **Pass means.** The events the ledger records today can be reconstructed. Z10's exit stays open until tool-failure rows exist. No task-benefit claim.
 - **Runner.** The scored commands are `npm run build && npm run test:delivery-ledger`, the overhead scripts above, and the mutant script and two host checks outside the repo. If a fixture's construction does not produce its stated rows, this list is amended before any scored run. Result in `docs/evals/<run date>-z10-exit-check-result.md`.
+- **Amendment 1, before any scored run: queued prompts.** The build review read two real transcripts from this machine. A prompt sent while the agent is busy (typed text, a task notification or a message from another session) is never written as a user line. Claude Code writes it as a `queued_command` attachment that carries the prompt text, and that prompt's hook attachments follow it. The two transcripts hold 62 such prompts, and 41 of them are followed by a hook attachment. The parser treated only user lines as prompts, so it gave those hook attachments to the prompt before them. The independent count had the same blind spot, so the per-kind check could not catch it. Changes:
+  - The parser treats a `queued_command` attachment as a prompt. Its kind comes from its text, as for a user line, and `cross-session-message` joins `task-notification` as a kind that fires hooks. A queued command with another command mode fires no hook.
+  - The independent count also counts queued prompts, by kind.
+  - Context availability gains one read: a queued prompt that was sent and whose attachment confirms delivery. That makes 17 in that stage and 34 class reads in all.
+  - A twelfth control checks that a queued prompt's attachment is never given to the prompt before it. Turn 1 is sent with its attachment missing, a `pre-compact` resets the block, and turn 2, a queued prompt, sends the same block with its attachment present. Turn 1 must stay unconfirmed.
+  - An eleventh mutant ignores queued prompts.
+  - Not verified: whether the hook's payload prompt equals the queued text. A turn that printed still pairs by its attachment hash.
 
 ## Controls and failure cases
 
