@@ -7,7 +7,7 @@ Links: `scripts/token-eval/checker-identity.mjs` (`checkerIdentity`); `benchmark
 ## Context
 A lesson checker is a script that gives a pass, fail or na verdict on a diff.
 The Z0 G5 regrade (prereg 166) must know whether a checker changed after the run.
-Five places read that answer through one function: the resume key of a regrade row, the `checker-changed` gate, the post-fix test for an unchanged checker, the `checkerSha` field of each row, and the reader's new-round test.
+Six places read that answer through one function: the resume key of a regrade row, the `checker-changed` gate, the post-fix test for an unchanged checker, the `checkerSha` field of each row, the reader's new-round test, and the freeze check before a post-fix pass.
 
 The answer can be wrong in two directions.
 An identity that misses a change reuses a stale verdict in silence.
@@ -29,4 +29,4 @@ This is the third design. The first two each failed in one of the two directions
 Loading a tasks file needs the `typescript` dev dependency, version 5, with its parser API. Without it the load stops with an error.
 Some code that node runs stops the load, because the parser refuses it or reads it another way. The README lists the known examples and the edit that fixes each one.
 Node built-ins, packages and files that a checker reads at run time stay outside the identity. After a change there, the operator changes an arg or the entry script.
-An identity written by an earlier design never equals one from this design. A results folder that an older build graded faults `checker-changed` on every cell and must be run again.
+An identity written by an earlier design never equals one from this design. A results folder that an older build graded faults `checker-changed` on every cell that has a lesson and must be run again.

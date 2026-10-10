@@ -123,7 +123,7 @@ function verdictShas(out, round) {
   return [...new Set(pairs.map(([id, sha]) => `${id}:${sha}`))].sort();
 }
 
-// The same test as G5 in z0-gates.mjs, so a round the gate passes is never redrawn and its checkers never change.
+// G5's 10% test from z0-gates.mjs without its size test, so a short round with few disagreements also counts as passed.
 const passed = ({ n, disagreements }) => !(disagreements * 10 > n);
 
 /** Prereg 166: round K only once round K-1 was scored with more than 10% disagreeing and a checker changed since its draw. */
