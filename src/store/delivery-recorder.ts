@@ -1,4 +1,4 @@
-// In-memory observer for one hook call (a pinned-only context call or a compaction boundary): what was considered, why each was rejected, what reached stdout.
+// In-memory observer for one call (a context call, a compaction boundary or a session end): what was considered, why each was rejected, what reached stdout.
 // No DB access (the caller hands build()'s output to src/store/recall-trace.ts); hashes, ids, counts and enums only, never text.
 import type { MemoryEntry } from '../core/memory.js';
 import { evalNow } from '../core/ablation.js';
@@ -7,9 +7,12 @@ import { hookPayloadSessionId, hookPayloadString, isSubagentPayload } from './to
 import { blockHash, estimateTokens } from '../util/token-text.js';
 import { errorMessage, log } from '../util/log.js';
 export type DeliveryRuntime = 'claude-code' | 'codex' | 'copilot' | 'unknown';
-export type DeliveryEventType = 'prompt-submit' | 'pinned-manual' | 'pre-compact' | 'compact-resume';
-/** True for the two compaction boundary types. */
-export const isBoundaryEvent = (type: DeliveryEventType): boolean => type === 'pre-compact' || type === 'compact-resume';
+export type DeliveryEventType = 'prompt-submit' | 'pinned-manual' | 'pre-compact' | 'compact-resume' | 'session-end' | 'context';
+/** True for the boundary types: a compaction's two hooks and the end of a session. */
+export const isBoundaryEvent = (type: DeliveryEventType): boolean =>
+  type === 'pre-compact' || type === 'compact-resume' || type === 'session-end';
+/** Only the per-prompt calls keep prompt facts; a boundary or a `hippo context` run is not a prompt. */
+const carriesPrompt = (type: DeliveryEventType): boolean => type === 'prompt-submit' || type === 'pinned-manual';
 export type DeliverySurface = 'hook' | 'context';
 export type DeliveryWriteStore = 'local' | 'global';
 export type DeliverySessionState = 'payload' | 'env' | 'missing' | 'subagent';
@@ -20,8 +23,8 @@ export type DeliveryOutcome = 'emitted' | 'reused' | 'rejected';
 export type DeliveryRejectReason =
   | 'budget' | 'gate-below-threshold' | 'gate-max-items' | 'duplicate' | 'scope' | 'quality' | 'limit';
 
-/** Row format version in `delivery_events.ledger_version`: 2 = written by a binary that can write boundary rows, so `event_type` has four values. */
-export const DELIVERY_LEDGER_VERSION = 2;
+/** Row format version in `delivery_events.ledger_version`: 3 = written by a binary that can write session-end and context rows, so `event_type` has six values. */
+export const DELIVERY_LEDGER_VERSION = 3;
 /** Rejected candidate rows kept per event; the rest only add to `rejected_unlisted`. */
 export const DELIVERY_REJECTED_ROW_CAP = 16;
 
@@ -114,6 +117,10 @@ export interface DeliveryObserver {
     kept: readonly { item: { id: string } }[],
   ): void;
   selected(items: readonly DeliverySelected[]): void;
+  /** A searching call's query, `*` for none; kept as its hash, the one the recall trace stores. */
+  queried(query: string): void;
+  /** The recall trace this call wrote; null when the write failed or the store answers no id. */
+  traced(traceId: number | null): void;
 }
 
 /** What the renderer sent, reported once at its exit. */
@@ -199,6 +206,8 @@ interface RecorderState {
   dropped: number;
   disabledSeen: boolean;
   outcome: DeliveryOutcomeInput;
+  queryHash: string | null;
+  recallTraceId: number | null;
   broken: string | null;
   flushed: boolean;
 }
@@ -234,15 +243,21 @@ function rejectId(state: RecorderState, id: string, rejection: Rejection): void 
   state.candidates.set(id, { ...held, stage, reason, score, tokens });
 }
 
+function pickedPool(p: Picked, held: Candidate | undefined): DeliveryPool {
+  if (p.promptRecall) return 'prompt-recall';
+  // A ranked call's rows keep the ranking that chose them, a pinned hit included.
+  if (held?.pool === 'search' || held?.pool === 'strength') return held.pool;
+  return held?.pool === 'pin' || p.entry.pinned ? 'pin' : 'recent';
+}
+
 function pickedRows(state: RecorderState): DeliveryCandidateInput[] {
   const staticReused = state.outcome.staticReused === true;
   const rows: DeliveryCandidateInput[] = [];
   for (const p of state.picked.values()) {
-    const held = state.candidates.get(p.entry.id);
     rows.push({
       memoryId: p.entry.id,
       sourceStore: p.sourceStore,
-      pool: p.promptRecall ? 'prompt-recall' : held?.pool === 'pin' || p.entry.pinned ? 'pin' : 'recent',
+      pool: pickedPool(p, state.candidates.get(p.entry.id)),
       stage: 'final',
       outcome: staticReused && !p.promptRecall ? 'reused' : 'emitted',
       reason: null,
@@ -289,14 +304,14 @@ function buildEvent(
   const rows = [...picked, ...rejected.rows];
   const emitted = outcome.emittedText ?? null;
   const eventType = init.eventType ?? (payload.hookEvent === 'UserPromptSubmit' ? 'prompt-submit' : 'pinned-manual');
-  // A boundary row carries no prompt facts, whatever the payload holds.
-  const prompt = isBoundaryEvent(eventType) ? null : payload.prompt;
+  // Whatever the payload holds, so a hook-run `hippo context` is never matched to an earlier row by its prompt.
+  const prompt = carriesPrompt(eventType) ? payload.prompt : null;
   return {
     ts,
     tenantId: init.tenantId,
     runtime: init.runtime ?? (payload.hostTurnId !== null ? 'codex' : payload.hookEvent !== null ? 'claude-code' : 'unknown'),
     eventType,
-    surface: 'hook',
+    surface: eventType === 'context' ? 'context' : 'hook',
     storeHash: init.storeHash,
     writeStore: init.writeStore,
     projectHash: facts !== null && facts.projectName !== '' ? blockHash(facts.projectName) : null,
@@ -305,8 +320,8 @@ function buildEvent(
     hostTurnId: payload.hostTurnId,
     promptHash: prompt !== null ? blockHash(prompt) : null,
     promptLength: prompt?.length ?? 0,
-    queryHash: null,
-    recallTraceId: null,
+    queryHash: state.queryHash,
+    recallTraceId: state.recallTraceId,
     blockState: state.disabledSeen ? 'disabled' : outcome.state,
     promptRecall: facts?.promptRecall === true,
     consideredCount: new Set([...state.candidates.keys(), ...state.picked.keys()]).size,
@@ -397,7 +412,7 @@ export function createDeliveryRecorder(init: DeliveryRecorderInit): DeliveryReco
   const payload = readPayload(init);
   const state: RecorderState = {
     candidates: new Map(), picked: new Map(), filtered: new Set(), facts: null, shown: 0, dropped: 0,
-    disabledSeen: false, outcome: { state: 'empty' }, broken: null, flushed: false,
+    disabledSeen: false, outcome: { state: 'empty' }, queryHash: null, recallTraceId: null, broken: null, flushed: false,
   };
 
   const guard = guardFor(state, fault);
@@ -419,6 +434,8 @@ export function createDeliveryRecorder(init: DeliveryRecorderInit): DeliveryReco
     dropMissing,
     gated,
     selected,
+    queried: (query) => guard(() => { state.queryHash = blockHash(query); }),
+    traced: (traceId) => guard(() => { state.recallTraceId = traceId; }),
     delivered: (o) => guard(() => { state.outcome = { ...o }; }),
     flush: (write) => {
       if (state.flushed) return;

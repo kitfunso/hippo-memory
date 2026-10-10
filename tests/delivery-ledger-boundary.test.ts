@@ -1,12 +1,13 @@
-// The two compaction hooks through the built CLI: which delivery_events row each one leaves.
+// The boundary hooks through the built CLI, compaction and session end: which delivery_events row each one leaves.
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { blockHash, estimateTokens } from '../src/util/token-text.js';
 import { copilotPayload } from './_helpers/copilot-hooks.js';
 import {
-  PROMPT_HOOK, SNAPSHOT_TASK, dispose, eventCount, eventsN, hippo, hippoAsync, installCopilotHooksFile, preCompactPayload, project,
-  promptPayload, resumePayload, saveSnapshot, tableRows, writeConfig, writeTranscript, writeVscodeTranscript, type Project,
+  PROMPT_HOOK, SNAPSHOT_TASK, dispose, eventCount, eventsN, hippo, hippoAsync, hippoNoWorker, installCopilotHooksFile, preCompactPayload,
+  project, promptPayload, resumePayload, saveSnapshot, sessionEndPayload, tableRows, writeConfig, writeTranscript, writeVscodeTranscript,
+  type Project,
 } from './_helpers/delivery-boundary.js';
 
 let p: Project;
@@ -26,7 +27,7 @@ describe('what one boundary hook call records', () => {
     expect(r.stdout).not.toBe('');
     const [e] = eventsN(p, 'b1', 1);
     expect([e.event_type, e.runtime, e.surface, e.session_state, e.turn_seq, e.block_state, e.ledger_version])
-      .toEqual(['pre-compact', 'claude-code', 'hook', 'payload', 1, 'sent', 2]);
+      .toEqual(['pre-compact', 'claude-code', 'hook', 'payload', 1, 'sent', 3]);
     expect([e.emitted_hash, e.injected_tokens]).toEqual([blockHash(r.stdout), estimateTokens(r.stdout)]);
     expect([e.candidates, e.considered_count, e.emitted_count, e.rejected_count]).toEqual([[], 0, 0, 0]);
   });
@@ -109,7 +110,7 @@ describe('what one boundary hook call records', () => {
     ]);
   });
 
-  it('B7: one session in order shows the boundary rows between the prompt rows, numbered per type', () => {
+  it('B7: one session in order shows the boundary and context rows between the prompt rows, numbered per type', () => {
     const transcript = writeTranscript(p);
     const steps: Array<[string[], string]> = [
       [PROMPT_HOOK, promptPayload('b7', 'first question about deploys')],
@@ -119,14 +120,54 @@ describe('what one boundary hook call records', () => {
       [PROMPT_HOOK, promptPayload('b7', 'third question about the release')],
     ];
     for (const [args, input] of steps) expect(hippo(p, args, { input }).status).toBe(0);
-    const rows = eventsN(p, 'b7', 5);
+    // An agent's own `hippo context` run takes the session from the environment Claude Code gives its shell.
+    expect(hippo(p, ['context', 'rollback', 'plan'], { env: { CLAUDE_CODE_SESSION_ID: 'b7' } }).status).toBe(0);
+    expect(hippoNoWorker(p, ['session-end'], { input: sessionEndPayload('b7') }).status).toBe(0);
+    const rows = eventsN(p, 'b7', 7);
     expect(rows.map((e) => [e.event_type, e.block_state, e.turn_seq])).toEqual([
       ['prompt-submit', 'sent', 1],
       ['prompt-submit', 'reused', 2],
       ['pre-compact', 'sent', 1],
       ['compact-resume', 'sent', 1],
       ['prompt-submit', 'sent', 3],
+      ['context', 'sent', 1],
+      ['session-end', 'empty', 1],
     ]);
+  });
+});
+
+describe('what one session-end hook call records', () => {
+  it('E1: a Claude Code SessionEnd payload leaves one empty boundary row and prints nothing', () => {
+    const r = hippoNoWorker(p, ['session-end'], { input: sessionEndPayload('e1') });
+    expect([r.status, r.stdout]).toEqual([0, '']);
+    const [e] = eventsN(p, 'e1', 1);
+    expect([e.event_type, e.runtime, e.surface, e.session_state, e.turn_seq, e.block_state, e.ledger_version])
+      .toEqual(['session-end', 'claude-code', 'hook', 'payload', 1, 'empty', 3]);
+    expect([e.emitted_hash, e.injected_tokens, e.prompt_hash, e.query_hash, e.recall_trace_id, e.candidates])
+      .toEqual([null, 0, null, null, null, []]);
+  });
+
+  it('E2: a second fire inside the window is a duplicate of the first', () => {
+    for (let i = 0; i < 2; i++) expect(hippoNoWorker(p, ['session-end'], { input: sessionEndPayload('e2') }).status).toBe(0);
+    const [first, second] = eventsN(p, 'e2', 2);
+    expect([first.turn_seq, first.duplicate_of, second.turn_seq, second.duplicate_of]).toEqual([1, null, null, first.id]);
+  });
+
+  it('E3: a Copilot sessionEnd run from another folder records runtime copilot in the payload folder store', () => {
+    const r = hippoNoWorker(p, ['session-end', '--runtime', 'copilot'], { input: copilotPayload('sessionEnd', p.cwd), cwd: p.dir });
+    expect(r.status, r.stderr).toBe(0);
+    const [e] = eventsN(p, 'copilot-sess-1', 1);
+    expect([e.event_type, e.runtime, e.session_state, e.block_state]).toEqual(['session-end', 'copilot', 'payload', 'empty']);
+  });
+
+  it('E4: a manual run, a malformed payload, a turn end and a ledger switched off leave no row', () => {
+    expect(hippoNoWorker(p, ['session-end']).status).toBe(0);
+    expect(hippoNoWorker(p, ['session-end'], { input: 'not json' }).status).toBe(0);
+    // A VS Code Stop payload, the one turn mode accepts, so the call reaches the recorder's turn check.
+    expect(hippoNoWorker(p, ['session-end', '--turn'], { input: sessionEndPayload('e4-turn', { hook_event_name: 'Stop' }) }).status).toBe(0);
+    writeConfig(p, { ledger: false });
+    expect(hippoNoWorker(p, ['session-end'], { input: sessionEndPayload('e4-off') }).status).toBe(0);
+    expect(eventCount(p)).toBe(0);
   });
 });
 

@@ -4,6 +4,7 @@ import { loadLastRecall, saveIndex } from '../index-and-stats.js';
 import { changeScopeGrantAt, type ScopeGrantChange } from '../key-writes.js';
 import { onHandle } from '../open.js';
 import type { EntryTarget, OutcomeWrite, RecallWrites } from '../port.js';
+import type { RecallTraceInput } from '../recall-trace.js';
 import { applyOutcomeAt } from './entry-writes-group.js';
 import { finishRecallAt } from './store.js';
 
@@ -16,9 +17,11 @@ export interface SqliteLocal {
   applyOutcome(outcome: OutcomeWrite, traceId: number): string[];
   /** applyOutcome on the ids of the last recall, which hippo.db's meta table holds with that recall's trace; answers the ids applied. */
   applyOutcomeToLastRecall(target: EntryTarget, good: boolean): string[];
-  /** finishRecall, then the ids this root lacks strengthened under `globalRoot`, then the ids and their trace saved as the last recall.
-   *  A store of another kind keeps no last recall, so its stand-in is its own finishRecall, hence the Promise. */
-  finishLastRecall(writes: LastRecallWrites, globalRoot: string | undefined): void | Promise<void>;
+  /** finishRecall, then the ids this root lacks strengthened under `globalRoot`, then the ids and their trace saved as the last recall;
+   *  answers the trace id. A store of another kind keeps no last recall, so its stand-in is its own finishRecall, answering null. */
+  finishLastRecall(writes: LastRecallWrites, globalRoot: string | undefined): number | null | Promise<number | null>;
+  /** The trace alone, so a reply that returned nothing never replaces the last recall; answers its id, null from a served store. */
+  traceRecall(trace: RecallTraceInput): number | null | Promise<number | null>;
 }
 
 export function sqliteLocal(hippoRoot: string): SqliteLocal {
@@ -36,7 +39,9 @@ export function sqliteLocal(hippoRoot: string): SqliteLocal {
       if (globalRoot !== undefined) strengthenRetrieved(globalRoot, ids.filter((id) => !strengthened.has(id)), opts);
       // One write for both keys, so an outcome never pairs these ids with an older trace; a lost trace saves null.
       saveIndex(hippoRoot, { last_retrieval_ids: [...ids], last_trace_id: traceId === null ? null : String(traceId) });
+      return traceId;
     },
+    traceRecall: (trace) => finishRecallAt(hippoRoot, { goalLog: [], audit: [], trace }).traceId,
   };
 }
 

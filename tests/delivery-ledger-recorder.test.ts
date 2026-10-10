@@ -10,7 +10,10 @@ import { getContext, type Context, type ContextOpts } from '../src/api/index.js'
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { _resetAblationCacheForTests } from '../src/core/ablation.js';
 import type { HippoConfig } from '../src/core/config.js';
-import { _setDeliveryFaultForTests, createDeliveryRecorder, type DeliveryEventInput, type DeliveryRecorder } from '../src/store/delivery-recorder.js';
+import {
+  _setDeliveryFaultForTests, createDeliveryRecorder, type DeliveryEventInput, type DeliveryEventType, type DeliveryRecorder,
+} from '../src/store/delivery-recorder.js';
+import { blockHash } from '../src/util/token-text.js';
 
 const PROJECT = 'proj-a';
 const PROMPT = 'how should the postgres migration rollback plan work';
@@ -253,18 +256,28 @@ describe('the event type of a recorder', () => {
   });
 });
 
-describe('prompt facts on a boundary row', () => {
-  const withPrompt = (eventType?: 'pre-compact' | 'compact-resume') => createDeliveryRecorder({
+describe('prompt facts on a boundary or context row', () => {
+  const withPrompt = (eventType?: DeliveryEventType) => createDeliveryRecorder({
     root: local, storeHash: 'aaaaaaaaaaaaaaaa', writeStore: 'local', tenantId: 'default', eventType,
     stdinText: JSON.stringify({ session_id: 's1', prompt: 'secret prompt', hook_event_name: 'UserPromptSubmit' }),
   });
 
-  for (const type of ['pre-compact', 'compact-resume'] as const) {
+  for (const type of ['pre-compact', 'compact-resume', 'session-end', 'context'] as const) {
     it(`R3 a ${type} row keeps no prompt hash or length although the payload carries a prompt`, () => {
       const event = eventOf(withPrompt(type));
       expect([event.eventType, event.promptHash, event.promptLength]).toEqual([type, null, 0]);
+      expect(event.surface).toBe(type === 'context' ? 'context' : 'hook');
     });
   }
+
+  it('R5 a context row keeps the hash of the query it was told and the trace id, which no other call reports', () => {
+    const rec = withPrompt('context');
+    rec.queried('postgres rollback');
+    rec.traced(42);
+    const event = eventOf(rec);
+    expect([event.queryHash, event.recallTraceId]).toEqual([blockHash('postgres rollback'), 42]);
+    expect([eventOf(withPrompt()).queryHash, eventOf(withPrompt()).recallTraceId]).toEqual([null, null]);
+  });
 
   it('R4 a prompt-submit row still carries the prompt hash and length', () => {
     const event = eventOf(withPrompt());

@@ -2386,6 +2386,8 @@ Slice 1 [built, off by default]: schema v50 `delivery_events` and `delivery_cand
 
 Slice 2a [built, off by default]: `hippo pre-compact` and `hippo compact-resume` each write one boundary row to `delivery_events` (no schema change, `ledger_version` 2) behind `deliveryLedger.enabled`; result in [the slice 2a result](docs/evals/2026-10-08-z10-ledger-slice2a-result.md).
 
+Slice 2b [built, off by default]: `hippo session-end` writes one boundary row for a host's SessionEnd payload, and `hippo context` without `--pinned-only` writes a `context` row whose `recall_trace_id` and `query_hash` link the recall trace it wrote (no schema change, `ledger_version` 3); result in [the slice 2b result](docs/evals/2026-10-10-z10-ledger-slice2b-result.md). Tool-failure rows wait for a schema change; the server context surfaces and `hippo recall` remain open.
+
 ### Z1d. Trigger-then-gate [experiment; after Z10]
 
 Register a new arm using the current prompt, bounded recent conversational context and task state, alongside scoped path, error class, test identity or command-family triggers. Include indirect references such as continuing a previously agreed approach; do not require an explicit file or error to qualify. A path match alone is not relevance. Freeze query construction, allowed context sources and bounds before scoring. Retrieve a small set and admit it only when the registered gate clears; otherwise inject no additional claims. Applicable pins remain.
