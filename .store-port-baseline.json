@@ -10,7 +10,7 @@
   "txLiterals": 0,
   "tenantResolvesInCli": 8,
   "storeImportsInCli": 64,
-  "handleHoldersOutside": 16,
+  "handleHoldersOutside": 12,
   "openersOutsideByFile": {
     "src/agent-memories/sync.ts": 3,
     "src/api/ledger-db.ts": 1,
@@ -24,9 +24,6 @@
     "src/agent-memories/legacy.ts": 1,
     "src/agent-memories/sync.ts": 1,
     "src/api/pilot-arm.ts": 1,
-    "src/capture/caller-session.ts": 1,
-    "src/capture/command.ts": 1,
-    "src/capture/compaction-record.ts": 1,
     "src/cli/sleep.ts": 1,
     "src/doctor.ts": 1,
     "src/graph/delta.ts": 1,
@@ -34,8 +31,7 @@
     "src/index.ts": 1,
     "src/server/boot.ts": 1,
     "src/sharing/global-store.ts": 1,
-    "src/sharing/project-merge.ts": 1,
-    "src/trust/gated-write.ts": 1
+    "src/sharing/project-merge.ts": 1
   },
   "sqliteLocalMethods": [
     "applyOutcome",
