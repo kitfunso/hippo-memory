@@ -160,13 +160,25 @@ async function drainStream(
   return { ingested, pages, maxUpdatedAt, drained: true };
 }
 
+// A reset hours away must fail the run for a later rerun; sleeping through it would hold the process for the whole window.
+const MAX_RATE_LIMIT_ATTEMPTS = 5;
+const MAX_RATE_LIMIT_WAIT_MS = 10 * 60 * 1000;
+
 async function fetchPagePastRateLimit(options: DrainStreamOptions, url: string): Promise<GitHubBackfillPage> {
   const { fetcher, token, sleep } = options;
-  // Fetch with rate-limit retry loop.
-  while (true) {
+  let waitedMs = 0;
+  for (let attempt = 1; ; attempt++) {
     const page = await fetcher({ url, token });
     if (page.rateLimit.reason === 'none') return page;
-    await sleep(page.rateLimit.sleepSeconds * 1000);
+    const waitMs = page.rateLimit.sleepSeconds * 1000;
+    if (attempt >= MAX_RATE_LIMIT_ATTEMPTS || waitedMs + waitMs > MAX_RATE_LIMIT_WAIT_MS) {
+      const resetAt = new Date(Date.now() + waitMs).toISOString();
+      throw new Error(
+        `GitHub rate limit still active after ${attempt} attempts and ${Math.round(waitedMs / 1000)}s waited; resets at ${resetAt}`,
+      );
+    }
+    await sleep(waitMs);
+    waitedMs += waitMs;
   }
 }
 

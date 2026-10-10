@@ -1,3 +1,4 @@
+import { errorFields, errorMessage, log } from '../util/log.js';
 import type { DatabaseSyncLike } from './sqlite.js';
 
 function carriesErrcode(cause: unknown): cause is { errcode: unknown } {
@@ -49,6 +50,16 @@ function undoScope(db: DatabaseSyncLike, top: boolean, name: string): void {
   }
 }
 
+/** Undo after a failure without letting a failed undo replace the caller's error; an idle handle means SQLite already unwound the scope. */
+function undoAfterFailure(db: DatabaseSyncLike, top: boolean, name: string): void {
+  if (db.isTransaction === false) return;
+  try {
+    undoScope(db, top, name);
+  } catch (undoError) {
+    log.error(`rollback of write scope ${name} failed: ${errorMessage(undoError)}`, errorFields(undoError));
+  }
+}
+
 /** Waits for the lock past busy_timeout when given; ignored inside a caller's transaction, which already holds it. */
 export interface WriteScopeOptions {
   readonly busyWaitMs?: number;
@@ -65,7 +76,7 @@ export function withWriteScope<T>(db: DatabaseSyncLike, name: string, fn: () => 
     db.exec(top ? 'COMMIT' : `RELEASE SAVEPOINT ${name}`);
     return result;
   } catch (error) {
-    try { undoScope(db, top, name); } catch { /* already rolled back; keep the original error */ }
+    undoAfterFailure(db, top, name);
     throw error;
   }
 }
@@ -78,7 +89,11 @@ export function withReadSnapshot<T>(db: DatabaseSyncLike, fn: () => T): T {
   try {
     result = fn();
   } catch (error) {
-    try { db.exec('COMMIT'); } catch { /* snapshot already gone; keep the original error */ }
+    try {
+      db.exec('COMMIT');
+    } catch (endError) {
+      log.error(`ending read snapshot failed: ${errorMessage(endError)}`, errorFields(endError));
+    }
     throw error;
   }
   db.exec('COMMIT');
@@ -93,7 +108,7 @@ export function withTrialScope<T>(db: DatabaseSyncLike, name: string, fn: () => 
   try {
     result = fn();
   } catch (error) {
-    try { undoScope(db, top, name); } catch { /* already rolled back; keep the original error */ }
+    undoAfterFailure(db, top, name);
     throw error;
   }
   undoScope(db, top, name);
@@ -126,7 +141,7 @@ export function withWriteScopeOr<T, R>(
     db.exec(top ? 'COMMIT' : `RELEASE SAVEPOINT ${name}`);
     return result;
   } catch (error) {
-    try { undoScope(db, top, name); } catch { /* already rolled back; keep the original error */ }
+    undoAfterFailure(db, top, name);
     throw error;
   }
 }

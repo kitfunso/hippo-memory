@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, writeFileSync, unlinkSync, renameSync } from 'node:fs';
 import { join } from 'node:path';
 import { envHealthProbeMs } from '../util/env.js';
+import { errorMessage, log } from '../util/log.js';
 
 export interface ServerInfo {
   /** Pidfile schema version; absent on pidfiles written before the field existed, which detectServer treats as legacy and still accepts. */
@@ -114,7 +115,8 @@ export async function detectServer(hippoRoot: string): Promise<ServerInfo | null
   let info: ServerInfo;
   try {
     info = JSON.parse(readFileSync(path, 'utf8'));
-  } catch {
+  } catch (err) {
+    log.warn(`server pidfile ${path} is unreadable (${errorMessage(err)}); removing it`);
     removePidfile(hippoRoot);
     return null;
   }
