@@ -1,4 +1,5 @@
 import type { DatabaseSyncLike } from './sqlite.js';
+import { errorCode, log } from '../util/log.js';
 
 /** Column names of one table; empty when the table is missing. */
 export function tableColumns(db: DatabaseSyncLike, tableName: string): Set<string> {
@@ -35,8 +36,9 @@ export function countTableRows(db: DatabaseSyncLike, table: string): number | nu
     // SAFETY: COUNT(*) returns one row with one numeric column.
     const row = db.prepare(`SELECT COUNT(*) AS n FROM "${table.replace(/"/g, '""')}"`).get() as { n: number } | undefined;
     return Number(row?.n ?? 0);
-  } catch {
+  } catch (err) {
     // Callers treat an uncountable table as unknown; the bundle and doctor still finish.
+    log.warn(`could not count rows in table ${table}`, { table, code: errorCode(err) || 'unknown' });
     return null;
   }
 }

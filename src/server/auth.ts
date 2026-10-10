@@ -2,7 +2,7 @@
 import { envAllowKeylessLocal, envRequireAuth } from '../util/env.js';
 import type { IncomingMessage } from 'node:http';
 import { resolveTenantId } from '../store/tenant.js';
-import { log } from '../util/log.js';
+import { errorFields, errorMessage, log } from '../util/log.js';
 import { API_KEY_PREFIX, verifyApiKeyCached } from '../store/auth.js';
 import { type Actor, type Context, ownerOrSubject } from '../api/index.js';
 import { HttpError, isCrossSite, isHeaderString, LOOPBACK_HOST_HEADER, MAX_ID_LEN } from '../util/http-util.js';
@@ -285,6 +285,7 @@ export async function heartbeatVerdict(req: IncomingMessage, opts: AuthOpts): Pr
     await checkAuth(req, opts);
     return 'ok';
   } catch (err) {
+    if (!(err instanceof HttpError)) log.error(`heartbeat auth check failed: ${errorMessage(err)}`, errorFields(err));
     return err instanceof HttpError && err.status < 500 && err.status !== 429 ? 'revoked' : 'unavailable';
   }
 }

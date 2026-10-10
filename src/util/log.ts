@@ -111,6 +111,11 @@ export function reportCompactionFailure(say: (message: string) => void, step: st
   log.error(`post-compact: ${step} failed: ${reason}`);
 }
 
+/** The string `code` of a caught value (an errno name such as EACCES), or '' when it has none. */
+export function errorCode(cause: unknown): string {
+  return cause instanceof Error && 'code' in cause ? String(cause.code) : '';
+}
+
 /** Test hook: forget which once-keys have fired. */
 export function resetLogOnce(): void {
   onceKeys.clear();

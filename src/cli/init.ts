@@ -18,9 +18,13 @@ import { getGlobalRoot, initGlobal } from '../sharing/global-store.js';
 import { registerWorkspace } from './scheduler.js';
 import { type CliFlags, numberFlag, stringFlag, type CommandContext } from './flag-values.js';
 import { printAgentImport } from './print.js';
+import { errorCode, errorMessage, log } from '../util/log.js';
 import { installCodexMemoryHooks, setupDailySchedule, warnClaudeSettingsUnusable } from './install-steps.js';
 import { learnFromRepo, skipLearnOnSharedStore } from './shared.js';
 import { HOOK_MARKERS, HOOKS, hippoBlock } from '../hooks/hook-blocks.js';
+
+// An unreadable or vanished folder is expected while scanning; any other failure is worth a line.
+const QUIET_SCAN_ERRORS: ReadonlySet<string> = new Set(['EACCES', 'EPERM', 'ENOENT', 'ENOTDIR']);
 
 function scanForGitRepos(rootDir: string, maxDepth = 2): string[] {
   const repos: string[] = [];
@@ -37,7 +41,10 @@ function scanForGitRepos(rootDir: string, maxDepth = 2): string[] {
         }
         if (depth < maxDepth) walk(full, depth + 1);
       }
-    } catch { /* permission denied, etc */ }
+    } catch (err) {
+      const code = errorCode(err);
+      if (!QUIET_SCAN_ERRORS.has(code)) log.warn(`repo scan skipped ${dir}`, { code: code || 'unknown', reason: errorMessage(err) });
+    }
   }
   // Check if rootDir itself is a git repo
   if (fs.existsSync(path.join(rootDir, '.git'))) repos.push(rootDir);
