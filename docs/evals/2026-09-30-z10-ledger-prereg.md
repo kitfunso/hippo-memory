@@ -95,6 +95,79 @@ This section settles the engineering part of two more calls: the SessionEnd hook
 - **Out of slice 2b.** Tool-failure events. `hippo capture-error` sends nothing to the model, and `failure_log` already keeps the time, session, tool and signature hash of every failure, so a ledger row would add only its place in the id order. Linking that row to its `failure_log` row, and telling two failures apart by tool call (parallel tool calls can fail within the same second, so a time window would merge real failures), each need a column, which is a schema change. Tool failures wait for that change, or for a failure hook that delivers memories. Also out: turn-end rows, the Codex wrapper's session end, the server context surfaces, `hippo recall` (it writes a trace but no row), a salted prompt hash, and the measured lock wait.
 - **Runner.** `npm run build && npm run test:delivery-ledger`. The call sequence that slice 2a drove by hand is a test here, so the result cites tests and the squash commit only. Result in `docs/evals/2026-10-10-z10-ledger-slice2b-result.md`.
 
+## Exit check: engineering scope (settled)
+
+This section settles the engineering part of the Z10 exit. It covers three checks: known fixture events reconstructed end to end, recall decisions unchanged, and the ledger's overhead measured. The task-level part above stays DRAFT / NOT REGISTERED. The exit check changes no schema, no hook output and no command output.
+
+- **Question.** For one store, session and lesson, which ROADMAP class holds? The classes are not-written, not-retrieved, rejected (not injected), delivery-unconfirmed, delivered with application unknown, applied-but-wrong, and applied with a supporting outcome. When the evidence cannot decide, the answer is `indeterminate` with a reason.
+- **Reader.** `scripts/z10-reconstruct.mjs`, which is not shipped. It opens the store read-only. It joins five sources for one tenant and session: `memories` (local and global), `delivery_events`, `delivery_candidates`, the host transcript, and an application-label file. A memory is present at a turn when `memories.created` is not later than the row's `ts`. Both are ISO 8601 UTC.
+- **Turns.** A turn is a numbered `prompt-submit` row. A duplicate joins its original. A sub-agent row carries the parent's session id but no number, and it is reported beside the turns, never as one. A row with another store's hash, as in a copied store, is reported and never used. A `context` or `pinned-manual` row is a turn of a surface with no verified host join, so its delivery stays unconfirmed.
+- **Delivery confirmation.** Each hook's output is its own `hook_additional_context` attachment under the user prompt, and one prompt can carry several. A turn pairs with a transcript prompt in three ways:
+  - by the blockHash of the prompt text against `prompt_hash`;
+  - for a row that printed, by an attachment hash against its `emitted_hash`;
+  - between two pairs already made, by order, but only when the unpaired turns equal the unpaired user prompts and task notifications there, quiet ones included.
+
+  A turn's delivery is confirmed when an attachment under its own prompt has the row's `emitted_hash`. A prompt that fired hooks and pairs with no row is a gap. A line that fired no hook, such as a slash command or shell input, is never a gap and never pairs. `context` and `pinned-manual` rows never pair. A live Claude Code 2.1.288 session on a scratch store matched both hashes before this section was written.
+- **Reuse and compaction.** A `reused` candidate takes the delivery of the latest earlier `sent` turn that emitted it with the same static block hash. If the transcript shows a compaction between the two, or the ledger holds a `pre-compact` or `compact-resume` row between them, the delivery stays unconfirmed. Both of hippo's compaction hooks reset injection, so the prompt after a compaction hippo saw is always sent again. Reuse across a compaction happens only when hippo missed it, so the ledger-row case is checked with rows built by the real writer, not through the CLI.
+- **Undecided rows.** The recent load offers a window of up to 32 rows, but only five are judged with prompt recall off, and only the recall pool with it on. A row that is offered and never judged writes no candidate row and only adds to `rejected_unlisted`. So in a store with more than five unpinned rows, the ledger cannot tell "never loaded" from "loaded and never judged" for a memory that was not emitted. The reader returns `undecided` when fewer than 16 rejected rows are listed, and `unlisted` when 16 are, since overflow is then also possible. Not-retrieved is provable only for a memory the loader never offers, such as another project's memory. A later slice can close this gap by recording the window cut as a `limit` rejection.
+- **Indeterminate.** Besides `undecided` and `unlisted`, the reader returns `indeterminate` in six more cases:
+  - `no-ledger-table`: a store from before the ledger;
+  - `no-event-row`: a gap, or a session with no rows;
+  - `context-surface`: a `context` row without the memory, since that surface cannot tell never-retrieved from rejected;
+  - `outcome-unknown`: the lesson was applied, but no outcome is known;
+  - `forgotten`: the memory was deleted at an unknown point relative to the turns;
+  - `key-ambiguous`: the content key matches more than one memory.
+
+  A session's class is the furthest stage any turn proved, unless an indeterminate turn could have reached further.
+- **Labels.** A label names a session and a memory. Application is `observed`, `judged` or `unknown`, and is never inferred from delivery. The signal is one of six: resolved check, failed check, explicit correction, revert, repeated error, or unknown. Observed or judged evidence needs a reference. A label acts only on a confirmed delivery. A label on any other case is reported and changes nothing. An invalid label is reported and ignored.
+- **Fixtures and denominators.** The fixtures are driven through the built CLI on scratch stores. Each transcript is built from the hook's real stdout, with three things added: a decoy attachment from another hook, slash-command and shell lines, and a task-notification line. Each case asserts its raw ledger rows before it calls the reader, so the oracle never depends on the reader. The 33 class reads are frozen by stage:
+  - capture: 3 (never written, written after the turn, forgotten before it);
+  - budgeted evidence: 10 (another project's memory never loaded, undecided past the judged five, gate rejection, budget rejection, an unlisted and a listed row in an overflowing list, gate max items, a duplicate dropped at load, a limit cut on `hippo context`, a holdout session);
+  - context availability: 16 (attachment missing, no transcript, delivered, unchanged-block reuse, reuse across a compaction hippo missed, re-send after a compaction hippo saw, a duplicate fire, two interleaved sessions, a gap with and without a delivery elsewhere, an agent `hippo context` call, a prompt-recall block beside a reused static block, a hand-run pinned call, a prompt whose text differs from the payload when sent and when reused, a global-store pin);
+  - application: 3 (applied-but-wrong, applied and supported, applied with outcome unknown);
+  - boundary evidence: 1 (a session-end row).
+
+  The 11 negative controls are reported separately:
+  - a label on a rejected memory;
+  - another session's label;
+  - one changed character in the attachment;
+  - the ledger off;
+  - an invalid application value;
+  - the attachment under the wrong prompt;
+  - a copied store;
+  - another tenant's row in the session;
+  - a sub-agent row under the parent session;
+  - a transcript of command, shell and notification lines;
+  - a lost row, then a compaction, then a quiet reused turn whose text differs from the payload, which must never read confirmed.
+
+  Every stage and reason value is also checked against rows built with the real writer.
+- **Metric and bound.** Every case matches its oracle on class, reason, store hash, tenant, session, turn (event id and number), candidate stage and memory id. The bound is 100% in every stage.
+- **Joins carry weight.** Ten reader mutants must each fail at least one case:
+  - no session filter;
+  - no hash compare;
+  - `rejected_unlisted` ignored;
+  - labels applied before delivery;
+  - transcript compaction ignored;
+  - attachments matched under any prompt;
+  - store hash ignored;
+  - no tenant filter;
+  - sub-agent rows treated as turns;
+  - gaps counted on lines that fired no hook.
+- **Real host.** The parser runs on a copy of a real transcript from this machine, with its SHA-256 recorded, and its per-kind counts must equal an independent count. The reader runs on a copy of the live scratch session. The expected class there is delivered with application unknown, and a second live turn adds a reused turn.
+- **Recall decisions.** On the exit commit, three surfaces must show identical decisions with the ledger off and on:
+  - the pinned prompt hook: F9, plus `hook-latency.mjs --ledger-compare` with identical stdout and a zero token delta at 2000 memories;
+  - `hippo context` with a query, with results and with none: markdown and json stdout, the trace's result rows, and retrieval counts;
+  - the `pre-compact`, `compact-resume` and `session-end` hooks: stdout and exit code, with non-empty stdout asserted for the two hooks that print, so empty output on both sides cannot pass.
+- **Overhead.** `node scripts/ledger-overhead.mjs --memories 2000 --runs 200` is checked against Amendment 1 by its `pass` field, since the script exits 0 when a bound fails. Bytes per turn must stay at or under 7168, from `hook-latency.mjs`. That script's two latency bounds were replaced by Amendment 1, so they are reported but not gated. The bound met is Amendment 1's latency proxy. H4 itself, the Z0 cost ratio and resolve rate, is not measured here.
+- **Machine load.** Before each overhead run, `cmd /c exit` is timed five times. A median over 100 ms makes the run void, not failed. The load is cleared and the script is run again. The first run that is not void decides, and every run is reported.
+- **Limits.** A deleted memory keeps no text, so a content key cannot tell never-written from deleted. The sub-agent's own transcript is not joined, and neither are Codex transcripts. A missing row is a gap, never evidence.
+- **Out.** Three things stay out:
+  - tool-failure rows, which need a schema change;
+  - the server context surfaces;
+  - listing undecided rows, which is a src change.
+- **Pass means.** The events the ledger records today can be reconstructed. Z10's exit stays open until tool-failure rows exist. No task-benefit claim.
+- **Runner.** The scored commands are `npm run build && npm run test:delivery-ledger`, the overhead scripts above, and the mutant script and two host checks outside the repo. If a fixture's construction does not produce its stated rows, this list is amended before any scored run. Result in `docs/evals/<run date>-z10-exit-check-result.md`.
+
 ## Controls and failure cases
 
 - Fixture oracle includes rejected candidates, emitted-but-undelivered context, unknown application, concurrent turns, compaction, missing hooks and duplicate events.
