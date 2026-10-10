@@ -16,7 +16,7 @@ import { currentMachine, importForStore, importProjectMemories, importUserMemori
 import { emptyReport, mergeReports } from '../agent-memories/report.js';
 import { getGlobalRoot, initGlobal } from '../sharing/global-store.js';
 import { registerWorkspace } from './scheduler.js';
-import { type CliFlags, stringFlag, type CommandContext } from './flag-values.js';
+import { type CliFlags, numberFlag, stringFlag, type CommandContext } from './flag-values.js';
 import { printAgentImport } from './print.js';
 import { installCodexMemoryHooks, setupDailySchedule, warnClaudeSettingsUnusable } from './install-steps.js';
 import { learnFromRepo, skipLearnOnSharedStore } from './shared.js';
@@ -117,7 +117,7 @@ function cmdInitScan(scanDir: string, flags: CliFlags): void {
   let totalLessons = 0;
   // Rolled up so the cross-repo summary reports the gate too: a dropped subject is never invisible.
   let totalLowInfo = 0;
-  const seedDays = parseInt(String(flags['days'] ?? '365'), 10);
+  const seedDays = numberFlag(flags, 'days') ?? 365;
   const machine = currentMachine();
   const agentImport = emptyReport();
   const learn = !flags['no-learn'];

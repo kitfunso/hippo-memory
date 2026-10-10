@@ -9,7 +9,7 @@ import { loadEmbeddingIndex, resetStoredParticles } from '../store/vector-index.
 import { loadConfig } from '../core/config.js';
 import { refineStore } from './refine-llm.js';
 import { printError } from './output.js';
-import { boolFlag, type CommandContext } from './flag-values.js';
+import { boolFlag, numberFlag, type CommandContext } from './flag-values.js';
 import { requireInit, resolveAuthRoot } from './shared.js';
 import { errorMessage } from '../util/log.js';
 import { CliExit } from './exit.js';
@@ -29,7 +29,7 @@ export async function handleRefine({ hippoRoot, tenantId, flags }: CommandContex
 
   const dryRun = boolFlag(flags, 'dry-run');
   const all = boolFlag(flags, 'all');
-  const limit = flags['limit'] !== undefined ? parseInt(String(flags['limit']), 10) : undefined;
+  const limit = numberFlag(flags, 'limit');
   const model = flags['model'] ? String(flags['model']) : undefined;
   const asJson = boolFlag(flags, 'json');
 

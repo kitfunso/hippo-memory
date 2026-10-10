@@ -20,7 +20,7 @@ import type { RankRecallResult, RankStage, RecallGraphHops, RecallGraphStream, R
 import { handoffText, printedTokens, sessionTrailText, settleTokens, snapshotText } from '../api/context-render.js';
 import { printError } from './output.js';
 import {
-  parseLimitFlag, parseBudgetFlag, type CliFlags, type CommandContext, parseAsOfFlag, engineFlags, boolFlag, flagIsTrue, isBooleanFlag,
+  parseLimitFlag, parseBudgetFlag, type CliFlags, type CommandContext, parseAsOfFlag, engineFlags, boolFlag, flagIsTrue, isBooleanFlag, numberFlag,
 } from './flag-values.js';
 import { requireInit } from './shared.js';
 import { recallEntryText, recallHeading, printActiveTaskSnapshot, printSessionEvents, printHandoff, captureConsole } from './print.js';
@@ -217,9 +217,7 @@ function parseRecallOptions(ctx: api.HippoDbContext, flags: CliFlags) {
   const explicitScope = flags['scope'] !== undefined ? String(flags['scope']).trim() : null;
   const setting = cliRecallSetting(ctx, explicitScope);
   const config = loadConfig(ctx.hippoRoot);
-  const minResults = flags['min-results'] !== undefined
-    ? parseInt(String(flags['min-results']), 10)
-    : undefined;
+  const minResults = numberFlag(flags, 'min-results');
   const graphStream = flagIsTrue(flags, 'graph-stream') ? parseGraphStreamFlags(flags) : undefined;
   const late = parseRecallLateFlags(flags);
   const goalTag = flags['goal'] !== undefined ? String(flags['goal']).trim() : '';

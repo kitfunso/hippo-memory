@@ -86,9 +86,16 @@ export function isOneOf<T extends string>(allowed: readonly T[], value: string):
   return allowed.some((a) => a === value);
 }
 
+// A junk value exits instead of becoming NaN, which would pass every `<` gate.
 export function numberFlag(flags: CliFlags, name: string): number | undefined {
   const v = flags[name];
-  return isStringFlag(v) ? Number(v) : undefined;
+  if (!isStringFlag(v)) return undefined;
+  const parsed = Number(v);
+  if (v.trim() === '' || !Number.isFinite(parsed)) {
+    printError(`Invalid --${name}: "${v}". Must be a number.`);
+    throw new CliExit(1);
+  }
+  return parsed;
 }
 
 // Any truthy value counts, so a string value is true too.
@@ -126,10 +133,10 @@ export function engineFlags(flags: CliFlags, config: HippoConfig): EngineFlags {
     usePhysics: boolFlag(flags, 'physics') || (!flags['classic'] && config.physics.enabled !== false),
     physicsConfig: config.physics,
     mmr: !flags['no-mmr'] && config.mmr.enabled,
-    mmrLambda: flags['mmr-lambda'] !== undefined ? parseFloat(String(flags['mmr-lambda'])) : config.mmr.lambda,
+    mmrLambda: numberFlag(flags, 'mmr-lambda') ?? config.mmr.lambda,
     localBump: flags['equal-sources']
       ? 1.0
-      : flags['local-bump'] !== undefined ? parseFloat(String(flags['local-bump'])) : config.search.localBump,
+      : numberFlag(flags, 'local-bump') ?? config.search.localBump,
   };
 }
 

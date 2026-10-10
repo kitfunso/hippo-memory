@@ -30,7 +30,7 @@ import { printError } from './output.js';
 import { errorMessage, log } from '../util/log.js';
 import { requireInit, runViaServerIfAvailable, learnFromRepo } from './shared.js';
 import { fmt } from './print.js';
-import { type CliFlags, type CommandContext, boolFlag, flagIsTrue, isStringFlag, nonEmptyStringFlag } from './flag-values.js';
+import { type CliFlags, type CommandContext, boolFlag, flagIsTrue, isStringFlag, nonEmptyStringFlag, numberFlag } from './flag-values.js';
 import { CONTENT_PREVIEW_CHARS, DATE_PREFIX_CHARS } from '../util/token-text.js';
 import { CliExit } from './exit.js';
 
@@ -95,7 +95,7 @@ export function handleLearn({ hippoRoot, flags }: CommandContext): void {
     throw new CliExit(1);
   }
 
-  const days = parseInt(String(flags['days'] ?? '7'), 10);
+  const days = numberFlag(flags, 'days') ?? 7;
 
   console.log(`Scanning git log for the last ${days} days...`);
 
@@ -390,7 +390,7 @@ export async function handleShare({ hippoRoot, tenantId, args, flags }: CommandC
   if (shareId === '--auto' || flags['auto']) {
     // Auto-share mode
     requireInit(hippoRoot);
-    const minScore = parseFloat(String(flags['min-score'] ?? '0.6'));
+    const minScore = numberFlag(flags, 'min-score') ?? 0.6;
     const dryRun = boolFlag(flags, 'dry-run');
     const results = autoShare(hippoRoot, { minScore, dryRun, tenantId });
     if (results.length === 0) {

@@ -12,7 +12,7 @@ import { PACKAGE_VERSION } from '../util/version.js';
 import { printError } from './output.js';
 import { requireInit } from './shared.js';
 import { fmt } from './print.js';
-import { type CliFlags, type CommandContext, boolFlag } from './flag-values.js';
+import { type CliFlags, type CommandContext, boolFlag, numberFlag } from './flag-values.js';
 import { errorMessage } from '../util/log.js';
 import { CliExit } from './exit.js';
 
@@ -30,7 +30,7 @@ async function cmdEval(
   flags: CliFlags
 ): Promise<void> {
   const asJson = boolFlag(flags, 'json');
-  const minMrr = flags['min-mrr'] !== undefined ? parseFloat(String(flags['min-mrr'])) : null;
+  const minMrr = numberFlag(flags, 'min-mrr') ?? null;
   const comparePath = flags['compare'] ? String(flags['compare']) : null;
 
   // Suite mode doesn't need an initialized store
@@ -74,16 +74,14 @@ async function runCorpusEval(
   const globalRoot = getGlobalRoot();
   const localBump = flags['equal-sources']
     ? 1.0
-    : flags['local-bump'] !== undefined
-      ? parseFloat(String(flags['local-bump']))
-      : loadConfig(hippoRoot).search.localBump;
+    : numberFlag(flags, 'local-bump') ?? loadConfig(hippoRoot).search.localBump;
 
   return runEval(cases, entries, {
     hippoRoot,
     globalRoot,
     mmr: !flags['no-mmr'],
-    mmrLambda: flags['mmr-lambda'] !== undefined ? parseFloat(String(flags['mmr-lambda'])) : undefined,
-    embeddingWeight: flags['embedding-weight'] !== undefined ? parseFloat(String(flags['embedding-weight'])) : undefined,
+    mmrLambda: numberFlag(flags, 'mmr-lambda'),
+    embeddingWeight: numberFlag(flags, 'embedding-weight'),
     localBump,
   });
 }
@@ -91,7 +89,7 @@ async function runCorpusEval(
 /** Bootstrap mode: emit a synthetic corpus built from the store's own memories. */
 function writeBootstrapCorpus(entries: MemoryEntry[], flags: CliFlags): void {
   const outPath = flags['out'] ? String(flags['out']) : null;
-  const max = flags['max-cases'] !== undefined ? parseInt(String(flags['max-cases']), 10) : 50;
+  const max = numberFlag(flags, 'max-cases') ?? 50;
   const corpus = bootstrapCorpus(entries, max);
   const payload = JSON.stringify({ cases: corpus }, null, 2);
   if (outPath) {

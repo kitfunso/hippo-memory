@@ -15,7 +15,7 @@ import type { SessionEvent, TaskSnapshot } from '../store/rows.js';
 import { printError } from './output.js';
 import { requireInit } from './shared.js';
 import { printActiveTaskSnapshot, printSessionEvents, printHandoff } from './print.js';
-import { type CliFlags, boolFlag, isStringFlag, type CommandContext } from './flag-values.js';
+import { type CliFlags, boolFlag, isStringFlag, numberFlag, type CommandContext } from './flag-values.js';
 import { CliExit } from './exit.js';
 
 const ISO_DATETIME_CHARS = 19;
@@ -200,7 +200,7 @@ export function handleSession({ hippoRoot, tenantId, args, flags }: CommandConte
   const subcommand = args[0] ?? 'show';
   const sessionId = String(flags['id'] ?? flags['session'] ?? '').trim();
   const task = String(flags['task'] ?? '').trim();
-  const limit = Math.max(1, parseInt(String(flags['limit'] ?? '8'), 10) || 8);
+  const limit = Math.max(1, numberFlag(flags, 'limit') || 8);
   const s: SessionArgs = { sessionId, task, limit };
 
   if (subcommand === 'log') return sessionLog(hippoRoot, tenantId, s, flags);
@@ -489,10 +489,12 @@ export function handleWm({ hippoRoot, args, flags }: CommandContext): void {
   throw new CliExit(1);
 }
 
+const WM_DEFAULT_IMPORTANCE = 0.5;
+
 function wmPushCmd(hippoRoot: string, flags: CliFlags): void {
   const scope = String(flags['scope'] ?? 'default').trim();
   const content = String(flags['content'] ?? '').trim();
-  const importance = parseFloat(String(flags['importance'] ?? '0.5'));
+  const importance = numberFlag(flags, 'importance') ?? WM_DEFAULT_IMPORTANCE;
   const sessionId = flags['session'] ? String(flags['session']).trim() : undefined;
   const taskId = flags['task'] ? String(flags['task']).trim() : undefined;
 
@@ -504,18 +506,18 @@ function wmPushCmd(hippoRoot: string, flags: CliFlags): void {
   const id = wmPush(hippoRoot, {
     scope,
     content,
-    importance: Number.isFinite(importance) ? importance : 0.5,
+    importance,
     sessionId,
     taskId,
   });
 
-  console.log(`Pushed working memory #${id} (scope=${scope}, importance=${Number.isFinite(importance) ? importance : 0.5})`);
+  console.log(`Pushed working memory #${id} (scope=${scope}, importance=${importance})`);
 }
 
 function wmReadCmd(hippoRoot: string, flags: CliFlags): void {
   const scope = flags['scope'] ? String(flags['scope']).trim() : undefined;
   const sessionId = flags['session'] ? String(flags['session']).trim() : undefined;
-  const limit = parseInt(String(flags['limit'] ?? '20'), 10) || 20;
+  const limit = numberFlag(flags, 'limit') || 20;
 
   const items = wmRead(hippoRoot, { scope, sessionId, limit });
 
