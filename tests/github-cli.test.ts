@@ -149,6 +149,7 @@ describe('hippo github CLI', () => {
     try {
       await cmdGitHubBackfill(
         hippoRoot,
+        'default',
         { repo: 'acme/widgets' },
         fetcher,
       );
@@ -190,6 +191,16 @@ describe('hippo github CLI', () => {
     expect(r.stdout).toMatch(/unhandled/);
     expect(r.stdout).toMatch(/default/);
     expect(r.stdout).toMatch(/bad envelope/);
+  });
+
+  it('dlq list reads the HIPPO_TENANT tenant, not default', async () => {
+    for (const tenantId of ['default', 'acme']) {
+      await parkInDlq(githubDlq, hippoRoot, { tenantId, rawPayload: '{}', error: `err-${tenantId}`, bucket: 'unhandled' });
+    }
+    const r = runCli(root, ['github', 'dlq', 'list'], { HIPPO_TENANT: 'acme' });
+    expect(r.status).toBe(0);
+    expect(r.stdout).toMatch(/err-acme/);
+    expect(r.stdout).not.toMatch(/err-default/);
   });
 
   it('dlq replay with invalid id exits 1 with not-found message', () => {
@@ -332,7 +343,7 @@ describe('hippo github CLI', () => {
     const printed = vi.spyOn(console, 'log').mockImplementation(() => {});
     vi.stubEnv('GITHUB_TOKEN', 'fake-token');
     try {
-      await cmdGitHubBackfill(hippoRoot, { repo, max }, fetcher);
+      await cmdGitHubBackfill(hippoRoot, 'default', { repo, max }, fetcher);
       return JSON.parse(String(printed.mock.calls[0][0])).ingested.issues;
     } finally {
       vi.unstubAllEnvs();

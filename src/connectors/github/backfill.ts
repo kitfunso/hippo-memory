@@ -25,7 +25,7 @@
  */
 
 import type { Context } from '../../api/index.js';
-import { readCursors, writeHwm, type HwmColumn } from '../../store/connectors/github.js';
+import { readCursors, seedCursors, writeHwm, type HwmColumn } from '../../store/connectors/github.js';
 import { ingestEvent, type IngestEvent } from './ingest.js';
 import type { GitHubFetcher, GitHubBackfillPage } from './octokit-client.js';
 import type {
@@ -46,6 +46,8 @@ export interface BackfillOpts {
   token: string;
   /** Optional cap on items per stream. Useful for tests. */
   maxPerStream?: number;
+  /** First-run `--since`; seeds all three HWMs, COALESCE keeps any HWM a stream already saved. */
+  sinceIso?: string;
   /** sleep ms — injectable so tests don't actually wait. */
   sleepMs?: (ms: number) => Promise<void>;
 }
@@ -299,6 +301,7 @@ export async function backfillRepo(
 ): Promise<BackfillResult> {
   const sleep =
     opts.sleepMs ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
+  if (opts.sinceIso) seedCursors(ctx.hippoRoot, ctx.tenantId, opts.repoFullName, opts.sinceIso);
   const cursors = readCursors(ctx.hippoRoot, ctx.tenantId, opts.repoFullName);
   const repository = syntheticRepository(opts.repoFullName);
 

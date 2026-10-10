@@ -12,8 +12,6 @@
 
 import { envGitHubToken, envGitHubWebhookSecret, envGitHubWebhookSecretPrevious } from '../util/env.js';
 import { type Context, adminActor } from '../api/index.js';
-import { seedCursors } from '../store/connectors/github.js';
-import { resolveTenantId } from '../store/tenant.js';
 import { backfillRepo } from '../connectors/github/backfill.js';
 import { realGitHubFetcher, type GitHubFetcher } from '../connectors/github/octokit-client.js';
 import { listDlq } from '../connectors/dlq.js';
@@ -30,6 +28,7 @@ import {
 import type { JsonValue } from '../util/json.js';
 import type { CommandContext } from './flag-values.js';
 import { CliExit } from './exit.js';
+import { errorMessage } from '../util/log.js';
 
 type FlagValue = string | boolean | string[];
 type Flags = Record<string, FlagValue>;
@@ -99,6 +98,7 @@ function maxPerStreamFlag(maxRaw: FlagValue): number | undefined {
  */
 export async function cmdGitHubBackfill(
   hippoRoot: string,
+  tenantId: string,
   flags: Flags,
   fetcher: GitHubFetcher = realGitHubFetcher,
 ): Promise<void> {
@@ -117,13 +117,6 @@ export async function cmdGitHubBackfill(
   const maxPerStream = maxPerStreamFlag(flags['max']);
   const sinceFlag = flags['since'];
   const sinceIso = isFlagString(sinceFlag) ? sinceFlag : undefined;
-  const tenantId = resolveTenantId({});
-
-  // Seed the github_cursors row so all 3 streams use --since on a fresh run.
-  // COALESCE preserves any existing HWM (subsequent runs ignore --since for
-  // streams that already drained at least once — same idempotency story as
-  // Slack's slack_cursors).
-  if (sinceIso) seedCursors(hippoRoot, tenantId, repo, sinceIso);
 
   const ctx: Context = {
     hippoRoot,
@@ -136,19 +129,17 @@ export async function cmdGitHubBackfill(
       fetcher,
       token,
       maxPerStream,
+      sinceIso,
     });
     console.log(JSON.stringify(result, null, 2));
   } catch (e) {
-    // SAFETY: this is a best-effort error message only; property access on
-    // any JS value is safe (undefined if absent), preserving the existing
-    // lenient formatting even when something non-Error was thrown.
-    console.error('backfill failed:', (e as Error).message);
+    console.error('backfill failed:', errorMessage(e));
     throw new CliExit(3);
   }
 }
 
-export function cmdGitHubDlqList(hippoRoot: string, _flags: Flags): void {
-  const items = listDlq(githubDlq, hippoRoot, { tenantId: resolveTenantId({}) });
+export function cmdGitHubDlqList(hippoRoot: string, tenantId: string, _flags: Flags): void {
+  const items = listDlq(githubDlq, hippoRoot, { tenantId });
   if (items.length === 0) {
     console.log('no entries');
     return;
@@ -198,6 +189,7 @@ const reingestParkedDelivery: IngestHook = async (innerCtx, args) => {
 
 export async function cmdGitHubDlqReplay(
   hippoRoot: string,
+  tenantId: string,
   args: string[],
   flags: Flags,
 ): Promise<void> {
@@ -214,7 +206,7 @@ export async function cmdGitHubDlqReplay(
   const force = flags['force'] === true;
   const ctx: Context = {
     hippoRoot,
-    tenantId: resolveTenantId({}),
+    tenantId,
     actor: adminActor('cli:github-dlq-replay'),
   };
   // Without an ingestHook replay only bumps retry_count while printing "replay ok"; the real hook re-runs ingest.
@@ -237,18 +229,18 @@ export async function cmdGitHubDlqReplay(
   );
 }
 
-export async function handleGitHub({ hippoRoot, args, flags }: CommandContext): Promise<void> {
+export async function handleGitHub({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
   const sub = args[0];
   if (sub === 'backfill') {
-    await cmdGitHubBackfill(hippoRoot, flags);
+    await cmdGitHubBackfill(hippoRoot, tenantId, flags);
     return;
   }
   if (sub === 'dlq' && args[1] === 'list') {
-    cmdGitHubDlqList(hippoRoot, flags);
+    cmdGitHubDlqList(hippoRoot, tenantId, flags);
     return;
   }
   if (sub === 'dlq' && args[1] === 'replay') {
-    await cmdGitHubDlqReplay(hippoRoot, args.slice(2), flags);
+    await cmdGitHubDlqReplay(hippoRoot, tenantId, args.slice(2), flags);
     return;
   }
   console.error('Usage: hippo github <backfill|dlq list|dlq replay <id> [--force]> [...]');
