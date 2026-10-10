@@ -71,7 +71,8 @@ function writeLessons(ctx: Context, lessons: readonly string[], opts: LearnOpts,
   return withRequestStoresSync(() => {
     // One read serves the batch: invalidation matches against `live`, which follows every write below, as a reload per lesson did.
     const live = profile.full ? loadAllEntries(hippoRoot, tenantId) : [];
-    // Schema fit needs every row; without it, only rows holding a lesson's longest word can be its copy. Learn is host-admin only, so both read what an admin can.
+    // Schema fit needs every row; without it, only rows holding a lesson's longest word can be its copy. Learn is host-admin only, so
+    // both read what an admin can.
     const existing = profile.full ? live.filter((e) => e.scope == null || canReadScope(ctx.actor, e.scope)) : undefined;
     const readable = touchableScopeSql('', personalScopeOf(ctx.actor));
     const keys = storedTextKeys(existing ?? loadTextsHoldingWords(hippoRoot, tenantId, lessons.map(longestWord), undefined, readable));

@@ -679,7 +679,8 @@ export async function handlePreCompact({ hippoRoot, flags }: CommandContext): Pr
 }
 
 export async function handlePostCompact({ hippoRoot, flags }: CommandContext): Promise<void> {
-  // PostCompact hook: saves the compaction summary and its memories, then prints one plain line, because Claude Code shows this hook's stdout as-is. Always exits 0.
+  // PostCompact hook: saves the compaction summary and its memories, then prints one plain line, because Claude Code shows this hook's
+  // stdout as-is. Always exits 0.
   const { text, timedOut } = await readHookStdin();
   const logFlag = flags['log-file'];
   const store = hookStoreRoot(hippoRoot);

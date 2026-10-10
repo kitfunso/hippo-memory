@@ -110,7 +110,8 @@ function migrateHalfLives(hippoRoot: string, dryRun: boolean, result: Consolidat
     );
   }
   if (halfLife.typed > 0) {
-    result.details.push(`  ⏳ ${dryRun ? 'would move' : 'moved'} ${halfLife.typed} memories of decisions, incidents and other objects from the ${LEGACY_TYPED_HALF_LIFE}-day to the ${halfLife.to}-day half-life`);
+    result.details.push(`  ⏳ ${dryRun ? 'would ' +
+      'move' : 'moved'} ${halfLife.typed} memories of decisions, incidents and other objects from the ${LEGACY_TYPED_HALF_LIFE}-day to the ${halfLife.to}-day half-life`);
   }
   return halfLife;
 }
@@ -139,7 +140,8 @@ async function expireDormant(run: SleepRun, budget: WriteBudget): Promise<void> 
   const cutoff = new Date(run.now.getTime() - config.dormant.retentionDays * DAY_MS).toISOString();
   result.dormantExpired = await expireDormantBefore(run.hippoRoot, cutoff, { dryRun, budget, busyWaitMs: SLEEP_DB_WAIT_MS });
   if (result.dormantExpired > 0) {
-    result.details.push(`  ⌛ ${dryRun ? 'would expire' : 'expired'} ${result.dormantExpired} dormant memor${result.dormantExpired === 1 ? 'y' : 'ies'} older than ${config.dormant.retentionDays} days`);
+    result.details.push(`  ⌛ ${dryRun ? 'would ' +
+      'expire' : 'expired'} ${result.dormantExpired} dormant memor${result.dormantExpired === 1 ? 'y' : 'ies'} older than ${config.dormant.retentionDays} days`);
   }
 }
 

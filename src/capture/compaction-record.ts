@@ -13,7 +13,10 @@ import { readTranscriptTail, truncateCodePointSafe } from '../util/transcript-ta
 
 /** Tested verbatim: Claude Code hands PreCompact stdout to the summariser as instructions. */
 export const PRE_COMPACT_INSTRUCTION =
-  "In your summary, add a last section titled 'Memories for hippo'. List, one per line starting with '- ', each lesson learned, decision made (with its reason) and correction the user gave in this session that should outlive it. Write each as a standalone sentence that names its subject. Leave out anything an earlier summary already listed under 'Memories for hippo', and anything this session already saved with `hippo remember`. Write '- none' if nothing new remains.";
+  "In your summary, add a last section titled 'Memories for hippo'. List, one per line starting with '- ', each lesson learned, decision made (with its " +
+    "reason) and correction the user gave in this session that should outlive it. Write each as a standalone sentence that names its subject. Leave out " +
+      "anything an earlier summary already listed under 'Memories for hippo', and anything this session already saved with `hippo remember`. Write '- none' " +
+        "if nothing new remains.";
 
 const SUMMARY_MAX_CHARS = 256 * 1024;
 const TRANSCRIPT_TAIL_CAPS = [1 << 20, 8 << 20, 64 << 20];
@@ -36,7 +39,8 @@ export function readCompactionText(compactSummary: string): ScrubbedSummary {
   return { summary: truncateCodePointSafe(scrub(body), SUMMARY_MAX_CHARS), items: parsed.items.map(scrub), found: parsed.found };
 }
 
-/** A caller's items scrubbed as readCompactionText scrubs a summary's, since another machine's scrub is not trusted; cut after it, as a mask can run longer than what it hides. */
+/** A caller's items scrubbed as readCompactionText scrubs a summary's, since another machine's scrub is not trusted; cut after it, as a
+ * mask can run longer than what it hides. */
 export function scrubCompactionItems(items: readonly string[]): string[] {
   return items.map((item) => truncateCodePointSafe(scrub(item), COMPACTION_ITEM_MAX_CHARS));
 }

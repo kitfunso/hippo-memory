@@ -71,10 +71,10 @@ function newKey<F extends KeyFields>(ctx: Context, fields: F): MintedKeyRow<F> {
 }
 
 /** Days a key lives when its mint names no expiry, so a key nobody remembers stops working by itself. */
-const DEFAULT_KEY_TTL_DAYS = 90;
+export const DEFAULT_KEY_TTL_DAYS = 90;
 
 // The ceiling keeps toISOString in range.
-const MAX_TTL_DAYS = 3650;
+export const MAX_TTL_DAYS = 3650;
 
 /** A 400, not a RangeError, since the caller of the mint chose these. */
 function mintExpiry({ ttlDays, noExpiry }: AuthCreateOpts): string | null {

@@ -8,6 +8,23 @@ import { DAY_MS } from '../util/time.js';
 
 const STATE_DECIMALS = 3;
 
+// Cut points renderAmbientSummary uses to turn the state vector into words.
+const SUMMARY_THRESHOLD = {
+  freshHigh: 0.5,
+  freshLow: 0.1,
+  skewHigh: 0.3,
+  skewLow: -0.3,
+  consolidatedHigh: 0.4,
+  consolidatedLow: 0.1,
+  extractionHigh: 0.5,
+  conflictShown: 0.1,
+  dagDepthShown: 2,
+  strengthLow: 0.3,
+  strengthHigh: 0.7,
+  entropyHigh: 0.8,
+  entropyLow: 0.3,
+} as const;
+
 export interface AmbientState {
   tagEntropy: number;
   avgStrength: number;
@@ -145,30 +162,31 @@ function shannonEntropy(counts: Map<string, number>, total: number): number {
 export function renderAmbientSummary(state: AmbientState): string {
   if (state.totalMemories === 0) return 'Memory state: empty store, no memories yet.';
 
+  const T = SUMMARY_THRESHOLD;
   const parts: string[] = [];
 
   parts.push(`${state.totalMemories} memories`);
 
-  if (state.recencyFreshness > 0.5) parts.push('mostly fresh (<7d)');
-  else if (state.recencyFreshness < 0.1) parts.push('mostly aged');
+  if (state.recencyFreshness > T.freshHigh) parts.push('mostly fresh (<7d)');
+  else if (state.recencyFreshness < T.freshLow) parts.push('mostly aged');
 
-  if (state.emotionalSkew > 0.3) parts.push('error-focused');
-  else if (state.emotionalSkew < -0.3) parts.push('steady operation');
+  if (state.emotionalSkew > T.skewHigh) parts.push('error-focused');
+  else if (state.emotionalSkew < T.skewLow) parts.push('steady operation');
 
-  if (state.consolidationRatio > 0.4) parts.push('well-consolidated');
-  else if (state.consolidationRatio < 0.1) parts.push('mostly episodic');
+  if (state.consolidationRatio > T.consolidatedHigh) parts.push('well-consolidated');
+  else if (state.consolidationRatio < T.consolidatedLow) parts.push('mostly episodic');
 
-  if (state.extractionCoverage > 0.5) parts.push('high extraction coverage');
+  if (state.extractionCoverage > T.extractionHigh) parts.push('high extraction coverage');
 
-  if (state.conflictIntensity > 0.1) parts.push(`${(state.conflictIntensity * 100).toFixed(0)}% conflict rate`);
+  if (state.conflictIntensity > T.conflictShown) parts.push(`${(state.conflictIntensity * 100).toFixed(0)}% conflict rate`);
 
-  if (state.dagDepth >= 2) parts.push(`DAG depth ${state.dagDepth}`);
+  if (state.dagDepth >= T.dagDepthShown) parts.push(`DAG depth ${state.dagDepth}`);
 
-  if (state.avgStrength < 0.3) parts.push('low avg strength (aging corpus)');
-  else if (state.avgStrength > 0.7) parts.push('high avg strength');
+  if (state.avgStrength < T.strengthLow) parts.push('low avg strength (aging corpus)');
+  else if (state.avgStrength > T.strengthHigh) parts.push('high avg strength');
 
-  if (state.tagEntropy > 0.8) parts.push('diverse topics');
-  else if (state.tagEntropy < 0.3) parts.push('narrow focus');
+  if (state.tagEntropy > T.entropyHigh) parts.push('diverse topics');
+  else if (state.tagEntropy < T.entropyLow) parts.push('narrow focus');
 
   return `Memory state: ${parts.join(', ')}.`;
 }

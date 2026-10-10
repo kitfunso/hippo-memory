@@ -14,7 +14,8 @@ import { onHandle, openStore } from './open.js';
 import { type ContinuityKey, continuityStamp, continuityWhere, loadActiveTaskSnapshot } from './sessions.js';
 
 /** Column list shared by every session_handoffs SELECT; cards.ts reuses it for the card handoff lookup. */
-export const HANDOFF_COLUMNS = 'id, session_id, repo_root, task_id, summary, next_action, artifacts_json, scope, created_at, constraints_json, evidence_json, outcome, target_runtime, card_id';
+export const HANDOFF_COLUMNS = 'id, session_id, repo_root, task_id, summary, next_action, artifacts_json, scope, created_at, constraints_json, ' +
+  'evidence_json, outcome, target_runtime, card_id';
 
 /** Save a session handoff record; returns the persisted handoff. */
 export function saveSessionHandoff(

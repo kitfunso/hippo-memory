@@ -65,7 +65,8 @@ export function failureHash(text: string): string {
   return blockHash(failureSignature(text));
 }
 
-/** The memory text for a failure payload, or why it is not stored; a routine skip keeps its text for the log. `scrub` runs before the cap, as a mask can be longer than what it hides. Pure. */
+/** The memory text for a failure payload, or why it is not stored; a routine skip keeps its text for the log. `scrub` runs before the
+ * cap, as a mask can be longer than what it hides. Pure. */
 export function lessonFromFailure(payload: JsonValue, scrub: (text: string) => string = (text) => text): FailureReading {
   if (!isJsonObjectLiteral(payload)) return { skip: 'skipped-invalid', text: null, detail: null };
   // SAFETY: isJsonObjectLiteral narrowed payload to a plain JSON object; the fields read are all optional.
