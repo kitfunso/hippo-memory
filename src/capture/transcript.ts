@@ -111,6 +111,9 @@ function claudeCodeTurn(entry: TranscriptRecord): SessionTurn | null {
   return chunks.length > 0 ? { role: 'assistant', text: chunks.join('\n') } : null;
 }
 
+// Codex stores its own context as user messages: the AGENTS.md text, and one tagged block each for the environment and app state.
+const CODEX_INJECTED_USER_TEXT = /^(?:# AGENTS\.md instructions\b|<([A-Za-z][\w-]*)(?:\s[^>]*)?>[\s\S]*<\/\1>$)/;
+
 // Codex rollout transcript shape: response_item -> payload.message
 function codexTurn(entry: TranscriptRecord): SessionTurn | null {
   if (entry.type !== 'response_item') return null;
@@ -125,7 +128,7 @@ function codexTurn(entry: TranscriptRecord): SessionTurn | null {
     if (!isObjectLike(block)) continue;
     const blockType = 'type' in block ? block.type : undefined;
     const blockText = 'text' in block ? block.text : undefined;
-    if (role === 'user' && blockType === 'input_text' && isStringValue(blockText) && blockText.trim()) {
+    if (role === 'user' && blockType === 'input_text' && isStringValue(blockText) && blockText.trim() && !CODEX_INJECTED_USER_TEXT.test(blockText.trim())) {
       chunks.push(blockText.trim());
     }
     if (role === 'assistant' && blockType === 'output_text' && isStringValue(blockText) && blockText.trim()) {
