@@ -112,7 +112,7 @@ describe('scrubForSharing', () => {
 });
 
 describe('scrubForSharing on hostile input', () => {
-  const SIZE = 16 * 1024;
+  const SIZE = 64 * 1024;
   const fillTo = (unit: string, size: number): string => unit.repeat(Math.ceil(size / unit.length)).slice(0, size);
   // Best of five, so a GC pause or a busy runner cannot lift one size alone.
   const bestMs = (text: string): number => {
