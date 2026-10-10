@@ -8,13 +8,14 @@
 // Usage: check-store-port.mjs [--list] [--update]. --update lowers the baseline and refuses to raise any number.
 
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { join, sep } from 'node:path';
+import { join, posix, sep } from 'node:path';
 import ts from 'typescript';
 
 const BASELINE = '.store-port-baseline.json';
 const OPENERS = new Set(['openHippoDb', 'openHippoDbReadOnly', 'openStore', 'onHandle']);
 const TWIN_SUFFIX = /(ThroughStore|OnHippoDb|UnderStore|OnStore)$/;
-const NUMBERS = ['openersOutside', 'openersInCli', 'storeBranches', 'routesWithoutStore', 'sqliteOnlyRoutes', 'routesOnLoop', 'twinFunctions', 'sqlOutside', 'txLiterals', 'tenantResolvesInCli'];
+const NUMBERS = ['openersOutside', 'openersInCli', 'storeBranches', 'routesWithoutStore', 'sqliteOnlyRoutes', 'routesOnLoop', 'twinFunctions',
+  'sqlOutside', 'txLiterals', 'tenantResolvesInCli', 'storeImportsInCli'];
 // Routes dispatched outside V1_ROUTES. Named here so the count cannot read 0 while they answer on the server thread; a name leaves when its route does.
 const OFF_TABLE_ROUTES = ['POST /mcp', 'GET /mcp/stream', 'POST /v1/connectors/slack/events', 'POST /v1/connectors/github/events', 'GET /health', 'GET /ready', 'POST add-on routes'];
 const TX_OWNER = 'src/db/busy.ts';
@@ -116,6 +117,16 @@ function countTenantResolves(sf) {
   };
   visit(sf);
   return n;
+}
+
+const reachesDataLayer = (file, spec) => spec.startsWith('.') && isDataLayer(posix.join(posix.dirname(file), spec));
+const namesOnlyTypes = (clause) => clause.isTypeOnly ||
+  (!clause.name && clause.namedBindings && ts.isNamedImports(clause.namedBindings) && clause.namedBindings.elements.every((e) => e.isTypeOnly));
+
+/** Import lines that bring a value in from src/store or src/db: what the CLI still reads past the api. */
+function countStoreImports(file, sf) {
+  return sf.statements.filter((s) => ts.isImportDeclaration(s) && ts.isStringLiteral(s.moduleSpecifier) &&
+    reachesDataLayer(file, s.moduleSpecifier.text) && !(s.importClause && namesOnlyTypes(s.importClause))).length;
 }
 
 function countTwins(sf) {
@@ -222,7 +233,7 @@ function localMethods(sf) {
 
 /** All numbers plus the per-file opener and prepare counts for src/, keys sorted, and the SqliteLocal method names. */
 function measure() {
-  const out = { openersOutside: 0, openersInCli: 0, storeBranches: 0, routesWithoutStore: 0, sqliteOnlyRoutes: 0, routesOnLoop: 0, twinFunctions: 0, sqlOutside: 0, txLiterals: 0, tenantResolvesInCli: 0 };
+  const out = Object.fromEntries(NUMBERS.map((k) => [k, 0]));
   const byFile = {};
   const sqlByFile = {};
   let sqliteLocalMethods = [];
@@ -244,6 +255,7 @@ function measure() {
     }
     if (file !== TX_OWNER) out.txLiterals += countTxLiterals(sf);
     if (file.startsWith('src/cli/')) out.tenantResolvesInCli += countTenantResolves(sf);
+    if (file.startsWith('src/cli/')) out.storeImportsInCli += countStoreImports(file, sf);
     if (file.startsWith('src/api/')) out.storeBranches += countStoreBranches(sf);
     out.twinFunctions += countTwins(sf);
     if (file !== CARRIER_OWNER && usesCarrier(sf)) carrierFilesList.push(file);

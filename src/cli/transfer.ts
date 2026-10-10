@@ -3,7 +3,7 @@
 import * as path from 'path';
 import * as fs from 'fs';
 import { isInitialized } from '../store/open.js';
-import { readEntry, loadAllEntries } from '../store/entry-reads.js';
+import { loadAllEntries } from '../store/entry-reads.js';
 import { RejectedValueError } from '../store/rejection.js';
 import { embedAll } from '../store/embeddings/index.js';
 import { loadEmbeddingIndex } from '../store/vector-index.js';
@@ -23,6 +23,7 @@ import { importMarkdown } from '../importers/markdown.js';
 import { importVault } from '../importers/vault.js';
 import { ImportOptions, type ImportResult } from '../importers/core.js';
 import * as api from '../api/index.js';
+import { getMemory } from '../api/memories.js';
 import * as client from './client.js';
 import { cliApiContext } from './api-context.js';
 import { printError } from './output.js';
@@ -404,7 +405,7 @@ export async function handlePromote({ hippoRoot, tenantId, args }: CommandContex
   cmdPromote(hippoRoot, tenantId, id);
 }
 
-export function handleShare({ hippoRoot, tenantId, args, flags }: CommandContext): void {
+export async function handleShare({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
   const shareId = args[0];
   if (shareId === '--auto' || flags['auto']) {
     // Auto-share mode
@@ -434,7 +435,7 @@ export function handleShare({ hippoRoot, tenantId, args, flags }: CommandContext
       console.log(`Shared [${result.id}] to global store.`);
       console.log(`  Source: ${result.source}`);
     } else {
-      const entry = readEntry(hippoRoot, shareId, tenantId);
+      const entry = await getMemory(cliApiContext(hippoRoot, tenantId), shareId);
       if (entry) {
         const score = transferScore(entry);
         console.log(`Transfer score too low (${fmt(score)}). This memory looks project-specific.`);

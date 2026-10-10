@@ -2,7 +2,7 @@
 
 import { envHippoSessionId } from '../util/env.js';
 import { confidenceFacets, Layer } from '../core/memory.js';
-import { TaskSnapshot, SessionEvent } from '../store/rows.js';
+import type { TaskSnapshot, SessionEvent } from '../store/rows.js';
 import { isInitialized } from '../store/open.js';
 import { loadIndex } from '../store/index-and-stats.js';
 import { loadActiveTaskSnapshot, listSessionEvents } from '../store/sessions.js';

@@ -231,6 +231,20 @@ async function simulate(adapter, tasks, opts = {}) {
   let pushFailures = 0;
   let completeFailures = 0;
 
+  // Lives outside the finally block so its strict-mode throw is not an unsafe-finally.
+  async function completeGoalReportingFailure(adapter, goalId, matched, taskId, evalStrict) {
+    try {
+      await adapter.completeGoal(goalId, matched);
+      return 0;
+    } catch (err) {
+      if (evalStrict) {
+        throw new Error(`evalStrict: completeGoal failed task ${taskId}: ${err.message}`);
+      }
+      console.error(`completeGoal failed for task ${taskId}: ${err.message}`);
+      return 1;
+    }
+  }
+
   for (const task of tasks) {
     // Clean task: no trap
     if (!task.trapCategory) {
@@ -300,17 +314,7 @@ async function simulate(adapter, tasks, opts = {}) {
     } finally {
       // v1.7.5 P1 -- complete the goal even if recall/outcome/store threw.
       if (useGoalStack && goalId) {
-        try {
-          await adapter.completeGoal(goalId, matched);
-        } catch (err) {
-          completeFailures++;
-          if (evalStrict) {
-            throw new Error(
-              `evalStrict: completeGoal failed task ${task.id}: ${err.message}`,
-            );
-          }
-          console.error(`completeGoal failed for task ${task.id}: ${err.message}`);
-        }
+        completeFailures += await completeGoalReportingFailure(adapter, goalId, matched, task.id, evalStrict);
       }
     }
   }

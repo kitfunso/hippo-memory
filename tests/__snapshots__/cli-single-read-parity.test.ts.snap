@@ -1,0 +1,1606 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`hippo forget --dry-run (built CLI, no server) > an unknown id, a row of another tenant, and a store that cannot be read > audit rows 1`] = `
+"{
+ "local": [],
+ "global": []
+}"
+`;
+
+exports[`hippo forget --dry-run (built CLI, no server) > an unknown id, a row of another tenant, and a store that cannot be read > memory rows 1`] = `
+"{
+ "local": [
+  {
+   "id": "id#1",
+   "retrieval_count": 0,
+   "strength": 1,
+   "half_life_days": 365,
+   "layer": "episodic",
+   "tags_json": "[]",
+   "emotional_valence": "neutral",
+   "schema_fit": 0.5,
+   "source": "cli",
+   "outcome_score": null,
+   "conflicts_with_json": "[]",
+   "pinned": 0,
+   "confidence": "verified",
+   "content": "the billing service retries a failed charge three times",
+   "outcome_positive": 0,
+   "outcome_negative": 0,
+   "parents_json": "[]",
+   "starred": 0,
+   "trace_outcome": null,
+   "source_session_id": null,
+   "superseded_by": null,
+   "extracted_from": null,
+   "dag_level": 0,
+   "dag_parent_id": null,
+   "kind": "distilled",
+   "scope": null,
+   "owner": null,
+   "artifact_ref": null,
+   "tenant_id": "other",
+   "descendant_count": 0,
+   "earliest_at": null,
+   "latest_at": null,
+   "summary_dirty": 0,
+   "last_rebuilt_at": null,
+   "rebuild_count": 0,
+   "dag_level_3_built_at": null,
+   "origin_project": "app"
+  }
+ ],
+ "global": []
+}"
+`;
+
+exports[`hippo forget --dry-run (built CLI, no server) > an unknown id, a row of another tenant, and a store that cannot be read > other state 1`] = `
+"{
+ "storeMade": true,
+ "meta": [
+  {
+   "key": "total_forgotten",
+   "value": "0"
+  },
+  {
+   "key": "total_remembered",
+   "value": "0"
+  }
+ ]
+}"
+`;
+
+exports[`hippo forget --dry-run (built CLI, no server) > an unknown id, a row of another tenant, and a store that cannot be read > output 1`] = `
+"$ hippo forget mem_does_not_exist --dry-run -> 1
+--- stdout
+--- stderr
+Memory not found: mem_does_not_exist
+
+$ hippo forget id#1 --dry-run -> 1
+--- stdout
+--- stderr
+Memory not found: id#1
+
+$ hippo forget id#1 --dry-run -> 1
+--- stdout
+--- stderr
+Error: file is not a database
+"
+`;
+
+exports[`hippo forget --dry-run (built CLI, no server) > previews a row, with its text cut at the preview length > audit rows 1`] = `
+"{
+ "local": [],
+ "global": []
+}"
+`;
+
+exports[`hippo forget --dry-run (built CLI, no server) > previews a row, with its text cut at the preview length > memory rows 1`] = `
+"{
+ "local": [
+  {
+   "id": "id#1",
+   "retrieval_count": 0,
+   "strength": 1,
+   "half_life_days": 365,
+   "layer": "episodic",
+   "tags_json": "[\\"billing\\"]",
+   "emotional_valence": "neutral",
+   "schema_fit": 0.5,
+   "source": "cli",
+   "outcome_score": null,
+   "conflicts_with_json": "[]",
+   "pinned": 0,
+   "confidence": "verified",
+   "content": "the billing service retries a failed charge three times",
+   "outcome_positive": 0,
+   "outcome_negative": 0,
+   "parents_json": "[]",
+   "starred": 0,
+   "trace_outcome": null,
+   "source_session_id": null,
+   "superseded_by": null,
+   "extracted_from": null,
+   "dag_level": 0,
+   "dag_parent_id": null,
+   "kind": "distilled",
+   "scope": null,
+   "owner": null,
+   "artifact_ref": null,
+   "tenant_id": "default",
+   "descendant_count": 0,
+   "earliest_at": null,
+   "latest_at": null,
+   "summary_dirty": 0,
+   "last_rebuilt_at": null,
+   "rebuild_count": 0,
+   "dag_level_3_built_at": null,
+   "origin_project": "app"
+  },
+  {
+   "id": "id#2",
+   "retrieval_count": 0,
+   "strength": 1,
+   "half_life_days": 365,
+   "layer": "episodic",
+   "tags_json": "[]",
+   "emotional_valence": "neutral",
+   "schema_fit": 0.5,
+   "source": "cli",
+   "outcome_score": null,
+   "conflicts_with_json": "[]",
+   "pinned": 0,
+   "confidence": "verified",
+   "content": "the billing service retries a failed charge three times; the invoice worker sends a receipt after each charge and logs the charge id; the invoice worker sends a receipt after each charge and logs the charge id; the invoice worker sends a receipt after each charge and logs the charge id; end",
+   "outcome_positive": 0,
+   "outcome_negative": 0,
+   "parents_json": "[]",
+   "starred": 0,
+   "trace_outcome": null,
+   "source_session_id": null,
+   "superseded_by": null,
+   "extracted_from": null,
+   "dag_level": 0,
+   "dag_parent_id": null,
+   "kind": "distilled",
+   "scope": null,
+   "owner": null,
+   "artifact_ref": null,
+   "tenant_id": "default",
+   "descendant_count": 0,
+   "earliest_at": null,
+   "latest_at": null,
+   "summary_dirty": 0,
+   "last_rebuilt_at": null,
+   "rebuild_count": 0,
+   "dag_level_3_built_at": null,
+   "origin_project": "app"
+  }
+ ],
+ "global": []
+}"
+`;
+
+exports[`hippo forget --dry-run (built CLI, no server) > previews a row, with its text cut at the preview length > other state 1`] = `
+"{
+ "storeMade": true,
+ "meta": [
+  {
+   "key": "total_forgotten",
+   "value": "0"
+  },
+  {
+   "key": "total_remembered",
+   "value": "0"
+  }
+ ]
+}"
+`;
+
+exports[`hippo forget --dry-run (built CLI, no server) > previews a row, with its text cut at the preview length > output 1`] = `
+"$ hippo forget id#1 --dry-run -> 0
+--- stdout
+Would forget id#1 (dry run, nothing changed): "the billing service retries a failed charge three times"
+--- stderr
+
+$ hippo forget id#2 --dry-run -> 0
+--- stdout
+Would forget id#2 (dry run, nothing changed): "the billing service retries a failed charge three times; the invoice worker send..."
+--- stderr
+"
+`;
+
+exports[`hippo forget --dry-run (built CLI, no server) > refuses a raw row, and --archive refuses a row that is not raw > audit rows 1`] = `
+"{
+ "local": [],
+ "global": []
+}"
+`;
+
+exports[`hippo forget --dry-run (built CLI, no server) > refuses a raw row, and --archive refuses a row that is not raw > memory rows 1`] = `
+"{
+ "local": [
+  {
+   "id": "id#1",
+   "retrieval_count": 0,
+   "strength": 1,
+   "half_life_days": 365,
+   "layer": "episodic",
+   "tags_json": "[]",
+   "emotional_valence": "neutral",
+   "schema_fit": 0.5,
+   "source": "cli",
+   "outcome_score": null,
+   "conflicts_with_json": "[]",
+   "pinned": 0,
+   "confidence": "verified",
+   "content": "raw slack message about the billing retry count",
+   "outcome_positive": 0,
+   "outcome_negative": 0,
+   "parents_json": "[]",
+   "starred": 0,
+   "trace_outcome": null,
+   "source_session_id": null,
+   "superseded_by": null,
+   "extracted_from": null,
+   "dag_level": 0,
+   "dag_parent_id": null,
+   "kind": "raw",
+   "scope": null,
+   "owner": null,
+   "artifact_ref": null,
+   "tenant_id": "default",
+   "descendant_count": 0,
+   "earliest_at": null,
+   "latest_at": null,
+   "summary_dirty": 0,
+   "last_rebuilt_at": null,
+   "rebuild_count": 0,
+   "dag_level_3_built_at": null,
+   "origin_project": "app"
+  },
+  {
+   "id": "id#2",
+   "retrieval_count": 0,
+   "strength": 1,
+   "half_life_days": 365,
+   "layer": "episodic",
+   "tags_json": "[]",
+   "emotional_valence": "neutral",
+   "schema_fit": 0.5,
+   "source": "cli",
+   "outcome_score": null,
+   "conflicts_with_json": "[]",
+   "pinned": 0,
+   "confidence": "verified",
+   "content": "the billing service retries a failed charge three times",
+   "outcome_positive": 0,
+   "outcome_negative": 0,
+   "parents_json": "[]",
+   "starred": 0,
+   "trace_outcome": null,
+   "source_session_id": null,
+   "superseded_by": null,
+   "extracted_from": null,
+   "dag_level": 0,
+   "dag_parent_id": null,
+   "kind": "distilled",
+   "scope": null,
+   "owner": null,
+   "artifact_ref": null,
+   "tenant_id": "default",
+   "descendant_count": 0,
+   "earliest_at": null,
+   "latest_at": null,
+   "summary_dirty": 0,
+   "last_rebuilt_at": null,
+   "rebuild_count": 0,
+   "dag_level_3_built_at": null,
+   "origin_project": "app"
+  }
+ ],
+ "global": []
+}"
+`;
+
+exports[`hippo forget --dry-run (built CLI, no server) > refuses a raw row, and --archive refuses a row that is not raw > other state 1`] = `
+"{
+ "storeMade": true,
+ "meta": [
+  {
+   "key": "total_forgotten",
+   "value": "0"
+  },
+  {
+   "key": "total_remembered",
+   "value": "0"
+  }
+ ]
+}"
+`;
+
+exports[`hippo forget --dry-run (built CLI, no server) > refuses a raw row, and --archive refuses a row that is not raw > output 1`] = `
+"$ hippo forget id#1 --dry-run -> 1
+--- stdout
+--- stderr
+Cannot forget id#1: it is a raw, append-only memory. Archive it instead: hippo forget id#1 --archive --reason "<why>"
+
+$ hippo forget id#1 --dry-run --archive --reason asked to remove it -> 0
+--- stdout
+Would archive id#1 (dry run, nothing changed): "raw slack message about the billing retry count"
+--- stderr
+
+$ hippo forget id#2 --dry-run --archive --reason asked to remove it -> 1
+--- stdout
+--- stderr
+Could not archive id#2: memory id#2 is not raw (kind=distilled)
+"
+`;
+
+exports[`hippo inspect (built CLI, no server) > an unknown id, a row of another tenant, no id, and a store that cannot be read > audit rows 1`] = `
+"{
+ "local": [],
+ "global": []
+}"
+`;
+
+exports[`hippo inspect (built CLI, no server) > an unknown id, a row of another tenant, no id, and a store that cannot be read > memory rows 1`] = `
+"{
+ "local": [
+  {
+   "id": "mem_inspect_other",
+   "retrieval_count": 0,
+   "strength": 1,
+   "half_life_days": 365,
+   "layer": "episodic",
+   "tags_json": "[]",
+   "emotional_valence": "neutral",
+   "schema_fit": 0.5,
+   "source": "cli",
+   "outcome_score": null,
+   "conflicts_with_json": "[]",
+   "pinned": 0,
+   "confidence": "verified",
+   "content": "the billing service retries a failed charge three times",
+   "outcome_positive": 0,
+   "outcome_negative": 0,
+   "parents_json": "[]",
+   "starred": 0,
+   "trace_outcome": null,
+   "source_session_id": null,
+   "superseded_by": null,
+   "extracted_from": null,
+   "dag_level": 0,
+   "dag_parent_id": null,
+   "kind": "distilled",
+   "scope": null,
+   "owner": null,
+   "artifact_ref": null,
+   "tenant_id": "other",
+   "descendant_count": 0,
+   "earliest_at": null,
+   "latest_at": null,
+   "summary_dirty": 0,
+   "last_rebuilt_at": null,
+   "rebuild_count": 0,
+   "dag_level_3_built_at": null,
+   "origin_project": "app"
+  }
+ ],
+ "global": []
+}"
+`;
+
+exports[`hippo inspect (built CLI, no server) > an unknown id, a row of another tenant, no id, and a store that cannot be read > other state 1`] = `
+"{
+ "storeMade": true,
+ "meta": [
+  {
+   "key": "total_forgotten",
+   "value": "0"
+  },
+  {
+   "key": "total_remembered",
+   "value": "0"
+  }
+ ]
+}"
+`;
+
+exports[`hippo inspect (built CLI, no server) > an unknown id, a row of another tenant, no id, and a store that cannot be read > output 1`] = `
+"$ hippo inspect mem_does_not_exist -> 1
+--- stdout
+--- stderr
+Memory not found: mem_does_not_exist
+
+$ hippo inspect mem_inspect_other -> 1
+--- stdout
+--- stderr
+Memory not found: mem_inspect_other
+
+$ hippo inspect -> 1
+--- stdout
+--- stderr
+Please provide a memory ID.
+
+$ hippo inspect mem_inspect_other -> 1
+--- stdout
+--- stderr
+Error: file is not a database
+"
+`;
+
+exports[`hippo inspect (built CLI, no server) > prints a plain row, and a row with outcomes, tags and a conflict > audit rows 1`] = `
+"{
+ "local": [],
+ "global": []
+}"
+`;
+
+exports[`hippo inspect (built CLI, no server) > prints a plain row, and a row with outcomes, tags and a conflict > memory rows 1`] = `
+"{
+ "local": [
+  {
+   "id": "mem_inspect_plain",
+   "retrieval_count": 0,
+   "strength": 1,
+   "half_life_days": 365,
+   "layer": "episodic",
+   "tags_json": "[]",
+   "emotional_valence": "neutral",
+   "schema_fit": 0.5,
+   "source": "cli",
+   "outcome_score": null,
+   "conflicts_with_json": "[]",
+   "pinned": 0,
+   "confidence": "verified",
+   "content": "the billing service retries a failed charge three times",
+   "outcome_positive": 0,
+   "outcome_negative": 0,
+   "parents_json": "[]",
+   "starred": 0,
+   "trace_outcome": null,
+   "source_session_id": null,
+   "superseded_by": null,
+   "extracted_from": null,
+   "dag_level": 0,
+   "dag_parent_id": null,
+   "kind": "distilled",
+   "scope": null,
+   "owner": null,
+   "artifact_ref": null,
+   "tenant_id": "default",
+   "descendant_count": 0,
+   "earliest_at": null,
+   "latest_at": null,
+   "summary_dirty": 0,
+   "last_rebuilt_at": null,
+   "rebuild_count": 0,
+   "dag_level_3_built_at": null,
+   "origin_project": "app"
+  },
+  {
+   "id": "mem_inspect_full",
+   "retrieval_count": 4,
+   "strength": 1,
+   "half_life_days": 730,
+   "layer": "episodic",
+   "tags_json": "[\\"billing\\",\\"error\\"]",
+   "emotional_valence": "negative",
+   "schema_fit": 0.5,
+   "source": "cli",
+   "outcome_score": null,
+   "conflicts_with_json": "[\\"mem_inspect_plain\\"]",
+   "pinned": 1,
+   "confidence": "verified",
+   "content": "the billing service retries a failed charge three times; the invoice worker sends a receipt after each charge and logs the charge id; the invoice worker sends a receipt after each charge and logs the charge id; the invoice worker sends a receipt after each charge and logs the charge id; end",
+   "outcome_positive": 2,
+   "outcome_negative": 1,
+   "parents_json": "[]",
+   "starred": 0,
+   "trace_outcome": null,
+   "source_session_id": null,
+   "superseded_by": null,
+   "extracted_from": null,
+   "dag_level": 0,
+   "dag_parent_id": null,
+   "kind": "distilled",
+   "scope": null,
+   "owner": null,
+   "artifact_ref": null,
+   "tenant_id": "default",
+   "descendant_count": 0,
+   "earliest_at": null,
+   "latest_at": null,
+   "summary_dirty": 0,
+   "last_rebuilt_at": null,
+   "rebuild_count": 0,
+   "dag_level_3_built_at": null,
+   "origin_project": "app"
+  }
+ ],
+ "global": []
+}"
+`;
+
+exports[`hippo inspect (built CLI, no server) > prints a plain row, and a row with outcomes, tags and a conflict > other state 1`] = `
+"{
+ "storeMade": true,
+ "meta": [
+  {
+   "key": "total_forgotten",
+   "value": "0"
+  },
+  {
+   "key": "total_remembered",
+   "value": "0"
+  }
+ ]
+}"
+`;
+
+exports[`hippo inspect (built CLI, no server) > prints a plain row, and a row with outcomes, tags and a conflict > output 1`] = `
+"$ hippo inspect mem_inspect_plain -> 0
+--- stdout
+Memory: mem_inspect_plain
+---------------------------
+Layer:            episodic
+Confidence:       verified
+Created:          <ts> (12.0d ago)
+Last retrieved:   <ts> (12.0d ago)
+Retrieval count:  0
+Strength (live):  0.98 (stored: 1.00)
+Half-life:        365d
+Emotional:        neutral
+Schema fit:       0.5
+Pinned:           false
+Tags:             none
+Outcomes:         none
+
+Content:
+----------------------------------------
+the billing service retries a failed charge three times
+--- stderr
+
+$ hippo inspect mem_inspect_full -> 0
+--- stdout
+Memory: mem_inspect_full
+---------------------------
+Layer:            episodic
+Confidence:       verified
+Created:          <ts> (12.0d ago)
+Last retrieved:   <ts> (12.0d ago)
+Retrieval count:  4
+Strength (live):  1.00 (stored: 1.00)
+Half-life:        730d
+Emotional:        negative
+Schema fit:       0.5
+Pinned:           true
+Tags:             billing, error
+Outcomes:         +2 / -1 (reward factor: 1.13)
+Conflicts with:   mem_inspect_plain
+
+Content:
+----------------------------------------
+the billing service retries a failed charge three times; the invoice worker sends a receipt after each charge and logs the charge id; the invoice worker sends a receipt after each charge and logs the charge id; the invoice worker sends a receipt after each charge and logs the charge id; end
+--- stderr
+"
+`;
+
+exports[`hippo resolve with no --keep (built CLI, no server) > an unknown conflict, a conflict of another tenant, and a store that cannot be read > audit rows 1`] = `
+"{
+ "local": [],
+ "global": []
+}"
+`;
+
+exports[`hippo resolve with no --keep (built CLI, no server) > an unknown conflict, a conflict of another tenant, and a store that cannot be read > memory rows 1`] = `
+"{
+ "local": [
+  {
+   "id": "mem_resolve_a",
+   "retrieval_count": 0,
+   "strength": 1,
+   "half_life_days": 365,
+   "layer": "episodic",
+   "tags_json": "[]",
+   "emotional_valence": "neutral",
+   "schema_fit": 0.5,
+   "source": "cli",
+   "outcome_score": null,
+   "conflicts_with_json": "[\\"mem_resolve_b\\"]",
+   "pinned": 0,
+   "confidence": "verified",
+   "content": "the billing service retries a failed charge three times",
+   "outcome_positive": 0,
+   "outcome_negative": 0,
+   "parents_json": "[]",
+   "starred": 0,
+   "trace_outcome": null,
+   "source_session_id": null,
+   "superseded_by": null,
+   "extracted_from": null,
+   "dag_level": 0,
+   "dag_parent_id": null,
+   "kind": "distilled",
+   "scope": null,
+   "owner": null,
+   "artifact_ref": null,
+   "tenant_id": "other",
+   "descendant_count": 0,
+   "earliest_at": null,
+   "latest_at": null,
+   "summary_dirty": 0,
+   "last_rebuilt_at": null,
+   "rebuild_count": 0,
+   "dag_level_3_built_at": null,
+   "origin_project": "app"
+  },
+  {
+   "id": "mem_resolve_b",
+   "retrieval_count": 0,
+   "strength": 1,
+   "half_life_days": 365,
+   "layer": "episodic",
+   "tags_json": "[]",
+   "emotional_valence": "neutral",
+   "schema_fit": 0.5,
+   "source": "cli",
+   "outcome_score": null,
+   "conflicts_with_json": "[\\"mem_resolve_a\\"]",
+   "pinned": 0,
+   "confidence": "verified",
+   "content": "the billing service retries a failed charge three times; the invoice worker sends a receipt after each charge and logs the charge id; the invoice worker sends a receipt after each charge and logs the charge id; the invoice worker sends a receipt after each charge and logs the charge id; end",
+   "outcome_positive": 0,
+   "outcome_negative": 0,
+   "parents_json": "[]",
+   "starred": 0,
+   "trace_outcome": null,
+   "source_session_id": null,
+   "superseded_by": null,
+   "extracted_from": null,
+   "dag_level": 0,
+   "dag_parent_id": null,
+   "kind": "distilled",
+   "scope": null,
+   "owner": null,
+   "artifact_ref": null,
+   "tenant_id": "other",
+   "descendant_count": 0,
+   "earliest_at": null,
+   "latest_at": null,
+   "summary_dirty": 0,
+   "last_rebuilt_at": null,
+   "rebuild_count": 0,
+   "dag_level_3_built_at": null,
+   "origin_project": "app"
+  }
+ ],
+ "global": []
+}"
+`;
+
+exports[`hippo resolve with no --keep (built CLI, no server) > an unknown conflict, a conflict of another tenant, and a store that cannot be read > other state 1`] = `
+"{
+ "storeMade": true,
+ "meta": [
+  {
+   "key": "total_forgotten",
+   "value": "0"
+  },
+  {
+   "key": "total_remembered",
+   "value": "0"
+  }
+ ]
+}"
+`;
+
+exports[`hippo resolve with no --keep (built CLI, no server) > an unknown conflict, a conflict of another tenant, and a store that cannot be read > output 1`] = `
+"$ hippo resolve 7 -> 1
+--- stdout
+--- stderr
+Conflict 7 not found or already resolved.
+
+$ hippo resolve 1 -> 1
+--- stdout
+--- stderr
+Conflict 1 not found or already resolved.
+
+$ hippo resolve 1 -> 1
+--- stdout
+--- stderr
+Error: file is not a database
+"
+`;
+
+exports[`hippo resolve with no --keep (built CLI, no server) > shows both sides of an open conflict, each cut at the preview length > audit rows 1`] = `
+"{
+ "local": [],
+ "global": []
+}"
+`;
+
+exports[`hippo resolve with no --keep (built CLI, no server) > shows both sides of an open conflict, each cut at the preview length > memory rows 1`] = `
+"{
+ "local": [
+  {
+   "id": "mem_resolve_a",
+   "retrieval_count": 0,
+   "strength": 1,
+   "half_life_days": 365,
+   "layer": "episodic",
+   "tags_json": "[]",
+   "emotional_valence": "neutral",
+   "schema_fit": 0.5,
+   "source": "cli",
+   "outcome_score": null,
+   "conflicts_with_json": "[\\"mem_resolve_b\\"]",
+   "pinned": 0,
+   "confidence": "verified",
+   "content": "the billing service retries a failed charge three times",
+   "outcome_positive": 0,
+   "outcome_negative": 0,
+   "parents_json": "[]",
+   "starred": 0,
+   "trace_outcome": null,
+   "source_session_id": null,
+   "superseded_by": null,
+   "extracted_from": null,
+   "dag_level": 0,
+   "dag_parent_id": null,
+   "kind": "distilled",
+   "scope": null,
+   "owner": null,
+   "artifact_ref": null,
+   "tenant_id": "default",
+   "descendant_count": 0,
+   "earliest_at": null,
+   "latest_at": null,
+   "summary_dirty": 0,
+   "last_rebuilt_at": null,
+   "rebuild_count": 0,
+   "dag_level_3_built_at": null,
+   "origin_project": "app"
+  },
+  {
+   "id": "mem_resolve_b",
+   "retrieval_count": 0,
+   "strength": 1,
+   "half_life_days": 365,
+   "layer": "episodic",
+   "tags_json": "[]",
+   "emotional_valence": "neutral",
+   "schema_fit": 0.5,
+   "source": "cli",
+   "outcome_score": null,
+   "conflicts_with_json": "[\\"mem_resolve_a\\"]",
+   "pinned": 0,
+   "confidence": "verified",
+   "content": "the billing service retries a failed charge three times; the invoice worker sends a receipt after each charge and logs the charge id; the invoice worker sends a receipt after each charge and logs the charge id; the invoice worker sends a receipt after each charge and logs the charge id; end",
+   "outcome_positive": 0,
+   "outcome_negative": 0,
+   "parents_json": "[]",
+   "starred": 0,
+   "trace_outcome": null,
+   "source_session_id": null,
+   "superseded_by": null,
+   "extracted_from": null,
+   "dag_level": 0,
+   "dag_parent_id": null,
+   "kind": "distilled",
+   "scope": null,
+   "owner": null,
+   "artifact_ref": null,
+   "tenant_id": "default",
+   "descendant_count": 0,
+   "earliest_at": null,
+   "latest_at": null,
+   "summary_dirty": 0,
+   "last_rebuilt_at": null,
+   "rebuild_count": 0,
+   "dag_level_3_built_at": null,
+   "origin_project": "app"
+  }
+ ],
+ "global": []
+}"
+`;
+
+exports[`hippo resolve with no --keep (built CLI, no server) > shows both sides of an open conflict, each cut at the preview length > other state 1`] = `
+"{
+ "storeMade": true,
+ "meta": [
+  {
+   "key": "total_forgotten",
+   "value": "0"
+  },
+  {
+   "key": "total_remembered",
+   "value": "0"
+  }
+ ]
+}"
+`;
+
+exports[`hippo resolve with no --keep (built CLI, no server) > shows both sides of an open conflict, each cut at the preview length > output 1`] = `
+"$ hippo resolve 1 -> 0
+--- stdout
+Conflict 1:
+  mem_resolve_a <-> mem_resolve_b
+  Reason: retry counts differ
+
+  [A] mem_resolve_a:
+      the billing service retries a failed charge three times
+  [B] mem_resolve_b:
+      the billing service retries a failed charge three times; the invoice worker sends a receipt after each charge and logs t...
+
+Resolve with: hippo resolve 1 --keep <memory_id> [--forget] [--reject-loser [--reason "<why>"]]
+--- stderr
+
+$ hippo resolve conflict_1 -> 0
+--- stdout
+Conflict 1:
+  mem_resolve_a <-> mem_resolve_b
+  Reason: retry counts differ
+
+  [A] mem_resolve_a:
+      the billing service retries a failed charge three times
+  [B] mem_resolve_b:
+      the billing service retries a failed charge three times; the invoice worker sends a receipt after each charge and logs t...
+
+Resolve with: hippo resolve 1 --keep <memory_id> [--forget] [--reject-loser [--reason "<why>"]]
+--- stderr
+"
+`;
+
+exports[`hippo share (built CLI, no server) > a row whose transfer score is too low is not shared > audit rows 1`] = `
+"{
+ "local": [],
+ "global": []
+}"
+`;
+
+exports[`hippo share (built CLI, no server) > a row whose transfer score is too low is not shared > memory rows 1`] = `
+"{
+ "local": [
+  {
+   "id": "id#1",
+   "retrieval_count": 0,
+   "strength": 1,
+   "half_life_days": 365,
+   "layer": "episodic",
+   "tags_json": "[\\"deploy\\",\\"cron\\",\\"config\\"]",
+   "emotional_valence": "neutral",
+   "schema_fit": 0.5,
+   "source": "cli",
+   "outcome_score": null,
+   "conflicts_with_json": "[]",
+   "pinned": 0,
+   "confidence": "verified",
+   "content": "the deploy cron reads its endpoint from config",
+   "outcome_positive": 0,
+   "outcome_negative": 0,
+   "parents_json": "[]",
+   "starred": 0,
+   "trace_outcome": null,
+   "source_session_id": null,
+   "superseded_by": null,
+   "extracted_from": null,
+   "dag_level": 0,
+   "dag_parent_id": null,
+   "kind": "distilled",
+   "scope": null,
+   "owner": null,
+   "artifact_ref": null,
+   "tenant_id": "default",
+   "descendant_count": 0,
+   "earliest_at": null,
+   "latest_at": null,
+   "summary_dirty": 0,
+   "last_rebuilt_at": null,
+   "rebuild_count": 0,
+   "dag_level_3_built_at": null,
+   "origin_project": "app"
+  }
+ ],
+ "global": []
+}"
+`;
+
+exports[`hippo share (built CLI, no server) > a row whose transfer score is too low is not shared > other state 1`] = `
+"{
+ "storeMade": true,
+ "meta": [
+  {
+   "key": "total_forgotten",
+   "value": "0"
+  },
+  {
+   "key": "total_remembered",
+   "value": "0"
+  }
+ ]
+}"
+`;
+
+exports[`hippo share (built CLI, no server) > a row whose transfer score is too low is not shared > output 1`] = `
+"$ hippo share id#1 -> 0
+--- stdout
+Transfer score too low (0.05). This memory looks project-specific.
+Use --force to share anyway.
+--- stderr
+"
+`;
+
+exports[`hippo share (built CLI, no server) > an unknown id, a row of another tenant, no id, and a store that cannot be read > audit rows 1`] = `
+"{
+ "local": [],
+ "global": []
+}"
+`;
+
+exports[`hippo share (built CLI, no server) > an unknown id, a row of another tenant, no id, and a store that cannot be read > memory rows 1`] = `
+"{
+ "local": [
+  {
+   "id": "id#1",
+   "retrieval_count": 0,
+   "strength": 1,
+   "half_life_days": 365,
+   "layer": "episodic",
+   "tags_json": "[\\"deploy\\",\\"cron\\",\\"config\\"]",
+   "emotional_valence": "neutral",
+   "schema_fit": 0.5,
+   "source": "cli",
+   "outcome_score": null,
+   "conflicts_with_json": "[]",
+   "pinned": 0,
+   "confidence": "verified",
+   "content": "the deploy cron reads its endpoint from config",
+   "outcome_positive": 0,
+   "outcome_negative": 0,
+   "parents_json": "[]",
+   "starred": 0,
+   "trace_outcome": null,
+   "source_session_id": null,
+   "superseded_by": null,
+   "extracted_from": null,
+   "dag_level": 0,
+   "dag_parent_id": null,
+   "kind": "distilled",
+   "scope": null,
+   "owner": null,
+   "artifact_ref": null,
+   "tenant_id": "other",
+   "descendant_count": 0,
+   "earliest_at": null,
+   "latest_at": null,
+   "summary_dirty": 0,
+   "last_rebuilt_at": null,
+   "rebuild_count": 0,
+   "dag_level_3_built_at": null,
+   "origin_project": "app"
+  }
+ ],
+ "global": []
+}"
+`;
+
+exports[`hippo share (built CLI, no server) > an unknown id, a row of another tenant, no id, and a store that cannot be read > other state 1`] = `
+"{
+ "storeMade": true,
+ "meta": [
+  {
+   "key": "total_forgotten",
+   "value": "0"
+  },
+  {
+   "key": "total_remembered",
+   "value": "0"
+  }
+ ]
+}"
+`;
+
+exports[`hippo share (built CLI, no server) > an unknown id, a row of another tenant, no id, and a store that cannot be read > output 1`] = `
+"$ hippo share mem_does_not_exist -> 1
+--- stdout
+--- stderr
+Error: Memory not found: mem_does_not_exist
+
+$ hippo share id#1 -> 1
+--- stdout
+--- stderr
+Error: Memory not found: id#1
+
+$ hippo share -> 1
+--- stdout
+--- stderr
+Usage: hippo share <memory_id> [--force] or hippo share --auto [--dry-run]
+
+$ hippo share id#1 -> 1
+--- stdout
+--- stderr
+Error: file is not a database
+"
+`;
+
+exports[`hippo trace <id> (built CLI, no server) > a local row with a local parent, a global parent and a missing one, as text and as json > audit rows 1`] = `
+"{
+ "local": [],
+ "global": [
+  {
+   "tenant_id": "default",
+   "actor": "cli",
+   "op": "remember",
+   "target_id": "mem_trace_gparent",
+   "metadata_json": "{\\"kind\\":\\"distilled\\",\\"scope\\":null}"
+  }
+ ]
+}"
+`;
+
+exports[`hippo trace <id> (built CLI, no server) > a local row with a local parent, a global parent and a missing one, as text and as json > memory rows 1`] = `
+"{
+ "local": [
+  {
+   "id": "mem_trace_parent",
+   "retrieval_count": 0,
+   "strength": 1,
+   "half_life_days": 365,
+   "layer": "episodic",
+   "tags_json": "[]",
+   "emotional_valence": "neutral",
+   "schema_fit": 0.5,
+   "source": "cli",
+   "outcome_score": null,
+   "conflicts_with_json": "[]",
+   "pinned": 0,
+   "confidence": "verified",
+   "content": "the billing service retries a failed charge three times; the invoice worker sends a receipt after each charge and logs the charge id; the invoice worker sends a receipt after each charge and logs the charge id; the invoice worker sends a receipt after each charge and logs the charge id; end",
+   "outcome_positive": 0,
+   "outcome_negative": 0,
+   "parents_json": "[]",
+   "starred": 0,
+   "trace_outcome": null,
+   "source_session_id": null,
+   "superseded_by": null,
+   "extracted_from": null,
+   "dag_level": 0,
+   "dag_parent_id": null,
+   "kind": "distilled",
+   "scope": null,
+   "owner": null,
+   "artifact_ref": null,
+   "tenant_id": "default",
+   "descendant_count": 0,
+   "earliest_at": null,
+   "latest_at": null,
+   "summary_dirty": 0,
+   "last_rebuilt_at": null,
+   "rebuild_count": 0,
+   "dag_level_3_built_at": null,
+   "origin_project": "app"
+  },
+  {
+   "id": "mem_trace_child",
+   "retrieval_count": 0,
+   "strength": 1,
+   "half_life_days": 365,
+   "layer": "episodic",
+   "tags_json": "[\\"billing\\"]",
+   "emotional_valence": "neutral",
+   "schema_fit": 0.5,
+   "source": "cli",
+   "outcome_score": null,
+   "conflicts_with_json": "[]",
+   "pinned": 0,
+   "confidence": "verified",
+   "content": "the billing service retries a failed charge three times",
+   "outcome_positive": 0,
+   "outcome_negative": 0,
+   "parents_json": "[\\"mem_trace_parent\\",\\"mem_trace_gparent\\",\\"mem_does_not_exist\\"]",
+   "starred": 0,
+   "trace_outcome": null,
+   "source_session_id": null,
+   "superseded_by": null,
+   "extracted_from": null,
+   "dag_level": 0,
+   "dag_parent_id": null,
+   "kind": "distilled",
+   "scope": null,
+   "owner": null,
+   "artifact_ref": null,
+   "tenant_id": "default",
+   "descendant_count": 0,
+   "earliest_at": null,
+   "latest_at": null,
+   "summary_dirty": 0,
+   "last_rebuilt_at": null,
+   "rebuild_count": 0,
+   "dag_level_3_built_at": null,
+   "origin_project": "app"
+  }
+ ],
+ "global": [
+  {
+   "id": "mem_trace_gparent",
+   "retrieval_count": 0,
+   "strength": 1,
+   "half_life_days": 365,
+   "layer": "episodic",
+   "tags_json": "[]",
+   "emotional_valence": "neutral",
+   "schema_fit": 0.5,
+   "source": "cli",
+   "outcome_score": null,
+   "conflicts_with_json": "[]",
+   "pinned": 0,
+   "confidence": "verified",
+   "content": "a parent that only the global store holds",
+   "outcome_positive": 0,
+   "outcome_negative": 0,
+   "parents_json": "[]",
+   "starred": 0,
+   "trace_outcome": null,
+   "source_session_id": null,
+   "superseded_by": null,
+   "extracted_from": null,
+   "dag_level": 0,
+   "dag_parent_id": null,
+   "kind": "distilled",
+   "scope": null,
+   "owner": null,
+   "artifact_ref": null,
+   "tenant_id": "default",
+   "descendant_count": 0,
+   "earliest_at": null,
+   "latest_at": null,
+   "summary_dirty": 0,
+   "last_rebuilt_at": null,
+   "rebuild_count": 0,
+   "dag_level_3_built_at": null,
+   "origin_project": ""
+  }
+ ]
+}"
+`;
+
+exports[`hippo trace <id> (built CLI, no server) > a local row with a local parent, a global parent and a missing one, as text and as json > other state 1`] = `
+"{
+ "storeMade": true,
+ "meta": [
+  {
+   "key": "total_forgotten",
+   "value": "0"
+  },
+  {
+   "key": "total_remembered",
+   "value": "0"
+  }
+ ]
+}"
+`;
+
+exports[`hippo trace <id> (built CLI, no server) > a local row with a local parent, a global parent and a missing one, as text and as json > output 1`] = `
+"$ hippo trace mem_trace_child -> 0
+--- stdout
+Memory: mem_trace_child  [local]
+==================================================
+Content:   the billing service retries a failed charge three times
+Layer:     episodic   Confidence: verified       Pinned: no
+Tags:      billing
+Created:   <ts>  (12.0 days ago)
+
+Strength trajectory:
+  now:        0.977
+  in 30 days: 0.923
+  in 90 days: 0.824
+  half-life:  365.0d (stored) x 1.00 reward = 365.0d effective
+
+Retrieval:
+  count:      0
+  last:       <ts>  (12.0 days ago)
+
+Outcomes:   +0 / -0
+
+Parents (consolidation lineage):
+  - mem_trace_parent: the billing service retries a failed charge three times; the invoice w
+  - mem_trace_gparent: a parent that only the global store holds
+  - mem_does_not_exist: (not found)
+--- stderr
+
+$ hippo trace mem_trace_child --json -> 0
+--- stdout
+{
+  "id": "mem_trace_child",
+  "source": "local",
+  "layer": "episodic",
+  "confidence": "verified",
+  "aged_out": false,
+  "pinned": false,
+  "starred": false,
+  "tags": [
+    "billing"
+  ],
+  "content": "the billing service retries a failed charge three times",
+  "created": "<ts>",
+  "age_days": 12,
+  "last_retrieved": "<ts>",
+  "days_since_last_retrieval": 12,
+  "retrieval_count": 0,
+  "strength_now": 0.9774692939481615,
+  "half_life_days": 365,
+  "reward_factor": 1,
+  "effective_half_life_days": 365,
+  "projected_strength_30d": 0.9233384734244436,
+  "projected_strength_90d": 0.8239038820431119,
+  "outcome_positive": 0,
+  "outcome_negative": 0,
+  "parents": [
+    {
+      "id": "mem_trace_parent",
+      "content": "the billing service retries a failed charge three times; the invoice w"
+    },
+    {
+      "id": "mem_trace_gparent",
+      "content": "a parent that only the global store holds"
+    },
+    {
+      "id": "mem_does_not_exist",
+      "content": "(not found)"
+    }
+  ],
+  "open_conflicts": []
+}
+--- stderr
+
+$ hippo trace mem_trace_parent -> 0
+--- stdout
+Memory: mem_trace_parent  [local]
+==================================================
+Content:   the billing service retries a failed charge three times; the invoice worker sends a receipt after each charge and logs the charge id; the invoice worker sends a...
+Layer:     episodic   Confidence: verified       Pinned: no
+Tags:      (none)
+Created:   <ts>  (12.0 days ago)
+
+Strength trajectory:
+  now:        0.977
+  in 30 days: 0.923
+  in 90 days: 0.824
+  half-life:  365.0d (stored) x 1.00 reward = 365.0d effective
+
+Retrieval:
+  count:      0
+  last:       <ts>  (12.0 days ago)
+
+Outcomes:   +0 / -0
+--- stderr
+"
+`;
+
+exports[`hippo trace <id> (built CLI, no server) > a row only the global store holds, and a parent of another tenant reads as not found > audit rows 1`] = `
+"{
+ "local": [],
+ "global": [
+  {
+   "tenant_id": "default",
+   "actor": "cli",
+   "op": "remember",
+   "target_id": "mem_trace_global",
+   "metadata_json": "{\\"kind\\":\\"distilled\\",\\"scope\\":null}"
+  }
+ ]
+}"
+`;
+
+exports[`hippo trace <id> (built CLI, no server) > a row only the global store holds, and a parent of another tenant reads as not found > memory rows 1`] = `
+"{
+ "local": [
+  {
+   "id": "mem_trace_hidden",
+   "retrieval_count": 0,
+   "strength": 1,
+   "half_life_days": 365,
+   "layer": "episodic",
+   "tags_json": "[]",
+   "emotional_valence": "neutral",
+   "schema_fit": 0.5,
+   "source": "cli",
+   "outcome_score": null,
+   "conflicts_with_json": "[]",
+   "pinned": 0,
+   "confidence": "verified",
+   "content": "the billing service retries a failed charge three times; the invoice worker sends a receipt after each charge and logs the charge id; the invoice worker sends a receipt after each charge and logs the charge id; the invoice worker sends a receipt after each charge and logs the charge id; end",
+   "outcome_positive": 0,
+   "outcome_negative": 0,
+   "parents_json": "[]",
+   "starred": 0,
+   "trace_outcome": null,
+   "source_session_id": null,
+   "superseded_by": null,
+   "extracted_from": null,
+   "dag_level": 0,
+   "dag_parent_id": null,
+   "kind": "distilled",
+   "scope": null,
+   "owner": null,
+   "artifact_ref": null,
+   "tenant_id": "other",
+   "descendant_count": 0,
+   "earliest_at": null,
+   "latest_at": null,
+   "summary_dirty": 0,
+   "last_rebuilt_at": null,
+   "rebuild_count": 0,
+   "dag_level_3_built_at": null,
+   "origin_project": "app"
+  }
+ ],
+ "global": [
+  {
+   "id": "mem_trace_global",
+   "retrieval_count": 0,
+   "strength": 1,
+   "half_life_days": 365,
+   "layer": "episodic",
+   "tags_json": "[]",
+   "emotional_valence": "neutral",
+   "schema_fit": 0.5,
+   "source": "cli",
+   "outcome_score": null,
+   "conflicts_with_json": "[]",
+   "pinned": 0,
+   "confidence": "verified",
+   "content": "the billing service retries a failed charge three times",
+   "outcome_positive": 0,
+   "outcome_negative": 0,
+   "parents_json": "[\\"mem_trace_hidden\\"]",
+   "starred": 0,
+   "trace_outcome": null,
+   "source_session_id": null,
+   "superseded_by": null,
+   "extracted_from": null,
+   "dag_level": 0,
+   "dag_parent_id": null,
+   "kind": "distilled",
+   "scope": null,
+   "owner": null,
+   "artifact_ref": null,
+   "tenant_id": "default",
+   "descendant_count": 0,
+   "earliest_at": null,
+   "latest_at": null,
+   "summary_dirty": 0,
+   "last_rebuilt_at": null,
+   "rebuild_count": 0,
+   "dag_level_3_built_at": null,
+   "origin_project": ""
+  }
+ ]
+}"
+`;
+
+exports[`hippo trace <id> (built CLI, no server) > a row only the global store holds, and a parent of another tenant reads as not found > other state 1`] = `
+"{
+ "storeMade": true,
+ "meta": [
+  {
+   "key": "total_forgotten",
+   "value": "0"
+  },
+  {
+   "key": "total_remembered",
+   "value": "0"
+  }
+ ]
+}"
+`;
+
+exports[`hippo trace <id> (built CLI, no server) > a row only the global store holds, and a parent of another tenant reads as not found > output 1`] = `
+"$ hippo trace mem_trace_global -> 0
+--- stdout
+Memory: mem_trace_global  [global]
+==================================================
+Content:   the billing service retries a failed charge three times
+Layer:     episodic   Confidence: verified       Pinned: no
+Tags:      (none)
+Created:   <ts>  (12.0 days ago)
+
+Strength trajectory:
+  now:        0.977
+  in 30 days: 0.923
+  in 90 days: 0.824
+  half-life:  365.0d (stored) x 1.00 reward = 365.0d effective
+
+Retrieval:
+  count:      0
+  last:       <ts>  (12.0 days ago)
+
+Outcomes:   +0 / -0
+
+Parents (consolidation lineage):
+  - mem_trace_hidden: (not found)
+--- stderr
+"
+`;
+
+exports[`hippo trace <id> (built CLI, no server) > an unknown id with and without a global store, a row of another tenant, and a store that cannot be read > audit rows 1`] = `
+"{
+ "local": [],
+ "global": [
+  {
+   "tenant_id": "other",
+   "actor": "cli",
+   "op": "remember",
+   "target_id": "mem_trace_gother",
+   "metadata_json": "{\\"kind\\":\\"distilled\\",\\"scope\\":null}"
+  }
+ ]
+}"
+`;
+
+exports[`hippo trace <id> (built CLI, no server) > an unknown id with and without a global store, a row of another tenant, and a store that cannot be read > audit rows 2`] = `
+"{
+ "local": [],
+ "global": []
+}"
+`;
+
+exports[`hippo trace <id> (built CLI, no server) > an unknown id with and without a global store, a row of another tenant, and a store that cannot be read > memory rows 1`] = `
+"{
+ "local": [
+  {
+   "id": "mem_trace_other",
+   "retrieval_count": 0,
+   "strength": 1,
+   "half_life_days": 365,
+   "layer": "episodic",
+   "tags_json": "[]",
+   "emotional_valence": "neutral",
+   "schema_fit": 0.5,
+   "source": "cli",
+   "outcome_score": null,
+   "conflicts_with_json": "[]",
+   "pinned": 0,
+   "confidence": "verified",
+   "content": "the billing service retries a failed charge three times",
+   "outcome_positive": 0,
+   "outcome_negative": 0,
+   "parents_json": "[]",
+   "starred": 0,
+   "trace_outcome": null,
+   "source_session_id": null,
+   "superseded_by": null,
+   "extracted_from": null,
+   "dag_level": 0,
+   "dag_parent_id": null,
+   "kind": "distilled",
+   "scope": null,
+   "owner": null,
+   "artifact_ref": null,
+   "tenant_id": "other",
+   "descendant_count": 0,
+   "earliest_at": null,
+   "latest_at": null,
+   "summary_dirty": 0,
+   "last_rebuilt_at": null,
+   "rebuild_count": 0,
+   "dag_level_3_built_at": null,
+   "origin_project": "app"
+  }
+ ],
+ "global": [
+  {
+   "id": "mem_trace_gother",
+   "retrieval_count": 0,
+   "strength": 1,
+   "half_life_days": 365,
+   "layer": "episodic",
+   "tags_json": "[]",
+   "emotional_valence": "neutral",
+   "schema_fit": 0.5,
+   "source": "cli",
+   "outcome_score": null,
+   "conflicts_with_json": "[]",
+   "pinned": 0,
+   "confidence": "verified",
+   "content": "the billing service retries a failed charge three times",
+   "outcome_positive": 0,
+   "outcome_negative": 0,
+   "parents_json": "[]",
+   "starred": 0,
+   "trace_outcome": null,
+   "source_session_id": null,
+   "superseded_by": null,
+   "extracted_from": null,
+   "dag_level": 0,
+   "dag_parent_id": null,
+   "kind": "distilled",
+   "scope": null,
+   "owner": null,
+   "artifact_ref": null,
+   "tenant_id": "other",
+   "descendant_count": 0,
+   "earliest_at": null,
+   "latest_at": null,
+   "summary_dirty": 0,
+   "last_rebuilt_at": null,
+   "rebuild_count": 0,
+   "dag_level_3_built_at": null,
+   "origin_project": ""
+  }
+ ]
+}"
+`;
+
+exports[`hippo trace <id> (built CLI, no server) > an unknown id with and without a global store, a row of another tenant, and a store that cannot be read > memory rows 2`] = `
+"{
+ "local": [],
+ "global": []
+}"
+`;
+
+exports[`hippo trace <id> (built CLI, no server) > an unknown id with and without a global store, a row of another tenant, and a store that cannot be read > other state 1`] = `
+"{
+ "storeMade": true,
+ "meta": [
+  {
+   "key": "total_forgotten",
+   "value": "0"
+  },
+  {
+   "key": "total_remembered",
+   "value": "0"
+  }
+ ]
+}"
+`;
+
+exports[`hippo trace <id> (built CLI, no server) > an unknown id with and without a global store, a row of another tenant, and a store that cannot be read > other state 2`] = `
+"{
+ "storeMade": true,
+ "meta": [
+  {
+   "key": "total_forgotten",
+   "value": "0"
+  },
+  {
+   "key": "total_remembered",
+   "value": "0"
+  }
+ ]
+}"
+`;
+
+exports[`hippo trace <id> (built CLI, no server) > an unknown id with and without a global store, a row of another tenant, and a store that cannot be read > output 1`] = `
+"$ hippo trace mem_does_not_exist -> 1
+--- stdout
+--- stderr
+Memory not found: mem_does_not_exist
+
+$ hippo trace mem_trace_other -> 1
+--- stdout
+--- stderr
+Memory not found: mem_trace_other
+
+$ hippo trace mem_trace_gother -> 1
+--- stdout
+--- stderr
+Memory not found: mem_trace_gother
+
+$ hippo trace mem_trace_other -> 1
+--- stdout
+--- stderr
+Error: file is not a database
+"
+`;
+
+exports[`hippo trace <id> (built CLI, no server) > an unknown id with and without a global store, a row of another tenant, and a store that cannot be read > output 2`] = `
+"$ hippo trace mem_does_not_exist -> 1
+--- stdout
+--- stderr
+Memory not found: mem_does_not_exist
+"
+`;

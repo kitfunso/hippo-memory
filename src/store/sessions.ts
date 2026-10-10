@@ -3,6 +3,7 @@ import { closeHippoDb, HOOK_DB_WAIT_MS, scopedBusyWait, withWriteScope, type Dat
 import { raiseMinBinary } from '../db/meta.js';
 import { originInSql } from '../core/project-identity.js';
 import { assertTenantId } from './tenant.js';
+import type { JsonObject } from './working-memory.js';
 import { redactSecretsStrict } from '../util/secret-detect.js';
 import { TASK_OWNER_MIN_BINARY } from '../util/version.js';
 import {
@@ -277,7 +278,7 @@ interface SessionEventInput {
   task?: string | null;
   source?: string;
   scope?: string | null;
-  metadata?: Record<string, unknown>;
+  metadata?: JsonObject;
 }
 
 function insertSessionEventRow(db: DatabaseSyncLike, tenantId: string, event: SessionEventInput, now: string): number {

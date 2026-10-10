@@ -16,6 +16,7 @@ import { resolveTenantId } from '../store/tenant.js';
 import { type Context, adminActor, learn, CLI_LEARN } from '../api/index.js';
 import { errorMessage, log } from '../util/log.js';
 import { printError } from './output.js';
+import type { JsonObject } from '../store/working-memory.js';
 import type { CliFlags } from './flag-values.js';
 
 /**
@@ -27,7 +28,7 @@ export function emitCliAudit(
   hippoRoot: string,
   op: AuditOp,
   targetId?: string,
-  metadata?: Record<string, unknown>,
+  metadata?: JsonObject,
 ): void {
   try {
     sqliteSyncStore(hippoRoot).appendAuditEvents([{
@@ -142,12 +143,18 @@ export function skipLearnOnSharedStore(hippoRoot: string): boolean {
   return true;
 }
 
+interface LearnFromRepoResult {
+  added: number;
+  skipped: number;
+  lowInfo: number;
+}
+
 export function learnFromRepo(
   hippoRoot: string,
   repoPath: string,
   days: number,
   label?: string
-): { added: number; skipped: number; lowInfo: number } {
+): LearnFromRepoResult {
   const prefix = label ? `[${label}] ` : '';
   const ctx: Context = { hippoRoot, tenantId: resolveTenantId({}), actor: adminActor('cli') };
   const result = learn(ctx, { repoPath, days, profile: CLI_LEARN });
