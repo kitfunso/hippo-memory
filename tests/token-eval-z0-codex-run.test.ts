@@ -8,7 +8,6 @@ import { STUB_CLAUDE_MD, X3_STUB, stubRefOf, checkoutBase } from '../scripts/tok
 import { parseZ0Records } from '../scripts/token-eval/z0-records.mjs';
 import { cleanup, makeRepo, lesson, family, teach, apply, find, logLines, runRoot, workDir, tmp } from './fixtures/z0-harness.js';
 import { xSpec, xRun, xTrio, xIsolate, xRecords, fakeSeen, X_IDS } from './fixtures/z0-codex-harness.js';
-import type { XRecord } from './fixtures/z0-codex-harness.js';
 
 afterEach(cleanup);
 

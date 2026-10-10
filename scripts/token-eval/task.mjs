@@ -294,8 +294,9 @@ function sessionRecord(ctx, run, step, parts) {
     timedOut: session.cc.timedOut || Boolean(resume?.cc.timedOut), limitRetries: session.limitRetries + ((resume ?? turns?.cutOffResume)?.limitRetries ?? 0),
     sessionId: session.result?.session_id ?? sessionIds[0] ?? null, resumeSessionId: resumeId ?? null, agentError: agentError(session, turns, codex ? 'codex' : 'claude'),
     ...stage.carry, homesAtStart: stage.homesAtStart, envKeys: Object.keys(run.env).sort(), passEnv: ctx.passEnv,
-    surfaceRestored: stage.restores.every(Boolean), injectedRows: stage.injected, ...(codex ? codexFields(ctx, run, session) : {}),
+    surfaceRestored: stage.restores.every(Boolean), injectedRows: stage.injected,
   };
+  if (codex) Object.assign(shared, codexFields(ctx, run, session));
   const reason = invalidReason(session, turns, found, stage);
   if (reason) return invalidRecord(parts.base, reason, shared);
   return validRecord(parts.base, {
