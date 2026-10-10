@@ -2,6 +2,7 @@
  * Memories are particles on the unit hypersphere in embedding space (384-dim); query gravity, attraction, conflict repulsion and drag act on them,
  * and nearby high-scoring memories amplify each other. */
 
+import { cosineOf } from './cosine.js';
 import { isRecallBoostAblated } from './ablation.js';
 import { FALLBACK_HALF_LIFE_DAYS, type EmotionalValence } from './memory.js';
 import type { PhysicsConfig } from './physics-config.js';
@@ -84,16 +85,6 @@ export function vecClampMagnitude(v: number[], maxMag: number): number[] {
   return vecScale(v, maxMag / mag);
 }
 
-/** Cosine similarity between two vectors. */
-function cosine(a: number[], b: number[]): number {
-  if (a.length === 0 || b.length === 0 || a.length !== b.length) return 0;
-  const dot = vecDot(a, b);
-  const na = vecNorm(a);
-  const nb = vecNorm(b);
-  if (na < 1e-10 || nb < 1e-10) return 0;
-  return Math.min(1, Math.max(-1, dot / (na * nb)));
-}
-
 const CHARGE_MAP = {
   neutral: 0,
   positive: 0.3,
@@ -122,7 +113,7 @@ export function queryGravityMagnitude(
   queryEmbedding: number[],
   G_query: number,
 ): number {
-  const cos = cosine(particle.position, queryEmbedding);
+  const cos = cosineOf(particle.position, queryEmbedding);
   return G_query * particle.mass * Math.pow(Math.max(0, cos), 2);
 }
 
@@ -148,7 +139,7 @@ export function attractionForce(
   out: number[] = vecZero(pi.position.length),
   diff: number[] = vecZero(pi.position.length),
 ): number[] {
-  const cos = cosine(pi.position, pj.position);
+  const cos = cosineOf(pi.position, pj.position);
   if (cos <= 0) return out;
 
   const magnitude = G_memory * pi.mass * pj.mass * Math.pow(cos, 3);
@@ -167,7 +158,7 @@ export function repulsionForce(
   pj: PhysicsParticle,
   K_repulsion: number,
 ): number[] {
-  const cos = cosine(pi.position, pj.position);
+  const cos = cosineOf(pi.position, pj.position);
   const dist = Math.max(0.01, 1 - cos);
   const magnitude = K_repulsion * pi.mass * pj.mass / (dist * dist);
   // Direction: away from j
@@ -339,7 +330,7 @@ export function computeSystemEnergy(
 
   for (let i = 0; i < particles.length; i++) {
     for (let j = i + 1; j < particles.length; j++) {
-      const cos = cosine(particles[i].position, particles[j].position);
+      const cos = cosineOf(particles[i].position, particles[j].position);
       potential -= G_memory * particles[i].mass * particles[j].mass * Math.max(0, cos);
     }
   }
@@ -409,7 +400,7 @@ function applyClusterAmplification(
       const pj = particleMap.get(top[j].memoryId);
       if (!pj) continue;
 
-      const proximity = cosine(pi.position, pj.position);
+      const proximity = cosineOf(pi.position, pj.position);
       if (proximity > config.cluster_threshold) {
         clusterSignal += top[j].baseScore * proximity;
       }

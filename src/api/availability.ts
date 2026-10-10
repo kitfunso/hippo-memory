@@ -1,4 +1,4 @@
-import { DAY_MS } from '../util/time.js';
+import { DAY_MS, HOUR_MS } from '../util/time.js';
 // Flags when a recall's top-K is dominated by recent entries while older relevant candidates in the same matched pool were passed over.
 // Soft warning only (never filters or reorders) and PURE: no I/O or env reads; the HIPPO_AVAILABILITY gate lives in the callers.
 
@@ -54,8 +54,6 @@ export const DEFAULT_MIN_RETURNED = 3;
 export const DEFAULT_MIN_POOL = 10;
 export const DEFAULT_MIN_OLDER_PASSED_OVER = 3;
 
-const MS_PER_HOUR = 60 * 60 * 1000;
-
 function median(nums: readonly number[]): number {
   if (nums.length === 0) return 0;
   const sorted = [...nums].sort((a, b) => a - b);
@@ -100,7 +98,7 @@ export function detectAvailabilityBias(opts: DetectAvailabilityBiasOpts): Availa
   if (olderCandidatesPassedOver < minOlderPassedOver) return null;
 
   const pct = Math.round(recentFraction * 100);
-  const windowHours = Math.round(recencyWindowMs / MS_PER_HOUR);
+  const windowHours = Math.round(recencyWindowMs / HOUR_MS);
   const summary =
     `Availability bias risk: ${recentCount} of ${topK.length} returned results are from the ` +
     `last ${windowHours}h (${pct}%), but ${olderCandidatesPassedOver} older matched memories ` +

@@ -15,8 +15,8 @@ import { RejectedValueError, checkRejectionGuard } from '../store/rejection.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../db/index.js';
 import { loadConfig } from '../core/config.js';
 import { classifyOriginProject, projectId, type ProjectRef } from '../core/project-identity.js';
-import { isStringValue } from '../core/capture-contract.js';
 import { errorMessage, log } from '../util/log.js';
+import { teeStdStreams } from '../util/stream-tee.js';
 import { extractFromTexts, type ExtractedItem } from './extract.js';
 import { type SessionTurn, collectSessionTurns, sessionTail, resolveLastSessionTranscript } from './transcript.js';
 
@@ -60,35 +60,11 @@ export function cmdCapture(
   }
 }
 
-/** Append-mode tee: mirror every stdout/stderr chunk to `logFile` until the returned restore function is called; a log-write failure is non-fatal. */
+/** Append-mode tee: mirror every stdout/stderr chunk to `logFile` until the returned restore function is called. */
 function beginLogTee(logFile: string): () => void {
   if (!writeLogBanner(logFile)) return () => {};
 
-  const origStdoutWrite = process.stdout.write.bind(process.stdout);
-  const origStderrWrite = process.stderr.write.bind(process.stderr);
-  const tee = (chunk: string | Uint8Array): void => appendToLog(logFile, chunk);
-  // Node's `write` is overloaded (`(chunk, cb?)` vs `(chunk, encoding, cb?)`); this forwards whichever shape was called to the real method.
-  type StreamWriteArgs = [
-    chunk: string | Uint8Array,
-    encodingOrCb?: BufferEncoding | ((err?: Error) => void),
-    cb?: (err?: Error) => void,
-  ];
-  const wrapWrite = (origWrite: typeof process.stdout.write): typeof process.stdout.write => {
-    const wrapped = (...args: StreamWriteArgs): boolean => {
-      tee(args[0]);
-      // SAFETY: forwarding the exact arguments the real overloaded `write` received is safe; `StreamWriteArgs` is the union of both overloads' parameter lists.
-      return (origWrite as (...args: StreamWriteArgs) => boolean)(...args);
-    };
-    // SAFETY: `wrapped` matches both real `write` overload shapes; TS cannot verify one implementation covers an overloaded type.
-    return wrapped as typeof process.stdout.write;
-  };
-  process.stdout.write = wrapWrite(origStdoutWrite);
-  process.stderr.write = wrapWrite(origStderrWrite);
-
-  return () => {
-    process.stdout.write = origStdoutWrite;
-    process.stderr.write = origStderrWrite;
-  };
+  return teeStdStreams(logFile);
 }
 
 /** Creates the log's folder and appends the banner line; false, after a warning, when the log cannot be written. */
@@ -105,15 +81,6 @@ function writeLogBanner(logFile: string): boolean {
     return false;
   }
   return true;
-}
-
-function appendToLog(logFile: string, chunk: string | Uint8Array): void {
-  try {
-    const buf = isStringValue(chunk) ? chunk : Buffer.from(chunk).toString('utf8');
-    fs.appendFileSync(logFile, buf, 'utf8');
-  } catch {
-    // log failures are non-fatal
-  }
 }
 
 // Console lines here are the `hippo capture` command's printed result, so they stay off the logger.

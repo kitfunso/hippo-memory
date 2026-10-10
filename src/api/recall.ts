@@ -291,29 +291,40 @@ function planRecall(ctx: Context, opts: RecallOpts, all: MemoryEntry[], own: str
   };
 }
 
-/** The plan's reads on the synchronous store, for the recall that cannot await the port. */
-function readRecallSync(store: SqliteSyncStore, ctx: Context, opts: RecallOpts, plan: RecallPlan): RecallReads {
+/** What the plan reads and when; the sync and async readers only differ in how they await, so a new read rule goes here. */
+function recallReadRequests(ctx: Context, opts: RecallOpts, plan: RecallPlan) {
   const { tenantId } = ctx;
   const freshCount = opts.freshTailCount ?? 0;
   return {
-    goals: plan.goalBoost ? store.activeGoals({ sessionId: plan.goalBoost.sessionId, tenantId }) : null,
-    parents: plan.overflow.size > 0 ? store.entriesByIds([...plan.overflow.keys()], tenantId) : [],
-    freshRaws: freshCount > 0 ? store.freshRawEntries(freshCount, tenantId, opts.freshTailSessionId, recallOrigin(opts) ?? null) : [],
-    continuity: opts.includeContinuity ? store.continuity(tenantId, CONTINUITY_EVENT_LIMIT, continuityKey(ctx, opts)) : undefined,
-    planning: plan.claim ? store.planningFallacyEvidence(tenantId, plan.claim.classQueryTokens) : null,
+    goals: plan.goalBoost ? { sessionId: plan.goalBoost.sessionId, tenantId } : null,
+    parentIds: plan.overflow.size > 0 ? [...plan.overflow.keys()] : null,
+    fresh: freshCount > 0 ? { count: freshCount, sessionId: opts.freshTailSessionId, origin: recallOrigin(opts) ?? null } : null,
+    continuity: opts.includeContinuity ? { tenantId, key: continuityKey(ctx, opts) } : null,
+    planning: plan.claim ? { tenantId, tokens: plan.claim.classQueryTokens } : null,
+  };
+}
+
+/** The plan's reads on the synchronous store, for the recall that cannot await the port. */
+function readRecallSync(store: SqliteSyncStore, ctx: Context, opts: RecallOpts, plan: RecallPlan): RecallReads {
+  const r = recallReadRequests(ctx, opts, plan);
+  return {
+    goals: r.goals ? store.activeGoals(r.goals) : null,
+    parents: r.parentIds ? store.entriesByIds(r.parentIds, ctx.tenantId) : [],
+    freshRaws: r.fresh ? store.freshRawEntries(r.fresh.count, ctx.tenantId, r.fresh.sessionId, r.fresh.origin) : [],
+    continuity: r.continuity ? store.continuity(r.continuity.tenantId, CONTINUITY_EVENT_LIMIT, r.continuity.key) : undefined,
+    planning: r.planning ? store.planningFallacyEvidence(r.planning.tenantId, r.planning.tokens) : null,
   };
 }
 
 /** The plan's reads through the store; `goals` already read by the caller skips that read. */
 async function readRecall(store: HippoStore, ctx: Context, opts: RecallOpts, plan: RecallPlan, goals?: ActiveGoals | null): Promise<RecallReads> {
-  const { tenantId } = ctx;
-  const freshCount = opts.freshTailCount ?? 0;
+  const r = recallReadRequests(ctx, opts, plan);
   return {
-    goals: goals !== undefined ? goals : plan.goalBoost ? await store.activeGoals({ sessionId: plan.goalBoost.sessionId, tenantId }) : null,
-    parents: plan.overflow.size > 0 ? await store.entriesByIds([...plan.overflow.keys()], tenantId) : [],
-    freshRaws: freshCount > 0 ? await store.freshRawEntries(freshCount, tenantId, opts.freshTailSessionId, recallOrigin(opts) ?? null) : [],
-    continuity: opts.includeContinuity ? await store.continuity(tenantId, CONTINUITY_EVENT_LIMIT, continuityKey(ctx, opts)) : undefined,
-    planning: plan.claim ? await store.planningFallacyEvidence(tenantId, plan.claim.classQueryTokens) : null,
+    goals: goals !== undefined ? goals : r.goals ? await store.activeGoals(r.goals) : null,
+    parents: r.parentIds ? await store.entriesByIds(r.parentIds, ctx.tenantId) : [],
+    freshRaws: r.fresh ? await store.freshRawEntries(r.fresh.count, ctx.tenantId, r.fresh.sessionId, r.fresh.origin) : [],
+    continuity: r.continuity ? await store.continuity(r.continuity.tenantId, CONTINUITY_EVENT_LIMIT, r.continuity.key) : undefined,
+    planning: r.planning ? await store.planningFallacyEvidence(r.planning.tenantId, r.planning.tokens) : null,
   };
 }
 

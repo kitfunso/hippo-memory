@@ -10,6 +10,7 @@ import * as api from '../api/index.js';
 import { cliApiContext } from './api-context.js';
 import { sleepResultLines } from './sleep-render.js';
 import { errorMessage, log } from '../util/log.js';
+import { teeStdStreams } from '../util/stream-tee.js';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../db/index.js';
 import { repairOnceOnSleep } from '../sharing/project-merge.js';
 import { type CliFlags, boolFlag, stringFlag, type CommandContext } from './flag-values.js';
@@ -27,30 +28,7 @@ export async function cmdSleep(hippoRoot: string, tenantId: string, flags: CliFl
     try {
       fs.mkdirSync(path.dirname(logFile), { recursive: true });
       fs.writeFileSync(logFile, `[hippo] ${new Date().toISOString()} consolidating memory...\n`, 'utf8');
-      const origStdoutWrite = process.stdout.write.bind(process.stdout);
-      const origStderrWrite = process.stderr.write.bind(process.stderr);
-      const tee = (chunk: string | Uint8Array) => {
-        try {
-          const buf = Buffer.isBuffer(chunk) ? chunk.toString('utf8') : String(chunk);
-          fs.appendFileSync(logFile, buf, 'utf8');
-        } catch {
-          // log failures are non-fatal — still write to the real stream
-        }
-      };
-      // SAFETY: the wrapper forwards chunk, enc and cb untouched to the original write, so it keeps write's contract.
-      process.stdout.write = ((chunk: any, enc?: any, cb?: any): boolean => {
-        tee(chunk);
-        return origStdoutWrite(chunk, enc, cb);
-      }) as typeof process.stdout.write;
-      // SAFETY: the wrapper forwards chunk, enc and cb untouched to the original write, so it keeps write's contract.
-      process.stderr.write = ((chunk: any, enc?: any, cb?: any): boolean => {
-        tee(chunk);
-        return origStderrWrite(chunk, enc, cb);
-      }) as typeof process.stderr.write;
-      restoreStdout = () => {
-        process.stdout.write = origStdoutWrite;
-        process.stderr.write = origStderrWrite;
-      };
+      restoreStdout = teeStdStreams(logFile);
     } catch (err) {
       log.warn(`could not open log file ${logFile}: ${errorMessage(err)}`);
     }

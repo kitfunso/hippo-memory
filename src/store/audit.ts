@@ -1,8 +1,8 @@
-import { createHash } from 'node:crypto';
 import { canAutoDelete, type MemoryEntry } from '../core/memory.js';
 import { closeHippoDb, openHippoDb, withWriteScope, type DatabaseSyncLike } from '../db/index.js';
 import type { JsonObject } from './working-memory.js';
 import { log } from '../util/log.js';
+import { blockHash } from '../util/token-text.js';
 import { keysetAfter, type KeysetPosition } from '../util/keyset.js';
 import type { JsonValue } from '../util/json.js';
 import { warnDamagedColumn } from '../util/stored-json.js';
@@ -182,7 +182,7 @@ export type AuditQueryFields = {
 
 export function auditQueryFields(query: string): AuditQueryFields {
   return {
-    query_hash: createHash('sha256').update(query).digest('hex').slice(0, 16),
+    query_hash: blockHash(query),
     query_length: query.length,
   };
 }

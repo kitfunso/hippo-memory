@@ -1,5 +1,6 @@
 import type { MemoryEntry } from '../core/memory.js';
-import { cosineOf, indexNeedsRebuild } from '../store/embeddings/index.js';
+import { cosineOf } from '../core/cosine.js';
+import { indexNeedsRebuild } from '../store/embeddings/index.js';
 import { indexedModel } from '../store/vector-index.js';
 import type { VectorCandidateSpec } from '../store/search-rows.js';
 import { resolveEmbeddingProvider, type EmbeddingProvider } from '../store/embeddings/provider.js';
