@@ -33,15 +33,18 @@ interface EntryFrontmatterFields {
   scope: FrontmatterValue;
   owner: FrontmatterValue;
   artifact_ref: FrontmatterValue;
+  valid_from: FrontmatterValue;
+  superseded_by: FrontmatterValue;
+  extracted_from: FrontmatterValue;
+  dag_level: FrontmatterValue;
+  dag_parent_id: FrontmatterValue;
   tenant_id?: FrontmatterValue;
   origin_project?: FrontmatterValue;
 }
 
-/**
- * Serialize a MemoryEntry to markdown with YAML frontmatter.
- */
-export function serializeEntry(entry: MemoryEntry): string {
-  const frontmatter: EntryFrontmatterFields = {
+/** The fields every mirror file carries; serializeEntry adds the optional ones. */
+function entryFrontmatter(entry: MemoryEntry): EntryFrontmatterFields {
+  return {
     id: entry.id,
     created: entry.created,
     last_retrieved: entry.last_retrieved,
@@ -67,7 +70,20 @@ export function serializeEntry(entry: MemoryEntry): string {
     scope: entry.scope ?? null,
     owner: entry.owner ?? null,
     artifact_ref: entry.artifact_ref ?? null,
+    // A rebuild from these files must keep supersession and the DAG; deserializeEntry reads all five.
+    valid_from: entry.valid_from,
+    superseded_by: entry.superseded_by,
+    extracted_from: entry.extracted_from,
+    dag_level: entry.dag_level,
+    dag_parent_id: entry.dag_parent_id,
   };
+}
+
+/**
+ * Serialize a MemoryEntry to markdown with YAML frontmatter.
+ */
+export function serializeEntry(entry: MemoryEntry): string {
+  const frontmatter = entryFrontmatter(entry);
   // Emit tenant_id only when not 'default' to keep diffs clean for the dominant
   // single-tenant case (mirrors the plan's task 7 guidance).
   const tenantId = entry.tenantId ?? DEFAULT_TENANT_ID;
