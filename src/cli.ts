@@ -13,7 +13,7 @@ import { handleGithub, printGithubBackfillUsage } from './connectors/github/cli-
 import { printError } from './cli/output.js';
 import { errorFields, errorMessage, isLevelEnabled, log } from './util/log.js';
 import { isStoreBusy, STORE_BUSY_MESSAGE } from './db/busy.js';
-import { type CliFlags, type CommandContext, boolFlag, flagIsTrue } from './cli/flag-values.js';
+import { type CliFlags, type CommandContext, boolFlag, flagIsTrue, isBooleanFlag, isStringFlag } from './cli/flag-values.js';
 import { VERB_USAGE, USAGE_HEADER, USAGE_EXAMPLES, printAuditPruneUsage, printSlackBackfillUsage, printSlackWorkspacesUsage } from './cli/usage.js';
 import { type FlagKind, type VerbFlags, VERB_FLAGS, flagKind, isKnownFlag, undeclaredFlags } from './cli/flags.js';
 
@@ -80,7 +80,7 @@ function setSeparatedFlag(flags: CliFlags, key: string, next: string | undefined
   return 2;
 }
 
-export function parseArgs(argv: string[]): { command: string; args: string[]; flags: CliFlags } {
+export function parseArgs(argv: string[]) {
   const [, , command = '', ...rest] = argv;
   const args: string[] = [];
   const flags: CliFlags = {};
@@ -487,6 +487,7 @@ function printVersion(): never {
   const __filename_local = fileURLToPath(import.meta.url);
   const __dirname_local = path.dirname(__filename_local);
   const pkgJson = fs.readFileSync(path.join(__dirname_local, '..', 'package.json'), 'utf-8');
+  // SAFETY: package.json ships with the build, and npm refuses to pack a package without a string version.
   const { version } = JSON.parse(pkgJson) as { version: string };
   console.log(version);
   process.exit(0);
@@ -495,7 +496,7 @@ function printVersion(): never {
 /** A value-less --scope parses as boolean true, which consumers coerced to the scope 'true' or dropped;
  *  reject it once here so every command, thin-client relays included, sees only a non-empty string. */
 function rejectEmptyScope(flags: CliFlags): void {
-  if ('scope' in flags && (typeof flags['scope'] !== 'string' || !flags['scope'].trim())) {
+  if ('scope' in flags && (!isStringFlag(flags['scope']) || !flags['scope'].trim())) {
     printError('--scope requires a non-empty value (e.g. --scope slack:private:C1).');
     process.exit(1);
   }
@@ -506,7 +507,7 @@ function rejectEmptyScope(flags: CliFlags): void {
 function rejectNonNumericFlags(flags: CliFlags, declared: VerbFlags | undefined): void {
   for (const [key, raw] of Object.entries(flags)) {
     if (flagKind(declared, key) !== 'number') continue;
-    if (typeof raw !== 'string' || !raw.trim() || !Number.isFinite(Number(raw))) {
+    if (!isStringFlag(raw) || !raw.trim() || !Number.isFinite(Number(raw))) {
       printError(`--${key} requires a numeric value.`);
       process.exit(1);
     }
@@ -517,7 +518,7 @@ function rejectNonNumericFlags(flags: CliFlags, declared: VerbFlags | undefined)
 // so no single coercion of an inline value would be correct for every one of them.
 function rejectValuedSwitches(flags: CliFlags, declared: VerbFlags | undefined): void {
   for (const [key, raw] of Object.entries(flags)) {
-    if (flagKind(declared, key) === 'switch' && typeof raw !== 'boolean') {
+    if (flagKind(declared, key) === 'switch' && !isBooleanFlag(raw)) {
       printError(`--${key} takes no value`);
       process.exit(1);
     }

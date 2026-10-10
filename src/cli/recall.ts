@@ -33,7 +33,9 @@ import { JEV_DEFAULT_TOP_K } from '../rerankers/jev.js';
 import { isClefModel } from '../rerankers/clef.js';
 import { handoffText, printedTokens, sessionTrailText, settleTokens, snapshotText } from '../api/context-render.js';
 import { printError } from './output.js';
-import { parseLimitFlag, parseBudgetFlag, type CliFlags, type CommandContext, parseAsOfFlag, engineFlags, boolFlag, flagIsTrue } from './flag-values.js';
+import {
+  parseLimitFlag, parseBudgetFlag, type CliFlags, type CommandContext, parseAsOfFlag, engineFlags, boolFlag, flagIsTrue, isBooleanFlag,
+} from './flag-values.js';
 import { requireInit } from './shared.js';
 import { recallEntryText, recallHeading, printActiveTaskSnapshot, printSessionEvents, printHandoff, captureConsole } from './print.js';
 import { hostSessionId, hookStoreRoot } from './hook-runtime.js';
@@ -82,7 +84,7 @@ function failWith(message: string): () => never {
 function parseGraphStreamFlags(flags: CliFlags): RecallGraphStream {
   let hops: number | undefined;
   if (flags['graph-hops'] !== undefined) {
-    if (typeof flags['graph-hops'] === 'boolean') failWith(`--graph-hops requires an integer value 1..${MAX_HOPS} (e.g. --graph-hops 2).`)();
+    if (isBooleanFlag(flags['graph-hops'])) failWith(`--graph-hops requires an integer value 1..${MAX_HOPS} (e.g. --graph-hops 2).`)();
     const h = Number(flags['graph-hops']);
     if (!Number.isInteger(h) || h < 1 || h > MAX_HOPS) {
       failWith(`Invalid --graph-hops: "${String(flags['graph-hops'])}". Must be an integer 1..${MAX_HOPS}.`)();
@@ -91,7 +93,7 @@ function parseGraphStreamFlags(flags: CliFlags): RecallGraphStream {
   }
   let seeds: number | undefined;
   if (flags['graph-seeds'] !== undefined) {
-    if (typeof flags['graph-seeds'] === 'boolean') failWith('--graph-seeds requires a positive integer value (e.g. --graph-seeds 10).')();
+    if (isBooleanFlag(flags['graph-seeds'])) failWith('--graph-seeds requires a positive integer value (e.g. --graph-seeds 10).')();
     const s = Number(flags['graph-seeds']);
     if (!Number.isInteger(s) || s < 1) failWith(`Invalid --graph-seeds: "${String(flags['graph-seeds'])}". Must be a positive integer.`)();
     seeds = s;
@@ -102,14 +104,14 @@ function parseGraphStreamFlags(flags: CliFlags): RecallGraphStream {
 function parseHopsFlags(flags: CliFlags): ParsedFlag<RecallGraphHops> {
   if (flags['hops'] === undefined) return {};
   // A value-less `--hops` parses as true, and Number(true) === 1 would silently run a 1-hop expansion.
-  if (typeof flags['hops'] === 'boolean') return { fail: failWith(`--hops requires an integer value 0..${MAX_HOPS} (e.g. --hops 1).`) };
+  if (isBooleanFlag(flags['hops'])) return { fail: failWith(`--hops requires an integer value 0..${MAX_HOPS} (e.g. --hops 1).`) };
   const hops = Number(flags['hops']);
   if (!Number.isInteger(hops) || hops < 0 || hops > MAX_HOPS) {
     return { fail: failWith(`Invalid --hops: "${String(flags['hops'])}". Must be an integer 0..${MAX_HOPS}.`) };
   }
   const raw = flags['max-neighbors'];
   if (raw === undefined) return { value: { hops, maxNeighbors: DEFAULT_MAX_NEIGHBORS } };
-  if (typeof raw === 'boolean') return { fail: failWith(`--max-neighbors requires an integer value 1..200.`) };
+  if (isBooleanFlag(raw)) return { fail: failWith(`--max-neighbors requires an integer value 1..200.`) };
   const maxNeighbors = Number(raw);
   if (!Number.isInteger(maxNeighbors) || maxNeighbors < 1 || maxNeighbors > 200) {
     return { fail: failWith(`Invalid --max-neighbors: "${String(raw)}". Must be an integer 1..200.`) };
@@ -470,18 +472,27 @@ function recallOutput(query: string, o: RecallOptions, fit: FittedRecall, isGlob
   });
 }
 
+/** The keys are set in the order the JSON prints them. */
+interface RecallJsonTail {
+  suppressionSummary: FittedRecall['hints']['summary'];
+  planningFallacyHint?: NonNullable<FittedRecall['cmdPlanningFallacyHint']>;
+  planningFallacyWatching?: NonNullable<FittedRecall['cmdPlanningFallacyWatching']>;
+  anchoringHint?: NonNullable<FittedRecall['hints']['anchoring']>;
+  availabilityHint?: NonNullable<FittedRecall['hints']['availability']>;
+  continuity?: RecallContinuity;
+  continuityTokens?: number;
+}
+
 /** The JSON keys after the result list: suppression summary, any bias hints, then continuity when asked for. */
-function recallJsonTail(fit: FittedRecall, includeContinuity: boolean | undefined) {
+function recallJsonTail(fit: FittedRecall, includeContinuity: boolean | undefined): RecallJsonTail {
   const { cmdPlanningFallacyHint, cmdPlanningFallacyWatching, continuityTokens } = fit;
   const { activeSnapshot, sessionHandoff, recentSessionEvents } = fit.continuity;
   const { anchoring: cmdAnchoringHint, availability: cmdAvailabilityHint, summary: cmdSuppressionSummary } = fit.hints;
-  const tail: Record<string, unknown> = {
-    suppressionSummary: cmdSuppressionSummary,
-    ...(cmdPlanningFallacyHint ? { planningFallacyHint: cmdPlanningFallacyHint } : {}),
-    ...(cmdPlanningFallacyWatching ? { planningFallacyWatching: cmdPlanningFallacyWatching } : {}),
-    ...(cmdAnchoringHint ? { anchoringHint: cmdAnchoringHint } : {}),
-    ...(cmdAvailabilityHint ? { availabilityHint: cmdAvailabilityHint } : {}),
-  };
+  const tail: RecallJsonTail = { suppressionSummary: cmdSuppressionSummary };
+  if (cmdPlanningFallacyHint) tail.planningFallacyHint = cmdPlanningFallacyHint;
+  if (cmdPlanningFallacyWatching) tail.planningFallacyWatching = cmdPlanningFallacyWatching;
+  if (cmdAnchoringHint) tail.anchoringHint = cmdAnchoringHint;
+  if (cmdAvailabilityHint) tail.availabilityHint = cmdAvailabilityHint;
   if (includeContinuity) {
     tail.continuity = {
       activeSnapshot,
@@ -493,8 +504,31 @@ function recallJsonTail(fit: FittedRecall, includeContinuity: boolean | undefine
   return tail;
 }
 
-function recallJsonRow(r: SearchResult, query: string, showWhy: boolean, isGlobal: boolean) {
-  const base: Record<string, unknown> = {
+/** One result row; the optional keys are set in the order the JSON prints them. */
+interface RecallJsonRow {
+  id: string;
+  score: number;
+  strength: SearchResult['entry']['strength'];
+  tokens: number;
+  tags: SearchResult['entry']['tags'];
+  content: string;
+  layer: SearchResult['entry']['layer'];
+  trace_outcome?: SearchResult['entry']['trace_outcome'];
+  superseded?: boolean;
+  superseded_by?: SearchResult['entry']['superseded_by'];
+  graphVia?: SearchResult['graphVia'];
+  confidence?: ReturnType<typeof confidenceFacets>['tier'];
+  aged_out?: ReturnType<typeof confidenceFacets>['agedOut'];
+  source?: 'global' | 'local';
+  reason?: ReturnType<typeof explainMatch>['reason'];
+  bm25?: SearchResult['bm25'];
+  cosine?: SearchResult['cosine'];
+  envelope?: ReturnType<typeof explainMatch>['envelope'];
+  rerankTrace?: SearchResult['rerankTrace'];
+}
+
+function recallJsonRow(r: SearchResult, query: string, showWhy: boolean, isGlobal: boolean): RecallJsonRow {
+  const base: RecallJsonRow = {
     id: r.entry.id,
     score: r.score,
     strength: r.entry.strength,

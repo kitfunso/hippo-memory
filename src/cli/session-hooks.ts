@@ -49,7 +49,10 @@ import { printError } from './output.js';
 import { cmdLastSleep } from './last-sleep.js';
 import { readCompactResumePayload } from './compact-resume-payload.js';
 import { type CliFlags, type CommandContext, boolFlag, flagIsTrue, stringFlag } from './flag-values.js';
-import { logSessionEndImport, appendSessionEndCloseLog, resetHookInjection, hookStoreRoot, hookRuntime, payloadCwdRoot, runHookWithStores, inPilotHoldout, startDeliveryRecorder } from './hook-runtime.js';
+import {
+  logSessionEndImport, appendSessionEndCloseLog, reportSessionEndFailure, resetHookInjection, hookStoreRoot, hookRuntime,
+  payloadCwdRoot, runHookWithStores, inPilotHoldout, startDeliveryRecorder,
+} from './hook-runtime.js';
 import type { JsonValue } from '../util/json.js';
 
 /**
@@ -295,8 +298,8 @@ async function sleepProjectStore(
     try {
       await (await import('./sleep.js')).cmdSleep(hippoRoot, tenantId, flags);
     } catch (err) {
-      // cmdSleep writes its failure line only when it has a log file, and capture runs regardless.
-      log.debug(`session-end: sleep failed: ${errorMessage(err)}`);
+      // cmdSleep writes its own failure line only once its log tee is open, and capture runs regardless.
+      reportSessionEndFailure(closeLogFile, 'session-end: sleep', err);
     }
   } else {
     appendSessionEndCloseLog(closeLogFile, 'skip sleep: this folder has no store of its own', { startFresh: true });
@@ -378,7 +381,7 @@ function captureEndedSession(
     });
     return true;
   } catch (err) {
-    log.debug(`session-end: capture failed: ${errorMessage(err)}`);
+    reportSessionEndFailure(stringFlag(flags, 'log-file') ?? null, 'session-end: capture', err);
     return false;
   }
 }
@@ -447,6 +450,7 @@ function loadCodexWrapperMetadata(): CodexWrapperMetadata {
   if (!fs.existsSync(metadataPath)) {
     throw new Error('Codex wrapper is not installed. Run `hippo hook install codex` first.');
   }
+  // SAFETY: the file is the one installCodexWrapper wrote; handleCodexRun reads only logFile and realCodexPath from it.
   return JSON.parse(fs.readFileSync(metadataPath, 'utf8')) as CodexWrapperMetadata;
 }
 
@@ -612,7 +616,7 @@ async function sleepCodexProjectStore(hippoRoot: string, tenantId: string, logFi
     try {
       await (await import('./sleep.js')).cmdSleep(hippoRoot, tenantId, logFile ? { 'log-file': logFile } : {});
     } catch (err) {
-      log.debug(`codex session-end: sleep failed: ${errorMessage(err)}`);
+      reportSessionEndFailure(logFile ?? null, 'codex session-end: sleep', err);
     }
   } else {
     appendSessionEndCloseLog(logFile ?? null, 'skip sleep: this folder has no store of its own', { startFresh: true });
@@ -653,12 +657,12 @@ function captureCodexTranscript(hippoRoot: string, tenantId: string, store: stri
     try {
       cmdCapture(store, captureOpts);
     } catch (err) {
-      log.debug(`codex session-end: capture failed: ${errorMessage(err)}`);
+      reportSessionEndFailure(logFile ?? null, 'codex session-end: capture', err);
     }
     // The Codex wrapper passes no session id, so the rollout file names the session.
     recordSessionDigest(hippoRoot, scan, { key: path.basename(transcriptPath, '.jsonl'), tenantId, log: digestLog });
   } catch (err) {
-    log.debug(`codex session-end: transcript scan or digest failed: ${errorMessage(err)}`);
+    reportSessionEndFailure(logFile ?? null, 'codex session-end: transcript scan or digest', err);
   }
 }
 

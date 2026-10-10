@@ -9,7 +9,7 @@ import { search } from '../search/bm25-search.js';
 import { hybridSearch } from '../search/hybrid.js';
 import { fitBudget } from '../search/finalize.js';
 import { DEFAULT_LOCAL_BUMP, DEFAULT_RECALL_BUDGET, type SearchResult, type ResultCost } from '../core/search-types.js';
-import type { HybridVectorCandidates } from '../search/vector.js';
+import { startQueryEmbedDeadline, type HybridVectorCandidates } from '../search/vector.js';
 import { evalNow } from '../core/ablation.js';
 import { duplicateKey } from '../util/same-text.js';
 import { errorMessage, log } from '../util/log.js';
@@ -208,9 +208,10 @@ export async function rankBothStores(
     includeSuperseded, asOf, summaryDeboost, summaryFreshness
   } = options;
   if (entries.local.length === 0 && entries.global.length === 0) return [];
+  // One deadline for both stores, so a provider that stalls on the first is not waited on again for the second.
   const shared = {
     budget, now, embeddingWeight, explain, mmr, mmrLambda, minResults, cost, scope, includeSuperseded, asOf, summaryDeboost, summaryFreshness,
-    vectorCandidates
+    vectorCandidates, queryEmbedDeadline: startQueryEmbedDeadline(),
   };
   const localResults = await hybridSearch(query, entries.local, { ...shared, hippoRoot: roots.local });
   const globalResults = await hybridSearch(query, entries.global, { ...shared, hippoRoot: roots.global });

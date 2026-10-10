@@ -7,8 +7,8 @@ import { join } from 'node:path';
 import { Worker } from 'node:worker_threads';
 import { closeHippoDb, getHippoDbPath, openHippoDb, STORE_BUSY_MESSAGE, StoreBusyError, type DatabaseSyncLike } from '../src/db/index.js';
 import type { JsonValue } from '../src/util/json.js';
-import { log } from '../src/util/log.js';
-import { serve, type ServeOpts, type ServerHandle } from '../src/server.js';
+import { log, type LogFields } from '../src/util/log.js';
+import { serve, type AuthResolver, type ServeOpts, type ServerHandle } from '../src/server.js';
 import { type CallOptions, createSqliteExecutor, type ExecutorOptions, type SqliteExecutor } from '../src/store/sqlite/executor.js';
 import { initStore } from '../src/store/open.js';
 import { sqliteStore } from '../src/store/sqlite/store.js';
@@ -103,6 +103,17 @@ function logged(level: 'warn' | 'error', text: string): Promise<void> {
   return new Promise((resolve) => {
     vi.spyOn(log, level).mockImplementation((message) => {
       if (message.includes(text)) resolve();
+    });
+  });
+}
+
+const LATE = 'after its deadline reply';
+
+/** Settles with the fields of the first line holding `text` logged at `level`; set before the request that causes it. */
+function loggedFields(level: 'warn' | 'info', text: string): Promise<LogFields | undefined> {
+  return new Promise((resolve) => {
+    vi.spyOn(log, level).mockImplementation((message, fields) => {
+      if (message.includes(text)) resolve(fields);
     });
   });
 }
@@ -371,6 +382,8 @@ describe('the handler deadline', () => {
     const server = await start(root, { routes });
     const before = await counts(server);
     const errors = vi.spyOn(log, 'error').mockImplementation(() => {});
+    const warns = vi.spyOn(log, 'warn').mockImplementation(() => {});
+    const finished = loggedFields('info', LATE);
 
     deadline(SHORT_DEADLINE_MS);
     const late = await post(server, '/v1/slow', {});
@@ -379,9 +392,62 @@ describe('the handler deadline', () => {
     deadline('0');
     release();
     await handlerDone;
+    // A write that ends late did run, so one info line says so under the id and the route of the 504's access line.
+    expect(await finished).toEqual({ requestId: late.headers.get('x-request-id'), method: 'POST', route: '/v1/slow' });
     const after = await counts(server);
     expect(after.handler_deadlines).toBe(before.handler_deadlines + 1);
     expect(errors.mock.calls.map((call) => call[0])).toEqual([expect.stringContaining('POST /v1/slow failed: the request did not finish by its deadline')]);
+    expect(warns.mock.calls.filter(([message]) => message.includes(LATE))).toEqual([]);
+  });
+
+  it('logs one warn line when the handler fails after the 504, with the request id and the route and none of the error text', async () => {
+    const root = newRoot();
+    let release = (): void => {};
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const routes = [{ path: '/v1/slow', handler: async () => { await gate; throw new RangeError('no row for private-caller-text'); } }];
+    const server = await start(root, { routes });
+    vi.spyOn(log, 'error').mockImplementation(() => {});
+    const infos = vi.spyOn(log, 'info').mockImplementation(() => {});
+    const warned = vi.spyOn(log, 'warn');
+    const failed = new Promise<void>((resolve) => { warned.mockImplementation((message) => { if (message.includes(LATE)) resolve(); }); });
+
+    deadline(SHORT_DEADLINE_MS);
+    const late = await post(server, '/v1/slow?q=private-query', {});
+
+    await expectDeadlineReply(late, 'did not finish by its deadline');
+    deadline('0');
+    release();
+    await failed;
+    await counts(server);
+    expect(warned.mock.calls.filter(([message]) => message.includes(LATE))).toEqual([
+      ['request failed after its deadline reply',
+        { requestId: late.headers.get('x-request-id'), method: 'POST', route: '/v1/slow', failureStatus: 500, errorClass: 'RangeError' }],
+    ]);
+    expect(infos.mock.calls.filter(([message]) => message.includes(LATE))).toEqual([]);
+    expect(JSON.stringify([warned.mock.calls, infos.mock.calls])).not.toContain('private-');
+  });
+
+  it('says nothing when a read finishes after its 504: nothing was written', async () => {
+    const root = newRoot();
+    let release = (): void => {};
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const authResolver: AuthResolver = async () => { await gate; return { tenantId: 'default', subject: 'user-1', role: 'member' }; };
+    // The in-process store, since the workers refuse a call that arrives past its request's deadline and the read would fail.
+    const server = await start(root, { store: sqliteStore(root), authResolver, authResolverTimeoutMs: LONG_WAIT_MS });
+    vi.spyOn(log, 'error').mockImplementation(() => {});
+    const infos = vi.spyOn(log, 'info').mockImplementation(() => {});
+    const warns = vi.spyOn(log, 'warn').mockImplementation(() => {});
+
+    deadline(SHORT_DEADLINE_MS);
+    const late = await fetch(`${server.url}/v1/predictions`, { headers: { ...JSON_TYPE, authorization: 'Bearer ext.reader' } });
+
+    await expectDeadlineReply(late, 'did not finish by its deadline');
+    deadline('0');
+    release();
+    // Two round trips give the late handler the turns it needs to end.
+    expect((await get(server, '/v1/predictions')).status).toBe(200);
+    await counts(server);
+    expect([...infos.mock.calls, ...warns.mock.calls].filter(([message]) => message.includes(LATE))).toEqual([]);
   });
 
   it('is off at HIPPO_REQUEST_DEADLINE_MS=0: a write held far past the short deadline still lands', async () => {

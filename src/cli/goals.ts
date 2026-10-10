@@ -5,7 +5,7 @@ import type { PolicyType } from '../store/goals.js';
 import * as api from '../api/index.js';
 import { cliApiContext } from './api-context.js';
 import { printError } from './output.js';
-import { type CliFlags, boolFlag, flagIsTrue, stringFlag, type CommandContext } from './flag-values.js';
+import { type CliFlags, boolFlag, flagIsTrue, isStringFlag, stringFlag, type CommandContext } from './flag-values.js';
 
 // ---------------------------------------------------------------------------
 // `hippo goal <push|list|complete|suspend|resume>`
@@ -18,12 +18,16 @@ const GOAL_POLICY_TYPES: ReadonlyArray<PolicyType> = [
   'hybrid',
 ];
 
-function sanitizeGoalName(s: string): string {
-  // Strip C0 control chars + DEL to prevent terminal escape injection.
-  return s.replace(/[\x00-\x1f\x7f]/g, '?');
+function isGoalPolicyType(value: string): value is PolicyType {
+  return GOAL_POLICY_TYPES.some((type) => type === value);
 }
 
-function resolveGoalSession(flags: CliFlags, defaultTenantId: string): { sessionId: string; tenantId: string } {
+function sanitizeGoalName(s: string): string {
+  // Strip C0 control chars + DEL to prevent terminal escape injection.
+  return s.replace(/[^\x20-\x7e\u0080-\uffff]/g, '?');
+}
+
+function resolveGoalSession(flags: CliFlags, defaultTenantId: string) {
   const sessionId = (
     flags['session-id'] !== undefined
       ? String(flags['session-id'])
@@ -47,12 +51,12 @@ function readGoalPolicy(flags: CliFlags): { policyType: PolicyType } | undefined
     printError('--policy requires a value (e.g., --policy error-prioritized)');
     process.exit(1);
   }
-  if (typeof policyRaw !== 'string') return undefined;
-  if (!(GOAL_POLICY_TYPES as readonly string[]).includes(policyRaw)) {
+  if (!isStringFlag(policyRaw)) return undefined;
+  if (!isGoalPolicyType(policyRaw)) {
     printError(`Unknown --policy '${policyRaw}'. Expected one of: ${GOAL_POLICY_TYPES.join(' | ')}.`);
     process.exit(1);
   }
-  return { policyType: policyRaw as PolicyType };
+  return { policyType: policyRaw };
 }
 
 function readGoalLevel(flags: CliFlags): number | undefined {

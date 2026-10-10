@@ -121,7 +121,8 @@ function unsupportedPreview(db: DatabaseSyncLike, tenantId: string) {
   if (!columns.has('id') || !columns.has('content')) return { total: 0, issues: [] };
   const rows = selectPreviewRows(db, columns, tenantId);
   const issues = rows.flatMap((row): QualityRepairIssue[] => {
-    const provenance = { ...row, source: row.source ?? '', confidence: row.confidence ?? 'observed', dag_level: row.dag_level ?? 0, tags: parseJsonArray(row.tags_json) };
+    const tags = parseJsonArray(row.tags_json, { table: 'memories', id: row.id, column: 'tags_json' });
+    const provenance = { ...row, source: row.source ?? '', confidence: row.confidence ?? 'observed', dag_level: row.dag_level ?? 0, tags };
     if (!isAutomaticEntry(provenance)) return [];
     const { reason } = assessAutomaticMemory(row.content);
     return reason === null ? [] : [{ id: row.id, reason, disposition: 'review', protection: 'unsupported schema; no changes permitted' }];

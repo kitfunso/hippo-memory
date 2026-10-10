@@ -7,7 +7,7 @@ import * as predictionsModule from '../store/predictions.js';
 import * as decisionsModule from '../objects/decisions.js';
 import * as incidentsModule from '../objects/incidents.js';
 import { printError } from './output.js';
-import { nonEmptyStringFlag, parseListLimit, type CliFlags, flagIsTrue, stringFlag, type CommandContext } from './flag-values.js';
+import { nonEmptyStringFlag, parseListLimit, type CliFlags, flagIsTrue, isStringFlag, stringFlag, type CommandContext } from './flag-values.js';
 import { requireInit } from './shared.js';
 import { cliApiContext } from './api-context.js';
 import { closeObject, foundOrExit, idArgOrExit, listObjects, printLifecycleTail, requireStatus, type ObjectNames } from './object-verbs.js';
@@ -35,6 +35,7 @@ function parseObjectId(idRaw: string, noun: string): number {
 function predictClose(hippoRoot: string, tenantId: string, args: string[], flags: CliFlags): void {
   const id = idArgOrExit(args, 'Usage: hippo predict close <id> --state <closed|closed-unknown> [--actual <v>] [--note "..."]', 'prediction', parseObjectId);
   const stateRaw = (stringFlag(flags, 'state') ?? '').trim();
+  // SAFETY: Set.has only compares by value, so a string outside the closure states is a plain miss.
   if (!predictionsModule.VALID_CLOSURE_STATES.has(stateRaw as predictionsModule.ClosureState) || stateRaw === 'open') {
     printError(`Invalid --state: "${stateRaw}". Must be one of: closed | closed-unknown.`);
     process.exit(1);
@@ -48,6 +49,7 @@ function predictClose(hippoRoot: string, tenantId: string, args: string[], flags
   const closureNote = stringFlag(flags, 'note');
 
   const closed = predictionsModule.closePrediction(hippoRoot, tenantId, id, {
+    // SAFETY: the check above exits unless stateRaw is in VALID_CLOSURE_STATES.
     closureState: stateRaw as predictionsModule.ClosureState,
     actualValue,
     closureNote,
@@ -371,7 +373,7 @@ function incidentCreate(hippoRoot: string, tenantId: string, incidentText: strin
   let linkedMemoryIds: string[] | undefined;
   if (Array.isArray(linkRaw)) {
     linkedMemoryIds = linkRaw;
-  } else if (typeof linkRaw === 'string') {
+  } else if (isStringFlag(linkRaw)) {
     linkedMemoryIds = [linkRaw];
   } else if (linkRaw === true) {
     printError('--link requires a memory id, e.g. hippo incident "<text>" --link mem_abc123.');
