@@ -5,6 +5,21 @@ import { join } from 'node:path';
 import ts from 'typescript';
 import { findFloatingPromises } from '../scripts/check-floating-promises.mjs';
 
+// Parsing the real ES2022 lib took 6.5 s on a CI runner, past the unit budget; the check only needs these globals.
+const MINIMAL_LIB = [
+  'interface Array<T> { length: number; [n: number]: T }',
+  'interface Boolean {} interface Function {} interface CallableFunction {} interface NewableFunction {}',
+  'interface IArguments {} interface Number {} interface Object {} interface RegExp {} interface String {}',
+  'interface PromiseLike<T> { then<A = T, B = never>(ok?: (v: T) => A | PromiseLike<A>, no?: (e: unknown) => B | PromiseLike<B>): PromiseLike<A | B> }',
+  'interface Promise<T> {',
+  '  then<A = T, B = never>(ok?: (v: T) => A | PromiseLike<A>, no?: (e: unknown) => B | PromiseLike<B>): Promise<A | B>;',
+  '  catch<B = never>(no?: (e: unknown) => B | PromiseLike<B>): Promise<T | B>;',
+  '  finally(done?: () => void): Promise<T>;',
+  '}',
+  'interface PromiseConstructor { new <T>(run: (ok: (v: T) => void, no: (e: unknown) => void) => void): Promise<T> }',
+  'declare var Promise: PromiseConstructor;',
+].join('\n');
+
 describe('check-floating-promises', () => {
   let dir: string;
   beforeEach(() => { dir = mkdtempSync(join(tmpdir(), 'floating-promises-')); });
@@ -15,8 +30,10 @@ describe('check-floating-promises', () => {
     const src = join(dir, 'src');
     mkdirSync(src, { recursive: true });
     const file = join(src, 'entry.ts');
+    const lib = join(dir, 'lib.d.ts');
     writeFileSync(file, body, 'utf8');
-    const program = ts.createProgram([file], { target: ts.ScriptTarget.ES2022, strict: true, noEmit: true });
+    writeFileSync(lib, MINIMAL_LIB, 'utf8');
+    const program = ts.createProgram([lib, file], { target: ts.ScriptTarget.ES2022, strict: true, noEmit: true, noLib: true });
     return findFloatingPromises(program, src).map(({ line, text }) => ({ line, text }));
   }
 
