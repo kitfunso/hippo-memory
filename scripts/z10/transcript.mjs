@@ -1,8 +1,7 @@
 // The Claude Code transcript contract the Z10 reader joins on: which lines are prompts, which hooks fired under them, and which turn row owns which prompt.
 
-const TAGS = [
-  'task-notification', 'command-name', 'local-command-stdout', 'local-command-caveat', 'bash-input', 'bash-stdout', 'bash-stderr',
-];
+const FIRING = ['task-notification', 'cross-session-message', 'agent-message'];
+const QUIET = ['command-name', 'local-command-stdout', 'local-command-caveat', 'bash-input', 'bash-stdout', 'bash-stderr'];
 
 // String(v) === v holds only for a string primitive, which a JSON line's text always is.
 export const isText = (v) => String(v) === v;
@@ -19,7 +18,7 @@ function promptBody(content) {
 
 function kindOf(text) {
   const tag = /^\s*<([a-z-]+)/.exec(text)?.[1];
-  return TAGS.includes(tag) ? tag : 'prompt';
+  return FIRING.includes(tag) || QUIET.includes(tag) ? tag : 'prompt';
 }
 
 function hookText(content) {
@@ -44,7 +43,12 @@ export function parseTranscript(text) {
       compactions.push({ pos });
     } else if (line.type === 'user' && !line.isMeta && !line.isCompactSummary) {
       const body = promptBody(line.message?.content);
-      if (body) candidates.push({ index: candidates.length, pos, kind: kindOf(body.text), image: body.image, text: body.text, attachments: [], fired: false });
+      if (body) candidates.push({ index: candidates.length, pos, kind: kindOf(body.text), image: body.image, text: body.text, attachments: [], fired: false, queued: false });
+    } else if (line.type === 'attachment' && line.attachment?.type === 'queued_command') {
+      const body = promptBody(line.attachment.prompt);
+      const mode = line.attachment.commandMode;
+      const kind = mode === undefined || mode === 'prompt' || mode === 'task-notification' ?kindOf(body?.text ?? '') : `queued-${mode}`;
+      if (body) candidates.push({ index: candidates.length, pos, kind, image: body.image, text: body.text, attachments: [], fired: false, queued: true });
     } else if (line.type === 'attachment' && line.attachment?.type === 'hook_additional_context' && line.attachment.hookEvent === 'UserPromptSubmit') {
       const owner = candidates[candidates.length - 1];
       if (owner) {
@@ -56,7 +60,7 @@ export function parseTranscript(text) {
   return { candidates, compactions, skipped };
 }
 
-const positional = (c) => c.kind === 'prompt' || c.kind === 'task-notification';
+const positional = (c) => c.kind === 'prompt' || FIRING.includes(c.kind);
 
 /** Pairs rows `{id, prompt_hash, emitted}` in id order with candidates; `hash` is the ledger's blockHash, passed in so this file imports nothing from dist. */
 export function pairTurns(parsed, rows, hash) {

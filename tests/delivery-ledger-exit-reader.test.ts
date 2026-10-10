@@ -235,6 +235,27 @@ describe('the transcript parser', () => {
     const [plain, image, after] = parsed.candidates.slice(7);
     expect([plain.attachments, plain.fired, image.text, image.image, after.fired]).toEqual([['hippo block\nsecond part'], true, 'see\nthis', true, false]);
     expect([parsed.compactions, parsed.skipped]).toEqual([[{ pos: 17 }], [18]]);
+    expect(parsed.candidates.map((c: { queued: boolean }) => c.queued)).toEqual(Array(10).fill(false));
+  });
+
+  it('R16 a queued_command attachment is a candidate kinded by its text, and the hooks under it are its own', () => {
+    const attach = (a: Json) => JSON.stringify({ type: 'attachment', attachment: a });
+    const queued = (prompt: string | Json[], extra: Json = {}) => attach({ type: 'queued_command', prompt, commandMode: 'prompt', origin: { kind: 'human' }, ...extra });
+    const hook = (text: string) => attach({ type: 'hook_additional_context', content: [text], hookName: 'UserPromptSubmit', hookEvent: 'UserPromptSubmit' });
+    const lines = [
+      JSON.stringify({ type: 'user', message: { role: 'user', content: 'a typed prompt' } }),
+      queued('<task-notification>done</task-notification>', { commandMode: 'task-notification' }), hook('h1'),
+      queued('<cross-session-message from="x">hi</cross-session-message>'), hook('h2'),
+      queued('<agent-message from="x">hi</agent-message>'), hook('h3'),
+      queued('a plain human prompt'), hook('h4'),
+      queued('ls', { commandMode: 'bash' }),
+      queued([{ type: 'text', text: 'blocks prompt' }]),
+    ];
+    const { candidates } = parseTranscript(lines.join('\n'));
+    expect(candidates.map((c: { kind: string }) => c.kind)).toEqual(['prompt', 'task-notification', 'cross-session-message', 'agent-message', 'prompt', 'queued-bash', 'prompt']);
+    expect(candidates.map((c: { queued: boolean }) => c.queued)).toEqual([false, true, true, true, true, true, true]);
+    expect(candidates.map((c: { attachments: string[] }) => c.attachments)).toEqual([[], ['h1'], ['h2'], ['h3'], ['h4'], [], []]);
+    expect(candidates[6].text).toBe('blocks prompt');
   });
 });
 

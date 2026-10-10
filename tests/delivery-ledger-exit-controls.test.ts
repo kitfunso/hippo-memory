@@ -2,7 +2,7 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { PROMPT_HOOK, dispose, hippo, project, tableRows, writeConfig, type Project } from './_helpers/delivery-boundary.js';
+import { PROMPT_HOOK, dispose, hippo, preCompactPayload, project, tableRows, writeConfig, type Project } from './_helpers/delivery-boundary.js';
 import {
   additionalContextOf, expectVerdict, fire, seed, verdictOf, writeHostTranscript, type Oracle, type ReadOpts, type TurnSpec, type Verdict,
 } from './_helpers/host-transcript.js';
@@ -179,5 +179,20 @@ describe('negative controls', () => {
     expect([v.turns[1].event_id, v.turns[1].paired_by, v.turns[1].delivery, v.turns[1].why]).toEqual([e3.id, null, 'unconfirmed', 'compacted-since-send']);
     expect(v.notes.includes('gap:1')).toBe(true);
     expect(stages('n11', pinId())).toEqual([['emitted', 'final'], ['reused', 'final']]);
+  });
+
+  it('N12 a queued prompt\'s attachment is never given to the prompt before it', () => {
+    p = project();
+    const r1 = fire(p, 'n12', P1);
+    expect(hippo(p, ['pre-compact'], { input: preCompactPayload('n12') }).status).toBe(0);
+    const r2 = fire(p, 'n12', P2);
+    const prompts = rows(`SELECT id, turn_seq, block_state, emitted_hash FROM delivery_events WHERE session_id = 'n12' AND event_type = 'prompt-submit' ORDER BY id`);
+    expect(prompts.map((e) => e.block_state)).toEqual(['sent', 'sent']);
+    expect(prompts[0].emitted_hash).toBe(prompts[1].emitted_hash);
+    const t = doc('n12', [turnOf(P1, r1.stdout, { attach: null }), turnOf(P2, r2.stdout, { queued: true })]);
+    const v = read('n12', pinId(), { transcript: t });
+    const second = prompts.find((e) => Number(e.turn_seq) === 2);
+    ok(v, 'n12', pinId(), { class: 'application-unknown', reason: null, turn: at(second?.id ?? null, 2), stage: 'final' });
+    expect([v.turns[0].delivery, v.turns[0].why, v.turns[1].paired_by, v.turns[1].delivery]).toEqual(['unconfirmed', 'no-attachment', 'prompt', 'confirmed']);
   });
 });

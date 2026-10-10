@@ -99,6 +99,8 @@ export interface TurnSpec {
   image?: boolean;
   /** A compact_boundary line right before the prompt. */
   compactBefore?: boolean;
+  /** Written as a queued_command attachment under tool results, the way a prompt sent mid-task is. */
+  queued?: boolean;
 }
 
 export interface TranscriptOpts {
@@ -116,11 +118,21 @@ const hookLine = (text: string, hookName = 'UserPromptSubmit'): string => line({
 
 export const additionalContextOf = (stdout: string): string => JSON.parse(stdout).hookSpecificOutput.additionalContext;
 
+const toolResult = (id: string): string => user([{ type: 'tool_result', tool_use_id: id, content: 'out' }]);
+
+/** A prompt sent while the agent was busy: Claude Code writes it as an attachment after the tool results, never as a user line. */
+const queuedLines = (prompt: string): string[] => [
+  line({ type: 'queue-operation', operation: 'enqueue', content: prompt }),
+  toolResult('t1'),
+  line({ type: 'queue-operation', operation: 'remove', content: prompt }),
+  line({ type: 'attachment', attachment: { type: 'queued_command', prompt, commandMode: 'prompt', origin: { kind: 'human' }, humanTurn: true } }),
+];
+
 function turnLines(turn: TurnSpec): string[] {
   const content: string | Json[] = turn.image
     ? [{ type: 'text', text: turn.prompt }, { type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'AAAA' } }]
     : turn.prompt;
-  const out = [...(turn.compactBefore ? [line({ type: 'system', subtype: 'compact_boundary' })] : []), user(content)];
+  const out = [...(turn.compactBefore ? [line({ type: 'system', subtype: 'compact_boundary' })] : []), ...(turn.queued ? queuedLines(turn.prompt) : [user(content)])];
   if (turn.fired === false) return out;
   out.push(hookLine('decoy: another hook wrote this', 'DecoyHook'));
   const attach = turn.attach !== undefined ? turn.attach : turn.stdout ? additionalContextOf(turn.stdout) : null;

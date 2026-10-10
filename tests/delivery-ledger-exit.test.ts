@@ -400,6 +400,16 @@ describe('context availability: was the block that carried the lesson delivered'
     ok(v, 'x20', g.id, { class: 'application-unknown', reason: null, turn: at(e.id, 1), stage: 'final' });
     expect([v.memory_store, v.turns[0].source_store]).toEqual(['global', 'global']);
   });
+
+  it('X22 a queued prompt that was sent confirms on the attachment under its queued line', () => {
+    make();
+    const r = fire(p, 'x22', P1);
+    const [e] = events('x22');
+    expect([events('x22').length, e.block_state, stages('x22', pinId())]).toEqual([1, 'sent', [['emitted', 'final']]]);
+    const v = read('x22', pinId(), { transcript: doc('x22', [turnOf(P1, r.stdout, { queued: true })]) });
+    ok(v, 'x22', pinId(), { class: 'application-unknown', reason: null, turn: at(e.id, 1), stage: 'final' });
+    expect([v.turns[0].paired_by, v.turns[0].delivery]).toEqual(['prompt', 'confirmed']);
+  });
 });
 
 describe('application: labels act only on a confirmed delivery', () => {
