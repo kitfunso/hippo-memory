@@ -37,7 +37,7 @@ export function runStatusTool({ ctx, hippoRoot, config, tenantId }: ToolCall): s
   // honors HIPPO_FAKE_NOW (eval-only; see ablation.ts)
   const tallies = getMemoryStatus({ hippoRoot, tenantId, actor: mcpActor(ctx), store: ctx?.store }, evalNow(), 0.1);
   const avgStrength = tallies.total > 0 ? (tallies.strengthSum / tallies.total).toFixed(2) : '0';
-    return [
+  return [
     `Memories: ${tallies.total} (${tallies.pinned} pinned, ${tallies.errors} errors)`,
     `Avg strength: ${avgStrength}`,
     `At risk (<0.1): ${tallies.atRisk}`,
