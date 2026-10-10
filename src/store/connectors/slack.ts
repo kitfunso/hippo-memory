@@ -189,11 +189,6 @@ function markSlackDlqRetriedAt(db: DatabaseSyncLike, id: number): void {
     .run(new Date().toISOString(), id);
 }
 
-/** Counts a failed replay and leaves `retried_at` alone, so the row still reads as never drained. */
-export function bumpSlackDlqRetryCountAt(db: DatabaseSyncLike, id: number): void {
-  db.prepare(`UPDATE slack_dlq SET retry_count = retry_count + 1 WHERE id = ?`).run(id);
-}
-
 export function insertSlackDlq(hippoRoot: string, row: SlackDlqInsert): number {
   return onHandle(hippoRoot, (db) => insertSlackDlqAt(db, row));
 }
@@ -208,10 +203,6 @@ export function slackDlqEntry(hippoRoot: string, id: number): DlqItem | null {
 
 export function markSlackDlqRetried(hippoRoot: string, id: number): void {
   onHandle(hippoRoot, (db) => markSlackDlqRetriedAt(db, id));
-}
-
-export function bumpSlackDlqRetryCount(hippoRoot: string, id: number): void {
-  onHandle(hippoRoot, (db) => bumpSlackDlqRetryCountAt(db, id));
 }
 
 // Workspace routing

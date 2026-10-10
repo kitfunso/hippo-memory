@@ -29,10 +29,12 @@ export interface ParkedRow<Bucket extends string> {
   signature: string | null;
 }
 
-/** What one connector supplies: the tag that names its table to the store, and its list. `Own` is the columns only its table has. */
+/** What one connector supplies: the tag that names its table to the store, its list and its one-row retry bump. `Own` is the columns only its table has. */
 export interface ConnectorDlq<Own, Bucket extends string, Item> {
   readonly letter: (row: ParkedRow<Bucket> & Own) => ConnectorDeadLetter;
   readonly list: (hippoRoot: string, tenantId: string, limit: number) => Item[];
+  /** Adds one to `retry_count` and stamps `retried_at`. */
+  readonly bump: (hippoRoot: string, id: number) => void;
 }
 
 /** Parks on `store`, else on hippo.db under `hippoRoot`. */
@@ -90,4 +92,16 @@ export interface ReplayResult {
 /** A replay that did not go through; `retryCount` is the row's count after any bump the caller made. */
 export function replayFailed(status: ReplayStatus, retryCount: number, reason: string): ReplayResult {
   return { ok: false, status, memoryId: null, retryCount, reason };
+}
+
+/** A replay that failed after the row was read: counts it exactly once, then reports the new count. */
+export function failAndBump(
+  dlq: ConnectorDlq<never, never, unknown>,
+  hippoRoot: string,
+  row: { id: number; retryCount: number },
+  status: ReplayStatus,
+  reason: string,
+): ReplayResult {
+  dlq.bump(hippoRoot, row.id);
+  return replayFailed(status, row.retryCount + 1, reason);
 }
