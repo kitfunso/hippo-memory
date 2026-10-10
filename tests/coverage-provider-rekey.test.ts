@@ -4,9 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import v8 from '@vitest/coverage-v8';
 import { createCoverageMap } from '@vitest/istanbul-lib-coverage';
 
-// Loaded on demand: vitest hands this file to Node as TypeScript, which only a Node with type stripping can read.
-const loadProvider = () => import('./_coverage-provider.js');
-const NODE_READS_TYPESCRIPT = process.features.typescript !== undefined && process.features.typescript !== false;
+const loadProvider = () => import('./_coverage-provider.mjs');
 
 const FILE = '/repo/src/sample.ts';
 const loc = (line: number, from: number, endLine: number, to: number) => ({ start: { line, column: from }, end: { line: endLine, column: to } });
@@ -33,7 +31,7 @@ async function merged(worker: Report, child: Report) {
   return map.fileCoverageFor(FILE);
 }
 
-describe.skipIf(!NODE_READS_TYPESCRIPT)('coverage re-keying across the worker and child source maps', () => {
+describe('coverage re-keying across the worker and child source maps', () => {
   afterEach(() => { vi.restoreAllMocks(); });
 
   it('two statements on one line keep their own counts', async () => {
@@ -78,7 +76,7 @@ describe.skipIf(!NODE_READS_TYPESCRIPT)('coverage re-keying across the worker an
   });
 });
 
-describe.skipIf(!NODE_READS_TYPESCRIPT)('the provider wrapped around vitest\'s v8 provider', () => {
+describe('the provider wrapped around vitest\'s v8 provider', () => {
   afterEach(() => { vi.restoreAllMocks(); });
 
   interface Wrapped { getUntestedFiles(tested: string[]): Promise<string[]>; remapCoverage(): Promise<Record<string, Report>> }

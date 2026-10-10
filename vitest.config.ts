@@ -10,15 +10,8 @@ const runTmp = mkdtempSync(join(tmpdir(), 'hippo-test-tmp-'));
 process.env.HIPPO_TEST_TMP_RUN = runTmp;
 for (const k of TMP_KEYS) process.env[k] = runTmp;
 
-// Isolate the global hippo store for the whole test run. getGlobalRoot()
-// (HIPPO_HOME, then XDG_DATA_HOME/hippo, then ~/.hippo) otherwise falls through
-// to the developer's real ~/.hippo, which the developer's own Claude Code
-// UserPromptSubmit hook (`hippo context`) mutates mid-run — tripping
-// tests/_real-store-guard.ts with a false positive. This runs at config module
-// scope, in the main process, before globalSetup loads the guard and before any
-// test worker is spawned, so the guard, every worker, and any inherited child
-// process resolve the global store to this temp dir. HIPPO_TEST_TMP_HOME marks
-// the dir so the guard's teardown removes exactly it, and nothing else.
+// The developer's own hooks write the real ~/.hippo mid-run, so set at module scope, before the guard loads or a worker spawns, every process resolves this dir.
+// HIPPO_TEST_TMP_HOME marks it so the guard's teardown removes exactly it.
 const isolatedHippoHome = mkdtempSync(join(tmpdir(), 'hippo-test-home-'));
 process.env.HIPPO_HOME = isolatedHippoHome;
 process.env.HIPPO_TEST_TMP_HOME = isolatedHippoHome;
@@ -42,6 +35,8 @@ const PROVIDER_ENV_KEYS = ['ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'VOYAGE_API_KE
 for (const k of PROVIDER_ENV_KEYS) delete process.env[k];
 // Most server tests speak as the keyless local caller; the tests of the key-required default delete this.
 process.env.HIPPO_ALLOW_KEYLESS_LOCAL = '1';
+// No test may reach the real schtasks or crontab, whatever flags it passes; a test of the schedule clears this and fakes the scheduler.
+process.env.HIPPO_SKIP_SCHEDULE = '1';
 
 // Each of these builds real git repositories and worktrees per case, too slow for every shard; token-eval.yml runs them.
 export const EVAL_TESTS = ['ab-run', 'make-tasks', 'z0-homes', 'z0-turns', 'z0-codex-run', 'z0-codex-guards', 'z0-codex-faults', 'z0-codex-install'].map((name) => `tests/token-eval-${name}.test.ts`);
@@ -82,18 +77,18 @@ export default defineConfig({
     // the process.env writes at module scope above cover the main process. Both are required.
     env: {
       HIPPO_HOME: isolatedHippoHome, HOME: isolatedUserHome, USERPROFILE: isolatedUserHome, APPDATA: isolatedAppData,
-      HIPPO_ALLOW_KEYLESS_LOCAL: '1',
+      HIPPO_ALLOW_KEYLESS_LOCAL: '1', HIPPO_SKIP_SCHEDULE: '1',
       ...Object.fromEntries(TMP_KEYS.map((k) => [k, runTmp])),
       ...Object.fromEntries(AGENT_HOME_KEYS.map((k) => [k, ''])),
       ...Object.fromEntries(PROVIDER_ENV_KEYS.map((k) => [k, ''])),
     },
     globalSetup: ['tests/_build-freshness.ts', 'tests/_real-store-guard.ts'],
-    server: { deps: { external: [/tests[\\/]_coverage-provider\.ts$/] } },
+    server: { deps: { external: [/tests[\\/]_coverage-provider\.mjs$/] } },
     // About a fifth of the files spawn git/hippo/nested-vitest children, so one fork per core oversubscribes a big box (CHANGELOG 1.38.3).
     maxWorkers: 6,
     coverage: {
       provider: 'custom',
-      customProviderModule: './tests/_coverage-provider.ts',
+      customProviderModule: './tests/_coverage-provider.mjs',
       // Without include, untested src files would not count; dist/ lets spawned-CLI results through to remap.
       include: ['src/**/*.ts', 'dist/**/*.js'],
       autoAttachSubprocess: true,

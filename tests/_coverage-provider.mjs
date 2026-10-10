@@ -1,35 +1,32 @@
-// v8 coverage that also counts spawned `node dist/cli.js` children, mapped back to src/*.ts.
-// Children map through tsc's source maps and workers through vite's, which disagree on columns;
-// without one shared key per construct, a file loaded both ways would count everything twice.
+// @ts-check
+// v8 coverage that also counts spawned `node dist/cli.js` children, mapped to src/*.ts; plain JS since vitest loads it natively on every Node.
+// Children map through tsc's source maps and workers through vite's, which disagree on columns, so each construct gets one shared key.
 import v8 from '@vitest/coverage-v8';
-import type { CoverageProviderModule } from 'vitest/node';
 
-interface Pos { line: number; column: number | null }
-interface Loc { start: Pos; end: Pos }
-interface Fn { name: string; loc: Loc; decl: Loc }
-interface Branch { type: string; loc: Loc; locations: Loc[] }
-interface FileData { statementMap: Record<string, Loc>; fnMap: Record<string, Fn>; branchMap: Record<string, Branch> }
+/** @typedef {{ start: { line: number, column: number | null }, end: { line: number, column: number | null } }} Loc */
+/** @typedef {{ statementMap: Record<string, Loc>, fnMap: Record<string, { name: string, loc: Loc, decl: Loc }>, branchMap: Record<string, { type: string, loc: Loc, locations: Loc[] }> }} FileData */
 
 // Both pipelines agree on a construct's first and last line, so it is keyed by those lines plus its
 // rank among constructs sharing them; the rank stands in for the column, which they do not agree on.
-function rekey<M>(map: Record<string, M>, locOf: (m: M) => Loc, place: (m: M, loc: Loc) => M): void {
-  const groups = new Map<string, string[]>();
+/** @type {<M>(map: Record<string, M>, locOf: (m: M) => Loc, place: (m: M, loc: Loc) => M) => void} */
+const rekey = (map, locOf, place) => {
+  const groups = new Map();
   for (const [id, m] of Object.entries(map)) {
     const { start, end } = locOf(m);
     const k = `${start.line}:${end.line}`;
     groups.set(k, [...(groups.get(k) ?? []), id]);
   }
-  const col = (id: string): number => locOf(map[id]).start.column ?? 0;
+  const col = (/** @type {string} */ id) => locOf(map[id]).start.column ?? 0;
   for (const ids of groups.values()) {
-    ids.sort((a, b) => col(a) - col(b)).forEach((id, rank) => {
+    ids.sort((/** @type {string} */ a, /** @type {string} */ b) => col(a) - col(b)).forEach((/** @type {string} */ id, /** @type {number} */ rank) => {
       const { start, end } = locOf(map[id]);
       map[id] = place(map[id], { start: { line: start.line, column: rank }, end: { line: end.line, column: null } });
     });
   }
-}
+};
 
-/** Rewrites each file's locations in place so the same source construct has one key whichever pipeline saw it. */
-export function canonicalizeCoverage(files: Record<string, FileData>): void {
+/** Rewrites each file's locations in place so the same source construct has one key whichever pipeline saw it. @param {Record<string, FileData>} files */
+export function canonicalizeCoverage(files) {
   for (const d of Object.values(files)) {
     rekey(d.statementMap, (l) => l, (_, loc) => loc);
     // A function's decl line agrees across pipelines; its body start can sit on a later line in one of them.
@@ -39,21 +36,20 @@ export function canonicalizeCoverage(files: Record<string, FileData>): void {
   }
 }
 
-const isDist = (file: string): boolean => /[\\/]dist[\\/]/.test(file);
+const isDist = (/** @type {string} */ file) => /[\\/]dist[\\/]/.test(file);
 
-interface V8Internals {
-  remapCoverage(...args: unknown[]): Promise<Record<string, FileData>>;
-  getUntestedFiles(tested: string[]): Promise<string[]>;
-}
-const hasInternals = <T extends object>(p: T): p is T & V8Internals =>
-  'remapCoverage' in p && typeof p.remapCoverage === 'function' && 'getUntestedFiles' in p && typeof p.getUntestedFiles === 'function';
+/** @typedef {{ remapCoverage(...args: unknown[]): Promise<Record<string, FileData>>, getUntestedFiles(tested: string[]): Promise<string[]> }} V8Internals */
+/** @type {<T extends object>(p: T) => p is T & V8Internals} */
+const hasInternals = (p) =>
+  'remapCoverage' in p && p.remapCoverage instanceof Function && 'getUntestedFiles' in p && p.getUntestedFiles instanceof Function;
 
 // vitest.config.ts imports this natively (server.deps.external): --merge-reports stubs any vite-loaded module a blob lists.
-const mod: CoverageProviderModule = {
+/** @type {import('vitest/node').CoverageProviderModule} */
+const mod = {
   ...v8,
   async getProvider() {
     const p = await v8.getProvider();
-    if (!hasInternals(p)) throw new Error('@vitest/coverage-v8 no longer has remapCoverage/getUntestedFiles; update tests/_coverage-provider.ts');
+    if (!hasInternals(p)) throw new Error('@vitest/coverage-v8 no longer has remapCoverage/getUntestedFiles; update tests/_coverage-provider.mjs');
     const remap = p.remapCoverage.bind(p);
     const untested = p.getUntestedFiles.bind(p);
     // dist/ is in coverage.include only so child results pass the pre-remap filter; src/ already lists every untested file.
