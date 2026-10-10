@@ -12,7 +12,8 @@ import { openHippoDbReadOnly, closeHippoDb, getCurrentSchemaVersion, Incompatibl
 import { REPLAY_AFTER_MS, TRANSCRIPT_FILL_WINDOW_MS } from './capture/compaction-record.js';
 import { SPOOL_DIR, spoolCounts, type SpoolCounts } from './capture/compaction-spool.js';
 import { isEmbeddingAvailable } from './store/embeddings/local.js';
-import { CODEX_TRUST_LINE, claudeConfigDir, codexHomeDir, isCodexPresent } from './hooks/shared.js';
+import { CODEX_TRUST_LINE, isCodexPresent } from './hooks/shared.js';
+import { claudeConfigDir, codexHomeDir } from './util/agent-homes.js';
 import { planProjectRepair } from './sharing/project-merge.js';
 import { resolveTenantId } from './store/tenant.js';
 import { errorMessage, log } from './util/log.js';

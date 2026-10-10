@@ -3,7 +3,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { detectRealCodexPath, isCodexWrapperInstalled, repairCodexWrapperIfInstalled } from './hooks/codex-wrapper.js';
-import { claudeConfigDir } from './hooks/shared.js';
+import { claudeConfigDir } from './util/agent-homes.js';
 import { errorMessage, log } from './util/log.js';
 
 function main(): void {

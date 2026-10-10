@@ -4,9 +4,6 @@ import * as os from 'os';
 import * as path from 'path';
 import { claudeConfigDir, codexHomeDir, homeDir, vscodeDataFolders } from '../util/agent-homes.js';
 
-// Hook callers outside this folder still import these three from here.
-export { claudeConfigDir, codexHomeDir, homeDir };
-
 export type JsonHookTarget = 'claude-code' | 'codex' | 'copilot';
 
 export interface ToolDetection {

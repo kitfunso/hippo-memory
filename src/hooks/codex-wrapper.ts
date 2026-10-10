@@ -3,7 +3,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { PACKAGE_ROOT } from '../core/package-root.js';
 import { errorMessage, log } from '../util/log.js';
-import { HIPPO_CODEX_WRAPPER_MARKER, homeDir, codexHomeDir, ensureDir } from './shared.js';
+import { HIPPO_CODEX_WRAPPER_MARKER, ensureDir } from './shared.js';
+import { homeDir, codexHomeDir } from '../util/agent-homes.js';
 import { isJsonString } from '../util/json.js';
 import { writeFileAtomic } from '../util/atomic-write.js';
 

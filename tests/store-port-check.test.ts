@@ -93,13 +93,10 @@ describe('check-store-port.mjs', () => {
   });
 
   it('counts a file outside the data layer that names the handle type, once, and not comments or the data layer', () => {
-    const holder = "import type { DatabaseSyncLike } from './db/index.js';
-export const f = (db: DatabaseSyncLike, g: DatabaseSyncLike) => db === g;
-";
+    const holder = "import type { DatabaseSyncLike } from './db/index.js';\nexport const f = (db: DatabaseSyncLike, g: DatabaseSyncLike) => db === g;\n";
+    const comment = '// DatabaseSync is only named here\nexport const b = 1;\n';
     withFixture(
-      { 'src/a.ts': holder, 'src/b.ts': '// DatabaseSync is only named here
-export const b = 1;
-', 'src/store/c.ts': holder, 'src/db/d.ts': holder, 'src/cli/e.ts': holder },
+      { 'src/a.ts': holder, 'src/b.ts': comment, 'src/store/c.ts': holder, 'src/db/d.ts': holder, 'src/cli/e.ts': holder },
       null,
       ({ run, baseline }) => {
         expect(list(run)).toMatchObject({ handleHoldersOutside: '2', 'src/a.ts': '1', 'src/cli/e.ts': '1' });
@@ -110,9 +107,8 @@ export const b = 1;
   });
 
   it('fails when a new file starts holding a handle', () => {
-    withFixture({ 'src/a.ts': "import type { DatabaseSync } from 'node:sqlite';
-export type H = DatabaseSync;
-" }, { handleHoldersOutside: 0, handleHoldersOutsideByFile: {} }, ({ run }) => {
+    const src = "import type { DatabaseSync } from 'node:sqlite';\nexport type H = DatabaseSync;\n";
+    withFixture({ 'src/a.ts': src }, { handleHoldersOutside: 0, handleHoldersOutsideByFile: {} }, ({ run }) => {
       const r = run();
       expect(r.status).toBe(1);
       expect(r.stderr).toContain('handleHoldersOutside: 0 -> 1');

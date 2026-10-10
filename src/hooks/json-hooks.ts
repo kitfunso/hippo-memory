@@ -16,12 +16,10 @@ import {
   HIPPO_COMPACT_RESUME_MARKER,
   HIPPO_CAPTURE_ERROR_MARKER,
   HIPPO_POST_COMPACT_MARKER,
-  homeDir,
-  claudeConfigDir,
-  codexHomeDir,
   copilotHooksFile,
   defaultPreCompactLogPath
 } from './shared.js';
+import { claudeConfigDir, codexHomeDir, homeDir } from '../util/agent-homes.js';
 import { type JsonValue, isJsonString, readJsonFile, isJsonObjectLiteral } from '../util/json.js';
 import { escapeRegex } from '../util/escape.js';
 import { writeFileAtomic } from '../util/atomic-write.js';

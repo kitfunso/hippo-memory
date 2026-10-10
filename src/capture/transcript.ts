@@ -1,5 +1,5 @@
 import { envHomeDir, processEnv } from '../util/env.js';
-import { claudeConfigDir } from '../hooks/shared.js';
+import { claudeConfigDir } from '../util/agent-homes.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import { isObjectLike, isStringValue, readSessionEnd } from '../core/capture-contract.js';

@@ -3,7 +3,7 @@
 
 import { BadRequestError } from '../core/api-errors.js';
 import { isPersonalScope } from '../store/recall-scope.js';
-import { mergedSuccessor } from '../consolidate/merged-row.js';
+import { mergedSuccessor } from '../util/merged-row.js';
 import { normalizeValueForRejection, type RejectedValueRow } from '../store/rejection.js';
 import {
   applyRejection,

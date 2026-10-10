@@ -3,7 +3,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { createHash } from 'node:crypto';
-import { homeDir } from '../hooks/shared.js';
+import { homeDir } from '../util/agent-homes.js';
 import { errorMessage, log as logger } from '../util/log.js';
 import { isObjectLike, isStringValue, type ProgressCursor } from '../core/capture-contract.js';
 import { SESSION_ID_RE } from './copilot-transcript.js';
