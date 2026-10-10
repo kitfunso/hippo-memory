@@ -107,7 +107,7 @@ export function shownAtStartCodex(lesson, run) {
 /** X4 (plan D9): the taught lessons between the markers in work/AGENTS.md; one whole block is replaced, else a new one is appended. */
 export function writeX4Block(work, taught) {
   const file = path.join(work, 'AGENTS.md');
-  const text = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '';
+  const text = readIfPresent(file)?.toString('utf8') ?? '';
   const block = `${OPEN}${memoryText(taught)}${CLOSE}\n`;
   const from = text.indexOf(OPEN);
   const to = from < 0 ? -1 : text.indexOf(CLOSE, from);

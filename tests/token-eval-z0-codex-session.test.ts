@@ -292,8 +292,9 @@ describe('setup faults stop the run (tests 26, 27)', () => {
     const { run, ctx, op } = setup('authfail');
     const err = await runCodexSession(ctx, run, xTask('AUTH_FAIL'), () => false).catch((e: Error) => e);
     expect(err).toBeInstanceOf(Error);
-    expect((err as Error).message).toMatch(/login failed.*log in to Codex again/);
-    for (const tok of op.tokens) expect((err as Error).message).not.toContain(tok);
+    const message = err instanceof Error ? err.message : '';
+    expect(message).toMatch(/login failed.*log in to Codex again/);
+    for (const tok of op.tokens) expect(message).not.toContain(tok);
     expect(existsSync(join(run.dirs.codexHome, 'auth.json'))).toBe(false);
   }, 30_000);
 

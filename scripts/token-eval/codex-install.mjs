@@ -20,7 +20,7 @@ const REFUSED = 'nothing was installed, and the run is abandoned';
 const same = (a, b) => Boolean(a) && (WIN ? path.resolve(a).toLowerCase() === path.resolve(b).toLowerCase() : path.resolve(a) === path.resolve(b));
 const whereOf = (run) => `${run.s.id} ${run.arm} seed${run.seed}`;
 const metaFileOf = (run) => path.join(run.dirs.home, '.hippo', 'integrations', 'codex.json');
-const digest = (file) => (fs.lstatSync(file).isSymbolicLink() ? `link:${fs.readlinkSync(file)}` : createHash('sha256').update(fs.readFileSync(file)).digest('hex'));
+const digest = (file, isLink) => (isLink ? `link:${fs.readlinkSync(file)}` : createHash('sha256').update(fs.readFileSync(file)).digest('hex'));
 
 /** The install's env: one PATH key holding only the run's bin/ and node's dir, HOME and APPDATA under `<root>/home` (plan R5, R11). */
 export function installEnv(run) {
@@ -46,8 +46,8 @@ export function assertInstallProbe(run, env) {
 
 /** Every `codex*` entry in the operator launcher dir with its hash; npm's POSIX shim is a symlink, kept as its target. */
 function launcherState(dir) {
-  const names = fs.readdirSync(dir, { withFileTypes: true }).filter((e) => /^codex/i.test(e.name) && !e.isDirectory()).map((e) => e.name);
-  return new Map(names.sort().map((n) => [n, digest(path.join(dir, n))]));
+  const entries = fs.readdirSync(dir, { withFileTypes: true }).filter((e) => /^codex/i.test(e.name) && !e.isDirectory());
+  return new Map(entries.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0)).map((e) => [e.name, digest(path.join(dir, e.name), e.isSymbolicLink())]));
 }
 
 const changedNames = (a, b) => [...new Set([...a.keys(), ...b.keys()])].filter((n) => a.get(n) !== b.get(n)).sort();
