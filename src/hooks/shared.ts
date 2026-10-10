@@ -1,8 +1,11 @@
-import { envHomeDir, processEnv } from '../util/env.js';
+import { processEnv } from '../util/env.js';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { vscodeDataFolders } from '../agent-memories/copilot.js';
+import { claudeConfigDir, codexHomeDir, homeDir, vscodeDataFolders } from '../util/agent-homes.js';
+
+// Hook callers outside this folder still import these three from here.
+export { claudeConfigDir, codexHomeDir, homeDir };
 
 export type JsonHookTarget = 'claude-code' | 'codex' | 'copilot';
 
@@ -26,25 +29,10 @@ export const HIPPO_COMPACT_RESUME_MARKER = 'hippo compact-resume';
 export const HIPPO_CAPTURE_ERROR_MARKER = 'hippo capture-error';
 export const HIPPO_POST_COMPACT_MARKER = 'hippo post-compact';
 
-export function homeDir(): string {
-  return envHomeDir() || os.homedir();
-}
-
-/** Codex's config folder: $CODEX_HOME, else ~/.codex, as the Codex hooks docs describe. */
-export function codexHomeDir(home: string = homeDir(), env: Readonly<Record<string, string | undefined>> = processEnv()): string {
-  return env.CODEX_HOME || path.join(home, '.codex');
-}
-
 /** Copilot's config folder: $COPILOT_HOME, else ~/.copilot under os.homedir(), as the
  * Copilot apps resolve it (a HOME that differs from the profile must not move it). */
 export function copilotHomeDir(home: string = os.homedir(), env: Readonly<Record<string, string | undefined>> = processEnv()): string {
   return env.COPILOT_HOME || path.join(home, '.copilot');
-}
-
-/** Claude Code's config folder, where it reads settings.json: $CLAUDE_CONFIG_DIR when set and non-empty, else
- * ~/.claude under os.homedir(), as Claude Code does (a HOME that differs from the profile must not move it). */
-export function claudeConfigDir(home: string = os.homedir(), env: Readonly<Record<string, string | undefined>> = processEnv()): string {
-  return env.CLAUDE_CONFIG_DIR || path.join(home, '.claude');
 }
 
 /** Codex counts as installed only when its config folder exists: Codex itself refuses a CODEX_HOME that is not a folder. */

@@ -1,7 +1,7 @@
 // Codex CLI's memory_summary.md, the one memory file Codex puts in its prompt, read as a single text-keyed file.
 import fs from 'node:fs';
 import path from 'node:path';
-import { codexHomeDir } from '../hooks/shared.js';
+import { codexHomeDir } from '../util/agent-homes.js';
 import { readTextFile } from './files.js';
 import { textItemKeys } from './keys.js';
 import { splitMarkdownItems } from './markdown.js';
