@@ -18,6 +18,48 @@ export interface HookTable {
   [agent: string]: HookSpec;
 }
 
+// Shared by the agents that differ only in the noun, an optional recall paragraph and an optional footer.
+const PI_FOOTER = 'For full integration, copy the hippo-memory Pi extension to `~/.pi/agent/extensions/hippo-memory/`.';
+
+function agentsBlock(noun: 'task' | 'session', opts: { recall?: boolean; footer?: string } = {}): string {
+  const recall = opts.recall
+    ? `
+When stuck or repeating yourself, check if this happened before:
+\`\`\`bash
+hippo recall "<what's going wrong>" --budget 2000
+\`\`\`
+`
+    : '';
+  const footer = opts.footer ? `\n${opts.footer}\n` : '';
+  return `
+## Project Memory (Hippo)
+
+At the start of every ${noun}, run:
+\`\`\`bash
+hippo context --auto --budget 1500
+\`\`\`
+Read the output before writing any code.
+
+On errors or unexpected behaviour, record it right then, while you work,
+never as a closing step:
+\`\`\`bash
+hippo remember "<description of what went wrong>" --error
+\`\`\`
+
+When you learn something that should outlive this session (a decision and
+its reason, a user preference, a lesson), record it right then, while you
+work, never as a closing step. Leave out secrets and personal details:
+\`\`\`bash
+hippo remember "<what you learned and why>"
+\`\`\`
+${recall}
+When ending a session, capture a brief summary:
+\`\`\`bash
+hippo capture --stdin <<< '<decisions, errors, lessons: 2-5 bullets>'
+\`\`\`
+${footer}`.trim();
+}
+
 export const HOOKS: HookTable = {
   'claude-code': {
     file: 'CLAUDE.md',
@@ -76,137 +118,10 @@ hippo capture --stdin <<< '<decisions, errors, lessons: 2-5 bullets>'
 \`\`\`
 `.trim(),
   },
-  'cursor': {
-    file: 'AGENTS.md',
-    description: 'Cursor',
-    content: `
-## Project Memory (Hippo)
-
-At the start of every task, run:
-\`\`\`bash
-hippo context --auto --budget 1500
-\`\`\`
-Read the output before writing any code.
-
-On errors or unexpected behaviour, record it right then, while you work,
-never as a closing step:
-\`\`\`bash
-hippo remember "<description of what went wrong>" --error
-\`\`\`
-
-When you learn something that should outlive this session (a decision and
-its reason, a user preference, a lesson), record it right then, while you
-work, never as a closing step. Leave out secrets and personal details:
-\`\`\`bash
-hippo remember "<what you learned and why>"
-\`\`\`
-
-When ending a session, capture a brief summary:
-\`\`\`bash
-hippo capture --stdin <<< '<decisions, errors, lessons: 2-5 bullets>'
-\`\`\`
-`.trim(),
-  },
-  'openclaw': {
-    file: 'AGENTS.md',
-    description: 'OpenClaw',
-    content: `
-## Project Memory (Hippo)
-
-At the start of every session, run:
-\`\`\`bash
-hippo context --auto --budget 1500
-\`\`\`
-Read the output before writing any code.
-
-On errors or unexpected behaviour, record it right then, while you work,
-never as a closing step:
-\`\`\`bash
-hippo remember "<description of what went wrong>" --error
-\`\`\`
-
-When you learn something that should outlive this session (a decision and
-its reason, a user preference, a lesson), record it right then, while you
-work, never as a closing step. Leave out secrets and personal details:
-\`\`\`bash
-hippo remember "<what you learned and why>"
-\`\`\`
-
-When ending a session, capture a brief summary:
-\`\`\`bash
-hippo capture --stdin <<< '<decisions, errors, lessons: 2-5 bullets>'
-\`\`\`
-`.trim(),
-  },
-  'opencode': {
-    file: 'AGENTS.md',
-    description: 'OpenCode',
-    content: `
-## Project Memory (Hippo)
-
-At the start of every task, run:
-\`\`\`bash
-hippo context --auto --budget 1500
-\`\`\`
-Read the output before writing any code.
-
-On errors or unexpected behaviour, record it right then, while you work,
-never as a closing step:
-\`\`\`bash
-hippo remember "<description of what went wrong>" --error
-\`\`\`
-
-When you learn something that should outlive this session (a decision and
-its reason, a user preference, a lesson), record it right then, while you
-work, never as a closing step. Leave out secrets and personal details:
-\`\`\`bash
-hippo remember "<what you learned and why>"
-\`\`\`
-
-When stuck or repeating yourself, check if this happened before:
-\`\`\`bash
-hippo recall "<what's going wrong>" --budget 2000
-\`\`\`
-
-When ending a session, capture a brief summary:
-\`\`\`bash
-hippo capture --stdin <<< '<decisions, errors, lessons: 2-5 bullets>'
-\`\`\`
-`.trim(),
-  },
-  'pi': {
-    file: 'AGENTS.md',
-    description: 'Pi',
-    content: `
-## Project Memory (Hippo)
-
-At the start of every session, run:
-\`\`\`bash
-hippo context --auto --budget 1500
-\`\`\`
-Read the output before writing any code.
-
-On errors or unexpected behaviour, record it right then, while you work,
-never as a closing step:
-\`\`\`bash
-hippo remember "<description of what went wrong>" --error
-\`\`\`
-
-When you learn something that should outlive this session (a decision and
-its reason, a user preference, a lesson), record it right then, while you
-work, never as a closing step. Leave out secrets and personal details:
-\`\`\`bash
-hippo remember "<what you learned and why>"
-\`\`\`
-
-When ending a session, capture a brief summary:
-\`\`\`bash
-hippo capture --stdin <<< '<decisions, errors, lessons: 2-5 bullets>'
-\`\`\`
-
-For full integration, copy the hippo-memory Pi extension to \`~/.pi/agent/extensions/hippo-memory/\`.
-`.trim(),
-  },
+  'cursor': { file: 'AGENTS.md', description: 'Cursor', content: agentsBlock('task') },
+  'openclaw': { file: 'AGENTS.md', description: 'OpenClaw', content: agentsBlock('session') },
+  'opencode': { file: 'AGENTS.md', description: 'OpenCode', content: agentsBlock('task', { recall: true }) },
+  'pi': { file: 'AGENTS.md', description: 'Pi', content: agentsBlock('session', { footer: PI_FOOTER }) },
 };
 
 // sha256 of each trimmed block an earlier hippo wrote, so init refreshes only blocks nobody edited. Add the old hash when a block changes.

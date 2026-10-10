@@ -84,6 +84,9 @@ export function ambientSecretAdmit(e: MemoryEntry, currentProject: ProjectRef): 
   return projectNames(currentProject).includes(origin);
 }
 
+/** Tokens a context block may use when the caller sets no budget; the hook command and the CLI default match it. */
+export const DEFAULT_CONTEXT_BUDGET = 1500;
+
 /** Most rows per store a no-query context reads; past it, ranking and ambientState see the strongest by decay. */
 const CONTEXT_CANDIDATE_CAP = 2000;
 
@@ -180,7 +183,7 @@ export async function getContext(
   ctx: Context,
   opts: ContextOpts = {},
 ): Promise<ContextResult> {
-  const budget = opts.budget ?? 1500;
+  const budget = opts.budget ?? DEFAULT_CONTEXT_BUDGET;
   assertScopeRequestAllowed(ctx.actor, opts.exactScope);
   if (budget <= 0) {
     return { entries: [], tokens: 0 };

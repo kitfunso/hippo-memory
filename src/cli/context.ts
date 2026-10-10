@@ -9,6 +9,7 @@ import { bookLedgerTurn } from '../api/ledger-db.js';
 import { readHookStdin } from './stdin.js';
 import { isJsonObject, isJsonString, type JsonValue } from '../util/json.js';
 import * as api from '../api/index.js';
+import { DEFAULT_CONTEXT_BUDGET } from '../api/context.js';
 import { resolveTenantId } from '../store/tenant.js';
 import { cliApiContext } from './api-context.js';
 import { renderAmbientSummary } from '../core/ambient.js';
@@ -85,7 +86,7 @@ async function renderContext(
     return;
   }
 
-  const budget = parseBudgetFlag(flags['budget'], 1500);
+  const budget = parseBudgetFlag(flags['budget'], DEFAULT_CONTEXT_BUDGET);
   if (budget <= 0) {
     rec?.disabled();
     return;

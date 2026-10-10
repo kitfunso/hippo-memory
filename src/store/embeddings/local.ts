@@ -11,9 +11,30 @@ const _require = createRequire(import.meta.url);
 let _embeddingAvailable: boolean | null = null;
 
 // A pipeline is expensive to load, so one instance per model is kept for the process.
-const _pipelineInstances = new Map<string, unknown>();
-const _pipelineLoading = new Map<string, Promise<unknown>>();
+const _pipelineInstances = new Map<string, EmbeddingPipeline>();
+const _pipelineLoading = new Map<string, Promise<EmbeddingPipeline | null>>();
 const _pipelineErrors = new Map<string, string>();
+
+/** The one call this file makes on a Transformers.js feature-extraction pipeline, and the part of its tensor it reads. */
+interface EmbeddingPipeline {
+  (input: string, options: { pooling: 'cls' | 'mean'; normalize: boolean }): Promise<{ data: ArrayLike<number> }>;
+}
+
+type PipelineFactory = (task: 'feature-extraction', model: string, options: { quantized: boolean }) => Promise<EmbeddingPipeline>;
+
+/** The settings written on the package's `env` object. */
+interface TransformersEnv {
+  cacheDir?: string;
+  localModelPath?: string;
+  allowRemoteModels?: boolean;
+}
+
+/** The parts of the optional package's module this file reads; either export spelling may carry `pipeline`. */
+interface TransformersModule {
+  env?: TransformersEnv;
+  pipeline?: PipelineFactory;
+  default?: { pipeline?: PipelineFactory };
+}
 
 export const DEFAULT_EMBEDDING_MODEL = 'Xenova/all-MiniLM-L6-v2';
 
@@ -75,10 +96,11 @@ function resolveTransformersPackage(): string | null {
   }
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function loadPipeline(model: string): Promise<any> {
-  if (_pipelineInstances.has(model)) return _pipelineInstances.get(model);
-  if (_pipelineLoading.has(model)) return _pipelineLoading.get(model);
+async function loadPipeline(model: string): Promise<EmbeddingPipeline | null> {
+  const loaded = _pipelineInstances.get(model);
+  if (loaded) return loaded;
+  const inFlight = _pipelineLoading.get(model);
+  if (inFlight) return inFlight;
 
   const loading = createPipeline(model);
 
@@ -87,9 +109,7 @@ async function loadPipeline(model: string): Promise<any> {
 }
 
 /** The model's pipeline, or null with the reason recorded in `_pipelineErrors`. */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function createPipeline(model: string): Promise<any> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function createPipeline(model: string): Promise<EmbeddingPipeline | null> {
   const pkg = resolveTransformersPackage();
   if (!pkg) {
     _pipelineErrors.set(model, 'no transformers package is installed');
@@ -119,22 +139,18 @@ async function createPipeline(model: string): Promise<any> {
 }
 
 /** The package's `pipeline` function, or null with the reason recorded in `_pipelineErrors`. */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function importPipelineFactory(pkg: string, model: string): Promise<any> {
-  let pipelineFn: any = null;
+async function importPipelineFactory(pkg: string, model: string): Promise<PipelineFactory | null> {
+  let pipelineFn: PipelineFactory | null = null;
   try {
-    // SAFETY: the resolved module's shape is untyped by design (optional peer
-    // dependency); pipelineFn/mod.env are read defensively below and any
-    // failure to find a usable pipeline falls through to `return null`.
-    const mod = await import(/* @vite-ignore */ pkg);
-    if (envModelCache()) {
-      if (mod.env) {
-        mod.env.cacheDir = envModelCache();
-        mod.env.localModelPath = envModelCache();
-        mod.env.allowRemoteModels = false;
-      }
+    // The package is an optional peer, so the dynamic import is typed by what this file reads; a missing export falls to the null below.
+    const mod: TransformersModule = await import(/* @vite-ignore */ pkg);
+    const cache = envModelCache();
+    if (cache && mod.env) {
+      mod.env.cacheDir = cache;
+      mod.env.localModelPath = cache;
+      mod.env.allowRemoteModels = false;
     }
-    pipelineFn = mod.pipeline ?? mod.default?.pipeline;
+    pipelineFn = mod.pipeline ?? mod.default?.pipeline ?? null;
   } catch (err) {
     // String(err) keeps a Node error's [ERR_...] code, which callers match on.
     const reason = `transformers import failed (${pkg}): ${String(err)}`;
@@ -184,14 +200,8 @@ export async function getEmbedding(
 
     const prefix = prefixFor(model, role);
     const input = prefix ? `${prefix}${text}` : text;
-    // SAFETY: pipe() is a Transformers.js feature-extraction pipeline call;
-    // its untyped output is read defensively below (only `.data`, cast on
-    // the return line to the documented Float32Array tensor shape).
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const output = await pipe(input, { pooling: poolingFor(model), normalize: true }) as any;
-    // SAFETY: output.data is a Float32Array per the feature-extraction
-    // pipeline's documented tensor output shape.
-    return Array.from(output.data as Float32Array);
+    const output = await pipe(input, { pooling: poolingFor(model), normalize: true });
+    return Array.from(output.data);
   } catch (err) {
     // The caller sees `[]` and names the memory; the reason only shows at debug.
     log.debug(`local embedding failed: ${errorMessage(err)}`);

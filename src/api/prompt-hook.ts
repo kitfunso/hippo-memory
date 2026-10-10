@@ -23,6 +23,7 @@ import {
 } from '../store/token-ledger.js';
 import { blockHash, estimateTokens } from '../util/token-text.js';
 import { errorMessage, log } from '../util/log.js';
+import { DEFAULT_CONTEXT_BUDGET } from './context.js';
 
 /** With `write`, stores on the token ledger's connection (same store); without it, opens its own. A second flush is a no-op. */
 export function flushDeliveryRecorder(rec: DeliveryRecorder | null, write?: DeliveryWrite): void {
@@ -193,7 +194,7 @@ function recordAdditionalContextRows(view: ContextView, surface: TokenSurface, s
 
 // The flags HIPPO_PINNED_INJECT_COMMAND gives the local hook; the CLI parity test fails if the two drift.
 const HOOK_INCLUDE_RECENT = 5;
-const HOOK_BUDGET = 1500;
+const HOOK_BUDGET = DEFAULT_CONTEXT_BUDGET;
 const HOOK_FRAMING = 'observe';
 
 // blockHash's shape (token-ledger.ts).
