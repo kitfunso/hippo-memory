@@ -15,14 +15,10 @@ import {
 import * as api from '../api/index.js';
 import { ConflictError, NotFoundError } from '../core/api-errors.js';
 import { isInitialized } from '../store/open.js';
-import { readEntry, loadAllEntries } from '../store/entry-reads.js';
-import { loadNewestEntries, schemaFitInStore } from '../store/candidates.js';
-import { updateStats } from '../store/index-and-stats.js';
+import { readEntry } from '../store/entry-reads.js';
 import { listMemoryConflicts } from '../store/conflicts.js';
 import { RejectedValueError } from '../store/rejection.js';
 import { renderTraceContent, parseSteps } from '../consolidate/trace.js';
-import { embedMemory } from '../store/embeddings/index.js';
-import { loadConfig } from '../core/config.js';
 import { extractPathTags } from '../search/path-context.js';
 import { detectScope } from '../sharing/scope.js';
 import { assertClientScope } from '../store/recall-scope.js';
@@ -30,7 +26,6 @@ import { getGlobalRoot, initGlobal } from '../sharing/global-store.js';
 import { vetSecrets } from '../util/secret-detect.js';
 import * as client from './client.js';
 import { cliApiContext } from './api-context.js';
-import { computeSalience } from '../core/salience.js';
 import { validateOwner, isStrictOwnerEnv } from './owner-validation.js';
 import { printError } from './output.js';
 import { requireInit, runViaServerIfAvailable } from './shared.js';
@@ -134,80 +129,34 @@ async function cmdRemember(
   }
 
   const { requested: requestedTags, all: allTags } = rememberTags(flags, process.cwd());
-
-  // Schema fit needs the store, which the routed request has no access to, so it stays here.
-  const schemaFit = schemaFitInStore(targetRoot, tenantId, text, requestedTags);
   const envelope = parseRememberEnvelope(flags);
 
-  const gate = salienceGate(text, allTags, targetRoot, tenantId, flags);
-  if (gate.skip) return;
-
-  const entry = writeRemembered(targetRoot, tenantId, {
+  const ctx = cliApiContext(targetRoot, tenantId);
+  const outcome = api.rememberLocally(ctx, {
     content: text,
     kind: envelope.kind as ('raw' | 'distilled' | 'superseded' | 'archived' | undefined),
     scope: envelope.scope ?? undefined,
     owner: envelope.owner ?? undefined,
     artifactRef: envelope.artifactRef ?? undefined,
     tags: allTags,
-    local: {
-      layer: Layer.Episodic,
-      pinned: boolFlag(flags, 'pin'),
-      source: useGlobal ? 'cli-global' : 'cli',
-      confidence: rememberConfidence(flags),
-      schemaFit,
-      weaken: gate.weaken,
-    },
+    // Schema fit is scored on the tags the caller typed, without the path and scope tags added from this process.
+    fitTags: requestedTags,
+    layer: Layer.Episodic,
+    pinned: boolFlag(flags, 'pin'),
+    source: useGlobal ? 'cli-global' : 'cli',
+    confidence: rememberConfidence(flags),
+    force: boolFlag(flags, 'force'),
   });
-  updateStats(targetRoot, { remembered: 1 });
-  printRemembered(entry, useGlobal);
-
-  void embedMemory(targetRoot, entry);
-  await extractRememberFacts(targetRoot, entry, flags);
-}
-
-/** The row as the store holds it after the write: the printout, the embedding and the extraction work on that. */
-function writeRemembered(targetRoot: string, tenantId: string, opts: api.RememberOpts): MemoryEntry {
-  const { id } = api.remember(cliApiContext(targetRoot, tenantId), opts);
-  const entry = readEntry(targetRoot, id, tenantId);
-  if (!entry) throw new Error(`memory ${id} was written but cannot be read back`);
-  return entry;
-}
-
-/** `skip` drops the write; `weaken` is a start_weak verdict, which the write applies to the new row. */
-interface GateVerdict {
-  skip: boolean;
-  weaken?: api.RememberLocal['weaken'];
-}
-
-function salienceGate(
-  text: string,
-  tags: string[],
-  targetRoot: string,
-  tenantId: string,
-  flags: CliFlags,
-): GateVerdict {
-  const { salience } = loadConfig(targetRoot);
-  if (!salience.enabled || boolFlag(flags, 'pin') || boolFlag(flags, 'force')) return { skip: false };
-  // computeSalience compares against the last `recentWindow` rows only; below 1 its slice takes every row, so that case still loads them all.
-  const window = Math.trunc(salience.recentWindow);
-  const recent = Number.isSafeInteger(window) && window >= 1
-    ? loadNewestEntries(targetRoot, tenantId, window)
-    : loadAllEntries(targetRoot, tenantId);
-  const salienceResult = computeSalience(text, tags, recent, {
-    recentWindow: salience.recentWindow,
-    overlapThreshold: salience.overlapThreshold,
-    minContentLength: salience.minContentLength,
-    maxRepeatErrors: salience.maxRepeatErrors,
-  });
-  if (salienceResult.decision === 'skip') {
-    console.log(`Skipped (salience: ${salienceResult.reason}, score ${salienceResult.score.toFixed(2)})`);
-    return { skip: true };
+  if (outcome.status === 'skipped') {
+    console.log(`Skipped (salience: ${outcome.reason}, score ${outcome.score.toFixed(2)})`);
+    return;
   }
-  if (salienceResult.decision === 'start_weak') {
-    console.log(`Weakened (salience: ${salienceResult.reason}, strength ${salienceResult.score.toFixed(2)})`);
-    return { skip: false, weaken: { strength: salienceResult.score, halfLifeFactor: 0.5 } };
-  }
-  return { skip: false };
+  const weak = outcome.startedWeak;
+  if (weak) console.log(`Weakened (salience: ${weak.reason}, strength ${weak.strength.toFixed(2)})`);
+  printRemembered(outcome.entry, useGlobal);
+
+  const request = { requested: boolFlag(flags, 'extract'), apiKey: envAnthropicApiKey() };
+  printExtraction(await api.extractRememberedFacts(ctx, outcome.entry, request));
 }
 
 function printRemembered(entry: MemoryEntry, useGlobal: boolean): void {
@@ -219,30 +168,11 @@ function printRemembered(entry: MemoryEntry, useGlobal: boolean): void {
   for (const w of vetSecrets(entry.content, entry.tags, false).warnings) printError(`Warning: ${w}`);
 }
 
-async function extractRememberFacts(targetRoot: string, entry: MemoryEntry, flags: CliFlags): Promise<void> {
-  const config = loadConfig(targetRoot);
-  const shouldExtract = flags['extract'] || config.extraction.enabled === true;
-  const apiKey = envAnthropicApiKey() ?? '';
-
-  if (shouldExtract && apiKey) {
-    try {
-      const { extractFacts, storeExtractedFacts } = await import('../learn/extract.js');
-      const facts = await extractFacts(entry.content, {
-        apiKey,
-        model: config.extraction.model,
-        onError: (msg) => printError(`  (extraction failed: ${msg})`),
-      });
-      if (facts.length > 0) {
-        storeExtractedFacts(targetRoot, entry, facts);
-        printError(`  extracted ${facts.length} fact(s)`);
-      }
-    } catch (err) {
-      // Extraction is best-effort: report it, never block remember.
-      printError(`  (extraction failed: ${errorMessage(err)})`);
-    }
-  } else if (shouldExtract && !apiKey) {
-    printError('  (extraction skipped: ANTHROPIC_API_KEY not set)');
-  }
+function printExtraction(extraction: api.FactExtraction): void {
+  if (extraction.status === 'no_key') printError('  (extraction skipped: ANTHROPIC_API_KEY not set)');
+  if (extraction.status !== 'ran') return;
+  for (const failure of extraction.failures) printError(`  (extraction failed: ${failure})`);
+  if (extraction.facts > 0) printError(`  extracted ${extraction.facts} fact(s)`);
 }
 
 function supersedeTags(flags: CliFlags): string[] | undefined {

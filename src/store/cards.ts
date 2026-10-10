@@ -4,6 +4,7 @@ import { SessionHandoff, SessionHandoffRow, rowToSessionHandoff, isHandoffOutcom
 import { Card, CardStatus, CardRun, CardComment, CARD_TRANSITIONS, CARD_LEASE_MS } from '../core/card.js';
 import { assertTenantId } from './tenant.js';
 import { openStore } from './open.js';
+import { chunked } from './entry-reads.js';
 import { HANDOFF_COLUMNS } from './handoffs.js';
 
 // ---------------------------------------------------------------------------
@@ -135,6 +136,11 @@ export interface TransitionCardOptions {
 }
 
 export function transitionCard(db: DatabaseSyncLike, tenantId: string, cardId: string, options: TransitionCardOptions): number {
+  return transitionCards(db, tenantId, [cardId], options);
+}
+
+/** transitionCard for every card in `cardIds`, as one statement with one timestamp; returns how many moved. */
+function transitionCards(db: DatabaseSyncLike, tenantId: string, cardIds: readonly string[], options: TransitionCardOptions): number {
   const { from, to, extra } = options;
   for (const status of from) {
     if (!CARD_TRANSITIONS[status].includes(to)) {
@@ -147,9 +153,9 @@ export function transitionCard(db: DatabaseSyncLike, tenantId: string, cardId: s
   const fromPlaceholders = from.map(() => '?').join(', ');
   const sql = `
     UPDATE cards SET status = ?, updated_at = ?, lease_until = ?, heartbeat_at = ?${extra?.setSql ? `, ${extra.setSql}` : ''}
-    WHERE id = ? AND tenant_id = ? AND status IN (${fromPlaceholders})${extra?.whereSql ? ` AND ${extra.whereSql}` : ''}
+    WHERE id IN (${cardIds.map(() => '?').join(', ')}) AND tenant_id = ? AND status IN (${fromPlaceholders})${extra?.whereSql ? ` AND ${extra.whereSql}` : ''}
   `;
-  const params: unknown[] = [to, now, ...lease, ...(extra?.params ?? []), cardId, tenantId, ...from];
+  const params: unknown[] = [to, now, ...lease, ...(extra?.params ?? []), ...cardIds, tenantId, ...from];
   const result = db.prepare(sql).run(...params);
   return Number(result.changes ?? 0);
 }
@@ -186,11 +192,10 @@ export function createCard(
         INSERT INTO cards (id, title, status, repo, contract, budget, created_at, updated_at, tenant_id)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(id, input.title, status, input.repo ?? null, input.contract ?? null, input.budget ?? null, now, now, tenantId);
-      for (const parentId of dependsOn) {
-        db.prepare(`
-          INSERT INTO card_deps (parent, child, tenant_id, created_at) VALUES (?, ?, ?, ?)
-        `).run(parentId, id, tenantId, now);
-      }
+      const insertDep = db.prepare(`
+        INSERT INTO card_deps (parent, child, tenant_id, created_at) VALUES (?, ?, ?, ?)
+      `);
+      for (const parentId of dependsOn) insertDep.run(parentId, id, tenantId, now);
     });
     return loadCardRow(db, tenantId, id)!;
   } finally {
@@ -472,32 +477,18 @@ export function completeCard(
 
 /** Moves to ready each backlog child of `parentId` whose parents are all done, and returns their ids. Call inside the write scope. */
 function promoteUnblockedChildren(db: DatabaseSyncLike, tenantId: string, parentId: string): string[] {
-  const promotedChildren: string[] = [];
-  // SAFETY: rows' shape matches the single `child` column named in the SELECT below.
-  const children = (db.prepare(`SELECT child FROM card_deps WHERE tenant_id = ? AND parent = ?`).all(
-    tenantId,
-    parentId
-  ) as Array<{ child: string }>).map((r) => r.child);
-  for (const childId of children) {
-    // SAFETY: row's shape matches the single `status` column named in the SELECT below.
-    const child = db.prepare(`SELECT status FROM cards WHERE tenant_id = ? AND id = ?`).get(tenantId, childId) as { status: string } | undefined;
-    if (!child || child.status !== 'backlog') continue;
-    // SAFETY: rows' shape matches the single `parent` column named in the SELECT below.
-    const parents = (db.prepare(`SELECT parent FROM card_deps WHERE tenant_id = ? AND child = ?`).all(
-      tenantId,
-      childId
-    ) as Array<{ parent: string }>).map((r) => r.parent);
-    const placeholders = parents.map(() => '?').join(', ');
-    // SAFETY: row's shape matches the single `c` column named in the SELECT below.
-    const doneCount = (db.prepare(
-      `SELECT COUNT(*) as c FROM cards WHERE tenant_id = ? AND id IN (${placeholders}) AND status = 'done'`,
-    ).get(tenantId, ...parents) as { c: number }).c;
-    if (doneCount === parents.length) {
-      transitionCard(db, tenantId, childId, { from: ['backlog'], to: 'ready' });
-      promotedChildren.push(childId);
-    }
-  }
-  return promotedChildren;
+  // The child's status and its open parents are result columns, not joins, so the rows keep the order of a plain read of the parent's children.
+  // SAFETY: rows' shape matches the three columns named in the SELECT below.
+  const children = db.prepare(`
+    SELECT d.child AS child,
+      (SELECT c.status FROM cards c WHERE c.tenant_id = ? AND c.id = d.child) AS status,
+      (SELECT COUNT(*) FROM card_deps p WHERE p.tenant_id = ? AND p.child = d.child
+        AND NOT EXISTS (SELECT 1 FROM cards pc WHERE pc.tenant_id = ? AND pc.id = p.parent AND pc.status = 'done')) AS open_parents
+    FROM card_deps d WHERE d.tenant_id = ? AND d.parent = ?
+  `).all(tenantId, tenantId, tenantId, tenantId, parentId) as Array<{ child: string; status: string | null; open_parents: number }>;
+  const unblocked = children.filter((r) => r.status === 'backlog' && r.open_parents === 0).map((r) => r.child);
+  for (const ids of chunked(unblocked)) transitionCards(db, tenantId, ids, { from: ['backlog'], to: 'ready' });
+  return unblocked;
 }
 
 /** Returns to ready every running card of the tenant whose lease has expired or is missing: clears its assignee, closes its live

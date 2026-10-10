@@ -4,10 +4,8 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { isInitialized } from '../store/open.js';
 import { readEntry, loadAllEntries } from '../store/entry-reads.js';
-import { schemaFitInStore } from '../store/candidates.js';
-import { updateStats } from '../store/index-and-stats.js';
 import { RejectedValueError } from '../store/rejection.js';
-import { embedAll, embedMemory } from '../store/embeddings/index.js';
+import { embedAll } from '../store/embeddings/index.js';
 import { loadEmbeddingIndex } from '../store/vector-index.js';
 import { captureError, runWatched } from '../learn/autolearn.js';
 import { currentMachine, importAtSessionEnd, importForStore } from '../agent-memories/sync.js';
@@ -31,7 +29,7 @@ import { printError } from './output.js';
 import { errorMessage, log } from '../util/log.js';
 import { requireInit, runViaServerIfAvailable, learnFromRepo } from './shared.js';
 import { fmt } from './print.js';
-import { type CliFlags, type CommandContext, boolFlag, flagIsTrue, nonEmptyStringFlag } from './flag-values.js';
+import { type CliFlags, type CommandContext, boolFlag, flagIsTrue, isStringFlag, nonEmptyStringFlag } from './flag-values.js';
 import { CONTENT_PREVIEW_CHARS, DATE_PREFIX_CHARS } from '../util/token-text.js';
 import { CliExit } from './exit.js';
 
@@ -62,18 +60,18 @@ async function cmdWatch(command: string, hippoRoot: string, tenantId: string): P
   }
 
   const failure = captureError(exitCode, stderr, command, tenantId);
-  const schemaFit = schemaFitInStore(hippoRoot, tenantId, failure.content, failure.tags);
   // A rejection-guard refusal of a failed command's output must not crash the watcher:
   // skip with the message below and still exit with the wrapped command's real exit code.
   try {
-    const { id } = api.remember(cliApiContext(hippoRoot, tenantId), {
+    api.rememberLocally(cliApiContext(hippoRoot, tenantId), {
       content: failure.content,
       tags: failure.tags,
-      local: { layer: failure.layer, source: failure.source, confidence: failure.confidence, schemaFit },
+      layer: failure.layer,
+      source: failure.source,
+      confidence: failure.confidence,
+      // A failure is stored each time it happens: watch has never put it to the salience gate.
+      force: true,
     });
-    updateStats(hippoRoot, { remembered: 1 });
-    const stored = readEntry(hippoRoot, id, tenantId);
-    if (stored) void embedMemory(hippoRoot, stored);
 
     const preview = stderr.trim().slice(0, STDERR_PREVIEW_CHARS);
     printError(`\nHippo learned from failure: "${preview}"`);
@@ -148,7 +146,7 @@ export function handleImport({ hippoRoot, tenantId, args, flags }: CommandContex
   const useGlobal = boolFlag(flags, 'global');
   const dryRun = boolFlag(flags, 'dry-run');
   const extraTags: string[] = Array.isArray(flags['tag'])
-    ? (flags['tag'] as string[])
+    ? flags['tag']
     : flags['tag']
       ? [String(flags['tag'])]
       : [];
@@ -306,13 +304,13 @@ function checkVaultArgs(folderPath: string, flags: CliFlags, useGlobal: boolean)
     printError('hippo import --vault does not support --global (raw rows are tenant-local).');
     throw new CliExit(1);
   }
-  if (typeof flags['name'] !== 'string' || !flags['name'].trim()) {
+  if (!isStringFlag(flags['name']) || !flags['name'].trim()) {
     // --name keys the destructive source-deletion sync; a folder-basename default lets same-basename vaults clobber
     // each other, and a valueless `--name` (boolean true) would silently import under vault:true:*.
     printError('hippo import --vault requires --name <vault> (a non-empty identity key for source-deletion sync).');
     throw new CliExit(1);
   }
-  if (flags['scope'] !== undefined && (typeof flags['scope'] !== 'string' || !flags['scope'].trim())) {
+  if (flags['scope'] !== undefined && (!isStringFlag(flags['scope']) || !flags['scope'].trim())) {
     // Same valueless-flag trap: a bare `--scope` must not become scope "true".
     // Example uses the source-prefixed private form, since a bare `private` scope
     // is NOT treated as private by recall and importVault rejects it.
@@ -470,7 +468,7 @@ export function handlePeers({ tenantId, flags }: CommandContext): void {
 
 export function handleExport({ hippoRoot, tenantId, args, flags }: CommandContext): void {
   requireInit(hippoRoot);
-  const format = (flags['format'] || 'json') as string;
+  const format = String(flags['format'] || 'json');
   const outputPath = args[0] || null;
   const entries = loadAllEntries(hippoRoot, tenantId);
 

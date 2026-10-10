@@ -7,7 +7,7 @@ import * as api from '../api/index.js';
 import { pruneAuditLog, parseOlderThanFlag } from './audit-prune.js';
 import { printError } from './output.js';
 import { cliApiContext } from './api-context.js';
-import { type CliFlags, type CommandContext, boolFlag, flagIsTrue, stringFlag } from './flag-values.js';
+import { type CliFlags, type CommandContext, boolFlag, flagIsTrue, isBooleanFlag, stringFlag } from './flag-values.js';
 import { requireInit, resolveAuthRoot } from './shared.js';
 import { repairAutomaticMemories } from './quality-repair.js';
 import { getGlobalRoot } from '../sharing/global-store.js';
@@ -28,19 +28,21 @@ function formatAuditRow(ev: AuditEvent): string {
 
 function readAuditOp(flags: CliFlags): AuditOp | undefined {
   const opFlag = stringFlag(flags, 'op');
+  // SAFETY: Set.has only compares by value, so a string outside the audit ops is a plain miss.
   if (opFlag && !VALID_AUDIT_OPS.has(opFlag as AuditOp)) {
     // Built from the Set so the message cannot drift from the valid ops.
     const expected = Array.from(VALID_AUDIT_OPS).join(' | ');
     printError(`Unknown --op value: ${opFlag}. Expected one of: ${expected}.`);
     throw new CliExit(1);
   }
+  // SAFETY: the exit above rejects every non-empty opFlag outside VALID_AUDIT_OPS, and an empty one is returned as given.
   return opFlag as AuditOp | undefined;
 }
 
 function readAuditLimit(flags: CliFlags): number {
   const limitRaw = flags['limit'];
   let limit = 100;
-  if (limitRaw !== undefined && typeof limitRaw !== 'boolean') {
+  if (limitRaw !== undefined && !isBooleanFlag(limitRaw)) {
     const parsed = parseInt(String(limitRaw), 10);
     if (!Number.isFinite(parsed)) {
       printError(`Invalid --limit value: ${String(limitRaw)} (expected a positive integer).`);

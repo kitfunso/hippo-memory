@@ -15,7 +15,7 @@ import type { SessionEvent, TaskSnapshot } from '../store/rows.js';
 import { printError } from './output.js';
 import { requireInit } from './shared.js';
 import { printActiveTaskSnapshot, printSessionEvents, printHandoff } from './print.js';
-import { type CliFlags, boolFlag, type CommandContext } from './flag-values.js';
+import { type CliFlags, boolFlag, isStringFlag, type CommandContext } from './flag-values.js';
 import { CliExit } from './exit.js';
 
 const ISO_DATETIME_CHARS = 19;
@@ -154,6 +154,11 @@ function sessionLatest(hippoRoot: string, tenantId: string, s: SessionArgs, flag
   printSessionEvents(events);
 }
 
+type SessionCompleteMetadata = {
+  ended_at: string;
+  summary?: string;
+};
+
 function sessionComplete(hippoRoot: string, tenantId: string, s: SessionArgs, flags: CliFlags): void {
   const { sessionId, task } = s;
   const outcomeRaw = String(flags['outcome'] ?? '').trim();
@@ -169,7 +174,7 @@ function sessionComplete(hippoRoot: string, tenantId: string, s: SessionArgs, fl
   }
   const outcome: HandoffOutcome = outcomeRaw;
 
-  const metadata: Record<string, unknown> = { ended_at: new Date().toISOString() };
+  const metadata: SessionCompleteMetadata = { ended_at: new Date().toISOString() };
   if (summary) metadata.summary = summary;
 
   const event = appendSessionEvent(hippoRoot, tenantId, {
@@ -251,7 +256,7 @@ function sessionResume(hippoRoot: string, tenantId: string, sessionId: string): 
 
 /** A repeatable flag as a list: absent is empty, one value is a singleton. */
 function flagList(value: string | boolean | string[] | undefined): string[] {
-  return Array.isArray(value) ? value : (typeof value === 'string' ? [value] : []);
+  return Array.isArray(value) ? value : (isStringFlag(value) ? [value] : []);
 }
 
 function handoffCreate(hippoRoot: string, tenantId: string, flags: CliFlags): void {

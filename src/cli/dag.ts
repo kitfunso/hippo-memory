@@ -107,13 +107,13 @@ async function cmdAssemble(hippoRoot: string, tenantId: string, sessionId: strin
     tenantId,
     actor: api.adminActor('cli:assemble'),
   };
-  const r = await api.assemble(ctx, sessionId, {
-    ...(Number.isFinite(budget) && budget! > 0 ? { budget } : {}),
-    ...(Number.isFinite(freshTailCount) && freshTailCount! >= 0 ? { freshTailCount } : {}),
-    summarizeOlder,
-    ...(scope !== undefined ? { scope } : {}),
-    cost: assembleCost(sessionId),
-  });
+  const opts: api.AssembleOpts = {};
+  if (Number.isFinite(budget) && budget! > 0) opts.budget = budget;
+  if (Number.isFinite(freshTailCount) && freshTailCount! >= 0) opts.freshTailCount = freshTailCount;
+  opts.summarizeOlder = summarizeOlder;
+  if (scope !== undefined) opts.scope = scope;
+  opts.cost = assembleCost(sessionId);
+  const r = await api.assemble(ctx, sessionId, opts);
   if (flags['json']) {
     console.log(JSON.stringify(r, null, 2));
     return;
@@ -148,12 +148,12 @@ async function cmdDrillDown(hippoRoot: string, tenantId: string, summaryId: stri
     tenantId,
     actor: api.adminActor('cli:drill'),
   };
-  const r = await api.drillDown(ctx, summaryId, {
-    ...(Number.isFinite(limit) && limit! > 0 ? { limit } : {}),
-    ...(Number.isFinite(budget) && budget! > 0 ? { budget } : {}),
-    ...(depth !== undefined ? { depth } : {}),
-    cost: drillCost,
-  });
+  const opts: api.DrillDownOpts = {};
+  if (Number.isFinite(limit) && limit! > 0) opts.limit = limit;
+  if (Number.isFinite(budget) && budget! > 0) opts.budget = budget;
+  if (depth !== undefined) opts.depth = depth;
+  opts.cost = drillCost;
+  const r = await api.drillDown(ctx, summaryId, opts);
   if ('failure' in r) {
     // Only `not_drillable` is caller-actionable. `not_found` collapses cross-tenant, scope-blocked
     // and missing on purpose: telling scope_blocked apart would leak that the row exists.
