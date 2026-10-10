@@ -73,8 +73,9 @@ function redactedTarget(url: string | URL): string {
   }
 }
 
-function warnRetry(init: RequestInit, url: string | URL, reason: string, attempt: number, attempts: number, delayMs: number): void {
-  log.warn('http retry', {
+function logRetry(init: RequestInit, url: string | URL, reason: string, attempt: number, attempts: number, delayMs: number): void {
+  // Debug: an attempt that may still succeed is not a warning, and the caller reports the final failure.
+  log.debug('http retry', {
     method: (init.method ?? 'GET').toUpperCase(), target: redactedTarget(url), reason, attempt: `${attempt}/${attempts}`, delayMs: Math.round(delayMs),
   });
 }
@@ -129,7 +130,7 @@ export async function fetchWithRetry(url: string | URL, init: RequestInit, polic
       // The caller's own abort is a decision, not a fault, so it ends the call.
       if (!retryTransport || attempt >= attempts || init.signal?.aborted || !isTransientTransportError(err)) throw err;
       const delay = backoffMs(attempt);
-      warnRetry(init, url, errorCode(err) || (err instanceof Error ? err.name : 'transport'), attempt, attempts, delay);
+      logRetry(init, url, errorCode(err) || (err instanceof Error ? err.name : 'transport'), attempt, attempts, delay);
       await backoffWait(delay, policy.sleep, init.signal);
       continue;
     }
@@ -140,7 +141,7 @@ export async function fetchWithRetry(url: string | URL, init: RequestInit, polic
     // Frees the pooled socket before the next attempt.
     await res.body?.cancel();
     const delay = retryAfter ?? backoffMs(attempt);
-    warnRetry(init, url, `status ${res.status}`, attempt, attempts, delay);
+    logRetry(init, url, `status ${res.status}`, attempt, attempts, delay);
     await backoffWait(delay, policy.sleep, init.signal);
   }
 }

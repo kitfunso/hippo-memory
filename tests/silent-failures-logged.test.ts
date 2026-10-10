@@ -60,7 +60,8 @@ function failStat(code: string, target: string): void {
 }
 
 describe('http retry', () => {
-  it('logs each retry with method, host and path, never the query', async () => {
+  it('logs each retry at debug with method, host and path, never the query', async () => {
+    process.env.HIPPO_LOG = 'debug';
     const replies = [new Response('', { status: 503 }), new Response('', { status: 429 }), new Response('ok')];
     const fetchFn = vi.fn(async () => replies.shift()!);
     const res = await fetchWithRetry('https://api.example.test/v1/items?key=SECRET', { method: 'POST' }, {
