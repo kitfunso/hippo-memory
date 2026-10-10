@@ -8,9 +8,9 @@ import { finishCodex } from '../scripts/token-eval/codex-task.mjs';
 import { codexArgs, resolveCodex, runCodexSession } from '../scripts/token-eval/codex.mjs';
 import { codexAdapter, parseRollouts } from '../scripts/token-eval/codex-rollout.mjs';
 import { tokenSweep, closeVault } from '../scripts/token-eval/codex-auth.mjs';
-import { codexPreflight } from '../scripts/token-eval/ab-run.mjs';
-import { cleanup, tmp, isolate } from './fixtures/z0-harness.js';
-import { operator, wrapOperator, codexCtx, codexRun, xTask, fakeSeen, filesHolding } from './fixtures/z0-codex-harness.js';
+import { codexPreflight, chooseArms } from '../scripts/token-eval/ab-run.mjs';
+import { cleanup, tmp, isolate, makeRepo } from './fixtures/z0-harness.js';
+import { operator, wrapOperator, codexCtx, codexRun, xTask, fakeSeen, filesHolding, xTrio } from './fixtures/z0-codex-harness.js';
 import type { CodexCtx, CodexOpts } from './fixtures/z0-codex-harness.js';
 
 afterEach(cleanup);
@@ -21,7 +21,9 @@ afterEach(() => {
 });
 const sha = (f: string) => createHash('sha256').update(readFileSync(f)).digest('hex');
 
-const LOCK_CODE = process.platform === 'win32' ? 'EBUSY' : 'EACCES';
+// The shell label a rollout with no environment_context gets on this platform.
+const SHELL = process.platform === 'win32' ? 'PowerShell' : 'Bash';
+const LOCK_CODE =process.platform === 'win32' ? 'EBUSY' : 'EACCES';
 
 /** Runs `fn` while `file` cannot be read or deleted (a sharing lock held by a child on Windows, mode 0 in a read-only dir on POSIX); null when root makes that impossible. */
 async function withUnreadable<T>(file: string, fn: () => T): Promise<T | null> {
@@ -82,6 +84,16 @@ describe('codex exec args and the real-run preflight (tests 4, 23)', () => {
     expect(() => codexPreflight(['X2'], 'dry', {})).not.toThrow();
     expect(() => codexPreflight(['A1'], 'real', {})).not.toThrow();
   });
+
+  it('a screen runs A0 and A4 whatever the tasks file holds, so it needs no model; an X arm named with it is refused', () => {
+    const spec = xTrio(makeRepo());
+    const screenArms = chooseArms(spec, null, true);
+    expect(screenArms).toEqual(['A0', 'A4']);
+    expect(() => codexPreflight(screenArms, 'real', {})).not.toThrow();
+    expect(() => codexPreflight(chooseArms(spec, null, false), 'real', {})).toThrow(/--codex-model/);
+    expect(chooseArms(spec, ['A0', 'A1'], true)).toEqual(['A0', 'A4']);
+    expect(() => chooseArms(spec, ['A0', 'X1', 'X2'], true)).toThrow(/--screen runs A0 and A4 only.*X1, X2/);
+  });
 });
 
 describe('the rollout parser (test 5)', () => {
@@ -122,14 +134,51 @@ describe('the rollout parser (test 5)', () => {
     const tools = codexAdapter.toolInputs([file]).map((x: { name: string; input: Record<string, string> }) => ({ name: x.name, ...x.input }));
     expect(tools).toEqual([
       { name: 'Edit', file_path: other, cwd: work },
-      { name: 'Bash', command: 'ls', cwd: work },
-      { name: 'Bash', command: `cat ${past}`, cwd: work },
-      { name: 'Bash', command: `cat ${past}\n`, cwd: work },
+      { name: SHELL, command: 'ls', cwd: work },
+      { name: SHELL, command: `cat ${past}`, cwd: work },
+      { name: SHELL, command: `cat ${past}\n`, cwd: work },
     ]);
     expect(parseRollouts([file]).unparsed).toEqual({ exec_command: 1 });
     const work2 = codexAdapter.transcriptWork([file], new Set<string>());
     expect(work2.shellReads).toBe(2);
     expect(work2.toolCalls).toBe(6);
+  });
+
+  /** A rollout in `dir` of `exec_command` calls; `shell` is what its environment_context names, null for no such item. */
+  function shellRollout(dir: string, shell: string | null, calls: Array<{ cmd: string; workdir?: string }>) {
+    const work = join(dir, 'work');
+    const context = shell === null ? [] : [{ type: 'message', role: 'user', content: [{ type: 'input_text', text: `<environment_context>\n  <cwd>${work}</cwd>\n  <shell>${shell}</shell>\n</environment_context>` }] }];
+    const items = calls.map((c, i) => ({ type: 'function_call', name: 'exec_command', call_id: `c${i}`, arguments: JSON.stringify(c) }));
+    const lines = [{ type: 'session_meta', payload: { id: 't1', cwd: work } }, ...[...context, ...items].map((payload) => ({ type: 'response_item', payload }))];
+    const file = join(dir, `rollout-${shell ?? 'none'}.jsonl`);
+    writeFileSync(file, `${lines.map((l) => JSON.stringify(l)).join('\n')}\n`);
+    return { file, work };
+  }
+
+  it('names the shell the rollout says and counts its reads: Get-Content reads in PowerShell only', () => {
+    const dir = tmp('z0-rollout-shell-');
+    const calls = [{ cmd: 'Get-Content README.md' }, { cmd: 'cat README.md' }];
+    const ps = shellRollout(dir, 'powershell', calls);
+    expect(codexAdapter.toolInputs([ps.file]).map((t: { name: string }) => t.name)).toEqual(['PowerShell', 'PowerShell']);
+    expect(codexAdapter.transcriptWork([ps.file], new Set<string>())).toMatchObject({ fileReads: 2, shellReads: 2 });
+    expect(codexAdapter.commandLog([ps.file])).toEqual(['Get-Content README.md', 'cat README.md']);
+    const bash = shellRollout(dir, 'bash', calls);
+    expect(codexAdapter.toolInputs([bash.file]).map((t: { name: string }) => t.name)).toEqual(['Bash', 'Bash']);
+    expect(codexAdapter.transcriptWork([bash.file], new Set<string>())).toMatchObject({ fileReads: 1, shellReads: 1 });
+    expect(codexAdapter.commandLog([bash.file])).toEqual(['Get-Content README.md', 'cat README.md']);
+  });
+
+  it('labels a call by the platform when the rollout names no shell: PowerShell on win32, so Get-Content counts there', () => {
+    const { file } = shellRollout(tmp('z0-rollout-noshell-'), null, [{ cmd: 'Get-Content README.md' }]);
+    expect(codexAdapter.toolInputs([file]).map((t: { name: string }) => t.name)).toEqual([SHELL]);
+    expect(codexAdapter.transcriptWork([file], new Set<string>()).fileReads).toBe(process.platform === 'win32' ? 1 : 0);
+  });
+
+  it('resolves a relative workdir against the session cwd and keeps an absolute one', () => {
+    const dir = tmp('z0-rollout-rel-');
+    const absolute = join(dir, 'abs');
+    const { file, work } = shellRollout(dir, 'bash', [{ cmd: 'ls', workdir: 'sub' }, { cmd: 'ls', workdir: join('..', 'other', 'work') }, { cmd: 'ls', workdir: absolute }]);
+    expect(codexAdapter.toolInputs([file]).map((t: { input: { cwd: string } }) => t.input.cwd)).toEqual([join(work, 'sub'), join(dir, 'other', 'work'), absolute]);
   });
 
   it('finds the rollout of a HANG session with no thread id, graded on a timeout and priced from the rollout (test 21)', async () => {

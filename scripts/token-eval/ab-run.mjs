@@ -10,7 +10,7 @@ import { validateFamilies, drawOrder, taskRoles } from './lessons.mjs';
 import { openContext, cacheTaskRepos } from './runs.mjs';
 import { assertNoPhraseLeaks } from './leaks.mjs';
 import { runSteps } from './task.mjs';
-import { planScreen, screenLines, runScreen } from './screen.mjs';
+import { planScreen, screenLines, runScreen, SCREEN_ARMS } from './screen.mjs';
 import { parseHookTrust } from './codex.mjs';
 import { finishCodex } from './codex-task.mjs';
 import { checkInstaller } from './codex-install.mjs';
@@ -61,7 +61,7 @@ function assertArmsPair(spec, arms) {
 // --seeds only lowers a count: E7 refuses an A0 or A4 seed past the prereg's two (prereg 122-124).
 const seedCap = (seeds) => (arm) => Math.min(seeds ?? ARM_SEEDS[arm], ARM_SEEDS[arm]);
 
-/** Every session in execution order, `{ seed, position, arm, sequence, taskId, t, role }`: position-major, arm order rotated by position + seed. */
+/** Every session in execution order, `{ seed, position, arm, sequence, taskId, t, role }`: position-major, each arm set's order rotated by position + seed. */
 export function planRuns(spec, arms, seedsFor = (arm) => ARM_SEEDS[arm]) {
   assertArmsPair(spec, arms);
   const steps = [];
@@ -69,9 +69,11 @@ export function planRuns(spec, arms, seedsFor = (arm) => ARM_SEEDS[arm]) {
   const maxTasks = Math.max(...spec.sequences.map((s) => s.tasks.length));
   for (let seed = 1; seed <= maxSeed; seed++) {
     const active = arms.filter((a) => seed <= seedsFor(a));
+    // Each set rotates alone and the sets run one after the other (RN, then X), so a set's order balance never depends on the other set's arm count (prereg 120).
+    const sets = [active.filter((a) => armSet(a) !== 'X'), active.filter((a) => armSet(a) === 'X')];
     const orders = new Map(spec.sequences.map((s) => [s.id, seededOrder(s, spec.families ?? [], seed)]));
     for (let position = 0; position < maxTasks; position++) {
-      for (const arm of rotate(active, position + seed)) {
+      for (const arm of sets.flatMap((set) => rotate(set, position + seed))) {
         for (const sequence of spec.sequences) {
           if (position >= sequence.tasks.length || !pairs(arm, sequence)) continue;
           const { tasks, roles } = orders.get(sequence.id);
@@ -162,6 +164,18 @@ function orderReport(steps) {
 const USAGE = 'Usage: node scripts/token-eval/ab-run.mjs --tasks tasks.json --out DIR --model MODEL [--arms A0,A1,A2,A4,A5,X1,X2,X3,X4] [--seeds N] [--pass-env NAME]... [--max-budget-usd N] [--session-timeout-min N] [--canaries FILE] [--screen] [--dry-run | --check-homes]\n  set X: --codex-model M [--codex-bin PATH] [--codex-auth auth.json] [--codex-hook-trust none|flag|file:PATH] [--codex-memory-wait none|poll:STABLE_MS:TIMEOUT_MS] [--codex-memories on|off] [--codex-wrapper-wait-ms N]';
 const CODEX_FLAGS = { codexBin: '--codex-bin', codexModel: '--codex-model', codexAuth: '--codex-auth', codexHookTrust: '--codex-hook-trust', codexMemoryWait: '--codex-memory-wait', codexMemories: '--codex-memories', codexWrapperWaitMs: '--codex-wrapper-wait-ms' };
 
+/** The arms a run uses: the named ones, else every arm the tasks file has a sequence for; a screen's are always A0 and A4 (prereg 68), so an X arm named with it is refused. */
+export function chooseArms(spec, named, screen) {
+  for (const a of named ?? []) if (!ARMS.includes(a)) throw new Error(`unknown arm ${a}; known: ${ARMS.join(', ')}`);
+  if (named && new Set(named).size !== named.length) throw new Error(`--arms names an arm twice (${named.join(',')}); each arm runs once`);
+  if (screen) {
+    const x = (named ?? []).filter((a) => armSet(a) === 'X');
+    if (x.length) throw new Error(`--screen runs A0 and A4 only, so --arms cannot name ${x.join(', ')}`);
+    return [...SCREEN_ARMS];
+  }
+  return named ?? ARMS.filter((a) => spec.sequences.some((s) => pairs(a, s)));
+}
+
 /** The command line, checked: the tasks file, out dir, arms, seeds, pass-env names and mode. */
 function parseArgs(argv) {
   const flag = (name, fallback) => {
@@ -175,10 +189,9 @@ function parseArgs(argv) {
     process.exit(1);
   }
   const spec = validateTasks(JSON.parse(fs.readFileSync(tasksFile, 'utf8')), path.dirname(path.resolve(tasksFile)));
-  const fitting = ARMS.filter((a) => spec.sequences.some((s) => pairs(a, s)));
-  const arms = flag('--arms', fitting.join(',')).split(',').map((a) => a.trim());
-  for (const a of arms) if (!ARMS.includes(a)) throw new Error(`unknown arm ${a}; known: ${ARMS.join(', ')}`);
-  if (new Set(arms).size !== arms.length) throw new Error(`--arms names an arm twice (${arms.join(',')}); each arm runs once`);
+  const named = flag('--arms', null);
+  const screen = argv.includes('--screen');
+  const arms = chooseArms(spec, named === null ? null : named.split(',').map((a) => a.trim()), screen);
   const timeoutArg = flag('--session-timeout-min', '60');
   if (!/^[1-9]\d*$/.test(timeoutArg)) throw new Error(`--session-timeout-min must be a positive integer, got ${timeoutArg}`);
   const seedsArg = flag('--seeds', null);
@@ -188,7 +201,7 @@ function parseArgs(argv) {
   if (canariesFile && canaries.length === 0) throw new Error(`--canaries ${canariesFile} holds no canary; one per line`);
   return {
     canaries,
-    flag, spec, arms, seeds: seedsArg === null ? null : Number(seedsArg), sessionTimeoutMs: Number(timeoutArg) * 60_000, out: path.resolve(outDir), screen: argv.includes('--screen'),
+    flag, spec, arms, seeds: seedsArg === null ? null : Number(seedsArg), sessionTimeoutMs: Number(timeoutArg) * 60_000, out: path.resolve(outDir), screen,
     passEnv: argv.flatMap((a, i) => (a === '--pass-env' && i + 1 < argv.length ? [argv[i + 1]] : [])),
     mode: argv.includes('--dry-run') ? 'dry' : (argv.includes('--check-homes') ? 'check' : 'real'),
   };

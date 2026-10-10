@@ -79,6 +79,23 @@ describe('set X in the plan (test 2)', () => {
     expect(steps.filter((st) => st.sequence.id === 'seqR').every((st) => st.role.set !== 'X')).toBe(true);
   });
 
+  it('rotates each set on its own, so every arm is first in its set equally often (prereg 120)', () => {
+    const tasks = (prefix: string, n: number) => Array.from({ length: n }, (_, i) => ({ id: `${prefix}${i}`, kind: 'no-lesson' }));
+    // 20 positions is a multiple of both the 5 A arms and the 4 X arms.
+    const spec = { sequences: [{ id: 'sr', fixedOrder: true, tasks: tasks('r', 20) }, { id: 'sx', set: 'X', fixedOrder: true, tasks: tasks('x', 20) }] };
+    const steps: Step[] = planRuns(spec, ['A0', 'A1', 'A2', 'A4', 'A5', 'X1', 'X2', 'X3', 'X4']);
+    const firstCounts = (sequence: string) => {
+      const counts = new Map<string, number>();
+      for (let position = 0; position < 20; position++) {
+        const first = steps.find((st) => st.seed === 1 && st.position === position && st.sequence.id === sequence)!.arm;
+        counts.set(first, (counts.get(first) ?? 0) + 1);
+      }
+      return [...counts.entries()].sort();
+    };
+    expect(firstCounts('sr')).toEqual(['A0', 'A1', 'A2', 'A4', 'A5'].map((arm) => [arm, 4]));
+    expect(firstCounts('sx')).toEqual(['X1', 'X2', 'X3', 'X4'].map((arm) => [arm, 5]));
+  });
+
   it('refuses an arm with no sequence of its set, naming it', () => {
     expect(() => planRuns(validateTasks(xSpec(), CHECKS), ['X1', 'A1'])).toThrow(/A1.*no sequence of set R or N/);
     const rOnly = xSpec(true);

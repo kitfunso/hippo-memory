@@ -117,7 +117,7 @@ export const fakeSeen = (log: string): FakeSeen[] => (existsSync(log) ? readFile
 
 /** A set X record with the Codex fields the runner adds. */
 export type XRecord = RunRecord & {
-  codexVersion?: string; codexMemories?: boolean; codexHookTrust?: string; codexAuth?: string; codexMemoryWait?: { ms: number; timedOut: boolean };
+  model?: string | null; codexVersion?: string; codexMemories?: boolean; codexHookTrust?: string; codexAuth?: string; codexMemoryWait?: { ms: number; timedOut: boolean };
   codexHooksFired?: { sent: number; injections: number } | null; codexInternalHooksFired?: { sent: number; injections: number } | null; codexWrapperCaptured?: boolean | null;
   codexWrapperWait?: { ms: number; timedOut: boolean; end: string | null } | null; codexStrayRollouts?: number; codexInternalUsage?: { usage: Record<string, number> } | null; x4Block?: string; wallMs?: number;
   chain?: { stored: boolean | null; shown: boolean | null; captured: boolean | null; capturedAny: boolean | null };

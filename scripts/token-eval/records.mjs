@@ -88,7 +88,7 @@ export function assistantIds(segments) {
 /** Turns of a turn with no result: distinct assistant message ids not in skip, a different unit from the result's num_turns. */
 export const assistantTurns = (segments, skip = new Set()) => [...assistantIds(segments)].filter((id) => !skip.has(id)).length;
 
-const SHELL_TOOLS = new Set(['Bash', 'PowerShell']);
+export const SHELL_TOOLS = new Set(['Bash', 'PowerShell']);
 const BASH_READ = /^(?:cat|head|tail|less|more|grep|rg)(?=\s|$)|^sed\s+-n(?=\s|$)/;
 // `type` reads a file only in PowerShell; in Git Bash it is a builtin that names a command.
 const PS_READ = /^(?:get-content|select-string|type|gc)(?=\s|$)/i;

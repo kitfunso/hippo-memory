@@ -58,7 +58,7 @@ function baseFields(ctx, run, step) {
   const { t, role } = step;
   const base = {
     schema: 'z0-record/1', set: role.set, tool: step.driver.tool, repo: run.s.repo, taskId: t.id, cluster: run.s.cluster, sequence: run.s.id,
-    position: step.position, order: step.order, arm: run.arm, seed: run.seed, model: ctx.model, claudeVersion: ctx.claudeVersion,
+    position: step.position, order: step.order, arm: run.arm, seed: run.seed, model: step.driver === CODEX_DRIVER ? ctx.codexModel : ctx.model, claudeVersion: ctx.claudeVersion,
     startedAt: new Date().toISOString(), baseCommit: null, kind: role.kind, familyId: role.familyId, lessonSource: role.lessonSource,
     applyIndex: role.applyIndex, afterReversal: role.afterReversal, tasksSinceTeach: role.tasksSinceTeach,
   };

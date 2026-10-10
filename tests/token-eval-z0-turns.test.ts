@@ -688,6 +688,19 @@ describe('family screen', () => {
     expect(existsSync(join(out, 'runs.jsonl'))).toBe(false);
   }, 300_000);
 
+  it('runs A0 and A4 and opens no Codex login when the tasks file holds a set X sequence and the caller names X arms', async () => {
+    const { out } = isolate('screen-x');
+    const r = makeRepo();
+    const fam: FamilyDef = { ...family('fK', [lesson('fK-l1', 'Write the fK file')]), screen: { id: 'fK-screen', baseRef: r.base, fixRef: r.fix, prompt: 'LESSON_TOLD SEED2_OK', test: 'node test.js', testFiles: ['test.js'] } };
+    const s = spec(r, [fam], [teach(r, 'tK', 'fK-l1', 'LESSON_BAD'), plain(r, 'n1'), plain(r, 'n2'), apply(r, 'aK1', 'fK-l1', 'look around only'), apply(r, 'aK2', 'fK-l1', 'look around only')]);
+    const withX = { ...s, sequences: [...s.sequences, { id: 'seqX', cluster: 'c', repo: r.repo, fixedOrder: true, set: 'X', tasks: [plain(r, 'x1'), plain(r, 'x2')] }] };
+    // isolate gives the run an empty HOME, so opening the Codex vault would throw for want of a login before the first session.
+    const v = await runScreen({ spec: withX, arms: ['X1', 'X2'], outDir: out, claudeBin: CLAUDE, settleMs: 0, warmup: false, log: () => {} });
+    expect(v.families.map((f: { familyId: string }) => f.familyId)).toEqual(['fK']);
+    const recs: Z0Record[] = readFileSync(join(out, 'screen.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l));
+    expect([...new Set(recs.map((x) => x.arm))].sort()).toEqual(['A0', 'A4']);
+  }, 300_000);
+
   it('a screen task with a symlinked instruction file stops the screen before any session', async () => {
     const { out, log } = isolate('screen-link');
     const r = makeRepo();

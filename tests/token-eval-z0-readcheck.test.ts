@@ -1,9 +1,11 @@
 // Z0 G1 read check and delivery voids (prereg 113, 159-162) with the fake Claude Code: a session that read past its own memory is void.
 import { describe, it, expect, beforeAll, afterAll, afterEach } from 'vitest';
-import { symlinkSync, writeFileSync, rmSync, readdirSync } from 'node:fs';
-import { join } from 'node:path';
+import { symlinkSync, writeFileSync, rmSync, readdirSync, mkdirSync } from 'node:fs';
+import { join, relative } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { resolveToken, foldPath } from '../scripts/token-eval/readcheck.mjs';
+import { resolveToken, foldPath, sessionVoid } from '../scripts/token-eval/readcheck.mjs';
+import { codexAdapter } from '../scripts/token-eval/codex-rollout.mjs';
+import { runDirs } from '../scripts/token-eval/homes.mjs';
 import { __setSettleHook } from '../scripts/token-eval/runs.mjs';
 import { g1 } from '../scripts/token-eval/z0-gates.mjs';
 import { validateCorpus } from './fixtures/z0-contract.js';
@@ -78,6 +80,40 @@ describe('reads outside the cell (one A1 run, one read per task)', () => {
   it('type, uuid and sessionId from different objects do not make a transcript line', () => expect(find(recs, 'A1', 'scattered').void).toBeNull());
   it('a transcript record nested inside other output still voids', () => expectRead('nestedRecord', 'transcript-content'));
   it('a transcript line printed with colour escapes still voids', () => expectRead('coloured', 'transcript-content'));
+});
+
+describe('a Codex call\'s workdir is a read of that dir', () => {
+  afterEach(cleanup);
+
+  /** G1 over one fake rollout whose only call is `cmd` run in `workdir` (null: no workdir), from the X1 run's own session cwd. */
+  function codexVerdict(cmd: string, workdir: (own: string, other: string) => string | null) {
+    const out = tmp('z0-workdir-');
+    const own = runDirs(out, 'seqF', 'X1', 1);
+    const other = runDirs(out, 'seqF', 'X2', 1);
+    for (const d of [own.work, other.work]) mkdirSync(d, { recursive: true });
+    const wd = workdir(own.work, other.work);
+    const items = [{ type: 'function_call', name: 'exec_command', call_id: 'c1', arguments: JSON.stringify({ cmd, workdir: wd ?? undefined }) }];
+    const lines = [{ type: 'session_meta', payload: { id: 't1', cwd: own.work } }, ...items.map((payload) => ({ type: 'response_item', payload }))];
+    const file = join(out, 'rollout-t1.jsonl');
+    writeFileSync(file, `${lines.map((l) => JSON.stringify(l)).join('\n')}\n`);
+    const ctx = { outDir: out, cacheDir: join(out, 'repo-cache'), operatorEnv: { ...process.env }, foreignDirs: [], canaries: [] };
+    return sessionVoid(ctx, { arm: 'X1', dirs: own, env: {} }, { order: 1 }, { files: [file], ownIds: ['t1'], delivery: [], adapter: codexAdapter, env: {} });
+  }
+
+  it('a bare filename read in another run\'s work dir voids; the same read in the run\'s own work dir does not', () => {
+    const foreign = codexVerdict('Get-Content MEMORY.md', (_own, other) => other);
+    expect(foreign.void).toBe('read');
+    expect(foreign.voidHits.map((h: { class: string | null }) => h.class)).toContain('other-run');
+    expect(codexVerdict('Get-Content MEMORY.md', (own) => own)).toEqual({ void: null, voidHits: [] });
+    expect(codexVerdict('Get-Content MEMORY.md', () => null)).toEqual({ void: null, voidHits: [] });
+  });
+
+  it('a relative workdir naming another run\'s dir resolves against the session cwd and voids', () => {
+    const verdict = codexVerdict('Get-Content MEMORY.md', (own, other) => relative(own, other));
+    expect(verdict.void).toBe('read');
+    expect(verdict.voidHits.map((h: { class: string | null }) => h.class)).toContain('other-run');
+    expect(codexVerdict('Get-Content MEMORY.md', () => 'src').void).toBeNull();
+  });
 });
 
 describe('resolveToken', () => {

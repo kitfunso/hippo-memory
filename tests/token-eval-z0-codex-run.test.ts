@@ -18,16 +18,16 @@ describe('set X end to end (test 6)', () => {
   it('runs teaches in Claude and applies once each in Codex, as records the contract takes', async () => {
     const { out, log, op, codexLog } = xIsolate('e2e');
     const prompts = Object.fromEntries(X_IDS.flatMap((id) => [[`t-${id}`, 'LESSON_BAD'], [`a-${id}`, 'FIX\nLESSON_BAD'], [`b-${id}`, 'FIX\nLESSON_OK']]));
-    await xRun(xTrio(makeRepo(), prompts), ['X1'], out, op);
+    await xRun(xTrio(makeRepo(), prompts), ['X1'], out, op, { model: 'claude-fake' });
     const { records } = parseZ0Records(readFileSync(join(out, 'runs.jsonl'), 'utf8'), 'runs.jsonl');
     expect(records).toHaveLength(9);
     const recs = xRecords(out);
     for (const id of X_IDS) {
       const t = find(recs, 'X1', `t-${id}`);
-      expect([t.tool, t.invalid, t.teachTurns], t.taskId).toEqual(['claude-code', null, 1]);
+      expect([t.tool, t.invalid, t.teachTurns, t.model], t.taskId).toEqual(['claude-code', null, 1, 'claude-fake']);
       for (const [task, first] of [[`a-${id}`, 'fail'], [`b-${id}`, 'pass']]) {
         const a = find(recs, 'X1', task);
-        expect([a.tool, a.invalid, a.void, a.correctionTurns, a.acceptancePassed], task).toEqual(['codex', null, null, 0, true]);
+        expect([a.tool, a.invalid, a.void, a.correctionTurns, a.acceptancePassed, a.model], task).toEqual(['codex', null, null, 0, true, 'gpt-fake']);
         expect(a.lessons[0], task).toMatchObject({ first, final: first });
         expect(a.usage, task).toEqual({ firstSession: { inputTokens: 500, cacheWriteTokens: 0, cacheReadTokens: 1500, outputTokens: 120 }, extra: ZERO });
         expect(a, task).toMatchObject({ costUsd: null, turns: 2, turnsSource: 'rollout', codexAuth: 'copied-file', codexVersion: 'codex-cli 0.153.4-fake', codexMemories: true, codexHookTrust: 'none' });

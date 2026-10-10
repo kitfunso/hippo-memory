@@ -2,7 +2,7 @@
 // Field names follow Codex 0.153.4; the smoke stage pins them against the version each run records.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { isShellRead, errorRepeated } from './records.mjs';
+import { isShellRead, errorRepeated, SHELL_TOOLS } from './records.mjs';
 
 /** session_meta sources of Codex's own memory threads; smoke fills it (plan R21), so until then every outside rollout is a stray. */
 export const CODEX_INTERNAL_SOURCES = [];
@@ -11,6 +11,7 @@ const NO_FS_CALLS = new Set(['wait', 'sleep', 'send_message', 'followup_task', '
 const CELL_CALLS = new Set(['exec', 'js']);
 const ESCAPES = { n: '\n', t: '\t', r: '\r', b: '\b', f: '\f', v: '\v', 0: '\0' };
 const FAILED = /exited with code [1-9]/i;
+const SHELL_TAG = /<environment_context>[\s\S]*?<shell>\s*([^<\s]+)\s*<\/shell>/;
 
 const isObject = (v) => v !== null && v !== undefined && v.constructor === Object;
 const isString = (v) => v !== null && v !== undefined && v.constructor === String;
@@ -157,6 +158,11 @@ function cellCalls(code) {
   return calls;
 }
 
+// A relative workdir means a directory under the session cwd, never under this process's.
+const resolveDir = (dir, st) => (!dir || !st.cwd || path.isAbsolute(dir) ? dir : path.resolve(st.cwd, dir));
+// Codex names its shell in the environment_context it sends; a rollout without one (the fake) gets the platform's default shell.
+const shellTool = (st) => (/^(?:powershell|pwsh)/i.test(st.shell ?? (process.platform === 'win32' ? 'powershell' : '')) ? 'PowerShell' : 'Bash');
+
 const joinCmd = (v) => (Array.isArray(v) ? v.join(' ') : v);
 
 /** A function_call's arguments as a cell call; js code goes through cellCalls. */
@@ -182,20 +188,21 @@ function emitCall(call, st, out) {
   bump(out.calls, call.name);
   if (call.name.startsWith('mcp__') || call.name.includes('codex_app')) out.mcp.push(call.name);
   if (NO_FS_CALLS.has(call.name)) return;
-  const shell = (command, cwd) => out.tools.push({ file: st.file, name: 'Bash', input: { command, cwd }, callId: st.callId });
+  const shell = (command, cwd) => out.tools.push({ file: st.file, name: shellTool(st), input: { command, cwd }, callId: st.callId });
   if ((call.name === 'exec_command' || call.name === 'shell_command') && call.cmd !== null) {
-    st.lastWorkdir = call.workdir ?? st.cwd;
+    st.lastWorkdir = resolveDir(call.workdir, st) ?? st.cwd;
     st.callCwd.set(st.callId, st.lastWorkdir);
     shell(call.cmd, st.lastWorkdir);
   } else if (call.name === 'write_stdin' && isString(call.chars)) {
     shell(call.chars, st.sessions.get(String(call.sessionId)) ?? st.lastWorkdir ?? st.cwd);
   } else if (call.name === 'apply_patch' && call.patch !== null) {
-    for (const p of patchPaths(call.patch)) out.tools.push({ file: st.file, name: 'Edit', input: { file_path: p, cwd: call.workdir ?? st.cwd }, callId: st.callId });
+    for (const p of patchPaths(call.patch)) out.tools.push({ file: st.file, name: 'Edit', input: { file_path: p, cwd: resolveDir(call.workdir, st) ?? st.cwd }, callId: st.callId });
   } else bump(out.unparsed, call.name);
 }
 
 function readItem(p, st, out) {
   st.callId = p.call_id ?? null;
+  if (p.type === 'message' && p.role === 'user') st.shell = SHELL_TAG.exec(outputText(p.content))?.[1] ?? st.shell;
   if (p.type === 'custom_tool_call') {
     if (p.name === 'exec') {
       bump(out.calls, 'exec');
@@ -218,7 +225,7 @@ export function parseRollouts(files) {
   const out = { tools: [], outputs: [], hooks: [], calls: {}, unparsed: {}, mcp: [] };
   for (const file of files) {
     const lines = rolloutLines(file);
-    const st = { file, cwd: lines.find((o) => o.type === 'session_meta')?.payload?.cwd ?? null, lastWorkdir: null, callId: null, sessions: new Map(), callCwd: new Map() };
+    const st = { file, cwd: lines.find((o) => o.type === 'session_meta')?.payload?.cwd ?? null, lastWorkdir: null, shell: null, callId: null, sessions: new Map(), callCwd: new Map() };
     for (const o of lines) {
       if (o.type === 'turn_context' && o.payload?.cwd) st.cwd = o.payload.cwd;
       else if (o.type === 'response_item' && isObject(o.payload)) readItem(o.payload, st, out);
@@ -234,11 +241,11 @@ export const codexAdapter = {
   toolInputs: (files) => parseRollouts(files).tools.map(strip),
   toolResultTexts: (files) => parseRollouts(files).outputs.map(({ file, text }) => ({ file, text })),
   hookContexts: (files) => parseRollouts(files).hooks,
-  commandLog: (files) => parseRollouts(files).tools.filter((t) => t.name === 'Bash').map((t) => t.input.command),
+  commandLog: (files) => parseRollouts(files).tools.filter((t) => SHELL_TOOLS.has(t.name)).map((t) => t.input.command),
   transcriptWork(files, seenErrors) {
     if (files.length === 0) return { toolCalls: null, fileReads: null, shellReads: null, repeatedErrors: null };
     const parsed = parseRollouts(files);
-    const reads = parsed.tools.filter((t) => t.name === 'Bash' && isShellRead('Bash', t.input.command)).length;
+    const reads = parsed.tools.filter((t) => SHELL_TOOLS.has(t.name) && isShellRead(t.name, t.input.command)).length;
     const toolCalls = Object.entries(parsed.calls).filter(([name]) => !CELL_CALLS.has(name)).reduce((n, [, c]) => n + c, 0);
     const repeatedErrors = parsed.outputs.filter((o) => o.failed && errorRepeated(o.text, seenErrors)).length;
     return { toolCalls, fileReads: reads, shellReads: reads, repeatedErrors };

@@ -5,6 +5,7 @@ import { openContext } from './runs.mjs';
 import { runSteps } from './task.mjs';
 
 const SCREEN_SEEDS = [1, 2];
+export const SCREEN_ARMS = ['A0', 'A4'];
 const A0_OF = 4;
 const A4_OF = 2;
 
@@ -63,7 +64,8 @@ export function screenLines(spec, steps) {
 
 /** Run the screen; records go to screen.jsonl and the keep and drop lists to screen.json. */
 export async function runScreen(opts) {
-  const ctx = await openContext({ ...opts, recordsFile: 'screen.jsonl', screen: true });
+  // arms is pinned here, so no caller can open the Codex login vault for a screen.
+  const ctx = await openContext({ ...opts, arms: SCREEN_ARMS, recordsFile: 'screen.jsonl', screen: true });
   const records = await runSteps(ctx, planScreen(opts.spec));
   const verdicts = screenVerdicts(records, opts.spec);
   fs.writeFileSync(path.join(opts.outDir, 'screen.json'), `${JSON.stringify(verdicts, null, 2)}\n`);

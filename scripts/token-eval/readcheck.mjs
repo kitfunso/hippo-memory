@@ -3,7 +3,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { stripVTControlCharacters } from 'node:util';
 import { HIPPO_ARMS } from './arms.mjs';
-import { toolInputs, toolResultTexts, hookContexts, segmentText, asSegment } from './records.mjs';
+import { toolInputs, toolResultTexts, hookContexts, segmentText, asSegment, SHELL_TOOLS } from './records.mjs';
 
 /** Void reasons in precedence order: the record's `void` is the first one hit. */
 export const VOID_ORDER = ['operator-canary', 'read', 'auto-memory', 'user-instructions', 'hippo-text'];
@@ -206,7 +206,10 @@ function pathHits(run, b, files, fileName, how) {
   const opts = { env: how.env, platform: process.platform };
   const hits = [];
   for (const { file, name, input } of how.adapter.toolInputs(files)) {
-    for (const { token, search, cwd } of toolPaths(name, input, input.cwd ?? run.dirs.work, opts)) {
+    const paths = toolPaths(name, input, input.cwd ?? run.dirs.work, opts);
+    // A Codex shell call's workdir counts as a read the way a `cd` target does: a bare filename in a foreign dir names no path (prereg 113).
+    if (SHELL_TOOLS.has(name) && input.cwd && input.cwd !== run.dirs.work) paths.unshift({ token: input.cwd, search: false, cwd: run.dirs.work });
+    for (const { token, search, cwd } of paths) {
       const p = b.fold(cutWildcard(resolveToken(token, { ...opts, cwd })));
       const cls = classify(b, p, search);
       if (cls && (!how.outsideOnly || OUTSIDE.has(cls))) hits.push(hit('read', cls, name, p, fileName(file)));

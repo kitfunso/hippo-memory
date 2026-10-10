@@ -112,7 +112,7 @@ export async function openContext(opts) {
     const warmArgs = ['-p', '--output-format', 'json', '--setting-sources', 'project', '--strict-mcp-config', ...(ctx.model ? ['--model', ctx.model] : [])];
     sh(`${claude} ${warmArgs.join(' ')}`, warmDir, warmEnv, 10 * 60_000, 'Reply with the single word OK.');
   }
-  // Last, since it opens the login vault, which only runAll's finally closes.
+  // Last, so a refused step above leaves no login copy; runAll closes the vault in its catch and after runSteps, and a screen never opens it.
   if ((opts.arms ?? []).some((a) => armSet(a) === 'X')) Object.assign(ctx, codexContext(opts, process.env));
   return ctx;
 }

@@ -105,7 +105,7 @@ export function oneLesson(r: FixtureRepo, prompts: Record<string, string> = {}, 
   ]);
 }
 
-export interface RunExtra { passEnv?: string[]; limitWaitMs?: number; limitMaxWaits?: number; sessionTimeoutMs?: number; canaries?: string[]; log?: (m: string) => void }
+export interface RunExtra { model?: string | null; passEnv?: string[]; limitWaitMs?: number; limitMaxWaits?: number; sessionTimeoutMs?: number; canaries?: string[]; log?: (m: string) => void }
 export async function run(s: ReturnType<typeof spec>, arms: string[], out: string, extra: RunExtra = {}) {
   return runAll({ spec: s, arms, seeds: 1, outDir: out, model: null, claudeBin: CLAUDE, settleMs: 0, warmup: false, log: () => {}, ...extra });
 }
