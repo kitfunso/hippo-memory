@@ -74,8 +74,22 @@ export function redact(vault, codexHome, text) {
   return out;
 }
 
+/** `read()`, or null when its path is gone; any error but ENOENT still throws. */
+function unlessGone(read) {
+  try {
+    return read();
+  } catch (err) {
+    // A hippo worker may still be closing its store under the sweep, and a file that no longer exists holds no token.
+    if (err.code !== 'ENOENT') throw err;
+    return null;
+  }
+}
+
+/** A file's bytes, or null when the file is gone. */
+export const readIfPresent = (file) => unlessGone(() => fs.readFileSync(file));
+
 function* walk(dir) {
-  for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+  for (const e of unlessGone(() => fs.readdirSync(dir, { withFileTypes: true })) ?? []) {
     const p = path.join(e.parentPath ?? dir, e.name);
     if (e.isDirectory()) yield* walk(p);
     else if (e.isFile()) yield p;
@@ -90,8 +104,8 @@ export function tokenSweep(vault, roots, outDir) {
     if (!fs.existsSync(root)) continue;
     const files = fs.statSync(root).isDirectory() ? [...walk(root)] : [root];
     for (const f of files) {
-      const bytes = fs.readFileSync(f);
-      if (!tokens.some((t) => bytes.includes(t))) continue;
+      const bytes = readIfPresent(f);
+      if (bytes === null || !tokens.some((t) => bytes.includes(t))) continue;
       fs.rmSync(f, { force: true });
       hits.push(path.relative(outDir, f).split(path.sep).join('/'));
     }

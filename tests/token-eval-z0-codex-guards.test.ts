@@ -82,15 +82,17 @@ describe('the X2 chain (test 19)', () => {
     expect(a.chain).toMatchObject({ captured: true, shown: true });
   }, 240_000);
 
-  it('counts hook rows for the Codex thread and the wrapper capture line for that thread only', async () => {
+  it('counts hook rows for the Codex thread and reads the wrapper\'s digest line for it', async () => {
     const { out, op } = xIsolate('x2hooks');
-    const prompts = { 'a-xa': 'HOOKROW\nWRAPLOG', 'b-xa': 'WRAPLOG_OTHER' };
+    const prompts = { 'a-xa': 'HOOKROW\nFINALMSG' };
     await xRun(xTrio(makeRepo(), prompts), ['X2'], out, op);
     const recs = xRecords(out);
     const a = find(recs, 'X2', 'a-xa');
     expect([a.codexHooksFired?.injections, a.codexInternalHooksFired, a.codexWrapperCaptured]).toEqual([1, null, true]);
+    expect(a.codexWrapperWait).toMatchObject({ timedOut: false, end: expect.stringMatching(/^digest: wrote 1 sentence/) });
     const b = find(recs, 'X2', 'b-xa');
     expect([b.codexHooksFired?.injections, b.codexWrapperCaptured]).toEqual([0, false]);
+    expect(b.codexWrapperWait?.end).toBe('digest: skip: no final message and no edits');
   }, 240_000);
 });
 

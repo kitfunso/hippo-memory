@@ -101,6 +101,12 @@ export function parseCodexMemories(spec = 'on') {
   return spec === 'on';
 }
 
+/** `--codex-wrapper-wait-ms N`: how long an X2 cell waits for the end line of hippo's Codex worker; 0 reads the log once. */
+export function parseWrapperWait(spec = '120000') {
+  if (!/^\d+$/.test(String(spec))) throw new Error(`--codex-wrapper-wait-ms must be a whole number of milliseconds, got ${spec}`);
+  return Number(spec);
+}
+
 /** The run's config.toml, the same for X1 to X4 apart from the trust path; then the run launcher. */
 export function writeCodexHome(ctx, run) {
   const { codexHome, home, bin } = run.dirs;
@@ -166,7 +172,7 @@ export function codexContext(opts, baseEnv = process.env) {
   const fields = {
     codexModel: opts.codexModel ?? null, codexHookTrust: parseHookTrust(opts.codexHookTrust), codexMemoryWait: parseMemoryWait(opts.codexMemoryWait),
     codexMemories: parseCodexMemories(opts.codexMemories), codexTokenFiles: opts.codexTokenFiles ?? CODEX_TOKEN_FILES,
-    codexInternalSources: opts.codexInternalSources ?? CODEX_INTERNAL_SOURCES,
+    codexInternalSources: opts.codexInternalSources ?? CODEX_INTERNAL_SOURCES, codexWrapperWaitMs: parseWrapperWait(opts.codexWrapperWaitMs),
   };
   const codexLauncher = resolveCodex(opts.codexBin ?? 'codex', baseEnv);
   const version = codexVersion(codexLauncher.path, baseEnv);

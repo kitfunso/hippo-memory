@@ -17,7 +17,7 @@ import { teachMessage, withTaught, memoryText, wordOverlap } from './lessons.mjs
 import { cellName, snapshotSurfaces, restoreSurfaces, recordInjected } from './surfaces.mjs';
 import { deliveryHits, sessionVoid, byPrecedence, foldPath, under } from './readcheck.mjs';
 import { followedOf } from './z0-records.mjs';
-import { CODEX_DRIVER, driverOf, codexSession, codexPricing, codexVoid, codexFields, shownAtStartCodex, writeX4Block, sweepCell } from './codex-task.mjs';
+import { CODEX_DRIVER, driverOf, codexSession, codexPricing, codexVoid, codexFields, shownAtStartCodex, writeX4Block, sweepCell, wrapperWait } from './codex-task.mjs';
 import { installHippoCodex } from './codex-install.mjs';
 
 // The arms whose teach cells record what hippo captured (prereg 182).
@@ -354,6 +354,7 @@ async function runTurns(ctx, run, step, stage, base) {
   // Before the end hooks and the hidden tests, so the final tree is the agent's alone.
   if (!stage.fault) stage.finalPost = guarded(run, t, stage, () => stateCommit(work, stage.pre));
   await settle(ctx, run, t.id, 'end');
+  if (step.driver === CODEX_DRIVER && run.arm === 'X2') session.wrapper = await wrapperWait(ctx, run, t.id, session.threadId);
   snapshotSurfaces(ctx, run, 'end', step);
   if (HIPPO_ARMS.has(run.arm)) stage.injected = hippoEnd(ctx, run, step, stage, sessionIds);
   guarded(run, t, stage, () => noteWorktrees(ctx, run, step));

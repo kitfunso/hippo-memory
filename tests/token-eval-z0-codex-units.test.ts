@@ -1,9 +1,12 @@
 // Z0 set X units: the tasks file, the plan, arm settings and env, the Codex args, rollout parser, waits and auth.
 import { describe, it, expect, afterEach } from 'vitest';
-import { delimiter } from 'node:path';
+import { delimiter, join } from 'node:path';
 import { validateTasks, planRuns } from '../scripts/token-eval/ab-run.mjs';
 import { armEnv, armSettings, ARM_SEEDS, HIPPO_ARMS, CARRY_ARMS } from '../scripts/token-eval/arms.mjs';
 import { runDirs } from '../scripts/token-eval/homes.mjs';
+import { parseWrapperWait } from '../scripts/token-eval/codex.mjs';
+import { wrapperVerdict, wrapperWait } from '../scripts/token-eval/codex-task.mjs';
+import { readIfPresent } from '../scripts/token-eval/codex-auth.mjs';
 import { CHECKS, cleanup, tmp, lesson, family, task, teach, apply } from './fixtures/z0-harness.js';
 import type { FixtureRepo, TaskDef } from './fixtures/z0-harness.js';
 
@@ -106,5 +109,50 @@ describe('X arm settings and env (test 3)', () => {
       expect(env.CLAUDE_CODE_DISABLE_AUTO_MEMORY, arm).toBe('0');
       expect((env.PATH ?? '').split(delimiter)[0] === dirs.bin, arm).toBe(arm === 'X2');
     }
+  });
+});
+
+describe('the wrapper\'s end line (R17)', () => {
+  const ID = '0199a7c2-4d1e-7b30-9c55-2f6e8a41d0b7';
+  const at = (text: string) => `[hippo] 2026-01-01T00:00:00.000Z ${text}`;
+  const START = at('consolidating memory...');
+  const wrote = (id: string) => at(`digest: wrote 1 sentence(s), 0 file(s) for rollout-x-${id}`);
+
+  it('is captured when the digest line names this thread\'s rollout, and not when it names another', () => {
+    const log = [START, 'Sleep done.', '[hippo] sleep complete', wrote(ID), ''].join('\r\n');
+    expect(wrapperVerdict(log, ID)).toEqual({ done: true, captured: true, end: `digest: wrote 1 sentence(s), 0 file(s) for rollout-x-${ID}` });
+    expect(wrapperVerdict(log, 'another-thread')).toMatchObject({ done: true, captured: false });
+    expect(wrapperVerdict(log, null)).toMatchObject({ done: true, captured: false });
+    expect(wrapperVerdict([START, at('digest: skip: no final message and no edits'), ''].join('\n'), ID)).toEqual({ done: true, captured: false, end: 'digest: skip: no final message and no edits' });
+  });
+
+  it('is not done on a progress line, nor on an end line with no start line above it', () => {
+    expect(wrapperVerdict([START, at('digest: transcript is 9 bytes, reading its last 5'), ''].join('\n'), ID)).toMatchObject({ done: false, captured: false });
+    expect(wrapperVerdict(`${wrote(ID)}\n`, ID)).toMatchObject({ done: false, captured: false });
+    expect(wrapperVerdict('', ID)).toEqual({ done: false, captured: false, end: null });
+  });
+
+  it('gives null after the bound when no log shows up, and says so once', async () => {
+    const said: string[] = [];
+    const run = { s: { id: 'seqX' }, arm: 'X2', seed: 1, dirs: { home: tmp('z0-wrapwait-') } };
+    const got = await wrapperWait({ codexWrapperWaitMs: 300, log: (m: string) => said.push(m) }, run, 'a-xa', ID);
+    expect(got.captured).toBeNull();
+    expect(got.wait).toMatchObject({ timedOut: true, end: null });
+    expect(got.wait.ms).toBeGreaterThanOrEqual(300);
+    expect(said).toHaveLength(1);
+    expect(said[0]).toMatch(/seqX a-xa X2 seed1.*300 ms/);
+  });
+
+  it('takes the bound from --codex-wrapper-wait-ms, 120 s unless set, and refuses a value that is not a whole number', () => {
+    expect([parseWrapperWait(), parseWrapperWait('500'), parseWrapperWait('0')]).toEqual([120_000, 500, 0]);
+    for (const bad of ['-1', '1.5', 'soon', '']) expect(() => parseWrapperWait(bad), bad).toThrow(/--codex-wrapper-wait-ms/);
+  });
+});
+
+describe('a file that is gone when the token sweep reads it', () => {
+  it('reads a missing path as null and still throws on a folder', () => {
+    const dir = tmp('z0-gone-');
+    expect(readIfPresent(join(dir, 'hippo.db-shm'))).toBeNull();
+    expect(() => readIfPresent(dir)).toThrow(/EISDIR/);
   });
 });

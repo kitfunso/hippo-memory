@@ -5,17 +5,21 @@ import { HIPPO_ARMS } from './arms.mjs';
 import { toolInputs, toolResultTexts, hookContexts, commandLog, transcriptWork } from './records.mjs';
 import { runCodexSession, codexEnv } from './codex.mjs';
 import { codexAdapter, parseRollouts, streamEvents } from './codex-rollout.mjs';
-import { authOut, tokenSweep, closeVault } from './codex-auth.mjs';
+import { authOut, tokenSweep, closeVault, readIfPresent } from './codex-auth.mjs';
 import { sessionVoid, byPrecedence } from './readcheck.mjs';
 import { holds } from './leaks.mjs';
 import { memoryText } from './lessons.mjs';
-import { hippoSentFor } from './runs.mjs';
+import { hippoSentFor, sleep } from './runs.mjs';
 
 const ZERO_USAGE = { inputTokens: 0, cacheWriteTokens: 0, cacheReadTokens: 0, outputTokens: 0 };
 // Codex's project_doc_max_bytes default; the run's config.toml leaves it unset.
 const PROJECT_DOC_CAP = 32 * 1024;
 const OPEN = '<!-- z0 taught -->';
 const CLOSE = '<!-- /z0 taught -->';
+// The first and the closing line of hippo's Codex session-end worker log; each line is `[hippo] <time> <text>`.
+const WRAPPER_START = /^\[hippo\] \S+ (?:consolidating memory\.\.\.|skip sleep: |skip: no hippo store )/;
+const WRAPPER_END = /^\[hippo\] \S+ (digest: wrote .*|digest: skip: .*|digest failed: .*|skip capture: no Codex transcript for this session|skip: no hippo store for this folder or globally)$/;
+const WRAPPER_POLL_MS = 250;
 
 export const CLAUDE_DRIVER = { tool: 'claude-code', adapter: { toolInputs, toolResultTexts, hookContexts, commandLog, transcriptWork } };
 export const CODEX_DRIVER = { tool: 'codex', adapter: codexAdapter };
@@ -45,11 +49,30 @@ export function codexVoid(ctx, run, step, stage, session) {
   return { void: hits[0]?.reason ?? null, voidHits: hits };
 }
 
-/** True when the wrapper's log holds a capture line naming this thread's transcript; the rollout file name carries the thread id (plan R17). */
-export function wrapperCaptured(run, threadId) {
-  const log = path.join(run.dirs.root, 'home', '.hippo', 'logs', 'codex-sleep.log');
-  if (!threadId || !fs.existsSync(log)) return false;
-  return fs.readFileSync(log, 'utf8').split('\n').some((l) => /capture[^\n]*transcript/.test(l) && l.includes(threadId));
+/** What the worker's log says (plan R17): done once a start line heads it and an end line follows; captured only when the digest names this thread's rollout. */
+export function wrapperVerdict(logText, threadId) {
+  const lines = logText.split('\n').map((l) => l.replace(/\r$/, ''));
+  // A log with no start line holds an earlier worker's late line, never this session's end.
+  const end = WRAPPER_START.test(lines[0]) ? lines.map((l) => WRAPPER_END.exec(l)?.[1]).filter(Boolean).at(-1) : undefined;
+  if (end === undefined) return { done: false, captured: false, end: null };
+  const rollout = /^digest: wrote .* for (\S+)$/.exec(end)?.[1];
+  return { done: true, captured: Boolean(threadId) && Boolean(rollout?.includes(threadId)), end: end.slice(0, 200) };
+}
+
+/** Poll the worker's log until its end line, so no snapshot or sweep runs under a live worker; `ms` goes in the record, never in wallMs. */
+export async function wrapperWait(ctx, run, cell, threadId) {
+  const log = path.join(run.dirs.home, '.hippo', 'logs', 'codex-sleep.log');
+  const start = performance.now();
+  for (;;) {
+    const verdict = wrapperVerdict(readIfPresent(log)?.toString('utf8') ?? '', threadId);
+    const ms = Math.round(performance.now() - start);
+    if (verdict.done) return { captured: verdict.captured, wait: { ms, timedOut: false, end: verdict.end } };
+    if (ms >= ctx.codexWrapperWaitMs) {
+      ctx.log(`${run.s.id} ${cell} ${run.arm} seed${run.seed}: hippo's Codex worker wrote no end line within ${ctx.codexWrapperWaitMs} ms, so codexWrapperCaptured is null`);
+      return { captured: null, wait: { ms, timedOut: true, end: null } };
+    }
+    await sleep(WRAPPER_POLL_MS);
+  }
 }
 
 /** The record fields only a Codex apply has. */
@@ -60,7 +83,8 @@ export function codexFields(ctx, run, session) {
     // Hook rows are booked per thread id, so every agent thread counts and Codex's own memory threads are counted apart (plan R26).
     codexHooksFired: hippoSentFor(store, session.rollouts.threadIds),
     codexInternalHooksFired: hippoSentFor(store, session.rollouts.internalIds),
-    codexWrapperCaptured: wrapperCaptured(run, session.threadId),
+    // Null is a wait that timed out; false is an end line that names no digest for this thread, or an arm with no wrapper.
+    codexWrapperCaptured: session.wrapper ? session.wrapper.captured : false, codexWrapperWait: session.wrapper?.wait ?? null,
     codexVersion: ctx.codexVersion, codexMemories: ctx.codexMemories, codexHookTrust: ctx.codexHookTrust.kind, codexAuth: 'copied-file', codexMemoryWait: session.wait,
     codexCalls: parsed.calls, codexUnparsedCalls: parsed.unparsed, codexUsageOdd: session.usage?.odd ?? null, codexUsageRaw: session.usage?.raw ?? null,
     codexInternalUsage: session.internalUsage, codexStrayRollouts: session.rollouts.stray.length,

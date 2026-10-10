@@ -155,8 +155,8 @@ function orderReport(steps) {
   return lines;
 }
 
-const USAGE = 'Usage: node scripts/token-eval/ab-run.mjs --tasks tasks.json --out DIR --model MODEL [--arms A0,A1,A2,A4,A5,X1,X2,X3,X4] [--seeds N] [--pass-env NAME]... [--max-budget-usd N] [--session-timeout-min N] [--canaries FILE] [--screen] [--dry-run | --check-homes]\n  set X: --codex-model M [--codex-bin PATH] [--codex-auth auth.json] [--codex-hook-trust none|flag|file:PATH] [--codex-memory-wait none|poll:STABLE_MS:TIMEOUT_MS] [--codex-memories on|off]';
-const CODEX_FLAGS = { codexBin: '--codex-bin', codexModel: '--codex-model', codexAuth: '--codex-auth', codexHookTrust: '--codex-hook-trust', codexMemoryWait: '--codex-memory-wait', codexMemories: '--codex-memories' };
+const USAGE = 'Usage: node scripts/token-eval/ab-run.mjs --tasks tasks.json --out DIR --model MODEL [--arms A0,A1,A2,A4,A5,X1,X2,X3,X4] [--seeds N] [--pass-env NAME]... [--max-budget-usd N] [--session-timeout-min N] [--canaries FILE] [--screen] [--dry-run | --check-homes]\n  set X: --codex-model M [--codex-bin PATH] [--codex-auth auth.json] [--codex-hook-trust none|flag|file:PATH] [--codex-memory-wait none|poll:STABLE_MS:TIMEOUT_MS] [--codex-memories on|off] [--codex-wrapper-wait-ms N]';
+const CODEX_FLAGS = { codexBin: '--codex-bin', codexModel: '--codex-model', codexAuth: '--codex-auth', codexHookTrust: '--codex-hook-trust', codexMemoryWait: '--codex-memory-wait', codexMemories: '--codex-memories', codexWrapperWaitMs: '--codex-wrapper-wait-ms' };
 
 /** The command line, checked: the tasks file, out dir, arms, seeds, pass-env names and mode. */
 function parseArgs(argv) {

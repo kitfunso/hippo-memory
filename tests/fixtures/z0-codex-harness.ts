@@ -48,7 +48,7 @@ export function wrapOperator(op: Operator, { metadata = true }: { metadata?: boo
   return { real, sentinel };
 }
 
-export interface CodexOpts { codexModel?: string | null; codexHookTrust?: string; codexMemoryWait?: string; codexMemories?: string; codexTokenFiles?: string[]; codexInternalSources?: string[] }
+export interface CodexOpts { codexModel?: string | null; codexHookTrust?: string; codexMemoryWait?: string; codexMemories?: string; codexTokenFiles?: string[]; codexInternalSources?: string[]; codexWrapperWaitMs?: number }
 
 /** A ctx holding only what a Codex session reads: the codexContext fields plus the limit and timeout settings. */
 export function codexCtx(op: Operator, opts: CodexOpts = {}, extra: { sessionTimeoutMs?: number; limitMaxWaits?: number } = {}) {
@@ -115,8 +115,8 @@ export const fakeSeen = (log: string): FakeSeen[] => (existsSync(log) ? readFile
 /** A set X record with the Codex fields the runner adds. */
 export type XRecord = RunRecord & {
   codexVersion?: string; codexMemories?: boolean; codexHookTrust?: string; codexAuth?: string; codexMemoryWait?: { ms: number; timedOut: boolean };
-  codexHooksFired?: { sent: number; injections: number } | null; codexInternalHooksFired?: { sent: number; injections: number } | null; codexWrapperCaptured?: boolean;
-  codexStrayRollouts?: number; codexInternalUsage?: { usage: Record<string, number> } | null; x4Block?: string; wallMs?: number;
+  codexHooksFired?: { sent: number; injections: number } | null; codexInternalHooksFired?: { sent: number; injections: number } | null; codexWrapperCaptured?: boolean | null;
+  codexWrapperWait?: { ms: number; timedOut: boolean; end: string | null } | null; codexStrayRollouts?: number; codexInternalUsage?: { usage: Record<string, number> } | null; x4Block?: string; wallMs?: number;
   chain?: { stored: boolean | null; shown: boolean | null; captured: boolean | null; capturedAny: boolean | null };
 };
 

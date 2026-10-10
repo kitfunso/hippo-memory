@@ -40,7 +40,7 @@ const write = (f, text) => {
 };
 // HOOKROW, HOOKROW_CHILD and HOOKROW_MEMGEN book one hippo hook injection in the cell's store under that thread's id.
 const ledger = /\bHOOKROW/.test(prompt)
-  ? { db: await import(new URL('../../dist/db.js', import.meta.url)), tokens: await import(new URL('../../dist/token-ledger.js', import.meta.url)) } : null;
+  ? { db: await import(new URL('../../dist/db/index.js', import.meta.url)), tokens: await import(new URL('../../dist/store/token-ledger.js', import.meta.url)) } : null;
 function hookRow(sessionId) {
   const db = ledger.db.openHippoDb(path.resolve('.hippo'));
   try {
@@ -203,15 +203,10 @@ if (has('AUTH_FAIL')) {
   process.exit(1);
 }
 const body = [...hookLines(), ...work()];
+// FINALMSG: a closing reply for hippo's digest; the sentence lives here because the digest drops one that repeats the prompt.
+if (has('FINALMSG')) body.push(line('response_item', { type: 'message', role: 'assistant', phase: 'final_answer', content: [{ type: 'output_text', text: 'Fixture reply for the wrapper digest check.' }] }));
 writeRollout(rolloutPath(threadId), [...head, tokenCount(1000, 600, 50), ...body, tokenCount(2000, 1500, 120)]);
 if (has('HOOKROW')) hookRow(threadId);
-// WRAPLOG and WRAPLOG_OTHER stand in for the installed wrapper's capture line, naming this thread or another one.
-for (const [m, id] of [['WRAPLOG', threadId], ['WRAPLOG_OTHER', randomUUID()]]) {
-  if (!has(m)) continue;
-  const log = path.join(path.dirname(HOME), 'home', '.hippo', 'logs', 'codex-sleep.log');
-  fs.mkdirSync(path.dirname(log), { recursive: true });
-  fs.appendFileSync(log, `[hippo] ${new Date().toISOString()} capture: transcript ${rolloutPath(id)}\n`);
-}
 if (has('CHILD')) sideRollout('child');
 if (has('MEMGEN')) sideRollout('memgen');
 if (has('STRAY')) sideRollout('stray');
