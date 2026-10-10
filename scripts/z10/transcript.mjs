@@ -25,11 +25,12 @@ function hookText(content) {
   return Array.isArray(content) ? content.join('\n') : String(content ?? '');
 }
 
-/** Candidate prompts with the UserPromptSubmit attachments under each, and the compaction lines, by line position. */
-export function parseTranscript(text) {
+/** Candidate prompts with the UserPromptSubmit attachments under each, and the compaction lines, by line position; lines of another session are counted and dropped. */
+export function parseTranscript(text, session) {
   const candidates = [];
   const compactions = [];
   const skipped = [];
+  let foreign = 0;
   text.split('\n').forEach((raw, pos) => {
     if (raw.trim() === '') return;
     let line;
@@ -39,7 +40,9 @@ export function parseTranscript(text) {
       skipped.push(pos);
       return;
     }
-    if (line.type === 'system' && line.subtype === 'compact_boundary') {
+    if (session !== undefined && isText(line?.sessionId) && line.sessionId !== session) {
+      foreign++;
+    } else if (line.type === 'system' && line.subtype === 'compact_boundary') {
       compactions.push({ pos });
     } else if (line.type === 'user' && !line.isMeta && !line.isCompactSummary) {
       const body = promptBody(line.message?.content);
@@ -57,7 +60,7 @@ export function parseTranscript(text) {
       }
     }
   });
-  return { candidates, compactions, skipped };
+  return { candidates, compactions, skipped, foreign };
 }
 
 const positional = (c) => c.kind === 'prompt' || FIRING.includes(c.kind);

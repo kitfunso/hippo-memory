@@ -277,7 +277,7 @@ describe('context availability: was the block that carried the lesson delivered'
     fire(p, 'x12', P1, { env });
     const [a, b] = events('x12');
     expect([a.turn_seq, b.turn_seq, b.duplicate_of]).toEqual([1, null, a.id]);
-    expect(stages('x12', pinId()).slice(0, 1)).toEqual([['emitted', 'final']]);
+    expect(cand('x12', pinId()).map((c) => [c.event_id, c.outcome, c.stage])).toEqual([[a.id, 'emitted', 'final'], [b.id, 'reused', 'final']]);
     const v = read('x12', pinId(), { transcript: doc('x12', [turnOf(P1, r1.stdout)]) });
     ok(v, 'x12', pinId(), { class: 'application-unknown', reason: null, turn: at(a.id, 1), stage: 'final' });
     expect([v.turns.length, v.turns[0].duplicates]).toEqual([1, [b.id]]);
@@ -386,7 +386,7 @@ describe('context availability: was the block that carried the lesson delivered'
     const t = doc('x19b', [turnOf(P1, r1.stdout), turnOf('what is in this screenshot', r2.stdout, { image: true })]);
     const v = read('x19b', pinId(), { transcript: t });
     ok(v, 'x19b', pinId(), { class: 'application-unknown', reason: null, turn: at(e1.id, 1), stage: 'final' });
-    expect([v.turns[1].paired_by, v.turns[1].delivery, v.turns[1].via_event_id]).toEqual(['position', 'confirmed', v.turns[0].event_id]);
+    expect([v.turns[1].paired_by, v.turns[1].delivery, v.turns[1].via_event_id]).toEqual(['position', 'confirmed', e1.id]);
   });
 
   it('X20 a pin that lives only in the global store is application-unknown with source_store global', () => {

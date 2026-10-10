@@ -51,6 +51,7 @@ function loadSession(db, tenant, session, storeHash, notes) {
 function splitRows(rows, targetCands, notes) {
   const mains = [];
   const dups = new Map();
+  const kept = new Set(rows.map((r) => r.id));
   const compactIds = [];
   for (const r of rows) {
     if (r.session_state === 'subagent') {
@@ -61,9 +62,12 @@ function splitRows(rows, targetCands, notes) {
       compactIds.push(r.id);
       notes.push(`${r.event_type}:${r.id}`);
     } else if (r.duplicate_of !== null) {
+      if (!kept.has(r.duplicate_of)) notes.push(`orphan-duplicate:${r.id}`);
       dups.set(r.duplicate_of, [...(dups.get(r.duplicate_of) ?? []), r]);
     } else if (r.turn_seq !== null || r.event_type !== 'prompt-submit') {
       mains.push(r);
+    } else {
+      notes.push(`unnumbered:${r.id}`);
     }
   }
   return { mains, dups, compactIds };
@@ -86,7 +90,7 @@ function emittedDelivery(g, env) {
   if (!env.parsed) return unconfirmed('no-transcript');
   const pair = env.pairs.get(g.row.id);
   if (!pair) return unconfirmed('no-paired-prompt');
-  const sent = new Set(g.members.map((r) => r.emitted_hash).filter((h) => h !== null));
+  const sent = new Set(g.emitters.map((r) => r.emitted_hash).filter((h) => h !== null));
   const seen = env.parsed.candidates[pair.cand].attachments.map((a) => blockHash(a));
   return seen.some((h) => sent.has(h)) ? proven('application-unknown', null, 'confirmed') : unconfirmed('no-attachment');
 }
@@ -172,10 +176,10 @@ function checkLabel(l) {
   return null;
 }
 
-function pickLabel(labels, session, memoryId, notes) {
+function pickLabel(labels, session, memoryIds, notes) {
   const valid = [];
   for (const l of labels ?? []) {
-    if (!(l instanceof Object) || l.session_id !== session || l.memory_id !== memoryId) continue;
+    if (!(l instanceof Object) || l.session_id !== session || !memoryIds.includes(l.memory_id)) continue;
     const bad = checkLabel(l);
     if (bad) notes.push(`label-error:${bad}`);
     else valid.push(l);
@@ -194,7 +198,7 @@ function labelClass(label) {
   return { class: 'indeterminate', reason: 'outcome-unknown' };
 }
 
-function fold(turns, label, notes) {
+function fold(turns, label) {
   const reached = turns.filter((t) => t.stage_reached !== null);
   const best = reached.reduce((m, t) => Math.max(m, RANK[t.stage_reached]), -1);
   const first = reached.find((t) => RANK[t.stage_reached] === best);
@@ -206,17 +210,29 @@ function fold(turns, label, notes) {
     out = { turn: first, class: first.stage_reached, reason: first.why };
     if (first.stage_reached === 'application-unknown') out = { turn: first, ...labelClass(label) };
   }
-  if (label !== null && out.class !== 'application-unknown' && !out.class.startsWith('applied') && out.reason !== 'outcome-unknown') {
-    notes.push(out.class === 'indeterminate' ? 'label-unused' : 'label-conflict');
-  }
   return out;
 }
 
-function forgotten(db, tenant, id, firstTs) {
-  if (!hasTable(db, 'audit_log')) return null;
-  const row = db.prepare("SELECT ts FROM audit_log WHERE op = 'forget' AND target_id = ? AND tenant_id = ? ORDER BY id LIMIT 1").get(id, tenant);
-  if (row === undefined) return null;
-  return firstTs === null || row.ts > firstTs ? 'forgotten' : 'forgotten-before';
+// A label acts only on application-unknown; on any other class it is noted, never applied.
+function noteLabelMisfit(label, part, notes) {
+  if (label === null) return false;
+  if (part.class === 'application-unknown' || part.class.startsWith('applied') || part.reason === 'outcome-unknown') return true;
+  notes.push(part.class === 'indeterminate' ? 'label-unused' : 'label-conflict');
+  return false;
+}
+
+function forgotten(stores, tenant, id, firstTs) {
+  for (const { db } of stores) {
+    if (!hasTable(db, 'audit_log')) continue;
+    const row = db.prepare("SELECT ts FROM audit_log WHERE op = 'forget' AND target_id = ? AND tenant_id = ? ORDER BY id LIMIT 1").get(id, tenant);
+    if (row !== undefined) return firstTs === null || row.ts > firstTs ? 'forgotten' : 'forgotten-before';
+  }
+  // Several delete paths write no forget row, so a trace of the id anywhere still means it existed.
+  for (const { db } of stores) {
+    if (hasTable(db, 'delivery_candidates') && db.prepare('SELECT 1 AS x FROM delivery_candidates WHERE tenant_id = ? AND memory_id = ? LIMIT 1').get(tenant, id) !== undefined) return 'forgotten';
+    if (hasTable(db, 'recall_trace_results') && db.prepare('SELECT 1 AS x FROM recall_trace_results WHERE tenant_id = ? AND memory_id = ? LIMIT 1').get(tenant, id) !== undefined) return 'forgotten';
+  }
+  return null;
 }
 
 function build(local, opts, base) {
@@ -225,11 +241,18 @@ function build(local, opts, base) {
   const stores = [{ db: local, name: 'local' }];
   if (opts.globalDb) stores.push({ db: opts.globalDb, name: 'global' });
   const env = { stores };
-  if (!hasTable(local, 'delivery_events')) return { class: 'indeterminate', reason: 'no-ledger-table' };
+  if (!hasTable(local, 'delivery_events')) {
+    base.label = pickLabel(opts.labels, session, opts.memory === undefined ? [] : [opts.memory], base.notes);
+    return { class: 'indeterminate', reason: 'no-ledger-table' };
+  }
   const found = findMemories(stores, tenant, opts);
-  if (found.length > 1 && opts.key !== undefined) return { class: 'indeterminate', reason: 'key-ambiguous' };
+  if (found.length > 1 && opts.key !== undefined) {
+    base.label = pickLabel(opts.labels, session, found.map((m) => m.id), base.notes);
+    return { class: 'indeterminate', reason: 'key-ambiguous' };
+  }
   env.memory = found[0] ?? null;
   base.memory_id = env.memory?.id ?? opts.memory ?? null;
+  base.label = pickLabel(opts.labels, session, base.memory_id === null ? [] : [base.memory_id], base.notes);
   base.memory_store = env.memory?.store ?? null;
 
   const rows = loadSession(local, tenant, session, storeHash, base.notes);
@@ -241,7 +264,7 @@ function build(local, opts, base) {
   }
   env.hasCandidates = targetCands.size > 0;
   if (env.memory === null && !env.hasCandidates) {
-    const why = base.memory_id === null ? null : forgotten(local, tenant, base.memory_id, rows[0]?.ts ?? null);
+    const why = base.memory_id === null ? null : forgotten(stores, tenant, base.memory_id, rows[0]?.ts ?? null);
     return why === 'forgotten' ? { class: 'indeterminate', reason: why } : { class: 'not-written', reason: why ?? 'no-row' };
   }
   return foldSession(env, { rows, targetCands, opts, base });
@@ -253,7 +276,8 @@ function foldSession(env, { rows, targetCands, opts, base }) {
   env.compactIds = compactIds;
   env.prompts = groups.filter((g) => !g.surface);
   env.done = new Map();
-  env.parsed = opts.transcript === undefined ? null : parseTranscript(fs.readFileSync(opts.transcript, 'utf8'));
+  env.parsed = opts.transcript === undefined ? null : parseTranscript(fs.readFileSync(opts.transcript, 'utf8'), base.session);
+  if (env.parsed?.foreign > 0) base.notes.push(`transcript-foreign-lines:${env.parsed.foreign}`);
   env.pairs = new Map();
   let gaps = [];
   if (env.parsed) {
@@ -263,12 +287,11 @@ function foldSession(env, { rows, targetCands, opts, base }) {
   const turns = groups.map((g) => turnOf(env, g, env.prompts.indexOf(g)));
   if (turns.length === 0) return { class: 'indeterminate', reason: 'no-event-row', turns: gaps.map((x) => gapTurn(x, base.notes)) };
   turns.push(...gaps.map((x) => gapTurn(x, base.notes)));
-  const label = pickLabel(opts.labels, base.session, base.memory_id, base.notes);
-  const out = fold(turns, label, base.notes);
+  const out = fold(turns, base.label);
   const { turn } = out;
   return {
     class: out.class, reason: out.reason, turn: turn.event_id === null ? null : { event_id: turn.event_id, turn_seq: turn.turn_seq },
-    stage: turn.stage, cand_reason: turn.cand_reason, turns, label,
+    stage: turn.stage, cand_reason: turn.cand_reason, turns,
   };
 }
 
@@ -283,14 +306,15 @@ export function reconstruct(opts) {
   const globalRoot = opts.global === false ? null : path.resolve(opts.global ?? resolveGlobalRootDir());
   const globalDb = globalRoot !== null && globalRoot !== path.resolve(store) ? openDb(globalRoot) : null;
   const base = {
-    store_hash: blockHash(path.resolve(store)), tenant, session, memory_id: null, memory_store: null, notes: [],
+    store_hash: blockHash(path.resolve(store)), tenant, session, memory_id: null, memory_store: null, notes: [], label: null,
   };
   try {
     const part = build(local, { ...opts, globalDb }, base);
+    const acted = noteLabelMisfit(base.label, part, base.notes);
     return {
       class: part.class, reason: part.reason, store_hash: base.store_hash, tenant_id: tenant, session_id: session,
       memory_id: base.memory_id, memory_store: base.memory_store, turn: part.turn ?? null, stage: part.stage ?? null,
-      cand_reason: part.cand_reason ?? null, turns: part.turns ?? [], label: part.label ?? null, notes: base.notes,
+      cand_reason: part.cand_reason ?? null, turns: part.turns ?? [], label: acted ? base.label : null, notes: base.notes,
     };
   } finally {
     local.close();

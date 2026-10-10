@@ -133,6 +133,20 @@ describe('defensive reuse arms', () => {
     expect([v.class, v.turns[0].duplicates, v.turns[0].delivery]).toEqual(['application-unknown', [b], 'confirmed']);
   });
 
+  it('R17 a recall-only attachment does not confirm a pin whose duplicate row printed the full block', () => {
+    const m = present();
+    const promptHash = blockHash('one prompt fired twice');
+    const t = Date.parse('2026-10-02T00:00:00.000Z');
+    const a = write(event('r17', { ts: new Date(t).toISOString(), promptHash, blockState: 'reused-recall-sent', emittedHash: blockHash('the recall block'), candidates: [row(m.id, { outcome: 'reused' })] }));
+    const b = write(event('r17', { ts: new Date(t + 500).toISOString(), promptHash, emittedHash: blockHash('the full block'), candidates: [row(m.id)] }));
+    const check = new DatabaseSync(path.join(dir, 'hippo.db'), { readOnly: true });
+    const rows = check.prepare('SELECT id, turn_seq, duplicate_of FROM delivery_events ORDER BY id').all();
+    check.close();
+    expect(rows.map((r) => [r.id, r.turn_seq, r.duplicate_of])).toEqual([[a, 1, null], [b, null, a]]);
+    const v = read('r17', m.id, { transcript: transcript([{ prompt: 'one prompt fired twice', attach: 'the recall block' }]) });
+    expect([v.class, v.reason, v.turns[0].delivery, v.turns[0].why]).toEqual(['delivery-unconfirmed', 'no-attachment', 'unconfirmed', 'no-attachment']);
+  });
+
   it('R6 a reused turn whose latest send had another static hash has no original', () => {
     const m = present();
     write(event('r6', { staticHash: 'bbbbbbbbbbbbbbbb', emittedHash: blockHash('old block'), candidates: [row(m.id)] }));
@@ -184,6 +198,37 @@ describe('fold edge cases', () => {
     expect([v.class, v.reason, v.turn]).toEqual(['indeterminate', 'forgotten', null]);
   });
 
+  it('R19 a memory with no row, no forget row and a trace in another session is indeterminate forgotten', () => {
+    write(event('r19-other', { candidates: [row('mem_gone')] }));
+    write(event('r19', { candidates: [], selectedCount: 0, emittedCount: 0 }));
+    const v = read('r19', 'mem_gone');
+    expect([v.class, v.reason]).toEqual(['indeterminate', 'forgotten']);
+  });
+
+  it('R20 a valid label on a not-written or key-ambiguous read is noted, not applied', () => {
+    const label = { session_id: 'r20', memory_id: 'mem_never', application: 'observed', signal: 'resolved-check', evidence: 'a passing run' };
+    const never = read('r20', 'mem_never', { labels: [label] });
+    expect([never.class, never.reason, never.notes, never.label]).toEqual(['not-written', 'no-row', ['label-conflict'], null]);
+    const first = seed(dir, 'the shared phrase appears in the first lesson', { created: CREATED });
+    seed(dir, 'the shared phrase appears in the second lesson', { created: CREATED });
+    const amb = verdictOf({ store: dir, session: 'r20', key: 'shared phrase', labels: [{ ...label, memory_id: first.id }] });
+    expect([amb.class, amb.reason, amb.notes]).toEqual(['indeterminate', 'key-ambiguous', ['label-unused']]);
+  });
+
+  it('R21 a row from another store and its duplicate are both noted as dropped', () => {
+    const m = present();
+    const promptHash = blockHash('one prompt fired twice');
+    const t = Date.parse('2026-10-02T00:00:00.000Z');
+    const a = write(event('r21', { ts: new Date(t).toISOString(), promptHash, storeHash: 'aaaaaaaaaaaaaaaa', candidates: [row(m.id)] }));
+    const b = write(event('r21', { ts: new Date(t + 500).toISOString(), promptHash, candidates: [row(m.id)] }));
+    const check = new DatabaseSync(path.join(dir, 'hippo.db'), { readOnly: true });
+    const rows = check.prepare('SELECT id, turn_seq, duplicate_of FROM delivery_events ORDER BY id').all();
+    check.close();
+    expect(rows.map((r) => [r.id, r.turn_seq, r.duplicate_of])).toEqual([[a, 1, null], [b, null, a]]);
+    const v = read('r21', m.id);
+    expect(v.notes).toEqual([`foreign-store:${a}`, `orphan-duplicate:${b}`]);
+  });
+
   it('R11 label validation: bad fields, other sessions and duplicates', () => {
     const m = present();
     const block = 'the block that was sent';
@@ -204,6 +249,29 @@ describe('fold edge cases', () => {
 });
 
 describe('pairing', () => {
+  it('R18 transcript lines of another session are skipped and counted, and lines of this session pair', () => {
+    const m = present();
+    const block = 'the block that was sent';
+    write(event('r18', { promptHash: blockHash('a prompt'), emittedHash: blockHash(block), candidates: [row(m.id)] }));
+    const lines = (sessionId: string) => {
+      const user = JSON.stringify({ type: 'user', sessionId, message: { role: 'user', content: 'a prompt' } });
+      const hook = JSON.stringify({ type: 'attachment', sessionId, attachment: { type: 'hook_additional_context', content: [block], hookName: 'UserPromptSubmit', hookEvent: 'UserPromptSubmit' } });
+      return `${user}
+${hook}
+`;
+    };
+    const file = (name: string, sessionId: string): string => {
+      const f = path.join(dir, `${name}.jsonl`);
+      fs.writeFileSync(f, lines(sessionId));
+      return f;
+    };
+    const foreign = read('r18', m.id, { transcript: file('foreign', 'someone-else') });
+    expect([foreign.class, foreign.notes]).toEqual(['delivery-unconfirmed', ['transcript-foreign-lines:2']]);
+    expect(foreign.turns[0].delivery).toBe('unconfirmed');
+    const own = read('r18', m.id, { transcript: file('own', 'r18') });
+    expect([own.class, own.notes, own.turns[0].delivery]).toEqual(['application-unknown', [], 'confirmed']);
+  });
+
   it('R15 a sent turn whose prompt hash and attachment match no transcript prompt is delivery-unconfirmed no-paired-prompt', () => {
     const m = present();
     const block = 'the block that was sent';
@@ -250,12 +318,14 @@ describe('the transcript parser', () => {
       queued('a plain human prompt'), hook('h4'),
       queued('ls', { commandMode: 'bash' }),
       queued([{ type: 'text', text: 'blocks prompt' }]),
+      JSON.stringify({ type: 'user', message: { role: 'user', content: '<command-message>run the skill</command-message>' } }), hook('h5'),
     ];
     const { candidates } = parseTranscript(lines.join('\n'));
-    expect(candidates.map((c: { kind: string }) => c.kind)).toEqual(['prompt', 'task-notification', 'cross-session-message', 'agent-message', 'prompt', 'queued-bash', 'prompt']);
-    expect(candidates.map((c: { queued: boolean }) => c.queued)).toEqual([false, true, true, true, true, true, true]);
-    expect(candidates.map((c: { attachments: string[] }) => c.attachments)).toEqual([[], ['h1'], ['h2'], ['h3'], ['h4'], [], []]);
+    expect(candidates.map((c: { kind: string }) => c.kind)).toEqual(['prompt', 'task-notification', 'cross-session-message', 'agent-message', 'prompt', 'queued-bash', 'prompt', 'prompt']);
+    expect(candidates.map((c: { queued: boolean }) => c.queued)).toEqual([false, true, true, true, true, true, true, false]);
+    expect(candidates.map((c: { attachments: string[] }) => c.attachments)).toEqual([[], ['h1'], ['h2'], ['h3'], ['h4'], [], [], ['h5']]);
     expect(candidates[6].text).toBe('blocks prompt');
+    expect([candidates[7].kind, candidates[7].fired]).toEqual(['prompt', true]);
   });
 });
 
