@@ -25,18 +25,21 @@ function lastJson(stdout) {
   }
 }
 
-/** Run claude until it is not at the plan limit, calling `reset` before each rerun (a truthy reset skips it: `stopped`); `args()` is called once per attempt. */
-async function untilNotLimited(ctx, run, t, { args, input, rawName, reset }) {
+const claudeLimit = (cc, result) => isUsageLimit(result, `${cc.stdout}\n${cc.stderr}`);
+
+/** Run a session until it is not at the plan limit, calling `reset` before each rerun (a truthy reset skips it: `stopped`); `command()` or `args()` is called once per attempt.
+ * Codex passes its own command, env, limit test and redaction, so both tools share one limit loop. */
+export async function untilNotLimited(ctx, run, t, { args, input, rawName, reset, command = () => `${ctx.claude} ${args().join(' ')}`, env = run.env, isLimit = claudeLimit, redact = (text) => text }) {
   // Every cut-off attempt, its wait and its reset: none of it is the kept attempt's work, so wallMs leaves it out.
   let cutOffMs = 0;
   // SHORTCUT: 15-minute polls up to 24h; parse the reset time if waits get long.
   for (let attempt = 1; ; attempt++) {
     const start = performance.now();
-    const cc = await spawnTree(`${ctx.claude} ${args().join(' ')}`, run.dirs.work, run.env, ctx.sessionTimeoutMs, input);
+    const cc = await spawnTree(command(), run.dirs.work, env, ctx.sessionTimeoutMs, input);
     const result = lastJson(cc.stdout);
     // A hung session can print overloaded_error before it hangs; a timeout is a graded result, never a limit wait (prereg 165).
-    if (cc.timedOut || !isUsageLimit(result, `${cc.stdout}\n${cc.stderr}`)) return { cc, result, limitRetries: attempt - 1, cutOffMs };
-    fs.writeFileSync(path.join(run.rawDir, `${t.id}.${rawName}${attempt}.txt`), `${cc.stdout}\n${cc.stderr}`.slice(-20000));
+    if (cc.timedOut || !isLimit(cc, result)) return { cc, result, limitRetries: attempt - 1, cutOffMs };
+    fs.writeFileSync(path.join(run.rawDir, `${t.id}.${rawName}${attempt}.txt`), redact(`${cc.stdout}\n${cc.stderr}`).slice(-20000));
     // Prereg: a run that stops partway is abandoned and never analysed, so a limit that outlasts every wait ends the run.
     if (attempt > ctx.limitMaxWaits) throw new Error(`${run.s.id} ${t.id} ${run.arm} seed${run.seed}: still at the plan limit after ${ctx.limitMaxWaits} waits`);
     ctx.log(`${run.s.id} ${t.id} ${run.arm} seed${run.seed}: plan limit hit, waiting ${Math.round(ctx.limitWaitMs / 60_000)} min (attempt ${attempt})`);

@@ -20,6 +20,8 @@ export function runDirs(outDir, seq, arm, seed) {
     codexHome: path.join(root, 'codex-home'),
     hippoHome: path.join(root, 'hippo-home'),
     bin: path.join(root, 'bin'),
+    // HOME and APPDATA for Codex sessions and the X2 install, so hippo's wrapper metadata is per run (E6 plan R11).
+    home: path.join(root, 'home'),
   };
 }
 
@@ -36,7 +38,7 @@ export function assertFreshEmpty(dirs) {
 /** Remove and recreate a run's dirs, then check its homes are empty. */
 export function freshRunDirs(dirs) {
   fs.rmSync(dirs.root, { recursive: true, force: true });
-  for (const k of [...HOME_DIRS, 'work']) fs.mkdirSync(dirs[k], { recursive: true });
+  for (const k of [...HOME_DIRS, 'work', 'home']) fs.mkdirSync(dirs[k], { recursive: true });
   assertFreshEmpty(dirs);
 }
 
@@ -116,7 +118,7 @@ export function shellHippoCheck(arm, dirs, env, shell, name) {
 }
 
 /** One run's homes check on fresh dirs: what hippo's importer would read, and what `hippo` the agent's shell finds. */
-function checkRunHomes({ outDir, seq, arm, seed }, { baseEnv, passEnv, shell }) {
+function checkRunHomes({ outDir, seq, arm, seed }, { baseEnv, passEnv, shell, install }) {
   const dirs = runDirs(outDir, seq, arm, seed);
   const name = `${seq}/${arm}/seed${seed}`;
   freshRunDirs(dirs);
@@ -124,22 +126,28 @@ function checkRunHomes({ outDir, seq, arm, seed }, { baseEnv, passEnv, shell }) 
     git(['init', '--quiet'], dirs.work);
     const env = armEnv(arm, dirs, baseEnv, { passEnv });
     if (HIPPO_ARMS.has(arm)) writeHippoShim(dirs.bin, outDir, arm === 'A5' ? 'sham' : 'real');
-    const r = sh(`"${process.execPath}" "${HIPPO_JS}" import --agents --dry-run`, dirs.work, { ...childEnv(env), HOME: outDir, USERPROFILE: outDir });
-    if (r.status !== 0) throw new Error(`${name}: hippo import --agents --dry-run exited ${r.status}: ${r.stderr.slice(-500)}`);
-    checkImportHomes(parseImportDryRun(r.stdout), dirs, name);
+    // X2's Codex install adds hooks.json and a wrapper home, and hippo runs under that home too, so the importer is checked from both.
+    const x2 = arm === 'X2' && install;
+    if (x2) install({ s: { id: seq }, arm, seed, dirs, env });
+    for (const home of x2 ? [outDir, dirs.home] : [outDir]) {
+      const r = sh(`"${process.execPath}" "${HIPPO_JS}" import --agents --dry-run`, dirs.work, { ...childEnv(env), HOME: home, USERPROFILE: home });
+      if (r.status !== 0) throw new Error(`${name}: hippo import --agents --dry-run exited ${r.status}: ${r.stderr.slice(-500)}`);
+      checkImportHomes(parseImportDryRun(r.stdout), dirs, name);
+    }
     shellHippoCheck(arm, dirs, env, shell, name);
   } finally {
     fs.rmSync(dirs.root, { recursive: true, force: true });
   }
 }
 
-/** The homes check for every planned run (`--check-homes`, and the first step of a real run). */
-export function checkHomes({ outDir, runs, passEnv = [], baseEnv = process.env }) {
+/** The homes check for every planned run (`--check-homes`, and the first step of a real run); `install` is X2's Codex install, run before its check.
+ * @param {{outDir: string, runs: {seq: string, arm: string, seed: number}[], passEnv?: string[], baseEnv?: NodeJS.ProcessEnv, install?: ((run: any) => void) | null}} options */
+export function checkHomes({ outDir, runs, passEnv = [], baseEnv = process.env, install = null }) {
   if (!fs.existsSync(path.join(REPO, 'dist', 'cli.js'))) throw new Error('run `npm run build` first: the homes check runs the built hippo CLI');
   // The check recreates and removes each run dir, so it refuses any that already holds data rather than delete it.
   const occupied = runs.map((r) => runDirs(outDir, r.seq, r.arm, r.seed).root).filter((d) => fs.existsSync(d) && fs.readdirSync(d).length > 0);
   if (occupied.length > 0) throw new Error(`${occupied[0]} already holds run data${occupied.length > 1 ? ` (and ${occupied.length - 1} more run dirs)` : ''}; the homes check never deletes it. Pick a new --out, or move that run away first.`);
   fs.mkdirSync(outDir, { recursive: true });
   const shell = gitBash(baseEnv, passEnv);
-  for (const run of runs) checkRunHomes({ outDir, ...run }, { baseEnv, passEnv, shell });
+  for (const run of runs) checkRunHomes({ outDir, ...run }, { baseEnv, passEnv, shell, install });
 }

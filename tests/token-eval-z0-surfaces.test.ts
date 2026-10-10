@@ -16,7 +16,7 @@ afterEach(cleanup);
 
 const sha = (b: Buffer | string) => createHash('sha256').update(b).digest('hex');
 const lineOf = (lines: LedgerLine[], arm: string, id: string, when: string) => lines.find((l) => l.arm === arm && l.taskId === id && l.when === when)!;
-const SURFACE_KEYS = ['autoMemory', 'codexMemories', 'hippoGlobal', 'hippoWork', 'instructions', 'userInstructions'];
+const SURFACE_KEYS = ['autoMemory', 'codexInstructions', 'codexMemories', 'codexState', 'hippoGlobal', 'hippoWork', 'instructions', 'userInstructions'];
 
 /** A run object and ctx for calling the surface functions directly. */
 function unitRun(name: string) {

@@ -5,7 +5,12 @@ import { createHash } from 'node:crypto';
 import { instructionSnapshot } from './workspace.mjs';
 
 /** Every surface a retry restores; `instructions` is restored by restoreInstructions from memory. */
-export const RESTORABLE = ['autoMemory', 'userInstructions', 'codexMemories', 'hippoGlobal', 'hippoWork'];
+export const RESTORABLE = ['autoMemory', 'userInstructions', 'codexMemories', 'codexInstructions', 'hippoGlobal', 'hippoWork'];
+/** Snapshotted and restored but never read as memory: Codex's own state, which G3 scans by an allowlist (E6 plan R10). */
+export const RESTORE_ONLY = ['codexState'];
+const SNAPSHOT = [...RESTORABLE, ...RESTORE_ONLY];
+// Left out of codexState: the login, the other surfaces, past sessions, and Codex's logs, caches and locks (plan R10).
+const NOT_STATE = /^(?:auth\.json.*|memories|sessions|archived_sessions|history\.jsonl|session_index\.jsonl|log|logs_.*\.sqlite.*|cache|models_cache\.json|tmp|process_manager|cap_sid|.*-locks|agents(?:\.override)?\.md)$/i;
 
 const sha256 = (data) => createHash('sha256').update(data).digest('hex');
 const relOf = (run, abs) => path.relative(run.dirs.root, abs).split(path.sep).join('/');
@@ -35,6 +40,8 @@ function surfaceRoots(run) {
     autoMemory: folders.map((name) => ({ name, abs: path.join(projects, name, 'memory'), linked: linked.has(name) })),
     userInstructions: [{ name: 'CLAUDE.md', abs: path.join(claudeConfig, 'CLAUDE.md') }, { name: 'rules', abs: path.join(claudeConfig, 'rules') }],
     codexMemories: [{ name: 'memories', abs: path.join(codexHome, 'memories') }],
+    codexInstructions: ['AGENTS.md', 'AGENTS.override.md'].map((name) => ({ name, abs: path.join(codexHome, name) })),
+    codexState: (fs.existsSync(codexHome) ? fs.readdirSync(codexHome) : []).filter((name) => !NOT_STATE.test(name)).sort().map((name) => ({ name, abs: path.join(codexHome, name) })),
     hippoGlobal: [{ name: 'hippo-home', abs: hippoHome }],
     hippoWork: [{ name: '.hippo', abs: path.join(work, '.hippo') }],
   };
@@ -68,7 +75,7 @@ function walk(run, abs, out) {
 /** Every surface's files as ledger entries, keyed by surface. */
 export function surfaceFiles(run) {
   const roots = surfaceRoots(run);
-  const files = Object.fromEntries(RESTORABLE.map((key) => [key, roots[key].flatMap((r) => walk(run, r.abs, []))]));
+  const files = Object.fromEntries(SNAPSHOT.map((key) => [key, roots[key].flatMap((r) => walk(run, r.abs, []))]));
   files.instructions = [...instructionSnapshot(run.dirs.work)].map(([rel, bytes]) => ({ path: `work/${rel}`, sha256: sha256(bytes), size: bytes.length }));
   return files;
 }
@@ -111,7 +118,7 @@ export function snapshotSurfaces(ctx, run, when, step) {
   } catch (err) {
     fail('*', err);
   }
-  for (const key of copyErrors.length ? [] : RESTORABLE) {
+  for (const key of copyErrors.length ? [] : SNAPSHOT) {
     try {
       const own = roots[key].filter((r) => !r.linked);
       for (const r of own) if (lexists(r.abs)) copyRoot(r.abs, path.join(copyDir, key, r.name));
@@ -194,8 +201,8 @@ export function restoreSurfaces(ctx, run, snap, when, step) {
   const through = new Set(now.autoMemory.filter((r) => r.linked).map((r) => r.abs));
   for (const [key, all] of snap.copied) {
     const roots = all.filter((r) => !through.has(r.abs));
-    // The cut-off attempt can start a memory dir for a project folder the snapshot never saw.
-    const extra = key === 'autoMemory' ? now.autoMemory.filter((r) => !r.linked && !roots.some((s) => s.abs === r.abs)) : [];
+    // The cut-off attempt can start a memory dir for a project folder, or a Codex state file, the snapshot never saw.
+    const extra = key === 'autoMemory' || key === 'codexState' ? now[key].filter((r) => !r.linked && !roots.some((s) => s.abs === r.abs)) : [];
     try {
       for (const r of [...roots, ...extra]) fs.rmSync(r.abs, { recursive: true, force: true, maxRetries: 3 });
       for (const r of roots) {

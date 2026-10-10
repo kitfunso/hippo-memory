@@ -88,13 +88,13 @@ export function assistantIds(segments) {
 /** Turns of a turn with no result: distinct assistant message ids not in skip, a different unit from the result's num_turns. */
 export const assistantTurns = (segments, skip = new Set()) => [...assistantIds(segments)].filter((id) => !skip.has(id)).length;
 
-const SHELL_TOOLS = new Set(['Bash', 'PowerShell']);
+export const SHELL_TOOLS = new Set(['Bash', 'PowerShell']);
 const BASH_READ = /^(?:cat|head|tail|less|more|grep|rg)(?=\s|$)|^sed\s+-n(?=\s|$)/;
 // `type` reads a file only in PowerShell; in Git Bash it is a builtin that names a command.
 const PS_READ = /^(?:get-content|select-string|type|gc)(?=\s|$)/i;
 
 /** Whether a shell command has a read command word at its start or after `|`, `;`, `&&`, `||` or `(`. */
-function isShellRead(tool, command) {
+export function isShellRead(tool, command) {
   return String(command ?? '').split(/\|\||&&|[|;(]/).some((part) => {
     const word = part.trim();
     return BASH_READ.test(word) || (tool === 'PowerShell' && PS_READ.test(word));
@@ -185,15 +185,18 @@ export function transcriptWork(files, seenErrors) {
         work.fileReads++;
         work.shellReads++;
       }
-    } else if (block.is_error) {
-      const text = blockText(block.content);
-      const sig = text.replace(/\d+/g, '#').replace(/\s+/g, ' ').trim().slice(0, 160);
-      if (!sig) continue;
-      if (seenErrors.has(sig)) work.repeatedErrors++;
-      else seenErrors.add(sig);
-    }
+    } else if (block.is_error && errorRepeated(blockText(block.content), seenErrors)) work.repeatedErrors++;
   }
   return work;
+}
+
+/** Whether an error text repeats a signature seen earlier in the run; a new signature is remembered. */
+export function errorRepeated(text, seenErrors) {
+  const sig = text.replace(/\d+/g, '#').replace(/\s+/g, ' ').trim().slice(0, 160);
+  if (!sig) return false;
+  if (seenErrors.has(sig)) return true;
+  seenErrors.add(sig);
+  return false;
 }
 
 /** Every Bash and PowerShell command in the transcripts, file by file in order: what a checker reads through Z0_COMMANDS. */

@@ -3,7 +3,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { stripVTControlCharacters } from 'node:util';
 import { HIPPO_ARMS } from './arms.mjs';
-import { toolInputs, toolResultTexts, hookContexts, segmentText, asSegment } from './records.mjs';
+import { toolInputs, toolResultTexts, hookContexts, segmentText, asSegment, SHELL_TOOLS } from './records.mjs';
 
 /** Void reasons in precedence order: the record's `void` is the first one hit. */
 export const VOID_ORDER = ['operator-canary', 'read', 'auto-memory', 'user-instructions', 'hippo-text'];
@@ -19,6 +19,11 @@ const PS_R = /^-r(?:ecurse)?$/i;
 const RECURSIVE_FLAG = { grep: GREP_R, egrep: GREP_R, fgrep: GREP_R, ls: /^-[a-zA-Z]*R|^--recursive$/, 'get-childitem': PS_R, gci: PS_R, dir: /^(?:-r(?:ecurse)?|[-/]s)$/i };
 const WILDCARD_SEARCH = new Set(['select-string', 'sls']);
 const CD = new Set(['cd', 'pushd', 'set-location', 'sl', 'chdir']);
+// Under a Codex home a session may read its memories, config, hooks and instructions; any other file but its own rollouts is past work.
+const CODEX_OWN = /^(?:memories(?:\/|$)|config\.toml$|hooks\.json$|agents[^/]*\.md$)/i;
+// What a Codex memory thread may not reach: it reads this run's past sessions by design (E6 plan R21).
+const OUTSIDE = new Set(['other-arm', 'other-run', 'operator']);
+const CLAUDE_READ = { toolInputs, toolResultTexts, hookContexts };
 const READ_KEYS = { Read: 'file_path', NotebookRead: 'notebook_path', NotebookEdit: 'notebook_path', LS: 'path', Edit: 'file_path', MultiEdit: 'file_path', Write: 'file_path' };
 
 function envValue(env, name, win) {
@@ -128,17 +133,17 @@ export function foldPath(p) {
   return (WIN ? s.toLowerCase() : s).replace(/(?<=.)\/+$/, '');
 }
 
-/** The cell's bounds, folded for comparison. */
+/** The cell's bounds, folded for comparison; operator homes come from the runner's own env, since a Codex session's HOME is the run's. */
 function bounds(ctx, run, step, ownIds) {
   const win = WIN;
   const fold = foldPath;
   const d = run.dirs;
-  const homes = [...new Set(['HOME', 'USERPROFILE'].map((k) => envValue(run.env, k, win)).filter(Boolean))];
-  const appData = envValue(run.env, 'APPDATA', win);
+  const homes = [...new Set(['HOME', 'USERPROFILE'].map((k) => envValue(ctx.operatorEnv, k, win)).filter(Boolean))];
+  const appData = envValue(ctx.operatorEnv, 'APPDATA', win);
   const operator = [...homes.flatMap((h) => ['.claude', '.codex', '.hippo'].map((s) => path.join(h, s))), ...(appData ? [path.join(appData, 'Claude')] : [])].map(fold);
   return {
     win, fold, operator, cache: fold(ctx.cacheDir), out: fold(ctx.outDir), root: fold(d.root), config: fold(d.claudeConfig), codex: fold(d.codexHome),
-    projects: fold(path.join(d.claudeConfig, 'projects')), own: [d.work, d.claudeConfig, d.codexHome, d.hippoHome, d.bin].map(fold),
+    projects: fold(path.join(d.claudeConfig, 'projects')), own: [d.work, d.claudeConfig, d.codexHome, d.hippoHome, d.bin, d.home].map(fold),
     ownIds: new Set(ownIds.map((id) => (win ? id.toLowerCase() : id))),
     foreign: ctx.foreignDirs.filter((f) => f.order < step.order).map((f) => fold(f.path)),
     // A recursive search from an ancestor of any of these reads past transcripts, other runs or operator memory (162).
@@ -157,11 +162,14 @@ function ownConfig(b, p) {
   return Boolean(m && b.ownIds.has(m[1]));
 }
 
+/** A rollout of one of the session's own threads, named `rollout-<time>-<thread id>.jsonl`. */
+const ownRollout = (b, rel) => /^sessions\/.*\.jsonl$/.test(rel) && [...b.ownIds].some((id) => rel.endsWith(`-${id}.jsonl`));
+
 /** The first class a resolved path falls in (plan section 4, revisions 11 and 13), or null when the read is allowed. */
 function classify(b, p, search) {
   if (under(p, b.cache)) return 'other-arm';
   if (under(p, b.config) && !ownConfig(b, p)) return 'past-transcript';
-  if (under(p, b.codex) && !/^(?:memories(?:\/|$)|config\.toml$)/i.test(relTo(b.codex, p))) return 'past-rollout';
+  if (under(p, b.codex) && !CODEX_OWN.test(relTo(b.codex, p)) && !ownRollout(b, relTo(b.codex, p))) return 'past-rollout';
   if (under(p, b.out) && !under(p, b.root)) return 'other-run';
   if (search && b.searchRoots.some((f) => under(f, p))) return 'ancestor-search';
   if (under(p, b.root) && !b.own.some((o) => under(p, o))) return 'outside-work';
@@ -193,15 +201,18 @@ export function deliveryHits(run, snap, preSession) {
   return hits;
 }
 
-/** Read hits from every tool call's paths, plus auto-memory hits for a floor arm whose tools touched a memory dir. */
-function pathHits(run, b, files, fileName) {
-  const opts = { env: run.env, platform: process.platform };
+/** Read hits from every tool call's paths, plus auto-memory hits for a floor arm whose tools touched a memory dir; tokens resolve in the session's env and cwd. */
+function pathHits(run, b, files, fileName, how) {
+  const opts = { env: how.env, platform: process.platform };
   const hits = [];
-  for (const { file, name, input } of toolInputs(files)) {
-    for (const { token, search, cwd } of toolPaths(name, input, run.dirs.work, opts)) {
+  for (const { file, name, input } of how.adapter.toolInputs(files)) {
+    const paths = toolPaths(name, input, input.cwd ?? run.dirs.work, opts);
+    // A Codex shell call's workdir counts as a read the way a `cd` target does: a bare filename in a foreign dir names no path (prereg 113).
+    if (SHELL_TOOLS.has(name) && input.cwd && input.cwd !== run.dirs.work) paths.unshift({ token: input.cwd, search: false, cwd: run.dirs.work });
+    for (const { token, search, cwd } of paths) {
       const p = b.fold(cutWildcard(resolveToken(token, { ...opts, cwd })));
       const cls = classify(b, p, search);
-      if (cls) hits.push(hit('read', cls, name, p, fileName(file)));
+      if (cls && (!how.outsideOnly || OUTSIDE.has(cls))) hits.push(hit('read', cls, name, p, fileName(file)));
       if (FLOOR_ARMS.has(run.arm) && /^[^/]+\/memory(?:\/|$)/i.test(under(p, b.projects) ? relTo(b.projects, p) : '')) hits.push(hit('auto-memory', 'tool-input', name, p, fileName(file)));
     }
   }
@@ -237,9 +248,9 @@ function ownObjects(text) {
 }
 
 /** Hits from what the session saw: other sessions' transcript lines in tool results, canaries anywhere, hook-injected context. */
-function contentHits(ctx, run, b, files, fileName) {
+function contentHits(ctx, run, b, files, fileName, how) {
   const hits = [];
-  for (const { file, text: raw } of toolResultTexts(files)) {
+  for (const { file, text: raw } of how.outsideOnly ? [] : how.adapter.toolResultTexts(files)) {
     // Colour escapes (`rg --color=always`) hold `[`, which would open a false array and hide the record's keys.
     const text = stripVTControlCharacters(raw);
     // Only a Claude Code transcript line holds type, uuid and sessionId together; hippo output has no uuid, so no arm voids on its own output.
@@ -253,15 +264,20 @@ function contentHits(ctx, run, b, files, fileName) {
     const raw = fs.existsSync(file) ? segmentText(seg) : '';
     for (const c of ctx.canaries) if (raw.includes(c)) hits.push(hit('operator-canary', null, null, null, fileName(file)));
   }
-  if (!HIPPO_ARMS.has(run.arm)) for (const { file } of hookContexts(files)) hits.push(hit('hippo-text', 'hook', null, null, fileName(file)));
+  if (how.outsideOnly || HIPPO_ARMS.has(run.arm)) return hits;
+  for (const { file } of how.adapter.hookContexts(files)) hits.push(hit('hippo-text', 'hook', null, null, fileName(file)));
+  // The Codex hook item's shape is not pinned yet (plan R16), so a rollout holding hippo's marker anywhere voids too.
+  if (how.markScan) for (const file of files) if (segmentText(file).includes(HIPPO_MARK)) hits.push(hit('hippo-text', 'rollout', null, null, fileName(file)));
   return hits;
 }
 
-/** The session's G1 verdict: `void` is the highest-precedence hit's reason; `voidHits` keeps every hit, in precedence order. */
-export function sessionVoid(ctx, run, step, { files, ownIds, delivery }) {
+/** The session's G1 verdict: `void` is the highest-precedence hit's reason; `voidHits` keeps every hit, in precedence order.
+ * A Codex session passes its adapter and env; `outsideOnly` keeps just the reach outside the run, for Codex's own memory threads. */
+export function sessionVoid(ctx, run, step, { files, ownIds, delivery, adapter = CLAUDE_READ, env = run.env, outsideOnly = false, markScan = false }) {
   const b = bounds(ctx, run, step, ownIds);
   const fileName = (f) => path.relative(ctx.outDir, f).split(path.sep).join('/');
-  const hits = byPrecedence([...delivery, ...pathHits(run, b, files, fileName), ...contentHits(ctx, run, b, files, fileName)]);
+  const how = { adapter, env, outsideOnly, markScan };
+  const hits = byPrecedence([...delivery, ...pathHits(run, b, files, fileName, how), ...contentHits(ctx, run, b, files, fileName, how)]);
   return { void: hits[0]?.reason ?? null, voidHits: hits };
 }
 

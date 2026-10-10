@@ -2,9 +2,10 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { HIPPO_JS, sh, git } from './exec.mjs';
-import { HIPPO_ARMS, armSettings, armEnv, childEnv, writeHippoShim, startupTools } from './arms.mjs';
+import { HIPPO_ARMS, armSettings, armEnv, armSet, childEnv, writeHippoShim, startupTools } from './arms.mjs';
 import { runDirs, freshRunDirs } from './homes.mjs';
-import { stubBaseCommit, assertNoInstructionLinks } from './workspace.mjs';
+import { stubBaseCommit, assertNoInstructionLinks, STUB_CLAUDE_MD, X3_STUB } from './workspace.mjs';
+import { codexContext, writeCodexHome } from './codex.mjs';
 import { lessonIndex } from './lessons.mjs';
 import { assertNoPhraseInStub } from './leaks.mjs';
 
@@ -74,10 +75,14 @@ export function cacheTaskRepos(spec, cacheDir, { screen = false } = {}) {
       git(['clone', '--quiet', s.repo, cached]);
     }
     const screens = screen ? (spec.families ?? []).filter((f) => f.sequence === s.id && f.screen).map((f) => f.screen) : [];
+    // A set X sequence may run in X3, whose stub adds its own CLAUDE.md text (E6 plan R22).
+    const texts = s.set === 'X' ? [STUB_CLAUDE_MD, X3_STUB] : [STUB_CLAUDE_MD];
     for (const t of [...s.tasks, ...screens]) {
-      const stub = stubBaseCommit(cached, t.baseRef);
-      assertNoInstructionLinks(cached, s.id, t, stub);
-      assertNoPhraseInStub(spec, cached, s.id, t, stub);
+      for (const text of texts) {
+        const stub = stubBaseCommit(cached, t.baseRef, text);
+        assertNoInstructionLinks(cached, s.id, t, stub);
+        assertNoPhraseInStub(spec, cached, s.id, t, stub);
+      }
     }
   }
 }
@@ -95,6 +100,7 @@ export async function openContext(opts) {
     limitWaitMs: opts.limitWaitMs ?? 15 * 60_000, sessionTimeoutMs: opts.sessionTimeoutMs ?? 60 * 60_000, limitMaxWaits: opts.limitMaxWaits ?? 96, log: opts.log ?? console.log,
     lessons: lessonIndex(spec.families ?? []), recordsFile: opts.recordsFile ?? 'runs.jsonl', progress: opts.progress ?? {},
     ledgerFile: path.join(outDir, 'ledger.jsonl'), snapDir: path.join(outDir, 'snap'), canaries: opts.canaries ?? [], foreignDirs: [], leakedRuns: new Map(),
+    operatorEnv: { ...process.env },
   };
   cacheTaskRepos(spec, ctx.cacheDir, { screen: opts.screen === true });
   const warmDir = path.join(outDir, 'warmup');
@@ -106,6 +112,8 @@ export async function openContext(opts) {
     const warmArgs = ['-p', '--output-format', 'json', '--setting-sources', 'project', '--strict-mcp-config', ...(ctx.model ? ['--model', ctx.model] : [])];
     sh(`${claude} ${warmArgs.join(' ')}`, warmDir, warmEnv, 10 * 60_000, 'Reply with the single word OK.');
   }
+  // Last, so a refused step above leaves no login copy; runAll closes the vault in its catch and after runSteps, and a screen never opens it.
+  if ((opts.arms ?? []).some((a) => armSet(a) === 'X')) Object.assign(ctx, codexContext(opts, process.env));
   return ctx;
 }
 
@@ -118,10 +126,12 @@ export function startRun(ctx, s, arm, seed, name = s.id) {
   const settingsFile = path.join(ctx.outDir, 'settings', `${name}-${arm}-seed${seed}.json`);
   fs.mkdirSync(path.dirname(settingsFile), { recursive: true });
   fs.writeFileSync(settingsFile, JSON.stringify(armSettings(arm, HIPPO_ARMS.has(arm) ? hippoHookSettings(ctx.hookHome) : null), null, 2));
-  return {
+  const run = {
     s, arm, seed, dirs, env, settingsFile, cached: path.join(ctx.cacheDir, s.id), seenErrors: new Set(), changes: new Map(), taught: [], teachSeen: new Set(), captured: new Map(),
     rawDir: path.join(ctx.outDir, 'raw', name, arm, `seed${seed}`), runName: name,
   };
+  if (armSet(arm) === 'X') writeCodexHome(ctx, run);
+  return run;
 }
 
 /** hippo init on the stub base (A2/A5, first task that runs), through the child env, with LLM extraction off and prompt recall pinned on. */

@@ -6,8 +6,7 @@ import { HIPPO_ARMS, CARRY_ARMS, childEnv } from './arms.mjs';
 import { homeFiles, ancestorInstructionFiles } from './homes.mjs';
 import { checkoutBase, instructionSnapshot, instructionDelta, applyInstructions, restoreInstructions, writeHiddenTests, goldLines } from './workspace.mjs';
 import {
-  findTranscript, sessionFiles, listTranscripts, transcriptWork, transcriptUsage, assistantTurns, assistantIds, commandLog, usageFromResult, invalidRecord, validRecord,
-  hookContexts, toolResultTexts,
+  findTranscript, sessionFiles, listTranscripts, transcriptUsage, assistantTurns, assistantIds, usageFromResult, invalidRecord, validRecord,
 } from './records.mjs';
 import { hippoInit, storeLeaks, storeEntries, hippoSentFor, writeRecord, settle, startRun } from './runs.mjs';
 import { findLeaks, storedAt, shownAtStart, capturedBy, holds } from './leaks.mjs';
@@ -18,7 +17,11 @@ import { teachMessage, withTaught, memoryText, wordOverlap } from './lessons.mjs
 import { cellName, snapshotSurfaces, restoreSurfaces, recordInjected } from './surfaces.mjs';
 import { deliveryHits, sessionVoid, byPrecedence, foldPath, under } from './readcheck.mjs';
 import { followedOf } from './z0-records.mjs';
+import { CODEX_DRIVER, driverOf, codexSession, codexPricing, codexVoid, codexFields, shownAtStartCodex, writeX4Block, sweepCell, wrapperWait } from './codex-task.mjs';
+import { installHippoCodex } from './codex-install.mjs';
 
+// The arms whose teach cells record what hippo captured (prereg 182).
+const CAPTURE_ARMS = new Set(['A2', 'X2']);
 const NO_CARRY = { carryMerges: 0, carryUnionMerges: 0, carryDeleteKept: 0 };
 const NOT_STAGED = { carryMerges: null, carryUnionMerges: null, carryDeleteKept: null, homesAtStart: null };
 const ZERO_USAGE = { inputTokens: 0, cacheWriteTokens: 0, cacheReadTokens: 0, outputTokens: 0 };
@@ -54,8 +57,8 @@ function newSessionIds(run, before) {
 function baseFields(ctx, run, step) {
   const { t, role } = step;
   const base = {
-    schema: 'z0-record/1', set: role.set, tool: 'claude-code', repo: run.s.repo, taskId: t.id, cluster: run.s.cluster, sequence: run.s.id,
-    position: step.position, order: step.order, arm: run.arm, seed: run.seed, model: ctx.model, claudeVersion: ctx.claudeVersion,
+    schema: 'z0-record/1', set: role.set, tool: step.driver.tool, repo: run.s.repo, taskId: t.id, cluster: run.s.cluster, sequence: run.s.id,
+    position: step.position, order: step.order, arm: run.arm, seed: run.seed, model: step.driver === CODEX_DRIVER ? ctx.codexModel : ctx.model, claudeVersion: ctx.claudeVersion,
     startedAt: new Date().toISOString(), baseCommit: null, kind: role.kind, familyId: role.familyId, lessonSource: role.lessonSource,
     applyIndex: role.applyIndex, afterReversal: role.afterReversal, tasksSinceTeach: role.tasksSinceTeach,
   };
@@ -88,10 +91,15 @@ function stageTask(ctx, run, step) {
   // Init waits for the first step whose setup passed, so a skipped first task cannot leave A2/A5 without hippo.
   if (HIPPO_ARMS.has(run.arm) && !run.initDone) {
     hippoInit(run, ctx.fakeHome);
+    // X2 only: hippo's Codex hooks and wrapper go onto the run's own launcher, once (E6 plan D7).
+    if (run.arm === 'X2') installHippoCodex(ctx, run);
     run.initDone = true;
   }
   const carry = CARRY_ARMS.has(run.arm) ? applyInstructions(work, run.changes, baseline, path.join(ctx.outDir, 'tmp')) : NO_CARRY;
   const stage = { commit, prepare, baseline, carry, homesAtStart: run.sessionRan ? null : homeFiles(run.dirs), preSession: instructionSnapshot(work) };
+  // A Codex session points filesOf at its rollouts once it ends.
+  stage.adapter = step.driver.adapter;
+  stage.filesOf = (ids) => transcriptsOf(run, ids);
   stage.pre = stateCommit(work, commit);
   holdPre(work, stage.pre);
   stage.step = step;
@@ -127,7 +135,7 @@ function checker(ctx, run, t, stage, sessionIds) {
     if (!postCommit) return null;
     if (hold) guarded(run, t, stage, () => holdPre(work, postCommit, hold));
     if (stage.fault) return null;
-    const commands = commandLog(transcriptsOf(run, sessionIds));
+    const commands = stage.adapter.commandLog(stage.filesOf(sessionIds));
     state.calls.push({ lessonId: lesson.id, post: postCommit, commands });
     try {
       return guarded(run, t, stage, () => runCheck(lesson, { work, env: childEnv(run.env), preCommit: stage.pre, postCommit, commands, scratch: path.join(run.dirs.root, 'scratch') }));
@@ -161,12 +169,12 @@ async function lessonTurns(ctx, run, step, stage, sessionIds) {
       finalChecked: own.length > 1, finalCheckPost: own.at(-1)?.post ?? null, stalePost: stale?.post ?? null, commandsStale: stale?.commands ?? null,
     };
   };
-  // A teach whose checker crashed is still taught (reading 9); an apply resumes only on a real fail; a screen session never (reading 4).
+  // A teach whose checker crashed is still taught (reading 9); an apply resumes only on a real fail; a screen session or a Codex apply never (reading 4, prereg 110).
   const noResume = { lesson, first, final: first, staleFollow, checkerError: c.error, resume: null, form: null, ...saved() };
   // Rechecked after grading on every graded cell, so a file a checker left voids the cell whatever its verdict.
   if ((stage.ancestors ||= ancestorHits(ctx, run, t))) return noResume;
   // A broken workspace git voids the cell, so a teach is not resumed and A4 is never taught from it.
-  if (role.kind === 'screen' || stage.fault || (!teach && (first !== 'fail' || c.error))) return noResume;
+  if (role.kind === 'screen' || step.driver === CODEX_DRIVER || stage.fault || (!teach && (first !== 'fail' || c.error))) return noResume;
   let resumeAncestorHits;
   // Only a failing apply resumes, so its resume-time file is kept, never invalidating it; every teach resumes, so its file voids it (reading 13).
   const resumeAncestors = () => {
@@ -221,8 +229,8 @@ function invalidReason(session, turns, transcriptsFound, stage) {
   return transcriptsFound ? null : 'no-transcript';
 }
 
-function agentError(session, turns) {
-  const exited = (cc, who) => (cc.timedOut ? `${who}claude timed out` : `${who}claude exited ${cc.status}: ${cc.stderr.slice(0, 300)}`);
+function agentError(session, turns, tool) {
+  const exited = (cc, who) => (cc.timedOut ? `${who}${tool} timed out` : `${who}${tool} exited ${cc.status}: ${cc.stderr.slice(0, 300)}`);
   const say = (cc, result, who) => (result === null ? exited(cc, who) : (result.is_error ? result.subtype ?? 'error' : null));
   const resumed = turns?.resume ? say(turns.resume.cc, turns.resume.result, 'resume: ') : null;
   return say(session.cc, session.result, '') ?? resumed;
@@ -274,25 +282,27 @@ function resumeAwareVoid(ctx, run, step, stage, sessionIds, resume) {
 /** The record for a cell whose session ran. */
 function sessionRecord(ctx, run, step, parts) {
   const { session, turns, sessionIds, acceptancePassed, wallMs, stage } = parts;
+  const codex = step.driver === CODEX_DRIVER;
   const projects = projectsOf(run);
-  // A result without a session id has no transcript to read, so it is no-transcript, never a record with null work counts.
-  const found = sessionIds.length > 0 && sessionIds.every((id) => findTranscript(projects, id));
+  // A result without a session id has no transcript to read, so it is no-transcript, never a record with null work counts; so is a rollout with no usage.
+  const found = sessionIds.length > 0 && (codex ? session.usage !== null : sessionIds.every((id) => findTranscript(projects, id)));
   const resume = turns?.resume ?? null;
   const resumeId = resume?.result?.session_id ?? (resume?.cc.timedOut ? sessionIds.at(-1) : null);
-  const g1 = resumeAwareVoid(ctx, run, step, stage, sessionIds, resume);
+  const g1 = codex ? codexVoid(ctx, run, step, stage, session) : resumeAwareVoid(ctx, run, step, stage, sessionIds, resume);
   const shared = {
     void: g1.void, voidHits: g1.void ? g1.voidHits : undefined, resumeVoidHits: g1.resumeVoidHits, resumeAncestorHits: turns?.resumeAncestorHits,
     timedOut: session.cc.timedOut || Boolean(resume?.cc.timedOut), limitRetries: session.limitRetries + ((resume ?? turns?.cutOffResume)?.limitRetries ?? 0),
-    sessionId: session.result?.session_id ?? sessionIds[0] ?? null, resumeSessionId: resumeId ?? null, agentError: agentError(session, turns),
+    sessionId: session.result?.session_id ?? sessionIds[0] ?? null, resumeSessionId: resumeId ?? null, agentError: agentError(session, turns, codex ? 'codex' : 'claude'),
     ...stage.carry, homesAtStart: stage.homesAtStart, envKeys: Object.keys(run.env).sort(), passEnv: ctx.passEnv,
     surfaceRestored: stage.restores.every(Boolean), injectedRows: stage.injected,
   };
+  if (codex) Object.assign(shared, codexFields(ctx, run, session));
   const reason = invalidReason(session, turns, found, stage);
   if (reason) return invalidRecord(parts.base, reason, shared);
   return validRecord(parts.base, {
     lessons: turns ? [{ lessonId: turns.lesson.id, first: turns.first, final: turns.final, staleFollow: turns.staleFollow }] : [],
-    acceptancePassed, ...pricing(run, session, resume, sessionIds),
-    ...transcriptWork(transcriptsOf(run, sessionIds), run.seenErrors), transcriptFound: true, wallMs,
+    acceptancePassed, ...(codex ? codexPricing(session) : pricing(run, session, resume, sessionIds)),
+    ...stage.adapter.transcriptWork(stage.filesOf(sessionIds), run.seenErrors), transcriptFound: true, wallMs,
     teachTurns: step.role.kind === 'teach' ? 1 : 0, correctionTurns: step.role.kind === 'apply' && resume ? 1 : 0, teachForm: turns?.form ?? null,
     hippo: HIPPO_ARMS.has(run.arm) ? hippoSentFor(path.join(run.dirs.work, '.hippo'), sessionIds) : null, ...shared,
     chain: chainOf(run, step, stage, turns),
@@ -301,6 +311,8 @@ function sessionRecord(ctx, run, step, parts) {
 
 /** Session 1's id: the result's, or for a session killed before its result the id it was started under, else its one new transcript. */
 function firstSessionIds(ctx, run, t, session, stage) {
+  // A Codex session's main thread comes first, then the children it spawned (plan R21).
+  if (session.rollouts) return session.rollouts.threadIds;
   if (session.result?.session_id) return [session.result.session_id];
   if (!session.cc.timedOut) return [];
   if (findTranscript(projectsOf(run), session.sessionId)) return [session.sessionId];
@@ -327,26 +339,32 @@ async function runTurns(ctx, run, step, stage, base) {
   const work = run.dirs.work;
   // Monotonic, so a wall-clock step (NTP, a WSL resync) cannot make wallMs negative.
   const started = performance.now();
-  const session = await runSession(ctx, run, t, () => resetTask(ctx, run, t, stage));
+  const reset = () => resetTask(ctx, run, t, stage);
+  const session = step.driver === CODEX_DRIVER ? await codexSession(ctx, run, t, stage, reset) : await runSession(ctx, run, t, reset);
   run.sessionRan = true;
   writeRaw(run, `${t.id}.json`, session.cc.stdout || JSON.stringify({ error: session.cc.stderr.slice(0, 4000), status: session.cc.status }));
   // Reading 13: every cell kind, before any check, so whether a cell is void never depends on its verdict.
   stage.ancestors ||= ancestorHits(ctx, run, t);
   const sessionIds = firstSessionIds(ctx, run, t, session, stage);
   // Before the resume, so its transcript lines are not yet there.
-  if (stage.chainPre) stage.chainPre.shown ||= shownInSession(run, stage.chainPre.lesson, sessionIds);
+  if (stage.chainPre) stage.chainPre.shown ||= shownInSession(stage, stage.chainPre.lesson, sessionIds);
   // A timed-out session is still checked and resumed (prereg 109, 165).
   const turns = sessionIds.length && !stage.ancestors ? await lessonTurns(ctx, run, step, stage, sessionIds) : null;
-  const wallMs = Math.round(performance.now() - started - session.cutOffMs - ((turns?.resume ?? turns?.cutOffResume)?.cutOffMs ?? 0));
+  // Codex's memory wait is the runner's, never the agent's (prereg 112).
+  const wallMs = Math.round(performance.now() - started - session.cutOffMs - ((turns?.resume ?? turns?.cutOffResume)?.cutOffMs ?? 0) - (session.wait?.ms ?? 0));
   // Before the end hooks and the hidden tests, so the final tree is the agent's alone.
   if (!stage.fault) stage.finalPost = guarded(run, t, stage, () => stateCommit(work, stage.pre));
   await settle(ctx, run, t.id, 'end');
+  if (step.driver === CODEX_DRIVER && run.arm === 'X2') session.wrapper = await wrapperWait(ctx, run, t.id, session.threadId, session.priorLog);
   snapshotSurfaces(ctx, run, 'end', step);
   if (HIPPO_ARMS.has(run.arm)) stage.injected = hippoEnd(ctx, run, step, stage, sessionIds);
   guarded(run, t, stage, () => noteWorktrees(ctx, run, step));
+  // Reading 8: A4 and X4 hold a lesson only once its teach resume delivered it; X4's block goes in before the delta, so it carries (plan D9).
+  if (step.role.kind === 'teach' && turns?.delivered) {
+    run.taught = withTaught(run.taught, turns.lesson);
+    if (run.arm === 'X4') base.x4Block = writeX4Block(work, run.taught);
+  }
   if (CARRY_ARMS.has(run.arm)) run.changes = instructionDelta(stage.baseline, instructionSnapshot(work));
-  // Reading 8: A4 holds a lesson only once its teach resume delivered it.
-  if (step.role.kind === 'teach' && turns?.delivered) run.taught = withTaught(run.taught, turns.lesson);
   writeHiddenTests(run.cached, work, t);
   const test = sh(t.test, work, childEnv(run.env));
   writeLog(run, `${t.id}.test.txt`, `${test.stdout}\n${test.stderr}`);
@@ -354,14 +372,16 @@ async function runTurns(ctx, run, step, stage, base) {
   stage.dropped = true;
   guarded(run, t, stage, () => dropPre(work));
   const parts = { base, session, turns, sessionIds, acceptancePassed: test.status === 0, wallMs, stage };
-  const record = sessionRecord(ctx, run, step, parts);
-  if (record.invalid || step.role.kind === 'screen') return record;
+  let record = sessionRecord(ctx, run, step, parts);
   // A cell whose trees cannot be saved cannot be regraded (166), so it turns invalid like any other workspace fault.
-  const saved = guarded(run, t, stage, () => {
+  const graded = record.invalid || step.role.kind === 'screen' || guarded(run, t, stage, () => {
     saveGrading(ctx, run, step, stage, turns, record);
     return true;
   });
-  return saved ? record : sessionRecord(ctx, run, step, parts);
+  if (!graded) record = sessionRecord(ctx, run, step, parts);
+  // Last, so the cell's test log and grading files are swept too (plan R24).
+  if (step.driver === CODEX_DRIVER) sweepCell(ctx, run);
+  return record;
 }
 
 /** This sequence's lessons whose teach the run has not reached; none in a screen run, which teaches outside the drawn order. */
@@ -386,31 +406,31 @@ function phraseLeaks(run, step, stage, open) {
 function chainAtStart(ctx, run, step, stage) {
   const { lesson } = ctx.lessons.get(step.role.lessonId);
   const at = { root: run.dirs.root, surfaces: stage.snap.surfaces, stores: stage.stores };
-  return { lesson, stored: storedAt(lesson, at), shown: shownAtStart(lesson, at) };
+  return { lesson, stored: storedAt(lesson, at), shown: step.driver === CODEX_DRIVER ? shownAtStartCodex(lesson, run) : shownAtStart(lesson, at) };
 }
 
 /** Session 1's share of `shown` (decision 23): the key phrase in a hook's added context or a tool result, main or subagent. */
-const shownInSession = (run, lesson, sessionIds) => {
-  const files = transcriptsOf(run, sessionIds);
-  return [...hookContexts(files), ...toolResultTexts(files)].some(({ text }) => holds(text, lesson.keyPhrase));
+const shownInSession = (stage, lesson, sessionIds) => {
+  const files = stage.filesOf(sessionIds);
+  return [...stage.adapter.hookContexts(files), ...stage.adapter.toolResultTexts(files)].some(({ text }) => holds(text, lesson.keyPhrase));
 };
 
-/** A valid apply's failure chain (prereg 179-182); `captured` is A2's alone, copied from its teach cell. */
+/** A valid apply's failure chain (prereg 179-182); `captured` is A2's and X2's alone, copied from its teach cell. */
 function chainOf(run, step, stage, turns) {
   if (step.role.kind !== 'apply') return undefined;
   const { stored, shown } = stage.chainPre;
   const none = { captured: null, capturedAny: null };
-  const capture = run.arm === 'A2' ? run.captured.get(step.role.lessonId) ?? { captured: false, capturedAny: false } : none;
+  const capture = CAPTURE_ARMS.has(run.arm) ? run.captured.get(step.role.lessonId) ?? { captured: false, capturedAny: false } : none;
   return { stored, shown, followed: followedOf(shown, turns?.first), ...capture };
 }
 
-/** End of a hippo cell: the injected rows (prereg 93) over both loads of the stores, and an A2 teach's capture (182). */
+/** End of a hippo cell: the injected rows (prereg 93) over both loads of the stores, and an A2 or X2 teach's capture (182). */
 function hippoEnd(ctx, run, step, stage, sessionIds) {
   const end = hippoStores(run);
-  if (run.arm === 'A2' && step.role.kind === 'teach') run.captured.set(step.role.lessonId, capturedBy(ctx.lessons.get(step.role.lessonId).lesson, end));
+  if (CAPTURE_ARMS.has(run.arm) && step.role.kind === 'teach') run.captured.set(step.role.lessonId, capturedBy(ctx.lessons.get(step.role.lessonId).lesson, end));
   // Both loads, so a row sleep removed during the session still matches.
   const byId = new Map([...stage.stores, ...end].flatMap((s) => s.entries.map((e) => [e.id, { ...e, global: s.surface === 'hippoGlobal' }])));
-  const texts = hookContexts(transcriptsOf(run, sessionIds)).map(({ text }) => text);
+  const texts = stage.adapter.hookContexts(stage.filesOf(sessionIds)).map(({ text }) => text);
   return recordInjected(ctx, run, step, texts, [...byId.values()]);
 }
 
@@ -424,7 +444,7 @@ export async function runSteps(ctx, steps) {
     const name = step.runName ?? s.id;
     const key = `${name}|${arm}|${seed}`;
     if (!runs.has(key)) runs.set(key, { ...startRun(ctx, s, arm, seed, name), taught: step.taught ?? [] });
-    await runTask(ctx, runs.get(key), { ...step, order });
+    await runTask(ctx, runs.get(key), { ...step, order, driver: driverOf(step.role) });
     ctx.progress.last = `step ${order}: ${name} ${step.taskId} ${arm} seed${seed}`;
   }
   return ctx.records;

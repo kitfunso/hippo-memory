@@ -111,6 +111,29 @@ describe('conflict refresh', () => {
     expect(refsOf(root, 'mem_bulk_21')).toBe('[]');
   });
 
+  it('reads only rows that hold conflicts or are named, not the whole table', () => {
+    const root = bulkStore(STORE_ROWS);
+    replaceDetectedConflicts(root, [pair(1, 2), pair(3, 4)], NOW);
+    let rowsRead = 0;
+    const { all } = StatementSync.prototype;
+    vi.spyOn(StatementSync.prototype, 'all').mockImplementation(function (this: StatementProto, ...params: unknown[]) {
+      const rows = all.apply(this, params);
+      rowsRead += rows.length;
+      return rows;
+    });
+
+    // pair(1, 2) is re-detected, pair(3, 4) goes stale, pair(5, 6) is new.
+    replaceDetectedConflicts(root, [pair(1, 2), pair(5, 6)], NOW);
+    vi.restoreAllMocks();
+
+    expect(rowsRead).toBeLessThan(STORE_ROWS / 10);
+    expect(refsOf(root, 'mem_bulk_1')).toBe('["mem_bulk_2"]');
+    expect(refsOf(root, 'mem_bulk_3')).toBe('[]');
+    expect(refsOf(root, 'mem_bulk_4')).toBe('[]');
+    expect(refsOf(root, 'mem_bulk_5')).toBe('["mem_bulk_6"]');
+    expect(refsOf(root, 'mem_bulk_7')).toBe('[]');
+  });
+
   it('keeps a value another writer set between the read and the write', () => {
     const root = bulkStore(4);
     const { exec } = DatabaseSync.prototype;
