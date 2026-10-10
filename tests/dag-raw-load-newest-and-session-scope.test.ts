@@ -18,7 +18,7 @@ import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadSessionRawMemories, loadFreshRawMemories } from '../src/store/entry-reads.js';
 import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
-import { recall, assemble, type Context } from '../src/api/index.js';
+import { retrieve, assemble, type Context } from '../src/api/index.js';
 import { makeRoot } from './_helpers/make-root.js';
 
 function safeRmSync(p: string): void { try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ } }
@@ -110,7 +110,7 @@ describe('loadFreshRawMemories sessionId scope', () => {
     expect(got.map((e) => e.id)).toEqual([a.id]);
   });
 
-  it('recall with freshTailSessionId scopes the fresh-tail to that session', () => {
+  it('recall with freshTailSessionId scopes the fresh-tail to that session', async () => {
     // Two concurrent sessions; the cross-session row must NOT be marked
     // isFreshTail when the caller scopes to sess-A.
     const a = makeRaw('row in session A query', 'sess-A');
@@ -119,7 +119,7 @@ describe('loadFreshRawMemories sessionId scope', () => {
     b.created = '2026-01-02T00:00:00.000Z';
     writeEntry(root, a);
     writeEntry(root, b);
-    const r = recall(ctxFor(root), {
+    const r = await retrieve(ctxFor(root), {
       query: 'totally unmatched query string',
       freshTailCount: 5,
       freshTailSessionId: 'sess-A',
@@ -129,14 +129,14 @@ describe('loadFreshRawMemories sessionId scope', () => {
     expect(tailIds).not.toContain(b.id);
   });
 
-  it('recall WITHOUT freshTailSessionId is tenant-wide (legacy)', () => {
+  it('recall WITHOUT freshTailSessionId is tenant-wide (legacy)', async () => {
     const a = makeRaw('row in session A query', 'sess-A');
     a.created = '2026-01-01T00:00:00.000Z';
     const b = makeRaw('row in session B query', 'sess-B');
     b.created = '2026-01-02T00:00:00.000Z';
     writeEntry(root, a);
     writeEntry(root, b);
-    const r = recall(ctxFor(root), {
+    const r = await retrieve(ctxFor(root), {
       query: 'totally unmatched query string',
       freshTailCount: 5,
     });

@@ -26,7 +26,7 @@ import { writeEntry } from '../src/store/entry-writes.js';
 import { loadIndex } from '../src/store/index-and-stats.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { remember, recall, getContext, type Context } from '../src/api/index.js';
+import { remember, retrieve, getContext, type Context } from '../src/api/index.js';
 
 // Invoke this worktree's own bin/hippo.js directly (not the `hippo` binary
 // on PATH) so the CLI test exercises THIS build, not whatever hippo-memory
@@ -94,14 +94,14 @@ function lastTraceId(home: string): number | null {
 }
 
 describe('api.recall — trace wiring', () => {
-  it('writes exactly one recall_traces row (pipeline=api) with the full returned id+rank+score list', () => {
+  it('writes exactly one recall_traces row (pipeline=api) with the full returned id+rank+score list', async () => {
     const { home, restore } = tmpHome();
     try {
       const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
       remember(ctx, { content: 'recall-trace-target-alpha' });
       remember(ctx, { content: 'recall-trace-target-beta also matches' });
 
-      const result = recall(ctx, { query: 'recall-trace-target', limit: 5 });
+      const result = await retrieve(ctx, { query: 'recall-trace-target', limit: 5 });
       expect(result.results.length).toBeGreaterThan(0);
 
       const traces = traceRows(home, 'api');
@@ -123,14 +123,14 @@ describe('api.recall — trace wiring', () => {
     }
   });
 
-  it('does NOT write last_trace_id (v1.11.5 no-side-effects contract, extended)', () => {
+  it('does NOT write last_trace_id (v1.11.5 no-side-effects contract, extended)', async () => {
     const { home, restore } = tmpHome();
     try {
       const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
       remember(ctx, { content: 'recall-trace-no-side-effect-target' });
 
       expect(lastTraceId(home)).toBeNull();
-      const result = recall(ctx, { query: 'recall-trace-no-side-effect-target', limit: 5 });
+      const result = await retrieve(ctx, { query: 'recall-trace-no-side-effect-target', limit: 5 });
       expect(result.results.length).toBeGreaterThan(0);
 
       // A trace row WAS written (previous test), but last_trace_id stays null.
@@ -143,7 +143,7 @@ describe('api.recall — trace wiring', () => {
     }
   });
 
-  it('batched api.recall calls each insert their own trace row (no overwrite race)', () => {
+  it('batched api.recall calls each insert their own trace row (no overwrite race)', async () => {
     const { home, restore } = tmpHome();
     try {
       const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
@@ -151,9 +151,9 @@ describe('api.recall — trace wiring', () => {
       remember(ctx, { content: 'batched-trace-B' });
       remember(ctx, { content: 'batched-trace-C' });
 
-      recall(ctx, { query: 'batched-trace-A', limit: 5 });
-      recall(ctx, { query: 'batched-trace-B', limit: 5 });
-      recall(ctx, { query: 'batched-trace-C', limit: 5 });
+      await retrieve(ctx, { query: 'batched-trace-A', limit: 5 });
+      await retrieve(ctx, { query: 'batched-trace-B', limit: 5 });
+      await retrieve(ctx, { query: 'batched-trace-C', limit: 5 });
 
       expect(traceRows(home, 'api')).toHaveLength(3);
     } finally {
@@ -161,13 +161,13 @@ describe('api.recall — trace wiring', () => {
     }
   });
 
-  it('F2: suppressRecallTrace:true writes NO trace row', () => {
+  it('F2: suppressRecallTrace:true writes NO trace row', async () => {
     const { home, restore } = tmpHome();
     try {
       const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
       remember(ctx, { content: 'suppressed-trace-target' });
 
-      const result = recall(ctx, { query: 'suppressed-trace-target', limit: 5, suppressRecallTrace: true });
+      const result = await retrieve(ctx, { query: 'suppressed-trace-target', limit: 5, suppressRecallTrace: true });
       expect(result.results.length).toBeGreaterThan(0);
 
       expect(traceRows(home, 'api')).toHaveLength(0);

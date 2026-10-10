@@ -10,7 +10,7 @@ import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { serve, type AddonRoute, type ServerHandle } from '../src/server.js';
 import { handleMcpRequest, type McpResponse } from '../src/mcp/server.js';
-import { recall, remember } from '../src/api/index.js';
+import { retrieve, remember } from '../src/api/index.js';
 
 interface Connection { location(): string | null }
 type ConnectionMethod = (this: Connection, ...args: never[]) => void;
@@ -82,7 +82,7 @@ beforeAll(async () => {
   // An add-on route that runs two api helpers, as a hook route does.
   const addon: AddonRoute = { path: '/v1/test/remember-then-recall', handler: async ({ ctx }) => {
     remember(ctx, { content: 'the release train leaves every second Wednesday' });
-    return { total: recall(ctx, { query: 'release train' }).total };
+    return { total: (await retrieve(ctx, { query: 'release train' })).total };
   } };
   server = await serve({ hippoRoot: root, port: 0, routes: [addon] });
 });

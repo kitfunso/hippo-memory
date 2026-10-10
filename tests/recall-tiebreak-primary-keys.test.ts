@@ -19,7 +19,7 @@ import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { Layer, type MemoryEntry} from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { recall, type Context } from '../src/api/index.js';
+import { retrieve, type Context } from '../src/api/index.js';
 import { estimateTokens } from '../src/util/token-text.js';
 import type { SearchResult } from '../src/core/search-types.js';
 import { insertEntity, insertRelation } from '../src/store/graph-writes.js';
@@ -64,7 +64,7 @@ describe('api.ts:833 DAG substitution ordering', () => {
   beforeEach(() => { root = makeRoot('dag-tiebreak'); });
   afterEach(() => safeRmSync(root));
 
-  it('primary wins: the summary with MORE overflowing children is substituted, not the one with fewer', () => {
+  it('primary wins: the summary with MORE overflowing children is substituted, not the one with fewer', async () => {
     // Every leaf under both topics tokenizes to the SAME 4-term bag ("alpha
     // zulu topic event") — the numeric/letter suffix ("a-0", "b-3", ...) is
     // stripped by tokenize()'s length>1 filter (hyphen splits it into two
@@ -96,7 +96,7 @@ describe('api.ts:833 DAG substitution ordering', () => {
     // maxSub = max(1, ceil(limit * 0.3)) = 1 at limit=1, so only the WINNING
     // (highest overflow count) summary is substituted — a clean single-slot
     // assertion instead of inspecting relative order in a longer list.
-    const r = recall(ctxFor(root), { query: 'alpha zulu topic event', limit: 1 });
+    const r = await retrieve(ctxFor(root), { query: 'alpha zulu topic event', limit: 1 });
     const summaries = r.results.filter((it) => it.isSummary);
     expect(summaries.length).toBe(1);
     expect(summaries[0].id).toBe(summaryB.id); // topic B (6 overflow) beats topic A (2 overflow)

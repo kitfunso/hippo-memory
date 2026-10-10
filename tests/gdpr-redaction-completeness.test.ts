@@ -9,7 +9,7 @@ import {
   type DatabaseSyncLike,
 } from '../src/db/index.js';
 import type { HippoDbContext } from '../src/api/index.js';
-import { remember, archiveRaw, recall } from '../src/api/index.js';
+import { remember, archiveRaw, retrieve } from '../src/api/index.js';
 import { queryAuditEvents } from '../src/store/audit.js';
 import { recordStatements, countMatching } from './_helpers/count-statements.js';
 
@@ -243,12 +243,12 @@ describe('GDPR Path A completeness fixes', () => {
   // Fix 2: recall audit stores query_hash, not query text
   // ---------------------------------------------------------------------------
 
-  it('3. recall audit_log row stores query_hash + query_length, no query field', () => {
+  it('3. recall audit_log row stores query_hash + query_length, no query field', async () => {
     const ctx: HippoDbContext = { hippoRoot: root, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
     remember(ctx, { content: 'something to find with the canary query' });
 
     const distinctive = 'gdpr-canary-quaxle-2026';
-    recall(ctx, { query: distinctive });
+    await retrieve(ctx, { query: distinctive });
 
     const db = openHippoDb(root);
     try {
@@ -268,7 +268,7 @@ describe('GDPR Path A completeness fixes', () => {
   // Fix 3 verification (also full RTBF): canary scan across all tables
   // ---------------------------------------------------------------------------
 
-  it('4. full RTBF: original content + query text appear in zero persistent tables after archive', () => {
+  it('4. full RTBF: original content + query text appear in zero persistent tables after archive', async () => {
     const ctx: HippoDbContext = { hippoRoot: root, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
     const canary = 'gdpr-canary-99-special-token-xyz';
 
@@ -282,7 +282,7 @@ describe('GDPR Path A completeness fixes', () => {
     archiveRaw(ctx, id, 'GDPR right-to-be-forgotten');
 
     // Recall using the canary as the query — must not bring back the archived row.
-    recall(ctx, { query: canary });
+    await retrieve(ctx, { query: canary });
 
     // Markdown mirrors gone.
     const layers = ['episodic', 'buffer', 'semantic'];
@@ -318,7 +318,7 @@ describe('GDPR Path A completeness fixes', () => {
     }
   });
 
-  it('5. cross-recall non-leakage: two recalls before/after archive both leave hash-only audit rows', () => {
+  it('5. cross-recall non-leakage: two recalls before/after archive both leave hash-only audit rows', async () => {
     const ctx: HippoDbContext = { hippoRoot: root, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
     const queryText = 'special-private-cross-recall-string';
     const { id } = remember(ctx, {
@@ -327,14 +327,14 @@ describe('GDPR Path A completeness fixes', () => {
     });
 
     // Recall #1: matches.
-    const r1 = recall(ctx, { query: queryText });
+    const r1 = await retrieve(ctx, { query: queryText });
     expect(r1.results.length).toBeGreaterThanOrEqual(1);
 
     // Archive.
     archiveRaw(ctx, id, 'GDPR purge');
 
     // Recall #2: same query text, no match.
-    const r2 = recall(ctx, { query: queryText });
+    const r2 = await retrieve(ctx, { query: queryText });
     expect(r2.results.length).toBe(0);
 
     const db = openHippoDb(root);

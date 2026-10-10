@@ -38,7 +38,7 @@ import {
   DEFAULT_HALF_LIFE_DAYS,
 } from '../src/core/memory.js';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { recall, type Context } from '../src/api/index.js';
+import { retrieve, type Context } from '../src/api/index.js';
 import { makeRoot } from './_helpers/make-root.js';
 
 const ENV_KEY = 'HIPPO_LOSS_AVERSION_RATIO';
@@ -258,7 +258,7 @@ describe('behavioral: env=0 ranking effect', () => {
     _resetLossAversionRatioCacheForTests();
   });
 
-  it('9. env=0.5 (v1.13.4-equivalent floor) reduces error-tagged memory strength vs default', () => {
+  it('9. env=0.5 (v1.13.4-equivalent floor) reduces error-tagged memory strength vs default', async () => {
     // v1.13.5 + codex P1 fold: env=0.01 was originally used here but is
     // now rejected as invalid (below the 0.5 floor). Use env=0.5 (the
     // minimum valid ratio = v1.13.4 equivalent multiplier of 1.0 + 0.5*1.0
@@ -292,7 +292,7 @@ describe('behavioral: env=0 ranking effect', () => {
       tenantId: 'default',
       actor: { subject: 'test:j5-behavioral', role: 'admin' },
     };
-    const result = recall(ctx, { query: 'shared ranking keyword variant test' });
+    const result = await retrieve(ctx, { query: 'shared ranking keyword variant test' });
     expect(result.results.length).toBeGreaterThanOrEqual(4);
     // Locate the 4 seeded entries via their content marker and read the
     // strength field that recall surfaced. The strength field IS the output
@@ -339,7 +339,7 @@ describe('behavioral: env=0 ranking effect', () => {
       tenantId: 'default',
       actor: { subject: 'test:j5-behavioral-baseline', role: 'admin' },
     };
-    const baselineResult = recall(ctx2, { query: 'shared ranking keyword variant test' });
+    const baselineResult = await retrieve(ctx2, { query: 'shared ranking keyword variant test' });
     const baselineNeg = baselineResult.results.find((r) => r.content.includes('variant negative test'))?.strength;
     expect(baselineNeg).toBeDefined();
     // Aged fixtures keep both values unclamped; env=0.5 should STRICTLY

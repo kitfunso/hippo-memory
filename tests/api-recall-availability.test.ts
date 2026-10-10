@@ -18,7 +18,7 @@ import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, Layer } from '../src/core/memory.js';
-import { recall, type Context } from '../src/api/index.js';
+import { retrieve, type Context } from '../src/api/index.js';
 import { makeRoot } from './_helpers/make-root.js';
 
 function safeRmSync(p: string): void {
@@ -70,9 +70,9 @@ describe('api.recall availabilityHint', () => {
   beforeEach(() => { root = makeRoot('j2-api'); delete process.env.HIPPO_AVAILABILITY; });
   afterEach(() => { safeRmSync(root); delete process.env.HIPPO_AVAILABILITY; });
 
-  it('fires and emits exactly one audit row on a recency-biased recall', () => {
+  it('fires and emits exactly one audit row on a recency-biased recall', async () => {
     seedFiringFixture(root);
-    const result = recall(ctxFor(root), { query: QUERY, limit: 4 });
+    const result = await retrieve(ctxFor(root), { query: QUERY, limit: 4 });
     expect(result.availabilityHint).toBeDefined();
     expect(result.availabilityHint!.recentCount).toBe(4);
     expect(result.availabilityHint!.returnedCount).toBe(4);
@@ -81,37 +81,37 @@ describe('api.recall availabilityHint', () => {
     expect(countAuditOps(root, 'recall_availability_detected')).toBe(1);
   });
 
-  it('HIPPO_AVAILABILITY=off suppresses the hint and the audit', () => {
+  it('HIPPO_AVAILABILITY=off suppresses the hint and the audit', async () => {
     seedFiringFixture(root);
     process.env.HIPPO_AVAILABILITY = 'off';
-    const result = recall(ctxFor(root), { query: QUERY, limit: 4 });
+    const result = await retrieve(ctxFor(root), { query: QUERY, limit: 4 });
     expect(result.availabilityHint).toBeUndefined();
     expect(countAuditOps(root, 'recall_availability_detected')).toBe(0);
   });
 
-  it('opts.suppressAvailabilityHint suppresses hint + audit (MCP double-emit guard)', () => {
+  it('opts.suppressAvailabilityHint suppresses hint + audit (MCP double-emit guard)', async () => {
     seedFiringFixture(root);
-    const result = recall(ctxFor(root), { query: QUERY, limit: 4, suppressAvailabilityHint: true });
+    const result = await retrieve(ctxFor(root), { query: QUERY, limit: 4, suppressAvailabilityHint: true });
     expect(result.availabilityHint).toBeUndefined();
     expect(countAuditOps(root, 'recall_availability_detected')).toBe(0);
   });
 
-  it('counts only scope-eligible olds: private rows excluded from the pool (HIGH-2 guard)', () => {
+  it('counts only scope-eligible olds: private rows excluded from the pool (HIGH-2 guard)', async () => {
     for (let i = 0; i < 4; i++) seedAged(root, `zephyr quasar nimbus recent ${i}`, 0);
     for (let i = 0; i < 6; i++) seedAged(root, `zephyr older weak public ${i}`, 40);
     for (let i = 0; i < 3; i++) seedAged(root, `zephyr older weak private ${i}`, 40, 'slack:private:x');
     // No scope on the recall = default-deny private rows. With the fix (pool=entries)
     // only the 6 public olds count; the buggy pool=all would have counted 9.
-    const result = recall(ctxFor(root), { query: QUERY, limit: 4 });
+    const result = await retrieve(ctxFor(root), { query: QUERY, limit: 4 });
     expect(result.availabilityHint).toBeDefined();
     expect(result.availabilityHint!.olderCandidatesPassedOver).toBe(6);
   });
 
-  it('does not change result ordering (soft warning only)', () => {
+  it('does not change result ordering (soft warning only)', async () => {
     seedFiringFixture(root);
-    const withHint = recall(ctxFor(root), { query: QUERY, limit: 4 });
+    const withHint = await retrieve(ctxFor(root), { query: QUERY, limit: 4 });
     process.env.HIPPO_AVAILABILITY = 'off';
-    const without = recall(ctxFor(root), { query: QUERY, limit: 4 });
+    const without = await retrieve(ctxFor(root), { query: QUERY, limit: 4 });
     expect(withHint.results.map((r) => r.id)).toEqual(without.results.map((r) => r.id));
   });
 });
