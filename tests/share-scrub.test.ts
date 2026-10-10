@@ -112,23 +112,20 @@ describe('scrubForSharing', () => {
 });
 
 describe('scrubForSharing on hostile input', () => {
-  const SIZE = 64 * 1024;
-  const fill = (unit: string): string => unit.repeat(Math.ceil(SIZE / unit.length)).slice(0, SIZE);
-  const PROSE = fill('We decided to pin pnpm in packages/api because npm rewrote the lockfile. ');
-  // The fastest of three interleaved runs of each text, so a GC pause or a busy runner weighs on both alike.
-  const costOverProse = (text: string): number => {
-    let hostile = Infinity;
-    let prose = Infinity;
-    for (let run = 0; run < 3; run++) {
-      let started = performance.now();
+  const SIZE = 32 * 1024;
+  const fillTo = (unit: string, size: number): string => unit.repeat(Math.ceil(size / unit.length)).slice(0, size);
+  // Best of five, so a GC pause or a busy runner cannot lift one size alone.
+  const bestMs = (text: string): number => {
+    let best = Infinity;
+    for (let run = 0; run < 5; run++) {
+      const started = performance.now();
       scrubForSharing(text);
-      hostile = Math.min(hostile, performance.now() - started);
-      started = performance.now();
-      scrubForSharing(PROSE);
-      prose = Math.min(prose, performance.now() - started);
+      best = Math.min(best, performance.now() - started);
     }
-    return hostile / prose;
+    return best;
   };
+  // Linear work reads near 4 when the input grows 4x, quadratic near 16; a ratio of two sizes needs no prose baseline and no clock threshold.
+  const growth = (build: (size: number) => string): number => bestMs(build(4 * SIZE)) / Math.max(bestMs(build(SIZE)), 0.05);
   // Each run sits on the hot path of at least one pattern, so a super-linear pattern shows here before it reaches the server.
   const UNITS = [
     'a.', 'a-', 'a@a.a.', '%2', '%3A%5C', 'c%3A%5CUsers%5C', 'c%3A/Users/',
@@ -140,11 +137,10 @@ describe('scrubForSharing on hostile input', () => {
     'A~1', 'AAAAAA~1', '\\A~1', 'A~1.AB', '\\\\?\\', '\\\\a\\home$\\', '\\\\a\\home$\\a b ', '\\\\a\\profiles$\\', '\\\\a',
   ];
   it.each([
-    ...UNITS.map((unit) => [JSON.stringify(unit), fill(unit)] as const),
-    ['a@ then a long a. run', `a@${fill('a.')}`.slice(0, SIZE)] as const,
-    ['long names that end in a keyword', fill(`${'a_'.repeat(1024)}password=`)] as const,
-  ])('scrubs 64 KiB of %s within 25x the time of prose', (_name, text) => {
-    // A backtracking pattern costs hundreds of times prose at this size; dense matches alone reach 7x on shared macOS runners.
-    expect(costOverProse(text)).toBeLessThan(25);
+    ...UNITS.map((unit) => [JSON.stringify(unit), (size: number) => fillTo(unit, size)] as const),
+    ['a@ then a long a. run', (size: number) => `a@${fillTo('a.', size)}`.slice(0, size)] as const,
+    ['long names that end in a keyword', (size: number) => fillTo(`${'a_'.repeat(1024)}password=`, size)] as const,
+  ])('scrubs %s in under 8x the time when the input grows 4x', (_name, build) => {
+    expect(growth(build)).toBeLessThan(8);
   });
 });

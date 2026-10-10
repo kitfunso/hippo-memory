@@ -47,12 +47,11 @@ import {
 import { handleAssembleSession, handleDrillRecall, handleGetContext, handleRecallMemories } from './routes/recall.js';
 import { handleCloseSkill, handleCreateSkill, handleExportSkills, handleGetSkill, handleListSkills, handleSupersedeSkill } from './routes/skills.js';
 import { parseJsonBody } from './validation.js';
-import type { AddonRoute, ResolvedServeOpts, Route, RouteRequest } from './types.js';
-import type { JsonValue } from '../util/json.js';
+import type { ResolvedServeOpts, Route, RouteRequest } from './types.js';
 
 // Explicit allow-list for unauthenticated /v1/* routes: add a new one here AND in tests/server-bearer-lockdown.test.ts; never gate auth by `path.startsWith`.
 // Handlers check `isPublicRoute` before auth, so an entry without that check is a no-op (fail-closed); other open paths are ServeOpts.publicJson GETs.
-const PUBLIC_ROUTES: ReadonlySet<string> = new Set([
+export const PUBLIC_ROUTES: ReadonlySet<string> = new Set([
   'POST /v1/connectors/slack/events',
   'POST /v1/connectors/github/events',
 ]);
@@ -62,7 +61,7 @@ export function isPublicRoute(method: string, path: string): boolean {
 }
 
 /** The /v1 routes in dispatch order; the first entry whose method and path match handles the request. */
-const V1_ROUTES: readonly Route[] = [
+export const V1_ROUTES: readonly Route[] = [
   { method: 'POST', path: '/v1/memories', storeReady: 'entryWrites', loop: 'off', handler: handleCreateMemory },
   { method: 'GET', path: '/v1/graph', storeReady: 'graphReads', loop: 'off', handler: handleGetGraph },
   { method: 'GET', path: '/v1/memories', storeReady: 'base', loop: 'off', handler: handleRecallMemories },
@@ -129,7 +128,7 @@ const V1_ROUTES: readonly Route[] = [
 
 /** The route's handler bound to this request's path params, or null when method or path differ. The matcher runs before the
  *  method check, as the inline route blocks did, so a malformed `%` escape still throws from matchPath on any method. */
-function routeMatches(route: Route, method: string, path: string): ((r: RouteRequest) => Promise<void>) | null {
+export function routeMatches(route: Route, method: string, path: string): ((r: RouteRequest) => Promise<void>) | null {
   if ('path' in route) return method === route.method && path === route.path ? route.handler : null;
   if ('pattern' in route) {
     const params = matchPath(route.pattern, path);
@@ -140,7 +139,7 @@ function routeMatches(route: Route, method: string, path: string): ((r: RouteReq
 }
 
 /** The route as the access line names it; a regex route reads as its pattern would, so no line carries a caller's id. */
-function routeLabel(route: Route): string {
+export function routeLabel(route: Route): string {
   if ('path' in route) return route.path;
   if ('pattern' in route) return route.pattern;
   return route.regex.source.replace(/^\^|\$$/g, '').replaceAll('\\/', '/').replaceAll('(\\d+)', ':id');
@@ -158,45 +157,6 @@ export async function dispatchV1Route(r: RouteRequest, method: string, path: str
     return true;
   }
   return false;
-}
-
-const PLAIN_SEGMENT_RE = /^[A-Za-z0-9._~-]+$/;
-
-function isPlainV1Path(path: string): boolean {
-  return path.startsWith('/v1/') && new URL(path, 'http://h').pathname === path
-    && path.slice('/v1/'.length).split('/').every((segment) => PLAIN_SEGMENT_RE.test(segment));
-}
-
-// A plain path never holds a `%`, so matchPath cannot throw here.
-function isCorePath(method: string, path: string): boolean {
-  return PUBLIC_ROUTES.has(`${method} ${path}`) || V1_ROUTES.some((route) => routeMatches(route, method, path) !== null);
-}
-
-/** Boot-time check: an add-on path must be plain, unique and not one core serves, so no add-on shadows a core route or hides from dispatch. */
-export function assertAddonRoutes(routes: readonly AddonRoute[]): void {
-  const seen = new Set<string>();
-  for (const { path } of routes) {
-    if (!isPlainV1Path(path)) throw new Error(`add-on route '${path}' is not a plain /v1/ path (segments use A-Z a-z 0-9 . _ ~ -)`);
-    if (seen.has(path)) throw new Error(`add-on route '${path}' is registered twice`);
-    if (isCorePath('POST', path)) throw new Error(`add-on route '${path}' is already served by core`);
-    seen.add(path);
-  }
-}
-
-const PUBLIC_JSON_MAX_BYTES = 64 * 1024;
-
-/** Boot-time check and serialization: a public path that a core GET route serves would open that route to anyone. */
-export function assertPublicJson(publicJson: Readonly<Record<string, JsonValue>>): ReadonlyMap<string, string> {
-  const bodies = new Map<string, string>();
-  for (const [path, value] of Object.entries(publicJson)) {
-    if (!isPlainV1Path(path)) throw new Error(`public JSON path '${path}' is not a plain /v1/ path (segments use A-Z a-z 0-9 . _ ~ -)`);
-    if (isCorePath('GET', path)) throw new Error(`public JSON path '${path}' is already served by core`);
-    const text = JSON.stringify(value);
-    if (text === undefined) throw new Error(`public JSON at '${path}' is not JSON`);
-    if (Buffer.byteLength(text) > PUBLIC_JSON_MAX_BYTES) throw new Error(`public JSON at '${path}' is over 64 KiB`);
-    bodies.set(path, text);
-  }
-  return bodies;
 }
 
 /** Core authenticates and parses before the handler runs, so an add-on route gets the same 401, 400 and 501 as a core one. */

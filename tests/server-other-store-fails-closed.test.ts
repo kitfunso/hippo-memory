@@ -1,10 +1,9 @@
 // Under a store other than hippo.db, a route not yet ported to it answers 501 and no request opens or creates hippo.db.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { randomBytes, scryptSync } from 'node:crypto';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
 import { closeHippoDb, openHippoDb, rethrowIfSqliteBlocked, SqliteBlockedError, STORE_BUSY_MESSAGE } from '../src/db/index.js';
 import { StoreNotPortedError } from '../src/util/sqlite-blocked.js';
 import { mapApiError, STORE_NOT_PORTED_MESSAGE } from '../src/util/http-util.js';
@@ -15,6 +14,7 @@ import { physicsSearch } from '../src/search/physics-search.js';
 import { requireVectorReads } from '../src/search/vector.js';
 import { loadEntriesByIds } from '../src/store/entry-reads.js';
 import { writeEntry } from '../src/store/entry-writes.js';
+import { V1_ROWS } from './_helpers/v1-route-rows.js';
 import { hashedVector, startHashedEmbeddings, type HashedEmbeddings } from './_helpers/hashed-embedding-server.js';
 import { inMemoryGraphReadsStore, seedGraphRows, type SeededGraph } from './_helpers/in-memory-graph-reads-store.js';
 import { inMemoryObjectsStore, type InMemoryObjectsStore } from './_helpers/in-memory-objects-store.js';
@@ -24,20 +24,10 @@ import { portOnlyStoreWithoutVectorReads } from './_helpers/port-only-store.js';
 import { seeded } from './_helpers/recall-golden-seed.js';
 import { seedTwoTenants, TENANT_A, type TwoTenantFixture } from './_helpers/store-conformance.js';
 
-const repoRoot = dirname(dirname(fileURLToPath(import.meta.url)));
-const serverSource = readFileSync(join(repoRoot, 'src/server/route-table.ts'), 'utf8');
 
-/** Every V1_ROUTES entry as 'METHOD /path' beside the group it names, each :param and (\d+) slot filled with 1. */
+/** Every V1_ROUTES entry as 'METHOD /path' beside the group it names, each :param slot filled with 1. */
 function v1Routes(): { route: string; group: string | undefined }[] {
-  const table = serverSource.slice(serverSource.indexOf('const V1_ROUTES'), serverSource.indexOf('async function dispatchV1Route'));
-  const routes: { route: string; group: string | undefined }[] = [];
-  for (const m of table.matchAll(/\{ method: '([A-Z]+)', (?:path|pattern): '([^']+)'(?:, storeReady: '(\w+)')?/g)) {
-    routes.push({ route: `${m[1]} ${m[2]!.replace(/:\w+/g, '1')}`, group: m[3] });
-  }
-  for (const m of table.matchAll(/\{ method: '([A-Z]+)', regex: \/\^(.+?)\$\/(?:, storeReady: '(\w+)')?/g)) {
-    routes.push({ route: `${m[1]} ${m[2]!.replace(/\\\//g, '/').replace(/\(\\d\+\)/g, '1')}`, group: m[3] });
-  }
-  return routes;
+  return V1_ROWS.map(({ key, route }) => ({ route: key.replace(/:\w+/g, '1'), group: route.storeReady }));
 }
 
 /** The entries the stub store cannot run: no group named, or one besides 'base'. */

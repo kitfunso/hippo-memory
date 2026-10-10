@@ -15,7 +15,7 @@ import type { Context } from '../src/api/index.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { openHippoDb, closeHippoDb, setMeta } from '../src/db/index.js';
-import { compareSemver } from '../src/util/version.js';
+import { compareSemver, PACKAGE_VERSION } from '../src/util/version.js';
 import { handleCommentDeleted } from '../src/connectors/github/deletion.js';
 import { computeIdempotencyKey } from '../src/connectors/github/signature.js';
 import { backfillRepo } from '../src/connectors/github/backfill.js';
@@ -64,7 +64,7 @@ describe('rollback guard', () => {
     const db = openHippoDb(home);
     closeHippoDb(db);
     const db2 = openHippoDb(home);
-    setMeta(db2, 'min_compatible_binary', '1.3.1');
+    setMeta(db2, 'min_compatible_binary', PACKAGE_VERSION);
     closeHippoDb(db2);
     expect(() => openHippoDb(home)).not.toThrow();
   });

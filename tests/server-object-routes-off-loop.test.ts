@@ -1,9 +1,6 @@
 // The typed-object routes answer from store workers as they do on the in-process store, and fail when a handler opens hippo.db on the server thread.
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
-import { fileURLToPath } from 'node:url';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, Layer } from '../src/core/memory.js';
 import { mintApiKey } from '../src/store/auth.js';
 import { writeEntry } from '../src/store/entry-writes.js';
@@ -14,13 +11,13 @@ import { sqliteStore } from '../src/store/sqlite/store.js';
 import { workerSqliteStore } from '../src/store/sqlite/worker-store.js';
 import type { JsonValue } from '../src/util/json.js';
 import { log } from '../src/util/log.js';
+import { V1_ROWS } from './_helpers/v1-route-rows.js';
 import { entryMirrorFiles } from './_helpers/entry-mirror-files.js';
 import { loadExtractionQueue } from './_helpers/graph-queue.js';
 import { auditRows, get, holdWriteLock, keyFor, mirrorFiles, newRoot, onDb, patientStore, postText, scrub, seen, start, undoAll } from './_helpers/store-worker-server.js';
 
 afterEach(undoAll);
 
-const REPO = dirname(dirname(fileURLToPath(import.meta.url)));
 const REFUSED = 'the decision a person rejected';
 const BLOCKED_LINE = 'opened on the server thread by a route';
 
@@ -33,19 +30,11 @@ interface ObjectRoute {
   readonly offLoop: boolean;
 }
 
-/** Every V1_ROUTES row that names the objects group, in table order: the table is not exported, so its source is read. */
+/** Every V1_ROUTES row that names the objects group, in table order, read from the live table. */
 function objectRoutes(): ObjectRoute[] {
-  const source = readFileSync(join(REPO, 'src/server/route-table.ts'), 'utf8');
-  const table = source.slice(source.indexOf('const V1_ROUTES'), source.indexOf('function routeMatches'));
-  const rows = table.split('\n').filter((line) => line.includes("storeReady: 'objects'"));
-  // A row split over two lines would be read as fewer rows than the table names.
-  expect(rows).toHaveLength(table.split("storeReady: 'objects'").length - 1);
-  return rows.map((row) => {
-    const method = /method: '([A-Z]+)'/.exec(row)?.[1] ?? '';
-    const regex = /regex: \/\^(.+?)\$\//.exec(row)?.[1] ?? '';
-    const path = /path: '([^']+)'/.exec(row)?.[1] ?? regex.replaceAll('\\/', '/').replaceAll('(\\d+)', ':id');
-    return { label: `${method} ${path}`, offLoop: row.includes("loop: 'off'") };
-  });
+  return V1_ROWS
+    .filter(({ route }) => route.storeReady === 'objects')
+    .map(({ key, route }) => ({ label: key, offLoop: route.loop === 'off' }));
 }
 
 interface Sent {

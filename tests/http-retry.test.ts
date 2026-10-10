@@ -207,12 +207,13 @@ describe('the wait between attempts under a caller signal', () => {
   it('waits in full and retries when the signal never aborts, and when there is none', async () => {
     for (const signal of [new AbortController().signal, undefined]) {
       const { url, hits } = await startServer([{ status: 503 }, { status: 200 }]);
-      const started = performance.now();
-      const res = await fetchWithRetry(url, { signal }, { timeoutMs: 60_000, baseDelayMs: 200, random: () => 1 });
+      const sleeps: number[] = [];
+      const sleep = async (ms: number): Promise<void> => { sleeps.push(ms); };
+      const res = await fetchWithRetry(url, { signal }, { timeoutMs: 60_000, baseDelayMs: 200, random: () => 1, sleep });
       expect(res.status).toBe(200);
       expect(hits()).toBe(2);
-      // A timer may fire a millisecond or two early.
-      expect(performance.now() - started).toBeGreaterThan(180);
+      // Attempt 1 waits ceiling/2 + random * ceiling/2 = 200 ms at random 1.
+      expect(sleeps).toEqual([200]);
       await new Promise<void>((resolve) => server?.close(() => resolve()));
     }
   });

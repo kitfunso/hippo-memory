@@ -45,19 +45,35 @@ describe('v28 schema migration + dirty-flag plumbing', () => {
     fs.rmSync(hippoRoot, { recursive: true, force: true });
   });
 
-  it('migration v28 is idempotent (re-open does not error or duplicate columns)', () => {
-    // initStore in beforeEach already ran v28. Re-open twice more and
-    // confirm the 4 new columns are present + the migration runner
-    // skips v28 on subsequent opens.
-    const db1 = openHippoDb(hippoRoot);
-    db1.close();
-    const db2 = openHippoDb(hippoRoot);
-    expect(() =>
-      db2.prepare(
-        `SELECT summary_dirty, last_rebuilt_at, rebuild_count, dag_level_3_built_at FROM memories`,
-      ).all(),
-    ).not.toThrow();
-    db2.close();
+  it('migration v28 is idempotent: each column once, schema version unchanged, a written value survives a reopen', () => {
+    const summary = createMemory('idempotency summary', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Semantic, dag_level: 2 });
+    writeEntry(hippoRoot, summary);
+    const columns = ['summary_dirty', 'last_rebuilt_at', 'rebuild_count', 'dag_level_3_built_at'];
+    const inspect = () => {
+      const db = openHippoDb(hippoRoot);
+      try {
+        // SAFETY: PRAGMA table_info returns one row per column, each with a string name.
+        const info = db.prepare('PRAGMA table_info(memories)').all() as { name: string }[];
+        // SAFETY: PRAGMA user_version returns one row with that integer column.
+        const version = db.prepare('PRAGMA user_version').get() as { user_version: number };
+        return {
+          names: info.map((c) => c.name),
+          version: version.user_version,
+          row: db.prepare('SELECT summary_dirty, rebuild_count FROM memories WHERE id = ?').get(summary.id),
+        };
+      } finally {
+        db.close();
+      }
+    };
+    const first = inspect();
+    const db = openHippoDb(hippoRoot);
+    db.prepare('UPDATE memories SET summary_dirty = 1, rebuild_count = 7 WHERE id = ?').run(summary.id);
+    db.close();
+    const second = inspect();
+    for (const column of columns) expect(second.names.filter((n) => n === column)).toHaveLength(1);
+    expect(second.version).toBe(first.version);
+    expect(first.row).toEqual({ summary_dirty: 0, rebuild_count: 0 });
+    expect(second.row).toEqual({ summary_dirty: 1, rebuild_count: 7 });
   });
 
   it('backfill leaves rows clean (summary_dirty=0, rebuild_count=0, NULL timestamps)', () => {

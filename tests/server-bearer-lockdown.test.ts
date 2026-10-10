@@ -1,6 +1,6 @@
 // Regression bar: with the loopback no-auth fallback off (HIPPO_REQUIRE_AUTH=1) every
 // /v1 and /mcp route must 401 without a valid Bearer. The route list is derived from
-// src/server.ts so a new route missing buildContextWithAuth/requireAuth fails here.
+// the route table so a new route missing buildContextWithAuth/requireAuth fails here.
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, rmSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -8,82 +8,18 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { initStore } from '../src/store/open.js';
 import { serve, type ServerHandle } from '../src/server.js';
+import { PUBLIC_ROUTES as PUBLIC } from '../src/server/route-table.js';
+import { V1_ROWS } from './_helpers/v1-route-rows.js';
 
 const repoRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 
-// Parses the V1_ROUTES entries and the inline route shapes in handleRequest into
-// 'METHOD /pattern' keys, so completeness below catches a route missing its auth call.
-function routesFromServerSource(text: string): Set<string> {
-  const lines = text.split('\n');
-  const routes = new Set<string>();
-  const literalRe = /method === '([A-Z]+)' && path === '([^']+)'/;
-  const matchAssignRe = /const (\w+) = matchPath\('([^']+)', path\);/;
-  const regexAssignRe = /const (\w+) = path\.match\(\/\^(.+?)\$\/\);/;
-  const tableRe = /\{ method: '([A-Z]+)', (?:path|pattern): '([^']+)'/;
-  const tableRegexRe = /\{ method: '([A-Z]+)', regex: \/\^(.+?)\$\//;
-  const fromRegex = (rawPattern: string): string => rawPattern.replace(/\\\//g, '/').replace(/\(\\d\+\)/g, ':id');
+// The /v1 rows come from the live table; these routes are answered inline in boot.ts's handleRequest, so no table names them.
+const INLINE_ROUTES: readonly string[] = ['GET /health', 'GET /ready', 'POST /mcp', 'GET /mcp/stream'];
 
-  const methodForVar = (startLine: number, varName: string): string | undefined => {
-    for (let j = startLine + 1; j < Math.min(startLine + 6, lines.length); j++) {
-      const m = lines[j].match(new RegExp(`method === '([A-Z]+)' && [^\\n]*\\b${varName}\\b`));
-      if (m) return m[1];
-    }
-    return undefined;
-  };
+// Rows the old source-text parse found in the table.
+const OLD_PARSED_V1_COUNT = 62;
 
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    const entry = line.match(tableRe);
-    if (entry) {
-      routes.add(`${entry[1]} ${entry[2]}`);
-      continue;
-    }
-    const regexEntry = line.match(tableRegexRe);
-    if (regexEntry) {
-      routes.add(`${regexEntry[1]} ${fromRegex(regexEntry[2])}`);
-      continue;
-    }
-    const lit = line.match(literalRe);
-    if (lit) {
-      routes.add(`${lit[1]} ${lit[2]}`);
-      continue;
-    }
-    const ma = line.match(matchAssignRe);
-    if (ma) {
-      const [, varName, pattern] = ma;
-      const method = methodForVar(i, varName);
-      if (method) routes.add(`${method} ${pattern}`);
-      continue;
-    }
-    const ra = line.match(regexAssignRe);
-    if (ra) {
-      const [, varName, rawPattern] = ra;
-      const pattern = fromRegex(rawPattern);
-      const method = methodForVar(i, varName);
-      if (method) routes.add(`${method} ${pattern}`);
-      continue;
-    }
-  }
-  return routes;
-}
-
-// Parses the PUBLIC_ROUTES Set literal in server.ts source.
-function publicRoutesFromServerSource(text: string): Set<string> {
-  const m = text.match(/const PUBLIC_ROUTES: ReadonlySet<string> = new Set\(\[([\s\S]*?)\]\);/);
-  if (!m) throw new Error('PUBLIC_ROUTES literal not found in server.ts');
-  const routes = new Set<string>();
-  const entryRe = /'([^']+)'/g;
-  let entry: RegExpExecArray | null;
-  while ((entry = entryRe.exec(m[1])) !== null) {
-    routes.add(entry[1]);
-  }
-  return routes;
-}
-
-const serverSource = readFileSync(join(repoRoot, 'src/server/route-table.ts'), 'utf8');
-const routeTableSource = serverSource.slice(serverSource.indexOf('const V1_ROUTES'), serverSource.indexOf('async function dispatchV1Route'));
-const handlerSource = readFileSync(join(repoRoot, 'src/server/boot.ts'), 'utf8');
-const dispatchSource = routeTableSource + handlerSource.slice(handlerSource.indexOf('async function handleRequest'));
+const derivedRoutes = (): Set<string> => new Set([...V1_ROWS.map((row) => row.key), ...INLINE_ROUTES]);
 
 // Every authed route with a request shape that clears pre-auth validation, so a
 // 401 (not 400) proves the Bearer check ran. :param segments become '1'.
@@ -185,32 +121,28 @@ describe('server Bearer lockdown', () => {
     rmSync(root, { recursive: true, force: true });
   });
 
-  it('every method-check dispatch line parses into a route (guards an unknown path shape)', () => {
-    // Counts the method axis, not the path axis, so a path shape the parser
-    // does not know still shows up here and the two counts disagree loudly.
-    const dispatchCount = (dispatchSource.match(/^\s*(?:if \(method === '|\{ method: ')/gm) ?? []).length;
-    const derived = routesFromServerSource(dispatchSource);
-    expect(
-      dispatchCount,
-      `${dispatchCount} method-check dispatch lines must equal parsed routes (${derived.size})`,
-    ).toBe(derived.size);
+  it('every inline method-check in boot.ts handleRequest is a listed inline or public route', () => {
+    const boot = readFileSync(join(repoRoot, 'src/server/boot.ts'), 'utf8');
+    const inlineChecks = (boot.slice(boot.indexOf('async function handleRequest')).match(/^\s*if \(method === '/gm) ?? []).length;
+    expect(inlineChecks).toBe(INLINE_ROUTES.length + PUBLIC.size);
+  });
+
+  it('the live /v1 table is at least as large as the 62 rows the old source parse found', () => {
+    expect(V1_ROWS.length).toBeGreaterThanOrEqual(OLD_PARSED_V1_COUNT);
   });
 
   it('PUBLIC_ROUTES contains exactly the two documented unauth routes', () => {
-    const publicRoutes = publicRoutesFromServerSource(serverSource);
-    expect([...publicRoutes].sort()).toEqual([
+    expect([...PUBLIC].sort()).toEqual([
       'POST /v1/connectors/github/events',
       'POST /v1/connectors/slack/events',
     ]);
   });
 
   it('AUTHED_ROUTES covers exactly the derived routes minus public routes minus the GET /health and GET /ready probes', () => {
-    const derived = routesFromServerSource(dispatchSource);
-    const publicRoutes = publicRoutesFromServerSource(serverSource);
-    const expected = new Set(derived);
+    const expected = derivedRoutes();
     expected.delete('GET /health');
     expected.delete('GET /ready');
-    for (const r of publicRoutes) expected.delete(r);
+    for (const r of PUBLIC) expected.delete(r);
 
     const actual = new Set(AUTHED_ROUTES.map((r) => `${r.method} ${r.pattern}`));
     const missing = [...expected].filter((r) => !actual.has(r));
