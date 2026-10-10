@@ -18,7 +18,7 @@
     "src/capture/codex-patch.ts": 1,
     "src/capture/compact.ts": 3,
     "src/capture/compaction-items-caller.ts": 1,
-    "src/capture/compaction-record.ts": 9,
+    "src/capture/compaction-record.ts": 8,
     "src/capture/compaction-spool.ts": 4,
     "src/capture/copilot-transcript.ts": 1,
     "src/capture/failure-caller.ts": 2,

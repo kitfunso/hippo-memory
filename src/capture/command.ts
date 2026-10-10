@@ -3,7 +3,7 @@ import * as path from 'path';
 import { createMemory, Layer, type MemoryEntry } from '../core/memory.js';
 import { duplicateKey, longestWord, storedTextKeys } from '../util/same-text.js';
 import { stampOriginProject } from '../store/entry-row.js';
-import { isInitialized, withCaptureHandles } from '../store/open.js';
+import { isInitialized, openStore } from '../store/open.js';
 import { writeEntryMirrors } from '../store/entry-writes.js';
 import { EVERY_SCOPE, loadTextsHoldingWords } from '../store/candidates.js';
 import { updateStatsOn } from '../store/index-and-stats.js';
@@ -11,8 +11,8 @@ import { gatedWrite } from '../trust/gated-write.js';
 import { getGlobalRoot, initGlobal } from '../sharing/global-store.js';
 import { embedMemory } from '../store/embeddings/index.js';
 import { maskEmails, redactSecretsStrict } from '../util/secret-detect.js';
-import { RejectedValueError, checkRejectionGuard } from '../store/rejection.js';
-import type { DatabaseSyncLike } from '../db/index.js';
+import { withRejectionProbe, type RejectionProbe } from '../store/rejection-probe.js';
+import { closeHippoDb, type DatabaseSyncLike } from '../db/index.js';
 import { loadConfig } from '../core/config.js';
 import { classifyOriginProject, projectId, type ProjectRef } from '../core/project-identity.js';
 import { isStringValue } from '../core/capture-contract.js';
@@ -253,7 +253,7 @@ export function captureExtractedItems(
 
   // Dry run probes the same checkRejectionGuard the real write uses, on a read-only handle,
   // so a tombstoned item previews as rejected rather than captured.
-  withCaptureHandles(targetRoot, options.dryRun, (dryRunDb, writeDb) => {
+  const run = (wouldReject: RejectionProbe | null, writeDb: DatabaseSyncLike | null): CaptureTally => {
     for (const item of extracted) {
       if (keys.has(duplicateKey(item.content))) {
         tally.skipped++;
@@ -263,10 +263,17 @@ export function captureExtractedItems(
         continue;
       }
       const entry = captureEntry(item, options, baseHalfLifeDays);
-      tally[captureOne({ targetRoot, options, dryRunDb, writeDb, keys }, item, entry)]++;
+      tally[captureOne({ targetRoot, options, wouldReject, writeDb, keys }, item, entry)]++;
     }
-  });
-  return tally;
+    return tally;
+  };
+  if (options.dryRun) return withRejectionProbe(targetRoot, (wouldReject) => run(wouldReject, null));
+  const writeDb = openStore(targetRoot);
+  try {
+    return run(null, writeDb);
+  } finally {
+    closeHippoDb(writeDb);
+  }
 }
 
 function captureEntry(item: ExtractedItem, options: CaptureWriteOptions, baseHalfLifeDays: number): MemoryEntry {
@@ -287,25 +294,18 @@ function captureEntry(item: ExtractedItem, options: CaptureWriteOptions, baseHal
 interface CaptureWriteContext {
   targetRoot: string;
   options: CaptureWriteOptions;
-  dryRunDb: DatabaseSyncLike | null;
+  wouldReject: RejectionProbe | null;
   writeDb: DatabaseSyncLike | null;
   keys: Set<string>;
 }
 
 /** Previews or writes one non-duplicate item and names the tally it counts toward. */
 function captureOne(ctx: CaptureWriteContext, item: ExtractedItem, entry: MemoryEntry): keyof CaptureTally {
-  const { targetRoot, options, dryRunDb, writeDb, keys } = ctx;
+  const { targetRoot, options, wouldReject, writeDb, keys } = ctx;
   if (options.dryRun) {
-    if (dryRunDb) {
-      try {
-        checkRejectionGuard(dryRunDb, entry.tenantId ?? 'default', entry.id, entry.content);
-      } catch (err) {
-        if (err instanceof RejectedValueError) {
-          console.log(`  [reject] (${item.category}) ${item.content.slice(0, 80)} - matches a rejected value`);
-          return 'rejected';
-        }
-        throw err;
-      }
+    if (wouldReject?.(entry.tenantId ?? 'default', entry.id, entry.content)) {
+      console.log(`  [reject] (${item.category}) ${item.content.slice(0, 80)} - matches a rejected value`);
+      return 'rejected';
     }
     console.log(`  [capture] (${item.category}) ${item.content}`);
   } else if (writeDb !== null) {
