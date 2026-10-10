@@ -174,4 +174,35 @@ describe('the ledger changes nothing a context call prints', () => {
     expect(on.stdout).toBe(plain.stdout);
     expect([eventCount(p), eventCount(off)]).toEqual([1, 0]);
   });
+
+  const resultRows = (target: Project) => tableRows(target, `SELECT t.id AS trace_id, r.memory_id, r.result_rank, r.score
+    FROM recall_trace_results r JOIN recall_traces t ON t.id = r.trace_id WHERE t.pipeline = 'context' ORDER BY t.id, r.result_rank`);
+  const retrievalCounts = (target: Project) => tableRows(target, 'SELECT id, retrieval_count FROM memories ORDER BY id');
+
+  it('I1: a query in both formats prints the same bytes and leaves the same trace results and retrieval counts', () => {
+    for (const args of [[...QUERY], [...QUERY, '--format', 'json']]) {
+      const on = run(p, args);
+      const plain = run(off, args);
+      expect([on.status, plain.status], on.stderr + plain.stderr).toEqual([0, 0]);
+      expect(on.stdout).not.toBe('');
+      expect(on.stdout).toBe(plain.stdout);
+    }
+    const rows = resultRows(off);
+    expect(rows.length).toBeGreaterThan(0);
+    expect(resultRows(p)).toEqual(rows);
+    expect(retrievalCounts(p)).toEqual(retrievalCounts(off));
+    expect([eventCount(p), eventCount(off)]).toEqual([2, 0]);
+  });
+
+  it('I2: a query that matches nothing prints the same empty output and writes the same empty trace', () => {
+    const args = ['zzqxv', 'wplmk'];
+    const on = run(p, args);
+    const plain = run(off, args);
+    expect([on.status, plain.status]).toEqual([0, 0]);
+    expect([on.stdout, plain.stdout]).toEqual(['', '']);
+    const traces = (target: Project) => tableRows(target, `SELECT query_hash, result_count FROM recall_traces WHERE pipeline = 'context'`);
+    expect(traces(off)).toHaveLength(1);
+    expect(traces(p)).toEqual(traces(off));
+    expect(retrievalCounts(p)).toEqual(retrievalCounts(off));
+  });
 });
