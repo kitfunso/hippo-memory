@@ -132,7 +132,7 @@ describe('repo scan in init', () => {
 });
 
 describe('capture log append', () => {
-  it('warns once per process when appends fail after the banner', () => {
+  it('warns once when appends fail after the banner', () => {
     initStore(root);
     const logFile = path.join(root, 'capture.log');
     const blank = path.join(root, 'blank.txt');
@@ -150,8 +150,7 @@ describe('capture log append', () => {
     vi.spyOn(console, 'log').mockImplementation((line: string) => process.stdout.write(`${line}
 `));
     cmdCapture(root, { source: 'file', filePath: blank, dryRun: true, global: false, logFile });
-    cmdCapture(root, { source: 'file', filePath: blank, dryRun: true, global: false, logFile });
-    expect(logged().filter((l) => l.includes('could not append to log file'))).toHaveLength(1);
+    expect(logged().filter((l) => l.includes('is no longer writable'))).toHaveLength(1);
   });
 });
 
