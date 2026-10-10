@@ -75,6 +75,20 @@ function runHook(args: string[], input: string): HookRun {
   return { stdout, opens };
 }
 
+function setLedger(enabled: boolean): void {
+  fs.writeFileSync(path.join(localRoot, 'config.json'), JSON.stringify({ deliveryLedger: { enabled } }));
+}
+
+function ledgerRows(): number {
+  const db = openHippoDb(localRoot);
+  try {
+    // SAFETY: a single COUNT(*) aggregate aliased `c`.
+    return (db.prepare('SELECT COUNT(*) AS c FROM delivery_events').get() as { c: number }).c;
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
 const PROMPT_HOOK = ['context', '--pinned-only', '--include-recent', '5', '--format', 'additional-context'];
 const promptPayload = (sessionId: string): string =>
   JSON.stringify({ session_id: sessionId, prompt: 'postgres migration rollback plan for the deploy' });
@@ -150,6 +164,17 @@ describe('session and tool-failure hooks', () => {
     }
   });
 
+  it('pre-compact opens the store as often with the delivery ledger on as with it off', () => {
+    const payload = (id: string): string =>
+      JSON.stringify({ session_id: id, transcript_path: path.join(tmp, 'none.jsonl'), hook_event_name: 'PreCompact', trigger: 'auto' });
+    const off = runHook(['pre-compact'], payload('sess-open-8'));
+    setLedger(true);
+    const on = runHook(['pre-compact'], payload('sess-open-9'));
+    expect(on.stdout).not.toBe('');
+    expect(on.opens).toEqual(off.opens);
+    expect(ledgerRows()).toBe(1);
+  });
+
   it('post-compact opens the store once', () => {
     const payload = { session_id: 'sess-open-6', trigger: 'manual', compact_summary: 'Rolled back the postgres migration and wrote the deploy plan.' };
     const run = runHook(['post-compact', '--log-file', path.join(tmp, 'compact.log')], JSON.stringify(payload));
@@ -165,5 +190,16 @@ describe('session and tool-failure hooks', () => {
     const run = runHook(['capture-error'], JSON.stringify(payload));
     expect(run.stdout).toBe('');
     expect(run.opens).toEqual({ local: 1 });
+  });
+});
+
+describe('an agent-run hippo context', () => {
+  it('opens the store as often with the delivery ledger on as with it off', () => {
+    const off = runHook(['context', 'postgres', 'rollback'], '');
+    setLedger(true);
+    const on = runHook(['context', 'postgres', 'rollback'], '');
+    expect(on.stdout).toContain('rollback plan');
+    expect(on.opens).toEqual(off.opens);
+    expect(ledgerRows()).toBe(1);
   });
 });

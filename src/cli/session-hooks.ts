@@ -161,6 +161,8 @@ export async function handleSessionEnd({ hippoRoot, tenantId, flags }: CommandCo
   // Before the spawn, since the worker finds its store from the folder it inherits.
   const root = payloadCwdRoot(hippoRoot, stdinText, runtime);
   const input = stop ?? sessionEndInput(stdinText, raw.timedOut, runtime);
+  // Only a host payload ends a session: a manual run and a reply's end (turn mode) are not boundaries.
+  const rec = !turn && input !== null && !input.manual ? startDeliveryRecorder(hookStoreRoot(root), stdinText, runtime, 'session-end') : null;
   const sessionId = input?.sessionId ?? null;
   // Resolved here because only this process saw the payload; the worker captures just the path it is handed.
   // Always a hook, so never scan: an empty stdin here is not a manual run. The Copilot CLI's sessionEnd names no transcript, so its log is found by id.
@@ -176,9 +178,15 @@ export async function handleSessionEnd({ hippoRoot, tenantId, flags }: CommandCo
     if (logFile) flags['log-file'] = logFile;
     if (transcriptPath) flags['transcript'] = transcriptPath;
     if (sessionId) flags['session-id'] = sessionId;
-    await cmdSessionEndWorker(root, tenantId, flags);
+    try {
+      await cmdSessionEndWorker(root, tenantId, flags);
+    } finally {
+      await runHookWithStores(() => flushDeliveryRecorder(rec));
+    }
     return;
   }
+  // After the spawn, so a locked store delays only the row; the hook's short lock wait bounds it.
+  await runHookWithStores(() => flushDeliveryRecorder(rec));
 }
 
 /** What the session-end payload named; null for one hippo refuses or one that never arrived, and the worker then runs with neither value. */

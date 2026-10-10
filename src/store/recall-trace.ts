@@ -15,12 +15,12 @@
  * new debug env var).
  */
 
-import { createHash } from 'node:crypto';
 import { openHippoDb, closeHippoDb, rethrowIfSqliteBlocked, withWriteScope, type DatabaseSyncLike } from '../db/index.js';
 import type { RerankStep } from '../core/search-types.js';
 import { DELIVERY_LEDGER_VERSION, isBoundaryEvent, type DeliveryEventInput } from './delivery-recorder.js';
 import { errorFields, errorMessage, log } from '../util/log.js';
 import { DAY_MS } from '../util/time.js';
+import { blockHash } from '../util/token-text.js';
 
 /** One ranked result to persist alongside its trace row. */
 export interface RecallTraceResultInput {
@@ -78,7 +78,7 @@ function sanitizeRerankSteps(
  */
 export function writeRecallTrace(db: DatabaseSyncLike, input: RecallTraceInput): number | null {
   try {
-    const queryHash = createHash('sha256').update(input.query).digest('hex').slice(0, 16);
+    const queryHash = blockHash(input.query);
     const ts = new Date().toISOString();
     return withWriteScope(db, 'write_recall_trace', () => {
       const insertTrace = db.prepare(`

@@ -1,7 +1,8 @@
-// Scratch projects and CLI runs for the compaction boundary rows of the delivery ledger.
+// Scratch projects and CLI runs for the boundary rows of the delivery ledger: compaction and session end.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { spawn, spawnSync, type SpawnSyncReturns } from 'node:child_process';
+import { pathToFileURL } from 'node:url';
 import { expect } from 'vitest';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { readDeliveryEvents, type DeliveryEventRow } from '../../src/store/recall-trace.js';
@@ -73,6 +74,18 @@ export function hippo(p: Project, args: string[], opts: RunOpts = {}): SpawnSync
     cwd: opts.cwd ?? p.cwd, env: { ...p.env, ...opts.env }, input: opts.input ?? '', encoding: 'utf8',
   });
 }
+
+/** A run whose detached session-end worker cannot start, so no worker sleeps on the store while the test reads it. */
+export function hippoNoWorker(p: Project, args: string[], opts: Omit<RunOpts, 'fault'> = {}): SpawnSyncReturns<string> {
+  const preload = path.join(p.dir, 'no-worker.mjs');
+  fs.writeFileSync(preload, `process.execPath = ${JSON.stringify(path.join(p.dir, 'no-such-node'))};\n`);
+  return spawnSync(process.execPath, ['--import', pathToFileURL(preload).href, HIPPO_JS, ...args], {
+    cwd: opts.cwd ?? p.cwd, env: { ...p.env, ...opts.env }, input: opts.input ?? '', encoding: 'utf8',
+  });
+}
+
+export const sessionEndPayload = (sessionId: string, extra: { [field: string]: string } = {}): string =>
+  JSON.stringify({ session_id: sessionId, transcript_path: 'no-such-transcript.jsonl', hook_event_name: 'SessionEnd', reason: 'exit', ...extra });
 
 export interface AsyncRun { status: number | null; stdout: string; stderr: string }
 

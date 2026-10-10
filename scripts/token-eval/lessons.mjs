@@ -1,6 +1,7 @@
 // Z0 lesson families: tasks-file rules (prereg 32-46, 62-68, 111), the per-seed task order (117-119), roles and teach text.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { checkerFiles } from './checker-identity.mjs';
 
 export const KINDS = ['teach', 'apply', 'no-lesson'];
 const SOURCES = ['maintainer', 'template'];
@@ -41,6 +42,11 @@ function checkLesson(l, baseDir) {
   if (!baseDir) throw new Error('validateTasks needs the tasks file\'s directory to resolve checker scripts');
   l.checkPath = path.resolve(baseDir, l.check.script);
   if (!fs.existsSync(l.checkPath)) throw new Error(`lesson ${l.id}: check.script ${l.check.script} not found at ${l.checkPath}`);
+  try {
+    checkerFiles(l.checkPath);
+  } catch (e) {
+    throw new Error(`lesson ${l.id}: ${e.message}`, { cause: e });
+  }
 }
 
 function checkFamilyLessons(f, spec, baseDir) {

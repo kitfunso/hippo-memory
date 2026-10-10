@@ -32,7 +32,7 @@ function servedLocal(store: HippoStore, hippoRoot: string): SqliteLocal {
     applyOutcomeToLastRecall() {
       throw new SqliteBlockedError(store.kind);
     },
-    finishLastRecall: (writes) => store.finishRecall(writes),
+    finishLastRecall: (writes) => store.finishRecall(writes).then(() => null),
   };
 }
 

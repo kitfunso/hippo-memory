@@ -41,6 +41,13 @@ export function isInstructionPath(rel) {
   return NAMES.has(parts[parts.length - 1]);
 }
 
+// Not carried between tasks, yet a reader who saw one could guess the arm.
+const MEMORY_NAMES = ['AGENTS.override.md', 'MEMORY.md'];
+/** The one list of instruction and memory files that G5's reader diff and its command filter both hide. */
+export const READER_HIDDEN = [...NAMES, ...MEMORY_NAMES, '.claude/rules'];
+/** An instruction path, or a memory file at any depth: never in a reader diff. */
+export const isReaderHidden = (rel) => isInstructionPath(rel) || MEMORY_NAMES.includes(rel.split('/').at(-1));
+
 const isLink = (file) => fs.lstatSync(file, { throwIfNoEntry: false })?.isSymbolicLink() ?? false;
 
 /** Every instruction file on disk as `{path: bytes}`, forward-slash paths; read from disk so git filters never enter. */

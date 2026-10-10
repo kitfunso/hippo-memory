@@ -43,6 +43,12 @@ export function resolvedOf(r) {
   return isNullish(r.invalid) && r.acceptancePassed === true && r.timedOut !== true && r.lessons.every((l) => l.final === 'pass');
 }
 
+/** An apply chain's `followed` (prereg 181): the first check's pass-ness, only when the lesson was shown; na and missing give null. */
+export function followedOf(shown, first) {
+  if (!shown) return null;
+  return first === 'pass' ? true : first === 'fail' ? false : null;
+}
+
 function check(ok, message) {
   if (!ok) throw new Error(message);
 }
