@@ -11,20 +11,8 @@ import type { Context, StoreReply } from './types.js';
 import { memoryReach } from '../store/tenant-lookup.js';
 import { canTouchScope, personalScopeOf } from '../store/recall-scope.js';
 
-// ---------------------------------------------------------------------------
-// promote
-// ---------------------------------------------------------------------------
-
-/**
- * Copy a local memory into the global store. Mirrors `cmdPromote` in cli.ts:
- * the `writeEntry` inside `promoteToGlobal` emits a 'remember' on the global
- * db; we add a 'promote' audit event on the global db so the user-facing
- * intent stays distinct from the underlying upsert.
- *
- * Note: `promoteToGlobal` does not currently take a tenantId override — it
- * reads the entry from the local root via `readEntry` (no tenant filter) and
- * preserves the entry's existing tenantId on the global side.
- */
+/** Copies a local memory into the global store; the inner writeEntry emits 'remember' there, and we add a 'promote' audit event so intent stays distinct.
+ * promoteToGlobal reads via `readEntry` with no tenant filter and keeps the entry's existing tenantId on the global side. */
 export interface PromoteResult {
   ok: true;
   sourceId: string;
@@ -34,12 +22,8 @@ export function promote(
   ctx: Context,
   id: string,
 ): PromoteResult {
-  // Tenant scope: promoteToGlobal reads the entry from the local root via
-  // readEntry without a tenant filter, so a Bearer for tenant A could
-  // promote tenant B's row by guessing or leaking the id. Pre-check the
-  // row's tenant_id and deny cross-tenant access with the same not-found
-  // wording archiveRaw uses (no info leak about whether the id exists in
-  // another tenant).
+  // promoteToGlobal reads without a tenant filter, so pre-check the row's tenant_id and deny cross-tenant access with archiveRaw's not-found wording
+  // (no leak about whether the id exists in another tenant).
   const reach = memoryReach(ctx.hippoRoot, id);
   if (reach?.tenantId !== ctx.tenantId || !canTouchScope(ctx.actor, reach.scope)) {
     throw new NotFoundError(`memory not found: ${id}`);
@@ -54,10 +38,6 @@ export function promote(
 
   return { ok: true, sourceId: id, globalId: globalEntry.id };
 }
-
-// ---------------------------------------------------------------------------
-// supersede
-// ---------------------------------------------------------------------------
 
 /** Replace an old memory with new content, chaining old.superseded_by = new.id; the store commits both rows and the audit row together. */
 export interface SupersedeResult {
@@ -108,10 +88,6 @@ function assertSupersedable(ctx: Context, oldId: string, old: MemoryEntry | null
   }
   return old;
 }
-
-// ---------------------------------------------------------------------------
-// archive_raw
-// ---------------------------------------------------------------------------
 
 /** Archive a kind='raw' memory: its metadata moves to raw_archive and the row is
  * deleted. The store writes the one archive_raw audit row, under the caller's subject. */

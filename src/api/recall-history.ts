@@ -1,28 +1,8 @@
-/**
- * Anchoring detector (recall-recurrence), pure module.
- *
- * Implements two detection rules:
- *   query_repeat: same queryHash within recentRepeatWindow returned
- *     same topMemoryId (caller is re-asking the same question).
- *   memory_dominance: same topMemoryId across >= minDominance distinct
- *     queryHashes (memory acts as a fixed-point anchor regardless of what
- *     the agent asks).
- *
- * Each pipeline (api.recall via
- * HTTP, cmdRecall, MCP hippo_recall) owns its OWN ring buffer Map keyed
- * by (tenant, session). No cross-pipeline sharing (the typical multi-
- * process deployment makes IPC ring-sharing impractical; per-pipeline
- * is correct because each pipeline has its own top-1 ranking anyway).
- *
- * AnchoringHint + PlanningFallacyHint are independent
- * signals; both can fire on the same recall.
- */
+/** Anchoring detector (recall-recurrence), pure module: `query_repeat` (a queryHash re-asked within the window returns the same topMemoryId) and
+ * `memory_dominance` (the same topMemoryId across >= minDominance distinct queryHashes). Each pipeline keeps its OWN ring Map keyed by (tenant, session),
+ * because its top-1 ranking differs. AnchoringHint and PlanningFallacyHint are independent signals. */
 
 import { envAnchoringOff, envAvailabilityOff } from '../util/env.js';
-
-// ---------------------------------------------------------------------------
-// Domain types
-// ---------------------------------------------------------------------------
 
 export type AnchoringReason = 'query_repeat' | 'memory_dominance';
 
@@ -46,10 +26,8 @@ export interface RecallHistoryEntry {
   topMemoryId: string | null;
   /** ISO-8601 timestamp; advisory, not used by the detection rules. */
   ts: string;
-  /** Memory id of the AnchoringHint that fired on this recall, if any.
-   *  Used by the cooldown logic to prevent re-emitting the same hint on
-   *  consecutive recalls within the dominance window. Caller-written
-   *  AFTER detectAnchoring returns; reads next time detectAnchoring runs. */
+  /** Memory id of the AnchoringHint that fired on this recall, if any; the caller writes it after detectAnchoring returns, and the cooldown reads it next
+   * time. */
   anchoredOn?: string;
 }
 
@@ -62,9 +40,7 @@ export interface DetectAnchoringOpts {
   /** query_repeat window: how many recent history entries to scan for query repeat.
    *  Default 5. */
   recentRepeatWindow?: number;
-  /** Cooldown: if the immediately-prior fire (per `anchoredOn`) was for
-   *  the same topMemoryId within this many history entries, suppress.
-   *  Default 3. */
+  /** Cooldown: suppress when the prior fire (per `anchoredOn`) was for the same topMemoryId within this many history entries. Default 3. */
   cooldown?: number;
 }
 
@@ -72,26 +48,12 @@ const DEFAULT_MIN_DOMINANCE = 3;
 const DEFAULT_RECENT_REPEAT_WINDOW = 5;
 const DEFAULT_COOLDOWN = 3;
 
-// ---------------------------------------------------------------------------
-// Query text normalization + hashing
-// ---------------------------------------------------------------------------
-
-/**
- * Normalize + hash a query text into a 32-bit integer.
- * Lowercase → strip non-alphanumeric → split → drop empty + short tokens →
- * sort tokens → join → FNV-1a 32-bit.
- *
- * Token sort + dedup means semantically-equivalent queries with reordered
- * words collide intentionally ("semantically-distinct" is approximated by
- * textual normalization, not embeddings).
- *
- * Deterministic across processes; stable across Node + V8 versions.
- */
+/** Normalizes a query (lowercase, strip non-alphanumerics, drop short tokens, sort, dedup, join) and hashes it with 32-bit FNV-1a.
+ * Reordered words collide intentionally; deterministic across processes and V8 versions. */
 export function hashQueryText(query: string): number {
   if (!query) return 0;
   // Tokens are deduped before join so `foo foo bar` and `foo bar` count as one query for memory_dominance.
-  // Unicode classes (\p{L} letter, \p{N} number, \p{M} combining mark; needs /u) keep
-  // non-Latin queries from collapsing to an empty token set and colliding at hash 0.
+  // Unicode classes (\p{L}, \p{N}, \p{M}; need /u) keep non-Latin queries from collapsing to an empty token set and colliding at hash 0.
   const normalized = query
     .toLowerCase()
     .replace(/[^\p{L}\p{N}\p{M}\s]/gu, ' ')
@@ -119,28 +81,8 @@ function fnv1a32(text: string): number {
   return hash >>> 0;
 }
 
-// ---------------------------------------------------------------------------
-// Anchoring detection
-// ---------------------------------------------------------------------------
-
-/**
- * Detect anchoring patterns in the recall history against the current
- * recall's (queryHash, topMemoryId).
- *
- * Rule precedence: memory_dominance wins on tie. When both rules fire on the
- * same recall, return only memory_dominance, the stronger signal (a memory
- * dominating multiple DIFFERENT queries is a fixed-point anchor; query_repeat
- * alone is just a literal re-ask).
- *
- * Cooldown: if the immediately-prior recall fired a hint on the SAME
- * topMemoryId within `cooldown=3` history entries, suppress. Prevents
- * spam when the agent repeatedly recalls within the dominance window.
- * Cooldown is per-memory, not per-rule: if memory_dominance fired on M
- * (cooldown engaged for M), and the next recall has top=N + repeated query,
- * query_repeat fires on N (different memory, not in cooldown).
- *
- * @returns AnchoringHint when a pattern fires; null otherwise.
- */
+/** Detects anchoring against the current (queryHash, topMemoryId); memory_dominance wins when both rules fire, since it spans DIFFERENT queries.
+ * Cooldown is per memory: a hint on the SAME topMemoryId within `cooldown=3` history entries is suppressed. Returns an AnchoringHint or null. */
 export function detectAnchoring(
   history: RecallHistorySnapshot,
   currentQueryHash: number,
@@ -215,19 +157,10 @@ function isRecentRepeat(
     .some((entry) => entry.queryHash === currentQueryHash && entry.topMemoryId === currentTopMemoryId);
 }
 
-// ---------------------------------------------------------------------------
-// RingBuffer + caller-side state helpers
-// ---------------------------------------------------------------------------
-
 const MAX_HISTORY = 10;
 const DEFAULT_MAX_SESSIONS = 1000;
 
-/**
- * Bounded FIFO ring of RecallHistoryEntry. Newest entries pushed via
- * append; oldest evicted when the ring is full. The class is intentionally
- * a thin wrapper around an array so snapshotRing returns a readonly view
- * without copying on the hot path.
- */
+/** Bounded FIFO ring of RecallHistoryEntry (oldest evicted when full); a thin array wrapper so snapshotRing returns a readonly view without copying. */
 export class RingBuffer {
   private entries: RecallHistoryEntry[] = [];
 
@@ -247,24 +180,14 @@ export class RingBuffer {
   }
 }
 
-/**
- * Build the (tenant, session) key for a per-session ring Map. Uses a NUL
- * (`\x00`) byte as delimiter because tenant ids and session ids are
- * validated elsewhere to reject NUL chars — guarantees collision-free
- * concatenation regardless of what `:` or other delimiters might appear
- * inside either field (notably API-key-derived subjects can contain `:`).
- */
+/** Builds the (tenant, session) key with a NUL delimiter: tenant and session ids are validated elsewhere to reject NUL,
+ * so concatenation cannot collide even though API-key-derived subjects can contain `:`. */
 export function buildSessionKey(tenantId: string, sessionId: string): string {
   return `${tenantId}\x00${sessionId}`;
 }
 
-/**
- * Get-or-create a RingBuffer for a session key. Caps total tracked keys
- * at `maxSessions` (default 1000) with LRU eviction — when the cap is
- * hit, deletes the oldest-inserted key before inserting the new one.
- * Map iteration order preserves insertion order per ECMA-262 spec, so
- * "oldest" = first key returned by Map.prototype.keys().
- */
+/** Get-or-create a RingBuffer per session key, capped at `maxSessions` (default 1000); at the cap the oldest-inserted key (first from Map.keys()) is
+ * evicted. */
 export function getOrCreateRing(
   map: Map<string, RingBuffer>,
   key: string,
@@ -286,11 +209,7 @@ export function getOrCreateRing(
   return ring;
 }
 
-/**
- * Append a recall to a ring. The `anchoredOn` argument carries the
- * memoryId of the AnchoringHint that fired on THIS recall (or undefined
- * if no hint). detectAnchoring reads it next time for cooldown gating.
- */
+/** Appends a recall to a ring; `anchoredOn` is the memoryId of the hint that fired on THIS recall (or undefined), read by detectAnchoring for cooldown. */
 export function appendRecall(
   ring: RingBuffer,
   queryHash: number,
@@ -311,10 +230,7 @@ export function snapshotRing(ring: RingBuffer): RecallHistorySnapshot {
   return ring.snapshot();
 }
 
-/**
- * Whether a recall bias hint is enabled. Reads the env at call time, so
- * `HIPPO_ANCHORING=off` or `HIPPO_AVAILABILITY=off` disables only that kind.
- */
+/** Whether a recall bias hint is enabled; reads env at call time, so `HIPPO_ANCHORING=off` or `HIPPO_AVAILABILITY=off` disables only that kind. */
 export function biasHintEnabled(kind: 'anchoring' | 'availability'): boolean {
   return kind === 'anchoring'
     ? !envAnchoringOff()

@@ -28,10 +28,8 @@ export interface HippoConfig {
     enabled: boolean | 'auto';  // 'auto' = use if dependency installed (local) / key present (api)
     model: string;
     hybridWeight: number;
-    /** Embedding backend. 'local' (default) = zero-dependency transformers.js.
-     *  'openai' | 'voyage' | 'cohere' = opt-in API embedder; needs the provider's
-     *  API key in env (OPENAI_API_KEY / VOYAGE_API_KEY / COHERE_API_KEY).
-     *  See src/store/embeddings/provider.ts. */
+    /** Embedding backend: 'local' (default) = zero-dependency transformers.js; 'openai' | 'voyage' | 'cohere' = opt-in API embedder needing the provider's
+     *  API key in env (OPENAI_API_KEY / VOYAGE_API_KEY / COHERE_API_KEY). See src/store/embeddings/provider.ts. */
     provider?: 'local' | 'openai' | 'voyage' | 'cohere';
     /** Optional API base-URL override (self-host / proxy). HTTPS only (localhost
      *  may use http). Ignored by the local provider. */
@@ -66,18 +64,15 @@ export interface HippoConfig {
   autoTraceCapture: boolean;
   /** Only promote sessions whose session_complete event is within N days. */
   autoTraceWindowDays: number;
-  /** Mid-session pinned-rule re-injection via the Claude Code UserPromptSubmit
-   *  hook. When enabled, pinned memories are re-injected each turn within the
-   *  given token budget. */
+  /** Mid-session pinned-rule re-injection through the UserPromptSubmit hook: pinned memories are re-injected each turn within the token budget. */
   pinnedInject: {
     enabled: boolean;
     budget: number;
     /** Skip a block identical to the one already injected this session
      *  Default true. Needs a session id from the hook payload. */
     skipUnchanged: boolean;
-    /** Resend an unchanged block after this many consecutive skips, so long
-     *  sessions still see pinned rules near the latest turn. Default 10; 0
-     *  never resends an unchanged block. */
+    /** Resend an unchanged block after this many consecutive skips, so long sessions still see pinned rules near the latest turn (default 10; 0 never
+     * resends). */
     refreshTurns: number;
     /** Gate the hook's backfill on the prompt's own content instead of the five
      *  newest memories. Default true: the same overlap for fewer tokens. */
@@ -93,13 +88,8 @@ export interface HippoConfig {
     /** FTS candidate pool size per store before gating. Default 100. */
     promptRecallCandidates: number;
   };
-  /** Memory scope isolation: when true (default), ambient context
-   *  (`hippo context`, the UserPromptSubmit hook, /v1/context, MCP
-   *  hippo_context) excludes memories owned by OTHER projects; explicit
-   *  recall is unaffected. Set false to disable the ORIGIN PARTITION only -
-   *  the secret veto is unconditional for ambient surfaces and no config or
-   *  flag re-includes secret-flagged rows (explicit recall still returns
-   *  them). */
+  /** Memory scope isolation (default true): ambient context (`hippo context`, the hook, /v1/context, MCP hippo_context) excludes OTHER projects' memories;
+   *  explicit recall is unaffected. False disables the ORIGIN PARTITION only: the secret veto is unconditional, and no flag re-includes secret-flagged rows. */
   contextProjectIsolation: boolean;
   extraction: {
     enabled: boolean | 'auto';
@@ -123,13 +113,8 @@ export interface HippoConfig {
   memoryValue: {
     enabled: boolean;
   };
-  /** Dormant memories (src/store/dormant.ts): when enabled (the default), the
-   *  sleep decay pass moves a memory that faded below the threshold into the
-   *  dormant store instead of deleting it. A dormant memory leaves recall and
-   *  context like a deleted one, but `hippo dormant restore <id>` brings it
-   *  back and `hippo dormant forget <id>` deletes it for good. A faded memory
-   *  the secret detector flags is always deleted, never kept dormant.
-   *  `{"enabled": false}` restores the old delete-on-fade behaviour. */
+  /** Dormant memories (src/store/dormant.ts), on by default: the sleep decay pass moves a memory that faded below the threshold there instead of deleting it
+   *  (`hippo dormant restore|forget <id>`); a faded memory the secret detector flags is always deleted. `{"enabled": false}` restores delete-on-fade. */
   dormant: {
     enabled: boolean;
     /** Days a dormant memory is kept before sleep deletes it for good.
@@ -321,8 +306,7 @@ function memoryValueOverride(raw: Partial<HippoConfig>): Partial<HippoConfig['me
 }
 
 function dormantSettings(raw: Partial<HippoConfig>): HippoConfig['dormant'] {
-  // Same rule as memoryValue above: a malformed value never silently
-  // changes what sleep does. Anything but a real object / boolean / number
+  // Same rule as memoryValue above: a malformed value never silently changes what sleep does; anything but a real object / boolean / number
   // warns and falls back to the default, which keeps faded memories.
   const dormantRaw = raw.dormant;
   if (dormantRaw !== undefined && !isJsonObject(dormantRaw)) {

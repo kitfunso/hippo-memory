@@ -1,10 +1,4 @@
-/**
- * Session handoff types and helpers.
- *
- * A handoff captures the state of a session so that a successor
- * session (or a different agent) can pick up where the previous
- * one left off.
- */
+/** Session handoff types and helpers: a handoff captures a session's state so a successor session or another agent can pick up where it left off. */
 
 import { isJsonString, type JsonValue } from '../util/json.js';
 import { warnDamagedColumn } from '../util/stored-json.js';

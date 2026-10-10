@@ -135,12 +135,8 @@ function dispatch(body: string): void {
   }));
 }
 
-/**
- * Wire stdin/stdout to the dispatcher. Idempotent — only the entrypoint
- * (cli.ts `hippo mcp`, or running this file directly) should call this.
- * src/server.ts imports `handleMcpRequest` without invoking this, so the
- * HTTP daemon does not steal stdin or exit when its parent closes a pipe.
- */
+/** Wires stdin/stdout to the dispatcher; idempotent. Only the entrypoint (cli.ts `hippo mcp`, or this file run directly) should call it, so the HTTP daemon
+ * (which imports `handleMcpRequest`) does not steal stdin or exit when its parent closes a pipe. */
 export function startStdioLoop(): void {
   process.stdin.on('data', (chunk: Buffer) => {
     buffer = Buffer.concat([buffer, withoutRefused(chunk)]);

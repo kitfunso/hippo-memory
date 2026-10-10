@@ -237,12 +237,10 @@ function assertPromptHookRequest(req: PromptHookRequest): void {
   }
 }
 
-/** The text `hippo context --pinned-only --include-recent 5 --format additional-context` prints for this session, read
- * on `ctx`'s store for the caller's project, leaving out an unchanged static block only when `printedHash` matches it.
- * `arm` is the raw ledger arm (`hippo` or `holdout`), null at rate 0; a holdout session gets an empty
- * stdout. `staticHash` is the hash to echo back: null with no static block, for a sub-agent or a holdout.
- *  Scope detection (HIPPO_SCOPE and skill env vars) and delivery-ledger events are CLI-only.
- *  Throws BadRequestError past the input caps, and on a shared store for a project assertCallerProject refuses, before any arm is booked. */
+/** The text `hippo context --pinned-only --include-recent 5 --format additional-context` prints for this session, read on `ctx`'s store for its project.
+ * Omits an unchanged static block only when `printedHash` matches; `arm` is the ledger arm (`hippo` or `holdout`, null at rate 0); a holdout gets empty stdout.
+ * `staticHash` is the hash to echo back (null with no static block, a sub-agent or a holdout). Scope detection and delivery-ledger events are CLI-only.
+ * Throws BadRequestError past the input caps, and on a shared store for a project assertCallerProject refuses, before any arm is booked. */
 export async function promptHookContext(
   ctx: Context, req: PromptHookRequest, opts: PromptHookOpts = {},
 ): Promise<{ arm: PilotArm | null; stdout: string; staticHash: string | null }> {

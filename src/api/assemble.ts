@@ -13,10 +13,6 @@ const DEFAULT_ROW_CAP = 5000;
 
 export const DEFAULT_ASSEMBLE_BUDGET = 4000;
 
-// ---------------------------------------------------------------------------
-// assemble — Hippo DAG Phase 2 (bio-aware context engine)
-// ---------------------------------------------------------------------------
-
 export interface AssembleOpts {
   /** Token budget. Default DEFAULT_ASSEMBLE_BUDGET. */
   budget?: number;
@@ -25,19 +21,10 @@ export interface AssembleOpts {
   /** Substitute parent summaries for older raws when ≥2 share a level-2
    *  ancestor. Default true. */
   summarizeOlder?: boolean;
-  /**
-   * Restrict to a specific scope, same rule as
-   * `recall`: when set, exact match required (so an authorised caller can
-   * assemble a `slack:private:CSEC` session by passing scope explicitly).
-   * When undefined, default-deny applies to ANY `<source>:private:*` and
-   * `unknown:legacy` rows.
-   */
+  /** Exact scope match when set, so an authorised caller can assemble a private session.
+   * When undefined, default-deny applies to every `<source>:private:*` and `unknown:legacy` row. */
   scope?: string;
-  /**
-   * Hard row cap on the SELECT that loads session raws. Default 5000 to
-   * protect against degenerate sessions. When the cap is hit, `truncated`
-   * is set on the result so the caller knows to widen.
-   */
+  /** Hard row cap on the SELECT that loads session raws (default 5000); `truncated` is set when it is hit. */
   rowCap?: number;
   cost?: AssembleCost;
   project?: CallerProject;
@@ -71,44 +58,16 @@ export interface AssembleResult {
   sessionId: string;
   items: AssembledContextItem[];
   tokens: number;
-  /**
-   * Tenant + scope-filtered raw row count for the session, uncapped by `rowCap`, so
-   * "session has N msgs" stays accurate when items[] is the windowed view.
-   */
+  /** Tenant + scope-filtered raw row count, uncapped by `rowCap`, so "session has N msgs" stays accurate for a windowed items[]. */
   totalRaw: number;
   summarized: number;
   evicted: number;
-  /**
-   * True when `rowCap` truncated the loaded window. The cap keeps the NEWEST
-   * rows, so the items[] array represents the freshest tail of the session;
-   * older rows beyond the cap are silently absent. Use `totalRaw - items.length
-   * - summarized + ...` to estimate how much you didn't see, or widen `rowCap`.
-   */
+  /** True when `rowCap` truncated the window; the cap keeps the NEWEST rows, so older rows beyond it are absent. */
   truncated: boolean;
 }
 
-/**
- * Build a chronologically-ordered context window for a session. Adapts the
- * lossless-claw context-engine pattern to Hippo's score-ranked memory store.
- *
- * Algorithm:
- *   1. Load all kind='raw' rows for the session, tenant + scope filtered.
- *   2. Split: newest `freshTailCount` are protected (fresh tail).
- *   3. For older rows, when ≥2 share a level-2 parent, substitute the
- *      summary; everything else passes through as raw.
- *   4. Hippo-additive eviction: when over-budget, drop the lowest-strength
- *      non-fresh-tail item first. Fresh-tail rows are never evicted.
- *
- * Strength-weighted eviction is the differentiator from lossless-claw,
- * which evicts oldest-first. A high-strength older row (high retrieval
- * count, slow decay) survives; a low-strength recent row (newer but
- * unimportant) goes first.
- *
- * Returns `items: []` cleanly when:
- *   - sessionId is empty
- *   - no raws exist for the session
- *   - all rows fail the scope/tenant filter
- */
+/** Chronological context window for a session; over budget, evicts the lowest-strength non-fresh-tail item first (fresh tail is never evicted).
+ * Returns `items: []` for an empty sessionId, no raws, or when every row fails the scope/tenant filter. */
 export async function assemble(
   ctx: Context,
   sessionId: string,

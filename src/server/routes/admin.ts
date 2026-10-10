@@ -15,17 +15,13 @@ const VALID_AUDIT_OPS: ReadonlySet<AuditOp> = new Set<AuditOp>(AUDIT_OPS);
 const MINT_BODY_MAX_BYTES = 4 * 1024;
 const MINT_BODY_DEADLINE_MS = 10_000;
 
-// Cap on GET /v1/audit?limit=. Matches docs/api.md (when written) and is large
-// enough to dump a small deployment's full audit log without paginating, but
-// small enough that a malicious client can't ask for the world.
+// Cap on GET /v1/audit?limit=: large enough to dump a small deployment's audit log unpaginated, small enough that a client cannot ask for the world.
 const MAX_AUDIT_LIMIT = 10000;
 
 // GET /v1/auth/keys had no limit, so its default page is the cap: a deployment below 1000 keys sees no change.
 const MAX_AUTH_KEYS_PAGE = 1000;
 
-// POST /v1/auth/keys — mint a new API key. Plaintext lands in the response
-// body: the HTTP layer hands it to the client; the user-facing
-// "store this somewhere safe" warning belongs in the CLI client, not here.
+// POST /v1/auth/keys: mints a key; plaintext is in the response body (the CLI client, not this layer, carries the "store this somewhere safe" warning).
 export async function handleCreateAuthKey({ req, res, opts }: RouteRequest): Promise<void> {
   // Body first, so the resolver's check (and any gate in it) runs right before the mint with no wait between.
   const raw = await readBody(req, { maxBytes: MINT_BODY_MAX_BYTES, deadlineMs: opts.mintBodyDeadlineMs ?? MINT_BODY_DEADLINE_MS });
@@ -35,9 +31,8 @@ export async function handleCreateAuthKey({ req, res, opts }: RouteRequest): Pro
   if (labelRaw !== undefined && !isJsonString(labelRaw)) {
     throw new HttpError(400, 'label must be a string');
   }
-  // Optional body.role mirrors the --role CLI flag. Validated
-  // strictly — anything other than 'admin'|'member' is a 400 (no silent
-  // fallback). authCreate refuses a member caller with a 403.
+  // Optional body.role mirrors the --role CLI flag and is validated strictly: anything but 'admin'|'member' is a 400; authCreate refuses a member caller
+  // with a 403.
   const roleRaw = body['role'];
   let role: 'admin' | 'member' | undefined;
   if (roleRaw !== undefined) {
@@ -55,10 +50,8 @@ export async function handleCreateAuthKey({ req, res, opts }: RouteRequest): Pro
   if (noExpiry !== undefined && !isJsonBoolean(noExpiry)) {
     throw new HttpError(400, 'noExpiry must be true or false');
   }
-  // Security: any `tenantId` in the body is IGNORED. The minted key is
-  // bound to the caller's authenticated tenant (ctx.tenantId, resolved
-  // from the Bearer token). Forwarding body.tenantId here would let
-  // tenant A mint a key for tenant B — see authCreate doc comment.
+  // Security: any body `tenantId` is IGNORED; the key is bound to the caller's authenticated tenant, or tenant A could mint a key for tenant B (see
+  // authCreate).
   const result = await authCreate(ctx, {
     label: labelRaw,
     role,
@@ -69,9 +62,7 @@ export async function handleCreateAuthKey({ req, res, opts }: RouteRequest): Pro
   return;
 }
 
-// GET /v1/auth/keys?active=true&limit=&cursor=: list keys visible to ctx.tenantId.
-// `active` defaults to true so the common case (show me usable keys) is
-// a single GET; ?active=false includes revoked and expired rows.
+// GET /v1/auth/keys?active=true&limit=&cursor=: lists keys visible to ctx.tenantId; `active` defaults to true, ?active=false includes revoked and expired rows.
 export async function handleListAuthKeys({ req, res, opts, query }: RouteRequest): Promise<void> {
   const activeRaw = query.get('active');
   let active = true;
@@ -89,9 +80,8 @@ export async function handleListAuthKeys({ req, res, opts, query }: RouteRequest
   return;
 }
 
-// DELETE /v1/auth/keys/:keyId — revoke. Missing or cross-tenant keys are 404 (no info leak); a member
-// is 403 on any key but its own key or, signed in through the resolver, the keys it minted.
-// 200 with the body rather than 204 so the caller sees revokedAt.
+// DELETE /v1/auth/keys/:keyId revokes: missing or cross-tenant keys are 404 (no leak); a member is 403 on any key but its own or, via the resolver, those it
+// minted. Returns 200 with the body rather than 204 so the caller sees revokedAt.
 export async function handleRevokeAuthKey({ req, res, opts }: RouteRequest, keyMatch: Record<string, string>): Promise<void> {
   validateIdSegment(keyMatch.keyId!, 'key id');
   const ctx = await buildContextWithAuth(req, opts);
@@ -139,9 +129,7 @@ export async function handleRejectQuarantine({ req, res, opts }: RouteRequest, q
   return;
 }
 
-// GET /v1/audit?op=&since=&limit=&cursor=: read audit events. All three filters
-// validated at the route boundary so an invalid value lands a 400 before
-// we hit the DB.
+// GET /v1/audit?op=&since=&limit=&cursor=: all three filters are validated at the route boundary so an invalid value is a 400 before the DB is hit.
 export async function handleListAudit({ req, res, opts, query }: RouteRequest): Promise<void> {
   const opRaw = query.get('op');
   let op: AuditOp | undefined;

@@ -1,12 +1,6 @@
 #!/usr/bin/env node
-/**
- * Hippo Memory MCP Server
- *
- * Exposes hippo memory as MCP tools over stdio transport.
- * Uses the programmatic API directly (no child process spawning).
- *
- * Usage: hippo mcp (or npx hippo-memory mcp)
- */
+/** Hippo Memory MCP server: exposes hippo memory as MCP tools over stdio via the programmatic API (no child process). Usage: hippo mcp (or npx hippo-memory
+ * mcp). */
 
 export { _resetSessionRecallHistoryMcpForTests } from './session-state.js';
 export { findHippoRoot, mcpErrorResponse, type McpRequest, type McpResponse, type McpContext } from './protocol.js';
@@ -15,13 +9,8 @@ export { startStdioLoop } from './stdio.js';
 import { envMcpStdio } from '../util/env.js';
 import { startStdioLoop } from './stdio.js';
 
-// Auto-start when invoked as the main module (node dist/mcp/server.js or via
-// the cli's `import('./mcp/server.js')`). Importing this file from another
-// module (e.g. src/server.ts wiring up the HTTP/SSE transport) will NOT
-// trigger the stdio loop. The cli imports this file specifically to start
-// stdio; that import is also `import.meta.url === main`-equivalent because
-// it's executed as the program, so we keep a fallback: if HIPPO_MCP_STDIO=1
-// or argv1 ends in /mcp/server.js we start.
+// Auto-start only as the main module (node dist/mcp/server.js or the cli's import('./mcp/server.js')); importing it elsewhere (the HTTP/SSE wiring) must not
+// start stdio. Fallback: HIPPO_MCP_STDIO=1 or argv1 ending in /mcp/server.js also starts it.
 const isMainModule = (() => {
   try {
     const argv1 = process.argv[1] ?? '';

@@ -6,10 +6,6 @@ import { requireGroup, storeFor } from '../store/index.js';
 import type { KeysetPosition } from '../util/keyset.js';
 import type { Context } from './types.js';
 
-// ---------------------------------------------------------------------------
-// audit: list
-// ---------------------------------------------------------------------------
-
 export interface AuditListOpts {
   op?: AuditOp;
   /** ISO timestamp lower bound. */

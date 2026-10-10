@@ -1,22 +1,9 @@
-/**
- * Deterministic tie-break comparators for recall ranking.
- *
- * A true LEAF module: imports NOTHING from any sort-site module (search.ts,
- * physics.ts, api.ts, cli.ts, shared.ts, goals.ts, graph-recall.ts,
- * multihop.ts, rerankers/*). Every comparator here takes a structural param
- * type instead of an imported one, on purpose — a type-only import back to
- * search.ts would still create the search.ts <-> physics.ts ESM import
- * cycle this module exists to avoid.
- *
- * Mirrors the deliberate-determinism comment style already established in
- * graph-stream.ts:88, :165-168, :233-236 — a sort with a documented,
- * reproducible tiebreak instead of leaving ties to array/scan order.
- */
+/** Deterministic tie-break comparators for recall ranking. A true LEAF module: it imports from no sort-site module (search, physics, api, cli, goals,
+ * graph-recall, multihop, rerankers), taking structural param types instead, because even a type-only import back would recreate the search <-> physics ESM
+ * cycle this module exists to avoid. */
 
-/** Minimal shape needed to break a tie deterministically across fresh
- *  ingests of the same content into different stores. The metadata keys are
- *  optional so existing `{ content, id }` callers (tests, benchmarks) still fit;
- *  a full MemoryEntry satisfies it structurally and gets the metadata order. */
+/** Minimal shape for a deterministic tie-break across fresh ingests into different stores;
+ *  the metadata keys are optional so `{ content, id }` callers still fit. */
 export interface EntryIdentity {
   content: string;
   id: string;
@@ -25,30 +12,8 @@ export interface EntryIdentity {
   source?: string;
 }
 
-/**
- * content asc -> layer rank asc -> distinct tag count desc -> sorted tags asc
- * -> source asc -> id asc (all string compares are UTF-16 code-unit order).
- *
- * `content` is the cross-ingest-stable key: identical text ingested into two
- * independently-created stores (different directory name, different insert
- * order of everything else on disk) sorts identically. The metadata keys make
- * byte-identical twins order by what they carry instead of by `id`
- * (`crypto.randomUUID()`), which is per-instance random and would make the
- * dedupe survivor arbitrary. `id` stays the terminal key so the order is
- * total within one store.
- *
- * Layer rank puts semantic first: semantic rows are consolidation output, so
- * keeping that copy preserves the promotion instead of demoting the memory.
- * Unknown or missing layers rank last and then compare as raw strings.
- * Tags prefer the copy with more distinct labels (fewer labels are lost on
- * dedupe); source is an arbitrary but stable key.
- *
- * Plain `<`/`>`, NOT `localeCompare`: `localeCompare` is locale- and
- * ICU-version-dependent (a determinism leak in its own right) and needlessly
- * slow for a tiebreak that only needs a total order. The metadata keys are
- * only computed on a content tie, which is rare, so the per-compare Set/sort
- * cost never lands on the hot path.
- */
+/** Order: content, layer rank (semantic first, keeping the promotion), tag count desc, sorted tags, source, id; plain `<`/`>`, never `localeCompare`.
+ * `content` is the cross-ingest-stable key; `id` is random per instance, so it is only the terminal key. Metadata keys are computed only on a content tie. */
 export function compareEntryIdentity(a: EntryIdentity, b: EntryIdentity): number {
   return (
     compareStrings(a.content, b.content) ||
@@ -94,15 +59,8 @@ export interface ScoredEntryLike {
   entry: EntryIdentity;
 }
 
-/**
- * score descending -> `compareEntryIdentity`. The shared ordering rule for
- * every score-primary recall sort site (search.ts, shared.ts, goals.ts,
- * api.ts, cli.ts, graph-recall.ts, multihop.ts, rerankers/cross-encoder.ts).
- * Sites delegate wholesale to this (via a thin arrow where the element
- * shape's score field is named something other than `score`, e.g.
- * `rerankScore`) rather than reimplementing `b.score - a.score` locally, so
- * the tiebreak can't silently drift between call sites.
- */
+/** score descending, then `compareEntryIdentity`: the shared ordering for every score-primary recall sort site, which delegate here (via an arrow when the
+ * score field is not named `score`) so the tiebreak cannot drift between call sites. */
 export function compareScoredResults(a: ScoredEntryLike, b: ScoredEntryLike): number {
   return compareScoresDesc(a.score, b.score) || compareEntryIdentity(a.entry, b.entry);
 }
@@ -114,22 +72,8 @@ export function compareScoresDesc(a: number, b: number): number {
   return Number(Number.isNaN(a)) - Number(Number.isNaN(b));
 }
 
-/**
- * Build a score-desc -> tie-key comparator for the physics layer.
- *
- * `ScoredPhysicsResult` (physics.ts) carries `{ memoryId, baseScore,
- * clusterAmplification, finalScore }` -- NO `entry`/`content` in scope at
- * that layer, so `compareEntryIdentity` cannot apply directly. With only the
- * default memoryId key this is PER-INSTANCE-ONLY determinism; callers that need
- * CROSS-INGEST stability supply `tieKeyOf` mapping the result to its memory
- * CONTENT, because the baseScore tie order selects the cluster_top_k
- * amplification set, which MUTATES scores before the content-aware merge sort.
- *
- * A factory (not a fixed-field comparator) because physics.ts re-sorts the
- * same result array by two different score fields in sequence (`baseScore`
- * for top-K selection, then `finalScore` after cluster amplification) — one
- * shared tiebreak rule, parameterised by which field is primary this pass.
- */
+/** Score-desc then tie-key comparator for the physics layer (no `entry`/`content` in scope): the default memoryId key is per-instance determinism only.
+ * Cross-ingest stability needs `tieKeyOf` (content), since the baseScore tie order picks the cluster_top_k set. A factory, as two fields sort in turn. */
 export function comparePhysicsResultsBy<T extends { memoryId: string }>(
   scoreOf: (r: T) => number,
   tieKeyOf?: (r: T) => string,

@@ -50,10 +50,8 @@ function isAddressInfo(
   return a !== null && typeof a !== 'string';
 }
 
-// Pinned at module load. Bumped alongside package.json on releases. The
-// HTTP /health response uses this; reading package.json synchronously here
-// would couple the daemon to its on-disk install path, which we want to
-// avoid for tests that mkdtemp a hippoRoot.
+// Pinned at module load, bumped with package.json on releases; reading package.json synchronously here would couple the daemon to its install path,
+// which tests that mkdtemp a hippoRoot avoid.
 const VERSION = PACKAGE_VERSION;
 
 const LOOPBACK_HOSTS = new Set(['127.0.0.1', '::1', 'localhost']);
@@ -152,10 +150,8 @@ async function dispatchScopedRoute(r: RouteRequest, method: string, path: string
 }
 
 function sendHealth(req: IncomingMessage, res: ServerResponse, startedAt: string): void {
-  // A caller on this machine (detectServer's stale-pidfile probe reads version and
-  // pid) gets the full body. Anyone else gets liveness only, a proxied caller and a
-  // browser page on a loopback socket included: the version string would fingerprint
-  // the build and the pid is noise. Platform health checks only need the 200.
+  // A caller on this machine (detectServer's probe reads version and pid) gets the full body; anyone else, even a proxied caller or a browser page on loopback,
+  // gets liveness only: the version would fingerprint the build and the pid is noise. Platform health checks only need the 200.
   if (isLocalCaller(req)) {
     sendJson(res, 200, {
       ok: true,
@@ -199,10 +195,8 @@ function assertBindable(host: string): void {
 }
 
 async function assertNoLiveServer(hippoRoot: string): Promise<void> {
-  // Refuse to start if a live hippo server already serves this hippoRoot.
-  // detectServer probes the recorded /health — a stale pidfile is unlinked and
-  // ignored, but a live peer means a concurrent `hippo serve` would race for
-  // the port and clobber the pidfile.
+  // Refuse to start if a live hippo server already serves this hippoRoot (detectServer probes the recorded /health and unlinks a stale pidfile):
+  // a concurrent `hippo serve` would race for the port and clobber the pidfile.
   const existing = await detectServer(hippoRoot);
   if (existing) {
     throw new Error(
@@ -220,10 +214,8 @@ function limiterFor({ ratePerSec, burst }: RateLimitSpec): RateLimiter {
 function bootRateLimiter(perAddress: RateLimitSpec | 'off' | undefined): RateLimiter | undefined {
   if (perAddress === 'off') return undefined;
   if (perAddress !== undefined) return limiterFor(perAddress);
-  // Per-IP rate limiter for /v1/* and /mcp*. Built here (not at module scope) so
-  // HIPPO_V1_RPS is read at boot, matching HIPPO_PORT above and letting a test
-  // set the rate before serve(). A non-positive or non-finite value disables
-  // limiting (the opt-out knob).
+  // Per-IP rate limiter for /v1/* and /mcp*, built here (not at module scope) so HIPPO_V1_RPS is read at boot and a test can set it before serve().
+  // A non-positive or non-finite value disables limiting (the opt-out knob).
   const v1Rps = Number(envV1Rps() ?? 20);
   return Number.isFinite(v1Rps) && v1Rps > 0 ? limiterFor({ ratePerSec: v1Rps, burst: v1Rps * 2 }) : undefined;
 }
@@ -274,8 +266,7 @@ function createStoreHolder(hippoRoot: string, store: HippoStore): StoreHolder {
   const hold = (): void => {
     if (heldDb || stopHolding || !existsSync(getHippoDbPath(hippoRoot))) return;
     try {
-      // The 'finish' listener can fire inside a request scope, which would close this connection with the request,
-      // and inside the block of a `loop: 'off'` route, which would refuse the open.
+      // The 'finish' listener can fire inside a request scope (closing this connection with the request) and inside a `loop: 'off'` block (refusing the open).
       // The server's lock wait: this open runs on the event loop, where SQLite's 5 s default and the 30 s journal-mode retry would stall every request.
       heldDb = outsideSqliteOffLoop(() => outsideRequestStores(() => openHippoDb(hippoRoot, { busyWaitMs: SERVER_DB_WAIT_MS })));
       checkpointer = startWalCheckpointer(getHippoDbPath(hippoRoot));
@@ -407,27 +398,8 @@ function exitOnSignalOrCrash(stop: () => Promise<void>, drainMs: number): void {
   installCrashHandlers('serve', shutdown);
 }
 
-/**
- * Boot the HTTP daemon on host:port and write the pidfile under hippoRoot.
- *
- * Refuses non-loopback hosts at boot unless
- * HIPPO_REQUIRE_AUTH=1 is set. The auth middleware (buildContextWithAuth /
- * requireAuth) has shipped and every route checks it except GET /health
- * (public by design for platform health checks) and the two connector
- * webhooks in PUBLIC_ROUTES, which are HMAC-gated by their own signing
- * secrets and 404 when those secrets are unset, and any publicJson GET path. But under
- * HIPPO_ALLOW_KEYLESS_LOCAL=1 the keyless fallback inside buildContextWithAuth admits unauthenticated
- * requests from a loopback remote address (unless they carry Forwarded,
- * X-Forwarded-For/-Host/-Proto, X-Real-IP, Cf-Connecting-Ip, True-Client-Ip or Fly-Client-Ip, which mark a same-host proxy and get
- * a 401 like any keyless remote request), so binding to a non-loopback host
- * needs HIPPO_REQUIRE_AUTH=1, which wins over that opt-in and
- * forces every request (loopback or not) through Bearer-token
- * validation. Without that env var set, a non-loopback bind could expose the
- * DB to the network with no auth, so we fail fast instead.
- *
- * Use port: 0 in tests to bind to an ephemeral port and read the actual
- * port back via server.address() after listen.
- */
+/** Boots the HTTP daemon on host:port and writes the pidfile under hippoRoot; refuses non-loopback hosts unless HIPPO_REQUIRE_AUTH=1.
+ * Use port: 0 in tests for an ephemeral port. See docs/ARCHITECTURE.md#srcserverbootts. */
 export async function serve(opts: ServeOpts): Promise<ServerHandle> {
   const host = opts.host ?? DEFAULT_SERVER_HOST;
   const requestedPort = opts.port ?? Number(envPort() ?? DEFAULT_SERVER_PORT);
@@ -438,9 +410,8 @@ export async function serve(opts: ServeOpts): Promise<ServerHandle> {
   assertBindable(host);
   await assertNoLiveServer(opts.hippoRoot);
 
-  // The server's start time. Single source of truth: it is returned by every
-  // GET /health response and (below) written into the pidfile, so detectServer
-  // can match the two and prove a pid-reusing impostor is not the real server.
+  // Single source of truth for the start time: returned by GET /health and written into the pidfile, so detectServer can prove a pid-reusing impostor is not
+  // this server.
   const startedAt = new Date().toISOString();
 
   // Open /mcp/stream count per client key, so the cap is per server rather than per process.
@@ -524,9 +495,7 @@ async function listenAndDescribe(server: Server, port: number, host: string, tls
 }
 
 async function stopListening(opts: ServeOpts, server: Server, inflight: Set<ServerResponse>, startedAt: string): Promise<void> {
-  // Remove the pidfile only if it still names this server. A newer server
-  // may have started on this hippoRoot and rewritten the pidfile; an
-  // unconditional unlink here would orphan it.
+  // Remove the pidfile only if it still names this server: a newer server may have rewritten it, and an unconditional unlink would orphan it.
   removePidfileIfOwned(opts.hippoRoot, { pid: process.pid, startedAt });
   await drainAndClose(server, inflight, opts.shutdownDrainMs ?? DEFAULT_SHUTDOWN_DRAIN_MS);
 }

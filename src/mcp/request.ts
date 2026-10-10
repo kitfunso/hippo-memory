@@ -20,12 +20,8 @@ import { runPredictBaserateTool, runStatusTool, runConflictsTool, runResolveTool
 import { sharedStoreRefusal } from './shared-gate.js';
 import { type JsonValue, isJsonString, isJsonObject } from '../util/json.js';
 
-/**
- * Zero-install first run (`npx -y hippo-memory mcp` with no store anywhere):
- * create the global store instead of failing every tool call, and say so on
- * stderr (stdout carries the protocol). `hippo init` in a project later adds
- * a project store, which then takes precedence.
- */
+/** Zero-install first run (`npx -y hippo-memory mcp`, no store anywhere): create the global store instead of failing every tool call, and say so on stderr
+ * (stdout carries the protocol). A later `hippo init` project store takes precedence. */
 function createGlobalStoreOnFirstRun(): string {
   initGlobal();
   const root = getGlobalRoot();
@@ -40,10 +36,7 @@ const MCP_TOKEN_SURFACES = new Map<string, TokenSurface>([
   ['hippo_context', 'mcp_context'],
 ]);
 
-/**
- * Record the memory text a recall or context tool returned. Best-effort: a
- * ledger failure never fails the tool call. Other tools are not recorded.
- */
+/** Records the memory text a recall or context tool returned; best-effort (a ledger failure never fails the call), other tools are not recorded. */
 export async function recordMcpTokens(toolName: string, output: string, ctx?: McpContext): Promise<void> {
   const surface = MCP_TOKEN_SURFACES.get(toolName);
   if (!surface || !output) return;
@@ -103,17 +96,13 @@ async function executeTool(
   args: Record<string, JsonValue>,
   ctx?: McpContext,
 ): Promise<string> {
-  // When a transport hands us a context (HTTP path), trust it: the HTTP
-  // server already resolved hippoRoot from its bound opts and tenantId
-  // from the Bearer token (or the loopback fallback). The stdio path
-  // continues to walk from cwd / fall back to the global root, and to
-  // resolve tenant from HIPPO_TENANT.
+  // With a transport context (HTTP), trust it: hippoRoot comes from the server's bound opts and tenantId from the Bearer (or loopback fallback).
+  // Stdio walks from cwd / the global root and resolves tenant from HIPPO_TENANT.
   const hippoRoot = ctx?.hippoRoot ?? findHippoRoot() ?? createGlobalStoreOnFirstRun();
 
   const config = loadConfig(hippoRoot);
-  // Every store read in this server returns to the caller and is
-  // tenant-isolated. Resolved once per tool call: prefer the transport's
-  // ctx.tenantId so an HTTP Bearer for tenant B doesn't drop to HIPPO_TENANT.
+  // Every store read here is tenant-isolated, resolved once per tool call; prefer the transport's ctx.tenantId so an HTTP Bearer for tenant B
+  // does not drop to HIPPO_TENANT.
   const tenantId = ctx?.tenantId ?? resolveTenantId({});
 
   const handler = TOOL_HANDLERS.get(name)?.handler;
@@ -175,13 +164,8 @@ async function callTool(id: McpRequest['id'], params: McpRequest['params'], ctx?
   };
 }
 
-/**
- * Transport-agnostic MCP dispatcher. Both the stdio loop (below) and the
- * HTTP/SSE transport in src/server.ts route every incoming JSON-RPC message
- * through this single function. Returns null for notifications (no response
- * expected) and a McpResponse otherwise. Errors thrown by `executeTool` are
- * the caller's problem — wrap with try/catch on the transport side.
- */
+/** Transport-agnostic MCP dispatcher: the stdio loop and the HTTP/SSE transport route every JSON-RPC message through it. Returns null for notifications.
+ * Errors thrown by `executeTool` are the caller's problem: wrap with try/catch on the transport side. */
 export async function handleMcpRequest(
   req: McpRequest,
   ctx?: McpContext,

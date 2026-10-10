@@ -46,19 +46,8 @@ import { type Context, ownerOrSubject } from './types.js';
 
 export { oneCopyPerMemory } from './context-select.js';
 
-/**
- * v39: the single ambient-injection admission policy, shared by getContext
- * and the CLI-side ambient-state summary so the two cannot drift.
- *
- * - Secret veto is UNCONDITIONAL: neither crossProject nor
- *   contextProjectIsolation:false re-includes secrets. A flagged row only
- *   injects inside its owning project; flagged rows with no project origin
- *   (''/null) never ambient-inject at all. Explicit recall is unaffected -
- *   recalling a secret is a deliberate act.
- * - Envelope parity: private/quarantine scopes never inject unless `exactScope` names one.
- * - Origin partition: other-project rows are excluded unless
- *   `includeCrossProject`.
- */
+/** The single ambient-injection admission policy, shared by getContext and the CLI ambient-state summary so they cannot drift.
+ * Secret veto is unconditional (flagged rows inject only in their own project); private scopes need `exactScope`, other projects `includeCrossProject`. */
 function ambientAdmitEntry(
   e: MemoryEntry,
   currentProject: ProjectRef,
@@ -72,11 +61,7 @@ function ambientAdmitEntry(
   return classifyOriginProject(e.origin_project, currentProject) !== 'cross-project';
 }
 
-/**
- * The secret half of the ambient policy on its own, for callers
- * that apply their own scope rule. A flagged row is only admitted inside its owning project;
- * flagged rows with no project origin never ambient-inject.
- */
+/** The secret half of the ambient policy alone, for callers with their own scope rule: a flagged row is admitted only inside its owning project. */
 export function ambientSecretAdmit(e: MemoryEntry, currentProject: ProjectRef): boolean {
   if (!detectSecret(e).flagged) return true;
   const origin = e.origin_project;
@@ -162,23 +147,8 @@ interface TaskSections {
   left: number;
 }
 
-/**
- * Assemble a context bundle: recalled memories (pinned-only / strength-sorted
- * fallback / hybrid search) + active task snapshot + session handoff + recent
- * session events. Budget-bounded, tenant-scoped. Mutates `last_retrieval_ids`
- * + emits a 'recall' audit row for non-pinned, non-'*' queries.
- *
- * Behaves like the pre-extraction `cmdContext` data-loading + selection
- * pipeline. CLI presentation (markdown / json / additional-context rendering)
- * stays in `cli.ts`.
- *
- * Tenant scope: all `loadAllEntries` / snapshot / handoff / events reads use
- * `ctx.tenantId`. Cross-tenant rows are filtered out.
- *
- * @returns An empty result (`entries: []`, snapshot/handoff/events undefined)
- * when there's nothing to surface (no memories AND no snapshot AND no handoff
- * AND no recent events).
- */
+/** Assembles a budget-bounded, tenant-scoped context bundle; mutates `last_retrieval_ids` and emits a 'recall' audit row for non-pinned, non-'*' queries.
+ * Returns an empty result when there are no memories, snapshot, handoff or recent events. CLI rendering stays in `cli.ts`. */
 export async function getContext(
   ctx: Context,
   opts: ContextOpts = {},

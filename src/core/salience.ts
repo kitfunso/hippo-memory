@@ -1,10 +1,4 @@
-/**
- * Salience gate — decides at memory creation time whether content is worth
- * storing at full strength, should start weakened, or should be skipped.
- *
- * Inspired by the biological salience network (anterior insula + dACC):
- * not everything that enters working memory deserves long-term storage.
- */
+/** Salience gate: decides at memory creation whether content is stored at full strength, starts weakened, or is skipped. */
 
 import type { MemoryEntry } from './memory.js';
 import { textOverlap } from '../util/tokenize.js';

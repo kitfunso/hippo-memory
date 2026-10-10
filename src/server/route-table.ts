@@ -50,16 +50,8 @@ import { parseJsonBody } from './validation.js';
 import type { AddonRoute, ResolvedServeOpts, Route, RouteRequest } from './types.js';
 import type { JsonValue } from '../util/json.js';
 
-// Review patch #2: explicit allow-list for unauthenticated /v1/* routes.
-// New unauth routes MUST be added here AND get a corresponding entry in
-// tests/server-bearer-lockdown.test.ts. Do not gate auth elsewhere by
-// `path.startsWith` — pattern-positional auth is bypass-by-accident.
-//
-// The route handlers consult `isPublicRoute` before invoking
-// `buildContextWithAuth` / `requireAuth`. Adding a route here without
-// adding the corresponding `isPublicRoute` short-circuit in a handler is
-// a no-op (auth still applies), so the failure mode is fail-closed.
-// The only other unauthenticated paths are ServeOpts.publicJson's: GET only, checked at boot by assertPublicJson.
+// Explicit allow-list for unauthenticated /v1/* routes: add a new one here AND in tests/server-bearer-lockdown.test.ts; never gate auth by `path.startsWith`.
+// Handlers check `isPublicRoute` before auth, so an entry without that check is a no-op (fail-closed); other open paths are ServeOpts.publicJson GETs.
 const PUBLIC_ROUTES: ReadonlySet<string> = new Set([
   'POST /v1/connectors/slack/events',
   'POST /v1/connectors/github/events',

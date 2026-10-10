@@ -19,26 +19,14 @@ import type { Context } from './types.js';
 
 const touchable = (ctx: Context): SqlFragment => touchableScopeSql('', personalScopeOf(ctx.actor));
 
-/**
- * A tenant's dormant memories (src/store/dormant.ts): what sleep moved out of
- * active memory instead of deleting, when `dormant.enabled` is on. Newest
- * first; `opts.query` keeps rows containing every term (case-insensitive).
- */
+/** A tenant's dormant memories (src/store/dormant.ts): what sleep moved out of active memory when `dormant.enabled` is on. Newest first;
+ * `opts.query` keeps rows containing every term (case-insensitive). */
 export function listDormant(ctx: Context, opts: ListDormantOpts = {}): DormantMemory[] {
   return loadDormantMemories(ctx.hippoRoot, ctx.tenantId, opts, touchable(ctx));
 }
 
-/**
- * Bring a dormant memory back into active memory. It returns as if just
- * recalled, with a full half-life. A row audit repair set aside returns
- * `verified`, so no quality check judges it again. Every other field is the
- * snapshot taken when it went dormant.
- *
- * Throws when the tenant has no dormant memory with that id (another
- * tenant's id, or another person's personal row, reads the same way), when a live memory already holds the id,
- * and RejectedValueError when the value has been rejected since. On any
- * throw the dormant copy stays where it is.
- */
+/** Restores a dormant memory as if just recalled, with a full half-life; a row set aside by audit repair returns `verified`.
+ * Throws if the tenant has no such dormant id or a live memory holds it, and RejectedValueError if the value was since rejected (the dormant copy stays). */
 export function restoreDormant(ctx: Context, id: string): MemoryEntry {
   const outcome = restoreDormantMemory(ctx.hippoRoot, {
     tenantId: ctx.tenantId,
@@ -55,11 +43,8 @@ export function restoreDormant(ctx: Context, id: string): MemoryEntry {
 }
 
 function reviveSnapshot(ctx: Context, dormant: DormantSnapshot, now: Date): MemoryEntry {
-  // Dormant rows are long-lived, so a snapshot can predate a field added
-  // later: createMemory supplies a default for anything it lacks, then
-  // the snapshot overrides every field it does carry, content included.
-  // (The placeholder only satisfies createMemory's minimum length, so a
-  // legacy row shorter than 3 chars can still be restored.)
+  // A snapshot can predate a field added later: createMemory supplies defaults, then the snapshot overrides every field it carries.
+  // The placeholder content only meets createMemory's minimum length, so a legacy row under 3 chars still restores.
   const revived: MemoryEntry = {
     ...createMemory('dormant snapshot defaults', { baseHalfLifeDays: loadConfig(ctx.hippoRoot).defaultHalfLifeDays }),
     ...dormant.entry,
@@ -69,11 +54,7 @@ function reviveSnapshot(ctx: Context, dormant: DormantSnapshot, now: Date): Memo
   return stampOriginProject(ctx.hippoRoot, { ...revived, strength: calculateStrength(revived, now) });
 }
 
-/**
- * Permanently delete a dormant memory: the explicit "forget it for good"
- * that dormant storage leaves to the user. Throws when the tenant has no
- * dormant memory with that id.
- */
+/** Permanently deletes a dormant memory, the explicit "forget it for good"; throws when the tenant has no dormant memory with that id. */
 export function forgetDormant(ctx: Context, id: string): void {
   const forgotten = forgetDormantMemory(ctx.hippoRoot, { tenantId: ctx.tenantId, id, actor: ctx.actor.subject, admit: touchable(ctx) });
   if (!forgotten) throw new NotFoundError(`dormant memory not found: ${id}`);

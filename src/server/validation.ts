@@ -4,17 +4,10 @@ import type { Context, RememberOpts } from '../api/index.js';
 import { HttpError, MAX_ID_LEN, readBody } from '../util/http-util.js';
 import { type JsonValue, isJsonString, isJsonObject } from '../util/json.js';
 
-// Runtime membership check for a `ReadonlySet<T>` of string-literal union
-// members, used at every `body` field validated against a VALID_* set below.
-// Set<T>.has(value: T) itself gives no narrowing (its parameter type is T,
-// not a type predicate) so callers previously needed a separate `as T` cast
-// at both the check and the later usage; this helper is the one place that
-// assertion lives, so downstream call sites narrow via the `value is T`
-// return instead of re-asserting.
+// Runtime membership check for a `ReadonlySet<T>` of string-literal members: Set<T>.has gives no narrowing, so this is the one place the `as T` assertion lives
+// and callers narrow via the `value is T` return.
 export function isSetMember<T extends string>(set: ReadonlySet<T>, value: string): value is T {
-  // SAFETY: `value as T` is discarded unless `set.has` (the real runtime
-  // check) confirms membership; the `value is T` return type is what
-  // performs the actual narrowing for callers.
+  // SAFETY: `value as T` is discarded unless `set.has` (the real runtime check) confirms membership; the `value is T` return type does the narrowing.
   return set.has(value as T);
 }
 
@@ -80,17 +73,8 @@ export function getCallerProject(body: Record<string, JsonValue>): RememberOpts[
   return { name: v.name, aliases: v.aliases };
 }
 
-/**
- * Charset + length validation for `:id` route captures. Routes call
- * this immediately after `matchPath` to reject empty / overlong / illegal
- * ids with a useful 400 instead of silently falling through to "not found".
- *
- * Allowed charset matches all production id shapes Hippo emits: `mem_<hex>`,
- * `sum_<hex>`, `sess-<id>`, Slack bot ids like `B01ABCD`, etc. The `:` and
- * `.` are allowed for forward-compat. The `/` is intentionally absent —
- * Hippo never emits ids with slashes, and `rejectEncodedSlash` already
- * stops `%2F`-smuggled ones at the front door.
- */
+/** Charset + length validation for `:id` captures, called right after `matchPath` so empty/overlong/illegal ids get a 400, not "not found".
+ * Allows every production id shape (`mem_<hex>`, `sess-<id>`, Slack ids) plus `:` and `.`; no `/`, since `rejectEncodedSlash` stops `%2F` smuggling. */
 const ID_SEGMENT_RE = /^[A-Za-z0-9_:.-]+$/;
 export function validateIdSegment(id: string, fieldName: string): void {
   if (id.length === 0) throw new HttpError(400, `${fieldName} is required`);

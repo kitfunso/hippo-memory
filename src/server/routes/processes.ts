@@ -8,9 +8,7 @@ import { type JsonValue, isJsonString } from '../../util/json.js';
 import { saveFor } from '../../api/objects.js';
 import { closeRoute, getRoute, listRoute, optionalString, requiredString, supersedeRoute, type VersionedRouteConfig } from './object-routes.js';
 
-// HTTP-boundary validation for a process `steps` body (untrusted). Returns the
-// step strings (saveProcess re-validates + trims, this is the fail-fast 400
-// gate).
+// HTTP-boundary validation for an untrusted process `steps` body; saveProcess re-validates and trims, this is the fail-fast 400 gate.
 function validateProcessStepsBody(raw: JsonValue | undefined): string[] {
   if (raw === undefined || raw === null) return [];
   if (!Array.isArray(raw)) {
@@ -50,17 +48,8 @@ const processRoutes: VersionedRouteConfig<'process', SaveProcessOpts> = {
   },
 };
 
-// ── processes (first-class object) ──
-//
-// 5 routes: POST /v1/processes (new; body processName + steps[] + description),
-// GET /v1/processes (list, status filter), GET /v1/processes/:id (show),
-// POST /v1/processes/:id/supersede (active -> superseded by a new version; body
-// steps[] + changeSummary + description; reuses the predecessor's name),
-// POST /v1/processes/:id/close (active -> closed). Bearer-authed + tenant-scoped
-// via buildContextWithAuth. status validated against VALID_PROCESS_STATES. DoS
-// caps: processName/description/changeSummary MAX_SHORT_FIELD_LEN, steps MAX_PROCESS_STEPS x MAX_PROCESS_STEP_LEN
-// (validateProcessStepsBody). Mirrors /v1/decisions; the delta lifecycle is the
-// decision supersede path.
+// Routes: /v1/processes (create, list, show, supersede, close), mirroring /v1/decisions; supersede creates a new version that reuses the predecessor's name.
+// DoS caps: processName/description/changeSummary MAX_SHORT_FIELD_LEN, steps MAX_PROCESS_STEPS x MAX_PROCESS_STEP_LEN (validateProcessStepsBody).
 export async function handleCreateProcess(rr: RouteRequest): Promise<void> {
   const ctx = await buildContextWithAuth(rr.req, rr.opts);
   const body = await parseJsonBody(rr.req, ctx);

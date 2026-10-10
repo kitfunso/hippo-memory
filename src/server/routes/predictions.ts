@@ -10,13 +10,8 @@ import type { RouteRequest } from '../types.js';
 import { isSetMember, MAX_SHORT_FIELD_LEN, parseJsonBody, parseListLimit } from '../validation.js';
 import { isJsonString, isJsonNumber } from '../../util/json.js';
 
-// ── prediction first-class object ──
-//
-// 4 routes: POST /v1/predictions (create), GET /v1/predictions (list),
-// GET /v1/predictions/:id (show), POST /v1/predictions/:id/close (close).
-// All Bearer-authed + tenant-scoped via buildContextWithAuth. closure_state
-// validated against VALID_CLOSURE_STATES (3 states). DoS caps on claim
-// (MAX_SHORT_FIELD_LEN chars) + closureNote (2048 chars).
+// Routes: /v1/predictions (create, list, show, close), Bearer-authed and tenant-scoped; closure_state is validated against VALID_CLOSURE_STATES.
+// DoS caps: claim MAX_SHORT_FIELD_LEN chars, closureNote 2048.
 export async function handleCreatePrediction({ req, res, opts }: RouteRequest): Promise<void> {
   const ctx = await buildContextWithAuth(req, opts);
   const body = await parseJsonBody(req, ctx);
@@ -85,10 +80,8 @@ export async function handleListPredictions({ req, res, opts, query }: RouteRequ
   sendJson(res, 200, { predictions: page.items, next_cursor: page.nextCursor });
 }
 
-// Reference-class / planning-fallacy detector.
-// Order matters: this must match BEFORE /v1/predictions/:id since 'stats'
-// is not a number — the :id regex requires \d+ so they don't conflict,
-// but routing this first avoids the dispatch order risk.
+// Reference-class / planning-fallacy detector; registered BEFORE /v1/predictions/:id so dispatch order cannot matter ('stats' is not a number, but routing
+// it first is safer).
 export async function handlePredictionStats({ req, res, opts, query }: RouteRequest): Promise<void> {
   const classTag = query.get('class');
   if (!classTag || classTag.length === 0) {

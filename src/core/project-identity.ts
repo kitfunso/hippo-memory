@@ -9,25 +9,8 @@ import { errorMessage, log } from '../util/log.js';
 import { originRemoteId, projectFileId } from './project-remote.js';
 import { realpathOrResolve } from '../util/real-path.js';
 
-/**
- * Project identity resolution for memory scope isolation.
- *
- * Resolution rules:
- * - The nearest ancestor of cwd (including cwd itself) containing a `.hippo`
- *   directory is the project root; if none exists, the nearest ancestor
- *   containing `.git` (directory or worktree file).
- * - The user home directory is NEVER a project, even though it contains the
- *   global store at `~/.hippo`. Reaching home or the temp root (inside home on Windows) ends the walk.
- * - A directory with no marker anywhere up the walk is NOT a project: it
- *   resolves to the user-global identity (empty name), so memories written
- *   there stay injectable everywhere (matches pre-isolation behavior).
- * - A project's name is its id: `.hippo-project.json` at the root, else the
- *   checkout's normalised `origin` remote, else the folder rule (legacyName),
- *   so two repos in folders of one name stay apart.
- *
- * NOTE: this module must stay free of imports from shared.ts / store.ts /
- * api.ts so any of them can import it without creating a cycle.
- */
+/** Project = nearest ancestor of cwd with `.hippo` (else `.git`); home and the temp root never are, and no marker means user-global (empty name).
+ * Name: `.hippo-project.json`, else the normalised `origin`, else the folder name. Must not import shared.ts / store.ts / api/index.ts (cycle). */
 
 /** The project a working directory belongs to. */
 export interface ProjectIdentity {
@@ -44,11 +27,8 @@ export interface ProjectIdentity {
   isHome: boolean;
 }
 
-/**
- * Options for resolveProjectIdentity. Both fields are test seams; results are
- * not cached when either is set. stopDir bounds the upward walk so tests in a
- * temp sandbox never escape it and hit the host machine's real markers.
- */
+/** Options for resolveProjectIdentity. Both fields are test seams and disable caching;
+ * stopDir bounds the upward walk so tests in a temp sandbox never reach the host's real markers. */
 export interface ResolveProjectIdentityOpts {
   homeDir?: string;
   stopDir?: string;
@@ -100,9 +80,8 @@ function isUnder(child: string, parent: string): boolean {
   return false;
 }
 
-/** A `.hippo` marker must be a DIRECTORY (a store) - a stray file named
- *  `.hippo` must not turn its parent into a project. `.git` stays existsSync
- *  because worktrees legitimately use a `.git` FILE. */
+/** A `.hippo` marker must be a DIRECTORY (a store), so a stray file named `.hippo` cannot make its parent a project;
+ *  `.git` stays existsSync because worktrees use a `.git` FILE. */
 function isDirectoryAt(p: string): boolean {
   try {
     return fs.statSync(p).isDirectory();
@@ -112,10 +91,7 @@ function isDirectoryAt(p: string): boolean {
   }
 }
 
-/**
- * Resolve the project identity for a working directory.
- * Defaults to process.cwd(). Results are cached per resolved input path.
- */
+/** Resolves the project identity for a working directory (default process.cwd()); results are cached per resolved input path. */
 export function resolveProjectIdentity(
   cwd?: string,
   opts?: ResolveProjectIdentityOpts,
@@ -255,14 +231,8 @@ export function originInSql(names: readonly string[], column = 'origin_project')
   return names.length === 0 ? '0' : `${column} IN (${names.map(() => '?').join(', ')})`;
 }
 
-/**
- * v39 memory scope isolation: classify a memory's origin_project against the
- * active project. An empty current id means the session is not in a project
- * (home dir or markerless cwd) - everything is in scope there, matching
- * pre-isolation behavior. NULL/undefined origin means no known project (a legacy
- * row, or a shared-store write that named none) and is treated as cross-project
- * (deny by default) - the safe direction for a security partition.
- */
+/** Classifies a memory's origin_project against the active project. An empty current id (home or markerless cwd) puts everything in scope;
+ * NULL/undefined origin (legacy row, or a shared-store write naming none) counts as cross-project: deny by default for a security partition. */
 export function classifyOriginProject(
   origin: string | null | undefined,
   current: ProjectRef,
@@ -273,12 +243,8 @@ export function classifyOriginProject(
   return projectNames(current).includes(origin) ? 'project' : 'cross-project';
 }
 
-/**
- * The global Hippo store directory, resolved the same way shared.ts does:
- * $HIPPO_HOME > $XDG_DATA_HOME/hippo > ~/.hippo. Lives here (leaf module) so
- * db.ts migrations can use it without importing shared.ts (store.ts cycle);
- * shared.getGlobalRoot delegates to this.
- */
+/** The global Hippo store directory ($HIPPO_HOME > $XDG_DATA_HOME/hippo > ~/.hippo); getGlobalRoot (sharing/global-store.ts) returns it.
+ * Leaf module so store migrations can use it without importing sharing/ (store cycle). */
 export function resolveGlobalRootDir(): string {
   const hippoHome = envHippoHome();
   if (hippoHome) return hippoHome;
@@ -287,24 +253,14 @@ export function resolveGlobalRootDir(): string {
   return path.join(os.homedir(), '.hippo');
 }
 
-/**
- * True when `p` IS the global store root. Used by the v39 migration so a
- * global store whose parent chain happens to contain `.git`/`.hippo`
- * (git-managed HIPPO_HOME, dotfiles setups) still backfills as user-global
- * ('') instead of being stamped with the surrounding repo's name - which
- * would hide the user's entire global corpus from every project.
- */
+/** True when `p` IS the global store root, so a global store whose parent chain contains `.git`/`.hippo` (git-managed HIPPO_HOME) still backfills as
+ * user-global ('') instead of being stamped with the surrounding repo's name, which would hide the global corpus from every project. */
 export function isGlobalStoreRoot(p: string): boolean {
   return samePath(realpathOrResolve(path.resolve(p)), realpathOrResolve(resolveGlobalRootDir()));
 }
 
-/**
- * Parse a memory's origin from its provenance `source` string, mirroring the
- * v39 migration's evidence rules: `shared:<project>:<ts>` and
- * `promoted:<localRoot>` identify the owning project; the user home dir's
- * basename maps to '' (user-global). Returns null when the source carries no
- * origin evidence. Pure string logic - recorded paths may no longer exist.
- */
+/** Parses a memory's origin from its provenance `source`: `shared:<project>:<ts>` and `promoted:<localRoot>` name the owning project; the home dir basename
+ * maps to '' (user-global). Returns null without origin evidence. Pure string logic, since recorded paths may no longer exist. */
 export function originFromSource(
   source: string | null | undefined,
   homeName?: string,

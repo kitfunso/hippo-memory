@@ -1,47 +1,19 @@
-/**
- * Reciprocal Rank Fusion (Cormack, Clarke, and Buettcher 2009).
- *
- * Fuses N ranked candidate lists into a single ordering by summing
- * weighted 1/(k + rank) contributions per candidate. The constant K is
- * the canonical 60 from the original paper and the value already in use
- * across hippo's `hybridSearch`. Do NOT tune K without an
- * explicit cross-corpus eval — it is calibrated against IR benchmarks
- * and works robustly across BM25/dense/cross-encoder rank-list shapes.
- *
- * Generic over the candidate id type so this helper can be shared by
- * `src/search.ts::hybridSearch` (T = number, idx into MemoryEntry[]) and
- * the LongMemEval hybrid retrieve benchmark (T = string, session_id).
- *
- * Behaviour MUST stay byte-identical to the inline implementation that
- * lived in `src/search.ts:354-374` before extraction (commit ab6c5eb).
- * The `tests/rrf.test.ts` suite is the contract.
- */
+/** Reciprocal Rank Fusion (Cormack, Clarke and Buettcher 2009): fuses N ranked lists by summing weighted 1/(k + rank) per candidate. K is the standard 60,
+ * the value hybridSearch already uses; do NOT tune it without a cross-corpus eval. Generic over the id type (hybridSearch uses number, the LongMemEval
+ * benchmark string). Behaviour MUST stay byte-identical to the inline hybridSearch code it replaced; tests/rrf.test.ts is the contract. */
 
 export const RRF_K = 60;
 
 export interface RrfFuseOptions {
   /** Smoothing constant. Default RRF_K = 60. */
   k?: number;
-  /**
-   * Rank assigned to candidates absent from a list. Default is
-   * `max(rankedLists.map(l => l.length)) + 1` — the convention used in
-   * the pre-extraction `hybridSearch` code (`entries.length + 1`).
-   */
+  /** Rank assigned to candidates absent from a list; default `max(rankedLists.map(l => l.length)) + 1`, the convention hybridSearch used (`entries.length +
+   * 1`). */
   absentRank?: number;
 }
 
-/**
- * Fuse N ranked lists into a single Map of candidate id -> RRF score.
- *
- * @param rankedLists  Each inner array is candidates in descending-score order.
- *                     Element at index 0 is rank 1; index 1 is rank 2; etc.
- * @param weights      Per-list weights. weights.length === rankedLists.length.
- *                     Weights are summed without normalisation — pass {0.5, 0.5}
- *                     for symmetric fusion or {0.2, 0.8} for asymmetric.
- * @param options      Optional k override + absentRank override.
- * @returns            Map from candidate id to fused RRF score. Sort descending
- *                     by value to get the fused ordering.
- */
+/** Fuses N ranked lists (each in descending-score order; index 0 is rank 1) into a Map of candidate id -> RRF score; sort by value descending for the fused
+ * order. `weights` has one entry per list and is summed without normalisation; `options` overrides k and absentRank. */
 export function rrfFuse<T>(
   rankedLists: ReadonlyArray<ReadonlyArray<T>>,
   weights: ReadonlyArray<number>,

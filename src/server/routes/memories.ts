@@ -106,12 +106,8 @@ export async function handleForgetMemory({ req, res, opts }: RouteRequest, idMat
   return;
 }
 
-// POST /v1/outcome — apply a positive/negative outcome to memory ids.
-// Body: {ids?: string[], good: boolean}. If ids omitted, falls back to
-// the last-recall path (api.outcomeForLastRecall); returned shape is
-// {applied, ids} in that case so callers can disambiguate "no recent
-// recall" from "all ids skipped". Each applied id writes one audit_log
-// row (op='outcome', actor from Bearer).
+// POST /v1/outcome: applies a positive/negative outcome to memory ids; without ids it falls back to the last-recall path (api.outcomeForLastRecall)
+// and returns {applied, ids}, so callers can tell "no recent recall" from "all ids skipped". Each applied id writes one audit_log row (op='outcome').
 export async function handleApplyOutcome({ req, res, opts }: RouteRequest): Promise<void> {
   const ctx = await buildContextWithAuth(req, opts);
   const body = await parseJsonBody(req, ctx);
@@ -129,10 +125,8 @@ export async function handleApplyOutcome({ req, res, opts }: RouteRequest): Prom
     if (!idsRaw.every(isNonEmptyId)) {
       throw new HttpError(400, 'ids must be an array of non-empty strings');
     }
-    // DoS cap on ids.length. Each id triggers ~3 DB ops (readEntry +
-    // writeEntry + appendAuditEvent). N=1000 keeps per-request work bounded
-    // to sub-second wall time on SQLite hot path. Cap BEFORE buildContextWithAuth
-    // so attack traffic doesn't pay the api-key lookup cost.
+    // DoS cap on ids.length (each id costs ~3 DB ops): N=1000 keeps per-request work sub-second on SQLite.
+    // Checked BEFORE buildContextWithAuth so attack traffic does not pay the api-key lookup.
     if (idsRaw.length > 1000) {
       throw new HttpError(400, 'ids exceeds 1000-id cap');
     }
@@ -150,29 +144,16 @@ export async function handleApplyOutcome({ req, res, opts }: RouteRequest): Prom
   return;
 }
 
-// POST /v1/sleep — host-wide consolidation pipeline (consolidate + dedup +
-// audit + share + ambient). serve() refuses non-loopback hosts at boot, AND
-// this per-request loopback assertion makes the host-wide semantic fail-
-// closed regardless of any future serve() boot-config change. Body:
-// {dry_run?, no_share?}. Returns SleepResult JSON.
-//
-// Tenant scope (Episode A follow-up tracked in TODOS.md): api.sleep operates
-// on the WHOLE hippoRoot (cross-tenant by design, matching CLI cmdSleep).
-// The loopback-only guard is the trust boundary today. Future non-loopback
-// serving must also zero the cross-tenant counters for other tenants.
+// POST /v1/sleep: host-wide consolidation (consolidate, dedup, audit, share, ambient); api.sleep spans the WHOLE hippoRoot, cross-tenant by design, so the
+// loopback-only guard is the trust boundary; non-loopback serving must also zero cross-tenant counters. Body {dry_run?, no_share?}; returns SleepResult JSON.
 export async function handleSleep({ req, res, opts }: RouteRequest): Promise<void> {
-  // Defensive per-request loopback guard. Uses the canonical isLoopback()
-  // helper above so any future extension (additional mapped/IPv6 forms,
-  // NAT64 prefixes) flows through without drift. serve()'s boot-time host
-  // check is the primary trust boundary; this is belt-and-suspenders.
+  // Defensive per-request loopback guard using isLoopback(), so future mapped/IPv6/NAT64 forms flow through without drift;
+  // serve()'s boot-time host check is the primary trust boundary.
   if (!isLoopback(req.socket.remoteAddress)) {
     throw new HttpError(403, '/v1/sleep is loopback-only (host-wide consolidation; see CHANGELOG v1.11.4)');
   }
-  // Admin-role gate. Forward-defensive: exists today
-  // under loopback-only enforcement (loopback fallback is admin by default;
-  // any Bearer-authed caller now carries an explicit role from the api_keys
-  // row). When non-loopback serving lands, this gate is the actual auth
-  // boundary on host-wide sleep.
+  // Admin-role gate, forward-defensive: loopback fallback is admin by default and Bearer callers carry an explicit role from the api_keys row;
+  // when non-loopback serving lands, this gate is the real auth boundary on host-wide sleep.
   const sleepCtx = await buildContextWithAuth(req, opts);
   // Sleep consolidates every tenant under hippoRoot, so it is a cross-tenant action.
   assertCrossTenantAdmin(sleepCtx, '/v1/sleep');

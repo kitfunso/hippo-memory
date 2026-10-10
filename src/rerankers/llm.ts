@@ -17,17 +17,8 @@ interface FetchHeaders {
   authorization?: string;
 }
 
-/**
- * Track 3 reranker: listwise LLM rerank. Uses a customer-supplied
- * OpenAI-compatible endpoint. Gated on HIPPO_LLM_RERANKER_URL to prevent
- * accidental cost.
- *
- * Skeleton only; full characterisation is deferred.
- *
- * Timeout: defaults to 30s for the whole call, retries included; overridable
- * via HIPPO_LLM_RERANKER_TIMEOUT_MS. On timeout or any failure the reranker
- * falls back to identity ordering; recall must not hang on a wedged endpoint.
- */
+/** Track 3 reranker (skeleton): listwise LLM rerank on a customer-supplied OpenAI-compatible endpoint, gated on HIPPO_LLM_RERANKER_URL against accidental cost.
+ * Timeout is 30s for the whole call, retries included (HIPPO_LLM_RERANKER_TIMEOUT_MS); any failure falls back to identity ordering, so recall never hangs. */
 export function createLlmReranker(): RerankerFn {
   const outage = createOutageWarning('llm', 'keeping the input order');
   return async (query, results, options?: RerankerOptions): Promise<RerankResult[]> => {

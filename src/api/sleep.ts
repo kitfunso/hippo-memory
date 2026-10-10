@@ -4,10 +4,6 @@ import type { AmbientState } from '../core/ambient.js';
 import type { Context } from './types.js';
 import { runSleep } from './sleep-run.js';
 
-// ---------------------------------------------------------------------------
-// sleep
-// ---------------------------------------------------------------------------
-
 /** Options for `sleep`, one consolidation cycle on a SQLite store that returns counts; unlike `hippo sleep` it skips the auto-learn step. */
 export interface SleepOpts {
   /** Report what a sleep would change without applying it; sharing, the ambient summary and the graph refresh are skipped. */
@@ -20,17 +16,10 @@ export interface SleepOpts {
 export interface SleepResult {
   active: number;
   removed: number;
-  /**
-   * Faded memories the decay pass moved to the dormant store instead of
-   * deleting (config `dormant.enabled`). Absent when 0. Per-invocation
-   * activity counter, same class as `removed`.
-   */
+  /** Faded memories the decay pass moved to the dormant store instead of deleting (config `dormant.enabled`); absent when 0. Per-invocation counter, like
+   * `removed`. */
   dormant?: number;
-  /**
-   * Dormant memories deleted for good this sleep because they outlived
-   * `dormant.retentionDays`. Absent when 0. Same per-invocation class as
-   * `removed`.
-   */
+  /** Dormant memories deleted for good this sleep for outliving `dormant.retentionDays`; absent when 0. Per-invocation counter, like `removed`. */
   dormantExpired?: number;
   mergedEpisodic: number;
   newSemantic: number;
@@ -43,26 +32,13 @@ export interface SleepResult {
   };
   audit?: { errorsRemoved: number; warningCount: number };
   shared?: number;
-  /**
-   * Count of memories the auto-share secret veto withheld this sleep
-   * — rows that passed every other admission gate (transfer score,
-   * not-already-global) and were blocked solely by `detectSecret`. Absent
-   * when 0 or when auto-share did not run.
-   */
+  /** Memories the auto-share secret veto withheld: rows that passed every other gate but `detectSecret`; absent when 0 or auto-share did not run. */
   secretSkipped?: number;
-  /**
-   * Count of auto-share candidates the GLOBAL store's rejection
-   * tombstone refused this sleep; copy paths must not let one rejected
-   * candidate abort the batch. Absent when 0 or when auto-share did not run.
-   */
+  /** Auto-share candidates the GLOBAL store's rejection tombstone refused (one must not abort the batch); absent when 0 or auto-share did not run. */
   rejectedSkipped?: number;
   ambient?: AmbientState | null;
-  /**
-   * Graph re-extraction totals across the tenants rebuilt
-   * this sleep. Absent when no tenant was dirty, and under dryRun (the graph
-   * phase runs only on a real sleep). Cross-tenant aggregate, one reason
-   * /v1/sleep stays loopback-only.
-   */
+  /** Graph re-extraction totals across tenants rebuilt this sleep; absent when none was dirty or under dryRun.
+   * Cross-tenant aggregate: one reason /v1/sleep stays loopback-only. */
   graph?: { tenants: number; entities: number; relations: number };
   details?: string[];
 }

@@ -22,16 +22,8 @@ function supersededId(body: Record<string, JsonValue>): number | undefined {
   return raw;
 }
 
-// ── decisions (first-class object) ──
-//
-// 5 routes: POST /v1/decisions (create, optional supersedesDecisionId),
-// GET /v1/decisions (list, status filter), GET /v1/decisions/:id (show),
-// POST /v1/decisions/:id/supersede (create a successor + supersede :id),
-// POST /v1/decisions/:id/close (retire). Bearer-authed + tenant-scoped via
-// buildContextWithAuth. status validated against VALID_DECISION_STATES.
-// DoS caps: text and context MAX_SHORT_FIELD_LEN. The HTTP surface is
-// new (no legacy --supersedes <memory-id> constraint), so it supersedes by
-// table id and never weakens a memory mirror.
+// Routes: /v1/decisions (create, list, show, supersede, close), Bearer-authed and tenant-scoped; status is validated against VALID_DECISION_STATES.
+// The HTTP surface has no legacy --supersedes <memory-id> constraint, so it supersedes by table id and never weakens a memory mirror.
 export async function handleCreateDecision(rr: RouteRequest): Promise<void> {
   const { req, res } = rr;
   const ctx = await buildContextWithAuth(req, rr.opts);

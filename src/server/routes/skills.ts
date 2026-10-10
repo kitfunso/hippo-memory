@@ -31,18 +31,8 @@ const skillRoutes: VersionedRouteConfig<'skill', SaveSkillOpts> = {
   },
 };
 
-// ── skills (first-class object, executable/exportable) ──
-//
-// 6 routes: POST /v1/skills (new; body skillName + instructions + trigger?),
-// GET /v1/skills (list, status filter; shared parseListLimit), GET
-// /v1/skills/export (renders ACTIVE skills as an AGENTS.md/CLAUDE.md markdown
-// block -> {markdown}; literal 'export' is non-numeric so the /:id (\d+) route
-// cannot capture it, but it is ordered first regardless), GET /v1/skills/:id,
-// POST /v1/skills/:id/supersede, POST /v1/skills/:id/close. DoS caps:
-// skillName 256, instructions 8192, trigger 1024, changeSummary MAX_SHORT_FIELD_LEN. The store
-// validates + throws; the boundary maps validation -> 400, not-found -> 404,
-// not-active -> 409. Mirrors /v1/processes; "executable" = exportable
-// instruction (no code exec).
+// Routes: /v1/skills (create, list, export, show, supersede, close), mirroring /v1/processes; "executable" means exportable instruction (no code exec).
+// GET /v1/skills/export renders ACTIVE skills as a markdown block for AGENTS.md or CLAUDE.md and is ordered before /:id.
 export async function handleCreateSkill(rr: RouteRequest): Promise<void> {
   const ctx = await buildContextWithAuth(rr.req, rr.opts);
   const body = await parseJsonBody(rr.req, ctx);

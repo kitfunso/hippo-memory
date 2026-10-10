@@ -9,10 +9,8 @@ export interface ServerHandle {
   port: number;
   url: string;
   stop: () => Promise<void>;
-  /** Introspection-only: the underlying node:http Server, exposed so
-   *  tests can assert keep-alive/headers timeout hardening without reaching
-   *  into serve()'s closure. Additive field — do not depend on it for control
-   *  flow outside tests. */
+  /** Introspection-only: the underlying node:http Server, so tests can assert keep-alive/headers timeout hardening without reaching into serve()'s closure.
+   * Do not use for control flow. */
   server?: import('node:http').Server;
 }
 
@@ -98,9 +96,8 @@ export interface RouteRequest {
 /** A route's store status: a `storeReady` group, a `sqliteOnly` reason, or neither while it waits for a group; never both. */
 type StoreStatus = { storeReady?: StoreGroup; sqliteOnly?: never } | { sqliteOnly: string; storeReady?: never };
 
-/** One /v1 route: an exact path, a matchPath pattern, or a regex, each paired with the handler for one method.
- * Under another store it runs only when that store has its `storeReady` group; a `sqliteOnly` route never does.
- *  `loop: 'off'` declares that the route's SQLite work runs on a worker thread, so its handler opens no hippo.db on the server thread. */
+/** One /v1 route: an exact path, a matchPath pattern, or a regex, each paired with one method's handler. Under another store it runs only with its
+ * store's `storeReady` group; `loop: 'off'` runs its SQLite work on a worker thread, so the handler opens no hippo.db on the server thread. */
 export type Route = { method: string; loop?: 'off' } & StoreStatus & (
   | { path: string; handler: (r: RouteRequest) => Promise<void> }
   | { pattern: string; handler: (r: RouteRequest, params: Record<string, string>) => Promise<void> }

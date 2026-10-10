@@ -12,11 +12,8 @@ export async function runRememberTool({ args, ctx, hippoRoot, config, tenantId }
   const tags: string[] = [];
   if (args.error) tags.push('error');
   if (args.tag) tags.push(String(args.tag));
-  // Route through api.ts so audit_log captures the caller identity
-  // uniformly with CLI/REST: the auth-resolved ctx.actor under HTTP-MCP,
-  // 'mcp' for stdio (no ctx). api.ts.remember writes the memory + audit
-  // row in one transaction-friendly path; we re-read the entry to surface
-  // the half-life used in the MCP human-readable response.
+  // Route through api/index.ts so audit_log captures the caller identity like CLI/REST: the auth-resolved ctx.actor under HTTP-MCP, 'mcp' for stdio.
+  // The entry is re-read to surface the half-life used in the MCP response.
   const apiCtx: ApiContext = {
     hippoRoot,
     tenantId,
@@ -46,10 +43,8 @@ export async function runOutcomeTool({ args, ctx, hippoRoot, tenantId }: ToolCal
   const ids = lastRecalledIds.get(clientKey) ?? [];
   if (ids.length === 0) return 'No recent recalls to apply outcome to.';
 
-  // Route through src/api/index.ts so audit_log captures the caller identity
-  // (auth-resolved ctx.actor under HTTP-MCP, 'mcp' for stdio) and tenant
-  // scoping is enforced uniformly (same surface as recall/remember).
-  // outcome() also handles cross-tenant id skip silently.
+  // Route through src/api/index.ts so audit_log captures the caller identity (auth-resolved ctx.actor under HTTP-MCP, 'mcp' for stdio) and tenant scoping is
+  // uniform; outcome() also skips cross-tenant ids silently.
   const apiCtx: ApiContext = {
     hippoRoot,
     tenantId,

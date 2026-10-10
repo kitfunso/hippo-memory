@@ -1,19 +1,7 @@
 import type { SearchResult } from '../core/search-types.js';
 
-/**
- * A reranker reorders (and optionally rescales) the candidate set produced
- * by hybridSearch's BM25 + cosine + MMR pipeline. Rerankers run AFTER MMR
- * de-duplication and BEFORE token-budget filtering, so the reranker sees
- * the full diversity-balanced candidate pool but does not see candidates
- * already filtered out by score-zero or supersession.
- *
- * Rerankers MUST be deterministic for a given (query, results) input
- * unless explicitly documented as stochastic (the LLM track, and the
- * hosted jev reranker, whose scores move slightly run to run).
- * Determinism is required for paired A/B and for the workload-validity gate.
- *
- * @returns Reordered (and optionally rescaled) results.
- */
+/** Reorders hybridSearch's candidates AFTER MMR de-duplication and BEFORE token-budget filtering, so it sees the full diverse pool.
+ * MUST be deterministic for a given (query, results) unless documented stochastic (LLM track, hosted jev): paired A/B and the validity gate need it. */
 export type RerankerFn = (
   query: string,
   results: SearchResult[],

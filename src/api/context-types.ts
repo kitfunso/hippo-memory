@@ -7,21 +7,8 @@ import type { DeliveryObserver } from '../store/delivery-recorder.js';
 import type { AmbientState } from '../core/ambient.js';
 import type { ProjectRef } from '../core/project-identity.js';
 
-// ---------------------------------------------------------------------------
-// getContext
-// ---------------------------------------------------------------------------
-
-/**
- * Options for `getContext` — assemble a budget-bounded context bundle
- * (recalled memories + active task snapshot + handoff + recent events).
- *
- * Named `getContext` (not `context`) to avoid collision with the `Context`
- * interface above and the ubiquitous `ctx: Context` convention. Follows the
- * existing `getEntry` naming pattern in store.ts.
- *
- * Rendering opts (`format`, `framing`, `rendered`) and host-side opts (`auto`) stay in the CLI,
- * because its print helpers are shared with `cmdRecall` / `handleSnapshot` / `cmdHandoffShow`.
- */
+/** Options for `getContext`: a budget-bounded bundle of recalled memories, active task snapshot, handoff and recent events.
+ * Rendering opts (`format`, `framing`, `rendered`) and host-side opts (`auto`) stay in the CLI, whose print helpers are shared. */
 export interface ContextOpts {
   q?: string;
   /** Default 1500 tokens. */
@@ -31,30 +18,16 @@ export interface ContextOpts {
   scope?: string;
   /** Envelope scope to match exactly, as in `recall`: admits that scope even when private, after the actor's scope check. */
   exactScope?: string;
-  /** With `pinnedOnly`, also inject the N most recent writes that pass the
-   *  quality floor (`isWorthSurfacing`). Filtering happens BEFORE
-   *  the take-N, so a caller asking for 5 gets 5 qualifying entries rather
-   *  than 5-minus-junk; pinned entries bypass the floor. Entries are only
-   *  skipped for this read, never mutated or deleted. Ignored when
-   *  `pinnedOnly` is false — no other path reads it. */
+  /** With `pinnedOnly`, also inject the N most recent writes that pass the quality floor (`isWorthSurfacing`); pinned entries bypass it.
+   *  Filtering happens BEFORE the take-N, so asking for 5 gets 5 qualifying entries. Ignored when `pinnedOnly` is false. */
   includeRecent?: number;
-  /** v39 memory scope isolation: re-include other-project memories that the
-   *  origin partition excludes by default. They come back tagged
-   *  `category: 'cross-project'` so renderers can demarcate them. */
+  /** Re-include other-project memories the origin partition excludes by default; they come back tagged `category: 'cross-project'`. */
   crossProject?: boolean;
-  /** The active project for the origin partition ('' = not in a project): a
-   *  name, or an identity whose rows may also carry its legacy folder name.
-   *  Defaults to `resolveProjectIdentity(process.cwd())`; surfaces whose
-   *  process cwd is not the caller's project (HTTP server) should pass it. */
+  /** The active project for the origin partition ('' = not in a project): a name, or an identity whose rows may carry its legacy folder name.
+   *  Defaults to `resolveProjectIdentity(process.cwd())`; surfaces whose cwd is not the caller's project (HTTP server) should pass it. */
   currentProject?: ProjectRef;
-  /** The calling
-   *  session's id. Stamped on this call's recall trace, and the owner-match input to
-   *  `loadFreshActiveTaskSnapshot` — when it strictly equals the active
-   *  snapshot's `session_id`, the read is unbounded (same-session
-   *  continuity); otherwise the snapshot must pass the freshness bound to
-   *  surface. Absent (undefined/null/'') never short-circuits as a match;
-   *  it just means every snapshot goes through the age check. Host-resolved
-   *  (stdin payload, HIPPO_SESSION_ID, else the host's session var) so this stays host-agnostic. */
+  /** The calling session's id, stamped on this call's recall trace. When it strictly equals the active snapshot's `session_id` the read is unbounded;
+   *  otherwise the snapshot must pass the freshness bound. Absent (undefined/null/'') never matches. Host-resolved, so this stays host-agnostic. */
   currentSessionId?: string | null;
   /** Raw hook-payload prompt; only the pinned-only branch reads it, gated on `pinnedInject.promptRecall`. */
   prompt?: string;
@@ -88,9 +61,7 @@ export interface ContextResultEntry {
   promptRecall?: boolean;
   /** v39: the entry's owning project ('' = user-global, null = legacy row). */
   origin?: string | null;
-  /** v39: how the origin relates to the active project. 'cross-project'
-   *  entries only appear when ContextOpts.crossProject was set (or isolation
-   *  is disabled). */
+  /** How the origin relates to the active project; 'cross-project' appears only when `crossProject` was set (or isolation is disabled). */
   category?: 'project' | 'user-global' | 'cross-project';
 }
 

@@ -18,17 +18,8 @@ import { FINGERPRINT_HEX_CHARS } from '../util/token-text.js';
 const DEFAULT_SSE_HEARTBEAT_MS = 60000;
 const DEFAULT_SSE_MAX_AGE_SEC = 3600;
 
-/**
- * Build a per-client key for MCP state isolation under HTTP-MCP. Used by
- * mcp/server.ts to scope `lastRecalledIds` to the calling client so two
- * clients on the same tenant cannot poison each other's outcome feedback.
- *
- * Token is hashed (sha256, 16-hex-char prefix) so we never log or persist
- * the raw bearer. Combined with remoteAddress so two clients sharing a key
- * (e.g. on a shared Postman environment) are still separable in the common
- * case. 'noauth' covers loopback no-auth and is acceptable because that
- * path is single-host single-user.
- */
+/** Per-client key for MCP state isolation under HTTP-MCP (scopes `lastRecalledIds`): sha256 of the token (16 hex chars, so the raw bearer is never logged)
+ * plus remoteAddress, so clients sharing a key stay separable; 'noauth' covers loopback no-auth, which is single-host single-user. */
 function buildMcpClientKey(req: IncomingMessage): string {
   const auth = readAuthHeader(req);
   const tokenHash = auth.kind === 'bearer'
@@ -38,24 +29,8 @@ function buildMcpClientKey(req: IncomingMessage): string {
   return `http:${tokenHash}:${addr}`;
 }
 
-// ── MCP-over-HTTP/SSE transport ──
-//
-// Two routes implement an MCP HTTP transport alongside the stdio one. Both
-// dispatch to the same `handleMcpRequest` as the stdio loop in src/mcp/server.ts.
-//
-// POST /mcp        — Send a JSON-RPC request, get a JSON-RPC response synchronously
-//                    in the body. Content-type: application/json both ways.
-// GET  /mcp/stream — Open an SSE stream for server-initiated messages.
-//                    v1 simplification: this stream is keepalive-only. Clients
-//                    that need server-pushed notifications/progress will see
-//                    only `: ping` comments every 30s. All real responses come
-//                    back synchronously on POST /mcp. This matches the
-//                    "synchronous JSON in body" leg of the MCP HTTP spec and
-//                    is enough for `tools/list` / `tools/call` round-trips.
-//                    Server-initiated SSE messages will be wired in a later task.
-//
-// Auth: same as /v1/* — Bearer token validated via `requireAuth`, with the
-// loopback no-auth fallback. SSE check runs once at stream-open.
+// MCP-over-HTTP/SSE: POST /mcp answers a JSON-RPC request synchronously; GET /mcp/stream is a keepalive-only SSE stream (`: ping` every 30s) in v1.
+// Both dispatch to handleMcpRequest as stdio does. Auth matches /v1/* (Bearer via `requireAuth`, loopback fallback); SSE is checked once at stream-open.
 
 // Percent-encoded by the client, so any lowercase Unicode name fits a Latin-1 header.
 const HEADER_PIECE = /^[A-Za-z0-9\-_.!~*'()%]+$/;
@@ -107,11 +82,8 @@ function mcpContextFor(ctx: Context, clientKey: string, autoSleep: McpContext['a
 }
 
 export async function handleMcpPost(req: IncomingMessage, res: ServerResponse, opts: ResolvedServeOpts): Promise<void> {
-  // Build the same Context the /v1/* routes use so MCP tool calls inherit
-  // the server's bound hippoRoot and the auth-resolved tenantId / actor.
-  // Without this, executeTool would walk from cwd via findHippoRoot() and
-  // pull tenant from HIPPO_TENANT, dropping a valid Bearer for tenant B
-  // back to whatever the env says.
+  // Same Context the /v1/* routes use, so MCP tool calls inherit the bound hippoRoot and the auth-resolved tenantId/actor; otherwise executeTool would walk
+  // from cwd and read HIPPO_TENANT, dropping a valid Bearer for tenant B to the env's tenant.
   const ctx = await buildContextWithAuth(req, opts);
   noteAccess(req, { tenant: ctx.tenantId });
   const project = callerProjectFromHeaders(req, ctx.hippoRoot);
@@ -125,9 +97,8 @@ export async function handleMcpPost(req: IncomingMessage, res: ServerResponse, o
   if (!isJsonObject(mcpReq) || !isJsonString(mcpReq.method)) {
     throw new HttpError(400, 'JSON-RPC body must include a method string');
   }
-  // SAFETY: validated above as a plain JSON object carrying a string method;
-  // the remaining McpRequest wire fields (jsonrpc, id, params) are checked or
-  // safely defaulted inside handleMcpRequest's JSON-RPC dispatch.
+  // SAFETY: validated above as a plain JSON object with a string method; the other McpRequest wire fields (jsonrpc, id, params) are checked or defaulted in
+  // handleMcpRequest.
   const rpcReq = mcpReq as McpRequest & Record<string, JsonValue>;
   let mcpRes;
   try {
@@ -187,13 +158,8 @@ export async function handleMcpStream(
   // waiting for the first keepalive interval.
   res.write(': ping\n\n');
 
-  // SSE hardening:
-  //   - Heartbeat re-validates the bearer (default 60s). If the key was
-  //     revoked or rotated, close the stream with reason='auth_revoked'.
-  //   - MCP_SSE_MAX_AGE_SEC (default 3600) caps stream lifetime; close
-  //     with reason='max_age_exceeded' when reached.
-  //   - MCP_SSE_HEARTBEAT_MS (default 60000) lets tests run with a short
-  //     interval without waiting a full minute.
+  // SSE hardening: the heartbeat re-validates the bearer (MCP_SSE_HEARTBEAT_MS, default 60000) and closes with 'auth_revoked' if the key was revoked or
+  // rotated; MCP_SSE_MAX_AGE_SEC (default 3600) caps stream lifetime and closes with 'max_age_exceeded'.
   keepStreamAlive(req, res, opts);
 }
 

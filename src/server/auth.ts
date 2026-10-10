@@ -11,11 +11,7 @@ import { keyCheckBounds } from './key-check-bounds.js';
 import type { AuthResolver, ResolvedBearer, ResolvedServeOpts } from './types.js';
 import { isJsonString } from '../util/json.js';
 
-/**
- * Recognise loopback remote addresses. Node reports IPv6-mapped IPv4 as
- * '::ffff:127.0.0.1' on dual-stack sockets, so we accept that alongside
- * the bare v4 and v6 loopbacks. Anything else is treated as remote.
- */
+/** Recognises loopback remote addresses, including the IPv6-mapped '::ffff:127.0.0.1' Node reports on dual-stack sockets; anything else is remote. */
 export function isLoopback(remoteAddress: string | undefined): boolean {
   if (!remoteAddress) return false;
   if (remoteAddress === '127.0.0.1') return true;
@@ -67,17 +63,8 @@ const KEY_REQUIRED_MESSAGE =
   '"Authorization: Bearer <key>" (the hippo CLI reads HIPPO_API_KEY), or start the server with HIPPO_ALLOW_KEYLESS_LOCAL=1 ' +
   'to let requests from this machine in without a key.';
 
-/**
- * Read the Authorization header in a case-insensitive way and pull the
- * bearer token out. Returns:
- *   - { kind: 'absent' } when no Authorization header is present
- *   - { kind: 'malformed' } when the header is set but not 'Bearer <token>'
- *   - { kind: 'bearer', token } when a non-empty bearer token is present
- *
- * The header NAME is case-insensitive (Node lowercases all header names on
- * IncomingMessage.headers); the SCHEME ('Bearer') is also matched
- * case-insensitively per RFC 6750.
- */
+/** Reads the Authorization header case-insensitively (name and RFC 6750 'Bearer' scheme): { kind: 'absent' }, { kind: 'malformed' } (set but not 'Bearer
+ * <token>'), or { kind: 'bearer', token } for a non-empty token. */
 type AuthHeader =
   | { kind: 'absent' }
   | { kind: 'malformed' }
@@ -266,12 +253,8 @@ function chargeCaller(tenantId: string, actor: Actor, opts: AuthOpts): void {
   throw new HttpError(429, 'rate limit exceeded for this caller', limiter.retryAfterSec);
 }
 
-/**
- * Build a per-request Context from the Authorization header and remote
- * address. Throws HttpError(401) for invalid / missing credentials. Reads
- * the store only for an API-key-shaped Bearer token (or any Bearer token when no
- * auth resolver is registered), so keyless local requests stay cheap.
- */
+/** Builds a per-request Context from the Authorization header and remote address; throws HttpError(401) for invalid or missing credentials.
+ * Reads the store only for an API-key-shaped Bearer (or any Bearer when no auth resolver is registered), so keyless local requests stay cheap. */
 export async function buildContextWithAuth(req: IncomingMessage, opts: AuthOpts): Promise<Context> {
   const id = await checkAuth(req, opts);
   if (id !== null) {
@@ -289,12 +272,8 @@ export async function buildContextWithAuth(req: IncomingMessage, opts: AuthOpts)
   };
 }
 
-/**
- * Auth check for routes that do not need a tenant Context (e.g. MCP transport,
- * which builds its own root resolution via findHippoRoot). Throws HttpError
- * 401 the same way buildContextWithAuth does, but skips building the Context
- * envelope. A keyless local request passes only under HIPPO_ALLOW_KEYLESS_LOCAL=1.
- */
+/** Auth check for routes that need no tenant Context (e.g. the MCP transport, which resolves its own root): throws HttpError 401 like buildContextWithAuth.
+ * A keyless local request passes only under HIPPO_ALLOW_KEYLESS_LOCAL=1. */
 export async function requireAuth(req: IncomingMessage, opts: AuthOpts): Promise<void> {
   const id = await checkAuth(req, opts);
   if (id !== null) chargeCaller(id.tenantId, bearerActor(id), opts);

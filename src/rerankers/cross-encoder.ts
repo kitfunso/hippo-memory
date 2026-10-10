@@ -35,9 +35,8 @@ const _require = createRequire(import.meta.url);
 
 const TRANSFORMERS_PACKAGES = ['@huggingface/transformers', '@xenova/transformers'] as const;
 
-// Returns the ESM entry URL, the same build src/store/embeddings/index.ts imports. A
-// require-style resolve picks the CommonJS build and puts a second copy of
-// the library, with its own ONNX sessions, in the process.
+// Returns the ESM entry URL, the same build src/store/embeddings/index.ts imports; a require-style resolve picks the CommonJS build and
+// puts a second copy of the library, with its own ONNX sessions, in the process.
 function resolveTransformersPackage(): string | null {
   for (const name of TRANSFORMERS_PACKAGES) {
     try {
@@ -76,9 +75,8 @@ type CrossEncoderFn = (query: string, candidate: string) => Promise<number>;
 let pipelineLoading: Promise<CrossEncoderFn | null> | null = null;
 const outage = createOutageWarning('cross-encoder', 'falling back to identity ordering');
 
-// NOT the text-classification pipeline: this model is a num_labels=1
-// regression head, and that pipeline softmaxes a length-1 logit vector, which
-// is identically 1.0 for every input. Read the logit, then squash it.
+// NOT the text-classification pipeline: this is a num_labels=1 regression head and that pipeline softmaxes a length-1 logit vector (always 1.0).
+// Read the logit, then squash it.
 async function buildPipeline(): Promise<CrossEncoderFn | null> {
   try {
     const mod = await loadTransformersModule();

@@ -108,10 +108,8 @@ export function runShareTool({ args, ctx, hippoRoot, tenantId }: ToolCall): stri
   const force = Boolean(args.force);
   // Checked before shareMemory, whose personal-row refusal would tell another person the id exists.
   if (!canTouchScope(mcpActor(ctx), memoryScope(hippoRoot, shareId))) throw new NotFoundError(`Memory not found: ${shareId}`);
-  // Pass tenantId so shareMemory's readEntry filters by tenant. Without
-  // this, a Bearer for tenant A could call hippo_share with tenant B's
-  // id and copy the row to the global store. The 'Memory not found'
-  // error matches the cross-tenant deny shape elsewhere in the code.
+  // Pass tenantId so shareMemory's readEntry filters by tenant; otherwise a Bearer for tenant A could share tenant B's id to the global store.
+  // The 'Memory not found' error matches the cross-tenant deny shape elsewhere.
   const shared = shareMemory(hippoRoot, shareId, { force, tenantId });
   if (!shared) return 'Transfer score too low. Use force=true to override.';
   return `Shared [${shared.id}] to global store. Source: ${shared.source}`;

@@ -30,16 +30,8 @@ const briefRoutes: VersionedRouteConfig<'project_brief', SaveProjectBriefOpts> =
   },
 };
 
-// ── project_brief routes ──
-//
-// 6 routes: POST /v1/project-briefs (new; body repo + summary), GET
-// /v1/project-briefs (list; status + repo filter; shared parseListLimit), POST
-// /v1/project-briefs/refresh (body {repo, dryRun?} -> auto-assemble the brief
-// from the repo's receipts; dryRun returns {markdown} without writing; ordered
-// before /:id), GET /v1/project-briefs/:id, POST /v1/project-briefs/:id/supersede,
-// POST /v1/project-briefs/:id/close. DoS caps: repo 256, summary 8192,
-// changeSummary MAX_CHANGE_SUMMARY_LEN. The store validates + throws; the boundary maps validation
-// -> 400, not-found -> 404, not-active -> 409. Mirrors /v1/skills.
+// Routes: /v1/project-briefs (create, list, refresh, show, supersede, close), mirroring /v1/skills; /refresh is ordered before /:id.
+// The store validates and throws; the boundary maps validation -> 400, not-found -> 404, not-active -> 409.
 export async function handleCreateProjectBrief(rr: RouteRequest): Promise<void> {
   const ctx = await buildContextWithAuth(rr.req, rr.opts);
   const body = await parseJsonBody(rr.req, ctx);

@@ -25,10 +25,7 @@ export function shutdownBoundMs(drainMs: number): number {
   return drainMs + STORE_CLOSE_GRACE_MS;
 }
 
-/**
- * Stop accepting, end streams at once (they never finish on their own), give other in-flight
- * requests up to `drainMs`, then close whatever is left.
- */
+/** Stops accepting, ends streams at once (they never finish on their own), gives other in-flight requests up to `drainMs`, then closes what is left. */
 export async function drainAndClose(server: Server, inflight: ReadonlySet<ServerResponse>, drainMs: number): Promise<void> {
   const closed = new Promise<void>((resolve, reject) => {
     server.close((err) => (err ? reject(err) : resolve()));

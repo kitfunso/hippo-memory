@@ -32,10 +32,8 @@ export async function handleRecallMemories({ req, res, opts, query }: RouteReque
   return;
 }
 
-// GET /v1/sessions/:id/assemble?budget=N&freshTail=N&summarizeOlder=0|1
-// Phase 2 context-engine API. Returns ordered AssembledContextItem[]
-// with fresh-tail raws + summary substitutions + bio-aware budget fit.
-// Tenant scope from Bearer; default-deny on private rows.
+// GET /v1/sessions/:id/assemble?budget=N&freshTail=N&summarizeOlder=0|1: ordered AssembledContextItem[] (fresh-tail raws, summary substitutions, bio-aware
+// budget fit). Tenant scope from the Bearer; default-deny on private rows.
 export async function handleAssembleSession({ req, res, opts, query }: RouteRequest, assembleMatch: Record<string, string>): Promise<void> {
   validateIdSegment(assembleMatch.id!, 'session id');
   const budgetRaw = query.get('budget');
@@ -68,12 +66,8 @@ export async function handleAssembleSession({ req, res, opts, query }: RouteRequ
   return;
 }
 
-// GET /v1/recall/drill/:id?limit=N&budget=N
-// Companion to /v1/memories. When recall surfaces a level-2 summary in
-// place of overflowed children (RecallResultItem.isSummary === true), the
-// caller drills into the summary id to recover the originals. Tenant
-// scoped via Bearer; default-deny on private scopes for both summary
-// and children.
+// GET /v1/recall/drill/:id?limit=N&budget=N: companion to /v1/memories; the caller drills into a level-2 summary (RecallResultItem.isSummary) to recover the
+// originals. Tenant-scoped via Bearer; default-deny on private scopes for the summary and its children.
 export async function handleDrillRecall({ req, res, opts, query }: RouteRequest, drillMatch: Record<string, string>): Promise<void> {
   validateIdSegment(drillMatch.id!, 'summary id');
   const limitRaw = query.get('limit');
@@ -127,11 +121,8 @@ function contextReader(hippoRoot: string, query: URLSearchParams): ProjectRef {
   return { name, legacyName: name, aliases };
 }
 
-// GET /v1/context — assemble a budget-bounded context bundle. Returns
-// ContextResult JSON (entries + tokens + activeSnapshot + sessionHandoff
-// + recentEvents). No server-side rendering; clients render. Tenant-scoped
-// via the Bearer. Pinned-only + '*' fallback skip the recall audit emit
-// (matches cmdContext); real-query hybrid search emits one 'recall' row.
+// GET /v1/context: a budget-bounded ContextResult JSON, rendered by clients, not the server; tenant-scoped via the Bearer.
+// Pinned-only and '*' fallback skip the recall audit emit (as cmdContext does); a real-query hybrid search emits one 'recall' row.
 export async function handleGetContext({ req, res, opts, query }: RouteRequest): Promise<void> {
   const parsed = parseContextRequest(httpParams(query));
   const ctx = await buildContextWithAuth(req, opts);

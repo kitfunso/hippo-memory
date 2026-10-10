@@ -7,10 +7,6 @@ import type { QuarantineStatus } from '../store/quarantine.js';
 import type { KeysetPosition } from '../util/keyset.js';
 import type { Context } from './types.js';
 
-// ---------------------------------------------------------------------------
-// quarantine (CD5)
-// ---------------------------------------------------------------------------
-
 export interface QuarantineListItem {
   id: string;
   originalScope: string | null;

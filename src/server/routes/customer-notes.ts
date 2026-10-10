@@ -20,14 +20,8 @@ const noteRoutes: VersionedRouteConfig<'customer_note', SaveCustomerNoteOpts> = 
   },
 };
 
-// ── customer_note routes ──
-//
-// 5 routes (no assembler/refresh): POST /v1/customer-notes (new; body customer +
-// note), GET /v1/customer-notes (list; status + customer filter; shared
-// parseListLimit), GET /v1/customer-notes/:id, POST /v1/customer-notes/:id/supersede,
-// POST /v1/customer-notes/:id/close. DoS caps: customer 256, note 8192,
-// changeSummary MAX_CHANGE_SUMMARY_LEN. The store validates + throws; the boundary maps validation ->
-// 400, not-found -> 404, not-active -> 409. Mirrors /v1/project-briefs.
+// Routes: customer notes under /v1/customer-notes (create, list, show, supersede, close), mirroring /v1/project-briefs. The store validates and throws;
+// the boundary maps validation -> 400, not-found -> 404, not-active -> 409.
 export async function handleCreateCustomerNote(rr: RouteRequest): Promise<void> {
   const ctx = await buildContextWithAuth(rr.req, rr.opts);
   const body = await parseJsonBody(rr.req, ctx);

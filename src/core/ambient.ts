@@ -1,11 +1,4 @@
-/**
- * Ambient state vector — a compact representation of the agent's memory
- * landscape, computed in O(N) from the current corpus.
- *
- * Inspired by the biological ambient neural state: a continuous background
- * representation that tells the agent "where it is" in knowledge-space
- * without retrieving specific memories.
- */
+/** Ambient state vector: a compact O(N) summary of the corpus telling the agent "where it is" in knowledge-space without retrieving specific memories. */
 
 import { evalNow } from './ablation.js';
 import type { MemoryEntry } from './memory.js';

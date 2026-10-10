@@ -1,22 +1,6 @@
 import { DAY_MS } from '../util/time.js';
-// ---------------------------------------------------------------------------
-// Availability-bias detector (biases over memory state)
-// ---------------------------------------------------------------------------
-//
-// Flags when a recall's returned top-K is dominated by recent entries while
-// substantially older relevant candidates in the same MATCHED pool were passed
-// over. This is the availability / recency heuristic (Tversky-Kahneman): what
-// is most mentally available (recent) gets over-weighted relative to what is
-// most relevant. Hippo's substrate makes this measurable: every entry carries a
-// creation timestamp, so we can compare the age distribution of what was
-// RETURNED against the age distribution of the pool it was drawn from.
-//
-// Soft warning ONLY: this never filters, reorders, or suppresses a result. It surfaces
-// a hint the calling agent may act on, like anchoringHint / planningFallacyHint / suppressionSummary.
-//
-// PURE: no I/O, no env reads. The env gate (HIPPO_AVAILABILITY=off) and the
-// audit emission live in the callers (api.recall, cmdRecall, MCP), mirroring
-// detectAnchoring in recall-history.ts.
+// Flags when a recall's top-K is dominated by recent entries while older relevant candidates in the same matched pool were passed over.
+// Soft warning only (never filters or reorders) and PURE: no I/O or env reads; the HIPPO_AVAILABILITY gate lives in the callers.
 
 /** A minimal age reference: a memory id plus its ISO-8601 creation timestamp
  *  (MemoryEntry.created, canonical ISO per the src/core/memory.ts invariant). */
@@ -85,21 +69,8 @@ function parseTimestamps(refs: readonly AgeRef[]): { id: string; ts: number }[] 
     .filter((e) => Number.isFinite(e.ts));
 }
 
-/**
- * Detect availability/recency bias in a recall result.
- *
- * Returns an AvailabilityHint when ALL of the following hold:
- *   1. topK.length >= minReturned AND pool.length >= minPool (enough signal);
- *   2. recentFraction > recentFractionThreshold (returned slice is recency-dominated);
- *   3. poolMedianAgeDays > topKMedianAgeDays (the pool genuinely skews older,
- *      so recency is not just the corpus being young);
- *   4. olderCandidatesPassedOver >= minOlderPassedOver (older matched memories
- *      actually existed and were not returned).
- * Otherwise returns null.
- *
- * Entries with an unparseable `created` are dropped defensively so a malformed
- * row cannot poison the medians with NaN.
- */
+/** Returns an AvailabilityHint when the returned slice is recency-dominated, the pool skews older and older matches were passed over; else null.
+ * Entries with an unparseable `created` are dropped so a malformed row cannot poison the medians with NaN. */
 export function detectAvailabilityBias(opts: DetectAvailabilityBiasOpts): AvailabilityHint | null {
   const now = opts.now ?? Date.now();
   const recencyWindowMs = opts.recencyWindowMs ?? DEFAULT_RECENCY_WINDOW_MS;

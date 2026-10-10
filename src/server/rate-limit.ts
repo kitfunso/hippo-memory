@@ -1,17 +1,8 @@
-/**
- * Per-key token-bucket rate limiter for inbound /v1/* requests.
- *
- * Bounds api-key-id enumeration: a
- * client that drains its bucket is denied until it refills. Dependency-free
- * and unit-testable in isolation via the injectable `now`.
- */
+/** Per-key token-bucket rate limiter for inbound /v1/* requests, bounding api-key-id enumeration. Dependency-free; the injectable `now` makes it
+ * unit-testable. */
 
 export interface RateLimiter {
-  /**
-   * Consume one token for `key`. Returns true if the request is allowed,
-   * false if the key's bucket is exhausted. `now` (epoch ms) is injectable
-   * for deterministic tests.
-   */
+  /** Consume one token for `key`: true if allowed, false if the bucket is exhausted; `now` (epoch ms) is injectable for deterministic tests. */
   check(key: string, now?: number): boolean;
   readonly retryAfterSec: number;
 }
@@ -32,12 +23,8 @@ interface Bucket {
   last: number;
 }
 
-/**
- * Build a token-bucket limiter. Memory is bounded two ways: a sweep (throttled
- * to once per `idleEvictMs`) drops idle buckets, and a hard `maxKeys` cap evicts
- * the least-recently-used key, so a client rotating source addresses cannot
- * grow the map without bound between sweeps.
- */
+/** Token-bucket limiter with bounded memory: a sweep (at most once per `idleEvictMs`) drops idle buckets and a `maxKeys` cap evicts the least-recently-used
+ * key, so a client rotating source addresses cannot grow the map without bound. */
 export function createRateLimiter(opts: RateLimiterOpts): RateLimiter {
   const { ratePerSec, burst, idleEvictMs, maxKeys } = opts;
   const buckets = new Map<string, Bucket>();

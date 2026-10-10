@@ -15,6 +15,47 @@ node:sqlite is synchronous, and the store port is async so another store can do 
 
 A production export that no other `src/` file names but a test does is a seam added for the test. `scripts/check-test-only-exports.mjs` finds them and fails CI on any not listed in `.test-only-exports-baseline.json`; exports in a package entry file (derived from `package.json` `exports` and `bin`) are exempt. The list can only shrink: move the helper to `tests/_helpers` or give it a production caller, then run the script with `--update` to lock the lower count in.
 
+## src/core/ablation.ts
+
+EVAL-ONLY lifecycle ablation switches. These env flags exist for controlled experiments on hippo's memory-lifecycle mechanisms (the "lifecycle, ablated" paper protocol): each switch neutralizes exactly ONE mechanism so its causal contribution can be measured in isolation.
+
+They are NOT a production configuration surface: there are no config-file equivalents, deliberately (config implies support), they are undocumented in user-facing help, and their semantics may change with the experiment design. With all flags unset, production behavior is unchanged.
+
+Flags (set to `1` or `true`):
+
+- `HIPPO_ABLATE_DECAY`: the time-decay term becomes 1 in `calculateStrength`.
+- `HIPPO_ABLATE_RECALL_BOOST`: full recall-strengthening ablation.
+  - `markRetrieved` returns entries UNMUTATED (no clock reset, count or half-life increment); ids stay available so `hippo outcome` attribution keeps working in this arm.
+  - Persisting callers (CLI recall, api context, MCP recall/context, consolidation replay) skip their `writeEntry` loops (identical-row writes would still refresh `updated_at`, mirrors and DAG dirty flags).
+  - The retrieval-count READ boost becomes 1.
+  - Decay anchors at `created` instead of `last_retrieved`, so prior-run clock resets cannot leak in.
+  - Physics: `computeMass` ignores the count, and `physicsSearch` recomputes loaded masses LIVE under ablated strength rules (persisted masses embed recall history in their frozen strength component).
+  - Replay rehearsal is silenced entirely (it IS strengthening; use config `replay.count=0` to separate replay in unflagged arms).
+  - CAVEAT: half_life increments persisted by prior unflagged runs are NOT reconstructed (consolidation legitimately writes half_life too), so ablation arms run on FRESH stores, as the experiment protocol mandates.
+- `HIPPO_ABLATE_OUTCOME`: both outcome channels become neutral (`_SLOW` and `_FAST` together). The slow side also silences replay's outcome reward bias (`replayPriority`). NOT gated: the opt-in `recall --value-aware` rerank (an explicit CLI flag that also reads outcome counts); ablated arms must not pass it.
+- `HIPPO_ABLATE_OUTCOME_SLOW`: `rewardFactor` becomes 1 (no half-life modulation).
+- `HIPPO_ABLATE_OUTCOME_FAST`: `hybridSearch` `outcomeBoost` becomes 1.
+- `HIPPO_ABLATE_RECENCY`: the search recency factor becomes 1 (the creation-age multiplier `0.8 + 0.2*exp(-age/30d)`); decay, strengthening and outcomes stay live.
+- `HIPPO_EVAL_RECENCY_DAYS`: a positive number replaces the 30-day scale of that recency factor (tuning grids only). Unset, zero, negative or junk values keep 30.
+- `HIPPO_FAKE_NOW`: timestamp injected as the default `now` for strength computation and retrieval stamping (simulated-time protocols). It MUST be the exact `Date.toISOString()` form (`YYYY-MM-DDTHH:mm:ss.sssZ`); it is validated by round-trip, so junk, locale dates, non-UTC offsets and rolled-over dates (`2026-02-31`) all fall back to the real clock.
+
+Formula notes (load-bearing for the experiments). Ablating decay has TWO intrinsic co-effects, because the unified formula routes other mechanisms THROUGH the decay term. Both are real properties of the architecture, not implementation accidents; experiment analysis must attribute accordingly (the decay-off arm is "decay + its dependents off", see prereg amendment A1):
+
+1. Read-side strengthening flattens: raw = retrievalBoost * emotionalMult >= 1, and the [0,1] clamp caps it at 1.0, so the recall boost can only offset decay, never exceed baseline. (Write-side still runs.)
+2. Outcome-slow goes inert: `rewardFactor` only acts by scaling the effective half-life INSIDE the decay exponent; with decay := 1 there is no exponent for it to modulate. Outcome-slow is decay-rate modulation BY DESIGN, so "no decay" necessarily means "no slow channel" (the fast channel in `hybridSearch` is unaffected).
+
+Env caching follows the house pattern (see `getLossAversionRatio` in `memory.ts`): read once per process, with a test-only reset helper. Tests that mutate these env vars MUST call `_resetAblationCacheForTests()` in BOTH `beforeEach` AND `afterEach`.
+
+## src/server/boot.ts
+
+`serve(opts)` boots the HTTP daemon on host:port and writes the pidfile under `hippoRoot`. It refuses non-loopback hosts at boot unless `HIPPO_REQUIRE_AUTH=1` is set.
+
+The auth middleware (`buildContextWithAuth` / `requireAuth`) is checked by every route except `GET /health` (public by design, for platform health checks), the two connector webhooks in `PUBLIC_ROUTES` (HMAC-gated by their own signing secrets, and 404 when those secrets are unset) and any `publicJson` GET path.
+
+Under `HIPPO_ALLOW_KEYLESS_LOCAL=1` the keyless fallback inside `buildContextWithAuth` admits unauthenticated requests from a loopback remote address, unless they carry `Forwarded`, `X-Forwarded-For`/`-Host`/`-Proto`, `X-Real-IP`, `Cf-Connecting-Ip`, `True-Client-Ip` or `Fly-Client-Ip` (these mark a same-host proxy and get a 401 like any keyless remote request). So binding to a non-loopback host needs `HIPPO_REQUIRE_AUTH=1`, which wins over that opt-in and forces every request (loopback or not) through Bearer-token validation. Without it, a non-loopback bind could expose the DB to the network with no auth, so boot fails fast instead.
+
+Tests use `port: 0` to bind an ephemeral port and read the actual port back via `server.address()` after listen.
+
 Design provenance for src/: which roadmap item or release added a behaviour, schema history, measurements and alternatives tried. Source comments keep the one-line reason; this file keeps the record, quoted from the comment it came from.
 
 ## History moved out of src/ comments, by module

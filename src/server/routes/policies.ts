@@ -32,8 +32,6 @@ const policyRoutes: VersionedRouteConfig<'policy', SavePolicyOpts> = {
   },
 };
 
-// ── policies (first-class object, bi-temporal-first) ──
-//
 // The as-of route is registered BEFORE /:id so the literal 'asof' is matched first; date errors surface as 400.
 export async function handleCreatePolicy(rr: RouteRequest): Promise<void> {
   const ctx = await buildContextWithAuth(rr.req, rr.opts);

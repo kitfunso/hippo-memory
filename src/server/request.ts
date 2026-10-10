@@ -124,14 +124,7 @@ export function parseRequest(req: IncomingMessage): ParsedRoute {
   };
 }
 
-/**
- * Lightweight pattern matcher for /v1/memories/:id/<action>. Avoids pulling
- * in a router dependency for the half-dozen patterns we actually use.
- *
- * Returns null if `path` does not match `pattern`. Otherwise returns an object
- * mapping each :param name to its value. Path segments are exact-matched
- * except for parameter slots.
- */
+/** Pattern matcher for /v1/memories/:id/<action> (no router dependency); null if `path` does not match, else each :param name mapped to its value. */
 function decodePathSegment(segment: string): string {
   try {
     return decodeURIComponent(segment);
@@ -159,14 +152,8 @@ export function matchPath(pattern: string, path: string): Record<string, string>
   return params;
 }
 
-/**
- * Reject URL-encoded slashes in path segments BEFORE the URL parser decodes
- * them — otherwise `%2F` becomes `/`, path-split runs, and the route either
- * silently 404s or matches the wrong template.
- *
- * Only the PATHNAME is scanned (split on the first `?`), so recall queries
- * containing URLs like `?q=https%3A%2F%2Fexample.com` are not rejected.
- */
+/** Rejects URL-encoded slashes in path segments BEFORE the URL parser decodes them (`%2F` would become `/` and 404 or match the wrong template).
+ * Only the PATHNAME is scanned, so recall queries like `?q=https%3A%2F%2Fexample.com` are not rejected. */
 export function rejectEncodedSlash(rawUrl: string): void {
   const queryIdx = rawUrl.indexOf('?');
   const pathname = queryIdx === -1 ? rawUrl : rawUrl.slice(0, queryIdx);

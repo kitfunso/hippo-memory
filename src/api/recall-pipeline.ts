@@ -128,9 +128,8 @@ interface RankState {
   goalRecallLog: GoalRecallLogRow[];
 }
 
-/** Ranks memories for a query as `hippo recall` does, through the `limit` slice. Reads stores, embeddings and
- *  physics state; writes nothing and prints nothing (notes go to `ctx.note`). The caller supplies the cost
- *  function and reranker in `opts`, and persists the returned goal-log rows. */
+/** Ranks memories for a query as `hippo recall` does, through the `limit` slice. Reads stores, embeddings and physics state; writes and prints nothing
+ *  (notes go to `ctx.note`). The caller supplies the cost function and reranker in `opts` and persists the returned goal-log rows. */
 export async function rankRecall(ctx: RankRecallCtx, opts: RankRecallOpts): Promise<RankRecallResult> {
   const pool = loadRecallPool(ctx, opts);
   const state: RankState = { results: [], droppedPreRank: pool.dropped, graphAdded: 0, goalRecallLog: [] };

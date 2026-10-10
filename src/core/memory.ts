@@ -1,7 +1,4 @@
-/**
- * Core data model for Hippo memory entries.
- * Based on the strength formula from PLAN.md.
- */
+/** Core data model for Hippo memory entries, based on the strength formula from PLAN.md. */
 
 import { DEFAULT_TENANT_ID, envLossAversionRatio } from '../util/env.js';
 import { BadRequestError } from './api-errors.js';

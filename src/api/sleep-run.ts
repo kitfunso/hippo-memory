@@ -68,18 +68,15 @@ export async function runSleep(
   const dryRun = Boolean(opts.dryRun);
   const phases: SleepPhases = { ...DEFAULT_SLEEP_PHASES, ...overrides };
 
-  // Phase counters for the consolidate audit emit (in finally).
-  // Accumulated as each phase completes so partial-failure paths still report
-  // accurate "what got done before the failure" data.
+  // Phase counters for the consolidate audit emit (in finally), accumulated per phase so a partial failure still reports what got done.
   const counts: SleepCounts = { consolidation: 0, dedup: 0, auditDeleted: 0, ambient: 0 };
   let phaseError: Error | null = null;
 
   try {
     return await runSleepPhases(ctx, opts, phases, counts);
   } catch (err) {
-    // SAFETY: phaseError is read via phaseError.message / (phaseError !==
-    // null) below, both safe even if a non-Error was thrown; this mirrors
-    // the existing lenient (err as Error) pattern used throughout this catch chain.
+    // SAFETY: phaseError is only read via phaseError.message / (phaseError !== null) below, safe even if a non-Error was thrown;
+    // this mirrors the lenient (err as Error) pattern used through this catch chain.
     phaseError = err as Error;
     throw err;
   } finally {

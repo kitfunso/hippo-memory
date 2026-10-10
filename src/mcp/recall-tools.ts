@@ -33,11 +33,8 @@ import { isJsonString } from '../util/json.js';
 import { parseContextRequest, parseRecallRequest, toolParams } from '../api/recall-request.js';
 import { noteRecall, sessionRing, shownRecallRows } from '../api/recall-record.js';
 
-// Named shapes for the optional fields each api.* call only wants to pass
-// when the caller actually supplied them. Built via `const extra: T = {};
-// if (cond) extra.field = value;` then spread once, unconditionally — keeps
-// the same per-field omission semantics as a conditional spread without the
-// `...(cond ? { field } : {})` pattern.
+// Named shapes for optional fields each api.* call only wants when the caller supplied them: build `extra`, then spread once,
+// which keeps per-field omission without the `...(cond ? { field } : {})` pattern.
 interface AssembleExtraOpts {
   budget?: number;
   freshTailCount?: number;

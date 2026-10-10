@@ -11,11 +11,7 @@ export interface GoalStackBoostOpts {
   sessionId: string;
   tenantId: string;
   limit: number;
-  /**
-   * Optional side-channel: one goal-boost `RerankStep` per boosted row, keyed by
-   * `entry.id`. A map rather than a row field because the helper re-spreads rows.
-   * Only populated when passed, so the default path allocates nothing.
-   */
+  /** Side-channel: one goal-boost `RerankStep` per boosted row, keyed by `entry.id` (a map because the helper re-spreads rows); only populated when passed. */
   trace?: Map<string, RerankStep>;
 }
 
@@ -97,9 +93,7 @@ export function boostByGoals<R extends { entry: MemoryEntry; score: number }>(
   const goalsByTag = new Map(active.goals.map((g) => [g.goalName, g]));
   const policiesByGoalId = active.policies;
 
-  // Goal-tag matches per boosted row, keyed by entry id. Kept as a side table
-  // (rather than a spread-on `_goalMatches` marker property) so `boosted`
-  // stays exactly R[] end to end, with no cast-tag-then-strip round trip.
+  // Goal-tag matches per boosted row, keyed by entry id; a side table (not a spread-on marker property) so `boosted` stays exactly R[] with no cast-then-strip.
   const matchesByEntryId = new Map<string, string[]>();
 
   const boosted = results
@@ -120,15 +114,11 @@ export function boostByGoals<R extends { entry: MemoryEntry; score: number }>(
         });
       }
       matchesByEntryId.set(r.entry.id, matches);
-      // SAFETY: spreading a generic-constrained `r: R` widens the result to
-      // the spread's plain object type; only `score` changes, so the value
-      // still satisfies R's shape exactly.
+      // SAFETY: spreading a generic-constrained `r: R` widens to the spread's plain object type; only `score` changes, so the value still satisfies R.
       return { ...r, score: r.score * multiplier } as R;
     })
-    // Deliberately a PLAIN stable score sort, no compareEntryIdentity
-    // tail -- a re-sort of an already deterministically-ordered ranking
-    // inherits its determinism via sort stability, and ties preserve the
-    // prior (meaningful) rank instead of reordering by content.
+    // Deliberately a PLAIN stable score sort with no compareEntryIdentity tail: re-sorting an already deterministic ranking inherits its determinism via
+    // stability, and ties keep the prior (meaningful) rank instead of reordering by content.
     .sort((a, b) => compareScoresDesc(a.score, b.score));
 
   return { results: boosted, log: buildGoalRecallLog(boosted, matchesByEntryId, goalsByTag, opts) };

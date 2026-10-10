@@ -8,15 +8,8 @@ export function _resetSessionRecallHistoryMcpForTests(): void {
   resetSessionRings('mcp');
 }
 
-// ── Track last recalled IDs for outcome feedback ──
-//
-// Keyed per-client so two HTTP-MCP clients hitting the same tenant cannot
-// poison each other's outcome feedback. The key is `ctx.clientKey` when the
-// transport supplies one (HTTP-MCP via src/server.ts builds
-// hash(bearer+remoteAddr)); stdio and any caller without a clientKey falls
-// back to `'stdio-${pid}'` (one process = one client) or
-// `${tenantId}:default` if a McpContext is constructed in tests without a
-// pid-bound transport.
+// Last recalled IDs per client for outcome feedback, so two HTTP-MCP clients on one tenant cannot poison each other: key is `ctx.clientKey` (hash of
+// bearer+remoteAddr over HTTP), else 'stdio-${pid}', else `${tenantId}:default` for a McpContext built in tests.
 const MAX_RECALL_CLIENTS = 4096;
 
 // The caller names the project half of each key, so a set past the cap drops the client that recalled longest ago.

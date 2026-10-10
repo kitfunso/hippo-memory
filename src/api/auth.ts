@@ -21,10 +21,6 @@ function keyIdOfSubject(subject: string): string | null {
   return subject.startsWith(API_KEY_SUBJECT) ? subject.slice(API_KEY_SUBJECT.length) : null;
 }
 
-// ---------------------------------------------------------------------------
-// auth: create / list / revoke
-// ---------------------------------------------------------------------------
-
 export interface AuthCreateOpts {
   label?: string;
   /** Defaults to `'member'`, which admin-gated routes such as `POST /v1/sleep` refuse; an admin key has to be asked for by name. */
@@ -45,17 +41,8 @@ export interface AuthCreateResult {
   expiresAt: string | null;
 }
 
-/**
- * Mint a new API key. The new key is ALWAYS bound to `ctx.tenantId`. Callers
- * cannot override the tenant via the opts bag — a previous `tenantId` field
- * was removed because the HTTP layer would happily forward `body.tenantId`,
- * letting tenant A mint a key for tenant B. The HTTP route handler at
- * `src/server.ts` POST /v1/auth/keys mirrors this: it ignores any body
- * `tenantId` and uses the resolved Bearer's tenant exclusively.
- *
- * Only an admin actor can mint (ForbiddenError otherwise), and a key never
- * outranks its minter: a resolver admin is tenant-only, so it mints members.
- */
+/** Mints a key always bound to `ctx.tenantId`; opts cannot override the tenant, or tenant A could mint a key for tenant B.
+ * Admin only (ForbiddenError otherwise), and a key never outranks its minter: a resolver admin is tenant-only, so it mints members. */
 export function authCreate<C extends Context>(ctx: C, opts: AuthCreateOpts): StoreReply<C, AuthCreateResult> {
   // The key and its auth_create row commit together on either store, so a failed audit write leaves no key.
   return onStore(ctx, (port) => {
@@ -252,10 +239,8 @@ function keyOwnerOf(record: ApiKeyRecord | null): ApiKeyOwner | undefined {
   return record ? { tenantId: record.tenantId, revokedAt: record.revokedAt, role: record.role, ownerSubject: record.ownerSubject ?? null } : undefined;
 }
 
-/**
- * The tenant that owns `keyId`, or undefined for an unknown key. Host admin only: it reads across tenants,
- * so the local CLI can run revoke and grant in the key's own tenant.
- */
+/** The tenant that owns `keyId`, or undefined for an unknown key. Host admin only: it reads across tenants,
+ * so the local CLI can run revoke and grant in the key's own tenant. */
 export function authKeyTenant(ctx: Context, keyId: string): string | undefined {
   if (!ctx.actor.hostAdmin) {
     throw new ForbiddenError('Only the host admin can look up a key across tenants');

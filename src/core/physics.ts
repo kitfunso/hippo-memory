@@ -1,23 +1,11 @@
-/**
- * Memory-as-Physics engine for Hippo.
- *
- * Pure math module: forces, Velocity Verlet integration, physics-based scoring,
- * and cluster amplification. No I/O — all state is passed in and returned.
- *
- * Memories are particles on the unit hypersphere in embedding space (384-dim).
- * Forces act on them: query gravity (retrieval), inter-memory attraction,
- * conflict repulsion, and drag (consolidation). Nearby high-scoring memories
- * amplify each other via constructive interference.
- */
+/** Memory-as-Physics engine: pure math (forces, Velocity Verlet integration, physics-based scoring, cluster amplification), no I/O.
+ * Memories are particles on the unit hypersphere in embedding space (384-dim); query gravity, attraction, conflict repulsion and drag act on them,
+ * and nearby high-scoring memories amplify each other. */
 
 import { isRecallBoostAblated } from './ablation.js';
 import { FALLBACK_HALF_LIFE_DAYS, type EmotionalValence } from './memory.js';
 import type { PhysicsConfig } from './physics-config.js';
 import { comparePhysicsResultsBy } from './compare.js';
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
 
 export interface PhysicsParticle {
   memoryId: string;
@@ -49,10 +37,6 @@ export interface SimulationStats {
   energy: SystemEnergy;
   substepsRun: number;
 }
-
-// ---------------------------------------------------------------------------
-// Vector math (hot path — kept inline for performance)
-// ---------------------------------------------------------------------------
 
 export function vecDot(a: number[], b: number[]): number {
   let sum = 0;
@@ -110,10 +94,6 @@ function cosine(a: number[], b: number[]): number {
   return Math.min(1, Math.max(-1, dot / (na * nb)));
 }
 
-// ---------------------------------------------------------------------------
-// Property derivation from memory attributes
-// ---------------------------------------------------------------------------
-
 const CHARGE_MAP = {
   neutral: 0,
   positive: 0.3,
@@ -122,9 +102,8 @@ const CHARGE_MAP = {
 } satisfies Record<EmotionalValence, number>;
 
 export function computeMass(strength: number, retrievalCount: number): number {
-  // EVAL-ONLY ablation (see ablation.ts): under the recall-boost flag mass ignores retrieval history, since
-  // query gravity ranks by mass and prior counts would leak strengthening into the ablated arm's
-  // physics-pool rankings. Covers both the init and refresh callers in physics-state.ts.
+  // EVAL-ONLY ablation (ablation.ts): under the recall-boost flag mass ignores retrieval history, which would otherwise leak strengthening into the ablated
+  // arm's physics-pool rankings (query gravity ranks by mass). Covers both init and refresh callers in physics-state.ts.
   const effectiveCount = isRecallBoostAblated() ? 0 : retrievalCount;
   return Math.max(0.01, strength * (1 + 0.1 * Math.log2(effectiveCount + 1)));
 }
@@ -137,16 +116,7 @@ export function computeTemperature(ageDays: number, temperatureDecay: number): n
   return 1 / (ageDays * temperatureDecay + 1);
 }
 
-// ---------------------------------------------------------------------------
-// Force computations
-// ---------------------------------------------------------------------------
-
-/**
- * Query gravity (retrieval-time, virtual — does not update position).
- * Returns scalar force magnitude for ranking.
- *
- * F_query(i) = G_Q * mass(i) * max(0, cosine(pos_i, query))^2
- */
+/** Query gravity (retrieval-time, virtual: does not move the particle): scalar ranking magnitude F = G_Q * mass * max(0, cosine(pos, query))^2. */
 export function queryGravityMagnitude(
   particle: PhysicsParticle,
   queryEmbedding: number[],
@@ -156,10 +126,7 @@ export function queryGravityMagnitude(
   return G_query * particle.mass * Math.pow(Math.max(0, cos), 2);
 }
 
-/**
- * Momentum bonus: how aligned is the particle's velocity with the query direction?
- * Returns a value in [0, 1].
- */
+/** Momentum bonus in [0, 1]: how aligned the particle's velocity is with the query direction. */
 export function velocityAlignmentBonus(
   particle: PhysicsParticle,
   queryEmbedding: number[],
@@ -172,15 +139,8 @@ export function velocityAlignmentBonus(
   return Math.max(0, alignment);
 }
 
-/**
- * Inter-memory attraction force vector (consolidation-time).
- * Attractive force from particle j on particle i.
- *
- * F_attract(i,j) = G_M * m_i * m_j * max(0, cosine(i,j))^3 * direction(j→i in embedding space)
- *
- * Direction is computed as the component of (pos_j - pos_i) that lies tangent to the
- * unit sphere at pos_i (since we normalize positions back to the sphere after integration).
- */
+/** Attraction force on particle i from j (consolidation-time): G_M m_i m_j max(0, cosine)^3, directed along (pos_j - pos_i) projected tangent to the unit
+ * sphere at pos_i (positions are re-normalized to the sphere after integration). */
 export function attractionForce(
   pi: PhysicsParticle,
   pj: PhysicsParticle,
@@ -195,13 +155,7 @@ export function attractionForce(
   return vecScale(direction, magnitude);
 }
 
-/**
- * Conflict repulsion force vector (consolidation-time).
- * Repulsive force pushing i away from j.
- *
- * F_repel(i,j) = K_R * m_i * m_j / max(0.01, cosine_distance(i,j))^2
- * where cosine_distance = 1 - cosine_similarity
- */
+/** Conflict repulsion on i away from j (consolidation-time): K_R * m_i * m_j / max(0.01, cosine_distance)^2, where cosine_distance = 1 - cosine_similarity. */
 export function repulsionForce(
   pi: PhysicsParticle,
   pj: PhysicsParticle,
@@ -215,12 +169,7 @@ export function repulsionForce(
   return vecScale(direction, magnitude);
 }
 
-/**
- * Drag force vector (consolidation-time).
- * F_drag(i) = -drag * velocity(i) / max(1, effective_half_life(i))
- *
- * effectiveHalfLife should be passed in from the memory's current half_life_days.
- */
+/** Drag force (consolidation-time): -drag * velocity / max(1, effectiveHalfLife), with effectiveHalfLife from the memory's current half_life_days. */
 export function dragForce(
   particle: PhysicsParticle,
   drag: number,
@@ -230,10 +179,6 @@ export function dragForce(
   return vecScale(particle.velocity, -damping);
 }
 
-// ---------------------------------------------------------------------------
-// Velocity Verlet integration
-// ---------------------------------------------------------------------------
-
 export interface ForceContext {
   /** Map of memory ID -> list of conflicting memory IDs */
   conflictPairs: Map<string, Set<string>>;
@@ -242,9 +187,6 @@ export interface ForceContext {
   config: PhysicsConfig;
 }
 
-/**
- * Compute net force on particle i from all other particles + drag.
- */
 function computeNetForce(
   i: number,
   particles: PhysicsParticle[],
@@ -278,10 +220,7 @@ function computeNetForce(
   return net;
 }
 
-/**
- * Run one Velocity Verlet integration step for all particles.
- * Mutates particles in place for performance.
- */
+/** One Velocity Verlet step for all particles; mutates in place for performance. */
 function verletStep(
   particles: PhysicsParticle[],
   accelerations: number[][],
@@ -323,10 +262,7 @@ function verletStep(
   }
 }
 
-/**
- * Run the full physics simulation for one sleep cycle.
- * Mutates particles in place. Returns simulation statistics.
- */
+/** Full physics simulation for one sleep cycle; mutates particles in place and returns simulation statistics. */
 export function simulate(
   particles: PhysicsParticle[],
   ctx: ForceContext,
@@ -378,10 +314,6 @@ export function simulate(
   };
 }
 
-// ---------------------------------------------------------------------------
-// System energy (health monitoring)
-// ---------------------------------------------------------------------------
-
 export function computeSystemEnergy(
   particles: PhysicsParticle[],
   G_memory: number,
@@ -404,22 +336,13 @@ export function computeSystemEnergy(
   return { kinetic, potential, total: kinetic + potential };
 }
 
-// ---------------------------------------------------------------------------
-// Physics-based scoring (retrieval-time)
-// ---------------------------------------------------------------------------
-
-/**
- * Score all particles against a query embedding using physics-based ranking.
- * Does NOT modify particle positions (virtual force computation).
- */
+/** Scores all particles against a query embedding; virtual force computation, so it does NOT modify particle positions. */
 export function physicsScore(
   particles: PhysicsParticle[],
   queryEmbedding: number[],
   config: PhysicsConfig,
-  /** Cross-ingest-stable tie key per memoryId (typically the memory's
-   *  content, supplied by the caller which has entries in scope). Without
-   *  it ties fall to memoryId -- per-instance only, which lets the
-   *  cluster_top_k amplification set vary across fresh ingests. */
+  /** Cross-ingest-stable tie key per memoryId (typically the memory content, from a caller with entries in scope); without it ties fall to memoryId,
+   *  which is per-instance only and lets the cluster_top_k amplification set vary across fresh ingests. */
   tieKeyOf?: (memoryId: string) => string,
 ): ScoredPhysicsResult[] {
   if (particles.length === 0 || queryEmbedding.length === 0) return [];
@@ -436,10 +359,8 @@ export function physicsScore(
     };
   });
 
-  // Sort by base score for top-K selection: score desc -> tie key asc.
-  // The tie order here picks the cluster_top_k amplification SET (which
-  // mutates scores), so it must be cross-ingest-stable when the caller
-  // supplies a content tie key. See compare.ts comparePhysicsResultsBy.
+  // Base-score order picks the cluster_top_k amplification SET (which mutates scores), so ties must be cross-ingest-stable
+  // when the caller supplies a content tie key (see comparePhysicsResultsBy in compare.ts).
   const tie = tieKeyOf ? (r: ScoredPhysicsResult) => tieKeyOf(r.memoryId) : undefined;
   results.sort(comparePhysicsResultsBy((r) => r.baseScore, tie));
 
@@ -452,10 +373,7 @@ export function physicsScore(
   return results;
 }
 
-/**
- * Cluster amplification: nearby high-scoring memories reinforce each other.
- * Mutates results in place.
- */
+/** Cluster amplification: nearby high-scoring memories reinforce each other; mutates results in place. */
 function applyClusterAmplification(
   results: ScoredPhysicsResult[],
   particles: PhysicsParticle[],
@@ -492,15 +410,7 @@ function applyClusterAmplification(
   }
 }
 
-// ---------------------------------------------------------------------------
-// Outcome feedback (micro-nudge)
-// ---------------------------------------------------------------------------
-
-/**
- * Nudge a particle's position toward (good outcome) or away from (bad outcome)
- * the query embedding. Respects temperature: new memories respond more.
- * Mutates particle in place.
- */
+/** Nudges a particle toward (good outcome) or away from (bad outcome) the query embedding; new memories respond more (temperature). Mutates in place. */
 export function applyOutcomeFeedback(
   particle: PhysicsParticle,
   queryEmbedding: number[],

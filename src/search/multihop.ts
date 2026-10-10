@@ -46,8 +46,7 @@ export function multihopSearch(
     }
   }
 
-  // PLAIN stable score sort on purpose -- pass1/pass2 inputs are
-  // deterministically ordered (search() carries the content tail), stability
-  // inherits that, and ties keep pass-1 results ahead of pass-2 follow-ups.
+  // PLAIN stable score sort on purpose: pass1/pass2 inputs are already deterministically ordered (search() carries the content tail),
+  // stability inherits that, and ties keep pass-1 results ahead of pass-2 follow-ups.
   return fit([...merged.values()].sort((a, b) => compareScoresDesc(a.score, b.score)));
 }

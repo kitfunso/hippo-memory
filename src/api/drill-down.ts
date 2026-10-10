@@ -11,28 +11,13 @@ import type { Context } from './types.js';
 
 const DEFAULT_DRILL_DOWN_LIMIT = 50;
 
-// ---------------------------------------------------------------------------
-// drillDown — DAG-aware recall Phase 1 Task 3
-// ---------------------------------------------------------------------------
-
 export interface DrillDownOpts {
   /** Cap on number of children returned. Default 50. */
   limit?: number;
-  /**
-   * Optional token budget. When set, children are appended in chronological
-   * order (created ASC) until adding the next child would exceed the budget.
-   * Token cost = the child's printed line under `cost`, else ceil(content.length / 4).
-   *
-   * For depth > 1, the budget is GLOBAL cumulative (NOT per-level).
-   */
+  /** Token budget: children append in created order until the next would exceed it (cost: printed line under `cost`, else ceil(content.length / 4)).
+   * For depth > 1 the budget is global and cumulative, not per level. */
   budget?: number;
-  /**
-   * v0.30 / E5 — walk N levels down (default 1 = direct children only).
-   * Higher values include children of children, etc. Internal hard cap 10
-   * to prevent pathological depth walks. BFS uses visited Set for dedup
-   * (defensive against shared-child data anomalies; DAG is acyclic by
-   * construction).
-   */
+  /** Levels to walk down (default 1 = direct children); capped at 10 internally. BFS dedups with a visited Set, defensive against shared-child anomalies. */
   depth?: number;
   cost?: DrillDownCost;
   project?: CallerProject;
@@ -54,44 +39,16 @@ export interface DrillDownResult {
   truncated: boolean;
 }
 
-/**
- * v1.6.4 discriminated failure shape. Two reasons distinguishable:
- *   - `not_found`: covers genuinely-missing, wrong-tenant, AND
- *     scope-blocked (codex round 3 P1 — distinguishing scope_blocked
- *     from not_found on non-HTTP surfaces leaked private-row existence
- *     to no-scope callers, even though the HTTP route already collapsed
- *     them. Collapse at the API layer.)
- *   - `not_drillable`: id is a leaf row (level 0/1). Caller-actionable.
- *
- * If a future drillDown gains a `scope` opt for explicit-scope callers,
- * a `scope_blocked` failure could be safely re-introduced ONLY for that
- * code path (caller already proved authorization by passing a scope).
- */
+/** `not_found` covers missing, wrong-tenant AND scope-blocked, because distinguishing scope_blocked leaked private-row existence to no-scope callers.
+ *  `not_drillable`: the id is a leaf row (level 0/1), which the caller can act on. */
 export interface DrillDownFailure {
   failure: 'not_found' | 'not_drillable';
 }
 
 export type DrillDownOutcome = DrillDownResult | DrillDownFailure;
 
-/**
- * Walk one step down the DAG from a level-2 (or higher) summary to its direct
- * children. Companion to `recall(... summarizeOverflow: true)` — when recall
- * surfaces a summary with `substitutedFor: [...]`, the caller drills into the
- * summary id to recover the original detail.
- *
- * Tenant scope: only summaries owned by `ctx.tenantId` are reachable. The same
- * scope filter that recall applies is enforced on the children — a level-2
- * summary in `slack:public:CGEN` cannot leak `slack:private:*` children even
- * if the underlying DAG accidentally linked across scopes.
- *
- * Returns a discriminated `DrillDownOutcome`: `DrillDownResult` on success,
- * or `{failure: '...'}` for `not_found` (covers genuinely-missing, wrong-
- * tenant and scope-blocked, intentionally indistinguishable) or
- * `not_drillable` (id is a leaf row).
- *
- * Pre-v1.6.4 returned null for all three cases. JS callers migrate via
- * `'failure' in result` checks; HTTP route maps `not_drillable` to 422.
- */
+/** One step down the DAG from a level-2+ summary to its direct children (the way back from `recall(... summarizeOverflow: true)` substitutions). Only
+ * `ctx.tenantId` summaries are reachable; children get recall's scope filter. Returns `DrillDownResult` or `{failure}`; HTTP maps `not_drillable` to 422. */
 export async function drillDown(
   ctx: Context,
   summaryId: string,
@@ -112,10 +69,8 @@ export async function drillDown(
     admit: (row) => readable(row) && (row.id !== summaryId || isDrillable(row)),
     page: limit >= 0 && Number.isSafeInteger(pastLimit) ? { rows: pastLimit, admit: readable } : undefined,
   });
-  // No unscoped cross-tenant probe here: the tenant-scoped read's miss covers
-  // both "doesn't exist" and "exists in another tenant" by design.
-  // Distinguishing them via an unscoped lookup would leak existence to
-  // unauthorised tenants. The two cases collapse into not_found.
+  // No unscoped cross-tenant probe: the tenant-scoped miss covers "missing" and "in another tenant" alike,
+  // because telling them apart would leak existence to unauthorised tenants.
   if (!walked) return { failure: 'not_found' };
   // A distinguishable "scope_blocked" would tell a no-scope caller "this row
   // exists, just not for you", the existence leak the HTTP 404 collapse prevents.
@@ -155,9 +110,7 @@ function drillResult({ summary, levels, sizes: counted }: SummaryDescendants, op
   return {
     summary: summaryOut,
     children,
-    // v0.30 / E5: totalChildren = BFS-collected count (depth-aware). For
-    // depth=1 this equals the eligible direct-children count (backward
-    // compat). For depth>1 it is the cumulative count across levels.
+    // totalChildren is the BFS-collected count, cumulative across levels (equals the direct-children count at depth=1).
     totalChildren: total,
     truncated,
   };

@@ -9,25 +9,9 @@ import { HttpError } from '../util/http-util.js';
 const IPV6_PREFIX_GROUPS = 4;
 
 /**
- * Rate-limit key for a request. Defaults to the socket's remote address.
- *
- * Behind a TLS-terminating proxy (Fly, most PaaS ingress) every socket
- * carries the proxy's address, so per-IP buckets collapse into one global
- * bucket that unauthenticated traffic can drain before auth runs. Set
- * HIPPO_CLIENT_IP_HEADER to the header the proxy stamps with the real
- * client address (fly-client-ip on Fly, which the edge always overwrites)
- * to key buckets per client instead.
- *
- * Only set this when a trusted proxy fronts EVERY request: a directly
- * reachable server honoring the header would let clients mint a fresh
- * bucket per request and bypass the limiter entirely.
- *
- * HIPPO_TRUSTED_PROXIES (comma-separated IPs or CIDRs) pins which peers count
- * as that proxy: the header is read only when the socket peer is listed, and
- * listed hops are skipped. In a comma-joined chain (X-Forwarded-For) the key is
- * the rightmost hop no trusted proxy added; entries to its left are whatever
- * the client sent, so they never pick the bucket.
- */
+ * Rate-limit key: the socket's remote address, which behind a TLS proxy collapses into one bucket unauthenticated traffic can drain.
+ * Set HIPPO_CLIENT_IP_HEADER (fly-client-ip on Fly) only when a trusted proxy fronts EVERY request, or clients could mint a fresh bucket per request.
+ * HIPPO_TRUSTED_PROXIES (IPs or CIDRs) pins which peers count as that proxy; in a comma-joined chain the key is the rightmost hop no trusted proxy added. */
 export function clientIpForRateLimit(req: IncomingMessage): string {
   const socketIp = req.socket.remoteAddress ?? 'unknown';
   const header = envClientIpHeader();
@@ -104,15 +88,8 @@ function isTrustedProxy(list: BlockList, ip: string): boolean {
 }
 
 export function enforceRateLimit(req: IncomingMessage, path: string, limiter?: RateLimiter): void {
-  // Per-IP rate limit on /v1/* and /mcp* to bound api-key-id enumeration. /health
-  // (a liveness probe) and other paths are never throttled. A 429 thrown
-  // here lands in the createServer catch like any other HttpError.
-  //
-  // Keyed on the socket's remote address by default. Behind a TLS-terminating
-  // proxy every socket carries the proxy's address, collapsing the per-IP
-  // buckets into one global bucket that pre-auth traffic can drain; set
-  // HIPPO_CLIENT_IP_HEADER there so each real client gets its own bucket
-  // (see clientIpForRateLimit).
+  // Per-IP rate limit on /v1/* and /mcp* to bound api-key-id enumeration; /health and other paths are never throttled, and a 429 lands in the createServer
+  // catch. Keyed per clientIpForRateLimit (set HIPPO_CLIENT_IP_HEADER behind a TLS-terminating proxy, or all clients share one bucket).
   if (limiter && (path.startsWith('/v1/') || path === '/mcp' || path === '/mcp/stream')) {
     if (!limiter.check(clientLimitKey(req))) {
       throw new HttpError(429, 'rate limit exceeded', limiter.retryAfterSec);

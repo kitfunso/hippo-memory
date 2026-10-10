@@ -31,10 +31,8 @@ interface McpRequest {
   jsonrpc: '2.0';
   id: number | string;
   method: string;
-  // NOTE: kept as Record<string, unknown> (not narrowed to a JsonValue
-  // Wire params are always parsed JSON, so the value domain is JsonValue;
-  // every read of `params` (the tools/call case below) still narrows via
-  // the isJson* predicates before use.
+  // Kept as Record<string, JsonValue>: wire params are always parsed JSON, and every read of `params` (tools/call below) narrows via the isJson* predicates
+  // first.
   params?: Record<string, JsonValue>;
 }
 
@@ -61,25 +59,14 @@ export function mcpErrorResponse<E>(id: McpResponse['id'], err: E, requestId: st
 
 export type { McpRequest, McpResponse };
 
-/**
- * Optional execution context threaded from a non-stdio transport. When the
- * HTTP transport in src/server.ts calls handleMcpRequest, it knows the
- * server's bound hippoRoot and the auth-resolved tenantId/actor. Passing
- * those through here lets executeTool skip the findHippoRoot() walk and
- * the env-based resolveTenantId({}) fallback — both of which would
- * otherwise produce the wrong store and the wrong tenant for HTTP callers.
- *
- * Stdio callers pass nothing; behavior stays unchanged for that path.
- */
+/** Optional context from a non-stdio transport (the HTTP server's bound hippoRoot and auth-resolved tenantId/actor), so executeTool skips the
+ * findHippoRoot() walk and the env-based resolveTenantId({}) fallback, which would pick the wrong store and tenant for HTTP callers. Stdio passes nothing. */
 export interface McpContext {
   hippoRoot: string;
   tenantId: string;
   actor: string;
-  /**
-   * The caller's role from the HTTP transport's auth. Absent for stdio, which
-   * is the local operator and runs as admin. Tools must use this rather than
-   * assuming admin, or a member key over HTTP-MCP would act as admin.
-   */
+  /** The caller's role from the HTTP transport's auth; absent for stdio (the local operator, admin). Tools must use this, or a member key over HTTP-MCP
+   * would act as admin. */
   role?: 'admin' | 'member';
   /** Scope grants for the HTTP-MCP caller's key. Absent for stdio (admin, needs none). */
   scopes?: readonly string[];
@@ -90,20 +77,13 @@ export interface McpContext {
   project?: CallerProject; // from X-Hippo-Project on a shared store: stamps writes, filters reads, keys outcomes
   store?: HippoStore;
   autoSleep?: false;
-  /**
-   * Per-client key for state isolation under HTTP-MCP. For stdio: 'stdio-${pid}'
-   * (one process = one client). For HTTP-SSE / HTTP MCP: hash(bearer + remoteAddr)
-   * built by src/server.ts when constructing McpContext for the request.
-   * Optional for backwards compatibility; defaults to `${tenantId}:default`.
-   */
+  /** Per-client key for state isolation under HTTP-MCP: 'stdio-${pid}' for stdio, hash(bearer + remoteAddr) for HTTP (built in src/server/mcp-http.ts);
+   * defaults to `${tenantId}:default`. */
   clientKey?: string;
 }
 
-/**
- * The api-layer actor for a tool call. Stdio (no ctx) is the local operator
- * and runs as admin; over HTTP the transport's authenticated role is used, so
- * a member key never acts as admin through MCP.
- */
+/** The api-layer actor for a tool call: stdio (no ctx) is the local operator and runs as admin; over HTTP the authenticated role is used, so a member key
+ * never acts as admin. */
 export function mcpActor(ctx: McpContext | undefined): ApiActor {
   const actor: ApiActor = { subject: ctx?.actor ?? 'mcp', role: ctx?.role ?? 'admin', scopes: ctx?.scopes };
   if (ctx?.viaAuthResolver) actor.viaAuthResolver = true;

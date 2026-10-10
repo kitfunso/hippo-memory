@@ -1,4 +1,4 @@
-// Work-queue card types (W2a plan.md): a claimable unit of work, N candidates claim one row, first wins.
+// Work-queue card types: a claimable unit of work, N candidates claim one row, first wins.
 /** A work-queue card's lifecycle state; CARD_TRANSITIONS lists the legal moves between them. */
 export type CardStatus = 'backlog' | 'ready' | 'running' | 'blocked' | 'review' | 'done' | 'shelved';
 

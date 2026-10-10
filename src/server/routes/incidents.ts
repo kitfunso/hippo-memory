@@ -30,17 +30,8 @@ function linkedMemoryIds(body: Record<string, JsonValue>): string[] | undefined 
   return raw;
 }
 
-// ── incidents (first-class object) ──
-//
-// 5 routes: POST /v1/incidents (open; body text + context + linkedMemoryIds[]),
-// GET /v1/incidents (list, status filter), GET /v1/incidents/:id (show),
-// POST /v1/incidents/:id/resolve (open -> resolved; body resolutionText),
-// POST /v1/incidents/:id/close (open|resolved -> closed). Bearer-authed +
-// tenant-scoped via buildContextWithAuth. status validated against
-// VALID_INCIDENT_STATES. DoS caps: text, context and resolutionText
-// MAX_SHORT_FIELD_LEN. Mirrors /v1/decisions; lifecycle is
-// open->resolved->closed (no supersede), so linkedMemoryIds replaces
-// supersedesDecisionId on create.
+// Routes: /v1/incidents (open, list, show, resolve, close), mirroring /v1/decisions; status is validated against VALID_INCIDENT_STATES.
+// Lifecycle is open->resolved->closed (no supersede), so linkedMemoryIds replaces supersedesDecisionId on create.
 export async function handleCreateIncident(rr: RouteRequest): Promise<void> {
   const { req, res, opts } = rr;
   const ctx = await buildContextWithAuth(req, opts);
