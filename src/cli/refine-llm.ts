@@ -88,7 +88,7 @@ ${sourceBlock}`;
 function describeRefineFailure(failure: AnthropicMessageFailure): string {
   switch (failure.kind) {
     case 'request': return `refine: request failed: ${failure.message}`;
-    case 'http': return `refine: API answered HTTP ${failure.status}`;
+    case 'http': return `refine: API answered HTTP ${failure.status}${failure.detail ? `: ${failure.detail}` : ''}`;
     case 'unreadable': return `refine: unreadable response: ${failure.message}`;
   }
 }

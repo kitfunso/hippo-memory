@@ -1,0 +1,8 @@
+### Fixed
+
+- **An open that names no lock wait now waits 5 s everywhere.** The journal-mode switch and migrations used to wait up to 30 s on a held lock while the open's own `busy_timeout` was 5 s, so a hook could spin far past its budget. One constant now sets both.
+- **Sleep stops LLM extraction at the first failure that every later call would repeat.** A bad or missing key, no credit, no permission or an unknown model (HTTP 401, 402, 403, 404) ends the pass and the DAG passes after it, and the sleep details say how many candidates were skipped. Rate limits and server errors keep the existing retry.
+- **An LLM error reply now says why.** The failure carries the first 256 characters of the error body on one line, with key-shaped text masked, so `HTTP 401` reads `HTTP 401: {"type":"error",...}`.
+- **One LLM call, retries included, now has a total time limit.** It is two attempts plus the longest wait between them (128 s at the default 60 s timeout), where three slow failures could take three full timeouts.
+- **A routed CLI write or `hippo serve` no longer bypasses a server that is too busy to answer its health probe.** A probe timeout now fails with a message that names the server, its pid and `HIPPO_HEALTH_PROBE_MS`, where it used to fall back to opening the store as a second writer. A refused connection still clears the stale pidfile and falls back.
+- **Internal:** failures that left no trace are logged: a handle that fails to close after a failed open, an MCP call that fails after its timeout reply (was debug, now error), and a sleep child whose reply cannot be sent. A request deadline now runs every idle callback registered during a store call, not only the last.

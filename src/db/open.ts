@@ -1,11 +1,12 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { errorMessage, log } from '../util/log.js';
+import { errorFields, errorMessage, log } from '../util/log.js';
 import { DatabaseSync, type DatabaseSyncLike } from './sqlite.js';
 import { tableExists } from './tables.js';
 import { assertBinaryCompatible } from './migrate.js';
-import { connectWithFacts, DEFAULT_BUSY_WAIT_MS, getHippoDbPath, type OpenedDb } from './connect.js';
+import { DEFAULT_BUSY_WAIT_MS } from './busy.js';
+import { connectWithFacts, getHippoDbPath, type OpenedDb } from './connect.js';
 import { currentRequestStores, isScopedHandle, runWithRequestStores } from './request-stores.js';
 import { OtherStoreFolderError, SqliteBlockedError } from '../util/sqlite-blocked.js';
 
@@ -109,14 +110,14 @@ export function openHippoDbReadOnly(hippoRoot: string): DatabaseSyncLike {
   assertSqliteAllowed(hippoRoot);
   const db = new DatabaseSync(getHippoDbPath(hippoRoot), { readOnly: true });
   try {
-    db.exec('PRAGMA busy_timeout = 5000');
+    db.exec(`PRAGMA busy_timeout = ${DEFAULT_BUSY_WAIT_MS}`);
     if (tableExists(db, 'meta')) assertBinaryCompatible(db);
     return db;
   } catch (error) {
     try {
       db.close();
-    } catch {
-      // Best effort only.
+    } catch (closeErr) {
+      log.error(`openHippoDbReadOnly: closing the handle after a failed open failed: ${errorMessage(closeErr)}`, errorFields(closeErr));
     }
     throw error;
   }

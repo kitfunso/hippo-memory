@@ -2,6 +2,7 @@
 import * as path from 'node:path';
 import { Worker } from 'node:worker_threads';
 import { errorMessage, log } from '../util/log.js';
+import { DEFAULT_BUSY_WAIT_MS } from './busy.js';
 
 // WAL pages at which a connection checkpoints inside its own commit.
 const INLINE_CHECKPOINT_PAGES = 100;
@@ -23,7 +24,7 @@ const WORKER_SOURCE = `
 const { parentPort, workerData } = require('node:worker_threads');
 const { DatabaseSync } = require('node:sqlite');
 const db = new DatabaseSync(workerData.dbPath);
-db.exec('PRAGMA busy_timeout = 5000');
+db.exec('PRAGMA busy_timeout = ${DEFAULT_BUSY_WAIT_MS}');
 db.exec('PRAGMA synchronous = NORMAL');
 const pass = db.prepare('PRAGMA wal_checkpoint(PASSIVE)');
 parentPort.on('message', (message) => {

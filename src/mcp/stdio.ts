@@ -131,7 +131,7 @@ function dispatch(body: string): void {
   // A frame with no id is a notification under any method name, and JSON-RPC forbids answering one.
   const timedOut = watchDeadline(req, isJsonString(req.id) || isJsonNumber(req.id));
   track(req.method, handleMcpRequest(req).then((resp) => { if (!timedOut() && resp) send(resp); }).catch((err) => {
-    if (timedOut()) log.debug(`mcp: ${callName(req)} failed after its timeout reply: ${errorMessage(err)}`);
+    if (timedOut()) log.error(`mcp: ${callName(req)} failed after its timeout reply: ${errorMessage(err)}`, errorFields(err));
     else send(mcpErrorResponse(req.id, err));
   }));
 }
