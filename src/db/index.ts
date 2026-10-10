@@ -12,7 +12,7 @@ export {
   withWriteScopeOr
 } from './busy.js';
 export { getSchemaVersion, getMeta, setMeta, isFtsAvailable } from './meta.js';
-export { countTableRows, pruneConsolidationRuns } from './tables.js';
+export { countTableRows, pruneConsolidationRuns, CONSOLIDATION_RUNS_KEPT } from './tables.js';
 export { getCurrentSchemaVersion, IncompatibleBinaryError, ftsRowCounts, repairFtsDrift } from './migrate.js';
 export {
   getHippoDbPath,

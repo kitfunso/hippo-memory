@@ -139,7 +139,7 @@ export function strengthenRetrieved(hippoRoot: string, ids: readonly string[], o
   }
 }
 
-/** strengthenRetrieved on an open handle that holds no transaction, so a recall's last writes share one handle. */
+/** strengthenRetrieved on an open handle in its own write scope, a savepoint inside a caller's transaction, so a recall's last writes share one handle. */
 export function strengthenRetrievedInOwnTx(db: DatabaseSyncLike, ids: readonly string[], opts: StrengthenOptions): Set<string> {
   if (ids.length === 0 || opts.recallBoostAblated) return new Set();
   try {

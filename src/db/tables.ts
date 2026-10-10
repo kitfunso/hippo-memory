@@ -43,7 +43,10 @@ export function countTableRows(db: DatabaseSyncLike, table: string): number | nu
   }
 }
 
-export function pruneConsolidationRuns(db: DatabaseSyncLike, keep = 50): void {
+/** Sleep runs a store keeps; stats.json lists exactly these, so a recall's stats rewrite reads a fixed number of rows. */
+export const CONSOLIDATION_RUNS_KEPT = 50;
+
+export function pruneConsolidationRuns(db: DatabaseSyncLike, keep = CONSOLIDATION_RUNS_KEPT): void {
   db.prepare(`
     DELETE FROM consolidation_runs
     WHERE id NOT IN (
