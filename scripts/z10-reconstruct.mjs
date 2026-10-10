@@ -10,7 +10,8 @@ import { isText, parseTranscript, pairTurns } from './z10/transcript.mjs';
 const DIST = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'dist');
 // Windows dynamic import() needs a file:// URL, not a raw drive path.
 const { blockHash } = await import(pathToFileURL(path.join(DIST, 'util', 'token-text.js')).href);
-const { resolveGlobalRootDir } = await import(pathToFileURL(path.join(DIST, 'core', 'project-identity.js')).href);
+const { realpathOrResolve } = await import(pathToFileURL(path.join(DIST, 'util', 'real-path.js')).href);
+const { resolveGlobalRootDir } =await import(pathToFileURL(path.join(DIST, 'core', 'project-identity.js')).href);
 
 const RANK = { 'not-written': 0, 'not-retrieved': 1, rejected: 2, 'delivery-unconfirmed': 3, 'application-unknown': 4 };
 const ROW_CAP = 16;
@@ -310,10 +311,13 @@ export function reconstruct(opts) {
   }
   const local = openDb(store);
   if (local === null) throw new Error(`no hippo.db in ${store}`);
-  const globalRoot = opts.global === false ? null : path.resolve(opts.global ?? resolveGlobalRootDir());
-  const globalDb = globalRoot !== null && globalRoot !== path.resolve(store) ? openDb(globalRoot) : null;
+  // The writer hashes the canonical path, so a symlinked path would read every row as foreign.
+  const canonical = (p) => path.resolve(realpathOrResolve(p));
+  const storeCanonical = canonical(store);
+  const globalRoot = opts.global === false ? null : canonical(opts.global ?? resolveGlobalRootDir());
+  const globalDb = globalRoot !== null && globalRoot !== storeCanonical ? openDb(globalRoot) : null;
   const base = {
-    store_hash: blockHash(path.resolve(store)), tenant, session, memory_id: null, memory_store: null, notes: [], label: null,
+    store_hash: blockHash(storeCanonical), tenant, session, memory_id: null, memory_store: null, notes: [], label: null,
   };
   try {
     const part = build(local, { ...opts, globalDb }, base);

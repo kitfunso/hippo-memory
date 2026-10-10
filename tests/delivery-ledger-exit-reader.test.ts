@@ -11,6 +11,7 @@ import { deleteEntry } from '../src/store/delete-and-batch.js';
 import { writeDeliveryEventOnHandle } from '../src/store/recall-trace.js';
 import type { DeliveryCandidateInput, DeliveryEventInput, DeliveryRejectReason, DeliveryStage } from '../src/store/delivery-recorder.js';
 import { blockHash } from '../src/util/token-text.js';
+import { realpathOrResolve } from '../src/util/real-path.js';
 import type { JsonValue } from '../src/util/json.js';
 import { seed, verdictOf, writeHostTranscript, type ReadOpts, type Verdict } from './_helpers/host-transcript.js';
 import type { Project } from './_helpers/delivery-boundary.js';
@@ -40,7 +41,7 @@ function event(session: string, o: Partial<DeliveryEventInput> = {}): DeliveryEv
   tick += 1;
   return {
     ts: new Date(Date.parse('2026-10-01T00:00:00.000Z') + tick * 10_000).toISOString(), tenantId: 'default', runtime: 'claude-code',
-    eventType: 'prompt-submit', surface: 'hook', storeHash: blockHash(path.resolve(dir)), writeStore: 'local', projectHash: null,
+    eventType: 'prompt-submit', surface: 'hook', storeHash: blockHash(path.resolve(realpathOrResolve(dir))), writeStore: 'local', projectHash: null,
     sessionId: session, sessionState: 'payload', hostTurnId: null, promptHash: blockHash(`prompt ${tick}`), promptLength: 5, queryHash: null,
     recallTraceId: null, blockState: 'sent', promptRecall: false, consideredCount: 1, filteredCount: 0, selectedCount: 1, emittedCount: 1,
     rejectedCount: 0, rejectedUnlisted: 0, sectionsShown: 0, sectionsDropped: 0, budgetTokens: 1000, selectedTokens: 10, injectedTokens: 10,
@@ -254,6 +255,28 @@ describe('fold edge cases', () => {
     expect(rows.map((r) => [r.id, r.turn_seq, r.duplicate_of])).toEqual([[a, 1, null], [b, null, a]]);
     const v = read('r21', m.id);
     expect(v.notes).toEqual([`foreign-store:${a}`, `orphan-duplicate:${b}`]);
+  });
+
+  it('R26 a store reached through a symlinked folder reads its own rows', (ctx) => {
+    const m = present();
+    const block = 'the block that was sent';
+    write(event('r26', { promptHash: blockHash('a prompt'), emittedHash: blockHash(block), candidates: [row(m.id)] }));
+    const link = `${dir}-link`;
+    try {
+      fs.symlinkSync(dir, link, 'junction');
+    } catch (err) {
+      // SAFETY: fs.symlinkSync throws only errno exceptions.
+      if ((err as NodeJS.ErrnoException).code === 'EPERM') return ctx.skip();
+      throw err;
+    }
+    try {
+      const v = verdictOf({ store: link, session: 'r26', memory: m.id, transcript: transcript([{ prompt: 'a prompt', attach: block }]) });
+      expect(v.class).toBe('application-unknown');
+      expect(v.notes.some((n: string) => n.startsWith('foreign-store'))).toBe(false);
+      expect(v.store_hash).toBe(blockHash(path.resolve(realpathOrResolve(dir))));
+    } finally {
+      fs.unlinkSync(link);
+    }
   });
 
   it('R23 a duplicate of a row that is not a main row is noted (the writer cannot produce the pair, so one UPDATE unnumbers the original)', () => {

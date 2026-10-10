@@ -6,6 +6,7 @@ import { expect } from 'vitest';
 import type { JsonValue } from '../../src/util/json.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
 import { blockHash } from '../../src/util/token-text.js';
+import { realpathOrResolve } from '../../src/util/real-path.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../../src/core/memory.js';
 import { reconstruct } from '../../scripts/z10-reconstruct.mjs';
 import { hippo, promptPayload, PROMPT_HOOK, type Project, type RunOpts } from './delivery-boundary.js';
@@ -68,7 +69,7 @@ export function expectVerdict(v: Verdict, want: Oracle & { store: string; sessio
     class: v.class, reason: v.reason, store_hash: v.store_hash, tenant_id: v.tenant_id,
     session_id: v.session_id, turn: v.turn, stage: v.stage, memory_id: v.memory_id,
   }).toEqual({
-    class: want.class, reason: want.reason, store_hash: blockHash(path.resolve(want.store)), tenant_id: want.tenant ?? 'default',
+    class: want.class, reason: want.reason, store_hash: blockHash(path.resolve(realpathOrResolve(want.store))), tenant_id: want.tenant ?? 'default',
     session_id: want.session, turn: want.turn, stage: want.stage, memory_id: want.memory,
   });
 }
