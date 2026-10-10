@@ -69,7 +69,7 @@ export function expectVerdict(v: Verdict, want: Oracle & { store: string; sessio
     class: v.class, reason: v.reason, store_hash: v.store_hash, tenant_id: v.tenant_id,
     session_id: v.session_id, turn: v.turn, stage: v.stage, memory_id: v.memory_id,
   }).toEqual({
-    class: want.class, reason: want.reason, store_hash: blockHash(path.resolve(realpathOrResolve(want.store))), tenant_id: want.tenant ?? 'default',
+    class: want.class, reason: want.reason, store_hash: blockHash(path.join(realpathOrResolve(path.dirname(path.resolve(want.store))), path.basename(want.store))), tenant_id: want.tenant ?? 'default',
     session_id: want.session, turn: want.turn, stage: want.stage, memory_id: want.memory,
   });
 }

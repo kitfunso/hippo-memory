@@ -14,7 +14,8 @@ import { blockHash } from '../src/util/token-text.js';
 import { realpathOrResolve } from '../src/util/real-path.js';
 import type { JsonValue } from '../src/util/json.js';
 import { seed, verdictOf, writeHostTranscript, type ReadOpts, type Verdict } from './_helpers/host-transcript.js';
-import type { Project } from './_helpers/delivery-boundary.js';
+import { dispose, project, type Project } from './_helpers/delivery-boundary.js';
+import { fire } from './_helpers/host-transcript.js';
 import { parseTranscript } from '../scripts/z10/transcript.mjs';
 
 const SCRIPT = path.resolve(__dirname, '..', 'scripts', 'z10-reconstruct.mjs');
@@ -41,7 +42,7 @@ function event(session: string, o: Partial<DeliveryEventInput> = {}): DeliveryEv
   tick += 1;
   return {
     ts: new Date(Date.parse('2026-10-01T00:00:00.000Z') + tick * 10_000).toISOString(), tenantId: 'default', runtime: 'claude-code',
-    eventType: 'prompt-submit', surface: 'hook', storeHash: blockHash(path.resolve(realpathOrResolve(dir))), writeStore: 'local', projectHash: null,
+    eventType: 'prompt-submit', surface: 'hook', storeHash: blockHash(path.join(realpathOrResolve(path.dirname(path.resolve(dir))), path.basename(dir))), writeStore: 'local', projectHash: null,
     sessionId: session, sessionState: 'payload', hostTurnId: null, promptHash: blockHash(`prompt ${tick}`), promptLength: 5, queryHash: null,
     recallTraceId: null, blockState: 'sent', promptRecall: false, consideredCount: 1, filteredCount: 0, selectedCount: 1, emittedCount: 1,
     rejectedCount: 0, rejectedUnlisted: 0, sectionsShown: 0, sectionsDropped: 0, budgetTokens: 1000, selectedTokens: 10, injectedTokens: 10,
@@ -257,28 +258,6 @@ describe('fold edge cases', () => {
     expect(v.notes).toEqual([`foreign-store:${a}`, `orphan-duplicate:${b}`]);
   });
 
-  it('R26 a store reached through a symlinked folder reads its own rows', (ctx) => {
-    const m = present();
-    const block = 'the block that was sent';
-    write(event('r26', { promptHash: blockHash('a prompt'), emittedHash: blockHash(block), candidates: [row(m.id)] }));
-    const link = `${dir}-link`;
-    try {
-      fs.symlinkSync(dir, link, 'junction');
-    } catch (err) {
-      // SAFETY: fs.symlinkSync throws only errno exceptions.
-      if ((err as NodeJS.ErrnoException).code === 'EPERM') return ctx.skip();
-      throw err;
-    }
-    try {
-      const v = verdictOf({ store: link, session: 'r26', memory: m.id, transcript: transcript([{ prompt: 'a prompt', attach: block }]) });
-      expect(v.class).toBe('application-unknown');
-      expect(v.notes.some((n: string) => n.startsWith('foreign-store'))).toBe(false);
-      expect(v.store_hash).toBe(blockHash(path.resolve(realpathOrResolve(dir))));
-    } finally {
-      fs.unlinkSync(link);
-    }
-  });
-
   it('R23 a duplicate of a row that is not a main row is noted (the writer cannot produce the pair, so one UPDATE unnumbers the original)', () => {
     const m = present();
     const promptHash = blockHash('one prompt fired twice');
@@ -438,5 +417,80 @@ describe('the command line', () => {
   ])('R14 %s exits 2 with usage on stderr', (_name, args) => {
     const r = spawnSync(process.execPath, [SCRIPT, ...args], { encoding: 'utf8' });
     expect([r.status, r.stdout, r.stderr.includes('usage:')]).toEqual([2, '', true]);
+  });
+});
+
+describe('store paths through a link', () => {
+  const PROMPT = 'first question about deploys';
+  let p: Project;
+  afterEach(() => dispose(p));
+
+  /** A junction to `target`, or null when this machine cannot create one. */
+  function link(target: string, name: string): string | null {
+    const l = path.join(p.dir, name);
+    try {
+      fs.symlinkSync(target, l, 'junction');
+    } catch (err) {
+      // SAFETY: fs.symlinkSync throws only errno exceptions.
+      if ((err as NodeJS.ErrnoException).code === 'EPERM') return null;
+      throw err;
+    }
+    return l;
+  }
+
+  const rawRows = (root: string) => {
+    const db = new DatabaseSync(path.join(root, 'hippo.db'), { readOnly: true });
+    try {
+      return db.prepare('SELECT store_hash, write_store FROM delivery_events').all();
+    } finally {
+      db.close();
+    }
+  };
+
+  it('R26 a project reached through a linked folder', (ctx) => {
+    p = project();
+    const L = link(p.proj, 'proj-link');
+    if (L === null) return ctx.skip();
+    try {
+      const r = fire(p, 'r26', PROMPT, { cwd: L });
+      const rows = rawRows(p.hippoRoot);
+      const want = blockHash(path.join(realpathOrResolve(p.proj), '.hippo'));
+      expect(rows.map((x) => x.store_hash)).toEqual([want]);
+      const t = writeHostTranscript(p, [{ prompt: PROMPT, stdout: r.stdout }], { name: 'r26' });
+      const db = new DatabaseSync(path.join(p.hippoRoot, 'hippo.db'), { readOnly: true });
+      const id = String(db.prepare('SELECT id FROM memories WHERE pinned = 1').get()?.id);
+      db.close();
+      for (const store of [p.hippoRoot, path.join(L, '.hippo')]) {
+        const v = verdictOf({ store, session: 'r26', memory: id, transcript: t });
+        expect(v.class).toBe('application-unknown');
+        expect(v.notes.some((n: string) => n.startsWith('foreign-store'))).toBe(false);
+        expect(v.store_hash).toBe(want);
+      }
+    } finally {
+      fs.unlinkSync(L);
+    }
+  });
+
+  it('R27 the global store through a linked HIPPO_HOME', (ctx) => {
+    p = project();
+    initStore(p.globalRoot);
+    fs.writeFileSync(path.join(p.globalRoot, 'config.json'), JSON.stringify({ deliveryLedger: { enabled: true }, pinnedInject: { promptRecall: false } }));
+    const g = seed(p.globalRoot, 'PINNED: the global release checklist lists every region first', { pinned: true });
+    const G = link(p.globalRoot, 'global-link');
+    if (G === null) return ctx.skip();
+    try {
+      const bare = path.join(p.dir, 'bare');
+      fs.mkdirSync(bare);
+      const r = fire(p, 'r27', PROMPT, { cwd: bare, env: { HIPPO_HOME: G } });
+      const want = blockHash(path.resolve(G));
+      expect(rawRows(p.globalRoot).map((x) => [x.store_hash, x.write_store])).toEqual([[want, 'global']]);
+      const t = writeHostTranscript(p, [{ prompt: PROMPT, stdout: r.stdout }], { name: 'r27' });
+      const v = verdictOf({ store: G, global: G, session: 'r27', memory: g.id, transcript: t });
+      expect(v.class).toBe('application-unknown');
+      expect(v.notes.some((n: string) => n.startsWith('foreign-store'))).toBe(false);
+      expect(v.store_hash).toBe(want);
+    } finally {
+      fs.unlinkSync(G);
+    }
   });
 });
