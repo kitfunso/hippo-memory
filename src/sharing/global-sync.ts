@@ -3,14 +3,13 @@
 import { BadRequestError } from '../core/api-errors.js';
 import * as fs from 'fs';
 import * as path from 'path';
-import { MemoryEntry } from '../core/memory.js';
 import { AGENT_MEMORY_SOURCE_PREFIX } from '../core/agent-memory-tools.js';
-import { writeEntry } from '../store/entry-writes.js';
-import { loadAllEntries } from '../store/entry-reads.js';
+import { writeEntriesSkippingRejected } from '../store/entry-writes.js';
+import { chunked, loadEntriesByIds, loadEntryTextKeys } from '../store/entry-reads.js';
+import { withRequestStoresSync } from '../db/request-stores.js';
 import { classifyOriginProject, resolveProjectIdentity } from '../core/project-identity.js';
 import { isSharedStore } from '../core/config.js';
 import { detectSecret } from '../util/secret-detect.js';
-import { RejectedValueError } from '../store/rejection.js';
 import { embedAll } from '../store/embeddings/index.js';
 import { log } from '../util/log.js';
 import { logEmbedAllFailure } from './search-both.js';
@@ -27,51 +26,41 @@ export function syncGlobalToLocal(
   }
   if (!fs.existsSync(globalRoot)) return 0;
 
-  // Host-wide read: the global union is copied into a tenant-scoped local store, and writeEntry carries the tenant if the local-root context has one.
-  const globalEntries = loadAllEntries(globalRoot);
-  const textKey = (e: MemoryEntry): string => `${e.tenantId}\n${e.content}`;
-  const localEntries = loadAllEntries(localRoot);
-  const localIds = new Set(localEntries.map((e) => e.id));
-  const localText = new Set(localEntries.map(textKey));
-
-  // Syncing down must not re-import what ambient context excludes: other-project rows are skipped by default and secret rows never copied.
-  // origin_project is preserved on the copy (writeEntry stamps it only when missing).
-  const currentProject = resolveProjectIdentity(path.dirname(path.resolve(localRoot)));
-  let count = 0;
-  // A locally rejected value must not come back through sync down: caught per item, printed as one line.
-  let rejected = 0;
-
-  for (const entry of globalEntries) {
-    // Skip if already present by ID
-    if (localIds.has(entry.id)) continue;
-    // Only the global store's user pass sets an imported note's row aside, so a copy would outlive the note.
-    if (entry.source.startsWith(AGENT_MEMORY_SOURCE_PREFIX)) continue;
-    if (localText.has(textKey(entry))) continue;
-    if (detectSecret(entry).flagged) continue;
-    if (!opts.includeCrossProject && classifyOriginProject(entry.origin_project, currentProject) === 'cross-project') continue;
-
-    if (!writeUnlessRejected(localRoot, entry)) {
-      rejected++;
-      continue;
-    }
-    localText.add(textKey(entry));
-    count++;
-  }
-
-  finishSyncDown(localRoot, count, rejected);
-
-  return count;
+  return withRequestStoresSync(() => copyMissingRows(localRoot, globalRoot, opts.includeCrossProject === true));
 }
 
-/** False when the local store rejects the value; any other failure still throws. */
-function writeUnlessRejected(localRoot: string, entry: MemoryEntry): boolean {
-  try {
-    writeEntry(localRoot, entry);
-    return true;
-  } catch (err) {
-    if (err instanceof RejectedValueError) return false;
-    throw err;
-  }
+const textKey = (e: { tenantId: string; content: string }): string => `${e.tenantId}\n${e.content}`;
+
+/** One open per store and one transaction: id, tenant and text decide which rows to read whole, and the copies commit together. */
+function copyMissingRows(localRoot: string, globalRoot: string, includeCrossProject: boolean): number {
+  // Host-wide read: the global union is copied into a tenant-scoped local store, and each copy keeps its own tenant.
+  const localKeys = loadEntryTextKeys(localRoot);
+  const localIds = new Set(localKeys.map((k) => k.id));
+  const localText = new Set(localKeys.map(textKey));
+  // Only the global store's user pass sets an imported note's row aside, so a copy would outlive the note.
+  const candidates = loadEntryTextKeys(globalRoot).filter((k) =>
+    !localIds.has(k.id) && !k.source.startsWith(AGENT_MEMORY_SOURCE_PREFIX) && !localText.has(textKey(k)));
+  if (candidates.length === 0) return 0;
+  const byId = new Map(chunked(candidates.map((k) => k.id)).flatMap((ids) => loadEntriesByIds(globalRoot, ids)).map((e) => [e.id, e]));
+
+  // Syncing down must not re-import what ambient context excludes: other-project rows are skipped by default and secret rows never copied.
+  // origin_project is preserved on the copy (the write stamps it only when missing).
+  const currentProject = resolveProjectIdentity(path.dirname(path.resolve(localRoot)));
+  // A locally rejected value must not come back through sync down: skipped per item, printed as one line.
+  let rejected = 0;
+  const count = writeEntriesSkippingRejected(localRoot, (put) => {
+    for (const { id } of candidates) {
+      const entry = byId.get(id);
+      // A row the global store dropped between the two reads, or a text an earlier copy in this batch already brought down.
+      if (!entry || localText.has(textKey(entry))) continue;
+      if (detectSecret(entry).flagged) continue;
+      if (!includeCrossProject && classifyOriginProject(entry.origin_project, currentProject) === 'cross-project') continue;
+      if (put(entry)) localText.add(textKey(entry));
+      else rejected++;
+    }
+  });
+  finishSyncDown(localRoot, count, rejected);
+  return count;
 }
 
 function finishSyncDown(localRoot: string, count: number, rejected: number): void {
