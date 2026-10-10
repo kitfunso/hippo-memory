@@ -11,8 +11,6 @@ import { cliApiContext } from './api-context.js';
 import { sleepResultLines } from './sleep-render.js';
 import { errorMessage, log } from '../util/log.js';
 import { teeStdStreams } from '../util/stream-tee.js';
-import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../db/index.js';
-import { repairOnceOnSleep } from '../sharing/project-merge.js';
 import { type CliFlags, boolFlag, stringFlag, type CommandContext } from './flag-values.js';
 import { requireInit, learnFromRepo, runChurnStaleForRepo, skipLearnOnSharedStore } from './shared.js';
 import { printAgentImport } from './print.js';
@@ -55,10 +53,8 @@ function renderSleepResult(result: api.SleepResult): void {
 
 /** Fault-isolated: a failed repair warns and runs again next sleep, and never stops the sleep. */
 function repairProjectTagsOnce(hippoRoot: string, tenantId: string): void {
-  let db: DatabaseSyncLike | undefined;
   try {
-    db = openHippoDb(hippoRoot);
-    const r = repairOnceOnSleep(db, hippoRoot, tenantId);
+    const r = api.repairProjectNamesOnce(cliApiContext(hippoRoot, tenantId));
     if (r === null) return;
     const parts = [
       r.copies.length > 0 ? `set aside ${r.copies.length} misfiled note imports` : '',
@@ -68,8 +64,6 @@ function repairProjectTagsOnce(hippoRoot: string, tenantId: string): void {
     console.log(`Repaired project tags once after the upgrade: ${parts.join('; ')} (backup: ${r.backup}).`);
   } catch (err) {
     log.warn(`project tag repair skipped, retried next sleep: ${errorMessage(err)}`);
-  } finally {
-    if (db) closeHippoDb(db);
   }
 }
 

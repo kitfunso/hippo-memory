@@ -15,6 +15,7 @@ import { isEmbeddingAvailable } from './store/embeddings/local.js';
 import { CODEX_TRUST_LINE, isCodexPresent } from './hooks/shared.js';
 import { claudeConfigDir, codexHomeDir } from './util/agent-homes.js';
 import { planProjectRepair } from './sharing/project-merge.js';
+import { projectTagReads } from './store/project-tags.js';
 import { resolveTenantId } from './store/tenant.js';
 import { errorMessage, log } from './util/log.js';
 import { readJsonFile, type JsonValue, isJsonObjectLiteral } from './util/json.js';
@@ -183,7 +184,7 @@ function projectsCheck(globalRoot: string): DoctorCheck {
   let db: DatabaseSyncLike | null = null;
   try {
     db = openHippoDbReadOnly(globalRoot);
-    const r = planProjectRepair(db, globalRoot, resolveTenantId({}));
+    const r = planProjectRepair(projectTagReads(db, resolveTenantId({})), globalRoot);
     const found = [
       r.copies.length > 0 ? `${r.copies.length} imported notes copied under the wrong project` : '',
       r.folds.length > 0 ? `old project names that now resolve to another project: ${r.folds.map((f) => `${f.from} -> ${f.into}`).join(', ')}` : '',

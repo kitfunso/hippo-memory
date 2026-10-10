@@ -8,7 +8,8 @@ import { restoreDormant } from '../src/api/index.js';
 import { gitLayout } from '../src/agent-memories/git.js';
 import { containerId, containerPrefix } from '../src/agent-memories/source.js';
 import { importAtSessionEnd, importForStore, importProjectMemories, importSessionFolder } from '../src/agent-memories/sync.js';
-import { repairProjects } from '../src/sharing/project-merge.js';
+import { repairProjectNames } from '../src/api/projects.js';
+import { cliApiContext } from '../src/cli/api-context.js';
 import type { ImportReport } from '../src/agent-memories/report.js';
 import { createMemory, type MemoryEntry } from '../src/core/memory.js';
 import { deriveOriginProject } from '../src/core/project-identity.js';
@@ -157,7 +158,7 @@ describe('agent memory sync: routing and sharing', () => {
     writeEntry(w.global, stray);
     withDb(w.global, (db) => db.prepare(`INSERT INTO compactions (tenant_id, id, session_id, origin_project, compact_trigger, cwd, transcript_path, started_at) VALUES ('default', 'c1', 's1', 'repoa', 'auto', ?, ?, ?)`)
       .run(join(w.dir, 'repoa'), transcript, new Date().toISOString()));
-    const repair = (dryRun: boolean) => withDb(w.global, (db) => repairProjects(db, w.global, { tenantId: 'default', dryRun }));
+    const repair = (dryRun: boolean) => repairProjectNames(cliApiContext(w.global, 'default'), { dryRun });
 
     expect(repair(true).copies).toEqual([stray.id]);
     expect(liveRows(w.global).map((e) => e.id)).toEqual([stray.id]);
