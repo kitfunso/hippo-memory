@@ -46,11 +46,18 @@ interface McpResponse {
 }
 
 /** JSON-RPC reply for a request that threw: typed API errors keep their text; anything else is logged and answered generically. */
-export function mcpErrorResponse<E>(id: McpResponse['id'], err: E, requestId: string = currentRequestId() ?? randomUUID()): McpResponse {
-  if (isStoreBusy(err)) return { jsonrpc: '2.0', id, error: { code: -32603, message: STORE_BUSY_MESSAGE } };
+export function mcpErrorResponse<E>(id: McpResponse['id'], err: E, requestId: string = currentRequestId() ?? randomUUID(), call?: string): McpResponse {
+  const where = call === undefined ? '' : ` (${call})`;
+  if (isStoreBusy(err)) {
+    log.warn(`mcp request${where} failed: ${errorMessage(err)}`, { requestId });
+    return { jsonrpc: '2.0', id, error: { code: -32603, message: STORE_BUSY_MESSAGE } };
+  }
   const { status, message } = mapApiError(err);
-  if (status !== 500) return { jsonrpc: '2.0', id, error: { code: -32603, message } };
-  log.error(`mcp request failed: ${errorMessage(err)}`, { requestId, ...errorFields(err) });
+  if (status !== 500) {
+    log.info(`mcp request${where} failed: ${errorMessage(err)}`, { requestId, status });
+    return { jsonrpc: '2.0', id, error: { code: -32603, message } };
+  }
+  log.error(`mcp request${where} failed: ${errorMessage(err)}`, { requestId, ...errorFields(err) });
   return {
     jsonrpc: '2.0',
     id,

@@ -22,6 +22,8 @@ export function logRequestFailure<E>(req: IncomingMessage, err: E, status: numbe
   // A 5xx that tells the caller when to retry is back-pressure too.
   if (isStoreBusy(err) || (status >= 500 && err instanceof HttpError && err.retryAfterSec !== undefined)) log.warn(line, { status });
   else if (status >= 500 && status !== 501) log.error(line, { status, ...errorFields(err) });
+  // A failed login is the one 4xx an operator needs by default; the id (never the credential) is stamped from the request scope.
+  else if (status === 401 || status === 403) log.warn(line, { status });
   else log.info(line, { status });
 }
 

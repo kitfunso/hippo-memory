@@ -104,7 +104,8 @@ export async function handleMcpPost(req: IncomingMessage, res: ServerResponse, o
   try {
     mcpRes = await handleMcpRequest(rpcReq, mcpContextFor(ctx, buildMcpClientKey(req), opts.autoSleep, project));
   } catch (err) {
-    mcpRes = mcpErrorResponse(rpcReq.id, err);
+    const tool = rpcReq.params?.name;
+    mcpRes = mcpErrorResponse(rpcReq.id, err, undefined, isJsonString(tool) ? `${rpcReq.method} ${tool.slice(0, 128)}` : rpcReq.method);
   }
   if (mcpRes === null) {
     // Notification — no body, 202 Accepted.

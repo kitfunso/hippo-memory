@@ -23,12 +23,15 @@ export const HippoPlugin = async ({ $ }) => {
       if (typeof $ !== "function") return;
       try {
         if (event.type === "session.idle") {
-          await $\`hippo session-end\`.quiet().nothrow();
+          const r = await $\`hippo session-end\`.quiet().nothrow();
+          if (r && r.exitCode !== 0) console.error("[hippo] session-end exited " + r.exitCode);
         } else if (event.type === "session.created") {
-          await $\`hippo last-sleep\`.quiet().nothrow();
+          const r = await $\`hippo last-sleep\`.quiet().nothrow();
+          if (r && r.exitCode !== 0) console.error("[hippo] last-sleep exited " + r.exitCode);
         }
-      } catch {
-        // hippo CLI not on PATH or other failure — never crash the host session.
+      } catch (err) {
+        // hippo CLI not on PATH or other failure: never crash the host session.
+        console.error("[hippo] plugin hook failed: " + (err && err.message ? err.message : err));
       }
     },
   };

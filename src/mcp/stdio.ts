@@ -132,7 +132,7 @@ function dispatch(body: string): void {
   const timedOut = watchDeadline(req, isJsonString(req.id) || isJsonNumber(req.id));
   track(req.method, handleMcpRequest(req).then((resp) => { if (!timedOut() && resp) send(resp); }).catch((err) => {
     if (timedOut()) log.error(`mcp: ${callName(req)} failed after its timeout reply: ${errorMessage(err)}`, errorFields(err));
-    else send(mcpErrorResponse(req.id, err));
+    else send(mcpErrorResponse(req.id, err, undefined, callName(req)));
   }));
 }
 

@@ -1,6 +1,6 @@
 import { envAnthropicApiKey, envDagRebuildCap } from '../util/env.js';
 import { Layer, type MemoryEntry } from '../core/memory.js';
-import { log } from '../util/log.js';
+import { errorFields, errorMessage, log } from '../util/log.js';
 import { keptAsWritten, type SleepRun } from './run.js';
 import { isReusable } from '../core/memory-quality.js';
 import { type AnthropicMessageFailure, isPermanentFailure } from '../util/anthropic-messages.js';
@@ -69,7 +69,8 @@ async function extractionPass(run: SleepRun, llm: SleepLlm, batch: readonly Memo
         extractedCount += storeExtractedFacts(run.hippoRoot, candidate, facts).length;
       }
     } catch (err) {
-      report(String(err));
+      report(errorMessage(err));
+      log.warn('consolidate extraction threw', errorFields(err));
     }
     if (stopped) {
       const skipped = batch.length - index - 1;
@@ -96,7 +97,8 @@ async function dagBuildPass(run: SleepRun, { apiKey, llmError, llmOpts }: SleepL
       run.result.details.push(`  🌳 DAG: ${dagResult.summariesCreated} summaries created, ${dagResult.factsLinked} facts linked`);
     }
   } catch (err) {
-    llmError('dag')(String(err));
+    llmError('dag')(errorMessage(err));
+    log.warn('consolidate dag threw', errorFields(err));
   }
 }
 
@@ -125,7 +127,8 @@ async function dagRebuildPass(run: SleepRun, { llmError, llmOpts }: SleepLlm): P
       result.details.push(`  🌳 DAG rebuild: ${parts.join(', ')}`);
     }
   } catch (err) {
-    llmError('dag rebuild')(String(err));
+    llmError('dag rebuild')(errorMessage(err));
+    log.warn('consolidate dag rebuild threw', errorFields(err));
   }
 }
 
@@ -144,6 +147,7 @@ async function entityProfilePass(run: SleepRun, { llmError, llmOpts }: SleepLlm)
       }
     }
   } catch (err) {
-    llmError('dag profiles')(String(err));
+    llmError('dag profiles')(errorMessage(err));
+    log.warn('consolidate dag profiles threw', errorFields(err));
   }
 }

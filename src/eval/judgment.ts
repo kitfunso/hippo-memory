@@ -4,7 +4,7 @@
 
 import { ConfidenceLevel, EmotionalValence } from '../core/memory.js';
 import { fetchWithRetry } from '../util/http-retry.js';
-import { errorMessage, log } from '../util/log.js';
+import { errorFields, errorMessage, log } from '../util/log.js';
 import { readCappedJson } from '../util/capped-json.js';
 import { type JsonValue, isJsonNumber, isJsonObject, isJsonString } from '../util/json.js';
 
@@ -106,10 +106,14 @@ async function post(content: string, opts: JudgeOptions): Promise<Response | nul
       }),
     }, { timeoutMs: JUDGE_TIMEOUT_MS, fetchFn: opts.fetcher });
   } catch (err) {
-    log.debug(`judge: request failed: ${errorMessage(err)}`);
+    log.warn(`judge: request failed: ${errorMessage(err)}`, errorFields(err));
     return null;
   }
-  return res.ok ? res : null;
+  if (res.ok) return res;
+  // The body is the server's reply, never the request, so it cannot hold the key.
+  const snippet = (await res.text().catch(() => '')).slice(0, 200);
+  log.warn('judge: non-2xx reply', { status: res.status, body: snippet });
+  return null;
 }
 
 /** `null` on any failure, so a Jev outage degrades capture to today's
