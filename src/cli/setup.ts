@@ -198,11 +198,14 @@ const MCP_MERGE_LINES = {
   added: (file: string) => `Added the "hippo" MCP server -> ${file}`,
   present: (file: string) => `The "hippo" MCP server is already in ${file}`,
   'user-owned': (file: string) => `Left the "hippo" MCP server in ${file} as it is: hippo did not write it`,
-  unreadable: (file: string, host: McpHost) => `WARNING: ${file} has comments or is not a JSON object hippo can merge into, so it was left unchanged; ${addByHand(host)}`,
+  unreadable: (file: string, host: McpHost) =>
+    `WARNING: ${file} has comments or is not a JSON object hippo can merge into, so it was left unchanged; ${addByHand(host)}`,
 } as const satisfies Record<McpMergeStatus, (file: string, host: McpHost) => string>;
 
-const mcpFailureLine = (file: string, failure: McpFailure, fix: string): string => `WARNING: hippo could not use ${file} (${failure.failed}), so it was left unchanged; ${fix}`;
-const unclosedLine = (file: string): string => `WARNING: ${file} has ${HOOK_MARKERS.start} with no ${HOOK_MARKERS.end}, so hippo left it unchanged; fix the markers by hand`;
+const mcpFailureLine = (file: string, failure: McpFailure, fix: string): string =>
+  `WARNING: hippo could not use ${file} (${failure.failed}), so it was left unchanged; ${fix}`;
+const unclosedLine = (file: string): string =>
+  `WARNING: ${file} has ${HOOK_MARKERS.start} with no ${HOOK_MARKERS.end}, so hippo left it unchanged; fix the markers by hand`;
 
 const INSTRUCTIONS_INSTALL_LINES = {
   written: (file: string) => `Wrote the hippo block -> ${file}`,
@@ -243,7 +246,8 @@ function printVscodeInstall(result: VscodeInstallResult, indent: string): void {
   console.log(`${indent}${VSCODE_INSTRUCTIONS_INSTALL_LINES[result.instructions](paths.instructions)}`);
   if (paths.profiles.length > 0) {
     const names = paths.profiles.map((dir) => path.basename(dir)).join(', ');
-    console.log(`${indent}Found VS Code profiles (${names}) under ${path.join(paths.userDir, 'profiles')}: hippo set up the default profile only; copy the "hippo" server and prompts/hippo.instructions.md into a profile to use hippo there.`);
+    console.log(`${indent}Found VS Code profiles (${names}) under ${path.join(paths.userDir, 'profiles')}: ` +
+      'hippo set up the default profile only; copy the "hippo" server and prompts/hippo.instructions.md into a profile to use hippo there.');
   }
 }
 
@@ -252,7 +256,8 @@ function printCopilotInstall(result: CopilotInstallResult, indent: string): void
   const hooks = result.hooks ? `Installed hippo's Copilot hooks (${copilotHookEvents().join(', ')}) ->` : "hippo's Copilot hooks are already in";
   console.log(`${indent}${hooks} ${paths.hooks}`);
   if (result.mcp === null || result.instructions === null) {
-    console.log(`${indent}No Copilot CLI files in ${path.dirname(paths.mcpConfig)}, so hippo skipped mcp-config.json and copilot-instructions.md, which only the Copilot CLI reads`);
+    console.log(`${indent}No Copilot CLI files in ${path.dirname(paths.mcpConfig)}, ` +
+      'so hippo skipped mcp-config.json and copilot-instructions.md, which only the Copilot CLI reads');
   } else {
     console.log(`${indent}${mcpInstallLine(paths.mcpConfig, result.mcp, COPILOT_CLI_MCP)}`);
     console.log(`${indent}${INSTRUCTIONS_INSTALL_LINES[result.instructions](paths.instructions)}`);
@@ -267,7 +272,10 @@ function mcpRemoveLines(file: string, mcp: McpRemoveStatus | McpFailure): string
   if (isMcpFailure(mcp)) return [mcpFailureLine(file, mcp, 'remove the "hippo" server by hand if hippo added it')];
   if (mcp === 'removed') return [`Removed the "hippo" MCP server from ${file}`];
   if (mcp === 'user-owned') return [`Left the "hippo" MCP server in ${file}: hippo did not write it`];
-  if (mcp === 'unreadable') return [`WARNING: ${file} has comments or is not a JSON object hippo can edit, so it was left unchanged; remove the "hippo" server by hand if hippo added it`];
+  if (mcp === 'unreadable') {
+    return [`WARNING: ${file} has comments or is not a JSON object hippo can edit, so it was left unchanged; ` +
+      'remove the "hippo" server by hand if hippo added it'];
+  }
   return [];
 }
 
@@ -543,7 +551,8 @@ export function handleDailyRunner({ tenantId }: CommandContext): void {
     }
   });
 
-  console.log(`Daily maintenance complete: ${processed} workspace${processed === 1 ? '' : 's'} processed, ${failed} command failure${failed === 1 ? '' : 's'}.`);
+  console.log(`Daily maintenance complete: ${processed} workspace${processed === 1 ? '' : 's'} processed, ` +
+    `${failed} command failure${failed === 1 ? '' : 's'}.`);
   // The scheduler that runs this only sees the exit code, so a failed workspace must not read as a clean run.
   if (failed > 0) process.exitCode = 1;
 }

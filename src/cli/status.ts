@@ -128,7 +128,8 @@ function printPhysicsStatus(ctx: Context): void {
       for (const p of particles) sumVelMag += vecNorm(p.velocity);
       const avgVelMag = sumVelMag / particles.length;
       console.log('');
-      console.log(`Physics: ${particles.length} particles, ${physicsEnergyText(particles, loadConfig(ctx.hippoRoot).physics.G_memory)}, avg vel: ${fmt(avgVelMag, 4)}`);
+      console.log(`Physics: ${particles.length} particles, ` +
+        `${physicsEnergyText(particles, loadConfig(ctx.hippoRoot).physics.G_memory)}, avg vel: ${fmt(avgVelMag, 4)}`);
     }
   } catch (err) {
     // The physics table may not exist yet, so status prints without that line.
@@ -348,7 +349,8 @@ export function handleSupportBundle({ flags }: CommandContext): void {
   const kb = Math.round(Buffer.byteLength(json) / 1024);
   console.log(`Wrote ${file} (${kb} KB).`);
   console.log(includeLogs
-    ? `It holds versions, doctor checks, config with secrets removed, store counts, and the last ${TAIL_MAX_LINES} lines of each hippo log with known secret shapes removed. Those log lines can quote memory text. Read it before you attach it to a ticket.`
+    ? `It holds versions, doctor checks, config with secrets removed, store counts, and the last ${TAIL_MAX_LINES} lines of ` +
+      'each hippo log with known secret shapes removed. Those log lines can quote memory text. Read it before you attach it to a ticket.'
     : 'It holds versions, doctor checks, config with secrets removed, store counts and log file names. It never holds memory text. Read it before you ' +
       'attach it to a ticket.');
 }

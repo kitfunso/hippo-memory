@@ -11,22 +11,8 @@
     "scripts/z1c-eval.mjs:main": 116
   },
   "longLines": {
-    "src/api/context.ts": 2,
-    "src/capture/session-digest.ts": 1,
-    "src/cli/audit.ts": 1,
-    "src/cli/continuity.ts": 1,
-    "src/cli/curate.ts": 1,
-    "src/cli/dag.ts": 1,
-    "src/cli/explain.ts": 2,
-    "src/cli/quality-repair-once.ts": 1,
-    "src/cli/refine-llm.ts": 1,
-    "src/cli/session-hooks.ts": 1,
-    "src/cli/setup.ts": 7,
-    "src/cli/shared.ts": 1,
-    "src/cli/status.ts": 2,
     "src/dashboard/dashboard.ts": 4,
     "src/db/migrations/v37.ts": 2,
-    "src/db/migrations/v38.ts": 9,
-    "src/doctor.ts": 2
+    "src/db/migrations/v38.ts": 9
   }
 }

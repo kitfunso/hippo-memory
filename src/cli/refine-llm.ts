@@ -53,7 +53,9 @@ export async function refineSemanticMemory(
     .map((s, i) => `[source ${i + 1}] ${redactSecretsStrict(s.content).slice(0, REFINE_SOURCE_CHARS)}`)
     .join('\n\n');
 
-  const prompt = `You are refining a semantic memory in an agent's memory store. The rule-based consolidator merged several related episodic memories into one, but the output is clumsy. Produce a single coherent semantic memory that captures the underlying principle.
+  const prompt = `You are refining a semantic memory in an agent's memory store. ` +
+    `The rule-based consolidator merged several related episodic memories into one, but the output is clumsy. ` +
+    `Produce a single coherent semantic memory that captures the underlying principle.
 
 Rules:
 - Output ONLY the refined content — no preamble, no quote marks, no "Here is...".

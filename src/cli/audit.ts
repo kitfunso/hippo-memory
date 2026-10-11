@@ -140,7 +140,10 @@ function auditRepair(hippoRoot: string, tenantId: string, flags: CliFlags): void
   }
   console.log(`Quality repair ${apply ? 'apply' : 'preview'}: ${result.issues.length} issue(s) across ${result.total} memories.`);
   for (const issue of result.issues) console.log(`  [${issue.disposition}] ${issue.id}: ${issue.reason}${issue.protection ? ` (${issue.protection})` : ''}`);
-  for (const blocker of result.blockers) console.log(`  Blocked: ${blocker}. Repair never upgrades a store; any other hippo command does, then run repair again.`);
+  for (const blocker of result.blockers) {
+    console.log(`  Blocked: ${blocker}. Repair never upgrades a store; ` +
+      'any other hippo command does, then run repair again.');
+  }
   const restore = `hippo dormant restore <id>${flags['global'] ? ' --global' : ''}`;
   if (result.backup) console.log(`Backup: ${result.backup}\nMoved ${result.appliedIds.length} memories to dormant storage. Recovery: ${restore}.`);
   else if (apply && result.supported) console.log('Nothing moved: no unprotected memory has a certain defect.');

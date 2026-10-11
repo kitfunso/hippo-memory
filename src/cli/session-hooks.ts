@@ -181,7 +181,11 @@ async function cmdSessionEndWorker(
   flags: CliFlags
 ): Promise<void> {
   const sessionId = flags['session-id'];
-  await runSessionWorker(isStringValue(sessionId) ? sessionId : null, flagIsTrue(flags, 'turn') ? 'turn' : 'full', (mode) => sessionEndWork(hippoRoot, tenantId, flags, mode));
+  await runSessionWorker(
+    isStringValue(sessionId) ? sessionId : null,
+    flagIsTrue(flags, 'turn') ? 'turn' : 'full',
+    (mode) => sessionEndWork(hippoRoot, tenantId, flags, mode),
+  );
 }
 
 export function handleSessionEndWorker({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {

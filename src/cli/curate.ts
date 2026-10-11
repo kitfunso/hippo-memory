@@ -404,7 +404,9 @@ function printDormantRows(rows: ReturnType<typeof api.listDormant>, hasQuery: bo
     const preview = truncateWithEllipsis(row.content, DORMANT_PREVIEW_CHARS);
     console.log(`--- ${row.id}`);
     console.log(`    ${preview}`);
-    console.log(`    Dormant since ${row.dormantAt.slice(0, DATE_PREFIX_CHARS)} (${row.reason}, strength ${row.strength.toFixed(STRENGTH_DECIMALS)})${row.tags.length > 0 ? `  tags: ${row.tags.join(', ')}` : ''}`);
+    console.log(`    Dormant since ${row.dormantAt.slice(0, DATE_PREFIX_CHARS)} ` +
+      `(${row.reason}, strength ${row.strength.toFixed(STRENGTH_DECIMALS)})` +
+      `${row.tags.length > 0 ? `  tags: ${row.tags.join(', ')}` : ''}`);
     console.log('');
   }
   console.log('Bring one back: hippo dormant restore <id>   Delete for good: hippo dormant forget <id>');

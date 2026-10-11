@@ -266,10 +266,14 @@ function flagList(value: string | boolean | string[] | undefined): string[] {
   return Array.isArray(value) ? value : (isStringFlag(value) ? [value] : []);
 }
 
+const HANDOFF_CREATE_USAGE = 'Usage: hippo handoff create --summary "..." [--next "..."] [--session <id>] [--task <id>] [--artifact <path>...] ' +
+  '[--constraint <text>...] [--outcome <success|failure|partial>] [--target-runtime <name>] [--card-id <id>] ' +
+  '[--tests <pass|fail|unknown>]';
+
 function handoffCreate(hippoRoot: string, tenantId: string, flags: CliFlags): void {
   const summary = String(flags['summary'] ?? '').trim();
   if (!summary) {
-    printError('Usage: hippo handoff create --summary "..." [--next "..."] [--session <id>] [--task <id>] [--artifact <path>...] [--constraint <text>...] [--outcome <success|failure|partial>] [--target-runtime <name>] [--card-id <id>] [--tests <pass|fail|unknown>]');
+    printError(HANDOFF_CREATE_USAGE);
     throw new CliExit(1);
   }
 

@@ -79,7 +79,8 @@ export async function runViaServerIfAvailable(
       // Every caller is a non-idempotent write, so replaying on the direct path would store a row the server may already have committed;
       // leave the pidfile alone: the next command's connect-phase failure heals it.
       printError(
-        `hippo: the connection to ${info.url} dropped or timed out mid-request, so the write may already have been applied. Not retrying locally. Check with \`hippo recall\` before running this again.`,
+        `hippo: the connection to ${info.url} dropped or timed out mid-request, so the write may already have been applied. ` +
+          'Not retrying locally. Check with `hippo recall` before running this again.',
       );
       process.exit(1);
     }

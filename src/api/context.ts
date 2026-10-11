@@ -298,7 +298,11 @@ function openBlockBudget(plan: ContextPlan, opts: ContextOpts, budget: number): 
   if (pinnedOnly && !config.pinnedInject.enabled) obs?.disabled();
   if (!pinnedOnly) obs?.queried(plan.query);
   return cost
-    ? Math.max(0, blockBudget - cost.fixed(blockBudget, { cross: plan.includeCrossProject, promptRecall: promptRecallPending, ambient: !pinnedOnly && config.ambient.enabled }))
+    ? Math.max(0, blockBudget - cost.fixed(blockBudget, {
+        cross: plan.includeCrossProject,
+        promptRecall: promptRecallPending,
+        ambient: !pinnedOnly && config.ambient.enabled,
+      }))
     : blockBudget;
 }
 
@@ -518,7 +522,13 @@ async function recordRetrieval(
 }
 
 async function readAmbientState(ctx: Context, plan: ContextPlan): Promise<AmbientState | undefined> {
-  const filter = { exactScope: plan.exactScope, ownScope: plan.ownScope, project: plan.originProject, currentProject: projectNames(plan.currentProject), now: evalNow() };
+  const filter = {
+    exactScope: plan.exactScope,
+    ownScope: plan.ownScope,
+    project: plan.originProject,
+    currentProject: projectNames(plan.currentProject),
+    now: evalNow(),
+  };
   const sources = [
     ...(plan.hasLocal ? [plan.local.reads] : []),
     ...(plan.hasGlobal && !plan.primaryIsGlobal ? [sourceOf(sqliteStore(plan.globalRoot)).reads] : []),

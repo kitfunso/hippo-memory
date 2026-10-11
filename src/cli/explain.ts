@@ -139,7 +139,8 @@ function printExplainTable(results: SearchResult[], query: string, modeUsed: str
     const preview = r.entry.content.replace(/\s+/g, ' ').slice(0, EXPLAIN_PREVIEW_CHARS);
     const ageStr = b ? `${b.ageDays}d` : '?';
     console.log(
-      `${String(i + 1).padEnd(5)} ${fmt(r.score, 3).padEnd(7)} ${fmt(r.entry.strength).padEnd(9)} ${ageStr.padEnd(6)} ${r.entry.layer.padEnd(10)} ${r.entry.id.padEnd(17)} ${preview}`,
+      `${String(i + 1).padEnd(5)} ${fmt(r.score, 3).padEnd(7)} ${fmt(r.entry.strength).padEnd(9)} ${ageStr.padEnd(6)} ` +
+        `${r.entry.layer.padEnd(10)} ${r.entry.id.padEnd(17)} ${preview}`,
     );
   }
   console.log();
@@ -169,7 +170,10 @@ function printExplainBreakdown(r: SearchResult, i: number): void {
     if (b.scopeBoost !== 1) console.log(`    scope:     x${fmt(b.scopeBoost, 2)}  (scope tag ${b.scopeBoost > 1 ? 'match' : 'mismatch'})`);
     if (b.pathBoost !== 1) console.log(`    path:      x${fmt(b.pathBoost, 3)}  (cwd path tag overlap)`);
     if (b.sourceBump !== 1) console.log(`    source:    x${fmt(b.sourceBump, 2)}  (local priority bump over global)`);
-    if (b.outcomeBoost !== 1) console.log(`    outcome:   x${fmt(b.outcomeBoost, 3)}  (user feedback: pos-neg = ${(r.entry.outcome_positive ?? 0) - (r.entry.outcome_negative ?? 0)})`);
+    if (b.outcomeBoost !== 1) {
+      console.log(`    outcome:   x${fmt(b.outcomeBoost, 3)}  ` +
+        `(user feedback: pos-neg = ${(r.entry.outcome_positive ?? 0) - (r.entry.outcome_negative ?? 0)})`);
+    }
     if (b.churnStaleMultiplier !== 1) console.log(`    churn:     x${fmt(b.churnStaleMultiplier, 2)}  (tagged 'churn-stale')`);
     if (b.preMmrRank !== undefined && b.postMmrRank !== undefined && b.preMmrRank !== b.postMmrRank) {
       const arrow = b.postMmrRank < b.preMmrRank ? 'up' : 'down';

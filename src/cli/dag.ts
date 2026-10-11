@@ -170,7 +170,8 @@ async function cmdDrillDown(hippoRoot: string, tenantId: string, summaryId: stri
     console.log(JSON.stringify(r, null, 2));
     return;
   }
-  console.log(`Summary ${r.summary.id} — ${r.summary.descendantCount} descendants${r.summary.earliestAt ? ` (${r.summary.earliestAt} → ${r.summary.latestAt})` : ''}`);
+  console.log(`Summary ${r.summary.id} — ${r.summary.descendantCount} descendants` +
+    `${r.summary.earliestAt ? ` (${r.summary.earliestAt} → ${r.summary.latestAt})` : ''}`);
   console.log(`  ${truncateWithEllipsis(r.summary.content, DAG_SUMMARY_PREVIEW_CHARS, '…')}`);
   console.log(`\nChildren (${r.children.length}/${r.totalChildren}${r.truncated ? ', truncated' : ''}):`);
   for (const c of r.children) {

@@ -173,7 +173,8 @@ function compactionsCheck(compactions: StoreHealth['compactions'], store: string
   ].filter((s) => s !== '');
   const unfinished = stuck === 0
     ? `${recorded} in the store`
-    : `${stuck} compaction${stuck === 1 ? '' : 's'} unfinished after 10 minutes (${summarised} with a summary whose memories are not saved yet, ${started} with no summary yet)`;
+    : `${stuck} compaction${stuck === 1 ? '' : 's'} unfinished after 10 minutes ` +
+      `(${summarised} with a summary whose memories are not saved yet, ${started} with no summary yet)`;
   const note = spooled ? `; spool: ${spool.waiting} waiting, ${spool.stale} left by a replay that stopped, ${spool.bad} .bad` : '';
   return { id: 'compactions', status: 'warn', detail: `${unfinished}${note}${unread}`, fix: fix.join('; ') };
 }
@@ -300,7 +301,8 @@ function tokensCheck(tokens: StoreHealth['tokens']): DoctorCheck {
   return {
     id: 'tokens',
     status: 'info',
-    detail: `${tally.injected} memory blocks sent to agents in 7 days, about ${tally.tokensSent} tokens sent and ${tally.tokensReread} re-read by later model calls (hippo tokens for detail)`,
+    detail: `${tally.injected} memory blocks sent to agents in 7 days, about ${tally.tokensSent} tokens sent ` +
+      `and ${tally.tokensReread} re-read by later model calls (hippo tokens for detail)`,
   };
 }
 

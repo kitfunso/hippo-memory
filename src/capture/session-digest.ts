@@ -379,8 +379,11 @@ const ANCHORS: readonly RegExp[] = [
   /(?:^|\s)#\d+\b/,
 ];
 /** Each marker states a cause or a choice, the part of a lesson that transfers. */
-const MARKERS =
-  /\b(?:because|caused by|due to|root cause|the (?:bug|issue|problem) was|fail(?:s|ed) when|so that|otherwise|instead of|rather than|switched to|decided|chose|must|never|always|do not)\b/i;
+const MARKERS = new RegExp(
+  '\\b(?:because|caused by|due to|root cause|the (?:bug|issue|problem) was|fail(?:s|ed) when|so that|otherwise|' +
+    'instead of|rather than|switched to|decided|chose|must|never|always|do not)\\b',
+  'i',
+);
 
 const FENCE = /^\s*(`{3,}|~{3,})/;
 const STRUCTURE_LINE = /^\s*(?:#{1,6}\s|\||>|([-*_])(?:\s*\1){2,}\s*$)/;
