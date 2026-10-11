@@ -40,7 +40,7 @@ describe('reads through a served store', () => {
 
   it('authKeyTenant finds a key in the served store', async () => {
     const served = root();
-    const { keyId } = authCreate(ctxAt(served), { label: 'served key' });
+    const { keyId } = await authCreate(ctxAt(served), { label: 'served key' });
     const ctx = { ...ctxAt(root()), tenantId: 'default', store: portOnlyStore(served) };
     expect(await authKeyTenant(ctx, keyId)).toBe(TENANT);
     expect(await authKeyTenant({ ...ctx, store: undefined }, keyId)).toBeUndefined();

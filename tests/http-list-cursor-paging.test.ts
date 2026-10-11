@@ -46,7 +46,7 @@ let home: string;
 let handle: ServerHandle;
 let adminKey: CreateApiKeyResult;
 
-function seedTenant(tenantId: string, count: number): void {
+async function seedTenant(tenantId: string, count: number): Promise<void> {
   const ctx: api.HippoDbContext = { hippoRoot: home, tenantId, actor: api.adminActor('test') };
   for (let i = 0; i < count; i++) {
     saveDecision(home, tenantId, { decisionText: `${tenantId} decision ${i}` });
@@ -57,7 +57,7 @@ function seedTenant(tenantId: string, count: number): void {
     saveProjectBrief(home, tenantId, { repo: `${tenantId}/repo-${i}`, summary: 'a brief' });
     saveCustomerNote(home, tenantId, { customer: `${tenantId} customer ${i}`, note: 'a note' });
     savePrediction(home, tenantId, { classTag: 'paging', claimText: `${tenantId} claim ${i}` });
-    const { id } = api.remember(ctx, { content: `${tenantId} held memory ${i} for review` });
+    const { id } = await api.remember(ctx, { content: `${tenantId} held memory ${i} for review` });
     const db = openHippoDb(home);
     try {
       createApiKey(db, { tenantId, label: `${tenantId} key ${i}`, role: 'member' });
@@ -76,9 +76,9 @@ beforeAll(async () => {
   } finally {
     closeHippoDb(db);
   }
-  seedTenant('default', ROWS);
+  await seedTenant('default', ROWS);
   // Another tenant's rows must never leak into a page, even when the tenant filter sits beside a cursor.
-  seedTenant('tenant-b', 3);
+  await seedTenant('tenant-b', 3);
   // Paging every route makes well over the per-IP burst; the limiter is read once, at serve().
   vi.stubEnv('HIPPO_V1_RPS', '0');
   handle = await serve({ hippoRoot: home, port: 0 });

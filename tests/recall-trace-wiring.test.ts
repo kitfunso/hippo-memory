@@ -98,8 +98,8 @@ describe('api.recall — trace wiring', () => {
     const { home, restore } = tmpHome();
     try {
       const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
-      remember(ctx, { content: 'recall-trace-target-alpha' });
-      remember(ctx, { content: 'recall-trace-target-beta also matches' });
+      await remember(ctx, { content: 'recall-trace-target-alpha' });
+      await remember(ctx, { content: 'recall-trace-target-beta also matches' });
 
       const result = await retrieve(ctx, { query: 'recall-trace-target', limit: 5 });
       expect(result.results.length).toBeGreaterThan(0);
@@ -127,7 +127,7 @@ describe('api.recall — trace wiring', () => {
     const { home, restore } = tmpHome();
     try {
       const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
-      remember(ctx, { content: 'recall-trace-no-side-effect-target' });
+      await remember(ctx, { content: 'recall-trace-no-side-effect-target' });
 
       expect(lastTraceId(home)).toBeNull();
       const result = await retrieve(ctx, { query: 'recall-trace-no-side-effect-target', limit: 5 });
@@ -147,9 +147,9 @@ describe('api.recall — trace wiring', () => {
     const { home, restore } = tmpHome();
     try {
       const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
-      remember(ctx, { content: 'batched-trace-A' });
-      remember(ctx, { content: 'batched-trace-B' });
-      remember(ctx, { content: 'batched-trace-C' });
+      await remember(ctx, { content: 'batched-trace-A' });
+      await remember(ctx, { content: 'batched-trace-B' });
+      await remember(ctx, { content: 'batched-trace-C' });
 
       await retrieve(ctx, { query: 'batched-trace-A', limit: 5 });
       await retrieve(ctx, { query: 'batched-trace-B', limit: 5 });
@@ -165,7 +165,7 @@ describe('api.recall — trace wiring', () => {
     const { home, restore } = tmpHome();
     try {
       const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
-      remember(ctx, { content: 'suppressed-trace-target' });
+      await remember(ctx, { content: 'suppressed-trace-target' });
 
       const result = await retrieve(ctx, { query: 'suppressed-trace-target', limit: 5, suppressRecallTrace: true });
       expect(result.results.length).toBeGreaterThan(0);
@@ -182,7 +182,7 @@ describe('api.getContext — trace wiring', () => {
     const { home, restore } = tmpHome();
     try {
       const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
-      remember(ctx, { content: 'context-trace-target-gamma' });
+      await remember(ctx, { content: 'context-trace-target-gamma' });
 
       const result = await getContext(ctx, { q: 'context-trace-target', budget: 1000 });
       expect(result.entries.length).toBeGreaterThan(0);
@@ -225,7 +225,7 @@ describe('api.getContext — trace wiring', () => {
       // the bare `return { entries: [], tokens: 0 }` early-return path
       // (api.ts, the check right after the origin/category annotation).
       disableEmbeddings(home);
-      remember(ctx, { content: 'context-empty-baseline unrelated content' });
+      await remember(ctx, { content: 'context-empty-baseline unrelated content' });
 
       const before = loadIndex(home);
       expect(before.last_trace_id).toBeNull();
@@ -255,7 +255,7 @@ describe('api.getContext — trace wiring', () => {
     const { home, restore } = tmpHome();
     try {
       const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
-      remember(ctx, { content: 'context-trace-target-caller-session' });
+      await remember(ctx, { content: 'context-trace-target-caller-session' });
 
       const result = await getContext(ctx, { q: 'context-trace-target-caller', budget: 1000, currentSessionId: 'sess-caller-1' });
       expect(result.entries.length).toBeGreaterThan(0);
@@ -273,7 +273,7 @@ describe('api.getContext — trace wiring', () => {
     try {
       const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
       disableEmbeddings(home);
-      remember(ctx, { content: 'context-empty-baseline-caller unrelated content' });
+      await remember(ctx, { content: 'context-empty-baseline-caller unrelated content' });
 
       const result = await getContext(ctx, { q: 'zzz-query-matches-absolutely-nothing-xyzzy', budget: 1000, currentSessionId: 'sess-caller-2' });
       expect(result.entries).toEqual([]);

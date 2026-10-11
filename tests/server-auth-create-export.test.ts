@@ -9,11 +9,11 @@ import { recordStatements } from './_helpers/count-statements.js';
 
 // hippo-enterprise's `key create --store` mints through this subpath export.
 describe('hippo-memory/server exports authCreate', () => {
-  it('mints a key into the named store for the given tenant and role', () => {
+  it('mints a key into the named store for the given tenant and role', async () => {
     const root = mkdtempSync(join(tmpdir(), 'hippo-server-auth-create-'));
     try {
       const ctx: HippoDbContext = { hippoRoot: root, tenantId: 'acme', actor: { subject: 'addon:install', role: 'admin', hostAdmin: true } };
-      const minted = authCreate(ctx, { label: 'first-admin', role: 'admin' });
+      const minted = await authCreate(ctx, { label: 'first-admin', role: 'admin' });
       expect(minted.tenantId).toBe('acme');
       expect(minted.role).toBe('admin');
       const db = openHippoDb(root);

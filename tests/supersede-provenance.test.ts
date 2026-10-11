@@ -40,13 +40,13 @@ afterEach(() => {
 });
 
 describe('supersede keeps provenance', () => {
-  it('keeps a project row in its project when it is superseded in the global store', () => {
+  it('keeps a project row in its project when it is superseded in the global store', async () => {
     const old = seed(globalStore, 'the billing service retries a failed charge three times before it pages', {
       origin_project: 'proj-a',
       source_session_id: 'sess-old',
     });
 
-    const { newId } = supersede(ctxFor(globalStore), old.id, 'the billing service retries a failed charge five times before it pages');
+    const { newId } = await supersede(ctxFor(globalStore), old.id, 'the billing service retries a failed charge five times before it pages');
 
     const next = readEntry(globalStore, newId);
     expect(next?.origin_project).toBe('proj-a');
@@ -54,25 +54,25 @@ describe('supersede keeps provenance', () => {
     expect(readEntry(globalStore, old.id)?.superseded_by).toBe(newId);
   });
 
-  it('keeps a user-global row user-global in a project store', () => {
+  it('keeps a user-global row user-global in a project store', async () => {
     const old = seed(projectStore, 'the release checklist lives in the wiki under the platform section', {
       origin_project: '',
     });
 
-    const { newId } = supersede(ctxFor(projectStore), old.id, 'the release checklist lives in the wiki under the delivery section');
+    const { newId } = await supersede(ctxFor(projectStore), old.id, 'the release checklist lives in the wiki under the delivery section');
 
     const next = readEntry(projectStore, newId);
     expect(next?.origin_project).toBe('');
     expect(next?.source_session_id).toBeNull();
   });
 
-  it('lets the store stamp the origin of a legacy row that has none', () => {
+  it('lets the store stamp the origin of a legacy row that has none', async () => {
     const old = seed(projectStore, 'the nightly export job writes its files to the shared archive bucket', {
       origin_project: null,
     });
     expect(readEntry(projectStore, old.id)?.origin_project).toBeNull();
 
-    const { newId } = supersede(ctxFor(projectStore), old.id, 'the nightly export job writes its files to the cold archive bucket');
+    const { newId } = await supersede(ctxFor(projectStore), old.id, 'the nightly export job writes its files to the cold archive bucket');
 
     expect(readEntry(projectStore, newId)?.origin_project).toBe('proj');
   });

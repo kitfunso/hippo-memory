@@ -121,8 +121,8 @@ function copy(): string {
 }
 
 // Seeding the template stores row by row runs past the 30 s hook default on a slow runner.
-beforeAll(() => {
-  seed = seedMovedReads();
+beforeAll(async () => {
+  seed = await seedMovedReads();
 }, 120_000);
 
 afterAll(() => {

@@ -25,8 +25,8 @@ beforeEach(async () => {
   mkdirSync(join(home, '.hippo'), { recursive: true });
   initStore(home);
   ctx = { hippoRoot: home, tenantId: 'default', actor: { subject: 'test', role: 'admin' } };
-  remember(ctx, { content: 'auth bug fix details', tags: ['fix-auth'] });
-  remember(ctx, { content: 'auth UI polish notes', tags: ['ui'] });
+  await remember(ctx, { content: 'auth bug fix details', tags: ['fix-auth'] });
+  await remember(ctx, { content: 'auth UI polish notes', tags: ['ui'] });
   handle = await serve({ hippoRoot: home, port: 0 });
 });
 

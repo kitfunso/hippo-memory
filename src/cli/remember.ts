@@ -130,7 +130,7 @@ async function cmdRemember(
   const envelope = parseRememberEnvelope(flags);
 
   const ctx = cliApiContext(targetRoot, tenantId);
-  const outcome = api.rememberLocally(ctx, {
+  const outcome = await api.rememberLocally(ctx, {
     content: text,
     kind: envelope.kind,
     scope: envelope.scope ?? undefined,
@@ -212,7 +212,7 @@ async function cmdSupersede(
 
   let newId: string;
   try {
-    ({ newId } = api.supersede(cliApiContext(hippoRoot, tenantId), oldId, newContent, overrides));
+    ({ newId } = await api.supersede(cliApiContext(hippoRoot, tenantId), oldId, newContent, overrides));
   } catch (err) {
     if (err instanceof NotFoundError) printError(`Error: memory ${oldId} not found.`);
     else if (err instanceof RejectedValueError) printError(`Error: ${err.message}`);
@@ -241,11 +241,11 @@ function traceTags(flags: CliFlags): string[] {
       : [];
 }
 
-function cmdTraceRecord(
+async function cmdTraceRecord(
   hippoRoot: string,
   tenantId: string,
   flags: CliFlags,
-): void {
+): Promise<void> {
   requireInit(hippoRoot);
 
   const task = String(flags['task'] ?? '').trim();
@@ -273,7 +273,7 @@ function cmdTraceRecord(
     outcome,
   });
 
-  const { id } = api.remember(cliApiContext(hippoRoot, tenantId), {
+  const { id } = await api.remember(cliApiContext(hippoRoot, tenantId), {
     content,
     tags,
     local: {
@@ -495,7 +495,7 @@ export async function handleSupersede({ hippoRoot, tenantId, args, flags }: Comm
 export async function handleTrace({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
   const sub = args[0] ? String(args[0]) : '';
   if (sub === 'record') {
-    cmdTraceRecord(hippoRoot, tenantId, flags);
+    await cmdTraceRecord(hippoRoot, tenantId, flags);
     return;
   }
   if (!sub) {

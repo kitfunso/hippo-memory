@@ -57,10 +57,10 @@ function ctxFor(root: string): Context {
 }
 
 /** Seed `count` distinct memories that all match `keyword`. */
-function seedMatchingMemories(env: TestEnv, keyword: string, count: number): void {
+async function seedMatchingMemories(env: TestEnv, keyword: string, count: number): Promise<void> {
   const ctx = ctxFor(env.hippoRoot);
   for (let i = 0; i < count; i++) {
-    remember(ctx, { content: `${keyword} candidate number ${i} carries unique detail ${i}` });
+    await remember(ctx, { content: `${keyword} candidate number ${i} carries unique detail ${i}` });
   }
 }
 
@@ -146,9 +146,9 @@ describe('cmdRecall candidate accounting closes', () => {
     { keyword: 'widgetgamma', seeded: 12, limit: 4 },
   ])(
     'totalCandidates == droppedPreRank + droppedByBudget + returned ($keyword, limit=$limit)',
-    ({ keyword, seeded, limit }) => {
+    async ({ keyword, seeded, limit }) => {
       env = makeEnv(keyword);
-      seedMatchingMemories(env, keyword, seeded);
+      await seedMatchingMemories(env, keyword, seeded);
 
       const out = recallJson(env, keyword, limit);
       const s = out.suppressionSummary;
@@ -162,9 +162,9 @@ describe('cmdRecall candidate accounting closes', () => {
     },
   );
 
-  it('invariant also holds when nothing is truncated (droppedByBudget == 0)', () => {
+  it('invariant also holds when nothing is truncated (droppedByBudget == 0)', async () => {
     env = makeEnv('notrunc');
-    seedMatchingMemories(env, 'widgetdelta', 5);
+    await seedMatchingMemories(env, 'widgetdelta', 5);
 
     const out = recallJson(env, 'widgetdelta', 100);
     const s = out.suppressionSummary;
@@ -255,9 +255,9 @@ describe('BUDGET-driven truncation is counted (the measured failure)', () => {
   // The measured production failure was budget/rank driven with NO --limit:
   // totalCandidates 400, returned 3, droppedByBudget 0, Cutoff line silent.
   // This is the case that must go red without the derivation fix.
-  it('reports drops when a small --budget truncates and --limit is never passed', () => {
+  it('reports drops when a small --budget truncates and --limit is never passed', async () => {
     env = makeEnv('budget-gap');
-    seedMatchingMemories(env, 'widgetbudget', 40);
+    await seedMatchingMemories(env, 'widgetbudget', 40);
 
     const out = recallJsonBudget(env, 'widgetbudget', 40);
     const s = out.suppressionSummary;
@@ -282,9 +282,9 @@ describe('the `Cutoff:` line prints on a truncated CLI recall', () => {
     if (env?.cwd) rmSync(env.cwd, { recursive: true, force: true });
   });
 
-  it('prints "Cutoff:" naming the dropped count when --limit truncates the result set', () => {
+  it('prints "Cutoff:" naming the dropped count when --limit truncates the result set', async () => {
     env = makeEnv('print-gap');
-    seedMatchingMemories(env, 'widgetepsilon', 30);
+    await seedMatchingMemories(env, 'widgetepsilon', 30);
 
     const output = recallText(env, 'widgetepsilon', 5);
 
@@ -303,9 +303,9 @@ describe('the `Cutoff:` line prints on a truncated CLI recall', () => {
       .not.toMatch(/dropped to fit limit/);
   });
 
-  it('does NOT print "Cutoff:" when the recall is not truncated (no always-on noise)', () => {
+  it('does NOT print "Cutoff:" when the recall is not truncated (no always-on noise)', async () => {
     env = makeEnv('no-print');
-    seedMatchingMemories(env, 'widgetzeta', 3);
+    await seedMatchingMemories(env, 'widgetzeta', 3);
 
     const output = recallText(env, 'widgetzeta', 100);
 

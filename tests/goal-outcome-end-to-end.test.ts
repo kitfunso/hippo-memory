@@ -92,8 +92,8 @@ describe('outcome propagation E2E (recall -> log -> completeGoal)', () => {
     if (env?.cwd) rmSync(env.cwd, { recursive: true, force: true });
   });
 
-  it('positive outcome boosts strength of memories actually recalled during goal life', () => {
-    const m = remember(ctx(env.hippoRoot), { content: 'good lesson', tags: ['rfx'] });
+  it('positive outcome boosts strength of memories actually recalled during goal life', async () => {
+    const m = await remember(ctx(env.hippoRoot), { content: 'good lesson', tags: ['rfx'] });
     const g = pushGoal(env.hippoRoot, {
       sessionId: 's-e2e-1',
       tenantId: 'default',
@@ -112,8 +112,8 @@ describe('outcome propagation E2E (recall -> log -> completeGoal)', () => {
     expect(readStrength(env.hippoRoot, m.id)).toBeGreaterThan(before);
   });
 
-  it('negative outcome decays strength', () => {
-    const m = remember(ctx(env.hippoRoot), { content: 'misleading lesson', tags: ['rfx'] });
+  it('negative outcome decays strength', async () => {
+    const m = await remember(ctx(env.hippoRoot), { content: 'misleading lesson', tags: ['rfx'] });
     const g = pushGoal(env.hippoRoot, {
       sessionId: 's-e2e-2',
       tenantId: 'default',

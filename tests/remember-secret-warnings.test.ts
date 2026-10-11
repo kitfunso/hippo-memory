@@ -28,21 +28,21 @@ afterEach(() => {
 });
 
 describe('api.remember', () => {
-  it('stores typed text as sent and warns', () => {
-    const result = remember(ctx(), { content: TYPED });
+  it('stores typed text as sent and warns', async () => {
+    const result = await remember(ctx(), { content: TYPED });
     expect(result.warnings).toHaveLength(1);
     expect(result.warnings![0]).toContain('pattern:github-token');
     expect(loadAllEntries(root)[0].content).toBe(TYPED);
   });
 
-  it('redacts untrusted text and warns', () => {
-    const result = remember(ctx(), { content: TYPED, untrusted: true });
+  it('redacts untrusted text and warns', async () => {
+    const result = await remember(ctx(), { content: TYPED, untrusted: true });
     expect(result.warnings).toEqual([expect.stringContaining('redacted')]);
     expect(loadAllEntries(root)[0].content).not.toContain(GHP);
   });
 
-  it('leaves the field off when nothing looks like a secret', () => {
-    const result = remember(ctx(), { content: 'the nightly job runs at two' });
+  it('leaves the field off when nothing looks like a secret', async () => {
+    const result = await remember(ctx(), { content: 'the nightly job runs at two' });
     expect('warnings' in result).toBe(false);
   });
 });

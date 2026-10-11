@@ -129,10 +129,10 @@ function pinUpdatedAt(root: string): void {
 export interface Templates { dir: string; goalId: string }
 
 /** Seeds the three template stores once per file; `extendLocal` adds rows to the local store before the stamps are pinned. */
-export function seedTemplates(extendLocal?: (root: string) => void): Templates {
+export async function seedTemplates(extendLocal?: (root: string) => void | Promise<void>): Promise<Templates> {
   const dir = mkdtempSync(join(tmpdir(), 'hippo-parity-template-'));
   const goalId = seedLocal(join(dir, 'local'));
-  extendLocal?.(join(dir, 'local'));
+  await extendLocal?.(join(dir, 'local'));
   seedWide(join(dir, 'wide'));
   seedGlobal(join(dir, 'global'));
   for (const kind of ['local', 'wide', 'global']) pinUpdatedAt(join(dir, kind));

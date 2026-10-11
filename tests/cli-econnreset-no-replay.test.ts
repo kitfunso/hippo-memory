@@ -41,9 +41,9 @@ async function startResettingServer(hippoRoot: string, startedAt: string): Promi
       posts.count++;
       const chunks: Buffer[] = [];
       req.on('data', (c: Buffer) => chunks.push(c));
-      req.on('end', () => {
+      req.on('end', async () => {
         const body = JSON.parse(Buffer.concat(chunks).toString('utf8'));
-        remember(
+        await remember(
           { hippoRoot, tenantId: 'default', actor: { subject: 'stub', role: 'admin' } },
           { content: body.content },
         );

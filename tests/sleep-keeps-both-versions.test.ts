@@ -357,7 +357,7 @@ describe('a retired version leaves the merged row', () => {
 
   it('reject takes the value out of every merged row that holds it, in the same call', async () => {
     const { root, old, next, row } = await mergedPair();
-    api.forget(ctx(root), next.id); // as if the demoted source had faded, so only the merged row still holds the new value
+    await api.forget(ctx(root), next.id); // as if the demoted source had faded, so only the merged row still holds the new value
 
     const out = hippo(root, 'reject', old.id, '--reason', 'the port moved');
 
@@ -379,7 +379,7 @@ describe('a retired version leaves the merged row', () => {
     } finally {
       closeHippoDb(db);
     }
-    api.forget(ctx(root), row.id); // sleep's decay pass moves a row this way: dormant copy in, live row out
+    await api.forget(ctx(root), row.id); // sleep's decay pass moves a row this way: dormant copy in, live row out
 
     const out = hippo(root, 'reject', old.id, '--reason', 'the port moved');
     const [dormant] = api.listDormant(ctx(root));
@@ -394,7 +394,7 @@ describe('a retired version leaves the merged row', () => {
 
   it('a superseded version leaves the merged row at the next sleep', async () => {
     const { root, old, next } = await mergedPair();
-    api.supersede(ctx(root), old.id, 'The web app dev server runs on port 5173, set in vite.config.ts.');
+    await api.supersede(ctx(root), old.id, 'The web app dev server runs on port 5173, set in vite.config.ts.');
 
     await consolidate(root, { now: new Date(Date.now() + DAY) });
 

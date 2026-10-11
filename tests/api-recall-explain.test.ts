@@ -27,8 +27,8 @@ describe('api.recall explain', () => {
   });
 
   it('explain:true attaches the goal-boost step + rerankPipeline:api', async () => {
-    const goalMatch = remember(ctx, { content: 'auth bug fix details', tags: ['fix-auth'] });
-    remember(ctx, { content: 'auth UI polish', tags: ['ui'] });
+    const goalMatch = await remember(ctx, { content: 'auth bug fix details', tags: ['fix-auth'] });
+    await remember(ctx, { content: 'auth UI polish', tags: ['ui'] });
     pushGoal(hippoRoot, { sessionId, tenantId, goalName: 'fix-auth' });
 
     const result = await retrieve(ctx, { query: 'auth', limit: 10, sessionId, explain: true });
@@ -47,8 +47,8 @@ describe('api.recall explain', () => {
   });
 
   it('explain:false (default) leaves both fields absent on every band', async () => {
-    const goalMatch = remember(ctx, { content: 'auth bug fix details', tags: ['fix-auth'] });
-    remember(ctx, { content: 'auth UI polish', tags: ['ui'] });
+    const goalMatch = await remember(ctx, { content: 'auth bug fix details', tags: ['fix-auth'] });
+    await remember(ctx, { content: 'auth UI polish', tags: ['ui'] });
     pushGoal(hippoRoot, { sessionId, tenantId, goalName: 'fix-auth' });
 
     const result = await retrieve(ctx, { query: 'auth', limit: 10, sessionId });

@@ -285,14 +285,14 @@ describe('server hardening', () => {
   // ---- Fix 5.6: default-deny lower-level loader test -------------------
   it('MCP recall with no scope hides slack:private:* memories (default-deny)', async () => {
     // Seed a private slack memory + a regular memory under the same tenant.
-    apiRemember(
+    await apiRemember(
       { hippoRoot: root, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } },
       {
         content: 'private-slack-canary should not surface in default recall',
         scope: 'slack:private:CSECRET',
       },
     );
-    apiRemember(
+    await apiRemember(
       { hippoRoot: root, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } },
       { content: 'public-canary should surface in default recall' },
     );

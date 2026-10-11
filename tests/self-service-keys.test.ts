@@ -72,7 +72,7 @@ function breakAuditLog(): void {
   withDb((db) => db.exec(`CREATE TRIGGER audit_broken BEFORE INSERT ON audit_log BEGIN SELECT RAISE(ABORT, 'audit table unwritable'); END`));
 }
 
-const revokeAs = (token: string, keyId: string): AuthRevokeResult => authRevoke({ hippoRoot: home, tenantId: TENANT, actor: actorOf(token) }, keyId);
+const revokeAs = async (token: string, keyId: string): Promise<AuthRevokeResult> => await authRevoke({ hippoRoot: home, tenantId: TENANT, actor: actorOf(token) }, keyId);
 
 async function listKeys(token: string): Promise<string[]> {
   const res = await fetch(`${handle!.url}/v1/auth/keys?active=false`, { headers: { authorization: `Bearer ${token}` } });
@@ -195,10 +195,10 @@ describe('authCreateSelf', () => {
     ['perSubject', 0],
     ['perSubject', 1.5],
     ['perSubject', Number.NaN],
-  ])('throws before opening the store when %s is %s', (field, value) => {
+  ])('throws before opening the store when %s is %s', async (field, value) => {
     const ctx = { hippoRoot: join(home, 'never-opened'), tenantId: TENANT, actor: actorOf(ALICE) };
-    expect(() => authCreateSelf(ctx, { ...OPTS, [field]: value })).toThrow(RangeError);
-    expect(() => authCreateSelf(ctx, { ...OPTS, [field]: value })).toThrow(field);
+    await expect(Promise.resolve().then(() => authCreateSelf(ctx, { ...OPTS, [field]: value }))).rejects.toThrow(RangeError);
+    await expect(Promise.resolve().then(() => authCreateSelf(ctx, { ...OPTS, [field]: value }))).rejects.toThrow(field);
     expect(existsSync(ctx.hippoRoot)).toBe(false);
   });
 
@@ -226,40 +226,40 @@ describe('authCreate audit rows', () => {
   it.each([
     ['a resolver admin', actorOf('tok.boss')],
     ['the local admin', adminActor('cli')],
-  ])('leaves no key behind when a mint by %s cannot write its audit row', (_name, actor) => {
+  ])('leaves no key behind when a mint by %s cannot write its audit row', async (_name, actor) => {
     breakAuditLog();
-    expect(() => authCreate({ hippoRoot: home, tenantId: TENANT, actor }, { label: 'x' })).toThrow(/audit table unwritable/);
+    await expect(Promise.resolve().then(() => authCreate({ hippoRoot: home, tenantId: TENANT, actor }, { label: 'x' }))).rejects.toThrow(/audit table unwritable/);
     expect(keyRows()).toEqual([]);
   });
 });
 
 describe('authRevoke by a member signed in through the auth resolver', () => {
-  it('revokes its own self-minted key and audits it', () => {
+  it('revokes its own self-minted key and audits it', async () => {
     const own = selfMint();
-    expect(revokeAs(ALICE, own.keyId).ok).toBe(true);
+    expect((await revokeAs(ALICE, own.keyId)).ok).toBe(true);
     expect(liveOwned('alice@corp.example')).toEqual([]);
     expect(auditRows().filter((r) => r.op === 'auth_revoke')).toEqual([
       expect.objectContaining({ actor: 'alice@corp.example', targetId: own.keyId }),
     ]);
   });
 
-  it('refuses another member\'s self-minted key', () => {
+  it('refuses another member\'s self-minted key', async () => {
     const bobs = selfMint('tok.bob');
-    expect(() => revokeAs(ALICE, bobs.keyId)).toThrow(ForbiddenError);
+    await expect(Promise.resolve().then(() => revokeAs(ALICE, bobs.keyId))).rejects.toThrow(ForbiddenError);
     expect(liveOwned('bob@corp.example')).toHaveLength(1);
   });
 
-  it('refuses an admin-minted member key, which has no owner', () => {
+  it('refuses an admin-minted member key, which has no owner', async () => {
     const plain = mintDirect('member');
-    expect(() => revokeAs(ALICE, plain.keyId)).toThrow(ForbiddenError);
+    await expect(Promise.resolve().then(() => revokeAs(ALICE, plain.keyId))).rejects.toThrow(ForbiddenError);
     expect(keyRows().find((r) => r.key_id === plain.keyId)?.revoked_at).toBeNull();
   });
 
-  it('refuses its own subject\'s key in another tenant, and an unknown key, with the same error', () => {
-    const elsewhere = authCreateSelf({ hippoRoot: home, tenantId: 'other-tenant', actor: actorOf(ALICE) }, OPTS);
+  it('refuses its own subject\'s key in another tenant, and an unknown key, with the same error', async () => {
+    const elsewhere = await authCreateSelf({ hippoRoot: home, tenantId: 'other-tenant', actor: actorOf(ALICE) }, OPTS);
     const bobs = selfMint('tok.bob');
     for (const keyId of [elsewhere.keyId, 'hk_unknown', bobs.keyId]) {
-      expect(() => revokeAs(ALICE, keyId)).toThrow(new ForbiddenError('A member can revoke only the keys it minted'));
+      await expect(Promise.resolve().then(() => revokeAs(ALICE, keyId))).rejects.toThrow(new ForbiddenError('A member can revoke only the keys it minted'));
     }
     expect(withDb((db) => validateApiKey(db, elsewhere.plaintext)).valid).toBe(true);
   });

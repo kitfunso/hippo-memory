@@ -193,14 +193,14 @@ describe('key lists', () => {
     return { expired, live, liveExpiry, plain };
   }
 
-  it('an active list leaves out expired keys, page sizes included, and shows owner and expiry', () => {
+  it('an active list leaves out expired keys, page sizes included, and shows owner and expiry', async () => {
     const keys = threeKeys();
     const ctx = { hippoRoot: home, tenantId: 'default', actor: adminActor('cli') };
-    expect(authListRows(ctx, { active: true }).map((r) => r.key.keyId)).toEqual([keys.plain, keys.live]);
-    expect(authListRows(ctx, { active: false }).map((r) => r.key.keyId)).toEqual([keys.expired, keys.plain, keys.live]);
-    const [first] = authListRows(ctx, { active: true, limit: 1 });
+    expect((await authListRows(ctx, { active: true })).map((r) => r.key.keyId)).toEqual([keys.plain, keys.live]);
+    expect((await authListRows(ctx, { active: false })).map((r) => r.key.keyId)).toEqual([keys.expired, keys.plain, keys.live]);
+    const [first] = await authListRows(ctx, { active: true, limit: 1 });
     expect(first?.key.keyId).toBe(keys.plain);
-    const byId = new Map(authListRows(ctx, { active: true }).map((r) => [r.key.keyId, r.key]));
+    const byId = new Map((await authListRows(ctx, { active: true })).map((r) => [r.key.keyId, r.key]));
     expect(byId.get(keys.live)).toMatchObject({ ownerSubject: 'alice', expiresAt: keys.liveExpiry });
     expect(byId.get(keys.plain)).toMatchObject({ ownerSubject: null, expiresAt: null });
   });

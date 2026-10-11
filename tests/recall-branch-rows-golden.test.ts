@@ -50,11 +50,11 @@ function withPredictionId<T>(value: T, root: string): T {
   }
 }
 
-beforeAll(() => {
+beforeAll(async () => {
   // savePrediction stamps its memory from the eval clock, so a fixed clock keeps that row's score the same on every run.
   vi.stubEnv('HIPPO_FAKE_NOW', FAKE_NOW);
   _resetAblationCacheForTests();
-  templates = seedTemplates(seedPortBranches);
+  templates = await seedTemplates(seedPortBranches);
   vi.unstubAllEnvs();
   _resetAblationCacheForTests();
 });

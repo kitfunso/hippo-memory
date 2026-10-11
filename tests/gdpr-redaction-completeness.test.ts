@@ -144,11 +144,11 @@ describe('GDPR Path A completeness fixes', () => {
     }
   });
 
-  it('2b. mirror reaper does NOT delete mirrors of non-archived (live) memories', () => {
+  it('2b. mirror reaper does NOT delete mirrors of non-archived (live) memories', async () => {
     // Plant a raw_archive row + a UNRELATED live memory with a mirror; reaper
     // must only touch files whose id appears in raw_archive.
     const ctx: HippoDbContext = { hippoRoot: root, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
-    const live = remember(ctx, { content: 'i-am-still-alive-content' });
+    const live = await remember(ctx, { content: 'i-am-still-alive-content' });
 
     const db1 = openHippoDb(root);
     try {
@@ -245,7 +245,7 @@ describe('GDPR Path A completeness fixes', () => {
 
   it('3. recall audit_log row stores query_hash + query_length, no query field', async () => {
     const ctx: HippoDbContext = { hippoRoot: root, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
-    remember(ctx, { content: 'something to find with the canary query' });
+    await remember(ctx, { content: 'something to find with the canary query' });
 
     const distinctive = 'gdpr-canary-quaxle-2026';
     await retrieve(ctx, { query: distinctive });
@@ -273,13 +273,13 @@ describe('GDPR Path A completeness fixes', () => {
     const canary = 'gdpr-canary-99-special-token-xyz';
 
     // Seed: kind='raw' so it can be archived. Content embeds the canary.
-    const { id } = remember(ctx, {
+    const { id } = await remember(ctx, {
       content: `payload contains ${canary} as a secret`,
       kind: 'raw',
     });
 
     // Archive (RTBF). Mirror cleanup must NOT throw.
-    archiveRaw(ctx, id, 'GDPR right-to-be-forgotten');
+    await archiveRaw(ctx, id, 'GDPR right-to-be-forgotten');
 
     // Recall using the canary as the query — must not bring back the archived row.
     await retrieve(ctx, { query: canary });
@@ -321,7 +321,7 @@ describe('GDPR Path A completeness fixes', () => {
   it('5. cross-recall non-leakage: two recalls before/after archive both leave hash-only audit rows', async () => {
     const ctx: HippoDbContext = { hippoRoot: root, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
     const queryText = 'special-private-cross-recall-string';
-    const { id } = remember(ctx, {
+    const { id } = await remember(ctx, {
       content: `contains ${queryText} as content`,
       kind: 'raw',
     });
@@ -331,7 +331,7 @@ describe('GDPR Path A completeness fixes', () => {
     expect(r1.results.length).toBeGreaterThanOrEqual(1);
 
     // Archive.
-    archiveRaw(ctx, id, 'GDPR purge');
+    await archiveRaw(ctx, id, 'GDPR purge');
 
     // Recall #2: same query text, no match.
     const r2 = await retrieve(ctx, { query: queryText });

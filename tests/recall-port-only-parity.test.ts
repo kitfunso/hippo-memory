@@ -97,8 +97,8 @@ async function runPass(scenario: Scenario, makeStore?: (root: string) => HippoSt
 }
 
 // Seeding three stores row by row ran past the 30 s hook default on windows-latest CI.
-beforeAll(() => {
-  templates = seedTemplates((root) => {
+beforeAll(async () => {
+  templates = await seedTemplates((root) => {
     seedPortBranches(root);
     // A shared store reads only the caller's keyed snapshot, and MCP's loopback caller owns by its subject.
     const key = { owner: 'localhost:cli', project: [PROJECT] };

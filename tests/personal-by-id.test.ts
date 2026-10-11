@@ -50,8 +50,8 @@ async function expectMissingIdAnswer(id: string, call: (target: string) => Retur
   expect(forRow).toEqual(await masked(randomId, () => call(randomId)));
 }
 
-function personalRow(kind: MemoryKind = 'distilled'): string {
-  return remember(ctxFor(actorA), { content: `a's own note ${generateId('n')}`, personal: true, kind }).id;
+async function personalRow(kind: MemoryKind = 'distilled'): Promise<string> {
+  return (await remember(ctxFor(actorA), { content: `a's own note ${generateId('n')}`, personal: true, kind })).id;
 }
 
 beforeEach(() => {
@@ -67,16 +67,16 @@ afterEach(() => {
 });
 
 describe('by-id writes on someone else\'s personal row', () => {
-  it('supersede by the owner keeps the successor in the owner\'s scope with origin \'\'', () => {
-    const id = personalRow();
-    const { newId } = supersede(ctxFor(actorA), id, 'a newer version of the note');
+  it('supersede by the owner keeps the successor in the owner\'s scope with origin \'\'', async () => {
+    const id = await personalRow();
+    const { newId } = await supersede(ctxFor(actorA), id, 'a newer version of the note');
     const successor = readEntry(root, newId, 'default');
     expect(successor?.scope).toBe('personal:private:a');
     expect(successor?.origin_project).toBe('');
   });
 
   it('hippo_share: another owner and an unowned admin get the missing-id error, while a team row still shares', async () => {
-    const id = personalRow();
+    const id = await personalRow();
     const share = (actor: Actor, target: string): Promise<McpResponse | null> => handleMcpRequest(
       { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_share', arguments: { id: target, force: true } } },
       mcpCtxFor(actor),
@@ -84,7 +84,7 @@ describe('by-id writes on someone else\'s personal row', () => {
     for (const [, actor] of outsiders) {
       await expectMissingIdAnswer(id, (target) => share(actor, target));
     }
-    const team = remember(ctxFor(actorB), { content: 'always pin the node version in CI' });
+    const team = await remember(ctxFor(actorB), { content: 'always pin the node version in CI' });
     expect(JSON.stringify(await share(actorB, team.id))).toContain('Shared [');
   });
 });
@@ -94,7 +94,7 @@ describe('reject next to personal rows', () => {
   const PERSONAL_REFUSAL = "Personal memories can't be rejected. Use forget to remove it.";
 
   it('reject by id: another owner and an unowned admin get the missing-id 404, the owner and the CLI get a 400, and no tombstone is made', async () => {
-    const id = personalRow();
+    const id = await personalRow();
     for (const [, actor] of outsiders) {
       await expectMissingIdAnswer(id, (target) => reject(ctxFor(actor), { memoryId: target, reason: 'wrong' }));
     }
@@ -105,9 +105,9 @@ describe('reject next to personal rows', () => {
   });
 
   it('reject by value removes team copies and the caller\'s own personal copy, never another person\'s', async () => {
-    const mineA = remember(ctxFor(actorA), { content: SHARED_TEXT, personal: true }).id;
-    const mineB = remember(ctxFor(actorB), { content: SHARED_TEXT, personal: true }).id;
-    const team = remember(ctxFor(actorB), { content: SHARED_TEXT }).id;
+    const mineA = (await remember(ctxFor(actorA), { content: SHARED_TEXT, personal: true })).id;
+    const mineB = (await remember(ctxFor(actorB), { content: SHARED_TEXT, personal: true })).id;
+    const team = (await remember(ctxFor(actorB), { content: SHARED_TEXT })).id;
     const { removedIds } = await reject(ctxFor(actorB), { value: SHARED_TEXT, reason: 'stale' });
     expect([...removedIds].sort()).toEqual([mineB, team].sort());
     expect(readEntry(root, mineA, 'default')?.scope).toBe('personal:private:a');
@@ -115,9 +115,9 @@ describe('reject next to personal rows', () => {
     expect(readEntry(root, team, 'default')).toBeNull();
   });
 
-  it('the CLI reject by value, which has no owner, leaves every personal row', () => {
-    const mineA = remember(ctxFor(actorA), { content: SHARED_TEXT, personal: true }).id;
-    const team = remember(ctxFor(actorB), { content: SHARED_TEXT }).id;
+  it('the CLI reject by value, which has no owner, leaves every personal row', async () => {
+    const mineA = (await remember(ctxFor(actorA), { content: SHARED_TEXT, personal: true })).id;
+    const team = (await remember(ctxFor(actorB), { content: SHARED_TEXT })).id;
     const { removedIds } = rejectValue({ hippoRoot: root, tenantId: 'default', actor: 'cli', reason: 'stale', value: SHARED_TEXT });
     expect(removedIds).toEqual([team]);
     expect(readEntry(root, mineA, 'default')?.scope).toBe('personal:private:a');

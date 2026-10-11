@@ -56,8 +56,8 @@ describe('api tenant isolation', () => {
   });
 
   // ---- Test 1: promote cross-tenant denied ----------------------------------
-  it('promote refuses to promote a row that belongs to another tenant', () => {
-    const created = remember(
+  it('promote refuses to promote a row that belongs to another tenant', async () => {
+    const created = await remember(
       { hippoRoot: home, tenantId: 'alpha', actor: { subject: 'cli', role: 'admin' } },
       { content: 'alpha-row promote-cross-tenant canary' },
     );
@@ -91,9 +91,9 @@ describe('api tenant isolation', () => {
   });
 
   // The loser read the row before the winner committed, so its early check passed: only the guarded UPDATE can refuse it.
-  it('supersede refuses the writer that read the row before another connection superseded it', () => {
+  it('supersede refuses the writer that read the row before another connection superseded it', async () => {
     const alpha = (): HippoDbContext => ({ hippoRoot: home, tenantId: 'alpha', actor: { subject: 'cli', role: 'admin' } });
-    const created = remember(alpha(), { content: 'alpha-row supersede CAS race canary' });
+    const created = await remember(alpha(), { content: 'alpha-row supersede CAS race canary' });
 
     const winners: string[] = [];
     let raced = false;
@@ -106,7 +106,7 @@ describe('api tenant isolation', () => {
       }
       exec.call(this, sql);
     });
-    expect(() => supersede(alpha(), created.id, 'the loser')).toThrow(`Memory ${created.id} already superseded by another writer`);
+    await expect(Promise.resolve().then(() => supersede(alpha(), created.id, 'the loser'))).rejects.toThrow(`Memory ${created.id} already superseded by another writer`);
     vi.restoreAllMocks();
 
     expect(winners).toHaveLength(1);
@@ -121,17 +121,17 @@ describe('api tenant isolation', () => {
     } finally {
       closeHippoDb(db);
     }
-    expect(() => supersede(alpha(), created.id, 'a later writer')).toThrow(`is already superseded by ${winners[0]}`);
+    await expect(Promise.resolve().then(() => supersede(alpha(), created.id, 'a later writer'))).rejects.toThrow(`is already superseded by ${winners[0]}`);
   });
 
   // ---- Test 6: supersede CAS — clean path -----------------------------------
-  it('supersede CAS clean path: both rows present, audit row written, chain pointer set', () => {
-    const created = remember(
+  it('supersede CAS clean path: both rows present, audit row written, chain pointer set', async () => {
+    const created = await remember(
       { hippoRoot: home, tenantId: 'alpha', actor: { subject: 'cli', role: 'admin' } },
       { content: 'alpha-row supersede clean-path canary' },
     );
 
-    const result = supersede(
+    const result = await supersede(
       { hippoRoot: home, tenantId: 'alpha', actor: { subject: 'cli', role: 'admin' } },
       created.id,
       'fresh replacement content',
@@ -171,19 +171,19 @@ describe('api tenant isolation', () => {
   });
 
   // ---- Test 7: supersede CAS — tenant-scoped --------------------------------
-  it('supersede across tenants throws "Memory not found" via readEntry tenant scope', () => {
-    const created = remember(
+  it('supersede across tenants throws "Memory not found" via readEntry tenant scope', async () => {
+    const created = await remember(
       { hippoRoot: home, tenantId: 'alpha', actor: { subject: 'cli', role: 'admin' } },
       { content: 'alpha-row supersede tenant-scope canary' },
     );
 
-    expect(() =>
+    await expect(Promise.resolve().then(() =>
       supersede(
         { hippoRoot: home, tenantId: 'bravo', actor: { subject: 'api_key:bravo-key', role: 'admin' } },
         created.id,
         'cross-tenant supersede attempt',
-      ),
-    ).toThrow(/memory not found/i);
+      )),
+    ).rejects.toThrow(/memory not found/i);
 
     // The original row is untouched: no superseded_by, no new memory created.
     const db = openHippoDb(home);

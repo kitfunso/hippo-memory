@@ -445,14 +445,14 @@ describe('exported authRevoke for add-ons', () => {
     expect(row).toMatchObject({ actor: 'system:addon:u1', targetId: member.keyId });
   });
 
-  it('refuses an admin key for a resolver admin ctx', () => {
+  it('refuses an admin key for a resolver admin ctx', async () => {
     const admin = mint('ext-tenant', 'admin');
-    expect(() => authRevoke(ctx('ext-tenant'), admin.keyId)).toThrow(ForbiddenError);
+    await expect(Promise.resolve().then(() => authRevoke(ctx('ext-tenant'), admin.keyId))).rejects.toThrow(ForbiddenError);
   });
 
-  it('treats a key in another tenant as unknown', () => {
+  it('treats a key in another tenant as unknown', async () => {
     const other = mint('other-tenant', 'member');
-    expect(() => authRevoke(ctx('ext-tenant'), other.keyId)).toThrow(/Unknown key_id/);
+    await expect(Promise.resolve().then(() => authRevoke(ctx('ext-tenant'), other.keyId))).rejects.toThrow(/Unknown key_id/);
   });
 });
 

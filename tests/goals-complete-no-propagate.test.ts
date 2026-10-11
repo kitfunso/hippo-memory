@@ -75,8 +75,8 @@ describe('completeGoal noPropagate flag', () => {
     rmSync(root, { recursive: true, force: true });
   });
 
-  it('default propagates strength multiplier on positive outcome', () => {
-    const m = remember(ctx(root), { content: 'fix auth bug', tags: ['fix-auth'] });
+  it('default propagates strength multiplier on positive outcome', async () => {
+    const m = await remember(ctx(root), { content: 'fix auth bug', tags: ['fix-auth'] });
     // Default strength is 1.0 (ceiling); knock it down so the 1.10x boost shows.
     setStrength(root, m.id, 0.5);
     const goal = pushGoal(root, { sessionId, tenantId, goalName: 'fix-auth' });
@@ -87,8 +87,8 @@ describe('completeGoal noPropagate flag', () => {
     expect(afterStrength).toBeGreaterThan(beforeStrength);
   });
 
-  it('noPropagate skips strength side-effects', () => {
-    const m = remember(ctx(root), { content: 'fix auth bug', tags: ['fix-auth'] });
+  it('noPropagate skips strength side-effects', async () => {
+    const m = await remember(ctx(root), { content: 'fix auth bug', tags: ['fix-auth'] });
     setStrength(root, m.id, 0.5);
     const goal = pushGoal(root, { sessionId, tenantId, goalName: 'fix-auth' });
     seedRecallLog(root, goal.id, m.id, new Date().toISOString());
@@ -98,12 +98,12 @@ describe('completeGoal noPropagate flag', () => {
     expect(afterStrength).toBe(beforeStrength); // unchanged
   });
 
-  it('second call with noPropagate is a true no-op after first call propagated (idempotency)', () => {
+  it('second call with noPropagate is a true no-op after first call propagated (idempotency)', async () => {
     // Status check at src/store/goals.ts:253-257 short-circuits the second call BEFORE
     // reading opts.noPropagate. So a second call with noPropagate after a propagating
     // first call leaves strength as the post-first-call value (propagation already
     // happened on call 1; call 2 is a no-op regardless of noPropagate).
-    const m = remember(ctx(root), { content: 'fix auth bug', tags: ['fix-auth'] });
+    const m = await remember(ctx(root), { content: 'fix auth bug', tags: ['fix-auth'] });
     setStrength(root, m.id, 0.5);
     const goal = pushGoal(root, { sessionId, tenantId, goalName: 'fix-auth' });
     seedRecallLog(root, goal.id, m.id, new Date().toISOString());

@@ -119,8 +119,8 @@ async function onFreshStore<T>(kind: 'local' | 'wide', fn: (s: Store) => Promise
   }
 }
 
-beforeAll(() => {
-  templates = seedTemplates();
+beforeAll(async () => {
+  templates = await seedTemplates();
 });
 
 afterAll(() => {

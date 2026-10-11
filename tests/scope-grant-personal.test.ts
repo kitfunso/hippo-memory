@@ -39,7 +39,7 @@ beforeEach(async () => {
   root = makeRoot('scope-grant-personal', { config: { embeddings: { enabled: false } } });
   keyB = withDb((db) => createApiKey(db, { tenantId: 'default', role: 'member', ownerSubject: 'oid-b' }));
   adminCtx = { hippoRoot: root, tenantId: 'default', actor: api.adminActor('cli') };
-  api.remember({ hippoRoot: root, tenantId: 'default', actor: { subject: 'api_key:hk_a', role: 'member', owner: 'oid-a' } }, { content: A_TEXT, personal: true });
+  await api.remember({ hippoRoot: root, tenantId: 'default', actor: { subject: 'api_key:hk_a', role: 'member', owner: 'oid-a' } }, { content: A_TEXT, personal: true });
   handle = await serve({ hippoRoot: root, port: 0 });
 });
 

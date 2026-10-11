@@ -387,7 +387,7 @@ describe('GitHub connector — 200-event smoke test', () => {
     // ---- (9) Cross-scope leak negative test (generic private filter) -----
     // Insert a synthetic memory under acme:private:demo (NOT a github source).
     // The Task 0 generic-private filter should still hide it from no-scope recall.
-    remember(ctx, {
+    await remember(ctx, {
       content: 'cross-scope-canary-payload-1234',
       kind: 'raw',
       scope: 'acme:private:demo',

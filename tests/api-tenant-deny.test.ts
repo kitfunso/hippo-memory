@@ -33,21 +33,21 @@ describe('api tenant deny — archiveRaw and forget', () => {
     try { rmSync(home, { recursive: true, force: true }); } catch { /* windows file locks */ }
   });
 
-  it('archiveRaw refuses to archive a row that belongs to another tenant', () => {
+  it('archiveRaw refuses to archive a row that belongs to another tenant', async () => {
     // Tenant A creates a kind='raw' memory.
-    const created = remember(
+    const created = await remember(
       { hippoRoot: home, tenantId: 'alpha', actor: { subject: 'cli', role: 'admin' } },
       { content: 'raw-row-from-alpha tenant-deny canary', kind: 'raw' },
     );
 
     // Tenant B (bravo) tries to archive it. Should fail with not-found.
-    expect(() =>
+    await expect(Promise.resolve().then(() =>
       archiveRaw(
         { hippoRoot: home, tenantId: 'bravo', actor: { subject: 'api_key:bravo-key', role: 'admin' } },
         created.id,
         'cross-tenant probe',
-      ),
-    ).toThrow(/memory not found/i);
+      )),
+    ).rejects.toThrow(/memory not found/i);
 
     // Original row must still exist with its kind intact.
     const db = openHippoDb(home);
@@ -63,20 +63,20 @@ describe('api tenant deny — archiveRaw and forget', () => {
     }
   });
 
-  it('forget refuses to delete a row that belongs to another tenant', () => {
+  it('forget refuses to delete a row that belongs to another tenant', async () => {
     // Tenant A creates a kind='distilled' memory.
-    const created = remember(
+    const created = await remember(
       { hippoRoot: home, tenantId: 'alpha', actor: { subject: 'cli', role: 'admin' } },
       { content: 'distilled-row-from-alpha tenant-deny canary', kind: 'distilled' },
     );
 
     // Tenant B tries to forget it.
-    expect(() =>
+    await expect(Promise.resolve().then(() =>
       forget(
         { hippoRoot: home, tenantId: 'bravo', actor: { subject: 'api_key:bravo-key', role: 'admin' } },
         created.id,
-      ),
-    ).toThrow(/memory not found/i);
+      )),
+    ).rejects.toThrow(/memory not found/i);
 
     // Original row must still exist.
     const db = openHippoDb(home);
@@ -91,12 +91,12 @@ describe('api tenant deny — archiveRaw and forget', () => {
     }
   });
 
-  it('forget still works for the owning tenant', () => {
-    const created = remember(
+  it('forget still works for the owning tenant', async () => {
+    const created = await remember(
       { hippoRoot: home, tenantId: 'alpha', actor: { subject: 'cli', role: 'admin' } },
       { content: 'owning-tenant forget happy-path' },
     );
-    const result = forget(
+    const result = await forget(
       { hippoRoot: home, tenantId: 'alpha', actor: { subject: 'cli', role: 'admin' } },
       created.id,
     );

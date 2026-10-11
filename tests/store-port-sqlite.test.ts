@@ -132,8 +132,8 @@ function seedTeam(root: string): void {
   saveSessionHandoff(root, TEAM, { version: 1, sessionId: 'alice-proj-a', summary: 'bob hands off on her session', nextAction: 'merge' }, { owner: 'bob', project: ['proj-a'] });
 }
 
-beforeAll(() => {
-  templates = seedTemplates((root) => {
+beforeAll(async () => {
+  templates = await seedTemplates((root) => {
     seedPortBranches(root);
     seedTeam(root);
     // A goal with a retrieval policy, so activeGoals has a policy row to read.

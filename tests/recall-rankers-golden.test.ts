@@ -103,7 +103,7 @@ function rankOpts(s: Store, c: CoreSetup): Omit<RankRecallOpts, 'query' | 'sessi
 describe('recall ranker goldens', () => {
   beforeAll(async () => {
     embeddings = await startHashedEmbeddings();
-    templates = seedTemplates((root) => seedVectors(root, embeddings.url));
+    templates = await seedTemplates((root) => seedVectors(root, embeddings.url));
   });
 
   afterAll(async () => {

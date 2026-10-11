@@ -22,14 +22,14 @@ describe('remember with a connector event is transactional', () => {
   beforeEach(() => { root = mkdtempSync(join(tmpdir(), 'hippo-after-')); initStore(root); });
   afterEach(() => rmSync(root, { recursive: true, force: true }));
 
-  it('rolls back the memory row when the event log write throws', () => {
+  it('rolls back the memory row when the event log write throws', async () => {
     breakEventLog(root);
-    expect(() =>
+    await expect(Promise.resolve().then(() =>
       remember({ hippoRoot: root, tenantId: 'default', actor: { subject: 'test', role: 'admin' } }, {
         content: 'doomed',
         event: { connector: 'slack', eventId: 'Ev_doomed' },
-      }),
-    ).toThrow(/boom/);
+      })),
+    ).rejects.toThrow(/boom/);
     expect(loadAllEntries(root).filter((e) => e.content === 'doomed')).toHaveLength(0);
   });
 });

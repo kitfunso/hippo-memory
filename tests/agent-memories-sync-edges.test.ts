@@ -51,11 +51,11 @@ function importThenDelete(text = A): string {
 }
 
 describe('agent memory sync: the Added list', () => {
-  it('a user-superseded row is left alone while the note is unchanged, then superseded when it changes', () => {
+  it('a user-superseded row is left alone while the note is unchanged, then superseded when it changes', async () => {
     note(dir, 'deploy.md', A);
     sync();
     const USER = 'Run the schema check, then page the on-call engineer, before deploys.';
-    const { newId } = supersede(ctxFor(w.local), only().id, USER);
+    const { newId } = await supersede(ctxFor(w.local), only().id, USER);
 
     expect(claude(sync())).toMatchObject({ unchanged: 1, imported: 0, replaced: 0 });
     expect(only()).toMatchObject({ id: newId, content: USER, tags: [TAG] });
@@ -228,11 +228,11 @@ describe('agent memory sync: the Added list', () => {
     expect(liveRows(w.local)).toEqual([]);
   });
 
-  it('a forgotten row is imported again while its note exists', () => {
+  it('a forgotten row is imported again while its note exists', async () => {
     note(dir, 'deploy.md', A);
     sync();
     const { id } = only();
-    forget(ctxFor(w.local), id);
+    await forget(ctxFor(w.local), id);
 
     expect(claude(sync()).imported).toBe(1);
     expect(only().id).not.toBe(id);

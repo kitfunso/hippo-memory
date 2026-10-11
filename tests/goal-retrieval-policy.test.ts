@@ -74,14 +74,14 @@ describe('retrieval policy', () => {
     if (env?.cwd) rmSync(env.cwd, { recursive: true, force: true });
   });
 
-  it('error-prioritized policy ranks error-tagged > non-error within same goal', () => {
+  it('error-prioritized policy ranks error-tagged > non-error within same goal', async () => {
     const ctx: Context = { hippoRoot: env.hippoRoot, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
-    remember(ctx, { content: 'note one about auth refactor', tags: ['auth-rewrite'] });
-    remember(ctx, {
+    await remember(ctx, { content: 'note one about auth refactor', tags: ['auth-rewrite'] });
+    await remember(ctx, {
       content: 'lesson learned during auth refactor: bare except handler caused a bug',
       tags: ['auth-rewrite', 'error'],
     });
-    remember(ctx, { content: 'note two about auth refactor', tags: ['auth-rewrite'] });
+    await remember(ctx, { content: 'note two about auth refactor', tags: ['auth-rewrite'] });
 
     pushGoal(env.hippoRoot, {
       sessionId: 's-p1',
@@ -94,9 +94,9 @@ describe('retrieval policy', () => {
     expect(top[0].content).toContain('lesson learned');
   });
 
-  it('final multiplier never exceeds 3.0x even with extreme policy weights', () => {
+  it('final multiplier never exceeds 3.0x even with extreme policy weights', async () => {
     const ctx: Context = { hippoRoot: env.hippoRoot, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
-    remember(ctx, { content: 'high-error lesson', tags: ['plan-x', 'error'] });
+    await remember(ctx, { content: 'high-error lesson', tags: ['plan-x', 'error'] });
 
     // Baseline: no session → no boost.
     const base = recallCli(env, 'high-error lesson', '');

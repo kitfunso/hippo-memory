@@ -79,7 +79,7 @@ describe('api.getContext', () => {
         actor: { subject: 'cli', role: 'admin' },
       };
       for (let i = 0; i < 5; i++) {
-        remember(ctx, {
+        await remember(ctx, {
           content: `getcontext-fallback-mem-${i}`,
           kind: 'distilled',
         });
@@ -109,7 +109,7 @@ describe('api.getContext', () => {
         tenantId: 'default',
         actor: { subject: 'cli', role: 'admin' },
       };
-      for (let i = 0; i < 4; i++) remember(ctx, { content: `getcontext-limit-${i}`, kind: 'distilled' });
+      for (let i = 0; i < 4; i++) await remember(ctx, { content: `getcontext-limit-${i}`, kind: 'distilled' });
 
       const result = await getContext(ctx, { budget: 1500, limit: 2 });
 
@@ -129,7 +129,7 @@ describe('api.getContext', () => {
       };
       // Seed 10 longish memories so total tokens >> tight budget
       for (let i = 0; i < 10; i++) {
-        remember(ctx, {
+        await remember(ctx, {
           content: `padding ${'x'.repeat(200)} content number ${i}`,
           kind: 'distilled',
         });
@@ -158,8 +158,8 @@ describe('api.getContext', () => {
         tenantId: 'tenant_b',
         actor: { subject: 'cli', role: 'admin' },
       };
-      remember(ctxA, { content: 'belongs-to-tenant-A', kind: 'distilled' });
-      remember(ctxB, { content: 'belongs-to-tenant-B', kind: 'distilled' });
+      await remember(ctxA, { content: 'belongs-to-tenant-A', kind: 'distilled' });
+      await remember(ctxB, { content: 'belongs-to-tenant-B', kind: 'distilled' });
 
       const resultA = await getContext(ctxA, { budget: 1500 });
       const resultB = await getContext(ctxB, { budget: 1500 });
@@ -192,7 +192,7 @@ describe('api.getContext', () => {
         session_id: 'sess-ctxtest',
         scope: null,
       });
-      remember(ctx, { content: 'snapshot-test-mem', kind: 'distilled' });
+      await remember(ctx, { content: 'snapshot-test-mem', kind: 'distilled' });
 
       const result = await getContext(ctx, { budget: 1500 });
 
@@ -212,7 +212,7 @@ describe('api.getContext', () => {
         tenantId: 'default',
         actor: { subject: 'cli', role: 'admin' },
       };
-      remember(ctx, { content: 'budget-zero-test', kind: 'distilled' });
+      await remember(ctx, { content: 'budget-zero-test', kind: 'distilled' });
 
       const result = await getContext(ctx, { budget: 0 });
 

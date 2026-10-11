@@ -58,7 +58,7 @@ function expectNoCanary(): void {
   for (const row of rows) expect(row.text).not.toContain(CANARY);
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   home = mkdtempSync(join(tmpdir(), 'hippo-audit-privacy-'));
   mkdirSync(join(home, '.hippo'), { recursive: true });
   localRoot = join(home, '.hippo');
@@ -67,7 +67,7 @@ beforeEach(() => {
   process.env.HIPPO_HOME = globalRoot;
   initStore(localRoot);
   ctx = { hippoRoot: localRoot, tenantId: 'default', actor: { subject: 'test', role: 'admin' } };
-  remember(ctx, { content: `${CANARY} stored memory body` });
+  await remember(ctx, { content: `${CANARY} stored memory body` });
 });
 
 afterEach(() => {

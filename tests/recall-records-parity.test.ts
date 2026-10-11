@@ -123,9 +123,9 @@ async function onStore<T>(s: Store, fn: (s: Store) => Promise<T>): Promise<T> {
 
 const onSeeded = <T>(fn: (s: Store) => Promise<T>): Promise<T> => onStore(freshStore(templates, 'local'), fn);
 
-beforeAll(() => {
+beforeAll(async () => {
   launchFolder = process.cwd();
-  templates = seedTemplates(seedContinuity);
+  templates = await seedTemplates(seedContinuity);
 });
 
 afterAll(() => {

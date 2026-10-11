@@ -55,9 +55,9 @@ interface PersonalPair {
 }
 
 /** A's personal row in an open conflict with B's team row. */
-function personalPair(): PersonalPair {
-  const personalId = remember(ctxFor(actorA), { content: A_TEXT, personal: true }).id;
-  const teamId = remember(ctxFor(actorB), { content: 'never run the deploy script with --dry-run' }).id;
+async function personalPair(): Promise<PersonalPair> {
+  const personalId = (await remember(ctxFor(actorA), { content: A_TEXT, personal: true })).id;
+  const teamId = (await remember(ctxFor(actorB), { content: 'never run the deploy script with --dry-run' })).id;
   return { personalId, teamId, conflictId: seedConflict(personalId, teamId) };
 }
 
@@ -71,10 +71,10 @@ afterEach(() => {
 
 describe('resolving conflicts next to personal rows', () => {
   it('rejectLoser on a team row sweeps team duplicates but leaves another person\'s personal row holding the same text', async () => {
-    const personalId = remember(ctxFor(actorA), { content: A_TEXT, personal: true }).id;
-    const teamCopy = remember(ctxFor(actorB), { content: A_TEXT }).id;
-    const loser = remember(ctxFor(actorB), { content: A_TEXT }).id;
-    const keeper = remember(ctxFor(actorB), { content: 'never run the deploy script with --dry-run' }).id;
+    const personalId = (await remember(ctxFor(actorA), { content: A_TEXT, personal: true })).id;
+    const teamCopy = (await remember(ctxFor(actorB), { content: A_TEXT })).id;
+    const loser = (await remember(ctxFor(actorB), { content: A_TEXT })).id;
+    const keeper = (await remember(ctxFor(actorB), { content: 'never run the deploy script with --dry-run' })).id;
     expect(new Set([personalId, teamCopy, loser]).size).toBe(3);
     const conflictId = seedConflict(keeper, loser);
 
@@ -88,7 +88,7 @@ describe('resolving conflicts next to personal rows', () => {
   });
 
   it('rejectLoser on the owner\'s own personal loser is a 400 that changes nothing, while forget resolves it', async () => {
-    const { personalId, teamId, conflictId } = personalPair();
+    const { personalId, teamId, conflictId } = await personalPair();
     let refusal: { status: number; message: string } | undefined;
     try {
       await callTool(actorA, 'hippo_resolve', { conflict_id: conflictId, keep: teamId, rejectLoser: true });
@@ -107,8 +107,8 @@ describe('resolving conflicts next to personal rows', () => {
   });
 
   it('hippo_conflicts hides a pair holding someone else\'s personal row, and the owner sees it', async () => {
-    const { personalId, teamId } = personalPair();
-    const otherTeamId = remember(ctxFor(actorB), { content: 'always run the deploy script from the repo root' }).id;
+    const { personalId, teamId } = await personalPair();
+    const otherTeamId = (await remember(ctxFor(actorB), { content: 'always run the deploy script from the repo root' })).id;
     const [conflictId, teamConflictId] = seedConflicts([personalId, teamId], [otherTeamId, teamId]);
     const listed = replyText(await callTool(actorA, 'hippo_conflicts', {}));
     expect(listed).toContain(`conflict_${conflictId}:`);
@@ -121,7 +121,7 @@ describe('resolving conflicts next to personal rows', () => {
   });
 
   it('hippo_resolve on a pair holding someone else\'s personal row answers as a missing conflict does, and the owner resolves it', async () => {
-    const { personalId, teamId, conflictId } = personalPair();
+    const { personalId, teamId, conflictId } = await personalPair();
     for (const outsider of [actorB, unownedAdmin]) {
       expect(replyText(await callTool(outsider, 'hippo_resolve', { conflict_id: conflictId, keep: teamId, forget: true }))).toBe(NOT_RESOLVED);
       expect(replyText(await callTool(outsider, 'hippo_resolve', { conflict_id: conflictId + 1000, keep: teamId, forget: true }))).toBe(NOT_RESOLVED);
@@ -134,7 +134,7 @@ describe('resolving conflicts next to personal rows', () => {
   });
 
   it('the dashboard resolve answers a pair holding a personal row as it answers a missing conflict, open or resolved', async () => {
-    const { personalId, teamId, conflictId } = personalPair();
+    const { personalId, teamId, conflictId } = await personalPair();
     const missing = resolveOpenConflict(root, 'default', conflictId + 1000, { keep: teamId });
     expect(missing.status).toBe(404);
     expect(resolveOpenConflict(root, 'default', conflictId, { keep: teamId })).toEqual(missing);

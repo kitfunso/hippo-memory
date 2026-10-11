@@ -79,7 +79,7 @@ describe('POST /v1/sleep', () => {
 
   it('dry_run=true previews dedup/audit and skips share/ambient', async () => {
     const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } };
-    remember(ctx, { content: 'dry-run-canary' });
+    await remember(ctx, { content: 'dry-run-canary' });
 
     const res = await fetch(`${handle.url}/v1/sleep`, {
       method: 'POST',
@@ -104,7 +104,7 @@ describe('POST /v1/sleep', () => {
   it('runs the full pipeline on a populated store', async () => {
     const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } };
     for (let i = 0; i < 5; i++) {
-      remember(ctx, { content: `populate ${i} ${'x'.repeat(50)}` });
+      await remember(ctx, { content: `populate ${i} ${'x'.repeat(50)}` });
     }
 
     const res = await fetch(`${handle.url}/v1/sleep`, {
@@ -120,7 +120,7 @@ describe('POST /v1/sleep', () => {
 
   it('no_share=true keeps shared undefined', async () => {
     const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } };
-    remember(ctx, { content: 'high-value would-trigger-share' });
+    await remember(ctx, { content: 'high-value would-trigger-share' });
 
     const res = await fetch(`${handle.url}/v1/sleep`, {
       method: 'POST',
@@ -150,8 +150,8 @@ describe('POST /v1/sleep', () => {
     const tenantA: Context = { hippoRoot: home, tenantId: 'tenant_a', actor: { subject: 'localhost:cli', role: 'admin' } };
     const tenantB: Context = { hippoRoot: home, tenantId: 'tenant_b', actor: { subject: 'localhost:cli', role: 'admin' } };
     const dupContent = 'highly similar content x'.repeat(20);
-    remember(tenantA, { content: dupContent + ' tenant_a marker' });
-    remember(tenantB, { content: dupContent + ' tenant_b marker' });
+    await remember(tenantA, { content: dupContent + ' tenant_a marker' });
+    await remember(tenantB, { content: dupContent + ' tenant_b marker' });
 
     const res = await fetch(`${handle.url}/v1/sleep`, {
       method: 'POST',
@@ -189,7 +189,7 @@ describe('POST /v1/sleep', () => {
     fetch(`${handle.url}/v1/sleep`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
 
   it('answers GET /health while a sleep is still running', async () => {
-    remember({ hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } }, { content: 'a memory for the sleep to write' });
+    await remember({ hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } }, { content: 'a memory for the sleep to write' });
     // The sleep needs the write lock held here, so it cannot finish until the health answer has released it.
     const lock = openHippoDb(home);
     lock.exec('BEGIN IMMEDIATE');
@@ -207,7 +207,7 @@ describe('POST /v1/sleep', () => {
   });
 
   it('still answers 503 with Retry-After when another connection holds the write lock', async () => {
-    remember({ hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } }, { content: 'a memory for the sleep to write' });
+    await remember({ hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } }, { content: 'a memory for the sleep to write' });
     const lock = openHippoDb(home);
     lock.exec('BEGIN IMMEDIATE');
     const busy = await postSleep();
@@ -217,7 +217,7 @@ describe('POST /v1/sleep', () => {
   });
 
   it('refuses a third sleep at once with 503 and Retry-After 30 while one runs and one waits, then takes sleeps again', async () => {
-    remember({ hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } }, { content: 'a memory for the sleep to write' });
+    await remember({ hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } }, { content: 'a memory for the sleep to write' });
     // Neither admitted sleep can finish while this lock is held, so the first reply back is the refusal.
     const lock = openHippoDb(home);
     lock.exec('BEGIN IMMEDIATE');

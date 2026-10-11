@@ -21,8 +21,8 @@ afterEach(() => {
 
 describe('api admin reads', () => {
   it('counts memories and open conflicts, hides a personal pair from another person, and refuses their personal row', async () => {
-    const personal = remember(ctxFor(actorA), { content: 'deploy with --dry-run first', personal: true }).id;
-    const team = remember(ctxFor(actorB), { content: 'deploy without --dry-run' }).id;
+    const personal = (await remember(ctxFor(actorA), { content: 'deploy with --dry-run first', personal: true })).id;
+    const team = (await remember(ctxFor(actorB), { content: 'deploy without --dry-run' })).id;
     replaceDetectedConflicts(root, [{ memory_a_id: personal, memory_b_id: team, reason: 'contradiction', score: 0.9 }]);
 
     const status = getMemoryStatus(ctxFor(actorA), new Date(), 0.1);

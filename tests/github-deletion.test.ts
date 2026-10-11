@@ -26,9 +26,9 @@ interface SeedOpts {
   content: string;
 }
 
-function seedMemory(root: string, opts: SeedOpts): string {
+async function seedMemory(root: string, opts: SeedOpts): Promise<string> {
   const ctx = ctxFor(root, opts.tenantId ?? 'default');
-  const result = remember(ctx, {
+  const result = await remember(ctx, {
     content: opts.content,
     kind: opts.kind ?? 'raw',
     scope: opts.scope ?? SCOPE_PUBLIC,
@@ -70,7 +70,7 @@ describe('handleCommentDeleted', () => {
   afterEach(() => rmSync(root, { recursive: true, force: true }));
 
   it('1. archives a single matching raw row', async () => {
-    const id = seedMemory(root, { content: 'comment body v1' });
+    const id = await seedMemory(root, { content: 'comment body v1' });
 
     const result = await handleCommentDeleted(ctxFor(root), {
       artifactRef: ARTIFACT,
@@ -86,9 +86,9 @@ describe('handleCommentDeleted', () => {
   });
 
   it('2. archives ALL raw rows sharing artifact_ref (edit history)', async () => {
-    const id1 = seedMemory(root, { content: 'edit v1' });
-    const id2 = seedMemory(root, { content: 'edit v2' });
-    const id3 = seedMemory(root, { content: 'edit v3' });
+    const id1 = await seedMemory(root, { content: 'edit v1' });
+    const id2 = await seedMemory(root, { content: 'edit v2' });
+    const id3 = await seedMemory(root, { content: 'edit v3' });
 
     const result = await handleCommentDeleted(ctxFor(root), {
       artifactRef: ARTIFACT,
@@ -108,8 +108,8 @@ describe('handleCommentDeleted', () => {
   });
 
   it('3. cross-tenant: deletion under tenant A does not touch tenant B row', async () => {
-    const idA = seedMemory(root, { content: 'tenant A comment', tenantId: 'a' });
-    const idB = seedMemory(root, { content: 'tenant B comment', tenantId: 'b' });
+    const idA = await seedMemory(root, { content: 'tenant A comment', tenantId: 'a' });
+    const idB = await seedMemory(root, { content: 'tenant B comment', tenantId: 'b' });
 
     const result = await handleCommentDeleted(ctxFor(root, 'a'), {
       artifactRef: ARTIFACT,
@@ -127,8 +127,8 @@ describe('handleCommentDeleted', () => {
   });
 
   it('4. cross-kind: only archives kind=raw, leaves distilled alone', async () => {
-    const rawId = seedMemory(root, { content: 'the raw row', kind: 'raw' });
-    const distilledId = seedMemory(root, {
+    const rawId = await seedMemory(root, { content: 'the raw row', kind: 'raw' });
+    const distilledId = await seedMemory(root, {
       content: 'the distilled row',
       kind: 'distilled',
     });
@@ -168,7 +168,7 @@ describe('handleCommentDeleted', () => {
   });
 
   it('6. duplicate delivery: second call returns duplicate, no double-archive', async () => {
-    const id = seedMemory(root, { content: 'dup target' });
+    const id = await seedMemory(root, { content: 'dup target' });
 
     const first = await handleCommentDeleted(ctxFor(root), {
       artifactRef: ARTIFACT,
@@ -196,7 +196,7 @@ describe('handleCommentDeleted', () => {
   });
 
   it('7. already-archived (re-deletion attempt with new key): no rows match', async () => {
-    seedMemory(root, { content: 'first delete target' });
+    await seedMemory(root, { content: 'first delete target' });
 
     const first = await handleCommentDeleted(ctxFor(root), {
       artifactRef: ARTIFACT,
@@ -228,7 +228,7 @@ describe('handleCommentDeleted', () => {
 
   it('8. archived private-scope content does not surface via no-scope recall', async () => {
     const distinctive = 'octopus-canary-token-zaqxsw';
-    seedMemory(root, {
+    await seedMemory(root, {
       content: distinctive,
       scope: SCOPE_PRIVATE,
     });

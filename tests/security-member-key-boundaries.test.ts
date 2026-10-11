@@ -176,10 +176,10 @@ describe('member-key boundaries in the api layer (every surface goes through it)
   const memberCtx = (): api.Context => ({ hippoRoot: home, tenantId: 'default', actor: { subject: 'api_key:m', role: 'member' } });
   const adminCtx = (): api.HippoDbContext => ({ hippoRoot: home, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } });
 
-  it('key management refuses a member actor', () => {
-    expect(() => api.authCreate(memberCtx(), { role: 'admin' })).toThrow(api.ForbiddenError);
-    expect(() => api.authRevoke(memberCtx(), 'k_missing')).toThrow(api.ForbiddenError);
-    expect(api.authCreate(adminCtx(), { role: 'member' }).role).toBe('member');
+  it('key management refuses a member actor', async () => {
+    await expect(Promise.resolve().then(() => api.authCreate(memberCtx(), { role: 'admin' }))).rejects.toThrow(api.ForbiddenError);
+    await expect(Promise.resolve().then(() => api.authRevoke(memberCtx(), 'k_missing'))).rejects.toThrow(api.ForbiddenError);
+    expect((await api.authCreate(adminCtx(), { role: 'member' })).role).toBe('member');
   });
 
   it('recall and assemble refuse a restricted scope for a member, and allow it for an admin', async () => {

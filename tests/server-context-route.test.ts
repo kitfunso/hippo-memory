@@ -73,7 +73,7 @@ describe('GET /v1/context', () => {
   it('returns entries within budget (200)', async () => {
     const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } };
     for (let i = 0; i < 5; i++) {
-      remember(ctx, { content: `ctx-route-mem-${i}` });
+      await remember(ctx, { content: `ctx-route-mem-${i}` });
     }
 
     const res = await fetch(`${handle.url}/v1/context?budget=1500`);
@@ -86,7 +86,7 @@ describe('GET /v1/context', () => {
   it('honors tight budget cap', async () => {
     const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } };
     for (let i = 0; i < 10; i++) {
-      remember(ctx, { content: `padding ${'x'.repeat(200)} content ${i}` });
+      await remember(ctx, { content: `padding ${'x'.repeat(200)} content ${i}` });
     }
 
     const res = await fetch(`${handle.url}/v1/context?budget=50`);
@@ -108,7 +108,7 @@ describe('GET /v1/context', () => {
     const projHandle = await serve({ hippoRoot: projHippo, port: 0 });
     try {
       const ctx: Context = { hippoRoot: projHippo, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } };
-      remember(ctx, { content: 'ownrow deploykey local fact' });
+      await remember(ctx, { content: 'ownrow deploykey local fact' });
       // Cross-project row in the GLOBAL store (the 2026-07-01 leak shape).
       writeEntry(globalHome, {
         ...createMemory('BRAVO deploykey cross-project fact', { pinned: true }),
@@ -136,7 +136,7 @@ describe('GET /v1/context', () => {
 
   it('v39 secret veto at the HTTP surface: secret rows never inject, even with cross_project=1', async () => {
     const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } };
-    remember(ctx, { content: 'harmless deploykey row' });
+    await remember(ctx, { content: 'harmless deploykey row' });
     // Secret-bearing rows: one cross-project, one with no origin — neither
     // may ambient-inject regardless of the cross_project override.
     writeEntry(globalHome, {
@@ -160,7 +160,7 @@ describe('GET /v1/context', () => {
 
   it('budget=0 short-circuits to empty result', async () => {
     const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } };
-    remember(ctx, { content: 'budget-zero' });
+    await remember(ctx, { content: 'budget-zero' });
 
     const res = await fetch(`${handle.url}/v1/context?budget=0`);
     expect(res.status).toBe(200);
@@ -182,8 +182,8 @@ describe('GET /v1/context', () => {
   it('pinned_only filters to pinned entries only', async () => {
     // Seed: 2 unpinned + 1 pinned. Default-tenant memories.
     const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } };
-    remember(ctx, { content: 'unpinned-1' });
-    remember(ctx, { content: 'unpinned-2' });
+    await remember(ctx, { content: 'unpinned-1' });
+    await remember(ctx, { content: 'unpinned-2' });
     // Use store-level write for pinned to keep the test simple.
     const { writeEntry } = await import('../src/store/entry-writes.js');
     const { Layer } = await import('../src/core/memory.js');
@@ -216,7 +216,7 @@ describe('GET /v1/context', () => {
       scope: null,
     });
     const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } };
-    remember(ctx, { content: 'snapshot-companion' });
+    await remember(ctx, { content: 'snapshot-companion' });
 
     const res = await fetch(`${handle.url}/v1/context?budget=1500`);
     expect(res.status).toBe(200);
@@ -231,8 +231,8 @@ describe('GET /v1/context', () => {
   it('tenant scoping: default Bearer does not see tenant_b memories', async () => {
     const ctxA: Context = { hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } };
     const ctxB: Context = { hippoRoot: home, tenantId: 'tenant_b', actor: { subject: 'localhost:cli', role: 'admin' } };
-    remember(ctxA, { content: 'belongs-to-default' });
-    remember(ctxB, { content: 'belongs-to-tenant-B' });
+    await remember(ctxA, { content: 'belongs-to-default' });
+    await remember(ctxB, { content: 'belongs-to-tenant-B' });
 
     // No Bearer in the request -> ctx.tenantId resolves to 'default'.
     const res = await fetch(`${handle.url}/v1/context?budget=1500`);
@@ -256,7 +256,7 @@ describe('GET /v1/context', () => {
 
   it('q at 1024-char boundary returns 200', async () => {
     const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } };
-    remember(ctx, { content: 'boundary-test' });
+    await remember(ctx, { content: 'boundary-test' });
     const q = 'a'.repeat(1024);
     const res = await fetch(`${handle.url}/v1/context?q=${q}`);
     expect(res.status).toBe(200);
@@ -264,9 +264,9 @@ describe('GET /v1/context', () => {
 
   it('q=foo emits exactly one recall audit row (row-count delta)', async () => {
     const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } };
-    remember(ctx, { content: 'foo bar baz' });
-    remember(ctx, { content: 'foo qux' });
-    remember(ctx, { content: 'unrelated content' });
+    await remember(ctx, { content: 'foo bar baz' });
+    await remember(ctx, { content: 'foo qux' });
+    await remember(ctx, { content: 'unrelated content' });
 
     // Snapshot audit_log count BEFORE the request.
     const db1 = openHippoDb(home);
@@ -316,7 +316,7 @@ describe('GET /v1/context - ambientState field', () => {
   it('is present with a populated totalMemories when ambient is on and entries are admitted', async () => {
     await startServer(true);
     const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } };
-    remember(ctx, { content: 'ambient-route-marker-row' });
+    await remember(ctx, { content: 'ambient-route-marker-row' });
 
     const res = await fetch(`${handle.url}/v1/context?budget=1500`);
     expect(res.status).toBe(200);
@@ -334,7 +334,7 @@ describe('GET /v1/context - ambientState field', () => {
   it('is absent when ambient is off in config, while the existing fields are unchanged', async () => {
     await startServer(false);
     const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } };
-    remember(ctx, { content: 'ambient-off-marker-row' });
+    await remember(ctx, { content: 'ambient-off-marker-row' });
 
     const res = await fetch(`${handle.url}/v1/context?budget=1500`);
     expect(res.status).toBe(200);

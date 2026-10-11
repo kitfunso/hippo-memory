@@ -72,7 +72,7 @@ describe('verified API key cache', () => {
   it('an in-process revoke rejects the next verify at once', async () => {
     const key = mint();
     expect(await verify(key.plaintext)).not.toBeNull();
-    authRevoke(adminCtx(), key.keyId);
+    await authRevoke(adminCtx(), key.keyId);
     const after = await counted(() => verify(key.plaintext));
     expect(after.value).toBeNull();
     // The row proves the key revoked, so no scrypt is spent on it.
@@ -126,7 +126,7 @@ describe('verified API key cache', () => {
   it('calls the bound, with the key id, only when scrypt is about to run', async () => {
     const key = mint();
     const revoked = mint();
-    authRevoke(adminCtx(), revoked.keyId);
+    await authRevoke(adminCtx(), revoked.keyId);
     const bounded: string[] = [];
     const boundedBy = async (token: string): Promise<string[]> => {
       const before = bounded.length;
@@ -196,7 +196,7 @@ describe('verified API key cache', () => {
     const inner = sqliteStore(home);
     const racing = { ...inner, findApiKey: async (keyId: string) => {
       const record = await inner.findApiKey(keyId);
-      authRevoke(adminCtx(), keyId);
+      await authRevoke(adminCtx(), keyId);
       return record;
     } };
     expect(await verifyApiKeyCached(key.plaintext, racing)).not.toBeNull();

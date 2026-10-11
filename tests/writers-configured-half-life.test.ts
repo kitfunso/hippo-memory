@@ -120,7 +120,7 @@ const writers: [string, (root: string) => Promise<MemoryEntry[]>][] = [
     const vault = tmp();
     fs.writeFileSync(path.join(vault, 'note.md'), 'The on-call rota changes every Monday at 09:00.\n');
     // The row itself goes through remember(); the result's copy must say what was stored.
-    return importVault(vault, { hippoRoot: root, name: 'notes' }).entries;
+    return (await importVault(vault, { hippoRoot: root, name: 'notes' })).entries;
   }],
   ['extracted facts', (root) => {
     const source = seed(root, 'Alice prefers dark mode and vim keybindings');

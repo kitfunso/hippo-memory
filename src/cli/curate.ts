@@ -24,7 +24,7 @@ const REJECTED_DIGEST_LIST_CHARS = 16;
 const DORMANT_PREVIEW_CHARS = 100;
 const STRENGTH_DECIMALS = 3;
 
-export function handleOutcome({ hippoRoot, tenantId, flags }: CommandContext): void {
+export async function handleOutcome({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
   requireInit(hippoRoot);
 
   const good = boolFlag(flags, 'good');
@@ -41,9 +41,9 @@ export function handleOutcome({ hippoRoot, tenantId, flags }: CommandContext): v
 
   let updated: number;
   if (specificId) {
-    updated = api.outcome(ctx, [specificId], good).applied;
+    updated = (await api.outcome(ctx, [specificId], good)).applied;
   } else {
-    const r = api.outcomeForLastRecall(ctx, good);
+    const r = await api.outcomeForLastRecall(ctx, good);
     if (r.ids.length === 0) {
       console.log('No recent recall to apply outcome to. Use --id <id> to target a specific memory.');
       return;
@@ -58,12 +58,12 @@ export function handleOutcome({ hippoRoot, tenantId, flags }: CommandContext): v
 const ARCHIVE_REASON_REQUIRED =
   'hippo forget --archive requires --reason "<why>" (recorded on the archive).';
 
-function cmdForget(
+async function cmdForget(
   hippoRoot: string,
   tenantId: string,
   id: string,
   flags: CliFlags,
-): void {
+): Promise<void> {
   requireInit(hippoRoot);
 
   const ctx = cliApiContext(hippoRoot, tenantId);
@@ -71,12 +71,12 @@ function cmdForget(
   // Raw memories (connector ingestion) are append-only: a BEFORE-DELETE trigger aborts any delete,
   // so archiveRaw is the sanctioned removal path and records ctx.actor as the archiver.
   if (flagIsTrue(flags, 'archive')) {
-    archiveForgottenRaw(ctx, id, stringFlag(flags, 'reason') ?? null);
+    await archiveForgottenRaw(ctx, id, stringFlag(flags, 'reason') ?? null);
     return;
   }
 
   try {
-    api.forget(ctx, id);
+    await api.forget(ctx, id);
     console.log(`Forgot ${id}`);
   } catch (err) {
     reportForgetFailure(ctx, id, err);
@@ -84,13 +84,13 @@ function cmdForget(
   }
 }
 
-function archiveForgottenRaw(ctx: api.HippoDbContext, id: string, reason: string | null): void {
+async function archiveForgottenRaw(ctx: api.HippoDbContext, id: string, reason: string | null): Promise<void> {
   if (!reason) {
     printError(ARCHIVE_REASON_REQUIRED);
     throw new CliExit(1);
   }
   try {
-    api.archiveRaw(ctx, id, reason);
+    await api.archiveRaw(ctx, id, reason);
     console.log(`Archived ${id}`);
   } catch (err) {
     printError(`Could not archive ${id}: ${errorMessage(err)}`);
@@ -500,7 +500,7 @@ export async function handleForget({ hippoRoot, tenantId, args, flags }: Command
     }
   });
   if (routed) return;
-  cmdForget(hippoRoot, tenantId, id, flags);
+  await cmdForget(hippoRoot, tenantId, id, flags);
 }
 
 function invalidateChurn(hippoRoot: string, tenantId: string, args: string[], flags: CommandContext['flags']): void {

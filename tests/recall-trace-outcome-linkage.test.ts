@@ -69,11 +69,11 @@ describe('outcome linkage E2E (CLI recall -> outcome)', () => {
 });
 
 describe('outcomeForLastRecall — no prior trace', () => {
-  it('applies the outcome but writes NO recall_trace_outcomes row, and does not throw', () => {
+  it('applies the outcome but writes NO recall_trace_outcomes row, and does not throw', async () => {
     const { home, restore } = tmpHome();
     try {
       const ctx: HippoDbContext = { hippoRoot: home, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
-      const res = remember(ctx, { content: 'no-trace-outcome-target' });
+      const res = await remember(ctx, { content: 'no-trace-outcome-target' });
       // Seed last_retrieval_ids directly WITHOUT ever calling recall()/getContext()
       // — last_trace_id stays unset (fresh store, pre-v40-flow shape).
       const idx = loadIndex(home);
@@ -81,10 +81,8 @@ describe('outcomeForLastRecall — no prior trace', () => {
       saveIndex(home, idx);
       expect(loadIndex(home).last_trace_id).toBeNull();
 
-      expect(() => {
-        const result = outcomeForLastRecall(ctx, true);
-        expect(result.applied).toBe(1);
-      }).not.toThrow();
+      const result = await outcomeForLastRecall(ctx, true);
+      expect(result.applied).toBe(1);
 
       const db = openHippoDb(home);
       try {
@@ -106,7 +104,7 @@ describe('api.outcome explicit traceId opt (SDK linkage)', () => {
     const { home, restore } = tmpHome();
     try {
       const ctx: HippoDbContext = { hippoRoot: home, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
-      remember(ctx, { content: 'explicit-trace-opt-target' });
+      await remember(ctx, { content: 'explicit-trace-opt-target' });
       const recallResult = await retrieve(ctx, { query: 'explicit-trace-opt-target', limit: 5 });
       expect(recallResult.results.length).toBeGreaterThan(0);
 
@@ -122,7 +120,7 @@ describe('api.outcome explicit traceId opt (SDK linkage)', () => {
       }
 
       const ids = recallResult.results.map((r) => r.id);
-      outcome(ctx, ids, true, { traceId });
+      await outcome(ctx, ids, true, { traceId });
 
       const db2 = openHippoDb(home);
       try {
@@ -139,12 +137,12 @@ describe('api.outcome explicit traceId opt (SDK linkage)', () => {
     }
   });
 
-  it('without traceId, no linkage row is written (existing behavior unchanged)', () => {
+  it('without traceId, no linkage row is written (existing behavior unchanged)', async () => {
     const { home, restore } = tmpHome();
     try {
       const ctx: HippoDbContext = { hippoRoot: home, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
-      const res = remember(ctx, { content: 'no-opt-target' });
-      outcome(ctx, [res.id], true);
+      const res = await remember(ctx, { content: 'no-opt-target' });
+      await outcome(ctx, [res.id], true);
 
       const db = openHippoDb(home);
       try {
@@ -167,7 +165,7 @@ describe('storage overhead smoke (success criterion 3)', () => {
     try {
       const ctx: HippoDbContext = { hippoRoot: home, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
       for (let i = 0; i < 15; i++) {
-        remember(ctx, { content: `storage-smoke-target memory number ${i} filler content` });
+        await remember(ctx, { content: `storage-smoke-target memory number ${i} filler content` });
       }
 
       const checkpoint = (db: DatabaseSyncLike) => db.exec(`PRAGMA wal_checkpoint(TRUNCATE)`);

@@ -80,7 +80,7 @@ describe('a superseded summary never stands in for its children', () => {
       (await retrieve(ctxFor(root), { query: 'invoice detail', limit: 1 })).results.filter((r) => r.isSummary).map((r) => r.id);
 
     expect(await summaryIds()).toEqual([summary.id]);
-    supersede(ctxFor(root), summary.id, 'billing rollup, revised');
+    await supersede(ctxFor(root), summary.id, 'billing rollup, revised');
     expect(await summaryIds()).toEqual([]);
   });
 
@@ -91,7 +91,7 @@ describe('a superseded summary never stands in for its children', () => {
       (await assemble(ctxFor(root), 'sess-s', { freshTailCount: 1, budget: 100000 })).items.filter((it) => it.isSummary).map((it) => it.id);
 
     expect(await summaryIds()).toEqual([summary.id]);
-    supersede(ctxFor(root), summary.id, 'session rollup, revised');
+    await supersede(ctxFor(root), summary.id, 'session rollup, revised');
     expect(await summaryIds()).toEqual([]);
   });
 });

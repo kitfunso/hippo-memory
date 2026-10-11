@@ -63,11 +63,11 @@ const SHARED_CONTENT =
   'This exact sentence is shared by two different tenants in the store on purpose';
 
 describe('deduplicateStore tenant partition', () => {
-  it('(a) byte-identical content in tenant-a and tenant-b removes nothing; both rows survive', () => {
+  it('(a) byte-identical content in tenant-a and tenant-b removes nothing; both rows survive', async () => {
     const { home, restore } = tmpHome('hippo-dedupe-tenant-a-');
     try {
-      const a = remember(ctxFor(home, 'tenant-a'), { content: SHARED_CONTENT });
-      const b = remember(ctxFor(home, 'tenant-b'), { content: SHARED_CONTENT });
+      const a = await remember(ctxFor(home, 'tenant-a'), { content: SHARED_CONTENT });
+      const b = await remember(ctxFor(home, 'tenant-b'), { content: SHARED_CONTENT });
 
       const result = deduplicateStore(home);
 
@@ -85,12 +85,12 @@ describe('deduplicateStore tenant partition', () => {
     }
   });
 
-  it('(b) duplicates within EACH of two tenants: exactly one removal per tenant, survivor per the total order in each', () => {
+  it('(b) duplicates within EACH of two tenants: exactly one removal per tenant, survivor per the total order in each', async () => {
     const { home, restore } = tmpHome('hippo-dedupe-tenant-b-');
     try {
       // tenant-a: CONTENT_A weak, CONTENT_B strong -> CONTENT_B survives.
-      const aWeak = remember(ctxFor(home, 'tenant-a'), { content: CONTENT_A });
-      const aStrong = remember(ctxFor(home, 'tenant-a'), { content: CONTENT_B });
+      const aWeak = await remember(ctxFor(home, 'tenant-a'), { content: CONTENT_A });
+      const aStrong = await remember(ctxFor(home, 'tenant-a'), { content: CONTENT_B });
       setStrength(home, aWeak.id, 0.5);
       setStrength(home, aStrong.id, 1.0);
 
@@ -99,8 +99,8 @@ describe('deduplicateStore tenant partition', () => {
       // cross-tenant comparison (all four rows are pairwise duplicates)
       // would produce a different removal count and different survivors
       // than the per-tenant-correct result asserted below.
-      const bWeak = remember(ctxFor(home, 'tenant-b'), { content: CONTENT_B });
-      const bStrong = remember(ctxFor(home, 'tenant-b'), { content: CONTENT_A });
+      const bWeak = await remember(ctxFor(home, 'tenant-b'), { content: CONTENT_B });
+      const bStrong = await remember(ctxFor(home, 'tenant-b'), { content: CONTENT_A });
       setStrength(home, bWeak.id, 0.5);
       setStrength(home, bStrong.id, 1.0);
 
@@ -128,16 +128,16 @@ describe('deduplicateStore tenant partition', () => {
     }
   });
 
-  it('(c) dryRun parity: two-tenant dryRun pairs equal what a subsequent real run deletes', () => {
+  it('(c) dryRun parity: two-tenant dryRun pairs equal what a subsequent real run deletes', async () => {
     const { home, restore } = tmpHome('hippo-dedupe-tenant-c-');
     try {
-      const aWeak = remember(ctxFor(home, 'tenant-a'), { content: CONTENT_A });
-      const aStrong = remember(ctxFor(home, 'tenant-a'), { content: CONTENT_B });
+      const aWeak = await remember(ctxFor(home, 'tenant-a'), { content: CONTENT_A });
+      const aStrong = await remember(ctxFor(home, 'tenant-a'), { content: CONTENT_B });
       setStrength(home, aWeak.id, 0.5);
       setStrength(home, aStrong.id, 1.0);
 
-      const bWeak = remember(ctxFor(home, 'tenant-b'), { content: CONTENT_B });
-      const bStrong = remember(ctxFor(home, 'tenant-b'), { content: CONTENT_A });
+      const bWeak = await remember(ctxFor(home, 'tenant-b'), { content: CONTENT_B });
+      const bStrong = await remember(ctxFor(home, 'tenant-b'), { content: CONTENT_A });
       setStrength(home, bWeak.id, 0.5);
       setStrength(home, bStrong.id, 1.0);
 

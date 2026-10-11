@@ -60,7 +60,7 @@ async function cmdWatch(command: string, hippoRoot: string, tenantId: string): P
   // A rejection-guard refusal of a failed command's output must not crash the watcher:
   // skip with the message below and still exit with the wrapped command's real exit code.
   try {
-    api.rememberLocally(cliApiContext(hippoRoot, tenantId), {
+    await api.rememberLocally(cliApiContext(hippoRoot, tenantId), {
       content: failure.content,
       tags: failure.tags,
       layer: failure.layer,
@@ -142,7 +142,7 @@ function warnRedacted(count: number | undefined): void {
   if (count) printError(`Warning: secret-shaped text was redacted from ${count} imported ${count === 1 ? 'entry' : 'entries'} before storing`);
 }
 
-export function handleImport({ hippoRoot, tenantId, args, flags }: CommandContext): void {
+export async function handleImport({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
   const useGlobal = boolFlag(flags, 'global');
   const dryRun = boolFlag(flags, 'dry-run');
   const extraTags: string[] = Array.isArray(flags['tag'])
@@ -170,7 +170,7 @@ export function handleImport({ hippoRoot, tenantId, args, flags }: CommandContex
 
   // Vault import is a FOLDER importer that dispatches apart from the single-file slot below; it writes through tenant-scoped api calls,
   // so the tenant is resolved and passed through. --global is unsupported (the connector raw-archive path is tenant-local).
-  if (flags['vault']) return importVaultFolder(hippoRoot, tenantId, flags, importOptions, useGlobal, dryRun);
+  if (flags['vault']) return await importVaultFolder(hippoRoot, tenantId, flags, importOptions, useGlobal, dryRun);
   importFromFile(targetRoot, args, flags, { importOptions, useGlobal, dryRun, tenantId });
 }
 
@@ -267,14 +267,14 @@ function importAgentMemories(hippoRoot: string, useGlobal: boolean, dryRun: bool
   for (const warning of report.warnings) printError(`hippo: agent memories: ${warning}`);
 }
 
-function importVaultFolder(
+async function importVaultFolder(
   hippoRoot: string,
   tenantId: string,
   flags: CliFlags,
   importOptions: ImportOptions,
   useGlobal: boolean,
   dryRun: boolean,
-): void {
+): Promise<void> {
   const folderPath = String(flags['vault']);
   checkVaultArgs(folderPath, flags, useGlobal);
   const vaultOptions: ImportOptions = {
@@ -283,7 +283,7 @@ function importVaultFolder(
     name: flags['name'] ? String(flags['name']) : undefined,
     scope: flags['scope'] ? String(flags['scope']) : undefined,
   };
-  const vaultResult = importVault(folderPath, vaultOptions);
+  const vaultResult = await importVault(folderPath, vaultOptions);
   printVaultSummary(vaultResult, folderPath, cliApiContext(hippoRoot, tenantId), dryRun);
 }
 

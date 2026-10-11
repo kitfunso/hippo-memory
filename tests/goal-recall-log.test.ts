@@ -64,8 +64,8 @@ describe('goal_recall_log captured from real CLI recall', () => {
     if (env?.cwd) rmSync(env.cwd, { recursive: true, force: true });
   });
 
-  it('top-K boosted memories land in goal_recall_log with the active goal', () => {
-    const m1 = remember(ctx(env.hippoRoot), {
+  it('top-K boosted memories land in goal_recall_log with the active goal', async () => {
+    const m1 = await remember(ctx(env.hippoRoot), {
       content: 'lesson on auth refactor',
       tags: ['auth-rewrite'],
     });
@@ -90,8 +90,8 @@ describe('goal_recall_log captured from real CLI recall', () => {
     }
   });
 
-  it('no log row is written when no active goal matches', () => {
-    remember(ctx(env.hippoRoot), { content: 'unrelated note' });
+  it('no log row is written when no active goal matches', async () => {
+    await remember(ctx(env.hippoRoot), { content: 'unrelated note' });
     pushGoal(env.hippoRoot, {
       sessionId: 's-log-2',
       tenantId: 'default',

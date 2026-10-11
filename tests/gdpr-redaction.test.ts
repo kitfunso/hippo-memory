@@ -95,13 +95,13 @@ describe('GDPR Path A redaction + migration v20', () => {
     }
   });
 
-  it('2. fresh archive Path A: payload_json is metadata-only (no original content)', () => {
+  it('2. fresh archive Path A: payload_json is metadata-only (no original content)', async () => {
     const ctx: HippoDbContext = { hippoRoot: root, tenantId: 'tenant-A', actor: { subject: 'cli', role: 'admin' } };
-    const { id } = remember(ctx, {
+    const { id } = await remember(ctx, {
       content: 'a-very-distinctive-secret-string-zylph123',
       kind: 'raw',
     });
-    archiveRaw(ctx, id, 'GDPR right-to-be-forgotten');
+    await archiveRaw(ctx, id, 'GDPR right-to-be-forgotten');
 
     const db = openHippoDb(root);
     try {
@@ -212,10 +212,10 @@ describe('GDPR Path A redaction + migration v20', () => {
     }
   });
 
-  it('5. audit row preserved: archiveRaw writes audit_log op=archive_raw even though raw_archive is gone', () => {
+  it('5. audit row preserved: archiveRaw writes audit_log op=archive_raw even though raw_archive is gone', async () => {
     const ctx: HippoDbContext = { hippoRoot: root, tenantId: 'tenant-B', actor: { subject: 'user:42', role: 'admin' } };
-    const { id } = remember(ctx, { content: 'audit-trail-content', kind: 'raw' });
-    archiveRaw(ctx, id, 'compliance test');
+    const { id } = await remember(ctx, { content: 'audit-trail-content', kind: 'raw' });
+    await archiveRaw(ctx, id, 'compliance test');
 
     const db = openHippoDb(root);
     try {
@@ -236,13 +236,13 @@ describe('GDPR Path A redaction + migration v20', () => {
   it('6. no re-recall after archive: original content text returns 0 results', async () => {
     const ctx: HippoDbContext = { hippoRoot: root, tenantId: 'tenant-C', actor: { subject: 'cli', role: 'admin' } };
     const distinctive = 'gdpr-canary-token-quaxle';
-    const { id } = remember(ctx, { content: distinctive, kind: 'raw' });
+    const { id } = await remember(ctx, { content: distinctive, kind: 'raw' });
 
     // Pre-condition: recall finds it.
     const before = await retrieve(ctx, { query: distinctive });
     expect(before.results.some((r) => r.id === id)).toBe(true);
 
-    archiveRaw(ctx, id, 'right-to-be-forgotten');
+    await archiveRaw(ctx, id, 'right-to-be-forgotten');
 
     // Post-condition: gone from recall.
     const after = await retrieve(ctx, { query: distinctive });

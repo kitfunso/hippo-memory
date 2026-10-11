@@ -68,9 +68,9 @@ describe('goal recall log, completion and CLI flag failure paths', () => {
     if (env?.cwd) rmSync(env.cwd, { recursive: true, force: true });
   });
 
-  it('global memory in top-K does not trigger FK violation; global IDs absent from goal_recall_log', () => {
+  it('global memory in top-K does not trigger FK violation; global IDs absent from goal_recall_log', async () => {
     // Seed only in GLOBAL store. Local has no memories.
-    const globalMem = remember(ctx(env.globalRoot), {
+    const globalMem = await remember(ctx(env.globalRoot), {
       content: 'global lesson about review fixes',
       tags: ['rfx'],
     });
@@ -104,8 +104,8 @@ describe('goal recall log, completion and CLI flag failure paths', () => {
     }
   });
 
-  it('completeGoal is idempotent (second call does not double-apply propagation)', () => {
-    const m = remember(ctx(env.hippoRoot), {
+  it('completeGoal is idempotent (second call does not double-apply propagation)', async () => {
+    const m = await remember(ctx(env.hippoRoot), {
       content: 'idempotent lesson',
       tags: ['idem'],
     });

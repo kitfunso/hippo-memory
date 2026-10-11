@@ -119,7 +119,7 @@ describe('server concurrency — recall + write under single-writer', () => {
       const seedTerms = ['alpha', 'beta', 'gamma', 'delta', 'epsilon'];
       for (let i = 0; i < 100; i++) {
         const term = seedTerms[i % seedTerms.length]!;
-        apiRemember(
+        await apiRemember(
           { hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } },
           { content: `seed-${term}-doc-${i} reference content for recall test` },
         );

@@ -50,8 +50,8 @@ describe('api.recall divergence from cmdRecall (no last_retrieval_ids side-effec
     const { home, restore } = tmpHome();
     try {
       const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
-      remember(ctx, { content: 'recall-divergence-target-1' });
-      remember(ctx, { content: 'recall-divergence-target-2 also matches' });
+      await remember(ctx, { content: 'recall-divergence-target-1' });
+      await remember(ctx, { content: 'recall-divergence-target-2 also matches' });
 
       // Snapshot: index.last_retrieval_ids starts empty.
       const before = loadIndex(home).last_retrieval_ids ?? [];
@@ -79,9 +79,9 @@ describe('api.recall divergence from cmdRecall (no last_retrieval_ids side-effec
     const { home, restore } = tmpHome();
     try {
       const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
-      remember(ctx, { content: 'batched-A' });
-      remember(ctx, { content: 'batched-B' });
-      remember(ctx, { content: 'batched-C' });
+      await remember(ctx, { content: 'batched-A' });
+      await remember(ctx, { content: 'batched-B' });
+      await remember(ctx, { content: 'batched-C' });
 
       // SDK pattern: batch many recall calls in a row.
       await retrieve(ctx, { query: 'batched-A', limit: 5 });

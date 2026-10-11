@@ -328,12 +328,12 @@ describe('memories of decisions, incidents and other objects pinned to 90 days',
     expect(halfLifeOf(root, pinned.id)).toBe(365);
   });
 
-  it('leave a supersede copy on the base, even one whose recalls give it the pinned shape', () => {
+  it('leave a supersede copy on the base, even one whose recalls give it the pinned shape', async () => {
     const root = store();
     fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ defaultHalfLifeDays: 30 }));
     migrateDefaultHalfLife(root, 30);
     const decision = saveDecision(root, 'default', { decisionText: 'we release on Mondays' }).memoryId!;
-    const copy = supersede({ hippoRoot: root, tenantId: 'default', actor: adminActor('test') }, decision, 'we release on Tuesdays now').newId;
+    const copy = (await supersede({ hippoRoot: root, tenantId: 'default', actor: adminActor('test') }, decision, 'we release on Tuesdays now')).newId;
     writeEntry(root, { ...readEntry(root, copy, 'default')!, retrieval_count: 40, half_life_days: 30 + 2 * 40 });
     unrecord(root, TYPED_HALF_LIFE_META_KEY);
 

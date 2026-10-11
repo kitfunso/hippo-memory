@@ -22,13 +22,13 @@ interface ZeroRecallJson {
 let root: string;
 
 /** Three closed migration-effort predictions (actual twice the estimate), then every memory they wrote forgotten. */
-function seedBaserateWithNoMemories(): void {
+async function seedBaserateWithNoMemories(): Promise<void> {
   for (const [estimate, actual] of [[2, 4], [3, 6], [4, 8]]) {
     const p = savePrediction(root, 'default', { classTag: 'migration-effort', claimText: `migration effort estimate ${estimate} days`, estimateValue: estimate });
     closePrediction(root, 'default', p.id, { closureState: 'closed', actualValue: actual });
   }
   const ctx: Context = { hippoRoot: root, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
-  for (const entry of loadAllEntries(root)) forget(ctx, entry.id);
+  for (const entry of loadAllEntries(root)) await forget(ctx, entry.id);
   expect(loadAllEntries(root)).toEqual([]);
 }
 
@@ -57,7 +57,7 @@ describe('hippo recall with no matching memory keeps the planning-fallacy hint',
   });
 
   it('--json returns no results and still carries planningFallacyHint', async () => {
-    seedBaserateWithNoMemories();
+    await seedBaserateWithNoMemories();
     const out = await recallJson();
 
     expect(out.results).toEqual([]);
@@ -65,14 +65,14 @@ describe('hippo recall with no matching memory keeps the planning-fallacy hint',
   });
 
   it('--json prints the keys in the order scripts have always seen them', async () => {
-    seedBaserateWithNoMemories();
+    await seedBaserateWithNoMemories();
     const out = await recallJson();
 
     expect(Object.keys(out)).toEqual(['query', 'results', 'total', 'suppressionSummary', 'planningFallacyHint']);
   });
 
   it('text prints the hint line, with the detected phrase quoted, above the no-memories line', async () => {
-    seedBaserateWithNoMemories();
+    await seedBaserateWithNoMemories();
     const text = await recall();
 
     const hintAt = text.indexOf('Planning fallacy hint (class: migration-effort)');

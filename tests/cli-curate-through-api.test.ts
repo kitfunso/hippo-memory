@@ -18,7 +18,7 @@ afterEach(() => rmSync(root, { recursive: true, force: true }));
 
 describe('the CLI curate verbs go through src/api', () => {
   it('hippo reject writes the tombstone under the api actor and removes the row', async () => {
-    const id = remember(cli(), { content: 'the backup job runs on tuesdays at noon' }).id;
+    const id = (await remember(cli(), { content: 'the backup job runs on tuesdays at noon' })).id;
     const run = await runInProcess(() => handleReject({ hippoRoot: root, tenantId: 'default', args: [id], flags: { reason: 'wrong day' } }));
     expect(run.status).toBe(0);
     expect(readEntry(root, id, 'default')).toBeNull();
@@ -26,16 +26,16 @@ describe('the CLI curate verbs go through src/api', () => {
   });
 
   it('hippo invalidate weakens the matching row through the api', async () => {
-    const id = remember(cli(), { content: 'we deploy with jenkins pipelines' }).id;
+    const id = (await remember(cli(), { content: 'we deploy with jenkins pipelines' })).id;
     const run = await runInProcess(() => handleInvalidate({ hippoRoot: root, tenantId: 'default', args: ['jenkins'], flags: { reason: 'github actions' } }));
     expect(run.status).toBe(0);
     expect(run.stdout).toContain(id);
     expect(readEntry(root, id, 'default')?.confidence).toBe('stale');
   });
 
-  it('rejectOnHost reports every removed row and refuses a caller who is not the host admin', () => {
+  it('rejectOnHost reports every removed row and refuses a caller who is not the host admin', async () => {
     const text = 'the nightly export runs at four in the morning';
-    const id = remember(cli(), { content: text }).id;
+    const id = (await remember(cli(), { content: text })).id;
     const result = rejectOnHost(cli(), { memoryId: id, reason: 'wrong time' });
     expect(result).toMatchObject({ content: text, removedIds: [id], successorIds: [], dormantSuccessorIds: [] });
     expect(readEntry(root, id, 'default')).toBeNull();
@@ -43,15 +43,15 @@ describe('the CLI curate verbs go through src/api', () => {
     expect(() => rejectOnHost(member, { value: 'anything else', reason: 'x' })).toThrow(ForbiddenError);
   });
 
-  it('rejectOnHost keeps the personal refusal for a personal row by id', () => {
+  it('rejectOnHost keeps the personal refusal for a personal row by id', async () => {
     const owner: HippoDbContext = { hippoRoot: root, tenantId: 'default', actor: { subject: 'api_key:hk_a', role: 'member', owner: 'a' } };
-    const id = remember(owner, { content: 'my own reminder about the dentist', personal: true }).id;
+    const id = (await remember(owner, { content: 'my own reminder about the dentist', personal: true })).id;
     expect(() => rejectOnHost(cli(), { memoryId: id, reason: 'x' })).toThrow("Personal memories can't be rejected. Use forget to remove it.");
   });
 
-  it('invalidateMemories weakens only the context tenant', () => {
-    const here = remember(cli(), { content: 'we deploy with jenkins pipelines' }).id;
-    const there = remember(cli('other'), { content: 'we deploy with jenkins pipelines' }).id;
+  it('invalidateMemories weakens only the context tenant', async () => {
+    const here = (await remember(cli(), { content: 'we deploy with jenkins pipelines' })).id;
+    const there = (await remember(cli('other'), { content: 'we deploy with jenkins pipelines' })).id;
     const result = invalidateMemories(cli(), { from: 'jenkins', to: 'github actions', type: 'migration' }, {});
     expect(result.targets).toEqual([here]);
     expect(readEntry(root, here, 'default')?.confidence).toBe('stale');

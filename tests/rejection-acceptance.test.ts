@@ -97,7 +97,7 @@ describe('case 1: acceptance (roadmap-verbatim)', () => {
       // Supersession unchanged for non-rejected values: api.supersede.
       const u = createMemory('unrelated baseline for api supersede', { layer: Layer.Episodic });
       writeEntry(home, u);
-      const supersedeResult = api.supersede(ctx(home), u.id, 'unrelated baseline, revised');
+      const supersedeResult = await api.supersede(ctx(home), u.id, 'unrelated baseline, revised');
       expect(supersedeResult.ok).toBe(true);
       expect(readEntry(home, u.id)!.superseded_by).toBe(supersedeResult.newId);
       expect(readEntry(home, supersedeResult.newId)!.content).toBe('unrelated baseline, revised');
@@ -132,7 +132,7 @@ describe('case 2: refused supersede audit surface', () => {
       const yContent = 'rejected successor content for supersede';
       await api.reject(ctx(home), { value: yContent, reason: 'pre-emptively rejected successor' });
 
-      expect(() => api.supersede(ctx(home), old.id, yContent)).toThrow(RejectedValueError);
+      await expect(Promise.resolve().then(() => api.supersede(ctx(home), old.id, yContent))).rejects.toThrow(RejectedValueError);
 
       // CAS rolled back: the old row's superseded_by pointer is untouched.
       const stored = readEntry(home, old.id);
@@ -357,7 +357,7 @@ describe('case 6: reject removes a value from recall, permanently', () => {
     try {
       initStore(home);
       const wContent = 'do not use the deprecated zynthkey rotation script for staging credentials';
-      const remembered = api.remember(ctx(home), { content: wContent });
+      const remembered = await api.remember(ctx(home), { content: wContent });
 
       const before = await api.retrieve(ctx(home), { query: 'zynthkey', limit: 5 });
       expect(before.results.some((r) => r.id === remembered.id)).toBe(true);
@@ -369,7 +369,7 @@ describe('case 6: reject removes a value from recall, permanently', () => {
 
       let caught: unknown;
       try {
-        api.remember(ctx(home), { content: wContent });
+        await api.remember(ctx(home), { content: wContent });
       } catch (err) {
         caught = err;
       }
@@ -497,12 +497,12 @@ describe('import dry-run tombstone accuracy', () => {
       writeFileSync(join(vault, 'other.md'), otherNote);
       await api.reject(ctx(home), { value: rejectedNote, reason: 'pre-emptive dry-run vault tombstone' });
 
-      const dryResult = importVault(vault, { hippoRoot: home, tenantId: 'default', name: 'notes', dryRun: true });
+      const dryResult = await importVault(vault, { hippoRoot: home, tenantId: 'default', name: 'notes', dryRun: true });
       expect(dryResult.rejected).toBe(1);
       expect(dryResult.imported).toBe(1);
       expect(loadAllEntries(home).length).toBe(0); // dry-run writes nothing
 
-      const realResult = importVault(vault, { hippoRoot: home, tenantId: 'default', name: 'notes', dryRun: false });
+      const realResult = await importVault(vault, { hippoRoot: home, tenantId: 'default', name: 'notes', dryRun: false });
       expect(realResult.rejected).toBe(1);
       expect(realResult.imported).toBe(1);
       const contents = loadAllEntries(home).map((e) => e.content);

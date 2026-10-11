@@ -29,7 +29,7 @@ const sessionId = 'sess-http-1.7.4';
 
 beforeEach(async () => {
   home = makeRoot('http-goal-boost');
-  remember({ hippoRoot: home, tenantId, actor: { subject: 'test', role: 'admin' } }, {
+  await remember({ hippoRoot: home, tenantId, actor: { subject: 'test', role: 'admin' } }, {
     content: 'auth bug fix details',
     tags: ['fix-auth'],
   });

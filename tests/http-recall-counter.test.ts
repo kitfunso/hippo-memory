@@ -37,7 +37,7 @@ beforeEach(async () => {
   mkdirSync(join(home, '.hippo'), { recursive: true });
   initStore(home);
   for (const content of ['alpha token one', 'alpha token two', 'alpha token three']) {
-    remember(ctx(), { content });
+    await remember(ctx(), { content });
   }
   handle = await serve({ hippoRoot: home, port: 0, host: '127.0.0.1' });
 });

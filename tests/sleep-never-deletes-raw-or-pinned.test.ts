@@ -171,7 +171,7 @@ describe('a row changed while sleep awaits the LLM keeps the change', () => {
       if (calls++ === 0) {
         writeEntry(root, { ...readEntry(root, condemned.id)!, pinned: true });
         deleteEntry(root, forgotten.id);
-        supersede(ctxFor(root), replaced.id, 'invoices are exported as parquet files on the first monday');
+        await supersede(ctxFor(root), replaced.id, 'invoices are exported as parquet files on the first monday');
       }
       return new Response(JSON.stringify({ content: [{ text: '[]' }] }), { status: 200 });
     });

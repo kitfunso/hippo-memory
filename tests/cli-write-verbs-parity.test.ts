@@ -212,10 +212,10 @@ describe('hippo supersede (built CLI, no server)', () => {
     s.expectPinned();
   }, CASE_MS);
 
-  it("another person's personal row", () => {
+  it("another person's personal row", async () => {
     const s = new Store();
     const owner = { subject: 'api_key:hk_a', role: 'member', owner: 'a' } as const;
-    const { id } = remember({ hippoRoot: s.root, tenantId: 'default', actor: owner }, { content: 'my own note about the billing retry count', personal: true });
+    const { id } = await remember({ hippoRoot: s.root, tenantId: 'default', actor: owner }, { content: 'my own note about the billing retry count', personal: true });
     s.settle();
     s.run('supersede', id, 'a newer note about the billing retry count');
     s.expectPinned();

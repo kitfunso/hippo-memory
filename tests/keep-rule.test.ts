@@ -302,32 +302,32 @@ describe('dedupe and audit leave a kept row alone', () => {
 });
 
 describe('forget and supersede still work on a kept row', () => {
-  it('forget removes it', () => {
+  it('forget removes it', async () => {
     const root = newRoot();
     const kept = keptRow('the release train leaves on thursdays');
     writeEntry(root, kept);
 
-    expect(forget(ctxFor(root), kept.id)).toEqual({ ok: true, id: kept.id });
+    expect(await forget(ctxFor(root), kept.id)).toEqual({ ok: true, id: kept.id });
     expect(readEntry(root, kept.id)).toBeNull();
   });
 
-  it('supersede chains it to a new row', () => {
+  it('supersede chains it to a new row', async () => {
     const root = newRoot();
     const kept = keptRow('the release train leaves on thursdays');
     writeEntry(root, kept);
 
-    const result = supersede(ctxFor(root), kept.id, 'the release train leaves on tuesdays now');
+    const result = await supersede(ctxFor(root), kept.id, 'the release train leaves on tuesdays now');
 
     expect(readEntry(root, kept.id)?.superseded_by).toBe(result.newId);
     expect(readEntry(root, result.newId)?.content).toBe('the release train leaves on tuesdays now');
   });
 
-  it('the superseded old version stops being kept in both the function and the SQL, and its successor is kept', () => {
+  it('the superseded old version stops being kept in both the function and the SQL, and its successor is kept', async () => {
     const root = newRoot();
     const kept = keptRow('the release train leaves on thursdays');
     writeEntry(root, kept);
 
-    const { newId } = supersede(ctxFor(root), kept.id, 'the release train leaves on tuesdays now');
+    const { newId } = await supersede(ctxFor(root), kept.id, 'the release train leaves on tuesdays now');
 
     expect(canAutoDelete(readEntry(root, kept.id)!)).toBe(true);
     expect(canAutoDelete(readEntry(root, newId)!)).toBe(false);

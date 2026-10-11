@@ -335,7 +335,7 @@ describe('detectChurnStale', () => {
     expect(readEntry(hippoRoot, mem.id)!.tags).not.toContain(CHURN_STALE_TAG);
   });
 
-  it('a positive outcome recorded after the churn moves the anchor forward, clearing the staleness', () => {
+  it('a positive outcome recorded after the churn moves the anchor forward, clearing the staleness', async () => {
     fs.writeFileSync(path.join(repoDir, 'j.ts'), 'v1');
     commit(repoDir, BEFORE_ANCHOR);
     const mem = storeMemory('see j.ts for the setup', { created: ANCHOR });
@@ -343,7 +343,7 @@ describe('detectChurnStale', () => {
     commit(repoDir, AFTER_ANCHOR);
 
     const ctx: api.Context = { hippoRoot, tenantId: 'default', actor: api.adminActor('test') };
-    api.outcome(ctx, [mem.id], true); // confirmedAt lands after the churn commit, anchor moves past it
+    await api.outcome(ctx, [mem.id], true); // confirmedAt lands after the churn commit, anchor moves past it
 
     const result = detectChurnStale(hippoRoot, repoDir, { tenantId: 'default', projectName: project });
     expect(result.marked).toBe(0);
@@ -427,32 +427,32 @@ describe('api.outcome clears churn-stale on a good outcome', () => {
     fs.rmSync(hippoRoot, { recursive: true, force: true });
   });
 
-  it('drops the churn-stale tag on good=true', () => {
+  it('drops the churn-stale tag on good=true', async () => {
     const mem = createMemory('some tagged content', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: [CHURN_STALE_TAG] });
     writeEntry(hippoRoot, mem);
 
     const ctx: api.Context = { hippoRoot, tenantId: 'default', actor: api.adminActor('test') };
-    api.outcome(ctx, [mem.id], true);
+    await api.outcome(ctx, [mem.id], true);
 
     expect(readEntry(hippoRoot, mem.id)!.tags).not.toContain(CHURN_STALE_TAG);
   });
 
-  it('keeps the churn-stale tag on good=false', () => {
+  it('keeps the churn-stale tag on good=false', async () => {
     const mem = createMemory('some tagged content', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: [CHURN_STALE_TAG] });
     writeEntry(hippoRoot, mem);
 
     const ctx: api.Context = { hippoRoot, tenantId: 'default', actor: api.adminActor('test') };
-    api.outcome(ctx, [mem.id], false);
+    await api.outcome(ctx, [mem.id], false);
 
     expect(readEntry(hippoRoot, mem.id)!.tags).toContain(CHURN_STALE_TAG);
   });
 
-  it('a good outcome on an untagged memory is a no-op for tags', () => {
+  it('a good outcome on an untagged memory is a no-op for tags', async () => {
     const mem = createMemory('plain content', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: ['other'] });
     writeEntry(hippoRoot, mem);
 
     const ctx: api.Context = { hippoRoot, tenantId: 'default', actor: api.adminActor('test') };
-    api.outcome(ctx, [mem.id], true);
+    await api.outcome(ctx, [mem.id], true);
 
     expect(readEntry(hippoRoot, mem.id)!.tags).toEqual(['other']);
   });

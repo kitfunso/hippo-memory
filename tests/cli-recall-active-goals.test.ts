@@ -77,26 +77,26 @@ describe('cli recall + active goal stack', () => {
     if (env?.cwd) rmSync(env.cwd, { recursive: true, force: true });
   });
 
-  it('without active goals (no HIPPO_SESSION_ID), top-3 unchanged from baseline', () => {
+  it('without active goals (no HIPPO_SESSION_ID), top-3 unchanged from baseline', async () => {
     const ctx: Context = { hippoRoot: env.hippoRoot, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
-    remember(ctx, { content: 'plan note one for the auth migration' });
-    remember(ctx, { content: 'plan note two for the auth migration' });
-    remember(ctx, { content: 'plan note three for the auth migration' });
-    remember(ctx, { content: 'marker tagged A: auth migration step', tags: ['auth-rewrite'] });
-    remember(ctx, { content: 'marker tagged B: auth migration step', tags: ['auth-rewrite'] });
+    await remember(ctx, { content: 'plan note one for the auth migration' });
+    await remember(ctx, { content: 'plan note two for the auth migration' });
+    await remember(ctx, { content: 'plan note three for the auth migration' });
+    await remember(ctx, { content: 'marker tagged A: auth migration step', tags: ['auth-rewrite'] });
+    await remember(ctx, { content: 'marker tagged B: auth migration step', tags: ['auth-rewrite'] });
 
     const { results } = recallCli(env, 'auth migration');
     const top = results.slice(0, 3).map((r) => r.content);
     expect(top.some((c) => c.includes('plan note'))).toBe(true);
   });
 
-  it('with HIPPO_SESSION_ID set and an active goal whose name matches a tag, tagged memories surface in top-2', () => {
+  it('with HIPPO_SESSION_ID set and an active goal whose name matches a tag, tagged memories surface in top-2', async () => {
     const ctx: Context = { hippoRoot: env.hippoRoot, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
-    remember(ctx, { content: 'plan note one for the auth migration' });
-    remember(ctx, { content: 'plan note two for the auth migration' });
-    remember(ctx, { content: 'plan note three for the auth migration' });
-    remember(ctx, { content: 'marker tagged A: auth migration step', tags: ['auth-rewrite'] });
-    remember(ctx, { content: 'marker tagged B: auth migration step', tags: ['auth-rewrite'] });
+    await remember(ctx, { content: 'plan note one for the auth migration' });
+    await remember(ctx, { content: 'plan note two for the auth migration' });
+    await remember(ctx, { content: 'plan note three for the auth migration' });
+    await remember(ctx, { content: 'marker tagged A: auth migration step', tags: ['auth-rewrite'] });
+    await remember(ctx, { content: 'marker tagged B: auth migration step', tags: ['auth-rewrite'] });
 
     pushGoal(env.hippoRoot, { sessionId: 's-cli-1', tenantId: 'default', goalName: 'auth-rewrite' });
 
@@ -106,11 +106,11 @@ describe('cli recall + active goal stack', () => {
     expect(top.some((c) => c.includes('marker tagged B'))).toBe(true);
   });
 
-  it('completed goals do not affect ranking (test asserts ORDER, not just length)', () => {
+  it('completed goals do not affect ranking (test asserts ORDER, not just length)', async () => {
     const ctx: Context = { hippoRoot: env.hippoRoot, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
-    remember(ctx, { content: 'plan note one for the auth migration' });
-    remember(ctx, { content: 'plan note two for the auth migration' });
-    remember(ctx, { content: 'marker tagged A: auth migration step', tags: ['auth-rewrite'] });
+    await remember(ctx, { content: 'plan note one for the auth migration' });
+    await remember(ctx, { content: 'plan note two for the auth migration' });
+    await remember(ctx, { content: 'marker tagged A: auth migration step', tags: ['auth-rewrite'] });
 
     // Baseline (no active goal) ordering, captured BEFORE we push/complete the
     // goal so strength-boost side effects from completeGoal cannot perturb it.
@@ -132,13 +132,13 @@ describe('cli recall + active goal stack', () => {
     expect(withSession).toEqual(baseline);
   });
 
-  it('explicit --goal still works as a manual override (MVP behavior preserved)', () => {
+  it('explicit --goal still works as a manual override (MVP behavior preserved)', async () => {
     const ctx: Context = { hippoRoot: env.hippoRoot, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
-    remember(ctx, { content: 'plan note one for the auth migration' });
-    remember(ctx, { content: 'plan note two for the auth migration' });
-    remember(ctx, { content: 'plan note three for the auth migration' });
-    remember(ctx, { content: 'marker tagged A: auth migration step', tags: ['auth-rewrite'] });
-    remember(ctx, { content: 'marker tagged B: auth migration step', tags: ['auth-rewrite'] });
+    await remember(ctx, { content: 'plan note one for the auth migration' });
+    await remember(ctx, { content: 'plan note two for the auth migration' });
+    await remember(ctx, { content: 'plan note three for the auth migration' });
+    await remember(ctx, { content: 'marker tagged A: auth migration step', tags: ['auth-rewrite'] });
+    await remember(ctx, { content: 'marker tagged B: auth migration step', tags: ['auth-rewrite'] });
 
     const { results } = recallCli(env, 'auth migration', {}, ['--goal', 'auth-rewrite']);
     const top = results.slice(0, 2).map((r) => r.content);
@@ -148,15 +148,15 @@ describe('cli recall + active goal stack', () => {
   // PLAN-ENG-REVIEW INLINE FIX #3: explicit --goal must beat the active goal stack.
   // Active goal `auth-rewrite` on session, but CLI passes --goal other-tag. Top
   // results should contain other-tag-tagged memories, NOT auth-rewrite ones.
-  it('explicit --goal flag overrides the active goal stack (MVP wins)', () => {
+  it('explicit --goal flag overrides the active goal stack (MVP wins)', async () => {
     const ctx: Context = { hippoRoot: env.hippoRoot, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
-    remember(ctx, { content: 'plan note alpha untagged content one' });
-    remember(ctx, { content: 'plan note beta untagged content two' });
-    remember(ctx, { content: 'plan note gamma untagged content three' });
-    remember(ctx, { content: 'AAA marker auth-rewrite tagged one', tags: ['auth-rewrite'] });
-    remember(ctx, { content: 'BBB marker auth-rewrite tagged two', tags: ['auth-rewrite'] });
-    remember(ctx, { content: 'CCC marker other-tag tagged one', tags: ['other-tag'] });
-    remember(ctx, { content: 'DDD marker other-tag tagged two', tags: ['other-tag'] });
+    await remember(ctx, { content: 'plan note alpha untagged content one' });
+    await remember(ctx, { content: 'plan note beta untagged content two' });
+    await remember(ctx, { content: 'plan note gamma untagged content three' });
+    await remember(ctx, { content: 'AAA marker auth-rewrite tagged one', tags: ['auth-rewrite'] });
+    await remember(ctx, { content: 'BBB marker auth-rewrite tagged two', tags: ['auth-rewrite'] });
+    await remember(ctx, { content: 'CCC marker other-tag tagged one', tags: ['other-tag'] });
+    await remember(ctx, { content: 'DDD marker other-tag tagged two', tags: ['other-tag'] });
 
     pushGoal(env.hippoRoot, {
       sessionId: 's-cli-override',
@@ -180,13 +180,13 @@ describe('cli recall + active goal stack', () => {
   // PLAN-ENG-REVIEW INLINE FIX #4: empty active-goal-list must be a clean no-op.
   // HIPPO_SESSION_ID is set but the (tenant, session) has zero active goals.
   // Recall must succeed and produce the same baseline ordering as the no-session case.
-  it('empty active-goal list is a no-op (no errors, baseline ranking)', () => {
+  it('empty active-goal list is a no-op (no errors, baseline ranking)', async () => {
     const ctx: Context = { hippoRoot: env.hippoRoot, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
-    remember(ctx, { content: 'plan note one for the auth migration' });
-    remember(ctx, { content: 'plan note two for the auth migration' });
-    remember(ctx, { content: 'plan note three for the auth migration' });
-    remember(ctx, { content: 'marker tagged A: auth migration step', tags: ['auth-rewrite'] });
-    remember(ctx, { content: 'marker tagged B: auth migration step', tags: ['auth-rewrite'] });
+    await remember(ctx, { content: 'plan note one for the auth migration' });
+    await remember(ctx, { content: 'plan note two for the auth migration' });
+    await remember(ctx, { content: 'plan note three for the auth migration' });
+    await remember(ctx, { content: 'marker tagged A: auth migration step', tags: ['auth-rewrite'] });
+    await remember(ctx, { content: 'marker tagged B: auth migration step', tags: ['auth-rewrite'] });
 
     // Push then complete — leaves the (tenant, session) with zero active goals.
     const g = pushGoal(env.hippoRoot, {

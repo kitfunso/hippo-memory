@@ -70,7 +70,7 @@ describe('child-write dirty-flag propagation', () => {
     expect(dirtyFor(hippoRoot, 'default').map((m) => m.id)).toContain(summary.id);
   });
 
-  it('test #2: supersede with dag_parent_id → OLD parent marked dirty + NEW parent marked dirty (same parent, idempotent)', () => {
+  it('test #2: supersede with dag_parent_id → OLD parent marked dirty + NEW parent marked dirty (same parent, idempotent)', async () => {
     const summary = createMemory('test summary 2', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Semantic, dag_level: 2 });
     writeEntry(hippoRoot, summary);
     const oldFact = createMemory('old fact', {
@@ -93,7 +93,7 @@ describe('child-write dirty-flag propagation', () => {
     // layer/tags/pinned/source/confidence/tenantId but NOT dag_parent_id,
     // so NEW has dag_parent_id=null and S1 hook early-exits for NEW. Only
     // S2 fires for OLD's parent → +1 audit row, parent dirty.
-    supersede(defaultCtx(hippoRoot), oldFact.id, 'new corrected fact');
+    await supersede(defaultCtx(hippoRoot), oldFact.id, 'new corrected fact');
     expect(dirtyFor(hippoRoot, 'default').map((m) => m.id)).toContain(summary.id);
     const db2 = openHippoDb(hippoRoot);
     // SAFETY: `SELECT COUNT(*) AS n` always returns exactly one row shaped { n: number }.

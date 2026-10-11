@@ -33,12 +33,12 @@ describe('Context.actor shape', () => {
     expect(a.role).toBe('member');
   });
 
-  it('round-trip: ctx.actor.subject lands in audit_log as actor string', () => {
+  it('round-trip: ctx.actor.subject lands in audit_log as actor string', async () => {
     const home = mkdtempSync(join(tmpdir(), 'hippo-actor-shape-'));
     initStore(home);
     try {
       const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: adminActor('cli') };
-      remember(ctx, { content: 'actor-shape-test-target' });
+      await remember(ctx, { content: 'actor-shape-test-target' });
 
       const db = openHippoDb(home);
       try {

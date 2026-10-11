@@ -172,7 +172,7 @@ function handleRead(ctx: RouteContext, segments: string[]): boolean {
 }
 
 // Names the action only; nothing runs until the cross-site, content-type and body guards pass.
-function matchAction(segments: string[]): ((hippoRoot: string, tenantId: string, body: ActionBody) => ActionResult) | null {
+function matchAction(segments: string[]): ((hippoRoot: string, tenantId: string, body: ActionBody) => ActionResult | Promise<ActionResult>) | null {
   const [, head, id, verb] = segments;
   if (segments.length !== 4 || id === undefined) return null;
   if (head === 'memory' && verb === 'pin') return (root, tenant, body) => pinMemory(root, tenant, id, body);
@@ -199,7 +199,7 @@ async function handlePost(ctx: RouteContext, segments: string[]): Promise<boolea
   }
   const body = await readActionBody(req);
   const tenantId = resolveTenantId({});
-  const result = action(hippoRoot, tenantId, body);
+  const result = await action(hippoRoot, tenantId, body);
   if (result.changed) snapshots.invalidate();
   if (result.entry) {
     // The write is committed, so a rebuild failure must not turn it into a 500: the next read rebuilds.

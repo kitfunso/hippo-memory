@@ -32,7 +32,7 @@ afterEach(() => {
 
 describe('a deliberate stale tier survives being read', () => {
   it('a recall through getContext leaves an invalidated memory invalidated', async () => {
-    const { id } = remember(ctx(), { content: 'deploys go through the legacy pipeline' });
+    const { id } = await remember(ctx(), { content: 'deploys go through the legacy pipeline' });
 
     const result = invalidateMatching(home, { from: 'legacy pipeline', to: null, type: 'deprecation' });
     expect(result.invalidated).toBe(1);

@@ -58,26 +58,27 @@ function seedGraph(root: string): void {
 }
 
 /** A connector's flagged text, which lands under a quarantine scope with a pending record; returns the memory id. */
-function hold(root: string, tenantId: string, ending: string): string {
-  const saved = remember({ hippoRoot: root, tenantId, actor: adminActor('seed') }, { content: `${STANDING_ORDER} ${ending}.`, untrusted: true, scope: HELD_SCOPE });
+async function hold(root: string, tenantId: string, ending: string): Promise<string> {
+  const saved = await remember({ hippoRoot: root, tenantId, actor: adminActor('seed') }, { content: `${STANDING_ORDER} ${ending}.`, untrusted: true, scope: HELD_SCOPE });
   if (saved.quarantined === undefined) throw new Error(`the seed text was not quarantined: ${ending}`);
   return saved.id;
 }
 
 /** Seeds the template stores once per file. */
-export function seedMovedReads(): MovedReadsSeed {
+export async function seedMovedReads(): Promise<MovedReadsSeed> {
   let held: string[] = [];
   let otherHeld = '';
   let keys = { main: '', member: '', other: '', unknown: '' };
   let keyIds: string[] = [];
-  const templates = seedTemplates((root) => {
+  const templates = await seedTemplates(async (root) => {
     // A remember may share to the user's global store, which must not be the real one.
     vi.stubEnv('HIPPO_HOME', join(dirname(root), 'seed-home'));
     seedPortBranches(root);
     seedVectors(root);
     seedGraph(root);
-    held = ['commit', 'deploy', 'release'].map((ending) => hold(root, TENANT, ending));
-    otherHeld = hold(root, OTHER_TENANT, 'merge');
+    held = [];
+    for (const ending of ['commit', 'deploy', 'release']) held.push(await hold(root, TENANT, ending));
+    otherHeld = await hold(root, OTHER_TENANT, 'merge');
     const main = keyFor(root, TENANT);
     const member = keyFor(root, TENANT, { role: 'member' });
     const other = keyFor(root, OTHER_TENANT);

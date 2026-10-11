@@ -177,10 +177,10 @@ describe('authGrant / authUngrant validation (api layer)', () => {
     expect(() => api.authGrant(adminCtx, other.keyId, PRIVATE_SCOPE)).toThrow(/Unknown key_id/);
   });
 
-  it('rejects a grant on a revoked key', () => {
+  it('rejects a grant on a revoked key', async () => {
     const member = mintKey(home, 'member');
     const adminCtx: api.HippoDbContext = { hippoRoot: home, tenantId: 'default', actor: api.adminActor('cli') };
-    api.authRevoke(adminCtx, member.keyId);
+    await api.authRevoke(adminCtx, member.keyId);
     expect(() => api.authGrant(adminCtx, member.keyId, PRIVATE_SCOPE)).toThrow(/revoked/);
   });
 
@@ -240,11 +240,11 @@ describe('supersede keeps the old row\'s scope', () => {
     rmSync(home, { recursive: true, force: true });
   });
 
-  it('api.supersede: the successor of a private row stays in that scope', () => {
+  it('api.supersede: the successor of a private row stays in that scope', async () => {
     const old = createMemory(PRIVATE_TEXT, { layer: Layer.Episodic, scope: PRIVATE_SCOPE });
     writeEntry(home, old);
     const ctx: api.HippoDbContext = { hippoRoot: home, tenantId: 'default', actor: api.adminActor('cli') };
-    const result = api.supersede(ctx, old.id, 'kowalski payroll rollout moved to friday');
+    const result = await api.supersede(ctx, old.id, 'kowalski payroll rollout moved to friday');
     const successor = readEntry(home, result.newId, 'default');
     expect(successor?.scope).toBe(PRIVATE_SCOPE);
   });

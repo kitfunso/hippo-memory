@@ -37,41 +37,41 @@ function newCtx(tenantId = 'default') {
 }
 
 describe('auth CLI role surfacing', () => {
-  it('authCreate({}) without role defaults to member', () => {
+  it('authCreate({}) without role defaults to member', async () => {
     const t = newCtx();
     try {
-      const result = authCreate(t.ctx, {});
+      const result = await authCreate(t.ctx, {});
       expect(result.role).toBe('member');
     } finally {
       t.cleanup();
     }
   });
 
-  it('authCreate({ role: "admin" }) returns admin', () => {
+  it('authCreate({ role: "admin" }) returns admin', async () => {
     const t = newCtx();
     try {
-      const result = authCreate(t.ctx, { role: 'admin' });
+      const result = await authCreate(t.ctx, { role: 'admin' });
       expect(result.role).toBe('admin');
     } finally {
       t.cleanup();
     }
   });
 
-  it('authCreate({ role: "member" }) returns member', () => {
+  it('authCreate({ role: "member" }) returns member', async () => {
     const t = newCtx();
     try {
-      const result = authCreate(t.ctx, { role: 'member', label: 'service:reporter' });
+      const result = await authCreate(t.ctx, { role: 'member', label: 'service:reporter' });
       expect(result.role).toBe('member');
     } finally {
       t.cleanup();
     }
   });
 
-  it('listApiKeys returns role column for each row', () => {
+  it('listApiKeys returns role column for each row', async () => {
     const t = newCtx();
     try {
-      authCreate(t.ctx, { role: 'admin', label: 'admin-key' });
-      authCreate(t.ctx, { role: 'member', label: 'member-key' });
+      await authCreate(t.ctx, { role: 'admin', label: 'admin-key' });
+      await authCreate(t.ctx, { role: 'member', label: 'member-key' });
 
       const db = openHippoDb(t.ctx.hippoRoot);
       try {
@@ -88,14 +88,14 @@ describe('auth CLI role surfacing', () => {
     }
   });
 
-  it('listApiKeys fail-safe-to-member on unrecognised role value', () => {
+  it('listApiKeys fail-safe-to-member on unrecognised role value', async () => {
     // Construct an api_keys row with a non-canonical role via direct SQL
     // (simulates a legacy or corrupted row). listApiKeys must cast it to
     // 'member' — never silently grant admin.
     const t = newCtx();
     try {
       // First mint a real key so the schema migration runs and the table exists.
-      authCreate(t.ctx, { label: 'real-key' });
+      await authCreate(t.ctx, { label: 'real-key' });
 
       const db = openHippoDb(t.ctx.hippoRoot);
       try {

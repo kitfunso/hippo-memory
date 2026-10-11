@@ -47,11 +47,11 @@ describe('api domain — recall/forget/promote/supersede', () => {
   });
 
   it('recall returns BM25 candidates and audits with the supplied actor', async () => {
-    remember(
+    await remember(
       { hippoRoot: home, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } },
       { content: 'recall-canary alpha-token sentinel' },
     );
-    remember(
+    await remember(
       { hippoRoot: home, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } },
       { content: 'unrelated content for noise' },
     );
@@ -77,14 +77,14 @@ describe('api domain — recall/forget/promote/supersede', () => {
     }
   });
 
-  it('forget deletes the row and audits with the supplied actor', () => {
-    const { id } = remember(
+  it('forget deletes the row and audits with the supplied actor', async () => {
+    const { id } = await remember(
       { hippoRoot: home, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } },
       { content: 'forget-me-please' },
     );
     expect(readEntry(home, id)?.id).toBe(id);
 
-    const result = forget(
+    const result = await forget(
       { hippoRoot: home, tenantId: 'default', actor: { subject: 'api_key:hk_forget', role: 'admin' } },
       id,
     );
@@ -103,8 +103,8 @@ describe('api domain — recall/forget/promote/supersede', () => {
     }
   });
 
-  it('promote copies a memory into the global store and audits with the supplied actor', () => {
-    const { id } = remember(
+  it('promote copies a memory into the global store and audits with the supplied actor', async () => {
+    const { id } = await remember(
       { hippoRoot: home, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } },
       { content: 'promote-me-to-global' },
     );
@@ -134,13 +134,13 @@ describe('api domain — recall/forget/promote/supersede', () => {
     }
   });
 
-  it('supersede chains old -> new and audits with the supplied actor', () => {
-    const { id: oldId } = remember(
+  it('supersede chains old -> new and audits with the supplied actor', async () => {
+    const { id: oldId } = await remember(
       { hippoRoot: home, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } },
       { content: 'original-belief' },
     );
 
-    const result = supersede(
+    const result = await supersede(
       { hippoRoot: home, tenantId: 'default', actor: { subject: 'api_key:hk_supersede', role: 'admin' } },
       oldId,
       'updated-belief',
@@ -183,7 +183,7 @@ describe('api domain — archive_raw / auth / audit', () => {
     rmSync(home, { recursive: true, force: true });
   });
 
-  it('archiveRaw moves a kind=raw row into raw_archive and removes it from memories', () => {
+  it('archiveRaw moves a kind=raw row into raw_archive and removes it from memories', async () => {
     // createMemory defaults to distilled, but archiveRawMemory only accepts
     // kind='raw'. Insert a raw row directly via SQL to seed the test.
     const db = openHippoDb(home);
@@ -210,7 +210,7 @@ describe('api domain — archive_raw / auth / audit', () => {
       closeHippoDb(db);
     }
 
-    const result = archiveRaw(
+    const result = await archiveRaw(
       { hippoRoot: home, tenantId: 'default', actor: { subject: 'api_key:hk_archive', role: 'admin' } },
       rawId,
       'gdpr-request',
@@ -273,7 +273,7 @@ describe('api domain — archive_raw / auth / audit', () => {
 
     // Cross-tenant revoke must be rejected with the same "not found" message
     // as a missing key, so caller cannot probe other tenants' key_ids.
-    expect(() => authRevoke(ctxA, kOther.keyId)).toThrow(/Unknown key_id/);
+    await expect(Promise.resolve().then(() => authRevoke(ctxA, kOther.keyId))).rejects.toThrow(/Unknown key_id/);
 
     // kOther must still be active on tenant-b.
     const activeB = await authListRows(ctxB, { active: true });

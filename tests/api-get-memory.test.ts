@@ -68,7 +68,7 @@ describe('getMemory answers what readEntry answers', () => {
   it('a raw row archived through the api has left memories and reads as null', async () => {
     const r = root();
     seed(r, 'mem_raw', { kind: 'raw' });
-    archiveRaw(ctxAt(r), 'mem_raw', 'asked to remove it');
+    await archiveRaw(ctxAt(r), 'mem_raw', 'asked to remove it');
     expect(await expectSameAnswer(r, 'mem_raw')).toBeNull();
   });
 

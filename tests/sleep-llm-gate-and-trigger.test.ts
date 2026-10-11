@@ -140,10 +140,10 @@ describe('the auto-sleep trigger', () => {
 });
 
 describe('the configured base half-life', () => {
-  it('api.remember uses defaultHalfLifeDays from config.json', () => {
+  it('api.remember uses defaultHalfLifeDays from config.json', async () => {
     const root = newRoot(JSON.stringify({ defaultHalfLifeDays: 14 }));
     const ctx: HippoDbContext = { hippoRoot: root, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
-    const { id } = remember(ctx, { content: 'the on-call rotation hands over every tuesday' });
+    const { id } = await remember(ctx, { content: 'the on-call rotation hands over every tuesday' });
     expect(readEntry(root, id)?.half_life_days).toBe(14);
   });
 });

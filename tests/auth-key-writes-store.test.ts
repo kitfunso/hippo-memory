@@ -135,12 +135,12 @@ describe('authCreate and authCreateSelf with ctx.store', () => {
     const before = hippoDbState(root);
     const actor: Actor = { subject: `api_key:${fixture.keys.adminA}`, role: 'admin' };
     await expect(authCreate({ hippoRoot: root, tenantId: TENANT_A, actor, store: sqliteStore(root) }, { label: 'x' })).rejects.toThrow(/audit table unwritable/);
-    expect(() => authCreate({ hippoRoot: root, tenantId: TENANT_A, actor }, { label: 'y' })).toThrow(/audit table unwritable/);
+    await expect(Promise.resolve().then(() => authCreate({ hippoRoot: root, tenantId: TENANT_A, actor }, { label: 'y' }))).rejects.toThrow(/audit table unwritable/);
     expect(hippoDbState(root)).toEqual(before);
   });
 
-  it('keeps the plain result for a ctx with no store, and the promise for one with a store', () => {
-    const minted = authCreate({ hippoRoot: copyOf(), tenantId: TENANT_A, actor: admin }, {});
+  it('keeps the plain result for a ctx with no store, and the promise for one with a store', async () => {
+    const minted = await authCreate({ hippoRoot: copyOf(), tenantId: TENANT_A, actor: admin }, {});
     expect(minted).not.toBeInstanceOf(Promise);
     expectTypeOf(minted).toEqualTypeOf<AuthCreateResult>();
     type WithStore = Context & { store: HippoStore };
@@ -169,7 +169,7 @@ describe('authListRows with ctx.store', () => {
     const memory = inMemoryKeyWritesStore(root);
     const actor = actorOf();
     for (const active of [true, false]) {
-      const onHippoDb = authListRows({ hippoRoot: root, tenantId: TENANT_A, actor }, { active });
+      const onHippoDb = await authListRows({ hippoRoot: root, tenantId: TENANT_A, actor }, { active });
       expect(onHippoDb.length > 0).toBe(listsAny);
       expect(await authListRows({ hippoRoot: markedFolder(), tenantId: TENANT_A, actor, store: memory.store }, { active })).toEqual(onHippoDb);
     }

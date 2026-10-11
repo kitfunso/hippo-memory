@@ -31,7 +31,7 @@ function noteMintDefaults(roleGiven: boolean, expiryGiven: boolean): void {
   if (notes.length > 0) printError(`hippo auth create: ${notes.join('; ')}.`);
 }
 
-function cmdAuthCreate(hippoRoot: string, defaultTenantId: string, flags: CliFlags): void {
+async function cmdAuthCreate(hippoRoot: string, defaultTenantId: string, flags: CliFlags): Promise<void> {
   const root = resolveAuthRoot(hippoRoot, flags);
   const tenantFlag = stringFlag(flags, 'tenant');
   const labelFlag = stringFlag(flags, 'label');
@@ -49,7 +49,7 @@ function cmdAuthCreate(hippoRoot: string, defaultTenantId: string, flags: CliFla
   const ctx = cliApiContext(root, tenantFlag ?? defaultTenantId);
   let result: api.AuthCreateResult;
   try {
-    result = api.authCreate(ctx, { label: labelFlag, role, ttlDays, noExpiry: noExpiry || undefined });
+    result = await api.authCreate(ctx, { label: labelFlag, role, ttlDays, noExpiry: noExpiry || undefined });
   } catch (err) {
     if (!(err instanceof api.BadRequestError)) throw err;
     printError(`hippo auth create: ${err.message} (--ttl-days, --no-expiry).`);
@@ -124,7 +124,7 @@ async function cmdAuthRevoke(hippoRoot: string, tenantId: string, keyId: string,
   const ctx = await keyContext(resolveAuthRoot(hippoRoot, flags), tenantId, keyId);
   let revokedAt: string;
   try {
-    revokedAt = api.authRevoke(ctx, keyId).revokedAt;
+    revokedAt = (await api.authRevoke(ctx, keyId)).revokedAt;
   } catch (err) {
     printError(`Error: ${errorMessage(err)}`);
     throw new CliExit(1);
@@ -162,7 +162,7 @@ export async function handleAuth({ hippoRoot, tenantId, args, flags }: CommandCo
   const subArgs = args.slice(1);
   switch (sub) {
     case 'create':
-      cmdAuthCreate(hippoRoot, tenantId, flags);
+      await cmdAuthCreate(hippoRoot, tenantId, flags);
       return;
     case 'list':
       cmdAuthList(hippoRoot, tenantId, flags);

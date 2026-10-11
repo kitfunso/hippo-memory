@@ -129,7 +129,7 @@ async function runSteps(steps: readonly Step[], inProcess: boolean) {
 // Seeding the template stores row by row runs past the 30 s hook default on a slow runner.
 beforeAll(async () => {
   embeddings = await startHashedEmbeddings();
-  seed = seedMovedReads();
+  seed = await seedMovedReads();
 }, 120_000);
 
 afterAll(async () => {

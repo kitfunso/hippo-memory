@@ -61,7 +61,7 @@ describe('api.sleep', () => {
         tenantId: 'default',
         actor: { subject: 'cli', role: 'admin' },
       };
-      remember(ctx, { content: 'sleep-dry-mem-1', kind: 'distilled' });
+      await remember(ctx, { content: 'sleep-dry-mem-1', kind: 'distilled' });
 
       const result = await sleep(ctx, { dryRun: true });
 
@@ -111,7 +111,7 @@ describe('api.sleep', () => {
         actor: { subject: 'cli', role: 'admin' },
       };
       for (let i = 0; i < 5; i++) {
-        remember(ctx, {
+        await remember(ctx, {
           content: `unique memory ${i} with some distinct content here for testing`,
           kind: 'distilled',
         });
@@ -138,7 +138,7 @@ describe('api.sleep', () => {
         tenantId: 'default',
         actor: { subject: 'cli', role: 'admin' },
       };
-      remember(ctx, {
+      await remember(ctx, {
         content: 'high-value-pattern that might trigger auto-share',
         kind: 'distilled',
       });
@@ -156,8 +156,8 @@ describe('api.sleep', () => {
     const { home, restore } = tmpHome();
     try {
       const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
-      remember(ctx, { content: 'before-sleep-1' });
-      remember(ctx, { content: 'before-sleep-2' });
+      await remember(ctx, { content: 'before-sleep-1' });
+      await remember(ctx, { content: 'before-sleep-2' });
 
       await sleep(ctx, { dryRun: false, noShare: true });
 
@@ -189,7 +189,7 @@ describe('api.sleep', () => {
     const { home, restore } = tmpHome();
     try {
       const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
-      remember(ctx, { content: 'dry-run-target' });
+      await remember(ctx, { content: 'dry-run-target' });
 
       await sleep(ctx, { dryRun: true });
 
@@ -216,7 +216,7 @@ describe('api.sleep', () => {
         tenantId: 'default',
         actor: { subject: 'api_key:hk_test_xyz', role: 'admin' },
       };
-      remember(ctx, { content: 'mcp-actor-target' });
+      await remember(ctx, { content: 'mcp-actor-target' });
 
       await sleep(ctx, { dryRun: true });
 

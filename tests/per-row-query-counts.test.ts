@@ -444,11 +444,11 @@ describe('cmdCapture', () => {
 });
 
 describe('outcome with a repeated id', () => {
-  it('applies the outcome twice, as one read per id did', () => {
+  it('applies the outcome twice, as one read per id did', async () => {
     const root = freshRoot('qc-outcome-repeat');
     const [entry] = rows(1, 'repeat');
     seed(root, [entry]);
-    expect(outcome(ctxFor(root), [entry.id, entry.id], false).applied).toBe(2);
+    expect((await outcome(ctxFor(root), [entry.id, entry.id], false)).applied).toBe(2);
     expect(readEntry(root, entry.id)?.outcome_negative).toBe(2);
   });
 });

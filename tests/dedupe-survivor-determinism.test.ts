@@ -94,15 +94,15 @@ const VARIANT_A = VARIANT_B.replace(' this time', '  this time');
 const VARIANT_C = VARIANT_B.replace(' each week', '  each week');
 
 describe('dedupe survivor determinism', () => {
-  it('1. keeps the same surviving content across opposite ingest orders (red-on-master core)', () => {
+  it('1. keeps the same surviving content across opposite ingest orders (red-on-master core)', async () => {
     const s1 = tmpHome('hippo-dedupe-det-1a-');
     const s2 = tmpHome('hippo-dedupe-det-1b-');
     try {
-      remember(ctxFor(s1.home), { content: CONTENT_A });
-      remember(ctxFor(s1.home), { content: CONTENT_B });
+      await remember(ctxFor(s1.home), { content: CONTENT_A });
+      await remember(ctxFor(s1.home), { content: CONTENT_B });
 
-      remember(ctxFor(s2.home), { content: CONTENT_B });
-      remember(ctxFor(s2.home), { content: CONTENT_A });
+      await remember(ctxFor(s2.home), { content: CONTENT_B });
+      await remember(ctxFor(s2.home), { content: CONTENT_A });
 
       const result1 = deduplicateStore(s1.home);
       const result2 = deduplicateStore(s2.home);
@@ -116,7 +116,7 @@ describe('dedupe survivor determinism', () => {
     }
   });
 
-  it('2. permutation invariance: 3 pairwise near-duplicates with an epsilon-chain triple (1.0/0.994/0.988) survive identically across all 6 ingest orders', () => {
+  it('2. permutation invariance: 3 pairwise near-duplicates with an epsilon-chain triple (1.0/0.994/0.988) survive identically across all 6 ingest orders', async () => {
     const contents = [VARIANT_A, VARIANT_B, VARIANT_C];
     const strengths = [1.0, 0.994, 0.988]; // pins transitivity: old raw-epsilon check tied 1.0~0.994 and 0.994~0.988 but not 1.0~0.988
     const survivorContents = new Set<string>();
@@ -126,7 +126,7 @@ describe('dedupe survivor determinism', () => {
       try {
         const ids: string[] = [];
         for (const idx of perm) {
-          const { id } = remember(ctxFor(home), { content: contents[idx] });
+          const { id } = await remember(ctxFor(home), { content: contents[idx] });
           ids[idx] = id;
         }
         for (let idx = 0; idx < contents.length; idx++) {
@@ -146,11 +146,11 @@ describe('dedupe survivor determinism', () => {
     expect([...survivorContents][0]).toBe(VARIANT_A);
   });
 
-  it('3. strength dominance preserved: materially stronger entry survives even when ingested last', () => {
+  it('3. strength dominance preserved: materially stronger entry survives even when ingested last', async () => {
     const { home, restore } = tmpHome('hippo-dedupe-det-3-');
     try {
-      const weak = remember(ctxFor(home), { content: CONTENT_A });
-      const strong = remember(ctxFor(home), { content: CONTENT_B });
+      const weak = await remember(ctxFor(home), { content: CONTENT_A });
+      const strong = await remember(ctxFor(home), { content: CONTENT_B });
       setStrength(home, weak.id, 0.5);
       setStrength(home, strong.id, 1.0);
 
@@ -165,21 +165,21 @@ describe('dedupe survivor determinism', () => {
     }
   });
 
-  it('4. retrieval-count tiebreak preserved on an equal strength bucket, regardless of ingest order', () => {
+  it('4. retrieval-count tiebreak preserved on an equal strength bucket, regardless of ingest order', async () => {
     const s1 = tmpHome('hippo-dedupe-det-4a-');
     const s2 = tmpHome('hippo-dedupe-det-4b-');
     try {
       // Order 1: low-retrieval entry ingested first.
-      const low1 = remember(ctxFor(s1.home), { content: CONTENT_A });
-      const high1 = remember(ctxFor(s1.home), { content: CONTENT_B });
+      const low1 = await remember(ctxFor(s1.home), { content: CONTENT_A });
+      const high1 = await remember(ctxFor(s1.home), { content: CONTENT_B });
       setStrength(s1.home, low1.id, 1.0);
       setStrength(s1.home, high1.id, 1.0);
       setRetrievalCount(s1.home, low1.id, 0);
       setRetrievalCount(s1.home, high1.id, 5);
 
       // Order 2: high-retrieval entry ingested first.
-      const high2 = remember(ctxFor(s2.home), { content: CONTENT_B });
-      const low2 = remember(ctxFor(s2.home), { content: CONTENT_A });
+      const high2 = await remember(ctxFor(s2.home), { content: CONTENT_B });
+      const low2 = await remember(ctxFor(s2.home), { content: CONTENT_A });
       setStrength(s2.home, high2.id, 1.0);
       setStrength(s2.home, low2.id, 1.0);
       setRetrievalCount(s2.home, high2.id, 5);
@@ -198,7 +198,7 @@ describe('dedupe survivor determinism', () => {
     }
   });
 
-  it('4b. quantization intent: within-epsilon strength difference is a TIE, so retrieval_count decides (kills the raw-strength-compare mutant)', () => {
+  it('4b. quantization intent: within-epsilon strength difference is a TIE, so retrieval_count decides (kills the raw-strength-compare mutant)', async () => {
     // strengths 1.0 and 0.996 land in the SAME bucket (round(100.0) ==
     // round(99.6) == 100), so under the shipped comparator retrieval_count
     // decides -- the 0.996-strength / 5-retrieval entry must survive. A
@@ -208,8 +208,8 @@ describe('dedupe survivor determinism', () => {
     // determinism properties (independent-review r1 MED).
     const { home, restore } = tmpHome('hippo-dedupe-det-4b-');
     try {
-      const strongRaw = remember(ctxFor(home), { content: CONTENT_A });
-      const retrieved = remember(ctxFor(home), { content: CONTENT_B });
+      const strongRaw = await remember(ctxFor(home), { content: CONTENT_A });
+      const retrieved = await remember(ctxFor(home), { content: CONTENT_B });
       setStrength(home, strongRaw.id, 1.0);
       setStrength(home, retrieved.id, 0.996);
       setRetrievalCount(home, strongRaw.id, 0);
@@ -226,11 +226,11 @@ describe('dedupe survivor determinism', () => {
     }
   });
 
-  it('5. exact-content duplicates: dedupe removes one, store ends with exactly one copy', () => {
+  it('5. exact-content duplicates: dedupe removes one, store ends with exactly one copy', async () => {
     const { home, restore } = tmpHome('hippo-dedupe-det-5-');
     try {
-      remember(ctxFor(home), { content: CONTENT_A });
-      remember(ctxFor(home), { content: CONTENT_A });
+      await remember(ctxFor(home), { content: CONTENT_A });
+      await remember(ctxFor(home), { content: CONTENT_A });
 
       const result = deduplicateStore(home);
 
@@ -243,11 +243,11 @@ describe('dedupe survivor determinism', () => {
     }
   });
 
-  it('6. dryRun parity: dryRun pairs equal what a subsequent real run deletes', () => {
+  it('6. dryRun parity: dryRun pairs equal what a subsequent real run deletes', async () => {
     const { home, restore } = tmpHome('hippo-dedupe-det-6-');
     try {
-      remember(ctxFor(home), { content: CONTENT_A });
-      remember(ctxFor(home), { content: CONTENT_B });
+      await remember(ctxFor(home), { content: CONTENT_A });
+      await remember(ctxFor(home), { content: CONTENT_B });
 
       const dry = deduplicateStore(home, { dryRun: true });
       const real = deduplicateStore(home, { dryRun: false });

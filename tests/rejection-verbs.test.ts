@@ -91,7 +91,7 @@ describe('api.reject / api.unreject / listRejectionsForTenant', () => {
     writeEntry(tmpDir, a);
     await api.reject(ctx(), { memoryId: a.id, reason: 'refused' });
 
-    expect(() => api.remember(ctx(), { content: 'refuse me please' })).toThrow(RejectedValueError);
+    await expect(Promise.resolve().then(() => api.remember(ctx(), { content: 'refuse me please' }))).rejects.toThrow(RejectedValueError);
   });
 
   it('unreject then re-remember succeeds', async () => {
@@ -103,14 +103,14 @@ describe('api.reject / api.unreject / listRejectionsForTenant', () => {
     expect(unrejectResult.ok).toBe(true);
     expect(listRejectionsForTenant(tmpDir, 'default').length).toBe(0);
 
-    expect(() => api.remember(ctx(), { content: 'temporarily rejected' })).not.toThrow();
+    expect(await api.remember(ctx(), { content: 'temporarily rejected' })).toMatchObject({ id: expect.any(String) });
   });
 
   it('reject --value pre-emptive path: zero removals, still refuses a later write', async () => {
     const result = await api.reject(ctx(), { value: 'never seen before value', reason: 'pre-emptive' });
     expect(result.removedIds.length).toBe(0);
 
-    expect(() => api.remember(ctx(), { content: 'never seen before value' })).toThrow(RejectedValueError);
+    await expect(Promise.resolve().then(() => api.remember(ctx(), { content: 'never seen before value' }))).rejects.toThrow(RejectedValueError);
   });
 
   it('reject requires a non-empty reason', async () => {
@@ -189,7 +189,7 @@ describe('resolveConflict rejection wiring', () => {
     }
   });
 
-  it('rejectLoserValue tombstones + removes the loser; re-remember of its content is refused', () => {
+  it('rejectLoserValue tombstones + removes the loser; re-remember of its content is refused', async () => {
     const { aId, bId, conflictId } = seedConflict();
     const result = resolveConflict(tmpDir, conflictId, aId, false, 'default', {
       rejectLoserValue: true,
@@ -198,9 +198,9 @@ describe('resolveConflict rejection wiring', () => {
     expect(result).not.toBeNull();
     expect(readEntry(tmpDir, bId)).toBeNull();
 
-    expect(() =>
-      api.remember(ctx(), { content: 'Use && to chain commands in PowerShell' }),
-    ).toThrow(RejectedValueError);
+    await expect(Promise.resolve().then(() =>
+      api.remember(ctx(), { content: 'Use && to chain commands in PowerShell' })),
+    ).rejects.toThrow(RejectedValueError);
 
     const db = openHippoDb(tmpDir);
     try {
@@ -212,7 +212,7 @@ describe('resolveConflict rejection wiring', () => {
     }
   });
 
-  it('rejectLoserValue removes a same-tenant same-digest duplicate but leaves an identical-content row in ANOTHER tenant untouched (P1 fix)', () => {
+  it('rejectLoserValue removes a same-tenant same-digest duplicate but leaves an identical-content row in ANOTHER tenant untouched (P1 fix)', async () => {
     const { aId, bId, conflictId } = seedConflict();
     const loserContent = 'Use && to chain commands in PowerShell';
 
@@ -247,7 +247,7 @@ describe('resolveConflict rejection wiring', () => {
       closeHippoDb(db);
     }
 
-    expect(() => api.remember(ctx(), { content: loserContent })).toThrow(RejectedValueError);
+    await expect(Promise.resolve().then(() => api.remember(ctx(), { content: loserContent }))).rejects.toThrow(RejectedValueError);
   });
 
   it('raw loser via resolve --forget no longer throws (kind-aware removal)', () => {
@@ -315,7 +315,7 @@ describe('resolveConflict rejection wiring', () => {
     }
   });
 
-  it('rejectLoserValue on a RAW loser: tombstone written, raw archived (not deleted), no crash — previously untested combination (GDPR pairing)', () => {
+  it('rejectLoserValue on a RAW loser: tombstone written, raw archived (not deleted), no crash — previously untested combination (GDPR pairing)', async () => {
     const a = createMemory('keeper content for raw+reject conflict', { tags: ['x'] });
     const rawLoser = createMemory('raw loser content later rejected via the reject-loser path', {
       tags: ['x'],
@@ -351,9 +351,9 @@ describe('resolveConflict rejection wiring', () => {
     }
 
     // Tombstone written: re-remembering the raw loser's content is refused.
-    expect(() =>
-      api.remember(ctx(), { content: 'raw loser content later rejected via the reject-loser path' }),
-    ).toThrow(RejectedValueError);
+    await expect(Promise.resolve().then(() =>
+      api.remember(ctx(), { content: 'raw loser content later rejected via the reject-loser path' })),
+    ).rejects.toThrow(RejectedValueError);
 
     const db2 = openHippoDb(tmpDir);
     try {

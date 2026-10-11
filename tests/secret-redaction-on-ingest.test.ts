@@ -218,11 +218,11 @@ describe('importers', () => {
     });
   }
 
-  it('vault import stores the note without the token and counts the redaction', () => {
+  it('vault import stores the note without the token and counts the redaction', async () => {
     const vault = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-secret-vault-'));
     try {
       fs.writeFileSync(path.join(vault, 'ops.md'), `${line}\n`, 'utf8');
-      const result = importVault(vault, { hippoRoot: root, name: 'notes' });
+      const result = await importVault(vault, { hippoRoot: root, name: 'notes' });
       expect(result.imported).toBe(1);
       expect(result.redacted).toBe(1);
       expect(result.entries[0].content).not.toContain(GHP);
