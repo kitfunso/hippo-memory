@@ -1,5 +1,6 @@
 // Text the MCP recall and context tools print, and what each printed piece costs the token budget.
 
+import { truncateWithEllipsis } from '../util/ellipsize.js';
 import type { SearchResult } from '../core/search-types.js';
 import type { SessionEvent, TaskSnapshot } from '../store/rows.js';
 import { confidenceLabel } from '../core/memory.js';
@@ -29,7 +30,7 @@ function handoffLines(h: SessionHandoff): string[] {
 
 function trailLines(events: readonly SessionEvent[]): string[] {
   return events.map((e) => {
-    const preview = e.content.length > MCP_PREVIEW_CHARS ? e.content.slice(0, MCP_PREVIEW_CHARS) + '…' : e.content;
+    const preview = truncateWithEllipsis(e.content, MCP_PREVIEW_CHARS, '…');
     return `- [${e.event_type}] ${preview}`;
   });
 }
@@ -137,7 +138,7 @@ export function tailSection(rows: RecallResultItem[]): string {
   const lines: string[] = ['', '## Fresh tail / substituted summaries'];
   for (const r of rows) {
     const tag = r.isSummary ? '[summary]' : '[tail]';
-    const head = r.content.length > MCP_PREVIEW_CHARS ? r.content.slice(0, MCP_PREVIEW_CHARS) + '…' : r.content;
+    const head = truncateWithEllipsis(r.content, MCP_PREVIEW_CHARS, '…');
     if (r.isSummary && r.substitutedFor && r.substitutedFor.length > 0) {
       lines.push(`- ${tag} ${r.id} (covers ${r.substitutedFor.length} rows): ${head}`);
     } else {

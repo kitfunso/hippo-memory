@@ -1,4 +1,5 @@
 // The graph reads a view and a traversal share. Each opens hippo.db itself unless the caller hands it the handle its snapshot runs on.
+import { DEFAULT_LIST_LIMIT } from '../util/limits.js';
 import { openHippoDb, closeHippoDb, withReadSnapshot, type DatabaseSyncLike } from '../db/index.js';
 import { onHandle } from './open.js';
 import { assertTenantId } from './tenant.js';
@@ -18,7 +19,7 @@ import {
   RELATION_COLS
 } from './graph-rows.js';
 
-const DEFAULT_GRAPH_PAGE_SIZE = 100;
+const DEFAULT_GRAPH_PAGE_SIZE = DEFAULT_LIST_LIMIT;
 const DEFAULT_GRAPH_SCAN_LIMIT = 1000;
 
 /** Entities with an exact `name`, bounded by `limit` in SQL with a deterministic order, so graph-view focus finds `--entity NAME` directly

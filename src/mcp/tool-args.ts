@@ -1,5 +1,7 @@
 // Hand-written for the JSON Schema subset the hippo tool definitions use, so the MCP server needs no validator dependency.
 
+import { truncateWithEllipsis } from '../util/ellipsize.js';
+
 const ARG_PREVIEW_CHARS = 40;
 
 export type ToolArgValue = string | number | boolean | null | ToolArgValue[] | { [key: string]: ToolArgValue };
@@ -45,7 +47,7 @@ function asNumber(v: ToolArgValue): number | null {
 function describeValue(v: ToolArgValue): string {
   if (v === null) return 'null';
   if (Array.isArray(v)) return 'array';
-  if (isArgString(v)) return JSON.stringify(v.length > ARG_PREVIEW_CHARS ? `${v.slice(0, ARG_PREVIEW_CHARS)}...` : v);
+  if (isArgString(v)) return JSON.stringify(truncateWithEllipsis(v, ARG_PREVIEW_CHARS));
   if (isArgNumber(v) || isArgBoolean(v)) return String(v);
   return 'object';
 }
