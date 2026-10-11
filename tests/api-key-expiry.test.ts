@@ -238,13 +238,15 @@ describe('expired keys over MCP and the stream', () => {
   it('closes an open stream once its key expires', async () => {
     process.env.MCP_SSE_HEARTBEAT_MS = '100';
     handle = await serve({ hippoRoot: home, port: 0 });
-    const key = mint(new Date(Date.now() + 1500).toISOString());
+    const key = mint(new Date(Date.now() + 3_600_000).toISOString());
     const ac = new AbortController();
     const res = await fetch(`${handle.url}/mcp/stream`, {
       headers: { accept: 'text/event-stream', authorization: `Bearer ${key.plaintext}` },
       signal: ac.signal,
     });
     expect(res.status).toBe(200);
+    // Expire the key only once the stream is open, so a slow runner cannot reach the open after a wall-clock expiry.
+    withDb((db) => db.prepare(`UPDATE api_keys SET expires_at = ? WHERE key_id = ?`).run(new Date(Date.now() - 1000).toISOString(), key.keyId));
     const reader = res.body!.getReader();
     const decoder = new TextDecoder();
     let buf = '';
