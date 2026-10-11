@@ -270,8 +270,8 @@ describe('the first key of a store', () => {
     expect((await send('GET', '/v1/quarantine', first.plaintext)).status).toBe(403);
   });
 
-  it('authCreate with no role names member, even when the host admin mints it, in the reply and in the store', () => {
-    const minted = authCreate({ hippoRoot: home, tenantId: 'default', actor: adminActor('cli') }, { noExpiry: true });
+  it('authCreate with no role names member, even when the host admin mints it, in the reply and in the store', async () => {
+    const minted = await authCreate({ hippoRoot: home, tenantId: 'default', actor: adminActor('cli') }, { noExpiry: true });
     expect(minted.role).toBe('member');
     const db = openHippoDb(home);
     try {
