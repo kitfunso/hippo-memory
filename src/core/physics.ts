@@ -438,7 +438,7 @@ export function initializeParticle(
 
   return {
     memoryId: entry.id,
-    position: [...embedding], // copy — position will diverge from original embedding
+    position: [...embedding], // copy: position will diverge from original embedding
     velocity: vecZero(embedding.length),
     mass: computeMass(strength, entry.retrieval_count),
     charge: computeCharge(entry.emotional_valence),
