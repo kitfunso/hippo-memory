@@ -110,6 +110,40 @@ Drafts, from the runner checkout before #781; they are rerun on the S6 commit. P
 
 So before #781, capture fires on the teach message for 4 of these 25 lessons. #781's build (27f58449) captures the same 4 and no others: it changes what happens to a captured rule, not which teach messages yield one. Regenerate: `node C:/z0-runs/s3/tables.mjs <tasks.json>` per repository, into `C:/z0-runs/s3/tables-<key>-draft.md`; with `EXTRACT_JS=<#781 worktree>/dist/capture/extract.js`, into `tables-<key>-781.md`.
 
+## S4: key phrases re-picked before the screen
+
+The first screen launches refused in preflight: the runner's stub-tree check (`assertNoPhraseInStub`, `leaks.mjs`) found lesson key phrases in repository files. A scan of every task and screen (`C:/z0-runs/s4/phrase-scan.mjs`) found 14 of 25 lessons colliding: boring-maths 5 of 6, fifty 1 of 4, hippo 5 of 5, Metrolist 2 of 5, Comonicon.jl 1 of 5. Authors had picked the rule's subject, such as `npm test`, `JSDoc` or `affiliates.ts`, which READMEs, CI files and docs also hold. Neither the S3 proof nor `--dry-run` ran that check, so S3 passed them.
+
+This departs from prereg 62, where the author lists the key phrase. The session re-picking can read hippo's capture code, so each colliding phrase is re-picked by one fixed rule, set before any screen result:
+
+- take the shortest span of whole words of the verbatim rule that holds the author's phrase, ties going to the earliest;
+- trim quotes, backticks and sentence punctuation from its ends;
+- reject a span that any stub-tree file, any other task's prompt in the sequence, or any other lesson's rule or reason holds, compared case-folded with whitespace collapsed.
+
+| Lesson | Author's phrase | Re-picked phrase |
+|---|---|---|
+| bm-f1-l1 | `affiliates.ts` | ``Use `affiliates.ts`` |
+| bm-f3-l1 | `npm run build` | ``Verify `npm run build`` |
+| bm-f4-l1 | `Kit:` | `Kit: <brief` |
+| bm-f5-l1 | `npm test` | ``with `npm test`` |
+| bm-f5-l2 | `npx vitest run` | ``with `npx vitest run`` |
+| ff-f2-l1 | `eval/baselines/` | ``They live only in `eval/baselines/`` |
+| hp-f2-l1 | `changelog.d` | `changelog.d/<branch-with-dashes>.md` |
+| hp-f3-l1 | `npm run build:all` | ``without `npm run build:all`` |
+| hp-f4-l1 | `npm test` | ``with `npm test`` |
+| hp-f4-l2 | `npx vitest run` | ``npx vitest run`; `npm`` |
+| ml-f2-l1 | `metrolist_strings.xml` | `Metrolist/app/src/main/res/values/metrolist_strings.xml` |
+| ml-f3-l1 | `:app:assembleFossDebug` | `bash ./gradlew :app:assembleFossDebug` |
+| cj-f4-l1 | `Pkg.test()` | `Pkg; Pkg.test()` |
+
+Some re-picked phrases differ from repository text only by a word or the markdown around a command; Metrolist's development guide and Comonicon.jl's tests give the same commands. The screen's A0 arm shows whether the agent already follows those rules unprompted.
+
+hp-f1 ("Document public APIs with JSDoc") has no such span: the whole rule is a fixture string in hippo's `tests/importers.test.ts:342`, so G3 (prereg 164) would void every hippo sequence. It leaves before the screen. That leaves 19 families, 14 from maintainer rules, and 114 screen sessions. Capture still fires on the same 4 teach messages, now of 24 lessons; hp-f1 had none. Prompt overlap and capture columns of the other tables are unchanged.
+
+The S3 proof (`prove.mjs`) now runs the runner's real preflight, `cacheTaskRepos`, and fails on any hit. Set N stays as merged; after the screen, the merge's target (half the lesson tasks, rounded up) is re-applied to the kept families before calibration.
+
+Regenerate: `node C:/z0-runs/s4/repick-phrases.mjs <key>=<merged tasks.json> ...` writes `tasks-s4.json` beside each merged spec and `C:/z0-runs/s4/repick.json`; `node C:/z0-runs/s4/phrase-scan.mjs <key>=<tasks-s4.json> ...` then reports 0 collisions in all five; tables are `C:/z0-runs/s3/tables-<key>-s4-draft.md` and `-s4-781.md`.
+
 ## Contract limits found
 
 - A checker's `CHECK_POST_COMMIT` is a state commit whose parent is the pre-session commit, so the agent's own commits are not visible to it. Commit-message rules are checked from the `git commit` commands in `CHECK_COMMANDS`.
