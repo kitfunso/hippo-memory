@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { Layer, type MemoryEntry } from '../core/memory.js';
 import { dumpFrontmatter } from '../util/yaml.js';
-import { openHippoDb, getMeta } from '../db/index.js';
+import { openHippoDb, getMeta, CONSOLIDATION_RUNS_KEPT } from '../db/index.js';
 import { oncePerStore } from '../db/connect.js';
 import { errorFields, errorMessage, log } from '../util/log.js';
 import {
@@ -288,8 +288,12 @@ export function readLastRecall(db: ReturnType<typeof openHippoDb>): Pick<HippoIn
 }
 
 export function buildStatsFromDb(db: ReturnType<typeof openHippoDb>): LegacyStats {
-  // SAFETY: runs' shape matches the four columns named in the SELECT above.
-  const runs = db.prepare(`SELECT timestamp, decayed, merged, removed FROM consolidation_runs ORDER BY timestamp ASC, id ASC`).all() as ConsolidationRunRow[];
+  // SAFETY: runs' shape matches the four columns named in the SELECT below.
+  const runs = db.prepare(`
+    SELECT timestamp, decayed, merged, removed FROM (
+      SELECT id, timestamp, decayed, merged, removed FROM consolidation_runs ORDER BY timestamp DESC, id DESC LIMIT ?
+    ) ORDER BY timestamp ASC, id ASC
+  `).all(CONSOLIDATION_RUNS_KEPT) as ConsolidationRunRow[];
 
   return {
     total_remembered: Number(getMeta(db, 'total_remembered', '0')),

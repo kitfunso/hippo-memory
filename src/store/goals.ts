@@ -265,33 +265,34 @@ export interface GoalRecallLogRow {
 // Per-goal retrieval_policy multipliers compose onto the base goal-tag boost and are hard-capped at MAX_FINAL_MULTIPLIER (3.0x) before scoring.
 function loadGoalPolicies(db: DatabaseSyncLike, active: readonly Goal[]): Map<string, RetrievalPolicy> {
   const policiesByGoalId = new Map<string, RetrievalPolicy>();
+  const policyIds = [...new Set(active.flatMap((g) => (g.retrievalPolicyId ? [g.retrievalPolicyId] : [])))];
+  if (policyIds.length === 0) return policiesByGoalId;
+  // SAFETY: the SELECT projects exactly these seven retrieval_policy columns; MAX_ACTIVE_GOAL_DEPTH bounds the IN list.
+  const rows = db.prepare(`
+    SELECT id, goal_id, policy_type, weight_schema_fit, weight_recency, weight_outcome, error_priority
+    FROM retrieval_policy WHERE id IN (${policyIds.map(() => '?').join(',')})
+  `).all(...policyIds) as Array<{
+    id: string;
+    goal_id: string;
+    policy_type: RetrievalPolicy['policyType'];
+    weight_schema_fit: number;
+    weight_recency: number;
+    weight_outcome: number;
+    error_priority: number;
+  }>;
+  const byId = new Map(rows.map((row) => [row.id, row]));
   for (const g of active) {
-    if (!g.retrievalPolicyId) continue;
-    // SAFETY: the row comes from the SELECT above, which projects exactly
-    // these seven retrieval_policy columns.
-    const row = db.prepare(`
-      SELECT id, goal_id, policy_type, weight_schema_fit, weight_recency, weight_outcome, error_priority
-      FROM retrieval_policy WHERE id = ?
-    `).get(g.retrievalPolicyId) as {
-      id: string;
-      goal_id: string;
-      policy_type: RetrievalPolicy['policyType'];
-      weight_schema_fit: number;
-      weight_recency: number;
-      weight_outcome: number;
-      error_priority: number;
-    } | undefined;
-    if (row) {
-      policiesByGoalId.set(g.id, {
-        id: row.id,
-        goalId: row.goal_id,
-        policyType: row.policy_type,
-        weightSchemaFit: row.weight_schema_fit,
-        weightRecency: row.weight_recency,
-        weightOutcome: row.weight_outcome,
-        errorPriority: row.error_priority,
-      });
-    }
+    const row = g.retrievalPolicyId ? byId.get(g.retrievalPolicyId) : undefined;
+    if (!row) continue;
+    policiesByGoalId.set(g.id, {
+      id: row.id,
+      goalId: row.goal_id,
+      policyType: row.policy_type,
+      weightSchemaFit: row.weight_schema_fit,
+      weightRecency: row.weight_recency,
+      weightOutcome: row.weight_outcome,
+      errorPriority: row.error_priority,
+    });
   }
   return policiesByGoalId;
 }

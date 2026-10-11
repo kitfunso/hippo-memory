@@ -2,6 +2,7 @@
  * Every helper requires tenantId; `trg_predictions_tenant_match_*` triggers enforce the prediction's tenant matches the referenced memory's.
  * `savePrediction` writes memory and prediction inside `writeEntry`'s SAVEPOINT (via afterWrite), so a failure in either rolls back both. */
 
+import { DEFAULT_LIST_LIMIT } from '../util/limits.js';
 import { BadRequestError, NotFoundError } from '../core/api-errors.js';
 import { withWriteScope, type DatabaseSyncLike } from '../db/index.js';
 import { onHandle } from './open.js';
@@ -13,7 +14,7 @@ import { loadConfig } from '../core/config.js';
 import { keysetAfter, type KeysetPosition } from '../util/keyset.js';
 import type { PredictionSave } from './port.js';
 
-const DEFAULT_PREDICTION_PAGE_SIZE = 100;
+const DEFAULT_PREDICTION_PAGE_SIZE = DEFAULT_LIST_LIMIT;
 
 const SELECT_COLUMNS = `id, memory_id, tenant_id, class_tag, claim_text,
   estimate_value, estimate_unit, target_date,
