@@ -2,7 +2,7 @@
 // the quarantine records out of hippo.db once, then keeps both in memory and lands them exactly when the staged entry does.
 import { listAuditEventsAfter } from '../../src/store/audit.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import type { EntryWrites, HippoStore } from '../../src/server.js';
+import type { EntryWrites, HippoStore } from '../../src/entry/store-kit.js';
 import { sqliteStore } from '../../src/store/index.js';
 import type { ConnectorEvent, ConnectorWrites } from '../../src/store/port.js';
 import { inMemoryEntryWritesStore, type InMemoryEntryWritesStore } from './in-memory-entry-writes-store.js';

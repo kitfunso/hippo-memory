@@ -6,7 +6,7 @@ import { embeddingIndexIdentity } from '../src/store/embeddings/index.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../src/core/memory.js';
 import { savePhysicsState } from '../src/db/physics-state.js';
 import { initializeParticle } from '../src/core/physics.js';
-import type { EmbeddingIndexState, PhysicsParticle, VectorBackfillQuery, VectorRowWrite, VectorWriteResult } from '../src/server.js';
+import type { EmbeddingIndexState, PhysicsParticle, VectorBackfillQuery, VectorRowWrite, VectorWriteResult } from '../src/entry/store-kit.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { EMBEDDING_MODEL_META_KEY, upsertVectors } from '../src/db/vector-store.js';
 import { inMemoryVectorWritesStore } from './_helpers/in-memory-vector-writes-store.js';

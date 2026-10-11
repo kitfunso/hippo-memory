@@ -60,7 +60,7 @@ What to change:
 
 ### The lastRecall store group
 
-The last recall and its trace now go through an optional store group, `lastRecall`. Its types, `LastRecall` and `LastRecallWrites`, are exported from `hippo-memory/server`.
+The last recall and its trace now go through an optional store group, `lastRecall`. Its types, `LastRecall` and `LastRecallWrites`, are exported from `hippo-memory/store-kit`.
 
 - `sqliteStore` and `workerSqliteStore` have the group.
 - On a store without the group, `outcomeForLastRecall` and an `outcome` call with a `traceId` reject with `StoreNotPortedError`, which the server answers as 501.
@@ -106,9 +106,26 @@ Long positional argument lists became options objects, and two helpers that expo
 
 `hippo-memory/server` no longer exports internals or test hooks. The test hooks now live on a new subpath, `hippo-memory/testing`, which is not for production code and carries no semver guarantee beyond the major version.
 
-- `withSqliteAllowed` and `OtherStoreFolderError` left `hippo-memory/server`. They are internal. `OTHER_STORE_MARKER` stays, so a store that is not hippo.db can still mark its folder. A caller that needs to open hippo.db on purpose must do it through a store from `sqliteStore(hippoRoot)`.
+- `withSqliteAllowed` and `OtherStoreFolderError` left `hippo-memory/server`. They are internal. `OTHER_STORE_MARKER` stays, on `hippo-memory/store-kit`, so a store that is not hippo.db can still mark its folder. A caller that needs to open hippo.db on purpose must do it through a store from `sqliteStore(hippoRoot)`.
 - `__resetSessionRecallHistoryHttp` moved to `hippo-memory/testing`, with the other reset hooks: `_resetAblationCacheForTests`, `_resetSharedStoreCacheForTests`, `_resetLossAversionRatioCacheForTests` and `_resetSessionRecallHistoryMcpForTests`. Change `import { __resetSessionRecallHistoryHttp } from 'hippo-memory/server'` to import it from `hippo-memory/testing`.
 - `sqliteSyncStore`, `SqliteSyncStore`, `finishRecallAt` and `storeFor` are not exported from any package entry. Implement and consume stores through `HippoStore` and `sqliteStore`.
+
+## Store kit subpath
+
+The exports that a second store needs moved from `hippo-memory/server` to a new subpath, `hippo-memory/store-kit`. A store built on it applies hippo.db's rules with the same code. `hippo-memory/server` keeps the server add-on API: `serve`, `authCreate`, `authCreateSelf`, `authRevoke`, the error classes, the `*ForCaller` hook functions and their types.
+
+No name changed and none was deleted. The old names are gone from `hippo-memory/server`, so an add-on that still imports one from there fails to build or load until you change the import. Change `import { sqliteStore } from 'hippo-memory/server'` to import it from `hippo-memory/store-kit`. `HippoStore` is also still exported from `hippo-memory/server`, because `ServeOpts` takes one.
+
+Values that moved:
+
+- Store: `sqliteStore`, `hasGroup`, `StoreBusyError`, `OTHER_STORE_MARKER`, `isSharedStore`.
+- Entry and recall rules: `entryAfterOutcome`, `rejectionDigest`, `RejectedValueError`, `ownScopeTouches`, `passesScopeFilterForRecall`, `RECALL_DEFAULT_DENY_SCOPES`, `SECRET_TAGS`, `tallyAmbientEntries`, `ftsTermParts`, `rarestFtsQuery`.
+- Vectors: `encodeVector`, `decodeVector`, `rankVectorRows`, `EMBEDDING_MODEL_META_KEY`, `bufferToFloat32`, `float32ToBuffer`, `replacesIndex`.
+
+Types that moved:
+
+- Store port and groups: `HippoStore`, `StoreGroup`, `StoreGroups`, `ContextReads`, `EntryRemoval`, `EntryTarget`, `EntryWrite`, `EntryWrites`, `KeyAudit`, `KeyListQuery`, `KeyMint`, `KeyRevoke`, `KeyWrites`, `SelfKeyMint`, `LastRecall`, `LastRecallWrites`, `OutcomeWrite`, `RawArchive`, `RecallSearchArgs`, `RecallWrites`, `SupersedeWrite`, `VectorReads`, `VectorWrites`, `VectorWrite`, `VectorWriteResult`, `VectorRowWrite`, `VectorBackfillQuery`, `AmbientCandidateRequest`.
+- Row and argument types: `ActiveGoals`, `AmbientLoadResult`, `AmbientRecallRequest`, `AmbientStoreFilter`, `AmbientTallies`, `ApiKeyListItem`, `ApiKeyListRow`, `ApiKeyRecord`, `AppendAuditOpts`, `AuditEvent`, `ClassResolution`, `ContextCandidateFilter`, `ContinuityBlock`, `ContinuityKey`, `EmbeddingIndexState`, `GetActiveGoalsOpts`, `Goal`, `GoalRecallLogRow`, `HippoDbContext`, `KeysetPosition`, `ListApiKeysOpts`, `ListAuditAfterOpts`, `MemoryEntry`, `NewApiKey`, `OriginFilter`, `PhysicsParticle`, `PlanningFallacyEvidence`, `PredictionBaserate`, `RecallScopeFilter`, `RecallTraceInput`, `RecentOrigins`, `RetrievalPolicy`, `SessionEvent`, `SessionHandoff`, `StrengthenOptions`, `TaskSnapshot`, `TokenUse`, `VectorCandidateSpec`, `VectorMatch`, `VectorRow`.
 
 ## Audit log
 

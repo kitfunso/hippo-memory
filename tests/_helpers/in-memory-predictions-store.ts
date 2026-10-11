@@ -1,6 +1,7 @@
 // A store other than hippo.db for the Predictions group: its rows and mirrors live in Maps and start empty, so a
 // conformance test seeds both sides through the port and shows the port's own words are enough to build on.
-import { BadRequestError, ConflictError, NotFoundError, type HippoStore, type MemoryEntry } from '../../src/server.js';
+import { BadRequestError, ConflictError, NotFoundError } from '../../src/server.js';
+import { type HippoStore, type MemoryEntry } from '../../src/entry/store-kit.js';
 import type { Predictions } from '../../src/store/port.js';
 import { predictionBaserateOf, type Prediction } from '../../src/store/predictions.js';
 import { inMemoryKeyAuditStore } from './in-memory-key-audit-store.js';

@@ -1,0 +1,3 @@
+### Changed
+
+- **BREAKING: the exports a second store needs moved from `hippo-memory/server` to a new subpath, `hippo-memory/store-kit`.** `sqliteStore`, `hasGroup`, `StoreBusyError`, the `HippoStore` group and row types, and hippo.db's rule helpers (`passesScopeFilterForRecall`, `encodeVector`, `rankVectorRows`, `OTHER_STORE_MARKER` and the rest) are now imported from `hippo-memory/store-kit`. `hippo-memory/server` keeps `serve`, the auth functions, the error classes and the `*ForCaller` hook functions, and still exports the `HippoStore` type that `ServeOpts` takes. No name changed. See `docs/UPGRADING-2.0.md`, "Store kit subpath".

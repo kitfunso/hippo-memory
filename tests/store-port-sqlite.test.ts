@@ -18,11 +18,11 @@ import { lastRecalledIds } from '../src/mcp/session-state.js';
 import { loadPhysicsState, resetAllPhysicsState } from '../src/db/physics-state.js';
 import { planningFallacyEvidenceAt } from '../src/store/planning-fallacy-evidence.js';
 import { writeRecallTraceAtRoot } from '../src/store/recall-trace.js';
+import { serve } from '../src/server.js';
 import {
-  serve, sqliteStore,
-  type ActiveGoals, type ContinuityKey, type GoalRecallLogRow, type HippoStore, type MemoryEntry, type RecallSearchArgs, type RecallTraceInput, type RecallWrites,
-  type VectorCandidateSpec,
-} from '../src/server.js';
+  sqliteStore, type ActiveGoals, type ContinuityKey, type GoalRecallLogRow, type HippoStore, type MemoryEntry,
+  type RecallSearchArgs, type RecallTraceInput, type RecallWrites, type VectorCandidateSpec,
+} from '../src/entry/store-kit.js';
 import { __resetSessionRecallHistoryHttp } from '../src/entry/testing.js';
 import { loadEntriesByIds, loadFreshRawMemories } from '../src/store/entry-reads.js';
 import { strengthenRetrieved, writeEntry } from '../src/store/entry-writes.js';

@@ -5,7 +5,7 @@ import { rmSync } from 'node:fs';
 import { reject, type HippoDbContext } from '../src/api/index.js';
 import { CHURN_STALE_TAG, type MemoryEntry } from '../src/core/memory.js';
 import { writeEntry } from '../src/store/entry-writes.js';
-import type { AuditEvent } from '../src/server.js';
+import type { AuditEvent } from '../src/entry/store-kit.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { inMemoryEntryWritesStore } from './_helpers/in-memory-entry-writes-store.js';
 import { onBothStores, seedTwoTenants, TENANT_A, TENANT_B, type GroupCall, type SideResult, type TwoTenantFixture } from './_helpers/store-conformance.js';

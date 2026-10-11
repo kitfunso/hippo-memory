@@ -142,27 +142,17 @@ describe('published runtime exports', () => {
       resolveProjectIdentity",
         "./server": "BadRequestError
       ConflictError
-      EMBEDDING_MODEL_META_KEY
       ForbiddenError
       HttpError
       LOOPBACK_HOST_HEADER
       NotFoundError
-      OTHER_STORE_MARKER
-      RECALL_DEFAULT_DENY_SCOPES RejectedValueError
-      SECRET_TAGS StoreBusyError
       authCreate authCreateSelf authRevoke
-      bindSessionOwner bufferToFloat32
+      bindSessionOwner
       captureFailureForCaller captureSessionTexts clientIpForRateLimit compactResumeForCaller
-      decodeVector
-      encodeVector entryAfterOutcome
-      float32ToBuffer ftsTermParts
-      hasGroup
-      isCrossSite isLoopback isReservedActor isSharedStore
-      ownScopeTouches ownerOrSubject
-      passesScopeFilterForRecall preCompactForCaller promptHookContext
-      rankVectorRows rarestFtsQuery rejectionDigest replacesIndex
-      saveCompactionItemsForCaller serve sessionEndHandoffForCaller sqliteStore
-      tallyAmbientEntries",
+      isCrossSite isLoopback isReservedActor
+      ownerOrSubject
+      preCompactForCaller promptHookContext
+      saveCompactionItemsForCaller serve sessionEndHandoffForCaller",
         "./session-text": "COMPACTION_ITEM_MAX_CHARS COMPACTION_ITEM_ROW_CAP
       WORKING_STATE_CAPS
       collectHandoffEvidence collectSessionTurns compactSummaryBody
@@ -171,6 +161,21 @@ describe('published runtime exports', () => {
       parseCompactionItems
       scrubForSharing sessionTail
       transcriptWorkingState",
+        "./store-kit": "EMBEDDING_MODEL_META_KEY
+      OTHER_STORE_MARKER
+      RECALL_DEFAULT_DENY_SCOPES RejectedValueError
+      SECRET_TAGS StoreBusyError
+      bufferToFloat32
+      decodeVector
+      encodeVector entryAfterOutcome
+      float32ToBuffer ftsTermParts
+      hasGroup
+      isSharedStore
+      ownScopeTouches
+      passesScopeFilterForRecall
+      rankVectorRows rarestFtsQuery rejectionDigest replacesIndex
+      sqliteStore
+      tallyAmbientEntries",
         "./testing": "__resetSessionRecallHistoryHttp _resetAblationCacheForTests _resetLossAversionRatioCacheForTests _resetSessionRecallHistoryMcpForTests _resetSharedStoreCacheForTests",
       }
     `);

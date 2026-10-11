@@ -8,7 +8,8 @@ import { appendAuditEvent, listAuditEventsAfter, type AuditOp, type QueryAuditOp
 import { createApiKey } from '../src/store/auth.js';
 import { _resetSharedStoreCacheForTests, markSharedStore } from '../src/core/config.js';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
-import { serve, type AuditEvent, type HippoStore, type KeysetPosition } from '../src/server.js';
+import { serve } from '../src/server.js';
+import { type AuditEvent, type HippoStore, type KeysetPosition } from '../src/entry/store-kit.js';
 import { inMemoryAuditLogStore } from './_helpers/in-memory-audit-log-store.js';
 import { CLEARED_ENV } from './_helpers/recall-golden-seed.js';
 import { onBothStores, seedTwoTenants, TENANT_A, TENANT_B, type GroupCall, type TwoTenantFixture } from './_helpers/store-conformance.js';
