@@ -12,10 +12,10 @@ import { repairProjectNames } from '../src/api/projects.js';
 import { cliApiContext } from '../src/cli/api-context.js';
 import type { ImportReport } from '../src/agent-memories/report.js';
 import { createMemory, type MemoryEntry } from '../src/core/memory.js';
-import { deriveOriginProject } from '../src/core/project-identity.js';
+import { deriveOriginProject, isInitialized } from '../src/core/project-identity.js';
 import { autoShare } from '../src/sharing/share.js';
 import { syncGlobalToLocal } from '../src/sharing/global-sync.js';
-import { initStore, isInitialized } from '../src/store/open.js';
+import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import {

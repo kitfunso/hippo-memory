@@ -1,7 +1,6 @@
 {
   "src/api/recall-core.ts": 1,
   "src/api/sleep-run.ts": 1,
-  "src/cli/shared.ts": 1,
   "src/cli.ts": 1,
   "src/consolidate/llm-passes.ts": 4,
   "src/consolidate/merge.ts": 1,

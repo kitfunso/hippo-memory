@@ -82,13 +82,13 @@ async function cmdSleepCore(
   } else if (learn) {
     const config = loadConfig(hippoRoot);
     if (config.autoLearnOnSleep && isGitRepo(process.cwd())) {
-      const { added } = learnFromRepo(hippoRoot, process.cwd(), 1);
+      const { added } = learnFromRepo(hippoRoot, tenantId, process.cwd(), 1);
       if (added > 0) console.log(`Auto-learned ${added} lessons from today's git commits.`);
     }
 
     // Opt-in code-churn staleness, off by default (config.churnStaleness.enabled).
     if (config.churnStaleness.enabled && isGitRepo(process.cwd())) {
-      for (const { root, result } of runChurnStaleForRepo(hippoRoot, false)) {
+      for (const { root, result } of runChurnStaleForRepo(hippoRoot, tenantId, false)) {
         if (result.marked > 0) console.log(`Tagged ${result.marked} memories churn-stale in ${root}.`);
         if (result.error) printError(`Churn-staleness check failed for ${root}: ${result.error}`);
       }
@@ -102,7 +102,7 @@ async function cmdSleepCore(
     const finished = replayCompactionsAt(hippoRoot, (message) => log.warn(`compaction replay: ${message}`));
     if (finished > 0) console.log(`Finished saving ${finished} compaction${finished === 1 ? '' : 's'} left over from earlier sessions.`);
     repairProjectTagsOnce(hippoRoot, tenantId);
-    repairQualityOnceAt(hippoRoot);
+    repairQualityOnceAt(hippoRoot, tenantId);
   }
 
   // Phase 2-6: Pure-storage pipeline (consolidate + dedup + audit + share + ambient).

@@ -1,15 +1,23 @@
 // Where-you-left-off verbs: snapshot, session, handoff, current and working memory.
 
 import {
-  saveActiveTaskSnapshot,
-  loadActiveTaskSnapshot,
-  clearActiveTaskSnapshot,
-  appendSessionEvent,
-  listSessionEvents,
-} from '../store/sessions.js';
-import { saveSessionHandoff, loadLatestHandoff, loadHandoffById, stampHandoffOutcome } from '../store/handoffs.js';
+  snapshotSave as apiSnapshotSave,
+  snapshotClear as apiSnapshotClear,
+  snapshotLoad,
+  sessionEventAppend,
+  sessionEventList,
+  continuityLatest,
+  handoffStampOutcome,
+  handoffSave,
+  handoffLatest as apiHandoffLatest,
+  handoffById,
+  workingMemoryPush,
+  workingMemoryRead,
+  workingMemoryClear,
+  workingMemoryFlush,
+} from '../api/continuity.js';
+import { cliApiContext } from './api-context.js';
 import { isHandoffOutcome, formatHandoffEvidenceLine, type HandoffOutcome } from '../core/handoff.js';
-import { wmPush, wmRead, wmClear, wmFlush } from '../store/working-memory.js';
 import { collectHandoffEvidence } from '../capture/handoff-evidence.js';
 import type { SessionEvent, TaskSnapshot } from '../store/rows.js';
 import { printError } from './output.js';
@@ -31,7 +39,7 @@ function snapshotSave(hippoRoot: string, tenantId: string, flags: CliFlags): voi
     throw new CliExit(1);
   }
 
-  const snapshot = saveActiveTaskSnapshot(hippoRoot, tenantId, {
+  const snapshot = apiSnapshotSave(cliApiContext(hippoRoot, tenantId), {
     task,
     summary,
     next_step: nextStep,
@@ -48,7 +56,7 @@ function snapshotSave(hippoRoot: string, tenantId: string, flags: CliFlags): voi
 }
 
 function snapshotClear(hippoRoot: string, tenantId: string, flags: CliFlags): void {
-  const cleared = clearActiveTaskSnapshot(hippoRoot, tenantId, String(flags['status'] ?? 'cleared'));
+  const cleared = apiSnapshotClear(cliApiContext(hippoRoot, tenantId), String(flags['status'] ?? 'cleared'));
   if (!cleared) {
     console.log('No active task snapshot to clear.');
     return;
@@ -57,7 +65,7 @@ function snapshotClear(hippoRoot: string, tenantId: string, flags: CliFlags): vo
 }
 
 function snapshotShow(hippoRoot: string, tenantId: string, flags: CliFlags): void {
-  const snapshot = loadActiveTaskSnapshot(hippoRoot, tenantId);
+  const snapshot = snapshotLoad(cliApiContext(hippoRoot, tenantId));
   if (!snapshot) {
     if (flags['json']) {
       console.log(JSON.stringify({ snapshot: null }));
@@ -105,7 +113,7 @@ function sessionLog(hippoRoot: string, tenantId: string, s: SessionArgs, flags: 
     throw new CliExit(1);
   }
 
-  const event = appendSessionEvent(hippoRoot, tenantId, {
+  const event = sessionEventAppend(cliApiContext(hippoRoot, tenantId), {
     session_id: s.sessionId,
     task: s.task || null,
     event_type: eventType || 'note',
@@ -119,7 +127,7 @@ function sessionLog(hippoRoot: string, tenantId: string, s: SessionArgs, flags: 
 }
 
 function sessionShow(hippoRoot: string, tenantId: string, s: SessionArgs, flags: CliFlags): void {
-  const events = listSessionEvents(hippoRoot, tenantId, {
+  const events = sessionEventList(cliApiContext(hippoRoot, tenantId), {
     session_id: s.sessionId || undefined,
     task: s.task || undefined,
     limit: s.limit,
@@ -134,9 +142,8 @@ function sessionShow(hippoRoot: string, tenantId: string, s: SessionArgs, flags:
 }
 
 function sessionLatest(hippoRoot: string, tenantId: string, s: SessionArgs, flags: CliFlags): void {
-  const snapshot = loadActiveTaskSnapshot(hippoRoot, tenantId);
-  const events = listSessionEvents(hippoRoot, tenantId, {
-    session_id: s.sessionId || snapshot?.session_id || undefined,
+  const { snapshot, events } = continuityLatest(cliApiContext(hippoRoot, tenantId), {
+    sessionId: s.sessionId,
     limit: s.limit,
   });
 
@@ -177,7 +184,7 @@ function sessionComplete(hippoRoot: string, tenantId: string, s: SessionArgs, fl
   const metadata: SessionCompleteMetadata = { ended_at: new Date().toISOString() };
   if (summary) metadata.summary = summary;
 
-  const event = appendSessionEvent(hippoRoot, tenantId, {
+  const event = sessionEventAppend(cliApiContext(hippoRoot, tenantId), {
     session_id: sessionId,
     task: task || null,
     event_type: 'session_complete',
@@ -188,7 +195,7 @@ function sessionComplete(hippoRoot: string, tenantId: string, s: SessionArgs, fl
 
   console.log(`Completed session ${event.session_id} with outcome=${outcome} (event #${event.id})`);
 
-  const stamped = stampHandoffOutcome(hippoRoot, tenantId, sessionId, outcome);
+  const stamped = handoffStampOutcome(cliApiContext(hippoRoot, tenantId), sessionId, outcome);
   if (stamped > 0) {
     console.log(`Stamped outcome on handoff for session ${sessionId}`);
   }
@@ -214,7 +221,7 @@ export function handleSession({ hippoRoot, tenantId, args, flags }: CommandConte
 }
 
 function sessionResume(hippoRoot: string, tenantId: string, sessionId: string): void {
-  const handoff = loadLatestHandoff(hippoRoot, tenantId, sessionId || undefined);
+  const handoff = apiHandoffLatest(cliApiContext(hippoRoot, tenantId), sessionId || undefined);
   if (!handoff) {
     console.log('No handoff to resume from.');
     return;
@@ -292,7 +299,7 @@ function handoffCreate(hippoRoot: string, tenantId: string, flags: CliFlags): vo
     testStatus === 'pass' || testStatus === 'fail' ? testStatus : 'unknown',
   );
 
-  const handoff = saveSessionHandoff(hippoRoot, tenantId, {
+  const handoff = handoffSave(cliApiContext(hippoRoot, tenantId), {
     version: 1,
     sessionId,
     repoRoot: process.cwd(),
@@ -310,7 +317,7 @@ function handoffCreate(hippoRoot: string, tenantId: string, flags: CliFlags): vo
   printCreatedHandoff(handoff);
 }
 
-function printCreatedHandoff(handoff: ReturnType<typeof saveSessionHandoff>): void {
+function printCreatedHandoff(handoff: ReturnType<typeof handoffSave>): void {
   console.log(`Created session handoff for session ${handoff.sessionId}`);
   console.log(`   Summary: ${handoff.summary}`);
   if (handoff.nextAction) console.log(`   Next: ${handoff.nextAction}`);
@@ -328,7 +335,7 @@ function printCreatedHandoff(handoff: ReturnType<typeof saveSessionHandoff>): vo
 
 function handoffLatest(hippoRoot: string, tenantId: string, flags: CliFlags): void {
   const sessionId = String(flags['session'] ?? flags['id'] ?? '').trim() || undefined;
-  const handoff = loadLatestHandoff(hippoRoot, tenantId, sessionId);
+  const handoff = apiHandoffLatest(cliApiContext(hippoRoot, tenantId), sessionId);
 
   if (!handoff) {
     if (flags['json']) {
@@ -360,7 +367,7 @@ function handoffShow(hippoRoot: string, tenantId: string, args: string[], flags:
     throw new CliExit(1);
   }
 
-  const handoff = loadHandoffById(hippoRoot, tenantId, handoffId);
+  const handoff = handoffById(cliApiContext(hippoRoot, tenantId), handoffId);
 
   if (!handoff) {
     if (flags['json']) {
@@ -418,12 +425,7 @@ function printCurrentState(snapshot: TaskSnapshot | null, events: SessionEvent[]
 
 function currentShow(hippoRoot: string, tenantId: string, flags: CliFlags): void {
   const asJson = boolFlag(flags, 'json');
-  const snapshot = loadActiveTaskSnapshot(hippoRoot, tenantId);
-  const sessionId = snapshot?.session_id ?? undefined;
-  const events = listSessionEvents(hippoRoot, tenantId, {
-    session_id: sessionId,
-    limit: 5,
-  });
+  const { snapshot, events } = continuityLatest(cliApiContext(hippoRoot, tenantId), { limit: 5 });
 
   if (asJson) {
     console.log(JSON.stringify({
@@ -460,18 +462,18 @@ export function handleCurrent({ hippoRoot, tenantId, args, flags }: CommandConte
 
 // Working Memory
 
-export function handleWm({ hippoRoot, args, flags }: CommandContext): void {
+export function handleWm({ hippoRoot, tenantId, args, flags }: CommandContext): void {
   requireInit(hippoRoot);
 
   const subcommand = args[0] ?? '';
-  if (subcommand === 'push') return wmPushCmd(hippoRoot, flags);
-  if (subcommand === 'read') return wmReadCmd(hippoRoot, flags);
+  if (subcommand === 'push') return wmPushCmd(hippoRoot, tenantId, flags);
+  if (subcommand === 'read') return wmReadCmd(hippoRoot, tenantId, flags);
 
   if (subcommand === 'clear') {
     const scope = flags['scope'] ? String(flags['scope']).trim() : undefined;
     const sessionId = flags['session'] ? String(flags['session']).trim() : undefined;
 
-    const count = wmClear(hippoRoot, { scope, sessionId });
+    const count = workingMemoryClear(cliApiContext(hippoRoot, tenantId), { scope, sessionId });
     console.log(`Cleared ${count} working memory entries.`);
     return;
   }
@@ -480,7 +482,7 @@ export function handleWm({ hippoRoot, args, flags }: CommandContext): void {
     const scope = flags['scope'] ? String(flags['scope']).trim() : undefined;
     const sessionId = flags['session'] ? String(flags['session']).trim() : undefined;
 
-    const count = wmFlush(hippoRoot, { scope, sessionId });
+    const count = workingMemoryFlush(cliApiContext(hippoRoot, tenantId), { scope, sessionId });
     console.log(`Flushed ${count} working memory entries.`);
     return;
   }
@@ -491,7 +493,7 @@ export function handleWm({ hippoRoot, args, flags }: CommandContext): void {
 
 const WM_DEFAULT_IMPORTANCE = 0.5;
 
-function wmPushCmd(hippoRoot: string, flags: CliFlags): void {
+function wmPushCmd(hippoRoot: string, tenantId: string, flags: CliFlags): void {
   const scope = String(flags['scope'] ?? 'default').trim();
   const content = String(flags['content'] ?? '').trim();
   const importance = numberFlag(flags, 'importance') ?? WM_DEFAULT_IMPORTANCE;
@@ -503,7 +505,7 @@ function wmPushCmd(hippoRoot: string, flags: CliFlags): void {
     throw new CliExit(1);
   }
 
-  const id = wmPush(hippoRoot, {
+  const id = workingMemoryPush(cliApiContext(hippoRoot, tenantId), {
     scope,
     content,
     importance,
@@ -514,12 +516,12 @@ function wmPushCmd(hippoRoot: string, flags: CliFlags): void {
   console.log(`Pushed working memory #${id} (scope=${scope}, importance=${importance})`);
 }
 
-function wmReadCmd(hippoRoot: string, flags: CliFlags): void {
+function wmReadCmd(hippoRoot: string, tenantId: string, flags: CliFlags): void {
   const scope = flags['scope'] ? String(flags['scope']).trim() : undefined;
   const sessionId = flags['session'] ? String(flags['session']).trim() : undefined;
   const limit = numberFlag(flags, 'limit') || 20;
 
-  const items = wmRead(hippoRoot, { scope, sessionId, limit });
+  const items = workingMemoryRead(cliApiContext(hippoRoot, tenantId), { scope, sessionId, limit });
 
   if (flags['json']) {
     console.log(JSON.stringify({ items }, null, 2));

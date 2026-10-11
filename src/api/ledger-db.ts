@@ -3,7 +3,8 @@ import { isSqliteBusy, noteStoreBusy, type openHippoDb } from '../db/index.js';
 import { errorFields, errorMessage, log } from '../util/log.js';
 import { getGlobalRoot } from '../sharing/global-store.js';
 import { lastSentOnSurface, recordLedgerTurn, type LedgerTurn } from '../store/ledger-turn.js';
-import { isInitialized, onHandle } from '../store/open.js';
+import { onHandle } from '../store/open.js';
+import { isInitialized } from '../core/project-identity.js';
 import { sqliteSyncStore } from '../store/sqlite/store.js';
 import type { LastSent, TokenSurface, TokenUse } from '../store/token-ledger.js';
 

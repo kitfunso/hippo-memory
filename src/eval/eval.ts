@@ -4,7 +4,7 @@
 import type { MemoryEntry } from '../core/memory.js';
 import { hybridSearch } from '../search/hybrid.js';
 import { searchBothHybrid } from '../sharing/search-both.js';
-import { isInitialized } from '../store/open.js';
+import { isInitialized } from '../core/project-identity.js';
 
 // Generous so metrics are not truncated.
 const DEFAULT_EVAL_BUDGET = 100_000;

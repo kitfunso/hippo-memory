@@ -2,16 +2,13 @@
 
 import { truncateWithEllipsis } from '../util/ellipsize.js';
 import { DEFAULT_LIST_LIMIT } from '../util/limits.js';
-import { loadAllEntries } from '../store/entry-reads.js';
-import { memoriesBackingObjects } from '../store/delete-and-batch.js';
-import { auditMemories, AUDIT_OPS, type AuditEvent, type AuditOp } from '../store/audit.js';
+import { AUDIT_OPS, type AuditEvent, type AuditOp, type AuditResult } from '../store/audit.js';
 import * as api from '../api/index.js';
-import { pruneAuditLog, parseOlderThanFlag } from './audit-prune.js';
+import { parseOlderThanFlag } from './audit-prune.js';
 import { printError } from './output.js';
 import { cliApiContext } from './api-context.js';
 import { type CliFlags, type CommandContext, boolFlag, flagIsTrue, isBooleanFlag, stringFlag } from './flag-values.js';
 import { requireInit, resolveAuthRoot } from './shared.js';
-import { repairAutomaticMemories } from '../store/quality-repair.js';
 import { getGlobalRoot } from '../sharing/global-store.js';
 import { errorMessage } from '../util/log.js';
 import { CliExit } from './exit.js';
@@ -107,7 +104,7 @@ function cmdAuditPrune(hippoRoot: string, ctxTenantId: string, flags: CliFlags):
   const dryRun = flagIsTrue(flags, 'dry-run');
   const asJson = boolFlag(flags, 'json');
 
-  const result = pruneAuditLog(hippoRoot, { olderThanDays, tenantId, dryRun, actor: 'cli' });
+  const result = api.pruneAuditLog(cliApiContext(hippoRoot, tenantId), { olderThanDays, dryRun });
 
   if (asJson) {
     console.log(JSON.stringify(result));
@@ -136,7 +133,7 @@ async function cmdAuditLog(hippoRoot: string, tenantId: string, args: string[], 
 
 function auditRepair(hippoRoot: string, tenantId: string, flags: CliFlags): void {
   const apply = flagIsTrue(flags, 'apply') && flags['dry-run'] !== true;
-  const result = repairAutomaticMemories(flags['global'] ? getGlobalRoot() : hippoRoot, { tenantId, apply });
+  const result = api.repairMemoryQuality(cliApiContext(flags['global'] ? getGlobalRoot() : hippoRoot, tenantId), apply);
   if (flags['json']) {
     console.log(JSON.stringify(result));
     return;
@@ -151,7 +148,7 @@ function auditRepair(hippoRoot: string, tenantId: string, flags: CliFlags): void
   if (!apply) console.log('Preview only. Add --apply to move set-aside memories to dormant storage. Pin a review memory to keep it.');
 }
 
-function fixAuditErrors(hippoRoot: string, tenantId: string, result: ReturnType<typeof auditMemories>, flags: CliFlags): void {
+function fixAuditErrors(hippoRoot: string, tenantId: string, result: AuditResult, flags: CliFlags): void {
   const errors = result.issues.filter(i => i.severity === 'error');
   if (errors.length > 0 && flagIsTrue(flags, 'dry-run')) {
     console.log(`\nWould remove ${errors.length} error-severity memories (dry run, nothing deleted).`);
@@ -177,8 +174,7 @@ export async function handleAudit({ hippoRoot, tenantId, args, flags }: CommandC
     return;
   }
   requireInit(hippoRoot);
-  const entries = loadAllEntries(hippoRoot, tenantId);
-  const result = auditMemories(entries, memoriesBackingObjects(hippoRoot));
+  const result = api.auditMemoryQuality(cliApiContext(hippoRoot, tenantId));
   const shouldFix = boolFlag(flags, 'fix');
 
   if (result.issues.length === 0) {

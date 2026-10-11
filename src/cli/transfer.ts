@@ -2,11 +2,9 @@
 
 import * as path from 'path';
 import * as fs from 'fs';
-import { isInitialized } from '../store/open.js';
-import { loadAllEntries } from '../store/entry-reads.js';
+import { isInitialized } from '../core/project-identity.js';
 import { RejectedValueError } from '../core/api-errors.js';
-import { embedAll } from '../store/embeddings/index.js';
-import { loadEmbeddingIndex } from '../store/vector-index.js';
+import { embedCoverage, embedMissingMemories } from '../api/embeddings.js';
 import { captureError, runWatched } from '../learn/autolearn.js';
 import { currentMachine, importAtSessionEnd, importForStore } from '../agent-memories/sync.js';
 import { detailLines } from '../agent-memories/report.js';
@@ -23,7 +21,7 @@ import { importMarkdown } from '../importers/markdown.js';
 import { importVault } from '../importers/vault.js';
 import { ImportOptions, type ImportResult } from '../importers/core.js';
 import * as api from '../api/index.js';
-import { getMemory } from '../api/memories.js';
+import { getMemory, listMemories } from '../api/memories.js';
 import * as client from './client.js';
 import { cliApiContext } from './api-context.js';
 import { printError } from './output.js';
@@ -87,7 +85,7 @@ async function cmdWatch(command: string, hippoRoot: string, tenantId: string): P
 
 // Learn command
 
-export function handleLearn({ hippoRoot, flags }: CommandContext): void {
+export function handleLearn({ hippoRoot, tenantId, flags }: CommandContext): void {
   requireInit(hippoRoot);
 
   if (!flags['git']) {
@@ -107,14 +105,14 @@ export function handleLearn({ hippoRoot, flags }: CommandContext): void {
 
     for (const repo of repos) {
       const label = path.basename(repo);
-      const { added, skipped } = learnFromRepo(hippoRoot, repo, days, label);
+      const { added, skipped } = learnFromRepo(hippoRoot, tenantId, repo, days, label);
       totalAdded += added;
       totalSkipped += skipped;
     }
 
     console.log(`Git learn complete: ${totalAdded} new lessons added, ${totalSkipped} duplicates skipped across ${repos.length} repos.`);
   } else {
-    const { added, skipped } = learnFromRepo(hippoRoot, process.cwd(), days);
+    const { added, skipped } = learnFromRepo(hippoRoot, tenantId, process.cwd(), days);
     console.log(`Git learn complete: ${added} new lessons added, ${skipped} duplicates skipped.`);
   }
 }
@@ -122,15 +120,22 @@ export function handleLearn({ hippoRoot, flags }: CommandContext): void {
 // Import command
 
 /** The rows are saved either way; a failed backfill only delays vectors, so it warns with how many wait and the command that finishes them. */
-function warnBackfillFailed<E>(root: string, embedCommand: string, err: E): void {
+function warnBackfillFailed<E>(ctx: api.Context, embedCommand: string, err: E): void {
   let waiting: string;
   try {
-    const vectors = loadEmbeddingIndex(root);
-    waiting = String(loadAllEntries(root).filter((entry) => !Object.hasOwn(vectors, entry.id)).length);
+    const { memoryIds, vectorIds } = embedCoverage(ctx);
+    const embedded = new Set(vectorIds);
+    waiting = String(memoryIds.filter((id) => !embedded.has(id)).length);
   } catch (countErr) {
     waiting = `an unknown number of (count failed: ${errorMessage(countErr)})`;
   }
   log.warn(`import: embedding backfill failed (${errorMessage(err)}); ${waiting} rows have no vector; run '${embedCommand}' to backfill`);
+}
+
+/** Batch-embed freshly imported rows. The floating promise is deliberate: libuv keeps the process alive until it settles, and awaiting
+ *  would block the CLI on model load; `hippo embed` is the backstop if interrupted. */
+function backfillVectors(ctx: api.Context, embedCommand: string): void {
+  void embedMissingMemories(ctx).catch((err) => warnBackfillFailed(ctx, embedCommand, err));
 }
 
 function warnRedacted(count: number | undefined): void {
@@ -166,7 +171,7 @@ export function handleImport({ hippoRoot, tenantId, args, flags }: CommandContex
   // Vault import is a FOLDER importer that dispatches apart from the single-file slot below; it writes through tenant-scoped api calls,
   // so the tenant is resolved and passed through. --global is unsupported (the connector raw-archive path is tenant-local).
   if (flags['vault']) return importVaultFolder(hippoRoot, tenantId, flags, importOptions, useGlobal, dryRun);
-  importFromFile(targetRoot, args, flags, { importOptions, useGlobal, dryRun });
+  importFromFile(targetRoot, args, flags, { importOptions, useGlobal, dryRun, tenantId });
 }
 
 type FileImporter = (fp: string, opts: ImportOptions) => ReturnType<typeof importChatGPT>;
@@ -193,10 +198,11 @@ interface ImportFromFileOptions {
   readonly importOptions: ImportOptions;
   readonly useGlobal: boolean;
   readonly dryRun: boolean;
+  readonly tenantId: string;
 }
 
 function importFromFile(targetRoot: string, args: string[], flags: CliFlags, options: ImportFromFileOptions): void {
-  const { importOptions, useGlobal, dryRun } = options;
+  const { importOptions, useGlobal, dryRun, tenantId } = options;
   const { filePath, importer, importerName } = pickImporter(args, flags);
 
   if (!filePath || !importer) {
@@ -211,10 +217,9 @@ function importFromFile(targetRoot: string, args: string[], flags: CliFlags, opt
 
   const result = importer(filePath, importOptions);
 
-  // Batch-embed newly imported rows in one pass (the importers' writeEntry sites don't embed). The floating promise is deliberate: libuv keeps the process
-  // alive until it settles; do not await it, that would block the CLI on model load. `hippo embed` is the backstop if interrupted.
+  // The importers' writeEntry sites don't embed, so the new rows are embedded here in one pass.
   if (!dryRun && result.imported >= 1) {
-    void embedAll(targetRoot).catch((err) => warnBackfillFailed(targetRoot, useGlobal ? 'hippo embed --global' : 'hippo embed', err));
+    backfillVectors(cliApiContext(targetRoot, tenantId), useGlobal ? 'hippo embed --global' : 'hippo embed');
   }
 
   const storeLabel = useGlobal ? `global (${getGlobalRoot()})` : targetRoot;
@@ -279,7 +284,7 @@ function importVaultFolder(
     scope: flags['scope'] ? String(flags['scope']) : undefined,
   };
   const vaultResult = importVault(folderPath, vaultOptions);
-  printVaultSummary(vaultResult, folderPath, hippoRoot, dryRun);
+  printVaultSummary(vaultResult, folderPath, cliApiContext(hippoRoot, tenantId), dryRun);
 }
 
 function checkVaultArgs(folderPath: string, flags: CliFlags, useGlobal: boolean): void {
@@ -305,7 +310,7 @@ function checkVaultArgs(folderPath: string, flags: CliFlags, useGlobal: boolean)
   }
 }
 
-function printVaultSummary(vaultResult: ImportResult, folderPath: string, hippoRoot: string, dryRun: boolean): void {
+function printVaultSummary(vaultResult: ImportResult, folderPath: string, ctx: api.Context, dryRun: boolean): void {
   console.log(`\nImport Vault: ${folderPath}${dryRun ? ' (dry run - no writes)' : ''}`);
   console.log(`  Notes found:           ${vaultResult.total}`);
   console.log(`  ${dryRun ? 'Would import:         ' : 'Imported:             '}${vaultResult.imported}`);
@@ -315,12 +320,9 @@ function printVaultSummary(vaultResult: ImportResult, folderPath: string, hippoR
   }
   warnRedacted(vaultResult.redacted);
   console.log(`  ${dryRun ? 'Would archive:        ' : 'Archived (removed):   '}${vaultResult.archived ?? 0}`);
-  console.log(`  Store:                 ${hippoRoot}`);
-  // Batch producer, same contract as the single-file import above: vault rows write through api.remember (which never embeds), so backfill them here.
-  // The floating promise is deliberate; see the single-file site.
-  if (!dryRun && vaultResult.imported >= 1) {
-    void embedAll(hippoRoot).catch((err) => warnBackfillFailed(hippoRoot, 'hippo embed', err));
-  }
+  console.log(`  Store:                 ${ctx.hippoRoot}`);
+  // Vault rows write through api.remember, which never embeds, so backfill them as the single-file import does.
+  if (!dryRun && vaultResult.imported >= 1) backfillVectors(ctx, 'hippo embed');
 }
 
 // Promote command
@@ -452,7 +454,7 @@ export function handleExport({ hippoRoot, tenantId, args, flags }: CommandContex
   requireInit(hippoRoot);
   const format = String(flags['format'] || 'json');
   const outputPath = args[0] || null;
-  const entries = loadAllEntries(hippoRoot, tenantId);
+  const entries = listMemories(cliApiContext(hippoRoot, tenantId));
 
   let output: string;
   if (format === 'markdown' || format === 'md') {

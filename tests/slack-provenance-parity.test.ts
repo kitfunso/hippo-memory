@@ -16,7 +16,7 @@ import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { ingestMessage } from '../src/connectors/slack/ingest.js';
-import { buildProvenanceCoverage } from '../src/cli/provenance-coverage.js';
+import { buildProvenanceCoverage } from '../src/api/provenance-coverage.js';
 import type { ChannelMeta } from '../src/connectors/slack/scope.js';
 import type { SlackMessageEvent } from '../src/connectors/slack/types.js';
 import type { Context } from '../src/api/index.js';

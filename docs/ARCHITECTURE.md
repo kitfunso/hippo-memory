@@ -70,6 +70,9 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 
 ### src/api/audit.ts
 - `auditList`: Read-only — no audit emit (matches A5: cmdAuditList does not record a 'recall'-style read event).
+- `pruneAuditLog`: Audit log retention pruning (v1.12.9), moved here from `src/cli/audit-prune.ts`, which keeps only the `--older-than` parser.
+- `pruneAuditLog`: Closes TODOS A5 v2 M6: "Audit log unbounded growth. Add a daily `audit prune` cron + `hippo audit prune --older-than 90d` CLI in v2. Mind regulatory retention floors (HIPAA, SOX, GDPR); the prune should be opt-in per tenant and emit its own audit trail event."
+- `pruneAuditLog` tenant: Required, taken from `ctx.tenantId`; prune is always tenant-scoped per the A5 v2 design.
 
 ### src/api/auth.ts
 - `AuthCreateOpts.role`: v1.12.3: authorization role for the new key. Defaults to `'admin'` for back-compat with v1.12.0-v1.12.2 (the api_keys.role column DEFAULT also resolves to 'admin' if omitted from the INSERT).
@@ -163,11 +166,6 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 ### src/api/types.ts
 - `Actor`: Actor identity + authorization role for a Context. v1.12.0 A5 v2 sub-1. Before v1.12.0, Context.actor was a bare string. v1.12.0 promotes it to an object carrying both the audit-log subject (formerly the string itself) and a role for /v1/sleep admin gating. Audit helpers continue accepting `string` — callers pass `ctx.actor.subject`.
 - `Actor.scopes`: EI2: restricted scopes a member key may read (auth.ts grantScope). Unused for admin actors.
-
-### src/cli/audit-prune.ts
-- (module header): Audit log retention pruning (v1.12.9).
-- (module header): Closes TODOS A5 v2 M6: "Audit log unbounded growth. Add a daily `audit prune` cron + `hippo audit prune --older-than 90d` CLI in v2. Mind regulatory retention floors (HIPAA, SOX, GDPR) — the prune should be opt-in per tenant and emit its own audit trail event."
-- `PruneAuditOpts.tenantId`: Tenant scope. Required — prune is always tenant-scoped per the A5 v2 design.
 
 ### src/store/audit.ts
 - `audit log primitives` (section banner): A5 audit log primitives (append-only mutation trail)

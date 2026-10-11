@@ -6,7 +6,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { execFileSync, spawnSync } from 'child_process';
 import { fileURLToPath } from 'url';
-import { getHippoRoot, initStore, isInitialized } from '../src/store/open.js';
+import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { readEntry } from '../src/store/entry-reads.js';
 import { loadIndex } from '../src/store/index-and-stats.js';
@@ -16,7 +16,7 @@ import { createMemory } from './_helpers/default-half-life-memory.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { queryAuditEvents } from '../src/store/audit.js';
 import { adminActor, retrieve } from '../src/api/index.js';
-import { findHippoStoreDir } from '../src/core/project-identity.js';
+import { findHippoStoreDir, getHippoRoot, isInitialized } from '../src/core/project-identity.js';
 import { findHippoRoot } from '../src/mcp/server.js';
 
 const repoRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));

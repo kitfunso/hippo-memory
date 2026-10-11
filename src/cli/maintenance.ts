@@ -1,11 +1,12 @@
 // Store upkeep verbs: `hippo refine`, `hippo dedup` and `hippo embed`.
 
 import { envAnthropicApiKey } from '../util/env.js';
-import { loadAllEntries, loadAllEntryIds } from '../store/entry-reads.js';
 import { deduplicateStore } from '../consolidate/dedupe.js';
-import { embedAll } from '../store/embeddings/index.js';
 import { resolveEmbeddingProvider, type EmbeddingProvider } from '../embeddings/provider.js';
-import { loadEmbeddingIndex, resetStoredParticles } from '../store/vector-index.js';
+import { embedCoverage, embedMissingMemories, resetPhysicsFromVectors, storedVectorCount } from '../api/embeddings.js';
+import { listMemories } from '../api/memories.js';
+import { cliApiContext } from './api-context.js';
+import type * as api from '../api/index.js';
 import { loadConfig } from '../core/config.js';
 import { refineStore } from './refine-llm.js';
 import { printError } from './output.js';
@@ -59,7 +60,7 @@ export async function handleRefine({ hippoRoot, tenantId, flags }: CommandContex
   }
 }
 
-export function handleDedup({ hippoRoot, flags }: CommandContext): void {
+export function handleDedup({ hippoRoot, tenantId, flags }: CommandContext): void {
   requireInit(hippoRoot);
 
   const dryRun = boolFlag(flags, 'dry-run');
@@ -67,7 +68,7 @@ export function handleDedup({ hippoRoot, flags }: CommandContext): void {
     printError('hippo dedup: --threshold is ignored; a duplicate is the same text apart from spacing.');
   }
 
-  const entries = loadAllEntries(hippoRoot);
+  const entries = listMemories(cliApiContext(hippoRoot, tenantId), { everyTenant: true });
   console.log(`Scanning ${entries.length} memories for duplicates (same text apart from spacing)${dryRun ? ' (dry run)' : ''}...\n`);
 
   const result = deduplicateStore(hippoRoot, { dryRun });
@@ -123,22 +124,23 @@ function printDedupPairs(result: DedupResult, dryRun: boolean): void {
 // Embed command
 
 export async function handleEmbed(
-  { hippoRoot, flags }: CommandContext,
+  { hippoRoot, tenantId, flags }: CommandContext,
   given?: EmbeddingProvider,
 ): Promise<void> {
   // --global mirrors resolveAuthRoot: initGlobal() + the global root, skipping the local requireInit,
   // so it heals pre-1.27.0 global stores from a directory with no local .hippo.
   const root = resolveAuthRoot(hippoRoot, flags);
+  const ctx = cliApiContext(root, tenantId);
 
   // --status and --reset-physics only read cached state, so they must work with no provider key (e.g. removed after an earlier embed);
   // the provider-availability gate is deferred to the embed path.
   if (flags['reset-physics']) {
-    resetPhysics(root);
+    resetPhysics(ctx);
     return;
   }
 
   if (flags['status']) {
-    printEmbedStatus(root);
+    printEmbedStatus(ctx);
     return;
   }
 
@@ -148,43 +150,41 @@ export async function handleEmbed(
   console.log('Embedding all memories (this may take a moment on first run to download model)...');
   let count: number;
   try {
-    count = await embedAll(root, undefined, provider);
+    count = await embedMissingMemories(ctx, provider);
   } catch (err) {
     printError(`Embedding failed: ${errorMessage(err)}`);
-    const partial = loadEmbeddingIndex(root);
     printError(
-      `Partial progress saved: ${Object.keys(partial).length} embeddings on disk. Re-run \`hippo embed\` to resume.`,
+      `Partial progress saved: ${storedVectorCount(ctx)} embeddings on disk. Re-run \`hippo embed\` to resume.`,
     );
     process.exitCode = 1;
     return;
   }
-  const entriesAfter = loadAllEntries(root);
-  const embIndexAfter = loadEmbeddingIndex(root);
-  console.log(`Done. ${count} new embeddings created. ${Object.keys(embIndexAfter).length}/${entriesAfter.length} total.`);
-  const unembedded = entriesAfter.filter((e) => !embIndexAfter[e.id]).length;
+  const after = embedCoverage(ctx);
+  console.log(`Done. ${count} new embeddings created. ${after.vectorIds.length}/${after.memoryIds.length} total.`);
+  const embeddedAfter = new Set(after.vectorIds);
+  const unembedded = after.memoryIds.filter((id) => !embeddedAfter.has(id)).length;
   if (unembedded > 0) {
     printError(`${unembedded} memories are still not embedded (the warnings above name them). Re-run \`hippo embed\` to retry.`);
     process.exitCode = 1;
   }
 }
 
-function resetPhysics(root: string): void {
-  const embIndex = loadEmbeddingIndex(root);
-  const count = resetStoredParticles(root, loadAllEntryIds(root), embIndex);
+function resetPhysics(ctx: api.Context): void {
+  const count = resetPhysicsFromVectors(ctx);
   console.log(`Reset physics state: ${count} particles re-initialized from embeddings.`);
 }
 
-function printEmbedStatus(root: string): void {
-  const entries = loadAllEntries(root);
-  const embIndex = loadEmbeddingIndex(root);
-  const activeIds = new Set(entries.map((e) => e.id));
-  const activeEmbedded = Object.keys(embIndex).filter((id) => activeIds.has(id)).length;
-  const orphaned = Object.keys(embIndex).length - activeEmbedded;
-  console.log(`Embedding status: ${activeEmbedded}/${entries.length} memories embedded`);
+function printEmbedStatus(ctx: api.Context): void {
+  const { memoryIds, vectorIds } = embedCoverage(ctx);
+  const activeIds = new Set(memoryIds);
+  const activeEmbedded = vectorIds.filter((id) => activeIds.has(id)).length;
+  const orphaned = vectorIds.length - activeEmbedded;
+  console.log(`Embedding status: ${activeEmbedded}/${memoryIds.length} memories embedded`);
   if (orphaned > 0) {
     console.log(`  ${orphaned} orphaned embeddings (run \`hippo embed\` to prune)`);
   }
-  const missing = entries.filter((e) => !embIndex[e.id]);
+  const embedded = new Set(vectorIds);
+  const missing = memoryIds.filter((id) => !embedded.has(id));
   if (missing.length > 0) {
     console.log(`  ${missing.length} memories need embedding (run \`hippo embed\` to embed them)`);
   }

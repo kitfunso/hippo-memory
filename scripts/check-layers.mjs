@@ -2,6 +2,7 @@
 // CI layer gate. A src/ file imports only from its own layer or a lower one (order and the folder and root-file
 // map are in layers.json). Existing upward imports sit in .layers-baseline.json and may go but never grow.
 // A file under src/server/routes/ that names requireGroup or storeFor also fails: routes reach the store through src/api.
+// So does a runtime import from src/cli/** or src/cli.ts into src/store or src/db, unless .cli-store-allowlist.json names it with a reason.
 // Usage: check-layers.mjs [--list] [--update]. --update rewrites the baseline; it refuses to add an edge or raise a number.
 
 import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
@@ -117,6 +118,41 @@ function findRouteStoreReaches(srcDir) {
   return out;
 }
 
+const CLI_ALLOWLIST = '.cli-store-allowlist.json';
+const isCliFile = (file) => file === 'cli.ts' || file.startsWith('cli/');
+const isStoreFile = (file) => file.startsWith('store/') || file.startsWith('db/');
+
+/** Runtime imports from the CLI into src/store or src/db, one per (file, target), as src-relative paths. */
+function findCliStoreImports(srcDir) {
+  const root = resolve(srcDir);
+  const rel = (p) => relative(root, p).replace(/\\/g, '/');
+  const out = new Map();
+  for (const file of tsFiles(root)) {
+    const from = rel(file);
+    if (!isCliFile(from)) continue;
+    for (const { spec, line, kind } of importsOf(readFileSync(file, 'utf8'))) {
+      const target = kind === 'runtime' ? resolveSpecifier(file, spec) : null;
+      const to = target && rel(target);
+      if (to && isStoreFile(to) && !out.has(`${from}\t${to}`)) out.set(`${from}\t${to}`, { file: from, target: to, line });
+    }
+  }
+  return [...out.values()];
+}
+
+/** Problems with the CLI's store imports against the allowlist: unlisted imports, entries with no reason, and stale entries. */
+function cliStoreProblems(srcDir) {
+  const allowed = readJson(CLI_ALLOWLIST, []);
+  const key = (e) => `${e.file}\t${e.target}`;
+  const found = findCliStoreImports(srcDir);
+  const foundKeys = new Set(found.map(key));
+  const allowedKeys = new Set(allowed.map(key));
+  return [
+    ...found.filter((e) => !allowedKeys.has(key(e))).map((e) => `src/${e.file}:${e.line} imports src/${e.target} at runtime; call a src/api function instead`),
+    ...allowed.filter((e) => !String(e.why ?? '').trim()).map((e) => `${CLI_ALLOWLIST}: src/${e.file} -> src/${e.target} gives no reason`),
+    ...allowed.filter((e) => !foundKeys.has(key(e))).map((e) => `${CLI_ALLOWLIST}: src/${e.file} -> src/${e.target} matches no import; delete the entry`),
+  ];
+}
+
 const edgeKey = (e) => `${e.from}\t${e.to}\t${e.kind}`;
 const describe = (e) => `${e.from}:${e.line} -> ${e.to} (${e.layerFrom} -> ${e.layerTo}, ${e.kind === 'typeOnly' ? 'type' : 'runtime'})`;
 
@@ -138,6 +174,13 @@ const routeReaches = findRouteStoreReaches('src');
 if (routeReaches.length > 0 && !args.includes('--update') && !args.includes('--list')) {
   console.error('A route handler names requireGroup or storeFor; call a src/api function that takes the Context instead:');
   for (const r of routeReaches) console.error(`  ${r}`);
+  process.exit(1);
+}
+
+const cliProblems = cliStoreProblems('src');
+if (cliProblems.length > 0 && !args.includes('--list')) {
+  console.error('The CLI reaches the store past src/api:');
+  for (const p of cliProblems) console.error(`  ${p}`);
   process.exit(1);
 }
 

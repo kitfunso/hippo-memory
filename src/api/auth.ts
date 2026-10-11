@@ -2,8 +2,8 @@
 
 import { BadRequestError, ForbiddenError, NotFoundError } from '../core/api-errors.js';
 import {
-  DEFAULT_KEY_TTL_DAYS, mintApiKey,
-  type ApiKeyListRow, type ApiKeyRecord, type ListApiKeysOpts, type NewApiKey,
+  DEFAULT_KEY_TTL_DAYS, listApiKeys, mintApiKey,
+  type ApiKeyListItem, type ApiKeyListRow, type ApiKeyRecord, type ListApiKeysOpts, type NewApiKey,
 } from '../store/auth.js';
 import type { KeysetPosition } from '../util/keyset.js';
 import { storeFor, type KeyMint, type SelfKeyMint } from '../store/index.js';
@@ -11,7 +11,7 @@ import { changeScopeGrant } from '../store/sqlite/local.js';
 import type { ApiKeyOwner } from '../store/tenant-lookup.js';
 import { DAY_MS } from '../util/time.js';
 import { andThen, notPorted, onStore, type Reply, type StorePort } from './on-store.js';
-import type { Actor, Context, StoreReply } from './types.js';
+import { requireHostAdmin, type Actor, type Context, type StoreReply } from './types.js';
 
 const API_KEY_SUBJECT = 'api_key:';
 
@@ -166,6 +166,12 @@ type KeyListOpts = { active: boolean; limit?: number; after?: KeysetPosition };
 /** One page of the caller's tenant's keys, newest first, with the row ids a next-page cursor is built from. */
 export function authListRows<C extends Context>(ctx: C, opts: KeyListOpts): StoreReply<C, ApiKeyListRow[]> {
   return onStore(ctx, (port) => listRows(ctx, port, opts));
+}
+
+/** Every tenant's keys in the store, live ones only unless `active` is false; the host's own view, so the host admin only. */
+export function authListAllTenants(ctx: Context, active: boolean): ApiKeyListItem[] {
+  requireHostAdmin(ctx, "Listing every tenant's keys");
+  return listApiKeys(ctx.hippoRoot, { active });
 }
 
 function listRows(ctx: Context, port: StorePort, opts: KeyListOpts): Reply<ApiKeyListRow[]> {

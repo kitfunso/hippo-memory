@@ -14,6 +14,8 @@ const ROUTE_CALLS = ["import { requireGroup } from '../../x.js';", "export const
 const ROUTE_CLEAN = ['// not requireGroup', "import { graphRows } from '../../api/graph.js';", 'export const r = graphRows;', ''].join('\n');
 const ROUTE_MAP = { order: ['low', 'high'], folders: { sub: 'high', server: 'high' }, rootFiles: { 'a.ts': 'low', 'b.ts': 'high' } };
 const NO_EDGES = { runtime: 0, typeOnly: 0, rootFiles: 2, edges: [] };
+const CLI_MAP = { order: ['low', 'high'], folders: { sub: 'high', cli: 'high', store: 'low' }, rootFiles: { 'a.ts': 'low', 'b.ts': 'high' } };
+const CLI_BASE = { 'src/a.ts': '', 'src/b.ts': '', 'src/store/s.ts': 'export const s = 1;\nexport type S = 1;\n' };
 
 type Row = {
   name: string;
@@ -77,6 +79,38 @@ const rows: Row[] = [
     map: ROUTE_MAP,
     status: 0,
     output: ['Layer ratchet OK'],
+  },
+  {
+    name: 'a CLI runtime import of the store fails with file:line',
+    files: { ...CLI_BASE, 'src/cli/v.ts': "export const v = 1;\nimport { s } from '../store/s.js';\n" },
+    map: CLI_MAP,
+    status: 1,
+    output: ['src/cli/v.ts:2 imports src/store/s.ts at runtime'],
+  },
+  {
+    name: 'a CLI type-only import of the store passes',
+    files: { ...CLI_BASE, 'src/cli/v.ts': "import type { S } from '../store/s.js';\nexport type V = S;\n" },
+    map: CLI_MAP,
+    status: 0,
+    output: ['Layer ratchet OK'],
+  },
+  {
+    name: 'an allowlisted CLI store import with a reason passes',
+    files: { ...CLI_BASE, 'src/cli/v.ts': "import { s } from '../store/s.js';\n", '.cli-store-allowlist.json': JSON.stringify([{ file: 'cli/v.ts', target: 'store/s.ts', why: 'a constant' }]) },
+    map: CLI_MAP,
+    status: 0,
+    output: ['Layer ratchet OK'],
+  },
+  {
+    name: 'an allowlist entry with no reason or no matching import fails',
+    files: {
+      ...CLI_BASE,
+      'src/cli/v.ts': "import { s } from '../store/s.js';\n",
+      '.cli-store-allowlist.json': JSON.stringify([{ file: 'cli/v.ts', target: 'store/s.ts', why: ' ' }, { file: 'cli/w.ts', target: 'store/s.ts', why: 'gone' }]),
+    },
+    map: CLI_MAP,
+    status: 1,
+    output: ['src/cli/v.ts -> src/store/s.ts gives no reason', 'src/cli/w.ts -> src/store/s.ts matches no import'],
   },
 ];
 

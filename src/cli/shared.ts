@@ -1,44 +1,19 @@
-// Store and server helpers the CLI verbs share: audit events, init checks, server routing, git learning and the auth root.
+// Store and server helpers the CLI verbs share: init checks, server routing, git learning and the auth root.
 // This module must never import cli.ts.
 
 import { envApiKey, envRequireServer } from '../util/env.js';
 import { execFileSync } from 'child_process';
 import { isSharedStore } from '../core/config.js';
-import { isInitialized } from '../store/open.js';
 import { type ChurnStaleResult, detectChurnStale } from '../learn/invalidation.js';
-import { resolveProjectIdentity } from '../core/project-identity.js';
+import { resolveProjectIdentity, isInitialized } from '../core/project-identity.js';
 import { getGlobalRoot, initGlobal } from '../sharing/global-store.js';
-import { type AuditOp, reportAuditWriteFailure } from '../store/audit.js';
-import { sqliteSyncStore } from '../store/sqlite/store.js';
 import * as client from './client.js';
 import { type ServerInfo, detectServer, removePidfileIfOwned } from '../server/server-detect.js';
-import { resolveTenantId } from '../store/tenant.js';
-import { type Context, adminActor, learn, CLI_LEARN } from '../api/index.js';
+import { learn, CLI_LEARN } from '../api/index.js';
+import { cliApiContext } from './api-context.js';
 import { errorMessage, log } from '../util/log.js';
 import { printError } from './output.js';
-import type { JsonObject } from '../store/working-memory.js';
 import type { CliFlags } from './flag-values.js';
-
-/** Emit an audit event on its own short-lived connection to `hippoRoot`'s db; swallows all errors, since audit must never crash a CLI command. */
-export function emitCliAudit(
-  hippoRoot: string,
-  op: AuditOp,
-  targetId?: string,
-  metadata?: JsonObject,
-): void {
-  try {
-    sqliteSyncStore(hippoRoot).appendAuditEvents([{
-      tenantId: resolveTenantId({}),
-      actor: 'cli',
-      op,
-      targetId,
-      metadata,
-    }]);
-  } catch (error) {
-    // Best effort: the command already did its work.
-    reportAuditWriteFailure(op, String(error), targetId);
-  }
-}
 
 export function requireInit(hippoRoot: string): void {
   if (!isInitialized(hippoRoot)) {
@@ -48,12 +23,11 @@ export function requireInit(hippoRoot: string): void {
 }
 
 /** Runs detectChurnStale against every store this repo's memories can live in. */
-export function runChurnStaleForRepo(hippoRoot: string, dryRun: boolean): { root: string; result: ChurnStaleResult }[] {
+export function runChurnStaleForRepo(hippoRoot: string, tenantId: string, dryRun: boolean): { root: string; result: ChurnStaleResult }[] {
   const repoRoot = execFileSync('git', ['rev-parse', '--show-toplevel'], { cwd: process.cwd(), encoding: 'utf8', timeout: 10_000, windowsHide: true }).trim();
   const { name: projectName, legacyName } = resolveProjectIdentity(process.cwd());
   const globalRoot = getGlobalRoot();
   const roots = globalRoot !== hippoRoot && isInitialized(globalRoot) ? [hippoRoot, globalRoot] : [hippoRoot];
-  const tenantId = resolveTenantId({});
   return roots.map((root) => {
     // One store failing must not abort sleep's later phases or skip the other store.
     try {
@@ -128,13 +102,13 @@ interface LearnFromRepoResult {
 
 export function learnFromRepo(
   hippoRoot: string,
+  tenantId: string,
   repoPath: string,
   days: number,
   label?: string
 ): LearnFromRepoResult {
   const prefix = label ? `[${label}] ` : '';
-  const ctx: Context = { hippoRoot, tenantId: resolveTenantId({}), actor: adminActor('cli') };
-  const result = learn(ctx, { repoPath, days, profile: CLI_LEARN });
+  const result = learn(cliApiContext(hippoRoot, tenantId), { repoPath, days, profile: CLI_LEARN });
   if (result.status === 'not-a-repo') {
     console.log(`${prefix}No git history found (or not a git repository).`);
     return { added: 0, skipped: 0, lowInfo: 0 };

@@ -6,27 +6,12 @@ import { spawn } from 'child_process';
 import { resolveCodexSessionTranscript } from '../hooks/codex-session.js';
 import { resolveCodexWrapperPaths, type CodexWrapperMetadata } from '../hooks/codex-wrapper.js';
 import { resolveJsonHookPaths } from '../hooks/json-hooks.js';
-import type { SessionEvent } from '../store/rows.js';
-import { isInitialized } from '../store/open.js';
-import {
-  loadActiveTaskSnapshot,
-  loadFreshActiveTaskSnapshot,
-  closeTaskSnapshotsForSession,
-  listSessionEvents,
-} from '../store/sessions.js';
-import { writeSessionEndHandoff } from '../store/handoffs.js';
 import { readSessionScan, recordSessionDigest } from '../capture/session-digest.js';
 import { captureToolFailure } from '../capture/capture-error.js';
-import {
-  readApiCalls,
-  recordRereads,
-  type TranscriptCalls,
-} from '../store/token-ledger.js';
 import { estimateTokens } from '../util/token-text.js';
 import { currentMachine, importSessionFolder } from '../agent-memories/sync.js';
 import { summaryLine } from '../agent-memories/report.js';
-import { resolveProjectIdentity } from '../core/project-identity.js';
-import { getGlobalRoot } from '../sharing/global-store.js';
+import { resolveProjectIdentity, isInitialized } from '../core/project-identity.js';
 import { cmdCapture, CaptureOptions } from '../capture/command.js';
 import { cmdPreCompact, cmdPostCompact } from '../capture/compact.js';
 import { transcriptWorkingState } from '../capture/working-state.js';
@@ -37,21 +22,21 @@ import { loadTurnPosition, runSessionWorker, saveTurnPosition, turnsAfter, type 
 import { isStringValue, readSessionEnd, readVscodeStop, type CaptureInput, type HookRuntime } from '../core/capture-contract.js';
 import { loadConfig } from '../core/config.js';
 import { autoSleepDue } from '../api/auto-sleep.js';
-import { truncateCodePointSafe } from '../util/transcript-tail.js';
 import { COMPACTION_DB_WAIT_MS } from '../core/compaction-timing.js';
-import { COMPACT_RESUME_EVENT_CONTENT_CAP, COMPACT_RESUME_MAX_AGE_MS, compactResumeText } from '../api/context-render.js';
+import { bookSessionRereads, closeEndedSession, compactResumeBlock } from '../api/session-end.js';
 import { normaliseHookPayload, readHookStdin, readStdinBounded, type BoundedStdin } from './stdin.js';
 import { errorMessage, log } from '../util/log.js';
 import { bookLedgerTurn } from '../api/ledger-db.js';
-import { flushDeliveryRecorder } from '../api/prompt-hook.js';
+import { flushDeliveryRecorder, startDeliveryRecorder } from '../api/prompt-hook.js';
 import type { DeliveryRecorder } from '../store/delivery-recorder.js';
 import { printError } from './output.js';
 import { cmdLastSleep } from './last-sleep.js';
 import { readCompactResumePayload } from './compact-resume-payload.js';
+import { cliApiContext } from './api-context.js';
 import { type CliFlags, type CommandContext, boolFlag, flagIsTrue, stringFlag } from './flag-values.js';
 import {
   logSessionEndImport, appendSessionEndCloseLog, reportSessionEndFailure, resetHookInjection, hookStoreRoot, hookRuntime,
-  payloadCwdRoot, runHookWithStores, inPilotHoldout, startDeliveryRecorder,
+  payloadCwdRoot, runHookWithStores, inPilotHoldout, hostSessionId,
 } from './hook-runtime.js';
 import type { JsonValue } from '../util/json.js';
 import { CliExit } from './exit.js';
@@ -71,7 +56,11 @@ function cmdCompactResume(hippoRoot: string, tenantId: string, stdinText: string
     let suppressOutput = payloadState.suppressOutput;
     const payloadSessionId = payloadState.payloadSessionId;
 
-    if (payloadState.boundary) rec = startDeliveryRecorder(hippoRoot, stdinText, 'claude-code', 'compact-resume');
+    if (payloadState.boundary) {
+      rec = startDeliveryRecorder(cliApiContext(hippoRoot, tenantId), {
+        stdinText, runtime: 'claude-code', eventType: 'compact-resume', envSessionId: hostSessionId(),
+      });
+    }
 
     // A compaction follows a prompt or SessionStart that booked the arm, so this only reads it.
     if (!suppressOutput && payloadSessionId !== null && inPilotHoldout(hippoRoot, tenantId, payloadSessionId, false)) {
@@ -91,32 +80,12 @@ function cmdCompactResume(hippoRoot: string, tenantId: string, stdinText: string
 }
 
 function restoreCompactSnapshot(hippoRoot: string, tenantId: string, payloadSessionId: string | null, rec: DeliveryRecorder | null): void {
-  const snapshot = loadFreshActiveTaskSnapshot(hippoRoot, tenantId, { maxAgeMs: COMPACT_RESUME_MAX_AGE_MS });
-  // Concurrent sessions must not cross-restore. Only suppress when BOTH ids are present and differ;
-  // either side missing, or a manual invocation with no payload session_id, still prints.
-  const sessionMismatch =
-    !!snapshot &&
-    payloadSessionId !== null &&
-    snapshot.session_id !== null &&
-    payloadSessionId !== snapshot.session_id;
-
-  if (!snapshot || sessionMismatch) return;
-  // Loaded before the print so a bad trail row costs the trail, not the snapshot; stderr stays out of the model's context.
-  let events: SessionEvent[] = [];
-  try {
-    if (snapshot.session_id) {
-      events = listSessionEvents(hippoRoot, tenantId, { session_id: snapshot.session_id }).map((e) => ({
-        ...e,
-        content: truncateCodePointSafe(e.content, COMPACT_RESUME_EVENT_CONTENT_CAP),
-      }));
-    }
-  } catch (err) {
-    log.warn(`hippo compact-resume: trail skipped: ${errorMessage(err)}`);
-  }
+  const text = compactResumeBlock(cliApiContext(hippoRoot, tenantId), payloadSessionId);
+  if (text === null) return;
   // Printed in one write so the ledger books exactly the text the model is handed.
-  const text = compactResumeText(snapshot, events);
   console.log(text);
-  rec?.delivered({ state: 'sent', emittedText: `${text}\n` });
+  rec?.delivered({ state: 'sent', emittedText: `${text}
+` });
   bookLedgerTurn(hippoRoot, {
     uses: [{
       tenantId, sessionId: payloadSessionId, surface: 'compact_resume', event: 'inject', items: 1, tokens: estimateTokens(text),
@@ -143,7 +112,9 @@ export async function handleSessionEnd({ hippoRoot, tenantId, flags }: CommandCo
   const root = payloadCwdRoot(hippoRoot, stdinText, runtime);
   const input = stop ?? sessionEndInput(stdinText, raw.timedOut, runtime);
   // Only a host payload ends a session: a manual run and a reply's end (turn mode) are not boundaries.
-  const rec = !turn && input !== null && !input.manual ? startDeliveryRecorder(hookStoreRoot(root), stdinText, runtime, 'session-end') : null;
+  const rec = !turn && input !== null && !input.manual
+    ? startDeliveryRecorder(cliApiContext(hookStoreRoot(root), tenantId), { stdinText, runtime, eventType: 'session-end', envSessionId: hostSessionId() })
+    : null;
   const sessionId = input?.sessionId ?? null;
   // Resolved here because only this process saw the payload; the worker captures just the path it is handed.
   // Always a hook, so never scan: an empty stdin here is not a manual run. The Copilot CLI's sessionEnd names no transcript, so its log is found by id.
@@ -226,7 +197,7 @@ async function sessionEndWork(
   const transcriptPath = stringFlag(flags, 'transcript');
   const closeLogFile = stringFlag(flags, 'log-file') ?? null;
   const closeSessionId = stringFlag(flags, 'session-id') ?? null;
-  const rereadLog = await bookSessionRereads(hippoRoot, tenantId, transcriptPath, closeSessionId)
+  const rereadLog = await bookSessionRereads(cliApiContext(hippoRoot, tenantId), transcriptPath, closeSessionId)
     .catch((err) => [`re-read count failed: ${errorMessage(err)}`]);
   // Sleep starts the log file afresh, so the lines go in after it; on exit too, in case sleep exits the process.
   const flushRereadLog = (): void => { for (const line of rereadLog.splice(0)) appendSessionEndCloseLog(closeLogFile, line); };
@@ -252,28 +223,15 @@ async function sessionEndWork(
     log: digestLog,
   });
 
-  // Close only this session's snapshot, after sleep+capture; if session-end never fires (crash, kill -9) the freshness bound in
-  // loadFreshActiveTaskSnapshot is the backstop. The handoff is written first, while the snapshot writeSessionEndHandoff reads is active.
-  if (closeSessionId) writeEndHandoff(store, tenantId, closeSessionId, transcriptPath, closeLogFile, mode === 'turn');
-  if (mode === 'turn') {
-    // The chat goes on after a reply, so its snapshot stays for the next compaction to restore.
-    appendSessionEndCloseLog(closeLogFile, 'skip snapshot close: turn mode');
-    return;
-  }
-  closeEndedSessionSnapshot(store, tenantId, closeSessionId, closeLogFile);
-}
-
-function closeEndedSessionSnapshot(store: string, tenantId: string, closeSessionId: string | null, closeLogFile: string | null): void {
-  try {
-    if (closeSessionId) {
-      const closed = closeTaskSnapshotsForSession(store, tenantId, closeSessionId);
-      appendSessionEndCloseLog(closeLogFile, `closed ${closed} active snapshot(s) for session ${closeSessionId}`);
-    } else {
-      appendSessionEndCloseLog(closeLogFile, 'skip: no session_id in SessionEnd payload, active snapshot left untouched');
-    }
-  } catch (err) {
-    appendSessionEndCloseLog(closeLogFile, `snapshot close failed: ${errorMessage(err)}`);
-  }
+  // Only this session's snapshot, and only after sleep and capture.
+  const closeLog = (line: string): void => appendSessionEndCloseLog(closeLogFile, line);
+  closeEndedSession(cliApiContext(store, tenantId), {
+    sessionId: closeSessionId,
+    turn: mode === 'turn',
+    workingState: () => (transcriptPath ? transcriptWorkingState(transcriptPath, closeLog) : null),
+    evidence: () => collectHandoffEvidence(process.cwd(), 'unknown'),
+    log: closeLog,
+  });
 }
 
 async function sleepProjectStore(
@@ -374,65 +332,6 @@ function captureEndedSession(
     reportSessionEndFailure(stringFlag(flags, 'log-file') ?? null, 'session-end: capture', err);
     return false;
   }
-}
-
-function writeEndHandoff(
-  store: string,
-  tenantId: string,
-  closeSessionId: string,
-  transcriptPath: string | undefined,
-  closeLogFile: string | null,
-  inPlace = false,
-): void {
-  try {
-    const ownSnapshot = loadActiveTaskSnapshot(store, tenantId)?.session_id === closeSessionId;
-    // A never-compacted session has no snapshot; read even when it has one, as another session's PreCompact can take the slot before the write.
-    const derived = transcriptPath
-      ? transcriptWorkingState(transcriptPath, (message) => appendSessionEndCloseLog(closeLogFile, message))
-      : null;
-    if (!ownSnapshot && !derived) {
-      appendSessionEndCloseLog(closeLogFile, 'skip: no snapshot or transcript for session');
-    } else {
-      const evidence = collectHandoffEvidence(process.cwd(), 'unknown');
-      const handoff = writeSessionEndHandoff(store, tenantId, closeSessionId, evidence, derived, undefined, { inPlace });
-      appendSessionEndCloseLog(
-        closeLogFile,
-        handoff ? `wrote handoff for session ${closeSessionId}` : `skip: kept the existing handoff for session ${closeSessionId}`,
-      );
-    }
-  } catch (err) {
-    // SAFETY: catch clauses bind unknown, but Node/V8 always throws an Error here.
-    appendSessionEndCloseLog(closeLogFile, `handoff write failed: ${errorMessage(err)}`);
-  }
-}
-
-/** Books the ending session's re-reads in each store its ledger rows can land in (project and global); returns the log lines. */
-async function bookSessionRereads(
-  hippoRoot: string,
-  tenantId: string,
-  transcriptPath: string | undefined,
-  sessionId: string | null,
-): Promise<string[]> {
-  if (!transcriptPath || !sessionId) return [];
-  let read: TranscriptCalls;
-  try {
-    read = await readApiCalls(transcriptPath);
-  } catch (err) {
-    return [`skip re-read count: cannot read the transcript: ${errorMessage(err)}`];
-  }
-  const roots = new Set([hippoRoot, getGlobalRoot()].filter((root) => isInitialized(root)).map((root) => path.resolve(root)));
-  const lines: string[] = [];
-  let tokens = 0;
-  for (const root of roots) {
-    try {
-      tokens += recordRereads(root, tenantId, sessionId, read.calls);
-    } catch (err) {
-      lines.push(`re-read count failed: ${errorMessage(err)}`);
-    }
-  }
-  const skipped = read.malformed > 0 ? `, ${read.malformed} unparsable transcript lines skipped` : '';
-  lines.push(`re-read ${tokens} tokens over ${read.calls.length} model calls for session ${sessionId}${skipped}`);
-  return lines;
 }
 
 function loadCodexWrapperMetadata(): CodexWrapperMetadata {
@@ -656,15 +555,17 @@ function captureCodexTranscript(hippoRoot: string, tenantId: string, store: stri
   }
 }
 
-export async function handlePreCompact({ hippoRoot, flags }: CommandContext): Promise<void> {
+export async function handlePreCompact({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
   // Bounded wait, not a TTY guard: an idle non-TTY pipe must not hang.
   const { text: stdinText, timedOut: stdinTimedOut } = await readHookStdin();
   const runtime = hookRuntime(flags);
   const root = payloadCwdRoot(hippoRoot, stdinText, runtime);
   await runHookWithStores(async () => {
     // Started before any store wait, so two fires of one hook carry timestamps close enough to match as duplicates.
-    const rec = startDeliveryRecorder(hookStoreRoot(root), stdinText, runtime, 'pre-compact');
-    resetHookInjection(root, stdinText, null);
+    const rec = startDeliveryRecorder(cliApiContext(hookStoreRoot(root), tenantId), {
+      stdinText, runtime, eventType: 'pre-compact', envSessionId: hostSessionId(),
+    });
+    resetHookInjection(root, tenantId, stdinText, null);
     await cmdPreCompact(hookStoreRoot(root), {
       stdinText,
       stdinTimedOut,
@@ -720,7 +621,7 @@ export async function handleCaptureError({ hippoRoot, tenantId, flags }: Command
 export async function handleCompactResume({ hippoRoot, tenantId }: CommandContext): Promise<void> {
   const { text: stdinText, timedOut: stdinTimedOut } = await readHookStdin();
   await runHookWithStores(() => {
-    resetHookInjection(hippoRoot, stdinText, 'compact');
+    resetHookInjection(hippoRoot, tenantId, stdinText, 'compact');
     cmdCompactResume(hookStoreRoot(hippoRoot), tenantId, stdinText, stdinTimedOut);
   });
 }

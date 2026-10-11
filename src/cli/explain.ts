@@ -1,16 +1,13 @@
 // The `hippo explain` verb; main() loads it lazily from the command table.
 
 import { confidenceFacets } from '../core/memory.js';
-import { isInitialized } from '../store/open.js';
-import { loadSearchEntries } from '../store/search-rows.js';
-import { loadIndex } from '../store/index-and-stats.js';
 import { DEFAULT_RECALL_BUDGET, type SearchResult } from '../core/search-types.js';
 import { loadConfig } from '../core/config.js';
 import { dropHeldCopies } from '../util/same-text.js';
 import { detectScope } from '../sharing/scope.js';
 import { getGlobalRoot } from '../sharing/global-store.js';
 import * as api from '../api/index.js';
-import { resolveTenantId } from '../store/tenant.js';
+import { cliRecallOrigin, scopeHiddenCount } from '../api/recall-cli.js';
 import { cliApiContext } from './api-context.js';
 import type { RankRecallResult } from '../api/recall-pipeline.js';
 import { printedTokens } from '../api/context-render.js';
@@ -23,13 +20,8 @@ import { CliExit } from './exit.js';
 const EXPLAIN_PREVIEW_CHARS = 48;
 
 /** The SQL predicate drops denied rows before the window, so an unscoped probe counts what the policy hides. */
-function noteScopeHidden(hippoRoot: string, globalRoot: string | undefined, query: string, tenantId: string, requested: string | undefined): void {
-  const probe = [
-    ...loadSearchEntries(hippoRoot, query, undefined, tenantId),
-    ...(globalRoot ? loadSearchEntries(globalRoot, query, undefined, tenantId) : []),
-  ];
-  // Window-capped, so the count is a floor on large stores; fine for a "why is my row missing" hint.
-  const hidden = probe.filter((e) => !api.passesCliRecallScopeFilter(e.scope ?? null, requested)).length;
+function noteScopeHidden(ctx: api.Context, globalRoot: string | undefined, query: string, requested: string | undefined): void {
+  const hidden = scopeHiddenCount(ctx, query, globalRoot, requested);
   if (hidden > 0) {
     printError(`[note] ${hidden} candidate${hidden === 1 ? '' : 's'} hidden by recall scope policy (pass an explicit --scope to inspect).`);
   }
@@ -40,6 +32,7 @@ interface InspectedSlot { rank?: RankRecallResult }
 
 async function cmdExplain(
   hippoRoot: string,
+  tenantId: string,
   query: string,
   flags: CliFlags
 ): Promise<void> {
@@ -51,30 +44,30 @@ async function cmdExplain(
   const includeSuperseded = boolFlag(flags, 'include-superseded');
   const asOf = parseAsOfFlag(flags);
   const globalRoot = getGlobalRoot();
-  const tenantId = resolveTenantId({});
+  const ctx = cliApiContext(hippoRoot, tenantId);
   // Explain shows what recall would see, so it applies the same scope rule.
   const explicitScope = flags['scope'] !== undefined ? String(flags['scope']).trim() : null;
+  const activeScope = explicitScope || detectScope();
   // Unlike recall, explain reads the global store whenever it exists, even when it is the local root.
-  const explainGlobalOn = isInitialized(globalRoot);
-  noteScopeHidden(hippoRoot, explainGlobalOn ? globalRoot : undefined, query, tenantId, explicitScope || undefined);
+  const origin = cliRecallOrigin(ctx, { globalRoot, primaryIsGlobal: false, activeScope });
+  const explainGlobalOn = origin.globalOn;
+  noteScopeHidden(ctx, explainGlobalOn ? globalRoot : undefined, query, explicitScope || undefined);
 
   const config = loadConfig(hippoRoot);
   const engine = engineFlags(flags, config);
   // Priced as recall prints each result, so explain returns what recall's engines would.
-  const explainIndex = loadIndex(hippoRoot);
-  const cost = (r: SearchResult): number =>
-    printedTokens(recallEntryText(r, query, false, explainGlobalOn && !explainIndex.entries[r.entry.id]));
+  const cost = (r: SearchResult): number => printedTokens(recallEntryText(r, query, false, origin.isGlobal(r.entry.id)));
   const entryBudget = Math.max(0, budget - printedTokens(recallHeading(budget, budget, query)));
 
   const slot: InspectedSlot = {};
   await api.retrieve(
-    cliApiContext(hippoRoot, tenantId),
+    ctx,
     {
       query,
       cliCore: {
         rank: {
           budget: entryBudget, cost, limit, includeSuperseded, asOf,
-          explicitScope, activeScope: explicitScope || detectScope(),
+          explicitScope, activeScope,
           search: { ...engine, multihop: false, explain: true },
         },
         sources: { globalRoot: explainGlobalOn ? globalRoot : undefined },
@@ -187,11 +180,11 @@ function printExplainBreakdown(r: SearchResult, i: number): void {
   console.log();
 }
 
-export async function handleExplain({ hippoRoot, args, flags }: CommandContext): Promise<void> {
+export async function handleExplain({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
   const query = args.join(' ').trim();
   if (!query) {
     printError('Please provide a search query.');
     throw new CliExit(1);
   }
-  await cmdExplain(hippoRoot, query, flags);
+  await cmdExplain(hippoRoot, tenantId, query, flags);
 }

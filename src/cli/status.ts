@@ -7,12 +7,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import { fileURLToPath } from 'node:url';
 import { calculateStrength, calculateRewardFactor, resolveConfidence, Layer } from '../core/memory.js';
-import { loadCorrectionEntries, loadRawEntries } from '../store/report-reads.js';
-import { loadStats } from '../store/index-and-stats.js';
-import { loadStatusCounts, type StatusCounts } from '../store/candidates.js';
-import { embeddingModelRequiresReindex } from '../store/embeddings/index.js';
 import { resolveEmbeddingProvider } from '../embeddings/provider.js';
-import { loadStoredParticles, storedVectorSummary } from '../store/vector-index.js';
 import { computeSystemEnergy, vecNorm, type PhysicsParticle } from '../core/physics.js';
 import { loadConfig } from '../core/config.js';
 import { runDoctor, formatDoctor } from '../doctor.js';
@@ -20,10 +15,13 @@ import { buildSupportBundle, TAIL_MAX_LINES } from '../support-bundle.js';
 import { PACKAGE_VERSION } from '../util/version.js';
 import { FAILURE_LOG_RETENTION_DAYS } from '../store/failure-log.js';
 import { getGlobalRoot } from '../sharing/global-store.js';
-import { buildProvenanceCoverage } from './provenance-coverage.js';
-import { buildCorrectionLatency } from './correction-latency.js';
 import * as api from '../api/index.js';
 import { getMemory } from '../api/memories.js';
+import {
+  correctionLatencyReport, embeddingReindexNeeded, provenanceCoverageReport, storeStatus, storedParticles, vectorSummary,
+} from '../api/status.js';
+import type { StatusCounts } from '../store/candidates.js';
+import type { Context } from '../api/types.js';
 import { cliApiContext } from './api-context.js';
 import { errorMessage, log } from '../util/log.js';
 import { printError } from './output.js';
@@ -35,11 +33,11 @@ import { hookStoreRoot } from './hook-runtime.js';
 import { DAY_MS } from '../util/time.js';
 import { CliExit } from './exit.js';
 
-export function handleStatus({ hippoRoot }: CommandContext): void {
+export function handleStatus({ hippoRoot, tenantId }: CommandContext): void {
   requireInit(hippoRoot);
 
-  const stats = loadStats(hippoRoot);
-  const counts = loadStatusCounts(hippoRoot, evalNow(), 0.2);
+  const ctx = cliApiContext(hippoRoot, tenantId);
+  const { stats, counts } = storeStatus(ctx, evalNow(), 0.2);
   const { byLayer, byConfidence, pinned, atRisk, agedOut, avgStrength } = counts;
 
   console.log('Hippo Status');
@@ -73,15 +71,15 @@ export function handleStatus({ hippoRoot }: CommandContext): void {
     console.log(`Last sleep:        never`);
   }
 
-  printEmbeddingStatus(hippoRoot, counts);
-  printPhysicsStatus(hippoRoot);
+  printEmbeddingStatus(ctx, counts);
+  printPhysicsStatus(ctx);
 }
 
 // Embedding status (provider-aware)
-function printEmbeddingStatus(hippoRoot: string, counts: Pick<StatusCounts, 'total' | 'embedded'>): void {
+function printEmbeddingStatus(ctx: Context, counts: Pick<StatusCounts, 'total' | 'embedded'>): void {
   const embedProvider = (() => {
     try {
-      return resolveEmbeddingProvider(hippoRoot);
+      return resolveEmbeddingProvider(ctx.hippoRoot);
     } catch {
       // Status reports a bad provider config as "misconfigured" below instead of failing.
       return null;
@@ -92,7 +90,7 @@ function printEmbeddingStatus(hippoRoot: string, counts: Pick<StatusCounts, 'tot
     console.log(`Embeddings:        misconfigured (check embeddings.provider / apiBaseUrl), BM25 only`);
     return;
   }
-  const embeddingsDisabled = loadConfig(hippoRoot).embeddings.enabled === false;
+  const embeddingsDisabled = loadConfig(ctx.hippoRoot).embeddings.enabled === false;
   const embAvail = embedProvider.isAvailable();
   if (embeddingsDisabled) {
     console.log(`Embeddings:        disabled in config (embeddings.enabled = false), BM25 only`);
@@ -105,7 +103,7 @@ function printEmbeddingStatus(hippoRoot: string, counts: Pick<StatusCounts, 'tot
   }
   // Show cached counts whenever vectors exist on disk (even when disabled or
   // the key was removed), so the user still sees what is already indexed.
-  const { ids: embeddedIds, dims } = storedVectorSummary(hippoRoot);
+  const { ids: embeddedIds, dims } = vectorSummary(ctx);
   if (!embAvail && embeddedIds.size === 0) return;
   const orphaned = embeddedIds.size - counts.embedded;
   let line = `Embedded:          ${counts.embedded}/${counts.total} memories`;
@@ -113,7 +111,7 @@ function printEmbeddingStatus(hippoRoot: string, counts: Pick<StatusCounts, 'tot
   if (orphaned > 0) line += ` (${orphaned} orphaned, run \`hippo embed\` to prune)`;
   console.log(line);
   // No index argument: the check then asks SQLite whether any vector exists instead of loading them.
-  if (embeddingModelRequiresReindex(hippoRoot, embedProvider.id)) {
+  if (embeddingReindexNeeded(ctx, embedProvider.id)) {
     console.log(`                   model changed, run \`hippo embed\` to reindex`);
   }
 }
@@ -122,15 +120,15 @@ function printEmbeddingStatus(hippoRoot: string, counts: Pick<StatusCounts, 'tot
 const PHYSICS_ENERGY_STATUS_MAX = 2000;
 
 // Physics status
-function printPhysicsStatus(hippoRoot: string): void {
+function printPhysicsStatus(ctx: Context): void {
   try {
-    const particles = loadStoredParticles(hippoRoot);
+    const particles = storedParticles(ctx);
     if (particles.length > 0) {
       let sumVelMag = 0;
       for (const p of particles) sumVelMag += vecNorm(p.velocity);
       const avgVelMag = sumVelMag / particles.length;
       console.log('');
-      console.log(`Physics: ${particles.length} particles, ${physicsEnergyText(particles, loadConfig(hippoRoot).physics.G_memory)}, avg vel: ${fmt(avgVelMag, 4)}`);
+      console.log(`Physics: ${particles.length} particles, ${physicsEnergyText(particles, loadConfig(ctx.hippoRoot).physics.G_memory)}, avg vel: ${fmt(avgVelMag, 4)}`);
     }
   } catch (err) {
     // The physics table may not exist yet, so status prints without that line.
@@ -270,9 +268,9 @@ export function handleFailures({ hippoRoot, tenantId, flags }: CommandContext): 
   }
 }
 
-export function handleCorrectionLatency({ hippoRoot, flags }: CommandContext): void {
+export function handleCorrectionLatency({ hippoRoot, tenantId, flags }: CommandContext): void {
   requireInit(hippoRoot);
-  const report = buildCorrectionLatency(loadCorrectionEntries(hippoRoot));
+  const report = correctionLatencyReport(cliApiContext(hippoRoot, tenantId));
   if (flags['json']) {
     console.log(JSON.stringify(report, null, 2));
   } else if (report.count === 0) {
@@ -294,9 +292,9 @@ export function handleCorrectionLatency({ hippoRoot, flags }: CommandContext): v
   }
 }
 
-export function handleProvenance({ hippoRoot, flags }: CommandContext): void {
+export function handleProvenance({ hippoRoot, tenantId, flags }: CommandContext): void {
   requireInit(hippoRoot);
-  const coverage = buildProvenanceCoverage(loadRawEntries(hippoRoot));
+  const coverage = provenanceCoverageReport(cliApiContext(hippoRoot, tenantId));
   if (flags['json']) {
     console.log(JSON.stringify(coverage, null, 2));
   } else if (coverage.rawTotal === 0) {

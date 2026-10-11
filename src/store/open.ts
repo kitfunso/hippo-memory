@@ -7,8 +7,6 @@ import {
   closeHippoDb, currentRequestStores, type DatabaseSyncLike, openHippoDb, getMeta, setMeta, withWriteScope, pruneConsolidationRuns,
 } from '../db/index.js';
 import { openHippoDbWithFacts } from '../db/open.js';
-import { type ResolveProjectIdentityOpts, findHippoStoreDir } from '../core/project-identity.js';
-import { realpathOrResolve } from '../util/real-path.js';
 import { RejectedValueError } from '../core/api-errors.js';
 import { errorFields, errorMessage, log } from '../util/log.js';
 import { type HippoIndex, type LegacyStats } from './rows.js';
@@ -17,17 +15,6 @@ import { deserializeEntry } from '../core/markdown.js';
 import { stampOriginProjectForImport, upsertEntryRow } from './entry-row.js';
 import { ensureMirrorDirectories, syncMirrorFiles, layerDir } from './mirrors.js';
 import { isJsonObject } from '../util/json.js';
-
-/** Nearest ancestor store like git; the strict join is the fallback so `hippo init` still creates `<cwd>/.hippo`. */
-export function getHippoRoot(cwd: string = process.cwd(), opts?: ResolveProjectIdentityOpts): string {
-  return findHippoStoreDir(cwd, opts) ?? path.join(realpathOrResolve(cwd), '.hippo');
-}
-
-export function isInitialized(hippoRoot: string): boolean {
-  // autoInstallHooks / setupDailySchedule can create a bare .hippo with no hippo.db; counting
-  // that as initialized makes `hippo init` skip initStore, so only hippo.db counts.
-  return fs.existsSync(path.join(hippoRoot, 'hippo.db'));
-}
 
 export function initStore(hippoRoot: string): void {
   closeHippoDb(openStore(hippoRoot));

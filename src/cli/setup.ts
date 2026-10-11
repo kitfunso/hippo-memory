@@ -33,7 +33,7 @@ import {
   isMcpFailure,
   uninstallCopilot,
 } from '../hooks/copilot.js';
-import { isInitialized } from '../store/open.js';
+import { isInitialized } from '../core/project-identity.js';
 import { currentMachine, importUserMemories } from '../agent-memories/sync.js';
 import { getGlobalRoot } from '../sharing/global-store.js';
 import { listRegisteredWorkspaces, runDailyMaintenance } from './scheduler.js';
@@ -506,13 +506,13 @@ function dailyStepFailure<E>(err: E, timeoutMs: number): string {
   return errorMessage(err);
 }
 
-export function handleDailyRunner(_ctx: CommandContext): void {
+export function handleDailyRunner({ tenantId }: CommandContext): void {
   const globalRoot = getGlobalRoot();
   // No workspace sleep ever opens the global store, yet hooks in folders without a store compact into it.
   if (isInitialized(globalRoot)) {
     const finished = replayCompactionsAt(globalRoot, (message) => log.warn(`compaction replay: ${message}`));
     if (finished > 0) console.log(`Finished saving ${finished} compaction${finished === 1 ? '' : 's'} left over in the global store.`);
-    repairQualityOnceAt(globalRoot);
+    repairQualityOnceAt(globalRoot, tenantId);
   }
   printAgentImport(importUserMemories(globalRoot, { machine: currentMachine() }), '');
   const workspaces = listRegisteredWorkspaces(globalRoot);

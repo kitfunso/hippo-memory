@@ -4,7 +4,7 @@ import * as path from 'path';
 import { type SpawnSyncReturns } from 'child_process';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { getHippoRoot } from '../src/store/open.js';
+import { getHippoRoot } from '../src/core/project-identity.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { loadActiveTaskSnapshot, saveActiveTaskSnapshot, appendSessionEvent } from '../src/store/sessions.js';
 import { writeSessionEndHandoff } from '../src/store/handoffs.js';

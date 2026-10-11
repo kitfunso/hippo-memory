@@ -1,0 +1,37 @@
+[
+  {
+    "file": "cli.ts",
+    "target": "store/tenant.ts",
+    "why": "dispatch resolves the tenant once and hands it to every verb in CommandContext"
+  },
+  {
+    "file": "cli.ts",
+    "target": "db/busy.ts",
+    "why": "maps a busy-store error to the exit message; error classification, not a store read"
+  },
+  {
+    "file": "cli.ts",
+    "target": "db/request-stores.ts",
+    "why": "opens the per-process handle scope a scoped verb runs in, as the server and MCP entry points do"
+  },
+  {
+    "file": "cli/hook-runtime.ts",
+    "target": "db/index.ts",
+    "why": "the hook's handle scope, wait budget and busy classification, the same process plumbing as src/cli.ts dispatch"
+  },
+  {
+    "file": "cli/audit.ts",
+    "target": "store/audit.ts",
+    "why": "AUDIT_OPS, the op vocabulary --op is checked against; a constant, not a store read"
+  },
+  {
+    "file": "cli/status.ts",
+    "target": "store/failure-log.ts",
+    "why": "FAILURE_LOG_RETENTION_DAYS, the retention the failures verb prints; a constant, not a store read"
+  },
+  {
+    "file": "cli/decisions.ts",
+    "target": "store/predictions.ts",
+    "why": "split in flight (C-b)"
+  }
+]

@@ -190,6 +190,17 @@ export function findHippoStoreDir(cwd?: string, opts?: ResolveProjectIdentityOpt
   return hippoRoot === null ? null : path.join(hippoRoot, '.hippo');
 }
 
+/** Nearest ancestor store like git; the strict join is the fallback so `hippo init` still creates `<cwd>/.hippo`. */
+export function getHippoRoot(cwd: string = process.cwd(), opts?: ResolveProjectIdentityOpts): string {
+  return findHippoStoreDir(cwd, opts) ?? path.join(realpathOrResolve(cwd), '.hippo');
+}
+
+export function isInitialized(hippoRoot: string): boolean {
+  // autoInstallHooks / setupDailySchedule can create a bare .hippo with no hippo.db; counting
+  // that as initialized makes `hippo init` skip initStore, so only hippo.db counts.
+  return fs.existsSync(path.join(hippoRoot, 'hippo.db'));
+}
+
 /** A reader's project: a bare name, or an identity whose own rows may also carry its legacy folder name. */
 export type ProjectRef = string | Pick<ProjectIdentity, 'name' | 'legacyName' | 'aliases'>;
 

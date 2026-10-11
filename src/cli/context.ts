@@ -10,7 +10,6 @@ import { readHookStdin } from './stdin.js';
 import { isJsonObject, isJsonString, type JsonValue } from '../util/json.js';
 import * as api from '../api/index.js';
 import { DEFAULT_CONTEXT_BUDGET } from '../api/context.js';
-import { resolveTenantId } from '../store/tenant.js';
 import { cliApiContext } from './api-context.js';
 import { renderAmbientSummary } from '../core/ambient.js';
 import { contextBlockLines, contextCost, crossProjectLines, settleTokens } from '../api/context-render.js';
@@ -19,23 +18,27 @@ import {
   type ContextView,
   flushDeliveryRecorder,
   hasContextData,
+  startDeliveryRecorder,
   sessionStartEnvelope,
   toRenderItems,
 } from '../api/prompt-hook.js';
 import { type CliFlags, parseLimitFlag, parseCountFlag, parseBudgetFlag, type CommandContext, flagIsTrue } from './flag-values.js';
 import { requireInit } from './shared.js';
 import { printActiveTaskSnapshot, printSessionEvents, printHandoff, captureConsole } from './print.js';
-import { hostSessionId, hookStoreRoot, hookRuntime, payloadCwdRoot, runHookWithStores, inPilotHoldout, startDeliveryRecorder } from './hook-runtime.js';
+import { hostSessionId, hookStoreRoot, hookRuntime, payloadCwdRoot, runHookWithStores, inPilotHoldout } from './hook-runtime.js';
 
 async function cmdContext(
   hippoRoot: string,
+  tenantId: string,
   args: string[],
   flags: CliFlags,
   stdinText?: string
 ): Promise<void> {
-  const rec = startDeliveryRecorder(hippoRoot, stdinText, hookRuntime(flags), flagIsTrue(flags, 'pinned-only') ? undefined : 'context');
+  const rec = startDeliveryRecorder(cliApiContext(hippoRoot, tenantId), {
+    stdinText, runtime: hookRuntime(flags), eventType: flagIsTrue(flags, 'pinned-only') ? undefined : 'context', envSessionId: hostSessionId(),
+  });
   // No try/finally: a render throw keeps its own exit code and writes no event.
-  await renderContext(hippoRoot, args, flags, stdinText, rec);
+  await renderContext(hippoRoot, tenantId, args, flags, stdinText, rec);
   flushDeliveryRecorder(rec);
 }
 
@@ -64,6 +67,7 @@ function readHookPayload(stdinText: string | undefined): HookPayload {
 
 async function renderContext(
   hippoRoot: string,
+  resolvedTenant: string,
   args: string[],
   flags: CliFlags,
   stdinText: string | undefined,
@@ -80,7 +84,6 @@ async function renderContext(
   const { currentSessionId, ledgerSessionId, payloadSessionId } = session;
 
   // The pilot arm is booked at the first hook call whatever the flags, so the holdout sees no budget or content branch.
-  const resolvedTenant = resolveTenantId({});
   if (inPilotHoldout(hippoRoot, resolvedTenant, currentSessionId, payloadSessionId !== undefined)) {
     rec?.disabled();
     return;
@@ -248,9 +251,9 @@ function printCrossProjectSection(items: api.ContextResultEntry[]): void {
   for (const line of crossProjectLines(items)) console.log(line);
 }
 
-export async function handleContext({ hippoRoot, args, flags }: CommandContext): Promise<void> {
+export async function handleContext({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
   // Bounded, not a TTY guard: the hot stdin path and a manual run share this one command.
   const { text: stdinText } = await readHookStdin();
   const root = payloadCwdRoot(hippoRoot, stdinText, hookRuntime(flags));
-  await runHookWithStores(() => cmdContext(hookStoreRoot(root), args, flags, stdinText));
+  await runHookWithStores(() => cmdContext(hookStoreRoot(root), tenantId, args, flags, stdinText));
 }

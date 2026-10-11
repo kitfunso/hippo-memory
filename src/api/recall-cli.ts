@@ -1,7 +1,7 @@
 // What the `hippo recall` verb reads beside its ranking core: the stores it searches, the resume packet and the JSON rows.
 
 import { confidenceFacets, Layer } from '../core/memory.js';
-import { isGlobalStoreRoot } from '../core/project-identity.js';
+import { isGlobalStoreRoot, isInitialized } from '../core/project-identity.js';
 import type { ResultCost, SearchResult } from '../core/search-types.js';
 import { getReranker } from '../rerankers/index.js';
 import { isClefModel } from '../rerankers/clef.js';
@@ -13,9 +13,9 @@ import { getGlobalRoot } from '../sharing/global-store.js';
 import { detectScope } from '../sharing/scope.js';
 import { loadLatestHandoff } from '../store/handoffs.js';
 import { loadIndex } from '../store/index-and-stats.js';
-import { isInitialized } from '../store/open.js';
 import type { ContinuityBlock } from '../store/port.js';
-import { passesScopeFilterForRecall } from '../core/recall-scope.js';
+import { passesCliRecallScopeFilter, passesScopeFilterForRecall } from '../core/recall-scope.js';
+import { loadSearchEntries } from '../store/search-rows.js';
 import { listSessionEvents, loadActiveTaskSnapshot } from '../store/sessions.js';
 import type { Context } from './types.js';
 
@@ -43,6 +43,16 @@ export function cliRecallOrigin(ctx: Context, setting: CliRecallSetting): CliRec
   const localIndex = loadIndex(ctx.hippoRoot);
   const globalOn = isInitialized(setting.globalRoot);
   return { globalOn, isGlobal: (id) => setting.primaryIsGlobal || (globalOn && !localIndex.entries[id]) };
+}
+
+/** How many of `query`'s search candidates the scope rule hides from a recall asking for `requested`; the read is
+ *  window-capped, so this is a floor on a large store. */
+export function scopeHiddenCount(ctx: Context, query: string, globalRoot: string | undefined, requested: string | undefined): number {
+  const probe = [
+    ...loadSearchEntries(ctx.hippoRoot, query, undefined, ctx.tenantId),
+    ...(globalRoot ? loadSearchEntries(globalRoot, query, undefined, ctx.tenantId) : []),
+  ];
+  return probe.filter((e) => !passesCliRecallScopeFilter(e.scope ?? null, requested)).length;
 }
 
 /** The active snapshot, its session's latest handoff and last five events, each kept only when its scope passes. */
