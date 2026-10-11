@@ -149,7 +149,7 @@ export function runWatched(
 ): Promise<{ exitCode: number; stderr: string }> {
   return new Promise((resolve, reject) => {
     const options: SpawnOptions = { stdio: ['inherit', 'inherit', 'pipe'], windowsHide: true };
-    const child = opts.shell ? spawn(argv.join(' '), { ...options, shell: true }) : spawnArgv(argv, options);
+    const child = opts.shell ? spawn(argv.join(' '), { ...options, windowsHide: true, shell: true }) : spawnArgv(argv, options);
 
     let tail = Buffer.alloc(0);
 

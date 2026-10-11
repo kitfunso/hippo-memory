@@ -46,8 +46,13 @@ export function spawnArgv(argv: readonly string[], options: SpawnOptions): Child
     const resolved = resolveWindowsCommand(command);
     const ext = resolved === null ? '' : path.extname(resolved).toLowerCase();
     if (resolved !== null && (ext === '.cmd' || ext === '.bat')) {
-      return spawn('cmd.exe', cmdShimArgs(resolved, args), { ...options, shell: false, windowsVerbatimArguments: true });
+      return spawn('cmd.exe', cmdShimArgs(resolved, args), {
+        ...options,
+        windowsHide: options.windowsHide ?? true,
+        shell: false,
+        windowsVerbatimArguments: true,
+      });
     }
   }
-  return spawn(command, args, { ...options, shell: false });
+  return spawn(command, args, { ...options, windowsHide: options.windowsHide ?? true, shell: false });
 }
