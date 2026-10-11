@@ -1,5 +1,6 @@
 // Readers that turn parsed CLI flags into typed values, and the flag types they share.
 
+import { DEFAULT_LIST_LIMIT } from '../util/limits.js';
 import type { RecallSearchOpts } from '../api/recall-pipeline.js';
 import type { HippoConfig } from '../core/config.js';
 import { printError } from './output.js';
@@ -56,7 +57,7 @@ export function parsePositiveId(idRaw: string | undefined, label: string): numbe
 
 export function parseListLimit(flags: CliFlags): number {
   const limitRaw = flags['limit'];
-  const limit = limitRaw !== undefined ? parseInt(String(limitRaw), 10) : 100;
+  const limit = limitRaw !== undefined ? parseInt(String(limitRaw), 10) : DEFAULT_LIST_LIMIT;
   if (!Number.isFinite(limit) || limit <= 0) {
     printError(`Invalid --limit: "${limitRaw}". Must be a positive integer.`);
     throw new CliExit(1);

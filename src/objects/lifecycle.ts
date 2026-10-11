@@ -2,6 +2,7 @@
 // Each flow is written twice over the same steps: `...At` answers at once on hippo.db for the CLI, and the other awaits a served store's group for the routes.
 // The tenant, the fields and the list status are checked first, so a bad request fails before a store is asked.
 
+import { DEFAULT_LIST_LIMIT } from '../util/limits.js';
 import { BadRequestError, ConflictError, NotFoundError } from '../core/api-errors.js';
 import { loadConfig } from '../core/config.js';
 import { createMemory, Layer, type MemoryEntry } from '../core/memory.js';
@@ -17,7 +18,7 @@ function listQuery<K extends ObjectKind>(d: ObjectDescriptor<K>, tenantId: strin
   if (opts.status && !d.states.has(opts.status)) {
     throw new BadRequestError(`${d.fn.list}: status must be one of ${Array.from(d.states).join('|')}; got ${opts.status}`);
   }
-  return { status: opts.status || undefined, filter: opts.filter || undefined, limit: opts.limit ?? 100, after: opts.after };
+  return { status: opts.status || undefined, filter: opts.filter || undefined, limit: opts.limit ?? DEFAULT_LIST_LIMIT, after: opts.after };
 }
 
 /** Newest first. */

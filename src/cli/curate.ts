@@ -1,5 +1,6 @@
 // Verbs that weaken, suppress or retire memories: outcome, forget, conflicts, reject, dormant, quarantine, invalidate.
 
+import { truncateWithEllipsis } from '../util/ellipsize.js';
 import * as path from 'path';
 import { listMemoryConflicts } from '../store/conflicts.js';
 import { rejectValue, unrejectValue, listRejectionsForTenant } from '../trust/reject-flow.js';
@@ -136,7 +137,7 @@ async function previewForget(hippoRoot: string, tenantId: string, id: string, ar
     printError(`Could not archive ${id}: memory ${id} is not raw (kind=${entry.kind})`);
     throw new CliExit(1);
   }
-  const snippet = entry.content.length > CONTENT_PREVIEW_CHARS ? `${entry.content.slice(0, CONTENT_PREVIEW_CHARS)}...` : entry.content;
+  const snippet = truncateWithEllipsis(entry.content, CONTENT_PREVIEW_CHARS);
   console.log(`Would ${archive ? 'archive' : 'forget'} ${id} (dry run, nothing changed): "${snippet}"`);
 }
 
@@ -182,11 +183,11 @@ async function showConflictForResolve(hippoRoot: string, conflictId: number, ten
   const entryB = await getMemory(ctx, conflict.memory_b_id);
   if (entryA) {
     console.log(`  [A] ${conflict.memory_a_id}:`);
-    console.log(`      ${entryA.content.slice(0, CONFLICT_PREVIEW_CHARS)}${entryA.content.length > CONFLICT_PREVIEW_CHARS ? '...' : ''}`);
+    console.log(`      ${truncateWithEllipsis(entryA.content, CONFLICT_PREVIEW_CHARS)}`);
   }
   if (entryB) {
     console.log(`  [B] ${conflict.memory_b_id}:`);
-    console.log(`      ${entryB.content.slice(0, CONFLICT_PREVIEW_CHARS)}${entryB.content.length > CONFLICT_PREVIEW_CHARS ? '...' : ''}`);
+    console.log(`      ${truncateWithEllipsis(entryB.content, CONFLICT_PREVIEW_CHARS)}`);
   }
   console.log('');
   console.log(`Resolve with: hippo resolve ${conflictId} --keep <memory_id> [--forget] [--reject-loser [--reason "<why>"]]`);
@@ -275,7 +276,7 @@ export function handleReject({ hippoRoot, tenantId, args, flags }: CommandContex
 
 function printRejected(result: ReturnType<typeof rejectValue>, reason: string): void {
   const digestPrefix = result.digest.slice(0, DIGEST_DISPLAY_CHARS);
-  const preview = result.content.length > CONTENT_PREVIEW_CHARS ? `${result.content.slice(0, CONTENT_PREVIEW_CHARS)}...` : result.content;
+  const preview = truncateWithEllipsis(result.content, CONTENT_PREVIEW_CHARS);
   console.log(`Rejected [${digestPrefix}...]: "${preview}"`);
   console.log(`  Reason: ${reason}`);
   if (result.removedIds.length > 0) {
@@ -401,7 +402,7 @@ function printDormantRows(rows: ReturnType<typeof api.listDormant>, hasQuery: bo
 
   console.log(`${rows.length} dormant memor${rows.length === 1 ? 'y' : 'ies'}${hasQuery ? ' matching' : ''} (newest first):\n`);
   for (const row of rows) {
-    const preview = row.content.length > DORMANT_PREVIEW_CHARS ? `${row.content.slice(0, DORMANT_PREVIEW_CHARS)}...` : row.content;
+    const preview = truncateWithEllipsis(row.content, DORMANT_PREVIEW_CHARS);
     console.log(`--- ${row.id}`);
     console.log(`    ${preview}`);
     console.log(`    Dormant since ${row.dormantAt.slice(0, DATE_PREFIX_CHARS)} (${row.reason}, strength ${row.strength.toFixed(STRENGTH_DECIMALS)})${row.tags.length > 0 ? `  tags: ${row.tags.join(', ')}` : ''}`);

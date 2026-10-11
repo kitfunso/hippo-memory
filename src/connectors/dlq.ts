@@ -1,5 +1,6 @@
 // The dead-letter queue every webhook connector parks into: one redaction, one unroutable sentinel, one set of defaults, one replay result.
 
+import { DEFAULT_LIST_LIMIT } from '../util/limits.js';
 import { DLQ_REDACTED_NOTE, redactPayload } from '../util/secret-detect.js';
 import { requireGroup, storeFor, type HippoStore } from '../store/index.js';
 import type { ConnectorDeadLetter } from '../store/port.js';
@@ -10,7 +11,6 @@ import { errorMessage } from '../util/log.js';
 const UNROUTABLE_TENANT = '__unroutable__';
 
 const DEFAULT_BUCKET = 'parse_error';
-const DEFAULT_LIST_LIMIT = 100;
 
 /** What a caller hands over to park one payload, whatever the connector. */
 export interface ParkOpts<Bucket extends string> {

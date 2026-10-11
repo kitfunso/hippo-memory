@@ -1,3 +1,4 @@
+import { truncateWithEllipsis } from '../util/ellipsize.js';
 import { envJevModel, envJevTimeoutMs, envTypesafeApiKey } from '../util/env.js';
 import type { RerankerFn, RerankResult, RerankerOptions } from './types.js';
 import type { SearchResult } from '../core/search-types.js';
@@ -19,10 +20,6 @@ const TRUNCATE_CHARS = 1200;
 const DEFAULT_MODEL = 'jev-1.13.0';
 // The pool size the eval numbers were measured at.
 export const JEV_DEFAULT_TOP_K = 40;
-
-function truncate(s: string, n: number): string {
-  return s.length <= n ? s : `${s.slice(0, n)}...`;
-}
 
 // Number.isFinite rejects a string or null without coercing it, which the
 // declared type cannot promise about a third-party payload.
@@ -53,7 +50,7 @@ export interface RelevanceRequest {
 /** Redacted query plus numbered, redacted, truncated candidates. Shared with CLEF so both arms see matched input. */
 export function buildRelevanceRequest(query: string, head: readonly SearchResult[]): RelevanceRequest {
   // Strict: this text leaves the machine, so Bearer, Basic-auth and JWT shapes go too.
-  const lines = head.map((r, i) => `[${i + 1}] ${truncate(redactSecretsStrict(r.entry.content), TRUNCATE_CHARS)}`);
+  const lines = head.map((r, i) => `[${i + 1}] ${truncateWithEllipsis(redactSecretsStrict(r.entry.content), TRUNCATE_CHARS)}`);
   const state = `Query: ${redactSecretsStrict(query)}\n\nNumbered candidate memories from an AI coding agent's project store:\n\n${lines.join('\n\n')}`;
   const questions: RelevanceRequest['questions'] = {};
   for (let i = 1; i <= head.length; i++) {

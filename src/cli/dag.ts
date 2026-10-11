@@ -1,5 +1,6 @@
 // DAG summary verbs: `hippo dag`, `hippo assemble` and `hippo drill`.
 
+import { truncateWithEllipsis } from '../util/ellipsize.js';
 import { loadAllEntries } from '../store/entry-reads.js';
 import type { MemoryEntry } from '../core/memory.js';
 import * as api from '../api/index.js';
@@ -169,10 +170,10 @@ async function cmdDrillDown(hippoRoot: string, tenantId: string, summaryId: stri
     return;
   }
   console.log(`Summary ${r.summary.id} — ${r.summary.descendantCount} descendants${r.summary.earliestAt ? ` (${r.summary.earliestAt} → ${r.summary.latestAt})` : ''}`);
-  console.log(`  ${r.summary.content.slice(0, DAG_SUMMARY_PREVIEW_CHARS)}${r.summary.content.length > DAG_SUMMARY_PREVIEW_CHARS ? '…' : ''}`);
+  console.log(`  ${truncateWithEllipsis(r.summary.content, DAG_SUMMARY_PREVIEW_CHARS, '…')}`);
   console.log(`\nChildren (${r.children.length}/${r.totalChildren}${r.truncated ? ', truncated' : ''}):`);
   for (const c of r.children) {
-    console.log(`  [L${c.dagLevel}] ${c.id} — ${c.content.slice(0, DAG_CHILD_PREVIEW_CHARS)}${c.content.length > DAG_CHILD_PREVIEW_CHARS ? '…' : ''}`);
+    console.log(`  [L${c.dagLevel}] ${c.id} — ${truncateWithEllipsis(c.content, DAG_CHILD_PREVIEW_CHARS, '…')}`);
   }
 }
 
