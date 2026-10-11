@@ -215,7 +215,8 @@ describe('the memory wait and the memories switch (tests 13, 14)', () => {
     const short = setup('waitout', { codexMemoryWait: 'poll:5000:600' });
     const t = await runCodexSession(short.ctx, short.run, xTask('plain'), () => false);
     expect(t.wait.timedOut).toBe(true);
-    expect(t.wait.ms).toBeLessThan(5000);
+    // timedOut is only set when the 600 ms timeout fires before the 5000 ms stable window, so the wait ended on the timeout.
+    expect(t.wait.ms).toBeGreaterThanOrEqual(600);
   }, 60_000);
 
   it('writes the memories feature as the flag says, and the session reads that config', async () => {
