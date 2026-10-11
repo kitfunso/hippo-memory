@@ -25,7 +25,7 @@ import { Layer} from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { detectPlanningClaim } from '../src/predictions/planning-fallacy.js';
 import { savePrediction, closePrediction } from '../src/store/predictions.js';
-import { recall, type Context } from '../src/api/index.js';
+import { retrieve, type Context } from '../src/api/index.js';
 import { makeRoot } from './_helpers/make-root.js';
 
 function safeRmSync(p: string): void {
@@ -57,7 +57,7 @@ describe('PlanningFallacyWatching', () => {
   beforeEach(() => { root = makeRoot('j32-watch'); });
   afterEach(() => safeRmSync(root));
 
-  it('Output.watching set with reason=tiebreak when >=2 classes tied at best overlap', () => {
+  it('Output.watching set with reason=tiebreak when >=2 classes tied at best overlap', async () => {
     // Seed predictions in TWO classes that share NO query tokens between
     // themselves but each share 1 token with the query. Both classes should
     // tie at score 1, triggering the tiebreak path.
@@ -67,7 +67,7 @@ describe('PlanningFallacyWatching', () => {
     // -> tie at score 1.
     seedClosedPredictions(root, 'migration-effort', 1);
     seedClosedPredictions(root, 'feature-effort', 1);
-    const out = recall(ctxFor(root), { query: 'the migration feature will take 2 days' });
+    const out = await retrieve(ctxFor(root), { query: 'the migration feature will take 2 days' });
     expect(out.planningFallacyHint).toBeUndefined();
     expect(out.planningFallacyWatching).toBeDefined();
     expect(out.planningFallacyWatching!.reason).toBe('tiebreak');
@@ -79,14 +79,14 @@ describe('PlanningFallacyWatching', () => {
     expect(detectPlanningClaim('the next task will take 2 days', { mode: 'regex' })).not.toBeNull();
   });
 
-  it('Output returns {} (neither variant) on non-forward-claim queries', () => {
+  it('Output returns {} (neither variant) on non-forward-claim queries', async () => {
     seedClosedPredictions(root, 'estimate-task', 3);
-    const out = recall(ctxFor(root), { query: 'what is the architecture of this system' });
+    const out = await retrieve(ctxFor(root), { query: 'what is the architecture of this system' });
     expect(out.planningFallacyHint).toBeUndefined();
     expect(out.planningFallacyWatching).toBeUndefined();
   });
 
-  it('api.recall populates RecallResult.planningFallacyWatching when output is watching', () => {
+  it('api.recall populates RecallResult.planningFallacyWatching when output is watching', async () => {
     // Seed at least one memory so recall has results (not strictly required
     // but exercises the populated-results path).
     writeEntry(root, createMemory('some unrelated memory content', {
@@ -94,7 +94,7 @@ describe('PlanningFallacyWatching', () => {
       kind: 'raw',
       tenantId: 'default',
     }));
-    const result = recall(ctxFor(root), { query: 'this will take 2 days to finish the project' });
+    const result = await retrieve(ctxFor(root), { query: 'this will take 2 days to finish the project' });
     expect(result.planningFallacyWatching).toBeDefined();
     expect(result.planningFallacyWatching!.reason).toBe('no_class_match');
     expect(result.planningFallacyWatching!.detectedPhrase).toMatch(/will\s+take\s+2\s+days/i);
@@ -102,14 +102,14 @@ describe('PlanningFallacyWatching', () => {
     expect(result.planningFallacyHint).toBeUndefined();
   });
 
-  it('api.recall populates planningFallacyHint (NOT watching) when class resolves (mutual exclusivity)', () => {
+  it('api.recall populates planningFallacyHint (NOT watching) when class resolves (mutual exclusivity)', async () => {
     seedClosedPredictions(root, 'estimate-task', 3);
     writeEntry(root, createMemory('some unrelated memory content', {
       layer: Layer.Buffer,
       kind: 'raw',
       tenantId: 'default',
     }));
-    const result = recall(ctxFor(root), { query: 'the next task will take 2 days' });
+    const result = await retrieve(ctxFor(root), { query: 'the next task will take 2 days' });
     expect(result.planningFallacyHint).toBeDefined();
     expect(result.planningFallacyHint!.classTag).toBe('estimate-task');
     expect(result.planningFallacyWatching).toBeUndefined();

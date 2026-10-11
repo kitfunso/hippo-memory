@@ -1,6 +1,7 @@
 import { type MemoryEntry, markRetrieved } from '../core/memory.js';
-import { type DatabaseSyncLike, closeHippoDb, openHippoDb, rethrowIfSqliteBlocked, withWriteScope } from '../db/index.js';
-import { RejectedValueError } from './rejection.js';
+import { type DatabaseSyncLike, closeHippoDb, openHippoDb, withWriteScope } from '../db/index.js';
+import { rethrowIfSqliteBlocked } from '../util/sqlite-blocked.js';
+import { RejectedValueError } from '../core/api-errors.js';
 import { markSummaryDirtyInTx } from './summary-dirty.js';
 import { errorMessage, log } from '../util/log.js';
 import { auditRejectionRefusal, audit } from './audit-event.js';
@@ -43,6 +44,34 @@ export function writeEntriesTogether(hippoRoot: string, entries: readonly Memory
     closeHippoDb(db);
   }
   return stamped.length;
+}
+
+/** Runs `fill` in one transaction; each `put` writes one entry and returns false when the store rejects its value,
+ * leaving that row's refusal audit and the rest of the batch. Mirrors follow the commit. Returns how many were written. */
+export function writeEntriesSkippingRejected(
+  hippoRoot: string,
+  fill: (put: (entry: MemoryEntry) => boolean) => void,
+  actor = 'cli',
+): number {
+  const written: MemoryEntry[] = [];
+  onHandle(hippoRoot, (db) => {
+    withWriteScope(db, 'write_entries_skipping_rejected', () => {
+      fill((entry) => {
+        const stamped = stampOriginProject(hippoRoot, entry);
+        try {
+          writeEntryDbOnly(db, stamped, { actor });
+        } catch (error) {
+          if (!(error instanceof RejectedValueError)) throw error;
+          auditRejectionRefusal(db, error, actor);
+          return false;
+        }
+        written.push(stamped);
+        return true;
+      });
+    });
+  }, openStore);
+  for (const entry of written) writeEntryMirrors(hippoRoot, entry);
+  return written.length;
 }
 
 /** Adds `tag` to each of a tenant's rows that lacks it, in `ids` order, each read fresh
@@ -139,7 +168,7 @@ export function strengthenRetrieved(hippoRoot: string, ids: readonly string[], o
   }
 }
 
-/** strengthenRetrieved on an open handle that holds no transaction, so a recall's last writes share one handle. */
+/** strengthenRetrieved on an open handle in its own write scope, a savepoint inside a caller's transaction, so a recall's last writes share one handle. */
 export function strengthenRetrievedInOwnTx(db: DatabaseSyncLike, ids: readonly string[], opts: StrengthenOptions): Set<string> {
   if (ids.length === 0 || opts.recallBoostAblated) return new Set();
   try {

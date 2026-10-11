@@ -10,7 +10,7 @@ import {
   type DatabaseSyncLike,
 } from '../src/db/index.js';
 import type { HippoDbContext } from '../src/api/index.js';
-import { remember, archiveRaw, recall } from '../src/api/index.js';
+import { remember, archiveRaw, retrieve } from '../src/api/index.js';
 import { LATEST_SCHEMA_VERSION } from './_helpers/schema-version.js';
 
 interface RedactedArchivePayload {
@@ -233,19 +233,19 @@ describe('GDPR Path A redaction + migration v20', () => {
     }
   });
 
-  it('6. no re-recall after archive: original content text returns 0 results', () => {
+  it('6. no re-recall after archive: original content text returns 0 results', async () => {
     const ctx: HippoDbContext = { hippoRoot: root, tenantId: 'tenant-C', actor: { subject: 'cli', role: 'admin' } };
     const distinctive = 'gdpr-canary-token-quaxle';
     const { id } = remember(ctx, { content: distinctive, kind: 'raw' });
 
     // Pre-condition: recall finds it.
-    const before = recall(ctx, { query: distinctive });
+    const before = await retrieve(ctx, { query: distinctive });
     expect(before.results.some((r) => r.id === id)).toBe(true);
 
     archiveRaw(ctx, id, 'right-to-be-forgotten');
 
     // Post-condition: gone from recall.
-    const after = recall(ctx, { query: distinctive });
+    const after = await retrieve(ctx, { query: distinctive });
     expect(after.results.length).toBe(0);
   });
 });

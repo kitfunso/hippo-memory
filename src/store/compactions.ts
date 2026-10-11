@@ -1,7 +1,7 @@
 // The `compactions` table: one row per Claude Code compaction, and the reads project merge makes over it.
 import type { DatabaseSyncLike } from '../db/index.js';
 import { originInSql } from '../core/project-identity.js';
-import { scopeAdmitSql } from './recall-scope.js';
+import { scopeAdmitSql } from './rule-sql.js';
 
 export type CompactionStatus = 'started' | 'summarised' | 'done' | 'no-summary';
 
@@ -51,7 +51,8 @@ export interface SummarisedInsert extends SummarisedUpdate {
 
 export type SummarisedInsertMeta = Omit<StartedCompactionInput, 'id'>;
 
-const COLUMNS = 'tenant_id, id, session_id, origin_project, compact_trigger, cwd, transcript_path, snapshot_saved, started_at, summarised_at, summary, items_json, items_written, status';
+const COLUMNS = 'tenant_id, id, session_id, origin_project, compact_trigger, cwd, transcript_path, snapshot_saved, started_at, summarised_at, summary, ' +
+  'items_json, items_written, status';
 
 function selectRows(db: DatabaseSyncLike, where: string, ...params: Array<string | number>): CompactionRow[] {
   // SAFETY: the SELECT names exactly COLUMNS, matching CompactionRow's field set.
@@ -120,8 +121,9 @@ export function insertSummarisedCompaction(db: DatabaseSyncLike, tenantId: strin
   const stamp = requestId === undefined ? [] : [requestId];
   const [col, mark] = stamp.length === 0 ? ['', ''] : [', request_id', ', ?'];
   db.prepare(
-    `INSERT INTO compactions(tenant_id, id, session_id, origin_project, compact_trigger, cwd, transcript_path, started_at, summarised_at, summary, items_json, status${col})
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'summarised'${mark})`,
+    `INSERT INTO compactions(tenant_id, id, session_id, origin_project, compact_trigger, cwd, transcript_path, started_at, ` +
+      `summarised_at, summary, items_json, status${col})\n` +
+      `     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'summarised'${mark})`,
   ).run(
     tenantId,
     id,

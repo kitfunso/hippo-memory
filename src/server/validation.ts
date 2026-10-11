@@ -1,7 +1,9 @@
 // Request-body and path-segment validators shared by the /v1 route handlers.
+import { DEFAULT_LIST_LIMIT } from '../util/limits.js';
 import type { IncomingMessage } from 'node:http';
 import type { Context, RememberOpts } from '../api/index.js';
-import { HttpError, MAX_ID_LEN, readBody } from '../util/http-util.js';
+import { HttpError, readBody } from '../util/http-util.js';
+import { MAX_ID_LEN } from '../util/limits.js';
 import { type JsonValue, isJsonString, isJsonObject } from '../util/json.js';
 
 // Runtime membership check for a `ReadonlySet<T>` of string-literal members: Set<T>.has gives no narrowing, so this is the one place the `as T` assertion lives
@@ -18,7 +20,7 @@ export const MAX_SHORT_FIELD_LEN = 4096;
 // Shared by every first-class-object list route so the guard cannot drift.
 export const MAX_LIST_LIMIT = 1000;
 
-export function parseListLimit(limitRaw: string | null, defaultLimit = 100, maxLimit = MAX_LIST_LIMIT): number {
+export function parseListLimit(limitRaw: string | null, defaultLimit = DEFAULT_LIST_LIMIT, maxLimit = MAX_LIST_LIMIT): number {
   if (limitRaw === null) return defaultLimit;
   const limit = Number(limitRaw);
   if (!Number.isInteger(limit) || limit <= 0 || limit > maxLimit) {
@@ -28,7 +30,7 @@ export function parseListLimit(limitRaw: string | null, defaultLimit = 100, maxL
 }
 
 /** `_authed` is proof the caller passed auth, so a full-size body is read only for
- * an authenticated caller; the key mint reads first under its own small cap. */
+ * an authenticated caller; the key mint reads under its own small cap. */
 export async function parseJsonBody(req: IncomingMessage, _authed: Context): Promise<Record<string, JsonValue>> {
   return parseJsonObjectText(await readBody(req));
 }

@@ -136,17 +136,22 @@ function recentRows(live: readonly MemoryRow[], needed: number, admit: (e: Memor
     : newest;
   const window = Math.max(needed * 4, 32);
   const drifted = live.some((r) => [...r.created].length !== 24 || !/z$/i.test(r.created));
-  if (!drifted) {
-    const windowed = newest.slice(0, window).map(rowToEntry);
-    const kept = windowed.filter(keep);
-    if (kept.length >= needed || windowed.length < window) return kept;
-    if (origins) {
-      const ownWindow = own.slice(0, window).map(rowToEntry);
-      const ownKept = ownWindow.filter(keep);
-      if (ownKept.length >= needed || ownWindow.length < window) return ownKept;
-    }
+  if (drifted) return own.map(rowToEntry).filter(keep);
+  const windowed = newest.slice(0, window).map(rowToEntry);
+  let kept = windowed.filter(keep);
+  if (kept.length >= needed || windowed.length < window) return kept;
+  if (origins) {
+    const ownWindow = own.slice(0, window).map(rowToEntry);
+    kept = ownWindow.filter(keep);
+    if (kept.length >= needed || ownWindow.length < window) return kept;
   }
-  return own.map(rowToEntry).filter(keep);
+  // Keyset pages past the window, each four times the last, until enough rows are kept.
+  for (let start = window, size = window * 4; kept.length < needed; start += size, size *= 4) {
+    const page = own.slice(start, start + size).map(rowToEntry);
+    kept = [...kept, ...page.filter(keep)];
+    if (page.length < size) break;
+  }
+  return kept;
 }
 
 export function inMemoryContextStore(hippoRoot: string): InMemoryContextStore {

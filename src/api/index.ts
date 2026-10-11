@@ -5,8 +5,8 @@
 export { ApiError, BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '../core/api-errors.js';
 
 // The recall-side scope predicates live in recall-scope.ts (leaf) so shared.ts can use them without an import cycle.
-export { isPrivateScope, passesScopeFilterForRecall } from '../store/recall-scope.js';
-export { passesCliRecallScopeFilter, ScopeForbiddenError } from '../store/recall-scope.js';
+export { isPrivateScope, passesScopeFilterForRecall } from '../core/recall-scope.js';
+export { passesCliRecallScopeFilter, ScopeForbiddenError } from '../core/recall-scope.js';
 export type { TokenSummary, TokenSurface, TokenSurfaceSummary } from '../store/token-ledger.js';
 export type { FailureSummary } from '../store/failure-log.js';
 
@@ -23,6 +23,7 @@ export * from './drill-down.js';
 export * from './outcome.js';
 export * from './forget.js';
 export * from './conflicts.js';
+export * from './projects.js';
 export * from './promote.js';
 export * from './auth.js';
 export * from './audit.js';

@@ -137,7 +137,7 @@ describe('request-path output on a fixed store', () => {
   const call = (name: string, args: ToolArgs = {}): Promise<McpResponse | null> =>
     handleMcpRequest(
       { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } },
-      { hippoRoot: localRoot, tenantId: 'default', actor: 'mcp' },
+      { hippoRoot: localRoot, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true },
     );
 
   const toolCases: Array<[string, ToolArgs]> = [

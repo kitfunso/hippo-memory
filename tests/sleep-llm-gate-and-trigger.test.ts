@@ -75,6 +75,41 @@ describe('the sleep LLM gate', () => {
     expect(errSpy).toHaveBeenCalled();
   });
 
+  describe('a failing extraction call', () => {
+    const TOPICS = ['the release train leaves every second thursday', 'the staging cluster restarts at noon', 'invoices are exported as csv on fridays'];
+
+    function rootWithCandidates(): string {
+      const root = newRoot();
+      for (const topic of TOPICS) writeEntry(root, createMemory(topic));
+      return root;
+    }
+
+    it('stops the pass at the first one every later call would repeat, and says how many it skipped', async () => {
+      const root = rootWithCandidates();
+      vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+      const fetcher = llmReturning(() => new Response('{"type":"error","error":{"type":"authentication_error"}}', { status: 401 }));
+
+      const result = await consolidate(root, { fetcher });
+
+      expect(fetcher).toHaveBeenCalledTimes(1);
+      const details = result.details.join('\n');
+      expect(details).toMatch(/extraction: HTTP 401: .*authentication_error/);
+      expect(details).toContain(`2 of ${TOPICS.length} candidates skipped`);
+    });
+
+    it('keeps going past a rate limit, which the next call can clear', async () => {
+      const root = rootWithCandidates();
+      vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+      const fetcher = llmReturning(() => new Response('{"type":"error"}', { status: 429, headers: { 'retry-after': '0' } }));
+
+      const result = await consolidate(root, { fetcher });
+
+      // Three attempts per candidate: the retry policy's own, and no candidate skipped.
+      expect(fetcher).toHaveBeenCalledTimes(3 * TOPICS.length);
+      expect(result.details.join('\n')).not.toContain('candidates skipped');
+    });
+  });
+
   it('test workers start with no provider keys', () => {
     for (const k of ['ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'HIPPO_LLM_RERANKER_URL']) {
       expect(process.env[k] ?? '').toBe('');

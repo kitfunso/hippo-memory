@@ -96,6 +96,7 @@ export function envTenant(): string {
 // Install and CLI switches.
 export function envSkipAutoIntegrations(): boolean { return isOne('HIPPO_SKIP_AUTO_INTEGRATIONS'); }
 export function envSkipPostinstall(): boolean { return isOne('HIPPO_SKIP_POSTINSTALL'); }
+export function envSkipSchedule(): boolean { return isOne('HIPPO_SKIP_SCHEDULE'); }
 export function envMcpStdio(): boolean { return isOne('HIPPO_MCP_STDIO'); }
 /** `1` or `true`, so `0` and `false` turn it off; `true` stays on for anyone who set it that way. */
 export function envRequireServer(): boolean { return isOneOrTrue('HIPPO_REQUIRE_SERVER'); }
@@ -118,7 +119,7 @@ export function envBodyTimeoutMs(): number | undefined { return positiveInt('HIP
 /** How long POST /v1/sleep lets its consolidation run; server/sleep-offload.ts holds the default. */
 export function envSleepTimeoutMs(): number | undefined { return positiveInt('HIPPO_SLEEP_TIMEOUT_MS'); }
 /** How long a /v1 or /mcp request may run before the server answers 504, and a stdio MCP
- * request before its timeout error; 0 for no deadline; server/deadline.ts holds the default. */
+ * request before its timeout error; 0 for no deadline; util/request-scope.ts holds the default. */
 export function envRequestDeadlineMs(): number | undefined { return nonNegativeInt('HIPPO_REQUEST_DEADLINE_MS'); }
 /** How many store calls may wait for one worker thread before the next is refused; store/sqlite/executor.ts holds the default. */
 export function envStoreQueueMax(): number | undefined { return positiveInt('HIPPO_STORE_QUEUE_MAX'); }

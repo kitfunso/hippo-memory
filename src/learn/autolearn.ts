@@ -1,7 +1,7 @@
 /** Auto-learn from errors and git history.
  *  Agents learn from failures without explicit hippo remember calls. */
 
-import { execSync, execFileSync, spawn } from 'child_process';
+import { execFileSync, spawn } from 'child_process';
 import { MemoryEntry, createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../core/memory.js';
 import { loadAllEntries } from '../store/entry-reads.js';
 import { textOverlap } from '../util/tokenize.js';
@@ -120,26 +120,26 @@ export function deduplicateLesson(
   return false;
 }
 
+/** The most stderr `runWatched` returns; the terminal still gets all of it. */
+const STDERR_TAIL_BYTES = 64 * 1024;
+
 /** Run a command in a shell, streaming stderr live; never pass text the caller did not write.
- *  Returns: { exitCode, stderr }. */
+ *  Returns: { exitCode, stderr } with only the last 64 KiB of stderr. */
 export function runWatched(command: string): Promise<{ exitCode: number; stderr: string }> {
   return new Promise((resolve) => {
     // Use shell: true so the command string is handled by the shell as-is
     const child = spawn(command, { shell: true, stdio: ['inherit', 'inherit', 'pipe'], windowsHide: true });
 
-    const stderrChunks: Buffer[] = [];
+    let tail = Buffer.alloc(0);
 
     child.stderr.on('data', (chunk: Buffer) => {
-      stderrChunks.push(chunk);
-      // Also pass through to terminal
+      tail = Buffer.concat([tail, chunk]);
+      if (tail.length > STDERR_TAIL_BYTES) tail = tail.subarray(tail.length - STDERR_TAIL_BYTES);
       process.stderr.write(chunk);
     });
 
     child.on('close', (code: number | null) => {
-      resolve({
-        exitCode: code ?? 1,
-        stderr: Buffer.concat(stderrChunks).toString('utf8'),
-      });
+      resolve({ exitCode: code ?? 1, stderr: tail.toString('utf8') });
     });
 
     child.on('error', (err: Error) => {
@@ -151,7 +151,7 @@ export function runWatched(command: string): Promise<{ exitCode: number; stderr:
 /** Check whether a directory is a git work tree. */
 export function isGitRepo(cwd: string): boolean {
   try {
-    const raw = execSync('git rev-parse --is-inside-work-tree', {
+    const raw = execFileSync('git', ['rev-parse', '--is-inside-work-tree'], {
       encoding: 'utf8',
       cwd,
       timeout: 10000,

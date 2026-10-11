@@ -3,7 +3,8 @@
 import * as path from 'path';
 import * as fs from 'fs';
 import type { MemoryEntry } from '../core/memory.js';
-import { loadAllEntries } from '../store/entry-reads.js';
+import { listMemories } from '../api/memories.js';
+import { cliApiContext } from './api-context.js';
 import { loadConfig } from '../core/config.js';
 import { getGlobalRoot } from '../sharing/global-store.js';
 import { runEval, bootstrapCorpus, compareSummaries, type EvalCase, type EvalSummary } from '../eval/eval.js';
@@ -26,6 +27,7 @@ const MAX_DELTAS_SHOWN = 5;
 /** Runs `hippo eval`: --bootstrap writes a corpus, --suite runs the built-in feature eval, else it scores a corpus file. */
 async function cmdEval(
   hippoRoot: string,
+  tenantId: string,
   corpusPath: string | null,
   flags: CliFlags
 ): Promise<void> {
@@ -36,7 +38,7 @@ async function cmdEval(
   // Suite mode doesn't need an initialized store
   if (!flags['suite']) requireInit(hippoRoot);
 
-  const entries = flags['suite'] ? [] : loadAllEntries(hippoRoot);
+  const entries = flags['suite'] ? [] : listMemories(cliApiContext(hippoRoot, tenantId), { everyTenant: true });
 
   if (flags['bootstrap']) {
     writeBootstrapCorpus(entries, flags);
@@ -245,7 +247,7 @@ function printEvalCompare(summary: EvalSummary, comparePath: string, asJson: boo
   }
 }
 
-export async function handleEval({ hippoRoot, args, flags }: CommandContext): Promise<void> {
+export async function handleEval({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
   const corpusPath = args[0] ? String(args[0]) : null;
-  await cmdEval(hippoRoot, corpusPath, flags);
+  await cmdEval(hippoRoot, tenantId, corpusPath, flags);
 }

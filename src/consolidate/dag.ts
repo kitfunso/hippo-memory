@@ -6,15 +6,18 @@ import {
   applyRebuildResult,
   clearSummaryDirtyAfterBuild,
 } from '../store/summaries.js';
-import { RejectedValueError } from '../store/rejection.js';
+import { RejectedValueError } from '../core/api-errors.js';
 import { generateDagSummary, type DagSummaryOptions } from './dag-summary.js';
-import { derivationScope, derivationPartitionKey } from '../store/recall-scope.js';
+import { overlapPartners } from './overlap-index.js';
+import { derivationScope, derivationPartitionKey } from '../core/recall-scope.js';
 import { loadConfig } from '../core/config.js';
 import { neverAutoShareTags } from '../sharing/share.js';
 import { errorFields, errorMessage, log } from '../util/log.js';
 
 const SUMMARY_FALLBACK_CHARS = 40;
 const DEFAULT_REBUILD_CAP = 20;
+// Facts join a cluster when their tag sets overlap at least this much.
+const CLUSTER_JACCARD_MIN = 0.5;
 
 export interface FactCluster {
   label: string;
@@ -29,6 +32,9 @@ export function clusterFacts(facts: MemoryEntry[]): FactCluster[] {
     f.tags.filter((t) => t.startsWith('speaker:') || t.startsWith('topic:')),
   );
 
+  const tagSets = entityTags.map((tags) => new Set(tags));
+  // Every tag indexed, not a prefix: a repeated tag counts twice in `shared`, so the prefix-filter bound would not hold.
+  const partnersOf = overlapPartners(tagSets, () => 1);
   const assigned = new Set<number>();
   const clusters: FactCluster[] = [];
 
@@ -37,12 +43,11 @@ export function clusterFacts(facts: MemoryEntry[]): FactCluster[] {
     const cluster: number[] = [i];
     assigned.add(i);
 
-    for (let j = i + 1; j < facts.length; j++) {
+    for (const j of partnersOf(i)) {
       if (assigned.has(j)) continue;
-      const shared = entityTags[i].filter((t) => entityTags[j].includes(t));
-      const union = new Set([...entityTags[i], ...entityTags[j]]);
-      const jaccard = union.size > 0 ? shared.length / union.size : 0;
-      if (jaccard >= 0.5) {
+      const shared = entityTags[i].filter((t) => tagSets[j].has(t)).length;
+      const inBoth = [...tagSets[i]].filter((t) => tagSets[j].has(t)).length;
+      if (shared / (tagSets[i].size + tagSets[j].size - inBoth) >= CLUSTER_JACCARD_MIN) {
         cluster.push(j);
         assigned.add(j);
       }
@@ -50,7 +55,7 @@ export function clusterFacts(facts: MemoryEntry[]): FactCluster[] {
 
     const members = cluster.map((idx) => facts[idx]);
     const sharedTags = entityTags[cluster[0]].filter((t) =>
-      cluster.every((idx) => entityTags[idx].includes(t)),
+      cluster.every((idx) => tagSets[idx].has(t)),
     );
     const label = sharedTags
       .map((t) => t.split(':')[1])

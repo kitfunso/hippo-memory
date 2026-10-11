@@ -7,7 +7,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { embedAll } from '../src/store/embeddings/index.js';
+import { embedAll } from '../src/search/embed-memories.js';
 
 const serverPath = path.resolve('dist/mcp/server.js');
 let tmpHome: string;
@@ -286,6 +286,31 @@ describe('MCP stdio fault handling', () => {
     run.proc.stdin.write(`yyy\n${list(2)}`);
     expect(JSON.parse(await run.nextLine(10000)).id).toBe(2);
     expect(run.proc.exitCode).toBeNull();
+  }, 40000);
+
+  it('assembles a frame that arrives over many chunks, newline-delimited or Content-Length', async () => {
+    const run = start([serverPath]);
+    const pause = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 5));
+    const dribble = async (text: string, size: number): Promise<void> => {
+      const bytes = Buffer.from(text);
+      for (let i = 0; i < bytes.length; i += size) {
+        run.proc.stdin.write(bytes.subarray(i, i + size));
+        await pause();
+      }
+    };
+    const list = (id: number): string => JSON.stringify({ jsonrpc: '2.0', id, method: 'tools/list' });
+
+    await dribble(`${list(1)}\n`, 3);
+    expect(JSON.parse(await run.nextLine(10000)).id).toBe(1);
+
+    const body = list(2);
+    await dribble(`Content-Length: ${Buffer.byteLength(body)}\r\n\r\n${body}`, 4);
+    expect(JSON.parse(await run.nextLine(10000)).id).toBe(2);
+
+    // Two frames split mid-way across one chunk boundary each still come out in order.
+    await dribble(`${list(3)}\n${list(4)}\n`, 17);
+    expect(JSON.parse(await run.nextLine(10000)).id).toBe(3);
+    expect(JSON.parse(await run.nextLine(10000)).id).toBe(4);
   }, 40000);
 
   it('exits non-zero and logs the stack on an uncaught exception', async () => {

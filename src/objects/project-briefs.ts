@@ -2,17 +2,18 @@
  *  `refreshBrief` assembles recent `path:<repo>` receipts with a deterministic (no-LLM) assembler; an LLM pipeline is deferred.
  *  The `project_briefs` table is the source of truth; the memory mirror (memory_id NULLABLE, ON DELETE SET NULL) is for recall. */
 
+import { truncateWithEllipsis } from '../util/ellipsize.js';
 import { BadRequestError } from '../core/api-errors.js';
 import { assertTenantId } from '../store/tenant.js';
 import type { KeysetPosition } from '../util/keyset.js';
 import type { SavableDescriptor } from './descriptor.js';
 import { checkText, requireLine } from './fields.js';
 import { closeObjectAt, listObjectsAt, objectByIdAt, type ObjectSaveSite, saveObject, saveObjectAt } from './lifecycle.js';
-import type { BriefReceipt, BriefStatus, ProjectBrief } from '../store/object-types.js';
+import type { BriefReceipt, BriefStatus, ProjectBrief } from '../core/object-types.js';
 import type { ObjectListQuery, Objects } from '../store/port.js';
 import { sqliteObjects } from '../store/sqlite/objects-group.js';
 
-export type { BriefStatus, ProjectBrief } from '../store/object-types.js';
+export type { BriefStatus, ProjectBrief } from '../core/object-types.js';
 
 export const VALID_BRIEF_STATES: ReadonlySet<BriefStatus> = new Set<BriefStatus>([
   'active',
@@ -149,9 +150,7 @@ function newestActive(repo: string): ObjectListQuery<'project_brief'> {
 function receiptHeadline(content: string): string {
   const firstLine = (content ?? '').split(/\r?\n/).find((l) => l.trim().length > 0) ?? '';
   const trimmed = firstLine.trim();
-  return trimmed.length > MAX_RECEIPT_HEADLINE_LEN
-    ? `${trimmed.slice(0, MAX_RECEIPT_HEADLINE_LEN)}...`
-    : trimmed;
+  return truncateWithEllipsis(trimmed, MAX_RECEIPT_HEADLINE_LEN);
 }
 
 /** The tag a memory of the repo carries; the store matches it whole, so `path:hip` never matches `path:hippo`. */

@@ -38,11 +38,11 @@ describe('migration v26: api_keys.role', () => {
     }
   });
 
-  it('createApiKey 6-column INSERT sets role=admin by default', () => {
+  it('createApiKey 6-column INSERT stores role=admin when asked', () => {
     const home = mkdtempSync(join(tmpdir(), 'hippo-v26-create-'));
     const db = openHippoDb(home);
     try {
-      const { keyId, plaintext } = createApiKey(db, { tenantId: 'default', label: 'test-admin' });
+      const { keyId, plaintext } = createApiKey(db, { tenantId: 'default', label: 'test-admin', role: 'admin' });
       const result = validateApiKey(db, plaintext);
       expect(result).toEqual({
         valid: true,

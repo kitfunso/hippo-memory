@@ -13,13 +13,8 @@ import { writeEntry } from '../src/store/entry-writes.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { Layer } from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import {
-  recordTokenUse,
-  lastSentState,
-  shouldSkipUnchanged,
-  summarizeTokenUse,
-  hookPayloadSessionId,
-} from '../src/store/token-ledger.js';
+import { recordTokenUse, lastSentState, shouldSkipUnchanged, summarizeTokenUse } from '../src/store/token-ledger.js';
+import { hookPayloadSessionId } from '../src/util/hook-payload.js';
 import { blockHash } from '../src/util/token-text.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { handleMcpRequest } from '../src/mcp/server.js';
@@ -232,7 +227,7 @@ describe('ledger on the HTTP and MCP surfaces', () => {
   it('records MCP recall', async () => {
     await handleMcpRequest(
       { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_recall', arguments: { query: 'zanzibar' } } },
-      { hippoRoot: home, tenantId: 'default', actor: 'mcp-test' },
+      { hippoRoot: home, tenantId: 'default', actor: 'mcp-test', role: 'admin', hostAdmin: true },
     );
     expect(surfaces().mcp_recall).toBeGreaterThan(0);
   });

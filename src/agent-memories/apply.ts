@@ -1,13 +1,14 @@
 // One container's sync in one transaction on the caller's handle: lookup, plan, then every write (plan designs 6 to 8).
 import { appendAuditEvent } from '../store/audit.js';
 import { withTrialScope, withWriteScope, type DatabaseSyncLike } from '../db/index.js';
-import { deleteDormantRow, dormantSnapshotsBySourcePrefix, insertDormantRow, readDormantSnapshot, replaceDormantEntry } from '../store/dormant.js';
+import { deleteDormantRow, dormantSnapshotsBySourcePrefix, readDormantSnapshot, replaceDormantEntry } from '../store/dormant.js';
 import { gatedWrite } from '../store/gated-write.js';
 import { Layer, calculateStrength, createMemory, type MemoryEntry } from '../core/memory.js';
 import { findRejectedValue, rejectionDigest } from '../store/rejection.js';
 import { redactSecretsStrict } from '../util/secret-detect.js';
 import { stampOriginProject } from '../store/entry-row.js';
-import { deleteEntryRowInTx, renameEntrySourceAndOriginAt, renameEntrySourceAt, setEntryTagsInTx, supersedeEntryAt } from '../store/entry-writes.js';
+import { renameEntrySourceAndOriginAt, renameEntrySourceAt, setEntryTagsInTx, supersedeEntryAt } from '../store/entry-writes.js';
+import { SYNC_ACTOR, setAsideRow } from '../store/set-aside.js';
 import { entryIdTakenAt, selectLiveEntriesBySourcePrefix } from '../store/entry-reads.js';
 import { markSummaryDirtyInTx } from '../store/summary-dirty.js';
 import { itemHash } from './keys.js';
@@ -16,8 +17,6 @@ import { emptyTally, type Tally } from './report.js';
 import { MIN_ITEM_CHARS, itemSource, splitSource, storedText } from './source.js';
 import type { AgentMemoryTool } from '../core/agent-memory-tools.js';
 import type { Container, MemoryItem } from './types.js';
-
-export const SYNC_ACTOR = 'agent-memories';
 
 export interface StoreSession {
   readonly db: DatabaseSyncLike;
@@ -56,27 +55,6 @@ export interface ContainerOutcome {
 export function syncContainer(s: StoreSession, work: ContainerWork): ContainerOutcome {
   const run = (): ContainerOutcome => new ContainerRun(s, work).run();
   return s.dryRun ? withTrialScope(s.db, 'sync_container', run) : withWriteScope(s.db, 'sync_container', run);
-}
-
-export type SetAsideWhy = 'note-gone' | 'note-changed' | 'handover' | 'project-merge' | 'project-repair';
-export type SetAsideResult = { readonly kind: 'untagged'; readonly entry: MemoryEntry } | { readonly kind: 'dormant'; readonly id: string };
-
-/** Design 6's set-aside on the caller's transaction: a pinned row only loses the tag, any other goes dormant, restorable. */
-export function setAsideRow(db: DatabaseSyncLike, tag: string, row: MemoryEntry, why: SetAsideWhy): SetAsideResult {
-  const untagged: MemoryEntry = { ...row, tags: row.tags.filter((t) => t !== tag) };
-  const audit = (metadata: Record<string, string | boolean>): void =>
-    appendAuditEvent(db, { tenantId: row.tenantId, actor: SYNC_ACTOR, op: 'agent_memory_set_aside', targetId: row.id, metadata });
-  if (row.pinned) {
-    setEntryTagsInTx(db, untagged);
-    audit({ why, untagged: true });
-    return { kind: 'untagged', entry: untagged };
-  }
-  const now = new Date();
-  // Sleep's dormant move skips kept rows, so the steps are written out here without its filter.
-  insertDormantRow(db, { entry: untagged, strength: calculateStrength(row, now), reason: 'source-deleted', dormantAt: now.toISOString() });
-  deleteEntryRowInTx(db, row, SYNC_ACTOR);
-  audit({ why });
-  return { kind: 'dormant', id: row.id };
 }
 
 type Refusal = 'short' | 'secret' | 'rejected';

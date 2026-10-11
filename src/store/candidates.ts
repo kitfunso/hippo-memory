@@ -1,7 +1,7 @@
 import { type MemoryEntry, type ConfidenceLevel, FALLBACK_HALF_LIFE_DAYS, Layer, calculateStrength, facetsOf, schemaFitFrom } from '../core/memory.js';
 import { strengthSql } from './rule-sql.js';
 import { withReadSnapshot } from '../db/index.js';
-import { scopeAdmitSql, type SqlFragment } from './recall-scope.js';
+import { scopeAdmitSql, type SqlFragment } from './rule-sql.js';
 import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry, parseJsonArray } from './rows.js';
 import { onHandle, openStore } from './open.js';
 import { originInSql } from '../core/project-identity.js';
@@ -44,30 +44,47 @@ interface RecentRowsOptions {
   readonly origins?: RecentOrigins;
 }
 
+// `id DESC` mirrors getContext's comparator, not loadFreshRawMemories'
+// cross-ingest-stable order: that would change what the hook injects.
+const NEWEST = 'ORDER BY created DESC, id DESC';
+
+interface OwnRows {
+  readonly where: string;
+  readonly params: ReadonlyArray<string | number>;
+}
+
 // The newest rows `admit` keeps, newest first. The first window stays unfiltered so admit still sees, and the
 // delivery ledger still counts, the other-project rows it refuses; past it, the reads narrow to the caller's origins.
 function loadRecentRows(run: RunSql, drifted: boolean, tenantId: string, options: RecentRowsOptions): MemoryEntry[] {
   const { needed, admit, origins } = options;
   const keep = origins ? (e: MemoryEntry): boolean => admit(e) && inOrigins(e, origins) : admit;
-  // `id DESC` mirrors getContext's comparator, not loadFreshRawMemories'
-  // cross-ingest-stable order: that would change what the hook injects.
-  const newest = 'ORDER BY created DESC, id DESC';
   const window = Math.max(needed * 4, 32);
   const originSql = origins && (origins.userGlobal ? `(origin_project = '' OR ${originInSql(origins.names)})` : originInSql(origins.names));
-  const ownWhere = originSql ? `${AMBIENT_SCOPED} AND ${originSql}` : AMBIENT_SCOPED;
-  const ownParams = [tenantId, ...(origins?.names ?? [])];
-  if (!drifted) {
-    const windowed = run(`${AMBIENT_SCOPED} ${newest} LIMIT ?`, [tenantId, window]);
-    const kept = windowed.filter(keep);
-    if (kept.length >= needed || windowed.length < window) return kept;
-    if (origins) {
-      const ownWindow = run(`${ownWhere} ${newest} LIMIT ?`, [...ownParams, window]);
-      const ownKept = ownWindow.filter(keep);
-      if (ownKept.length >= needed || ownWindow.length < window) return ownKept;
-    }
+  const own: OwnRows = { where: originSql ? `${AMBIENT_SCOPED} AND ${originSql}` : AMBIENT_SCOPED, params: [tenantId, ...(origins?.names ?? [])] };
+  // Text order is chronological only for standard UTC ISO (memory.ts), so a drifted store is read whole and re-sorted downstream.
+  if (drifted) return run(`${own.where} ${NEWEST}`, [...own.params]).filter(keep);
+  let read = run(`${AMBIENT_SCOPED} ${NEWEST} LIMIT ?`, [tenantId, window]);
+  let kept = read.filter(keep);
+  if (kept.length >= needed || read.length < window) return kept;
+  if (origins) {
+    read = run(`${own.where} ${NEWEST} LIMIT ?`, [...own.params, window]);
+    kept = read.filter(keep);
+    if (kept.length >= needed || read.length < window) return kept;
   }
-  // Text order is chronological only for standard UTC ISO (memory.ts), and a window of junk can hide older rows.
-  return run(`${ownWhere} ${newest}`, ownParams).filter(keep);
+  return [...kept, ...keptPastWindow(run, own, read, needed - kept.length, keep)];
+}
+
+// A window of refused rows can hide older ones, so read on in keyset pages, each four times the last, until enough are kept.
+function keptPastWindow(run: RunSql, own: OwnRows, read: readonly MemoryEntry[], wanted: number, keep: (e: MemoryEntry) => boolean): MemoryEntry[] {
+  const out: MemoryEntry[] = [];
+  let last = read[read.length - 1];
+  for (let size = read.length * 4; out.length < wanted; size *= 4) {
+    const page = run(`${own.where} AND created <= ? AND (created < ? OR id < ?) ${NEWEST} LIMIT ?`, [...own.params, last.created, last.created, last.id, size]);
+    out.push(...page.filter(keep));
+    if (page.length < size) break;
+    last = page[page.length - 1];
+  }
+  return out;
 }
 
 // The pins plus the `recentNeeded` newest rows that pass `admit`, for ambient injection. One connection;
@@ -186,7 +203,8 @@ export function loadTextsHoldingWords(
       const chunk = unique.slice(i, i + 200);
       // SAFETY: rows' shape matches the three columns named in the SELECT below.
       const rows = db.prepare(
-        `SELECT content, source, origin_project FROM memories WHERE ${tenantWhere}${originWhere} AND ${admit.sql} AND (${chunk.map(() => 'instr(content, ?) > 0').join(' OR ')})`,
+        `SELECT content, source, origin_project FROM memories WHERE ${tenantWhere}${originWhere} AND ${admit.sql} AND (${chunk.map(() => 'instr(content, ?) ' +
+          '> 0').join(' OR ')})`,
       ).all(...tenantParams, ...(project ?? []), ...admit.params, ...chunk) as Array<{ content: string; source: string | null; origin_project: string | null }>;
       for (const row of rows) out.push({ content: row.content, source: row.source ?? 'cli', origin_project: row.origin_project });
     }

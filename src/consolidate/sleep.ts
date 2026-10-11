@@ -12,7 +12,7 @@ import { loadConfig } from '../core/config.js';
 import { type AppendAuditOpts, recordAuditEventsRowByRow, reportAuditWriteFailure } from '../store/audit.js';
 import { lazyTombstoneChecks } from '../store/tombstone-checks.js';
 import { migrateDefaultHalfLife, LEGACY_TYPED_HALF_LIFE } from './half-life-migration.js';
-import { errorMessage, log } from '../util/log.js';
+import { errorFields, errorMessage, log } from '../util/log.js';
 import { WRITE_BUDGET, type WriteBudget } from '../util/write-budget.js';
 import { type DecayOutcome, decayPass } from './decay.js';
 import { familyUnits, groupFlush } from './flush-units.js';
@@ -110,7 +110,10 @@ function migrateHalfLives(hippoRoot: string, dryRun: boolean, result: Consolidat
     );
   }
   if (halfLife.typed > 0) {
-    result.details.push(`  ⏳ ${dryRun ? 'would move' : 'moved'} ${halfLife.typed} memories of decisions, incidents and other objects from the ${LEGACY_TYPED_HALF_LIFE}-day to the ${halfLife.to}-day half-life`);
+    result.details.push(
+      `  ⏳ ${dryRun ? 'would move' : 'moved'} ${halfLife.typed} memories of decisions, incidents and other objects ` +
+        `from the ${LEGACY_TYPED_HALF_LIFE}-day to the ${halfLife.to}-day half-life`,
+    );
   }
   return halfLife;
 }
@@ -139,7 +142,10 @@ async function expireDormant(run: SleepRun, budget: WriteBudget): Promise<void> 
   const cutoff = new Date(run.now.getTime() - config.dormant.retentionDays * DAY_MS).toISOString();
   result.dormantExpired = await expireDormantBefore(run.hippoRoot, cutoff, { dryRun, budget, busyWaitMs: SLEEP_DB_WAIT_MS });
   if (result.dormantExpired > 0) {
-    result.details.push(`  ⌛ ${dryRun ? 'would expire' : 'expired'} ${result.dormantExpired} dormant memor${result.dormantExpired === 1 ? 'y' : 'ies'} older than ${config.dormant.retentionDays} days`);
+    result.details.push(
+      `  ⌛ ${dryRun ? 'would expire' : 'expired'} ${result.dormantExpired} dormant memor${result.dormantExpired === 1 ? 'y' : 'ies'} ` +
+        `older than ${config.dormant.retentionDays} days`,
+    );
   }
 }
 
@@ -191,7 +197,7 @@ function auditRescues(run: SleepRun, { rescuedEntries, rankById }: DecayOutcome)
     }
   } catch (err) {
     // An audit store that will not open must never crash the mutation it records.
-    log.debug(`mv_rescue audit unavailable: ${errorMessage(err)}`);
+    log.warn(`mv_rescue audit unavailable: ${errorMessage(err)}`, { errorClass: errorFields(err).errorClass });
     result.details.push(
       `  ⚠️ memory-value: mv_rescue audit unavailable this cycle ` +
       `(${rescuedEntries.length} rescue${rescuedEntries.length === 1 ? '' : 's'} not audited)`,

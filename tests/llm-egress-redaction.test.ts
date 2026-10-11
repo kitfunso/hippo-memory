@@ -10,7 +10,7 @@ import { generateDagSummary } from '../src/consolidate/dag-summary.js';
 import { extractFacts } from '../src/learn/extract.js';
 import { getReranker } from '../src/rerankers/index.js';
 import { createJevReranker } from '../src/rerankers/jev.js';
-import { resolveEmbeddingProvider } from '../src/store/embeddings/provider.js';
+import { resolveEmbeddingProvider } from '../src/embeddings/provider.js';
 import type { JsonValue } from '../src/util/json.js';
 
 const SECRET = 'AKIA' + 'Q7'.repeat(8);

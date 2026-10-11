@@ -7,9 +7,10 @@ import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../src/core/memory.js';
-import { embedMemory, saveStoredEmbeddingModel } from '../src/store/embeddings/index.js';
+import { saveStoredEmbeddingModel } from '../src/store/embeddings/index.js';
+import { embedMemory } from '../src/search/embed-memories.js';
 import { loadEmbeddingIndex, saveEmbeddingIndex } from '../src/store/vector-index.js';
-import { resolveEmbeddingProvider, type EmbeddingProvider } from '../src/store/embeddings/provider.js';
+import { resolveEmbeddingProvider, type EmbeddingProvider } from '../src/embeddings/provider.js';
 import { retrieve } from '../src/api/index.js';
 import { physicsSearch } from '../src/search/physics-search.js';
 import { embedQueryBy } from '../src/search/vector.js';
@@ -182,7 +183,7 @@ describe("a recall's query embedding", () => {
     expect(given).toEqual([deadline]);
   });
 
-  it('does not hold the in-process provider to the deadline, which no signal can stop', async () => {
+  it('keeps a vector that arrives after the deadline, as a loaded in-process model gives one', async () => {
     const local: EmbeddingProvider = { kind: 'local', model: 'in-process', id: 'in-process', isAvailable: () => true, embed: async () => [[1, 0]] };
 
     expect(await embedQueryBy(AbortSignal.abort(), local, QUERY)).toEqual([1, 0]);

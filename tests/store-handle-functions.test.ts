@@ -109,6 +109,16 @@ describe('writeCapturedItems', () => {
     expect(loadAllEntries(root, 'default').map((e) => e.content)).toEqual([first]);
   });
 
+  it('hands each captured entry to onCaptured, which is where the caller embeds it', () => {
+    const rejected = 'Never log the raw bearer token on a failed request.';
+    reject(rejected);
+    const kept = 'Rotate the signing key before the old one expires.';
+    const seen: string[] = [];
+    const outcomes = writeCapturedItems(root, [item(kept), item(kept), item(rejected)], new Set(), { lean: true, onCaptured: (e) => seen.push(e.content) });
+    expect(outcomes).toEqual(['captured', 'skipped', 'rejected']);
+    expect(seen).toEqual([kept]);
+  });
+
   it('skips an item whose text the store already holds without building its entry', () => {
     const held = 'Keep the changelog fragment in the same commit as the code.';
     let built = false;

@@ -1,3 +1,4 @@
+import { HOUR_MS } from '../util/time.js';
 import { isSharedStore } from '../core/config.js';
 import { closeHippoDb, HOOK_DB_WAIT_MS, scopedBusyWait, withWriteScope, type DatabaseSyncLike } from '../db/index.js';
 import { raiseMinBinary } from '../db/meta.js';
@@ -49,7 +50,9 @@ export function continuityStamp(key: ContinuityKey): ContinuityStamp {
 
 // An unkeyed write acts on the tenant's newest or every active row, which on a shared store belong to other owners.
 function assertKeyedOnSharedStore(fn: string, hippoRoot: string, key: ContinuityKey | undefined): void {
-  if (!key && isSharedStore(hippoRoot)) throw new Error(`${fn}: a shared store keeps one task snapshot per owner and project, so this write needs their continuity key`);
+  if (!key && isSharedStore(hippoRoot)) {
+    throw new Error(`${fn}: a shared store keeps one task snapshot per owner and project, so this write needs their continuity key`);
+  }
 }
 
 type SnapshotInput = {
@@ -150,7 +153,7 @@ export function loadActiveTaskSnapshot(hippoRoot: string, tenantId: string, key?
 
 /** Default freshness bound for AMBIENT active-task-snapshot reads: 72h rather than 48h so a Friday-evening orphan still offers continuity on Monday;
  * override via `loadFreshActiveTaskSnapshot`'s `opts.maxAgeMs`; deliberately no env knob. */
-export const SNAPSHOT_AMBIENT_MAX_AGE_MS = 72 * 60 * 60 * 1000;
+export const SNAPSHOT_AMBIENT_MAX_AGE_MS = 72 * HOUR_MS;
 
 /** A usable session id: non-null, non-empty string; named so the owner-match rule in `loadFreshActiveTaskSnapshot` states its contract once. */
 function isNonEmptySessionId(value: string | null | undefined): value is string {
@@ -195,7 +198,9 @@ export function clearActiveTaskSnapshot(hippoRoot: string, tenantId: string, cle
 
   try {
     // SAFETY: active's shape matches the single `id` column selected above.
-    const active = db.prepare(`SELECT id FROM task_snapshots WHERE status = 'active' AND tenant_id = ? ORDER BY updated_at DESC, id DESC LIMIT 1`).get(tenantId) as { id?: number } | undefined;
+    const active = db.prepare(
+      `SELECT id FROM task_snapshots WHERE status = 'active' AND tenant_id = ? ORDER BY updated_at DESC, id DESC LIMIT 1`,
+    ).get(tenantId) as { id?: number } | undefined;
     if (!active?.id) {
       removeActiveTaskMirror(hippoRoot, tenantId);
       return false;
@@ -380,7 +385,9 @@ export function traceExistsForSession(hippoRoot: string, tenantId: string, sessi
 /** The owner a session id is bound to, or null. */
 function selectSessionOwnerAt(db: DatabaseSyncLike, tenantId: string, sessionId: string): string | null {
   // SAFETY: the SELECT names exactly this one TEXT column.
-  const row = db.prepare(`SELECT owner_subject FROM session_owners WHERE tenant_id = ? AND session_id = ?`).get(tenantId, sessionId) as { owner_subject: string } | undefined;
+  const row = db.prepare(
+    `SELECT owner_subject FROM session_owners WHERE tenant_id = ? AND session_id = ?`,
+  ).get(tenantId, sessionId) as { owner_subject: string } | undefined;
   return row?.owner_subject ?? null;
 }
 

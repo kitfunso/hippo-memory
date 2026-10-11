@@ -29,7 +29,8 @@ export async function runRememberTool({ args, ctx, hippoRoot, config, tenantId }
   const [entry] = await storeFor(apiCtx).entriesByIds([result.id], tenantId);
 
   // Auto-sleep runs on hippo.db, so another store skips it.
-  startAutoSleepIfDue(hippoRoot, tenantId, config.autoSleep, (ctx?.store === undefined || ctx.store.kind === 'sqlite') && ctx?.autoSleep !== false);
+  const allowed = (ctx?.store === undefined || ctx.store.kind === 'sqlite') && ctx?.autoSleep !== false;
+  startAutoSleepIfDue(hippoRoot, tenantId, config.autoSleep, allowed, ctx?.autoSleepRunner);
 
   const halfLife = entry?.half_life_days ?? config.defaultHalfLifeDays;
   const tagStr = entry?.tags.join(', ') || tags.join(', ') || 'none';
@@ -57,6 +58,7 @@ export async function runOutcomeTool({ args, ctx, hippoRoot, tenantId }: ToolCal
 
 export function runLearnTool({ args, ctx, hippoRoot, tenantId }: ToolCall): string {
   const days = Number(args.days) || 7;
+  // process.cwd() is the server's repo, not a remote caller's, so api learn refuses all but stdio and a host admin (mcpActor fails closed).
   const result = apiLearn({ hippoRoot, tenantId, actor: mcpActor(ctx), store: ctx?.store }, { repoPath: process.cwd(), days, profile: MCP_LEARN });
   if (result.status === 'not-a-repo') return 'No git history found.';
   if (result.status === 'no-commits') return 'No fix/revert/bug commits found in the specified period.';

@@ -8,10 +8,10 @@ import { assertTenantId } from '../store/tenant.js';
 import type { KeysetPosition } from '../util/keyset.js';
 import type { SavableDescriptor } from './descriptor.js';
 import { closeObjectAt, listObjectsAt, objectByIdAt, saveObjectAt } from './lifecycle.js';
-import type { Decision, DecisionStatus } from '../store/object-types.js';
+import type { Decision, DecisionStatus } from '../core/object-types.js';
 import { objectIdByMemory } from '../store/sqlite/objects-group.js';
 
-export type { Decision, DecisionStatus } from '../store/object-types.js';
+export type { Decision, DecisionStatus } from '../core/object-types.js';
 
 const SUPERSEDED_TAG = 'superseded';
 

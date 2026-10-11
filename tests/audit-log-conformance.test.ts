@@ -82,7 +82,7 @@ function seedAuditRows(dir: string): void {
     }
     vi.setSystemTime(new Date(at(30)));
     for (let i = 0; i < BULK_ROWS; i++) appendAuditEvent(db, { tenantId: 'bulk', actor: 'cli', op: 'outcome', targetId: `b${i}` });
-    hostAdminToken = createApiKey(db, { tenantId: 'default', label: 'host-admin', role: 'admin' }).plaintext;
+    hostAdminToken = createApiKey(db, { tenantId: 'default', label: 'host-admin', role: 'admin', expiresAt: '2999-01-01T00:00:00.000Z' }).plaintext;
     fixtureAudit = listAuditEventsAfter(db, { afterId: 0, limit: 10_000 });
   } finally {
     vi.useRealTimers();

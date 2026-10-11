@@ -13,7 +13,8 @@ import { queryAuditEvents, type AuditOp } from '../../src/store/audit.js';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { loadDormantMemories, type DormantMemory } from '../../src/store/dormant.js';
 import type { MemoryEntry } from '../../src/core/memory.js';
-import { initStore, isInitialized } from '../../src/store/open.js';
+import { initStore } from '../../src/store/open.js';
+import { isInitialized } from '../../src/core/project-identity.js';
 import { loadAllEntries } from '../../src/store/entry-reads.js';
 
 export interface World {

@@ -28,13 +28,8 @@ import { appendSessionEvent } from '../src/store/sessions.js';
 import { Layer} from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { queryAuditEvents } from '../src/store/audit.js';
-import {
-  RejectedValueError,
-  rejectionDigest,
-  normalizeValueForRejection,
-  insertRejectedValue,
-  findRejectedValue,
-} from '../src/store/rejection.js';
+import { rejectionDigest, normalizeValueForRejection, insertRejectedValue, findRejectedValue } from '../src/store/rejection.js';
+import { RejectedValueError } from '../src/core/api-errors.js';
 import { cmdCapture } from '../src/capture/command.js';
 import { syncGlobalToLocal } from '../src/sharing/global-sync.js';
 import { autoShare } from '../src/sharing/share.js';
@@ -364,12 +359,12 @@ describe('case 6: reject removes a value from recall, permanently', () => {
       const wContent = 'do not use the deprecated zynthkey rotation script for staging credentials';
       const remembered = api.remember(ctx(home), { content: wContent });
 
-      const before = api.recall(ctx(home), { query: 'zynthkey', limit: 5 });
+      const before = await api.retrieve(ctx(home), { query: 'zynthkey', limit: 5 });
       expect(before.results.some((r) => r.id === remembered.id)).toBe(true);
 
       await api.reject(ctx(home), { memoryId: remembered.id, reason: 'staging creds process changed' });
 
-      const afterReject = api.recall(ctx(home), { query: 'zynthkey', limit: 5 });
+      const afterReject = await api.retrieve(ctx(home), { query: 'zynthkey', limit: 5 });
       expect(afterReject.results.some((r) => r.content === wContent)).toBe(false);
 
       let caught: unknown;
@@ -380,7 +375,7 @@ describe('case 6: reject removes a value from recall, permanently', () => {
       }
       expect(caught).toBeInstanceOf(RejectedValueError);
 
-      const afterReattempt = api.recall(ctx(home), { query: 'zynthkey', limit: 5 });
+      const afterReattempt = await api.retrieve(ctx(home), { query: 'zynthkey', limit: 5 });
       expect(afterReattempt.results.some((r) => r.content === wContent)).toBe(false);
     } finally {
       rmSync(home, { recursive: true, force: true });

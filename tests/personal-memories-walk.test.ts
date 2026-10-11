@@ -11,7 +11,7 @@ import { captureSessionTexts } from '../src/capture/session-texts.js';
 import { handleRecall } from '../src/cli/recall.js';
 import { _resetSharedStoreCacheForTests } from '../src/core/config.js';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
-import { insertEntity } from '../src/store/graph-writes.js';
+import { insertEntityAt } from './_helpers/graph-seed.js';
 import type { JsonValue } from '../src/util/json.js';
 import { Layer, generateId, type CreateMemoryOptions, type MemoryEntry } from '../src/core/memory.js';
 import { clearProjectIdentityCache } from '../src/core/project-identity.js';
@@ -394,8 +394,8 @@ describe('personal memories walk (plan lane T)', () => {
   });
 
   it('line 9: GET /v1/graph shows the entity from A\'s row to A only', async () => {
-    insertEntity(store, 'default', { entityType: 'system', name: 'ZirconKettle', memoryId: ids.aZircon });
-    insertEntity(store, 'default', { entityType: 'system', name: 'TealHarbour', memoryId: ids.teamZircon });
+    insertEntityAt(store, 'default', { entityType: 'system', name: 'ZirconKettle', memoryId: ids.aZircon });
+    insertEntityAt(store, 'default', { entityType: 'system', name: 'TealHarbour', memoryId: ids.teamZircon });
     const names = async (who: Who): Promise<string[]> => {
       const r = await http(keys[who].plaintext, 'GET', '/v1/graph');
       expect(r.status, r.text).toBe(200);

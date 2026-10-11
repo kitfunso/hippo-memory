@@ -552,7 +552,7 @@ describe('CHURN_STALE_RANK_MULTIPLIER in search scoring', () => {
     }
   });
 
-  it('sinks a churn-stale row in the default api.recall path (no search scorer)', () => {
+  it('sinks a churn-stale row in the default api.recall path (no search scorer)', async () => {
     const hippoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-churn-recall-'));
     try {
       initStore(hippoRoot);
@@ -561,7 +561,7 @@ describe('CHURN_STALE_RANK_MULTIPLIER in search scoring', () => {
       const c = createMemory('zephyr gearbox notes with many many more padding words here', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: [] });
       for (const m of [stale, b, c]) writeEntry(hippoRoot, m);
       const ctx: api.Context = { hippoRoot, tenantId: 'default', actor: api.adminActor('test') };
-      const ids = api.recall(ctx, { query: 'zephyr' }).results.map((r) => r.id);
+      const ids = (await api.retrieve(ctx, { query: 'zephyr' })).results.map((r) => r.id);
       expect(ids).toHaveLength(3);
       expect(ids[0]).not.toBe(stale.id);
     } finally {

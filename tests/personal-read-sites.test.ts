@@ -15,7 +15,8 @@ import { loadRecallSearchEntries, loadVectorCandidateEntries, recallScopeFilter 
 import { loadAmbientCandidates, loadContextCandidates, loadTextsHoldingWords } from '../src/store/candidates.js';
 import { loadAmbientTallies } from '../src/store/ambient.js';
 import { countSessionRawMemories, loadAllEntries, loadContentsWithTag } from '../src/store/entry-reads.js';
-import { canReadScope, personalScopeOf, touchableScopeSql, type ScopeActor } from '../src/store/recall-scope.js';
+import { canReadScope, personalScopeOf, type ScopeActor } from '../src/core/recall-scope.js';
+import { touchableScopeSql } from '../src/store/rule-sql.js';
 import { loadLatestHandoff, saveSessionHandoff } from '../src/store/handoffs.js';
 import { assembleBriefFromReceipts } from '../src/objects/project-briefs.js';
 import { saveItems, type ItemContext } from '../src/store/compactions-record.js';

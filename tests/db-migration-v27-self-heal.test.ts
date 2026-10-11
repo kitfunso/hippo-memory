@@ -155,10 +155,15 @@ describe('migration v27 self-heal — partial-applied v16 state', () => {
     // crash on the partial-apply state before v27 could heal.
     simulatePartialV16State();
 
-    // Should not throw — v26 sees api_keys missing and no-ops.
-    expect(() => {
-      const db = openHippoDb(root);
+    const db = openHippoDb(root);
+    try {
+      expect(tableNames(db)).toEqual(expect.arrayContaining(['api_keys', 'audit_log']));
+      expect(getMeta(db, 'schema_version')).toBe(LATEST_SCHEMA_VERSION_STR);
+      // SAFETY: PRAGMA table_info rows always carry `name`, the only field read.
+      const cols = (db.prepare(`PRAGMA table_info(api_keys)`).all() as Array<{ name: string }>).map((r) => r.name);
+      expect(cols).toContain('role');
+    } finally {
       closeHippoDb(db);
-    }).not.toThrow();
+    }
   });
 });

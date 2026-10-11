@@ -5,11 +5,13 @@ import { renderAmbientSummary } from '../core/ambient.js';
 
 /** The lines `hippo sleep` prints for an api.sleep result; pure, so the snapshot tests read them without a console spy. */
 export function sleepResultLines(result: api.SleepResult): string[] {
-  return [...sleepCountLines(result), ...(result.dryRun ? ['\n(dry run  - nothing written)'] : []), ...sleepDedupeAndAuditLines(result), ...sleepShareAndGraphLines(result)];
+  return [...sleepCountLines(result), ...(result.dryRun ? ['\n(dry run  - nothing ' +
+    'written)'] : []), ...sleepDedupeAndAuditLines(result), ...sleepShareAndGraphLines(result)];
 }
 
 function sleepCountLines(result: api.SleepResult): string[] {
-  const lines = [`Running consolidation${result.dryRun ? ' (dry run)' : ''}...`, `\nResults:`, `   Active memories:  ${result.active}`, `   Removed (decayed): ${result.removed}`];
+  const lines = [`Running consolidation${result.dryRun ? ' (dry ' +
+    'run)' : ''}...`, `\nResults:`, `   Active memories:  ${result.active}`, `   Removed (decayed): ${result.removed}`];
   // Only when dormant.enabled moved something, so every other render stays byte-identical.
   if (result.dormant !== undefined && result.dormant > 0) {
     lines.push(`   Kept dormant:      ${result.dormant}  (hippo dormant to list)`);
@@ -30,7 +32,8 @@ function sleepDedupeAndAuditLines(result: api.SleepResult): string[] {
     if (semDups > 0) parts.push(`${semDups} redundant semantic patterns`);
     if (epiDups > 0) parts.push(`${epiDups} duplicate episodic lessons`);
     if (crossDups > 0) parts.push(`${crossDups} cross-layer duplicates`);
-    lines.push(`\n${result.dryRun ? 'Would dedupe' : 'Deduped'} ${removed} duplicates (${parts.join(', ')}). ${result.dryRun ? 'Would keep' : 'Kept'} stronger copies.`);
+    lines.push(`\n${result.dryRun ? 'Would ' +
+      'dedupe' : 'Deduped'} ${removed} duplicates (${parts.join(', ')}). ${result.dryRun ? 'Would keep' : 'Kept'} stronger copies.`);
   }
   if (result.audit) {
     if (result.audit.errorsRemoved > 0) {

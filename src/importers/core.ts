@@ -8,7 +8,7 @@ import { loadAllEntries } from '../store/entry-reads.js';
 import { duplicateKey, storedTextKeys } from '../util/same-text.js';
 import { getGlobalRoot, initGlobal } from '../sharing/global-store.js';
 import { withRequestStoresSync } from '../db/request-stores.js';
-import { RejectedValueError } from '../store/rejection.js';
+import { RejectedValueError } from '../core/api-errors.js';
 import { rejectionGuardRefuses } from '../store/rejected-values.js';
 import { loadConfig } from '../core/config.js';
 import { vetSecrets } from '../util/secret-detect.js';

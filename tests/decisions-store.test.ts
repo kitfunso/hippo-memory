@@ -37,7 +37,7 @@ import {
   VALID_DECISION_STATES,
 } from '../src/objects/decisions.js';
 import { ConflictError } from '../src/core/api-errors.js';
-import { mapApiError } from '../src/util/http-util.js';
+import { mapApiError } from '../src/api/error-reply.js';
 import { makeRoot } from './_helpers/make-root.js';
 
 function safeRmSync(p: string): void {

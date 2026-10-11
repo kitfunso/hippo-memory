@@ -14,7 +14,6 @@ import { purgeMirrorBestEffort } from './mirrors.js';
 import { onHandle, openStore } from './open.js';
 import { archiveRawMemory, markMirrorCleaned } from './raw-archive.js';
 import {
-  RejectedValueError,
   checkRejectionGuard,
   deleteRejectedValue,
   insertRejectedValue,
@@ -23,6 +22,7 @@ import {
   rejectionDigest,
   type RejectedValueRow,
 } from './rejection.js';
+import { RejectedValueError } from '../core/api-errors.js';
 
 type HoldsValue = (text: string) => boolean;
 

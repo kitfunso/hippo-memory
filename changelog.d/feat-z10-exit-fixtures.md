@@ -1,0 +1,4 @@
+### Added
+
+- **A reader that says what happened to one lesson in one session.** `scripts/z10-reconstruct.mjs` opens a store read-only and joins the memory, the delivery ledger rows, the host transcript and an optional application-label file. It returns the lesson's delivery class: not written, not retrieved, rejected, delivery unconfirmed, delivered with application unknown, applied but wrong, or applied with a supporting outcome. When the evidence cannot decide, it returns `indeterminate` with a reason. The script is a development tool and is not shipped in the package.
+- **Labelled fixtures for every delivery class.** 34 class reads and 12 negative controls drive the built CLI on scratch stores and check the reader against each case's raw ledger rows. Three more tests check that `hippo context` with a query and the three boundary hooks print, save and exit the same with the ledger off and on.

@@ -44,7 +44,8 @@ export function mergeWorkingState(derived: WorkingState, existing: TaskSnapshot 
   return merged.task || merged.summary || merged.next_step ? merged : null;
 }
 
-/** Keeps the LAST maxChars behind a trim marker, aligned to a nearby line start: the summary runs oldest first, so a head cap would drop the newest working state. */
+/** Keeps the LAST maxChars behind a trim marker, aligned to a nearby line start: the summary runs oldest first, so a head cap would drop
+ * the newest working state. */
 export function truncateKeepNewest(text: string, maxChars: number): string {
   if (text.length <= maxChars) return text;
   let start = text.length - maxChars;
@@ -115,7 +116,8 @@ function lastAssistantTextBlock(jsonl: string): string {
   return '';
 }
 
-/** A session's task, summary and next step from its transcript tail, secrets scrubbed and capped, '' where none; null with a logged reason when nothing is derivable. */
+/** A session's task, summary and next step from its transcript tail, secrets scrubbed and capped, '' where none; null with a logged
+ * reason when nothing is derivable. */
 export function transcriptWorkingState(transcriptPath: string, log: (message: string) => void): Pick<TaskSnapshot, 'task' | 'summary' | 'next_step'> | null {
   let tail = '';
   let rawTask = '';

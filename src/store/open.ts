@@ -3,29 +3,18 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { DEFAULT_HALF_LIFE_DAYS, type MemoryEntry, Layer } from '../core/memory.js';
-import { closeHippoDb, currentRequestStores, type DatabaseSyncLike, openHippoDb, getMeta, setMeta, withWriteScope } from '../db/index.js';
+import {
+  closeHippoDb, currentRequestStores, type DatabaseSyncLike, openHippoDb, getMeta, setMeta, withWriteScope, pruneConsolidationRuns,
+} from '../db/index.js';
 import { openHippoDbWithFacts } from '../db/open.js';
-import { type ResolveProjectIdentityOpts, findHippoStoreDir } from '../core/project-identity.js';
-import { realpathOrResolve } from '../util/real-path.js';
-import { RejectedValueError } from './rejection.js';
-import { errorMessage, log } from '../util/log.js';
+import { RejectedValueError } from '../core/api-errors.js';
+import { errorFields, errorMessage, log } from '../util/log.js';
 import { type HippoIndex, type LegacyStats } from './rows.js';
 import { audit } from './audit-event.js';
-import { deserializeEntry } from './markdown.js';
+import { deserializeEntry } from '../core/markdown.js';
 import { stampOriginProjectForImport, upsertEntryRow } from './entry-row.js';
 import { ensureMirrorDirectories, syncMirrorFiles, layerDir } from './mirrors.js';
-import { isJsonObject } from '../util/json.js';
-
-/** Nearest ancestor store like git; the strict join is the fallback so `hippo init` still creates `<cwd>/.hippo`. */
-export function getHippoRoot(cwd: string = process.cwd(), opts?: ResolveProjectIdentityOpts): string {
-  return findHippoStoreDir(cwd, opts) ?? path.join(realpathOrResolve(cwd), '.hippo');
-}
-
-export function isInitialized(hippoRoot: string): boolean {
-  // autoInstallHooks / setupDailySchedule can create a bare .hippo with no hippo.db; counting
-  // that as initialized makes `hippo init` skip initStore, so only hippo.db counts.
-  return fs.existsSync(path.join(hippoRoot, 'hippo.db'));
-}
+import { isJsonObject, type JsonValue } from '../util/json.js';
 
 export function initStore(hippoRoot: string): void {
   closeHippoDb(openStore(hippoRoot));
@@ -50,8 +39,9 @@ export function openStore(hippoRoot: string, opts?: { busyWaitMs?: number }): Da
   } catch (error) {
     try {
       closeHippoDb(db);
-    } catch {
-      // Best effort only; surface the original init error.
+    } catch (closeErr) {
+      // The init error is the one thrown; the close failure is only logged.
+      log.error(`openStore: closing the handle after a failed init failed: ${errorMessage(closeErr)}`, errorFields(closeErr));
     }
     throw error;
   }
@@ -152,6 +142,8 @@ function importLegacyIndexAndStats(db: DatabaseSyncLike, hippoRoot: string): voi
       Number(row.removed ?? 0)
     );
   }
+  // Same cap as every later sleep, so stats.json and the table agree from the first open.
+  pruneConsolidationRuns(db);
 }
 
 export function loadLegacyEntriesFromMarkdown(hippoRoot: string): MemoryEntry[] {
@@ -162,52 +154,44 @@ export function loadLegacyEntriesFromMarkdown(hippoRoot: string): MemoryEntry[] 
 
     for (const file of fs.readdirSync(dir)) {
       if (!file.endsWith('.md')) continue;
-      const raw = fs.readFileSync(path.join(dir, file), 'utf8');
-      const entry = deserializeEntry(raw);
-      if (entry) entries.push(entry);
+      try {
+        const entry = deserializeEntry(fs.readFileSync(path.join(dir, file), 'utf8'));
+        if (entry) entries.push(entry);
+      } catch (err) {
+        log.warn(`store: skipped unreadable legacy file ${file}: ${errorMessage(err)}`);
+      }
     }
   }
   return entries;
 }
 
+function readLegacyJsonObject(file: string): { [key: string]: JsonValue } | null {
+  let parsed: JsonValue;
+  try {
+    parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
+  } catch (err) {
+    log.warn(`store: unreadable ${path.basename(file)} read as empty: ${errorMessage(err)}`);
+    return null;
+  }
+  if (!isJsonObject(parsed)) {
+    log.warn(`store: ${path.basename(file)} is not a JSON object, read as empty`);
+    return null;
+  }
+  return parsed;
+}
+
 function loadLegacyIndexFile(hippoRoot: string): HippoIndex {
   const indexPath = path.join(hippoRoot, 'index.json');
-  if (!fs.existsSync(indexPath)) {
-    return { version: 1, entries: {}, last_retrieval_ids: [], last_trace_id: null };
-  }
-
-  try {
-    // SAFETY: index.json is only written by writeIndexMirror below, which serializes a HippoIndex;
-    // a hand-edited file that violates the shape falls through to the catch block's fallback.
-    return JSON.parse(fs.readFileSync(indexPath, 'utf8')) as HippoIndex;
-  } catch (err) {
-    log.debug(`store: unreadable index.json read as empty: ${errorMessage(err)}`);
-    return { version: 1, entries: {}, last_retrieval_ids: [], last_trace_id: null };
-  }
+  const empty: HippoIndex = { version: 1, entries: {}, last_retrieval_ids: [], last_trace_id: null };
+  if (!fs.existsSync(indexPath)) return empty;
+  // SAFETY: index.json is written by writeIndexMirror as a HippoIndex; readers default every field, so only the object shape is checked.
+  return (readLegacyJsonObject(indexPath) as HippoIndex | null) ?? empty;
 }
 
 function loadLegacyStatsFile(hippoRoot: string): LegacyStats {
   const statsPath = path.join(hippoRoot, 'stats.json');
-  if (!fs.existsSync(statsPath)) {
-    return {
-      total_remembered: 0,
-      total_recalled: 0,
-      total_forgotten: 0,
-      consolidation_runs: [],
-    };
-  }
-
-  try {
-    // SAFETY: stats.json is only written by writeStatsMirror below with exactly these four fields; callers also guard every read with `?? 0` / `Array.isArray`,
-    // so a hand-edited file is tolerated even if this cast is wrong.
-    return JSON.parse(fs.readFileSync(statsPath, 'utf8')) as LegacyStats;
-  } catch (err) {
-    log.debug(`store: unreadable stats.json read as zero: ${errorMessage(err)}`);
-    return {
-      total_remembered: 0,
-      total_recalled: 0,
-      total_forgotten: 0,
-      consolidation_runs: [],
-    };
-  }
+  const empty: LegacyStats = { total_remembered: 0, total_recalled: 0, total_forgotten: 0, consolidation_runs: [] };
+  if (!fs.existsSync(statsPath)) return empty;
+  // SAFETY: callers guard every field read with `?? 0` / `Array.isArray`, so only the object shape is checked.
+  return (readLegacyJsonObject(statsPath) as LegacyStats | null) ?? empty;
 }

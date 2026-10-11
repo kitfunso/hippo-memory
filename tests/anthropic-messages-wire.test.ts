@@ -106,8 +106,8 @@ const callers: CallerSpec[] = [
     run: (fetcher, messages) => extractFacts('Alice likes tea', { apiKey: KEY, fetcher, onError: (m) => messages.push(m) }),
     expected: {
       ok: { result: [FACT], messages: [], requests: 1 },
-      http400: { result: [], messages: ['HTTP 400'], requests: 1 },
-      http500: { result: [], messages: ['HTTP 500'], requests: 3 },
+      http400: { result: [], messages: ['HTTP 400: {"error":"bad"}'], requests: 1 },
+      http500: { result: [], messages: ['HTTP 500: {"error":"down"}'], requests: 3 },
       badjson: { result: [], messages: [new RegExp(`^unparseable response: ${NOT_JSON.source}`)], requests: 1 },
       empty: { result: [], messages: [], requests: 1 },
       hang: { result: [], messages: [new RegExp(`^request failed: .*${TIMEOUT_MESSAGE.source}`)], requests: 1 },
@@ -123,8 +123,8 @@ const callers: CallerSpec[] = [
     run: (fetcher, messages) => generateDagSummary('tea', ['Alice likes tea'], { apiKey: KEY, fetcher, onError: (m) => messages.push(m) }),
     expected: {
       ok: { result: DAG_TEXT, messages: [], requests: 1 },
-      http400: { result: null, messages: ['HTTP 400'], requests: 1 },
-      http500: { result: null, messages: ['HTTP 500'], requests: 3 },
+      http400: { result: null, messages: ['HTTP 400: {"error":"bad"}'], requests: 1 },
+      http500: { result: null, messages: ['HTTP 500: {"error":"down"}'], requests: 3 },
       badjson: { result: null, messages: [new RegExp(`^unparseable response: ${NOT_JSON.source}`)], requests: 1 },
       empty: { result: null, messages: [], requests: 1 },
       hang: { result: null, messages: [new RegExp(`^request failed: .*${TIMEOUT_MESSAGE.source}`)], requests: 1 },
@@ -140,8 +140,8 @@ const callers: CallerSpec[] = [
     run: (fetcher) => refineSemanticMemory('merged tea notes', [], { apiKey: KEY, fetcher }),
     expected: {
       ok: { result: REFINE_TEXT, messages: [], requests: 1 },
-      http400: { result: null, messages: ['[hippo] warn: refine: API answered HTTP 400'], requests: 1 },
-      http500: { result: null, messages: ['[hippo] warn: refine: API answered HTTP 500'], requests: 3 },
+      http400: { result: null, messages: ['[hippo] warn: refine: API answered HTTP 400: {"error":"bad"}'], requests: 1 },
+      http500: { result: null, messages: ['[hippo] warn: refine: API answered HTTP 500: {"error":"down"}'], requests: 3 },
       badjson: { result: null, messages: [new RegExp(`^\\[hippo\\] warn: refine: unreadable response: ${NOT_JSON.source}`)], requests: 1 },
       empty: { result: null, messages: ['[hippo] warn: refine: response was empty or too short to use'], requests: 1 },
       hang: { result: null, messages: [new RegExp(`^\\[hippo\\] warn: refine: request failed: .*${TIMEOUT_MESSAGE.source}`)], requests: 1 },

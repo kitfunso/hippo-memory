@@ -14,13 +14,14 @@ import { rmSync } from 'node:fs';
 import type { Context } from '../src/api/index.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
-import { openHippoDb, closeHippoDb, setMeta } from '../src/db/index.js';
+import { openHippoDb, closeHippoDb, getMeta, setMeta } from '../src/db/index.js';
 import { compareSemver, PACKAGE_VERSION } from '../src/util/version.js';
 import { handleCommentDeleted } from '../src/connectors/github/deletion.js';
 import { computeIdempotencyKey } from '../src/connectors/github/signature.js';
 import { backfillRepo } from '../src/connectors/github/backfill.js';
 import type { GitHubFetcher, GitHubBackfillPage } from '../src/connectors/github/octokit-client.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { LATEST_SCHEMA_VERSION_STR } from './_helpers/schema-version.js';
 
 function ctx(home: string): Context {
   return { hippoRoot: home, tenantId: 'default', actor: { subject: 'test', role: 'admin' } };
@@ -57,7 +58,16 @@ describe('rollback guard', () => {
     const db2 = openHippoDb(home);
     setMeta(db2, 'min_compatible_binary', '0.1.0');
     closeHippoDb(db2);
-    expect(() => openHippoDb(home)).not.toThrow();
+    const db3 = openHippoDb(home);
+    try {
+      expect(getMeta(db3, 'schema_version')).toBe(LATEST_SCHEMA_VERSION_STR);
+      // The floor never drops below the stamp the test wrote, and never passes this binary.
+      const floor = getMeta(db3, 'min_compatible_binary');
+      expect(compareSemver(floor, '0.1.0')).toBeGreaterThanOrEqual(0);
+      expect(compareSemver(floor, PACKAGE_VERSION)).toBeLessThanOrEqual(0);
+    } finally {
+      closeHippoDb(db3);
+    }
   });
 
   it('opens normally when min_compatible_binary equals this binary version', () => {
@@ -66,7 +76,13 @@ describe('rollback guard', () => {
     const db2 = openHippoDb(home);
     setMeta(db2, 'min_compatible_binary', PACKAGE_VERSION);
     closeHippoDb(db2);
-    expect(() => openHippoDb(home)).not.toThrow();
+    const db3 = openHippoDb(home);
+    try {
+      expect(getMeta(db3, 'schema_version')).toBe(LATEST_SCHEMA_VERSION_STR);
+      expect(getMeta(db3, 'min_compatible_binary')).toBe(PACKAGE_VERSION);
+    } finally {
+      closeHippoDb(db3);
+    }
   });
 
   it('compareSemver handles standard cases', () => {

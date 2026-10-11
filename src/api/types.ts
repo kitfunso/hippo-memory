@@ -1,6 +1,6 @@
 // Request context (caller identity and tenant) shared by every API module, plus the recall contract error.
 
-import { BadRequestError } from '../core/api-errors.js';
+import { BadRequestError, ForbiddenError } from '../core/api-errors.js';
 import type { HippoStore } from '../store/index.js';
 
 /** Actor identity + role for a Context: the audit-log subject (pass `ctx.actor.subject` to audit helpers) and the role for admin gating.
@@ -36,6 +36,11 @@ export type StoreReply<C extends Context, R> = C extends { readonly store: Hippo
  * instead. */
 export function adminActor(subject: string): Actor {
   return { subject, role: 'admin', hostAdmin: true };
+}
+
+/** Throws unless the caller is the host's operator: `action` reaches past the caller's tenant. */
+export function requireHostAdmin(ctx: Context, action: string): void {
+  if (!ctx.actor.hostAdmin) throw new ForbiddenError(`${action} requires a host admin`);
 }
 
 /** The per-person key: an unowned key gets its own bucket by key id rather than sharing one. */

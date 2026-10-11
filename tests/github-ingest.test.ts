@@ -7,7 +7,8 @@ import { remember, type HippoDbContext } from '../src/api/index.js';
 import { initStore } from '../src/store/open.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
-import { ingestEvent, type IngestEvent, type IngestInput, type IngestResult } from '../src/connectors/github/ingest.js';
+import { ingestEvent, type IngestEvent, type IngestInput } from '../src/connectors/github/ingest.js';
+import type { IngestResult } from '../src/connectors/ingest.js';
 import { computeIdempotencyKey } from '../src/connectors/github/signature.js';
 import { issueEventToRememberOpts } from '../src/connectors/github/transform.js';
 import type {

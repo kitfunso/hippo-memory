@@ -278,7 +278,7 @@ describe('DELETE /v1/auth/keys/:keyId on hippo.db', () => {
   });
 });
 
-describe('POST /v1/auth/keys reads its body before auth', () => {
+describe('POST /v1/auth/keys checks auth before its body and again before the mint', () => {
   it('gives no key to a resolver admin deactivated between headers and body', async () => {
     let active = true;
     let checks = 0;
@@ -289,7 +289,7 @@ describe('POST /v1/auth/keys reads its body before auth', () => {
     });
     const status = await postInTwoParts('/v1/auth/keys', 'tok.boss', '{"label":"handed-out"}', async () => {
       await handlerAwaitsBody();
-      expect(checks).toBe(0);
+      expect(checks).toBe(1);
       active = false;
     });
     expect(status).toBe(401);

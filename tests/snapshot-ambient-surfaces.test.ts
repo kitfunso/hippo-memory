@@ -4,7 +4,8 @@ import * as path from 'path';
 import { type SpawnSyncReturns } from 'child_process';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 
-import { initStore, getHippoRoot } from '../src/store/open.js';
+import { initStore } from '../src/store/open.js';
+import { getHippoRoot } from '../src/core/project-identity.js';
 import { saveActiveTaskSnapshot } from '../src/store/sessions.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { handleMcpRequest, type McpResponse } from '../src/mcp/server.js';
@@ -51,7 +52,7 @@ describe('7. MCP hippo_context surface: backdated snapshot is bounded out', () =
         method: 'tools/call',
         params: { name: 'hippo_context', arguments: {} },
       },
-      { hippoRoot: home, tenantId: 'default', actor: 'mcp' },
+      { hippoRoot: home, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true },
     );
   }
 

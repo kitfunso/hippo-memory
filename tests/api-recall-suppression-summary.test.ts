@@ -13,7 +13,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
-import { recall, retrieve, type Context } from '../src/api/index.js';
+import { retrieve, type Context } from '../src/api/index.js';
 import { makeRoot } from './_helpers/make-root.js';
 
 function safeRmSync(p: string): void {
@@ -37,9 +37,9 @@ describe('RecallResult.suppressionSummary', () => {
   beforeEach(() => { root = makeRoot('c5'); });
   afterEach(() => safeRmSync(root));
 
-  it('always present on api.recall response (back-compat preserved on existing fields)', () => {
+  it('always present on api.recall response (back-compat preserved on existing fields)', async () => {
     writeEntry(root, makeRaw('alpha'));
-    const result = recall(ctxFor(root), { query: 'alpha' });
+    const result = await retrieve(ctxFor(root), { query: 'alpha' });
     // Existing fields unchanged.
     expect(result.results).toBeDefined();
     expect(result.total).toBeDefined();
@@ -57,32 +57,32 @@ describe('RecallResult.suppressionSummary', () => {
     expect(Number.isInteger(result.suppressionSummary!.suppressedByInterference)).toBe(true);
   });
 
-  it('totalCandidates reflects loaded candidate pool (post tenant + SQL scope predicate)', () => {
+  it('totalCandidates reflects loaded candidate pool (post tenant + SQL scope predicate)', async () => {
     // Insert 5 query-matching memories; expect totalCandidates >= 5.
     for (let i = 0; i < 5; i++) writeEntry(root, makeRaw(`zeta ${i}`));
-    const result = recall(ctxFor(root), { query: 'zeta', limit: 10 });
+    const result = await retrieve(ctxFor(root), { query: 'zeta', limit: 10 });
     expect(result.suppressionSummary!.totalCandidates).toBeGreaterThanOrEqual(5);
   });
 
-  it('droppedByBudget reflects rows excluded by the final limit slice', () => {
+  it('droppedByBudget reflects rows excluded by the final limit slice', async () => {
     // Insert 20 matching memories; limit to 5; expect droppedByBudget = 15.
     for (let i = 0; i < 20; i++) writeEntry(root, makeRaw(`omega ${i}`));
-    const result = recall(ctxFor(root), { query: 'omega', limit: 5 });
+    const result = await retrieve(ctxFor(root), { query: 'omega', limit: 5 });
     expect(result.results.length).toBe(5);
     expect(result.suppressionSummary!.droppedByBudget).toBe(15);
   });
 
-  it('droppedByBudget = 0 when limit >= candidates (no overflow)', () => {
+  it('droppedByBudget = 0 when limit >= candidates (no overflow)', async () => {
     for (let i = 0; i < 3; i++) writeEntry(root, makeRaw(`kappa ${i}`));
-    const result = recall(ctxFor(root), { query: 'kappa', limit: 10 });
+    const result = await retrieve(ctxFor(root), { query: 'kappa', limit: 10 });
     expect(result.suppressionSummary!.droppedByBudget).toBe(0);
     // suppressionSummary still defined even when no overflow.
     expect(result.suppressionSummary).toBeDefined();
   });
 
-  it('all 6 counters are non-negative integers', () => {
+  it('all 6 counters are non-negative integers', async () => {
     writeEntry(root, makeRaw('delta'));
-    const result = recall(ctxFor(root), { query: 'delta' });
+    const result = await retrieve(ctxFor(root), { query: 'delta' });
     const s = result.suppressionSummary!;
     expect(Number.isInteger(s.totalCandidates)).toBe(true);
     expect(s.totalCandidates).toBeGreaterThanOrEqual(0);
@@ -104,20 +104,20 @@ describe('RecallResult.suppressionSummary', () => {
   // when R2 fires. This test asserts the no-history / no-snapshot case
   // (which keeps the counter at 0). The non-zero-on-R2 case is tested by
   // tests/api-recall-suppressed-interference.test.ts.
-  it('suppressedByInterference is 0 when J1 is off or no R2 detected (default no-history path)', () => {
+  it('suppressedByInterference is 0 when J1 is off or no R2 detected (default no-history path)', async () => {
     writeEntry(root, makeRaw('iota'));
-    const result = recall(ctxFor(root), { query: 'iota' });
+    const result = await retrieve(ctxFor(root), { query: 'iota' });
     expect(result.suppressionSummary!.suppressedByInterference).toBe(0);
   });
 
-  it('recall and retrieve return the same ids in the same order and the same summary', async () => {
+  it('retrieve returns the same ids in the same order and the same summary on a repeat call', async () => {
     for (let i = 0; i < 8; i++) writeEntry(root, makeRaw(`parity ${i} shared token`));
     writeEntry(root, { ...makeRaw('parity old shared token'), superseded_by: 'mem_newer' });
     const opts = { query: 'parity shared', limit: 5 };
-    const sync = recall(ctxFor(root), opts);
-    const async_ = await retrieve(ctxFor(root), opts);
-    expect(async_.results.map((r) => r.id)).toEqual(sync.results.map((r) => r.id));
-    expect(async_.suppressionSummary).toEqual(sync.suppressionSummary);
-    expect(sync.suppressionSummary!.droppedByBudget).toBeGreaterThan(0);
+    const first = await retrieve(ctxFor(root), opts);
+    const again = await retrieve(ctxFor(root), opts);
+    expect(again.results.map((r) => r.id)).toEqual(first.results.map((r) => r.id));
+    expect(again.suppressionSummary).toEqual(first.suppressionSummary);
+    expect(first.suppressionSummary!.droppedByBudget).toBeGreaterThan(0);
   });
 });

@@ -3,6 +3,8 @@
 
 import type { DatabaseSyncLike } from '../../db/index.js';
 import { onHandle } from '../open.js';
+import type { ConnectorEventRecord } from '../port.js';
+import { getDlqRow, insertDlqRow, listDlqRows, markDlqRetried, type DlqRawRow } from './dlq.js';
 
 // Backfill cursors
 
@@ -52,11 +54,8 @@ export function slackEventMemoryAt(db: DatabaseSyncLike, eventId: string): strin
   return row?.memory_id ?? null;
 }
 
-/** What the event log holds for one event id; `memoryId` is null for an event seen without a memory. */
-export type SlackEventRecord = { seen: false } | { seen: true; memoryId: string | null };
-
-export function slackEventRecord(hippoRoot: string, eventId: string): SlackEventRecord {
-  return onHandle(hippoRoot, (db): SlackEventRecord =>
+export function slackEventRecord(hippoRoot: string, eventId: string): ConnectorEventRecord {
+  return onHandle(hippoRoot, (db): ConnectorEventRecord =>
     slackEventSeenAt(db, eventId) ? { seen: true, memoryId: slackEventMemoryAt(db, eventId) } : { seen: false });
 }
 
@@ -104,22 +103,10 @@ export interface SlackDlqInsert {
   slackTimestamp?: string | null;
 }
 
-/** Raw `slack_dlq` row shape, matching the columns named in the SELECTs below. */
-interface DlqRow {
-  id?: unknown;
-  tenant_id?: unknown;
-  team_id?: unknown;
-  raw_payload?: unknown;
-  error?: unknown;
-  received_at?: unknown;
-  retried_at?: unknown;
-  bucket?: unknown;
-  retry_count?: unknown;
-  signature?: unknown;
-  slack_timestamp?: unknown;
-}
+const SELECT_COLUMNS = `id, tenant_id, team_id, raw_payload, error, received_at, retried_at,
+              bucket, retry_count, signature, slack_timestamp`;
 
-function rowToItem(r: DlqRow): DlqItem {
+function rowToItem(r: DlqRawRow): DlqItem {
   return {
     id: Number(r.id),
     tenantId: String(r.tenant_id),
@@ -135,74 +122,32 @@ function rowToItem(r: DlqRow): DlqItem {
   };
 }
 
-function insertSlackDlqAt(db: DatabaseSyncLike, row: SlackDlqInsert): number {
-  const result = db
-    .prepare(
-      `INSERT INTO slack_dlq
-        (tenant_id, team_id, raw_payload, error, received_at, bucket, signature, slack_timestamp)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    )
-    .run(
-      row.tenantId,
-      row.teamId ?? null,
-      row.rawPayload,
-      row.error,
-      new Date().toISOString(),
-      row.bucket,
-      row.signature,
-      row.slackTimestamp ?? null,
-    );
-  return Number(result.lastInsertRowid);
-}
-
-function listSlackDlqAt(db: DatabaseSyncLike, tenantId: string, limit: number): DlqItem[] {
-  // SAFETY: row shape matches the columns named in the SELECT below.
-  const rows = db
-    .prepare(
-      `SELECT id, tenant_id, team_id, raw_payload, error, received_at, retried_at,
-              bucket, retry_count, signature, slack_timestamp
-         FROM slack_dlq
-        WHERE tenant_id = ?
-        ORDER BY received_at ASC
-        LIMIT ?`,
-    )
-    .all(tenantId, limit) as DlqRow[];
-  return rows.map(rowToItem);
-}
-
-function slackDlqEntryAt(db: DatabaseSyncLike, id: number): DlqItem | null {
-  // SAFETY: row shape matches the columns named in the SELECT below.
-  const row = db
-    .prepare(
-      `SELECT id, tenant_id, team_id, raw_payload, error, received_at, retried_at,
-              bucket, retry_count, signature, slack_timestamp
-         FROM slack_dlq
-        WHERE id = ?`,
-    )
-    .get(id) as DlqRow | undefined;
-  if (!row) return null;
-  return rowToItem(row);
-}
-
-function markSlackDlqRetriedAt(db: DatabaseSyncLike, id: number): void {
-  db.prepare(`UPDATE slack_dlq SET retried_at = ?, retry_count = retry_count + 1 WHERE id = ?`)
-    .run(new Date().toISOString(), id);
-}
-
 export function insertSlackDlq(hippoRoot: string, row: SlackDlqInsert): number {
-  return onHandle(hippoRoot, (db) => insertSlackDlqAt(db, row));
+  return onHandle(hippoRoot, (db) =>
+    insertDlqRow(db, 'slack_dlq', [
+      ['tenant_id', row.tenantId],
+      ['team_id', row.teamId ?? null],
+      ['raw_payload', row.rawPayload],
+      ['error', row.error],
+      ['bucket', row.bucket],
+      ['signature', row.signature],
+      ['slack_timestamp', row.slackTimestamp ?? null],
+    ]));
 }
 
 export function listSlackDlq(hippoRoot: string, tenantId: string, limit: number): DlqItem[] {
-  return onHandle(hippoRoot, (db) => listSlackDlqAt(db, tenantId, limit));
+  return onHandle(hippoRoot, (db) => listDlqRows(db, 'slack_dlq', SELECT_COLUMNS, tenantId, limit).map(rowToItem));
 }
 
 export function slackDlqEntry(hippoRoot: string, id: number): DlqItem | null {
-  return onHandle(hippoRoot, (db) => slackDlqEntryAt(db, id));
+  return onHandle(hippoRoot, (db) => {
+    const row = getDlqRow(db, 'slack_dlq', SELECT_COLUMNS, id);
+    return row ? rowToItem(row) : null;
+  });
 }
 
 export function markSlackDlqRetried(hippoRoot: string, id: number): void {
-  onHandle(hippoRoot, (db) => markSlackDlqRetriedAt(db, id));
+  onHandle(hippoRoot, (db) => markDlqRetried(db, 'slack_dlq', id));
 }
 
 // Workspace routing

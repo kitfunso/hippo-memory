@@ -2,14 +2,14 @@
 
 import * as path from 'path';
 import { errorMessage, log } from '../util/log.js';
-import { repairQualityOnce } from '../store/quality-repair.js';
 import { getGlobalRoot } from '../sharing/global-store.js';
-import { resolveTenantId } from '../store/tenant.js';
+import { repairMemoryQualityOnce } from '../api/audit.js';
+import { cliApiContext } from './api-context.js';
 
 /** Fault-isolated like the project tag repair: a failure warns, leaves the store unmarked and runs again next time. */
-export function repairQualityOnceAt(root: string): void {
+export function repairQualityOnceAt(root: string, tenantId: string): void {
   try {
-    const result = repairQualityOnce(root, resolveTenantId({}));
+    const result = repairMemoryQualityOnce(cliApiContext(root, tenantId));
     if (result === null) return;
     if (!result.supported) {
       log.warn(`memory quality repair skipped, tried again next time: ${result.blockers.join('; ')}`);
@@ -19,7 +19,8 @@ export function repairQualityOnceAt(root: string): void {
     const scope = path.resolve(root) === path.resolve(getGlobalRoot()) ? ' --global' : '';
     const moved = result.appliedIds.length;
     if (moved > 0) {
-      console.log(`Set aside ${moved} automatic ${moved === 1 ? 'memory' : 'memories'} with a certain defect, once after the upgrade (backup: ${result.backup}).`);
+      console.log(`Set aside ${moved} automatic ${moved === 1 ? 'memory' : 'memories'} with a certain defect, ` +
+        `once after the upgrade (backup: ${result.backup}).`);
       console.log(`  List them: hippo dormant${scope}   Bring one back: hippo dormant restore <id>${scope}`);
     }
     const review = result.issues.filter((issue) => issue.disposition === 'review').length;

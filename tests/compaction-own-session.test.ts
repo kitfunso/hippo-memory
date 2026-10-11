@@ -14,7 +14,7 @@ import {
 } from '../src/core/memory.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { getContext, recall, type Context } from '../src/api/index.js';
+import { getContext, retrieve, type Context } from '../src/api/index.js';
 import { _resetAblationCacheForTests } from '../src/core/ablation.js';
 
 const PROJECT = 'proj-a';
@@ -163,10 +163,10 @@ describe('explicit recall is not filtered', () => {
       seedItem(root, OWN, `the ${word} lesson from this session is that the ledger export needs a dry run`, minute(5, i)).id);
   }
 
-  it('api recall returns the session own items', () => {
+  it('api recall returns the session own items', async () => {
     const wanted = seedThree(local);
 
-    const result = recall(ctx, { query: 'ledger export dry run' });
+    const result = await retrieve(ctx, { query: 'ledger export dry run' });
 
     expect(result.results.map((r) => r.id).sort()).toEqual(wanted.sort());
   });

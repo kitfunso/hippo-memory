@@ -4,7 +4,7 @@ import { rmSync } from 'node:fs';
 import { reject, remember, supersede, type Actor, type HippoDbContext, type RejectResult } from '../src/api/index.js';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
 import { insertDormantRow, readDormantSnapshot } from '../src/store/dormant.js';
-import { mapApiError } from '../src/util/http-util.js';
+import { mapApiError } from '../src/api/error-reply.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, generateId, type MemoryKind } from '../src/core/memory.js';
 import { handleMcpRequest, type McpContext, type McpResponse } from '../src/mcp/server.js';
 import { listRejectionsForTenant, rejectValue } from '../src/trust/reject-flow.js';

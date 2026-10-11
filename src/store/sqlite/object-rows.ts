@@ -8,7 +8,7 @@ import type { SourceObjectType } from '../graph-rows.js';
 import type {
   BriefStatus, CustomerNote, Decision, DecisionStatus, Incident, IncidentStatus, NoteStatus, ObjectByKind, ObjectFields, ObjectKind,
   Policy, PolicyStatus, Process, ProcessStatus, ProjectBrief, SavableKind, Skill, SkillStatus,
-} from '../object-types.js';
+} from '../../core/object-types.js';
 
 interface HeadRow {
   id: number;

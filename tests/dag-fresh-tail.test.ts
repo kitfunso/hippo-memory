@@ -11,7 +11,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
-import { recall, retrieve, type Context } from '../src/api/index.js';
+import { retrieve, type Context } from '../src/api/index.js';
 import { sqliteStore, type HippoStore } from '../src/server.js';
 import { makeRoot } from './_helpers/make-root.js';
 
@@ -37,13 +37,13 @@ describe('fresh-tail recall', () => {
   beforeEach(() => { root = makeRoot('fresh-tail'); });
   afterEach(() => safeRmSync(root));
 
-  it('1. freshTailCount=0 (default): no fresh-tail rows surfaced', () => {
+  it('1. freshTailCount=0 (default): no fresh-tail rows surfaced', async () => {
     for (let i = 0; i < 5; i++) writeEntry(root, makeRaw(`alpha event ${i}`));
-    const r = recall(ctxFor(root), { query: 'unrelated query terms' });
+    const r = await retrieve(ctxFor(root), { query: 'unrelated query terms' });
     expect(r.results.every((it) => !it.isFreshTail)).toBe(true);
   });
 
-  it('2. freshTailCount=3 stamps isFreshTail on the 3 most recent raw rows', () => {
+  it('2. freshTailCount=3 stamps isFreshTail on the 3 most recent raw rows', async () => {
     // Five raw rows with sequential timestamps. loadSearchEntries returns
     // all tenant-scoped rows scored by BM25, so the recent rows ALSO surface
     // as BM25 hits. The fresh-tail logic stamps `isFreshTail=true` on the
@@ -56,7 +56,7 @@ describe('fresh-tail recall', () => {
       writeEntry(root, e);
       ids.push(e.id);
     }
-    const r = recall(ctxFor(root), {
+    const r = await retrieve(ctxFor(root), {
       query: 'no match for this string anywhere',
       freshTailCount: 3,
     });
@@ -66,10 +66,10 @@ describe('fresh-tail recall', () => {
     expect(new Set(tailIds)).toEqual(new Set([ids[4], ids[3], ids[2]]));
   });
 
-  it('3. fresh-tail dedup vs BM25 hits: same row never appears twice', () => {
+  it('3. fresh-tail dedup vs BM25 hits: same row never appears twice', async () => {
     const e = makeRaw('shared keyword target row');
     writeEntry(root, e);
-    const r = recall(ctxFor(root), {
+    const r = await retrieve(ctxFor(root), {
       query: 'shared keyword target',
       freshTailCount: 5,
     });
@@ -77,10 +77,10 @@ describe('fresh-tail recall', () => {
     expect(matches.length).toBe(1);
   });
 
-  it('4. fresh-tail respects default-deny scope filter', () => {
+  it('4. fresh-tail respects default-deny scope filter', async () => {
     writeEntry(root, makeRaw('public chatter alpha', { scope: 'slack:public:Cgen' }));
     writeEntry(root, makeRaw('private payroll memo', { scope: 'slack:private:Csec' }));
-    const r = recall(ctxFor(root), {
+    const r = await retrieve(ctxFor(root), {
       query: 'completely unrelated string',
       freshTailCount: 5,
     });
@@ -93,10 +93,10 @@ describe('fresh-tail recall', () => {
     expect(publicHit?.isFreshTail).toBe(true);
   });
 
-  it('5. fresh-tail respects tenant isolation', () => {
+  it('5. fresh-tail respects tenant isolation', async () => {
     writeEntry(root, makeRaw('default tenant row', { tenantId: 'default' }));
     writeEntry(root, makeRaw('other tenant row', { tenantId: 'other' }));
-    const r = recall(ctxFor(root, 'default'), {
+    const r = await retrieve(ctxFor(root, 'default'), {
       query: 'unmatched',
       freshTailCount: 10,
     });
@@ -106,7 +106,7 @@ describe('fresh-tail recall', () => {
     expect(defaultHit?.isFreshTail).toBe(true);
   });
 
-  it('6. fresh-tail row not matched by query is prepended at score 1.0', () => {
+  it('6. fresh-tail row not matched by query is prepended at score 1.0', async () => {
     // Two rows: one only matches the query, one only fits the recent window.
     // The recent-only row should be in results with isFreshTail=true.
     const queryHit = makeRaw('alpha bravo charlie match');
@@ -115,7 +115,7 @@ describe('fresh-tail recall', () => {
     const recent = makeRaw('zebra zebra zebra');
     recent.created = '2026-02-01T00:00:00.000Z';
     writeEntry(root, recent);
-    const r = recall(ctxFor(root), {
+    const r = await retrieve(ctxFor(root), {
       query: 'alpha bravo charlie',
       freshTailCount: 1,
     });

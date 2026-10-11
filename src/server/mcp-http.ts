@@ -5,27 +5,28 @@ import type { Context } from '../api/index.js';
 import { isSharedStore } from '../core/config.js';
 import { handleMcpRequest, mcpErrorResponse, type McpContext, type McpRequest } from '../mcp/server.js';
 import { HttpError, readBody, sendJson } from '../util/http-util.js';
+import { log } from '../util/log.js';
 import { assertCallerProject } from '../core/project-identity.js';
 import type { CallerProject } from '../api/prompt-hook.js';
 import { buildContextWithAuth, heartbeatVerdict, readAuthHeader, requireAuth } from './auth.js';
-import { clientLimitKey, subscriberKey } from './client-ip.js';
+import { clientLimitKey } from './client-ip.js';
 import { noteAccess } from './request.js';
 import type { ResolvedServeOpts } from './types.js';
 import { type JsonValue, isJsonString, isJsonObject } from '../util/json.js';
 import { blockHash } from '../util/token-text.js';
+import { consolidateInChild } from './sleep-offload.js';
 
 const DEFAULT_SSE_HEARTBEAT_MS = 60000;
 const DEFAULT_SSE_MAX_AGE_SEC = 3600;
 
 /** Per-client key for MCP state isolation under HTTP-MCP (scopes `lastRecalledIds`): sha256 of the token (16 hex chars, so the raw bearer is never logged)
- * plus remoteAddress, so clients sharing a key stay separable; 'noauth' covers loopback no-auth, which is single-host single-user. */
+ * plus the client address the rate limiter keys on, so clients sharing a key stay separable behind a trusted proxy too; 'noauth' covers loopback no-auth. */
 function buildMcpClientKey(req: IncomingMessage): string {
   const auth = readAuthHeader(req);
   const tokenHash = auth.kind === 'bearer'
     ? blockHash(auth.token)
     : 'noauth';
-  const addr = subscriberKey(req.socket.remoteAddress ?? 'unknown');
-  return `http:${tokenHash}:${addr}`;
+  return `http:${tokenHash}:${clientLimitKey(req)}`;
 }
 
 // MCP-over-HTTP/SSE: POST /mcp answers a JSON-RPC request synchronously; GET /mcp/stream is a keepalive-only SSE stream (`: ping` every 30s) in v1.
@@ -75,6 +76,7 @@ function mcpContextFor(ctx: Context, clientKey: string, autoSleep: McpContext['a
     clientKey,
     store: ctx.store,
     autoSleep,
+    autoSleepRunner: consolidateInChild,
   };
   if (project !== undefined) mcpCtx.project = project;
   return mcpCtx;
@@ -103,7 +105,8 @@ export async function handleMcpPost(req: IncomingMessage, res: ServerResponse, o
   try {
     mcpRes = await handleMcpRequest(rpcReq, mcpContextFor(ctx, buildMcpClientKey(req), opts.autoSleep, project));
   } catch (err) {
-    mcpRes = mcpErrorResponse(rpcReq.id, err);
+    const tool = rpcReq.params?.name;
+    mcpRes = mcpErrorResponse(rpcReq.id, err, undefined, isJsonString(tool) ? `${rpcReq.method} ${tool.slice(0, 128)}` : rpcReq.method);
   }
   if (mcpRes === null) {
     // Notification — no body, 202 Accepted.
@@ -189,6 +192,7 @@ function keepStreamAlive(req: IncomingMessage, res: ServerResponse, opts: Resolv
     checking = true;
     void heartbeatVerdict(req, opts).then((verdict) => {
       checking = false;
+      if (!closed && verdict === 'unavailable') log.warn('heartbeat tick skipped: auth check unavailable');
       if (closed || verdict === 'unavailable') return;
       if (verdict === 'revoked') {
         closeWith('auth_revoked');

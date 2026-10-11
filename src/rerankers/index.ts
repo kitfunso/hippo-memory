@@ -1,15 +1,16 @@
 import { createClefReranker } from './clef.js';
-import { crossEncoderReranker } from './cross-encoder.js';
+import { createCrossEncoderReranker } from './cross-encoder.js';
 import { createJevReranker } from './jev.js';
 import { createLlmReranker } from './llm.js';
 import type { RerankerFn } from './types.js';
 
-// Each hosted reranker is built once here, so its outage warning lasts the process.
+// Each reranker is built once here, so its outage warning lasts the process; jev falls back to the same cross-encoder, so one model loads.
+const crossEncoder = createCrossEncoderReranker();
 const REGISTRY = {
   clef: createClefReranker('clef'),
   'clef-flash': createClefReranker('clef-flash'),
-  'cross-encoder': crossEncoderReranker,
-  jev: createJevReranker(crossEncoderReranker),
+  'cross-encoder': crossEncoder,
+  jev: createJevReranker(crossEncoder),
   llm: createLlmReranker(),
 } satisfies Record<string, RerankerFn>;
 

@@ -87,7 +87,7 @@ describe('mcp hippo_recall anchoringHint', () => {
   });
 
   it('R2 fires after >=3 recalls with same query on same session (memory_dominance + suppressedByInterference bumped)', async () => {
-    const ctx: McpContext = { hippoRoot: home, tenantId: 'default', actor: 'mcp' };
+    const ctx: McpContext = { hippoRoot: home, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true };
     // Three recalls with DIFFERENT queries on the same session — same top
     // memory should win each time and trigger R2 on the 3rd.
     await callTool(1, 'hippo_recall', { query: 'frobnicate baz quux', session_id: 'sess1' }, ctx);
@@ -106,14 +106,14 @@ describe('mcp hippo_recall anchoringHint', () => {
   });
 
   it('does NOT render anchoring block on the first recall (no history yet)', async () => {
-    const ctx: McpContext = { hippoRoot: home, tenantId: 'default', actor: 'mcp' };
+    const ctx: McpContext = { hippoRoot: home, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true };
     const res = await callTool(1, 'hippo_recall', { query: 'frobnicate baz quux', session_id: 'sess1' }, ctx);
     const text = extractText(res);
     expect(text).not.toContain('## Anchoring hint');
   });
 
   it('emits recall_anchor_skipped_no_session when session_id is absent', async () => {
-    const ctx: McpContext = { hippoRoot: home, tenantId: 'default', actor: 'mcp' };
+    const ctx: McpContext = { hippoRoot: home, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true };
     expect(countAuditOps(home, 'recall_anchor_skipped_no_session')).toBe(0);
     await callTool(1, 'hippo_recall', { query: 'frobnicate baz quux' }, ctx);
     expect(countAuditOps(home, 'recall_anchor_skipped_no_session')).toBe(1);
@@ -121,7 +121,7 @@ describe('mcp hippo_recall anchoringHint', () => {
 
   it('does NOT render anchoring block when HIPPO_ANCHORING=off', async () => {
     process.env.HIPPO_ANCHORING = 'off';
-    const ctx: McpContext = { hippoRoot: home, tenantId: 'default', actor: 'mcp' };
+    const ctx: McpContext = { hippoRoot: home, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true };
     // Repeat 3 distinct queries — would normally fire R2.
     await callTool(1, 'hippo_recall', { query: 'frobnicate baz quux', session_id: 'sess1' }, ctx);
     await callTool(2, 'hippo_recall', { query: 'frobnicate baz different words', session_id: 'sess1' }, ctx);

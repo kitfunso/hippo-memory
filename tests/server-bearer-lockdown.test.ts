@@ -8,7 +8,6 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { initStore } from '../src/store/open.js';
 import { serve, type ServerHandle } from '../src/server.js';
-import { PUBLIC_ROUTES as PUBLIC } from '../src/server/route-table.js';
 import { V1_ROWS } from './_helpers/v1-route-rows.js';
 
 const repoRoot = dirname(dirname(fileURLToPath(import.meta.url)));
@@ -18,6 +17,9 @@ const INLINE_ROUTES: readonly string[] = ['GET /health', 'GET /ready', 'POST /mc
 
 // Rows the old source-text parse found in the table.
 const OLD_PARSED_V1_COUNT = 62;
+
+// The rows that skip the key check because their own signature check is the proof.
+const PUBLIC = V1_ROWS.filter(({ route }) => route.auth === 'webhook-signature').map(({ key }) => key);
 
 const derivedRoutes = (): Set<string> => new Set([...V1_ROWS.map((row) => row.key), ...INLINE_ROUTES]);
 
@@ -121,17 +123,17 @@ describe('server Bearer lockdown', () => {
     rmSync(root, { recursive: true, force: true });
   });
 
-  it('every inline method-check in boot.ts handleRequest is a listed inline or public route', () => {
+  it('every inline method-check in boot.ts handleRequest is a listed inline route; the public webhooks live in the table', () => {
     const boot = readFileSync(join(repoRoot, 'src/server/boot.ts'), 'utf8');
     const inlineChecks = (boot.slice(boot.indexOf('async function handleRequest')).match(/^\s*if \(method === '/gm) ?? []).length;
-    expect(inlineChecks).toBe(INLINE_ROUTES.length + PUBLIC.size);
+    expect(inlineChecks).toBe(INLINE_ROUTES.length);
   });
 
   it('the live /v1 table is at least as large as the 62 rows the old source parse found', () => {
     expect(V1_ROWS.length).toBeGreaterThanOrEqual(OLD_PARSED_V1_COUNT);
   });
 
-  it('PUBLIC_ROUTES contains exactly the two documented unauth routes', () => {
+  it('only the two documented webhooks are public', () => {
     expect([...PUBLIC].sort()).toEqual([
       'POST /v1/connectors/github/events',
       'POST /v1/connectors/slack/events',

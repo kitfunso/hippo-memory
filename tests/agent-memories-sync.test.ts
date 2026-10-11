@@ -11,9 +11,8 @@ import type { ImportReport } from '../src/agent-memories/report.js';
 import { insertDormantRow } from '../src/store/dormant.js';
 import { Layer, type MemoryEntry } from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { deriveOriginProject } from '../src/core/project-identity.js';
+import { deriveOriginProject, isInitialized } from '../src/core/project-identity.js';
 import { removeEntryMirrors } from '../src/store/mirrors.js';
-import { isInitialized } from '../src/store/open.js';
 import { deleteEntryRowInTx, writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries, readEntry } from '../src/store/entry-reads.js';
 import {

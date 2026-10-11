@@ -42,8 +42,11 @@ export interface ShellPatch {
   cd: string | null;
 }
 
-const HEREDOC =
-  /^\s*(?:cd\s+(?<cd>'[^']*'|"[^"]*"|[^\s'"&|;]+)\s+&&\s+)?(?:apply_patch|applypatch)\s+<<\s*(?<q>['"]?)(?<tag>\w+)\k<q>[ \t]*\r?\n(?<body>[\s\S]*?)\r?\n\s*\k<tag>\s*$/;
+const HEREDOC = new RegExp(
+  String.raw`^\s*(?:cd\s+(?<cd>'[^']*'|"[^"]*"|[^\s'"&|;]+)\s+&&\s+)?` +
+    String.raw`(?:apply_patch|applypatch)\s+<<\s*(?<q>['"]?)(?<tag>\w+)\k<q>[ \t]*\r?\n` +
+    String.raw`(?<body>[\s\S]*?)\r?\n\s*\k<tag>\s*$`,
+);
 
 /** The script a shell argv runs, for the shells Codex checks for an apply_patch heredoc. */
 function shellScript(argv: readonly string[]): string | null {

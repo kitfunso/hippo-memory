@@ -3,8 +3,7 @@
 
 import { createHash } from 'node:crypto';
 import type { DatabaseSyncLike } from '../db/index.js';
-import { BadRequestError } from '../core/api-errors.js';
-import { DIGEST_DISPLAY_CHARS } from '../util/token-text.js';
+import { RejectedValueError } from '../core/api-errors.js';
 
 /** Normalize content for rejection digests: NFC, lowercase, collapse whitespace runs, trim. No punctuation stripping: over-normalizing causes false
  * refusals, worse than misses. */
@@ -15,35 +14,6 @@ export function normalizeValueForRejection(content: string): string {
 /** Full 64-char sha256 hex of the normalized content: a tombstone key needs collision resistance, not the 16-char redaction hash used for query hashing. */
 export function rejectionDigest(content: string): string {
   return createHash('sha256').update(normalizeValueForRejection(content)).digest('hex');
-}
-
-/** Thrown by the write-path guard (checkRejectionGuard, via upsertEntryRow) when a write would introduce a tombstoned value; carries what the
- * transaction-owner catch blocks (writeEntry, api.supersede) need to write the post-rollback `reject_refusal` audit row via `auditRejectionRefusal`. */
-export class RejectedValueError extends BadRequestError {
-  readonly digest: string;
-  readonly tenantId: string;
-  readonly entryId: string;
-  readonly reason: string | null;
-  readonly rejectedAt: string;
-
-  constructor(opts: {
-    digest: string;
-    tenantId: string;
-    entryId: string;
-    reason: string | null;
-    rejectedAt: string;
-  }) {
-    super(
-      `Memory value refused: matches a rejected value (digest ${opts.digest.slice(0, DIGEST_DISPLAY_CHARS)}..., ` +
-        `reason: ${opts.reason ?? 'none given'}). Run "hippo unreject" to allow it again.`,
-    );
-    this.name = 'RejectedValueError';
-    this.digest = opts.digest;
-    this.tenantId = opts.tenantId;
-    this.entryId = opts.entryId;
-    this.reason = opts.reason;
-    this.rejectedAt = opts.rejectedAt;
-  }
 }
 
 export interface RejectedValueRow {

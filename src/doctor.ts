@@ -3,18 +3,18 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { findHippoStoreDir } from './core/project-identity.js';
+import { findHippoStoreDir, isInitialized } from './core/project-identity.js';
 import { getGlobalRoot } from './sharing/global-store.js';
-import { isInitialized } from './store/open.js';
 import { readStoreHealth, type StoreHealth } from './store/diagnostics.js';
 import { loadConfig } from './core/config.js';
 import { openHippoDbReadOnly, closeHippoDb, getCurrentSchemaVersion, IncompatibleBinaryError, type DatabaseSyncLike } from './db/index.js';
 import { REPLAY_AFTER_MS, TRANSCRIPT_FILL_WINDOW_MS } from './core/compaction-timing.js';
 import { SPOOL_DIR, spoolCounts, type SpoolCounts } from './capture/compaction-spool.js';
-import { isEmbeddingAvailable } from './store/embeddings/local.js';
+import { isEmbeddingAvailable } from './embeddings/local.js';
 import { CODEX_TRUST_LINE, isCodexPresent } from './hooks/shared.js';
 import { claudeConfigDir, codexHomeDir } from './util/agent-homes.js';
 import { planProjectRepair } from './sharing/project-merge.js';
+import { projectTagReads } from './store/project-tags.js';
 import { resolveTenantId } from './store/tenant.js';
 import { errorMessage, log } from './util/log.js';
 import { readJsonFile, type JsonValue, isJsonObjectLiteral } from './util/json.js';
@@ -173,7 +173,8 @@ function compactionsCheck(compactions: StoreHealth['compactions'], store: string
   ].filter((s) => s !== '');
   const unfinished = stuck === 0
     ? `${recorded} in the store`
-    : `${stuck} compaction${stuck === 1 ? '' : 's'} unfinished after 10 minutes (${summarised} with a summary whose memories are not saved yet, ${started} with no summary yet)`;
+    : `${stuck} compaction${stuck === 1 ? '' : 's'} unfinished after 10 minutes ` +
+      `(${summarised} with a summary whose memories are not saved yet, ${started} with no summary yet)`;
   const note = spooled ? `; spool: ${spool.waiting} waiting, ${spool.stale} left by a replay that stopped, ${spool.bad} .bad` : '';
   return { id: 'compactions', status: 'warn', detail: `${unfinished}${note}${unread}`, fix: fix.join('; ') };
 }
@@ -183,7 +184,7 @@ function projectsCheck(globalRoot: string): DoctorCheck {
   let db: DatabaseSyncLike | null = null;
   try {
     db = openHippoDbReadOnly(globalRoot);
-    const r = planProjectRepair(db, globalRoot, resolveTenantId({}));
+    const r = planProjectRepair(projectTagReads(db, resolveTenantId({})), globalRoot);
     const found = [
       r.copies.length > 0 ? `${r.copies.length} imported notes copied under the wrong project` : '',
       r.folds.length > 0 ? `old project names that now resolve to another project: ${r.folds.map((f) => `${f.from} -> ${f.into}`).join(', ')}` : '',
@@ -300,7 +301,8 @@ function tokensCheck(tokens: StoreHealth['tokens']): DoctorCheck {
   return {
     id: 'tokens',
     status: 'info',
-    detail: `${tally.injected} memory blocks sent to agents in 7 days, about ${tally.tokensSent} tokens sent and ${tally.tokensReread} re-read by later model calls (hippo tokens for detail)`,
+    detail: `${tally.injected} memory blocks sent to agents in 7 days, about ${tally.tokensSent} tokens sent ` +
+      `and ${tally.tokensReread} re-read by later model calls (hippo tokens for detail)`,
   };
 }
 

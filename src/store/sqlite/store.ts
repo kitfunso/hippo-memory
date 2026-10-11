@@ -325,16 +325,17 @@ interface RecallFinish {
 /** sqliteStore's finishRecall, for the synchronous recall that cannot await the port. */
 export function finishRecallAt(hippoRoot: string, writes: RecallWrites): RecallFinish {
   return onHandle(hippoRoot, (db) => {
-    // With no row to write the scope would only take the write lock.
-    if (writes.goalLog.length > 0 || writes.audit.length > 0) {
-      withWriteScope(db, 'finish_recall', () => {
-        writeGoalRecallLog(db, localGoalRecallRows(db, writes.goalLog));
-        for (const event of writes.audit) appendAuditEvent(db, event);
-      });
-    }
-    // Each opens its own transaction, so neither can share the scope above.
-    const traceId = writes.trace ? writeRecallTrace(db, writes.trace) : null;
-    const strengthened = writes.strengthen ? strengthenRetrievedInOwnTx(db, writes.strengthen.ids, writes.strengthen.opts) : new Set<string>();
-    return { traceId, strengthened };
+    const traceAndStrengthen = (): RecallFinish => ({
+      traceId: writes.trace ? writeRecallTrace(db, writes.trace) : null,
+      strengthened: writes.strengthen ? strengthenRetrievedInOwnTx(db, writes.strengthen.ids, writes.strengthen.opts) : new Set<string>(),
+    });
+    // Alone, the fail-soft trace and strengthen keep their own scopes so a busy lock loses them, never the read.
+    if (writes.goalLog.length === 0 && writes.audit.length === 0) return traceAndStrengthen();
+    // Inside this scope both run as savepoints, so one recall commits once and a failed trace or strengthen still unwinds alone.
+    return withWriteScope(db, 'finish_recall', () => {
+      writeGoalRecallLog(db, localGoalRecallRows(db, writes.goalLog));
+      for (const event of writes.audit) appendAuditEvent(db, event);
+      return traceAndStrengthen();
+    });
   });
 }

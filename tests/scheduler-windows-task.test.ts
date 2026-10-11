@@ -18,7 +18,8 @@ describe('Windows daily task', () => {
     expect(quoteInsideWindowsArg('C:\\a\\b')).toBe('C:\\a\\b');
   });
 
-  it.skipIf(process.platform !== 'win32')('creates a task whose quoted && command runs intact', async () => {
+  // It creates and runs a real scheduled task, so only on a throwaway CI machine, never a developer's.
+  it.skipIf(process.platform !== 'win32' || !process.env.CI)('creates a task whose quoted && command runs intact', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'hippo sched '));
     const name = `hippo-test-headless-${process.pid}`;
     const schtasks = (...args: string[]) => execFileSync('schtasks', args, { encoding: 'utf-8', windowsHide: true });

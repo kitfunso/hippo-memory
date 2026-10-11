@@ -12,7 +12,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
-import { recall, type Context } from '../src/api/index.js';
+import { retrieve, type Context } from '../src/api/index.js';
 import { _forceLikePathForTests } from '../src/store/search-rows.js';
 import { makeRoot } from './_helpers/make-root.js';
 
@@ -56,10 +56,10 @@ describe('scorerWindow tenant isolation', () => {
     return tenantAIds;
   }
 
-  it('FTS path: wide scorerWindow under one tenant does not surface rows from another', () => {
+  it('FTS path: wide scorerWindow under one tenant does not surface rows from another', async () => {
     const N = 5;
     const tenantAIds = seedTwoTenants(N);
-    const result = recall(ctxFor(root, 'tenant-a'), {
+    const result = await retrieve(ctxFor(root, 'tenant-a'), {
       query: 'kappa',
       limit: 100,
       scorerWindow: N + 5,
@@ -71,10 +71,10 @@ describe('scorerWindow tenant isolation', () => {
     }
   });
 
-  it('No-terms path: empty query under one tenant does not surface rows from another', () => {
+  it('No-terms path: empty query under one tenant does not surface rows from another', async () => {
     const N = 5;
     const tenantAIds = seedTwoTenants(N);
-    const result = recall(ctxFor(root, 'tenant-a'), {
+    const result = await retrieve(ctxFor(root, 'tenant-a'), {
       query: '',
       limit: 100,
       scorerWindow: N + 5,
@@ -86,12 +86,12 @@ describe('scorerWindow tenant isolation', () => {
     }
   });
 
-  it('LIKE-fallback path: the forced LIKE route keeps tenant isolation', () => {
+  it('LIKE-fallback path: the forced LIKE route keeps tenant isolation', async () => {
     const N = 5;
     const tenantAIds = seedTwoTenants(N);
     try {
       _forceLikePathForTests(true);
-      const result = recall(ctxFor(root, 'tenant-a'), {
+      const result = await retrieve(ctxFor(root, 'tenant-a'), {
         query: 'kappa',
         limit: 100,
         scorerWindow: N + 5,

@@ -26,7 +26,9 @@ export function saveCompactionItemsForCaller(ctx: Context, req: CallerItemsReque
   assertTrigger(req.trigger);
   assertRequestId(req.requestId);
   // Refused before the scrub, as failure text is, so the cut after it only ever takes back a mask's growth.
-  if (req.items.some((item) => item.length > COMPACTION_ITEM_MAX_CHARS)) throw new BadRequestError(`items: each at most ${COMPACTION_ITEM_MAX_CHARS} characters`);
+  if (req.items.some((item) => item.length > COMPACTION_ITEM_MAX_CHARS)) {
+    throw new BadRequestError(`items: each at most ${COMPACTION_ITEM_MAX_CHARS} characters`);
+  }
   const key = bindCaller(ctx, req.sessionId, req.project);
   if (callerInHoldout(ctx, req.sessionId)) return { written: 0 };
   const written = saveCallerItems(ctx.hippoRoot, ctx.tenantId, {

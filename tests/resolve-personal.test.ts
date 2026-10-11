@@ -4,7 +4,7 @@ import { rmSync } from 'node:fs';
 import { remember, type Actor, type HippoDbContext } from '../src/api/index.js';
 import { listRejectionsForTenant } from '../src/trust/reject-flow.js';
 import { resolveOpenConflict } from '../src/dashboard/dashboard-actions.js';
-import { mapApiError } from '../src/util/http-util.js';
+import { mapApiError } from '../src/api/error-reply.js';
 import { handleMcpRequest, type McpContext, type McpResponse } from '../src/mcp/server.js';
 import { listMemoryConflicts, replaceDetectedConflicts } from '../src/store/conflicts.js';
 import { readEntry } from '../src/store/entry-reads.js';

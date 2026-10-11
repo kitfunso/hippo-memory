@@ -2,7 +2,7 @@ import type { MemoryEntry } from '../core/memory.js';
 import { tokenize } from '../util/tokenize.js';
 import { evalNow } from '../core/ablation.js';
 import { extractPathTags } from './path-context.js';
-import { detectScope } from '../sharing/scope.js';
+import { detectScope } from '../core/active-scope.js';
 import { compareScoredResults } from '../core/compare.js';
 import type { RerankerFn, RerankerOptions } from '../rerankers/types.js';
 import { bm25Score, buildCorpus, entryText, type BM25Corpus } from './bm25.js';
@@ -60,8 +60,8 @@ export interface HybridSearchOptions {
 }
 
 // Share of the blended score that cosine takes, and the relevance side of the MMR relevance-versus-diversity trade.
-const DEFAULT_EMBEDDING_WEIGHT = 0.6;
-const DEFAULT_MMR_LAMBDA = 0.7;
+export const DEFAULT_EMBEDDING_WEIGHT = 0.6;
+export const DEFAULT_MMR_LAMBDA = 0.7;
 
 /** BM25 blended with cosine similarity when stored vectors and a provider are available, BM25 * strength * recency otherwise. */
 export async function hybridSearch(query: string, entries: MemoryEntry[], options: HybridSearchOptions = {}): Promise<SearchResult[]> {

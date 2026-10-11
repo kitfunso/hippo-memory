@@ -78,7 +78,7 @@ describe('mcp hippo_recall fresh-tail policy', () => {
       await callTool(
         'hippo_recall',
         { query: 'event', fresh_tail_count: 3 },
-        { hippoRoot: home, tenantId: 'default', actor: 'mcp' },
+        { hippoRoot: home, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true },
       );
     } catch (err) {
       thrown = err;
@@ -108,7 +108,7 @@ describe('mcp hippo_recall fresh-tail policy', () => {
     const res = await callTool(
       'hippo_recall',
       { query: 'event', fresh_tail_count: 3, fresh_tail_session_id: 'sess-A' },
-      { hippoRoot: home, tenantId: 'default', actor: 'mcp' },
+      { hippoRoot: home, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true },
     );
     // SAFETY: hippo_recall's MCP tool result envelope always carries
     // result.content per src/mcp/server.ts; McpResponse.result is typed
@@ -131,7 +131,7 @@ describe('mcp hippo_recall fresh-tail policy', () => {
     const res = await callTool(
       'hippo_recall',
       { query: 'event', fresh_tail_count: 3 },
-      { hippoRoot: home, tenantId: 'default', actor: 'mcp' },
+      { hippoRoot: home, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true },
     );
     const r = res!;
     expect(r.error).toBeUndefined();
@@ -157,7 +157,7 @@ describe('mcp hippo_recall fresh tail on a shared store', () => {
       writeEntry(shared, entry);
       return entry;
     });
-    const ctx: McpContext = { hippoRoot: shared, tenantId: 'default', actor: 'mcp', project: { name: 'acme', legacyName: 'acme' } };
+    const ctx: McpContext = { hippoRoot: shared, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true, project: { name: 'acme', legacyName: 'acme' } };
     for (const args of [{ fresh_tail_count: 3 }, { fresh_tail_count: 3, fresh_tail_session_id: 'sess-A' }]) {
       // SAFETY: hippo_recall's tool result carries result.content, as in the cases above.
       const r = (await callTool('hippo_recall', { query: 'zzqqxx', ...args }, ctx)) as { result?: { content: Array<{ text: string }> } };

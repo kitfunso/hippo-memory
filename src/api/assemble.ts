@@ -3,7 +3,7 @@
 import { requireGroup, storeFor } from '../store/index.js';
 import { estimateTokens } from '../util/token-text.js';
 import type { MemoryEntry } from '../core/memory.js';
-import { passesScopeFilterForRecall, assertScopeRequestAllowed, personalScopeOf } from '../store/recall-scope.js';
+import { passesScopeFilterForRecall, assertScopeRequestAllowed, personalScopeOf } from '../core/recall-scope.js';
 import { classifyOriginProject, projectNames } from '../core/project-identity.js';
 import type { CallerProject } from './prompt-hook.js';
 import type { Context } from './types.js';

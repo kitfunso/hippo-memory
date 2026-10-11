@@ -3,11 +3,9 @@ import * as path from 'path';
 import { cleanupArchivedMirrors } from './raw-archive-mirror-cleanup.js';
 import { errorFields, errorMessage, log } from '../util/log.js';
 import { DatabaseSync, type DatabaseSyncLike } from './sqlite.js';
-import { execWithBusyRetry } from './busy.js';
+import { DEFAULT_BUSY_WAIT_MS, execWithBusyRetry } from './busy.js';
 import { type OpenFacts, runMigrations } from './migrate.js';
 import { autoCheckpointPages } from './wal-checkpointer.js';
-
-export const DEFAULT_BUSY_WAIT_MS = 5000;
 
 export function getHippoDbPath(hippoRoot: string): string {
   return path.join(hippoRoot, 'hippo.db');
@@ -63,11 +61,11 @@ export interface OpenedDb {
 }
 
 /** A new connection with the store's pragmas and migrations applied and the mirror cleanup run when it is due; the caller owns and closes it. */
-export function connectWithFacts(hippoRoot: string, busyWaitMs?: number): OpenedDb {
+export function connectWithFacts(hippoRoot: string, busyWaitMs: number = DEFAULT_BUSY_WAIT_MS): OpenedDb {
   createStoreFilesOwnerOnly(hippoRoot);
   const db = new DatabaseSync(getHippoDbPath(hippoRoot));
   try {
-    db.exec(`PRAGMA busy_timeout = ${busyWaitMs ?? DEFAULT_BUSY_WAIT_MS}`);
+    db.exec(`PRAGMA busy_timeout = ${busyWaitMs}`);
     execWithBusyRetry(db, 'PRAGMA journal_mode = WAL', busyWaitMs);
     db.exec('PRAGMA synchronous = NORMAL');
     db.exec(`PRAGMA wal_autocheckpoint = ${autoCheckpointPages(getHippoDbPath(hippoRoot))}`);
@@ -83,8 +81,8 @@ export function connectWithFacts(hippoRoot: string, busyWaitMs?: number): Opened
   } catch (error) {
     try {
       db.close();
-    } catch {
-      // Best effort only.
+    } catch (closeErr) {
+      log.error(`openHippoDb: closing the handle after a failed open failed: ${errorMessage(closeErr)}`, errorFields(closeErr));
     }
     throw error;
   }

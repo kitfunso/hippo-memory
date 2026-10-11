@@ -32,11 +32,13 @@ const ctxOn = (kind: string | undefined): McpContext => ({
   hippoRoot: root,
   tenantId: 'default',
   actor: 'mcp',
+  role: 'admin',
+  hostAdmin: true,
   store: kind === undefined ? undefined : { ...sqliteStore(root), kind },
 });
 
 // An add-on store built before the contextReads group.
-const ctxWithoutContextReads = (): McpContext => ({ hippoRoot: root, tenantId: 'default', actor: 'mcp', store: portOnlyStore(root) });
+const ctxWithoutContextReads = (): McpContext => ({ hippoRoot: root, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true, store: portOnlyStore(root) });
 
 function listedNames(res: McpResponse | null): string[] {
   // SAFETY: src/mcp/request.ts answers tools/list with { tools: McpToolDefinition[] }.

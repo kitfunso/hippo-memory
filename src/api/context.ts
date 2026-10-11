@@ -1,6 +1,5 @@
 // Ambient context injection: the admission policy and getContext.
 
-import { isInitialized } from '../store/open.js';
 import { DEFAULT_SEARCH_CANDIDATE_LIMIT } from '../store/rows.js';
 import {
   type ContextCandidateFilter,
@@ -20,15 +19,17 @@ import { evalNow } from '../core/ablation.js';
 import { dropHeldCopies } from '../util/same-text.js';
 import { BadRequestError } from '../core/api-errors.js';
 import { isSharedStore, loadConfig } from '../core/config.js';
-import { rethrowIfSqliteBlocked } from '../db/index.js';
+import { rethrowIfSqliteBlocked } from '../util/sqlite-blocked.js';
 import { errorMessage, log } from '../util/log.js';
-import { resolveProjectIdentity, classifyOriginProject, isGlobalStoreRoot, projectId, projectNames, type ProjectRef } from '../core/project-identity.js';
+import {
+  resolveProjectIdentity, classifyOriginProject, isGlobalStoreRoot, isInitialized, projectId, projectNames, type ProjectRef,
+} from '../core/project-identity.js';
 import { promptTokens } from '../core/prompt-recall.js';
 import { detectSecret } from '../util/secret-detect.js';
 import { isSessionDigestRow } from '../core/session-digest-row.js';
 import { addAmbientTallies, ambientStateFromTallies, type AmbientState, type AmbientTallies } from '../core/ambient.js';
 import { requireGroup, sqliteStore, storeFor, type HippoStore } from '../store/index.js';
-import { passesScopeFilterForRecall, assertScopeRequestAllowed, personalScopeOf } from '../store/recall-scope.js';
+import { passesScopeFilterForRecall, assertScopeRequestAllowed, personalScopeOf } from '../core/recall-scope.js';
 import {
   finiteOr,
   selectBySearch,
@@ -297,7 +298,11 @@ function openBlockBudget(plan: ContextPlan, opts: ContextOpts, budget: number): 
   if (pinnedOnly && !config.pinnedInject.enabled) obs?.disabled();
   if (!pinnedOnly) obs?.queried(plan.query);
   return cost
-    ? Math.max(0, blockBudget - cost.fixed(blockBudget, { cross: plan.includeCrossProject, promptRecall: promptRecallPending, ambient: !pinnedOnly && config.ambient.enabled }))
+    ? Math.max(0, blockBudget - cost.fixed(blockBudget, {
+        cross: plan.includeCrossProject,
+        promptRecall: promptRecallPending,
+        ambient: !pinnedOnly && config.ambient.enabled,
+      }))
     : blockBudget;
 }
 
@@ -517,7 +522,13 @@ async function recordRetrieval(
 }
 
 async function readAmbientState(ctx: Context, plan: ContextPlan): Promise<AmbientState | undefined> {
-  const filter = { exactScope: plan.exactScope, ownScope: plan.ownScope, project: plan.originProject, currentProject: projectNames(plan.currentProject), now: evalNow() };
+  const filter = {
+    exactScope: plan.exactScope,
+    ownScope: plan.ownScope,
+    project: plan.originProject,
+    currentProject: projectNames(plan.currentProject),
+    now: evalNow(),
+  };
   const sources = [
     ...(plan.hasLocal ? [plan.local.reads] : []),
     ...(plan.hasGlobal && !plan.primaryIsGlobal ? [sourceOf(sqliteStore(plan.globalRoot)).reads] : []),

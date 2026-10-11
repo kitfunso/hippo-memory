@@ -8,7 +8,7 @@ import { type PhysicsConfig, DEFAULT_PHYSICS_CONFIG, mergePhysicsConfig } from '
 import { DEFAULT_HALF_LIFE_DAYS } from './memory.js';
 import type { PromptRecallMetric } from './prompt-recall.js';
 import { DEFAULT_LOCAL_BUMP, DEFAULT_RECALL_BUDGET } from './search-types.js';
-import { errorMessage, log } from '../util/log.js';
+import { errorCode, errorMessage, log } from '../util/log.js';
 import { isJsonObject } from '../util/json.js';
 
 export type DecayBasis = 'clock' | 'session' | 'adaptive';
@@ -29,7 +29,7 @@ export interface HippoConfig {
     model: string;
     hybridWeight: number;
     /** Embedding backend: 'local' (default) = zero-dependency transformers.js; 'openai' | 'voyage' | 'cohere' = opt-in API embedder needing the provider's
-     *  API key in env (OPENAI_API_KEY / VOYAGE_API_KEY / COHERE_API_KEY). See src/store/embeddings/provider.ts. */
+     *  API key in env (OPENAI_API_KEY / VOYAGE_API_KEY / COHERE_API_KEY). See src/embeddings/provider.ts. */
     provider?: 'local' | 'openai' | 'voyage' | 'cohere';
     /** Optional API base-URL override (self-host / proxy). HTTPS only (localhost
      *  may use http). Ignored by the local provider. */
@@ -406,7 +406,10 @@ function fileStamp(file: string): string | null {
     const stat = fs.statSync(file, { throwIfNoEntry: false });
     return stat === undefined ? null : `${stat.mtimeMs}:${stat.size}`;
   } catch (err) {
-    log.debug(`config: ${file} could not be reached, read as missing: ${errorMessage(err)}`);
+    const code = errorCode(err);
+    const message = `config: ${file} could not be reached, read as missing: ${errorMessage(err)}`;
+    if (code === 'EACCES' || code === 'EPERM') log.warnThenDebug(`config-unreachable:${file}:${code}`, message, { path: file, code });
+    else log.debug(message);
     return null;
   }
 }

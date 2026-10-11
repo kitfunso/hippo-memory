@@ -30,7 +30,10 @@ import { CliExit } from './exit.js';
 // JSON.stringify keeps quotes or parens in the matched phrase from blurring the line.
 function planningLine(p: PlanningFallacyOutput): string | null {
   if (p.hint) return `Planning fallacy hint (class: ${p.hint.classTag}): ${p.hint.baserateSummary} [detected: ${JSON.stringify(p.hint.detectedPhrase)}]`;
-  if (p.watching) return `Planning fallacy: watching this query (reason: ${p.watching.reason}). ${p.watching.suggestion} [detected: ${JSON.stringify(p.watching.detectedPhrase)}]`;
+  if (p.watching) {
+    return `Planning fallacy: watching this query (reason: ${p.watching.reason}). ${p.watching.suggestion} ` +
+      `[detected: ${JSON.stringify(p.watching.detectedPhrase)}]`;
+  }
   return null;
 }
 
@@ -253,7 +256,13 @@ function rankOptions(query: string, flags: CliFlags, o: RecallOptions, priced: P
   return {
     budget: entryBudget, cost: priced.printCost, limit: o.limit, why: o.showWhy, includeSuperseded: o.includeSuperseded, asOf: o.asOf,
     explicitScope: o.explicitScope, activeScope: o.setting.activeScope,
-    search: { ...engineFlags(flags, o.config), multihop: flagIsTrue(flags, 'multihop') || o.config.multihop.enabled, graphStream: o.graphStream, minResults: o.minResults, explain: false },
+    search: {
+      ...engineFlags(flags, o.config),
+      multihop: flagIsTrue(flags, 'multihop') || o.config.multihop.enabled,
+      graphStream: o.graphStream,
+      minResults: o.minResults,
+      explain: false,
+    },
     graphHops: o.late.graphHops,
     evcAdaptive: boolFlag(flags, 'evc-adaptive'),
     filterConflicts: boolFlag(flags, 'filter-conflicts'),

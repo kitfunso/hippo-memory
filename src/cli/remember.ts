@@ -15,13 +15,12 @@ import {
 import * as api from '../api/index.js';
 import { getMemory } from '../api/memories.js';
 import { ConflictError, NotFoundError } from '../core/api-errors.js';
-import { isInitialized } from '../store/open.js';
-import { listMemoryConflicts } from '../store/conflicts.js';
-import { RejectedValueError } from '../store/rejection.js';
+import { isInitialized } from '../core/project-identity.js';
+import { RejectedValueError } from '../core/api-errors.js';
 import { renderTraceContent, parseSteps } from '../consolidate/trace.js';
 import { extractPathTags } from '../search/path-context.js';
-import { detectScope } from '../sharing/scope.js';
-import { assertClientScope } from '../store/recall-scope.js';
+import { detectScope } from '../core/active-scope.js';
+import { assertClientScope } from '../core/recall-scope.js';
 import { getGlobalRoot, initGlobal } from '../sharing/global-store.js';
 import { vetSecrets } from '../util/secret-detect.js';
 import * as client from './client.js';
@@ -359,8 +358,8 @@ async function traceLineage(hippoRoot: string, globalRoot: string, entry: Memory
 
   // Open conflicts involving this memory.
   const allConflicts = [
-    ...listMemoryConflicts(hippoRoot, 'open', tenantId),
-    ...(isInitialized(globalRoot) ? listMemoryConflicts(globalRoot, 'open', tenantId) : []),
+    ...api.listConflicts(cliApiContext(hippoRoot, tenantId), 'open'),
+    ...(isInitialized(globalRoot) ? api.listConflicts(cliApiContext(globalRoot, tenantId), 'open') : []),
   ];
   const myConflicts = allConflicts.filter((c) => c.memory_a_id === id || c.memory_b_id === id);
   return { parentPreviews, myConflicts };
@@ -402,7 +401,8 @@ function printTraceText(t: TraceView): void {
   console.log(`Memory: ${entry.id}  [${sourceLabel}]`);
   console.log('='.repeat(50));
   console.log(`Content:   ${entry.content.replace(/\s+/g, ' ').slice(0, DETAIL_CONTENT_CHARS)}${entry.content.length > DETAIL_CONTENT_CHARS ? '...' : ''}`);
-  console.log(`Layer:     ${entry.layer.padEnd(10)} Confidence: ${conf.padEnd(14)} Pinned: ${entry.pinned ? 'yes' : 'no'}${entry.starred ? '  Starred: yes' : ''}`);
+  console.log(`Layer:     ${entry.layer.padEnd(10)} Confidence: ${conf.padEnd(14)} Pinned: ${entry.pinned ? 'yes' : 'no'}${entry.starred ? '  Starred: ' +
+    'yes' : ''}`);
   console.log(`Tags:      ${entry.tags.join(', ') || '(none)'}`);
   console.log(`Created:   ${entry.created}  (${fmt(ageDays, 1)} days ago)`);
   console.log();

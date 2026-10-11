@@ -2,21 +2,22 @@
  * Local `id` is the bare model string, API `id` is `${kind}:${model}`; the stored identity adds `#t<N>` (`embeddingIndexIdentity`), so changes reindex.
  * `embed()` MAY throw on hard transport/auth failure so a reindex aborts atomically; hot paths wrap it and fall back to BM25. */
 
-import { envByName } from '../../util/env.js';
+import { envByName } from '../util/env.js';
 import {
+  createLocalEmbedder,
   type EmbeddingRole,
-  getEmbedding,
-  isEmbeddingAvailable,
-  requireLocalPipeline,
+  type LocalEmbedder,
+  type LocalTransformers,
   resolveEmbeddingModel,
+  sharedLocalEmbedder,
   DEFAULT_EMBEDDING_MODEL,
 } from './local.js';
-import { loadConfig } from '../../core/config.js';
-import { errorMessage, log } from '../../util/log.js';
-import { redactSecretsStrict } from '../../util/secret-detect.js';
-import { fetchWithRetry } from '../../util/http-retry.js';
-import type { JsonValue } from '../../util/json.js';
-import { readCappedJson, readCappedText } from '../../util/capped-json.js';
+import { loadConfig } from '../core/config.js';
+import { errorMessage, log } from '../util/log.js';
+import { redactSecretsStrict } from '../util/secret-detect.js';
+import { fetchWithRetry } from '../util/http-retry.js';
+import type { JsonValue } from '../util/json.js';
+import { readCappedJson, readCappedText } from '../util/capped-json.js';
 
 const ERROR_DETAIL_CHARS = 300;
 // An error body is read for its first lines only; 4x leaves room for multi-byte text.
@@ -41,7 +42,8 @@ const REQUEST_TIMEOUT_MS = 30_000;
 const DEADLINE_RETRY_WAIT_CAP_MS = 2_000;
 
 export interface EmbedCallOptions {
-  /** Ends the whole call when it aborts, every batch and retry included. The local provider runs in process and ignores it. */
+  /** Ends the whole call when it aborts, every batch and retry included. The local provider stops waiting only on a model download,
+   * since nothing stops a load from disk or an in-process inference. */
   signal?: AbortSignal;
 }
 
@@ -63,19 +65,19 @@ export interface EmbeddingProvider {
 
 class LocalEmbeddingProvider implements EmbeddingProvider {
   readonly kind = 'local' as const;
-  constructor(readonly model: string, private readonly enabled: boolean = true) {}
+  constructor(readonly model: string, private readonly enabled: boolean, private readonly embedder: LocalEmbedder) {}
   get id(): string {
     return this.model;
   }
   isAvailable(): boolean {
-    return this.enabled && isEmbeddingAvailable();
+    return this.enabled && this.embedder.isAvailable();
   }
-  async embed(texts: string[], role?: EmbeddingRole): Promise<number[][]> {
+  async embed(texts: string[], role?: EmbeddingRole, call: EmbedCallOptions = {}): Promise<number[][]> {
     // A model that cannot load fails the call, as an API outage does; items then run one at a time on the shared pipeline.
-    if (texts.length > 0) await requireLocalPipeline(this.model);
+    if (texts.length > 0) await this.embedder.requirePipeline(this.model, call.signal);
     const out: number[][] = [];
     for (const text of texts) {
-      out.push(await getEmbedding(text, this.model, role));
+      out.push(await this.embedder.embed(text, this.model, role));
     }
     return out;
   }
@@ -279,8 +281,8 @@ class ApiEmbeddingProvider implements EmbeddingProvider {
       let detail = '';
       try {
         detail = await readCappedText(resp, ERROR_BODY_MAX_BYTES);
-      } catch {
-        /* ignore body read error */
+      } catch (err) {
+        log.debug(`${this.kind} embeddings error body unreadable: ${errorMessage(err)}`);
       }
       throw new Error(
         redact(`${this.kind} embeddings HTTP ${resp.status}: ${detail.slice(0, ERROR_DETAIL_CHARS)}`, key),
@@ -340,6 +342,8 @@ export interface ResolveProviderOptions {
   model?: string;
   /** Explicit provider override (mainly for tests). */
   provider?: EmbeddingProviderKind;
+  /** The Transformers.js package a local provider loads from, with its own models; the process's shared embedder when unset. */
+  transformers?: LocalTransformers;
 }
 
 /** Build the active embedding provider from config (or an explicit override). A missing key never throws here (it surfaces via `isAvailable()`);
@@ -355,7 +359,8 @@ export function resolveEmbeddingProvider(
   const enabled = cfg.enabled !== false;
 
   if (requested === 'local') {
-    return new LocalEmbeddingProvider(resolveEmbeddingModel(hippoRoot, opts.model), enabled);
+    const embedder = opts.transformers ? createLocalEmbedder(opts.transformers) : sharedLocalEmbedder;
+    return new LocalEmbeddingProvider(resolveEmbeddingModel(hippoRoot, opts.model), enabled, embedder);
   }
   if (!isApiProviderKind(requested)) {
     // Fail loud on a typo'd provider rather than silently using local (which

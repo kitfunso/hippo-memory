@@ -1,9 +1,9 @@
-import { createRequire } from 'node:module';
-import { pathToFileURL } from 'node:url';
 import { createOutageWarning } from './outage-warning.js';
 import type { RerankerFn, RerankResult, RerankerOptions } from './types.js';
 import { compareScoresDesc } from '../core/compare.js';
-import { errorMessage, log } from '../util/log.js';
+import type { SearchResult } from '../core/search-types.js';
+import { createModelLoads, importTransformers, MODEL_LOAD_POLICY } from '../embeddings/transformers.js';
+import { errorFields, errorMessage, log } from '../util/log.js';
 
 const DEFAULT_CROSS_ENCODER_TOP_K = 50;
 
@@ -31,111 +31,53 @@ interface TransformersModuleNamespace extends TransformersExports {
   default?: TransformersExports;
 }
 
-const _require = createRequire(import.meta.url);
-
-const TRANSFORMERS_PACKAGES = ['@huggingface/transformers', '@xenova/transformers'] as const;
-
-// Returns the ESM entry URL, the same build src/store/embeddings/index.ts imports; a require-style resolve picks the CommonJS build and
-// puts a second copy of the library, with its own ONNX sessions, in the process.
-function resolveTransformersPackage(): string | null {
-  for (const name of TRANSFORMERS_PACKAGES) {
-    try {
-      return import.meta.resolve(name);
-    } catch {
-      // import.meta.resolve is missing under some module runners (vitest's
-      // included); fall through to the require-based resolve there.
-      try {
-        return pathToFileURL(_require.resolve(name)).href;
-      } catch {
-        // Try the legacy fallback only when the preferred package is not installed.
-      }
-    }
-  }
-  return null;
-}
-
-async function loadTransformersModule(): Promise<Required<TransformersExports> | null> {
-  // Import one backend only. Loading both native ONNX runtimes in one process
-  // can abort during finalization; Hugging Face is the maintained default.
-  const url = resolveTransformersPackage();
-  if (!url) return null;
-  try {
-    const mod: TransformersModuleNamespace = await import(/* @vite-ignore */ url);
-    const tok = mod.AutoTokenizer ?? mod.default?.AutoTokenizer;
-    const seq =
-      mod.AutoModelForSequenceClassification ?? mod.default?.AutoModelForSequenceClassification;
-    return tok && seq ? { AutoTokenizer: tok, AutoModelForSequenceClassification: seq } : null;
-  } catch (err) {
-    log.debug(`cross-encoder: transformers import failed: ${errorMessage(err)}`);
-    return null;
-  }
-}
-
 type CrossEncoderFn = (query: string, candidate: string) => Promise<number>;
-let pipelineLoading: Promise<CrossEncoderFn | null> | null = null;
-const outage = createOutageWarning('cross-encoder', 'falling back to identity ordering');
+type ImportModule = () => Promise<{ readonly name: string; readonly mod: TransformersModuleNamespace } | null>;
+
+async function importModelClasses(importModule: ImportModule): Promise<Required<TransformersExports>> {
+  const imported = await importModule();
+  if (!imported) throw new Error('no Transformers.js package is installed');
+  const { name, mod } = imported;
+  const tok = mod.AutoTokenizer ?? mod.default?.AutoTokenizer;
+  const seq = mod.AutoModelForSequenceClassification ?? mod.default?.AutoModelForSequenceClassification;
+  if (!tok || !seq) throw new Error(`${name} exports no AutoTokenizer or AutoModelForSequenceClassification`);
+  return { AutoTokenizer: tok, AutoModelForSequenceClassification: seq };
+}
 
 // NOT the text-classification pipeline: this is a num_labels=1 regression head and that pipeline softmaxes a length-1 logit vector (always 1.0).
 // Read the logit, then squash it.
-async function buildPipeline(): Promise<CrossEncoderFn | null> {
-  try {
-    const mod = await loadTransformersModule();
-    if (!mod) return null;
-    const [tokenizer, model] = await Promise.all([
-      mod.AutoTokenizer.from_pretrained(MODEL_NAME),
-      mod.AutoModelForSequenceClassification.from_pretrained(MODEL_NAME),
-    ]);
-    return async (query: string, candidate: string) => {
-      const inputs = await tokenizer(query, {
-        text_pair: candidate,
-        padding: true,
-        truncation: true,
-      });
-      const { logits } = await model(inputs);
-      const score = 1 / (1 + Math.exp(-Number(logits.data[0])));
-      // NaN would make the sort comparator a no-op; throwing hands this
-      // candidate to the per-candidate fallback instead.
-      if (!Number.isFinite(score)) throw new Error('cross-encoder returned a non-finite score');
-      return score;
-    };
-  } catch (err) {
-    log.debug(`cross-encoder: model load failed: ${errorMessage(err)}`);
-    return null;
-  }
+async function buildPipeline(importModule: ImportModule): Promise<CrossEncoderFn> {
+  const mod = await importModelClasses(importModule);
+  const [tokenizer, model] = await Promise.all([
+    mod.AutoTokenizer.from_pretrained(MODEL_NAME),
+    mod.AutoModelForSequenceClassification.from_pretrained(MODEL_NAME),
+  ]);
+  return async (query: string, candidate: string) => {
+    const inputs = await tokenizer(query, {
+      text_pair: candidate,
+      padding: true,
+      truncation: true,
+    });
+    const { logits } = await model(inputs);
+    const score = 1 / (1 + Math.exp(-Number(logits.data[0])));
+    // NaN would make the sort comparator a no-op; throwing hands this
+    // candidate to the per-candidate fallback instead.
+    if (!Number.isFinite(score)) throw new Error('cross-encoder returned a non-finite score');
+    return score;
+  };
 }
 
-// One shared in-flight load: two first calls must not fetch the model twice.
-// A failed load clears the slot so a later call can try again.
-function loadPipeline(): Promise<CrossEncoderFn | null> {
-  pipelineLoading ??= buildPipeline().then((pipe) => {
-    if (!pipe) pipelineLoading = null;
-    return pipe;
-  });
-  return pipelineLoading;
+/** The head in its input order, scored as it came. */
+function identityOrder(head: readonly SearchResult[]): RerankResult[] {
+  return head.map((r, i) => ({
+    ...r,
+    rerankScore: r.score,
+    preRerankRank: r.preRerankRank ?? i + 1,
+    postRerankRank: i + 1,
+  }));
 }
 
-/** Track 2 reranker: MS-MARCO MiniLM cross-encoder, identity fallback if the model will not load. */
-export const crossEncoderReranker: RerankerFn = async (
-  query,
-  results,
-  options?: RerankerOptions,
-): Promise<RerankResult[]> => {
-  const topK = options?.topK ?? DEFAULT_CROSS_ENCODER_TOP_K;
-  const head = results.slice(0, topK);
-
-  const pipe = await loadPipeline();
-  if (!pipe) {
-    // A silent identity fallback otherwise reads as a working reranker.
-    outage.failed('no Transformers.js backend, or model fetch blocked');
-    return head.map((r, i) => ({
-      ...r,
-      rerankScore: r.score,
-      preRerankRank: r.preRerankRank ?? i + 1,
-      postRerankRank: i + 1,
-    }));
-  }
-  outage.answered();
-
+async function scoreHead(pipe: CrossEncoderFn, query: string, head: readonly SearchResult[]): Promise<RerankResult[]> {
   const scored = await Promise.all(
     head.map(async (r, i) => {
       let ceScore: number;
@@ -160,4 +102,25 @@ export const crossEncoderReranker: RerankerFn = async (
   scored.sort((a, b) => compareScoresDesc(a.rerankScore, b.rerankScore));
   scored.forEach((r, i) => (r.postRerankRank = i + 1));
   return scored;
-};
+}
+
+/** Track 2 reranker: MS-MARCO MiniLM cross-encoder, identity fallback if the model will not load. Each instance owns its model and outage warning. */
+export function createCrossEncoderReranker(importModule: ImportModule = importTransformers): RerankerFn {
+  const outage = createOutageWarning('cross-encoder', 'falling back to identity ordering');
+  // The outage warning already says each failure, at most once per window, so the loads report nothing themselves.
+  const pipelines = createModelLoads<CrossEncoderFn>(MODEL_LOAD_POLICY);
+  return async (query, results, options?: RerankerOptions): Promise<RerankResult[]> => {
+    const head = results.slice(0, options?.topK ?? DEFAULT_CROSS_ENCODER_TOP_K);
+    let pipe: CrossEncoderFn;
+    try {
+      // One shared load per backoff window: two first calls fetch the model once, and a failure is not fetched again on every recall.
+      pipe = await pipelines.load(MODEL_NAME, () => buildPipeline(importModule));
+    } catch (err) {
+      // A silent identity fallback otherwise reads as a working reranker.
+      outage.failed(errorMessage(err), errorFields(err));
+      return identityOrder(head);
+    }
+    outage.answered();
+    return scoreHead(pipe, query, head);
+  };
+}

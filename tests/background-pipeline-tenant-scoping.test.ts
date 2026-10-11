@@ -23,7 +23,7 @@ import { autoShare } from '../src/sharing/share.js';
 import { consolidate } from '../src/consolidate/sleep.js';
 import { listPeers } from '../src/sharing/share.js';
 import { syncGlobalToLocal } from '../src/sharing/global-sync.js';
-import { embedAll } from '../src/store/embeddings/index.js';
+import { embedAll } from '../src/search/embed-memories.js';
 
 // ---------------------------------------------------------------------------
 // Helpers

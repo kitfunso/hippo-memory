@@ -11,7 +11,7 @@ import path from 'node:path';
 import os from 'node:os';
 import fs from 'node:fs';
 import { initStore } from '../src/store/open.js';
-import { remember, recall, type HippoDbContext } from '../src/api/index.js';
+import { remember, retrieve, type HippoDbContext } from '../src/api/index.js';
 import { pushGoal } from '../src/store/goals.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
 
@@ -35,7 +35,7 @@ describe('api.recall + RecallOpts.sessionId goal-stack boost', () => {
     ctx = { hippoRoot, tenantId, actor: { subject: 'test', role: 'admin' } };
   });
 
-  it('boosts the goal-tagged memory above an unrelated, query-matching one when sessionId set', () => {
+  it('boosts the goal-tagged memory above an unrelated, query-matching one when sessionId set', async () => {
     // Both rows mention "auth" so BM25 surfaces both. Without the boost, the
     // ui-tagged row outranks (or ties) the goal-tagged one. With the boost,
     // fix-auth wins.
@@ -43,7 +43,7 @@ describe('api.recall + RecallOpts.sessionId goal-stack boost', () => {
     const unrelated = remember(ctx, { content: 'auth UI polish', tags: ['ui'] });
     pushGoal(hippoRoot, { sessionId, tenantId, goalName: 'fix-auth' });
 
-    const result = recall(ctx, { query: 'auth', limit: 10, sessionId });
+    const result = await retrieve(ctx, { query: 'auth', limit: 10, sessionId });
     const ids = result.results.map((r) => r.id);
     expect(ids).toContain(goalMatch.id);
     expect(ids).toContain(unrelated.id);
@@ -51,10 +51,10 @@ describe('api.recall + RecallOpts.sessionId goal-stack boost', () => {
     expect(ids.indexOf(goalMatch.id)).toBeLessThan(ids.indexOf(unrelated.id));
   });
 
-  it('writes a goal_recall_log row when sessionId set AND the boosted memory is local', () => {
+  it('writes a goal_recall_log row when sessionId set AND the boosted memory is local', async () => {
     const goal = pushGoal(hippoRoot, { sessionId, tenantId, goalName: 'fix-auth' });
     const m = remember(ctx, { content: 'auth bug fix details', tags: ['fix-auth'] });
-    recall(ctx, { query: 'auth', limit: 10, sessionId });
+    await retrieve(ctx, { query: 'auth', limit: 10, sessionId });
     const db = openHippoDb(hippoRoot);
     try {
       const count = countRows(
@@ -69,14 +69,14 @@ describe('api.recall + RecallOpts.sessionId goal-stack boost', () => {
     }
   });
 
-  it('goalTag override SUPPRESSES the boost (mirrors the CLI v0.38 goalTag === \'\' gate)', () => {
+  it('goalTag override SUPPRESSES the boost (mirrors the CLI v0.38 goalTag === \'\' gate)', async () => {
     // Sanity: same setup as the first test but with goalTag set.
     const goalMatch = remember(ctx, { content: 'auth bug fix details', tags: ['fix-auth'] });
     const unrelated = remember(ctx, { content: 'auth UI polish', tags: ['ui'] });
     pushGoal(hippoRoot, { sessionId, tenantId, goalName: 'fix-auth' });
     const goal = pushGoal(hippoRoot, { sessionId, tenantId, goalName: 'pin-this' });
 
-    const result = recall(ctx, {
+    const result = await retrieve(ctx, {
       query: 'auth',
       limit: 10,
       sessionId,
@@ -98,10 +98,10 @@ describe('api.recall + RecallOpts.sessionId goal-stack boost', () => {
     }
   });
 
-  it('omitting sessionId preserves v1.7.3 behaviour (no boost, no log)', () => {
+  it('omitting sessionId preserves v1.7.3 behaviour (no boost, no log)', async () => {
     const goal = pushGoal(hippoRoot, { sessionId, tenantId, goalName: 'fix-auth' });
     const m = remember(ctx, { content: 'auth bug fix details', tags: ['fix-auth'] });
-    recall(ctx, { query: 'auth', limit: 10 }); // no sessionId
+    await retrieve(ctx, { query: 'auth', limit: 10 }); // no sessionId
     const db = openHippoDb(hippoRoot);
     try {
       const count = countRows(

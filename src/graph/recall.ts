@@ -8,7 +8,7 @@ import { estimateTokens } from '../util/token-text.js';
 import { compareEntryIdentity, compareScoresDesc } from '../core/compare.js';
 import { loadEntitiesByMemoryId, loadEntitiesByIds, loadNeighborRelations } from '../store/graph-reads.js';
 import type { Entity } from '../store/graph-rows.js';
-import { passesCliRecallScopeFilter, passesScopeFilterForRecall } from '../store/recall-scope.js';
+import { passesCliRecallScopeFilter, passesScopeFilterForRecall } from '../core/recall-scope.js';
 
 /** Hard cap on `--hops` (a higher value just walks more of a finite graph; this bounds
  *  worst-case work and keeps the flag honest). */

@@ -26,3 +26,8 @@ export class OtherStoreFolderError extends SqliteBlockedError {
     this.name = 'OtherStoreFolderError';
   }
 }
+
+/** First line of a best-effort catch around a hippo.db open: an unported path must fail closed, not fall back silently. */
+export function rethrowIfSqliteBlocked<E>(err: E): void {
+  if (err instanceof SqliteBlockedError) throw err;
+}

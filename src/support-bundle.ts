@@ -5,10 +5,9 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { pathToFileURL } from 'url';
-import { findHippoStoreDir, isGlobalStoreRoot } from './core/project-identity.js';
+import { findHippoStoreDir, isGlobalStoreRoot, isInitialized } from './core/project-identity.js';
 import { realpathOrResolve } from './util/real-path.js';
 import { getGlobalRoot } from './sharing/global-store.js';
-import { isInitialized } from './store/open.js';
 import { readStoreInventory } from './store/diagnostics.js';
 import { runDoctor, type DoctorOpts } from './doctor.js';
 import { loadConfig } from './core/config.js';
@@ -31,7 +30,7 @@ const TAIL_MAX_LINE_CHARS = 2000;
 // Greedy on purpose: complete key blocks are redacted first, so any END left is an orphan and what precedes it may be key body.
 const ORPHAN_KEY_END_RE = /^[\s\S]*-----END [A-Z ]*PRIVATE KEY-----/;
 
-// The other env vars hippo reads outside the HIPPO_ prefix (src/store/embeddings/provider.ts, connectors/*).
+// The other env vars hippo reads outside the HIPPO_ prefix (src/embeddings/provider.ts, connectors/*).
 const OTHER_ENV_NAMES: readonly string[] = [
   'ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'VOYAGE_API_KEY', 'COHERE_API_KEY', 'TYPESAFE_API_KEY',
   'GITHUB_TOKEN', 'GITHUB_WEBHOOK_SECRET', 'GITHUB_WEBHOOK_SECRET_PREVIOUS',

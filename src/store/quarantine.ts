@@ -1,4 +1,5 @@
 // The memory_quarantine table: the review queue's rows, and the approve and reject writes with their audit rows.
+import { DEFAULT_LIST_LIMIT } from '../util/limits.js';
 import { appendAuditEvent } from './audit.js';
 import { withWriteScopeOr, type DatabaseSyncLike } from '../db/index.js';
 import { keysetAfter, type KeysetPosition } from '../util/keyset.js';
@@ -62,7 +63,7 @@ function listQuarantineRows(
   db: DatabaseSyncLike,
   tenantId: string,
   status: QuarantineStatus | 'all' = 'pending',
-  limit = 100,
+  limit = DEFAULT_LIST_LIMIT,
   afterRow?: KeysetPosition,
 ): QuarantineRow[] {
   // A pending row whose memory was deleted (e.g. Slack message_deleted) is dead; keep its history, drop it from the queue.

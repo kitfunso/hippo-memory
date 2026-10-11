@@ -7,7 +7,7 @@ import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { embedMemory } from '../src/store/embeddings/index.js';
+import { embedMemory } from '../src/search/embed-memories.js';
 import { hybridSearch } from '../src/search/hybrid.js';
 import { resetLogOnce } from '../src/util/log.js';
 

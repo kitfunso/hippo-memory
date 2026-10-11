@@ -4,11 +4,10 @@ import { type JsonValue, isJsonString } from '../../util/json.js';
 import type { ObjectDescriptor, ObjectListOpts, SavableDescriptor } from '../../objects/descriptor.js';
 import { objectsOf, saveFor } from '../../api/objects.js';
 import { closeObject, listObjects, objectById } from '../../objects/lifecycle.js';
-import type { ObjectByKind, ObjectKind, SavableKind } from '../../store/object-types.js';
+import type { ObjectByKind, ObjectKind, SavableKind } from '../../core/object-types.js';
 import type { Objects } from '../../store/port.js';
-import { buildContextWithAuth } from '../auth.js';
 import { byCreatedAt, pageOf, parseCursor } from '../cursor.js';
-import type { RouteRequest } from '../types.js';
+import type { AuthedRouteRequest } from '../types.js';
 import { isSetMember, parseJsonBody, parseListLimit } from '../validation.js';
 
 export interface ObjectRouteConfig<K extends ObjectKind> {
@@ -63,14 +62,12 @@ async function found<K extends ObjectKind>(cfg: ObjectRouteConfig<K>, objects: O
   return row;
 }
 
-// Limit and cursor are checked before auth and status after it, so a keyless caller gets 400 for the first two and 401 for a bad status.
-export async function listRoute<K extends ObjectKind>(cfg: ObjectRouteConfig<K>, rr: RouteRequest): Promise<void> {
-  const { req, res, opts, query } = rr;
+export async function listRoute<K extends ObjectKind>(cfg: ObjectRouteConfig<K>, rr: AuthedRouteRequest): Promise<void> {
+  const { res, query, ctx } = rr;
   const status = query.get('status') ?? 'all';
   const filter = cfg.filterParam === undefined ? null : query.get(cfg.filterParam);
   const limit = parseListLimit(query.get('limit'));
   const after = parseCursor(query.get('cursor'), 'string', 'integer');
-  const ctx = await buildContextWithAuth(req, opts);
   const listOpts: ObjectListOpts<K> = { limit: limit + 1, after, filter: filter?.trim() || undefined };
   if (status !== 'all') {
     const states = cfg.object.states;
@@ -83,21 +80,23 @@ export async function listRoute<K extends ObjectKind>(cfg: ObjectRouteConfig<K>,
   sendJson(res, 200, { [cfg.listField]: page.items, next_cursor: page.nextCursor });
 }
 
-export async function getRoute<K extends ObjectKind>(cfg: ObjectRouteConfig<K>, rr: RouteRequest, match: RegExpMatchArray): Promise<void> {
+export async function getRoute<K extends ObjectKind>(cfg: ObjectRouteConfig<K>, rr: AuthedRouteRequest, match: RegExpMatchArray): Promise<void> {
   const id = parseInt(match[1], 10);
-  const ctx = await buildContextWithAuth(rr.req, rr.opts);
+  const { ctx } = rr;
   sendJson(rr.res, 200, { [cfg.field]: await found(cfg, objectsOf(ctx), ctx.tenantId, id) });
 }
 
-export async function closeRoute<K extends ObjectKind>(cfg: ObjectRouteConfig<K>, rr: RouteRequest, match: RegExpMatchArray): Promise<void> {
+export async function closeRoute<K extends ObjectKind>(cfg: ObjectRouteConfig<K>, rr: AuthedRouteRequest, match: RegExpMatchArray): Promise<void> {
   const id = parseInt(match[1], 10);
-  const ctx = await buildContextWithAuth(rr.req, rr.opts);
+  const { ctx } = rr;
   sendJson(rr.res, 200, { [cfg.field]: await closeObject(objectsOf(ctx), cfg.object, ctx.tenantId, id, ctx.actor.subject) });
 }
 
-export async function supersedeRoute<K extends SavableKind, W>(cfg: VersionedRouteConfig<K, W>, rr: RouteRequest, match: RegExpMatchArray): Promise<void> {
+export async function supersedeRoute<K extends SavableKind, W>(
+  cfg: VersionedRouteConfig<K, W>, rr: AuthedRouteRequest, match: RegExpMatchArray,
+): Promise<void> {
   const id = parseInt(match[1], 10);
-  const ctx = await buildContextWithAuth(rr.req, rr.opts);
+  const { ctx } = rr;
   const successor = cfg.revise(await parseJsonBody(rr.req, ctx));
   const existing = await found(cfg, objectsOf(ctx), ctx.tenantId, id);
   const saved = await saveFor(ctx, cfg.object, successor(existing, id));

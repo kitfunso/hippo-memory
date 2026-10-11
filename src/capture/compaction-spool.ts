@@ -1,4 +1,5 @@
 // Summaries post-compact could not record because the store was busy, waiting on disk for the next replay.
+import { MINUTE_MS } from '../util/time.js';
 import { randomBytes } from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -11,11 +12,12 @@ import { errorMessage } from '../util/log.js';
 const STAMP_DIGITS = 13;
 
 export const SPOOL_DIR = 'compactions-spool';
-/** Starts the log line of a step that broke with an unexpected error, so the session-start banner counts it; a set-aside file is counted by its `.bad` name instead. */
+/** Starts the log line of a step that broke with an unexpected error, so the session-start banner counts it; a set-aside file is counted
+ * by its `.bad` name instead. */
 export const SPOOL_PROBLEM = 'spool problem: ';
 const LOCK = 'replay.lock';
 /** Long enough that a live replayer has finished with its claim. */
-const STALE_MS = 10 * 60_000;
+const STALE_MS = 10 * MINUTE_MS;
 const MAX_ATTEMPTS = 3;
 const BUSY_RETRIES = 3;
 const BUSY_WAIT_MS = 50;
@@ -169,7 +171,16 @@ function spoolFile(hippoRoot: string): string {
 export function spool(hippoRoot: string, tenantId: string, payload: PostCompactPayload, text: CompactionText, at: Date): void {
   const file = spoolFile(hippoRoot);
   fsx.mkdirSync(path.dirname(file), { recursive: true });
-  const body = { tenantId, sessionId: payload.sessionId, trigger: payload.trigger, cwd: payload.cwd, transcriptPath: payload.transcriptPath, at: at.toISOString(), summary: text.summary, items: text.items };
+  const body = {
+    tenantId,
+    sessionId: payload.sessionId,
+    trigger: payload.trigger,
+    cwd: payload.cwd,
+    transcriptPath: payload.transcriptPath,
+    at: at.toISOString(),
+    summary: text.summary,
+    items: text.items,
+  };
   // Renamed into place so a replayer listing `.json` files never reads half a file.
   fsx.writeFileSync(`${file}.tmp`, JSON.stringify(body), { encoding: 'utf8', flag: 'wx' });
   // A rename that stays busy leaves a whole tmp, which a replay promotes once it is STALE_MS old.
@@ -313,7 +324,7 @@ function recoverStaleClaims(dir: string, names: readonly string[], log: Log): bo
 function putBack(dir: string, claim: string, stem: string, attempt: number, log: Log): void {
   const name = path.basename(claim);
   if (settle(() => fsx.renameSync(claim, path.join(dir, `${stem}.a${attempt}.json`)), log, `spool file ${name} not put back`) === 'busy') {
-    log(`spool file ${name} could not be put back; it returns ${STALE_MS / 60_000} minutes after its claim`);
+    log(`spool file ${name} could not be put back; it returns ${STALE_MS / MINUTE_MS} minutes after its claim`);
   }
 }
 
@@ -408,7 +419,11 @@ function importFailed(dir: string, claim: string, entry: Waiting, options: Impor
   const busy = isSqliteBusy(cause);
   if (recorded) {
     // The record stays `summarised`, so the stalled-record step of a later replay writes its items.
-    log(busy ? `spool file ${name} saved; its memories wait for the next sleep (store busy)` : `spool file ${name} saved; writing its memories failed: ${errorMessage(cause)}`);
+    log(
+      busy
+        ? `spool file ${name} saved; its memories wait for the next sleep (store busy)`
+        : `spool file ${name} saved; writing its memories failed: ${errorMessage(cause)}`,
+    );
     return busy ? 'stop' : 'skipped';
   }
   if (busy) {
@@ -440,7 +455,9 @@ function importFile(dir: string, entry: Waiting, tenantId: string, log: Log, imp
   if (read !== 'done') return 'skipped';
   const spooled = parseSpooled(text, tenantId);
   if (spooled === null) {
-    if (moveBad(dir, claim, { stem: entry.stem, attempt: entry.attempt, cause: 'unreadable', log, raw: text })) log(`spool file ${name} is not readable, set aside as .bad`);
+    if (moveBad(dir, claim, { stem: entry.stem, attempt: entry.attempt, cause: 'unreadable', log, raw: text })) {
+      log(`spool file ${name} is not readable, set aside as .bad`);
+    }
     return 'skipped';
   }
   let recorded = false;

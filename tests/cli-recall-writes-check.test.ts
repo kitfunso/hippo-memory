@@ -38,10 +38,15 @@ describe('check-cli-recall-writes: memory writers and the store opener', () => {
     expect(findCliStoreWrites(dir)).toEqual([{ file: 'cli.ts', line: 1, name: 'openHippoDb' }]);
   });
 
-  it('lets an excepted file keep only the names listed for it', () => {
+  it('excepts no CLI file from the store opener, projects and sleep included', () => {
     file('cli/projects.ts', 'const db = openHippoDb(root);\nwriteEntry(root, entry);\n');
     file('cli/sleep.ts', 'const db = openHippoDb(root);\n');
-    expect(findCliStoreWrites(dir)).toEqual([{ file: 'cli/projects.ts', line: 2, name: 'writeEntry' }]);
+    expect(STORE_WRITER_EXCEPTIONS).toEqual({});
+    expect(findCliStoreWrites(dir)).toEqual([
+      { file: 'cli/projects.ts', line: 1, name: 'openHippoDb' },
+      { file: 'cli/projects.ts', line: 2, name: 'writeEntry' },
+      { file: 'cli/sleep.ts', line: 1, name: 'openHippoDb' },
+    ]);
   });
 
   it('exits 1 naming the file and line, and 0 once the import is gone', () => {

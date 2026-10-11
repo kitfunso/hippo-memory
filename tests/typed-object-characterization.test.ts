@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { createApiKey } from '../src/store/auth.js';
 import { runCli } from '../src/cli.js';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
-import { insertEntity } from '../src/store/graph-writes.js';
+import { insertEntityAt } from './_helpers/graph-seed.js';
 import type { SourceObjectType } from '../src/store/graph-rows.js';
 import type { JsonValue } from '../src/util/json.js';
 import { serve, type ServerHandle } from '../src/server.js';
@@ -270,7 +270,7 @@ describe('typed objects over HTTP, one fresh store per case', () => {
       const first = await api.send('POST', path, create);
       await api.send('POST', path, create);
       deleteEntry(api.root, fieldIn(first, 'memoryId') ?? '');
-      for (const id of [1, 2]) insertEntity(api.root, 'default', { entityType: source, name: `object ${id}`, sourceObject: { type: source, id } });
+      for (const id of [1, 2]) insertEntityAt(api.root, 'default', { entityType: source, name: `object ${id}`, sourceObject: { type: source, id } });
       expect(api.graphOwners(source)).toEqual([1, 2]);
       expect((await api.send('POST', `${path}/1/close`)).status).toBe(200);
       expect(api.graphOwners(source)).toEqual([2]);
@@ -289,15 +289,14 @@ describe('typed objects over HTTP, one shared store', () => {
     await api.stop();
   });
 
-  const LIMIT = 'limit must be a positive integer <= 1000';
-  const CURSOR = 'cursor is malformed; pass next_cursor from the previous page unchanged';
+  // The dispatch gate runs before any handler, so a keyless caller learns nothing about which parameters are bad.
   const KEYLESS: readonly (readonly [string, number, string])[] = [
     ...TYPES.flatMap((row): (readonly [string, number, string])[] => [
-      [`${row.path}?limit=0`, 400, LIMIT],
-      [`${row.path}?cursor=junk`, 400, CURSOR],
+      [`${row.path}?limit=0`, 401, 'auth required'],
+      [`${row.path}?cursor=junk`, 401, 'auth required'],
       [`${row.path}?status=bogus`, 401, 'auth required'],
     ]),
-    ['/v1/policies/asof', 400, 'date is required (ISO-8601 valid-time)'],
+    ['/v1/policies/asof', 401, 'auth required'],
     ['/v1/policies/asof?date=soon', 401, 'auth required'],
   ];
 
@@ -367,7 +366,7 @@ const NOUNS: readonly NounRow[] = [
   { noun: 'incident', seed: ['incident', 'open', 'Checkout returned 500s'], read: 'get', refuses: strict('incident'), loose: strict('incident') },
   {
     noun: 'process', seed: ['process', 'new', 'Release', '--step', 'run the tests'], read: 'get', refuses: strict('process'), loose: strict('process'),
-    revise: ['--step', 'sign the build'], reviseAgain: `exit 1: Error: ${again('saveProcess', 'process', 'processes')}`,
+    revise: ['--step', 'sign the build'], reviseAgain: `exit 1: ${again('saveProcess', 'process', 'processes')}`,
   },
   {
     noun: 'policy', seed: ['policy', 'new', 'Retention', '--text', 'Delete logs after 90 days'], read: 'get', refuses: strict('policy'), loose: strict('policy'),

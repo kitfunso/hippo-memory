@@ -6,8 +6,9 @@ import { fileURLToPath } from 'node:url';
 
 const SRC = fileURLToPath(new URL('../src', import.meta.url));
 const HAND_ROLLED = /:private:%|%:private:|(LIKE|GLOB)\s+['"`][^'"`]*(:private|personal:)|instr\([^)]*:private|['"`]unknown:legacy['"`]/i;
-const SCOPE_MODULE = join('store', 'recall-scope.ts');
-const ALLOWED = new Set([SCOPE_MODULE]);
+// The deny list lives with the JS predicates; the SQL that reads it lives with the other SQL twins.
+const SCOPE_MODULES = [join('core', 'recall-scope.ts'), join('store', 'rule-sql.ts')];
+const ALLOWED = new Set(SCOPE_MODULES);
 // Migrations stamp the legacy marker once, as data, and never read through it.
 const EXEMPT_DIR = `db${sep}migrations${sep}`;
 // Doc lines that name the rule; exempt by file and exact text, so an edited or added line is read again.
@@ -31,7 +32,7 @@ const sources = readdirSync(SRC, { recursive: true, encoding: 'utf8' }).filter((
 describe('scope SQL guard', () => {
   it('finds the patterns where they belong, so the scan is live', () => {
     expect(sources.length).toBeGreaterThan(50);
-    expect(hits(SCOPE_MODULE).length).toBeGreaterThan(0);
+    for (const file of SCOPE_MODULES) expect(hits(file).length, file).toBeGreaterThan(0);
   });
 
   it('no other source file spells the default-deny SQL or the legacy marker', () => {

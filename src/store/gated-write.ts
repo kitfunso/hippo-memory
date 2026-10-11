@@ -2,7 +2,7 @@
 import { isContentWorthStoring } from '../core/memory-quality.js';
 import type { DatabaseSyncLike } from '../db/index.js';
 import type { MemoryEntry } from '../core/memory.js';
-import { RejectedValueError } from './rejection.js';
+import { RejectedValueError } from '../core/api-errors.js';
 import { detectSecret } from '../util/secret-detect.js';
 import { auditRejectionRefusal } from './audit-event.js';
 import { stampOriginProject } from './entry-row.js';
@@ -10,7 +10,9 @@ import { writeEntryDbOnly } from './entry-writes.js';
 
 export type GatedWriteResult = 'written' | 'skipped:not-worth-storing' | 'skipped:secret' | 'skipped:rejected';
 
-/** Runs on the caller's handle so it nests in the caller's transaction (writeEntry would open a second handle and wait on that lock); the caller mirrors after commit with an entry it stamped itself. The rejection audit lands inside that transaction, which is safe because a batch that rolls back stays `summarised` and replay writes the audit again. */
+/** Runs on the caller's handle so it nests in the caller's transaction (writeEntry would open a second handle and wait on that lock); the
+ * caller mirrors after commit with an entry it stamped itself. The rejection audit lands inside that transaction, which is safe because
+ * a batch that rolls back stays `summarised` and replay writes the audit again. */
 export function gatedWrite(
   db: DatabaseSyncLike,
   hippoRoot: string,

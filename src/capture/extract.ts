@@ -5,6 +5,8 @@ export interface ExtractedItem {
   content: string;
   category: string;
   tags: string[];
+  /** A person said it, not the agent: capture pins a rule that carries this. */
+  fromUser?: boolean;
 }
 
 const DECISION_PATTERNS = [
@@ -160,10 +162,11 @@ function extractOne(text: string): ExtractedItem[] {
   return items;
 }
 
-/** Captures complete supported statements, each text parsed alone so a fence or heading in one never reaches the next. */
-export function extractFromTexts(texts: readonly string[]): ExtractedItem[] {
+/** Captures complete supported statements, each text parsed alone so a fence or heading in one never reaches the next.
+ *  The first `userTexts` texts are a person's own words; on a repeat their copy wins, so it keeps `fromUser`. */
+export function extractFromTexts(texts: readonly string[], userTexts = 0): ExtractedItem[] {
   const seen = new Set<string>();
-  return texts.flatMap(extractOne).filter((item) => {
+  return texts.flatMap((text, i) => extractOne(text).map((item) => (i < userTexts ? { ...item, fromUser: true } : item))).filter((item) => {
     const key = duplicateKey(item.content);
     if (seen.has(key) || !assessAutomaticMemory(item.content).accepted) return false;
     seen.add(key);

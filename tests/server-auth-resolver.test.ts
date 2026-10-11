@@ -552,6 +552,27 @@ describe('auth resolver stream', () => {
     10_000,
   );
 
+  it('logs a warning when a heartbeat tick is skipped because the resolver is down', async () => {
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    process.env.MCP_SSE_HEARTBEAT_MS = '50';
+    let down = false;
+    await start((t) => {
+      if (t !== EXT) return null;
+      if (down) throw new Error('upstream down');
+      return GOOD;
+    });
+    const ac = new AbortController();
+    const res = await openStream(EXT, ac.signal);
+    expect(res.status).toBe(200);
+    const text = collect(res);
+    down = true;
+    const skipped = (): boolean => stderr.mock.calls.some((c) => String(c[0]).includes('heartbeat tick skipped'));
+    await waitFor(skipped, 3000);
+    ac.abort();
+    expect(skipped()).toBe(true);
+    expect(text()).not.toContain('event: closed');
+  }, 10_000);
+
   it('skips a heartbeat tick while a check is still in flight', async () => {
     const auth = heldResolver(2);
     await start(auth.resolver);

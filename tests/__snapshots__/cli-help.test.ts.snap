@@ -52,6 +52,10 @@ Commands:
     --min-results <n>      Minimum results regardless of budget (default: 1)
     --json                 Output as JSON
     --why                  Show match reasons and source annotations
+    --include-superseded   Also return memories a newer version replaced
+    --as-of <iso-date>     Return the memories that were current on that date
+    --multihop             Search a second time with the speaker: and topic: tags the
+                           first pass found (also on when config multihop.enabled is true)
     --hops <n>             E3.2 multi-hop graph recall: also surface memories
                            reached by walking the entities/relations graph <n>
                            hops (0..3, default off) out from the lexical seeds.
@@ -1548,6 +1552,10 @@ exports[`CLI help output is byte-identical and runs nothing > hippo recall --hel
     --min-results <n>      Minimum results regardless of budget (default: 1)
     --json                 Output as JSON
     --why                  Show match reasons and source annotations
+    --include-superseded   Also return memories a newer version replaced
+    --as-of <iso-date>     Return the memories that were current on that date
+    --multihop             Search a second time with the speaker: and topic: tags the
+                           first pass found (also on when config multihop.enabled is true)
     --hops <n>             E3.2 multi-hop graph recall: also surface memories
                            reached by walking the entities/relations graph <n>
                            hops (0..3, default off) out from the lexical seeds.

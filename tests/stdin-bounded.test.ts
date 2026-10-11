@@ -4,7 +4,7 @@ import * as path from 'path';
 import { spawn, type SpawnSyncReturns } from 'child_process';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { getHippoRoot } from '../src/store/open.js';
+import { getHippoRoot } from '../src/core/project-identity.js';
 import { loadActiveTaskSnapshot } from '../src/store/sessions.js';
 import { compactionRows } from './_helpers/compaction-hooks.js';
 import { hippoRun } from './_helpers/spawn-hippo.js';

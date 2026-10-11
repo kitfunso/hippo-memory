@@ -9,7 +9,7 @@ Every local F-track measurement (F9 hybrid RRF, F14/F15/F16 embedder swaps)
 reached the same conclusion: on the comparable `longmemeval_s` split, the
 **local embedder is the structural ceiling**, not the fusion or chunking signal
 mix. gbrain v0.28.8's 97.6 R@5 uses OpenAI `text-embedding-3-large`. v1.23.0
-makes the embedder pluggable (see `src/store/embeddings/provider.ts`), so we can finally
+makes the embedder pluggable (see `src/embeddings/provider.ts`), so we can finally
 measure hippo's retrieval with a frontier embedder and publish the number
 honestly, next to the zero-dependency local floor.
 

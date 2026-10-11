@@ -2,9 +2,10 @@
  * Uses fetch directly (no SDK dependency); on any failure the original memory is untouched. */
 
 import { MemoryEntry, Layer } from '../core/memory.js';
-import { REFINED_TAG, storeRefinement } from '../api/index.js';
+import { REFINED_TAG, storeRefinement, type Context } from '../api/index.js';
+import { listMemories, listMemoriesByIds, type TenantReach } from '../api/memories.js';
 import { cliApiContext } from './api-context.js';
-import { chunked, loadAllEntries, loadEntriesByIds } from '../store/entry-reads.js';
+import { chunked } from '../util/chunked.js';
 import { redactSecretsStrict } from '../util/secret-detect.js';
 import { sendAnthropicMessage, type AnthropicMessageFailure } from '../util/anthropic-messages.js';
 import { log } from '../util/log.js';
@@ -52,7 +53,9 @@ export async function refineSemanticMemory(
     .map((s, i) => `[source ${i + 1}] ${redactSecretsStrict(s.content).slice(0, REFINE_SOURCE_CHARS)}`)
     .join('\n\n');
 
-  const prompt = `You are refining a semantic memory in an agent's memory store. The rule-based consolidator merged several related episodic memories into one, but the output is clumsy. Produce a single coherent semantic memory that captures the underlying principle.
+  const prompt = `You are refining a semantic memory in an agent's memory store. ` +
+    `The rule-based consolidator merged several related episodic memories into one, but the output is clumsy. ` +
+    `Produce a single coherent semantic memory that captures the underlying principle.
 
 Rules:
 - Output ONLY the refined content — no preamble, no quote marks, no "Here is...".
@@ -88,7 +91,7 @@ ${sourceBlock}`;
 function describeRefineFailure(failure: AnthropicMessageFailure): string {
   switch (failure.kind) {
     case 'request': return `refine: request failed: ${failure.message}`;
-    case 'http': return `refine: API answered HTTP ${failure.status}`;
+    case 'http': return `refine: API answered HTTP ${failure.status}${failure.detail ? `: ${failure.detail}` : ''}`;
     case 'unreadable': return `refine: unreadable response: ${failure.message}`;
   }
 }
@@ -111,9 +114,10 @@ export async function refineStore(
     details: [],
   };
 
-  // When opts.tenantId is provided, scope the top-level scan to this
-  // tenant's consolidated entries.
-  const entries = loadAllEntries(hippoRoot, opts.tenantId);
+  // No tenant means every tenant, so the ctx's own tenant is never read.
+  const ctx = cliApiContext(hippoRoot, opts.tenantId ?? '');
+  const reach: TenantReach = { everyTenant: opts.tenantId === undefined };
+  const entries = listMemories(ctx, reach);
   let processed = 0;
 
   for (const entry of entries) {
@@ -129,14 +133,15 @@ export async function refineStore(
     if (opts.limit !== undefined && processed >= opts.limit) break;
     processed++;
 
-    await refineOneEntry(hippoRoot, entry, opts, result);
+    await refineOneEntry(ctx, reach, entry, opts, result);
   }
 
   return result;
 }
 
 async function refineOneEntry(
-  hippoRoot: string,
+  ctx: Context,
+  reach: TenantReach,
   entry: MemoryEntry,
   opts: RefineOptions,
   result: RefineResult,
@@ -147,7 +152,7 @@ async function refineOneEntry(
   // Parent lookup is tenant-scoped; cross-tenant parents are absent and skipped,
   // so refine still works from the merged content alone.
   const found = new Map(
-    chunked(parentIds).flatMap((chunk) => loadEntriesByIds(hippoRoot, chunk, opts.tenantId)).map((p) => [p.id, p]),
+    chunked(parentIds).flatMap((chunk) => listMemoriesByIds(ctx, chunk, reach)).map((p) => [p.id, p]),
   );
   const sources = parentIds.flatMap((pid) => found.get(pid) ?? []);
 
@@ -169,7 +174,7 @@ async function refineOneEntry(
     return;
   }
 
-  storeRefinement(cliApiContext(hippoRoot, entry.tenantId), entry, refined);
+  storeRefinement(cliApiContext(ctx.hippoRoot, entry.tenantId), entry, refined);
   result.refined++;
   result.details.push({ id: entry.id, status: 'refined' });
 }

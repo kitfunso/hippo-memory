@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { embedAll } from '../../dist/store/embeddings/index.js';
 import { loadEmbeddingIndex } from '../../dist/store/vector-index.js';
-import { isEmbeddingAvailable } from '../../dist/store/embeddings/local.js';
+import { isEmbeddingAvailable } from '../../dist/embeddings/local.js';
 import { rankWith, SHOWN_ROWS } from './arms.ts';
 import { buildMicroStore } from './micro-store.ts';
 import {

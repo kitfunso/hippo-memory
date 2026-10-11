@@ -20,7 +20,7 @@ import { execFileSync } from 'node:child_process';
 import { initStore } from '../src/store/open.js';
 import { loadIndex, saveIndex } from '../src/store/index-and-stats.js';
 import { openHippoDb, closeHippoDb, getHippoDbPath, withSharedStoreHandles, type DatabaseSyncLike } from '../src/db/index.js';
-import { remember, recall, outcome, outcomeForLastRecall, type HippoDbContext } from '../src/api/index.js';
+import { remember, retrieve, outcome, outcomeForLastRecall, type HippoDbContext } from '../src/api/index.js';
 
 const repoRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 const hippoBin = join(repoRoot, 'bin', 'hippo.js');
@@ -102,12 +102,12 @@ describe('outcomeForLastRecall — no prior trace', () => {
 });
 
 describe('api.outcome explicit traceId opt (SDK linkage)', () => {
-  it('links to the given trace when a caller supplies traceId explicitly', () => {
+  it('links to the given trace when a caller supplies traceId explicitly', async () => {
     const { home, restore } = tmpHome();
     try {
       const ctx: HippoDbContext = { hippoRoot: home, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
       remember(ctx, { content: 'explicit-trace-opt-target' });
-      const recallResult = recall(ctx, { query: 'explicit-trace-opt-target', limit: 5 });
+      const recallResult = await retrieve(ctx, { query: 'explicit-trace-opt-target', limit: 5 });
       expect(recallResult.results.length).toBeGreaterThan(0);
 
       const db = openHippoDb(home);
@@ -183,9 +183,9 @@ describe('storage overhead smoke (success criterion 3)', () => {
 
       const before = dbSizeBytes();
       // One handle for the 100 recalls: each fresh open repeats the pragmas and migration check, which is not what this measures.
-      await withSharedStoreHandles(() => {
+      await withSharedStoreHandles(async () => {
         for (let i = 0; i < 100; i++) {
-          recall(ctx, { query: 'storage-smoke-target', limit: 10 });
+          await retrieve(ctx, { query: 'storage-smoke-target', limit: 10 });
         }
       });
       const after = dbSizeBytes();

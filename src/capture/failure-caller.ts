@@ -1,4 +1,5 @@
-// PostToolUseFailure for a caller on another machine: the lesson and its log row carry the caller's owner and project, and a retried request id gets the first answer.
+// PostToolUseFailure for a caller on another machine: the lesson and its log row carry the caller's owner and project, and a retried
+// request id gets the first answer.
 import { BadRequestError } from '../core/api-errors.js';
 import type { Context } from '../api/types.js';
 import { storeLesson } from './capture-error.js';
@@ -31,7 +32,13 @@ export interface CallerFailureResult {
 }
 
 const SKIPS = { 'skipped-interrupt': true, 'skipped-routine': true, 'skipped-invalid': true } as const satisfies Record<FailureSkip, true>;
-const ROUTINE_RULES = { declined: true, 'os-permission': true, 'no-match': true, 'search-tool': true, 'quiet-exit': true } as const satisfies Record<RoutineRule, true>;
+const ROUTINE_RULES = {
+  declined: true,
+  'os-permission': true,
+  'no-match': true,
+  'search-tool': true,
+  'quiet-exit': true,
+} as const satisfies Record<RoutineRule, true>;
 
 type CheckedFailure = { readonly skip: FailureSkip; readonly text: string | null } | { readonly skip: null; readonly text: string };
 

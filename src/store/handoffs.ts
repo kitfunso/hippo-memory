@@ -7,14 +7,15 @@ import {
   type HandoffEvidence,
   isHandoffOutcome,
 } from '../core/handoff.js';
-import { scopeAdmitSql } from './recall-scope.js';
+import { scopeAdmitSql } from './rule-sql.js';
 import { assertTenantId } from './tenant.js';
 import type { TaskSnapshot } from './rows.js';
 import { onHandle, openStore } from './open.js';
 import { type ContinuityKey, continuityStamp, continuityWhere, loadActiveTaskSnapshot } from './sessions.js';
 
 /** Column list shared by every session_handoffs SELECT; cards.ts reuses it for the card handoff lookup. */
-export const HANDOFF_COLUMNS = 'id, session_id, repo_root, task_id, summary, next_action, artifacts_json, scope, created_at, constraints_json, evidence_json, outcome, target_runtime, card_id';
+export const HANDOFF_COLUMNS = 'id, session_id, repo_root, task_id, summary, next_action, artifacts_json, scope, created_at, constraints_json, ' +
+  'evidence_json, outcome, target_runtime, card_id';
 
 /** Save a session handoff record; returns the persisted handoff. */
 export function saveSessionHandoff(
@@ -31,10 +32,11 @@ export function saveSessionHandoff(
   // Scope is stored as given; read-side default-deny in api.recall + cmdRecall
   // continuity excludes slack:private:* and 'unknown:legacy'.
   try {
-    const result = db.prepare(`
-      INSERT INTO session_handoffs(session_id, repo_root, task_id, summary, next_action, artifacts_json, scope, tenant_id, created_at, constraints_json, evidence_json, outcome, target_runtime, card_id, owner_subject, origin_project)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
+    const result = db.prepare(
+      `\n      INSERT INTO session_handoffs(session_id, repo_root, task_id, summary, next_action, artifacts_json, scope, tenant_id, created_at, ` +
+        `constraints_json, evidence_json, outcome, target_runtime, card_id, owner_subject, origin_project)\n` +
+        `      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)\n    `,
+    ).run(
       handoff.sessionId,
       handoff.repoRoot ?? null,
       handoff.taskId ?? null,

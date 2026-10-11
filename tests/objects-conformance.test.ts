@@ -10,7 +10,7 @@ import type { MemoryEntry } from '../src/core/memory.js';
 import { objectMirror } from '../src/objects/lifecycle.js';
 import { requireGroup, sqliteStore } from '../src/store/index.js';
 import { auditHighIdAt } from '../src/store/key-audit.js';
-import type { BriefReceipt, Incident, ObjectByKind, ObjectFields, ObjectKind, SavableKind } from '../src/store/object-types.js';
+import type { BriefReceipt, Incident, ObjectByKind, ObjectFields, ObjectKind, SavableKind } from '../src/core/object-types.js';
 import type { IncidentOpen, IncidentOpenRefusal, ObjectListQuery, ObjectRefusal, ObjectSave } from '../src/store/port.js';
 import { inMemoryObjectsStore } from './_helpers/in-memory-objects-store.js';
 import { onBothStores, seedTwoTenants, TENANT_A, TENANT_B, type GroupCall, type SideResult, type TwoTenantFixture } from './_helpers/store-conformance.js';

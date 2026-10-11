@@ -6,7 +6,7 @@ import { sampleForReplay } from './replay.js';
 import { renderTraceContent } from './trace.js';
 import { resolveTenantId } from '../store/tenant.js';
 import { reportAuditWriteFailure } from '../store/audit.js';
-import { commonDerivationScope } from '../store/recall-scope.js';
+import { commonDerivationScope } from '../core/recall-scope.js';
 import { log } from '../util/log.js';
 import { REPLAY_COUNT_DEFAULT, type SleepRun } from './run.js';
 import { type JsonValue, isJsonString } from '../util/json.js';

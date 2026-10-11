@@ -47,7 +47,7 @@ type ToolArgs = Record<string, string | number | boolean>;
 function callTool(root: string, name: string, args: ToolArgs): Promise<McpResponse | null> {
   return handleMcpRequest(
     { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } },
-    { hippoRoot: root, tenantId: TENANT, actor: 'mcp' },
+    { hippoRoot: root, tenantId: TENANT, actor: 'mcp', role: 'admin', hostAdmin: true },
   );
 }
 
@@ -353,7 +353,7 @@ describe('shared store recall, MCP vs HTTP', () => {
       writeEntry(root, seeded('lighthouse rota for the beta repo', 'mem_d18_beta', '2026-01-20T00:00:00.000Z', { origin_project: 'beta' }));
       const mcp = toolReply(await handleMcpRequest(
         { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_recall', arguments: { query: 'lighthouse' } } },
-        { hippoRoot: root, tenantId: TENANT, actor: 'mcp', project: { name: 'acme', legacyName: 'acme' } },
+        { hippoRoot: root, tenantId: TENANT, actor: 'mcp', role: 'admin', hostAdmin: true, project: { name: 'acme', legacyName: 'acme' } },
       ));
       expect(mcp.isError, mcp.text).toBe(false);
       expect(mcp.text).toContain('the acme repo');

@@ -4,7 +4,7 @@
 
 import { ConfidenceLevel, EmotionalValence } from '../core/memory.js';
 import { fetchWithRetry } from '../util/http-retry.js';
-import { errorMessage, log } from '../util/log.js';
+import { errorFields, errorMessage, log } from '../util/log.js';
 import { readCappedJson } from '../util/capped-json.js';
 import { type JsonValue, isJsonNumber, isJsonObject, isJsonString } from '../util/json.js';
 
@@ -47,7 +47,9 @@ const QUESTIONS = {
   durable: {
     type: 'noul',
     instructions:
-      'This text was extracted from an AI coding agent transcript as a candidate memory. It is worth storing long-term only if it would still be useful to a future agent working on this codebase weeks from now: a durable preference, a convention, a decision with a reason, or a gotcha that will recur. Transient chatter, one-off status, restatements of code already in the repo, and anything only true inside this one session are not worth storing.',
+      'This text was extracted from an AI coding agent transcript as a candidate memory. It is worth storing long-term only if it would still be useful to ' +
+        'a future agent working on this codebase weeks from now: a durable preference, a convention, a decision with a reason, or a gotcha that will recur. ' +
+          'Transient chatter, one-off status, restatements of code already in the repo, and anything only true inside this one session are not worth storing.',
   },
   kind: {
     type: 'choice',
@@ -104,10 +106,14 @@ async function post(content: string, opts: JudgeOptions): Promise<Response | nul
       }),
     }, { timeoutMs: JUDGE_TIMEOUT_MS, fetchFn: opts.fetcher });
   } catch (err) {
-    log.debug(`judge: request failed: ${errorMessage(err)}`);
+    log.warn(`judge: request failed: ${errorMessage(err)}`, errorFields(err));
     return null;
   }
-  return res.ok ? res : null;
+  if (res.ok) return res;
+  // The body is the server's reply, never the request, so it cannot hold the key.
+  const snippet = (await res.text().catch(() => '')).slice(0, 200);
+  log.warn('judge: non-2xx reply', { status: res.status, body: snippet });
+  return null;
 }
 
 /** `null` on any failure, so a Jev outage degrades capture to today's

@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
-import { remember, recall, type HippoDbContext } from '../src/api/index.js';
+import { remember, retrieve, type HippoDbContext } from '../src/api/index.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { handleCommentDeleted } from '../src/connectors/github/deletion.js';
 
@@ -234,7 +234,7 @@ describe('handleCommentDeleted', () => {
     });
 
     // Pre-condition: scoped recall finds it (sanity).
-    const before = recall(ctxFor(root), { query: distinctive, scope: SCOPE_PRIVATE });
+    const before = await retrieve(ctxFor(root), { query: distinctive, scope: SCOPE_PRIVATE });
     expect(before.results.some((r) => r.content.includes(distinctive))).toBe(true);
 
     // Archive via deletion.
@@ -247,7 +247,7 @@ describe('handleCommentDeleted', () => {
     expect(result.status).toBe('archived');
 
     // Post-condition: no-scope recall returns nothing matching the canary.
-    const after = recall(ctxFor(root), { query: distinctive });
+    const after = await retrieve(ctxFor(root), { query: distinctive });
     expect(after.results.some((r) => r.content.includes(distinctive))).toBe(false);
 
     // Also confirm the row is gone from memories entirely.

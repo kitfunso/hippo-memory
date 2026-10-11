@@ -1,6 +1,5 @@
-// No unauthenticated caller can make the server buffer a large body or wait long for one: most routes check
-// the credential before they read, and the key mint, which reads first, has a 4 KB cap and a deadline.
-// The two webhook routes take no API key, so they check the signing secret and the signature headers first.
+// No unauthenticated caller can make the server buffer a large body or wait long for one: every keyed route checks
+// the credential before it reads. The two webhook routes take no API key, so they check the signing secret and the signature headers first.
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -88,25 +87,26 @@ describe('no route reads an unauthenticated body beyond a stated cap and deadlin
     '/v1/decisions',
     '/v1/memories/mem_abc/archive',
     '/v1/project-briefs/refresh',
+    '/v1/auth/keys',
     '/mcp',
   ])('POST %s answers 401 without waiting for the promised body', async (path) => {
     expect(await statusBeforeBodyArrives(handle.port, path)).toBe('HTTP/1.1 401 Unauthorized');
   });
 
-  // POST /v1/auth/keys reads its body before auth on purpose, so a 4 KB cap and a deadline are what bound an unauthenticated caller there.
+  // Past auth (a keyless loopback store accepts the caller) the key mint still reads under its own 4 KB cap and short deadline.
   it('POST /v1/auth/keys answers 413 for a body over its 4 KB cap', async () => {
     const res = await fetch(`${handle.url}/v1/auth/keys`, {
       method: 'POST',
-      headers: { authorization: 'Bearer hk_bogus.notakey', 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ label: 'x'.repeat(5000) }),
     });
     expect(res.status).toBe(413);
   });
 
-  it('POST /v1/auth/keys answers 408 and drops the socket when the promised body never arrives', async () => {
+  it('POST /v1/auth/keys answers 408 and drops the socket when an accepted caller never sends the promised body', async () => {
     await handle.stop();
     handle = await serve({ hippoRoot: root, port: 0, mintBodyDeadlineMs: 50 });
-    expect(await statusUntilServerCloses(handle.port, '/v1/auth/keys')).toBe('HTTP/1.1 408 Request Timeout');
+    expect(await statusUntilServerCloses(handle.port, '/v1/auth/keys', '')).toBe('HTTP/1.1 408 Request Timeout');
   });
 
   // Past auth (a keyless loopback store accepts the caller) every other route reads through one shared reader, so one route stands for all.

@@ -18,7 +18,7 @@ import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { Layer, type MemoryEntry } from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { insertEntity, insertRelation } from '../src/store/graph-writes.js';
+import { insertEntityAt, insertRelationAt } from './_helpers/graph-seed.js';
 import { rrfFuse } from '../src/search/rrf.js';
 import { selectGraphSeeds, graphRankStream } from '../src/graph/stream.js';
 import { makeRoot } from './_helpers/make-root.js';
@@ -32,7 +32,7 @@ function mem(home: string, tenant: string, text: string): MemoryEntry {
   return m;
 }
 function ent(home: string, tenant: string, m: MemoryEntry, name: string): number {
-  return insertEntity(home, tenant, { entityType: 'decision', name, memoryId: m.id }).id;
+  return insertEntityAt(home, tenant, { entityType: 'decision', name, memoryId: m.id }).id;
 }
 
 // Default fusion weights, mirroring hybridSearch: [1-embeddingWeight, embeddingWeight, w_g].
@@ -66,7 +66,7 @@ describe('graph stream x RRF fusion (real SQLite)', () => {
 
     const es = ent(home, T, strong, 'STRONG');
     const ew = ent(home, T, weak, 'WEAK');
-    insertRelation(home, T, { fromEntityId: es, toEntityId: ew, relType: 'supersedes', memoryId: strong.id });
+    insertRelationAt(home, T, { fromEntityId: es, toEntityId: ew, relType: 'supersedes', memoryId: strong.id });
 
     // Lexical rankings: strong rank1 ... weak rank8 (last) in BOTH streams.
     const bm25Ranked = [0, 1, 2, 3, 4, 5, 6, 7];
@@ -119,7 +119,7 @@ describe('graph stream x RRF fusion (real SQLite)', () => {
     // Graph edge: a strong seed (mids[0], index 1) -> adjacent (index 5). The ANSWER has no path.
     const eSeed = ent(home, T, mids[0], 'SEED');
     const eAdj = ent(home, T, adjacent, 'ADJ');
-    insertRelation(home, T, { fromEntityId: eSeed, toEntityId: eAdj, relType: 'supersedes', memoryId: mids[0].id });
+    insertRelationAt(home, T, { fromEntityId: eSeed, toEntityId: eAdj, relType: 'supersedes', memoryId: mids[0].id });
 
     const bm25Ranked = [0, 1, 2, 3, 4, 5];   // answer rank1, adjacent rank6 (tail)
     const cosineRanked = [0, 1, 2, 3, 4, 5];

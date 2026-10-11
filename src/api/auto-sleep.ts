@@ -9,6 +9,9 @@ import type { HippoConfig } from '../core/config.js';
 
 export const autoSleepInFlight = new Set<string>();
 
+/** Runs one auto-sleep consolidation of `hippoRoot`: the HTTP server passes one that runs it off its event loop, in a child process. */
+export type AutoSleepRunner = (hippoRoot: string) => Promise<void>;
+
 export interface AutoSleepDue {
   enabled: boolean;
   count: number;
@@ -23,8 +26,15 @@ export function autoSleepDue(hippoRoot: string, tenantId: string, config: HippoC
   return { enabled, count, threshold, due: enabled && count >= threshold };
 }
 
-/** One run per store at a time; `allowed` is the caller's own gate. Consolidation is host-wide, so only the host tenant may start it. */
-export function startAutoSleepIfDue(hippoRoot: string, tenantId: string, config: HippoConfig['autoSleep'], allowed: boolean): void {
+/** One run per store at a time; `allowed` is the caller's own gate. Consolidation is host-wide, so only the host tenant may start it.
+ * Without `run`, it runs in process. */
+export function startAutoSleepIfDue(
+  hippoRoot: string,
+  tenantId: string,
+  config: HippoConfig['autoSleep'],
+  allowed: boolean,
+  run?: AutoSleepRunner,
+): void {
   if (
     !allowed ||
     !config.enabled ||
@@ -36,7 +46,10 @@ export function startAutoSleepIfDue(hippoRoot: string, tenantId: string, config:
   // Fire-and-forget (never block the response); an unhandled rejection would kill the server, so log it.
   // Its own scope: the call's closes a handle the sleep still holds across its pauses, but the caller's lock wait carries over.
   const busyWaitMs = scopedBusyWait();
-  outsideRequestStores(() => runWithRequestStores(() => consolidate(hippoRoot), { busyWaitMs }))
+  const started: Promise<unknown> = run
+    ? run(hippoRoot)
+    : outsideRequestStores(() => runWithRequestStores(() => consolidate(hippoRoot), { busyWaitMs }));
+  started
     .catch((err) => {
       log.error(`auto-sleep consolidate failed (tenant ${tenantId}): ${errorMessage(err)}`, errorFields(err));
     })

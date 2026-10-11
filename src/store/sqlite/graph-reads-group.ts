@@ -1,5 +1,5 @@
 // hippo.db's half of the GraphReads store group: one read snapshot around the walk the CLI graph commands run.
-import { canReadScope } from '../recall-scope.js';
+import { canReadScope } from '../../core/recall-scope.js';
 import { withGraphReadSnapshot } from '../graph-reads.js';
 import { graphViewRows } from '../graph-view-rows.js';
 import type { GraphReads, Sync } from '../port.js';

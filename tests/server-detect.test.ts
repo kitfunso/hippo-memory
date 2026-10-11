@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { detectServer, writePidfile, removePidfile, removePidfileIfOwned } from '../src/server/server-detect.js';
+import { detectServer, writePidfile, removePidfile, removePidfileIfOwned, ServerUnresponsiveError } from '../src/server/server-detect.js';
 import { serve } from '../src/server.js';
 
 // hippoRoot is the directory the pidfile sits directly inside, matching the
@@ -105,7 +105,7 @@ describe('server-detect', () => {
     }
   });
 
-  it('returns null but keeps the pidfile when /health times out (H1 case c)', async () => {
+  it('throws ServerUnresponsiveError and keeps the pidfile when /health times out, and serve() refuses to start beside it', async () => {
     const home = makeRoot();
     const pidfile = join(home, 'server.pid');
     // A stub server that accepts the connection but never answers, so the
@@ -126,9 +126,10 @@ describe('server-detect', () => {
         schema: 1, pid: process.pid, port,
         url: `http://127.0.0.1:${port}`, started_at: new Date().toISOString(),
       }));
-      expect(await detectServer(home)).toBeNull();
-      // A timeout is ambiguous (the server may be alive but busy), so the
-      // pidfile is left in place for the next probe to re-confirm.
+      // A busy server misses the probe too, so a timeout must stop the caller from opening the store as a second writer.
+      await expect(detectServer(home)).rejects.toThrow(ServerUnresponsiveError);
+      expect(existsSync(pidfile)).toBe(true);
+      await expect(serve({ hippoRoot: home, port: 0 })).rejects.toThrow(/did not answer \/health within \d+ ms; it may be busy/);
       expect(existsSync(pidfile)).toBe(true);
     } finally {
       stub.closeAllConnections?.();

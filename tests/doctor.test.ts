@@ -15,7 +15,8 @@ import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { runDoctor, formatDoctor } from '../src/doctor.js';
 import { startCompaction } from '../src/store/compactions-record.js';
 import { _setSpoolFsForTests } from '../src/capture/compaction-spool.js';
-import { repairProjects } from '../src/sharing/project-merge.js';
+import { repairProjectNames } from '../src/api/projects.js';
+import { cliApiContext } from '../src/cli/api-context.js';
 import { openHippoDb, openHippoDbReadOnly, closeHippoDb, getSchemaVersion, getCurrentSchemaVersion, setMeta } from '../src/db/index.js';
 
 function sha256(file: string): string {
@@ -333,12 +334,7 @@ describe('hippo doctor', () => {
     expect(runDoctor({ cwd, home: cwd, version: 'test' }).checks.find((c) => c.id === 'projects'))
       .toMatchObject({ status: 'warn', fix: expect.stringContaining('hippo projects repair --global') });
 
-    const db = openHippoDb(global);
-    try {
-      repairProjects(db, global, { tenantId: 'default', dryRun: false });
-    } finally {
-      closeHippoDb(db);
-    }
+    repairProjectNames(cliApiContext(global, 'default'), { dryRun: false });
     expect(runDoctor({ cwd, home: cwd, version: 'test' }).checks.find((c) => c.id === 'projects')!.status).toBe('pass');
   });
 });

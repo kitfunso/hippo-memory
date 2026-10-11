@@ -1,4 +1,5 @@
 import type { DatabaseSyncLike } from './sqlite.js';
+import { errorCode, log } from '../util/log.js';
 
 /** Column names of one table; empty when the table is missing. */
 export function tableColumns(db: DatabaseSyncLike, tableName: string): Set<string> {
@@ -35,13 +36,17 @@ export function countTableRows(db: DatabaseSyncLike, table: string): number | nu
     // SAFETY: COUNT(*) returns one row with one numeric column.
     const row = db.prepare(`SELECT COUNT(*) AS n FROM "${table.replace(/"/g, '""')}"`).get() as { n: number } | undefined;
     return Number(row?.n ?? 0);
-  } catch {
+  } catch (err) {
     // Callers treat an uncountable table as unknown; the bundle and doctor still finish.
+    log.warn(`could not count rows in table ${table}`, { table, code: errorCode(err) || 'unknown' });
     return null;
   }
 }
 
-export function pruneConsolidationRuns(db: DatabaseSyncLike, keep = 50): void {
+/** Sleep runs a store keeps; stats.json lists exactly these, so a recall's stats rewrite reads a fixed number of rows. */
+export const CONSOLIDATION_RUNS_KEPT = 50;
+
+export function pruneConsolidationRuns(db: DatabaseSyncLike, keep = CONSOLIDATION_RUNS_KEPT): void {
   db.prepare(`
     DELETE FROM consolidation_runs
     WHERE id NOT IN (

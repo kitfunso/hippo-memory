@@ -11,14 +11,16 @@ const CLOCK = String.raw`(?:Date\.now\(\)|performance\.now\(\)|hrtime(?:\.bigint
 // A clock read minus a start time held in a variable; minus a constant is a moment in the past, not a duration.
 const CLOCK_DIFF = new RegExp(String.raw`${CLOCK}\s*-\s*[a-z_$][\w$.]*(?!\s*[*(/\w$.])`);
 const ASSIGNED = new RegExp(String.raw`(?<![\w$.])([A-Za-z_$][\w$]*)\s*=[^=;\n]*?${CLOCK_DIFF.source}`, 'g');
-// Names a helper or a spawned process gives a duration it measured itself.
-const REPORTED = /(?<![\w$])(?:elapsed|elapsedMs|durationMs|wallMs|tookMs)\b/;
+// Names a helper or a spawned process gives a duration it measured itself: elapsed, ms, or any name ending in Ms or _ms; _MS constants are limits, not measurements.
+const REPORTED = /(?<![\w$])(?:elapsed|ms|[\w$]*(?:Ms|_ms))\b/;
 const MATCHER = /^\s*\.\s*(not\s*\.\s*)?(toBeLessThan|toBeLessThanOrEqual|toBeGreaterThan|toBeGreaterThanOrEqual)\(/;
 
 // By file and exact line, so an edited line is read again; the value says why a slow runner cannot fail it.
 const ALLOWED = new Map([
   ['token-eval-z0-turns.test.ts: expect(wallMs + 10_000).toBeLessThanOrEqual(stepMs);', 'the bound is the same step\'s own span, taken in the same run, which a slow runner only widens'],
   ['token-eval-z0-codex-faults.test.ts: expect(wallMs + waitMs).toBeLessThanOrEqual(stepMs);', 'the bound is the same cell\'s own span, taken in the same run, which a slow runner only widens'],
+  ['audit-prune.test.ts: expect(cutoffMs).toBeLessThanOrEqual(after - oneDayMs);', 'the value is a timestamp the code under test returns, bracketed by two clock reads taken around the call, which a slow runner only widens'],
+  ['company-brain-scorecard.test.ts: expect(report.p95Ms).toBeLessThanOrEqual(600 * 60 * 1000);', 'the value is a percentile computed from fixture timestamps, not a measured wall-clock span, so a slow runner cannot change it'],
 ]);
 
 /** The text between the bracket at `open` and the bracket that closes it. */
@@ -89,6 +91,8 @@ describe('elapsed-time upper bounds in tests', () => {
     'const elapsed = Date.now() - started;\nexpect(elapsed).toBeLessThan(3000);',
     'expect(Date.now() - started).toBeLessThan(30_000);',
     'expect(performance.now() - t0, "too slow").toBeLessThanOrEqual(500);',
+    'expect(t.wait.ms).toBeLessThan(5000);',
+    'expect(res.latencyMs).toBeLessThanOrEqual(200);',
     'expect(run.elapsedMs).toBeLessThan(PROMPT_HOOK_BUDGET_MS);',
     'let took = 0;\ntook = performance.now() - t0;\nexpect(took).not.toBeGreaterThan(100);',
     'const stopElapsed = Date.now() - stopStart;\nexpect(5000).toBeGreaterThan(stopElapsed);',

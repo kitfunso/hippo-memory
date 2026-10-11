@@ -26,7 +26,8 @@ export interface DashboardRows {
   readonly excluded: ExcludedCounts;
 }
 
-const LIVE_COLUMNS = 'id, created, last_retrieved, retrieval_count, half_life_days, layer, tags_json, emotional_valence, outcome_positive, outcome_negative, pinned, confidence, content, superseded_by, kind, scope, origin_project';
+const LIVE_COLUMNS = 'id, created, last_retrieved, retrieval_count, half_life_days, layer, tags_json, emotional_valence, outcome_positive, ' +
+  'outcome_negative, pinned, confidence, content, superseded_by, kind, scope, origin_project';
 type LiveRow = Pick<
   MemoryRow,
   'id' | 'created' | 'last_retrieved' | 'retrieval_count' | 'half_life_days' | 'layer' | 'tags_json' | 'emotional_valence' | 'outcome_positive'
@@ -70,11 +71,13 @@ export function loadDashboardRows(hippoRoot: string, tenantId: string): Dashboar
       // SAFETY: the SELECT names exactly LiveRow's columns.
       const live = db.prepare(`SELECT ${LIVE_COLUMNS} FROM memories WHERE tenant_id = ? AND ${LIVE} ORDER BY created ASC, id ASC`).all(tenantId) as LiveRow[];
       // SAFETY: the SELECT names exactly these two fields, and `why` is one of the three CASE arms or NULL.
-      const counts = db.prepare(`
-        SELECT CASE WHEN ${QUARANTINED} THEN 'quarantined' WHEN ${SUPERSEDED_BY} OR ${KIND} = 'superseded' THEN 'superseded' WHEN ${KIND} = 'archived' THEN 'archived' END AS why,
-               COUNT(*) AS n
-        FROM memories WHERE tenant_id = ? AND NOT (${LIVE}) GROUP BY why
-      `).all(tenantId) as Array<{ why: keyof ExcludedCounts | null; n: number }>;
+      const counts = db.prepare(
+        `\n        SELECT CASE WHEN ${QUARANTINED} THEN 'quarantined' ` +
+          `WHEN ${SUPERSEDED_BY} OR ${KIND} = 'superseded' THEN 'superseded' ` +
+          `WHEN ${KIND} = 'archived' THEN 'archived' END AS why,\n` +
+          `               COUNT(*) AS n\n` +
+          `        FROM memories WHERE tenant_id = ? AND NOT (${LIVE}) GROUP BY why\n      `,
+      ).all(tenantId) as Array<{ why: keyof ExcludedCounts | null; n: number }>;
       const excluded: ExcludedCounts = { superseded: 0, archived: 0, quarantined: 0 };
       for (const { why, n } of counts) if (why !== null) excluded[why] = Number(n);
       return { live: live.map(toDashboardRow), excluded };

@@ -1,5 +1,5 @@
 import type { JsonValue } from '../util/json.js';
-import { PUBLIC_ROUTES, V1_ROUTES, routeMatches } from './route-table.js';
+import { V1_ROUTES, routeMatches } from './route-table.js';
 import type { AddonRoute } from './types.js';
 
 const PLAIN_SEGMENT_RE = /^[A-Za-z0-9._~-]+$/;
@@ -11,7 +11,7 @@ function isPlainV1Path(path: string): boolean {
 
 // A plain path never holds a `%`, so matchPath cannot throw here.
 function isCorePath(method: string, path: string): boolean {
-  return PUBLIC_ROUTES.has(`${method} ${path}`) || V1_ROUTES.some((route) => routeMatches(route, method, path) !== null);
+  return V1_ROUTES.some((route) => routeMatches(route, method, path) !== null);
 }
 
 /** Boot-time check: an add-on path must be plain, unique and not one core serves, so no add-on shadows a core route or hides from dispatch. */

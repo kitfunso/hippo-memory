@@ -2,14 +2,14 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { createMemory, Layer, type MemoryEntry } from '../core/memory.js';
 import { duplicateKey, longestWord, storedTextKeys } from '../util/same-text.js';
-import { isInitialized } from '../store/open.js';
 import { writeCapturedItems } from '../store/capture-write.js';
+import { embedMemory } from '../search/embed-memories.js';
 import { EVERY_SCOPE, loadTextsHoldingWords } from '../store/candidates.js';
 import { getGlobalRoot, initGlobal } from '../sharing/global-store.js';
 import { maskEmails, redactSecretsStrict } from '../util/secret-detect.js';
 import { withRejectionProbe } from '../store/rejection-probe.js';
 import { loadConfig } from '../core/config.js';
-import { classifyOriginProject, projectId, type ProjectRef } from '../core/project-identity.js';
+import { classifyOriginProject, projectId, type ProjectRef, isInitialized } from '../core/project-identity.js';
 import { errorMessage, log } from '../util/log.js';
 import { teeStdStreams } from '../util/stream-tee.js';
 import { extractFromTexts, type ExtractedItem } from './extract.js';
@@ -95,8 +95,9 @@ function cmdCaptureCore(
     }
   }
 
-  const texts = readCaptureTexts(options);
-  if (texts === null) return;
+  const read = readCaptureTexts(options);
+  if (read === null) return;
+  const { texts, userTexts } = read;
 
   if (texts.every((text) => text.trim().length === 0)) {
     console.log('No text to capture from.');
@@ -104,7 +105,7 @@ function cmdCaptureCore(
   }
 
   // Scrub once here, as the snapshot fields are: every source can carry a pasted token (AGENTS.md: no secrets in memories).
-  const extracted = extractFromTexts(texts.map((text) => maskEmails(redactSecretsStrict(text))));
+  const extracted = extractFromTexts(texts.map((text) => maskEmails(redactSecretsStrict(text))), userTexts);
 
   if (extracted.length === 0) {
     console.log('No actionable items found in the input.');
@@ -144,12 +145,13 @@ function printCaptureTally(options: CaptureOptions, { captured, skipped, rejecte
   );
 }
 
-/** The raw texts for the chosen source, one per session turn; null after printing why a last-session capture has nothing. */
-function readCaptureTexts(options: CaptureOptions): string[] | null {
+/** The raw texts for the chosen source, one per session turn, the person's turns first; null after printing why a last-session capture has nothing.
+ *  Only a session says who spoke, so a piped or file capture counts no user texts. */
+function readCaptureTexts(options: CaptureOptions): { texts: string[]; userTexts: number } | null {
   switch (options.source) {
     case 'stdin': {
       try {
-        return [fs.readFileSync(0, 'utf8')];
+        return { texts: [fs.readFileSync(0, 'utf8')], userTexts: 0 };
       } catch {
         console.error('No input on stdin. Pipe text in or use --file <path>.');
         process.exit(1);
@@ -164,7 +166,7 @@ function readCaptureTexts(options: CaptureOptions): string[] | null {
         console.error(`File not found: ${options.filePath}`);
         process.exit(1);
       }
-      return [fs.readFileSync(options.filePath, 'utf8')];
+      return { texts: [fs.readFileSync(options.filePath, 'utf8')], userTexts: 0 };
     }
     case 'last-session': {
       let turns = options.sessionTurns;
@@ -181,7 +183,7 @@ function readCaptureTexts(options: CaptureOptions): string[] | null {
         console.log('Transcript had no user/assistant messages to summarise.');
         return null;
       }
-      return [...users, ...assistants];
+      return { texts: [...users, ...assistants], userTexts: users.length };
     }
   }
 }
@@ -218,7 +220,7 @@ export function captureExtractedItems(
       targetRoot,
       extracted.map((item) => ({ content: item.content, makeEntry: () => captureEntry(item, options, baseHalfLifeDays) })),
       keys,
-      { actor: options.actor, lean: options.lean },
+      { actor: options.actor, lean: options.lean, onCaptured: options.lean ? undefined : (entry) => void embedMemory(targetRoot, entry) },
     );
     for (const outcome of outcomes) tally[outcome]++;
     return tally;
@@ -248,11 +250,14 @@ export function captureExtractedItems(
 function captureEntry(item: ExtractedItem, options: CaptureWriteOptions, baseHalfLifeDays: number): MemoryEntry {
   // kind stays 'distilled': these are curated items, not raw transcript (see MEMORY_ENVELOPE.md).
   // The write tenant must match the dedup read's, or scoped dedup passes and the row lands in 'default'.
+  // A rule the person stated is pinned, so it injects even when a later prompt shares none of its words.
+  // SHORTCUT: every stated rule pins; cap or age these pins if a store's pins outgrow the hook budget.
   const created = createMemory(item.content, {
     layer: Layer.Episodic,
     tags: item.tags,
     source: 'capture',
     confidence: 'observed',
+    pinned: item.fromUser === true && item.category === 'rule',
     tenantId: options.tenantId,
     source_session_id: options.sessionId,
     baseHalfLifeDays,

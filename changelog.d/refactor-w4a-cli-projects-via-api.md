@@ -1,0 +1,2 @@
+### Changed
+- **Internal:** `hippo projects` and the once-per-sleep project tag repair reach hippo.db through new api functions (`listProjectNames`, `mergeProjectNames`, `repairProjectNames`, `repairProjectNamesOnce`). The store opens the handle and owns the backup, transaction and mirror refresh; the merge and repair rules no longer hold a raw database handle. No CLI opens hippo.db itself any more.

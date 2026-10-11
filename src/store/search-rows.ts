@@ -1,7 +1,8 @@
 import type { MemoryEntry } from '../core/memory.js';
 import { openHippoDb, isFtsAvailable, closeHippoDb, type DatabaseSyncLike } from '../db/index.js';
 import { tokenize } from '../util/tokenize.js';
-import { isPersonalScope, scopeAdmitSql, type SqlFragment } from './recall-scope.js';
+import { isPersonalScope } from '../core/recall-scope.js';
+import { scopeAdmitSql, type SqlFragment } from './rule-sql.js';
 import { ftsTermParts, RAREST_TERM_COUNT, rarestFtsQuery } from '../core/prompt-recall.js';
 import { errorMessage, log } from '../util/log.js';
 import { originInSql } from '../core/project-identity.js';
@@ -41,7 +42,10 @@ function withProject(scope: SqlFragment, col: 'm.' | '', origin: OriginFilter | 
   if (origin === undefined) return scope;
   // A string is the shape published callers passed before a project could carry several names.
   const originProjects = [origin].flat();
-  return { sql: `${scope.sql} AND (${col}origin_project = '' OR ${originInSql(originProjects, `${col}origin_project`)})`, params: [...scope.params, ...originProjects] };
+  return {
+    sql: `${scope.sql} AND (${col}origin_project = '' OR ${originInSql(originProjects, `${col}origin_project`)})`,
+    params: [...scope.params, ...originProjects],
+  };
 }
 
 /** Scope rule for recall: none requested is default-deny; 'exact' narrows to the request; 'additive' adds it to the default set, unless it is personal,
@@ -143,7 +147,8 @@ function searchPredicates(
 
 /** Every admitted row, oldest first; the no-terms path and the last-resort fallback share it. */
 function selectAllCandidates(db: DatabaseSyncLike, p: SearchPredicates, limit: number): MemoryRow[] {
-  const sql = `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories${p.tenantOnlyPredicate}${p.archivedClauseTenantOnly}${p.plainScope.sql}${p.currentNoAlias} ORDER BY created ASC, id ASC LIMIT ?`;
+  const sql = `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories${p.tenantOnlyPredicate}${p.archivedClauseTenantOnly}` +
+    `${p.plainScope.sql}${p.currentNoAlias} ORDER BY created ASC, id ASC LIMIT ?`;
   // SAFETY: sql selects exactly MEMORY_SELECT_COLUMNS, whose column list
   // matches MemoryRow's field set.
   return db.prepare(sql).all(...p.tenantParams, ...p.scopeParams, limit) as MemoryRow[];
@@ -247,7 +252,15 @@ export function loadRecallSearchEntriesFromDb(
   query: string,
   options: RecallSearchEntriesOptions = {},
 ): MemoryEntry[] {
-  const { limit = DEFAULT_SEARCH_CANDIDATE_LIMIT, tenantId, requestedScope, explicitScopeMode = 'exact', includeSuperseded = true, originProjects, ownScope } = options;
+  const {
+    limit = DEFAULT_SEARCH_CANDIDATE_LIMIT,
+    tenantId,
+    requestedScope,
+    explicitScopeMode = 'exact',
+    includeSuperseded = true,
+    originProjects,
+    ownScope,
+  } = options;
   const scopeFilter = recallScopeFilter(requestedScope, explicitScopeMode, ownScope);
   return loadSearchRows(db, query, limit, tenantId, { scopeFilter, includeSuperseded, originProjects }).map(rowToEntry);
 }

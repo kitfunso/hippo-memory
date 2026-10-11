@@ -6,11 +6,12 @@ import { archiveRawMemory } from './raw-archive.js';
 import { type MemoryConflict, type MemoryConflictRow, rowToMemoryConflict } from './rows.js';
 import { audit } from './audit-event.js';
 import { syncChangedMirrors, purgeMirrorBestEffort } from './mirrors.js';
-import { chunked, selectEntriesByIds } from './entry-reads.js';
+import { selectEntriesByIds } from './entry-reads.js';
+import { chunked } from '../util/chunked.js';
 import { onHandle, openStore } from './open.js';
 import { deleteEntryCore } from './delete-and-batch.js';
 import { BadRequestError } from '../core/api-errors.js';
-import { canTouchScope, isPersonalScope } from './recall-scope.js';
+import { canTouchScope, isPersonalScope } from '../core/recall-scope.js';
 import { selectMemoryReach } from './tenant-lookup.js';
 
 // The one place MemoryConflictRow's columns are listed; CONFLICT_COLS_MC is the same list under the `mc` alias.
@@ -494,7 +495,10 @@ function tombstoneLoserValue(
   removal: LoserRemoval,
 ): string {
   if (isPersonalScope(loserRow.scope)) {
-    throw new BadRequestError(`cannot reject the value of personal memory ${t.loserId}: a rejection reaches the whole tenant, so its reason would show to everyone; resolve with forget instead`);
+    throw new BadRequestError(
+      `cannot reject the value of personal memory ${t.loserId}: a rejection reaches the whole tenant, ` +
+        `so its reason would show to everyone; resolve with forget instead`,
+    );
   }
   const { actor, reason } = who;
   const rejectedDigest = rejectionDigest(loserRow.content);
@@ -602,7 +606,10 @@ function purgeRemovedLoserMirrors(
 /** The conflict and loser ids every conflict_resolve audit row names. */
 export function conflictResolveAuditsAt(db: DatabaseSyncLike): Array<{ conflictId: number; loserId: string }> {
   // SAFETY: SELECT of two fields every conflict_resolve audit row carries (ConflictResolveMeta above).
-  return db.prepare(`SELECT json_extract(metadata_json, '$.conflictId') AS conflictId, json_extract(metadata_json, '$.loserId') AS loserId FROM audit_log WHERE op = 'conflict_resolve'`).all() as { conflictId: number; loserId: string }[];
+  return db.prepare(
+    `SELECT json_extract(metadata_json, '$.conflictId') AS conflictId, json_extract(metadata_json, '$.loserId') AS loserId ` +
+      `FROM audit_log WHERE op = 'conflict_resolve'`,
+  ).all() as { conflictId: number; loserId: string }[];
 }
 
 /** Every resolved conflict with both sides. */

@@ -8,7 +8,7 @@ import { closeHippoDb, openHippoDb, withSqliteBlocked } from '../src/db/index.js
 import type { MemoryEntry } from '../src/core/memory.js';
 import type { AuditEvent } from '../src/server.js';
 import { requireGroup } from '../src/store/index.js';
-import { logEvent, type GitHubRouting } from '../src/store/connectors/github.js';
+import { markGitHubEventSeen, type GitHubRouting } from '../src/store/connectors/github.js';
 import { markSlackEventSeen, upsertSlackWorkspace, type SlackTeamRoute } from '../src/store/connectors/slack.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import type { ConnectorDeadLetter, ConnectorEvent, ConnectorEventRecord, ConnectorWriteOutcome, DeletionTarget } from '../src/store/port.js';
@@ -63,8 +63,8 @@ function seed(dir: string): Seeded {
   for (const entry of Object.values(rows)) writeEntry(dir, entry, { actor: 'cli' });
   markSlackEventSeen(dir, 'Ev_empty', null);
   markSlackEventSeen(dir, 'Ev_stored', rows.message.id);
-  logEvent(dir, { idempotencyKey: 'key-empty', deliveryId: 'd-seed', eventName: 'issues', memoryId: null });
-  logEvent(dir, { idempotencyKey: 'key-stored', deliveryId: 'd-seed', eventName: 'issues', memoryId: rows.message.id });
+  markGitHubEventSeen(dir, { idempotencyKey: 'key-empty', deliveryId: 'd-seed', eventName: 'issues', memoryId: null });
+  markGitHubEventSeen(dir, { idempotencyKey: 'key-stored', deliveryId: 'd-seed', eventName: 'issues', memoryId: rows.message.id });
   return rows;
 }
 

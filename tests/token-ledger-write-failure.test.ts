@@ -66,7 +66,7 @@ describe('token ledger write failures', () => {
     writeEntry(root, createMemory('ledger probe note about deploys'));
     const res = await handleMcpRequest(
       { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_recall', arguments: { query: 'deploys' } } },
-      { hippoRoot: root, tenantId: 'default', actor: 'mcp' },
+      { hippoRoot: root, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true },
     );
     expect(res?.error).toBeUndefined();
     expect(JSON.stringify(res?.result)).toContain('ledger probe note');

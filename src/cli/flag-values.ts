@@ -1,5 +1,6 @@
 // Readers that turn parsed CLI flags into typed values, and the flag types they share.
 
+import { DEFAULT_LIST_LIMIT } from '../util/limits.js';
 import type { RecallSearchOpts } from '../api/recall-pipeline.js';
 import type { HippoConfig } from '../core/config.js';
 import { printError } from './output.js';
@@ -43,7 +44,8 @@ export function parseBudgetFlag(value: string | boolean | string[] | undefined, 
 
 export type CliFlags = Record<string, string | boolean | string[]>;
 
-// Whole-arg digits only: parseInt alone reads "1abc" as 1 and a mutating verb would hit the wrong row. Digits past 2^53 round to a neighbouring id, so they are refused too.
+// Whole-arg digits only: parseInt alone reads "1abc" as 1 and a mutating verb would hit the wrong row.
+// Digits past 2^53 round to a neighbouring id, so they are refused too.
 export function parsePositiveId(idRaw: string | undefined, label: string): number {
   const s = String(idRaw ?? '').trim();
   const id = parseInt(s, 10);
@@ -56,7 +58,7 @@ export function parsePositiveId(idRaw: string | undefined, label: string): numbe
 
 export function parseListLimit(flags: CliFlags): number {
   const limitRaw = flags['limit'];
-  const limit = limitRaw !== undefined ? parseInt(String(limitRaw), 10) : 100;
+  const limit = limitRaw !== undefined ? parseInt(String(limitRaw), 10) : DEFAULT_LIST_LIMIT;
   if (!Number.isFinite(limit) || limit <= 0) {
     printError(`Invalid --limit: "${limitRaw}". Must be a positive integer.`);
     throw new CliExit(1);

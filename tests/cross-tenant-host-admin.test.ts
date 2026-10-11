@@ -146,7 +146,7 @@ describe('hippo_learn needs a host admin', () => {
   it('runs for an in-process stdio caller', async () => {
     const res = await handleMcpRequest(
       { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_learn', arguments: { days: 1 } } },
-      { hippoRoot: home, tenantId: 'default', actor: 'mcp' },
+      { hippoRoot: home, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true },
     );
     expect(res?.error).toBeUndefined();
   });

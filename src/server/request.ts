@@ -1,9 +1,11 @@
 // Request plumbing: request ids, error replies, URL parsing and path matching.
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { randomUUID } from 'node:crypto';
-import { isStoreBusy, STORE_BUSY_MESSAGE } from '../db/index.js';
+import { STORE_BUSY_MESSAGE } from '../store/port.js';
+import { isStoreBusy } from '../store/sqlite/busy.js';
 import { errorFields, errorMessage, log } from '../util/log.js';
-import { HttpError, mapApiError, sendJson } from '../util/http-util.js';
+import { mapApiError } from '../api/error-reply.js';
+import { HttpError, sendJson } from '../util/http-util.js';
 
 // The caller's id lands in a response header and in logs, so only a short plain token is echoed back.
 const REQUEST_ID_RE = /^[A-Za-z0-9._:-]{1,128}$/;
@@ -21,6 +23,8 @@ export function logRequestFailure<E>(req: IncomingMessage, err: E, status: numbe
   // A 5xx that tells the caller when to retry is back-pressure too.
   if (isStoreBusy(err) || (status >= 500 && err instanceof HttpError && err.retryAfterSec !== undefined)) log.warn(line, { status });
   else if (status >= 500 && status !== 501) log.error(line, { status, ...errorFields(err) });
+  // A failed login is the one 4xx an operator needs by default; the id (never the credential) is stamped from the request scope.
+  else if (status === 401 || status === 403) log.warn(line, { status });
   else log.info(line, { status });
 }
 

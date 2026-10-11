@@ -1,6 +1,6 @@
 {
-  "openersOutside": 8,
-  "openersInCli": 2,
+  "openersOutside": 6,
+  "openersInCli": 0,
   "storeBranches": 4,
   "routesWithoutStore": 0,
   "sqliteOnlyRoutes": 2,
@@ -8,30 +8,30 @@
   "twinFunctions": 0,
   "sqlOutside": 0,
   "txLiterals": 0,
-  "tenantResolvesInCli": 8,
-  "storeImportsInCli": 64,
-  "handleHoldersOutside": 12,
+  "tenantResolvesInCli": 0,
+  "storeImportsInCli": 3,
+  "handleHoldersOutside": 8,
+  "storeFilesWithoutSql": 3,
+  "storeFilesWithoutSqlList": [
+    "src/store/card-detail.ts",
+    "src/store/delivery-recorder.ts",
+    "src/store/embeddings/index.ts"
+  ],
   "openersOutsideByFile": {
     "src/agent-memories/sync.ts": 3,
-    "src/api/ledger-db.ts": 1,
     "src/doctor.ts": 1,
-    "src/index.ts": 2,
-    "src/server/boot.ts": 1
+    "src/index.ts": 2
   },
   "sqlOutsideByFile": {},
   "handleHoldersOutsideByFile": {
     "src/agent-memories/apply.ts": 1,
     "src/agent-memories/legacy.ts": 1,
     "src/agent-memories/sync.ts": 1,
-    "src/api/pilot-arm.ts": 1,
-    "src/cli/sleep.ts": 1,
     "src/doctor.ts": 1,
     "src/graph/delta.ts": 1,
     "src/graph/write.ts": 1,
     "src/index.ts": 1,
-    "src/server/boot.ts": 1,
-    "src/sharing/global-store.ts": 1,
-    "src/sharing/project-merge.ts": 1
+    "src/sharing/global-store.ts": 1
   },
   "sqliteLocalMethods": [
     "applyOutcome",

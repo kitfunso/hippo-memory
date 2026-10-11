@@ -9,7 +9,7 @@ import { loadConfig } from '../core/config.js';
 import { vetSecrets } from '../util/secret-detect.js';
 import { assertCallerProject } from '../core/project-identity.js';
 import { BadRequestError } from '../core/api-errors.js';
-import { assertClientScope, personalScopeOf } from '../store/recall-scope.js';
+import { assertClientScope, personalScopeOf } from '../core/recall-scope.js';
 import { andThen, notPorted, onStore } from './on-store.js';
 import type { Context, StoreReply } from './types.js';
 
@@ -33,7 +33,8 @@ export interface RememberOpts {
   owner?: string;
   artifactRef?: string;
   tags?: string[];
-  /** The connector event this write answers. The store logs it in the memory's own transaction; an event logged before stores nothing and answers `duplicate`. */
+  /** The connector event this write answers. The store logs it in the memory's own transaction; an event logged before stores nothing and
+   * answers `duplicate`. */
   event?: ConnectorEvent;
   /** Connector-ingested content an agent doesn't control; gates detectInstruction. CLI/HTTP/MCP never set this. */
   untrusted?: boolean;
@@ -67,7 +68,8 @@ function rememberScope(ctx: Context, opts: RememberOpts): string | null {
   if (opts.scope !== undefined) throw new BadRequestError('send personal or scope, not both');
   const own = personalScopeOf(ctx.actor);
   if (own === null) {
-    throw new BadRequestError('personal memories need a key its owner minted, or a sign-in; owner ids over 239 characters or with control characters cannot hold them');
+    throw new BadRequestError('personal memories need a key its owner minted, or a sign-in; owner ids over 239 characters or with control characters cannot ' +
+      'hold them');
   }
   return own;
 }

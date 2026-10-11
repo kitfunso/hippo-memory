@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { openHippoDb, closeHippoDb, getMeta } from '../src/db/index.js';
-import { remember, recall } from '../src/api/index.js';
+import { remember, retrieve } from '../src/api/index.js';
 import { serve, __resetSessionRecallHistoryHttp, type ServerHandle } from '../src/server.js';
 
 let home: string;
@@ -88,7 +88,7 @@ describe('GET /v1/memories counts toward total_recalled', () => {
     await httpRecall('q=alpha&limit=10');
     expect(totalRecalled()).toBe(3);
 
-    const direct = recall(ctx(), { query: 'alpha', limit: 10 });
+    const direct = await retrieve(ctx(), { query: 'alpha', limit: 10 });
     expect(direct.results.length).toBe(3);
     expect(totalRecalled()).toBe(3);
   });

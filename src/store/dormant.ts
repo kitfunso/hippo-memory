@@ -4,9 +4,10 @@
 import { closeHippoDb, openHippoDb, withWriteScope, withWriteScopeOr, type DatabaseSyncLike } from '../db/index.js';
 import { onHandle } from './open.js';
 import type { MemoryEntry } from '../core/memory.js';
-import type { SqlFragment } from './recall-scope.js';
+import type { SqlFragment } from './rule-sql.js';
 import type { WriteBudget } from '../util/write-budget.js';
-import { RejectedValueError, rejectionDigest } from './rejection.js';
+import { rejectionDigest } from './rejection.js';
+import { RejectedValueError } from '../core/api-errors.js';
 import { escapeLike } from '../util/escape.js';
 import { warnDamagedColumn } from '../util/stored-json.js';
 import { DAY_MS } from '../util/time.js';
@@ -93,6 +94,7 @@ function parseSnapshot(row: DormantRow): MemoryEntry | null {
     // the id / tenant / content checks below reject a row edited out of shape.
     const entry = JSON.parse(row.entry_json) as MemoryEntry;
     if (entry.id !== row.id || entry.tenantId !== row.tenant_id || entry.content !== row.content) {
+      warnDamagedColumn({ table: 'dormant_memories', id: row.id, column: 'entry_json' }, 'wrong shape');
       return null;
     }
     return entry;

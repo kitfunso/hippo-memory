@@ -1,4 +1,4 @@
-// The async store interface and its groups; type-only apart from requireGroup's error, so an add-on can build a store on it alone.
+// The async store interface and its groups; type-only apart from the store errors, so an add-on can build a store on it alone.
 import type { AmbientTallies } from '../core/ambient.js';
 import type { AmbientStoreFilter } from './ambient.js';
 import type { ApiKeyListRow, ApiKeyRecord, ListApiKeysOpts, NewApiKey } from './auth.js';
@@ -12,11 +12,12 @@ import type { JsonValue } from '../util/json.js';
 import type { KeysetPosition } from '../util/keyset.js';
 import type { MemoryEntry } from '../core/memory.js';
 import type { PhysicsParticle } from '../core/physics.js';
-import type { BriefReceipt, Incident, IncidentFields, ObjectByKind, ObjectFields, ObjectKind, Policy, SavableKind, Skill } from './object-types.js';
+import type { BriefReceipt, Incident, IncidentFields, ObjectByKind, ObjectFields, ObjectKind, Policy, SavableKind, Skill } from '../core/object-types.js';
 import type { PlanningFallacyEvidence } from './planning-fallacy-evidence.js';
-import type { ClosureState, Prediction, PredictionBaserate, SavePredictionOpts } from './predictions.js';
+import type { Prediction, PredictionBaserate, SavePredictionOpts } from './predictions.js';
+import type { ClosureState } from '../core/prediction.js';
 import type { QuarantineRow, QuarantineStatus } from './quarantine.js';
-import type { ScopeActor } from './recall-scope.js';
+import type { ScopeActor } from '../core/recall-scope.js';
 import type { RecallTraceInput } from './recall-trace.js';
 import type { AmbientLoadResult, AmbientRecallRequest, ContextCandidateFilter, RecentOrigins } from './candidates.js';
 import type { GitHubDlqInsert, GitHubRouting } from './connectors/github.js';
@@ -621,6 +622,16 @@ export function requireGroup<G extends keyof StoreGroups>(store: HippoStore, gro
   const methods = groups[group];
   if (methods === undefined) throw new StoreNotPortedError(store.kind, group);
   return methods;
+}
+
+export const STORE_BUSY_MESSAGE = 'store busy (another hippo process holds the write lock); retry shortly';
+
+/** A store behind the port throws this when its lock wait runs out, so the server answers 503 as it does for a busy hippo.db. */
+export class StoreBusyError extends Error {
+  constructor(message: string = STORE_BUSY_MESSAGE, options?: ErrorOptions) {
+    super(message, options);
+    this.name = 'StoreBusyError';
+  }
 }
 
 /** What `serve()` reads and writes through. Each method is atomic and no transaction spans an

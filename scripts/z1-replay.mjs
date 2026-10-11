@@ -16,7 +16,7 @@ const [{ estimateTokens, blockHash }, { shouldSkipUnchanged }] = await Promise.a
 const { isWorthSurfacing } = await distImport('core/memory-quality.js');
 const { ambientSecretAdmit } = await distImport('api/index.js');
 const { resolveProjectIdentity, classifyOriginProject } = await distImport('core/project-identity.js');
-const { passesScopeFilterForRecall } = await distImport('store/recall-scope.js');
+const { passesScopeFilterForRecall } = await distImport('core/recall-scope.js');
 const { contentTokens, promptTokens, gatePromptRecall, scoreOverlap } = await distImport('core/prompt-recall.js');
 
 const PIN_BUDGET = 1500;

@@ -5,9 +5,9 @@ import type { KeysetPosition } from '../util/keyset.js';
 import type { SavableDescriptor } from './descriptor.js';
 import { checkText, requireLine } from './fields.js';
 import { closeObjectAt, listObjectsAt, objectByIdAt, saveObjectAt } from './lifecycle.js';
-import type { CustomerNote, NoteStatus } from '../store/object-types.js';
+import type { CustomerNote, NoteStatus } from '../core/object-types.js';
 
-export type { CustomerNote, NoteStatus } from '../store/object-types.js';
+export type { CustomerNote, NoteStatus } from '../core/object-types.js';
 
 export const VALID_NOTE_STATES: ReadonlySet<NoteStatus> = new Set<NoteStatus>([
   'active',

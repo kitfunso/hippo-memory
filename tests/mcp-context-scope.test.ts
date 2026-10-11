@@ -24,7 +24,7 @@ function callTool(
       method: 'tools/call',
       params: { name, arguments: args },
     },
-    ctx,
+    { ...ctx, role: 'admin', hostAdmin: true },
   );
 }
 

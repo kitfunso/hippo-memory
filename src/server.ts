@@ -34,8 +34,9 @@ export {
 } from './store/index.js';
 // An add-on store's entry writes apply an outcome, guard tombstones and check reach exactly as hippo.db does.
 export { entryAfterOutcome } from './core/memory.js';
-export { rejectionDigest, RejectedValueError } from './store/rejection.js';
-export { ownScopeTouches } from './store/recall-scope.js';
+export { rejectionDigest } from './store/rejection.js';
+export { RejectedValueError } from './core/api-errors.js';
+export { ownScopeTouches } from './core/recall-scope.js';
 export { BadRequestError, ConflictError } from './core/api-errors.js';
 export type { HippoDbContext, StoreReply } from './api/types.js';
 export type { ApiKeyListItem, ApiKeyListRow, ApiKeyRecord, ListApiKeysOpts, NewApiKey } from './store/auth.js';
@@ -59,14 +60,14 @@ export type { AmbientTallies } from './core/ambient.js';
 export type { TokenUse } from './store/token-ledger.js';
 export type { EmbeddingIndexState } from './store/vector-index.js';
 export type { PhysicsParticle } from './core/physics.js';
-export { StoreBusyError } from './db/index.js';
+export { StoreBusyError } from './store/port.js';
 // An add-on store encodes, decodes and ranks vectors and particles with hippo.db's own code, and drops the index by its rule,
 // so both stores keep the same bytes and return the same ids in the same order.
 export { decodeVector, EMBEDDING_MODEL_META_KEY, encodeVector, rankVectorRows, type VectorMatch, type VectorRow } from './db/vector-store.js';
 export { bufferToFloat32, float32ToBuffer } from './db/physics-state.js';
 export { replacesIndex } from './store/vector-index.js';
 // An add-on's ContextReads applies hippo.db's scope, secret, tally and rarest-term rules with the same code.
-export { passesScopeFilterForRecall, RECALL_DEFAULT_DENY_SCOPES } from './store/recall-scope.js';
+export { passesScopeFilterForRecall, RECALL_DEFAULT_DENY_SCOPES } from './core/recall-scope.js';
 export { SECRET_TAGS } from './util/secret-detect.js';
 export { tallyAmbientEntries } from './core/ambient.js';
 export { ftsTermParts, rarestFtsQuery } from './core/prompt-recall.js';

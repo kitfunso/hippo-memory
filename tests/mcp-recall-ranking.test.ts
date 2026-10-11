@@ -13,7 +13,7 @@ import { pushGoal } from '../src/store/goals.js';
 import { saveActiveTaskSnapshot, appendSessionEvent } from '../src/store/sessions.js';
 import { saveStoredEmbeddingModel } from '../src/store/embeddings/index.js';
 import { saveEmbeddingIndex } from '../src/store/vector-index.js';
-import { resolveEmbeddingProvider } from '../src/store/embeddings/provider.js';
+import { resolveEmbeddingProvider } from '../src/embeddings/provider.js';
 import { _resetAblationCacheForTests } from '../src/core/ablation.js';
 import { openHippoDb, closeHippoDb, withSharedStoreHandles } from '../src/db/index.js';
 
@@ -77,7 +77,7 @@ function seed(config?: StoreConfig): Seeded {
 function call(home: string, args: Record<string, string | number | boolean>, ctx?: Partial<McpContext>): Promise<McpResponse | null> {
   return handleMcpRequest(
     { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_recall', arguments: args } },
-    { hippoRoot: home, tenantId: TENANT, actor: 'mcp', ...ctx },
+    { hippoRoot: home, tenantId: TENANT, actor: 'mcp', role: 'admin', hostAdmin: true, ...ctx },
   );
 }
 

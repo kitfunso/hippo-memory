@@ -417,7 +417,10 @@ function warnKeptHippoHandlers(settingsPath: string, hooks: JsonObject): void {
     return Array.isArray(groups) ? handlerCommands(groups).filter((command) => markers.some((m) => command.includes(m))) : [];
   });
   if (kept.length === 0) return;
-  process.stderr.write(`hippo kept these hook handlers in ${settingsPath} because they do not start with a hippo command; remove any that are hippo's by hand: ${kept.map((c) => JSON.stringify(c)).join(', ')}\n`);
+  process.stderr.write(
+    `hippo kept these hook handlers in ${settingsPath} because they do not start with a hippo command; ` +
+      `remove any that are hippo's by hand: ${kept.map((c) => JSON.stringify(c)).join(', ')}\n`,
+  );
 }
 
 /** Removes hippo's own hook handlers from `target`'s settings file and keeps every other handler; true when the file changed. */

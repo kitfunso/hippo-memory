@@ -43,13 +43,9 @@ export const RECALL_VERB_FILES = ['cli/recall.ts', 'cli/explain.ts'];
 /** The memory writers and the store opener. A CLI verb reaches them through a root-taking function in src/api or the module that owns the rows. */
 export const STORE_WRITERS = ['writeEntry', 'deleteEntry', 'deleteEntryCore', 'batchWriteAndDelete', 'openHippoDb'];
 
-/** The CLI files that may still name some of them, each with its reason. A new entry needs one too. */
-export const STORE_WRITER_EXCEPTIONS = {
-  // Both hand their handle to src/sharing/project-merge.ts. An opener there raises check-store-port's openersOutside,
-  // and the merge cannot move into src/store, which may not import src/agent-memories.
-  'cli/projects.ts': ['openHippoDb'],
-  'cli/sleep.ts': ['openHippoDb'],
-};
+/** The CLI files that may still name some of them, each with its reason. A new entry needs one too.
+ * @type {Record<string, string[]>} */
+export const STORE_WRITER_EXCEPTIONS = {};
 
 /**
  * Returns each line of a source text that names one of `names` as an identifier, imports included.

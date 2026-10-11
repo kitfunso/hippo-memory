@@ -93,13 +93,26 @@ export interface RouteRequest {
   query: URLSearchParams;
 }
 
+/** A request past the dispatch gate, carrying the caller the gate authenticated. */
+export interface AuthedRouteRequest extends RouteRequest {
+  ctx: Context;
+}
+
 /** A route's store status: a `storeReady` group, a `sqliteOnly` reason, or neither while it waits for a group; never both. */
 type StoreStatus = { storeReady?: StoreGroup; sqliteOnly?: never } | { sqliteOnly: string; storeReady?: never };
+
+/** What the dispatch gate proves before a handler runs: any caller, an admin, a host admin on loopback, or nothing, for a route
+ * whose handler checks the sender's signature itself. */
+export type RouteAuth = 'caller' | 'admin' | 'host-admin-local' | 'webhook-signature';
+
+export type RouteEndpoint<R> =
+  | { path: string; handler: (r: R) => Promise<void> }
+  | { pattern: string; handler: (r: R, params: Record<string, string>) => Promise<void> }
+  | { regex: RegExp; handler: (r: R, match: RegExpMatchArray) => Promise<void> };
 
 /** One /v1 route: an exact path, a matchPath pattern, or a regex, each paired with one method's handler. Under another store it runs only with its
  * store's `storeReady` group; `loop: 'off'` runs its SQLite work on a worker thread, so the handler opens no hippo.db on the server thread. */
 export type Route = { method: string; loop?: 'off' } & StoreStatus & (
-  | { path: string; handler: (r: RouteRequest) => Promise<void> }
-  | { pattern: string; handler: (r: RouteRequest, params: Record<string, string>) => Promise<void> }
-  | { regex: RegExp; handler: (r: RouteRequest, match: RegExpMatchArray) => Promise<void> }
+  | ({ auth: Exclude<RouteAuth, 'webhook-signature'> } & RouteEndpoint<AuthedRouteRequest>)
+  | ({ auth: 'webhook-signature' } & RouteEndpoint<RouteRequest>)
 );

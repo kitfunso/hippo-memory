@@ -244,7 +244,7 @@ describe('authCreate HTTP body.tenantId ignored', () => {
     const db = openHippoDb(home);
     let alphaPlaintext: string;
     try {
-      const created = createApiKey(db, { tenantId: 'alpha', label: 'alpha-bootstrap' });
+      const created = createApiKey(db, { tenantId: 'alpha', label: 'alpha-bootstrap', role: 'admin' });
       alphaPlaintext = created.plaintext;
     } finally {
       closeHippoDb(db);

@@ -1,12 +1,16 @@
 /** One retry policy for outbound HTTP: a timeout on every attempt, backoff on 429 and 5xx, and on a dropped connection where a replay is safe. */
 
+import { MINUTE_MS } from './time.js';
 import { envLlmTimeoutMs } from './env.js';
+import { errorCode, errorFields, log } from './log.js';
 
 export interface RetryPolicy {
   /** Per-attempt limit; a stalled peer ends as a thrown `TimeoutError`, never a hang. */
   timeoutMs: number;
   /** Total attempts including the first. */
   attempts?: number;
+  /** Limit on the whole call, waits included: an attempt is cut short at it and no retry starts whose wait would reach it. */
+  totalMs?: number;
   baseDelayMs?: number;
   /** A Retry-After longer than this hands the response back, so a caller with its own long pause keeps it. */
   maxDelayMs?: number;
@@ -18,16 +22,23 @@ export interface RetryPolicy {
   /** Replaces the timer between attempts. A caller `signal` that aborts still ends the wait at once. */
   sleep?: (ms: number) => Promise<void>;
   random?: () => number;
+  /** Replaces the clock `totalMs` is measured on. */
+  now?: () => number;
 }
 
 const DEFAULT_ATTEMPTS = 3;
 const DEFAULT_BASE_DELAY_MS = 250;
 const DEFAULT_MAX_DELAY_MS = 8_000;
-const DEFAULT_LLM_TIMEOUT_MS = 60_000;
+const DEFAULT_LLM_TIMEOUT_MS = MINUTE_MS;
 
 /** LLM calls (consolidation refine, DAG summaries, fact extraction) share one budget; `HIPPO_LLM_TIMEOUT_MS` overrides it. */
 export function llmTimeoutMs(): number {
   return envLlmTimeoutMs() ?? DEFAULT_LLM_TIMEOUT_MS;
+}
+
+/** One LLM call with its retries: two full attempts and the longest wait between them, where three slow failures would hold a sleep for 3x the timeout. */
+export function llmTotalMs(): number {
+  return 2 * llmTimeoutMs() + DEFAULT_MAX_DELAY_MS;
 }
 
 export function isRetryableStatus(status: number): boolean {
@@ -60,6 +71,23 @@ export function isTransientTransportError<E>(err: E): boolean {
 function isIdempotent(method: string | undefined): boolean {
   const verb = (method ?? 'GET').toUpperCase();
   return verb === 'GET' || verb === 'HEAD';
+}
+
+/** Host plus pathname only: a query string can carry a key. */
+function redactedTarget(url: string | URL): string {
+  try {
+    const u = new URL(url);
+    return `${u.host}${u.pathname}`;
+  } catch {
+    return 'unparseable-url';
+  }
+}
+
+function logRetry(init: RequestInit, url: string | URL, reason: string, attempt: number, attempts: number, delayMs: number): void {
+  // Debug: an attempt that may still succeed is not a warning, and the caller reports the final failure.
+  log.debug('http retry', {
+    method: (init.method ?? 'GET').toUpperCase(), target: redactedTarget(url), reason, attempt: `${attempt}/${attempts}`, delayMs: Math.round(delayMs),
+  });
 }
 
 type Sleep = (ms: number) => Promise<void>;
@@ -96,6 +124,9 @@ export async function fetchWithRetry(url: string | URL, init: RequestInit, polic
   const random = policy.random ?? Math.random;
   const retryOn = policy.retryOn ?? ((res: Response) => isRetryableStatus(res.status));
   const retryTransport = policy.retryTransport ?? isIdempotent(init.method);
+  const now = policy.now ?? Date.now;
+  const deadline = policy.totalMs === undefined ? Infinity : now() + policy.totalMs;
+  const fitsBudget = (delayMs: number): boolean => now() + delayMs < deadline;
   // Jitter over the upper half keeps parallel callers from retrying in lockstep.
   const backoffMs = (attempt: number): number => {
     const ceiling = Math.min(maxDelayMs, baseDelayMs * 2 ** (attempt - 1));
@@ -103,7 +134,7 @@ export async function fetchWithRetry(url: string | URL, init: RequestInit, polic
   };
 
   for (let attempt = 1; ; attempt++) {
-    const timeout = AbortSignal.timeout(policy.timeoutMs);
+    const timeout = AbortSignal.timeout(Math.max(1, Math.min(policy.timeoutMs, deadline - now())));
     const signal = init.signal ? AbortSignal.any([init.signal, timeout]) : timeout;
     let res: Response;
     try {
@@ -111,15 +142,25 @@ export async function fetchWithRetry(url: string | URL, init: RequestInit, polic
     } catch (err) {
       // The caller's own abort is a decision, not a fault, so it ends the call.
       if (!retryTransport || attempt >= attempts || init.signal?.aborted || !isTransientTransportError(err)) throw err;
-      await backoffWait(backoffMs(attempt), policy.sleep, init.signal);
+      const delay = backoffMs(attempt);
+      if (!fitsBudget(delay)) throw err;
+      logRetry(init, url, errorCode(err) || (err instanceof Error ? err.name : 'transport'), attempt, attempts, delay);
+      await backoffWait(delay, policy.sleep, init.signal);
       continue;
     }
     if (!retryOn(res) || attempt >= attempts) return res;
 
     const retryAfter = parseRetryAfterMs(res.headers.get('retry-after'));
     if (retryAfter !== null && retryAfter > maxDelayMs) return res;
+    const delay = retryAfter ?? backoffMs(attempt);
+    if (!fitsBudget(delay)) return res;
     // Frees the pooled socket before the next attempt.
-    await res.body?.cancel();
-    await backoffWait(retryAfter ?? backoffMs(attempt), policy.sleep, init.signal);
+    try {
+      await res.body?.cancel();
+    } catch (err) {
+      log.debug('http retry: body cancel failed', errorFields(err));
+    }
+    logRetry(init, url, `status ${res.status}`, attempt, attempts, delay);
+    await backoffWait(delay, policy.sleep, init.signal);
   }
 }

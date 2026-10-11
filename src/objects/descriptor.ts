@@ -2,7 +2,7 @@
 // A kind's table, columns and audit keys sit behind the `objects` store group.
 
 import type { KeysetPosition } from '../util/keyset.js';
-import type { ObjectByKind, ObjectFields, ObjectKind, SavableKind } from '../store/object-types.js';
+import type { ObjectByKind, ObjectFields, ObjectKind, SavableKind } from '../core/object-types.js';
 
 export interface ObjectDescriptor<K extends ObjectKind> {
   readonly kind: K;

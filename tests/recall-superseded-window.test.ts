@@ -9,7 +9,7 @@ import { createMemory } from './_helpers/default-half-life-memory.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { _forceLikePathForTests, loadRecallSearchEntries } from '../src/store/search-rows.js';
-import { assemble, recall, supersede, type Context } from '../src/api/index.js';
+import { assemble, retrieve, supersede, type Context } from '../src/api/index.js';
 
 const roots: string[] = [];
 
@@ -66,24 +66,24 @@ describe('the recall candidate window drops superseded rows before its LIMIT', (
     expect(windowIds(false)).toEqual([current.id]);
   });
 
-  it('api.recall finds the current version when an old one outranks it', () => {
+  it('api.recall finds the current version when an old one outranks it', async () => {
     const root = newRoot();
     const { current } = seedVersions(root, false);
 
-    expect(recall(ctxFor(root), { query: 'deploy', limit: 1, scorerWindow: 1 }).results.map((r) => r.id)).toEqual([current.id]);
+    expect((await retrieve(ctxFor(root), { query: 'deploy', limit: 1, scorerWindow: 1 })).results.map((r) => r.id)).toEqual([current.id]);
   });
 });
 
 describe('a superseded summary never stands in for its children', () => {
-  it('in recall overflow', () => {
+  it('in recall overflow', async () => {
     const root = newRoot();
     const summary = summaryWithChildren(root, 'invoice detail', {});
-    const summaryIds = (): string[] =>
-      recall(ctxFor(root), { query: 'invoice detail', limit: 1 }).results.filter((r) => r.isSummary).map((r) => r.id);
+    const summaryIds = async (): Promise<string[]> =>
+      (await retrieve(ctxFor(root), { query: 'invoice detail', limit: 1 })).results.filter((r) => r.isSummary).map((r) => r.id);
 
-    expect(summaryIds()).toEqual([summary.id]);
+    expect(await summaryIds()).toEqual([summary.id]);
     supersede(ctxFor(root), summary.id, 'billing rollup, revised');
-    expect(summaryIds()).toEqual([]);
+    expect(await summaryIds()).toEqual([]);
   });
 
   it('in assemble', async () => {

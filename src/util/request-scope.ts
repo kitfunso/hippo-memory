@@ -1,5 +1,6 @@
 // The one ambient scope of a request. A leaf module, so the logger can read the request id without importing the store layer.
 import { AsyncLocalStorage } from 'node:async_hooks';
+import { envRequestDeadlineMs } from './env.js';
 
 /** What every scope carries; the store layer's RequestStores is one, and adds its handles. */
 export interface RequestScope {
@@ -9,12 +10,19 @@ export interface RequestScope {
   readonly deadline?: RequestDeadline | undefined;
 }
 
+const DEFAULT_REQUEST_DEADLINE_MS = 120_000;
+
+/** How long a request may run: 120 s, or HIPPO_REQUEST_DEADLINE_MS, where 0 turns the deadline off. */
+export function requestDeadlineMs(): number {
+  return envRequestDeadlineMs() ?? DEFAULT_REQUEST_DEADLINE_MS;
+}
+
 /** When a request must be answered, and the store calls it still waits on: the store ends each of those soon after `at`, with the outcome only it knows. */
 export class RequestDeadline {
   /** Epoch milliseconds. */
   readonly at: number;
   #storeCalls = 0;
-  #whenIdle: (() => void) | undefined;
+  #whenIdle: (() => void)[] = [];
 
   constructor(at: number) {
     this.at = at;
@@ -26,18 +34,16 @@ export class RequestDeadline {
     const done = (): void => {
       this.#storeCalls -= 1;
       if (this.#storeCalls > 0) return;
-      const idle = this.#whenIdle;
-      this.#whenIdle = undefined;
-      idle?.();
+      for (const idle of this.#whenIdle.splice(0)) idle();
     };
     call.then(done, done);
     return call;
   }
 
-  /** Runs `fn` now, or once the last store call the request waits on has settled. */
+  /** Runs `fn` now, or once the last store call the request waits on has settled; every function registered meanwhile runs, in order. */
   onceIdle(fn: () => void): void {
     if (this.#storeCalls === 0) fn();
-    else this.#whenIdle = fn;
+    else this.#whenIdle.push(fn);
   }
 }
 

@@ -26,6 +26,19 @@ const HEALTH_BODY_MAX_BYTES = 64 * 1024;
 /** Loopback hosts a recorded pidfile url may point at (serve() only binds these); any other host is malformed or forged and is not probed. */
 const PIDFILE_LOOPBACK_HOSTS = new Set(['127.0.0.1', '::1', 'localhost']);
 
+/** The pidfile names a live process on loopback that did not answer /health in time: most likely a busy server, so a caller must neither
+ * bypass it with a second writer nor start another server beside it. */
+export class ServerUnresponsiveError extends Error {
+  constructor(info: ServerInfo, probeMs: number, options?: ErrorOptions) {
+    super(
+      `a hippo server (pid ${info.pid}) is recorded at ${info.url} but did not answer /health within ${probeMs} ms; it may be busy. ` +
+      'Retry shortly, raise HIPPO_HEALTH_PROBE_MS, or stop that server.',
+      options,
+    );
+    this.name = 'ServerUnresponsiveError';
+  }
+}
+
 /** False when the pidfile's pid is dead or its url could not be one serve() wrote. */
 function isLiveLoopbackTarget(info: ServerInfo): boolean {
   // Signal 0 throws if the pid is dead or owned by another user we cannot signal; either way, treat as stale.
@@ -73,14 +86,13 @@ async function readCappedBody(body: ReadableStream<Uint8Array>): Promise<string 
   return raw;
 }
 
-/** True when /health on info.url reports the pidfile's started_at; unlinks the pidfile on any definitive mismatch. */
+/** True when /health on info.url reports the pidfile's started_at; unlinks the pidfile on any definitive mismatch and throws ServerUnresponsiveError on a
+ * probe timeout. */
 async function healthMatchesPidfile(hippoRoot: string, info: ServerInfo): Promise<boolean> {
-  // Confirm the answering process is this server by matching /health `started_at` against the pidfile; refusal, non-200 or a malformed body unlink the
-  // pidfile as stale. A probe timeout is ambiguous (a live but busy server can miss the 300ms window), so it returns null WITHOUT unlinking.
+  // Refusal, non-200 or a malformed body unlink the pidfile as stale. A timeout proves neither a dead server nor this one, so it keeps the pidfile and throws.
+  const probeMs = envHealthProbeMs() ?? HEALTH_PROBE_TIMEOUT_MS;
   try {
-    const res = await fetch(`${info.url}/health`, {
-      signal: AbortSignal.timeout(envHealthProbeMs() ?? HEALTH_PROBE_TIMEOUT_MS),
-    });
+    const res = await fetch(`${info.url}/health`, { signal: AbortSignal.timeout(probeMs) });
     if (!res.ok || !res.body) {
       removePidfile(hippoRoot);
       return false;
@@ -97,17 +109,15 @@ async function healthMatchesPidfile(hippoRoot: string, info: ServerInfo): Promis
     }
     return true;
   } catch (err) {
-    // A timeout is ambiguous (the server may be busy), so keep the pidfile; any other failure (refused, malformed body) is definitive: unlink as stale.
-    // SAFETY: err's shape is unknown (catch clause); reading an optional .name property structurally is safe regardless of the actual type.
-    if ((err as { name?: unknown })?.name !== 'TimeoutError') {
-      removePidfile(hippoRoot);
-    }
+    if (err instanceof Error && err.name === 'TimeoutError') throw new ServerUnresponsiveError(info, probeMs, { cause: err });
+    removePidfile(hippoRoot);
     return false;
   }
 }
 
 /** Returns the pidfile's ServerInfo if a live hippo server answers on the recorded url, else null (best-effort unlinking of missing/stale/malformed pidfiles).
- * `process.kill(pid, 0)` rules out dead pids; GET /health must then return the pidfile's `started_at` (pids get reused). Probes only if the pid is live. */
+ * `process.kill(pid, 0)` rules out dead pids; GET /health must then return the pidfile's `started_at` (pids get reused). Probes only if the pid is live.
+ * Throws ServerUnresponsiveError when that probe times out. */
 export async function detectServer(hippoRoot: string): Promise<ServerInfo | null> {
   const path = join(hippoRoot, PIDFILE);
   if (!existsSync(path)) return null;

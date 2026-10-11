@@ -25,7 +25,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { loadIndex } from '../src/store/index-and-stats.js';
-import { remember, recall, getContext, type Context } from '../src/api/index.js';
+import { remember, retrieve, getContext, type Context } from '../src/api/index.js';
 
 function tmpHome() {
   const home = mkdtempSync(join(tmpdir(), 'hippo-api-recall-noside-'));
@@ -58,7 +58,7 @@ describe('api.recall divergence from cmdRecall (no last_retrieval_ids side-effec
       expect(before).toEqual([]);
 
       // api.recall — should NOT mutate.
-      const recallResult = recall(ctx, { query: 'target', limit: 5 });
+      const recallResult = await retrieve(ctx, { query: 'target', limit: 5 });
       expect(recallResult.results.length).toBeGreaterThan(0);
       const afterRecall = loadIndex(home).last_retrieval_ids ?? [];
       expect(afterRecall).toEqual(before);
@@ -75,7 +75,7 @@ describe('api.recall divergence from cmdRecall (no last_retrieval_ids side-effec
     }
   });
 
-  it('batched api.recall calls leave last_retrieval_ids untouched (no overwrite race)', () => {
+  it('batched api.recall calls leave last_retrieval_ids untouched (no overwrite race)', async () => {
     const { home, restore } = tmpHome();
     try {
       const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
@@ -84,9 +84,9 @@ describe('api.recall divergence from cmdRecall (no last_retrieval_ids side-effec
       remember(ctx, { content: 'batched-C' });
 
       // SDK pattern: batch many recall calls in a row.
-      recall(ctx, { query: 'batched-A', limit: 5 });
-      recall(ctx, { query: 'batched-B', limit: 5 });
-      recall(ctx, { query: 'batched-C', limit: 5 });
+      await retrieve(ctx, { query: 'batched-A', limit: 5 });
+      await retrieve(ctx, { query: 'batched-B', limit: 5 });
+      await retrieve(ctx, { query: 'batched-C', limit: 5 });
 
       // last_retrieval_ids must remain empty — none of the recalls wrote it.
       const idx = loadIndex(home);

@@ -1,5 +1,6 @@
 // `hippo hook`, `hippo setup` and `hippo daily-runner`: install and run the agent and machine integrations.
 
+import { MINUTE_MS } from '../util/time.js';
 import * as path from 'path';
 import * as fs from 'fs';
 import { execFileSync } from 'child_process';
@@ -33,7 +34,7 @@ import {
   isMcpFailure,
   uninstallCopilot,
 } from '../hooks/copilot.js';
-import { isInitialized } from '../store/open.js';
+import { isInitialized } from '../core/project-identity.js';
 import { currentMachine, importUserMemories } from '../agent-memories/sync.js';
 import { getGlobalRoot } from '../sharing/global-store.js';
 import { listRegisteredWorkspaces, runDailyMaintenance } from './scheduler.js';
@@ -198,11 +199,14 @@ const MCP_MERGE_LINES = {
   added: (file: string) => `Added the "hippo" MCP server -> ${file}`,
   present: (file: string) => `The "hippo" MCP server is already in ${file}`,
   'user-owned': (file: string) => `Left the "hippo" MCP server in ${file} as it is: hippo did not write it`,
-  unreadable: (file: string, host: McpHost) => `WARNING: ${file} has comments or is not a JSON object hippo can merge into, so it was left unchanged; ${addByHand(host)}`,
+  unreadable: (file: string, host: McpHost) =>
+    `WARNING: ${file} has comments or is not a JSON object hippo can merge into, so it was left unchanged; ${addByHand(host)}`,
 } as const satisfies Record<McpMergeStatus, (file: string, host: McpHost) => string>;
 
-const mcpFailureLine = (file: string, failure: McpFailure, fix: string): string => `WARNING: hippo could not use ${file} (${failure.failed}), so it was left unchanged; ${fix}`;
-const unclosedLine = (file: string): string => `WARNING: ${file} has ${HOOK_MARKERS.start} with no ${HOOK_MARKERS.end}, so hippo left it unchanged; fix the markers by hand`;
+const mcpFailureLine = (file: string, failure: McpFailure, fix: string): string =>
+  `WARNING: hippo could not use ${file} (${failure.failed}), so it was left unchanged; ${fix}`;
+const unclosedLine = (file: string): string =>
+  `WARNING: ${file} has ${HOOK_MARKERS.start} with no ${HOOK_MARKERS.end}, so hippo left it unchanged; fix the markers by hand`;
 
 const INSTRUCTIONS_INSTALL_LINES = {
   written: (file: string) => `Wrote the hippo block -> ${file}`,
@@ -230,7 +234,8 @@ const VSCODE_INSTRUCTIONS_REMOVE_LINES = {
   kept: (file: string) => `Left ${file}: it is not the text hippo wrote. Delete it by hand if no agent needs it.`,
 } as const satisfies Record<VscodeInstructionsRemoveStatus, (file: string) => string>;
 
-const VSCODE_HOOKS_LINE = 'VS Code: hooks need VS Code 1.109.3 or later with chat.useHooks on (the default); older versions get the MCP server and the instructions file only.';
+const VSCODE_HOOKS_LINE = 'VS Code: hooks need VS Code 1.109.3 or later with chat.useHooks on (the default); older versions get the MCP server and the ' +
+  'instructions file only.';
 
 function mcpInstallLine(file: string, mcp: McpMergeStatus | McpFailure, host: McpHost): string {
   return isMcpFailure(mcp) ? mcpFailureLine(file, mcp, addByHand(host)) : MCP_MERGE_LINES[mcp](file, host);
@@ -242,7 +247,8 @@ function printVscodeInstall(result: VscodeInstallResult, indent: string): void {
   console.log(`${indent}${VSCODE_INSTRUCTIONS_INSTALL_LINES[result.instructions](paths.instructions)}`);
   if (paths.profiles.length > 0) {
     const names = paths.profiles.map((dir) => path.basename(dir)).join(', ');
-    console.log(`${indent}Found VS Code profiles (${names}) under ${path.join(paths.userDir, 'profiles')}: hippo set up the default profile only; copy the "hippo" server and prompts/hippo.instructions.md into a profile to use hippo there.`);
+    console.log(`${indent}Found VS Code profiles (${names}) under ${path.join(paths.userDir, 'profiles')}: ` +
+      'hippo set up the default profile only; copy the "hippo" server and prompts/hippo.instructions.md into a profile to use hippo there.');
   }
 }
 
@@ -251,7 +257,8 @@ function printCopilotInstall(result: CopilotInstallResult, indent: string): void
   const hooks = result.hooks ? `Installed hippo's Copilot hooks (${copilotHookEvents().join(', ')}) ->` : "hippo's Copilot hooks are already in";
   console.log(`${indent}${hooks} ${paths.hooks}`);
   if (result.mcp === null || result.instructions === null) {
-    console.log(`${indent}No Copilot CLI files in ${path.dirname(paths.mcpConfig)}, so hippo skipped mcp-config.json and copilot-instructions.md, which only the Copilot CLI reads`);
+    console.log(`${indent}No Copilot CLI files in ${path.dirname(paths.mcpConfig)}, ` +
+      'so hippo skipped mcp-config.json and copilot-instructions.md, which only the Copilot CLI reads');
   } else {
     console.log(`${indent}${mcpInstallLine(paths.mcpConfig, result.mcp, COPILOT_CLI_MCP)}`);
     console.log(`${indent}${INSTRUCTIONS_INSTALL_LINES[result.instructions](paths.instructions)}`);
@@ -266,7 +273,10 @@ function mcpRemoveLines(file: string, mcp: McpRemoveStatus | McpFailure): string
   if (isMcpFailure(mcp)) return [mcpFailureLine(file, mcp, 'remove the "hippo" server by hand if hippo added it')];
   if (mcp === 'removed') return [`Removed the "hippo" MCP server from ${file}`];
   if (mcp === 'user-owned') return [`Left the "hippo" MCP server in ${file}: hippo did not write it`];
-  if (mcp === 'unreadable') return [`WARNING: ${file} has comments or is not a JSON object hippo can edit, so it was left unchanged; remove the "hippo" server by hand if hippo added it`];
+  if (mcp === 'unreadable') {
+    return [`WARNING: ${file} has comments or is not a JSON object hippo can edit, so it was left unchanged; ` +
+      'remove the "hippo" server by hand if hippo added it'];
+  }
   return [];
 }
 
@@ -497,7 +507,7 @@ function setupPluginTool(tool: ToolDetection, dryRun: boolean): void {
 }
 
 // Three times the 10 minutes POST /v1/sleep allows a consolidation, so a slow real sleep fits and a hung child cannot stall every later workspace.
-const DAILY_STEP_TIMEOUT_MS = 30 * 60_000;
+const DAILY_STEP_TIMEOUT_MS = 30 * MINUTE_MS;
 
 /** Why a child step failed; a child killed at the deadline says so, since its own message is only the spawn error code. */
 function dailyStepFailure<E>(err: E, timeoutMs: number): string {
@@ -505,13 +515,13 @@ function dailyStepFailure<E>(err: E, timeoutMs: number): string {
   return errorMessage(err);
 }
 
-export function handleDailyRunner(_ctx: CommandContext): void {
+export function handleDailyRunner({ tenantId }: CommandContext): void {
   const globalRoot = getGlobalRoot();
   // No workspace sleep ever opens the global store, yet hooks in folders without a store compact into it.
   if (isInitialized(globalRoot)) {
     const finished = replayCompactionsAt(globalRoot, (message) => log.warn(`compaction replay: ${message}`));
     if (finished > 0) console.log(`Finished saving ${finished} compaction${finished === 1 ? '' : 's'} left over in the global store.`);
-    repairQualityOnceAt(globalRoot);
+    repairQualityOnceAt(globalRoot, tenantId);
   }
   printAgentImport(importUserMemories(globalRoot, { machine: currentMachine() }), '');
   const workspaces = listRegisteredWorkspaces(globalRoot);
@@ -542,7 +552,8 @@ export function handleDailyRunner(_ctx: CommandContext): void {
     }
   });
 
-  console.log(`Daily maintenance complete: ${processed} workspace${processed === 1 ? '' : 's'} processed, ${failed} command failure${failed === 1 ? '' : 's'}.`);
+  console.log(`Daily maintenance complete: ${processed} workspace${processed === 1 ? '' : 's'} processed, ` +
+    `${failed} command failure${failed === 1 ? '' : 's'}.`);
   // The scheduler that runs this only sees the exit code, so a failed workspace must not read as a clean run.
   if (failed > 0) process.exitCode = 1;
 }

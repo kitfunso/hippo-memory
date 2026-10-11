@@ -2,16 +2,17 @@
  *  Transaction-time travel (what we believed at past system time T) is deferred. Superseding keeps the predecessor's valid-time range.
  *  All dates are normalised to ISO-8601 (`toISOString`) at the store boundary so the lexical half-open comparison is sound. */
 
+import { DEFAULT_LIST_LIMIT } from '../util/limits.js';
 import { BadRequestError } from '../core/api-errors.js';
 import { assertTenantId } from '../store/tenant.js';
 import type { KeysetPosition } from '../util/keyset.js';
 import type { SavableDescriptor } from './descriptor.js';
 import { closeObjectAt, listObjectsAt, objectByIdAt, saveObjectAt } from './lifecycle.js';
-import type { Policy, PolicyStatus } from '../store/object-types.js';
+import type { Policy, PolicyStatus } from '../core/object-types.js';
 import type { Objects, PoliciesInForceQuery } from '../store/port.js';
 import { sqliteObjects } from '../store/sqlite/objects-group.js';
 
-export type { Policy, PolicyStatus } from '../store/object-types.js';
+export type { Policy, PolicyStatus } from '../core/object-types.js';
 
 export const VALID_POLICY_STATES: ReadonlySet<PolicyStatus> = new Set<PolicyStatus>([
   'active',
@@ -177,5 +178,5 @@ function inForceQuery(tenantId: string, asOfDate: string, opts: { name?: string;
   const asOf = /^\d{4}-\d{2}-\d{2}$/.test(asOfDate.trim())
     ? normalizePolicyDate(`${asOfDate.trim()}T23:59:59.999Z`, 'asOfDate')
     : normalizePolicyDate(asOfDate, 'asOfDate');
-  return { asOf, name: opts.name, limit: opts.limit ?? 100 };
+  return { asOf, name: opts.name, limit: opts.limit ?? DEFAULT_LIST_LIMIT };
 }

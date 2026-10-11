@@ -4,9 +4,11 @@ import { existsSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'nod
 import { randomBytes, scryptSync } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { closeHippoDb, openHippoDb, rethrowIfSqliteBlocked, SqliteBlockedError, STORE_BUSY_MESSAGE } from '../src/db/index.js';
-import { StoreNotPortedError } from '../src/util/sqlite-blocked.js';
-import { mapApiError, STORE_NOT_PORTED_MESSAGE } from '../src/util/http-util.js';
+import { closeHippoDb, openHippoDb, SqliteBlockedError } from '../src/db/index.js';
+import { STORE_BUSY_MESSAGE } from '../src/store/port.js';
+import { rethrowIfSqliteBlocked, StoreNotPortedError } from '../src/util/sqlite-blocked.js';
+import { mapApiError } from '../src/api/error-reply.js';
+import { STORE_NOT_PORTED_MESSAGE } from '../src/util/http-util.js';
 import { mcpErrorResponse, type McpRequest } from '../src/mcp/server.js';
 import { initStore } from '../src/store/open.js';
 import { serve, sqliteStore, StoreBusyError, type ApiKeyRecord, type ContinuityKey, type HippoStore, type ServerHandle } from '../src/server.js';
@@ -121,7 +123,8 @@ describe('serve() under a store that is not hippo.db', () => {
   });
 
   it('answers 501 on every unported /v1 route and both connectors, and never runs the handler', async () => {
-    const routes = [...unportedV1Routes(), 'POST /v1/connectors/slack/events', 'POST /v1/connectors/github/events'];
+    const routes = unportedV1Routes();
+    expect(routes).toEqual(expect.arrayContaining(['POST /v1/connectors/slack/events', 'POST /v1/connectors/github/events']));
     expect(routes).toHaveLength(63);
     for (const route of routes) {
       const [method, path] = route.split(' ');
@@ -157,7 +160,6 @@ describe('serve() under a store that is not hippo.db', () => {
   });
 
   it('a bad key on the store-ready /v1/memories and a missing key on /mcp are still a 401', async () => {
-    // /v1/memories parses its query before it checks the key, so q keeps a parse error from answering first.
     const wrong = await fetch(`${handle.url}/v1/memories?q=deploy`, { headers: bearer(newKey()) });
     expect(wrong.status).toBe(401);
     vi.stubEnv('HIPPO_REQUIRE_AUTH', '1');

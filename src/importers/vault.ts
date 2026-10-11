@@ -5,8 +5,8 @@ import { createHash } from 'node:crypto';
 import { createMemory, MemoryEntry } from '../core/memory.js';
 import { loadVaultRawRows, type VaultRawRow } from '../store/entry-reads.js';
 import { remember, archiveRaw, isPrivateScope, type HippoDbContext } from '../api/index.js';
-import { assertClientScope } from '../store/recall-scope.js';
-import { RejectedValueError } from '../store/rejection.js';
+import { assertClientScope } from '../core/recall-scope.js';
+import { RejectedValueError } from '../core/api-errors.js';
 import { rejectionGuardRefuses } from '../store/rejected-values.js';
 import { withRequestStoresSync } from '../db/request-stores.js';
 import { loadConfig } from '../core/config.js';
@@ -121,7 +121,8 @@ function vaultIdentityOrThrow(options: ImportOptions): VaultIdentity {
   const vaultName = options.name?.trim();
   if (!vaultName) {
     throw new Error(
-      'importVault requires an explicit vault name (options.name): it is the identity key for source-deletion sync and must not be inferred from the folder basename.',
+      'importVault requires an explicit vault name (options.name): it is the identity key for source-deletion sync and must not be inferred from the folder ' +
+        'basename.',
     );
   }
   if (vaultName.includes(':')) {
@@ -129,12 +130,13 @@ function vaultIdentityOrThrow(options: ImportOptions): VaultIdentity {
     throw new Error(`vault name must not contain ':' (artifactRef delimiter): ${vaultName}`);
   }
   const scope = options.scope ?? null;
-  // Privacy guard: recall only default-denies scopes shaped `<source>:private:*` (isPrivateScope in src/store/recall-scope.ts), so a bare `private`
+  // Privacy guard: recall only default-denies scopes shaped `<source>:private:*` (isPrivateScope in src/core/recall-scope.ts), so a bare `private`
   // alias would be returned to no-scope callers. Reject any scope naming a `private` segment that is not a valid `<source>:private:*`.
   assertClientScope(scope);
   if (scope !== null && scope.split(':').includes('private') && !isPrivateScope(scope)) {
     throw new Error(
-      `vault scope '${scope}' is not recognized as private by recall (only '<source>:private:*' scopes are default-denied). Use a source-prefixed scope such as 'vault:private:${vaultName}'.`,
+      `vault scope '${scope}' is not recognized as private by recall (only '<source>:private:*' scopes are default-denied). ` +
+        `Use a source-prefixed scope such as 'vault:private:${vaultName}'.`,
     );
   }
   return { vaultName, scope };

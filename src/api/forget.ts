@@ -1,11 +1,11 @@
 // Forget a memory, and reject or unreject a value so it cannot be stored again.
 
 import { BadRequestError, NotFoundError } from '../core/api-errors.js';
-import { rejectValue, unrejectValue } from '../trust/reject-flow.js';
+import { rejectValue, unrejectValue, type RejectFlowResult } from '../trust/reject-flow.js';
 import { andThen, notPorted, onStore } from './on-store.js';
-import type { Context, StoreReply } from './types.js';
+import { requireHostAdmin, type Context, type StoreReply } from './types.js';
 import { getMemory } from './memories.js';
-import { canTouchScope, personalScopeOf } from '../store/recall-scope.js';
+import { canTouchScope, personalScopeOf } from '../core/recall-scope.js';
 
 /** Delete a memory by id. Reach is checked inside the delete's write scope, and a
  * row out of reach answers as not found, so a caller learns nothing about it. */
@@ -47,8 +47,20 @@ export async function reject(ctx: Context, opts: RejectOpts): Promise<RejectResu
       throw new NotFoundError(`memory not found: ${opts.memoryId}`);
     }
   }
+  const result = applyReject(ctx, opts);
+  return { digest: result.digest, removedIds: result.removedIds };
+}
+
+/** `hippo reject` on the host: every row it removed and the rows that kept their other texts. A personal row by id answers with the
+ *  personal refusal rather than reject's not-found, as the operator can see that row. */
+export function rejectOnHost(ctx: Context, opts: RejectOpts): RejectFlowResult {
+  requireHostAdmin(ctx, 'Rejecting with the removal report');
+  return applyReject(ctx, opts);
+}
+
+function applyReject(ctx: Context, opts: RejectOpts): RejectFlowResult {
   // SHORTCUT: the tombstone write is hippo.db only, as the port has no rejection group; one when a served store needs reject.
-  const result = rejectValue({
+  return rejectValue({
     hippoRoot: ctx.hippoRoot,
     tenantId: ctx.tenantId,
     actor: ctx.actor.subject,
@@ -57,7 +69,6 @@ export async function reject(ctx: Context, opts: RejectOpts): Promise<RejectResu
     value: opts.value,
     ownScope: personalScopeOf(ctx.actor) ?? undefined,
   });
-  return { digest: result.digest, removedIds: result.removedIds };
 }
 
 /** Deletes a tombstone by exact digest or unambiguous prefix, restoring writability (the only v1 escape hatch); throws on blank, no match or several. */

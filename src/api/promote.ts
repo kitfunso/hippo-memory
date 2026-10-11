@@ -9,7 +9,7 @@ import { loadConfig } from '../core/config.js';
 import { andThen, notPorted, onStore } from './on-store.js';
 import type { Context, StoreReply } from './types.js';
 import { memoryReach } from '../store/tenant-lookup.js';
-import { canTouchScope, personalScopeOf } from '../store/recall-scope.js';
+import { canTouchScope, personalScopeOf } from '../core/recall-scope.js';
 
 /** Copies a local memory into the global store; the inner writeEntry emits 'remember' there, and we add a 'promote' audit event so intent stays distinct.
  * promoteToGlobal reads via `readEntry` with no tenant filter and keeps the entry's existing tenantId on the global side. */

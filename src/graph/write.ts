@@ -6,25 +6,25 @@ import {
   deleteEntityRow,
   deleteRelationRow,
   entityIdBySource,
-  insertEntity,
-  insertRelation,
+  insertEntityRow,
+  insertRelationRow,
   objectInForce,
   relationPresent,
-  updateEntity
+  updateEntityRow
 } from '../store/graph-writes.js';
 import type { DesiredRelation, GraphOp } from './delta.js';
 
-function insertDesiredRelation(db: DatabaseSyncLike, hippoRoot: string, tenantId: string, rel: DesiredRelation): boolean {
+function insertDesiredRelation(db: DatabaseSyncLike, tenantId: string, rel: DesiredRelation): boolean {
   const fromEntityId = entityIdBySource(db, tenantId, rel.from.entityType, rel.from.sourceObject);
   const toEntityId = entityIdBySource(db, tenantId, rel.to.entityType, rel.to.sourceObject);
   if (fromEntityId === undefined || toEntityId === undefined || !objectInForce(db, tenantId, rel.sourceObject)) return false;
   if (relationPresent(db, tenantId, fromEntityId, toEntityId, rel.relType)) return false;
-  insertRelation(hippoRoot, tenantId, { fromEntityId, toEntityId, relType: rel.relType, memoryId: rel.memoryId, sourceObject: rel.sourceObject }, db);
+  insertRelationRow(db, tenantId, { fromEntityId, toEntityId, relType: rel.relType, memoryId: rel.memoryId, sourceObject: rel.sourceObject });
   return true;
 }
 
 /** Applies one op; false when a writer since the diff made it stale, which the next run's diff repairs. */
-function applyGraphOp(db: DatabaseSyncLike, hippoRoot: string, tenantId: string, op: GraphOp): boolean {
+function applyGraphOp(db: DatabaseSyncLike, tenantId: string, op: GraphOp): boolean {
   switch (op.op) {
     case 'deleteEntity':
       deleteEntityRow(db, tenantId, op.id);
@@ -34,15 +34,15 @@ function applyGraphOp(db: DatabaseSyncLike, hippoRoot: string, tenantId: string,
       return true;
     case 'updateEntity':
       if (!objectInForce(db, tenantId, op.entity.sourceObject)) return false;
-      return updateEntity(hippoRoot, tenantId, op.id, op.entity, db) !== null;
+      return updateEntityRow(db, tenantId, op.id, op.entity) !== null;
     case 'insertEntity':
       // A mirrorless object closed since the load is never enqueued again, so a stale insert would stay for good.
       if (!objectInForce(db, tenantId, op.entity.sourceObject) || entityIdBySource(db, tenantId, op.entity.entityType, op.entity.sourceObject) !== undefined)
         return false;
-      insertEntity(hippoRoot, tenantId, op.entity, db);
+      insertEntityRow(db, tenantId, op.entity);
       return true;
     case 'insertRelation':
-      return insertDesiredRelation(db, hippoRoot, tenantId, op.relation);
+      return insertDesiredRelation(db, tenantId, op.relation);
   }
 }
 
@@ -55,7 +55,6 @@ export interface ApplyGraphOpsResult {
  *  Returns where the next chunk starts and how many ops were skipped as stale. */
 export function applyGraphOps(
   db: DatabaseSyncLike,
-  hippoRoot: string,
   tenantId: string,
   ops: readonly GraphOp[],
   opts: { readonly from: number; readonly holdMs: number; readonly clock?: () => number },
@@ -66,7 +65,7 @@ export function applyGraphOps(
   let next = opts.from;
   let skipped = 0;
   while (next < ops.length) {
-    if (!applyGraphOp(db, hippoRoot, tenantId, ops[next])) skipped += 1;
+    if (!applyGraphOp(db, tenantId, ops[next])) skipped += 1;
     next += 1;
     if (now() - begunAt >= opts.holdMs) break;
   }

@@ -4,7 +4,15 @@ import * as path from 'path';
 import { execFileSync, execSync } from 'child_process';
 import { installJsonHooks, type InstallResult } from '../hooks/json-hooks.js';
 import { CODEX_TRUST_LINE } from '../hooks/shared.js';
-import { DAILY_TASK_NAME, buildDailyRunnerCommand, hasUnsafeRunnerPathChars, buildSchtasksCreateArgs, buildWindowsTaskRun, quoteInsideWindowsArg } from './scheduler.js';
+import { envSkipSchedule } from '../util/env.js';
+import {
+  DAILY_TASK_NAME,
+  buildDailyRunnerCommand,
+  hasUnsafeRunnerPathChars,
+  buildSchtasksCreateArgs,
+  buildWindowsTaskRun,
+  quoteInsideWindowsArg,
+} from './scheduler.js';
 
 /** Adds hippo's two Codex hooks and says what changed; each install ends on the trust reminder, since Codex skips an untrusted hook. */
 export function installCodexMemoryHooks(indent: string): void {
@@ -23,10 +31,18 @@ export function installCodexMemoryHooks(indent: string): void {
   console.log(`${indent}${CODEX_TRUST_LINE}`);
 }
 
-/** The one line init, hook install, hook uninstall and setup print when Claude Code's settings.json is not JSON hippo can edit and so was left unchanged; true when it printed. */
-export function warnClaudeSettingsUnusable(result: Pick<InstallResult, 'settingsPath' | 'invalidJson'>, indent: string, action: 'install' | 'uninstall' = 'install'): boolean {
+/** The one line init, hook install, hook uninstall and setup print when Claude Code's settings.json is not JSON hippo can edit and so was
+ * left unchanged; true when it printed. */
+export function warnClaudeSettingsUnusable(
+  result: Pick<InstallResult, 'settingsPath' | 'invalidJson'>,
+  indent: string,
+  action: 'install' | 'uninstall' = 'install',
+): boolean {
   if (!result.invalidJson) return false;
-  console.log(`${indent}WARNING: ${result.settingsPath} is not a JSON object hippo can merge into, so it was left unchanged; fix it, then run \`hippo hook ${action} claude-code\`.`);
+  console.log(
+    `${indent}WARNING: ${result.settingsPath} is not a JSON object hippo can merge into, so it was left unchanged; ` +
+      `fix it, then run \`hippo hook ${action} claude-code\`.`,
+  );
   return true;
 }
 
@@ -44,6 +60,11 @@ function warnSchedulerTimedOut(command: string): void {
 }
 
 export function setupDailySchedule(globalRoot: string): void {
+  // Checked here, not per caller, so init, init --scan and setup all honour it.
+  if (envSkipSchedule()) {
+    console.log('   HIPPO_SKIP_SCHEDULE=1, so the machine-level daily runner was not scheduled.');
+    return;
+  }
   const runnerDir = path.resolve(globalRoot);
   if (hasUnsafeRunnerPathChars(runnerDir, process.platform)) {
     console.log(`   Skipping schedule: runner path contains unsafe characters.`);

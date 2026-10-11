@@ -34,7 +34,8 @@ import { consolidate } from '../src/consolidate/sleep.js';
 import { insertDormantRow } from '../src/store/dormant.js';
 import { loadConfig } from '../src/core/config.js';
 import { createMemory, Layer, calculateStrength, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../src/core/memory.js';
-import { RejectedValueError, rejectionDigest, insertRejectedValue } from '../src/store/rejection.js';
+import { rejectionDigest, insertRejectedValue } from '../src/store/rejection.js';
+import { RejectedValueError } from '../src/core/api-errors.js';
 import * as api from '../src/api/index.js';
 import { WRITE_BUDGET } from '../src/util/write-budget.js';
 
@@ -321,7 +322,7 @@ describe('with dormant memories enabled', () => {
       writeEntry(home, faded);
       await consolidate(home, { now: new Date() });
 
-      const recalled = api.recall(ctxFor(home), { query: 'zanzibar gateway auth header' });
+      const recalled = await api.retrieve(ctxFor(home), { query: 'zanzibar gateway auth header' });
       expect(recalled.results.map((r) => r.id)).not.toContain(faded.id);
     } finally {
       restore();
@@ -444,7 +445,7 @@ describe('listing, restoring and forgetting dormant memories', () => {
       expect(Date.parse(restored.last_retrieved)).toBeGreaterThanOrEqual(before - 1000);
       expect(calculateStrength(restored, new Date())).toBeGreaterThan(0.9);
       expect(api.listDormant(ctxFor(home))).toEqual([]);
-      expect(api.recall(ctxFor(home), { query: 'zanzibar gateway auth header' }).results.map((r) => r.id)).toContain(ids[0]);
+      expect((await api.retrieve(ctxFor(home), { query: 'zanzibar gateway auth header' })).results.map((r) => r.id)).toContain(ids[0]);
 
       const next = await consolidate(home, { now: new Date() });
       expect(next.dormant).toBe(0);

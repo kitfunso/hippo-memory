@@ -9,11 +9,11 @@ import { stringFlagOrExit, type CommandContext, stringFlag, numberFlag } from '.
 import { requireInit } from './shared.js';
 import { errorMessage } from '../util/log.js';
 import { CliExit } from './exit.js';
-import { DEFAULT_SERVER_HOST, DEFAULT_SERVER_PORT } from '../server/defaults.js';
+import { DEFAULT_DASHBOARD_PORT, DEFAULT_SERVER_HOST, DEFAULT_SERVER_PORT } from '../server/defaults.js';
 
 export async function handleDashboard({ hippoRoot, flags }: CommandContext): Promise<void> {
   requireInit(hippoRoot);
-  const port = numberFlag(flags, 'port') ?? 3333;
+  const port = numberFlag(flags, 'port') ?? DEFAULT_DASHBOARD_PORT;
   const { serveDashboard } = await import('../dashboard/dashboard.js');
   serveDashboard(hippoRoot, port, undefined, { handleSignals: true });
   // A later throw ends in one log line and exit 1, as it does for serve and mcp; a busy port is reported by the dashboard itself.

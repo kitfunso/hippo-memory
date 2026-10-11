@@ -3,7 +3,7 @@
 import type { MemoryEntry } from '../core/memory.js';
 import { evalNow } from '../core/ablation.js';
 import { scoreOverlap, type PromptRecallGate } from '../core/prompt-recall.js';
-import { hookPayloadSessionId, hookPayloadString, isSubagentPayload } from './token-ledger.js';
+import { hookPayloadSessionId, hookPayloadString, isSubagentPayload } from '../util/hook-payload.js';
 import { blockHash, estimateTokens } from '../util/token-text.js';
 import { errorMessage, log } from '../util/log.js';
 export type DeliveryRuntime = 'claude-code' | 'codex' | 'copilot' | 'unknown';
@@ -23,7 +23,8 @@ export type DeliveryOutcome = 'emitted' | 'reused' | 'rejected';
 export type DeliveryRejectReason =
   | 'budget' | 'gate-below-threshold' | 'gate-max-items' | 'duplicate' | 'scope' | 'quality' | 'limit';
 
-/** Row format version in `delivery_events.ledger_version`: 3 = written by a binary that can write session-end and context rows, so `event_type` has six values. */
+/** Row format version in `delivery_events.ledger_version`: 3 = written by a binary that can write session-end and context rows, so
+ * `event_type` has six values. */
 export const DELIVERY_LEDGER_VERSION = 3;
 /** Rejected candidate rows kept per event; the rest only add to `rejected_unlisted`. */
 export const DELIVERY_REJECTED_ROW_CAP = 16;

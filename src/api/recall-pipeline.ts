@@ -4,7 +4,7 @@
 import { evalNow } from '../core/ablation.js';
 import { oneCopyPerMemory } from './context-select.js';
 import { compareEntryIdentity, compareScoresDesc } from '../core/compare.js';
-import { isEmbeddingAvailable } from '../store/embeddings/local.js';
+import { isEmbeddingAvailable } from '../embeddings/local.js';
 import { activeGoalsWithPolicies, type GoalRecallLogRow } from '../store/goals.js';
 import { boostByGoals } from '../search/goal-boost.js';
 import { graphExpandRecall } from '../graph/recall.js';
@@ -12,14 +12,14 @@ import { DEFAULT_GRAPH_STREAM_WEIGHT } from '../graph/stream.js';
 import { Layer, type MemoryEntry } from '../core/memory.js';
 import { multihopSearch } from '../search/multihop.js';
 import type { PhysicsConfig } from '../core/physics-config.js';
-import { passesCliRecallScopeFilter } from '../store/recall-scope.js';
+import { passesCliRecallScopeFilter } from '../core/recall-scope.js';
 import type { RerankerFn } from '../rerankers/types.js';
 import { currentEntries } from '../search/as-of.js';
 import { STRENGTH_RANK_FLOOR, STRENGTH_RANK_SPAN } from '../search/boosts.js';
 import { hybridSearch } from '../search/hybrid.js';
 import { physicsSearch } from '../search/physics-search.js';
 import type { RerankStep, ResultCost, SearchResult } from '../core/search-types.js';
-import { searchBothHybrid } from '../sharing/search-both.js';
+import { rankBothStores } from '../sharing/search-both.js';
 import { loadRecallSearchEntries, recallScopeFilter } from '../store/search-rows.js';
 import { isJsonNumber } from '../util/json.js';
 import { textOverlap, tokenize as tokenizeQuery } from '../util/tokenize.js';
@@ -198,7 +198,7 @@ async function searchPool(ctx: RankRecallCtx, opts: RankRecallOpts, pool: Recall
     });
   }
   if (search.multihop) {
-    // Unlike searchBothHybrid below, multihop ranks one pooled list, so a shared memory's two copies both compete.
+    // Unlike rankBothStores below, multihop ranks one pooled list, so a shared memory's two copies both compete.
     const allEntries = oneCopyPerMemory(pool.local, pool.global, evalNow()).flat();
     return multihopSearch(query, allEntries, { budget, cost, hippoRoot: ctx.hippoRoot, minResults, includeSuperseded, asOf });
   }
@@ -217,11 +217,10 @@ async function searchPool(ctx: RankRecallCtx, opts: RankRecallOpts, pool: Recall
     });
   }
   if (globalRoot) {
-    // searchBothHybrid reloads candidates itself, so the scope rule is passed in rather than inherited from the pool.
-    return searchBothHybrid(query, ctx.hippoRoot, globalRoot, {
+    // The pool already holds searchBothHybrid's additive-scope load for each store, so rank it rather than read both stores again.
+    return rankBothStores(query, { local: ctx.hippoRoot, global: globalRoot }, { local: pool.local, global: pool.global }, vectorCandidates, {
       budget, cost, explain, mmr, mmrLambda, localBump: search.localBump, minResults, scope, tenantId: ctx.tenantId,
       includeSuperseded, asOf,
-      recallScope: opts.explicitScope ? { requested: opts.explicitScope, additive: true } : {},
     });
   }
   return hybridSearch(query, pool.local, {

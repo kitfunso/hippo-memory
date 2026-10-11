@@ -1,7 +1,8 @@
 // Generated ids, cursors and argv through the CLI and server parsers: what was written comes back, and a bad input ends in the parser's own refusal and nothing else.
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 import { parseArgs } from '../src/cli.js';
-import { VERB_FLAGS, flagKind, type VerbFlags } from '../src/cli/flags.js';
+import { flagKind, type VerbFlags } from '../src/cli/flags.js';
+import { COMMANDS } from '../src/cli/verbs.js';
 import { parsePositiveId, type CliFlags } from '../src/cli/flag-values.js';
 import { CliExit } from '../src/cli/exit.js';
 import { HttpError } from '../src/util/http-util.js';
@@ -133,7 +134,7 @@ interface FlagDraw {
   readonly value: string;
 }
 
-const VERBS: ReadonlyMap<string, VerbFlags> = new Map(Object.entries(VERB_FLAGS));
+const VERBS: ReadonlyMap<string, VerbFlags> = new Map(Object.entries(COMMANDS).map(([verb, row]) => [verb, row.flags]));
 const declaredBy = (verb: VerbFlags): string[] => [verb.switches, verb.values, verb.numbers, verb.lists].flatMap((names) => names ?? []);
 // A flag no verb declares parses as a value flag, and `help` belongs to the entry point.
 const NAMES = [...new Set([...[...VERBS.values()].flatMap(declaredBy), 'help', 'zz-unlisted'])];

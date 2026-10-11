@@ -9,7 +9,10 @@ import { saveItems } from '../src/store/compactions-record.js';
 import { listDormantSnapshots } from '../src/store/dormant.js';
 import { runDoctor } from '../src/doctor.js';
 import { createMemory, type MemoryEntry } from '../src/core/memory.js';
-import { mergeProjects, planProjectRepair, repairOnceOnSleep, repairProjects } from '../src/sharing/project-merge.js';
+import { planProjectRepair } from '../src/sharing/project-merge.js';
+import { mergeProjectNames, repairProjectNames, repairProjectNamesOnce } from '../src/api/projects.js';
+import { projectTagReads } from '../src/store/project-tags.js';
+import { cliApiContext } from '../src/cli/api-context.js';
 import { clearProjectIdentityCache, resolveProjectIdentity } from '../src/core/project-identity.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
@@ -94,7 +97,7 @@ describe('two repos named api in one global store', () => {
   it('repair refuses to fold api into either, and doctor names both ids', () => {
     compaction('c-a', 'api', a);
     compaction('c-b', 'api', b);
-    const plan = withDb(w.global, (db) => planProjectRepair(db, w.global, T));
+    const plan = withDb(w.global, (db) => planProjectRepair(projectTagReads(db, T), w.global));
     expect(plan.folds).toEqual([]);
     expect(plan.collisions).toEqual([{ name: 'api', ids: ['github.com/acme-pay/api', 'github.com/acme-search/api'] }]);
     const check = runDoctor({ cwd: a, home: w.home, version: 'test' }).checks.find((c) => c.id === 'projects');
@@ -104,7 +107,7 @@ describe('two repos named api in one global store', () => {
 
   it('repair folds a name whose folders all resolve to one id', () => {
     compaction('c-a', 'api', a);
-    const plan = withDb(w.global, (db) => planProjectRepair(db, w.global, T));
+    const plan = withDb(w.global, (db) => planProjectRepair(projectTagReads(db, T), w.global));
     expect(plan.folds).toEqual([{ from: 'api', into: 'github.com/acme-pay/api' }]);
     expect(plan.collisions).toEqual([]);
   });
@@ -182,10 +185,10 @@ describe('the upgrade re-sync', () => {
       `INSERT INTO compactions(tenant_id, id, session_id, origin_project, compact_trigger, cwd, transcript_path, started_at) VALUES (?, 'c1', 's1', 'api', 'auto', ?, ?, ?)`,
     ).run(T, api, transcript, new Date().toISOString()));
 
-    const r = withDb(w.global, (db) => repairProjects(db, w.global, { tenantId: T, dryRun: false }));
+    const r = repairProjectNames(cliApiContext(w.global, T), { dryRun: false });
     expect(r).toMatchObject({ copies: [], folds: [{ from: 'api', into: 'github.com/acme/api' }] });
     expect(toolTally(sync(api), 'claude-code')).toMatchObject({ renamed: 2, imported: 0 });
-    expect(withDb(w.global, (db) => planProjectRepair(db, w.global, T)).copies).toEqual([]);
+    expect(withDb(w.global, (db) => planProjectRepair(projectTagReads(db, T), w.global)).copies).toEqual([]);
   });
 
   it('follows a merge: imports under the merged name move on the next sync instead of coming back as copies', () => {
@@ -196,7 +199,7 @@ describe('the upgrade re-sync', () => {
     sync(svc);
     writeFileSync(join(svc, '.hippo-project.json'), JSON.stringify({ id: 'new-svc' }));
     clearProjectIdentityCache();
-    const merged = withDb(w.global, (db) => mergeProjects(db, w.global, { tenantId: T, from: 'old-svc', into: 'new-svc', dryRun: false }));
+    const merged = mergeProjectNames(cliApiContext(w.global, T), { from: 'old-svc', into: 'new-svc', dryRun: false });
     expect(merged.setAside).toEqual([]);
 
     expect(toolTally(sync(svc), 'claude-code')).toMatchObject({ renamed: 1, imported: 0 });
@@ -212,10 +215,10 @@ describe('a project store with an id', () => {
     const old = pinned(store, 'The svc store wrote this before ids.', 'svc');
     expect(loadAllEntries(store).find((e) => e.id === old.id)?.origin_project).toBe('svc');
 
-    const r = withDb(store, (db) => repairProjects(db, store, { tenantId: T, dryRun: false }));
+    const r = repairProjectNames(cliApiContext(store, T), { dryRun: false });
     expect(r.folds).toEqual([{ from: 'svc', into: 'github.com/acme/svc' }]);
     expect(loadAllEntries(store).find((e) => e.id === old.id)?.origin_project).toBe('github.com/acme/svc');
-    expect(withDb(store, (db) => planProjectRepair(db, store, T)).folds).toEqual([]);
+    expect(withDb(store, (db) => planProjectRepair(projectTagReads(db, T), store)).folds).toEqual([]);
   });
 
   it('repair folds the folder name when only a compaction record still carries it', () => {
@@ -225,7 +228,7 @@ describe('a project store with an id', () => {
     withDb(store, (db) => db.prepare(
       `INSERT INTO compactions(tenant_id, id, session_id, origin_project, compact_trigger, cwd, transcript_path, started_at) VALUES (?, 'c1', 's1', 'svc', 'auto', ?, NULL, ?)`,
     ).run(T, svc, new Date().toISOString()));
-    expect(withDb(store, (db) => planProjectRepair(db, store, T)).folds).toEqual([{ from: 'svc', into: 'github.com/acme/svc' }]);
+    expect(withDb(store, (db) => planProjectRepair(projectTagReads(db, T), store)).folds).toEqual([{ from: 'svc', into: 'github.com/acme/svc' }]);
   });
 });
 
@@ -235,11 +238,11 @@ describe('repair on sleep', () => {
     const store = join(svc, '.hippo');
     initStore(store);
     const old = pinned(store, 'The svc store wrote this before ids.', 'svc');
-    const first = withDb(store, (db) => repairOnceOnSleep(db, store, T));
+    const first = repairProjectNamesOnce(cliApiContext(store, T));
     expect(first).toMatchObject({ folds: [{ from: 'svc', into: 'github.com/acme/svc' }], backup: expect.any(String) });
     expect(loadAllEntries(store).find((e) => e.id === old.id)?.origin_project).toBe('github.com/acme/svc');
     pinned(store, 'A later row under the old name.', 'svc');
-    expect(withDb(store, (db) => repairOnceOnSleep(db, store, T))).toBeNull();
+    expect(repairProjectNamesOnce(cliApiContext(store, T))).toBeNull();
   });
 
   it('leaves global folds to the manual repair, since a same-named repo may never have compacted', () => {
@@ -247,8 +250,8 @@ describe('repair on sleep', () => {
     const a = checkout('git@github.com:acme-pay/api.git', 'pay', 'api');
     pinned(w.global, 'OLD-API rows under the folder name.', 'api');
     compaction('c-a', 'api', a);
-    expect(withDb(w.global, (db) => repairOnceOnSleep(db, w.global, T))).toBeNull();
+    expect(repairProjectNamesOnce(cliApiContext(w.global, T))).toBeNull();
     expect(loadAllEntries(w.global).map((e) => e.origin_project)).toEqual(['api']);
-    expect(withDb(w.global, (db) => planProjectRepair(db, w.global, T)).folds).toEqual([{ from: 'api', into: 'github.com/acme-pay/api' }]);
+    expect(withDb(w.global, (db) => planProjectRepair(projectTagReads(db, T), w.global)).folds).toEqual([{ from: 'api', into: 'github.com/acme-pay/api' }]);
   });
 });

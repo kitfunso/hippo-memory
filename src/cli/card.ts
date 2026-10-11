@@ -1,21 +1,10 @@
 // The `hippo card` verb (the agent work board); main() loads it lazily from the command table.
 
-import {
-  createCard,
-  loadCard,
-  listCards,
-  loadCardRuns,
-  claimCard,
-  heartbeatCard,
-  blockCard,
-  reviewCard,
-  completeCard,
-  reclaimExpiredCards,
-  addCardComment,
-} from '../store/cards.js';
+import * as cardsApi from '../api/cards.js';
+import { cliApiContext } from './api-context.js';
 import { isHandoffOutcome } from '../core/handoff.js';
 import { type Card, isCardStatus } from '../core/card.js';
-import { loadCardDetail, type CardDetail } from '../store/card-detail.js';
+import type { CardDetail } from '../store/card-detail.js';
 import { printError } from './output.js';
 import { type CliFlags, stringFlagOrExit, type CommandContext } from './flag-values.js';
 import { requireInit } from './shared.js';
@@ -77,8 +66,9 @@ function cardRunFlag(flags: CliFlags): number | undefined {
 
 // Reads after the store already refused, so this only explains the refusal, never changes it.
 function cardRefusal(hippoRoot: string, tenantId: string, id: string): string {
-  const card = loadCard(hippoRoot, tenantId, id);
-  const liveRun = loadCardRuns(hippoRoot, tenantId, id).find((r) => !r.ended);
+  const ctx = cliApiContext(hippoRoot, tenantId);
+  const card = cardsApi.cardLoad(ctx, id);
+  const liveRun = cardsApi.cardRuns(ctx, id).find((r) => !r.ended);
   return `status ${card?.status ?? 'unknown'}, live run ${liveRun?.id ?? 'none'}`;
 }
 
@@ -149,7 +139,7 @@ function cardCreate(hippoRoot: string, tenantId: string, _args: string[], flags:
 
   let card: Card;
   try {
-    card = createCard(hippoRoot, tenantId, { title, repo, contract, budget, dependsOn });
+    card = cardsApi.cardCreate(cliApiContext(hippoRoot, tenantId), { title, repo, contract, budget, dependsOn });
   } catch (error) {
     printError(errorMessage(error));
     throw new CliExit(1);
@@ -163,7 +153,7 @@ function cardShow(hippoRoot: string, tenantId: string, args: string[], flags: Cl
     printError('Usage: hippo card show <id> [--json]');
     throw new CliExit(1);
   }
-  const detail = loadCardDetail(hippoRoot, tenantId, id);
+  const detail = cardsApi.cardDetail(cliApiContext(hippoRoot, tenantId), id);
   if (!detail) {
     printError(`No card found with id ${id}.`);
     throw new CliExit(1);
@@ -181,7 +171,7 @@ function cardList(hippoRoot: string, tenantId: string, _args: string[], flags: C
     printError(`Invalid status: "${status}".`);
     throw new CliExit(1);
   }
-  const cards = listCards(hippoRoot, tenantId, { status });
+  const cards = cardsApi.cardList(cliApiContext(hippoRoot, tenantId), { status });
   if (flags['json']) {
     console.log(JSON.stringify({ cards }, null, 2));
     return;
@@ -205,7 +195,7 @@ function cardClaim(hippoRoot: string, tenantId: string, args: string[], flags: C
   const sessionId = stringFlagOrExit(flags, 'session') || undefined;
   let card: (Card & { runId: number }) | null;
   try {
-    card = claimCard(hippoRoot, tenantId, id, runtime, sessionId);
+    card = cardsApi.cardClaim(cliApiContext(hippoRoot, tenantId), id, runtime, sessionId);
   } catch (error) {
     printError(errorMessage(error));
     throw new CliExit(1);
@@ -226,7 +216,7 @@ function cardHeartbeat(hippoRoot: string, tenantId: string, args: string[], flag
   }
   let card: Card | null;
   try {
-    card = heartbeatCard(hippoRoot, tenantId, id, runId);
+    card = cardsApi.cardHeartbeat(cliApiContext(hippoRoot, tenantId), id, runId);
   } catch (error) {
     printError(errorMessage(error));
     throw new CliExit(1);
@@ -248,7 +238,7 @@ function cardBlock(hippoRoot: string, tenantId: string, args: string[], flags: C
   const runId = cardRunFlag(flags);
   let card: Card | null;
   try {
-    card = blockCard(hippoRoot, tenantId, id, reason, runId);
+    card = cardsApi.cardBlock(cliApiContext(hippoRoot, tenantId), id, reason, runId);
   } catch (error) {
     printError(errorMessage(error));
     throw new CliExit(1);
@@ -270,7 +260,7 @@ function cardReview(hippoRoot: string, tenantId: string, args: string[], flags: 
   const runId = cardRunFlag(flags);
   let card: Card | null;
   try {
-    card = reviewCard(hippoRoot, tenantId, id, runId);
+    card = cardsApi.cardReview(cliApiContext(hippoRoot, tenantId), id, runId);
   } catch (error) {
     printError(errorMessage(error));
     throw new CliExit(1);
@@ -293,7 +283,7 @@ function cardComplete(hippoRoot: string, tenantId: string, args: string[], flags
   const runId = cardRunFlag(flags);
   let result: { card: Card; promotedChildren: string[] } | null;
   try {
-    result = completeCard(hippoRoot, tenantId, id, outcomeRaw, runId);
+    result = cardsApi.cardComplete(cliApiContext(hippoRoot, tenantId), id, outcomeRaw, runId);
   } catch (error) {
     printError(errorMessage(error));
     throw new CliExit(1);
@@ -314,7 +304,7 @@ function cardReclaim(hippoRoot: string, tenantId: string, args: string[]): void 
     printError('Usage: hippo card reclaim (sweeps every expired lease; use hippo card block <id> for one card)');
     throw new CliExit(1);
   }
-  const ids = reclaimExpiredCards(hippoRoot, tenantId);
+  const ids = cardsApi.cardReclaimExpired(cliApiContext(hippoRoot, tenantId));
   if (ids.length === 0) {
     console.log('No expired leases.');
     return;
@@ -331,7 +321,8 @@ function cardComment(hippoRoot: string, tenantId: string, args: string[], flags:
     throw new CliExit(1);
   }
   // Only show and comment look the card up directly; claim/heartbeat/block/review/complete throw from the store instead.
-  const card = loadCard(hippoRoot, tenantId, id);
+  const ctx = cliApiContext(hippoRoot, tenantId);
+  const card = cardsApi.cardLoad(ctx, id);
   if (!card) {
     printError(`No card found with id ${id}.`);
     throw new CliExit(1);
@@ -342,7 +333,7 @@ function cardComment(hippoRoot: string, tenantId: string, args: string[], flags:
     throw new CliExit(1);
   }
   const author = stringFlagOrExit(flags, 'author') || 'cli';
-  const comment = addCardComment(hippoRoot, tenantId, id, author, body);
+  const comment = cardsApi.cardComment(ctx, id, author, body);
   console.log(`Added comment ${comment.id} to card ${id}`);
 }
 

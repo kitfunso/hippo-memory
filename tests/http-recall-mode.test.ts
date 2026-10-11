@@ -11,7 +11,7 @@ import { writeEntry } from '../src/store/entry-writes.js';
 import { loadEntriesByIds } from '../src/store/entry-reads.js';
 import { loadIndex } from '../src/store/index-and-stats.js';
 import { serve, __resetSessionRecallHistoryHttp, type ServerHandle } from '../src/server.js';
-import { recall, supersede, type HippoDbContext } from '../src/api/index.js';
+import { retrieve, supersede, type HippoDbContext } from '../src/api/index.js';
 
 let home: string;
 let handle: ServerHandle;
@@ -66,7 +66,7 @@ describe('GET /v1/memories honours mode and strengthens', () => {
     const ids = await recallIds(`q=alpha&mode=${mode}`);
     expect(ids).toContain(newId);
     expect(ids).not.toContain(weakId);
-    expect(recall(ctx, { query: 'alpha' }).results.map((r) => r.id)).not.toContain(weakId);
+    expect((await retrieve(ctx, { query: 'alpha' })).results.map((r) => r.id)).not.toContain(weakId);
   });
 
   it('strengthens every returned row and leaves last_retrieval_ids alone', async () => {

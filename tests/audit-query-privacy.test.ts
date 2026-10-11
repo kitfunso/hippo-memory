@@ -6,7 +6,7 @@ import { execFileSync } from 'node:child_process';
 import { initStore } from '../src/store/open.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { auditQueryFields } from '../src/store/audit.js';
-import { getContext, recall, remember, type Context } from '../src/api/index.js';
+import { getContext, retrieve, remember, type Context } from '../src/api/index.js';
 import { handleMcpRequest, type McpContext } from '../src/mcp/server.js';
 import { serve, type ServerHandle } from '../src/server.js';
 
@@ -107,13 +107,13 @@ describe('recall audits store a query hash, never the text', () => {
 describe('census: a canary query reaches no audit metadata value', () => {
   it('context, CLI, MCP and HTTP recall', async () => {
     await getContext(ctx, { q: QUERY, crossProject: true });
-    recall(ctx, { query: QUERY });
+    await retrieve(ctx, { query: QUERY });
     execFileSync('node', [HIPPO_BIN, 'recall', QUERY], {
       cwd: home,
       env: { ...process.env, HIPPO_HOME: globalRoot, HIPPO_SKIP_AUTO_INTEGRATIONS: '1' },
       encoding: 'utf-8',
     });
-    const mcpCtx: McpContext = { hippoRoot: localRoot, tenantId: 'default', actor: 'mcp' };
+    const mcpCtx: McpContext = { hippoRoot: localRoot, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true };
     await handleMcpRequest(
       { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_recall', arguments: { query: QUERY } } },
       mcpCtx,

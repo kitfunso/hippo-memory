@@ -126,13 +126,8 @@ function assertSourceObjectUsable(db: DatabaseSyncLike, tenantId: string, source
   }
 }
 
-/** Insert a graph entity extracted from a consolidated memory; throws if the source memory is missing / cross-tenant / raw (the DB trigger is the backstop). */
-export function insertEntity(
-  hippoRoot: string,
-  tenantId: string,
-  opts: InsertEntityOpts,
-  txDb?: DatabaseSyncLike,
-): Entity {
+/** Insert a graph entity on the caller's handle; throws if the source memory is missing / cross-tenant / raw (the DB trigger is the backstop). */
+export function insertEntityRow(db: DatabaseSyncLike, tenantId: string, opts: InsertEntityOpts): Entity {
   assertTenantId('insertEntity', tenantId);
   if (!GRAPH_ENTITY_TYPES.has(opts.entityType)) {
     throw new Error(`insertEntity: entityType must be one of ${Array.from(GRAPH_ENTITY_TYPES).join('|')}; got ${opts.entityType}`);
@@ -141,22 +136,16 @@ export function insertEntity(
   const now = new Date().toISOString();
   const memoryId = opts.memoryId ?? null;
   const sourceObject = opts.sourceObject ?? null;
-  const ownDb = txDb ? null : openHippoDb(hippoRoot);
-  const db = txDb ?? ownDb!;
-  try {
-    const { sourceKind, memoryId: effectiveMemoryId } = resolveConsolidatedSource(db, tenantId, memoryId, sourceObject, 'insertEntity');
-    const result = db.prepare(`
-      INSERT INTO entities(tenant_id, entity_type, name, memory_id, source_kind, source_object_type, source_object_id, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(tenantId, opts.entityType, name, effectiveMemoryId, sourceKind, sourceObject?.type ?? null, sourceObject?.id ?? null, now);
-    const id = Number(result.lastInsertRowid ?? 0);
-    // SAFETY: row's shape matches the columns named in ENTITY_COLS above.
-    const row = db.prepare(`SELECT ${ENTITY_COLS} FROM entities WHERE id = ?`).get(id) as EntityRow | undefined;
-    if (!row) throw new Error('insertEntity: failed to reload inserted entity');
-    return rowToEntity(row);
-  } finally {
-    if (ownDb) closeHippoDb(ownDb);
-  }
+  const { sourceKind, memoryId: effectiveMemoryId } = resolveConsolidatedSource(db, tenantId, memoryId, sourceObject, 'insertEntity');
+  const result = db.prepare(`
+    INSERT INTO entities(tenant_id, entity_type, name, memory_id, source_kind, source_object_type, source_object_id, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(tenantId, opts.entityType, name, effectiveMemoryId, sourceKind, sourceObject?.type ?? null, sourceObject?.id ?? null, now);
+  const id = Number(result.lastInsertRowid ?? 0);
+  // SAFETY: row's shape matches the columns named in ENTITY_COLS above.
+  const row = db.prepare(`SELECT ${ENTITY_COLS} FROM entities WHERE id = ?`).get(id) as EntityRow | undefined;
+  if (!row) throw new Error('insertEntity: failed to reload inserted entity');
+  return rowToEntity(row);
 }
 
 function checkedName(label: string, raw: string | undefined): string {
@@ -168,42 +157,26 @@ function checkedName(label: string, raw: string | undefined): string {
   return name;
 }
 
-/** Renames an entity or moves its memory provenance in place, keeping id and created_at; null when the row is gone.
+/** Renames an entity or moves its memory provenance in place on the caller's handle, keeping id and created_at; null when the row is gone.
  *  A delete plus an insert would cascade away every relation that points at it. */
-export function updateEntity(
-  hippoRoot: string,
-  tenantId: string,
-  id: number,
-  opts: UpdateEntityOpts,
-  txDb?: DatabaseSyncLike,
-): Entity | null {
+export function updateEntityRow(db: DatabaseSyncLike, tenantId: string, id: number, opts: UpdateEntityOpts): Entity | null {
   assertTenantId('updateEntity', tenantId);
   const name = checkedName('updateEntity', opts.name);
-  const db = txDb ?? openHippoDb(hippoRoot);
-  try {
-    // SAFETY: row's shape matches the columns named in ENTITY_COLS above.
-    const row = db.prepare(`SELECT ${ENTITY_COLS} FROM entities WHERE id = ? AND tenant_id = ?`).get(id, tenantId) as EntityRow | undefined;
-    if (!row) return null;
-    const entity = rowToEntity(row);
-    const sourceObject = entity.sourceObjectType === undefined || entity.sourceObjectId === undefined
-      ? null
-      : { type: entity.sourceObjectType, id: entity.sourceObjectId };
-    const resolved = resolveConsolidatedSource(db, tenantId, opts.memoryId ?? null, sourceObject, 'updateEntity');
-    db.prepare(`UPDATE entities SET name = ?, memory_id = ?, source_kind = ? WHERE id = ? AND tenant_id = ?`)
-      .run(name, resolved.memoryId, resolved.sourceKind, id, tenantId);
-    return { ...entity, name, memoryId: resolved.memoryId, sourceKind: resolved.sourceKind };
-  } finally {
-    if (db !== txDb) closeHippoDb(db);
-  }
+  // SAFETY: row's shape matches the columns named in ENTITY_COLS above.
+  const row = db.prepare(`SELECT ${ENTITY_COLS} FROM entities WHERE id = ? AND tenant_id = ?`).get(id, tenantId) as EntityRow | undefined;
+  if (!row) return null;
+  const entity = rowToEntity(row);
+  const sourceObject = entity.sourceObjectType === undefined || entity.sourceObjectId === undefined
+    ? null
+    : { type: entity.sourceObjectType, id: entity.sourceObjectId };
+  const resolved = resolveConsolidatedSource(db, tenantId, opts.memoryId ?? null, sourceObject, 'updateEntity');
+  db.prepare(`UPDATE entities SET name = ?, memory_id = ?, source_kind = ? WHERE id = ? AND tenant_id = ?`)
+    .run(name, resolved.memoryId, resolved.sourceKind, id, tenantId);
+  return { ...entity, name, memoryId: resolved.memoryId, sourceKind: resolved.sourceKind };
 }
 
-/** Insert a graph relation between two same-tenant entities, sourced from a consolidated memory. */
-export function insertRelation(
-  hippoRoot: string,
-  tenantId: string,
-  opts: InsertRelationOpts,
-  txDb?: DatabaseSyncLike,
-): Relation {
+/** Insert a graph relation between two same-tenant entities on the caller's handle, sourced from a consolidated memory. */
+export function insertRelationRow(db: DatabaseSyncLike, tenantId: string, opts: InsertRelationOpts): Relation {
   assertTenantId('insertRelation', tenantId);
   if (!GRAPH_RELATION_TYPES.has(opts.relType)) {
     throw new Error(`insertRelation: relType must be one of ${Array.from(GRAPH_RELATION_TYPES).join('|')}; got ${opts.relType}`);
@@ -211,41 +184,35 @@ export function insertRelation(
   const now = new Date().toISOString();
   const memoryId = opts.memoryId ?? null;
   const sourceObject = opts.sourceObject ?? null;
-  const ownDb = txDb ? null : openHippoDb(hippoRoot);
-  const db = txDb ?? ownDb!;
-  try {
-    for (const [eid, role] of [[opts.fromEntityId, 'from'], [opts.toEntityId, 'to']] as const) {
-      // SAFETY: ent's shape matches the single `tenant_id` column named in
-      // the SELECT above.
-      const ent = db.prepare(`SELECT tenant_id FROM entities WHERE id = ?`).get(eid) as { tenant_id: string } | undefined;
-      if (!ent) throw new Error(`insertRelation: ${role}_entity ${eid} not found`);
-      if (ent.tenant_id !== tenantId) {
-        throw new Error(`insertRelation: ${role}_entity ${eid} belongs to another tenant (no cross-tenant edges)`);
-      }
+  for (const [eid, role] of [[opts.fromEntityId, 'from'], [opts.toEntityId, 'to']] as const) {
+    // SAFETY: ent's shape matches the single `tenant_id` column named in
+    // the SELECT above.
+    const ent = db.prepare(`SELECT tenant_id FROM entities WHERE id = ?`).get(eid) as { tenant_id: string } | undefined;
+    if (!ent) throw new Error(`insertRelation: ${role}_entity ${eid} not found`);
+    if (ent.tenant_id !== tenantId) {
+      throw new Error(`insertRelation: ${role}_entity ${eid} belongs to another tenant (no cross-tenant edges)`);
     }
-    const { sourceKind, memoryId: effectiveMemoryId } = resolveConsolidatedSource(db, tenantId, memoryId, sourceObject, 'insertRelation');
-    const result = db.prepare(`
-      INSERT INTO relations(tenant_id, from_entity_id, to_entity_id, rel_type, memory_id, source_kind, source_object_type, source_object_id, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      tenantId,
-      opts.fromEntityId,
-      opts.toEntityId,
-      opts.relType,
-      effectiveMemoryId,
-      sourceKind,
-      sourceObject?.type ?? null,
-      sourceObject?.id ?? null,
-      now
-    );
-    const id = Number(result.lastInsertRowid ?? 0);
-    // SAFETY: row's shape matches the columns named in RELATION_COLS above.
-    const row = db.prepare(`SELECT ${RELATION_COLS} FROM relations WHERE id = ?`).get(id) as RelationRow | undefined;
-    if (!row) throw new Error('insertRelation: failed to reload inserted relation');
-    return rowToRelation(row);
-  } finally {
-    if (ownDb) closeHippoDb(ownDb);
   }
+  const { sourceKind, memoryId: effectiveMemoryId } = resolveConsolidatedSource(db, tenantId, memoryId, sourceObject, 'insertRelation');
+  const result = db.prepare(`
+    INSERT INTO relations(tenant_id, from_entity_id, to_entity_id, rel_type, memory_id, source_kind, source_object_type, source_object_id, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    tenantId,
+    opts.fromEntityId,
+    opts.toEntityId,
+    opts.relType,
+    effectiveMemoryId,
+    sourceKind,
+    sourceObject?.type ?? null,
+    sourceObject?.id ?? null,
+    now
+  );
+  const id = Number(result.lastInsertRowid ?? 0);
+  // SAFETY: row's shape matches the columns named in RELATION_COLS above.
+  const row = db.prepare(`SELECT ${RELATION_COLS} FROM relations WHERE id = ?`).get(id) as RelationRow | undefined;
+  if (!row) throw new Error('insertRelation: failed to reload inserted relation');
+  return rowToRelation(row);
 }
 
 /** The source object still holds the loader's rule (active or superseded); a closed or gone one gets no new graph row. */

@@ -1,6 +1,6 @@
 // hippo.db's half of the ConnectorWrites store group: a connector's write or archive with its companion rows, in one transaction on one handle.
 import type { DatabaseSyncLike } from '../../db/index.js';
-import { eventMemoryAt, logEventAt } from '../connectors/github.js';
+import { githubEventMemoryAt, markGitHubEventSeenAt } from '../connectors/github.js';
 import { markSlackEventSeenAt, slackEventMemoryAt } from '../connectors/slack.js';
 import { stampOriginProject } from '../entry-row.js';
 import { writeEntryMirrors } from '../entry-writes.js';
@@ -16,11 +16,11 @@ class EventAlreadyLogged extends Error {}
 function logEvent(db: DatabaseSyncLike, event: ConnectorEvent, memoryId: string): boolean {
   if (event.connector === 'slack') return markSlackEventSeenAt(db, event.eventId, memoryId);
   const { idempotencyKey, deliveryId, eventName } = event;
-  return logEventAt(db, { idempotencyKey, deliveryId, eventName, memoryId });
+  return markGitHubEventSeenAt(db, { idempotencyKey, deliveryId, eventName, memoryId });
 }
 
 function loggedMemory(db: DatabaseSyncLike, event: ConnectorEvent): string | null {
-  return event.connector === 'slack' ? slackEventMemoryAt(db, event.eventId) : eventMemoryAt(db, event.idempotencyKey);
+  return event.connector === 'slack' ? slackEventMemoryAt(db, event.eventId) : githubEventMemoryAt(db, event.idempotencyKey);
 }
 
 /** The record, then the log row, go in after the memory row and ahead of its remember row, as a second store must order them. */

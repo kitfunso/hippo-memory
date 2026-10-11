@@ -1,5 +1,4 @@
 import * as fs from 'fs';
-import { isStringValue } from '../core/capture-contract.js';
 import { errorMessage, log } from './log.js';
 
 // Node's `write` is overloaded (`(chunk, cb?)` vs `(chunk, encoding, cb?)`); this is the union of both parameter lists.
@@ -16,7 +15,7 @@ export function teeStdStreams(logFile: string): () => void {
   let warned = false;
   const tee = (chunk: string | Uint8Array): void => {
     try {
-      fs.appendFileSync(logFile, isStringValue(chunk) ? chunk : Buffer.from(chunk).toString('utf8'), 'utf8');
+      fs.appendFileSync(logFile, chunk instanceof Uint8Array ? Buffer.from(chunk).toString('utf8') : chunk, 'utf8');
     } catch (err) {
       if (warned) return;
       warned = true;

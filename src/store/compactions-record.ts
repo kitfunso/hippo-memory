@@ -488,32 +488,51 @@ function spoolRecorder(db: DatabaseSyncLike, hippoRoot: string, log: Log): Spool
   };
 }
 
-function replayStalled(db: DatabaseSyncLike, hippoRoot: string, tenantId: string, now: number, log: Log, deadline: number): number {
+/** What every replay step reads: the open store, who owns the rows, and the moment and deadline the run works to. */
+interface ReplayRun {
+  readonly db: DatabaseSyncLike;
+  readonly hippoRoot: string;
+  readonly tenantId: string;
+  readonly now: number;
+  readonly sources: ReplaySources;
+  readonly log: Log;
+  readonly deadline: number;
+}
+
+/** Runs `step` over each record until the deadline; a record that throws is logged and the rest still run. Returns how many `step` finished. */
+function replayEach(run: ReplayRun, records: CompactionRecord[], what: string, step: (record: CompactionRecord) => boolean): number {
   let finished = 0;
-  const stalled = stalledSummarisedRows(db, tenantId, new Date(now - REPLAY_AFTER_MS).toISOString()).map(toRecord);
-  for (const record of stalled) {
-    if (Date.now() > deadline) break;
+  for (const record of records) {
+    if (Date.now() > run.deadline) break;
     try {
-      saveItems(db, hippoRoot, itemContext(tenantId, record), log);
-      finished++;
+      if (step(record)) finished++;
     } catch (err) {
-      log(`replay of ${record.id} failed: ${errorMessage(err)}`);
+      run.log(`${what} of ${record.id} failed: ${errorMessage(err)}`);
     }
   }
   return finished;
 }
 
-function replaySpool(db: DatabaseSyncLike, hippoRoot: string, tenantId: string, sources: ReplaySources, log: Log, deadline: number): number {
+function replayStalled(run: ReplayRun): number {
+  const stalled = stalledSummarisedRows(run.db, run.tenantId, new Date(run.now - REPLAY_AFTER_MS).toISOString()).map(toRecord);
+  return replayEach(run, stalled, 'replay', (record) => {
+    saveItems(run.db, run.hippoRoot, itemContext(run.tenantId, record), run.log);
+    return true;
+  });
+}
+
+function replaySpool(run: ReplayRun): number {
   try {
-    return sources.importSpool(tenantId, deadline, spoolRecorder(db, hippoRoot, log));
+    return run.sources.importSpool(run.tenantId, run.deadline, spoolRecorder(run.db, run.hippoRoot, run.log));
   } catch (err) {
-    log(`spool import failed: ${errorMessage(err)}`);
+    run.log(`spool import failed: ${errorMessage(err)}`);
     return 0;
   }
 }
 
 /** Fills one open record from its transcript; true when it saved items. */
-function fillFromTranscript(db: DatabaseSyncLike, hippoRoot: string, tenantId: string, record: CompactionRecord, sources: ReplaySources, log: Log): boolean {
+function fillFromTranscript(run: ReplayRun, record: CompactionRecord): boolean {
+  const { db, hippoRoot, tenantId, sources, log } = run;
   if (record.transcriptPath === null || !sources.transcriptExists(record.transcriptPath)) return false;
   const next = nextStartedAt(db, record);
   const found = sources.transcriptText(record.transcriptPath, Date.parse(record.startedAt), next === null ? Number.POSITIVE_INFINITY : Date.parse(next));
@@ -532,33 +551,21 @@ function fillFromTranscript(db: DatabaseSyncLike, hippoRoot: string, tenantId: s
   return true;
 }
 
-function replayOpen(db: DatabaseSyncLike, hippoRoot: string, tenantId: string, now: number, sources: ReplaySources, log: Log, deadline: number): number {
-  let finished = 0;
+function replayOpen(run: ReplayRun): number {
   const open = openTranscriptRows(
-    db,
-    tenantId,
-    new Date(now - REPLAY_AFTER_MS).toISOString(),
-    new Date(now - TRANSCRIPT_FILL_WINDOW_MS).toISOString(),
+    run.db,
+    run.tenantId,
+    new Date(run.now - REPLAY_AFTER_MS).toISOString(),
+    new Date(run.now - TRANSCRIPT_FILL_WINDOW_MS).toISOString(),
   ).map(toRecord);
-  for (const record of open) {
-    if (Date.now() > deadline) break;
-    try {
-      if (fillFromTranscript(db, hippoRoot, tenantId, record, sources, log)) finished++;
-    } catch (err) {
-      log(`transcript fill of ${record.id} failed: ${errorMessage(err)}`);
-    }
-  }
-  return finished;
+  return replayEach(run, open, 'transcript fill', (record) => fillFromTranscript(run, record));
 }
 
 /** Finishes what a killed hook or a busy store left: `summarised` records, spool files, and `started` records the transcript can fill.
  * Returns how many compactions it saved. */
 function replayCompactions(db: DatabaseSyncLike, hippoRoot: string, sources: ReplaySources, log: Log, deadline: number): number {
-  const tenantId = resolveTenantId({});
-  const now = Date.now();
-  return replayStalled(db, hippoRoot, tenantId, now, log, deadline)
-    + replaySpool(db, hippoRoot, tenantId, sources, log, deadline)
-    + replayOpen(db, hippoRoot, tenantId, now, sources, log, deadline);
+  const run: ReplayRun = { db, hippoRoot, tenantId: resolveTenantId({}), now: Date.now(), sources, log, deadline };
+  return replayStalled(run) + replaySpool(run) + replayOpen(run);
 }
 
 export interface ReplayOptions {

@@ -10,9 +10,9 @@ import { USER_SEGMENT } from '../util/home-path.js';
 import { errorMessage } from '../util/log.js';
 import { SESSION_DIGEST_TAG } from '../core/session-digest-row.js';
 import { createMemory, Layer, type MemoryEntry } from '../core/memory.js';
-import { RejectedValueError } from '../store/rejection.js';
+import { RejectedValueError } from '../core/api-errors.js';
 import { maskEmails, redactSecretsStrict } from '../util/secret-detect.js';
-import { isInitialized } from '../store/open.js';
+import { isInitialized } from '../core/project-identity.js';
 import { writeEntry } from '../store/entry-writes.js';
 import { loadLiveContentsBySourceAndTag } from '../store/entry-reads.js';
 import { SNAPSHOT_AMBIENT_MAX_AGE_MS } from '../store/sessions.js';
@@ -379,8 +379,11 @@ const ANCHORS: readonly RegExp[] = [
   /(?:^|\s)#\d+\b/,
 ];
 /** Each marker states a cause or a choice, the part of a lesson that transfers. */
-const MARKERS =
-  /\b(?:because|caused by|due to|root cause|the (?:bug|issue|problem) was|fail(?:s|ed) when|so that|otherwise|instead of|rather than|switched to|decided|chose|must|never|always|do not)\b/i;
+const MARKERS = new RegExp(
+  '\\b(?:because|caused by|due to|root cause|the (?:bug|issue|problem) was|fail(?:s|ed) when|so that|otherwise|' +
+    'instead of|rather than|switched to|decided|chose|must|never|always|do not)\\b',
+  'i',
+);
 
 const FENCE = /^\s*(`{3,}|~{3,})/;
 const STRUCTURE_LINE = /^\s*(?:#{1,6}\s|\||>|([-*_])(?:\s*\1){2,}\s*$)/;

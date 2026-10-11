@@ -17,7 +17,7 @@ import { batchWriteAndDelete, deleteEntry } from '../src/store/delete-and-batch.
 import { listMemoryConflicts } from '../src/store/conflicts.js';
 import { consolidate } from '../src/consolidate/sleep.js';
 import { deduplicateStore } from '../src/consolidate/dedupe.js';
-import { auditMemory } from '../src/store/audit.js';
+import { auditMemory } from '../src/core/memory-audit.js';
 import { closeHippoDb, openHippoDb, withSharedStoreHandles } from '../src/db/index.js';
 import { NO_MERGE_TAGS } from '../src/sharing/share.js';
 import { forget, listDormant, sleep, supersede, type HippoDbContext } from '../src/api/index.js';

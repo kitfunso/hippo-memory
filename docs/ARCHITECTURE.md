@@ -2,7 +2,7 @@
 
 ## Layers
 
-Six layers, lowest first: base (pure helpers and core types), db (SQLite connection and schema), store (persistence and embeddings), domain (recall, graph, consolidation, hooks), api (operations over the store), surface (CLI, server, MCP, importers, dashboard).
+Six layers, lowest first: base (pure helpers, core types, embedding providers), db (SQLite connection and schema), store (code that runs SQL on hippo.db, plus its row shapes, SQL text and adapter), domain (recall, graph, consolidation, hooks), api (operations over the store), surface (CLI, server, MCP, importers, dashboard).
 A file imports only from its own layer or a lower one. `layers.json` is the map and `scripts/check-layers.mjs` enforces it against `.layers-baseline.json`.
 
 ## Store port
@@ -10,6 +10,10 @@ A file imports only from its own layer or a lower one. `layers.json` is the map 
 ### Sync core, async port
 
 node:sqlite is synchronous, and the store port is async so another store can do I/O. `authCreate`, `authCreateSelf` and `authRevoke` from `./server` return a value when the context has no store and a Promise when it has one. `importVault` from `.` is synchronous and calls `remember` and `archiveRaw` with no store. `Reply<T>` and `andThen` in `src/api/on-store.ts` carry that for exactly these functions and what they call. Every other operation is async and goes through `storeFor(ctx)`. Removing the carrier means making those published functions async, which is a breaking change. `scripts/check-store-port.mjs` counts the files that use the carrier so the list cannot grow.
+
+### What lives in src/store
+
+A file belongs in `src/store` only if it runs SQL on hippo.db, holds or opens a handle, or is one of the row-shape, SQL-text and adapter files named in `DB_DEFINITION_FILES` in `scripts/check-store-port.mjs`. Scope predicates, the markdown mirror format, typed-object shapes, embedding providers and hook payload parsing live in `src/core`, `src/util` and `src/embeddings`. The same script pins `storeFilesWithoutSqlList`, the files still under `src/store` that run no SQL, so a new pure helper filed there fails CI.
 
 ## Test-only exports
 
@@ -50,7 +54,7 @@ Env caching follows the house pattern (see `getLossAversionRatio` in `memory.ts`
 
 `serve(opts)` boots the HTTP daemon on host:port and writes the pidfile under `hippoRoot`. It refuses non-loopback hosts at boot unless `HIPPO_REQUIRE_AUTH=1` is set.
 
-The auth middleware (`buildContextWithAuth` / `requireAuth`) is checked by every route except `GET /health` (public by design, for platform health checks), the two connector webhooks in `PUBLIC_ROUTES` (HMAC-gated by their own signing secrets, and 404 when those secrets are unset) and any `publicJson` GET path.
+Every `/v1` row in `V1_ROUTES` declares its `auth` need, and dispatch runs that gate before the handler. The auth middleware (`buildContextWithAuth` / `requireAuth`) is checked by every route except `GET /health` (public by design, for platform health checks), the two connector webhooks whose rows declare `webhook-signature` (HMAC-gated by their own signing secrets, and 404 when those secrets are unset) and any `publicJson` GET path.
 
 Under `HIPPO_ALLOW_KEYLESS_LOCAL=1` the keyless fallback inside `buildContextWithAuth` admits unauthenticated requests from a loopback remote address, unless they carry `Forwarded`, `X-Forwarded-For`/`-Host`/`-Proto`, `X-Real-IP`, `Cf-Connecting-Ip`, `True-Client-Ip` or `Fly-Client-Ip` (these mark a same-host proxy and get a 401 like any keyless remote request). So binding to a non-loopback host needs `HIPPO_REQUIRE_AUTH=1`, which wins over that opt-in and forces every request (loopback or not) through Bearer-token validation. Without it, a non-loopback bind could expose the DB to the network with no auth, so boot fails fast instead.
 
@@ -66,6 +70,9 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 
 ### src/api/audit.ts
 - `auditList`: Read-only — no audit emit (matches A5: cmdAuditList does not record a 'recall'-style read event).
+- `pruneAuditLog`: Audit log retention pruning (v1.12.9), moved here from `src/cli/audit-prune.ts`, which keeps only the `--older-than` parser.
+- `pruneAuditLog`: Closes TODOS A5 v2 M6: "Audit log unbounded growth. Add a daily `audit prune` cron + `hippo audit prune --older-than 90d` CLI in v2. Mind regulatory retention floors (HIPAA, SOX, GDPR); the prune should be opt-in per tenant and emit its own audit trail event."
+- `pruneAuditLog` tenant: Required, taken from `ctx.tenantId`; prune is always tenant-scoped per the A5 v2 design.
 
 ### src/api/auth.ts
 - `AuthCreateOpts.role`: v1.12.3: authorization role for the new key. Defaults to `'admin'` for back-compat with v1.12.0-v1.12.2 (the api_keys.role column DEFAULT also resolves to 'admin' if omitted from the INSERT).
@@ -160,11 +167,6 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `Actor`: Actor identity + authorization role for a Context. v1.12.0 A5 v2 sub-1. Before v1.12.0, Context.actor was a bare string. v1.12.0 promotes it to an object carrying both the audit-log subject (formerly the string itself) and a role for /v1/sleep admin gating. Audit helpers continue accepting `string` — callers pass `ctx.actor.subject`.
 - `Actor.scopes`: EI2: restricted scopes a member key may read (auth.ts grantScope). Unused for admin actors.
 
-### src/cli/audit-prune.ts
-- (module header): Audit log retention pruning (v1.12.9).
-- (module header): Closes TODOS A5 v2 M6: "Audit log unbounded growth. Add a daily `audit prune` cron + `hippo audit prune --older-than 90d` CLI in v2. Mind regulatory retention floors (HIPAA, SOX, GDPR) — the prune should be opt-in per tenant and emit its own audit trail event."
-- `PruneAuditOpts.tenantId`: Tenant scope. Required — prune is always tenant-scoped per the A5 v2 design.
-
 ### src/store/audit.ts
 - `audit log primitives` (section banner): A5 audit log primitives (append-only mutation trail)
 
@@ -239,7 +241,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `handleDag`: Orphan L2 summaries (no L3 parent) at top level — pre-E5 default shape.
 - `cmdDrillDown`: v0.30 / E5: --depth N walks N levels down (default 1, hard cap 10). L4 fold: reject out-of-range explicitly (no silent clamp).
 
-### src/cli/decisions.ts
+### src/cli/predictions.ts
 - `prediction banner`: E2 prediction first-class object (v0.31) docs/plans/2026-05-26-e2-prediction-object.md
 - `predictBaserate`: J3 reference-class / planning-fallacy detector
 
@@ -500,11 +502,12 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - module header: E2 decision first-class object (docs/plans/2026-05-28-e2-decision-object.md).
 - module header: Mirrors the v0.31 predictions pattern (src/predictions.ts).
 
-### src/store/embeddings/provider.ts
+### src/embeddings/provider.ts
 - module header: Design contract (see docs/plans/2026-06-08-b-pluggable-embedding-provider.md):
 - module header: Local provider `id` is the BARE model string. (Historical note: this originally guaranteed NO identity change on upgrade; since the embed-text-format versioning in embeddings.ts (`embeddingIndexIdentity`, `${id}#t2`, docs/plans/2026-07-09-recall-determinism.md T1), the STORED identity carries a `#t<N>` suffix and pre-#t2 stores get exactly one forced reindex on their next embed-touching operation — deliberate, because their vectors were computed over path-contaminated text.)
 
-### src/store/embeddings/index.ts
+### src/search/embed-memories.ts
+- module header: provider selection, the API-key check and vector computation moved here from src/store/embeddings/index.ts, which keeps only the stored index identity (src/store/port.ts VectorWrites: core computes each vector, the store only keeps it).
 - `embedMemory`: L9: host-wide rebuild. The embedding index is keyed by entry.id (which is tenant-scoped) but the index itself is one per hippoRoot.
 - `embedAll`: L9: host-wide by design. embedAll backfills vectors for all tenants' entries into the per-host embedding index.
 
@@ -735,7 +738,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `RecallHistoryEntry` / `DetectAnchoringOpts` / `detectAnchoring`: rule labels R1 (query_repeat) and R2 (memory_dominance) renamed to their reason strings in comments.
 - `hashQueryText`: Token sort + dedup means semantically-equivalent queries with reordered words collide intentionally (the roadmap's "semantically-distinct" v1 uses textual normalization; embedding-based distinctness is J1-v2).
 
-### src/store/recall-scope.ts
+### src/core/recall-scope.ts
 - `module header`: v1.25.0 — recall-side scope predicates, extracted from api.ts into a leaf module so shared.ts (which api.ts imports) can apply the same default-deny rule to searchBothHybrid's internal candidate loads without an import cycle. Mirrors the v39 `project-identity.ts` precedent.
 - `isPrivateScope`: v1.2.1: source-agnostic private-scope detector.
 - `passesScopeFilterForRecall`: @internal v1.7.2 — exported for test parity with `RECALL_DEFAULT_DENY_SCOPES` (single-source-of-truth verification).

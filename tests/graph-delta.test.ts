@@ -9,7 +9,7 @@ import { saveCustomerNote } from '../src/objects/customer-notes.js';
 import { saveProjectBrief } from '../src/objects/project-briefs.js';
 import { extractGraph, deriveGraph, loadGraphSources, MAX_REFERENCES_PER_OBJECT } from '../src/graph/extract.js';
 import { graphDelta, entityKey, type GraphOp } from '../src/graph/delta.js';
-import { insertEntity } from '../src/store/graph-writes.js';
+import { insertEntityAt } from './_helpers/graph-seed.js';
 import type { EntityType, SourceObjectType } from '../src/store/graph-rows.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
 import { makeRoot } from './_helpers/make-root.js';
@@ -189,7 +189,7 @@ describe('graph delta', () => {
   it('a duplicate current entity gives one delete', () => {
     const d = saveDecision(home, T, { decisionText: 'Adopt Postgres' });
     extractGraph(home, T);
-    const dup = insertEntity(home, T, { entityType: 'decision', name: 'Adopt Postgres', memoryId: d.memoryId, sourceObject: { type: 'decision', id: d.id } });
+    const dup = insertEntityAt(home, T, { entityType: 'decision', name: 'Adopt Postgres', memoryId: d.memoryId, sourceObject: { type: 'decision', id: d.id } });
 
     expect(deltaOf(home)).toEqual([{ op: 'deleteEntity', id: dup.id }]);
   });
@@ -197,7 +197,7 @@ describe('graph delta', () => {
   it('an entity with no source object gives one delete', () => {
     const d = saveDecision(home, T, { decisionText: 'Adopt Postgres' });
     extractGraph(home, T);
-    const loose = insertEntity(home, T, { entityType: 'system', name: 'Postgres', memoryId: d.memoryId });
+    const loose = insertEntityAt(home, T, { entityType: 'system', name: 'Postgres', memoryId: d.memoryId });
 
     expect(deltaOf(home)).toEqual([{ op: 'deleteEntity', id: loose.id }]);
   });

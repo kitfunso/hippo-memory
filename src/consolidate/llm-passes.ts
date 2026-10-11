@@ -1,8 +1,12 @@
 import { envAnthropicApiKey, envDagRebuildCap } from '../util/env.js';
-import { Layer } from '../core/memory.js';
-import { log } from '../util/log.js';
+import { Layer, type MemoryEntry } from '../core/memory.js';
+import { errorFields, errorMessage, log } from '../util/log.js';
 import { keptAsWritten, type SleepRun } from './run.js';
 import { isReusable } from '../core/memory-quality.js';
+import { type AnthropicMessageFailure, isPermanentFailure } from '../util/anthropic-messages.js';
+
+// Bounds the LLM calls one sleep spends on extraction.
+const EXTRACTION_BATCH_LIMIT = 20;
 
 /** The key, model options and once-per-line error reporter every LLM phase shares. */
 function sleepLlm(run: SleepRun, fetcher: typeof fetch | undefined) {
@@ -36,20 +40,9 @@ export async function llmPasses(run: SleepRun, fetcher: typeof fetch | undefined
 
   const llm = sleepLlm(run, fetcher);
   if (llm.apiKey && extractionCandidates.length > 0 && !run.dryRun) {
-    const { extractFacts, storeExtractedFacts } = await import('../learn/extract.js');
-    const batchLimit = 20;
-    let extractedCount = 0;
-    for (const candidate of extractionCandidates.slice(0, batchLimit)) {
-      try {
-        const facts = await extractFacts(candidate.content, { ...llm.llmOpts, onError: llm.llmError('extraction') });
-        if (facts.length > 0) {
-          extractedCount += storeExtractedFacts(run.hippoRoot, candidate, facts).length;
-        }
-      } catch (err) {
-        llm.llmError('extraction')(String(err));
-      }
-    }
-    run.result.extracted = extractedCount;
+    const stopped = await extractionPass(run, llm, extractionCandidates.slice(0, EXTRACTION_BATCH_LIMIT));
+    // The DAG passes call the same API with the same key and model, so they would fail the same way.
+    if (stopped) return;
   }
 
   await dagBuildPass(run, llm);
@@ -57,6 +50,36 @@ export async function llmPasses(run: SleepRun, fetcher: typeof fetch | undefined
     await dagRebuildPass(run, llm);
     await entityProfilePass(run, llm);
   }
+}
+
+/** Extracts facts from each candidate; true when it stopped on a failure every later call would repeat (bad key, no credit, unknown model). */
+async function extractionPass(run: SleepRun, llm: SleepLlm, batch: readonly MemoryEntry[]): Promise<boolean> {
+  const { extractFacts, storeExtractedFacts } = await import('../learn/extract.js');
+  const report = llm.llmError('extraction');
+  let extractedCount = 0;
+  let stopped = false;
+  const onError = (msg: string, failure?: AnthropicMessageFailure): void => {
+    report(msg);
+    if (failure && isPermanentFailure(failure)) stopped = true;
+  };
+  for (const [index, candidate] of batch.entries()) {
+    try {
+      const facts = await extractFacts(candidate.content, { ...llm.llmOpts, onError });
+      if (facts.length > 0) {
+        extractedCount += storeExtractedFacts(run.hippoRoot, candidate, facts).length;
+      }
+    } catch (err) {
+      report(errorMessage(err));
+      log.warn('consolidate extraction threw', errorFields(err));
+    }
+    if (stopped) {
+      const skipped = batch.length - index - 1;
+      report(`stopped after a failure that will not clear on retry; ${skipped} of ${batch.length} candidates skipped, and the DAG passes with them`);
+      break;
+    }
+  }
+  run.result.extracted = extractedCount;
+  return stopped;
 }
 
 // 1.7. DAG summarization — cluster extracted facts and generate summaries
@@ -74,7 +97,8 @@ async function dagBuildPass(run: SleepRun, { apiKey, llmError, llmOpts }: SleepL
       run.result.details.push(`  🌳 DAG: ${dagResult.summariesCreated} summaries created, ${dagResult.factsLinked} facts linked`);
     }
   } catch (err) {
-    llmError('dag')(String(err));
+    llmError('dag')(errorMessage(err));
+    log.warn('consolidate dag threw', errorFields(err));
   }
 }
 
@@ -103,7 +127,8 @@ async function dagRebuildPass(run: SleepRun, { llmError, llmOpts }: SleepLlm): P
       result.details.push(`  🌳 DAG rebuild: ${parts.join(', ')}`);
     }
   } catch (err) {
-    llmError('dag rebuild')(String(err));
+    llmError('dag rebuild')(errorMessage(err));
+    log.warn('consolidate dag rebuild threw', errorFields(err));
   }
 }
 
@@ -122,6 +147,7 @@ async function entityProfilePass(run: SleepRun, { llmError, llmOpts }: SleepLlm)
       }
     }
   } catch (err) {
-    llmError('dag profiles')(String(err));
+    llmError('dag profiles')(errorMessage(err));
+    log.warn('consolidate dag profiles threw', errorFields(err));
   }
 }
