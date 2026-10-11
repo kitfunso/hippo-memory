@@ -191,6 +191,20 @@ describe('session and tool-failure hooks', () => {
     expect(run.stdout).toBe('');
     expect(run.opens).toEqual({ local: 1 });
   });
+
+  it('capture-error opens the store once with the delivery ledger on, as with it off, and writes one row', () => {
+    const payload = (id: string): string => JSON.stringify({
+      session_id: id, tool_name: 'Bash', tool_use_id: 'toolu_open', tool_input: { command: 'npm test' }, error: 'Command failed: npm test exited 1',
+      hook_event_name: 'PostToolUseFailure',
+    });
+    const off = runHook(['capture-error'], payload('sess-open-10'));
+    setLedger(true);
+    const on = runHook(['capture-error'], payload('sess-open-11'));
+    expect(on.stdout).toBe('');
+    expect(on.opens).toEqual({ local: 1 });
+    expect(on.opens).toEqual(off.opens);
+    expect(ledgerRows()).toBe(1);
+  });
 });
 
 describe('an agent-run hippo context', () => {

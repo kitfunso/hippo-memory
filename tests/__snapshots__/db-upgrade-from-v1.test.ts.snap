@@ -113,6 +113,13 @@ exports[`upgrading a populated v1 store to the latest schema > ends with the pin
       "type": "index",
     },
     {
+      "name": "idx_delivery_events_tool_call",
+      "sql": "CREATE UNIQUE INDEX idx_delivery_events_tool_call
+        ON delivery_events(tenant_id, session_id, tool_use_id)
+        WHERE tool_use_id IS NOT NULL AND turn_seq IS NOT NULL",
+      "type": "index",
+    },
+    {
       "name": "idx_delivery_events_ts",
       "sql": "CREATE INDEX idx_delivery_events_ts ON delivery_events(ts)",
       "type": "index",
@@ -834,7 +841,7 @@ exports[`upgrading a populated v1 store to the latest schema > ends with the pin
           recall_hash       TEXT,
           emitted_hash      TEXT,
           elapsed_ms        INTEGER NOT NULL DEFAULT 0
-        )",
+        , tool_use_id TEXT, failure_id INTEGER)",
       "type": "table",
     },
     {
@@ -2048,6 +2055,6 @@ exports[`upgrading a populated v1 store to the latest schema > ends with the pin
       "type": "trigger",
     },
   ],
-  "userVersion": 54,
+  "userVersion": 55,
 }
 `;

@@ -75,8 +75,8 @@ export function expectVerdict(v: Verdict, want: Oracle & { store: string; sessio
   } finally {
     closeHippoDb(db);
   }
-  // A session with no row has no hook hash to read, so the project-store rule stands in.
-  const storeHash = hooked ?? blockHash(path.join(realpathOrResolve(path.dirname(path.resolve(want.store))), path.basename(want.store)));
+  // A session with no row has no hook hash to read, so the reader's no-row rule stands in.
+  const storeHash = hooked ?? blockHash(realpathOrResolve(path.resolve(want.store)));
   expect({
     class: v.class, reason: v.reason, store_hash: v.store_hash, tenant_id: v.tenant_id,
     session_id: v.session_id, turn: v.turn, stage: v.stage, memory_id: v.memory_id,

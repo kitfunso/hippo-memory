@@ -7,7 +7,7 @@ import { isSharedStore, loadConfig } from '../core/config.js';
 import { contextBlockLines, contextCost, crossProjectLines, handoffText, sessionTrailText, settleTokens, snapshotText } from './context-render.js';
 import { createDeliveryRecorder, type DeliveryEventType, type DeliveryRecorder } from '../store/delivery-recorder.js';
 import type { HookRuntime } from '../core/capture-contract.js';
-import * as path from 'path';
+import { realpathOrResolve } from '../util/real-path.js';
 import { MAX_ID_LEN } from '../util/limits.js';
 import { isJsonString, type JsonValue } from '../util/json.js';
 import { bookLedgerTurn, ledgerLastSent, ledgerRoot } from './ledger-db.js';
@@ -41,7 +41,7 @@ export function startDeliveryRecorder(ctx: Context, start: DeliveryStart): Deliv
     if (root === null || !loadConfig(root).deliveryLedger.enabled) return null;
     return createDeliveryRecorder({
       root,
-      storeHash: blockHash(path.resolve(root)),
+      storeHash: blockHash(realpathOrResolve(root)),
       writeStore: isGlobalStoreRoot(root) ? 'global' : 'local',
       tenantId: ctx.tenantId,
       stdinText: start.stdinText,
@@ -49,6 +49,18 @@ export function startDeliveryRecorder(ctx: Context, start: DeliveryStart): Deliv
       runtime: start.runtime === 'copilot' ? 'copilot' : undefined,
       eventType: start.eventType,
     });
+  } catch (error) {
+    log.warn(`delivery ledger skipped: ${errorMessage(error)}`);
+    return null;
+  }
+}
+
+/** A recorder for `hippo capture-error`, only when the failure log and the ledger are one store, so `failure_id` never points into another. */
+export function startToolFailureRecorder(ctx: Context, start: Omit<DeliveryStart, 'eventType'>): DeliveryRecorder | null {
+  try {
+    const root = ledgerRoot(ctx.hippoRoot);
+    if (root === null || realpathOrResolve(root) !== realpathOrResolve(ctx.hippoRoot)) return null;
+    return startDeliveryRecorder(ctx, { ...start, eventType: 'tool-failure' });
   } catch (error) {
     log.warn(`delivery ledger skipped: ${errorMessage(error)}`);
     return null;

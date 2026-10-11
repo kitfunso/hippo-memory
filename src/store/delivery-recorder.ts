@@ -7,7 +7,7 @@ import { hookPayloadSessionId, hookPayloadString, isSubagentPayload } from '../u
 import { blockHash, estimateTokens } from '../util/token-text.js';
 import { errorMessage, log } from '../util/log.js';
 export type DeliveryRuntime = 'claude-code' | 'codex' | 'copilot' | 'unknown';
-export type DeliveryEventType = 'prompt-submit' | 'pinned-manual' | 'pre-compact' | 'compact-resume' | 'session-end' | 'context';
+export type DeliveryEventType = 'prompt-submit' | 'pinned-manual' | 'pre-compact' | 'compact-resume' | 'session-end' | 'context' | 'tool-failure';
 /** True for the boundary types: a compaction's two hooks and the end of a session. */
 export const isBoundaryEvent = (type: DeliveryEventType): boolean =>
   type === 'pre-compact' || type === 'compact-resume' || type === 'session-end';
@@ -23,9 +23,9 @@ export type DeliveryOutcome = 'emitted' | 'reused' | 'rejected';
 export type DeliveryRejectReason =
   | 'budget' | 'gate-below-threshold' | 'gate-max-items' | 'duplicate' | 'scope' | 'quality' | 'limit';
 
-/** Row format version in `delivery_events.ledger_version`: 3 = written by a binary that can write session-end and context rows, so
- * `event_type` has six values. */
-export const DELIVERY_LEDGER_VERSION = 3;
+/** Row format version in `delivery_events.ledger_version`: 4 = written by a binary that can write `tool-failure` rows and hashes the
+ * store's resolved root. */
+export const DELIVERY_LEDGER_VERSION = 4;
 /** Rejected candidate rows kept per event; the rest only add to `rejected_unlisted`. */
 export const DELIVERY_REJECTED_ROW_CAP = 16;
 
@@ -80,6 +80,10 @@ export interface DeliveryEventInput {
   recallHash: string | null;
   emittedHash: string | null;
   elapsedMs: number;
+  /** The host's id for the tool call; set on `tool-failure` rows only. */
+  toolUseId?: string | null;
+  /** The `failure_log` row the failure was logged as; set on `tool-failure` rows only. */
+  failureId?: number | null;
   candidates: readonly DeliveryCandidateInput[];
 }
 
@@ -138,6 +142,8 @@ export interface DeliveryOutcomeInput {
 export interface DeliveryRecorder extends DeliveryObserver {
   readonly root: string;
   delivered(outcome: DeliveryOutcomeInput): void;
+  /** The failure log row id a `tool-failure` event links to; null when the log write threw. */
+  logged(failureId: number | null): void;
   /** Builds the event and hands it to `write` once per call; throws on an injected fault, and writes nothing once broken. */
   flush(write: (input: DeliveryEventInput) => number | null): void;
 }
@@ -194,6 +200,7 @@ interface PayloadFacts {
   prompt: string | null;
   hostTurnId: string | null;
   hookEvent: string | null;
+  toolUseId: string | null;
   sessionState: DeliverySessionState;
 }
 
@@ -209,6 +216,7 @@ interface RecorderState {
   outcome: DeliveryOutcomeInput;
   queryHash: string | null;
   recallTraceId: number | null;
+  failureId: number | null;
   broken: string | null;
   flushed: boolean;
 }
@@ -223,10 +231,13 @@ function readPayload(init: DeliveryRecorderInit): PayloadFacts {
   const rawTurnId = hookPayloadString(init.stdinText, 'turn_id');
   const hostTurnId = rawTurnId !== null && rawTurnId.trim() !== '' ? rawTurnId : null;
   const hookEvent = hookPayloadString(init.stdinText, 'hook_event_name');
+  const rawToolUseId = hookPayloadString(init.stdinText, 'tool_use_id')?.trim() ?? '';
+  // Cut as failure_log cuts its payload fields: the payload is not trusted to be short.
+  const toolUseId = rawToolUseId !== '' ? rawToolUseId.slice(0, 128) : null;
   const sessionState: DeliverySessionState = subagent
     ? 'subagent'
     : payloadSession !== null ? 'payload' : envSession !== null ? 'env' : 'missing';
-  return { payloadSession, envSession, prompt, hostTurnId, hookEvent, sessionState };
+  return { payloadSession, envSession, prompt, hostTurnId, hookEvent, toolUseId, sessionState };
 }
 
 interface Rejection {
@@ -340,6 +351,8 @@ function buildEvent(
     recallHash: outcome.recallHash ?? null,
     emittedHash: emitted !== null ? blockHash(emitted) : null,
     elapsedMs: Math.max(0, Date.now() - startedMs),
+    toolUseId: eventType === 'tool-failure' ? payload.toolUseId : null,
+    failureId: eventType === 'tool-failure' ? state.failureId : null,
     candidates: rows,
   };
 }
@@ -413,7 +426,7 @@ export function createDeliveryRecorder(init: DeliveryRecorderInit): DeliveryReco
   const payload = readPayload(init);
   const state: RecorderState = {
     candidates: new Map(), picked: new Map(), filtered: new Set(), facts: null, shown: 0, dropped: 0,
-    disabledSeen: false, outcome: { state: 'empty' }, queryHash: null, recallTraceId: null, broken: null, flushed: false,
+    disabledSeen: false, outcome: { state: 'empty' }, queryHash: null, recallTraceId: null, failureId: null, broken: null, flushed: false,
   };
 
   const guard = guardFor(state, fault);
@@ -438,6 +451,7 @@ export function createDeliveryRecorder(init: DeliveryRecorderInit): DeliveryReco
     queried: (query) => guard(() => { state.queryHash = blockHash(query); }),
     traced: (traceId) => guard(() => { state.recallTraceId = traceId; }),
     delivered: (o) => guard(() => { state.outcome = { ...o }; }),
+    logged: (failureId) => guard(() => { state.failureId = failureId; }),
     flush: (write) => {
       if (state.flushed) return;
       state.flushed = true;

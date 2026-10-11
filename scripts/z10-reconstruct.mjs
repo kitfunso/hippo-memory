@@ -52,14 +52,24 @@ function presentSince(found, tenant) {
   return times.length === 0 ? null : times.reduce((a, b) => (b < a ? b : a));
 }
 
-function loadSession(db, tenant, session, storeHash, notes) {
+// Version 4 hashes the resolved store root; older rows keep the two-path rule they were written under.
+const hashFor = (version, hashes) => (version !== null && version >= 4 ? hashes.v4 : hashes.v3);
+
+function loadSession(db, tenant, session, hashes, notes) {
   const all = db.prepare('SELECT * FROM delivery_events WHERE tenant_id = ? AND session_id = ? ORDER BY id').all(tenant, session);
   const rows = [];
   for (const r of all) {
-    if (r.store_hash !== storeHash) notes.push(`foreign-store:${r.id}`);
+    if (r.store_hash !== hashFor(r.ledger_version, hashes)) notes.push(`foreign-store:${r.id}`);
     else rows.push(r);
   }
   return rows;
+}
+
+// The verdict reports the hash under the rule of the session's last row; a session with no rows reports the version 4 hash.
+function verdictHash(db, tenant, session, hashes) {
+  if (!hasTable(db, 'delivery_events')) return hashes.v4;
+  const last = db.prepare('SELECT ledger_version FROM delivery_events WHERE tenant_id = ? AND session_id = ? ORDER BY id DESC LIMIT 1').get(tenant, session);
+  return last === undefined ? hashes.v4 : hashFor(last.ledger_version, hashes);
 }
 
 function splitRows(rows, targetCands, notes) {
@@ -269,7 +279,6 @@ function forgotten(stores, tenant, id, firstTs) {
 
 function build(local, opts, base) {
   const { session, tenant } = base;
-  const storeHash = base.store_hash;
   const stores = [{ db: local, name: 'local' }];
   if (opts.globalDb) stores.push({ db: opts.globalDb, name: 'global' });
   const env = { stores };
@@ -288,7 +297,7 @@ function build(local, opts, base) {
   base.label = pickLabel(opts.labels, session, base.memory_id === null ? [] : [base.memory_id], base.notes);
   base.memory_store = env.memory?.store ?? null;
 
-  const rows = loadSession(local, tenant, session, storeHash, base.notes);
+  const rows = loadSession(local, tenant, session, base.hashes, base.notes);
   const targetCands = new Map();
   if (base.memory_id !== null) {
     for (const c of local.prepare('SELECT * FROM delivery_candidates WHERE tenant_id = ? AND memory_id = ?').all(tenant, base.memory_id)) {
@@ -347,8 +356,9 @@ export function reconstruct(opts) {
   const isGlobal = realpathOrResolve(abs) === realpathOrResolve(classRoot);
   const hashed = isGlobal ? classRoot : path.join(realpathOrResolve(path.dirname(abs)), path.basename(abs));
   const globalDb = globalRoot !== null && !isGlobal ? openDb(globalRoot) : null;
+  const hashes = { v3: blockHash(hashed), v4: blockHash(realpathOrResolve(abs)) };
   const base = {
-    store_hash: blockHash(hashed), tenant, session, memory_id: null, memory_store: null, notes: [], label: null,
+    hashes, store_hash: verdictHash(local, tenant, session, hashes), tenant, session, memory_id: null, memory_store: null, notes: [], label: null,
   };
   try {
     const part = build(local, { ...opts, globalDb, isGlobal }, base);

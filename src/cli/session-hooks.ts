@@ -27,7 +27,7 @@ import { bookSessionRereads, closeEndedSession, compactResumeBlock } from '../ap
 import { normaliseHookPayload, readHookStdin, readStdinBounded, type BoundedStdin } from './stdin.js';
 import { errorMessage, log } from '../util/log.js';
 import { bookLedgerTurn } from '../api/ledger-db.js';
-import { flushDeliveryRecorder, startDeliveryRecorder } from '../api/prompt-hook.js';
+import { flushDeliveryRecorder, startDeliveryRecorder, startToolFailureRecorder } from '../api/prompt-hook.js';
 import type { DeliveryRecorder } from '../store/delivery-recorder.js';
 import { printError } from './output.js';
 import { cmdLastSleep } from './last-sleep.js';
@@ -614,7 +614,10 @@ export async function handleCaptureError({ hippoRoot, tenantId, flags }: Command
     if (isInitialized(root) && payload) {
       // SAFETY: JSON.parse returns a JSON value by definition.
       const failure = JSON.parse(payload) as JsonValue;
-      await runHookWithStores(() => captureToolFailure(root, tenantId, failure));
+      const rec = startToolFailureRecorder(cliApiContext(root, tenantId), { stdinText: text, runtime: hookRuntime(flags), envSessionId: hostSessionId() });
+      await runHookWithStores(() => {
+        try { return captureToolFailure(root, tenantId, failure, (id) => rec?.logged(id)); } finally { flushDeliveryRecorder(rec); }
+      });
     }
   } catch (err) {
     // A malformed payload or store error must never fail the agent's tool call, so it is reported and dropped.

@@ -39,7 +39,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "test:delivery-ledger": "vitest run tests/delivery-ledger",
+    "test:delivery-ledger": "vitest run tests/delivery-ledger tests/migration-v55",
     "test:eval": "vitest run --config vitest.eval.config.ts",
     "lint": "oxlint",
     "sbom": "node scripts/sbom.mjs",

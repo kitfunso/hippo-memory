@@ -3,8 +3,8 @@ import { onHandle } from './open.js';
 import { recordFailure, requestOutcome, settleFailureOutcome, type FailureEvent, type FailureOutcome } from './failure-log.js';
 
 /** {@link recordFailure} on a handle of its own. */
-export function recordFailureAt(hippoRoot: string, event: FailureEvent): void {
-  onHandle(hippoRoot, (db) => recordFailure(db, event));
+export function recordFailureAt(hippoRoot: string, event: FailureEvent): number {
+  return onHandle(hippoRoot, (db) => recordFailure(db, event));
 }
 
 /** {@link requestOutcome} on a handle of its own. */

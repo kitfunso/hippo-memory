@@ -12,6 +12,7 @@ import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { readDeliveryEvents, type DeliveryEventRow } from '../src/store/recall-trace.js';
 import type { DeliveryFault } from '../src/store/delivery-recorder.js';
 import { blockHash, estimateTokens } from '../src/util/token-text.js';
+import { realpathOrResolve } from '../src/util/real-path.js';
 import type { HippoConfig } from '../src/core/config.js';
 
 const HIPPO_JS = path.resolve(__dirname, '..', 'bin', 'hippo.js');
@@ -33,6 +34,10 @@ interface Payload {
   hook_event_name?: string;
   turn_id?: string;
   agent_id?: string;
+  tool_name?: string;
+  tool_use_id?: string;
+  tool_input?: { command: string };
+  error?: string;
 }
 
 interface RunOpts {
@@ -307,7 +312,7 @@ describe('what one hook call records', () => {
       closeHippoDb(db);
     }
     expect(rows).toHaveLength(1);
-    expect([rows[0].write_store, rows[0].store_hash]).toEqual(['global', blockHash(path.resolve(globalRoot))]);
+    expect([rows[0].write_store, rows[0].store_hash]).toEqual(['global', blockHash(realpathOrResolve(globalRoot))]);
   });
 
   it.each([
@@ -464,5 +469,22 @@ DatabaseSync.prototype.prepare = function (sql, ...rest) {
       return w.slice(0, -2).map((_, i) => w.slice(i, i + 3).join(' '));
     });
     expect(cells.filter((v) => words.some((p) => v.includes(p)))).toEqual([]);
+  });
+
+  it('F10: a tool-failure row holds no error or command text, and a 300-character tool_use_id is stored cut to 128', () => {
+    fixture();
+    configure(true);
+    const error = 'ZQXERROR the quarterly reconciliation exploded halfway through';
+    const command = 'zqxcommand --reconcile everything now';
+    const toolUseId = 'toolu_'.padEnd(300, 'x');
+    const r = run(proj, {
+      session_id: 'f10-fail', hook_event_name: 'PostToolUseFailure', tool_name: 'Bash', tool_use_id: toolUseId,
+      tool_input: { command }, error,
+    }, { args: ['capture-error'] });
+    expect([r.status, r.stdout]).toEqual([0, '']);
+    const [row] = eventsN(proj, 'f10-fail', 1);
+    expect([row.event_type, row.tool_use_id, row.failure_id]).toEqual(['tool-failure', toolUseId.slice(0, 128), 1]);
+    const text = JSON.stringify(row);
+    for (const word of ['ZQXERROR', 'reconciliation', 'zqxcommand', '--reconcile']) expect(text).not.toContain(word);
   });
 });

@@ -13,6 +13,7 @@ import {
 } from '../src/store/recall-trace.js';
 import {
   createDeliveryRecorder,
+  DELIVERY_LEDGER_VERSION,
   DELIVERY_REJECTED_ROW_CAP,
   type DeliveryEventInput,
   type DeliveryRejectReason,
@@ -105,8 +106,8 @@ describe('writeDeliveryEvent', () => {
     expect(first).not.toBeNull();
     const rows = readDeliveryEvents(db, 'default', 'sess-1');
     expect(rows.map((r) => [r.id, r.turn_seq, r.duplicate_of, r.ledger_version])).toEqual([
-      [first, 1, null, 3],
-      [second, 2, null, 3],
+      [first, 1, null, DELIVERY_LEDGER_VERSION],
+      [second, 2, null, DELIVERY_LEDGER_VERSION],
     ]);
     expect(rows[0].candidates).toEqual([{
       event_id: first, tenant_id: 'default', memory_id: 'mem-1', source_store: 'local', pool: 'pin', stage: 'final',

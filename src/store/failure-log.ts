@@ -40,11 +40,11 @@ export interface FailureEvent {
   now?: string;
 }
 
-/** Append one failure row and prune rows past {@link FAILURE_LOG_RETENTION_DAYS}. */
-export function recordFailure(db: DatabaseSyncLike, event: FailureEvent): void {
+/** Append one failure row and prune rows past {@link FAILURE_LOG_RETENTION_DAYS}; returns the new row's id. */
+export function recordFailure(db: DatabaseSyncLike, event: FailureEvent): number {
   // Normalised, because the window and prune compare timestamps as strings.
   const now = new Date(event.now ?? Date.now()).toISOString();
-  db.prepare(
+  const inserted = db.prepare(
     `INSERT INTO failure_log (ts, tenant_id, session_id, tool, outcome, skip_rule, sig_hash, detail_hash, owner_subject, origin_project, request_id)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
@@ -62,6 +62,7 @@ export function recordFailure(db: DatabaseSyncLike, event: FailureEvent): void {
   );
   const cutoff = new Date(Date.parse(now) - FAILURE_LOG_RETENTION_DAYS * DAY_MS).toISOString();
   db.prepare(`DELETE FROM failure_log WHERE ts < ?`).run(cutoff);
+  return Number(inserted.lastInsertRowid);
 }
 
 /** The outcome logged for a caller's request id, or null, so a retried send finds the first one; another session's id is a ConflictError. */

@@ -2,6 +2,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import { blockHash, estimateTokens } from '../src/util/token-text.js';
+import { DELIVERY_LEDGER_VERSION } from '../src/store/delivery-recorder.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { initStore } from '../src/store/open.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
@@ -62,7 +63,7 @@ describe('what one hippo context call records', () => {
     expect(r.stdout).toContain('rollback plan');
     const [e] = eventsN(p, 'ctx-1', 1);
     expect([e.event_type, e.surface, e.runtime, e.session_state, e.turn_seq, e.block_state, e.ledger_version])
-      .toEqual(['context', 'context', 'unknown', 'env', 1, 'sent', 3]);
+      .toEqual(['context', 'context', 'unknown', 'env', 1, 'sent', DELIVERY_LEDGER_VERSION]);
     expect([e.emitted_hash, e.injected_tokens]).toEqual([blockHash(r.stdout), estimateTokens(r.stdout)]);
     const [trace] = contextTraces(p);
     expect([e.recall_trace_id, e.query_hash]).toEqual([trace.id, trace.query_hash]);

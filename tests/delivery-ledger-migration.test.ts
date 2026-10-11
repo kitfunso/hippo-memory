@@ -15,7 +15,7 @@ const EVENT_COLUMNS = [
   'prompt_length', 'query_hash', 'recall_trace_id', 'block_state', 'prompt_recall', 'considered_count',
   'filtered_count', 'selected_count', 'emitted_count', 'rejected_count', 'rejected_unlisted', 'sections_shown',
   'sections_dropped', 'budget_tokens', 'selected_tokens', 'injected_tokens', 'static_hash', 'recall_hash',
-  'emitted_hash', 'elapsed_ms',
+  'emitted_hash', 'elapsed_ms', 'tool_use_id', 'failure_id',
 ];
 const CANDIDATE_COLUMNS = [
   'event_id', 'tenant_id', 'memory_id', 'source_store', 'pool', 'stage', 'outcome', 'reason', 'cand_rank', 'score', 'tokens',
@@ -68,14 +68,18 @@ describe('delivery ledger schema v50', () => {
     });
   });
 
-  it('has two plain indexes and one partial unique index on events, and none on candidates', () => {
+  it('has two plain indexes and two partial unique indexes on events, and none on candidates', () => {
     withStore((db) => {
       const idx = names(db, `SELECT name FROM sqlite_master WHERE type='index' AND tbl_name = ? AND sql IS NOT NULL ORDER BY name`, 'delivery_events');
-      expect(idx).toEqual(['idx_delivery_events_session', 'idx_delivery_events_ts', 'idx_delivery_events_turn']);
+      expect(idx).toEqual(['idx_delivery_events_session', 'idx_delivery_events_tool_call', 'idx_delivery_events_ts', 'idx_delivery_events_turn']);
       // SAFETY: one TEXT column `sql`.
       const turn = db.prepare(`SELECT sql FROM sqlite_master WHERE name = 'idx_delivery_events_turn'`).get() as { sql: string };
       expect(turn.sql).toMatch(/UNIQUE/);
       expect(turn.sql).toMatch(/WHERE turn_seq IS NOT NULL/);
+      // SAFETY: one TEXT column `sql`.
+      const call = db.prepare(`SELECT sql FROM sqlite_master WHERE name = 'idx_delivery_events_tool_call'`).get() as { sql: string };
+      expect(call.sql).toMatch(/UNIQUE/);
+      expect(call.sql).toMatch(/WHERE tool_use_id IS NOT NULL AND turn_seq IS NOT NULL/);
       expect(names(db, `SELECT name FROM sqlite_master WHERE type='index' AND tbl_name = ? AND sql IS NOT NULL`, 'delivery_candidates')).toEqual([]);
     });
   });

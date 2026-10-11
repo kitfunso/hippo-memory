@@ -167,7 +167,7 @@ const DELIVERY_EVENT_COLUMNS = [
   'session_id', 'session_state', 'host_turn_id', 'turn_seq', 'duplicate_of', 'prompt_hash', 'prompt_length', 'query_hash',
   'recall_trace_id', 'block_state', 'prompt_recall', 'considered_count', 'filtered_count', 'selected_count', 'emitted_count',
   'rejected_count', 'rejected_unlisted', 'sections_shown', 'sections_dropped', 'budget_tokens', 'selected_tokens',
-  'injected_tokens', 'static_hash', 'recall_hash', 'emitted_hash', 'elapsed_ms',
+  'injected_tokens', 'static_hash', 'recall_hash', 'emitted_hash', 'elapsed_ms', 'tool_use_id', 'failure_id',
 ] as const;
 
 /** One stored `delivery_candidates` row. */
@@ -223,6 +223,8 @@ export interface DeliveryEventRow {
   recall_hash: string | null;
   emitted_hash: string | null;
   elapsed_ms: number;
+  tool_use_id: string | null;
+  failure_id: number | null;
   candidates: DeliveryCandidateRow[];
 }
 
@@ -237,7 +239,20 @@ function findDuplicateBoundary(db: DatabaseSyncLike, input: DeliveryEventInput):
   return rows.find((r) => Math.abs(Date.parse(r.ts) - at) <= DELIVERY_DUPLICATE_WINDOW_MS)?.id ?? null;
 }
 
+function findDuplicateToolFailure(db: DatabaseSyncLike, input: DeliveryEventInput): number | null {
+  // Without a call id a time window would merge parallel failures, so two such fires stay two rows.
+  if (input.toolUseId === undefined || input.toolUseId === null) return null;
+  // SAFETY: a single `id` column, undefined when no row matches.
+  const row = db.prepare(`
+    SELECT id FROM delivery_events
+    WHERE tenant_id = ? AND session_id = ? AND event_type = ? AND tool_use_id = ? AND turn_seq IS NOT NULL
+    ORDER BY id LIMIT 1
+  `).get(input.tenantId, input.sessionId, input.eventType, input.toolUseId) as { id: number } | undefined;
+  return row?.id ?? null;
+}
+
 function findDuplicateTurn(db: DatabaseSyncLike, input: DeliveryEventInput): number | null {
+  if (input.eventType === 'tool-failure') return findDuplicateToolFailure(db, input);
   // A boundary has no prompt, and two compactions of one session never start within the window, so time alone decides.
   if (isBoundaryEvent(input.eventType)) return findDuplicateBoundary(db, input);
   if (input.hostTurnId !== null) {
@@ -285,6 +300,7 @@ export function writeDeliveryEvent(db: DatabaseSyncLike, input: DeliveryEventInp
         input.consideredCount, input.filteredCount, input.selectedCount, input.emittedCount, input.rejectedCount,
         input.rejectedUnlisted, input.sectionsShown, input.sectionsDropped, input.budgetTokens, input.selectedTokens,
         input.injectedTokens, input.staticHash, input.recallHash, input.emittedHash, Math.round(input.elapsedMs),
+        input.toolUseId ?? null, input.failureId ?? null,
       ];
       const eventId = Number(db.prepare(`
         INSERT INTO delivery_events (${DELIVERY_EVENT_COLUMNS.join(', ')})

@@ -528,7 +528,7 @@ describe('store paths through a link', () => {
       const bare = path.join(p.dir, 'bare');
       fs.mkdirSync(bare);
       const r = fire(p, 'r27', PROMPT, { cwd: bare, env: { HIPPO_HOME: G } });
-      const want = blockHash(path.resolve(G));
+      const want = blockHash(realpathOrResolve(G));
       expect(rawRows(p.globalRoot).map((x) => [x.store_hash, x.write_store])).toEqual([[want, 'global']]);
       const t = writeHostTranscript(p, [{ prompt: PROMPT, stdout: r.stdout }], { name: 'r27' });
       const v = verdictOf({ store: G, global: G, session: 'r27', memory: g.id, transcript: t });
@@ -559,7 +559,7 @@ describe('store paths through a link', () => {
       const v = JSON.parse(out.stdout) as Verdict;
       expect(v.class).toBe('application-unknown');
       expect(v.notes.some((n) => n.startsWith('foreign-store'))).toBe(false);
-      expect(v.store_hash).toBe(blockHash(path.resolve(G)));
+      expect(v.store_hash).toBe(blockHash(realpathOrResolve(G)));
     } finally {
       fs.unlinkSync(L);
     }

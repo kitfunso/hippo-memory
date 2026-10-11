@@ -17,20 +17,40 @@ import {
 import type { JsonValue } from '../util/json.js';
 
 /** Store a failure as an error memory unless it is routine or a repeat, and log it either way, even when storing throws. */
-export function captureToolFailure(hippoRoot: string, tenantId: string, payload: JsonValue): CaptureErrorOutcome {
+export function captureToolFailure(
+  hippoRoot: string,
+  tenantId: string,
+  payload: JsonValue,
+  onLogged?: (failureId: number | null) => void,
+): CaptureErrorOutcome {
   const lesson = lessonFromFailure(payload);
   let outcome: FailureOutcome = 'store-failed';
   try {
     outcome = 'skip' in lesson ? lesson.skip : storeLesson(hippoRoot, tenantId, lesson.text);
     return outcome;
   } finally {
-    logFailure(hippoRoot, tenantId, payload, lesson, outcome);
+    logAndReport(hippoRoot, tenantId, payload, lesson, outcome, onLogged);
   }
 }
 
-function logFailure(hippoRoot: string, tenantId: string, payload: JsonValue, lesson: FailureReading, outcome: FailureOutcome): void {
+/** Logs the failure, then tells the caller the row id, or null when the write threw; the throw goes on. */
+function logAndReport(
+  hippoRoot: string, tenantId: string, payload: JsonValue, lesson: FailureReading, outcome: FailureOutcome,
+  onLogged: ((failureId: number | null) => void) | undefined,
+): void {
+  let id: number;
+  try {
+    id = logFailure(hippoRoot, tenantId, payload, lesson, outcome);
+  } catch (error) {
+    onLogged?.(null);
+    throw error;
+  }
+  onLogged?.(id);
+}
+
+function logFailure(hippoRoot: string, tenantId: string, payload: JsonValue, lesson: FailureReading, outcome: FailureOutcome): number {
   const hash = (s: string | null): string | null => (s === null ? null : failureHash(s));
-  recordFailureAt(hippoRoot, {
+  return recordFailureAt(hippoRoot, {
     tenantId,
     sessionId: payloadString(payload, 'session_id'),
     tool: payloadString(payload, 'tool_name'),
