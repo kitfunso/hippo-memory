@@ -92,7 +92,7 @@ const PROJECT = 'proj';
 const note = (id: string): string => `${id} holds a note about the rollout`;
 const minute = (m: number): string => `2026-03-01T10:0${m}:00.000Z`;
 const row = (tenantId: string, id: string, m: number, extra: Partial<MemoryEntry>): MemoryEntry =>
-  seeded(note(id), id, minute(m), { tenantId, origin_project: PROJECT, ...extra });
+  seeded(note(id), id, minute(m), { tenant_id: tenantId, origin_project: PROJECT, ...extra });
 const raw = (tenantId: string, id: string, m: number): MemoryEntry => row(tenantId, id, m, { kind: 'raw', source_session_id: 'sess-mcp' });
 
 // serve() blocks hippo.db for a store of another kind, so a tool that still opened it would answer store_not_ported here.

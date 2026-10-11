@@ -28,7 +28,7 @@ function makeRaw(text: string, sessionId: string, opts: Partial<MemoryEntry> = {
     confidence: 'observed',
     kind: 'raw',
     scope: opts.scope ?? null,
-    tenantId: opts.tenantId ?? 'default',
+    tenantId: opts.tenant_id ?? 'default',
     source_session_id: sessionId,
   });
   if (opts.created) e.created = opts.created;
@@ -132,7 +132,7 @@ describe('countSessionRawMemories helper', () => {
     b.created = '2026-01-02T00:00:00.000Z';
     const c = makeRaw('row c', 'sess-B');
     c.created = '2026-01-03T00:00:00.000Z';
-    const d = makeRaw('row d cross tenant', 'sess-A', { tenantId: 'other' });
+    const d = makeRaw('row d cross tenant', 'sess-A', { tenant_id: 'other' });
     d.created = '2026-01-04T00:00:00.000Z';
     [a, b, c, d].forEach((e) => writeEntry(root, e));
     expect(countSessionRawMemories(root, 'sess-A', 'default')).toBe(2);

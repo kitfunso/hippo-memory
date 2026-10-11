@@ -21,7 +21,7 @@ const OWN = 'personal:private:alice';
 const at = (minute: number): string => `2026-03-01T10:${String(minute).padStart(2, '0')}:00.000Z`;
 
 function row(tenantId: string, id: string, minute: number, extra: Partial<MemoryEntry> = {}): MemoryEntry {
-  return seeded(`${id} holds a note about the rollout`, id, at(minute), { tenantId, origin_project: 'proj', ...extra });
+  return seeded(`${id} holds a note about the rollout`, id, at(minute), { tenant_id: tenantId, origin_project: 'proj', ...extra });
 }
 
 const raw = (tenantId: string, id: string, minute: number, extra: Partial<MemoryEntry> = {}): MemoryEntry =>

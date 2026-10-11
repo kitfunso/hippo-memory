@@ -175,7 +175,7 @@ async function refineOneEntry(
     return;
   }
 
-  storeRefinement(cliApiContext(ctx.hippoRoot, entry.tenantId), entry, refined);
+  storeRefinement(cliApiContext(ctx.hippoRoot, entry.tenant_id), entry, refined);
   result.refined++;
   result.details.push({ id: entry.id, status: 'refined' });
 }

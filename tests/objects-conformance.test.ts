@@ -139,7 +139,7 @@ const byId = (kind: ObjectKind, id: number, tenantId = TENANT_A): Call => (g) =>
 const list = <K extends ObjectKind>(kind: K, query: ObjectListQuery<K>, tenantId = TENANT_A): Call => (g) => g.listObjects(tenantId, kind, query);
 const ids = <K extends ObjectKind>(kind: K, query: ObjectListQuery<K>, tenantId = TENANT_A): Call => async (g) => (await g.listObjects(tenantId, kind, query)).map((o) => o.id);
 const mirrorViews = (mirrorIds: readonly string[], tenantId?: string): Call => async (_g, store) =>
-  (await store.entriesByIds(mirrorIds, tenantId)).map((e) => ({ id: e.id, tenantId: e.tenantId, content: e.content, tags: e.tags }));
+  (await store.entriesByIds(mirrorIds, tenantId)).map((e) => ({ id: e.id, tenantId: e.tenant_id, content: e.content, tags: e.tags }));
 const mirrorsOf = (drafts: readonly Draft[], tenantId?: string): Call => mirrorViews(drafts.map((d) => d.save.mirror.id), tenantId);
 
 interface RowState {

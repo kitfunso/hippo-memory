@@ -43,7 +43,7 @@ describe('loadContextCandidates over the cap', () => {
         row('g-other', 0, { origin_project: 'other' }),
         row('h-global', 2, { origin_project: '' }),
         row('i-superseded', 0, { superseded_by: 'b-fresh' }),
-        row('j-acme', 0, { tenantId: 'acme' }),
+        row('j-acme', 0, { tenant_id: 'acme' }),
         row('k-team', 0, { scope: 'team:x' }),
       ]) writeEntry(root, e);
     });

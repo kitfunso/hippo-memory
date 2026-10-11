@@ -161,7 +161,7 @@ export function rankNonPinnedByTenant(
     if (e.pinned) continue; // pinned entries never compete for rescue (never condemned)
     // Default an undefined tenantId as dag.ts:341 does: a raw/legacy row can carry one at runtime,
     // and keying it "undefined" would split it into its own singleton tenant.
-    const tenantId = e.tenantId ?? DEFAULT_TENANT_ID;
+    const tenantId = e.tenant_id ?? DEFAULT_TENANT_ID;
     const list = byTenant.get(tenantId);
     if (list) list.push(e);
     else byTenant.set(tenantId, [e]);

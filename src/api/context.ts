@@ -109,7 +109,7 @@ interface LoadAmbientEntriesOptions {
 // The pinned-only branch needs pins and recent-N candidates, not the corpus.
 async function loadAmbientEntries(source: ContextSource, tenantId: string, options: LoadAmbientEntriesOptions): Promise<AmbientLoadResult> {
   const { pinnedOnly, recent, admit, recheck, window, recall, onQualityDrop } = options;
-  const ownTenant = (e: MemoryEntry): boolean => e.tenantId === tenantId;
+  const ownTenant = (e: MemoryEntry): boolean => e.tenant_id === tenantId;
   if (!pinnedOnly) {
     const rows = 'query' in window
       ? await source.store.searchRecallEntries(window.query, {

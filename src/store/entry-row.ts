@@ -5,8 +5,16 @@ import { fallbackOrigin, originFromSource } from '../core/project-identity.js';
 import { checkRejectionGuard } from './rejection.js';
 import { errorMessage, log } from '../util/log.js';
 
+/** A 1.x JS caller's `tenantId` would otherwise fall through to the default tenant without a sound. */
+function rejectLegacyTenantKey(entry: MemoryEntry): void {
+  if (Object.hasOwn(entry, 'tenantId') && entry.tenant_id === undefined) {
+    throw new TypeError('tenantId was renamed to tenant_id in 2.0');
+  }
+}
+
 export function upsertEntryRow(db: ReturnType<typeof openHippoDb>, entry: MemoryEntry): void {
-  checkRejectionGuard(db, entry.tenantId ?? DEFAULT_TENANT_ID, entry.id, entry.content);
+  rejectLegacyTenantKey(entry);
+  checkRejectionGuard(db, entry.tenant_id ?? DEFAULT_TENANT_ID, entry.id, entry.content);
   syncFtsRow(db, entry, upsertMemoryRow(db, entry));
 }
 
@@ -109,7 +117,7 @@ function memoryRowValues(entry: MemoryEntry): Array<string | number | null> {
     entry.scope ?? null,
     entry.owner ?? null,
     entry.artifact_ref ?? null,
-    entry.tenantId ?? DEFAULT_TENANT_ID,
+    entry.tenant_id ?? DEFAULT_TENANT_ID,
     entry.origin_project ?? null,
     entry.descendant_count ?? 0,
     entry.earliest_at ?? null,

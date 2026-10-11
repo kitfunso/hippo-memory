@@ -340,7 +340,7 @@ describe('the recall getContext records on hippo.db', () => {
 
   it('strengthens the row in the global store when the local store holds its id for another tenant', async () => {
     const copyToOtherTenant = (root: string, globalRoot: string): void => {
-      for (const entry of loadEntriesByIds(globalRoot, ['mem_g_note'], TENANT_A)) writeEntry(root, { ...entry, tenantId: TENANT_B });
+      for (const entry of loadEntriesByIds(globalRoot, ['mem_g_note'], TENANT_A)) writeEntry(root, { ...entry, tenant_id: TENANT_B });
     };
     const pass = await runPass({ opts: {} }, { withGlobal: true, embedded: false, prepare: copyToOtherTenant });
     expect(idsOf(pass)).toContain('mem_g_note');

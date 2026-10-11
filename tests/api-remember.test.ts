@@ -26,7 +26,7 @@ describe('api.remember', () => {
     expect(result.tenantId).toBe('default');
     const stored = readEntry(home, result.id);
     expect(stored?.content).toBe('api-canary-remember-77');
-    expect(stored?.tenantId).toBe('default');
+    expect(stored?.tenant_id).toBe('default');
     rmSync(home, { recursive: true, force: true });
   });
 

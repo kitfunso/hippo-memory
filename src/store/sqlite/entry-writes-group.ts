@@ -96,7 +96,7 @@ function assertInReach(db: DatabaseSyncLike, target: EntryTarget, id: string): v
 /** hippo.db's upsert would move the row into the writer's tenant, so a store write refuses an id another tenant holds. */
 function assertIdInTenant(db: DatabaseSyncLike, entry: MemoryEntry): void {
   const holder = selectMemoryReach(db, entry.id)?.tenantId;
-  if (holder !== undefined && holder !== entry.tenantId) throw new ConflictError(`Memory ${entry.id} belongs to another tenant`);
+  if (holder !== undefined && holder !== entry.tenant_id) throw new ConflictError(`Memory ${entry.id} belongs to another tenant`);
 }
 
 /** The refusal row lands after `write` has rolled back, in a fresh implicit transaction the aborted one cannot undo. */

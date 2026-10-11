@@ -57,7 +57,7 @@ function entriesByPartition(entries: readonly MemoryEntry[]): Map<string, Memory
   const entriesByTenant = new Map<string, MemoryEntry[]>();
   for (const entry of entries) {
     // EI2: also split by restricted scope, else a private copy can delete the readable one.
-    const key = derivationPartitionKey(entry.tenantId, entry.scope, entry.origin_project);
+    const key = derivationPartitionKey(entry.tenant_id, entry.scope, entry.origin_project);
     const bucket = entriesByTenant.get(key);
     if (bucket) bucket.push(entry);
     else entriesByTenant.set(key, [entry]);

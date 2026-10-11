@@ -26,7 +26,7 @@ const COMMENT_REF = 'github://acme/demo/issue/1/comment/9';
 const ONLY_B_REF = 'github://globex/site/issue/3/comment/4';
 const REASON = 'source_deleted:github:issue_comment:d-1';
 
-type Row = Pick<MemoryEntry, 'id' | 'tenantId' | 'kind'>;
+type Row = Pick<MemoryEntry, 'id' | 'tenant_id' | 'kind'>;
 type Archived = { readonly duplicate: boolean; readonly archived: number };
 type Value = ConnectorEventRecord | DeletionTarget | Archived | SlackTeamRoute | GitHubRouting | ConnectorWriteOutcome | Row[] | number | void;
 type Call = GroupCall<'connectorEvents', Value>;
@@ -117,7 +117,7 @@ const archive = (event: ReturnType<typeof github>, artifactRef: string): Call =>
 const park = (letter: ConnectorDeadLetter): Call => (g) => g.parkDeadLetter(letter);
 const writeRaw = (entry: MemoryEntry): Call => (_g, store) => requireGroup(store, 'connectorWrites').writeConnectorEntry({ entry, actor: ACTOR });
 const readBack = (tenantId: string, ...ids: string[]): Call =>
-  async (_g, store) => (await store.entriesByIds(ids, tenantId)).map((e) => ({ id: e.id, tenantId: e.tenantId, kind: e.kind }));
+  async (_g, store) => (await store.entriesByIds(ids, tenantId)).map((e) => ({ id: e.id, tenant_id: e.tenant_id, kind: e.kind }));
 const values = (side: Side): unknown[] => side.outcomes.map((o) => ('value' in o ? o.value : o));
 
 /** The audit rows a run added, without the ids and times both sides already matched on. */
@@ -218,7 +218,7 @@ describe('ConnectorEvents.archiveDeletedArtifact', () => {
     ]);
     expect(values(side)).toEqual([
       { outcome: 'written' }, { outcome: 'written' }, { duplicate: false, archived: 2 }, { duplicate: true, archived: 0 },
-      [{ id: note.id, tenantId: TENANT_A, kind: 'distilled' }], [{ id: commentB.id, tenantId: TENANT_B, kind: 'raw' }],
+      [{ id: note.id, tenant_id: TENANT_A, kind: 'distilled' }], [{ id: commentB.id, tenant_id: TENANT_B, kind: 'raw' }],
     ]);
     expect(newEvents(side)).toEqual([loggedRow(github('key-deleted'), first.id)]);
     expect(added(side)).toEqual([remembered(first), remembered(edited), archivedRow(first), archivedRow(edited)]);
@@ -227,7 +227,7 @@ describe('ConnectorEvents.archiveDeletedArtifact', () => {
   it('with no raw row of the tenant under the ref it archives nothing and still logs the event, so a redelivery answers duplicate', async () => {
     const { onlyB } = seeded;
     const side = await conforms([archive(github('key-nothing'), ONLY_B_REF), archive(github('key-nothing', 'd-again'), ONLY_B_REF), readBack(TENANT_B, onlyB.id)]);
-    expect(values(side)).toEqual([{ duplicate: false, archived: 0 }, { duplicate: true, archived: 0 }, [{ id: onlyB.id, tenantId: TENANT_B, kind: 'raw' }]]);
+    expect(values(side)).toEqual([{ duplicate: false, archived: 0 }, { duplicate: true, archived: 0 }, [{ id: onlyB.id, tenant_id: TENANT_B, kind: 'raw' }]]);
     expect([newEvents(side), added(side)]).toEqual([[loggedRow(github('key-nothing'), null)], []]);
   });
 });

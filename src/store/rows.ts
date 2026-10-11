@@ -181,7 +181,7 @@ type RetrievalFields = Pick<
 type PlacementFields = Pick<
   MemoryEntry,
   'source_session_id' | 'valid_from' | 'superseded_by' | 'extracted_from' | 'dag_level' | 'dag_parent_id' | 'kind' |
-  'scope' | 'owner' | 'artifact_ref' | 'tenantId' | 'origin_project' | 'descendant_count' | 'earliest_at' |
+  'scope' | 'owner' | 'artifact_ref' | 'tenant_id' | 'origin_project' | 'descendant_count' | 'earliest_at' |
   'latest_at' | 'summary_dirty' | 'last_rebuilt_at' | 'rebuild_count' | 'dag_level_3_built_at'
 >;
 
@@ -226,12 +226,12 @@ function rowToPlacementFields(row: MemoryRow): PlacementFields {
     scope: row.scope ?? null,
     owner: row.owner ?? null,
     artifact_ref: row.artifact_ref ?? null,
-    tenantId: row.tenant_id ?? DEFAULT_TENANT_ID,
+    tenant_id: row.tenant_id ?? DEFAULT_TENANT_ID,
     origin_project: row.origin_project ?? null,
     descendant_count: Number(row.descendant_count ?? 0),
     earliest_at: row.earliest_at ?? null,
     latest_at: row.latest_at ?? null,
-    summary_dirty: (Number(row.summary_dirty ?? 0) === 1 ? 1 : 0) as 0 | 1,
+    summary_dirty: Number(row.summary_dirty) === 1,
     last_rebuilt_at: row.last_rebuilt_at ?? null,
     rebuild_count: Number(row.rebuild_count ?? 0),
     dag_level_3_built_at: row.dag_level_3_built_at ?? null,

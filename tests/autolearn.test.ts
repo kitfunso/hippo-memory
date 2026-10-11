@@ -42,8 +42,8 @@ describe('captureError', () => {
   });
 
   it('writes into the tenant it is given, else default', () => {
-    expect(captureError(1, 'err', 'cmd', 'tenant_b').tenantId).toBe('tenant_b');
-    expect(captureError(1, 'err', 'cmd').tenantId).toBe('default');
+    expect(captureError(1, 'err', 'cmd', 'tenant_b').tenant_id).toBe('tenant_b');
+    expect(captureError(1, 'err', 'cmd').tenant_id).toBe('default');
   });
 
   it('short stderr passes through unchanged', () => {

@@ -281,7 +281,7 @@ describe('conflict tenant isolation', () => {
     expect(readEntry(tmpDir, a.id)!.conflicts_with).toContain(b.id);
 
     // Re-home b to tenant-b — the (a, b) conflict row is now cross-tenant.
-    writeEntry(tmpDir, { ...b, tenantId: 'tenant-b' });
+    writeEntry(tmpDir, { ...b, tenant_id: 'tenant-b' });
 
     // Re-run detection passing the same pair, so the row stays open and the
     // refMap rebuild — not the resolve-stale path — is what must exclude it.

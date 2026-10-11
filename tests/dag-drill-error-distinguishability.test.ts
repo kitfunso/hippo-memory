@@ -28,7 +28,7 @@ function makeSummary(text: string, opts: Partial<MemoryEntry> = {}): MemoryEntry
     confidence: 'inferred',
     dag_level: 2,
     scope: opts.scope ?? null,
-    tenantId: opts.tenantId ?? 'default',
+    tenantId: opts.tenant_id ?? 'default',
   });
 }
 
@@ -44,7 +44,7 @@ describe('drillDown discriminated outcome', () => {
   });
 
   it('failure=not_found for cross-tenant id (NO unscoped probe leak)', async () => {
-    const s = makeSummary('other tenant', { tenantId: 'other' });
+    const s = makeSummary('other tenant', { tenant_id: 'other' });
     writeEntry(root, s);
     const r = await drillDown(ctxFor(root, 'default'), s.id);
     expect('failure' in r).toBe(true);
@@ -124,7 +124,7 @@ describe('HTTP /v1/recall/drill status mapping', () => {
   });
 
   it('404 for cross-tenant id (no info leak)', async () => {
-    const s = makeSummary('other tenant', { tenantId: 'other' });
+    const s = makeSummary('other tenant', { tenant_id: 'other' });
     writeEntry(home, s);
     const res = await fetch(`${handle.url}/v1/recall/drill/${s.id}`);
     expect(res.status).toBe(404);

@@ -147,7 +147,7 @@ function setAsideIssue(db: DatabaseSyncLike, entry: MemoryEntry, reason: string,
   if (getMeta(db, 'fts5_available', '0') === '1' && ftsRowExists(db, entry.id)) {
     throw new Error(`Quality repair could not remove the full-text row for ${entry.id}`);
   }
-  appendAuditEvent(db, { tenantId: entry.tenantId, actor, op: 'quality_repair', targetId: entry.id, metadata: { reason, backup } });
+  appendAuditEvent(db, { tenantId: entry.tenant_id, actor, op: 'quality_repair', targetId: entry.id, metadata: { reason, backup } });
   return true;
 }
 

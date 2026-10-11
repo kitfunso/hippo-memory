@@ -82,7 +82,7 @@ export function serializeEntry(entry: MemoryEntry): string {
   const frontmatter = entryFrontmatter(entry);
   // Emit tenant_id only when not 'default' to keep diffs clean for the dominant
   // single-tenant case (mirrors the plan's task 7 guidance).
-  const tenantId = entry.tenantId ?? DEFAULT_TENANT_ID;
+  const tenantId = entry.tenant_id ?? DEFAULT_TENANT_ID;
   if (tenantId !== DEFAULT_TENANT_ID) {
     frontmatter['tenant_id'] = tenantId;
   }
@@ -140,7 +140,7 @@ export function deserializeEntry(raw: string): MemoryEntry | null {
     scope: data['scope'] === null || data['scope'] === undefined ? null : String(data['scope']),
     owner: data['owner'] === null || data['owner'] === undefined ? null : String(data['owner']),
     artifact_ref: data['artifact_ref'] === null || data['artifact_ref'] === undefined ? null : String(data['artifact_ref']),
-    tenantId: data['tenant_id'] === null || data['tenant_id'] === undefined ? DEFAULT_TENANT_ID : String(data['tenant_id']),
+    tenant_id: data['tenant_id'] === null || data['tenant_id'] === undefined ? DEFAULT_TENANT_ID : String(data['tenant_id']),
     origin_project: !('origin_project' in data) ? undefined : data['origin_project'] === null ? null : String(data['origin_project']),
   };
 }

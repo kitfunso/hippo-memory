@@ -112,7 +112,7 @@ class ContainerRun {
       if (item === undefined) continue;
       const source = itemSource(this.w.prefix, key, item.text);
       for (const row of rows) {
-        if (renameEntrySourceAt(this.s.db, row.tenantId, row.id, row.source, source) === 0) continue;
+        if (renameEntrySourceAt(this.s.db, row.tenant_id, row.id, row.source, source) === 0) continue;
         this.tally.adopted++;
         this.mirror.push({ ...row, source });
       }
@@ -125,7 +125,7 @@ class ContainerRun {
     let moved = 0;
     for (const row of selectLiveEntriesBySourcePrefix(this.s.db, this.s.tenantId, old)) {
       const source = this.w.prefix + row.source.slice(old.length);
-      if (renameEntrySourceAndOriginAt(this.s.db, row.tenantId, row.id, { from: row.source, to: source, origin }) === 0) continue;
+      if (renameEntrySourceAndOriginAt(this.s.db, row.tenant_id, row.id, { from: row.source, to: source, origin }) === 0) continue;
       moved++;
       this.mirror.push({ ...row, source, origin_project: origin ?? row.origin_project });
     }
@@ -177,9 +177,9 @@ class ContainerRun {
 
   /** api.supersede's steps on this transaction; false when another writer superseded the row first. */
   private supersede(old: MemoryEntry, newId: string): boolean {
-    if (!supersedeEntryAt(this.s.db, old.tenantId, old.id, newId)) return false;
-    if (old.dag_parent_id) markSummaryDirtyInTx(this.s.db, old.dag_parent_id, old.tenantId, SYNC_ACTOR);
-    appendAuditEvent(this.s.db, { tenantId: old.tenantId, actor: SYNC_ACTOR, op: 'supersede', targetId: old.id, metadata: { newId } });
+    if (!supersedeEntryAt(this.s.db, old.tenant_id, old.id, newId)) return false;
+    if (old.dag_parent_id) markSummaryDirtyInTx(this.s.db, old.dag_parent_id, old.tenant_id, SYNC_ACTOR);
+    appendAuditEvent(this.s.db, { tenantId: old.tenant_id, actor: SYNC_ACTOR, op: 'supersede', targetId: old.id, metadata: { newId } });
     this.mirror.push({ ...old, superseded_by: newId });
     return true;
   }

@@ -351,7 +351,7 @@ export function buildMemoryDetail(hippoRoot: string, tenantId: string, entry: Me
     projectKey: project.key,
     projectName: project.name,
     scope: entry.scope,
-    tenant: entry.tenantId,
+    tenant: entry.tenant_id,
     kind: entry.kind,
     embedded,
     conflicts: openConflictsOf(hippoRoot, tenantId, entry, nowMs),

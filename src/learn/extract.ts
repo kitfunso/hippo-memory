@@ -167,7 +167,7 @@ function buildExtractedEntry(
     scope: source.scope,
     // Without it createMemory stamps 'default', and extracted facts leave
     // the tenant of the episodic memory they were extracted from.
-    tenantId: source.tenantId,
+    tenantId: source.tenant_id,
     baseHalfLifeDays,
   }), origin_project: source.origin_project };
 }

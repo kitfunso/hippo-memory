@@ -51,7 +51,7 @@ describe('index.json is written only by rebuildIndex', () => {
   it('reject leaves no index.json', () => {
     const entry = createMemory('reject leaves index.json alone');
     writeEntry(root, entry);
-    rejectValue({ hippoRoot: root, tenantId: entry.tenantId, actor: 'test', reason: 'index-mirror-writers test', memoryId: entry.id });
+    rejectValue({ hippoRoot: root, tenantId: entry.tenant_id, actor: 'test', reason: 'index-mirror-writers test', memoryId: entry.id });
     expect(fs.existsSync(indexPath())).toBe(false);
   });
 
@@ -67,7 +67,7 @@ describe('index.json is written only by rebuildIndex', () => {
     saveIndex(root, loadIndex(root));
     const toReject = createMemory('sentinel reject');
     writeEntry(root, toReject);
-    rejectValue({ hippoRoot: root, tenantId: toReject.tenantId, actor: 'test', reason: 'sentinel', memoryId: toReject.id });
+    rejectValue({ hippoRoot: root, tenantId: toReject.tenant_id, actor: 'test', reason: 'sentinel', memoryId: toReject.id });
 
     expect(fs.readFileSync(indexPath(), 'utf8')).toBe(sentinel);
   });

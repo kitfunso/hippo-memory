@@ -75,7 +75,7 @@ export function detectConflicts(
 function recalledTogether(a: MemoryEntry, b: MemoryEntry): boolean {
   // A personal row pairs only inside its own scope; any other pair shows its id to someone else.
   if ((isPersonalScope(a.scope) || isPersonalScope(b.scope)) && a.scope !== b.scope) return false;
-  if (a.tenantId !== b.tenantId) return false;
+  if (a.tenant_id !== b.tenant_id) return false;
   const [x, y] = [a.origin_project ?? null, b.origin_project ?? null];
   return x === y || (x === '' && y !== null) || (y === '' && x !== null);
 }

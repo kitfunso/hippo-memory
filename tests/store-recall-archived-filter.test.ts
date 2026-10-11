@@ -59,7 +59,7 @@ function makeRawMemory(id: string, content: string, tenantId = 'default'): Memor
     scope: null,
     owner: null,
     artifact_ref: null,
-    tenantId,
+    tenant_id: tenantId,
   };
 }
 

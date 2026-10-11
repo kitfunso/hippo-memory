@@ -138,8 +138,8 @@ describe('forget', () => {
 
 describe('another tenant and not-live rows', () => {
   it('answers 404 and changes nothing for every action on another tenant id', async () => {
-    const foreign = seed(store.hippoRoot, 'tenant b row', { tenantId: 'tenant_b' });
-    const foreign2 = seed(store.hippoRoot, 'tenant b other row', { tenantId: 'tenant_b' });
+    const foreign = seed(store.hippoRoot, 'tenant b row', { tenant_id: 'tenant_b' });
+    const foreign2 = seed(store.hippoRoot, 'tenant b other row', { tenant_id: 'tenant_b' });
     const conflictId = openConflict(foreign.id, foreign2.id, 'tenant b conflict', 'tenant_b');
 
     expect((await get(dash.port, `/api/memory/${foreign.id}`)).status).toBe(404);

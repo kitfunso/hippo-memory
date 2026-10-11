@@ -99,7 +99,7 @@ function makeSummary(
     confidence: 'inferred',
     dag_level: 2,
   });
-  s.tenantId = tenantId;
+  s.tenant_id = tenantId;
   return s;
 }
 
@@ -116,7 +116,7 @@ function makeChild(
     dag_level: 1,
     dag_parent_id: parentId,
   });
-  c.tenantId = tenantId;
+  c.tenant_id = tenantId;
   return c;
 }
 
@@ -704,7 +704,7 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
     forceMarkDirty(hippoRoot, summary.id);
 
     const rejectedContent = 'this-exact-content-was-already-rejected-XYZ';
-    rejectValue(hippoRoot, summary.tenantId, rejectedContent);
+    rejectValue(hippoRoot, summary.tenant_id, rejectedContent);
 
     // Fetcher regenerates content byte-identical to the tombstoned value —
     // the deterministic-summarization scenario the AT1 P1a fix guards.

@@ -176,7 +176,7 @@ function auditRescues(run: SleepRun, { rescuedEntries, rankById }: DecayOutcome)
   const rescueEvent = (entry: MemoryEntry): AppendAuditOpts => {
     const rank = rankById.get(entry.id);
     return {
-      tenantId: entry.tenantId,
+      tenantId: entry.tenant_id,
       actor: 'sleep',
       op: 'mv_rescue',
       targetId: entry.id,

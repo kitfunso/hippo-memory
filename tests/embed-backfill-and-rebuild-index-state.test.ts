@@ -155,7 +155,7 @@ describe('embedAll backfill on hippo.db', () => {
     const embedded = new Set(before.vectors.map((v) => v.memory_id));
     const pending = entries.filter((e) => !embedded.has(e.id));
     expect([entries.length, before.vectors.length, pending.length]).toEqual([ROWS, 180, 120]);
-    expect(new Set(pending.map((e) => e.tenantId))).toEqual(new Set(TENANTS));
+    expect(new Set(pending.map((e) => e.tenant_id))).toEqual(new Set(TENANTS));
 
     const calls: string[][] = [];
     expect(await embedAll(root, undefined, fake('fake-old', (texts) => calls.push(texts)))).toBe(120);
@@ -243,7 +243,7 @@ describe('rows held while embedding hippo.db', () => {
     const index = loadEmbeddingIndex(root);
     const log = recordStatements(() => resetStoredParticles(root, ids, index));
     const { particles } = indexOn(root);
-    const tenantOf = new Map(loadAllEntries(root).map((e) => [e.id, e.tenantId]));
+    const tenantOf = new Map(loadAllEntries(root).map((e) => [e.id, e.tenant_id]));
     expect([ids.length, log.result, particles.length]).toEqual([ROWS, 180, 180]);
     expect(particles.map((p) => p.memoryId)).toEqual(Object.keys(index).sort());
     expect(new Set(particles.map((p) => tenantOf.get(p.memoryId)))).toEqual(new Set(TENANTS));

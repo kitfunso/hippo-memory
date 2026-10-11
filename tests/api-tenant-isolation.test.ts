@@ -151,7 +151,7 @@ describe('api tenant isolation', () => {
     const newEntry = readEntry(home, result.newId, 'alpha');
     expect(newEntry).not.toBeNull();
     expect(newEntry!.content).toBe('fresh replacement content');
-    expect(newEntry!.tenantId).toBe('alpha');
+    expect(newEntry!.tenant_id).toBe('alpha');
 
     // Audit log: 'supersede' op with newId metadata + 'remember' for the new row.
     const db = openHippoDb(home);

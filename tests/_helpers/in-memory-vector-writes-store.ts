@@ -90,7 +90,7 @@ export function inMemoryVectorWritesStore(hippoRoot: string): InMemoryVectorWrit
     async entriesWithoutVector({ model, afterId = '', limit, tenantId }) {
       if (!Number.isInteger(limit)) throw new RangeError('limit must be an integer');
       const ids = [...entries.keys()].sort().filter((id) => id > afterId && vectors.get(id)?.model !== model
-        && (tenantId === undefined || entries.get(id)?.tenantId === tenantId));
+        && (tenantId === undefined || entries.get(id)?.tenant_id === tenantId));
       return ids.slice(0, Math.max(1, Math.min(limit, 500))).flatMap((id) => {
         const entry = entries.get(id);
         return entry ? [structuredClone(entry)] : [];
@@ -99,7 +99,7 @@ export function inMemoryVectorWritesStore(hippoRoot: string): InMemoryVectorWrit
     async writeVectors({ tenantId, model, replaceIndex, rows }) {
       const replaces = replacesIndex(indexState(), model);
       if (replaces && !replaceIndex) return { written: 0, modelMismatch: true };
-      const writable = rows.filter((r) => entries.get(r.memoryId)?.tenantId === tenantId && r.vector.length > 0 && r.vector.every(Number.isFinite));
+      const writable = rows.filter((r) => entries.get(r.memoryId)?.tenant_id === tenantId && r.vector.length > 0 && r.vector.every(Number.isFinite));
       if (writable.length === 0) return { written: 0, modelMismatch: false };
       if (replaces) {
         vectors.clear();

@@ -30,7 +30,7 @@ function defaultCtx(hippoRoot: string): Context {
 
 // loadAllDirtySummaries is the production reader; the tenant filter stands in for the per-tenant wrapper.
 function dirtyFor(root: string, tenantId: string): MemoryEntry[] {
-  return loadAllDirtySummaries(root).filter((m) => m.tenantId === tenantId);
+  return loadAllDirtySummaries(root).filter((m) => m.tenant_id === tenantId);
 }
 
 describe('child-write dirty-flag propagation', () => {

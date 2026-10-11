@@ -58,7 +58,7 @@ function makeMemory(overrides: Partial<MemoryEntry> & { id: string; content: str
     scope: overrides.scope ?? null,
     owner: overrides.owner ?? null,
     artifact_ref: overrides.artifact_ref ?? null,
-    tenantId: overrides.tenantId ?? 'default',
+    tenant_id: overrides.tenant_id ?? 'default',
   };
 }
 

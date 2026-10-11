@@ -77,14 +77,14 @@ export function loadChildrenOfSummary(
 /** loadChildrenOfSummary for many summaries in one IN query per tenant chunk; the map key is `${tenantId}\u0000${summaryId}`, each list in created order. */
 export function loadChildrenOfSummaries(
   hippoRoot: string,
-  summaries: ReadonlyArray<{ id: string; tenantId: string }>,
+  summaries: ReadonlyArray<{ id: string; tenant_id: string }>,
 ): Map<string, MemoryEntry[]> {
   const byTenant = new Map<string, string[]>();
   for (const s of summaries) {
-    assertTenantId('loadChildrenOfSummaries', s.tenantId);
-    const ids = byTenant.get(s.tenantId) ?? [];
+    assertTenantId('loadChildrenOfSummaries', s.tenant_id);
+    const ids = byTenant.get(s.tenant_id) ?? [];
     ids.push(s.id);
-    byTenant.set(s.tenantId, ids);
+    byTenant.set(s.tenant_id, ids);
   }
   const out = new Map<string, MemoryEntry[]>();
   onHandle(hippoRoot, (db) => {
@@ -134,7 +134,7 @@ export function applyRebuildResult(
   summary: MemoryEntry,
   patch: RebuildPatch,
 ) {
-  assertTenantId('applyRebuildResult', summary.tenantId);
+  assertTenantId('applyRebuildResult', summary.tenant_id);
   return onHandle(hippoRoot, (db) => {
     return withWriteScope(db, 'rebuild_summary', () => applyRebuildInSavepoint(db, summary, patch));
   }, openStore);
@@ -175,7 +175,7 @@ function applyRebuildInSavepoint(
   // Check tombstones before choosing the UPDATE: this direct UPDATE bypasses upsertEntryRow's guard, and
   // a deterministic rebuild would otherwise re-assert a rejected value every sleep cycle.
   const tombstone = patch.bumpRebuildCount
-    ? findRejectedValue(db, summary.tenantId, rejectionDigest(patch.content))
+    ? findRejectedValue(db, summary.tenant_id, rejectionDigest(patch.content))
     : null;
   // On a tombstone hit, write no content: take the zero-child metadata-only path (descendant_count/earliest_at/latest_at, summary_dirty cleared, no
   // rebuild_count bump). Clearing dirty is deliberate: leaving it set would make every later sleep re-attempt and re-refuse the same rebuild forever.
@@ -189,14 +189,14 @@ function applyRebuildInSavepoint(
         patch.latest_at,
         nowIso,
         summary.id,
-        summary.tenantId,
+        summary.tenant_id,
       )
     : db.prepare(REBUILD_METADATA_SQL).run(
         patch.descendant_count,
         patch.earliest_at,
         patch.latest_at,
         summary.id,
-        summary.tenantId,
+        summary.tenant_id,
       );
 
   // `changed` means THIS call's UPDATE hit a row, so a refusal still settles the cycle (false would retry
@@ -223,7 +223,7 @@ function auditRefusedRebuild(
     targetId: summary.id,
     metadata: { digest: tombstone.digest, reason: tombstone.reason },
     actor: patch.actor,
-    tenantId: summary.tenantId
+    tenantId: summary.tenant_id
   });
   log.warn(
     `applyRebuildResult: refused rebuild content for ${summary.id} — matches a rejected value ` +
@@ -246,7 +246,7 @@ function syncRebuiltSummary(
     descendant_count: patch.descendant_count,
     earliest_at: patch.earliest_at,
     latest_at: patch.latest_at,
-    summary_dirty: 0,
+    summary_dirty: false,
     last_rebuilt_at: applyContentWrite ? nowIso : summary.last_rebuilt_at,
     rebuild_count: applyContentWrite
       ? (summary.rebuild_count ?? 0) + 1
@@ -260,7 +260,7 @@ function syncRebuiltSummary(
       source: 'E3-rebuild',
       zero_children: patch.zeroChildren,
       descendant_count: patch.descendant_count,
-    }, actor: patch.actor, tenantId: summary.tenantId });
+    }, actor: patch.actor, tenantId: summary.tenant_id });
 }
 
 /** Clear summary_dirty on a new summary after buildDag's child-link loop (each member's writeEntry marks the parent dirty, so the same cycle would rebuild it).

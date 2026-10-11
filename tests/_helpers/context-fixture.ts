@@ -22,7 +22,7 @@ type SeedOpts = Parameters<typeof seeded>[4];
 
 function inTenant(tenantId: string, origin: string | null) {
   return (content: string, id: string, hours: number, extra: Partial<MemoryEntry> = {}, opts: SeedOpts = {}): MemoryEntry =>
-    seeded(content, id, ago(hours), { tenantId, origin_project: origin, ...extra }, opts);
+    seeded(content, id, ago(hours), { tenant_id: tenantId, origin_project: origin, ...extra }, opts);
 }
 
 function memoryRows(): MemoryEntry[] {
@@ -56,7 +56,7 @@ function memoryRows(): MemoryEntry[] {
     a('rollout lesson with no half life', 'mem_a_flat', 49, { half_life_days: 0 }),
     b('globex pinned rule about the deploy window', 'mem_b_pin', 50, {}, { pinned: true }),
     ...Array.from({ length: 5 }, (_, i) => b(`globex note ${i} about the rollout plan`, `mem_b_${i}`, 5 + i)),
-    seeded('globex drifted row written by an old importer', 'mem_b_drift', '2026-03-05 10:00:00', { tenantId: TENANT_B, origin_project: PROJECT }),
+    seeded('globex drifted row written by an old importer', 'mem_b_drift', '2026-03-05 10:00:00', { tenant_id: TENANT_B, origin_project: PROJECT }),
   ];
 }
 

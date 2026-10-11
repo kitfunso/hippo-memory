@@ -77,7 +77,7 @@ export function insertDormantRow(db: DatabaseSyncLike, move: DormantMove): void 
       strength = excluded.strength,
       dormant_at = excluded.dormant_at
   `).run(
-    move.entry.tenantId,
+    move.entry.tenant_id,
     move.entry.id,
     move.entry.content,
     JSON.stringify(move.entry),
@@ -87,13 +87,25 @@ export function insertDormantRow(db: DatabaseSyncLike, move: DormantMove): void 
   );
 }
 
+/** What entry_json may hold: 2.0 snapshots, or 1.x ones with `tenantId` and a 0|1 `summary_dirty`. */
+type StoredSnapshot = Omit<MemoryEntry, 'tenant_id' | 'summary_dirty'> & {
+  tenant_id?: string;
+  tenantId?: string;
+  summary_dirty?: boolean | 0 | 1;
+};
+
+function toCurrentEntry({ tenantId, summary_dirty, tenant_id, ...rest }: StoredSnapshot): MemoryEntry {
+  return { ...rest, tenant_id: tenant_id ?? tenantId ?? '', summary_dirty: summary_dirty === true || summary_dirty === 1 };
+}
+
 /** Parse a stored snapshot back into a MemoryEntry, or null when the row no longer matches it (edited by hand, or truncated). */
 function parseSnapshot(row: DormantRow): MemoryEntry | null {
   try {
     // SAFETY: entry_json is only written by insertDormantRow from a MemoryEntry;
     // the id / tenant / content checks below reject a row edited out of shape.
-    const entry = JSON.parse(row.entry_json) as MemoryEntry;
-    if (entry.id !== row.id || entry.tenantId !== row.tenant_id || entry.content !== row.content) {
+    // SAFETY: entry_json came from JSON.stringify of a MemoryEntry (2.0) or a 1.x one; the checks below reject a row edited out of shape.
+    const entry = toCurrentEntry(JSON.parse(row.entry_json) as StoredSnapshot);
+    if (entry.id !== row.id || entry.tenant_id !== row.tenant_id || entry.content !== row.content) {
       warnDamagedColumn({ table: 'dormant_memories', id: row.id, column: 'entry_json' }, 'wrong shape');
       return null;
     }

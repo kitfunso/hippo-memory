@@ -32,7 +32,7 @@ function makeRaw(text: string, opts: Partial<MemoryEntry> = {}): MemoryEntry {
     layer: Layer.Buffer,
     confidence: 'observed',
     kind: 'raw',
-    tenantId: opts.tenantId ?? 'default',
+    tenantId: opts.tenant_id ?? 'default',
   });
 }
 

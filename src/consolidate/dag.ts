@@ -83,7 +83,7 @@ export interface DagBuildResult {
 function partitionFactsByTenant(unparented: MemoryEntry[]): Map<string, MemoryEntry[]> {
   const unparentedByTenant = new Map<string, MemoryEntry[]>();
   for (const fact of unparented) {
-    const key = derivationPartitionKey(fact.tenantId, fact.scope, fact.origin_project);
+    const key = derivationPartitionKey(fact.tenant_id, fact.scope, fact.origin_project);
     const bucket = unparentedByTenant.get(key);
     if (bucket) bucket.push(fact);
     else unparentedByTenant.set(key, [fact]);
@@ -154,7 +154,7 @@ async function summarizeCluster(
   result.factsLinked += writeEntriesTogether(hippoRoot, cluster.members.map((member) => ({ ...member, dag_parent_id: summaryEntry.id })));
   // Member writes just marked this fresh summary dirty; clear it, or the same sleep cycle's
   // rebuild pass would re-rebuild every new summary at twice the LLM cost.
-  clearSummaryDirtyAfterBuild(hippoRoot, summaryEntry.id, summaryEntry.tenantId, 'buildDag');
+  clearSummaryDirtyAfterBuild(hippoRoot, summaryEntry.id, summaryEntry.tenant_id, 'buildDag');
 }
 
 export async function buildDag(
@@ -171,7 +171,7 @@ export async function buildDag(
 
   for (const [, tenantFacts] of partitionFactsByTenant(unparented)) {
     const home: PartitionHome = {
-      tenantId: tenantFacts[0].tenantId,
+      tenantId: tenantFacts[0].tenant_id,
       scope: derivationScope(tenantFacts[0].scope),
       originProject: tenantFacts[0].origin_project,
       baseHalfLifeDays,
@@ -210,7 +210,7 @@ async function rebuildOneSummary(
 ): Promise<void> {
   // A queued child may have been rebuilt earlier in this drain, so its preloaded content is stale: reread then.
   const children = preloaded.some((c) => queuedIds.has(c.id))
-    ? loadChildrenOfSummary(hippoRoot, summary.id, summary.tenantId)
+    ? loadChildrenOfSummary(hippoRoot, summary.id, summary.tenant_id)
     : preloaded;
 
   if (children.length === 0) {
@@ -306,13 +306,13 @@ export async function rebuildDirtySummaries(
       await new Promise((resolve) => setImmediate(resolve));
     }
     try {
-      await rebuildOneSummary(hippoRoot, summary, opts, result, childrenByParent.get(childrenKey(summary.tenantId, summary.id)) ?? [], queuedIds);
+      await rebuildOneSummary(hippoRoot, summary, opts, result, childrenByParent.get(childrenKey(summary.tenant_id, summary.id)) ?? [], queuedIds);
     } catch (err) {
       // One throw doesn't abort the queue; log enough to triage an exotic
       // failure (SQLite I/O, prepare), since audit() already catches its own.
       result.failed++;
       log.error(
-        `rebuildDirtySummaries: summary ${summary.id} (tenant ${summary.tenantId}) failed: ${
+        `rebuildDirtySummaries: summary ${summary.id} (tenant ${summary.tenant_id}) failed: ${
           errorMessage(err)
         }`,
         errorFields(err),
@@ -424,7 +424,7 @@ export async function buildEntityProfiles(
 
   for (const [, tenantL2s] of partitionFactsByTenant(unparented)) {
     const home: PartitionHome = {
-      tenantId: tenantL2s[0].tenantId,
+      tenantId: tenantL2s[0].tenant_id,
       scope: derivationScope(tenantL2s[0].scope),
       originProject: tenantL2s[0].origin_project,
       baseHalfLifeDays,

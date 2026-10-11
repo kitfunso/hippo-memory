@@ -164,7 +164,7 @@ describe('embedAll with a store', () => {
     const [first] = seeded;
     const other = embeddingIndexIdentity('fake-other');
     const racing = provider('fake-a', async (texts) => {
-      await memory.store.vectorWrites.writeVectors({ tenantId: first.tenantId, model: other, replaceIndex: true, rows: [{ memoryId: first.id, vector: [1, 0] }] });
+      await memory.store.vectorWrites.writeVectors({ tenantId: first.tenant_id, model: other, replaceIndex: true, rows: [{ memoryId: first.id, vector: [1, 0] }] });
       return vectorsFor('fake-a', texts);
     });
     const running = withSqliteBlocked(memory.store.kind, () => embedAll(markedFolder(), undefined, racing, memory.store));

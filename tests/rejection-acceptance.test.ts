@@ -707,7 +707,7 @@ describe('merge tombstone check uses the destination tenant', () => {
       const allAfter = loadAllEntries(home);
       const semantic = allAfter.find((e) => e.layer === Layer.Semantic && e.content === mergedContent);
       expect(semantic).toBeDefined();
-      expect(semantic!.tenantId).toBe('tenant-a');
+      expect(semantic!.tenant_id).toBe('tenant-a');
     } finally {
       rmSync(home, { recursive: true, force: true });
     }

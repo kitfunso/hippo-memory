@@ -69,7 +69,7 @@ describe('sleep after consolidation', () => {
 
   const contentsByTenant = (root: string) => {
     const out: Record<string, string[]> = {};
-    for (const e of loadAllEntries(root)) (out[e.tenantId] ??= []).push(e.content);
+    for (const e of loadAllEntries(root)) (out[e.tenant_id] ??= []).push(e.content);
     for (const list of Object.values(out)) list.sort();
     return out;
   };
@@ -191,7 +191,7 @@ describe('syncGlobalToLocal', () => {
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('skipped 2 rejected value'));
     const local = new Map(loadAllEntries(localRoot).map((e) => [e.id, e]));
     expect([...local.keys()].sort()).toEqual([rows[0]!.id, rows[1]!.id, rows[2]!.id, sameText.id, acme.id].sort());
-    expect(local.get(acme.id)!.tenantId).toBe('acme');
+    expect(local.get(acme.id)!.tenant_id).toBe('acme');
     const refusals = (() => {
       const handle = openHippoDb(localRoot);
       try {

@@ -452,7 +452,7 @@ describe('level-3 entity profiles + drillDown depth', () => {
       'alice owns the API layer in tenant A repo one',
     ].map((c, _i) => {
       const m = makeL2Summary(c, 'alice');
-      m.tenantId = 'tenant-a';
+      m.tenant_id = 'tenant-a';
       return m;
     });
     const tenantBL2s = [
@@ -461,7 +461,7 @@ describe('level-3 entity profiles + drillDown depth', () => {
       'alice owns the frontend in tenant B repo two',
     ].map((c, _i) => {
       const m = makeL2Summary(c, 'alice');
-      m.tenantId = 'tenant-b';
+      m.tenant_id = 'tenant-b';
       return m;
     });
     [...tenantAL2s, ...tenantBL2s].forEach((e) => writeEntry(hippoRoot, e));

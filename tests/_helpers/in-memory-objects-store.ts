@@ -110,7 +110,7 @@ const asciiFolded = (text: string): string => text.replace(/[A-Z]/g, (letter) =>
 
 const nextId = (table: ReadonlyMap<number, unknown>): number => Math.max(0, ...table.keys()) + 1;
 const rememberRow = (mirror: MemoryEntry, actor: string): AppendAuditOpts =>
-  ({ tenantId: mirror.tenantId, actor, op: 'remember', targetId: mirror.id, metadata: { kind: mirror.kind ?? 'distilled', scope: mirror.scope ?? null } });
+  ({ tenantId: mirror.tenant_id, actor, op: 'remember', targetId: mirror.id, metadata: { kind: mirror.kind ?? 'distilled', scope: mirror.scope ?? null } });
 
 export function inMemoryObjectsStore(hippoRoot: string): InMemoryObjectsStore {
   const base = inMemoryKeyAuditStore(hippoRoot);
@@ -177,7 +177,7 @@ export function inMemoryObjectsStore(hippoRoot: string): InMemoryObjectsStore {
     async openIncident(tenantId, open) {
       const { mirror, fields } = open;
       // The mirror goes in ahead of the link check, so an incident may cite its own mirror.
-      const unlinked = fields.linkedMemoryIds.find((linkId) => (linkId === mirror.id ? mirror : mirrors.get(linkId))?.tenantId !== tenantId);
+      const unlinked = fields.linkedMemoryIds.find((linkId) => (linkId === mirror.id ? mirror : mirrors.get(linkId))?.tenant_id !== tenantId);
       if (unlinked !== undefined) return { refused: 'unlinked', memoryId: unlinked };
       const id = nextId(tables.incident);
       const row: Incident = {
@@ -218,7 +218,7 @@ export function inMemoryObjectsStore(hippoRoot: string): InMemoryObjectsStore {
     async briefReceipts(tenantId, tag, limit) {
       const quoted = asciiFolded(`"${tag}"`);
       const hits = [...mirrors.values()].filter((m) =>
-        m.tenantId === tenantId && m.source !== 'project_brief' && passesScopeFilterForRecall(m.scope ?? null, undefined)
+        m.tenant_id === tenantId && m.source !== 'project_brief' && passesScopeFilterForRecall(m.scope ?? null, undefined)
         && asciiFolded(JSON.stringify(m.tags)).includes(quoted));
       hits.sort((a, b) => byBytes(b.created, a.created) || byBytes(b.id, a.id));
       return hits.slice(0, limit).map((m) => ({ id: m.id, created: m.created, source: m.source, content: m.content }));
@@ -229,7 +229,7 @@ export function inMemoryObjectsStore(hippoRoot: string): InMemoryObjectsStore {
     ...base.store,
     async entriesByIds(ids, tenantId) {
       const wanted = new Set(ids.slice(0, 500));
-      const found = [...mirrors.values()].filter((e) => wanted.has(e.id) && (tenantId === undefined || e.tenantId === tenantId));
+      const found = [...mirrors.values()].filter((e) => wanted.has(e.id) && (tenantId === undefined || e.tenant_id === tenantId));
       return structuredClone(found.sort((a, b) => byBytes(a.created, b.created) || byBytes(a.content, b.content) || byBytes(a.id, b.id)));
     },
     objects,

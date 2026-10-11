@@ -235,7 +235,7 @@ export function captureExtractedItems(
         continue;
       }
       const entry = captureEntry(item, options, baseHalfLifeDays);
-      if (wouldReject(entry.tenantId ?? 'default', entry.id, entry.content)) {
+      if (wouldReject(entry.tenant_id ?? 'default', entry.id, entry.content)) {
         console.log(`  [reject] (${item.category}) ${item.content.slice(0, 80)} - matches a rejected value`);
         tally.rejected++;
         continue;

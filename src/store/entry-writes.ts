@@ -132,11 +132,11 @@ export function auditEntryWrite(db: DatabaseSyncLike, entry: MemoryEntry, actor:
   audit(db, 'remember', { targetId: entry.id, metadata: {
       kind: entry.kind ?? 'distilled',
       scope: entry.scope ?? null,
-    }, actor, tenantId: entry.tenantId });
+    }, actor, tenantId: entry.tenant_id });
   // A child write marks its summary parent dirty for the sleep-cycle rebuild; most writes
   // have no parent, so the hot path pays one null check.
   if (entry.dag_parent_id) {
-    markSummaryDirtyInTx(db, entry.dag_parent_id, entry.tenantId, actor);
+    markSummaryDirtyInTx(db, entry.dag_parent_id, entry.tenant_id, actor);
   }
 }
 
@@ -211,15 +211,15 @@ export function strengthenRetrievedOn(db: DatabaseSyncLike, ids: readonly string
 /** Rewrites a live row's tags and its full-text row on the caller's transaction, with no audit row. */
 export function setEntryTagsInTx(db: DatabaseSyncLike, entry: MemoryEntry): void {
   db.prepare(`UPDATE memories SET tags_json = ?, updated_at = datetime('now') WHERE id = ? AND tenant_id = ?`)
-    .run(JSON.stringify(entry.tags), entry.id, entry.tenantId);
+    .run(JSON.stringify(entry.tags), entry.id, entry.tenant_id);
   syncFtsRow(db, entry);
 }
 
 /** Removes a row from `memories` and full-text search on the caller's transaction, as sleep's dormant move does, and marks its summary parent dirty. */
 export function deleteEntryRowInTx(db: DatabaseSyncLike, entry: MemoryEntry, actor: string): void {
-  db.prepare('DELETE FROM memories WHERE id = ? AND tenant_id = ?').run(entry.id, entry.tenantId);
+  db.prepare('DELETE FROM memories WHERE id = ? AND tenant_id = ?').run(entry.id, entry.tenant_id);
   deleteFtsRow(db, entry.id);
-  if (entry.dag_parent_id) markSummaryDirtyInTx(db, entry.dag_parent_id, entry.tenantId, actor);
+  if (entry.dag_parent_id) markSummaryDirtyInTx(db, entry.dag_parent_id, entry.tenant_id, actor);
 }
 
 /** One half-life per memory id, on the caller's transaction. */

@@ -123,11 +123,11 @@ function sessionEnding(events: ReturnType<typeof listSessionEvents>): { outcome:
 // sleep; check the tombstone under the entry's own stamped tenantId, never a guessed one.
 function traceRejected(run: SleepRun, trace: MemoryEntry, sessionId: string): boolean {
   const traceDigest = rejectionDigest(trace.content);
-  const tombstone = run.tombstones.find(trace.tenantId, traceDigest);
+  const tombstone = run.tombstones.find(trace.tenant_id, traceDigest);
   if (!tombstone) return false;
   try {
     run.tombstones.audit({
-      tenantId: trace.tenantId,
+      tenantId: trace.tenant_id,
       actor: 'sleep',
       op: 'reject_refusal',
       metadata: {

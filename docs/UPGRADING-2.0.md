@@ -48,3 +48,11 @@ What to change:
 - An add-on store that spreads `sqliteStore(...)` and sets its own `kind` now also has `localFiles`. Set `localFiles: undefined` to keep hippo.db fenced.
 - Put `await` in front of `auditMemoryQuality`, `removeAuditErrors`, `repairMemoryQuality`, `repairMemoryQualityOnce`, `pruneAuditLog` and `learn`. Each one rejects with `StoreNotPortedError` (a 501) on a store without its group.
 - `remember` now returns `halfLifeDays` and `tags`. `POST /v1/memories` sends both fields in its reply.
+
+## Entry shape
+
+`MemoryEntry.tenantId` is now `tenant_id`, and `summary_dirty` is a `boolean` (it was `0 | 1`). `createMemory(text, { tenantId })` keeps its option name and sets `entry.tenant_id`.
+
+- `writeEntry` throws `TypeError('tenantId was renamed to tenant_id in 2.0')` for an entry that has `tenantId` and no `tenant_id`. Without the check, a 1.x caller would write into the `default` tenant.
+- Export JSON: `hippo export` now writes `tenant_id` and a boolean `summary_dirty`. Update any script that reads `tenantId` or compares `summary_dirty` to `0` or `1`.
+- Dormant memories saved by 1.x keep working; hippo reads their old fields on load.

@@ -386,7 +386,7 @@ function applyBatchWrites(
     // Hook for writes: a new child, or a change to what its summary reads, marks the parent dirty; decay alone does not.
     if (row.dag_parent_id && (!live || SUMMARY_INPUTS.some((k) => row[k] !== live[k]))) {
       dirty.parents.add(row.dag_parent_id);
-      dirty.tenantById.set(row.dag_parent_id, row.tenantId);
+      dirty.tenantById.set(row.dag_parent_id, row.tenant_id);
     }
   }
 }
@@ -399,7 +399,7 @@ interface FtsChanges {
 
 /** True, after auditing the refusal, when the write would introduce a rejected value. */
 function isRejectedBatchWrite(db: DatabaseSyncLike, row: MemoryEntry): boolean {
-  const entryTenantId = row.tenantId ?? DEFAULT_TENANT_ID;
+  const entryTenantId = row.tenant_id ?? DEFAULT_TENANT_ID;
   // checkRejectionGuard, not a bare tombstone probe: a tombstone can coexist with a live same-content row,
   // and skipping every re-persist would starve it of decay/replay updates; only new or changed content is refused.
   try {

@@ -49,18 +49,18 @@ const at = (iso: string, call: Call): Call => (g, store) => {
   vi.setSystemTime(new Date(iso));
   return call(g, store);
 };
-const save = (input: PredictionSave): Call => (g) => g.savePrediction(input.mirror.tenantId, input, ACTOR);
+const save = (input: PredictionSave): Call => (g) => g.savePrediction(input.mirror.tenant_id, input, ACTOR);
 const close = (id: number, how: PredictionClose, tenantId = TENANT_A): Call => (g) => g.closePrediction(tenantId, id, how, ACTOR);
 const byId = (id: number, tenantId = TENANT_A): Call => (g) => g.predictionById(tenantId, id);
 const list = (query: PredictionListQuery, tenantId = TENANT_A): Call => (g) => g.listPredictions(tenantId, query);
 const ids = (query: PredictionListQuery, tenantId = TENANT_A): Call => async (g) => (await g.listPredictions(tenantId, query)).map((p) => p.id);
 const baserate = (classTag: string, tenantId = TENANT_A): Call => (g) => g.predictionBaserate(tenantId, classTag, ACTOR);
 const mirrorOf = (input: PredictionSave, tenantId = TENANT_A): Call => async (_g, store) =>
-  (await store.entriesByIds([input.mirror.id], tenantId)).map((e) => ({ id: e.id, tenantId: e.tenantId, content: e.content, tags: e.tags }));
+  (await store.entriesByIds([input.mirror.id], tenantId)).map((e) => ({ id: e.id, tenantId: e.tenant_id, content: e.content, tags: e.tags }));
 
 function openRow(id: number, input: PredictionSave, createdAt: string): Prediction {
   return {
-    id, memoryId: input.mirror.id, tenantId: input.mirror.tenantId, classTag: input.classTag, claimText: input.claimText,
+    id, memoryId: input.mirror.id, tenantId: input.mirror.tenant_id, classTag: input.classTag, claimText: input.claimText,
     estimateValue: input.estimateValue ?? null, estimateUnit: input.estimateUnit ?? null, targetDate: input.targetDate ?? null,
     actualValue: null, closureState: 'open', closedAt: null, closureNote: null, createdAt,
   };

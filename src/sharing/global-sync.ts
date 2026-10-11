@@ -33,7 +33,7 @@ export function syncGlobalToLocal(
   return withRequestStoresSync(() => copyMissingRows(localRoot, globalRoot, opts.includeCrossProject === true));
 }
 
-const textKey = (e: { tenantId: string; content: string }): string => `${e.tenantId}\n${e.content}`;
+const textKey = (e: { tenant_id: string; content: string }): string => `${e.tenant_id}\n${e.content}`;
 
 /** One open per store and one transaction: id, tenant and text decide which rows to read whole, and the copies commit together. */
 function copyMissingRows(localRoot: string, globalRoot: string, includeCrossProject: boolean): number {

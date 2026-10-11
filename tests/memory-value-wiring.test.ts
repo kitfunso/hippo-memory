@@ -784,11 +784,11 @@ describe('(h) scale characterization', () => {
     // rescue outcomes for its condemned entries must be unchanged. ---
     const tenantAId = TENANTS[0];
     const tenantBId = TENANTS[1];
-    const tenantBIds = new Set(loaded.filter((e) => e.tenantId === tenantBId).map((e) => e.id));
+    const tenantBIds = new Set(loaded.filter((e) => e.tenant_id === tenantBId).map((e) => e.id));
     const dropCount = Math.floor(tenantBIds.size * 0.4);
     let dropped = 0;
     const mutated = loaded.filter((e) => {
-      if (e.tenantId === tenantBId && dropped < dropCount) {
+      if (e.tenant_id === tenantBId && dropped < dropCount) {
         dropped++;
         return false;
       }
@@ -799,7 +799,7 @@ describe('(h) scale characterization', () => {
     const rescuedAfterMutation = rescueSet(mutated, condemnedIds, NOW);
     const tenantACondemned = [...condemnedIds].filter((id) => {
       const e = loaded.find((x) => x.id === id);
-      return e?.tenantId === tenantAId;
+      return e?.tenant_id === tenantAId;
     });
     expect(tenantACondemned.length).toBeGreaterThan(0);
     for (const id of tenantACondemned) {
@@ -810,7 +810,7 @@ describe('(h) scale characterization', () => {
     const rescueRate = rescued1.size / condemnedIds.size;
     const perTenant: Record<string, { condemned: number; rescued: number }> = {};
     for (const tenantId of TENANTS) {
-      const tCondemned = [...condemnedIds].filter((id) => loaded.find((x) => x.id === id)?.tenantId === tenantId);
+      const tCondemned = [...condemnedIds].filter((id) => loaded.find((x) => x.id === id)?.tenant_id === tenantId);
       const tRescued = tCondemned.filter((id) => rescued1.has(id));
       perTenant[tenantId] = { condemned: tCondemned.length, rescued: tRescued.length };
     }
@@ -861,12 +861,12 @@ describe('(h) scale characterization', () => {
       initStore(dirMutated);
       enableMemoryValue(dirMutated, { replay: { count: 0 }, autoTraceCapture: false });
 
-      const tenantBIds = new Set(loaded.filter((e) => e.tenantId === tenantBId).map((e) => e.id));
+      const tenantBIds = new Set(loaded.filter((e) => e.tenant_id === tenantBId).map((e) => e.id));
       const dropCount = Math.floor(tenantBIds.size * 0.4);
       expect(dropCount).toBeGreaterThan(0);
       let droppedForMutated = 0;
       const seedForMutated = loaded.filter((e) => {
-        if (e.tenantId === tenantBId && droppedForMutated < dropCount) {
+        if (e.tenant_id === tenantBId && droppedForMutated < dropCount) {
           droppedForMutated++;
           return false;
         }

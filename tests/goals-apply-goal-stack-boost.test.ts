@@ -78,7 +78,7 @@ describe('the session goal boost plus writeGoalRecallLog', () => {
       scope: null,
       owner: null,
       artifact_ref: null,
-      tenantId: 'default',
+      tenant_id: 'default',
     };
   }
 

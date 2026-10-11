@@ -31,7 +31,7 @@ function makeLeaf(text: string, opts: Partial<MemoryEntry> = {}): MemoryEntry {
     dag_level: opts.dag_level ?? 0,
     dag_parent_id: opts.dag_parent_id ?? undefined,
     scope: opts.scope ?? null,
-    tenantId: opts.tenantId ?? 'default',
+    tenantId: opts.tenant_id ?? 'default',
     kind: opts.kind ?? 'distilled',
   });
   return e;
@@ -45,7 +45,7 @@ function makeSummary(text: string, opts: Partial<MemoryEntry> = {}): MemoryEntry
     confidence: 'inferred',
     dag_level: 2,
     scope: opts.scope ?? null,
-    tenantId: opts.tenantId ?? 'default',
+    tenantId: opts.tenant_id ?? 'default',
   });
   return s;
 }
@@ -103,13 +103,13 @@ describe('DAG-aware recall substitution', () => {
   });
 
   it('4. cross-tenant summary not loaded', async () => {
-    const summary = makeSummary('other tenant topic', { tenantId: 'other' });
+    const summary = makeSummary('other tenant topic', { tenant_id: 'other' });
     writeEntry(root, summary);
     for (let i = 0; i < 6; i++) {
       writeEntry(root, makeLeaf(`alpha cross tenant ${i}`, {
         dag_level: 1,
         dag_parent_id: summary.id,
-        tenantId: 'other',
+        tenant_id: 'other',
       }));
     }
     // Recall as default tenant: nothing should match (entries belong to other),

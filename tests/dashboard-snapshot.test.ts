@@ -135,7 +135,7 @@ describe('dashboard snapshot', () => {
     seed(root, 'archived', { kind: 'archived' });
     seed(root, 'quarantined', { scope: quarantineScopeFor('team:eng') });
     seed(root, 'quarantined and archived', { scope: quarantineScopeFor(null), kind: 'archived' });
-    seed(root, 'another tenant', { tenantId: 'other' });
+    seed(root, 'another tenant', { tenant_id: 'other' });
     replaceDetectedConflicts(root, [{ memory_a_id: pinned.id, memory_b_id: wrong.id, reason: 'inside alpha', score: 0.9 }]);
     embed(root, [pinned.id, wrong.id]);
 

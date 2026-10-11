@@ -62,8 +62,8 @@ export interface MemoryEntry {
   descendant_count?: number;
   earliest_at?: string | null;
   latest_at?: string | null;
-  /** 1 when a child was invalidated, superseded, forgotten or archived since the last rebuild; sleep clears it. Always 0 below level 2. */
-  summary_dirty?: 0 | 1;
+  /** True when a child was invalidated, superseded, forgotten or archived since the last rebuild; sleep clears it. Always false below level 2. */
+  summary_dirty?: boolean;
   /** ISO 8601 time of the last successful rebuild, or null if never rebuilt. */
   last_rebuilt_at?: string | null;
   /** Count of successful rebuilds: 0 at the first buildDag write, bumped by each rebuild. */
@@ -75,7 +75,7 @@ export interface MemoryEntry {
   scope: string | null;         // e.g. 'team:eng', 'project:foo'; null = global
   owner: string | null;         // 'user:<id>' or 'agent:<id>'
   artifact_ref: string | null;  // URI to source artifact (slack://, gh://, file://)
-  tenantId: string;             // 'default' for single-tenant deployments
+  tenant_id: string;            // 'default' for single-tenant deployments
   /** Owning project, lowercased; '' = user-global (injectable everywhere), null = none known (legacy or unnamed write), denied by ambient context.
    *  Stamped at write time by stampOriginProject (src/store/entry-row.ts); undefined only before the first write. */
   origin_project?: string | null;
@@ -435,7 +435,7 @@ export function createMemory(content: string, options: Partial<CreateMemoryOptio
     scope: options.scope ?? null,
     owner: options.owner ?? null,
     artifact_ref: options.artifact_ref ?? null,
-    tenantId: options.tenantId ?? DEFAULT_TENANT_ID,
+    tenant_id: options.tenantId ?? DEFAULT_TENANT_ID,
   };
 
   entry.strength = calculateStrength(entry);

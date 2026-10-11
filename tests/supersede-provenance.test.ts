@@ -138,6 +138,6 @@ describe('createSuccessor', () => {
   });
 
   it('takes the tenant from the options', () => {
-    expect(createSuccessor(oldRow(), 'the deploy pipeline now signs twice', { ...opts, tenantId: 'tenant-b' }).tenantId).toBe('tenant-b');
+    expect(createSuccessor(oldRow(), 'the deploy pipeline now signs twice', { ...opts, tenantId: 'tenant-b' }).tenant_id).toBe('tenant-b');
   });
 });

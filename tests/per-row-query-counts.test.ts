@@ -535,7 +535,7 @@ describe('hippo_status', () => {
         memory('status row pinned', { pinned: true, tags: ['errors-seen'] }),
         memory('status row tagged as an error', { tags: ['deploy', 'error'] }),
       ];
-      const elsewhere = rows(2, 'elsewhere', { tenantId: 'other' });
+      const elsewhere = rows(2, 'elsewhere', { tenant_id: 'other' });
       seed(root, [...own, ...elsewhere]);
       replaceDetectedConflicts(root, [
         { memory_a_id: own[0].id, memory_b_id: own[1].id, reason: 'own pair', score: 0.9 },

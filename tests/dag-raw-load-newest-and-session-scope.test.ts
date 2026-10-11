@@ -32,7 +32,7 @@ function makeRaw(text: string, sessionId: string, opts: Partial<MemoryEntry> = {
     confidence: 'observed',
     kind: 'raw',
     scope: opts.scope ?? null,
-    tenantId: opts.tenantId ?? 'default',
+    tenantId: opts.tenant_id ?? 'default',
     source_session_id: sessionId,
   });
   if (opts.created) e.created = opts.created;

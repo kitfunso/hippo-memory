@@ -14,7 +14,7 @@ export type SetAsideResult = { readonly kind: 'untagged'; readonly entry: Memory
 export function setAsideRow(db: DatabaseSyncLike, tag: string, row: MemoryEntry, why: SetAsideWhy): SetAsideResult {
   const untagged: MemoryEntry = { ...row, tags: row.tags.filter((t) => t !== tag) };
   const audit = (metadata: Record<string, string | boolean>): void =>
-    appendAuditEvent(db, { tenantId: row.tenantId, actor: SYNC_ACTOR, op: 'agent_memory_set_aside', targetId: row.id, metadata });
+    appendAuditEvent(db, { tenantId: row.tenant_id, actor: SYNC_ACTOR, op: 'agent_memory_set_aside', targetId: row.id, metadata });
   if (row.pinned) {
     setEntryTagsInTx(db, untagged);
     audit({ why, untagged: true });

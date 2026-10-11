@@ -66,15 +66,15 @@ function copyRows(hippoRoot: string): CopiedRows {
 /** As hippo.db: a level 2 or 3 summary of the same tenant, live and clean, flips to dirty with one audit row. */
 function markParentDirty(tx: Tx, parentId: string, tenantId: string, actor: string): void {
   const parent = tx.rows.get(parentId);
-  if (!parent || parent.tenantId !== tenantId || (parent.dag_level !== 2 && parent.dag_level !== 3)) return;
-  if ((parent.summary_dirty ?? 0) !== 0 || parent.kind === 'archived') return;
-  tx.rows.set(parentId, { ...parent, summary_dirty: 1 });
+  if (!parent || parent.tenant_id !== tenantId || (parent.dag_level !== 2 && parent.dag_level !== 3)) return;
+  if (parent.summary_dirty === true || parent.kind === 'archived') return;
+  tx.rows.set(parentId, { ...parent, summary_dirty: true });
   tx.audit.push({ tenantId, actor, op: 'summary_marked_dirty', targetId: parentId, metadata: { dag_level: parent.dag_level, source: 'E2' } });
 }
 
 function inReach(tx: Tx, target: EntryTarget, id: string): MemoryEntry {
   const row = tx.rows.get(id);
-  if (!row || row.tenantId !== target.tenantId || !ownScopeTouches(target.ownScope, row.scope)) {
+  if (!row || row.tenant_id !== target.tenantId || !ownScopeTouches(target.ownScope, row.scope)) {
     throw new NotFoundError(`memory not found: ${id}`);
   }
   return row;
@@ -91,16 +91,16 @@ export function inMemoryEntryWritesStore(hippoRoot: string): InMemoryEntryWrites
   /** An id another tenant holds is refused; a same-id write that keeps its content passes a tombstone, one that brings it in is refused. */
   const put = (tx: Tx, entry: MemoryEntry, actor: string): void => {
     const stored = tx.rows.get(entry.id);
-    if (stored && stored.tenantId !== entry.tenantId) throw new ConflictError(`Memory ${entry.id} belongs to another tenant`);
+    if (stored && stored.tenant_id !== entry.tenant_id) throw new ConflictError(`Memory ${entry.id} belongs to another tenant`);
     const digest = rejectionDigest(entry.content);
-    const tombstone = tombstones.get(tombstoneKey(entry.tenantId, digest));
+    const tombstone = tombstones.get(tombstoneKey(entry.tenant_id, digest));
     const keepsContent = stored !== undefined && rejectionDigest(stored.content) === digest;
     if (tombstone && !keepsContent) {
-      throw new RejectedValueError({ digest, tenantId: entry.tenantId, entryId: entry.id, reason: tombstone.reason, rejectedAt: tombstone.rejectedAt });
+      throw new RejectedValueError({ digest, tenantId: entry.tenant_id, entryId: entry.id, reason: tombstone.reason, rejectedAt: tombstone.rejectedAt });
     }
-    tx.rows.set(entry.id, { ...structuredClone(entry), origin_project: entry.origin_project ?? null, summary_dirty: stored?.summary_dirty ?? 0 });
-    tx.audit.push({ tenantId: entry.tenantId, actor, op: 'remember', targetId: entry.id, metadata: { kind: entry.kind ?? 'distilled', scope: entry.scope ?? null } });
-    if (entry.dag_parent_id) markParentDirty(tx, entry.dag_parent_id, entry.tenantId, actor);
+    tx.rows.set(entry.id, { ...structuredClone(entry), origin_project: entry.origin_project ?? null, summary_dirty: stored?.summary_dirty ?? false });
+    tx.audit.push({ tenantId: entry.tenant_id, actor, op: 'remember', targetId: entry.id, metadata: { kind: entry.kind ?? 'distilled', scope: entry.scope ?? null } });
+    if (entry.dag_parent_id) markParentDirty(tx, entry.dag_parent_id, entry.tenant_id, actor);
   };
 
   /** Commits the rows and audit rows only when fn returns; a refusal still gets its row, written after the drop. */
@@ -134,8 +134,8 @@ export function inMemoryEntryWritesStore(hippoRoot: string): InMemoryEntryWrites
     if (row.kind !== 'raw') throw new BadRequestError(`memory ${row.id} is not raw (kind=${row.kind})`);
     const archivedAt = new Date().toISOString();
     tx.rows.delete(row.id);
-    tx.audit.push({ tenantId: row.tenantId, actor, op: 'archive_raw', targetId: row.id, metadata: { reason } });
-    if (row.dag_parent_id) markParentDirty(tx, row.dag_parent_id, row.tenantId, actor);
+    tx.audit.push({ tenantId: row.tenant_id, actor, op: 'archive_raw', targetId: row.id, metadata: { reason } });
+    if (row.dag_parent_id) markParentDirty(tx, row.dag_parent_id, row.tenant_id, actor);
     return { memoryId: row.id, archivedAt, reason, archivedBy: actor };
   };
 
@@ -151,7 +151,7 @@ export function inMemoryEntryWritesStore(hippoRoot: string): InMemoryEntryWrites
   };
 
   const rawIdsFor: InMemoryEntryWritesStore['rawIdsFor'] = (artifactRef, tenantId) =>
-    [...memories.values()].filter((e) => e.artifact_ref === artifactRef && e.tenantId === tenantId && e.kind === 'raw').map((e) => e.id);
+    [...memories.values()].filter((e) => e.artifact_ref === artifactRef && e.tenant_id === tenantId && e.kind === 'raw').map((e) => e.id);
 
   const archiveAllWith: InMemoryEntryWritesStore['archiveAllWith'] = async (ids, by, companion) => {
     const rows = await inTx(by.actor, (tx) => {
@@ -173,7 +173,7 @@ export function inMemoryEntryWritesStore(hippoRoot: string): InMemoryEntryWrites
         const applied: string[] = [];
         for (const id of ids) {
           const row = tx.rows.get(id);
-          if (!row || row.tenantId !== tenantId || !ownScopeTouches(ownScope, row.scope)) continue;
+          if (!row || row.tenant_id !== tenantId || !ownScopeTouches(ownScope, row.scope)) continue;
           put(tx, entryAfterOutcome(row, good), actor);
           tx.audit.push({ tenantId, actor, op: 'outcome', targetId: id, metadata: { good } });
           applied.push(id);
@@ -199,8 +199,8 @@ export function inMemoryEntryWritesStore(hippoRoot: string): InMemoryEntryWrites
         // hippo.db's trigger message, so the dashboard and CLI match it the same way under either store.
         if (row.kind === 'raw') throw new Error('raw is append-only');
         tx.rows.delete(removal.id);
-        tx.audit.push({ tenantId: row.tenantId, actor: removal.actor, op: 'forget', targetId: removal.id });
-        if (row.dag_parent_id) markParentDirty(tx, row.dag_parent_id, row.tenantId, removal.actor);
+        tx.audit.push({ tenantId: row.tenant_id, actor: removal.actor, op: 'forget', targetId: removal.id });
+        if (row.dag_parent_id) markParentDirty(tx, row.dag_parent_id, row.tenant_id, removal.actor);
       });
       forgotten += 1;
     },
@@ -210,7 +210,7 @@ export function inMemoryEntryWritesStore(hippoRoot: string): InMemoryEntryWrites
     ...base.store,
     async entriesByIds(ids, tenantId) {
       const wanted = new Set(ids.slice(0, 500));
-      const rows = [...memories.values()].filter((e) => wanted.has(e.id) && (tenantId === undefined || e.tenantId === tenantId));
+      const rows = [...memories.values()].filter((e) => wanted.has(e.id) && (tenantId === undefined || e.tenant_id === tenantId));
       const cmp = (x: string, y: string): number => (x < y ? -1 : x > y ? 1 : 0);
       return structuredClone(rows.sort((a, b) => cmp(a.created, b.created) || cmp(a.content, b.content) || cmp(a.id, b.id)));
     },

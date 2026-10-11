@@ -24,7 +24,7 @@ const BANNED = 'the launch date is march third';
 const EMPTY_EVENT = 'Ev_seeded_without_a_memory';
 const PUBLIC_REPO = 'github:public:acme/demo';
 
-type Row = Pick<MemoryEntry, 'id' | 'tenantId' | 'kind' | 'scope' | 'content' | 'origin_project'>;
+type Row = Pick<MemoryEntry, 'id' | 'tenant_id' | 'kind' | 'scope' | 'content' | 'origin_project'>;
 type Value = ConnectorWriteOutcome | string | Row[];
 type Call = GroupCall<'connectorWrites', Value>;
 
@@ -88,7 +88,7 @@ async function conforms(calls: readonly Call[]): Promise<Side> {
 }
 
 const project = (entries: MemoryEntry[]): Row[] => entries.map((e) => ({
-  id: e.id, tenantId: e.tenantId, kind: e.kind, scope: e.scope, content: e.content, origin_project: e.origin_project,
+  id: e.id, tenant_id: e.tenant_id, kind: e.kind, scope: e.scope, content: e.content, origin_project: e.origin_project,
 }));
 const readBack = (tenantId: string, ...ids: string[]): Call => async (_g, store) => project(await store.entriesByIds(ids, tenantId));
 const fresh = (content: string, extra: Parameters<typeof createMemory>[1] = {}): MemoryEntry =>
@@ -107,7 +107,7 @@ const newEvents = (side: Side): LoggedEvent[] => side.events.filter((row) => row
 const logged = (event: ConnectorEvent, memoryId: string): LoggedEvent => (event.connector === 'slack'
   ? { connector: 'slack', eventKey: event.eventId, memoryId, deliveryId: null, eventName: null, loggedAt: NOW }
   : { connector: 'github', eventKey: event.idempotencyKey, memoryId, deliveryId: event.deliveryId, eventName: event.eventName, loggedAt: NOW });
-const remembered = (e: MemoryEntry) => ({ tenantId: e.tenantId, actor: ACTOR, op: 'remember', targetId: e.id, metadata: { kind: e.kind, scope: e.scope } });
+const remembered = (e: MemoryEntry) => ({ tenantId: e.tenant_id, actor: ACTOR, op: 'remember', targetId: e.id, metadata: { kind: e.kind, scope: e.scope } });
 const archivedRow = (id: string) => ({ tenantId: TENANT_A, actor: ACTOR, op: 'archive_raw', targetId: id, metadata: { reason: 'source deleted' } });
 const WRITTEN = { value: { outcome: 'written' } };
 
@@ -207,7 +207,7 @@ describe('ConnectorWrites.writeConnectorEntry', () => {
     expect(side.outcomes[1]).toMatchObject({ error: expect.stringMatching(/^RejectedValueError: Memory value refused/) });
     expect(side.outcomes[2]).toEqual({ error: `ConflictError: Memory ${noteB.id} belongs to another tenant` });
     expect(side.outcomes[3]).toMatchObject({ error: expect.stringMatching(/^RejectedValueError: Memory value refused/) });
-    expect(side.outcomes[4]).toMatchObject({ value: [{ id: noteB.id, tenantId: TENANT_B, content: noteB.content }] });
+    expect(side.outcomes[4]).toMatchObject({ value: [{ id: noteB.id, tenant_id: TENANT_B, content: noteB.content }] });
     expect(newEvents(side)).toEqual([logged(slack('Ev_taken'), ok.id)]);
     expect(side.records).toEqual([]);
     expect(added(side).map((r) => [r.op, r.targetId])).toEqual([['remember', ok.id], ['reject_refusal', bannedReplay.id], ['reject_refusal', bannedNew.id]]);
@@ -233,7 +233,7 @@ describe('ConnectorWrites.archiveConnectorEntry', () => {
       { error: 'NotFoundError: memory not found: mem_missing' },
       { error: `BadRequestError: memory ${note.id} is not raw (kind=distilled)` },
     ]);
-    expect(side.outcomes[3]).toMatchObject({ value: [{ id: rawB.id, tenantId: TENANT_B, kind: 'raw' }] });
+    expect(side.outcomes[3]).toMatchObject({ value: [{ id: rawB.id, tenant_id: TENANT_B, kind: 'raw' }] });
     expect([newEvents(side), added(side)]).toEqual([[], []]);
   });
 

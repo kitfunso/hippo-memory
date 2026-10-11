@@ -282,7 +282,7 @@ export function loadEntriesMentioning(hippoRoot: string, tokens: readonly string
 
 export interface EntryTextKey {
   id: string;
-  tenantId: string;
+  tenant_id: string;
   content: string;
   source: string;
 }
@@ -295,7 +295,7 @@ export function loadEntryTextKeys(hippoRoot: string, tenantId?: string): EntryTe
     const rows = db.prepare(`SELECT id, tenant_id, content, source FROM memories ${where}ORDER BY created ASC, id ASC`)
       .all(...(tenantId !== undefined ? [tenantId] : [])) as
       Array<{ id: string; tenant_id: string | null; content: string; source: string }>;
-    return rows.map((row) => ({ id: row.id, tenantId: row.tenant_id ?? DEFAULT_TENANT_ID, content: row.content, source: row.source }));
+    return rows.map((row) => ({ id: row.id, tenant_id: row.tenant_id ?? DEFAULT_TENANT_ID, content: row.content, source: row.source }));
   }, openStore);
 }
 

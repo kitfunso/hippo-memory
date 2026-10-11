@@ -43,7 +43,7 @@ describe('invalidateMatching without onlyId', () => {
       tagOnly: memory('nothing in the text', { tags: ['Zephyrine Cache'] }),
       pinned: memory('pinned zephyrine cache note', { pinned: true }),
     };
-    const misses = [memory('zephyrines and caches differ'), memory('acme zephyrine cache', { tenantId: 'acme' })];
+    const misses = [memory('zephyrines and caches differ'), memory('acme zephyrine cache', { tenant_id: 'acme' })];
     writeEntriesTogether(root, [...padding(n), ...Object.values(hits), ...misses]);
     return { root, hits };
   }
@@ -111,7 +111,7 @@ describe('countAllMemories', () => {
   it('counts every tenant\'s rows without reading them', () => {
     const read = [10, 200].map((n) => {
       const root = newRoot('bounded-count');
-      writeEntriesTogether(root, [...padding(n), memory('acme row', { tenantId: 'acme' })]);
+      writeEntriesTogether(root, [...padding(n), memory('acme row', { tenant_id: 'acme' })]);
       const ctx = { hippoRoot: root, tenantId: 'default', actor: adminActor('test:count') };
       const { result, rowsRead } = recordStatements(() => countAllMemories(ctx));
       expect(result).toBe(n + 1);

@@ -109,7 +109,7 @@ const ALICE_A: ContinuityKey = { owner: 'alice', project: ['proj-a'] };
 
 /** A second tenant where alice and bob share proj-a and alice also works in proj-b, so each narrowed read has rows to skip. */
 function seedTeam(root: string): void {
-  const team = (content: string, id: string, created: string, extra: Partial<MemoryEntry>) => seeded(content, id, created, { tenantId: TEAM, ...extra });
+  const team = (content: string, id: string, created: string, extra: Partial<MemoryEntry>) => seeded(content, id, created, { tenant_id: TEAM, ...extra });
   const rows = [
     team('lighthouse runbook for project a', 'mem_t_a', '2026-01-20T00:00:00.000Z', { origin_project: 'proj-a' }),
     team('lighthouse runbook for project b', 'mem_t_b', '2026-01-20T00:00:00.000Z', { origin_project: 'proj-b' }),

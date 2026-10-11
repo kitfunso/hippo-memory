@@ -27,7 +27,7 @@ function makeRaw(text: string, sessionId: string, opts: Partial<MemoryEntry> = {
     confidence: 'observed',
     kind: 'raw',
     scope: opts.scope ?? null,
-    tenantId: opts.tenantId ?? 'default',
+    tenantId: opts.tenant_id ?? 'default',
     source_session_id: sessionId,
     tags: opts.tags ?? [],
     dag_level: opts.dag_level ?? 0,
@@ -46,7 +46,7 @@ function makeSummary(text: string, opts: Partial<MemoryEntry> = {}): MemoryEntry
     dag_level: 2,
     tags: ['dag-summary'],
     scope: opts.scope ?? null,
-    tenantId: opts.tenantId ?? 'default',
+    tenantId: opts.tenant_id ?? 'default',
   });
   return s;
 }
@@ -67,7 +67,7 @@ describe('loadSessionRawMemories', () => {
     b.created = '2026-01-02T00:00:00.000Z';
     const c = makeRaw('third message text', 'sess-b');
     c.created = '2026-01-03T00:00:00.000Z';
-    const d = makeRaw('other tenant content', 'sess-a', { tenantId: 'other' });
+    const d = makeRaw('other tenant content', 'sess-a', { tenant_id: 'other' });
     d.created = '2026-01-04T00:00:00.000Z';
     [a, b, c, d].forEach((e) => writeEntry(root, e));
     const got = loadSessionRawMemories(root, 'sess-a', 'default');
@@ -173,7 +173,7 @@ describe('api.assemble', () => {
   });
 
   it('6. tenant isolation: rows from another tenant are not loaded', async () => {
-    const e = makeRaw('cross tenant content', 'sess-x', { tenantId: 'other' });
+    const e = makeRaw('cross tenant content', 'sess-x', { tenant_id: 'other' });
     writeEntry(root, e);
     const r = await assemble(ctxFor(root, 'default'), 'sess-x');
     expect(r.items).toEqual([]);

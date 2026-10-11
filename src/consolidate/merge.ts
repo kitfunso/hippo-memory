@@ -26,7 +26,7 @@ export function retireHeldTexts(run: SleepRun): void {
     run.tombstones.find(tenantId, rejectionDigest(text)) !== null;
   for (let i = survivors.length - 1; i >= 0; i--) {
     const row = survivors[i];
-    const successor = run.retirable(row) ? successorAfterRetirement(row, byId, rejectedIn(row.tenantId)) : undefined;
+    const successor = run.retirable(row) ? successorAfterRetirement(row, byId, rejectedIn(row.tenant_id)) : undefined;
     if (successor === undefined) continue;
     run.result.details.push(`  ✂️  ${row.id} held a retired text${successor ? `, ${successor.id} holds the rest` : ''}`);
     if (run.dryRun) continue;
@@ -62,7 +62,7 @@ function partitionMergeCandidates(survivors: readonly MemoryEntry[]): Map<string
   // Map keeps insertion order, so a single-tenant store gets one partition in the original order.
   const mergeCandidatesByTenant = new Map<string, MemoryEntry[]>();
   for (const entry of mergeCandidates) {
-    const key = derivationPartitionKey(entry.tenantId, entry.scope, entry.origin_project);
+    const key = derivationPartitionKey(entry.tenant_id, entry.scope, entry.origin_project);
     const bucket = mergeCandidatesByTenant.get(key);
     if (bucket) bucket.push(entry);
     else mergeCandidatesByTenant.set(key, [entry]);
@@ -81,7 +81,7 @@ export function mergePass(run: SleepRun): number {
   let mergesSkippedRejected = 0;
   for (const [, tenantCandidates] of mergeCandidatesByTenant) {
     const partition: MergePartition = {
-      tenantId: tenantCandidates[0].tenantId,
+      tenantId: tenantCandidates[0].tenant_id,
       scope: derivationScope(tenantCandidates[0].scope),
       origin: tenantCandidates[0].origin_project,
     };
@@ -176,8 +176,8 @@ function mergeRejected(run: SleepRun, semantic: MemoryEntry, cluster: MemoryEntr
   const { tombstones } = run;
   const newDigest = rejectionDigest(semantic.content);
   const oldDigest = rejectionDigest(legacyMergeContents(related)); // tombstones from older releases hold this format's digest
-  const newHit = tombstones.find(semantic.tenantId, newDigest);
-  const tombstone = newHit ?? tombstones.find(semantic.tenantId, oldDigest);
+  const newHit = tombstones.find(semantic.tenant_id, newDigest);
+  const tombstone = newHit ?? tombstones.find(semantic.tenant_id, oldDigest);
   const mergeDigest = newHit ? newDigest : oldDigest;
   if (!tombstone) return false;
   // Still mark used: these members are not re-tried against a different cluster in this pass; the next sleep re-clusters them fresh.
@@ -185,7 +185,7 @@ function mergeRejected(run: SleepRun, semantic: MemoryEntry, cluster: MemoryEntr
   for (const e of rejected) used.add(e.id);
   try {
     tombstones.audit({
-      tenantId: semantic.tenantId,
+      tenantId: semantic.tenant_id,
       actor: 'sleep',
       op: 'reject_refusal',
       metadata: {

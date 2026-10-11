@@ -27,7 +27,7 @@ function makeRaw(text: string, opts: Partial<MemoryEntry> = {}): MemoryEntry {
     confidence: 'observed',
     kind: 'raw',
     scope: opts.scope ?? null,
-    tenantId: opts.tenantId ?? 'default',
+    tenantId: opts.tenant_id ?? 'default',
     tags: opts.tags ?? [],
   });
 }
@@ -94,8 +94,8 @@ describe('fresh-tail recall', () => {
   });
 
   it('5. fresh-tail respects tenant isolation', async () => {
-    writeEntry(root, makeRaw('default tenant row', { tenantId: 'default' }));
-    writeEntry(root, makeRaw('other tenant row', { tenantId: 'other' }));
+    writeEntry(root, makeRaw('default tenant row', { tenant_id: 'default' }));
+    writeEntry(root, makeRaw('other tenant row', { tenant_id: 'other' }));
     const r = await retrieve(ctxFor(root, 'default'), {
       query: 'unmatched',
       freshTailCount: 10,

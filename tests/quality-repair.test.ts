@@ -228,7 +228,7 @@ describe('recoverable automatic memory quality repair', () => {
 
   it('does not disclose the source text in its report and scopes repair to one tenant', () => {
     const mine = seed('succeeds (inserts or updates)');
-    const other = seed(mine.content, { tenantId: 'other' });
+    const other = seed(mine.content, { tenant_id: 'other' });
     const result = run(true);
     expect(result.appliedIds).toEqual([mine.id]);
     expect(JSON.stringify(result)).not.toContain(mine.content);

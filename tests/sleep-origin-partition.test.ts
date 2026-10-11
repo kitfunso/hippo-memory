@@ -74,7 +74,7 @@ describe('sleep partitions by origin project', () => {
     const never = rule('never alpha beta gamma zeta', 'proj-c', 'c');
     expect(detectConflicts([always, never], now)).toEqual([]);
     expect(detectConflicts([always, { ...never, origin_project: '' }], now)).toHaveLength(1);
-    expect(detectConflicts([always, { ...never, origin_project: 'proj-b', tenantId: 'other' }], now)).toEqual([]);
+    expect(detectConflicts([always, { ...never, origin_project: 'proj-b', tenant_id: 'other' }], now)).toEqual([]);
   });
 
   it('facts extracted from a project row stay in that project; from an unknown row they stay unknown', () => {

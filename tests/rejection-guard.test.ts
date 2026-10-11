@@ -232,7 +232,7 @@ describe('rejection guard', () => {
 
       const after = readEntry(home, summary.id)!;
       expect(after.content).toBe('old summary content');
-      expect(after.summary_dirty).toBe(0);
+      expect(after.summary_dirty).toBe(false);
       expect(after.rebuild_count).toBe(0);
       expect(after.descendant_count).toBe(3); // metadata DID apply
 
@@ -281,7 +281,7 @@ describe('rejection guard', () => {
       initStore(home);
       // Content lives quietly in tenant A — never rejected there.
       const entry = createMemory('shared content across a tenant move', { layer: Layer.Episodic });
-      entry.tenantId = 'tenant-a';
+      entry.tenant_id = 'tenant-a';
       writeEntry(home, entry);
       expect(readEntry(home, entry.id, 'tenant-a')).not.toBeNull();
 
@@ -301,7 +301,7 @@ describe('rejection guard', () => {
       }
 
       // Same id, SAME content — only tenantId changes A -> B.
-      const moved = { ...entry, tenantId: 'tenant-b' };
+      const moved = { ...entry, tenant_id: 'tenant-b' };
       expect(() => writeEntry(home, moved)).toThrow(RejectedValueError);
 
       // The row stays in tenant A, untouched.
