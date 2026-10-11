@@ -199,7 +199,7 @@ export function errorRepeated(text, seenErrors) {
   return false;
 }
 
-/** Every Bash and PowerShell command in the transcripts, file by file in order: what a checker reads through Z0_COMMANDS. */
+/** Every Bash and PowerShell command in the transcripts, file by file in order: what a checker reads through CHECK_COMMANDS. */
 export function commandLog(files) {
   const commands = [];
   for (const block of toolBlocks(files)) {

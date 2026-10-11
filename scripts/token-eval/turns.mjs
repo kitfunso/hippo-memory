@@ -139,7 +139,7 @@ function restoreWork(run, snap, sessionId) {
     rgit(['clean', '-ffdq'], work, env);
   });
   restoreInstructions(work, snap.instructions);
-  // Subagent transcripts too, so a cut-off attempt's subagent commands never reach Z0_COMMANDS.
+  // Subagent transcripts too, so a cut-off attempt's subagent commands never reach CHECK_COMMANDS.
   for (const f of transcriptsOf(run, sessionId)) if (!snap.transcripts.has(f)) fs.rmSync(f);
   for (const [f, bytes] of snap.transcripts) fs.writeFileSync(f, bytes);
 }

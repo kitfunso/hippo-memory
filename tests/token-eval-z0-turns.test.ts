@@ -251,7 +251,7 @@ describe('Z0 lesson tasks end to end (fake Claude Code)', () => {
         expect('scored' in x).toBe(false);
       }
     }
-    // Z0_COMMANDS: session one's commands at the first check, then the correction turn's too at the final check.
+    // CHECK_COMMANDS: session one's commands at the first check, then the correction turn's too at the final check.
     const a1Checks = checkLog(log).filter((c) => c.commands.includes('npm run lint'));
     expect(a1Checks).toHaveLength(10);
     for (const c of a1Checks) expect(c.commands.slice(0, 2)).toEqual(['git status && cat lib.js', 'npm run lint']);
@@ -270,7 +270,7 @@ describe('Z0 lesson tasks end to end (fake Claude Code)', () => {
     expect(logLines(log)).toEqual([]);
   }, 120_000);
 
-  it('a checker diffs Z0_PRE_COMMIT against Z0_POST_COMMIT: unstaged new files count, runner writes never do', async () => {
+  it('a checker diffs CHECK_PRE_COMMIT against CHECK_POST_COMMIT: unstaged new files count, runner writes never do', async () => {
     const { out } = isolate('diff');
     const r = makeRepo();
     const want = family('f1', [lesson('f1-l1', 'Add a changelog fragment', { check: { script: 'diff.mjs', args: ['want=changelog.d/x.md'] } })]);
@@ -484,7 +484,7 @@ describe('an instruction file the agent leaves above work/', () => {
 });
 
 describe('session evidence', () => {
-  it('Z0_COMMANDS and the work counts take in subagent transcripts', async () => {
+  it('CHECK_COMMANDS and the work counts take in subagent transcripts', async () => {
     const { out, log } = isolate('subagent');
     const r = makeRepo();
     const s = spec(r, [family('f1', [lesson('f1-l1', 'Write the lesson file')])], [
@@ -630,7 +630,7 @@ describe('usage limits around resumes', () => {
     expect(logs.some((m) => /runner git on the agent's workspace failed/.test(m))).toBe(true);
   }, 120_000);
 
-  it('a session-1 retry rebuilds Z0_PRE_COMMIT, and the held ref keeps nothing reachable after the task', async () => {
+  it('a session-1 retry rebuilds CHECK_PRE_COMMIT, and the held ref keeps nothing reachable after the task', async () => {
     const { out, log } = isolate('retry');
     const r = makeRepo();
     const newer = stubBaseCommit(r.repo, r.fix);
@@ -642,7 +642,7 @@ describe('usage limits around resumes', () => {
     await run(s, ['A2'], out, { limitWaitMs: 0, log: (m: string) => said.push(m) });
     const t1 = find(readRecords(out), 'A2', 't1');
     expect(t1).toMatchObject({ invalid: null, limitRetries: 1, baseCommit: newer, lessons: [{ first: 'fail', final: 'pass' }] });
-    expect(said.some((m) => /t1 A2 seed1: Z0_PRE_COMMIT rebuilt/.test(m))).toBe(true);
+    expect(said.some((m) => /t1 A2 seed1: CHECK_PRE_COMMIT rebuilt/.test(m))).toBe(true);
     expect(seen(out, 'A2', 't1')['CLAUDE.md']).toContain('hippo:start');
     const checks = checkLog(log);
     for (const c of checks) expect(c.preRef).toBe(c.pre);

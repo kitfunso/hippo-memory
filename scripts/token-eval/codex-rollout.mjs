@@ -236,7 +236,7 @@ export function parseRollouts(files) {
 
 const strip = ({ file, name, input }) => ({ file, name, input });
 
-/** The Claude parsers' shapes over rollouts, so the read check, Z0_COMMANDS and the work counts run unchanged. */
+/** The Claude parsers' shapes over rollouts, so the read check, CHECK_COMMANDS and the work counts run unchanged. */
 export const codexAdapter = {
   toolInputs: (files) => parseRollouts(files).tools.map(strip),
   toolResultTexts: (files) => parseRollouts(files).outputs.map(({ file, text }) => ({ file, text })),

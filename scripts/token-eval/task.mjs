@@ -78,7 +78,7 @@ function ancestorFiles(ctx, run, name) {
 
 const ancestorHits = (ctx, run, t) => ancestorFiles(ctx, run, `${t.id}.ancestor.txt`).length > 0;
 
-/** Every runner write before the session, then Z0_PRE_COMMIT over all of it and the surface snapshot; `failed` when setup failed. */
+/** Every runner write before the session, then CHECK_PRE_COMMIT over all of it and the surface snapshot; `failed` when setup failed. */
 function stageTask(ctx, run, step) {
   const { t } = step;
   const work = run.dirs.work;
@@ -111,7 +111,7 @@ function stageTask(ctx, run, step) {
   return stage;
 }
 
-/** The session-1 usage-limit reset: the checkout, every memory surface and every runner write back, without rerunning init, and a fresh Z0_PRE_COMMIT. */
+/** The session-1 usage-limit reset: the checkout, every memory surface and every runner write back, without rerunning init, and a fresh CHECK_PRE_COMMIT. */
 function resetTask(ctx, run, t, stage) {
   const work = run.dirs.work;
   const again = stage.prepare().setup;
@@ -123,7 +123,7 @@ function resetTask(ctx, run, t, stage) {
   // The cut-off attempt's transcript stays (prereg 113), so it must never be taken for the rerun's.
   stage.transcriptsBefore = new Set(listTranscripts(projectsOf(run)));
   stage.ancestors ||= ancestorHits(ctx, run, t);
-  ctx.log(`${cellName(run, t)}: Z0_PRE_COMMIT rebuilt after the usage-limit reset`);
+  ctx.log(`${cellName(run, t)}: CHECK_PRE_COMMIT rebuilt after the usage-limit reset`);
 }
 
 /** Run every lesson check through one door, so a broken checker is kept once and never read as a verdict. */
