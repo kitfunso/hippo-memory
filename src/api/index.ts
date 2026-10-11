@@ -13,7 +13,6 @@ export type { FailureSummary } from '../store/failure-log.js';
 // classifyOriginProject lives in project-identity.ts (leaf) for the same reason.
 export { classifyOriginProject } from '../core/project-identity.js';
 
-export * from './loss-aversion.js';
 export * from './types.js';
 export * from './remember.js';
 export * from './remember-local.js';
