@@ -1,7 +1,7 @@
 /** Auto-learn from errors and git history.
  *  Agents learn from failures without explicit hippo remember calls. */
 
-import { execSync, execFileSync, spawn } from 'child_process';
+import { execFileSync, spawn } from 'child_process';
 import { MemoryEntry, createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../core/memory.js';
 import { loadAllEntries } from '../store/entry-reads.js';
 import { textOverlap } from '../util/tokenize.js';
@@ -151,7 +151,7 @@ export function runWatched(command: string): Promise<{ exitCode: number; stderr:
 /** Check whether a directory is a git work tree. */
 export function isGitRepo(cwd: string): boolean {
   try {
-    const raw = execSync('git rev-parse --is-inside-work-tree', {
+    const raw = execFileSync('git', ['rev-parse', '--is-inside-work-tree'], {
       encoding: 'utf8',
       cwd,
       timeout: 10000,
