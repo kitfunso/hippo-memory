@@ -10,27 +10,27 @@ const STATS_DECIMALS = 4;
 const SLEEP_PHYSICS_MAX_PARTICLES = 1000;
 
 // 2. Physics simulation pass
-export function physicsPass(run: SleepRun): void {
+export function physicsPass(run: SleepRun, maxParticles: number = SLEEP_PHYSICS_MAX_PARTICLES): void {
   if (run.dryRun) return;
   const { config, result } = run;
   try {
     const physicsEnabled = config.physics.enabled === true
       || (config.physics.enabled === 'auto');
 
-    if (physicsEnabled) simulateStoredParticles(run);
+    if (physicsEnabled) simulateStoredParticles(run, maxParticles);
   } catch (error) {
     result.details.push(`  ⚠️ physics simulation skipped: ${errorMessage(error)}`);
   }
 }
 
-function simulateStoredParticles(run: SleepRun): void {
+function simulateStoredParticles(run: SleepRun, maxParticles: number): void {
   const { result, survivors } = run;
   const stored = loadStoredParticles(run.hippoRoot);
   if (stored.length === 0) return;
 
   // Build entry lookup for property refresh
   const entryMap = new Map(survivors.map(e => [e.id, e]));
-  const particles = particlesToSimulate(stored, entryMap);
+  const particles = particlesToSimulate(stored, entryMap, maxParticles);
   refreshParticleProperties(particles, entryMap, run.now);
 
   const stats = simulate(particles, survivorForces(run));
