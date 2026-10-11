@@ -2,7 +2,7 @@
 // The sleep module alone: the api barrel loads far more than one sleep needs, and every sleep pays for the start.
 import { sleep } from '../api/sleep.js';
 import { runWithRequestStores, SERVER_DB_WAIT_MS } from '../db/index.js';
-import { isStoreBusy } from '../store/port.js';
+import { isStoreBusy } from '../store/sqlite/busy.js';
 import { errorFields, errorMessage, log } from '../util/log.js';
 import type { SleepJob, SleepReply } from './sleep-offload.js';
 

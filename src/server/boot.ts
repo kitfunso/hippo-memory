@@ -3,7 +3,7 @@ import type { IncomingMessage, Server, ServerResponse } from 'node:http';
 import { detectServer, removePidfileIfOwned, writePidfile } from './server-detect.js';
 import { outsideSqliteOffLoop, runWithRequestStores, SERVER_DB_WAIT_MS, withSqliteBlocked } from '../db/index.js';
 import { requireGroup, type HippoStore } from '../store/index.js';
-import { isStoreBusy } from '../store/port.js';
+import { isStoreBusy } from '../store/sqlite/busy.js';
 import { holdSqliteConnection, type StoreHolder } from '../store/sqlite/held-connection.js';
 import { workerSqliteStore } from '../store/sqlite/worker-store.js';
 import { markSharedStore } from '../core/config.js';

@@ -7,8 +7,7 @@ import { rankRecall, type RankRecallResult } from './recall-pipeline.js';
 import { writeRecallTraceAtRoot } from '../store/recall-trace.js';
 import type { SearchResult } from '../core/search-types.js';
 import { saveIndex } from '../store/index-and-stats.js';
-import { sqliteStore, type HippoStore, type RecallWrites } from '../store/index.js';
-import { estimateTokens } from '../util/token-text.js';
+import { sqliteStore, storeFor, type HippoStore, type RecallWrites } from '../store/index.js';import { estimateTokens } from '../util/token-text.js';
 import { callerOf, recallAuditMetadata, recallAuditRow, strengthenOf } from './recall-record.js';
 import { RECALL_RECORDING, recordShownRecall } from './recall-finish.js';
 import type { CliCoreRanker, CliCoreRecall, RecallOpts, RecallResult, ShownCliCore } from './recall-types.js';
@@ -21,8 +20,8 @@ export async function retrieveWithCliCore(ctx: Context, opts: RecallOpts, core: 
   // This ranker applies the operator's scope rule and may search a second store, so no bearer client may reach it.
   if (!ctx.actor.hostAdmin) throw new ForbiddenError('The CLI ranking core serves the host admin only');
   const globalRoot = core.sources?.globalRoot;
-  // The ranking core reads hippo.db itself, so its writes go to the same file whatever store the context names.
-  const store = sqliteStore(ctx.hippoRoot);
+  // The ranking core reads hippo.db under hippoRoot, yet writes through the caller's store, whose finishRecall skips any id it does not hold.
+  const store = storeFor(ctx);
   const ranking = await rankRecall(
     { hippoRoot: ctx.hippoRoot, globalRoot, tenantId: ctx.tenantId, note: core.note },
     { ...core.rank, query: opts.query, sessionId: opts.sessionId, goalTag: opts.goalTag },

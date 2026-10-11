@@ -2,7 +2,8 @@
 
 import { loadAllEntries } from '../store/entry-reads.js';
 import { memoriesBackingObjects } from '../store/delete-and-batch.js';
-import { reportAuditWriteFailure, auditMemories } from '../store/audit.js';
+import { reportAuditWriteFailure } from '../store/audit.js';
+import { auditMemories } from '../core/memory-audit.js';
 import { sqliteSyncStore } from '../store/sqlite/store.js';
 import { autoShare } from '../sharing/share.js';
 import { consolidate } from '../consolidate/sleep.js';

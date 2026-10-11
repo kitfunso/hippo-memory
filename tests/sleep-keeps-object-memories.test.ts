@@ -5,7 +5,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { sleep, type Context } from '../src/api/index.js';
-import { auditMemories } from '../src/store/audit.js';
+import { auditMemories } from '../src/core/memory-audit.js';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
 import { saveDecision } from '../src/objects/decisions.js';
 import { deduplicateStore } from '../src/consolidate/dedupe.js';

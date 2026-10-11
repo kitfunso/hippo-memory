@@ -1,6 +1,7 @@
 // Audit log queries and retention, and the memory-quality audit with its repair passes.
 
-import { auditMemories, pruneAuditRows, type AuditEvent, type AuditIssue, type AuditOp, type AuditResult } from '../store/audit.js';
+import { pruneAuditRows, type AuditEvent, type AuditOp } from '../store/audit.js';
+import { auditMemories, type AuditIssue, type AuditResult } from '../core/memory-audit.js';
 import { deleteEntry, memoriesBackingObjects } from '../store/delete-and-batch.js';
 import { loadAllEntries } from '../store/entry-reads.js';
 import { repairAutomaticMemories, repairQualityOnce, type QualityRepairResult } from '../store/quality-repair.js';

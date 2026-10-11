@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { assessAutomaticMemory, certainDefect, isAutomaticEntry, isContentWorthStoring, isReusable, isWorthSurfacing } from '../src/core/memory-quality.js';
-import { auditMemory } from '../src/store/audit.js';
+import { auditMemory } from '../src/core/memory-audit.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, type CreateMemoryOptions } from '../src/core/memory.js';
 import { mergedText } from '../src/util/same-text.js';
 

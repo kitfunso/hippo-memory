@@ -2,7 +2,8 @@
 
 import { truncateWithEllipsis } from '../util/ellipsize.js';
 import { DEFAULT_LIST_LIMIT } from '../util/limits.js';
-import { AUDIT_OPS, type AuditEvent, type AuditOp, type AuditResult } from '../store/audit.js';
+import { AUDIT_OPS, type AuditEvent, type AuditOp } from '../store/audit.js';
+import type { AuditResult } from '../core/memory-audit.js';
 import * as api from '../api/index.js';
 import { parseOlderThanFlag } from './audit-prune.js';
 import { printError } from './output.js';

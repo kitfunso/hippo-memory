@@ -7,7 +7,12 @@
   {
     "file": "cli.ts",
     "target": "store/port.ts",
-    "why": "maps a busy-store error to the exit message; error classification, not a store read"
+    "why": "STORE_BUSY_MESSAGE, the exit message for a busy store; a constant, not a store read"
+  },
+  {
+    "file": "cli.ts",
+    "target": "store/sqlite/busy.ts",
+    "why": "isStoreBusy picks that exit message; error classification, not a store read"
   },
   {
     "file": "cli.ts",
