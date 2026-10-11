@@ -1,14 +1,13 @@
 // The entity graph verbs: rebuild it from the consolidated objects, print it, or write it out as a diagram.
 
 import * as fs from 'fs';
-import { spawn } from 'child_process';
 import { extractGraph } from '../graph/extract.js';
 import { buildGraphModel, renderGraphHtml, renderGraphCanvas, DEFAULT_VIEW_LIMIT } from '../graph/view.js';
-import { errorMessage, log } from '../util/log.js';
 import { printError } from './output.js';
 import { type CliFlags, stringFlag, type CommandContext } from './flag-values.js';
 import { requireInit } from './shared.js';
 import { CliExit } from './exit.js';
+import { openInBrowser } from './open-browser.js';
 
 function graphExtract(hippoRoot: string, tenantId: string): void {
   const result = extractGraph(hippoRoot, tenantId);
@@ -50,26 +49,6 @@ function graphShow(hippoRoot: string, tenantId: string, entity: string | undefin
     for (const e of model.edges) {
       console.log(`  ${nameById.get(e.from)} --${e.relType}--> ${nameById.get(e.to)}`);
     }
-  }
-}
-
-function openInBrowser(out: string): void {
-  // Best-effort browser launch; never fail the command if it doesn't work.
-  try {
-    const [cmd, cmdArgs]: [string, string[]] =
-      process.platform === 'win32'
-        ? ['cmd', ['/c', 'start', '', out]]
-        : process.platform === 'darwin'
-          ? ['open', [out]]
-          : ['xdg-open', [out]];
-    const child = spawn(cmd, cmdArgs, { detached: true, stdio: 'ignore', windowsHide: true });
-    // A missing launcher (e.g. xdg-open absent) emits 'error' asynchronously; unhandled, it would throw,
-    // so swallow it: the file is already written and its path printed above.
-    child.on('error', () => { /* best-effort launch */ });
-    child.unref();
-  } catch (err) {
-    // The file is written and its path printed above, so a browser that will not start costs nothing.
-    log.debug(`browser not opened: ${errorMessage(err)}`);
   }
 }
 
