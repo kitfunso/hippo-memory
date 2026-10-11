@@ -7,7 +7,7 @@ import { initStore } from '../src/store/open.js';
 import { loadConfig } from '../src/core/config.js';
 import { openHippoDb, closeHippoDb, HOOK_DB_WAIT_MS, runWithRequestStores, SERVER_DB_WAIT_MS, type DatabaseSyncLike } from '../src/db/index.js';
 import { bookTokenUse } from '../src/api/ledger-db.js';
-import { ensurePilotArm, hashArm, readPilotArm } from '../src/api/pilot-arm.js';
+import { ensurePilotArm, hashArm, readPilotArm } from '../src/store/pilot-arm.js';
 import { recordTokenUse, summarizeTokenUse, tokensBySession } from '../src/store/token-ledger.js';
 import { runDoctor } from '../src/doctor.js';
 import type { JsonValue } from '../src/util/json.js';

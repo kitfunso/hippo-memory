@@ -9,7 +9,7 @@ import { getGlobalRoot } from '../sharing/global-store.js';
 import { loadConfig } from '../core/config.js';
 import type { Actor as ApiActor } from '../api/index.js';
 import { findHippoStoreDir, type ResolveProjectIdentityOpts } from '../core/project-identity.js';
-import { isStoreBusy, STORE_BUSY_MESSAGE } from '../db/index.js';
+import { isStoreBusy, STORE_BUSY_MESSAGE } from '../store/port.js';
 import { type JsonValue } from '../util/json.js';
 import type { CallerProject } from '../api/prompt-hook.js';
 import type { HippoStore } from '../store/index.js';

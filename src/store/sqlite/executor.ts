@@ -2,7 +2,8 @@
 import { fileURLToPath } from 'node:url';
 import { SHARE_ENV, Worker } from 'node:worker_threads';
 import { addAuditWriteFailures } from '../audit.js';
-import { getHippoDbPath, SERVER_DB_WAIT_MS, StoreBusyError } from '../../db/index.js';
+import { getHippoDbPath, SERVER_DB_WAIT_MS } from '../../db/index.js';
+import { StoreBusyError } from '../port.js';
 import { autoCheckpointPages } from '../../db/wal-checkpointer.js';
 import { envStoreQueueMax } from '../../util/env.js';
 import { DeadlineExceededError } from '../../util/http-util.js';

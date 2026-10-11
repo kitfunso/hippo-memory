@@ -2,7 +2,8 @@
 import { describe, it, expect } from 'vitest';
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '../src/core/api-errors.js';
 import { RawAppendOnlyError } from '../src/core/raw-append-only.js';
-import { IncompatibleBinaryError, StoreBusyError } from '../src/db/index.js';
+import { IncompatibleBinaryError } from '../src/db/index.js';
+import { StoreBusyError } from '../src/store/port.js';
 import { BodyTimeoutError, BodyTooLargeError, HttpError } from '../src/util/http-util.js';
 import { ScopeForbiddenError } from '../src/core/recall-scope.js';
 import { RejectedValueError } from '../src/core/api-errors.js';

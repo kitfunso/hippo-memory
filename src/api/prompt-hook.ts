@@ -8,9 +8,11 @@ import { contextBlockLines, contextCost, crossProjectLines, handoffText, session
 import type { DeliveryRecorder } from '../store/delivery-recorder.js';
 import { MAX_ID_LEN } from '../util/http-util.js';
 import { isJsonString, type JsonValue } from '../util/json.js';
-import { bookLedgerTurn, ledgerLastSent, noteLedgerRowSkipped } from './ledger-db.js';
+import { bookLedgerTurn, ledgerLastSent } from './ledger-db.js';
+import { noteLedgerRowSkipped } from '../store/ledger-turn.js';
 import type { MemoryEntry } from '../core/memory.js';
-import { sessionPilotArm, type PilotArm } from './pilot-arm.js';
+import { sessionPilotArm } from './pilot-arm.js';
+import type { PilotArm } from '../store/pilot-arm.js';
 import { assertCallerProject, MAX_PROJECT_ALIASES } from '../core/project-identity.js';
 import type { DeliveryWrite } from '../store/ledger-turn.js';
 import { writeDeliveryEventAtRoot } from '../store/recall-trace.js';

@@ -2,7 +2,8 @@
  * One trace row per recall on api.recall, api.getContext and CLI cmdRecall: the (query, shown, outcome) triple the learned components train on.
  * All writes are fail-soft: a failed trace write is logged to stderr and swallowed, never breaking the surrounding call. */
 
-import { openHippoDb, closeHippoDb, rethrowIfSqliteBlocked, withWriteScope, type DatabaseSyncLike } from '../db/index.js';
+import { openHippoDb, closeHippoDb, withWriteScope, type DatabaseSyncLike } from '../db/index.js';
+import { rethrowIfSqliteBlocked } from '../util/sqlite-blocked.js';
 import type { RerankStep } from '../core/search-types.js';
 import { DELIVERY_LEDGER_VERSION, isBoundaryEvent, type DeliveryEventInput } from './delivery-recorder.js';
 import { errorFields, errorMessage, log } from '../util/log.js';

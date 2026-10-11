@@ -60,7 +60,7 @@ export type { AmbientTallies } from './core/ambient.js';
 export type { TokenUse } from './store/token-ledger.js';
 export type { EmbeddingIndexState } from './store/vector-index.js';
 export type { PhysicsParticle } from './core/physics.js';
-export { StoreBusyError } from './db/index.js';
+export { StoreBusyError } from './store/port.js';
 // An add-on store encodes, decodes and ranks vectors and particles with hippo.db's own code, and drops the index by its rule,
 // so both stores keep the same bytes and return the same ids in the same order.
 export { decodeVector, EMBEDDING_MODEL_META_KEY, encodeVector, rankVectorRows, type VectorMatch, type VectorRow } from './db/vector-store.js';
