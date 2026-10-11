@@ -251,10 +251,12 @@ export function deliveryHits(run, snap, preSession) {
 function pathHits(run, b, files, fileName, how) {
   const opts = { env: how.env, platform: process.platform };
   const hits = [];
-  for (const { file, name, input } of how.adapter.toolInputs(files)) {
-    const paths = toolPaths(name, input, input.cwd ?? run.dirs.work, opts);
-    // A Codex shell call's workdir counts as a read the way a `cd` target does: a bare filename in a foreign dir names no path (prereg 113).
-    if (SHELL_TOOLS.has(name) && input.cwd && input.cwd !== run.dirs.work) paths.unshift({ token: input.cwd, search: false, cwd: run.dirs.work });
+  for (const { file, name, input, cwd: lineCwd } of how.adapter.toolInputs(files)) {
+    // A Claude call runs where an earlier call's `cd` left the shell, as its transcript line records; a Codex call names its workdir.
+    const callCwd = lineCwd ?? input.cwd;
+    const paths = toolPaths(name, input, callCwd ?? run.dirs.work, opts);
+    // That dir counts as a read the way a `cd` target does: a bare filename in a foreign dir names no path (prereg 113).
+    if (SHELL_TOOLS.has(name) && callCwd && callCwd !== run.dirs.work) paths.unshift({ token: callCwd, search: false, cwd: run.dirs.work });
     for (const { token, search, cwd } of paths) {
       const p = b.fold(cutWildcard(resolveToken(token, { ...opts, cwd })));
       // Prereg 162 voids a read of files: a word naming nothing on disk, such as an import path in a grep pattern, read nothing.

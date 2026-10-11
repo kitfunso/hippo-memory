@@ -135,7 +135,7 @@ function* fileLines(items) {
   }
 }
 
-/** tool_use and tool_result blocks across transcript files as `{file, block}`, each tool_use id once. */
+/** tool_use and tool_result blocks across transcript files as `{file, block, cwd}`, each tool_use id once; cwd is the line's own, when it has one. */
 function* fileBlocks(files) {
   const seen = new Set();
   for (const { file, o } of fileLines(files)) {
@@ -146,7 +146,7 @@ function* fileBlocks(files) {
       const key = id === undefined ? null : `${block.type}:${id}`;
       if (key && seen.has(key)) continue;
       if (key) seen.add(key);
-      yield { file, block };
+      yield { file, block, cwd: o.cwd };
     }
   }
 }
@@ -155,9 +155,9 @@ function* toolBlocks(files) {
   for (const { block } of fileBlocks(files)) yield block;
 }
 
-/** Every tool call as `{file, name, input}`. */
+/** Every tool call as `{file, name, input, cwd}`: Claude Code's shell keeps its cwd between calls, and each transcript line records where it stood. */
 export function toolInputs(files) {
-  return [...fileBlocks(files)].filter(({ block }) => block.type === 'tool_use').map(({ file, block }) => ({ file, name: block.name, input: block.input ?? {} }));
+  return [...fileBlocks(files)].filter(({ block }) => block.type === 'tool_use').map(({ file, block, cwd }) => ({ file, name: block.name, input: block.input ?? {}, cwd }));
 }
 
 const blockText = (content) => (Array.isArray(content) ? content.map((c) => c.text ?? '').join('\n') : String(content ?? ''));

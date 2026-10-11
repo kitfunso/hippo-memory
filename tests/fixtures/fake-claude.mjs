@@ -131,10 +131,14 @@ function pastTranscript() {
 /** Read probes, emitted as tool calls and never run: READ:<p>, READ_PAST, GREP:<p>, BASH:<cmd> (a literal \n is a newline), ECHO:<t>, ECHO_TRANSCRIPT(_PRETTY). */
 function probes(text = prompt) {
   const lines = [];
-  for (const m of text.matchAll(/^(READ:\S+|READ_PAST|GREP:\S+|BASH:.+|ECHO:\S+|ECHO_TRANSCRIPT(?:_PRETTY)?)$/gm)) {
+  // Claude Code records its shell's cwd on each line; CWD:<dir> moves it for the probes after it, as an earlier call's `cd` would.
+  let cwd = process.cwd();
+  for (const m of text.matchAll(/^(CWD:\S+|READ:\S+|READ_PAST|GREP:\S+|BASH:.+|ECHO:\S+|ECHO_TRANSCRIPT(?:_PRETTY)?)$/gm)) {
     const [kind, ...rest] = m[1].split(':');
     const arg = fill(rest.join(':'));
-    if (kind === 'READ') lines.push(toolUse('Read', { file_path: arg }));
+    const from = lines.length;
+    if (kind === 'CWD') cwd = path.resolve(cwd, arg);
+    else if (kind === 'READ') lines.push(toolUse('Read', { file_path: arg }));
     else if (kind === 'READ_PAST') lines.push(toolUse('Read', { file_path: pastTranscript() }));
     else if (kind === 'GREP') lines.push(toolUse('Grep', { pattern: 'x', path: arg }));
     else if (kind === 'BASH') lines.push(toolUse('Bash', { command: arg.replaceAll('\\n', '\n') }));
@@ -144,6 +148,7 @@ function probes(text = prompt) {
       // The pretty form is what `jq .` prints: no single line holds type, uuid and sessionId together.
       lines.push(toolUse('Bash', { command: 'sh x.sh' }), toolResult(`${kind === 'ECHO_TRANSCRIPT_PRETTY' ? JSON.stringify(old, null, 2) : JSON.stringify(old)}\n`));
     }
+    for (const line of lines.slice(from)) line.cwd = cwd;
   }
   return lines;
 }

@@ -43,6 +43,8 @@ describe('reads outside the cell (one A1 run, one read per task)', () => {
     rootPattern: 'BASH:grep -rn / .',
     rootByFlag: 'BASH:grep -rn -e x /',
     continued: 'BASH:rg -n secret \\\\n  ~',
+    cdBack: 'CWD:src\nBASH:cd .. && git status',
+    cdUp: 'CWD:src\nBASH:cat ../../../../A2/seed1/work/lib.js',
   };
 
   beforeAll(async () => {
@@ -99,6 +101,10 @@ describe('reads outside the cell (one A1 run, one read per task)', () => {
   });
   it('an operand after a -e pattern is still a search root', () => expectRead('rootByFlag', 'ancestor-search'));
   it('a line continuation joins a search to its root', () => expectRead('continued', 'ancestor-search'));
+  it('a call runs where an earlier call\'s cd left the shell, as its transcript line records', () => {
+    expect(find(recs, 'A1', 'cdBack')).toMatchObject({ invalid: null, void: null });
+    expectRead('cdUp', 'other-run');
+  });
 });
 
 function writeFileIn(root: string, rel: string): void {
