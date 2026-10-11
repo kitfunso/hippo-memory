@@ -2,7 +2,7 @@ import type { MemoryEntry } from '../core/memory.js';
 import { tokenize } from '../util/tokenize.js';
 import { evalNow } from '../core/ablation.js';
 import { extractPathTags } from './path-context.js';
-import { detectScope } from '../sharing/scope.js';
+import { detectScope } from '../core/active-scope.js';
 import { compareScoredResults } from '../core/compare.js';
 import type { RerankerFn, RerankerOptions } from '../rerankers/types.js';
 import { bm25Score, buildCorpus, entryText, type BM25Corpus } from './bm25.js';

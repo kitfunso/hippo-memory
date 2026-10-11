@@ -8,7 +8,7 @@ import { contextBlockLines, contextCost, crossProjectLines, handoffText, session
 import { createDeliveryRecorder, type DeliveryEventType, type DeliveryRecorder } from '../store/delivery-recorder.js';
 import type { HookRuntime } from '../core/capture-contract.js';
 import * as path from 'path';
-import { MAX_ID_LEN } from '../util/http-util.js';
+import { MAX_ID_LEN } from '../util/limits.js';
 import { isJsonString, type JsonValue } from '../util/json.js';
 import { bookLedgerTurn, ledgerLastSent, ledgerRoot, noteLedgerRowSkipped } from './ledger-db.js';
 import type { MemoryEntry } from '../core/memory.js';

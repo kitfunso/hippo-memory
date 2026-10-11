@@ -182,7 +182,7 @@ describe("a recall's query embedding", () => {
     expect(given).toEqual([deadline]);
   });
 
-  it('does not hold the in-process provider to the deadline, which no signal can stop', async () => {
+  it('keeps a vector that arrives after the deadline, as a loaded in-process model gives one', async () => {
     const local: EmbeddingProvider = { kind: 'local', model: 'in-process', id: 'in-process', isAvailable: () => true, embed: async () => [[1, 0]] };
 
     expect(await embedQueryBy(AbortSignal.abort(), local, QUERY)).toEqual([1, 0]);

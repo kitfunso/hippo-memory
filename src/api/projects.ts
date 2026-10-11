@@ -6,7 +6,8 @@ import {
 import { onProjectTags, type ProjectTagStore } from '../store/project-tags.js';
 import type { Context } from './types.js';
 
-export type { MergeResult, ProjectCollision, ProjectFold, ProjectSummary, RepairResult } from '../sharing/project-merge.js';
+export type { MergeResult, ProjectCollision, ProjectSummary, RepairResult } from '../sharing/project-merge.js';
+export type { ProjectFold } from '../agent-memories/project-folds.js';
 
 export interface MergeProjectNamesOpts {
   from: string;

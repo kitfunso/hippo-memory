@@ -2,7 +2,7 @@
  * import cycle. src/api/index.ts imports these and re-exports them for back-compat (`api.isPrivateScope`, tests importing `passesScopeFilterForRecall`). */
 
 import { BadRequestError, ForbiddenError } from './api-errors.js';
-import { MAX_ID_LEN } from '../util/http-util.js';
+import { MAX_ID_LEN } from '../util/limits.js';
 
 /** Literal scopes excluded from recall by default-deny when the caller passes no `scope`; read by the SQL clause in `loadSearchRows` and by
  * `passesScopeFilterForRecall`. Invariant: never empty, or quarantine scopes would pass both paths silently (the module-load assertion below pins this). */

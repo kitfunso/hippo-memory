@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { findImportCycles, runtimeSpecifiers } from '../scripts/check-import-cycles.mjs';
+import { findFolderCycles, findImportCycles, FOLDER_CYCLE_ALLOWLIST, judgeFolderCycles, runtimeSpecifiers } from '../scripts/check-import-cycles.mjs';
 
 describe('check-import-cycles', () => {
   let dir: string;
@@ -44,5 +44,36 @@ describe('check-import-cycles', () => {
   it('keeps a mixed value-and-type import as a runtime edge', () => {
     expect(runtimeSpecifiers(`import { type T, value } from './m.js';\nimport Default, { type U } from './n.js';\n`))
       .toEqual(['./m.js', './n.js']);
+  });
+
+  it('reports two folders that import each other through different files, which the file check passes', () => {
+    file('search/rank.ts', `import { scopeOf } from '../sharing/scope.js';\nexport const rank = scopeOf;\n`);
+    file('sharing/scope.ts', `export const scopeOf = 1;\n`);
+    file('sharing/both.ts', `import { rank } from '../search/rank.js';\nexport const both = rank;\n`);
+    file('core/x.ts', `export const x = 1;\n`);
+    file('cli.ts', `import { both } from './sharing/both.js';\nimport { x } from './core/x.js';\nexport const cli = [both, x];\n`);
+    expect(findImportCycles(dir)).toEqual([]);
+    expect(findFolderCycles(dir)).toEqual([{
+      folders: ['search', 'sharing'],
+      edges: [['search/rank.ts', 'sharing/scope.ts'], ['sharing/both.ts', 'search/rank.ts']],
+    }]);
+  });
+
+  it('skips a type-only import between folders', () => {
+    file('a/one.ts', `import type { Two } from '../b/two.js';\nexport type One = Two;\nexport const one = 1;\n`);
+    file('b/two.ts', `import { one } from '../a/one.js';\nexport type Two = number;\nexport const two = one;\n`);
+    expect(findFolderCycles(dir)).toEqual([]);
+  });
+
+  it('passes an allowlisted folder cycle and fails an allowlist entry that matches no cycle', () => {
+    const none: [string, string][] = [];
+    const cycles = [{ folders: ['mcp', 'server'], edges: none }, { folders: ['core', 'util'], edges: none }];
+    const allowlist = [{ folders: ['server', 'mcp'], why: 'w' }, { folders: ['search', 'sharing'], why: 'gone' }];
+    expect(judgeFolderCycles(cycles, allowlist)).toEqual({ unlisted: [cycles[1]], stale: [allowlist[1]] });
+  });
+
+  it('finds no folder cycle in src and keeps no allowlist entry', () => {
+    expect(findFolderCycles(join(import.meta.dirname, '..', 'src'))).toEqual([]);
+    expect(FOLDER_CYCLE_ALLOWLIST).toEqual([]);
   });
 });

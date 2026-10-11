@@ -4,7 +4,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { BadRequestError } from './api-errors.js';
 import { isSharedStore, loadConfig } from './config.js';
-import { MAX_ID_LEN } from '../util/http-util.js';
+import { MAX_ID_LEN } from '../util/limits.js';
 import { errorMessage, log } from '../util/log.js';
 import { originRemoteId, projectFileId } from './project-remote.js';
 import { realpathOrResolve } from '../util/real-path.js';

@@ -4,7 +4,7 @@ import { rmSync } from 'node:fs';
 import * as api from '../src/api/index.js';
 import { createApiKey, grantScope, readApiKeyRecord } from '../src/store/auth.js';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
-import { mapApiError } from '../src/util/http-util.js';
+import { mapApiError } from '../src/api/error-reply.js';
 import { canReadScope } from '../src/core/recall-scope.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { makeRoot } from './_helpers/make-root.js';

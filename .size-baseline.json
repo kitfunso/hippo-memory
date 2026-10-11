@@ -20,7 +20,6 @@
     "src/capture/failure-caller.ts": 1,
     "src/capture/session-digest.ts": 1,
     "src/cli/audit.ts": 1,
-    "src/cli/briefs.ts": 1,
     "src/cli/continuity.ts": 1,
     "src/cli/curate.ts": 1,
     "src/cli/dag.ts": 1,

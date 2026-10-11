@@ -5,7 +5,7 @@ import { DEFAULT_SERVER_HOST, DEFAULT_SERVER_PORT } from '../../server/defaults.
 import { type VerbSpec, verb } from '../verb-row.js';
 
 export const OBJECT_VERBS = {
-  predict: verb(() => import('../decisions.js'), 'handlePredict', {
+  predict: verb(() => import('../predictions.js'), 'handlePredict', {
     flags: {
       values: ['actual', 'class', 'estimate', 'note', 'state', 'status', 'target', 'unit'],
       numbers: ['limit'],
@@ -37,7 +37,7 @@ export const OBJECT_VERBS = {
   decide get <id>          Show a decision by its table id
   decide close <id>        Retire (close) an active decision by its table id`],
   }),
-  incident: verb(() => import('../decisions.js'), 'handleIncident', {
+  incident: verb(() => import('../incidents.js'), 'handleIncident', {
     flags: { values: ['context', 'resolution', 'status'], numbers: ['limit'], lists: ['link'] },
     usage: [`
   incident "<incident>"    Record an incident (first-class object + memory mirror)
@@ -117,7 +117,7 @@ export const OBJECT_VERBS = {
   brief refresh "<repo>"   Auto-assemble the brief from the repo's receipts (path:<repo>)
     --dry-run              Print the assembled brief without writing it`],
   }),
-  note: verb(() => import('../briefs.js'), 'handleCustomerNote', {
+  note: verb(() => import('../notes.js'), 'handleCustomerNote', {
     aliases: ['customer-note'],
     flags: { values: ['change', 'customer', 'status', 'text'], numbers: ['limit'] },
     usage: [`
@@ -131,7 +131,7 @@ export const OBJECT_VERBS = {
     --change "<summary>"   What changed in this version (the delta note)
   note close <id>          Retire (close) an active customer note by its table id`],
   }),
-  graph: verb(() => import('../briefs.js'), 'handleGraph', {
+  graph: verb(() => import('../graph.js'), 'handleGraph', {
     flags: { switches: ['json', 'open'], values: ['entity', 'format', 'out'] },
     usage: [`
   graph extract            Rebuild the entity/relation graph from consolidated objects

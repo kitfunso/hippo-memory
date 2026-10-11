@@ -1,6 +1,4 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { ApiError } from '../core/api-errors.js';
-import { SqliteBlockedError } from './sqlite-blocked.js';
 import { envBodyTimeoutMs } from './env.js';
 
 // Leaf module shared by server.ts and the connector webhook receivers; it must not import either.
@@ -21,9 +19,6 @@ function sizeLabel(bytes: number): string {
 
 // How long a refused upload is still read and discarded after its reply, so a client that never stops cannot hold the socket.
 const REFUSED_UPLOAD_LINGER_MS = 2000;
-
-// Cap for id-shaped request fields (ids, tenant, session, scope, class): far above real values, small enough to bound logs and indexes.
-export const MAX_ID_LEN = 256;
 
 export const JSON_HEADERS = { 'content-type': 'application/json' } as const;
 
@@ -51,29 +46,10 @@ export class BodyTooLargeError extends Error {}
 /** The body did not arrive in time. Its own class so mapApiError answers 408 and the server drops the socket. */
 export class BodyTimeoutError extends Error {}
 
-/** The status and client-facing message for one failed request. */
-export interface ApiErrorReply {
-  status: number;
-  message: string;
-}
-
 export const INTERNAL_ERROR_MESSAGE = 'internal server error';
 
 /** The reply when a request under another store reaches code that still opens hippo.db. */
 export const STORE_NOT_PORTED_MESSAGE = 'store_not_ported';
-
-/** Maps by class so rewording a message never moves a status; an untyped error is a 500 whose text stays in the server log. */
-export function mapApiError<E>(err: E): ApiErrorReply {
-  // An add-on can build an HttpError from any number, and writeHead throws on one outside 100-999.
-  if (err instanceof HttpError && !(Number.isInteger(err.status) && err.status >= 100 && err.status <= 999)) {
-    return { status: 500, message: INTERNAL_ERROR_MESSAGE };
-  }
-  if (err instanceof HttpError || err instanceof ApiError) return { status: err.status, message: err.message };
-  if (err instanceof BodyTooLargeError) return { status: 413, message: err.message };
-  if (err instanceof BodyTimeoutError) return { status: 408, message: err.message };
-  if (err instanceof SqliteBlockedError) return { status: 501, message: STORE_NOT_PORTED_MESSAGE };
-  return { status: 500, message: INTERNAL_ERROR_MESSAGE };
-}
 
 /** Serialises before the head goes out, so a body that is not JSON still reaches the caller's error reply. */
 export function sendJson<T>(res: ServerResponse, status: number, body: T): void {

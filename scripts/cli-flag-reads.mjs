@@ -187,8 +187,50 @@ function bind(env, scope, name, kind) {
   if (sym) scope[ts.isIdentifier(name) ? kind : 'flags'].add(sym);
 }
 
-function newScope(env, fn, taint) {
-  const scope = { flags: new Set(), ctx: new Set(), paramIndex: new Map(), reads: [], keyParams: new Map() };
+// A member a known object literal lacks: a call through it never runs for that object.
+const ABSENT = Symbol('absent');
+
+/** The function or object literal an expression names, through bound names, declarations and factory calls; null when unknown. */
+function valueOf(env, scope, expr, depth = 0) {
+  const { ts, checker } = env;
+  const e = strip(ts, expr);
+  if (!e || depth > 6) return null;
+  if (isFunctionLike(ts, e) || ts.isObjectLiteralExpression(e)) return e;
+  if (ts.isIdentifier(e)) {
+    const sym = checker.getSymbolAtLocation(e);
+    return (sym && scope?.bound.get(sym)) ?? functionOf(env, e);
+  }
+  if (ts.isPropertyAccessExpression(e)) {
+    const base = valueOf(env, scope, e.expression, depth + 1);
+    if (base === ABSENT) return ABSENT;
+    if (!base || !ts.isObjectLiteralExpression(base)) return null;
+    const prop = base.properties.find((p) => p.name?.getText() === e.name.text);
+    if (!prop) return ABSENT;
+    if (ts.isMethodDeclaration(prop)) return prop;
+    if (ts.isShorthandPropertyAssignment(prop)) return functionOf(env, prop.name);
+    return ts.isPropertyAssignment(prop) ? valueOf(env, null, prop.initializer, depth + 1) : null;
+  }
+  if (!ts.isCallExpression(e)) return null;
+  const fn = valueOf(env, scope, e.expression, depth + 1);
+  if (!fn || fn === ABSENT || !isFunctionLike(ts, fn) || !fn.body) return null;
+  const ret = ts.isBlock(fn.body) ? fn.body.statements.find((s) => ts.isReturnStatement(s) && s.expression)?.expression : fn.body;
+  return ret ? valueOf(env, null, ret, depth + 1) : null;
+}
+
+/** The callee's parameters bound to the functions and object literals a call passes it. */
+function boundParams(env, scope, decl, callArgs) {
+  const { ts, checker } = env;
+  const bound = new Map();
+  decl.parameters.forEach((param, index) => {
+    const value = callArgs[index] && ts.isIdentifier(param.name) ? valueOf(env, scope, callArgs[index]) : null;
+    const sym = value && value !== ABSENT ? checker.getSymbolAtLocation(param.name) : undefined;
+    if (sym) bound.set(sym, value);
+  });
+  return bound;
+}
+
+function newScope(env, fn, taint, bound) {
+  const scope = { flags: new Set(), ctx: new Set(), paramIndex: new Map(), bound: new Map(bound), reads: [], keyParams: new Map() };
   fn.parameters.forEach((param, index) => {
     const sym = env.ts.isIdentifier(param.name) ? env.checker.getSymbolAtLocation(param.name) : undefined;
     if (sym) scope.paramIndex.set(sym, index);
@@ -240,13 +282,15 @@ function followCall(env, scope, call) {
   if (tainted.size === 0 || name === 'Object.keys') return;
   if (name === 'Object.hasOwn' && callArgs.length === 2) { addRead(env, scope, callArgs[1], call, 'presence'); return; }
   if (WHOLE_OBJECT_CALLS.has(name)) { noteUnfollowed(env, call, 'whole object'); return; }
-  const decls = tableHandlers(env, call) ?? [checker.getResolvedSignature(call)?.declaration];
+  const target = valueOf(env, scope, call.expression);
+  if (target === ABSENT) return;
+  const decls = tableHandlers(env, call) ?? [target && isFunctionLike(ts, target) ? target : checker.getResolvedSignature(call)?.declaration];
   if (decls.some((d) => !d || !isFunctionLike(ts, d) || !d.body || d.getSourceFile().isDeclarationFile)) {
     noteUnfollowed(env, call, 'call not followed');
     return;
   }
   for (const decl of decls) {
-    const callee = analyze(env, decl, tainted);
+    const callee = analyze(env, decl, tainted, boundParams(env, scope, decl, callArgs));
     scope.reads.push(...callee.reads);
     for (const [index, kinds] of callee.keyParams) {
       if (!callArgs[index]) noteUnfollowed(env, call, 'missing key argument');
@@ -258,6 +302,9 @@ function followCall(env, scope, call) {
 
 function visitDeclaration(env, scope, node) {
   const { ts } = env;
+  const value = ts.isIdentifier(node.name) ? valueOf(env, scope, node.initializer) : null;
+  const sym = value && value !== ABSENT ? env.checker.getSymbolAtLocation(node.name) : undefined;
+  if (sym) scope.bound.set(sym, value);
   const kind = taintOf(env, scope, node.initializer);
   if (!kind) return;
   if (kind === 'ctx' || ts.isIdentifier(node.name)) { bind(env, scope, node.name, kind); return; }
@@ -288,19 +335,20 @@ function visitNode(env, scope, node) {
 }
 
 /** One function's reads, given which parameters (by index) are the flags object or a context holding it. */
-function analyze(env, fn, taint) {
-  const memoKey = `${fn.pos}:${fn.getSourceFile().fileName}:${[...taint].sort().join(',')}`;
+function analyze(env, fn, taint, bound = new Map()) {
+  const boundKey = [...bound].map(([sym, value]) => `${sym.valueDeclaration?.pos}=${value.pos}:${value.getSourceFile().fileName}`).sort();
+  const memoKey = `${fn.pos}:${fn.getSourceFile().fileName}:${[...taint].sort().join(',')}:${boundKey.join(',')}`;
   if (env.memo.has(memoKey)) return env.memo.get(memoKey);
   if (env.inProgress.has(memoKey)) return { reads: [], keyParams: new Map() };
   env.inProgress.add(memoKey);
-  const scope = newScope(env, fn, taint);
+  const scope = newScope(env, fn, taint, bound);
   if (fn.body) visitNode(env, scope, fn.body);
   env.memo.set(memoKey, scope);
   env.inProgress.delete(memoKey);
   return scope;
 }
 
-/** The function a `verb(() => import(module), 'handleX', row)` row names: export handleX of that module. */
+/** The function a `verb(() => import(module), 'handleX', row)` row names, export handleX of that module; a `factory(descriptor)` export runs what the factory returns. */
 function rowHandler(env, call) {
   const { ts, checker } = env;
   const [load, name] = call.arguments;
@@ -316,8 +364,11 @@ function rowHandler(env, call) {
   const decl = sym?.valueDeclaration;
   const init = decl && ts.isVariableDeclaration(decl) && decl.initializer ? strip(ts, decl.initializer) : null;
   const fn = decl && isFunctionLike(ts, decl) ? decl : init && isFunctionLike(ts, init) ? init : null;
-  if (!fn) throw new Error(`verb row handler not found: ${where(env, call)}`);
-  return fn;
+  if (fn) return { run: fn, bound: new Map() };
+  const factory = init && ts.isCallExpression(init) ? valueOf(env, null, init.expression) : null;
+  const made = factory && factory !== ABSENT && isFunctionLike(ts, factory) ? valueOf(env, null, init) : null;
+  if (!made || made === ABSENT || !isFunctionLike(ts, made)) throw new Error(`verb row handler not found: ${where(env, call)}`);
+  return { run: made, bound: boundParams(env, null, factory, init.arguments) };
 }
 
 /** The handler of every `verb(...)` row of the verb table in src/cli/verbs/. */
@@ -327,7 +378,7 @@ function commandRows(env) {
   const rows = [];
   const find = (node) => {
     if (ts.isPropertyAssignment(node) && ts.isCallExpression(node.initializer) && node.initializer.expression.getText() === 'verb') {
-      rows.push({ verb: ts.isStringLiteral(node.name) ? node.name.text : node.name.getText(), run: rowHandler(env, node.initializer) });
+      rows.push({ verb: ts.isStringLiteral(node.name) ? node.name.text : node.name.getText(), ...rowHandler(env, node.initializer) });
     }
     ts.forEachChild(node, find);
   };
@@ -340,9 +391,9 @@ function commandRows(env) {
 export function collectVerbReads(repo = '.') {
   const env = loadEnv(path.resolve(repo));
   const unclassed = [];
-  const verbs = commandRows(env).map(({ verb, run }) => {
+  const verbs = commandRows(env).map(({ verb, run, bound }) => {
     const byKey = new Map();
-    for (const read of analyze(env, run, new Map([[0, 'ctx']])).reads) byKey.set(read.key, [...(byKey.get(read.key) ?? []), read]);
+    for (const read of analyze(env, run, new Map([[0, 'ctx']]), bound).reads) byKey.set(read.key, [...(byKey.get(read.key) ?? []), read]);
     const flags = {};
     for (const key of [...byKey.keys()].sort()) {
       flags[key] = mergeKinds(byKey.get(key).map((read) => read.kind));
