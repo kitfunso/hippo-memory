@@ -1,6 +1,6 @@
 // authRevoke with a store revokes through its keyAudit group and never opens hippo.db, and DELETE /v1/auth/keys/:keyId
 // runs under another store only when that store has the group.
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cpSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -8,7 +8,7 @@ import { closeHippoDb, openHippoDb } from '../src/db/index.js';
 import { StoreNotPortedError } from '../src/util/sqlite-blocked.js';
 import { STORE_NOT_PORTED_MESSAGE } from '../src/util/http-util.js';
 import {
-  authRevoke, ForbiddenError, NotFoundError, OTHER_STORE_MARKER, serve, type Actor, type AuthRevokeResult, type Context, type HippoStore, type ServerHandle,
+  authRevoke, ForbiddenError, NotFoundError, OTHER_STORE_MARKER, serve, type Actor, type HippoStore, type ServerHandle,
 } from '../src/server.js';
 import { inMemoryKeyAuditStore } from './_helpers/in-memory-key-audit-store.js';
 import { portOnlyStoreWithoutVectorReads } from './_helpers/port-only-store.js';
@@ -102,16 +102,6 @@ describe('authRevoke with ctx.store', () => {
     await expect(authRevoke(member, adminA)).rejects.toThrow(ForbiddenError);
     await expect(authRevoke({ ...member, actor: admin }, memberB)).rejects.toThrow(NotFoundError);
     expect(await authRevoke(member, memberA)).toEqual({ ok: true, revokedAt: NOW });
-  });
-
-  it('stays synchronous for a ctx with no store, so an injected `typeof authRevoke` still compiles', () => {
-    const revoke: typeof authRevoke = (ctx, keyId) => authRevoke(ctx, keyId);
-    const ctx = { hippoRoot: copyOf(), tenantId: TENANT_A, actor: { subject: 'system:scim:u1', role: 'admin' as const, viaAuthResolver: true as const } };
-    const result = revoke(ctx, fixture.keys.memberA);
-    expectTypeOf(result).toEqualTypeOf<AuthRevokeResult>();
-    expect(result).toEqual({ ok: true, revokedAt: NOW });
-    expectTypeOf(authRevoke<Context & { store: HippoStore }>).returns.toEqualTypeOf<Promise<AuthRevokeResult>>();
-    expectTypeOf(authRevoke<Context>).returns.toEqualTypeOf<AuthRevokeResult | Promise<AuthRevokeResult>>();
   });
 });
 

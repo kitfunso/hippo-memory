@@ -91,7 +91,7 @@ describe('api.reject / api.unreject / listRejectionsForTenant', () => {
     writeEntry(tmpDir, a);
     await api.reject(ctx(), { memoryId: a.id, reason: 'refused' });
 
-    await expect(Promise.resolve().then(() => api.remember(ctx(), { content: 'refuse me please' }))).rejects.toThrow(RejectedValueError);
+    await expect(api.remember(ctx(), { content: 'refuse me please' })).rejects.toThrow(RejectedValueError);
   });
 
   it('unreject then re-remember succeeds', async () => {
@@ -110,7 +110,7 @@ describe('api.reject / api.unreject / listRejectionsForTenant', () => {
     const result = await api.reject(ctx(), { value: 'never seen before value', reason: 'pre-emptive' });
     expect(result.removedIds.length).toBe(0);
 
-    await expect(Promise.resolve().then(() => api.remember(ctx(), { content: 'never seen before value' }))).rejects.toThrow(RejectedValueError);
+    await expect(api.remember(ctx(), { content: 'never seen before value' })).rejects.toThrow(RejectedValueError);
   });
 
   it('reject requires a non-empty reason', async () => {
@@ -198,8 +198,7 @@ describe('resolveConflict rejection wiring', () => {
     expect(result).not.toBeNull();
     expect(readEntry(tmpDir, bId)).toBeNull();
 
-    await expect(Promise.resolve().then(() =>
-      api.remember(ctx(), { content: 'Use && to chain commands in PowerShell' })),
+    await expect(api.remember(ctx(), { content: 'Use && to chain commands in PowerShell' }),
     ).rejects.toThrow(RejectedValueError);
 
     const db = openHippoDb(tmpDir);
@@ -247,7 +246,7 @@ describe('resolveConflict rejection wiring', () => {
       closeHippoDb(db);
     }
 
-    await expect(Promise.resolve().then(() => api.remember(ctx(), { content: loserContent }))).rejects.toThrow(RejectedValueError);
+    await expect(api.remember(ctx(), { content: loserContent })).rejects.toThrow(RejectedValueError);
   });
 
   it('raw loser via resolve --forget no longer throws (kind-aware removal)', () => {
@@ -351,8 +350,7 @@ describe('resolveConflict rejection wiring', () => {
     }
 
     // Tombstone written: re-remembering the raw loser's content is refused.
-    await expect(Promise.resolve().then(() =>
-      api.remember(ctx(), { content: 'raw loser content later rejected via the reject-loser path' })),
+    await expect(api.remember(ctx(), { content: 'raw loser content later rejected via the reject-loser path' }),
     ).rejects.toThrow(RejectedValueError);
 
     const db2 = openHippoDb(tmpDir);

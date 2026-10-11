@@ -81,12 +81,12 @@ function indexInBackground(hippoRoot: string, entry: MemoryEntry): Promise<Embed
 }
 
 /** One local write on hippo.db: gate, write, read-back, counter, then the embedding, started and never awaited. A refused value throws as `remember` does. */
-export function rememberLocally(ctx: HippoDbContext, input: LocalRememberInput): LocalRememberOutcome {
+export async function rememberLocally(ctx: HippoDbContext, input: LocalRememberInput): Promise<LocalRememberOutcome> {
   const schemaFit = schemaFitInStore(ctx.hippoRoot, ctx.tenantId, input.content, input.fitTags ?? input.tags);
   const verdict = salienceVerdict(ctx, input);
   if (verdict?.decision === 'skip') return { status: 'skipped', reason: verdict.reason, score: verdict.score };
   const startedWeak = verdict?.decision === 'start_weak' ? { reason: verdict.reason, strength: verdict.score } : undefined;
-  const { id } = remember(ctx, {
+  const { id } = await remember(ctx, {
     content: input.content,
     kind: input.kind,
     scope: input.scope,

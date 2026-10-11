@@ -1,0 +1,3 @@
+### Changed
+
+- BREAKING: **The api write functions return a Promise on every store.** `authCreate`, `authCreateSelf`, `authListRows`, `authRevoke`, `forget`, `outcome`, `outcomeForLastRecall`, `supersede`, `archiveRaw`, `remember`, `rememberLocally` and `importVault` used to return a plain value when the context had no store. They now always return a Promise, and a refusal rejects it instead of throwing. `StoreReply` and `AuthRevokeReply` are gone from `hippo-memory/server`. The last-recall writes move to a new optional `lastRecall` store group, so `outcomeForLastRecall` and an `outcome` with a `traceId` answer 501 on a store without it. See `docs/UPGRADING-2.0.md`.

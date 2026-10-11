@@ -177,8 +177,8 @@ describe('member-key boundaries in the api layer (every surface goes through it)
   const adminCtx = (): api.HippoDbContext => ({ hippoRoot: home, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } });
 
   it('key management refuses a member actor', async () => {
-    await expect(Promise.resolve().then(() => api.authCreate(memberCtx(), { role: 'admin' }))).rejects.toThrow(api.ForbiddenError);
-    await expect(Promise.resolve().then(() => api.authRevoke(memberCtx(), 'k_missing'))).rejects.toThrow(api.ForbiddenError);
+    await expect(api.authCreate(memberCtx(), { role: 'admin' })).rejects.toThrow(api.ForbiddenError);
+    await expect(api.authRevoke(memberCtx(), 'k_missing')).rejects.toThrow(api.ForbiddenError);
     expect((await api.authCreate(adminCtx(), { role: 'member' })).role).toBe('member');
   });
 

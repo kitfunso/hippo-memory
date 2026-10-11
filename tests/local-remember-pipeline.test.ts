@@ -136,13 +136,13 @@ describe('rememberLocally', () => {
 
   it('a rejected value throws what remember throws, with nothing stored or counted, weak verdict or not', async () => {
     const ctx = store();
-    reject(ctx, { value: TEXT, reason: 'wrong' });
-    await expect(Promise.resolve().then(() => rememberLocally(ctx, { content: TEXT, tags: [] }))).rejects.toThrow(RejectedValueError);
+    await reject(ctx, { value: TEXT, reason: 'wrong' });
+    await expect(rememberLocally(ctx, { content: TEXT, tags: [] })).rejects.toThrow(RejectedValueError);
     expect(rows(ctx)).toHaveLength(0);
     expect(counted(ctx)).toBe(0);
     const weak = storeOfRepeatedErrors();
-    reject(weak, { value: FIFTH_ERROR.content, reason: 'wrong' });
-    await expect(Promise.resolve().then(() => rememberLocally(weak, FIFTH_ERROR))).rejects.toThrow(RejectedValueError);
+    await reject(weak, { value: FIFTH_ERROR.content, reason: 'wrong' });
+    await expect(rememberLocally(weak, FIFTH_ERROR)).rejects.toThrow(RejectedValueError);
     expect(rows(weak)).toHaveLength(4);
     expect(counted(weak)).toBe(0);
   });

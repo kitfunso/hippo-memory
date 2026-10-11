@@ -231,24 +231,25 @@ describe('Slack hardening + migration v19', () => {
     const racedOpts = messageToRememberOpts(raced);
     if (!racedOpts) throw new Error('the raced message has text');
     const memBefore = loadAllEntries(root).length;
-    const winners: IngestResult[] = [];
+    const winners: Promise<IngestResult>[] = [];
     let winnerRan = false;
     const { exec } = DatabaseSync.prototype;
     const spy = vi.spyOn(DatabaseSync.prototype, 'exec').mockImplementation(function (this: DatabaseSyncLike, sql: string) {
       // The loser's first lock request: the winner stores the same event on its own connection, then the loser goes on.
       if (sql === 'BEGIN IMMEDIATE' && !winnerRan) {
         winnerRan = true;
-        // On hippo.db `remember` answers at once, so the winner commits before this lock request goes through.
+        // remember's first store call is the write, which hippo.db runs before it returns, so the winner commits before this lock request goes through.
         const stored = remember(ctx, { ...racedOpts, untrusted: true, event: { connector: 'slack', eventId: racedEventId } });
-        winners.push({ status: stored.duplicate ? 'skipped_duplicate' : 'ingested', memoryId: stored.id });
+        winners.push(stored.then((w): IngestResult => ({ status: w.duplicate ? 'skipped_duplicate' : 'ingested', memoryId: w.id })));
       }
       exec.call(this, sql);
     });
     const loser = await ingestMessage(ctx, raced);
     spy.mockRestore();
+    const settled = await Promise.all(winners);
 
-    expect(winners.map((w) => w.status)).toEqual(['ingested']);
-    expect(loser).toEqual({ status: 'skipped_duplicate', memoryId: winners[0].memoryId });
+    expect(settled.map((w) => w.status)).toEqual(['ingested']);
+    expect(loser).toEqual({ status: 'skipped_duplicate', memoryId: settled[0].memoryId });
     // One new memory row, the winner's: the loser's write rolled back.
     expect(loadAllEntries(root).length).toBe(memBefore + 1);
 
@@ -261,7 +262,7 @@ describe('Slack hardening + migration v19', () => {
           .prepare(`SELECT memory_id FROM slack_event_log WHERE event_id = ?`)
           .all(racedEventId) as Array<{ memory_id: string }>;
         expect(rows).toHaveLength(1);
-        expect(rows[0].memory_id).toBe(winners[0].memoryId);
+        expect(rows[0].memory_id).toBe(settled[0].memoryId);
       } finally {
         closeHippoDb(db);
       }

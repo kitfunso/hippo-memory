@@ -7,7 +7,7 @@ import { pathToFileURL } from 'node:url';
 import ts from 'typescript';
 
 /** Handled: a `.catch` or a two-argument `.then`; a `.finally` or one-argument `.then` inherits. `void f()` is no call, so it passes. */
-function isHandled(expr) {
+export function isHandled(expr) {
   if (!ts.isCallExpression(expr) || !ts.isPropertyAccessExpression(expr.expression)) return false;
   const method = expr.expression.name.text;
   if (method === 'catch') return true;

@@ -8,7 +8,7 @@ import { remember, archiveRaw, isPrivateScope, type HippoDbContext } from '../ap
 import { assertClientScope } from '../core/recall-scope.js';
 import { RejectedValueError } from '../core/api-errors.js';
 import { rejectionGuardRefuses } from '../store/rejected-values.js';
-import { withRequestStoresSync } from '../db/request-stores.js';
+import { runWithRequestStores } from '../db/request-stores.js';
 import { loadConfig } from '../core/config.js';
 import { vetSecrets } from '../util/secret-detect.js';
 import { errorMessage, log } from '../util/log.js';
@@ -25,7 +25,7 @@ type VaultRow = VaultRawRow;
 
 /** Import a markdown vault FOLDER as `kind='raw'` memories.
  *  NOT re-entrant: idempotency rests on the in-memory `existing` Map loaded once, so two concurrent runs over one vault can double-insert. */
-export function importVault(folderPath: string, options: ImportOptions): ImportResult {
+export async function importVault(folderPath: string, options: ImportOptions): Promise<ImportResult> {
   const hippoRoot = options.hippoRoot;
   const identity = vaultIdentityOrThrow(options);
   if (options.global) {
@@ -43,7 +43,7 @@ export function importVault(folderPath: string, options: ImportOptions): ImportR
   return syncVaultFolder(folderPath, options, identity);
 }
 
-function syncVaultFolder(folderPath: string, options: ImportOptions, { vaultName, scope }: VaultIdentity): ImportResult {
+async function syncVaultFolder(folderPath: string, options: ImportOptions, { vaultName, scope }: VaultIdentity): Promise<ImportResult> {
   const hippoRoot = options.hippoRoot;
   const tenantId = options.tenantId ?? DEFAULT_TENANT_ID;
   const extraTags = options.extraTags ?? [];
@@ -66,12 +66,12 @@ function syncVaultFolder(folderPath: string, options: ImportOptions, { vaultName
   const run: VaultImportRun = {
     ctx, folderPath, vaultName, scope, extraTags, dryRun, existing, seen, baseHalfLifeDays, tally,
   };
-  const importNotes = (): void => {
-    for (const relpath of relpaths) importVaultNote(run, relpath);
+  const importNotes = async (): Promise<void> => {
+    for (const relpath of relpaths) await importVaultNote(run, relpath);
   };
   // A dry run probes the rejection guard once per changed note; one scope lets every probe share a handle.
-  if (dryRun) withRequestStoresSync(importNotes);
-  else importNotes();
+  if (dryRun) await runWithRequestStores(importNotes);
+  else await importNotes();
 
   // Deletion-sync: an artifactRef in the Map but not seen this run vanished from the source, so archive its raw row.
   // Per-file archiveRaw, no outer SAVEPOINT: there is no cross-file idempotency row to commit atomically.
@@ -79,7 +79,7 @@ function syncVaultFolder(folderPath: string, options: ImportOptions, { vaultName
     if (seen.has(artifactRef)) continue;
     for (const row of rows) {
       tally.archived++; // count even in dryRun so the preview reflects destructive deletes
-      if (!dryRun) archiveRaw(ctx, row.id, `source_deleted:${artifactRef}`);
+      if (!dryRun) await archiveRaw(ctx, row.id, `source_deleted:${artifactRef}`);
     }
   }
 
@@ -162,7 +162,7 @@ function loadVaultRows(hippoRoot: string, tenantId: string, vaultName: string): 
   return existing;
 }
 
-function importVaultNote(run: VaultImportRun, relpath: string): void {
+async function importVaultNote(run: VaultImportRun, relpath: string): Promise<void> {
   const { tally } = run;
   tally.total++;
   const artifactRef = `vault:${run.vaultName}:${relpath}`;
@@ -182,7 +182,7 @@ function importVaultNote(run: VaultImportRun, relpath: string): void {
   // Empty or frontmatter-only note: nothing storable, and the content was deleted at source, so archive prior rows (the old body must not stay searchable)
   // and skip the write. Safe because remember() is skipped, so there is no archive-then-throw hazard; the note stays in `seen` so deletion-sync skips it.
   if (body.trim().length < 3) {
-    archivePriors(run, priors, `emptied:${artifactRef}`);
+    await archivePriors(run, priors, `emptied:${artifactRef}`);
     tally.skipped++;
     return;
   }
@@ -192,14 +192,14 @@ function importVaultNote(run: VaultImportRun, relpath: string): void {
     tally.skipped++;
     return;
   }
-  writeChangedNote(run, artifactRef, priors, body, tags);
+  await writeChangedNote(run, artifactRef, priors, body, tags);
 }
 
-function writeChangedNote(run: VaultImportRun, artifactRef: string, priors: VaultRow[], body: string, tags: string[]): void {
+async function writeChangedNote(run: VaultImportRun, artifactRef: string, priors: VaultRow[], body: string, tags: string[]): Promise<void> {
   const { ctx, tally } = run;
   // Changed file: archive EVERY old raw row for this ref (>1 only after a concurrent double-insert), then append the new one; NEVER supersede.
   // archiveRaw commits before remember() runs, so no double-live row; a crash between them self-heals on the next import.
-  archivePriors(run, priors, `changed:${artifactRef}`);
+  await archivePriors(run, priors, `changed:${artifactRef}`);
 
   // remember() owns the write; the `echo` from createMemory only fills the ImportResult, with its id reconciled to the row that landed.
   const content = vetSecrets(body, tags, true).content;
@@ -212,7 +212,7 @@ function writeChangedNote(run: VaultImportRun, artifactRef: string, priors: Vaul
     tenantId: ctx.tenantId,
     baseHalfLifeDays: run.baseHalfLifeDays,
   });
-  if (!storeVaultNote(run, echo, content, tags, artifactRef)) {
+  if (!(await storeVaultNote(run, echo, content, tags, artifactRef))) {
     tally.rejected++;
     return;
   }
@@ -232,10 +232,10 @@ function readVaultNote(run: VaultImportRun, relpath: string): string | null {
   }
 }
 
-function archivePriors(run: VaultImportRun, priors: readonly { id: string }[], reason: string): void {
+async function archivePriors(run: VaultImportRun, priors: readonly { id: string }[], reason: string): Promise<void> {
   for (const p of priors) {
     run.tally.archived++; // count the would-be archive even in dryRun (true preview)
-    if (!run.dryRun) archiveRaw(run.ctx, p.id, reason);
+    if (!run.dryRun) await archiveRaw(run.ctx, p.id, reason);
   }
 }
 
@@ -273,13 +273,13 @@ function vaultEnvelopeUnchanged(priors: VaultRow[], tags: string[], scope: strin
 }
 
 /** Returns false when the rejection guard refuses the note; any other error propagates. */
-function storeVaultNote(run: VaultImportRun, echo: MemoryEntry, content: string, tags: string[], artifactRef: string): boolean {
+async function storeVaultNote(run: VaultImportRun, echo: MemoryEntry, content: string, tags: string[], artifactRef: string): Promise<boolean> {
   // A dry run writes nothing; it asks the guard remember() uses, so its `rejected` count matches what a real run would refuse.
   if (run.dryRun) return !rejectionGuardRefuses(run.ctx.hippoRoot, run.ctx.tenantId, echo.id, echo.content);
   try {
     // A rejected note must not stop the scan or the deletion sync. Its priors are archived by now, so a rerun meets
     // the same refusal and counts it again.
-    const result = remember(run.ctx, {
+    const result = await remember(run.ctx, {
       content,
       kind: 'raw',
       artifactRef,

@@ -77,14 +77,14 @@ const PROSE: Gen<string> = map(
 );
 
 describe('injection screening properties', () => {
-  it('a flagged phrase still flags, under the same name, with invisible characters inside it', () => {
-    forAll(0x1a5c, 400, SMUGGLED, ({ content, reason }) => {
+  it('a flagged phrase still flags, under the same name, with invisible characters inside it', async () => {
+    await forAll(0x1a5c, 400, SMUGGLED, ({ content, reason }) => {
       expect(detectInstruction(content)).toEqual({ flagged: true, reason });
     });
   });
 
-  it('ordinary prose over mixed scripts never flags', () => {
-    forAll(0x9a05e, 400, PROSE, (content) => {
+  it('ordinary prose over mixed scripts never flags', async () => {
+    await forAll(0x9a05e, 400, PROSE, (content) => {
       expect(detectInstruction(content)).toEqual({ flagged: false, reason: null });
     });
   });
@@ -100,8 +100,8 @@ describe('injection screening leaves the stored text alone', () => {
     // A visible word at each end: the store trims what it is given.
     const sent = map(arr(oneOf([PROSE, map(SMUGGLED, (s) => s.content)]), 1, 3), (bodies) => `note ${bodies.join('\n')} end`);
     // Each run is a real write and read, so this one property runs fewer times than the others, on one connection.
-    await withSharedStoreHandles(() => forAll(0x570e, 100, sent, (content) => {
-      const { id } = api.remember(ctx, { content, untrusted: true });
+    await withSharedStoreHandles(() => forAll(0x570e, 100, sent, async (content) => {
+      const { id } = await api.remember(ctx, { content, untrusted: true });
       expect(readEntry(root, id, 'default')?.content).toBe(content);
     }));
   });

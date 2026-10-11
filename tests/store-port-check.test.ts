@@ -348,14 +348,16 @@ describe('check-store-port.mjs', () => {
     });
   });
 
-  it('fails and names a file outside the list that calls onStore, and ignores the carrier file itself', () => {
+  it('fails and names a file outside the list that names the carrier, a file defining it included', () => {
     const use = "import { onStore } from './on-store.js';\nexport const f = (ctx: any) => onStore(ctx, () => 1);\n";
-    const files = { 'src/api/on-store.ts': 'export const onStore = andThen;\n', 'src/api/old.ts': use, 'src/api/new.ts': use };
+    const reply = 'export type R = StoreReply<object, number>;\n';
+    const files = { 'src/api/on-store.ts': 'export const onStore = andThen;\n', 'src/api/old.ts': use, 'src/api/new.ts': use, 'src/api/reply.ts': reply };
     withFixture(files, { carrierFiles: 2, carrierFilesList: ['src/api/old.ts', 'src/api/gone.ts'] }, ({ run }) => {
       const r = run();
       expect(r.status).toBe(1);
-      expect(r.stderr).toContain('src/api/new.ts: not a carrier file -> uses andThen or onStore');
-      expect(r.stderr).not.toContain('src/api/on-store.ts');
+      expect(r.stderr).toContain('src/api/new.ts: not a carrier file -> uses andThen, onStore or StoreReply');
+      expect(r.stderr).toContain('src/api/on-store.ts: not a carrier file');
+      expect(r.stderr).toContain('src/api/reply.ts: not a carrier file');
       expect(r.stderr).not.toContain('src/api/old.ts');
     });
   });

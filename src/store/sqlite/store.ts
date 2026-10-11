@@ -4,17 +4,16 @@ import { listApiKeyRows, readApiKeyRecord } from '../auth.js';
 import { existsSync } from 'node:fs';
 import { appendAuditEvent, listAuditEventsAfter, queryAuditEvents } from '../audit.js';
 import { getHippoDbPath, withWriteScope } from '../../db/index.js';
-import { activeGoalsWithPolicies, localGoalRecallRows, writeGoalRecallLog } from '../goals.js';
+import { activeGoalsWithPolicies } from '../goals.js';
 import { planningFallacyEvidenceAt } from '../planning-fallacy-evidence.js';
-import { writeRecallTrace } from '../recall-trace.js';
 import { recordTokenUse } from '../token-ledger.js';
 import { loadAmbientCandidates, loadContextCandidates } from '../candidates.js';
 import { loadEntriesByIds, loadFreshRawMemories } from '../entry-reads.js';
-import { strengthenRetrievedInOwnTx } from '../entry-writes.js';
 import { servedConnectorEvents, sqliteConnectorEvents } from './connector-events-group.js';
 import { servedConnectorWrites, sqliteConnectorWrites } from './connector-writes-group.js';
 import { sqliteDagReads } from './dag-reads-group.js';
 import { sqliteEntryWrites } from './entry-writes-group.js';
+import { finishRecallAt, servedLastRecall, sqliteLastRecall } from './last-recall-group.js';
 import { servedGraphReads, sqliteGraphReads } from './graph-reads-group.js';
 import { servedObjects, sqliteObjects } from './objects-group.js';
 import { servedPredictions, sqlitePredictions } from './predictions-group.js';
@@ -26,7 +25,7 @@ import { auditHighIdAt, revokeKeyAt } from '../key-audit.js';
 import { createKeyAt, createSelfKeyAt } from '../key-writes.js';
 import { onHandle } from '../open.js';
 import type {
-  AuditLog, ContextReads, ContinuityBlock, HippoStore, KeyAudit, KeyWrites, Readiness, RecallWrites, StoreGroups, Sync, VectorViews,
+  AuditLog, ContextReads, ContinuityBlock, HippoStore, KeyAudit, KeyWrites, Readiness, StoreGroups, Sync, VectorViews,
   VectorWrites,
 } from '../port.js';
 import { loadRecallSearchEntries } from '../search-rows.js';
@@ -65,6 +64,7 @@ export function sqliteSyncStore(hippoRoot: string): SqliteSyncStore & Sync<Omit<
     connectorEvents: sqliteConnectorEvents(hippoRoot),
     objects: sqliteObjects(hippoRoot),
     readiness: sqliteReadiness(hippoRoot),
+    lastRecall: sqliteLastRecall(hippoRoot),
     close() {},
   };
 }
@@ -180,6 +180,7 @@ export function sqliteStore(hippoRoot: string): HippoStore & StoreGroups {
     connectorEvents: servedConnectorEvents(sync.connectorEvents),
     objects: servedObjects(sqliteObjects(hippoRoot)),
     readiness: { ping: async () => sync.readiness.ping() },
+    lastRecall: servedLastRecall(sync.lastRecall),
     close: async () => sync.close(),
   };
 }
@@ -314,28 +315,4 @@ function continuityAt(hippoRoot: string, tenantId: string, eventLimit: number, k
     sessionHandoff: sessionId ? loadLatestHandoff(hippoRoot, tenantId, sessionId, {}, key ?? undefined) : null,
     recentSessionEvents: sessionId ? listSessionEvents(hippoRoot, tenantId, { session_id: sessionId, limit: eventLimit }) : [],
   };
-}
-
-/** What a finished recall wrote after its audit rows: the trace's id, null when none was asked or its write failed, and the ids strengthened. */
-interface RecallFinish {
-  readonly traceId: number | null;
-  readonly strengthened: ReadonlySet<string>;
-}
-
-/** sqliteStore's finishRecall, for the synchronous recall that cannot await the port. */
-export function finishRecallAt(hippoRoot: string, writes: RecallWrites): RecallFinish {
-  return onHandle(hippoRoot, (db) => {
-    const traceAndStrengthen = (): RecallFinish => ({
-      traceId: writes.trace ? writeRecallTrace(db, writes.trace) : null,
-      strengthened: writes.strengthen ? strengthenRetrievedInOwnTx(db, writes.strengthen.ids, writes.strengthen.opts) : new Set<string>(),
-    });
-    // Alone, the fail-soft trace and strengthen keep their own scopes so a busy lock loses them, never the read.
-    if (writes.goalLog.length === 0 && writes.audit.length === 0) return traceAndStrengthen();
-    // Inside this scope both run as savepoints, so one recall commits once and a failed trace or strengthen still unwinds alone.
-    return withWriteScope(db, 'finish_recall', () => {
-      writeGoalRecallLog(db, localGoalRecallRows(db, writes.goalLog));
-      for (const event of writes.audit) appendAuditEvent(db, event);
-      return traceAndStrengthen();
-    });
-  });
 }

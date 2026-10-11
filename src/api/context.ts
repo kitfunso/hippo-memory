@@ -41,7 +41,6 @@ import {
   type ContextSource,
 } from './context-select.js';
 import type { ContextOpts, ContextResult, ContextResultEntry } from './context-types.js';
-import { andThen, onStore } from './on-store.js';
 import { strengthenOf } from './recall-record.js';
 import { type Context, ownerOrSubject } from './types.js';
 
@@ -466,7 +465,7 @@ async function traceEmptyContext(ctx: Context, opts: ContextOpts, plan: ContextP
   };
   // The empty reply is already decided, so a lost trace is logged and the call still answers.
   try {
-    await onStore(ctx, (port) => port.finishRecall({ goalLog: [], audit: [], trace }));
+    await storeFor(ctx).finishRecall({ goalLog: [], audit: [], trace });
   } catch (error) {
     rethrowIfSqliteBlocked(error);
     log.error(`recall trace write failed: ${errorMessage(error)}`);
@@ -501,14 +500,13 @@ async function recordRetrieval(
     })),
   };
   const writes = { goalLog: [], audit: [], trace, strengthen: strengthenOf(ctx, retrievedIds) };
-  // hippo.db keeps the ids as its last recall, which feeds only outcomeForLastRecall, and it alone reads a second root.
-  await onStore(ctx, (port, local) => andThen(
-    local.finishLastRecall(writes, plan.hasGlobal ? plan.globalRoot : undefined),
-    (traceId) => {
-      plan.obs?.traced(traceId);
-      return port.bumpRecallStats(selected.length);
-    },
-  ));
+  // The last recall feeds only outcomeForLastRecall, so a store that keeps none still finishes the recall without one.
+  const store = storeFor(ctx);
+  const traceId = store.lastRecall
+    ? await store.lastRecall.finishRecall(writes, plan.hasGlobal ? plan.globalRoot : undefined)
+    : await store.finishRecall(writes).then(() => null);
+  plan.obs?.traced(traceId);
+  await store.bumpRecallStats(selected.length);
 
   // Replace selectedItems entries with markRetrieved-updated copies so
   // the returned ContextResult reflects post-recall state.

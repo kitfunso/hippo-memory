@@ -67,8 +67,8 @@ function plainFields(error: Error, dropped: readonly string[]): object {
 }
 
 describe('error codec properties', () => {
-  it('decode(encode(e)) keeps the class, message, plain fields and cause chain of every listed class', () => {
-    forAll(0xc0dec, 300, CASE, (drawn) => {
+  it('decode(encode(e)) keeps the class, message, plain fields and cause chain of every listed class', async () => {
+    await forAll(0xc0dec, 300, CASE, (drawn) => {
       const error = thrownFrom(drawn);
       // structuredClone is what a thread message does to the encoded error.
       const arrived = chain(decodeError(structuredClone(encodeError(error))));

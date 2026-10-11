@@ -13,7 +13,7 @@ import { rankRecall, type RankRecallOpts } from '../src/api/recall-pipeline.js';
 import { searchBothHybrid } from '../src/sharing/search-both.js';
 import { pushGoal, activeGoalsWithPolicies } from '../src/store/goals.js';
 import { updateStats, appendConsolidationRun } from '../src/store/index-and-stats.js';
-import { finishRecallAt } from '../src/store/sqlite/store.js';
+import { finishRecallAt } from '../src/store/sqlite/last-recall-group.js';
 import { loadAmbientCandidates } from '../src/store/candidates.js';
 
 const roots: string[] = [];

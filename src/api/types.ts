@@ -27,11 +27,6 @@ export interface Context {
 
 export type HippoDbContext = Context & { store?: undefined };
 
-// hippoRoot keeps the second test off TypeScript's weak-type rule, which would fail a ctx with no store key at all.
-export type StoreReply<C extends Context, R> = C extends { readonly store: HippoStore }
-  ? Promise<R>
-  : C extends { readonly hippoRoot: string; readonly store?: undefined } ? R : R | Promise<R>;
-
 /** Builds process-local Actor values (admin and host admin) for CLI and CLI-run connector Contexts; Bearer-authed callers build Actor from the api_keys row
  * instead. */
 export function adminActor(subject: string): Actor {

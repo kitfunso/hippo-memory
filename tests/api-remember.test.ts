@@ -98,7 +98,7 @@ describe("api.remember stamps the caller's project", () => {
     const ctx = storeCtx(true);
     const eleven = Array.from({ length: 11 }, (_, i) => `a${i}`);
     for (const project of [{ name: '' }, { name: '   ' }, { name: 'acme/app', aliases: eleven }, { name: 'x'.repeat(257) }]) {
-      await expect(Promise.resolve().then(() => remember(ctx, { content: 'release notes go out on tuesdays', project }))).rejects.toThrow(BadRequestError);
+      await expect(remember(ctx, { content: 'release notes go out on tuesdays', project })).rejects.toThrow(BadRequestError);
     }
     expect(loadAllEntries(ctx.hippoRoot)).toHaveLength(0);
   });

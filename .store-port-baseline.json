@@ -1,7 +1,7 @@
 {
   "openersOutside": 6,
   "openersInCli": 0,
-  "storeBranches": 4,
+  "storeBranches": 2,
   "routesWithoutStore": 0,
   "sqliteOnlyRoutes": 2,
   "routesOnLoop": 12,
@@ -33,22 +33,11 @@
     "src/index.ts": 1,
     "src/sharing/global-store.ts": 1
   },
-  "sqliteLocalMethods": [
-    "applyOutcome",
-    "applyOutcomeToLastRecall",
-    "finishLastRecall"
-  ],
+  "sqliteLocalMethods": [],
   "sqliteOnlyRoutesList": [
     "POST /v1/memories/:id/promote",
     "POST /v1/sleep"
   ],
-  "carrierFiles": 6,
-  "carrierFilesList": [
-    "src/api/auth.ts",
-    "src/api/context.ts",
-    "src/api/forget.ts",
-    "src/api/outcome.ts",
-    "src/api/promote.ts",
-    "src/api/remember.ts"
-  ]
+  "carrierFiles": 0,
+  "carrierFilesList": []
 }

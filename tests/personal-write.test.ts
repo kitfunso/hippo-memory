@@ -104,8 +104,8 @@ describe('client scopes', () => {
     const vault = mkdtempSync(join(tmpdir(), 'hippo-personal-vault-'));
     try {
       writeFileSync(join(vault, 'note.md'), '# note\nsome vault text\n');
-      await expect(Promise.resolve().then(() => importVault(vault, { hippoRoot: root, tenantId: 'default', name: 'v', scope: 'personal:private:b' }))).rejects.toThrow(BadRequestError);
-      await expect(Promise.resolve().then(() => importVault(vault, { hippoRoot: root, tenantId: 'default', name: 'v', scope: 'PERSONAL:x' }))).rejects.toThrow(BadRequestError);
+      await expect(importVault(vault, { hippoRoot: root, tenantId: 'default', name: 'v', scope: 'personal:private:b' })).rejects.toThrow(BadRequestError);
+      await expect(importVault(vault, { hippoRoot: root, tenantId: 'default', name: 'v', scope: 'PERSONAL:x' })).rejects.toThrow(BadRequestError);
       expect(loadAllEntries(root)).toHaveLength(0);
       await importVault(vault, { hippoRoot: root, tenantId: 'default', name: 'v', scope: 'vault:private:v' });
       expect(loadAllEntries(root).map((e) => e.scope)).toEqual(['vault:private:v']);

@@ -3,7 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { existsSync, mkdirSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { createRequire } from 'node:module';
-import { restoreDormant, supersede } from '../src/api/index.js';
+import { restoreDormant } from '../src/api/index.js';
+import { supersedeNow } from './_helpers/supersede-now.js';
 import type { DatabaseSyncLike } from '../src/db/index.js';
 import { consolidate } from '../src/consolidate/sleep.js';
 import { importAtSessionEnd, importForStore, importProjectMemories, type Machine } from '../src/agent-memories/sync.js';
@@ -169,7 +170,7 @@ describe('agent memory sync', () => {
       // The import's first lock request: the other writer commits on its own connection, then the import goes on.
       if (sql === 'BEGIN IMMEDIATE' && !raced) {
         raced = true;
-        winners.push(supersede(ctxFor(w.local), edited.id, 'The staging database lives in ap-south.').newId);
+        winners.push(supersedeNow(ctxFor(w.local), edited.id, 'The staging database lives in ap-south.'));
       }
       exec.call(this, sql);
     });

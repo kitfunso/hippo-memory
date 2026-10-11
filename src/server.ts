@@ -1,5 +1,5 @@
 import {
-  type Actor, authCreateSelf, type AuthCreateSelfOpts, type AuthCreateSelfResult, authRevoke, type AuthRevokeReply, type AuthRevokeResult, type Context,
+  type Actor, authCreateSelf, type AuthCreateSelfOpts, type AuthCreateSelfResult, authRevoke, type AuthRevokeResult, type Context,
 } from './api/index.js';
 import { ForbiddenError, NotFoundError } from './core/api-errors.js';
 
@@ -8,7 +8,7 @@ export { serve } from './server/boot.js';
 // Add-on packages mint and revoke keys through these without importing the whole api surface.
 export {
   authCreateSelf, authRevoke, ForbiddenError, NotFoundError,
-  type AuthCreateSelfOpts, type AuthCreateSelfResult, type AuthRevokeReply, type AuthRevokeResult, type Context, type Actor,
+  type AuthCreateSelfOpts, type AuthCreateSelfResult, type AuthRevokeResult, type Context, type Actor,
 };
 // Published on the hippo-memory/server subpath before they moved to http-util.ts, so they stay exported here.
 export { isCrossSite, LOOPBACK_HOST_HEADER } from './util/http-util.js';
@@ -28,7 +28,8 @@ export { captureSessionTexts, type SessionCaptureRequest, type SessionCaptureRes
 export {
   hasGroup, sqliteStore,
   type AmbientCandidateRequest, type ContextReads, type EntryRemoval, type EntryTarget, type EntryWrite, type EntryWrites, type HippoStore,
-  type KeyAudit, type KeyListQuery, type KeyMint, type KeyRevoke, type KeyWrites, type OutcomeWrite, type RawArchive, type RecallSearchArgs,
+  type KeyAudit, type KeyListQuery, type KeyMint, type KeyRevoke, type KeyWrites, type LastRecall, type LastRecallWrites, type OutcomeWrite,
+  type RawArchive, type RecallSearchArgs,
   type RecallWrites, type SelfKeyMint, type StoreGroup, type StoreGroups, type SupersedeWrite, type VectorReads,
   type VectorBackfillQuery, type VectorRowWrite, type VectorWrite, type VectorWriteResult, type VectorWrites,
 } from './store/index.js';
@@ -38,7 +39,7 @@ export { rejectionDigest } from './store/rejection.js';
 export { RejectedValueError } from './core/api-errors.js';
 export { ownScopeTouches } from './core/recall-scope.js';
 export { BadRequestError, ConflictError } from './core/api-errors.js';
-export type { HippoDbContext, StoreReply } from './api/types.js';
+export type { HippoDbContext } from './api/types.js';
 export type { ApiKeyListItem, ApiKeyListRow, ApiKeyRecord, ListApiKeysOpts, NewApiKey } from './store/auth.js';
 export type { KeysetPosition } from './util/keyset.js';
 // The types HippoStore's methods take and return, so an add-on store can implement them from this subpath.

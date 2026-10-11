@@ -3,6 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import ts from 'typescript';
+import { findFloatingApiCalls } from '../scripts/check-floating-api.mjs';
 import { findFloatingPromises } from '../scripts/check-floating-promises.mjs';
 
 // Parsing the real ES2022 lib took 6.5 s on a CI runner, past the unit budget; the check only needs these globals.
@@ -73,5 +74,59 @@ describe('check-floating-promises', { timeout: 30_000 }, () => {
 
   it('ignores calls that do not return a promise', () => {
     expect(hitsFor('function plain(): number { return 1; }\nplain();\n')).toEqual([]);
+  });
+});
+
+describe('check-floating-api', { timeout: 30_000 }, () => {
+  let dir: string;
+  beforeEach(() => { dir = mkdtempSync(join(tmpdir(), 'floating-api-')); });
+  afterEach(() => { rmSync(dir, { recursive: true, force: true }); });
+
+  /** The hits for one test file that imports a stand-in forget from src/api/forget.ts. */
+  function hitsFor(body: string): { file: string; line: number; why: string }[] {
+    mkdirSync(join(dir, 'src', 'api'), { recursive: true });
+    mkdirSync(join(dir, 'tests'));
+    const files = {
+      'lib.d.ts': `${MINIMAL_LIB}\ndeclare function expect(x: unknown): { rejects: unknown; toThrow(): void };`,
+      'src/api/forget.ts': 'export async function forget(id: string): Promise<string> { return id; }\nexport async function other(): Promise<number> { return 1; }\n',
+      'tests/use.test.ts': `import { forget, other } from '../src/api/forget';\n${body}`,
+    };
+    for (const [name, text] of Object.entries(files)) writeFileSync(join(dir, name), text, 'utf8');
+    const program = ts.createProgram(Object.keys(files).map((name) => join(dir, name)), {
+      target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, strict: true, noEmit: true, noLib: true,
+    });
+    return findFloatingApiCalls(program, dir).map(({ file, line, why }) => ({ file, line, why }));
+  }
+
+  it('flags a dropped api write and a sync expect callback that returns one', () => {
+    const body = [
+      'async function main(): Promise<void> {',
+      "  forget('a');",
+      "  forget('a').then(() => 0);",
+      "  expect(() => forget('a')).toThrow();",
+      '}',
+      'void main;',
+    ].join('\n');
+    expect(hitsFor(body)).toEqual([
+      { file: 'tests/use.test.ts', line: 3, why: 'dropped' },
+      { file: 'tests/use.test.ts', line: 4, why: 'dropped' },
+      { file: 'tests/use.test.ts', line: 5, why: 'sync expect' },
+    ]);
+  });
+
+  it('passes an awaited, returned, void or handled call, an async expect, and other promises', () => {
+    const body = [
+      'async function main(): Promise<string> {',
+      "  await forget('a');",
+      "  void forget('a');",
+      "  forget('a').catch(() => 0);",
+      "  await expect(forget('a')).rejects;",
+      "  expect(async () => forget('a'));",
+      '  other();',
+      "  return forget('a');",
+      '}',
+      'void main;',
+    ].join('\n');
+    expect(hitsFor(body)).toEqual([]);
   });
 });

@@ -26,16 +26,16 @@ describe('typed-object id parser properties', () => {
   });
   afterEach(() => { vi.restoreAllMocks(); });
 
-  it('an id written with padding and leading zeros comes back as that id', () => {
+  it('an id written with padding and leading zeros comes back as that id', async () => {
     const pad = str(' \t\n', 0, 2);
     const written = both(both(oneOf([int(1, 9999), int(1, Number.MAX_SAFE_INTEGER)]), int(0, 3)), both(pad, pad));
-    forAll(0x1d01, 400, written, ([[id, zeros], [before, after]]) => {
+    await forAll(0x1d01, 400, written, ([[id, zeros], [before, after]]) => {
       expect(idOrExit(`${before}${'0'.repeat(zeros)}${id}${after}`)).toEqual({ id });
     });
   });
 
-  it('a string that is not whole positive digits is refused with exit 1, and never read as a number', () => {
-    forAll(0x1d02, 500, str('0123456789 +-.eExX_,a\t', 0, 8), (raw) => {
+  it('a string that is not whole positive digits is refused with exit 1, and never read as a number', async () => {
+    await forAll(0x1d02, 500, str('0123456789 +-.eExX_,a\t', 0, 8), (raw) => {
       const trimmed = raw.trim();
       const positiveDigits = /^0*[1-9][0-9]*$/.test(trimmed);
       expect(idOrExit(raw)).toEqual(positiveDigits ? { id: Number(trimmed) } : { exit: 1 });
@@ -43,9 +43,9 @@ describe('typed-object id parser properties', () => {
   });
 
   // Digits past 2^53 would come back as the nearest number a double holds, which is not the id that was typed.
-  it('an id too long to be held exactly is refused', () => {
+  it('an id too long to be held exactly is refused', async () => {
     const digits = map(both(str('123456789', 1, 1), str('0123456789', 16, 24)), ([lead, rest]) => lead + rest);
-    forAll(0x1d03, 200, digits, (raw) => {
+    await forAll(0x1d03, 200, digits, (raw) => {
       expect(idOrExit(raw)).toEqual({ exit: 1 });
     });
   });
@@ -92,8 +92,8 @@ const HOSTILE_CURSOR: Gen<string> = oneOf([
 ]);
 
 describe('keyset cursor properties', () => {
-  it('a minted cursor parses back to its position, and only under the part types it was minted with', () => {
-    forAll(0xc0750, 400, both(PART_VALUE, PART_VALUE), ([key, id]) => {
+  it('a minted cursor parses back to its position, and only under the part types it was minted with', async () => {
+    await forAll(0xc0750, 400, both(PART_VALUE, PART_VALUE), ([key, id]) => {
       const cursor = minted({ key, id });
       for (const keyPart of PARTS) {
         for (const idPart of PARTS) {
@@ -104,8 +104,8 @@ describe('keyset cursor properties', () => {
     });
   });
 
-  it('any other string is refused with a 400, or yields parts of the types asked for', () => {
-    forAll(0xc0751, 400, both(HOSTILE_CURSOR, both(pick(PARTS), pick(PARTS))), ([raw, [keyPart, idPart]]) => {
+  it('any other string is refused with a 400, or yields parts of the types asked for', async () => {
+    await forAll(0xc0751, 400, both(HOSTILE_CURSOR, both(pick(PARTS), pick(PARTS))), ([raw, [keyPart, idPart]]) => {
       const { pos, status } = positionOrStatus(raw, keyPart, idPart);
       if (pos === undefined) expect(status).toBe(400);
       else expect([fits(pos.key, keyPart), fits(pos.id, idPart)]).toEqual([true, true]);
@@ -208,9 +208,9 @@ function parseOf(items: readonly Item[]) {
 }
 
 describe('parseArgs properties', () => {
-  it("argv built from a verb's flags gives back the same command, flags and positionals", () => {
+  it("argv built from a verb's flags gives back the same command, flags and positionals", async () => {
     const argv = both(both(COMMAND, arr(DRAW, 0, 8)), both(BARE_LAST, TAIL));
-    forAll(0xa49, 500, argv, ([[command, body], [last, tail]]) => {
+    await forAll(0xa49, 500, argv, ([[command, body], [last, tail]]) => {
       const items = [...body, ...last].map((draw) => {
         if (!('family' in draw)) return draw;
         const names = namesOn(command, draw.family, draw.own);

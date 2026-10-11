@@ -41,12 +41,11 @@ describe('api tenant deny — archiveRaw and forget', () => {
     );
 
     // Tenant B (bravo) tries to archive it. Should fail with not-found.
-    await expect(Promise.resolve().then(() =>
-      archiveRaw(
+    await expect(archiveRaw(
         { hippoRoot: home, tenantId: 'bravo', actor: { subject: 'api_key:bravo-key', role: 'admin' } },
         created.id,
         'cross-tenant probe',
-      )),
+      ),
     ).rejects.toThrow(/memory not found/i);
 
     // Original row must still exist with its kind intact.
@@ -71,11 +70,10 @@ describe('api tenant deny — archiveRaw and forget', () => {
     );
 
     // Tenant B tries to forget it.
-    await expect(Promise.resolve().then(() =>
-      forget(
+    await expect(forget(
         { hippoRoot: home, tenantId: 'bravo', actor: { subject: 'api_key:bravo-key', role: 'admin' } },
         created.id,
-      )),
+      ),
     ).rejects.toThrow(/memory not found/i);
 
     // Original row must still exist.

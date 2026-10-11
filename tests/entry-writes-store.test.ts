@@ -1,19 +1,19 @@
 // With ctx.store, remember, outcome, supersede, archiveRaw and forget write through its entryWrites group and never open hippo.db;
 // their routes and the hippo_remember and hippo_outcome tools run under another store only when it has the group.
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
-  archiveRaw, forget, outcome, outcomeForLastRecall, remember, supersede, type Actor, type ArchiveRawResult, type Context, type ForgetResult,
-  type HippoDbContext, type OutcomeResult, type RememberResult, type SupersedeResult,
+  archiveRaw, forget, outcome, outcomeForLastRecall, remember, supersede, type Actor, type ArchiveRawResult, type ForgetResult,
+  type OutcomeResult, type RememberResult, type SupersedeResult,
 } from '../src/api/index.js';
 import { closeHippoDb, openHippoDb, withSqliteBlocked } from '../src/db/index.js';
-import { SqliteBlockedError, StoreNotPortedError } from '../src/util/sqlite-blocked.js';
+import { StoreNotPortedError } from '../src/util/sqlite-blocked.js';
 import { STORE_NOT_PORTED_MESSAGE } from '../src/util/http-util.js';
 import { handleMcpRequest, type McpContext } from '../src/mcp/server.js';
 import { lastRecalledIds, resolveClientKey } from '../src/mcp/session-state.js';
-import { OTHER_STORE_MARKER, serve, type HippoStore, type ServerHandle } from '../src/server.js';
+import { OTHER_STORE_MARKER, serve, type ServerHandle } from '../src/server.js';
 import { inMemoryEntryWritesStore } from './_helpers/in-memory-entry-writes-store.js';
 import { portOnlyStoreWithoutVectorReads } from './_helpers/port-only-store.js';
 import { seedTwoTenants, TENANT_A, type TwoTenantFixture } from './_helpers/store-conformance.js';
@@ -100,19 +100,13 @@ describe('the api with ctx.store', () => {
     expect(auditIdsOnHippoDb(storeRoot)).toEqual(before);
   });
 
-  it("refuses a connector write, the trace link and the last-recall outcome under a store without connectorWrites", async () => {
+  it("refuses a connector write, the trace link and the last-recall outcome under a store without connectorWrites or lastRecall", async () => {
     const ctx = { hippoRoot: markedFolder(), tenantId: TENANT_A, actor: admin, store: inMemoryEntryWritesStore(copyOf()).store };
     const noGroup = new StoreNotPortedError('in-memory', 'connectorWrites');
     await expect(remember(ctx, { content: 'connector text', untrusted: true })).rejects.toThrow(noGroup);
-    await expect(outcome(ctx, ['mem_x'], true, { traceId: 1 })).rejects.toThrow('links its recall trace on hippo.db only');
+    await expect(outcome(ctx, ['mem_x'], true, { traceId: 1 })).rejects.toThrow(new StoreNotPortedError('in-memory', 'lastRecall'));
     await expect(archiveRaw(ctx, 'mem_x', 'r', { event: { connector: 'slack', eventId: 'Ev_x' } })).rejects.toThrow(noGroup);
-    await expect(outcomeForLastRecall(ctx, true)).rejects.toThrow(SqliteBlockedError);
-  });
-
-  it('stays synchronous for a ctx with no store', () => {
-    expectTypeOf(remember<HippoDbContext>).returns.toEqualTypeOf<RememberResult>();
-    expectTypeOf(remember<Context & { store: HippoStore }>).returns.toEqualTypeOf<Promise<RememberResult>>();
-    expectTypeOf(remember<Context>).returns.toEqualTypeOf<RememberResult | Promise<RememberResult>>();
+    await expect(outcomeForLastRecall(ctx, true)).rejects.toThrow(new StoreNotPortedError('in-memory', 'lastRecall'));
   });
 });
 

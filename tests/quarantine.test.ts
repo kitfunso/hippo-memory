@@ -225,13 +225,12 @@ describe('atomicity: a connector event log write that throws leaves no memory an
       } finally {
         closeHippoDb(setup);
       }
-      await expect(Promise.resolve().then(() =>
-        api.remember(ctx, {
+      await expect(api.remember(ctx, {
           content: INJECTION,
           untrusted: true,
           scope: 'github:public:acme/demo',
           event: { connector: 'github', idempotencyKey: 'key-doomed', deliveryId: 'd-doomed', eventName: 'issue_comment' },
-        })),
+        }),
       ).rejects.toThrow('boom');
 
       const db = openHippoDb(home);

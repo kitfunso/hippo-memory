@@ -33,7 +33,7 @@ function mint(expiresAt?: string): { keyId: string; plaintext: string } {
   return withDb((db) => createApiKey(db, { tenantId: 'default', label: 'expiry', role: 'member', ownerSubject: 'alice', expiresAt }));
 }
 
-function selfMint(): AuthCreateSelfResult {
+function selfMint(): Promise<AuthCreateSelfResult> {
   const actor: Actor = { subject: 'alice', role: 'member', viaAuthResolver: true };
   return authCreateSelf({ hippoRoot: home, tenantId: 'default', actor }, { ttlDays: 30, perSubject: 3 });
 }
@@ -105,17 +105,17 @@ describe('the binary floor for expiring keys', () => {
     expect(floor()).toBe('1.24.0');
   });
 
-  it('the first self-minted key raises the floor and a second leaves it', () => {
+  it('the first self-minted key raises the floor and a second leaves it', async () => {
     expect(floor()).toBe('1.24.0');
-    selfMint();
+    await selfMint();
     expect(floor()).toBe(EXPIRING_KEYS_MIN_BINARY);
-    selfMint();
+    await selfMint();
     expect(floor()).toBe(EXPIRING_KEYS_MIN_BINARY);
   });
 
-  it('a self-mint that fails leaves the floor where it was', () => {
+  it('a self-mint that fails leaves the floor where it was', async () => {
     withDb((db) => db.exec(`CREATE TRIGGER audit_broken BEFORE INSERT ON audit_log BEGIN SELECT RAISE(ABORT, 'audit table unwritable'); END`));
-    expect(() => selfMint()).toThrow(/audit table unwritable/);
+    await expect(selfMint()).rejects.toThrow(/audit table unwritable/);
     expect(floor()).toBe('1.24.0');
   });
 

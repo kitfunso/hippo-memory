@@ -132,7 +132,7 @@ describe('case 2: refused supersede audit surface', () => {
       const yContent = 'rejected successor content for supersede';
       await api.reject(ctx(home), { value: yContent, reason: 'pre-emptively rejected successor' });
 
-      await expect(Promise.resolve().then(() => api.supersede(ctx(home), old.id, yContent))).rejects.toThrow(RejectedValueError);
+      await expect(api.supersede(ctx(home), old.id, yContent)).rejects.toThrow(RejectedValueError);
 
       // CAS rolled back: the old row's superseded_by pointer is untouched.
       const stored = readEntry(home, old.id);

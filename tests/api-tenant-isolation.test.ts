@@ -13,6 +13,7 @@ import {
 } from '../src/api/index.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { supersedeNow } from './_helpers/supersede-now.js';
 
 // SAFETY: node:sqlite's DatabaseSync is the class db.ts wraps as DatabaseSyncLike.
 const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite') as { DatabaseSync: { prototype: DatabaseSyncLike } };
@@ -102,11 +103,11 @@ describe('api tenant isolation', () => {
       // The loser's first lock request: the winner runs to its commit on its own connection, then the loser goes on.
       if (sql === 'BEGIN IMMEDIATE' && !raced) {
         raced = true;
-        winners.push(supersede(alpha(), created.id, 'the winner').newId);
+        winners.push(supersedeNow(alpha(), created.id, 'the winner'));
       }
       exec.call(this, sql);
     });
-    await expect(Promise.resolve().then(() => supersede(alpha(), created.id, 'the loser'))).rejects.toThrow(`Memory ${created.id} already superseded by another writer`);
+    await expect(supersede(alpha(), created.id, 'the loser')).rejects.toThrow(`Memory ${created.id} already superseded by another writer`);
     vi.restoreAllMocks();
 
     expect(winners).toHaveLength(1);
@@ -121,7 +122,7 @@ describe('api tenant isolation', () => {
     } finally {
       closeHippoDb(db);
     }
-    await expect(Promise.resolve().then(() => supersede(alpha(), created.id, 'a later writer'))).rejects.toThrow(`is already superseded by ${winners[0]}`);
+    await expect(supersede(alpha(), created.id, 'a later writer')).rejects.toThrow(`is already superseded by ${winners[0]}`);
   });
 
   // ---- Test 6: supersede CAS — clean path -----------------------------------
@@ -177,12 +178,11 @@ describe('api tenant isolation', () => {
       { content: 'alpha-row supersede tenant-scope canary' },
     );
 
-    await expect(Promise.resolve().then(() =>
-      supersede(
+    await expect(supersede(
         { hippoRoot: home, tenantId: 'bravo', actor: { subject: 'api_key:bravo-key', role: 'admin' } },
         created.id,
         'cross-tenant supersede attempt',
-      )),
+      ),
     ).rejects.toThrow(/memory not found/i);
 
     // The original row is untouched: no superseded_by, no new memory created.

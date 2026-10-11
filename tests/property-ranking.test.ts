@@ -38,8 +38,8 @@ function ranked(candidates: readonly ScoredEntryLike[]): string[] {
 }
 
 describe('ranking properties', () => {
-  it('any arrival order of the same candidates ranks them the same, ties included', () => {
-    forAll(0x7a9c, 500, ARRIVALS, (arrivals) => {
+  it('any arrival order of the same candidates ranks them the same, ties included', async () => {
+    await forAll(0x7a9c, 500, ARRIVALS, (arrivals) => {
       const first = arrivals.map((a) => a.scored);
       const second = [...arrivals].sort((a, b) => a.turn - b.turn).map((a) => a.scored);
       const order = ranked(first);
@@ -48,8 +48,8 @@ describe('ranking properties', () => {
     });
   });
 
-  it('the physics comparator ranks any arrival order the same, by id or by a content tie key', () => {
-    forAll(0x9415, 500, both(ARRIVALS, pick([true, false])), ([arrivals, byContent]) => {
+  it('the physics comparator ranks any arrival order the same, by id or by a content tie key', async () => {
+    await forAll(0x9415, 500, both(ARRIVALS, pick([true, false])), ([arrivals, byContent]) => {
       const compare = comparePhysicsResultsBy<Row>((row) => row.score, byContent ? (row) => row.content : undefined);
       const order = (rows: readonly Row[]): string[] => [...rows].sort(compare).map((row) => row.memoryId);
       const first = arrivals.map(({ scored }) => ({ memoryId: scored.entry.id, score: scored.score, content: scored.entry.content }));
@@ -57,9 +57,9 @@ describe('ranking properties', () => {
     });
   });
 
-  it('raising one candidate\'s score never moves it down the ranking', () => {
+  it('raising one candidate\'s score never moves it down the ranking', async () => {
     const raise = both(ARRIVALS, both(int(0, 11), pick([1e-9, 0.2, 0.5, 2])));
-    forAll(0x4a15e, 500, raise, ([arrivals, [slot, by]]) => {
+    await forAll(0x4a15e, 500, raise, ([arrivals, [slot, by]]) => {
       const before = arrivals.map((a) => a.scored);
       if (before.length === 0) return;
       const chosen = before[slot % before.length]!;

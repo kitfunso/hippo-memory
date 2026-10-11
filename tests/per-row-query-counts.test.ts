@@ -83,12 +83,12 @@ function ageMirrors(root: string): () => number {
 }
 
 describe('outcome', () => {
-  it('opens the store once and reads every id in one query', () => {
+  it('opens the store once and reads every id in one query', async () => {
     for (const n of SIZES) {
       const root = freshRoot('qc-outcome');
       const entries = rows(n, 'outcome');
       seed(root, entries);
-      const { result, statements } = recordStatements(() => outcome(ctxFor(root), entries.map((e) => e.id), true));
+      const { result, statements } = await recordStatementsAsync(() => outcome(ctxFor(root), entries.map((e) => e.id), true));
       expect(result.applied).toBe(n);
       expect(countMatching(statements, STORE_OPEN)).toBe(1);
       expect(countMatching(statements, ROW_READ)).toBe(1);
@@ -194,16 +194,17 @@ describe('importEntries', () => {
 });
 
 describe('importVault', () => {
-  it('probes a dry run on a fixed number of opens however many notes changed', () => {
-    const opens = SIZES.map((n) => {
+  it('probes a dry run on a fixed number of opens however many notes changed', async () => {
+    const opens: number[] = [];
+    for (const n of SIZES) {
       const root = freshRoot('qc-vault-dry');
       const vault = path.join(freshRoot('qc-vault-notes'), 'notes');
       fs.mkdirSync(vault);
       for (let i = 0; i < n; i++) fs.writeFileSync(path.join(vault, `note-${i}.md`), `vault note ${i} about the zephyrine cache`);
-      const { result, statements } = recordStatements(() => importVault(vault, { hippoRoot: root, tenantId: 'default', name: 'notes', dryRun: true }));
+      const { result, statements } = await recordStatementsAsync(() => importVault(vault, { hippoRoot: root, tenantId: 'default', name: 'notes', dryRun: true }));
       expect(result.imported).toBe(n);
-      return countMatching(statements, STORE_OPEN);
-    });
+      opens.push(countMatching(statements, STORE_OPEN));
+    }
     expect(opens[1]).toBe(opens[0]);
   });
 });
@@ -572,13 +573,13 @@ describe('writeSessionDigest', () => {
 });
 
 describe('an id-list read of one tenant', () => {
-  it('seeks each id on the primary key, never walking every row of the tenant', () => {
+  it('seeks each id on the primary key, never walking every row of the tenant', async () => {
     const root = freshRoot('qc-id-plan');
     const entries = rows(10, 'plan');
     seed(root, entries);
     const ids = entries.map((e) => e.id);
-    const { result, statements } = recordStatements(() => {
-      outcome(ctxFor(root), ids, true);
+    const { result, statements } = await recordStatementsAsync(async () => {
+      await outcome(ctxFor(root), ids, true);
       return { held: heldIdLookup(root, 'default', ids)(ids[0]), listed: loadEntriesByIds(root, ids, 'default').length };
     });
     expect(result).toEqual({ held: true, listed: 10 });

@@ -17,7 +17,7 @@ import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { loadIndex, saveIndex } from '../src/store/index-and-stats.js';
 import { remember, outcomeForLastRecall, type HippoDbContext } from '../src/api/index.js';
-import { recordStatements, countMatching } from './_helpers/count-statements.js';
+import { recordStatementsAsync, countMatching } from './_helpers/count-statements.js';
 
 function tmpHome(): string {
   const home = mkdtempSync(join(tmpdir(), 'hippo-api-ofr-'));
@@ -157,7 +157,7 @@ describe('api.outcomeForLastRecall reads', () => {
       seedLastRetrievalIds(home, recalled);
       const ctx: HippoDbContext = { hippoRoot: home, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
 
-      const { result, statements, rowsRead } = recordStatements(() => outcomeForLastRecall(ctx, true));
+      const { result, statements, rowsRead } = await recordStatementsAsync(async () => outcomeForLastRecall(ctx, true));
 
       expect(result).toEqual({ applied: 2, ids: recalled });
       expect(countMatching(statements, 'FROM memories ORDER BY created ASC, id ASC')).toBe(0);

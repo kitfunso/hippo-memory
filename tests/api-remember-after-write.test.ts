@@ -24,11 +24,10 @@ describe('remember with a connector event is transactional', () => {
 
   it('rolls back the memory row when the event log write throws', async () => {
     breakEventLog(root);
-    await expect(Promise.resolve().then(() =>
-      remember({ hippoRoot: root, tenantId: 'default', actor: { subject: 'test', role: 'admin' } }, {
+    await expect(remember({ hippoRoot: root, tenantId: 'default', actor: { subject: 'test', role: 'admin' } }, {
         content: 'doomed',
         event: { connector: 'slack', eventId: 'Ev_doomed' },
-      })),
+      }),
     ).rejects.toThrow(/boom/);
     expect(loadAllEntries(root).filter((e) => e.content === 'doomed')).toHaveLength(0);
   });

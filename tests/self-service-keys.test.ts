@@ -49,11 +49,11 @@ function actorOf(token: string): Actor {
   return { subject: person.subject, role: person.role, viaAuthResolver: true };
 }
 
-function mintAs(actor: Actor, label = 'laptop', over: Partial<AuthCreateSelfOpts> = {}): AuthCreateSelfResult {
+function mintAs(actor: Actor, label = 'laptop', over: Partial<AuthCreateSelfOpts> = {}): Promise<AuthCreateSelfResult> {
   return authCreateSelf({ hippoRoot: home, tenantId: TENANT, actor }, { label, ...OPTS, ...over });
 }
 
-const selfMint = (token = ALICE, label = 'laptop', over: Partial<AuthCreateSelfOpts> = {}): AuthCreateSelfResult => mintAs(actorOf(token), label, over);
+const selfMint = (token = ALICE, label = 'laptop', over: Partial<AuthCreateSelfOpts> = {}): Promise<AuthCreateSelfResult> => mintAs(actorOf(token), label, over);
 
 interface KeyRow { key_id: string; owner_subject: string | null; expires_at: string | null; role: string; revoked_at: string | null }
 
@@ -119,9 +119,9 @@ afterEach(async () => {
 });
 
 describe('authCreateSelf', () => {
-  it('mints a member key owned by the caller that expires after ttlDays', () => {
+  it('mints a member key owned by the caller that expires after ttlDays', async () => {
     const before = Date.now();
-    const minted = selfMint();
+    const minted = await selfMint();
     expect(minted).toMatchObject({ tenantId: TENANT, role: 'member' });
     expect(Date.parse(minted.expiresAt)).toBeGreaterThanOrEqual(before + 90 * DAY_MS);
     expect(Date.parse(minted.expiresAt)).toBeLessThanOrEqual(Date.now() + 90 * DAY_MS);
@@ -129,8 +129,8 @@ describe('authCreateSelf', () => {
     expect(withDb((db) => validateApiKey(db, minted.plaintext))).toMatchObject({ valid: true, tenantId: TENANT, role: 'member' });
   });
 
-  it('gives a signed-in admin a member key too', () => {
-    const minted = selfMint('tok.boss');
+  it('gives a signed-in admin a member key too', async () => {
+    const minted = await selfMint('tok.boss');
     expect(minted.role).toBe('member');
     expect(keyRows()).toEqual([expect.objectContaining({ role: 'member', owner_subject: 'boss@corp.example' })]);
     expect(withDb((db) => validateApiKey(db, minted.plaintext)).role).toBe('member');
@@ -140,18 +140,18 @@ describe('authCreateSelf', () => {
     ['the local CLI', adminActor('cli')],
     ['an admin API key', { subject: 'api_key:hk_admin', role: 'admin' } satisfies Actor],
     ['a member API key', { subject: 'api_key:hk_member', role: 'member' } satisfies Actor],
-  ])('refuses %s with ForbiddenError and writes nothing', (_name, actor) => {
-    expect(() => mintAs(actor)).toThrow(ForbiddenError);
+  ])('refuses %s with ForbiddenError and writes nothing', async (_name, actor) => {
+    await expect(mintAs(actor)).rejects.toThrow(ForbiddenError);
     expect(keyRows()).toEqual([]);
     expect(auditRows()).toEqual([]);
   });
 
-  it('revokes the oldest live keys over the cap and audits each one with the mint', () => {
+  it('revokes the oldest live keys over the cap and audits each one with the mint', async () => {
     const cap = { perSubject: 2 };
-    const first = selfMint(ALICE, 'one', cap);
-    const second = selfMint(ALICE, 'two', cap);
-    selfMint('tok.bob', 'bob', cap);
-    const third = selfMint(ALICE, 'three', cap);
+    const first = await selfMint(ALICE, 'one', cap);
+    const second = await selfMint(ALICE, 'two', cap);
+    await selfMint('tok.bob', 'bob', cap);
+    const third = await selfMint(ALICE, 'three', cap);
     expect(liveOwned('alice@corp.example').map((r) => r.key_id)).toEqual([second.keyId, third.keyId]);
     expect(liveOwned('bob@corp.example')).toHaveLength(1);
     const audit = auditRows();
@@ -165,9 +165,9 @@ describe('authCreateSelf', () => {
     expect(withDb((db) => validateApiKey(db, first.plaintext)).valid).toBe(false);
   });
 
-  it('writes one auth_revoke per replaced key when a lower cap replaces several', () => {
-    const early = [selfMint(ALICE, 'a'), selfMint(ALICE, 'b'), selfMint(ALICE, 'c')];
-    const latest = selfMint(ALICE, 'd', { perSubject: 1 });
+  it('writes one auth_revoke per replaced key when a lower cap replaces several', async () => {
+    const early = [await selfMint(ALICE, 'a'), await selfMint(ALICE, 'b'), await selfMint(ALICE, 'c')];
+    const latest = await selfMint(ALICE, 'd', { perSubject: 1 });
     expect(liveOwned('alice@corp.example').map((r) => r.key_id)).toEqual([latest.keyId]);
     const audit = auditRows();
     expect(audit.filter((r) => r.op === 'auth_revoke')).toEqual(
@@ -179,10 +179,10 @@ describe('authCreateSelf', () => {
   it.each([
     ['a mint under the cap', 3],
     ['a mint that replaces a key', 1],
-  ])('leaves no new key and revokes nothing when the audit write fails: %s', (_name, perSubject) => {
-    const kept = selfMint(ALICE, 'kept', { perSubject });
+  ])('leaves no new key and revokes nothing when the audit write fails: %s', async (_name, perSubject) => {
+    const kept = await selfMint(ALICE, 'kept', { perSubject });
     breakAuditLog();
-    expect(() => selfMint(ALICE, 'second', { perSubject })).toThrow(/audit table unwritable/);
+    await expect(selfMint(ALICE, 'second', { perSubject })).rejects.toThrow(/audit table unwritable/);
     expect(keyRows()).toEqual([expect.objectContaining({ key_id: kept.keyId, revoked_at: null })]);
   });
 
@@ -197,27 +197,27 @@ describe('authCreateSelf', () => {
     ['perSubject', Number.NaN],
   ])('throws before opening the store when %s is %s', async (field, value) => {
     const ctx = { hippoRoot: join(home, 'never-opened'), tenantId: TENANT, actor: actorOf(ALICE) };
-    await expect(Promise.resolve().then(() => authCreateSelf(ctx, { ...OPTS, [field]: value }))).rejects.toThrow(RangeError);
-    await expect(Promise.resolve().then(() => authCreateSelf(ctx, { ...OPTS, [field]: value }))).rejects.toThrow(field);
+    await expect(authCreateSelf(ctx, { ...OPTS, [field]: value })).rejects.toThrow(RangeError);
+    await expect(authCreateSelf(ctx, { ...OPTS, [field]: value })).rejects.toThrow(field);
     expect(existsSync(ctx.hippoRoot)).toBe(false);
   });
 
-  it('does not count or revoke keys that expired before the next mint', () => {
+  it('does not count or revoke keys that expired before the next mint', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date('2026-10-05T12:00:00Z'));
     const cap = { ttlDays: 1, perSubject: 2 };
-    selfMint(ALICE, 'a', cap);
-    selfMint(ALICE, 'b', cap);
+    await selfMint(ALICE, 'a', cap);
+    await selfMint(ALICE, 'b', cap);
     vi.setSystemTime(new Date('2026-10-07T12:00:00Z'));
-    const latest = selfMint(ALICE, 'c', cap);
+    const latest = await selfMint(ALICE, 'c', cap);
     expect(auditRows().filter((r) => r.op === 'auth_revoke')).toEqual([]);
     const unexpired = liveOwned('alice@corp.example').filter((r) => Date.parse(r.expires_at!) > Date.now());
     expect(unexpired.map((r) => r.key_id)).toEqual([latest.keyId]);
   });
 
-  it('accepts a fractional day count, the 3650-day ceiling and a cap of one', () => {
-    expect(() => selfMint(ALICE, 'half-day', { ttlDays: 0.5 })).not.toThrow();
-    const longest = selfMint(ALICE, 'ceiling', { ttlDays: 3650, perSubject: 1 });
+  it('accepts a fractional day count, the 3650-day ceiling and a cap of one', async () => {
+    await expect(selfMint(ALICE, 'half-day', { ttlDays: 0.5 })).resolves.toMatchObject({ role: 'member' });
+    const longest = await selfMint(ALICE, 'ceiling', { ttlDays: 3650, perSubject: 1 });
     expect(Date.parse(longest.expiresAt)).toBeGreaterThan(Date.now() + 3649 * DAY_MS);
   });
 });
@@ -228,14 +228,14 @@ describe('authCreate audit rows', () => {
     ['the local admin', adminActor('cli')],
   ])('leaves no key behind when a mint by %s cannot write its audit row', async (_name, actor) => {
     breakAuditLog();
-    await expect(Promise.resolve().then(() => authCreate({ hippoRoot: home, tenantId: TENANT, actor }, { label: 'x' }))).rejects.toThrow(/audit table unwritable/);
+    await expect(authCreate({ hippoRoot: home, tenantId: TENANT, actor }, { label: 'x' })).rejects.toThrow(/audit table unwritable/);
     expect(keyRows()).toEqual([]);
   });
 });
 
 describe('authRevoke by a member signed in through the auth resolver', () => {
   it('revokes its own self-minted key and audits it', async () => {
-    const own = selfMint();
+    const own = await selfMint();
     expect((await revokeAs(ALICE, own.keyId)).ok).toBe(true);
     expect(liveOwned('alice@corp.example')).toEqual([]);
     expect(auditRows().filter((r) => r.op === 'auth_revoke')).toEqual([
@@ -244,22 +244,22 @@ describe('authRevoke by a member signed in through the auth resolver', () => {
   });
 
   it('refuses another member\'s self-minted key', async () => {
-    const bobs = selfMint('tok.bob');
-    await expect(Promise.resolve().then(() => revokeAs(ALICE, bobs.keyId))).rejects.toThrow(ForbiddenError);
+    const bobs = await selfMint('tok.bob');
+    await expect(revokeAs(ALICE, bobs.keyId)).rejects.toThrow(ForbiddenError);
     expect(liveOwned('bob@corp.example')).toHaveLength(1);
   });
 
   it('refuses an admin-minted member key, which has no owner', async () => {
     const plain = mintDirect('member');
-    await expect(Promise.resolve().then(() => revokeAs(ALICE, plain.keyId))).rejects.toThrow(ForbiddenError);
+    await expect(revokeAs(ALICE, plain.keyId)).rejects.toThrow(ForbiddenError);
     expect(keyRows().find((r) => r.key_id === plain.keyId)?.revoked_at).toBeNull();
   });
 
   it('refuses its own subject\'s key in another tenant, and an unknown key, with the same error', async () => {
     const elsewhere = await authCreateSelf({ hippoRoot: home, tenantId: 'other-tenant', actor: actorOf(ALICE) }, OPTS);
-    const bobs = selfMint('tok.bob');
+    const bobs = await selfMint('tok.bob');
     for (const keyId of [elsewhere.keyId, 'hk_unknown', bobs.keyId]) {
-      await expect(Promise.resolve().then(() => revokeAs(ALICE, keyId))).rejects.toThrow(new ForbiddenError('A member can revoke only the keys it minted'));
+      await expect(revokeAs(ALICE, keyId)).rejects.toThrow(new ForbiddenError('A member can revoke only the keys it minted'));
     }
     expect(withDb((db) => validateApiKey(db, elsewhere.plaintext)).valid).toBe(true);
   });
@@ -268,7 +268,7 @@ describe('authRevoke by a member signed in through the auth resolver', () => {
 describe('DELETE /v1/auth/keys/:keyId on hippo.db', () => {
   it('answers 500 and leaves the key live when the audit write fails', async () => {
     await start();
-    const own = selfMint();
+    const own = await selfMint();
     breakAuditLog();
     vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     const res = await fetch(`${handle!.url}/v1/auth/keys/${own.keyId}`, { method: 'DELETE', headers: { authorization: 'Bearer tok.boss' } });
@@ -300,9 +300,9 @@ describe('POST /v1/auth/keys checks auth before its body and again before the mi
 describe('GET /v1/auth/keys for members', () => {
   it('shows a member only its own keys, and an admin every key in the tenant', async () => {
     await start();
-    const a1 = selfMint(ALICE, 'a1');
-    const a2 = selfMint(ALICE, 'a2');
-    const b1 = selfMint('tok.bob', 'b1');
+    const a1 = await selfMint(ALICE, 'a1');
+    const a2 = await selfMint(ALICE, 'a2');
+    const b1 = await selfMint('tok.bob', 'b1');
     const plain = mintDirect('member');
     const admin = mintDirect('admin');
     expect(await listKeys(ALICE)).toEqual([a1.keyId, a2.keyId].sort());

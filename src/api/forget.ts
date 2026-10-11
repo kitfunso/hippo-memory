@@ -2,8 +2,8 @@
 
 import { BadRequestError, NotFoundError } from '../core/api-errors.js';
 import { rejectValue, unrejectValue, type RejectFlowResult } from '../trust/reject-flow.js';
-import { andThen, notPorted, onStore } from './on-store.js';
-import { requireHostAdmin, type Context, type StoreReply } from './types.js';
+import { requireGroup, storeFor } from '../store/index.js';
+import { requireHostAdmin, type Context } from './types.js';
 import { getMemory } from './memories.js';
 import { canTouchScope, personalScopeOf } from '../core/recall-scope.js';
 
@@ -13,12 +13,10 @@ export interface ForgetResult {
   ok: true;
   id: string;
 }
-export function forget<C extends Context>(ctx: C, id: string): StoreReply<C, ForgetResult> {
-  return onStore(ctx, (port) => {
-    const entryWrites = port.entryWrites ?? notPorted(port, 'entryWrites');
-    const removal = { tenantId: ctx.tenantId, actor: ctx.actor.subject, ownScope: personalScopeOf(ctx.actor), id };
-    return andThen(entryWrites.forget(removal), (): ForgetResult => ({ ok: true, id }));
-  });
+export async function forget(ctx: Context, id: string): Promise<ForgetResult> {
+  const entryWrites = requireGroup(storeFor(ctx), 'entryWrites');
+  await entryWrites.forget({ tenantId: ctx.tenantId, actor: ctx.actor.subject, ownScope: personalScopeOf(ctx.actor), id });
+  return { ok: true, id };
 }
 
 // Reject administration is Context-based and tenant-checked; it shares one transaction flow with `hippo reject` via src/trust/reject-flow.ts.

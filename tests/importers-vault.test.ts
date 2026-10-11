@@ -449,14 +449,14 @@ describe('importVault (n) — block-style frontmatter lists are parsed', () => {
 describe('importVault (o) — rejects a vault name containing the ":" delimiter', () => {
   it('throws on a name with ":" so it cannot over-match another vault prefix', async () => {
     writeNote('m.md', 'some content long enough to store');
-    await expect(Promise.resolve().then(() => importVault(vaultDir, opts({ name: 'a:b' })))).rejects.toThrow(/must not contain/);
+    await expect(importVault(vaultDir, opts({ name: 'a:b' }))).rejects.toThrow(/must not contain/);
   });
 });
 
 describe('importVault (p) — rejects global mode', () => {
   it('throws on global:true (raw rows are tenant-local)', async () => {
     writeNote('m.md', 'content long enough to store here');
-    await expect(Promise.resolve().then(() => importVault(vaultDir, opts({ name: 'v', global: true })))).rejects.toThrow(/global/);
+    await expect(importVault(vaultDir, opts({ name: 'v', global: true }))).rejects.toThrow(/global/);
   });
 });
 
@@ -771,11 +771,11 @@ describe('importVault (w) — nested non-dot store skipped under an aliased hipp
 describe('importVault (x) — explicit name + envelope-aware idempotency', () => {
   it('throws when no vault name is given (no basename default that could collide)', async () => {
     writeNote('a.md', '# A\nbody content long enough to store');
-    await expect(Promise.resolve().then(() => importVault(vaultDir, { hippoRoot: tmpDir, tenantId: 'default' }))).rejects.toThrow(
+    await expect(importVault(vaultDir, { hippoRoot: tmpDir, tenantId: 'default' })).rejects.toThrow(
       /explicit vault name/,
     );
     // A blank/whitespace name is rejected the same way.
-    await expect(Promise.resolve().then(() => importVault(vaultDir, opts({ name: '   ' })))).rejects.toThrow(/explicit vault name/);
+    await expect(importVault(vaultDir, opts({ name: '   ' }))).rejects.toThrow(/explicit vault name/);
   });
 
   it('re-imports an unchanged file when --scope changes (archive old + new scoped row)', async () => {
@@ -806,10 +806,10 @@ describe('importVault (x) — explicit name + envelope-aware idempotency', () =>
     writeNote('note.md', '# Note\nsensitive content the user wants private');
     // Bare `private` / `private:<x>` are NOT default-denied by recall, so reject
     // them rather than store public-visible "private" notes.
-    await expect(Promise.resolve().then(() => importVault(vaultDir, opts({ name: 'v', scope: 'private' })))).rejects.toThrow(
+    await expect(importVault(vaultDir, opts({ name: 'v', scope: 'private' }))).rejects.toThrow(
       /not recognized as private/,
     );
-    await expect(Promise.resolve().then(() => importVault(vaultDir, opts({ name: 'v', scope: 'private:secret' })))).rejects.toThrow(
+    await expect(importVault(vaultDir, opts({ name: 'v', scope: 'private:secret' }))).rejects.toThrow(
       /not recognized as private/,
     );
     // Nothing was written by the rejected runs; the source-prefixed form is accepted.

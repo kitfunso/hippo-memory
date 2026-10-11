@@ -443,6 +443,20 @@ export interface Readiness {
   ping(): Promise<void>;
 }
 
+/** A recall's writes when the store keeps it as its last one: `strengthen.ids` are the ids it returned. */
+export type LastRecallWrites = RecallWrites & Required<Pick<RecallWrites, 'strengthen'>>;
+
+/** The last recall a store keeps, so a later outcome can name it, and the outcome linked to a recall trace. */
+export interface LastRecall {
+  /** entryWrites.applyOutcome, then a link from recall trace `traceId` to the ids applied; resolves to those ids. */
+  applyTracedOutcome(outcome: OutcomeWrite, traceId: number): Promise<string[]>;
+  /** applyTracedOutcome on the ids and trace of the last recall, read together so an outcome never pairs them with an older trace. */
+  applyOutcomeToLast(target: EntryTarget, good: boolean): Promise<string[]>;
+  /** finishRecall, then the ids this store lacks strengthened under `globalRoot`, then the ids and their trace saved as the last
+   *  recall in one write; resolves to the trace id, null when none was asked or its write failed. */
+  finishRecall(writes: LastRecallWrites, globalRoot: string | undefined): Promise<number | null>;
+}
+
 /** Which of a tenant's quarantine records a list reads; `limit` is 100 when unset. */
 export interface QuarantineListQuery {
   readonly status: QuarantineStatus | 'all';
@@ -608,6 +622,8 @@ export interface StoreGroups {
   readonly objects: Objects;
   /** Unset on a store built before it, where GET /ready answers 200 with `store: "unchecked"`. */
   readonly readiness: Readiness;
+  /** Unset on a store that keeps no last recall, where outcomeForLastRecall and a traced outcome answer 501 and context writes no last recall. */
+  readonly lastRecall: LastRecall;
 }
 
 export type StoreGroup = 'base' | keyof StoreGroups;

@@ -7,9 +7,9 @@ A file imports only from its own layer or a lower one. `layers.json` is the map 
 
 ## Store port
 
-### Sync core, async port
+### Async port
 
-node:sqlite is synchronous, and the store port is async so another store can do I/O. `authCreate`, `authCreateSelf` and `authRevoke` from `./server` return a value when the context has no store and a Promise when it has one. `importVault` from `.` is synchronous and calls `remember` and `archiveRaw` with no store. `Reply<T>` and `andThen` in `src/api/on-store.ts` carry that for exactly these functions and what they call. Every other operation is async and goes through `storeFor(ctx)`. Removing the carrier means making those published functions async, which is a breaking change. `scripts/check-store-port.mjs` counts the files that use the carrier so the list cannot grow.
+node:sqlite is synchronous, and the store port is async so another store can do I/O. Every api function is async and reaches the store through `storeFor(ctx)`, with or without `ctx.store`. `sqliteStore` runs each method's synchronous body when it is called and resolves the result, so an api function's first store call has run by the time the function returns. A store group the store lacks gives `StoreNotPortedError`, a 501. The last recall and its trace sit in the optional `lastRecall` group, which only the sqlite stores have. `scripts/check-floating-api.mjs` fails on any call to an api write function whose Promise nothing awaits.
 
 ### What lives in src/store
 

@@ -1,8 +1,8 @@
 // Outcome feedback on recalled memories.
 
 import { personalScopeOf } from '../core/recall-scope.js';
-import { andThen, notPorted, onStore } from './on-store.js';
-import type { Context, StoreReply } from './types.js';
+import { requireGroup, storeFor } from '../store/index.js';
+import type { Context } from './types.js';
 
 /** An id outside ctx.tenantId, or in someone else's personal scope, is skipped, so a stale id never fails the call.
  *  `appliedIds` holds only the ids applied: a caller that answers across tenants returns it, never the ids it was sent. */
@@ -11,34 +11,31 @@ export interface OutcomeResult {
   appliedIds: string[];
 }
 /** `opts.traceId` links the outcome to the recall trace it judges. Only outcomeForLastRecall sends one: explicit ids may follow no recall at all. */
-export function outcome<C extends Context>(
-  ctx: C,
+export async function outcome(
+  ctx: Context,
   ids: ReadonlyArray<string>,
   good: boolean,
   opts?: { traceId?: number },
-): StoreReply<C, OutcomeResult> {
-  return onStore(ctx, (port, local) => {
-    const entryWrites = port.entryWrites ?? notPorted(port, 'entryWrites');
-    const write = { tenantId: ctx.tenantId, actor: ctx.actor.subject, ownScope: personalScopeOf(ctx.actor), ids, good };
-    const traceId = opts?.traceId;
-    // The trace link is written on hippo.db's own handle after the commit, so a served store refuses a traceId.
-    const applied = traceId === undefined ? entryWrites.applyOutcome(write) : local.applyOutcome(write, traceId);
-    return andThen(applied, (appliedIds): OutcomeResult => ({ applied: appliedIds.length, appliedIds }));
-  });
+): Promise<OutcomeResult> {
+  const store = storeFor(ctx);
+  const entryWrites = requireGroup(store, 'entryWrites');
+  const write = { tenantId: ctx.tenantId, actor: ctx.actor.subject, ownScope: personalScopeOf(ctx.actor), ids, good };
+  const traceId = opts?.traceId;
+  // Recall traces live beside the last recall, so only a store with the lastRecall group can link one.
+  const appliedIds = traceId === undefined
+    ? await entryWrites.applyOutcome(write)
+    : await requireGroup(store, 'lastRecall').applyTracedOutcome(write, traceId);
+  return { applied: appliedIds.length, appliedIds };
 }
 
-/** The last recall's ids and its trace sit in hippo.db's meta table, which only the CLI and context write, so a store of another kind is refused.
+/** The last recall's ids and its trace sit with the store's lastRecall group, which only the CLI and context write; a store without it is refused.
  *  `ids` holds only the ids applied in ctx.tenantId: the index is not tenant-scoped, so the ids read from it are never returned. */
 export interface OutcomeForLastRecallResult {
   applied: number;
   ids: string[];
 }
-export function outcomeForLastRecall<C extends Context>(
-  ctx: C,
-  good: boolean,
-): StoreReply<C, OutcomeForLastRecallResult> {
-  return onStore(ctx, (_port, local) => {
-    const ids = local.applyOutcomeToLastRecall({ tenantId: ctx.tenantId, actor: ctx.actor.subject, ownScope: personalScopeOf(ctx.actor) }, good);
-    return { applied: ids.length, ids };
-  });
+export async function outcomeForLastRecall(ctx: Context, good: boolean): Promise<OutcomeForLastRecallResult> {
+  const lastRecall = requireGroup(storeFor(ctx), 'lastRecall');
+  const ids = await lastRecall.applyOutcomeToLast({ tenantId: ctx.tenantId, actor: ctx.actor.subject, ownScope: personalScopeOf(ctx.actor) }, good);
+  return { applied: ids.length, ids };
 }

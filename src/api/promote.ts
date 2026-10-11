@@ -6,8 +6,8 @@ import type { ConnectorEvent } from '../store/port.js';
 import { createSuccessor, type Layer, type MemoryEntry } from '../core/memory.js';
 import { promoteToGlobal } from '../sharing/global-store.js';
 import { loadConfig } from '../core/config.js';
-import { andThen, notPorted, onStore } from './on-store.js';
-import type { Context, StoreReply } from './types.js';
+import { requireGroup, storeFor } from '../store/index.js';
+import type { Context } from './types.js';
 import { memoryReach } from '../store/tenant-lookup.js';
 import { canTouchScope, personalScopeOf } from '../core/recall-scope.js';
 
@@ -51,28 +51,26 @@ export interface SupersedeOverrides {
   tags?: string[];
   pinned?: boolean;
 }
-export function supersede<C extends Context>(
-  ctx: C,
+export async function supersede(
+  ctx: Context,
   oldId: string,
   newContent: string,
   overrides: SupersedeOverrides = {},
-): StoreReply<C, SupersedeResult> {
-  return onStore(ctx, (port) => {
-    const entryWrites = port.entryWrites ?? notPorted(port, 'entryWrites');
-    return andThen(port.entriesByIds([oldId], ctx.tenantId), ([old]) => {
-      const newEntry = createSuccessor(assertSupersedable(ctx, oldId, old ?? null), newContent, {
-        tenantId: ctx.tenantId,
-        baseHalfLifeDays: loadConfig(ctx.hippoRoot).defaultHalfLifeDays,
-        layer: overrides.layer,
-        tags: overrides.tags,
-        pinned: overrides.pinned,
-      });
-      // A store writes origin_project as given, so the served folder's fallback is stamped here.
-      const successor = stampOriginProject(ctx.hippoRoot, newEntry);
-      const write = { tenantId: ctx.tenantId, actor: ctx.actor.subject, ownScope: personalScopeOf(ctx.actor), oldId, successor };
-      return andThen(entryWrites.supersede(write), (): SupersedeResult => ({ ok: true, oldId, newId: successor.id }));
-    });
+): Promise<SupersedeResult> {
+  const store = storeFor(ctx);
+  const entryWrites = requireGroup(store, 'entryWrites');
+  const [old] = await store.entriesByIds([oldId], ctx.tenantId);
+  const newEntry = createSuccessor(assertSupersedable(ctx, oldId, old ?? null), newContent, {
+    tenantId: ctx.tenantId,
+    baseHalfLifeDays: loadConfig(ctx.hippoRoot).defaultHalfLifeDays,
+    layer: overrides.layer,
+    tags: overrides.tags,
+    pinned: overrides.pinned,
   });
+  // A store writes origin_project as given, so the served folder's fallback is stamped here.
+  const successor = stampOriginProject(ctx.hippoRoot, newEntry);
+  await entryWrites.supersede({ tenantId: ctx.tenantId, actor: ctx.actor.subject, ownScope: personalScopeOf(ctx.actor), oldId, successor });
+  return { ok: true, oldId, newId: successor.id };
 }
 
 /** The tenant-scoped row to supersede; another tenant's id, or someone else's personal row, reads as not found. */
@@ -100,19 +98,18 @@ export interface ArchiveRawResult {
   ok: true;
   archivedAt: string;
 }
-export function archiveRaw<C extends Context>(
-  ctx: C,
+export async function archiveRaw(
+  ctx: Context,
   id: string,
   reason: string,
   opts: ArchiveRawOpts = {},
-): StoreReply<C, ArchiveRawResult> {
-  return onStore(ctx, (port) => {
-    const entryWrites = port.entryWrites ?? notPorted(port, 'entryWrites');
-    const archive = { tenantId: ctx.tenantId, actor: ctx.actor.subject, ownScope: personalScopeOf(ctx.actor), id, reason };
-    const { event } = opts;
-    const archived = event
-      ? (port.connectorWrites ?? notPorted(port, 'connectorWrites')).archiveConnectorEntry({ ...archive, event })
-      : entryWrites.archiveRaw(archive);
-    return andThen(archived, (archivedAt): ArchiveRawResult => ({ ok: true, archivedAt }));
-  });
+): Promise<ArchiveRawResult> {
+  const store = storeFor(ctx);
+  const entryWrites = requireGroup(store, 'entryWrites');
+  const archive = { tenantId: ctx.tenantId, actor: ctx.actor.subject, ownScope: personalScopeOf(ctx.actor), id, reason };
+  const { event } = opts;
+  const archivedAt = event
+    ? await requireGroup(store, 'connectorWrites').archiveConnectorEntry({ ...archive, event })
+    : await entryWrites.archiveRaw(archive);
+  return { ok: true, archivedAt };
 }

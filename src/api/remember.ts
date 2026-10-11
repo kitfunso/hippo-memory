@@ -10,8 +10,8 @@ import { vetSecrets } from '../util/secret-detect.js';
 import { assertCallerProject } from '../core/project-identity.js';
 import { BadRequestError } from '../core/api-errors.js';
 import { assertClientScope, personalScopeOf } from '../core/recall-scope.js';
-import { andThen, notPorted, onStore } from './on-store.js';
-import type { Context, StoreReply } from './types.js';
+import { requireGroup, storeFor } from '../store/index.js';
+import type { Context } from './types.js';
 
 /** Row fields the caller's own process decides, as the CLI does from its flags and its salience gate. */
 export interface RememberLocal {
@@ -131,15 +131,17 @@ function quarantineOf({ requestedScope, detection }: PreparedRemember): Connecto
 
 /** Store one memory: the store's entryWrites group writes the row and its one remember audit row, under the caller's subject.
  *  A write that carries a connector event or untrusted content goes through connectorWrites, which commits its companion rows with it. */
-export function remember<C extends Context>(ctx: C, opts: RememberOpts): StoreReply<C, RememberResult> {
-  return onStore(ctx, (port) => {
-    const entryWrites = port.entryWrites ?? notPorted(port, 'entryWrites');
-    const prepared = prepareRemember(ctx, opts);
-    // A store writes origin_project as given, so the served folder's fallback is stamped here.
-    const write = { entry: stampOriginProject(ctx.hippoRoot, prepared.entry), actor: ctx.actor.subject };
-    if (opts.untrusted !== true && opts.event === undefined) return andThen(entryWrites.writeEntry(write), () => rememberResult(ctx, prepared));
-    const connectorWrites = port.connectorWrites ?? notPorted(port, 'connectorWrites');
-    const written = connectorWrites.writeConnectorEntry({ ...write, event: opts.event, quarantine: quarantineOf(prepared) });
-    return andThen(written, (outcome) => rememberResult(ctx, prepared, outcome));
-  });
+export async function remember(ctx: Context, opts: RememberOpts): Promise<RememberResult> {
+  const store = storeFor(ctx);
+  const entryWrites = requireGroup(store, 'entryWrites');
+  const prepared = prepareRemember(ctx, opts);
+  // A store writes origin_project as given, so the served folder's fallback is stamped here.
+  const write = { entry: stampOriginProject(ctx.hippoRoot, prepared.entry), actor: ctx.actor.subject };
+  if (opts.untrusted !== true && opts.event === undefined) {
+    await entryWrites.writeEntry(write);
+    return rememberResult(ctx, prepared);
+  }
+  const connectorWrites = requireGroup(store, 'connectorWrites');
+  const written = await connectorWrites.writeConnectorEntry({ ...write, event: opts.event, quarantine: quarantineOf(prepared) });
+  return rememberResult(ctx, prepared, written);
 }

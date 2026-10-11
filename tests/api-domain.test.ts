@@ -273,7 +273,7 @@ describe('api domain — archive_raw / auth / audit', () => {
 
     // Cross-tenant revoke must be rejected with the same "not found" message
     // as a missing key, so caller cannot probe other tenants' key_ids.
-    await expect(Promise.resolve().then(() => authRevoke(ctxA, kOther.keyId))).rejects.toThrow(/Unknown key_id/);
+    await expect(authRevoke(ctxA, kOther.keyId)).rejects.toThrow(/Unknown key_id/);
 
     // kOther must still be active on tenant-b.
     const activeB = await authListRows(ctxB, { active: true });
