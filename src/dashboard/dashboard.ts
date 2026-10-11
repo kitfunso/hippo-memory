@@ -326,7 +326,7 @@ function answerDashboardFailure(req: http.IncomingMessage, res: http.ServerRespo
   const clientFault = err instanceof ParamError || err instanceof URIError || err instanceof BodyTimeoutError;
   // A cut-short response is logged even for a client fault; a bare 400 is not.
   if (res.headersSent || !clientFault) {
-    log.error('dashboard request failed', { ...errorFields(err), error: errorMessage(err), path: req.url });
+    log.error('dashboard request failed', { ...errorFields(err), error: errorMessage(err), path: (req.url ?? '/').split('?')[0] });
   }
   if (res.headersSent) {
     res.end();
