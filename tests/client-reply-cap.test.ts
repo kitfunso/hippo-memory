@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { promote, remember, HttpResponseError } from '../src/cli/client.js';
+import { promote, remember, HttpResponseError, MalformedReplyError } from '../src/cli/client.js';
 
 const OVER_CAP = 'x'.repeat(1024 * 1024 + 1);
 
@@ -48,5 +48,18 @@ describe('thin client reply cap', () => {
     const err = await promote(big, undefined, 'a').catch((e: Error) => e);
     expect(err).toBeInstanceOf(HttpResponseError);
     expect(err).toMatchObject({ status: 500, message: '500 Internal Server Error' });
+  });
+
+  it.each(['null', '[]', '"text"'])('throws a typed error naming the route when a 2xx reply is %s', async (body) => {
+    const url = await startFake(200, body);
+    const err = await remember(url, undefined, { content: 'a fact' }).catch((e: Error) => e);
+    expect(err).toBeInstanceOf(MalformedReplyError);
+    expect(err).toMatchObject({ route: 'POST /v1/memories' });
+    expect(err instanceof Error && err.message).toContain('POST /v1/memories');
+  });
+
+  it('applies the per-route guard to an object missing the fields it needs', async () => {
+    const url = await startFake(200, JSON.stringify({ ok: true }));
+    await expect(promote(url, undefined, 'a')).rejects.toBeInstanceOf(MalformedReplyError);
   });
 });

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { runWatched } from '../src/learn/autolearn.js';
+import { runWatched, RunWatchedTimeoutError } from '../src/learn/autolearn.js';
 
 describe('runWatched', () => {
   it('returns only the last 64 KiB of stderr while the terminal gets all of it', async () => {
@@ -18,5 +18,11 @@ describe('runWatched', () => {
     } finally {
       spy.mockRestore();
     }
+  });
+
+  it('kills a command that passes its deadline and rejects with a typed error', async () => {
+    const err = await runWatched(`"${process.execPath}" -e "setTimeout(() => {}, 3000)"`, 300).catch((e: Error) => e);
+    expect(err).toBeInstanceOf(RunWatchedTimeoutError);
+    expect(err).toMatchObject({ deadlineMs: 300 });
   });
 });

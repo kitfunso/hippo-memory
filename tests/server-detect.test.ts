@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -101,6 +101,26 @@ describe('server-detect', () => {
       expect(await detectServer(home)).toBeNull();
       expect(existsSync(pidfile)).toBe(false);
     } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  it('keeps the pidfile and warns when the probe fails for a reason other than refusal', async () => {
+    const home = makeRoot();
+    const pidfile = join(home, 'server.pid');
+    const warn = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('fetch failed', { cause: Object.assign(new Error('reset'), { code: 'ECONNRESET' }) }); }));
+    try {
+      writeFileSync(pidfile, JSON.stringify({
+        schema: 1, pid: process.pid, port: 59_998,
+        url: 'http://127.0.0.1:59998', started_at: new Date().toISOString(),
+      }));
+      expect(await detectServer(home)).toBeNull();
+      expect(existsSync(pidfile)).toBe(true);
+      expect(warn.mock.calls.map((c) => String(c[0])).join('')).toContain('kept: the /health probe failed');
+    } finally {
+      vi.unstubAllGlobals();
+      warn.mockRestore();
       rmSync(home, { recursive: true, force: true });
     }
   });

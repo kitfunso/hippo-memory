@@ -16,7 +16,7 @@ import { type JsonValue, isJsonString, isJsonObject } from '../util/json.js';
 import { blockHash } from '../util/token-text.js';
 import { consolidateInChild } from './sleep-offload.js';
 
-const DEFAULT_SSE_HEARTBEAT_MS = 60000;
+const DEFAULT_SSE_HEARTBEAT_MS = 60_000;
 const DEFAULT_SSE_MAX_AGE_SEC = 3600;
 
 /** Per-client key for MCP state isolation under HTTP-MCP (scopes `lastRecalledIds`): sha256 of the token (16 hex chars, so the raw bearer is never logged)
@@ -29,7 +29,8 @@ function buildMcpClientKey(req: IncomingMessage): string {
   return `http:${tokenHash}:${clientLimitKey(req)}`;
 }
 
-// MCP-over-HTTP/SSE: POST /mcp answers a JSON-RPC request synchronously; GET /mcp/stream is a keepalive-only SSE stream (`: ping` every 30s) in v1.
+// MCP-over-HTTP/SSE: POST /mcp answers a JSON-RPC request synchronously; GET /mcp/stream is a keepalive-only SSE stream
+// (`: ping` every DEFAULT_SSE_HEARTBEAT_MS, 60 s) in v1.
 // Both dispatch to handleMcpRequest as stdio does. Auth matches /v1/* (Bearer via `requireAuth`, loopback fallback); SSE is checked once at stream-open.
 
 // Percent-encoded by the client, so any lowercase Unicode name fits a Latin-1 header.

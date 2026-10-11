@@ -4,7 +4,7 @@
 import type { RememberOpts, RememberResult } from '../api/index.js';
 import { fetchWithRetry } from '../util/http-retry.js';
 import { readCappedJson } from '../util/capped-json.js';
-import { isJsonObject, isJsonString } from '../util/json.js';
+import { isJsonObject, isJsonString, type JsonValue } from '../util/json.js';
 
 /** A write the local server has not answered in this long is stuck; the caller treats it as delivery-unknown. */
 const SERVER_TIMEOUT_MS = 30_000;
@@ -57,10 +57,22 @@ async function throwForStatus(res: Response): Promise<never> {
   throw new HttpResponseError(message, res.status);
 }
 
-/** A 2xx reply's body, read under the cap. */
-async function readReply<T>(res: Response): Promise<T> {
+/** A 2xx reply that is not the JSON object the route promises: another process may now own the pidfile's port. */
+export class MalformedReplyError extends Error {
+  constructor(readonly route: string, detail: string) {
+    super(`the hippo server's reply to ${route} was not the expected JSON object (${detail})`);
+    this.name = 'MalformedReplyError';
+  }
+}
+
+/** A 2xx reply's body, read under the cap; it must be a JSON object, and `guard` narrows it further where the shape is known. */
+async function readReply<T>(res: Response, route: string, guard?: (body: { [key: string]: JsonValue }) => boolean): Promise<T> {
+  const body = await readCappedJson(res, MAX_REPLY_BYTES);
+  if (!isJsonObject(body)) throw new MalformedReplyError(route, body === null ? 'null' : Array.isArray(body) ? 'array' : 'a scalar');
+  if (guard && !guard(body)) throw new MalformedReplyError(route, 'unexpected fields');
+  const reply: JsonValue = body;
   // SAFETY: the reply comes from hippo's own server, whose route returns this api result as JSON.
-  return (await readCappedJson(res, MAX_REPLY_BYTES)) as T;
+  return reply as T;
 }
 
 export async function remember(
@@ -74,7 +86,7 @@ export async function remember(
     body: JSON.stringify(opts),
   });
   if (!res.ok) await throwForStatus(res);
-  return readReply<RememberResult>(res);
+  return readReply<RememberResult>(res, 'POST /v1/memories');
 }
 
 export async function forget(
@@ -87,7 +99,7 @@ export async function forget(
     headers: buildHeaders(apiKey, false),
   });
   if (!res.ok) await throwForStatus(res);
-  return readReply<{ ok: true; id: string }>(res);
+  return readReply<{ ok: true; id: string }>(res, 'DELETE /v1/memories/:id', (b) => isJsonString(b.id));
 }
 
 export async function promote(
@@ -100,7 +112,8 @@ export async function promote(
     headers: buildHeaders(apiKey, false),
   });
   if (!res.ok) await throwForStatus(res);
-  return readReply<{ ok: true; sourceId: string; globalId: string }>(res);
+  return readReply<{ ok: true; sourceId: string; globalId: string }>(res, 'POST /v1/memories/:id/promote',
+    (b) => isJsonString(b.sourceId) && isJsonString(b.globalId));
 }
 
 export async function archiveRaw(
@@ -115,7 +128,7 @@ export async function archiveRaw(
     body: JSON.stringify({ reason }),
   });
   if (!res.ok) await throwForStatus(res);
-  return readReply<{ ok: true; archivedAt: string }>(res);
+  return readReply<{ ok: true; archivedAt: string }>(res, 'POST /v1/memories/:id/archive', (b) => isJsonString(b.archivedAt));
 }
 
 /** 'never-sent': connection never opened, safe to replay locally. 'delivery-unknown': the request was on the wire and may have

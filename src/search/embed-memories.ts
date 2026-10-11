@@ -161,9 +161,10 @@ async function withProcessEmbedLock<T>(fn: () => Promise<T>): Promise<T> {
   }
 }
 
-// A bad key fails every write; one warning per distinct failure tells the user, N would bury the command's own output.
+// A bad key fails every write; one full warning per distinct failure tells the user, and a count of the repeats follows at most once per interval.
 const EMBED_WARN_KEY_CAP = 64;
-const embedFailureWarned = new Set<string>();
+const EMBED_SUPPRESSED_SUMMARY_INTERVAL_MS = 60_000;
+const embedFailureSeen = new Map<string, { lastNoticeAt: number; suppressed: number }>();
 
 function embedFailureKey(source: string, cause: unknown): string {
   const kind = errorCode(cause) || (cause instanceof Error ? cause.constructor.name : 'NonError');
@@ -172,15 +173,25 @@ function embedFailureKey(source: string, cause: unknown): string {
 
 function warnEmbedFailureOnce(source: string, rawMessage: string, cause?: unknown): void {
   const key = embedFailureKey(source, cause);
-  if (embedFailureWarned.has(key)) return;
-  // Oldest key out, so a full set still lets a new failure warn.
-  if (embedFailureWarned.size >= EMBED_WARN_KEY_CAP) {
-    for (const oldest of embedFailureWarned) {
-      embedFailureWarned.delete(oldest);
+  const now = Date.now();
+  const seen = embedFailureSeen.get(key);
+  if (seen) {
+    seen.suppressed += 1;
+    if (now - seen.lastNoticeAt >= EMBED_SUPPRESSED_SUMMARY_INTERVAL_MS) {
+      log.warn(`${seen.suppressed} more embedding errors from ${source} since the last notice; memories are still stored without embeddings.`);
+      seen.suppressed = 0;
+      seen.lastNoticeAt = now;
+    }
+    return;
+  }
+  // Oldest key out, so a full map still lets a new failure warn.
+  if (embedFailureSeen.size >= EMBED_WARN_KEY_CAP) {
+    for (const oldest of embedFailureSeen.keys()) {
+      embedFailureSeen.delete(oldest);
       break;
     }
   }
-  embedFailureWarned.add(key);
+  embedFailureSeen.set(key, { lastNoticeAt: now, suppressed: 0 });
   // Strict scrub: this line can land in a hook log file, and an API may echo the key back in its error body.
   const message = redactSecretsStrict(rawMessage).replace(/\s+/g, ' ').replace(/\.+$/, '');
   log.warn(`embedding failed (${source}): ${message}. Memories are stored without embeddings until this is fixed.`);

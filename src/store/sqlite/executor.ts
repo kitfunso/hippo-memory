@@ -7,7 +7,7 @@ import { StoreBusyError } from '../port.js';
 import { autoCheckpointPages } from '../../db/wal-checkpointer.js';
 import { envStoreQueueMax } from '../../util/env.js';
 import { DeadlineExceededError } from '../../util/http-util.js';
-import { errorMessage, log } from '../../util/log.js';
+import { errorFields, errorMessage, log } from '../../util/log.js';
 import { requestScopes } from '../../util/request-scope.js';
 import { decodeError } from './error-codec.js';
 import { workerCounts } from './executor-counts.js';
@@ -81,6 +81,11 @@ interface Lane {
 
 function laneOf(mode: OpMode): Lane {
   return { mode, queue: [], running: undefined, worker: undefined, stopping: undefined, commitFlag: undefined };
+}
+
+// A thread that will not stop leaves a live worker behind, so the rejection is logged rather than dropped.
+function terminateLogged(worker: Worker): void {
+  worker.terminate().catch(<E>(err: E) => log.warn('the store worker did not terminate cleanly', errorFields(err)));
 }
 
 /** Gives `pending`'s caller its one answer; a second call does nothing. */
@@ -212,7 +217,7 @@ class WorkerPool implements SqliteExecutor {
   #stopReader(lane: Lane, worker: Worker, pending: Pending): void {
     finish(pending, () => pending.fail(new DeadlineExceededError(READ_LATE)));
     lane.stopping = worker;
-    void worker.terminate();
+    terminateLogged(worker);
   }
 
   // Before its commit flag a stopped write is a known rollback; after it the thread is left to finish, since stopping it could not undo the write.
@@ -257,7 +262,7 @@ class WorkerPool implements SqliteExecutor {
   }
 
   terminateWriter(): void {
-    void this.#writer.worker?.terminate();
+    if (this.#writer.worker) terminateLogged(this.#writer.worker);
   }
 
   #pump(lane: Lane): void {

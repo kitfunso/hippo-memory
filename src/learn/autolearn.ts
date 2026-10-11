@@ -123,10 +123,21 @@ export function deduplicateLesson(
 /** The most stderr `runWatched` returns; the terminal still gets all of it. */
 const STDERR_TAIL_BYTES = 64 * 1024;
 
+/** A transfer command that has not exited in this long is hung on a prompt or a dead remote. */
+export const RUN_WATCHED_DEADLINE_MS = 30 * 60_000;
+
+/** The command passed its deadline and was killed. */
+export class RunWatchedTimeoutError extends Error {
+  constructor(readonly deadlineMs: number, readonly stderr: string) {
+    super(`the command did not exit within ${deadlineMs} ms and was killed`);
+    this.name = 'RunWatchedTimeoutError';
+  }
+}
+
 /** Run a command in a shell, streaming stderr live; never pass text the caller did not write.
- *  Returns: { exitCode, stderr } with only the last 64 KiB of stderr. */
-export function runWatched(command: string): Promise<{ exitCode: number; stderr: string }> {
-  return new Promise((resolve) => {
+ *  Returns: { exitCode, stderr } with only the last 64 KiB of stderr; rejects with RunWatchedTimeoutError past `deadlineMs`. */
+export function runWatched(command: string, deadlineMs: number = RUN_WATCHED_DEADLINE_MS): Promise<{ exitCode: number; stderr: string }> {
+  return new Promise((resolve, reject) => {
     // Use shell: true so the command string is handled by the shell as-is
     const child = spawn(command, { shell: true, stdio: ['inherit', 'inherit', 'pipe'], windowsHide: true });
 
@@ -138,11 +149,19 @@ export function runWatched(command: string): Promise<{ exitCode: number; stderr:
       process.stderr.write(chunk);
     });
 
+    // SHORTCUT: kills the shell only; on Windows a grandchild can outlive it. A process-tree kill is the upgrade path.
+    const timer = setTimeout(() => {
+      child.kill('SIGKILL');
+      reject(new RunWatchedTimeoutError(deadlineMs, tail.toString('utf8')));
+    }, deadlineMs);
+
     child.on('close', (code: number | null) => {
+      clearTimeout(timer);
       resolve({ exitCode: code ?? 1, stderr: tail.toString('utf8') });
     });
 
     child.on('error', (err: Error) => {
+      clearTimeout(timer);
       resolve({ exitCode: 1, stderr: err.message });
     });
   });

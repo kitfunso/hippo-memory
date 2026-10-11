@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, writeFileSync, unlinkSync, renameSync } from 'node:fs';
 import { join } from 'node:path';
 import { envHealthProbeMs } from '../util/env.js';
-import { errorMessage, log } from '../util/log.js';
+import { errorCode, errorFields, errorMessage, log } from '../util/log.js';
 
 export interface ServerInfo {
   /** Pidfile schema version; absent on pidfiles written before the field existed, which detectServer treats as legacy and still accepts. */
@@ -86,10 +86,19 @@ async function readCappedBody(body: ReadableStream<Uint8Array>): Promise<string 
   return raw;
 }
 
+/** True when fetch failed because nothing listens on the port (the error or its cause, or any address tried, is ECONNREFUSED). */
+function isConnectionRefused<E>(err: E): boolean {
+  if (errorCode(err) === 'ECONNREFUSED') return true;
+  const cause = err instanceof Error ? err.cause : undefined;
+  if (errorCode(cause) === 'ECONNREFUSED') return true;
+  return cause instanceof AggregateError && cause.errors.length > 0 && cause.errors.every((e) => errorCode(e) === 'ECONNREFUSED');
+}
+
 /** True when /health on info.url reports the pidfile's started_at; unlinks the pidfile on any definitive mismatch and throws ServerUnresponsiveError on a
  * probe timeout. */
 async function healthMatchesPidfile(hippoRoot: string, info: ServerInfo): Promise<boolean> {
   // Refusal, non-200 or a malformed body unlink the pidfile as stale. A timeout proves neither a dead server nor this one, so it keeps the pidfile and throws.
+  // Any other error keeps it and warns.
   const probeMs = envHealthProbeMs() ?? HEALTH_PROBE_TIMEOUT_MS;
   try {
     const res = await fetch(`${info.url}/health`, { signal: AbortSignal.timeout(probeMs) });
@@ -110,7 +119,12 @@ async function healthMatchesPidfile(hippoRoot: string, info: ServerInfo): Promis
     return true;
   } catch (err) {
     if (err instanceof Error && err.name === 'TimeoutError') throw new ServerUnresponsiveError(info, probeMs, { cause: err });
-    removePidfile(hippoRoot);
+    // A refusal or a non-JSON body proves no hippo server answers there; any other failure may be a live server, so the file stays.
+    if (isConnectionRefused(err) || err instanceof SyntaxError) {
+      removePidfile(hippoRoot);
+    } else {
+      log.warn(`server pidfile ${join(hippoRoot, PIDFILE)} kept: the /health probe failed (${errorMessage(err)})`, errorFields(err));
+    }
     return false;
   }
 }
