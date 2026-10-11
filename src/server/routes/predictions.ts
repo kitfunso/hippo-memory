@@ -1,7 +1,8 @@
 // /v1/predictions routes.
 import { closePrediction, listPredictions, predictionBaserate, predictionById, savePrediction } from '../../api/predictions.js';
 import { loadConfig } from '../../core/config.js';
-import { predictionMirror, VALID_CLOSURE_STATES } from '../../store/predictions.js';
+import { predictionMirror } from '../../store/predictions.js';
+import { VALID_CLOSURE_STATES } from '../../core/prediction.js';
 import type { PredictionFilter } from '../../store/port.js';
 import { HttpError, sendJson } from '../../util/http-util.js';
 import { MAX_ID_LEN } from '../../util/limits.js';

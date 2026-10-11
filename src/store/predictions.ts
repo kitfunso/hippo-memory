@@ -13,6 +13,7 @@ import { appendAuditEvent } from './audit.js';
 import { loadConfig } from '../core/config.js';
 import { keysetAfter, type KeysetPosition } from '../util/keyset.js';
 import type { PredictionSave } from './port.js';
+import { type ClosureState, VALID_CLOSURE_STATES } from '../core/prediction.js';
 
 const DEFAULT_PREDICTION_PAGE_SIZE = DEFAULT_LIST_LIMIT;
 
@@ -20,13 +21,6 @@ const SELECT_COLUMNS = `id, memory_id, tenant_id, class_tag, claim_text,
   estimate_value, estimate_unit, target_date,
   actual_value, closure_state, closed_at, closure_note, created_at`;
 
-export type ClosureState = 'open' | 'closed' | 'closed-unknown';
-
-export const VALID_CLOSURE_STATES: ReadonlySet<ClosureState> = new Set<ClosureState>([
-  'open',
-  'closed',
-  'closed-unknown',
-]);
 
 export interface Prediction {
   id: number;

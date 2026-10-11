@@ -1,6 +1,10 @@
 // First-class object verbs for predictions: record a claim, close it against the actual, and read the class base rate.
 
-import * as predictionsModule from '../store/predictions.js';
+import * as predictionsApi from '../api/predictions.js';
+import type { Context } from '../api/types.js';
+import { type ClosureState, VALID_CLOSURE_STATES } from '../core/prediction.js';
+import type { Prediction } from '../store/predictions.js';
+import { cliApiContext } from './api-context.js';
 import { printError } from './output.js';
 import { parseListLimit, type CliFlags, stringFlag, type CommandContext } from './flag-values.js';
 import { requireInit } from './shared.js';
@@ -11,11 +15,11 @@ import { CliExit } from './exit.js';
 const BASERATE_DECIMALS = 3;
 const PREDICTION_NOUN = 'Prediction';
 
-function predictClose(hippoRoot: string, tenantId: string, args: string[], flags: CliFlags): void {
+async function predictClose(ctx: Context, args: string[], flags: CliFlags): Promise<void> {
   const id = idArgOrExit(args, 'Usage: hippo predict close <id> --state <closed|closed-unknown> [--actual <v>] [--note "..."]', 'prediction', parseObjectId);
   const stateRaw = (stringFlag(flags, 'state') ?? '').trim();
   // SAFETY: Set.has only compares by value, so a string outside the closure states is a plain miss.
-  if (!predictionsModule.VALID_CLOSURE_STATES.has(stateRaw as predictionsModule.ClosureState) || stateRaw === 'open') {
+  if (!VALID_CLOSURE_STATES.has(stateRaw as ClosureState) || stateRaw === 'open') {
     printError(`Invalid --state: "${stateRaw}". Must be one of: closed | closed-unknown.`);
     throw new CliExit(1);
   }
@@ -27,45 +31,45 @@ function predictClose(hippoRoot: string, tenantId: string, args: string[], flags
   }
   const closureNote = stringFlag(flags, 'note');
 
-  const closed = predictionsModule.closePrediction(hippoRoot, tenantId, id, {
-    // SAFETY: the check above exits unless stateRaw is in VALID_CLOSURE_STATES.
-    closureState: stateRaw as predictionsModule.ClosureState,
+  const closed = await predictionsApi.closePrediction(ctx, id, {
+    // SAFETY: the check above exits unless stateRaw is in VALID_CLOSURE_STATES and not open.
+    closureState: stateRaw as Exclude<ClosureState, 'open'>,
     actualValue,
     closureNote,
   });
   console.log(`Prediction ${closed.id} closed: state=${closed.closureState}${closed.actualValue !== null ? ` actual=${closed.actualValue}` : ''}`);
 }
 
-function loadPredictionList(hippoRoot: string, tenantId: string, status: string, classTag: string, limit: number): predictionsModule.Prediction[] {
+async function loadPredictionList(ctx: Context, status: string, classTag: string, limit: number): Promise<Prediction[]> {
   if (status === 'open') {
-    return predictionsModule.loadOpenPredictions(hippoRoot, tenantId, {
+    return predictionsApi.listPredictions(ctx, {
       classTag: classTag || undefined,
+      closureState: 'open',
       limit,
     });
   }
   if (status === 'all') {
-    return classTag
-      ? predictionsModule.loadPredictionsByClass(hippoRoot, tenantId, classTag, { limit })
-      : predictionsModule.loadAllPredictions(hippoRoot, tenantId, { limit });
+    return predictionsApi.listPredictions(ctx, classTag ? { classTag, limit } : { limit });
   }
-  const closureState = requireStatus(status, predictionsModule.VALID_CLOSURE_STATES);
+  const closureState = requireStatus(status, VALID_CLOSURE_STATES);
   if (!classTag) {
     // status filter without class: scan all classes is more complex; v1 requires --class for non-default status
     printError('--status filter (non-open) requires --class to be set.');
     throw new CliExit(1);
   }
-  return predictionsModule.loadPredictionsByClass(hippoRoot, tenantId, classTag, {
+  return predictionsApi.listPredictions(ctx, {
+    classTag,
     closureState,
     limit,
   });
 }
 
-function predictList(hippoRoot: string, tenantId: string, flags: CliFlags): void {
+async function predictList(ctx: Context, flags: CliFlags): Promise<void> {
   const classTag = stringFlag(flags, 'class')?.trim() ?? '';
   const status = stringFlag(flags, 'status')?.trim() ?? 'all';
   const limit = parseListLimit(flags);
 
-  const results = loadPredictionList(hippoRoot, tenantId, status, classTag, limit);
+  const results = await loadPredictionList(ctx, status, classTag, limit);
   if (results.length === 0) {
     console.log(classTag ? `No predictions in class "${classTag}".` : 'No predictions.');
     return;
@@ -81,9 +85,9 @@ function predictList(hippoRoot: string, tenantId: string, flags: CliFlags): void
   }
 }
 
-function predictShow(hippoRoot: string, tenantId: string, args: string[]): void {
+async function predictShow(ctx: Context, args: string[]): Promise<void> {
   const id = idArgOrExit(args, 'Usage: hippo predict show <id>', 'prediction', parseObjectId);
-  const pred = foundOrExit(predictionsModule.loadPredictionById(hippoRoot, tenantId, id), PREDICTION_NOUN, id);
+  const pred = foundOrExit(await predictionsApi.predictionById(ctx, id), PREDICTION_NOUN, id);
   console.log(`Prediction #${pred.id}`);
   console.log(`  class: ${pred.classTag}`);
   console.log(`  claim: ${pred.claimText}`);
@@ -97,14 +101,14 @@ function predictShow(hippoRoot: string, tenantId: string, args: string[]): void 
   console.log(`  created: ${pred.createdAt}`);
 }
 
-function predictBaserate(hippoRoot: string, tenantId: string, flags: CliFlags): void {
+async function predictBaserate(ctx: Context, flags: CliFlags): Promise<void> {
   // Reference-class / planning-fallacy detector
   const classTag = stringFlag(flags, 'class')?.trim();
   if (!classTag) {
     printError('Usage: hippo predict baserate --class <c>');
     throw new CliExit(1);
   }
-  const baserate = predictionsModule.computePredictionBaserate(hippoRoot, tenantId, classTag);
+  const baserate = await predictionsApi.predictionBaserate(ctx, classTag);
   if (baserate.nClosed === 0) {
     console.log(`No closed predictions in class "${baserate.classTag}" yet.`);
     console.log(`  Create one with: hippo predict "<claim>" --class ${baserate.classTag} --estimate N`);
@@ -121,18 +125,19 @@ function predictBaserate(hippoRoot: string, tenantId: string, flags: CliFlags): 
   if (baserate.mae !== null)          console.log(`  mae:              ${baserate.mae.toFixed(BASERATE_DECIMALS)}`);
 }
 
-export function handlePredict({ hippoRoot, tenantId, args, flags }: CommandContext): void {
+export async function handlePredict({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
   requireInit(hippoRoot);
+  const ctx = cliApiContext(hippoRoot, tenantId);
   const subcommand = args[0] ?? '';
-  if (subcommand === 'close') return predictClose(hippoRoot, tenantId, args, flags);
-  if (subcommand === 'list') return predictList(hippoRoot, tenantId, flags);
-  if (subcommand === 'show') return predictShow(hippoRoot, tenantId, args);
-  if (subcommand === 'baserate') return predictBaserate(hippoRoot, tenantId, flags);
+  if (subcommand === 'close') return predictClose(ctx, args, flags);
+  if (subcommand === 'list') return predictList(ctx, flags);
+  if (subcommand === 'show') return predictShow(ctx, args);
+  if (subcommand === 'baserate') return predictBaserate(ctx, flags);
   // Default subcommand: create. args[0] is the claim text.
-  predictCreate(hippoRoot, tenantId, subcommand, flags);
+  return predictCreate(ctx, subcommand, flags);
 }
 
-function predictCreate(hippoRoot: string, tenantId: string, claimText: string, flags: CliFlags): void {
+async function predictCreate(ctx: Context, claimText: string, flags: CliFlags): Promise<void> {
   if (!claimText) {
     printError('Usage: hippo predict "<claim>" --class <c> [--estimate <v>] [--unit <u>] [--target <YYYY-MM-DD>]');
     printError('       hippo predict close <id> --state <closed|closed-unknown> [--actual <v>] [--note "..."]');
@@ -154,7 +159,7 @@ function predictCreate(hippoRoot: string, tenantId: string, claimText: string, f
   const estimateUnit = stringFlag(flags, 'unit');
   const targetDate = stringFlag(flags, 'target');
 
-  const created = predictionsModule.savePrediction(hippoRoot, tenantId, {
+  const created = await predictionsApi.recordPrediction(ctx, {
     classTag,
     claimText,
     estimateValue,

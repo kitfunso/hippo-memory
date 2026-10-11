@@ -28,10 +28,5 @@
     "file": "cli/status.ts",
     "target": "store/failure-log.ts",
     "why": "FAILURE_LOG_RETENTION_DAYS, the retention the failures verb prints; a constant, not a store read"
-  },
-  {
-    "file": "cli/decisions.ts",
-    "target": "store/predictions.ts",
-    "why": "split in flight (C-b)"
   }
 ]
