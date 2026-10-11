@@ -6,12 +6,17 @@ import type { OpenedDb } from '../../db/connect.js';
 import { loadStoredVectorViews } from '../vector-index.js';
 import { requestScopes } from '../../util/request-scope.js';
 import { initStore } from '../open.js';
+import { parseLossAversionRatio, setProcessLossAversionRatio } from '../../core/memory.js';
+import { envLossAversionRatio } from '../../util/env.js';
 import { watchCommits } from './commit-watch.js';
 import { encodeError } from './error-codec.js';
 import { sqliteSyncStore } from './store.js';
 import { PackedVectors, packVectors } from './vector-pack.js';
 import { sqliteVectorReads } from './vector-reads-group.js';
 import { type Job, type OpPlace, type Reply, STORE_SETUP_OP, type WorkerGroup, type WorkerInit, WORKER_OPS } from './worker-ops.js';
+
+// A worker thread has its own core module, and the api barrel that sets the ratio on the main thread is not loaded here.
+setProcessLossAversionRatio(parseLossAversionRatio(envLossAversionRatio()));
 
 /** Every method the op table can name: the synchronous store, and the vector reads, which answer only through Promises.
  *  The two reads that return vectors answer with a pack, which worker-store.ts turns back into the port's Map. */

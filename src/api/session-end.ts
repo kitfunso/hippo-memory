@@ -110,3 +110,54 @@ export function compactResumeBlock(ctx: Context, payloadSessionId: string | null
   }
   return compactResumeText(snapshot, events);
 }
+
+/** What one session-end run needs from its host; the host owns sleep, transcript reading and capture, this module owns the order. */
+export interface SessionEndWork<Scan> {
+  mode: 'turn' | 'full';
+  hippoRoot: string;
+  tenantId: string;
+  sessionId: string | null;
+  transcriptPath: string | undefined;
+  /** Builds the call context for one store root. */
+  contextFor: (root: string) => Context;
+  /** The store the run captures into: the project store, else global. */
+  storeRoot: () => string;
+  /** One line to the session-end log; `startFresh` restarts the file. */
+  log: (line: string, opts?: { startFresh?: boolean }) => void;
+  sleep: () => Promise<void>;
+  readScan: (log: (line: string) => void) => Scan | null;
+  capture: (store: string, scan: Scan | null) => void;
+  digest: (scan: Scan | null, log: (line: string) => void) => void;
+  workingState: (log: (line: string) => void) => ReturnType<SessionClose['workingState']>;
+  evidence: () => HandoffEvidence;
+}
+
+/** Books re-reads, sleeps, captures, digests and closes one ended session, in that order. */
+export async function sessionEndWork<Scan>(w: SessionEndWork<Scan>): Promise<void> {
+  const rereadLog = await bookSessionRereads(w.contextFor(w.hippoRoot), w.transcriptPath, w.sessionId)
+    .catch((err) => [`re-read count failed: ${errorMessage(err)}`]);
+  // Sleep starts the log file afresh, so the lines go in after it; on exit too, in case sleep exits the process.
+  const flushRereadLog = (): void => { for (const line of rereadLog.splice(0)) w.log(line); };
+  process.once('exit', flushRereadLog);
+  // A folder with neither a project nor a global store must not get one made.
+  const store = w.storeRoot();
+  if (!isInitialized(store)) {
+    w.log('skip: no hippo store for this folder or globally', { startFresh: true });
+    flushRereadLog();
+    return;
+  }
+  await w.sleep();
+  flushRereadLog();
+  const scan = w.readScan((line) => w.log(line));
+  w.capture(store, scan);
+  w.digest(scan, (line) => w.log(line));
+  // Only this session's snapshot, and only after sleep and capture.
+  const closeLog = (line: string): void => w.log(line);
+  closeEndedSession(w.contextFor(store), {
+    sessionId: w.sessionId,
+    turn: w.mode === 'turn',
+    workingState: () => (w.transcriptPath ? w.workingState(closeLog) : null),
+    evidence: w.evidence,
+    log: closeLog,
+  });
+}

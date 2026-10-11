@@ -3,8 +3,9 @@
  * and nearby high-scoring memories amplify each other. */
 
 import { cosineOf } from './cosine.js';
-import { isRecallBoostAblated } from './ablation.js';
-import { FALLBACK_HALF_LIFE_DAYS, type EmotionalValence } from './memory.js';
+import { evalNow, isRecallBoostAblated, strengthAblation } from './ablation.js';
+import { calculateStrength, FALLBACK_HALF_LIFE_DAYS, type EmotionalValence, type MemoryEntry } from './memory.js';
+import { DAY_MS } from '../util/time.js';
 import type { PhysicsConfig } from './physics-config.js';
 import { comparePhysicsResultsBy } from './compare.js';
 
@@ -424,4 +425,24 @@ export function applyOutcomeFeedback(
   const direction = vecSub(queryEmbedding, particle.position);
   const nudge = vecScale(direction, sign * feedbackAlpha * particle.temperature);
   particle.position = vecNormalize(vecAdd(particle.position, nudge));
+}
+
+/** Initialize physics state for a memory from its embedding vector; returns the new particle without persisting (the caller must save). */
+export function initializeParticle(
+  entry: MemoryEntry,
+  embedding: number[],
+  now: Date = evalNow(),
+): PhysicsParticle {
+  const strength = calculateStrength(entry, now, { ablation: strengthAblation() });
+  const ageDays = (now.getTime() - new Date(entry.created).getTime()) / DAY_MS;
+
+  return {
+    memoryId: entry.id,
+    position: [...embedding], // copy — position will diverge from original embedding
+    velocity: vecZero(embedding.length),
+    mass: computeMass(strength, entry.retrieval_count),
+    charge: computeCharge(entry.emotional_valence),
+    temperature: computeTemperature(ageDays, 1.0),
+    lastSimulation: now.toISOString(),
+  };
 }

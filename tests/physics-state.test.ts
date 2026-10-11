@@ -5,14 +5,13 @@ import * as os from 'os';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
 import { initStore } from '../src/store/open.js';
 import {
-  float32ToBuffer,
-  bufferToFloat32,
   loadPhysicsState,
   savePhysicsState,
-  initializeParticle,
   resetAllPhysicsState,
   refreshParticleProperties,
 } from '../src/db/physics-state.js';
+import { float32ToBuffer, bufferToFloat32 } from '../src/util/vector-codec.js';
+import { initializeParticle } from '../src/core/physics.js';
 import { loadStoredParticles, resetStoredParticles, seedStoredParticle } from '../src/store/vector-index.js';
 import type { PhysicsParticle } from '../src/core/physics.js';
 import type { MemoryEntry } from '../src/core/memory.js';

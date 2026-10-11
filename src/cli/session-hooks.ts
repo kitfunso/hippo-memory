@@ -23,7 +23,7 @@ import { isStringValue, readSessionEnd, readVscodeStop, type CaptureInput, type 
 import { loadConfig } from '../core/config.js';
 import { autoSleepDue } from '../api/auto-sleep.js';
 import { COMPACTION_DB_WAIT_MS } from '../core/compaction-timing.js';
-import { bookSessionRereads, closeEndedSession, compactResumeBlock } from '../api/session-end.js';
+import { compactResumeBlock, sessionEndWork as runSessionEnd } from '../api/session-end.js';
 import { normaliseHookPayload, readHookStdin, readStdinBounded, type BoundedStdin } from './stdin.js';
 import { errorMessage, log } from '../util/log.js';
 import { bookLedgerTurn } from '../api/ledger-db.js';
@@ -192,49 +192,35 @@ export function handleSessionEndWorker({ hippoRoot, tenantId, flags }: CommandCo
   return cmdSessionEndWorker(hippoRoot, tenantId, flags);
 }
 
-async function sessionEndWork(
-  hippoRoot: string,
-  tenantId: string,
-  flags: CliFlags,
-  mode: WorkerMode,
-): Promise<void> {
+function sessionEndWork(hippoRoot: string, tenantId: string, flags: CliFlags, mode: WorkerMode): Promise<void> {
   const transcriptPath = stringFlag(flags, 'transcript');
-  const closeLogFile = stringFlag(flags, 'log-file') ?? null;
-  const closeSessionId = stringFlag(flags, 'session-id') ?? null;
-  const rereadLog = await bookSessionRereads(cliApiContext(hippoRoot, tenantId), transcriptPath, closeSessionId)
-    .catch((err) => [`re-read count failed: ${errorMessage(err)}`]);
-  // Sleep starts the log file afresh, so the lines go in after it; on exit too, in case sleep exits the process.
-  const flushRereadLog = (): void => { for (const line of rereadLog.splice(0)) appendSessionEndCloseLog(closeLogFile, line); };
-  process.once('exit', flushRereadLog);
-  // Like the other hooks: project store, else global; a folder with neither must not get one made.
-  const store = hookStoreRoot(hippoRoot);
-  if (!isInitialized(store)) {
-    appendSessionEndCloseLog(closeLogFile, 'skip: no hippo store for this folder or globally', { startFresh: true });
-    flushRereadLog();
-    return;
-  }
-  if (mode === 'turn' && closeSessionId) await sleepIfDue(hippoRoot, tenantId, flags, closeLogFile, transcriptPath, closeSessionId);
-  else await sleepProjectStore(hippoRoot, tenantId, flags, closeLogFile, transcriptPath);
-  flushRereadLog();
-  const digestLog = (message: string): void => appendSessionEndCloseLog(closeLogFile, message);
-  const scan = transcriptPath ? readSessionScan(transcriptPath, digestLog) : null;
-  const capture = (turns: readonly SessionTurn[] | undefined): boolean => captureEndedSession(hippoRoot, tenantId, store, flags, transcriptPath, turns);
-  if (mode === 'turn') captureNewTurns(transcriptPath, closeSessionId, scan, capture, digestLog);
-  else capture(scan?.turns);
-  recordSessionDigest(hippoRoot, scan, {
-    key: closeSessionId || path.basename(transcriptPath ?? '', '.jsonl'),
+  const logFile = stringFlag(flags, 'log-file') ?? null;
+  const sessionId = stringFlag(flags, 'session-id') ?? null;
+  return runSessionEnd({
+    mode,
+    hippoRoot,
     tenantId,
-    log: digestLog,
-  });
-
-  // Only this session's snapshot, and only after sleep and capture.
-  const closeLog = (line: string): void => appendSessionEndCloseLog(closeLogFile, line);
-  closeEndedSession(cliApiContext(store, tenantId), {
-    sessionId: closeSessionId,
-    turn: mode === 'turn',
-    workingState: () => (transcriptPath ? transcriptWorkingState(transcriptPath, closeLog) : null),
+    sessionId,
+    transcriptPath,
+    contextFor: (root) => cliApiContext(root, tenantId),
+    storeRoot: () => hookStoreRoot(hippoRoot),
+    log: (line, opts) => appendSessionEndCloseLog(logFile, line, opts),
+    sleep: () => (mode === 'turn' && sessionId
+      ? sleepIfDue(hippoRoot, tenantId, flags, logFile, transcriptPath, sessionId)
+      : sleepProjectStore(hippoRoot, tenantId, flags, logFile, transcriptPath)),
+    readScan: (log) => (transcriptPath ? readSessionScan(transcriptPath, log) : null),
+    capture: (store, scan) => {
+      const capture = (turns: readonly SessionTurn[] | undefined): boolean => captureEndedSession(hippoRoot, tenantId, store, flags, transcriptPath, turns);
+      if (mode === 'turn') captureNewTurns(transcriptPath, sessionId, scan, capture, (line) => appendSessionEndCloseLog(logFile, line));
+      else capture(scan?.turns);
+    },
+    digest: (scan, log) => recordSessionDigest(hippoRoot, scan, {
+      key: sessionId || path.basename(transcriptPath ?? '', '.jsonl'),
+      tenantId,
+      log,
+    }),
+    workingState: (log) => (transcriptPath ? transcriptWorkingState(transcriptPath, log) : null),
     evidence: () => collectHandoffEvidence(process.cwd(), 'unknown'),
-    log: closeLog,
   });
 }
 

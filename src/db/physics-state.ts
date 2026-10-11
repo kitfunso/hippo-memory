@@ -5,25 +5,10 @@ import type { DatabaseSyncLike } from './index.js';
 import { withWriteScope } from './busy.js';
 import type { MemoryEntry } from '../core/memory.js';
 import type { PhysicsParticle } from '../core/physics.js';
-import { computeMass, computeCharge, computeTemperature, vecZero } from '../core/physics.js';
+import { computeMass, computeCharge, computeTemperature, initializeParticle } from '../core/physics.js';
 import { calculateStrength } from '../core/memory.js';
 import { DAY_MS } from '../util/time.js';
-
-// Float32Array <-> Buffer serialization
-
-export function float32ToBuffer(arr: number[]): Buffer {
-  const f32 = new Float32Array(arr);
-  return Buffer.from(f32.buffer);
-}
-
-export function bufferToFloat32(buf: Buffer | Uint8Array): number[] {
-  if (buf.byteLength === 0 || buf.byteLength % 4 !== 0) return [];
-  // Ensure we have a properly aligned copy (SQLite may return Uint8Array, not Buffer)
-  const bytes = new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength);
-  const aligned = new ArrayBuffer(bytes.length);
-  new Uint8Array(aligned).set(bytes);
-  return Array.from(new Float32Array(aligned));
-}
+import { bufferToFloat32, float32ToBuffer } from '../util/vector-codec.js';
 
 // Schema migration
 
@@ -140,26 +125,6 @@ export function savePhysicsState(
       );
     }
   });
-}
-
-/** Initialize physics state for a memory from its embedding vector; returns the new particle without persisting (the caller must save). */
-export function initializeParticle(
-  entry: MemoryEntry,
-  embedding: number[],
-  now: Date = evalNow(),
-): PhysicsParticle {
-  const strength = calculateStrength(entry, now, { ablation: strengthAblation() });
-  const ageDays = (now.getTime() - new Date(entry.created).getTime()) / DAY_MS;
-
-  return {
-    memoryId: entry.id,
-    position: [...embedding], // copy — position will diverge from original embedding
-    velocity: vecZero(embedding.length),
-    mass: computeMass(strength, entry.retrieval_count),
-    charge: computeCharge(entry.emotional_valence),
-    temperature: computeTemperature(ageDays, 1.0),
-    lastSimulation: now.toISOString(),
-  };
 }
 
 const RESET_BATCH = 64;

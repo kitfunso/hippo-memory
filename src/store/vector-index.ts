@@ -4,7 +4,9 @@ import { onHandle } from './open.js';
 import { DEFAULT_EMBEDDING_MODEL } from '../embeddings/local.js';
 import type { MemoryEntry } from '../core/memory.js';
 import type { PhysicsParticle } from '../core/physics.js';
-import { float32ToBuffer, initializeParticle, loadPhysicsState, resetAllPhysicsState, savePhysicsState } from '../db/physics-state.js';
+import { loadPhysicsState, resetAllPhysicsState, savePhysicsState } from '../db/physics-state.js';
+import { initializeParticle } from '../core/physics.js';
+import { float32ToBuffer } from '../util/vector-codec.js';
 import type { VectorBackfillQuery, VectorRowWrite, VectorWrite, VectorWriteResult } from './port.js';
 import {
   EMBEDDING_MODEL_META_KEY, deleteOrphanVectors, hasStoredVectors, loadVectors, loadVectorViews, replaceAllVectors, storedVectorDims, storedVectorIds,

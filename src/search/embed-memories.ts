@@ -6,7 +6,7 @@ import * as path from 'path';
 import { randomUUID } from 'crypto';
 import type { MemoryEntry } from '../core/memory.js';
 import { loadConfig } from '../core/config.js';
-import { initializeParticle } from '../db/physics-state.js';
+import { initializeParticle } from '../core/physics.js';
 import { resolveEmbeddingProvider, type EmbeddingProvider } from '../embeddings/provider.js';
 import {
   embeddingIndexIdentity, embeddingInputText, embeddingModelRequiresReindex, indexNeedsRebuild, saveStoredEmbeddingModel,

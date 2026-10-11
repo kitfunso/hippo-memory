@@ -1,6 +1,6 @@
 /** Core data model for Hippo memory entries, based on the strength formula from PLAN.md. */
 
-import { DEFAULT_TENANT_ID, envLossAversionRatio } from '../util/env.js';
+import { DEFAULT_TENANT_ID } from '../util/env.js';
 import { BadRequestError } from './api-errors.js';
 import { randomUUID } from 'crypto';
 import { evalNow, NO_STRENGTH_ABLATION, type StrengthAblation } from './ablation.js';
@@ -99,37 +99,32 @@ export const EMOTIONAL_MULTIPLIERS = {
 // so values below it fall back to 1.0.
 const LOSS_AVERSION_RATIO_MIN = 0.5;
 
-// Read once: calculateStrength runs per entry inside hot loops (src/api, src/consolidate, src/search).
-let _lossAversionRatioCache: number | undefined;
-
-function getLossAversionRatio(): number {
-  if (_lossAversionRatioCache !== undefined) return _lossAversionRatioCache;
-  const raw = envLossAversionRatio();
-  if (raw === undefined || raw === '') {
-    _lossAversionRatioCache = 1.0;
-    return 1.0;
-  }
+/** The ratio a raw env string means: unset, non-numeric or below the floor is 1.0. */
+export function parseLossAversionRatio(raw: string | undefined): number {
+  if (raw === undefined || raw === '') return 1.0;
   const parsed = Number(raw);
-  if (!Number.isFinite(parsed) || parsed < LOSS_AVERSION_RATIO_MIN) {
-    _lossAversionRatioCache = 1.0;
-    return 1.0;
-  }
-  _lossAversionRatioCache = parsed;
-  return parsed;
+  return Number.isFinite(parsed) && parsed >= LOSS_AVERSION_RATIO_MIN ? parsed : 1.0;
 }
 
-/** Test-only: a test that sets HIPPO_LOSS_AVERSION_RATIO calls this in beforeEach and afterEach (tests/emotional-multipliers.test.ts). */
-export function _resetLossAversionRatioCacheForTests(): void {
-  _lossAversionRatioCache = undefined;
+// The process-wide default for callers that pass no ratio; src/api/loss-aversion.ts sets it from env, core never reads env.
+let processLossAversionRatio = 1.0;
+
+export function setProcessLossAversionRatio(ratio: number): void {
+  processLossAversionRatio = parseLossAversionRatio(String(ratio));
+}
+
+function getLossAversionRatio(ratio: number | undefined): number {
+  return ratio === undefined ? processLossAversionRatio : parseLossAversionRatio(String(ratio));
 }
 
 /** Scales only the `negative` multiplier; `critical` stays unscaled so the knob moves just the losses-vs-gains claim. */
 export function applyLossAversionRatio(
   valence: EmotionalValence,
   baseMultiplier: number,
+  ratio?: number,
 ): number {
   if (valence !== 'negative') return baseMultiplier;
-  return baseMultiplier * getLossAversionRatio();
+  return baseMultiplier * getLossAversionRatio(ratio);
 }
 
 /** 1 + REWARD_SLOPE * (pos - neg) / (pos + neg + 1), in (0.5, 1.5), 1.0 with no outcomes; it scales the effective half-life. */
@@ -178,6 +173,8 @@ export interface DecayOptions {
   sleepCount?: number;
   /** EVAL-ONLY switches resolved once at the entry layer (`strengthAblation()`); absent means production scoring. */
   ablation?: StrengthAblation;
+  /** Overrides the process-wide loss-aversion ratio for this call. */
+  lossAversionRatio?: number;
 }
 
 /** Strength at `now` = decay * retrieval boost * emotional multiplier, clamped to [0, 1]; the basis modes are on DecayOptions.
@@ -213,7 +210,7 @@ export function calculateStrength(
   const retrievalBoost = retrievalBoostFor(entry, ablation);
 
   const baseMultiplier = EMOTIONAL_MULTIPLIERS[entry.emotional_valence] ?? 1.0;
-  const emotionalMultiplier = applyLossAversionRatio(entry.emotional_valence, baseMultiplier);
+  const emotionalMultiplier = applyLossAversionRatio(entry.emotional_valence, baseMultiplier, options.lossAversionRatio);
 
   const raw = decay * retrievalBoost * emotionalMultiplier;
 

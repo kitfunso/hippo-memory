@@ -20,7 +20,8 @@ import { loadAllEntries } from '../src/store/entry-reads.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { hybridSearch } from '../src/search/hybrid.js';
 import { sampleForReplay } from '../src/consolidate/replay.js';
-import { initializeParticle, savePhysicsState, loadPhysicsState } from '../src/db/physics-state.js';
+import { savePhysicsState, loadPhysicsState } from '../src/db/physics-state.js';
+import { initializeParticle } from '../src/core/physics.js';
 
 /** These tests pin decay arithmetic to the pre-1.46 7-day base; the default itself is tested in half-life-migration and schema-fit. */
 const createMemory7 = (content: string, options: Parameters<typeof createMemory>[1] = {}) => createMemory(content, { baseHalfLifeDays: 7, ...options });

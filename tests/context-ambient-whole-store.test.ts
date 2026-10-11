@@ -8,7 +8,8 @@ import { writeEntry, writeEntryDbOnly } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { loadAmbientTallies } from '../src/store/ambient.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
-import { Layer, _resetLossAversionRatioCacheForTests, type EmotionalValence, type MemoryEntry } from '../src/core/memory.js';
+import { refreshLossAversionRatio } from './_helpers/refresh-loss-aversion.js';
+import { Layer, type EmotionalValence, type MemoryEntry } from '../src/core/memory.js';
 import { _resetAblationCacheForTests } from '../src/core/ablation.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { getContext, adminActor, type Context } from '../src/api/index.js';
@@ -98,7 +99,7 @@ describe('SQL ambient tallies match the JS tallies over the same rows', () => {
 
   afterEach(() => {
     _resetAblationCacheForTests();
-    _resetLossAversionRatioCacheForTests();
+    refreshLossAversionRatio();
   });
 
   it.each([
@@ -109,7 +110,7 @@ describe('SQL ambient tallies match the JS tallies over the same rows', () => {
   ])('%s', (_label, env: Record<string, string>) => {
     for (const [k, v] of Object.entries(env)) vi.stubEnv(k, v);
     _resetAblationCacheForTests();
-    _resetLossAversionRatioCacheForTests();
+    refreshLossAversionRatio();
     for (let i = 0; i < 60; i++) writeEntry(store, row(i));
     const db = openHippoDb(store);
     try {
