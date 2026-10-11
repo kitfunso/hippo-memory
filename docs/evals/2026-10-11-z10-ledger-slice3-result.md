@@ -2,7 +2,7 @@
 
 **Date:** 2026-10-11  
 **Scope:** engineering scope from the [Z10 draft](./2026-09-30-z10-ledger-prereg.md), "Slice 3: engineering scope (settled)" and Amendment 4, registered at `25d388bf` before any slice 3 run; the rebases left that file byte for byte the same (now `62966162`). No task or efficacy claim.  
-**Verdict:** every fixture, control, mutant, I4, the live payload check and CI pass; the overhead check has had only void runs on a loaded machine, so the exit stays open until a run that is not void passes.  
+**Verdict:** every fixture, control, mutant, I4, the live payload check, CI and the overhead check pass, so Z10's engineering exit closes. Overhead run 1 was void under the machine-load rule; run 2 was not void and decides.  
 **Status:** the delivery ledger stays off by default behind `deliveryLedger.enabled`.
 
 ## What was built
@@ -57,7 +57,7 @@ Claude Code 2.1.288, `claude -p` with a scratch project's own settings only. Rec
 `node scripts/ledger-overhead.mjs --memories 2000 --runs 200`, checked by its `pass` field against Amendment 1 (tool-failure p50 under 15 ms, p95 under 30 ms, 0 dropped), with the machine-load rule: five timed `cmd /c exit` runs, and a median over 100 ms makes the run void.
 
 - **Run 1, void** (at `68f12c6f`). `cmd /c exit` took 1791, 3771, 1744, 3694 and 3267 ms, median 3267 ms. For the record, `pass` was true: worst tool-failure p50 2.54 ms and p95 5.22 ms, 0 dropped in fresh and steady. Contention mode dropped 2 of 200 tool-failure rows; no bound covers contention. In this run the tool-failure writes were interleaved with the timed turns.
-- **Run 2, pending.** The review fixes moved the tool-failure writes into their own loop. A watcher runs the script the first time the median is at or under 100 ms. Through the review the median stayed between 524 and 2104 ms, while other sessions held 76 node processes; total CPU read 13% and the disk was idle, so process start-up, not compute, was slow.
+- **Run 2, decides** (at `afa4167e`, whose `src` is that of `4db50a30`). The review fixes moved the tool-failure writes into their own loop. A watcher checked the median every two minutes and ran the script at the first one at or under 100 ms. Its first 41 checks read 174 to 4415 ms, while other sessions held 76 node processes, total CPU read 13% and the disk was idle. Before the run `cmd /c exit` took 88, 89, 97, 1129 and 1939 ms, median 97 ms, so the run is not void. `pass` is true: worst tool-failure p50 2.14 ms and p95 2.90 ms, 0 dropped in fresh and steady for both promptRecall settings; worst turn-row p50 0.57 ms and p95 0.76 ms. Contention mode, which no bound covers, dropped 3 and 2 of 200 tool-failure rows (promptRecall off and on), with p95 47 ms and max 111 ms: a row whose store stays locked past the ledger's 50 ms wait is dropped with one stderr line, as registered. Timed after the run, `cmd /c exit` took 97, 556, 598, 2405 and 3865 ms (median 598 ms), so load came back during the run. The rule reads the timing before the run, and load only slows the timings, so it cannot have moved them inside the bounds. Output: `C:/hippo-tmp/z10tf/overhead-final.json`, outside the repo.
 
 ## Review
 
