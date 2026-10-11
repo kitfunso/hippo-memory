@@ -96,6 +96,7 @@ export function envTenant(): string {
 // Install and CLI switches.
 export function envSkipAutoIntegrations(): boolean { return isOne('HIPPO_SKIP_AUTO_INTEGRATIONS'); }
 export function envSkipPostinstall(): boolean { return isOne('HIPPO_SKIP_POSTINSTALL'); }
+export function envSkipSchedule(): boolean { return isOne('HIPPO_SKIP_SCHEDULE'); }
 export function envMcpStdio(): boolean { return isOne('HIPPO_MCP_STDIO'); }
 /** `1` or `true`, so `0` and `false` turn it off; `true` stays on for anyone who set it that way. */
 export function envRequireServer(): boolean { return isOneOrTrue('HIPPO_REQUIRE_SERVER'); }

@@ -13,7 +13,7 @@ import { detectAnchoring, hashQueryText, biasHintEnabled, snapshotRing, type Rin
 import { detectAvailabilityBias } from '../api/availability.js';
 import { estimateTokens } from '../util/token-text.js';
 import { assembleCost, assembleText, drillCost, drillText } from '../api/context-render.js';
-import { mcpActor, type ToolCall } from './protocol.js';
+import { mcpActor, ownsServerCwd, type ToolCall } from './protocol.js';
 import { lastRecalledIds, resolveClientKey } from './session-state.js';
 import {
   formatContinuityBlock,
@@ -252,10 +252,10 @@ export async function runDrillTool({ args, ctx, hippoRoot, tenantId }: ToolCall)
   return drillText(r);
 }
 
-// The served store names the project (an HTTP daemon runs from anywhere); the global root names none, so stdio falls back to its launch cwd.
-function localProject(hippoRoot: string): ProjectIdentity {
+// The served store names the project (an HTTP daemon runs from anywhere); the global root names none, so only an owner of the server cwd falls back to it.
+function localProject(hippoRoot: string, ownsCwd: boolean): ProjectIdentity {
   const storeProject = resolveProjectIdentity(path.dirname(path.resolve(hippoRoot)));
-  return storeProject.name !== '' ? storeProject : resolveProjectIdentity(process.cwd());
+  return storeProject.name !== '' || !ownsCwd ? storeProject : resolveProjectIdentity(process.cwd());
 }
 
 export async function runContextTool({ args, ctx, hippoRoot, config, tenantId }: ToolCall): Promise<string> {
@@ -265,14 +265,15 @@ export async function runContextTool({ args, ctx, hippoRoot, config, tenantId }:
   const budget = budgetArg ?? config.defaultContextBudget;
   if (budget === 0) return '';
   if (budget < memoriesReserve(budget)) return ''; // not even the heading fits, so nothing prints, as at budget 0
+  const ownsCwd = ownsServerCwd(ctx);
   const result = await apiGetContext(
     { hippoRoot, tenantId, actor: mcpActor(ctx), store: ctx?.store },
     {
-      // The server's git state is no caller's, so a shared-store caller gets its project's rows without a query.
-      q: ctx?.project ? undefined : autoDetectContext(),
+      // The server's git state is no remote caller's, so a project or remote caller gets rows by strength without a query.
+      q: ctx?.project || !ownsCwd ? undefined : autoDetectContext(),
       budget,
       exactScope,
-      currentProject: ctx?.project ?? localProject(hippoRoot),
+      currentProject: ctx?.project ?? localProject(hippoRoot, ownsCwd),
       cost: contextCost,
     },
   );

@@ -51,7 +51,7 @@ describe('7. MCP hippo_context surface: backdated snapshot is bounded out', () =
         method: 'tools/call',
         params: { name: 'hippo_context', arguments: {} },
       },
-      { hippoRoot: home, tenantId: 'default', actor: 'mcp' },
+      { hippoRoot: home, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true },
     );
   }
 

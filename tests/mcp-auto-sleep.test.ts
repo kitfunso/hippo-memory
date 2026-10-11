@@ -19,7 +19,7 @@ afterEach(() => {
 function remember(hippoRoot: string, text: string) {
   return handleMcpRequest(
     { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_remember', arguments: { text } } },
-    { hippoRoot, tenantId: 'default', actor: 'mcp' },
+    { hippoRoot, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true },
   );
 }
 

@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as http from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { fetchWithRetry, isRetryableStatus, llmTimeoutMs, parseRetryAfterMs } from '../src/util/http-retry.js';
+import { fetchWithRetry, isRetryableStatus, llmTimeoutMs, llmTotalMs, parseRetryAfterMs } from '../src/util/http-retry.js';
 import { classifyTransportFailure } from '../src/cli/client.js';
 
 interface Reply {
@@ -137,6 +137,39 @@ describe('fetchWithRetry against a local server', () => {
     expect(sleeps).toEqual([125, 250]);
   });
 
+  describe('with a total budget', () => {
+    // The clock moves only by the waits, so the budget is measured on them alone.
+    function fakeClock() {
+      let clock = 0;
+      const sleeps: number[] = [];
+      return { sleeps, policy: { random: () => 0, now: () => clock, sleep: async (ms: number) => { sleeps.push(ms); clock += ms; } } };
+    }
+
+    it('hands back the last 5xx once the next wait would pass totalMs, before the attempt cap', async () => {
+      const { url, hits } = await startServer([{ status: 503 }]);
+      const { sleeps, policy } = fakeClock();
+      const res = await fetchWithRetry(url, {}, { timeoutMs: 2000, attempts: 10, totalMs: 1000, ...policy });
+      expect(res.status).toBe(503);
+      // Waits of 125, 250 and 500 end at 875; the next one, 1000, would end past the budget.
+      expect(sleeps).toEqual([125, 250, 500]);
+      expect(hits()).toBe(4);
+    });
+
+    it('throws the transport error once the next wait would pass totalMs', async () => {
+      const { url, hits } = await startServer(['reset']);
+      const { sleeps, policy } = fakeClock();
+      await expect(fetchWithRetry(url, {}, { timeoutMs: 2000, attempts: 10, totalMs: 400, ...policy })).rejects.toThrow(/fetch failed|socket/i);
+      expect(sleeps).toEqual([125, 250]);
+      expect(hits()).toBe(3);
+    });
+
+    it('cuts a stalled attempt short at the budget rather than at its own timeout', async () => {
+      const { url } = await startServer([null]);
+      const pending = fetchWithRetry(url, { method: 'POST' }, { timeoutMs: 60_000, totalMs: 200 });
+      await expect(pending).rejects.toMatchObject({ name: 'TimeoutError' });
+    });
+  });
+
   it('returns a 429 whose Retry-After exceeds the cap, so the caller can run its own longer pause', async () => {
     const { url, hits } = await startServer([{ status: 429, headers: { 'retry-after': '60' } }, { status: 200 }]);
     const res = await fetchWithRetry(url, {}, { timeoutMs: 2000, ...noSleep });
@@ -240,5 +273,11 @@ describe('retry helpers', () => {
     expect(llmTimeoutMs()).toBe(1500);
     process.env.HIPPO_LLM_TIMEOUT_MS = 'zero';
     expect(llmTimeoutMs()).toBe(60_000);
+  });
+
+  it('gives one LLM call, retries included, two attempts and the longest wait', () => {
+    expect(llmTotalMs()).toBe(128_000);
+    process.env.HIPPO_LLM_TIMEOUT_MS = '1500';
+    expect(llmTotalMs()).toBe(11_000);
   });
 });

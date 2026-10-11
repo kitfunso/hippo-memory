@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest';
+import { execFileSync } from 'node:child_process';
+import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
 import { cosineSimilarity } from '../src/store/embeddings/index.js';
+import { REQUIRE_EMBEDDINGS_VAR } from './_helpers/embedding-backend.js';
+
+const LOCAL_JS = new URL('../dist/store/embeddings/local.js', import.meta.url).href;
+const INSTALLED_ONLY = fileURLToPath(new URL('./_helpers/transformers-installed.cjs', import.meta.url));
 
 // ---------------------------------------------------------------------------
 // Tests that run without a Transformers.js backend installed
@@ -45,11 +52,36 @@ describe('cosineSimilarity', () => {
 // ---------------------------------------------------------------------------
 
 describe('isEmbeddingAvailable', () => {
-  it('returns a boolean', async () => {
+  const TRANSFORMERS = ['@xenova/transformers', '@huggingface/transformers'];
+
+  /** What the built local.js answers in a fresh node that can resolve only `installed` of the two packages. */
+  function availableWith(installed: readonly string[]): string {
+    const script = `import(${JSON.stringify(LOCAL_JS)}).then((m) => process.stdout.write(String(m.isEmbeddingAvailable())))`;
+    return execFileSync(process.execPath, ['--require', INSTALLED_ONLY, '-e', script], {
+      encoding: 'utf8',
+      env: { ...process.env, TRANSFORMERS_INSTALLED: installed.join(',') },
+    });
+  }
+
+  it('is false with neither package installed and true with either one', () => {
+    expect(availableWith([])).toBe('false');
+    expect(availableWith(['@huggingface/transformers'])).toBe('true');
+    expect(availableWith(['@xenova/transformers'])).toBe('true');
+  });
+
+  it('matches what this install resolves, and is true on the CI leg that requires the backend', async () => {
     const { isEmbeddingAvailable } = await import('../src/store/embeddings/local.js');
-    const available = await isEmbeddingAvailable();
-    expect(available).toEqual(expect.any(Boolean));
-    // We don't assert true/false since the test env may or may not have the lib
+    const req = createRequire(import.meta.url);
+    const resolves = (id: string): boolean => {
+      try {
+        req.resolve(id);
+        return true;
+      } catch {
+        return false;
+      }
+    };
+    expect(isEmbeddingAvailable()).toBe(TRANSFORMERS.some(resolves));
+    if (process.env[REQUIRE_EMBEDDINGS_VAR] === '1') expect(isEmbeddingAvailable()).toBe(true);
   });
 });
 

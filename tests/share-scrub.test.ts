@@ -114,20 +114,23 @@ describe('scrubForSharing', () => {
 describe('scrubForSharing on hostile input', () => {
   const SIZE = 64 * 1024;
   const fillTo = (unit: string, size: number): string => unit.repeat(Math.ceil(size / unit.length)).slice(0, size);
-  // Best of five, so a GC pause or a busy runner cannot lift one size alone.
-  const bestMs = (text: string): number => {
+  // Best of five, so a GC pause or a busy runner cannot lift one side alone.
+  const bestMs = (work: () => void): number => {
     let best = Infinity;
     for (let run = 0; run < 5; run++) {
       const started = performance.now();
-      scrubForSharing(text);
+      work();
       best = Math.min(best, performance.now() - started);
     }
     return best;
   };
-  // Linear work reads near 16 when the input grows 16x, quadratic near 256, so 64 sits 4x from both; a ratio of two sizes needs no prose baseline and no clock threshold.
+  // Both sides scrub the same bytes, so neither is a sub-millisecond reading: linear work reads near 1, quadratic near 16, and 4 sits 4x from both.
   const growth = (build: (size: number) => string): number => {
-    scrubForSharing(build(SIZE));
-    return bestMs(build(16 * SIZE)) / Math.max(bestMs(build(SIZE)), 0.05);
+    const piece = build(SIZE);
+    const whole = build(16 * SIZE);
+    scrubForSharing(piece);
+    const pieces = bestMs(() => { for (let i = 0; i < 16; i++) scrubForSharing(piece); });
+    return bestMs(() => scrubForSharing(whole)) / pieces;
   };
   // Each run sits on the hot path of at least one pattern, so a super-linear pattern shows here before it reaches the server.
   const UNITS = [
@@ -143,7 +146,7 @@ describe('scrubForSharing on hostile input', () => {
     ...UNITS.map((unit) => [JSON.stringify(unit), (size: number) => fillTo(unit, size)] as const),
     ['a@ then a long a. run', (size: number) => `a@${fillTo('a.', size)}`.slice(0, size)] as const,
     ['long names that end in a keyword', (size: number) => fillTo(`${'a_'.repeat(1024)}password=`, size)] as const,
-  ])('scrubs %s in under 64x the time when the input grows 16x', (_name, build) => {
-    expect(growth(build)).toBeLessThan(64);
+  ])('scrubs %s 16x longer in under 4x the time of 16 separate pieces', (_name, build) => {
+    expect(growth(build)).toBeLessThan(4);
   });
 });

@@ -8,7 +8,7 @@ import { autoShare } from '../sharing/share.js';
 import { consolidate } from '../consolidate/sleep.js';
 import { failedUnitOf } from '../store/delete-and-batch.js';
 import { loadConfig } from '../core/config.js';
-import { deduplicateStore } from '../consolidate/dedupe.js';
+import { deduplicateStore, type LoadedStore } from '../consolidate/dedupe.js';
 import { computeAmbientState } from '../core/ambient.js';
 import { loadPendingExtractionTenants, markPendingProcessedUpTo } from '../store/graph-queue.js';
 import { extractGraphChunked, type ExtractResult } from '../graph/extract.js';
@@ -98,13 +98,16 @@ async function runSleepPhases(
   counts.consolidation = consolidateResult.semanticCreated + consolidateResult.merged;
   const result = sleepResultFrom(consolidateResult, dryRun);
 
+  // One read after consolidation serves dedup, the audit and ambient: dedup reports every row it deletes, so later phases subtract instead of reading again.
+  const loaded: LoadedStore = { entries: phases.loadAllEntries(ctx.hippoRoot), backing: memoriesBackingObjects(ctx.hippoRoot) };
+
   // Phase 2: Dedup (post-consolidate near-duplicate cleanup).
-  const dedupResult = phases.deduplicateStore(ctx.hippoRoot, { dryRun, actor: ctx.actor.subject });
+  const dedupResult = phases.deduplicateStore(ctx.hippoRoot, { dryRun, actor: ctx.actor.subject, loaded });
   counts.dedup = dedupResult.removed;
   if (dedupResult.removed > 0) result.deduped = dedupSummary(dedupResult);
 
   // Phase 3: Quality audit (remove junk, report warnings; a dry run skips rows earlier phases would remove).
-  const audited = runQualityAudit(ctx, phases, { dryRun, consolidateResult, dedupResult, result });
+  const audited = runQualityAudit(ctx, phases, { dryRun, consolidateResult, dedupResult, result, loaded });
   counts.auditDeleted = audited.removed;
 
   if (dryRun) return result;
@@ -181,14 +184,16 @@ interface QualityAuditOptions {
   readonly consolidateResult: ConsolidateOutcome;
   readonly dedupResult: DedupOutcome;
   readonly result: SleepResult;
+  readonly loaded: LoadedStore;
 }
 
 /** `removed` counts audit errors deleted (or that would be under dryRun); `remaining` is what the audit read, less the rows it deleted. */
 function runQualityAudit(ctx: Context, phases: SleepPhases, options: QualityAuditOptions): QualityAuditOutcome {
-  const { dryRun, consolidateResult, dedupResult, result } = options;
-  const planned = new Set(dryRun ? [...(consolidateResult.removedIds ?? []), ...dedupResult.pairs.map((p) => p.removed)] : []);
-  const allEntries = phases.loadAllEntries(ctx.hippoRoot).filter((e) => !planned.has(e.id));
-  const auditOut = phases.auditMemories(allEntries, memoriesBackingObjects(ctx.hippoRoot));
+  const { dryRun, consolidateResult, dedupResult, result, loaded } = options;
+  // The load followed consolidation, so only a dry run still holds the rows consolidation would remove; dedup's pairs are gone or would be.
+  const planned = new Set([...(dryRun ? consolidateResult.removedIds ?? [] : []), ...dedupResult.pairs.map((p) => p.removed)]);
+  const allEntries = loaded.entries.filter((e) => !planned.has(e.id));
+  const auditOut = phases.auditMemories(allEntries, loaded.backing);
   if (auditOut.issues.length === 0) return { removed: 0, remaining: allEntries };
   const errors = auditOut.issues.filter((i) => i.severity === 'error');
   const warnings = auditOut.issues.filter((i) => i.severity === 'warning');

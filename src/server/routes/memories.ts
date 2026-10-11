@@ -125,8 +125,8 @@ export async function handleApplyOutcome({ req, res, opts }: RouteRequest): Prom
     if (!idsRaw.every(isNonEmptyId)) {
       throw new HttpError(400, 'ids must be an array of non-empty strings');
     }
-    // DoS cap on ids.length (each id costs ~3 DB ops): N=1000 keeps per-request work sub-second on SQLite.
-    // Checked BEFORE buildContextWithAuth so attack traffic does not pay the api-key lookup.
+    // DoS cap on ids.length (each id costs ~3 DB ops): N=1000 keeps per-request work sub-second on SQLite. Auth runs first, so only a caller with a key
+    // reaches it.
     if (idsRaw.length > 1000) {
       throw new HttpError(400, 'ids exceeds 1000-id cap');
     }
@@ -145,17 +145,14 @@ export async function handleApplyOutcome({ req, res, opts }: RouteRequest): Prom
 }
 
 // POST /v1/sleep: host-wide consolidation (consolidate, dedup, audit, share, ambient); api.sleep spans the WHOLE hippoRoot, cross-tenant by design, so the
-// loopback-only guard is the trust boundary; non-loopback serving must also zero cross-tenant counters. Body {dry_run?, no_share?}; returns SleepResult JSON.
+// host-admin check is the trust boundary and the loopback check only narrows who can reach it. Body {dry_run?, no_share?}; returns SleepResult JSON.
 export async function handleSleep({ req, res, opts }: RouteRequest): Promise<void> {
-  // Defensive per-request loopback guard using isLoopback(), so future mapped/IPv6/NAT64 forms flow through without drift;
-  // serve()'s boot-time host check is the primary trust boundary.
+  // Defence in depth, not the boundary: a socket address says where a request came from, never who sent it.
   if (!isLoopback(req.socket.remoteAddress)) {
     throw new HttpError(403, '/v1/sleep is loopback-only (host-wide consolidation; see CHANGELOG v1.11.4)');
   }
-  // Admin-role gate, forward-defensive: loopback fallback is admin by default and Bearer callers carry an explicit role from the api_keys row;
-  // when non-loopback serving lands, this gate is the real auth boundary on host-wide sleep.
   const sleepCtx = await buildContextWithAuth(req, opts);
-  // Sleep consolidates every tenant under hippoRoot, so it is a cross-tenant action.
+  // The trust boundary: sleep spans every tenant, so only a host admin runs it (the keyless local operator, or an admin key of the host's tenant).
   assertCrossTenantAdmin(sleepCtx, '/v1/sleep');
   const body = await parseJsonBody(req, sleepCtx);
   const dryRunRaw = body['dry_run'];

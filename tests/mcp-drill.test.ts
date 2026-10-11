@@ -32,7 +32,7 @@ async function callTool(
       method: 'tools/call',
       params: { name, arguments: args },
     },
-    ctx,
+    { ...ctx, role: 'admin', hostAdmin: true },
   );
 }
 
@@ -63,7 +63,7 @@ describe('mcp hippo_drill', () => {
   it('hippo_drill is registered in the tools catalogue', async () => {
     const res = await handleMcpRequest(
       { jsonrpc: '2.0', id: 1, method: 'tools/list' },
-      { hippoRoot: home, tenantId: 'default', actor: 'mcp' },
+      { hippoRoot: home, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true },
     );
     // SAFETY: `tools/list` responses always carry `result.tools` as the
     // catalogue array; each entry at minimum has its registered `name`.

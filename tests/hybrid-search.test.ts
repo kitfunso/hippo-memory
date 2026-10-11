@@ -3,97 +3,125 @@
  * Uses synthetic vectors (no Transformers.js backend needed).
  */
 
-import { describe, it, expect } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, it, expect, vi } from 'vitest';
 import { hybridSearch } from '../src/search/hybrid.js';
 import { search } from '../src/search/bm25-search.js';
 import { mmrRerank } from '../src/search/rerank.js';
 import type { SearchResult } from '../src/core/search-types.js';
-import { createMemory, applyOutcome, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
-import { cosineSimilarity } from '../src/store/embeddings/index.js';
+import { createMemory, applyOutcome, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../src/core/memory.js';
+import { embeddingIndexIdentity } from '../src/store/embeddings/index.js';
+import { initStore } from '../src/store/open.js';
+import { closeHippoDb, openHippoDb, setMeta } from '../src/db/index.js';
+import { EMBEDDING_MODEL_META_KEY, upsertVectors } from '../src/db/vector-store.js';
+import { HASHED_DIM, hashedVector, startHashedEmbeddings, type HashedEmbeddings } from './_helpers/hashed-embedding-server.js';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { saveEmbeddingIndex } from '../src/store/vector-index.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Create a tmp hippo root with a pre-built embedding index. */
-function setupEmbeddingFixture(index: Record<string, number[]>): string {
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-hybrid-'));
-  saveEmbeddingIndex(tmpDir, index);
-  return tmpDir;
+const MODEL = 'hashed-16';
+const IDENTITY = embeddingIndexIdentity(`openai:${MODEL}`);
+let embeddings: HashedEmbeddings;
+const roots: string[] = [];
+
+/** A real store whose provider is the local hashed-embedding server, holding exactly `vectors`. */
+function vectorRoot(vectors: Record<string, readonly number[]>): string {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-hybrid-'));
+  roots.push(root);
+  initStore(root);
+  fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ embeddings: { provider: 'openai', model: MODEL, apiBaseUrl: embeddings.url } }));
+  const db = openHippoDb(root);
+  try {
+    setMeta(db, EMBEDDING_MODEL_META_KEY, IDENTITY);
+    upsertVectors(db, Object.entries(vectors), IDENTITY);
+  } finally {
+    closeHippoDb(db);
+  }
+  return root;
 }
 
-function cleanup(dir: string): void {
-  fs.rmSync(dir, { recursive: true, force: true });
+/** `count` unit vectors orthogonal to `q` and to each other, so a test sets each cosine exactly. */
+function orthogonalTo(q: readonly number[], count: number): number[][] {
+  const basis = [[...q]];
+  for (let k = 0; basis.length <= count; k++) {
+    let v = Array.from({ length: HASHED_DIM }, (_, i): number => (i === k ? 1 : 0));
+    for (const b of basis) {
+      const d = v.reduce((sum, x, i) => sum + x * b[i]!, 0);
+      v = v.map((x, i) => x - d * b[i]!);
+    }
+    const norm = Math.hypot(...v);
+    if (norm > 1e-6) basis.push(v.map((x) => x / norm));
+  }
+  return basis.slice(1);
 }
+
+/** The unit vector whose cosine with unit `q` is `cos`, leaning toward the unit `away` orthogonal to it. */
+function withCosine(q: readonly number[], away: readonly number[], cos: number): number[] {
+  const sin = Math.sqrt(1 - cos * cos);
+  return q.map((x, i) => cos * x + sin * away[i]!);
+}
+
+const memory = (content: string): MemoryEntry => createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
+
+beforeAll(async () => { embeddings = await startHashedEmbeddings(); });
+afterAll(async () => {
+  await embeddings.close();
+  for (const root of roots) fs.rmSync(root, { recursive: true, force: true });
+});
 
 // ---------------------------------------------------------------------------
 // Hybrid scoring tests (with synthetic embeddings)
 // ---------------------------------------------------------------------------
 
+describe('hybridSearch over stored vectors', () => {
+  beforeEach(() => { vi.stubEnv('OPENAI_API_KEY', 'test-key-not-secret'); });
+  afterEach(() => { vi.unstubAllEnvs(); });
+
+  it('finds a row no query word matches through its stored vector alone', async () => {
+    const query = 'deployment broke';
+    const q = hashedVector(query);
+    const [near, far] = orthogonalTo(q, 2);
+    const related = memory('CI pipeline failure on push to master causes rollback');
+    const unrelated = memory('Python dict ordering is guaranteed in 3.7+');
+    const root = vectorRoot({ [related.id]: withCosine(q, near!, 0.95), [unrelated.id]: withCosine(q, far!, -0.1) });
+
+    expect(await hybridSearch(query, [related, unrelated], { budget: 10_000 })).toEqual([]);
+    const results = await hybridSearch(query, [related, unrelated], { hippoRoot: root, budget: 10_000, scope: null, explain: true });
+    expect(results.map((r) => r.entry.id)).toEqual([related.id]);
+    expect(results[0]!.bm25).toBe(0);
+    expect(results[0]!.cosine).toBeCloseTo(0.95, 5);
+    expect(results[0]!.breakdown?.mode).toBe('hybrid');
+  });
+
+  it('blends normalised BM25 and cosine by embeddingWeight, 0.6 to cosine by default', async () => {
+    const query = 'cache failure';
+    const q = hashedVector(query);
+    const [a, b] = orthogonalTo(q, 2);
+    const keyword = memory('cache failure: the cache failure repeats on every cache failure');
+    const semantic = memory('the cache went stale overnight');
+    const root = vectorRoot({ [keyword.id]: withCosine(q, a!, 0.1), [semantic.id]: withCosine(q, b!, 0.9) });
+    const run = (embeddingWeight?: number) =>
+      hybridSearch(query, [keyword, semantic], { hippoRoot: root, budget: 10_000, scope: null, explain: true, embeddingWeight });
+
+    for (const [weight, expected] of [[undefined, 0.6], [0.1, 0.1], [0.9, 0.9]] as const) {
+      const results = await run(weight);
+      expect(results.map((r) => r.cosine).sort()).toEqual([expect.closeTo(0.1, 5), expect.closeTo(0.9, 5)]);
+      for (const r of results) {
+        const bd = r.breakdown!;
+        expect(bd.embeddingWeight).toBe(expected);
+        expect(bd.bm25Weight).toBeCloseTo(1 - expected, 12);
+        expect(bd.base).toBeCloseTo((1 - expected) * bd.normBm25 + expected * r.cosine, 9);
+      }
+    }
+    expect((await run(0.1)).map((r) => r.entry.id)).toEqual([keyword.id, semantic.id]);
+    expect((await run(0.9)).map((r) => r.entry.id)).toEqual([semantic.id, keyword.id]);
+  });
+});
+
 describe('hybridSearch with embeddings', () => {
-  it('returns results that have no BM25 match but high cosine similarity', async () => {
-    // "deployment broke" vs "CI pipeline failure" — no shared tokens, but semantically related
-    const entries = [
-      createMemory('CI pipeline failure on push to master causes rollback', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
-      createMemory('Python dict ordering is guaranteed in 3.7+', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
-    ];
-
-    // Synthetic vectors: query is close to entry[0], far from entry[1]
-    const queryVector = [1.0, 0.0, 0.0, 0.0];
-    const embeddingIndex = {
-      [entries[0].id]: [0.95, 0.05, 0.0, 0.0],  // high similarity to query
-      [entries[1].id]: [0.0, 0.0, 1.0, 0.0],     // orthogonal to query
-    } satisfies Record<string, number[]>;
-
-    const tmpDir = setupEmbeddingFixture(embeddingIndex);
-
-    // With BM25 only, "deployment broke" finds nothing (no shared tokens)
-    const bm25Results = search('deployment broke', entries, { budget: 10000 });
-    expect(bm25Results.length).toBe(0);
-
-    // Hybrid search should find entry[0] via cosine similarity
-    // We need to mock the embedding pipeline — hybridSearch calls isEmbeddingAvailable()
-    // and getEmbedding() which require the actual library.
-    // Instead, test the scoring math directly.
-    const cosine = cosineSimilarity(queryVector, embeddingIndex[entries[0].id]);
-    expect(cosine).toBeGreaterThan(0.9);
-
-    const cosineIrrelevant = cosineSimilarity(queryVector, embeddingIndex[entries[1].id]);
-    expect(cosineIrrelevant).toBeCloseTo(0, 5);
-
-    cleanup(tmpDir);
-  });
-
-  it('blends BM25 and cosine scores with configurable weight', async () => {
-    const entries = [
-      createMemory('FRED cache silently dropped the TIPS series', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
-      createMemory('cache refresh always verify contents after failure', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
-    ];
-
-    // entry[0]: strong keyword match AND strong embedding match
-    // entry[1]: strong keyword match but weak embedding match
-    const queryVector = [1.0, 0.0, 0.0];
-    const embeddingIndex = {
-      [entries[0].id]: [0.9, 0.1, 0.0],   // high cosine
-      [entries[1].id]: [0.1, 0.9, 0.0],   // low cosine
-    } satisfies Record<string, number[]>;
-
-    // BM25 alone: both match "cache" similarly
-    const bm25Results = search('cache failure', entries, { budget: 10000 });
-    expect(bm25Results.length).toBe(2);
-
-    // Verify that the cosine scores discriminate
-    const cos0 = cosineSimilarity(queryVector, embeddingIndex[entries[0].id]);
-    const cos1 = cosineSimilarity(queryVector, embeddingIndex[entries[1].id]);
-    expect(cos0).toBeGreaterThan(cos1);
-
-    cleanup(setupEmbeddingFixture(embeddingIndex));
-  });
-
   it('falls back to BM25-only when no embedding index exists', async () => {
     const entries = [
       createMemory('FRED cache silently dropped the TIPS series', {
@@ -413,25 +441,31 @@ describe('mmrRerank', () => {
 // ---------------------------------------------------------------------------
 
 describe('hybridSearch MMR cap on large candidate sets', () => {
-  it('preserves tail entries past MMR cap in relevance order', async () => {
-    // 150 entries — enough to exceed the 100-entry MMR cap in hybridSearch.
-    // Queries match 'topic N' where N is the entry index, so relevance is
-    // monotonic: entry N beats entry N+1 on BM25. No embeddings available in
-    // test env, so MMR is skipped and we get pure relevance order regardless.
-    const entries = Array.from({ length: 150 }, (_, i) =>
-      createMemory(`topic ${String(i).padStart(3, '0')} about ${'x'.repeat(20)} content`, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
-    );
-    const results = await hybridSearch('topic content about', entries, {
-      budget: 1_000_000, // enough to include all matches
-      mmr: true,
-      mmrLambda: 0.5,
-    });
-    // Top 10 should all score positive and be in the returned list.
-    expect(results.length).toBeGreaterThan(10);
-    // No crash, no timeout, and results are well-ordered by score desc.
-    for (let i = 1; i < results.length; i++) {
-      expect(results[i - 1].score).toBeGreaterThanOrEqual(results[i].score);
-    }
+  beforeEach(() => { vi.stubEnv('OPENAI_API_KEY', 'test-key-not-secret'); });
+  afterEach(() => { vi.unstubAllEnvs(); });
+
+  it('re-ranks only the top 100 by relevance and keeps the rest in relevance order', async () => {
+    const query = 'topic content about';
+    const q = hashedVector(query);
+    const [cluster, headAway, tailAway] = orthogonalTo(q, 3);
+    // Every row has the same words, so BM25 ties and each row's stored cosine alone sets its relevance rank.
+    const entries = Array.from({ length: 150 }, (_, i) => memory(`topic ${String(i).padStart(3, '0')} about content`));
+    const HEAD_OUTLIER = 50;
+    const TAIL_OUTLIER = 149;
+    const vectors = Object.fromEntries(entries.map((e, i) => {
+      const away = i === HEAD_OUTLIER ? headAway! : i === TAIL_OUTLIER ? tailAway! : cluster!;
+      return [e.id, withCosine(q, away, i === TAIL_OUTLIER ? 0.5 : 0.99 - i * 0.001)];
+    }));
+
+    const results = await hybridSearch(query, entries, { hippoRoot: vectorRoot(vectors), budget: 1_000_000, scope: null, explain: true, mmrLambda: 0.5 });
+
+    expect(results).toHaveLength(150);
+    expect(results.filter((r) => r.breakdown?.preMmrRank !== undefined)).toHaveLength(100);
+    // The head outlier proves MMR ran: off the cluster, it jumps the near-duplicates ranked above it.
+    const head = results.find((r) => r.entry.id === entries[HEAD_OUTLIER]!.id)!.breakdown!;
+    expect(head.postMmrRank!).toBeLessThan(head.preMmrRank!);
+    // The tail outlier would jump them too, but past the cap it keeps its last place.
+    expect(results.slice(100).map((r) => r.entry.id)).toEqual(entries.slice(100).map((e) => e.id));
   });
 });
 
