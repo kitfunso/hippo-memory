@@ -44,7 +44,7 @@ function event(session: string, o: Partial<DeliveryEventInput> = {}): DeliveryEv
   tick += 1;
   return {
     ts: new Date(Date.parse('2026-10-01T00:00:00.000Z') + tick * 10_000).toISOString(), tenantId: 'default', runtime: 'claude-code',
-    eventType: 'prompt-submit', surface: 'hook', storeHash: blockHash(path.join(realpathOrResolve(path.dirname(path.resolve(dir))), path.basename(dir))), writeStore: 'local', projectHash: null,
+    eventType: 'prompt-submit', surface: 'hook', storeHash: blockHash(realpathOrResolve(dir)), writeStore: 'local', projectHash: null,
     sessionId: session, sessionState: 'payload', hostTurnId: null, promptHash: blockHash(`prompt ${tick}`), promptLength: 5, queryHash: null,
     recallTraceId: null, blockState: 'sent', promptRecall: false, consideredCount: 1, filteredCount: 0, selectedCount: 1, emittedCount: 1,
     rejectedCount: 0, rejectedUnlisted: 0, sectionsShown: 0, sectionsDropped: 0, budgetTokens: 1000, selectedTokens: 10, injectedTokens: 10,

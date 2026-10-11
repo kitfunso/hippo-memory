@@ -78,36 +78,53 @@ function verdictHash(db, tenant, session, hashes) {
 const logRowOf = (db, tenant, id) => (id === null || !hasTable(db, 'failure_log') ? undefined
   : db.prepare('SELECT outcome, tool, sig_hash FROM failure_log WHERE id = ? AND tenant_id = ?').get(id, tenant));
 
-// Exact and clock-free: the one tool-failure memory whose text hashes to the log row's signature; none or several is no link.
-function lessonFor(db, tenant, eventId, sigHash, notes) {
+// Exact and clock-free: only the newest stored log row for a signature links, and then to the one tool-failure memory with that signature; none or several is no link.
+function lessonFor(db, tenant, eventId, failureId, sigHash, notes) {
+  if (sigHash !== null) {
+    const newest = db.prepare("SELECT MAX(id) AS id FROM failure_log WHERE tenant_id = ? AND sig_hash = ? AND outcome = 'stored'").get(tenant, sigHash).id;
+    if (newest !== failureId) {
+      notes.push(`lesson-superseded:${eventId}:${newest}`);
+      return null;
+    }
+  }
   const hits = sigHash === null ? [] : db.prepare("SELECT id, content FROM memories WHERE tenant_id = ? AND source = 'tool-failure'").all(tenant).filter((m) => failureHash(m.content) === sigHash);
   if (hits.length === 1) return hits[0].id;
   notes.push(`lesson-ambiguous:${eventId}:${hits.length}`);
   return null;
 }
 
+// A tool call is one entry: the numbered row, read through the stored log row of its duplicate group when there is one, since either process may flush first.
+function sourceOf(db, tenant, row, dups) {
+  for (const m of [row, ...dups].sort((x, y) => x.id - y.id)) {
+    const log = logRowOf(db, tenant, m.failure_id);
+    if (log?.outcome === 'stored') return { src: m, log };
+  }
+  return { src: row, log: logRowOf(db, tenant, row.failure_id) };
+}
+
 function toolFailureEntries(db, tenant, rows, notes) {
-  const dupCount = new Map();
-  for (const r of rows) if (r.duplicate_of !== null) dupCount.set(r.duplicate_of, (dupCount.get(r.duplicate_of) ?? 0) + 1);
+  const groups = new Map();
+  for (const r of rows) if (r.duplicate_of !== null) groups.set(r.duplicate_of, [...(groups.get(r.duplicate_of) ?? []), r]);
   const entries = [];
   let afterPrompt = null;
   for (const r of rows) {
     if (r.event_type === 'prompt-submit' && r.turn_seq !== null && r.duplicate_of === null && r.session_state !== 'subagent') afterPrompt = r.turn_seq;
     if (r.event_type !== 'tool-failure' || r.turn_seq === null || r.duplicate_of !== null || r.session_state === 'subagent') continue;
-    const log = logRowOf(db, tenant, r.failure_id);
+    const dups = groups.get(r.id) ?? [];
+    const { src, log } = sourceOf(db, tenant, r, dups.filter((d) => d.event_type === 'tool-failure'));
     const outcome = log?.outcome ?? 'log-missing';
     entries.push({
-      event_id: r.id, turn_seq: r.turn_seq, after_prompt_turn: afterPrompt, tool_use_id: r.tool_use_id, failure_id: r.failure_id, outcome,
-      tool: log?.tool ?? null, duplicates: dupCount.get(r.id) ?? 0, lesson: outcome === 'stored' ? lessonFor(db, tenant, r.id, log.sig_hash, notes) : null,
+      event_id: r.id, turn_seq: r.turn_seq, after_prompt_turn: afterPrompt, tool_use_id: r.tool_use_id, failure_id: src.failure_id, outcome,
+      tool: log?.tool ?? null, duplicates: dups.length, lesson: outcome === 'stored' ? lessonFor(db, tenant, r.id, src.failure_id, log.sig_hash, notes) : null,
     });
   }
   return entries;
 }
 
 // A tool-failure lesson names the listing entry that links to it; every other memory has no origin.
-function originOf(db, memory, tenant, rows) {
+function originOf(db, memory, tenant, rows, notes) {
   if (memory === null || memory.store !== 'local' || memory.source !== 'tool-failure') return null;
-  return toolFailureEntries(db, tenant, rows, []).find((e) => e.lesson === memory.id)?.event_id ?? null;
+  return toolFailureEntries(db, tenant, rows, notes).find((e) => e.lesson === memory.id)?.event_id ?? null;
 }
 
 function splitRows(rows, targetCands, notes) {
@@ -338,7 +355,7 @@ function build(local, opts, base) {
   base.memory_store = env.memory?.store ?? null;
 
   const rows = loadSession(local, tenant, session, base.hashes, base.notes);
-  base.origin = originOf(local, env.memory, tenant, rows);
+  base.origin = originOf(local, env.memory, tenant, rows, base.notes);
   const targetCands = new Map();
   if (base.memory_id !== null) {
     for (const c of local.prepare('SELECT * FROM delivery_candidates WHERE tenant_id = ? AND memory_id = ?').all(tenant, base.memory_id)) {

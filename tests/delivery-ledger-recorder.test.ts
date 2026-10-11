@@ -286,3 +286,44 @@ describe('prompt facts on a boundary or context row', () => {
     expect(event.promptLength).toBe(13);
   });
 });
+
+describe('the tool-failure recorder', () => {
+  const failureRecorder = (eventType: DeliveryEventType, payload: Record<string, string>) => createDeliveryRecorder({
+    root: local, storeHash: 'aaaaaaaaaaaaaaaa', writeStore: 'local', tenantId: 'default', eventType,
+    stdinText: JSON.stringify({ session_id: 's', hook_event_name: 'PostToolUseFailure', ...payload }),
+  });
+
+  it('reads tool_use_id trimmed and cut to 128 characters, and a blank one as null', () => {
+    expect(eventOf(failureRecorder('tool-failure', { tool_use_id: '  toolu_1  ' })).toolUseId).toBe('toolu_1');
+    expect(eventOf(failureRecorder('tool-failure', { tool_use_id: 'x'.repeat(300) })).toolUseId).toBe('x'.repeat(128));
+    expect(eventOf(failureRecorder('tool-failure', { tool_use_id: '   ' })).toolUseId).toBeNull();
+    expect(eventOf(failureRecorder('tool-failure', {})).toolUseId).toBeNull();
+  });
+
+  it('sets the tool call and failure link on tool-failure rows only, with no candidates or counts', () => {
+    const rec = failureRecorder('tool-failure', { tool_use_id: 'toolu_1' });
+    rec.logged(42);
+    const input = eventOf(rec);
+    expect([input.eventType, input.surface, input.blockState, input.toolUseId, input.failureId]).toEqual(['tool-failure', 'hook', 'empty', 'toolu_1', 42]);
+    expect([input.candidates, input.consideredCount, input.emittedCount, input.promptHash, input.promptLength]).toEqual([[], 0, 0, null, 0]);
+    const other = failureRecorder('prompt-submit', { tool_use_id: 'toolu_1', prompt: 'hello' });
+    other.logged(42);
+    const o = eventOf(other);
+    expect([o.toolUseId, o.failureId]).toEqual([null, null]);
+  });
+
+  it('logged(null) leaves the link empty', () => {
+    const rec = failureRecorder('tool-failure', {});
+    rec.logged(null);
+    expect(eventOf(rec).failureId).toBeNull();
+  });
+
+  it('a throw inside logged marks the recorder broken, so it writes nothing', () => {
+    _setDeliveryFaultForTests('observe');
+    const rec = failureRecorder('tool-failure', { tool_use_id: 'toolu_1' });
+    rec.logged(7);
+    const write = vi.fn(() => 1);
+    rec.flush(write);
+    expect(write).not.toHaveBeenCalled();
+  });
+});

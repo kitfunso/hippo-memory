@@ -40,10 +40,13 @@ export interface FailureEvent {
   now?: string;
 }
 
-/** Append one failure row and prune rows past {@link FAILURE_LOG_RETENTION_DAYS}; returns the new row's id. */
+/** Prune rows past {@link FAILURE_LOG_RETENTION_DAYS}, then append one failure row; returns the new row's id. */
 export function recordFailure(db: DatabaseSyncLike, event: FailureEvent): number {
   // Normalised, because the window and prune compare timestamps as strings.
   const now = new Date(event.now ?? Date.now()).toISOString();
+  // Prune first: nothing after the insert can throw, so a returned id always means a committed row.
+  const cutoff = new Date(Date.parse(now) - FAILURE_LOG_RETENTION_DAYS * DAY_MS).toISOString();
+  db.prepare(`DELETE FROM failure_log WHERE ts < ?`).run(cutoff);
   const inserted = db.prepare(
     `INSERT INTO failure_log (ts, tenant_id, session_id, tool, outcome, skip_rule, sig_hash, detail_hash, owner_subject, origin_project, request_id)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -60,8 +63,6 @@ export function recordFailure(db: DatabaseSyncLike, event: FailureEvent): number
     event.originProject ?? null,
     event.requestId ?? null,
   );
-  const cutoff = new Date(Date.parse(now) - FAILURE_LOG_RETENTION_DAYS * DAY_MS).toISOString();
-  db.prepare(`DELETE FROM failure_log WHERE ts < ?`).run(cutoff);
   return Number(inserted.lastInsertRowid);
 }
 

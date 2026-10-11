@@ -3,14 +3,16 @@ import { describe, it, expect, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { pathToFileURL } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
 import { initStore } from '../src/store/open.js';
-import { DELIVERY_LEDGER_VERSION } from '../src/store/delivery-recorder.js';
+import { DELIVERY_LEDGER_VERSION, type DeliveryEventInput } from '../src/store/delivery-recorder.js';
+import { writeDeliveryEvent } from '../src/store/recall-trace.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { blockHash } from '../src/util/token-text.js';
 import { realpathOrResolve } from '../src/util/real-path.js';
 import type { JsonValue } from '../src/util/json.js';
-import { dispose, hippo, project, type Config as ProjectConfig, type Project, type RunOpts } from './_helpers/delivery-boundary.js';
+import { dispose, hippo, project, withDb, type Config as ProjectConfig, type Project, type RunOpts } from './_helpers/delivery-boundary.js';
 import {
   configure, expectVerdict, fire, listingOf, seed, verdictOf, writeHostTranscript, type ReadOpts, type TurnSpec, type Verdict,
 } from './_helpers/host-transcript.js';
@@ -20,6 +22,7 @@ vi.setConfig({ testTimeout: 90_000 });
 
 const SCRIPT = path.resolve(__dirname, '..', 'scripts', 'z10-reconstruct.mjs');
 const V = DELIVERY_LEDGER_VERSION;
+const HIPPO_JS = path.resolve(__dirname, '..', 'bin', 'hippo.js');
 const P1 = 'first question about deploys';
 const P2 = 'second question about the test suite';
 const ERR_ALPHA = 'Command failed with exit code 2: the alpha package build cannot find its manifest file';
@@ -28,6 +31,7 @@ const RECALL_PROMPT = 'why does the alpha package build keep failing, it cannot 
 const ROUTINE = { tool_input: { command: 'grep -r zebra src' }, error: 'Command failed with exit code 1: no output produced' };
 
 type Row = { [column: string]: string | number | null };
+type Param = string | number;
 type Over = { [field: string]: JsonValue | undefined };
 
 const made: Project[] = [];
@@ -41,19 +45,19 @@ const mk = (config?: ProjectConfig): Project => {
   return x;
 };
 
-function rowsAt(root: string, sql: string): Row[] {
+function rowsAt(root: string, sql: string, params: Param[] = []): Row[] {
   const db = new DatabaseSync(path.join(root, 'hippo.db'), { readOnly: true });
   try {
     // SAFETY: callers pass a SELECT; rows are column-name to cell maps.
-    return db.prepare(sql).all() as Row[];
+    return db.prepare(sql).all(...params) as Row[];
   } finally {
     db.close();
   }
 }
-const rows = (sql: string, root: string = p.hippoRoot): Row[] => rowsAt(root, sql);
+const rows = (sql: string, root: string = p.hippoRoot, params: Param[] = []): Row[] => rowsAt(root, sql, params);
 const EV_COLS = 'id, event_type, turn_seq, duplicate_of, tool_use_id, failure_id, ledger_version, runtime, session_state, tenant_id, store_hash';
 const events = (session: string, root: string = p.hippoRoot, tenant = 'default'): Row[] =>
-  rows(`SELECT ${EV_COLS} FROM delivery_events WHERE tenant_id = '${tenant}' AND session_id = '${session}' ORDER BY id`, root);
+  rows(`SELECT ${EV_COLS} FROM delivery_events WHERE tenant_id = ? AND session_id = ? ORDER BY id`, root, [tenant, session]);
 const logs = (root: string = p.hippoRoot): Row[] => rows('SELECT id, outcome, tool, sig_hash FROM failure_log ORDER BY id', root);
 const lessons = (root: string = p.hippoRoot): Row[] => rows("SELECT id, content FROM memories WHERE source = 'tool-failure' ORDER BY created, id", root);
 const lessonWith = (word: string): string => String(lessons().find((m) => String(m.content).includes(word))?.id);
@@ -69,6 +73,24 @@ const payload = (session: string, over: Over = {}): string => JSON.stringify({
 function fail(at: Project, session: string, over: Over = {}, opts: RunOpts & { args?: string[] } = {}) {
   const { args = ['capture-error'], ...run } = opts;
   const r = hippo(at, args, { ...run, input: payload(session, over) });
+  expect([r.status, r.stdout]).toEqual([0, '']);
+  return r;
+}
+
+/** One `hippo capture-error` run with every prepared statement that starts with `sqlPrefix` made to throw. */
+function failWhere(at: Project, session: string, sqlPrefix: string, over: Over = {}) {
+  const preload = path.join(at.dir, `throw-${sqlPrefix.replace(/\W+/g, '-')}.mjs`);
+  fs.writeFileSync(preload, `
+import { DatabaseSync } from 'node:sqlite';
+const original = DatabaseSync.prototype.prepare;
+DatabaseSync.prototype.prepare = function (sql, ...rest) {
+  if (sql.trimStart().startsWith(${JSON.stringify(sqlPrefix)})) throw new Error('injected failure');
+  return original.call(this, sql, ...rest);
+};
+`);
+  const r = spawnSync(process.execPath, ['--import', pathToFileURL(preload).href, HIPPO_JS, 'capture-error'], {
+    cwd: at.cwd, env: at.env, input: payload(session, over), encoding: 'utf8',
+  });
   expect([r.status, r.stdout]).toEqual([0, '']);
   return r;
 }
@@ -109,7 +131,7 @@ describe('tool-failure listing, lesson and origin', () => {
     const [lesson] = lessons();
     expect(lessons()).toHaveLength(1);
     const id = String(lesson.id);
-    expect(rows(`SELECT pool, outcome, stage FROM delivery_candidates WHERE event_id = ${ev[2].id} AND memory_id = '${id}'`)).toEqual([
+    expect(rows('SELECT pool, outcome, stage FROM delivery_candidates WHERE event_id = ? AND memory_id = ?', p.hippoRoot, [num(ev[2].id), id])).toEqual([
       { pool: 'prompt-recall', outcome: 'emitted', stage: 'final' },
     ]);
     const listing = list('tf1');
@@ -233,6 +255,66 @@ describe('tool-failure listing, lesson and origin', () => {
     expect(list('tf8').entries.map((e) => [e.event_id, e.tool_use_id, e.tool, e.outcome])).toEqual([
       [ev[0].id, null, 'bash', 'stored'], [ev[1].id, null, 'bash', 'duplicate'],
     ]);
+  });
+});
+
+describe('lesson links and the ledger loss window', () => {
+  it('TF11 a forgotten lesson is not replaced by a later failure with the same signature', () => {
+    p = mk();
+    fail(p, 'tf11', { tool_use_id: 'toolu_first' });
+    const first = String(lessons()[0].id);
+    const gone = hippo(p, ['forget', first]);
+    expect(gone.status, gone.stderr).toBe(0);
+    expect(lessons()).toEqual([]);
+    fail(p, 'tf11', { tool_use_id: 'toolu_second' });
+    const ev = events('tf11');
+    const log = logs();
+    expect(log.map((l) => l.outcome)).toEqual(['stored', 'stored']);
+    const second = String(lessons()[0].id);
+    expect(second).not.toBe(first);
+    const note = `lesson-superseded:${ev[0].id}:${log[1].id}`;
+    const listing = list('tf11');
+    expect(listing.entries.map((e) => [e.event_id, e.lesson])).toEqual([[ev[0].id, null], [ev[1].id, second]]);
+    expect(listing.notes).toEqual([note]);
+    const v = read('tf11', second);
+    expect(v.origin).toBe(ev[1].id);
+    expect(v.notes).toContain(note);
+  });
+
+  it('TF12 when the failure_log write throws the hook still writes one row with no failure_id, listed as log-missing', () => {
+    p = mk();
+    failWhere(p, 'tf12', 'INSERT INTO failure_log', { tool_use_id: 'toolu_loss' });
+    const ev = events('tf12');
+    expect(ev.map((e) => [e.event_type, e.tool_use_id, e.failure_id])).toEqual([['tool-failure', 'toolu_loss', null]]);
+    expect(list('tf12').entries.map((e) => [e.event_id, e.outcome, e.lesson])).toEqual([[ev[0].id, 'log-missing', null]]);
+  });
+
+  it('TF13 a stored log row whose ledger row flushed second still names the entry, its lesson and its origin', () => {
+    p = mk();
+    failWhere(p, 'tf13', 'INSERT INTO delivery_events', { tool_use_id: 'toolu_race' });
+    expect(events('tf13')).toEqual([]);
+    fail(p, 'tf13', { tool_use_id: 'toolu_race' });
+    const log = logs();
+    expect(log.map((l) => l.outcome)).toEqual(['stored', 'duplicate']);
+    const numbered = events('tf13');
+    expect(numbered.map(callKey)).toEqual([['tool-failure', 1, null, 'toolu_race']]);
+    const input: DeliveryEventInput = {
+      ts: new Date().toISOString(), tenantId: 'default', runtime: 'claude-code', eventType: 'tool-failure', surface: 'hook',
+      storeHash: blockHash(realpathOrResolve(p.hippoRoot)), writeStore: 'local', projectHash: null, sessionId: 'tf13', sessionState: 'payload',
+      hostTurnId: null, promptHash: null, promptLength: 0, queryHash: null, recallTraceId: null, blockState: 'empty', promptRecall: false,
+      consideredCount: 0, filteredCount: 0, selectedCount: 0, emittedCount: 0, rejectedCount: 0, rejectedUnlisted: 0, sectionsShown: 0,
+      sectionsDropped: 0, budgetTokens: 0, selectedTokens: 0, injectedTokens: 0, staticHash: null, recallHash: null, emittedHash: null,
+      elapsedMs: 1, toolUseId: 'toolu_race', failureId: num(log[0].id), candidates: [],
+    };
+    expect(withDb(p, (db) => writeDeliveryEvent(db, input))).not.toBeNull();
+    const ev = events('tf13');
+    expect(ev.map(callKey)).toEqual([['tool-failure', 1, null, 'toolu_race'], ['tool-failure', null, ev[0].id, 'toolu_race']]);
+    const lesson = String(lessons()[0].id);
+    expect(list('tf13').entries).toEqual([{
+      event_id: ev[0].id, turn_seq: 1, after_prompt_turn: null, tool_use_id: 'toolu_race', failure_id: log[0].id,
+      outcome: 'stored', tool: 'Bash', duplicates: 1, lesson,
+    }]);
+    expect(read('tf13', lesson).origin).toBe(ev[0].id);
   });
 });
 

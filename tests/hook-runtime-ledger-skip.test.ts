@@ -1,7 +1,11 @@
 // A hook whose delivery recorder cannot start skips the ledger with one leveled warn line and still returns null.
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { startDeliveryRecorder } from '../src/api/prompt-hook.js';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
+import { startDeliveryRecorder, startToolFailureRecorder } from '../src/api/prompt-hook.js';
 import { adminActor } from '../src/api/types.js';
+import { initStore } from '../src/store/open.js';
 
 describe('startDeliveryRecorder when the recorder cannot start', () => {
   afterEach(() => { vi.restoreAllMocks(); });
@@ -14,5 +18,28 @@ describe('startDeliveryRecorder when the recorder cannot start', () => {
     expect(startDeliveryRecorder(ctx, { stdinText: undefined, runtime: 'claude-code', envSessionId: undefined })).toBeNull();
     expect(err.mock.calls).toHaveLength(1);
     expect(String(err.mock.calls[0][0])).toMatch(/^\[hippo\] warn: delivery ledger skipped: \S.* ts=\S+\n$/);
+  });
+});
+
+describe('startToolFailureRecorder', () => {
+  const saved = process.env.HIPPO_HOME;
+  let tmp = '';
+  afterEach(() => {
+    if (saved === undefined) delete process.env.HIPPO_HOME;
+    else process.env.HIPPO_HOME = saved;
+    fs.rmSync(tmp, { recursive: true, force: true });
+  });
+
+  it('returns null when the ledger store is not the hook store, and a recorder when they are one', () => {
+    tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-tf-recorder-'));
+    const globalRoot = path.join(tmp, 'global');
+    fs.mkdirSync(globalRoot);
+    initStore(globalRoot);
+    fs.writeFileSync(path.join(globalRoot, 'config.json'), JSON.stringify({ deliveryLedger: { enabled: true } }));
+    process.env.HIPPO_HOME = globalRoot;
+    const noStore = path.join(tmp, 'proj', '.hippo');
+    const start = { stdinText: '{}', runtime: 'claude-code' as const, envSessionId: undefined };
+    expect(startToolFailureRecorder({ hippoRoot: noStore, tenantId: 'default', actor: adminActor('cli') }, start)).toBeNull();
+    expect(startToolFailureRecorder({ hippoRoot: globalRoot, tenantId: 'default', actor: adminActor('cli') }, start)).not.toBeNull();
   });
 });

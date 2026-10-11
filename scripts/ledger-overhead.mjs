@@ -190,11 +190,16 @@ async function cell(store, mode) {
     : null;
   if (contender) pause(300);
   const rows = [];
+  const tfRows = [];
   try {
+    // Turns run alone, so their bounds are measured as before; tool-failure writes follow under the same mode and contender.
     for (let i = 0; i < WARMUPS + RUNS; i++) {
       const r = await turn(store, mode, i);
+      if (i >= WARMUPS) rows.push(r);
+    }
+    for (let i = 0; i < WARMUPS + RUNS; i++) {
       const tf = toolFailureTurn(store, mode, i);
-      if (i >= WARMUPS) rows.push({ ...r, tfMs: tf.ms, tfWritten: tf.written });
+      if (i >= WARMUPS) tfRows.push(tf);
     }
   } finally {
     contender?.kill();
@@ -205,11 +210,11 @@ async function cell(store, mode) {
     flush: stats(rows.map((r) => r.flushMs)),
     context_without_ledger: stats(rows.map((r) => r.contextMs)),
     dropped: rows.filter((r) => !r.written).length,
-    tool_failure: { ...stats(rows.map((r) => r.tfMs)), dropped: rows.filter((r) => !r.tfWritten).length },
+    tool_failure: { ...stats(tfRows.map((r) => r.ms)), dropped: tfRows.filter((r) => !r.written).length },
     turns: rows.length,
   };
   console.error(`  [${mode}] ledger p50 ${out.ledger.p50.toFixed(2)} p95 ${out.ledger.p95.toFixed(2)} max ${out.ledger.max.toFixed(1)} ms, flush p95 ${out.flush.p95.toFixed(2)}, dropped ${out.dropped}/${out.turns}`);
-  console.error(`  [${mode}] tool-failure p50 ${out.tool_failure.p50.toFixed(2)} p95 ${out.tool_failure.p95.toFixed(2)} max ${out.tool_failure.max.toFixed(1)} ms, dropped ${out.tool_failure.dropped}/${out.turns}`);
+  console.error(`  [${mode}] tool-failure p50 ${out.tool_failure.p50.toFixed(2)} p95 ${out.tool_failure.p95.toFixed(2)} max ${out.tool_failure.max.toFixed(1)} ms, dropped ${out.tool_failure.dropped}/${tfRows.length}`);
   return out;
 }
 
