@@ -8,9 +8,11 @@ import { spawnTree } from './exec.mjs';
 import { startLogProxy, requestBodies } from './proxy.mjs';
 
 // What a blind author must never see; the hippo-repository author uses a narrower set, since hippo's name is its subject (D3).
-export const DEFAULT_FORBID = '(?<![a-z])hippo(?![a-z])|(?<![a-z0-9])z0(?![0-9])|token-eval';
+// z0 skips the regex class a-z0-9 and a base64 run after "+", which nearly every codebase holds.
+const Z0 = '(?<![a-z0-9+])z0(?![0-9]|-[0-9])';
+export const DEFAULT_FORBID = `(?<![a-z])hippo(?![a-z])|${Z0}|token-eval`;
 // The CLI picks a set by name, so no pattern is ever built from a command-line argument.
-export const FORBID_SETS = Object.freeze({ default: DEFAULT_FORBID, 'hippo-repo': '(?<![a-z0-9])z0(?![0-9])|token-eval' });
+export const FORBID_SETS = Object.freeze({ default: DEFAULT_FORBID, 'hippo-repo': `${Z0}|token-eval` });
 const AUTHOR_UNSET = ['HIPPO_HOME', 'HIPPO_AGENT_MEMORY_TOOLS', 'CODEX_HOME', 'EVAL_SEED'];
 const USAGE = `usage: node scripts/token-eval/z0-author.mjs --work DIR --prompt-file FILE --out DIR [--model M] [--claude-bin PATH] [--forbid-set ${Object.keys(FORBID_SETS).join('|')}] [--timeout-min N]`;
 
@@ -18,6 +20,22 @@ const USAGE = `usage: node scripts/token-eval/z0-author.mjs --work DIR --prompt-
 export function leakHits(texts, forbid) {
   const re = new RegExp(forbid, 'gi');
   return texts.flatMap(({ where, text }) => [...String(text).matchAll(re)].map((m) => ({ where, match: m[0], near: String(text).slice(Math.max(0, m.index - 30), m.index + m[0].length + 30) })));
+}
+
+/** A logged request body without its ciphertext: thinking signatures, redacted thinking and base64 images, where "z0" turns up by chance. */
+export function readableBody(body) {
+  let parsed;
+  try {
+    parsed = JSON.parse(body);
+  } catch {
+    // A body that is not JSON has no opaque fields, so it is scanned whole.
+    return body;
+  }
+  return JSON.stringify(parsed, function (key, value) {
+    if (key === 'signature' && this.type === 'thinking') return undefined;
+    if (key === 'data' && (this.type === 'redacted_thinking' || this.type === 'base64')) return undefined;
+    return value;
+  });
 }
 
 /**
@@ -30,7 +48,9 @@ export async function runAuthor({ work, prompt, out, model = null, claudeBin = '
   if (named.length) throw new Error(`the author's own paths hold a forbidden term: ${named.map((h) => `${h.where} has "${h.match}"`).join('; ')}`);
   const dirs = { claudeConfig: path.join(out, 'claude-config'), codexHome: '', hippoHome: '', bin: path.join(out, 'bin'), seed: 0 };
   if (fs.existsSync(dirs.claudeConfig)) throw new Error(`${dirs.claudeConfig} exists; an author starts from an empty config`);
-  for (const dir of [work, dirs.claudeConfig]) fs.mkdirSync(dir, { recursive: true });
+  // The box's temp folder holds hippo test folders, and an author checking for its own leftovers lists it, so its temp lives in its work dir.
+  const tmp = path.join(work, '.tmp');
+  for (const dir of [work, tmp, dirs.claudeConfig]) fs.mkdirSync(dir, { recursive: true });
   const settings = path.join(out, 'settings.json');
   fs.writeFileSync(settings, JSON.stringify({ autoMemoryEnabled: false }));
   // A0's env (no provider keys but the plan login, no hippo on PATH, auto memory off) minus the arm keys an author has no use for, which name hippo.
@@ -40,12 +60,12 @@ export async function runAuthor({ work, prompt, out, model = null, claudeBin = '
   const proxy = await startLogProxy(log, { upstream });
   let cc;
   try {
-    cc = await spawnTree(`${claudeBin} ${args.join(' ')}`, work, { ...env, ANTHROPIC_BASE_URL: proxy.url }, timeoutMs, prompt);
+    cc = await spawnTree(`${claudeBin} ${args.join(' ')}`, work, { ...env, ANTHROPIC_BASE_URL: proxy.url, TEMP: tmp, TMP: tmp, TMPDIR: tmp }, timeoutMs, prompt);
   } finally {
     await proxy.close();
   }
   fs.writeFileSync(path.join(out, 'session.json'), cc.stdout);
-  const hits = leakHits([...requestBodies(log).map((text) => ({ where: 'request', text })), { where: 'output', text: cc.stdout }], forbid);
+  const hits = leakHits([...requestBodies(log).map((body) => ({ where: 'request', text: readableBody(body) })), { where: 'output', text: cc.stdout }], forbid);
   const verdict = { status: cc.status, timedOut: cc.timedOut, forbid, requests: requestBodies(log).length, discarded: hits.length > 0, hits };
   fs.writeFileSync(path.join(out, 'verdict.json'), `${JSON.stringify(verdict, null, 2)}\n`);
   return verdict;

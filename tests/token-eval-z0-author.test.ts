@@ -4,7 +4,7 @@ import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { DEFAULT_FORBID, FORBID_SETS, leakHits, runAuthor } from '../scripts/token-eval/z0-author.mjs';
+import { DEFAULT_FORBID, FORBID_SETS, leakHits, readableBody, runAuthor } from '../scripts/token-eval/z0-author.mjs';
 import { cleanup, tmp } from './fixtures/z0-harness.js';
 
 // The temp root can itself name hippo (CI's is hippo-test-tmp-*), so the end-to-end runs forbid a sentinel instead.
@@ -14,7 +14,7 @@ const SENTINEL = 'SENTINEL-AUTHOR-LEAK';
 const AUTHOR_BIN = `import * as fs from 'node:fs';
 const prompt = fs.readFileSync(0, 'utf8');
 await fetch(process.env.ANTHROPIC_BASE_URL + '/v1/messages', { method: 'POST', body: JSON.stringify({ messages: [{ role: 'user', content: prompt }] }) });
-const keys = ['HIPPO_HOME', 'HIPPO_AGENT_MEMORY_TOOLS', 'CODEX_HOME', 'EVAL_SEED', 'ANTHROPIC_BASE_URL', 'CLAUDE_CONFIG_DIR', 'CLAUDE_CODE_DISABLE_AUTO_MEMORY'];
+const keys = ['HIPPO_HOME', 'HIPPO_AGENT_MEMORY_TOOLS', 'CODEX_HOME', 'EVAL_SEED', 'ANTHROPIC_BASE_URL', 'CLAUDE_CONFIG_DIR', 'CLAUDE_CODE_DISABLE_AUTO_MEMORY', 'TEMP', 'TMP', 'TMPDIR'];
 fs.writeFileSync(process.env.AUTHOR_DUMP, JSON.stringify({ cwd: process.cwd(), argv: process.argv.slice(2), env: Object.fromEntries(keys.map((k) => [k, process.env[k] ?? null])), hasToken: Boolean(process.env.CLAUDE_CODE_OAUTH_TOKEN) }));
 console.log(JSON.stringify({ type: 'result', result: prompt.includes('ECHO') ? prompt : 'done' }));
 `;
@@ -60,6 +60,23 @@ describe('leakHits', () => {
     expect(hits[2].near).toContain('HIPPO_HOME');
   });
 
+  it('catches z0 in paths and env names but not in a regex class or a base64 run', () => {
+    const named = 'C:/z0-runs/d5, hippo-wt-z0smoke, CHECK_X=Z0_PRE';
+    const code = "/^[a-z0-9-]+$/, [A-Z0-9_], [^a-z0-9\\s-], sha512-Ak7T+Z0Ez+VZ";
+    const hits = leakHits([{ where: 'a', text: named }, { where: 'b', text: code }], FORBID_SETS['hippo-repo']);
+    expect(hits.map((h: { where: string; match: string }) => `${h.where}:${h.match}`)).toEqual(['a:z0', 'a:z0', 'a:Z0']);
+  });
+
+  it('skips ciphertext in a request body but still scans thinking text and tool output', () => {
+    const body = JSON.stringify({ messages: [{ role: 'assistant', content: [
+      { type: 'thinking', thinking: 'look in C:/z0-runs', signature: 'dnOQ8h/z0SmTiNUs' },
+      { type: 'redacted_thinking', data: 'Qx/z0Ab' },
+      { type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'iVB/z0Rw' } },
+      { type: 'tool_result', content: 'ls: z0-smoke' } ] }] });
+    expect(leakHits([{ where: 'request', text: readableBody(body) }], DEFAULT_FORBID).map((h: { near: string }) => h.near.includes('runs') || h.near.includes('smoke'))).toEqual([true, true]);
+    expect(readableBody('not json z0')).toBe('not json z0');
+  });
+
   it('lets the hippo-repo set name hippo but still catches z0 and token-eval', () => {
     const hits = leakHits([{ where: 'a', text: 'hippo src/capture, Z0 stage 2, token-eval' }], FORBID_SETS['hippo-repo']);
     expect(hits.map((h: { match: string }) => h.match)).toEqual(['Z0', 'token-eval']);
@@ -89,7 +106,9 @@ describe('runAuthor', () => {
     expect(bodies).toHaveLength(1);
     expect(bodies[0]).toContain('pick two repositories');
     expect(realpathSync(dump.cwd)).toBe(realpathSync(work));
-    expect(dump.env).toMatchObject({ HIPPO_HOME: null, HIPPO_AGENT_MEMORY_TOOLS: null, CODEX_HOME: null, EVAL_SEED: null, CLAUDE_CONFIG_DIR: join(out, 'claude-config'), CLAUDE_CODE_DISABLE_AUTO_MEMORY: '1' });
+    const tmpDir = join(work, '.tmp');
+    expect(dump.env).toMatchObject({ HIPPO_HOME: null, HIPPO_AGENT_MEMORY_TOOLS: null, CODEX_HOME: null, EVAL_SEED: null, CLAUDE_CONFIG_DIR: join(out, 'claude-config'), CLAUDE_CODE_DISABLE_AUTO_MEMORY: '1', TEMP: tmpDir, TMP: tmpDir, TMPDIR: tmpDir });
+    expect(existsSync(tmpDir)).toBe(true);
     expect(dump.env.ANTHROPIC_BASE_URL).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/);
     expect(dump.hasToken).toBe(true);
     const settings = join(out, 'settings.json');
