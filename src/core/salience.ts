@@ -28,6 +28,9 @@ const NOVEL_ERROR_SCORE = 0.9;
 const NOVEL_BASE_SCORE = 0.5;
 const STRUCTURED_TAGS_BONUS = 0.15;
 const LENGTH_BONUS = 0.1;
+// A novel memory earns LENGTH_BONUS past each of these lengths in characters.
+const LONG_CONTENT_CHARS = 100;
+const VERY_LONG_CONTENT_CHARS = 300;
 
 const DEFAULTS: Required<SalienceOptions> = {
   recentWindow: 20,
@@ -108,8 +111,8 @@ function scoreNovel(trimmed: string, tags: string[]): SalienceResult {
 
   let score = NOVEL_BASE_SCORE;
   if (hasStructuredTags) score += STRUCTURED_TAGS_BONUS;
-  if (trimmed.length > 100) score += LENGTH_BONUS;
-  if (trimmed.length > 300) score += LENGTH_BONUS;
+  if (trimmed.length > LONG_CONTENT_CHARS) score += LENGTH_BONUS;
+  if (trimmed.length > VERY_LONG_CONTENT_CHARS) score += LENGTH_BONUS;
 
   return { decision: 'store', reason: 'novel', score: Math.min(score, 1.0) };
 }

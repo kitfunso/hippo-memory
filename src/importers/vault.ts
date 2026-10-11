@@ -188,7 +188,6 @@ async function importVaultNote(run: VaultImportRun, relpath: string): Promise<vo
   }
 
   const tags = vaultNoteTags(run, hashTag, fm, body);  if (vaultEnvelopeUnchanged(priors, tags, run.scope)) {
-    // Unchanged file + envelope → skip (idempotent re-import).
     tally.skipped++;
     return;
   }

@@ -14,6 +14,7 @@ import type {
   GitHubSender,
 } from './types.js';
 import { type JsonValue, isJsonObject } from '../../util/json.js';
+import { MINUTE_MS } from '../../util/time.js';
 
 const API = 'https://api.github.com';
 
@@ -162,7 +163,7 @@ async function drainStream(
 
 // A reset hours away must fail the run for a later rerun; sleeping through it would hold the process for the whole window.
 const MAX_RATE_LIMIT_ATTEMPTS = 5;
-const MAX_RATE_LIMIT_WAIT_MS = 10 * 60 * 1000;
+const MAX_RATE_LIMIT_WAIT_MS = 10 * MINUTE_MS;
 
 async function fetchPagePastRateLimit(options: DrainStreamOptions, url: string): Promise<GitHubBackfillPage> {
   const { fetcher, token, sleep } = options;

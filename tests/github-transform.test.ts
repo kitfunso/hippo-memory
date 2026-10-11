@@ -268,3 +268,27 @@ describe('prReviewCommentEventToRememberOpts', () => {
     expect(opts!.scope).toBe('github:private:acme/secrets');
   });
 });
+
+describe('the shape all four transforms share', () => {
+  const user = { login: 'octocat', id: 1 };
+  const common = { kind: 'raw', scope: 'github:private:unknown', owner: 'user:github:octocat' };
+
+  it('pins the exact opts, tag order included, for an event with no repository', () => {
+    expect(issueEventToRememberOpts({ action: 'opened', issue: { number: 1, title: ' T ', body: ' B ', user } })).toEqual({
+      ...common, content: 'T\n\nB', artifactRef: 'github://unknown/unknown/issue/1',
+      tags: ['source:github', 'repo:unknown/unknown', 'event:issues.opened', 'user:github:octocat'],
+    });
+    expect(issueCommentEventToRememberOpts({ action: 'created', issue: { number: 1 }, comment: { id: 2, body: ' C ', user } })).toEqual({
+      ...common, content: 'C', artifactRef: 'github://unknown/unknown/issue/1/comment/2',
+      tags: ['source:github', 'repo:unknown/unknown', 'event:issue_comment.created', 'user:github:octocat'],
+    });
+    expect(pullRequestEventToRememberOpts({ action: 'opened', pull_request: { number: 3, title: '', body: ' B ', user } })).toEqual({
+      ...common, content: 'B', artifactRef: 'github://unknown/unknown/pull/3',
+      tags: ['source:github', 'repo:unknown/unknown', 'event:pull_request.opened', 'user:github:octocat'],
+    });
+    expect(prReviewCommentEventToRememberOpts({ action: 'created', pull_request: { number: 3 }, comment: { id: 4, body: ' R ', user } })).toEqual({
+      ...common, content: 'R', artifactRef: 'github://unknown/unknown/pull/3/review_comment/4',
+      tags: ['source:github', 'repo:unknown/unknown', 'event:pull_request_review_comment.created', 'user:github:octocat'],
+    });
+  });
+});

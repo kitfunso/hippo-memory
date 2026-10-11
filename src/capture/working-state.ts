@@ -56,8 +56,11 @@ export function truncateKeepNewest(text: string, maxChars: number): string {
   return TRIM_MARKER + text.slice(start);
 }
 
-/** Most recent plain-text user message in a JSONL tail, from a Claude Code or a Copilot transcript. */
-function lastPlainUserMessage(jsonl: string): string {
+type LineFlags = Parameters<typeof humanUserText>[0];
+type LineMessage = Parameters<typeof humanUserText>[1];
+
+/** Newest main-agent `role` turn in a JSONL tail, from a Claude Code or a Copilot transcript; `textOf` reads a Claude Code line, '' when it has no text. */
+function lastTurnText(jsonl: string, role: 'user' | 'assistant', textOf: (entry: LineFlags, message: LineMessage) => string): string {
   const lines = jsonl.split('\n').filter((l) => l.trim());
   for (let i = lines.length - 1; i >= 0; i--) {
     let entry: unknown;
@@ -69,49 +72,27 @@ function lastPlainUserMessage(jsonl: string): string {
     if (!isObjectLike(entry)) continue;
     if (!('type' in entry)) continue;
     const copilot = copilotTurn(entry);
-    if (copilot?.role === 'user') return copilot.text;
-    if (entry.type !== 'user') continue;
-    // An isMeta user line holds an earlier compact summary and an isSidechain one is a sub-agent turn; neither is the human's task.
+    if (copilot?.role === role) return copilot.text;
+    if (entry.type !== role) continue;
+    // An isMeta line holds an earlier compact summary and an isSidechain one is a sub-agent turn; neither is this session's own.
     if (('isMeta' in entry && entry.isMeta === true) || ('isSidechain' in entry && entry.isSidechain === true)) continue;
     const message = 'message' in entry && isObjectLike(entry.message) ? entry.message : undefined;
     if (!message) continue;
-    const text = humanUserText(entry, message);
+    const text = textOf(entry, message);
     if (text) return text;
   }
   return '';
 }
 
-/** Last assistant text block in a JSONL tail (skips thinking + tool_use, same as summariseTranscript). */
-function lastAssistantTextBlock(jsonl: string): string {
-  const lines = jsonl.split('\n').filter((l) => l.trim());
-  for (let i = lines.length - 1; i >= 0; i--) {
-    let entry: unknown;
-    try {
-      entry = JSON.parse(lines[i]);
-    } catch {
-      continue; // the tail read can start mid-line; skip the torn fragment
-    }
-    if (!isObjectLike(entry)) continue;
-    if (!('type' in entry)) continue;
-    const copilot = copilotTurn(entry);
-    if (copilot?.role === 'assistant') return copilot.text;
-    if (entry.type !== 'assistant') continue;
-    // Same meta/sidechain guard as lastPlainUserMessage: sub-agent turns
-    // (isSidechain) are not this session's next step.
-    if (('isMeta' in entry && entry.isMeta === true) || ('isSidechain' in entry && entry.isSidechain === true)) continue;
-    const message = 'message' in entry && isObjectLike(entry.message) ? entry.message : undefined;
-    if (!message) continue;
-    const content = 'content' in message ? message.content : undefined;
-    if (!Array.isArray(content)) continue;
-    for (let j = content.length - 1; j >= 0; j--) {
-      const block = content[j];
-      if (isObjectLike(block)) {
-        const blockText = 'type' in block && block.type === 'text' && 'text' in block ? block.text : undefined;
-        if (isStringValue(blockText) && blockText.trim()) {
-          return blockText.trim();
-        }
-      }
-    }
+/** The last text block of an assistant message, skipping thinking and tool_use blocks (as summariseTranscript does). */
+function lastTextBlock(_entry: LineFlags, message: LineMessage): string {
+  const content = message.content;
+  if (!Array.isArray(content)) return '';
+  for (let j = content.length - 1; j >= 0; j--) {
+    const block = content[j];
+    if (!isObjectLike(block)) continue;
+    const blockText = 'type' in block && block.type === 'text' && 'text' in block ? block.text : undefined;
+    if (isStringValue(blockText) && blockText.trim()) return blockText.trim();
   }
   return '';
 }
@@ -129,8 +110,8 @@ export function transcriptWorkingState(transcriptPath: string, log: (message: st
     for (const cap of [PRE_COMPACT_TAIL_BYTES, PRE_COMPACT_TAIL_BYTES * 4, PRE_COMPACT_TAIL_BYTES * 16]) {
       if (cap > PRE_COMPACT_TAIL_BYTES) log(`tail window grown to ${cap} bytes (last ${rawTask ? 'assistant' : 'user'} turn is further back)`);
       tail = readTranscriptTail(transcriptPath, cap);
-      rawTask = lastPlainUserMessage(tail);
-      rawNextStep = lastAssistantTextBlock(tail);
+      rawTask = lastTurnText(tail, 'user', humanUserText);
+      rawNextStep = lastTurnText(tail, 'assistant', lastTextBlock);
       if ((rawTask && rawNextStep) || size <= cap) break;
     }
   } catch (err) {

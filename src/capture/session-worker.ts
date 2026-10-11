@@ -8,6 +8,7 @@ import { isObjectLike, isStringValue, type ProgressCursor } from '../core/captur
 import { SESSION_ID_RE } from './copilot-transcript.js';
 import type { SessionTurn } from './transcript.js';
 import { blockHash } from '../util/token-text.js';
+import { MINUTE_MS } from '../util/time.js';
 
 /** A turn close runs after each reply; a full close runs once, when the session ends. */
 export type WorkerMode = 'turn' | 'full';
@@ -36,7 +37,7 @@ function pidAlive(pid: number): boolean {
 }
 
 /** Windows reuses pids, so past this a lock is stale whatever process it names; a worker rarely waits more than minutes on a busy store. */
-const STALE_LOCK_MS = 15 * 60 * 1000;
+const STALE_LOCK_MS = 15 * MINUTE_MS;
 
 /** A dead holder frees its session at once, and any holder at STALE_LOCK_MS. */
 function holderAlive(lock: string): boolean {

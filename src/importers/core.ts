@@ -97,7 +97,6 @@ export function importEntries(
 function openImportTarget(options: ImportOptions) {
   const targetRoot = options.global ? getGlobalRoot() : options.hippoRoot;
 
-  // Ensure store is ready
   if (options.global) {
     initGlobal();
   }
@@ -110,9 +109,7 @@ function openImportTarget(options: ImportOptions) {
 }
 
 function skipReason(chunk: string, keys: ReturnType<typeof storedTextKeys>): 'too-short' | 'duplicate' | null {
-  // Skip empty or too-short chunks
   if (!chunk || chunk.length < 10) return 'too-short';
-  // Dedup check: skip only when the same text is already stored
   if (keys.has(duplicateKey(chunk))) return 'duplicate';
   return null;
 }

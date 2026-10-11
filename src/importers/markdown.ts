@@ -33,7 +33,6 @@ function parseStructuredMarkdown(raw: string): Array<{ content: string; sectionS
   for (const line of lines) {
     const trimmed = line.trim();
 
-    // Heading
     const headingMatch = trimmed.match(/^(#{1,6})\s+(.+)/);
     if (headingMatch) {
       flush();
@@ -42,7 +41,6 @@ function parseStructuredMarkdown(raw: string): Array<{ content: string; sectionS
       continue;
     }
 
-    // Bullet or numbered item: flush previous, start new
     if (/^[-*+]\s+/.test(trimmed) || /^\d+\.\s+/.test(trimmed)) {
       flush();
       const itemText = trimmed.replace(/^[-*+]\s+/, '').replace(/^\d+\.\s+/, '').trim();
@@ -50,13 +48,11 @@ function parseStructuredMarkdown(raw: string): Array<{ content: string; sectionS
       continue;
     }
 
-    // Empty line: flush current pending
     if (!trimmed) {
       flush();
       continue;
     }
 
-    // Continuation of current item
     pendingText = pendingText ? pendingText + ' ' + trimmed : trimmed;
   }
 
@@ -68,8 +64,7 @@ export function importMarkdown(filePath: string, options: ImportOptions): Import
   const raw = fs.readFileSync(filePath, 'utf8');
   const parsed = parseStructuredMarkdown(raw);
 
-  // Group by section slug so we can pass per-chunk tags
-  // We call importEntries per unique slug to get the right tags per section
+  // importEntries takes one tag set per call, so each section's chunks go in as one call.
   const bySlug = new Map<string, string[]>();
   for (const { content, sectionSlug } of parsed) {
     const list = bySlug.get(sectionSlug) ?? [];
@@ -86,8 +81,7 @@ export function importMarkdown(filePath: string, options: ImportOptions): Import
       total: totalResult.total + result.total,
       imported: totalResult.imported + result.imported,
       skipped: totalResult.skipped + result.skipped,
-      // AT1 P2 fix: `rejected` is now optional on ImportResult (compat) — tolerate
-      // undefined on either side of the accumulation.
+      // rejected and redacted are optional on ImportResult, so either side may be undefined.
       rejected: (totalResult.rejected ?? 0) + (result.rejected ?? 0),
       redacted: (totalResult.redacted ?? 0) + (result.redacted ?? 0),
       entries: [...totalResult.entries, ...result.entries],

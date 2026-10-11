@@ -9,6 +9,7 @@ import { workerSqliteStore } from '../store/sqlite/worker-store.js';
 import { markSharedStore } from '../core/config.js';
 import { auditWriteFailureCount } from '../store/audit.js';
 import { PACKAGE_VERSION } from '../util/version.js';
+import { MINUTE_MS } from '../util/time.js';
 import { errorFields, errorMessage, log } from '../util/log.js';
 import { runWithRequestId } from '../util/request-scope.js';
 import { createRateLimiter, type RateLimiter } from './rate-limit.js';
@@ -167,7 +168,7 @@ async function assertNoLiveServer(hippoRoot: string): Promise<void> {
 
 // SHORTCUT: buckets live in this process and reset on restart or LRU eviction; move them to the store if serve ever runs as several processes.
 function limiterFor({ ratePerSec, burst }: RateLimitSpec): RateLimiter {
-  return createRateLimiter({ ratePerSec, burst, idleEvictMs: 60000, maxKeys: LIMITER_MAX_KEYS });
+  return createRateLimiter({ ratePerSec, burst, idleEvictMs: MINUTE_MS, maxKeys: LIMITER_MAX_KEYS });
 }
 
 function bootRateLimiter(perAddress: RateLimitSpec | 'off' | undefined): RateLimiter | undefined {

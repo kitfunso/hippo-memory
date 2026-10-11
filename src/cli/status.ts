@@ -33,11 +33,13 @@ import { hookStoreRoot } from './hook-runtime.js';
 import { DAY_MS, HOUR_MS, MINUTE_MS } from '../util/time.js';
 import { CliExit } from './exit.js';
 
+const AT_RISK_BELOW = 0.2;
+
 export function handleStatus({ hippoRoot, tenantId }: CommandContext): void {
   requireInit(hippoRoot);
 
   const ctx = cliApiContext(hippoRoot, tenantId);
-  const { stats, counts } = storeStatus(ctx, evalNow(), 0.2);
+  const { stats, counts } = storeStatus(ctx, evalNow(), AT_RISK_BELOW);
   const { byLayer, byConfidence, pinned, atRisk, agedOut, avgStrength } = counts;
 
   console.log('Hippo Status');
@@ -48,7 +50,7 @@ export function handleStatus({ hippoRoot, tenantId }: CommandContext): void {
   console.log(`  Semantic:        ${byLayer[Layer.Semantic]}`);
   console.log(`  Trace:           ${byLayer[Layer.Trace]}`);
   console.log(`Pinned:            ${pinned}`);
-  console.log(`At risk (<0.2):    ${atRisk}`);
+  console.log(`At risk (<${AT_RISK_BELOW}):    ${atRisk}`);
   console.log(`Open conflicts:    ${counts.openConflicts}`);
   console.log(`Avg strength:      ${fmt(avgStrength)}`);
   console.log('');

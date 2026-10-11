@@ -40,6 +40,13 @@ export interface SimulationStats {
   substepsRun: number;
 }
 
+// Floors that stop a near-zero mass or a coincident pair from dividing a force by about zero.
+const MIN_MASS = 0.01;
+const MIN_COSINE_DISTANCE = 0.01;
+// Mass gained per doubling of the retrieval count.
+const RETRIEVAL_MASS_GAIN = 0.1;
+const NEAR_ZERO = 1e-10;
+
 export function vecDot(a: number[], b: number[]): number {
   let sum = 0;
   for (let i = 0; i < a.length; i++) sum += a[i] * b[i];
@@ -75,7 +82,7 @@ export function vecZero(dim: number): number[] {
 /** Normalize to unit length. Returns zero vector if magnitude < epsilon. */
 export function vecNormalize(v: number[]): number[] {
   const mag = vecNorm(v);
-  if (mag < 1e-10) return vecZero(v.length);
+  if (mag < NEAR_ZERO) return vecZero(v.length);
   return vecScale(v, 1 / mag);
 }
 
@@ -97,7 +104,7 @@ export function computeMass(strength: number, retrievalCount: number): number {
   // EVAL-ONLY ablation (ablation.ts): under the recall-boost flag mass ignores retrieval history, which would otherwise leak strengthening into the ablated
   // arm's physics-pool rankings (query gravity ranks by mass). Covers both init and refresh callers in physics-state.ts.
   const effectiveCount = isRecallBoostAblated() ? 0 : retrievalCount;
-  return Math.max(0.01, strength * (1 + 0.1 * Math.log2(effectiveCount + 1)));
+  return Math.max(MIN_MASS, strength * (1 + RETRIEVAL_MASS_GAIN * Math.log2(effectiveCount + 1)));
 }
 
 export function computeCharge(valence: EmotionalValence): number {
@@ -126,7 +133,7 @@ export function velocityAlignmentBonus(
   if (particle.velocity.length === 0 || particle.velocity.length !== queryEmbedding.length) return 0;
   const velMag = vecNorm(particle.velocity);
   const qNorm = vecNorm(queryEmbedding);
-  if (velMag < 1e-10 || qNorm < 1e-10) return 0;
+  if (velMag < NEAR_ZERO || qNorm < NEAR_ZERO) return 0;
   const alignment = vecDot(particle.velocity, queryEmbedding) / (velMag * qNorm);
   return Math.max(0, alignment);
 }
@@ -147,7 +154,7 @@ export function attractionForce(
   // Direction: from i toward j (tangent projection handled by normalization after integration)
   for (let k = 0; k < out.length; k++) diff[k] = pj.position[k] - pi.position[k];
   const norm = vecNorm(diff);
-  if (norm < 1e-10) return out;
+  if (norm < NEAR_ZERO) return out;
   const inv = 1 / norm;
   for (let k = 0; k < out.length; k++) out[k] += diff[k] * inv * magnitude;
   return out;
@@ -160,7 +167,7 @@ export function repulsionForce(
   K_repulsion: number,
 ): number[] {
   const cos = cosineOf(pi.position, pj.position);
-  const dist = Math.max(0.01, 1 - cos);
+  const dist = Math.max(MIN_COSINE_DISTANCE, 1 - cos);
   const magnitude = K_repulsion * pi.mass * pj.mass / (dist * dist);
   // Direction: away from j
   const direction = vecNormalize(vecSub(pi.position, pj.position));
@@ -222,7 +229,7 @@ function computeNetForce(
 /** Acceleration of particle i: its net force divided by mass, scaled in place. */
 function computeAcceleration(i: number, particles: PhysicsParticle[], ctx: ForceContext, diff: number[]): number[] {
   const accel = computeNetForce(i, particles, ctx, diff);
-  const inv = 1 / Math.max(0.01, particles[i].mass);
+  const inv = 1 / Math.max(MIN_MASS, particles[i].mass);
   for (let k = 0; k < accel.length; k++) accel[k] *= inv;
   return accel;
 }

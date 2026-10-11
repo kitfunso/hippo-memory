@@ -18,6 +18,8 @@ const MERGE_MAX_CHARS = 2000;           // total source text; sources past eithe
 // Half-life scale for merged source episodics. Demote via half_life_days: calculateStrength() recomputes live strength and never reads the stored field,
 // so a stored-strength write is inert for ranking and overwritten by the next decay pass.
 const MERGE_SOURCE_HALF_LIFE_FACTOR = 0.3;
+// deriveHalfLife grants its high-fit bonus only above 0.7, so a rollup at 0.7 gets none.
+const MERGED_SCHEMA_FIT = 0.7;
 
 export function retireHeldTexts(run: SleepRun): void {
   const { survivors } = run;
@@ -150,7 +152,7 @@ function semanticSummary(mergedContent: string, cluster: MemoryEntry[], partitio
       layer: Layer.Semantic,
       tags: allTags,
       emotional_valence: maxValence,
-      schema_fit: 0.7,
+      schema_fit: MERGED_SCHEMA_FIT,
       source: 'consolidation',
       confidence: 'inferred',
       tenantId: partition.tenantId,

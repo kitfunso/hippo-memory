@@ -14,9 +14,10 @@ import { noteAccess } from './request.js';
 import type { ResolvedServeOpts } from './types.js';
 import { type JsonValue, isJsonString, isJsonObject } from '../util/json.js';
 import { blockHash } from '../util/token-text.js';
+import { MINUTE_MS } from '../util/time.js';
 import { consolidateInChild } from './sleep-offload.js';
 
-const DEFAULT_SSE_HEARTBEAT_MS = 60_000;
+const DEFAULT_SSE_HEARTBEAT_MS = MINUTE_MS;
 const DEFAULT_SSE_MAX_AGE_SEC = 3600;
 
 /** Per-client key for MCP state isolation under HTTP-MCP (scopes `lastRecalledIds`): sha256 of the token (16 hex chars, so the raw bearer is never logged)

@@ -6,6 +6,7 @@ import { isStoreBusy } from '../store/sqlite/busy.js';
 import { errorFields, errorMessage, log } from '../util/log.js';
 import { mapApiError } from '../api/error-reply.js';
 import { HttpError, sendJson } from '../util/http-util.js';
+import { MINUTE_MS } from '../util/time.js';
 
 // The caller's id lands in a response header and in logs, so only a short plain token is echoed back.
 const REQUEST_ID_RE = /^[A-Za-z0-9._:-]{1,128}$/;
@@ -34,7 +35,7 @@ export function replyFor<E>(err: E): { status: number; message: string } {
 }
 
 // Above the 30 s body deadline and the 5 s resolver deadline, so a request those govern is answered before it is called slow.
-const SLOW_REQUEST_WARN_MS = 60_000;
+const SLOW_REQUEST_WARN_MS = MINUTE_MS;
 
 /** Logs one warn when `res` has sent nothing after `afterMs`. It never ends the request
  * or touches the reply; the timer goes when the reply finishes or the socket closes. */

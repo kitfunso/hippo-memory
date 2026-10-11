@@ -22,6 +22,7 @@ import { chunked } from '../util/chunked.js';
 import { envByName } from '../util/env.js';
 import { errorCode, errorMessage, log } from '../util/log.js';
 import { redactSecretsStrict } from '../util/secret-detect.js';
+import { MINUTE_MS } from '../util/time.js';
 
 const STORE_PAGE = 64;
 
@@ -163,7 +164,7 @@ async function withProcessEmbedLock<T>(fn: () => Promise<T>): Promise<T> {
 
 // A bad key fails every write; one full warning per distinct failure tells the user, and a count of the repeats follows at most once per interval.
 const EMBED_WARN_KEY_CAP = 64;
-const EMBED_SUPPRESSED_SUMMARY_INTERVAL_MS = 60_000;
+const EMBED_SUPPRESSED_SUMMARY_INTERVAL_MS = MINUTE_MS;
 const embedFailureSeen = new Map<string, { lastNoticeAt: number; suppressed: number }>();
 
 function embedFailureKey(source: string, cause: unknown): string {

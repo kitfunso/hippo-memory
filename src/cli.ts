@@ -21,8 +21,6 @@ import { COMMANDS } from './cli/verbs.js';
 import type { VerbSpec } from './cli/verb-row.js';
 import { CliExit } from './cli/exit.js';
 
-// Helpers
-
 // A command that does not honour --dry-run would ignore it and run for real.
 function dryRunRefusal(command: string, spec: VerbSpec | undefined, args: string[], flags: CliFlags): string | null {
   const only = spec?.dryRun;
@@ -61,7 +59,6 @@ function setSeparatedFlag(flags: CliFlags, key: string, next: string | undefined
     return 2;
   }
   if (!next || next.startsWith('--') || kind === 'switch') {
-    // Boolean flag
     flags[key] = true;
     return 1;
   }
@@ -159,8 +156,6 @@ function printHelp(command: string, args: string[]): void {
   if (printSubcommandUsage) printSubcommandUsage();
   else console.log(verbUsage(command) ?? usageText());
 }
-
-// Entry point
 
 function printVersion(): never {
   const __filename_local = fileURLToPath(import.meta.url);

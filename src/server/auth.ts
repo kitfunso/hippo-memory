@@ -11,6 +11,7 @@ import { clientLimitKey } from './client-ip.js';
 import { keyCheckBounds } from './key-check-bounds.js';
 import type { AuthResolver, ResolvedBearer, ResolvedServeOpts } from './types.js';
 import { isJsonString } from '../util/json.js';
+import { MINUTE_MS } from '../util/time.js';
 
 /** Recognises loopback remote addresses, including the IPv6-mapped '::ffff:127.0.0.1' Node reports on dual-stack sockets; anything else is remote. */
 export function isLoopback(remoteAddress: string | undefined): boolean {
@@ -228,7 +229,7 @@ function bearerActor(id: BearerIdentity): Actor {
 export const LIMITER_MAX_KEYS = 10_000;
 // One for the process, as the thread pool its derivations run on is.
 const keyChecks = keyCheckBounds(LIMITER_MAX_KEYS);
-const CALLER_WARN_EVERY_MS = 60_000;
+const CALLER_WARN_EVERY_MS = MINUTE_MS;
 const callerWarnedAt = new Map<string, number>();
 
 function warnCallerLimited(key: string, tenantId: string, person: string): void {

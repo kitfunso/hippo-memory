@@ -10,7 +10,6 @@ interface FrontmatterParseResult {
 }
 
 export function splitMarkdownFrontmatter(raw: string): FrontmatterParseResult {
-  // Must start with `---` on its own line. Accept CRLF or LF.
   const m = raw.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?/);
   if (!m) return { fm: {}, body: raw };
   const block = m[1];

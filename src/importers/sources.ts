@@ -19,17 +19,14 @@ function extractMemoryText(candidate: JsonValue): string {
 function parseChatGPTFile(filePath: string): string[] {
   const raw = fs.readFileSync(filePath, 'utf8').trim();
 
-  // Try JSON first
   if (raw.startsWith('[') || raw.startsWith('{')) {
     try {
       const parsed: JsonValue = JSON.parse(raw);
 
-      // {"memories": [...]} - ChatGPT export format
       if (isJsonObject(parsed) && Array.isArray(parsed.memories)) {
         return parsed.memories.map(extractMemoryText).filter(Boolean);
       }
 
-      // Array format
       if (Array.isArray(parsed)) {
         return parsed.map(extractMemoryText).filter(Boolean);
       }
@@ -38,7 +35,6 @@ function parseChatGPTFile(filePath: string): string[] {
     }
   }
 
-  // Plain text: one memory per line
   return raw.split('\n').map((l) => l.trim()).filter(Boolean);
 }
 
@@ -75,14 +71,12 @@ function appendLine(chunks: string[], open: string, line: string): string {
   let current = open;
   const trimmed = line.trim();
 
-  // Heading: start a new chunk
   if (/^#{1,6}\s+/.test(trimmed)) {
     if (current.trim()) chunks.push(current.trim());
     current = trimmed;
     return current;
   }
 
-  // Bullet point: each bullet is its own chunk (flush previous if not a bullet context)
   if (/^[-*+]\s+/.test(trimmed)) {
     if (current.trim() && !/^[-*+]\s+/.test(current.split('\n')[0])) {
       chunks.push(current.trim());
@@ -96,7 +90,6 @@ function appendLine(chunks: string[], open: string, line: string): string {
     return current;
   }
 
-  // Numbered list item
   if (/^\d+\.\s+/.test(trimmed)) {
     if (current.trim()) {
       chunks.push(current.trim());
@@ -106,7 +99,6 @@ function appendLine(chunks: string[], open: string, line: string): string {
     return current;
   }
 
-  // Empty line
   if (!trimmed) {
     if (current.trim()) {
       chunks.push(current.trim());
@@ -115,7 +107,6 @@ function appendLine(chunks: string[], open: string, line: string): string {
     return current;
   }
 
-  // Regular line: append to current
   return current ? current + ' ' + trimmed : trimmed;
 }
 
@@ -123,7 +114,6 @@ function appendLine(chunks: string[], open: string, line: string): string {
 function parseClaudeFile(filePath: string): string[] {
   const raw = fs.readFileSync(filePath, 'utf8');
 
-  // JSON memory file
   if (filePath.endsWith('.json')) {
     try {
       const parsed: JsonValue = JSON.parse(raw.trim());
@@ -135,7 +125,6 @@ function parseClaudeFile(filePath: string): string[] {
     }
   }
 
-  // Markdown file: strip hippo block and split
   const cleaned = stripHippoBlock(raw);
   return splitMarkdown(cleaned);
 }
@@ -155,7 +144,7 @@ function parseCursorFile(content: string): string[] {
   for (const line of lines) {
     const trimmed = line.trim();
 
-    // Skip comment-only lines that are empty after stripping #
+    // A bare '#' is an empty comment line, so it ends the rule like a blank line.
     if (!trimmed || trimmed === '#') {
       if (current.trim()) {
         chunks.push(current.trim());
@@ -164,7 +153,6 @@ function parseCursorFile(content: string): string[] {
       continue;
     }
 
-    // Numbered item: 1. 2. 3.
     if (/^\d+\.\s+/.test(trimmed)) {
       if (current.trim()) {
         chunks.push(current.trim());
@@ -174,7 +162,6 @@ function parseCursorFile(content: string): string[] {
       continue;
     }
 
-    // Bullet: - or *
     if (/^[-*]\s+/.test(trimmed)) {
       if (current.trim()) {
         chunks.push(current.trim());
@@ -184,7 +171,6 @@ function parseCursorFile(content: string): string[] {
       continue;
     }
 
-    // Regular line
     current = current ? current + ' ' + trimmed : trimmed;
   }
 
@@ -220,11 +206,9 @@ function parseGenericFile(filePath: string): string[] {
     return splitMarkdown(raw);
   }
 
-  // Plain text: try double newlines first
   const byParagraph = raw.split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
   if (byParagraph.length > 1) return byParagraph;
 
-  // Fall back to one-per-line
   return raw.split('\n').map((l) => l.trim()).filter(Boolean);
 }
 
