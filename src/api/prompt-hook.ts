@@ -5,7 +5,7 @@ import { getContext, type Context, type ContextResult, type ContextResultEntry }
 import { BadRequestError } from '../core/api-errors.js';
 import { isSharedStore, loadConfig } from '../core/config.js';
 import { contextBlockLines, contextCost, crossProjectLines, handoffText, sessionTrailText, settleTokens, snapshotText } from './context-render.js';
-import { createDeliveryRecorder, type DeliveryEventType, type DeliveryRecorder } from '../store/delivery-recorder.js';
+import { createDeliveryRecorder, type DeliveryEventType, type DeliveryFault, type DeliveryRecorder } from '../store/delivery-recorder.js';
 import type { HookRuntime } from '../core/capture-contract.js';
 import { realpathOrResolve } from '../util/real-path.js';
 import { MAX_ID_LEN } from '../util/limits.js';
@@ -31,6 +31,8 @@ export interface DeliveryStart {
   eventType?: DeliveryEventType;
   /** The host's own session id from its environment, used when the payload names none. */
   envSessionId: string | undefined;
+  /** Passed through to the recorder; only tests set it. */
+  fault?: DeliveryFault;
 }
 
 /** A delivery recorder for a hook on `ctx.hippoRoot` when the ledger store enables one, else null; never throws. */
@@ -48,6 +50,7 @@ export function startDeliveryRecorder(ctx: Context, start: DeliveryStart): Deliv
       envSessionId: start.envSessionId,
       runtime: start.runtime === 'copilot' ? 'copilot' : undefined,
       eventType: start.eventType,
+      fault: start.fault,
     });
   } catch (error) {
     log.warn(`delivery ledger skipped: ${errorMessage(error)}`);

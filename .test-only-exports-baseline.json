@@ -1,8 +1,7 @@
 {
-  "count": 58,
+  "count": 55,
   "exports": [
     "src/api/availability.ts:DEFAULT_RECENCY_WINDOW_MS",
-    "src/capture/compaction-spool.ts:_setSpoolFsForTests",
     "src/capture/extract.ts:extractFromText",
     "src/capture/session-digest.ts:MAX_DIGEST_CHARS",
     "src/capture/session-digest.ts:_setDigestExistsProbeForTests",
@@ -47,7 +46,6 @@
     "src/server/server-detect.ts:removePidfile",
     "src/store/auth.ts:apiKeyVerifyStats",
     "src/store/delivery-recorder.ts:DELIVERY_REJECTED_ROW_CAP",
-    "src/store/delivery-recorder.ts:_setDeliveryFaultForTests",
     "src/store/embeddings/index.ts:EMBED_TEXT_FORMAT",
     "src/store/embeddings/index.ts:resolveIndexedEmbeddingModel",
     "src/store/failure-log.ts:failuresBySession",
@@ -55,7 +53,6 @@
     "src/store/recall-trace.ts:DELIVERY_LEDGER_RETENTION_DAYS",
     "src/store/recall-trace.ts:readDeliveryEvents",
     "src/store/recall-trace.ts:writeDeliveryEvent",
-    "src/store/search-rows.ts:_forceLikePathForTests",
     "src/util/log.ts:logThreshold",
     "src/util/log.ts:resetLogOnce",
     "src/util/secret-detect.ts:redactSecrets"

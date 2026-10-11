@@ -8,7 +8,7 @@ import { Layer, type MemoryEntry} from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { _forceLikePathForTests, loadRecallSearchEntries } from '../src/store/search-rows.js';
+import { loadRecallSearchEntries } from '../src/store/search-rows.js';
 import { assemble, retrieve, supersede, type Context } from '../src/api/index.js';
 
 const roots: string[] = [];
@@ -24,7 +24,6 @@ const ctxFor = (hippoRoot: string): Context =>
   ({ hippoRoot, tenantId: 'default', actor: { subject: 'superseded-window-test', role: 'admin' } });
 
 afterEach(() => {
-  _forceLikePathForTests(false);
   for (const r of roots.splice(0)) rmSync(r, { recursive: true, force: true });
 });
 
@@ -47,16 +46,15 @@ function summaryWithChildren(root: string, childText: string, leafOptions: Param
   return summary;
 }
 
-const LOADER_PATHS: Array<[string, string, boolean, boolean]> = [
-  ['FTS', 'deploy', false, false],
-  ['LIKE', 'deploy', false, true],
-  ['empty-query', '', true, false],
-  ['no-match fallback', 'zebra', true, false],
+const LOADER_PATHS: Array<[string, string, boolean]> = [
+  ['FTS', 'deploy', false],
+  ['LIKE', 'deplo', false],
+  ['empty-query', '', true],
+  ['no-match fallback', 'zebra', true],
 ];
 
 describe('the recall candidate window drops superseded rows before its LIMIT', () => {
-  it.each(LOADER_PATHS)('%s path', (_path, query, oldCreatedFirst, forceLike) => {
-    _forceLikePathForTests(forceLike);
+  it.each(LOADER_PATHS)('%s path', (_path, query, oldCreatedFirst) => {
     const root = newRoot();
     const { current, old } = seedVersions(root, oldCreatedFirst);
     const windowIds = (includeSuperseded: boolean): string[] =>

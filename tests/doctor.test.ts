@@ -13,8 +13,8 @@ import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { runDoctor, formatDoctor } from '../src/doctor.js';
+import type { SpoolFs } from '../src/capture/compaction-spool.js';
 import { startCompaction } from '../src/store/compactions-record.js';
-import { _setSpoolFsForTests } from '../src/capture/compaction-spool.js';
 import { repairProjectNames } from '../src/api/projects.js';
 import { cliApiContext } from '../src/cli/api-context.js';
 import { openHippoDb, openHippoDbReadOnly, closeHippoDb, getSchemaVersion, getCurrentSchemaVersion, setMeta } from '../src/db/index.js';
@@ -138,7 +138,7 @@ describe('hippo doctor', () => {
       };
       return { cwd, hippoRoot, spoolAt };
     };
-    const compactions = (cwd: string) => runDoctor({ cwd, home: cwd, version: 'test', now }).checks.find((c) => c.id === 'compactions')!;
+    const compactions = (cwd: string, spoolFs?: SpoolFs) => runDoctor({ cwd, home: cwd, version: 'test', now, spoolFs }).checks.find((c) => c.id === 'compactions')!;
 
     it('adds waiting, stale and .bad spool counts to unfinished compactions', () => {
       const { cwd, hippoRoot, spoolAt } = setup('doctor-spool-');
@@ -185,18 +185,14 @@ describe('hippo doctor', () => {
     it('a spool that cannot be listed still shows the database counts', () => {
       const { cwd, spoolAt } = setup('doctor-spool-unread-');
       spoolAt(`${stamp(ago(30))}-ddddddd1.unreadable.bad`, ago(2));
-      _setSpoolFsForTests({
+      const unlistable: SpoolFs = {
         ...fs,
         readdirSync: (dir) => {
           if (dir.endsWith('compactions-spool')) throw Object.assign(new Error('EPERM: simulated'), { code: 'EPERM' });
           return fs.readdirSync(dir);
         },
-      });
-      try {
-        expect(compactions(cwd)).toMatchObject({ status: 'warn', detail: '0 compactions recorded, none stuck in the store; spool not read: EPERM: simulated' });
-      } finally {
-        _setSpoolFsForTests(null);
-      }
+      };
+      expect(compactions(cwd, unlistable)).toMatchObject({ status: 'warn', detail: '0 compactions recorded, none stuck in the store; spool not read: EPERM: simulated' });
     });
   });
 

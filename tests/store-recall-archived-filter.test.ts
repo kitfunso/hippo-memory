@@ -22,7 +22,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { _forceLikePathForTests, loadSearchEntries } from '../src/store/search-rows.js';
+import { loadSearchEntries } from '../src/store/search-rows.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
 import { Layer, type MemoryEntry } from '../src/core/memory.js';
 
@@ -98,20 +98,15 @@ describe('loadSearchEntries defensive kind!=archived filter', () => {
     expect(ids).not.toContain('mem_archived');
   });
 
-  it('LIKE-fallback path: archived row excluded on the forced LIKE route', () => {
+  it('LIKE-fallback path: archived row excluded on a part-word LIKE match', () => {
     writeEntry(hippoRoot, makeRawMemory('mem_visible', 'visible token bravo'));
     writeEntry(hippoRoot, makeRawMemory('mem_archived', 'archived token bravo'));
     poisonToArchived('mem_archived');
 
-    _forceLikePathForTests(true);
-    try {
-      const results = loadSearchEntries(hippoRoot, 'bravo', 10, 'default');
-      const ids = results.map((r) => r.id);
-      expect(ids).toContain('mem_visible');
-      expect(ids).not.toContain('mem_archived');
-    } finally {
-      _forceLikePathForTests(false);
-    }
+    const results = loadSearchEntries(hippoRoot, 'brav', 10, 'default');
+    const ids = results.map((r) => r.id);
+    expect(ids).toContain('mem_visible');
+    expect(ids).not.toContain('mem_archived');
   });
 
   it('empty-query full-scan path: archived row excluded when no terms tokenize', () => {

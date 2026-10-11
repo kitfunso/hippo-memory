@@ -10,14 +10,11 @@ import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { readDeliveryEvents, type DeliveryEventRow } from '../src/store/recall-trace.js';
-import type { DeliveryFault } from '../src/store/delivery-recorder.js';
 import { blockHash, estimateTokens } from '../src/util/token-text.js';
 import { realpathOrResolve } from '../src/util/real-path.js';
 import type { HippoConfig } from '../src/core/config.js';
 
 const HIPPO_JS = path.resolve(__dirname, '..', 'bin', 'hippo.js');
-// The fault switch has no environment or flag route, so a faulted run starts the same CLI through this entry file.
-const FAULT_CLI = path.resolve(__dirname, 'fixtures', 'delivery-fault-cli.mjs');
 const HOOK_ARGS = ['context', '--pinned-only', '--include-recent', '5', '--format', 'additional-context'];
 const PROMPT = 'how should the postgres migration rollback plan work';
 // After every seeded `created`, real or fixed, so no memory is dated in the future.
@@ -43,7 +40,6 @@ interface Payload {
 interface RunOpts {
   args?: string[];
   env?: NodeJS.ProcessEnv;
-  fault?: DeliveryFault;
 }
 
 let tmp: string;
@@ -75,8 +71,7 @@ function clone(ledger: boolean, pinnedInject: Partial<HippoConfig['pinnedInject'
 }
 
 function run(dir: string, payload: Payload | null, opts: RunOpts = {}): SpawnSyncReturns<string> {
-  const entry = opts.fault ? [FAULT_CLI, opts.fault] : [HIPPO_JS];
-  return spawnSync(process.execPath, [...entry, ...(opts.args ?? HOOK_ARGS)], {
+  return spawnSync(process.execPath, [HIPPO_JS, ...(opts.args ?? HOOK_ARGS)], {
     cwd: dir,
     env: { ...BASE_ENV, HIPPO_HOME: path.join(dir, 'global'), ...opts.env },
     input: payload === null ? '' : JSON.stringify(payload),
@@ -346,20 +341,6 @@ describe('the ledger never changes the hook', () => {
       seed(`office note ${i}: the coffee machine schedule changes for team lunch on friday`, { created: `2026-06-0${i + 1}T00:00:00.000Z` });
     }
   }
-
-  it.each<[DeliveryFault]>([
-    ['build'],
-    ['flush'],
-  ])('F7c: a recorder that throws at %s leaves stdout and the exit code as flag-off, with one stderr line', (fault) => {
-    fixture();
-    const off = run(clone(false), claude('f7c'), { env: { HIPPO_FAKE_NOW: FAKE_NOW } });
-    const dir = clone(true);
-    const on = run(dir, claude('f7c'), { env: { HIPPO_FAKE_NOW: FAKE_NOW }, fault });
-    expect(off.stdout).not.toBe('');
-    expect([on.status, on.stdout]).toEqual([off.status, off.stdout]);
-    expect(ledgerLines(on.stderr)).toHaveLength(1);
-    expect(eventCount(dir)).toBe(0);
-  });
 
   it('F7a: a failing write rolls back, keeps stdout and the exit code, and prints one stderr line', () => {
     fixture();

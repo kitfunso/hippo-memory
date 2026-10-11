@@ -9,7 +9,7 @@ import { readStoreHealth, type StoreHealth } from './store/diagnostics.js';
 import { loadConfig } from './core/config.js';
 import { openHippoDbReadOnly, closeHippoDb, getCurrentSchemaVersion, IncompatibleBinaryError, type DatabaseSyncLike } from './db/index.js';
 import { REPLAY_AFTER_MS, TRANSCRIPT_FILL_WINDOW_MS } from './core/compaction-timing.js';
-import { SPOOL_DIR, spoolCounts, type SpoolCounts } from './capture/compaction-spool.js';
+import { SPOOL_DIR, spoolCounts, type SpoolCounts, type SpoolFs } from './capture/compaction-spool.js';
 import { isEmbeddingAvailable } from './embeddings/local.js';
 import { CODEX_TRUST_LINE, isCodexPresent } from './hooks/shared.js';
 import { claudeConfigDir, codexHomeDir } from './util/agent-homes.js';
@@ -49,6 +49,8 @@ export interface DoctorOpts {
   version: string;
   nodeVersion?: string;
   now?: Date;
+  /** Stands in for the fs the spool check reads; a test makes one call fail. */
+  spoolFs?: SpoolFs;
 }
 
 /** Minimum Node.js version hippo supports (package.json engines). */
@@ -146,16 +148,16 @@ interface SpoolRead {
 }
 
 /** Spool counts in their own try, so a spool that cannot be read never hides the database counts. */
-function readSpool(store: string, now: Date): SpoolRead {
+function readSpool(store: string, now: Date, spoolFs?: SpoolFs): SpoolRead {
   try {
-    return { counts: spoolCounts(store, now, REPLAY_AFTER_MS), unread: '' };
+    return { counts: spoolCounts(store, now, REPLAY_AFTER_MS, spoolFs), unread: '' };
   } catch (err) {
     return { counts: { waiting: 0, stale: 0, bad: 0 }, unread: `; spool not read: ${errorMessage(err)}` };
   }
 }
 
 /** Compaction records the PostCompact hook left unfinished and spool files a replay has not finished, which `hippo sleep` replays. */
-function compactionsCheck(compactions: StoreHealth['compactions'], store: string, now: Date): DoctorCheck {
+function compactionsCheck(compactions: StoreHealth['compactions'], store: string, now: Date, spoolFs?: SpoolFs): DoctorCheck {
   if (!compactions.ok) {
     return compactions.message.includes('no such table')
       ? { id: 'compactions', status: 'info', detail: 'no compaction records yet (hippo creates them on the next write)' }
@@ -163,7 +165,7 @@ function compactionsCheck(compactions: StoreHealth['compactions'], store: string
   }
   const { total, summarised, started } = compactions.value;
   const stuck = summarised + started;
-  const { counts: spool, unread } = readSpool(store, now);
+  const { counts: spool, unread } = readSpool(store, now, spoolFs);
   const spooled = spool.waiting + spool.stale + spool.bad > 0;
   const recorded = `${total} compaction${total === 1 ? '' : 's'} recorded, none stuck`;
   if (stuck === 0 && !spooled && unread === '') return { id: 'compactions', status: 'pass', detail: recorded };
@@ -307,7 +309,7 @@ function tokensCheck(tokens: StoreHealth['tokens']): DoctorCheck {
 }
 
 /** Checks that read the store's database; a store that cannot be opened becomes one failed schema check. */
-function databaseChecks(store: string, now: Date): DoctorCheck[] {
+function databaseChecks(store: string, now: Date, spoolFs?: SpoolFs): DoctorCheck[] {
   let health: StoreHealth;
   try {
     health = readStoreHealth(store, {
@@ -330,7 +332,7 @@ function databaseChecks(store: string, now: Date): DoctorCheck[] {
     tokensCheck(health.tokens),
     failuresCheck(health.failures, health.schemaVersion),
     sleepCheck(health.lastSleep, now),
-    compactionsCheck(health.compactions, store, now),
+    compactionsCheck(health.compactions, store, now, spoolFs),
   ];
 }
 
@@ -384,7 +386,7 @@ export function runDoctor(opts: DoctorOpts): DoctorReport {
   const hasGlobal = isInitialized(globalRoot);
   const { store, check } = storeCheck(local, globalRoot, hasGlobal);
   checks.push(check);
-  if (store !== null) checks.push(...databaseChecks(store, now));
+  if (store !== null) checks.push(...databaseChecks(store, now, opts.spoolFs));
 
   const holdoutRateBp = store === null ? 0 : loadConfig(store).pilot.holdoutRateBp;
   if (holdoutRateBp > 0) {

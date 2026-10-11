@@ -71,13 +71,6 @@ interface SearchPredicates {
   currentNoAlias: string;
 }
 
-let forceLikePath = false;
-
-/** Sends term queries down the LIKE path on a build that has FTS. Only tests call it. */
-export function _forceLikePathForTests(on: boolean): void {
-  forceLikePath = on;
-}
-
 interface SearchRowsOptions {
   readonly scopeFilter?: RecallScopeFilter;
   readonly includeSuperseded?: boolean;
@@ -100,8 +93,7 @@ function loadSearchRows(
     return selectAllCandidates(db, p, limit);
   }
 
-  // The test switch is read here, not in `isFtsAvailable`, so writes never skip FTS index sync.
-  if (!forceLikePath && isFtsAvailable(db)) {
+  if (isFtsAvailable(db)) {
     const rows = selectFtsCandidates(db, terms, p, limit);
     if (rows.length > 0) return rows;
   }

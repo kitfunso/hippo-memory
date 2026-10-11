@@ -3,7 +3,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PostCompactPayload } from '../src/capture/compaction-record.js';
-import { _setSpoolFsForTests, importSpool, spool, spoolCounts, type SpoolFs, type SpoolImporter } from '../src/capture/compaction-spool.js';
+import { importSpool, spool, spoolCounts, type SpoolFs, type SpoolImporter } from '../src/capture/compaction-spool.js';
 
 let root: string;
 let logs: string[];
@@ -13,7 +13,6 @@ beforeEach(() => {
   logs = [];
 });
 afterEach(() => {
-  _setSpoolFsForTests(null);
   vi.restoreAllMocks();
   fs.rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
@@ -26,7 +25,7 @@ const spoolDir = (): string => path.join(root, 'compactions-spool');
 const lockFile = (): string => path.join(spoolDir(), 'replay.lock');
 const stamp = (ms: number): string => String(ms).padStart(13, '0');
 const realFs: SpoolFs = fs;
-const withFs = (over: Partial<SpoolFs>): void => _setSpoolFsForTests({ ...realFs, ...over });
+const withFs = (over: Partial<SpoolFs>): SpoolFs => ({ ...realFs, ...over });
 const fsError = (code: string): Error => Object.assign(new Error(`${code}: simulated`), { code });
 const leftToAnother = (): string[] => logs.filter((l) => l.startsWith('spool left to another replayer'));
 const payload = (sessionId: string): PostCompactPayload => ({ sessionId, trigger: 'auto', cwd: null, transcriptPath: null, compactSummary: null });
@@ -49,7 +48,7 @@ function collector(): Collector {
   return { seen, importer: (spooled, recorded) => { seen.push(spooled.payload.sessionId); recorded(); } };
 }
 
-const replay = (importer: SpoolImporter): number => importSpool(root, 'default', log, Number.POSITIVE_INFINITY, importer);
+const replay = (importer: SpoolImporter, fsx?: SpoolFs): number => importSpool(root, 'default', log, Number.POSITIVE_INFINITY, importer, fsx);
 
 describe('spool names and order', () => {
   it('imports oldest first across sessions and legacy names', () => {
@@ -159,16 +158,16 @@ describe('one replayer at a time', () => {
     fs.utimesSync(file, old, old);
     let fired = false;
     let nested: number | null = null;
-    withFs({
+    const faulty = withFs({
       renameSync: (from, to) => {
         fs.renameSync(from, to);
         if (fired || !String(to).includes('.claim')) return;
         fired = true;
-        nested = importSpool(root, 'default', log, Number.POSITIVE_INFINITY, collector().importer);
+        nested = importSpool(root, 'default', log, Number.POSITIVE_INFINITY, collector().importer, faulty);
       },
     });
     const outer = collector();
-    replay(outer.importer);
+    replay(outer.importer, faulty);
     expect(nested).toBe(0);
     expect(leftToAnother()).toHaveLength(1);
     expect(outer.seen).toEqual(['s1']);
@@ -193,14 +192,14 @@ describe('one replayer at a time', () => {
     put(`${A}.a0.json`, 's1');
     for (const code of ['EPERM', 'EBUSY']) {
       logs = [];
-      withFs({
+      const faulty = withFs({
         writeFileSync: (file, data, options) => {
           if (String(file).endsWith('replay.lock')) throw fsError(code);
           fs.writeFileSync(file, data, options);
         },
       });
       const { seen, importer } = collector();
-      expect(replay(importer)).toBe(0);
+      expect(replay(importer, faulty)).toBe(0);
       expect(seen).toEqual([]);
       expect(logs).toHaveLength(1);
       expect(leftToAnother()).toHaveLength(1);
@@ -212,7 +211,7 @@ describe('one replayer at a time', () => {
     put(`${A}.a0.json`, 's1');
     fs.writeFileSync(lockFile(), JSON.stringify({ pid: 4242, at: Date.now(), token: 'leaving' }));
     let released = false;
-    withFs({
+    const faulty = withFs({
       readFileSync: (file, encoding) => {
         if (!released && String(file).endsWith('replay.lock')) {
           released = true;
@@ -222,7 +221,7 @@ describe('one replayer at a time', () => {
       },
     });
     const { seen, importer } = collector();
-    expect(replay(importer)).toBe(1);
+    expect(replay(importer, faulty)).toBe(1);
     expect(released).toBe(true);
     expect(seen).toEqual(['s1']);
     expect(logs).toEqual([]);
@@ -233,17 +232,16 @@ describe('one replayer at a time', () => {
     put(`${A}.a0.json`, 's1');
     put(`${B}.a0.json`, 's2');
     const seen: string[] = [];
-    withFs({
+    const faulty = withFs({
       readFileSync: (file, encoding) => {
         if (seen.length > 0 && String(file).endsWith('replay.lock')) throw fsError('EBUSY');
         return fs.readFileSync(file, encoding);
       },
     });
-    expect(replay((spooled, recorded) => { seen.push(spooled.payload.sessionId); recorded(); })).toBe(1);
+    expect(replay((spooled, recorded) => { seen.push(spooled.payload.sessionId); recorded(); }, faulty)).toBe(1);
     expect(seen).toEqual(['s1']);
     expect(logs).toEqual(['spool lock could not be read, stopping']);
     expect(fs.readdirSync(spoolDir())).toEqual([`${B}.a0.json`]);
-    _setSpoolFsForTests(null);
     expect(replay(collector().importer)).toBe(1);
   });
 });
@@ -252,13 +250,13 @@ describe('spool counts', () => {
   it('skips a file whose stat stays busy instead of throwing', () => {
     const old = new Date(Date.now() - 20 * MINUTE);
     for (const name of ['s1-1.json', 's2-1.json']) fs.utimesSync(put(name, name), old, old);
-    withFs({
+    const faulty = withFs({
       statSync: (file) => {
         if (path.basename(file) === 's1-1.json') throw fsError('EBUSY');
         return fs.statSync(file);
       },
     });
-    expect(spoolCounts(root, new Date(), 10 * MINUTE)).toEqual({ waiting: 1, stale: 0, bad: 0 });
+    expect(spoolCounts(root, new Date(), 10 * MINUTE, faulty)).toEqual({ waiting: 1, stale: 0, bad: 0 });
   });
 });
 
@@ -320,13 +318,13 @@ describe('failures are counted and set aside', () => {
     put(`${A}.a0.json`, 's1');
     const claimFails = (code: string): string[] => {
       logs = [];
-      withFs({
+      const faulty = withFs({
         renameSync: (from, to) => {
           if (to.includes('.claim')) throw fsError(code);
           fs.renameSync(from, to);
         },
       });
-      expect(replay(collector().importer)).toBe(0);
+      expect(replay(collector().importer, faulty)).toBe(0);
       expect(fs.readdirSync(spoolDir())).toEqual([`${A}.a0.json`]);
       return logs;
     };
@@ -338,7 +336,7 @@ describe('failures are counted and set aside', () => {
     fs.mkdirSync(spoolDir(), { recursive: true });
     fs.writeFileSync(path.join(spoolDir(), `${A}.a0.json`), '{ not json');
     put(`${B}.a0.json`, 's2');
-    withFs({
+    const faulty = withFs({
       writeFileSync: (file, data, options) => {
         if (file.includes('.bad')) throw fsError('EPERM');
         fs.writeFileSync(file, data, options);
@@ -349,7 +347,7 @@ describe('failures are counted and set aside', () => {
       },
     });
     const { seen, importer } = collector();
-    expect(replay(importer)).toBe(1);
+    expect(replay(importer, faulty)).toBe(1);
     expect(seen).toEqual(['s2']);
     expect(fs.readdirSync(spoolDir())).toEqual([`${A}.a0.json`]);
   });
@@ -357,14 +355,14 @@ describe('failures are counted and set aside', () => {
   it('a claim that vanishes before the read is skipped and the rest still import', () => {
     put(`${A}.a0.json`, 's1');
     put(`${B}.a0.json`, 's2');
-    withFs({
+    const faulty = withFs({
       readFileSync: (file, encoding) => {
         if (path.basename(file).startsWith(`${A}.a0.claim-`)) fs.unlinkSync(file);
         return fs.readFileSync(file, encoding);
       },
     });
     const { seen, importer } = collector();
-    expect(replay(importer)).toBe(1);
+    expect(replay(importer, faulty)).toBe(1);
     expect(seen).toEqual(['s2']);
     expect(logs).toEqual([`spool file ${A}.a0.json vanished`]);
     expect(fs.readdirSync(spoolDir())).toEqual([]);
@@ -372,14 +370,14 @@ describe('failures are counted and set aside', () => {
 
   it('EPERM on the claim unlink after the record logs the duplicate risk', () => {
     put(`${A}.a0.json`, 's1');
-    withFs({
+    const faulty = withFs({
       unlinkSync: (file) => {
         if (file.includes('.claim')) throw fsError('EPERM');
         fs.unlinkSync(file);
       },
     });
     const { seen, importer } = collector();
-    expect(replay(importer)).toBe(1);
+    expect(replay(importer, faulty)).toBe(1);
     expect(seen).toEqual(['s1']);
     expect(logs).toEqual([`spool file ${A}.a0.json saved; its claim could not be removed (EPERM); it will be imported again`]);
   });
@@ -439,14 +437,13 @@ describe('temp files a spool left', () => {
   });
 
   it('a spool whose rename stays busy leaves a whole tmp for promotion', () => {
-    withFs({
+    const faulty = withFs({
       renameSync: (from, to) => {
         if (from.endsWith('.tmp')) throw fsError('EPERM');
         fs.renameSync(from, to);
       },
     });
-    expect(() => spool(root, 'default', payload('s1'), { summary: 'kept', items: [] }, new Date())).not.toThrow();
-    _setSpoolFsForTests(null);
+    expect(() => spool(root, 'default', payload('s1'), { summary: 'kept', items: [] }, new Date(), faulty)).not.toThrow();
     const [name] = fs.readdirSync(spoolDir());
     expect(name).toMatch(/^\d{13}-[0-9a-f]{8}\.a0\.json\.tmp$/);
     age(path.join(spoolDir(), name));

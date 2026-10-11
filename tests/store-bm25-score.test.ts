@@ -16,7 +16,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry, writeEntryDbOnly } from '../src/store/entry-writes.js';
-import { _forceLikePathForTests, loadRecallSearchEntriesFromDb, loadSearchEntries } from '../src/store/search-rows.js';
+import { loadRecallSearchEntriesFromDb, loadSearchEntries } from '../src/store/search-rows.js';
 import { closeHippoDb, openHippoDb, withSharedStoreHandles } from '../src/db/index.js';
 import { Layer, type MemoryEntry } from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
@@ -132,34 +132,16 @@ describe('loadSearchEntries bm25_score', () => {
     expect(got).toEqual(expectedOrder);
   });
 
-  it('LIKE fallback path: the forced LIKE route is deterministic; bm25_score undefined; expected row anchored (v1.7.1 senior P2.3 + INFO #7)', () => {
-    // v1.7.0 used a substring "alphab" tokenizer-miss to route through LIKE
-    // — fragile under porter/trigram tokenizers (senior P2.3). Both rev.1
-    // alternatives (DROP TABLE, setMeta('fts5_available','0')) are no-ops
-    // because ensureOptionalFts runs CREATE+backfill+meta-write on every
-    // openHippoDb (db.ts:998-1029).
-    //
-    // v1.7.1 fix: the _forceLikePathForTests switch is read in
-    // loadSearchRows, which then skips the FTS branch unconditionally
-    // and runs the LIKE query. Gated at the read site (NOT inside
-    // isFtsAvailable) so writes (syncFtsRow, deleteFtsRow, raw-archive)
-    // keep maintaining the FTS index honestly — no on-disk poisoning.
-    //
-    // INFO #7: anchor on the expected content so a partial hit cannot let
-    // the test pass spuriously.
-    try {
-      writeEntry(root, makeRaw('alphabet soup contents'));
-      _forceLikePathForTests(true);
-      const results = loadSearchEntries(root, 'alphabet', 200, 'default');
-      expect(results.length).toBeGreaterThan(0);
-      // Anchor: the expected row must come back via the LIKE branch.
-      expect(results.some((e) => e.content === 'alphabet soup contents')).toBe(true);
-      // No FTS path → no bm25_score on any returned row.
-      for (const e of results) {
-        expect(e.bm25_score).toBeUndefined();
-      }
-    } finally {
-      _forceLikePathForTests(false);
+  it('LIKE fallback path: a part-word query reaches LIKE; bm25_score undefined; expected row anchored', () => {
+    // FTS5 matches whole tokens, so a part-word is the only route to LIKE that leaves the FTS index untouched.
+    writeEntry(root, makeRaw('alphabet soup contents'));
+    const results = loadSearchEntries(root, 'alphab', 200, 'default');
+    expect(results.length).toBeGreaterThan(0);
+    // Anchor: the expected row must come back via the LIKE branch.
+    expect(results.some((e) => e.content === 'alphabet soup contents')).toBe(true);
+    // No FTS path → no bm25_score on any returned row.
+    for (const e of results) {
+      expect(e.bm25_score).toBeUndefined();
     }
   });
 

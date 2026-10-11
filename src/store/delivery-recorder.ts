@@ -160,6 +160,8 @@ export interface DeliveryRecorderInit {
   runtime?: DeliveryRuntime;
   /** Set by hooks that are not prompt or context calls; without it the payload's hook event decides. */
   eventType?: DeliveryEventType;
+  /** Makes this recorder throw at one stage; only tests set it, and no CLI flag or environment variable reaches it. */
+  fault?: DeliveryFault;
 }
 
 interface Candidate {
@@ -411,18 +413,11 @@ function candidateMethods(state: RecorderState, guard: Guard): CandidateMethods 
 
 export type DeliveryFault = 'observe' | 'build' | 'flush';
 
-let injectedFault: DeliveryFault | null = null;
-
-/** Makes every recorder created afterwards throw at one stage. Only tests call it; the shipped CLI and server have no route here. */
-export function _setDeliveryFaultForTests(fault: DeliveryFault | null): void {
-  injectedFault = fault;
-}
-
 /** A recorder for one call; every observer method is guarded, and a throw marks it broken instead of escaping. */
 export function createDeliveryRecorder(init: DeliveryRecorderInit): DeliveryRecorder {
   const startedMs = Date.now();
   const ts = evalNow().toISOString();
-  const fault = injectedFault;
+  const fault = init.fault ?? null;
   const payload = readPayload(init);
   const state: RecorderState = {
     candidates: new Map(), picked: new Map(), filtered: new Set(), facts: null, shown: 0, dropped: 0,
