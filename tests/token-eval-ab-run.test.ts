@@ -1,7 +1,7 @@
 // Z0 runner end to end with a stand-in for Claude Code (tests/fixtures/fake-claude.mjs), so it costs nothing.
 // Real git, hidden-test grading, hippo hooks, ledger and CLI; the stand-in's token numbers are made up.
 import { describe, it, expect, afterEach } from 'vitest';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync, readdirSync, statSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync, readdirSync, statSync, cpSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve, dirname, delimiter } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
@@ -520,9 +520,8 @@ describe('Z0 runner end to end (fake Claude Code)', () => {
   it('validates and plans a run with dist/ absent (no build needed to dry-run)', () => {
     const scratch = tmp('ab-run-nodist-');
     const scriptsDir = join(scratch, 'scripts', 'token-eval');
-    mkdirSync(scriptsDir, { recursive: true });
-    const src = resolve(__dirname, '..', 'scripts', 'token-eval');
-    for (const f of readdirSync(src)) writeFileSync(join(scriptsDir, f), readFileSync(join(src, f)));
+    // The whole scripts/ tree, as a checkout without dist/ has it: the runner imports shared libs from scripts/.
+    cpSync(resolve(__dirname, '..', 'scripts'), join(scratch, 'scripts'), { recursive: true });
     const r = makeRepo();
     const tasksFile = join(scratch, 'tasks.json');
     writeFileSync(tasksFile, JSON.stringify(validateTasks({ sequences: [{ id: 'seqA', cluster: 'c', repo: r.repo, fixedOrder: true, tasks: [task(r, 'a1', 'x'), task(r, 'a2', 'y')] }] })));
