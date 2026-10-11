@@ -262,6 +262,10 @@ Keith stopped the hippo chunk (`C:/z0-runs/s7/cal-hp`) on 2026-10-11 so the firs
 
 The one hippo record is voided as `read`. While debugging a test about home folders, the agent ran `ls -d ~/.hippo`. The arms keep the operator's `USERPROFILE`, so in Git Bash `~` is the operator's home, and the read check classed the path as `operator`. The S4 hippo screen shows the same void on 1 of its 6 hp-f4 sessions (A0), so the rerun will lose some hp-f4 sessions to it. The check is doing its job: a void session is not data. Whether arms should get their own home folder is a question for the scored-run build, not calibration, since the calibration build is pinned.
 
+## S7: both chunks stopped for low memory
+
+On 2026-10-11 at about 18:36 Claude Code stopped the cj and bm chunks, and their hook watchers, for low memory. Another session had started several Python training runs of about 3 GB each, and the box's commit charge reached 119.5 of 133.6 GB. By then cj had 98 records (seed 1 whole, seed 2 at 28 of 70) and bm had 23 of 170. No hippo hook had failed in either. The runner has no resume, so both chunks rerun whole into new out dirs (`cal-cj2`, `cal-bm2`) once the box has the memory. The partial records stay in `cal-cj` and `cal-bm` and decide nothing. The cj seed 1 leak can recur in the rerun, since its task order is the same.
+
 ## Contract limits found
 
 - A checker's `CHECK_POST_COMMIT` is a state commit whose parent is the pre-session commit, so the agent's own commits are not visible to it. Commit-message rules are checked from the `git commit` commands in `CHECK_COMMANDS`.
