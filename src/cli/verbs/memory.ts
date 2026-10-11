@@ -36,6 +36,7 @@ export const MEMORY_VERBS = {
     --global               Store in global store ($HIPPO_HOME or ~/.hippo/)`],
   }),
   supersede: verb(() => import('../remember.js'), 'handleSupersede', {
+    destructive: true,
     flags: { switches: ['pin'], values: ['layer'], lists: ['tag'] },
     usage: [`
   supersede <id> "<text>"  Replace a memory with a new version; the old one points at it
@@ -216,6 +217,7 @@ export const MEMORY_VERBS = {
     --framing <mode>       Framing: observe (default), suggest, assert`],
   }),
   sleep: verb(() => import('../sleep.js'), 'handleSleep', {
+    destructive: true,
     scoped: true,
     flags: { switches: ['dry-run', 'no-learn', 'no-share'], values: ['log-file'] },
     usage: [`
@@ -233,6 +235,7 @@ export const MEMORY_VERBS = {
   daily-runner             Sweep registered workspaces and run daily learn+sleep`],
   }),
   dedup: verb(() => import('../maintenance.js'), 'handleDedup', {
+    destructive: true,
     flags: { switches: ['dry-run'], numbers: ['threshold'] },
     usage: [`
   dedup                    Remove duplicate memories (keeps stronger copy)

@@ -1,4 +1,5 @@
 // The strings a context block prints. The budget prices these same strings, so selection and print cannot drift.
+import { MINUTE_MS } from '../util/time.js';
 import { calculateStrength, confidenceFacets, confidenceLabel, type MemoryEntry } from '../core/memory.js';
 import { evalNow } from '../core/ablation.js';
 import { estimateTokens } from '../util/token-text.js';
@@ -57,7 +58,7 @@ export function sessionTrailText(events: SessionEvent[]): string {
 export const COMPACT_RESUME_EVENT_CONTENT_CAP = 400;
 
 // A snapshot older than this was not written for this compaction (pre-compact skipped), so restoring it is stale, not a resume.
-export const COMPACT_RESUME_MAX_AGE_MS = 15 * 60_000;
+export const COMPACT_RESUME_MAX_AGE_MS = 15 * MINUTE_MS;
 
 /** The block compact-resume hands the model; events arrive already capped. */
 export function compactResumeText(snapshot: TaskSnapshot, events: SessionEvent[]): string {

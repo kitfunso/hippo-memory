@@ -30,7 +30,7 @@ import { requireInit, resolveAuthRoot } from './shared.js';
 import { fmt } from './print.js';
 import { isJsonObject } from '../util/json.js';
 import { hookStoreRoot } from './hook-runtime.js';
-import { DAY_MS } from '../util/time.js';
+import { DAY_MS, HOUR_MS, MINUTE_MS } from '../util/time.js';
 import { CliExit } from './exit.js';
 
 export function handleStatus({ hippoRoot, tenantId }: CommandContext): void {
@@ -280,9 +280,9 @@ export function handleCorrectionLatency({ hippoRoot, tenantId, flags }: CommandC
     const fmt = (ms: number | null) => {
       if (ms === null) return 'n/a';
       if (ms < 1000) return `${ms}ms`;
-      if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`;
-      if (ms < 3_600_000) return `${(ms / 60_000).toFixed(1)}m`;
-      return `${(ms / 3_600_000).toFixed(1)}h`;
+      if (ms < MINUTE_MS) return `${(ms / 1000).toFixed(1)}s`;
+      if (ms < HOUR_MS) return `${(ms / MINUTE_MS).toFixed(1)}m`;
+      return `${(ms / HOUR_MS).toFixed(1)}h`;
     };
     console.log(`Corrections: ${report.count} total (${report.extractionCount} extraction-driven, ${report.manualCount} manual)`);
     console.log(`Latency p50: ${fmt(report.p50Ms)}, p95: ${fmt(report.p95Ms)}, max: ${fmt(report.maxMs)}`);

@@ -1,5 +1,6 @@
 /** One retry policy for outbound HTTP: a timeout on every attempt, backoff on 429 and 5xx, and on a dropped connection where a replay is safe. */
 
+import { MINUTE_MS } from './time.js';
 import { envLlmTimeoutMs } from './env.js';
 import { errorCode, log } from './log.js';
 
@@ -28,7 +29,7 @@ export interface RetryPolicy {
 const DEFAULT_ATTEMPTS = 3;
 const DEFAULT_BASE_DELAY_MS = 250;
 const DEFAULT_MAX_DELAY_MS = 8_000;
-const DEFAULT_LLM_TIMEOUT_MS = 60_000;
+const DEFAULT_LLM_TIMEOUT_MS = MINUTE_MS;
 
 /** LLM calls (consolidation refine, DAG summaries, fact extraction) share one budget; `HIPPO_LLM_TIMEOUT_MS` overrides it. */
 export function llmTimeoutMs(): number {

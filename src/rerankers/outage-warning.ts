@@ -1,7 +1,8 @@
 // One way for a reranker to report that it stopped working, without a line per recall.
+import { MINUTE_MS } from '../util/time.js';
 import { log, type LogFields } from '../util/log.js';
 
-const REPEAT_MS = 5 * 60_000;
+const REPEAT_MS = 5 * MINUTE_MS;
 
 export interface OutageWarning {
   /** `fields` carries the error's class and stack onto the warning line. */
@@ -23,7 +24,7 @@ export function createOutageWarning(name: string, fallback: string): OutageWarni
         return;
       }
       const skipped = unreported > 0 ? ` ${unreported} more calls failed since the last warning.` : '';
-      const repeat = `While it fails this repeats at most every ${REPEAT_MS / 60_000} minutes.`;
+      const repeat = `While it fails this repeats at most every ${REPEAT_MS / MINUTE_MS} minutes.`;
       log.warn(`${name} reranker unavailable (${reason}); ${fallback}.${skipped} ${repeat}`, fields);
       warnedAt = Date.now();
       unreported = 0;

@@ -1,4 +1,5 @@
 // Summaries post-compact could not record because the store was busy, waiting on disk for the next replay.
+import { MINUTE_MS } from '../util/time.js';
 import { randomBytes } from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -16,7 +17,7 @@ export const SPOOL_DIR = 'compactions-spool';
 export const SPOOL_PROBLEM = 'spool problem: ';
 const LOCK = 'replay.lock';
 /** Long enough that a live replayer has finished with its claim. */
-const STALE_MS = 10 * 60_000;
+const STALE_MS = 10 * MINUTE_MS;
 const MAX_ATTEMPTS = 3;
 const BUSY_RETRIES = 3;
 const BUSY_WAIT_MS = 50;
@@ -323,7 +324,7 @@ function recoverStaleClaims(dir: string, names: readonly string[], log: Log): bo
 function putBack(dir: string, claim: string, stem: string, attempt: number, log: Log): void {
   const name = path.basename(claim);
   if (settle(() => fsx.renameSync(claim, path.join(dir, `${stem}.a${attempt}.json`)), log, `spool file ${name} not put back`) === 'busy') {
-    log(`spool file ${name} could not be put back; it returns ${STALE_MS / 60_000} minutes after its claim`);
+    log(`spool file ${name} could not be put back; it returns ${STALE_MS / MINUTE_MS} minutes after its claim`);
   }
 }
 

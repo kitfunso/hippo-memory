@@ -1,10 +1,12 @@
 // src/search/goal-boost.ts: the goal-stack boost over goals already read; it ranks rows and touches no store.
 import { compareScoresDesc } from '../core/compare.js';
-import type { MemoryEntry } from '../core/memory.js';
+import { DEFAULT_SCHEMA_FIT, type MemoryEntry } from '../core/memory.js';
 import type { RerankStep } from '../core/search-types.js';
 import type { ActiveGoals, Goal, GoalRecallLogRow, RetrievalPolicy } from '../store/goals.js';
 
 const MAX_FINAL_MULTIPLIER = 3.0;
+const FIRST_MATCH_BOOST = 2.0;
+const EXTRA_MATCH_BOOST = 0.5;
 
 /** Options of {@link boostByGoals}. */
 export interface GoalStackBoostOpts {
@@ -29,9 +31,9 @@ function goalBoostMultiplier(
   goalsByTag: Map<string, Goal>,
   policiesByGoalId: ReadonlyMap<string, RetrievalPolicy>,
 ): number {
-  // Base 2.0x for first match, +0.5x per additional, capped at 3.0x.
+  // First match boosts by FIRST_MATCH_BOOST, each further one adds EXTRA_MATCH_BOOST, capped at MAX_FINAL_MULTIPLIER.
   let multiplier = Math.min(
-    2.0 + 0.5 * (matches.length - 1),
+    FIRST_MATCH_BOOST + EXTRA_MATCH_BOOST * (matches.length - 1),
     MAX_FINAL_MULTIPLIER,
   );
   // Compose per-policy multipliers per matched tag.
@@ -47,7 +49,7 @@ function goalBoostMultiplier(
       multiplier *=
         1.0 +
         Math.max(0, policy.weightSchemaFit - 1.0) *
-          (entry.schema_fit ?? 0.5);
+          (entry.schema_fit ?? DEFAULT_SCHEMA_FIT);
     } else if (policy.policyType === 'recency-first') {
       multiplier *= policy.weightRecency;
     } else if (policy.policyType === 'hybrid') {

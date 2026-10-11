@@ -1,4 +1,5 @@
 // The local Transformers.js embedder, a leaf so provider.ts can wrap it without importing index.ts.
+import { MINUTE_MS } from '../util/time.js';
 import { envModelCache } from '../util/env.js';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -101,7 +102,7 @@ export function createLocalEmbedder(transformers: LocalTransformers = INSTALLED_
 }
 
 function warnLoadFailure(model: string, err: Error): void {
-  const retry = `the next try is in ${MODEL_LOAD_POLICY.backoffMs / 60_000} minutes`;
+  const retry = `the next try is in ${MODEL_LOAD_POLICY.backoffMs / MINUTE_MS} minutes`;
   log.warn(`local embedding model ${model} did not load (${errorMessage(err)}); embeddings stay off and ${retry}`, errorFields(err));
 }
 

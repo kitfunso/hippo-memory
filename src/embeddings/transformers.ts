@@ -1,4 +1,5 @@
 // The optional Transformers.js package, and a bounded load of a model from it, shared by the local embedder and the cross-encoder.
+import { MINUTE_MS } from '../util/time.js';
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
 import { errorCode, errorMessage } from '../util/log.js';
@@ -59,7 +60,7 @@ export interface ModelLoadPolicy {
 
 // A quantized MiniLM is about 23 MB, so two minutes is a 1.5 Mbit/s link; a load from disk takes about a second.
 // The backoff matches the reranker outage warning's repeat window, so each window has one attempt and one warning.
-export const MODEL_LOAD_POLICY: ModelLoadPolicy = { timeoutMs: 2 * 60_000, backoffMs: 5 * 60_000 };
+export const MODEL_LOAD_POLICY: ModelLoadPolicy = { timeoutMs: 2 * MINUTE_MS, backoffMs: 5 * MINUTE_MS };
 
 export interface ModelLoads<T> {
   /** The model under `key`: the loaded one, the load in flight, the failure inside its backoff window, or a new `start()`. */

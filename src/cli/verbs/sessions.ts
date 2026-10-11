@@ -114,6 +114,7 @@ export const SESSION_VERBS = {
       --json               Output as JSON`],
   }),
   forget: verb(() => import('../curate.js'), 'handleForget', {
+    destructive: true,
     scoped: true,
     flags: { switches: ['archive', 'dry-run'], values: ['reason'] },
     usage: [`

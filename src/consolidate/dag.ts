@@ -16,6 +16,8 @@ import { errorFields, errorMessage, log } from '../util/log.js';
 
 const SUMMARY_FALLBACK_CHARS = 40;
 const DEFAULT_REBUILD_CAP = 20;
+// Facts join a cluster when their tag sets overlap at least this much.
+const CLUSTER_JACCARD_MIN = 0.5;
 
 export interface FactCluster {
   label: string;
@@ -45,7 +47,7 @@ export function clusterFacts(facts: MemoryEntry[]): FactCluster[] {
       if (assigned.has(j)) continue;
       const shared = entityTags[i].filter((t) => tagSets[j].has(t)).length;
       const inBoth = [...tagSets[i]].filter((t) => tagSets[j].has(t)).length;
-      if (shared / (tagSets[i].size + tagSets[j].size - inBoth) >= 0.5) {
+      if (shared / (tagSets[i].size + tagSets[j].size - inBoth) >= CLUSTER_JACCARD_MIN) {
         cluster.push(j);
         assigned.add(j);
       }

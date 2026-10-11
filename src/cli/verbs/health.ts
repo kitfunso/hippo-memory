@@ -11,6 +11,7 @@ export const HEALTH_VERBS = {
   status                   Show memory health stats`],
   }),
   audit: verb(() => import('../audit.js'), 'handleAudit', {
+    destructive: true,
     scoped: true,
     flags: {
       switches: ['apply', 'dry-run', 'fix', 'global', 'json'],
@@ -115,6 +116,7 @@ export const HEALTH_VERBS = {
     --json                 Output as JSON`],
   }),
   resolve: verb(() => import('../curate.js'), 'handleResolve', {
+    destructive: true,
     flags: { switches: ['forget', 'reject-loser'], values: ['keep', 'reason'] },
     usage: [`
   resolve <conflict_id>    Resolve a memory conflict
@@ -124,6 +126,7 @@ export const HEALTH_VERBS = {
     --reason "<why>"       Reason for --reject-loser (default: conflict context)`],
   }),
   reject: verb(() => import('../curate.js'), 'handleReject', {
+    destructive: true,
     flags: { switches: ['global'], values: ['reason', 'value'] },
     usage: [`
   reject <memory-id>       Tombstone a value so it refuses re-ingestion
@@ -158,6 +161,7 @@ export const HEALTH_VERBS = {
     dormant forget <id>    Delete a dormant memory permanently`],
   }),
   projects: verb(() => import('../projects.js'), 'handleProjects', {
+    destructive: true,
     flags: { switches: ['apply', 'global', 'json'] },
     usage: [`
   projects [list]          List the project names in a store, with a hint for old worktree names

@@ -138,6 +138,7 @@ export const OBJECT_VERBS = {
                            (decisions/policies/customer-notes/project-briefs); idempotent`],
   }),
   invalidate: verb(() => import('../curate.js'), 'handleInvalidate', {
+    destructive: true,
     flags: { switches: ['churn', 'dry-run'], values: ['id', 'reason'] },
     usage: [`
   invalidate "<pattern>"   Actively weaken memories matching an old pattern

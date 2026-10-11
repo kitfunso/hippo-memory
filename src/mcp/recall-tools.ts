@@ -64,6 +64,9 @@ interface RecallPresenterOptions {
   readonly hintRows: (rendered: RenderedRecall) => AppendAuditOpts[];
 }
 
+// Candidate pool the MCP recall ranks before the token budget trims what is shown.
+const MCP_RECALL_LIMIT = 50;
+
 type ShownPool = Parameters<NonNullable<RecallOpts['showRanked']>>[0]['pool'];
 
 function detectBiasHints(
@@ -182,7 +185,7 @@ export async function runRecallTool(call: ToolCall): Promise<string> {
   // RecallContractError throws reach the MCP caller raw, as mcp-recall-fresh-tail-policy.test.ts pins.
   await apiRetrieve(apiCtx, {
     ...recallOpts,
-    limit: 50,
+    limit: MCP_RECALL_LIMIT,
     mode: config.physics?.enabled !== false ? 'physics' : 'hybrid',
     // The hint is computed below over the list MCP shows; the window band's copy would emit its audit row twice.
     suppressAvailabilityHint: true,

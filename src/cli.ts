@@ -22,11 +22,6 @@ import { CliExit } from './cli/exit.js';
 
 // Helpers
 
-// Commands that delete or hide memories: an unknown flag here stops the run instead of being ignored.
-const DESTRUCTIVE_COMMANDS: ReadonlySet<string> = new Set([
-  'audit', 'dedup', 'forget', 'invalidate', 'projects', 'reject', 'resolve', 'sleep', 'supersede',
-]);
-
 // A command that does not honour --dry-run would ignore it and run for real.
 function dryRunRefusal(command: string, spec: VerbSpec | undefined, args: string[], flags: CliFlags): string | null {
   const only = spec?.dryRun;
@@ -210,12 +205,13 @@ function rejectValuedSwitches(flags: CliFlags, declared: VerbFlags | undefined):
   }
 }
 
-function checkUnknownFlags(command: string, flags: CliFlags, declared: VerbFlags | undefined): void {
+function checkUnknownFlags(command: string, flags: CliFlags, spec: VerbSpec | undefined): void {
+  const declared = spec?.flags;
   // card checks its flags per subcommand, with a stricter message.
   if (command === 'card') return;
   const flagNames = (keys: readonly string[]): string => keys.map((key) => `--${key}`).join(', ');
   const unknown = Object.keys(flags).filter((key) => !isKnownFlag(key));
-  if (unknown.length > 0 && DESTRUCTIVE_COMMANDS.has(command)) {
+  if (unknown.length > 0 && spec?.destructive) {
     printError(`Unknown flag ${flagNames(unknown)} for hippo ${command}. Nothing was changed.`);
     throw new CliExit(2);
   }
@@ -245,7 +241,7 @@ async function main(
   rejectEmptyScope(flags);
   rejectNonNumericFlags(flags, spec?.flags);
   rejectValuedSwitches(flags, spec?.flags);
-  checkUnknownFlags(command, flags, spec?.flags);
+  checkUnknownFlags(command, flags, spec);
   const refusal = Object.hasOwn(flags, 'dry-run') ? dryRunRefusal(command, spec, args, flags) : null;
   if (refusal) {
     printError(refusal);

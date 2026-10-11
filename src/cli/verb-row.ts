@@ -23,6 +23,8 @@ export interface VerbRow {
   readonly aliases?: readonly string[];
   /** Runs in a request scope, opening each store once; set on api-backed verbs, as hook verbs open their own. */
   readonly scoped?: true;
+  /** Deletes or hides memories: an unknown flag stops the run instead of being ignored. */
+  readonly destructive?: true;
   /** Unset: --dry-run is honoured exactly when the verb declares it; `false` refuses it even so. */
   readonly dryRun?: false | DryRunForm;
 }

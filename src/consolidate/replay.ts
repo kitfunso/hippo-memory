@@ -1,6 +1,7 @@
 /** Replay: during `hippo sleep`, sample N survivors weighted by reward, valence, under-rehearsal and age, then apply the `markRetrieved` strengthening.
  * A lightweight deterministic analog of hippocampal replay, so important memories stay strong without being queried; distinct from decay, physics and merge. */
 
+import { HOUR_MS } from '../util/time.js';
 import { isOutcomeSlowAblated } from '../core/ablation.js';
 import { resolveConfidence, type MemoryEntry, type EmotionalValence } from '../core/memory.js';
 
@@ -36,7 +37,7 @@ export function replayPriority(entry: MemoryEntry, now: Date, outcomeAblated: bo
   // Idle-time boost: memories that haven't been touched recently need rehearsal more.
   const lastRetrieved = new Date(entry.last_retrieved);
   const deltaMs = now.getTime() - lastRetrieved.getTime();
-  const ageHours = Number.isFinite(deltaMs) ? Math.max(0, deltaMs / 3_600_000) : 0;
+  const ageHours = Number.isFinite(deltaMs) ? Math.max(0, deltaMs / HOUR_MS) : 0;
   const idleBoost = 1 + Math.log1p(ageHours) * IDLE_BOOST_GAIN;
 
   // Weight by current strength so dead-and-decaying memories don't waste replay slots.

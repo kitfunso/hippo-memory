@@ -1,5 +1,6 @@
 // `hippo hook`, `hippo setup` and `hippo daily-runner`: install and run the agent and machine integrations.
 
+import { MINUTE_MS } from '../util/time.js';
 import * as path from 'path';
 import * as fs from 'fs';
 import { execFileSync } from 'child_process';
@@ -506,7 +507,7 @@ function setupPluginTool(tool: ToolDetection, dryRun: boolean): void {
 }
 
 // Three times the 10 minutes POST /v1/sleep allows a consolidation, so a slow real sleep fits and a hung child cannot stall every later workspace.
-const DAILY_STEP_TIMEOUT_MS = 30 * 60_000;
+const DAILY_STEP_TIMEOUT_MS = 30 * MINUTE_MS;
 
 /** Why a child step failed; a child killed at the deadline says so, since its own message is only the spawn error code. */
 function dailyStepFailure<E>(err: E, timeoutMs: number): string {
