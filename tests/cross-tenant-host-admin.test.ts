@@ -63,7 +63,7 @@ beforeEach(async () => {
   vi.stubEnv('HIPPO_HOME', globalHome);
   vi.stubEnv('HIPPO_TENANT', '');
   vi.stubEnv('ANTHROPIC_API_KEY', '');
-  handle = await serve({ hippoRoot: home, port: 0 });
+  handle = await serve({ hippoRoot: home, port: 0, keylessLocalRole: 'admin' });
 });
 
 afterEach(async () => {
@@ -102,7 +102,7 @@ describe('host admin is unchanged', () => {
     expect((await sleep(k)).status).toBe(200);
   });
 
-  it('lets a keyless loopback caller read another tenant and sleep', async () => {
+  it('lets a keyless loopback caller opted in with keylessLocalRole: admin read another tenant and sleep', async () => {
     expect((await audit('?tenant=acme')).status).toBe(200);
     expect((await sleep()).status).toBe(200);
   });

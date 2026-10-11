@@ -343,9 +343,20 @@ function answerDashboardFailure(req: http.IncomingMessage, res: http.ServerRespo
   jsonResponse(res, { error: 'Internal error' }, 500);
 }
 
-function printDashboardBanner(boundPort: number, token: string, distUiDir: string | null): void {
+const DASHBOARD_URL_FILE = 'dashboard.url';
+
+function printDashboardBanner(hippoRoot: string, boundPort: number, token: string, distUiDir: string | null): void {
   // The banner is the `hippo dashboard` command's printed result, so it stays on stdout.
-  console.log(`Hippo Dashboard running at http://localhost:${boundPort}/?token=${token}`);
+  const url = `http://localhost:${boundPort}/?token=${token}`;
+  if (process.stdout.isTTY) {
+    console.log(`Hippo Dashboard running at ${url}`);
+  } else {
+    // Captured stdout lands in logs, so the token goes to an owner-only file, created fresh so its mode holds.
+    const file = path.join(hippoRoot, DASHBOARD_URL_FILE);
+    fs.rmSync(file, { force: true });
+    fs.writeFileSync(file, `${url}\n`, { flag: 'wx', mode: 0o600 });
+    console.log(`Hippo Dashboard running at http://localhost:${boundPort}/ (open the URL with its token from ${file})`);
+  }
   if (distUiDir !== null) console.log(`Serving React UI from ${distUiDir}`);
   console.log('Press Ctrl+C to stop.');
 }
@@ -436,7 +447,7 @@ export function serveDashboard(
   server.listen(port, '127.0.0.1', () => {
     // SAFETY: listen() was given a TCP port, so address() is AddressInfo, never a pipe name.
     const boundPort = (server.address() as AddressInfo).port;
-    printDashboardBanner(boundPort, token, hasDistUi ? distUiDir : null);
+    printDashboardBanner(hippoRoot, boundPort, token, hasDistUi ? distUiDir : null);
   });
 
   return server;

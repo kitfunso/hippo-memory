@@ -37,13 +37,38 @@ const MAX_ENTRIES_SHOWN = 10;
 
 // Watch command
 
-async function cmdWatch(command: string, hippoRoot: string, tenantId: string): Promise<void> {
-  if (!command) {
-    printError('Usage: hippo watch "<command>"');
+const WATCH_USAGE = 'Usage: hippo watch -- <command> [args...], or hippo watch --shell "<command line>"';
+
+interface WatchedCommand {
+  readonly argv: string[];
+  readonly shell: boolean;
+}
+
+/** The argv to run and whether a shell parses it: `--shell` takes one command line, anything else is argv as given. */
+function watchedCommand(args: readonly string[], flags: CliFlags): WatchedCommand {
+  if (flags['shell'] !== undefined) {
+    const line = nonEmptyStringFlag(flags, 'shell');
+    if (line === undefined) {
+      printError(WATCH_USAGE);
+      throw new CliExit(1);
+    }
+    return { argv: [line], shell: true };
+  }
+  if (args.length === 0) {
+    printError(WATCH_USAGE);
     throw new CliExit(1);
   }
+  // A quoted 1.x command line would now run as one program name, so it is refused rather than guessed at.
+  if (args.length === 1 && /\s/.test(args[0]!)) {
+    printError(`hippo watch: "${args[0]}" is one argument with spaces. Use \`hippo watch -- cmd args\` or \`hippo watch --shell "<command line>"\`.`);
+    throw new CliExit(1);
+  }
+  return { argv: [...args], shell: false };
+}
 
-  const { exitCode, stderr } = await runWatched(command);
+async function cmdWatch(argv: string[], shell: boolean, hippoRoot: string, tenantId: string): Promise<void> {
+  const command = argv.join(' ');
+  const { exitCode, stderr } = await runWatched(argv, undefined, { shell });
 
   if (exitCode === 0) {
     // Success: no noise
@@ -364,9 +389,9 @@ export function handleSync({ hippoRoot, flags }: CommandContext): void {
     'include them)'}`);
 }
 
-export async function handleWatch({ hippoRoot, tenantId, args }: CommandContext): Promise<void> {
-  const watchCmd = args.join(' ').trim();
-  await cmdWatch(watchCmd, hippoRoot, tenantId);
+export async function handleWatch({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
+  const { argv, shell } = watchedCommand(args, flags);
+  await cmdWatch(argv, shell, hippoRoot, tenantId);
 }
 
 export async function handlePromote({ hippoRoot, tenantId, args }: CommandContext): Promise<void> {

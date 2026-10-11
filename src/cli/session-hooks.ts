@@ -26,6 +26,7 @@ import { COMPACTION_DB_WAIT_MS } from '../core/compaction-timing.js';
 import { compactResumeBlock, sessionEndWork as runSessionEnd } from '../api/session-end.js';
 import { normaliseHookPayload, readHookStdin, readStdinBounded, type BoundedStdin } from './stdin.js';
 import { errorMessage, log } from '../util/log.js';
+import { cmdShimArgs } from '../util/spawn-argv.js';
 import { bookLedgerTurn } from '../api/ledger-db.js';
 import { flushDeliveryRecorder, startDeliveryRecorder, startToolFailureRecorder } from '../api/prompt-hook.js';
 import type { DeliveryRecorder } from '../store/delivery-recorder.js';
@@ -347,20 +348,6 @@ function loadCodexWrapperMetadata(): CodexWrapperMetadata {
   }
   // SAFETY: the file is the one installCodexWrapper wrote; handleCodexRun reads only logFile and realCodexPath from it.
   return JSON.parse(fs.readFileSync(metadataPath, 'utf8')) as CodexWrapperMetadata;
-}
-
-/** Quotes one cmd.exe argument; each `%` leaves the quotes as `^%`, so no %NAME% pair can expand. */
-export function quoteCmdArg(arg: string): string {
-  if (arg.length === 0) return '""';
-  if (!/[ \t"&()^<>|%!]/.test(arg)) return arg;
-  return `"${arg.replace(/"/g, '""').replace(/%/g, '"^%"')}"`;
-}
-
-/** cmd.exe arguments that run a .cmd or .bat shim with every forwarded argument delivered verbatim. */
-export function cmdShimArgs(shimPath: string, forwardArgs: readonly string[]): string[] {
-  const command = `"${shimPath}"${forwardArgs.length > 0 ? ` ${forwardArgs.map(quoteCmdArg).join(' ')}` : ''}`;
-  // The line is already quoted for cmd.exe, so Node must not quote it again; /s strips the outer pair.
-  return ['/d', '/v:off', '/s', '/c', `"${command}"`];
 }
 
 function spawnRealCodex(

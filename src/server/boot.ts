@@ -1,4 +1,4 @@
-import { envPort, envRequireAuth, envV1Rps } from '../util/env.js';
+import { envAllowCleartext, envCallerRps, envPort, envRequireAuth, envV1Rps } from '../util/env.js';
 import type { IncomingMessage, Server, ServerResponse } from 'node:http';
 import { detectServer, removePidfileIfOwned, writePidfile } from './server-detect.js';
 import { outsideSqliteOffLoop, runWithRequestStores, SERVER_DB_WAIT_MS, withSqliteBlocked } from '../db/index.js';
@@ -16,7 +16,7 @@ import { RecallContractError } from '../api/index.js';
 import { BodyTimeoutError, BodyTooLargeError, closeAfterReply, DeadlineExceededError, HttpError, JSON_HEADERS, sendJson } from '../util/http-util.js';
 import { workerCounts } from '../store/sqlite/executor-counts.js';
 import { isLocalCaller, LIMITER_MAX_KEYS } from './auth.js';
-import { enforceRateLimit, warnIfClientIpHeaderUnpinned } from './client-ip.js';
+import { assertClientIpHeaderPinned, enforceRateLimit } from './client-ip.js';
 import { answerAtDeadline, handlerDeadlineCount, isAbandoned, requestDeadlineFor } from './deadline.js';
 import { DEFAULT_SHUTDOWN_DRAIN_MS, drainAndClose, setKeepAliveTimeouts, shutdownBoundMs } from './lifecycle.js';
 import { readyProbeFor } from './ready.js';
@@ -25,7 +25,7 @@ import { installCrashHandlers, installSignalHandlers } from '../util/crash-handl
 import { handleMcpPost, handleMcpStream } from './mcp-http.js';
 import { MCP_PROJECT_SCOPED_HEADER } from '../core/project-identity.js';
 import { accessRouteOf, logRequestFailure, noteAccess, openRequest, parseRequest, rejectEncodedSlash, replyFor, sendError } from './request.js';
-import { createListener, warnIfCleartext } from './tls.js';
+import { assertTlsOrCleartextAllowed, createListener } from './tls.js';
 import { assertAddonRoutes, assertPublicJson } from './route-checks.js';
 import { dispatchAddonRoute, dispatchPublicJson, dispatchV1Route } from './route-table.js';
 import type { AuthResolver, RateLimitSpec, ResolvedServeOpts, RouteRequest, ServeOpts, ServerHandle } from './types.js';
@@ -192,16 +192,27 @@ interface BootedLimiters {
   failedAuthLimiter: RateLimiter;
 }
 
+const DEFAULT_CALLER_RPS = 20;
+
+/** The per-caller spec when serve() names none: HIPPO_CALLER_RPS (0 is off), else 20 per second with a burst of twice that. */
+function defaultCallerSpec(): RateLimitSpec | 'off' {
+  const raw = envCallerRps();
+  const rps = raw === undefined ? DEFAULT_CALLER_RPS : Number(raw);
+  // A typo must not switch the limit off, so only an explicit 0 does.
+  if (!Number.isFinite(rps) || rps < 0) throw new Error(`HIPPO_CALLER_RPS must be a number of at least 0 (0 turns the per-caller limit off), not '${raw}'`);
+  return rps === 0 ? 'off' : { ratePerSec: rps, burst: Math.max(1, rps * 2) };
+}
+
 /** Refuses a bad spec at boot, since a NaN or zero rate would otherwise turn a bucket off or refuse every request. */
 function bootLimiters(rateLimits: ServeOpts['rateLimits']): BootedLimiters {
-  const { perCaller, perAddress, failedAuthPerAddress = DEFAULT_FAILED_AUTH } = rateLimits ?? {};
-  if (perCaller !== undefined) assertRateLimitSpec('perCaller', perCaller);
+  const { perCaller = defaultCallerSpec(), perAddress, failedAuthPerAddress = DEFAULT_FAILED_AUTH } = rateLimits ?? {};
+  if (perCaller !== 'off') assertRateLimitSpec('perCaller', perCaller);
   if (perAddress !== undefined && perAddress !== 'off') assertRateLimitSpec('perAddress', perAddress);
   assertRateLimitSpec('failedAuthPerAddress', failedAuthPerAddress);
-  warnIfClientIpHeaderUnpinned();
+  assertClientIpHeaderPinned();
   return {
     perAddress: bootRateLimiter(perAddress),
-    callerLimiter: perCaller === undefined ? undefined : limiterFor(perCaller),
+    callerLimiter: perCaller === 'off' ? undefined : limiterFor(perCaller),
     failedAuthLimiter: limiterFor(failedAuthPerAddress),
   };
 }
@@ -322,7 +333,8 @@ function exitOnSignalOrCrash(stop: () => Promise<void>, drainMs: number): void {
   installCrashHandlers('serve', shutdown);
 }
 
-/** Boots the HTTP daemon on host:port and writes the pidfile under hippoRoot; refuses non-loopback hosts unless HIPPO_REQUIRE_AUTH=1.
+/** Boots the HTTP daemon on host:port and writes the pidfile under hippoRoot; refuses a non-loopback host unless HIPPO_REQUIRE_AUTH=1 and
+ * either `tls` or allowCleartext is given, and refuses HIPPO_CLIENT_IP_HEADER without HIPPO_TRUSTED_PROXIES.
  * Use port: 0 in tests for an ephemeral port. See docs/ARCHITECTURE.md#srcserverbootts. */
 export async function serve(opts: ServeOpts): Promise<ServerHandle> {
   const host = opts.host ?? DEFAULT_SERVER_HOST;
@@ -332,6 +344,7 @@ export async function serve(opts: ServeOpts): Promise<ServerHandle> {
   const publicJsonBodies = assertPublicJson(opts.publicJson ?? {});
   const limiters = bootLimiters(opts.rateLimits);
   assertBindable(host);
+  assertTlsOrCleartextAllowed(host, opts.tls, LOOPBACK_HOSTS, opts.allowCleartext ?? envAllowCleartext());
   await assertNoLiveServer(opts.hippoRoot);
 
   // Single source of truth for the start time: returned by GET /health and written into the pidfile, so detectServer can prove a pid-reusing impostor is not
@@ -411,7 +424,6 @@ async function listenAndDescribe(server: Server, port: number, host: string, tls
   const addressInfo = address;
   const actualPort = addressInfo.port;
   const url = `${tls ? 'https' : 'http'}://${host.includes(':') ? `[${host}]` : host}:${actualPort}`;
-  warnIfCleartext(host, tls, LOOPBACK_HOSTS);
   return { port: actualPort, url };
 }
 

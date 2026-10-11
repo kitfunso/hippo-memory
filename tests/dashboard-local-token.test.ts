@@ -4,7 +4,7 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createHash } from 'node:crypto';
-import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { request, type Server } from 'node:http';
@@ -117,20 +117,39 @@ describe('dashboard local access token', () => {
     expect(status).toBe(403);
   });
 
-  it('prints the dashboard URL with the token once at start', async () => {
+  /** The lines a second dashboard prints at start with stdout's isTTY forced to `tty`, and the port it bound. */
+  async function startLines(tty: boolean): Promise<{ lines: string[]; port: number }> {
     const lines: string[] = [];
     const spy = vi.spyOn(console, 'log').mockImplementation((...args) => {
       lines.push(args.join(' '));
     });
+    const savedTty = process.stdout.isTTY;
+    process.stdout.isTTY = tty;
     try {
       const second = serveDashboard(hippoRoot, 0, 'another-token-abcdef');
       const secondPort = await boundPort(second);
       await new Promise((r) => setImmediate(r));
       await new Promise<void>((resolve) => second.close(() => resolve()));
-      const withToken = lines.filter((l) => l.includes('token=another-token-abcdef'));
-      expect(withToken).toEqual([`Hippo Dashboard running at http://localhost:${secondPort}/?token=another-token-abcdef`]);
+      return { lines, port: secondPort };
     } finally {
+      process.stdout.isTTY = savedTty;
       spy.mockRestore();
     }
+  }
+
+  it('prints the dashboard URL with the token once at start on a terminal', async () => {
+    const { lines, port: secondPort } = await startLines(true);
+    const withToken = lines.filter((l) => l.includes('token=another-token-abcdef'));
+    expect(withToken).toEqual([`Hippo Dashboard running at http://localhost:${secondPort}/?token=another-token-abcdef`]);
+  });
+
+  it('keeps the token off a captured stdout and writes the full URL to an owner-only file in the hippo root', async () => {
+    const urlFile = join(hippoRoot, 'dashboard.url');
+    const { lines, port: secondPort } = await startLines(false);
+    expect(lines.join('\n')).not.toContain('token=');
+    expect(lines).toContain(`Hippo Dashboard running at http://localhost:${secondPort}/ (open the URL with its token from ${urlFile})`);
+    expect(existsSync(urlFile)).toBe(true);
+    expect(readFileSync(urlFile, 'utf8')).toBe(`http://localhost:${secondPort}/?token=another-token-abcdef\n`);
+    if (process.platform !== 'win32') expect(statSync(urlFile).mode & 0o777).toBe(0o600);
   });
 });

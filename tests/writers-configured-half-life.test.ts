@@ -95,7 +95,7 @@ const writers: [string, (root: string) => Promise<MemoryEntry[]>][] = [
   }],
   ['CLI watch', (root) => added(root, () => {
     // watch exits with the watched command's code, so a failing command throws here.
-    expect(() => hippo(root, 'watch', 'node -e "process.exit(3)"')).toThrow();
+    expect(() => hippo(root, 'watch', '--', 'node', '-e', 'process.exit(3)')).toThrow();
   })],
   ['Claude Code memory import', (root) => {
     const home = tmp();

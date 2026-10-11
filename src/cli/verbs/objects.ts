@@ -190,16 +190,19 @@ export const OBJECT_VERBS = {
   mcp                      Start MCP server (stdio transport)`],
   }),
   serve: verb(() => import('../serve.js'), 'handleServe', {
-    flags: { values: ['host', 'tls-cert', 'tls-key'], numbers: ['port'] },
+    flags: { switches: ['allow-cleartext'], values: ['host', 'tls-cert', 'tls-key'], numbers: ['port'] },
     usage: [`
   serve                    Start the HTTP API server for this store (Ctrl+C stops it)
     --port <n>             Port to serve on (default: $HIPPO_PORT or ${DEFAULT_SERVER_PORT})
     --host <host>          Address to bind (default: ${DEFAULT_SERVER_HOST})
     --tls-cert <file>      PEM certificate; serve HTTPS only (or $HIPPO_TLS_CERT)
     --tls-key <file>       PEM private key for it; give both (or $HIPPO_TLS_KEY)
+    --allow-cleartext      Bind a non-loopback host without TLS, for a TLS proxy
+                           in front (or $HIPPO_ALLOW_CLEARTEXT=1)
                            Every request needs an API key (hippo auth create).
                            $HIPPO_ALLOW_KEYLESS_LOCAL=1 lets requests from this machine
-                           in without one; $HIPPO_REQUIRE_AUTH=1 wins over it.`],
+                           in without one, as a member ($HIPPO_KEYLESS_LOCAL_ROLE=admin
+                           for host admin); $HIPPO_REQUIRE_AUTH=1 wins over it.`],
   }),
   goal: verb(() => import('../goals.js'), 'handleGoal', {
     scoped: true,

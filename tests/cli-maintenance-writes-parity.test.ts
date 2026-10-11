@@ -40,8 +40,8 @@ describe('hippo watch (built CLI, no server)', () => {
   it('stores a failed command, and a second failure of it beside the first', () => {
     const s = new Store();
     scripts(s);
-    s.run('watch', 'node fail.js');
-    s.run('watch', 'node fail.js');
+    s.run('watch', 'node', 'fail.js');
+    s.run('watch', 'node', 'fail.js');
     s.expectPinned();
   }, CASE_MS);
 
@@ -51,21 +51,21 @@ describe('hippo watch (built CLI, no server)', () => {
     const value = captureError(3, STDERR, 'node fail.js').content;
     await reject({ hippoRoot: s.root, tenantId: 'default', actor: adminActor('cli') }, { value, reason: 'wrong' });
     s.settle();
-    s.run('watch', 'node fail.js');
+    s.run('watch', 'node', 'fail.js');
     s.expectPinned();
   }, CASE_MS);
 
   it('a command that succeeds stores nothing', () => {
     const s = new Store();
     scripts(s);
-    s.run('watch', 'node ok.js');
+    s.run('watch', 'node', 'ok.js');
     s.expectPinned();
   }, CASE_MS);
 
   it('a folder with no store', () => {
     const s = new Store({ init: false });
     scripts(s);
-    s.run('watch', 'node fail.js');
+    s.run('watch', 'node', 'fail.js');
     s.expectPinned();
   }, CASE_MS);
 

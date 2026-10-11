@@ -83,7 +83,8 @@ export async function handleGitHubEventsWebhook(request: WebhookRequest, store?:
 // GitHub signs no timestamp, so a captured delivery verifies forever; this window is what refuses its replay.
 const DELIVERY_REPLAY_TTL_MS = DAY_MS;
 const DELIVERY_REPLAY_MAX_IDS = 10_000;
-// SHORTCUT: seen ids live in this process and reset on restart or eviction; move them to the store if serve ever runs as several processes.
+// A fast path only: the durable dedupe is the connector event log's content-derived idempotency key (ingest.ts, and the deletion key below),
+// so a replay after a restart or an eviction is a stored 'duplicate' with no new rows.
 const seenDeliveries = new Map<string, number>();
 
 /** Claims a delivery id for the window; false when it was claimed within the window already. The oldest claim goes first at the cap. */

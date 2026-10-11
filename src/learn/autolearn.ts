@@ -1,7 +1,8 @@
 /** Auto-learn from errors and git history.
  *  Agents learn from failures without explicit hippo remember calls. */
 
-import { execFileSync, spawn } from 'child_process';
+import { execFileSync, spawn, type SpawnOptions } from 'child_process';
+import { spawnArgv } from '../util/spawn-argv.js';
 import { MemoryEntry, createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../core/memory.js';
 import { loadAllEntries } from '../store/entry-reads.js';
 import { textOverlap } from '../util/tokenize.js';
@@ -134,22 +135,32 @@ export class RunWatchedTimeoutError extends Error {
   }
 }
 
-/** Run a command in a shell, streaming stderr live; never pass text the caller did not write.
+export interface RunWatchedOptions {
+  /** Join argv with spaces and run it as one shell command line; only for text the caller wrote itself. */
+  shell?: boolean;
+}
+
+/** Run argv[0] with the rest as its arguments and no shell, so `;`, `&` and `$()` reach it literally; stderr streams live.
  *  Returns: { exitCode, stderr } with only the last 64 KiB of stderr; rejects with RunWatchedTimeoutError past `deadlineMs`. */
-export function runWatched(command: string, deadlineMs: number = RUN_WATCHED_DEADLINE_MS): Promise<{ exitCode: number; stderr: string }> {
+export function runWatched(
+  argv: readonly string[],
+  deadlineMs: number = RUN_WATCHED_DEADLINE_MS,
+  opts: RunWatchedOptions = {},
+): Promise<{ exitCode: number; stderr: string }> {
   return new Promise((resolve, reject) => {
-    // Use shell: true so the command string is handled by the shell as-is
-    const child = spawn(command, { shell: true, stdio: ['inherit', 'inherit', 'pipe'], windowsHide: true });
+    const options: SpawnOptions = { stdio: ['inherit', 'inherit', 'pipe'], windowsHide: true };
+    const child = opts.shell ? spawn(argv.join(' '), { ...options, windowsHide: true, shell: true }) : spawnArgv(argv, options);
 
     let tail = Buffer.alloc(0);
 
-    child.stderr.on('data', (chunk: Buffer) => {
+    child.stderr?.on('data', (chunk: Buffer) => {
       tail = Buffer.concat([tail, chunk]);
       if (tail.length > STDERR_TAIL_BYTES) tail = tail.subarray(tail.length - STDERR_TAIL_BYTES);
       process.stderr.write(chunk);
     });
 
-    // SHORTCUT: kills the shell only; on Windows a grandchild can outlive it. A process-tree kill is the upgrade path.
+    // SHORTCUT: kills the direct child only (the shell or cmd.exe when there is one); on Windows a grandchild can outlive it.
+    // A process-tree kill is the upgrade path.
     const timer = setTimeout(() => {
       child.kill('SIGKILL');
       reject(new RunWatchedTimeoutError(deadlineMs, tail.toString('utf8')));

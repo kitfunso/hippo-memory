@@ -9,7 +9,7 @@ import { hippoRun } from './_helpers/spawn-hippo.js';
 
 // Forward slashes, since NODE_OPTIONS reads a backslash as an escape.
 const FETCH_UNAUTHORISED = resolve(__dirname, '_helpers', 'fetch-unauthorised.cjs').split(sep).join('/');
-const FAILING_COMMAND = 'node -e "process.exit(3)"';
+const FAILING_COMMAND = ['--', 'node', '-e', 'process.exit(3)'];
 const SPAWN_TIMEOUT_MS = 60_000;
 
 interface Case {
@@ -64,8 +64,10 @@ const CASES: readonly Case[] = [
   inStore('predict baserate without a class', 'predict', 'baserate'),
   inStore('hook install of an unknown target', 'hook', 'install', 'bogus'),
   inStore('watch without a command', 'watch'),
-  inBare('watch of a failing command with no store', 'watch', FAILING_COMMAND),
-  inStore('watch of a failing command', 'watch', FAILING_COMMAND),
+  inBare('watch of a failing command with no store', 'watch', ...FAILING_COMMAND),
+  inStore('watch of a failing command', 'watch', ...FAILING_COMMAND),
+  inStore('watch of one quoted command line, which needs -- or --shell', 'watch', 'node -e "process.exit(3)"'),
+  inStore('watch of a failing command line through --shell', 'watch', '--shell', 'node -e "process.exit(3)"'),
   inStore('serve with one TLS file', 'serve', '--tls-cert', 'cert.pem'),
   inStore('policy asof without a date', 'policy', 'asof'),
   inStore('brief refresh without a repo', 'brief', 'refresh'),

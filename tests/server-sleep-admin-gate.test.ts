@@ -1,11 +1,9 @@
 /**
  * Runtime test for v1.12.0 A5 v2 sub-1: admin-role gate on POST /v1/sleep.
  *
- * Defense-in-depth: today /v1/sleep is loopback-only, so the loopback fallback's
- * default admin role passes naturally. The role gate exists ALREADY so that
- * when non-loopback serving lands (HIPPO_BIND_ALL or A5 v2 v2 multi-tenant
- * deployment), member-role Bearer tokens are 403'd at the route boundary
- * BEFORE any host-wide consolidation runs.
+ * The keyless loopback caller is a member unless HIPPO_KEYLESS_LOCAL_ROLE=admin
+ * or keylessLocalRole: 'admin' opts it in, and member-role Bearer tokens are
+ * 403'd at the route boundary BEFORE any host-wide consolidation runs.
  *
  * Member keys are constructed via direct DB insert per brainstorm decision #3
  * (no `hippo auth create-key --role` CLI flag in this episode).
@@ -24,6 +22,7 @@ describe('POST /v1/sleep admin-role gate', () => {
   let home: string;
   let globalHome: string;
   let origHippoHome: string | undefined;
+  let origRole: string | undefined;
   let handle: ServerHandle;
 
   beforeEach(async () => {
@@ -31,6 +30,8 @@ describe('POST /v1/sleep admin-role gate', () => {
     globalHome = makeRoot('sleep-gate');
     origHippoHome = process.env.HIPPO_HOME;
     process.env.HIPPO_HOME = globalHome;
+    origRole = process.env.HIPPO_KEYLESS_LOCAL_ROLE;
+    delete process.env.HIPPO_KEYLESS_LOCAL_ROLE;
     handle = await serve({ hippoRoot: home, port: 0 });
   });
 
@@ -41,17 +42,41 @@ describe('POST /v1/sleep admin-role gate', () => {
     } else {
       process.env.HIPPO_HOME = origHippoHome;
     }
+    if (origRole !== undefined) process.env.HIPPO_KEYLESS_LOCAL_ROLE = origRole;
     rmSync(home, { recursive: true, force: true });
     rmSync(globalHome, { recursive: true, force: true });
   });
 
-  it('loopback no-Bearer → 200 (loopback fallback is admin by default)', async () => {
-    const res = await fetch(`${handle.url}/v1/sleep`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ dry_run: true }),
-    });
-    expect(res.status).toBe(200);
+  const keyless = (path: string, method = 'POST'): Promise<Response> =>
+    fetch(`${handle.url}${path}`, method === 'GET'
+      ? { method }
+      : { method, headers: { 'content-type': 'application/json' }, body: JSON.stringify({ dry_run: true }) });
+
+  it('loopback no-Bearer with HIPPO_KEYLESS_LOCAL_ROLE unset is a member: 403 on sleep and the quarantine routes, 200 on a member route', async () => {
+    expect(process.env.HIPPO_KEYLESS_LOCAL_ROLE).toBeUndefined();
+    expect((await keyless('/v1/sleep')).status).toBe(403);
+    expect((await keyless('/v1/quarantine', 'GET')).status).toBe(403);
+    expect((await keyless('/v1/quarantine/mem_missing/approve')).status).toBe(403);
+    expect((await keyless('/v1/quarantine/mem_missing/reject')).status).toBe(403);
+    expect((await keyless('/v1/memories?q=deploy', 'GET')).status).toBe(200);
+  });
+
+  it('loopback no-Bearer → 200 once HIPPO_KEYLESS_LOCAL_ROLE=admin', async () => {
+    const saved = process.env.HIPPO_KEYLESS_LOCAL_ROLE;
+    process.env.HIPPO_KEYLESS_LOCAL_ROLE = 'admin';
+    try {
+      expect((await keyless('/v1/sleep')).status).toBe(200);
+      expect((await keyless('/v1/quarantine', 'GET')).status).toBe(200);
+    } finally {
+      if (saved === undefined) delete process.env.HIPPO_KEYLESS_LOCAL_ROLE;
+      else process.env.HIPPO_KEYLESS_LOCAL_ROLE = saved;
+    }
+  });
+
+  it('loopback no-Bearer → 200 once serve() is given keylessLocalRole: admin', async () => {
+    await handle.stop();
+    handle = await serve({ hippoRoot: home, port: 0, keylessLocalRole: 'admin' });
+    expect((await keyless('/v1/sleep')).status).toBe(200);
   });
 
   it('admin Bearer → 200', async () => {

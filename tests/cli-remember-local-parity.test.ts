@@ -153,8 +153,8 @@ describe('hippo watch never gates or extracts (built CLI, no server)', () => {
     s.env['ANTHROPIC_API_KEY'] = '';
     configure(s.root, { salience: { enabled: true }, extraction: { enabled: true } });
     failingScript(s);
-    s.run('watch', 'node fail.js');
-    s.run('watch', 'node fail.js');
+    s.run('watch', 'node', 'fail.js');
+    s.run('watch', 'node', 'fail.js');
     s.expectPinned();
   }, CASE_MS);
 });
@@ -170,7 +170,7 @@ describe('embedding after a local write (built CLI, local embeddings server)', (
     configure(s.root, { embeddings: { provider: 'openai', model: 'hashed-16', apiBaseUrl: embeddings.url } });
     failingScript(s);
     await s.runAsync('remember', TEXT);
-    await s.runAsync('watch', 'node fail.js');
+    await s.runAsync('watch', 'node', 'fail.js');
     s.expectPinned({ rows: query(s.root, 'SELECT id FROM memories ORDER BY rowid'), vectors: Object.keys(loadEmbeddingIndex(s.root)) });
   }, CASE_MS);
 });

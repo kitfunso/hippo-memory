@@ -1,4 +1,5 @@
-// A request with no key is refused by default, on loopback too; HIPPO_ALLOW_KEYLESS_LOCAL=1 is the one switch that lets this machine's own user in.
+// A request with no key is refused by default, on loopback too; HIPPO_ALLOW_KEYLESS_LOCAL=1 lets this machine's own user in as a member,
+// and HIPPO_KEYLESS_LOCAL_ROLE=admin is the separate switch that makes that user the host admin.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { request } from 'node:http';
 import { rmSync } from 'node:fs';
@@ -9,7 +10,7 @@ import { serve, type ServerHandle } from '../src/server.js';
 import { presentConnectionsAsRemote } from './_helpers/listen.js';
 import { makeRoot } from './_helpers/make-root.js';
 
-const MODE_KEYS = ['HIPPO_ALLOW_KEYLESS_LOCAL', 'HIPPO_REQUIRE_AUTH'] as const;
+const MODE_KEYS = ['HIPPO_ALLOW_KEYLESS_LOCAL', 'HIPPO_KEYLESS_LOCAL_ROLE', 'HIPPO_REQUIRE_AUTH'] as const;
 const PLAIN_REFUSAL = 'auth required';
 
 /** The fields these tests read: a refusal carries `error`, /health the rest. */
@@ -172,12 +173,25 @@ describe('a request with no key under HIPPO_ALLOW_KEYLESS_LOCAL=1', () => {
     process.env.HIPPO_ALLOW_KEYLESS_LOCAL = '1';
   });
 
-  it('is served as the local host admin', async () => {
+  /** The keys GET /v1/auth/keys shows this caller: a member sees only keys it owns, the admin every key in the tenant. */
+  async function listedKeyCount(): Promise<number> {
+    const res = await fetch(`${handle.url}/v1/auth/keys`);
+    expect(res.status).toBe(200);
+    const rows: unknown = await res.json();
+    return Array.isArray(rows) ? rows.length : -1;
+  }
+
+  it('is served as a member while HIPPO_KEYLESS_LOCAL_ROLE is unset', async () => {
     expect((await remember('keyless-opt-in-canary')).status).toBe(200);
     expect(rememberActors()).toEqual(['localhost:cli']);
-    // Listing keys is admin-only, so a 200 here is the admin role and not just a way in.
-    expect((await call('/v1/auth/keys')).status).toBe(200);
+    expect(await listedKeyCount()).toBe(0);
+    expect((await call('/v1/sleep', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{"dry_run":true}' })).status).toBe(403);
     expect((await call('/mcp/stream')).status).toBe(200);
+  });
+
+  it('is served as the local host admin once HIPPO_KEYLESS_LOCAL_ROLE=admin', async () => {
+    process.env.HIPPO_KEYLESS_LOCAL_ROLE = 'admin';
+    expect(await listedKeyCount()).toBe(1);
   });
 
   it('still serves a keyed request as that key', async () => {
