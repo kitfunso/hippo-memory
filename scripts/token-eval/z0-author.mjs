@@ -7,10 +7,12 @@ import { armEnv } from './arms.mjs';
 import { spawnTree } from './exec.mjs';
 import { startLogProxy, requestBodies } from './proxy.mjs';
 
-// What a blind author must never see; the hippo-repository author passes a narrower list, since hippo's name is its subject (D3).
+// What a blind author must never see; the hippo-repository author uses a narrower set, since hippo's name is its subject (D3).
 export const DEFAULT_FORBID = '(?<![a-z])hippo(?![a-z])|(?<![a-z0-9])z0(?![0-9])|token-eval';
+// The CLI picks a set by name, so no pattern is ever built from a command-line argument.
+export const FORBID_SETS = Object.freeze({ default: DEFAULT_FORBID, 'hippo-repo': '(?<![a-z0-9])z0(?![0-9])|token-eval' });
 const AUTHOR_UNSET = ['HIPPO_HOME', 'HIPPO_AGENT_MEMORY_TOOLS', 'CODEX_HOME', 'EVAL_SEED'];
-const USAGE ='usage: node scripts/token-eval/z0-author.mjs --work DIR --prompt-file FILE --out DIR [--model M] [--claude-bin PATH] [--forbid REGEX] [--timeout-min N]';
+const USAGE = `usage: node scripts/token-eval/z0-author.mjs --work DIR --prompt-file FILE --out DIR [--model M] [--claude-bin PATH] [--forbid-set ${Object.keys(FORBID_SETS).join('|')}] [--timeout-min N]`;
 
 /** Each match of `forbid` in `texts` as `{where, match, near}`; one hit discards the author's output, and `near` lets the operator judge it. */
 export function leakHits(texts, forbid) {
@@ -54,10 +56,11 @@ async function main(argv) {
   const work = flag('--work', null);
   const promptFile = flag('--prompt-file', null);
   const out = flag('--out', null);
-  if (!work || !promptFile || !out) throw new Error(USAGE);
+  const set = flag('--forbid-set', 'default');
+  if (!work || !promptFile || !out || !Object.hasOwn(FORBID_SETS, set)) throw new Error(USAGE);
   const verdict = await runAuthor({
     work, out, prompt: fs.readFileSync(promptFile, 'utf8'), model: flag('--model', null), claudeBin: flag('--claude-bin', 'claude'),
-    forbid: flag('--forbid', DEFAULT_FORBID), timeoutMs: Number(flag('--timeout-min', '60')) * 60_000,
+    forbid: FORBID_SETS[set], timeoutMs: Number(flag('--timeout-min', '60')) * 60_000,
   });
   console.log(JSON.stringify({ ...verdict, hits: verdict.hits.length }));
   process.exitCode = verdict.discarded || verdict.status !== 0 ? 1 : 0;

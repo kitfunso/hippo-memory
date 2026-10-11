@@ -4,7 +4,7 @@ import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { DEFAULT_FORBID, leakHits, runAuthor } from '../scripts/token-eval/z0-author.mjs';
+import { DEFAULT_FORBID, FORBID_SETS, leakHits, runAuthor } from '../scripts/token-eval/z0-author.mjs';
 import { cleanup, tmp } from './fixtures/z0-harness.js';
 
 // The temp root can itself name hippo (CI's is hippo-test-tmp-*), so the end-to-end runs forbid a sentinel instead.
@@ -56,8 +56,13 @@ describe('leakHits', () => {
   it('finds hippo and z0 in any case and form, with nearby text, and skips words that only contain them', () => {
     const named = 'Hippo, .hippo/, HIPPO_HOME, hippo-memory, Z0 stage 2, z0-smoke, z0_run, token-eval';
     const hits = leakHits([{ where: 'a', text: named }, { where: 'b', text: 'hippopotamus chippo az0b z01' }], DEFAULT_FORBID);
-    expect(hits.map((h) => `${h.where}:${h.match}`)).toEqual(['a:Hippo', 'a:hippo', 'a:HIPPO', 'a:hippo', 'a:Z0', 'a:z0', 'a:z0', 'a:token-eval']);
+    expect(hits.map((h: { where: string; match: string }) => `${h.where}:${h.match}`)).toEqual(['a:Hippo', 'a:hippo', 'a:HIPPO', 'a:hippo', 'a:Z0', 'a:z0', 'a:z0', 'a:token-eval']);
     expect(hits[2].near).toContain('HIPPO_HOME');
+  });
+
+  it('lets the hippo-repo set name hippo but still catches z0 and token-eval', () => {
+    const hits = leakHits([{ where: 'a', text: 'hippo src/capture, Z0 stage 2, token-eval' }], FORBID_SETS['hippo-repo']);
+    expect(hits.map((h: { match: string }) => h.match)).toEqual(['Z0', 'token-eval']);
   });
 });
 
