@@ -1,4 +1,5 @@
 // Admin routes: API keys, quarantine and the audit log.
+import { DEFAULT_LIST_LIMIT } from '../../util/limits.js';
 import { AUDIT_OPS, type AuditOp } from '../../store/audit.js';
 import { auditList, authCreate, authListRows, authRevoke, quarantineApprove, quarantineList, quarantineReject } from '../../api/index.js';
 import { HttpError, readBody, sendJson } from '../../util/http-util.js';
@@ -150,7 +151,7 @@ export async function handleListAudit({ req, res, opts, query }: RouteRequest): 
     since = sinceRaw;
   }
   const limitRaw = query.get('limit');
-  let limit = 100;
+  let limit = DEFAULT_LIST_LIMIT;
   if (limitRaw !== null) {
     const parsed = Number(limitRaw);
     if (!Number.isFinite(parsed) || !Number.isInteger(parsed) || parsed < 1 || parsed > MAX_AUDIT_LIMIT) {
