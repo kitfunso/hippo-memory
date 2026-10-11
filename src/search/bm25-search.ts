@@ -3,7 +3,7 @@ import { estimateTokens } from '../util/token-text.js';
 import { tokenize } from '../util/tokenize.js';
 import { evalNow } from '../core/ablation.js';
 import { extractPathTags } from './path-context.js';
-import { detectScope } from '../sharing/scope.js';
+import { detectScope } from '../core/active-scope.js';
 import { compareScoredResults } from '../core/compare.js';
 import { bm25Score, buildCorpus, entryText } from './bm25.js';
 import { currentEntries } from './as-of.js';

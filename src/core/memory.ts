@@ -29,7 +29,8 @@ export type ConfidenceLevel = 'verified' | 'observed' | 'inferred' | 'stale';
 
 export type TraceOutcome = 'success' | 'failure' | 'partial' | null;
 
-export type MemoryKind = 'raw' | 'distilled' | 'superseded' | 'archived';
+export const MEMORY_KINDS = ['raw', 'distilled', 'superseded', 'archived'] as const;
+export type MemoryKind = (typeof MEMORY_KINDS)[number];
 
 // Timestamps are Date.toISOString() output (24 chars, UTC, ms, trailing Z), so byte comparison sorts them chronologically.
 // A markdown rebuild keeps legacy offsets as written, so importers should normalize on write.

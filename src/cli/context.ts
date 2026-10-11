@@ -4,7 +4,7 @@ import type { DeliveryRecorder } from '../store/delivery-recorder.js';
 import { isSubagentPayload } from '../util/hook-payload.js';
 import { estimateTokens } from '../util/token-text.js';
 import { autoDetectContext } from '../api/context-auto.js';
-import { detectScope } from '../sharing/scope.js';
+import { detectScope } from '../core/active-scope.js';
 import { bookLedgerTurn } from '../api/ledger-db.js';
 import { readHookStdin } from './stdin.js';
 import { isJsonObject, isJsonString, type JsonValue } from '../util/json.js';

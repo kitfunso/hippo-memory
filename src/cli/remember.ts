@@ -20,7 +20,7 @@ import { listMemoryConflicts } from '../store/conflicts.js';
 import { RejectedValueError } from '../core/api-errors.js';
 import { renderTraceContent, parseSteps } from '../consolidate/trace.js';
 import { extractPathTags } from '../search/path-context.js';
-import { detectScope } from '../sharing/scope.js';
+import { detectScope } from '../core/active-scope.js';
 import { assertClientScope } from '../core/recall-scope.js';
 import { getGlobalRoot, initGlobal } from '../sharing/global-store.js';
 import { vetSecrets } from '../util/secret-detect.js';

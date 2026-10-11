@@ -1,7 +1,7 @@
 // The checks every caller call shares: ids, project, the session's owner and the pilot arm, all from the request, never the server's env or folder.
 import { BadRequestError } from '../core/api-errors.js';
 import { ownerOrSubject, type Context } from '../api/types.js';
-import { MAX_ID_LEN } from '../util/http-util.js';
+import { MAX_ID_LEN } from '../util/limits.js';
 import { sessionPilotArm } from '../api/pilot-arm.js';
 import { assertCallerIds, type CallerProject } from '../api/prompt-hook.js';
 import { assertCallerProject, projectNames } from '../core/project-identity.js';

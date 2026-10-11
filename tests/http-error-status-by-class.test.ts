@@ -9,7 +9,8 @@ import { createApiKey } from '../src/store/auth.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '../src/core/api-errors.js';
-import { BodyTimeoutError, BodyTooLargeError, HttpError, INTERNAL_ERROR_MESSAGE, mapApiError } from '../src/util/http-util.js';
+import { mapApiError } from '../src/api/error-reply.js';
+import { BodyTimeoutError, BodyTooLargeError, HttpError, INTERNAL_ERROR_MESSAGE } from '../src/util/http-util.js';
 import { makeRoot } from './_helpers/make-root.js';
 
 type ReplyBody = Record<string, string>;

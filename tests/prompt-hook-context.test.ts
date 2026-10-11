@@ -10,7 +10,7 @@ import { saveActiveTaskSnapshot } from '../src/store/sessions.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { adminActor, type Context } from '../src/api/index.js';
 import { BadRequestError } from '../src/core/api-errors.js';
-import { MAX_ID_LEN } from '../src/util/http-util.js';
+import { MAX_ID_LEN } from '../src/util/limits.js';
 import { hashArm } from '../src/api/pilot-arm.js';
 import { resolveProjectIdentity } from '../src/core/project-identity.js';
 import { promptHookContext } from '../src/api/prompt-hook.js';

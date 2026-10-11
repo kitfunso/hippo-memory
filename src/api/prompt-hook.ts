@@ -6,7 +6,7 @@ import { BadRequestError } from '../core/api-errors.js';
 import { isSharedStore, loadConfig } from '../core/config.js';
 import { contextBlockLines, contextCost, crossProjectLines, handoffText, sessionTrailText, settleTokens, snapshotText } from './context-render.js';
 import type { DeliveryRecorder } from '../store/delivery-recorder.js';
-import { MAX_ID_LEN } from '../util/http-util.js';
+import { MAX_ID_LEN } from '../util/limits.js';
 import { isJsonString, type JsonValue } from '../util/json.js';
 import { bookLedgerTurn, ledgerLastSent, noteLedgerRowSkipped } from './ledger-db.js';
 import type { MemoryEntry } from '../core/memory.js';

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Fails when src/ has a runtime import cycle: a cycle makes module init order decide
+// Fails when src/ has a runtime import cycle between files or top-level folders: a cycle makes module init order decide
 // whether a binding is defined yet, and it hides which module owns a function.
 // Type-only imports are skipped because tsc erases them; dynamic import() is lazy.
 
@@ -94,12 +94,8 @@ function stronglyConnected(graph) {
   return components;
 }
 
-/**
- * Finds every group of src modules that import each other at runtime.
- * @param {string} srcDir
- * @returns {{ modules: string[], edges: [string, string][] }[]}
- */
-export function findImportCycles(srcDir) {
+/** Each src module, as a src-relative path, mapped to the sorted src modules it loads at runtime. */
+function runtimeGraph(srcDir) {
   const root = resolve(srcDir);
   const rel = (p) => relative(root, p).replace(/\\/g, '/');
   const graph = new Map();
@@ -111,6 +107,16 @@ export function findImportCycles(srcDir) {
     }
     graph.set(rel(file), [...deps].sort());
   }
+  return graph;
+}
+
+/**
+ * Finds every group of src modules that import each other at runtime.
+ * @param {string} srcDir
+ * @returns {{ modules: string[], edges: [string, string][] }[]}
+ */
+export function findImportCycles(srcDir) {
+  const graph = runtimeGraph(srcDir);
   return stronglyConnected(graph)
     .filter((comp) => comp.length > 1 || (graph.get(comp[0]) ?? []).includes(comp[0]))
     .map((comp) => {
@@ -120,6 +126,52 @@ export function findImportCycles(srcDir) {
       return { modules, edges };
     })
     .sort((a, b) => a.modules[0].localeCompare(b.modules[0]));
+}
+
+/** The top-level src folder a module sits in; a file at the src root is a unit of its own. */
+const folderOf = (module) => module.split('/')[0];
+
+/**
+ * Finds every group of top-level src folders that import each other at runtime, even when no single file is on a cycle.
+ * @param {string} srcDir
+ * @returns {{ folders: string[], edges: [string, string][] }[]}
+ */
+export function findFolderCycles(srcDir) {
+  const files = runtimeGraph(srcDir);
+  const graph = new Map();
+  for (const [file, deps] of files) {
+    const from = folderOf(file);
+    const to = new Set(graph.get(from) ?? []);
+    for (const dep of deps) if (folderOf(dep) !== from) to.add(folderOf(dep));
+    graph.set(from, [...to].sort());
+  }
+  return stronglyConnected(graph)
+    .filter((comp) => comp.length > 1)
+    .map((comp) => {
+      const members = new Set(comp);
+      const crosses = (a, b) => folderOf(a) !== folderOf(b) && members.has(folderOf(a)) && members.has(folderOf(b));
+      const edges = [...files].flatMap(([a, deps]) => deps.filter((b) => crosses(a, b)).map((b) => [a, b]));
+      return { folders: [...comp].sort(), edges: edges.sort((x, y) => x.join(' ').localeCompare(y.join(' '))) };
+    })
+    .sort((a, b) => a.folders[0].localeCompare(b.folders[0]));
+}
+
+// Folder cycles not broken yet, each with why. An entry that matches no cycle fails the check too, so the list only shrinks.
+export const FOLDER_CYCLE_ALLOWLIST = [];
+
+/**
+ * Splits folder cycles into the ones the allowlist does not cover and the allowlist entries that match no cycle.
+ * @param {{ folders: string[] }[]} cycles
+ * @param {{ folders: string[], why: string }[]} allowlist
+ */
+export function judgeFolderCycles(cycles, allowlist) {
+  const key = (folders) => [...folders].sort().join(',');
+  const allowed = new Set(allowlist.map((a) => key(a.folders)));
+  const found = new Set(cycles.map((c) => key(c.folders)));
+  return {
+    unlisted: cycles.filter((c) => !allowed.has(key(c.folders))),
+    stale: allowlist.filter((a) => !found.has(key(a.folders))),
+  };
 }
 
 // Guarded so the test can import the functions without running the check.
@@ -135,5 +187,16 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     console.error('\nFix: move the shared function or constant into the lower module or a new leaf module.\n');
     process.exit(1);
   }
-  console.log(`No runtime import cycles in ${srcDir}/. OK.`);
+  const { unlisted, stale } = judgeFolderCycles(findFolderCycles(srcDir), FOLDER_CYCLE_ALLOWLIST);
+  if (unlisted.length > 0 || stale.length > 0) {
+    if (unlisted.length > 0) console.error(`\n${unlisted.length} folder-level import cycle(s) in ${srcDir}/:`);
+    for (const c of unlisted) {
+      console.error(`\n  ${c.folders.join(', ')}`);
+      for (const [a, b] of c.edges) console.error(`    ${a} -> ${b}`);
+    }
+    if (unlisted.length > 0) console.error('\nFix: move what one folder takes from the other into the folder both already import, or a lower layer.\n');
+    for (const s of stale) console.error(`Allowlisted folder cycle ${s.folders.join(', ')} is gone; delete its FOLDER_CYCLE_ALLOWLIST entry.`);
+    process.exit(1);
+  }
+  console.log(`No runtime import cycles in ${srcDir}/, between files or between folders. OK.`);
 }

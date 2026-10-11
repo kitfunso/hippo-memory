@@ -10,7 +10,7 @@ import type { RerankerFn } from '../rerankers/types.js';
 import { explainMatch } from '../search/explain.js';
 import { fitBudget } from '../search/finalize.js';
 import { getGlobalRoot } from '../sharing/global-store.js';
-import { detectScope } from '../sharing/scope.js';
+import { detectScope } from '../core/active-scope.js';
 import { loadLatestHandoff } from '../store/handoffs.js';
 import { loadIndex } from '../store/index-and-stats.js';
 import { isInitialized } from '../store/open.js';

@@ -7,7 +7,7 @@ import { errorMessage } from '../util/log.js';
 import { loadConfig } from '../core/config.js';
 import { closeHippoDb, isSqliteBusy, openHippoDb, outsideRequestStores, withWriteScope, type DatabaseSyncLike } from '../db/index.js';
 import type { MemoryEntry } from '../core/memory.js';
-import { namesFoldedInto } from '../sharing/project-merge.js';
+import { namesFoldedInto } from './project-folds.js';
 import { projectTagReads } from '../store/project-tags.js';
 import { isGlobalStoreRoot, projectNames, resolveGlobalRootDir, resolveProjectIdentity, type ProjectIdentity } from '../core/project-identity.js';
 import { duplicateKey, heldTextKeys } from '../util/same-text.js';

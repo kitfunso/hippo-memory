@@ -8,7 +8,7 @@ import { BadRequestError } from '../src/core/api-errors.js';
 import { createApiKey } from '../src/store/auth.js';
 import { handleRemember } from '../src/cli/remember.js';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
-import { mapApiError } from '../src/util/http-util.js';
+import { mapApiError } from '../src/api/error-reply.js';
 import { importVault } from '../src/importers/vault.js';
 import type { JsonValue } from '../src/util/json.js';
 import { serve, type ServerHandle } from '../src/server.js';
