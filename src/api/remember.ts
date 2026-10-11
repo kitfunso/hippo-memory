@@ -50,6 +50,9 @@ export interface RememberResult {
   id: string;
   kind: MemoryKind;
   tenantId: string;
+  /** The row as written, so a caller can show it without reading it back. */
+  halfLifeDays: number;
+  tags: string[];
   /** Set only when untrusted content was flagged and quarantined instead of stored under its requested scope. */
   quarantined?: { reason: string };
   /** Set only when the content held secret material: untrusted text had it redacted, typed text was stored as sent. */
@@ -117,7 +120,7 @@ function weakened(entry: MemoryEntry, weaken: NonNullable<RememberLocal['weaken'
 
 function rememberResult(ctx: Context, prepared: PreparedRemember, written?: ConnectorWriteOutcome): RememberResult {
   const { entry, detection, warnings } = prepared;
-  const result: RememberResult = { id: entry.id, kind: entry.kind, tenantId: ctx.tenantId };
+  const result: RememberResult = { id: entry.id, kind: entry.kind, tenantId: ctx.tenantId, halfLifeDays: entry.half_life_days, tags: [...entry.tags] };
   if (detection.flagged) result.quarantined = { reason: detection.reason ?? 'unknown' };
   if (warnings.length > 0) result.warnings = [...warnings];
   if (written?.outcome === 'duplicate') result.duplicate = { memoryId: written.memoryId };

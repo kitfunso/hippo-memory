@@ -1,6 +1,7 @@
 import { addTagToEntries, writeEntriesTogether } from '../store/entry-writes.js';
 import { confirmedOutcomeTimes } from '../store/audit.js';
-import { loadAllEntries, loadEntriesByIds, loadEntriesMentioning, readEntry } from '../store/entry-reads.js';
+import { loadAllEntries, loadEntriesMentioning, readEntry } from '../store/entry-reads.js';
+import { requireGroup, type HippoStore } from '../store/port.js';
 import { chunked } from '../util/chunked.js';
 import { CHURN_STALE_TAG, type MemoryEntry } from '../core/memory.js';
 import {
@@ -102,18 +103,19 @@ export function invalidateMatching(
 
 /** invalidateMatching for a batch: matches against `live`, the caller's list of the tenant's rows, and keeps it current.
  *  Each match is read again before it is weakened, so a row another writer changed since the list was read is never written back stale. */
-export function invalidateMatchingAmong(
-  hippoRoot: string,
+export async function invalidateMatchingAmong(
+  store: HippoStore,
   live: MemoryEntry[],
   target: InvalidationTarget,
   tenantId?: string,
-): InvalidationResult {
+): Promise<InvalidationResult> {
   const seen = weakenMatches(live, target, { dryRun: true }).result;
   const ids = [...seen.targets, ...seen.skippedPinned];
-  // loadEntriesByIds reads at most 500 ids a call.
-  const fresh = new Map(chunked(ids, 500).flatMap((chunk) => loadEntriesByIds(hippoRoot, chunk, tenantId)).map((entry) => [entry.id, entry]));
+  const fresh = new Map<string, MemoryEntry>();
+  // The port reads at most 500 ids a call.
+  for (const chunk of chunked(ids, 500)) for (const entry of await store.entriesByIds(chunk, tenantId)) fresh.set(entry.id, entry);
   const { result, weakened } = weakenMatches(ids.flatMap((id) => fresh.get(id) ?? []), target);
-  writeEntriesTogether(hippoRoot, weakened);
+  if (weakened.length > 0) await requireGroup(store, 'lessonWrites').writeTogether(weakened);
   const byId = new Map(weakened.map((entry) => [entry.id, entry]));
   for (let i = 0; i < live.length; i++) live[i] = byId.get(live[i].id) ?? live[i];
   return result;

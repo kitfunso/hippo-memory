@@ -111,22 +111,22 @@ describe('embedding provider', () => {
 });
 
 describe('repo scan in init', () => {
-  const scan = (dir: string): void => {
+  const scan = async (dir: string): Promise<void> => {
     vi.spyOn(console, 'log').mockImplementation(() => {});
-    handleInit({ hippoRoot: root, tenantId: 'default', args: [], flags: { scan: dir } });
+    await handleInit({ hippoRoot: root, tenantId: 'default', args: [], flags: { scan: dir } });
   };
 
-  it('warns with path and code for an unexpected readdir failure', () => {
+  it('warns with path and code for an unexpected readdir failure', async () => {
     failReaddir('EIO');
-    scan(root);
+    await scan(root);
     const line = logged().find((l) => l.includes('repo scan skipped'));
     expect(line).toContain(root);
     expect(line).toContain('code=EIO');
   });
 
-  it.each(['EACCES', 'EPERM', 'ENOENT', 'ENOTDIR'])('stays silent for %s', (code) => {
+  it.each(['EACCES', 'EPERM', 'ENOENT', 'ENOTDIR'])('stays silent for %s', async (code) => {
     failReaddir(code);
-    scan(root);
+    await scan(root);
     expect(logged().filter((l) => l.includes('repo scan skipped'))).toEqual([]);
   });
 });

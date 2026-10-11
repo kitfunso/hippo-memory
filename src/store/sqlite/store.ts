@@ -13,6 +13,7 @@ import { servedConnectorEvents, sqliteConnectorEvents } from './connector-events
 import { servedConnectorWrites, sqliteConnectorWrites } from './connector-writes-group.js';
 import { sqliteDagReads } from './dag-reads-group.js';
 import { sqliteEntryWrites } from './entry-writes-group.js';
+import { servedAuditMaintenance, servedLessonWrites, sqliteAuditMaintenance, sqliteLessonWrites } from './maintenance-groups.js';
 import { finishRecallAt, servedLastRecall, sqliteLastRecall } from './last-recall-group.js';
 import { servedGraphReads, sqliteGraphReads } from './graph-reads-group.js';
 import { servedObjects, sqliteObjects } from './objects-group.js';
@@ -47,6 +48,7 @@ export type SqliteSyncStore = Sync<Omit<HippoStore, AsyncOnly>>;
 export function sqliteSyncStore(hippoRoot: string): SqliteSyncStore & Sync<Omit<StoreGroups, AsyncOnly>> {
   return {
     kind: 'sqlite',
+    localFiles: { hippoRoot },
     ...sqliteBaseReads(hippoRoot),
     ...sqliteRecallWrites(hippoRoot),
     keyAudit: sqliteKeyAudit(hippoRoot),
@@ -65,6 +67,8 @@ export function sqliteSyncStore(hippoRoot: string): SqliteSyncStore & Sync<Omit<
     objects: sqliteObjects(hippoRoot),
     readiness: sqliteReadiness(hippoRoot),
     lastRecall: sqliteLastRecall(hippoRoot),
+    auditMaintenance: sqliteAuditMaintenance(hippoRoot),
+    lessonWrites: sqliteLessonWrites(hippoRoot),
     close() {},
   };
 }
@@ -168,6 +172,7 @@ export function sqliteStore(hippoRoot: string): HippoStore & StoreGroups {
   const sync = sqliteSyncStore(hippoRoot);
   return {
     ...servedBaseMethods(sync),
+    localFiles: sync.localFiles,
     vectors: sqliteVectorReads(hippoRoot),
     vectorViews: { storedVectorViews: async (ids) => sync.vectorViews.storedVectorViews(ids) },
     ...servedKeyGroups(sync),
@@ -181,6 +186,8 @@ export function sqliteStore(hippoRoot: string): HippoStore & StoreGroups {
     objects: servedObjects(sqliteObjects(hippoRoot)),
     readiness: { ping: async () => sync.readiness.ping() },
     lastRecall: servedLastRecall(sync.lastRecall),
+    auditMaintenance: servedAuditMaintenance(sync.auditMaintenance),
+    lessonWrites: servedLessonWrites(sync.lessonWrites),
     close: async () => sync.close(),
   };
 }

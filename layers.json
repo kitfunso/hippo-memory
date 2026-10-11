@@ -52,7 +52,7 @@
         "why": "starts the background sleep in its own RequestStores scope with the caller's lock wait; the ambient scope stays in src/db until its owner moves it"
       },
       "api/learn.ts": {
-        "names": ["withRequestStoresSync"],
+        "names": ["runWithRequestStores"],
         "why": "the git-learn batch shares one handle through a RequestStores scope; the ambient scope stays in src/db until its owner moves it"
       },
       "mcp/request.ts": {

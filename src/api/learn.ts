@@ -3,7 +3,7 @@
 import { ForbiddenError } from '../core/api-errors.js';
 import { fetchGitLog, extractLessons, partitionLessons, isGitRepo } from '../learn/autolearn.js';
 import { type HippoConfig, loadConfig } from '../core/config.js';
-import { withRequestStoresSync } from '../db/request-stores.js';
+import { runWithRequestStores } from '../db/request-stores.js';
 import { embedMemory } from '../search/embed-memories.js';
 import {
   extractInvalidationTarget, invalidateMatching, invalidateMatchingAmong, type InvalidationOptions, type InvalidationResult, type InvalidationTarget,
@@ -11,12 +11,9 @@ import {
 import { createMemory, Layer, schemaFitFrom, schemaFitSourceOf, type MemoryEntry } from '../core/memory.js';
 import { extractPathTags } from '../search/path-context.js';
 import { canReadScope, personalScopeOf } from '../core/recall-scope.js';
-import { touchableScopeSql } from '../store/rule-sql.js';
 import { duplicateKey, longestWord, storedTextKeys } from '../util/same-text.js';
-import { loadTextsHoldingWords } from '../store/candidates.js';
-import { loadAllEntries } from '../store/entry-reads.js';
-import { writeEntriesSkippingRejected } from '../store/entry-writes.js';
-import { updateStats } from '../store/index-and-stats.js';
+import { requireGroup, storeFor } from '../store/index.js';
+import type { LessonWrites } from '../store/port.js';
 import type { Context } from './types.js';
 
 /** How a surface writes what it learns. */
@@ -51,7 +48,7 @@ export interface LearnResult {
 type LessonCounts = Pick<LearnResult, 'added' | 'skipped' | 'rejected' | 'invalidations'>;
 
 /** Learn from `repoPath`'s last `days` of commits into the caller's tenant. Host admin only. */
-export function learn(ctx: Context, opts: LearnOpts): LearnResult {
+export async function learn(ctx: Context, opts: LearnOpts): Promise<LearnResult> {
   // It reads the host's own git history, which belongs to the host, not to the caller's tenant.
   if (!ctx.actor.hostAdmin) throw new ForbiddenError('hippo_learn requires a host admin');
   const none = { added: 0, skipped: 0, rejected: 0, lowInfo: 0, invalidations: [] };
@@ -63,69 +60,77 @@ export function learn(ctx: Context, opts: LearnOpts): LearnResult {
   if (parsed.length === 0) return { status: 'no-lessons', ...none };
   // The gate filters the loop input, so a dropped lesson neither stores nor invalidates; docs/decisions git-learn-gate-placement says why.
   const { kept, dropped } = partitionLessons(parsed);
-  return { status: 'scanned', lowInfo: dropped.length, ...writeLessons(ctx, kept, opts, config) };
+  return { status: 'scanned', lowInfo: dropped.length, ...await writeLessons(ctx, kept, opts, config) };
 }
 
 interface QueuedLesson { entry: MemoryEntry; key: string }
 
-/** Writes `batch` in one transaction; a refused lesson is dropped from `live` and `keys` and must not abort the rest of the git-log scan. */
-function landLessons(
-  ctx: Context,
-  batch: readonly QueuedLesson[],
-  live: MemoryEntry[],
-  keys: Set<string>,
-  counts: LessonCounts,
-  full: boolean,
-): void {
-  if (batch.length === 0) return;
-  // SHORTCUT: hippo.db only, as the port has no batch write, stats bump or whole-tenant read, so another store kind answers 501 at the
-  // open; port groups for them once a served store must learn.
-  const landed: MemoryEntry[] = [];
-  writeEntriesSkippingRejected(ctx.hippoRoot, (put) => {
-    for (const { entry, key } of batch) {
-      if (put(entry)) {
-        landed.push(entry);
-        continue;
-      }
-      counts.rejected++;
-      keys.delete(key);
-      const at = live.indexOf(entry);
-      if (at !== -1) live.splice(at, 1);
-    }
-  }, ctx.actor.subject);
-  counts.added += landed.length;
-  if (!full) return;
-  if (landed.length > 0) updateStats(ctx.hippoRoot, { remembered: landed.length });
-  for (const entry of landed) void embedMemory(ctx.hippoRoot, entry);
+/** Where a batch writes and what it has learned so far: `live` and `keys` follow every write, so a later lesson matches against them. */
+interface LessonBatch {
+  readonly ctx: Context;
+  readonly writes: LessonWrites;
+  readonly live: MemoryEntry[];
+  readonly keys: Set<string>;
+  readonly counts: LessonCounts;
+  readonly full: boolean;
 }
 
-function writeLessons(ctx: Context, lessons: readonly string[], opts: LearnOpts, config: HippoConfig): LessonCounts {
-  const { hippoRoot, tenantId } = ctx;
+/** Writes `queued` in one transaction; a refused lesson is dropped from `live` and `keys` and must not abort the rest of the git-log scan. */
+async function landLessons(batch: LessonBatch, queued: readonly QueuedLesson[]): Promise<void> {
+  if (queued.length === 0) return;
+  const { ctx, writes, live, keys, counts } = batch;
+  const written = new Set(await writes.writeSkippingRejected(queued.map((q) => q.entry), ctx.actor.subject));
+  const landed: MemoryEntry[] = [];
+  for (const { entry, key } of queued) {
+    if (written.has(entry.id)) {
+      landed.push(entry);
+      continue;
+    }
+    counts.rejected++;
+    keys.delete(key);
+    const at = live.indexOf(entry);
+    if (at !== -1) live.splice(at, 1);
+  }
+  counts.added += landed.length;
+  if (!batch.full) return;
+  if (landed.length > 0) await writes.bumpRemembered(landed.length);
+  for (const entry of landed) void embedMemory(ctx.hippoRoot, entry, undefined, ctx.store);
+}
+
+/** The duplicate keys a batch skips: every readable row's with `existing`, else only the rows holding a lesson's longest word. */
+async function knownKeys(ctx: Context, writes: LessonWrites, lessons: readonly string[], existing: readonly MemoryEntry[] | undefined): Promise<Set<string>> {
+  return storedTextKeys(existing ?? await writes.textsHoldingWords(ctx.tenantId, lessons.map(longestWord), personalScopeOf(ctx.actor)));
+}
+
+async function writeLessons(ctx: Context, lessons: readonly string[], opts: LearnOpts, config: HippoConfig): Promise<LessonCounts> {
+  const { tenantId } = ctx;
   const { profile } = opts;
+  const store = storeFor(ctx);
+  const writes = requireGroup(store, 'lessonWrites');
   // `hippo init` calls this outside any request, so the batch brings its own scope: every read and write below shares one handle.
-  return withRequestStoresSync(() => {
+  return runWithRequestStores(async () => {
     // One read serves the batch: invalidation matches against `live`, which follows every write below, as a reload per lesson did.
-    const live = profile.full ? loadAllEntries(hippoRoot, tenantId) : [];
+    const live = profile.full ? await writes.tenantEntries(tenantId) : [];
     // Schema fit needs every row; without it, only rows holding a lesson's longest word can be its copy. Learn is host-admin only, so
     // both read what an admin can.
     const existing = profile.full ? live.filter((e) => e.scope == null || canReadScope(ctx.actor, e.scope)) : undefined;
     // Each lesson is scored against `existing` as it was before the batch, so its tag counts and texts are read once.
     const fitSource = existing && schemaFitSourceOf(existing);
-    const readable = touchableScopeSql('', personalScopeOf(ctx.actor));
-    const keys = storedTextKeys(existing ?? loadTextsHoldingWords(hippoRoot, tenantId, lessons.map(longestWord), undefined, readable));
+    const batch: LessonBatch = {
+      ctx, writes, live, keys: await knownKeys(ctx, writes, lessons, existing), full: profile.full,
+      counts: { added: 0, skipped: 0, rejected: 0, invalidations: [] },
+    };
     const pathTags = profile.full ? extractPathTags(opts.repoPath) : [];
-    const counts: LessonCounts = { added: 0, skipped: 0, rejected: 0, invalidations: [] };
     // Lessons queue and land in one transaction; an invalidation reads the store, so it flushes the queue first.
     const queue: QueuedLesson[] = [];
-    const flush = (): void => landLessons(ctx, queue.splice(0), live, keys, counts, profile.full);
     for (const lesson of lessons) {
       const key = duplicateKey(lesson);
-      if (keys.has(key)) { counts.skipped++; continue; }
+      if (batch.keys.has(key)) { batch.counts.skipped++; continue; }
       const target = profile.full ? extractInvalidationTarget(lesson) : null;
       if (target) {
-        flush();
-        const { invalidated } = invalidateMatchingAmong(hippoRoot, live, target, tenantId);
-        if (invalidated > 0) counts.invalidations.push({ from: target.from, count: invalidated });
+        await landLessons(batch, queue.splice(0));
+        const { invalidated } = await invalidateMatchingAmong(store, live, target, tenantId);
+        if (invalidated > 0) batch.counts.invalidations.push({ from: target.from, count: invalidated });
       }
       const entry = createMemory(lesson, {
         layer: Layer.Episodic,
@@ -139,10 +144,10 @@ function writeLessons(ctx: Context, lessons: readonly string[], opts: LearnOpts,
       for (const tag of pathTags) if (!entry.tags.includes(tag)) entry.tags.push(tag);
       queue.push({ entry, key });
       if (profile.full) live.push(entry);
-      keys.add(key);
+      batch.keys.add(key);
     }
-    flush();
-    return counts;
+    await landLessons(batch, queue.splice(0));
+    return batch.counts;
   });
 }
 

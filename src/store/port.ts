@@ -2,7 +2,8 @@
 import type { AmbientTallies } from '../core/ambient.js';
 import type { AmbientStoreFilter } from './ambient.js';
 import type { ApiKeyListRow, ApiKeyRecord, ListApiKeysOpts, NewApiKey } from './auth.js';
-import type { AppendAuditOpts, AuditEvent, ListAuditAfterOpts, QueryAuditOpts } from './audit.js';
+import type { AppendAuditOpts, AuditEvent, AuditPrune, ListAuditAfterOpts, QueryAuditOpts } from './audit.js';
+import type { QualityRepairResult } from './quality-repair.js';
 import { StoreNotPortedError } from '../util/sqlite-blocked.js';
 import type { EmbeddingIndexState } from './vector-index.js';
 import type { Entity, Relation } from './graph-rows.js';
@@ -19,7 +20,7 @@ import type { ClosureState } from '../core/prediction.js';
 import type { QuarantineRow, QuarantineStatus } from './quarantine.js';
 import type { ScopeActor } from '../core/recall-scope.js';
 import type { RecallTraceInput } from './recall-trace.js';
-import type { AmbientLoadResult, AmbientRecallRequest, ContextCandidateFilter, RecentOrigins } from './candidates.js';
+import type { AmbientLoadResult, AmbientRecallRequest, ContextCandidateFilter, HeldText, RecentOrigins } from './candidates.js';
 import type { GitHubDlqInsert, GitHubRouting } from './connectors/github.js';
 import type { SlackDlqInsert, SlackTeamRoute } from './connectors/slack.js';
 import type { StrengthenOptions } from './entry-writes.js';
@@ -598,8 +599,49 @@ export interface VectorViews {
   storedVectorViews(ids: readonly string[]): Promise<Map<string, Float32Array>>;
 }
 
+/** The store is hippo.db and its files under `hippoRoot`, so a path that reopens them by folder (sleep, its child process, the global store) may run. */
+export interface LocalFiles {
+  readonly hippoRoot: string;
+}
+
+/** The reads and writes behind the memory-quality audit, its repair and audit-log retention. */
+export interface AuditMaintenance {
+  /** Every memory of the tenant, in `loadAllEntries` order. */
+  tenantEntries(tenantId: string): Promise<MemoryEntry[]>;
+  /** The ids of every memory a typed object row names, in any tenant; an automatic pass never deletes one. */
+  objectBackedIds(): Promise<Set<string>>;
+  /** Deletes each removal's row with its own forget row, leaving a pinned, raw, kept or object-backing row; resolves to the ids deleted. */
+  deleteAutomatically(removals: readonly { readonly id: string; readonly reason: string }[], actor: string): Promise<string[]>;
+  /** Counts (dryRun) or deletes the tenant's audit rows before `cutoff`, then appends one audit_prune row; resolves to the count. */
+  pruneAuditRows(prune: AuditPrune): Promise<number>;
+  /** A preview, or with `apply` the moves of certain defects to dormant storage behind a backup. */
+  repairQuality(tenantId: string, apply: boolean): Promise<QualityRepairResult>;
+  /** repairQuality applied once per store; null once it ran there. */
+  repairQualityOnce(tenantId: string): Promise<QualityRepairResult | null>;
+}
+
+/** The reads and writes behind git auto-learn's batch. */
+export interface LessonWrites {
+  /** Every memory of the tenant, in `loadAllEntries` order. */
+  tenantEntries(tenantId: string): Promise<MemoryEntry[]>;
+  /** Content, source and origin of the tenant's rows holding any of `words`, among the rows a team member or `ownScope`'s owner may touch. */
+  textsHoldingWords(tenantId: string, words: readonly string[], ownScope: string | null): Promise<HeldText[]>;
+  /** Writes each entry in one transaction; a rejected value writes its refusal row and is skipped. Resolves to the ids written. */
+  writeSkippingRejected(entries: readonly MemoryEntry[], actor: string): Promise<string[]>;
+  /** Rewrites each entry in one transaction, all or none. */
+  writeTogether(entries: readonly MemoryEntry[]): Promise<void>;
+  /** Adds `count` to the store-wide remembered counter. */
+  bumpRemembered(count: number): Promise<void>;
+}
+
 /** The optional groups: a store sets each one whole or leaves it unset, and a route or MCP tool names the one it needs. */
 export interface StoreGroups {
+  /** Unset on any store but hippo.db; a request then runs fenced from hippo.db, and a route or tool that names no group answers 501. */
+  readonly localFiles: LocalFiles;
+  /** Unset on a store without it, where the quality audit, its repair and audit prune answer 501. */
+  readonly auditMaintenance: AuditMaintenance;
+  /** Unset on a store without it, where git learn answers 501. */
+  readonly lessonWrites: LessonWrites;
   /** Unset on a store built before them, where hybrid and physics recall under an embedding provider answer 501. */
   readonly vectors: VectorReads;
   /** Unset on a store without them, where recall scores the number[] copies `vectors` returns, to the same ranking. */
@@ -653,7 +695,7 @@ export class StoreBusyError extends Error {
 /** What `serve()` reads and writes through. Each method is atomic and no transaction spans an
  * await, since SQLite's lock wait blocks the event loop; a lock timeout throws `StoreBusyError`. */
 export interface HippoStore extends Partial<StoreGroups> {
-  /** 'sqlite' is hippo.db under the served root. Under any other kind, an unported route answers 501 and a hippo.db open inside a request throws. */
+  /** A name for logs and errors; what a store can do is the groups it sets, `localFiles` above all. */
   readonly kind: string;
   /** The api_keys row for `keyId` with its scope grants, revoked or not; null when no row matches. */
   findApiKey(keyId: string): Promise<ApiKeyRecord | null>;

@@ -1,6 +1,6 @@
 // Write-side tool handlers: hippo_remember, hippo_outcome and hippo_learn.
 
-import { storeFor } from '../store/index.js';
+import { hasGroup } from '../store/index.js';
 import { startAutoSleepIfDue } from '../api/auto-sleep.js';
 import { remember as apiRemember, outcome as apiOutcome, learn as apiLearn, MCP_LEARN, type Context as ApiContext } from '../api/index.js';
 import { mcpActor, type ToolCall } from './protocol.js';
@@ -13,7 +13,6 @@ export async function runRememberTool({ args, ctx, hippoRoot, config, tenantId }
   if (args.error) tags.push('error');
   if (args.tag) tags.push(String(args.tag));
   // Route through api/index.ts so audit_log captures the caller identity like CLI/REST: the auth-resolved ctx.actor under HTTP-MCP, 'mcp' for stdio.
-  // The entry is re-read to surface the half-life used in the MCP response.
   const apiCtx: ApiContext = {
     hippoRoot,
     tenantId,
@@ -26,16 +25,14 @@ export async function runRememberTool({ args, ctx, hippoRoot, config, tenantId }
     personal: args.personal === true,
     project: ctx?.project,
   });
-  const [entry] = await storeFor(apiCtx).entriesByIds([result.id], tenantId);
 
   // Auto-sleep runs on hippo.db, so another store skips it.
-  const allowed = (ctx?.store === undefined || ctx.store.kind === 'sqlite') && ctx?.autoSleep !== false;
+  const allowed = (ctx?.store === undefined || hasGroup(ctx.store, 'localFiles')) && ctx?.autoSleep !== false;
   startAutoSleepIfDue(hippoRoot, tenantId, config.autoSleep, allowed, ctx?.autoSleepRunner);
 
-  const halfLife = entry?.half_life_days ?? config.defaultHalfLifeDays;
-  const tagStr = entry?.tags.join(', ') || tags.join(', ') || 'none';
+  const tagStr = result.tags.join(', ') || 'none';
   const warnings = (result.warnings ?? []).map((w) => `\nWarning: ${w}`).join('');
-  return `Remembered [${result.id}] (half-life: ${halfLife}d, tags: ${tagStr})${warnings}`;
+  return `Remembered [${result.id}] (half-life: ${result.halfLifeDays}d, tags: ${tagStr})${warnings}`;
 }
 
 export async function runOutcomeTool({ args, ctx, hippoRoot, tenantId }: ToolCall): Promise<string> {
@@ -56,10 +53,10 @@ export async function runOutcomeTool({ args, ctx, hippoRoot, tenantId }: ToolCal
   return `Applied ${good ? 'positive' : 'negative'} outcome to ${applied} memories`;
 }
 
-export function runLearnTool({ args, ctx, hippoRoot, tenantId }: ToolCall): string {
+export async function runLearnTool({ args, ctx, hippoRoot, tenantId }: ToolCall): Promise<string> {
   const days = Number(args.days) || 7;
   // process.cwd() is the server's repo, not a remote caller's, so api learn refuses all but stdio and a host admin (mcpActor fails closed).
-  const result = apiLearn({ hippoRoot, tenantId, actor: mcpActor(ctx), store: ctx?.store }, { repoPath: process.cwd(), days, profile: MCP_LEARN });
+  const result = await apiLearn({ hippoRoot, tenantId, actor: mcpActor(ctx), store: ctx?.store }, { repoPath: process.cwd(), days, profile: MCP_LEARN });
   if (result.status === 'not-a-repo') return 'No git history found.';
   if (result.status === 'no-commits') return 'No fix/revert/bug commits found in the specified period.';
   const { added, skipped, rejected, lowInfo } = result;

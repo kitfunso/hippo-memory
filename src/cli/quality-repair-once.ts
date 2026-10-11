@@ -7,9 +7,9 @@ import { repairMemoryQualityOnce } from '../api/audit.js';
 import { cliApiContext } from './api-context.js';
 
 /** Fault-isolated like the project tag repair: a failure warns, leaves the store unmarked and runs again next time. */
-export function repairQualityOnceAt(root: string, tenantId: string): void {
+export async function repairQualityOnceAt(root: string, tenantId: string): Promise<void> {
   try {
-    const result = repairMemoryQualityOnce(cliApiContext(root, tenantId));
+    const result = await repairMemoryQualityOnce(cliApiContext(root, tenantId));
     if (result === null) return;
     if (!result.supported) {
       log.warn(`memory quality repair skipped, tried again next time: ${result.blockers.join('; ')}`);

@@ -336,41 +336,42 @@ describe('learn', () => {
     return repo;
   }
 
-  function learnInto(repo: string, n: number) {
+  async function learnInto(repo: string, n: number) {
     const root = freshRoot('qc-learn');
     fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ embeddings: { enabled: false } }));
     seed(root, [...rows(n, 'learn'), memory('the quuxlib client retries twice'), memory('quuxlib client timeouts are 30s')]);
-    const { result, statements } = recordStatements(() => learn(ctxFor(root), { repoPath: repo, days: 7, profile: CLI_LEARN }));
+    const { result, statements } = await recordStatementsAsync(() => learn(ctxFor(root), { repoPath: repo, days: 7, profile: CLI_LEARN }));
     return { root, result, statements, opens: countMatching(statements, STORE_OPEN), tenantReads: countMatching(statements, TENANT_READ) };
   }
 
-  it('opens the store and reads the tenant once per batch, however many lessons or rows', () => {
+  it('opens the store and reads the tenant once per batch, however many lessons or rows', async () => {
     const one = repoWith(1);
     const ten = repoWith(10);
-    const counts = SIZES.map((n) => {
-      const single = learnInto(one, n);
-      const batch = learnInto(ten, n);
+    const counts: number[] = [];
+    for (const n of SIZES) {
+      const single = await learnInto(one, n);
+      const batch = await learnInto(ten, n);
       expect(single.result.added).toBe(1);
       expect(batch.result.added).toBe(10);
       expect(batch.tenantReads).toBe(1);
       expect(batch.opens).toBe(single.opens);
-      return batch.opens;
-    });
+      counts.push(batch.opens);
+    }
     expect(counts[1]).toBe(counts[0]);
   });
 
-  it('commits lessons that invalidate nothing in one write transaction, however many there are', () => {
-    const writes = (lessons: number): number => {
-      const { result, statements } = learnInto(repoWith(lessons, 'handle the retry timeout'), 10);
+  it('commits lessons that invalidate nothing in one write transaction, however many there are', async () => {
+    const writes = async (lessons: number): Promise<number> => {
+      const { result, statements } = await learnInto(repoWith(lessons, 'handle the retry timeout'), 10);
       expect(result.added).toBe(lessons);
       return countMatching(statements, /^BEGIN IMMEDIATE$/);
     };
-    const [one, ten] = [writes(1), writes(10)];
+    const [one, ten] = [await writes(1), await writes(10)];
     expect(ten).toBe(one);
   });
 
-  it('a later lesson still invalidates a lesson written earlier in the batch', () => {
-    const { root, result } = learnInto(repoWith(3), 10);
+  it('a later lesson still invalidates a lesson written earlier in the batch', async () => {
+    const { root, result } = await learnInto(repoWith(3), 10);
     // Each lesson names the quuxlib client, so the second and third also weaken the lessons before them.
     expect(result.invalidations.map((i) => i.count)).toEqual([2, 3, 4]);
     const lessons = loadAllEntries(root, 'default').filter((e) => e.source === CLI_LEARN.source);

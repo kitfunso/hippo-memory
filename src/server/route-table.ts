@@ -220,8 +220,7 @@ export function dispatchPublicJson({ req, res, opts }: RouteRequest, method: str
   return true;
 }
 
-/** Under another store, a route that names no group, or one the store lacks, answers 501 without running. */
-function assertRoutePorted(opts: ResolvedServeOpts, group?: StoreGroup): void {
-  if (opts.store.kind === 'sqlite' || (group !== undefined && hasGroup(opts.store, group))) return;
-  throw new HttpError(501, STORE_NOT_PORTED_MESSAGE);
+/** A route answers 501 without running when the store lacks its group; a route that names none, a sqliteOnly one among them, needs hippo.db's local files. */
+function assertRoutePorted(opts: ResolvedServeOpts, group: StoreGroup = 'localFiles'): void {
+  if (!hasGroup(opts.store, group)) throw new HttpError(501, STORE_NOT_PORTED_MESSAGE);
 }

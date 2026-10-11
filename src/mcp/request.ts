@@ -62,7 +62,7 @@ export async function recordMcpTokens(toolName: string, output: string, ctx?: Mc
 
 interface ToolEntry {
   readonly handler: ToolHandler;
-  /** The store group it reaches its store through, so it runs under another store that has it; unset means hippo.db only. */
+  /** The store group it reaches its store through, so it runs under any store that has it; unset means hippo.db's local files. */
   readonly storeReady?: StoreGroup;
 }
 
@@ -75,22 +75,16 @@ const TOOL_HANDLERS: ReadonlyMap<string, ToolEntry> = new Map<string, ToolEntry>
   ['hippo_outcome', { handler: runOutcomeTool, storeReady: 'entryWrites' }],
   ['hippo_context', { handler: runContextTool, storeReady: 'contextReads' }],
   ['hippo_status', { handler: runStatusTool }],
-  ['hippo_learn', { handler: runLearnTool }],
+  ['hippo_learn', { handler: runLearnTool, storeReady: 'lessonWrites' }],
   ['hippo_conflicts', { handler: runConflictsTool }],
   ['hippo_resolve', { handler: runResolveTool }],
   ['hippo_share', { handler: runShareTool }],
   ['hippo_peers', { handler: runPeersTool }],
 ]);
 
-/** The served store when it is not hippo.db, else null. */
-function otherStore(ctx?: McpContext): HippoStore | null {
-  const store = ctx?.store;
-  return store !== undefined && store.kind !== 'sqlite' ? store : null;
-}
-
-function runsOn(store: HippoStore, toolName: string): boolean {
-  const group = TOOL_HANDLERS.get(toolName)?.storeReady;
-  return group !== undefined && hasGroup(store, group);
+/** Stdio serves no store and runs every tool on the folder's hippo.db. */
+function runsOn(store: HippoStore | undefined, toolName: string): boolean {
+  return store === undefined || hasGroup(store, TOOL_HANDLERS.get(toolName)?.storeReady ?? 'localFiles');
 }
 
 async function executeTool(
@@ -144,8 +138,7 @@ async function callTool(id: McpRequest['id'], params: McpRequest['params'], ctx?
     return { jsonrpc: '2.0', id, error: { code: -32602, message: `Unknown tool: ${toolName.slice(0, 128)}` } };
   }
   // The same refusal a ported tool gives when it reaches hippo.db, so a client handles one shape.
-  const other = otherStore(ctx);
-  if (other && !runsOn(other, toolName)) {
+  if (!runsOn(ctx?.store, toolName)) {
     return { jsonrpc: '2.0', id, error: { code: -32603, message: STORE_NOT_PORTED_MESSAGE } };
   }
   const refusal = sharedStoreRefusal(toolName, ctx);
@@ -197,8 +190,7 @@ export async function handleMcpRequest(
       return null;
 
     case 'tools/list': {
-      const other = otherStore(ctx);
-      return { jsonrpc: '2.0', id, result: { tools: other ? TOOLS.filter((t) => runsOn(other, t.name)) : TOOLS } };
+      return { jsonrpc: '2.0', id, result: { tools: TOOLS.filter((t) => runsOn(ctx?.store, t.name)) } };
     }
 
     case 'tools/call':

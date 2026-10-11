@@ -111,6 +111,7 @@ describe('a publicJson path under a store that is not hippo.db', () => {
     const store: HippoStore = {
       ...sqliteStore(bare),
       kind: 'stub',
+      localFiles: undefined,
       async findApiKey(): Promise<ApiKeyRecord | null> { lookups += 1; return null; },
     };
     try {

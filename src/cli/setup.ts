@@ -515,13 +515,13 @@ function dailyStepFailure<E>(err: E, timeoutMs: number): string {
   return errorMessage(err);
 }
 
-export function handleDailyRunner({ tenantId }: CommandContext): void {
+export async function handleDailyRunner({ tenantId }: CommandContext): Promise<void> {
   const globalRoot = getGlobalRoot();
   // No workspace sleep ever opens the global store, yet hooks in folders without a store compact into it.
   if (isInitialized(globalRoot)) {
     const finished = replayCompactionsAt(globalRoot, (message) => log.warn(`compaction replay: ${message}`));
     if (finished > 0) console.log(`Finished saving ${finished} compaction${finished === 1 ? '' : 's'} left over in the global store.`);
-    repairQualityOnceAt(globalRoot, tenantId);
+    await repairQualityOnceAt(globalRoot, tenantId);
   }
   printAgentImport(importUserMemories(globalRoot, { machine: currentMachine() }), '');
   const workspaces = listRegisteredWorkspaces(globalRoot);

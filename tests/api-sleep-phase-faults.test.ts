@@ -208,10 +208,10 @@ describe('api.sleep mid-phase failure paths emit partial+errorMessage audit row'
     expect(row!.metadata.errorMessage).toBeUndefined();
   });
 
-  it('a non-sqlite store throws before any phase runs, leaving no audit row', async () => {
-    const ctx: Context = { ...testCtx.ctx, store: { ...sqliteStore(testCtx.ctx.hippoRoot), kind: 'postgres' } };
+  it('a store without local files throws before any phase runs, leaving no audit row', async () => {
+    const ctx: Context = { ...testCtx.ctx, store: { ...sqliteStore(testCtx.ctx.hippoRoot), kind: 'postgres', localFiles: undefined } };
 
-    await expect(sleep(ctx)).rejects.toThrow("sleep supports only the sqlite store, not 'postgres'");
+    await expect(sleep(ctx)).rejects.toThrow("the 'postgres' store has no 'localFiles' group");
 
     expect(getLastConsolidateAuditRow(testCtx.ctx.hippoRoot)).toBeNull();
   });

@@ -32,3 +32,19 @@ The last recall and its trace now go through an optional store group, `lastRecal
 - On a store without the group, `outcomeForLastRecall` and an `outcome` call with a `traceId` reject with `StoreNotPortedError`, which the server answers as 501.
 - A served sqlite store now accepts `outcome` with a `traceId`. Before, it refused one.
 - `context` on a store without the group still works. It writes the recall's audit rows but keeps no last recall.
+
+### Store groups replace the store kind
+
+Hippo no longer reads `store.kind` to decide what a store can do. `kind` is now only a name for logs and errors. Three new optional groups do that work:
+
+- `localFiles` names the store's hippo.db folder. A store without it gets the request fence, no auto-sleep, and 501 on `POST /v1/sleep` and the other local-only routes.
+- `auditMaintenance` runs the quality audit, its repairs and the audit-log prune.
+- `lessonWrites` runs git learn.
+
+`sqliteStore` and `workerSqliteStore` have all three groups.
+
+What to change:
+
+- An add-on store that spreads `sqliteStore(...)` and sets its own `kind` now also has `localFiles`. Set `localFiles: undefined` to keep hippo.db fenced.
+- Put `await` in front of `auditMemoryQuality`, `removeAuditErrors`, `repairMemoryQuality`, `repairMemoryQualityOnce`, `pruneAuditLog` and `learn`. Each one rejects with `StoreNotPortedError` (a 501) on a store without its group.
+- `remember` now returns `halfLifeDays` and `tags`. `POST /v1/memories` sends both fields in its reply.

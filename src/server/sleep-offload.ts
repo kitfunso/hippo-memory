@@ -3,7 +3,7 @@ import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { sleep, type Actor, type Context, type SleepOpts, type SleepResult } from '../api/index.js';
 import type { ConsolidationResult } from '../consolidate/run.js';
-import { StoreBusyError } from '../store/port.js';
+import { hasGroup, StoreBusyError } from '../store/port.js';
 import { envSleepTimeoutMs } from '../util/env.js';
 import { HttpError } from '../util/http-util.js';
 
@@ -79,8 +79,8 @@ function inTurn<R>(job: SleepJob): Promise<R> {
 
 /** `sleep` for the HTTP route: same result and errors, run outside the serving process and stopped at the deadline (10 minutes, or HIPPO_SLEEP_TIMEOUT_MS). */
 export function sleepInChild(ctx: Context, opts: SleepOpts): Promise<SleepResult> {
-  // The child reopens the store by path, which only SQLite has; any other store keeps sleep's own refusal.
-  if (ctx.store && ctx.store.kind !== 'sqlite') return sleep(ctx, opts);
+  // The child reopens the store by path, which only a store of local files has; any other store keeps sleep's own refusal.
+  if (ctx.store && !hasGroup(ctx.store, 'localFiles')) return sleep(ctx, opts);
   return inTurn<SleepResult>({ kind: 'sleep', hippoRoot: ctx.hippoRoot, tenantId: ctx.tenantId, actor: ctx.actor, opts });
 }
 

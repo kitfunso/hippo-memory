@@ -109,7 +109,7 @@ async function runSleepPhases(
   if (dedupResult.removed > 0) result.deduped = dedupSummary(dedupResult);
 
   // Phase 3: Quality audit (remove junk, report warnings; a dry run skips rows earlier phases would remove).
-  const audited = runQualityAudit(ctx, phases, { dryRun, consolidateResult, dedupResult, result, loaded });
+  const audited = await runQualityAudit(ctx, phases, { dryRun, consolidateResult, dedupResult, result, loaded });
   counts.auditDeleted = audited.removed;
 
   if (dryRun) return result;
@@ -190,7 +190,7 @@ interface QualityAuditOptions {
 }
 
 /** `removed` counts audit errors deleted (or that would be under dryRun); `remaining` is what the audit read, less the rows it deleted. */
-function runQualityAudit(ctx: Context, phases: SleepPhases, options: QualityAuditOptions): QualityAuditOutcome {
+async function runQualityAudit(ctx: Context, phases: SleepPhases, options: QualityAuditOptions): Promise<QualityAuditOutcome> {
   const { dryRun, consolidateResult, dedupResult, result, loaded } = options;
   // The load followed consolidation, so only a dry run still holds the rows consolidation would remove; dedup's pairs are gone or would be.
   const planned = new Set([...(dryRun ? consolidateResult.removedIds ?? [] : []), ...dedupResult.pairs.map((p) => p.removed)]);
@@ -199,7 +199,7 @@ function runQualityAudit(ctx: Context, phases: SleepPhases, options: QualityAudi
   if (auditOut.issues.length === 0) return { removed: 0, remaining: allEntries };
   const errors = auditOut.issues.filter((i) => i.severity === 'error');
   const warnings = auditOut.issues.filter((i) => i.severity === 'warning');
-  const gone = dryRun ? errors.map((issue) => issue.memoryId) : removeAuditErrors(ctx, 'sleep-audit', errors);
+  const gone = dryRun ? errors.map((issue) => issue.memoryId) : await removeAuditErrors(ctx, 'sleep-audit', errors);
   const removed = gone.length;
   const deleted = new Set(gone);
   if (removed > 0 || warnings.length > 0) {

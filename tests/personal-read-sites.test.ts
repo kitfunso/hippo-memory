@@ -185,7 +185,7 @@ describe('admin read sites', () => {
 
   it.each<[string, LearnProfile]>([['MCP', MCP_LEARN], ['CLI', CLI_LEARN]])(
     '%s learn: another person\'s personal row never answers duplicate; a legacy row and the caller\'s own do',
-    (_, profile) => {
+    async (_, profile) => {
       fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ embeddings: { enabled: false } }));
       const repo = path.join(dir, 'repo');
       fs.mkdirSync(repo);
@@ -202,13 +202,13 @@ describe('admin read sites', () => {
         const row = loadAllEntries(root, T).find((e) => e.source === profile.source && (e.scope ?? null) === from)!;
         writeEntry(root, { ...row, scope: to });
       };
-      expect(run()).toMatchObject({ added: 1, skipped: 0 });
+      expect(await run()).toMatchObject({ added: 1, skipped: 0 });
       move(null, OWN_B);
-      expect(run()).toMatchObject({ added: 1, skipped: 0 });
+      expect(await run()).toMatchObject({ added: 1, skipped: 0 });
       move(null, SCOPES.legacy);
-      expect(run()).toMatchObject({ added: 0, skipped: 1 });
+      expect(await run()).toMatchObject({ added: 0, skipped: 1 });
       move(SCOPES.legacy, OWN_A);
-      expect(run()).toMatchObject({ added: 0, skipped: 1 });
+      expect(await run()).toMatchObject({ added: 0, skipped: 1 });
     },
   );
 });

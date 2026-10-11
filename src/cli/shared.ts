@@ -101,15 +101,15 @@ interface LearnFromRepoResult {
   lowInfo: number;
 }
 
-export function learnFromRepo(
+export async function learnFromRepo(
   hippoRoot: string,
   tenantId: string,
   repoPath: string,
   days: number,
   label?: string
-): LearnFromRepoResult {
+): Promise<LearnFromRepoResult> {
   const prefix = label ? `[${label}] ` : '';
-  const result = learn(cliApiContext(hippoRoot, tenantId), { repoPath, days, profile: CLI_LEARN });
+  const result = await learn(cliApiContext(hippoRoot, tenantId), { repoPath, days, profile: CLI_LEARN });
   if (result.status === 'not-a-repo') {
     console.log(`${prefix}No git history found (or not a git repository).`);
     return { added: 0, skipped: 0, lowInfo: 0 };

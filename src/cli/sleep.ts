@@ -82,7 +82,7 @@ async function cmdSleepCore(
   } else if (learn) {
     const config = loadConfig(hippoRoot);
     if (config.autoLearnOnSleep && isGitRepo(process.cwd())) {
-      const { added } = learnFromRepo(hippoRoot, tenantId, process.cwd(), 1);
+      const { added } = await learnFromRepo(hippoRoot, tenantId, process.cwd(), 1);
       if (added > 0) console.log(`Auto-learned ${added} lessons from today's git commits.`);
     }
 
@@ -102,7 +102,7 @@ async function cmdSleepCore(
     const finished = replayCompactionsAt(hippoRoot, (message) => log.warn(`compaction replay: ${message}`));
     if (finished > 0) console.log(`Finished saving ${finished} compaction${finished === 1 ? '' : 's'} left over from earlier sessions.`);
     repairProjectTagsOnce(hippoRoot, tenantId);
-    repairQualityOnceAt(hippoRoot, tenantId);
+    await repairQualityOnceAt(hippoRoot, tenantId);
   }
 
   // Phase 2-6: Pure-storage pipeline (consolidate + dedup + audit + share + ambient).

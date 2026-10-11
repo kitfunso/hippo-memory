@@ -1,10 +1,9 @@
 // Audit log queries and retention, and the memory-quality audit with its repair passes.
 
-import { pruneAuditRows, type AuditEvent, type AuditOp } from '../store/audit.js';
+import type { AuditEvent, AuditOp } from '../store/audit.js';
 import { auditMemories, type AuditIssue, type AuditResult } from '../core/memory-audit.js';
-import { deleteEntriesAutomatically, memoriesBackingObjects } from '../store/delete-and-batch.js';
-import { loadAllEntries } from '../store/entry-reads.js';
-import { repairAutomaticMemories, repairQualityOnce, type QualityRepairResult } from '../store/quality-repair.js';
+import type { QualityRepairResult } from '../store/quality-repair.js';
+import type { AuditMaintenance } from '../store/port.js';
 import { DAY_MS } from '../util/time.js';
 import { requireGroup, storeFor } from '../store/index.js';
 import type { KeysetPosition } from '../util/keyset.js';
@@ -29,29 +28,33 @@ export async function auditList(ctx: Context, opts: AuditListOpts): Promise<Audi
 /** The pass that removes audit errors; it leads the reason on each forget row. */
 export type AuditPass = 'audit --fix' | 'sleep-audit';
 
+function maintenanceOf(ctx: Context): AuditMaintenance {
+  return requireGroup(storeFor(ctx), 'auditMaintenance');
+}
+
 /** Delete the memories an audit marked as errors, each with its own forget row, and answer the ids that went: a pinned or raw row stays. */
-export function removeAuditErrors(ctx: Context, pass: AuditPass, issues: readonly AuditIssue[]): string[] {
+export async function removeAuditErrors(ctx: Context, pass: AuditPass, issues: readonly AuditIssue[]): Promise<string[]> {
   const removals = issues
     .filter((issue) => issue.severity === 'error')
     .map((issue) => ({ id: issue.memoryId, reason: `${pass}: ${issue.reason}` }));
-  return deleteEntriesAutomatically(ctx.hippoRoot, removals, ctx.actor.subject);
+  if (removals.length === 0) return [];
+  return maintenanceOf(ctx).deleteAutomatically(removals, ctx.actor.subject);
 }
 
-// SHORTCUT: hippo.db only, as the port has no whole-tenant read, backing-object read or automatic delete with a reason; another store kind
-// answers 501 at the open. Port groups for them once a served store must audit.
 /** The caller's memories run through the quality audit; a memory that backs an object is never marked for removal. */
-export function auditMemoryQuality(ctx: Context): AuditResult {
-  return auditMemories(loadAllEntries(ctx.hippoRoot, ctx.tenantId), memoriesBackingObjects(ctx.hippoRoot));
+export async function auditMemoryQuality(ctx: Context): Promise<AuditResult> {
+  const maintenance = maintenanceOf(ctx);
+  return auditMemories(await maintenance.tenantEntries(ctx.tenantId), await maintenance.objectBackedIds());
 }
 
 /** Audit repair for the caller's tenant: a preview, or with `apply` the moves of certain defects to dormant storage behind a backup. */
-export function repairMemoryQuality(ctx: Context, apply: boolean): QualityRepairResult {
-  return repairAutomaticMemories(ctx.hippoRoot, { tenantId: ctx.tenantId, apply });
+export async function repairMemoryQuality(ctx: Context, apply: boolean): Promise<QualityRepairResult> {
+  return maintenanceOf(ctx).repairQuality(ctx.tenantId, apply);
 }
 
 /** The repair sleep and the daily runner apply once per store after an upgrade; null when it already ran there. */
-export function repairMemoryQualityOnce(ctx: Context): QualityRepairResult | null {
-  return repairQualityOnce(ctx.hippoRoot, ctx.tenantId);
+export async function repairMemoryQualityOnce(ctx: Context): Promise<QualityRepairResult | null> {
+  return maintenanceOf(ctx).repairQualityOnce(ctx.tenantId);
 }
 
 export interface PruneAuditOpts {
@@ -79,7 +82,7 @@ export function computeCutoff(days: number, now: Date = new Date()): string {
 /** Delete the caller's tenant's audit_log rows older than `olderThanDays`, then record an `audit_prune` row as `ctx.actor`; opt-in, since
  *  retention floors (HIPAA, SOX, GDPR) apply. The row is written after the DELETE, so a call never prunes its own record.
  *  Throws on non-positive days or an empty tenant. */
-export function pruneAuditLog(ctx: Context, opts: PruneAuditOpts): PruneAuditResult {
+export async function pruneAuditLog(ctx: Context, opts: PruneAuditOpts): Promise<PruneAuditResult> {
   if (!Number.isFinite(opts.olderThanDays) || opts.olderThanDays <= 0) {
     throw new Error(`pruneAuditLog: olderThanDays must be a positive number, got ${opts.olderThanDays}`);
   }
@@ -88,6 +91,7 @@ export function pruneAuditLog(ctx: Context, opts: PruneAuditOpts): PruneAuditRes
   }
   const dryRun = opts.dryRun === true;
   const cutoff = computeCutoff(opts.olderThanDays);
-  const count = pruneAuditRows(ctx.hippoRoot, { tenantId: ctx.tenantId, cutoff, actor: ctx.actor.subject, olderThanDays: opts.olderThanDays, dryRun });
+  const prune = { tenantId: ctx.tenantId, cutoff, actor: ctx.actor.subject, olderThanDays: opts.olderThanDays, dryRun };
+  const count = await maintenanceOf(ctx).pruneAuditRows(prune);
   return { cutoff, count, dryRun };
 }

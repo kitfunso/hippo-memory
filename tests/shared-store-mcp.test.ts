@@ -95,10 +95,10 @@ describe('MCP writes on a shared store', () => {
     expect(loadAllEntries(store).map((e) => e.origin_project)).toEqual(['acme']);
   });
 
-  it('learn with the MCP profile stores NULL rows', () => {
+  it('learn with the MCP profile stores NULL rows', async () => {
     const store = flaggedStore();
     const ctx = { hippoRoot: store, tenantId: 'default', actor: adminActor('shared-store-mcp-test') };
-    const result = learn(ctx, { repoPath: repoWithOneFix(), days: 7, profile: MCP_LEARN });
+    const result = await learn(ctx, { repoPath: repoWithOneFix(), days: 7, profile: MCP_LEARN });
     expect(result.added).toBe(1);
     const rows = loadAllEntries(store);
     expect(rows).toHaveLength(1);

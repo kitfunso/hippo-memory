@@ -17,6 +17,8 @@ export interface StoreHolder {
   hold: () => void;
   afterResponse: () => void;
   release: () => Promise<void>;
+  /** Runs one request, inside the fence that keeps hippo.db shut when the store is not it. */
+  runRequest: (run: () => Promise<void>) => Promise<void>;
 }
 
 /** Holds a connection to the hippo.db under `hippoRoot` once it exists, so serving never creates one. */
@@ -49,5 +51,5 @@ export function holdSqliteConnection(hippoRoot: string): StoreHolder {
     if (heldDb) closeHippoDb(heldDb);
     heldDb = undefined;
   };
-  return { hold, afterResponse, release };
+  return { hold, afterResponse, release, runRequest: (run) => run() };
 }

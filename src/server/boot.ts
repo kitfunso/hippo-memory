@@ -2,7 +2,7 @@ import { envPort, envRequireAuth, envV1Rps } from '../util/env.js';
 import type { IncomingMessage, Server, ServerResponse } from 'node:http';
 import { detectServer, removePidfileIfOwned, writePidfile } from './server-detect.js';
 import { outsideSqliteOffLoop, runWithRequestStores, SERVER_DB_WAIT_MS, withSqliteBlocked } from '../db/index.js';
-import type { HippoStore } from '../store/index.js';
+import { hasGroup, type HippoStore } from '../store/index.js';
 import { isStoreBusy } from '../store/sqlite/busy.js';
 import { holdSqliteConnection, type StoreHolder } from '../store/sqlite/held-connection.js';
 import { workerSqliteStore } from '../store/sqlite/worker-store.js';
@@ -207,11 +207,10 @@ function bootLimiters(rateLimits: ServeOpts['rateLimits']): BootedLimiters {
 }
 
 function createStoreHolder(hippoRoot: string, store: HippoStore): StoreHolder {
-  if (store.kind !== 'sqlite') {
-    log.info(`serve: the '${store.kind}' store serves ${hippoRoot}, so no hippo.db connection is held`);
-    return { hold: () => {}, afterResponse: () => {}, release: async () => {} };
-  }
-  return holdSqliteConnection(hippoRoot);
+  if (hasGroup(store, 'localFiles')) return holdSqliteConnection(hippoRoot);
+  log.info(`serve: the '${store.kind}' store serves ${hippoRoot}, so no hippo.db connection is held`);
+  // A missed port under another store would otherwise create and write a hippo.db that store never reads.
+  return { hold: () => {}, afterResponse: () => {}, release: async () => {}, runRequest: (run) => withSqliteBlocked(store.kind, run) };
 }
 
 // A plugin's resolver may read hippo.db through this package's synchronous functions, so it runs outside the block of a `loop: 'off'` route.
@@ -344,7 +343,7 @@ export async function serve(opts: ServeOpts): Promise<ServerHandle> {
 
   const served = servedOptsFor(opts, routes, publicJsonBodies, limiters);
   // A store other than hippo.db is a team's central server, so its folder's config.json must not decide shared-ness.
-  if (served.store.kind !== 'sqlite') markSharedStore(opts.hippoRoot);
+  if (!hasGroup(served.store, 'localFiles')) markSharedStore(opts.hippoRoot);
   const holder = createStoreHolder(opts.hippoRoot, served.store);
 
   const inflight = new Set<ServerResponse>();
@@ -394,14 +393,11 @@ function servedOptsFor(
 }
 
 function acceptingServer(served: ResolvedServeOpts, holder: StoreHolder, inflight: Set<ServerResponse>, options: HandleRequestOptions): Server {
-  const { kind } = served.store;
   return createListener(served.tls, (req, res) => {
     res.once('finish', holder.afterResponse);
     inflight.add(res);
     res.once('close', () => inflight.delete(res));
-    const run = (): Promise<void> => handleRequest(req, res, served, options);
-    // A missed port under another store would otherwise create and write a hippo.db that store never reads.
-    answerRequest(req, res, () => (kind === 'sqlite' ? run() : withSqliteBlocked(kind, run)), served.slowRequestWarnMs);
+    answerRequest(req, res, () => holder.runRequest(() => handleRequest(req, res, served, options)), served.slowRequestWarnMs);
   });
 }
 

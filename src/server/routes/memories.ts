@@ -4,6 +4,7 @@ import { archiveRaw, forget, outcome, outcomeForLastRecall, promote, remember, s
 import { MEMORY_KINDS, type MemoryKind } from '../../core/memory.js';
 import { graphModelOf } from '../../graph/view.js';
 import { MAX_ENTITY_NAME_LEN } from '../../store/graph-rows.js';
+import { hasGroup } from '../../store/index.js';
 import { HttpError, sendJson } from '../../util/http-util.js';
 import { sleepInChild } from '../sleep-offload.js';
 import type { AuthedRouteRequest } from '../types.js';
@@ -123,8 +124,10 @@ export async function handleApplyOutcome({ req, res, ctx }: AuthedRouteRequest):
     const { applied } = await outcome(ctx, ids, good);
     sendJson(res, 200, { applied });
   } else {
-    // The last recall's ids live in hippo.db alone, so a client of another store must send the ids its recall returned.
-    if (ctx.store !== undefined && ctx.store.kind !== 'sqlite') throw new HttpError(501, 'this store keeps no last recall: send the ids your recall returned');
+    // A store without the group keeps no last recall, so its client must send the ids its recall returned.
+    if (ctx.store !== undefined && !hasGroup(ctx.store, 'lastRecall')) {
+      throw new HttpError(501, 'this store keeps no last recall: send the ids your recall returned');
+    }
     const result = await outcomeForLastRecall(ctx, good);
     sendJson(res, 200, result);
   }

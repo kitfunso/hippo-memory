@@ -85,7 +85,7 @@ async function cmdWatch(command: string, hippoRoot: string, tenantId: string): P
 
 // Learn command
 
-export function handleLearn({ hippoRoot, tenantId, flags }: CommandContext): void {
+export async function handleLearn({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
   requireInit(hippoRoot);
 
   if (!flags['git']) {
@@ -105,14 +105,14 @@ export function handleLearn({ hippoRoot, tenantId, flags }: CommandContext): voi
 
     for (const repo of repos) {
       const label = path.basename(repo);
-      const { added, skipped } = learnFromRepo(hippoRoot, tenantId, repo, days, label);
+      const { added, skipped } = await learnFromRepo(hippoRoot, tenantId, repo, days, label);
       totalAdded += added;
       totalSkipped += skipped;
     }
 
     console.log(`Git learn complete: ${totalAdded} new lessons added, ${totalSkipped} duplicates skipped across ${repos.length} repos.`);
   } else {
-    const { added, skipped } = learnFromRepo(hippoRoot, tenantId, process.cwd(), days);
+    const { added, skipped } = await learnFromRepo(hippoRoot, tenantId, process.cwd(), days);
     console.log(`Git learn complete: ${added} new lessons added, ${skipped} duplicates skipped.`);
   }
 }

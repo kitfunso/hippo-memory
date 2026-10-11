@@ -20,7 +20,7 @@ afterEach(() => {
 const issue = (memoryId: string, severity: AuditIssue['severity'], reason: string): AuditIssue => ({ memoryId, content: '', severity, reason });
 
 describe('removeAuditErrors', () => {
-  it('deletes each unpinned error once, in issue order, with its own forget reason', () => {
+  it('deletes each unpinned error once, in issue order, with its own forget reason', async () => {
     const root = makeRoot('audit-batch');
     roots.push(root);
     const ctx: Context = { hippoRoot: root, tenantId: 'default', actor: { subject: 'audit-test', role: 'admin' } };
@@ -30,7 +30,7 @@ describe('removeAuditErrors', () => {
     const warned = createMemory('only a warning here');
     for (const entry of [first, second, pinned, warned]) writeEntry(root, entry);
 
-    const gone = removeAuditErrors(ctx, 'audit --fix', [
+    const gone = await removeAuditErrors(ctx, 'audit --fix', [
       issue(second.id, 'error', 'too short'),
       issue('no-such-id', 'error', 'missing'),
       issue(pinned.id, 'error', 'too short'),
@@ -53,9 +53,9 @@ describe('removeAuditErrors', () => {
     }
   });
 
-  it('answers an empty list without opening the store', () => {
+  it('answers an empty list without opening the store', async () => {
     const ctx: Context = { hippoRoot: '/no/such/root', tenantId: 'default', actor: { subject: 'audit-test', role: 'admin' } };
-    expect(removeAuditErrors(ctx, 'sleep-audit', [issue('x', 'warning', 'vague')])).toEqual([]);
+    expect(await removeAuditErrors(ctx, 'sleep-audit', [issue('x', 'warning', 'vague')])).toEqual([]);
   });
 });
 

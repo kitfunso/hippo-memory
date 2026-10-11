@@ -3,6 +3,7 @@
 import type { AmbientState } from '../core/ambient.js';
 import type { Context } from './types.js';
 import { runSleep } from './sleep-run.js';
+import { requireGroup, storeFor } from '../store/index.js';
 
 /** Options for `sleep`, one consolidation cycle on a SQLite store that returns counts; unlike `hippo sleep` it skips the auto-learn step. */
 export interface SleepOpts {
@@ -45,8 +46,7 @@ export interface SleepResult {
 
 /** Sleeps the WHOLE hippoRoot, every tenant, so /v1/sleep stays loopback-only; SQLite only; never auto-deletes pinned, raw, kept or object-backing rows. */
 export async function sleep(ctx: Context, opts: SleepOpts = {}): Promise<SleepResult> {
-  if (ctx.store && ctx.store.kind !== 'sqlite') {
-    throw new Error(`sleep supports only the sqlite store, not '${ctx.store.kind}'`);
-  }
+  // Sleep reopens hippo.db by folder, here and in its child process.
+  requireGroup(storeFor(ctx), 'localFiles');
   return runSleep(ctx, opts);
 }

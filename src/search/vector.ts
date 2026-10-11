@@ -7,7 +7,7 @@ import { resolveEmbeddingProvider, type EmbeddingProvider } from '../embeddings/
 import { rethrowIfSqliteBlocked } from '../util/sqlite-blocked.js';
 import { errorMessage, log } from '../util/log.js';
 import { envQueryEmbedTimeoutMs } from '../util/env.js';
-import { requireGroup, type HippoStore, type VectorReads } from '../store/index.js';
+import { hasGroup, requireGroup, type HippoStore, type VectorReads } from '../store/index.js';
 import { redactSecretsStrict } from '../util/secret-detect.js';
 import { currentEntries, type CurrentnessOptions } from './as-of.js';
 
@@ -63,12 +63,12 @@ function warnBm25Fallback(reason: string, detail: string): void {
   log.once(`search.bm25-fallback.${reason}`, 'warn', `hybrid search fell back to BM25 only: ${redactSecretsStrict(detail)}`);
 }
 
-function reindexHint(storeKind: string): string {
+function reindexHint(store: HippoStore): string {
   const why = 'the embedding index was built by another model or is being rebuilt';
   // `hippo embed` writes only hippo.db, so another store gets its vectors by a rebuild from it.
-  return storeKind === 'sqlite'
+  return hasGroup(store, 'localFiles')
     ? `${why}; run 'hippo embed'`
-    : `${why}; run 'hippo embed' on the SQLite store, then rebuild the '${storeKind}' database from it`;
+    : `${why}; run 'hippo embed' on the SQLite store, then rebuild the '${store.kind}' database from it`;
 }
 
 /** The store's vector reads; a store without them answers 501, as any unported path does. */
@@ -112,7 +112,7 @@ async function fillVectorArm(arm: VectorArm, query: string, { root, store }: Vec
   const reads = requireVectorReads(store);
   const index = await reads.embeddingIndexState();
   if (indexNeedsRebuild(indexedModel(index), provider.id)) {
-    warnBm25Fallback('reindex', reindexHint(store.kind));
+    warnBm25Fallback('reindex', reindexHint(store));
     return;
   }
   const spec = options.vectorCandidates;

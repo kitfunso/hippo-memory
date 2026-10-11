@@ -28,7 +28,7 @@ import { promptTokens } from '../core/prompt-recall.js';
 import { detectSecret } from '../util/secret-detect.js';
 import { isSessionDigestRow } from '../core/session-digest-row.js';
 import { addAmbientTallies, ambientStateFromTallies, type AmbientState, type AmbientTallies } from '../core/ambient.js';
-import { requireGroup, sqliteStore, storeFor, type HippoStore } from '../store/index.js';
+import { hasGroup, requireGroup, sqliteStore, storeFor, type HippoStore } from '../store/index.js';
 import { passesScopeFilterForRecall, assertScopeRequestAllowed, personalScopeOf } from '../core/recall-scope.js';
 import {
   finiteOr,
@@ -211,7 +211,7 @@ function warnIsolationIgnored(hippoRoot: string): void {
 
 /** Which stores this read can draw on, and what kind the primary one is. */
 function storesInReach(ctx: Context, opts: ContextOpts, local: ContextSource) {
-  const other = local.store.kind !== 'sqlite' ? local.store : undefined;
+  const other = hasGroup(local.store, 'localFiles') ? undefined : local.store;
   // Global memories do not establish a project boundary for task state.
   const hasLocal = other !== undefined || isInitialized(ctx.hippoRoot);
   const globalRoot = getGlobalRoot();

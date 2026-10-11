@@ -88,46 +88,46 @@ describe('pruneAuditLog', () => {
     rmSync(root, { recursive: true, force: true });
   });
 
-  it('deletes rows older than the cutoff and preserves newer ones', () => {
+  it('deletes rows older than the cutoff and preserves newer ones', async () => {
     seedAuditRow(db, { tenantId: 'acme', op: 'recall', daysAgo: 100 });
     seedAuditRow(db, { tenantId: 'acme', op: 'recall', daysAgo: 95 });
     seedAuditRow(db, { tenantId: 'acme', op: 'recall', daysAgo: 50 });
     seedAuditRow(db, { tenantId: 'acme', op: 'recall', daysAgo: 1 });
     expect(countAudit(db, 'acme')).toBe(4);
 
-    const result = pruneAuditLog({ hippoRoot: root, tenantId: 'acme', actor: adminActor('cli') }, { olderThanDays: 90 });
+    const result = await pruneAuditLog({ hippoRoot: root, tenantId: 'acme', actor: adminActor('cli') }, { olderThanDays: 90 });
     // 2 rows older than 90 days deleted, 2 rows newer preserved, +1 audit_prune row.
     expect(result.count).toBe(2);
     expect(result.dryRun).toBe(false);
     expect(countAudit(db, 'acme')).toBe(2 + 1); // remaining + the audit_prune event
   });
 
-  it('is per-tenant — does NOT delete rows from other tenants', () => {
+  it('is per-tenant — does NOT delete rows from other tenants', async () => {
     seedAuditRow(db, { tenantId: 'acme', op: 'recall', daysAgo: 100 });
     seedAuditRow(db, { tenantId: 'globex', op: 'recall', daysAgo: 100 });
     seedAuditRow(db, { tenantId: 'initech', op: 'recall', daysAgo: 100 });
 
-    const result = pruneAuditLog({ hippoRoot: root, tenantId: 'acme', actor: adminActor('cli') }, { olderThanDays: 30 });
+    const result = await pruneAuditLog({ hippoRoot: root, tenantId: 'acme', actor: adminActor('cli') }, { olderThanDays: 30 });
     expect(result.count).toBe(1);
     expect(countAudit(db, 'acme')).toBe(1); // the audit_prune event
     expect(countAudit(db, 'globex')).toBe(1); // untouched
     expect(countAudit(db, 'initech')).toBe(1); // untouched
   });
 
-  it('dry-run returns count without deleting OR emitting an audit_prune row', () => {
+  it('dry-run returns count without deleting OR emitting an audit_prune row', async () => {
     seedAuditRow(db, { tenantId: 'acme', op: 'recall', daysAgo: 100 });
     seedAuditRow(db, { tenantId: 'acme', op: 'recall', daysAgo: 95 });
 
-    const result = pruneAuditLog({ hippoRoot: root, tenantId: 'acme', actor: adminActor('cli') }, { olderThanDays: 90, dryRun: true });
+    const result = await pruneAuditLog({ hippoRoot: root, tenantId: 'acme', actor: adminActor('cli') }, { olderThanDays: 90, dryRun: true });
     expect(result.count).toBe(2);
     expect(result.dryRun).toBe(true);
     expect(countAudit(db, 'acme')).toBe(2); // nothing deleted, no audit_prune emitted
   });
 
-  it('emits an audit_prune row with metadata after a real prune', () => {
+  it('emits an audit_prune row with metadata after a real prune', async () => {
     seedAuditRow(db, { tenantId: 'acme', op: 'recall', daysAgo: 100 });
 
-    pruneAuditLog({ hippoRoot: root, tenantId: 'acme', actor: adminActor('cli:test') }, { olderThanDays: 30 });
+    await pruneAuditLog({ hippoRoot: root, tenantId: 'acme', actor: adminActor('cli:test') }, { olderThanDays: 30 });
 
     // SAFETY: literal SELECT of these three known columns for the
     // audit_prune row pruneAuditLog just emitted.
@@ -144,29 +144,29 @@ describe('pruneAuditLog', () => {
     expect(meta.cutoff).toMatch(/^\d{4}-\d{2}-\d{2}T/);
   });
 
-  it('returns count=0 when nothing matches', () => {
+  it('returns count=0 when nothing matches', async () => {
     seedAuditRow(db, { tenantId: 'acme', op: 'recall', daysAgo: 1 });
 
-    const result = pruneAuditLog({ hippoRoot: root, tenantId: 'acme', actor: adminActor('cli') }, { olderThanDays: 30 });
+    const result = await pruneAuditLog({ hippoRoot: root, tenantId: 'acme', actor: adminActor('cli') }, { olderThanDays: 30 });
     expect(result.count).toBe(0);
     // audit_prune row still emitted even for zero-count prunes (full audit trail).
     expect(countAudit(db, 'acme')).toBe(2);
   });
 
-  it('throws on non-positive olderThanDays', () => {
-    expect(() => pruneAuditLog({ hippoRoot: root, tenantId: 'acme', actor: adminActor('cli') }, { olderThanDays: 0 })).toThrow(/positive number/);
-    expect(() => pruneAuditLog({ hippoRoot: root, tenantId: 'acme', actor: adminActor('cli') }, { olderThanDays: -1 })).toThrow(/positive number/);
-    expect(() => pruneAuditLog({ hippoRoot: root, tenantId: 'acme', actor: adminActor('cli') }, { olderThanDays: NaN })).toThrow(/positive number/);
+  it('throws on non-positive olderThanDays', async () => {
+    await expect(pruneAuditLog({ hippoRoot: root, tenantId: 'acme', actor: adminActor('cli') }, { olderThanDays: 0 })).rejects.toThrow(/positive number/);
+    await expect(pruneAuditLog({ hippoRoot: root, tenantId: 'acme', actor: adminActor('cli') }, { olderThanDays: -1 })).rejects.toThrow(/positive number/);
+    await expect(pruneAuditLog({ hippoRoot: root, tenantId: 'acme', actor: adminActor('cli') }, { olderThanDays: NaN })).rejects.toThrow(/positive number/);
   });
 
-  it('throws on missing tenantId', () => {
-    expect(() => pruneAuditLog({ hippoRoot: root, tenantId: '', actor: adminActor('cli') }, { olderThanDays: 30 })).toThrow(/tenantId is required/);
+  it('throws on missing tenantId', async () => {
+    await expect(pruneAuditLog({ hippoRoot: root, tenantId: '', actor: adminActor('cli') }, { olderThanDays: 30 })).rejects.toThrow(/tenantId is required/);
   });
 
-  it('the just-emitted audit_prune row is NOT itself pruned by the same call', () => {
+  it('the just-emitted audit_prune row is NOT itself pruned by the same call', async () => {
     // Edge case: ensure the audit_prune row's ts > cutoff so it survives.
     seedAuditRow(db, { tenantId: 'acme', op: 'recall', daysAgo: 100 });
-    pruneAuditLog({ hippoRoot: root, tenantId: 'acme', actor: adminActor('cli') }, { olderThanDays: 1 });
+    await pruneAuditLog({ hippoRoot: root, tenantId: 'acme', actor: adminActor('cli') }, { olderThanDays: 1 });
     // 1 old row deleted, 1 audit_prune row remaining (its ts is now, way newer than cutoff).
     expect(countAudit(db, 'acme')).toBe(1);
     // SAFETY: literal SELECT of the op column against the known audit_log

@@ -88,7 +88,7 @@ async function cmdAuditList(hippoRoot: string, tenantId: string, flags: CliFlags
   }
 }
 
-function cmdAuditPrune(hippoRoot: string, ctxTenantId: string, flags: CliFlags): void {
+async function cmdAuditPrune(hippoRoot: string, ctxTenantId: string, flags: CliFlags): Promise<void> {
   const olderThanRaw = stringFlag(flags, 'older-than') ?? '';
   if (!olderThanRaw) {
     printError('Usage: hippo audit prune --older-than <Nd> [--dry-run] [--tenant <t>]');
@@ -105,7 +105,7 @@ function cmdAuditPrune(hippoRoot: string, ctxTenantId: string, flags: CliFlags):
   const dryRun = flagIsTrue(flags, 'dry-run');
   const asJson = boolFlag(flags, 'json');
 
-  const result = api.pruneAuditLog(cliApiContext(hippoRoot, tenantId), { olderThanDays, dryRun });
+  const result = await api.pruneAuditLog(cliApiContext(hippoRoot, tenantId), { olderThanDays, dryRun });
 
   if (asJson) {
     console.log(JSON.stringify(result));
@@ -125,16 +125,16 @@ async function cmdAuditLog(hippoRoot: string, tenantId: string, args: string[], 
     return;
   }
   if (sub === 'prune') {
-    cmdAuditPrune(hippoRoot, tenantId, flags);
+    await cmdAuditPrune(hippoRoot, tenantId, flags);
     return;
   }
   printError(`Unknown audit subcommand: ${sub}. Expected: list | prune.`);
   throw new CliExit(1);
 }
 
-function auditRepair(hippoRoot: string, tenantId: string, flags: CliFlags): void {
+async function auditRepair(hippoRoot: string, tenantId: string, flags: CliFlags): Promise<void> {
   const apply = flagIsTrue(flags, 'apply') && flags['dry-run'] !== true;
-  const result = api.repairMemoryQuality(cliApiContext(flags['global'] ? getGlobalRoot() : hippoRoot, tenantId), apply);
+  const result = await api.repairMemoryQuality(cliApiContext(flags['global'] ? getGlobalRoot() : hippoRoot, tenantId), apply);
   if (flags['json']) {
     console.log(JSON.stringify(result));
     return;
@@ -152,14 +152,14 @@ function auditRepair(hippoRoot: string, tenantId: string, flags: CliFlags): void
   if (!apply) console.log('Preview only. Add --apply to move set-aside memories to dormant storage. Pin a review memory to keep it.');
 }
 
-function fixAuditErrors(hippoRoot: string, tenantId: string, result: AuditResult, flags: CliFlags): void {
+async function fixAuditErrors(hippoRoot: string, tenantId: string, result: AuditResult, flags: CliFlags): Promise<void> {
   const errors = result.issues.filter(i => i.severity === 'error');
   if (errors.length > 0 && flagIsTrue(flags, 'dry-run')) {
     console.log(`\nWould remove ${errors.length} error-severity memories (dry run, nothing deleted).`);
     console.log(`${result.issues.length - errors.length} warnings would remain (review manually).`);
   } else if (errors.length > 0) {
     const ctx = cliApiContext(hippoRoot, tenantId);
-    const removedCount = api.removeAuditErrors(ctx, 'audit --fix', errors).length;
+    const removedCount = (await api.removeAuditErrors(ctx, 'audit --fix', errors)).length;
     console.log(`\nRemoved ${removedCount} error-severity memories.`);
     console.log(`${result.issues.length - errors.length} warnings remain (review manually).`);
   } else {
@@ -169,7 +169,7 @@ function fixAuditErrors(hippoRoot: string, tenantId: string, result: AuditResult
 
 export async function handleAudit({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
   if (args[0] === 'repair') {
-    auditRepair(hippoRoot, tenantId, flags);
+    await auditRepair(hippoRoot, tenantId, flags);
     return;
   }
   // `audit list` and `audit prune` are the audit-log subcommands; other forms (no sub, --fix) keep the memory-quality auditor.
@@ -178,7 +178,7 @@ export async function handleAudit({ hippoRoot, tenantId, args, flags }: CommandC
     return;
   }
   requireInit(hippoRoot);
-  const result = api.auditMemoryQuality(cliApiContext(hippoRoot, tenantId));
+  const result = await api.auditMemoryQuality(cliApiContext(hippoRoot, tenantId));
   const shouldFix = boolFlag(flags, 'fix');
 
   if (result.issues.length === 0) {
@@ -191,7 +191,7 @@ export async function handleAudit({ hippoRoot, tenantId, args, flags }: CommandC
       console.log(`         "${truncateWithEllipsis(issue.content, 80)}"`);
     }
     if (shouldFix) {
-      fixAuditErrors(hippoRoot, tenantId, result, flags);
+      await fixAuditErrors(hippoRoot, tenantId, result, flags);
     } else {
       console.log(`\nRun with --fix to auto-remove error-severity issues.`);
     }

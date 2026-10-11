@@ -58,11 +58,11 @@ describe('a write scope that fails in the middle rolls back', () => {
     }
   });
 
-  it('pruneAuditLog keeps the old rows when the prune record is refused', () => {
+  it('pruneAuditLog keeps the old rows when the prune record is refused', async () => {
     const old = new Date(Date.now() - 100 * 86_400_000).toISOString();
     run(`INSERT INTO audit_log (ts, tenant_id, actor, op, target_id, metadata_json) VALUES ('${old}', 'default', 't', 'recall', NULL, '{}')`);
     refuse('audit_log', "NEW.op = 'audit_prune'");
-    expect(() => pruneAuditLog({ hippoRoot: root, tenantId: 'default', actor: adminActor('cli') }, { olderThanDays: 30 })).toThrow('refused');
+    await expect(pruneAuditLog({ hippoRoot: root, tenantId: 'default', actor: adminActor('cli') }, { olderThanDays: 30 })).rejects.toThrow('refused');
     expect(count(`SELECT COUNT(*) AS n FROM audit_log WHERE op = 'recall'`)).toBe(1);
   });
 

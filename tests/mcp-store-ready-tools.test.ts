@@ -27,14 +27,18 @@ afterEach(() => {
   rmSync(root, { recursive: true, force: true });
 });
 
-// The stub kind wraps a hippo.db store that nothing blocks, so a tool that ran would leave hippo.db behind.
+// The stub wraps a hippo.db store that nothing blocks, without the local files, so a tool that ran would leave hippo.db behind.
+function storeOfKind(kind: string): HippoStore {
+  return kind === 'sqlite' ? sqliteStore(root) : { ...sqliteStore(root), kind, localFiles: undefined };
+}
+
 const ctxOn = (kind: string | undefined): McpContext => ({
   hippoRoot: root,
   tenantId: 'default',
   actor: 'mcp',
   role: 'admin',
   hostAdmin: true,
-  store: kind === undefined ? undefined : { ...sqliteStore(root), kind },
+  store: kind === undefined ? undefined : storeOfKind(kind),
 });
 
 // An add-on store built before the contextReads group.
@@ -49,7 +53,7 @@ function listedNames(res: McpResponse | null): string[] {
 const declared = TOOLS.map((t) => t.name);
 const notPorted = { jsonrpc: '2.0', id: 1, error: { code: -32603, message: STORE_NOT_PORTED_MESSAGE } };
 // The stub carries every group sqliteStore sets, so the tools that name one run on it.
-const READY = ['hippo_recall', 'hippo_assemble', 'hippo_drill', 'hippo_predict_baserate', 'hippo_remember', 'hippo_outcome', 'hippo_context'];
+const READY = ['hippo_recall', 'hippo_assemble', 'hippo_drill', 'hippo_predict_baserate', 'hippo_remember', 'hippo_outcome', 'hippo_context', 'hippo_learn'];
 const ready = declared.filter((name) => READY.includes(name));
 
 describe('store-ready MCP tools', () => {

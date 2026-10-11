@@ -1,7 +1,7 @@
 {
   "openersOutside": 6,
   "openersInCli": 0,
-  "storeBranches": 2,
+  "storeBranches": 0,
   "routesWithoutStore": 0,
   "sqliteOnlyRoutes": 2,
   "routesOnLoop": 12,
