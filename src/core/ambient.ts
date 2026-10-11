@@ -1,6 +1,6 @@
 /** Ambient state vector: a compact O(N) summary of the corpus telling the agent "where it is" in knowledge-space without retrieving specific memories. */
 
-import { evalNow } from './ablation.js';
+import { evalNow, strengthAblation } from './ablation.js';
 import type { MemoryEntry } from './memory.js';
 import { Layer } from './memory.js';
 import { calculateStrength } from './memory.js';
@@ -96,7 +96,7 @@ export function tallyAmbientEntries(entries: readonly MemoryEntry[], now?: Date)
   for (const entry of entries) {
     if (entry.superseded_by) continue;
     for (const tag of entry.tags) t.tagCounts.set(tag, (t.tagCounts.get(tag) ?? 0) + 1);
-    t.strengthSum += calculateStrength(entry, currentTime);
+    t.strengthSum += calculateStrength(entry, currentTime, { ablation: strengthAblation() });
     if (new Date(entry.created).getTime() > freshAfter) t.fresh++;
     if (entry.emotional_valence === 'negative' || entry.emotional_valence === 'critical') t.negative++;
     if (isErrorTagged(entry.tags)) t.errors++;

@@ -1,6 +1,6 @@
 import { calculateStrength, type MemoryEntry } from '../core/memory.js';
 import { estimateTokens } from '../util/token-text.js';
-import { evalNow, isRecallBoostAblated } from '../core/ablation.js';
+import { evalNow, isRecallBoostAblated, strengthAblation } from '../core/ablation.js';
 import { indexNeedsRebuild } from '../store/embeddings/index.js';
 import { indexedModel } from '../store/vector-index.js';
 import { resolveEmbeddingProvider } from '../embeddings/provider.js';
@@ -147,7 +147,9 @@ function splitByParticle(
     pools.entries.push(entry);
     // EVAL-ONLY ablation (see ablation.ts): persisted masses bake in recall history twice, so the flag recomputes mass live.
     pools.particles.push(
-      isRecallBoostAblated() ? { ...particle, mass: computeMass(calculateStrength(entry, now), entry.retrieval_count) } : particle,
+      isRecallBoostAblated()
+        ? { ...particle, mass: computeMass(calculateStrength(entry, now, { ablation: strengthAblation() }), entry.retrieval_count) }
+        : particle,
     );
   }
   return pools;

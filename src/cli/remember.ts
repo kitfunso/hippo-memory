@@ -1,7 +1,7 @@
 // The write verbs: `hippo remember`, `hippo supersede` and `hippo trace`.
 
 import { envAnthropicApiKey } from '../util/env.js';
-import { evalNow } from '../core/ablation.js';
+import { evalNow, strengthAblation } from '../core/ablation.js';
 import * as fs from 'fs';
 import {
   calculateStrength,
@@ -329,9 +329,9 @@ type TraceView = ReturnType<typeof traceStats> & Awaited<ReturnType<typeof trace
 
 function traceStats(entry: MemoryEntry) {
   const now = evalNow();
-  const strength = calculateStrength(entry, now);
+  const strength = calculateStrength(entry, now, { ablation: strengthAblation() });
   const halfLife = entry.half_life_days;
-  const rewardFactor = calculateRewardFactor(entry);
+  const rewardFactor = calculateRewardFactor(entry, strengthAblation());
   const effHalfLife = halfLife * rewardFactor;
   const createdMs = new Date(entry.created).getTime();
   const ageDays = (now.getTime() - createdMs) / DAY_MS;
@@ -342,7 +342,7 @@ function traceStats(entry: MemoryEntry) {
 
   // Projected strength: same decay curve, just push `now` out.
   const projectedAt = (days: number): number =>
-    calculateStrength(entry, new Date(now.getTime() + days * DAY_MS));
+    calculateStrength(entry, new Date(now.getTime() + days * DAY_MS), { ablation: strengthAblation() });
   return { strength, halfLife, rewardFactor, effHalfLife, ageDays, sinceLast, facets, conf, projectedAt };
 }
 

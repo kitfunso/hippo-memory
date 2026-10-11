@@ -1,6 +1,6 @@
 /** Physics state persistence: particle state (position, velocity, mass, charge, temperature) in SQLite, with BLOB columns for 384-dim vectors. */
 
-import { evalNow } from '../core/ablation.js';
+import { evalNow, strengthAblation } from '../core/ablation.js';
 import type { DatabaseSyncLike } from './index.js';
 import { withWriteScope } from './busy.js';
 import type { MemoryEntry } from '../core/memory.js';
@@ -148,7 +148,7 @@ export function initializeParticle(
   embedding: number[],
   now: Date = evalNow(),
 ): PhysicsParticle {
-  const strength = calculateStrength(entry, now);
+  const strength = calculateStrength(entry, now, { ablation: strengthAblation() });
   const ageDays = (now.getTime() - new Date(entry.created).getTime()) / DAY_MS;
 
   return {
@@ -202,7 +202,7 @@ export function refreshParticleProperties(
     const entry = entries.get(p.memoryId);
     if (!entry) continue;
 
-    const strength = calculateStrength(entry, now);
+    const strength = calculateStrength(entry, now, { ablation: strengthAblation() });
     const ageDays = (now.getTime() - new Date(entry.created).getTime()) / DAY_MS;
 
     p.mass = computeMass(strength, entry.retrieval_count);

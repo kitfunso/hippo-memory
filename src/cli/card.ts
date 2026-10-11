@@ -11,6 +11,23 @@ import { requireInit } from './shared.js';
 import { errorMessage } from '../util/log.js';
 import { CliExit } from './exit.js';
 
+// Each subcommand's usage line, written once so the repeated checks cannot drift.
+const CARD_USAGE = {
+  create: 'hippo card create --title "..." [--repo <name>] [--contract <text>] [--budget <n>] [--depends-on <id>...]',
+  show: 'hippo card show <id> [--json]',
+  claim: 'hippo card claim <id> --runtime <name> [--session <id>]',
+  heartbeat: 'hippo card heartbeat <id> --run <n>',
+  review: 'hippo card review <id> [--run <n>]',
+  complete: 'hippo card complete <id> --outcome <success|failure|partial> [--run <n>]',
+  reclaim: 'hippo card reclaim (sweeps every expired lease; use hippo card block <id> for one card)',
+  comment: 'hippo card comment <id> --body "..." [--author <name>]',
+} as const;
+
+function usageError(sub: keyof typeof CARD_USAGE): CliExit {
+  printError(`Usage: ${CARD_USAGE[sub]}`);
+  return new CliExit(1);
+}
+
 // Mirrors ARCHIVE_REASON_REQUIRED so the block message can't drift from its usage line.
 const CARD_BLOCK_REASON_REQUIRED = 'hippo card block <id> requires --reason "<why>" (recorded as a comment).';
 
@@ -116,8 +133,7 @@ export function handleCard({ hippoRoot, tenantId, args, flags }: CommandContext)
 function cardCreate(hippoRoot: string, tenantId: string, _args: string[], flags: CliFlags): void {
   const title = stringFlagOrExit(flags, 'title') ?? '';
   if (!title) {
-    printError('Usage: hippo card create --title "..." [--repo <name>] [--contract <text>] [--budget <n>] [--depends-on <id>...]');
-    throw new CliExit(1);
+    throw usageError('create');
   }
   const repo = stringFlagOrExit(flags, 'repo') || undefined;
   const contract = stringFlagOrExit(flags, 'contract') || undefined;
@@ -150,8 +166,7 @@ function cardCreate(hippoRoot: string, tenantId: string, _args: string[], flags:
 function cardShow(hippoRoot: string, tenantId: string, args: string[], flags: CliFlags): void {
   const id = args[1];
   if (!id) {
-    printError('Usage: hippo card show <id> [--json]');
-    throw new CliExit(1);
+    throw usageError('show');
   }
   const detail = cardsApi.cardDetail(cliApiContext(hippoRoot, tenantId), id);
   if (!detail) {
@@ -189,8 +204,7 @@ function cardClaim(hippoRoot: string, tenantId: string, args: string[], flags: C
   const id = args[1];
   const runtime = stringFlagOrExit(flags, 'runtime') ?? '';
   if (!id || !runtime) {
-    printError('Usage: hippo card claim <id> --runtime <name> [--session <id>]');
-    throw new CliExit(1);
+    throw usageError('claim');
   }
   const sessionId = stringFlagOrExit(flags, 'session') || undefined;
   let card: (Card & { runId: number }) | null;
@@ -211,8 +225,7 @@ function cardHeartbeat(hippoRoot: string, tenantId: string, args: string[], flag
   const id = args[1];
   const runId = cardRunFlag(flags);
   if (!id || runId === undefined) {
-    printError('Usage: hippo card heartbeat <id> --run <n>');
-    throw new CliExit(1);
+    throw usageError('heartbeat');
   }
   let card: Card | null;
   try {
@@ -254,8 +267,7 @@ function cardBlock(hippoRoot: string, tenantId: string, args: string[], flags: C
 function cardReview(hippoRoot: string, tenantId: string, args: string[], flags: CliFlags): void {
   const id = args[1];
   if (!id) {
-    printError('Usage: hippo card review <id> [--run <n>]');
-    throw new CliExit(1);
+    throw usageError('review');
   }
   const runId = cardRunFlag(flags);
   let card: Card | null;
@@ -277,8 +289,7 @@ function cardComplete(hippoRoot: string, tenantId: string, args: string[], flags
   const id = args[1];
   const outcomeRaw = flags['outcome'];
   if (!id || !isHandoffOutcome(outcomeRaw)) {
-    printError('Usage: hippo card complete <id> --outcome <success|failure|partial> [--run <n>]');
-    throw new CliExit(1);
+    throw usageError('complete');
   }
   const runId = cardRunFlag(flags);
   let result: { card: Card; promotedChildren: string[] } | null;
@@ -301,8 +312,7 @@ function cardComplete(hippoRoot: string, tenantId: string, args: string[], flags
 
 function cardReclaim(hippoRoot: string, tenantId: string, args: string[]): void {
   if (args.length > 1) {
-    printError('Usage: hippo card reclaim (sweeps every expired lease; use hippo card block <id> for one card)');
-    throw new CliExit(1);
+    throw usageError('reclaim');
   }
   const ids = cardsApi.cardReclaimExpired(cliApiContext(hippoRoot, tenantId));
   if (ids.length === 0) {
@@ -317,8 +327,7 @@ function cardReclaim(hippoRoot: string, tenantId: string, args: string[]): void 
 function cardComment(hippoRoot: string, tenantId: string, args: string[], flags: CliFlags): void {
   const id = args[1];
   if (!id) {
-    printError('Usage: hippo card comment <id> --body "..." [--author <name>]');
-    throw new CliExit(1);
+    throw usageError('comment');
   }
   // Only show and comment look the card up directly; claim/heartbeat/block/review/complete throw from the store instead.
   const ctx = cliApiContext(hippoRoot, tenantId);
@@ -329,8 +338,7 @@ function cardComment(hippoRoot: string, tenantId: string, args: string[], flags:
   }
   const body = stringFlagOrExit(flags, 'body') ?? '';
   if (!body) {
-    printError('Usage: hippo card comment <id> --body "..." [--author <name>]');
-    throw new CliExit(1);
+    throw usageError('comment');
   }
   const author = stringFlagOrExit(flags, 'author') || 'cli';
   const comment = cardsApi.cardComment(ctx, id, author, body);

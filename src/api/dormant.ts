@@ -12,6 +12,7 @@ import {
   type DormantSnapshot,
   type ListDormantOpts,
 } from '../store/dormant.js';
+import { strengthAblation } from '../core/ablation.js';
 import { createMemory, calculateStrength, type MemoryEntry } from '../core/memory.js';
 import { loadConfig } from '../core/config.js';
 import { canTouchScope, personalScopeOf } from '../core/recall-scope.js';
@@ -52,7 +53,7 @@ function reviveSnapshot(ctx: Context, dormant: DormantSnapshot, now: Date): Memo
     last_retrieved: now.toISOString(),
   };
   if (dormant.reason === 'quality-repair') revived.confidence = 'verified';
-  return stampOriginProject(ctx.hippoRoot, { ...revived, strength: calculateStrength(revived, now) });
+  return stampOriginProject(ctx.hippoRoot, { ...revived, strength: calculateStrength(revived, now, { ablation: strengthAblation() }) });
 }
 
 /** Permanently deletes a dormant memory, the explicit "forget it for good"; throws when the tenant has no dormant memory with that id. */

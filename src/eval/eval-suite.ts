@@ -6,6 +6,7 @@ import { search } from '../search/bm25-search.js';
 import { multihopSearch } from '../search/multihop.js';
 import { mrr, recallAtK, ndcgAtK } from './eval.js';
 import { DAY_MS } from '../util/time.js';
+import { pct } from '../util/format.js';
 
 export type FeatureCategory =
   | 'direct-recall'
@@ -455,10 +456,6 @@ export function resultToBaseline(result: EvalSuiteResult): EvalBaseline {
     features,
     overall: result.overall,
   };
-}
-
-function pct(n: number): string {
-  return (n * 100).toFixed(1) + '%';
 }
 
 function pad(s: string, w: number): string {

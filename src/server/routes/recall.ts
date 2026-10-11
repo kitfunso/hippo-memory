@@ -9,7 +9,8 @@ import { httpParams, parseContextRequest, parseRecallRequest } from '../../api/r
 import { resetSessionRings } from '../../api/recall-record.js';
 import { HttpError, sendJson } from '../../util/http-util.js';
 import type { AuthedRouteRequest } from '../types.js';
-import { MAX_LIST_LIMIT, parseListLimit, validateIdSegment } from '../validation.js';
+import { MAX_LIST_LIMIT } from '../../util/limits.js';
+import { parseListLimit, validateIdSegment } from '../validation.js';
 
 /** Test-only: reset the HTTP recall rings. Call from beforeEach. */
 export function __resetSessionRecallHistoryHttp(): void {

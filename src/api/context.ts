@@ -15,7 +15,7 @@ import { markRetrieved, type MemoryEntry, COMPACTION_MEMORY_TAG } from '../core/
 import { isWorthSurfacing } from '../core/memory-quality.js';
 import { getGlobalRoot } from '../sharing/global-store.js';
 import type { RecallTraceInput } from '../store/recall-trace.js';
-import { evalNow } from '../core/ablation.js';
+import { evalNow, strengthAblation } from '../core/ablation.js';
 import { dropHeldCopies } from '../util/same-text.js';
 import { BadRequestError } from '../core/api-errors.js';
 import { isSharedStore, loadConfig } from '../core/config.js';
@@ -487,7 +487,7 @@ async function recordRetrieval(
   activeSnapshot: TaskSnapshot | null,
 ): Promise<RecordedRetrieval> {
   const toUpdate = selected.map((s) => s.entry);
-  const updatedEntries = markRetrieved(toUpdate);
+  const updatedEntries = markRetrieved(toUpdate, undefined, { ablation: strengthAblation() });
   const retrievedIds = updatedEntries.map((u) => u.id);
   const trace: RecallTraceInput = {
     tenantId: ctx.tenantId,

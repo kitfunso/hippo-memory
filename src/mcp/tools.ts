@@ -3,7 +3,7 @@
 import type { ToolInputSchema } from './tool-args.js';
 import { DEFAULT_RECALL_BUDGET } from '../core/search-types.js';
 import { DEFAULT_ASSEMBLE_BUDGET } from '../api/assemble.js';
-import { MAX_ID_LEN } from '../util/limits.js';
+import { MAX_ID_LEN, MAX_LIST_LIMIT } from '../util/limits.js';
 import { DEFAULT_SEARCH_CANDIDATE_LIMIT } from '../store/rows.js';
 import { DEFAULT_CONFIG } from '../core/config.js';
 
@@ -11,8 +11,6 @@ import { DEFAULT_CONFIG } from '../core/config.js';
 
 // HTTP sets no budget cap; 25x the recall default leaves room for large-context clients while bounding one call's work.
 const MAX_BUDGET_TOKENS = 25 * DEFAULT_RECALL_BUDGET;
-// Same ceiling as the HTTP list routes' parseListLimit.
-const MAX_LIST_LIMIT = 1000;
 
 interface McpToolDefinition {
   name: string;

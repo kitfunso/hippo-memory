@@ -3,6 +3,7 @@ import { appendAuditEvent } from '../store/audit.js';
 import { withTrialScope, withWriteScope, type DatabaseSyncLike } from '../db/index.js';
 import { deleteDormantRow, dormantSnapshotsBySourcePrefix, readDormantSnapshot, replaceDormantEntry } from '../store/dormant.js';
 import { gatedWrite } from '../store/gated-write.js';
+import { strengthAblation } from '../core/ablation.js';
 import { Layer, calculateStrength, createMemory, type MemoryEntry } from '../core/memory.js';
 import { findRejectedValue, rejectionDigest } from '../store/rejection.js';
 import { redactSecretsStrict } from '../util/secret-detect.js';
@@ -234,7 +235,7 @@ class ContainerRun {
       tags: [...tags, this.tag],
       last_retrieved: now.toISOString(),
     };
-    if (!this.gated(stampOriginProject(this.s.hippoRoot, { ...revived, strength: calculateStrength(revived, now) }))) return;
+    if (!this.gated(stampOriginProject(this.s.hippoRoot, { ...revived, strength: calculateStrength(revived, now, { ablation: strengthAblation() }) }))) return;
     deleteDormantRow(this.s.db, this.s.tenantId, dormantId);
     appendAuditEvent(this.s.db, {
       tenantId: this.s.tenantId,

@@ -1,3 +1,4 @@
+import { strengthAblation } from '../core/ablation.js';
 import { type MemoryEntry, markRetrieved } from '../core/memory.js';
 import { type DatabaseSyncLike, closeHippoDb, openHippoDb, withWriteScope } from '../db/index.js';
 import { rethrowIfSqliteBlocked } from '../util/sqlite-blocked.js';
@@ -192,7 +193,7 @@ export function strengthenRetrievedOn(db: DatabaseSyncLike, ids: readonly string
   const update = db.prepare(
     'UPDATE memories SET retrieval_count = ?, last_retrieved = ?, half_life_days = ?, strength = ? WHERE id = ?',
   );
-  for (const e of markRetrieved(live)) {
+  for (const e of markRetrieved(live, undefined, { ablation: strengthAblation() })) {
     update.run(e.retrieval_count, e.last_retrieved, e.half_life_days, e.strength, e.id);
     found.add(e.id);
   }

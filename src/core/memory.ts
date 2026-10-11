@@ -3,12 +3,7 @@
 import { DEFAULT_TENANT_ID, envLossAversionRatio } from '../util/env.js';
 import { BadRequestError } from './api-errors.js';
 import { randomUUID } from 'crypto';
-import {
-  isDecayAblated,
-  isOutcomeSlowAblated,
-  isRecallBoostAblated,
-  evalNow,
-} from './ablation.js';
+import { evalNow, NO_STRENGTH_ABLATION, type StrengthAblation } from './ablation.js';
 import { AGENT_MEMORY_TOOLS, toolSourcePrefix } from './agent-memory-tools.js';
 import { isJsonString } from '../util/json.js';
 import { DAY_MS } from '../util/time.js';
@@ -138,9 +133,12 @@ export function applyLossAversionRatio(
 }
 
 /** 1 + REWARD_SLOPE * (pos - neg) / (pos + neg + 1), in (0.5, 1.5), 1.0 with no outcomes; it scales the effective half-life. */
-export function calculateRewardFactor(entry: Pick<MemoryEntry, 'outcome_positive' | 'outcome_negative'>): number {
+export function calculateRewardFactor(
+  entry: Pick<MemoryEntry, 'outcome_positive' | 'outcome_negative'>,
+  ablation: StrengthAblation = NO_STRENGTH_ABLATION,
+): number {
   // EVAL-ONLY ablation (see ablation.ts): the slow outcome channel.
-  if (isOutcomeSlowAblated()) return 1.0;
+  if (ablation.outcomeSlow) return 1.0;
   const pos = entry.outcome_positive ?? 0;
   const neg = entry.outcome_negative ?? 0;
   if (pos === 0 && neg === 0) return 1.0;
@@ -157,8 +155,11 @@ export const REWARD_SLOPE = 0.5;
 export const RETRIEVAL_BOOST_SLOPE = 0.1;
 
 /** Bad outcome marks past good ones, floored at zero; each halves strength and stops recall strengthening, so a correction outranks pinning. */
-export function netWrong(entry: Pick<MemoryEntry, 'outcome_positive' | 'outcome_negative'>): number {
-  if (isOutcomeSlowAblated() || isDecayAblated()) return 0;
+export function netWrong(
+  entry: Pick<MemoryEntry, 'outcome_positive' | 'outcome_negative'>,
+  ablation: StrengthAblation = NO_STRENGTH_ABLATION,
+): number {
+  if (ablation.outcomeSlow || ablation.decay) return 0;
   return Math.max(0, (entry.outcome_negative ?? 0) - (entry.outcome_positive ?? 0));
 }
 
@@ -175,6 +176,8 @@ export interface DecayOptions {
   avgSessionIntervalDays?: number;
   /** Total sleep cycles completed. Used by consolidation tracking. */
   sleepCount?: number;
+  /** EVAL-ONLY switches resolved once at the entry layer (`strengthAblation()`); absent means production scoring. */
+  ablation?: StrengthAblation;
 }
 
 /** Strength at `now` = decay * retrieval boost * emotional multiplier, clamped to [0, 1]; the basis modes are on DecayOptions.
@@ -185,17 +188,18 @@ export function calculateStrength(
   now: Date = evalNow(),
   options: DecayOptions = {},
 ): number {
+  const ablation = options.ablation ?? NO_STRENGTH_ABLATION;
   // Being marked wrong outranks every shield: pinning, error tags, heavy recall.
-  const wrongPenalty = Math.pow(DECAY_BASE, Math.min(netWrong(entry), MAX_WRONG_HALVINGS));
+  const wrongPenalty = Math.pow(DECAY_BASE, Math.min(netWrong(entry, ablation), MAX_WRONG_HALVINGS));
   if (entry.pinned) return wrongPenalty;
 
   // EVAL-ONLY ablation (see ablation.ts): anchor decay at creation so clock resets from earlier unflagged runs cannot leak in.
   const lastRetrieved = new Date(
-    isRecallBoostAblated() ? entry.created : entry.last_retrieved,
+    ablation.recallBoost ? entry.created : entry.last_retrieved,
   );
   const daysSince = (now.getTime() - lastRetrieved.getTime()) / DAY_MS;
 
-  const rewardFactor = calculateRewardFactor(entry);
+  const rewardFactor = calculateRewardFactor(entry, ablation);
   const effectiveHalfLife = entry.half_life_days * rewardFactor;
 
   // Guard: zero half-life causes 0/0 = NaN in the exponent
@@ -204,9 +208,9 @@ export function calculateStrength(
   const decayExponent = decayExponentFor(options, daysSince, effectiveHalfLife);
 
   // EVAL-ONLY ablation (see ablation.ts): decay := 1, so the [0,1] clamp below caps the boost at baseline.
-  const decay = isDecayAblated() ? 1.0 : Math.pow(DECAY_BASE, decayExponent);
+  const decay = ablation.decay ? 1.0 : Math.pow(DECAY_BASE, decayExponent);
 
-  const retrievalBoost = retrievalBoostFor(entry);
+  const retrievalBoost = retrievalBoostFor(entry, ablation);
 
   const baseMultiplier = EMOTIONAL_MULTIPLIERS[entry.emotional_valence] ?? 1.0;
   const emotionalMultiplier = applyLossAversionRatio(entry.emotional_valence, baseMultiplier);
@@ -238,8 +242,8 @@ function decayExponentFor(options: DecayOptions, daysSince: number, halfLifeDays
 }
 
 // EVAL-ONLY ablation (see ablation.ts) neutralizes the read side too, so counts written before the flag cannot leak in.
-function retrievalBoostFor(entry: StrengthInputs): number {
-  return isRecallBoostAblated() || netWrong(entry) > 0
+function retrievalBoostFor(entry: StrengthInputs, ablation: StrengthAblation): number {
+  return ablation.recallBoost || netWrong(entry, ablation) > 0
     ? 1.0
     : 1 + RETRIEVAL_BOOST_SLOPE * Math.log2(entry.retrieval_count + 1);
 }
@@ -551,11 +555,16 @@ function inferValence(tags: string[]): EmotionalValence {
 
 /** Returns copies with the retrieval count, clock and half-life updated; the caller persists them.
  *  Under HIPPO_ABLATE_RECALL_BOOST (eval-only) the entries come back unchanged, not empty, since callers derive last_retrieval_ids from them. */
-export function markRetrieved(entries: MemoryEntry[], now: Date = evalNow()): MemoryEntry[] {
-  if (isRecallBoostAblated()) return entries;
+export function markRetrieved(
+  entries: MemoryEntry[],
+  now: Date = evalNow(),
+  options: Pick<DecayOptions, 'ablation'> = {},
+): MemoryEntry[] {
+  const ablation = options.ablation ?? NO_STRENGTH_ABLATION;
+  if (ablation.recallBoost) return entries;
   return entries.map((e) => {
     if (e.superseded_by) return e;
-    const wrong = netWrong(e) > 0;
+    const wrong = netWrong(e, ablation) > 0;
     // Confidence stays untouched: it is an epistemic tier, not a recency signal.
     const updated: MemoryEntry = {
       ...e,
@@ -564,7 +573,7 @@ export function markRetrieved(entries: MemoryEntry[], now: Date = evalNow()): Me
       last_retrieved: wrong ? e.last_retrieved : now.toISOString(),
       half_life_days: wrong ? e.half_life_days : e.half_life_days + RETRIEVAL_HALF_LIFE_GAIN_DAYS,
     };
-    updated.strength = calculateStrength(updated, now);
+    updated.strength = calculateStrength(updated, now, { ablation });
     return updated;
   });
 }

@@ -1,9 +1,8 @@
 // Request-body and path-segment validators shared by the /v1 route handlers.
-import { DEFAULT_LIST_LIMIT } from '../util/limits.js';
 import type { IncomingMessage } from 'node:http';
 import type { Context, RememberOpts } from '../api/index.js';
 import { HttpError, readBody } from '../util/http-util.js';
-import { MAX_ID_LEN } from '../util/limits.js';
+import { DEFAULT_LIST_LIMIT, MAX_ID_LEN, MAX_LIST_LIMIT, resolveListLimit } from '../util/limits.js';
 import { type JsonValue, isJsonString, isJsonObject } from '../util/json.js';
 
 // Runtime membership check for a `ReadonlySet<T>` of string-literal members: Set<T>.has gives no narrowing, so this is the one place the `as T` assertion lives
@@ -16,16 +15,9 @@ export function isSetMember<T extends string>(set: ReadonlySet<T>, value: string
 // Cap for short free-text HTTP fields (names, text, context, change summaries) on the object routes.
 export const MAX_SHORT_FIELD_LEN = 4096;
 
-// Number.isInteger, not isFinite: SQLite `LIMIT ?` rejects "1.5" with a 500.
-// Shared by every first-class-object list route so the guard cannot drift.
-export const MAX_LIST_LIMIT = 1000;
-
 export function parseListLimit(limitRaw: string | null, defaultLimit = DEFAULT_LIST_LIMIT, maxLimit = MAX_LIST_LIMIT): number {
-  if (limitRaw === null) return defaultLimit;
-  const limit = Number(limitRaw);
-  if (!Number.isInteger(limit) || limit <= 0 || limit > maxLimit) {
-    throw new HttpError(400, `limit must be a positive integer <= ${maxLimit}`);
-  }
+  const limit = resolveListLimit(limitRaw === null ? undefined : Number(limitRaw), defaultLimit, maxLimit);
+  if (limit === undefined) throw new HttpError(400, `limit must be a positive integer <= ${maxLimit}`);
   return limit;
 }
 

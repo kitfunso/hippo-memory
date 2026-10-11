@@ -1,7 +1,7 @@
 // Read-only report verbs: status, inspect, tokens, failures, provenance, correction latency, doctor and support bundle.
 
 import { envHomeDir } from '../util/env.js';
-import { evalNow } from '../core/ablation.js';
+import { evalNow, strengthAblation } from '../core/ablation.js';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -153,7 +153,7 @@ async function cmdInspect(hippoRoot: string, tenantId: string, id: string): Prom
   }
 
   const now = evalNow();
-  const currentStrength = calculateStrength(entry, now);
+  const currentStrength = calculateStrength(entry, now, { ablation: strengthAblation() });
   const lastRetrieved = new Date(entry.last_retrieved);
   const created = new Date(entry.created);
   const ageDays = (now.getTime() - created.getTime()) / DAY_MS;
@@ -174,7 +174,7 @@ async function cmdInspect(hippoRoot: string, tenantId: string, id: string): Prom
   console.log(`Schema fit:       ${entry.schema_fit}`);
   console.log(`Pinned:           ${entry.pinned}`);
   console.log(`Tags:             ${entry.tags.join(', ') || 'none'}`);
-  const rewardFactor = calculateRewardFactor(entry);
+  const rewardFactor = calculateRewardFactor(entry, strengthAblation());
   const pos = entry.outcome_positive ?? 0;
   const neg = entry.outcome_negative ?? 0;
   const outcomeLabel = pos === 0 && neg === 0

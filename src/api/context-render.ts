@@ -1,7 +1,7 @@
 // The strings a context block prints. The budget prices these same strings, so selection and print cannot drift.
 import { MINUTE_MS } from '../util/time.js';
 import { calculateStrength, confidenceFacets, confidenceLabel, type MemoryEntry } from '../core/memory.js';
-import { evalNow } from '../core/ablation.js';
+import { evalNow, strengthAblation } from '../core/ablation.js';
 import { estimateTokens } from '../util/token-text.js';
 import { renderAmbientSummary, type AmbientState } from '../core/ambient.js';
 import { formatHandoffEvidenceLine, type SessionHandoff } from '../core/handoff.js';
@@ -81,7 +81,7 @@ export function contextLine(
   framing: string,
   showStrength: boolean,
   now: Date,
-  strengthPct: number = Math.round(calculateStrength(item.entry) * 100),
+  strengthPct: number = Math.round(calculateStrength(item.entry, undefined, { ablation: strengthAblation() }) * 100),
 ): string {
   const e = item.entry;
   const tagStr = e.tags.length > 0 ? ` [${e.tags.join(', ')}]` : '';

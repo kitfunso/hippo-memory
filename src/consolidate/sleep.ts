@@ -1,6 +1,6 @@
 /** Consolidation engine ("Sleep"): decay pass (drop entries below the strength threshold), merge pass (semantic summaries of overlapping episodics), stats. */
 
-import { evalNow } from '../core/ablation.js';
+import { evalNow, strengthAblation } from '../core/ablation.js';
 import { MemoryEntry, canAutoDelete, type DecayOptions } from '../core/memory.js';
 import { loadAllEntriesWithBase } from '../store/entry-reads.js';
 import { commitInChunks, memoriesBackingObjects, type LoadedRows } from '../store/delete-and-batch.js';
@@ -76,6 +76,7 @@ function sessionDecayOptions(hippoRoot: string, config: SleepRun['config']): Dec
     decayBasis: config.decayBasis,
     avgSessionIntervalDays: sessionCtx.avgSessionIntervalDays,
     sleepCount: sessionCtx.sleepCount,
+    ablation: strengthAblation(),
   };
 }
 

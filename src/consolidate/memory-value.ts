@@ -2,6 +2,7 @@
  * rescueSet rescues a condemned entry iff it ranks in the top 30% (RESCUE_BUDGET) of its tenant's non-pinned set; memory-value-wiring.test.ts guards parity. */
 
 import { DEFAULT_TENANT_ID } from '../util/env.js';
+import { strengthAblation } from '../core/ablation.js';
 import { type MemoryEntry, calculateStrength } from '../core/memory.js';
 import { compareEntryIdentity } from '../core/compare.js';
 import { MEMORY_VALUE_WEIGHTS, SOURCE_ARTIFACT_SHA256 } from './memory-value-weights.js';
@@ -47,7 +48,7 @@ export function computeMvFeatures(entry: MemoryEntry, now: Date): MvFeatureVecto
   return {
     age_days: ageDays,
     half_life_days: entry.half_life_days,
-    strength: calculateStrength(entry, now), // clock-basis, never decayOpts — see doc comment above
+    strength: calculateStrength(entry, now, { ablation: strengthAblation() }), // clock-basis, never the production decay basis — see doc comment above
     retrieval_count: entry.retrieval_count,
     outcome_positive: pos,
     outcome_negative: neg,
