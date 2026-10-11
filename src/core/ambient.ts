@@ -39,6 +39,11 @@ export interface AmbientState {
   totalMemories: number;
 }
 
+/** A memory is fresh when created within this window. */
+export const AMBIENT_FRESH_WINDOW_MS = 7 * DAY_MS;
+/** A memory counts as high schema fit strictly above this. */
+export const HIGH_SCHEMA_FIT_ABOVE = 0.7;
+
 /** Row counts and sums an AmbientState is derived from; two stores' tallies add with addAmbientTallies. */
 export interface AmbientTallies {
   total: number;
@@ -83,7 +88,7 @@ export function isErrorTagged(tags: readonly string[]): boolean {
 /** Tallies over loaded entries; superseded rows count toward the total only, as they always have here. */
 export function tallyAmbientEntries(entries: readonly MemoryEntry[], now?: Date): AmbientTallies {
   const currentTime = now ?? evalNow(); // honors HIPPO_FAKE_NOW (eval-only)
-  const sevenDaysAgo = currentTime.getTime() - 7 * DAY_MS;
+  const freshAfter = currentTime.getTime() - AMBIENT_FRESH_WINDOW_MS;
   const t: AmbientTallies = {
     total: entries.length, strengthSum: 0, fresh: 0, negative: 0, highSchemaFit: 0, errors: 0,
     semantic: 0, episodic: 0, conflicts: 0, extracted: 0, maxDagLevel: 0, tagCounts: new Map(),
@@ -92,10 +97,10 @@ export function tallyAmbientEntries(entries: readonly MemoryEntry[], now?: Date)
     if (entry.superseded_by) continue;
     for (const tag of entry.tags) t.tagCounts.set(tag, (t.tagCounts.get(tag) ?? 0) + 1);
     t.strengthSum += calculateStrength(entry, currentTime);
-    if (new Date(entry.created).getTime() > sevenDaysAgo) t.fresh++;
+    if (new Date(entry.created).getTime() > freshAfter) t.fresh++;
     if (entry.emotional_valence === 'negative' || entry.emotional_valence === 'critical') t.negative++;
     if (isErrorTagged(entry.tags)) t.errors++;
-    if (entry.schema_fit > 0.7) t.highSchemaFit++;
+    if (entry.schema_fit > HIGH_SCHEMA_FIT_ABOVE) t.highSchemaFit++;
     if (entry.layer === Layer.Semantic) t.semantic++;
     if (entry.layer === Layer.Episodic) t.episodic++;
     t.conflicts += entry.conflicts_with.length;

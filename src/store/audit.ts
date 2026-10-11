@@ -1,3 +1,4 @@
+import { DEFAULT_LIST_LIMIT } from '../util/limits.js';
 import { canAutoDelete, type MemoryEntry } from '../core/memory.js';
 import { closeHippoDb, openHippoDb, withWriteScope, type DatabaseSyncLike } from '../db/index.js';
 import type { JsonObject } from './working-memory.js';
@@ -260,7 +261,7 @@ export function queryAuditEvents(db: DatabaseSyncLike, opts: QueryAuditOpts): Au
   }
   const after = keysetAfter('ts', 'id', opts.after);
   // One past the route's 10000 cap: GET /v1/audit reads a row ahead to tell whether another page exists.
-  const limit = Math.max(1, Math.min(opts.limit ?? 100, 10001));
+  const limit = Math.max(1, Math.min(opts.limit ?? DEFAULT_LIST_LIMIT, 10001));
   // SAFETY: AUDIT_COLUMNS names exactly the AuditRow columns, in this order.
   const rows = db
     .prepare(

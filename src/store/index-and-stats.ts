@@ -134,7 +134,7 @@ export function appendConsolidationRun(
       run.merged,
       run.removed
     );
-    pruneConsolidationRuns(db, 50);
+    pruneConsolidationRuns(db);
     writeStatsMirror(hippoRoot, buildStatsFromDb(db));
   }, openStore);
 }

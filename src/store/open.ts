@@ -3,7 +3,9 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { DEFAULT_HALF_LIFE_DAYS, type MemoryEntry, Layer } from '../core/memory.js';
-import { closeHippoDb, currentRequestStores, type DatabaseSyncLike, openHippoDb, getMeta, setMeta, withWriteScope } from '../db/index.js';
+import {
+  closeHippoDb, currentRequestStores, type DatabaseSyncLike, openHippoDb, getMeta, setMeta, withWriteScope, pruneConsolidationRuns,
+} from '../db/index.js';
 import { openHippoDbWithFacts } from '../db/open.js';
 import { type ResolveProjectIdentityOpts, findHippoStoreDir } from '../core/project-identity.js';
 import { realpathOrResolve } from '../util/real-path.js';
@@ -153,6 +155,8 @@ function importLegacyIndexAndStats(db: DatabaseSyncLike, hippoRoot: string): voi
       Number(row.removed ?? 0)
     );
   }
+  // Same cap as every later sleep, so stats.json and the table agree from the first open.
+  pruneConsolidationRuns(db);
 }
 
 export function loadLegacyEntriesFromMarkdown(hippoRoot: string): MemoryEntry[] {

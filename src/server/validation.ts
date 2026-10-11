@@ -1,4 +1,5 @@
 // Request-body and path-segment validators shared by the /v1 route handlers.
+import { DEFAULT_LIST_LIMIT } from '../util/limits.js';
 import type { IncomingMessage } from 'node:http';
 import type { Context, RememberOpts } from '../api/index.js';
 import { HttpError, MAX_ID_LEN, readBody } from '../util/http-util.js';
@@ -18,7 +19,7 @@ export const MAX_SHORT_FIELD_LEN = 4096;
 // Shared by every first-class-object list route so the guard cannot drift.
 export const MAX_LIST_LIMIT = 1000;
 
-export function parseListLimit(limitRaw: string | null, defaultLimit = 100, maxLimit = MAX_LIST_LIMIT): number {
+export function parseListLimit(limitRaw: string | null, defaultLimit = DEFAULT_LIST_LIMIT, maxLimit = MAX_LIST_LIMIT): number {
   if (limitRaw === null) return defaultLimit;
   const limit = Number(limitRaw);
   if (!Number.isInteger(limit) || limit <= 0 || limit > maxLimit) {
