@@ -1,10 +1,11 @@
 // Cross-tenant actions need a host admin: a tenant's own admin key stops at its tenant. Real server, real SQLite.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
+import { makeRoot } from './_helpers/make-root.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { createApiKey } from '../src/store/auth.js';
 import { adminActor } from '../src/api/index.js';
@@ -17,13 +18,6 @@ const CLI = join(process.cwd(), 'dist', 'cli.js');
 let home: string;
 let globalHome: string;
 let handle: ServerHandle;
-
-function makeRoot(prefix: string): string {
-  const dir = mkdtempSync(join(tmpdir(), prefix));
-  mkdirSync(join(dir, '.hippo'), { recursive: true });
-  initStore(dir);
-  return dir;
-}
 
 function key(tenantId: string, role: 'admin' | 'member'): string {
   const db = openHippoDb(home);
@@ -64,8 +58,8 @@ function sleepRuns(): number {
 }
 
 beforeEach(async () => {
-  home = makeRoot('hippo-host-admin-');
-  globalHome = makeRoot('hippo-host-admin-global-');
+  home = makeRoot('host-admin');
+  globalHome = makeRoot('host-admin-global');
   vi.stubEnv('HIPPO_HOME', globalHome);
   vi.stubEnv('HIPPO_TENANT', '');
   vi.stubEnv('ANTHROPIC_API_KEY', '');

@@ -10,32 +10,15 @@
 // Uses the Task-6 isolation harness: separate cwd tempdir, isolated HIPPO_HOME
 // global root, HIPPO_SKIP_AUTO_INTEGRATIONS=1.
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { initStore } from '../src/store/open.js';
 import { remember, type HippoDbContext } from '../src/api/index.js';
 import { pushGoal, completeGoal } from '../src/store/goals.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
+import { makeEnv, type TestEnv } from './_helpers/cli-env.js';
 
 const CLI = join(process.cwd(), 'dist', 'cli.js');
-
-interface TestEnv {
-  cwd: string;
-  hippoRoot: string;
-  globalRoot: string;
-}
-
-function makeEnv(): TestEnv {
-  const cwd = mkdtempSync(join(tmpdir(), 'hippo-b3-review-'));
-  const hippoRoot = join(cwd, '.hippo');
-  const globalRoot = join(cwd, 'global-hippo');
-  mkdirSync(globalRoot, { recursive: true });
-  initStore(hippoRoot);
-  initStore(globalRoot);
-  return { cwd, hippoRoot, globalRoot };
-}
 
 function runRecall(env: TestEnv, query: string, sessionId: string): string {
   return execFileSync(
@@ -61,7 +44,7 @@ describe('goal recall log, completion and CLI flag failure paths', () => {
   let env: TestEnv;
 
   beforeEach(() => {
-    env = makeEnv();
+    env = makeEnv('b3-review', { initGlobal: true });
   });
 
   afterEach(() => {

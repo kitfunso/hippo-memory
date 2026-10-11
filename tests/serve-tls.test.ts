@@ -10,6 +10,7 @@ import { join } from 'node:path';
 import { log } from '../src/util/log.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { initStore } from '../src/store/open.js';
+import { waitFor } from './_helpers/wait-for.js';
 
 const CLI_PATH = join(process.cwd(), 'dist', 'cli.js');
 const savedRequireAuth = process.env.HIPPO_REQUIRE_AUTH;
@@ -118,9 +119,18 @@ describe('hippo serve over TLS', () => {
     if (savedRequireAuth === undefined) delete process.env.HIPPO_REQUIRE_AUTH;
     else process.env.HIPPO_REQUIRE_AUTH = savedRequireAuth;
     for (const kill of children.splice(0)) kill();
-    // A killed child holds the store open for a moment on Windows.
-    if (process.platform === 'win32') await new Promise((r) => setTimeout(r, 200));
-    rmSync(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    // A killed child holds the store open for a moment on Windows, so removal is retried until the child lets go.
+    await waitFor(() => {
+      try {
+        rmSync(home, { recursive: true, force: true });
+        return true;
+      } catch (err) {
+        // SAFETY: rmSync throws only errno exceptions.
+        const { code } = err as NodeJS.ErrnoException;
+        if (code === 'EPERM' || code === 'EBUSY') return false;
+        throw err;
+      }
+    }, { timeoutMs: 5_000, intervalMs: 50, what: 'the killed server child releasing its store' });
   });
 
   const childEnv = (extra: Record<string, string>): NodeJS.ProcessEnv =>

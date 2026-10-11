@@ -34,23 +34,9 @@ import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { insertEntityAt, insertRelationAt } from './_helpers/graph-seed.js';
 import { remember, type Context } from '../src/api/index.js';
+import { makeEnv, type TestEnv } from './_helpers/cli-env.js';
 
 const CLI = join(process.cwd(), 'dist', 'cli.js');
-
-interface TestEnv {
-  cwd: string;
-  hippoRoot: string;
-  globalRoot: string;
-}
-
-function makeEnv(prefix: string): TestEnv {
-  const cwd = mkdtempSync(join(tmpdir(), `hippo-c5-${prefix}-`));
-  const hippoRoot = join(cwd, '.hippo');
-  const globalRoot = join(cwd, 'global-hippo');
-  mkdirSync(globalRoot, { recursive: true });
-  initStore(hippoRoot);
-  return { cwd, hippoRoot, globalRoot };
-}
 
 function ctxFor(root: string): Context {
   return { hippoRoot: root, tenantId: 'default', actor: { subject: 'c5-test', role: 'admin' } };
@@ -147,7 +133,7 @@ describe('cmdRecall candidate accounting closes', () => {
   ])(
     'totalCandidates == droppedPreRank + droppedByBudget + returned ($keyword, limit=$limit)',
     async ({ keyword, seeded, limit }) => {
-      env = makeEnv(keyword);
+      env = makeEnv(`c5-${keyword}`);
       await seedMatchingMemories(env, keyword, seeded);
 
       const out = recallJson(env, keyword, limit);
@@ -163,7 +149,7 @@ describe('cmdRecall candidate accounting closes', () => {
   );
 
   it('invariant also holds when nothing is truncated (droppedByBudget == 0)', async () => {
-    env = makeEnv('notrunc');
+    env = makeEnv('c5-notrunc');
     await seedMatchingMemories(env, 'widgetdelta', 5);
 
     const out = recallJson(env, 'widgetdelta', 100);
@@ -256,7 +242,7 @@ describe('BUDGET-driven truncation is counted (the measured failure)', () => {
   // totalCandidates 400, returned 3, droppedByBudget 0, Cutoff line silent.
   // This is the case that must go red without the derivation fix.
   it('reports drops when a small --budget truncates and --limit is never passed', async () => {
-    env = makeEnv('budget-gap');
+    env = makeEnv('c5-budget-gap');
     await seedMatchingMemories(env, 'widgetbudget', 40);
 
     const out = recallJsonBudget(env, 'widgetbudget', 40);
@@ -283,7 +269,7 @@ describe('the `Cutoff:` line prints on a truncated CLI recall', () => {
   });
 
   it('prints "Cutoff:" naming the dropped count when --limit truncates the result set', async () => {
-    env = makeEnv('print-gap');
+    env = makeEnv('c5-print-gap');
     await seedMatchingMemories(env, 'widgetepsilon', 30);
 
     const output = recallText(env, 'widgetepsilon', 5);
@@ -304,7 +290,7 @@ describe('the `Cutoff:` line prints on a truncated CLI recall', () => {
   });
 
   it('does NOT print "Cutoff:" when the recall is not truncated (no always-on noise)', async () => {
-    env = makeEnv('no-print');
+    env = makeEnv('c5-no-print');
     await seedMatchingMemories(env, 'widgetzeta', 3);
 
     const output = recallText(env, 'widgetzeta', 100);

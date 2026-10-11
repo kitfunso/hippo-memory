@@ -26,6 +26,7 @@ import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { createApiKey } from '../src/store/auth.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import type { JsonValue } from '../src/util/json.js';
+import { waitFor } from './_helpers/wait-for.js';
 
 const ADAPTER_PATH = fileURLToPath(new URL('../deploy/aml/adapter/adapter.mjs', import.meta.url));
 
@@ -37,18 +38,14 @@ interface SearchRow {
 }
 
 async function waitForAdapterReady(baseUrl: string, timeoutMs = 10_000): Promise<void> {
-  const deadline = Date.now() + timeoutMs;
-  let lastErr: unknown;
-  while (Date.now() < deadline) {
+  await waitFor(async () => {
     try {
       const res = await fetch(`${baseUrl}/health`);
-      if (res.status === 200 || res.status === 503) return;
-    } catch (err) {
-      lastErr = err;
+      return res.status === 200 || res.status === 503;
+    } catch {
+      return false; // not listening yet
     }
-    await new Promise((resolve) => setTimeout(resolve, 50));
-  }
-  throw new Error(`adapter never became reachable at ${baseUrl}: ${String(lastErr)}`);
+  }, { timeoutMs, intervalMs: 50, what: `adapter reachable at ${baseUrl}` });
 }
 
 interface AdapterHandle {

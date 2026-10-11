@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
@@ -18,7 +18,10 @@ describe('github DLQ', () => {
     ctx = { hippoRoot: root, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
   });
 
-  afterEach(() => rmSync(root, { recursive: true, force: true }));
+  afterEach(() => {
+    vi.useRealTimers();
+    rmSync(root, { recursive: true, force: true });
+  });
 
   it('parkInDlq round-trips all rich metadata fields', async () => {
     const id = await parkInDlq(githubDlq, root, {
@@ -85,9 +88,11 @@ describe('github DLQ', () => {
   });
 
   it('listDlq filters by tenant and orders by received_at ASC', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-01-01T00:00:00.000Z'));
     await parkInDlq(githubDlq, root, { tenantId: 'default', rawPayload: '{"i":1}', error: 'first' });
-    // Force a different received_at by sleeping a millisecond.
-    await new Promise((r) => setTimeout(r, 5));
+    // A later clock makes received_at differ without a sleep.
+    vi.setSystemTime(new Date('2026-01-01T00:00:01.000Z'));
     await parkInDlq(githubDlq, root, { tenantId: 'default', rawPayload: '{"i":2}', error: 'second' });
     await parkInDlq(githubDlq, root, { tenantId: 'acme', rawPayload: '{"i":3}', error: 'other tenant' });
 
