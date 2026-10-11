@@ -242,6 +242,20 @@ The smoke then ran on the calibration build (`C:/z0-runs/s6/smoke-a2-run4`, `pin
 
 So from here on, G1 delivery for hippo's hooks is checked on what the model received. `C:/z0-runs/s7/hook-check.mjs` reads each session's transcript and lists every hippo start and prompt hook per arm. It exits 1 when a prompt hook timed out (run4: 6 failed, run3: 0). Calibration starts one chunk at a time after a bare-launch check (`C:/z0-runs/s7/box-check.sh`, median of 7 at or under 150 ms). A second chunk joins only while the slowest hippo hook stays under 2.5 s. A stopped chunk cannot resume, because lockstep carries each arm's store from task to task. So one timeout does not stop a chunk. The stop comes once more than 5% of an arm's sessions have had a prompt hook time out, the G4 plumbing bar. The chunk then reruns from the start on a quiet box. hippo's 5 s limit stays as it is: users install it, and raising it would change the build under test. The calibration report gives every arm's hook counts.
 
+## S7: a leak voids Comonicon.jl's seed 1
+
+The Comonicon.jl chunk (`C:/z0-runs/s7/cal-cj`) recorded seed 1's first task, cj-f3-teach, in all five arms. The G3 check then found cj-f2-l1's key phrase, "Conventional commits", in A2's memory: Claude Code's auto memory, hippo's global store and the work store. A2 had filed cj-f3's rule (mark a breaking change with `feat!:` or `fix!:` or a `BREAKING CHANGE:` footer) as "Conventional Commits style". So the runner voided seed 1 in every arm, and the other 65 of its 70 sessions were skipped as `invalid: leak`.
+
+The check did what G3 says. The fault is in S3. cj-f2 and cj-f3 are lines 72 and 73 of one list in Comonicon.jl's AGENTS.md, two parts of one convention. f3's rule is part of a standard the agent knows, so its memory names the standard, and that name is f2's key phrase. The S4 screen could not catch this: it runs only A0 and A4, which keep no memory, and the phrase re-pick reads repository files, prompts and the other lessons' text, never what an agent writes.
+
+Seed 2 teaches cj-f2 at position 2, before cj-f3 at position 3, so this direction cannot happen there. The other direction can: a memory written at cj-f2-teach that names `BREAKING CHANGE`. If G3 voids seed 2 as well, Comonicon.jl gives no calibration records and S9 sizes from hippo and boring-maths alone, and says so.
+
+No other pair is nested. bm-f3 and bm-f4 come from two sections of boring-maths' AGENTS.md (the new calculator checklist at line 64, Git at line 77). hp-f3 is in hippo's "Never Do" list (line 31). hp-f4 and bm-f5 are templates. ml-f1, ml-f2 and ml-f3 are three different rules: commit names, the strings file and the build command.
+
+The scored task set is authored after the freeze (prereg, "Scored task set"), so the fix goes there. Its author brief gets one more rule: two families from one repository may not come from one convention, and no key phrase may be the name of a convention that another family's rule belongs to. The S3 check reads each same-repository pair against that rule before the screen.
+
+The A5 seed 1 teach also lost its prompt hook, at 7.3 s. The hippo chunk had joined at a slowest hook of 0.8 s, and its first session ran beside that teach while other sessions' test runs held the bare-launch check at 640 to 700 ms. The session is in the voided seed, so it does not count toward any arm's bar.
+
 ## Contract limits found
 
 - A checker's `CHECK_POST_COMMIT` is a state commit whose parent is the pre-session commit, so the agent's own commits are not visible to it. Commit-message rules are checked from the `git commit` commands in `CHECK_COMMANDS`.
