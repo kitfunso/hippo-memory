@@ -9,10 +9,10 @@ import { cliApiContext } from '../src/cli/api-context.js';
 import { listMemories } from '../src/api/memories.js';
 import { loadContextCandidates } from '../src/store/candidates.js';
 import { loadAllEntries, loadEntryTextKeys, readEntry } from '../src/store/entry-reads.js';
-import { strengthenRetrieved, writeEntry } from '../src/store/entry-writes.js';
+import { strengthenRetrieved, writeEntry, writeEntryDbOnly } from '../src/store/entry-writes.js';
 import { initStore } from '../src/store/open.js';
 import { applyRejection } from '../src/store/rejected-values.js';
-import { withSharedStoreHandles } from '../src/db/index.js';
+import { closeHippoDb, openHippoDb, withSharedStoreHandles } from '../src/db/index.js';
 import { storedTextKeys } from '../src/util/same-text.js';
 
 let root: string;
@@ -24,15 +24,24 @@ beforeEach(() => {
 
 afterEach(() => rmSync(join(root, '..'), { recursive: true, force: true }));
 
+// One transaction and no mirrors: these tests read rows only, and 1003 mirrored writes overran the Windows timeout.
 async function seed(count: number, tenantId = 'default'): Promise<string[]> {
   const ids: string[] = [];
-  await withSharedStoreHandles(() => {
+  const db = openHippoDb(root);
+  db.exec('BEGIN');
+  try {
     for (let i = 0; i < count; i++) {
       const e = createMemory(`seeded memory number ${i} about topic${i % 7}`, { tenantId });
-      writeEntry(root, { ...e, created: new Date(Date.UTC(2026, 0, 1, 0, 0, i)).toISOString() });
+      writeEntryDbOnly(db, { ...e, created: new Date(Date.UTC(2026, 0, 1, 0, 0, i)).toISOString() });
       ids.push(e.id);
     }
-  });
+    db.exec('COMMIT');
+  } catch (error) {
+    db.exec('ROLLBACK');
+    throw error;
+  } finally {
+    closeHippoDb(db);
+  }
   return ids;
 }
 
