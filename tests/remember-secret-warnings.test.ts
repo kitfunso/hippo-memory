@@ -71,7 +71,7 @@ describe('MCP hippo_remember', () => {
   it('appends the warning to the tool result', async () => {
     const response = await handleMcpRequest(
       { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_remember', arguments: { text: TYPED } } },
-      { hippoRoot: root, tenantId: 'default', actor: 'mcp' },
+      { hippoRoot: root, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true },
     );
     const text = JSON.stringify(response);
     expect(text).toContain('Remembered [');

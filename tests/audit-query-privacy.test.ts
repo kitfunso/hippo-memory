@@ -113,7 +113,7 @@ describe('census: a canary query reaches no audit metadata value', () => {
       env: { ...process.env, HIPPO_HOME: globalRoot, HIPPO_SKIP_AUTO_INTEGRATIONS: '1' },
       encoding: 'utf-8',
     });
-    const mcpCtx: McpContext = { hippoRoot: localRoot, tenantId: 'default', actor: 'mcp' };
+    const mcpCtx: McpContext = { hippoRoot: localRoot, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true };
     await handleMcpRequest(
       { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_recall', arguments: { query: QUERY } } },
       mcpCtx,

@@ -2,7 +2,7 @@
 import { AUDIT_OPS, type AuditOp } from '../../store/audit.js';
 import { auditList, authCreate, authListRows, authRevoke, quarantineApprove, quarantineList, quarantineReject } from '../../api/index.js';
 import { HttpError, readBody, sendJson } from '../../util/http-util.js';
-import { assertCrossTenantAdmin, buildContextWithAuth } from '../auth.js';
+import { assertCrossTenantAdmin, buildContextWithAuth, recheckContextWithAuth, requireAuth } from '../auth.js';
 import { pageOf, parseCursor, setNextCursorHeader } from '../cursor.js';
 import type { RouteRequest } from '../types.js';
 import { isSetMember, parseJsonObjectText, parseListLimit, validateIdSegment } from '../validation.js';
@@ -10,7 +10,7 @@ import { isJsonBoolean, isJsonNumber, isJsonString } from '../../util/json.js';
 
 const VALID_AUDIT_OPS: ReadonlySet<AuditOp> = new Set<AuditOp>(AUDIT_OPS);
 
-// POST /v1/auth/keys reads its body before auth, so an unauthenticated caller can make the server buffer at most this many bytes and wait at most this many ms.
+// A key mint is a few short fields, so even an authenticated caller gets a small cap and a short wait.
 // ServeOpts.mintBodyDeadlineMs overrides the wait for tests only, so a 408 test need not sit through it.
 const MINT_BODY_MAX_BYTES = 4 * 1024;
 const MINT_BODY_DEADLINE_MS = 10_000;
@@ -23,9 +23,10 @@ const MAX_AUTH_KEYS_PAGE = 1000;
 
 // POST /v1/auth/keys: mints a key; plaintext is in the response body (the CLI client, not this layer, carries the "store this somewhere safe" warning).
 export async function handleCreateAuthKey({ req, res, opts }: RouteRequest): Promise<void> {
-  // Body first, so the resolver's check (and any gate in it) runs right before the mint with no wait between.
+  // Auth before the body, so an unauthenticated caller costs no read; again after it, so the resolver's gate runs right before the mint.
+  await requireAuth(req, opts);
   const raw = await readBody(req, { maxBytes: MINT_BODY_MAX_BYTES, deadlineMs: opts.mintBodyDeadlineMs ?? MINT_BODY_DEADLINE_MS });
-  const ctx = await buildContextWithAuth(req, opts);
+  const ctx = await recheckContextWithAuth(req, opts);
   const body = parseJsonObjectText(raw);
   const labelRaw = body['label'];
   if (labelRaw !== undefined && !isJsonString(labelRaw)) {

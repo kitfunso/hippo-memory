@@ -203,7 +203,7 @@ describe('hippo_remember and hippo_outcome under another store', () => {
   it('remember and apply an outcome through the store, with hippo.db blocked', async () => {
     const hippoRoot = markedFolder();
     const memory = inMemoryEntryWritesStore(copyOf());
-    const ctx: McpContext = { hippoRoot, tenantId: TENANT_A, actor: 'mcp', store: memory.store, clientKey: 'entry-writes-store' };
+    const ctx: McpContext = { hippoRoot, tenantId: TENANT_A, actor: 'mcp', role: 'admin', hostAdmin: true, store: memory.store, clientKey: 'entry-writes-store' };
     const call = (name: string, args: Record<string, string | boolean>) => withSqliteBlocked('in-memory', () =>
       handleMcpRequest({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } }, ctx));
     const textOf = (res: Awaited<ReturnType<typeof call>>): string | undefined =>

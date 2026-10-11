@@ -90,7 +90,7 @@ function retrievalCount(id: string): number {
 async function mcpText(name: string, args: McpArgs): Promise<string> {
   const res: McpResponse | null = await handleMcpRequest(
     { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } },
-    { hippoRoot: hippoDir, tenantId: 'default', actor: 'mcp' },
+    { hippoRoot: hippoDir, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true },
   );
   // SAFETY: tools/call answers carry one MCP text content block.
   return (res?.result as { content?: Array<{ text?: string }> } | undefined)?.content?.[0]?.text ?? '';

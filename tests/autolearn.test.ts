@@ -381,7 +381,7 @@ describe('write-path gate: MCP hippo_learn tool', () => {
         method: 'tools/call',
         params: { name: 'hippo_learn', arguments: { days: 3650 } },
       },
-      { hippoRoot, tenantId: 'default', actor: 'mcp' },
+      { hippoRoot, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true },
     );
 
     // SAFETY: a tools/call reply wraps tool output as result.content[{type:'text',text}] (src/mcp/request.ts:173).

@@ -317,7 +317,7 @@ describe('confidence facets', () => {
         method: 'tools/call',
         params: { name: 'hippo_recall', arguments: { query: 'haddock' } },
       },
-      { hippoRoot, tenantId: 'default', actor: 'test' },
+      { hippoRoot, tenantId: 'default', actor: 'test', role: 'admin', hostAdmin: true },
     );
     expect(JSON.stringify(res)).toContain('[stale]');
   }, 30_000);
