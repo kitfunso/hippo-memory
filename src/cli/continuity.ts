@@ -23,16 +23,16 @@ import type { SessionEvent, TaskSnapshot } from '../store/rows.js';
 import { printError } from './output.js';
 import { requireInit } from './shared.js';
 import { printActiveTaskSnapshot, printSessionEvents, printHandoff } from './print.js';
-import { type CliFlags, boolFlag, isStringFlag, numberFlag, type CommandContext } from './flag-values.js';
+import { type CliFlags, boolFlag, isStringFlag, numberFlag, stringFlagOrExit, type CommandContext } from './flag-values.js';
 import { CliExit } from './exit.js';
 
 const ISO_DATETIME_CHARS = 19;
 
 function snapshotSave(hippoRoot: string, tenantId: string, flags: CliFlags): void {
-  const task = String(flags['task'] ?? '').trim();
-  const summary = String(flags['summary'] ?? '').trim();
-  const nextStep = String(flags['next-step'] ?? '').trim();
-  const sessionId = String(flags['session'] ?? flags['id'] ?? '').trim();
+  const task = stringFlagOrExit(flags, 'task') ?? '';
+  const summary = stringFlagOrExit(flags, 'summary') ?? '';
+  const nextStep = stringFlagOrExit(flags, 'next-step') ?? '';
+  const sessionId = stringFlagOrExit(flags, 'session') ?? stringFlagOrExit(flags, 'id') ?? '';
 
   if (!task || !summary || !nextStep) {
     printError('Usage: hippo snapshot save --task <task> --summary <summary> --next-step <step> [--source <source>] [--session <session-id>]');
@@ -43,7 +43,7 @@ function snapshotSave(hippoRoot: string, tenantId: string, flags: CliFlags): voi
     task,
     summary,
     next_step: nextStep,
-    source: String(flags['source'] ?? 'cli'),
+    source: stringFlagOrExit(flags, 'source') ?? 'cli',
     session_id: sessionId || null,
   });
 
@@ -56,7 +56,7 @@ function snapshotSave(hippoRoot: string, tenantId: string, flags: CliFlags): voi
 }
 
 function snapshotClear(hippoRoot: string, tenantId: string, flags: CliFlags): void {
-  const cleared = apiSnapshotClear(cliApiContext(hippoRoot, tenantId), String(flags['status'] ?? 'cleared'));
+  const cleared = apiSnapshotClear(cliApiContext(hippoRoot, tenantId), stringFlagOrExit(flags, 'status') ?? 'cleared');
   if (!cleared) {
     console.log('No active task snapshot to clear.');
     return;
@@ -105,8 +105,8 @@ interface SessionArgs {
 }
 
 function sessionLog(hippoRoot: string, tenantId: string, s: SessionArgs, flags: CliFlags): void {
-  const eventType = String(flags['type'] ?? 'note').trim();
-  const content = String(flags['content'] ?? '').trim();
+  const eventType = stringFlagOrExit(flags, 'type') ?? 'note';
+  const content = stringFlagOrExit(flags, 'content') ?? '';
 
   if (!s.sessionId || !content) {
     printError('Usage: hippo session log --id <session-id> --content <text> [--type <type>] [--task <task>] [--source <source>]');
@@ -118,7 +118,7 @@ function sessionLog(hippoRoot: string, tenantId: string, s: SessionArgs, flags: 
     task: s.task || null,
     event_type: eventType || 'note',
     content,
-    source: String(flags['source'] ?? 'cli'),
+    source: stringFlagOrExit(flags, 'source') ?? 'cli',
   });
 
   console.log(`Logged session event #${event.id}`);
@@ -168,8 +168,8 @@ type SessionCompleteMetadata = {
 
 function sessionComplete(hippoRoot: string, tenantId: string, s: SessionArgs, flags: CliFlags): void {
   const { sessionId, task } = s;
-  const outcomeRaw = String(flags['outcome'] ?? '').trim();
-  const summary = String(flags['summary'] ?? '').trim();
+  const outcomeRaw = stringFlagOrExit(flags, 'outcome') ?? '';
+  const summary = stringFlagOrExit(flags, 'summary') ?? '';
 
   if (!sessionId) {
     printError('Usage: hippo session complete --session <session-id> --outcome <success|failure|partial> [--summary "..."]');
@@ -189,7 +189,7 @@ function sessionComplete(hippoRoot: string, tenantId: string, s: SessionArgs, fl
     task: task || null,
     event_type: 'session_complete',
     content: outcome,
-    source: String(flags['source'] ?? 'cli'),
+    source: stringFlagOrExit(flags, 'source') ?? 'cli',
     metadata,
   });
 
@@ -205,8 +205,8 @@ export function handleSession({ hippoRoot, tenantId, args, flags }: CommandConte
   requireInit(hippoRoot);
 
   const subcommand = args[0] ?? 'show';
-  const sessionId = String(flags['id'] ?? flags['session'] ?? '').trim();
-  const task = String(flags['task'] ?? '').trim();
+  const sessionId = stringFlagOrExit(flags, 'id') ?? stringFlagOrExit(flags, 'session') ?? '';
+  const task = stringFlagOrExit(flags, 'task') ?? '';
   const limit = Math.max(1, numberFlag(flags, 'limit') || 8);
   const s: SessionArgs = { sessionId, task, limit };
 
@@ -271,7 +271,7 @@ const HANDOFF_CREATE_USAGE = 'Usage: hippo handoff create --summary "..." [--nex
   '[--tests <pass|fail|unknown>]';
 
 function handoffCreate(hippoRoot: string, tenantId: string, flags: CliFlags): void {
-  const summary = String(flags['summary'] ?? '').trim();
+  const summary = stringFlagOrExit(flags, 'summary') ?? '';
   if (!summary) {
     printError(HANDOFF_CREATE_USAGE);
     throw new CliExit(1);
@@ -283,21 +283,14 @@ function handoffCreate(hippoRoot: string, tenantId: string, flags: CliFlags): vo
     throw new CliExit(1);
   }
 
-  const sessionId = String(flags['session'] ?? flags['id'] ?? '').trim() || `fallback-${Date.now()}-${process.pid}`;
-  const nextAction = String(flags['next'] ?? '').trim() || undefined;
-  const taskId = String(flags['task'] ?? '').trim() || undefined;
+  const sessionId = (stringFlagOrExit(flags, 'session') ?? stringFlagOrExit(flags, 'id') ?? '') || `fallback-${Date.now()}-${process.pid}`;
+  const nextAction = stringFlagOrExit(flags, 'next') || undefined;
+  const taskId = stringFlagOrExit(flags, 'task') || undefined;
   const artifacts = flagList(flags['artifact']);
   const constraints = flagList(flags['constraint']);
-  for (const name of ['target-runtime', 'card-id'] as const) {
-    // parseArgs turns a value-less flag into `true`; refuse rather than store "true".
-    if (flags[name] === true) {
-      printError(`--${name} needs a value`);
-      throw new CliExit(1);
-    }
-  }
-  const targetRuntime = String(flags['target-runtime'] ?? '').trim() || undefined;
-  const cardId = String(flags['card-id'] ?? '').trim() || undefined;
-  const testStatus = String(flags['tests'] ?? '').trim();
+  const targetRuntime = stringFlagOrExit(flags, 'target-runtime') || undefined;
+  const cardId = stringFlagOrExit(flags, 'card-id') || undefined;
+  const testStatus = stringFlagOrExit(flags, 'tests') ?? '';
   const evidence = collectHandoffEvidence(
     process.cwd(),
     testStatus === 'pass' || testStatus === 'fail' ? testStatus : 'unknown',
@@ -338,7 +331,7 @@ function printCreatedHandoff(handoff: ReturnType<typeof handoffSave>): void {
 }
 
 function handoffLatest(hippoRoot: string, tenantId: string, flags: CliFlags): void {
-  const sessionId = String(flags['session'] ?? flags['id'] ?? '').trim() || undefined;
+  const sessionId = (stringFlagOrExit(flags, 'session') ?? stringFlagOrExit(flags, 'id') ?? '') || undefined;
   const handoff = apiHandoffLatest(cliApiContext(hippoRoot, tenantId), sessionId);
 
   if (!handoff) {
@@ -474,8 +467,8 @@ export function handleWm({ hippoRoot, tenantId, args, flags }: CommandContext): 
   if (subcommand === 'read') return wmReadCmd(hippoRoot, tenantId, flags);
 
   if (subcommand === 'clear') {
-    const scope = flags['scope'] ? String(flags['scope']).trim() : undefined;
-    const sessionId = flags['session'] ? String(flags['session']).trim() : undefined;
+    const scope = stringFlagOrExit(flags, 'scope') || undefined;
+    const sessionId = stringFlagOrExit(flags, 'session') || undefined;
 
     const count = workingMemoryClear(cliApiContext(hippoRoot, tenantId), { scope, sessionId });
     console.log(`Cleared ${count} working memory entries.`);
@@ -483,8 +476,8 @@ export function handleWm({ hippoRoot, tenantId, args, flags }: CommandContext): 
   }
 
   if (subcommand === 'flush') {
-    const scope = flags['scope'] ? String(flags['scope']).trim() : undefined;
-    const sessionId = flags['session'] ? String(flags['session']).trim() : undefined;
+    const scope = stringFlagOrExit(flags, 'scope') || undefined;
+    const sessionId = stringFlagOrExit(flags, 'session') || undefined;
 
     const count = workingMemoryFlush(cliApiContext(hippoRoot, tenantId), { scope, sessionId });
     console.log(`Flushed ${count} working memory entries.`);
@@ -498,11 +491,11 @@ export function handleWm({ hippoRoot, tenantId, args, flags }: CommandContext): 
 const WM_DEFAULT_IMPORTANCE = 0.5;
 
 function wmPushCmd(hippoRoot: string, tenantId: string, flags: CliFlags): void {
-  const scope = String(flags['scope'] ?? 'default').trim();
-  const content = String(flags['content'] ?? '').trim();
+  const scope = stringFlagOrExit(flags, 'scope') ?? 'default';
+  const content = stringFlagOrExit(flags, 'content') ?? '';
   const importance = numberFlag(flags, 'importance') ?? WM_DEFAULT_IMPORTANCE;
-  const sessionId = flags['session'] ? String(flags['session']).trim() : undefined;
-  const taskId = flags['task'] ? String(flags['task']).trim() : undefined;
+  const sessionId = stringFlagOrExit(flags, 'session') || undefined;
+  const taskId = stringFlagOrExit(flags, 'task') || undefined;
 
   if (!content) {
     printError('Usage: hippo wm push --scope <scope> --content "..." [--importance 0.8] [--session <id>] [--task <id>]');
@@ -521,8 +514,8 @@ function wmPushCmd(hippoRoot: string, tenantId: string, flags: CliFlags): void {
 }
 
 function wmReadCmd(hippoRoot: string, tenantId: string, flags: CliFlags): void {
-  const scope = flags['scope'] ? String(flags['scope']).trim() : undefined;
-  const sessionId = flags['session'] ? String(flags['session']).trim() : undefined;
+  const scope = stringFlagOrExit(flags, 'scope') || undefined;
+  const sessionId = stringFlagOrExit(flags, 'session') || undefined;
   const limit = numberFlag(flags, 'limit') || 20;
 
   const items = workingMemoryRead(cliApiContext(hippoRoot, tenantId), { scope, sessionId, limit });

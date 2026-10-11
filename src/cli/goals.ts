@@ -5,7 +5,7 @@ import type { PolicyType } from '../store/goals.js';
 import * as api from '../api/index.js';
 import { cliApiContext } from './api-context.js';
 import { printError } from './output.js';
-import { type CliFlags, boolFlag, flagIsTrue, isStringFlag, stringFlag, type CommandContext } from './flag-values.js';
+import { type CliFlags, boolFlag, flagIsTrue, isStringFlag, stringFlag, stringFlagOrExit, type CommandContext } from './flag-values.js';
 import { CliExit } from './exit.js';
 
 // `hippo goal <push|list|complete|suspend|resume>`
@@ -27,20 +27,12 @@ function sanitizeGoalName(s: string): string {
 }
 
 function resolveGoalSession(flags: CliFlags, defaultTenantId: string) {
-  const sessionId = (
-    flags['session-id'] !== undefined
-      ? String(flags['session-id'])
-      : envHippoSessionId() ?? ''
-  ).trim();
+  const sessionId = (stringFlagOrExit(flags, 'session-id') ?? envHippoSessionId() ?? '').trim();
   if (!sessionId) {
     printError('session id required (set HIPPO_SESSION_ID or pass --session-id)');
     throw new CliExit(1);
   }
-  const tenantId = (
-    flags['tenant-id'] !== undefined
-      ? String(flags['tenant-id'])
-      : defaultTenantId
-  ).trim() || DEFAULT_TENANT_ID;
+  const tenantId = (stringFlagOrExit(flags, 'tenant-id') ?? defaultTenantId).trim() || DEFAULT_TENANT_ID;
   return { sessionId, tenantId };
 }
 

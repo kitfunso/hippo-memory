@@ -13,7 +13,7 @@ import { PACKAGE_VERSION } from '../util/version.js';
 import { printError } from './output.js';
 import { requireInit } from './shared.js';
 import { fmt } from './print.js';
-import { type CliFlags, type CommandContext, boolFlag, numberFlag } from './flag-values.js';
+import { type CliFlags, type CommandContext, boolFlag, numberFlag, stringFlagOrExit } from './flag-values.js';
 import { errorMessage } from '../util/log.js';
 import { CliExit } from './exit.js';
 
@@ -33,7 +33,7 @@ async function cmdEval(
 ): Promise<void> {
   const asJson = boolFlag(flags, 'json');
   const minMrr = numberFlag(flags, 'min-mrr') ?? null;
-  const comparePath = flags['compare'] ? String(flags['compare']) : null;
+  const comparePath = stringFlagOrExit(flags, 'compare') || null;
 
   // Suite mode doesn't need an initialized store
   if (!flags['suite']) requireInit(hippoRoot);
@@ -90,7 +90,7 @@ async function runCorpusEval(
 
 /** Bootstrap mode: emit a synthetic corpus built from the store's own memories. */
 function writeBootstrapCorpus(entries: MemoryEntry[], flags: CliFlags): void {
-  const outPath = flags['out'] ? String(flags['out']) : null;
+  const outPath = stringFlagOrExit(flags, 'out') || null;
   const max = numberFlag(flags, 'max-cases') ?? 50;
   const corpus = bootstrapCorpus(entries, max);
   const payload = JSON.stringify({ cases: corpus }, null, 2);
@@ -105,7 +105,7 @@ function writeBootstrapCorpus(entries: MemoryEntry[], flags: CliFlags): void {
 
 /** Suite mode: run the built-in feature eval (no corpus file needed, no init needed). */
 async function runEvalSuite(hippoRoot: string, flags: CliFlags, asJson: boolean, minMrr: number | null): Promise<void> {
-  const baselinePath = flags['baseline'] ? String(flags['baseline']) : path.join(hippoRoot, 'eval-baseline.json');
+  const baselinePath = stringFlagOrExit(flags, 'baseline') || path.join(hippoRoot, 'eval-baseline.json');
   let baseline: EvalBaseline | undefined;
   try {
     baseline = JSON.parse(fs.readFileSync(baselinePath, 'utf8'));

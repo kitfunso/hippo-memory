@@ -34,7 +34,7 @@ import { printError } from './output.js';
 import { cmdLastSleep } from './last-sleep.js';
 import { readCompactResumePayload } from './compact-resume-payload.js';
 import { cliApiContext } from './api-context.js';
-import { type CliFlags, type CommandContext, boolFlag, flagIsTrue, stringFlag } from './flag-values.js';
+import { type CliFlags, type CommandContext, boolFlag, flagIsTrue, stringFlag, stringFlagOrExit } from './flag-values.js';
 import {
   logSessionEndImport, appendSessionEndCloseLog, reportSessionEndFailure, resetHookInjection, hookStoreRoot, hookRuntime,
   payloadCwdRoot, runHookWithStores, inPilotHoldout, hostSessionId,
@@ -510,8 +510,8 @@ function captureCodexTranscript(hippoRoot: string, tenantId: string, store: stri
   try {
     const codexHome = stringFlag(flags, 'codex-home') ?? resolveCodexWrapperPaths().codexHome;
     const historyPath = stringFlag(flags, 'history-path') ?? path.join(codexHome, 'history.jsonl');
-    const startOffsetBytes = parseInt(String(flags['start-offset'] ?? '0'), 10) || 0;
-    const startedAtMs = parseInt(String(flags['started-at'] ?? Date.now()), 10) || Date.now();
+    const startOffsetBytes = parseInt(stringFlag(flags, 'start-offset') ?? '', 10) || 0;
+    const startedAtMs = parseInt(stringFlag(flags, 'started-at') ?? '', 10) || Date.now();
     const transcriptPath = resolveCodexSessionTranscript({
       codexHome,
       historyPath,
@@ -628,11 +628,11 @@ export async function handleCapture({ hippoRoot, tenantId, flags }: CommandConte
   let transcriptPath: string | undefined;
 
   if (flags['stdin']) { captureSource = 'stdin'; }
-  else if (flags['file']) { captureSource = 'file'; captureFile = String(flags['file']); }
+  else if (flags['file']) { captureSource = 'file'; captureFile = stringFlagOrExit(flags, 'file'); }
   else if (flags['last-session']) { captureSource = 'last-session'; }
 
   if (flags['transcript']) {
-    transcriptPath = String(flags['transcript']);
+    transcriptPath = stringFlagOrExit(flags, 'transcript');
     if (!captureSource) captureSource = 'last-session';
   }
 

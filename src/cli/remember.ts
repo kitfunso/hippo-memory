@@ -29,7 +29,7 @@ import { validateOwner, isStrictOwnerEnv } from './owner-validation.js';
 import { printError } from './output.js';
 import { requireInit, runViaServerIfAvailable } from './shared.js';
 import { fmt } from './print.js';
-import { type CliFlags, type CommandContext, boolFlag, flagIsTrue, isOneOf, stringFlag, stringListFlag } from './flag-values.js';
+import { type CliFlags, type CommandContext, boolFlag, flagIsTrue, isOneOf, stringFlag, stringFlagOrExit, stringListFlag } from './flag-values.js';
 import { DAY_MS } from '../util/time.js';
 import { errorMessage } from '../util/log.js';
 import { CliExit } from './exit.js';
@@ -54,7 +54,7 @@ function rememberTags(
   for (const pt of extractPathTags(cwd)) {
     if (!all.includes(pt)) all.push(pt);
   }
-  const explicitScope = flags['scope'] !== undefined ? String(flags['scope']).trim() : null;
+  const explicitScope = stringFlagOrExit(flags, 'scope') ?? null;
   const activeScope = explicitScope || detectScope();
   if (activeScope) {
     const scopeTag = `scope:${activeScope}`;
@@ -233,12 +233,7 @@ function parseStepsOrExit(stepsJson: string): ReturnType<typeof parseSteps> {
 }
 
 function traceTags(flags: CliFlags): string[] {
-  const rawTags = flags['tag'];
-  return Array.isArray(rawTags)
-    ? rawTags.map((t) => String(t))
-    : rawTags !== undefined
-      ? [String(rawTags)]
-      : [];
+  return stringListFlag(flags, 'tag') ?? [];
 }
 
 async function cmdTraceRecord(
@@ -248,9 +243,9 @@ async function cmdTraceRecord(
 ): Promise<void> {
   requireInit(hippoRoot);
 
-  const task = String(flags['task'] ?? '').trim();
-  const stepsJson = String(flags['steps'] ?? '').trim();
-  const outcome = String(flags['outcome'] ?? '').trim();
+  const task = stringFlagOrExit(flags, 'task') ?? '';
+  const stepsJson = stringFlagOrExit(flags, 'steps') ?? '';
+  const outcome = stringFlagOrExit(flags, 'outcome') ?? '';
   const validOutcomes = ['success', 'failure', 'partial'] as const;
 
   if (!task || !stepsJson || !outcome) {
@@ -264,7 +259,7 @@ async function cmdTraceRecord(
 
   const steps = parseStepsOrExit(stepsJson);
 
-  const sessionId = String(flags['session'] ?? '').trim() || null;
+  const sessionId = stringFlagOrExit(flags, 'session') || null;
   const tags = traceTags(flags);
 
   const content = renderTraceContent({
@@ -278,7 +273,7 @@ async function cmdTraceRecord(
     tags,
     local: {
       layer: Layer.Trace,
-      source: String(flags['source'] ?? 'cli'),
+      source: stringFlagOrExit(flags, 'source') ?? 'cli',
       traceOutcome: outcome,
       sourceSessionId: sessionId,
     },

@@ -20,7 +20,8 @@ import type { RankRecallResult, RankStage, RecallGraphHops, RecallGraphStream, R
 import { handoffText, printedTokens, sessionTrailText, settleTokens, snapshotText } from '../api/context-render.js';
 import { printError } from './output.js';
 import {
-  parseLimitFlag, parseBudgetFlag, type CliFlags, type CommandContext, parseAsOfFlag, engineFlags, boolFlag, flagIsTrue, isBooleanFlag, numberFlag,
+  parseLimitFlag, parseBudgetFlag, type CliFlags, type CommandContext, parseAsOfFlag, engineFlags, boolFlag, flagIsTrue, isBooleanFlag, isStringFlag,
+  numberFlag, stringFlag, stringFlagOrExit,
 } from './flag-values.js';
 import { requireInit } from './shared.js';
 import { recallEntryText, recallHeading, printActiveTaskSnapshot, printSessionEvents, printHandoff, captureConsole } from './print.js';
@@ -77,7 +78,7 @@ function parseGraphStreamFlags(flags: CliFlags): RecallGraphStream {
     if (isBooleanFlag(flags['graph-hops'])) failWith(`--graph-hops requires an integer value 1..${MAX_HOPS} (e.g. --graph-hops 2).`)();
     const h = Number(flags['graph-hops']);
     if (!Number.isInteger(h) || h < 1 || h > MAX_HOPS) {
-      failWith(`Invalid --graph-hops: "${String(flags['graph-hops'])}". Must be an integer 1..${MAX_HOPS}.`)();
+      failWith(`Invalid --graph-hops: "${stringFlag(flags, 'graph-hops')}". Must be an integer 1..${MAX_HOPS}.`)();
     }
     hops = h;
   }
@@ -85,7 +86,7 @@ function parseGraphStreamFlags(flags: CliFlags): RecallGraphStream {
   if (flags['graph-seeds'] !== undefined) {
     if (isBooleanFlag(flags['graph-seeds'])) failWith('--graph-seeds requires a positive integer value (e.g. --graph-seeds 10).')();
     const s = Number(flags['graph-seeds']);
-    if (!Number.isInteger(s) || s < 1) failWith(`Invalid --graph-seeds: "${String(flags['graph-seeds'])}". Must be a positive integer.`)();
+    if (!Number.isInteger(s) || s < 1) failWith(`Invalid --graph-seeds: "${stringFlag(flags, 'graph-seeds')}". Must be a positive integer.`)();
     seeds = s;
   }
   return { hops, seeds };
@@ -97,7 +98,7 @@ function parseHopsFlags(flags: CliFlags): ParsedFlag<RecallGraphHops> {
   if (isBooleanFlag(flags['hops'])) return { fail: failWith(`--hops requires an integer value 0..${MAX_HOPS} (e.g. --hops 1).`) };
   const hops = Number(flags['hops']);
   if (!Number.isInteger(hops) || hops < 0 || hops > MAX_HOPS) {
-    return { fail: failWith(`Invalid --hops: "${String(flags['hops'])}". Must be an integer 0..${MAX_HOPS}.`) };
+    return { fail: failWith(`Invalid --hops: "${stringFlag(flags, 'hops')}". Must be an integer 0..${MAX_HOPS}.`) };
   }
   const raw = flags['max-neighbors'];
   if (raw === undefined) return { value: { hops, maxNeighbors: DEFAULT_MAX_NEIGHBORS } };
@@ -110,7 +111,9 @@ function parseHopsFlags(flags: CliFlags): ParsedFlag<RecallGraphHops> {
 }
 
 function parseRerankerFlag(flags: CliFlags): ParsedFlag<RecallReranker> {
-  const name = flags['reranker'] !== undefined ? String(flags['reranker']).trim() : '';
+  const nameRaw = flags['reranker'];
+  if (nameRaw !== undefined && !isStringFlag(nameRaw)) return { fail: failWith('--reranker requires a value.') };
+  const name = nameRaw?.trim() ?? '';
   let picked: CliRecallRerankerPick | null;
   try {
     picked = cliRecallReranker(name);
@@ -140,7 +143,9 @@ function parseSalienceFlag(flags: CliFlags): ParsedFlag<number> {
 }
 
 function parseChoiceFlag(flags: CliFlags, name: 'outcome' | 'layer', valid: readonly string[]): ParsedFlag<string> {
-  const value = flags[name] !== undefined ? String(flags[name]).trim() : '';
+  const raw = flags[name];
+  if (raw !== undefined && !isStringFlag(raw)) return { fail: failWith(`--${name} requires a value. Must be one of: ${valid.join(', ')}.`) };
+  const value = raw?.trim() ?? '';
   if (!value) return {};
   if (!valid.includes(value)) return { fail: failWith(`Invalid --${name}: "${value}". Must be one of: ${valid.join(', ')}.`) };
   return { value };
@@ -217,18 +222,14 @@ function parseRecallOptions(ctx: api.HippoDbContext, flags: CliFlags) {
   const includeSuperseded = boolFlag(flags, 'include-superseded');
   const asOf = parseAsOfFlag(flags);
   // The explicit --scope is the filter input; the detected scope only boosts, so auto-detection never filters.
-  const explicitScope = flags['scope'] !== undefined ? String(flags['scope']).trim() : null;
+  const explicitScope = stringFlagOrExit(flags, 'scope') ?? null;
   const setting = cliRecallSetting(ctx, explicitScope);
   const config = loadConfig(ctx.hippoRoot);
   const minResults = numberFlag(flags, 'min-results');
   const graphStream = flagIsTrue(flags, 'graph-stream') ? parseGraphStreamFlags(flags) : undefined;
   const late = parseRecallLateFlags(flags);
-  const goalTag = flags['goal'] !== undefined ? String(flags['goal']).trim() : '';
-  const sessionId = (
-    flags['session-id'] !== undefined
-      ? String(flags['session-id'])
-      : envHippoSessionId() ?? ''
-  ).trim();
+  const goalTag = stringFlagOrExit(flags, 'goal') ?? '';
+  const sessionId = (stringFlagOrExit(flags, 'session-id') ?? envHippoSessionId() ?? '').trim();
   return {
     budget, limit, asJson, showWhy, includeSuperseded, asOf, setting, tenantId: ctx.tenantId,
     explicitScope, config, minResults, graphStream, late, goalTag, sessionId,

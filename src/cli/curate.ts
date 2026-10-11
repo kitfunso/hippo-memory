@@ -12,7 +12,7 @@ import { getMemory } from '../api/memories.js';
 import * as client from './client.js';
 import { cliApiContext } from './api-context.js';
 import { printError } from './output.js';
-import { type CliFlags, parseCountFlag, type CommandContext, boolFlag, flagIsTrue, nonEmptyStringFlag, stringFlag } from './flag-values.js';
+import { type CliFlags, parseCountFlag, type CommandContext, boolFlag, flagIsTrue, nonEmptyStringFlag, stringFlag, stringFlagOrExit } from './flag-values.js';
 import { requireInit, runChurnStaleForRepo, runViaServerIfAvailable, resolveAuthRoot } from './shared.js';
 import { fmt } from './print.js';
 import { errorMessage } from '../util/log.js';
@@ -37,7 +37,7 @@ export async function handleOutcome({ hippoRoot, tenantId, flags }: CommandConte
 
   // Through api.outcome so every CLI outcome writes one audit_log row per id, as the MCP path does.
   const ctx = cliApiContext(hippoRoot, tenantId);
-  const specificId = flags['id'] ? String(flags['id']) : null;
+  const specificId = stringFlagOrExit(flags, 'id') || null;
 
   let updated: number;
   if (specificId) {
@@ -142,7 +142,7 @@ async function previewForget(hippoRoot: string, tenantId: string, id: string, ar
 export function handleConflicts({ hippoRoot, tenantId, flags }: CommandContext): void {
   requireInit(hippoRoot);
 
-  const conflicts = api.listConflicts(cliApiContext(hippoRoot, tenantId), String(flags['status'] ?? 'open'), { everyTenant: true });
+  const conflicts = api.listConflicts(cliApiContext(hippoRoot, tenantId), stringFlagOrExit(flags, 'status') ?? 'open', { everyTenant: true });
   if (flags['json']) {
     console.log(JSON.stringify({ conflicts }, null, 2));
     return;
@@ -202,7 +202,7 @@ export async function handleResolve({ hippoRoot, tenantId, args, flags }: Comman
     throw new CliExit(1);
   }
 
-  const keepId = String(flags['keep'] ?? '').trim();
+  const keepId = stringFlagOrExit(flags, 'keep') ?? '';
   if (!keepId) {
     await showConflictForResolve(hippoRoot, conflictId, tenantId);
     return;

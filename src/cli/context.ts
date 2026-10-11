@@ -22,7 +22,7 @@ import {
   sessionStartEnvelope,
   toRenderItems,
 } from '../api/prompt-hook.js';
-import { type CliFlags, parseLimitFlag, parseCountFlag, parseBudgetFlag, type CommandContext, flagIsTrue } from './flag-values.js';
+import { type CliFlags, parseLimitFlag, parseCountFlag, parseBudgetFlag, type CommandContext, flagIsTrue, stringFlagOrExit } from './flag-values.js';
 import { requireInit } from './shared.js';
 import { printActiveTaskSnapshot, printSessionEvents, printHandoff, captureConsole } from './print.js';
 import { hostSessionId, hookStoreRoot, hookRuntime, payloadCwdRoot, runHookWithStores, inPilotHoldout } from './hook-runtime.js';
@@ -99,8 +99,8 @@ async function renderContext(
   const query = contextQuery(args, flags);
 
   const ctx = cliApiContext(hippoRoot, resolvedTenant);
-  const format = String(flags['format'] ?? 'markdown');
-  const framing = String(flags['framing'] ?? 'observe');
+  const format = stringFlagOrExit(flags, 'format') ?? 'markdown';
+  const framing = stringFlagOrExit(flags, 'framing') ?? 'observe';
   const opts = buildContextOpts(flags, { query, budget, pinnedOnly, format, framing, session, rec });
 
   const result = await api.getContext(ctx, opts);
@@ -162,7 +162,7 @@ interface ContextOptsInput {
 
 function buildContextOpts(flags: CliFlags, input: ContextOptsInput): api.ContextOpts {
   // Scope detection uses cwd, so it is resolved here and passed in via opts.scope.
-  const ctxExplicitScope = flags['scope'] !== undefined ? String(flags['scope']).trim() : null;
+  const ctxExplicitScope = stringFlagOrExit(flags, 'scope') ?? null;
   const ctxActiveScope = ctxExplicitScope || detectScope();
   // --cross-project re-includes other-project memories, rendered under their own section.
   const crossProject = flagIsTrue(flags, 'cross-project');

@@ -28,7 +28,9 @@ import { printError } from './output.js';
 import { errorMessage, log } from '../util/log.js';
 import { requireInit, runViaServerIfAvailable, learnFromRepo } from './shared.js';
 import { fmt } from './print.js';
-import { type CliFlags, type CommandContext, boolFlag, flagIsTrue, isStringFlag, nonEmptyStringFlag, numberFlag } from './flag-values.js';
+import {
+  type CliFlags, type CommandContext, boolFlag, flagIsTrue, isStringFlag, nonEmptyStringFlag, numberFlag, stringFlagOrExit, stringListFlag,
+} from './flag-values.js';
 import { CONTENT_PREVIEW_CHARS, DATE_PREFIX_CHARS } from '../util/token-text.js';
 import { CliExit } from './exit.js';
 
@@ -170,11 +172,7 @@ function warnRedacted(count: number | undefined): void {
 export async function handleImport({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
   const useGlobal = boolFlag(flags, 'global');
   const dryRun = boolFlag(flags, 'dry-run');
-  const extraTags: string[] = Array.isArray(flags['tag'])
-    ? flags['tag']
-    : flags['tag']
-      ? [String(flags['tag'])]
-      : [];
+  const extraTags = stringListFlag(flags, 'tag') ?? [];
 
   const targetRoot = useGlobal ? getGlobalRoot() : hippoRoot;
 
@@ -195,7 +193,8 @@ export async function handleImport({ hippoRoot, tenantId, args, flags }: Command
 
   // Vault import is a FOLDER importer that dispatches apart from the single-file slot below; it writes through tenant-scoped api calls,
   // so the tenant is resolved and passed through. --global is unsupported (the connector raw-archive path is tenant-local).
-  if (flags['vault']) return await importVaultFolder(hippoRoot, tenantId, flags, importOptions, useGlobal, dryRun);
+  const vault = stringFlagOrExit(flags, 'vault');
+  if (vault) return await importVaultFolder(hippoRoot, tenantId, vault, flags, importOptions, useGlobal, dryRun);
   importFromFile(targetRoot, args, flags, { importOptions, useGlobal, dryRun, tenantId });
 }
 
@@ -209,11 +208,11 @@ interface PickedImporter {
 
 // Determine which importer to use based on flag
 function pickImporter(args: string[], flags: CliFlags): PickedImporter {
-  if (flags['chatgpt']) return { filePath: String(flags['chatgpt']), importer: importChatGPT, importerName: 'ChatGPT' };
-  if (flags['claude']) return { filePath: String(flags['claude']), importer: importClaude, importerName: 'Claude' };
-  if (flags['cursor']) return { filePath: String(flags['cursor']), importer: importCursor, importerName: 'Cursor' };
-  if (flags['file']) return { filePath: String(flags['file']), importer: importGenericFile, importerName: 'File' };
-  if (flags['markdown']) return { filePath: String(flags['markdown']), importer: importMarkdown, importerName: 'Markdown' };
+  if (flags['chatgpt']) return { filePath: stringFlagOrExit(flags, 'chatgpt'), importer: importChatGPT, importerName: 'ChatGPT' };
+  if (flags['claude']) return { filePath: stringFlagOrExit(flags, 'claude'), importer: importClaude, importerName: 'Claude' };
+  if (flags['cursor']) return { filePath: stringFlagOrExit(flags, 'cursor'), importer: importCursor, importerName: 'Cursor' };
+  if (flags['file']) return { filePath: stringFlagOrExit(flags, 'file'), importer: importGenericFile, importerName: 'File' };
+  if (flags['markdown']) return { filePath: stringFlagOrExit(flags, 'markdown'), importer: importMarkdown, importerName: 'Markdown' };
   // Positional: try to auto-detect from extension
   if (args[0]) return { filePath: args[0], importer: importGenericFile, importerName: 'File' };
   return { filePath: undefined, importer: undefined, importerName: '' };
@@ -295,18 +294,18 @@ function importAgentMemories(hippoRoot: string, useGlobal: boolean, dryRun: bool
 async function importVaultFolder(
   hippoRoot: string,
   tenantId: string,
+  folderPath: string,
   flags: CliFlags,
   importOptions: ImportOptions,
   useGlobal: boolean,
   dryRun: boolean,
 ): Promise<void> {
-  const folderPath = String(flags['vault']);
   checkVaultArgs(folderPath, flags, useGlobal);
   const vaultOptions: ImportOptions = {
     ...importOptions,
     tenantId,
-    name: flags['name'] ? String(flags['name']) : undefined,
-    scope: flags['scope'] ? String(flags['scope']) : undefined,
+    name: nonEmptyStringFlag(flags, 'name'),
+    scope: nonEmptyStringFlag(flags, 'scope'),
   };
   const vaultResult = await importVault(folderPath, vaultOptions);
   printVaultSummary(vaultResult, folderPath, cliApiContext(hippoRoot, tenantId), dryRun);
@@ -477,7 +476,7 @@ export function handlePeers({ tenantId, flags }: CommandContext): void {
 
 export function handleExport({ hippoRoot, tenantId, args, flags }: CommandContext): void {
   requireInit(hippoRoot);
-  const format = String(flags['format'] || 'json');
+  const format = stringFlagOrExit(flags, 'format') || 'json';
   const outputPath = args[0] || null;
   const entries = listMemories(cliApiContext(hippoRoot, tenantId));
 

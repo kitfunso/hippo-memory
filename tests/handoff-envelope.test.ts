@@ -739,7 +739,7 @@ describe('CLI round trip: handoff create -> handoff latest --json', () => {
     try {
       const create = runCli(home, env, 'handoff', 'create', '--summary', 's', '--target-runtime');
       expect(create.status, create.out).toBe(1);
-      expect(create.out).toContain('--target-runtime needs a value');
+      expect(create.out).toContain('--target-runtime requires a value');
 
       const latest = runCli(home, env, 'handoff', 'latest', '--json');
       expect(latest.status, latest.out).toBe(0);
@@ -754,7 +754,7 @@ describe('CLI round trip: handoff create -> handoff latest --json', () => {
     try {
       const create = runCli(home, env, 'handoff', 'create', '--card-id', '--summary', 's');
       expect(create.status, create.out).toBe(1);
-      expect(create.out).toContain('--card-id needs a value');
+      expect(create.out).toContain('--card-id requires a value');
 
       const latest = runCli(home, env, 'handoff', 'latest', '--json');
       expect(latest.status, latest.out).toBe(0);

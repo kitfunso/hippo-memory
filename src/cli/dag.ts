@@ -153,7 +153,7 @@ async function cmdDrillDown(hippoRoot: string, tenantId: string, summaryId: stri
   let depth: number | undefined;
   if (rawDepth !== undefined) {
     if (!Number.isInteger(rawDepth) || rawDepth < 1 || rawDepth > 10) {
-      printError(`--depth must be an integer between 1 and 10 (got ${flags['depth']})`);
+      printError(`--depth must be an integer between 1 and 10 (got ${stringFlag(flags, 'depth')})`);
       throw new CliExit(2);
     }
     depth = rawDepth;

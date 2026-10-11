@@ -12,7 +12,7 @@ import { cliApiContext } from './api-context.js';
 import type { RankRecallResult } from '../api/recall-pipeline.js';
 import { printedTokens } from '../api/context-render.js';
 import { printError } from './output.js';
-import { parseLimitFlag, parseBudgetFlag, type CliFlags, type CommandContext, parseAsOfFlag, engineFlags, boolFlag } from './flag-values.js';
+import { parseLimitFlag, parseBudgetFlag, type CliFlags, type CommandContext, parseAsOfFlag, engineFlags, boolFlag, stringFlagOrExit } from './flag-values.js';
 import { requireInit } from './shared.js';
 import { fmt, recallEntryText, recallHeading } from './print.js';
 import { CliExit } from './exit.js';
@@ -46,7 +46,7 @@ async function cmdExplain(
   const globalRoot = getGlobalRoot();
   const ctx = cliApiContext(hippoRoot, tenantId);
   // Explain shows what recall would see, so it applies the same scope rule.
-  const explicitScope = flags['scope'] !== undefined ? String(flags['scope']).trim() : null;
+  const explicitScope = stringFlagOrExit(flags, 'scope') ?? null;
   const activeScope = explicitScope || detectScope();
   // Unlike recall, explain reads the global store whenever it exists, even when it is the local root.
   const origin = cliRecallOrigin(ctx, { globalRoot, primaryIsGlobal: false, activeScope });

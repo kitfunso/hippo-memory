@@ -79,6 +79,9 @@ jobs:
       # The CLI parses flags and prints; ranking and every row a recall writes belong to retrieve().
       - name: CLI recall ranks and records only through retrieve()
         run: node scripts/check-cli-recall-writes.mjs
+      # A value-less flag arrives as `true`; hand-rolled String(flags[x]) stores that as text.
+      - name: CLI flags read only through flag-values helpers
+        run: node scripts/check-cli-flags.mjs
       - run: node scripts/check-roadmap.mjs
       - run: node scripts/check-agent-inventory.mjs
       - run: node website/scripts/check-readme-sync.mjs
