@@ -144,6 +144,59 @@ The S3 proof (`prove.mjs`) now runs the runner's real preflight, `cacheTaskRepos
 
 Regenerate: `node C:/z0-runs/s4/repick-phrases.mjs <key>=<merged tasks.json> ...` writes `tasks-s4.json` beside each merged spec and `C:/z0-runs/s4/repick.json`; `node C:/z0-runs/s4/phrase-scan.mjs <key>=<tasks-s4.json> ...` then reports 0 collisions in all five; tables are `C:/z0-runs/s3/tables-<key>-s4-draft.md` and `-s4-781.md`.
 
+## S4: a read-check fault in the runner
+
+The first boring-maths screen session was void under G1 (prereg 162) as an `other-run` read. The agent had run a `grep` whose pattern held an import path, `../../lib/affiliates`. The read check (`readcheck.mjs`, `pathHits`) treats every slash-bearing shell word as a path, so it resolved that word against the work folder, landed under `runs/<run>/A0/`, and classed it as another run's files. Nothing exists there, so nothing was read. Prereg 162 voids a session that read a past transcript, a past rollout or another arm's files; a word that names nothing on disk is none of those.
+
+The fix, at the check: a path that does not exist when the session is checked is skipped. Runs are in lockstep, so no other cell writes between a session's end and its check, and what exists then is what the session could see. The fake Claude Code used in the runner tests only emits tool calls and never runs them, so the tests now create the files their probes read, and a new case covers an import path in a `grep` pattern.
+
+A second fault of the same kind voided one Comonicon.jl session (cj-f4, A0 seed 1) as an `ancestor-search`. The agent ran `grep -rn "lower()\|replace(\"_\"\|replace('_'" --include=*.py .` inside its own work folder. The old shell lexer split commands on `|` even inside quotes and did not know `\"`, so the pattern left a bare `\` word. Windows resolves `\` to the drive root, `C:/`, which exists, and the grep was recursive. The existence check above cannot catch this, since `C:/` exists.
+
+The fix, also at the check: the lexer now reads each line with the agent shell's quotes, its escape character (backslash in Bash, backtick in PowerShell) and line continuations. A grep-family command's first operand is its pattern, and it no longer counts as a path unless `-e` or `-f` supplied the pattern. New tests cover the Comonicon.jl command, an escaped quote, a bare `/` pattern, a `-e` pattern whose operand still voids, and a line continuation.
+
+Both are runner faults, fixed and listed under prereg 240. The boring-maths screen restarted from the fixed runner in a new out folder (`C:/z0-runs/s4/screen-bm-2`); the one void record stays in `screen-bm` and is not used. Neither earlier Comonicon.jl screen is used; see the next section.
+
+A third fault of the same kind showed on `0635b4fc`, in the Comonicon.jl rerun: cj-f2, A0 seed 2, void as an `outside-work` read. The agent ran `cd src && sed ...` in one call and `cd .. && git commit ...` in the next. Claude Code's shell keeps its cwd between calls, and each transcript line records it, so the second call started in `work/src` and its `cd ..` went back to `work`. The check read every Claude call from `work`, so it put that `cd ..` in the seed folder.
+
+The fix, at the record reader: `toolInputs` (`records.mjs`) now carries each line's recorded cwd, and the check resolves a call against it, as it already did with a Codex call's workdir. The fake Claude Code records a cwd on each line, and a `CWD:` probe moves it. A new case covers both directions: `cd ..` from `src` stays in the work folder, and a relative read from `src` that reaches another arm's files still voids. Over every screen transcript so far, 8 calls in 6 sessions ran from a moved cwd. Seven began with an absolute `cd` back into their own work folder, so cj-f2 is the only session the fault changed. Its family reruns on the fixed build.
+
+## S4: screens stopped for low memory
+
+On 2026-10-11 Claude Code stopped the boring-maths, Metrolist and hippo screens for low memory: four screens ran at once, with Metrolist's Gradle builds (about 7 GB) and a test run beside other sessions. Sessions done by then: boring-maths 24 of 30, Metrolist 19 of 24, hippo 3 of 18. A family those runs finished keeps its verdict. The runner has no resume, so each family left undecided (bm-f5, hp-f2, hp-f3, hp-f4, ml-f4) reruns whole on the calibration build (S6), into a new out folder, from a tasks file that `C:/z0-runs/s4/rerun-tasks.mjs` cuts from `tasks-s4.json`. Their partial records stay in the first folders and decide nothing; `split-sets.mjs` takes a rerun file only for families its earlier files left undecided. Screens now run two repositories at a time.
+
+## S4: each repository's tools on the agent's PATH
+
+Prereg 72 gives each run "its own tool installs on `PATH`". The task tests call each toolchain by full path (`C:/eval-envs/julia-1.13.1/bin/julia.exe`, `C:/eval-envs/fifty/Scripts/python.exe`), so the S3 proofs passed, but the agent's shell had no `julia` at all, and its `python` was the system Python 3.12, not fifty's environment. In both Comonicon.jl screens (`screen-cj` on `0142c3be`, `screen-cj-f4` on `0635b4fc`) agents ran `which julia` and looked for it. Two sessions searched from `C:/` or the home folder and were voided as `ancestor-search`, which G1 got right, and one downloaded Julia from the internet into `/tmp`. Those sessions measured a missing toolchain, not the lesson, so neither run decides a family.
+
+A session's PATH is the launching shell's PATH with hippo launchers removed (`armEnv` in `arms.mjs`), so the fix is in the launch, beside the `--pass-env` values, and the runner at `0635b4fc` is unchanged. Each repository's launch now puts its toolchain first on PATH:
+
+- Comonicon.jl: `C:\eval-envs\julia-1.13.1\bin` (Git Bash then resolves `julia` to it, checked before launch)
+- fifty: `C:\eval-envs\fifty\Scripts`
+- boring-maths, hippo, Metrolist: nothing; `node`, `npm`, `npx` and `java` (with `JAVA_HOME`) already resolve.
+
+The whole Comonicon.jl screen reruns this way into `C:/z0-runs/s4/screen-cj-2`, and only that run decides its families. S7 and S8 launch the same way.
+
+## S4: how kept families split into sets R and X
+
+Neither the prereg nor the plan says which family goes to which set. This rule was set on 2026-10-11, before any screen verdict was read:
+
+- Set X takes 4 families, the minimum, since Codex usage is shared with the whole account (smoke report, set X limit). Set R takes every other kept family.
+- The 4 come from 4 different repositories, so H2 is not one repository's result.
+- Among the splits that meet both, take the one with the highest lower maintainer share of the two sets; ties go to lower family numbers, in the repository order boring-maths, fifty, hippo, Metrolist, Comonicon.jl.
+- If no split leaves both sets at two thirds maintainer rules or more, the S4 check fails.
+
+`C:/z0-runs/s4/split-sets.mjs` applies it.
+
+## S6: calibration build
+
+#781 merged as `cf53aebb`. D5 does not ship (0 of 54 held-out corrections flagged), so A2 runs on #781 alone. Master was merged into the runner branch once, as `9dc3981e`, with no conflicts; the read-check fixes above sit on top as `0635b4fc` and then `f945de49` (the cwd fix). `f945de49` is the calibration build: S7 and S8 run from a detached worktree at it, so every record carries it, and the branch takes no rebase or merge until S9 tags it. Its pins are `C:/z0-runs/s6/pins-s6c.json`: Claude Code 2.1.288, `claude-opus-5-5`, dist hash `59e0c77e`. The cwd fix changed only `scripts/token-eval`, so the dist hash is the one `0635b4fc` had (`pins-s6b.json`). The screens finished before the fix ran on `0635b4fc`; the reruns and everything after run on `f945de49`.
+
+On that build the capture tables match #781's in all five repositories (`tables-<key>-s6.md` against `-s4-781.md`, 0 changed lines).
+
+The smoke's A2 set R sequence re-run on `0635b4fc` (`C:/z0-runs/s6/smoke-a2-run3`, seed 1): all five cells valid, none void, and every record carries `0635b4fc`. The teach failed its check, then passed once taught. On a1 and a2 the prompt hook's context held the taught rule (put each change note in its own new file under `changelog.d/`, never edit `CHANGELOG.md` by hand), with 2 and 3 injections in hippo's record, and both apply cells passed their lesson check on the first try.
+
+The first re-run (`smoke-a2-run2`) is not used. Its teach and apply cells were invalid as `checker`: the stage 1 toy checkers in `C:/z0-runs/toy1` and `toy2` still read the `Z0_*` env names that `de41d9a9` renamed to `CHECK_*`, so their `git` calls failed. They now read `CHECK_*`; the S3 checkers already did.
+
 ## Contract limits found
 
 - A checker's `CHECK_POST_COMMIT` is a state commit whose parent is the pre-session commit, so the agent's own commits are not visible to it. Commit-message rules are checked from the `git commit` commands in `CHECK_COMMANDS`.
@@ -151,3 +204,4 @@ Regenerate: `node C:/z0-runs/s4/repick-phrases.mjs <key>=<merged tasks.json> ...
   - fifty: `PYTHONNOUSERSITE`, `PIP_NO_INDEX`, `PYTHONDONTWRITEBYTECODE`
   - Metrolist: `ANDROID_HOME`, `ANDROID_SDK_ROOT`, `ANDROID_USER_HOME`, `GRADLE_USER_HOME`, `JAVA_TOOL_OPTIONS`
   - Comonicon.jl: `JULIA_DEPOT_PATH`, `JULIA_PKG_OFFLINE`
+- A session's PATH is the launching shell's PATH with hippo launchers removed, and PATH cannot go through `--pass-env` because the runner sets it. Each chunk's launch puts its toolchain first on PATH: Comonicon.jl `C:\eval-envs\julia-1.13.1\bin`, fifty `C:\eval-envs\fifty\Scripts`.
