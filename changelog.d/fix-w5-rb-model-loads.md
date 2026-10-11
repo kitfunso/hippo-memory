@@ -1,0 +1,8 @@
+### Fixed
+
+- **A recall no longer waits on a local embedding model while it downloads.** The first use of the local model can download its weights. Before, the recall waited for the whole download. Now the recall uses BM25 when its query-embedding deadline passes and says so once. The download goes on in the background, and later recalls in the same process use the model. A model that loads from disk is still waited for, because that load is short.
+- **A model load that hangs now fails after 2 minutes.** This applies to the local embedding model and to the cross-encoder reranker. A model that arrives after the timeout is still kept.
+- **A failed model load is not tried again on every recall.** After a failure, the next attempt waits 5 minutes. Before, the cross-encoder downloaded the model again on every recall after a failed load.
+- **The warning for a failed model load now shows the real error.** The warning line names the error and its class once in each 5-minute window. Before, the real error was logged only at debug level.
+- **A blocked move of the old `embeddings.json` is now logged.** When another process holds the file open, hippo logs the error and copies the file aside. Any other rename error leaves the file in place, and the next open tries the import again. If hippo cannot delete the original after a copy, it removes the copy, so copies do not pile up.
+- **Internal:** One module now finds and imports the optional Transformers.js package for both the local embedder and the cross-encoder. Both take the package as a parameter, so tests pass a fake one instead of mocking modules.
