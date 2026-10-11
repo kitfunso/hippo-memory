@@ -28,6 +28,11 @@ import { writeFileAtomic } from '../util/atomic-write.js';
 
 const SCORE_DECIMALS = 3;
 
+// Mirrors are derived and rebuildable from the store, so they skip the fsyncs (the cost on Windows) and keep the temp-and-rename atomicity.
+function writeMirror(file: string, text: string): void {
+  writeFileAtomic(file, text, { durable: false });
+}
+
 export function layerDir(root: string, layer: Layer): string {
   return path.join(root, layer);
 }
@@ -88,7 +93,7 @@ export function writeActiveTaskMirror(hippoRoot: string, tenantId: string, snaps
   }
 
   fs.mkdirSync(path.dirname(filePath), MIRROR_FOLDER);
-  writeFileAtomic(filePath, `${fm}\n\n${body.join('\n')}`);
+  writeMirror(filePath, `${fm}\n\n${body.join('\n')}`);
 }
 
 export function removeActiveTaskMirror(hippoRoot: string, tenantId: string): void {
@@ -133,7 +138,7 @@ export function writeRecentSessionMirror(hippoRoot: string, tenantId: string, ev
   lines.push('');
 
   fs.mkdirSync(path.dirname(filePath), MIRROR_FOLDER);
-  writeFileAtomic(filePath, `${fm}\n\n${lines.join('\n')}`);
+  writeMirror(filePath, `${fm}\n\n${lines.join('\n')}`);
 }
 
 function writeConflictMirrors(hippoRoot: string, conflicts: MemoryConflict[]): void {
@@ -167,7 +172,7 @@ function writeConflictMirrors(hippoRoot: string, conflicts: MemoryConflict[]): v
       '',
     ].join('\n');
 
-    writeFileAtomic(path.join(conflictDir, filename), `${fm}\n\n${body}`);
+    writeMirror(path.join(conflictDir, filename), `${fm}\n\n${body}`);
   }
 
   for (const existing of fs.readdirSync(conflictDir)) {
@@ -182,7 +187,7 @@ export function writeMarkdownMirror(hippoRoot: string, entry: MemoryEntry): void
   removeEntryMirrors(hippoRoot, entry.id);
   const dir = layerDir(hippoRoot, entry.layer);
   fs.mkdirSync(dir, MIRROR_FOLDER);
-  writeFileAtomic(path.join(dir, `${entry.id}.md`), serializeEntry(entry));
+  writeMirror(path.join(dir, `${entry.id}.md`), serializeEntry(entry));
 }
 
 // Every layer, Trace included: `writeMarkdownMirror` writes any layer, and a stale trace mirror
