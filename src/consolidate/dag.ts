@@ -275,7 +275,8 @@ export async function rebuildDirtySummaries(
   opts: DagSummaryOptions & { cap?: number },
 ): Promise<DagRebuildResult> {
   const cap = opts.cap ?? DEFAULT_REBUILD_CAP;
-  const dirty = loadAllDirtySummaries(hippoRoot);
+  // One past the cap tells whether more were waiting without reading the rest.
+  const dirty = loadAllDirtySummaries(hippoRoot, cap + 1);
   const capped = dirty.length > cap;
   const queue = dirty.slice(0, cap);
 

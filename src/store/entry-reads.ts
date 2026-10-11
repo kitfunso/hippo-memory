@@ -242,6 +242,43 @@ export function loadAllEntryIds(hippoRoot: string): string[] {
   }, openStore);
 }
 
+/** How many memory rows the store holds across every tenant. */
+export function countAllEntries(hippoRoot: string): number {
+  return onHandle(hippoRoot, (db) => {
+    // SAFETY: row's shape matches the single `COUNT(*) AS c` column.
+    const row = db.prepare('SELECT COUNT(*) AS c FROM memories').get() as { c?: number } | undefined;
+    return Number(row?.c ?? 0);
+  }, openStore);
+}
+
+// The only code points whose JS toLowerCase yields ASCII, which SQLite's ASCII-only LIKE folding cannot see.
+const FOLDS_TO_ASCII = ['\u0130', '\u212A'];
+
+/** A superset, in loadAllEntries' order, of the rows whose lowercased content holds any of `tokens` or whose lowercased tags hold `tag`.
+ * The caller re-checks each row exactly; this only spares decoding rows that cannot match. */
+export function loadEntriesMentioning(hippoRoot: string, tokens: readonly string[], tag: string, tenantId?: string): MemoryEntry[] {
+  const likes = [...new Set(tokens)].map((t) => `%${escapeLike(t)}%`);
+  const clauses = likes.map(() => `content LIKE ? ESCAPE '\\'`);
+  const params: string[] = [...likes];
+  // A tag needing JSON escapes or case folding past ASCII is not found by a substring of tags_json, so every tagged row stays in.
+  if (/^[\x20-\x7e]*$/.test(tag) && !/["\\]/.test(tag)) {
+    clauses.push(`tags_json LIKE ? ESCAPE '\\'`);
+    params.push(`%${escapeLike(tag)}%`);
+  } else clauses.push(`COALESCE(tags_json, '[]') != '[]'`);
+  for (const ch of FOLDS_TO_ASCII) {
+    clauses.push('instr(content, ?) > 0', 'instr(tags_json, ?) > 0');
+    params.push(ch, ch);
+  }
+  const tenantClause = tenantId !== undefined ? 'tenant_id = ? AND ' : '';
+  return onHandle(hippoRoot, (db) => {
+    // SAFETY: selects exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
+    const rows = db.prepare(
+      `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE ${tenantClause}(${clauses.join(' OR ')}) ORDER BY created ASC, id ASC`,
+    ).all(...(tenantId !== undefined ? [tenantId] : []), ...params) as MemoryRow[];
+    return rows.map(rowToEntry);
+  }, openStore);
+}
+
 export interface EntryTextKey {
   id: string;
   tenantId: string;

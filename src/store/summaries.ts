@@ -31,9 +31,9 @@ export function loadAllL2Summaries(hippoRoot: string): MemoryEntry[] {
   }, openStore);
 }
 
-/** Dirty summaries across all tenants in one query, newest change first (latest_at DESC NULLS LAST, id ASC) so HIPPO_DAG_REBUILD_CAP takes the most
- * recently changed. Each entry carries its own tenantId so the children read and rebuild UPDATE stay tenant-scoped. */
-export function loadAllDirtySummaries(hippoRoot: string): MemoryEntry[] {
+/** Dirty summaries across all tenants, newest change first (latest_at DESC NULLS LAST, id ASC), at most `limit` (all when omitted)
+ * so HIPPO_DAG_REBUILD_CAP reads only the most recently changed. Each entry carries its tenantId so later writes stay tenant-scoped. */
+export function loadAllDirtySummaries(hippoRoot: string, limit?: number): MemoryEntry[] {
   return onHandle(hippoRoot, (db) => {
     // SAFETY: this query selects exactly MEMORY_SELECT_COLUMNS, matching
     // MemoryRow's field set.
@@ -43,7 +43,8 @@ export function loadAllDirtySummaries(hippoRoot: string): MemoryEntry[] {
        WHERE summary_dirty = 1
          AND kind != 'archived'
        ORDER BY latest_at DESC NULLS LAST, id ASC
-    `).all() as MemoryRow[];
+       LIMIT ?
+    `).all(limit ?? -1) as MemoryRow[];
     return rows.map(rowToEntry);
   }, openStore);
 }
