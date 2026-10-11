@@ -59,7 +59,10 @@ function setAsideCorruptRegistry<E>(registryPath: string, err: E): void {
     fs.renameSync(registryPath, aside);
     log.warn(`workspace registry ${registryPath} is corrupt (${reason}); moved it to ${aside} and starting with no workspaces`);
   } catch (renameErr) {
-    log.warn(`workspace registry ${registryPath} is corrupt (${reason}) and could not be moved aside (${errorMessage(renameErr)}); starting with no workspaces`);
+    log.warn(
+      `workspace registry ${registryPath} is corrupt (${reason}) and could not be moved aside (${errorMessage(renameErr)}); ` +
+        `starting with no workspaces`,
+    );
   }
 }
 

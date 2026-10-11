@@ -359,7 +359,10 @@ export interface PreviewRow {
 export function selectPreviewRows(db: DatabaseSyncLike, columns: ReadonlySet<string>, tenantId: string): PreviewRow[] {
   const tenant = columns.has('tenant_id') ? ' WHERE tenant_id = ?' : '';
   const column = (name: string, fallback: string): string => (columns.has(name) ? name : `${fallback} AS ${name}`);
-  const statement = db.prepare(`SELECT id, content, ${column('source', "''")}, ${column('confidence', 'NULL')}, ${column('extracted_from', 'NULL')}, ${column('dag_level', '0')}, ${column('tags_json', "'[]'")} FROM memories${tenant}`);
+  const statement = db.prepare(
+    `SELECT id, content, ${column('source', "''")}, ${column('confidence', 'NULL')}, ${column('extracted_from', 'NULL')}, ` +
+      `${column('dag_level', '0')}, ${column('tags_json', "'[]'")} FROM memories${tenant}`,
+  );
   // SAFETY: the SELECT names every PreviewRow field, each a literal fallback when its column is missing.
   return (tenant ? statement.all(tenantId) : statement.all()) as PreviewRow[];
 }

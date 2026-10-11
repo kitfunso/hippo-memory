@@ -4,7 +4,15 @@ import * as path from 'path';
 import { fitBudget } from '../search/finalize.js';
 import type { SearchResult } from '../core/search-types.js';
 import { dropHeldCopies, duplicateKey, storedTextKeys } from '../util/same-text.js';
-import { retrieve as apiRetrieve, drillDown as apiDrillDown, assemble as apiAssemble, getContext as apiGetContext, type Context as ApiContext, type RecallOpts, type RecallSuppressionSummary } from '../api/index.js';
+import {
+  retrieve as apiRetrieve,
+  drillDown as apiDrillDown,
+  assemble as apiAssemble,
+  getContext as apiGetContext,
+  type Context as ApiContext,
+  type RecallOpts,
+  type RecallSuppressionSummary,
+} from '../api/index.js';
 import { autoDetectContext } from '../api/context-auto.js';
 import { resolveProjectIdentity, type ProjectIdentity } from '../core/project-identity.js';
 import { isSharedStore } from '../core/config.js';

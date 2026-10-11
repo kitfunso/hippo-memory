@@ -85,7 +85,8 @@ function countedLevel(db: DatabaseSyncLike, walk: PagedWalk, parents: readonly s
   for (const chunk of chunked([...parents])) {
     // SAFETY: the SELECT names exactly ChildGroup's four fields, and the WHERE keeps dag_parent_id a string.
     const groups = db.prepare(
-      `SELECT dag_parent_id, scope, origin_project, COUNT(*) AS n FROM memories WHERE dag_parent_id IN (${marks(chunk)}) AND ${TENANT_IS} AND id <> ? GROUP BY dag_parent_id, scope, origin_project`,
+      `SELECT dag_parent_id, scope, origin_project, COUNT(*) AS n FROM memories ` +
+        `WHERE dag_parent_id IN (${marks(chunk)}) AND ${TENANT_IS} AND id <> ? GROUP BY dag_parent_id, scope, origin_project`,
     ).all(...chunk, walk.tenantId, walk.summary.id) as ChildGroup[];
     for (const group of groups) {
       if (!walk.page.admit(group)) return null;
@@ -122,7 +123,8 @@ function childrenInOrder(db: DatabaseSyncLike, walk: PagedWalk, parents: readonl
   for (const chunk of chunked([...parents])) {
     // SAFETY: selects exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
     const rows = db.prepare(
-      `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE dag_parent_id IN (${marks(chunk)}) AND ${TENANT_IS} AND id <> ? ORDER BY created ASC, id ASC LIMIT ?`,
+      `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE dag_parent_id IN (${marks(chunk)}) AND ${TENANT_IS} AND id <> ? ` +
+        `ORDER BY created ASC, id ASC LIMIT ?`,
     ).all(...chunk, walk.tenantId, walk.summary.id, limit) as MemoryRow[];
     for (const row of rows) {
       const bucket = byParent.get(row.dag_parent_id ?? '');

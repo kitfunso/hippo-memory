@@ -135,7 +135,8 @@ function vaultIdentityOrThrow(options: ImportOptions): VaultIdentity {
   assertClientScope(scope);
   if (scope !== null && scope.split(':').includes('private') && !isPrivateScope(scope)) {
     throw new Error(
-      `vault scope '${scope}' is not recognized as private by recall (only '<source>:private:*' scopes are default-denied). Use a source-prefixed scope such as 'vault:private:${vaultName}'.`,
+      `vault scope '${scope}' is not recognized as private by recall (only '<source>:private:*' scopes are default-denied). ` +
+        `Use a source-prefixed scope such as 'vault:private:${vaultName}'.`,
     );
   }
   return { vaultName, scope };

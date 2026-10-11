@@ -495,7 +495,10 @@ function tombstoneLoserValue(
   removal: LoserRemoval,
 ): string {
   if (isPersonalScope(loserRow.scope)) {
-    throw new BadRequestError(`cannot reject the value of personal memory ${t.loserId}: a rejection reaches the whole tenant, so its reason would show to everyone; resolve with forget instead`);
+    throw new BadRequestError(
+      `cannot reject the value of personal memory ${t.loserId}: a rejection reaches the whole tenant, ` +
+        `so its reason would show to everyone; resolve with forget instead`,
+    );
   }
   const { actor, reason } = who;
   const rejectedDigest = rejectionDigest(loserRow.content);
@@ -603,7 +606,10 @@ function purgeRemovedLoserMirrors(
 /** The conflict and loser ids every conflict_resolve audit row names. */
 export function conflictResolveAuditsAt(db: DatabaseSyncLike): Array<{ conflictId: number; loserId: string }> {
   // SAFETY: SELECT of two fields every conflict_resolve audit row carries (ConflictResolveMeta above).
-  return db.prepare(`SELECT json_extract(metadata_json, '$.conflictId') AS conflictId, json_extract(metadata_json, '$.loserId') AS loserId FROM audit_log WHERE op = 'conflict_resolve'`).all() as { conflictId: number; loserId: string }[];
+  return db.prepare(
+    `SELECT json_extract(metadata_json, '$.conflictId') AS conflictId, json_extract(metadata_json, '$.loserId') AS loserId ` +
+      `FROM audit_log WHERE op = 'conflict_resolve'`,
+  ).all() as { conflictId: number; loserId: string }[];
 }
 
 /** Every resolved conflict with both sides. */

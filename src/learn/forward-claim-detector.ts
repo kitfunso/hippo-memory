@@ -9,7 +9,11 @@ const FORWARD_CLAIM_PATTERNS: ReadonlyArray<RegExp> = [
   // Verb + duration tail: requires `<verb> take <N> <unit>`, because a bare `will take` matched `who will take ownership of auth?`.
   new RegExp(String.raw`\b(?:will|should|gonna|going\s+to)\s+take\s+${DURATION_TAIL}`, 'i'),
   // Ship + by/in + duration-or-day: a bare `ship in` matched `how does this ship in Docker?`, so a duration tail or literal day-of-week is required.
-  new RegExp(String.raw`\bship(?:ping|s)?\s+(?:by|in)\s+(?:(?:about|around)\s+)?(?:next\s+)?(?:${DURATION_TAIL}|(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday))\b`, 'i'),
+  new RegExp(
+    String.raw`\bship(?:ping|s)?\s+(?:by|in)\s+(?:(?:about|around)\s+)?(?:next\s+)?` +
+      String.raw`(?:${DURATION_TAIL}|(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday))\b`,
+    'i',
+  ),
   /\bestimate(?:d)?\s+(?:at\s+)?(?:~|≈|about|around)?\s*\d+/i,
   /\b(?:by|in|within)\s+(?:about|around|~)?\s*\d+\s*(?:day|week|month|hour)s?\b/i,
   /\bETA\s*(?:is|:)?\s*\d+/i,
@@ -19,7 +23,11 @@ const FORWARD_CLAIM_PATTERNS: ReadonlyArray<RegExp> = [
   /(?<=^|\s)~\s*\d+\s*(?:day|week|month|hour)s?\b/i,
   // Should + verb + duration tail. Same tightening as the leading 'will
   // take' rule: 'should ship by EOD' must include a quantifier.
-  new RegExp(String.raw`\bshould\s+(?:be|ship|finish|complete|land)\s+(?:by|in|within)\s+(?:(?:about|around)\s+)?(?:next\s+)?(?:${DURATION_TAIL}|(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday))\b`, 'i'),
+  new RegExp(
+    String.raw`\bshould\s+(?:be|ship|finish|complete|land)\s+(?:by|in|within)\s+(?:(?:about|around)\s+)?(?:next\s+)?` +
+      String.raw`(?:${DURATION_TAIL}|(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday))\b`,
+    'i',
+  ),
 ];
 
 /** Pronouns, function words and modal verbs the regex set already gates on; dropped before class resolution so overlap comes from domain tokens. */

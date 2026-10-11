@@ -44,7 +44,8 @@ export function parseBudgetFlag(value: string | boolean | string[] | undefined, 
 
 export type CliFlags = Record<string, string | boolean | string[]>;
 
-// Whole-arg digits only: parseInt alone reads "1abc" as 1 and a mutating verb would hit the wrong row. Digits past 2^53 round to a neighbouring id, so they are refused too.
+// Whole-arg digits only: parseInt alone reads "1abc" as 1 and a mutating verb would hit the wrong row.
+// Digits past 2^53 round to a neighbouring id, so they are refused too.
 export function parsePositiveId(idRaw: string | undefined, label: string): number {
   const s = String(idRaw ?? '').trim();
   const id = parseInt(s, 10);

@@ -32,10 +32,11 @@ export function saveSessionHandoff(
   // Scope is stored as given; read-side default-deny in api.recall + cmdRecall
   // continuity excludes slack:private:* and 'unknown:legacy'.
   try {
-    const result = db.prepare(`
-      INSERT INTO session_handoffs(session_id, repo_root, task_id, summary, next_action, artifacts_json, scope, tenant_id, created_at, constraints_json, evidence_json, outcome, target_runtime, card_id, owner_subject, origin_project)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
+    const result = db.prepare(
+      `\n      INSERT INTO session_handoffs(session_id, repo_root, task_id, summary, next_action, artifacts_json, scope, tenant_id, created_at, ` +
+        `constraints_json, evidence_json, outcome, target_runtime, card_id, owner_subject, origin_project)\n` +
+        `      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)\n    `,
+    ).run(
       handoff.sessionId,
       handoff.repoRoot ?? null,
       handoff.taskId ?? null,

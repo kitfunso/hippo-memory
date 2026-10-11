@@ -23,7 +23,10 @@ export function syncGlobalToLocal(
   opts: { includeCrossProject?: boolean } = {},
 ): number {
   if (isSharedStore(localRoot)) {
-    throw new BadRequestError(`Refusing to sync into ${localRoot}: a shared store takes no copies of a personal global store, whose rows would reach every member.`);
+    throw new BadRequestError(
+      `Refusing to sync into ${localRoot}: a shared store takes no copies of a personal global store, ` +
+        `whose rows would reach every member.`,
+    );
   }
   if (!fs.existsSync(globalRoot)) return 0;
 

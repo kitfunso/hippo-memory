@@ -5,7 +5,14 @@ import { execFileSync, execSync } from 'child_process';
 import { installJsonHooks, type InstallResult } from '../hooks/json-hooks.js';
 import { CODEX_TRUST_LINE } from '../hooks/shared.js';
 import { envSkipSchedule } from '../util/env.js';
-import { DAILY_TASK_NAME, buildDailyRunnerCommand, hasUnsafeRunnerPathChars, buildSchtasksCreateArgs, buildWindowsTaskRun, quoteInsideWindowsArg } from './scheduler.js';
+import {
+  DAILY_TASK_NAME,
+  buildDailyRunnerCommand,
+  hasUnsafeRunnerPathChars,
+  buildSchtasksCreateArgs,
+  buildWindowsTaskRun,
+  quoteInsideWindowsArg,
+} from './scheduler.js';
 
 /** Adds hippo's two Codex hooks and says what changed; each install ends on the trust reminder, since Codex skips an untrusted hook. */
 export function installCodexMemoryHooks(indent: string): void {
@@ -26,9 +33,16 @@ export function installCodexMemoryHooks(indent: string): void {
 
 /** The one line init, hook install, hook uninstall and setup print when Claude Code's settings.json is not JSON hippo can edit and so was
  * left unchanged; true when it printed. */
-export function warnClaudeSettingsUnusable(result: Pick<InstallResult, 'settingsPath' | 'invalidJson'>, indent: string, action: 'install' | 'uninstall' = 'install'): boolean {
+export function warnClaudeSettingsUnusable(
+  result: Pick<InstallResult, 'settingsPath' | 'invalidJson'>,
+  indent: string,
+  action: 'install' | 'uninstall' = 'install',
+): boolean {
   if (!result.invalidJson) return false;
-  console.log(`${indent}WARNING: ${result.settingsPath} is not a JSON object hippo can merge into, so it was left unchanged; fix it, then run \`hippo hook ${action} claude-code\`.`);
+  console.log(
+    `${indent}WARNING: ${result.settingsPath} is not a JSON object hippo can merge into, so it was left unchanged; ` +
+      `fix it, then run \`hippo hook ${action} claude-code\`.`,
+  );
   return true;
 }
 

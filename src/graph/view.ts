@@ -217,7 +217,9 @@ const CLIENT_JS = [
   "  svg.addEventListener('click',function(){clearHi();active=null;});",
   "  function clearHi(){svg.classList.remove('focused');document.querySelectorAll('.hi').forEach(function(el){el.classList.remove('hi');});}",
   "  function highlight(id){clearHi();svg.classList.add('focused');var " +
-    "keep={};keep[id]=1;(adj[id]||[]).forEach(function(n){keep[n]=1;});document.querySelectorAll('.node').forEach(function(g){if(keep[g.getAttribute('data-id')])g.classList.add('hi');});document.querySelectorAll('.edge').forEach(function(l){if(l.getAttribute('data-from')===id||l.getAttribute('data-to')===id)l.classList.add('hi');});}",
+    "keep={};keep[id]=1;(adj[id]||[]).forEach(function(n){keep[n]=1;});document.querySelectorAll('.node').forEach(" +
+    "function(g){if(keep[g.getAttribute('data-id')])g.classList.add('hi');});document.querySelectorAll('.edge').forEach(" +
+    "function(l){if(l.getAttribute('data-from')===id||l.getAttribute('data-to')===id)l.classList.add('hi');});}",
   "})();",
 ].join("\n");
 

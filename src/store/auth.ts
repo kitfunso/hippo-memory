@@ -400,7 +400,8 @@ export function listApiKeyRows(db: DatabaseSyncLike, opts: ListApiKeysOpts): Api
   params.push(...after.params);
   const limitSql = opts.limit === undefined ? '' : ' LIMIT ?';
   if (opts.limit !== undefined) params.push(opts.limit);
-  const sql = `SELECT id, key_id, tenant_id, label, created_at, revoked_at, role, expires_at, owner_subject FROM api_keys WHERE ${where.join(' AND ')}${after.sql} ORDER BY id DESC${limitSql}`;
+  const sql = `SELECT id, key_id, tenant_id, label, created_at, revoked_at, role, expires_at, owner_subject FROM api_keys ` +
+    `WHERE ${where.join(' AND ')}${after.sql} ORDER BY id DESC${limitSql}`;
   // SAFETY: the SELECT above projects exactly these 9 columns, in this order.
   const rows = db.prepare(sql).all(...params) as Array<{
     id: number; key_id: string; tenant_id: string; label: string | null; created_at: string; revoked_at: string | null; role: string;

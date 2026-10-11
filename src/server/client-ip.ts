@@ -57,7 +57,8 @@ export function warnIfClientIpHeaderUnpinned(): void {
   const header = envClientIpHeader();
   if (!header || trustedProxyList(envTrustedProxies())) return;
   log.warn(
-    `serve: HIPPO_CLIENT_IP_HEADER is ${header} and HIPPO_TRUSTED_PROXIES is unset, so any caller that reaches this port without passing the proxy can send that header and pick its own rate-limit bucket. ` +
+    `serve: HIPPO_CLIENT_IP_HEADER is ${header} and HIPPO_TRUSTED_PROXIES is unset, so any caller that reaches this port ` +
+      `without passing the proxy can send that header and pick its own rate-limit bucket. ` +
       "Set HIPPO_TRUSTED_PROXIES to the proxy's addresses or CIDRs, so the header is read from the proxy alone.",
   );
 }
