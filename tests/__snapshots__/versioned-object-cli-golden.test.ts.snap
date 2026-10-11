@@ -370,7 +370,7 @@ Process #3 recorded (v2), superseding #1.
 $ process supersede 1 --step sign the build --description signed -> 1
 --- stdout
 --- stderr
-Error: saveProcess: process 1 is not active (status='superseded'); only active processes can be superseded.
+saveProcess: process 1 is not active (status='superseded'); only active processes can be superseded.
 
 $ process list -> 0
 --- stdout

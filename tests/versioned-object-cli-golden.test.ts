@@ -88,4 +88,12 @@ describe('versioned object CLI verbs', () => {
     await step(...k.bodyless);
     expect(transcript.join('\n')).toMatchSnapshot();
   });
+
+  it.each([
+    ['new', 'Broken', '--step', '   '],
+    ['supersede', '1', '--step', '   '],
+  ])('a failing process save (%s) exits 1 and prints the store error alone', async (...args) => {
+    expect((await hippo('process', 'new', 'Release', '--step', 'run the tests')).status).toBe(0);
+    expect(await hippo('process', ...args)).toEqual({ stdout: '', stderr: 'saveProcess: step 1 is empty\n', status: 1 });
+  });
 });

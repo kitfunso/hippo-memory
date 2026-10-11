@@ -243,7 +243,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `handleDag`: Orphan L2 summaries (no L3 parent) at top level — pre-E5 default shape.
 - `cmdDrillDown`: v0.30 / E5: --depth N walks N levels down (default 1, hard cap 10). L4 fold: reject out-of-range explicitly (no silent clamp).
 
-### src/cli/decisions.ts
+### src/cli/predictions.ts
 - `prediction banner`: E2 prediction first-class object (v0.31) docs/plans/2026-05-26-e2-prediction-object.md
 - `predictBaserate`: J3 reference-class / planning-fallacy detector
 
