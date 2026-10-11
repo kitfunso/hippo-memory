@@ -256,6 +256,12 @@ The scored task set is authored after the freeze (prereg, "Scored task set"), so
 
 The A5 seed 1 teach also lost its prompt hook, at 7.3 s. The hippo chunk had joined at a slowest hook of 0.8 s, and its first session ran beside that teach while other sessions' test runs held the bare-launch check at 640 to 700 ms. The session is in the voided seed, so it does not count toward any arm's bar.
 
+## S7: the hippo chunk stopped, to rerun alone
+
+Keith stopped the hippo chunk (`C:/z0-runs/s7/cal-hp`) on 2026-10-11 so the first sizing comes sooner. It had recorded 1 of its 120 sessions in 45 minutes. That session, hp-f4-teach in A1 seed 1, took 38 minutes and $0.98, because the hp-f4 task leads the agent to run hippo's whole test suite. At that pace the chunk needed about a day, and its test runs were slowing cj's hippo hooks. A stopped chunk cannot resume, so hippo reruns whole and alone into a new out dir. boring-maths took its place beside cj (`C:/z0-runs/s7/cal-bm`). S9 sizes first from cj and bm, then adds hippo.
+
+The one hippo record is voided as `read`. While debugging a test about home folders, the agent ran `ls -d ~/.hippo`. The arms keep the operator's `USERPROFILE`, so in Git Bash `~` is the operator's home, and the read check classed the path as `operator`. The S4 hippo screen shows the same void on 1 of its 6 hp-f4 sessions (A0), so the rerun will lose some hp-f4 sessions to it. The check is doing its job: a void session is not data. Whether arms should get their own home folder is a question for the scored-run build, not calibration, since the calibration build is pinned.
+
 ## Contract limits found
 
 - A checker's `CHECK_POST_COMMIT` is a state commit whose parent is the pre-session commit, so the agent's own commits are not visible to it. Commit-message rules are checked from the `git commit` commands in `CHECK_COMMANDS`.
