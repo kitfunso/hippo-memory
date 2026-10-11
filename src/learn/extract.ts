@@ -3,7 +3,7 @@ import { writeEntry } from '../store/entry-writes.js';
 import { loadConfig } from '../core/config.js';
 import { RejectedValueError } from '../store/rejection.js';
 import { redactSecretsStrict } from '../util/secret-detect.js';
-import { describeMessageFailure, sendAnthropicMessage } from '../util/anthropic-messages.js';
+import { type AnthropicMessageFailure, describeMessageFailure, sendAnthropicMessage } from '../util/anthropic-messages.js';
 import { neverAutoShareTags } from '../sharing/share.js';
 import { errorMessage, log } from '../util/log.js';
 import { isJsonString, type JsonValue } from '../util/json.js';
@@ -19,8 +19,8 @@ export interface ExtractOptions {
   apiKey: string;
   model?: string;
   fetcher?: typeof fetch;
-  /** Told why a call produced nothing, so callers can surface it instead of guessing. */
-  onError?: (msg: string) => void;
+  /** Told why a call produced nothing, so callers can surface it instead of guessing; `failure` is set when the API call itself failed. */
+  onError?: (msg: string, failure?: AnthropicMessageFailure) => void;
 }
 
 const EXTRACTION_PROMPT = `You are extracting factual statements from a conversation or memory entry. Extract 1-8 standalone factual statements that would be useful to remember later.
@@ -51,7 +51,7 @@ export async function extractFacts(
     fetcher: opts.fetcher,
   });
   if (!reply.ok) {
-    opts.onError?.(describeMessageFailure(reply.failure));
+    opts.onError?.(describeMessageFailure(reply.failure), reply.failure);
     return [];
   }
 

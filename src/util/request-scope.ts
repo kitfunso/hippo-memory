@@ -14,7 +14,7 @@ export class RequestDeadline {
   /** Epoch milliseconds. */
   readonly at: number;
   #storeCalls = 0;
-  #whenIdle: (() => void) | undefined;
+  #whenIdle: (() => void)[] = [];
 
   constructor(at: number) {
     this.at = at;
@@ -26,18 +26,16 @@ export class RequestDeadline {
     const done = (): void => {
       this.#storeCalls -= 1;
       if (this.#storeCalls > 0) return;
-      const idle = this.#whenIdle;
-      this.#whenIdle = undefined;
-      idle?.();
+      for (const idle of this.#whenIdle.splice(0)) idle();
     };
     call.then(done, done);
     return call;
   }
 
-  /** Runs `fn` now, or once the last store call the request waits on has settled. */
+  /** Runs `fn` now, or once the last store call the request waits on has settled; every function registered meanwhile runs, in order. */
   onceIdle(fn: () => void): void {
     if (this.#storeCalls === 0) fn();
-    else this.#whenIdle = fn;
+    else this.#whenIdle.push(fn);
   }
 }
 
