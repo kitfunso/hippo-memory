@@ -1,5 +1,5 @@
 {
-  "count": 55,
+  "count": 53,
   "exports": [
     "src/api/availability.ts:DEFAULT_RECENCY_WINDOW_MS",
     "src/capture/extract.ts:extractFromText",
@@ -15,8 +15,6 @@
     "src/consolidate/half-life-migration.ts:storeHalfLifeBase",
     "src/consolidate/memory-value.ts:MV_FEATURE_NAMES",
     "src/consolidate/memory-value.ts:computeMvFeatures",
-    "src/core/config.ts:_resetSharedStoreCacheForTests",
-    "src/core/memory.ts:_resetLossAversionRatioCacheForTests",
     "src/core/physics.ts:applyOutcomeFeedback",
     "src/core/project-identity.ts:clearProjectIdentityCache",
     "src/core/prompt-recall.ts:PROMPT_RECALL_MAX_CHARS",

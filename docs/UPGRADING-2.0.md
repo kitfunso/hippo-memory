@@ -101,3 +101,11 @@ Long positional argument lists became options objects, and two helpers that expo
 - `afterWrite` is removed from the options of `writeEntry` and `promoteToGlobal`. It handed out the write's own database handle. Code in this package that needs it uses `writeEntryWithHook` and `promoteWithHook`, which no package entry exports. Move any hook to a store method that runs inside the write.
 - `hippo decide get|close` and `hippo predict show|close` reject ids such as `12abc` and `0x1` with exit code 1. They read these as `12` and `0` before. Pass a plain positive integer.
 - `confidenceFacets` takes `ConfidenceInputs` (`pinned`, `confidence`, `last_retrieved`) instead of a whole `MemoryEntry`. Every old call still compiles.
+
+## Server entry and test seams
+
+`hippo-memory/server` no longer exports internals or test hooks. The test hooks now live on a new subpath, `hippo-memory/testing`, which is not for production code and carries no semver guarantee beyond the major version.
+
+- `withSqliteAllowed` and `OtherStoreFolderError` left `hippo-memory/server`. They are internal. `OTHER_STORE_MARKER` stays, so a store that is not hippo.db can still mark its folder. A caller that needs to open hippo.db on purpose must do it through a store from `sqliteStore(hippoRoot)`.
+- `__resetSessionRecallHistoryHttp` moved to `hippo-memory/testing`, with the other reset hooks: `_resetAblationCacheForTests`, `_resetSharedStoreCacheForTests`, `_resetLossAversionRatioCacheForTests` and `_resetSessionRecallHistoryMcpForTests`. Change `import { __resetSessionRecallHistoryHttp } from 'hippo-memory/server'` to import it from `hippo-memory/testing`.
+- `sqliteSyncStore`, `SqliteSyncStore`, `finishRecallAt` and `storeFor` are not exported from any package entry. Implement and consume stores through `HippoStore` and `sqliteStore`.

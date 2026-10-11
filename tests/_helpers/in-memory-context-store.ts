@@ -4,10 +4,11 @@ import { listAuditEventsAfter } from '../../src/store/audit.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { rowToSessionHandoff, type SessionHandoffRow } from '../../src/core/handoff.js';
 import {
-  ftsTermParts, passesScopeFilterForRecall, rarestFtsQuery, SECRET_TAGS, tallyAmbientEntries, withSqliteAllowed,
+  ftsTermParts, passesScopeFilterForRecall, rarestFtsQuery, SECRET_TAGS, tallyAmbientEntries,
   type AmbientCandidateRequest, type AmbientLoadResult, type AuditEvent, type ContextReads, type ContinuityKey, type HippoStore,
   type MemoryEntry, type RecentOrigins, type SessionHandoff, type VectorReads,
 } from '../../src/server.js';
+import { withSqliteAllowed } from '../../src/db/open.js';
 import { HANDOFF_COLUMNS } from '../../src/store/handoffs.js';
 import { MEMORY_SELECT_COLUMNS, rowToEntry, type MemoryRow } from '../../src/store/rows.js';
 import { assertTenantId } from '../../src/store/tenant.js';

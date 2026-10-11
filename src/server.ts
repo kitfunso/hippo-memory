@@ -13,7 +13,6 @@ export {
 // Published on the hippo-memory/server subpath before they moved to http-util.ts, so they stay exported here.
 export { isCrossSite, LOOPBACK_HOST_HEADER } from './util/http-util.js';
 // The code behind these lives in src/server/; this subpath keeps exporting them.
-export { __resetSessionRecallHistoryHttp } from './server/routes/recall.js';
 export { clientIpForRateLimit } from './server/client-ip.js';
 export { isLoopback, isReservedActor } from './server/auth.js';
 export type { AddonCall, AddonRoute, AuthResolver, RateLimitSpec, ResolvedBearer, ServeOpts, ServerHandle } from './server/types.js';
@@ -72,8 +71,8 @@ export { passesScopeFilterForRecall, RECALL_DEFAULT_DENY_SCOPES } from './core/r
 export { SECRET_TAGS } from './util/secret-detect.js';
 export { tallyAmbientEntries } from './core/ambient.js';
 export { ftsTermParts, rarestFtsQuery } from './core/prompt-recall.js';
-// store copy --db writes the marker and reads the old hippo.db under the waiver.
-export { OTHER_STORE_MARKER, OtherStoreFolderError, withSqliteAllowed } from './db/index.js';
+// store copy --db writes the marker into the other store's folder.
+export { OTHER_STORE_MARKER } from './db/index.js';
 // An add-on's install step mints the first admin key into a store folder it names, which `hippo auth create` cannot reach.
 export { authCreate, type AuthCreateOpts, type AuthCreateResult } from './api/index.js';
 

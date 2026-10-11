@@ -1,6 +1,7 @@
 import { predictionMirror, type Prediction, type PredictionBaserate, type SavePredictionOpts } from '../store/predictions.js';
 import { loadConfig } from '../core/config.js';
-import { requireGroup, storeFor } from '../store/index.js';
+import { requireGroup } from '../store/index.js';
+import { storeFor } from '../store/sqlite/store.js';
 import type { PredictionClose, PredictionSave, Predictions } from '../store/port.js';
 import type { Context } from './types.js';
 

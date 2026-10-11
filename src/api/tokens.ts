@@ -2,7 +2,7 @@
 
 import { rethrowIfSqliteBlocked } from '../util/sqlite-blocked.js';
 import type { TokenSummary, TokenSurface } from '../store/token-ledger.js';
-import { storeFor } from '../store/index.js';
+import { storeFor } from '../store/sqlite/store.js';
 import type { FailureSummary } from '../store/failure-log.js';
 import { failureLogSummary, tokenUseSummary } from '../store/usage-reports.js';
 import { errorMessage, log } from '../util/log.js';

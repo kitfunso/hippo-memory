@@ -5,7 +5,8 @@ import { auditMemories, type AuditIssue, type AuditResult } from '../core/memory
 import type { QualityRepairResult } from '../store/quality-repair.js';
 import type { AuditMaintenance } from '../store/port.js';
 import { DAY_MS } from '../util/time.js';
-import { requireGroup, storeFor } from '../store/index.js';
+import { requireGroup } from '../store/index.js';
+import { storeFor } from '../store/sqlite/store.js';
 import type { KeysetPosition } from '../util/keyset.js';
 import type { Context } from './types.js';
 

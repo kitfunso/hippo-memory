@@ -1,7 +1,8 @@
 // Outcome feedback on recalled memories.
 
 import { personalScopeOf } from '../core/recall-scope.js';
-import { requireGroup, storeFor } from '../store/index.js';
+import { requireGroup } from '../store/index.js';
+import { storeFor } from '../store/sqlite/store.js';
 import type { Context } from './types.js';
 
 /** An id outside ctx.tenantId, or in someone else's personal scope, is skipped, so a stale id never fails the call.

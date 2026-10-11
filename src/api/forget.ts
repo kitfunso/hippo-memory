@@ -2,7 +2,8 @@
 
 import { BadRequestError, NotFoundError } from '../core/api-errors.js';
 import { rejectValue, unrejectValue, type RejectFlowResult } from '../trust/reject-flow.js';
-import { requireGroup, storeFor } from '../store/index.js';
+import { requireGroup } from '../store/index.js';
+import { storeFor } from '../store/sqlite/store.js';
 import { requireHostAdmin, type Context } from './types.js';
 import { getMemory } from './memories.js';
 import { canTouchScope, personalScopeOf } from '../core/recall-scope.js';

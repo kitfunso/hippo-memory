@@ -4,7 +4,7 @@ import { loadStrengthTallies, type StrengthTallies } from '../store/candidates.j
 import { countOpenConflicts } from '../store/conflicts.js';
 import { NotFoundError } from '../core/api-errors.js';
 import { canTouchScope } from '../core/recall-scope.js';
-import { storeFor } from '../store/index.js';
+import { storeFor } from '../store/sqlite/store.js';
 import { countAllEntries, loadEntriesByIds, loadEntriesPage, type EntryCursor } from '../store/entry-reads.js';
 import { requireHostAdmin, type Context } from './types.js';
 

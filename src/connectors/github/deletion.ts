@@ -1,5 +1,6 @@
 import { type Context } from '../../api/index.js';
-import { requireGroup, storeFor } from '../../store/index.js';
+import { requireGroup } from '../../store/index.js';
+import { storeFor } from '../../store/sqlite/store.js';
 
 export interface DeletionInput {
   /** artifact_ref of the comment, e.g. 'github://acme/repo/issue/42/comment/123'

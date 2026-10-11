@@ -6,7 +6,8 @@ import {
   type ApiKeyListItem, type ApiKeyListRow, type ApiKeyRecord, type ListApiKeysOpts, type NewApiKey,
 } from '../store/auth.js';
 import type { KeysetPosition } from '../util/keyset.js';
-import { requireGroup, storeFor, type HippoStore, type KeyMint, type SelfKeyMint } from '../store/index.js';
+import { requireGroup, type HippoStore, type KeyMint, type SelfKeyMint } from '../store/index.js';
+import { storeFor } from '../store/sqlite/store.js';
 import { changeScopeGrant } from '../store/sqlite/local.js';
 import type { ApiKeyOwner } from '../store/tenant-lookup.js';
 import { DAY_MS } from '../util/time.js';

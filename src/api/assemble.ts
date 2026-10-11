@@ -1,6 +1,7 @@
 // Session context assembly under a token budget.
 
-import { requireGroup, storeFor } from '../store/index.js';
+import { requireGroup } from '../store/index.js';
+import { storeFor } from '../store/sqlite/store.js';
 import { estimateTokens } from '../util/token-text.js';
 import type { MemoryEntry } from '../core/memory.js';
 import { passesScopeFilterForRecall, assertScopeRequestAllowed, personalScopeOf } from '../core/recall-scope.js';

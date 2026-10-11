@@ -1,4 +1,5 @@
-import { requireGroup, storeFor } from '../store/index.js';
+import { requireGroup } from '../store/index.js';
+import { storeFor } from '../store/sqlite/store.js';
 import type { GraphRows } from '../store/port.js';
 import type { Context } from './types.js';
 

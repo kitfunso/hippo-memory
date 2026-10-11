@@ -1,6 +1,7 @@
 // DAG drill-down from a summary to its children.
 
-import { requireGroup, storeFor } from '../store/index.js';
+import { requireGroup } from '../store/index.js';
+import { storeFor } from '../store/sqlite/store.js';
 import type { DescendantOrigin, SummaryDescendants } from '../store/port.js';
 import { estimateTokens } from '../util/token-text.js';
 import type { MemoryEntry } from '../core/memory.js';

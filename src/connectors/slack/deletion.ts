@@ -1,5 +1,6 @@
 import { archiveRaw, type Context } from '../../api/index.js';
-import { requireGroup, storeFor } from '../../store/index.js';
+import { requireGroup } from '../../store/index.js';
+import { storeFor } from '../../store/sqlite/store.js';
 import type { ConnectorEvent } from '../../store/port.js';
 
 export interface DeletionInput {

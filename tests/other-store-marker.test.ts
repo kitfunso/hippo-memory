@@ -108,10 +108,10 @@ describe('the other-store marker', () => {
     expect(readdirSync(root)).toEqual([OTHER_STORE_MARKER]);
   });
 
-  it('the server entry exports what store copy needs', () => {
+  it('the server entry exports the marker name and keeps the waiver internal', () => {
     expect(serverEntry.OTHER_STORE_MARKER).toBe(OTHER_STORE_MARKER);
-    expect(serverEntry.OtherStoreFolderError).toBe(OtherStoreFolderError);
-    expect(serverEntry.withSqliteAllowed).toBe(withSqliteAllowed);
+    expect('OtherStoreFolderError' in serverEntry).toBe(false);
+    expect('withSqliteAllowed' in serverEntry).toBe(false);
   });
 
   it('quality repair, which opens hippo.db itself to skip migrations, refuses and takes no backup', () => {

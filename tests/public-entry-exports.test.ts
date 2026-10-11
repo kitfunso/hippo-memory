@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { spawnSync } from 'node:child_process';
-import { readFileSync, realpathSync } from 'node:fs';
+import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as entry from '../src/index.js';
@@ -71,6 +71,24 @@ describe('package entry re-exports sleep', () => {
   });
 });
 
+// The test seams live on their own subpath; a seam leaking back into /server or the root would ship test hooks to production callers.
+describe('hippo-memory/testing', () => {
+  it('resolves through the package exports map to dist/entry/testing.js and holds every reset seam', () => {
+    const script = [
+      "const url = import.meta.resolve('hippo-memory/testing');",
+      "const m = await import('hippo-memory/testing');",
+      "const server = await import('hippo-memory/server');",
+      'console.log(JSON.stringify({ url, names: Object.keys(m).sort(), onServer: Object.keys(server).some((n) => /^_+reset/.test(n)) }));',
+    ].join('\n');
+    const out = importBuiltEntry<{ url: string; names: string[]; onServer: boolean }>(script);
+    expect(realpathSync(fileURLToPath(out.url))).toBe(realpathSync(resolve(REPO_ROOT, 'dist', 'entry', 'testing.js')));
+    expect(out.names.every((n) => /^_+reset\w+/.test(n))).toBe(true);
+    expect(out.names).toContain('__resetSessionRecallHistoryHttp');
+    expect(out.onServer).toBe(false);
+    expect(existsSync(resolve(REPO_ROOT, 'dist', 'entry', 'testing.d.ts'))).toBe(true);
+  });
+});
+
 /** One line per initial letter, so a snapshot diff shows the one name that came or went. */
 function byInitial(names: readonly string[]): string {
   const lines = new Map<string, string[]>();
@@ -129,10 +147,9 @@ describe('published runtime exports', () => {
       HttpError
       LOOPBACK_HOST_HEADER
       NotFoundError
-      OTHER_STORE_MARKER OtherStoreFolderError
+      OTHER_STORE_MARKER
       RECALL_DEFAULT_DENY_SCOPES RejectedValueError
       SECRET_TAGS StoreBusyError
-      __resetSessionRecallHistoryHttp
       authCreate authCreateSelf authRevoke
       bindSessionOwner bufferToFloat32
       captureFailureForCaller captureSessionTexts clientIpForRateLimit compactResumeForCaller
@@ -145,8 +162,7 @@ describe('published runtime exports', () => {
       passesScopeFilterForRecall preCompactForCaller promptHookContext
       rankVectorRows rarestFtsQuery rejectionDigest replacesIndex
       saveCompactionItemsForCaller serve sessionEndHandoffForCaller sqliteStore
-      tallyAmbientEntries
-      withSqliteAllowed",
+      tallyAmbientEntries",
         "./session-text": "COMPACTION_ITEM_MAX_CHARS COMPACTION_ITEM_ROW_CAP
       WORKING_STATE_CAPS
       collectHandoffEvidence collectSessionTurns compactSummaryBody
@@ -155,6 +171,7 @@ describe('published runtime exports', () => {
       parseCompactionItems
       scrubForSharing sessionTail
       transcriptWorkingState",
+        "./testing": "__resetSessionRecallHistoryHttp _resetAblationCacheForTests _resetLossAversionRatioCacheForTests _resetSessionRecallHistoryMcpForTests _resetSharedStoreCacheForTests",
       }
     `);
   });

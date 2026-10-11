@@ -10,7 +10,8 @@ import { vetSecrets } from '../util/secret-detect.js';
 import { assertCallerProject } from '../core/project-identity.js';
 import { BadRequestError } from '../core/api-errors.js';
 import { assertClientScope, personalScopeOf } from '../core/recall-scope.js';
-import { requireGroup, storeFor } from '../store/index.js';
+import { requireGroup } from '../store/index.js';
+import { storeFor } from '../store/sqlite/store.js';
 import type { Context } from './types.js';
 
 /** Row fields the caller's own process decides, as the CLI does from its flags and its salience gate. */

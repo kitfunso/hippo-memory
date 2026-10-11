@@ -11,7 +11,8 @@ import { appendSessionEvent, saveActiveTaskSnapshot } from '../src/store/session
 import { saveSessionHandoff } from '../src/store/handoffs.js';
 import { handleRecall } from '../src/cli/recall.js';
 import { resetSessionRings } from '../src/api/recall-record.js';
-import { serve, __resetSessionRecallHistoryHttp, type ServerHandle } from '../src/server.js';
+import { serve, type ServerHandle } from '../src/server.js';
+import { __resetSessionRecallHistoryHttp } from '../src/entry/testing.js';
 import type { RecallResult } from '../src/api/index.js';
 import { estimateTokens } from '../src/util/token-text.js';
 import { _resetAblationCacheForTests } from '../src/core/ablation.js';

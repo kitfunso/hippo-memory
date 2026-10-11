@@ -4,7 +4,8 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { serve, __resetSessionRecallHistoryHttp, sqliteStore, type HippoStore, type VectorCandidateSpec, type VectorReads } from '../src/server.js';
+import { serve, sqliteStore, type HippoStore, type VectorCandidateSpec, type VectorReads } from '../src/server.js';
+import { __resetSessionRecallHistoryHttp } from '../src/entry/testing.js';
 import { hybridSearch } from '../src/search/hybrid.js';
 import { resolveVectorArm } from '../src/search/vector.js';
 import { markSharedStore } from '../src/core/config.js';

@@ -3,7 +3,8 @@
 // the store logs the key in the memory's own transaction, which is what holds when two workers race.
 
 import type { Context, RememberOpts } from '../../api/index.js';
-import { requireGroup, storeFor } from '../../store/index.js';
+import { requireGroup } from '../../store/index.js';
+import { storeFor } from '../../store/sqlite/store.js';
 import type { ConnectorEvent } from '../../store/port.js';
 import { rememberWithEventLog, type IngestResult } from '../ingest.js';
 import { computeIdempotencyKey } from './signature.js';

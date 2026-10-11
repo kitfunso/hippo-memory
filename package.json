@@ -8,6 +8,10 @@
   "exports": {
     ".": "./dist/index.js",
     "./server": "./dist/server.js",
+    "./testing": {
+      "types": "./dist/entry/testing.d.ts",
+      "default": "./dist/entry/testing.js"
+    },
     "./project-identity": "./dist/entry/project-identity.js",
     "./json-hooks": "./dist/entry/json-hooks.js",
     "./session-text": "./dist/entry/session-text.js"

@@ -1,5 +1,6 @@
 import { envGitHubAllowUnknownInstallationFallback, envTenant } from '../../util/env.js';
-import { requireGroup, storeFor, type HippoStore } from '../../store/index.js';
+import { requireGroup, type HippoStore } from '../../store/index.js';
+import { storeFor } from '../../store/sqlite/store.js';
 
 export interface ResolveArgs {
   /** String form of `installation.id`. `null`/`undefined` means "no installation field" (PAT-mode webhook). */

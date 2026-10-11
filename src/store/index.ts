@@ -5,4 +5,4 @@ export type {
   SupersedeWrite, VectorBackfillQuery, VectorReads, VectorRowWrite, VectorWrite, VectorWriteResult, VectorWrites,
 } from './port.js';
 export { hasGroup, requireGroup } from './port.js';
-export * from './sqlite/store.js';
+export { sqliteStore } from './sqlite/store.js';

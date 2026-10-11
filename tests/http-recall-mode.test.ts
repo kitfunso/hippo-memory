@@ -10,7 +10,8 @@ import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadEntriesByIds } from '../src/store/entry-reads.js';
 import { loadIndex } from '../src/store/index-and-stats.js';
-import { serve, __resetSessionRecallHistoryHttp, type ServerHandle } from '../src/server.js';
+import { serve, type ServerHandle } from '../src/server.js';
+import { __resetSessionRecallHistoryHttp } from '../src/entry/testing.js';
 import { retrieve, supersede, type HippoDbContext } from '../src/api/index.js';
 
 let home: string;

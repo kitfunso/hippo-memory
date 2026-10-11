@@ -9,7 +9,8 @@ import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { openHippoDb, closeHippoDb, getMeta } from '../src/db/index.js';
 import { remember, retrieve } from '../src/api/index.js';
-import { serve, __resetSessionRecallHistoryHttp, type ServerHandle } from '../src/server.js';
+import { serve, type ServerHandle } from '../src/server.js';
+import { __resetSessionRecallHistoryHttp } from '../src/entry/testing.js';
 
 let home: string;
 let handle: ServerHandle;

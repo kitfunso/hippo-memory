@@ -2,7 +2,8 @@
 
 import { DEFAULT_LIST_LIMIT } from '../util/limits.js';
 import { DLQ_REDACTED_NOTE, redactPayload } from '../util/secret-detect.js';
-import { requireGroup, storeFor, type HippoStore } from '../store/index.js';
+import { requireGroup, type HippoStore } from '../store/index.js';
+import { storeFor } from '../store/sqlite/store.js';
 import type { ConnectorDeadLetter } from '../store/port.js';
 import type { JsonValue } from '../util/json.js';
 import { errorMessage } from '../util/log.js';

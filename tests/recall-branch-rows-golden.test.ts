@@ -3,7 +3,8 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
-import { serve, __resetSessionRecallHistoryHttp } from '../src/server.js';
+import { serve } from '../src/server.js';
+import { __resetSessionRecallHistoryHttp } from '../src/entry/testing.js';
 import { _resetSessionRecallHistoryMcpForTests } from '../src/mcp/server.js';
 import { lastRecalledIds } from '../src/mcp/session-state.js';
 import { _resetAblationCacheForTests } from '../src/core/ablation.js';

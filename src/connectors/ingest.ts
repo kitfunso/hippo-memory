@@ -1,7 +1,8 @@
 // The write half every connector's ingest shares, after its own pre-check of the event log.
 
 import { remember, type Context, type RememberOpts } from '../api/index.js';
-import { requireGroup, storeFor } from '../store/index.js';
+import { requireGroup } from '../store/index.js';
+import { storeFor } from '../store/sqlite/store.js';
 import type { ConnectorEvent } from '../store/port.js';
 import { RejectedValueError } from '../core/api-errors.js';
 

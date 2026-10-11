@@ -19,10 +19,11 @@ import { loadPhysicsState, resetAllPhysicsState } from '../src/db/physics-state.
 import { planningFallacyEvidenceAt } from '../src/store/planning-fallacy-evidence.js';
 import { writeRecallTraceAtRoot } from '../src/store/recall-trace.js';
 import {
-  serve, sqliteStore, __resetSessionRecallHistoryHttp,
+  serve, sqliteStore,
   type ActiveGoals, type ContinuityKey, type GoalRecallLogRow, type HippoStore, type MemoryEntry, type RecallSearchArgs, type RecallTraceInput, type RecallWrites,
   type VectorCandidateSpec,
 } from '../src/server.js';
+import { __resetSessionRecallHistoryHttp } from '../src/entry/testing.js';
 import { loadEntriesByIds, loadFreshRawMemories } from '../src/store/entry-reads.js';
 import { strengthenRetrieved, writeEntry } from '../src/store/entry-writes.js';
 import { loadLatestHandoff, saveSessionHandoff } from '../src/store/handoffs.js';

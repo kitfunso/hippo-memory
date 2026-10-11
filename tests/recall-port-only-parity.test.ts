@@ -2,7 +2,8 @@
 // store that answers only through the port; the replies and the rows written must match.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
-import { serve, __resetSessionRecallHistoryHttp, sqliteStore, type HippoStore } from '../src/server.js';
+import { serve, sqliteStore, type HippoStore } from '../src/server.js';
+import { __resetSessionRecallHistoryHttp } from '../src/entry/testing.js';
 import { markSharedStore } from '../src/core/config.js';
 import { _resetSessionRecallHistoryMcpForTests } from '../src/mcp/server.js';
 import { lastRecalledIds } from '../src/mcp/session-state.js';

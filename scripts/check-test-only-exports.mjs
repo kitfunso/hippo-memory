@@ -15,7 +15,7 @@ const EXPORT_RE = /^export\s+(?:async\s+)?(?:function\*?|const|let|var|class|enu
 const IDENT_RE = /[A-Za-z_$][\w$]*/g;
 const DIST_RE = /dist\/[\w./-]+\.js/g;
 const SEAM_RE = /^_[a-z][A-Za-z0-9]*ForTests$/;
-// Published through src/server.ts and renamed at 2.0.
+// Published on hippo-memory/testing; add-ons import it by this name.
 const SEAM_EXEMPT = new Set(['__resetSessionRecallHistoryHttp']);
 const CALLER_DIRS = ['scripts', 'benchmarks'];
 const BUILD_DIRS = new Set(['node_modules', 'dist', '.git']);
