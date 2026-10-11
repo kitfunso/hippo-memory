@@ -77,12 +77,18 @@ function identityOrder(head: readonly SearchResult[]): RerankResult[] {
   }));
 }
 
-async function scoreHead(pipe: CrossEncoderFn, query: string, head: readonly SearchResult[]): Promise<RerankResult[]> {
+async function scoreHead(
+  pipe: CrossEncoderFn,
+  query: string,
+  head: readonly SearchResult[],
+): Promise<{ readonly results: RerankResult[]; readonly succeeded: number }> {
+  let succeeded = 0;
   const scored = await Promise.all(
     head.map(async (r, i) => {
       let ceScore: number;
       try {
         ceScore = await pipe(query, r.entry.content);
+        succeeded++;
       } catch (err) {
         // One bad inference must not sink the whole pass.
         log.debug(`cross-encoder inference failed, keeping the base score: ${errorMessage(err)}`);
@@ -101,7 +107,7 @@ async function scoreHead(pipe: CrossEncoderFn, query: string, head: readonly Sea
   // relevance order, never an arbitrary content order.
   scored.sort((a, b) => compareScoresDesc(a.rerankScore, b.rerankScore));
   scored.forEach((r, i) => (r.postRerankRank = i + 1));
-  return scored;
+  return { results: scored, succeeded };
 }
 
 /** Track 2 reranker: MS-MARCO MiniLM cross-encoder, identity fallback if the model will not load. Each instance owns its model and outage warning. */
@@ -120,7 +126,10 @@ export function createCrossEncoderReranker(importModule: ImportModule = importTr
       outage.failed(errorMessage(err), errorFields(err));
       return identityOrder(head);
     }
-    outage.answered();
-    return scoreHead(pipe, query, head);
+    const { results: scored, succeeded } = await scoreHead(pipe, query, head);
+    // A loaded model whose every call throws is as dead as one that never loaded.
+    if (head.length > 0 && succeeded === 0) outage.failed('every inference failed');
+    else outage.answered();
+    return scored;
   };
 }

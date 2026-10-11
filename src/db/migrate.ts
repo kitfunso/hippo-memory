@@ -1,5 +1,5 @@
 import { PACKAGE_VERSION, compareSemver } from '../util/version.js';
-import { errorMessage, log } from '../util/log.js';
+import { errorFields, errorMessage, log } from '../util/log.js';
 import { importLegacyEmbeddingIndex } from './vector-store.js';
 import type { DatabaseSyncLike } from './sqlite.js';
 import { execWithBusyRetry, withWriteScope } from './busy.js';
@@ -176,18 +176,24 @@ function ensureMetaDefaults(db: DatabaseSyncLike): void {
 }
 
 function ensureOptionalFts(db: DatabaseSyncLike): void {
-  let available = false;
   try {
     db.exec(MEMORIES_FTS_DDL);
     repairFtsDrift(db);
-    available = true;
   } catch (err) {
+    // A busy or locked open says nothing about fts5, so only a missing module may flip the flag.
+    if (!/no such module/i.test(errorMessage(err)) || !/fts5/i.test(errorMessage(err))) {
+      log.warn(`full-text index not set up this open (${errorMessage(err)}); the next open retries`, errorFields(err));
+      return;
+    }
     log.warn(`full-text index unavailable (${errorMessage(err)}); search falls back to slower LIKE matching`);
+    writeFtsFlag(db, '0');
+    return;
   }
+  writeFtsFlag(db, '1');
+}
 
-  // Read-first: only write when the flag actually changed, so a healthy
-  // store's open doesn't take a write lock for a same-value upsert.
-  const flag = available ? '1' : '0';
+// Read-first: only write when the flag actually changed, so a healthy store's open takes no write lock.
+function writeFtsFlag(db: DatabaseSyncLike, flag: '0' | '1'): void {
   if (getMeta(db, 'fts5_available') !== flag) setMeta(db, 'fts5_available', flag);
 }
 

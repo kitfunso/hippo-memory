@@ -1,4 +1,5 @@
 import { execFileSync } from 'child_process';
+import { errorFields, log } from '../util/log.js';
 
 const MAX_DIFF_TERMS = 10;
 
@@ -28,8 +29,9 @@ export function autoDetectContext(): string {
     if (branch && branch !== 'main' && branch !== 'master') {
       return branch.replace(/[-_/]/g, ' ');
     }
-  } catch {
-    // Not a git repo or git missing: no query, so the caller lists by strength.
+  } catch (err) {
+    // Not a git repo, git missing or a timeout: no query, so the caller lists by strength.
+    log.debug('auto context: no git-derived query', errorFields(err));
   }
 
   return '';

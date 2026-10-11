@@ -499,22 +499,23 @@ interface ReplayRun {
   readonly deadline: number;
 }
 
-/** Runs `step` over each record until the deadline; a record that throws is logged and the rest still run. Returns how many `step` finished. */
-function replayEach(run: ReplayRun, records: CompactionRecord[], what: string, step: (record: CompactionRecord) => boolean): number {
+/** Runs `step` over each row until the deadline; a row that will not map or a step that throws is logged and the rest still run.
+ * Returns how many `step` finished. */
+function replayEach(run: ReplayRun, rows: CompactionRow[], what: string, step: (record: CompactionRecord) => boolean): number {
   let finished = 0;
-  for (const record of records) {
+  for (const row of rows) {
     if (Date.now() > run.deadline) break;
     try {
-      if (step(record)) finished++;
+      if (step(toRecord(row))) finished++;
     } catch (err) {
-      run.log(`${what} of ${record.id} failed: ${errorMessage(err)}`);
+      run.log(`${what} of ${row.id} failed: ${errorMessage(err)}`);
     }
   }
   return finished;
 }
 
 function replayStalled(run: ReplayRun): number {
-  const stalled = stalledSummarisedRows(run.db, run.tenantId, new Date(run.now - REPLAY_AFTER_MS).toISOString()).map(toRecord);
+  const stalled = stalledSummarisedRows(run.db, run.tenantId, new Date(run.now - REPLAY_AFTER_MS).toISOString());
   return replayEach(run, stalled, 'replay', (record) => {
     saveItems(run.db, run.hippoRoot, itemContext(run.tenantId, record), run.log);
     return true;
@@ -557,7 +558,7 @@ function replayOpen(run: ReplayRun): number {
     run.tenantId,
     new Date(run.now - REPLAY_AFTER_MS).toISOString(),
     new Date(run.now - TRANSCRIPT_FILL_WINDOW_MS).toISOString(),
-  ).map(toRecord);
+  );
   return replayEach(run, open, 'transcript fill', (record) => fillFromTranscript(run, record));
 }
 

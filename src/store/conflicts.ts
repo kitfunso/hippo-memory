@@ -3,7 +3,7 @@ import { closeHippoDb, withWriteScope, type DatabaseSyncLike } from '../db/index
 import type { MemoryEntry } from '../core/memory.js';
 import { rejectionDigest, insertRejectedValue, normalizeValueForRejection } from './rejection.js';
 import { archiveRawMemory } from './raw-archive.js';
-import { type MemoryConflict, type MemoryConflictRow, rowToMemoryConflict } from './rows.js';
+import { type MemoryConflict, type MemoryConflictRow, parseJsonArray, rowToMemoryConflict } from './rows.js';
 import { audit } from './audit-event.js';
 import { syncChangedMirrors, purgeMirrorBestEffort } from './mirrors.js';
 import { selectEntriesByIds } from './entry-reads.js';
@@ -541,7 +541,7 @@ function stripConflictRefs(db: DatabaseSyncLike, t: ResolveTarget, loserRemoved:
     ...memArgs
   ) as { conflicts_with_json: string } | undefined;
   if (keepRow) {
-    const refs: string[] = JSON.parse(keepRow.conflicts_with_json || '[]');
+    const refs = parseJsonArray(keepRow.conflicts_with_json, { table: 'memories', id: keepId, column: 'conflicts_with_json' });
     const cleaned = refs.filter((r: string) => r !== loserId);
     db.prepare(`UPDATE memories SET conflicts_with_json = ?, updated_at = datetime('now') WHERE id = ?${memScope}`)
       .run(JSON.stringify(cleaned), keepId, ...memArgs);
@@ -555,7 +555,7 @@ function stripConflictRefs(db: DatabaseSyncLike, t: ResolveTarget, loserRemoved:
       ...memArgs
     ) as { conflicts_with_json: string } | undefined;
     if (loserRow) {
-      const refs: string[] = JSON.parse(loserRow.conflicts_with_json || '[]');
+      const refs = parseJsonArray(loserRow.conflicts_with_json, { table: 'memories', id: loserId, column: 'conflicts_with_json' });
       const cleaned = refs.filter((r: string) => r !== keepId);
       db.prepare(`UPDATE memories SET conflicts_with_json = ?, updated_at = datetime('now') WHERE id = ?${memScope}`)
         .run(JSON.stringify(cleaned), loserId, ...memArgs);

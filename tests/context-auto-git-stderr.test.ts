@@ -1,5 +1,5 @@
 // Git warnings on stderr must not leak into the auto-detected context query; only changed file names count.
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -36,5 +36,23 @@ afterEach(() => {
 describe('autoDetectContext', () => {
   it('builds the query from changed file names only', () => {
     expect(autoDetectContext()).toBe('deployment txt');
+  });
+
+  it('logs at debug why no git-derived query came back, and returns empty', () => {
+    // A repo with no commit makes `git diff HEAD` fail, which stands for any git error or timeout.
+    const empty = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-ctx-auto-empty-'));
+    execFileSync('git', ['init', '-q'], { cwd: empty, stdio: 'ignore', windowsHide: true });
+    process.chdir(empty);
+    vi.stubEnv('HIPPO_LOG', 'debug');
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    try {
+      expect(autoDetectContext()).toBe('');
+      expect(stderr.mock.calls.map((c) => String(c[0])).join('')).toContain('auto context: no git-derived query');
+    } finally {
+      stderr.mockRestore();
+      vi.unstubAllEnvs();
+      process.chdir(repo);
+      fs.rmSync(empty, { recursive: true, force: true });
+    }
   });
 });

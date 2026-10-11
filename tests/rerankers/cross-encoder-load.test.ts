@@ -80,4 +80,23 @@ describe('the cross-encoder model load', () => {
 
     expect(order(await rerank('q', INPUTS))).toEqual(['beta', 'alpha']);
   });
+
+  it('warns when the model loads but every inference throws, and keeps the base order', async () => {
+    const rerank = createCrossEncoderReranker(async () => ({
+      name: '@huggingface/transformers',
+      mod: {
+        AutoTokenizer: { from_pretrained: async () => async () => ({ input_ids: {}, attention_mask: {} }) },
+        AutoModelForSequenceClassification: {
+          from_pretrained: async () => async () => {
+            throw new Error('onnx runtime crashed');
+          },
+        },
+      },
+    }));
+
+    const out = await rerank('q', INPUTS);
+
+    expect(order(out)).toEqual(['alpha', 'beta']);
+    expect(warnings()).toEqual([expect.stringContaining('every inference failed')]);
+  });
 });

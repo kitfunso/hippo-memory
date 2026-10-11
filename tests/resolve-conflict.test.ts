@@ -100,6 +100,21 @@ describe('resolveConflict', () => {
     expect(aAfter.conflicts_with).not.toContain(bId);
   });
 
+  it('still cleans the other side when a side has malformed conflicts_with_json', () => {
+    const { aId, bId, conflictId } = seedConflict();
+    const db = openHippoDb(tmpDir);
+    try {
+      db.prepare(`UPDATE memories SET conflicts_with_json = '{not json' WHERE id = ?`).run(aId);
+    } finally {
+      closeHippoDb(db);
+    }
+
+    expect(() => resolveConflict(tmpDir, { conflictId, keepId: aId })).not.toThrow();
+
+    expect(readEntry(tmpDir, bId)!.conflicts_with).not.toContain(aId);
+    expect(readEntry(tmpDir, aId)!.conflicts_with).toEqual([]);
+  });
+
   it('returns null for non-existent conflict ID', () => {
     seedConflict();
     const result = resolveConflict(tmpDir, { conflictId: 999, keepId: 'mem_doesnt_exist' });
