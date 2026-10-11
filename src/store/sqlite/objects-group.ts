@@ -3,6 +3,7 @@ import { appendAuditEvent } from '../audit.js';
 import { getMeta, withWriteScopeOr, type DatabaseSyncLike } from '../../db/index.js';
 import { escapeLike } from '../../util/escape.js';
 import { keysetAfter } from '../../util/keyset.js';
+import { chunked } from '../../util/chunked.js';
 import { calculateStrength, deriveHalfLife, type MemoryEntry } from '../../core/memory.js';
 import { scopeAdmitSql } from '../rule-sql.js';
 import type { JsonObject } from '../working-memory.js';
@@ -282,10 +283,15 @@ function saveAt<K extends SavableKind>(hippoRoot: string, tenantId: string, kind
 /** The linked ids are checked once the mirror is in and before the INSERT, so a refusal undoes the mirror with it. */
 function openIncidentRow(db: DatabaseSyncLike, tenantId: string, memoryId: string, open: IncidentOpen): RowByKind['incident'] | IncidentOpenRefusal {
   const { incidentText, context, linkedMemoryIds } = open.fields;
-  for (const linkId of linkedMemoryIds) {
-    const held = db.prepare(`SELECT id FROM memories WHERE id = ? AND tenant_id = ?`).get<{ id: string } | undefined>(linkId, tenantId);
-    if (!held) return { refused: 'unlinked', memoryId: linkId };
+  const held = new Set<string>();
+  for (const ids of chunked(linkedMemoryIds)) {
+    // SAFETY: rows' shape matches the one column named in the SELECT.
+    const marks = ids.map(() => '?').join(',');
+    const found = db.prepare(`SELECT id FROM memories WHERE tenant_id = ? AND id IN (${marks})`).all(tenantId, ...ids) as Array<{ id: string }>;
+    for (const r of found) held.add(r.id);
   }
+  const missing = linkedMemoryIds.find((linkId) => !held.has(linkId));
+  if (missing !== undefined) return { refused: 'unlinked', memoryId: missing };
   const result = db.prepare(`
     INSERT INTO incidents(
       memory_id, tenant_id, incident_text, context,

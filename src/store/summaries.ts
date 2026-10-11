@@ -7,6 +7,7 @@ import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry } from './rows.js';
 import { audit } from './audit-event.js';
 import { syncFtsRow } from './entry-row.js';
 import { onHandle, openStore } from './open.js';
+import { chunked } from '../util/chunked.js';
 import { DIGEST_DISPLAY_CHARS } from '../util/token-text.js';
 
 // Sleep-cycle rebuild surface: lives here, not in src/consolidate/dag.ts, because it needs module-private MEMORY_SELECT_COLUMNS, MemoryRow, rowToEntry,
@@ -69,6 +70,48 @@ export function loadChildrenOfSummary(
     `).all(summaryId, tenantId) as MemoryRow[];
     return rows.map(rowToEntry);
   }, openStore);
+}
+
+/** loadChildrenOfSummary for many summaries in one IN query per tenant chunk; the map key is `${tenantId}\u0000${summaryId}`, each list in created order. */
+export function loadChildrenOfSummaries(
+  hippoRoot: string,
+  summaries: ReadonlyArray<{ id: string; tenantId: string }>,
+): Map<string, MemoryEntry[]> {
+  const byTenant = new Map<string, string[]>();
+  for (const s of summaries) {
+    assertTenantId('loadChildrenOfSummaries', s.tenantId);
+    const ids = byTenant.get(s.tenantId) ?? [];
+    ids.push(s.id);
+    byTenant.set(s.tenantId, ids);
+  }
+  const out = new Map<string, MemoryEntry[]>();
+  onHandle(hippoRoot, (db) => {
+    for (const [tenantId, ids] of byTenant) {
+      for (const slice of chunked(ids)) {
+        // SAFETY: this query selects exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
+        const rows = db.prepare(`
+          SELECT ${MEMORY_SELECT_COLUMNS}
+            FROM memories
+           WHERE dag_parent_id IN (${slice.map(() => '?').join(',')})
+             AND tenant_id = ?
+             AND kind != 'archived'
+             AND superseded_by IS NULL
+           ORDER BY created ASC
+        `).all(...slice, tenantId) as MemoryRow[];
+        for (const entry of rows.map(rowToEntry)) {
+          const key = childrenKey(tenantId, entry.dag_parent_id ?? '');
+          const list = out.get(key);
+          if (list) list.push(entry); else out.set(key, [entry]);
+        }
+      }
+    }
+  }, openStore);
+  return out;
+}
+
+/** Key into the map loadChildrenOfSummaries returns. */
+export function childrenKey(tenantId: string, summaryId: string): string {
+  return `${tenantId}\u0000${summaryId}`;
 }
 
 /** Patch applied by applyRebuildResult; `bumpRebuildCount` is false for the zero-child case, true for a normal rebuild. */

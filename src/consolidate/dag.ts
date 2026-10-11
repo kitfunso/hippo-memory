@@ -3,6 +3,8 @@ import { writeEntry, writeEntriesTogether } from '../store/entry-writes.js';
 import {
   loadAllDirtySummaries,
   loadChildrenOfSummary,
+  loadChildrenOfSummaries,
+  childrenKey,
   applyRebuildResult,
   clearSummaryDirtyAfterBuild,
 } from '../store/summaries.js';
@@ -203,8 +205,13 @@ async function rebuildOneSummary(
   summary: MemoryEntry,
   opts: DagSummaryOptions,
   result: DagRebuildResult,
+  preloaded: readonly MemoryEntry[],
+  queuedIds: ReadonlySet<string>,
 ): Promise<void> {
-  const children = loadChildrenOfSummary(hippoRoot, summary.id, summary.tenantId);
+  // A queued child may have been rebuilt earlier in this drain, so its preloaded content is stale: reread then.
+  const children = preloaded.some((c) => queuedIds.has(c.id))
+    ? loadChildrenOfSummary(hippoRoot, summary.id, summary.tenantId)
+    : preloaded;
 
   if (children.length === 0) {
     clearZeroChildSummary(hippoRoot, summary, result);
@@ -288,6 +295,9 @@ export async function rebuildDirtySummaries(
     capped,
   };
 
+  const childrenByParent = loadChildrenOfSummaries(hippoRoot, queue);
+  const queuedIds = new Set(queue.map((s) => s.id));
+
   for (const [index, summary] of queue.entries()) {
     // Yield the macrotask queue every 25 summaries: each iteration is synchronous SQLite, so a batch of up to 1000
     // would starve timers and IPC (server keep-alives, Vitest's birpc heartbeat).
@@ -295,7 +305,7 @@ export async function rebuildDirtySummaries(
       await new Promise((resolve) => setImmediate(resolve));
     }
     try {
-      await rebuildOneSummary(hippoRoot, summary, opts, result);
+      await rebuildOneSummary(hippoRoot, summary, opts, result, childrenByParent.get(childrenKey(summary.tenantId, summary.id)) ?? [], queuedIds);
     } catch (err) {
       // One throw doesn't abort the queue; log enough to triage an exotic
       // failure (SQLite I/O, prepare), since audit() already catches its own.

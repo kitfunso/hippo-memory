@@ -1,4 +1,3 @@
 {
-  "anti-slop(no-chained-type-assertions)": 1,
-  "anti-slop(no-conditional-empty-object-spread)": 1
+  "anti-slop(require-safety-comment-for-type-assertion)": 1
 }

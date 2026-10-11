@@ -711,6 +711,25 @@ describe("hippo.db's Objects writes are one transaction each", () => {
     }
   });
 
+  it('an incident with more links than one lookup chunk is checked across chunks and names the first unheld link', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'hippo-objects-links-'));
+    try {
+      cpSync(fixture.dir, root, { recursive: true });
+      const store = sqliteStore(root);
+      const objects = requireGroup(store, 'objects');
+      const first = opening(1);
+      await objects.openIncident(TENANT_A, first.open);
+      const held = Array.from({ length: 1200 }, () => mirrorIdOf(first));
+      const late = [...held.slice(0, 1100), 'mem_missing_late', 'mem_missing_later', ...held.slice(1100)];
+
+      expect(await objects.openIncident(TENANT_A, opening(2, { at: T2, links: late }).open)).toEqual({ refused: 'unlinked', memoryId: 'mem_missing_late' });
+      expect(await objects.openIncident(TENANT_A, opening(3, { at: T2, links: held }).open)).toMatchObject({ status: 'open' });
+      await store.close();
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it('an incident open or resolve whose audit row is refused keeps no row, no mirror, no resolved status and no audit row', async () => {
     const root = mkdtempSync(join(tmpdir(), 'hippo-objects-atomic-'));
     try {
