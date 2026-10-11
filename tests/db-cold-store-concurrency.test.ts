@@ -8,6 +8,7 @@ import { join } from 'node:path';
 import { spawn } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import { getCurrentSchemaVersion } from '../src/db/index.js';
+import { waitFor } from './_helpers/wait-for.js';
 
 let root: string;
 
@@ -46,13 +47,8 @@ function readyFile(i: number): string {
 }
 
 async function waitForReady(count: number, timeoutMs: number): Promise<void> {
-  const deadline = Date.now() + timeoutMs;
-  for (;;) {
-    const missing = Array.from({ length: count }, (_, i) => i).filter((i) => !existsSync(readyFile(i)));
-    if (missing.length === 0) return;
-    if (Date.now() > deadline) throw new Error(`workers ${missing.join(', ')} never reached the barrier within ${timeoutMs} ms`);
-    await new Promise((resolve) => setTimeout(resolve, 20));
-  }
+  const missing = (): number[] => Array.from({ length: count }, (_, i) => i).filter((i) => !existsSync(readyFile(i)));
+  await waitFor(() => missing().length === 0, { timeoutMs, what: `workers ${missing().join(', ')} at the barrier` });
 }
 
 function runWorkers(count: number, barrier: string): Promise<Array<{ code: number | null; stdout: string; stderr: string }>> {

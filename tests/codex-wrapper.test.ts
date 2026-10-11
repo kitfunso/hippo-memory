@@ -18,6 +18,7 @@ import {
 import { resolveCodexSessionTranscript } from '../src/hooks/codex-session.js';
 import { initStore } from '../src/store/open.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
+import { waitFor } from './_helpers/wait-for.js';
 
 const HIPPO_JS = path.resolve(__dirname, '..', 'bin', 'hippo.js');
 
@@ -394,10 +395,7 @@ describe('codex-run captures from the CODEX_HOME it launches under', () => {
     const readLog = (): string => (fs.existsSync(logFile) ? fs.readFileSync(logFile, 'utf8') : '');
     // The detached worker writes until its last log line; cleanup racing those writes fails with ENOTEMPTY.
     const workerDone = (log: string): boolean => log.includes('skip capture') || /digest: (skip|wrote)|digest failed/.test(log);
-    const deadline = Date.now() + 30_000;
-    while (Date.now() < deadline && !workerDone(readLog())) {
-      await new Promise((resolve) => setTimeout(resolve, 200));
-    }
+    await waitFor(() => workerDone(readLog()), { timeoutMs: 30_000, intervalMs: 200, what: 'the codex worker log line' });
 
     expect(readLog()).not.toContain('skip capture');
     expect(saved().some((c) => c.includes(SENTINEL))).toBe(true);

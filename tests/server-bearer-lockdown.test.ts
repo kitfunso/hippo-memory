@@ -8,6 +8,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { initStore } from '../src/store/open.js';
 import { serve, type ServerHandle } from '../src/server.js';
+import { routeLabel } from '../src/server/route-table.js';
 import { V1_ROWS } from './_helpers/v1-route-rows.js';
 
 const repoRoot = dirname(dirname(fileURLToPath(import.meta.url)));
@@ -123,6 +124,21 @@ describe('server Bearer lockdown', () => {
     rmSync(root, { recursive: true, force: true });
   });
 
+  it('every non-public row of the live route table answers 401 to a request with no credential', async () => {
+    const open: string[] = [];
+    for (const { route } of V1_ROWS) {
+      if (route.auth === 'webhook-signature') continue;
+      const method = route.method;
+      const path = requestPath(routeLabel(route));
+      const init: RequestInit = { method, headers: { 'content-type': 'application/json' } };
+      if (method !== 'GET') init.body = '{}';
+      const res = await fetch(`http://127.0.0.1:${handle.port}${path}`, init);
+      if (res.status !== 401) open.push(`${method} ${path} -> ${res.status}`);
+    }
+    expect(open).toEqual([]);
+  });
+
+  // Source text is the only way to see an inline route nobody listed, since no request names a path the table lacks.
   it('every inline method-check in boot.ts handleRequest is a listed inline route; the public webhooks live in the table', () => {
     const boot = readFileSync(join(repoRoot, 'src/server/boot.ts'), 'utf8');
     const inlineChecks = (boot.slice(boot.indexOf('async function handleRequest')).match(/^\s*if \(method === '/gm) ?? []).length;

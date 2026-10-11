@@ -8,6 +8,7 @@ import { initStore } from '../src/store/open.js';
 import { openHippoDb, closeHippoDb, getMeta } from '../src/db/index.js';
 import { queryAuditEvents } from '../src/store/audit.js';
 import { boundPort } from './_helpers/listen.js';
+import { waitFor } from './_helpers/wait-for.js';
 import { ROUTED_CLI_ENV } from './_helpers/routed-cli-env.js';
 
 /**
@@ -85,17 +86,11 @@ async function startServer(workspace: string): Promise<SpawnedServer> {
     if (child.exitCode !== null) return;
     child.kill('SIGTERM');
     // Windows doesn't actually deliver SIGTERM; fall back to SIGKILL after a beat.
-    const stopDeadline = Date.now() + 3_000;
-    while (Date.now() < stopDeadline && child.exitCode === null) {
-      await new Promise((r) => setTimeout(r, 50));
-    }
+    await waitFor(() => child.exitCode !== null, { timeoutMs: 3_000, intervalMs: 50 }).catch(() => undefined);
     if (child.exitCode === null) child.kill('SIGKILL');
     // Wait for the pidfile to be cleared OR for the process to be gone, then
     // best-effort wipe so the next spawn starts clean.
-    const wipeDeadline = Date.now() + 2_000;
-    while (Date.now() < wipeDeadline && existsSync(pidfilePath)) {
-      await new Promise((r) => setTimeout(r, 50));
-    }
+    await waitFor(() => !existsSync(pidfilePath), { timeoutMs: 2_000, intervalMs: 50 }).catch(() => undefined);
     if (existsSync(pidfilePath)) {
       try { rmSync(pidfilePath); } catch { /* ignore */ }
     }
