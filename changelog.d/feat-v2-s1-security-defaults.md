@@ -6,3 +6,4 @@
   - `HIPPO_CLIENT_IP_HEADER` is read only from the peers in `HIPPO_TRUSTED_PROXIES`, and boot refuses the header with no proxy listed. `*` trusts every peer.
   - Each API key owner gets 20 requests a second, burst 40. Opt out with `HIPPO_CALLER_RPS=0`.
   - `hippo watch -- <cmd> [args]` and `runWatched(argv)` run with no shell, so no argument is read as shell syntax. `--shell` and `{ shell: true }` are the opt-in.
+- **`hippo dashboard` keeps its token off a captured stdout.** When stdout is not a terminal, it prints the URL with no token and writes the full URL to `.hippo/dashboard.url` (mode 0600), replaced at each start.
