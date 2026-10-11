@@ -106,6 +106,14 @@ describe('runSessionWorker', () => {
     expect(fs.readdirSync(sessions)).toEqual([]);
   });
 
+  it('refuses to run unlocked when the request cannot be queued', async () => {
+    fs.rmSync(sessions, { recursive: true });
+    fs.writeFileSync(sessions, 'a file where the sessions folder belongs');
+    const { runs, work } = recorder();
+    await runSessionWorker(ID, 'full', work);
+    expect(runs).toEqual([]);
+  });
+
   it('lets go of the lock when the work throws', async () => {
     await expect(runSessionWorker(ID, 'turn', async () => { throw new Error('boom'); })).rejects.toThrow('boom');
     expect(fs.existsSync(file('.lock'))).toBe(false);

@@ -1,6 +1,7 @@
 // Transport-agnostic request handling: tool dispatch table, tool execution and the JSON-RPC method switch.
 
 import { errorMessage, log } from '../util/log.js';
+import { currentSignal } from '../util/request-scope.js';
 import { STORE_NOT_PORTED_MESSAGE } from '../util/http-util.js';
 import { getGlobalRoot, initGlobal } from '../sharing/global-store.js';
 import { loadConfig } from '../core/config.js';
@@ -123,6 +124,18 @@ function invalidArgs(id: McpResponse['id'], toolName: string, problems: readonly
   };
 }
 
+/** One handle per store for the tool and its ledger row; stdio interleaves calls, so each gets its own scope.
+ *  SHORTCUT: the deadline stops a call only between these steps, not a store read or fetch already running; thread the signal into them. */
+function runToolScoped(toolName: string, args: Record<string, JsonValue>, ctx?: McpContext): Promise<string> {
+  return runWithRequestStores(async () => {
+    currentSignal()?.throwIfAborted();
+    const text = await executeTool(toolName, args, ctx);
+    currentSignal()?.throwIfAborted();
+    await recordMcpTokens(toolName, text, ctx);
+    return text;
+  });
+}
+
 async function callTool(id: McpRequest['id'], params: McpRequest['params'], ctx?: McpContext): Promise<McpResponse> {
   const nameValue = params?.name;
   const toolName = isJsonString(nameValue) ? nameValue : '';
@@ -146,12 +159,7 @@ async function callTool(id: McpRequest['id'], params: McpRequest['params'], ctx?
   if (problems.length > 0) return invalidArgs(id, toolName, problems);
   let output: string;
   try {
-    // One handle per store for the tool and its ledger row; stdio interleaves calls, so each gets its own scope.
-    output = await runWithRequestStores(async () => {
-      const text = await executeTool(toolName, toolArgs, ctx);
-      await recordMcpTokens(toolName, text, ctx);
-      return text;
-    });
+    output = await runToolScoped(toolName, toolArgs, ctx);
   } catch (err) {
     if (!(err instanceof RecallRequestError)) throw err;
     return invalidArgs(id, toolName, [err.message]);

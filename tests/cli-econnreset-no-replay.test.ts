@@ -90,7 +90,7 @@ describe('classifyTransportFailure', () => {
   it('calls connect-phase failures safe to replay', () => {
     expect(classifyTransportFailure(fetchError('ECONNREFUSED'))).toBe('never-sent');
     expect(classifyTransportFailure(fetchError('ENOTFOUND'))).toBe('never-sent');
-    expect(classifyTransportFailure(new Error('connect ECONNREFUSED 127.0.0.1:9'))).toBe('never-sent');
+    expect(classifyTransportFailure(Object.assign(new Error('connect refused'), { code: 'ECONNREFUSED' }))).toBe('never-sent');
   });
 
   it('calls a socket that broke mid-request unsafe to replay', () => {
@@ -99,7 +99,7 @@ describe('classifyTransportFailure', () => {
     expect(classifyTransportFailure(fetchError('UND_ERR_SOCKET'))).toBe('delivery-unknown');
     expect(classifyTransportFailure(fetchError('ECONNRESET'))).toBe('delivery-unknown');
     expect(classifyTransportFailure(fetchError('EPIPE'))).toBe('delivery-unknown');
-    expect(classifyTransportFailure(new Error('socket hang up'))).toBe('delivery-unknown');
+    expect(classifyTransportFailure(Object.assign(new Error('socket hang up'), { code: 'ECONNRESET' }))).toBe('delivery-unknown');
     // No syscall code to go on, so the conservative answer is the only safe one.
     expect(classifyTransportFailure(fetchError(undefined))).toBe('delivery-unknown');
   });
@@ -107,6 +107,8 @@ describe('classifyTransportFailure', () => {
   it('calls a server response no transport failure at all', () => {
     expect(classifyTransportFailure(new HttpResponseError('not found: mem_ECONNREFUSED', 404))).toBe('none');
     expect(classifyTransportFailure(new Error('something else went wrong'))).toBe('none');
+    // Message text alone never classifies: only the error class or syscall code does.
+    expect(classifyTransportFailure(new Error('connect ECONNREFUSED 127.0.0.1:9'))).toBe('none');
   });
 });
 

@@ -55,11 +55,28 @@ describe('rememberLocally', () => {
     const ctx = store();
     const outcome = await rememberLocally(ctx, { content: TEXT, tags: ['billing'], layer: Layer.Episodic, source: 'cli', confidence: 'observed', scope: 'team:eng' });
     const entry = storedRow(outcome);
-    expect(outcome).toEqual({ status: 'stored', entry });
+    expect(outcome).toMatchObject({ status: 'stored', entry });
     expect(entry).toEqual(readEntry(ctx.hippoRoot, entry.id, ctx.tenantId));
     expect(entry).toMatchObject({ content: TEXT, tags: ['billing'], source: 'cli', confidence: 'observed', scope: 'team:eng', pinned: false });
     expect(rows(ctx)).toHaveLength(1);
     expect(counted(ctx)).toBe(1);
+  });
+
+  it('says in the outcome and the log that a row the embedder could not index is stored without a vector', async () => {
+    vi.stubEnv('OPENAI_API_KEY', 'test-key-not-real');
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('bad key', { status: 401 })));
+    const warn = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    try {
+      const ctx = store({ embeddings: { provider: 'openai', model: 'm' } });
+      const outcome = await rememberLocally(ctx, { content: TEXT, tags: [] });
+      if (outcome.status !== 'stored') throw new Error('expected a stored row');
+      expect(await outcome.embedding).toBe('failed');
+      expect(rows(ctx)).toHaveLength(1);
+      expect(warn.mock.calls.map((c) => String(c[0])).join('')).toContain(`memory ${outcome.entry.id} is stored but not in the vector index`);
+    } finally {
+      warn.mockRestore();
+      vi.unstubAllGlobals();
+    }
   });
 
   it('scores schema fit on fitTags when given, else on the stored tags', async () => {
@@ -110,7 +127,7 @@ describe('rememberLocally', () => {
     const ctx = store(SALIENCE_ON);
     await rememberLocally(ctx, { content: TEXT, tags: [] });
     const outcome = await rememberLocally(ctx, { content: TEXT, tags: [], ...bypass });
-    expect(outcome).toEqual({ status: 'stored', entry: storedRow(outcome) });
+    expect(outcome).toMatchObject({ status: 'stored', entry: storedRow(outcome) });
     expect(storedRow(outcome).pinned).toBe(bypass.pinned === true);
     expect(counted(ctx)).toBe(2);
     const weak = storeOfRepeatedErrors();

@@ -129,7 +129,7 @@ async function judge(content: string, opts: JudgeOptions): Promise<Judgment | nu
   try {
     data = await readCappedJson(res, JUDGE_MAX_REPLY_BYTES);
   } catch (err) {
-    log.debug(`judge: unreadable response: ${errorMessage(err)}`);
+    log.warnThenDebug('judge-unreadable', `judge: unreadable response: ${errorMessage(err)}`, errorFields(err));
     return null;
   }
 

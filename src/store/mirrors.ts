@@ -24,6 +24,7 @@ import {
   rowToMemoryConflict,
 } from './rows.js';
 import { serializeEntry } from '../core/markdown.js';
+import { writeFileAtomic } from '../util/atomic-write.js';
 
 const SCORE_DECIMALS = 3;
 
@@ -87,7 +88,7 @@ export function writeActiveTaskMirror(hippoRoot: string, tenantId: string, snaps
   }
 
   fs.mkdirSync(path.dirname(filePath), MIRROR_FOLDER);
-  fs.writeFileSync(filePath, `${fm}\n\n${body.join('\n')}`, 'utf8');
+  writeFileAtomic(filePath, `${fm}\n\n${body.join('\n')}`);
 }
 
 export function removeActiveTaskMirror(hippoRoot: string, tenantId: string): void {
@@ -132,7 +133,7 @@ export function writeRecentSessionMirror(hippoRoot: string, tenantId: string, ev
   lines.push('');
 
   fs.mkdirSync(path.dirname(filePath), MIRROR_FOLDER);
-  fs.writeFileSync(filePath, `${fm}\n\n${lines.join('\n')}`, 'utf8');
+  writeFileAtomic(filePath, `${fm}\n\n${lines.join('\n')}`);
 }
 
 function writeConflictMirrors(hippoRoot: string, conflicts: MemoryConflict[]): void {
@@ -166,7 +167,7 @@ function writeConflictMirrors(hippoRoot: string, conflicts: MemoryConflict[]): v
       '',
     ].join('\n');
 
-    fs.writeFileSync(path.join(conflictDir, filename), `${fm}\n\n${body}`, 'utf8');
+    writeFileAtomic(path.join(conflictDir, filename), `${fm}\n\n${body}`);
   }
 
   for (const existing of fs.readdirSync(conflictDir)) {
@@ -181,7 +182,7 @@ export function writeMarkdownMirror(hippoRoot: string, entry: MemoryEntry): void
   removeEntryMirrors(hippoRoot, entry.id);
   const dir = layerDir(hippoRoot, entry.layer);
   fs.mkdirSync(dir, MIRROR_FOLDER);
-  fs.writeFileSync(path.join(dir, `${entry.id}.md`), serializeEntry(entry), 'utf8');
+  writeFileAtomic(path.join(dir, `${entry.id}.md`), serializeEntry(entry));
 }
 
 // Every layer, Trace included: `writeMarkdownMirror` writes any layer, and a stale trace mirror

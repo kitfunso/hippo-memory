@@ -7,6 +7,7 @@ import { writeEntry } from '../src/store/entry-writes.js';
 import { readEntry } from '../src/store/entry-reads.js';
 import { deleteEntry, batchWriteAndDelete } from '../src/store/delete-and-batch.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
+import { layerDir, writeMarkdownMirror } from '../src/store/mirrors.js';
 
 let root: string;
 
@@ -48,5 +49,23 @@ describe('mirror write failures after COMMIT', () => {
     expect(process.stderr.write).toHaveBeenCalledWith(expect.stringContaining(`${entry.id}.md`));
     expect(deleteEntry(root, entry.id)).toBe(true);
     expect(readEntry(root, entry.id)).toBeNull();
+  });
+});
+
+describe('mirror files are replaced whole', () => {
+  it('writeMarkdownMirror leaves the new content and no temp file beside it', () => {
+    const entry = createMemory('first wording of the mirror');
+    writeMarkdownMirror(root, entry);
+    writeMarkdownMirror(root, { ...entry, content: 'second wording of the mirror' });
+    const dir = layerDir(root, entry.layer);
+    expect(fs.readdirSync(dir).filter((name) => name.startsWith(entry.id))).toEqual([`${entry.id}.md`]);
+    expect(fs.readFileSync(path.join(dir, `${entry.id}.md`), 'utf8')).toContain('second wording of the mirror');
+  });
+
+  it('a write that cannot rename onto its target throws and leaves no temp file', () => {
+    const entry = createMemory('blocked mirror');
+    blockMarkdownMirror(entry.id, entry.layer);
+    expect(() => writeMarkdownMirror(root, entry)).toThrow();
+    expect(fs.readdirSync(layerDir(root, entry.layer)).filter((name) => name.endsWith('.tmp'))).toEqual([]);
   });
 });

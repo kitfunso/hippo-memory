@@ -88,14 +88,15 @@ function callName(req: McpRequest): string {
 
 /** Answers `req` with one timeout error at the deadline a served request has. The returned function stops the timer and says whether that
  * answer went out, so a later reply is dropped. */
-function watchDeadline(req: McpRequest, owedReply: boolean): () => boolean {
+function watchDeadline(req: McpRequest, owedReply: boolean, abort: AbortController): () => boolean {
   const ms = requestDeadlineMs();
   if (ms === 0) return () => false;
   let expired = false;
   const timer = setTimeout(() => {
     expired = true;
     const name = callName(req);
-    log.warn(`mcp: ${name} did not answer within ${ms} ms; it keeps running and its reply will be dropped`, { method: req.method });
+    log.warn(`mcp: ${name} did not answer within ${ms} ms; its next step is cancelled and its reply will be dropped`, { method: req.method });
+    abort.abort(new DOMException(`${name} did not finish within ${ms} ms`, 'TimeoutError'));
     if (!owedReply) return;
     const requestId = currentRequestId();
     const message = `Request timed out: ${name} did not finish within ${ms} ms; a write it started may or may not be saved`;
@@ -111,7 +112,7 @@ function watchDeadline(req: McpRequest, owedReply: boolean): () => boolean {
   };
 }
 
-function dispatch(body: string): void {
+function dispatch(body: string, abort: AbortController): void {
   let parsed: JsonValue;
   try {
     parsed = JSON.parse(body);
@@ -126,16 +127,17 @@ function dispatch(body: string): void {
   }
   const req = parsed;
   if (req.method.startsWith('notifications/')) {
-    const stopWatching = watchDeadline(req, false);
+    const stopWatching = watchDeadline(req, false, abort);
     track(req.method, handleMcpRequest(req).then(() => {}).catch((err) => {
       log.error(`mcp notification ${req.method} failed: ${errorMessage(err)}`, errorFields(err));
     }).finally(stopWatching));
     return;
   }
   // A frame with no id is a notification under any method name, and JSON-RPC forbids answering one.
-  const timedOut = watchDeadline(req, isJsonString(req.id) || isJsonNumber(req.id));
+  const timedOut = watchDeadline(req, isJsonString(req.id) || isJsonNumber(req.id), abort);
   track(req.method, handleMcpRequest(req).then((resp) => { if (!timedOut() && resp) send(resp); }).catch((err) => {
-    if (timedOut()) log.error(`mcp: ${callName(req)} failed after its timeout reply: ${errorMessage(err)}`, errorFields(err));
+    if (timedOut() && err instanceof DOMException && err.name === 'TimeoutError') log.debug(`mcp: ${callName(req)} stopped at its deadline`);
+    else if (timedOut()) log.error(`mcp: ${callName(req)} failed after its timeout reply: ${errorMessage(err)}`, errorFields(err));
     else send(mcpErrorResponse(req.id, err, undefined, callName(req)));
   }));
 }
@@ -165,7 +167,10 @@ export function startStdioLoop(): void {
         continue;
       }
       // One id per frame, so the error reply and every line logged for the call name the same request.
-      if (result.kind === 'message') runWithRequestId(randomUUID(), () => dispatch(result.body));
+      if (result.kind === 'message') {
+        const abort = new AbortController();
+        runWithRequestId(randomUUID(), () => dispatch(result.body, abort), undefined, abort.signal);
+      }
     }
     pending = buffer.length > 0 ? [buffer] : [];
     pendingBytes = buffer.length;

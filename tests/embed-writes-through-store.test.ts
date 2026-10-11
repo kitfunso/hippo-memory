@@ -219,7 +219,7 @@ describe('embedMemory with a store', () => {
       return true;
     });
     const store: HippoStore = portOnlyStoreWithoutVectorReads(copyOf());
-    await expect(embedMemory(markedFolder(hashedConfig()), seeded[0], undefined, store)).resolves.toBeUndefined();
+    await expect(embedMemory(markedFolder(hashedConfig()), seeded[0], undefined, store)).resolves.toBe('failed');
     expect(lines.join('')).toContain(`skipped embedding ${seeded[0].id} (the 'port-only' store has no 'vectors' group`);
   });
 });

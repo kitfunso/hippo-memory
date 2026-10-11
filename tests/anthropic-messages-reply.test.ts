@@ -13,9 +13,9 @@ describe('sendAnthropicMessage reply reading', () => {
     expect(await send(JSON.stringify({ content: [{ type: 'text', text: '  tea  ' }] }))).toEqual({ ok: true, text: 'tea' });
   });
 
-  it('returns empty text when the reply has no text block', async () => {
+  it('reports a reply with no text block as an empty failure, not as ok', async () => {
     for (const body of ['{}', '{"content":[]}', '{"content":"tea"}', '{"content":[{"type":"tool_use"}]}', '{"content":[null]}']) {
-      expect(await send(body)).toEqual({ ok: true, text: '' });
+      expect(await send(body)).toEqual({ ok: false, failure: { kind: 'empty' } });
     }
   });
 

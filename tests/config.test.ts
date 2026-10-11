@@ -145,14 +145,9 @@ describe('loadConfig characterization', () => {
     }
   });
 
-  it('falls back to the defaults with one warning on unparsable or null JSON', () => {
-    const defaults = load(null).cfg;
-    for (const json of ['{not json', 'null']) {
-      const { cfg, warnings } = load(json);
-      expect(cfg).toEqual(defaults);
-      expect(warnings).toHaveLength(1);
-      expect(warnings[0]).toMatch(/^failed to parse <root>[\\/]config\.json: /);
-    }
+  it('throws with the file path and the parse error on unparsable JSON, and names a non-object', () => {
+    expect(() => load('{not json')).toThrow(/config\.json could not be loaded: .*(JSON|property name)/);
+    for (const json of ['null', '[]', '"tea"']) expect(() => load(json), json).toThrow(/config\.json must hold a JSON object/);
   });
 });
 
@@ -198,12 +193,7 @@ describe('config.sharedStore', () => {
     writeConfig('{not json');
     expect(isSharedStore(tmp)).toBe(true);
     _resetSharedStoreCacheForTests();
-    const warn = vi.spyOn(log, 'warn').mockImplementation(() => undefined);
-    try {
-      expect(isSharedStore(tmp)).toBe(false);
-    } finally {
-      warn.mockRestore();
-    }
+    expect(() => isSharedStore(tmp)).toThrow(/config\.json could not be loaded/);
   });
 
   /** Flags `seen`, breaks its config, then asks through `other`, a second spelling of the same folder. */
