@@ -1,12 +1,12 @@
 // A store other than hippo.db for the KeyWrites group: it copies api_keys and audit_log out of hippo.db once, then keeps
-// both in memory and answers with what hippo-memory/server exports, so a conformance test shows that is all another store needs.
+// both in memory and answers with what hippo-memory/store-kit exports, so a conformance test shows that is all another store needs.
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { listAuditEventsAfter } from '../../src/store/audit.js';
 import { createApiKey, grantScope, readApiKeyRecord, revokeApiKey } from '../../src/store/auth.js';
 import { auditHighIdAt } from '../../src/store/key-audit.js';
 import type {
   ApiKeyListRow, ApiKeyRecord, AppendAuditOpts, AuditEvent, HippoStore, KeyListQuery, KeyMint, KeyWrites, NewApiKey,
-} from '../../src/server.js';
+} from '../../src/entry/store-kit.js';
 import { FIXTURE_REVOKED_AT, TENANT_A, TENANT_B, type StoreSide, type TwoTenantFixture } from './store-conformance.js';
 import { portOnlyStoreWithoutVectorReads } from './port-only-store.js';
 

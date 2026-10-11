@@ -5,7 +5,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { JsonValue } from '../src/util/json.js';
 import { initStore } from '../src/store/open.js';
-import { serve, sqliteStore, type ApiKeyRecord, type HippoStore, type ServerHandle } from '../src/server.js';
+import { serve, type ServerHandle } from '../src/server.js';
+import { sqliteStore, type ApiKeyRecord, type HippoStore } from '../src/entry/store-kit.js';
 
 const INFO = '/v1/x-info';
 const BODY = { providers: [{ tenant: 't1', scopes: ['api://x/.default'], redirectUris: ['http://localhost/cb'] }] };

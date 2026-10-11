@@ -1,11 +1,12 @@
 // A store other than hippo.db for the EntryWrites group: it copies memories and tombstones out of hippo.db once, keeps them in
-// memory and writes what hippo.db writes, with only what hippo-memory/server exports, so a conformance test shows that is enough.
+// memory and writes what hippo.db writes, with only what hippo-memory/store-kit exports, so a conformance test shows that is enough.
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { selectAllEntries } from '../../src/store/entry-reads.js';
+import { BadRequestError, ConflictError, NotFoundError } from '../../src/server.js';
 import {
-  BadRequestError, ConflictError, entryAfterOutcome, NotFoundError, ownScopeTouches, rejectionDigest, RejectedValueError,
-  type AppendAuditOpts, type EntryTarget, type EntryWrite, type EntryWrites, type HippoStore, type MemoryEntry, type RawArchive,
-} from '../../src/server.js';
+  entryAfterOutcome, ownScopeTouches, rejectionDigest, RejectedValueError, type AppendAuditOpts, type EntryTarget,
+  type EntryWrite, type EntryWrites, type HippoStore, type MemoryEntry, type RawArchive,
+} from '../../src/entry/store-kit.js';
 import { inMemoryKeyAuditStore } from './in-memory-key-audit-store.js';
 import type { StoreSide } from './store-conformance.js';
 

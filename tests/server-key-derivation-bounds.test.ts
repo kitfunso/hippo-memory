@@ -4,7 +4,8 @@ import { createHook } from 'node:async_hooks';
 import { rmSync } from 'node:fs';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
 import { apiKeyVerifyStats, createApiKey } from '../src/store/auth.js';
-import { serve, sqliteStore, type HippoStore, type ServeOpts } from '../src/server.js';
+import { serve, type ServeOpts } from '../src/server.js';
+import { sqliteStore, type HippoStore } from '../src/entry/store-kit.js';
 import { makeRoot } from './_helpers/make-root.js';
 
 /** Node's own record of scrypt jobs. One that hands its result to a callback ran on the thread pool; `scryptSync` never does, so it stays in `running`. */

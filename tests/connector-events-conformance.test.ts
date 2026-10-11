@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { closeHippoDb, openHippoDb, withSqliteBlocked } from '../src/db/index.js';
 import type { MemoryEntry } from '../src/core/memory.js';
-import type { AuditEvent } from '../src/server.js';
+import type { AuditEvent } from '../src/entry/store-kit.js';
 import { requireGroup } from '../src/store/index.js';
 import { markGitHubEventSeen, type GitHubRouting } from '../src/store/connectors/github.js';
 import { markSlackEventSeen, upsertSlackWorkspace, type SlackTeamRoute } from '../src/store/connectors/slack.js';

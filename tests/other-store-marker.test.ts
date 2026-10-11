@@ -18,6 +18,7 @@ import {
 } from '../src/db/index.js';
 import { repairAutomaticMemories } from '../src/store/quality-repair.js';
 import * as serverEntry from '../src/server.js';
+import * as storeKit from '../src/entry/store-kit.js';
 import { initStore } from '../src/store/open.js';
 
 const CLI = join(dirname(dirname(fileURLToPath(import.meta.url))), 'dist', 'cli.js');
@@ -108,10 +109,12 @@ describe('the other-store marker', () => {
     expect(readdirSync(root)).toEqual([OTHER_STORE_MARKER]);
   });
 
-  it('the server entry exports the marker name and keeps the waiver internal', () => {
-    expect(serverEntry.OTHER_STORE_MARKER).toBe(OTHER_STORE_MARKER);
-    expect('OtherStoreFolderError' in serverEntry).toBe(false);
-    expect('withSqliteAllowed' in serverEntry).toBe(false);
+  it('the store-kit entry exports the marker name and no entry exports the waiver', () => {
+    expect(storeKit.OTHER_STORE_MARKER).toBe(OTHER_STORE_MARKER);
+    for (const entry of [serverEntry, storeKit]) {
+      expect('OtherStoreFolderError' in entry).toBe(false);
+      expect('withSqliteAllowed' in entry).toBe(false);
+    }
   });
 
   it('quality repair, which opens hippo.db itself to skip migrations, refuses and takes no backup', () => {

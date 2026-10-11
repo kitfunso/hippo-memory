@@ -7,9 +7,8 @@ import { join } from 'node:path';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
 import { StoreNotPortedError } from '../src/util/sqlite-blocked.js';
 import { STORE_NOT_PORTED_MESSAGE } from '../src/util/http-util.js';
-import {
-  authRevoke, ForbiddenError, NotFoundError, OTHER_STORE_MARKER, serve, type Actor, type HippoStore, type ServerHandle,
-} from '../src/server.js';
+import { authRevoke, ForbiddenError, NotFoundError, serve, type Actor, type ServerHandle } from '../src/server.js';
+import { OTHER_STORE_MARKER, type HippoStore } from '../src/entry/store-kit.js';
 import { inMemoryKeyAuditStore } from './_helpers/in-memory-key-audit-store.js';
 import { portOnlyStoreWithoutVectorReads } from './_helpers/port-only-store.js';
 import { seedTwoTenants, TENANT_A, type TwoTenantFixture } from './_helpers/store-conformance.js';

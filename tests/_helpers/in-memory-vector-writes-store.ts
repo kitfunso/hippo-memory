@@ -1,12 +1,13 @@
 // A store other than hippo.db for the VectorWrites group: it copies memories, vectors, particles and the model meta row out of hippo.db once,
-// then reads and writes them in memory with what hippo-memory/server exports, so a conformance test shows that is all another store needs.
+// then reads and writes them in memory with what hippo-memory/store-kit exports, so a conformance test shows that is all another store needs.
 import { listAuditEventsAfter } from '../../src/store/audit.js';
 import { closeHippoDb, getMeta, openHippoDb } from '../../src/db/index.js';
 import { loadPhysicsState } from '../../src/db/physics-state.js';
 import {
   bufferToFloat32, decodeVector, EMBEDDING_MODEL_META_KEY, encodeVector, float32ToBuffer, rankVectorRows, replacesIndex,
-  type AuditEvent, type EmbeddingIndexState, type HippoStore, type MemoryEntry, type PhysicsParticle, type VectorReads, type VectorWrites,
-} from '../../src/server.js';
+  type AuditEvent, type EmbeddingIndexState, type HippoStore, type MemoryEntry, type PhysicsParticle, type VectorReads,
+  type VectorWrites,
+} from '../../src/entry/store-kit.js';
 import { selectAllEntries } from '../../src/store/entry-reads.js';
 import { passesSpec, type FilterRow } from './in-memory-vector-store.js';
 import { portOnlyStoreWithoutVectorReads } from './port-only-store.js';

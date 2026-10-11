@@ -2,7 +2,7 @@
 // memory and filters, orders and pages them itself, so a conformance test shows another store can match hippo.db's SQL.
 import { listAuditEventsAfter } from '../../src/store/audit.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import { type AuditEvent, type HippoStore, type KeysetPosition } from '../../src/server.js';
+import { type AuditEvent, type HippoStore, type KeysetPosition } from '../../src/entry/store-kit.js';
 import { withSqliteAllowed } from '../../src/db/open.js';
 import type { AuditLog } from '../../src/store/port.js';
 import { portOnlyStoreWithoutVectorReads } from './port-only-store.js';

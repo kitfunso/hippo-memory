@@ -12,7 +12,8 @@ import { verifyApiKeyCached, type ApiKeyListItem, type ApiKeyListRow } from '../
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
 import { StoreNotPortedError } from '../src/util/sqlite-blocked.js';
 import { STORE_NOT_PORTED_MESSAGE } from '../src/util/http-util.js';
-import { OTHER_STORE_MARKER, serve, sqliteStore, type Actor, type ServerHandle } from '../src/server.js';
+import { serve, type Actor, type ServerHandle } from '../src/server.js';
+import { OTHER_STORE_MARKER, sqliteStore } from '../src/entry/store-kit.js';
 import { inMemoryKeyWritesStore, OWNER, seedOwnedKeys, type OwnedKeys } from './_helpers/in-memory-key-writes-store.js';
 import { portOnlyStoreWithoutVectorReads } from './_helpers/port-only-store.js';
 import { seedTwoTenants, TENANT_A, type TwoTenantFixture } from './_helpers/store-conformance.js';

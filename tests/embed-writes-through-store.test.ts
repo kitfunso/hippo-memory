@@ -12,7 +12,7 @@ import { embeddingIndexIdentity, embeddingInputText } from '../src/store/embeddi
 import { embedAll, embedMemory } from '../src/search/embed-memories.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../src/core/memory.js';
 import { loadPhysicsState } from '../src/db/physics-state.js';
-import { OTHER_STORE_MARKER, sqliteStore, type HippoStore, type PhysicsParticle } from '../src/server.js';
+import { OTHER_STORE_MARKER, sqliteStore, type HippoStore, type PhysicsParticle } from '../src/entry/store-kit.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { initStore } from '../src/store/open.js';
 import { EMBEDDING_MODEL_META_KEY } from '../src/db/vector-store.js';

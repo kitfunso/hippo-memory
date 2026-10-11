@@ -12,7 +12,7 @@ import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { retrieve, type Context } from '../src/api/index.js';
-import { sqliteStore, type HippoStore } from '../src/server.js';
+import { sqliteStore, type HippoStore } from '../src/entry/store-kit.js';
 import { makeRoot } from './_helpers/make-root.js';
 
 function safeRmSync(p: string): void { try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ } }

@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { reject, type HippoDbContext } from '../src/api/index.js';
 import { closeHippoDb, openHippoDb, withSqliteBlocked } from '../src/db/index.js';
 import type { MemoryEntry } from '../src/core/memory.js';
-import type { AuditEvent } from '../src/server.js';
+import type { AuditEvent } from '../src/entry/store-kit.js';
 import { requireGroup } from '../src/store/index.js';
 import { markSlackEventSeen } from '../src/store/connectors/slack.js';
 import { writeEntry } from '../src/store/entry-writes.js';
