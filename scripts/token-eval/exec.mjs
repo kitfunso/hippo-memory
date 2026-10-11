@@ -7,8 +7,9 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 export const REPO = path.resolve(HERE, '..', '..');
 export const HIPPO_JS = path.join(REPO, 'bin', 'hippo.js');
 
-// A parent session id makes a child Claude Code session report and log under the parent's id.
-export const STRIP_ENV = ['CLAUDE_CODE_SESSION_ID', 'CLAUDE_CODE_CHILD_SESSION', 'CLAUDE_CODE_REMOTE_SESSION_ID', 'HIPPO_SESSION_ID', 'HIPPO_HOME', 'HIPPO_TENANT'];
+// A parent session id makes a child Claude Code session report and log under the parent's id. Claude Code sets
+// NoDefaultCurrentDirectoryInExePath in its own shells, and cmd.exe then stops finding a task's `gradlew.bat` in the checkout.
+export const STRIP_ENV = ['CLAUDE_CODE_SESSION_ID', 'CLAUDE_CODE_CHILD_SESSION', 'CLAUDE_CODE_REMOTE_SESSION_ID', 'HIPPO_SESSION_ID', 'HIPPO_HOME', 'HIPPO_TENANT', 'NoDefaultCurrentDirectoryInExePath'];
 
 /** The key the env already uses for PATH (Windows spells it Path). */
 export function pathKey(env) {
