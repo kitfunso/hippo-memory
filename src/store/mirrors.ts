@@ -311,7 +311,7 @@ export function buildStatsFromDb(db: ReturnType<typeof openHippoDb>): LegacyStat
 /** Write the `index.json` mirror file for an already-derived index. Exported for
  *  `rebuildIndex` (the only index.json writer) and the longmemeval benchmark. */
 export function writeIndexMirror(hippoRoot: string, index: HippoIndex): void {
-  mirrorBestEffort('index.json', () => fs.writeFileSync(path.join(hippoRoot, 'index.json'), JSON.stringify(index, null, 2), 'utf8'));
+  mirrorBestEffort('index.json', () => overwriteInPlace(path.join(hippoRoot, 'index.json'), JSON.stringify(index, null, 2)));
 }
 
 export function writeStatsMirror(hippoRoot: string, stats: LegacyStats): void {

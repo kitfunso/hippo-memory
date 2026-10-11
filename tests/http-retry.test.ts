@@ -252,6 +252,17 @@ describe('the wait between attempts under a caller signal', () => {
   });
 });
 
+describe('the pooled-socket release between attempts', () => {
+  it('still retries when cancelling the failed reply body rejects', async () => {
+    const bad = new Response('x', { status: 503 });
+    Object.defineProperty(bad, 'body', { value: { cancel: () => Promise.reject(new TypeError('cancel failed')) } });
+    const fetchFn = vi.fn<typeof fetch>().mockResolvedValueOnce(bad).mockResolvedValueOnce(new Response('ok', { status: 200 }));
+    const res = await fetchWithRetry('http://127.0.0.1:1/', {}, { timeoutMs: 60_000, fetchFn, ...noSleep, random: () => 0 });
+    expect(res.status).toBe(200);
+    expect(fetchFn).toHaveBeenCalledTimes(2);
+  });
+});
+
 describe('retry helpers', () => {
   it('treats only 429 and 5xx as retryable', () => {
     expect([429, 500, 503, 529, 599].every(isRetryableStatus)).toBe(true);

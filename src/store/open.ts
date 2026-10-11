@@ -14,7 +14,7 @@ import { audit } from './audit-event.js';
 import { deserializeEntry } from '../core/markdown.js';
 import { stampOriginProjectForImport, upsertEntryRow } from './entry-row.js';
 import { ensureMirrorDirectories, syncMirrorFiles, layerDir } from './mirrors.js';
-import { isJsonObject } from '../util/json.js';
+import { isJsonObject, type JsonValue } from '../util/json.js';
 
 export function initStore(hippoRoot: string): void {
   closeHippoDb(openStore(hippoRoot));
@@ -154,52 +154,44 @@ export function loadLegacyEntriesFromMarkdown(hippoRoot: string): MemoryEntry[] 
 
     for (const file of fs.readdirSync(dir)) {
       if (!file.endsWith('.md')) continue;
-      const raw = fs.readFileSync(path.join(dir, file), 'utf8');
-      const entry = deserializeEntry(raw);
-      if (entry) entries.push(entry);
+      try {
+        const entry = deserializeEntry(fs.readFileSync(path.join(dir, file), 'utf8'));
+        if (entry) entries.push(entry);
+      } catch (err) {
+        log.warn(`store: skipped unreadable legacy file ${file}: ${errorMessage(err)}`);
+      }
     }
   }
   return entries;
 }
 
+function readLegacyJsonObject(file: string): { [key: string]: JsonValue } | null {
+  let parsed: JsonValue;
+  try {
+    parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
+  } catch (err) {
+    log.warn(`store: unreadable ${path.basename(file)} read as empty: ${errorMessage(err)}`);
+    return null;
+  }
+  if (!isJsonObject(parsed)) {
+    log.warn(`store: ${path.basename(file)} is not a JSON object, read as empty`);
+    return null;
+  }
+  return parsed;
+}
+
 function loadLegacyIndexFile(hippoRoot: string): HippoIndex {
   const indexPath = path.join(hippoRoot, 'index.json');
-  if (!fs.existsSync(indexPath)) {
-    return { version: 1, entries: {}, last_retrieval_ids: [], last_trace_id: null };
-  }
-
-  try {
-    // SAFETY: index.json is only written by writeIndexMirror below, which serializes a HippoIndex;
-    // a hand-edited file that violates the shape falls through to the catch block's fallback.
-    return JSON.parse(fs.readFileSync(indexPath, 'utf8')) as HippoIndex;
-  } catch (err) {
-    log.debug(`store: unreadable index.json read as empty: ${errorMessage(err)}`);
-    return { version: 1, entries: {}, last_retrieval_ids: [], last_trace_id: null };
-  }
+  const empty: HippoIndex = { version: 1, entries: {}, last_retrieval_ids: [], last_trace_id: null };
+  if (!fs.existsSync(indexPath)) return empty;
+  // SAFETY: index.json is written by writeIndexMirror as a HippoIndex; readers default every field, so only the object shape is checked.
+  return (readLegacyJsonObject(indexPath) as HippoIndex | null) ?? empty;
 }
 
 function loadLegacyStatsFile(hippoRoot: string): LegacyStats {
   const statsPath = path.join(hippoRoot, 'stats.json');
-  if (!fs.existsSync(statsPath)) {
-    return {
-      total_remembered: 0,
-      total_recalled: 0,
-      total_forgotten: 0,
-      consolidation_runs: [],
-    };
-  }
-
-  try {
-    // SAFETY: stats.json is only written by writeStatsMirror below with exactly these four fields; callers also guard every read with `?? 0` / `Array.isArray`,
-    // so a hand-edited file is tolerated even if this cast is wrong.
-    return JSON.parse(fs.readFileSync(statsPath, 'utf8')) as LegacyStats;
-  } catch (err) {
-    log.debug(`store: unreadable stats.json read as zero: ${errorMessage(err)}`);
-    return {
-      total_remembered: 0,
-      total_recalled: 0,
-      total_forgotten: 0,
-      consolidation_runs: [],
-    };
-  }
+  const empty: LegacyStats = { total_remembered: 0, total_recalled: 0, total_forgotten: 0, consolidation_runs: [] };
+  if (!fs.existsSync(statsPath)) return empty;
+  // SAFETY: callers guard every field read with `?? 0` / `Array.isArray`, so only the object shape is checked.
+  return (readLegacyJsonObject(statsPath) as LegacyStats | null) ?? empty;
 }

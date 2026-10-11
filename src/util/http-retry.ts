@@ -1,7 +1,7 @@
 /** One retry policy for outbound HTTP: a timeout on every attempt, backoff on 429 and 5xx, and on a dropped connection where a replay is safe. */
 
 import { envLlmTimeoutMs } from './env.js';
-import { errorCode, log } from './log.js';
+import { errorCode, errorFields, log } from './log.js';
 
 export interface RetryPolicy {
   /** Per-attempt limit; a stalled peer ends as a thrown `TimeoutError`, never a hang. */
@@ -154,7 +154,11 @@ export async function fetchWithRetry(url: string | URL, init: RequestInit, polic
     const delay = retryAfter ?? backoffMs(attempt);
     if (!fitsBudget(delay)) return res;
     // Frees the pooled socket before the next attempt.
-    await res.body?.cancel();
+    try {
+      await res.body?.cancel();
+    } catch (err) {
+      log.debug('http retry: body cancel failed', errorFields(err));
+    }
     logRetry(init, url, `status ${res.status}`, attempt, attempts, delay);
     await backoffWait(delay, policy.sleep, init.signal);
   }

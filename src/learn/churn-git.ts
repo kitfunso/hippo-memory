@@ -6,6 +6,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { DAY_MS } from '../util/time.js';
 import { errorMessage } from '../util/log.js';
+import { isJsonObject, isJsonString, type JsonValue } from '../util/json.js';
 
 // A `git log --name-status` dump can run to tens of MB; default 1MB pipe would truncate it.
 const GIT_MAX_BUFFER = 64 * 1024 * 1024;
@@ -106,9 +107,15 @@ export function packageScriptsAt(repoRoot: string, rev: string): Record<string, 
   if (runGit(['ls-tree', '--name-only', rev, '--', 'package.json'], repoRoot).trim() === '') return {};
   const raw = runGit(['show', `${rev}:package.json`], repoRoot);
   try {
-    // SAFETY: optional chaining makes a `null` or scalar package.json read as "no scripts".
-    const parsed = JSON.parse(raw) as { scripts?: Record<string, string> } | null;
-    return parsed?.scripts ?? {};
+    const parsed: JsonValue = JSON.parse(raw);
+    const scripts = isJsonObject(parsed) ? parsed.scripts : undefined;
+    if (!isJsonObject(scripts)) return {};
+    const out: Record<string, string> = {};
+    for (const [name, command] of Object.entries(scripts)) {
+      if (!isJsonString(command)) return {};
+      out[name] = command;
+    }
+    return out;
   } catch (err) {
     if (err instanceof SyntaxError) return null;
     throw err;
