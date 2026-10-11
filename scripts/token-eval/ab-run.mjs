@@ -14,6 +14,7 @@ import { planScreen, screenLines, runScreen, SCREEN_ARMS } from './screen.mjs';
 import { parseHookTrust } from './codex.mjs';
 import { finishCodex } from './codex-task.mjs';
 import { checkInstaller } from './codex-install.mjs';
+import { objectLockRetries } from './exec.mjs';
 
 export { cacheTaskRepos } from './runs.mjs';
 export { usageFromResult, isUsageLimit, transcriptWork } from './records.mjs';
@@ -262,6 +263,8 @@ async function main() {
     // Under lockstep a mid-run throw leaves every run partial, so the out dir says so.
     fs.writeFileSync(path.join(out, 'ABANDONED'), `${err.message}\nlast completed: ${progress.last}\n`);
     throw err;
+  } finally {
+    if (objectLockRetries.count) console.log(`Git object-lock retries (antivirus holding a fresh object): ${objectLockRetries.count}.`);
   }
   // ab-analyze averages unequal seed counts unpaired, so Z0 records go to the Z0 analyzer, which pairs shared seeds.
   console.log(`\nRecords: ${path.join(out, 'runs.jsonl')}\nAnalyze with scripts/token-eval/z0-analyze.mjs (pairs shared seeds; it lands with PR #357), never ab-analyze.mjs.`);

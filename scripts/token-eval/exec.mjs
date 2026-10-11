@@ -95,10 +95,29 @@ function runnerGit(args, extraEnv) {
   return [['-c', `core.hooksPath=${NO_HOOKS}`, '-c', 'core.attributesFile=/dev/null', '-c', 'core.fsmonitor=false', '-c', 'core.longpaths=true', ...args], env];
 }
 
+// Windows real-time scanning can hold a fresh loose object past Git for Windows' own short rename retry.
+const OBJECT_LOCK = /unable to write file .*objects[\\/][0-9a-f]{2}[\\/][0-9a-f]{38,62}: Permission denied/;
+const LOCK_WAITS_MS = [500, 1000, 2000, 4000];
+/** Retries taken this process, printed at the end of a run so an environment flake is seen, never hidden. */
+export const objectLockRetries = { count: 0 };
+
+/** fn(), rerun while it fails on a locked loose object; every git that writes objects leaves refs untouched on that failure, so a rerun is safe. */
+export function retryObjectLock(fn, waits = LOCK_WAITS_MS) {
+  for (let i = 0; ; i++) {
+    try {
+      return fn();
+    } catch (err) {
+      if (i >= waits.length || !OBJECT_LOCK.test(String(err.stderr ?? ''))) throw err;
+      objectLockRetries.count++;
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, waits[i]);
+    }
+  }
+}
+
 /** Every runner git call goes through here or gitSpawn; extraEnv adds keys but can never undo the isolation. */
 export function git(args, cwd, extraEnv = {}, encoding = 'utf8') {
   const [argv, env] = runnerGit(args, extraEnv);
-  return execFileSync('git', argv, { cwd, env, encoding, stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 1 << 28 });
+  return retryObjectLock(() => execFileSync('git', argv, { cwd, env, encoding, stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 1 << 28 }));
 }
 
 /** git() for a caller that reads the exit code itself; stdout and stderr are Buffers. */

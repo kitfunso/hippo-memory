@@ -5,6 +5,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { retryObjectLock } from './exec.mjs';
 import { FORBID_SETS } from './z0-author.mjs';
 
 // Agent-instruction and contributor files at any depth; the rule sources go to the author as withheld-line copies instead.
@@ -112,15 +113,7 @@ export function buildSnapshot({ source, commit, out, forbidSet = 'default', drop
   }
   if (rulesOut) manifest.history = writeHistory(source, full, manifest.ruleFiles.filter((rel) => fs.existsSync(path.join(rulesOut, rel))), rulesOut, forbid);
   git(['-C', out, 'init', '-q', '-b', 'main']);
-  // Windows antivirus can hold a fresh loose object for a moment (Permission denied); add is idempotent, so it gets three tries.
-  for (let attempt = 1; ; attempt++) {
-    try {
-      git(['-C', out, 'add', '-A']);
-      break;
-    } catch (err) {
-      if (attempt === 3) throw err;
-    }
-  }
+  retryObjectLock(() => git(['-C', out, 'add', '-A'], { stdio: ['ignore', 'pipe', 'pipe'] }));
   git(['-C', out, 'commit', '-q', '--no-gpg-sign', '-m', 'snapshot'], { env: { ...process.env, ...IDENTITY } });
   return { ...manifest, snapshotCommit: git(['-C', out, 'rev-parse', 'HEAD']) };
 }
