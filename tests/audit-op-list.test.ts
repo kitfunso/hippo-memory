@@ -8,6 +8,8 @@ import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { serve, type ServerHandle } from '../src/server.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
+import { createApiKey } from '../src/store/auth.js';
 import { hippoRun } from './_helpers/spawn-hippo.js';
 
 const CLI = resolve(__dirname, '..', 'bin', 'hippo.js');
@@ -63,7 +65,15 @@ describe('audit op filter', () => {
   describe('GET /v1/audit', () => {
     let handle: ServerHandle;
 
+    let bearer = '';
+
     beforeEach(async () => {
+      const db = openHippoDb(hippoRoot);
+      try {
+        bearer = createApiKey(db, { tenantId: 'default', label: 'audit-op-admin', role: 'admin' }).plaintext;
+      } finally {
+        closeHippoDb(db);
+      }
       handle = await serve({ hippoRoot, port: 0 });
     });
 
@@ -72,12 +82,12 @@ describe('audit op filter', () => {
     });
 
     it('rejects an unknown op with 400', async () => {
-      const res = await fetch(`${handle.url}/v1/audit?op=bogus`);
+      const res = await fetch(`${handle.url}/v1/audit?op=bogus`, { headers: { authorization: `Bearer ${bearer}` } });
       expect(res.status).toBe(400);
     });
 
     it('returns the rows for a real op', async () => {
-      const res = await fetch(`${handle.url}/v1/audit?op=remember`);
+      const res = await fetch(`${handle.url}/v1/audit?op=remember`, { headers: { authorization: `Bearer ${bearer}` } });
       expect(res.status).toBe(200);
       // SAFETY: GET /v1/audit's response body is the serialized AuditEvent[], checked by the assertions below.
       const body = await res.json() as Array<{ op: string }>;

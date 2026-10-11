@@ -84,7 +84,7 @@ export const V1_ROUTES: readonly Route[] = [
   { method: 'GET', path: '/v1/quarantine', auth: 'admin', storeReady: 'quarantine', loop: 'off', handler: handleListQuarantine },
   { method: 'POST', pattern: '/v1/quarantine/:id/approve', auth: 'admin', storeReady: 'quarantine', loop: 'off', handler: handleApproveQuarantine },
   { method: 'POST', pattern: '/v1/quarantine/:id/reject', auth: 'admin', storeReady: 'quarantine', loop: 'off', handler: handleRejectQuarantine },
-  { method: 'GET', path: '/v1/audit', auth: 'caller', storeReady: 'auditLog', loop: 'off', handler: handleListAudit },
+  { method: 'GET', path: '/v1/audit', auth: 'admin', storeReady: 'auditLog', loop: 'off', handler: handleListAudit },
   { method: 'POST', path: '/v1/predictions', auth: 'caller', storeReady: 'predictions', loop: 'off', handler: handleCreatePrediction },
   { method: 'GET', path: '/v1/predictions', auth: 'caller', storeReady: 'predictions', loop: 'off', handler: handleListPredictions },
   { method: 'GET', path: '/v1/predictions/stats', auth: 'caller', storeReady: 'predictions', loop: 'off', handler: handlePredictionStats },

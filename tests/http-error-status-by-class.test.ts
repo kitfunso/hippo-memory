@@ -120,7 +120,8 @@ describe('an untyped error is a 500 that hides its text', () => {
     // before serve starts because a running server holds the file open, and Windows refuses to delete an open file.
     home = mkdtempSync(join(tmpdir(), 'hippo-error-class-'));
     mkdirSync(join(home, 'hippo.db'));
-    handle = await serve({ hippoRoot: home, port: 0 });
+    // No key can be minted in a store that will not open, so the keyless caller is made admin for the admin-only audit route.
+    handle = await serve({ hippoRoot: home, port: 0, keylessLocalRole: 'admin' });
   });
 
   afterAll(async () => {

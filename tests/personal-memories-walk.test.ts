@@ -445,7 +445,10 @@ describe('personal memories walk (plan lane T)', () => {
   });
 
   it('line 13: GET /v1/audit names A\'s write by actor and memory id and holds no row text', async () => {
-    for (const who of ['A', 'B', 'ADM'] as const) {
+    for (const who of ['A', 'B'] as const) {
+      expect((await http(keys[who].plaintext, 'GET', '/v1/audit?op=remember&limit=1000')).status, who).toBe(403);
+    }
+    for (const who of ['ADM'] as const) {
       const r = await http(keys[who].plaintext, 'GET', '/v1/audit?op=remember&limit=1000');
       expect(r.status, `${who}: ${r.text}`).toBe(200);
       expect(r.text, who).not.toContain('zircon-kettle');

@@ -109,3 +109,7 @@ Long positional argument lists became options objects, and two helpers that expo
 - `withSqliteAllowed` and `OtherStoreFolderError` left `hippo-memory/server`. They are internal. `OTHER_STORE_MARKER` stays, so a store that is not hippo.db can still mark its folder. A caller that needs to open hippo.db on purpose must do it through a store from `sqliteStore(hippoRoot)`.
 - `__resetSessionRecallHistoryHttp` moved to `hippo-memory/testing`, with the other reset hooks: `_resetAblationCacheForTests`, `_resetSharedStoreCacheForTests`, `_resetLossAversionRatioCacheForTests` and `_resetSessionRecallHistoryMcpForTests`. Change `import { __resetSessionRecallHistoryHttp } from 'hippo-memory/server'` to import it from `hippo-memory/testing`.
 - `sqliteSyncStore`, `SqliteSyncStore`, `finishRecallAt` and `storeFor` are not exported from any package entry. Implement and consume stores through `HippoStore` and `sqliteStore`.
+
+## Audit log
+
+- `GET /v1/audit` now needs an admin key. A member key gets 403, and so does a keyless local caller while it acts as a member. Mint an admin key with `--role admin`, or set `HIPPO_KEYLESS_LOCAL_ROLE=admin` for local use.

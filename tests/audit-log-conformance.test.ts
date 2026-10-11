@@ -164,7 +164,7 @@ type Asker = 'adminA' | 'memberA' | 'host';
 
 const SERVED: readonly (readonly [Asker, string, number])[] = [
   ['adminA', '', 200],
-  ['memberA', '?op=recall', 200],
+  ['adminA', '?op=recall', 200],
   ['adminA', `?since=${encodeURIComponent(at(3))}&op=forget`, 200],
   ['adminA', '?limit=9', 200],
   ['adminA', '?limit=9&cursor=', 200],
