@@ -97,10 +97,17 @@ function shellCall(cmd, output) {
 
 const readCall = (p) => shellCall(`cat ${JSON.stringify(p)}`, read(p) ?? `cat: ${p}: No such file or directory\nProcess exited with code 1`);
 
+/** A file at an earlier thread's rollout path, since the read check skips a path that names nothing; plain text, so only the path check fires. */
+function pastRollout() {
+  const past = path.join(HOME, 'sessions', 'past-rollout.jsonl');
+  if (!fs.existsSync(past)) write(past, 'an earlier thread\n');
+  return past;
+}
+
 /** A second thread's rollout: CHILD (parent set), MEMGEN (internal source), STRAY (source exec, no parent). */
 function sideRollout(kind) {
   const id = randomUUID();
-  const past = path.join(HOME, 'sessions', 'past-rollout.jsonl');
+  const past = pastRollout();
   const extra = kind === 'child' ? { parent_thread_id: threadId, source: { subagent: { thread_spawn: {} } }, thread_source: 'subagent' }
     : kind === 'memgen' ? { source: process.env.FAKE_CODEX_INTERNAL_SOURCE || 'z0-memgen' } : { source: 'exec' };
   const lines = [meta(id, extra), ...readCall(past)];
@@ -149,6 +156,7 @@ function work() {
   if (has('FIX')) fs.writeFileSync('lib.js', 'module.exports.add = (a, b) => a + b;\n');
   const lesson = has('LESSON_OK') ? 'ok' : has('LESSON_BAD') ? 'bad' : null;
   if (lesson) fs.writeFileSync('lesson.txt', `${lesson}\n`);
+  if (has('READ_PAST')) lines.push(...readCall(pastRollout()));
   for (const m of prompt.matchAll(/^READ:(.+)$/gm)) lines.push(...readCall(fill(m[1].trim())));
   // {B64:...} lets a hook context hold a key phrase the apply prompt may not spell out.
   const unb64 = (text) => text.replace(/\{B64:([^}]+)\}/g, (_, b64) => Buffer.from(b64, 'base64').toString('utf8'));

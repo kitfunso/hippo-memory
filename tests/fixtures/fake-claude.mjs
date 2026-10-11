@@ -121,6 +121,13 @@ const fill = (text) => text.replaceAll('{OUT}', OUT).replaceAll('{RUN}', path.di
 const hookLine = () => (injected ? [{ type: 'attachment', attachment: { type: 'hook_additional_context', content: [injected], hookEvent: 'UserPromptSubmit' } }] : []);
 const toolResult = (text) => ({ type: 'user', message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: `tu-${process.pid}-${toolN}`, content: text }] } });
 
+/** An earlier session's transcript in this config, since the read check skips a path that names nothing. */
+function pastTranscript() {
+  const dir = path.join(process.env.CLAUDE_CONFIG_DIR, 'projects', folder);
+  const past = fs.existsSync(dir) ? fs.readdirSync(dir).find((f) => f.endsWith('.jsonl') && f !== `${sessionId}.jsonl`) : undefined;
+  return path.join(dir, past ?? `${randomUUID()}.jsonl`);
+}
+
 /** Read probes, emitted as tool calls and never run: READ:<p>, READ_PAST, GREP:<p>, BASH:<cmd> (a literal \n is a newline), ECHO:<t>, ECHO_TRANSCRIPT(_PRETTY). */
 function probes(text = prompt) {
   const lines = [];
@@ -128,7 +135,7 @@ function probes(text = prompt) {
     const [kind, ...rest] = m[1].split(':');
     const arg = fill(rest.join(':'));
     if (kind === 'READ') lines.push(toolUse('Read', { file_path: arg }));
-    else if (kind === 'READ_PAST') lines.push(toolUse('Read', { file_path: path.join(process.env.CLAUDE_CONFIG_DIR, 'projects', folder, `${randomUUID()}.jsonl`) }));
+    else if (kind === 'READ_PAST') lines.push(toolUse('Read', { file_path: pastTranscript() }));
     else if (kind === 'GREP') lines.push(toolUse('Grep', { pattern: 'x', path: arg }));
     else if (kind === 'BASH') lines.push(toolUse('Bash', { command: arg.replaceAll('\\n', '\n') }));
     else if (kind === 'ECHO') lines.push(toolUse('Bash', { command: 'echo' }), toolResult(arg));

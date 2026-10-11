@@ -13,8 +13,10 @@ const FLOOR_ARMS = new Set(['A0', 'A4']);
 const HIPPO_MARK = '<!-- hippo:start -->';
 const HOME_PAIR = { HOME: 'USERPROFILE', USERPROFILE: 'HOME' };
 const ENV_FORM = /\$\{?\w+\}?|\$env:\w+|%\w+%/i;
-const WORD_PART = /(\s+|[<>()])|"([^"]*)"|'([^']*)'|([^\s"'<>()]+)/g;
 const SEARCH_ALWAYS = new Set(['rg', 'ag', 'ack', 'find', 'fd', 'tree', 'du']);
+const PATTERN_FIRST = new Set(['grep', 'egrep', 'fgrep', 'rg', 'ag', 'ack']);
+// With -e or -f the pattern comes from the flag, so every operand is a path; rg --files takes no pattern.
+const PATTERN_FLAG = /^-(?:[a-zA-Z]*[ef]|-regexp|-file)/;
 const GREP_R = /^-[a-z]*r|^--(?:dereference-)?recursive$/i;
 const PS_R = /^-r(?:ecurse)?$/i;
 const RECURSIVE_FLAG = { grep: GREP_R, egrep: GREP_R, fgrep: GREP_R, ls: /^-[a-zA-Z]*R|^--recursive$/, 'get-childitem': PS_R, gci: PS_R, dir: /^(?:-r(?:ecurse)?|[-/]s)$/i };
@@ -57,19 +59,33 @@ function cutWildcard(p) {
   return wild < 0 ? p : p.slice(0, p.lastIndexOf('/', wild) + 1) || p.slice(0, wild);
 }
 
-/** Shell words, with quoted and bare parts that touch joined as the shell joins them, so `"$HOME"/x` is one word. */
-function shellWords(seg) {
-  const words = [];
-  let cur = null;
-  for (const m of seg.matchAll(WORD_PART)) {
-    if (m[1] === undefined) {
-      cur = (cur ?? '') + (m[2] ?? m[3] ?? m[4]);
-      continue;
+/** Each simple command's words, line by line, read with the agent shell's quotes and escape character, so `"$HOME"/x` is one word and `;&|()` end a command. */
+function shellCommands(text, esc) {
+  const cmds = [];
+  const joined = text.replace(esc === '\\' ? /\\\r?\n/g : /`\r?\n/g, '');
+  for (const line of joined.split('\n')) {
+    let [words, word, quote] = [[], null, null];
+    const endWord = () => { if (word !== null) words.push(word); word = null; };
+    const endCmd = () => { endWord(); if (words.length) cmds.push(words); words = []; };
+    for (let i = 0; i < line.length; i++) {
+      const c = line[i];
+      if (c === esc && quote !== "'") {
+        const n = line[++i];
+        // Inside double quotes Bash keeps a backslash that escapes nothing special.
+        if (n !== undefined) word = (word ?? '') + (quote === '"' && esc === '\\' && !'$`"\\'.includes(n) ? c + n : n);
+      } else if (quote) {
+        if (c === quote) quote = null;
+        else word += c;
+      } else if (c === '"' || c === "'") {
+        quote = c;
+        word ??= '';
+      } else if (';&|()'.includes(c)) endCmd();
+      else if (/[\s<>]/.test(c)) endWord();
+      else word = (word ?? '') + c;
     }
-    if (cur !== null) words.push(cur);
-    cur = null;
+    endCmd();
   }
-  return cur === null ? words : [...words, cur];
+  return cmds;
 }
 
 const commandName = (word) => (word ?? '').replace(/^.*[\\/]/, '').replace(/\.exe$/i, '').toLowerCase();
@@ -79,7 +95,8 @@ const HEREDOC = /(?<!<)<<(?!<)(-?)\s*(['"]?)([\w.-]+)\2/g;
 const FILE_SINK = new Set(['cat', 'tee']);
 
 function onlyToFile(line, at) {
-  const cmd = commandName(shellWords(line.slice(0, at).split(/&&|\|\||[;&|(]/).at(-1))[0]);
+  // Quote-blind on purpose: in `git commit -m "$(cat <<'EOF'` the quote closes after the body.
+  const cmd = commandName(line.slice(0, at).split(/&&|\|\||[;&|(]/).at(-1).trim().split(/[\s<>]+/)[0]);
   return FILE_SINK.has(cmd) && !line.slice(at).split(/&&|\|\||[;&]/)[0].includes('|');
 }
 
@@ -100,11 +117,10 @@ function blankFileBodies(command) {
 }
 
 /** Path tokens of a shell command as `{token, search, cwd}`; a `cd` target counts as a read and moves cwd for the rest of the command. */
-function shellPaths(command, work, opts) {
+function shellPaths(command, work, opts, esc) {
   const out = [];
   let cwd = work;
-  for (const seg of blankFileBodies(command).split(/&&|\|\||[;|&\n]/)) {
-    const words = shellWords(seg);
+  for (const words of shellCommands(blankFileBodies(command), esc)) {
     const cmd = commandName(words[0]);
     const args = words.slice(1).filter((a) => !a.startsWith('-'));
     const flags = words.slice(1).filter((a) => a.startsWith('-') || a.startsWith('/'));
@@ -114,7 +130,9 @@ function shellPaths(command, work, opts) {
       cwd = resolveToken(args[0], { ...opts, cwd });
       continue;
     }
-    const kept = words.filter((a, i) => !a.startsWith('-') && (/[\\/]/.test(a) || a.startsWith('~') || ENV_FORM.test(a) || (search && i > 0 && (a === '.' || a === '..'))));
+    // A grep-family command's first operand is its pattern, which names no file.
+    const pattern = PATTERN_FIRST.has(cmd) && !flags.some((a) => PATTERN_FLAG.test(a)) ? words.indexOf(args[0], 1) : -1;
+    const kept = words.filter((a, i) => i !== pattern && !a.startsWith('-') && (/[\\/]/.test(a) || a.startsWith('~') || ENV_FORM.test(a) || (search && i > 0 && (a === '.' || a === '..'))));
     for (const token of kept) out.push({ token, search: search && token !== words[0], cwd });
     // A search with no path searches cwd, which a cd may have moved.
     if (search && !kept.some((a) => a !== words[0])) out.push({ token: '.', search: true, cwd });
@@ -124,7 +142,7 @@ function shellPaths(command, work, opts) {
 
 /** Every path a tool call names, as `{token, search, cwd}`. */
 function toolPaths(name, input, work, opts) {
-  if (name === 'Bash' || name === 'PowerShell') return shellPaths(input.command, work, opts);
+  if (name === 'Bash' || name === 'PowerShell') return shellPaths(input.command, work, opts, name === 'Bash' ? '\\' : '`');
   if (name === 'Grep') return [{ token: input.path ?? '.', search: true, cwd: work }];
   if (name === 'Glob') {
     const root = resolveToken(input.path ?? '.', { ...opts, cwd: work });
@@ -239,6 +257,8 @@ function pathHits(run, b, files, fileName, how) {
     if (SHELL_TOOLS.has(name) && input.cwd && input.cwd !== run.dirs.work) paths.unshift({ token: input.cwd, search: false, cwd: run.dirs.work });
     for (const { token, search, cwd } of paths) {
       const p = b.fold(cutWildcard(resolveToken(token, { ...opts, cwd })));
+      // Prereg 162 voids a read of files: a word naming nothing on disk, such as an import path in a grep pattern, read nothing.
+      if (!fs.existsSync(p)) continue;
       const cls = classify(b, p, search);
       if (cls && (!how.outsideOnly || OUTSIDE.has(cls))) hits.push(hit('read', cls, name, p, fileName(file)));
       if (FLOOR_ARMS.has(run.arm) && /^[^/]+\/memory(?:\/|$)/i.test(under(p, b.projects) ? relTo(b.projects, p) : '')) hits.push(hit('auto-memory', 'tool-input', name, p, fileName(file)));
