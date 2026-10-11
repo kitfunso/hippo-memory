@@ -101,5 +101,3 @@ Long positional argument lists became options objects, and two helpers that expo
 - `afterWrite` is removed from the options of `writeEntry` and `promoteToGlobal`. It handed out the write's own database handle. Code in this package that needs it uses `writeEntryWithHook` and `promoteWithHook`, which no package entry exports. Move any hook to a store method that runs inside the write.
 - `hippo decide get|close` and `hippo predict show|close` reject ids such as `12abc` and `0x1` with exit code 1. They read these as `12` and `0` before. Pass a plain positive integer.
 - `confidenceFacets` takes `ConfidenceInputs` (`pinned`, `confidence`, `last_retrieved`) instead of a whole `MemoryEntry`. Every old call still compiles.
-
-hippo-enterprise: `handoff/2026-09-28/budget/cli-base.ts` (an archived copy on origin/main) calls the positional `loadRecallSearchEntries`, `resolveConflict` and `writeSessionEndHandoff`. It needs the new forms if it is ever built against 2.0.
