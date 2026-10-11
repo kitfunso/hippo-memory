@@ -204,6 +204,30 @@ With hp-f4 undecided, set R holds 7 kept families, one short. Two families can c
 
 What this costs: set X is one repository's result in calibration, which sizes H2 from one repository's variance. The scored run needs the same 3-family floor per set X sequence, and S9's sizing has to plan for it.
 
+## S4: bm-f6, the top-up family
+
+bm-f6's author worked in a copy of the boring-maths author's folder (`C:/eval-authors/s3-bm6`), told to add one family from `AGENTS.md` line 78, change no earlier output, and keep off the 11 files the set N tasks change. It ran 20 minutes: 32 requests, no leak hits, not discarded. The rule is "Include model attribution trailer: `AI-Model: claude-sonnet-4-6`", key phrase `AI-Model`, four tasks (teach, two applies, screen), and a checker that reads the trailer from the commit messages the agent wrote. The nine earlier checkers are byte-identical to the run's.
+
+The S3 proof on LF checkouts passes all four tasks (`C:/z0-runs/s3/proof-bm6-lf.log`: base fails its hidden test, fix, good and bad pass it, the checker passes good and fails bad). That log also prints "PROOF FAILED" for its stub-tree check, which stops at bm-f1's pre-S4 key phrase in the author's copy of `tasks.json`; the run spec carries the re-picked phrase, and bm-f1 is dropped.
+
+bm-f6 joins the run without a new set N merge: its 16 task branches are fetched into `C:/z0-runs/eval-repos/bm` (same `main` commit), its two checker files are added beside the others, and `C:/z0-runs/s4/add-family.mjs` writes `bm-run/tasks-s4-f6.json`, the S4 spec plus bm-f6 with its tasks after bm-f5's and before set N. Its screen runs on `f945de49` with `pins-s6c.json`, like the other reruns, into `C:/z0-runs/s4/screen-bm-f6`. The runner's stub-tree check passed `AI-Model` at launch, so the phrase needed no re-pick.
+
+## S4: the last two verdicts and the split
+
+bm-f6 is dropped. Its A0 broke the rule in 4 of 4 sessions, but A4, told the rule, followed it in 0 of 2 (`C:/z0-runs/s4/screen-bm-f6`). It is not used in calibration.
+
+hp-f4 is kept. Its rerun (`C:/z0-runs/s4/screen-hp-r`) recorded all 6 sessions. The A0 teach on seed 1 was void as an `operator` read: the agent ran `ls -d` on `C:/Users/skf_s/.hippo`, the operator's hippo folder. `ls -d` prints only the folder's name, so nothing from the folder reached the agent, and that session broke the rule anyway. The other 3 A0 sessions broke the rule, and A4 followed it in 2 of 2. The keep rule needs 2 of 4 breaks, so the voided session cannot change the verdict.
+
+`split-sets.mjs` settled only families with sessions not recorded. It now also counts a void or invalid session as missing, since its result is thrown out either way. This change was made on 2026-10-11 after reading hp-f4's records, so it is stated here. It rests on the precedent in "screens stopped for low memory": a family whose recorded sessions fix the verdict keeps it, because a whole rerun would give it a second draw. Under the old rule hp-f4 would rerun whole, and set R would wait on that rerun.
+
+The same rule now settles cj-f2 from its first file, `screen-cj-2`: 3 valid A0 breaks and 2 of 2 A4 follows, its one void being the cwd fault above. Its rerun on the fixed build (`screen-cj-f2`) agrees, with 4 of 4 breaks and 2 of 2 follows.
+
+The S4 check passes (`C:/z0-runs/s4/split-final.txt`). Set X is ml-f1, ml-f2 and ml-f3 (maintainer 100%). Set R is bm-f3, bm-f4, bm-f5, hp-f3, hp-f4, cj-f1, cj-f2 and cj-f3 (8 families, maintainer 75%). ff-f3 is in neither set, since fifty's set R sequence does not order with one family. With bm-f6 dropped, the order in which the two verdicts landed does not matter. Regenerate with:
+
+```
+T=C:/z0-runs/s3; S=C:/z0-runs/s4; node $S/split-sets.mjs C:/Users/skf_s/hippo-wt-z0cal bm=$T/bm-run/tasks-s4.json,$S/screen-bm-2/screen.jsonl,$S/screen-bm-r/screen.jsonl ff=$T/ff-run/tasks-s4.json,$S/screen-ff/screen.jsonl hp=$T/hp-all/tasks-s4.json,$S/screen-hp/screen.jsonl,$S/screen-hp-r/screen.jsonl ml=$T/ml-run/tasks-s4.json,$S/screen-ml/screen.jsonl,$S/screen-ml-r/screen.jsonl cj=$T/cj-run/tasks-s4.json,$S/screen-cj-2/screen.jsonl,$S/screen-cj-f2/screen.jsonl
+```
+
 ## S6: calibration build
 
 #781 merged as `cf53aebb`. D5 does not ship (0 of 54 held-out corrections flagged), so A2 runs on #781 alone. Master was merged into the runner branch once, as `9dc3981e`, with no conflicts; the read-check fixes above sit on top as `0635b4fc`, then `f945de49` (the cwd fix), then `548cbd95`. That last one gives the Codex adapter the same per-call `cwd` field as the Claude one; without it `typecheck:tests` failed in CI, since a test hands the Codex adapter to code typed from the Claude one. `548cbd95` is the calibration build: S7 and S8 run from a detached worktree at it, so every record carries it, and the branch takes no rebase or merge until S9 tags it. Its pins are `C:/z0-runs/s6/pins-s6d.json`: Claude Code 2.1.288, `claude-opus-5-5`, dist hash `59e0c77e`. Both fixes changed only `scripts/token-eval`, so the dist hash is the one `0635b4fc` had (`pins-s6b.json`). The screens finished before the fix ran on `0635b4fc`, and the reruns ran on `f945de49`. For a Claude session `f945de49` and `548cbd95` give the same read check: the check reads the transcript line's cwd on both.
@@ -213,6 +237,10 @@ On that build the capture tables match #781's in all five repositories (`tables-
 The smoke's A2 set R sequence re-run on `0635b4fc` (`C:/z0-runs/s6/smoke-a2-run3`, seed 1): all five cells valid, none void, and every record carries `0635b4fc`. The teach failed its check, then passed once taught. On a1 and a2 the prompt hook's context held the taught rule (put each change note in its own new file under `changelog.d/`, never edit `CHANGELOG.md` by hand), with 2 and 3 injections in hippo's record, and both apply cells passed their lesson check on the first try.
 
 The first re-run (`smoke-a2-run2`) is not used. Its teach and apply cells were invalid as `checker`: the stage 1 toy checkers in `C:/z0-runs/toy1` and `toy2` still read the `Z0_*` env names that `de41d9a9` renamed to `CHECK_*`, so their `git` calls failed. They now read `CHECK_*`; the S3 checkers already did.
+
+The smoke then ran on the calibration build (`C:/z0-runs/s6/smoke-a2-run4`, `pins-s6d.json`, seed 1). All five cells are valid and resolved, none void, and every record carries `548cbd95` and dist hash `59e0c77e`. Both applies passed their lesson check on the first try. The run does not prove delivery, though. Claude Code's transcripts show that 6 of hippo's 8 start and prompt hooks hit hippo's own 5 s limit (`src/hooks/json-hooks.ts:343`) at 5.8 to 9.4 s. Those include the prompt hook on a1 and a2, so neither apply got hippo's text from the hook. Their `injectedRows` is 0, while hippo's own count says 3, because hippo logs the injection before Claude Code drops the output. The rule reached both applies only through the agent's own `hippo context --auto` call, which the CLAUDE.md block asks for. The same hooks took 0.3 to 1.3 s in run3 that morning. In the afternoon a bare `cmd /c exit` took 0.1 to 1.3 s against a healthy 40 ms, with two screens and four other sessions on the box. The cause is the box, not the build.
+
+So from here on, G1 delivery for hippo's hooks is checked on what the model received. `C:/z0-runs/s7/hook-check.mjs` reads each session's transcript and lists every hippo start and prompt hook per arm. It exits 1 when a prompt hook timed out (run4: 6 failed, run3: 0). Calibration starts one chunk at a time after a bare-launch check (`C:/z0-runs/s7/box-check.sh`, median of 7 at or under 150 ms). A second chunk joins only while the slowest hippo hook stays under 2.5 s. A stopped chunk cannot resume, because lockstep carries each arm's store from task to task. So one timeout does not stop a chunk. The stop comes once more than 5% of an arm's sessions have had a prompt hook time out, the G4 plumbing bar. The chunk then reruns from the start on a quiet box. hippo's 5 s limit stays as it is: users install it, and raising it would change the build under test. The calibration report gives every arm's hook counts.
 
 ## Contract limits found
 
