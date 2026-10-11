@@ -3,7 +3,8 @@
 import type { AmbientState } from '../core/ambient.js';
 import type { Context } from './types.js';
 import { runSleep } from './sleep-run.js';
-import { requireGroup, storeFor } from '../store/index.js';
+import { requireGroup } from '../store/index.js';
+import { storeFor } from '../store/sqlite/store.js';
 
 /** Options for `sleep`, one consolidation cycle on a SQLite store that returns counts; unlike `hippo sleep` it skips the auto-learn step. */
 export interface SleepOpts {

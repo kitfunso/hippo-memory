@@ -12,7 +12,8 @@ import { createMemory, Layer, schemaFitFrom, schemaFitSourceOf, type MemoryEntry
 import { extractPathTags } from '../search/path-context.js';
 import { canReadScope, personalScopeOf } from '../core/recall-scope.js';
 import { duplicateKey, longestWord, storedTextKeys } from '../util/same-text.js';
-import { requireGroup, storeFor } from '../store/index.js';
+import { requireGroup } from '../store/index.js';
+import { storeFor } from '../store/sqlite/store.js';
 import type { LessonWrites } from '../store/port.js';
 import type { Context } from './types.js';
 
