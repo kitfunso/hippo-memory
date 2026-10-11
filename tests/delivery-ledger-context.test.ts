@@ -29,14 +29,17 @@ function seedFacts(target: Project): void {
   });
 }
 
-const run = (target: Project, args: string[], sessionId: string | null = 'ctx-1') =>
-  hippo(target, ['context', ...args], { env: { HIPPO_FAKE_NOW: FAKE_NOW, ...(sessionId === null ? {} : { CLAUDE_CODE_SESSION_ID: sessionId }) } });
+function run(target: Project, args: string[], sessionId: string | null = 'ctx-1') {
+  const env: NodeJS.ProcessEnv = { HIPPO_FAKE_NOW: FAKE_NOW };
+  if (sessionId !== null) env.CLAUDE_CODE_SESSION_ID = sessionId;
+  return hippo(target, ['context', ...args], { env });
+}
 
 interface TraceRow { id: number; query_hash: string }
 
 function contextTraces(target: Project): TraceRow[] {
-  // SAFETY: the SELECT names exactly the two TraceRow columns.
-  return tableRows(target, `SELECT id, query_hash FROM recall_traces WHERE pipeline = 'context' ORDER BY id`) as unknown as TraceRow[];
+  return tableRows(target, `SELECT id, query_hash FROM recall_traces WHERE pipeline = 'context' ORDER BY id`)
+    .map((r) => ({ id: Number(r.id), query_hash: String(r.query_hash) }));
 }
 
 function traceResultIds(target: Project, traceId: number): string[] {
