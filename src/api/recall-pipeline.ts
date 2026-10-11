@@ -19,7 +19,7 @@ import { STRENGTH_RANK_FLOOR, STRENGTH_RANK_SPAN } from '../search/boosts.js';
 import { hybridSearch } from '../search/hybrid.js';
 import { physicsSearch } from '../search/physics-search.js';
 import type { RerankStep, ResultCost, SearchResult } from '../core/search-types.js';
-import { searchBothHybrid } from '../sharing/search-both.js';
+import { rankBothStores } from '../sharing/search-both.js';
 import { loadRecallSearchEntries, recallScopeFilter } from '../store/search-rows.js';
 import { isJsonNumber } from '../util/json.js';
 import { textOverlap, tokenize as tokenizeQuery } from '../util/tokenize.js';
@@ -198,7 +198,7 @@ async function searchPool(ctx: RankRecallCtx, opts: RankRecallOpts, pool: Recall
     });
   }
   if (search.multihop) {
-    // Unlike searchBothHybrid below, multihop ranks one pooled list, so a shared memory's two copies both compete.
+    // Unlike rankBothStores below, multihop ranks one pooled list, so a shared memory's two copies both compete.
     const allEntries = oneCopyPerMemory(pool.local, pool.global, evalNow()).flat();
     return multihopSearch(query, allEntries, { budget, cost, hippoRoot: ctx.hippoRoot, minResults, includeSuperseded, asOf });
   }
@@ -217,11 +217,10 @@ async function searchPool(ctx: RankRecallCtx, opts: RankRecallOpts, pool: Recall
     });
   }
   if (globalRoot) {
-    // searchBothHybrid reloads candidates itself, so the scope rule is passed in rather than inherited from the pool.
-    return searchBothHybrid(query, ctx.hippoRoot, globalRoot, {
+    // The pool already holds searchBothHybrid's additive-scope load for each store, so rank it rather than read both stores again.
+    return rankBothStores(query, { local: ctx.hippoRoot, global: globalRoot }, { local: pool.local, global: pool.global }, vectorCandidates, {
       budget, cost, explain, mmr, mmrLambda, localBump: search.localBump, minResults, scope, tenantId: ctx.tenantId,
       includeSuperseded, asOf,
-      recallScope: opts.explicitScope ? { requested: opts.explicitScope, additive: true } : {},
     });
   }
   return hybridSearch(query, pool.local, {
