@@ -1,10 +1,11 @@
 // DAG summary verbs: `hippo dag`, `hippo assemble` and `hippo drill`.
 
 import { truncateWithEllipsis } from '../util/ellipsize.js';
-import { loadAllEntries } from '../store/entry-reads.js';
 import type { MemoryEntry } from '../core/memory.js';
 import * as api from '../api/index.js';
 import { assembleCost, assembleHeading, drillCost, settleTokens } from '../api/context-render.js';
+import { listMemories } from '../api/memories.js';
+import { cliApiContext } from './api-context.js';
 import { printError } from './output.js';
 import { type CliFlags, parseBudgetFlag, type CommandContext, flagIsTrue, stringFlag, numberFlag } from './flag-values.js';
 import { requireInit } from './shared.js';
@@ -18,9 +19,9 @@ const DAG_HEAD_CHARS = 120;
 const DAG_SUMMARY_PREVIEW_CHARS = 200;
 const DAG_CHILD_PREVIEW_CHARS = 100;
 
-export function handleDag({ hippoRoot, flags }: CommandContext): void {
+export function handleDag({ hippoRoot, tenantId, flags }: CommandContext): void {
   requireInit(hippoRoot);
-  const entries = loadAllEntries(hippoRoot);
+  const entries = listMemories(cliApiContext(hippoRoot, tenantId), { everyTenant: true });
   const isStats = flagIsTrue(flags, 'stats');
 
   const byLevel = new Map<number, number>();

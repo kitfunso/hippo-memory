@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { type TaskSnapshot } from '../store/rows.js';
-import { isInitialized } from '../store/open.js';
+import { isInitialized } from '../core/project-identity.js';
 import { saveActiveTaskSnapshot, loadActiveTaskSnapshot } from '../store/sessions.js';
 import { PRE_COMPACT_INSTRUCTION, postCompactLine, saveCompaction, replayCompactionsAt } from './compaction-record.js';
 import { recordCompactionStart, recordSnapshotSaved } from '../store/compactions-record.js';

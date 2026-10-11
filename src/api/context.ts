@@ -1,6 +1,5 @@
 // Ambient context injection: the admission policy and getContext.
 
-import { isInitialized } from '../store/open.js';
 import { DEFAULT_SEARCH_CANDIDATE_LIMIT } from '../store/rows.js';
 import {
   type ContextCandidateFilter,
@@ -22,7 +21,9 @@ import { BadRequestError } from '../core/api-errors.js';
 import { isSharedStore, loadConfig } from '../core/config.js';
 import { rethrowIfSqliteBlocked } from '../db/index.js';
 import { errorMessage, log } from '../util/log.js';
-import { resolveProjectIdentity, classifyOriginProject, isGlobalStoreRoot, projectId, projectNames, type ProjectRef } from '../core/project-identity.js';
+import {
+  resolveProjectIdentity, classifyOriginProject, isGlobalStoreRoot, isInitialized, projectId, projectNames, type ProjectRef,
+} from '../core/project-identity.js';
 import { promptTokens } from '../core/prompt-recall.js';
 import { detectSecret } from '../util/secret-detect.js';
 import { isSessionDigestRow } from '../core/session-digest-row.js';

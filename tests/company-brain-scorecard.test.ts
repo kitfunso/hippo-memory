@@ -13,8 +13,8 @@ import {
 } from '../src/store/sessions.js';
 import { saveSessionHandoff, loadLatestHandoff } from '../src/store/handoffs.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../src/core/memory.js';
-import { buildProvenanceCoverage } from '../src/cli/provenance-coverage.js';
-import { buildCorrectionLatency } from '../src/cli/correction-latency.js';
+import { buildProvenanceCoverage } from '../src/api/provenance-coverage.js';
+import { buildCorrectionLatency } from '../src/api/correction-latency.js';
 import { estimateTokens } from '../src/util/token-text.js';
 
 let tmpDir: string;

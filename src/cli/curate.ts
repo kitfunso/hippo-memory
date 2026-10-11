@@ -2,7 +2,6 @@
 
 import { truncateWithEllipsis } from '../util/ellipsize.js';
 import * as path from 'path';
-import { listMemoryConflicts } from '../store/conflicts.js';
 import { rejectValue, unrejectValue, listRejectionsForTenant } from '../trust/reject-flow.js';
 import { RejectedValueError } from '../core/api-errors.js';
 import { loadConfig } from '../core/config.js';
@@ -141,10 +140,10 @@ async function previewForget(hippoRoot: string, tenantId: string, id: string, ar
   console.log(`Would ${archive ? 'archive' : 'forget'} ${id} (dry run, nothing changed): "${snippet}"`);
 }
 
-export function handleConflicts({ hippoRoot, flags }: CommandContext): void {
+export function handleConflicts({ hippoRoot, tenantId, flags }: CommandContext): void {
   requireInit(hippoRoot);
 
-  const conflicts = listMemoryConflicts(hippoRoot, String(flags['status'] ?? 'open'));
+  const conflicts = api.listConflicts(cliApiContext(hippoRoot, tenantId), String(flags['status'] ?? 'open'), { everyTenant: true });
   if (flags['json']) {
     console.log(JSON.stringify({ conflicts }, null, 2));
     return;
@@ -166,7 +165,7 @@ export function handleConflicts({ hippoRoot, flags }: CommandContext): void {
 
 /** Shown when --keep is missing, to help the user decide. */
 async function showConflictForResolve(hippoRoot: string, conflictId: number, tenantId: string): Promise<void> {
-  const conflicts = listMemoryConflicts(hippoRoot, 'open', tenantId);
+  const conflicts = api.listConflicts(cliApiContext(hippoRoot, tenantId), 'open');
   const conflict = conflicts.find((c) => c.id === conflictId);
   if (!conflict) {
     printError(`Conflict ${conflictId} not found or already resolved.`);
@@ -506,7 +505,7 @@ export async function handleForget({ hippoRoot, tenantId, args, flags }: Command
   cmdForget(hippoRoot, tenantId, id, flags);
 }
 
-function invalidateChurn(hippoRoot: string, args: string[], flags: CommandContext['flags']): void {
+function invalidateChurn(hippoRoot: string, tenantId: string, args: string[], flags: CommandContext['flags']): void {
   if (args[0] || flags['id'] !== undefined) {
     printError('Usage: hippo invalidate --churn [--dry-run]');
     printError('--churn takes no pattern or --id.');
@@ -518,7 +517,7 @@ function invalidateChurn(hippoRoot: string, args: string[], flags: CommandContex
   }
   const churnDryRun = flagIsTrue(flags, 'dry-run');
   let churnFailed = false;
-  for (const { root, result } of runChurnStaleForRepo(hippoRoot, churnDryRun)) {
+  for (const { root, result } of runChurnStaleForRepo(hippoRoot, tenantId, churnDryRun)) {
     if (result.error) {
       printError(`Churn-staleness check failed for ${root}: ${result.error}`);
       churnFailed = true;
@@ -541,7 +540,7 @@ function invalidateChurn(hippoRoot: string, args: string[], flags: CommandContex
 
 export function handleInvalidate({ hippoRoot, tenantId, args, flags }: CommandContext): void {
   requireInit(hippoRoot);
-  if (flagIsTrue(flags, 'churn')) return invalidateChurn(hippoRoot, args, flags);
+  if (flagIsTrue(flags, 'churn')) return invalidateChurn(hippoRoot, tenantId, args, flags);
   const target = args[0];
   if (flagIsTrue(flags, 'id')) {
     // Value-less --id must never silently fall through to pattern mode

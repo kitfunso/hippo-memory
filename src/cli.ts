@@ -7,7 +7,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { fileURLToPath } from 'node:url';
 import { repairCodexWrapperIfInstalled } from './hooks/codex-wrapper.js';
-import { getHippoRoot } from './store/open.js';
+import { getHippoRoot } from './core/project-identity.js';
 import { resolveTenantId } from './store/tenant.js';
 import { printGitHubBackfillUsage } from './cli/github.js';
 import { printError } from './cli/output.js';

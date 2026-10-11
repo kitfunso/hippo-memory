@@ -9,8 +9,10 @@ import { writeFileAtomic } from '../util/atomic-write.js';
 import { isCodexPresent } from '../hooks/shared.js';
 import { isCodexWrapperInstalled } from '../hooks/codex-wrapper.js';
 import { installOpencodePlugin } from '../hooks/opencode.js';
-import { isInitialized, initStore } from '../store/open.js';
-import { loadAllEntries } from '../store/entry-reads.js';
+import { initMemoryStore } from '../api/store-init.js';
+import { isInitialized } from '../core/project-identity.js';
+import { listMemories } from '../api/memories.js';
+import { cliApiContext } from './api-context.js';
 import { isGitRepo } from '../learn/autolearn.js';
 import { currentMachine, importForStore, importProjectMemories, importUserMemories } from '../agent-memories/sync.js';
 import { emptyReport, mergeReports } from '../agent-memories/report.js';
@@ -53,11 +55,11 @@ function scanForGitRepos(rootDir: string, maxDepth = 2): string[] {
 }
 
 /** Creates the repo's store when absent and registers it; returns whether it already existed. */
-function initScannedRepo(repo: string, globalRoot: string): boolean {
+function initScannedRepo(repo: string, tenantId: string, globalRoot: string): boolean {
   const repoHippo = path.join(repo, '.hippo');
   const alreadyExists = isInitialized(repoHippo);
   if (!alreadyExists) {
-    initStore(repoHippo);
+    initMemoryStore(cliApiContext(repoHippo, tenantId));
   }
   registerWorkspace(globalRoot, repo);
   return alreadyExists;
@@ -66,6 +68,7 @@ function initScannedRepo(repo: string, globalRoot: string): boolean {
 /** Seeds one scanned repo from git history and its agents' notes, unless --no-learn. */
 function learnScannedRepo(
   repo: string,
+  tenantId: string,
   seedDays: number,
   learn: boolean,
   machine: ReturnType<typeof currentMachine>,
@@ -75,7 +78,7 @@ function learnScannedRepo(
   let added = 0;
   let lowInfo = 0;
   if (learn && isGitRepo(repo)) {
-    const result = learnFromRepo(repoHippo, repo, seedDays, path.basename(repo));
+    const result = learnFromRepo(repoHippo, tenantId, repo, seedDays, path.basename(repo));
     added = result.added;
     lowInfo = result.lowInfo;
   }
@@ -107,7 +110,7 @@ function printScanSummary(repoCount: number, totalLessons: number, totalLowInfo:
     '.');
 }
 
-function cmdInitScan(scanDir: string, flags: CliFlags): void {
+function cmdInitScan(scanDir: string, tenantId: string, flags: CliFlags): void {
   const resolved = path.resolve(scanDir);
   console.log(`Scanning ${resolved} for git repositories...\n`);
 
@@ -130,13 +133,13 @@ function cmdInitScan(scanDir: string, flags: CliFlags): void {
   const learn = !flags['no-learn'];
 
   for (const repo of repos) {
-    const alreadyExists = initScannedRepo(repo, globalRoot);
-    const { added, lowInfo } = learnScannedRepo(repo, seedDays, learn, machine, agentImport);
+    const alreadyExists = initScannedRepo(repo, tenantId, globalRoot);
+    const { added, lowInfo } = learnScannedRepo(repo, tenantId, seedDays, learn, machine, agentImport);
     totalLessons += added;
     totalLowInfo += lowInfo;
 
     const status = alreadyExists ? 'existing' : 'new';
-    const entries = loadAllEntries(path.join(repo, '.hippo'));
+    const entries = listMemories(cliApiContext(path.join(repo, '.hippo'), tenantId), { everyTenant: true });
     console.log(`  ${path.basename(repo).padEnd(25)} ${status.padEnd(10)} ${entries.length} memories${added > 0 ? ` (+${added} from git)` : ''}`);
   }
 
@@ -164,11 +167,11 @@ function initGlobalOnly(flags: CliFlags): void {
   if (!flags['no-learn']) printAgentImport(importUserMemories(globalRoot, { machine: currentMachine() }));
 }
 
-function seedFromGitHistory(hippoRoot: string): void {
+function seedFromGitHistory(hippoRoot: string, tenantId: string): void {
   if (!isGitRepo(process.cwd())) return;
   const seedDays = 30;
   console.log(`\n   Seeding memories from last ${seedDays} days of git history...`);
-  const { added, skipped } = learnFromRepo(hippoRoot, process.cwd(), seedDays);
+  const { added, skipped } = learnFromRepo(hippoRoot, tenantId, process.cwd(), seedDays);
   if (added > 0) {
     console.log(`   Learned ${added} lessons from git (${skipped} duplicates skipped).`);
   } else {
@@ -176,11 +179,11 @@ function seedFromGitHistory(hippoRoot: string): void {
   }
 }
 
-export function handleInit({ hippoRoot, flags }: CommandContext): void {
+export function handleInit({ hippoRoot, tenantId, flags }: CommandContext): void {
   // Handle --scan mode
   if (flags['scan']) {
     const scanDir = stringFlag(flags, 'scan') ?? os.homedir();
-    cmdInitScan(scanDir, flags);
+    cmdInitScan(scanDir, tenantId, flags);
     return;
   }
 
@@ -193,7 +196,7 @@ export function handleInit({ hippoRoot, flags }: CommandContext): void {
   if (alreadyExists) {
     console.log('Already initialized at', hippoRoot);
   } else {
-    initStore(hippoRoot);
+    initMemoryStore(cliApiContext(hippoRoot, tenantId));
     console.log('Initialized Hippo at', hippoRoot);
     console.log('   Directories: buffer/ episodic/ semantic/ conflicts/');
     console.log('   Files: hippo.db stats.json');
@@ -213,7 +216,7 @@ export function handleInit({ hippoRoot, flags }: CommandContext): void {
 
   const learn = !flags['no-learn'] && !skipLearnOnSharedStore(hippoRoot);
   // Seed with git history on first init (unless --no-learn)
-  if (!alreadyExists && learn && !flags['global']) seedFromGitHistory(hippoRoot);
+  if (!alreadyExists && learn && !flags['global']) seedFromGitHistory(hippoRoot, tenantId);
 
   // Every run, not only the first: an agent's notes change between inits.
   if (learn) printAgentImport(importForStore(hippoRoot, { machine: currentMachine() }));

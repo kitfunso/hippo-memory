@@ -4,20 +4,15 @@ import { envClaudeCodeSessionId, envHippoSessionId } from '../util/env.js';
 import * as path from 'path';
 import * as fs from 'fs';
 import type { HookRuntime } from '../core/capture-contract.js';
-import { getHippoRoot, isInitialized } from '../store/open.js';
-import { loadConfig } from '../core/config.js';
-import { createDeliveryRecorder, type DeliveryEventType, type DeliveryRecorder } from '../store/delivery-recorder.js';
 import { isSqliteBusy, noteStoreBusy, runWithRequestStores, HOOK_DB_WAIT_MS } from '../db/index.js';
-import { bookTokenUse, ledgerRoot } from '../api/ledger-db.js';
+import { bookTokenUse } from '../api/ledger-db.js';
 import { sessionPilotArm } from '../api/pilot-arm.js';
 import { hookPayloadSessionId, hookPayloadString, isSubagentPayload } from '../util/hook-payload.js';
-import { blockHash } from '../util/token-text.js';
 import { importAtSessionEnd, currentMachine } from '../agent-memories/sync.js';
 import { summaryLine } from '../agent-memories/report.js';
-import { isGlobalStoreRoot } from '../core/project-identity.js';
+import { getHippoRoot, isInitialized } from '../core/project-identity.js';
 import { getGlobalRoot } from '../sharing/global-store.js';
 import { sanitizeLogMessage } from '../capture/compact.js';
-import { resolveTenantId } from '../store/tenant.js';
 import { errorMessage, log } from '../util/log.js';
 import type { CliFlags } from './flag-values.js';
 
@@ -64,12 +59,12 @@ export function hostSessionId(): string | undefined {
 
 /** Compaction drops the pinned blocks the per-prompt hook injected, so record a `reset` for the payload's session and the next prompt injects again.
  * `requiredSource` limits it to payloads with that `source`; best-effort and silent on a malformed payload. */
-export function resetHookInjection(hippoRoot: string, stdinText: string | undefined, requiredSource: string | null): void {
+export function resetHookInjection(hippoRoot: string, tenantId: string, stdinText: string | undefined, requiredSource: string | null): void {
   const sessionId = hookPayloadSessionId(stdinText, requiredSource);
   // A sub-agent's compaction leaves its parent's context, and the blocks in it, as they were.
   if (sessionId === null || isSubagentPayload(stdinText)) return;
   bookTokenUse(hippoRoot, {
-    tenantId: resolveTenantId({}), sessionId, surface: 'hook', event: 'reset', items: 0, tokens: 0,
+    tenantId, sessionId, surface: 'hook', event: 'reset', items: 0, tokens: 0,
   });
 }
 
@@ -84,33 +79,6 @@ export function hookStoreRoot(hippoRoot: string): string {
 /** `--runtime copilot`, or `--format copilot` on `hippo context`, marks a Copilot hook: the flag decides, never the payload. */
 export function hookRuntime(flags: CliFlags): HookRuntime {
   return flags['runtime'] === 'copilot' || flags['format'] === 'copilot' ? 'copilot' : 'claude-code';
-}
-
-/** A delivery recorder when the ledger store enables one, else null; never throws. */
-export function startDeliveryRecorder(
-  hippoRoot: string,
-  stdinText: string | undefined,
-  runtime: HookRuntime,
-  eventType?: DeliveryEventType,
-): DeliveryRecorder | null {
-  try {
-    // The same store withLedgerDb writes the token ledger to, so its config governs both.
-    const root = ledgerRoot(hippoRoot);
-    if (root === null || !loadConfig(root).deliveryLedger.enabled) return null;
-    return createDeliveryRecorder({
-      root,
-      storeHash: blockHash(path.resolve(root)),
-      writeStore: isGlobalStoreRoot(root) ? 'global' : 'local',
-      tenantId: resolveTenantId({}),
-      stdinText,
-      envSessionId: hostSessionId(),
-      runtime: runtime === 'copilot' ? 'copilot' : undefined,
-      eventType,
-    });
-  } catch (error) {
-    log.warn(`delivery ledger skipped: ${errorMessage(error)}`);
-    return null;
-  }
 }
 
 /** A Copilot hook's project root, from the payload's `cwd`, since VS Code runs user-level hooks in the home folder; other runtimes keep `hippoRoot`. */

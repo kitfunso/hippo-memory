@@ -1,6 +1,6 @@
 // `hippo auth`: create, list, revoke and scope API keys.
 
-import { listApiKeys, type ApiKeyListItem } from '../store/auth.js';
+import type { ApiKeyListItem } from '../store/auth.js';
 import * as api from '../api/index.js';
 import { cliApiContext } from './api-context.js';
 import { printError } from './output.js';
@@ -86,12 +86,12 @@ function formatKeyRow(item: ApiKeyListItem): string {
   return `${item.keyId}  ${item.tenantId}  ${item.role}  ${label}  ${created}  ${expires}  ${revoked}`;
 }
 
-function cmdAuthList(hippoRoot: string, flags: CliFlags): void {
+function cmdAuthList(hippoRoot: string, tenantId: string, flags: CliFlags): void {
   const root = resolveAuthRoot(hippoRoot, flags);
   const includeRevoked = boolFlag(flags, 'all');
   const asJson = boolFlag(flags, 'json');
 
-  const items = listApiKeys(root, { active: !includeRevoked });
+  const items = api.authListAllTenants(cliApiContext(root, tenantId), !includeRevoked);
 
   if (asJson) {
     console.log(JSON.stringify(items));
@@ -165,7 +165,7 @@ export async function handleAuth({ hippoRoot, tenantId, args, flags }: CommandCo
       cmdAuthCreate(hippoRoot, tenantId, flags);
       return;
     case 'list':
-      cmdAuthList(hippoRoot, flags);
+      cmdAuthList(hippoRoot, tenantId, flags);
       return;
     case 'revoke': {
       const keyId = subArgs[0];

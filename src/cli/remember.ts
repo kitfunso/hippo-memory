@@ -15,8 +15,7 @@ import {
 import * as api from '../api/index.js';
 import { getMemory } from '../api/memories.js';
 import { ConflictError, NotFoundError } from '../core/api-errors.js';
-import { isInitialized } from '../store/open.js';
-import { listMemoryConflicts } from '../store/conflicts.js';
+import { isInitialized } from '../core/project-identity.js';
 import { RejectedValueError } from '../core/api-errors.js';
 import { renderTraceContent, parseSteps } from '../consolidate/trace.js';
 import { extractPathTags } from '../search/path-context.js';
@@ -359,8 +358,8 @@ async function traceLineage(hippoRoot: string, globalRoot: string, entry: Memory
 
   // Open conflicts involving this memory.
   const allConflicts = [
-    ...listMemoryConflicts(hippoRoot, 'open', tenantId),
-    ...(isInitialized(globalRoot) ? listMemoryConflicts(globalRoot, 'open', tenantId) : []),
+    ...api.listConflicts(cliApiContext(hippoRoot, tenantId), 'open'),
+    ...(isInitialized(globalRoot) ? api.listConflicts(cliApiContext(globalRoot, tenantId), 'open') : []),
   ];
   const myConflicts = allConflicts.filter((c) => c.memory_a_id === id || c.memory_b_id === id);
   return { parentPreviews, myConflicts };

@@ -8,8 +8,8 @@
   "twinFunctions": 0,
   "sqlOutside": 0,
   "txLiterals": 0,
-  "tenantResolvesInCli": 8,
-  "storeImportsInCli": 53,
+  "tenantResolvesInCli": 0,
+  "storeImportsInCli": 4,
   "handleHoldersOutside": 10,
   "storeFilesWithoutSql": 3,
   "storeFilesWithoutSqlList": [

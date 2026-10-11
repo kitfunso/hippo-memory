@@ -9,10 +9,12 @@ import { closeHippoDb, isSqliteBusy, openHippoDb, outsideRequestStores, withWrit
 import type { MemoryEntry } from '../core/memory.js';
 import { namesFoldedInto } from '../sharing/project-merge.js';
 import { projectTagReads } from '../store/project-tags.js';
-import { isGlobalStoreRoot, projectNames, resolveGlobalRootDir, resolveProjectIdentity, type ProjectIdentity } from '../core/project-identity.js';
+import {
+  isGlobalStoreRoot, isInitialized, projectNames, resolveGlobalRootDir, resolveProjectIdentity, type ProjectIdentity,
+} from '../core/project-identity.js';
 import { duplicateKey, heldTextKeys } from '../util/same-text.js';
 import { removeEntryMirrors } from '../store/mirrors.js';
-import { initStore, isInitialized } from '../store/open.js';
+import { initStore } from '../store/open.js';
 import { writeEntryMirrors } from '../store/entry-writes.js';
 import { selectLiveEntriesBySourcePrefix, selectRowsOutsideSourcePrefixAt } from '../store/entry-reads.js';
 import { updateStats } from '../store/index-and-stats.js';

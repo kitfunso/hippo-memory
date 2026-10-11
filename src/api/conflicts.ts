@@ -2,7 +2,7 @@
 // SHORTCUT: hippo.db only, since the store port has no conflict calls; a conflicts group when a served store needs them.
 import { BadRequestError, ConflictError, NotFoundError } from '../core/api-errors.js';
 import type { MemoryEntry } from '../core/memory.js';
-import { listTouchableConflicts, resolveConflict } from '../store/conflicts.js';
+import { listMemoryConflicts, listTouchableConflicts, resolveConflict } from '../store/conflicts.js';
 import { loadEntriesByIds } from '../store/entry-reads.js';
 import { chunked } from '../util/chunked.js';
 import { passesScopeFilterForRecall, personalScopeOf } from '../core/recall-scope.js';
@@ -10,7 +10,8 @@ import type { MemoryConflict } from '../store/rows.js';
 import { classifyOriginProject } from '../core/project-identity.js';
 import type { CallerProject } from './prompt-hook.js';
 import { isQuarantineScope } from '../trust/quarantine.js';
-import type { Context } from './types.js';
+import { requireHostAdmin, type Context } from './types.js';
+import type { TenantReach } from './memories.js';
 
 export interface ResolveMemoryConflictOpts {
   /** One of the conflict's two memories; the other is the loser. */
@@ -70,4 +71,10 @@ export function listOpenConflicts(ctx: Context, project?: CallerProject): Memory
       && passesScopeFilterForRecall(row.scope ?? null, undefined, own);
   };
   return touchable.filter((c) => shown(c.memory_a_id) && shown(c.memory_b_id));
+}
+
+/** Conflicts with `status` ('*' for any) in reach, with no scope filter: the host's own view, so the host admin only. */
+export function listConflicts(ctx: Context, status: string, reach: TenantReach = {}): MemoryConflict[] {
+  requireHostAdmin(ctx, 'Listing conflicts past the scope check');
+  return listMemoryConflicts(ctx.hippoRoot, status, reach.everyTenant ? undefined : ctx.tenantId);
 }

@@ -5,13 +5,15 @@ import { getContext, type Context, type ContextResult, type ContextResultEntry }
 import { BadRequestError } from '../core/api-errors.js';
 import { isSharedStore, loadConfig } from '../core/config.js';
 import { contextBlockLines, contextCost, crossProjectLines, handoffText, sessionTrailText, settleTokens, snapshotText } from './context-render.js';
-import type { DeliveryRecorder } from '../store/delivery-recorder.js';
+import { createDeliveryRecorder, type DeliveryEventType, type DeliveryRecorder } from '../store/delivery-recorder.js';
+import type { HookRuntime } from '../core/capture-contract.js';
+import * as path from 'path';
 import { MAX_ID_LEN } from '../util/http-util.js';
 import { isJsonString, type JsonValue } from '../util/json.js';
-import { bookLedgerTurn, ledgerLastSent, noteLedgerRowSkipped } from './ledger-db.js';
+import { bookLedgerTurn, ledgerLastSent, ledgerRoot, noteLedgerRowSkipped } from './ledger-db.js';
 import type { MemoryEntry } from '../core/memory.js';
 import { sessionPilotArm, type PilotArm } from './pilot-arm.js';
-import { assertCallerProject, MAX_PROJECT_ALIASES } from '../core/project-identity.js';
+import { assertCallerProject, isGlobalStoreRoot, MAX_PROJECT_ALIASES } from '../core/project-identity.js';
 import type { DeliveryWrite } from '../store/ledger-turn.js';
 import { writeDeliveryEventAtRoot } from '../store/recall-trace.js';
 import { shouldSkipUnchanged, type TokenSurface, type TokenUse } from '../store/token-ledger.js';
@@ -19,6 +21,37 @@ import { hookPayloadString, isSubagentPayload } from '../util/hook-payload.js';
 import { blockHash, estimateTokens } from '../util/token-text.js';
 import { errorMessage, log } from '../util/log.js';
 import { DEFAULT_CONTEXT_BUDGET } from './context.js';
+
+/** What a hook's delivery row says about the call it records. */
+export interface DeliveryStart {
+  stdinText: string | undefined;
+  runtime: HookRuntime;
+  eventType?: DeliveryEventType;
+  /** The host's own session id from its environment, used when the payload names none. */
+  envSessionId: string | undefined;
+}
+
+/** A delivery recorder for a hook on `ctx.hippoRoot` when the ledger store enables one, else null; never throws. */
+export function startDeliveryRecorder(ctx: Context, start: DeliveryStart): DeliveryRecorder | null {
+  try {
+    // The same store withLedgerDb writes the token ledger to, so its config governs both.
+    const root = ledgerRoot(ctx.hippoRoot);
+    if (root === null || !loadConfig(root).deliveryLedger.enabled) return null;
+    return createDeliveryRecorder({
+      root,
+      storeHash: blockHash(path.resolve(root)),
+      writeStore: isGlobalStoreRoot(root) ? 'global' : 'local',
+      tenantId: ctx.tenantId,
+      stdinText: start.stdinText,
+      envSessionId: start.envSessionId,
+      runtime: start.runtime === 'copilot' ? 'copilot' : undefined,
+      eventType: start.eventType,
+    });
+  } catch (error) {
+    log.warn(`delivery ledger skipped: ${errorMessage(error)}`);
+    return null;
+  }
+}
 
 /** With `write`, stores on the token ledger's connection (same store); without it, opens its own. A second flush is a no-op. */
 export function flushDeliveryRecorder(rec: DeliveryRecorder | null, write?: DeliveryWrite): void {

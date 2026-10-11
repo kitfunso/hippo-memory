@@ -12,7 +12,7 @@ import { SESSION_DIGEST_TAG } from '../core/session-digest-row.js';
 import { createMemory, Layer, type MemoryEntry } from '../core/memory.js';
 import { RejectedValueError } from '../core/api-errors.js';
 import { maskEmails, redactSecretsStrict } from '../util/secret-detect.js';
-import { isInitialized } from '../store/open.js';
+import { isInitialized } from '../core/project-identity.js';
 import { writeEntry } from '../store/entry-writes.js';
 import { loadLiveContentsBySourceAndTag } from '../store/entry-reads.js';
 import { SNAPSHOT_AMBIENT_MAX_AGE_MS } from '../store/sessions.js';
