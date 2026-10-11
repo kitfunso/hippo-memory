@@ -285,8 +285,8 @@ function openIncidentRow(db: DatabaseSyncLike, tenantId: string, memoryId: strin
   const { incidentText, context, linkedMemoryIds } = open.fields;
   const held = new Set<string>();
   for (const ids of chunked(linkedMemoryIds)) {
-    // SAFETY: rows' shape matches the one column named in the SELECT.
     const marks = ids.map(() => '?').join(',');
+    // SAFETY: rows' shape matches the one column named in the SELECT.
     const found = db.prepare(`SELECT id FROM memories WHERE tenant_id = ? AND id IN (${marks})`).all(tenantId, ...ids) as Array<{ id: string }>;
     for (const r of found) held.add(r.id);
   }

@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { initStore } from '../src/store/open.js';
-import { writeEntry } from '../src/store/entry-writes.js';
+import { writeEntriesTogether } from '../src/store/entry-writes.js';
 import { childrenKey, loadChildrenOfSummaries, loadChildrenOfSummary } from '../src/store/summaries.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 
@@ -17,10 +17,10 @@ describe('loadChildrenOfSummaries', () => {
 
   it('matches the per-summary read for more parents than one chunk', () => {
     const parents = Array.from({ length: 520 }, (_, i) => ({ id: `parent_${i}`, tenantId: 'default' }));
-    for (const [i, p] of parents.entries()) {
-      if (i % 3 === 2) continue; // childless parent
-      writeEntry(root, createMemory(`child of ${p.id}`, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, dag_parent_id: p.id }));
-    }
+    const entries = parents
+      .filter((_, i) => i % 3 !== 2) // every third parent stays childless
+      .map((p) => createMemory(`child of ${p.id}`, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, dag_parent_id: p.id }));
+    writeEntriesTogether(root, entries);
     const batched = loadChildrenOfSummaries(root, parents);
     for (const p of [parents[0], parents[2], parents[510], parents[519]]) {
       const single = loadChildrenOfSummary(root, p.id, p.tenantId).map((c) => c.id);
