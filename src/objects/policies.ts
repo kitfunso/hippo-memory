@@ -8,11 +8,11 @@ import { assertTenantId } from '../store/tenant.js';
 import type { KeysetPosition } from '../util/keyset.js';
 import type { SavableDescriptor } from './descriptor.js';
 import { closeObjectAt, listObjectsAt, objectByIdAt, saveObjectAt } from './lifecycle.js';
-import type { Policy, PolicyStatus } from '../store/object-types.js';
+import type { Policy, PolicyStatus } from '../core/object-types.js';
 import type { Objects, PoliciesInForceQuery } from '../store/port.js';
 import { sqliteObjects } from '../store/sqlite/objects-group.js';
 
-export type { Policy, PolicyStatus } from '../store/object-types.js';
+export type { Policy, PolicyStatus } from '../core/object-types.js';
 
 export const VALID_POLICY_STATES: ReadonlySet<PolicyStatus> = new Set<PolicyStatus>([
   'active',

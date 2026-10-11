@@ -8,7 +8,7 @@ import { HttpError, MAX_ID_LEN } from '../src/util/http-util.js';
 import {
   assertClientScope, assertScopeRequestAllowed, canReadScope, canTouchScope, isPersonalScope, passesCliRecallScopeFilter,
   passesScopeFilterForRecall, PERSONAL_OWNER_MAX, personalScopeOf, ScopeForbiddenError, type ScopeActor,
-} from '../src/store/recall-scope.js';
+} from '../src/core/recall-scope.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { initStore } from '../src/store/open.js';
 

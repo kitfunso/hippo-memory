@@ -4,13 +4,13 @@ import { getMeta, withWriteScopeOr, type DatabaseSyncLike } from '../../db/index
 import { escapeLike } from '../../util/escape.js';
 import { keysetAfter } from '../../util/keyset.js';
 import { calculateStrength, deriveHalfLife, type MemoryEntry } from '../../core/memory.js';
-import { scopeAdmitSql } from '../recall-scope.js';
+import { scopeAdmitSql } from '../rule-sql.js';
 import type { JsonObject } from '../working-memory.js';
 import { stampOriginProject, upsertEntryRow } from '../entry-row.js';
 import { auditEntryWrite, writeEntryMirrors } from '../entry-writes.js';
 import { markGraphDirty } from '../graph-queue.js';
 import { removeGraphEntitiesForObject } from '../graph-writes.js';
-import type { BriefReceipt, Incident, ObjectByKind, ObjectKind, Policy, SavableKind, Skill } from '../object-types.js';
+import type { BriefReceipt, Incident, ObjectByKind, ObjectKind, Policy, SavableKind, Skill } from '../../core/object-types.js';
 import { LEGACY_TYPED_HALF_LIFE, onHandle, openStore, TYPED_HALF_LIFE_META_KEY } from '../open.js';
 import {
   isObjectRefusal, type IncidentOpen, type IncidentOpenRefusal, type IncidentResolve, type ObjectClose, type ObjectListQuery, type ObjectRefusal,

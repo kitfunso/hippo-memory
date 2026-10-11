@@ -3,7 +3,7 @@ import { BadRequestError, ConflictError, NotFoundError } from '../core/api-error
 import { appendAuditEvent, type AppendAuditOpts } from './audit.js';
 import { grantScope, insertApiKey, listLiveOwnedKeyIds, revokeApiKey, ungrantScope } from './auth.js';
 import { withWriteScope, type DatabaseSyncLike } from '../db/index.js';
-import { isRestrictedScope } from './recall-scope.js';
+import { isRestrictedScope } from '../core/recall-scope.js';
 import type { KeyMint, SelfKeyMint } from './port.js';
 import { selectApiKeyOwner } from './tenant-lookup.js';
 

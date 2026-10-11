@@ -3,7 +3,7 @@ import { cosineOf } from '../core/cosine.js';
 import { indexNeedsRebuild } from '../store/embeddings/index.js';
 import { indexedModel } from '../store/vector-index.js';
 import type { VectorCandidateSpec } from '../store/search-rows.js';
-import { resolveEmbeddingProvider, type EmbeddingProvider } from '../store/embeddings/provider.js';
+import { resolveEmbeddingProvider, type EmbeddingProvider } from '../embeddings/provider.js';
 import { rethrowIfSqliteBlocked } from '../db/index.js';
 import { errorMessage, log } from '../util/log.js';
 import { envQueryEmbedTimeoutMs } from '../util/env.js';

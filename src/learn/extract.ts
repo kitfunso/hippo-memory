@@ -1,7 +1,7 @@
 import { MemoryEntry, Layer, EmotionalValence, createMemory } from '../core/memory.js';
 import { writeEntry } from '../store/entry-writes.js';
 import { loadConfig } from '../core/config.js';
-import { RejectedValueError } from '../store/rejection.js';
+import { RejectedValueError } from '../core/api-errors.js';
 import { redactSecretsStrict } from '../util/secret-detect.js';
 import { type AnthropicMessageFailure, describeMessageFailure, sendAnthropicMessage } from '../util/anthropic-messages.js';
 import { neverAutoShareTags } from '../sharing/share.js';

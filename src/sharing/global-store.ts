@@ -6,7 +6,7 @@ import { MemoryEntry, generateId } from '../core/memory.js';
 import { initStore } from '../store/open.js';
 import { writeEntry } from '../store/entry-writes.js';
 import { readEntry } from '../store/entry-reads.js';
-import { isPersonalScope } from '../store/recall-scope.js';
+import { isPersonalScope } from '../core/recall-scope.js';
 import { fallbackOrigin, resolveGlobalRootDir } from '../core/project-identity.js';
 import { isSharedStore } from '../core/config.js';
 import { detectSecret } from '../util/secret-detect.js';

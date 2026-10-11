@@ -28,13 +28,8 @@ import { appendSessionEvent } from '../src/store/sessions.js';
 import { Layer} from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { queryAuditEvents } from '../src/store/audit.js';
-import {
-  RejectedValueError,
-  rejectionDigest,
-  normalizeValueForRejection,
-  insertRejectedValue,
-  findRejectedValue,
-} from '../src/store/rejection.js';
+import { rejectionDigest, normalizeValueForRejection, insertRejectedValue, findRejectedValue } from '../src/store/rejection.js';
+import { RejectedValueError } from '../src/core/api-errors.js';
 import { cmdCapture } from '../src/capture/command.js';
 import { syncGlobalToLocal } from '../src/sharing/global-sync.js';
 import { autoShare } from '../src/sharing/share.js';

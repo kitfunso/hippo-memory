@@ -1,7 +1,7 @@
 import type { SavableDescriptor } from '../objects/descriptor.js';
 import { saveObject } from '../objects/lifecycle.js';
 import { requireGroup, storeFor } from '../store/index.js';
-import type { ObjectByKind, SavableKind } from '../store/object-types.js';
+import type { ObjectByKind, SavableKind } from '../core/object-types.js';
 import type { Objects } from '../store/port.js';
 import type { Context } from './types.js';
 

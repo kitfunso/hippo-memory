@@ -10,7 +10,7 @@ import { createDeliveryRecorder, type DeliveryEventType, type DeliveryRecorder }
 import { isSqliteBusy, noteStoreBusy, runWithRequestStores, HOOK_DB_WAIT_MS } from '../db/index.js';
 import { bookTokenUse, ledgerRoot } from '../api/ledger-db.js';
 import { sessionPilotArm } from '../api/pilot-arm.js';
-import { hookPayloadSessionId, hookPayloadString, isSubagentPayload } from '../store/token-ledger.js';
+import { hookPayloadSessionId, hookPayloadString, isSubagentPayload } from '../util/hook-payload.js';
 import { blockHash } from '../util/token-text.js';
 import { importAtSessionEnd, currentMachine } from '../agent-memories/sync.js';
 import { summaryLine } from '../agent-memories/report.js';

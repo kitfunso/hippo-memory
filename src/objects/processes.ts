@@ -7,9 +7,9 @@ import type { KeysetPosition } from '../util/keyset.js';
 import { type JsonValue, isJsonString } from '../util/json.js';
 import type { SavableDescriptor } from './descriptor.js';
 import { closeObjectAt, listObjectsAt, objectByIdAt, saveObjectAt } from './lifecycle.js';
-import type { Process, ProcessStatus } from '../store/object-types.js';
+import type { Process, ProcessStatus } from '../core/object-types.js';
 
-export type { Process, ProcessStatus } from '../store/object-types.js';
+export type { Process, ProcessStatus } from '../core/object-types.js';
 
 export const VALID_PROCESS_STATES: ReadonlySet<ProcessStatus> = new Set<ProcessStatus>([
   'active',

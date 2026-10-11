@@ -2,7 +2,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { rmSync } from 'node:fs';
 import type { AuditEvent } from '../src/store/audit.js';
-import type { ScopeActor } from '../src/store/recall-scope.js';
+import type { ScopeActor } from '../src/core/recall-scope.js';
 import type { GraphRows, GraphViewQuery } from '../src/store/port.js';
 import {
   BULK_TENANT, HELD_SCOPE, inMemoryGraphReadsStore, MANY, seededAt, seedGraphRows, SOLO_TENANT, type SeededGraph,

@@ -5,8 +5,8 @@ import { RawAppendOnlyError } from '../../core/raw-append-only.js';
 import { IncompatibleBinaryError, StoreBusyError } from '../../db/index.js';
 import { BodyTimeoutError, BodyTooLargeError, HttpError } from '../../util/http-util.js';
 import { errorMessage, log } from '../../util/log.js';
-import { ScopeForbiddenError } from '../recall-scope.js';
-import { RejectedValueError } from '../rejection.js';
+import { ScopeForbiddenError } from '../../core/recall-scope.js';
+import { RejectedValueError } from '../../core/api-errors.js';
 import { OtherStoreFolderError, SqliteBlockedError, StoreNotPortedError } from '../../util/sqlite-blocked.js';
 
 type FieldValue = string | number | boolean | null;

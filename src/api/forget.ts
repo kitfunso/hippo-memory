@@ -5,7 +5,7 @@ import { rejectValue, unrejectValue } from '../trust/reject-flow.js';
 import { andThen, notPorted, onStore } from './on-store.js';
 import type { Context, StoreReply } from './types.js';
 import { getMemory } from './memories.js';
-import { canTouchScope, personalScopeOf } from '../store/recall-scope.js';
+import { canTouchScope, personalScopeOf } from '../core/recall-scope.js';
 
 /** Delete a memory by id. Reach is checked inside the delete's write scope, and a
  * row out of reach answers as not found, so a caller learns nothing about it. */

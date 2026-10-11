@@ -4,7 +4,8 @@
 import { MemoryEntry, Layer } from '../core/memory.js';
 import { REFINED_TAG, storeRefinement } from '../api/index.js';
 import { cliApiContext } from './api-context.js';
-import { chunked, loadAllEntries, loadEntriesByIds } from '../store/entry-reads.js';
+import { loadAllEntries, loadEntriesByIds } from '../store/entry-reads.js';
+import { chunked } from '../util/chunked.js';
 import { redactSecretsStrict } from '../util/secret-detect.js';
 import { sendAnthropicMessage, type AnthropicMessageFailure } from '../util/anthropic-messages.js';
 import { log } from '../util/log.js';

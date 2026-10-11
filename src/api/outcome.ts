@@ -1,6 +1,6 @@
 // Outcome feedback on recalled memories.
 
-import { personalScopeOf } from '../store/recall-scope.js';
+import { personalScopeOf } from '../core/recall-scope.js';
 import { andThen, notPorted, onStore } from './on-store.js';
 import type { Context, StoreReply } from './types.js';
 

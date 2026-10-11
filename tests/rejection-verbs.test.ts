@@ -17,7 +17,7 @@ import { listMemoryConflicts, replaceDetectedConflicts, resolveConflict } from '
 import { queryAuditEvents } from '../src/store/audit.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import * as api from '../src/api/index.js';
-import { RejectedValueError } from '../src/store/rejection.js';
+import { RejectedValueError } from '../src/core/api-errors.js';
 import { listRejectionsForTenant } from '../src/trust/reject-flow.js';
 
 let tmpDir: string;

@@ -1,7 +1,8 @@
 import type { MemoryEntry } from '../core/memory.js';
 import { openHippoDb, isFtsAvailable, closeHippoDb, type DatabaseSyncLike } from '../db/index.js';
 import { tokenize } from '../util/tokenize.js';
-import { isPersonalScope, scopeAdmitSql, type SqlFragment } from './recall-scope.js';
+import { isPersonalScope } from '../core/recall-scope.js';
+import { scopeAdmitSql, type SqlFragment } from './rule-sql.js';
 import { ftsTermParts, RAREST_TERM_COUNT, rarestFtsQuery } from '../core/prompt-recall.js';
 import { errorMessage, log } from '../util/log.js';
 import { originInSql } from '../core/project-identity.js';

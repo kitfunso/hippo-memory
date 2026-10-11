@@ -9,11 +9,11 @@ import type { KeysetPosition } from '../util/keyset.js';
 import type { SavableDescriptor } from './descriptor.js';
 import { checkText, requireLine } from './fields.js';
 import { closeObjectAt, listObjectsAt, objectByIdAt, type ObjectSaveSite, saveObject, saveObjectAt } from './lifecycle.js';
-import type { BriefReceipt, BriefStatus, ProjectBrief } from '../store/object-types.js';
+import type { BriefReceipt, BriefStatus, ProjectBrief } from '../core/object-types.js';
 import type { ObjectListQuery, Objects } from '../store/port.js';
 import { sqliteObjects } from '../store/sqlite/objects-group.js';
 
-export type { BriefStatus, ProjectBrief } from '../store/object-types.js';
+export type { BriefStatus, ProjectBrief } from '../core/object-types.js';
 
 export const VALID_BRIEF_STATES: ReadonlySet<BriefStatus> = new Set<BriefStatus>([
   'active',

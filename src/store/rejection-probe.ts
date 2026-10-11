@@ -1,6 +1,7 @@
 // A rejected-value check for a dry run, on a handle the caller never sees.
 import { onHandle } from './open.js';
-import { RejectedValueError, checkRejectionGuard } from './rejection.js';
+import { checkRejectionGuard } from './rejection.js';
+import { RejectedValueError } from '../core/api-errors.js';
 
 export type RejectionProbe = (tenantId: string, entryId: string, content: string) => boolean;
 

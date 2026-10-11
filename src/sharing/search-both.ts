@@ -4,7 +4,7 @@ import { compareScoresDesc } from '../core/compare.js';
 import * as fs from 'fs';
 import { MemoryEntry } from '../core/memory.js';
 import { loadSearchEntries, loadRecallSearchEntries, recallScopeFilter } from '../store/search-rows.js';
-import { passesScopeFilterForRecall, passesCliRecallScopeFilter } from '../store/recall-scope.js';
+import { passesScopeFilterForRecall, passesCliRecallScopeFilter } from '../core/recall-scope.js';
 import { search } from '../search/bm25-search.js';
 import { hybridSearch } from '../search/hybrid.js';
 import { fitBudget } from '../search/finalize.js';

@@ -2,7 +2,7 @@ import { DEFAULT_TENANT_ID } from '../util/env.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import { Layer, type MemoryEntry } from '../core/memory.js';
-import { dumpFrontmatter } from './yaml.js';
+import { dumpFrontmatter } from '../util/yaml.js';
 import { openHippoDb, getMeta, CONSOLIDATION_RUNS_KEPT } from '../db/index.js';
 import { oncePerStore } from '../db/connect.js';
 import { errorFields, errorMessage, log } from '../util/log.js';
@@ -23,7 +23,7 @@ import {
   type MemoryConflictRow,
   rowToMemoryConflict,
 } from './rows.js';
-import { serializeEntry } from './markdown.js';
+import { serializeEntry } from '../core/markdown.js';
 
 const SCORE_DECIMALS = 3;
 

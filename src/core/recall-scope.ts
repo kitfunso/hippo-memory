@@ -1,7 +1,7 @@
 /** Recall-side scope predicates, in a leaf module so search-both.ts can apply the same default-deny rule to searchBothHybrid's candidate loads without an
  * import cycle. src/api/index.ts imports these and re-exports them for back-compat (`api.isPrivateScope`, tests importing `passesScopeFilterForRecall`). */
 
-import { BadRequestError, ForbiddenError } from '../core/api-errors.js';
+import { BadRequestError, ForbiddenError } from './api-errors.js';
 import { MAX_ID_LEN } from '../util/http-util.js';
 
 /** Literal scopes excluded from recall by default-deny when the caller passes no `scope`; read by the SQL clause in `loadSearchRows` and by
@@ -79,28 +79,6 @@ export function passesScopeFilterForRecall(
     return scope === requested;
   }
   return !isRestrictedScope(scope) || (ownScope != null && scope === ownScope);
-}
-
-export interface SqlFragment {
-  sql: string;
-  params: string[];
-}
-
-/** SQL twin of the no-request arm of passesScopeFilterForRecall; `ownScope` is bound and compared with `=`, so `%` or `_` in an owner match nothing extra. */
-export function scopeAdmitSql(col: '' | 'm.', ownScope?: string | null): SqlFragment {
-  const placeholders = RECALL_DEFAULT_DENY_SCOPES.map(() => '?').join(', ');
-  const admitted = `${col}scope IS NULL OR (${col}scope NOT IN (${placeholders}) AND ${col}scope NOT LIKE '%:private:%')`;
-  if (ownScope == null) return { sql: `(${admitted})`, params: [...RECALL_DEFAULT_DENY_SCOPES] };
-  // The own arm sits inside the outer parentheses so a caller's `AND ${sql}` cannot split it off.
-  return { sql: `(${admitted} OR ${col}scope = ?)`, params: [...RECALL_DEFAULT_DENY_SCOPES, ownScope] };
-}
-
-/** SQL twin of canTouchScope, which is also canReadScope for an admin: every row but
- * another person's personal one. LIKE folds ASCII case as isPersonalScope's /i does. */
-export function touchableScopeSql(col: '' | 'm.', ownScope?: string | null): SqlFragment {
-  const notPersonal = `${col}scope IS NULL OR ${col}scope NOT LIKE '${PERSONAL_SCOPE_PREFIX}%'`;
-  if (ownScope == null) return { sql: `(${notPersonal})`, params: [] };
-  return { sql: `(${notPersonal} OR ${col}scope = ?)`, params: [ownScope] };
 }
 
 /** CLI `--scope` variant: an explicit `--scope X` UNLOCKS scope X on top of the default-admitted set rather than narrowing to X (api.recall keeps 'exact').

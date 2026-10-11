@@ -15,7 +15,7 @@ import { deduplicateStore } from '../src/consolidate/dedupe.js';
 import { buildDag, buildEntityProfiles } from '../src/consolidate/dag.js';
 import { storeExtractedFacts, type ExtractedFact } from '../src/learn/extract.js';
 import { saveProjectBrief, assembleBriefFromReceipts } from '../src/objects/project-briefs.js';
-import { derivationScope, commonDerivationScope } from '../src/store/recall-scope.js';
+import { derivationScope, commonDerivationScope } from '../src/core/recall-scope.js';
 
 function tmpHome(prefix: string = 'hippo-derived-scope-'): string {
   return mkdtempSync(join(tmpdir(), prefix));

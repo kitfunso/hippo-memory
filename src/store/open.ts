@@ -9,11 +9,11 @@ import {
 import { openHippoDbWithFacts } from '../db/open.js';
 import { type ResolveProjectIdentityOpts, findHippoStoreDir } from '../core/project-identity.js';
 import { realpathOrResolve } from '../util/real-path.js';
-import { RejectedValueError } from './rejection.js';
+import { RejectedValueError } from '../core/api-errors.js';
 import { errorFields, errorMessage, log } from '../util/log.js';
 import { type HippoIndex, type LegacyStats } from './rows.js';
 import { audit } from './audit-event.js';
-import { deserializeEntry } from './markdown.js';
+import { deserializeEntry } from '../core/markdown.js';
 import { stampOriginProjectForImport, upsertEntryRow } from './entry-row.js';
 import { ensureMirrorDirectories, syncMirrorFiles, layerDir } from './mirrors.js';
 import { isJsonObject } from '../util/json.js';

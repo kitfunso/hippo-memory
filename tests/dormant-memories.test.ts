@@ -34,7 +34,8 @@ import { consolidate } from '../src/consolidate/sleep.js';
 import { insertDormantRow } from '../src/store/dormant.js';
 import { loadConfig } from '../src/core/config.js';
 import { createMemory, Layer, calculateStrength, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../src/core/memory.js';
-import { RejectedValueError, rejectionDigest, insertRejectedValue } from '../src/store/rejection.js';
+import { rejectionDigest, insertRejectedValue } from '../src/store/rejection.js';
+import { RejectedValueError } from '../src/core/api-errors.js';
 import * as api from '../src/api/index.js';
 import { WRITE_BUDGET } from '../src/util/write-budget.js';
 

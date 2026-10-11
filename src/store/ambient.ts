@@ -1,5 +1,5 @@
 import { strengthSql } from './rule-sql.js';
-import { scopeAdmitSql } from './recall-scope.js';
+import { scopeAdmitSql } from './rule-sql.js';
 import { SECRET_TAGS } from '../util/secret-detect.js';
 import { onHandle, openStore } from './open.js';
 import { jsonList } from './candidates.js';

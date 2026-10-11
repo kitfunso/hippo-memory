@@ -3,7 +3,7 @@ import type { MemoryEntry } from '../core/memory.js';
 import { loadStrengthTallies, type StrengthTallies } from '../store/candidates.js';
 import { countOpenConflicts } from '../store/conflicts.js';
 import { NotFoundError } from '../core/api-errors.js';
-import { canTouchScope } from '../store/recall-scope.js';
+import { canTouchScope } from '../core/recall-scope.js';
 import { storeFor } from '../store/index.js';
 import type { Context } from './types.js';
 

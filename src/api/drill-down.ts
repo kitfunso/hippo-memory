@@ -4,7 +4,7 @@ import { requireGroup, storeFor } from '../store/index.js';
 import type { DescendantOrigin, SummaryDescendants } from '../store/port.js';
 import { estimateTokens } from '../util/token-text.js';
 import type { MemoryEntry } from '../core/memory.js';
-import { passesScopeFilterForRecall, personalScopeOf } from '../store/recall-scope.js';
+import { passesScopeFilterForRecall, personalScopeOf } from '../core/recall-scope.js';
 import { classifyOriginProject } from '../core/project-identity.js';
 import type { CallerProject } from './prompt-hook.js';
 import type { Context } from './types.js';

@@ -1,6 +1,7 @@
 import { addTagToEntries, writeEntriesTogether } from '../store/entry-writes.js';
 import { confirmedOutcomeTimes } from '../store/audit.js';
-import { chunked, loadAllEntries, loadEntriesByIds, readEntry } from '../store/entry-reads.js';
+import { loadAllEntries, loadEntriesByIds, readEntry } from '../store/entry-reads.js';
+import { chunked } from '../util/chunked.js';
 import { CHURN_STALE_TAG, type MemoryEntry } from '../core/memory.js';
 import {
   GitReadError,

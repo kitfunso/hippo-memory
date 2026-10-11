@@ -35,7 +35,7 @@ type EmbedRequestBody = { model: string; input: string[]; input_type?: string };
 
 function parseEmbedRequestBody(raw: string): EmbedRequestBody {
   // SAFETY: this body is captured from the repo's own ApiEmbeddingProvider
-  // (src/store/embeddings/provider.ts API_SHAPES.voyage.buildBody), which always
+  // (src/embeddings/provider.ts API_SHAPES.voyage.buildBody), which always
   // POSTs exactly `{ model, input, input_type? }`.
   return JSON.parse(raw) as EmbedRequestBody;
 }
@@ -99,7 +99,7 @@ describe('embedding model configuration', () => {
   it('resolves the configured embedding model when no explicit override is provided', async () => {
     writeConfig(tmpDir, 'custom/model');
 
-    const { resolveEmbeddingModel } = await import('../src/store/embeddings/local.js');
+    const { resolveEmbeddingModel } = await import('../src/embeddings/local.js');
 
     expect(resolveEmbeddingModel(tmpDir)).toBe('custom/model');
   });
@@ -109,7 +109,7 @@ describe('embedding model configuration', () => {
     try {
       writeVoyageConfig(tmpDir, 'custom/model', stub.url);
 
-      const { resolveEmbeddingProvider } = await import('../src/store/embeddings/provider.js');
+      const { resolveEmbeddingProvider } = await import('../src/embeddings/provider.js');
       const { saveStoredEmbeddingModel } = await import('../src/store/embeddings/index.js');
       const { saveEmbeddingIndex } = await import('../src/store/vector-index.js');
       const { hybridSearch } = await import('../src/search/hybrid.js');
@@ -183,7 +183,7 @@ describe('embedding model configuration', () => {
     try {
       writeVoyageConfig(tmpDir, 'custom/model', stub.url);
 
-      const { resolveEmbeddingProvider } = await import('../src/store/embeddings/provider.js');
+      const { resolveEmbeddingProvider } = await import('../src/embeddings/provider.js');
       const { saveStoredEmbeddingModel } = await import('../src/store/embeddings/index.js');
       const { hybridSearch } = await import('../src/search/hybrid.js');
       const { createMemory } = await import('../src/core/memory.js');

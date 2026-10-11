@@ -2,7 +2,7 @@
 import { isContentWorthStoring } from '../core/memory-quality.js';
 import type { DatabaseSyncLike } from '../db/index.js';
 import type { MemoryEntry } from '../core/memory.js';
-import { RejectedValueError } from './rejection.js';
+import { RejectedValueError } from '../core/api-errors.js';
 import { detectSecret } from '../util/secret-detect.js';
 import { auditRejectionRefusal } from './audit-event.js';
 import { stampOriginProject } from './entry-row.js';

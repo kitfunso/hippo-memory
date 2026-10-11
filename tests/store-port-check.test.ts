@@ -28,6 +28,8 @@ type Counts = {
   sqliteOnlyRoutesList: string[];
   carrierFiles: number;
   carrierFilesList: string[];
+  storeFilesWithoutSql?: number;
+  storeFilesWithoutSqlList?: string[];
 };
 type Run = (...args: string[]) => { status: number | null; stdout: string; stderr: string };
 
@@ -390,6 +392,26 @@ describe('check-store-port.mjs', () => {
     withFixture({ 'src/api/recall-finish.ts': records, 'src/mcp/recall-tools.ts': records, 'src/server/routes/recall.ts': route }, {}, ({ run }) => {
       const r = run();
       expect(r.status, r.stderr).toBe(0);
+    });
+  });
+
+  it('fails and names a src/store file that runs no SQL, and passes hippo.db definition files, listed files and files that touch hippo.db', () => {
+    const files = {
+      'src/store/rows.ts': 'export interface Row { id: string }\n',
+      'src/store/sqlite/plumbing.ts': 'export const a = 1;\n',
+      'src/store/reads.ts': "export const f = (db: any) => db.prepare('SELECT 1').get();\n",
+      'src/store/opens.ts': "export const g = (r: string) => onHandle(r, () => 1);\n",
+      'src/store/old.ts': 'export const b = 2;\n',
+      'src/store/scope.ts': "// db.prepare('SELECT 1') in a comment is no SQL call\nexport const isPrivate = (s: string) => s.includes(':private:');\n",
+    };
+    withFixture(files, { storeFilesWithoutSql: 1, storeFilesWithoutSqlList: ['src/store/old.ts'] }, ({ run }) => {
+      expect(list(run)).toMatchObject({ storeFilesWithoutSql: '2', 'src/store/scope.ts': 'no SQL', 'src/store/old.ts': 'no SQL' });
+      const r = run();
+      expect(r.status).toBe(1);
+      expect(r.stderr).toContain('storeFilesWithoutSql: 1 -> 2');
+      expect(r.stderr).toContain('src/store/scope.ts: unlisted -> under src/store, runs no SQL');
+      for (const quiet of ['rows.ts', 'plumbing.ts', 'reads.ts', 'opens.ts', 'old.ts']) expect(r.stderr).not.toContain(quiet);
+      expect(run('--update').status).toBe(1);
     });
   });
 

@@ -4,6 +4,7 @@
 // functions, SQL prepared outside the data layer, hand-written BEGIN literals) are counted and may fall but never rise above .store-port-baseline.json.
 // routesOnLoop counts the routes whose SQLite work still runs on the server thread: V1_ROUTES rows without `loop: 'off'`, plus the routes outside that table.
 // carrierFiles counts src files other than src/api/on-store.ts that name andThen or onStore, the sync-or-async reply carrier; the list is pinned so a new file fails even when another stops.
+// storeFilesWithoutSql counts src/store files that run no SQL on hippo.db and are not on DB_DEFINITION_FILES; the list is pinned, so a pure helper filed under src/store fails.
 // A file under src/server/routes or src/cli that feeds a recall ring, counts recall stats or books a recall token row fails outright.
 // Usage: check-store-port.mjs [--list] [--update]. --update lowers the baseline and refuses to raise any number.
 
@@ -15,11 +16,21 @@ const BASELINE = '.store-port-baseline.json';
 const OPENERS = new Set(['openHippoDb', 'openHippoDbReadOnly', 'openStore', 'onHandle']);
 const TWIN_SUFFIX = /(ThroughStore|OnHippoDb|UnderStore|OnStore)$/;
 const NUMBERS = ['openersOutside', 'openersInCli', 'storeBranches', 'routesWithoutStore', 'sqliteOnlyRoutes', 'routesOnLoop', 'twinFunctions',
-  'sqlOutside', 'txLiterals', 'tenantResolvesInCli', 'storeImportsInCli', 'handleHoldersOutside'];
+  'sqlOutside', 'txLiterals', 'tenantResolvesInCli', 'storeImportsInCli', 'handleHoldersOutside', 'storeFilesWithoutSql'];
 const BY_FILE_KEYS = ['openersOutsideByFile', 'sqlOutsideByFile', 'handleHoldersOutsideByFile'];
 const HANDLE_TYPES = new Set(['DatabaseSyncLike', 'DatabaseSync']);
 // Routes dispatched outside V1_ROUTES. Named here so the count cannot read 0 while they answer on the server thread; a name leaves when its route does.
 const OFF_TABLE_ROUTES = ['POST /mcp', 'GET /mcp/stream', 'POST /v1/connectors/slack/events', 'POST /v1/connectors/github/events', 'GET /health', 'GET /ready', 'POST add-on routes'];
+// src/store files that run no SQL yet belong there: hippo.db's shapes, SQL text and plumbing. A path ending in / covers its folder.
+const DB_DEFINITION_FILES = {
+  'src/store/rows.ts': 'row shapes and column lists of hippo.db',
+  'src/store/graph-rows.ts': 'graph row shapes of hippo.db',
+  'src/store/rule-sql.ts': 'SQL text that other store files run',
+  'src/store/port.ts': 'the store port every backend implements',
+  'src/store/index.ts': 'the published entry of the store port',
+  'src/store/sqlite/': 'the SQLite adapter and its executor plumbing',
+};
+const DB_TOUCH_NAMES = new Set([...OPENERS, ...HANDLE_TYPES, 'withWriteScope', 'withWriteScopeOr']);
 const TX_OWNER = 'src/db/busy.ts';
 const CARRIER_OWNER = 'src/api/on-store.ts';
 // What src/api/recall-finish.ts does for a surface that passes `recordAs`. No baseline: one hit fails. src/mcp is pending and not read.
@@ -239,6 +250,21 @@ function strayRecallRecords() {
     .flatMap((file) => recallRecordsIn(file, ts.createSourceFile(file, readFileSync(file, 'utf8'), ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)));
 }
 
+/** True when the file runs SQL itself (`<x>.prepare` or `<x>.exec`), holds a handle, or opens one; comments and strings never match. */
+function touchesHippoDb(sf) {
+  let found = false;
+  const visit = (node) => {
+    if (found) return;
+    if (ts.isIdentifier(node) && DB_TOUCH_NAMES.has(node.text)) found = true;
+    else if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression) && /^(prepare|exec)$/.test(node.expression.name.text)) found = true;
+    else ts.forEachChild(node, visit);
+  };
+  visit(sf);
+  return found;
+}
+
+const isDbDefinitionFile = (f) => Object.keys(DB_DEFINITION_FILES).some((k) => (k.endsWith('/') ? f.startsWith(k) : f === k));
+
 /** Method names of `interface SqliteLocal`: each is a write only hippo.db can run, so the list grows only by a hand edit of the baseline. */
 function localMethods(sf) {
   const local = sf.statements.find((s) => ts.isInterfaceDeclaration(s) && s.name.text === 'SqliteLocal');
@@ -254,6 +280,7 @@ function measure() {
   let sqliteLocalMethods = [];
   let sqliteOnlyRoutesList = [];
   const carrierFilesList = [];
+  const storeFilesWithoutSqlList = [];
   for (const file of existsSync('src') ? tsFiles('src') : []) {
     const text = readFileSync(file, 'utf8');
     const sf = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
@@ -277,6 +304,7 @@ function measure() {
     if (file.startsWith('src/api/')) out.storeBranches += countStoreBranches(sf);
     out.twinFunctions += countTwins(sf);
     if (file !== CARRIER_OWNER && usesCarrier(sf)) carrierFilesList.push(file);
+    if (file.startsWith('src/store/') && !isDbDefinitionFile(file) && !touchesHippoDb(sf)) storeFilesWithoutSqlList.push(file);
     if (file === 'src/server/route-table.ts') {
       const routes = readRoutes(sf);
       out.routesWithoutStore = routes.without;
@@ -286,7 +314,8 @@ function measure() {
     }
     if (file === 'src/store/sqlite/local.ts') sqliteLocalMethods = localMethods(sf);
   }
-  return { ...out, openersOutsideByFile: byFile, sqlOutsideByFile: sqlByFile, handleHoldersOutsideByFile: holdersByFile, sqliteLocalMethods, sqliteOnlyRoutesList, carrierFiles: carrierFilesList.length, carrierFilesList };
+  out.storeFilesWithoutSql = storeFilesWithoutSqlList.length;
+  return { ...out, storeFilesWithoutSqlList, openersOutsideByFile: byFile, sqlOutsideByFile: sqlByFile, handleHoldersOutsideByFile: holdersByFile, sqliteLocalMethods, sqliteOnlyRoutesList, carrierFiles: carrierFilesList.length, carrierFilesList };
 }
 
 /** Numbers, files and SqliteLocal methods that went above the baseline, as [label, was, now]. */
@@ -303,6 +332,9 @@ function rises(base, cur) {
   if (!firstWrite('carrierFiles') && cur.carrierFiles > (base?.carrierFiles ?? 0)) rose.push(['carrierFiles', base?.carrierFiles ?? 0, cur.carrierFiles]);
   if (!firstWrite('carrierFilesList')) {
     for (const f of cur.carrierFilesList) if (!(base?.carrierFilesList ?? []).includes(f)) rose.push([f, 'not a carrier file', 'uses andThen or onStore']);
+  }
+  if (!firstWrite('storeFilesWithoutSqlList')) {
+    for (const f of cur.storeFilesWithoutSqlList) if (!(base?.storeFilesWithoutSqlList ?? []).includes(f)) rose.push([f, 'unlisted', 'under src/store, runs no SQL']);
   }
   const listed = base?.sqliteLocalMethods ?? [];
   for (const m of cur.sqliteLocalMethods) if (!listed.includes(m)) rose.push([`SqliteLocal.${m}`, 'unlisted', 'declared']);
@@ -327,6 +359,7 @@ const total = NUMBERS.map((k) => `${k} ${current[k]}`).join(', ');
 if (args.includes('--list')) {
   for (const k of NUMBERS) console.log(`${current[k]}\t${k}`);
   console.log(`${current.carrierFiles}\tcarrierFiles`);
+  for (const f of current.storeFilesWithoutSqlList) console.log(`no SQL\t${f}`);
   for (const key of BY_FILE_KEYS) {
     for (const [f, n] of Object.entries(current[key]).sort(([, a], [, b]) => b - a)) console.log(`${n}\t${f}`);
   }

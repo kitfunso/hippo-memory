@@ -86,7 +86,7 @@ export { sleep, type SleepOpts, type SleepResult } from './api/sleep.js';
 export { strengthBucket } from './consolidate/dedupe.js';
 
 // Feature 1: Embedding search
-export { isEmbeddingAvailable, getEmbedding } from './store/embeddings/local.js';
+export { isEmbeddingAvailable, getEmbedding } from './embeddings/local.js';
 export {
   cosineSimilarity,
   embedMemory,

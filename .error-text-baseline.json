@@ -1,19 +1,16 @@
 {
-  "src/api/dormant.ts": 1,
   "src/api/recall-core.ts": 1,
   "src/api/sleep-run.ts": 1,
   "src/cli/shared.ts": 1,
   "src/cli.ts": 1,
-  "src/connectors/github/cli-impl.ts": 1,
   "src/consolidate/llm-passes.ts": 4,
   "src/consolidate/merge.ts": 1,
   "src/consolidate/sleep.ts": 1,
   "src/consolidate/traces.ts": 1,
   "src/db/backup.ts": 1,
-  "src/store/embeddings/local.ts": 2,
-  "src/store/raw-archive.ts": 1,
-  "src/trust/reject-flow.ts": 2,
+  "src/embeddings/local.ts": 2,
   "src/server/auth.ts": 2,
   "src/store/audit-event.ts": 1,
+  "src/store/raw-archive.ts": 1,
   "src/store/summary-dirty.ts": 1
 }

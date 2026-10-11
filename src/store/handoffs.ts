@@ -7,7 +7,7 @@ import {
   type HandoffEvidence,
   isHandoffOutcome,
 } from '../core/handoff.js';
-import { scopeAdmitSql } from './recall-scope.js';
+import { scopeAdmitSql } from './rule-sql.js';
 import { assertTenantId } from './tenant.js';
 import type { TaskSnapshot } from './rows.js';
 import { onHandle, openStore } from './open.js';

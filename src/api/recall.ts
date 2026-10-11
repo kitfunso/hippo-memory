@@ -25,7 +25,7 @@ import { decidePlanningFallacy, detectPlanningClaim } from '../predictions/plann
 import type { PlanningFallacyEvidence } from '../store/planning-fallacy-evidence.js';
 import { detectAnchoring, hashQueryText, biasHintEnabled, type AnchoringHint } from './recall-history.js';
 import { detectAvailabilityBias, type AvailabilityHint } from './availability.js';
-import { passesScopeFilterForRecall, assertScopeRequestAllowed, personalScopeOf } from '../store/recall-scope.js';
+import { passesScopeFilterForRecall, assertScopeRequestAllowed, personalScopeOf } from '../core/recall-scope.js';
 import type { RecallSuppressionSummary, RecallOpts, RecallResult, RecallResultItem, ContinuityBlock } from './recall-types.js';
 import { type Context, ownerOrSubject, RecallContractError } from './types.js';
 import { anchoringRows, availabilityRows, callerOf, recallAuditMetadata, recallAuditRow, strengthenOf } from './recall-record.js';

@@ -8,11 +8,11 @@ import { AGENT_MEMORY_SOURCE_PREFIX, AGENT_MEMORY_TAGS } from '../core/agent-mem
 import { writeEntry } from '../store/entry-writes.js';
 import { loadAllEntries, readEntry } from '../store/entry-reads.js';
 import { tallySources } from '../store/candidates.js';
-import { isPersonalScope } from '../store/recall-scope.js';
+import { isPersonalScope } from '../core/recall-scope.js';
 import { fallbackOrigin } from '../core/project-identity.js';
 import { detectSecret } from '../util/secret-detect.js';
 import { isQuarantineScope } from '../trust/quarantine.js';
-import { RejectedValueError } from '../store/rejection.js';
+import { RejectedValueError } from '../core/api-errors.js';
 import { embedMemory, embedAll } from '../store/embeddings/index.js';
 import { duplicateKey, storedTextKeys } from '../util/same-text.js';
 import { isReusable } from '../core/memory-quality.js';

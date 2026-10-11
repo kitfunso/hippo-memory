@@ -15,7 +15,7 @@ import { loadLatestHandoff } from '../store/handoffs.js';
 import { loadIndex } from '../store/index-and-stats.js';
 import { isInitialized } from '../store/open.js';
 import type { ContinuityBlock } from '../store/port.js';
-import { passesScopeFilterForRecall } from '../store/recall-scope.js';
+import { passesScopeFilterForRecall } from '../core/recall-scope.js';
 import { listSessionEvents, loadActiveTaskSnapshot } from '../store/sessions.js';
 import type { Context } from './types.js';
 

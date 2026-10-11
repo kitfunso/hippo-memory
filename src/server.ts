@@ -34,8 +34,9 @@ export {
 } from './store/index.js';
 // An add-on store's entry writes apply an outcome, guard tombstones and check reach exactly as hippo.db does.
 export { entryAfterOutcome } from './core/memory.js';
-export { rejectionDigest, RejectedValueError } from './store/rejection.js';
-export { ownScopeTouches } from './store/recall-scope.js';
+export { rejectionDigest } from './store/rejection.js';
+export { RejectedValueError } from './core/api-errors.js';
+export { ownScopeTouches } from './core/recall-scope.js';
 export { BadRequestError, ConflictError } from './core/api-errors.js';
 export type { HippoDbContext, StoreReply } from './api/types.js';
 export type { ApiKeyListItem, ApiKeyListRow, ApiKeyRecord, ListApiKeysOpts, NewApiKey } from './store/auth.js';
@@ -66,7 +67,7 @@ export { decodeVector, EMBEDDING_MODEL_META_KEY, encodeVector, rankVectorRows, t
 export { bufferToFloat32, float32ToBuffer } from './db/physics-state.js';
 export { replacesIndex } from './store/vector-index.js';
 // An add-on's ContextReads applies hippo.db's scope, secret, tally and rarest-term rules with the same code.
-export { passesScopeFilterForRecall, RECALL_DEFAULT_DENY_SCOPES } from './store/recall-scope.js';
+export { passesScopeFilterForRecall, RECALL_DEFAULT_DENY_SCOPES } from './core/recall-scope.js';
 export { SECRET_TAGS } from './util/secret-detect.js';
 export { tallyAmbientEntries } from './core/ambient.js';
 export { ftsTermParts, rarestFtsQuery } from './core/prompt-recall.js';

@@ -29,7 +29,7 @@ export interface HippoConfig {
     model: string;
     hybridWeight: number;
     /** Embedding backend: 'local' (default) = zero-dependency transformers.js; 'openai' | 'voyage' | 'cohere' = opt-in API embedder needing the provider's
-     *  API key in env (OPENAI_API_KEY / VOYAGE_API_KEY / COHERE_API_KEY). See src/store/embeddings/provider.ts. */
+     *  API key in env (OPENAI_API_KEY / VOYAGE_API_KEY / COHERE_API_KEY). See src/embeddings/provider.ts. */
     provider?: 'local' | 'openai' | 'voyage' | 'cohere';
     /** Optional API base-URL override (self-host / proxy). HTTPS only (localhost
      *  may use http). Ignored by the local provider. */

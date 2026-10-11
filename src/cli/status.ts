@@ -11,7 +11,7 @@ import { loadCorrectionEntries, loadRawEntries } from '../store/report-reads.js'
 import { loadStats } from '../store/index-and-stats.js';
 import { loadStatusCounts, type StatusCounts } from '../store/candidates.js';
 import { embeddingModelRequiresReindex } from '../store/embeddings/index.js';
-import { resolveEmbeddingProvider } from '../store/embeddings/provider.js';
+import { resolveEmbeddingProvider } from '../embeddings/provider.js';
 import { loadStoredParticles, storedVectorSummary } from '../store/vector-index.js';
 import { computeSystemEnergy, vecNorm, type PhysicsParticle } from '../core/physics.js';
 import { loadConfig } from '../core/config.js';

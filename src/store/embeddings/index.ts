@@ -7,7 +7,8 @@ import * as path from 'path';
 import { randomUUID } from 'crypto';
 import { MemoryEntry } from '../../core/memory.js';
 import { cosineOf } from '../../core/cosine.js';
-import { chunked, loadAllEntryIds, loadEntriesByIds } from '../entry-reads.js';
+import { loadAllEntryIds, loadEntriesByIds } from '../entry-reads.js';
+import { chunked } from '../../util/chunked.js';
 import { rethrowIfSqliteBlocked } from '../../db/index.js';
 import { EMBEDDING_MODEL_META_KEY } from '../../db/vector-store.js';
 import { initializeParticle } from '../../db/physics-state.js';
@@ -16,7 +17,7 @@ import {
   storedIndexState,
 } from '../vector-index.js';
 import { loadConfig } from '../../core/config.js';
-import { resolveEmbeddingProvider, type EmbeddingProvider } from './provider.js';
+import { resolveEmbeddingProvider, type EmbeddingProvider } from '../../embeddings/provider.js';
 import { redactSecretsStrict } from '../../util/secret-detect.js';
 import { errorCode, errorMessage, log } from '../../util/log.js';
 import { StoreNotPortedError } from '../../util/sqlite-blocked.js';

@@ -3,7 +3,7 @@ import { estimateTokens } from '../util/token-text.js';
 import { evalNow, isRecallBoostAblated } from '../core/ablation.js';
 import { indexNeedsRebuild } from '../store/embeddings/index.js';
 import { indexedModel } from '../store/vector-index.js';
-import { resolveEmbeddingProvider } from '../store/embeddings/provider.js';
+import { resolveEmbeddingProvider } from '../embeddings/provider.js';
 import { physicsScore as computePhysicsScores, computeMass, type PhysicsParticle } from '../core/physics.js';
 import { DEFAULT_PHYSICS_CONFIG, type PhysicsConfig } from '../core/physics-config.js';
 import { rethrowIfSqliteBlocked } from '../db/index.js';

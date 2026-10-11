@@ -8,11 +8,11 @@ import type { KeysetPosition } from '../util/keyset.js';
 import type { SavableDescriptor } from './descriptor.js';
 import { checkText, requireLine } from './fields.js';
 import { closeObjectAt, listObjectsAt, objectByIdAt, saveObjectAt } from './lifecycle.js';
-import type { Skill, SkillStatus } from '../store/object-types.js';
+import type { Skill, SkillStatus } from '../core/object-types.js';
 import type { Objects } from '../store/port.js';
 import { sqliteObjects } from '../store/sqlite/objects-group.js';
 
-export type { Skill, SkillStatus } from '../store/object-types.js';
+export type { Skill, SkillStatus } from '../core/object-types.js';
 
 export const VALID_SKILL_STATES: ReadonlySet<SkillStatus> = new Set<SkillStatus>([
   'active',

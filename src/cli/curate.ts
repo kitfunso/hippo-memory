@@ -4,7 +4,7 @@ import { truncateWithEllipsis } from '../util/ellipsize.js';
 import * as path from 'path';
 import { listMemoryConflicts } from '../store/conflicts.js';
 import { rejectValue, unrejectValue, listRejectionsForTenant } from '../trust/reject-flow.js';
-import { RejectedValueError } from '../store/rejection.js';
+import { RejectedValueError } from '../core/api-errors.js';
 import { loadConfig } from '../core/config.js';
 import { RawAppendOnlyError } from '../core/raw-append-only.js';
 import { isGitRepo } from '../learn/autolearn.js';
