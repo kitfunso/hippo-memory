@@ -8,6 +8,7 @@ import { DashboardConnection, loadDashboardRows, type DashboardRow, type Dashboa
 import type { MemoryConflict } from '../store/rows.js';
 import type { Band, ChipCounts, Layer, Overview, ProjectKind, ProjectSummary, ScatterGrid, ScatterPoints } from './dashboard-types.js';
 import { DAY_MS } from '../util/time.js';
+import { round1 } from '../util/format.js';
 
 export { DAY_MS };
 export const LAYERS: readonly Layer[] = ['buffer', 'episodic', 'semantic', 'trace'];
@@ -207,10 +208,6 @@ function cutHead(content: string): CutHead {
   const last = content.charCodeAt(end - 1);
   if (last >= 0xd800 && last <= 0xdbff) end -= 1;
   return { head: content.slice(0, end), truncated: true };
-}
-
-function round1(value: number): number {
-  return Math.round(value * 10) / 10;
 }
 
 interface ProjectDraft {

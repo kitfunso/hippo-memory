@@ -1,6 +1,7 @@
 // SQL for the token_ledger table in the ledger database; callers keep the handle, the transaction and the arithmetic.
 import type { DatabaseSyncLike } from '../db/index.js';
 import type { TokenSurface } from './token-ledger.js';
+import { placeholders } from '../util/sql.js';
 
 export interface TokenRowInput {
   ts: string;
@@ -92,7 +93,7 @@ export function sessionTotals(
   // SAFETY: the SELECT names exactly these four aggregate columns.
   return db.prepare(
     `SELECT COUNT(DISTINCT session_id) AS sessions,
-            COUNT(DISTINCT CASE WHEN event <> 'reset' AND surface IN (${rereadSurfaces.map(() => '?').join(', ')}) THEN session_id END) AS hook_sessions,
+            COUNT(DISTINCT CASE WHEN event <> 'reset' AND surface IN (${placeholders(rereadSurfaces.length)}) THEN session_id END) AS hook_sessions,
             COUNT(DISTINCT CASE WHEN event = 'reread' THEN session_id END) AS reread_sessions,
             SUM(CASE WHEN event = 'inject' THEN tokens ELSE 0 END) AS tokens
      FROM token_ledger
@@ -132,7 +133,7 @@ export function injectedBlocks(
   // SAFETY: the SELECT names exactly these three columns.
   return db.prepare(
     `SELECT ts, surface, tokens FROM token_ledger
-     WHERE tenant_id = ? AND session_id = ? AND event = 'inject' AND surface IN (${surfaces.map(() => '?').join(', ')})`,
+     WHERE tenant_id = ? AND session_id = ? AND event = 'inject' AND surface IN (${placeholders(surfaces.length)})`,
   ).all(tenantId, sessionId, ...surfaces) as InjectedBlockRow[];
 }
 

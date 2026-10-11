@@ -63,7 +63,7 @@ function cmdCompactResume(hippoRoot: string, tenantId: string, stdinText: string
     }
 
     // A compaction follows a prompt or SessionStart that booked the arm, so this only reads it.
-    if (!suppressOutput && payloadSessionId !== null && inPilotHoldout(hippoRoot, tenantId, payloadSessionId, false)) {
+    if (!suppressOutput && payloadSessionId !== null && inPilotHoldout(hippoRoot, tenantId, payloadSessionId, { write: false })) {
       suppressOutput = true;
       rec?.disabled();
     }
@@ -84,8 +84,7 @@ function restoreCompactSnapshot(hippoRoot: string, tenantId: string, payloadSess
   if (text === null) return;
   // Printed in one write so the ledger books exactly the text the model is handed.
   console.log(text);
-  rec?.delivered({ state: 'sent', emittedText: `${text}
-` });
+  rec?.delivered({ state: 'sent', emittedText: `${text}\n` });
   bookLedgerTurn(hippoRoot, {
     uses: [{
       tenantId, sessionId: payloadSessionId, surface: 'compact_resume', event: 'inject', items: 1, tokens: estimateTokens(text),
@@ -122,16 +121,14 @@ export async function handleSessionEnd({ hippoRoot, tenantId, flags }: CommandCo
   const transcriptPath = (named !== null && fs.existsSync(named) ? named : null)
     ?? (runtime === 'copilot' && sessionId ? copilotTranscriptFor(sessionId) : null);
 
+  const worker: SessionEndWorkerInput = { logFile, transcriptPath, sessionId, turn };
   try {
-    spawnSessionEndWorker(sessionEndWorkerArgs(logFile, transcriptPath, sessionId, turn));
+    spawnSessionEndWorker(sessionEndWorkerArgs(worker));
   } catch (err) {
     log.debug(`session-end: the worker did not spawn, running inline: ${errorMessage(err)}`);
     // Inline is the last resort, handed what the child's argv would have carried.
-    if (logFile) flags['log-file'] = logFile;
-    if (transcriptPath) flags['transcript'] = transcriptPath;
-    if (sessionId) flags['session-id'] = sessionId;
     try {
-      await cmdSessionEndWorker(root, tenantId, flags);
+      await cmdSessionEndWorker(root, tenantId, inlineWorkerFlags(flags, worker));
     } finally {
       await runHookWithStores(() => flushDeliveryRecorder(rec));
     }
@@ -149,13 +146,32 @@ function sessionEndInput(stdinText: string | undefined, timedOut: boolean, runti
   return null;
 }
 
-function sessionEndWorkerArgs(logFile: string | null, transcriptPath: string | null, sessionId: string | null, turn: boolean): string[] {
+function sessionEndWorkerArgs(o: SessionEndWorkerInput): string[] {
+  const { logFile, transcriptPath, sessionId, turn } = o;
   const workerArgs: string[] = [process.argv[1], '__session-end-worker'];
   if (logFile) workerArgs.push('--log-file', logFile);
   if (transcriptPath) workerArgs.push('--transcript', transcriptPath);
   if (sessionId) workerArgs.push('--session-id', sessionId);
   if (turn) workerArgs.push('--turn');
   return workerArgs;
+}
+
+type SessionEndWorkerInput = { logFile: string | null; transcriptPath: string | null; sessionId: string | null; turn: boolean };
+
+/** The flags the detached worker would parse from its argv, so the inline run sees what the child would have; the hook's own flags fill the gaps. */
+function inlineWorkerFlags(flags: CliFlags, w: SessionEndWorkerInput): CliFlags {
+  const out: CliFlags = {};
+  const keep = (name: string, value: CliFlags[string] | null | undefined): void => {
+    if (value) out[name] = value;
+  };
+  keep('log-file', w.logFile ?? flags['log-file']);
+  keep('transcript', w.transcriptPath ?? flags['transcript']);
+  keep('session-id', w.sessionId ?? flags['session-id']);
+  if (flagIsTrue(flags, 'turn')) out['turn'] = true;
+  if (flagIsTrue(flags, 'dry-run')) out['dry-run'] = true;
+  if (flagIsTrue(flags, 'no-learn')) out['no-learn'] = true;
+  if (flagIsTrue(flags, 'no-share')) out['no-share'] = true;
+  return out;
 }
 
 function spawnSessionEndWorker(workerArgs: readonly string[]): void {

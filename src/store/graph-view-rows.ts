@@ -2,6 +2,7 @@
 import type { DatabaseSyncLike } from '../db/index.js';
 import { IN_LIST_CHUNK, loadEntities, loadEntitiesByIds, loadEntitiesByName, loadNeighborRelations, loadRelations, loadRelationsAmong } from './graph-reads.js';
 import type { GraphRows } from './port.js';
+import { placeholders } from '../util/sql.js';
 
 type CanRead = (scope: string | null) => boolean;
 
@@ -26,7 +27,7 @@ function readableOnly<T extends { memoryId: string | null }>(db: DatabaseSyncLik
   for (let i = 0; i < ids.length; i += IN_LIST_CHUNK) {
     const slice = ids.slice(i, i + IN_LIST_CHUNK);
     // SAFETY: rows' shape matches the id and scope columns named in the SELECT.
-    const rows = db.prepare(`SELECT id, scope FROM memories WHERE +tenant_id = ? AND id IN (${slice.map(() => '?').join(',')})`)
+    const rows = db.prepare(`SELECT id, scope FROM memories WHERE +tenant_id = ? AND id IN (${placeholders(slice.length)})`)
       .all(tenantId, ...slice) as Array<{ id: string; scope: string | null }>;
     for (const r of rows) if (canRead(r.scope)) readable.add(r.id);
   }

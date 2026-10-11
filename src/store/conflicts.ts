@@ -13,6 +13,7 @@ import { deleteEntryCore } from './delete-and-batch.js';
 import { BadRequestError } from '../core/api-errors.js';
 import { canTouchScope, isPersonalScope } from '../core/recall-scope.js';
 import { selectMemoryReach } from './tenant-lookup.js';
+import { placeholders } from '../util/sql.js';
 
 // The one place MemoryConflictRow's columns are listed; CONFLICT_COLS_MC is the same list under the `mc` alias.
 const CONFLICT_COLS = 'id, memory_a_id, memory_b_id, reason, score, status, detected_at, updated_at';
@@ -167,7 +168,7 @@ function readConflictRefresh(db: DatabaseSyncLike, detected: readonly DetectedCo
   }
   const given = [...new Set(detected.flatMap((c) => [c.memory_a_id, c.memory_b_id]))].filter((id) => !tenantById.has(id));
   for (const ids of chunked(given)) {
-    const marks = ids.map(() => '?').join(',');
+    const marks = placeholders(ids.length);
     // SAFETY: rows' shape matches the two columns named in the SELECT.
     const found = db.prepare(`SELECT id, tenant_id FROM memories WHERE id IN (${marks})`).all(...ids) as Array<{ id: string; tenant_id: string }>;
     for (const r of found) tenantById.set(r.id, r.tenant_id);

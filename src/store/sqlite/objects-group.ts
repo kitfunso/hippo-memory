@@ -20,6 +20,7 @@ import {
 } from '../port.js';
 import { auditingRefusal } from './entry-writes-group.js';
 import { type ColumnValue, insertSpec, rowSpec, type RowByKind } from './object-rows.js';
+import { placeholders } from '../../util/sql.js';
 
 /** The group with each answer as its value; spelled out because `Sync<Objects>` would widen each method's kind to every kind. */
 export interface SyncObjects {
@@ -114,7 +115,7 @@ function listRows<K extends ObjectKind>(db: DatabaseSyncLike, tenantId: string, 
 function closeRow<K extends ObjectKind>(db: DatabaseSyncLike, tenantId: string, kind: K, id: number, close: ObjectClose<K>): ObjectByKind[K] | ObjectRefusal {
   const spec = rowSpec(kind);
   return withWriteScopeOr(db, 'close_object', (rollback) => {
-    const marks = close.from.map(() => '?').join(', ');
+    const marks = placeholders(close.from.length);
     const updated = db.prepare(
       `UPDATE ${spec.table} SET status = 'closed', closed_at = ? WHERE id = ? AND tenant_id = ? AND status IN (${marks})`,
     ).run(close.at, id, tenantId, ...close.from);
@@ -171,7 +172,7 @@ function insertRow<K extends SavableKind>(db: DatabaseSyncLike, row: NewRow<K>):
   }
   const result = db.prepare(`
     INSERT INTO ${rowSpec(row.kind).table}(${cols.join(', ')}, status, superseded_by, superseded_at, closed_at, created_at)
-    VALUES (${cols.map(() => '?').join(', ')}, 'active', NULL, NULL, NULL, ?)
+    VALUES (${placeholders(cols.length)}, 'active', NULL, NULL, NULL, ?)
   `).run(...values, row.save.at);
   return Number(result.lastInsertRowid ?? 0);
 }
@@ -285,7 +286,7 @@ function openIncidentRow(db: DatabaseSyncLike, tenantId: string, memoryId: strin
   const { incidentText, context, linkedMemoryIds } = open.fields;
   const held = new Set<string>();
   for (const ids of chunked(linkedMemoryIds)) {
-    const marks = ids.map(() => '?').join(',');
+    const marks = placeholders(ids.length);
     // SAFETY: rows' shape matches the one column named in the SELECT.
     const found = db.prepare(`SELECT id FROM memories WHERE tenant_id = ? AND id IN (${marks})`).all(tenantId, ...ids) as Array<{ id: string }>;
     for (const r of found) held.add(r.id);

@@ -5,6 +5,7 @@ import { selectEntriesByIds, TENANT_IS } from './entry-reads.js';
 import { chunked } from '../util/chunked.js';
 import type { DescendantOrigin, DescendantPage, SummaryDescendants } from './port.js';
 import { MEMORY_SELECT_COLUMNS, rowToEntry, type MemoryRow } from './rows.js';
+import { placeholders } from '../util/sql.js';
 
 export interface PagedWalk {
   readonly tenantId: string;
@@ -30,7 +31,7 @@ interface ChildGroup extends DescendantOrigin {
   readonly n: number;
 }
 
-const marks = (ids: readonly string[]): string => ids.map(() => '?').join(',');
+const marks = (ids: readonly string[]): string => placeholders(ids.length);
 
 /** The walk `summaryWithDescendants` documents, with `levels` cut to the first `page.rows` rows and each level's full count in `sizes`. */
 export function pagedDescendants(db: DatabaseSyncLike, walk: PagedWalk, summaryAdmitted: boolean): SummaryDescendants {

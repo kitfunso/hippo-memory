@@ -18,6 +18,7 @@ import {
   ENTITY_COLS,
   RELATION_COLS
 } from './graph-rows.js';
+import { placeholders } from '../util/sql.js';
 
 const DEFAULT_GRAPH_PAGE_SIZE = DEFAULT_LIST_LIMIT;
 const DEFAULT_GRAPH_SCAN_LIMIT = 1000;
@@ -134,7 +135,7 @@ export function loadEntitiesByIds(
     const out: Entity[] = [];
     for (let i = 0; i < ids.length; i += IN_LIST_CHUNK) {
       const slice = ids.slice(i, i + IN_LIST_CHUNK);
-      const ph = slice.map(() => '?').join(',');
+      const ph = placeholders(slice.length);
       // SAFETY: rows' shape matches the columns named in ENTITY_COLS above.
       const rows = db.prepare(`
         SELECT ${ENTITY_COLS} FROM entities
@@ -171,7 +172,7 @@ export function loadNeighborRelations(
     const byId = new Map<number, Relation>();
     for (let i = 0; i < entityIds.length; i += IN_LIST_CHUNK) {
       const slice = entityIds.slice(i, i + IN_LIST_CHUNK);
-      const ph = slice.map(() => '?').join(',');
+      const ph = placeholders(slice.length);
       // SAFETY: rows' shape matches the columns named in RELATION_COLS above.
       const rows = db.prepare(`
         SELECT ${RELATION_COLS} FROM relations
@@ -205,7 +206,7 @@ export function loadRelationsAmong(
   const ownDb = txDb ? null : openHippoDb(hippoRoot);
   const db = txDb ?? ownDb!;
   try {
-    const ph = entityIds.map(() => '?').join(',');
+    const ph = placeholders(entityIds.length);
     // SAFETY: rows' shape matches the columns named in RELATION_COLS above.
     const rows = db.prepare(`
       SELECT ${RELATION_COLS} FROM relations
@@ -232,7 +233,7 @@ export function loadEntitiesByMemoryId(
     const out: Entity[] = [];
     for (let i = 0; i < memoryIds.length; i += IN_LIST_CHUNK) {
       const slice = memoryIds.slice(i, i + IN_LIST_CHUNK);
-      const ph = slice.map(() => '?').join(',');
+      const ph = placeholders(slice.length);
       // id ASC so chunk-local scan order never decides ties (id is an autoincrement PK).
       // SAFETY: rows' shape matches the columns named in ENTITY_COLS above.
       const rows = db.prepare(`

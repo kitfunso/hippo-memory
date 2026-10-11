@@ -1,6 +1,7 @@
 // The dead-letter statements both connectors share; each connector names its table and columns and maps rows to its own item type.
 
 import type { DatabaseSyncLike } from '../../db/index.js';
+import { placeholders } from '../../util/sql.js';
 
 export type DlqTable = 'slack_dlq' | 'github_dlq';
 
@@ -13,7 +14,7 @@ export function insertDlqRow(db: DatabaseSyncLike, table: DlqTable, columns: Rea
   const names = [...columns.map(([name]) => name), 'received_at'];
   const values = [...columns.map(([, value]) => value), new Date().toISOString()];
   const result = db
-    .prepare(`INSERT INTO ${table} (${names.join(', ')}) VALUES (${names.map(() => '?').join(', ')})`)
+    .prepare(`INSERT INTO ${table} (${names.join(', ')}) VALUES (${placeholders(names.length)})`)
     .run(...values);
   return Number(result.lastInsertRowid);
 }

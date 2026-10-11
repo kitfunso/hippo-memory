@@ -7,6 +7,7 @@ import { type VerbSpec, verb } from '../verb-row.js';
 
 export const MEMORY_VERBS = {
   init: verb(() => import('../init.js'), 'handleInit', {
+    repairsCodexWrapper: true,
     flags: { switches: ['global', 'no-hooks', 'no-learn', 'no-schedule'], values: ['scan'], numbers: ['days'] },
     usage: [`
   init                     Create .hippo/ structure in current directory
@@ -20,6 +21,7 @@ export const MEMORY_VERBS = {
                            coding agents' own memories (every init imports those)`],
   }),
   remember: verb(() => import('../remember.js'), 'handleRemember', {
+    repairsCodexWrapper: true,
     flags: {
       switches: ['error', 'extract', 'force', 'global', 'inferred', 'observed', 'pin', 'verified'],
       values: ['artifact-ref', 'kind', 'layer', 'owner', 'scope'],
@@ -45,6 +47,7 @@ export const MEMORY_VERBS = {
     --pin                  Pin the new memory (default: pinned if the old one was)`],
   }),
   recall: verb(() => import('../recall.js'), 'handleRecall', {
+    repairsCodexWrapper: true,
     scoped: true,
     flags: {
       switches: ['classic', 'continuity', 'equal-sources', 'evc-adaptive', 'filter-conflicts', 'graph-stream',
@@ -63,47 +66,40 @@ export const MEMORY_VERBS = {
     --as-of <iso-date>     Return the memories that were current on that date
     --multihop             Search a second time with the speaker: and topic: tags the
                            first pass found (also on when config multihop.enabled is true)
-    --hops <n>             E3.2 multi-hop graph recall: also surface memories
-                           reached by walking the entities/relations graph <n>
-                           hops (0..3, default off) out from the lexical seeds.
-                           Graph hits are tagged [graph: Nhop <rel>]. Today the
-                           graph holds supersedes edges (E3.1); cross-object edges
-                           light up the same traversal once extracted.
+    --hops <n>             Also surface memories reached by walking the entity and
+                           relation graph <n> hops (0..3, default off) out from the
+                           lexical matches. Graph hits are tagged [graph: Nhop <rel>].
+                           Today the graph holds supersedes edges; cross-object
+                           edges light up the same walk once extracted.
     --max-neighbors <n>    Per-hop fanout cap for --hops (1..200, default 25).
-    --graph-stream         L1: fuse a graph-retrieval stream into RRF, re-ranking
-                           in-pool results by graph proximity to the strong lexical
-                           seeds. Implies rrf scoring (default is blend). Local store
-                           only. Distinct from --hops (which injects out-of-pool
-                           neighbours); this re-ranks within the candidate pool.
+    --graph-stream         Fuse a graph-proximity ranking into the result list,
+                           re-ranking in-pool results by closeness to the strong
+                           lexical matches. Implies rrf scoring (default is blend).
+                           Local store only. Unlike --hops, it adds no memories
+                           from outside the candidate pool.
     --graph-hops <n>       Hops for --graph-stream (1..3, default ${DEFAULT_GRAPH_HOPS}).
     --graph-seeds <n>      Lexical anchors for --graph-stream (default ${DEFAULT_GRAPH_SEED_COUNT}). The stream
-                           re-ranks the rank>seeds tail; on a pool with <= n candidates
-                           every candidate is a seed and the stream is inert.
+                           re-ranks the results below the anchors; on a pool with <= n
+                           candidates every candidate is an anchor and the stream is inert.
     --no-mmr               Disable MMR diversity re-ranking
     --mmr-lambda <f>       MMR balance 0..1 (default: ${DEFAULT_MMR_LAMBDA}, 1.0 = pure relevance)
-    --evc-adaptive         ACC-style: when top-K shows high inter-item overlap
-                           (= conflict cluster), expand pool and re-rank by
-                           recency. Default off. RESEARCH.md §PFC.ACC.
-    --filter-conflicts     vlPFC interference filter: drop superseded entries
-                           and 0.3x-downweight entries flagged in an open
-                           conflict with a peer in the same result set.
-                           Uses recorded supersession + conflicts only — never
-                           lexical inference. Default off. RESEARCH.md §PFC.vlPFC.
-    --value-aware          vmPFC value attribution: boost memories with positive
-                           cumulative outcomes and demote those with negative
-                           outcomes during ranking. Multiplier
-                           clip(1 + 0.3*tanh(pos - neg), 0.7, 1.3). Reuses
-                           outcome_positive / outcome_negative; no schema
-                           change. Default off. RESEARCH.md §PFC.vmPFC.
-    --rerank-utility       OFC option-value re-ranker: combine relevance,
-                           strength, and integration cost into a single utility
-                           = score * (0.5 + 0.5 * strength) * (1 - cost_factor)
-                           where cost_factor = min(0.3, tokens / 10000). Re-sorts
-                           results by utility. Default off. RESEARCH.md §PFC.OFC.
+    --evc-adaptive         When the top results overlap heavily (a conflict
+                           cluster), widen the pool and re-rank by recency.
+                           Default off.
+    --filter-conflicts     Drop superseded entries and down-weight by 0.3x any
+                           entry in an open conflict with another result.
+                           Uses recorded supersession and conflicts only, never
+                           lexical inference. Default off.
+    --value-aware          Boost memories with positive cumulative outcomes and
+                           demote those with negative ones during ranking:
+                           multiplier clip(1 + 0.3*tanh(pos - neg), 0.7, 1.3).
+                           Reads outcome_positive and outcome_negative. Default off.
+    --rerank-utility       Re-sort results by utility = score * (0.5 + 0.5 * strength)
+                           * (1 - cost_factor), where cost_factor =
+                           min(0.3, tokens / 10000). Default off.
     --reranker <name>      Apply a reranker pass after retrieval
-                           (cross-encoder|jev|clef-flash|clef|llm). Looks up
-                           the named reranker from src/rerankers/index.ts and
-                           re-orders the top-K candidates. Default unset (no reranker).
+                           (cross-encoder|jev|clef-flash|clef|llm) to re-order the
+                           top-K candidates. Default unset (no reranker).
                            jev calls the hosted TypeSafe Jev API: it needs
                            TYPESAFE_API_KEY, sends the query and candidate
                            text to that API, costs about 0.0004 USD a recall,
@@ -112,30 +108,24 @@ export const MEMORY_VERBS = {
                            Cloudflare Workers AI (CLOUDFLARE_ACCOUNT_ID and
                            CLOUDFLARE_API_TOKEN) or to HIPPO_CLEF_ENDPOINT, and
                            keep the native order on any failure.
-                           See docs/evals/2026-09-19-jev-reranker.md and
-                           docs/plans/2026-05-10-f6-reranker-hardening.md.
     --reranker-top-k <n>   Cap candidates passed to the reranker (default 50;
                            40 for jev, clef-flash and clef).
-    --goal <tag>           dlPFC goal-conditioned recall: memories tagged with
-                           the goal tag get a 1.5x score boost and results are
-                           re-sorted. Default off. RESEARCH.md §PFC.dlPFC.
-    --session-id <id>      Session identifier for dlPFC goal-stack boost.
+    --goal <tag>           Goal-conditioned recall: memories tagged with the
+                           goal tag get a 1.5x score boost and results are
+                           re-sorted. Default off.
+    --session-id <id>      Session identifier for the goal-stack boost.
                            Defaults to $HIPPO_SESSION_ID. When set and the
                            (tenant, session) has active goals (see
                            'hippo goal push'), recall auto-boosts memories
                            whose tags match an active goal name. Boost stacks
                            on top of base BM25 score, capped at 3.0x.
     --salience-threshold <n>
-                           Pineal salience: down-weight memories whose
-                           retrieval_count is below n. score *= max(0.5,
-                           retrieval_count / n) for entries with count < n;
-                           entries at or above n are unchanged. Salience emerges
-                           from USE, not from lexical overlap. Default off.
-                           RESEARCH.md §"AI Pineal Gland". (v1's creation-time
-                           lexical gate destroyed LoCoMo 0.28 -> 0.02; this v2
-                           is retrieval-side, opt-in only — see MEMORY.md
-                           "Hippo salience gate destroys benchmark recall".)
-    --continuity           Include continuity block (active task snapshot,
+                           Down-weight memories retrieved fewer than n times:
+                           score *= max(0.5, retrieval_count / n) for entries
+                           with count < n; entries at or above n are unchanged.
+                           Salience comes from use, not from lexical overlap.
+                           Default off.
+    --continuity           Include a continuity block (active task snapshot,
                            latest matching session handoff, last 5 session
                            events) above the memory list. Useful at agent
                            boot when you want both relevant memories AND
@@ -200,6 +190,7 @@ export const MEMORY_VERBS = {
     --json                 Output full summary as JSON`],
   }),
   context: verb(() => import('../context.js'), 'handleContext', {
+    repairsCodexWrapper: true,
     flags: {
       switches: ['auto', 'cross-project', 'pinned-only'],
       values: ['budget', 'format', 'framing', 'include-recent', 'runtime', 'scope'],
@@ -217,6 +208,7 @@ export const MEMORY_VERBS = {
     --framing <mode>       Framing: observe (default), suggest, assert`],
   }),
   sleep: verb(() => import('../sleep.js'), 'handleSleep', {
+    repairsCodexWrapper: true,
     destructive: true,
     scoped: true,
     flags: { switches: ['dry-run', 'no-learn', 'no-share'], values: ['log-file'] },

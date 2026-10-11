@@ -83,11 +83,25 @@ async function retrieveBand(ctx: Context, store: HippoStore, opts: RecallOpts, w
     candidates = [...ranked.map((r) => r.entry), ...candidates.filter((e) => !rankedIds.has(e.id))];
   }
   const plan = planRecall(ctx, opts, candidates, own);
-  const { result, writes } = composeRecall(ctx, opts, { windowSize, all: candidates, plan, reads: await readRecall(store, ctx, opts, plan) });
-  await store.finishRecall({
-    ...writes, audit: [...(opts.leadingAudit ?? []), ...writes.audit], strengthen: strengthenOf(ctx, result.results.map((r) => r.id))
-  });
+  const reads = await readRecall(store, ctx, opts, plan);
+  const { result, writes } = composeRecall(ctx, opts, { windowSize, all: candidates, plan, reads });
+  await finishBandRecall(store, ctx, opts, writes, result.results.map((r) => r.id));
   return result;
+}
+
+/** The one recall write: the caller's leading audit rows go first, and the ids shown are the ones strengthened. */
+async function finishBandRecall(
+  store: HippoStore,
+  ctx: Context,
+  opts: RecallOpts,
+  writes: RecallWrites,
+  shownIds: readonly string[],
+): Promise<void> {
+  await store.finishRecall({
+    ...writes,
+    audit: [...(opts.leadingAudit ?? []), ...writes.audit],
+    strengthen: strengthenOf(ctx, shownIds),
+  });
 }
 
 /** `mode` names the engine: physics with the store's config, hybrid otherwise. */
@@ -147,27 +161,26 @@ async function retrieveFromStore(
   const window = ranked.slice(0, windowSize).map((r) => r.entry);
   const bandOpts = { ...opts, suppressRecallTrace: true };
   const plan = planRecall(ctx, bandOpts, window, own);
-  const { result, writes } = composeRecall(ctx, bandOpts, {
-    windowSize, all: window, plan, reads: await readRecall(store, ctx, bandOpts, plan, goals), auditBand: false
-  });
+  const reads = await readRecall(store, ctx, bandOpts, plan, goals);
+  const { result, writes } = composeRecall(ctx, bandOpts, { windowSize, all: window, plan, reads, auditBand: false });
   // Rows the vector arm added count as candidates too.
   const inPool = new Set(pool.map((e) => e.id));
   const candidates = [...pool, ...ranked.map((r) => r.entry).filter((e) => !inPool.has(e.id))];
   const shown = show({ ranked, pool: candidates, droppedByScope: loaded.length - pool.length }, result);
   const scores = new Map(ranked.map((r) => [r.entry.id, r.score]));
   const shownRow = recallAuditRow(callerOf(ctx), 'recall', undefined, recallAuditMetadata(opts.query, shown.ids.length));
-  await store.finishRecall({
+  const trace = opts.suppressRecallTrace ? undefined : {
+    tenantId: ctx.tenantId,
+    sessionId: opts.sessionId ?? null,
+    pipeline: 'mcp' as const,
+    query: opts.query,
+    results: shown.ids.map((id) => ({ memoryId: id, score: scores.get(id) ?? 0 })),
+  };
+  await finishBandRecall(store, ctx, opts, {
     goalLog: [...rankedLog, ...writes.goalLog],
-    audit: [...(opts.leadingAudit ?? []), ...writes.audit, shownRow, ...shown.audit],
-    trace: opts.suppressRecallTrace ? undefined : {
-      tenantId: ctx.tenantId,
-      sessionId: opts.sessionId ?? null,
-      pipeline: 'mcp',
-      query: opts.query,
-      results: shown.ids.map((id) => ({ memoryId: id, score: scores.get(id) ?? 0 })),
-    },
-    strengthen: strengthenOf(ctx, shown.ids),
-  });
+    audit: [...writes.audit, shownRow, ...shown.audit],
+    trace,
+  }, shown.ids);
   return result;
 }
 

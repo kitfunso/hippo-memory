@@ -205,6 +205,7 @@ export const SESSION_VERBS = {
     --format <fmt>         Output format: json (default) or markdown`],
   }),
   capture: verb(() => import('../session-hooks.js'), 'handleCapture', {
+    repairsCodexWrapper: true,
     flags: { switches: ['dry-run', 'global', 'last-session', 'stdin'], values: ['file', 'log-file', 'transcript'] },
     usage: [`
   capture                  Extract memories from conversation text

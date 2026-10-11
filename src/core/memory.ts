@@ -508,8 +508,15 @@ export interface SchemaFitSource {
   readonly contents: Iterable<string>;
 }
 
+// Tokens of this length or shorter are filler for schema fit.
+const FILLER_TOKEN_MAX_LENGTH = 3;
+// Matching half the tags at average weight scores about 0.5, so the raw overlap ratio is doubled.
+const TAG_OVERLAP_SCALE = 2;
+// Floor on the matches that saturate the content score, so a tiny store cannot saturate it on one hit.
+const CONTENT_ENOUGH_MIN_MATCHES = 5;
+
 function significantTokens(text: string): Set<string> {
-  return new Set(text.toLowerCase().replace(/[^\w\s]/g, ' ').split(/\s+/).filter((t) => t.length > 3));
+  return new Set(text.toLowerCase().replace(/[^\w\s]/g, ' ').split(/\s+/).filter((t) => t.length > FILLER_TOKEN_MAX_LENGTH));
 }
 
 /** computeSchemaFit against `source`, for a caller that holds counts and texts but no rows. */
@@ -528,14 +535,13 @@ export function schemaFitFrom(content: string, tags: readonly string[], source: 
     if (freq > 0) weightedOverlap += Math.log(N / freq) + 1;
     totalWeight += maxIdf;
   }
-  // Scaled so that matching half the tags at average weight gives about 0.5.
-  const tagScore = totalWeight > 0 ? Math.min(1, (weightedOverlap / totalWeight) * 2) : 0;
+  const tagScore = totalWeight > 0 ? Math.min(1, (weightedOverlap / totalWeight) * TAG_OVERLAP_SCALE) : 0;
 
   const newTokens = significantTokens(content);
   if (newTokens.size === 0) return Math.min(1, Math.max(0, tagScore));
 
   // The content score is capped at 1, which this many matching memories reach.
-  const enough = Math.max(5, N * CONTENT_ENOUGH_FRACTION);
+  const enough = Math.max(CONTENT_ENOUGH_MIN_MATCHES, N * CONTENT_ENOUGH_FRACTION);
   let contentMatches = 0;
   for (const text of source.contents) {
     const entryTokens = significantTokens(text);

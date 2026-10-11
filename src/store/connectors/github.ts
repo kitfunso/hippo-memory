@@ -4,6 +4,7 @@ import { withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
 import { archiveRawMemory } from '../raw-archive.js';
 import { onHandle } from '../open.js';
 import type { ConnectorEventRecord } from '../port.js';
+import { eventMemoryAt, eventRecord, eventSeenAt, markEventSeenAt, type EventLogSpec } from './event-log.js';
 import { getDlqRow, insertDlqRow, listDlqRows, markDlqRetried, type DlqRawRow } from './dlq.js';
 
 /** One github_event_log row to write; `memoryId` is null for an event that produced no memory. */
@@ -14,30 +15,26 @@ export interface GitHubEventLogEntry {
   memoryId: string | null;
 }
 
+const GITHUB_LOG: EventLogSpec = { table: 'github_event_log', keyColumn: 'idempotency_key' };
+
 export function githubEventSeenAt(db: DatabaseSyncLike, idempotencyKey: string): boolean {
-  const row = db.prepare(`SELECT 1 FROM github_event_log WHERE idempotency_key = ?`).get(idempotencyKey);
-  return !!row;
+  return eventSeenAt(db, GITHUB_LOG, idempotencyKey);
 }
 
 export function githubEventMemoryAt(db: DatabaseSyncLike, idempotencyKey: string): string | null {
-  // SAFETY: the SELECT projects exactly the memory_id column of github_event_log.
-  const row = db.prepare(`SELECT memory_id FROM github_event_log WHERE idempotency_key = ?`).get(idempotencyKey) as
-    | { memory_id: string | null }
-    | undefined;
-  return row?.memory_id ?? null;
+  return eventMemoryAt(db, GITHUB_LOG, idempotencyKey);
 }
 
 /** False when the key was already logged, so a caller inside a write scope can roll its own row back. */
 export function markGitHubEventSeenAt(db: DatabaseSyncLike, entry: GitHubEventLogEntry): boolean {
-  const inserted = db.prepare(
-    `INSERT OR IGNORE INTO github_event_log (idempotency_key, delivery_id, event_name, ingested_at, memory_id) VALUES (?, ?, ?, ?, ?)`,
-  ).run(entry.idempotencyKey, entry.deliveryId, entry.eventName, new Date().toISOString(), entry.memoryId);
-  return Number(inserted.changes ?? 0) !== 0;
+  return markEventSeenAt(
+    db, GITHUB_LOG, entry.idempotencyKey,
+    [['delivery_id', entry.deliveryId], ['event_name', entry.eventName]], entry.memoryId,
+  );
 }
 
 export function githubEventRecord(hippoRoot: string, idempotencyKey: string): ConnectorEventRecord {
-  return onHandle(hippoRoot, (db): ConnectorEventRecord =>
-    githubEventSeenAt(db, idempotencyKey) ? { seen: true, memoryId: githubEventMemoryAt(db, idempotencyKey) } : { seen: false });
+  return eventRecord(hippoRoot, GITHUB_LOG, idempotencyKey);
 }
 
 export function markGitHubEventSeen(hippoRoot: string, entry: GitHubEventLogEntry): void {

@@ -8,6 +8,7 @@ import type { PhysicsParticle } from '../core/physics.js';
 import { computeMass, computeCharge, computeTemperature, initializeParticle } from '../core/physics.js';
 import { calculateStrength } from '../core/memory.js';
 import { DAY_MS } from '../util/time.js';
+import { placeholders } from '../util/sql.js';
 import { bufferToFloat32, float32ToBuffer } from '../util/vector-codec.js';
 
 // Schema migration
@@ -59,11 +60,11 @@ export function loadPhysicsState(
     // Chunked so a whole-store candidate list stays under SQLite's bound-parameter limit.
     for (let i = 0; i < memoryIds.length; i += PHYSICS_ID_CHUNK) {
       const chunk = memoryIds.slice(i, i + PHYSICS_ID_CHUNK);
-      const placeholders = chunk.map(() => '?').join(',');
+      const marks = placeholders(chunk.length);
       // SAFETY: the SELECT projects exactly the PhysicsRow columns, in order.
       rows = rows.concat(db.prepare(
         `SELECT memory_id, position_blob, velocity_blob, mass, charge, temperature, last_simulation
-         FROM memory_physics WHERE memory_id IN (${placeholders})`
+         FROM memory_physics WHERE memory_id IN (${marks})`
       ).all(...chunk) as PhysicsRow[]);
     }
   } else {

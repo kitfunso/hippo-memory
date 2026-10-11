@@ -4,6 +4,7 @@
 import type { DatabaseSyncLike } from '../../db/index.js';
 import { onHandle } from '../open.js';
 import type { ConnectorEventRecord } from '../port.js';
+import { eventMemoryAt, eventRecord, eventSeenAt, markEventSeenAt, type EventLogSpec } from './event-log.js';
 import { getDlqRow, insertDlqRow, listDlqRows, markDlqRetried, type DlqRawRow } from './dlq.js';
 
 // Backfill cursors
@@ -33,30 +34,23 @@ export function saveSlackCursor(hippoRoot: string, tenantId: string, channelId: 
 
 // Event log
 
+const SLACK_LOG: EventLogSpec = { table: 'slack_event_log', keyColumn: 'event_id' };
+
 export function slackEventSeenAt(db: DatabaseSyncLike, eventId: string): boolean {
-  const row = db.prepare(`SELECT 1 FROM slack_event_log WHERE event_id = ?`).get(eventId);
-  return !!row;
+  return eventSeenAt(db, SLACK_LOG, eventId);
 }
 
 /** Records the event unless a row already holds its id; false means another writer got there first. */
 export function markSlackEventSeenAt(db: DatabaseSyncLike, eventId: string, memoryId: string | null): boolean {
-  const inserted = db
-    .prepare(`INSERT OR IGNORE INTO slack_event_log (event_id, ingested_at, memory_id) VALUES (?, ?, ?)`)
-    .run(eventId, new Date().toISOString(), memoryId);
-  return Number(inserted.changes ?? 0) !== 0;
+  return markEventSeenAt(db, SLACK_LOG, eventId, [], memoryId);
 }
 
 export function slackEventMemoryAt(db: DatabaseSyncLike, eventId: string): string | null {
-  // SAFETY: the SELECT names only `memory_id`, a nullable column; .get() returns undefined when no row matches.
-  const row = db.prepare(`SELECT memory_id FROM slack_event_log WHERE event_id = ?`).get(eventId) as
-    | { memory_id: string | null }
-    | undefined;
-  return row?.memory_id ?? null;
+  return eventMemoryAt(db, SLACK_LOG, eventId);
 }
 
 export function slackEventRecord(hippoRoot: string, eventId: string): ConnectorEventRecord {
-  return onHandle(hippoRoot, (db): ConnectorEventRecord =>
-    slackEventSeenAt(db, eventId) ? { seen: true, memoryId: slackEventMemoryAt(db, eventId) } : { seen: false });
+  return eventRecord(hippoRoot, SLACK_LOG, eventId);
 }
 
 export function markSlackEventSeen(hippoRoot: string, eventId: string, memoryId: string | null): void {

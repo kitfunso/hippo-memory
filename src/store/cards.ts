@@ -6,6 +6,7 @@ import { assertTenantId } from './tenant.js';
 import { onHandle, openStore } from './open.js';
 import { chunked } from '../util/chunked.js';
 import { HANDOFF_COLUMNS } from './handoffs.js';
+import { placeholders } from '../util/sql.js';
 
 interface CardRow {
   id: string;
@@ -142,10 +143,10 @@ function transitionCards(db: DatabaseSyncLike, tenantId: string, cardIds: readon
   const now = new Date().toISOString();
   // Lease columns follow status: set on the move to running, cleared on every other move (rule 15).
   const lease = to === 'running' ? [leaseUntilFrom(now), now] : [null, null];
-  const fromPlaceholders = from.map(() => '?').join(', ');
+  const fromPlaceholders = placeholders(from.length);
   const sql = `
     UPDATE cards SET status = ?, updated_at = ?, lease_until = ?, heartbeat_at = ?${extra?.setSql ? `, ${extra.setSql}` : ''}
-    WHERE id IN (${cardIds.map(() => '?').join(', ')}) AND tenant_id = ? AND status IN (${fromPlaceholders})${extra?.whereSql ? ` AND ${extra.whereSql}` : ''}
+    WHERE id IN (${placeholders(cardIds.length)}) AND tenant_id = ? AND status IN (${fromPlaceholders})${extra?.whereSql ? ` AND ${extra.whereSql}` : ''}
   `;
   const params: unknown[] = [to, now, ...lease, ...(extra?.params ?? []), ...cardIds, tenantId, ...from];
   const result = db.prepare(sql).run(...params);
@@ -195,10 +196,10 @@ export function createCard(
 /** Whether every dependsOn card is done, true for none; throws on an id that is no card of the tenant. Call inside the write scope. */
 function everyParentDone(db: DatabaseSyncLike, tenantId: string, dependsOn: readonly string[]): boolean {
   if (dependsOn.length === 0) return true;
-  const placeholders = dependsOn.map(() => '?').join(', ');
+  const marks = placeholders(dependsOn.length);
   // SAFETY: rows' shape matches the two columns named in the SELECT below.
   const rows = db.prepare(
-    `SELECT id, status FROM cards WHERE tenant_id = ? AND id IN (${placeholders})`,
+    `SELECT id, status FROM cards WHERE tenant_id = ? AND id IN (${marks})`,
   ).all(tenantId, ...dependsOn) as Array<{ id: string; status: string }>;
   const found = new Map(rows.map((r) => [r.id, r.status]));
   // Pre-check before any write: a typo'd --depends-on can never commit a card row.

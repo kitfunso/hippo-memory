@@ -6,6 +6,7 @@ import {
   applyLossAversionRatio, type EmotionalValence, type KeepPair,
 } from '../core/memory.js';
 import { PERSONAL_SCOPE_PREFIX, RECALL_DEFAULT_DENY_SCOPES } from '../core/recall-scope.js';
+import { placeholders } from '../util/sql.js';
 
 const UNIX_EPOCH_JULIAN_DAY = 2440587.5;
 
@@ -52,8 +53,8 @@ export interface SqlFragment {
 
 /** SQL twin of the no-request arm of passesScopeFilterForRecall; `ownScope` is bound and compared with `=`, so `%` or `_` in an owner match nothing extra. */
 export function scopeAdmitSql(col: '' | 'm.', ownScope?: string | null): SqlFragment {
-  const placeholders = RECALL_DEFAULT_DENY_SCOPES.map(() => '?').join(', ');
-  const admitted = `${col}scope IS NULL OR (${col}scope NOT IN (${placeholders}) AND ${col}scope NOT LIKE '%:private:%')`;
+  const marks = placeholders(RECALL_DEFAULT_DENY_SCOPES.length);
+  const admitted = `${col}scope IS NULL OR (${col}scope NOT IN (${marks}) AND ${col}scope NOT LIKE '%:private:%')`;
   if (ownScope == null) return { sql: `(${admitted})`, params: [...RECALL_DEFAULT_DENY_SCOPES] };
   // The own arm sits inside the outer parentheses so a caller's `AND ${sql}` cannot split it off.
   return { sql: `(${admitted} OR ${col}scope = ?)`, params: [...RECALL_DEFAULT_DENY_SCOPES, ownScope] };

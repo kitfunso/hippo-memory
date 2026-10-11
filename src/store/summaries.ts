@@ -9,6 +9,7 @@ import { syncFtsRow } from './entry-row.js';
 import { onHandle, openStore } from './open.js';
 import { chunked } from '../util/chunked.js';
 import { DIGEST_DISPLAY_CHARS } from '../util/token-text.js';
+import { placeholders } from '../util/sql.js';
 
 // Sleep-cycle rebuild surface: lives here, not in src/consolidate/dag.ts, because it needs module-private MEMORY_SELECT_COLUMNS, MemoryRow, rowToEntry,
 // audit, syncFtsRow and assertTenantId. dag.ts keeps only the thin orchestrator rebuildDirtySummaries().
@@ -93,7 +94,7 @@ export function loadChildrenOfSummaries(
         const rows = db.prepare(`
           SELECT ${MEMORY_SELECT_COLUMNS}
             FROM memories
-           WHERE dag_parent_id IN (${slice.map(() => '?').join(',')})
+           WHERE dag_parent_id IN (${placeholders(slice.length)})
              AND tenant_id = ?
              AND kind != 'archived'
              AND superseded_by IS NULL

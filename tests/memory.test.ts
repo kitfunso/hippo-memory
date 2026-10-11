@@ -325,6 +325,8 @@ describe('strengthSql parity', () => {
       row('high-count', 14, { retrieval_count: 500 }),
       row('rewarded', 20, { outcome_positive: 6, outcome_negative: 1 }),
       row('wrong', 5, { outcome_negative: 4 }),
+      row('short-half-life', 6, { half_life_days: 2 }),
+      ...(['neutral', 'positive', 'negative', 'critical'] as const).map((v) => row(`valence-${v}`, 10, { emotional_valence: v })),
     ];
     const home = makeRoot('strength-parity');
     try {

@@ -6,6 +6,7 @@ import { type VerbSpec, verb } from '../verb-row.js';
 
 export const HEALTH_VERBS = {
   status: verb(() => import('../status.js'), 'handleStatus', {
+    repairsCodexWrapper: true,
     flags: {},
     usage: [`
   status                   Show memory health stats`],
@@ -100,6 +101,7 @@ export const HEALTH_VERBS = {
     --json                 Output as JSON`],
   }),
   outcome: verb(() => import('../curate.js'), 'handleOutcome', {
+    repairsCodexWrapper: true,
     scoped: true,
     flags: { switches: ['bad', 'good'], values: ['id'] },
     usage: [`

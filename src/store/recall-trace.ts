@@ -9,6 +9,7 @@ import { DELIVERY_LEDGER_VERSION, isBoundaryEvent, type DeliveryEventInput } fro
 import { errorFields, errorMessage, log } from '../util/log.js';
 import { DAY_MS } from '../util/time.js';
 import { blockHash } from '../util/token-text.js';
+import { placeholders } from '../util/sql.js';
 
 /** One ranked result to persist alongside its trace row. */
 export interface RecallTraceResultInput {
@@ -304,7 +305,7 @@ export function writeDeliveryEvent(db: DatabaseSyncLike, input: DeliveryEventInp
       ];
       const eventId = Number(db.prepare(`
         INSERT INTO delivery_events (${DELIVERY_EVENT_COLUMNS.join(', ')})
-        VALUES (${DELIVERY_EVENT_COLUMNS.map(() => '?').join(', ')})
+        VALUES (${placeholders(DELIVERY_EVENT_COLUMNS.length)})
       `).run(...values).lastInsertRowid);
       const insertCandidate = db.prepare(`
         INSERT INTO delivery_candidates (event_id, tenant_id, memory_id, source_store, pool, stage, outcome, reason, cand_rank, score, tokens)

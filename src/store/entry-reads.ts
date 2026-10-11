@@ -7,6 +7,7 @@ import { originInSql } from '../core/project-identity.js';
 import { scopeAdmitSql } from './rule-sql.js';
 import { chunked } from '../util/chunked.js';
 import { DEFAULT_TENANT_ID } from '../util/env.js';
+import { placeholders } from '../util/sql.js';
 
 const MAX_IDS_PER_READ = 500;
 
@@ -38,7 +39,7 @@ export function heldIdLookup(hippoRoot: string, tenantId: string, ids: readonly 
         for (const id of chunk) held.set(id, false);
         // SAFETY: rows' shape matches the single `id` column selected.
         const rows = db.prepare(
-          `SELECT id FROM memories WHERE id IN (${chunk.map(() => '?').join(',')}) AND ${TENANT_IS}`,
+          `SELECT id FROM memories WHERE id IN (${placeholders(chunk.length)}) AND ${TENANT_IS}`,
         ).all(...chunk, tenantId) as Array<{ id: string }>;
         for (const row of rows) held.set(row.id, true);
       }
@@ -61,10 +62,10 @@ export function selectEntriesByIds(
   const tenantClause = tenantId !== undefined ? ` AND ${TENANT_IS}` : '';
   const tenantArgs = tenantId !== undefined ? [tenantId] : [];
   for (const chunk of chunked([...new Set(ids)])) {
-    const placeholders = chunk.map(() => '?').join(',');
+    const marks = placeholders(chunk.length);
     // SAFETY: selects exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
     const rows = db.prepare(
-      `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id IN (${placeholders})${tenantClause}`,
+      `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id IN (${marks})${tenantClause}`,
     ).all(...chunk, ...tenantArgs) as MemoryRow[];
     for (const row of rows) byId.set(row.id, rowToEntry(row));
   }
@@ -81,10 +82,10 @@ export function selectChildrenByParent(
   const tenantClause = tenantId !== undefined ? ` AND ${TENANT_IS}` : '';
   const tenantArgs = tenantId !== undefined ? [tenantId] : [];
   for (const chunk of chunked([...new Set(parentIds)])) {
-    const placeholders = chunk.map(() => '?').join(',');
+    const marks = placeholders(chunk.length);
     // SAFETY: selects exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
     const rows = db.prepare(
-      `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE dag_parent_id IN (${placeholders})${tenantClause} ORDER BY created ASC, id ASC`,
+      `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE dag_parent_id IN (${marks})${tenantClause} ORDER BY created ASC, id ASC`,
     ).all(...chunk, ...tenantArgs) as MemoryRow[];
     for (const row of rows) {
       const entry = rowToEntry(row);
@@ -106,15 +107,15 @@ export function loadEntriesByIds(
   if (ids.length === 0) return [];
   const capped = ids.slice(0, MAX_IDS_PER_READ);
   return onHandle(hippoRoot, (db) => {
-    const placeholders = capped.map(() => '?').join(',');
+    const marks = placeholders(capped.length);
     // Without ORDER BY, rows follow SQLite's IN(...) scan order, undefined w.r.t. `ids`.
     // SAFETY: both branches select exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
     const rows = tenantId !== undefined
       ? db.prepare(
-          `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id IN (${placeholders}) AND ${TENANT_IS} ORDER BY created ASC, content ASC, id ASC`,
+          `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id IN (${marks}) AND ${TENANT_IS} ORDER BY created ASC, content ASC, id ASC`,
         ).all(...capped, tenantId) as MemoryRow[]
       : db.prepare(
-          `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id IN (${placeholders}) ORDER BY created ASC, content ASC, id ASC`,
+          `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id IN (${marks}) ORDER BY created ASC, content ASC, id ASC`,
         ).all(...capped) as MemoryRow[];
     return rows.map(rowToEntry);
   }, openStore);

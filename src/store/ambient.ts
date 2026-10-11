@@ -5,6 +5,7 @@ import { onHandle, openStore } from './open.js';
 import { jsonList } from './candidates.js';
 import { originInSql } from '../core/project-identity.js';
 import { AMBIENT_FRESH_WINDOW_MS, HIGH_SCHEMA_FIT_ABOVE, isErrorTagged, type AmbientTallies } from '../core/ambient.js';
+import { placeholders } from '../util/sql.js';
 
 /** The rows an ambient summary describes: a context read's envelope, origin partition and tag secret veto. */
 export interface AmbientStoreFilter {
@@ -42,7 +43,7 @@ function secretTaggedSql() {
   const tags = [...SECRET_TAGS];
   return {
     sql: `((${tags.map(() => 'tags_json LIKE ?').join(' OR ')})
-      AND EXISTS (SELECT 1 FROM json_each(${jsonList('tags_json')}) WHERE lower(value) IN (${tags.map(() => '?').join(', ')})))`,
+      AND EXISTS (SELECT 1 FROM json_each(${jsonList('tags_json')}) WHERE lower(value) IN (${placeholders(tags.length)})))`,
     params: [...tags.map((t) => `%"${t}"%`), ...tags],
   };
 }

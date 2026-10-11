@@ -15,6 +15,7 @@ import {
 import { selectEntriesByIds } from './entry-reads.js';
 import { chunked } from '../util/chunked.js';
 import { MEMORY_SELECT_COLUMNS, rowToEntry, type MemoryRow } from './rows.js';
+import { placeholders } from '../util/sql.js';
 
 const MAX_BACKFILL_PAGE = 500;
 
@@ -131,7 +132,7 @@ function ownedIds(db: DatabaseSyncLike, ids: readonly string[], tenantId: string
   const owned = new Set<string>();
   for (const chunk of chunked([...new Set(ids)])) {
     // SAFETY: the SELECT names one column, id.
-    const rows = db.prepare(`SELECT id FROM memories WHERE +tenant_id = ? AND id IN (${chunk.map(() => '?').join(', ')})`).all(
+    const rows = db.prepare(`SELECT id FROM memories WHERE +tenant_id = ? AND id IN (${placeholders(chunk.length)})`).all(
       tenantId,
       ...chunk
     ) as { id: string }[];
