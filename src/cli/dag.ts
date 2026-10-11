@@ -50,6 +50,17 @@ function printDagStats(byLevel: ReadonlyMap<number, number>, unlinked: number): 
   console.log(`  Unlinked facts: ${unlinked}`);
 }
 
+function groupByParent(entries: readonly MemoryEntry[]): Map<string, MemoryEntry[]> {
+  const byParent = new Map<string, MemoryEntry[]>();
+  for (const e of entries) {
+    if (!e.dag_parent_id) continue;
+    const list = byParent.get(e.dag_parent_id) ?? [];
+    list.push(e);
+    byParent.set(e.dag_parent_id, list);
+  }
+  return byParent;
+}
+
 function printDagTree(entries: readonly MemoryEntry[]): void {
   // Tree view: L3 entity profiles as roots with L2 children indented, then orphan L2 summaries at top level.
   const profiles = entries.filter((e) => e.dag_level === 3);
@@ -62,6 +73,8 @@ function printDagTree(entries: readonly MemoryEntry[]): void {
     list.push(l2);
     childL2ByProfile.set(l2.dag_parent_id, list);
   }
+
+  const childrenByParent = groupByParent(entries);
 
   if (profiles.length === 0 && orphanL2.length === 0) {
     console.log('No DAG summaries yet. Run `hippo sleep` with ANTHROPIC_API_KEY set.');
@@ -78,7 +91,7 @@ function printDagTree(entries: readonly MemoryEntry[]): void {
       const l2Tags = l2.tags.filter((t) => t !== 'dag-summary').join(', ');
       console.log(`   └─ 📌 ${l2.content.slice(0, TREE_CHILD_PREVIEW_CHARS)}`);
       if (l2Tags) console.log(`      [${l2Tags}]`);
-      const facts = entries.filter((e) => e.dag_parent_id === l2.id);
+      const facts = childrenByParent.get(l2.id) ?? [];
       for (const f of facts) {
         console.log(`      └─ ${f.content.slice(0, TREE_LEAF_PREVIEW_CHARS)}`);
       }
@@ -90,7 +103,7 @@ function printDagTree(entries: readonly MemoryEntry[]): void {
     const summaryTags = summary.tags.filter((t) => t !== 'dag-summary').join(', ');
     console.log(`\n📌 ${summary.content.slice(0, CONTENT_PREVIEW_CHARS)}`);
     if (summaryTags) console.log(`   [${summaryTags}]`);
-    const children = entries.filter((e) => e.dag_parent_id === summary.id);
+    const children = childrenByParent.get(summary.id) ?? [];
     for (const child of children) {
       console.log(`   └─ ${child.content.slice(0, TREE_CHILD_PREVIEW_CHARS)}`);
     }

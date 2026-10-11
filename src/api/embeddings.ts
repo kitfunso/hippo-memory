@@ -3,8 +3,8 @@
 
 import type { EmbeddingProvider } from '../embeddings/provider.js';
 import { embedAll } from '../search/embed-memories.js';
-import { loadAllEntries, loadAllEntryIds } from '../store/entry-reads.js';
-import { loadEmbeddingIndex, resetStoredParticles } from '../store/vector-index.js';
+import { loadAllEntryIds } from '../store/entry-reads.js';
+import { loadEmbeddingIndex, resetStoredParticles, storedVectorSummary } from '../store/vector-index.js';
 import { requireHostAdmin, type Context } from './types.js';
 
 /** Embed every memory that has no vector yet; resolves to how many it embedded. */
@@ -16,7 +16,7 @@ export async function embedMissingMemories(ctx: Context, provider?: EmbeddingPro
 /** How many vectors the store holds, live memory or not. */
 export function storedVectorCount(ctx: Context): number {
   requireHostAdmin(ctx, 'Reading the vector index');
-  return Object.keys(loadEmbeddingIndex(ctx.hippoRoot)).length;
+  return storedVectorSummary(ctx.hippoRoot).ids.size;
 }
 
 export interface EmbedCoverage {
@@ -29,8 +29,7 @@ export interface EmbedCoverage {
 /** Memory ids against vector ids, for the embed status and backfill lines. */
 export function embedCoverage(ctx: Context): EmbedCoverage {
   requireHostAdmin(ctx, 'Reading the vector index');
-  const memoryIds = loadAllEntries(ctx.hippoRoot).map((entry) => entry.id);
-  return { memoryIds, vectorIds: Object.keys(loadEmbeddingIndex(ctx.hippoRoot)) };
+  return { memoryIds: loadAllEntryIds(ctx.hippoRoot), vectorIds: [...storedVectorSummary(ctx.hippoRoot).ids] };
 }
 
 /** Re-seed every memory's physics particle from its vector; returns how many it reset. */

@@ -322,11 +322,11 @@ describe('strengthenRetrieved', () => {
 
 describe('learn', () => {
   /** A repo whose last `lessons` commits each replace the quuxlib client, so each lesson invalidates what mentions it. */
-  function repoWith(lessons: number): string {
+  function repoWith(lessons: number, subject = 'replace quuxlib client with fetch wrapper'): string {
     const repo = freshRoot('qc-learn-repo');
     const stamp = `t <t@example.com> ${Math.floor(Date.now() / 1000)} +0000`;
     const commits = Array.from({ length: lessons }, (_, i) => {
-      const message = `fix: replace quuxlib client with fetch wrapper ${i} in src/api${i}.ts`;
+      const message = `fix: ${subject} ${i} in src/api${i}.ts`;
       return `commit refs/heads/main\ncommitter ${stamp}\ndata ${Buffer.byteLength(message)}\n${message}\n`;
     });
     execFileSync('git', ['-c', 'init.defaultBranch=main', 'init'], { cwd: repo, stdio: 'ignore' });
@@ -340,7 +340,7 @@ describe('learn', () => {
     fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ embeddings: { enabled: false } }));
     seed(root, [...rows(n, 'learn'), memory('the quuxlib client retries twice'), memory('quuxlib client timeouts are 30s')]);
     const { result, statements } = recordStatements(() => learn(ctxFor(root), { repoPath: repo, days: 7, profile: CLI_LEARN }));
-    return { root, result, opens: countMatching(statements, STORE_OPEN), tenantReads: countMatching(statements, TENANT_READ) };
+    return { root, result, statements, opens: countMatching(statements, STORE_OPEN), tenantReads: countMatching(statements, TENANT_READ) };
   }
 
   it('opens the store and reads the tenant once per batch, however many lessons or rows', () => {
@@ -356,6 +356,16 @@ describe('learn', () => {
       return batch.opens;
     });
     expect(counts[1]).toBe(counts[0]);
+  });
+
+  it('commits lessons that invalidate nothing in one write transaction, however many there are', () => {
+    const writes = (lessons: number): number => {
+      const { result, statements } = learnInto(repoWith(lessons, 'handle the retry timeout'), 10);
+      expect(result.added).toBe(lessons);
+      return countMatching(statements, /^BEGIN IMMEDIATE$/);
+    };
+    const [one, ten] = [writes(1), writes(10)];
+    expect(ten).toBe(one);
   });
 
   it('a later lesson still invalidates a lesson written earlier in the batch', () => {

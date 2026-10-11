@@ -5,7 +5,7 @@ import { countOpenConflicts } from '../store/conflicts.js';
 import { NotFoundError } from '../core/api-errors.js';
 import { canTouchScope } from '../core/recall-scope.js';
 import { storeFor } from '../store/index.js';
-import { loadAllEntries, loadEntriesByIds } from '../store/entry-reads.js';
+import { loadAllEntries, loadAllEntryIds, loadEntriesByIds } from '../store/entry-reads.js';
 import { requireHostAdmin, type Context } from './types.js';
 
 /** The row `id` in the caller's tenant, or null when it is missing or another tenant's. */
@@ -47,6 +47,12 @@ function tenantFilter(ctx: Context, reach: TenantReach): string | undefined {
 /** Every memory row in reach, oldest first. */
 export function listMemories(ctx: Context, reach: TenantReach = {}): MemoryEntry[] {
   return loadAllEntries(ctx.hippoRoot, tenantFilter(ctx, reach));
+}
+
+/** How many memory rows the whole store holds, read as ids so no row is decoded. */
+export function countAllMemories(ctx: Context): number {
+  requireHostAdmin(ctx, 'Reading every tenant');
+  return loadAllEntryIds(ctx.hippoRoot).length;
 }
 
 /** The rows in reach among `ids`; a missing id or one out of reach is absent. */

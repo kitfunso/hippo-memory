@@ -48,17 +48,21 @@ export function writeEntriesTogether(hippoRoot: string, entries: readonly Memory
 
 /** Runs `fill` in one transaction; each `put` writes one entry and returns false when the store rejects its value,
  * leaving that row's refusal audit and the rest of the batch. Mirrors follow the commit. Returns how many were written. */
-export function writeEntriesSkippingRejected(hippoRoot: string, fill: (put: (entry: MemoryEntry) => boolean) => void): number {
+export function writeEntriesSkippingRejected(
+  hippoRoot: string,
+  fill: (put: (entry: MemoryEntry) => boolean) => void,
+  actor = 'cli',
+): number {
   const written: MemoryEntry[] = [];
   onHandle(hippoRoot, (db) => {
     withWriteScope(db, 'write_entries_skipping_rejected', () => {
       fill((entry) => {
         const stamped = stampOriginProject(hippoRoot, entry);
         try {
-          writeEntryDbOnly(db, stamped);
+          writeEntryDbOnly(db, stamped, { actor });
         } catch (error) {
           if (!(error instanceof RejectedValueError)) throw error;
-          auditRejectionRefusal(db, error, 'cli');
+          auditRejectionRefusal(db, error, actor);
           return false;
         }
         written.push(stamped);

@@ -4,7 +4,7 @@ import { envAnthropicApiKey } from '../util/env.js';
 import { deduplicateStore } from '../consolidate/dedupe.js';
 import { resolveEmbeddingProvider, type EmbeddingProvider } from '../embeddings/provider.js';
 import { embedCoverage, embedMissingMemories, resetPhysicsFromVectors, storedVectorCount } from '../api/embeddings.js';
-import { listMemories } from '../api/memories.js';
+import { countAllMemories } from '../api/memories.js';
 import { cliApiContext } from './api-context.js';
 import type * as api from '../api/index.js';
 import { loadConfig } from '../core/config.js';
@@ -68,8 +68,8 @@ export function handleDedup({ hippoRoot, tenantId, flags }: CommandContext): voi
     printError('hippo dedup: --threshold is ignored; a duplicate is the same text apart from spacing.');
   }
 
-  const entries = listMemories(cliApiContext(hippoRoot, tenantId), { everyTenant: true });
-  console.log(`Scanning ${entries.length} memories for duplicates (same text apart from spacing)${dryRun ? ' (dry run)' : ''}...\n`);
+  const total = countAllMemories(cliApiContext(hippoRoot, tenantId));
+  console.log(`Scanning ${total} memories for duplicates (same text apart from spacing)${dryRun ? ' (dry run)' : ''}...\n`);
 
   const result = deduplicateStore(hippoRoot, { dryRun });
 

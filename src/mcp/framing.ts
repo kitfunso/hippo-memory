@@ -15,7 +15,8 @@ export type FrameResult =
   | { kind: 'skip'; rest: Buffer }
   // Over the cap POST /mcp puts on a body, so one client cannot make the process buffer without bound.
   | { kind: 'oversize'; rest: Buffer; remainder: FrameRemainder }
-  | { kind: 'incomplete' };
+  // `needs` is the buffer length a Content-Length frame has to reach before it can complete; absent, a newline or the cap decides.
+  | { kind: 'incomplete'; needs?: number };
 
 export function parseFrame(buffer: Buffer): FrameResult {
   // Strip leading whitespace/newlines between messages.
@@ -43,7 +44,7 @@ export function parseFrame(buffer: Buffer): FrameResult {
       const end = bodyStart + contentLength;
       return { kind: 'oversize', rest: Buffer.from(trimmed.subarray(Math.min(end, trimmed.length))), remainder: Math.max(0, end - trimmed.length) };
     }
-    if (trimmed.length < bodyStart + contentLength) return { kind: 'incomplete' };
+    if (trimmed.length < bodyStart + contentLength) return { kind: 'incomplete', needs: start + bodyStart + contentLength };
     const body = trimmed.subarray(bodyStart, bodyStart + contentLength).toString('utf-8');
     return { kind: 'message', body, rest: Buffer.from(trimmed.subarray(bodyStart + contentLength)) };
   }

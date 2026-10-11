@@ -3,6 +3,7 @@
 import { exitAfterFlush, installCrashHandlers } from '../util/crash-handlers.js';
 import { errorFields, errorMessage, log } from '../util/log.js';
 import { requestDeadlineMs } from '../util/request-scope.js';
+import { MAX_BODY_BYTES } from '../util/http-util.js';
 import { parseFrame, type FrameRemainder } from './framing.js';
 import { mcpErrorResponse, type McpRequest, type McpResponse } from './protocol.js';
 import { handleMcpRequest } from './request.js';
@@ -18,7 +19,10 @@ function send(msg: McpResponse): void {
 
 // ── Stdio transport ──
 
-let buffer: Buffer = Buffer.alloc(0);
+let pending: Uint8Array[] = [];
+let pendingBytes = 0;
+// Set when the pending bytes hold a Content-Length header whose body has not fully arrived.
+let needs: number | undefined;
 // The part of a refused frame still on its way, dropped as it arrives so it is never buffered or read as a new frame.
 let refused: FrameRemainder = 0;
 
@@ -139,11 +143,20 @@ function dispatch(body: string): void {
 /** Wires stdin/stdout to the dispatcher; idempotent. Only the entrypoint (cli.ts `hippo mcp`, or this file run directly) should call it, so the HTTP daemon
  * (which imports `handleMcpRequest`) does not steal stdin or exit when its parent closes a pipe. */
 export function startStdioLoop(): void {
-  process.stdin.on('data', (chunk: Buffer) => {
-    buffer = Buffer.concat([buffer, withoutRefused(chunk)]);
+  process.stdin.on('data', (raw: Buffer) => {
+    const chunk = withoutRefused(raw);
+    pending.push(chunk);
+    pendingBytes += chunk.length;
+    // Joining on every chunk would copy the whole pending frame each time; wait until a frame can have ended.
+    if (needs === undefined ? !chunk.includes(0x0a) && pendingBytes <= MAX_BODY_BYTES : pendingBytes < needs) return;
+    let buffer: Buffer = Buffer.concat(pending, pendingBytes);
+    needs = undefined;
     while (true) {
       const result = parseFrame(buffer);
-      if (result.kind === 'incomplete') break;
+      if (result.kind === 'incomplete') {
+        needs = result.needs;
+        break;
+      }
       buffer = result.rest;
       if (result.kind === 'oversize') {
         refused = result.remainder;
@@ -154,6 +167,8 @@ export function startStdioLoop(): void {
       // One id per frame, so the error reply and every line logged for the call name the same request.
       if (result.kind === 'message') runWithRequestId(randomUUID(), () => dispatch(result.body));
     }
+    pending = buffer.length > 0 ? [buffer] : [];
+    pendingBytes = buffer.length;
   });
 
   process.stdin.on('end', () => { void exitWhenDrained(); });

@@ -8,15 +8,14 @@ import { embedMemory } from '../search/embed-memories.js';
 import {
   extractInvalidationTarget, invalidateMatching, invalidateMatchingAmong, type InvalidationOptions, type InvalidationResult, type InvalidationTarget,
 } from '../learn/invalidation.js';
-import { computeSchemaFit, createMemory, Layer } from '../core/memory.js';
+import { computeSchemaFit, createMemory, Layer, type MemoryEntry } from '../core/memory.js';
 import { extractPathTags } from '../search/path-context.js';
 import { canReadScope, personalScopeOf } from '../core/recall-scope.js';
 import { touchableScopeSql } from '../store/rule-sql.js';
-import { RejectedValueError } from '../core/api-errors.js';
 import { duplicateKey, longestWord, storedTextKeys } from '../util/same-text.js';
 import { loadTextsHoldingWords } from '../store/candidates.js';
 import { loadAllEntries } from '../store/entry-reads.js';
-import { writeEntry } from '../store/entry-writes.js';
+import { writeEntriesSkippingRejected } from '../store/entry-writes.js';
 import { updateStats } from '../store/index-and-stats.js';
 import type { Context } from './types.js';
 
@@ -67,6 +66,37 @@ export function learn(ctx: Context, opts: LearnOpts): LearnResult {
   return { status: 'scanned', lowInfo: dropped.length, ...writeLessons(ctx, kept, opts, config) };
 }
 
+interface QueuedLesson { entry: MemoryEntry; key: string }
+
+/** Writes `batch` in one transaction; a refused lesson is dropped from `live` and `keys` and must not abort the rest of the git-log scan. */
+function landLessons(
+  ctx: Context,
+  batch: readonly QueuedLesson[],
+  live: MemoryEntry[],
+  keys: Set<string>,
+  counts: LessonCounts,
+  full: boolean,
+): void {
+  if (batch.length === 0) return;
+  const landed: MemoryEntry[] = [];
+  writeEntriesSkippingRejected(ctx.hippoRoot, (put) => {
+    for (const { entry, key } of batch) {
+      if (put(entry)) {
+        landed.push(entry);
+        continue;
+      }
+      counts.rejected++;
+      keys.delete(key);
+      const at = live.indexOf(entry);
+      if (at !== -1) live.splice(at, 1);
+    }
+  }, ctx.actor.subject);
+  counts.added += landed.length;
+  if (!full) return;
+  if (landed.length > 0) updateStats(ctx.hippoRoot, { remembered: landed.length });
+  for (const entry of landed) void embedMemory(ctx.hippoRoot, entry);
+}
+
 function writeLessons(ctx: Context, lessons: readonly string[], opts: LearnOpts, config: HippoConfig): LessonCounts {
   const { hippoRoot, tenantId } = ctx;
   const { profile } = opts;
@@ -81,10 +111,15 @@ function writeLessons(ctx: Context, lessons: readonly string[], opts: LearnOpts,
     const keys = storedTextKeys(existing ?? loadTextsHoldingWords(hippoRoot, tenantId, lessons.map(longestWord), undefined, readable));
     const pathTags = profile.full ? extractPathTags(opts.repoPath) : [];
     const counts: LessonCounts = { added: 0, skipped: 0, rejected: 0, invalidations: [] };
+    // Lessons queue and land in one transaction; an invalidation reads the store, so it flushes the queue first.
+    const queue: QueuedLesson[] = [];
+    const flush = (): void => landLessons(ctx, queue.splice(0), live, keys, counts, profile.full);
     for (const lesson of lessons) {
-      if (keys.has(duplicateKey(lesson))) { counts.skipped++; continue; }
+      const key = duplicateKey(lesson);
+      if (keys.has(key)) { counts.skipped++; continue; }
       const target = profile.full ? extractInvalidationTarget(lesson) : null;
       if (target) {
+        flush();
         const { invalidated } = invalidateMatchingAmong(hippoRoot, live, target, tenantId);
         if (invalidated > 0) counts.invalidations.push({ from: target.from, count: invalidated });
       }
@@ -98,21 +133,11 @@ function writeLessons(ctx: Context, lessons: readonly string[], opts: LearnOpts,
         baseHalfLifeDays: config.defaultHalfLifeDays,
       });
       for (const tag of pathTags) if (!entry.tags.includes(tag)) entry.tags.push(tag);
-      // A refused lesson must not abort the rest of the git-log scan.
-      try {
-        writeEntry(hippoRoot, entry, { actor: ctx.actor.subject });
-      } catch (err) {
-        if (err instanceof RejectedValueError) { counts.rejected++; continue; }
-        throw err;
-      }
-      if (profile.full) {
-        updateStats(hippoRoot, { remembered: 1 });
-        live.push(entry);
-      }
-      keys.add(duplicateKey(lesson));
-      if (profile.full) void embedMemory(hippoRoot, entry);
-      counts.added++;
+      queue.push({ entry, key });
+      if (profile.full) live.push(entry);
+      keys.add(key);
     }
+    flush();
     return counts;
   });
 }

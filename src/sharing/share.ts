@@ -5,14 +5,13 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { MemoryEntry, generateId, COMPACTION_MEMORY_TAG } from '../core/memory.js';
 import { AGENT_MEMORY_SOURCE_PREFIX, AGENT_MEMORY_TAGS } from '../core/agent-memory-tools.js';
-import { writeEntry } from '../store/entry-writes.js';
+import { writeEntriesSkippingRejected, writeEntry } from '../store/entry-writes.js';
 import { loadAllEntries, readEntry } from '../store/entry-reads.js';
 import { tallySources } from '../store/candidates.js';
 import { isPersonalScope } from '../core/recall-scope.js';
 import { fallbackOrigin } from '../core/project-identity.js';
 import { detectSecret } from '../util/secret-detect.js';
 import { isQuarantineScope } from '../trust/quarantine.js';
-import { RejectedValueError } from '../core/api-errors.js';
 import { embedMemory, embedAll } from '../search/embed-memories.js';
 import { duplicateKey, storedTextKeys } from '../util/same-text.js';
 import { isReusable } from '../core/memory-quality.js';
@@ -89,25 +88,11 @@ export function shareMemory(
   const entry = readEntry(localRoot, id, options.tenantId);
   if (!entry) throw new NotFoundError(`Memory not found: ${id}`);
 
-  assertShareable(entry, id);
-
-  const score = transferScore(entry);
-  if (score < 0.3 && !options.force) return null;
+  const globalEntry = toGlobalEntry(localRoot, entry, options.force === true);
+  if (!globalEntry) return null;
 
   initGlobal();
   const globalRoot = getGlobalRoot();
-
-  // The label keeps the folder name for a user-global row; a NULL row gets `shared::`, which originFromSource reads as no project.
-  const fallbackName = path.basename(path.resolve(localRoot, '..'));
-  const originName = entry.origin_project ?? fallbackOrigin(localRoot);
-  const label = originName === '' ? fallbackName : (originName ?? '');
-  const globalEntry: MemoryEntry = {
-    ...entry,
-    id: generateId('g'),
-    source: `shared:${label}:${new Date().toISOString()}`,
-    origin_project: originName,
-  };
-
   writeEntry(globalRoot, globalEntry);
 
   // Embed here unless the caller opts out: autoShare sets skipEmbed to batch one embedAll(), since embedMemory rewrites the whole index per call.
@@ -116,6 +101,25 @@ export function shareMemory(
   }
 
   return globalEntry;
+}
+
+/** The global copy of a local row, or null when its transfer score is too low and `force` is off; throws when the row may not be shared. */
+function toGlobalEntry(localRoot: string, entry: MemoryEntry, force: boolean): MemoryEntry | null {
+  assertShareable(entry, entry.id);
+
+  const score = transferScore(entry);
+  if (score < 0.3 && !force) return null;
+
+  // The label keeps the folder name for a user-global row; a NULL row gets `shared::`, which originFromSource reads as no project.
+  const fallbackName = path.basename(path.resolve(localRoot, '..'));
+  const originName = entry.origin_project ?? fallbackOrigin(localRoot);
+  const label = originName === '' ? fallbackName : (originName ?? '');
+  return {
+    ...entry,
+    id: generateId('g'),
+    source: `shared:${label}:${new Date().toISOString()}`,
+    origin_project: originName,
+  };
 }
 
 function assertShareable(entry: MemoryEntry, id: string): void {
@@ -206,26 +210,23 @@ function isAutoShareCandidate(entry: MemoryEntry, globalContentSet: Set<string>,
   return true;
 }
 
-// Rejection containment: shareMemory -> writeEntry can throw RejectedValueError against the GLOBAL store tombstones and abort the autoShare sleep phase.
-// Catch per item like syncGlobalToLocal; writeEntry already audits reject_refusal before rethrowing, so count and continue.
-function shareCandidates(localRoot: string, candidates: readonly MemoryEntry[], stats: AutoShareStats | undefined): MemoryEntry[] {
+// A row the GLOBAL store's rejection tombstones refuse is audited and skipped, so it cannot abort the autoShare sleep phase.
+// The candidates are rows already held, written in one transaction; the caller embeds once via embedAll() afterwards.
+function shareCandidates(localRoot: string, globalRoot: string, candidates: readonly MemoryEntry[], stats: AutoShareStats | undefined): MemoryEntry[] {
   const shared: MemoryEntry[] = [];
   let rejectedSkipped = 0;
-  for (const entry of candidates) {
-    try {
-      // skipEmbed: batching invariant, this is a batch producer, so it embeds
-      // once via embedAll() below rather than once per row inside shareMemory.
-      const result = shareMemory(localRoot, entry.id, { force: true, skipEmbed: true });
-      if (result) shared.push(result);
-    } catch (err) {
-      if (err instanceof RejectedValueError) {
-        rejectedSkipped++;
-        if (stats) stats.rejectedSkipped = (stats.rejectedSkipped ?? 0) + 1;
+  writeEntriesSkippingRejected(globalRoot, (put) => {
+    for (const entry of candidates) {
+      const globalEntry = toGlobalEntry(localRoot, entry, true);
+      if (!globalEntry) continue;
+      if (put(globalEntry)) {
+        shared.push(globalEntry);
         continue;
       }
-      throw err;
+      rejectedSkipped++;
+      if (stats) stats.rejectedSkipped = (stats.rejectedSkipped ?? 0) + 1;
     }
-  }
+  });
 
   if (rejectedSkipped > 0) {
     log.warn(
@@ -262,7 +263,7 @@ export function autoShare(
 
   if (dryRun) return candidates;
 
-  const shared = shareCandidates(localRoot, candidates, options.stats);
+  const shared = shareCandidates(localRoot, globalRoot, candidates, options.stats);
 
   if (shared.length > 0) {
     void embedAll(globalRoot).catch((err) => logEmbedAllFailure('autoShare', err));
