@@ -9,7 +9,7 @@ import { captureError, runWatched } from '../learn/autolearn.js';
 import { currentMachine, importAtSessionEnd, importForStore } from '../agent-memories/sync.js';
 import { detailLines } from '../agent-memories/report.js';
 import { getGlobalRoot, initGlobal } from '../sharing/global-store.js';
-import { shareMemory, listPeers, autoShare, transferScore } from '../sharing/share.js';
+import { AUTO_SHARE_MIN_SCORE, shareMemory, listPeers, autoShare, transferScore } from '../sharing/share.js';
 import { syncGlobalToLocal } from '../sharing/global-sync.js';
 import {
   importChatGPT,
@@ -393,7 +393,7 @@ export async function handleShare({ hippoRoot, tenantId, args, flags }: CommandC
   if (shareId === '--auto' || flags['auto']) {
     // Auto-share mode
     requireInit(hippoRoot);
-    const minScore = numberFlag(flags, 'min-score') ?? 0.6;
+    const minScore = numberFlag(flags, 'min-score') ?? AUTO_SHARE_MIN_SCORE;
     const dryRun = boolFlag(flags, 'dry-run');
     const results = autoShare(hippoRoot, { minScore, dryRun, tenantId });
     if (results.length === 0) {

@@ -15,6 +15,7 @@ import { isStoreBusy } from '../store/sqlite/busy.js';
 import { type JsonValue } from '../util/json.js';
 import type { CallerProject } from '../api/prompt-hook.js';
 import type { HippoStore } from '../store/index.js';
+import type { AutoSleepRunner } from '../api/auto-sleep.js';
 
 // ── Find hippo root ──
 
@@ -78,6 +79,8 @@ export interface McpContext {
   project?: CallerProject; // from X-Hippo-Project on a shared store: stamps writes, filters reads, keys outcomes
   store?: HippoStore;
   autoSleep?: false;
+  /** Set by the HTTP transport so auto-sleep runs off the server's event loop; stdio consolidates in its own process. */
+  autoSleepRunner?: AutoSleepRunner;
   /** Per-client key for state isolation under HTTP-MCP: 'stdio-${pid}' for stdio, hash(bearer + remoteAddr) for HTTP (built in src/server/mcp-http.ts);
    * defaults to `${tenantId}:default`. */
   clientKey?: string;

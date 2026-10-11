@@ -5,7 +5,7 @@ import { memoriesBackingObjects } from '../store/delete-and-batch.js';
 import { reportAuditWriteFailure } from '../store/audit.js';
 import { auditMemories } from '../core/memory-audit.js';
 import { sqliteSyncStore } from '../store/sqlite/store.js';
-import { autoShare } from '../sharing/share.js';
+import { AUTO_SHARE_MIN_SCORE, autoShare } from '../sharing/share.js';
 import { consolidate } from '../consolidate/sleep.js';
 import { failedUnitOf } from '../store/delete-and-batch.js';
 import { loadConfig } from '../core/config.js';
@@ -215,7 +215,7 @@ function shareOnSleep(ctx: Context, phases: SleepPhases, result: SleepResult): v
   if (!sleepConfig.autoShareOnSleep) return;
   // Both skip counters are surfaced so the secret veto and the rejection tombstone are observable, not silent.
   const autoShareStats = { secretSkipped: 0, rejectedSkipped: 0 };
-  const shared = phases.autoShare(ctx.hippoRoot, { minScore: 0.6, stats: autoShareStats });
+  const shared = phases.autoShare(ctx.hippoRoot, { minScore: AUTO_SHARE_MIN_SCORE, stats: autoShareStats });
   if (shared.length > 0) {
     result.shared = shared.length;
   }

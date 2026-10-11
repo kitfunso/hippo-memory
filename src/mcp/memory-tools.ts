@@ -29,7 +29,8 @@ export async function runRememberTool({ args, ctx, hippoRoot, config, tenantId }
   const [entry] = await storeFor(apiCtx).entriesByIds([result.id], tenantId);
 
   // Auto-sleep runs on hippo.db, so another store skips it.
-  startAutoSleepIfDue(hippoRoot, tenantId, config.autoSleep, (ctx?.store === undefined || ctx.store.kind === 'sqlite') && ctx?.autoSleep !== false);
+  const allowed = (ctx?.store === undefined || ctx.store.kind === 'sqlite') && ctx?.autoSleep !== false;
+  startAutoSleepIfDue(hippoRoot, tenantId, config.autoSleep, allowed, ctx?.autoSleepRunner);
 
   const halfLife = entry?.half_life_days ?? config.defaultHalfLifeDays;
   const tagStr = entry?.tags.join(', ') || tags.join(', ') || 'none';

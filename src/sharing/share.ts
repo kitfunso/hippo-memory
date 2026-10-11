@@ -52,6 +52,9 @@ export const NO_MERGE_TAGS: ReadonlySet<string> = new Set([
   ...AGENT_MEMORY_TAGS,
 ]);
 
+/** The transfer score a memory needs before sleep or `hippo share --auto` copies it to the global store. */
+export const AUTO_SHARE_MIN_SCORE = 0.6;
+
 /** Estimate how well a memory would transfer to other projects.
  *  Returns 0..1 where >0.5 = good candidate for sharing. */
 export function transferScore(entry: MemoryEntry): number {
@@ -246,7 +249,7 @@ export function autoShare(
     stats?: AutoShareStats;
   } = {},
 ): MemoryEntry[] {
-  const { minScore = 0.6, dryRun = false } = options;
+  const { minScore = AUTO_SHARE_MIN_SCORE, dryRun = false } = options;
 
   const localEntries = loadAllEntries(localRoot, options.tenantId);
   initGlobal();

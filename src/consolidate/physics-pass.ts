@@ -1,10 +1,13 @@
 import { refreshParticleProperties } from '../db/physics-state.js';
 import { loadStoredParticles, saveStoredParticles } from '../store/vector-index.js';
-import { simulate, type ForceContext } from '../core/physics.js';
+import { simulate, type ForceContext, type PhysicsParticle } from '../core/physics.js';
+import type { MemoryEntry } from '../core/memory.js';
 import type { SleepRun } from './run.js';
 import { errorMessage } from '../util/log.js';
 
 const STATS_DECIMALS = 4;
+// Every substep is all-pairs, so one sleep moves at most this many particles; the rest keep their stored state until they are recalled.
+const SLEEP_PHYSICS_MAX_PARTICLES = 1000;
 
 // 2. Physics simulation pass
 export function physicsPass(run: SleepRun): void {
@@ -22,22 +25,43 @@ export function physicsPass(run: SleepRun): void {
 
 function simulateStoredParticles(run: SleepRun): void {
   const { result, survivors } = run;
-  const particles = loadStoredParticles(run.hippoRoot);
-  if (particles.length === 0) return;
+  const stored = loadStoredParticles(run.hippoRoot);
+  if (stored.length === 0) return;
 
   // Build entry lookup for property refresh
   const entryMap = new Map(survivors.map(e => [e.id, e]));
+  const particles = particlesToSimulate(stored, entryMap);
   refreshParticleProperties(particles, entryMap, run.now);
 
   const stats = simulate(particles, survivorForces(run));
   saveStoredParticles(run.hippoRoot, particles);
 
   result.physicsSimulated = stats.particleCount;
+  const capped = particles.length < stored.length ? ` (the ${particles.length} most recently recalled of ${stored.length})` : '';
   result.details.push(
-    `  ⚛️  physics: ${stats.particleCount} particles, ` +
+    `  ⚛️  physics: ${stats.particleCount} particles${capped}, ` +
     `avg vel ${stats.avgVelocityMagnitude.toFixed(STATS_DECIMALS)}, ` +
     `energy ${stats.energy.total.toFixed(STATS_DECIMALS)}`
   );
+}
+
+/** Every stored particle in load order up to the cap; past it, the most recently recalled survivors (memory id breaks ties),
+ * then particles with no survivor. */
+export function particlesToSimulate(
+  stored: PhysicsParticle[],
+  entries: ReadonlyMap<string, MemoryEntry>,
+  max: number = SLEEP_PHYSICS_MAX_PARTICLES,
+): PhysicsParticle[] {
+  if (stored.length <= max) return stored;
+  const recalled = (p: PhysicsParticle): string => entries.get(p.memoryId)?.last_retrieved ?? '';
+  const ranked = [...stored].sort((a, b) => {
+    const [ra, rb] = [recalled(a), recalled(b)];
+    if (ra !== rb) return ra < rb ? 1 : -1;
+    return a.memoryId < b.memoryId ? -1 : a.memoryId > b.memoryId ? 1 : 0;
+  });
+  const kept = new Set(ranked.slice(0, max));
+  // Load order, not rank order: the force sums run in this order, so a capped run matches an uncapped one over the same set.
+  return stored.filter((p) => kept.has(p));
 }
 
 function survivorForces(run: SleepRun): ForceContext {

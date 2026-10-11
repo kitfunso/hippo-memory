@@ -12,7 +12,7 @@ import { loadConfig } from '../core/config.js';
 import { type AppendAuditOpts, recordAuditEventsRowByRow, reportAuditWriteFailure } from '../store/audit.js';
 import { lazyTombstoneChecks } from '../store/tombstone-checks.js';
 import { migrateDefaultHalfLife, LEGACY_TYPED_HALF_LIFE } from './half-life-migration.js';
-import { errorMessage, log } from '../util/log.js';
+import { errorFields, errorMessage, log } from '../util/log.js';
 import { WRITE_BUDGET, type WriteBudget } from '../util/write-budget.js';
 import { type DecayOutcome, decayPass } from './decay.js';
 import { familyUnits, groupFlush } from './flush-units.js';
@@ -197,7 +197,7 @@ function auditRescues(run: SleepRun, { rescuedEntries, rankById }: DecayOutcome)
     }
   } catch (err) {
     // An audit store that will not open must never crash the mutation it records.
-    log.debug(`mv_rescue audit unavailable: ${errorMessage(err)}`);
+    log.warn(`mv_rescue audit unavailable: ${errorMessage(err)}`, { errorClass: errorFields(err).errorClass });
     result.details.push(
       `  ⚠️ memory-value: mv_rescue audit unavailable this cycle ` +
       `(${rescuedEntries.length} rescue${rescuedEntries.length === 1 ? '' : 's'} not audited)`,

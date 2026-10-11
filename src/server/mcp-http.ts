@@ -14,6 +14,7 @@ import { noteAccess } from './request.js';
 import type { ResolvedServeOpts } from './types.js';
 import { type JsonValue, isJsonString, isJsonObject } from '../util/json.js';
 import { blockHash } from '../util/token-text.js';
+import { consolidateInChild } from './sleep-offload.js';
 
 const DEFAULT_SSE_HEARTBEAT_MS = 60000;
 const DEFAULT_SSE_MAX_AGE_SEC = 3600;
@@ -76,6 +77,7 @@ function mcpContextFor(ctx: Context, clientKey: string, autoSleep: McpContext['a
     clientKey,
     store: ctx.store,
     autoSleep,
+    autoSleepRunner: consolidateInChild,
   };
   if (project !== undefined) mcpCtx.project = project;
   return mcpCtx;
