@@ -1,9 +1,6 @@
 // The deadline of a served request: past it the caller gets a 504, whatever the handler is still waiting on.
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { envRequestDeadlineMs } from '../util/env.js';
-import { RequestDeadline } from '../util/request-scope.js';
-
-const DEFAULT_REQUEST_DEADLINE_MS = 120_000;
+import { RequestDeadline, requestDeadlineMs } from '../util/request-scope.js';
 
 // Each has a deadline of its own kind: sleep stops its child process, and the stream is meant to stay open.
 const EXEMPT = new Set(['POST /v1/sleep', 'GET /mcp/stream']);
@@ -19,11 +16,6 @@ export function handlerDeadlineCount(): number {
 /** Whether `res` was answered at its deadline, so whatever its handler does later has no caller. */
 export function isAbandoned(res: ServerResponse): boolean {
   return abandoned.has(res);
-}
-
-/** How long a request may run: 120 s, or HIPPO_REQUEST_DEADLINE_MS, where 0 turns the deadline off. */
-export function requestDeadlineMs(): number {
-  return envRequestDeadlineMs() ?? DEFAULT_REQUEST_DEADLINE_MS;
 }
 
 /** The deadline of `req`, for every /v1 and /mcp route but the two exempt ones. */

@@ -3,7 +3,7 @@ import { tokenize } from '../util/tokenize.js';
 import { jaccardMinShared, overlapPartners } from './overlap-index.js';
 import { compareEntryIdentity } from '../core/compare.js';
 import { duplicateKey, mergedText } from '../util/same-text.js';
-import { successorAfterRetirement } from '../util/merged-row.js';
+import { successorAfterRetirement } from '../core/merged-row.js';
 import { rejectionDigest } from '../store/rejection.js';
 import { reportAuditWriteFailure } from '../store/audit.js';
 import { derivationScope, derivationPartitionKey } from '../core/recall-scope.js';

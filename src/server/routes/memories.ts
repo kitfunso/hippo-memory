@@ -1,7 +1,7 @@
 // Memory write routes: create, graph, archive, supersede, promote, forget, outcome, sleep.
 import { graphRows } from '../../api/graph.js';
 import { archiveRaw, forget, outcome, outcomeForLastRecall, promote, remember, supersede } from '../../api/index.js';
-import type { MemoryKind } from '../../core/memory.js';
+import { MEMORY_KINDS, type MemoryKind } from '../../core/memory.js';
 import { graphModelOf } from '../../graph/view.js';
 import { MAX_ENTITY_NAME_LEN } from '../../store/graph-rows.js';
 import { HttpError, sendJson } from '../../util/http-util.js';
@@ -11,12 +11,7 @@ import type { RouteRequest } from '../types.js';
 import { getCallerProject, getString, getStringArray, isSetMember, parseJsonBody, parseListLimit, validateIdSegment } from '../validation.js';
 import { type JsonValue, isJsonString, isJsonBoolean } from '../../util/json.js';
 
-const VALID_KINDS: ReadonlySet<MemoryKind> = new Set([
-  'raw',
-  'distilled',
-  'superseded',
-  'archived',
-]);
+const VALID_KINDS: ReadonlySet<MemoryKind> = new Set(MEMORY_KINDS);
 
 // POST /v1/memories
 export async function handleCreateMemory({ req, res, opts }: RouteRequest): Promise<void> {

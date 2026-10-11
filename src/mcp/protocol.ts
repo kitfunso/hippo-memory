@@ -2,7 +2,8 @@
 
 import * as fs from 'fs';
 import { randomUUID } from 'node:crypto';
-import { INTERNAL_ERROR_MESSAGE, mapApiError } from '../util/http-util.js';
+import { mapApiError } from '../api/error-reply.js';
+import { INTERNAL_ERROR_MESSAGE } from '../util/http-util.js';
 import { errorFields, errorMessage, log } from '../util/log.js';
 import { currentRequestId } from '../util/request-scope.js';
 import { getGlobalRoot } from '../sharing/global-store.js';

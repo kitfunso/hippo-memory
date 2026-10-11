@@ -1,6 +1,6 @@
 // The recall and context input rules in one copy, so MCP and HTTP reject the same inputs with the same messages.
 import { BadRequestError } from '../core/api-errors.js';
-import { MAX_ID_LEN } from '../util/http-util.js';
+import { MAX_ID_LEN } from '../util/limits.js';
 import { type JsonValue, isJsonString } from '../util/json.js';
 import type { ContextOpts } from './context-types.js';
 import type { RecallOpts } from './recall-types.js';

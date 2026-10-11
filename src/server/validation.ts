@@ -1,7 +1,8 @@
 // Request-body and path-segment validators shared by the /v1 route handlers.
 import type { IncomingMessage } from 'node:http';
 import type { Context, RememberOpts } from '../api/index.js';
-import { HttpError, MAX_ID_LEN, readBody } from '../util/http-util.js';
+import { HttpError, readBody } from '../util/http-util.js';
+import { MAX_ID_LEN } from '../util/limits.js';
 import { type JsonValue, isJsonString, isJsonObject } from '../util/json.js';
 
 // Runtime membership check for a `ReadonlySet<T>` of string-literal members: Set<T>.has gives no narrowing, so this is the one place the `as T` assertion lives

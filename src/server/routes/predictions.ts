@@ -3,7 +3,8 @@ import { closePrediction, listPredictions, predictionBaserate, predictionById, s
 import { loadConfig } from '../../core/config.js';
 import { predictionMirror, VALID_CLOSURE_STATES } from '../../store/predictions.js';
 import type { PredictionFilter } from '../../store/port.js';
-import { HttpError, MAX_ID_LEN, sendJson } from '../../util/http-util.js';
+import { HttpError, sendJson } from '../../util/http-util.js';
+import { MAX_ID_LEN } from '../../util/limits.js';
 import { buildContextWithAuth } from '../auth.js';
 import { byCreatedAt, pageOf, parseCursor } from '../cursor.js';
 import type { RouteRequest } from '../types.js';
