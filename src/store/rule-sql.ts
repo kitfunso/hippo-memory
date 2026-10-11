@@ -10,6 +10,14 @@ import { placeholders } from '../util/sql.js';
 
 const UNIX_EPOCH_JULIAN_DAY = 2440587.5;
 
+/** calculateRewardFactor as SQL over `memories` columns; strengthSql and the context-candidate rank both build on it, so the slope has one source. */
+export function rewardFactorSql(): string {
+  if (isOutcomeSlowAblated()) return '1.0';
+  const pos = 'COALESCE(outcome_positive, 0)';
+  const neg = 'COALESCE(outcome_negative, 0)';
+  return `(CASE WHEN ${pos} = 0 AND ${neg} = 0 THEN 1.0 ELSE 1.0 + ${REWARD_SLOPE} * (${pos} - ${neg}) / (${pos} + ${neg} + 1.0) END)`;
+}
+
 /** calculateStrength's clock-basis formula as SQL over `memories` columns, flags and multipliers baked in; keep in step.
  *  An unparseable date scores NULL here and 0 in JS, so sums agree. */
 export function strengthSql(now: Date): string {
@@ -17,10 +25,7 @@ export function strengthSql(now: Date): string {
   const pos = 'COALESCE(outcome_positive, 0)';
   const neg = 'COALESCE(outcome_negative, 0)';
   const wrong = isOutcomeSlowAblated() || isDecayAblated() ? '0' : `MAX(0, ${neg} - ${pos})`;
-  const reward = isOutcomeSlowAblated()
-    ? '1.0'
-    : `(CASE WHEN ${pos} = 0 AND ${neg} = 0 THEN 1.0 ELSE 1.0 + ${REWARD_SLOPE} * (${pos} - ${neg}) / (${pos} + ${neg} + 1.0) END)`;
-  const halfLife = `(COALESCE(half_life_days, ${FALLBACK_HALF_LIFE_DAYS}) * ${reward})`;
+  const halfLife = `(COALESCE(half_life_days, ${FALLBACK_HALF_LIFE_DAYS}) * ${rewardFactorSql()})`;
   const anchor = isRecallBoostAblated() ? 'created' : 'last_retrieved';
   const nowJulian = num(now.getTime() / DAY_MS + UNIX_EPOCH_JULIAN_DAY);
   const decay = isDecayAblated() ? '1.0' : `pow(${DECAY_BASE}, (${nowJulian} - julianday(${anchor})) / ${halfLife})`;

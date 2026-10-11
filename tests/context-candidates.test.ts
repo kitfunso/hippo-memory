@@ -8,6 +8,7 @@ import { loadContextCandidates, tallySources, loadTextsHoldingWords } from '../s
 import { calculateStrength, type MemoryEntry } from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { withSharedStoreHandles } from '../src/db/index.js';
+import { _resetAblationCacheForTests, strengthAblation } from '../src/core/ablation.js';
 
 const NOW = new Date('2026-06-01T00:00:00.000Z');
 const DAY = 86400000;
@@ -75,5 +76,45 @@ describe('loadContextCandidates over the cap', () => {
     expect(loadTextsHoldingWords(root, 'default', ['e-mid', 'nothing']).map((r) => r.content)).toEqual(['row e-mid body']);
     const scoped = loadTextsHoldingWords(root, 'default', ['e-mid', 'g-other', 'h-global', 'j-acme'], ['proj']);
     expect(scoped.map((r) => [r.content, r.origin_project]).sort()).toEqual([['row e-mid body', 'proj'], ['row h-global body', '']]);
+  });
+});
+
+describe('loadContextCandidates reward factor', () => {
+  let root: string;
+
+  beforeEach(() => {
+    root = join(mkdtempSync(join(tmpdir(), 'hippo-ctx-reward-')), '.hippo');
+    initStore(root);
+    _resetAblationCacheForTests();
+  });
+
+  afterEach(() => {
+    delete process.env.HIPPO_ABLATE_OUTCOME_SLOW;
+    _resetAblationCacheForTests();
+    rmSync(join(root, '..'), { recursive: true, force: true });
+  });
+
+  // One row survives a cap of 1; the pair is chosen so a slope other than REWARD_SLOPE flips the winner.
+  async function survivor(rows: MemoryEntry[]): Promise<{ id: string; strongest: string }> {
+    await withSharedStoreHandles(() => { for (const e of rows) writeEntry(root, e); });
+    const got = loadContextCandidates(root, 'default', { cap: 1, now: NOW });
+    const options = { ablation: strengthAblation() };
+    const strongest = [...rows].sort((a, b) => calculateStrength(b, NOW, options) - calculateStrength(a, NOW, options))[0].id;
+    return { id: got[0].id, strongest };
+  }
+
+  it('ranks asymmetric outcomes the way calculateStrength does', async () => {
+    // 20 days old: rewarded x8 at slope 0.5 is 13.75 days against plain y's 14.5; a slope of 0.7 would give 15.25 and flip them.
+    const { id, strongest } = await survivor([row('x-rewarded', 20, { outcome_positive: 3 }), row('y-plain', 20, { half_life_days: 14.5 })]);
+    expect(strongest).toBe('y-plain');
+    expect(id).toBe(strongest);
+  });
+
+  it('drops the reward factor from the rank when outcome-slow is ablated', async () => {
+    process.env.HIPPO_ABLATE_OUTCOME_SLOW = '1';
+    _resetAblationCacheForTests();
+    const { id, strongest } = await survivor([row('x-rewarded', 20, { outcome_positive: 3 }), row('z-plain', 20, { half_life_days: 12 })]);
+    expect(strongest).toBe('z-plain');
+    expect(id).toBe(strongest);
   });
 });

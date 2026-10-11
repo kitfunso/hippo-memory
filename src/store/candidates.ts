@@ -1,7 +1,7 @@
 import { type MemoryEntry, type ConfidenceLevel, FALLBACK_HALF_LIFE_DAYS, Layer, calculateStrength, facetsOf, schemaFitFrom } from '../core/memory.js';
 import { strengthSql } from './rule-sql.js';
 import { withReadSnapshot } from '../db/index.js';
-import { scopeAdmitSql, type SqlFragment } from './rule-sql.js';
+import { rewardFactorSql, scopeAdmitSql, type SqlFragment } from './rule-sql.js';
 import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry, parseJsonArray } from './rows.js';
 import { onHandle, openStore } from './open.js';
 import { originInSql } from '../core/project-identity.js';
@@ -146,10 +146,10 @@ export interface ContextCandidateFilter {
 }
 
 // calculateStrength's decay exponent with its reward factor, pins first: the strongest rows, without scoring each one in JS.
-const DECAY_RANK_SQL = `pinned DESC,
+// A function, not a constant, so the outcome-slow ablation is read per query as strengthSql reads it.
+const decayRankSql = (): string => `pinned DESC,
   CASE WHEN half_life_days > 0 THEN (julianday(?) - julianday(last_retrieved))
-    / (half_life_days * (1.0 + 0.5 * (COALESCE(outcome_positive, 0) - COALESCE(outcome_negative, 0))
-      / (COALESCE(outcome_positive, 0) + COALESCE(outcome_negative, 0) + 1.0))) END ASC NULLS LAST,
+    / (half_life_days * ${rewardFactorSql()}) END ASC NULLS LAST,
   id ASC`;
 
 /** Live tenant rows passing `filter`, at most `filter.cap`, in loadAllEntries' order; below the cap, every such row. */
@@ -178,7 +178,7 @@ export function loadContextCandidates(hippoRoot: string, tenantId: string, filte
     const ranked = matched > cap;
     const sql = ranked
       ? `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id IN (
-        SELECT id FROM memories WHERE ${whereSql} ORDER BY ${DECAY_RANK_SQL} LIMIT ?
+        SELECT id FROM memories WHERE ${whereSql} ORDER BY ${decayRankSql()} LIMIT ?
       ) ORDER BY created ASC, id ASC`
       : `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE ${whereSql} ORDER BY created ASC, id ASC`;
     // SAFETY: both SELECTs name exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set; the rank sort carries ids only.
