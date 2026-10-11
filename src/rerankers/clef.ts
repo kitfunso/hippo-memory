@@ -5,7 +5,7 @@ import type { SearchResult } from '../core/search-types.js';
 import { createOutageWarning } from './outage-warning.js';
 import { rerankerPost, RERANKER_MAX_REPLY_BYTES } from './remote.js';
 import { readCappedJson } from '../util/capped-json.js';
-import { type JsonValue, isJsonObject } from '../util/json.js';
+import { type JsonValue, isJsonObject, isJsonString } from '../util/json.js';
 import { errorMessage } from '../util/log.js';
 
 const RAY_ID_MAX_CHARS = 64;
@@ -45,10 +45,6 @@ interface ClefScores {
 
 function isNumber(v: JsonValue | undefined): v is number {
   return Number.isFinite(v);
-}
-
-function isString(v: JsonValue | undefined): v is string {
-  return v !== undefined && v !== null && v.constructor === String;
 }
 
 function isRejection(v: ClefScores | string): v is string {
@@ -104,7 +100,7 @@ export function parseClefReply(body: JsonValue, n: number, model: ClefModel, req
   if (!isJsonObject(reply)) return 'reply has no result object';
 
   const actual = reply.model;
-  if (actual !== undefined && (!isString(actual) || actual.trim() !== model)) return 'reply names a different model';
+  if (actual !== undefined && (!isJsonString(actual) || actual.trim() !== model)) return 'reply names a different model';
   if (actual === undefined && requireModel) return 'reply does not name its model';
 
   const answers = reply.answers;
@@ -122,7 +118,7 @@ export function parseClefReply(body: JsonValue, n: number, model: ClefModel, req
   const usage = isJsonObject(reply.usage) ? reply.usage : {};
   return {
     scores,
-    actualModel: isString(actual) ? actual.trim() : undefined,
+    actualModel: isJsonString(actual) ? actual.trim() : undefined,
     inputTokens: isNumber(usage.input_tokens) ? usage.input_tokens : undefined,
     outputTokens: isNumber(usage.output_tokens) ? usage.output_tokens : undefined,
   };

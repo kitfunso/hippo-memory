@@ -1,5 +1,7 @@
 // `hippo audit`: list and prune the audit log.
 
+import { truncateWithEllipsis } from '../util/ellipsize.js';
+import { DEFAULT_LIST_LIMIT } from '../util/limits.js';
 import { loadAllEntries } from '../store/entry-reads.js';
 import { memoriesBackingObjects } from '../store/delete-and-batch.js';
 import { auditMemories, AUDIT_OPS, type AuditEvent, type AuditOp } from '../store/audit.js';
@@ -39,7 +41,7 @@ function readAuditOp(flags: CliFlags): AuditOp | undefined {
 
 function readAuditLimit(flags: CliFlags): number {
   const limitRaw = flags['limit'];
-  let limit = 100;
+  let limit = DEFAULT_LIST_LIMIT;
   if (limitRaw !== undefined && !isBooleanFlag(limitRaw)) {
     const parsed = parseInt(String(limitRaw), 10);
     if (!Number.isFinite(parsed)) {
@@ -186,7 +188,7 @@ export async function handleAudit({ hippoRoot, tenantId, args, flags }: CommandC
     for (const issue of result.issues) {
       const icon = issue.severity === 'error' ? 'ERR' : 'WARN';
       console.log(`  [${icon}] ${issue.memoryId}: ${issue.reason}`);
-      console.log(`         "${issue.content.slice(0, 80)}${issue.content.length > 80 ? '...' : ''}"`);
+      console.log(`         "${truncateWithEllipsis(issue.content, 80)}"`);
     }
     if (shouldFix) {
       fixAuditErrors(hippoRoot, tenantId, result, flags);
