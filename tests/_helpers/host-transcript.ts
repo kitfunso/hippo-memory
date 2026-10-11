@@ -10,7 +10,7 @@ import { readDeliveryEvents } from '../../src/store/recall-trace.js';
 import { blockHash } from '../../src/util/token-text.js';
 import { realpathOrResolve } from '../../src/util/real-path.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../../src/core/memory.js';
-import { reconstruct } from '../../scripts/z10-reconstruct.mjs';
+import { reconstruct, toolFailures } from '../../scripts/z10-reconstruct.mjs';
 import { hippo, promptPayload, PROMPT_HOOK, type Project, type RunOpts } from './delivery-boundary.js';
 
 interface Json { [key: string]: JsonValue }
@@ -54,6 +54,25 @@ export interface Verdict {
   cand_reason: string | null;
   turns: TurnVerdict[];
   label: Json | null;
+  /** The listing entry of the tool failure that stored this lesson; null for any other memory. */
+  origin: number | null;
+  notes: string[];
+}
+
+export interface ToolFailureEntry {
+  event_id: number;
+  turn_seq: number;
+  after_prompt_turn: number | null;
+  tool_use_id: string | null;
+  failure_id: number | null;
+  outcome: string;
+  tool: string | null;
+  duplicates: number;
+  lesson: string | null;
+}
+
+export interface ToolFailureListing {
+  entries: ToolFailureEntry[];
   notes: string[];
 }
 
@@ -97,6 +116,12 @@ export interface VerdictOpts extends ReadOpts {
 export function verdictOf(opts: VerdictOpts): Verdict {
   // SAFETY: reconstruct returns exactly the verdict shape the script documents.
   return reconstruct({ global: false, ...opts }) as Verdict;
+}
+
+/** The reader's tool-failure listing, typed here because the script is plain JavaScript. */
+export function listingOf(opts: { store: string; session: string; tenant?: string; global?: string | false }): ToolFailureListing {
+  // SAFETY: toolFailures returns exactly the listing shape the script documents.
+  return toolFailures({ global: false, ...opts }) as ToolFailureListing;
 }
 
 export interface TurnSpec {

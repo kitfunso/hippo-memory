@@ -31,6 +31,7 @@ const { createDeliveryRecorder } = await load('store/delivery-recorder.js');
 const { writeDeliveryEventOnHandle } = await load('store/recall-trace.js');
 const { openHippoDb, closeHippoDb } = await load('db/index.js');
 const { blockHash } = await load('util/token-text.js');
+const { realpathOrResolve } = await load('util/real-path.js');
 const { recordTokenUse } = await load('store/token-ledger.js');
 
 // Same seed, vocabulary and prompt as scripts/hook-latency.mjs, so the stores match.
@@ -121,7 +122,7 @@ async function turn(store, mode, i) {
 
   const t0 = performance.now();
   const rec = createDeliveryRecorder({
-    root: store.local, storeHash: blockHash(path.resolve(store.local)), writeStore: 'local',
+    root: store.local, storeHash: blockHash(realpathOrResolve(store.local)), writeStore: 'local',
     tenantId: 'default', stdinText, envSessionId: undefined,
   });
   const createMs = performance.now() - t0;
@@ -156,6 +157,33 @@ async function turn(store, mode, i) {
   return { ledgerMs: createMs + acc.ms + deliveredMs + flushMs, observerMs: acc.ms, flushMs, contextMs, written };
 }
 
+// One `hippo capture-error` row as the hook builds it: recorder, failure link and the flush on an already open handle.
+function toolFailureTurn(store, mode, i) {
+  const sessionId = mode === 'steady' ? 'steady-tf' : `${mode}-tf-${i}`;
+  const stdinText = JSON.stringify({
+    session_id: sessionId, hook_event_name: 'PostToolUseFailure', tool_name: 'Bash', tool_use_id: `toolu_${mode}_${i}`,
+    tool_input: { command: 'npm run build' }, error: `Command failed with exit code 2: build ${i} cannot find its manifest`,
+  });
+  const db = openHippoDb(store.local);
+  try {
+    const t0 = performance.now();
+    const rec = createDeliveryRecorder({
+      root: store.local, storeHash: blockHash(realpathOrResolve(store.local)), writeStore: 'local',
+      tenantId: 'default', stdinText, envSessionId: undefined, eventType: 'tool-failure',
+    });
+    rec.logged(i + 1);
+    let written = false;
+    rec.flush((input) => {
+      const id = writeDeliveryEventOnHandle(db, input);
+      written = id !== null;
+      return id;
+    });
+    return { ms: performance.now() - t0, written };
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
 async function cell(store, mode) {
   const contender = mode === 'contention'
     ? spawn(process.execPath, ['-e', CONTENDER, path.join(store.local, 'hippo.db')], { stdio: 'ignore' })
@@ -165,7 +193,8 @@ async function cell(store, mode) {
   try {
     for (let i = 0; i < WARMUPS + RUNS; i++) {
       const r = await turn(store, mode, i);
-      if (i >= WARMUPS) rows.push(r);
+      const tf = toolFailureTurn(store, mode, i);
+      if (i >= WARMUPS) rows.push({ ...r, tfMs: tf.ms, tfWritten: tf.written });
     }
   } finally {
     contender?.kill();
@@ -176,9 +205,11 @@ async function cell(store, mode) {
     flush: stats(rows.map((r) => r.flushMs)),
     context_without_ledger: stats(rows.map((r) => r.contextMs)),
     dropped: rows.filter((r) => !r.written).length,
+    tool_failure: { ...stats(rows.map((r) => r.tfMs)), dropped: rows.filter((r) => !r.tfWritten).length },
     turns: rows.length,
   };
   console.error(`  [${mode}] ledger p50 ${out.ledger.p50.toFixed(2)} p95 ${out.ledger.p95.toFixed(2)} max ${out.ledger.max.toFixed(1)} ms, flush p95 ${out.flush.p95.toFixed(2)}, dropped ${out.dropped}/${out.turns}`);
+  console.error(`  [${mode}] tool-failure p50 ${out.tool_failure.p50.toFixed(2)} p95 ${out.tool_failure.p95.toFixed(2)} max ${out.tool_failure.max.toFixed(1)} ms, dropped ${out.tool_failure.dropped}/${out.turns}`);
   return out;
 }
 
@@ -203,9 +234,16 @@ async function main() {
   const timed = Object.values(arms).flatMap((m) => [m.fresh, m.steady]);
   const worstP50 = Math.max(...timed.map((c) => c.ledger.p50));
   const worstP95 = Math.max(...timed.map((c) => c.ledger.p95));
+  const tf = timed.map((c) => c.tool_failure);
+  const tfP50 = Math.max(...tf.map((c) => c.p50));
+  const tfP95 = Math.max(...tf.map((c) => c.p95));
+  const tfDropped = tf.reduce((n, c) => n + c.dropped, 0);
   const bounds = {
     ledger_p50_le_15ms: { worst: worstP50, pass: worstP50 <= P50_BOUND_MS },
     ledger_p95_le_30ms: { worst: worstP95, pass: worstP95 <= P95_BOUND_MS },
+    tool_failure_p50_le_15ms: { worst: tfP50, pass: tfP50 <= P50_BOUND_MS },
+    tool_failure_p95_le_30ms: { worst: tfP95, pass: tfP95 <= P95_BOUND_MS },
+    tool_failure_dropped_0: { worst: tfDropped, pass: tfDropped === 0 },
   };
   const pass = Object.values(bounds).every((b) => b.pass);
   console.log(JSON.stringify({ memories: MEMORIES, runs: RUNS, warmups: WARMUPS, arms, bounds, pass }, null, 2));
