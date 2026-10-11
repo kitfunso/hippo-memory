@@ -8,8 +8,8 @@ import { chiSquareQuantile, confirmSize, normal, normalCdf, repeatRun, repeatSiz
 import { runCli } from '../scripts/token-eval/z0-size.mjs';
 import { PRICES, generate, jsonl } from './fixtures/z0-gen.js';
 
-// Each case runs a few thousand bootstraps, several seconds on a loaded box.
-vi.setConfig({ testTimeout: 30_000 });
+// Each case runs thousands of seeded bootstraps: 9 s locally, 49 s for one case on a shared CI runner.
+vi.setConfig({ testTimeout: 180_000 });
 
 const Z_HOLM = 2.39398;
 const Z_95 = 1.959964;
