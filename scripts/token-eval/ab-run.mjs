@@ -161,7 +161,7 @@ function orderReport(steps) {
   return lines;
 }
 
-const USAGE = 'Usage: node scripts/token-eval/ab-run.mjs --tasks tasks.json --out DIR --model MODEL [--arms A0,A1,A2,A4,A5,X1,X2,X3,X4] [--seeds N] [--pass-env NAME]... [--max-budget-usd N] [--session-timeout-min N] [--canaries FILE] [--screen] [--dry-run | --check-homes]\n  set X: --codex-model M [--codex-bin PATH] [--codex-auth auth.json] [--codex-hook-trust none|flag|file:PATH] [--codex-memory-wait none|poll:STABLE_MS:TIMEOUT_MS] [--codex-memories on|off] [--codex-wrapper-wait-ms N]';
+const USAGE = 'Usage: node scripts/token-eval/ab-run.mjs --tasks tasks.json --out DIR --model MODEL [--arms A0,A1,A2,A4,A5,X1,X2,X3,X4] [--seeds N] [--pass-env NAME]... [--max-budget-usd N] [--session-timeout-min N] [--canaries FILE] [--pins FILE] [--screen] [--dry-run | --check-homes]\n  set X: --codex-model M [--codex-bin PATH] [--codex-auth auth.json] [--codex-hook-trust none|flag|file:PATH] [--codex-memory-wait none|poll:STABLE_MS:TIMEOUT_MS] [--codex-memories on|off] [--codex-wrapper-wait-ms N]';
 const CODEX_FLAGS = { codexBin: '--codex-bin', codexModel: '--codex-model', codexAuth: '--codex-auth', codexHookTrust: '--codex-hook-trust', codexMemoryWait: '--codex-memory-wait', codexMemories: '--codex-memories', codexWrapperWaitMs: '--codex-wrapper-wait-ms' };
 
 /** The arms a run uses: the named ones, else every arm the tasks file has a sequence for; a screen's are always A0 and A4 (prereg 68), so an X arm named with it is refused. */
@@ -199,8 +199,9 @@ function parseArgs(argv) {
   const canariesFile = flag('--canaries', null);
   const canaries = canariesFile ? fs.readFileSync(canariesFile, 'utf8').split(/\r?\n/).map((l) => l.trim()).filter(Boolean) : [];
   if (canariesFile && canaries.length === 0) throw new Error(`--canaries ${canariesFile} holds no canary; one per line`);
+  const pinsFile = flag('--pins', null);
   return {
-    canaries,
+    canaries, pins: pinsFile ? JSON.parse(fs.readFileSync(pinsFile, 'utf8')) : null,
     flag, spec, arms, seeds: seedsArg === null ? null : Number(seedsArg), sessionTimeoutMs: Number(timeoutArg) * 60_000, out: path.resolve(outDir), screen,
     passEnv: argv.flatMap((a, i) => (a === '--pass-env' && i + 1 < argv.length ? [argv[i + 1]] : [])),
     mode: argv.includes('--dry-run') ? 'dry' : (argv.includes('--check-homes') ? 'check' : 'real'),
@@ -248,7 +249,7 @@ async function main() {
   const opts = {
     spec, arms, seeds, outDir: out, passEnv, progress, model: flag('--model', null), claudeBin: flag('--claude-bin', 'claude'),
     maxBudgetUsd: flag('--max-budget-usd', null), settleMs: Number(flag('--settle-ms', '5000')), warmup: !process.argv.includes('--no-warmup'),
-    permissionMode: flag('--permission-mode', 'bypassPermissions'), sessionTimeoutMs: args.sessionTimeoutMs, canaries: args.canaries, ...codexOpts,
+    permissionMode: flag('--permission-mode', 'bypassPermissions'), sessionTimeoutMs: args.sessionTimeoutMs, canaries: args.canaries, pins: args.pins, ...codexOpts,
   };
   try {
     if (args.screen) {

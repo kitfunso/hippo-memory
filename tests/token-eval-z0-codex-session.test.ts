@@ -5,13 +5,14 @@ import { join, dirname } from 'node:path';
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { finishCodex } from '../scripts/token-eval/codex-task.mjs';
-import { codexArgs, resolveCodex, runCodexSession, wrapperLog } from '../scripts/token-eval/codex.mjs';
+import { codexArgs, codexContext, resolveCodex, runCodexSession, wrapperLog } from '../scripts/token-eval/codex.mjs';
+import { refuseOffPins, codexPinned } from '../scripts/token-eval/pins.mjs';
 import { codexAdapter, parseRollouts } from '../scripts/token-eval/codex-rollout.mjs';
 import { tokenSweep, closeVault } from '../scripts/token-eval/codex-auth.mjs';
 import { codexPreflight, chooseArms } from '../scripts/token-eval/ab-run.mjs';
 import { foldPath } from '../scripts/token-eval/readcheck.mjs';
 import { cleanup, tmp, isolate, makeRepo } from './fixtures/z0-harness.js';
-import { operator, wrapOperator, codexCtx, codexRun, xTask, fakeSeen, filesHolding, xTrio } from './fixtures/z0-codex-harness.js';
+import { operator, wrapOperator, codexCtx, codexRun, xTask, fakeSeen, filesHolding, xTrio, vaultsHolding } from './fixtures/z0-codex-harness.js';
 import type { CodexCtx, CodexOpts } from './fixtures/z0-codex-harness.js';
 
 afterEach(cleanup);
@@ -223,6 +224,8 @@ describe('the memory wait and the memories switch (tests 13, 14)', () => {
       const { run, ctx, log } = setup(`mem${flag}`, { codexMemories: flag });
       await runCodexSession(ctx, run, xTask('plain'), () => false);
       expect(fakeSeen(log)[0].config).toContain(want);
+      expect(fakeSeen(log)[0].config?.includes('[memories]\nmin_rollout_idle_hours = 1')).toBe(flag === 'on');
+      expect(fakeSeen(log)[0].config).toContain('plugins = false\nremote_plugin = false\napps = false');
     }
   }, 30_000);
 });
@@ -355,6 +358,15 @@ describe('setup faults stop the run (tests 26, 27)', () => {
     expect(message).toMatch(/login failed.*log in to Codex again/);
     for (const tok of op.tokens) expect(message).not.toContain(tok);
     expect(existsSync(join(run.dirs.codexHome, 'auth.json'))).toBe(false);
+  }, 30_000);
+
+  it('a --pins refusal sees the Codex version and model and opens no login vault', () => {
+    const op = operator('pins');
+    const pins = { codexVersion: 'codex-cli 0.153.4-fake', codexModel: 'gpt-other' };
+    const opts = { codexBin: op.launcher, codexAuth: op.authFile, codexModel: 'gpt-fake', codexMemoryWait: 'none' };
+    expect(() => codexContext(opts, op.env, (tools: { codexVersion: string; codexModel: string }) => refuseOffPins(pins, codexPinned(tools), { hippoBuild: { hippoDirty: false } })))
+      .toThrow('this run differs from --pins: codexModel is pinned gpt-other, this run has gpt-fake');
+    expect(vaultsHolding(op.tokens)).toEqual([]);
   }, 30_000);
 
   it('throws when the session called an MCP or app tool', async () => {

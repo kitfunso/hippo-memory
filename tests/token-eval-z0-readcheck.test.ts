@@ -35,6 +35,8 @@ describe('reads outside the cell (one A1 run, one read per task)', () => {
     scattered: 'ECHO:{"user":{"uuid":"u"},"event":{"type":"delivery","sessionId":"s"}}',
     nestedRecord: 'ECHO:{"wrap":{"type":"user","uuid":"u1","sessionId":"other-session"}}',
     coloured: 'ECHO:{"uuid":"u1",\x1b[0m\x1b[1m\x1b[31m"type":"user"\x1b[0m,"sessionId":"other-session"}',
+    heredocFile: "BASH:mkdir -p t && cat > t/x.test.js <<'EOF'\\nconst lib = require('../../../A2/seed1/work/lib.js');\\nEOF\\nnode --test t",
+    heredocPiped: "BASH:cat <<'EOF' | sh\\ncat ../../../A2/seed1/work/lib.js\\nEOF",
   };
 
   beforeAll(async () => {
@@ -80,6 +82,8 @@ describe('reads outside the cell (one A1 run, one read per task)', () => {
   it('type, uuid and sessionId from different objects do not make a transcript line', () => expect(find(recs, 'A1', 'scattered').void).toBeNull());
   it('a transcript record nested inside other output still voids', () => expectRead('nestedRecord', 'transcript-content'));
   it('a transcript line printed with colour escapes still voids', () => expectRead('coloured', 'transcript-content'));
+  it('a path in a heredoc that cat writes to a file is file content, not a read', () => expect(find(recs, 'A1', 'heredocFile').void).toBeNull());
+  it('a heredoc piped on to a shell is a script, so its reads still void', () => expectRead('heredocPiped', 'other-run'));
 });
 
 describe('a Codex call\'s workdir is a read of that dir', () => {
