@@ -77,7 +77,7 @@ const json = (out: string): { results: { id: string; content: string }[] } => JS
 type ToolArgs = { query?: string; fresh_tail_count?: number; days?: number };
 
 async function mcp(root: string, name: string, args: ToolArgs): Promise<string> {
-  const res = await handleMcpRequest({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } }, { hippoRoot: root, tenantId: 'default', actor: 'mcp' });
+  const res = await handleMcpRequest({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } }, { hippoRoot: root, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true });
   // SAFETY: the tools/call case always wraps a tool's output as { content: [{ type: 'text', text }] }.
   const result = res?.result as { content?: { text?: string }[] } | undefined;
   return result?.content?.[0]?.text ?? '';

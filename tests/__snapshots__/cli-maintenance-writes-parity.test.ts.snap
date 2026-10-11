@@ -1901,7 +1901,7 @@ exports[`hippo refine (verb function, injected fetcher, no model) > a failed mod
 "$ refineStore -> 0
 --- stdout
 --- stderr
-[hippo] warn: refine: API answered HTTP 500 ts=<ts>
+[hippo] warn: refine: API answered HTTP 500: {"content":[{"text":"ignored"}]} ts=<ts>
 --- result
 {
  "scanned": 2,

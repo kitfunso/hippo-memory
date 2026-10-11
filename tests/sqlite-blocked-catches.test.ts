@@ -28,7 +28,7 @@ const ROWS: readonly Row[] = [
     return 'returned';
   }, 'returned'],
   ['mcp/request.ts recordMcpTokens', /recordMcpTokens/, async (root) => {
-    await recordMcpTokens('hippo_context', 'memory text', { hippoRoot: root, tenantId: 'default', actor: 'mcp' });
+    await recordMcpTokens('hippo_context', 'memory text', { hippoRoot: root, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true });
     return 'returned';
   }, 'returned'],
   ['store/entry-writes.ts strengthenRetrieved', /strengthenRetrieved/,

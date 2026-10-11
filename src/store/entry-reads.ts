@@ -6,6 +6,7 @@ import { escapeLike } from '../util/escape.js';
 import { originInSql } from '../core/project-identity.js';
 import { scopeAdmitSql } from './rule-sql.js';
 import { chunked } from '../util/chunked.js';
+import { DEFAULT_TENANT_ID } from '../util/env.js';
 
 const MAX_IDS_PER_READ = 500;
 
@@ -238,6 +239,23 @@ export function loadAllEntryIds(hippoRoot: string): string[] {
   return onHandle(hippoRoot, (db) => {
     // SAFETY: the SELECT names exactly the one column read.
     return (db.prepare('SELECT id FROM memories ORDER BY created ASC, id ASC').all() as Array<{ id: string }>).map((row) => row.id);
+  }, openStore);
+}
+
+export interface EntryTextKey {
+  id: string;
+  tenantId: string;
+  content: string;
+  source: string;
+}
+
+/** Every tenant's rows in loadAllEntries' order, with only the columns that say whether another store already holds each. */
+export function loadEntryTextKeys(hippoRoot: string): EntryTextKey[] {
+  return onHandle(hippoRoot, (db) => {
+    // SAFETY: rows' shape matches the four columns named in the SELECT.
+    const rows = db.prepare('SELECT id, tenant_id, content, source FROM memories ORDER BY created ASC, id ASC').all() as
+      Array<{ id: string; tenant_id: string | null; content: string; source: string }>;
+    return rows.map((row) => ({ id: row.id, tenantId: row.tenant_id ?? DEFAULT_TENANT_ID, content: row.content, source: row.source }));
   }, openStore);
 }
 

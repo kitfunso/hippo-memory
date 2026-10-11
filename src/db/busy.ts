@@ -25,9 +25,12 @@ export function isStoreBusy<E>(error: E): boolean {
   return error instanceof StoreBusyError || isSqliteBusy(error);
 }
 
+/** The lock wait of an open that names none: its busy_timeout and every explicit wait below. */
+export const DEFAULT_BUSY_WAIT_MS = 5000;
+
 // busy_timeout covers neither contended statement here: SQLite skips the busy handler for `PRAGMA journal_mode` and for a write
 // that upgrades a deferred read snapshot, so both need an explicit wait.
-export function execWithBusyRetry(db: DatabaseSyncLike, sql: string, timeoutMs = 30000): void {
+export function execWithBusyRetry(db: DatabaseSyncLike, sql: string, timeoutMs = DEFAULT_BUSY_WAIT_MS): void {
   const deadline = Date.now() + timeoutMs;
   const idle = new Int32Array(new SharedArrayBuffer(4));
   for (;;) {

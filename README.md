@@ -137,7 +137,7 @@ hippo init
 #    Scheduled machine-level daily runner (6:15am) via crontab
 ```
 
-To leave parts out: `--no-hooks` skips the instruction files and hooks, `--no-schedule` the daily run, and `--no-learn` the git history and agent memory import. `HIPPO_SKIP_AUTO_INTEGRATIONS=1` skips the same files and hooks that `--no-hooks` does.
+To leave parts out: `--no-hooks` skips the instruction files and hooks, `--no-schedule` the daily run, and `--no-learn` the git history and agent memory import. `HIPPO_SKIP_AUTO_INTEGRATIONS=1` skips the same files and hooks that `--no-hooks` does, and `HIPPO_SKIP_SCHEDULE=1` skips the daily run as `--no-schedule` does.
 
 ### Agent memories
 

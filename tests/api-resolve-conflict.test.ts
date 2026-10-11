@@ -49,7 +49,7 @@ function supersedeB({ b }: Pair): void {
 }
 
 async function mcpResolve(args: Record<string, string | number | boolean>): Promise<McpResponse | null> {
-  return handleMcpRequest({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_resolve', arguments: args } }, { hippoRoot: root, tenantId: TENANT, actor: 'tester' });
+  return handleMcpRequest({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_resolve', arguments: args } }, { hippoRoot: root, tenantId: TENANT, actor: 'tester', role: 'admin', hostAdmin: true });
 }
 
 function replyText(res: McpResponse | null): string {

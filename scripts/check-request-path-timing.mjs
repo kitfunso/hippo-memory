@@ -119,7 +119,7 @@ const copyRoot = path.join(tmp, 'copy', '.hippo');
 fs.cpSync(localRoot, copyRoot, { recursive: true });
 
 const ctx = { hippoRoot: localRoot, tenantId: 'default', actor: adminActor('ci:timing') };
-const mcpCtx = { hippoRoot: localRoot, tenantId: 'default', actor: 'ci:timing' };
+const mcpCtx = { hippoRoot: localRoot, tenantId: 'default', actor: 'ci:timing', role: 'admin', hostAdmin: true };
 const tool = (name, args = {}) => async () => {
   const res = await handleMcpRequest({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } }, mcpCtx);
   if (res?.error || res?.result?.isError) throw new Error(`${name} failed: ${JSON.stringify(res)}`);

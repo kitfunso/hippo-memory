@@ -45,6 +45,30 @@ export function writeEntriesTogether(hippoRoot: string, entries: readonly Memory
   return stamped.length;
 }
 
+/** Runs `fill` in one transaction; each `put` writes one entry and returns false when the store rejects its value,
+ * leaving that row's refusal audit and the rest of the batch. Mirrors follow the commit. Returns how many were written. */
+export function writeEntriesSkippingRejected(hippoRoot: string, fill: (put: (entry: MemoryEntry) => boolean) => void): number {
+  const written: MemoryEntry[] = [];
+  onHandle(hippoRoot, (db) => {
+    withWriteScope(db, 'write_entries_skipping_rejected', () => {
+      fill((entry) => {
+        const stamped = stampOriginProject(hippoRoot, entry);
+        try {
+          writeEntryDbOnly(db, stamped);
+        } catch (error) {
+          if (!(error instanceof RejectedValueError)) throw error;
+          auditRejectionRefusal(db, error, 'cli');
+          return false;
+        }
+        written.push(stamped);
+        return true;
+      });
+    });
+  }, openStore);
+  for (const entry of written) writeEntryMirrors(hippoRoot, entry);
+  return written.length;
+}
+
 /** Adds `tag` to each of a tenant's rows that lacks it, in `ids` order, each read fresh
  * on one open store and committed alone; an id the tenant does not hold is skipped. */
 export function addTagToEntries(hippoRoot: string, tenantId: string, ids: readonly string[], tag: string): void {

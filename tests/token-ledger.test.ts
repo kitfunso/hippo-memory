@@ -227,7 +227,7 @@ describe('ledger on the HTTP and MCP surfaces', () => {
   it('records MCP recall', async () => {
     await handleMcpRequest(
       { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_recall', arguments: { query: 'zanzibar' } } },
-      { hippoRoot: home, tenantId: 'default', actor: 'mcp-test' },
+      { hippoRoot: home, tenantId: 'default', actor: 'mcp-test', role: 'admin', hostAdmin: true },
     );
     expect(surfaces().mcp_recall).toBeGreaterThan(0);
   });

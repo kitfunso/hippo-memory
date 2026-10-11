@@ -1,9 +1,10 @@
 // withTrialScope undoes every write; withWriteScope's busyWaitMs reaches the lock wait. Real SQLite; the lock holder is a child process.
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { spawn } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { closeHippoDb, openHippoDb, withReadSnapshot, withTrialScope, withWriteScope, type DatabaseSyncLike } from '../src/db/index.js';
+import { DEFAULT_BUSY_WAIT_MS } from '../src/db/busy.js';
 import { makeRoot } from './_helpers/make-root.js';
 
 let root: string;
@@ -87,6 +88,24 @@ describe('withWriteScope busyWaitMs', () => {
       withWriteScope(db, 'waits', () => { put(db, 'waited_key'); }, { busyWaitMs: 10000 });
       expect(metaCount(db, 'waited_key')).toBe(1);
     } finally {
+      closeHippoDb(db);
+    }
+  });
+
+  it('with no wait named, gives up once its clock passes DEFAULT_BUSY_WAIT_MS, the busy_timeout an open sets', async () => {
+    const db = openHippoDb(root);
+    let clock = 1_000_000;
+    let waits = 0;
+    try {
+      expect(db.prepare('PRAGMA busy_timeout').get<{ timeout: number }>()?.timeout).toBe(DEFAULT_BUSY_WAIT_MS);
+      db.exec('PRAGMA busy_timeout = 0');
+      await holdWriteLock(1500);
+      vi.spyOn(Date, 'now').mockImplementation(() => clock);
+      vi.spyOn(Atomics, 'wait').mockImplementation(() => { waits += 1; clock += 100; return 'timed-out'; });
+      expect(() => withWriteScope(db, 'default_wait', () => { put(db, 'default_key'); }, {})).toThrow(/locked|busy/i);
+      expect(waits).toBe(DEFAULT_BUSY_WAIT_MS / 100);
+    } finally {
+      vi.restoreAllMocks();
       closeHippoDb(db);
     }
   });

@@ -1,6 +1,6 @@
 import { addTagToEntries, writeEntriesTogether } from '../store/entry-writes.js';
 import { confirmedOutcomeTimes } from '../store/audit.js';
-import { loadAllEntries, loadEntriesByIds } from '../store/entry-reads.js';
+import { loadAllEntries, loadEntriesByIds, readEntry } from '../store/entry-reads.js';
 import { chunked } from '../util/chunked.js';
 import { CHURN_STALE_TAG, type MemoryEntry } from '../core/memory.js';
 import {
@@ -91,8 +91,11 @@ export function invalidateMatching(
   options?: InvalidationOptions,
 ): InvalidationResult {
   // tenantId opt-in: when set, only that tenant's memories are weakened; undefined is host-wide.
-  // options.onlyId filters this tenant-scoped list rather than looking up an id directly, so another tenant's id is invisible here.
-  const { result, weakened } = weakenMatches(loadAllEntries(hippoRoot, tenantId), target, options);
+  // The onlyId read is tenant-scoped too, so another tenant's id is invisible here.
+  const entries = options?.onlyId === undefined
+    ? loadAllEntries(hippoRoot, tenantId)
+    : [readEntry(hippoRoot, options.onlyId, tenantId)].filter((entry) => entry !== null);
+  const { result, weakened } = weakenMatches(entries, target, options);
   writeEntriesTogether(hippoRoot, weakened);
   return result;
 }

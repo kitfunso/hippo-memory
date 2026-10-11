@@ -96,22 +96,31 @@ function partitionPairs(tenantEntries: readonly MemoryEntry[], removed: Set<stri
   return [...groups.values()].flatMap((group) => group.pairs);
 }
 
+/** Every row of the store, read once by a caller that also needs them, with the ids of rows backing an object. */
+export interface LoadedStore {
+  readonly entries: readonly MemoryEntry[];
+  readonly backing: ReadonlySet<string>;
+}
+
+/** The rows loadCurrentDistilledEntries selects, picked from a whole-store read. */
+const isCurrentDistilled = (e: MemoryEntry): boolean => (e.kind ?? 'distilled') === 'distilled' && !e.superseded_by;
+
 /** Remove the weaker copy of same-text (apart from spacing) memories within one tenant; cross-tenant pairs are never duplicates (isolation boundary).
  * Higher strength wins, then more retrievals; `threshold` is accepted for old callers and ignored. */
 export function deduplicateStore(
   hippoRoot: string,
-  options: { threshold?: number; dryRun?: boolean; actor?: string } = {}
+  options: { threshold?: number; dryRun?: boolean; actor?: string; loaded?: LoadedStore } = {}
 ): DedupResult {
   const dryRun = options.dryRun ?? false;
   // Only current distilled rows compete: raw rows are append-only (the delete
   // trigger would abort sleep mid-loop) and superseded rows are history.
-  const entries = loadCurrentDistilledEntries(hippoRoot);
+  const entries = options.loaded?.entries.filter(isCurrentDistilled) ?? loadCurrentDistilledEntries(hippoRoot);
   const entriesByTenant = entriesByPartition(entries);
 
   // Shared across tenant groups: ids are globally unique UUIDs, so `removed` cannot collide across tenants and deleteEntry deletes by primary key alone.
   const removed = new Set<string>();
   const pairs: DedupPair[] = [];
-  const backing = memoriesBackingObjects(hippoRoot);
+  const backing = options.loaded?.backing ?? memoriesBackingObjects(hippoRoot);
 
   for (const tenantEntries of entriesByTenant.values()) {
     // The survivor total order (see the file-level docstring), scoped per

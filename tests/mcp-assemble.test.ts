@@ -20,7 +20,7 @@ async function callTool(
 ) {
   return handleMcpRequest(
     { jsonrpc: '2.0', id: reqId, method: 'tools/call', params: { name, arguments: args } },
-    ctx,
+    { ...ctx, role: 'admin', hostAdmin: true },
   );
 }
 function extractText(res: McpResponse | null): string {
@@ -47,7 +47,7 @@ describe('mcp hippo_assemble', () => {
   it('hippo_assemble is in the tools catalogue', async () => {
     const res = await handleMcpRequest(
       { jsonrpc: '2.0', id: 1, method: 'tools/list' },
-      { hippoRoot: home, tenantId: 'default', actor: 'mcp' },
+      { hippoRoot: home, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true },
     );
     // SAFETY: tools/list always returns { tools: [...] } per the MCP protocol handler above.
     const listResult = res?.result as { tools?: Array<{ name?: string }> } | undefined;

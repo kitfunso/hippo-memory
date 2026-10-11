@@ -65,13 +65,12 @@ export interface McpContext {
   hippoRoot: string;
   tenantId: string;
   actor: string;
-  /** The caller's role from the HTTP transport's auth; absent for stdio (the local operator, admin). Tools must use this, or a member key over HTTP-MCP
-   * would act as admin. */
-  role?: 'admin' | 'member';
+  /** The caller's authenticated role. Required so no transport can forget it; only stdio, which passes no context, is admin without one. */
+  role: 'admin' | 'member';
   /** Scope grants for the HTTP-MCP caller's key. Absent for stdio (admin, needs none). */
   scopes?: readonly string[];
   viaAuthResolver?: true;
-  /** Set by the HTTP transport for the host's operator; a context without a role is in-process and implies it. */
+  /** Set by the HTTP transport for the host's operator; never implied by the role. */
   hostAdmin?: true;
   owner?: string; // copied by mcpActor so MCP task state keys the same as REST
   project?: CallerProject; // from X-Hippo-Project on a shared store: stamps writes, filters reads, keys outcomes
@@ -82,14 +81,20 @@ export interface McpContext {
   clientKey?: string;
 }
 
-/** The api-layer actor for a tool call: stdio (no ctx) is the local operator and runs as admin; over HTTP the authenticated role is used, so a member key
- * never acts as admin. */
+/** The api-layer actor for a tool call. Only stdio passes no context: it is the local operator, host admin. Any context runs as its own role, and an
+ * untyped caller that sends none runs as a member, so a missing role fails closed. */
 export function mcpActor(ctx: McpContext | undefined): ApiActor {
-  const actor: ApiActor = { subject: ctx?.actor ?? 'mcp', role: ctx?.role ?? 'admin', scopes: ctx?.scopes };
-  if (ctx?.viaAuthResolver) actor.viaAuthResolver = true;
-  if (ctx?.role === undefined || ctx.hostAdmin) actor.hostAdmin = true;
-  if (ctx?.owner !== undefined) actor.owner = ctx.owner;
+  if (ctx === undefined) return { subject: 'mcp', role: 'admin', hostAdmin: true };
+  const actor: ApiActor = { subject: ctx.actor ?? 'mcp', role: ctx.role === 'admin' ? 'admin' : 'member', scopes: ctx.scopes };
+  if (ctx.viaAuthResolver) actor.viaAuthResolver = true;
+  if (ctx.hostAdmin) actor.hostAdmin = true;
+  if (ctx.owner !== undefined) actor.owner = ctx.owner;
   return actor;
+}
+
+/** Stdio or a host admin: the only callers whose server cwd and git history are their own to read. */
+export function ownsServerCwd(ctx: McpContext | undefined): boolean {
+  return mcpActor(ctx).hostAdmin === true;
 }
 
 // ── JSON-ish domain type for untrusted MCP tool-call arguments ──

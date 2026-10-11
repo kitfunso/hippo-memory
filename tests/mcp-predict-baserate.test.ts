@@ -75,6 +75,8 @@ describe('mcp hippo_predict_baserate', () => {
       hippoRoot: home,
       tenantId: 'default',
       actor: 'mcp:test',
+      role: 'admin',
+      hostAdmin: true,
     });
     const text = extractText(res);
 
@@ -93,6 +95,8 @@ describe('mcp hippo_predict_baserate', () => {
       hippoRoot: home,
       tenantId: 'default',
       actor: 'mcp:test',
+      role: 'admin',
+      hostAdmin: true,
     });
     const text = extractText(res);
     expect(text).toContain('No closed predictions');
@@ -105,6 +109,8 @@ describe('mcp hippo_predict_baserate', () => {
       hippoRoot: home,
       tenantId: 'default',
       actor: 'mcp:test',
+      role: 'admin',
+      hostAdmin: true,
     });
     expect(res?.result).toMatchObject({ isError: true });
     expect(extractText(res)).toContain('class_tag is required');
@@ -115,6 +121,8 @@ describe('mcp hippo_predict_baserate', () => {
       hippoRoot: home,
       tenantId: 'default',
       actor: 'mcp:test',
+      role: 'admin',
+      hostAdmin: true,
     });
     const text = extractText(res);
     expect(text).toContain('No class_tag');

@@ -531,7 +531,7 @@ describe('hippo_status', () => {
       ]);
       const { result, rowsRead } = await recordStatementsAsync(() => handleMcpRequest(
         { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_status', arguments: {} } },
-        { hippoRoot: root, tenantId: 'default', actor: 'tester', clientKey: 'client-1' },
+        { hippoRoot: root, tenantId: 'default', actor: 'tester', role: 'admin', hostAdmin: true, clientKey: 'client-1' },
       ));
       const reply = JSON.stringify(result);
       expect(reply).toContain(`Memories: ${n} (1 pinned, 1 errors)`);

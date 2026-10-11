@@ -43,7 +43,7 @@ describe('MCP tool argument validation', () => {
   async function call(name: string, args: Wire): Promise<ToolReply> {
     const res = await handleMcpRequest(
       { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } },
-      { hippoRoot: home, tenantId: 'default', actor: 'mcp' },
+      { hippoRoot: home, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true },
     );
     return reply(res);
   }

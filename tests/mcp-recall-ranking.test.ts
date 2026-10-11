@@ -77,7 +77,7 @@ function seed(config?: StoreConfig): Seeded {
 function call(home: string, args: Record<string, string | number | boolean>, ctx?: Partial<McpContext>): Promise<McpResponse | null> {
   return handleMcpRequest(
     { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_recall', arguments: args } },
-    { hippoRoot: home, tenantId: TENANT, actor: 'mcp', ...ctx },
+    { hippoRoot: home, tenantId: TENANT, actor: 'mcp', role: 'admin', hostAdmin: true, ...ctx },
   );
 }
 
