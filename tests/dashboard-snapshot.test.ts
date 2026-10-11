@@ -92,7 +92,7 @@ describe('dashboard snapshot', () => {
       { memory_a_id: r1.id, memory_b_id: r2.id, reason: 'already settled', score: 0.6 },
     ]);
     const settled = listMemoryConflicts(store.hippoRoot, 'open', 'default').find((c) => c.reason === 'already settled')!;
-    expect(resolveConflict(store.hippoRoot, settled.id, r1.id, false, 'default')).not.toBeNull();
+    expect(resolveConflict(store.hippoRoot, { conflictId: settled.id, keepId: r1.id, tenantId: 'default' })).not.toBeNull();
 
     const snap = snapshot();
     const overview = buildOverview(snap);

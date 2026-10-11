@@ -44,7 +44,7 @@ export function sessionEndHandoffForCaller(ctx: Context, req: CallerSessionEndRe
   const state = checkedWorkingState(req.workingState);
   const evidence = checkedEvidence(req.evidence);
   const key = bindCaller(ctx, req.sessionId, req.project);
-  const handoff = writeSessionEndHandoff(ctx.hippoRoot, ctx.tenantId, req.sessionId, evidence, state, key);
+  const handoff = writeSessionEndHandoff(ctx.hippoRoot, { tenantId: ctx.tenantId, sessionId: req.sessionId, evidence, derived: state, key });
   const snapshotsClosed = closeTaskSnapshotsForSession(ctx.hippoRoot, ctx.tenantId, req.sessionId, 'session-ended', key);
   return { handoffWritten: handoff !== null, snapshotsClosed };
 }

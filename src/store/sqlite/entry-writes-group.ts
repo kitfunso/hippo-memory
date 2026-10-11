@@ -14,7 +14,7 @@ import { auditRejectionRefusal } from '../audit-event.js';
 import { deleteEntryCore } from '../delete-and-batch.js';
 import { selectEntriesByIds } from '../entry-reads.js';
 import { stampOriginProject } from '../entry-row.js';
-import { writeEntryDbOnly, writeEntryMirrors, type WriteEntryOptions } from '../entry-writes.js';
+import { writeEntryDbOnly, writeEntryMirrors, type WriteEntryInternalOptions } from '../entry-writes.js';
 import { updateStatsUnlessBusy } from '../index-and-stats.js';
 import { purgeMirrorBestEffort, removeEntryMirrors } from '../mirrors.js';
 import { onHandle, openStore } from '../open.js';
@@ -49,7 +49,7 @@ export function sqliteEntryWrites(hippoRoot: string): Sync<EntryWrites> {
 }
 
 /** A store-side hook writes on the row's handle inside its write scope, so its throw undoes the row. */
-export function writeEntryAt(hippoRoot: string, { entry, actor }: EntryWrite, afterWrite?: WriteEntryOptions['afterWrite']): void {
+export function writeEntryAt(hippoRoot: string, { entry, actor }: EntryWrite, afterWrite?: WriteEntryInternalOptions['afterWrite']): void {
   const stamped = stampOriginProject(hippoRoot, entry);
   onHandle(hippoRoot, (db) => writeInOwnTenant(db, stamped, actor, afterWrite), openStore);
   writeEntryMirrors(hippoRoot, stamped);
@@ -110,7 +110,7 @@ export function auditingRefusal<T>(db: DatabaseSyncLike, actor: string, write: (
 }
 
 /** writeEntryAt on the caller's handle, so a sibling group can read on it after the scope has unwound. */
-export function writeInOwnTenant(db: DatabaseSyncLike, entry: MemoryEntry, actor: string, afterWrite?: WriteEntryOptions['afterWrite']): void {
+export function writeInOwnTenant(db: DatabaseSyncLike, entry: MemoryEntry, actor: string, afterWrite?: WriteEntryInternalOptions['afterWrite']): void {
   auditingRefusal(db, actor, () => withWriteScope(db, 'write_entry_in_tenant', () => {
     assertIdInTenant(db, entry);
     writeEntryDbOnly(db, entry, { actor, afterWrite });

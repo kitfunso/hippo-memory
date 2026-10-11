@@ -89,7 +89,7 @@ export function resolveOpenConflict(hippoRoot: string, tenantId: string, conflic
   if (liveEntry(hippoRoot, tenantId, conflict.memory_a_id) === null || liveEntry(hippoRoot, tenantId, conflict.memory_b_id) === null) {
     return notFound();
   }
-  const resolved = resolveConflict(hippoRoot, conflictId, keep, false, tenantId, { rejectedBy: ACTOR });
+  const resolved = resolveConflict(hippoRoot, { conflictId, keepId: keep, tenantId }, { rejectedBy: ACTOR });
   // Both guards passed above, so null here is a race with another resolver.
   if (resolved === null) return already();
   const result: ResolveResult = { ok: true, conflictId, keptId: keep, weakenedId: resolved.loserId };

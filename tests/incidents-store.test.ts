@@ -23,7 +23,7 @@
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
-import { writeEntry } from '../src/store/entry-writes.js';
+import { writeEntry, writeEntryWithHook } from '../src/store/entry-writes.js';
 import { deleteEntry } from '../src/store/delete-and-batch.js';
 import { Layer} from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
@@ -169,7 +169,7 @@ describe('incidents store (first-class object)', () => {
       tenantId: 'default',
     });
     expect(() => {
-      writeEntry(home, mem, {
+      writeEntryWithHook(home, mem, {
         afterWrite: () => { throw new Error('forced afterWrite failure'); },
       });
     }).toThrow('forced afterWrite failure');

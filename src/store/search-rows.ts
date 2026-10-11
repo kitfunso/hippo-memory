@@ -210,8 +210,23 @@ export function loadSearchEntries(
   }, openStore);
 }
 
+export interface RecallSearchEntriesOptions {
+  readonly limit?: number;
+  readonly tenantId?: string;
+  readonly requestedScope?: string;
+  readonly explicitScopeMode?: 'exact' | 'additive';
+  readonly includeSuperseded?: boolean;
+  readonly originProjects?: OriginFilter;
+  readonly ownScope?: string;
+}
+
 /** Recall-mode loader: scope predicate in SQL so `unknown:legacy` cannot leak. Empty `requestedScope` default-denies (admits `ownScope`); else exact match.
  * SQL `NOT LIKE '%:private:%'` runs before the LIMIT so private rows cannot starve admitted ones; `passesScopeFilterForRecall` is the exact post-filter. */
+export function loadRecallEntries(hippoRoot: string, query: string, options: RecallSearchEntriesOptions = {}): MemoryEntry[] {
+  return onHandle(hippoRoot, (db) => loadRecallSearchEntriesFromDb(db, query, options), openStore);
+}
+
+/** Positional form of `loadRecallEntries`, kept internal because the frozen q3b-ranker-floor benchmark imports it from dist. */
 export function loadRecallSearchEntries(
   hippoRoot: string,
   query: string,
@@ -223,19 +238,7 @@ export function loadRecallSearchEntries(
   originProjects?: OriginFilter,
   ownScope?: string,
 ): MemoryEntry[] {
-  return onHandle(hippoRoot, (db) => {
-    return loadRecallSearchEntriesFromDb(db, query, { limit, tenantId, requestedScope, explicitScopeMode, includeSuperseded, originProjects, ownScope });
-  }, openStore);
-}
-
-export interface RecallSearchEntriesOptions {
-  readonly limit?: number;
-  readonly tenantId?: string;
-  readonly requestedScope?: string;
-  readonly explicitScopeMode?: 'exact' | 'additive';
-  readonly includeSuperseded?: boolean;
-  readonly originProjects?: OriginFilter;
-  readonly ownScope?: string;
+  return loadRecallEntries(hippoRoot, query, { limit, tenantId, requestedScope, explicitScopeMode, includeSuperseded, originProjects, ownScope });
 }
 
 // Split out so callers with an already-open db (the prompt-recall path) skip

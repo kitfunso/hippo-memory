@@ -90,3 +90,16 @@ What to change:
 - `writeEntry` throws `TypeError('tenantId was renamed to tenant_id in 2.0')` for an entry that has `tenantId` and no `tenant_id`. Without the check, a 1.x caller would write into the `default` tenant.
 - Export JSON: `hippo export` now writes `tenant_id` and a boolean `summary_dirty`. Update any script that reads `tenantId` or compares `summary_dirty` to `0` or `1`.
 - Dormant memories saved by 1.x keep working; hippo reads their old fields on load.
+
+## Signatures that take one options object
+
+Long positional argument lists became options objects, and two helpers that exposed a database handle or parsed ids loosely were tightened.
+
+- `loadRecallSearchEntries` is no longer exported from `hippo-memory`. Use `loadRecallEntries(hippoRoot, query, options)`, where `options` is `RecallSearchEntriesOptions` (`limit`, `tenantId`, `requestedScope`, `explicitScopeMode`, `includeSuperseded`, `originProjects`, `ownScope`). The positional function stays in `dist/store/search-rows.js` for the frozen benchmark.
+- `resolveConflict(hippoRoot, conflictId, keepId, forgetLoser, tenantId, opts)` is now `resolveConflict(hippoRoot, { conflictId, keepId, forgetLoser, tenantId }, opts)`. `forgetLoser` defaults to `false`.
+- `writeSessionEndHandoff(hippoRoot, tenantId, sessionId, evidence, derived, key, { inPlace })` is now `writeSessionEndHandoff(hippoRoot, { tenantId, sessionId, evidence, derived, key, inPlace })`. `derived`, `key` and `inPlace` are optional.
+- `afterWrite` is removed from the options of `writeEntry` and `promoteToGlobal`. It handed out the write's own database handle. Code in this package that needs it uses `writeEntryWithHook` and `promoteWithHook`, which no package entry exports. Move any hook to a store method that runs inside the write.
+- `hippo decide get|close` and `hippo predict show|close` reject ids such as `12abc` and `0x1` with exit code 1. They read these as `12` and `0` before. Pass a plain positive integer.
+- `confidenceFacets` takes `ConfidenceInputs` (`pinned`, `confidence`, `last_retrieved`) instead of a whole `MemoryEntry`. Every old call still compiles.
+
+hippo-enterprise: `handoff/2026-09-28/budget/cli-base.ts` (an archived copy on origin/main) calls the positional `loadRecallSearchEntries`, `resolveConflict` and `writeSessionEndHandoff`. It needs the new forms if it is ever built against 2.0.

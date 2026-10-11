@@ -496,7 +496,7 @@ describe('hippo pre-compact (PreCompact hook producer, real store)', () => {
     expect(runHippo(['pre-compact'], dir, env, payload).status).toBe(0);
     const snapshot = loadActiveTaskSnapshot(hippoRoot, 'default');
     expect(snapshot!.next_step).toBe('retry the export with Authorization: [REDACTED]');
-    const handoff = writeSessionEndHandoff(hippoRoot, 'default', 'sess-old-jwt', null);
+    const handoff = writeSessionEndHandoff(hippoRoot, { tenantId: 'default', sessionId: 'sess-old-jwt', evidence: null });
     expect(handoff!.nextAction).toBe('retry the export with Authorization: [REDACTED]');
   });
 

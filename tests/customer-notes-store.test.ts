@@ -18,7 +18,7 @@
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
-import { writeEntry } from '../src/store/entry-writes.js';
+import { writeEntry, writeEntryWithHook } from '../src/store/entry-writes.js';
 import { deleteEntry } from '../src/store/delete-and-batch.js';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
@@ -107,7 +107,7 @@ describe('customer_notes store (entity-scoped first-class object)', () => {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       tags: ['customer_note'], layer: Layer.Semantic, confidence: 'verified', source: 'customer_note', tenantId: 'default',
     });
-    expect(() => writeEntry(home, mem, { afterWrite: () => { throw new Error('forced'); } })).toThrow('forced');
+    expect(() => writeEntryWithHook(home, mem, { afterWrite: () => { throw new Error('forced'); } })).toThrow('forced');
     expect(countRows(home, 'memories')).toBe(m0);
     expect(countRows(home, 'customer_notes')).toBe(c0);
   });

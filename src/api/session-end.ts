@@ -46,7 +46,7 @@ function writeEndHandoff(ctx: Context, sessionId: string, close: SessionClose): 
       close.log('skip: no snapshot or transcript for session');
       return;
     }
-    const handoff = writeSessionEndHandoff(ctx.hippoRoot, ctx.tenantId, sessionId, close.evidence(), derived, undefined, { inPlace: close.turn });
+    const handoff = writeSessionEndHandoff(ctx.hippoRoot, { tenantId: ctx.tenantId, sessionId, evidence: close.evidence(), derived, inPlace: close.turn });
     close.log(handoff ? `wrote handoff for session ${sessionId}` : `skip: kept the existing handoff for session ${sessionId}`);
   } catch (err) {
     close.log(`handoff write failed: ${errorMessage(err)}`);

@@ -3,7 +3,7 @@
 import { compareScoresDesc } from '../core/compare.js';
 import * as fs from 'fs';
 import { MemoryEntry } from '../core/memory.js';
-import { loadSearchEntries, loadRecallSearchEntries, recallScopeFilter } from '../store/search-rows.js';
+import { loadSearchEntries, loadRecallEntries, recallScopeFilter } from '../store/search-rows.js';
 import { passesScopeFilterForRecall, passesCliRecallScopeFilter } from '../core/recall-scope.js';
 import { search } from '../search/bm25-search.js';
 import { hybridSearch } from '../search/hybrid.js';
@@ -140,13 +140,14 @@ export async function searchBothHybrid(
   const loadEntries = (root: string): MemoryEntry[] => {
     if (!fs.existsSync(root)) return [];
     return recallScope
-      ? loadRecallSearchEntries(
-          root, query, searchWindow, tenantId, recallScope.requested,
-          recallScope.additive ? 'additive' : 'exact',
-          Boolean(includeSuperseded) || Boolean(asOf),
-          undefined,
-          recallScope.ownScope,
-        )
+      ? loadRecallEntries(root, query, {
+          limit: searchWindow,
+          tenantId,
+          requestedScope: recallScope.requested,
+          explicitScopeMode: recallScope.additive ? 'additive' : 'exact',
+          includeSuperseded: Boolean(includeSuperseded) || Boolean(asOf),
+          ownScope: recallScope.ownScope,
+        })
       : loadSearchEntries(root, query, searchWindow, tenantId);
   };
   const passesScope = (e: MemoryEntry): boolean =>

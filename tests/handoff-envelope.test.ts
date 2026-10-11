@@ -284,7 +284,7 @@ describe('test 6: writeSessionEndHandoff', () => {
       scope: null,
     });
 
-    const handoff = writeSessionEndHandoff(root, 'default', 'sess-a', { gitRef: 'deadbeef', dirtyTree: false, testStatus: 'pass' });
+    const handoff = writeSessionEndHandoff(root, { tenantId: 'default', sessionId: 'sess-a', evidence: { gitRef: 'deadbeef', dirtyTree: false, testStatus: 'pass' } });
     expect(handoff).not.toBeNull();
     expect(handoff!.taskId).toBe('ship W1');
     expect(handoff!.summary).toBe('writing the envelope');
@@ -301,12 +301,12 @@ describe('test 6: writeSessionEndHandoff', () => {
       session_id: 'sess-a',
     });
 
-    expect(writeSessionEndHandoff(root, 'default', 'sess-b', null)).toBeNull();
+    expect(writeSessionEndHandoff(root, { tenantId: 'default', sessionId: 'sess-b', evidence: null })).toBeNull();
   });
 
   it('6c: returns null when no active snapshot exists', () => {
     initStore(root);
-    expect(writeSessionEndHandoff(root, 'default', 'sess-none', null)).toBeNull();
+    expect(writeSessionEndHandoff(root, { tenantId: 'default', sessionId: 'sess-none', evidence: null })).toBeNull();
   });
 
   it('6d: returns null when a handoff strictly newer than the snapshot exists', () => {
@@ -327,7 +327,7 @@ describe('test 6: writeSessionEndHandoff', () => {
       closeHippoDb(db);
     }
 
-    expect(writeSessionEndHandoff(root, 'default', 'sess-d', null)).toBeNull();
+    expect(writeSessionEndHandoff(root, { tenantId: 'default', sessionId: 'sess-d', evidence: null })).toBeNull();
   });
 
   it('6e: a handoff whose created_at equals snapshot.updated_at to the millisecond does NOT suppress the write', () => {
@@ -352,7 +352,7 @@ describe('test 6: writeSessionEndHandoff', () => {
       closeHippoDb(db);
     }
 
-    const written = writeSessionEndHandoff(root, 'default', 'sess-e', null);
+    const written = writeSessionEndHandoff(root, { tenantId: 'default', sessionId: 'sess-e', evidence: null });
     expect(written).not.toBeNull();
 
     const db2 = openHippoDb(root);
@@ -374,7 +374,7 @@ describe('test 6: writeSessionEndHandoff', () => {
       session_id: 'sess-f1',
     });
     appendSessionEvent(root, 'default', { session_id: 'sess-f1', event_type: 'session_complete', content: 'success' });
-    const withOutcome = writeSessionEndHandoff(root, 'default', 'sess-f1', null);
+    const withOutcome = writeSessionEndHandoff(root, { tenantId: 'default', sessionId: 'sess-f1', evidence: null });
     expect(withOutcome!.outcome).toBe('success');
 
     saveActiveTaskSnapshot(root, 'default', {
@@ -384,7 +384,7 @@ describe('test 6: writeSessionEndHandoff', () => {
       session_id: 'sess-f2',
     });
     appendSessionEvent(root, 'default', { session_id: 'sess-f2', event_type: 'session_complete', content: 'not-a-real-outcome' });
-    const withoutOutcome = writeSessionEndHandoff(root, 'default', 'sess-f2', null);
+    const withoutOutcome = writeSessionEndHandoff(root, { tenantId: 'default', sessionId: 'sess-f2', evidence: null });
     expect(withoutOutcome!.outcome).toBeNull();
   });
 });
@@ -402,7 +402,7 @@ describe('test 7: IC-SMDP fixture, ambient handoff pop-off', () => {
         next_step: `next ${i}`,
         session_id: sessionId,
       });
-      writeSessionEndHandoff(root, 'default', sessionId, { gitRef: `ref${i}`, dirtyTree: false, testStatus: 'pass' });
+      writeSessionEndHandoff(root, { tenantId: 'default', sessionId, evidence: { gitRef: `ref${i}`, dirtyTree: false, testStatus: 'pass' } });
       closeTaskSnapshotsForSession(root, 'default', sessionId);
     }
 
@@ -560,7 +560,7 @@ describe('fix 3: writeSessionEndHandoff carries forward same-task envelope metad
       next_step: 'next',
       session_id: 'sess-carry',
     });
-    const refreshed = writeSessionEndHandoff(root, 'default', 'sess-carry', null);
+    const refreshed = writeSessionEndHandoff(root, { tenantId: 'default', sessionId: 'sess-carry', evidence: null });
     expect(refreshed!.constraints).toEqual(['no schema break']);
     expect(refreshed!.cardId).toBe('card-9');
     expect(refreshed!.targetRuntime).toBe('codex');
@@ -585,7 +585,7 @@ describe('fix 3: writeSessionEndHandoff carries forward same-task envelope metad
       next_step: 'next',
       session_id: 'sess-diff',
     });
-    const notCarried = writeSessionEndHandoff(root, 'default', 'sess-diff', null);
+    const notCarried = writeSessionEndHandoff(root, { tenantId: 'default', sessionId: 'sess-diff', evidence: null });
     expect(notCarried!.constraints).toEqual([]);
     expect(notCarried!.cardId).toBeNull();
     expect(notCarried!.targetRuntime).toBeNull();
@@ -614,7 +614,7 @@ describe('fix 3: writeSessionEndHandoff carries forward same-task envelope metad
       next_step: 'next',
       session_id: 'sess-scope-mismatch',
     });
-    const handoff = writeSessionEndHandoff(root, 'default', 'sess-scope-mismatch', null);
+    const handoff = writeSessionEndHandoff(root, { tenantId: 'default', sessionId: 'sess-scope-mismatch', evidence: null });
     expect(handoff!.artifacts).toEqual([]);
     expect(handoff!.constraints).toEqual([]);
     expect(handoff!.cardId).toBeNull();

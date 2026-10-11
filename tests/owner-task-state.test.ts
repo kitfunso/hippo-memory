@@ -158,15 +158,15 @@ describe('handoffs and failures keyed by owner and project', () => {
     saveActiveTaskSnapshot(home, T, snap('bob task', 'sb'), B);
     // A newer handoff of B's on A's session id would block A's write if it were read.
     saveSessionHandoff(home, T, handoff('bob note', 'sa'), B);
-    const written = writeSessionEndHandoff(home, T, 'sa', null, null, A);
+    const written = writeSessionEndHandoff(home, { tenantId: T, sessionId: 'sa', evidence: null, key: A });
     expect(written?.taskId).toBe('alice task');
     expect(handoffRows('sa').at(-1)).toEqual({ summary: 'alice task summary', owner_subject: 'alice', origin_project: 'p' });
   });
 
   it('derived-path retry writes no second revision', () => {
     const derived = { task: 'derived', summary: 'from the transcript', next_step: 'carry on' };
-    expect(writeSessionEndHandoff(home, T, 'sd', null, derived, A)?.taskId).toBe('derived');
-    expect(writeSessionEndHandoff(home, T, 'sd', null, derived, A)).toBeNull();
+    expect(writeSessionEndHandoff(home, { tenantId: T, sessionId: 'sd', evidence: null, derived, key: A })?.taskId).toBe('derived');
+    expect(writeSessionEndHandoff(home, { tenantId: T, sessionId: 'sd', evidence: null, derived, key: A })).toBeNull();
     expect(handoffRows('sd')).toHaveLength(1);
   });
 
@@ -194,7 +194,7 @@ describe('a partial key matches nothing and writes nothing', () => {
       expect(() => saveActiveTaskSnapshot(home, T, snap('x'), key)).toThrow(/owner and a project/);
       expect(() => closeTaskSnapshotsForSession(home, T, 's1', 'session-ended', key)).toThrow(/owner and a project/);
       expect(() => saveSessionHandoff(home, T, handoff('x'), key)).toThrow(/owner and a project/);
-      expect(() => writeSessionEndHandoff(home, T, 's1', null, null, key)).toThrow(/owner and a project/);
+      expect(() => writeSessionEndHandoff(home, { tenantId: T, sessionId: 's1', evidence: null, key })).toThrow(/owner and a project/);
       expect(statusOf(own.id)).toBe('active');
       expect(handoffRows('s1')).toHaveLength(1);
     });

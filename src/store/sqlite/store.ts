@@ -29,7 +29,7 @@ import type {
   AuditLog, ContextReads, ContinuityBlock, HippoStore, KeyAudit, KeyWrites, Readiness, StoreGroups, Sync, VectorViews,
   VectorWrites,
 } from '../port.js';
-import { loadRecallSearchEntries } from '../search-rows.js';
+import { loadRecallEntries } from '../search-rows.js';
 import { type ContinuityKey, listSessionEvents, loadActiveTaskSnapshot } from '../sessions.js';
 import { entriesWithoutVectorAt, loadStoredVectorViews, writeVectorsAt } from '../vector-index.js';
 
@@ -84,9 +84,7 @@ function sqliteBaseReads(hippoRoot: string): SqliteBaseReads {
       return onHandle(hippoRoot, (db) => readApiKeyRecord(db, keyId));
     },
     searchRecallEntries(query, args) {
-      return loadRecallSearchEntries(
-        hippoRoot, query, args.limit, args.tenantId, args.requestedScope, args.explicitScopeMode, args.includeSuperseded, args.originProjects, args.ownScope,
-      );
+      return loadRecallEntries(hippoRoot, query, args);
     },
     entriesByIds(ids, tenantId) {
       return loadEntriesByIds(hippoRoot, ids, tenantId);

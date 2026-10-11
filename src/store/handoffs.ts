@@ -253,17 +253,19 @@ function buildSessionEndHandoff(
   };
 }
 
+export interface SessionEndHandoffRequest {
+  readonly tenantId: string;
+  readonly sessionId: string;
+  readonly evidence: HandoffEvidence | null;
+  readonly derived?: Pick<TaskSnapshot, 'task' | 'summary' | 'next_step'> | null;
+  readonly key?: ContinuityKey;
+  readonly inPlace?: boolean;
+}
+
 /** Session-end handoff from the active snapshot, else `derived` transcript state; `inPlace` rewrites an earlier transcript read instead of adding a revision.
  * Returns null when no source is the session's, a newer handoff covers it, or the latest one is not transcript-derived or already holds `derived`. */
-export function writeSessionEndHandoff(
-  hippoRoot: string,
-  tenantId: string,
-  sessionId: string,
-  evidence: HandoffEvidence | null,
-  derived: Pick<TaskSnapshot, 'task' | 'summary' | 'next_step'> | null = null,
-  key?: ContinuityKey,
-  options: { inPlace?: boolean } = {},
-): SessionHandoff | null {
+export function writeSessionEndHandoff(hippoRoot: string, request: SessionEndHandoffRequest): SessionHandoff | null {
+  const { tenantId, sessionId, evidence, derived = null, key, inPlace } = request;
   assertTenantId('writeSessionEndHandoff', tenantId);
   if (key) continuityStamp(key); // a partial key is a caller bug, so fail loud rather than write nothing
   const active = loadActiveTaskSnapshot(hippoRoot, tenantId, key);
@@ -272,7 +274,7 @@ export function writeSessionEndHandoff(
   let handoffEvidence = evidence;
   let fromTranscript = false;
   // After every reply the transcript is newer than the last compaction's snapshot, which the open chat keeps for the next one.
-  const snapshotGivesWay = options.inPlace === true && derived !== null && active?.source === 'pre-compact';
+  const snapshotGivesWay = inPlace === true && derived !== null && active?.source === 'pre-compact';
   if (active && active.session_id === sessionId && !snapshotGivesWay) {
     // Strict '>': a same-millisecond tie must not swallow the session's only write (test 6e).
     if (existing && existing.updatedAt > active.updated_at) return null;
@@ -287,7 +289,7 @@ export function writeSessionEndHandoff(
   const outcome = sessionOutcome(hippoRoot, tenantId, sessionId);
   const handoff = buildSessionEndHandoff(sessionId, snapshot, existing, handoffEvidence, outcome);
   // A miss means a handoff landed since the read, and a new transcript row would hide it.
-  if (fromTranscript && options.inPlace && existing) return replaceTranscriptHandoff(hippoRoot, tenantId, handoff, key);
+  if (fromTranscript && inPlace && existing) return replaceTranscriptHandoff(hippoRoot, tenantId, handoff, key);
   return saveSessionHandoff(hippoRoot, tenantId, handoff, key);
 }
 

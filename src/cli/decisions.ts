@@ -9,7 +9,6 @@ import { nonEmptyStringFlag, type CliFlags, flagIsTrue, stringFlag, type Command
 import { requireInit } from './shared.js';
 import { cliApiContext } from './api-context.js';
 import { closeObject, foundOrExit, idArgOrExit, listObjects, printLifecycleTail, type ObjectNames } from './object-verbs.js';
-import { parseObjectId } from './lenient-id.js';
 import { errorMessage } from '../util/log.js';
 import { CliExit } from './exit.js';
 
@@ -32,7 +31,7 @@ function decideList(hippoRoot: string, tenantId: string, flags: CliFlags): void 
 }
 
 function decideGet(hippoRoot: string, tenantId: string, args: string[]): void {
-  const id = idArgOrExit(args, 'Usage: hippo decide get <id>', DECISION.idLabel, parseObjectId);
+  const id = idArgOrExit(args, 'Usage: hippo decide get <id>', DECISION.idLabel);
   const decision = foundOrExit(decisionsModule.loadDecisionById(hippoRoot, tenantId, id), DECISION.noun, id);
   console.log(`Decision #${decision.id}`);
   console.log(`  status: ${decision.status}`);
@@ -42,7 +41,7 @@ function decideGet(hippoRoot: string, tenantId: string, args: string[]): void {
 }
 
 function decideClose(hippoRoot: string, tenantId: string, args: string[]): void {
-  closeObject(args, DECISION, (id) => decisionsModule.closeDecision(hippoRoot, tenantId, id), parseObjectId);
+  closeObject(args, DECISION, (id) => decisionsModule.closeDecision(hippoRoot, tenantId, id));
 }
 
 export async function handleDecide({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {

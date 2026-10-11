@@ -23,7 +23,7 @@
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
-import { writeEntry } from '../src/store/entry-writes.js';
+import { writeEntry, writeEntryWithHook } from '../src/store/entry-writes.js';
 import { deleteEntry } from '../src/store/delete-and-batch.js';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
@@ -167,7 +167,7 @@ describe('decisions store (first-class object)', () => {
       tenantId: 'default',
     });
     expect(() => {
-      writeEntry(home, mem, {
+      writeEntryWithHook(home, mem, {
         afterWrite: () => { throw new Error('forced afterWrite failure'); },
       });
     }).toThrow('forced afterWrite failure');

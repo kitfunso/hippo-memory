@@ -44,14 +44,13 @@ export function idArgOrExit(
   args: string[],
   usage: string,
   label: string,
-  parseId: (raw: string, label: string) => number = parsePositiveId,
 ): number {
   const idRaw = args[1];
   if (!idRaw) {
     printError(usage);
     throw new CliExit(1);
   }
-  return parseId(idRaw, label);
+  return parsePositiveId(idRaw, label);
 }
 
 export function foundOrExit<O>(found: O | null | undefined, noun: string, id: number): O {
@@ -74,9 +73,8 @@ export function closeObject(
   args: string[],
   names: ObjectNames,
   close: (id: number) => { id: number },
-  parseId: (raw: string, label: string) => number = parsePositiveId,
 ): void {
-  const id = idArgOrExit(args, `Usage: hippo ${names.cmd} close <id>`, names.idLabel, parseId);
+  const id = idArgOrExit(args, `Usage: hippo ${names.cmd} close <id>`, names.idLabel);
   console.log(`${names.noun} #${close(id).id} closed.`);
 }
 

@@ -107,7 +107,7 @@ describe('published runtime exports', () => {
       generateId getEmbedding getGlobalRoot graphExpandRecall
       heartbeatCard hybridSearch
       importChatGPT importClaude importCursor importEntries importGenericFile importMarkdown importVault initGlobal initStore isCardStatus isEmbeddingAvailable isHandoffOutcome
-      listAuditEventsAfter listCards listMemoryConflicts listPeers listSessionEvents loadActiveTaskSnapshot loadAllEntries loadCard loadCardComments loadCardDeps loadCardRuns loadEmbeddingIndex loadFreshActiveTaskSnapshot loadHandoffById loadIndex loadLatestHandoff loadLatestHandoffForCard loadRecallSearchEntries loadSearchEntries loadSessionDecayContext
+      listAuditEventsAfter listCards listMemoryConflicts listPeers listSessionEvents loadActiveTaskSnapshot loadAllEntries loadCard loadCardComments loadCardDeps loadCardRuns loadEmbeddingIndex loadFreshActiveTaskSnapshot loadHandoffById loadIndex loadLatestHandoff loadLatestHandoffForCard loadRecallEntries loadSearchEntries loadSessionDecayContext
       markRetrieved multihopSearch
       openHippoDb openHippoDbReadOnly
       partitionLessons physicsSearch promoteToGlobal

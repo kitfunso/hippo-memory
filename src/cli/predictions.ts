@@ -9,14 +9,13 @@ import { printError } from './output.js';
 import { parseListLimit, type CliFlags, stringFlag, type CommandContext } from './flag-values.js';
 import { requireInit } from './shared.js';
 import { foundOrExit, idArgOrExit, requireStatus } from './object-verbs.js';
-import { parseObjectId } from './lenient-id.js';
 import { CliExit } from './exit.js';
 
 const BASERATE_DECIMALS = 3;
 const PREDICTION_NOUN = 'Prediction';
 
 async function predictClose(ctx: Context, args: string[], flags: CliFlags): Promise<void> {
-  const id = idArgOrExit(args, 'Usage: hippo predict close <id> --state <closed|closed-unknown> [--actual <v>] [--note "..."]', 'prediction', parseObjectId);
+  const id = idArgOrExit(args, 'Usage: hippo predict close <id> --state <closed|closed-unknown> [--actual <v>] [--note "..."]', 'prediction');
   const stateRaw = (stringFlag(flags, 'state') ?? '').trim();
   // SAFETY: Set.has only compares by value, so a string outside the closure states is a plain miss.
   if (!VALID_CLOSURE_STATES.has(stateRaw as ClosureState) || stateRaw === 'open') {
@@ -86,7 +85,7 @@ async function predictList(ctx: Context, flags: CliFlags): Promise<void> {
 }
 
 async function predictShow(ctx: Context, args: string[]): Promise<void> {
-  const id = idArgOrExit(args, 'Usage: hippo predict show <id>', 'prediction', parseObjectId);
+  const id = idArgOrExit(args, 'Usage: hippo predict show <id>', 'prediction');
   const pred = foundOrExit(await predictionsApi.predictionById(ctx, id), PREDICTION_NOUN, id);
   console.log(`Prediction #${pred.id}`);
   console.log(`  class: ${pred.classTag}`);

@@ -339,14 +339,18 @@ function findResolvableConflict(
   return { conflict, loserId };
 }
 
+export interface ResolveConflictRequest {
+  readonly conflictId: number;
+  readonly keepId: string;
+  readonly forgetLoser?: boolean;
+  readonly tenantId?: string;
+}
+
 /** Resolve a conflict by keeping one memory and halving the loser's half-life; `--forget` removes the loser, `opts.rejectLoserValue` also tombstones its
  * digest. Every path emits a `conflict_resolve` audit row. Returns the resolved conflict, or null if not found. */
 export function resolveConflict(
   hippoRoot: string,
-  conflictId: number,
-  keepId: string,
-  forgetLoser: boolean = false,
-  tenantId?: string,
+  { conflictId, keepId, forgetLoser = false, tenantId }: ResolveConflictRequest,
   opts?: ResolveConflictOpts,
 ): { conflict: MemoryConflict; loserId: string } | null {
   const db = openStore(hippoRoot);

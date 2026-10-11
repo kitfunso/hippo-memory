@@ -159,7 +159,7 @@ describe('resolveConflict rejection wiring', () => {
 
   it('legacy 5-arg call shape still works and now writes a conflict_resolve audit (previously zero)', () => {
     const { aId, conflictId } = seedConflict();
-    const result = resolveConflict(tmpDir, conflictId, aId, false, 'default'); // 5 args, no opts
+    const result = resolveConflict(tmpDir, { conflictId, keepId: aId, tenantId: 'default' }); // 5 args, no opts
     expect(result).not.toBeNull();
     expect(result!.conflict.status).toBe('resolved');
 
@@ -176,7 +176,7 @@ describe('resolveConflict rejection wiring', () => {
 
   it('resolveConflict --forget writes a conflict_resolve audit with disposition=deleted', () => {
     const { aId, bId, conflictId } = seedConflict();
-    resolveConflict(tmpDir, conflictId, aId, true, 'default');
+    resolveConflict(tmpDir, { conflictId, keepId: aId, forgetLoser: true, tenantId: 'default' });
     expect(readEntry(tmpDir, bId)).toBeNull();
 
     const db = openHippoDb(tmpDir);
@@ -191,7 +191,7 @@ describe('resolveConflict rejection wiring', () => {
 
   it('rejectLoserValue tombstones + removes the loser; re-remember of its content is refused', async () => {
     const { aId, bId, conflictId } = seedConflict();
-    const result = resolveConflict(tmpDir, conflictId, aId, false, 'default', {
+    const result = resolveConflict(tmpDir, { conflictId, keepId: aId, tenantId: 'default' }, {
       rejectLoserValue: true,
       reason: 'loser rejected',
     });
@@ -224,7 +224,7 @@ describe('resolveConflict rejection wiring', () => {
     const otherTenantDup = createMemory(loserContent, { tags: ['dup'], tenantId: 'other-tenant' });
     writeEntry(tmpDir, otherTenantDup);
 
-    const result = resolveConflict(tmpDir, conflictId, aId, false, 'default', {
+    const result = resolveConflict(tmpDir, { conflictId, keepId: aId, tenantId: 'default' }, {
       rejectLoserValue: true,
       reason: 'loser + same-tenant duplicates rejected',
     });
@@ -263,7 +263,7 @@ describe('resolveConflict rejection wiring', () => {
     const conflicts = listMemoryConflicts(tmpDir, 'open');
     const conflictId = conflicts[0]!.id;
 
-    expect(() => resolveConflict(tmpDir, conflictId, a.id, true, 'default')).not.toThrow();
+    expect(() => resolveConflict(tmpDir, { conflictId, keepId: a.id, forgetLoser: true, tenantId: 'default' })).not.toThrow();
     expect(readEntry(tmpDir, rawLoser.id)).toBeNull();
 
     const db = openHippoDb(tmpDir);
@@ -297,7 +297,7 @@ describe('resolveConflict rejection wiring', () => {
     // post-commit purge gate required rejectLoserValue too, so this path
     // left the raw mirror orphaned (only the reaper would eventually catch
     // it; a non-raw loser would never be caught at all).
-    resolveConflict(tmpDir, conflictId, a.id, true, 'default');
+    resolveConflict(tmpDir, { conflictId, keepId: a.id, forgetLoser: true, tenantId: 'default' });
     expect(readEntry(tmpDir, rawLoser.id)).toBeNull();
     expect(fs.existsSync(mirrorPath)).toBe(false);
 
@@ -332,7 +332,7 @@ describe('resolveConflict rejection wiring', () => {
     const conflictId = conflicts[0]!.id;
 
     expect(() =>
-      resolveConflict(tmpDir, conflictId, a.id, false, 'default', {
+      resolveConflict(tmpDir, { conflictId, keepId: a.id, tenantId: 'default' }, {
         rejectLoserValue: true,
         reason: 'raw loser rejected via GDPR-adjacent path',
       }),

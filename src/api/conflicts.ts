@@ -46,7 +46,7 @@ export function resolveMemoryConflict(ctx: Context, conflictId: number, opts: Re
   if (loadEntriesByIds(ctx.hippoRoot, pair, ctx.tenantId).filter(isLive).length < pair.length) {
     throw new NotFoundError(`conflict ${conflictId} names a memory that is superseded, archived or quarantined`);
   }
-  const resolved = resolveConflict(ctx.hippoRoot, conflictId, opts.keepId, opts.forget === true, ctx.tenantId, {
+  const resolved = resolveConflict(ctx.hippoRoot, { conflictId, keepId: opts.keepId, forgetLoser: opts.forget === true, tenantId: ctx.tenantId }, {
     rejectLoserValue: opts.rejectLoser === true,
     reason: opts.reason,
     rejectedBy: ctx.actor.subject,

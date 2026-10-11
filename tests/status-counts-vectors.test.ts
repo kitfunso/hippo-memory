@@ -129,7 +129,7 @@ function seedEveryCase(): void {
   ], NOW);
   const resolved = listMemoryConflicts(root).find((c) => c.reason === 'resolved below');
   if (!resolved) throw new Error('fixture conflict missing');
-  resolveConflict(root, resolved.id, fresh);
+  resolveConflict(root, { conflictId: resolved.id, keepId: fresh });
   saveStoredVectors(root, [[fresh, [1, 2, 3, 4]], [otherA, [4, 3, 2, 1]], ['orphan', [0, 1, 0, 1]]], 'm');
   updateStats(root, { remembered: 5, recalled: 3, forgotten: 1 });
   appendConsolidationRun(root, { timestamp: daysAgo(2), decayed: 1, merged: 0, removed: 0 });

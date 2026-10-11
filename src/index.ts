@@ -37,7 +37,7 @@ export { initStore } from './store/open.js';
 export { writeEntry } from './store/entry-writes.js';
 export { loadAllEntries, readEntry } from './store/entry-reads.js';
 export { deleteEntry } from './store/delete-and-batch.js';
-export { loadSearchEntries, loadRecallSearchEntries } from './store/search-rows.js';
+export { loadSearchEntries, loadRecallEntries, type RecallSearchEntriesOptions } from './store/search-rows.js';
 export { loadIndex, rebuildIndex, loadSessionDecayContext, SessionDecayContext } from './store/index-and-stats.js';
 export {
   saveActiveTaskSnapshot,

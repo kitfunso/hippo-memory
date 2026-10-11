@@ -102,6 +102,14 @@ describe('hippo predict', () => {
     expect(all).toContain(`#${closedId} [closed] class=port`);
   });
 
+  it.each([['decide', 'get', '12abc'], ['decide', 'close', '0x1'], ['predict', 'show', '12abc'], ['predict', 'close', '0x1']])(
+    'refuses the partly numeric id in `%s %s %s` that the lenient parser used to read as a number',
+    (verb, sub, id) => {
+      const r = hippo(verb, sub, id, ...(sub === 'close' && verb === 'predict' ? ['--state', 'closed'] : []));
+      expect([r.status, r.stderr]).toEqual([1, expect.stringContaining('expected a positive integer')]);
+    },
+  );
+
   it('refuses a missing class, bad numbers, a bad state and a closed filter without a class', () => {
     expect(hippo('predict', 'a claim').stderr).toContain('--class is required');
     expect(hippo('predict', 'a claim', '--class', 'c', '--estimate', 'soon').stderr).toContain('Invalid --estimate: "soon"');

@@ -140,7 +140,13 @@ describe('routed writes under a busy store', () => {
 
   it('promote: a busy audit write rolls back the global copy, so a failed promote leaves nothing to duplicate', async () => {
     const { id } = await client.remember(url, undefined, { content: 'promote-audit-busy-canary' });
-    expect(() => promoteToGlobal(home, id, { afterWrite: () => { throw busyErr; } })).toThrow(busyErr);
+    const globalDb = openHippoDb(globalHome);
+    try {
+      globalDb.exec(`CREATE TRIGGER fail_promote_audit BEFORE INSERT ON audit_log WHEN NEW.op = 'promote' BEGIN SELECT RAISE(ABORT, 'forced promote audit failure'); END`);
+    } finally {
+      closeHippoDb(globalDb);
+    }
+    expect(() => promoteToGlobal(home, id, { auditAs: { tenantId: 'default', actor: 'tester' } })).toThrow(/forced promote audit failure/);
     expect(count(globalHome, `SELECT COUNT(*) AS n FROM memories WHERE content = ?`, 'promote-audit-busy-canary')).toBe(0);
   });
 

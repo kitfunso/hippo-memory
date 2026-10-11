@@ -388,7 +388,7 @@ describe('personal memories walk (plan lane T)', () => {
     }
 
     // The admin resolves with the CLI on a shared store, which runs this.
-    expect(resolveConflict(store, teamPair, t2, false, 'default', { rejectLoserValue: true, rejectedBy: 'walk' })).not.toBeNull();
+    expect(resolveConflict(store, { conflictId: teamPair, keepId: t2, tenantId: 'default' }, { rejectLoserValue: true, rejectedBy: 'walk' })).not.toBeNull();
     expect(readEntry(store, t1)).toBeFalsy();
     expect(readEntry(store, p1)?.content).toBe(off);
   });

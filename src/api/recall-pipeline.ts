@@ -21,7 +21,7 @@ import { searchByEngine } from '../search/engine.js';
 import type { VectorSource } from '../search/vector.js';
 import type { RerankStep, ResultCost, SearchResult } from '../core/search-types.js';
 import { rankBothStores } from '../sharing/search-both.js';
-import { loadRecallSearchEntries, recallScopeFilter } from '../store/search-rows.js';
+import { loadRecallEntries, recallScopeFilter } from '../store/search-rows.js';
 import { isJsonNumber } from '../util/json.js';
 import { textOverlap, tokenize as tokenizeQuery } from '../util/tokenize.js';
 
@@ -166,10 +166,9 @@ function loadRecallPool(ctx: RankRecallCtx, opts: RankRecallOpts): RecallPool {
   // An explicit --scope unlocks that envelope scope; the regex-only `<source>:private:*` deny is the JS half below.
   const requested = opts.explicitScope || undefined;
   const loadSuperseded = opts.includeSuperseded || Boolean(opts.asOf);
-  let local = loadRecallSearchEntries(ctx.hippoRoot, opts.query, undefined, ctx.tenantId, requested, 'additive', loadSuperseded);
-  let global = ctx.globalRoot
-    ? loadRecallSearchEntries(ctx.globalRoot, opts.query, undefined, ctx.tenantId, requested, 'additive', loadSuperseded)
-    : [];
+  const load = { tenantId: ctx.tenantId, requestedScope: requested, explicitScopeMode: 'additive', includeSuperseded: loadSuperseded } as const;
+  let local = loadRecallEntries(ctx.hippoRoot, opts.query, load);
+  let global = ctx.globalRoot ? loadRecallEntries(ctx.globalRoot, opts.query, load) : [];
   // SQL-excluded rows are pre-candidate, so the total is taken before the JS filters, which normally drop nothing.
   const total = local.length + global.length;
   const passes = (e: MemoryEntry): boolean => passesCliRecallScopeFilter(e.scope ?? null, requested);

@@ -19,7 +19,7 @@
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
-import { writeEntry } from '../src/store/entry-writes.js';
+import { writeEntry, writeEntryWithHook } from '../src/store/entry-writes.js';
 import { deleteEntry } from '../src/store/delete-and-batch.js';
 import { Layer } from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
@@ -114,7 +114,7 @@ describe('skills store (executable/exportable first-class object)', () => {
     const mem = createMemory('throwing skill', {
       tags: ['skill'], layer: Layer.Semantic, confidence: 'verified', source: 'skill', tenantId: 'default',
     });
-    expect(() => writeEntry(home, mem, { afterWrite: () => { throw new Error('forced'); } })).toThrow('forced');
+    expect(() => writeEntryWithHook(home, mem, { afterWrite: () => { throw new Error('forced'); } })).toThrow('forced');
     expect(countRows(home, 'memories')).toBe(m0);
     expect(countRows(home, 'skills')).toBe(s0);
   });

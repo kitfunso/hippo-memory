@@ -277,7 +277,7 @@ describe('replaceDetectedConflicts', () => {
       replaceDetectedConflicts(root, [{ memory_a_id: entries[0].id, memory_b_id: entries[1].id, reason: 'test', score: 0.9 }]);
       const [conflict] = listMemoryConflicts(root);
       const mirrorsRewritten = ageMirrors(root);
-      const resolved = resolveConflict(root, conflict.id, conflict.memory_a_id);
+      const resolved = resolveConflict(root, { conflictId: conflict.id, keepId: conflict.memory_a_id });
       expect(resolved?.conflict.status).toBe('resolved');
       expect(mirrorsRewritten()).toBe(2);
     }

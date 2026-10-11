@@ -379,7 +379,7 @@ describe('memories of decisions, incidents and other objects pinned to 90 days',
     pinTo90(root, loser, 47);
     pinTo90(root, winner);
     replaceDetectedConflicts(root, [{ memory_a_id: loser, memory_b_id: winner, reason: 'contradiction', score: 0.9 }]);
-    resolveConflict(root, listMemoryConflicts(root)[0]!.id, winner);
+    resolveConflict(root, { conflictId: listMemoryConflicts(root)[0]!.id, keepId: winner });
     unrecord(root, TYPED_HALF_LIFE_META_KEY);
     expect(halfLifeOf(root, loser)).toBe(92);
 

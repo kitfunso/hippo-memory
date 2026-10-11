@@ -4,7 +4,7 @@ import { BadRequestError, NotFoundError } from '../core/api-errors.js';
 import * as fs from 'fs';
 import { MemoryEntry, generateId } from '../core/memory.js';
 import { initStore } from '../store/open.js';
-import { writeEntry } from '../store/entry-writes.js';
+import { writeEntryWithHook } from '../store/entry-writes.js';
 import { readEntry } from '../store/entry-reads.js';
 import { isPersonalScope } from '../core/recall-scope.js';
 import { fallbackOrigin, resolveGlobalRootDir } from '../core/project-identity.js';
@@ -34,29 +34,15 @@ export function initGlobal(): void {
   }
 }
 
-type PromoteHook = (db: DatabaseSyncLike, globalId: string) => void;
-
-/** The copy's write hook: the `promote` row when asked for, then the caller's own hook, both in the copy's transaction. */
-function promoteHook(sourceId: string, auditAs: { tenantId: string; actor: string } | undefined, afterWrite: PromoteHook | undefined): PromoteHook | undefined {
-  if (!auditAs) return afterWrite;
-  return (db, globalId) => {
-    appendAuditEvent(db, { tenantId: auditAs.tenantId, actor: auditAs.actor, op: 'promote', targetId: globalId, metadata: { sourceId } });
-    afterWrite?.(db, globalId);
-  };
+export interface PromoteOptions {
+  actor?: string;
+  tenantId?: string;
+  /** Also writes one `promote` audit row for the copy ({sourceId}), in the copy's own transaction. */
+  auditAs?: { tenantId: string; actor: string };
 }
 
 /** Copies a local memory to the global store and returns the copy, which gets a new `g_` id so it cannot collide. */
-export function promoteToGlobal(
-  localRoot: string,
-  id: string,
-  opts?: {
-    actor?: string;
-    tenantId?: string;
-    afterWrite?: (db: DatabaseSyncLike, globalId: string) => void;
-    /** Also writes one `promote` audit row for the copy ({sourceId}), in the copy's own transaction. */
-    auditAs?: { tenantId: string; actor: string };
-  },
-): MemoryEntry {
+export function promoteToGlobal(localRoot: string, id: string, opts?: PromoteOptions): MemoryEntry {
   const entry = readEntry(localRoot, id, opts?.tenantId);
   if (!entry) throw new NotFoundError(`Memory not found: ${id}`);
 
@@ -89,7 +75,11 @@ export function promoteToGlobal(
     origin_project: entry.origin_project ?? fallbackOrigin(localRoot),
   };
 
-  writeEntry(globalRoot, globalEntry, { actor: opts?.actor, afterWrite: promoteHook(id, opts?.auditAs, opts?.afterWrite) });
+  const { auditAs } = opts ?? {};
+  const promoteRow = auditAs && ((db: DatabaseSyncLike, globalId: string): void => {
+    appendAuditEvent(db, { tenantId: auditAs.tenantId, actor: auditAs.actor, op: 'promote', targetId: globalId, metadata: { sourceId: id } });
+  });
+  writeEntryWithHook(globalRoot, globalEntry, { actor: opts?.actor, afterWrite: promoteRow });
 
   // Fire-and-forget: embedMemory gates on availability and never rejects.
   void embedMemory(globalRoot, globalEntry);

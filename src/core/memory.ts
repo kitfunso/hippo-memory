@@ -323,7 +323,7 @@ export interface ConfidenceFacets {
   agedOut: boolean;
 }
 
-export function confidenceFacets(entry: MemoryEntry, now: Date = evalNow()): ConfidenceFacets {
+export function confidenceFacets(entry: ConfidenceInputs, now: Date = evalNow()): ConfidenceFacets {
   return facetsOf(entry, now);
 }
 

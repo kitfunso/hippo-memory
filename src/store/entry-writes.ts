@@ -14,14 +14,24 @@ import { onHandle, openStore } from './open.js';
 
 export interface WriteEntryOptions {
   actor?: string;
-  afterWrite?: (db: DatabaseSyncLike, memoryId: string) => void;
   /** Runs after the row commits and before the mirrors, on an idle connection; keep it best-effort. */
   afterCommit?: () => void;
 }
 
-/** Write an entry to SQLite and refresh mirrors; `opts.afterWrite` runs in the same SAVEPOINT as the INSERT, so a throw rolls the row back.
- * `opts.actor` defaults to 'cli'; the api layer passes the resolved actor so the audit log gets one row per write. */
+/** Store-side only, never exported from a package entry: `afterWrite` hands the write's own db handle to the hook. */
+export interface WriteEntryInternalOptions extends WriteEntryOptions {
+  /** Runs in the same SAVEPOINT as the INSERT, so a throw rolls the row back. */
+  afterWrite?: (db: DatabaseSyncLike, memoryId: string) => void;
+}
+
+/** Write an entry to SQLite and refresh mirrors. `opts.actor` defaults to 'cli'; the api layer passes the resolved actor,
+ * so the audit log gets one row per write. */
 export function writeEntry(hippoRoot: string, entry: MemoryEntry, opts?: WriteEntryOptions): void {
+  writeEntryWithHook(hippoRoot, entry, opts);
+}
+
+/** writeEntry for store code that needs the write's own handle: `opts.afterWrite` shares the INSERT's SAVEPOINT. */
+export function writeEntryWithHook(hippoRoot: string, entry: MemoryEntry, opts?: WriteEntryInternalOptions): void {
   onHandle(hippoRoot, (db) => {
     writeEntryOn(db, hippoRoot, entry, opts);
   }, openStore);
@@ -90,7 +100,7 @@ export function addTagToEntries(hippoRoot: string, tenantId: string, ids: readon
 }
 
 /** writeEntry on the caller's open store, so a loop of writes opens the store once; each row still commits alone. */
-function writeEntryOn(db: DatabaseSyncLike, hippoRoot: string, entry: MemoryEntry, opts?: WriteEntryOptions): void {
+function writeEntryOn(db: DatabaseSyncLike, hippoRoot: string, entry: MemoryEntry, opts?: WriteEntryInternalOptions): void {
   try {
     const stamped = stampOriginProject(hippoRoot, entry);
     writeEntryDbOnly(db, stamped, opts);
@@ -111,10 +121,7 @@ function writeEntryOn(db: DatabaseSyncLike, hippoRoot: string, entry: MemoryEntr
 export function writeEntryDbOnly(
   db: DatabaseSyncLike,
   entry: MemoryEntry,
-  opts?: {
-    actor?: string;
-    afterWrite?: (db: DatabaseSyncLike, memoryId: string) => void;
-  },
+  opts?: Pick<WriteEntryInternalOptions, 'actor' | 'afterWrite'>,
 ): void {
   // Inside a caller's transaction (e.g. supersede's BEGIN IMMEDIATE) the scope is a SAVEPOINT,
   // so a throw here rolls back only this write and leaves the outer open.
