@@ -31,7 +31,7 @@ describe('GET /v1/audit?op=<op> — consolidate + outcome wiring', () => {
     globalHome = makeRoot('audit-route');
     origHippoHome = process.env.HIPPO_HOME;
     process.env.HIPPO_HOME = globalHome;
-    handle = await serve({ hippoRoot: home, port: 0 });
+    handle = await serve({ hippoRoot: home, port: 0, keylessLocalRole: 'admin' });
   });
 
   afterEach(async () => {

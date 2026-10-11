@@ -36,7 +36,8 @@ async function recalled(server: ServerHandle, query: string): Promise<string[]> 
 describe('a root with no hippo.db', () => {
   it('answers its first request, a read, from a reader, after the writer recorded what a new store records', async () => {
     const root = bareRoot();
-    const server = await start(root);
+    // GET /v1/quarantine is an admin route, so this machine's keyless caller opts in to admin.
+    const server = await start(root, undefined, { keylessLocalRole: 'admin' });
 
     const graph = await get(server, '/v1/graph');
 

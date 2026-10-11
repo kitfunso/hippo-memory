@@ -76,6 +76,8 @@ export function envHippoHome(): string | undefined { return raw('HIPPO_HOME')?.t
 export function envXdgDataHome(): string | undefined { return raw('XDG_DATA_HOME')?.trim(); }
 export function envHomeDir(): string | undefined { return raw('HOME') || raw('USERPROFILE'); }
 export function envPath(): string | undefined { return raw('PATH'); }
+/** The extensions win32 tries on a bare command name, in order. */
+export function envPathExt(): string | undefined { return raw('PATHEXT'); }
 export function envModelCache(): string | undefined { return trimmed('HIPPO_MODEL_CACHE'); }
 
 // Session, scope and tenant.
@@ -111,9 +113,15 @@ export function envPort(): string | undefined { return raw('HIPPO_PORT'); }
 /** How long a client waits for a running server's /health before writing to the store directly; server-detect.ts holds the default. */
 export function envHealthProbeMs(): number | undefined { return positiveInt('HIPPO_HEALTH_PROBE_MS'); }
 export function envRequireAuth(): boolean { return isOne('HIPPO_REQUIRE_AUTH'); }
-/** `1` lets a request made on this machine in with no key, as host admin; HIPPO_REQUIRE_AUTH=1 wins over it. */
+/** `1` lets a request made on this machine in with no key; HIPPO_REQUIRE_AUTH=1 wins over it. */
 export function envAllowKeylessLocal(): boolean { return isOne('HIPPO_ALLOW_KEYLESS_LOCAL'); }
+/** The role a keyless local request gets: `admin` (host admin) only when asked for by name, else `member`. */
+export function envKeylessLocalRole(): 'admin' | 'member' { return trimmed('HIPPO_KEYLESS_LOCAL_ROLE')?.toLowerCase() === 'admin' ? 'admin' : 'member'; }
+/** `1` lets a non-loopback bind start without TLS, for TLS that ends at a proxy in front. */
+export function envAllowCleartext(): boolean { return isOne('HIPPO_ALLOW_CLEARTEXT'); }
 export function envV1Rps(): string | undefined { return raw('HIPPO_V1_RPS'); }
+/** Requests per second each authenticated caller may make; `0` turns the per-caller limit off. */
+export function envCallerRps(): string | undefined { return trimmed('HIPPO_CALLER_RPS'); }
 /** How long a request body may take to arrive; http-util.ts holds the default. */
 export function envBodyTimeoutMs(): number | undefined { return positiveInt('HIPPO_BODY_TIMEOUT_MS'); }
 /** How long POST /v1/sleep lets its consolidation run; server/sleep-offload.ts holds the default. */
@@ -127,6 +135,7 @@ export function envStoreQueueMax(): number | undefined { return positiveInt('HIP
 export function envDailyStepTimeoutMs(): number | undefined { return positiveInt('HIPPO_DAILY_STEP_TIMEOUT_MS'); }
 export function envApiKey(): string | undefined { return raw('HIPPO_API_KEY'); }
 export function envClientIpHeader(): string | undefined { return raw('HIPPO_CLIENT_IP_HEADER')?.trim().toLowerCase(); }
+/** The peers whose HIPPO_CLIENT_IP_HEADER is believed: IPs or CIDRs, or `*` for any peer. */
 export function envTrustedProxies(): string | undefined { return raw('HIPPO_TRUSTED_PROXIES'); }
 /** Paths to the PEM certificate and key `hippo serve` answers HTTPS with; the --tls-cert and --tls-key flags win. */
 export function envTlsCert(): string | undefined { return trimmed('HIPPO_TLS_CERT'); }

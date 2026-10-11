@@ -48,8 +48,9 @@ beforeAll(async () => {
   } finally {
     closeHippoDb(db);
   }
-  // Seventy requests from one IP would trip the per-IP limiter; it is read once, at serve().
+  // Seventy requests from one IP would trip the per-IP and per-caller limiters; both are read once, at serve().
   vi.stubEnv('HIPPO_V1_RPS', '0');
+  vi.stubEnv('HIPPO_CALLER_RPS', '0');
   handle = await serve({ hippoRoot: home, port: 0 });
   vi.unstubAllEnvs();
   ids.decision = await created('/v1/decisions', { text: 'use sqlite for the store' }, 'decision');

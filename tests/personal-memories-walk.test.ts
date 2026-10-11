@@ -146,7 +146,7 @@ beforeAll(async () => {
   initStore(store);
   fs.writeFileSync(path.join(store, 'config.json'), JSON.stringify({ sharedStore: true, pinnedInject: { promptRecall: true } }));
   keys = { A: mint('walk-a', 'member', 'oid-a'), B: mint('walk-b', 'member', 'oid-b'), ADM: mint('walk-adm', 'admin') };
-  handle = await serve({ hippoRoot: store, host: '127.0.0.1', port: 0, authResolver: resolver });
+  handle = await serve({ hippoRoot: store, host: '127.0.0.1', port: 0, authResolver: resolver, keylessLocalRole: 'admin' });
 
   const alpha = { name: 'alpha' };
   ids.aZircon = await post(keys.A.plaintext, { content: ZIRCON, personal: true, project: alpha });

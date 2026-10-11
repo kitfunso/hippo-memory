@@ -10,7 +10,8 @@
 //      every route behaves exactly as the Bearer-lockdown regime promises
 //      (public /health, 401 without a token, 200 with a valid one, and the
 //      created row is actually retrievable through the authed path),
-//   3. the loopback default path is unaffected (no regression).
+//   3. the loopback default path is unaffected (no regression),
+//   4. a non-loopback bind with no TLS refuses unless cleartext is allowed.
 //
 // Store-root convention follows tests/cli-recall-cutoff-counters.test.ts's
 // makeEnv: the store root passed to initStore/serve IS the .hippo directory
@@ -30,11 +31,13 @@ describe('serve() non-loopback host guard', () => {
   let hippoRoot: string;
   let handle: ServerHandle | undefined;
   const savedRequireAuth = process.env.HIPPO_REQUIRE_AUTH;
+  const savedAllowCleartext = process.env.HIPPO_ALLOW_CLEARTEXT;
 
   beforeEach(() => {
     hippoRoot = join(mkdtempSync(join(tmpdir(), 'hippo-nla-')), '.hippo');
     initStore(hippoRoot);
     delete process.env.HIPPO_REQUIRE_AUTH;
+    delete process.env.HIPPO_ALLOW_CLEARTEXT;
   });
 
   afterEach(async () => {
@@ -47,6 +50,8 @@ describe('serve() non-loopback host guard', () => {
     } else {
       process.env.HIPPO_REQUIRE_AUTH = savedRequireAuth;
     }
+    if (savedAllowCleartext === undefined) delete process.env.HIPPO_ALLOW_CLEARTEXT;
+    else process.env.HIPPO_ALLOW_CLEARTEXT = savedAllowCleartext;
     rmSync(hippoRoot, { recursive: true, force: true });
   });
 
@@ -62,15 +67,30 @@ describe('serve() non-loopback host guard', () => {
     expect(res.status).toBe(200);
   });
 
-  it('warns once at start that a network bind without TLS is cleartext, and stays quiet on loopback', async () => {
+  it('refuses a network bind without TLS by default, naming every way to allow it', async () => {
+    process.env.HIPPO_REQUIRE_AUTH = '1';
+    await expect(serve({ hippoRoot, host: '0.0.0.0', port: 0 })).rejects.toMatchObject({
+      name: 'CleartextBindError',
+      message: expect.stringMatching(/0\.0\.0\.0.*--tls-cert.*--allow-cleartext.*HIPPO_ALLOW_CLEARTEXT=1.*allowCleartext: true/s),
+    });
+  });
+
+  it('starts a network bind without TLS once HIPPO_ALLOW_CLEARTEXT=1', async () => {
+    process.env.HIPPO_REQUIRE_AUTH = '1';
+    process.env.HIPPO_ALLOW_CLEARTEXT = '1';
+    handle = await serve({ hippoRoot, host: '0.0.0.0', port: 0 });
+    expect(handle.port).toBeGreaterThan(0);
+  });
+
+  it('warns once at start that an allowed network bind without TLS is cleartext, and stays quiet on loopback', async () => {
     process.env.HIPPO_REQUIRE_AUTH = '1';
     const warn = vi.spyOn(log, 'warn').mockImplementation(() => {});
     try {
-      handle = await serve({ hippoRoot, host: '0.0.0.0', port: 0 });
+      handle = await serve({ hippoRoot, host: '0.0.0.0', port: 0, allowCleartext: true });
       await handle.stop();
       handle = await serve({ hippoRoot, host: '127.0.0.1', port: 0 });
       expect(warn.mock.calls.map((call) => String(call[0])).filter((line) => line.includes('cleartext'))).toEqual([
-        expect.stringMatching(/listening on 0\.0\.0\.0 without TLS.*unless a TLS-terminating proxy sits in front.*--tls-cert and --tls-key/),
+        expect.stringMatching(/listening on 0\.0\.0\.0 without TLS, as allowed.*cleartext until the proxy in front adds TLS/),
       ]);
     } finally {
       warn.mockRestore();
@@ -80,7 +100,7 @@ describe('serve() non-loopback host guard', () => {
   describe('with HIPPO_REQUIRE_AUTH=1', () => {
     beforeEach(async () => {
       process.env.HIPPO_REQUIRE_AUTH = '1';
-      handle = await serve({ hippoRoot, host: '0.0.0.0', port: 0 });
+      handle = await serve({ hippoRoot, host: '0.0.0.0', port: 0, allowCleartext: true });
     });
 
     it('starts and binds the requested non-loopback host', () => {
@@ -152,12 +172,19 @@ function fakeReq(headers: Record<string, string | string[]>, remoteAddress = '10
   return { headers, socket: { remoteAddress } } as IncomingMessage;
 }
 
-describe('clientIpForRateLimit', () => {
+describe('clientIpForRateLimit from a peer HIPPO_TRUSTED_PROXIES=* trusts', () => {
   const saved = process.env.HIPPO_CLIENT_IP_HEADER;
+  const savedProxies = process.env.HIPPO_TRUSTED_PROXIES;
+
+  beforeEach(() => {
+    process.env.HIPPO_TRUSTED_PROXIES = '*';
+  });
 
   afterEach(() => {
     if (saved === undefined) delete process.env.HIPPO_CLIENT_IP_HEADER;
     else process.env.HIPPO_CLIENT_IP_HEADER = saved;
+    if (savedProxies === undefined) delete process.env.HIPPO_TRUSTED_PROXIES;
+    else process.env.HIPPO_TRUSTED_PROXIES = savedProxies;
   });
 
   it('defaults to the socket remote address when the env var is unset', () => {

@@ -269,4 +269,15 @@ describe('the first key of a store', () => {
     expect(first.role).toBe('member');
     expect((await send('GET', '/v1/quarantine', first.plaintext)).status).toBe(403);
   });
+
+  it('authCreate with no role names member, even when the host admin mints it, in the reply and in the store', () => {
+    const minted = authCreate({ hippoRoot: home, tenantId: 'default', actor: adminActor('cli') }, { noExpiry: true });
+    expect(minted.role).toBe('member');
+    const db = openHippoDb(home);
+    try {
+      expect(db.prepare('SELECT role FROM api_keys WHERE key_id = ?').get<{ role: string }>(minted.keyId)?.role).toBe('member');
+    } finally {
+      closeHippoDb(db);
+    }
+  });
 });

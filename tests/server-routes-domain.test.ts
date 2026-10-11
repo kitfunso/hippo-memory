@@ -24,7 +24,7 @@ describe('server HTTP routes — memories', () => {
     globalHome = makeRoot('srv-routes');
     originalHippoHome = process.env.HIPPO_HOME;
     process.env.HIPPO_HOME = globalHome;
-    handle = await serve({ hippoRoot: home, port: 0 });
+    handle = await serve({ hippoRoot: home, port: 0, keylessLocalRole: 'admin' });
   });
 
   afterEach(async () => {
@@ -231,7 +231,7 @@ describe('server HTTP routes — auth + audit', () => {
     home = makeRoot('srv-routes');
     originalHippoHome = process.env.HIPPO_HOME;
     process.env.HIPPO_HOME = home;
-    handle = await serve({ hippoRoot: home, port: 0 });
+    handle = await serve({ hippoRoot: home, port: 0, keylessLocalRole: 'admin' });
   });
 
   afterEach(async () => {

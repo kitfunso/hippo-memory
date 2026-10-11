@@ -1,5 +1,5 @@
-// The rate-limit key trusts a forwarded header only in proxy mode, and then takes the
-// rightmost hop no trusted proxy added, so a client cannot mint a fresh bucket per request.
+// The rate-limit key trusts a forwarded header only from a listed proxy peer (or any peer under *), and then takes
+// the rightmost hop no trusted proxy added, so a client cannot mint a fresh bucket per request.
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -42,10 +42,22 @@ describe('clientIpForRateLimit behind a trusted proxy', () => {
     expect(clientIpForRateLimit(fakeReq({ 'x-forwarded-for': '6.6.6.6' }, '10.0.0.9'))).toBe('10.0.0.9');
   });
 
-  it('takes the rightmost hop, which the fronting proxy appended, not the client-supplied first hop', () => {
+  it('ignores the header from every peer when the header is set but no trusted proxy is listed', () => {
     process.env.HIPPO_CLIENT_IP_HEADER = 'x-forwarded-for';
+    expect(clientIpForRateLimit(fakeReq({ 'x-forwarded-for': '6.6.6.6, 203.0.113.7' }, '10.0.0.9'))).toBe('10.0.0.9');
+  });
+
+  it('with HIPPO_TRUSTED_PROXIES=* takes the rightmost hop from any peer, which the fronting proxy appended, not the client-supplied first hop', () => {
+    process.env.HIPPO_CLIENT_IP_HEADER = 'x-forwarded-for';
+    process.env.HIPPO_TRUSTED_PROXIES = '*';
     const req = fakeReq({ 'x-forwarded-for': '6.6.6.6, 203.0.113.7' }, '10.0.0.9');
     expect(clientIpForRateLimit(req)).toBe('203.0.113.7');
+  });
+
+  it('honours the header from a listed peer', () => {
+    process.env.HIPPO_CLIENT_IP_HEADER = 'x-forwarded-for';
+    process.env.HIPPO_TRUSTED_PROXIES = '10.0.0.9';
+    expect(clientIpForRateLimit(fakeReq({ 'x-forwarded-for': '6.6.6.6, 203.0.113.7' }, '10.0.0.9'))).toBe('203.0.113.7');
   });
 
   it('skips trusted proxy hops when walking the chain from the right', () => {
@@ -170,16 +182,31 @@ describe('rate limiting over real HTTP with rotating spoofed X-Forwarded-For', (
     expect(await statusesWithRotatingXff()).toContain(429);
   });
 
-  it('warns once at start that any caller can set the header when no trusted proxy is listed, and stays quiet with no header or with a list', async () => {
+  it('gives each forwarded address its own bucket when HIPPO_TRUSTED_PROXIES is *', async () => {
+    process.env.HIPPO_CLIENT_IP_HEADER = 'x-forwarded-for';
+    process.env.HIPPO_TRUSTED_PROXIES = '*';
+    expect(await statusesWithRotatingXff()).not.toContain(429);
+  });
+
+  it('refuses to start with the header set and no trusted proxy listed', async () => {
+    process.env.HIPPO_CLIENT_IP_HEADER = 'x-forwarded-for';
+    await expect(serve({ hippoRoot: root, port: 0 })).rejects.toMatchObject({
+      name: 'UntrustedClientIpHeaderError',
+      message: expect.stringMatching(/HIPPO_CLIENT_IP_HEADER is x-forwarded-for but HIPPO_TRUSTED_PROXIES is unset.*or to \*/),
+    });
+  });
+
+  it('warns once at start when * trusts any peer, and stays quiet with no header or with a list', async () => {
     const warn = vi.spyOn(log, 'warn').mockImplementation(() => {});
     try {
       await (await serve({ hippoRoot: root, port: 0 })).stop();
       process.env.HIPPO_CLIENT_IP_HEADER = 'x-forwarded-for';
-      await (await serve({ hippoRoot: root, port: 0 })).stop();
       process.env.HIPPO_TRUSTED_PROXIES = '192.0.2.1';
       await (await serve({ hippoRoot: root, port: 0 })).stop();
-      expect(warn.mock.calls.map((call) => String(call[0])).filter((line) => line.includes('HIPPO_CLIENT_IP_HEADER'))).toEqual([
-        expect.stringMatching(/HIPPO_CLIENT_IP_HEADER is x-forwarded-for and HIPPO_TRUSTED_PROXIES is unset.*any caller that reaches this port.*Set HIPPO_TRUSTED_PROXIES/),
+      process.env.HIPPO_TRUSTED_PROXIES = '*';
+      await (await serve({ hippoRoot: root, port: 0 })).stop();
+      expect(warn.mock.calls.map((call) => String(call[0])).filter((line) => line.includes('HIPPO_TRUSTED_PROXIES'))).toEqual([
+        expect.stringMatching(/HIPPO_TRUSTED_PROXIES is \*, so x-forwarded-for is read from any peer/),
       ]);
     } finally {
       warn.mockRestore();

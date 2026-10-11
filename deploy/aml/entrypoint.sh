@@ -32,4 +32,5 @@ if [ ! -f /data/.hippo/index.json ] && [ ! -f /data/.hippo/hippo.db ]; then
 fi
 
 echo "[aml] starting hippo serve (auth required, port ${HIPPO_PORT:-8080})"
-exec node /app/dist/cli.js serve --host 0.0.0.0 --port "${HIPPO_PORT:-8080}"
+# TLS ends at Cloudflare and hippo is reachable only on the compose network, so cleartext here is allowed on purpose.
+exec node /app/dist/cli.js serve --host 0.0.0.0 --allow-cleartext --port "${HIPPO_PORT:-8080}"

@@ -13,7 +13,7 @@ export interface Actor {
   scopes?: readonly string[];
   /** An auth resolver vouched for this caller, so its admin role stops at its own tenant. */
   viaAuthResolver?: true;
-  /** The host's operator (CLI, stdio MCP, keyless loopback, host-tenant admin key): may act beyond its tenant. */
+  /** The host's operator (CLI, stdio MCP, keyless loopback set to admin, host-tenant admin key): may act beyond its tenant. */
   hostAdmin?: true;
   owner?: string; // the person behind the key; task state keys on it
 }

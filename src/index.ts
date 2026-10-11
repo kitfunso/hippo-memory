@@ -98,6 +98,7 @@ export {
   partitionLessons,
   deduplicateLesson,
   runWatched,
+  type RunWatchedOptions,
   fetchGitLog,
 } from './learn/autolearn.js';
 

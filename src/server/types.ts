@@ -68,11 +68,16 @@ export interface ServeOpts {
   /** PEM certificate and key: serve() then answers HTTPS only. Unset means cleartext
    * HTTP, which needs a TLS-terminating proxy in front on any non-loopback bind. */
   tls?: { cert: string | Buffer; key: string | Buffer };
+  /** Lets a non-loopback bind start without `tls`, for TLS that ends at a proxy in front; else serve() refuses it. Also HIPPO_ALLOW_CLEARTEXT=1. */
+  allowCleartext?: boolean;
+  /** The role a keyless local request (HIPPO_ALLOW_KEYLESS_LOCAL=1) gets; defaults to HIPPO_KEYLESS_LOCAL_ROLE, else 'member'. Only 'admin' is host admin. */
+  keylessLocalRole?: 'member' | 'admin';
   /** Static JSON served to anyone at GET <path>; built once at boot and never authenticated, so it must hold nothing secret. */
   publicJson?: Readonly<Record<string, JsonValue>>;
-  /** Request limits: perCaller after auth; perAddress replaces HIPPO_V1_RPS when set, 'off' disables it; failedAuthPerAddress guards scrypt. */
+  /** Request limits: perCaller after auth, on by default (HIPPO_CALLER_RPS, else 20 per second, burst 40); perAddress replaces HIPPO_V1_RPS when set;
+   * 'off' disables either; failedAuthPerAddress guards scrypt. */
   rateLimits?: {
-    perCaller?: RateLimitSpec;
+    perCaller?: RateLimitSpec | 'off';
     perAddress?: RateLimitSpec | 'off';
     failedAuthPerAddress?: RateLimitSpec;
   };

@@ -20,7 +20,7 @@ let handle: ServerHandle;
 
 beforeEach(async () => {
   home = makeRoot('http-cont');
-  handle = await serve({ hippoRoot: home, port: 0 });
+  handle = await serve({ hippoRoot: home, port: 0, keylessLocalRole: 'admin' });
 });
 
 afterEach(async () => {

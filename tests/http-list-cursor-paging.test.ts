@@ -79,8 +79,9 @@ beforeAll(async () => {
   await seedTenant('default', ROWS);
   // Another tenant's rows must never leak into a page, even when the tenant filter sits beside a cursor.
   await seedTenant('tenant-b', 3);
-  // Paging every route makes well over the per-IP burst; the limiter is read once, at serve().
+  // Paging every route makes well over the per-IP and per-caller bursts; both limiters are read once, at serve().
   vi.stubEnv('HIPPO_V1_RPS', '0');
+  vi.stubEnv('HIPPO_CALLER_RPS', '0');
   handle = await serve({ hippoRoot: home, port: 0 });
   vi.unstubAllEnvs();
 }, 60_000);

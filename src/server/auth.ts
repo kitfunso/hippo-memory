@@ -1,5 +1,5 @@
 // Bearer and loopback auth for the HTTP server.
-import { envAllowKeylessLocal, envRequireAuth } from '../util/env.js';
+import { envAllowKeylessLocal, envKeylessLocalRole, envRequireAuth } from '../util/env.js';
 import type { IncomingMessage } from 'node:http';
 import { resolveTenantId } from '../store/tenant.js';
 import { errorFields, errorMessage, log } from '../util/log.js';
@@ -88,7 +88,7 @@ export function readAuthHeader(req: IncomingMessage): AuthHeader {
 }
 
 type AuthOpts = Pick<ResolvedServeOpts, 'hippoRoot' | 'authResolver' | 'authResolverTimeoutMs' | 'store' | 'callerLimiter'>
-  & Partial<Pick<ResolvedServeOpts, 'failedAuthLimiter'>>;
+  & Partial<Pick<ResolvedServeOpts, 'failedAuthLimiter' | 'keylessLocalRole'>>;
 
 // Built-in actors are the bare names below or `<name>:<detail>`; a plain prefix would also reject `clinton@corp`.
 const RESERVED_ACTOR_NAMES = [
@@ -268,15 +268,15 @@ export async function recheckContextWithAuth(req: IncomingMessage, opts: AuthOpt
   return contextFor(await checkAuth(req, opts), opts);
 }
 
+/** The keyless local caller: any process on this machine can reach loopback, so it is a member unless the operator names admin. */
+function keylessLocalActor(opts: AuthOpts): Actor {
+  const role = opts.keylessLocalRole ?? envKeylessLocalRole();
+  return role === 'admin' ? { subject: 'localhost:cli', role: 'admin', hostAdmin: true } : { subject: 'localhost:cli', role: 'member' };
+}
+
 function contextFor(id: BearerIdentity | null, opts: AuthOpts): Context {
   if (id !== null) return { hippoRoot: opts.hippoRoot, tenantId: id.tenantId, actor: bearerActor(id), store: opts.store };
-  // The keyless local fallback (HIPPO_ALLOW_KEYLESS_LOCAL=1) is this machine's own user, so it is host admin.
-  return {
-    hippoRoot: opts.hippoRoot,
-    tenantId: resolveTenantId({}),
-    actor: { subject: 'localhost:cli', role: 'admin', hostAdmin: true },
-    store: opts.store,
-  };
+  return { hippoRoot: opts.hippoRoot, tenantId: resolveTenantId({}), actor: keylessLocalActor(opts), store: opts.store };
 }
 
 /** Auth check for routes that need no tenant Context (e.g. the MCP transport, which resolves its own root): throws HttpError 401 like buildContextWithAuth.

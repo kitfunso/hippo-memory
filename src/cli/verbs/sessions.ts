@@ -134,9 +134,10 @@ export const SESSION_VERBS = {
     --status               Show embedding coverage`],
   }),
   watch: verb(() => import('../transfer.js'), 'handleWatch', {
-    flags: {},
+    flags: { values: ['shell'] },
     usage: [`
-  watch "<command>"        Run command, auto-learn from failures`],
+  watch -- <cmd> [args]    Run command, auto-learn from failures (no shell)
+    --shell "<line>"       Run one command line through the shell instead`],
   }),
   learn: verb(() => import('../transfer.js'), 'handleLearn', {
     scoped: true,

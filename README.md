@@ -675,10 +675,12 @@ hippo sleep
 Wrap any command with `hippo watch` to auto-learn from failures:
 
 ```bash
-hippo watch "npm run build"
+hippo watch -- npm run build
 # if it fails, Hippo captures the error automatically
 # next time an agent asks about build issues, the memory is there
 ```
+
+The command runs with no shell, so each argument reaches the program as written. To run a shell line with pipes or `&&`, pass it as one string after `--shell`: `hippo watch --shell "npm test && npm run build"`.
 
 ---
 
@@ -736,7 +738,7 @@ hippo watch "npm run build"
 | `hippo failures [--days n]` | Failed tool calls the capture-error hook saw, by outcome, and how many errors first happened in another session |
 | `hippo embed` | Embed all memories for semantic search |
 | `hippo embed --status` | Show embedding coverage |
-| `hippo watch "<command>"` | Run command, auto-learn from failures |
+| `hippo watch -- <command> [args...]` | Run command with no shell, auto-learn from failures (`--shell "<line>"` runs one line through the shell) |
 | `hippo learn --git` | Scan recent git commits for lessons |
 | `hippo learn --git --days <n>` | Scan N days back (default: 7) |
 | `hippo learn --git --repos <paths>` | Scan multiple repos (comma-separated) |
@@ -784,8 +786,8 @@ hippo watch "npm run build"
 | `hippo dashboard` | Open web dashboard at localhost:3333 (memory health by project, and the card board); open the printed URL, which carries a per-start access token |
 | `hippo dashboard --port <n>` | Use custom port |
 | `hippo mcp` | Start MCP server (stdio transport) |
-| `hippo serve` | Start the HTTP API server for this store on `127.0.0.1:6789` (`--port <n>` or `HIPPO_PORT`; `--host <host>`, which off loopback needs `HIPPO_REQUIRE_AUTH=1`). Every request needs an API key (`hippo auth create`, then `Authorization: Bearer <key>`; the hippo CLI reads `HIPPO_API_KEY`). `HIPPO_ALLOW_KEYLESS_LOCAL=1` lets requests from this machine in without one, as host admin; `HIPPO_REQUIRE_AUTH=1` wins over it |
-| `hippo serve --tls-cert <file> --tls-key <file>` | Serve HTTPS with that PEM certificate and key (or set `HIPPO_TLS_CERT` and `HIPPO_TLS_KEY`). Without them a network bind still starts, and warns once that API keys and memory text travel in cleartext unless a TLS-terminating proxy sits in front |
+| `hippo serve` | Start the HTTP API server for this store on `127.0.0.1:6789` (`--port <n>` or `HIPPO_PORT`; `--host <host>`, which off loopback needs `HIPPO_REQUIRE_AUTH=1`). Every request needs an API key (`hippo auth create`, then `Authorization: Bearer <key>`; the hippo CLI reads `HIPPO_API_KEY`). `HIPPO_ALLOW_KEYLESS_LOCAL=1` lets requests from this machine in without one, as a member (`HIPPO_KEYLESS_LOCAL_ROLE=admin` makes them host admin, for sleep and the quarantine routes); `HIPPO_REQUIRE_AUTH=1` wins over it. Each caller gets 20 requests a second, burst 40 (`HIPPO_CALLER_RPS`; `0` turns it off). See [Security defaults](docs/UPGRADING-2.0.md#security-defaults) |
+| `hippo serve --tls-cert <file> --tls-key <file>` | Serve HTTPS with that PEM certificate and key (or set `HIPPO_TLS_CERT` and `HIPPO_TLS_KEY`). Without them a network bind refuses to start, since API keys and memory text would travel in cleartext; behind a TLS-terminating proxy, pass `--allow-cleartext` (or set `HIPPO_ALLOW_CLEARTEXT=1`) |
 
 On `heartbeat`, `block`, `review` and `complete`, a given `--run` is checked against the card's live run and the command is refused, unchanged, if the two do not match.
 
