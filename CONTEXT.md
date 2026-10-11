@@ -71,7 +71,7 @@ _Avoid_: usage log, telemetry, cost log
 
 **Delivery ledger**:
 The optional record of the per-prompt hook, an agent's `hippo context` call, the two compaction
-hooks (`pre-compact` and `compact-resume`) and `session-end`: one event per call, and for a
+hooks (`pre-compact` and `compact-resume`), `session-end` and each failure `capture-error` logs: one event per call, and for a
 prompt or context call one row per candidate memory, saying whether it was emitted, reused or
 rejected and why. Ids, hashes, counts and reasons only, never the text. Off by default; kept 90 days.
 _Avoid_: delivery log, trace, telemetry
