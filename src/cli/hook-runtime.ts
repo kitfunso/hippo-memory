@@ -94,7 +94,7 @@ export function startDeliveryRecorder(
   eventType?: DeliveryEventType,
 ): DeliveryRecorder | null {
   try {
-    // The same store withLedgerDb writes the token ledger to, so its config governs both.
+    // The same store the token ledger writes to, so its config governs both.
     const root = ledgerRoot(hippoRoot);
     if (root === null || !loadConfig(root).deliveryLedger.enabled) return null;
     return createDeliveryRecorder({

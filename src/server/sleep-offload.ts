@@ -2,7 +2,7 @@
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { sleep, type Actor, type Context, type SleepOpts, type SleepResult } from '../api/index.js';
-import { StoreBusyError } from '../db/index.js';
+import { StoreBusyError } from '../store/port.js';
 import { envSleepTimeoutMs } from '../util/env.js';
 import { HttpError } from '../util/http-util.js';
 

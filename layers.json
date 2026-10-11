@@ -42,5 +42,39 @@
     "postinstall.ts": "surface",
     "server.ts": "surface",
     "support-bundle.ts": "surface"
+  },
+  "dbReach": {
+    "layer": "db",
+    "from": ["api", "mcp", "server"],
+    "allowed": {
+      "api/auto-sleep.ts": {
+        "names": ["outsideRequestStores", "runWithRequestStores", "scopedBusyWait"],
+        "why": "starts the background sleep in its own RequestStores scope with the caller's lock wait; the ambient scope stays in src/db until its owner moves it"
+      },
+      "api/learn.ts": {
+        "names": ["withRequestStoresSync"],
+        "why": "the git-learn batch shares one handle through a RequestStores scope; the ambient scope stays in src/db until its owner moves it"
+      },
+      "mcp/request.ts": {
+        "names": ["runWithRequestStores"],
+        "why": "each MCP tool call runs in its own RequestStores scope; the ambient scope stays in src/db until its owner moves it"
+      },
+      "server/boot.ts": {
+        "names": ["outsideSqliteOffLoop", "runWithRequestStores", "SERVER_DB_WAIT_MS", "withSqliteBlocked"],
+        "why": "each request runs in a RequestStores scope at the server lock wait, inside the fences that keep hippo.db shut for another store and a loop-off route; scope and fences stay in src/db until their owner moves them"
+      },
+      "server/ready.ts": {
+        "names": ["runWithRequestStores", "SERVER_DB_WAIT_MS"],
+        "why": "the readiness ping runs in a RequestStores scope at the server lock wait; the ambient scope stays in src/db until its owner moves it"
+      },
+      "server/route-table.ts": {
+        "names": ["withSqliteOffLoop"],
+        "why": "a loop-off route runs inside the fence that refuses hippo.db on the server thread; the fences stay in src/db until their owner moves them"
+      },
+      "server/sleep-child.ts": {
+        "names": ["runWithRequestStores", "SERVER_DB_WAIT_MS"],
+        "why": "the sleep job runs in a RequestStores scope at the server lock wait; the ambient scope stays in src/db until its owner moves it"
+      }
+    }
   }
 }

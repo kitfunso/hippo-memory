@@ -9,7 +9,7 @@ import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { entryMirrorFiles } from './_helpers/entry-mirror-files.js';
 import { DatabaseSync } from '../src/db/sqlite.js';
-import { STORE_BUSY_MESSAGE } from '../src/db/busy.js';
+import { STORE_BUSY_MESSAGE } from '../src/store/port.js';
 import { readDormantSnapshot } from '../src/store/dormant.js';
 import { findRejectedValue, rejectionDigest } from '../src/store/rejection.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';

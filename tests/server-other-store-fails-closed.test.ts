@@ -4,8 +4,9 @@ import { existsSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'nod
 import { randomBytes, scryptSync } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { closeHippoDb, openHippoDb, rethrowIfSqliteBlocked, SqliteBlockedError, STORE_BUSY_MESSAGE } from '../src/db/index.js';
-import { StoreNotPortedError } from '../src/util/sqlite-blocked.js';
+import { closeHippoDb, openHippoDb, SqliteBlockedError } from '../src/db/index.js';
+import { STORE_BUSY_MESSAGE } from '../src/store/port.js';
+import { rethrowIfSqliteBlocked, StoreNotPortedError } from '../src/util/sqlite-blocked.js';
 import { mapApiError, STORE_NOT_PORTED_MESSAGE } from '../src/util/http-util.js';
 import { mcpErrorResponse, type McpRequest } from '../src/mcp/server.js';
 import { initStore } from '../src/store/open.js';

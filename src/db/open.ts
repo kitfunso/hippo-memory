@@ -64,11 +64,6 @@ export function outsideSqliteOffLoop<T>(fn: () => T): T {
   return sqliteBlockedBy.getStore() === OFF_LOOP ? sqliteBlockedBy.exit(fn) : fn();
 }
 
-/** First line of a best-effort catch around a hippo.db open: an unported path must fail closed, not fall back silently. */
-export function rethrowIfSqliteBlocked<E>(err: E): void {
-  if (err instanceof SqliteBlockedError) throw err;
-}
-
 /** store init --db, store copy --db and serve --db write this file in the hippo root; its text is the store kind. */
 export const OTHER_STORE_MARKER = 'other-store';
 const markerWaived = new AsyncLocalStorage<true>();

@@ -1,6 +1,6 @@
 // Token-use and failure reports.
 
-import { rethrowIfSqliteBlocked } from '../db/index.js';
+import { rethrowIfSqliteBlocked } from '../util/sqlite-blocked.js';
 import type { TokenSummary, TokenSurface } from '../store/token-ledger.js';
 import { storeFor } from '../store/index.js';
 import type { FailureSummary } from '../store/failure-log.js';

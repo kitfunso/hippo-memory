@@ -2,6 +2,7 @@
 // CI layer gate. A src/ file imports only from its own layer or a lower one (order and the folder and root-file
 // map are in layers.json). Existing upward imports sit in .layers-baseline.json and may go but never grow.
 // A file under src/server/routes/ that names requireGroup or storeFor also fails: routes reach the store through src/api.
+// layers.json `dbReach` names the folders that reach the db layer only through the store, and each import that may stay, with why.
 // Usage: check-layers.mjs [--list] [--update]. --update rewrites the baseline; it refuses to add an edge or raise a number.
 
 import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
@@ -29,16 +30,25 @@ function isTypeOnly(typeKeyword, clause) {
   return specs.length > 0 && specs.every((s) => /^type\s/.test(s));
 }
 
-/** Every relative import of one source as { spec, line, kind: 'runtime' | 'typeOnly' }. */
+/** The names a clause binds; a default or namespace binding is '*', since it reaches every export. */
+function clauseNames(clause) {
+  const braces = /\{([^}]*)\}/.exec(clause);
+  const names = braces ? braces[1].split(',').map((s) => s.trim().replace(/^type\s+/, '').split(/\s+as\s+/)[0]).filter(Boolean) : [];
+  return clause.replace(/\{[^}]*\}/, '').replace(',', '').trim() ? [...names, '*'] : names;
+}
+
+/** Every relative import of one source as { spec, line, kind: 'runtime' | 'typeOnly', names }. */
 function importsOf(text) {
   const code = stripComments(text);
   const lineAt = (i) => code.slice(0, i).split('\n').length;
   const out = [];
   for (const re of STATIC_RES) {
-    for (const m of code.matchAll(re)) out.push({ spec: m[3], line: lineAt(m.index), kind: isTypeOnly(m[1], m[2]) ? 'typeOnly' : 'runtime' });
+    for (const m of code.matchAll(re)) {
+      out.push({ spec: m[3], line: lineAt(m.index), kind: isTypeOnly(m[1], m[2]) ? 'typeOnly' : 'runtime', names: clauseNames(m[2]) });
+    }
   }
-  for (const m of code.matchAll(SIDE_EFFECT_RE)) out.push({ spec: m[1], line: lineAt(m.index), kind: 'runtime' });
-  for (const m of code.matchAll(DYNAMIC_RE)) out.push({ spec: m[1], line: lineAt(m.index), kind: 'runtime' });
+  for (const m of code.matchAll(SIDE_EFFECT_RE)) out.push({ spec: m[1], line: lineAt(m.index), kind: 'runtime', names: ['*'] });
+  for (const m of code.matchAll(DYNAMIC_RE)) out.push({ spec: m[1], line: lineAt(m.index), kind: 'runtime', names: ['*'] });
   return out.filter((i) => i.spec.startsWith('./') || i.spec.startsWith('../'));
 }
 
@@ -74,14 +84,17 @@ function mapProblems(map, srcDir) {
   return problems;
 }
 
+/** The layer of a path relative to src/: its root file's, else its top folder's. */
+function layerIn(map, file) {
+  const [head, ...rest] = file.split('/');
+  return rest.length === 0 ? map.rootFiles[head] : map.folders[head];
+}
+
 /** Every upward import under srcDir, one per (from, to, kind), with the first line it occurs on. */
 function findUpwardEdges(map, srcDir) {
   const root = resolve(srcDir);
   const rel = (p) => relative(root, p).replace(/\\/g, '/');
-  const layerOf = (file) => {
-    const [head, ...rest] = file.split('/');
-    return rest.length === 0 ? map.rootFiles[head] : map.folders[head];
-  };
+  const layerOf = (file) => layerIn(map, file);
   const rank = (layer) => map.order.indexOf(layer);
   const edges = new Map();
   for (const file of tsFiles(root)) {
@@ -117,6 +130,36 @@ function findRouteStoreReaches(srcDir) {
   return out;
 }
 
+/** Imports from `dbReach.layer` in a `dbReach.from` folder that `dbReach.allowed` does not name, then allowed entries nothing uses or that give no why. */
+function findDbReaches(map, srcDir) {
+  const rule = map.dbReach;
+  if (!rule) return { reaches: [], stale: [] };
+  const root = resolve(srcDir);
+  const rel = (p) => relative(root, p).replace(/\\/g, '/');
+  const allowed = rule.allowed ?? {};
+  const used = new Map();
+  const reaches = [];
+  for (const file of tsFiles(root)) {
+    const from = rel(file);
+    if (!rule.from.includes(from.split('/')[0])) continue;
+    for (const { spec, line, names } of importsOf(readFileSync(file, 'utf8'))) {
+      const target = resolveSpecifier(file, spec);
+      if (!target || layerIn(map, rel(target)) !== rule.layer) continue;
+      for (const name of names) {
+        if (!used.has(from)) used.set(from, new Set());
+        used.get(from).add(name);
+        if (!(allowed[from]?.names ?? []).includes(name)) reaches.push(`${from}:${line} imports ${name} from ${rel(target)}`);
+      }
+    }
+  }
+  const stale = [];
+  for (const [file, entry] of Object.entries(allowed)) {
+    if (!entry.why?.trim()) stale.push(`${file} gives no why`);
+    for (const name of entry.names ?? []) if (!used.get(file)?.has(name)) stale.push(`${file} no longer imports ${name}`);
+  }
+  return { reaches, stale };
+}
+
 const edgeKey = (e) => `${e.from}\t${e.to}\t${e.kind}`;
 const describe = (e) => `${e.from}:${e.line} -> ${e.to} (${e.layerFrom} -> ${e.layerTo}, ${e.kind === 'typeOnly' ? 'type' : 'runtime'})`;
 
@@ -138,6 +181,16 @@ const routeReaches = findRouteStoreReaches('src');
 if (routeReaches.length > 0 && !args.includes('--update') && !args.includes('--list')) {
   console.error('A route handler names requireGroup or storeFor; call a src/api function that takes the Context instead:');
   for (const r of routeReaches) console.error(`  ${r}`);
+  process.exit(1);
+}
+
+const dbReach = findDbReaches(map, 'src');
+if (dbReach.reaches.length + dbReach.stale.length > 0 && !args.includes('--update') && !args.includes('--list')) {
+  const layer = map.dbReach.layer;
+  for (const r of dbReach.reaches) console.error(`  ${r}`);
+  for (const s of dbReach.stale) console.error(`  ${MAP} dbReach.allowed: ${s}`);
+  console.error(`src/${map.dbReach.from.join(', src/')} reach the ${layer} layer through a src/store function and the store errors in src/store/port.ts.`);
+  console.error(`Move the ${layer} work into src/store; an import that must stay goes in ${MAP} dbReach.allowed with its why, and an unused one leaves it.`);
   process.exit(1);
 }
 

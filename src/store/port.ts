@@ -1,5 +1,6 @@
-// The async store interface and its groups; type-only apart from requireGroup's error, so an add-on can build a store on it alone.
+// The async store interface and its groups; type-only apart from the store errors, so an add-on can build a store on it alone.
 import type { AmbientTallies } from '../core/ambient.js';
+import { isSqliteBusy } from '../db/busy.js';
 import type { AmbientStoreFilter } from './ambient.js';
 import type { ApiKeyListRow, ApiKeyRecord, ListApiKeysOpts, NewApiKey } from './auth.js';
 import type { AppendAuditOpts, AuditEvent, ListAuditAfterOpts, QueryAuditOpts } from './audit.js';
@@ -621,6 +622,21 @@ export function requireGroup<G extends keyof StoreGroups>(store: HippoStore, gro
   const methods = groups[group];
   if (methods === undefined) throw new StoreNotPortedError(store.kind, group);
   return methods;
+}
+
+export const STORE_BUSY_MESSAGE = 'store busy (another hippo process holds the write lock); retry shortly';
+
+/** A store behind the port throws this when its lock wait runs out, so the server answers 503 as it does for a busy hippo.db. */
+export class StoreBusyError extends Error {
+  constructor(message: string = STORE_BUSY_MESSAGE, options?: ErrorOptions) {
+    super(message, options);
+    this.name = 'StoreBusyError';
+  }
+}
+
+/** A held lock in any store: SQLite's busy codes or a port's StoreBusyError. */
+export function isStoreBusy<E>(error: E): boolean {
+  return error instanceof StoreBusyError || isSqliteBusy(error);
 }
 
 /** What `serve()` reads and writes through. Each method is atomic and no transaction spans an
