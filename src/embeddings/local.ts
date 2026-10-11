@@ -2,18 +2,15 @@
 import { envModelCache } from '../util/env.js';
 import * as fs from 'fs';
 import * as path from 'path';
-import { createRequire } from 'module';
 import { loadConfig } from '../core/config.js';
-import { errorMessage, log } from '../util/log.js';
+import { errorFields, errorMessage, log } from '../util/log.js';
+import { createModelLoads, importTransformers, MODEL_LOAD_POLICY, resolveTransformersPackage } from './transformers.js';
 
-const _require = createRequire(import.meta.url);
-
-let _embeddingAvailable: boolean | null = null;
-
-// A pipeline is expensive to load, so one instance per model is kept for the process.
-const _pipelineInstances = new Map<string, EmbeddingPipeline>();
-const _pipelineLoading = new Map<string, Promise<EmbeddingPipeline | null>>();
-const _pipelineErrors = new Map<string, string>();
+/** Opens once a model's load starts downloading weights; only then does a recall stop waiting at its deadline. */
+interface FetchGate {
+  readonly opened: Promise<void>;
+  readonly open: () => void;
+}
 
 /** The one call this file makes on a Transformers.js feature-extraction pipeline, and the part of its tensor it reads. */
 interface EmbeddingPipeline {
@@ -55,121 +52,126 @@ export function prefixFor(model: string, role?: EmbeddingRole): string {
   return '';
 }
 
-/** Check (synchronously) if @xenova/transformers or @huggingface/transformers is installed. */
-export function isEmbeddingAvailable(): boolean {
-  if (_embeddingAvailable !== null) return _embeddingAvailable;
-
-  try {
-    _require.resolve('@xenova/transformers');
-    _embeddingAvailable = true;
-    return true;
-  } catch {
-    // fall through
-  }
-
-  try {
-    _require.resolve('@huggingface/transformers');
-    _embeddingAvailable = true;
-    return true;
-  } catch {
-    // fall through
-  }
-
-  _embeddingAvailable = false;
-  return false;
+/** The optional package as the local embedder reaches it; tests hand in a stand-in. */
+export interface LocalTransformers {
+  /** Whether a package is installed, answered without importing it. */
+  installed(): boolean;
+  /** The package's module, or null when neither package is installed. */
+  load(): Promise<{ readonly name: string; readonly mod: TransformersModule } | null>;
 }
 
-// Importing both packages loads two incompatible onnxruntime-node builds whose finalizers can double-free on exit,
-// so pick one first: the maintained package hippo ships, with Xenova only as a fallback a user installed.
-function resolveTransformersPackage(): string | null {
-  try {
-    _require.resolve('@huggingface/transformers');
-    return '@huggingface/transformers';
-  } catch {
-    // fall through
-  }
-  try {
-    _require.resolve('@xenova/transformers');
-    return '@xenova/transformers';
-  } catch {
-    return null; // neither optional package is installed; callers fall back to no local embeddings
-  }
+const INSTALLED_TRANSFORMERS: LocalTransformers = {
+  installed: () => resolveTransformersPackage() !== null,
+  load: () => importTransformers<TransformersModule>(),
+};
+
+export interface LocalEmbedder {
+  isAvailable(): boolean;
+  /** Throws, with the reason, when the model's pipeline cannot load: a provider-level failure, not a per-item skip.
+   * `signal` ends the wait, never the load, and only once the load is downloading: a load from disk ends soon on its own, a download may not. */
+  requirePipeline(model: string, signal?: AbortSignal): Promise<void>;
+  /** `text`'s vector, or `[]` when the model is missing or fails; `role` adds e5-style prefixes. */
+  embed(text: string, model: string, role?: EmbeddingRole): Promise<number[]>;
 }
 
-async function loadPipeline(model: string): Promise<EmbeddingPipeline | null> {
-  const loaded = _pipelineInstances.get(model);
-  if (loaded) return loaded;
-  const inFlight = _pipelineLoading.get(model);
-  if (inFlight) return inFlight;
-
-  const loading = createPipeline(model);
-
-  _pipelineLoading.set(model, loading);
-  return loading;
+/** One pipeline per model for the embedder's life, since a pipeline is expensive to load. */
+export function createLocalEmbedder(transformers: LocalTransformers = INSTALLED_TRANSFORMERS): LocalEmbedder {
+  let available: boolean | null = null;
+  const gates = new Map<string, FetchGate>();
+  const pipelines = createModelLoads<EmbeddingPipeline>(MODEL_LOAD_POLICY, warnLoadFailure);
+  const load = (model: string): Promise<EmbeddingPipeline> => pipelines.load(model, () => createPipeline(transformers, model, gates));
+  const isAvailable = (): boolean => (available ??= transformers.installed());
+  return {
+    isAvailable,
+    requirePipeline: (model, signal) => waitForPipeline(load(model), signal && gateOf(gates, model).opened, signal),
+    async embed(text, model, role) {
+      if (!isAvailable()) return [];
+      try {
+        const pipe = await load(model);
+        const prefix = prefixFor(model, role);
+        const output = await pipe(prefix ? `${prefix}${text}` : text, { pooling: poolingFor(model), normalize: true });
+        return Array.from(output.data);
+      } catch (err) {
+        // The caller sees `[]` and names the memory; a failed load already warned once for its backoff window.
+        log.debug(`local embedding failed: ${errorMessage(err)}`);
+        return [];
+      }
+    },
+  };
 }
 
-/** The model's pipeline, or null with the reason recorded in `_pipelineErrors`. */
-async function createPipeline(model: string): Promise<EmbeddingPipeline | null> {
-  const pkg = resolveTransformersPackage();
-  if (!pkg) {
-    _pipelineErrors.set(model, 'no transformers package is installed');
-    return null;
-  }
+function warnLoadFailure(model: string, err: Error): void {
+  const retry = `the next try is in ${MODEL_LOAD_POLICY.backoffMs / 60_000} minutes`;
+  log.warn(`local embedding model ${model} did not load (${errorMessage(err)}); embeddings stay off and ${retry}`, errorFields(err));
+}
 
-  const pipelineFn = await importPipelineFactory(pkg, model);
-  if (!pipelineFn) return null;
+/** The model's pipeline; throws the reason it cannot load. */
+async function createPipeline(transformers: LocalTransformers, model: string, gates: Map<string, FetchGate>): Promise<EmbeddingPipeline> {
+  // The package is an optional peer, so the dynamic import is typed by what this file reads; a missing export throws below.
+  const imported = await transformers.load();
+  if (!imported) throw new Error('no transformers package is installed');
+  const { name, mod } = imported;
+  const cache = envModelCache();
+  if (cache && mod.env) {
+    mod.env.cacheDir = cache;
+    mod.env.localModelPath = cache;
+    mod.env.allowRemoteModels = false;
+  }
+  const pipelineFn = mod.pipeline ?? mod.default?.pipeline;
+  if (!pipelineFn) throw new Error(`${name} exports no pipeline function`);
 
   // The offline bundle used in egress-blocked sandboxes ships only the FP32 model, so use whichever file is on disk.
-  const cacheRoot = envModelCache();
-  const quantized = !cacheRoot
-    || fs.existsSync(path.join(cacheRoot, model, 'onnx', 'model_quantized.onnx'));
-
+  const quantized = !cache || fs.existsSync(path.join(cache, model, 'onnx', 'model_quantized.onnx'));
+  if (fetchesWeights(mod.env, model)) gateOf(gates, model).open();
   try {
-    const instance = await pipelineFn('feature-extraction', model, { quantized });
-    _pipelineInstances.set(model, instance);
-    return instance;
-  } catch (err) {
-    const reason = `embedding pipeline load failed (${model}): ${String(err)}`;
-    log.debug(reason);
-    _pipelineErrors.set(model, reason);
-    return null;
+    return await pipelineFn('feature-extraction', model, { quantized });
   } finally {
-    _pipelineLoading.delete(model);
+    gates.delete(model);
   }
 }
 
-/** The package's `pipeline` function, or null with the reason recorded in `_pipelineErrors`. */
-async function importPipelineFactory(pkg: string, model: string): Promise<PipelineFactory | null> {
-  let pipelineFn: PipelineFactory | null = null;
+/** Whether the load will download: remote models are allowed and no folder the package reads holds the model's ONNX files. */
+function fetchesWeights(env: TransformersEnv | undefined, model: string): boolean {
+  if (env?.allowRemoteModels === false) return false;
+  return ![env?.localModelPath, env?.cacheDir].some((dir) => dir !== undefined && fs.existsSync(path.join(dir, model, 'onnx')));
+}
+
+function gateOf(gates: Map<string, FetchGate>, model: string): FetchGate {
+  let gate = gates.get(model);
+  if (!gate) {
+    let open!: () => void;
+    const opened = new Promise<void>((resolve) => {
+      open = resolve;
+    });
+    gate = { opened, open };
+    gates.set(model, gate);
+  }
+  return gate;
+}
+
+function rejectOnAbort(signal: AbortSignal): Promise<never> {
+  return new Promise<never>((_resolve, reject) => {
+    if (signal.aborted) reject(signal.reason);
+    else signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+  });
+}
+
+async function waitForPipeline(loading: Promise<EmbeddingPipeline>, downloading?: Promise<void>, signal?: AbortSignal): Promise<void> {
   try {
-    // The package is an optional peer, so the dynamic import is typed by what this file reads; a missing export falls to the null below.
-    const mod: TransformersModule = await import(/* @vite-ignore */ pkg);
-    const cache = envModelCache();
-    if (cache && mod.env) {
-      mod.env.cacheDir = cache;
-      mod.env.localModelPath = cache;
-      mod.env.allowRemoteModels = false;
-    }
-    pipelineFn = mod.pipeline ?? mod.default?.pipeline ?? null;
+    await (downloading && signal ? Promise.race([loading, downloading.then(() => rejectOnAbort(signal))]) : loading);
   } catch (err) {
-    // String(err) keeps a Node error's [ERR_...] code, which callers match on.
-    const reason = `transformers import failed (${pkg}): ${String(err)}`;
-    log.debug(reason);
-    _pipelineErrors.set(model, reason);
-    return null;
+    // The download goes on, and the first call after it lands gets the model.
+    if (signal?.aborted && err === signal.reason) throw err;
+    throw new Error(`local embedding model did not load: ${errorMessage(err)}`, { cause: err });
   }
-
-  if (!pipelineFn) {
-    _pipelineErrors.set(model, `${pkg} exports no pipeline function`);
-    return null;
-  }
-  return pipelineFn;
 }
 
-/** Throws, with the reason, when the model's pipeline cannot load: a provider-level failure, not a per-item skip. */
-export async function requireLocalPipeline(model: string): Promise<void> {
-  if (await loadPipeline(model)) return;
-  throw new Error(`local embedding model did not load: ${_pipelineErrors.get(model) ?? 'unknown reason'}`);
+/** The process's embedder, shared by every provider and caller so each model loads once. */
+export const sharedLocalEmbedder = createLocalEmbedder();
+
+/** Check (synchronously) if @xenova/transformers or @huggingface/transformers is installed. */
+export function isEmbeddingAvailable(): boolean {
+  return sharedLocalEmbedder.isAvailable();
 }
 
 export function resolveEmbeddingModel(hippoRoot: string, explicitModel?: string): string {
@@ -187,24 +189,6 @@ export function resolveEmbeddingModel(hippoRoot: string, explicitModel?: string)
 }
 
 /** Embeds `text` with the local model, or returns `[]` when Transformers.js is missing or fails; `role` adds e5-style prefixes. */
-export async function getEmbedding(
-  text: string,
-  model = DEFAULT_EMBEDDING_MODEL,
-  role?: EmbeddingRole,
-): Promise<number[]> {
-  if (!isEmbeddingAvailable()) return [];
-
-  try {
-    const pipe = await loadPipeline(model);
-    if (!pipe) return [];
-
-    const prefix = prefixFor(model, role);
-    const input = prefix ? `${prefix}${text}` : text;
-    const output = await pipe(input, { pooling: poolingFor(model), normalize: true });
-    return Array.from(output.data);
-  } catch (err) {
-    // The caller sees `[]` and names the memory; the reason only shows at debug.
-    log.debug(`local embedding failed: ${errorMessage(err)}`);
-    return [];
-  }
+export function getEmbedding(text: string, model = DEFAULT_EMBEDDING_MODEL, role?: EmbeddingRole): Promise<number[]> {
+  return sharedLocalEmbedder.embed(text, model, role);
 }

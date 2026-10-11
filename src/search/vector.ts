@@ -45,10 +45,8 @@ export function startQueryEmbedDeadline(): AbortSignal {
   return AbortSignal.timeout(queryEmbedBudgetMs());
 }
 
-/** The query's vector, or null when an API provider outlasts `deadline`; any other provider failure throws as before. */
+/** The query's vector, or null when the provider outlasts `deadline`: an API call, or a local model still downloading. Any other failure throws. */
 export async function embedQueryBy(deadline: AbortSignal, provider: EmbeddingProvider, query: string): Promise<number[] | null> {
-  // No signal stops an in-process model, so the local provider is not held to the deadline.
-  if (provider.kind === 'local') return (await provider.embed([query], 'query'))[0] ?? [];
   try {
     return (await provider.embed([query], 'query', { signal: deadline }))[0] ?? [];
   } catch (err) {

@@ -8,7 +8,6 @@
   "src/consolidate/sleep.ts": 1,
   "src/consolidate/traces.ts": 1,
   "src/db/backup.ts": 1,
-  "src/embeddings/local.ts": 2,
   "src/server/auth.ts": 2,
   "src/store/audit-event.ts": 1,
   "src/store/raw-archive.ts": 1,
