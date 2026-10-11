@@ -8,6 +8,7 @@ import { getHippoRoot } from '../src/core/project-identity.js';
 import { loadActiveTaskSnapshot, saveActiveTaskSnapshot } from '../src/store/sessions.js';
 import { loadLatestHandoff } from '../src/store/handoffs.js';
 import { hippoRun } from './_helpers/spawn-hippo.js';
+import { waitFor } from './_helpers/wait-for.js';
 
 // DF1 (docs/plans/2026-08-23-df1-snapshot-lifecycle.md) T3 test 6:
 // session-end wiring. `handleSessionEnd` extracts `payload.session_id` from the
@@ -52,80 +53,34 @@ function safeRmSync(p: string): void {
   }
 }
 
-function sleepMs(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
+// The detached worker is a real process: a throw while it holds the WAL lock counts as "not yet", and the bound is generous under load.
+const WORKER_WAIT = { timeoutMs: 25_000, intervalMs: 50, retryOnThrow: true } as const;
 
-/** A one-off read after (rather than during) the detached worker's window
- * can still race its last DB write on a loaded machine — same cross-process
- * WAL contention `waitUntil` tolerates. Retry a few times before giving up. */
+/** A read just after the detached worker's window can still race its last DB write on a loaded machine; retry until it lands. */
 async function loadSnapshotRetrying(
   hippoRoot: string,
   tenantId: string,
-  attempts = 10,
-  delayMs = 100,
 ): Promise<ReturnType<typeof loadActiveTaskSnapshot>> {
-  for (let i = 0; i < attempts; i++) {
-    try {
-      return loadActiveTaskSnapshot(hippoRoot, tenantId);
-    } catch (err) {
-      if (i === attempts - 1) throw err;
-      await sleepMs(delayMs);
-    }
-  }
-  // Unreachable (the loop above always returns or throws), but keeps the
-  // function's control flow provably total for the type checker.
-  throw new Error('loadSnapshotRetrying: unreachable');
+  let snapshot: ReturnType<typeof loadActiveTaskSnapshot> = null;
+  await waitFor(() => {
+    snapshot = loadActiveTaskSnapshot(hippoRoot, tenantId);
+    return true;
+  }, { ...WORKER_WAIT, timeoutMs: 1_000, intervalMs: 100, what: 'the snapshot readable' });
+  return snapshot;
 }
 
-/** `session-end` spawns a DETACHED worker and returns immediately (by
- * design — the parent must never block on it). Poll for the condition the
- * worker is expected to eventually produce, bounded so a real wiring bug
- * fails the test instead of hanging it.
- *
- * `check()` must read the worker's `--log-file`, never the database: a 20 Hz
- * `loadActiveTaskSnapshot` poll is two `openHippoDb` cycles per tick and every
- * open runs migrations that write, so the poll itself made the worker's close
- * fail with "database is locked" and then waited 25s for a row that would
- * never change (CI run 33985138707; docs/plans/2026-09-05-session-end-test-
- * observable-signal.md). A throw from `check()` counts as "not yet"; only
- * running out of the clock fails the test.
- *
- * Default bound is generous (25s, under the 30s `testTimeout` of the
- * process project in vitest.config.ts) because the detached worker is a real
- * separate OS process competing for CPU/IO with the rest of a full `npm
- * test` run — under full-suite parallel load this project's own heavier
- * tests (e.g. dag-rebuild-summaries.test.ts) observably take well over a
- * minute, so 8s was too tight for this worker's sleep+capture+close chain. */
 const CLOSE_STEP = /closed \d+ active snapshot\(s\) for session |snapshot close failed: /;
 
 /** The worker's close-step line, success OR failure, so a failed close fails the
- * test fast with the worker's own error instead of waiting out the clock. */
+ * test fast with the worker's own error instead of waiting out the clock.
+ * Reads the worker's `--log-file`, never the database: each database open runs
+ * migrations that write, so a database poll made the worker's own close fail. */
 function closeStepLogged(logFile: string): boolean {
   return fs.existsSync(logFile) && CLOSE_STEP.test(fs.readFileSync(logFile, 'utf8'));
 }
 
-async function waitUntil(check: () => boolean, timeoutMs = 25_000, intervalMs = 50): Promise<void> {
-  const deadline = Date.now() + timeoutMs;
-  let lastError: unknown;
-  while (Date.now() < deadline) {
-    try {
-      if (check()) return;
-    } catch (err) {
-      lastError = err;
-    }
-    await sleepMs(intervalMs);
-  }
-  try {
-    if (check()) return;
-  } catch (err) {
-    lastError = err;
-  }
-  const lastErrorMessage = lastError instanceof Error ? lastError.message : String(lastError ?? '');
-  throw new Error(
-    `condition not met within ${timeoutMs}ms${lastErrorMessage ? ` (last error: ${lastErrorMessage})` : ''}`,
-  );
-}
+const waitForCloseStep = (logFile: string): Promise<void> =>
+  waitFor(() => closeStepLogged(logFile), { ...WORKER_WAIT, what: 'the worker close step in the log' });
 
 describe('6. session-end wiring: --session-id argv + worker close', () => {
   let dir: string;
@@ -156,8 +111,8 @@ describe('6. session-end wiring: --session-id argv + worker close', () => {
     expect(result.status).toBe(0);
 
     // The parent returns immediately; wait on the detached worker's own close
-    // line (see waitUntil), then read the row once.
-    await waitUntil(() => closeStepLogged(logFile));
+    // line (see closeStepLogged), then read the row once.
+    await waitForCloseStep(logFile);
     expect(fs.readFileSync(logFile, 'utf8')).toContain(
       'closed 1 active snapshot(s) for session sess-end-close-me',
     );
@@ -178,7 +133,7 @@ describe('6. session-end wiring: --session-id argv + worker close', () => {
     const payload = '\uFEFF' + JSON.stringify({ session_id: 'sess-bom', hook_event_name: 'SessionEnd' });
     expect(runHippo(['session-end', '--log-file', logFile], dir, env, payload).status).toBe(0);
 
-    await waitUntil(() => closeStepLogged(logFile));
+    await waitForCloseStep(logFile);
     expect(fs.readFileSync(logFile, 'utf8')).toContain('closed 1 active snapshot(s) for session sess-bom');
     expect(await loadSnapshotRetrying(hippoRoot, 'default')).toBeNull();
   });
@@ -201,7 +156,7 @@ describe('6. session-end wiring: --session-id argv + worker close', () => {
 
     // Wait until the worker reports its close step, so the survival check
     // proves it ran and closed nothing rather than that we did not wait long enough.
-    await waitUntil(() => closeStepLogged(logFile));
+    await waitForCloseStep(logFile);
     expect(fs.readFileSync(logFile, 'utf8')).toContain(
       'closed 0 active snapshot(s) for session sess-b-ending',
     );
@@ -226,8 +181,9 @@ describe('6. session-end wiring: --session-id argv + worker close', () => {
     const result = runHippo(['session-end', '--log-file', logFile], dir, env, payload);
     expect(result.status).toBe(0);
 
-    await waitUntil(
+    await waitFor(
       () => fs.existsSync(logFile) && fs.readFileSync(logFile, 'utf8').includes('skip: no session_id'),
+      { ...WORKER_WAIT, what: 'the worker skip line in the log' },
     );
 
     const snapshot = await loadSnapshotRetrying(hippoRoot, 'default');
@@ -250,7 +206,7 @@ describe('6. session-end wiring: --session-id argv + worker close', () => {
     const result = runHippo(['session-end', '--log-file', logFile], dir, env, payload);
     expect(result.status).toBe(0);
 
-    await waitUntil(() => closeStepLogged(logFile));
+    await waitForCloseStep(logFile);
 
     const logText = fs.readFileSync(logFile, 'utf8');
     // No line may START with the injected content — every log line stays
@@ -272,7 +228,7 @@ describe('6. session-end wiring: --session-id argv + worker close', () => {
     const payload = JSON.stringify({ session_id: 'sess-no-compact', transcript_path: transcriptPath, hook_event_name: 'SessionEnd' });
     expect(runHippo(['session-end', '--log-file', logFile], dir, env, payload).status).toBe(0);
 
-    await waitUntil(() => closeStepLogged(logFile));
+    await waitForCloseStep(logFile);
     expect(fs.readFileSync(logFile, 'utf8')).toContain('wrote handoff for session sess-no-compact');
     expect(loadLatestHandoff(hippoRoot, 'default', 'sess-no-compact')?.nextAction).toBe('Limiter added; the test is next.');
   });
@@ -288,7 +244,7 @@ describe('6. session-end wiring: --session-id argv + worker close', () => {
     const payload = JSON.stringify({ session_id: 'sess-own', transcript_path: transcriptPath, hook_event_name: 'SessionEnd' });
     expect(runHippo(['session-end', '--log-file', logFile], dir, env, payload).status).toBe(0);
 
-    await waitUntil(() => closeStepLogged(logFile));
+    await waitForCloseStep(logFile);
     const logText = fs.readFileSync(logFile, 'utf8');
     expect(logText).toContain('skip: empty summary');
     expect(logText).toContain('wrote handoff for session sess-own');
@@ -305,7 +261,7 @@ describe('6. session-end wiring: --session-id argv + worker close', () => {
     const result = runHippo(['session-end', '--log-file', logFile], dir, env, payload);
     expect(result.status).toBe(0);
 
-    await waitUntil(() => closeStepLogged(logFile));
+    await waitForCloseStep(logFile);
     const logText = fs.readFileSync(logFile, 'utf8');
     expect(logText).toContain('skip capture: no transcript for this session');
     expect(logText).not.toContain('capturing session');

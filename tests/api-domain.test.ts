@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -24,7 +24,6 @@ import { appendAuditEvent } from '../src/store/audit.js';
 describe('api domain — recall/forget/promote/supersede', () => {
   let home: string;
   let globalHome: string;
-  let originalHippoHome: string | undefined;
 
   beforeEach(() => {
     home = mkdtempSync(join(tmpdir(), 'hippo-api-dom-'));
@@ -32,16 +31,11 @@ describe('api domain — recall/forget/promote/supersede', () => {
     initStore(home);
     initStore(globalHome);
     // Pin the global store to our tmpdir for promote().
-    originalHippoHome = process.env.HIPPO_HOME;
-    process.env.HIPPO_HOME = globalHome;
+    vi.stubEnv('HIPPO_HOME', globalHome);
   });
 
   afterEach(() => {
-    if (originalHippoHome === undefined) {
-      delete process.env.HIPPO_HOME;
-    } else {
-      process.env.HIPPO_HOME = originalHippoHome;
-    }
+    vi.unstubAllEnvs();
     rmSync(home, { recursive: true, force: true });
     rmSync(globalHome, { recursive: true, force: true });
   });

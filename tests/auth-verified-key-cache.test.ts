@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
@@ -227,21 +227,18 @@ describe('VerifiedKeyCache', () => {
 describe('bearer requests through the server', () => {
   let home: string;
   let globalHome: string;
-  let origHippoHome: string | undefined;
   let handle: ServerHandle;
 
   beforeEach(async () => {
     home = makeRoot('key-cache');
     globalHome = makeRoot('key-cache');
-    origHippoHome = process.env.HIPPO_HOME;
-    process.env.HIPPO_HOME = globalHome;
+    vi.stubEnv('HIPPO_HOME', globalHome);
     handle = await serve({ hippoRoot: home, port: 0 });
   });
 
   afterEach(async () => {
     await handle.stop();
-    if (origHippoHome === undefined) delete process.env.HIPPO_HOME;
-    else process.env.HIPPO_HOME = origHippoHome;
+    vi.unstubAllEnvs();
     rmSync(home, { recursive: true, force: true });
     rmSync(globalHome, { recursive: true, force: true });
   });

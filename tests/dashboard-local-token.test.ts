@@ -19,14 +19,13 @@ describe('dashboard local access token', () => {
   let hippoRoot: string;
   let server: Server | undefined;
   let port: number;
-  const prevHippoHome = process.env.HIPPO_HOME;
 
   beforeEach(async () => {
     home = mkdtempSync(join(tmpdir(), 'hippo-dash-token-'));
     hippoRoot = join(home, '.hippo');
     mkdirSync(hippoRoot, { recursive: true });
     initStore(hippoRoot);
-    process.env.HIPPO_HOME = join(home, '.hippo-global');
+    vi.stubEnv('HIPPO_HOME', join(home, '.hippo-global'));
     server = serveDashboard(hippoRoot, 0, TOKEN);
     port = await boundPort(server);
   });
@@ -34,8 +33,7 @@ describe('dashboard local access token', () => {
   afterEach(async () => {
     if (server) await new Promise<void>((resolve) => server!.close(() => resolve()));
     server = undefined;
-    if (prevHippoHome === undefined) delete process.env.HIPPO_HOME;
-    else process.env.HIPPO_HOME = prevHippoHome;
+    vi.unstubAllEnvs();
     rmSync(home, { recursive: true, force: true });
   });
 

@@ -1,7 +1,7 @@
 // Memories seeded from git history never reach the global store on their own;
 // a hand-run share or promote of one still does. Real stores and the real CLI.
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -28,14 +28,12 @@ describe('git-learned rows and the global store', () => {
   let tmp: string;
   let hippoRoot: string;
   let seed: MemoryEntry;
-  let origHippoHome: string | undefined;
 
   beforeEach(() => {
     tmp = mkdtempSync(join(tmpdir(), 'hippo-gitshare-'));
     hippoRoot = join(tmp, 'proj', '.hippo');
     initStore(hippoRoot);
-    origHippoHome = process.env.HIPPO_HOME;
-    process.env.HIPPO_HOME = join(tmp, 'global');
+    vi.stubEnv('HIPPO_HOME', join(tmp, 'global'));
     // The tags learnFromRepo gives every seed.
     seed = createMemory(SEED, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: ['error', 'git-learned'], source: 'git-learn', tenantId: 'default' });
     writeEntry(hippoRoot, seed);
@@ -44,8 +42,7 @@ describe('git-learned rows and the global store', () => {
   });
 
   afterEach(() => {
-    if (origHippoHome !== undefined) process.env.HIPPO_HOME = origHippoHome;
-    else delete process.env.HIPPO_HOME;
+    vi.unstubAllEnvs();
     rmSync(tmp, { recursive: true, force: true });
   });
 

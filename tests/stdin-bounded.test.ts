@@ -8,6 +8,7 @@ import { getHippoRoot } from '../src/core/project-identity.js';
 import { loadActiveTaskSnapshot } from '../src/store/sessions.js';
 import { compactionRows } from './_helpers/compaction-hooks.js';
 import { hippoRun } from './_helpers/spawn-hippo.js';
+import { waitFor } from './_helpers/wait-for.js';
 
 // Plan: hippo/trajectories/01M2ZSMFG8JXSM7PH10EVZNZBW/plan.md. Real spawn,
 // real store, no mocks, same idiom as tests/pre-compact-e2e.test.ts.
@@ -45,19 +46,6 @@ function safeRmSync(p: string): void {
   } catch {
     // best-effort cleanup only
   }
-}
-
-function sleepMs(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-async function waitUntil(check: () => boolean, timeoutMs = 25_000, intervalMs = 50): Promise<void> {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    if (check()) return;
-    await sleepMs(intervalMs);
-  }
-  if (!check()) throw new Error(`condition not met within ${timeoutMs}ms`);
 }
 
 // case 1's payload-less run takes the "no session_id" branch, which
@@ -211,7 +199,7 @@ describe('hippo stdin: bounded read for the optional hook payload (plan: stdin-i
       expect(result.status).toBe(0);
       expect(result.signal).toBeNull();
       // Let the detached worker finish before afterEach removes dir.
-      await waitUntil(() => sessionEndDoneLogged(logFile));
+      await waitFor(() => sessionEndDoneLogged(logFile), { what: 'the session-end worker finishing', timeoutMs: 25_000, intervalMs: 50 });
     });
 
     it('capture --last-session', async () => {

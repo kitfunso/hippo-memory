@@ -1,6 +1,6 @@
 // A rule the person states is pinned at capture, so the prompt hook injects it on a later prompt that shares none of its words.
 // Real SQLite stores in tmp dirs, no mocks.
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -18,7 +18,6 @@ const LATER_PROMPT = 'Fix formatCents in src/money.js so it rounds half up';
 describe('capture pins the rules a person states', () => {
   let scratch: string;
   let root: string;
-  let priorHome: string | undefined;
   let ctx: Context;
 
   const capture = (turns: SessionTurn[]) => cmdCapture(root, { source: 'last-session', sessionTurns: turns, dryRun: false, global: false });
@@ -31,14 +30,12 @@ describe('capture pins the rules a person states', () => {
     initStore(root);
     const global = join(scratch, 'global');
     initStore(global);
-    priorHome = process.env.HIPPO_HOME;
-    process.env.HIPPO_HOME = global;
+    vi.stubEnv('HIPPO_HOME', global);
     ctx = { hippoRoot: root, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
   });
 
   afterEach(() => {
-    if (priorHome === undefined) delete process.env.HIPPO_HOME;
-    else process.env.HIPPO_HOME = priorHome;
+    vi.unstubAllEnvs();
     rmSync(scratch, { recursive: true, force: true });
   });
 

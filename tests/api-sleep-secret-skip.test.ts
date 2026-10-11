@@ -7,7 +7,7 @@
  * tests/api-sleep-phase-faults.test.ts.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -26,7 +26,6 @@ const CLEAN_ROW = 'gotcha: powershell 5.1 has no pipeline chain operators, use i
 describe('api.sleep secretSkipped counter', () => {
   let tmpDir: string;
   let globalTmp: string;
-  let origHippoHome: string | undefined;
   let ctx: Context;
 
   beforeEach(() => {
@@ -34,8 +33,7 @@ describe('api.sleep secretSkipped counter', () => {
     const hippoRoot = join(tmpDir, '.hippo');
     initStore(hippoRoot);
     globalTmp = mkdtempSync(join(tmpdir(), 'hippo-sleep-secretskip-global-'));
-    origHippoHome = process.env.HIPPO_HOME;
-    process.env.HIPPO_HOME = globalTmp;
+    vi.stubEnv('HIPPO_HOME', globalTmp);
 
     writeEntry(hippoRoot, createMemory(SECRET_ROW, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, pinned: true, tags: ['error', 'gotcha'], tenantId: 'default' }));
     writeEntry(hippoRoot, createMemory(CLEAN_ROW, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, pinned: true, tags: ['error', 'gotcha'], tenantId: 'default' }));
@@ -44,8 +42,7 @@ describe('api.sleep secretSkipped counter', () => {
   });
 
   afterEach(() => {
-    if (origHippoHome !== undefined) process.env.HIPPO_HOME = origHippoHome;
-    else delete process.env.HIPPO_HOME;
+    vi.unstubAllEnvs();
     rmSync(tmpDir, { recursive: true, force: true });
     rmSync(globalTmp, { recursive: true, force: true });
   });

@@ -68,6 +68,57 @@ describe('coverage re-keying across the worker and child source maps', () => {
     expect(Object.values(file.b)).toEqual([[1, 2], [0, 4]]);
   });
 
+  /** The provider re-keys a report in place, so a case reads the report back after one pass. */
+  async function keyed(parts: Partial<Report>): Promise<Report> {
+    const { canonicalizeCoverage } = await loadProvider();
+    const r = report(parts);
+    canonicalizeCoverage({ [FILE]: r });
+    return r;
+  }
+
+  it('a statement with no start column ranks first on its line', async () => {
+    // Parsed because istanbul types a column as a number, while v8 locations can lack one and the provider's own types allow it.
+    const noColumn: ReturnType<typeof loc> = JSON.parse('{"start":{"line":3,"column":null},"end":{"line":3,"column":6}}');
+    const r = await keyed({ statementMap: { 0: loc(3, 8, 3, 12), 1: noColumn } });
+    expect([r.statementMap[0].start.column, r.statementMap[1].start.column]).toEqual([1, 0]);
+  });
+
+  it('a function takes one key for its declaration and its body and keeps its name', async () => {
+    const r = await keyed({ fnMap: { 0: { name: 'run', line: 2, decl: loc(2, 9, 2, 12), loc: loc(3, 9, 6, 1) } } });
+    const key = { start: { line: 2, column: 0 }, end: { line: 6, column: null } };
+    expect(r.fnMap[0]).toMatchObject({ name: 'run', decl: key, loc: key });
+  });
+
+  it('a branch is keyed by its first arm, and later arms keep their start line and column', async () => {
+    const r = await keyed({ branchMap: { 0: { type: 'if', line: 4, loc: loc(4, 2, 4, 20), locations: [loc(4, 5, 4, 9), loc(4, 12, 6, 1)] } } });
+    expect(r.branchMap[0].loc).toEqual({ start: { line: 4, column: 0 }, end: { line: 4, column: null } });
+    expect(r.branchMap[0].locations).toEqual([
+      { start: { line: 4, column: 0 }, end: { line: 4, column: null } },
+      { start: { line: 4, column: 12 }, end: { line: 6, column: null } },
+    ]);
+  });
+
+  it('a branch with no arms is keyed by its own span and stays without arms', async () => {
+    const r = await keyed({ branchMap: {
+      0: { type: 'if', line: 1, loc: loc(1, 4, 3, 1), locations: [] },
+      1: { type: 'if', line: 1, loc: loc(1, 0, 3, 1), locations: [] },
+    } });
+    expect([r.branchMap[0].loc.start.column, r.branchMap[1].loc.start.column]).toEqual([1, 0]);
+    expect(r.branchMap[0].locations).toEqual([]);
+  });
+
+  it('a report that is already keyed comes through a second pass unchanged', async () => {
+    const r = await keyed({
+      statementMap: { 0: loc(3, 8, 3, 12), 1: loc(3, 2, 3, 6) },
+      fnMap: { 0: { name: 'run', line: 2, decl: loc(2, 9, 2, 12), loc: loc(3, 9, 6, 1) }, 1: { name: 'go', line: 2, decl: loc(2, 3, 2, 5), loc: loc(2, 3, 6, 1) } },
+      branchMap: { 0: { type: 'if', line: 4, loc: loc(4, 2, 4, 20), locations: [loc(4, 5, 4, 9), loc(4, 12, 6, 1)] }, 1: { type: 'if', line: 4, loc: loc(4, 30, 4, 40), locations: [loc(4, 31, 4, 35)] } },
+    });
+    const once = structuredClone(r);
+    const { canonicalizeCoverage } = await loadProvider();
+    canonicalizeCoverage({ [FILE]: r });
+    expect(r).toEqual(once);
+  });
+
   it('a file with no construct stays in the report', async () => {
     const { canonicalizeCoverage } = await loadProvider();
     const files = { [FILE]: report({}), '/repo/src/other.ts': report({ path: '/repo/src/other.ts', statementMap: { 0: loc(1, 0, 1, 4) }, s: { 0: 0 } }) };
@@ -100,6 +151,15 @@ describe('the provider wrapped around vitest\'s v8 provider', () => {
     assertWrapped(provider);
     const listed = await provider.getUntestedFiles([]);
     expect(listed).toEqual(['/repo/src/never-loaded.ts', '/repo/src/distance.ts']);
+  });
+
+  it('keeps a file outside src/ unless it is built output', async () => {
+    const untested = ['/repo/scripts/build.mjs', '/repo/tests/helper.ts', '/repo/mydist/cli.js', '/repo/packages/web/dist/index.js', 'C:/repo/dist\\cli.js'];
+    stubbed({ remapCoverage: async () => ({}), getUntestedFiles: async () => untested });
+    const { default: mod } = await loadProvider();
+    const provider = await mod.getProvider();
+    assertWrapped(provider);
+    expect(await provider.getUntestedFiles([])).toEqual(['/repo/scripts/build.mjs', '/repo/tests/helper.ts', '/repo/mydist/cli.js']);
   });
 
   it('re-keys what the v8 provider remapped before handing it on', async () => {

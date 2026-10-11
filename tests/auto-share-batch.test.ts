@@ -1,5 +1,5 @@
 // autoShare writes every candidate to the global store in one transaction, from the rows it already holds.
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -15,19 +15,16 @@ const TOPICS = ['powershell', 'sqlite', 'docker', 'cron', 'rsync', 'ssh'];
 
 describe('autoShare batching', () => {
   let tmp: string;
-  let origHippoHome: string | undefined;
 
   beforeEach(() => {
     tmp = mkdtempSync(join(tmpdir(), 'hippo-autoshare-batch-'));
-    origHippoHome = process.env.HIPPO_HOME;
-    process.env.HIPPO_HOME = join(tmp, 'global');
+    vi.stubEnv('HIPPO_HOME', join(tmp, 'global'));
     // The first open migrates the store, which would count as writes in whichever call comes first.
     initGlobal();
   });
 
   afterEach(() => {
-    if (origHippoHome !== undefined) process.env.HIPPO_HOME = origHippoHome;
-    else delete process.env.HIPPO_HOME;
+    vi.unstubAllEnvs();
     rmSync(tmp, { recursive: true, force: true });
   });
 

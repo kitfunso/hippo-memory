@@ -27,33 +27,23 @@ function queryRow<T>(db: DatabaseSyncLike, sql: string, ...params: unknown[]): T
   return db.prepare(sql).get(...params) as T | undefined;
 }
 
-// v0.39 commit 1 regressions:
-//  - promote: tenant pre-check matches archiveRaw (CRITICAL #1)
-//  - authCreate: HTTP body.tenantId ignored, key bound to caller (CRITICAL #2)
-//  - supersede: BEGIN IMMEDIATE CAS: two-connection race + clean path + tenant scope
-//    (CRITICAL #4)
+// A caller's tenant bounds promote, supersede and key minting, so one tenant can never touch another's rows.
 
 describe('api tenant isolation', () => {
   let home: string;
   let globalHome: string;
-  let originalHippoHome: string | undefined;
 
   beforeEach(() => {
-    home = makeRoot('v039');
-    globalHome = makeRoot('v039-global');
-    originalHippoHome = process.env.HIPPO_HOME;
-    process.env.HIPPO_HOME = globalHome;
+    home = makeRoot('api-tenant');
+    globalHome = makeRoot('api-tenant-global');
+    vi.stubEnv('HIPPO_HOME', globalHome);
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
-    if (originalHippoHome === undefined) {
-      delete process.env.HIPPO_HOME;
-    } else {
-      process.env.HIPPO_HOME = originalHippoHome;
-    }
-    try { rmSync(home, { recursive: true, force: true }); } catch { /* windows file locks */ }
-    try { rmSync(globalHome, { recursive: true, force: true }); } catch { /* windows file locks */ }
+    vi.unstubAllEnvs();
+    rmSync(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    rmSync(globalHome, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   });
 
   // ---- Test 1: promote cross-tenant denied ----------------------------------
@@ -217,26 +207,20 @@ describe('api tenant isolation', () => {
 describe('authCreate HTTP body.tenantId ignored', () => {
   let home: string;
   let globalHome: string;
-  let originalHippoHome: string | undefined;
   let handle: ServerHandle;
 
   beforeEach(async () => {
-    home = makeRoot('v039-authcreate');
-    globalHome = makeRoot('v039-authcreate-global');
-    originalHippoHome = process.env.HIPPO_HOME;
-    process.env.HIPPO_HOME = globalHome;
+    home = makeRoot('api-authcreate');
+    globalHome = makeRoot('api-authcreate-global');
+    vi.stubEnv('HIPPO_HOME', globalHome);
     handle = await serve({ hippoRoot: home, port: 0 });
   });
 
   afterEach(async () => {
     await handle.stop();
-    if (originalHippoHome === undefined) {
-      delete process.env.HIPPO_HOME;
-    } else {
-      process.env.HIPPO_HOME = originalHippoHome;
-    }
-    try { rmSync(home, { recursive: true, force: true }); } catch { /* windows file locks */ }
-    try { rmSync(globalHome, { recursive: true, force: true }); } catch { /* windows file locks */ }
+    vi.unstubAllEnvs();
+    rmSync(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    rmSync(globalHome, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   });
 
   it('POST /v1/auth/keys ignores body.tenantId, binds key to bearer tenant', async () => {

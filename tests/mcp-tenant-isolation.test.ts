@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
@@ -8,15 +8,7 @@ import { handleMcpRequest, type McpResponse, type McpContext } from '../src/mcp/
 import { lastRecalledIds } from '../src/mcp/session-state.js';
 import { makeRoot } from './_helpers/make-root.js';
 
-// v0.39 commit 2 regressions:
-//  - lastRecalledIds keyed per-client so two HTTP-MCP clients on the same
-//    tenant cannot poison each other's outcome feedback (Fix 2.1)
-//  - clientKey built from hash(bearer + remoteAddr) by src/server.ts (Fix 2.2)
-//  - hippo_recall / hippo_remember route through src/api/index.ts so audit_log
-//    captures actor='mcp' uniformly with CLI/REST (Fix 2.3)
-//  - hippo_share passes ctx.tenantId so a Bearer for tenant A cannot share
-//    tenant B's memory to the global store (Fix 2.4)
-//  - hippo_outcome reads with ctx.tenantId (Fix 2.5)
+// Every MCP tool takes tenant and client from its own context, so one caller can never read, share or score another's memories.
 
 function callTool(
   reqId: number,
@@ -45,23 +37,17 @@ function extractText(res: McpResponse | null): string {
 describe('mcp tenant + client-key isolation', () => {
   let home: string;
   let globalHome: string;
-  let originalHippoHome: string | undefined;
 
   beforeEach(() => {
-    home = makeRoot('v039-mcp');
-    globalHome = makeRoot('v039-mcp-global');
-    originalHippoHome = process.env.HIPPO_HOME;
-    process.env.HIPPO_HOME = globalHome;
+    home = makeRoot('mcp-tenant');
+    globalHome = makeRoot('mcp-tenant-global');
+    vi.stubEnv('HIPPO_HOME', globalHome);
   });
 
   afterEach(() => {
-    if (originalHippoHome === undefined) {
-      delete process.env.HIPPO_HOME;
-    } else {
-      process.env.HIPPO_HOME = originalHippoHome;
-    }
-    try { rmSync(home, { recursive: true, force: true }); } catch { /* windows file locks */ }
-    try { rmSync(globalHome, { recursive: true, force: true }); } catch { /* windows file locks */ }
+    vi.unstubAllEnvs();
+    rmSync(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    rmSync(globalHome, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   });
 
   // ---- Test 1: lastRecalledIds keyed by clientKey --------------------------
@@ -318,11 +304,7 @@ describe('mcp tenant + client-key isolation', () => {
   });
 
   // ---- Test 7: T2 — ctx.actor threads into audit_log subject ---------------
-  // server.ts's 5 ApiContext build sites used to hardcode adminActor('mcp'),
-  // ignoring McpContext.actor entirely. Fix: adminActor(ctx?.actor ?? 'mcp').
-  // Under HTTP-MCP ctx.actor carries the auth-resolved subject; this must
-  // show up as the audit_log actor for remember and outcome (recall already
-  // covered by Test 2's actor=mcp pin above, same code path).
+  // Under HTTP-MCP ctx.actor carries the auth-resolved subject, so it must be the audit_log actor for remember and outcome.
   it('hippo_remember and hippo_outcome via MCP thread ctx.actor into audit_log subject (T2)', async () => {
     const ctx = { hippoRoot: home, tenantId: 'alpha', actor: 'user:alice', role: 'admin' as const, hostAdmin: true as const, clientKey: 'http:alice:addr' };
 
@@ -349,11 +331,8 @@ describe('mcp tenant + client-key isolation', () => {
       const aliceOutcome = outcomeEvents.find((e) => e.actor === 'user:alice');
       expect(aliceOutcome).toBeDefined();
 
-      // Codex review-stage P2 pin: the recall branch's SIDE EFFECTS (retrieval
-      // persist via writeEntry, anchoring/availability audits) must carry the
-      // same resolved actor as the primary call - a single authenticated
-      // recall must never fan audit rows out across multiple principals
-      // ('user:alice' primary + 'cli' writeEntry default + hardcoded 'mcp').
+      // A recall's side effects (retrieval persist, anchoring and availability audits) must carry the
+      // resolved actor too, so one authenticated recall never spreads audit rows across principals.
       const allAlphaEvents = queryAuditEvents(db, { tenantId: 'alpha' });
       const principals = new Set(allAlphaEvents.map((e) => e.actor));
       expect(principals.has('cli')).toBe(false);
@@ -364,16 +343,8 @@ describe('mcp tenant + client-key isolation', () => {
   });
 
   // ---- Test 8: T2 — actor not supplied still falls back to 'mcp' -----------
-  // Pins ctx?.actor ?? 'mcp' directly (existing-behavior pin: stdio callers
-  // pass no ctx, and the fallback must stay 'mcp'). This deliberately does
-  // NOT call handleMcpRequest with the whole ctx argument omitted — on this
-  // dev machine findHippoRoot()'s cwd walk reaches the real global store at
-  // C:/Users/<user>/.hippo before HIPPO_HOME's sandbox override applies
-  // (verified: C:/Users/<user>/.hippo exists), so exercising the literal
-  // no-ctx branch here would write test rows into a real, non-test store.
-  // hippoRoot/tenantId are supplied instead (as in every other test in this
-  // file, skipping findHippoRoot entirely) with actor the only field left
-  // unset, which reaches the fix's `??` operator identically at runtime.
+  // The whole ctx is not omitted: with no hippoRoot, findHippoRoot() walks up to the developer's real store and the test would write into it.
+  // Leaving only actor unset reaches the same `??` fallback.
   it('MCP context with actor omitted falls back to "mcp" in audit_log (ctx?.actor ?? "mcp" pin)', async () => {
     const res = await handleMcpRequest(
       {

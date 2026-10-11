@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -132,7 +132,6 @@ describe('capture retains complete supported assertions', () => {
 describe('automatic quality does not govern manual or trusted import storage', () => {
   let scratch: string;
   let root: string;
-  let priorHome: string | undefined;
   let ctx: Context;
 
   beforeEach(() => {
@@ -141,14 +140,12 @@ describe('automatic quality does not govern manual or trusted import storage', (
     initStore(root);
     const global = join(scratch, 'global');
     initStore(global);
-    priorHome = process.env.HIPPO_HOME;
-    process.env.HIPPO_HOME = global;
+    vi.stubEnv('HIPPO_HOME', global);
     ctx = { hippoRoot: root, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
   });
 
   afterEach(() => {
-    if (priorHome === undefined) delete process.env.HIPPO_HOME;
-    else process.env.HIPPO_HOME = priorHome;
+    vi.unstubAllEnvs();
     rmSync(scratch, { recursive: true, force: true });
   });
 

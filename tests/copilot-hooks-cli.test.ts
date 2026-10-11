@@ -11,6 +11,7 @@ import type { JsonValue } from '../src/util/json.js';
 import { compactionRows, initGlobal, initProject, runHippo } from './_helpers/compaction-hooks.js';
 import { lockWaitAskedMs, tracingLockWaits } from './_helpers/lock-waits.js';
 import { holdStoreWriteLock, releaseStoreWriteLock } from './_helpers/store-write-lock.js';
+import { waitFor } from './_helpers/wait-for.js';
 import {
   CLAUDE_SESSION, claudeCodePayload, copilotEventsJsonl, copilotPayload, copilotScratch, writeClaudeTranscript, writeCopilotSessionLog, type CopilotScratch,
 } from './_helpers/copilot-hooks.js';
@@ -72,23 +73,13 @@ function initStoreIn(dir: string): string {
   return path.join(dir, '.hippo');
 }
 
-function sleepMs(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-async function waitUntil(test: () => boolean, what: string, timeoutMs = 25_000): Promise<void> {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    if (test()) return;
-    await sleepMs(50);
-  }
-  throw new Error(`${what} within ${timeoutMs}ms`);
-}
+// The detached workers are real processes, so a wait gets a generous bound under load.
+const WORKER_WAIT_MS = 25_000;
 
 const readLog = (logFile: string): string => (fs.existsSync(logFile) ? fs.readFileSync(logFile, 'utf8') : '');
 
-async function waitForLog(logFile: string, marker: string, timeoutMs = 25_000): Promise<string> {
-  await waitUntil(() => readLog(logFile).includes(marker), `${marker} not logged`, timeoutMs);
+async function waitForLog(logFile: string, marker: string, timeoutMs = WORKER_WAIT_MS): Promise<string> {
+  await waitFor(() => readLog(logFile).includes(marker), { what: `log line ${marker}`, timeoutMs });
   return readLog(logFile);
 }
 
@@ -341,7 +332,7 @@ describe('hippo session-end --runtime copilot --turn (the VS Code Stop hook)', (
       env,
       async reached(): Promise<number> {
         // A poll can see the file created and still empty, which must never parse as pid 0.
-        await waitUntil(() => marked().includes('\n'), 'no worker reached the progress cursor save', 40_000);
+        await waitFor(() => marked().includes('\n'), { what: 'a worker reaching the progress cursor save', timeoutMs: 40_000 });
         const pid = Number(marked().split('\n')[0]);
         if (!Number.isInteger(pid) || pid <= 0) throw new Error(`bad pid in the cursor save mark: ${marked()}`);
         return pid;
@@ -448,7 +439,7 @@ describe('hippo session-end --runtime copilot --turn (the VS Code Stop hook)', (
     const first = runHippo(stopArgs(logFile()), s.dir, fault.env, stopPayload(transcript));
     expect(first.status, first.stderr).toBe(0);
     const pid = await fault.reached();
-    await waitUntil(() => !pidAlive(pid), `worker ${pid} not dead`);
+    await waitFor(() => !pidAlive(pid), { what: `worker ${pid} dead`, timeoutMs: WORKER_WAIT_MS });
     expect(memoriesWith(FIRST_LESSON)).toBe(1);
     expect(fs.existsSync(sessionFile('.cursor.json'))).toBe(false);
     expect(fs.existsSync(sessionFile('.lock'))).toBe(true);
@@ -458,7 +449,7 @@ describe('hippo session-end --runtime copilot --turn (the VS Code Stop hook)', (
     expect(await stop(transcript)).toContain('Captured 0 items (1 skipped as duplicates');
     expect(memoriesWith(FIRST_LESSON)).toBe(1);
     expect(fs.existsSync(sessionFile('.cursor.json'))).toBe(true);
-    await waitUntil(() => !fs.existsSync(sessionFile('.lock')), 'session lock not released');
+    await waitFor(() => !fs.existsSync(sessionFile('.lock')), { what: 'session lock released', timeoutMs: WORKER_WAIT_MS });
 
     expect(await stop(transcript)).toContain('skip capture: no new turns since the last reply');
   }, 60_000);
@@ -473,9 +464,9 @@ describe('hippo session-end --runtime copilot --turn (the VS Code Stop hook)', (
     fs.appendFileSync(transcript, SECOND_TURN);
     const second = runHippo(stopArgs(logFile()), s.dir, s.env, stopPayload(transcript));
     expect(second.status, second.stderr).toBe(0);
-    await waitUntil(() => fs.existsSync(sessionFile('.queued')), 'second reply not queued');
+    await waitFor(() => fs.existsSync(sessionFile('.queued')), { what: 'second reply queued', timeoutMs: WORKER_WAIT_MS });
     fault.release();
-    await waitUntil(() => !fs.existsSync(sessionFile('.lock')), 'session lock not released', 60_000);
+    await waitFor(() => !fs.existsSync(sessionFile('.lock')), { what: 'session lock released', timeoutMs: 60_000 });
     expect(memoriesWith(FIRST_LESSON)).toBe(1);
     expect(memoriesWith(SECOND_LESSON)).toBe(1);
     // The second worker has no preload, so two lines with this pid mean the first worker saved the cursor twice.
@@ -505,7 +496,7 @@ describe('hippo session-end --runtime copilot --turn (the VS Code Stop hook)', (
     expect(fs.existsSync(sessionFile('.cursor.json', second))).toBe(true);
 
     fault.release();
-    await waitUntil(() => !fs.existsSync(sessionFile('.lock')), 'session lock not released', 60_000);
+    await waitFor(() => !fs.existsSync(sessionFile('.lock')), { what: 'session lock released', timeoutMs: 60_000 });
     expect(fs.existsSync(sessionFile('.cursor.json'))).toBe(true);
     expect(memoriesWith(FIRST_LESSON)).toBe(1);
     expect(memoriesWith(SECOND_LESSON)).toBe(1);
