@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { createApiKey } from '../src/store/auth.js';
 import { runCli } from '../src/cli.js';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
-import { insertEntity } from '../src/store/graph-writes.js';
+import { insertEntityAt } from './_helpers/graph-seed.js';
 import type { SourceObjectType } from '../src/store/graph-rows.js';
 import type { JsonValue } from '../src/util/json.js';
 import { serve, type ServerHandle } from '../src/server.js';
@@ -270,7 +270,7 @@ describe('typed objects over HTTP, one fresh store per case', () => {
       const first = await api.send('POST', path, create);
       await api.send('POST', path, create);
       deleteEntry(api.root, fieldIn(first, 'memoryId') ?? '');
-      for (const id of [1, 2]) insertEntity(api.root, 'default', { entityType: source, name: `object ${id}`, sourceObject: { type: source, id } });
+      for (const id of [1, 2]) insertEntityAt(api.root, 'default', { entityType: source, name: `object ${id}`, sourceObject: { type: source, id } });
       expect(api.graphOwners(source)).toEqual([1, 2]);
       expect((await api.send('POST', `${path}/1/close`)).status).toBe(200);
       expect(api.graphOwners(source)).toEqual([2]);

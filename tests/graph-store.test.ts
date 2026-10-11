@@ -13,7 +13,8 @@ import { writeEntry } from '../src/store/entry-writes.js';
 import { deleteEntry } from '../src/store/delete-and-batch.js';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
-import { insertEntity, insertRelation } from '../src/store/graph-writes.js';
+import { insertEntityAt, insertRelationAt } from './_helpers/graph-seed.js';
+import { insertEntityRow, insertRelationRow, runGraphRebuildTransaction, updateEntityRow } from '../src/store/graph-writes.js';
 import { markGraphDirty, markPendingProcessedUpTo } from '../src/store/graph-queue.js';
 import { loadEntitiesByIds, loadEntities, loadRelations } from '../src/store/graph-reads.js';
 import { MAX_ENTITY_NAME_LEN } from '../src/store/graph-rows.js';
@@ -52,20 +53,35 @@ describe('graph store (graph-on-consolidated guard)', () => {
   it('insertEntity from a distilled / superseded memory sets source_kind; insertRelation links them', () => {
     const md = addMemory(home, 'default', 'distilled');
     const ms = addMemory(home, 'default', 'superseded');
-    const a = insertEntity(home, 'default', { entityType: 'customer', name: 'Acme', memoryId: md });
-    const b = insertEntity(home, 'default', { entityType: 'person', name: 'Jordan', memoryId: ms });
+    const a = insertEntityAt(home, 'default', { entityType: 'customer', name: 'Acme', memoryId: md });
+    const b = insertEntityAt(home, 'default', { entityType: 'person', name: 'Jordan', memoryId: ms });
     expect(a.sourceKind).toBe('distilled');
     expect(b.sourceKind).toBe('superseded');
-    const rel = insertRelation(home, 'default', { fromEntityId: a.id, toEntityId: b.id, relType: 'owns', memoryId: md });
+    const rel = insertRelationAt(home, 'default', { fromEntityId: a.id, toEntityId: b.id, relType: 'owns', memoryId: md });
     expect(rel.relType).toBe('owns');
     expect(rel.sourceKind).toBe('distilled');
     expect(loadEntitiesByIds(home, 'default', [a.id])[0]!.name).toBe('Acme');
   });
 
+  it('every graph writer runs on the caller\'s handle, so a rolled-back transaction keeps none of its writes', async () => {
+    const writers = Object.keys(await import('../src/store/graph-writes.js'));
+    for (const rootForm of ['insertEntity', 'updateEntity', 'insertRelation']) expect(writers).not.toContain(rootForm);
+    const md = addMemory(home, 'default', 'distilled');
+    const kept = insertEntityAt(home, 'default', { entityType: 'system', name: 'kept', memoryId: md });
+    expect(() => runGraphRebuildTransaction(home, 'default', (txDb) => {
+      const added = insertEntityRow(txDb, 'default', { entityType: 'system', name: 'added', memoryId: md });
+      insertRelationRow(txDb, 'default', { fromEntityId: kept.id, toEntityId: added.id, relType: 'depends-on', memoryId: md });
+      updateEntityRow(txDb, 'default', kept.id, { name: 'renamed', memoryId: md });
+      throw new Error('rollback');
+    })).toThrow('rollback');
+    expect(loadEntities(home, 'default', { limit: 10 }).map((e) => e.name)).toEqual(['kept']);
+    expect(countRows(home, 'relations')).toBe(0);
+  });
+
   it('CRITERION 1: a raw-FK entity is rejected via the helper AND via a direct raw SQL INSERT (trigger ABORTs)', () => {
     const raw = addMemory(home, 'default', 'raw');
     // helper rejects
-    expect(() => insertEntity(home, 'default', { entityType: 'system', name: 'x', memoryId: raw }))
+    expect(() => insertEntityAt(home, 'default', { entityType: 'system', name: 'x', memoryId: raw }))
       .toThrow(/raw|consolidated/i);
     // direct raw SQL INSERT (claiming source_kind='distilled') is rejected by the trigger
     const db = openHippoDb(home);
@@ -81,7 +97,7 @@ describe('graph store (graph-on-consolidated guard)', () => {
   it('UPDATE-path guard: cannot move a graph row onto a raw memory or fake source_kind via raw SQL UPDATE', () => {
     const md = addMemory(home, 'default', 'distilled');
     const raw = addMemory(home, 'default', 'raw');
-    const e = insertEntity(home, 'default', { entityType: 'project', name: 'p', memoryId: md });
+    const e = insertEntityAt(home, 'default', { entityType: 'project', name: 'p', memoryId: md });
     const db = openHippoDb(home);
     try {
       // move memory_id to a raw memory -> ABORT (BEFORE UPDATE trigger)
@@ -111,7 +127,7 @@ describe('graph store (graph-on-consolidated guard)', () => {
 
   it('cross-tenant entity->memory rejected (helper + raw SQL trigger)', () => {
     const mb = addMemory(home, 'tenant-b', 'distilled');
-    expect(() => insertEntity(home, 'tenant-a', { entityType: 'customer', name: 'x', memoryId: mb }))
+    expect(() => insertEntityAt(home, 'tenant-a', { entityType: 'customer', name: 'x', memoryId: mb }))
       .toThrow(/another tenant/);
     const db = openHippoDb(home);
     try {
@@ -125,9 +141,9 @@ describe('graph store (graph-on-consolidated guard)', () => {
   it('cross-tenant relation->entity rejected (helper + raw SQL trigger)', () => {
     const ma = addMemory(home, 'tenant-a', 'distilled');
     const mb = addMemory(home, 'tenant-b', 'distilled');
-    const ea = insertEntity(home, 'tenant-a', { entityType: 'system', name: 'a', memoryId: ma });
-    const eb = insertEntity(home, 'tenant-b', { entityType: 'system', name: 'b', memoryId: mb });
-    expect(() => insertRelation(home, 'tenant-a', { fromEntityId: ea.id, toEntityId: eb.id, relType: 'depends-on', memoryId: ma }))
+    const ea = insertEntityAt(home, 'tenant-a', { entityType: 'system', name: 'a', memoryId: ma });
+    const eb = insertEntityAt(home, 'tenant-b', { entityType: 'system', name: 'b', memoryId: mb });
+    expect(() => insertRelationAt(home, 'tenant-a', { fromEntityId: ea.id, toEntityId: eb.id, relType: 'depends-on', memoryId: ma }))
       .toThrow(/another tenant/);
     const db = openHippoDb(home);
     try {
@@ -149,7 +165,7 @@ describe('graph store (graph-on-consolidated guard)', () => {
       // trigger fires before the CHECK in SQLite, so it raises the trigger message.
       expect(() => db.prepare(`INSERT INTO entities(tenant_id, entity_type, name, memory_id, source_kind, created_at)
         VALUES ('default', 'system', 'x', ?, 'raw', ?)`).run(md, 't')).toThrow(/source_kind must equal|CHECK|constraint/i);
-      const e = insertEntity(home, 'default', { entityType: 'system', name: 'a', memoryId: md });
+      const e = insertEntityAt(home, 'default', { entityType: 'system', name: 'a', memoryId: md });
       expect(() => db.prepare(`INSERT INTO relations(tenant_id, from_entity_id, to_entity_id, rel_type, memory_id, source_kind, created_at)
         VALUES ('default', ?, ?, 'frobnicates', ?, 'distilled', ?)`).run(e.id, e.id, md, 't')).toThrow(/CHECK|constraint/i);
     } finally { closeHippoDb(db); }
@@ -158,9 +174,9 @@ describe('graph store (graph-on-consolidated guard)', () => {
   it('helper rejects bad entityType/relType and over-cap name before touching the DB', () => {
     const md = addMemory(home, 'default', 'distilled');
     // @ts-expect-error runtime validation
-    expect(() => insertEntity(home, 'default', { entityType: 'alien', name: 'x', memoryId: md })).toThrow(/entityType must be one of/);
-    expect(() => insertEntity(home, 'default', { entityType: 'system', name: '  ', memoryId: md })).toThrow(/name is required/);
-    expect(() => insertEntity(home, 'default', { entityType: 'system', name: 'z'.repeat(MAX_ENTITY_NAME_LEN + 1), memoryId: md })).toThrow(/name exceeds/);
+    expect(() => insertEntityAt(home, 'default', { entityType: 'alien', name: 'x', memoryId: md })).toThrow(/entityType must be one of/);
+    expect(() => insertEntityAt(home, 'default', { entityType: 'system', name: '  ', memoryId: md })).toThrow(/name is required/);
+    expect(() => insertEntityAt(home, 'default', { entityType: 'system', name: 'z'.repeat(MAX_ENTITY_NAME_LEN + 1), memoryId: md })).toThrow(/name exceeds/);
   });
 
   it('markGraphDirty: distilled enqueues; raw is not enqueued; queue kind-mismatch UPDATE ABORTs; markProcessed', () => {
@@ -199,9 +215,9 @@ describe('graph store (graph-on-consolidated guard)', () => {
     // provenance row; that is tolerated because the SET NULL does NOT fire the BEFORE
     // UPDATE guard: recursive_triggers is default-OFF.)
     const md = addMemory(home, 'default', 'distilled');
-    const a = insertEntity(home, 'default', { entityType: 'system', name: 'a', memoryId: md });
-    const b = insertEntity(home, 'default', { entityType: 'system', name: 'b', memoryId: md });
-    insertRelation(home, 'default', { fromEntityId: a.id, toEntityId: b.id, relType: 'depends-on', memoryId: md });
+    const a = insertEntityAt(home, 'default', { entityType: 'system', name: 'a', memoryId: md });
+    const b = insertEntityAt(home, 'default', { entityType: 'system', name: 'b', memoryId: md });
+    insertRelationAt(home, 'default', { fromEntityId: a.id, toEntityId: b.id, relType: 'depends-on', memoryId: md });
     markGraphDirty(home, 'default', md);
     expect(countRows(home, 'entities')).toBe(2);
     expect(countRows(home, 'relations')).toBe(1);
@@ -218,7 +234,7 @@ describe('graph store (graph-on-consolidated guard)', () => {
 
   it('REVERSE guard (codex P1+P2): a graph-referenced memory is immutable in kind/tenant (raw, superseded, or tenant move all ABORT)', () => {
     const md = addMemory(home, 'default', 'distilled');
-    insertEntity(home, 'default', { entityType: 'system', name: 'a', memoryId: md });
+    insertEntityAt(home, 'default', { entityType: 'system', name: 'a', memoryId: md });
     const db = openHippoDb(home);
     try {
       // P1: reclassify the referenced memory to raw -> ABORT
@@ -246,9 +262,9 @@ describe('graph store (graph-on-consolidated guard)', () => {
   it('REVERSE guard (codex P2): a relation-endpoint entity cannot be moved cross-tenant via raw UPDATE', () => {
     const md = addMemory(home, 'default', 'distilled');
     const mb = addMemory(home, 'tenant-b', 'distilled');
-    const a = insertEntity(home, 'default', { entityType: 'system', name: 'a', memoryId: md });
-    const b = insertEntity(home, 'default', { entityType: 'system', name: 'b', memoryId: md });
-    insertRelation(home, 'default', { fromEntityId: a.id, toEntityId: b.id, relType: 'depends-on', memoryId: md });
+    const a = insertEntityAt(home, 'default', { entityType: 'system', name: 'a', memoryId: md });
+    const b = insertEntityAt(home, 'default', { entityType: 'system', name: 'b', memoryId: md });
+    insertRelationAt(home, 'default', { fromEntityId: a.id, toEntityId: b.id, relType: 'depends-on', memoryId: md });
     const db = openHippoDb(home);
     try {
       // moving endpoint 'a' to tenant-b (with a tenant-b memory, so the entity<->memory
@@ -259,7 +275,7 @@ describe('graph store (graph-on-consolidated guard)', () => {
     } finally { closeHippoDb(db); }
     // an entity NOT referenced by any relation can still move tenant (with a matching memory)
     const cmem = addMemory(home, 'default', 'distilled');
-    const c = insertEntity(home, 'default', { entityType: 'system', name: 'c', memoryId: cmem });
+    const c = insertEntityAt(home, 'default', { entityType: 'system', name: 'c', memoryId: cmem });
     const db2 = openHippoDb(home);
     try {
       expect(() => db2.prepare(`UPDATE entities SET tenant_id = 'tenant-b', memory_id = ?, source_kind = 'distilled' WHERE id = ?`).run(mb, c.id)).not.toThrow();
@@ -268,12 +284,12 @@ describe('graph store (graph-on-consolidated guard)', () => {
 
   it('loadEntities / loadRelations filters + tenant isolation', () => {
     const md = addMemory(home, 'default', 'distilled');
-    const a = insertEntity(home, 'default', { entityType: 'customer', name: 'Acme', memoryId: md });
-    insertEntity(home, 'default', { entityType: 'person', name: 'Jo', memoryId: md });
+    const a = insertEntityAt(home, 'default', { entityType: 'customer', name: 'Acme', memoryId: md });
+    insertEntityAt(home, 'default', { entityType: 'person', name: 'Jo', memoryId: md });
     expect(loadEntities(home, 'default').length).toBe(2);
     expect(loadEntities(home, 'default', { entityType: 'customer' }).map((e) => e.id)).toEqual([a.id]);
     expect(loadEntities(home, 'other-tenant').length).toBe(0);
-    insertRelation(home, 'default', { fromEntityId: a.id, toEntityId: a.id, relType: 'references', memoryId: md });
+    insertRelationAt(home, 'default', { fromEntityId: a.id, toEntityId: a.id, relType: 'references', memoryId: md });
     expect(loadRelations(home, 'default', { fromEntityId: a.id }).length).toBe(1);
   });
 });

@@ -11,7 +11,7 @@ import { Layer, type MemoryEntry} from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { estimateTokens } from '../src/util/token-text.js';
 import type { SearchResult } from '../src/core/search-types.js';
-import { insertEntity, insertRelation } from '../src/store/graph-writes.js';
+import { insertEntityAt, insertRelationAt } from './_helpers/graph-seed.js';
 import { graphExpandRecall } from '../src/graph/recall.js';
 import { hippoRun } from './_helpers/spawn-hippo.js';
 
@@ -231,7 +231,7 @@ describe('a memory with a copy in the global store', () => {
       return m;
     };
     const entity = (root: string, m: MemoryEntry): number =>
-      insertEntity(root, T, { entityType: 'decision', name: m.id, memoryId: m.id }).id;
+      insertEntityAt(root, T, { entityType: 'decision', name: m.id, memoryId: m.id }).id;
     const sr = (entry: MemoryEntry, score: number): SearchResult =>
       ({ entry, score, bm25: score, cosine: 0, tokens: estimateTokens(entry.content) });
 
@@ -239,14 +239,14 @@ describe('a memory with a copy in the global store', () => {
     const global = store('graph-global');
     const seed = mem(local, rule);
     const linked = mem(local, older);
-    insertRelation(local, T, { fromEntityId: entity(local, seed), toEntityId: entity(local, linked), relType: 'references', memoryId: seed.id });
+    insertRelationAt(local, T, { fromEntityId: entity(local, seed), toEntityId: entity(local, linked), relType: 'references', memoryId: seed.id });
     // The global graph holds a third memory that links to shared copies of both local ones.
     const other = mem(global, newest);
     const linkedCopy = mem(global, older);
     const seedCopy = mem(global, rule);
     const eOther = entity(global, other);
     for (const copy of [linkedCopy, seedCopy]) {
-      insertRelation(global, T, { fromEntityId: eOther, toEntityId: entity(global, copy), relType: 'references', memoryId: other.id });
+      insertRelationAt(global, T, { fromEntityId: eOther, toEntityId: entity(global, copy), relType: 'references', memoryId: other.id });
     }
 
     const out = graphExpandRecall([sr(seed, 1), sr(other, 0.9)], { hops: 1, hippoRoot: local, globalRoot: global, tenantId: T, budget: 4000 });

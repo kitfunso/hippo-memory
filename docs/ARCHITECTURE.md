@@ -506,7 +506,8 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - module header: Design contract (see docs/plans/2026-06-08-b-pluggable-embedding-provider.md):
 - module header: Local provider `id` is the BARE model string. (Historical note: this originally guaranteed NO identity change on upgrade; since the embed-text-format versioning in embeddings.ts (`embeddingIndexIdentity`, `${id}#t2`, docs/plans/2026-07-09-recall-determinism.md T1), the STORED identity carries a `#t<N>` suffix and pre-#t2 stores get exactly one forced reindex on their next embed-touching operation — deliberate, because their vectors were computed over path-contaminated text.)
 
-### src/store/embeddings/index.ts
+### src/search/embed-memories.ts
+- module header: provider selection, the API-key check and vector computation moved here from src/store/embeddings/index.ts, which keeps only the stored index identity (src/store/port.ts VectorWrites: core computes each vector, the store only keeps it).
 - `embedMemory`: L9: host-wide rebuild. The embedding index is keyed by entry.id (which is tenant-scoped) but the index itself is one per hippoRoot.
 - `embedAll`: L9: host-wide by design. embedAll backfills vectors for all tenants' entries into the per-host embedding index.
 

@@ -13,7 +13,7 @@ import { fallbackOrigin } from '../core/project-identity.js';
 import { detectSecret } from '../util/secret-detect.js';
 import { isQuarantineScope } from '../trust/quarantine.js';
 import { RejectedValueError } from '../core/api-errors.js';
-import { embedMemory, embedAll } from '../store/embeddings/index.js';
+import { embedMemory, embedAll } from '../search/embed-memories.js';
 import { duplicateKey, storedTextKeys } from '../util/same-text.js';
 import { isReusable } from '../core/memory-quality.js';
 import { log } from '../util/log.js';

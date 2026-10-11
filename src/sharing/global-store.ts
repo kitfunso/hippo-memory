@@ -11,7 +11,7 @@ import { fallbackOrigin, resolveGlobalRootDir } from '../core/project-identity.j
 import { isSharedStore } from '../core/config.js';
 import { detectSecret } from '../util/secret-detect.js';
 import { isQuarantineScope } from '../trust/quarantine.js';
-import { embedMemory } from '../store/embeddings/index.js';
+import { embedMemory } from '../search/embed-memories.js';
 import type { DatabaseSyncLike } from '../db/index.js';
 import { appendAuditEvent } from '../store/audit.js';
 

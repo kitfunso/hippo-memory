@@ -19,7 +19,7 @@ import { deleteEntry } from '../src/store/delete-and-batch.js';
 import { saveDecision, closeDecision } from '../src/objects/decisions.js';
 import { savePolicy } from '../src/objects/policies.js';
 import { saveProjectBrief, refreshBrief } from '../src/objects/project-briefs.js';
-import { runGraphRebuildTransaction, insertEntity } from '../src/store/graph-writes.js';
+import { runGraphRebuildTransaction, insertEntityRow } from '../src/store/graph-writes.js';
 import { loadPendingExtractionTenants, markGraphDirty } from '../src/store/graph-queue.js';
 import { loadExtractionQueue } from './_helpers/graph-queue.js';
 import { loadEntities, loadRelations } from '../src/store/graph-reads.js';
@@ -234,7 +234,7 @@ describe('sleep enqueue-hook', () => {
     // concurrent rebuilds serialize on the write lock instead of duplicating rows.
     expect(() =>
       runGraphRebuildTransaction(tc.hippoRoot, T, (txDb) => {
-        insertEntity(tc.hippoRoot, T, { entityType: 'policy', name: 'TempEntity', memoryId: d.memoryId! }, txDb);
+        insertEntityRow(txDb, T, { entityType: 'policy', name: 'TempEntity', memoryId: d.memoryId! });
         throw new Error('mid-rebuild boom');
       }),
     ).toThrow('mid-rebuild boom');

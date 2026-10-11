@@ -4,8 +4,10 @@ import { ForbiddenError } from '../core/api-errors.js';
 import { fetchGitLog, extractLessons, partitionLessons, isGitRepo } from '../learn/autolearn.js';
 import { type HippoConfig, loadConfig } from '../core/config.js';
 import { withRequestStoresSync } from '../db/request-stores.js';
-import { embedMemory } from '../store/embeddings/index.js';
-import { extractInvalidationTarget, invalidateMatchingAmong } from '../learn/invalidation.js';
+import { embedMemory } from '../search/embed-memories.js';
+import {
+  extractInvalidationTarget, invalidateMatching, invalidateMatchingAmong, type InvalidationOptions, type InvalidationResult, type InvalidationTarget,
+} from '../learn/invalidation.js';
 import { computeSchemaFit, createMemory, Layer } from '../core/memory.js';
 import { extractPathTags } from '../search/path-context.js';
 import { canReadScope, personalScopeOf } from '../core/recall-scope.js';
@@ -113,4 +115,11 @@ function writeLessons(ctx: Context, lessons: readonly string[], opts: LearnOpts,
     }
     return counts;
   });
+}
+
+export type { InvalidationOptions, InvalidationResult, InvalidationTarget };
+
+/** `hippo invalidate`: weakens the caller's tenant's memories that reference `target.from`, or only the one `options.onlyId` names. */
+export function invalidateMemories(ctx: Context, target: InvalidationTarget, options: InvalidationOptions): InvalidationResult {
+  return invalidateMatching(ctx.hippoRoot, target, ctx.tenantId, options);
 }

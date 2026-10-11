@@ -45,7 +45,7 @@ import { createMemory } from '../../dist/core/memory.js';
 import { initStore } from '../../dist/store/open.js';
 import { writeEntry } from '../../dist/store/entry-writes.js';
 import { loadAllEntries } from '../../dist/store/entry-reads.js';
-import { embedMemory } from '../../dist/store/embeddings/index.js';
+import { embedMemory } from '../../dist/search/embed-memories.js';
 import { loadEmbeddingIndex } from '../../dist/store/vector-index.js';
 import { isEmbeddingAvailable } from '../../dist/embeddings/local.js';
 import { physicsSearch } from '../../dist/search/physics-search.js';

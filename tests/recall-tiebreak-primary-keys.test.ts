@@ -22,7 +22,7 @@ import { createMemory } from './_helpers/default-half-life-memory.js';
 import { retrieve, type Context } from '../src/api/index.js';
 import { estimateTokens } from '../src/util/token-text.js';
 import type { SearchResult } from '../src/core/search-types.js';
-import { insertEntity, insertRelation } from '../src/store/graph-writes.js';
+import { insertEntityAt, insertRelationAt } from './_helpers/graph-seed.js';
 import { graphExpandRecall } from '../src/graph/recall.js';
 import { compareEntryIdentity, type EntryIdentity } from '../src/core/compare.js';
 import { makeRoot } from './_helpers/make-root.js';
@@ -184,7 +184,7 @@ describe('graph-recall.ts:248 graph-hop ordering', () => {
     return { entry, score, bm25: score, cosine: 0, tokens: estimateTokens(entry.content) };
   }
   function ent(home: string, tenant: string, m: MemoryEntry, name: string): number {
-    return insertEntity(home, tenant, { entityType: 'decision', name, memoryId: m.id }).id;
+    return insertEntityAt(home, tenant, { entityType: 'decision', name, memoryId: m.id }).id;
   }
 
   let home: string;
@@ -206,12 +206,12 @@ describe('graph-recall.ts:248 graph-hop ordering', () => {
     const c = mem(home, T, 'zzz hop one neighbor right of origin');
     const eb = ent(home, T, b, 'B');
     const ec = ent(home, T, c, 'C');
-    insertRelation(home, T, { fromEntityId: ea, toEntityId: eb, relType: 'supersedes', memoryId: a.id });
-    insertRelation(home, T, { fromEntityId: ea, toEntityId: ec, relType: 'supersedes', memoryId: a.id });
+    insertRelationAt(home, T, { fromEntityId: ea, toEntityId: eb, relType: 'supersedes', memoryId: a.id });
+    insertRelationAt(home, T, { fromEntityId: ea, toEntityId: ec, relType: 'supersedes', memoryId: a.id });
 
     const d = mem(home, T, 'mmm hop two neighbor reached via b');
     const ed = ent(home, T, d, 'D');
-    insertRelation(home, T, { fromEntityId: eb, toEntityId: ed, relType: 'supersedes', memoryId: b.id });
+    insertRelationAt(home, T, { fromEntityId: eb, toEntityId: ed, relType: 'supersedes', memoryId: b.id });
 
     const base = [sr(a, 1.0)];
     const out = graphExpandRecall(base, {

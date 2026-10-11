@@ -18,7 +18,7 @@ import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.
 import { saveDecision, closeDecision } from '../src/objects/decisions.js';
 import { savePolicy } from '../src/objects/policies.js';
 import { extractGraph } from '../src/graph/extract.js';
-import { insertEntity } from '../src/store/graph-writes.js';
+import { insertEntityAt } from './_helpers/graph-seed.js';
 import { loadEntities } from '../src/store/graph-reads.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { makeRoot } from './_helpers/make-root.js';
@@ -166,7 +166,7 @@ describe('graph provenance is anchored to the first-class object, not its memory
 
   it('the no-raw invariant holds: inserting an entity that references a raw memory still ABORTs', () => {
     const raw = addMemory(home, 'raw');
-    expect(() => insertEntity(home, T, { entityType: 'system', name: 'x', memoryId: raw }))
+    expect(() => insertEntityAt(home, T, { entityType: 'system', name: 'x', memoryId: raw }))
       .toThrow(/raw|consolidated/i);
     // and via a direct raw SQL INSERT claiming distilled -> the trigger ABORTs.
     const db = openHippoDb(home);
@@ -180,7 +180,7 @@ describe('graph provenance is anchored to the first-class object, not its memory
 
   it('the all-null guard: inserting an entity with neither memory nor source_object ABORTs', () => {
     // helper-level rejection.
-    expect(() => insertEntity(home, T, { entityType: 'system', name: 'x' }))
+    expect(() => insertEntityAt(home, T, { entityType: 'system', name: 'x' }))
       .toThrow(/needs a memory or a source object/i);
     // direct raw SQL with both null -> the BEFORE INSERT trigger ABORTs.
     const db = openHippoDb(home);
@@ -207,7 +207,7 @@ describe('graph provenance is anchored to the first-class object, not its memory
 
   it('object-path guard: inserting an entity pointing at a non-existent / wrong-tenant E2 row ABORTs', () => {
     // memory-null + a source_object that does not exist -> ABORT (helper + trigger).
-    expect(() => insertEntity(home, T, { entityType: 'decision', name: 'ghost', sourceObject: { type: 'decision', id: 99999 } }))
+    expect(() => insertEntityAt(home, T, { entityType: 'decision', name: 'ghost', sourceObject: { type: 'decision', id: 99999 } }))
       .toThrow(/not found|active\/superseded|active|superseded/i);
     const db = openHippoDb(home);
     try {
@@ -225,7 +225,7 @@ describe('graph provenance is anchored to the first-class object, not its memory
     // recursive_triggers OFF, so the all-null ABORT was removed from the UPDATE triggers
     // (kept on INSERT). The delete therefore succeeds and the row survives all-null.
     const md = addMemory(home, 'distilled');
-    const e = insertEntity(home, T, { entityType: 'system', name: 'mem-only', memoryId: md });
+    const e = insertEntityAt(home, T, { entityType: 'system', name: 'mem-only', memoryId: md });
     expect(() => deleteEntry(home, md)).not.toThrow();
     const ents = entityRows(home);
     const row = ents.find((r) => r.id === e.id)!;
@@ -286,7 +286,7 @@ describe('graph provenance is anchored to the first-class object, not its memory
     // memory is null - so a wrong/closed/nonexistent object cannot ride along with a live
     // memory and become a forget-blocking landmine after ON DELETE SET NULL.
     const md = addMemory(home, 'distilled');
-    expect(() => insertEntity(home, T, {
+    expect(() => insertEntityAt(home, T, {
       entityType: 'decision', name: 'x', memoryId: md, sourceObject: { type: 'decision', id: 99999 },
     })).toThrow(/not found|active|superseded/i);
 
@@ -306,13 +306,13 @@ describe('graph provenance is anchored to the first-class object, not its memory
     // source object. insertEntity must anchor to the object (memory_id null), NOT throw - else a
     // mirror forgotten during a rebuild would roll back the WHOLE tenant rebuild.
     const policy = savePolicy(home, T, { policyName: 'Retention', policyText: 'p' });
-    const ent = insertEntity(home, T, {
+    const ent = insertEntityAt(home, T, {
       entityType: 'policy', name: 'Retention', memoryId: 'sem_doesnotexist', sourceObject: { type: 'policy', id: policy.id },
     });
     expect(ent.memoryId).toBeNull();            // dead mirror pointer dropped
     expect(ent.sourceObjectId).toBe(policy.id); // anchored to the object
     // a stale-missing mirror with NO object still throws (no provenance to fall back on).
-    expect(() => insertEntity(home, T, { entityType: 'system', name: 'x', memoryId: 'sem_doesnotexist' }))
+    expect(() => insertEntityAt(home, T, { entityType: 'system', name: 'x', memoryId: 'sem_doesnotexist' }))
       .toThrow(/not found/i);
   });
 
@@ -335,7 +335,7 @@ describe('graph provenance is anchored to the first-class object, not its memory
   it('P2 round-5 (codex): a tenant-only move of an object-backed (mirrorless) row revalidates the object and ABORTs', () => {
     const policy = savePolicy(home, T, { policyName: 'Retention', policyText: 'p' });
     // object-only (mirrorless) entity in tenant T - the memory-path tenant check does not apply.
-    const ent = insertEntity(home, T, { entityType: 'policy', name: 'Retention', sourceObject: { type: 'policy', id: policy.id } });
+    const ent = insertEntityAt(home, T, { entityType: 'policy', name: 'Retention', sourceObject: { type: 'policy', id: policy.id } });
     expect(ent.memoryId).toBeNull();
     const db = openHippoDb(home);
     try {

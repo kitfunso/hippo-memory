@@ -8,7 +8,7 @@ import { canReadScope } from '../../src/core/recall-scope.js';
 import { withSqliteAllowed, type HippoStore } from '../../src/server.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
 import { ENTITY_COLS, RELATION_COLS, rowToEntity, rowToRelation, type Entity, type EntityRow, type EntityType, type Relation, type RelationRow } from '../../src/store/graph-rows.js';
-import { insertEntity, insertRelation } from '../../src/store/graph-writes.js';
+import { insertEntityRow, insertRelationRow } from '../../src/store/graph-writes.js';
 import type { GraphReads, GraphRows, GraphViewQuery } from '../../src/store/port.js';
 import { inMemoryKeyAuditStore } from './in-memory-key-audit-store.js';
 import { TENANT_A, TENANT_B, type StoreSide } from './store-conformance.js';
@@ -132,11 +132,11 @@ function seeder(db: Db, dir: string) {
   };
   const entity = (tenantId: string, second: number, name: string, entityType: EntityType, memoryId: string): number => {
     vi.setSystemTime(new Date(seededAt(second)));
-    return insertEntity(dir, tenantId, { entityType, name, memoryId }, db).id;
+    return insertEntityRow(db, tenantId, { entityType, name, memoryId }).id;
   };
   const relation = (tenantId: string, second: number, fromEntityId: number, toEntityId: number, memoryId: string): number => {
     vi.setSystemTime(new Date(seededAt(second)));
-    return insertRelation(dir, tenantId, { fromEntityId, toEntityId, relType: 'references', memoryId }, db).id;
+    return insertRelationRow(db, tenantId, { fromEntityId, toEntityId, relType: 'references', memoryId }).id;
   };
   return { memory, entity, relation };
 }
@@ -159,7 +159,7 @@ function seedTenantA(db: Db, dir: string, policyId: number): SeededTenantA {
   const lone = entity(TENANT_A, 6, 'Lone', 'decision', memories.team);
   const shared = entity(TENANT_A, 7, 'Shared', 'project', memories.team);
   // Stamped with the second `shared` left on the clock, so the two newest entities share a timestamp.
-  const anchored = insertEntity(dir, TENANT_A, { entityType: 'policy', name: 'Anchored', memoryId: null, sourceObject: { type: 'policy', id: policyId } }, db).id;
+  const anchored = insertEntityRow(db, TENANT_A, { entityType: 'policy', name: 'Anchored', memoryId: null, sourceObject: { type: 'policy', id: policyId } }).id;
   relation(TENANT_A, 8, hub, spoke1, memories.team);
   relation(TENANT_A, 8, hub, spoke2, memories.team);
   relation(TENANT_A, 9, spoke1, spoke2, memories.team);

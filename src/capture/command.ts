@@ -3,6 +3,7 @@ import * as path from 'path';
 import { createMemory, Layer, type MemoryEntry } from '../core/memory.js';
 import { duplicateKey, longestWord, storedTextKeys } from '../util/same-text.js';
 import { writeCapturedItems } from '../store/capture-write.js';
+import { embedMemory } from '../search/embed-memories.js';
 import { EVERY_SCOPE, loadTextsHoldingWords } from '../store/candidates.js';
 import { getGlobalRoot, initGlobal } from '../sharing/global-store.js';
 import { maskEmails, redactSecretsStrict } from '../util/secret-detect.js';
@@ -217,7 +218,7 @@ export function captureExtractedItems(
       targetRoot,
       extracted.map((item) => ({ content: item.content, makeEntry: () => captureEntry(item, options, baseHalfLifeDays) })),
       keys,
-      { actor: options.actor, lean: options.lean },
+      { actor: options.actor, lean: options.lean, onCaptured: options.lean ? undefined : (entry) => void embedMemory(targetRoot, entry) },
     );
     for (const outcome of outcomes) tally[outcome]++;
     return tally;

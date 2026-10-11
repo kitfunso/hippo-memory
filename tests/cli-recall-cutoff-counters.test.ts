@@ -32,7 +32,7 @@ import { execFileSync } from 'node:child_process';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
-import { insertEntity, insertRelation } from '../src/store/graph-writes.js';
+import { insertEntityAt, insertRelationAt } from './_helpers/graph-seed.js';
 import { remember, type Context } from '../src/api/index.js';
 
 const CLI = join(process.cwd(), 'dist', 'cli.js');
@@ -208,9 +208,9 @@ describe('graph-expanded recall keeps the published accounting honest', () => {
     };
     const a = mk('decision quokka about cache invalidation strategy');
     const b = mk('wholly unrelated wording xyzzy plugh frobnicate');
-    const ea = insertEntity(root, T, { entityType: 'decision', name: 'A', memoryId: a.id }).id;
-    const eb = insertEntity(root, T, { entityType: 'decision', name: 'B', memoryId: b.id }).id;
-    insertRelation(root, T, { fromEntityId: eb, toEntityId: ea, relType: 'supersedes', memoryId: b.id });
+    const ea = insertEntityAt(root, T, { entityType: 'decision', name: 'A', memoryId: a.id }).id;
+    const eb = insertEntityAt(root, T, { entityType: 'decision', name: 'B', memoryId: b.id }).id;
+    insertRelationAt(root, T, { fromEntityId: eb, toEntityId: ea, relType: 'supersedes', memoryId: b.id });
 
     // cwd is `home` so no stray local store joins the recall: this test pins
     // the SINGLE-store graph case. (A worktree cwd would silently merge its

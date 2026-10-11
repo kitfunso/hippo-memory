@@ -87,11 +87,8 @@ export { strengthBucket } from './consolidate/dedupe.js';
 
 // Feature 1: Embedding search
 export { isEmbeddingAvailable, getEmbedding } from './embeddings/local.js';
-export {
-  cosineSimilarity,
-  embedMemory,
-  embedAll,
-} from './store/embeddings/index.js';
+export { cosineSimilarity } from './store/embeddings/index.js';
+export { embedMemory, embedAll } from './search/embed-memories.js';
 export { loadEmbeddingIndex, saveEmbeddingIndex } from './store/vector-index.js';
 
 // Feature 2: Auto-learn from errors

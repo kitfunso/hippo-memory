@@ -2,7 +2,7 @@
 // Vectors and physics rows carry no tenant, so each op covers the whole store and needs the host admin.
 
 import type { EmbeddingProvider } from '../embeddings/provider.js';
-import { embedAll } from '../store/embeddings/index.js';
+import { embedAll } from '../search/embed-memories.js';
 import { loadAllEntries, loadAllEntryIds } from '../store/entry-reads.js';
 import { loadEmbeddingIndex, resetStoredParticles } from '../store/vector-index.js';
 import { requireHostAdmin, type Context } from './types.js';

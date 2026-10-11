@@ -1,5 +1,5 @@
 {
-  "count": 59,
+  "count": 58,
   "exports": [
     "src/api/availability.ts:DEFAULT_RECENCY_WINDOW_MS",
     "src/capture/compaction-spool.ts:_setSpoolFsForTests",
@@ -50,7 +50,6 @@
     "src/store/delivery-recorder.ts:_setDeliveryFaultForTests",
     "src/store/embeddings/index.ts:EMBED_TEXT_FORMAT",
     "src/store/embeddings/index.ts:resolveIndexedEmbeddingModel",
-    "src/store/embeddings/index.ts:saveStoredEmbeddingModel",
     "src/store/failure-log.ts:failuresBySession",
     "src/store/goals.ts:pushGoalWithDb",
     "src/store/recall-trace.ts:DELIVERY_LEDGER_RETENTION_DAYS",

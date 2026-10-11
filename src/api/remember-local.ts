@@ -6,7 +6,7 @@ import { loadConfig } from '../core/config.js';
 import type { ConfidenceLevel, Layer, MemoryEntry, MemoryKind } from '../core/memory.js';
 import { computeSalience, type SalienceResult } from '../core/salience.js';
 import { loadNewestEntries, schemaFitInStore } from '../store/candidates.js';
-import { embedMemory } from '../store/embeddings/index.js';
+import { embedMemory } from '../search/embed-memories.js';
 import { loadAllEntries, readEntry } from '../store/entry-reads.js';
 import { updateStats } from '../store/index-and-stats.js';
 import { errorMessage } from '../util/log.js';

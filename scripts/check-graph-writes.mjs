@@ -110,7 +110,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       console.error(`  ${v.file}:${v.line}: ${v.text}`);
     }
     console.error('');
-    console.error('Fix: route the write through the store graph writers (insertEntity / insertRelation /');
+    console.error('Fix: route the write through the store graph writers (insertEntityRow / insertRelationRow /');
     console.error('enqueueExtraction), which applies the consolidated-source guard. The graph must');
     console.error('never index the raw layer (ROADMAP-RESEARCH E3.3).');
     console.error('');

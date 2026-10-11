@@ -189,7 +189,7 @@ function deriveEntities(loaded: readonly LoadedType[]): DerivedEntities {
     pass.byType[entityType] = 0;
     for (const row of rows) {
       pass.allRows.push(row);
-      // Names are uncapped at source; trimming on both sides of the cap gives the exact name insertEntity stores.
+      // Names are uncapped at source; trimming on both sides of the cap gives the exact name insertEntityRow stores.
       const name = (row.name ?? '').trim().slice(0, MAX_ENTITY_NAME_LEN).trim();
       const key = keyOf(row.entityType, row.e2Id);
       // A row seen twice was superseded between the two status loads; its first sighting stands.
@@ -304,7 +304,7 @@ export function extractGraph(hippoRoot: string, tenantId: string): ExtractResult
   const derived = deriveGraph(loadGraphSources(hippoRoot, tenantId));
   // Diffed and applied under one lock, so two concurrent rebuilds serialize instead of both inserting a missing row.
   const skipped = runGraphRebuildTransaction(hippoRoot, tenantId, (txDb) =>
-    applyGraphOps(txDb, hippoRoot, tenantId, graphDelta(txDb, tenantId, derived), { from: 0, holdMs: Infinity }).skipped,
+    applyGraphOps(txDb, tenantId, graphDelta(txDb, tenantId, derived), { from: 0, holdMs: Infinity }).skipped,
   );
   return resultOf(derived, skipped);
 }
@@ -323,7 +323,7 @@ export async function extractGraphChunked(hippoRoot: string, tenantId: string, b
     const from = next;
     // Sleep's wait, not a server request's 250 ms: each chunk is a fresh BEGIN IMMEDIATE a hook's write could otherwise fail.
     const chunk = runGraphRebuildTransaction(hippoRoot, tenantId, (txDb) =>
-      applyGraphOps(txDb, hippoRoot, tenantId, ops, { from, holdMs: budget.holdMs, clock: budget.clock }),
+      applyGraphOps(txDb, tenantId, ops, { from, holdMs: budget.holdMs, clock: budget.clock }),
     { busyWaitMs: SLEEP_DB_WAIT_MS });
     committedAt = budget.clock();
     next = chunk.next;

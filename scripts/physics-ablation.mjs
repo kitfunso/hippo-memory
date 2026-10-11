@@ -27,7 +27,7 @@ import { createMemory } from '../dist/core/memory.js';
 import { initStore } from '../dist/store/open.js';
 import { writeEntry } from '../dist/store/entry-writes.js';
 import { loadAllEntries } from '../dist/store/entry-reads.js';
-import { embedMemory } from '../dist/store/embeddings/index.js';
+import { embedMemory } from '../dist/search/embed-memories.js';
 import { isEmbeddingAvailable, resolveEmbeddingModel } from '../dist/embeddings/local.js';
 import { openHippoDb, closeHippoDb } from '../dist/db/index.js';
 import { hybridSearch } from '../dist/search/hybrid.js';

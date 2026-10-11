@@ -2,12 +2,11 @@
 
 import { truncateWithEllipsis } from '../util/ellipsize.js';
 import * as path from 'path';
-import { rejectValue, unrejectValue, listRejectionsForTenant } from '../trust/reject-flow.js';
+import { unrejectValue, listRejectionsForTenant } from '../trust/reject-flow.js';
 import { RejectedValueError } from '../core/api-errors.js';
 import { loadConfig } from '../core/config.js';
 import { RawAppendOnlyError } from '../core/raw-append-only.js';
 import { isGitRepo } from '../learn/autolearn.js';
-import { invalidateMatching, InvalidationTarget } from '../learn/invalidation.js';
 import * as api from '../api/index.js';
 import { getMemory } from '../api/memories.js';
 import * as client from './client.js';
@@ -258,10 +257,7 @@ export function handleReject({ hippoRoot, tenantId, args, flags }: CommandContex
   }
 
   try {
-    const result = rejectValue({
-      hippoRoot: root,
-      tenantId,
-      actor: 'cli',
+    const result = api.rejectOnHost(cliApiContext(root, tenantId), {
       reason,
       memoryId: valueFlag === undefined ? memoryId : undefined,
       value: valueFlag,
@@ -273,7 +269,7 @@ export function handleReject({ hippoRoot, tenantId, args, flags }: CommandContex
   }
 }
 
-function printRejected(result: ReturnType<typeof rejectValue>, reason: string): void {
+function printRejected(result: ReturnType<typeof api.rejectOnHost>, reason: string): void {
   const digestPrefix = result.digest.slice(0, DIGEST_DISPLAY_CHARS);
   const preview = truncateWithEllipsis(result.content, CONTENT_PREVIEW_CHARS);
   console.log(`Rejected [${digestPrefix}...]: "${preview}"`);
@@ -559,12 +555,12 @@ export function handleInvalidate({ hippoRoot, tenantId, args, flags }: CommandCo
     throw new CliExit(1);
   }
   const reason = nonEmptyStringFlag(flags, 'reason') ?? null;
-  const invTarget: InvalidationTarget = {
+  const invTarget: api.InvalidationTarget = {
     from: target ?? `id:${onlyId}`,
     to: reason,
     type: 'migration',
   };
-  const result = invalidateMatching(hippoRoot, invTarget, tenantId, { dryRun, onlyId });
+  const result = api.invalidateMemories(cliApiContext(hippoRoot, tenantId), invTarget, { dryRun, onlyId });
   const label = target ? `"${target}"` : `--id ${onlyId}`;
   if (result.dryRun) {
     if (result.invalidated === 0) {
