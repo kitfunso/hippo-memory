@@ -70,6 +70,23 @@ describe('retrieve with the CLI ranking core', () => {
     expect([...(writes[0]!.strengthen?.ids ?? [])].sort()).toEqual(['mem_core_0', 'mem_core_1']);
     expect(recallRowsInHippoDb()).toBe(1);
   });
+
+  it('writes the second store\'s recall rows through the store named for that root', async () => {
+    const secondRoot = join(home, 'second');
+    initStore(secondRoot);
+    writeEntry(secondRoot, { ...createMemory('deploy notes kept in the second store'), id: 'mem_second_0', strength: 1 });
+    const inner = portOnlyStore(secondRoot);
+    const writes: RecallWrites[] = [];
+    const globalStore: HippoStore = { ...inner, finishRecall: async (w) => { writes.push(w); await inner.finishRecall(w); } };
+    const ctx: Context = { hippoRoot, tenantId: 'default', actor: adminActor('cli') };
+
+    const result = await retrieve(ctx, { query: 'deploy', cliCore: { ...cliCore(), sources: { globalRoot: secondRoot, globalStore } } });
+
+    expect(result.results.map((r) => r.id)).toContain('mem_second_0');
+    expect(writes).toHaveLength(1);
+    expect(writes[0]!.audit.map((a) => a.op)).toEqual(['recall']);
+    expect([...(writes[0]!.strengthen?.ids ?? [])]).toEqual(['mem_second_0']);
+  });
 });
 
 describe('the store port', () => {

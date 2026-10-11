@@ -12,11 +12,11 @@ import type { ActiveGoals, GoalRecallLogRow } from '../store/goals.js';
 import { boostByGoals, type GoalStackBoostOpts } from '../search/goal-boost.js';
 import type { ForwardClaimMatch } from '../learn/forward-claim-detector.js';
 import { storeFor, type HippoStore, type RecallSearchArgs, type RecallWrites } from '../store/index.js';
-import { hybridSearch, type HybridSearchOptions } from '../search/hybrid.js';
-import { physicsSearch } from '../search/physics-search.js';
+import { searchByEngine } from '../search/engine.js';
 import { churnStaleFactor } from '../search/boosts.js';
 import type { HybridVectorCandidates } from '../search/vector.js';
-import type { RerankStep, SearchResult } from '../core/search-types.js';
+import type { RerankStep } from '../core/search-types.js';
+import type { PhysicsConfig } from '../core/physics-config.js';
 import { compareEntryIdentity } from '../core/compare.js';
 import { dropHeldCopies, duplicateKey, storedTextKeys } from '../util/same-text.js';
 import { isSharedStore, loadConfig } from '../core/config.js';
@@ -78,7 +78,7 @@ async function retrieveBand(ctx: Context, store: HippoStore, opts: RecallOpts, w
   let candidates = await store.searchRecallEntries(opts.query, recallSearchArgs(ctx, opts, windowSize, own));
   if (opts.mode === 'hybrid' || opts.mode === 'physics') {
     const searchOpts = { budget: Infinity, hippoRoot: ctx.hippoRoot, scope: opts.scope ?? null, vectorCandidates: recallVectorSpec(ctx, opts, own), store };
-    const ranked = await rankPool(ctx, opts, candidates, searchOpts);
+    const ranked = await searchByEngine(opts.query, candidates, physicsFor(ctx, opts), searchOpts);
     const rankedIds = new Set(ranked.map((r) => r.entry.id));
     candidates = [...ranked.map((r) => r.entry), ...candidates.filter((e) => !rankedIds.has(e.id))];
   }
@@ -90,11 +90,9 @@ async function retrieveBand(ctx: Context, store: HippoStore, opts: RecallOpts, w
   return result;
 }
 
-/** The ranked pool: physics when `mode` says so, hybrid otherwise; each caller supplies its own search options. */
-function rankPool(ctx: Context, opts: RecallOpts, pool: MemoryEntry[], searchOpts: HybridSearchOptions): Promise<SearchResult[]> {
-  return opts.mode === 'physics'
-    ? physicsSearch(opts.query, pool, { ...searchOpts, physicsConfig: loadConfig(ctx.hippoRoot).physics })
-    : hybridSearch(opts.query, pool, searchOpts);
+/** `mode` names the engine: physics with the store's config, hybrid otherwise. */
+function physicsFor(ctx: Context, opts: RecallOpts): PhysicsConfig | null {
+  return opts.mode === 'physics' ? loadConfig(ctx.hippoRoot).physics : null;
 }
 
 /** The recall load's arguments: exact scope, current rows only, the caller's project and personal scope. */
@@ -137,7 +135,7 @@ async function retrieveFromStore(
   const pool = loaded.filter((e) => passesScopeFilterForRecall(e.scope ?? null, opts.scope, own));
   // No scope option: the scope boost follows HIPPO_SCOPE and the skill env, as MCP recall always ranked.
   const searchOpts = { budget: Infinity, hippoRoot: ctx.hippoRoot, vectorCandidates: recallVectorSpec(ctx, opts, own), store };
-  let ranked = await rankPool(ctx, opts, pool, searchOpts);
+  let ranked = await searchByEngine(opts.query, pool, physicsFor(ctx, opts), searchOpts);
   // One goal read serves both boosts; the ranked list's log rows come first, so its scores win the log's first-write.
   const goals = opts.sessionId && !opts.goalTag ? await store.activeGoals({ sessionId: opts.sessionId, tenantId: ctx.tenantId }) : null;
   let rankedLog: GoalRecallLogRow[] = [];

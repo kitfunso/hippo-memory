@@ -1,0 +1,12 @@
+// The one search-engine choice every ranker over a candidate pool makes: recall's band, MCP's wide list, the CLI core and context.
+
+import type { MemoryEntry } from '../core/memory.js';
+import type { PhysicsConfig } from '../core/physics-config.js';
+import type { SearchResult } from '../core/search-types.js';
+import { hybridSearch, type HybridSearchOptions } from './hybrid.js';
+import { physicsSearch } from './physics-search.js';
+
+/** Physics scoring when `physics` holds its config, hybrid otherwise; each caller keeps its own options. */
+export function searchByEngine(query: string, pool: MemoryEntry[], physics: PhysicsConfig | null, options: HybridSearchOptions): Promise<SearchResult[]> {
+  return physics ? physicsSearch(query, pool, { ...options, physicsConfig: physics }) : hybridSearch(query, pool, options);
+}

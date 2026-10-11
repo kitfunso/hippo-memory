@@ -1,0 +1,348 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`recall ranker goldens > CLI core ranker: core explain physics 1`] = `
+[
+  "mem_p_goal",
+  "mem_p_fill0",
+  "mem_p_plain",
+  "mem_p_pinned",
+  "mem_p_scoped",
+  "mem_p_noise",
+  "mem_p_new",
+  "mem_p_fill1",
+  "mem_p_trace",
+  "mem_p_fill2",
+]
+`;
+
+exports[`recall ranker goldens > CLI core ranker: core explicit private scope 1`] = `
+[
+  "<claim>",
+  "mem_p_plain",
+  "mem_p_pinned",
+  "mem_p_trace",
+  "mem_p_scoped",
+  "mem_p_fill5",
+  "mem_p_new",
+  "mem_p_fill2",
+  "mem_x_child1",
+  "mem_p_fill4",
+]
+`;
+
+exports[`recall ranker goldens > CLI core ranker: core hybrid 1`] = `
+[
+  "<claim>",
+  "mem_p_plain",
+  "mem_p_pinned",
+  "mem_p_trace",
+  "mem_p_scoped",
+  "mem_p_fill5",
+  "mem_p_new",
+  "mem_p_fill2",
+  "mem_x_child1",
+  "mem_p_fill4",
+]
+`;
+
+exports[`recall ranker goldens > CLI core ranker: core physics 1`] = `
+[
+  "mem_p_scoped",
+  "mem_p_fill0",
+  "mem_p_trace",
+  "mem_p_plain",
+  "mem_p_goal",
+  "mem_p_pinned",
+  "mem_p_new",
+  "mem_x_child1",
+  "mem_p_fill5",
+  "mem_p_fill2",
+]
+`;
+
+exports[`recall ranker goldens > CLI core ranker: core physics with the global store 1`] = `
+[
+  "<claim>",
+  "mem_p_plain",
+  "mem_p_pinned",
+  "mem_p_trace",
+  "mem_p_scoped",
+  "mem_p_fill5",
+  "mem_p_new",
+  "mem_p_fill2",
+  "mem_x_child1",
+  "mem_p_fill4",
+]
+`;
+
+exports[`recall ranker goldens > CLI core ranker: core session goal boost 1`] = `
+[
+  "<claim>",
+  "mem_p_goal",
+  "mem_p_plain",
+  "mem_p_pinned",
+  "mem_p_trace",
+  "mem_p_scoped",
+  "mem_p_fill5",
+  "mem_p_new",
+  "mem_p_fill2",
+  "mem_x_child1",
+]
+`;
+
+exports[`recall ranker goldens > CLI core ranker: core superseded kept 1`] = `
+[
+  "<claim>",
+  "mem_p_new",
+  "mem_p_old",
+  "mem_p_plain",
+  "mem_x_child1",
+  "mem_p_trace",
+  "mem_p_noise",
+  "mem_p_scoped",
+  "mem_x_child2",
+  "mem_p_pinned",
+]
+`;
+
+exports[`recall ranker goldens > CLI core ranker: core with the global store 1`] = `
+[
+  "<claim>",
+  "mem_p_plain",
+  "mem_p_pinned",
+  "mem_p_trace",
+  "mem_p_scoped",
+  "mem_p_fill5",
+  "mem_p_new",
+  "mem_p_fill2",
+  "mem_x_child1",
+  "mem_p_fill4",
+]
+`;
+
+exports[`recall ranker goldens > MCP wide ranker: wide hybrid 1`] = `
+{
+  "band": [
+    "<claim>",
+    "mem_p_fill5",
+    "mem_p_pinned",
+    "mem_x_child1",
+    "mem_x_summary",
+    "mem_p_trace",
+    "mem_x_cafe",
+    "mem_p_plain",
+    "mem_p_scoped",
+    "mem_x_raw",
+  ],
+  "ranked": [
+    "<claim>",
+    "mem_p_fill5",
+    "mem_p_pinned",
+    "mem_x_child1",
+    "mem_x_summary",
+    "mem_p_trace",
+    "mem_x_cafe",
+    "mem_p_plain",
+    "mem_p_scoped",
+    "mem_x_raw",
+    "mem_p_noise",
+    "mem_p_new",
+    "mem_p_goal",
+    "mem_x_child2",
+    "mem_p_fill3",
+    "mem_p_fill1",
+    "mem_p_fill2",
+    "mem_p_fill4",
+    "mem_p_fill0",
+  ],
+}
+`;
+
+exports[`recall ranker goldens > MCP wide ranker: wide physics with session 1`] = `
+{
+  "band": [
+    "mem_p_goal",
+    "mem_p_scoped",
+    "mem_p_fill0",
+    "mem_p_trace",
+    "mem_p_plain",
+    "mem_x_summary",
+  ],
+  "ranked": [
+    "mem_p_goal",
+    "mem_p_scoped",
+    "mem_p_fill0",
+    "mem_p_trace",
+    "mem_p_plain",
+    "mem_p_pinned",
+    "mem_p_new",
+    "mem_x_child1",
+    "mem_p_fill5",
+    "mem_p_fill2",
+    "mem_p_fill1",
+    "mem_p_fill4",
+    "mem_p_fill3",
+    "mem_x_child2",
+    "mem_p_noise",
+    "mem_x_raw",
+    "mem_x_cafe",
+    "<claim>",
+    "mem_x_summary",
+  ],
+}
+`;
+
+exports[`recall ranker goldens > MCP wide ranker: wide scoped 1`] = `
+{
+  "band": [
+    "mem_p_scoped",
+  ],
+  "ranked": [
+    "mem_p_scoped",
+  ],
+}
+`;
+
+exports[`recall ranker goldens > band ranker: LIKE path 1`] = `
+[
+  "mem_x_cafe",
+]
+`;
+
+exports[`recall ranker goldens > band ranker: bm25 limit 3 1`] = `
+[
+  "mem_p_pinned",
+  "mem_p_plain",
+  "mem_x_child1",
+]
+`;
+
+exports[`recall ranker goldens > band ranker: bm25 plain 1`] = `
+[
+  "mem_p_pinned",
+  "mem_p_plain",
+  "mem_x_child1",
+  "mem_x_child2",
+  "mem_p_fill0",
+  "mem_p_fill1",
+  "mem_p_fill2",
+  "mem_p_fill3",
+  "mem_p_fill4",
+  "mem_p_fill5",
+]
+`;
+
+exports[`recall ranker goldens > band ranker: fresh tail 1`] = `
+[
+  "mem_x_raw",
+  "mem_p_pinned",
+  "mem_p_plain",
+  "mem_x_child1",
+  "mem_x_child2",
+  "mem_p_fill0",
+  "mem_p_fill1",
+  "mem_p_fill2",
+  "mem_p_fill3",
+  "mem_p_fill4",
+  "mem_p_fill5",
+]
+`;
+
+exports[`recall ranker goldens > band ranker: goal tag beats the session 1`] = `
+[
+  "<claim>",
+  "mem_p_fill5",
+  "mem_p_pinned",
+  "mem_x_child1",
+  "mem_x_summary",
+  "mem_p_trace",
+  "mem_x_cafe",
+  "mem_p_plain",
+  "mem_p_scoped",
+  "mem_x_raw",
+]
+`;
+
+exports[`recall ranker goldens > band ranker: hybrid 1`] = `
+[
+  "<claim>",
+  "mem_p_fill5",
+  "mem_p_pinned",
+  "mem_x_child1",
+  "mem_x_summary",
+  "mem_p_trace",
+  "mem_x_cafe",
+  "mem_p_plain",
+  "mem_p_scoped",
+  "mem_x_raw",
+]
+`;
+
+exports[`recall ranker goldens > band ranker: hybrid rollout limit 5 1`] = `
+[
+  "<claim>",
+  "mem_p_fill5",
+  "mem_x_cafe",
+  "mem_x_child1",
+  "mem_x_summary",
+]
+`;
+
+exports[`recall ranker goldens > band ranker: overflow summary 1`] = `
+[
+  "mem_p_pinned",
+  "mem_p_plain",
+  "mem_x_summary",
+]
+`;
+
+exports[`recall ranker goldens > band ranker: physics 1`] = `
+[
+  "mem_p_scoped",
+  "mem_p_fill0",
+  "mem_p_trace",
+  "mem_p_plain",
+  "mem_p_goal",
+  "mem_p_pinned",
+  "mem_p_new",
+  "mem_x_child1",
+  "mem_p_fill5",
+  "mem_p_fill2",
+]
+`;
+
+exports[`recall ranker goldens > band ranker: physics with session 1`] = `
+[
+  "mem_p_goal",
+  "mem_p_scoped",
+  "mem_p_fill0",
+  "mem_p_trace",
+  "mem_p_plain",
+  "mem_p_pinned",
+  "mem_p_new",
+  "mem_x_child1",
+  "mem_p_fill5",
+  "mem_p_fill2",
+]
+`;
+
+exports[`recall ranker goldens > band ranker: scope team-alpha 1`] = `
+[
+  "mem_p_scoped",
+]
+`;
+
+exports[`recall ranker goldens > band ranker: session goal boost 1`] = `
+[
+  "mem_p_pinned",
+  "mem_p_plain",
+  "mem_x_child1",
+  "mem_x_child2",
+  "mem_p_fill0",
+  "mem_p_fill1",
+  "mem_p_fill2",
+  "mem_p_fill3",
+  "mem_p_fill4",
+  "mem_p_fill5",
+]
+`;

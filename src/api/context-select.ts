@@ -9,8 +9,7 @@ import type { ContextReads, HippoStore } from '../store/index.js';
 import { isWorthSurfacing } from '../core/memory-quality.js';
 import { rankBothStores } from '../sharing/search-both.js';
 import { evalNow, strengthAblation } from '../core/ablation.js';
-import { hybridSearch } from '../search/hybrid.js';
-import { physicsSearchIn } from '../search/physics-search.js';
+import { searchByEngine } from '../search/engine.js';
 import type { HybridVectorCandidates } from '../search/vector.js';
 import { DEFAULT_LOCAL_BUMP, type SearchResult } from '../core/search-types.js';
 import { compareScoredResults } from '../core/compare.js';
@@ -432,24 +431,15 @@ async function searchLocalRows(ctx: Context, plan: ContextPlan, options: SearchL
   const localCost = cost && ((r: SearchResult) => price(r.entry, primaryIsGlobal));
   const vectorCandidates = contextVectorSpec(ctx, plan, admit);
   const store = plan.local.store;
-  const ctxResults = usePhysicsCtx
-    ? await physicsSearchIn({ root: ctx.hippoRoot, store }, query, localEntries, {
-        budget: left,
-        minResults,
-        cost: localCost,
-        physicsConfig: ctxConfig.physics,
-        scope: plan.activeScope,
-        vectorCandidates,
-      })
-    : await hybridSearch(query, localEntries, {
-        budget: left,
-        minResults,
-        cost: localCost,
-        hippoRoot: ctx.hippoRoot,
-        scope: plan.activeScope,
-        vectorCandidates,
-        store,
-      });
+  const ctxResults = await searchByEngine(query, localEntries, usePhysicsCtx ? ctxConfig.physics : null, {
+    budget: left,
+    minResults,
+    cost: localCost,
+    hippoRoot: ctx.hippoRoot,
+    scope: plan.activeScope,
+    vectorCandidates,
+    store,
+  });
   return ctxResults.map((r) => ({
     entry: r.entry,
     score: r.score,

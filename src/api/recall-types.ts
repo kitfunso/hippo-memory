@@ -7,6 +7,7 @@ import type { PlanningFallacyHint, PlanningFallacyOutput, PlanningFallacyWatchin
 import type { AnchoringHint, RecallHistorySnapshot } from './recall-history.js';
 import type { AvailabilityHint } from './availability.js';
 import type { AppendAuditOpts } from '../store/audit.js';
+import type { HippoStore } from '../store/port.js';
 import type { CallerProject } from './prompt-hook.js';
 import type { RankRecallOpts, RankRecallResult } from './recall-pipeline.js';
 import type { RecallRecording } from './recall-finish.js';
@@ -64,8 +65,8 @@ export interface RecallOpts {
 
 interface CliCoreRanking {
   rank: Omit<RankRecallOpts, 'query' | 'sessionId' | 'goalTag'>;
-  /** A second store searched beside `ctx.hippoRoot`. */
-  sources?: { globalRoot?: string };
+  /** A second store searched beside `ctx.hippoRoot`; its recall rows go to `globalStore`, else hippo.db under `globalRoot`. */
+  sources?: { globalRoot?: string; globalStore?: HippoStore };
   /** Receives each operator note when ranking reaches it. */
   note?: (line: string) => void;
 }

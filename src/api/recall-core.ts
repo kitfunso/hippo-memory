@@ -7,7 +7,8 @@ import { rankRecall, type RankRecallResult } from './recall-pipeline.js';
 import { writeRecallTraceAtRoot } from '../store/recall-trace.js';
 import type { SearchResult } from '../core/search-types.js';
 import { saveIndex } from '../store/index-and-stats.js';
-import { sqliteStore, storeFor, type HippoStore, type RecallWrites } from '../store/index.js';import { estimateTokens } from '../util/token-text.js';
+import { storeFor, type HippoStore, type RecallWrites } from '../store/index.js';
+import { estimateTokens } from '../util/token-text.js';
 import { callerOf, recallAuditMetadata, recallAuditRow, strengthenOf } from './recall-record.js';
 import { RECALL_RECORDING, recordShownRecall } from './recall-finish.js';
 import type { CliCoreRanker, CliCoreRecall, RecallOpts, RecallResult, ShownCliCore } from './recall-types.js';
@@ -70,7 +71,7 @@ async function recordShown(ctx: Context, store: HippoStore, opts: RecallOpts, co
   const { ranking, shown, planningAudit } = done;
   const ids = shown.results.map((r) => r.entry.id);
   const recallRow = recallAuditRow(callerOf(ctx), 'recall', undefined, recallAuditMetadata(opts.query, ids.length));
-  const second = core.sources?.globalRoot !== undefined && core.sources.globalRoot !== ctx.hippoRoot ? core.sources.globalRoot : undefined;
+  const second = secondStore(ctx, core);
   const heldElsewhere = second !== undefined ? await idsNotHeld(store, ids, ctx.tenantId) : [];
   const audited = await finishOrReport(store, {
     goalLog: ranking.goalRecallLog,
@@ -79,7 +80,7 @@ async function recordShown(ctx: Context, store: HippoStore, opts: RecallOpts, co
   });
   if (audited) {
     // The second store logs that it was searched, and strengthens only the rows the first does not hold.
-    if (second !== undefined) await finishOrReport(sqliteStore(second), { goalLog: [], audit: [recallRow], strengthen: strengthenOf(ctx, heldElsewhere) });
+    if (second !== undefined) await finishOrReport(second, { goalLog: [], audit: [recallRow], strengthen: strengthenOf(ctx, heldElsewhere) });
     traceAndMark(ctx, opts, core, shown.results);
   }
   // The caller prints whether or not the record was written, so the ring and the ledger still take this list; `written` holds back the count.
@@ -93,6 +94,12 @@ async function recordShown(ctx: Context, store: HippoStore, opts: RecallOpts, co
     ledgerSessionId: core.hostSessionId ?? null,
     written: audited,
   });
+}
+
+/** The second store's writes go where the first's do: the store named for its root, else hippo.db under that root. */
+function secondStore(ctx: Context, core: CliCoreRecall): HippoStore | undefined {
+  const root = core.sources?.globalRoot;
+  return root !== undefined && root !== ctx.hippoRoot ? storeFor({ hippoRoot: root, store: core.sources?.globalStore }) : undefined;
 }
 
 // The caller has ranked and is about to print, so a failed audit write is logged and counted, never thrown.
