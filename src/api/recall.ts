@@ -77,8 +77,8 @@ function shownBand(opts: RecallOpts, result: RecallResult): ShownList {
 async function retrieveBand(ctx: Context, store: HippoStore, opts: RecallOpts, windowSize: number, own: string | undefined): Promise<RecallResult> {
   let candidates = await store.searchRecallEntries(opts.query, recallSearchArgs(ctx, opts, windowSize, own));
   if (opts.mode === 'hybrid' || opts.mode === 'physics') {
-    const searchOpts = { budget: Infinity, hippoRoot: ctx.hippoRoot, scope: opts.scope ?? null, vectorCandidates: recallVectorSpec(ctx, opts, own), store };
-    const ranked = await searchByEngine(opts.query, candidates, physicsFor(ctx, opts), searchOpts);
+    const searchOpts = { budget: Infinity, scope: opts.scope ?? null, vectorCandidates: recallVectorSpec(ctx, opts, own) };
+    const ranked = await searchByEngine({ root: ctx.hippoRoot, store }, opts.query, candidates, physicsFor(ctx, opts), searchOpts);
     const rankedIds = new Set(ranked.map((r) => r.entry.id));
     candidates = [...ranked.map((r) => r.entry), ...candidates.filter((e) => !rankedIds.has(e.id))];
   }
@@ -134,8 +134,8 @@ async function retrieveFromStore(
   const loaded = await store.searchRecallEntries(opts.query, recallSearchArgs(ctx, opts, Math.max(windowSize, SHOW_RANKED_LEXICAL_WINDOW), own));
   const pool = loaded.filter((e) => passesScopeFilterForRecall(e.scope ?? null, opts.scope, own));
   // No scope option: the scope boost follows HIPPO_SCOPE and the skill env, as MCP recall always ranked.
-  const searchOpts = { budget: Infinity, hippoRoot: ctx.hippoRoot, vectorCandidates: recallVectorSpec(ctx, opts, own), store };
-  let ranked = await searchByEngine(opts.query, pool, physicsFor(ctx, opts), searchOpts);
+  const searchOpts = { budget: Infinity, vectorCandidates: recallVectorSpec(ctx, opts, own) };
+  let ranked = await searchByEngine({ root: ctx.hippoRoot, store }, opts.query, pool, physicsFor(ctx, opts), searchOpts);
   // One goal read serves both boosts; the ranked list's log rows come first, so its scores win the log's first-write.
   const goals = opts.sessionId && !opts.goalTag ? await store.activeGoals({ sessionId: opts.sessionId, tenantId: ctx.tenantId }) : null;
   let rankedLog: GoalRecallLogRow[] = [];

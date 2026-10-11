@@ -431,14 +431,12 @@ async function searchLocalRows(ctx: Context, plan: ContextPlan, options: SearchL
   const localCost = cost && ((r: SearchResult) => price(r.entry, primaryIsGlobal));
   const vectorCandidates = contextVectorSpec(ctx, plan, admit);
   const store = plan.local.store;
-  const ctxResults = await searchByEngine(query, localEntries, usePhysicsCtx ? ctxConfig.physics : null, {
+  const ctxResults = await searchByEngine({ root: ctx.hippoRoot, store }, query, localEntries, usePhysicsCtx ? ctxConfig.physics : null, {
     budget: left,
     minResults,
     cost: localCost,
-    hippoRoot: ctx.hippoRoot,
     scope: plan.activeScope,
     vectorCandidates,
-    store,
   });
   return ctxResults.map((r) => ({
     entry: r.entry,
