@@ -36,7 +36,15 @@ const SECRET_PATTERNS: ReadonlyArray<{ name: string; re: RegExp }> = [
   { name: 'sk-underscore-key', re: /\bsk_[A-Za-z0-9]+_[A-Za-z0-9_]{6,}\b/ },
   // Value needs 12+ token-safe chars and a digit, or `token = estimateTokens(...)` and user:password@ templates would hide code lessons from ambient context.
   // Secret names end in the keyword (dbPassword), so the match opens there, no prefix scan; pwd and pass need a _ (OLDPWD, bypass are not secrets).
-  { name: 'secret-assignment', re: /(?:(?:api[_-]?key|access[_-]?key|private[_-]?key|secret|token|passw(?:or)?d|(?<=_)(?:pwd|pass))(?:[_-]?(?:key(?:[_-]?base)?|value|secret))?['"]?\s*(?::=?|=>?)\s*['"]?|(?<=--)password(?:=|\s+))(?=[A-Za-z0-9_\-+/]*\d)[A-Za-z0-9_\-+/=]{12,}/i },
+  {
+    name: 'secret-assignment',
+    re: new RegExp(
+      String.raw`(?:(?:api[_-]?key|access[_-]?key|private[_-]?key|secret|token|passw(?:or)?d|(?<=_)(?:pwd|pass))` +
+        String.raw`(?:[_-]?(?:key(?:[_-]?base)?|value|secret))?['"]?\s*(?::=?|=>?)\s*['"]?|(?<=--)password(?:=|\s+))` +
+        String.raw`(?=[A-Za-z0-9_\-+/]*\d)[A-Za-z0-9_\-+/=]{12,}`,
+      'i',
+    ),
+  },
   { name: 'url-password', re: /(?<=[A-Za-z0-9]:\/\/)[^\s/:@?#]*:(?=[^\s/@?#]*\d)[^\s/@?#]+(?=@)/ },
 ];
 

@@ -9,7 +9,7 @@ import { writeEntry } from '../src/store/entry-writes.js';
 import { saveActiveTaskSnapshot } from '../src/store/sessions.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
-import { hashArm } from '../src/api/pilot-arm.js';
+import { hashArm } from '../src/store/pilot-arm.js';
 import { hippoRun } from './_helpers/spawn-hippo.js';
 
 const HIPPO_JS = path.resolve(__dirname, '..', 'bin', 'hippo.js');

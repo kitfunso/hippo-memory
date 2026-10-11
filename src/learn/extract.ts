@@ -23,13 +23,15 @@ export interface ExtractOptions {
   onError?: (msg: string, failure?: AnthropicMessageFailure) => void;
 }
 
-const EXTRACTION_PROMPT = `You are extracting factual statements from a conversation or memory entry. Extract 1-8 standalone factual statements that would be useful to remember later.
+const EXTRACTION_PROMPT = `You are extracting factual statements from a conversation or memory entry. ` +
+`Extract 1-8 standalone factual statements that would be useful to remember later.
 
 Rules:
 - Each fact must be a complete, standalone sentence
 - Include the speaker's name in every fact (e.g. "Alice prefers..." not "She prefers...")
 - Preserve specific details: names, numbers, dates, paths, IDs
-- Return a JSON array of objects with: content (string), tags (array of "speaker:X" and "topic:Y" strings), valence ("neutral", "positive", "negative", or "critical")
+- Return a JSON array of objects with: content (string), tags (array of "speaker:X" and "topic:Y" strings), ` +
+`valence ("neutral", "positive", "negative", or "critical")
 - Return an empty array [] for small talk with no extractable facts
 - Output ONLY the JSON array, no preamble or explanation
 

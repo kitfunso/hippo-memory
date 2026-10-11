@@ -6,7 +6,7 @@
   },
   {
     "file": "cli.ts",
-    "target": "db/busy.ts",
+    "target": "store/port.ts",
     "why": "maps a busy-store error to the exit message; error classification, not a store read"
   },
   {

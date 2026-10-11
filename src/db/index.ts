@@ -2,9 +2,6 @@
 export type { DatabaseSyncLike } from './sqlite.js';
 export {
   isSqliteBusy,
-  isStoreBusy,
-  StoreBusyError,
-  STORE_BUSY_MESSAGE,
   execWithBusyRetry,
   withReadSnapshot,
   withTrialScope,
@@ -26,7 +23,6 @@ export {
   withSqliteAllowed,
   withSqliteOffLoop,
   outsideSqliteOffLoop,
-  rethrowIfSqliteBlocked,
   OTHER_STORE_MARKER,
   openHippoDb,
   openHippoDbReadOnly,

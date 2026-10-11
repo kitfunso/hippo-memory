@@ -1,9 +1,7 @@
 {
-  "count": 61,
+  "count": 59,
   "exports": [
     "src/api/availability.ts:DEFAULT_RECENCY_WINDOW_MS",
-    "src/api/pilot-arm.ts:ensurePilotArm",
-    "src/api/pilot-arm.ts:readPilotArm",
     "src/capture/compaction-spool.ts:_setSpoolFsForTests",
     "src/capture/extract.ts:extractFromText",
     "src/capture/session-digest.ts:MAX_DIGEST_CHARS",

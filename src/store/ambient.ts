@@ -71,7 +71,8 @@ export function loadAmbientTallies(hippoRoot: string, tenantId: string, filter: 
       FROM memories
       WHERE ${where.join(' AND ')}
         AND ((${originInSql(filter.currentProject)} AND origin_project != '') OR NOT ${secret.sql})`,
-    ).get(freshAfter, HIGH_SCHEMA_FIT_ABOVE, ...params, ...filter.currentProject, ...secret.params) as Record<Exclude<keyof AmbientTallies, 'tagCounts' | 'errors'>, number | bigint> & { tagLists: string };
+    ).get(freshAfter, HIGH_SCHEMA_FIT_ABOVE, ...params, ...filter.currentProject, ...secret.params) as
+      Record<Exclude<keyof AmbientTallies, 'tagCounts' | 'errors'>, number | bigint> & { tagLists: string };
     const tagCounts = new Map<string, number>();
     let errors = 0;
     const lists = /* SAFETY: jsonList yields an array per row, joined into one array */ JSON.parse(row.tagLists) as unknown[][];

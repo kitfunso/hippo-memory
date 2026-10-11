@@ -63,12 +63,17 @@ export const TOOLS: readonly McpToolDefinition[] = [
         },
         scorer_window: {
           type: 'number',
-          description: `How many of the top-ranked memories the fresh-tail and summarize-overflow appendix is worked out against. The main list ranks the whole tenant store, so scorer_window does not narrow it. Default ${DEFAULT_SEARCH_CANDIDATE_LIMIT}. Rejected as RecallContractError code=invalid_scorer_window if 0/negative/non-finite/non-numeric.`,
+          description: `How many of the top-ranked memories the fresh-tail and summarize-overflow appendix is worked out against. ` +
+            `The main list ranks the whole tenant store, so scorer_window does not narrow it. ` +
+            `Default ${DEFAULT_SEARCH_CANDIDATE_LIMIT}. ` +
+            `Rejected as RecallContractError code=invalid_scorer_window if 0/negative/non-finite/non-numeric.`,
         },
         session_id: {
           type: 'string',
           maxLength: MAX_ID_LEN,
-          description: `Optional session id (v1.7.4). When set AND (tenant, session) has active goals, applies the dlPFC goal-stack boost to the ranked memories before formatting. Mirrors fresh_tail_session_id shape (${MAX_ID_LEN}-char cap).`,
+          description: `Optional session id (v1.7.4). When set AND (tenant, session) has active goals, ` +
+            `applies the dlPFC goal-stack boost to the ranked memories before formatting. ` +
+            `Mirrors fresh_tail_session_id shape (${MAX_ID_LEN}-char cap).`,
         },
       },
       required: ['query'],

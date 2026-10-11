@@ -255,7 +255,8 @@ export function storedGraphOn(db: DatabaseSyncLike, tenantId: string, memoryIds:
   ).all(tenantId) as StoredEntity[];
   // SAFETY: the SELECT names exactly the columns of StoredRelation.
   const relations = db.prepare(
-    `SELECT id, from_entity_id, to_entity_id, rel_type, memory_id, source_kind, source_object_type, source_object_id FROM relations WHERE tenant_id = ? ORDER BY id`,
+    `SELECT id, from_entity_id, to_entity_id, rel_type, memory_id, source_kind, source_object_type, source_object_id ` +
+      `FROM relations WHERE tenant_id = ? ORDER BY id`,
   ).all(tenantId) as StoredRelation[];
   return { kinds, entities, relations };
 }

@@ -54,7 +54,15 @@ export interface PostCompactPayload {
   compactSummary: string | null;
 }
 
-function spoolSummary(hippoRoot: string, payload: PostCompactPayload, text: CompactionText, at: Date, reason: string, result: CompactionSaveResult, log: Log): void {
+function spoolSummary(
+  hippoRoot: string,
+  payload: PostCompactPayload,
+  text: CompactionText,
+  at: Date,
+  reason: string,
+  result: CompactionSaveResult,
+  log: Log,
+): void {
   try {
     spool(hippoRoot, resolveTenantId({}), payload, text, at);
     result.deferred = true;

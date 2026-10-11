@@ -14,7 +14,12 @@ import { DATE_PREFIX_CHARS } from '../util/token-text.js';
 /** Old per-worktree project names of the repo at cwd, mapped to the repo's main checkout name; empty outside git. */
 function worktreeNames(): Map<string, string> {
   try {
-    const out = execFileSync('git', ['worktree', 'list', '--porcelain'], { encoding: 'utf8', timeout: 10_000, stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true });
+    const out = execFileSync('git', ['worktree', 'list', '--porcelain'], {
+      encoding: 'utf8',
+      timeout: 10_000,
+      stdio: ['ignore', 'pipe', 'ignore'],
+      windowsHide: true,
+    });
     const paths = out.split(/\r?\n/).filter((l) => l.startsWith('worktree ')).map((l) => path.basename(l.slice('worktree '.length)));
     return new Map(paths.slice(1).map((name) => [name, paths[0]]));
   } catch {
@@ -47,7 +52,10 @@ function projectsList(ctx: api.Context, flags: CliFlags): void {
   const worktrees = worktreeNames();
   console.log(`${count(projects.length, 'project name')} in ${root} (newest write first):\n`);
   for (const p of projects) {
-    console.log(`${label(p.origin)}  ${count(p.live, 'memory', 'memories')}, ${p.imported} imported from agent notes, newest ${p.newest.slice(0, DATE_PREFIX_CHARS)}${hint(p, worktrees)}`);
+    console.log(
+      `${label(p.origin)}  ${count(p.live, 'memory', 'memories')}, ${p.imported} imported from agent notes, ` +
+        `newest ${p.newest.slice(0, DATE_PREFIX_CHARS)}${hint(p, worktrees)}`,
+    );
   }
 }
 
@@ -62,7 +70,10 @@ function projectsMerge(ctx: api.Context, args: string[], flags: CliFlags): void 
   console.log(`${apply ? 'Merged' : 'Dry run: would merge'} ${from} into ${into}:`);
   console.log(`  ${count(r.setAside.length, 'imported note ' +
     'copy', 'imported note copies')} set aside (${into} already holds the same note; the rest move under ${into} on the next sync)`);
-  console.log(`  ${count(r.restamped.length, 'memory', 'memories')} re-tagged, plus ${r.dormantRestamped.length} dormant and ${count(r.compactions, 'compaction record')}`);
+  console.log(
+    `  ${count(r.restamped.length, 'memory', 'memories')} re-tagged, plus ${r.dormantRestamped.length} dormant ` +
+      `and ${count(r.compactions, 'compaction record')}`,
+  );
   console.log(apply ? `Backup: ${r.backup}\nEvery id is in the audit log: hippo audit list --op project_merge` : 'Nothing written. Add --apply to run it.');
 }
 
@@ -78,7 +89,9 @@ function projectsRepair(ctx: api.Context, flags: CliFlags): void {
   console.log(`  ${count(r.copies.length, 'imported note ' +
     'copy', 'imported note copies')} under the wrong project set aside (the note stays under its own, or user-global)`);
   for (const f of r.folds) console.log(`  ${f.from} folded into ${f.into} (its sessions' folders resolve there now)`);
-  for (const c of r.collisions) console.log(`  ${c.name} left as it is: its folders now resolve to ${c.ids.join(', ')}; fold it by hand with hippo projects merge`);
+  for (const c of r.collisions) {
+    console.log(`  ${c.name} left as it is: its folders now resolve to ${c.ids.join(', ')}; fold it by hand with hippo projects merge`);
+  }
   console.log(`  sleep's user-global merged rows: ${r.toProject.length} re-tagged to their parents' project`);
   console.log(`  ${r.setAside.length} set aside (parents in two projects; sleep re-merges them per project)`);
   console.log(`  ${r.untraced.length} left as they are (no parent left to show which project; check them with hippo inspect <id>)`);

@@ -1,5 +1,6 @@
 import { type MemoryEntry, markRetrieved } from '../core/memory.js';
-import { type DatabaseSyncLike, closeHippoDb, openHippoDb, rethrowIfSqliteBlocked, withWriteScope } from '../db/index.js';
+import { type DatabaseSyncLike, closeHippoDb, openHippoDb, withWriteScope } from '../db/index.js';
+import { rethrowIfSqliteBlocked } from '../util/sqlite-blocked.js';
 import { RejectedValueError } from '../core/api-errors.js';
 import { markSummaryDirtyInTx } from './summary-dirty.js';
 import { errorMessage, log } from '../util/log.js';

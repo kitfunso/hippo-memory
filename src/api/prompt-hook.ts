@@ -10,9 +10,11 @@ import type { HookRuntime } from '../core/capture-contract.js';
 import * as path from 'path';
 import { MAX_ID_LEN } from '../util/limits.js';
 import { isJsonString, type JsonValue } from '../util/json.js';
-import { bookLedgerTurn, ledgerLastSent, ledgerRoot, noteLedgerRowSkipped } from './ledger-db.js';
+import { bookLedgerTurn, ledgerLastSent, ledgerRoot } from './ledger-db.js';
+import { noteLedgerRowSkipped } from '../store/ledger-turn.js';
 import type { MemoryEntry } from '../core/memory.js';
-import { sessionPilotArm, type PilotArm } from './pilot-arm.js';
+import { sessionPilotArm } from './pilot-arm.js';
+import type { PilotArm } from '../store/pilot-arm.js';
 import { assertCallerProject, isGlobalStoreRoot, MAX_PROJECT_ALIASES } from '../core/project-identity.js';
 import type { DeliveryWrite } from '../store/ledger-turn.js';
 import { writeDeliveryEventAtRoot } from '../store/recall-trace.js';
@@ -34,7 +36,7 @@ export interface DeliveryStart {
 /** A delivery recorder for a hook on `ctx.hippoRoot` when the ledger store enables one, else null; never throws. */
 export function startDeliveryRecorder(ctx: Context, start: DeliveryStart): DeliveryRecorder | null {
   try {
-    // The same store withLedgerDb writes the token ledger to, so its config governs both.
+    // The same store the token ledger writes to, so its config governs both.
     const root = ledgerRoot(ctx.hippoRoot);
     if (root === null || !loadConfig(root).deliveryLedger.enabled) return null;
     return createDeliveryRecorder({

@@ -50,7 +50,9 @@ export function continuityStamp(key: ContinuityKey): ContinuityStamp {
 
 // An unkeyed write acts on the tenant's newest or every active row, which on a shared store belong to other owners.
 function assertKeyedOnSharedStore(fn: string, hippoRoot: string, key: ContinuityKey | undefined): void {
-  if (!key && isSharedStore(hippoRoot)) throw new Error(`${fn}: a shared store keeps one task snapshot per owner and project, so this write needs their continuity key`);
+  if (!key && isSharedStore(hippoRoot)) {
+    throw new Error(`${fn}: a shared store keeps one task snapshot per owner and project, so this write needs their continuity key`);
+  }
 }
 
 type SnapshotInput = {
@@ -196,7 +198,9 @@ export function clearActiveTaskSnapshot(hippoRoot: string, tenantId: string, cle
 
   try {
     // SAFETY: active's shape matches the single `id` column selected above.
-    const active = db.prepare(`SELECT id FROM task_snapshots WHERE status = 'active' AND tenant_id = ? ORDER BY updated_at DESC, id DESC LIMIT 1`).get(tenantId) as { id?: number } | undefined;
+    const active = db.prepare(
+      `SELECT id FROM task_snapshots WHERE status = 'active' AND tenant_id = ? ORDER BY updated_at DESC, id DESC LIMIT 1`,
+    ).get(tenantId) as { id?: number } | undefined;
     if (!active?.id) {
       removeActiveTaskMirror(hippoRoot, tenantId);
       return false;
@@ -381,7 +385,9 @@ export function traceExistsForSession(hippoRoot: string, tenantId: string, sessi
 /** The owner a session id is bound to, or null. */
 function selectSessionOwnerAt(db: DatabaseSyncLike, tenantId: string, sessionId: string): string | null {
   // SAFETY: the SELECT names exactly this one TEXT column.
-  const row = db.prepare(`SELECT owner_subject FROM session_owners WHERE tenant_id = ? AND session_id = ?`).get(tenantId, sessionId) as { owner_subject: string } | undefined;
+  const row = db.prepare(
+    `SELECT owner_subject FROM session_owners WHERE tenant_id = ? AND session_id = ?`,
+  ).get(tenantId, sessionId) as { owner_subject: string } | undefined;
   return row?.owner_subject ?? null;
 }
 

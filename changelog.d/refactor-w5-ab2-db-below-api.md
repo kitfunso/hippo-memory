@@ -1,0 +1,3 @@
+### Changed
+
+- **Internal:** api, MCP and server code no longer reach into `src/db`. The pilot-arm write and the token-ledger skip rule (SQLite busy, corrupt and missing-table codes) moved into `src/store`, the server's held hippo.db connection and WAL checkpointer moved into `src/store/sqlite/held-connection.ts`, and `StoreBusyError`, `isStoreBusy` and `STORE_BUSY_MESSAGE` now live in `src/store/port.ts` beside the port that throws them. `hippo-memory/server` still exports `StoreBusyError`, and busy replies keep their 503 status and body. `scripts/check-layers.mjs` now fails a `src/db` import in `src/api`, `src/mcp` or `src/server` unless `layers.json` `dbReach.allowed` names it with a reason; what remains there is the request-store scope and the hippo.db fences.

@@ -4,7 +4,7 @@ import { indexNeedsRebuild } from '../store/embeddings/index.js';
 import { indexedModel } from '../store/vector-index.js';
 import type { VectorCandidateSpec } from '../store/search-rows.js';
 import { resolveEmbeddingProvider, type EmbeddingProvider } from '../embeddings/provider.js';
-import { rethrowIfSqliteBlocked } from '../db/index.js';
+import { rethrowIfSqliteBlocked } from '../util/sqlite-blocked.js';
 import { errorMessage, log } from '../util/log.js';
 import { envQueryEmbedTimeoutMs } from '../util/env.js';
 import { requireGroup, sqliteStore, type HippoStore, type VectorReads } from '../store/index.js';

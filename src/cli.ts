@@ -12,7 +12,7 @@ import { resolveTenantId } from './store/tenant.js';
 import { printGitHubBackfillUsage } from './cli/github.js';
 import { printError } from './cli/output.js';
 import { errorFields, errorMessage, isLevelEnabled, log } from './util/log.js';
-import { isStoreBusy, STORE_BUSY_MESSAGE } from './db/busy.js';
+import { isStoreBusy, STORE_BUSY_MESSAGE } from './store/port.js';
 import { type CliFlags, flagIsTrue, isBooleanFlag, isStringFlag } from './cli/flag-values.js';
 import { USAGE_HEADER, USAGE_EXAMPLES, printAuditPruneUsage, printSlackBackfillUsage, printSlackWorkspacesUsage } from './cli/usage.js';
 import { type FlagKind, type VerbFlags, flagKind, isKnownFlag, undeclaredFlags } from './cli/flags.js';

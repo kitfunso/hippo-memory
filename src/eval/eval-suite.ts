@@ -491,9 +491,8 @@ export function formatResult(result: EvalSuiteResult, baseline?: EvalBaseline): 
       vsBaseline = deltaStr(delta);
       verdict = delta < -REGRESSION_THRESHOLD ? 'REGRESS' : 'PASS';
     }
-    lines.push(
-      `${pad(feat.category, 24)} | ${pad(pct(feat.mrr), 8)} | ${pad(pct(feat.recallAt5), 8)} | ${pad(pct(feat.ndcgAt5), 8)} | ${pad(vsBaseline, 12)} | ${verdict}`
-    );
+    const cells = [pad(feat.category, 24), pad(pct(feat.mrr), 8), pad(pct(feat.recallAt5), 8), pad(pct(feat.ndcgAt5), 8), pad(vsBaseline, 12), verdict];
+    lines.push(cells.join(' | '));
   }
 
   lines.push('');

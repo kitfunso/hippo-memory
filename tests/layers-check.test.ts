@@ -16,6 +16,15 @@ const ROUTE_MAP = { order: ['low', 'high'], folders: { sub: 'high', server: 'hig
 const NO_EDGES = { runtime: 0, typeOnly: 0, rootFiles: 2, edges: [] };
 const CLI_MAP = { order: ['low', 'high'], folders: { sub: 'high', cli: 'high', store: 'low' }, rootFiles: { 'a.ts': 'low', 'b.ts': 'high' } };
 const CLI_BASE = { 'src/a.ts': '', 'src/b.ts': '', 'src/store/s.ts': 'export const s = 1;\nexport type S = 1;\n' };
+type DbAllowed = Record<string, { names: string[]; why: string }>;
+const dbMap = (allowed: DbAllowed) => ({
+  order: ['low', 'db', 'high'],
+  folders: { sub: 'high', db: 'db', api: 'high' },
+  rootFiles: { 'a.ts': 'low', 'b.ts': 'high' },
+  dbReach: { layer: 'db', from: ['api'], allowed },
+});
+const DB_FILES = { 'src/a.ts': '', 'src/b.ts': '', 'src/db/x.ts': 'export const open = 1;\nexport const scope = 2;\nexport type Handle = 3;\n' };
+const SCOPE_ONLY = { 'api/y.ts': { names: ['scope'], why: 'the request scope stays in db' } };
 
 type Row = {
   name: string;
@@ -95,6 +104,34 @@ const rows: Row[] = [
     output: ['Layer ratchet OK'],
   },
   {
+    name: 'an api file that imports the db layer fails with file:line and the name',
+    files: { ...DB_FILES, 'src/api/y.ts': "import { open } from '../db/x.js';\n" },
+    map: dbMap({}),
+    status: 1,
+    output: ['api/y.ts:1 imports open from db/x.ts'],
+  },
+  {
+    name: 'a type-only or namespace import of the db layer fails too',
+    files: { ...DB_FILES, 'src/api/y.ts': "import type { Handle } from '../db/x.js';\nimport * as db from '../db/x.js';\n" },
+    map: dbMap({}),
+    status: 1,
+    output: ['api/y.ts:1 imports Handle from db/x.ts', 'api/y.ts:2 imports * from db/x.ts'],
+  },
+  {
+    name: 'an allowed name passes and an unlisted one beside it fails',
+    files: { ...DB_FILES, 'src/api/y.ts': "import { scope, open } from '../db/x.js';\n" },
+    map: dbMap(SCOPE_ONLY),
+    status: 1,
+    output: ['api/y.ts:1 imports open from db/x.ts'],
+  },
+  {
+    name: 'an import the allow list names passes',
+    files: { ...DB_FILES, 'src/api/y.ts': "import { scope } from '../db/x.js';\n" },
+    map: dbMap(SCOPE_ONLY),
+    status: 0,
+    output: ['Layer ratchet OK'],
+  },
+  {
     name: 'an allowlisted CLI store import with a reason passes',
     files: { ...CLI_BASE, 'src/cli/v.ts': "import { s } from '../store/s.js';\n", '.cli-store-allowlist.json': JSON.stringify([{ file: 'cli/v.ts', target: 'store/s.ts', why: 'a constant' }]) },
     map: CLI_MAP,
@@ -111,6 +148,20 @@ const rows: Row[] = [
     map: CLI_MAP,
     status: 1,
     output: ['src/cli/v.ts -> src/store/s.ts gives no reason', 'src/cli/w.ts -> src/store/s.ts matches no import'],
+  },
+  {
+    name: 'an allowed name the file no longer imports fails as stale',
+    files: { ...DB_FILES, 'src/api/y.ts': 'export const y = 1;\n' },
+    map: dbMap(SCOPE_ONLY),
+    status: 1,
+    output: ['dbReach.allowed: api/y.ts no longer imports scope'],
+  },
+  {
+    name: 'an allowed entry with no why fails',
+    files: { ...DB_FILES, 'src/api/y.ts': "import { scope } from '../db/x.js';\n" },
+    map: dbMap({ 'api/y.ts': { names: ['scope'], why: ' ' } }),
+    status: 1,
+    output: ['dbReach.allowed: api/y.ts gives no why'],
   },
 ];
 

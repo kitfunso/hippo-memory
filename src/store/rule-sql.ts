@@ -38,7 +38,8 @@ export function strengthSql(now: Date): string {
 const sqlText = (s: string): string => `'${s.replace(/'/g, "''")}'`;
 // json_each matches the tag as a whole element; substr, not LIKE, keeps the prefix case-sensitive like startsWith.
 const keepPairSql = (p: KeepPair): string =>
-  `(COALESCE(superseded_by, '') = '' AND EXISTS (SELECT 1 FROM json_each(CASE WHEN json_valid(tags_json) THEN tags_json ELSE '[]' END) WHERE value = ${sqlText(p.tag)}) AND substr(source, 1, ${p.sourcePrefix.length}) = ${sqlText(p.sourcePrefix)})`;
+  `(COALESCE(superseded_by, '') = '' AND EXISTS (SELECT 1 FROM json_each(CASE WHEN json_valid(tags_json) THEN tags_json ELSE '[]' END) ` +
+  `WHERE value = ${sqlText(p.tag)}) AND substr(source, 1, ${p.sourcePrefix.length}) = ${sqlText(p.sourcePrefix)})`;
 
 // Pinned and kept rows stay (a superseded row is not kept: its successor carries the tag and
 // source); raw rows leave only through archiveRawMemory. The SQL twin guards the DELETE itself.

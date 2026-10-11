@@ -6,7 +6,7 @@ import { indexedModel } from '../store/vector-index.js';
 import { resolveEmbeddingProvider } from '../embeddings/provider.js';
 import { physicsScore as computePhysicsScores, computeMass, type PhysicsParticle } from '../core/physics.js';
 import { DEFAULT_PHYSICS_CONFIG, type PhysicsConfig } from '../core/physics-config.js';
-import { rethrowIfSqliteBlocked } from '../db/index.js';
+import { rethrowIfSqliteBlocked } from '../util/sqlite-blocked.js';
 import { compareScoredResults } from '../core/compare.js';
 import { errorMessage, log } from '../util/log.js';
 import { sqliteStore, type HippoStore, type VectorReads } from '../store/index.js';

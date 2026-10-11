@@ -21,7 +21,8 @@ export function recallEntryText(r: SearchResult, query: string, showWhy: boolean
   const bars = Math.round(e.strength * 10);
   const graphMark = r.graphVia ? ` [graph: ${r.graphVia.hops}hop ${r.graphVia.relType}]` : '';
   const lines = [
-    `--- ${e.id} [${e.layer}] ${confLabel}${isGlobal ? ' [global]' : ''}${e.superseded_by ? ' [superseded]' : ''}${graphMark} score=${fmt(r.score, 3)} strength=${fmt(e.strength)}`,
+    `--- ${e.id} [${e.layer}] ${confLabel}${isGlobal ? ' [global]' : ''}${e.superseded_by ? ' [superseded]' : ''}${graphMark} ` +
+      `score=${fmt(r.score, 3)} strength=${fmt(e.strength)}`,
     `    [${'█'.repeat(bars)}${'░'.repeat(10 - bars)}] tags: ${e.tags.join(', ') || 'none'} | retrieved: ${e.retrieval_count}x`,
   ];
   if (showWhy) {

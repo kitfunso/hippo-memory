@@ -20,7 +20,9 @@ export async function runPredictBaserateTool({ args, ctx, hippoRoot, tenantId }:
   if (!classTag) return 'No class_tag provided. Usage: pass class_tag matching a class used in past predictions (e.g. "migration-effort").';
   const baserate = await predictionBaserate({ hippoRoot, tenantId, actor: mcpActor(ctx), store: ctx?.store }, classTag);
   if (baserate.nClosed === 0) {
-    return `No closed predictions in class "${classTag}" yet. Create one via hippo_predict (or 'hippo predict ...' CLI) and close it with hippo_predict_close once the actual outcome is known. Base rates need closed predictions with numeric actual_value to compute.`;
+    return `No closed predictions in class "${classTag}" yet. Create one via hippo_predict (or 'hippo predict ...' CLI) ` +
+      `and close it with hippo_predict_close once the actual outcome is known. ` +
+      `Base rates need closed predictions with numeric actual_value to compute.`;
   }
   const lines: string[] = [baserate.summary, ''];
   lines.push(`n_closed:         ${baserate.nClosed}`);

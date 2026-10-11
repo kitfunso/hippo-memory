@@ -114,23 +114,24 @@ describe('scrubForSharing', () => {
 describe('scrubForSharing on hostile input', () => {
   const SIZE = 64 * 1024;
   const fillTo = (unit: string, size: number): string => unit.repeat(Math.ceil(size / unit.length)).slice(0, size);
-  // Best of five, so a GC pause or a busy runner cannot lift one side alone.
-  const bestMs = (work: () => void): number => {
-    let best = Infinity;
-    for (let run = 0; run < 5; run++) {
-      const started = performance.now();
-      work();
-      best = Math.min(best, performance.now() - started);
-    }
-    return best;
+  const timeMs = (work: () => void): number => {
+    const started = performance.now();
+    work();
+    return performance.now() - started;
   };
   // Both sides scrub the same bytes, so neither is a sub-millisecond reading: linear work reads near 1, quadratic near 16, and 4 sits 4x from both.
+  // The sides alternate and each keeps its best of seven, so a busy stretch on a shared runner slows both sides, never one alone.
   const growth = (build: (size: number) => string): number => {
     const piece = build(SIZE);
     const whole = build(16 * SIZE);
     scrubForSharing(piece);
-    const pieces = bestMs(() => { for (let i = 0; i < 16; i++) scrubForSharing(piece); });
-    return bestMs(() => scrubForSharing(whole)) / pieces;
+    let pieces = Infinity;
+    let wholeMs = Infinity;
+    for (let run = 0; run < 7; run++) {
+      pieces = Math.min(pieces, timeMs(() => { for (let i = 0; i < 16; i++) scrubForSharing(piece); }));
+      wholeMs = Math.min(wholeMs, timeMs(() => scrubForSharing(whole)));
+    }
+    return wholeMs / pieces;
   };
   // Each run sits on the hot path of at least one pattern, so a super-linear pattern shows here before it reaches the server.
   const UNITS = [

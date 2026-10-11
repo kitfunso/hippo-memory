@@ -19,7 +19,7 @@ import { evalNow } from '../core/ablation.js';
 import { dropHeldCopies } from '../util/same-text.js';
 import { BadRequestError } from '../core/api-errors.js';
 import { isSharedStore, loadConfig } from '../core/config.js';
-import { rethrowIfSqliteBlocked } from '../db/index.js';
+import { rethrowIfSqliteBlocked } from '../util/sqlite-blocked.js';
 import { errorMessage, log } from '../util/log.js';
 import {
   resolveProjectIdentity, classifyOriginProject, isGlobalStoreRoot, isInitialized, projectId, projectNames, type ProjectRef,

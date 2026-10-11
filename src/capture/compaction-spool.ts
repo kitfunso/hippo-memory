@@ -170,7 +170,16 @@ function spoolFile(hippoRoot: string): string {
 export function spool(hippoRoot: string, tenantId: string, payload: PostCompactPayload, text: CompactionText, at: Date): void {
   const file = spoolFile(hippoRoot);
   fsx.mkdirSync(path.dirname(file), { recursive: true });
-  const body = { tenantId, sessionId: payload.sessionId, trigger: payload.trigger, cwd: payload.cwd, transcriptPath: payload.transcriptPath, at: at.toISOString(), summary: text.summary, items: text.items };
+  const body = {
+    tenantId,
+    sessionId: payload.sessionId,
+    trigger: payload.trigger,
+    cwd: payload.cwd,
+    transcriptPath: payload.transcriptPath,
+    at: at.toISOString(),
+    summary: text.summary,
+    items: text.items,
+  };
   // Renamed into place so a replayer listing `.json` files never reads half a file.
   fsx.writeFileSync(`${file}.tmp`, JSON.stringify(body), { encoding: 'utf8', flag: 'wx' });
   // A rename that stays busy leaves a whole tmp, which a replay promotes once it is STALE_MS old.
@@ -409,7 +418,11 @@ function importFailed(dir: string, claim: string, entry: Waiting, options: Impor
   const busy = isSqliteBusy(cause);
   if (recorded) {
     // The record stays `summarised`, so the stalled-record step of a later replay writes its items.
-    log(busy ? `spool file ${name} saved; its memories wait for the next sleep (store busy)` : `spool file ${name} saved; writing its memories failed: ${errorMessage(cause)}`);
+    log(
+      busy
+        ? `spool file ${name} saved; its memories wait for the next sleep (store busy)`
+        : `spool file ${name} saved; writing its memories failed: ${errorMessage(cause)}`,
+    );
     return busy ? 'stop' : 'skipped';
   }
   if (busy) {
@@ -441,7 +454,9 @@ function importFile(dir: string, entry: Waiting, tenantId: string, log: Log, imp
   if (read !== 'done') return 'skipped';
   const spooled = parseSpooled(text, tenantId);
   if (spooled === null) {
-    if (moveBad(dir, claim, { stem: entry.stem, attempt: entry.attempt, cause: 'unreadable', log, raw: text })) log(`spool file ${name} is not readable, set aside as .bad`);
+    if (moveBad(dir, claim, { stem: entry.stem, attempt: entry.attempt, cause: 'unreadable', log, raw: text })) {
+      log(`spool file ${name} is not readable, set aside as .bad`);
+    }
     return 'skipped';
   }
   let recorded = false;

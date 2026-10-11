@@ -134,6 +134,7 @@ describe('schemaFitInStore', () => {
     expect(schemaFitInStore(root, 'nobody', 'zephyrine refresh', ['data-pipeline'])).toBe(0.5);
   });
 
+  // A full window of rows is slow to write; a macOS runner went past the 5 s default.
   it('scores against only the newest window of rows, not the whole tenant', () => {
     const root = makeRoot('schema-fit-window');
     roots.push(root);
@@ -156,7 +157,7 @@ describe('schemaFitInStore', () => {
     const fit = schemaFitInStore(root, 'default', 'ancient ledger entry', tags);
     expect(fit).toBe(computeSchemaFit('ancient ledger entry', tags, window));
     expect(fit).not.toBe(computeSchemaFit('ancient ledger entry', tags, loadAllEntries(root, 'default')));
-  });
+  }, 30_000);
 });
 
 describe('schema_fit affects half-life', () => {

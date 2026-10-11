@@ -9,7 +9,6 @@ import { MemoryEntry } from '../../core/memory.js';
 import { cosineOf } from '../../core/cosine.js';
 import { loadAllEntryIds, loadEntriesByIds } from '../entry-reads.js';
 import { chunked } from '../../util/chunked.js';
-import { rethrowIfSqliteBlocked } from '../../db/index.js';
 import { EMBEDDING_MODEL_META_KEY } from '../../db/vector-store.js';
 import { initializeParticle } from '../../db/physics-state.js';
 import {
@@ -20,7 +19,7 @@ import { loadConfig } from '../../core/config.js';
 import { resolveEmbeddingProvider, type EmbeddingProvider } from '../../embeddings/provider.js';
 import { redactSecretsStrict } from '../../util/secret-detect.js';
 import { errorCode, errorMessage, log } from '../../util/log.js';
-import { StoreNotPortedError } from '../../util/sqlite-blocked.js';
+import { rethrowIfSqliteBlocked, StoreNotPortedError } from '../../util/sqlite-blocked.js';
 import type { HippoStore, VectorReads, VectorRowWrite, VectorWrite, VectorWriteResult, VectorWrites } from '../index.js';
 
 export { EMBEDDING_MODEL_META_KEY };
