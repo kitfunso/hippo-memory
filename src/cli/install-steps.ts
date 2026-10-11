@@ -1,7 +1,7 @@
 // The init and setup steps that touch the machine: Codex hooks, the settings.json warning and the daily schedule.
 
 import * as path from 'path';
-import { execFileSync, execSync } from 'child_process';
+import { execFileSync, type ExecFileSyncOptionsWithStringEncoding } from 'child_process';
 import { installJsonHooks, type InstallResult } from '../hooks/json-hooks.js';
 import { CODEX_TRUST_LINE } from '../hooks/shared.js';
 import { envSkipSchedule } from '../util/env.js';
@@ -49,6 +49,11 @@ export function warnClaudeSettingsUnusable(
 /** Machine-level daily runner sweeping all registered workspaces: user crontab on Linux/macOS, a scheduled task on Windows; skips if installed. */
 /** Bound on each schtasks and crontab call, so a scheduler that never answers cannot hang `hippo init` or `hippo setup`. */
 const SCHEDULER_CALL_TIMEOUT_MS = 30_000;
+// Piped stderr stands in for `2>nul` and `2>/dev/null`, so no shell is needed to keep the scheduler's complaints off the terminal.
+const SCHEDULER_CALL: ExecFileSyncOptionsWithStringEncoding = { encoding: 'utf-8', stdio: 'pipe', windowsHide: true, timeout: SCHEDULER_CALL_TIMEOUT_MS };
+
+/** Runs one scheduler program from argv with no shell; tests hand in a stand-in so no real schtasks or crontab runs. */
+type RunScheduler = (file: string, args: readonly string[], opts: ExecFileSyncOptionsWithStringEncoding) => string;
 
 /** Node kills a child at its timeout and reports ETIMEDOUT; every other failure here means the scheduler refused or is missing. */
 function schedulerTimedOut<E>(err: E): boolean {
@@ -59,7 +64,7 @@ function warnSchedulerTimedOut(command: string): void {
   console.log(`   ${command} did not answer within ${SCHEDULER_CALL_TIMEOUT_MS / 1000} s and was stopped, so the daily runner is not scheduled.`);
 }
 
-export function setupDailySchedule(globalRoot: string): void {
+export function setupDailySchedule(globalRoot: string, run: RunScheduler = execFileSync): void {
   // Checked here, not per caller, so init, init --scan and setup all honour it.
   if (envSkipSchedule()) {
     console.log('   HIPPO_SKIP_SCHEDULE=1, so the machine-level daily runner was not scheduled.');
@@ -74,14 +79,14 @@ export function setupDailySchedule(globalRoot: string): void {
   const taskName = DAILY_TASK_NAME;
   const cmd = buildDailyRunnerCommand(runnerDir);
 
-  if (isWindows) scheduleOnWindows(taskName, cmd);
-  else scheduleOnCrontab(taskName, cmd);
+  if (isWindows) scheduleOnWindows(taskName, cmd, run);
+  else scheduleOnCrontab(taskName, cmd, run);
 }
 
-function scheduleOnWindows(taskName: string, cmd: string): void {
+function scheduleOnWindows(taskName: string, cmd: string, run: RunScheduler): void {
   // Check if task already exists
   try {
-    const existing = execSync(`schtasks /query /tn "${taskName}" 2>nul`, { encoding: 'utf-8', windowsHide: true, timeout: SCHEDULER_CALL_TIMEOUT_MS });
+    const existing = run('schtasks', ['/query', '/tn', taskName], SCHEDULER_CALL);
     if (existing.includes(taskName)) {
       return; // already scheduled
     }
@@ -91,7 +96,7 @@ function scheduleOnWindows(taskName: string, cmd: string): void {
   }
 
   try {
-    execFileSync('schtasks', buildSchtasksCreateArgs(taskName, cmd), { stdio: 'pipe', windowsHide: true, timeout: SCHEDULER_CALL_TIMEOUT_MS });
+    run('schtasks', buildSchtasksCreateArgs(taskName, cmd), SCHEDULER_CALL);
     console.log(`   Scheduled machine-level daily runner (6:15am) via Task Scheduler: ${taskName}`);
   } catch (err) {
     if (schedulerTimedOut(err)) warnSchedulerTimedOut('schtasks /create');
@@ -101,18 +106,18 @@ function scheduleOnWindows(taskName: string, cmd: string): void {
   }
 }
 
-function scheduleOnCrontab(taskName: string, cmd: string): void {
+function scheduleOnCrontab(taskName: string, cmd: string, run: RunScheduler): void {
   // Unix: check crontab for existing entry
   const marker = `# hippo:${taskName}`;
   try {
-    const existing = execSync('crontab -l 2>/dev/null', { encoding: 'utf-8', windowsHide: true, timeout: SCHEDULER_CALL_TIMEOUT_MS });
+    const existing = run('crontab', ['-l'], SCHEDULER_CALL);
     if (existing.includes(marker)) {
       return; // already scheduled
     }
 
     const cronLine = `15 6 * * * ${cmd} ${marker}`;
     const newCrontab = existing.trimEnd() + '\n' + cronLine + '\n';
-    execSync('crontab -', { input: newCrontab, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true, timeout: SCHEDULER_CALL_TIMEOUT_MS });
+    run('crontab', ['-'], { ...SCHEDULER_CALL, input: newCrontab });
     console.log(`   Scheduled machine-level daily runner (6:15am) via crontab`);
   } catch (err) {
     if (schedulerTimedOut(err)) warnSchedulerTimedOut('crontab');

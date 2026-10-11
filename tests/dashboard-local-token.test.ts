@@ -58,6 +58,11 @@ describe('dashboard local access token', () => {
     expect(again.status).toBe(200);
   });
 
+  it('bounds the cookie to one day, so a browser that restores its session does not keep the token forever', async () => {
+    const res = await fetch(`http://127.0.0.1:${port}/api/overview?token=${TOKEN}`);
+    expect(res.headers.get('set-cookie')).toMatch(/; Max-Age=86400(;|$)/);
+  });
+
   it('answers a page load that carries the token with the cookie and a 303 to the same address without it, never to another host', async () => {
     const first = await fetch(`http://127.0.0.1:${port}/memory/abc?tab=links&token=${TOKEN}&q=a%26b`, { redirect: 'manual' });
     expect([first.status, first.headers.get('location')]).toEqual([303, '/memory/abc?tab=links&q=a%26b']);

@@ -9,6 +9,13 @@ export interface VerifyOpts {
   previousSecret?: string;
 }
 
+const SIGNATURE_HEADER_RE = /^sha256=[0-9a-f]{64}$/;
+
+/** True for a header that could be a GitHub signature; anything else is refused before the body is read, since no secret can make it match. */
+export function isWellFormedGitHubSignature(signature: string): boolean {
+  return SIGNATURE_HEADER_RE.test(signature);
+}
+
 function verifyOne(rawBody: string, signature: string, secret: string): boolean {
   if (!signature.startsWith('sha256=')) return false;
   const expected = `sha256=${createHmac('sha256', secret).update(rawBody).digest('hex')}`;

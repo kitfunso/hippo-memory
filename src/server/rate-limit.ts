@@ -14,7 +14,7 @@ export interface RateLimiterOpts {
   burst: number;
   /** A bucket untouched for this many ms is dropped by the throttled sweep. */
   idleEvictMs: number;
-  /** Hard cap on tracked keys; the least-recently-used key is evicted on overflow. */
+  /** Hard cap on tracked keys; at the cap the least-recently-used key is evicted only once it has refilled, else unseen keys share one overflow bucket. */
   maxKeys: number;
 }
 
@@ -23,11 +23,31 @@ interface Bucket {
   last: number;
 }
 
-/** Token-bucket limiter with bounded memory: a sweep (at most once per `idleEvictMs`) drops idle buckets and a `maxKeys` cap evicts the least-recently-used
- * key, so a client rotating source addresses cannot grow the map without bound. */
+/** The tokens `b` holds at `now`; a clock stepped back refills nothing. */
+function tokensAt(b: Bucket, now: number, ratePerSec: number, burst: number): number {
+  return Math.min(burst, b.tokens + (Math.max(0, now - b.last) / 1000) * ratePerSec);
+}
+
+/** Brings `b` up to `now` and returns it; keeping the later time stops a clock that stepped back and forward again refilling that span twice. */
+function refill(b: Bucket, now: number, ratePerSec: number, burst: number): Bucket {
+  b.tokens = tokensAt(b, now, ratePerSec, burst);
+  b.last = Math.max(b.last, now);
+  return b;
+}
+
+function spend(b: Bucket): boolean {
+  const allowed = b.tokens >= 1;
+  if (allowed) b.tokens -= 1;
+  return allowed;
+}
+
+/** Token-bucket limiter with bounded memory: a sweep (at most once per `idleEvictMs`) drops idle buckets and a `maxKeys` cap bounds the map,
+ * so a client rotating source addresses can neither grow it without bound nor evict its own throttled bucket to get a fresh one. */
 export function createRateLimiter(opts: RateLimiterOpts): RateLimiter {
   const { ratePerSec, burst, idleEvictMs, maxKeys } = opts;
   const buckets = new Map<string, Bucket>();
+  // Unseen keys draw from this while the map is full of buckets still below burst, so key churn buys no fresh bucket.
+  const overflow: Bucket = { tokens: burst, last: 0 };
   let lastSweep = 0;
 
   function sweep(now: number): void {
@@ -38,37 +58,32 @@ export function createRateLimiter(opts: RateLimiterOpts): RateLimiter {
     }
   }
 
+  /** Frees one slot for an unseen key; false when the least-recently-used bucket is still below burst, since dropping it would reset a throttled caller. */
+  function makeRoom(now: number): boolean {
+    if (buckets.size < maxKeys) return true;
+    const lru = buckets.entries().next().value;
+    if (lru === undefined) return true;
+    if (tokensAt(lru[1], now, ratePerSec, burst) < burst) return false;
+    buckets.delete(lru[0]);
+    return true;
+  }
+
   return {
     check(key: string, now: number = Date.now()): boolean {
       sweep(now);
 
       const existing = buckets.get(key);
-      let bucket: Bucket;
-      if (existing === undefined) {
-        // Unseen key: a full bucket, so a fresh client's first request passes.
-        bucket = { tokens: burst, last: now };
-      } else {
-        // A clock stepped back refills nothing, and keeping the later time stops the step forward again refilling that span twice.
-        const refill = (Math.max(0, now - existing.last) / 1000) * ratePerSec;
-        existing.tokens = Math.min(burst, existing.tokens + refill);
-        existing.last = Math.max(existing.last, now);
-        bucket = existing;
-        // Drop the old slot so the re-insert below puts the key last in Map
-        // iteration order — Map order then tracks least-recently-used.
+      if (existing !== undefined) {
+        // Re-inserting puts the key last in Map iteration order, so Map order tracks least-recently-used.
         buckets.delete(key);
+        buckets.set(key, existing);
+        return spend(refill(existing, now, ratePerSec, burst));
       }
-
-      const allowed = bucket.tokens >= 1;
-      if (allowed) bucket.tokens -= 1;
-
-      // Hard cap: evict the LRU key (first in iteration order) before inserting.
-      if (buckets.size >= maxKeys) {
-        const lru = buckets.keys().next().value;
-        if (lru !== undefined) buckets.delete(lru);
-      }
+      if (!makeRoom(now)) return spend(refill(overflow, now, ratePerSec, burst));
+      // Unseen key: a full bucket, so a fresh client's first request passes.
+      const bucket: Bucket = { tokens: burst, last: now };
       buckets.set(key, bucket);
-
-      return allowed;
+      return spend(bucket);
     },
     // A refused bucket holds under one token and refills at ratePerSec, so one token is back within this.
     retryAfterSec: Math.max(1, Math.ceil(1 / ratePerSec)),

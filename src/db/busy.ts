@@ -29,6 +29,13 @@ export function execWithBusyRetry(db: DatabaseSyncLike, sql: string, timeoutMs =
   }
 }
 
+// SQLite cannot bind a savepoint name as a parameter, so the name is spliced into the SQL and must be a bare identifier.
+const SAVEPOINT_NAME_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
+function assertSavepointName(name: string): void {
+  if (!SAVEPOINT_NAME_RE.test(name)) throw new Error(`invalid savepoint name ${JSON.stringify(name)}: use letters, digits and _ only`);
+}
+
 function undoScope(db: DatabaseSyncLike, top: boolean, name: string): void {
   if (top) {
     db.exec('ROLLBACK');
@@ -56,6 +63,7 @@ export interface WriteScopeOptions {
 /** Runs `fn` as one write: BEGIN IMMEDIATE on an idle handle, else SAVEPOINT `name` inside the caller's transaction.
  *  A deferred scope that reads first cannot wait out another writer, while BEGIN IMMEDIATE waits the open's busy_timeout. */
 export function withWriteScope<T>(db: DatabaseSyncLike, name: string, fn: () => T, opts?: WriteScopeOptions): T {
+  assertSavepointName(name);
   const top = db.isTransaction === false;
   if (top && opts) execWithBusyRetry(db, 'BEGIN IMMEDIATE', opts.busyWaitMs);
   else db.exec(top ? 'BEGIN IMMEDIATE' : `SAVEPOINT ${name}`);
@@ -90,6 +98,7 @@ export function withReadSnapshot<T>(db: DatabaseSyncLike, fn: () => T): T {
 
 /** Runs `fn` and undoes every write it made, throw or not: a dry run that reports what a real run would do. Takes no write lock up front. */
 export function withTrialScope<T>(db: DatabaseSyncLike, name: string, fn: () => T): T {
+  assertSavepointName(name);
   const top = db.isTransaction === false;
   db.exec(top ? 'BEGIN' : `SAVEPOINT ${name}`);
   let result: T;
@@ -118,6 +127,7 @@ export function withWriteScopeOr<T, R>(
   name: string,
   fn: (rollback: <V>(value: V) => RolledBack<V>) => T | RolledBack<R>,
 ): T | R {
+  assertSavepointName(name);
   const top = db.isTransaction === false;
   db.exec(top ? 'BEGIN IMMEDIATE' : `SAVEPOINT ${name}`);
   try {

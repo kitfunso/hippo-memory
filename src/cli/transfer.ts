@@ -52,6 +52,7 @@ function watchedCommand(args: readonly string[], flags: CliFlags): WatchedComman
       printError(WATCH_USAGE);
       throw new CliExit(1);
     }
+    // The shell is the feature here: the user's own command line, pipes and && included, opted into by name; argv runs with no shell.
     return { argv: [line], shell: true };
   }
   if (args.length === 0) {

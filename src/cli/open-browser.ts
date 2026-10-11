@@ -9,8 +9,16 @@ interface Launched {
 }
 type Launcher = (cmd: string, args: string[], opts: { detached: boolean; stdio: 'ignore'; windowsHide: boolean }) => Launched;
 
+// cmd.exe re-reads `start`'s argument as a command line, so one of these in the file name would end it and run the rest.
+const CMD_METACHARS = /[&|<>^%!"\r\n]/;
+
 /** `launch` is the process starter; tests hand in a stand-in. */
 export function openInBrowser(out: string, launch: Launcher = spawn): void {
+  if (process.platform === 'win32' && CMD_METACHARS.test(out)) {
+    log.warn(`graph view: not opening ${out} in the browser, since cmd.exe would run part of its name as a command; open the file by hand`);
+    process.exitCode = 1;
+    return;
+  }
   // Best-effort browser launch; never fail the command if it doesn't work.
   try {
     const [cmd, cmdArgs]: [string, string[]] =

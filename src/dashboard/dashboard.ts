@@ -27,6 +27,7 @@ import { installSignalHandlers } from '../util/crash-handlers.js';
 import { DEFAULT_SHUTDOWN_DRAIN_MS, drainAndClose, setKeepAliveTimeouts, shutdownBoundMs } from '../server/lifecycle.js';
 import { printError } from '../cli/output.js';
 import { PACKAGE_ROOT } from '../core/package-root.js';
+import { DAY_MS } from '../util/time.js';
 
 const MIME_TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -301,6 +302,9 @@ function leaveTokenUrl(req: http.IncomingMessage, res: http.ServerResponse, url:
   return true;
 }
 
+// A browser that restores its session keeps a cookie with no Max-Age for good; no Secure, since this server speaks plain HTTP on loopback only.
+const DASHBOARD_COOKIE_MAX_AGE_S = DAY_MS / 1000;
+
 /** True when the request may proceed; false when this already answered it (redirect off the token URL, or 401). */
 function admitDashboardRequest(
   req: http.IncomingMessage,
@@ -312,7 +316,7 @@ function admitDashboardRequest(
   // Cookies ignore the port, so the name carries it: two dashboards on one host keep separate tokens.
   const cookieName = `hippo_dashboard_${req.socket.localPort ?? port}`;
   if (sameToken(url.searchParams.get('token') ?? undefined, token)) {
-    res.setHeader('Set-Cookie', `${cookieName}=${token}; HttpOnly; SameSite=Strict; Path=/`);
+    res.setHeader('Set-Cookie', `${cookieName}=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${DASHBOARD_COOKIE_MAX_AGE_S}`);
     if (leaveTokenUrl(req, res, url)) return false;
   } else if (!sameToken(cookieValue(req.headers.cookie, cookieName), token)) {
     res.writeHead(401, { 'Content-Type': 'text/plain' });

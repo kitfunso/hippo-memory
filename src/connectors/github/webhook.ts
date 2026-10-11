@@ -1,7 +1,7 @@
 import { envGitHubWebhookSecret, envGitHubWebhookSecretPrevious } from '../../util/env.js';
 import type { ServerResponse } from 'node:http';
 import { DAY_MS } from '../../util/time.js';
-import { verifyGitHubSignature } from './signature.js';
+import { isWellFormedGitHubSignature, verifyGitHubSignature } from './signature.js';
 import {
   isGitHubWebhookEnvelope,
   isGitHubIssueEvent,
@@ -51,7 +51,7 @@ export async function handleGitHubEventsWebhook(request: WebhookRequest, store?:
   const eventName = isHeaderString(eventHdr) ? eventHdr : null;
   const deliveryId = isHeaderString(deliveryHdr) ? deliveryHdr : null;
 
-  if (sigStr === null) {
+  if (sigStr === null || !isWellFormedGitHubSignature(sigStr)) {
     closeIfBodyUnread(request);
     throw new HttpError(401, 'invalid GitHub signature');
   }

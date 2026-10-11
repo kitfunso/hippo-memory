@@ -53,16 +53,29 @@ describe('createRateLimiter', () => {
     expect(rl.check('a', 1_000_000)).toBe(true);
   });
 
-  it('holds the map at maxKeys, evicting the least-recently-used key', () => {
+  it('holds the map at maxKeys: while no tracked bucket has refilled, unseen keys share one overflow bucket', () => {
     const rl = createRateLimiter({ ...OPTS, maxKeys: 3 });
-    rl.check('k1', 1000);
-    rl.check('k2', 1000);
-    rl.check('k3', 1000); // map full: k1 is least-recently-used
-    rl.check('k4', 1000); // inserting k4 evicts k1
-    // k1 was evicted, so its bucket is fresh: five requests in a row all pass.
-    // Had k1 survived, its 5th request here would be denied.
-    for (let i = 0; i < 5; i++) {
-      expect(rl.check('k1', 1000)).toBe(true);
-    }
+    for (const k of ['k1', 'k2', 'k3']) rl.check(k, 1000);
+    // Had the map grown, each new key would get its own burst of 5; sharing one bucket, the sixth new key is refused.
+    const fresh = ['n1', 'n2', 'n3', 'n4', 'n5', 'n6'].map((k) => rl.check(k, 1000));
+    expect(fresh).toEqual([true, true, true, true, true, false]);
+  });
+
+  it('evicts the least-recently-used bucket once it has refilled, so a new key gets its own bucket', () => {
+    const rl = createRateLimiter({ ...OPTS, maxKeys: 3 });
+    for (const k of ['k1', 'k2', 'k3']) rl.check(k, 1000);
+    // 100 ms at 10/s refills k1's one spent token: k1 is back at burst, so dropping it gives nothing away.
+    for (let i = 0; i < 5; i++) expect(rl.check('k4', 1100)).toBe(true);
+    expect(rl.check('k4', 1100)).toBe(false);
+    // k4 spent its own bucket, not a shared one: k5 evicts the refilled k2 and still gets a request through.
+    expect(rl.check('k5', 1100)).toBe(true);
+  });
+
+  it('keeps a throttled key throttled however many new keys churn the full map', () => {
+    const rl = createRateLimiter({ ...OPTS, maxKeys: 3 });
+    for (let i = 0; i < 5; i++) rl.check('attacker', 1000);
+    expect(rl.check('attacker', 1000)).toBe(false);
+    for (let i = 0; i < 50; i++) rl.check(`rotated-${i}`, 1000);
+    expect(rl.check('attacker', 1000)).toBe(false);
   });
 });

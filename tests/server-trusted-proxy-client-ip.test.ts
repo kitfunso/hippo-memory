@@ -206,7 +206,7 @@ describe('rate limiting over real HTTP with rotating spoofed X-Forwarded-For', (
       process.env.HIPPO_TRUSTED_PROXIES = '*';
       await (await serve({ hippoRoot: root, port: 0 })).stop();
       expect(warn.mock.calls.map((call) => String(call[0])).filter((line) => line.includes('HIPPO_TRUSTED_PROXIES'))).toEqual([
-        expect.stringMatching(/HIPPO_TRUSTED_PROXIES is \*, so x-forwarded-for is read from any peer/),
+        expect.stringMatching(/HIPPO_TRUSTED_PROXIES is \*, so x-forwarded-for is read from any peer: .*reaches this port without the proxy can .*escape every per-address limit/),
       ]);
     } finally {
       warn.mockRestore();

@@ -76,7 +76,10 @@ export function assertClientIpHeaderPinned(): void {
   const trust = proxyTrust(envTrustedProxies());
   if (trust === undefined) throw new UntrustedClientIpHeaderError(header);
   if (trust === ANY_PEER) {
-    log.warn(`serve: HIPPO_TRUSTED_PROXIES is *, so ${header} is read from any peer; keep the proxy the only route to this port.`);
+    log.warn(
+      `serve: HIPPO_TRUSTED_PROXIES is *, so ${header} is read from any peer: a client that reaches this port without the proxy can put any address ` +
+        `in ${header} and so escape every per-address limit. Keep the proxy the only route to this port, or list the proxy's addresses instead of *.`,
+    );
   }
 }
 
