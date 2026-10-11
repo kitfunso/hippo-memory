@@ -1,21 +1,20 @@
 // Transport-agnostic request handling: tool dispatch table, tool execution and the JSON-RPC method switch.
 
-import { errorMessage, log } from '../util/log.js';
+import { log } from '../util/log.js';
 import { currentSignal } from '../util/request-scope.js';
 import { STORE_NOT_PORTED_MESSAGE } from '../util/http-util.js';
 import { getGlobalRoot, initGlobal } from '../sharing/global-store.js';
 import { loadConfig } from '../core/config.js';
 import { resolveTenantId } from '../store/tenant.js';
 import { runWithRequestStores } from '../db/index.js';
-import { rethrowIfSqliteBlocked } from '../util/sqlite-blocked.js';
 import { hasGroup, type HippoStore, type StoreGroup } from '../store/index.js';
-import { storeFor } from '../store/sqlite/store.js';
 import { type TokenSurface } from '../store/token-ledger.js';
 import { estimateTokens } from '../util/token-text.js';
 import { PACKAGE_VERSION } from '../util/version.js';
 import { validateToolArgs } from './tool-args.js';
 import { RecallRequestError } from '../api/recall-request.js';
-import { findHippoRoot, type McpContext, type McpRequest, type McpResponse, type ToolHandler } from './protocol.js';
+import { recordTokens } from '../api/tokens.js';
+import { findHippoRoot, mcpActor, type McpContext, type McpRequest, type McpResponse, type ToolHandler } from './protocol.js';
 import { TOOLS, TOOLS_BY_NAME, ARGS_CHECKED_BY_API } from './tools.js';
 import { runRecallTool, runAssembleTool, runDrillTool, runContextTool } from './recall-tools.js';
 import { runRememberTool, runOutcomeTool, runLearnTool } from './memory-tools.js';
@@ -43,20 +42,10 @@ const MCP_TOKEN_SURFACES = new Map<string, TokenSurface>([
 export async function recordMcpTokens(toolName: string, output: string, ctx?: McpContext): Promise<void> {
   const surface = MCP_TOKEN_SURFACES.get(toolName);
   if (!surface || !output) return;
-  try {
-    const hippoRoot = ctx?.hippoRoot ?? findHippoRoot();
-    if (!hippoRoot) return;
-    await storeFor({ hippoRoot, store: ctx?.store }).recordTokens({
-      tenantId: ctx?.tenantId ?? resolveTenantId({}),
-      surface,
-      event: 'inject',
-      items: 0,
-      tokens: estimateTokens(output),
-    });
-  } catch (err) {
-    rethrowIfSqliteBlocked(err);
-    log.warnThenDebug('mcp-token-ledger', `token ledger write failed; the tool reply is unaffected: ${errorMessage(err)}`);
-  }
+  const hippoRoot = ctx?.hippoRoot ?? findHippoRoot();
+  if (!hippoRoot) return;
+  const apiCtx = { hippoRoot, tenantId: ctx?.tenantId ?? resolveTenantId({}), actor: mcpActor(ctx), store: ctx?.store };
+  await recordTokens(apiCtx, surface, { items: 0, tokens: estimateTokens(output) });
 }
 
 // ── Tool execution ──

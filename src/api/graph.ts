@@ -1,7 +1,15 @@
+import { BadRequestError } from '../core/api-errors.js';
+import { MAX_ENTITY_NAME_LEN } from '../store/graph-rows.js';
 import { requireGroup } from '../store/index.js';
 import { storeFor } from '../store/sqlite/store.js';
 import type { GraphRows } from '../store/port.js';
 import type { Context } from './types.js';
+
+/** The entity a graph read focuses on. Capped at the 512 entity-name cap, not the id-shaped 256, so a long decision or policy name stays focusable. */
+export function graphEntityOf(raw: string | null): string | undefined {
+  if (raw !== null && raw.length > MAX_ENTITY_NAME_LEN) throw new BadRequestError(`entity exceeds the ${MAX_ENTITY_NAME_LEN}-character cap`);
+  return raw ?? undefined;
+}
 
 /** The entity/relation rows behind GET /v1/graph, as the caller's role, scopes and owner may see them. */
 export async function graphRows(ctx: Context, query: { entity?: string; limit: number }): Promise<GraphRows> {

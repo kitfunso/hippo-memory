@@ -106,7 +106,9 @@ describe('the api with ctx.store', () => {
     await expect(remember(ctx, { content: 'connector text', untrusted: true })).rejects.toThrow(noGroup);
     await expect(outcome(ctx, ['mem_x'], true, { traceId: 1 })).rejects.toThrow(new StoreNotPortedError('in-memory', 'lastRecall'));
     await expect(archiveRaw(ctx, 'mem_x', 'r', { event: { connector: 'slack', eventId: 'Ev_x' } })).rejects.toThrow(noGroup);
-    await expect(outcomeForLastRecall(ctx, true)).rejects.toThrow(new StoreNotPortedError('in-memory', 'lastRecall'));
+    await expect(outcomeForLastRecall(ctx, true)).rejects.toMatchObject({
+      status: 501, message: 'this store keeps no last recall: send the ids your recall returned',
+    });
   });
 });
 

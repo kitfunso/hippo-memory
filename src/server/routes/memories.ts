@@ -1,10 +1,8 @@
 // Memory write routes: create, graph, archive, supersede, promote, forget, outcome, sleep.
-import { graphRows } from '../../api/graph.js';
+import { graphEntityOf, graphRows } from '../../api/graph.js';
 import { archiveRaw, forget, outcome, outcomeForLastRecall, promote, remember, supersede } from '../../api/index.js';
 import { MEMORY_KINDS, type MemoryKind } from '../../core/memory.js';
 import { graphModelOf } from '../../graph/view.js';
-import { MAX_ENTITY_NAME_LEN } from '../../store/graph-rows.js';
-import { hasGroup } from '../../store/index.js';
 import { HttpError, sendJson } from '../../util/http-util.js';
 import { sleepInChild } from '../sleep-offload.js';
 import type { AuthedRouteRequest } from '../types.js';
@@ -44,14 +42,9 @@ export async function handleCreateMemory({ req, res, ctx }: AuthedRouteRequest):
 
 // GET /v1/graph?entity=NAME&limit=N — read-only entity/relation graph (tenant-scoped)
 export async function handleGetGraph({ res, ctx, query }: AuthedRouteRequest): Promise<void> {
-  const entityRaw = query.get('entity');
-  // Cap at the graph entity-name cap (512), not the id-shaped 256, so a valid
-  // long decision/policy name remains focusable over HTTP.
-  if (entityRaw !== null && entityRaw.length > MAX_ENTITY_NAME_LEN) {
-    throw new HttpError(400, `entity exceeds the ${MAX_ENTITY_NAME_LEN}-character cap`);
-  }
+  const entity = graphEntityOf(query.get('entity'));
   const limit = parseListLimit(query.get('limit'));
-  const rows = await graphRows(ctx, { entity: entityRaw ?? undefined, limit });
+  const rows = await graphRows(ctx, { entity, limit });
   sendJson(res, 200, graphModelOf(rows));
   return;
 }
@@ -124,10 +117,6 @@ export async function handleApplyOutcome({ req, res, ctx }: AuthedRouteRequest):
     const { applied } = await outcome(ctx, ids, good);
     sendJson(res, 200, { applied });
   } else {
-    // A store without the group keeps no last recall, so its client must send the ids its recall returned.
-    if (ctx.store !== undefined && !hasGroup(ctx.store, 'lastRecall')) {
-      throw new HttpError(501, 'this store keeps no last recall: send the ids your recall returned');
-    }
     const result = await outcomeForLastRecall(ctx, good);
     sendJson(res, 200, result);
   }

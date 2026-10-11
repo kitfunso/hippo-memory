@@ -93,14 +93,20 @@ describe('every api write function answers through a Promise', () => {
 });
 
 describe('a store without the lastRecall group', () => {
-  it.each([
-    ['outcomeForLastRecall', (ctx: Context) => outcomeForLastRecall(ctx, true)],
-    ['outcome with a traceId', (ctx: Context) => outcome(ctx, ['mem_plain'], true, { traceId: 1 })],
-  ])('%s is refused as not ported, a 501', async (_fn, call) => {
+  // Its entryWrites group answers, so the refusal can only come from the missing lastRecall group.
+  function refusal(call: (ctx: Context) => Promise<object>): Promise<Error | null> {
     const root = seededRoot();
-    // Its entryWrites group answers, so the refusal can only come from the missing lastRecall group.
     const { store } = inMemoryEntryWritesStore(root);
-    const error = await call({ hippoRoot: root, tenantId: ACME, actor: HOST, store }).then(() => null, (err: Error) => err);
+    return call({ hippoRoot: root, tenantId: ACME, actor: HOST, store }).then(() => null, (err: Error) => err);
+  }
+
+  it('outcomeForLastRecall is refused with a 501 that asks for the ids the recall returned', async () => {
+    const error = await refusal((ctx) => outcomeForLastRecall(ctx, true));
+    expect(mapApiError(error)).toEqual({ status: 501, message: 'this store keeps no last recall: send the ids your recall returned' });
+  });
+
+  it('outcome with a traceId is refused as not ported, a 501', async () => {
+    const error = await refusal((ctx) => outcome(ctx, ['mem_plain'], true, { traceId: 1 }));
     expect(error).toBeInstanceOf(StoreNotPortedError);
     expect(error).toMatchObject({ group: 'lastRecall' });
     expect(mapApiError(error).status).toBe(501);

@@ -3,6 +3,7 @@
 import { personalScopeOf } from '../core/recall-scope.js';
 import { requireGroup } from '../store/index.js';
 import { storeFor } from '../store/sqlite/store.js';
+import { HttpError } from '../util/http-util.js';
 import type { Context } from './types.js';
 
 /** An id outside ctx.tenantId, or in someone else's personal scope, is skipped, so a stale id never fails the call.
@@ -36,7 +37,9 @@ export interface OutcomeForLastRecallResult {
   ids: string[];
 }
 export async function outcomeForLastRecall(ctx: Context, good: boolean): Promise<OutcomeForLastRecallResult> {
-  const lastRecall = requireGroup(storeFor(ctx), 'lastRecall');
+  const lastRecall = storeFor(ctx).lastRecall;
+  // Its own 501 text, since a client of such a store can still apply the outcome by sending the ids its recall returned.
+  if (lastRecall === undefined) throw new HttpError(501, 'this store keeps no last recall: send the ids your recall returned');
   const ids = await lastRecall.applyOutcomeToLast({ tenantId: ctx.tenantId, actor: ctx.actor.subject, ownScope: personalScopeOf(ctx.actor) }, good);
   return { applied: ids.length, ids };
 }

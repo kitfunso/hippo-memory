@@ -10,8 +10,6 @@ import { getGlobalRoot } from '../sharing/global-store.js';
 import { loadConfig } from '../core/config.js';
 import type { Actor as ApiActor } from '../api/index.js';
 import { findHippoStoreDir, type ResolveProjectIdentityOpts } from '../core/project-identity.js';
-import { STORE_BUSY_MESSAGE } from '../store/port.js';
-import { isStoreBusy } from '../store/sqlite/busy.js';
 import { type JsonValue } from '../util/json.js';
 import type { CallerProject } from '../api/prompt-hook.js';
 import type { HippoStore } from '../store/index.js';
@@ -50,11 +48,11 @@ interface McpResponse {
 /** JSON-RPC reply for a request that threw: typed API errors keep their text; anything else is logged and answered generically. */
 export function mcpErrorResponse<E>(id: McpResponse['id'], err: E, requestId: string = currentRequestId() ?? randomUUID(), call?: string): McpResponse {
   const where = call === undefined ? '' : ` (${call})`;
-  if (isStoreBusy(err)) {
-    log.warn(`mcp request${where} failed: ${errorMessage(err)}`, { requestId });
-    return { jsonrpc: '2.0', id, error: { code: -32603, message: STORE_BUSY_MESSAGE } };
-  }
   const { status, message } = mapApiError(err);
+  if (status === 503) {
+    log.warn(`mcp request${where} failed: ${errorMessage(err)}`, { requestId });
+    return { jsonrpc: '2.0', id, error: { code: -32603, message } };
+  }
   if (status !== 500) {
     log.info(`mcp request${where} failed: ${errorMessage(err)}`, { requestId, status });
     return { jsonrpc: '2.0', id, error: { code: -32603, message } };

@@ -2,6 +2,8 @@
 import { ApiError } from '../core/api-errors.js';
 import { BodyTimeoutError, BodyTooLargeError, HttpError, INTERNAL_ERROR_MESSAGE, STORE_NOT_PORTED_MESSAGE } from '../util/http-util.js';
 import { SqliteBlockedError } from '../util/sqlite-blocked.js';
+import { STORE_BUSY_MESSAGE } from '../store/port.js';
+import { isStoreBusy } from '../store/sqlite/busy.js';
 
 /** The status and client-facing message for one failed request. */
 export interface ApiErrorReply {
@@ -11,6 +13,8 @@ export interface ApiErrorReply {
 
 /** Maps by class so rewording a message never moves a status; an untyped error is a 500 whose text stays in the server log. */
 export function mapApiError<E>(err: E): ApiErrorReply {
+  // A held lock is a retryable 503 in every store, so the surfaces need not know SQLite's busy codes.
+  if (isStoreBusy(err)) return { status: 503, message: STORE_BUSY_MESSAGE };
   // An add-on can build an HttpError from any number, and writeHead throws on one outside 100-999.
   if (err instanceof HttpError && !(Number.isInteger(err.status) && err.status >= 100 && err.status <= 999)) {
     return { status: 500, message: INTERNAL_ERROR_MESSAGE };
