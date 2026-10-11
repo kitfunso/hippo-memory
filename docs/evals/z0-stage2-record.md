@@ -187,6 +187,23 @@ Neither the prereg nor the plan says which family goes to which set. This rule w
 
 `C:/z0-runs/s4/split-sets.mjs` applies it.
 
+## S4: the split rule could not run
+
+The rule above cannot be run, whatever the verdicts. A set X sequence holds no set N task (README, set X), so its only spacers are other families' tasks. The runner puts at least two tasks between a teach and its lesson's first apply (prereg 118), so a set X sequence needs 3 families from one repository. One family per repository never orders. A set R sequence carries ceil(L/2) set N tasks, and a lone reversal family needs 4 spacers but gets 3, so it never orders either. Checked with the runner's own `drawOrder` on seeds 1 and 2 (`node C:/z0-runs/s7/orderable.mjs <runner> <tasks-s4.json> <R|X> <family ids>`): bm-f3, bm-f4 and bm-f5 order as set X, and so do the three ml families. ff-f3 alone does not order as set R, and neither does hp-f4 alone.
+
+Putting set N tasks into set X sequences as spacers would keep the four-repository rule, but it is rejected. The prereg runs set N in the Claude Code sequences (prereg 78, "sets R and N, the same sequences"), set X applies run in Codex, and the runner would need a change after the calibration build is fixed.
+
+The plan's S4 numbers (8 set R, 4 set X) carry no derivation, and the prereg sets no family minimum for calibration. The set R floor of 8 stays as the plan set it, since lowering it after the verdicts would fit it to them. This amendment, set on 2026-10-11 after 18 of 19 screen verdicts were read, while hp-f4 was still screening and before any calibration run, makes the smallest change the runner can run:
+
+- Set X takes 3 or more kept families of one repository, and its sequence must order on seeds 1 and 2. 3 is the smallest set X sequence that orders.
+- Set R takes every other kept family. A repository whose set R sequence does not order on seeds 1 and 2 runs no set R sequence in calibration, and its families count in neither set.
+- The S4 check needs at least 8 set R families and 3 set X families, with maintainer rules at two thirds or more of each set.
+- Among the splits that pass, take the one with the highest lower maintainer share of the two sets. Ties go to the smaller set X, since Codex usage is shared, then to the repository order above, then to lower family numbers.
+
+With hp-f4 undecided, set R holds 7 kept families, one short. Two families can close the gap: hp-f4, and bm-f6, a new family from the last unused maintainer rule in the five repositories (boring-maths `AGENTS.md` line 78), whose blind author started on 2026-10-11. The split uses the families decided when the check first passes. If hp-f4 is kept, the check passes and bm-f6 is not used in calibration. If neither is kept, the check fails, and no calibration chunk that depends on the split starts until a new repository adds families through S2 and S3. Comonicon.jl's set R sequence (cj-f1, cj-f2, cj-f3) is the same in every passing split, so it may start before the check settles.
+
+What this costs: set X is one repository's result in calibration, which sizes H2 from one repository's variance. The scored run needs the same 3-family floor per set X sequence, and S9's sizing has to plan for it.
+
 ## S6: calibration build
 
 #781 merged as `cf53aebb`. D5 does not ship (0 of 54 held-out corrections flagged), so A2 runs on #781 alone. Master was merged into the runner branch once, as `9dc3981e`, with no conflicts; the read-check fixes above sit on top as `0635b4fc`, then `f945de49` (the cwd fix), then `548cbd95`. That last one gives the Codex adapter the same per-call `cwd` field as the Claude one; without it `typecheck:tests` failed in CI, since a test hands the Codex adapter to code typed from the Claude one. `548cbd95` is the calibration build: S7 and S8 run from a detached worktree at it, so every record carries it, and the branch takes no rebase or merge until S9 tags it. Its pins are `C:/z0-runs/s6/pins-s6d.json`: Claude Code 2.1.288, `claude-opus-5-5`, dist hash `59e0c77e`. Both fixes changed only `scripts/token-eval`, so the dist hash is the one `0635b4fc` had (`pins-s6b.json`). The screens finished before the fix ran on `0635b4fc`, and the reruns ran on `f945de49`. For a Claude session `f945de49` and `548cbd95` give the same read check: the check reads the transcript line's cwd on both.
