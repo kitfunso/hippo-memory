@@ -7,7 +7,7 @@ import { loadIndex } from '../store/index-and-stats.js';
 import { DEFAULT_RECALL_BUDGET, type SearchResult } from '../core/search-types.js';
 import { loadConfig } from '../core/config.js';
 import { dropHeldCopies } from '../util/same-text.js';
-import { detectScope } from '../sharing/scope.js';
+import { detectScope } from '../core/active-scope.js';
 import { getGlobalRoot } from '../sharing/global-store.js';
 import * as api from '../api/index.js';
 import { resolveTenantId } from '../store/tenant.js';

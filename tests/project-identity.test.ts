@@ -10,7 +10,7 @@ import {
   MAX_PROJECT_ALIASES,
 } from '../src/core/project-identity.js';
 import { BadRequestError } from '../src/core/api-errors.js';
-import { MAX_ID_LEN } from '../src/util/http-util.js';
+import { MAX_ID_LEN } from '../src/util/limits.js';
 
 let tmpRoot: string;
 let home: string;

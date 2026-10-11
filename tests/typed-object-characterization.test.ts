@@ -367,7 +367,7 @@ const NOUNS: readonly NounRow[] = [
   { noun: 'incident', seed: ['incident', 'open', 'Checkout returned 500s'], read: 'get', refuses: strict('incident'), loose: strict('incident') },
   {
     noun: 'process', seed: ['process', 'new', 'Release', '--step', 'run the tests'], read: 'get', refuses: strict('process'), loose: strict('process'),
-    revise: ['--step', 'sign the build'], reviseAgain: `exit 1: Error: ${again('saveProcess', 'process', 'processes')}`,
+    revise: ['--step', 'sign the build'], reviseAgain: `exit 1: ${again('saveProcess', 'process', 'processes')}`,
   },
   {
     noun: 'policy', seed: ['policy', 'new', 'Retention', '--text', 'Delete logs after 90 days'], read: 'get', refuses: strict('policy'), loose: strict('policy'),

@@ -3,15 +3,14 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { transcriptNotesProject } from '../agent-memories/claude-code.js';
 import { containerId, containerPrefix } from '../agent-memories/source.js';
+import { foldEdges, foldedInto, type ProjectFold } from '../agent-memories/project-folds.js';
 import { AGENT_MEMORY_SOURCE_PREFIX, AGENT_MEMORY_TOOLS, toolSourcePrefix } from '../core/agent-memory-tools.js';
 import { isSharedStore } from '../core/config.js';
 import { processEnv } from '../util/env.js';
 import type { MemoryEntry } from '../core/memory.js';
-import { isObjectLike, isStringValue } from '../core/capture-contract.js';
 import { isGlobalStoreRoot, projectNames, resolveProjectIdentity } from '../core/project-identity.js';
 import { duplicateKey } from '../util/same-text.js';
 import type { ProjectTagReads, ProjectTagStore, ProjectTagWrites } from '../store/project-tags.js';
-import type { JsonValue } from '../util/json.js';
 
 export interface ProjectSummary {
   /** '' is user-global, null is unknown; neither can be merged. */
@@ -32,11 +31,6 @@ export interface MergeResult {
   readonly dormantRestamped: readonly string[];
   readonly compactions: number;
   readonly backup: string | null;
-}
-
-export interface ProjectFold {
-  readonly from: string;
-  readonly into: string;
 }
 
 /** An old name whose session folders now resolve to several projects: no fold can say whose rows are whose. */
@@ -217,39 +211,6 @@ function ownLegacyFold(store: ProjectTagReads, hippoRoot: string): ProjectFold[]
     || store.holdsOrigin('compactions', legacyName)
     || store.dormant().some((s) => s.entry.origin_project === legacyName);
   return held ? [{ from: legacyName, into: name }] : [];
-}
-
-function foldOf(value: JsonValue | undefined): ProjectFold[] {
-  if (!isObjectLike(value) || Array.isArray(value)) return [];
-  const { from, into } = value;
-  return isStringValue(from) && isStringValue(into) ? [{ from, into }] : [];
-}
-
-function foldEdges(store: Pick<ProjectTagReads, 'auditEvents'>): ProjectFold[] {
-  return [
-    ...store.auditEvents('project_merge').flatMap((e) => foldOf(e.metadata)),
-    ...store.auditEvents('project_repair')
-      .flatMap((e) => (Array.isArray(e.metadata.folds) ? e.metadata.folds.flatMap(foldOf) : [])),
-  ];
-}
-
-function foldedInto(edges: readonly ProjectFold[], names: readonly string[]): string[] {
-  const seen = new Set(names);
-  let grew = true;
-  while (grew) {
-    grew = false;
-    for (const { from, into } of edges) {
-      if (!seen.has(into) || seen.has(from)) continue;
-      seen.add(from);
-      grew = true;
-    }
-  }
-  return [...seen].filter((n) => !names.includes(n));
-}
-
-/** Names folded, directly or through others, into one of `names`; the sync moves imports still filed under them. */
-export function namesFoldedInto(store: Pick<ProjectTagReads, 'auditEvents'>, names: readonly string[]): string[] {
-  return foldedInto(foldEdges(store), names);
 }
 
 /** Reads only, so doctor and a dry run take no write lock; merged rows are planned before any fold, so a few may re-tag differently once folds apply. */

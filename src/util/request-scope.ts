@@ -1,5 +1,6 @@
 // The one ambient scope of a request. A leaf module, so the logger can read the request id without importing the store layer.
 import { AsyncLocalStorage } from 'node:async_hooks';
+import { envRequestDeadlineMs } from './env.js';
 
 /** What every scope carries; the store layer's RequestStores is one, and adds its handles. */
 export interface RequestScope {
@@ -7,6 +8,13 @@ export interface RequestScope {
   readonly requestId: string | undefined;
   /** Set for a served request that must be answered by a given time. */
   readonly deadline?: RequestDeadline | undefined;
+}
+
+const DEFAULT_REQUEST_DEADLINE_MS = 120_000;
+
+/** How long a request may run: 120 s, or HIPPO_REQUEST_DEADLINE_MS, where 0 turns the deadline off. */
+export function requestDeadlineMs(): number {
+  return envRequestDeadlineMs() ?? DEFAULT_REQUEST_DEADLINE_MS;
 }
 
 /** When a request must be answered, and the store calls it still waits on: the store ends each of those soon after `at`, with the outcome only it knows. */

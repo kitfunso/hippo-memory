@@ -8,7 +8,6 @@ import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { loadEmbeddingIndex } from '../src/store/vector-index.js';
 import { resolveEmbeddingProvider, type EmbeddingProvider } from '../src/embeddings/provider.js';
-import { requireLocalPipeline } from '../src/embeddings/local.js';
 import { handleEmbed } from '../src/cli/maintenance.js';
 
 /** A local provider that answers every text with `vector`, or fails the whole call as an unloadable model does. */
@@ -58,8 +57,7 @@ describe('the local provider with a model that cannot load', () => {
   it('rejects with the reason instead of returning empty vectors', async () => {
     // An empty offline cache cannot hold the model, whether or not a transformers package is installed.
     process.env.HIPPO_MODEL_CACHE = emptyCache;
-    await expect(requireLocalPipeline('Xenova/all-MiniLM-L6-v2')).rejects.toThrow(/did not load: \S/);
-    await expect(resolveEmbeddingProvider(root).embed(['a memory'], 'passage')).rejects.toThrow(/did not load/);
+    await expect(resolveEmbeddingProvider(root).embed(['a memory'], 'passage')).rejects.toThrow(/did not load: \S/);
   });
 });
 

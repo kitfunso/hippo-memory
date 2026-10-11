@@ -4,7 +4,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import type { DatabaseSyncLike } from './index.js';
 import { withWriteScope } from './busy.js';
-import { log } from '../util/log.js';
+import { errorCode, errorFields, log } from '../util/log.js';
 
 /** Legacy whole-file index; imported once into `memory_vectors`, then kept beside the store as a renamed backup. */
 const LEGACY_EMBEDDINGS_FILE = 'embeddings.json';
@@ -221,15 +221,27 @@ function stamp(): string {
   return `${new Date().toISOString().replace(/[:.]/g, '-')}-${process.pid}`;
 }
 
-/** Rename `fp` to `aside`; a rename blocked by an open handle (Windows) falls back to a copy, so the bytes are kept either way. */
+// The codes a rename gets when another process holds the file open (Windows); any other failure would fail a copy too.
+const RENAME_BLOCKED_CODES = new Set(['EPERM', 'EBUSY', 'EACCES']);
+
+/** Rename `fp` to `aside`; a rename blocked by an open handle falls back to a copy, so the bytes are kept either way. */
 function moveAside(fp: string, aside: string): boolean {
   try {
     fs.renameSync(fp, aside);
     return true;
   } catch (err) {
-    if (err instanceof Error && 'code' in err && err.code === 'ENOENT') return false;
+    const code = errorCode(err);
+    if (code === 'ENOENT') return false;
+    if (!RENAME_BLOCKED_CODES.has(code)) throw err;
+    log.warn(`could not rename ${path.basename(fp)} aside (${code}); copying it instead`, { path: fp, ...errorFields(err) });
     fs.copyFileSync(fp, aside, fs.constants.COPYFILE_EXCL);
-    fs.rmSync(fp, { force: true });
+    try {
+      fs.rmSync(fp, { force: true });
+    } catch (rmErr) {
+      // The original stays for the next open to retry, so a copy left beside it would pile up one per open.
+      fs.rmSync(aside, { force: true });
+      throw rmErr;
+    }
     return true;
   }
 }

@@ -14,7 +14,7 @@ import { physicsSearch } from '../search/physics-search.js';
 import type { HybridVectorCandidates } from '../search/vector.js';
 import { DEFAULT_LOCAL_BUMP, type SearchResult } from '../core/search-types.js';
 import { compareScoredResults } from '../core/compare.js';
-import { scopeMatch } from '../sharing/scope.js';
+import { scopeMatch } from '../core/active-scope.js';
 import { scopeBoostFor } from '../search/boosts.js';
 import { type HippoConfig } from '../core/config.js';
 import type { ProjectRef } from '../core/project-identity.js';

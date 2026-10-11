@@ -2,7 +2,7 @@
 
 import { exitAfterFlush, installCrashHandlers } from '../util/crash-handlers.js';
 import { errorFields, errorMessage, log } from '../util/log.js';
-import { requestDeadlineMs } from '../server/deadline.js';
+import { requestDeadlineMs } from '../util/request-scope.js';
 import { parseFrame, type FrameRemainder } from './framing.js';
 import { mcpErrorResponse, type McpRequest, type McpResponse } from './protocol.js';
 import { handleMcpRequest } from './request.js';

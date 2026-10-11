@@ -1,0 +1,536 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`versioned object CLI verbs > hippo brief: every subcommand prints the same bytes and exit code 1`] = `
+"$ brief list -> 0
+--- stdout
+No project briefs.
+--- stderr
+
+$ brief new -> 1
+--- stdout
+--- stderr
+Usage: hippo brief new "<repo>" --summary "<text>"
+       hippo brief list [--status active|superseded|closed|all] [--repo "<repo>"] [--limit N]
+       hippo brief get <id>
+       hippo brief supersede <id> --summary "<text>" [--change "<summary>"]
+       hippo brief close <id>
+       hippo brief refresh "<repo>" [--dry-run]   (auto-assemble the brief from the repo's receipts)
+
+$ brief new acme/web --summary Storefront app -> 0
+--- stdout
+Project brief recorded: #1 (v1) for repo "acme/web"
+  memory: <mem>
+--- stderr
+
+$ brief acme/api --summary Orders service -> 0
+--- stdout
+Project brief recorded: #2 (v1) for repo "acme/api"
+  memory: <mem>
+--- stderr
+
+$ brief supersede -> 1
+--- stdout
+--- stderr
+Usage: hippo brief supersede <id> --summary "<text>" [--change "<summary>"]
+
+$ brief supersede 1 -> 1
+--- stdout
+--- stderr
+hippo brief supersede requires --summary "<text>" for the new version.
+
+$ brief supersede 9999 --summary Storefront and admin app -> 1
+--- stdout
+--- stderr
+Project brief 9999 not found.
+
+$ brief supersede 1 --summary Storefront and admin app --change tightened -> 0
+--- stdout
+Project brief #3 recorded (v2), superseding #1.
+  memory: <mem>
+--- stderr
+
+$ brief supersede 1 --summary Storefront and admin app -> 1
+--- stdout
+--- stderr
+saveProjectBrief: brief 1 is not active (status='superseded'); only active briefs can be superseded.
+
+$ brief list -> 0
+--- stdout
+Found 3 project briefs:
+
+#3 [active] v2 repo="acme/web" memory=<mem>
+    change: tightened
+#2 [active] v1 repo="acme/api" memory=<mem>
+#1 [superseded] v1 repo="acme/web" memory=<mem>
+--- stderr
+
+$ brief list --status superseded -> 0
+--- stdout
+Found 1 project briefs:
+
+#1 [superseded] v1 repo="acme/web" memory=<mem>
+--- stderr
+
+$ brief get 3 -> 0
+--- stdout
+Project brief #3
+  repo: acme/web
+  status: active
+  version: 2
+  summary: Storefront and admin app
+  change_summary: tightened
+  memory: <mem>
+  created: <ts>
+--- stderr
+
+$ brief get 9999 -> 1
+--- stdout
+--- stderr
+Project brief 9999 not found.
+
+$ brief close 3 -> 0
+--- stdout
+Project brief #3 closed.
+--- stderr
+
+$ brief new acme/ops -> 1
+--- stdout
+--- stderr
+Usage: hippo brief new "<repo>" --summary "<text>"
+       hippo brief list [--status active|superseded|closed|all] [--repo "<repo>"] [--limit N]
+       hippo brief get <id>
+       hippo brief supersede <id> --summary "<text>" [--change "<summary>"]
+       hippo brief close <id>
+       hippo brief refresh "<repo>" [--dry-run]   (auto-assemble the brief from the repo's receipts)
+"
+`;
+
+exports[`versioned object CLI verbs > hippo note: every subcommand prints the same bytes and exit code 1`] = `
+"$ note list -> 0
+--- stdout
+No customer notes.
+--- stderr
+
+$ note new -> 1
+--- stdout
+--- stderr
+Usage: hippo note new "<customer>" --text "<note>"
+       hippo note list [--status active|superseded|closed|all] [--customer "<id>"] [--limit N]
+       hippo note get <id>
+       hippo note supersede <id> --text "<note>" [--change "<summary>"]
+       hippo note close <id>
+
+$ note new Acme Ltd --text Prefers email -> 0
+--- stdout
+Customer note recorded: #1 (v1) for customer "Acme Ltd"
+  memory: <mem>
+--- stderr
+
+$ note Globex --text Pays monthly -> 0
+--- stdout
+Customer note recorded: #2 (v1) for customer "Globex"
+  memory: <mem>
+--- stderr
+
+$ note supersede -> 1
+--- stdout
+--- stderr
+Usage: hippo note supersede <id> --text "<note>" [--change "<summary>"]
+
+$ note supersede 1 -> 1
+--- stdout
+--- stderr
+hippo note supersede requires --text "<note>" for the new version.
+
+$ note supersede 9999 --text Prefers a call -> 1
+--- stdout
+--- stderr
+Customer note 9999 not found.
+
+$ note supersede 1 --text Prefers a call --change tightened -> 0
+--- stdout
+Customer note #3 recorded (v2), superseding #1.
+  memory: <mem>
+--- stderr
+
+$ note supersede 1 --text Prefers a call -> 1
+--- stdout
+--- stderr
+saveCustomerNote: note 1 is not active (status='superseded'); only active notes can be superseded.
+
+$ note list -> 0
+--- stdout
+Found 3 customer notes:
+
+#3 [active] v2 customer="Acme Ltd" memory=<mem>
+    change: tightened
+#2 [active] v1 customer="Globex" memory=<mem>
+#1 [superseded] v1 customer="Acme Ltd" memory=<mem>
+--- stderr
+
+$ note list --status superseded -> 0
+--- stdout
+Found 1 customer notes:
+
+#1 [superseded] v1 customer="Acme Ltd" memory=<mem>
+--- stderr
+
+$ note get 3 -> 0
+--- stdout
+Customer note #3
+  customer: Acme Ltd
+  status: active
+  version: 2
+  note: Prefers a call
+  change_summary: tightened
+  memory: <mem>
+  created: <ts>
+--- stderr
+
+$ note get 9999 -> 1
+--- stdout
+--- stderr
+Customer note 9999 not found.
+
+$ note close 3 -> 0
+--- stdout
+Customer note #3 closed.
+--- stderr
+
+$ note new Initech -> 1
+--- stdout
+--- stderr
+Usage: hippo note new "<customer>" --text "<note>"
+       hippo note list [--status active|superseded|closed|all] [--customer "<id>"] [--limit N]
+       hippo note get <id>
+       hippo note supersede <id> --text "<note>" [--change "<summary>"]
+       hippo note close <id>
+"
+`;
+
+exports[`versioned object CLI verbs > hippo policy: every subcommand prints the same bytes and exit code 1`] = `
+"$ policy list -> 0
+--- stdout
+No policies.
+--- stderr
+
+$ policy new -> 1
+--- stdout
+--- stderr
+Usage: hippo policy new "<name>" --text "<rule>" [--from <iso>] [--to <iso>]
+       hippo policy list [--status active|superseded|closed|all] [--limit N]
+       hippo policy get <id>
+       hippo policy asof <iso-date> [--name "<policy>"]
+       hippo policy supersede <id> --text "<rule>" [--from] [--to] [--change "<summary>"]
+       hippo policy close <id>
+
+$ policy new Retention --text Delete logs after 90 days --from 2026-01-01T00:00:00.000Z --to 2027-01-01T00:00:00.000Z -> 0
+--- stdout
+Policy recorded: #1 (v1, effective <ts>..<ts>)
+  memory: <mem>
+--- stderr
+
+$ policy Access --text Two reviewers -> 0
+--- stdout
+Policy recorded: #2 (v1, effective <ts>..(open))
+  memory: <mem>
+--- stderr
+
+$ policy supersede -> 1
+--- stdout
+--- stderr
+Usage: hippo policy supersede <id> --text "<rule>" [--from <iso>] [--to <iso>] [--change "<summary>"]
+
+$ policy supersede 1 -> 1
+--- stdout
+--- stderr
+hippo policy supersede requires --text "<rule>" for the new version.
+
+$ policy supersede 9999 --text Delete logs after 30 days --from 2026-02-01T00:00:00.000Z -> 1
+--- stdout
+--- stderr
+Policy 9999 not found.
+
+$ policy supersede 1 --text Delete logs after 30 days --from 2026-02-01T00:00:00.000Z --change tightened -> 0
+--- stdout
+Policy #3 recorded (v2), superseding #1.
+  memory: <mem>
+--- stderr
+
+$ policy supersede 1 --text Delete logs after 30 days --from 2026-02-01T00:00:00.000Z -> 1
+--- stdout
+--- stderr
+savePolicy: policy 1 is not active (status='superseded'); only active policies can be superseded.
+
+$ policy list -> 0
+--- stdout
+Found 3 policies:
+
+#3 [active] v2 <ts>..(open) memory=<mem>
+    Retention: Delete logs after 30 days
+    change: tightened
+#2 [active] v1 <ts>..(open) memory=<mem>
+    Access: Two reviewers
+#1 [superseded] v1 <ts>..<ts> memory=<mem>
+    Retention: Delete logs after 90 days
+--- stderr
+
+$ policy list --status superseded -> 0
+--- stdout
+Found 1 policies:
+
+#1 [superseded] v1 <ts>..<ts> memory=<mem>
+    Retention: Delete logs after 90 days
+--- stderr
+
+$ policy get 3 -> 0
+--- stdout
+Policy #3
+  name: Retention
+  text: Delete logs after 30 days
+  status: active
+  version: 2
+  valid_from: <ts>
+  valid_to: (open-ended)
+  change_summary: tightened
+  memory: <mem>
+  created: <ts>
+--- stderr
+
+$ policy get 9999 -> 1
+--- stdout
+--- stderr
+Policy 9999 not found.
+
+$ policy close 3 -> 0
+--- stdout
+Policy #3 closed.
+--- stderr
+
+$ policy new Backups -> 1
+--- stdout
+--- stderr
+Usage: hippo policy new "<name>" --text "<rule>" [--from <iso>] [--to <iso>]
+       hippo policy list [--status active|superseded|closed|all] [--limit N]
+       hippo policy get <id>
+       hippo policy asof <iso-date> [--name "<policy>"]
+       hippo policy supersede <id> --text "<rule>" [--from] [--to] [--change "<summary>"]
+       hippo policy close <id>
+"
+`;
+
+exports[`versioned object CLI verbs > hippo process: every subcommand prints the same bytes and exit code 1`] = `
+"$ process list -> 0
+--- stdout
+No processes.
+--- stderr
+
+$ process new -> 1
+--- stdout
+--- stderr
+Usage: hippo process new "<name>" --step "<text>" [--step ...] [--description "<text>"]
+       hippo process list [--status active|superseded|closed|all] [--limit N]
+       hippo process get <id>
+       hippo process supersede <id> --step "<text>" [--change "<summary>"]
+       hippo process close <id>
+
+$ process new Release --step run the tests --step publish --description ship it -> 0
+--- stdout
+Process recorded: #1 (v1, 2 steps)
+  memory: <mem>
+--- stderr
+
+$ process Deploy --step push -> 0
+--- stdout
+Process recorded: #2 (v1, 1 steps)
+  memory: <mem>
+--- stderr
+
+$ process supersede -> 1
+--- stdout
+--- stderr
+Usage: hippo process supersede <id> --step "<text>" [--step ...] [--change "<summary>"] [--description "<text>"]
+
+$ process supersede 1 -> 1
+--- stdout
+--- stderr
+hippo process supersede requires at least one --step "<text>" for the new version.
+
+$ process supersede 9999 --step sign the build --description signed -> 1
+--- stdout
+--- stderr
+Process 9999 not found.
+
+$ process supersede 1 --step sign the build --description signed --change tightened -> 0
+--- stdout
+Process #3 recorded (v2), superseding #1.
+  memory: <mem>
+--- stderr
+
+$ process supersede 1 --step sign the build --description signed -> 1
+--- stdout
+--- stderr
+saveProcess: process 1 is not active (status='superseded'); only active processes can be superseded.
+
+$ process list -> 0
+--- stdout
+Found 3 processes:
+
+#3 [active] v2 steps=1 memory=<mem>
+    Release
+    change: tightened
+#2 [active] v1 steps=1 memory=<mem>
+    Deploy
+#1 [superseded] v1 steps=2 memory=<mem>
+    Release
+--- stderr
+
+$ process list --status superseded -> 0
+--- stdout
+Found 1 processes:
+
+#1 [superseded] v1 steps=2 memory=<mem>
+    Release
+--- stderr
+
+$ process get 3 -> 0
+--- stdout
+Process #3
+  name: Release
+  status: active
+  version: 2
+  description: signed
+  steps:
+    1. sign the build
+  change_summary: tightened
+  memory: <mem>
+  created: <ts>
+--- stderr
+
+$ process get 9999 -> 1
+--- stdout
+--- stderr
+Process 9999 not found.
+
+$ process close 3 -> 0
+--- stdout
+Process #3 closed.
+--- stderr
+
+$ process new Onboard -> 0
+--- stdout
+Process recorded: #4 (v1, 0 steps)
+  memory: <mem>
+--- stderr
+"
+`;
+
+exports[`versioned object CLI verbs > hippo skill: every subcommand prints the same bytes and exit code 1`] = `
+"$ skill list -> 0
+--- stdout
+No skills.
+--- stderr
+
+$ skill new -> 1
+--- stdout
+--- stderr
+Usage: hippo skill new "<name>" --instructions "<text>" [--trigger "<when>"]
+       hippo skill list [--status active|superseded|closed|all] [--limit N]
+       hippo skill get <id>
+       hippo skill export   (render active skills as an AGENTS.md/CLAUDE.md block)
+       hippo skill supersede <id> --instructions "<text>" [--trigger] [--change "<summary>"]
+       hippo skill close <id>
+
+$ skill new Review --instructions Check the down path --trigger on PR -> 0
+--- stdout
+Skill recorded: #1 (v1)
+  memory: <mem>
+--- stderr
+
+$ skill Triage --instructions Sort by impact -> 0
+--- stdout
+Skill recorded: #2 (v1)
+  memory: <mem>
+--- stderr
+
+$ skill supersede -> 1
+--- stdout
+--- stderr
+Usage: hippo skill supersede <id> --instructions "<text>" [--trigger "<when>"] [--change "<summary>"]
+
+$ skill supersede 1 -> 1
+--- stdout
+--- stderr
+hippo skill supersede requires --instructions "<text>" for the new version.
+
+$ skill supersede 9999 --instructions Check both paths --trigger on merge -> 1
+--- stdout
+--- stderr
+Skill 9999 not found.
+
+$ skill supersede 1 --instructions Check both paths --trigger on merge --change tightened -> 0
+--- stdout
+Skill #3 recorded (v2), superseding #1.
+  memory: <mem>
+--- stderr
+
+$ skill supersede 1 --instructions Check both paths --trigger on merge -> 1
+--- stdout
+--- stderr
+saveSkill: skill 1 is not active (status='superseded'); only active skills can be superseded.
+
+$ skill list -> 0
+--- stdout
+Found 3 skills:
+
+#3 [active] v2 when="on merge" memory=<mem>
+    Review
+    change: tightened
+#2 [active] v1 memory=<mem>
+    Triage
+#1 [superseded] v1 when="on PR" memory=<mem>
+    Review
+--- stderr
+
+$ skill list --status superseded -> 0
+--- stdout
+Found 1 skills:
+
+#1 [superseded] v1 when="on PR" memory=<mem>
+    Review
+--- stderr
+
+$ skill get 3 -> 0
+--- stdout
+Skill #3
+  name: Review
+  status: active
+  version: 2
+  when: on merge
+  instructions: Check both paths
+  change_summary: tightened
+  memory: <mem>
+  created: <ts>
+--- stderr
+
+$ skill get 9999 -> 1
+--- stdout
+--- stderr
+Skill 9999 not found.
+
+$ skill close 3 -> 0
+--- stdout
+Skill #3 closed.
+--- stderr
+
+$ skill new Plan -> 1
+--- stdout
+--- stderr
+Usage: hippo skill new "<name>" --instructions "<text>" [--trigger "<when>"]
+       hippo skill list [--status active|superseded|closed|all] [--limit N]
+       hippo skill get <id>
+       hippo skill export   (render active skills as an AGENTS.md/CLAUDE.md block)
+       hippo skill supersede <id> --instructions "<text>" [--trigger] [--change "<summary>"]
+       hippo skill close <id>
+"
+`;
