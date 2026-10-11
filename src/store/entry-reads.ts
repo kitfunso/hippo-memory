@@ -286,11 +286,13 @@ export interface EntryTextKey {
   source: string;
 }
 
-/** Every tenant's rows in loadAllEntries' order, with only the columns that say whether another store already holds each. */
-export function loadEntryTextKeys(hippoRoot: string): EntryTextKey[] {
+/** The rows in loadAllEntries' order (every tenant unless one is named), with only the columns that say whether another store already holds each. */
+export function loadEntryTextKeys(hippoRoot: string, tenantId?: string): EntryTextKey[] {
   return onHandle(hippoRoot, (db) => {
+    const where = tenantId !== undefined ? 'WHERE tenant_id = ? ' : '';
     // SAFETY: rows' shape matches the four columns named in the SELECT.
-    const rows = db.prepare('SELECT id, tenant_id, content, source FROM memories ORDER BY created ASC, id ASC').all() as
+    const rows = db.prepare(`SELECT id, tenant_id, content, source FROM memories ${where}ORDER BY created ASC, id ASC`)
+      .all(...(tenantId !== undefined ? [tenantId] : [])) as
       Array<{ id: string; tenant_id: string | null; content: string; source: string }>;
     return rows.map((row) => ({ id: row.id, tenantId: row.tenant_id ?? DEFAULT_TENANT_ID, content: row.content, source: row.source }));
   }, openStore);
@@ -333,9 +335,49 @@ function selectAllRows(db: DatabaseSyncLike, tenantId?: string): MemoryRow[] {
       ).all() as MemoryRow[];
 }
 
+/** Where a page stopped: the `created`, `id` of its last row, in loadAllEntries' order. */
+export interface EntryCursor {
+  created: string;
+  id: string;
+}
+
+export interface EntryPage {
+  entries: MemoryEntry[];
+  /** The cursor that reads the page after this one, or null when this was the last. */
+  next: EntryCursor | null;
+}
+
+/** Up to `limit` rows in loadAllEntries' order, starting after `after`; omitting `tenantId` reads every tenant. */
+export function loadEntriesPage(hippoRoot: string, tenantId: string | undefined, page: { limit: number; after?: EntryCursor }): EntryPage {
+  const where: string[] = [];
+  const params: Array<string | number> = [];
+  if (tenantId !== undefined) { where.push('tenant_id = ?'); params.push(tenantId); }
+  if (page.after) {
+    where.push('(created > ? OR (created = ? AND id > ?))');
+    params.push(page.after.created, page.after.created, page.after.id);
+  }
+  const clause = where.length > 0 ? `WHERE ${where.join(' AND ')} ` : '';
+  // One extra row says whether another page follows without a count.
+  params.push(page.limit + 1);
+  return onHandle(hippoRoot, (db) => {
+    // SAFETY: selects exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
+    const rows = db.prepare(`SELECT ${MEMORY_SELECT_COLUMNS} FROM memories ${clause}ORDER BY created ASC, id ASC LIMIT ?`).all(...params) as MemoryRow[];
+    const entries = rows.slice(0, page.limit).map(rowToEntry);
+    const last = entries[entries.length - 1];
+    return { entries, next: rows.length > page.limit && last ? { created: last.created, id: last.id } : null };
+  }, openStore);
+}
+
 /** Every memory row on an open connection, so a caller can read inside its own transaction. */
 export function selectAllEntries(db: DatabaseSyncLike, tenantId?: string): MemoryEntry[] {
   return selectAllRows(db, tenantId).map(rowToEntry);
+}
+
+/** The columns a text match needs, for every row of a tenant in loadAllEntries' order: callers read whole rows only for the ids that match. */
+export function selectTenantTexts(db: DatabaseSyncLike, tenantId: string): Array<{ id: string; content: string; source: string; scope: string | null }> {
+  // SAFETY: rows' shape matches the four columns named in the SELECT.
+  return db.prepare('SELECT id, content, source, scope FROM memories WHERE tenant_id = ? ORDER BY created ASC, id ASC').all(tenantId) as
+    Array<{ id: string; content: string; source: string; scope: string | null }>;
 }
 
 /** Live rows whose source starts with `prefix`, on the caller's handle; LIKE folds case, so the prefix is checked again exactly. */

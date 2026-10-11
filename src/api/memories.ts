@@ -5,7 +5,7 @@ import { countOpenConflicts } from '../store/conflicts.js';
 import { NotFoundError } from '../core/api-errors.js';
 import { canTouchScope } from '../core/recall-scope.js';
 import { storeFor } from '../store/index.js';
-import { countAllEntries, loadAllEntries, loadEntriesByIds } from '../store/entry-reads.js';
+import { countAllEntries, loadEntriesByIds, loadEntriesPage, type EntryCursor } from '../store/entry-reads.js';
 import { requireHostAdmin, type Context } from './types.js';
 
 /** The row `id` in the caller's tenant, or null when it is missing or another tenant's. */
@@ -44,9 +44,21 @@ function tenantFilter(ctx: Context, reach: TenantReach): string | undefined {
   return undefined;
 }
 
-/** Every memory row in reach, oldest first. */
-export function listMemories(ctx: Context, reach: TenantReach = {}): MemoryEntry[] {
-  return loadAllEntries(ctx.hippoRoot, tenantFilter(ctx, reach));
+/** Rows a listing reads per query by default; the verbs still receive every row. */
+const LIST_PAGE_SIZE = 1000;
+
+/** Every memory row in reach, oldest first, read `pageSize` rows per query so no single read grows with the store. */
+export function listMemories(ctx: Context, reach: TenantReach = {}, opts: { pageSize?: number } = {}): MemoryEntry[] {
+  const tenant = tenantFilter(ctx, reach);
+  const limit = Math.max(1, Math.trunc(opts.pageSize ?? LIST_PAGE_SIZE));
+  const all: MemoryEntry[] = [];
+  let after: EntryCursor | undefined;
+  do {
+    const page = loadEntriesPage(ctx.hippoRoot, tenant, { limit, after });
+    all.push(...page.entries);
+    after = page.next ?? undefined;
+  } while (after);
+  return all;
 }
 
 /** How many memory rows the whole store holds, counted in SQL. */

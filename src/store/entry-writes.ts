@@ -2,6 +2,7 @@ import { strengthAblation } from '../core/ablation.js';
 import { type MemoryEntry, markRetrieved } from '../core/memory.js';
 import { type DatabaseSyncLike, closeHippoDb, openHippoDb, withWriteScope } from '../db/index.js';
 import { rethrowIfSqliteBlocked } from '../util/sqlite-blocked.js';
+import { chunked } from '../util/chunked.js';
 import { RejectedValueError } from '../core/api-errors.js';
 import { markSummaryDirtyInTx } from './summary-dirty.js';
 import { errorMessage, log } from '../util/log.js';
@@ -184,18 +185,25 @@ function warnStrengthenFailed<E>(error: E): void {
   log.warn(`retrieval stats not saved (${errorMessage(error)})`);
 }
 
+/** Rows per recall-write statement: five bound values each, far under SQLite's parameter limit. */
+const RETRIEVAL_UPDATE_CHUNK = 100;
+
 /** strengthenRetrieved on the caller's handle, inside the caller's transaction. Throws; the caller decides. */
 export function strengthenRetrievedOn(db: DatabaseSyncLike, ids: readonly string[], opts: StrengthenOptions): Set<string> {
   const found = new Set<string>();
   if (ids.length === 0 || opts.recallBoostAblated) return found;
   const byId = selectEntriesByIds(db, ids, opts.tenantId);
   const live = [...new Set(ids)].flatMap((id) => byId.get(id) ?? []);
-  const update = db.prepare(
-    'UPDATE memories SET retrieval_count = ?, last_retrieved = ?, half_life_days = ?, strength = ? WHERE id = ?',
-  );
-  for (const e of markRetrieved(live, undefined, { ablation: strengthAblation() })) {
-    update.run(e.retrieval_count, e.last_retrieved, e.half_life_days, e.strength, e.id);
-    found.add(e.id);
+  const updated = markRetrieved(live, undefined, { ablation: strengthAblation() });
+  // One UPDATE ... FROM per chunk of rows instead of one statement per row.
+  for (const chunk of chunked(updated, RETRIEVAL_UPDATE_CHUNK)) {
+    const values = chunk.map(() => '(?, ?, ?, ?, ?)').join(', ');
+    db.prepare(
+      `WITH v(id, rc, lr, hl, st) AS (VALUES ${values})
+       UPDATE memories SET retrieval_count = v.rc, last_retrieved = v.lr, half_life_days = v.hl, strength = v.st
+       FROM v WHERE memories.id = v.id`,
+    ).run(...chunk.flatMap((e) => [e.id, e.retrieval_count, e.last_retrieved, e.half_life_days, e.strength]));
+    for (const e of chunk) found.add(e.id);
   }
   return found;
 }

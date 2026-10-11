@@ -6,7 +6,7 @@ import * as path from 'path';
 import { MemoryEntry, generateId, COMPACTION_MEMORY_TAG } from '../core/memory.js';
 import { AGENT_MEMORY_SOURCE_PREFIX, AGENT_MEMORY_TAGS } from '../core/agent-memory-tools.js';
 import { writeEntriesSkippingRejected, writeEntry } from '../store/entry-writes.js';
-import { loadAllEntries, readEntry } from '../store/entry-reads.js';
+import { loadAllEntries, loadEntryTextKeys, readEntry } from '../store/entry-reads.js';
 import { tallySources } from '../store/candidates.js';
 import { isPersonalScope } from '../core/recall-scope.js';
 import { fallbackOrigin } from '../core/project-identity.js';
@@ -257,10 +257,7 @@ export function autoShare(
   const globalRoot = getGlobalRoot();
   // Host-wide read. The global store IS the union across all tenants;
   // per-tenant filtering on the global root would defeat the purpose.
-  const globalEntries = loadAllEntries(globalRoot);
-
-  // Build set of global content hashes to avoid duplicates
-  const globalContentSet = storedTextKeys(globalEntries);
+  const globalContentSet = storedTextKeys(loadEntryTextKeys(globalRoot));
 
   const candidates = localEntries.filter((entry) => isAutoShareCandidate(entry, globalContentSet, minScore, options.stats));
 

@@ -168,13 +168,21 @@ export function loadContextCandidates(hippoRoot: string, tenantId: string, filte
     where.push(`(origin_project = '' OR ${originInSql(filter.project)})`);
     params.push(...filter.project);
   }
+  const cap = Math.max(0, Math.trunc(filter.cap));
+  const whereSql = where.join(' AND ');
   return onHandle(hippoRoot, (db) => {
-    // SAFETY: the outer SELECT names exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set; the rank sort carries ids only.
-    const rows = db.prepare(
-      `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id IN (
-        SELECT id FROM memories WHERE ${where.join(' AND ')} ORDER BY ${DECAY_RANK_SQL} LIMIT ?
-      ) ORDER BY created ASC, id ASC`,
-    ).all(...params, filter.now.toISOString(), Math.max(0, Math.trunc(filter.cap))) as MemoryRow[];
+    // SAFETY: the count row has the one column named.
+    const matched = (db.prepare(`SELECT COUNT(*) AS n FROM memories WHERE ${whereSql}`).get(...params) as { n: number }).n;
+    // Under the cap every match is returned, so the per-row decay math and the sort are skipped.
+    // SHORTCUT: past the cap the rank still scans the tenant; a stored decay rank column needs a schema migration, held until one is approved.
+    const ranked = matched > cap;
+    const sql = ranked
+      ? `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id IN (
+        SELECT id FROM memories WHERE ${whereSql} ORDER BY ${DECAY_RANK_SQL} LIMIT ?
+      ) ORDER BY created ASC, id ASC`
+      : `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE ${whereSql} ORDER BY created ASC, id ASC`;
+    // SAFETY: both SELECTs name exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set; the rank sort carries ids only.
+    const rows = db.prepare(sql).all(...params, ...(ranked ? [filter.now.toISOString(), cap] : [])) as MemoryRow[];
     return rows.map(rowToEntry);
   }, openStore);
 }

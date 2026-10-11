@@ -60,7 +60,8 @@ export interface OpenedDb {
   readonly facts: OpenFacts | null;
 }
 
-/** A new connection with the store's pragmas and migrations applied and the mirror cleanup run when it is due; the caller owns and closes it. */
+/** A new connection with the store's pragmas and migrations applied and the mirror cleanup run when it is due; the caller owns and closes it.
+ *  Outside any request scope (CLI start-up, timers) this is the only handle there is; openHippoDb reuses the scope's when one exists. */
 export function connectWithFacts(hippoRoot: string, busyWaitMs: number = DEFAULT_BUSY_WAIT_MS): OpenedDb {
   createStoreFilesOwnerOnly(hippoRoot);
   const db = new DatabaseSync(getHippoDbPath(hippoRoot));

@@ -99,7 +99,8 @@ async function runSleepPhases(
   counts.consolidation = consolidateResult.semanticCreated + consolidateResult.merged;
   const result = sleepResultFrom(consolidateResult, dryRun);
 
-  // One read after consolidation serves dedup, the audit and ambient: dedup reports every row it deletes, so later phases subtract instead of reading again.
+  // Consolidate's own read predates its writes, so it cannot stand in for this one.
+  // One read after consolidation serves dedup, the audit and ambient: dedup reports every row it deletes, so later phases subtract.
   const loaded: LoadedStore = { entries: phases.loadAllEntries(ctx.hippoRoot), backing: memoriesBackingObjects(ctx.hippoRoot) };
 
   // Phase 2: Dedup (post-consolidate near-duplicate cleanup).

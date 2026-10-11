@@ -7,7 +7,7 @@ import { heldTexts } from '../util/same-text.js';
 import { audit } from './audit-event.js';
 import { deleteEntryCore } from './delete-and-batch.js';
 import { deleteDormantRow, listDormantSnapshots, purgeDormantByDigest, replaceDormantEntry } from './dormant.js';
-import { entryRejectRowAt, selectAllEntries } from './entry-reads.js';
+import { entryRejectRowAt, selectEntriesByIds, selectTenantTexts } from './entry-reads.js';
 import { stampOriginProject } from './entry-row.js';
 import { writeEntryDbOnly, writeEntryMirrors } from './entry-writes.js';
 import { purgeMirrorBestEffort } from './mirrors.js';
@@ -68,13 +68,17 @@ interface Removal {
 function removeLiveRows(db: DatabaseSyncLike, hippoRoot: string, rejection: Rejection, holdsValue: HoldsValue, removal: Removal): void {
   const { tenantId, actor, reason } = rejection;
   const { removedIds, removedRawIds, successors } = removal;
-  const merged: MemoryEntry[] = [];
-  for (const row of selectAllEntries(db, tenantId)) {
+  // Text columns decide which rows hold the value; only those rows are read whole.
+  const directIds: string[] = [];
+  const mergedIds: string[] = [];
+  for (const row of selectTenantTexts(db, tenantId)) {
     if (!rejection.inReach(row.scope)) continue;
-    if (!holdsValue(row.content)) {
-      if (heldTexts(row).some(holdsValue)) merged.push(row);
-      continue;
-    }
+    if (holdsValue(row.content)) directIds.push(row.id);
+    else if (heldTexts(row).some(holdsValue)) mergedIds.push(row.id);
+  }
+  const held = selectEntriesByIds(db, [...directIds, ...mergedIds], tenantId);
+  const merged = mergedIds.flatMap((id) => held.get(id) ?? []);
+  for (const row of directIds.flatMap((id) => held.get(id) ?? [])) {
     if (row.kind === 'raw') {
       // A raw row is append-only: archiving is its one removal path, and its savepoint nests in this write scope.
       archiveRawMemory(db, row.id, { reason, who: actor });
@@ -145,7 +149,7 @@ export function applyRejection(hippoRoot: string, rejection: Rejection): Applied
         sourceMemoryId: memoryId ?? null,
         normalizedChars: normalizeValueForRejection(content).length,
       });
-      // SHORTCUT: scans every row of the tenant, fine for a human-run command; a digest column on memories if stores grow a hundredfold.
+      // SHORTCUT: scans the tenant's text columns, fine for a human-run command; a digest column needs a schema migration, held until approved.
       const holdsValue: HoldsValue = (text) => rejectionDigest(text) === digest;
       removeLiveRows(db, hippoRoot, rejection, holdsValue, removal);
       removeDormantCopies(db, rejection, digest, holdsValue, removal);

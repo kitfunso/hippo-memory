@@ -4,7 +4,7 @@
 import { DEFAULT_TENANT_ID } from '../util/env.js';
 import { createMemory, Layer, MemoryEntry } from '../core/memory.js';
 import { writeEntry } from '../store/entry-writes.js';
-import { loadAllEntries } from '../store/entry-reads.js';
+import { loadEntryTextKeys } from '../store/entry-reads.js';
 import { duplicateKey, storedTextKeys } from '../util/same-text.js';
 import { getGlobalRoot, initGlobal } from '../sharing/global-store.js';
 import { withRequestStoresSync } from '../db/request-stores.js';
@@ -102,7 +102,7 @@ function openImportTarget(options: ImportOptions) {
     initGlobal();
   }
 
-  const keys = storedTextKeys(loadAllEntries(
+  const keys = storedTextKeys(loadEntryTextKeys(
     targetRoot,
     options.global ? undefined : options.tenantId,
   ));

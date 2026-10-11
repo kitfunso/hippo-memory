@@ -54,6 +54,7 @@ export const v14: Migration = {
       if (!tableHasColumn(db, 'memories', 'owner')) {
         db.exec(`ALTER TABLE memories ADD COLUMN owner TEXT`);
       }
+      // SHORTCUT: artifact_ref has no index, so connector deletes and vault lookups scan the tenant; the index is held until a schema migration is approved.
       if (!tableHasColumn(db, 'memories', 'artifact_ref')) {
         db.exec(`ALTER TABLE memories ADD COLUMN artifact_ref TEXT`);
       }

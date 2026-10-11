@@ -47,7 +47,8 @@ export function openStore(hippoRoot: string, opts?: { busyWaitMs?: number }): Da
   }
 }
 
-/** One call on a handle of its own, closed after; pass openStore where the call also sets up mirror folders and legacy rows. */
+/** One call on a handle of its own, closed after (a request scope's handle stays open);
+ *  pass openStore where the call also sets up mirror folders and legacy rows. */
 export function onHandle<T>(hippoRoot: string, fn: (db: DatabaseSyncLike) => T, open: (hippoRoot: string) => DatabaseSyncLike = openHippoDb): T {
   const db = open(hippoRoot);
   try {
