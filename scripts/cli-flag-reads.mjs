@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Per-verb flag reads: for each row of VERB_HANDLERS in src/cli.ts, the flags its handler and every function it hands the flags object to read.
+// Per-verb flag reads: for each row of the verb table in src/cli/verbs/, the flags its handler and every function it hands the flags object to read.
 // It follows the object, so a flags object built elsewhere does not count toward a verb. Usage: cli-flag-reads.mjs [--json]
 
 import { createRequire } from 'node:module';
@@ -300,22 +300,40 @@ function analyze(env, fn, taint) {
   return scope;
 }
 
-/** The `run` handler of every row of VERB_HANDLERS, in table order. */
+/** The function a `verb(() => import(module), 'handleX', row)` row names: export handleX of that module. */
+function rowHandler(env, call) {
+  const { ts, checker } = env;
+  const [load, name] = call.arguments;
+  let loaded = null;
+  const find = (node) => {
+    if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword) loaded = node.arguments[0];
+    else ts.forEachChild(node, find);
+  };
+  find(load);
+  const moduleSym = loaded ? checker.getSymbolAtLocation(loaded) : undefined;
+  let sym = moduleSym && ts.isStringLiteral(name) ? checker.tryGetMemberInModuleExports(name.text, moduleSym) : undefined;
+  if (sym && sym.flags & ts.SymbolFlags.Alias) sym = checker.getAliasedSymbol(sym);
+  const decl = sym?.valueDeclaration;
+  const init = decl && ts.isVariableDeclaration(decl) && decl.initializer ? strip(ts, decl.initializer) : null;
+  const fn = decl && isFunctionLike(ts, decl) ? decl : init && isFunctionLike(ts, init) ? init : null;
+  if (!fn) throw new Error(`verb row handler not found: ${where(env, call)}`);
+  return fn;
+}
+
+/** The handler of every `verb(...)` row of the verb table in src/cli/verbs/. */
 function commandRows(env) {
   const { ts, program, repo } = env;
-  const cliPath = path.resolve(repo, 'src', 'cli.ts');
-  const cliFile = program.getSourceFiles().find((sf) => path.resolve(sf.fileName) === cliPath);
-  let table = null;
+  const verbsDir = path.resolve(repo, 'src', 'cli', 'verbs');
+  const rows = [];
   const find = (node) => {
-    if (ts.isVariableDeclaration(node) && node.name.getText() === 'VERB_HANDLERS' && node.initializer) table = strip(ts, node.initializer);
+    if (ts.isPropertyAssignment(node) && ts.isCallExpression(node.initializer) && node.initializer.expression.getText() === 'verb') {
+      rows.push({ verb: ts.isStringLiteral(node.name) ? node.name.text : node.name.getText(), run: rowHandler(env, node.initializer) });
+    }
     ts.forEachChild(node, find);
   };
-  if (cliFile) find(cliFile);
-  if (!table || !ts.isObjectLiteralExpression(table)) throw new Error('VERB_HANDLERS not found in src/cli.ts');
-  return table.properties.filter(ts.isPropertyAssignment).map((prop) => {
-    const run = strip(ts, prop.initializer).properties.find((field) => ts.isPropertyAssignment(field) && field.name.getText() === 'run');
-    return { verb: ts.isStringLiteral(prop.name) ? prop.name.text : prop.name.getText(), run: strip(ts, run.initializer) };
-  });
+  for (const sf of program.getSourceFiles()) if (path.dirname(path.resolve(sf.fileName)) === verbsDir) find(sf);
+  if (rows.length === 0) throw new Error('no verb rows found in src/cli/verbs/');
+  return rows;
 }
 
 /** @returns {{ verbs: { verb: string, flags: Record<string, string> }[], unfollowed: string[], unclassed: string[] }} each read classed on-off, value, presence or unknown. */
