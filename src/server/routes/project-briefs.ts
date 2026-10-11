@@ -3,8 +3,7 @@ import {
   briefFromReceipts, MAX_CHANGE_SUMMARY_LEN, MAX_REPO_LEN, PROJECT_BRIEF, refreshedBrief, type SaveProjectBriefOpts,
 } from '../../objects/project-briefs.js';
 import { sendJson } from '../../util/http-util.js';
-import { buildContextWithAuth } from '../auth.js';
-import type { RouteRequest } from '../types.js';
+import type { AuthedRouteRequest } from '../types.js';
 import { parseJsonBody } from '../validation.js';
 import { objectsOf, saveFor } from '../../api/objects.js';
 import {
@@ -32,8 +31,8 @@ const briefRoutes: VersionedRouteConfig<'project_brief', SaveProjectBriefOpts> =
 
 // Routes: /v1/project-briefs (create, list, refresh, show, supersede, close), mirroring /v1/skills; /refresh is ordered before /:id.
 // The store validates and throws; the boundary maps validation -> 400, not-found -> 404, not-active -> 409.
-export async function handleCreateProjectBrief(rr: RouteRequest): Promise<void> {
-  const ctx = await buildContextWithAuth(rr.req, rr.opts);
+export async function handleCreateProjectBrief(rr: AuthedRouteRequest): Promise<void> {
+  const { ctx } = rr;
   const body = await parseJsonBody(rr.req, ctx);
   const brief = await saveFor(ctx, PROJECT_BRIEF, {
     repo: requiredString(body, 'repo', { max: MAX_REPO_LEN }),
@@ -42,15 +41,14 @@ export async function handleCreateProjectBrief(rr: RouteRequest): Promise<void> 
   sendJson(rr.res, 201, { brief });
 }
 
-export function handleListProjectBriefs(rr: RouteRequest): Promise<void> {
+export function handleListProjectBriefs(rr: AuthedRouteRequest): Promise<void> {
   return listRoute(briefRoutes, rr);
 }
 
 // The refresh op: must precede the /:id routes (literal 'refresh' is non-numeric
 // so the /(\d+)/ routes would not match it, but order it first).
-export async function handleRefreshProjectBrief(rr: RouteRequest): Promise<void> {
-  const { req, res, opts } = rr;
-  const ctx = await buildContextWithAuth(req, opts);
+export async function handleRefreshProjectBrief(rr: AuthedRouteRequest): Promise<void> {
+  const { req, res, opts, ctx } = rr;
   const body = await parseJsonBody(req, ctx);
   const repo = requiredString(body, 'repo', { max: MAX_REPO_LEN });
   if (body['dryRun'] === true) {
@@ -62,14 +60,14 @@ export async function handleRefreshProjectBrief(rr: RouteRequest): Promise<void>
   sendJson(res, 200, { brief });
 }
 
-export function handleSupersedeProjectBrief(rr: RouteRequest, match: RegExpMatchArray): Promise<void> {
+export function handleSupersedeProjectBrief(rr: AuthedRouteRequest, match: RegExpMatchArray): Promise<void> {
   return supersedeRoute(briefRoutes, rr, match);
 }
 
-export function handleCloseProjectBrief(rr: RouteRequest, match: RegExpMatchArray): Promise<void> {
+export function handleCloseProjectBrief(rr: AuthedRouteRequest, match: RegExpMatchArray): Promise<void> {
   return closeRoute(briefRoutes, rr, match);
 }
 
-export function handleGetProjectBrief(rr: RouteRequest, match: RegExpMatchArray): Promise<void> {
+export function handleGetProjectBrief(rr: AuthedRouteRequest, match: RegExpMatchArray): Promise<void> {
   return getRoute(briefRoutes, rr, match);
 }

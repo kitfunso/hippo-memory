@@ -2,7 +2,7 @@ import { envPort, envRequireAuth, envV1Rps } from '../util/env.js';
 import type { IncomingMessage, Server, ServerResponse } from 'node:http';
 import { detectServer, removePidfileIfOwned, writePidfile } from './server-detect.js';
 import { outsideSqliteOffLoop, runWithRequestStores, SERVER_DB_WAIT_MS, withSqliteBlocked } from '../db/index.js';
-import { requireGroup, type HippoStore } from '../store/index.js';
+import type { HippoStore } from '../store/index.js';
 import { isStoreBusy } from '../store/sqlite/busy.js';
 import { holdSqliteConnection, type StoreHolder } from '../store/sqlite/held-connection.js';
 import { workerSqliteStore } from '../store/sqlite/worker-store.js';
@@ -13,8 +13,6 @@ import { errorFields, errorMessage, log } from '../util/log.js';
 import { runWithRequestId } from '../util/request-scope.js';
 import { createRateLimiter, type RateLimiter } from './rate-limit.js';
 import { RecallContractError } from '../api/index.js';
-import { handleSlackEventsWebhook } from '../connectors/slack/webhook.js';
-import { handleGitHubEventsWebhook } from '../connectors/github/webhook.js';
 import { BodyTimeoutError, BodyTooLargeError, closeAfterReply, DeadlineExceededError, HttpError, JSON_HEADERS, sendJson } from '../util/http-util.js';
 import { workerCounts } from '../store/sqlite/executor-counts.js';
 import { isLocalCaller, LIMITER_MAX_KEYS } from './auth.js';
@@ -29,7 +27,7 @@ import { MCP_PROJECT_SCOPED_HEADER } from '../core/project-identity.js';
 import { accessRouteOf, logRequestFailure, noteAccess, openRequest, parseRequest, rejectEncodedSlash, replyFor, sendError } from './request.js';
 import { createListener, warnIfCleartext } from './tls.js';
 import { assertAddonRoutes, assertPublicJson } from './route-checks.js';
-import { dispatchAddonRoute, dispatchPublicJson, dispatchV1Route, isPublicRoute } from './route-table.js';
+import { dispatchAddonRoute, dispatchPublicJson, dispatchV1Route } from './route-table.js';
 import type { AuthResolver, RateLimitSpec, ResolvedServeOpts, RouteRequest, ServeOpts, ServerHandle } from './types.js';
 
 // server.address() returns AddressInfo once a TCP socket is bound; null before
@@ -94,41 +92,12 @@ async function handleRequest(
   res.end(JSON.stringify({ error: 'not found' }));
 }
 
-const WEBHOOK_GROUPS = ['entryWrites', 'connectorWrites', 'connectorEvents'] as const;
-
-/** A store missing a group a delivery writes through refuses the webhook up front, so no delivery is acknowledged and then half stored. */
-function requireWebhookGroups(store: HippoStore): void {
-  for (const group of WEBHOOK_GROUPS) requireGroup(store, group);
-}
-
-/** Every route that runs inside a request scope, so it opens each store once: the /v1 table, public JSON, add-on routes, the webhooks and POST /mcp. */
+/** Every route that runs inside a request scope, so it opens each store once: the /v1 table with the webhooks, public JSON, add-on routes and POST /mcp. */
 async function dispatchScopedRoute(r: RouteRequest, method: string, path: string): Promise<boolean> {
   if (await dispatchV1Route(r, method, path)) return true;
   if (dispatchPublicJson(r, method, path)) return true;
   if (await dispatchAddonRoute(r, method, path)) return true;
   const { req, res, opts } = r;
-
-  if (method === 'POST' && path === '/v1/connectors/slack/events') {
-    noteAccess(req, { route: path });
-    // Bearer auth deliberately skipped: this route is in PUBLIC_ROUTES and authenticates via the Slack HMAC signature.
-    if (!isPublicRoute(method, path)) {
-      // Defensive: PUBLIC_ROUTES drift would land here. Fail closed.
-      throw new HttpError(401, 'auth required');
-    }
-    requireWebhookGroups(opts.store);
-    await handleSlackEventsWebhook({ req, res, opts }, opts.store);
-    return true;
-  }
-
-  if (method === 'POST' && path === '/v1/connectors/github/events') {
-    noteAccess(req, { route: path });
-    if (!isPublicRoute(method, path)) {
-      throw new HttpError(401, 'auth required');
-    }
-    requireWebhookGroups(opts.store);
-    await handleGitHubEventsWebhook({ req, res, opts }, opts.store);
-    return true;
-  }
 
   // Store-ready: under another store the MCP layer lists and runs only the tools ported to the port.
   if (method === 'POST' && path === '/mcp') {

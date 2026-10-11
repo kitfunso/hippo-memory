@@ -54,7 +54,7 @@ Env caching follows the house pattern (see `getLossAversionRatio` in `memory.ts`
 
 `serve(opts)` boots the HTTP daemon on host:port and writes the pidfile under `hippoRoot`. It refuses non-loopback hosts at boot unless `HIPPO_REQUIRE_AUTH=1` is set.
 
-The auth middleware (`buildContextWithAuth` / `requireAuth`) is checked by every route except `GET /health` (public by design, for platform health checks), the two connector webhooks in `PUBLIC_ROUTES` (HMAC-gated by their own signing secrets, and 404 when those secrets are unset) and any `publicJson` GET path.
+Every `/v1` row in `V1_ROUTES` declares its `auth` need, and dispatch runs that gate before the handler. The auth middleware (`buildContextWithAuth` / `requireAuth`) is checked by every route except `GET /health` (public by design, for platform health checks), the two connector webhooks whose rows declare `webhook-signature` (HMAC-gated by their own signing secrets, and 404 when those secrets are unset) and any `publicJson` GET path.
 
 Under `HIPPO_ALLOW_KEYLESS_LOCAL=1` the keyless fallback inside `buildContextWithAuth` admits unauthenticated requests from a loopback remote address, unless they carry `Forwarded`, `X-Forwarded-For`/`-Host`/`-Proto`, `X-Real-IP`, `Cf-Connecting-Ip`, `True-Client-Ip` or `Fly-Client-Ip` (these mark a same-host proxy and get a 401 like any keyless remote request). So binding to a non-loopback host needs `HIPPO_REQUIRE_AUTH=1`, which wins over that opt-in and forces every request (loopback or not) through Bearer-token validation. Without it, a non-loopback bind could expose the DB to the network with no auth, so boot fails fast instead.
 

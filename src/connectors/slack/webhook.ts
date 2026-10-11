@@ -13,7 +13,8 @@ import type { HippoStore } from '../../store/index.js';
 import { HttpError, JSON_HEADERS, isHeaderString, closeIfBodyUnread, readWebhookBody, sendJson, type WebhookRequest } from '../../util/http-util.js';
 import { type JsonValue, isJsonObject } from '../../util/json.js';
 
-/** Slack Events API webhook: HMAC over the raw body with SLACK_SIGNING_SECRET, no Bearer (hence PUBLIC_ROUTES); malformed payloads go to slack_dlq, ACK 200.
+/** Slack Events API webhook: HMAC over the raw body with SLACK_SIGNING_SECRET, no Bearer (its route row declares webhook-signature);
+ *  malformed payloads go to slack_dlq, ACK 200.
  *  404 (not 503) when the secret is unset, so a probe cannot tell a gated-off route from a missing one. */
 export async function handleSlackEventsWebhook(request: WebhookRequest, store?: HippoStore): Promise<void> {
   const { req, res, opts } = request;

@@ -123,7 +123,8 @@ describe('serve() under a store that is not hippo.db', () => {
   });
 
   it('answers 501 on every unported /v1 route and both connectors, and never runs the handler', async () => {
-    const routes = [...unportedV1Routes(), 'POST /v1/connectors/slack/events', 'POST /v1/connectors/github/events'];
+    const routes = unportedV1Routes();
+    expect(routes).toEqual(expect.arrayContaining(['POST /v1/connectors/slack/events', 'POST /v1/connectors/github/events']));
     expect(routes).toHaveLength(63);
     for (const route of routes) {
       const [method, path] = route.split(' ');
@@ -159,7 +160,6 @@ describe('serve() under a store that is not hippo.db', () => {
   });
 
   it('a bad key on the store-ready /v1/memories and a missing key on /mcp are still a 401', async () => {
-    // /v1/memories parses its query before it checks the key, so q keeps a parse error from answering first.
     const wrong = await fetch(`${handle.url}/v1/memories?q=deploy`, { headers: bearer(newKey()) });
     expect(wrong.status).toBe(401);
     vi.stubEnv('HIPPO_REQUIRE_AUTH', '1');

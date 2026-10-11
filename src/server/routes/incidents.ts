@@ -2,8 +2,7 @@
 import { INCIDENT, openIncident, resolveOpenIncident } from '../../objects/incidents.js';
 import { HttpError, sendJson } from '../../util/http-util.js';
 import { NotFoundError } from '../../core/api-errors.js';
-import { buildContextWithAuth } from '../auth.js';
-import type { RouteRequest } from '../types.js';
+import type { AuthedRouteRequest } from '../types.js';
 import { MAX_SHORT_FIELD_LEN, parseJsonBody } from '../validation.js';
 import { type JsonValue, isJsonString } from '../../util/json.js';
 import { objectsOf } from '../../api/objects.js';
@@ -32,9 +31,8 @@ function linkedMemoryIds(body: Record<string, JsonValue>): string[] | undefined 
 
 // Routes: /v1/incidents (open, list, show, resolve, close), mirroring /v1/decisions; status is validated against VALID_INCIDENT_STATES.
 // Lifecycle is open->resolved->closed (no supersede), so linkedMemoryIds replaces supersedesDecisionId on create.
-export async function handleCreateIncident(rr: RouteRequest): Promise<void> {
-  const { req, res, opts } = rr;
-  const ctx = await buildContextWithAuth(req, opts);
+export async function handleCreateIncident(rr: AuthedRouteRequest): Promise<void> {
+  const { req, res, opts, ctx } = rr;
   const body = await parseJsonBody(req, ctx);
   const write = {
     incidentText: requiredString(body, 'text', { max: MAX_SHORT_FIELD_LEN, untrimmed: true }),
@@ -51,23 +49,22 @@ export async function handleCreateIncident(rr: RouteRequest): Promise<void> {
   }
 }
 
-export function handleListIncidents(rr: RouteRequest): Promise<void> {
+export function handleListIncidents(rr: AuthedRouteRequest): Promise<void> {
   return listRoute(incidentRoutes, rr);
 }
 
-export async function handleResolveIncident(rr: RouteRequest, match: RegExpMatchArray): Promise<void> {
-  const { req, res, opts } = rr;
+export async function handleResolveIncident(rr: AuthedRouteRequest, match: RegExpMatchArray): Promise<void> {
+  const { req, res, ctx } = rr;
   const id = parseInt(match[1], 10);
-  const ctx = await buildContextWithAuth(req, opts);
   const resolutionText = requiredString(await parseJsonBody(req, ctx), 'resolutionText', { max: MAX_SHORT_FIELD_LEN });
   const incident = await resolveOpenIncident(objectsOf(ctx), ctx.tenantId, id, resolutionText, ctx.actor.subject);
   sendJson(res, 200, { incident });
 }
 
-export function handleCloseIncident(rr: RouteRequest, match: RegExpMatchArray): Promise<void> {
+export function handleCloseIncident(rr: AuthedRouteRequest, match: RegExpMatchArray): Promise<void> {
   return closeRoute(incidentRoutes, rr, match);
 }
 
-export function handleGetIncident(rr: RouteRequest, match: RegExpMatchArray): Promise<void> {
+export function handleGetIncident(rr: AuthedRouteRequest, match: RegExpMatchArray): Promise<void> {
   return getRoute(incidentRoutes, rr, match);
 }

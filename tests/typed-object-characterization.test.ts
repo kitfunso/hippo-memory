@@ -289,15 +289,14 @@ describe('typed objects over HTTP, one shared store', () => {
     await api.stop();
   });
 
-  const LIMIT = 'limit must be a positive integer <= 1000';
-  const CURSOR = 'cursor is malformed; pass next_cursor from the previous page unchanged';
+  // The dispatch gate runs before any handler, so a keyless caller learns nothing about which parameters are bad.
   const KEYLESS: readonly (readonly [string, number, string])[] = [
     ...TYPES.flatMap((row): (readonly [string, number, string])[] => [
-      [`${row.path}?limit=0`, 400, LIMIT],
-      [`${row.path}?cursor=junk`, 400, CURSOR],
+      [`${row.path}?limit=0`, 401, 'auth required'],
+      [`${row.path}?cursor=junk`, 401, 'auth required'],
       [`${row.path}?status=bogus`, 401, 'auth required'],
     ]),
-    ['/v1/policies/asof', 400, 'date is required (ISO-8601 valid-time)'],
+    ['/v1/policies/asof', 401, 'auth required'],
     ['/v1/policies/asof?date=soon', 401, 'auth required'],
   ];
 

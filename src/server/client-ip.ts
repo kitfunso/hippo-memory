@@ -64,7 +64,7 @@ export function warnIfClientIpHeaderUnpinned(): void {
 }
 
 /** The key for one subscriber: an IPv6 address's /64, since one host may hold the whole /64; any other key as is. */
-export function subscriberKey(ip: string): string {
+function subscriberKey(ip: string): string {
   const bare = ip.split('%')[0]!;
   if (bare.toLowerCase().startsWith('::ffff:') && isIP(bare.slice(7)) === 4) return bare.slice(7);
   if (isIP(bare) !== 6) return ip;

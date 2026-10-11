@@ -5,7 +5,9 @@ import { join } from 'node:path';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
 import { apiKeyVerifyStats, createApiKey, revokeApiKey, type CreateApiKeyOpts } from '../src/store/auth.js';
 import { serve, sqliteStore, StoreBusyError, type AddonRoute, type HippoStore, type ServeOpts } from '../src/server.js';
-import { subscriberKey } from '../src/server/client-ip.js';
+import { IncomingMessage } from 'node:http';
+import { Socket } from 'node:net';
+import { clientLimitKey } from '../src/server/client-ip.js';
 import { makeRoot } from './_helpers/make-root.js';
 
 const ENV_KEYS = ['HIPPO_V1_RPS', 'HIPPO_CLIENT_IP_HEADER', 'HIPPO_TRUSTED_PROXIES', 'HIPPO_REQUIRE_AUTH', 'MCP_SSE_HEARTBEAT_MS', 'MCP_SSE_MAX_STREAMS'] as const;
@@ -329,7 +331,13 @@ describe('the per-address scrypt bucket', () => {
   });
 });
 
-describe('subscriberKey', () => {
+function fromSocket(ip: string | undefined): IncomingMessage {
+  const socket = new Socket();
+  Object.defineProperty(socket, 'remoteAddress', { value: ip });
+  return new IncomingMessage(socket);
+}
+
+describe('clientLimitKey on a direct peer', () => {
   it.each([
     ['2001:db8:1:2::a', '2001:db8:1:2::/64'],
     ['2001:0DB8:0001:0002:aaaa:bbbb:cccc:dddd', '2001:db8:1:2::/64'],
@@ -338,9 +346,12 @@ describe('subscriberKey', () => {
     ['64:ff9b::192.0.2.1', '64:ff9b:0:0::/64'],
     ['::ffff:203.0.113.9', '203.0.113.9'],
     ['203.0.113.9', '203.0.113.9'],
-    ['unknown', 'unknown'],
   ])('%s keys as %s', (ip, key) => {
-    expect(subscriberKey(ip)).toBe(key);
+    expect(clientLimitKey(fromSocket(ip))).toBe(key);
+  });
+
+  it('keys a peer with no address as unknown', () => {
+    expect(clientLimitKey(fromSocket(undefined))).toBe('unknown');
   });
 });
 

@@ -30,7 +30,8 @@ import {
 import type { JsonValue } from '../../util/json.js';
 
 /** GitHub webhook receiver: HMAC SHA-256 over the raw body, event type from the X-GitHub-Event header, tenant by installation.id then repository.full_name.
- *  ACKs 200 on signed envelopes (DLQ too); 401 only on a bad signature; 404 when GITHUB_WEBHOOK_SECRET is unset. No Bearer: server.ts checks isPublicRoute. */
+ *  ACKs 200 on signed envelopes (DLQ too); 401 only on a bad signature; 409 on a delivery id seen in the replay window;
+ *  404 when GITHUB_WEBHOOK_SECRET is unset. No Bearer: its route row declares webhook-signature. */
 export async function handleGitHubEventsWebhook(request: WebhookRequest, store?: HippoStore): Promise<void> {
   const { req, res, opts } = request;
   // Secret and signature header before the body, so a caller with neither cannot make the server buffer one.
@@ -67,7 +68,34 @@ export async function handleGitHubEventsWebhook(request: WebhookRequest, store?:
 
   // Signature OK from here on. Everything else is ACK-200; bad envelopes go
   // to the DLQ and a human can replay later.
-  await routeSignedDelivery({ hippoRoot: opts.hippoRoot, store, res, rawBody, eventName, deliveryId, signature: sigStr });
+  const replayKey = deliveryId === null ? null : `${opts.hippoRoot}\n${deliveryId}`;
+  if (replayKey !== null && !claimDelivery(replayKey, Date.now())) throw new HttpError(409, 'duplicate X-GitHub-Delivery');
+  try {
+    await routeSignedDelivery({ hippoRoot: opts.hippoRoot, store, res, rawBody, eventName, deliveryId, signature: sigStr });
+  } catch (err) {
+    // A delivery that failed left nothing stored, so GitHub's redelivery of the same id must get through.
+    if (replayKey !== null) seenDeliveries.delete(replayKey);
+    throw err;
+  }
+}
+
+// GitHub signs no timestamp, so a captured delivery verifies forever; this window is what refuses its replay.
+const DELIVERY_REPLAY_TTL_MS = 24 * 60 * 60 * 1000;
+const DELIVERY_REPLAY_MAX_IDS = 10_000;
+// SHORTCUT: seen ids live in this process and reset on restart or eviction; move them to the store if serve ever runs as several processes.
+const seenDeliveries = new Map<string, number>();
+
+/** Claims a delivery id for the window; false when it was claimed within the window already. The oldest claim goes first at the cap. */
+function claimDelivery(key: string, now: number): boolean {
+  const seenAt = seenDeliveries.get(key);
+  if (seenAt !== undefined && now - seenAt < DELIVERY_REPLAY_TTL_MS) return false;
+  seenDeliveries.delete(key);
+  if (seenDeliveries.size >= DELIVERY_REPLAY_MAX_IDS) {
+    const oldest = seenDeliveries.keys().next();
+    if (!oldest.done) seenDeliveries.delete(oldest.value);
+  }
+  seenDeliveries.set(key, now);
+  return true;
 }
 
 const ALLOWED_EVENTS: ReadonlySet<string> = new Set([

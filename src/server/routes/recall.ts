@@ -8,8 +8,7 @@ import { RECALL_RECORDING } from '../../api/recall-finish.js';
 import { httpParams, parseContextRequest, parseRecallRequest } from '../../api/recall-request.js';
 import { resetSessionRings } from '../../api/recall-record.js';
 import { HttpError, sendJson } from '../../util/http-util.js';
-import { buildContextWithAuth } from '../auth.js';
-import type { RouteRequest } from '../types.js';
+import type { AuthedRouteRequest } from '../types.js';
 import { MAX_LIST_LIMIT, parseListLimit, validateIdSegment } from '../validation.js';
 
 /** Test-only: reset the HTTP recall rings. Call from beforeEach. */
@@ -18,9 +17,8 @@ export function __resetSessionRecallHistoryHttp(): void {
 }
 
 // GET /v1/memories?q=...&limit=...&mode=...&scope=...&include_continuity=1
-export async function handleRecallMemories({ req, res, opts, query }: RouteRequest): Promise<void> {
+export async function handleRecallMemories({ res, ctx, query }: AuthedRouteRequest): Promise<void> {
   const { opts: recallOpts, limit, mode, explain } = parseRecallRequest(httpParams(query));
-  const ctx = await buildContextWithAuth(req, opts);
   const result = await retrieve(ctx, { ...recallOpts, limit, mode, explain, recordAs: RECALL_RECORDING.http });
 
   // Continuity payloads should never be cached. The caller is asking for
@@ -34,7 +32,7 @@ export async function handleRecallMemories({ req, res, opts, query }: RouteReque
 
 // GET /v1/sessions/:id/assemble?budget=N&freshTail=N&summarizeOlder=0|1: ordered AssembledContextItem[] (fresh-tail raws, summary substitutions, bio-aware
 // budget fit). Tenant scope from the Bearer; default-deny on private rows.
-export async function handleAssembleSession({ req, res, opts, query }: RouteRequest, assembleMatch: Record<string, string>): Promise<void> {
+export async function handleAssembleSession({ res, ctx, query }: AuthedRouteRequest, assembleMatch: Record<string, string>): Promise<void> {
   validateIdSegment(assembleMatch.id!, 'session id');
   const budgetRaw = query.get('budget');
   const budget = budgetRaw === null ? undefined : Number(budgetRaw);
@@ -54,7 +52,6 @@ export async function handleAssembleSession({ req, res, opts, query }: RouteRequ
     : (sumOlderRaw === '1' || sumOlderRaw === 'true');
   const scopeQ = query.get('scope');
   const scope = scopeQ !== null && scopeQ.length > 0 ? scopeQ : undefined;
-  const ctx = await buildContextWithAuth(req, opts);
   const assembleExtra: Pick<AssembleOpts, 'budget' | 'freshTailCount' | 'summarizeOlder' | 'scope'> = {};
   if (budget !== undefined) assembleExtra.budget = budget;
   if (freshTailCount !== undefined) assembleExtra.freshTailCount = freshTailCount;
@@ -68,7 +65,7 @@ export async function handleAssembleSession({ req, res, opts, query }: RouteRequ
 
 // GET /v1/recall/drill/:id?limit=N&budget=N: companion to /v1/memories; the caller drills into a level-2 summary (RecallResultItem.isSummary) to recover the
 // originals. Tenant-scoped via Bearer; default-deny on private scopes for the summary and its children.
-export async function handleDrillRecall({ req, res, opts, query }: RouteRequest, drillMatch: Record<string, string>): Promise<void> {
+export async function handleDrillRecall({ res, ctx, query }: AuthedRouteRequest, drillMatch: Record<string, string>): Promise<void> {
   validateIdSegment(drillMatch.id!, 'summary id');
   const limitRaw = query.get('limit');
   const limit = limitRaw === null ? undefined : Number(limitRaw);
@@ -93,7 +90,6 @@ export async function handleDrillRecall({ req, res, opts, query }: RouteRequest,
     }
     depth = parsed;
   }
-  const ctx = await buildContextWithAuth(req, opts);
   const drillExtra: Pick<DrillDownOpts, 'limit' | 'budget' | 'depth'> = {};
   if (limit !== undefined) drillExtra.limit = limit;
   if (budget !== undefined) drillExtra.budget = budget;
@@ -123,9 +119,8 @@ function contextReader(hippoRoot: string, query: URLSearchParams): ProjectRef {
 
 // GET /v1/context: a budget-bounded ContextResult JSON, rendered by clients, not the server; tenant-scoped via the Bearer.
 // Pinned-only and '*' fallback skip the recall audit emit (as cmdContext does); a real-query hybrid search emits one 'recall' row.
-export async function handleGetContext({ req, res, opts, query }: RouteRequest): Promise<void> {
+export async function handleGetContext({ res, ctx, opts, query }: AuthedRouteRequest): Promise<void> {
   const parsed = parseContextRequest(httpParams(query));
-  const ctx = await buildContextWithAuth(req, opts);
   const result = await getContext(ctx, {
     ...parsed,
     currentProject: contextReader(opts.hippoRoot, query),

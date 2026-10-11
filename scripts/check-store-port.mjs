@@ -20,7 +20,7 @@ const NUMBERS = ['openersOutside', 'openersInCli', 'storeBranches', 'routesWitho
 const BY_FILE_KEYS = ['openersOutsideByFile', 'sqlOutsideByFile', 'handleHoldersOutsideByFile'];
 const HANDLE_TYPES = new Set(['DatabaseSyncLike', 'DatabaseSync']);
 // Routes dispatched outside V1_ROUTES. Named here so the count cannot read 0 while they answer on the server thread; a name leaves when its route does.
-const OFF_TABLE_ROUTES = ['POST /mcp', 'GET /mcp/stream', 'POST /v1/connectors/slack/events', 'POST /v1/connectors/github/events', 'GET /health', 'GET /ready', 'POST add-on routes'];
+const OFF_TABLE_ROUTES = ['POST /mcp', 'GET /mcp/stream', 'GET /health', 'GET /ready', 'POST add-on routes'];
 // src/store files that run no SQL yet belong there: hippo.db's shapes, SQL text and plumbing. A path ending in / covers its folder.
 const DB_DEFINITION_FILES = {
   'src/store/rows.ts': 'row shapes and column lists of hippo.db',

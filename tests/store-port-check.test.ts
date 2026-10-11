@@ -150,7 +150,7 @@ describe('check-store-port.mjs', () => {
     });
   });
 
-  it("counts routes on the loop: rows without `loop: 'off'` plus the seven routes outside the table, and reads 0 with no route table", () => {
+  it("counts routes on the loop: rows without `loop: 'off'` plus the five routes outside the table, and reads 0 with no route table", () => {
     const rows = [
       "  { method: 'GET', path: '/a', handler: a },",
       "  { method: 'GET', path: '/b', storeReady: 'base', loop: 'off', handler: b },",
@@ -159,7 +159,7 @@ describe('check-store-port.mjs', () => {
       "  { method: 'GET', path: '/e', loop: 'on', handler: e },",
     ];
     withFixture({ 'src/server/route-table.ts': `const V1_ROUTES: readonly Route[] = [\n${rows.join('\n')}\n];\n` }, null, ({ run }) => {
-      expect(list(run).routesOnLoop).toBe('10');
+      expect(list(run).routesOnLoop).toBe('8');
     });
     withFixture({ 'src/a.ts': 'export const a = 1;\n' }, null, ({ run }) => {
       expect(list(run).routesOnLoop).toBe('0');
@@ -168,16 +168,16 @@ describe('check-store-port.mjs', () => {
 
   it("fails when a row drops `loop: 'off'`, and --update locks in a row that gains it", () => {
     const table = (second: string) => `const V1_ROUTES = [\n  { method: 'GET', path: '/a', loop: 'off', handler: a },\n  { method: 'GET', path: '/b', ${second}handler: b },\n];\n`;
-    withFixture({ 'src/server/route-table.ts': table('') }, { routesWithoutStore: 2, routesOnLoop: 7 }, ({ run }) => {
+    withFixture({ 'src/server/route-table.ts': table('') }, { routesWithoutStore: 2, routesOnLoop: 5 }, ({ run }) => {
       const r = run();
       expect(r.status).toBe(1);
-      expect(r.stderr).toContain('routesOnLoop: 7 -> 8');
+      expect(r.stderr).toContain('routesOnLoop: 5 -> 6');
       expect(run('--update').status).toBe(1);
     });
-    withFixture({ 'src/server/route-table.ts': table("loop: 'off', ") }, { routesWithoutStore: 2, routesOnLoop: 8 }, ({ run, baseline }) => {
+    withFixture({ 'src/server/route-table.ts': table("loop: 'off', ") }, { routesWithoutStore: 2, routesOnLoop: 6 }, ({ run, baseline }) => {
       expect(run().status).toBe(0);
       expect(run('--update').status).toBe(0);
-      expect(baseline().routesOnLoop).toBe(7);
+      expect(baseline().routesOnLoop).toBe(5);
     });
   });
 
