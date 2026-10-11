@@ -1,5 +1,6 @@
 import { envGitHubWebhookSecret, envGitHubWebhookSecretPrevious } from '../../util/env.js';
 import type { ServerResponse } from 'node:http';
+import { DAY_MS } from '../../util/time.js';
 import { verifyGitHubSignature } from './signature.js';
 import {
   isGitHubWebhookEnvelope,
@@ -80,7 +81,7 @@ export async function handleGitHubEventsWebhook(request: WebhookRequest, store?:
 }
 
 // GitHub signs no timestamp, so a captured delivery verifies forever; this window is what refuses its replay.
-const DELIVERY_REPLAY_TTL_MS = 24 * 60 * 60 * 1000;
+const DELIVERY_REPLAY_TTL_MS = DAY_MS;
 const DELIVERY_REPLAY_MAX_IDS = 10_000;
 // SHORTCUT: seen ids live in this process and reset on restart or eviction; move them to the store if serve ever runs as several processes.
 const seenDeliveries = new Map<string, number>();

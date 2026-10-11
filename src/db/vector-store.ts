@@ -5,6 +5,7 @@ import * as path from 'path';
 import type { DatabaseSyncLike } from './index.js';
 import { withWriteScope } from './busy.js';
 import { errorCode, errorFields, log } from '../util/log.js';
+import { placeholders } from '../util/sql.js';
 
 /** Legacy whole-file index; imported once into `memory_vectors`, then kept beside the store as a renamed backup. */
 const LEGACY_EMBEDDINGS_FILE = 'embeddings.json';
@@ -75,7 +76,7 @@ function eachStoredVector(db: DatabaseSyncLike, ids: readonly string[] | undefin
   const unique = [...new Set(ids)];
   for (let i = 0; i < unique.length; i += ID_CHUNK) {
     const chunk = unique.slice(i, i + ID_CHUNK);
-    read(db.prepare(`SELECT memory_id, vector FROM memory_vectors WHERE memory_id IN (${chunk.map(() => '?').join(', ')})`).all(...chunk));
+    read(db.prepare(`SELECT memory_id, vector FROM memory_vectors WHERE memory_id IN (${placeholders(chunk.length)})`).all(...chunk));
   }
 }
 

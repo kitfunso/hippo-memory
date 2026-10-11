@@ -2,6 +2,7 @@
 import { randomUUID } from 'node:crypto';
 import { withWriteScope, type DatabaseSyncLike } from '../db/index.js';
 import { onHandle } from './open.js';
+import { placeholders } from '../util/sql.js';
 
 export type GoalStatus = 'active' | 'suspended' | 'completed';
 export type PolicyType = 'schema-fit-biased' | 'error-prioritized' | 'recency-first' | 'hybrid';
@@ -270,7 +271,7 @@ function loadGoalPolicies(db: DatabaseSyncLike, active: readonly Goal[]): Map<st
   // SAFETY: the SELECT projects exactly these seven retrieval_policy columns; MAX_ACTIVE_GOAL_DEPTH bounds the IN list.
   const rows = db.prepare(`
     SELECT id, goal_id, policy_type, weight_schema_fit, weight_recency, weight_outcome, error_priority
-    FROM retrieval_policy WHERE id IN (${policyIds.map(() => '?').join(',')})
+    FROM retrieval_policy WHERE id IN (${placeholders(policyIds.length)})
   `).all(...policyIds) as Array<{
     id: string;
     goal_id: string;
@@ -303,7 +304,7 @@ export function localGoalRecallRows(db: DatabaseSyncLike, rows: readonly GoalRec
   if (rows.length === 0) return [];
   const ids = [...new Set(rows.map((r) => r.memoryId))];
   // SAFETY: the SELECT projects exactly one column, `id`, from memories.
-  const local = db.prepare(`SELECT id FROM memories WHERE id IN (${ids.map(() => '?').join(',')})`).all(...ids) as Array<{ id: string }>;
+  const local = db.prepare(`SELECT id FROM memories WHERE id IN (${placeholders(ids.length)})`).all(...ids) as Array<{ id: string }>;
   const localIds = new Set(local.map((r) => r.id));
   return rows.filter((r) => localIds.has(r.memoryId));
 }

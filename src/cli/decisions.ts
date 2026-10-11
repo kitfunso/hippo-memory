@@ -88,7 +88,7 @@ async function decideCreate(hippoRoot: string, tenantId: string, decisionText: s
     extraTags: decisionPathTags,
   });
 
-  if (oldEntry) weakenSupersededMemory(hippoRoot, oldEntry, supersedesMemId);
+  if (oldEntry) weakenOrWarn(hippoRoot, oldEntry, supersedesMemId);
 
   console.log(`Decision recorded: #${created.id}`);
   if (created.memoryId) console.log(`  memory: ${created.memoryId}`);
@@ -103,7 +103,7 @@ function exitWithDecideUsage(): never {
   throw new CliExit(1);
 }
 
-function weakenSupersededMemory(hippoRoot: string, oldEntry: MemoryEntry, supersedesMemId: string | null): void {
+function weakenOrWarn(hippoRoot: string, oldEntry: MemoryEntry, supersedesMemId: string | null): void {
   // Best-effort and last: saveDecision already committed. Failing here would make a retry find no active
   // decision for the old memory and create a duplicate active successor, so warn instead.
   try {

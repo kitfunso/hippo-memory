@@ -8,6 +8,7 @@ import { MAX_ID_LEN } from '../util/limits.js';
 import { errorMessage, log } from '../util/log.js';
 import { originRemoteId, projectFileId } from './project-remote.js';
 import { realpathOrResolve } from '../util/real-path.js';
+import { placeholders } from '../util/sql.js';
 
 /** Project = nearest ancestor of cwd with `.hippo` (else `.git`); home and the temp root never are, and no marker means user-global (empty name).
  * Name: `.hippo-project.json`, else the normalised `origin`, else the folder name. Must not import shared.ts / store.ts / api/index.ts (cycle). */
@@ -239,7 +240,7 @@ export function assertCallerProject(project: { readonly name: string; readonly a
 
 /** `origin_project IN (?, ...)` with one placeholder per name; an empty list matches nothing. */
 export function originInSql(names: readonly string[], column = 'origin_project'): string {
-  return names.length === 0 ? '0' : `${column} IN (${names.map(() => '?').join(', ')})`;
+  return names.length === 0 ? '0' : `${column} IN (${placeholders(names.length)})`;
 }
 
 /** Classifies a memory's origin_project against the active project. An empty current id (home or markerless cwd) puts everything in scope;

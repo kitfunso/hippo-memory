@@ -16,6 +16,7 @@ import {
 } from './rows.js';
 import { onHandle, openStore } from './open.js';
 import { escapeLike } from '../util/escape.js';
+import { placeholders } from '../util/sql.js';
 
 /** Recall scope filter: 'default-deny' (exclude RECALL_DEFAULT_DENY_SCOPES), 'exact' (m.scope = value), 'default-deny-or-exact' (both; CLI `--scope`).
  * @internal Internal SQL-builder shape; not re-exported from `src/index.ts`. Subject to change. */
@@ -278,7 +279,7 @@ export async function loadVectorCandidateEntries(hippoRoot: string, queryVector:
     const matches = await topVectorMatches(db, queryVector, spec.limit ?? 50, `${tenant} AND m.kind != 'archived'${scope.sql}${current}`, params);
     if (matches.length === 0) return [];
     // SAFETY: the SELECT names exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
-    const rows = db.prepare(`SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id IN (${matches.map(() => '?').join(', ')})`)
+    const rows = db.prepare(`SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id IN (${placeholders(matches.length)})`)
       .all(...matches.map((m) => m.id)) as MemoryRow[];
     const byId = new Map(rows.map((r) => [r.id, rowToEntry(r)]));
     return matches.flatMap((m) => byId.get(m.id) ?? []);
@@ -297,7 +298,7 @@ export function pickRarestFtsQuery(db: DatabaseSyncLike, terms: readonly string[
   if (vocab.length === 0) return '';
   // SAFETY: rows' shape matches the two columns named in the SELECT.
   const rows = db
-    .prepare(`SELECT term, doc FROM temp.z1_rarest_vocab WHERE term IN (${vocab.map(() => '?').join(', ')})`)
+    .prepare(`SELECT term, doc FROM temp.z1_rarest_vocab WHERE term IN (${placeholders(vocab.length)})`)
     .all(...vocab) as Array<{ term: string; doc: number }>;
   const counts = new Map(rows.map((r) => [r.term, r.doc]));
   return rarestFtsQuery(terms, (part) => counts.get(part) ?? 0, maxTerms);

@@ -7,6 +7,7 @@ import { tableExists } from './tables.js';
 import { ensureMetaTable, getMeta, getSchemaVersion, setMeta, setSchemaVersion } from './meta.js';
 import { MEMORIES_FTS_DDL, REQUIRED_SCHEMA_OBJECTS, ensureContinuityIndexes, ensureContinuityTables } from './continuity.js';
 import { CURRENT_SCHEMA_VERSION, MIGRATIONS } from './migrations/index.js';
+import { placeholders } from '../util/sql.js';
 
 export function getCurrentSchemaVersion(): number {
   return CURRENT_SCHEMA_VERSION;
@@ -162,7 +163,7 @@ function ensureMetaDefaults(db: DatabaseSyncLike): void {
   // SAFETY: the statement selects only the `key` column of `meta`, which is TEXT NOT NULL, so each row is { key: string }.
   const present = new Set(
     (db
-      .prepare(`SELECT key FROM meta WHERE key IN (${keys.map(() => '?').join(',')})`)
+      .prepare(`SELECT key FROM meta WHERE key IN (${placeholders(keys.length)})`)
       .all(...keys) as Array<{ key: string }>)
       .map((r) => r.key),
   );

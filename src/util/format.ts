@@ -4,3 +4,8 @@
 export function pct(fraction: number): string {
   return (fraction * 100).toFixed(1) + '%';
 }
+
+/** Rounds to one decimal place. */
+export function round1(value: number): number {
+  return Math.round(value * 10) / 10;
+}

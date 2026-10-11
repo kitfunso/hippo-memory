@@ -6,6 +6,7 @@ import {
   BANDS, DAY_MS, LAYERS, isLiveMemory, memoryFacts, projectIdentity,
   type Chip, type Fact, type FilteredSet, type ProjectAgg, type Snapshot,
 } from './dashboard-snapshot.js';
+import { pct, round1 } from '../util/format.js';
 import type { MemoryQuery, SortDir, SortKey } from './dashboard-params.js';
 import type {
   ChipCounts, DecayOutlook, Kpi, MemoryConflictDetail, MemoryDetail, MemoryPage, MemoryRow, Overview,
@@ -19,10 +20,6 @@ const POINTS_MAX = 4_000;
 const GRID_COLS = 64;
 const GRID_ROWS = 32;
 const NAME_MATCHES = 3;
-
-function round1(value: number): number {
-  return Math.round(value * 10) / 10;
-}
 
 function round3(value: number): number {
   return Math.round(value * 1000) / 1000;
@@ -43,10 +40,6 @@ function cumulativeSeries(times: Iterable<number>, nowMs: number): number[] {
 
 function addedWithin(series: number[]): number {
   return series[SERIES_DAYS] - series[SERIES_DAYS - DELTA_DAYS];
-}
-
-function pct(share: number): string {
-  return `${(share * 100).toFixed(1)}%`;
 }
 
 function plural(n: number, one: string, many: string): string {

@@ -16,6 +16,7 @@ import { buildDag, buildEntityProfiles } from '../src/consolidate/dag.js';
 import { storeExtractedFacts, type ExtractedFact } from '../src/learn/extract.js';
 import { saveProjectBrief, assembleBriefFromReceipts } from '../src/objects/project-briefs.js';
 import { derivationScope, commonDerivationScope } from '../src/core/recall-scope.js';
+import { placeholders } from '../src/util/sql.js';
 
 function tmpHome(prefix: string = 'hippo-derived-scope-'): string {
   return mkdtempSync(join(tmpdir(), prefix));
@@ -200,10 +201,10 @@ describe('dag buildDag / buildEntityProfiles partition by scope', () => {
         expect(publicL2).toBeDefined();
 
         // SAFETY: SELECT projects exactly dag_parent_id; .all() returns rows in that shape.
-        const privParents = db.prepare(`SELECT DISTINCT dag_parent_id FROM memories WHERE id IN (${privFacts.map(() => '?').join(',')})`)
+        const privParents = db.prepare(`SELECT DISTINCT dag_parent_id FROM memories WHERE id IN (${placeholders(privFacts.length)})`)
           .all(...privFacts.map((f) => f.id)) as Array<{ dag_parent_id: string }>;
         // SAFETY: SELECT projects exactly dag_parent_id; .all() returns rows in that shape.
-        const pubParents = db.prepare(`SELECT DISTINCT dag_parent_id FROM memories WHERE id IN (${pubFacts.map(() => '?').join(',')})`)
+        const pubParents = db.prepare(`SELECT DISTINCT dag_parent_id FROM memories WHERE id IN (${placeholders(pubFacts.length)})`)
           .all(...pubFacts.map((f) => f.id)) as Array<{ dag_parent_id: string }>;
         expect(privParents).toHaveLength(1);
         expect(pubParents).toHaveLength(1);
@@ -254,7 +255,7 @@ describe('dag buildDag / buildEntityProfiles partition by scope', () => {
         expect(publicL3).toBeDefined();
 
         // SAFETY: SELECT projects exactly dag_parent_id; .all() returns rows in that shape.
-        const privParents = db.prepare(`SELECT DISTINCT dag_parent_id FROM memories WHERE id IN (${privL2s.map(() => '?').join(',')})`)
+        const privParents = db.prepare(`SELECT DISTINCT dag_parent_id FROM memories WHERE id IN (${placeholders(privL2s.length)})`)
           .all(...privL2s.map((l2) => l2.id)) as Array<{ dag_parent_id: string }>;
         expect(privParents).toHaveLength(1);
         expect(privParents[0]!.dag_parent_id).toBe(privateL3!.id);

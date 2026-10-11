@@ -208,7 +208,7 @@ export const OBJECT_VERBS = {
       values: ['level', 'outcome', 'parent', 'policy', 'session-id', 'success', 'tenant-id'],
     },
     usage: [`
-  goal <sub>               dlPFC goal stack (B3) — scoped per session
+  goal <sub>               Goal stack, scoped per session
     goal push <name>       Push a new active goal; prints the new goal id
       --policy <type>      schema-fit-biased | error-prioritized |
                            recency-first | hybrid

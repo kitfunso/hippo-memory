@@ -108,6 +108,6 @@ export async function runHookWithStores<T>(fn: () => T | Promise<T>): Promise<T 
 }
 
 /** Whether this session sits in the pilot's holdout arm; off at rate 0 and with no session id. */
-export function inPilotHoldout(hippoRoot: string, tenantId: string, sessionId: string | undefined, write: boolean): boolean {
-  return sessionPilotArm(hippoRoot, tenantId, sessionId, write) === 'holdout';
+export function inPilotHoldout(hippoRoot: string, tenantId: string, sessionId: string | undefined, opts: { write: boolean }): boolean {
+  return sessionPilotArm(hippoRoot, tenantId, sessionId, opts.write) === 'holdout';
 }

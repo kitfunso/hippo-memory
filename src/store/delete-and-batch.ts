@@ -15,6 +15,7 @@ import { purgeMirrorBestEffort, mirrorBestEffort, writeMarkdownMirror } from './
 import { onHandle, openStore } from './open.js';
 import { clock, type WriteBudget } from '../util/write-budget.js';
 import { chunked } from '../util/chunked.js';
+import { placeholders } from '../util/sql.js';
 
 /** Tables whose rows keep a first-class object's backing memory in `memory_id` (ON DELETE SET NULL); tests/dormant-memories.test.ts pins it to the schema. */
 export const MEMORY_BACKED_TABLES = ['predictions', 'decisions', 'incidents', 'processes', 'policies', 'skills', 'project_briefs', 'customer_notes'] as const;
@@ -149,7 +150,7 @@ function selectDeleteTargets(db: DatabaseSyncLike, ids: readonly string[]): Map<
   const rows = new Map<string, DeleteTarget>();
   for (const chunk of chunked([...new Set(ids)])) {
     // SAFETY: rows' shape matches the three columns named in the SELECT.
-    const found = db.prepare(`SELECT id, tenant_id, dag_parent_id FROM memories WHERE id IN (${chunk.map(() => '?').join(',')})`)
+    const found = db.prepare(`SELECT id, tenant_id, dag_parent_id FROM memories WHERE id IN (${placeholders(chunk.length)})`)
       .all(...chunk) as Array<DeleteTarget>;
     for (const row of found) rows.set(row.id, row);
   }
@@ -341,7 +342,7 @@ function selectAutoDeletableRows(
 ): Array<{ id: string; dag_parent_id: string | null; tenant_id: string | null }> {
   // SAFETY: rows' shape matches the three columns named in the SELECT.
   const rows = db.prepare(
-    `SELECT id, dag_parent_id, tenant_id FROM memories WHERE id IN (${ids.map(() => '?').join(',')}) AND ${AUTOMATIC_DELETE_SQL}`,
+    `SELECT id, dag_parent_id, tenant_id FROM memories WHERE id IN (${placeholders(ids.length)}) AND ${AUTOMATIC_DELETE_SQL}`,
   ).all(...ids) as Array<{ id: string; dag_parent_id: string | null; tenant_id: string | null }>;
   for (const row of rows) {
     if (row.dag_parent_id) {

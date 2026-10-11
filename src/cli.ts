@@ -107,9 +107,7 @@ export function parseArgs(argv: string[]) {
 
 export function shouldAutoRepairCodexWrapper(currentCommand: string, flags: CliFlags): boolean {
   if (envSkipAutoIntegrations()) return false;
-  if (!['context', 'remember', 'recall', 'sleep', 'capture', 'outcome', 'status', 'init'].includes(currentCommand)) {
-    return false;
-  }
+  if (!COMMAND_INDEX.get(currentCommand)?.repairsCodexWrapper) return false;
   if (currentCommand === 'init' && flagIsTrue(flags, 'no-hooks')) return false;
   return true;
 }
