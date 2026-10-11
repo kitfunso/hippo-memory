@@ -4,6 +4,7 @@ import * as path from 'node:path';
 import { stripVTControlCharacters } from 'node:util';
 import { HIPPO_ARMS } from './arms.mjs';
 import { toolInputs, toolResultTexts, hookContexts, segmentText, asSegment, SHELL_TOOLS } from './records.mjs';
+import { requestBodies } from './proxy.mjs';
 
 /** Void reasons in precedence order: the record's `void` is the first one hit. */
 export const VOID_ORDER = ['operator-canary', 'read', 'auto-memory', 'user-instructions', 'hippo-text'];
@@ -71,13 +72,40 @@ function shellWords(seg) {
   return cur === null ? words : [...words, cur];
 }
 
+const commandName = (word) => (word ?? '').replace(/^.*[\\/]/, '').replace(/\.exe$/i, '').toLowerCase();
+
+// A body that only cat or tee takes is file content, as a Write tool's is; one fed to any other command, or piped on, may be a script.
+const HEREDOC = /(?<!<)<<(?!<)(-?)\s*(['"]?)([\w.-]+)\2/g;
+const FILE_SINK = new Set(['cat', 'tee']);
+
+function onlyToFile(line, at) {
+  const cmd = commandName(shellWords(line.slice(0, at).split(/&&|\|\||[;&|(]/).at(-1))[0]);
+  return FILE_SINK.has(cmd) && !line.slice(at).split(/&&|\|\||[;&]/)[0].includes('|');
+}
+
+/** The command with each file-content heredoc body blanked; every other line stays. */
+function blankFileBodies(command) {
+  const lines = String(command ?? '').split('\n');
+  for (let i = 0, next = 0; i < lines.length; i++) {
+    if (i < next) continue;
+    next = i + 1;
+    for (const m of lines[i].matchAll(HEREDOC)) {
+      let end = next;
+      while (end < lines.length && (m[1] ? lines[end].replace(/^\t+/, '') : lines[end]) !== m[3]) end++;
+      if (onlyToFile(lines[i], m.index)) lines.fill('', next, end + 1);
+      next = end + 1;
+    }
+  }
+  return lines.join('\n');
+}
+
 /** Path tokens of a shell command as `{token, search, cwd}`; a `cd` target counts as a read and moves cwd for the rest of the command. */
 function shellPaths(command, work, opts) {
   const out = [];
   let cwd = work;
-  for (const seg of String(command ?? '').split(/&&|\|\||[;|&\n]/)) {
+  for (const seg of blankFileBodies(command).split(/&&|\|\||[;|&\n]/)) {
     const words = shellWords(seg);
-    const cmd = (words[0] ?? '').replace(/^.*[\\/]/, '').replace(/\.exe$/i, '').toLowerCase();
+    const cmd = commandName(words[0]);
     const args = words.slice(1).filter((a) => !a.startsWith('-'));
     const flags = words.slice(1).filter((a) => a.startsWith('-') || a.startsWith('/'));
     const search = SEARCH_ALWAYS.has(cmd) || flags.some((a) => RECURSIVE_FLAG[cmd]?.test(a)) || (WILDCARD_SEARCH.has(cmd) && args.some((a) => a.includes('*')));
@@ -247,6 +275,22 @@ function ownObjects(text) {
   return [...done, ...stack.filter((f) => f.obj).map((f) => f.own.join(''))];
 }
 
+// Claude Code's own wording for injected memory and hook text (seen 2026-10-10); a rewording only loses these checks, never voids a clean session.
+const AUTO_MEMORY_TEXT = "(user's auto-memory, persists across conversations)";
+const HOOK_TEXT = 'hook additional context';
+
+/** Hits from the proxy's request logs, which hold what the model received (smoke report point 1). */
+function requestHits(ctx, run, logs, fileName) {
+  const hits = [];
+  for (const log of logs) {
+    const sent = requestBodies(log).join('\n');
+    for (const c of ctx.canaries) if (sent.includes(c)) hits.push(hit('operator-canary', 'request', null, null, fileName(log)));
+    if (FLOOR_ARMS.has(run.arm) && sent.includes(AUTO_MEMORY_TEXT)) hits.push(hit('auto-memory', 'request', null, null, fileName(log)));
+    if (!HIPPO_ARMS.has(run.arm) && (sent.includes(HIPPO_MARK) || sent.includes(HOOK_TEXT))) hits.push(hit('hippo-text', 'request', null, null, fileName(log)));
+  }
+  return hits;
+}
+
 /** Hits from what the session saw: other sessions' transcript lines in tool results, canaries anywhere, hook-injected context. */
 function contentHits(ctx, run, b, files, fileName, how) {
   const hits = [];
@@ -264,6 +308,7 @@ function contentHits(ctx, run, b, files, fileName, how) {
     const raw = fs.existsSync(file) ? segmentText(seg) : '';
     for (const c of ctx.canaries) if (raw.includes(c)) hits.push(hit('operator-canary', null, null, null, fileName(file)));
   }
+  hits.push(...requestHits(ctx, run, how.requestLogs, fileName));
   if (how.outsideOnly || HIPPO_ARMS.has(run.arm)) return hits;
   for (const { file } of how.adapter.hookContexts(files)) hits.push(hit('hippo-text', 'hook', null, null, fileName(file)));
   // The Codex hook item's shape is not pinned yet (plan R16), so a rollout holding hippo's marker anywhere voids too.
@@ -273,10 +318,10 @@ function contentHits(ctx, run, b, files, fileName, how) {
 
 /** The session's G1 verdict: `void` is the highest-precedence hit's reason; `voidHits` keeps every hit, in precedence order.
  * A Codex session passes its adapter and env; `outsideOnly` keeps just the reach outside the run, for Codex's own memory threads. */
-export function sessionVoid(ctx, run, step, { files, ownIds, delivery, adapter = CLAUDE_READ, env = run.env, outsideOnly = false, markScan = false }) {
+export function sessionVoid(ctx, run, step, { files, ownIds, delivery, adapter = CLAUDE_READ, env = run.env, outsideOnly = false, markScan = false, requestLogs = /** @type {string[]} */ ([]) }) {
   const b = bounds(ctx, run, step, ownIds);
   const fileName = (f) => path.relative(ctx.outDir, f).split(path.sep).join('/');
-  const how = { adapter, env, outsideOnly, markScan };
+  const how = { adapter, env, outsideOnly, markScan, requestLogs };
   const hits = byPrecedence([...delivery, ...pathHits(run, b, files, fileName, how), ...contentHits(ctx, run, b, files, fileName, how)]);
   return { void: hits[0]?.reason ?? null, voidHits: hits };
 }

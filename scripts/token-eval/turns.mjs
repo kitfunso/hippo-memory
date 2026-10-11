@@ -4,6 +4,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { spawnTree } from './exec.mjs';
+import { startLogProxy } from './proxy.mjs';
 import { isUsageLimit, sessionFiles, findTranscript, listTranscripts } from './records.mjs';
 import { sleep } from './runs.mjs';
 import { agentGit } from './checks.mjs';
@@ -27,15 +28,37 @@ function lastJson(stdout) {
 
 const claudeLimit = (cc, result) => isUsageLimit(result, `${cc.stdout}\n${cc.stderr}`);
 
+/** The request log of one Claude Code attempt: `kind` is session or resume (prereg G1 reads what the model received). */
+export const requestLogFile = (run, taskId, kind, attempt) => path.join(run.rawDir, `${taskId}.${kind}${attempt}.requests.jsonl`);
+
+/** Every attempt's request log of one kind, cut-off attempts included: a canary anywhere counts (prereg 161). */
+export function requestLogs(run, taskId, kind) {
+  const own = new RegExp(`^${taskId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\.${kind}\\d+\\.requests\\.jsonl$`);
+  return fs.existsSync(run.rawDir) ? fs.readdirSync(run.rawDir).filter((f) => own.test(f)).sort().map((f) => path.join(run.rawDir, f)) : [];
+}
+
+/** fn(env) with the attempt's API traffic routed through a request-log proxy; no log file runs it unproxied.
+ * A base URL passed with --pass-env stays the upstream, so the log sits in front of the operator's own route. */
+async function withRequestLog(logFile, env, fn) {
+  if (!logFile) return fn(env);
+  const proxy = await startLogProxy(logFile, env.ANTHROPIC_BASE_URL ? { upstream: env.ANTHROPIC_BASE_URL } : {});
+  try {
+    return await fn({ ...env, ANTHROPIC_BASE_URL: proxy.url });
+  } finally {
+    await proxy.close();
+  }
+}
+
 /** Run a session until it is not at the plan limit, calling `reset` before each rerun (a truthy reset skips it: `stopped`); `command()` or `args()` is called once per attempt.
- * Codex passes its own command, env, limit test and redaction, so both tools share one limit loop. */
-export async function untilNotLimited(ctx, run, t, { args, input, rawName, reset, command = () => `${ctx.claude} ${args().join(' ')}`, env = run.env, isLimit = claudeLimit, redact = (text) => text }) {
+ * Codex passes its own command, env, limit test and redaction, so both tools share one limit loop; only Claude Code passes `logKind`. */
+export async function untilNotLimited(ctx, run, t, { args, input, rawName, reset, command = () => `${ctx.claude} ${args().join(' ')}`, env = run.env, isLimit = claudeLimit, redact = (text) => text, logKind = null }) {
   // Every cut-off attempt, its wait and its reset: none of it is the kept attempt's work, so wallMs leaves it out.
   let cutOffMs = 0;
   // SHORTCUT: 15-minute polls up to 24h; parse the reset time if waits get long.
   for (let attempt = 1; ; attempt++) {
     const start = performance.now();
-    const cc = await spawnTree(command(), run.dirs.work, env, ctx.sessionTimeoutMs, input);
+    const logFile = logKind ? requestLogFile(run, t.id, logKind, attempt) : null;
+    const cc = await withRequestLog(logFile, env, (e) => spawnTree(command(), run.dirs.work, e, ctx.sessionTimeoutMs, input));
     const result = lastJson(cc.stdout);
     // A hung session can print overloaded_error before it hangs; a timeout is a graded result, never a limit wait (prereg 165).
     if (cc.timedOut || !isLimit(cc, result)) return { cc, result, limitRetries: attempt - 1, cutOffMs };
@@ -58,7 +81,7 @@ export async function runSession(ctx, run, t, reset) {
     sessionId = randomUUID();
     return [...claudeArgs(ctx, run), '--session-id', sessionId];
   };
-  const session = await untilNotLimited(ctx, run, t, { args, input: t.prompt, rawName: 'limit', reset });
+  const session = await untilNotLimited(ctx, run, t, { args, input: t.prompt, rawName: 'limit', reset, logKind: 'session' });
   return { ...session, sessionId };
 }
 
@@ -79,7 +102,7 @@ export async function resumeSession(ctx, run, t, sessionId, message, afterReset 
     // Where session 1 ends in every file it wrote, subagents included, since a resume can append to any of them.
     const sizesBefore = new Map([...snap.transcripts].map(([f, bytes]) => [f, bytes.length]));
     const before = { bytesBefore: (main && sizesBefore.get(main)) || 0, sizesBefore, filesBefore: new Set(listTranscripts(projects)) };
-    return { ...(await untilNotLimited(ctx, run, t, { args: () => args, input: message, rawName: 'resume-limit', reset })), ...before };
+    return { ...(await untilNotLimited(ctx, run, t, { args: () => args, input: message, rawName: 'resume-limit', reset, logKind: 'resume' })), ...before };
   } finally {
     if (dir) fs.rmSync(dir, { recursive: true, force: true, maxRetries: 3 });
   }

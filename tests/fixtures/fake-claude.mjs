@@ -10,7 +10,7 @@ import { execSync, spawn, spawnSync } from 'node:child_process';
 
 const argv = process.argv.slice(2);
 if (argv.includes('--version')) {
-  console.log('0.0.0-fake (Claude Code)');
+  console.log('0.0.0 (Claude Code)');
   process.exit(0);
 }
 const input = fs.readFileSync(0, 'utf8');
@@ -121,7 +121,7 @@ const fill = (text) => text.replaceAll('{OUT}', OUT).replaceAll('{RUN}', path.di
 const hookLine = () => (injected ? [{ type: 'attachment', attachment: { type: 'hook_additional_context', content: [injected], hookEvent: 'UserPromptSubmit' } }] : []);
 const toolResult = (text) => ({ type: 'user', message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: `tu-${process.pid}-${toolN}`, content: text }] } });
 
-/** Read probes, emitted as tool calls and never run: READ:<p>, READ_PAST, GREP:<p>, BASH:<cmd>, ECHO:<t>, ECHO_TRANSCRIPT(_PRETTY). */
+/** Read probes, emitted as tool calls and never run: READ:<p>, READ_PAST, GREP:<p>, BASH:<cmd> (a literal \n is a newline), ECHO:<t>, ECHO_TRANSCRIPT(_PRETTY). */
 function probes(text = prompt) {
   const lines = [];
   for (const m of text.matchAll(/^(READ:\S+|READ_PAST|GREP:\S+|BASH:.+|ECHO:\S+|ECHO_TRANSCRIPT(?:_PRETTY)?)$/gm)) {
@@ -130,7 +130,7 @@ function probes(text = prompt) {
     if (kind === 'READ') lines.push(toolUse('Read', { file_path: arg }));
     else if (kind === 'READ_PAST') lines.push(toolUse('Read', { file_path: path.join(process.env.CLAUDE_CONFIG_DIR, 'projects', folder, `${randomUUID()}.jsonl`) }));
     else if (kind === 'GREP') lines.push(toolUse('Grep', { pattern: 'x', path: arg }));
-    else if (kind === 'BASH') lines.push(toolUse('Bash', { command: arg }));
+    else if (kind === 'BASH') lines.push(toolUse('Bash', { command: arg.replaceAll('\\n', '\n') }));
     else if (kind === 'ECHO') lines.push(toolUse('Bash', { command: 'echo' }), toolResult(arg));
     else {
       const old = { type: 'user', uuid: randomUUID(), sessionId: randomUUID(), message: { content: 'old' } };

@@ -12,7 +12,7 @@ import { CODEX_TOKEN_FILES, CODEX_AUTH_RE, defaultAuthFile, openAuthVault, authI
 
 export const WRAPPER_MARK = 'hippo codex wrapper';
 export const CODEX_LIMIT_RE = /usage limit|hit your (?:usage )?limit|rate[_ ]limit|too many requests/i;
-const DEFAULT_WAIT = 'poll:30000:600000';
+const DEFAULT_WAIT = 'none';
 const HOME_KEYS = new Set(['HOME', 'USERPROFILE', 'APPDATA', 'LOCALAPPDATA']);
 
 /** hippo's Codex session-end worker log in a run's home. */
@@ -91,7 +91,7 @@ export function parseHookTrust(spec = 'none') {
   throw new Error(`--codex-hook-trust must be none, flag or file:<path>, got ${spec}`);
 }
 
-/** `--codex-memory-wait none|poll:<stableMs>:<timeoutMs>`; the poll default stands until smoke sets the wait (prereg 112). */
+/** `--codex-memory-wait none|poll:<stableMs>:<timeoutMs>`; none by default, since memories are off (smoke report point 5). */
 export function parseMemoryWait(spec = DEFAULT_WAIT) {
   if (spec === 'none') return { kind: 'none' };
   const m = /^poll:(\d+):(\d+)$/.exec(String(spec));
@@ -99,7 +99,8 @@ export function parseMemoryWait(spec = DEFAULT_WAIT) {
   return { kind: 'poll', stableMs: Number(m[1]), timeoutMs: Number(m[2]) };
 }
 
-export function parseCodexMemories(spec = 'on') {
+// Off by default: Codex makes memories only from interactive threads, never `codex exec` ones, so X1 to X4 run with them off (prereg 91, smoke report point 5).
+export function parseCodexMemories(spec = 'off') {
   if (spec !== 'on' && spec !== 'off') throw new Error(`--codex-memories must be on or off, got ${spec}`);
   return spec === 'on';
 }
@@ -117,8 +118,10 @@ export function writeCodexHome(ctx, run) {
   fs.mkdirSync(path.join(home, 'appdata'), { recursive: true });
   const trust = ctx.codexHookTrust.kind === 'file' ? ctx.codexHookTrust.text.replaceAll('{hooksJson}', path.join(codexHome, 'hooks.json')) : '';
   // The file store pins the login to auth.json, so the run copy is the only one Codex reads or refreshes (plan R14).
-  // Idle hours at the documented floor of 1: at the default 6, almost no apply idles long enough to feed a later one (smoke report).
-  const toml = ['cli_auth_credentials_store = "file"', 'check_for_update_on_startup = false', '', trust.trimEnd(), '', '[features]', `memories = ${ctx.codexMemories}`, '', '[memories]', 'min_rollout_idle_hours = 1', ''];
+  // With memories on, idle hours at the documented floor of 1: at the default 6, almost no apply idles long enough to feed a later one.
+  // Plugins and apps off, like the Claude arms' --strict-mcp-config: a ChatGPT login pulls an account-dependent set whose contents vary by timing (smoke report).
+  const idle = ctx.codexMemories ? ['', '[memories]', 'min_rollout_idle_hours = 1'] : [];
+  const toml = ['cli_auth_credentials_store = "file"', 'check_for_update_on_startup = false', '', trust.trimEnd(), '', '[features]', `memories = ${ctx.codexMemories}`, 'plugins = false', 'remote_plugin = false', 'apps = false', ...idle, ''];
   fs.writeFileSync(path.join(codexHome, 'config.toml'), toml.filter((l, i) => l !== '' || toml[i - 1] !== '').join('\n'));
   run.codexLauncher = writeLauncher(bin, ctx.codexLauncher.path);
   return run.codexLauncher;
@@ -171,16 +174,22 @@ function codexVersion(launcher, env) {
   return r.stdout.trim();
 }
 
-/** The ctx fields every Codex session reads; options are checked before the vault opens, so a refused flag leaves no copy. */
-export function codexContext(opts, baseEnv = process.env) {
+/**
+ * The ctx fields every Codex session reads; options and `checkTools` (the --pins check) run before the vault opens, so a refused run leaves no copy.
+ * @param {any} opts
+ * @param {Record<string, string | undefined>} [baseEnv]
+ * @param {(tools: any) => void} [checkTools]
+ */
+export function codexContext(opts, baseEnv = process.env, checkTools = () => {}) {
   const fields = {
     codexModel: opts.codexModel ?? null, codexHookTrust: parseHookTrust(opts.codexHookTrust), codexMemoryWait: parseMemoryWait(opts.codexMemoryWait),
     codexMemories: parseCodexMemories(opts.codexMemories), codexTokenFiles: opts.codexTokenFiles ?? CODEX_TOKEN_FILES,
     codexInternalSources: opts.codexInternalSources ?? CODEX_INTERNAL_SOURCES, codexWrapperWaitMs: parseWrapperWait(opts.codexWrapperWaitMs),
   };
   const codexLauncher = resolveCodex(opts.codexBin ?? 'codex', baseEnv);
-  const version = codexVersion(codexLauncher.path, baseEnv);
-  return { ...fields, codexLauncher, codexVersion: version, codexVault: openAuthVault(opts.codexAuth ?? defaultAuthFile(baseEnv)) };
+  const tools = { ...fields, codexLauncher, codexVersion: codexVersion(codexLauncher.path, baseEnv) };
+  checkTools(tools);
+  return { ...tools, codexVault: openAuthVault(opts.codexAuth ?? defaultAuthFile(baseEnv)) };
 }
 
 /** A login failure stops the run: a run that goes on without a login would fill cells with a broken tool (plan R6). */

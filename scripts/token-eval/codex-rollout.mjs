@@ -177,8 +177,8 @@ function fnCalls(name, argText) {
 export const patchPaths = (patch) => [...String(patch).matchAll(/^\*\*\* (?:(?:Add|Update|Delete) File|Move to): (.+)$/gm)].map((m) => m[1].trim());
 
 const outputText = (output) => (Array.isArray(output) ? output.map((p) => p.text ?? '').join('\n') : String(output ?? ''));
-// SHORTCUT: the hook item's shape is the fake's own field; smoke names the real one (plan R16).
-const isHookItem = (p) => p.type === 'message' && p.z0_fake_hook === true;
+// Codex 0.153.4 tags hook output in the message's metadata, not its text (plan R16, settled by the smoke).
+const isHookItem = (p) => p.type === 'message' && p.internal_chat_message_metadata_passthrough?.content_item_kinds?.includes('hooks.additional_context') === true;
 const bump = (counts, name) => { counts[name] = (counts[name] ?? 0) + 1; };
 
 /** One call into the out lists: Bash and Edit shapes for paths, a count by name, an unparsed count when no path can be read. */
