@@ -4,6 +4,7 @@ import { withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
 import { archiveRawMemory } from '../raw-archive.js';
 import { onHandle } from '../open.js';
 import type { ConnectorEventRecord } from '../port.js';
+import { getDlqRow, insertDlqRow, listDlqRows, markDlqRetried, type DlqRawRow } from './dlq.js';
 
 /** One github_event_log row to write; `memoryId` is null for an event that produced no memory. */
 export interface GitHubEventLogEntry {
@@ -112,53 +113,9 @@ export interface GitHubDlqInsert {
   bucket: DlqBucket;
 }
 
-function insertGitHubDlqAt(db: DatabaseSyncLike, row: GitHubDlqInsert): number {
-  const result = db
-    .prepare(
-      `INSERT INTO github_dlq
-        (tenant_id, raw_payload, error, event_name, delivery_id, signature,
-         installation_id, repo_full_name, received_at, bucket)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    )
-    .run(
-      row.tenantId,
-      row.rawPayload,
-      row.error,
-      row.eventName ?? null,
-      row.deliveryId ?? null,
-      row.signature,
-      row.installationId ?? null,
-      row.repoFullName ?? null,
-      new Date().toISOString(),
-      row.bucket,
-    );
-  return Number(result.lastInsertRowid);
-}
-
-export function insertGitHubDlq(hippoRoot: string, row: GitHubDlqInsert): number {
-  return onHandle(hippoRoot, (db) => insertGitHubDlqAt(db, row));
-}
-
 const SELECT_COLUMNS = `id, tenant_id, raw_payload, error, event_name, delivery_id,
             signature, installation_id, repo_full_name, retry_count,
             received_at, retried_at, bucket`;
-
-// The driver returns each column by its stored affinity; rowToItem coerces every field, so a named union is contract enough.
-type DlqRawRow = {
-  id: string | number | bigint;
-  tenant_id: string | number | bigint | null;
-  raw_payload: string | number | bigint | null;
-  error: string | number | bigint | null;
-  event_name: string | number | bigint | null;
-  delivery_id: string | number | bigint | null;
-  signature: string | number | bigint | null;
-  installation_id: string | number | bigint | null;
-  repo_full_name: string | number | bigint | null;
-  retry_count: string | number | bigint | null;
-  received_at: string | number | bigint | null;
-  retried_at: string | number | bigint | null;
-  bucket: string | number | bigint | null;
-};
 
 function rowToItem(r: DlqRawRow): DlqItem {
   return {
@@ -178,50 +135,34 @@ function rowToItem(r: DlqRawRow): DlqItem {
   };
 }
 
-function listGitHubDlqAt(db: DatabaseSyncLike, tenantId: string, limit: number): DlqItem[] {
-  // SAFETY: SELECT_COLUMNS projects exactly DlqRawRow's fields.
-  const rows = db
-    .prepare(
-      `SELECT ${SELECT_COLUMNS}
-         FROM github_dlq
-        WHERE tenant_id = ?
-        ORDER BY received_at ASC
-        LIMIT ?`,
-    )
-    .all(tenantId, limit) as DlqRawRow[];
-  return rows.map(rowToItem);
+export function insertGitHubDlq(hippoRoot: string, row: GitHubDlqInsert): number {
+  return onHandle(hippoRoot, (db) =>
+    insertDlqRow(db, 'github_dlq', [
+      ['tenant_id', row.tenantId],
+      ['raw_payload', row.rawPayload],
+      ['error', row.error],
+      ['event_name', row.eventName ?? null],
+      ['delivery_id', row.deliveryId ?? null],
+      ['signature', row.signature],
+      ['installation_id', row.installationId ?? null],
+      ['repo_full_name', row.repoFullName ?? null],
+      ['bucket', row.bucket],
+    ]));
 }
 
 export function listGitHubDlq(hippoRoot: string, tenantId: string, limit: number): DlqItem[] {
-  return onHandle(hippoRoot, (db) => listGitHubDlqAt(db, tenantId, limit));
-}
-
-function githubDlqEntryAt(db: DatabaseSyncLike, id: number): DlqItem | null {
-  // SAFETY: SELECT_COLUMNS projects exactly DlqRawRow's fields.
-  const row = db
-    .prepare(
-      `SELECT ${SELECT_COLUMNS}
-         FROM github_dlq
-        WHERE id = ?`,
-    )
-    .get(id) as DlqRawRow | undefined;
-  if (!row) return null;
-  return rowToItem(row);
+  return onHandle(hippoRoot, (db) => listDlqRows(db, 'github_dlq', SELECT_COLUMNS, tenantId, limit).map(rowToItem));
 }
 
 export function githubDlqEntry(hippoRoot: string, id: number): DlqItem | null {
-  return onHandle(hippoRoot, (db) => githubDlqEntryAt(db, id));
+  return onHandle(hippoRoot, (db) => {
+    const row = getDlqRow(db, 'github_dlq', SELECT_COLUMNS, id);
+    return row ? rowToItem(row) : null;
+  });
 }
 
 export function markGitHubDlqRetried(hippoRoot: string, id: number): void {
-  onHandle(hippoRoot, (db) => {
-    db.prepare(
-      `UPDATE github_dlq
-          SET retry_count = retry_count + 1,
-              retried_at = ?
-        WHERE id = ?`,
-    ).run(new Date().toISOString(), id);
-  });
+  onHandle(hippoRoot, (db) => markDlqRetried(db, 'github_dlq', id));
 }
 
 /** What the routing tables say about one webhook; `tenant` is the installation match, or the repo match when no installation was sent. */
