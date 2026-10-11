@@ -8,7 +8,7 @@ import { embedMemory } from '../search/embed-memories.js';
 import {
   extractInvalidationTarget, invalidateMatching, invalidateMatchingAmong, type InvalidationOptions, type InvalidationResult, type InvalidationTarget,
 } from '../learn/invalidation.js';
-import { computeSchemaFit, createMemory, Layer, type MemoryEntry } from '../core/memory.js';
+import { createMemory, Layer, schemaFitFrom, schemaFitSourceOf, type MemoryEntry } from '../core/memory.js';
 import { extractPathTags } from '../search/path-context.js';
 import { canReadScope, personalScopeOf } from '../core/recall-scope.js';
 import { touchableScopeSql } from '../store/rule-sql.js';
@@ -78,6 +78,8 @@ function landLessons(
   full: boolean,
 ): void {
   if (batch.length === 0) return;
+  // SHORTCUT: hippo.db only, as the port has no batch write, stats bump or whole-tenant read, so another store kind answers 501 at the
+  // open; port groups for them once a served store must learn.
   const landed: MemoryEntry[] = [];
   writeEntriesSkippingRejected(ctx.hippoRoot, (put) => {
     for (const { entry, key } of batch) {
@@ -107,6 +109,8 @@ function writeLessons(ctx: Context, lessons: readonly string[], opts: LearnOpts,
     // Schema fit needs every row; without it, only rows holding a lesson's longest word can be its copy. Learn is host-admin only, so
     // both read what an admin can.
     const existing = profile.full ? live.filter((e) => e.scope == null || canReadScope(ctx.actor, e.scope)) : undefined;
+    // Each lesson is scored against `existing` as it was before the batch, so its tag counts and texts are read once.
+    const fitSource = existing && schemaFitSourceOf(existing);
     const readable = touchableScopeSql('', personalScopeOf(ctx.actor));
     const keys = storedTextKeys(existing ?? loadTextsHoldingWords(hippoRoot, tenantId, lessons.map(longestWord), undefined, readable));
     const pathTags = profile.full ? extractPathTags(opts.repoPath) : [];
@@ -128,7 +132,7 @@ function writeLessons(ctx: Context, lessons: readonly string[], opts: LearnOpts,
         tags: [...profile.tags],
         source: profile.source,
         confidence: 'observed',
-        schema_fit: existing && computeSchemaFit(lesson, [...profile.tags], existing),
+        schema_fit: fitSource && schemaFitFrom(lesson, [...profile.tags], fitSource),
         tenantId,
         baseHalfLifeDays: config.defaultHalfLifeDays,
       });

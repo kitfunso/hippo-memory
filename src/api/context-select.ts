@@ -10,7 +10,7 @@ import { isWorthSurfacing } from '../core/memory-quality.js';
 import { rankBothStores } from '../sharing/search-both.js';
 import { evalNow } from '../core/ablation.js';
 import { hybridSearch } from '../search/hybrid.js';
-import { physicsSearch } from '../search/physics-search.js';
+import { physicsSearchIn } from '../search/physics-search.js';
 import type { HybridVectorCandidates } from '../search/vector.js';
 import { DEFAULT_LOCAL_BUMP, type SearchResult } from '../core/search-types.js';
 import { compareScoredResults } from '../core/compare.js';
@@ -433,15 +433,13 @@ async function searchLocalRows(ctx: Context, plan: ContextPlan, options: SearchL
   const vectorCandidates = contextVectorSpec(ctx, plan, admit);
   const store = plan.local.store;
   const ctxResults = usePhysicsCtx
-    ? await physicsSearch(query, localEntries, {
+    ? await physicsSearchIn({ root: ctx.hippoRoot, store }, query, localEntries, {
         budget: left,
         minResults,
         cost: localCost,
-        hippoRoot: ctx.hippoRoot,
         physicsConfig: ctxConfig.physics,
         scope: plan.activeScope,
         vectorCandidates,
-        store,
       })
     : await hybridSearch(query, localEntries, {
         budget: left,

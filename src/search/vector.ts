@@ -7,7 +7,7 @@ import { resolveEmbeddingProvider, type EmbeddingProvider } from '../embeddings/
 import { rethrowIfSqliteBlocked } from '../util/sqlite-blocked.js';
 import { errorMessage, log } from '../util/log.js';
 import { envQueryEmbedTimeoutMs } from '../util/env.js';
-import { requireGroup, sqliteStore, type HippoStore, type VectorReads } from '../store/index.js';
+import { requireGroup, type HippoStore, type VectorReads } from '../store/index.js';
 import { redactSecretsStrict } from '../util/secret-detect.js';
 import { currentEntries, type CurrentnessOptions } from './as-of.js';
 
@@ -23,11 +23,14 @@ export interface VectorArm {
   queryVector: number[];
 }
 
+/** Where the vector arm reads: the embedding provider configured under `root`, and the vectors `store` holds. */
+export interface VectorSource {
+  readonly root: string;
+  readonly store: HippoStore;
+}
+
 export interface VectorArmOptions extends CurrentnessOptions {
-  hippoRoot?: string;
   vectorCandidates?: HybridVectorCandidates;
-  /** Where vectors are read; hippo.db under `hippoRoot` when unset. */
-  store?: HippoStore;
   /** The deadline a caller already started for this recall's query embedding; a fresh budget when unset. */
   queryEmbedDeadline?: AbortSignal;
 }
@@ -84,11 +87,13 @@ export async function vectorCandidatesOutside(
 }
 
 /** Embeds the query and loads stored vectors; any failure leaves BM25 to rank alone. */
-export async function resolveVectorArm(query: string, entries: MemoryEntry[], options: VectorArmOptions): Promise<VectorArm> {
+export async function resolveVectorArm(
+  query: string, entries: MemoryEntry[], source: VectorSource | undefined, options: VectorArmOptions,
+): Promise<VectorArm> {
   const arm: VectorArm = { entries, addedRows: false, useEmbeddings: false, embeddingIndex: {}, queryVector: [] };
-  if (!options.hippoRoot) return arm;
+  if (!source) return arm;
   try {
-    await fillVectorArm(arm, query, options.hippoRoot, options);
+    await fillVectorArm(arm, query, source, options);
   } catch (err) {
     rethrowIfSqliteBlocked(err);
     warnBm25Fallback('error', errorMessage(err));
@@ -101,10 +106,9 @@ async function storedVectorsOf(store: HippoStore, reads: VectorReads, ids: reado
   return store.vectorViews ? store.vectorViews.storedVectorViews(ids) : reads.storedVectors(ids);
 }
 
-async function fillVectorArm(arm: VectorArm, query: string, root: string, options: VectorArmOptions): Promise<void> {
+async function fillVectorArm(arm: VectorArm, query: string, { root, store }: VectorSource, options: VectorArmOptions): Promise<void> {
   const provider = resolveEmbeddingProvider(root);
   if (!provider.isAvailable()) return;
-  const store = options.store ?? sqliteStore(root);
   const reads = requireVectorReads(store);
   const index = await reads.embeddingIndexState();
   if (indexNeedsRebuild(indexedModel(index), provider.id)) {

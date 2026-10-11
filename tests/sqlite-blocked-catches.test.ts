@@ -12,6 +12,7 @@ import { strengthenRetrieved } from '../src/store/entry-writes.js';
 import { writeRecallTraceAtRoot } from '../src/store/recall-trace.js';
 import { resolveIndexedEmbeddingModel } from '../src/store/embeddings/index.js';
 import { resolveVectorArm } from '../src/search/vector.js';
+import { sqliteStore } from '../src/store/index.js';
 import { physicsSearch } from '../src/search/physics-search.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 
@@ -38,7 +39,7 @@ const ROWS: readonly Row[] = [
   })), 'null'],
   ['embeddings.ts loadStoredEmbeddingModel', /loadStoredEmbeddingModel/, async (root) => String(resolveIndexedEmbeddingModel(root, {})), 'null'],
   ['search/vector.ts resolveVectorArm', /fillVectorArm/,
-    async (root) => `embeddings ${(await resolveVectorArm('deploy', [], { hippoRoot: root })).useEmbeddings}`, 'embeddings false'],
+    async (root) => `embeddings ${(await resolveVectorArm('deploy', [], { root, store: sqliteStore(root) }, {})).useEmbeddings}`, 'embeddings false'],
   ['search/physics-search.ts physicsQueryVector', /physicsQueryVector/,
     async (root) => ranked(await physicsSearch('deploy', [entry], { hippoRoot: root })), 'ranked 1'],
   ['search/physics-search.ts withVectorCandidates', /withVectorCandidates/, async (root) => ranked(await physicsSearch('deploy', [entry], {

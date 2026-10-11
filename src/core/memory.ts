@@ -481,13 +481,18 @@ export function computeSchemaFit(
   tags: string[],
   existingEntries: MemoryEntry[]
 ): number {
+  return schemaFitFrom(content, tags, schemaFitSourceOf(existingEntries));
+}
+
+/** What schema fit reads from `entries`, built once for a caller that scores many contents against the same rows. */
+export function schemaFitSourceOf(entries: readonly MemoryEntry[]): SchemaFitSource {
   const tagCounts = new Map<string, number>();
-  for (const entry of existingEntries) {
+  for (const entry of entries) {
     for (const tag of entry.tags) {
       tagCounts.set(tag, (tagCounts.get(tag) ?? 0) + 1);
     }
   }
-  return schemaFitFrom(content, tags, { rows: existingEntries.length, tagCounts, contents: existingEntries.map((e) => e.content) });
+  return { rows: entries.length, tagCounts, contents: entries.map((e) => e.content) };
 }
 
 /** What schema fit reads from a set of memories, so a store can answer without loading its rows. */

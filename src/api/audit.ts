@@ -2,7 +2,7 @@
 
 import { pruneAuditRows, type AuditEvent, type AuditOp } from '../store/audit.js';
 import { auditMemories, type AuditIssue, type AuditResult } from '../core/memory-audit.js';
-import { deleteEntry, memoriesBackingObjects } from '../store/delete-and-batch.js';
+import { deleteEntriesAutomatically, memoriesBackingObjects } from '../store/delete-and-batch.js';
 import { loadAllEntries } from '../store/entry-reads.js';
 import { repairAutomaticMemories, repairQualityOnce, type QualityRepairResult } from '../store/quality-repair.js';
 import { DAY_MS } from '../util/time.js';
@@ -31,12 +31,14 @@ export type AuditPass = 'audit --fix' | 'sleep-audit';
 
 /** Delete the memories an audit marked as errors, each with its own forget row, and answer the ids that went: a pinned or raw row stays. */
 export function removeAuditErrors(ctx: Context, pass: AuditPass, issues: readonly AuditIssue[]): string[] {
-  return issues
+  const removals = issues
     .filter((issue) => issue.severity === 'error')
-    .filter((issue) => deleteEntry(ctx.hippoRoot, issue.memoryId, { actor: ctx.actor.subject, reason: `${pass}: ${issue.reason}`, automatic: true }))
-    .map((issue) => issue.memoryId);
+    .map((issue) => ({ id: issue.memoryId, reason: `${pass}: ${issue.reason}` }));
+  return deleteEntriesAutomatically(ctx.hippoRoot, removals, ctx.actor.subject);
 }
 
+// SHORTCUT: hippo.db only, as the port has no whole-tenant read, backing-object read or automatic delete with a reason; another store kind
+// answers 501 at the open. Port groups for them once a served store must audit.
 /** The caller's memories run through the quality audit; a memory that backs an object is never marked for removal. */
 export function auditMemoryQuality(ctx: Context): AuditResult {
   return auditMemories(loadAllEntries(ctx.hippoRoot, ctx.tenantId), memoriesBackingObjects(ctx.hippoRoot));

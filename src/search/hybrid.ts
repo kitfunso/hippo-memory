@@ -9,13 +9,13 @@ import { bm25Score, buildCorpus, entryText, type BM25Corpus } from './bm25.js';
 import { currentEntries } from './as-of.js';
 import { summaryScoring, type BoostContext } from './boosts.js';
 import { temporalContext } from './temporal.js';
-import { denseScores, resolveVectorArm, type HybridVectorCandidates, type VectorArm } from './vector.js';
+import { denseScores, resolveVectorArm, type HybridVectorCandidates, type VectorArm, type VectorSource } from './vector.js';
 import { fuseRanks, type GraphStreamOptions } from './fusion.js';
 import { scoreHybridPool } from './hybrid-score.js';
 import { applyMmrWindow, applyReranker } from './rerank.js';
 import { dedupeExtracted, fitBudget, withDagChildren } from './finalize.js';
 import { DEFAULT_RECALL_BUDGET, type ResultCost, type SearchResult } from '../core/search-types.js';
-import type { HippoStore } from '../store/index.js';
+import { sqliteStore, type HippoStore } from '../store/index.js';
 
 export interface HybridSearchOptions {
   budget?: number;
@@ -72,7 +72,7 @@ export async function hybridSearch(query: string, entries: MemoryEntry[], option
   const queryTerms = tokenize(query);
   if (queryTerms.length === 0) return [];
 
-  const arm = await resolveVectorArm(query, pool, options);
+  const arm = await resolveVectorArm(query, pool, vectorSourceOf(options), options);
   // A prepared corpus covers the caller's entries only, so rows the vector arm added force a rebuild.
   const corpus = (arm.addedRows ? undefined : options.preparedCorpus) ?? buildCorpus(arm.entries.map(entryText));
   const bm25Scores = arm.entries.map((_, i) => bm25Score(corpus, i, queryTerms));
@@ -94,6 +94,11 @@ export async function hybridSearch(query: string, entries: MemoryEntry[], option
   scored.sort(compareScoredResults);
   const ordered = await orderHybrid(query, withDagChildren(dedupeExtracted(scored), arm.entries), arm, options);
   return fitBudget(ordered, options.budget ?? DEFAULT_RECALL_BUDGET, options.minResults ?? 1, options.cost);
+}
+
+/** hippo.db under `hippoRoot` when the caller passed no store: the default lives on this exported entry, never inside the vector arm. */
+export function vectorSourceOf({ hippoRoot, store }: { hippoRoot?: string; store?: HippoStore }): VectorSource | undefined {
+  return hippoRoot ? { root: hippoRoot, store: store ?? sqliteStore(hippoRoot) } : undefined;
 }
 
 function hybridBoostContext(query: string, pool: MemoryEntry[], now: Date, options: HybridSearchOptions): BoostContext {

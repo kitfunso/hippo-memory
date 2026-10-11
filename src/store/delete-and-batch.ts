@@ -14,6 +14,7 @@ import { deleteFtsRow, replaceFtsRows, stampOriginProject, upsertMemoryRow } fro
 import { purgeMirrorBestEffort, mirrorBestEffort, writeMarkdownMirror } from './mirrors.js';
 import { onHandle, openStore } from './open.js';
 import { clock, type WriteBudget } from '../util/write-budget.js';
+import { chunked } from '../util/chunked.js';
 
 /** Tables whose rows keep a first-class object's backing memory in `memory_id` (ON DELETE SET NULL); tests/dormant-memories.test.ts pins it to the schema. */
 export const MEMORY_BACKED_TABLES = ['predictions', 'decisions', 'incidents', 'processes', 'policies', 'skills', 'project_briefs', 'customer_notes'] as const;
@@ -71,9 +72,22 @@ export function deleteEntryCore(
   // SAFETY: row's shape matches the three columns named in the SELECT above.
   const row = db
     .prepare(`SELECT id, tenant_id, dag_parent_id FROM memories WHERE id = ?`)
-    .get(id) as { id?: string; tenant_id?: string; dag_parent_id?: string | null } | undefined;
-  if (!row?.id) return null;
+    .get(id) as DeleteTarget | undefined;
+  return row?.id ? deleteTargetRow(db, row, opts) : null;
+}
 
+interface DeleteTarget {
+  id: string;
+  tenant_id?: string;
+  dag_parent_id?: string | null;
+}
+
+function deleteTargetRow(
+  db: DatabaseSyncLike,
+  row: DeleteTarget,
+  opts?: { actor?: string; suppressForgetAudit?: boolean; reason?: string; automatic?: boolean },
+): { tenantId: string; dagParentId: string | null } | null {
+  const { id } = row;
   const guard = opts?.automatic ? ` AND ${AUTOMATIC_DELETE_SQL}` : '';
   if (deleteMemoryRow(db, `DELETE FROM memories WHERE id = ?${guard}`, id) === 0) return null;
   deleteFtsRow(db, id);
@@ -112,6 +126,34 @@ function deleteEntryOn(
 
   purgeMirrorBestEffort(hippoRoot, id, false, 'deleteEntry');
   return true;
+}
+
+/** deleteEntry with `automatic` for each removal and its own forget row and reason, all in one transaction after one read of the id set.
+ *  Returns the ids deleted, in `removals` order; a missing, repeated, pinned, raw or object-backing id is left out. */
+export function deleteEntriesAutomatically(hippoRoot: string, removals: readonly { id: string; reason: string }[], actor: string): string[] {
+  if (removals.length === 0) return [];
+  const deleted = onHandle(hippoRoot, (db) => withWriteScope(db, 'delete_entries_automatically', () => {
+    const rows = selectDeleteTargets(db, removals.map((removal) => removal.id));
+    return removals
+      .filter(({ id, reason }) => {
+        const row = rows.get(id);
+        return row !== undefined && deleteTargetRow(db, row, { actor, reason, automatic: true }) !== null;
+      })
+      .map((removal) => removal.id);
+  }), openStore);
+  for (const id of deleted) purgeMirrorBestEffort(hippoRoot, id, false, 'deleteEntry');
+  return deleted;
+}
+
+function selectDeleteTargets(db: DatabaseSyncLike, ids: readonly string[]): Map<string, DeleteTarget> {
+  const rows = new Map<string, DeleteTarget>();
+  for (const chunk of chunked([...new Set(ids)])) {
+    // SAFETY: rows' shape matches the three columns named in the SELECT.
+    const found = db.prepare(`SELECT id, tenant_id, dag_parent_id FROM memories WHERE id IN (${chunk.map(() => '?').join(',')})`)
+      .all(...chunk) as Array<DeleteTarget>;
+    for (const row of found) rows.set(row.id, row);
+  }
+  return rows;
 }
 
 /** Each row as the caller loaded it, by id; a `ReadonlyMap` fits. */

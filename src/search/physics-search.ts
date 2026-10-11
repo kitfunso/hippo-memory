@@ -9,13 +9,15 @@ import { DEFAULT_PHYSICS_CONFIG, type PhysicsConfig } from '../core/physics-conf
 import { rethrowIfSqliteBlocked } from '../util/sqlite-blocked.js';
 import { compareScoredResults } from '../core/compare.js';
 import { errorMessage, log } from '../util/log.js';
-import { sqliteStore, type HippoStore, type VectorReads } from '../store/index.js';
+import type { HippoStore, VectorReads } from '../store/index.js';
 import { churnStaleFactor, summaryMultipliers, summaryScoring, type SummaryScoring } from './boosts.js';
 import { addDagFields, ageInDays } from './breakdown.js';
 import { fitBudget } from './finalize.js';
-import { hybridSearch } from './hybrid.js';
+import { hybridSearch, vectorSourceOf } from './hybrid.js';
 import { currentEntries } from './as-of.js';
-import { embedQueryBy, requireVectorReads, startQueryEmbedDeadline, vectorCandidatesOutside, type HybridVectorCandidates } from './vector.js';
+import {
+  embedQueryBy, requireVectorReads, startQueryEmbedDeadline, vectorCandidatesOutside, type HybridVectorCandidates, type VectorSource,
+} from './vector.js';
 import { DEFAULT_RECALL_BUDGET, type ResultCost, type ScoreBreakdown, type SearchResult } from '../core/search-types.js';
 
 export interface PhysicsSearchOptions {
@@ -55,32 +57,41 @@ interface PhysicsScoring {
   summary: SummaryScoring;
 }
 
-/** Scores memories by gravity, momentum and cluster amplification; rows without physics state rank through hybridSearch. */
+/** Scores memories by gravity, momentum and cluster amplification; rows without physics state rank through hybridSearch.
+ *  Reads hippo.db under `hippoRoot` when no store is passed. */
 export async function physicsSearch(query: string, entries: MemoryEntry[], options: PhysicsSearchOptions = {}): Promise<SearchResult[]> {
+  const source = entries.length > 0 ? vectorSourceOf(options) : undefined;
+  return source ? physicsSearchIn(source, query, entries, options) : [];
+}
+
+/** physicsSearch on the store the caller names, so a caller holding its request's store never falls back to hippo.db. */
+export async function physicsSearchIn(
+  source: VectorSource, query: string, entries: MemoryEntry[], options: PhysicsSearchOptions = {},
+): Promise<SearchResult[]> {
   const now = options.now ?? evalNow(); // honors HIPPO_FAKE_NOW (eval-only; see ablation.ts)
   const explain = options.explain ?? false;
   const scoring: PhysicsScoring = { now, explain, summary: summaryScoring(options) };
-  if (entries.length === 0 || !options.hippoRoot) return [];
+  if (entries.length === 0) return [];
+  const { root, store } = source;
+  const hybrid = { ...options, hippoRoot: root, store };
   // memory_physics keeps only current positions and masses, so a past-dated query must rank without them.
-  if (options.asOf) return hybridSearch(query, entries, options);
-  const root = options.hippoRoot;
-  const store = options.store ?? sqliteStore(root);
+  if (options.asOf) return hybridSearch(query, entries, hybrid);
 
   // Shared with every hybrid ranking below, so a provider that stalls here is not waited on a second time.
   const queryEmbedDeadline = startQueryEmbedDeadline();
   const queryVector = await physicsQueryVector(query, root, store, queryEmbedDeadline, options.queryEmbedding);
-  if (!queryVector) return hybridSearch(query, entries, { ...options, queryEmbedDeadline });
+  if (!queryVector) return hybridSearch(query, entries, { ...hybrid, queryEmbedDeadline });
   // Checked here too, since a caller's own query vector skips the check inside physicsQueryVector.
   const reads = requireVectorReads(store);
   const pool = currentEntries(await withVectorCandidates(reads, entries, queryVector, options.vectorCandidates), options);
   const physicsMap = await loadCandidateParticles(reads, pool);
-  if (!physicsMap) return hybridSearch(query, pool, { ...options, queryEmbedDeadline });
+  if (!physicsMap) return hybridSearch(query, pool, { ...hybrid, queryEmbedDeadline });
 
   const pools = splitByParticle(pool, physicsMap, queryVector, now);
   const config = options.physicsConfig ?? DEFAULT_PHYSICS_CONFIG;
   const physicsResults = scorePhysicsPool(pools, queryVector, config, scoring);
   const classicResults = pools.classic.length > 0
-    ? await hybridSearch(query, pools.classic, { ...options, queryEmbedDeadline, vectorCandidates: undefined, budget: Infinity, explain })
+    ? await hybridSearch(query, pools.classic, { ...hybrid, queryEmbedDeadline, vectorCandidates: undefined, budget: Infinity, explain })
     : [];
   const merged = mergeScorePools(physicsResults, classicResults);
   merged.sort(compareScoredResults);
