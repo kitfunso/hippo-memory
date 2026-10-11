@@ -18,6 +18,7 @@ import { dispose, hippo, project, type Project } from './_helpers/delivery-bound
 import { upsertEntryRow } from '../src/store/entry-row.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { fire } from './_helpers/host-transcript.js';
+import { trySymlink } from './_helpers/symlink.js';
 import { parseTranscript } from '../scripts/z10/transcript.mjs';
 
 const SCRIPT = path.resolve(__dirname, '..', 'scripts', 'z10-reconstruct.mjs');
@@ -474,14 +475,7 @@ describe('store paths through a link', () => {
 
   /** A junction to `target`, or null when this machine cannot create one. */
   function link(target: string, l: string): string | null {
-    try {
-      fs.symlinkSync(target, l, 'junction');
-    } catch (err) {
-      // SAFETY: fs.symlinkSync throws only errno exceptions.
-      if ((err as NodeJS.ErrnoException).code === 'EPERM') return null;
-      throw err;
-    }
-    return l;
+    return trySymlink(target, l, 'junction') ? l : null;
   }
 
   const rawRows = (root: string) => {

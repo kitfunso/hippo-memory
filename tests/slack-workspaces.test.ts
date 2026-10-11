@@ -5,7 +5,7 @@
  * to avoid cross-test state.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -69,11 +69,15 @@ describe('slack workspaces helper', () => {
   });
 
   it('addWorkspace generates monotonically-increasing addedAt timestamps', async () => {
-    const first = addWorkspace(hippoRoot, { teamId: 'T01', tenantId: 'a' });
-    // Real new Date() across two add calls in the same ms can collide.
-    // 2ms sleep guarantees distinct ISO timestamps.
-    await new Promise((r) => setTimeout(r, 2));
-    const second = addWorkspace(hippoRoot, { teamId: 'T02', tenantId: 'b' });
-    expect(second.addedAt >= first.addedAt).toBe(true);
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      vi.setSystemTime(new Date('2026-01-01T00:00:00.000Z'));
+      const first = addWorkspace(hippoRoot, { teamId: 'T01', tenantId: 'a' });
+      vi.setSystemTime(new Date('2026-01-01T00:00:01.000Z'));
+      const second = addWorkspace(hippoRoot, { teamId: 'T02', tenantId: 'b' });
+      expect(second.addedAt > first.addedAt).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

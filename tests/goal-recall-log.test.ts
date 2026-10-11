@@ -7,31 +7,15 @@
 // HIPPO_HOME global root, HIPPO_SKIP_AUTO_INTEGRATIONS=1, initStore on the
 // per-test .hippo dir. This prevents dev-machine memories from leaking in.
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { initStore } from '../src/store/open.js';
 import { remember, type HippoDbContext } from '../src/api/index.js';
 import { pushGoal } from '../src/store/goals.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
+import { makeEnv, type TestEnv } from './_helpers/cli-env.js';
 
 const CLI = join(process.cwd(), 'dist', 'cli.js');
-
-interface TestEnv {
-  cwd: string;
-  hippoRoot: string;
-  globalRoot: string;
-}
-
-function makeEnv(): TestEnv {
-  const cwd = mkdtempSync(join(tmpdir(), 'hippo-b3-recall-log-'));
-  const hippoRoot = join(cwd, '.hippo');
-  const globalRoot = join(cwd, 'global-hippo');
-  mkdirSync(globalRoot, { recursive: true });
-  initStore(hippoRoot);
-  return { cwd, hippoRoot, globalRoot };
-}
 
 function runRecall(env: TestEnv, query: string, sessionId: string, extraArgs: string[] = []) {
   return execFileSync(
@@ -57,7 +41,7 @@ describe('goal_recall_log captured from real CLI recall', () => {
   let env: TestEnv;
 
   beforeEach(() => {
-    env = makeEnv();
+    env = makeEnv('b3-recall-log');
   });
 
   afterEach(() => {

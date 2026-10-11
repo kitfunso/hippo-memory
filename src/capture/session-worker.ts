@@ -3,7 +3,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { homeDir } from '../util/agent-homes.js';
-import { errorMessage, log as logger } from '../util/log.js';
+import { errorCode, errorMessage, log as logger } from '../util/log.js';
 import { isObjectLike, isStringValue, type ProgressCursor } from '../core/capture-contract.js';
 import { SESSION_ID_RE } from './copilot-transcript.js';
 import type { SessionTurn } from './transcript.js';
@@ -87,16 +87,23 @@ function releaseSessionLock(lock: string): void {
   }
 }
 
-/** False when the sessions folder cannot be written, so the caller runs unlocked as before. */
+/** False when the request could not be queued; the caller then refuses the run, since an unlocked worker could race a live one. */
 function queueRun(files: SessionStateFiles, mode: WorkerMode): boolean {
   try {
     fs.mkdirSync(path.dirname(files.queued), { recursive: true });
+  } catch (err) {
+    logger.warn(`session worker: cannot create ${path.dirname(files.queued)}, so the ${mode} close is not run: ${errorMessage(err)}`);
+    return false;
+  }
+  try {
     // A full close outranks a turn close: it overwrites a queued turn, and a turn never replaces a queued full close.
     if (mode === 'full') fs.writeFileSync(files.queued, 'full');
     else fs.writeFileSync(files.queued, 'turn', { flag: 'wx' });
     return true;
   } catch (err) {
-    return err instanceof Error && 'code' in err && err.code === 'EEXIST';
+    if (errorCode(err) === 'EEXIST') return true;
+    logger.warn(`session worker: cannot queue the ${mode} close in ${files.queued}, so it is not run: ${errorMessage(err)}`);
+    return false;
   }
 }
 
@@ -105,8 +112,9 @@ function takeQueued(queued: string): WorkerMode | null {
   const taken = `${queued}.${process.pid}`;
   try {
     fs.renameSync(queued, taken);
-  } catch {
-    // Nothing queued, or a rename refused for a moment; the request stays queued for the next round.
+  } catch (err) {
+    // ENOENT means nothing is queued; any other refusal leaves the request queued for the next round, but is told.
+    if (errorCode(err) !== 'ENOENT') logger.warn(`session worker: cannot take the queued request ${queued}: ${errorMessage(err)}`);
     return null;
   }
   try {
@@ -119,7 +127,8 @@ function takeQueued(queued: string): WorkerMode | null {
 /** Runs `work` unless a live worker holds this session, which then runs the request after its own so the last reply is never dropped. */
 export async function runSessionWorker(sessionId: string | null, mode: WorkerMode, work: (mode: WorkerMode) => Promise<void>): Promise<void> {
   const files = sessionStateFiles(sessionId);
-  if (files === null || !queueRun(files, mode)) return work(mode);
+  if (files === null) return work(mode);
+  if (!queueRun(files, mode)) return;
   for (let take = takeSessionLock(files.lock); take !== 'held'; take = takeSessionLock(files.lock)) {
     if (take === 'unusable') return work(mode);
     let ran = false;

@@ -10,30 +10,14 @@
 //
 // Real DB, real CLI subprocess — no mocks.
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { initStore } from '../src/store/open.js';
 import { remember, type Context } from '../src/api/index.js';
 import { pushGoal, completeGoal } from '../src/store/goals.js';
+import { makeEnv, type TestEnv } from './_helpers/cli-env.js';
 
 const CLI = join(process.cwd(), 'dist', 'cli.js');
-
-interface TestEnv {
-  cwd: string;
-  hippoRoot: string;
-  globalRoot: string;
-}
-
-function makeEnv(): TestEnv {
-  const cwd = mkdtempSync(join(tmpdir(), 'hippo-b3-cli-recall-'));
-  const hippoRoot = join(cwd, '.hippo');
-  const globalRoot = join(cwd, 'global-hippo');
-  mkdirSync(globalRoot, { recursive: true });
-  initStore(hippoRoot);
-  return { cwd, hippoRoot, globalRoot };
-}
 
 interface RecallCliResult {
   results: Array<{ content: string; score: number }>;
@@ -70,7 +54,7 @@ describe('cli recall + active goal stack', () => {
   let env: TestEnv;
 
   beforeEach(() => {
-    env = makeEnv();
+    env = makeEnv('b3-cli-recall');
   });
 
   afterEach(() => {

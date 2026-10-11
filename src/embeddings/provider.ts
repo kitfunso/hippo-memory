@@ -300,23 +300,6 @@ class ApiEmbeddingProvider implements EmbeddingProvider {
   }
 }
 
-interface EmbeddingsConfigValues {
-  enabled?: boolean | 'auto';
-  provider?: string;
-  model?: string;
-  apiBaseUrl?: string;
-  batchSize?: number;
-}
-
-function readEmbeddingsConfig(hippoRoot: string): EmbeddingsConfigValues {
-  try {
-    return loadConfig(hippoRoot).embeddings;
-  } catch {
-    // An unreadable config falls back to provider defaults; loadConfig warns on a bad parse.
-    return {};
-  }
-}
-
 /** Validate a user-supplied API base URL: HTTPS only (or explicit localhost). */
 function validateBaseUrl(url: string | undefined, fallback: string): string {
   const candidate = url?.trim();
@@ -352,7 +335,7 @@ export function resolveEmbeddingProvider(
   hippoRoot: string,
   opts: ResolveProviderOptions = {},
 ): EmbeddingProvider {
-  const cfg = readEmbeddingsConfig(hippoRoot);
+  const cfg = loadConfig(hippoRoot).embeddings;
   const requested = opts.provider ?? cfg.provider ?? 'local';
   // An explicit embeddings.enabled=false hard-disables embedding for BOTH local
   // and API providers — for API this prevents unwanted paid off-box calls.

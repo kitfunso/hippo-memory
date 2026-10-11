@@ -248,7 +248,7 @@ async function embedAllInStore(store: HippoStore, provider: EmbeddingProvider): 
 
 /** embedMemory on a store; like the hippo.db path it resolves whatever fails. Unlike it, it leaves a model change to embedAll, so a stale
  *  read here never drops another process's rebuild; the read only saves a paid embed call, as the write refuses another model itself. */
-function embedMemoryInStore(store: HippoStore, provider: EmbeddingProvider, entry: MemoryEntry): Promise<void> {
+function embedMemoryInStore(store: HippoStore, provider: EmbeddingProvider, entry: MemoryEntry): Promise<EmbedOutcome> {
   return withProcessEmbedLock(async () => {
     const [reads, writes] = vectorGroups(store);
     const model = embeddingIndexIdentity(provider.id);
@@ -262,59 +262,74 @@ function embedMemoryInStore(store: HippoStore, provider: EmbeddingProvider, entr
           true
         )).modelMismatch;
       if (refused) warnEmbedFailureOnce('index', OTHER_MODEL_INDEX);
+      return refused ? 'failed' : 'indexed';
     } catch (err) {
       warnEmbedFailureOnce(provider.kind, errorMessage(err), err);
+      return 'failed';
     }
-  }).catch((err) => {
+  }).catch((err): EmbedOutcome => {
     log.warn(`skipped embedding ${entry.id} (${errorMessage(err)})`);
+    return 'failed';
   });
 }
 
-/** Embed a single memory entry and cache the result in the embedding index; with `store`, through its vectorWrites, never opening hippo.db. */
+const INLINE_REINDEX_MAX_ROWS = 256;
+
+/** `off` is a provider that is disabled or not installed, which is a choice; `failed` is a memory that stays out of the vector index. */
+export type EmbedOutcome = 'indexed' | 'off' | 'failed';
+
+/** Embed a single memory entry and cache the result in the embedding index; with `store`, through its vectorWrites, never opening hippo.db.
+ *  Resolves whatever fails, so a caller that fires and forgets stays safe; the outcome says whether the memory reached the index. */
 export async function embedMemory(
   hippoRoot: string,
   entry: MemoryEntry,
   model?: string,
   store?: HippoStore,
-): Promise<void> {
+): Promise<EmbedOutcome> {
   let provider: EmbeddingProvider;
   try {
     provider = resolveEmbeddingProvider(hippoRoot, { model });
   } catch (err) {
     // Callers fire and forget, so this must resolve: a bad config warns once instead of rejecting.
     warnEmbedFailureOnce('config', errorMessage(err), err);
-    return;
+    return 'failed';
   }
-  if (!provider.isAvailable()) return;
+  if (!provider.isAvailable()) return 'off';
   if (store) return embedMemoryInStore(store, provider, entry);
 
-  return withEmbedLock(hippoRoot, async () => {
-    // Best-effort: an embedding failure (API down, bad key, 5xx) must not reject the caller's write; the existing index is left as-is.
-    // Failures surface on the explicit `hippo embed` / `embedAll` path.
-    try {
-      const identity = provider.id;
-
-      if (embeddingModelRequiresReindex(hippoRoot, identity)) {
-        await rebuildIndexForProvider(hippoRoot, provider);
-        return;
-      }
-
-      const text = embeddingInputText(entry);
-      const [vector] = await provider.embed([text], 'passage');
-      if (!vector || vector.length === 0) return;
-
-      saveStoredVectors(hippoRoot, [[entry.id, vector]], embeddingIndexIdentity(identity));
-      saveStoredEmbeddingModel(hippoRoot, identity);
-
-      // Initialize physics state for this memory
-      initializePhysicsIfMissing(hippoRoot, entry, vector);
-    } catch (err) {
-      // Provider failure (API down / bad key). Best-effort: leave the index as-is, but say so once.
-      warnEmbedFailureOnce(provider.kind, errorMessage(err), err);
-    }
-  }).catch((err) => {
+  return withEmbedLock(hippoRoot, () => embedMemoryLocked(hippoRoot, provider, entry)).catch((err): EmbedOutcome => {
     log.warn(`skipped embedding ${entry.id} (${errorMessage(err)}); run 'hippo embed' to backfill`);
+    return 'failed';
   });
+}
+
+/** Best-effort: an embedding failure (API down, bad key, 5xx) must not reject the caller's write; the existing index is left as-is.
+ *  Failures surface on the explicit `hippo embed` / `embedAll` path. */
+async function embedMemoryLocked(hippoRoot: string, provider: EmbeddingProvider, entry: MemoryEntry): Promise<EmbedOutcome> {
+  try {
+    const identity = provider.id;
+    if (embeddingModelRequiresReindex(hippoRoot, identity)) {
+      // A fire-and-forget write heals a small index inline; a large one is left to `hippo embed`, so no write holds the lock for a whole-store embed.
+      if (loadAllEntryIds(hippoRoot).length > INLINE_REINDEX_MAX_ROWS) {
+        warnEmbedFailureOnce('index', OTHER_MODEL_INDEX);
+        return 'failed';
+      }
+      await rebuildIndexForProvider(hippoRoot, provider);
+      return 'indexed';
+    }
+
+    const [vector] = await provider.embed([embeddingInputText(entry)], 'passage');
+    if (!vector || vector.length === 0) return 'failed';
+
+    saveStoredVectors(hippoRoot, [[entry.id, vector]], embeddingIndexIdentity(identity));
+    saveStoredEmbeddingModel(hippoRoot, identity);
+    initializePhysicsIfMissing(hippoRoot, entry, vector);
+    return 'indexed';
+  } catch (err) {
+    // Provider failure (API down / bad key). Best-effort: leave the index as-is, but say so once.
+    warnEmbedFailureOnce(provider.kind, errorMessage(err), err);
+    return 'failed';
+  }
 }
 
 // Every page is embedded before one transaction replaces the index, and the identity is saved only after that: a provider failure or a crash

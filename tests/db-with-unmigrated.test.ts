@@ -26,7 +26,10 @@ describe('withUnmigratedDb', () => {
   it('refuses a write on a read-only open and allows it on a writable one', () => {
     initStore(root);
     const write = (db: { exec(sql: string): void }) => db.exec('CREATE TABLE probe (x INTEGER)');
+    const hasProbe = (): boolean => withUnmigratedDb(root, true, (db) => db.prepare("SELECT 1 FROM sqlite_master WHERE name = 'probe'").get() !== undefined);
     expect(() => withUnmigratedDb(root, true, write)).toThrow(/readonly/i);
-    expect(() => withUnmigratedDb(root, false, write)).not.toThrow();
+    expect(hasProbe()).toBe(false);
+    withUnmigratedDb(root, false, write);
+    expect(hasProbe()).toBe(true);
   });
 });

@@ -56,12 +56,12 @@ function removeTemp(tmp: string): void {
 }
 
 /** Flushed before the rename, or a crash soon after could leave the file's name on bytes that never reached the disk. */
-function writeFlushed(tmp: string, text: string, old: fs.Stats | undefined): void {
+function writeFlushed(tmp: string, text: string, old: fs.Stats | undefined, durable: boolean): void {
   const fd = fs.openSync(tmp, 'w', (old?.mode ?? 0o666) & 0o777);
   try {
     fs.writeFileSync(fd, text, 'utf8');
     if (old) keepAccess(tmp, old);
-    fs.fsyncSync(fd);
+    if (durable) fs.fsyncSync(fd);
   } finally {
     fs.closeSync(fd);
   }
@@ -82,16 +82,16 @@ function flushFolder(dir: string): void {
   }
 }
 
-function replaceViaTemp(target: string, text: string, old: fs.Stats | undefined): void {
+function replaceViaTemp(target: string, text: string, old: fs.Stats | undefined, durable: boolean): void {
   const tmp = `${target}.${process.pid}.tmp`;
   try {
-    writeFlushed(tmp, text, old);
+    writeFlushed(tmp, text, old, durable);
     renameOnto(tmp, target);
   } catch (err) {
     removeTemp(tmp);
     throw err;
   }
-  flushFolder(path.dirname(target));
+  if (durable) flushFolder(path.dirname(target));
 }
 
 /** The pre-rename write: it truncates first, so it is only the fallback, but it needs just a writable file and keeps hard links together. */
@@ -108,8 +108,10 @@ function writeInPlace(target: string, text: string): void {
 }
 
 /** Replaces `file` through a flushed temp file and a rename, so a reader, or a crash at any point, finds the old content or the new, whole.
- *  A file with other hard links, or a rename the platform refuses (logged), is written in place: a crash mid-write can leave it truncated. */
-export function writeFileAtomic(file: string, text: string): void {
+ *  A file with other hard links, or a rename the platform refuses (logged), is written in place: a crash mid-write can leave it truncated.
+ *  `durable: false` skips the fsyncs for derived files that can be rebuilt; a reader still never sees a torn file. */
+export function writeFileAtomic(file: string, text: string, opts: { readonly durable?: boolean } = {}): void {
+  const durable = opts.durable !== false;
   const target = writeTarget(file);
   const old = fs.statSync(target, { throwIfNoEntry: false });
   if (old === undefined) {
@@ -124,7 +126,7 @@ export function writeFileAtomic(file: string, text: string): void {
     return;
   }
   try {
-    replaceViaTemp(target, text, old);
+    replaceViaTemp(target, text, old, durable);
   } catch (err) {
     if (!(err instanceof Error) || !REPLACE_REFUSALS.includes(errnoCode(err))) throw err;
     log.warn(

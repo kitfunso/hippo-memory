@@ -23,6 +23,7 @@ import { claudeConfigDir, codexHomeDir, homeDir } from '../util/agent-homes.js';
 import { type JsonValue, isJsonString, readJsonFile, isJsonObjectLiteral } from '../util/json.js';
 import { escapeRegex } from '../util/escape.js';
 import { writeFileAtomic } from '../util/atomic-write.js';
+import { errorMessage, log } from '../util/log.js';
 
 /** A target's hook settings file, the log its SessionEnd hook writes, and the tool's display name. */
 export interface JsonHookPaths {
@@ -436,8 +437,10 @@ export function uninstallJsonHooks(target: JsonHookTarget): boolean {
   let settings: JsonValue;
   try {
     settings = readJsonFile(settingsPath);
-  } catch {
-    // Never rewrite a settings file we cannot parse; report nothing uninstalled.
+  } catch (err) {
+    // Never rewrite a settings file we cannot parse; a read failure (permissions, a directory) is the caller's to see.
+    if (!(err instanceof SyntaxError)) throw new Error(`could not read ${settingsPath}: ${errorMessage(err)}`, { cause: err });
+    log.warn(`${settingsPath} is not valid JSON, so no hippo hooks were removed from it: ${err.message}`);
     return false;
   }
   if (!isJsonObjectLiteral(settings) || !isJsonObjectLiteral(settings.hooks)) return false;

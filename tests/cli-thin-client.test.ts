@@ -59,28 +59,24 @@ async function startServer(workspace: string): Promise<SpawnedServer> {
   // gate is racy because writePidfile fires synchronously before the listen
   // ack returns to userland; combine with a real health probe to be safe.
   const pidfilePath = join(workspace, '.hippo', 'server.pid');
-  const deadline = Date.now() + 10_000;
-  let ready = false;
   let port = 0;
-  while (Date.now() < deadline) {
+  await waitFor(async () => {
     if (child.exitCode !== null) {
       throw new Error(
         `hippo serve exited early (code=${child.exitCode}). stdout=${stdoutBuf} stderr=${stderrBuf}`,
       );
     }
-    if (existsSync(pidfilePath)) {
-      port = pidfilePort(pidfilePath);
-      try {
-        const res = await fetch(`http://127.0.0.1:${port}/health`);
-        if (res.status === 200) { ready = true; break; }
-      } catch { /* server not up yet */ }
+    if (!existsSync(pidfilePath)) return false;
+    port = pidfilePort(pidfilePath);
+    try {
+      return (await fetch(`http://127.0.0.1:${port}/health`)).status === 200;
+    } catch {
+      return false; // server not up yet
     }
-    await new Promise((r) => setTimeout(r, 100));
-  }
-  if (!ready) {
+  }, { timeoutMs: 10_000, intervalMs: 100, what: 'server ready' }).catch((err: Error) => {
     child.kill('SIGKILL');
-    throw new Error(`server did not become ready within 10s. stdout=${stdoutBuf} stderr=${stderrBuf}`);
-  }
+    throw new Error(`${err.message}. stdout=${stdoutBuf} stderr=${stderrBuf}`);
+  });
 
   const stop = async (): Promise<void> => {
     if (child.exitCode !== null) return;

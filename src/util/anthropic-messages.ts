@@ -36,7 +36,8 @@ export interface AnthropicMessageRequest {
 export type AnthropicMessageFailure =
   | { kind: 'request'; message: string }
   | { kind: 'http'; status: number; detail: string }
-  | { kind: 'unreadable'; message: string };
+  | { kind: 'unreadable'; message: string }
+  | { kind: 'empty' };
 
 export type AnthropicMessageResult =
   | { ok: true; text: string }
@@ -55,7 +56,7 @@ async function errorSnippet(res: Response): Promise<string> {
   return redactSecretsStrict(body.replace(/\s+/g, ' ').trim()).slice(0, ERROR_SNIPPET_CHARS);
 }
 
-/** The reply's first text block, trimmed (empty when the reply has none); never throws. */
+/** The reply's first text block, trimmed; a reply with no text is a failure of kind 'empty'. Never throws. */
 export async function sendAnthropicMessage(req: AnthropicMessageRequest): Promise<AnthropicMessageResult> {
   let res: Response;
   try {
@@ -80,7 +81,8 @@ export async function sendAnthropicMessage(req: AnthropicMessageRequest): Promis
   try {
     const data = await readCappedJson(res, MAX_REPLY_BYTES);
     if (!isJsonObject(data)) return { ok: false, failure: { kind: 'unreadable', message: 'the reply is not a JSON object' } };
-    return { ok: true, text: firstText(data) };
+    const text = firstText(data);
+    return text === '' ? { ok: false, failure: { kind: 'empty' } } : { ok: true, text };
   } catch (err) {
     return { ok: false, failure: { kind: 'unreadable', message: errorMessage(err) } };
   }
@@ -92,5 +94,6 @@ export function describeMessageFailure(failure: AnthropicMessageFailure): string
     case 'request': return `request failed: ${failure.message}`;
     case 'http': return failure.detail ? `HTTP ${failure.status}: ${failure.detail}` : `HTTP ${failure.status}`;
     case 'unreadable': return `unparseable response: ${failure.message}`;
+    case 'empty': return 'the reply held no text';
   }
 }

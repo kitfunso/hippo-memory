@@ -2,7 +2,7 @@
 import * as path from 'node:path';
 import type { DatabaseSyncLike } from './sqlite.js';
 import { connectWithFacts, getHippoDbPath, type OpenedDb } from './connect.js';
-import { currentDeadline, currentRequestId, requestScopes, type RequestScope } from '../util/request-scope.js';
+import { currentDeadline, currentRequestId, currentSignal, requestScopes, type RequestScope } from '../util/request-scope.js';
 
 export interface RequestStoresOptions {
   /** Lock wait of every open in the scope that does not pass its own. */
@@ -37,6 +37,7 @@ export class RequestStores implements RequestScope {
   // Taken from the scope this one opens inside, so the request's log lines keep their id.
   readonly requestId: string | undefined = currentRequestId();
   readonly deadline = currentDeadline();
+  readonly signal = currentSignal();
   readonly setupDoneFor: string | undefined;
   readonly #failFastWhenBusy: boolean;
   readonly #handles = new Map<string, DatabaseSyncLike>();

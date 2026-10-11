@@ -190,15 +190,15 @@ describe('a model identity change on hippo.db', () => {
     expect([state.vectors.length, state.particles.length]).toEqual([ROWS, ROWS]);
   }, SLOW);
 
-  it('embedAll and embedMemory end in the same state through the configured provider', async () => {
+  it('embedAll rebuilds a 300-row index, and embedMemory leaves it alone past the inline reindex cap', async () => {
     const [viaAll, viaOne] = [copyOf(indexedOld), copyOf(indexedOld)];
     useHashedServer(viaAll);
     useHashedServer(viaOne);
-    expect(await embedAll(viaAll)).toBe(ROWS);
+    const before = indexOn(viaOne);
     await embedMemory(viaOne, loadAllEntries(viaOne)[7]);
-    const expected = rebuiltState(viaAll, HASHED_ID, hashedServerVector);
-    expect(indexOn(viaAll)).toEqual(expected);
-    expect(indexOn(viaOne)).toEqual(expected);
+    expect(indexOn(viaOne)).toEqual(before);
+    expect(await embedAll(viaAll)).toBe(ROWS);
+    expect(indexOn(viaAll)).toEqual(rebuiltState(viaAll, HASHED_ID, hashedServerVector));
   }, SLOW);
 
   it('keeps the old vectors, identity and particles when the provider fails part way through the rebuild', async () => {

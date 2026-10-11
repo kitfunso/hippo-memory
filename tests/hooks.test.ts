@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { installJsonHooks, uninstallJsonHooks, resolveJsonHookPaths } from '../src/hooks/json-hooks.js';
 import { detectInstalledTools, defaultSleepLogPath, defaultPreCompactLogPath } from '../src/hooks/shared.js';
 import { withFakeHome as withFakeHomeShared } from './_helpers/with-fake-home.js';
+import { trySymlink } from './_helpers/symlink.js';
 import type { JsonValue } from '../src/util/json.js';
 
 /**
@@ -635,11 +636,7 @@ describe('JSON hook installer', () => {
       fs.writeFileSync(real, '{}\n', 'utf8');
       const { settings: link } = resolveJsonHookPaths('claude-code');
       fs.mkdirSync(path.dirname(link), { recursive: true });
-      try {
-        fs.symlinkSync(real, link);
-      } catch {
-        ctx.skip(); // creating a symlink needs a privilege some Windows boxes lack
-      }
+      if (!trySymlink(real, link)) ctx.skip(); // creating a symlink needs a privilege some Windows boxes lack
 
       installJsonHooks('claude-code');
 
@@ -652,11 +649,7 @@ describe('JSON hook installer', () => {
       const real = path.join(env.home, 'dotfiles', 'claude', 'settings.json');
       const { settings: link } = resolveJsonHookPaths('claude-code');
       fs.mkdirSync(path.dirname(link), { recursive: true });
-      try {
-        fs.symlinkSync(real, link);
-      } catch {
-        ctx.skip(); // creating a symlink needs a privilege some Windows boxes lack
-      }
+      if (!trySymlink(real, link)) ctx.skip(); // creating a symlink needs a privilege some Windows boxes lack
 
       installJsonHooks('claude-code');
 

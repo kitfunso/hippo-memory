@@ -5,6 +5,7 @@ import type { RememberOpts, RememberResult } from '../api/index.js';
 import { fetchWithRetry } from '../util/http-retry.js';
 import { readCappedJson } from '../util/capped-json.js';
 import { isJsonObject, isJsonString, type JsonValue } from '../util/json.js';
+import { isObjectLike } from '../core/capture-contract.js';
 
 /** A write the local server has not answered in this long is stuck; the caller treats it as delivery-unknown. */
 const SERVER_TIMEOUT_MS = 30_000;
@@ -33,8 +34,7 @@ function buildHeaders(apiKey: string | undefined, withBody: boolean) {
   return headers;
 }
 
-/** An error the server answered with, not one the transport raised: the refused-connection classifier sniffs message text,
- *  and a server message quotes the caller's own id or content back verbatim. */
+/** An error the server answered with, not one the transport raised, so the transport classifier can skip it by class. */
 export class HttpResponseError extends Error {
   constructor(message: string, readonly status: number) {
     super(message);
@@ -135,27 +135,27 @@ export async function archiveRaw(
  * committed, so never replay a write. 'none': not a transport failure. */
 export type TransportFailure = 'none' | 'never-sent' | 'delivery-unknown';
 
-function hasObjectCause(e: Error): e is Error & { cause: { code?: unknown } } {
-  // Node's fs/net system errors (ECONNREFUSED, ECONNRESET) attach the syscall code on a non-null object `cause`;
-  // the strict-equality checks below validate it before use.
-  return typeof e.cause === 'object' && e.cause !== null;
+/** The syscall code Node puts on a system error itself (`http` errors) or on the `cause` of a fetch `TypeError`; '' when there is none. */
+function transportCode(err: Error): string {
+  if ('code' in err) return String(err.code);
+  // Node's fetch attaches the syscall code (ECONNREFUSED, ECONNRESET) on a non-null object `cause`.
+  const cause: unknown = err.cause;
+  return isObjectLike(cause) && 'code' in cause ? String(cause.code) : '';
 }
 
 export function classifyTransportFailure(err: Error): TransportFailure {
   // The server answered, so the transport worked, whatever the message says.
   if (err instanceof HttpResponseError) return 'none';
-  const message = err.message.toLowerCase();
-  const code = hasObjectCause(err) ? err.cause.code : undefined;
+  const code = transportCode(err);
   // Connect-phase failures: no request bytes ever left the client, so a stale
   // pidfile can be healed and the call replayed on the direct path.
   if (code === 'ECONNREFUSED' || code === 'ENOTFOUND' || code === 'EAI_AGAIN') return 'never-sent';
-  if (message.includes('econnrefused')) return 'never-sent';
-  // The socket died mid-exchange. Node fetch surfaces this as a bare
-  // 'fetch failed' with the syscall code on the cause, so check both shapes.
+  // The socket died mid-exchange.
   if (code === 'ECONNRESET' || code === 'ECONNABORTED' || code === 'EPIPE' || code === 'UND_ERR_SOCKET') {
     return 'delivery-unknown';
   }
-  if (message.includes('socket hang up') || message.includes('fetch failed')) return 'delivery-unknown';
+  // Fetch rejects every network failure as a TypeError, with a cause only when the syscall is known, so no code means the conservative answer.
+  if (err instanceof TypeError) return 'delivery-unknown';
   // The request was sent and the server went quiet, so it may have committed.
   if (err.name === 'TimeoutError') return 'delivery-unknown';
   return 'none';

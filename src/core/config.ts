@@ -9,7 +9,7 @@ import { DEFAULT_HALF_LIFE_DAYS } from './memory.js';
 import type { PromptRecallMetric } from './prompt-recall.js';
 import { DEFAULT_LOCAL_BUMP, DEFAULT_RECALL_BUDGET } from './search-types.js';
 import { errorCode, errorMessage, log } from '../util/log.js';
-import { isJsonObject } from '../util/json.js';
+import { isJsonObject, type JsonValue } from '../util/json.js';
 
 export type DecayBasis = 'clock' | 'session' | 'adaptive';
 
@@ -414,16 +414,23 @@ function fileStamp(file: string): string | null {
   }
 }
 
-function parseConfigFile(configPath: string): HippoConfig {
+/** A config.json that exists must load: running on defaults would silently drop the user's settings, such as `sharedStore`. */
+function readConfigFile(configPath: string): Partial<HippoConfig> {
+  let raw: JsonValue;
   try {
-    const raw: Partial<HippoConfig> = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-    return configOverDefaults(raw);
+    raw = JSON.parse(fs.readFileSync(configPath, 'utf8'));
   } catch (err) {
-    if (fs.existsSync(configPath)) {
-      log.warn(`failed to parse ${configPath}: ${errorMessage(err)}`);
-    }
-    return { ...DEFAULT_CONFIG };
+    throw new Error(`${configPath} could not be loaded: ${errorMessage(err)}. Fix the file or delete it to use the defaults.`, { cause: err });
   }
+  if (!isJsonObject(raw)) {
+    throw new Error(`${configPath} must hold a JSON object. Fix the file or delete it to use the defaults.`);
+  }
+  // SAFETY: an object is all the shape check proves; configOverDefaults validates each key it reads.
+  return raw as Partial<HippoConfig>;
+}
+
+function parseConfigFile(configPath: string): HippoConfig {
+  return configOverDefaults(readConfigFile(configPath));
 }
 
 function configOverDefaults(raw: Partial<HippoConfig>): HippoConfig {
@@ -496,14 +503,8 @@ export function isSharedStore(hippoRoot: string): boolean {
   const configPath = path.join(path.resolve(hippoRoot), 'config.json');
   const stamp = fileStamp(configPath);
   if (stamp === null || notSharedStamps.get(configPath) === stamp) return false;
-  let raw: Partial<HippoConfig> | null;
-  try {
-    raw = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-  } catch (err) {
-    log.warn(`failed to read ${configPath}: ${errorMessage(err)} - sharedStore read as false.`);
-    return false;
-  }
-  if (raw?.sharedStore !== true) {
+  const raw = readConfigFile(configPath);
+  if (raw.sharedStore !== true) {
     if (notSharedStamps.size >= PARSED_CONFIGS_MAX) notSharedStamps.clear();
     notSharedStamps.set(configPath, stamp);
     return false;

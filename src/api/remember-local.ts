@@ -6,10 +6,10 @@ import { loadConfig } from '../core/config.js';
 import type { ConfidenceLevel, Layer, MemoryEntry, MemoryKind } from '../core/memory.js';
 import { computeSalience, type SalienceResult } from '../core/salience.js';
 import { loadNewestEntries, schemaFitInStore } from '../store/candidates.js';
-import { embedMemory } from '../search/embed-memories.js';
+import { embedMemory, type EmbedOutcome } from '../search/embed-memories.js';
 import { loadAllEntries, readEntry } from '../store/entry-reads.js';
 import { updateStats } from '../store/index-and-stats.js';
-import { errorMessage } from '../util/log.js';
+import { errorMessage, log } from '../util/log.js';
 import { remember } from './remember.js';
 import type { HippoDbContext } from './types.js';
 
@@ -40,9 +40,10 @@ export interface StartedWeak {
   readonly strength: number;
 }
 
-/** `stored` carries the row as the store holds it after the write; `skipped` is the gate dropping the write, with nothing stored or counted. */
+/** `stored` carries the row as the store holds it after the write, and `embedding`, which settles with whether the row reached the vector index
+ *  (a caller may ignore it; a failure is also logged). `skipped` is the gate dropping the write, with nothing stored or counted. */
 export type LocalRememberOutcome =
-  | { readonly status: 'stored'; readonly entry: MemoryEntry; readonly startedWeak?: StartedWeak }
+  | { readonly status: 'stored'; readonly entry: MemoryEntry; readonly embedding: Promise<EmbedOutcome>; readonly startedWeak?: StartedWeak }
   | { readonly status: 'skipped'; readonly reason: string; readonly score: number };
 
 /** The gate's verdict on one write, or null where it does not judge: the store has it off, or the write is pinned or forced. */
@@ -69,6 +70,16 @@ function storedEntry(ctx: HippoDbContext, id: string): MemoryEntry {
   return entry;
 }
 
+/** Best-effort and slow (a model load or a network call), so the caller is not held for it; a row left out of the index is logged. */
+function indexInBackground(hippoRoot: string, entry: MemoryEntry): Promise<EmbedOutcome> {
+  return embedMemory(hippoRoot, entry).then((outcome) => {
+    if (outcome === 'failed') {
+      log.warn(`memory ${entry.id} is stored but not in the vector index, so recall by meaning will miss it; run 'hippo embed' to index it`);
+    }
+    return outcome;
+  });
+}
+
 /** One local write on hippo.db: gate, write, read-back, counter, then the embedding, started and never awaited. A refused value throws as `remember` does. */
 export function rememberLocally(ctx: HippoDbContext, input: LocalRememberInput): LocalRememberOutcome {
   const schemaFit = schemaFitInStore(ctx.hippoRoot, ctx.tenantId, input.content, input.fitTags ?? input.tags);
@@ -93,9 +104,8 @@ export function rememberLocally(ctx: HippoDbContext, input: LocalRememberInput):
   });
   const entry = storedEntry(ctx, id);
   updateStats(ctx.hippoRoot, { remembered: 1 });
-  // Best-effort and slow (a model load or a network call), so the caller is not held for it.
-  void embedMemory(ctx.hippoRoot, entry);
-  return startedWeak ? { status: 'stored', entry, startedWeak } : { status: 'stored', entry };
+  const embedding = indexInBackground(ctx.hippoRoot, entry);
+  return startedWeak ? { status: 'stored', entry, embedding, startedWeak } : { status: 'stored', entry, embedding };
 }
 
 /** What a caller asks of fact extraction. The key comes from the caller, which read it from its own environment. */

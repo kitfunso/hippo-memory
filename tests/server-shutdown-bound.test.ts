@@ -6,6 +6,7 @@ import { pathToFileURL } from 'node:url';
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { waitFor } from './_helpers/wait-for.js';
 
 // The script's shutdownDrainMs plus the 10 s the store's threads get to close.
 const DRAIN_MS = 200;
@@ -112,18 +113,19 @@ const STUCK_WRITE = [
 
 /** Settles once another connection holds the store's write lock. The served store is idle but for the stuck write, so from then on its writer thread is inside that write. */
 async function writeLockTaken(watcher: DatabaseSyncLike, served: Served): Promise<void> {
-  const giveUpAt = Date.now() + REACH_MS;
-  for (;;) {
+  await waitFor(() => {
     try {
       watcher.exec('BEGIN IMMEDIATE');
       watcher.exec('ROLLBACK');
+      return false;
     } catch (err) {
-      if (String(err).includes('database is locked')) return;
+      if (String(err).includes('database is locked')) return true;
       throw err;
     }
-    if (Date.now() > giveUpAt) throw new Error(`the stuck write never took the write lock in ${REACH_MS} ms\n${served.output()}`);
-    await new Promise((again) => setTimeout(again, 25));
-  }
+  }, { timeoutMs: REACH_MS, intervalMs: 25, what: 'the stuck write taking the write lock' }).catch((err: Error) => {
+    throw new Error(`${String(err)}
+${served.output()}`);
+  });
 }
 
 // A kill has no exit code of its own: Windows reports 1, and elsewhere the parent sees the signal.

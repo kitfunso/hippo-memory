@@ -131,6 +131,7 @@ jobs:
         run: npx vitest run --shard=${{ matrix.shard }}/3 --coverage --reporter=default --reporter=blob --coverage.thresholds.lines=0 --coverage.thresholds.branches=0 --coverage.thresholds.functions=0 --coverage.thresholds.statements=0
         env:
           TMPDIR: /dev/shm
+          HIPPO_REQUIRE_SYMLINKS: '1'
       - name: Upload blob report
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -250,6 +251,7 @@ jobs:
         run: npx vitest run --shard=${{ matrix.shard }}/3
         env:
           TMPDIR: /dev/shm
+          HIPPO_REQUIRE_SYMLINKS: '1'
 
   # Every other job is Linux, where platform branches, path case rules and the temp-inside-home layout never run.
   suite:

@@ -84,8 +84,8 @@ describe('embedMemory provider failure', () => {
     const entry = createMemory('a memory under a typo in the provider name', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     writeEntry(root, entry);
 
-    await expect(fresh.embedMemory(root, entry)).resolves.toBeUndefined();
-    await expect(fresh.embedMemory(root, entry)).resolves.toBeUndefined();
+    await expect(fresh.embedMemory(root, entry)).resolves.toBe('failed');
+    await expect(fresh.embedMemory(root, entry)).resolves.toBe('failed');
 
     expect(warnings()).toHaveLength(1);
     expect(warnings()[0]).toContain("[hippo] warn: embedding failed (config): Unknown embeddings.provider 'opneai'");

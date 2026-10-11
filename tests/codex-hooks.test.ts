@@ -129,6 +129,11 @@ describe('installJsonHooks(codex)', () => {
     expect(uninstallJsonHooks('codex')).toBe(false);
   });
 
+  it('uninstall names a settings file it cannot read instead of reporting nothing to remove', () => {
+    fs.mkdirSync(hooksFile, { recursive: true });
+    expect(() => uninstallJsonHooks('codex')).toThrow(`could not read ${hooksFile}`);
+  });
+
   it("uninstall takes only hippo's exact handler: a group hippo shares keeps the other handler, and a user's hippo-like command stays", () => {
     const mine = { type: 'command', command: 'echo mine', timeout: 3 };
     const alike = { hooks: [{ type: 'command', command: 'hippo context --pinned-only --budget 300', timeout: 5 }, mine] };
