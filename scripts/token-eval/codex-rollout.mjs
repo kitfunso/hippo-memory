@@ -234,7 +234,8 @@ export function parseRollouts(files) {
   return out;
 }
 
-const strip = ({ file, name, input }) => ({ file, name, input });
+// A call's cwd is its workdir, where the Claude parser gives the transcript line's.
+const strip = ({ file, name, input }) => ({ file, name, input, cwd: input.cwd });
 
 /** The Claude parsers' shapes over rollouts, so the read check, CHECK_COMMANDS and the work counts run unchanged. */
 export const codexAdapter = {

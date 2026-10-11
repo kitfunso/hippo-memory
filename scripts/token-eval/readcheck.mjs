@@ -251,9 +251,8 @@ export function deliveryHits(run, snap, preSession) {
 function pathHits(run, b, files, fileName, how) {
   const opts = { env: how.env, platform: process.platform };
   const hits = [];
-  for (const { file, name, input, cwd: lineCwd } of how.adapter.toolInputs(files)) {
-    // A Claude call runs where an earlier call's `cd` left the shell, as its transcript line records; a Codex call names its workdir.
-    const callCwd = lineCwd ?? input.cwd;
+  for (const { file, name, input, cwd: callCwd } of how.adapter.toolInputs(files)) {
+    // A call runs in its cwd: where an earlier `cd` left Claude Code's shell, or a Codex call's workdir.
     const paths = toolPaths(name, input, callCwd ?? run.dirs.work, opts);
     // That dir counts as a read the way a `cd` target does: a bare filename in a foreign dir names no path (prereg 113).
     if (SHELL_TOOLS.has(name) && callCwd && callCwd !== run.dirs.work) paths.unshift({ token: callCwd, search: false, cwd: run.dirs.work });
