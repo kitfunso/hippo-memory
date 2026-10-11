@@ -1,0 +1,3 @@
+### Added
+
+- **`scripts/token-eval/eval-snapshot.mjs` builds a Z0 eval checkout.** It writes one commit of a source repository as a one-commit repo with fixed author and date, removes agent rule and settings files at any depth, drops named paths, and replaces forbidden terms in text files. With `--rules-out` it copies the rule files for the blind author with forbidden lines and tool blocks withheld in place, and writes each earlier version of them under `history/` so a reversal can come from a real rule change (stage 2 plan D3, D4). The same source commit always gives the same snapshot commit.
