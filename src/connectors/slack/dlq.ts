@@ -7,14 +7,13 @@ import {
   type DlqItem,
   type SlackDlqInsert,
 } from '../../store/connectors/slack.js';
-import { failAndBump, replayFailed, type ConnectorDlq, type ReplayResult } from '../dlq.js';
+import { replayParked, type ConnectorDlq, type Reingest, type ReplayResult, type SignatureRefusal } from '../dlq.js';
 import { ingestMessage } from './ingest.js';
 import { resolveTenantForSlackTeam } from './tenant-routing.js';
 import { verifySlackSignature } from './signature.js';
 import { isSlackEventEnvelope, isSlackMessageEvent, type SlackEventEnvelope } from './types.js';
 import { handleMessageDeleted } from './deletion.js';
 import type { JsonValue } from '../../util/json.js';
-import { errorMessage } from '../../util/log.js';
 import { YEAR_S } from '../../util/time.js';
 
 export type { DlqBucket, DlqItem };
@@ -23,6 +22,7 @@ export type { DlqBucket, DlqItem };
 export const slackDlq: ConnectorDlq<Pick<SlackDlqInsert, 'teamId' | 'slackTimestamp'>, DlqBucket, DlqItem> = {
   letter: (row) => ({ connector: 'slack', ...row }),
   list: listSlackDlq,
+  entry: slackDlqEntry,
   bump: markSlackDlqRetried,
 };
 
@@ -44,97 +44,58 @@ export async function replayDlqEntry(
   id: number,
   opts: ReplayDlqOpts = {},
 ): Promise<ReplayResult> {
-  const row = slackDlqEntry(ctx.hippoRoot, id);
-  if (!row) return replayFailed('not_found', 0, `dlq id ${id} not found`);
-
-  // Signature verification (current secret, not previous).
-  if (!opts.force) {
-    const sigFailure = checkReplaySignature(ctx.hippoRoot, row, opts);
-    if (sigFailure) return sigFailure;
-  }
-
-  // Parse + dispatch.
-  let parsed: JsonValue;
-  try {
-    parsed = JSON.parse(row.rawPayload);
-  } catch (e) {
-    return failAndBump(slackDlq, ctx.hippoRoot, row, 'parse_error', `still unparseable: ${errorMessage(e)}`);
-  }
-  if (!isSlackEventEnvelope(parsed)) {
-    return failAndBump(slackDlq, ctx.hippoRoot, row, 'unhandled', 'not an event_callback envelope');
-  }
-
-  // Resolve tenant against current state. If still unroutable, bail.
-  const tenant = await resolveTenantForSlackTeam(ctx.hippoRoot, parsed.team_id);
-  if (!tenant) {
-    return failAndBump(slackDlq, ctx.hippoRoot, row, 'unroutable', `team_id ${parsed.team_id} still unroutable`);
-  }
-
-  const replayCtx: Context = {
-    hippoRoot: ctx.hippoRoot,
-    tenantId: tenant,
-    actor: adminActor('connector:slack:replay'),
-  };
-  return dispatchReplay(replayCtx, row, parsed);
+  return replayParked<DlqItem, JsonValue & SlackEventEnvelope>({
+    dlq: slackDlq,
+    refuseSignature: (row) => refuseSignature(row, opts),
+    isEnvelope: isSlackEventEnvelope,
+    notEnvelope: 'not an event_callback envelope',
+    reingest: (_row, envelope) => reingest(ctx.hippoRoot, envelope),
+  }, ctx.hippoRoot, id, opts.force === true);
 }
 
-/** The failure result when the row cannot pass the signature gate, else null; a missing signature is not counted, a failed one is. */
-function checkReplaySignature(hippoRoot: string, row: DlqItem, opts: ReplayDlqOpts): ReplayResult | null {
+/** A missing signature or timestamp refuses even without a secret; a mismatch needs the current secret to show. */
+function refuseSignature(row: DlqItem, opts: ReplayDlqOpts): SignatureRefusal | null {
   if (!row.signature || !row.slackTimestamp) {
-    return replayFailed(
-      'sig_missing',
-      row.retryCount,
-      'row has no signature/timestamp (legacy, or redacted before storing); pass --force to replay',
-    );
+    return {
+      status: 'sig_missing',
+      reason: 'row has no signature/timestamp (legacy, or redacted before storing); pass --force to replay',
+    };
   }
-  if (opts.signingSecret) {
-    const ok = verifySlackSignature({
-      rawBody: row.rawPayload,
-      signature: row.signature,
-      timestamp: row.slackTimestamp,
-      signingSecret: opts.signingSecret,
-      now: opts.now,
-      // Replays happen long after the fact, so give them a wider skew unless overridden.
-      skewSeconds: opts.skewSeconds ?? YEAR_S,
-    });
-    if (!ok) {
-      return failAndBump(
-        slackDlq,
-        hippoRoot,
-        row,
-        'sig_fail',
-        'signature did not verify against current SLACK_SIGNING_SECRET; pass --force to replay anyway',
-      );
-    }
-  }
-  return null;
+  if (!opts.signingSecret) return null;
+  const ok = verifySlackSignature({
+    rawBody: row.rawPayload,
+    signature: row.signature,
+    timestamp: row.slackTimestamp,
+    signingSecret: opts.signingSecret,
+    now: opts.now,
+    // Replays happen long after the fact, so give them a wider skew unless overridden.
+    skewSeconds: opts.skewSeconds ?? YEAR_S,
+  });
+  if (ok) return null;
+  return {
+    status: 'sig_fail',
+    reason: 'signature did not verify against current SLACK_SIGNING_SECRET; pass --force to replay anyway',
+  };
 }
 
-async function dispatchReplay(
-  replayCtx: Context,
-  row: DlqItem,
-  parsed: JsonValue & SlackEventEnvelope,
-): Promise<ReplayResult> {
-  const { hippoRoot } = replayCtx;
-  const id = row.id;
-  const inner = parsed.event;
-  if (!isSlackMessageEvent(inner)) {
-    return failAndBump(slackDlq, hippoRoot, row, 'unhandled', `unhandled inner event type`);
-  }
+async function reingest(hippoRoot: string, envelope: JsonValue & SlackEventEnvelope): Promise<Reingest> {
+  const tenantId = await resolveTenantForSlackTeam(hippoRoot, envelope.team_id);
+  if (!tenantId) return { ok: false, status: 'unroutable', reason: `team_id ${envelope.team_id} still unroutable` };
+  const inner = envelope.event;
+  if (!isSlackMessageEvent(inner)) return { ok: false, status: 'unhandled', reason: 'unhandled inner event type' };
 
+  const replayCtx: Context = { hippoRoot, tenantId, actor: adminActor('connector:slack:replay') };
   if (inner.subtype === 'message_deleted' && inner.deleted_ts) {
     const r = await handleMessageDeleted(replayCtx, {
-      teamId: parsed.team_id,
+      teamId: envelope.team_id,
       channelId: inner.channel,
       deletedTs: inner.deleted_ts,
-      eventId: parsed.event_id,
+      eventId: envelope.event_id,
     });
-    markSlackDlqRetried(hippoRoot, id);
-    return { ok: true, status: r.status, memoryId: r.memoryId, retryCount: row.retryCount + 1 };
+    return { ok: true, status: r.status, memoryId: r.memoryId };
   }
-
   const result = await ingestMessage(replayCtx, {
-    teamId: parsed.team_id,
+    teamId: envelope.team_id,
     channel: {
       id: inner.channel,
       is_private: inner.channel_type !== 'channel',
@@ -142,8 +103,7 @@ async function dispatchReplay(
       is_mpim: inner.channel_type === 'mpim',
     },
     message: inner,
-    eventId: parsed.event_id,
+    eventId: envelope.event_id,
   });
-  markSlackDlqRetried(hippoRoot, id);
-  return { ok: true, status: result.status, memoryId: result.memoryId, retryCount: row.retryCount + 1 };
+  return { ok: true, status: result.status, memoryId: result.memoryId };
 }

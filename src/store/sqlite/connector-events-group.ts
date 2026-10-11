@@ -1,24 +1,22 @@
 // hippo.db's half of the ConnectorEvents store group: each call on a handle of its own.
-import { archiveDeletedArtifact, eventSeenAt, githubRouting, insertGitHubDlq, logEvent, seenEvent } from '../connectors/github.js';
+import { archiveDeletedArtifact, githubEventRecord, githubEventSeenAt, githubRouting, insertGitHubDlq, markGitHubEventSeen } from '../connectors/github.js';
 import { insertSlackDlq, markSlackEventSeen, rawMemoryIdForArtifactAt, slackEventRecord, slackEventSeenAt, slackTeamRoute } from '../connectors/slack.js';
 import { onHandle } from '../open.js';
 import type { ArtifactArchive, ConnectorEvent, ConnectorEventRecord, ConnectorEvents, DeletionLookup, DeletionTarget, Sync } from '../port.js';
 
 function eventRecord(hippoRoot: string, event: ConnectorEvent): ConnectorEventRecord {
-  if (event.connector === 'slack') return slackEventRecord(hippoRoot, event.eventId);
-  const logged = seenEvent(hippoRoot, event.idempotencyKey);
-  return logged ? { seen: true, memoryId: logged.memoryId } : { seen: false };
+  return event.connector === 'slack' ? slackEventRecord(hippoRoot, event.eventId) : githubEventRecord(hippoRoot, event.idempotencyKey);
 }
 
 function markEventSeen(hippoRoot: string, event: ConnectorEvent): void {
   if (event.connector === 'slack') return markSlackEventSeen(hippoRoot, event.eventId, null);
   const { idempotencyKey, deliveryId, eventName } = event;
-  logEvent(hippoRoot, { idempotencyKey, deliveryId, eventName, memoryId: null });
+  markGitHubEventSeen(hippoRoot, { idempotencyKey, deliveryId, eventName, memoryId: null });
 }
 
 function deletionTarget(hippoRoot: string, { event, artifactRef, tenantId }: DeletionLookup): DeletionTarget {
   return onHandle(hippoRoot, (db): DeletionTarget => {
-    const seen = event.connector === 'slack' ? slackEventSeenAt(db, event.eventId) : eventSeenAt(db, event.idempotencyKey);
+    const seen = event.connector === 'slack' ? slackEventSeenAt(db, event.eventId) : githubEventSeenAt(db, event.idempotencyKey);
     return seen ? { seen: true } : { seen: false, memoryId: rawMemoryIdForArtifactAt(db, artifactRef, tenantId) };
   });
 }

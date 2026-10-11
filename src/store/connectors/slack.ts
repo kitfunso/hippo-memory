@@ -3,6 +3,7 @@
 
 import type { DatabaseSyncLike } from '../../db/index.js';
 import { onHandle } from '../open.js';
+import type { ConnectorEventRecord } from '../port.js';
 
 // Backfill cursors
 
@@ -52,11 +53,8 @@ export function slackEventMemoryAt(db: DatabaseSyncLike, eventId: string): strin
   return row?.memory_id ?? null;
 }
 
-/** What the event log holds for one event id; `memoryId` is null for an event seen without a memory. */
-export type SlackEventRecord = { seen: false } | { seen: true; memoryId: string | null };
-
-export function slackEventRecord(hippoRoot: string, eventId: string): SlackEventRecord {
-  return onHandle(hippoRoot, (db): SlackEventRecord =>
+export function slackEventRecord(hippoRoot: string, eventId: string): ConnectorEventRecord {
+  return onHandle(hippoRoot, (db): ConnectorEventRecord =>
     slackEventSeenAt(db, eventId) ? { seen: true, memoryId: slackEventMemoryAt(db, eventId) } : { seen: false });
 }
 
