@@ -276,6 +276,14 @@ hook-check found one failed hippo hook per chunk, both in A2 seed 1: in cj a pro
 
 Both chunks rerun whole on `cb656ba4` into `cal-cj3` and `cal-bm3`, then hippo alone, then Metrolist set X.
 
+## S7: calibration moves to the Console credit
+
+`cal-cj3` and `cal-bm3` started on 2026-10-14 at about 21:04 UTC, met the weekly limit on their first session and waited. Keith approved running calibration on the Console's free credit instead (2026-10-14). Both were stopped before any session ran, with one pre-session ledger row each, and rerun whole into `cal-cj4` and `cal-bm4` at about 21:30 UTC.
+
+The runner is unchanged. `launch-run.ps1 -ApiRoute` passes `ANTHROPIC_BASE_URL` with `--pass-env`, so each session's G1 request-log proxy forwards to a second local proxy, `C:/z0-runs/api-route/swap-proxy.mjs` (sha256 `134c4fff2a75f409c9c27c1e8834467061ad6d24ad497e698ad1c5aa479bc91e`). On `/v1/` paths it swaps the plan login for the Console key and drops the OAuth beta flag; other paths keep the plan login. The key lives only in that proxy's process, so no arm's environment holds it and prereg 76 stands. The records list `ANTHROPIC_BASE_URL` in `passEnv` and `envKeys`. Model, Claude Code version and hippo build are the pins' own; only the billing route differs from the earlier chunks.
+
+The proxy tallies each reply's usage at Opus 5.5 list prices. On a test call its figure matched Claude Code's `total_cost_usd` ($0.378). At $150, or when the credit balance runs out, it answers 429 `rate_limit_error`, so the runner waits instead of grading empty sessions. Writing `plan` to its mode file sends traffic back through the plan login. The account's limits read 10,000 requests, 10M input tokens and 2M output tokens a minute.
+
 ## Contract limits found
 
 - A checker's `CHECK_POST_COMMIT` is a state commit whose parent is the pre-session commit, so the agent's own commits are not visible to it. Commit-message rules are checked from the `git commit` commands in `CHECK_COMMANDS`.
