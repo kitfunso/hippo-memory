@@ -5,7 +5,15 @@ import type { PolicyType } from '../store/goals.js';
 import * as api from '../api/index.js';
 import { cliApiContext } from './api-context.js';
 import { printError } from './output.js';
-import { type CliFlags, boolFlag, flagIsTrue, isStringFlag, stringFlag, stringFlagOrExit, type CommandContext } from './flag-values.js';
+import {
+  type CliFlags,
+  boolFlag,
+  flagIsTrue,
+  isStringFlag,
+  stringFlag,
+  stringFlagOrExit,
+  type CommandContext,
+} from './flag-values.js';
 import { fail } from './exit.js';
 
 // `hippo goal <push|list|complete|suspend|resume>`
@@ -123,9 +131,15 @@ function cmdGoalList(hippoRoot: string, defaultTenantId: string, flags: CliFlags
     outcome: Math.max(7, ...rows.map(r => r.outcome.length)),
   };
   const pad = (s: string, w: number): string => s + ' '.repeat(Math.max(0, w - s.length));
-  console.log(`${pad('id', widths.id)}  ${pad('status', widths.status)}  ${pad('name', widths.name)}  ${pad('outcome', widths.outcome)}`);
+  console.log(
+    `${pad('id', widths.id)}  ${pad('status', widths.status)}  ${pad('name', widths.name)}  ` +
+      pad('outcome', widths.outcome),
+  );
   for (const r of rows) {
-    console.log(`${pad(r.id, widths.id)}  ${pad(r.status, widths.status)}  ${pad(r.name, widths.name)}  ${pad(r.outcome, widths.outcome)}`);
+    console.log(
+      `${pad(r.id, widths.id)}  ${pad(r.status, widths.status)}  ${pad(r.name, widths.name)}  ` +
+        pad(r.outcome, widths.outcome),
+    );
   }
 }
 

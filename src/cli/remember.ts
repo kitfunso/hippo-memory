@@ -29,7 +29,16 @@ import { validateOwner, isStrictOwnerEnv } from './owner-validation.js';
 import { printError } from './output.js';
 import { requireInit, runViaServerIfAvailable } from './shared.js';
 import { fmt } from './print.js';
-import { type CliFlags, type CommandContext, boolFlag, flagIsTrue, isOneOf, stringFlag, stringFlagOrExit, stringListFlag } from './flag-values.js';
+import {
+  type CliFlags,
+  type CommandContext,
+  boolFlag,
+  flagIsTrue,
+  isOneOf,
+  stringFlag,
+  stringFlagOrExit,
+  stringListFlag,
+} from './flag-values.js';
 import { DAY_MS } from '../util/time.js';
 import { errorMessage } from '../util/log.js';
 import { CliExit, fail } from './exit.js';
@@ -78,8 +87,9 @@ type UserVisibleKind = (typeof USER_VISIBLE_KINDS)[number];
 function parseKindFlag(flags: CliFlags): UserVisibleKind | undefined {
   const kindFlagRaw = stringFlag(flags, 'kind');
   const kindFlag = kindFlagRaw === undefined ? undefined : kindFlagRaw.toLowerCase();
-  // 'raw' is reserved for ingestion connectors (deletions go through archiveRawMemory); the append-only trigger aborts forget/consolidate on raw rows,
-  // so exposing --kind raw would create unforgettable memories. 'archived' is an internal sentinel set only in that transaction.
+  // 'raw' is reserved for ingestion connectors (deletions go through archiveRawMemory); the append-only trigger aborts
+  // forget/consolidate on raw rows, so exposing --kind raw would create unforgettable memories. 'archived' is an
+  // internal sentinel set only in that transaction.
   if (kindFlag !== undefined && !isOneOf(USER_VISIBLE_KINDS, kindFlag)) {
     printError(`Invalid --kind: "${kindFlagRaw}". Must be one of: ${USER_VISIBLE_KINDS.join(', ')}`);
     fail(`(kind='raw' is reserved for ingestion connectors; kind='archived' is internal.)`);
@@ -158,7 +168,10 @@ async function cmdRemember(
 function printRemembered(entry: MemoryEntry, useGlobal: boolean): void {
   const prefix = useGlobal ? '[global] ' : '';
   console.log(`${prefix}Remembered [${entry.id}]`);
-  console.log(`   Layer: ${entry.layer} | Strength: ${fmt(entry.strength)} | Half-life: ${entry.half_life_days}d | Confidence: ${entry.confidence}`);
+  console.log(
+    `   Layer: ${entry.layer} | Strength: ${fmt(entry.strength)} | Half-life: ${entry.half_life_days}d | ` +
+      `Confidence: ${entry.confidence}`,
+  );
   if (entry.tags.length > 0) console.log(`   Tags: ${entry.tags.join(', ')}`);
   if (entry.pinned) console.log('   Pinned (no decay)');
   for (const w of vetSecrets(entry.content, entry.tags, false).warnings) printError(`Warning: ${w}`);
@@ -176,9 +189,16 @@ function supersedeTags(flags: CliFlags): string[] | undefined {
 }
 
 /** The api's conflict text differs by which writer lost; the row itself names its successor either way. */
-async function alreadySupersededLine(hippoRoot: string, oldId: string, tenantId: string, conflict: ConflictError): Promise<string> {
+async function alreadySupersededLine(
+  hippoRoot: string,
+  oldId: string,
+  tenantId: string,
+  conflict: ConflictError,
+): Promise<string> {
   const by = (await getMemory(cliApiContext(hippoRoot, tenantId), oldId))?.superseded_by;
-  return by ? `Error: memory ${oldId} is already superseded by ${by}. Supersede that one instead.` : `Error: ${conflict.message}`;
+  return by
+    ? `Error: memory ${oldId} is already superseded by ${by}. Supersede that one instead.`
+    : `Error: ${conflict.message}`;
 }
 
 function parseLayerFlag(flags: CliFlags): Layer | undefined {
@@ -245,7 +265,10 @@ async function cmdTraceRecord(
   const validOutcomes = ['success', 'failure', 'partial'] as const;
 
   if (!task || !stepsJson || !outcome) {
-    fail('Usage: hippo trace record --task <t> --steps <json> --outcome <success|failure|partial> [--session <id>] [--tag <t>]');
+    fail(
+      'Usage: hippo trace record --task <t> --steps <json> --outcome <success|failure|partial> ' +
+        '[--session <id>] [--tag <t>]',
+    );
   }
   if (!isOneOf(validOutcomes, outcome)) {
     fail(`Invalid outcome: "${outcome}". Must be one of: ${validOutcomes.join(', ')}.`);
@@ -341,7 +364,10 @@ async function traceLineage(hippoRoot: string, globalRoot: string, entry: Memory
   for (const pid of parents) {
     const p = (await getMemory(cliApiContext(hippoRoot, tenantId), pid))
       ?? (isInitialized(globalRoot) ? await getMemory(cliApiContext(globalRoot, tenantId), pid) : null);
-    parentPreviews.push({ id: pid, content: p ? p.content.replace(/\s+/g, ' ').slice(0, PARENT_PREVIEW_CHARS) : '(not found)' });
+    parentPreviews.push({
+      id: pid,
+      content: p ? p.content.replace(/\s+/g, ' ').slice(0, PARENT_PREVIEW_CHARS) : '(not found)',
+    });
   }
 
   // Open conflicts involving this memory.
@@ -384,13 +410,16 @@ function printTraceJson(t: TraceView): void {
 }
 
 function printTraceText(t: TraceView): void {
-  const { entry, id, sourceLabel, conf, ageDays, strength, projectedAt, halfLife, rewardFactor, effHalfLife, sinceLast } = t;
+  const { entry, id, sourceLabel, conf, ageDays, strength, projectedAt } = t;
+  const { halfLife, rewardFactor, effHalfLife, sinceLast } = t;
   const { parentPreviews, myConflicts } = t;
   console.log(`Memory: ${entry.id}  [${sourceLabel}]`);
   console.log('='.repeat(50));
-  console.log(`Content:   ${entry.content.replace(/\s+/g, ' ').slice(0, DETAIL_CONTENT_CHARS)}${entry.content.length > DETAIL_CONTENT_CHARS ? '...' : ''}`);
-  console.log(`Layer:     ${entry.layer.padEnd(10)} Confidence: ${conf.padEnd(14)} Pinned: ${entry.pinned ? 'yes' : 'no'}${entry.starred ? '  Starred: ' +
-    'yes' : ''}`);
+  const ellipsis = entry.content.length > DETAIL_CONTENT_CHARS ? '...' : '';
+  console.log(`Content:   ${entry.content.replace(/\s+/g, ' ').slice(0, DETAIL_CONTENT_CHARS)}${ellipsis}`);
+  const starred = entry.starred ? '  Starred: ' + 'yes' : '';
+  const pinned = entry.pinned ? 'yes' : 'no';
+  console.log(`Layer:     ${entry.layer.padEnd(10)} Confidence: ${conf.padEnd(14)} Pinned: ${pinned}${starred}`);
   console.log(`Tags:      ${entry.tags.join(', ') || '(none)'}`);
   console.log(`Created:   ${entry.created}  (${fmt(ageDays, 1)} days ago)`);
   console.log();
@@ -398,7 +427,9 @@ function printTraceText(t: TraceView): void {
   console.log(`  now:        ${fmt(strength, 3)}`);
   console.log(`  in 30 days: ${fmt(projectedAt(30), 3)}`);
   console.log(`  in 90 days: ${fmt(projectedAt(90), 3)}`);
-  console.log(`  half-life:  ${fmt(halfLife, 1)}d (stored) x ${fmt(rewardFactor, 2)} reward = ${fmt(effHalfLife, 1)}d effective`);
+  console.log(
+    `  half-life:  ${fmt(halfLife, 1)}d (stored) x ${fmt(rewardFactor, 2)} reward = ${fmt(effHalfLife, 1)}d effective`,
+  );
   console.log();
   console.log(`Retrieval:`);
   console.log(`  count:      ${entry.retrieval_count}`);
@@ -432,8 +463,9 @@ export async function handleRemember({ hippoRoot, tenantId, args, flags }: Comma
   if (!text || text.length < 3) {
     fail('Memory content too short (minimum 3 characters).');
   }
-  // Thin-client routing: simple `remember` calls go over HTTP so the daemon stays the single writer; rich flags need the direct path.
-  // The salience gate is not in richFlag and the route does not apply it, so a routed remember stores what a direct one would skip.
+  // Thin-client routing: simple `remember` calls go over HTTP so the daemon stays the single writer; rich flags need
+  // the direct path. The salience gate is not in richFlag and the route does not apply it, so a routed remember stores
+  // what a direct one would skip.
   const richFlag =
     flags['pin'] || flags['global'] || flags['extract'] || flags['force'] ||
     flags['observed'] || flags['inferred'] || flags['verified'] ||

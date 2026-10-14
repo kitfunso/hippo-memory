@@ -18,7 +18,10 @@ function graphExtract(hippoRoot: string, tenantId: string): void {
   const relations = `${result.relations} relations (${supersedes} supersedes, ${result.references} references)`;
   console.log(`Graph extracted: ${result.entities} entities (${byType}) + ${relations}.`);
   if (result.truncated.length > 0) {
-    printError(`WARNING: under-extracted (hit the per-type cap): ${result.truncated.join(', ')}. The graph is incomplete for those types.`);
+    printError(
+      `WARNING: under-extracted (hit the per-type cap): ${result.truncated.join(', ')}. ` +
+        'The graph is incomplete for those types.',
+    );
   }
 }
 
@@ -32,7 +35,9 @@ function graphShow(hippoRoot: string, tenantId: string, entity: string | undefin
     console.log(entity ? `No entity named "${entity}".` : 'Graph is empty. Run `hippo graph extract` first.');
     return;
   }
-  console.log(`Graph: ${model.nodes.length} entities, ${model.edges.length} relations${model.truncated ? ' (truncated)' : ''}`);
+  console.log(
+    `Graph: ${model.nodes.length} entities, ${model.edges.length} relations${model.truncated ? ' (truncated)' : ''}`,
+  );
   const byType = new Map<string, { id: number; name: string }[]>();
   for (const n of model.nodes) {
     const arr = byType.get(n.type) ?? [];
@@ -62,7 +67,8 @@ function graphView(hippoRoot: string, tenantId: string, entity: string | undefin
   const defaultOut = format === 'canvas' ? 'hippo-graph.canvas' : 'hippo-graph.html';
   const out = stringFlag(flags, 'out') ?? defaultOut;
   fs.writeFileSync(out, content, 'utf8');
-  console.log(`Wrote ${model.nodes.length} entities + ${model.edges.length} relations to ${out}${model.truncated ? ' (truncated)' : ''}`);
+  const truncated = model.truncated ? ' (truncated)' : '';
+  console.log(`Wrote ${model.nodes.length} entities + ${model.edges.length} relations to ${out}${truncated}`);
   if (flags['open'] && format === 'html') openInBrowser(out);
 }
 
@@ -78,6 +84,7 @@ export function handleGraph({ hippoRoot, tenantId, args, flags }: CommandContext
     'Usage:\n' +
       '  hippo graph extract                     Rebuild the entity/relation graph from consolidated objects\n' +
       '  hippo graph show [--entity NAME] [--json]   Inspect entities + their edges (text or JSON)\n' +
-      '  hippo graph view [--out FILE] [--open] [--format html|canvas] [--entity NAME]   Generate an interactive node-link diagram',
+      '  hippo graph view [--out FILE] [--open] [--format html|canvas] [--entity NAME]   ' +
+      'Generate an interactive node-link diagram',
   );
 }
