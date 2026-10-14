@@ -26,6 +26,7 @@ const { createMemory } = await load('core/memory.js');
 const { initStore } = await load('store/open.js');
 const { writeEntry } = await load('store/entry-writes.js');
 const api = await load('api/index.js');
+const { sqliteStore } = await load('store/sqlite/store.js');
 const { contextCost } = await load('api/context-render.js');
 const { createDeliveryRecorder } = await load('store/delivery-recorder.js');
 const { writeDeliveryEventOnHandle } = await load('store/recall-trace.js');
@@ -114,7 +115,9 @@ const stats = (xs) => {
 async function turn(store, mode, i) {
   const sessionId = mode === 'steady' ? 'steady' : `${mode}-${i}`;
   const stdinText = JSON.stringify({ session_id: sessionId, prompt: `${PROMPT} ${i}`, hook_event_name: 'UserPromptSubmit' });
-  const ctx = { hippoRoot: store.local, tenantId: 'default', actor: api.adminActor('cli') };
+  const ctx = {
+    hippoRoot: store.local, tenantId: 'default', actor: api.adminActor('cli'), store: sqliteStore(store.local),
+  };
   const opts = {
     q: '', budget: 1500, pinnedOnly: true, includeRecent: 5, currentSessionId: sessionId,
     prompt: `${PROMPT} ${i}`, cost: contextCost('additional-context', 'observe'),

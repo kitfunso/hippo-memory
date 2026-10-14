@@ -22,6 +22,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { initStore } from '../dist/store/open.js';
+import { sqliteStore } from '../dist/store/sqlite/store.js';
 import { ingestEvent } from '../dist/connectors/github/ingest.js';
 import { ingestMessage } from '../dist/connectors/slack/ingest.js';
 
@@ -36,7 +37,7 @@ const dataDir = join(root, '.hippo');
 mkdirSync(dataDir, { recursive: true });
 initStore(dataDir);
 
-const ctx = { hippoRoot: dataDir, tenantId: 'default', actor: 'ci:seed' };
+const ctx = { hippoRoot: dataDir, tenantId: 'default', actor: 'ci:seed', store: sqliteStore(dataDir) };
 
 const ghEvent = {
   eventName: 'issues',
