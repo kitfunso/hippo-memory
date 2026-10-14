@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import { initStore } from '../../src/store/open.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, Layer, type MemoryEntry } from '../../src/core/memory.js';
+import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
 import { pushGoal } from '../../src/store/goals.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { appendSessionEvent, saveActiveTaskSnapshot } from '../../src/store/sessions.js';
@@ -130,13 +131,23 @@ export interface Templates { dir: string; goalId: string }
 
 /** Seeds the three template stores once per file; `extendLocal` adds rows to the local store before the stamps are pinned. */
 export async function seedTemplates(extendLocal?: (root: string) => void | Promise<void>): Promise<Templates> {
-  const dir = mkdtempSync(join(tmpdir(), 'hippo-parity-template-'));
-  const goalId = seedLocal(join(dir, 'local'));
-  await extendLocal?.(join(dir, 'local'));
-  seedWide(join(dir, 'wide'));
-  seedGlobal(join(dir, 'global'));
-  for (const kind of ['local', 'wide', 'global']) pinUpdatedAt(join(dir, kind));
-  return { dir, goalId };
+  // Rows made by createMemory (the prediction mirror) take evalNow, so a real-clock seed drifts against recall at FAKE_NOW.
+  const prior = process.env.HIPPO_FAKE_NOW;
+  process.env.HIPPO_FAKE_NOW = FAKE_NOW;
+  _resetAblationCacheForTests();
+  try {
+    const dir = mkdtempSync(join(tmpdir(), 'hippo-parity-template-'));
+    const goalId = seedLocal(join(dir, 'local'));
+    await extendLocal?.(join(dir, 'local'));
+    seedWide(join(dir, 'wide'));
+    seedGlobal(join(dir, 'global'));
+    for (const kind of ['local', 'wide', 'global']) pinUpdatedAt(join(dir, kind));
+    return { dir, goalId };
+  } finally {
+    if (prior === undefined) delete process.env.HIPPO_FAKE_NOW;
+    else process.env.HIPPO_FAKE_NOW = prior;
+    _resetAblationCacheForTests();
+  }
 }
 
 export interface Store { home: string; root: string; globalRoot: string; goalId: string }
