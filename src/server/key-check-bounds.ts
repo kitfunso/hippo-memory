@@ -1,4 +1,5 @@
-// Bounds on the scrypt work a bearer key check may start: how many derive at once, and how many one address starts for one key id.
+// Bounds on the scrypt work a bearer key check may start: how many derive at once, and how many one address starts for
+// one key id.
 import { HttpError } from '../util/http-util.js';
 import { createRateLimiter } from './rate-limit.js';
 
@@ -22,13 +23,20 @@ export interface KeyCheckBounds {
 export function keyCheckBounds(maxKeys: number): KeyCheckBounds {
   // A bucket idle for a full refill is back at its burst, so dropping it then gives nothing away.
   const idleEvictMs = (KEY_ADDRESS_BURST / KEY_ADDRESS_TRIES_PER_SEC) * 1000;
-  const perKeyAddress = createRateLimiter({ ratePerSec: KEY_ADDRESS_TRIES_PER_SEC, burst: KEY_ADDRESS_BURST, idleEvictMs, maxKeys });
+  const perKeyAddress = createRateLimiter({
+    ratePerSec: KEY_ADDRESS_TRIES_PER_SEC,
+    burst: KEY_ADDRESS_BURST,
+    idleEvictMs,
+    maxKeys,
+  });
   let inFlight = 0;
   const waiting: Array<() => void> = [];
   return {
     admit(keyId, address) {
-      // Each answers in the words an existing limit uses: the request limit's for a full queue, the address's scrypt bucket's for spent tries.
-      if (inFlight >= MAX_IN_FLIGHT && waiting.length >= MAX_WAITING) throw new HttpError(429, 'rate limit exceeded', 1);
+      // Each answers in the words an existing limit uses: the request limit's for a full queue, the address's scrypt
+      // bucket's for spent tries.
+      if (inFlight >= MAX_IN_FLIGHT && waiting.length >= MAX_WAITING)
+        throw new HttpError(429, 'rate limit exceeded', 1);
       if (!perKeyAddress.check(`${keyId}\u0000${address}`)) {
         throw new HttpError(429, 'too many key checks from this address', perKeyAddress.retryAfterSec);
       }

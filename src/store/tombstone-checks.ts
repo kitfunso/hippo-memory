@@ -3,7 +3,8 @@ import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../db/index.js
 import { type AppendAuditOpts, appendAuditEvent } from './audit.js';
 import { findRejectedValue, type RejectedValueRow } from './rejection.js';
 
-/** Tombstone lookups and their refusal audit rows on one handle: opened on first use, never under dryRun, closed once. */
+/** Tombstone lookups and their refusal audit rows on one handle: opened on first use, never under dryRun, closed
+ * once. */
 export interface TombstoneChecks {
   /** The tenant's tombstone for `digest`; null when there is none, and always under dryRun. */
   find(tenantId: string, digest: string): RejectedValueRow | null;

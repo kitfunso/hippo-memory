@@ -8,14 +8,18 @@ import { type JsonValue, isJsonObject, isJsonString } from '../../util/json.js';
 /** Build a SlackHistoryFetcher that pages `conversations.history` over HTTP via `fetchWithRetry` (429 and 5xx handled).
  *  Slack omits `channel` from history messages, so the request channel id is stamped onto each one for ingest. */
 const SLACK_TIMEOUT_MS = 30_000;
-// A page is at most 200 messages, each up to 40,000 characters at 4 bytes, carried once as text and once as rich-text blocks.
+// A page is at most 200 messages, each up to 40,000 characters at 4 bytes, carried once as text and once as rich-text
+// blocks.
 const SLACK_MAX_REPLY_BYTES = 64 * 1024 * 1024;
 
 function isSlackMessage(m: JsonValue): m is { [key: string]: JsonValue } & SlackMessageEvent {
   return isJsonObject(m) && m.type === 'message' && isJsonString(m.ts);
 }
 
-/** The reply as a JSON object. The error names the status and the path only, since the query string carries channel ids and cursors. */
+/**
+ * The reply as a JSON object. The error names the status and the path only, since the query string carries channel ids
+ * and cursors.
+ */
 async function readHistoryReply(r: Response, url: URL): Promise<{ [key: string]: JsonValue }> {
   const where = `slack: HTTP ${r.status} on ${url.pathname}`;
   let body: JsonValue;
@@ -25,7 +29,8 @@ async function readHistoryReply(r: Response, url: URL): Promise<{ [key: string]:
     throw new Error(`${where}: ${errorMessage(err)}`, { cause: err });
   }
   if (!isJsonObject(body)) throw new Error(`${where}: the reply is not a JSON object`);
-  if (body.messages !== undefined && !Array.isArray(body.messages)) throw new Error(`${where}: \`messages\` is not an array`);
+  if (body.messages !== undefined && !Array.isArray(body.messages))
+    throw new Error(`${where}: \`messages\` is not an array`);
   return body;
 }
 

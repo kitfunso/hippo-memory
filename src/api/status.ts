@@ -28,7 +28,9 @@ export function vectorSummary(ctx: Context): StoredVectorSummary {
   return storedVectorSummary(ctx.hippoRoot);
 }
 
-/** Whether the stored vectors were built by a different model than `providerId`. Every tenant, so the host admin only. */
+/**
+ * Whether the stored vectors were built by a different model than `providerId`. Every tenant, so the host admin only.
+ */
 export function embeddingReindexNeeded(ctx: Context, providerId: string): boolean {
   requireHostAdmin(ctx, 'Reading every tenant');
   return embeddingModelRequiresReindex(ctx.hippoRoot, providerId);

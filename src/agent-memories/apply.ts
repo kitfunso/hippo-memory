@@ -1,14 +1,24 @@
 // One container's sync in one transaction on the caller's handle: lookup, plan, then every write (plan designs 6 to 8).
 import { appendAuditEvent } from '../store/audit.js';
 import { withTrialScope, withWriteScope, type DatabaseSyncLike } from '../db/index.js';
-import { deleteDormantRow, dormantSnapshotsBySourcePrefix, readDormantSnapshot, replaceDormantEntry } from '../store/dormant.js';
+import {
+  deleteDormantRow,
+  dormantSnapshotsBySourcePrefix,
+  readDormantSnapshot,
+  replaceDormantEntry,
+} from '../store/dormant.js';
 import { gatedWrite } from '../store/gated-write.js';
 import { strengthAblation } from '../core/ablation.js';
 import { Layer, calculateStrength, createMemory, type MemoryEntry } from '../core/memory.js';
 import { findRejectedValue, rejectionDigest } from '../store/rejection.js';
 import { redactSecretsStrict } from '../util/secret-detect.js';
 import { stampOriginProject } from '../store/entry-row.js';
-import { renameEntrySourceAndOriginAt, renameEntrySourceAt, setEntryTagsInTx, supersedeEntryAt } from '../store/entry-writes.js';
+import {
+  renameEntrySourceAndOriginAt,
+  renameEntrySourceAt,
+  setEntryTagsInTx,
+  supersedeEntryAt,
+} from '../store/entry-writes.js';
 import { SYNC_ACTOR, setAsideRow } from '../store/set-aside.js';
 import { entryIdTakenAt, selectLiveEntriesBySourcePrefix } from '../store/entry-reads.js';
 import { markSummaryDirtyInTx } from '../store/summary-dirty.js';
@@ -40,7 +50,10 @@ export interface ContainerWork {
   readonly adopt: ReadonlyMap<string, readonly MemoryEntry[]>;
   /** Legacy rows a new row of the key supersedes, by key (second round). */
   readonly replace: ReadonlyMap<string, readonly MemoryEntry[]>;
-  /** This container's prefixes under the project's earlier names; their rows move here, so a new id imports nothing twice. */
+  /**
+   * This container's prefixes under the project's earlier names; their rows move here, so a new id imports nothing
+   * twice.
+   */
   readonly legacyPrefixes: readonly string[];
 }
 
@@ -82,7 +95,11 @@ class ContainerRun {
     const liveRows = live.map((row) => this.liveRow(row));
     const plan = planContainer({
       textKeyed: this.w.container.textKeyed,
-      items: this.w.container.items.map((item) => ({ key: item.key, hash: itemHash(item.text), refused: refusals.has(item.key) })),
+      items: this.w.container.items.map((item) => ({
+        key: item.key,
+        hash: itemHash(item.text),
+        refused: refusals.has(item.key),
+      })),
       skipped: this.w.container.skipped,
       live: liveRows,
       dormant: this.dormantRows(new Set(liveRows.map((r) => r.key)), refusals),
@@ -119,21 +136,36 @@ class ContainerRun {
     }
   }
 
-  /** Rows filed under an earlier project name keep their id and history; dormant ones move too, scanned only until this prefix holds live rows. */
+  /**
+   * Rows filed under an earlier project name keep their id and history; dormant ones move too, scanned only until this
+   * prefix holds live rows.
+   */
   private adoptPrefix(old: string): void {
     const origin = this.s.originProject ?? null;
     let moved = 0;
     for (const row of selectLiveEntriesBySourcePrefix(this.s.db, this.s.tenantId, old)) {
       const source = this.w.prefix + row.source.slice(old.length);
-      if (renameEntrySourceAndOriginAt(this.s.db, row.tenant_id, row.id, { from: row.source, to: source, origin }) === 0) continue;
+      if (
+        renameEntrySourceAndOriginAt(this.s.db, row.tenant_id, row.id, { from: row.source, to: source, origin }) === 0
+      )
+        continue;
       moved++;
       this.mirror.push({ ...row, source, origin_project: origin ?? row.origin_project });
     }
     this.tally.renamed += moved;
-    if (moved === 0 && (this.w.container.items.length === 0 || selectLiveEntriesBySourcePrefix(this.s.db, this.s.tenantId, this.w.prefix).length > 0)) return;
+    if (
+      moved === 0 &&
+      (this.w.container.items.length === 0 ||
+        selectLiveEntriesBySourcePrefix(this.s.db, this.s.tenantId, this.w.prefix).length > 0)
+    )
+      return;
     for (const snap of dormantSnapshotsBySourcePrefix(this.s.db, this.s.tenantId, old)) {
       const source = this.w.prefix + snap.entry.source.slice(old.length);
-      replaceDormantEntry(this.s.db, this.s.tenantId, snap.entry.id, { ...snap.entry, source, origin_project: origin ?? snap.entry.origin_project });
+      replaceDormantEntry(this.s.db, this.s.tenantId, snap.entry.id, {
+        ...snap.entry,
+        source,
+        origin_project: origin ?? snap.entry.origin_project,
+      });
     }
   }
 
@@ -151,12 +183,18 @@ class ContainerRun {
     if (item.text.trim().length < MIN_ITEM_CHARS) return 'short';
     // Imported rows reach prompts, so the bar is text leaving the machine: Bearer headers and JWTs count too.
     if (redactSecretsStrict(item.text) !== item.text) return 'secret';
-    if (findRejectedValue(this.s.db, this.s.tenantId, rejectionDigest(storedText(item.text))) !== null) return 'rejected';
+    if (findRejectedValue(this.s.db, this.s.tenantId, rejectionDigest(storedText(item.text))) !== null)
+      return 'rejected';
     return null;
   }
 
   private liveRow(row: MemoryEntry): LiveRow {
-    return { id: row.id, ...splitSource(row.source, this.w.prefix), tagged: row.tags.includes(this.tag), created: row.created };
+    return {
+      id: row.id,
+      ...splitSource(row.source, this.w.prefix),
+      tagged: row.tags.includes(this.tag),
+      created: row.created,
+    };
   }
 
   /** Read only when a present key has no live row, which after the first import is rare. */
@@ -165,7 +203,11 @@ class ContainerRun {
     if (!needed) return [];
     return dormantSnapshotsBySourcePrefix(this.s.db, this.s.tenantId, this.w.prefix)
       .filter((snap) => !snap.entry.superseded_by)
-      .map((snap) => ({ id: snap.entry.id, ...splitSource(snap.entry.source, this.w.prefix), dormantAt: snap.dormantAt }));
+      .map((snap) => ({
+        id: snap.entry.id,
+        ...splitSource(snap.entry.source, this.w.prefix),
+        dormantAt: snap.dormantAt,
+      }));
   }
 
   private retag(row: MemoryEntry): void {
@@ -179,7 +221,13 @@ class ContainerRun {
   private supersede(old: MemoryEntry, newId: string): boolean {
     if (!supersedeEntryAt(this.s.db, old.tenant_id, old.id, newId)) return false;
     if (old.dag_parent_id) markSummaryDirtyInTx(this.s.db, old.dag_parent_id, old.tenant_id, SYNC_ACTOR);
-    appendAuditEvent(this.s.db, { tenantId: old.tenant_id, actor: SYNC_ACTOR, op: 'supersede', targetId: old.id, metadata: { newId } });
+    appendAuditEvent(this.s.db, {
+      tenantId: old.tenant_id,
+      actor: SYNC_ACTOR,
+      op: 'supersede',
+      targetId: old.id,
+      metadata: { newId },
+    });
     this.mirror.push({ ...old, superseded_by: newId });
     return true;
   }
@@ -235,7 +283,15 @@ class ContainerRun {
       tags: [...tags, this.tag],
       last_retrieved: now.toISOString(),
     };
-    if (!this.gated(stampOriginProject(this.s.hippoRoot, { ...revived, strength: calculateStrength(revived, now, { ablation: strengthAblation() }) }))) return;
+    if (
+      !this.gated(
+        stampOriginProject(this.s.hippoRoot, {
+          ...revived,
+          strength: calculateStrength(revived, now, { ablation: strengthAblation() }),
+        }),
+      )
+    )
+      return;
     deleteDormantRow(this.s.db, this.s.tenantId, dormantId);
     appendAuditEvent(this.s.db, {
       tenantId: this.s.tenantId,

@@ -1,5 +1,9 @@
-/** Store-level dedup: same text apart from spacing, keeping the stronger copy; split out so `api.sleep` can dedupe without cli -> api imports.
- * Survivor order is total and tenant-scoped: strength bucket, retrieval_count, then compareEntryIdentity; raw and superseded rows are not candidates. */
+/**
+ * Store-level dedup: same text apart from spacing, keeping the stronger copy; split out so `api.sleep` can dedupe
+ * without cli -> api imports.
+ * Survivor order is total and tenant-scoped: strength bucket, retrieval_count, then compareEntryIdentity; raw and
+ * superseded rows are not candidates.
+ */
 
 import { textOverlap } from '../util/tokenize.js';
 import { loadCurrentDistilledEntries } from '../store/entry-reads.js';
@@ -27,10 +31,15 @@ export interface DedupResult {
   pairs: DedupPair[];
 }
 
-/** Quantization step for strength-tie comparisons: the 0.01 epsilon applied by rounding instead of an abs-diff threshold, so the tiebreak is transitive. */
+/**
+ * Quantization step for strength-tie comparisons: the 0.01 epsilon applied by rounding instead of an abs-diff
+ * threshold, so the tiebreak is transitive.
+ */
 const STRENGTH_TIE_EPSILON = 0.01;
 
-/** Quantize strength to an integer bucket so ties are a true equivalence relation (equal iff same multiple of `STRENGTH_TIE_EPSILON`).
+/**
+ * Quantize strength to an integer bucket so ties are a true equivalence relation (equal iff same multiple of
+ * `STRENGTH_TIE_EPSILON`).
  * Non-finite input maps to 0: a NaN bucket would make the comparator return NaN and break the total order. */
 export function strengthBucket(strength: number | null | undefined): number {
   const s = strength ?? 0;
@@ -51,7 +60,8 @@ function survivorOrder(a: MemoryEntry, b: MemoryEntry): number {
   return compareEntryIdentity(a, b);
 }
 
-// Tenant partition: group by tenantId before sorting so a duplicate pair never forms across tenants; Map keeps insertion order,
+// Tenant partition: group by tenantId before sorting so a duplicate pair never forms across tenants; Map keeps
+// insertion order,
 // so a single-tenant store gets one group and the same result as a global pass.
 function entriesByPartition(entries: readonly MemoryEntry[]): Map<string, MemoryEntry[]> {
   const entriesByTenant = new Map<string, MemoryEntry[]>();
@@ -80,7 +90,11 @@ function dedupPair(kept: MemoryEntry, dropped: MemoryEntry): DedupPair {
 }
 
 /** Pairs within one partition, already in survivor order, grouped by survivor; marks each loser in `removed`. */
-function partitionPairs(tenantEntries: readonly MemoryEntry[], removed: Set<string>, backing: ReadonlySet<string>): DedupPair[] {
+function partitionPairs(
+  tenantEntries: readonly MemoryEntry[],
+  removed: Set<string>,
+  backing: ReadonlySet<string>,
+): DedupPair[] {
   const groups = new Map<string, { survivor: MemoryEntry; pairs: DedupPair[] }>();
   for (const entry of tenantEntries) {
     const key = duplicateKey(entry.content);
@@ -105,7 +119,9 @@ export interface LoadedStore {
 /** The rows loadCurrentDistilledEntries selects, picked from a whole-store read. */
 const isCurrentDistilled = (e: MemoryEntry): boolean => (e.kind ?? 'distilled') === 'distilled' && !e.superseded_by;
 
-/** Remove the weaker copy of same-text (apart from spacing) memories within one tenant; cross-tenant pairs are never duplicates (isolation boundary).
+/**
+ * Remove the weaker copy of same-text (apart from spacing) memories within one tenant; cross-tenant pairs are never
+ * duplicates (isolation boundary).
  * Higher strength wins, then more retrievals; `threshold` is accepted for old callers and ignored. */
 export function deduplicateStore(
   hippoRoot: string,
@@ -117,7 +133,8 @@ export function deduplicateStore(
   const entries = options.loaded?.entries.filter(isCurrentDistilled) ?? loadCurrentDistilledEntries(hippoRoot);
   const entriesByTenant = entriesByPartition(entries);
 
-  // Shared across tenant groups: ids are globally unique UUIDs, so `removed` cannot collide across tenants and deleteEntry deletes by primary key alone.
+  // Shared across tenant groups: ids are globally unique UUIDs, so `removed` cannot collide across tenants and
+  // deleteEntry deletes by primary key alone.
   const removed = new Set<string>();
   const pairs: DedupPair[] = [];
   const backing = options.loaded?.backing ?? memoriesBackingObjects(hippoRoot);

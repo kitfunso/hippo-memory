@@ -11,7 +11,10 @@ export interface LedgerRootOpts {
   readonly sharedStore?: boolean;
 }
 
-/** `hippoRoot` when it holds a store, else the global store (the prompt hook fires where no local one exists), else null. */
+/**
+ * `hippoRoot` when it holds a store, else the global store (the prompt hook fires where no local one exists), else
+ * null.
+ */
 export function ledgerRoot(hippoRoot: string, opts?: LedgerRootOpts): string | null {
   if (isInitialized(hippoRoot)) return hippoRoot;
   if (opts?.sharedStore) return null;
@@ -19,8 +22,15 @@ export function ledgerRoot(hippoRoot: string, opts?: LedgerRootOpts): string | n
   return isInitialized(globalRoot) ? globalRoot : null;
 }
 
-/** Runs `call` on ledgerRoot's store root. Best-effort: undefined on any failure, because a ledger failure must not break context or recall. */
-export function onLedgerRoot<T>(hippoRoot: string, opts: LedgerRootOpts | undefined, call: (root: string) => T): T | undefined {
+/**
+ * Runs `call` on ledgerRoot's store root. Best-effort: undefined on any failure, because a ledger failure must not
+ * break context or recall.
+ */
+export function onLedgerRoot<T>(
+  hippoRoot: string,
+  opts: LedgerRootOpts | undefined,
+  call: (root: string) => T,
+): T | undefined {
   let root: string | null = null;
   try {
     root = ledgerRoot(hippoRoot, opts);
@@ -50,7 +60,11 @@ export function bookLedgerTurn(hippoRoot: string, turn: LedgerTurn, opts?: Ledge
 
 /** What the session last sent on `surface` in ledgerRoot's store; undefined with no ledger or a failed read. */
 export function ledgerLastSent(
-  hippoRoot: string, tenantId: string, sessionId: string | null | undefined, surface: TokenSurface, opts?: LedgerRootOpts,
+  hippoRoot: string,
+  tenantId: string,
+  sessionId: string | null | undefined,
+  surface: TokenSurface,
+  opts?: LedgerRootOpts,
 ): LastSent | null | undefined {
   return onLedgerRoot(hippoRoot, opts, (root) => lastSentOnSurface(root, tenantId, sessionId, surface));
 }

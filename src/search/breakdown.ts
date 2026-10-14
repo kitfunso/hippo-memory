@@ -9,7 +9,12 @@ export function ageInDays(entry: MemoryEntry, now: Date): number {
 }
 
 /** Copies the entry's DAG metadata, and for summaries the multipliers applied, onto an explain breakdown. */
-export function addDagFields(breakdown: ScoreBreakdown, entry: MemoryEntry, deboost: number, freshness: number): ScoreBreakdown {
+export function addDagFields(
+  breakdown: ScoreBreakdown,
+  entry: MemoryEntry,
+  deboost: number,
+  freshness: number,
+): ScoreBreakdown {
   if (entry.dag_level !== undefined) breakdown.dagLevel = entry.dag_level;
   if (entry.descendant_count !== undefined) breakdown.descendantCount = entry.descendant_count;
   if (isDagSummary(entry)) {

@@ -36,7 +36,10 @@ export interface JudgeOptions {
 // An honest reply is three short answers, a few hundred bytes; 1 MiB leaves room for a verbose envelope.
 const JUDGE_MAX_REPLY_BYTES = 1024 * 1024;
 
-/** One named answer of a Jev reply `{ answers: { <name>: Answer } }`; an empty object when the reply has none of that shape. */
+/**
+ * One named answer of a Jev reply `{ answers: { <name>: Answer } }`; an empty object when the reply has none of that
+ * shape.
+ */
 function answerNamed(reply: JsonValue, name: string): { [key: string]: JsonValue } {
   const answers = isJsonObject(reply) ? reply.answers : undefined;
   const answer = isJsonObject(answers) ? answers[name] : undefined;
@@ -47,9 +50,12 @@ const QUESTIONS = {
   durable: {
     type: 'noul',
     instructions:
-      'This text was extracted from an AI coding agent transcript as a candidate memory. It is worth storing long-term only if it would still be useful to ' +
-        'a future agent working on this codebase weeks from now: a durable preference, a convention, a decision with a reason, or a gotcha that will recur. ' +
-          'Transient chatter, one-off status, restatements of code already in the repo, and anything only true inside this one session are not worth storing.',
+      'This text was extracted from an AI coding agent transcript as a candidate memory. It is worth storing ' +
+      'long-term only if it would still be useful to ' +
+      'a future agent working on this codebase weeks from now: a durable preference, a convention, a decision with a ' +
+      'reason, or a gotcha that will recur. ' +
+      'Transient chatter, one-off status, restatements of code already in the repo, and anything only true inside ' +
+      'this one session are not worth storing.',
   },
   kind: {
     type: 'choice',

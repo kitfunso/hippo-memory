@@ -25,7 +25,10 @@ export interface ObjectRouteConfig<K extends ObjectKind> {
 
 export interface VersionedRouteConfig<K extends SavableKind, W> extends ObjectRouteConfig<K> {
   readonly object: SavableDescriptor<K, W>;
-  /** Checks the body, then returns the successor's write; split in two so a bad body answers 400 before a missing row answers 404. */
+  /**
+   * Checks the body, then returns the successor's write; split in two so a bad body answers 400 before a missing row
+   * answers 404.
+   */
   readonly revise: (body: Record<string, JsonValue>) => (existing: ObjectByKind[K], id: number) => W;
 }
 
@@ -56,13 +59,21 @@ export function optionalString(body: Record<string, JsonValue>, key: string, max
   return value;
 }
 
-async function found<K extends ObjectKind>(cfg: ObjectRouteConfig<K>, objects: Objects, tenantId: string, id: number): Promise<ObjectByKind[K]> {
+async function found<K extends ObjectKind>(
+  cfg: ObjectRouteConfig<K>,
+  objects: Objects,
+  tenantId: string,
+  id: number,
+): Promise<ObjectByKind[K]> {
   const row = await objectById(objects, cfg.object, tenantId, id);
   if (!row) throw new HttpError(404, `${cfg.noun} ${id} not found`);
   return row;
 }
 
-export async function listRoute<K extends ObjectKind>(cfg: ObjectRouteConfig<K>, rr: AuthedRouteRequest): Promise<void> {
+export async function listRoute<K extends ObjectKind>(
+  cfg: ObjectRouteConfig<K>,
+  rr: AuthedRouteRequest,
+): Promise<void> {
   const { res, query, ctx } = rr;
   const status = query.get('status') ?? 'all';
   const filter = cfg.filterParam === undefined ? null : query.get(cfg.filterParam);
@@ -80,16 +91,26 @@ export async function listRoute<K extends ObjectKind>(cfg: ObjectRouteConfig<K>,
   sendJson(res, 200, { [cfg.listField]: page.items, next_cursor: page.nextCursor });
 }
 
-export async function getRoute<K extends ObjectKind>(cfg: ObjectRouteConfig<K>, rr: AuthedRouteRequest, match: RegExpMatchArray): Promise<void> {
+export async function getRoute<K extends ObjectKind>(
+  cfg: ObjectRouteConfig<K>,
+  rr: AuthedRouteRequest,
+  match: RegExpMatchArray,
+): Promise<void> {
   const id = parseInt(match[1], 10);
   const { ctx } = rr;
   sendJson(rr.res, 200, { [cfg.field]: await found(cfg, objectsOf(ctx), ctx.tenantId, id) });
 }
 
-export async function closeRoute<K extends ObjectKind>(cfg: ObjectRouteConfig<K>, rr: AuthedRouteRequest, match: RegExpMatchArray): Promise<void> {
+export async function closeRoute<K extends ObjectKind>(
+  cfg: ObjectRouteConfig<K>,
+  rr: AuthedRouteRequest,
+  match: RegExpMatchArray,
+): Promise<void> {
   const id = parseInt(match[1], 10);
   const { ctx } = rr;
-  sendJson(rr.res, 200, { [cfg.field]: await closeObject(objectsOf(ctx), cfg.object, ctx.tenantId, id, ctx.actor.subject) });
+  sendJson(rr.res, 200, {
+    [cfg.field]: await closeObject(objectsOf(ctx), cfg.object, ctx.tenantId, id, ctx.actor.subject),
+  });
 }
 
 export async function supersedeRoute<K extends SavableKind, W>(

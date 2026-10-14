@@ -1,4 +1,7 @@
-/** Embedding vectors in the `memory_vectors` table: one Float32 BLOB per memory id, plus the one-time import of the old JSON index. */
+/**
+ * Embedding vectors in the `memory_vectors` table: one Float32 BLOB per memory id, plus the one-time import of the old
+ * JSON index.
+ */
 
 import * as fs from 'fs';
 import * as path from 'path';
@@ -39,7 +42,11 @@ export function decodeVector(blob: Uint8Array): Float32Array {
 }
 
 /** Insert or replace vectors, skipping empty or non-finite ones; the caller owns any surrounding transaction. */
-export function upsertVectors(db: DatabaseSyncLike, rows: Iterable<readonly [string, readonly number[]]>, model: string): number {
+export function upsertVectors(
+  db: DatabaseSyncLike,
+  rows: Iterable<readonly [string, readonly number[]]>,
+  model: string,
+): number {
   const stmt = db.prepare('INSERT OR REPLACE INTO memory_vectors (memory_id, model, dim, vector) VALUES (?, ?, ?, ?)');
   let written = 0;
   for (const [id, vector] of rows) {
@@ -51,7 +58,11 @@ export function upsertVectors(db: DatabaseSyncLike, rows: Iterable<readonly [str
 }
 
 /** Replace the whole table with `index` in one transaction, as a full rebuild does. */
-export function replaceAllVectors(db: DatabaseSyncLike, index: Readonly<Record<string, readonly number[]>>, model: string): void {
+export function replaceAllVectors(
+  db: DatabaseSyncLike,
+  index: Readonly<Record<string, readonly number[]>>,
+  model: string,
+): void {
   withWriteScope(db, 'replace_all_vectors', () => {
     db.exec('DELETE FROM memory_vectors');
     upsertVectors(db, Object.entries(index), model);
@@ -60,14 +71,21 @@ export function replaceAllVectors(db: DatabaseSyncLike, index: Readonly<Record<s
 
 /** Drop vectors whose memory row is gone; returns how many went. */
 export function deleteOrphanVectors(db: DatabaseSyncLike): number {
-  return Number(db.prepare('DELETE FROM memory_vectors WHERE memory_id NOT IN (SELECT id FROM memories)').run().changes ?? 0);
+  return Number(
+    db.prepare('DELETE FROM memory_vectors WHERE memory_id NOT IN (SELECT id FROM memories)').run().changes ?? 0,
+  );
 }
 
 // One read behind the copied and the viewed shape, so the two can never return different rows.
-function eachStoredVector(db: DatabaseSyncLike, ids: readonly string[] | undefined, take: (id: string, vector: Float32Array) => void): void {
+function eachStoredVector(
+  db: DatabaseSyncLike,
+  ids: readonly string[] | undefined,
+  take: (id: string, vector: Float32Array) => void,
+): void {
   const read = (rows: Iterable<unknown>): void => {
     // SAFETY: both SELECTs below name exactly these two columns; node:sqlite returns BLOBs as Uint8Array.
-    for (const row of rows as Iterable<{ memory_id: string; vector: Uint8Array }>) take(row.memory_id, decodeVector(row.vector));
+    for (const row of rows as Iterable<{ memory_id: string; vector: Uint8Array }>)
+      take(row.memory_id, decodeVector(row.vector));
   };
   if (ids === undefined) {
     read(db.prepare('SELECT memory_id, vector FROM memory_vectors').iterate());
@@ -76,7 +94,11 @@ function eachStoredVector(db: DatabaseSyncLike, ids: readonly string[] | undefin
   const unique = [...new Set(ids)];
   for (let i = 0; i < unique.length; i += ID_CHUNK) {
     const chunk = unique.slice(i, i + ID_CHUNK);
-    read(db.prepare(`SELECT memory_id, vector FROM memory_vectors WHERE memory_id IN (${placeholders(chunk.length)})`).all(...chunk));
+    read(
+      db
+        .prepare(`SELECT memory_id, vector FROM memory_vectors WHERE memory_id IN (${placeholders(chunk.length)})`)
+        .all(...chunk),
+    );
   }
 }
 
@@ -96,13 +118,16 @@ export function loadVectorViews(db: DatabaseSyncLike, ids: readonly string[]): M
 
 export function storedVectorIds(db: DatabaseSyncLike): Set<string> {
   // SAFETY: the SELECT names exactly the one column read.
-  return new Set((db.prepare('SELECT memory_id FROM memory_vectors').all() as Array<{ memory_id: string }>).map((r) => r.memory_id));
+  return new Set(
+    (db.prepare('SELECT memory_id FROM memory_vectors').all() as Array<{ memory_id: string }>).map((r) => r.memory_id),
+  );
 }
 
 /** Float count of the first stored row, from its blob length; the vector is never read. */
 export function storedVectorDims(db: DatabaseSyncLike): number | undefined {
   // SAFETY: the SELECT names exactly the one column read.
-  const row = db.prepare('SELECT length(vector) AS bytes FROM memory_vectors LIMIT 1').get() as { bytes: number } | undefined;
+  const row = db.prepare('SELECT length(vector) AS bytes FROM memory_vectors LIMIT 1').get() as
+    { bytes: number } | undefined;
   return row === undefined ? undefined : Math.floor(row.bytes / 4);
 }
 
@@ -121,8 +146,12 @@ export interface VectorRow {
   readonly vector: Float32Array;
 }
 
-/** The `k` rows closest to `query` by cosine, best first; ties go to the smaller id, so row order never changes the top k.
- *  The query rounds to Float32 as stored vectors are, and scores add up in float64, so every store that feeds it the same bytes ranks alike. */
+/**
+ * The `k` rows closest to `query` by cosine, best first; ties go to the smaller id, so row order never changes the top
+ * k.
+ * The query rounds to Float32 as stored vectors are, and scores add up in float64, so every store that feeds it the
+ * same bytes ranks alike.
+ */
 export function rankVectorRows(query: readonly number[], rows: Iterable<VectorRow>, k: number): VectorMatch[] {
   const best = bestMatches(query, k);
   if (!best) return [];
@@ -225,7 +254,9 @@ function stamp(): string {
 // The codes a rename gets when another process holds the file open (Windows); any other failure would fail a copy too.
 const RENAME_BLOCKED_CODES = new Set(['EPERM', 'EBUSY', 'EACCES']);
 
-/** Rename `fp` to `aside`; a rename blocked by an open handle falls back to a copy, so the bytes are kept either way. */
+/**
+ * Rename `fp` to `aside`; a rename blocked by an open handle falls back to a copy, so the bytes are kept either way.
+ */
 function moveAside(fp: string, aside: string): boolean {
   try {
     fs.renameSync(fp, aside);
@@ -234,7 +265,10 @@ function moveAside(fp: string, aside: string): boolean {
     const code = errorCode(err);
     if (code === 'ENOENT') return false;
     if (!RENAME_BLOCKED_CODES.has(code)) throw err;
-    log.warn(`could not rename ${path.basename(fp)} aside (${code}); copying it instead`, { path: fp, ...errorFields(err) });
+    log.warn(`could not rename ${path.basename(fp)} aside (${code}); copying it instead`, {
+      path: fp,
+      ...errorFields(err),
+    });
     fs.copyFileSync(fp, aside, fs.constants.COPYFILE_EXCL);
     try {
       fs.rmSync(fp, { force: true });
@@ -247,7 +281,8 @@ function moveAside(fp: string, aside: string): boolean {
   }
 }
 
-// The old writer only wrote a plain object of id to number[]; any other shape is corrupt, and non-numeric entries are dropped.
+// The old writer only wrote a plain object of id to number[]; any other shape is corrupt, and non-numeric entries are
+// dropped.
 function parseLegacyIndex(raw: string): Map<string, number[]> | null {
   let parsed: unknown;
   try {
@@ -264,7 +299,9 @@ function parseLegacyIndex(raw: string): Map<string, number[]> | null {
 }
 
 /** Move a legacy `embeddings.json` into `memory_vectors`, then keep the file as `embeddings.json.imported-<stamp>`.
- *  Runs after the migration commits, so the rename never outlives rolled-back rows; a file an older binary writes later imports the same way. */
+ * Runs after the migration commits, so the rename never outlives rolled-back rows; a file an older binary writes later
+ * imports the same way.
+ */
 export function importLegacyEmbeddingIndex(db: DatabaseSyncLike, hippoRoot: string): void {
   const fp = path.join(hippoRoot, LEGACY_EMBEDDINGS_FILE);
   let raw: string;
@@ -278,16 +315,28 @@ export function importLegacyEmbeddingIndex(db: DatabaseSyncLike, hippoRoot: stri
   if (!index) {
     const aside = `${fp}.corrupt-${stamp()}`;
     if (!moveAside(fp, aside)) return;
-    log.error(`${LEGACY_EMBEDDINGS_FILE} could not be parsed; kept it as ${path.basename(aside)} and the next embed rebuilds the index`, { hippoRoot });
-    db.prepare(`INSERT INTO meta(key, value) VALUES(?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`)
-      .run(EMBEDDING_MODEL_META_KEY, QUARANTINED_INDEX_IDENTITY);
+    log.error(
+      `${LEGACY_EMBEDDINGS_FILE} could not be parsed; kept it as ${path.basename(aside)} and the next embed rebuilds ` +
+      `the index`,
+      { hippoRoot },
+    );
+    db.prepare(`INSERT INTO meta(key, value) VALUES(?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`).run(
+      EMBEDDING_MODEL_META_KEY,
+      QUARANTINED_INDEX_IDENTITY,
+    );
     return;
   }
   // SAFETY: the SELECT names exactly the one column read.
-  const model = (db.prepare(`SELECT value FROM meta WHERE key = ?`).get(EMBEDDING_MODEL_META_KEY) as { value?: string } | undefined)?.value ?? '';
+  const model =
+    (db.prepare(`SELECT value FROM meta WHERE key = ?`).get(EMBEDDING_MODEL_META_KEY) as { value?: string } | undefined)
+      ?.value ?? '';
   const written = withWriteScope(db, 'import_legacy_vectors', () => upsertVectors(db, index, model));
   const backup = `${fp}.imported-${stamp()}`;
   if (moveAside(fp, backup)) {
-    log.info(`moved ${written} vectors from ${LEGACY_EMBEDDINGS_FILE} into the store; the file is kept as ${path.basename(backup)}`, { hippoRoot });
+    log.info(
+      `moved ${written} vectors from ${LEGACY_EMBEDDINGS_FILE} into the store; the file is kept as ` +
+      `${path.basename(backup)}`,
+      { hippoRoot },
+    );
   }
 }

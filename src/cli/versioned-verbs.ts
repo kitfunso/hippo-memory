@@ -1,11 +1,19 @@
-// One handler set for the kinds that evolve by supersession (brief, note, policy, process, skill), each driven by a descriptor.
+// One handler set for the kinds that evolve by supersession (brief, note, policy, process, skill), each driven by a
+// descriptor.
 
 import { extractPathTags } from '../search/path-context.js';
 import { errorMessage } from '../util/log.js';
 import { printError } from './output.js';
 import { nonEmptyStringFlag, stringFlag, type CliFlags, type CommandContext } from './flag-values.js';
 import { requireInit } from './shared.js';
-import { closeObject, foundOrExit, idArgOrExit, listObjects, printLifecycleTail, type ObjectNames } from './object-verbs.js';
+import {
+  closeObject,
+  foundOrExit,
+  idArgOrExit,
+  listObjects,
+  printLifecycleTail,
+  type ObjectNames,
+} from './object-verbs.js';
 import { CliExit, fail } from './exit.js';
 
 type VersionedRow = Parameters<typeof printLifecycleTail>[0] & { readonly id: number; readonly version: number };
@@ -59,7 +67,12 @@ export function versionedVerbs<O extends VersionedRow, S extends string, B>(
     const sub = args[0] ?? '';
     if (sub === kind.extra?.sub) return kind.extra.run(args, flags);
     if (sub === 'list') {
-      return listObjects(flags, { plural: kind.plural, states: kind.states, load: (opts) => kind.list(opts, flags), printRow: kind.printRow });
+      return listObjects(flags, {
+        plural: kind.plural,
+        states: kind.states,
+        load: (opts) => kind.list(opts, flags),
+        printRow: kind.printRow,
+      });
     }
     if (sub === 'get') return getVersion(kind, args);
     if (sub === 'supersede') return supersedeVersion(kind, args, flags);
@@ -77,7 +90,11 @@ function getVersion<O extends VersionedRow, S extends string, B>(kind: Versioned
   printLifecycleTail(o);
 }
 
-function createVersion<O extends VersionedRow, S extends string, B>(kind: VersionedKind<O, S, B>, key: string, flags: CliFlags): void {
+function createVersion<O extends VersionedRow, S extends string, B>(
+  kind: VersionedKind<O, S, B>,
+  key: string,
+  flags: CliFlags,
+): void {
   const body = key ? kind.body(flags, 'new') : undefined;
   if (body === undefined) {
     for (const line of kind.usage) printError(line);
@@ -87,20 +104,33 @@ function createVersion<O extends VersionedRow, S extends string, B>(kind: Versio
   printSaved(kind.recorded(created), created);
 }
 
-function supersedeVersion<O extends VersionedRow, S extends string, B>(kind: VersionedKind<O, S, B>, args: string[], flags: CliFlags): void {
+function supersedeVersion<O extends VersionedRow, S extends string, B>(
+  kind: VersionedKind<O, S, B>,
+  args: string[],
+  flags: CliFlags,
+): void {
   const id = idArgOrExit(args, kind.supersedeUsage, kind.names.idLabel);
   const body = kind.body(flags, 'supersede');
   if (body === undefined) {
     fail(`hippo ${kind.names.cmd} supersede requires ${kind.bodyRequired} for the new version.`);
   }
-  // The lookup only gives a missing id its not-found line; the save's own preflight is the authoritative active-state check.
+  // The lookup only gives a missing id its not-found line; the save's own preflight is the authoritative active-state
+  // check.
   const existing = foundOrExit(kind.loadById(id), kind.names.noun, id);
-  const created = saveVersion(kind, kind.keyOf(existing), body, { id, changeSummary: nonEmptyStringFlag(flags, 'change') });
+  const created = saveVersion(kind, kind.keyOf(existing), body, {
+    id,
+    changeSummary: nonEmptyStringFlag(flags, 'change'),
+  });
   printSaved(`${kind.names.noun} #${created.id} recorded (v${created.version}), superseding #${id}.`, created);
 }
 
 /** Every kind's save goes through here, so a refused write always prints the store's message and exits 1. */
-function saveVersion<O extends VersionedRow, S extends string, B>(kind: VersionedKind<O, S, B>, key: string, body: B, from?: Succession): O {
+function saveVersion<O extends VersionedRow, S extends string, B>(
+  kind: VersionedKind<O, S, B>,
+  key: string,
+  body: B,
+  from?: Succession,
+): O {
   try {
     return kind.save(key, body, extractPathTags(process.cwd()), from);
   } catch (e) {

@@ -2,12 +2,16 @@ import { SERVER_DB_WAIT_MS, runWithRequestStores } from '../db/index.js';
 import { errorFields, errorMessage, log } from '../util/log.js';
 import type { HippoStore } from '../store/index.js';
 
-// A prober must never see a 429, so the store read is bounded by remembering its answer instead of rate-limiting the route.
+// A prober must never see a 429, so the store read is bounded by remembering its answer instead of rate-limiting the
+// route.
 const READY_WINDOW_MS = 1000;
 
 export type ReadyProbe = () => Promise<boolean>;
 
-/** True when the store answered; one read per window whatever the caller count, and a failed read is remembered for the same window. */
+/**
+ * True when the store answered; one read per window whatever the caller count, and a failed read is remembered for the
+ * same window.
+ */
 function createReadyProbe(readiness: { ping(): Promise<void> }, now: () => number = Date.now): ReadyProbe {
   let answer: { at: number; ok: boolean } | undefined;
   let inFlight: Promise<boolean> | undefined;
@@ -34,7 +38,11 @@ function createReadyProbe(readiness: { ping(): Promise<void> }, now: () => numbe
 const probes = new WeakMap<HippoStore, ReadyProbe>();
 
 /** The shared probe for a served store, so every request to that server draws on one remembered answer. */
-export function readyProbeFor(store: HippoStore, readiness: { ping(): Promise<void> }, now: () => number = Date.now): ReadyProbe {
+export function readyProbeFor(
+  store: HippoStore,
+  readiness: { ping(): Promise<void> },
+  now: () => number = Date.now,
+): ReadyProbe {
   let probe = probes.get(store);
   if (probe === undefined) {
     probe = createReadyProbe(readiness, now);

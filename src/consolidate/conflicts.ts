@@ -4,7 +4,8 @@ import { isQuarantineScope } from '../trust/quarantine.js';
 import { isPersonalScope } from '../core/recall-scope.js';
 import { DECAY_THRESHOLD } from './decay.js';
 
-// Gate contradictions on content overlap, not shared tags (`feedback`/`policy` are too coarse). The Jaccard threshold on stopword-filtered tokens
+// Gate contradictions on content overlap, not shared tags (`feedback`/`policy` are too coarse). The Jaccard threshold
+// on stopword-filtered tokens
 // only applies after a polarity signal, so it filters drive-by topic similarity, not semantic drift.
 const CONFLICT_OVERLAP_THRESHOLD = 0.5;
 // Minimum distinctive shared tokens before we trust an overlap score. Filters
@@ -56,7 +57,8 @@ export function detectConflicts(
       if (survivors[i].layer === Layer.Trace && survivors[j].layer === Layer.Trace) continue;
       if (survivors[i].superseded_by || survivors[j].superseded_by) continue;
       if (!recalledTogether(survivors[i], survivors[j])) continue;
-      if ([survivors[i], survivors[j]].some((e) => e.tags.includes('extracted') || e.tags.includes('session-digest'))) continue;
+      if ([survivors[i], survivors[j]].some((e) => e.tags.includes('extracted') || e.tags.includes('session-digest')))
+        continue;
       const reasonAndScore = describeConflict(profiles[i], profiles[j]);
       if (!reasonAndScore) continue;
       detected.push({
@@ -71,7 +73,10 @@ export function detectConflicts(
   return detected;
 }
 
-/** One project's ambient context can show both: same tenant, and the same project or a user-global row beside a project's. */
+/**
+ * One project's ambient context can show both: same tenant, and the same project or a user-global row beside a
+ * project's.
+ */
 function recalledTogether(a: MemoryEntry, b: MemoryEntry): boolean {
   // A personal row pairs only inside its own scope; any other pair shows its id to someone else.
   if ((isPersonalScope(a.scope) || isPersonalScope(b.scope)) && a.scope !== b.scope) return false;
@@ -91,9 +96,14 @@ interface ConflictProfile {
 
 function conflictProfile(text: string): ConflictProfile {
   const opening = openingWindow(text);
-  // Polarity is measured only in the first POLARITY_WINDOW_WORDS, so a stray negation deep in a prose memory doesn't flip the intent.
+  // Polarity is measured only in the first POLARITY_WINDOW_WORDS, so a stray negation deep in a prose memory doesn't
+  // flip the intent.
   // Pad with spaces so space-delimited patterns match words at the start/end.
-  return { distinct: distinctiveTokens(text), polarity: inferConflictPolarity(opening), window: ' ' + opening.toLowerCase() + ' ' };
+  return {
+    distinct: distinctiveTokens(text),
+    polarity: inferConflictPolarity(opening),
+    window: ' ' + opening.toLowerCase() + ' ',
+  };
 }
 
 function describeConflict(a: ConflictProfile, b: ConflictProfile): { reason: string; score: number } | null {
@@ -148,21 +158,28 @@ function classifyConflictType(
   aPolarity: ConflictPolarity,
   bPolarity: ConflictPolarity,
 ): string | null {
-  // Whole-word boundaries so " on " alone doesn't match "on/off"; pair only `enabled` <-> `disabled` and explicit on/off in imperative context.
+  // Whole-word boundaries so " on " alone doesn't match "on/off"; pair only `enabled` <-> `disabled` and explicit
+  // on/off in imperative context.
   const enabledDisabled =
     (containsAny(a, [' enabled ', ' enable ']) && containsAny(b, [' disabled ', ' disable ']))
     || (containsAny(b, [' enabled ', ' enable ']) && containsAny(a, [' disabled ', ' disable ']));
   if (enabledDisabled) return 'enabled/disabled mismatch on overlapping statement';
 
-  const trueFalse = (containsAny(a, [' true ', ' true.', ' true,', ' yes ']) && containsAny(b, [' false ', ' false.', ' false,', ' no ']))
-    || (containsAny(b, [' true ', ' true.', ' true,', ' yes ']) && containsAny(a, [' false ', ' false.', ' false,', ' no ']));
+  const trueFalse =
+    (containsAny(a, [' true ', ' true.', ' true,', ' yes ']) &&
+      containsAny(b, [' false ', ' false.', ' false,', ' no '])) ||
+    (containsAny(b, [' true ', ' true.', ' true,', ' yes ']) &&
+      containsAny(a, [' false ', ' false.', ' false,', ' no ']));
   if (trueFalse) return 'true/false mismatch on overlapping statement';
 
   const alwaysNever = (containsAny(a, [' always ', ' must ']) && containsAny(b, [' never ', ' must not ']))
     || (containsAny(b, [' always ', ' must ']) && containsAny(a, [' never ', ' must not ']));
   if (alwaysNever) return 'always/never mismatch on overlapping statement';
 
-  if ((aPolarity === 'positive' && bPolarity === 'negative') || (aPolarity === 'negative' && bPolarity === 'positive')) {
+  if (
+    (aPolarity === 'positive' && bPolarity === 'negative') ||
+    (aPolarity === 'negative' && bPolarity === 'positive')
+  ) {
     return 'negation polarity mismatch on overlapping statement';
   }
 

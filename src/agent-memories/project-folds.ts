@@ -1,4 +1,5 @@
-// Project names folded into others, read from the audit trail: the sync files imports under the surviving name, and `hippo projects` repair agrees.
+// Project names folded into others, read from the audit trail: the sync files imports under the surviving name, and
+// `hippo projects` repair agrees.
 import { isObjectLike, isStringValue } from '../core/capture-contract.js';
 import type { ProjectTagReads } from '../store/project-tags.js';
 import type { JsonValue } from '../util/json.js';

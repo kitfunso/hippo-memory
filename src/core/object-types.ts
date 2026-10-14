@@ -159,8 +159,17 @@ export type ObjectKind = keyof ObjectByKind;
 /** What one save stores, per kind the shared save writes; core has checked and resolved every value. */
 export interface ObjectFields {
   decision: { readonly decisionText: string; readonly context: string | undefined };
-  process: { readonly processName: string; readonly description: string | undefined; readonly steps: readonly string[] };
-  policy: { readonly policyName: string; readonly policyText: string; readonly validFrom: string; readonly validTo: string | null };
+  process: {
+    readonly processName: string;
+    readonly description: string | undefined;
+    readonly steps: readonly string[];
+  };
+  policy: {
+    readonly policyName: string;
+    readonly policyText: string;
+    readonly validFrom: string;
+    readonly validTo: string | null;
+  };
   skill: { readonly name: string; readonly instructions: string; readonly trigger: string | null };
   /** `receiptCount` is set only when a refresh wrote this version. */
   project_brief: { readonly repo: string; readonly summary: string; readonly receiptCount: number | undefined };

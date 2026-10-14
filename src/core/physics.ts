@@ -1,5 +1,8 @@
-/** Memory-as-Physics engine: pure math (forces, Velocity Verlet integration, physics-based scoring, cluster amplification), no I/O.
- * Memories are particles on the unit hypersphere in embedding space (384-dim); query gravity, attraction, conflict repulsion and drag act on them,
+/**
+ * Memory-as-Physics engine: pure math (forces, Velocity Verlet integration, physics-based scoring, cluster
+ * amplification), no I/O.
+ * Memories are particles on the unit hypersphere in embedding space (384-dim); query gravity, attraction, conflict
+ * repulsion and drag act on them,
  * and nearby high-scoring memories amplify each other. */
 
 import { cosineOf } from './cosine.js';
@@ -101,8 +104,10 @@ const CHARGE_MAP = {
 } satisfies Record<EmotionalValence, number>;
 
 export function computeMass(strength: number, retrievalCount: number): number {
-  // EVAL-ONLY ablation (ablation.ts): under the recall-boost flag mass ignores retrieval history, which would otherwise leak strengthening into the ablated
-  // arm's physics-pool rankings (query gravity ranks by mass). Covers both init and refresh callers in physics-state.ts.
+  // EVAL-ONLY ablation (ablation.ts): under the recall-boost flag mass ignores retrieval history, which would otherwise
+  // leak strengthening into the ablated
+  // arm's physics-pool rankings (query gravity ranks by mass). Covers both init and refresh callers in
+  // physics-state.ts.
   const effectiveCount = isRecallBoostAblated() ? 0 : retrievalCount;
   return Math.max(MIN_MASS, strength * (1 + RETRIEVAL_MASS_GAIN * Math.log2(effectiveCount + 1)));
 }
@@ -115,7 +120,10 @@ export function computeTemperature(ageDays: number, temperatureDecay: number): n
   return 1 / (ageDays * temperatureDecay + 1);
 }
 
-/** Query gravity (retrieval-time, virtual: does not move the particle): scalar ranking magnitude F = G_Q * mass * max(0, cosine(pos, query))^2. */
+/**
+ * Query gravity (retrieval-time, virtual: does not move the particle): scalar ranking magnitude F = G_Q * mass * max(0,
+ * cosine(pos, query))^2.
+ */
 export function queryGravityMagnitude(
   particle: PhysicsParticle,
   queryEmbedding: number[],
@@ -138,8 +146,12 @@ export function velocityAlignmentBonus(
   return Math.max(0, alignment);
 }
 
-/** Attraction force on particle i from j (consolidation-time): G_M m_i m_j max(0, cosine)^3, directed along (pos_j - pos_i) projected tangent to the unit
- * sphere at pos_i (positions are re-normalized to the sphere after integration). Adds into `out` (a fresh zero vector by default) using `diff` as scratch. */
+/**
+ * Attraction force on particle i from j (consolidation-time): G_M m_i m_j max(0, cosine)^3, directed along (pos_j -
+ * pos_i) projected tangent to the unit
+ * sphere at pos_i (positions are re-normalized to the sphere after integration). Adds into `out` (a fresh zero vector
+ * by default) using `diff` as scratch.
+ */
 export function attractionForce(
   pi: PhysicsParticle,
   pj: PhysicsParticle,
@@ -160,7 +172,10 @@ export function attractionForce(
   return out;
 }
 
-/** Conflict repulsion on i away from j (consolidation-time): K_R * m_i * m_j / max(0.01, cosine_distance)^2, where cosine_distance = 1 - cosine_similarity. */
+/**
+ * Conflict repulsion on i away from j (consolidation-time): K_R * m_i * m_j / max(0.01, cosine_distance)^2, where
+ * cosine_distance = 1 - cosine_similarity.
+ */
 export function repulsionForce(
   pi: PhysicsParticle,
   pj: PhysicsParticle,
@@ -174,7 +189,10 @@ export function repulsionForce(
   return vecScale(direction, magnitude);
 }
 
-/** Drag force (consolidation-time): -drag * velocity / max(1, effectiveHalfLife), with effectiveHalfLife from the memory's current half_life_days. */
+/**
+ * Drag force (consolidation-time): -drag * velocity / max(1, effectiveHalfLife), with effectiveHalfLife from the
+ * memory's current half_life_days.
+ */
 export function dragForce(
   particle: PhysicsParticle,
   drag: number,
@@ -346,12 +364,16 @@ export function computeSystemEnergy(
   return { kinetic, potential, total: kinetic + potential };
 }
 
-/** Scores all particles against a query embedding; virtual force computation, so it does NOT modify particle positions. */
+/**
+ * Scores all particles against a query embedding; virtual force computation, so it does NOT modify particle positions.
+ */
 export function physicsScore(
   particles: PhysicsParticle[],
   queryEmbedding: number[],
   config: PhysicsConfig,
-  /** Cross-ingest-stable tie key per memoryId (typically the memory content, from a caller with entries in scope); without it ties fall to memoryId,
+  /**
+   * Cross-ingest-stable tie key per memoryId (typically the memory content, from a caller with entries in scope);
+   * without it ties fall to memoryId,
    *  which is per-instance only and lets the cluster_top_k amplification set vary across fresh ingests. */
   tieKeyOf?: (memoryId: string) => string,
 ): ScoredPhysicsResult[] {
@@ -369,7 +391,8 @@ export function physicsScore(
     };
   });
 
-  // Base-score order picks the cluster_top_k amplification SET (which mutates scores), so ties must be cross-ingest-stable
+  // Base-score order picks the cluster_top_k amplification SET (which mutates scores), so ties must be
+  // cross-ingest-stable
   // when the caller supplies a content tie key (see comparePhysicsResultsBy in compare.ts).
   const tie = tieKeyOf ? (r: ScoredPhysicsResult) => tieKeyOf(r.memoryId) : undefined;
   results.sort(comparePhysicsResultsBy((r) => r.baseScore, tie));
@@ -420,7 +443,10 @@ function applyClusterAmplification(
   }
 }
 
-/** Nudges a particle toward (good outcome) or away from (bad outcome) the query embedding; new memories respond more (temperature). Mutates in place. */
+/**
+ * Nudges a particle toward (good outcome) or away from (bad outcome) the query embedding; new memories respond more
+ * (temperature). Mutates in place.
+ */
 export function applyOutcomeFeedback(
   particle: PhysicsParticle,
   queryEmbedding: number[],
@@ -434,7 +460,10 @@ export function applyOutcomeFeedback(
   particle.position = vecNormalize(vecAdd(particle.position, nudge));
 }
 
-/** Initialize physics state for a memory from its embedding vector; returns the new particle without persisting (the caller must save). */
+/**
+ * Initialize physics state for a memory from its embedding vector; returns the new particle without persisting (the
+ * caller must save).
+ */
 export function initializeParticle(
   entry: MemoryEntry,
   embedding: number[],

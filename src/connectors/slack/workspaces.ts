@@ -1,10 +1,17 @@
-/** Slack workspace registration helpers: the `slack_workspaces` table maps `team_id` to `tenant_id` (empty = single-tenant, non-empty = fail-closed routing).
- *  `add` is an upsert that overwrites an existing team_id's tenant on purpose, so moving a workspace needs no delete+add. */
+/**
+ * Slack workspace registration helpers: the `slack_workspaces` table maps `team_id` to `tenant_id` (empty =
+ * single-tenant, non-empty = fail-closed routing).
+ * `add` is an upsert that overwrites an existing team_id's tenant on purpose, so moving a workspace needs no
+ * delete+add.
+ */
 
 import { upsertSlackWorkspace, type SlackWorkspace } from '../../store/connectors/slack.js';
 
 export type { SlackWorkspace };
-export { listSlackWorkspaces as listWorkspaces, removeSlackWorkspace as removeWorkspace } from '../../store/connectors/slack.js';
+export {
+  listSlackWorkspaces as listWorkspaces,
+  removeSlackWorkspace as removeWorkspace,
+} from '../../store/connectors/slack.js';
 
 export interface AddWorkspaceOpts {
   teamId: string;

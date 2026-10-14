@@ -17,14 +17,26 @@ import type { CliFlags } from './flag-values.js';
 
 export function requireInit(hippoRoot: string): void {
   if (!isInitialized(hippoRoot)) {
-    printError(`No hippo store at ${hippoRoot} (searched ${process.cwd()} and its parents up to your home directory). Run \`hippo init\` first.`);
+    printError(
+      `No hippo store at ${hippoRoot} (searched ${process.cwd()} and its parents up to your home directory). Run ` +
+      `\`hippo init\` first.`,
+    );
     process.exit(1);
   }
 }
 
 /** Runs detectChurnStale against every store this repo's memories can live in. */
-export function runChurnStaleForRepo(hippoRoot: string, tenantId: string, dryRun: boolean): { root: string; result: ChurnStaleResult }[] {
-  const repoRoot = execFileSync('git', ['rev-parse', '--show-toplevel'], { cwd: process.cwd(), encoding: 'utf8', timeout: 10_000, windowsHide: true }).trim();
+export function runChurnStaleForRepo(
+  hippoRoot: string,
+  tenantId: string,
+  dryRun: boolean,
+): { root: string; result: ChurnStaleResult }[] {
+  const repoRoot = execFileSync('git', ['rev-parse', '--show-toplevel'], {
+    cwd: process.cwd(),
+    encoding: 'utf8',
+    timeout: 10_000,
+    windowsHide: true,
+  }).trim();
   const { name: projectName, legacyName } = resolveProjectIdentity(process.cwd());
   const globalRoot = getGlobalRoot();
   const roots = globalRoot !== hippoRoot && isInitialized(globalRoot) ? [hippoRoot, globalRoot] : [hippoRoot];
@@ -34,12 +46,17 @@ export function runChurnStaleForRepo(hippoRoot: string, tenantId: string, dryRun
       return { root, result: detectChurnStale(root, repoRoot, { tenantId, projectName, legacyName, dryRun }) };
     } catch (err) {
       const message = errorMessage(err);
-      return { root, result: { checked: 0, marked: 0, alreadyMarked: 0, skippedPinned: [], dryRun, preview: [], error: message } };
+      return {
+        root,
+        result: { checked: 0, marked: 0, alreadyMarked: 0, skippedPinned: [], dryRun, preview: [], error: message },
+      };
     }
   });
 }
 
-/** With HIPPO_REQUIRE_SERVER set, throw rather than fall back to direct DB mode, which would mask a misconfiguration and discard HIPPO_API_KEY.
+/**
+ * With HIPPO_REQUIRE_SERVER set, throw rather than fall back to direct DB mode, which would mask a misconfiguration and
+ * discard HIPPO_API_KEY.
  * Guards only the routed writes (remember, forget, archive, promote). */
 function failIfServerRequired(reason: string): void {
   if (envRequireServer()) {
@@ -50,7 +67,9 @@ function failIfServerRequired(reason: string): void {
   }
 }
 
-/** Run an HTTP-routed command if a `hippo serve` is detected: true if it ran, false on no server or a stale pidfile (removed if it names the dead server).
+/**
+ * Run an HTTP-routed command if a `hippo serve` is detected: true if it ran, false on no server or a stale pidfile
+ * (removed if it names the dead server).
  * With HIPPO_REQUIRE_SERVER set both fallbacks throw; a stale pidfile must self-heal, not crash. */
 export async function runViaServerIfAvailable(
   hippoRoot: string,
@@ -76,10 +95,12 @@ export async function runViaServerIfAvailable(
       return false;
     }
     if (failure === 'delivery-unknown') {
-      // Every caller is a non-idempotent write, so replaying on the direct path would store a row the server may already have committed;
+      // Every caller is a non-idempotent write, so replaying on the direct path would store a row the server may
+      // already have committed;
       // leave the pidfile alone: the next command's connect-phase failure heals it.
       printError(
-        `hippo: the connection to ${info.url} dropped or timed out mid-request, so the write may already have been applied. ` +
+        `hippo: the connection to ${info.url} dropped or timed out mid-request, so the write may already have been ` +
+        `applied. ` +
           'Not retrying locally. Check with `hippo recall` before running this again.',
       );
       process.exit(1);

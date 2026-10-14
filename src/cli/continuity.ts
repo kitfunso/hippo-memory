@@ -22,7 +22,14 @@ import { collectHandoffEvidence } from '../capture/handoff-evidence.js';
 import type { SessionEvent, TaskSnapshot } from '../store/rows.js';
 import { requireInit } from './shared.js';
 import { printActiveTaskSnapshot, printSessionEvents, printHandoff } from './print.js';
-import { type CliFlags, boolFlag, isStringFlag, numberFlag, stringFlagOrExit, type CommandContext } from './flag-values.js';
+import {
+  type CliFlags,
+  boolFlag,
+  isStringFlag,
+  numberFlag,
+  stringFlagOrExit,
+  type CommandContext,
+} from './flag-values.js';
 import { fail } from './exit.js';
 
 const ISO_DATETIME_CHARS = 19;
@@ -34,7 +41,10 @@ function snapshotSave(hippoRoot: string, tenantId: string, flags: CliFlags): voi
   const sessionId = stringFlagOrExit(flags, 'session') ?? stringFlagOrExit(flags, 'id') ?? '';
 
   if (!task || !summary || !nextStep) {
-    fail('Usage: hippo snapshot save --task <task> --summary <summary> --next-step <step> [--source <source>] [--session <session-id>]');
+    fail(
+      'Usage: hippo snapshot save --task <task> --summary <summary> --next-step <step> ' +
+        '[--source <source>] [--session <session-id>]',
+    );
   }
 
   const snapshot = apiSnapshotSave(cliApiContext(hippoRoot, tenantId), {
@@ -106,7 +116,10 @@ function sessionLog(hippoRoot: string, tenantId: string, s: SessionArgs, flags: 
   const content = stringFlagOrExit(flags, 'content') ?? '';
 
   if (!s.sessionId || !content) {
-    fail('Usage: hippo session log --id <session-id> --content <text> [--type <type>] [--task <task>] [--source <source>]');
+    fail(
+      'Usage: hippo session log --id <session-id> --content <text> [--type <type>] [--task <task>] ' +
+        '[--source <source>]',
+    );
   }
 
   const event = sessionEventAppend(cliApiContext(hippoRoot, tenantId), {
@@ -259,7 +272,8 @@ function flagList(value: string | boolean | string[] | undefined): string[] {
   return Array.isArray(value) ? value : (isStringFlag(value) ? [value] : []);
 }
 
-const HANDOFF_CREATE_USAGE = 'Usage: hippo handoff create --summary "..." [--next "..."] [--session <id>] [--task <id>] [--artifact <path>...] ' +
+const HANDOFF_CREATE_USAGE = 'Usage: hippo handoff create --summary "..." [--next "..."] [--session <id>] ' +
+  '[--task <id>] [--artifact <path>...] ' +
   '[--constraint <text>...] [--outcome <success|failure|partial>] [--target-runtime <name>] [--card-id <id>] ' +
   '[--tests <pass|fail|unknown>]';
 
@@ -274,7 +288,8 @@ function handoffCreate(hippoRoot: string, tenantId: string, flags: CliFlags): vo
     fail(`Invalid outcome: "${String(outcomeRaw)}". Must be one of: success, failure, partial.`);
   }
 
-  const sessionId = (stringFlagOrExit(flags, 'session') ?? stringFlagOrExit(flags, 'id') ?? '') || `fallback-${Date.now()}-${process.pid}`;
+  const sessionId = (stringFlagOrExit(flags, 'session') ?? stringFlagOrExit(flags, 'id') ?? '') ||
+    `fallback-${Date.now()}-${process.pid}`;
   const nextAction = stringFlagOrExit(flags, 'next') || undefined;
   const taskId = stringFlagOrExit(flags, 'task') || undefined;
   const artifacts = flagList(flags['artifact']);

@@ -1,6 +1,13 @@
-// hippo.db's half of the Predictions store group: each method is one call into the queries the CLI and the MCP tools run.
+// hippo.db's half of the Predictions store group: each method is one call into the queries the CLI and the MCP tools
+// run.
 import {
-  closePrediction, computePredictionBaserate, loadAllPredictions, loadOpenPredictions, loadPredictionById, loadPredictionsByClass, writePrediction,
+  closePrediction,
+  computePredictionBaserate,
+  loadAllPredictions,
+  loadOpenPredictions,
+  loadPredictionById,
+  loadPredictionsByClass,
+  writePrediction,
 } from '../predictions.js';
 import type { Predictions, Sync } from '../port.js';
 
@@ -18,7 +25,8 @@ export function sqlitePredictions(hippoRoot: string): Sync<Predictions> {
   };
 }
 
-/** The group as a served store answers it: each call runs at once and resolves through a Promise, so a throw rejects as another store's would. */
+/** The group as a served store answers it: each call runs at once and resolves through a Promise, so a throw rejects as
+ * another store's would. */
 export function servedPredictions(sync: Sync<Predictions>): Predictions {
   return {
     savePrediction: async (tenantId, input, actor) => sync.savePrediction(tenantId, input, actor),

@@ -14,11 +14,17 @@ import {
   quoteInsideWindowsArg,
 } from './scheduler.js';
 
-/** Adds hippo's two Codex hooks and says what changed; each install ends on the trust reminder, since Codex skips an untrusted hook. */
+/**
+ * Adds hippo's two Codex hooks and says what changed; each install ends on the trust reminder, since Codex skips an
+ * untrusted hook.
+ */
 export function installCodexMemoryHooks(indent: string): void {
   const result = installJsonHooks('codex');
   if (result.invalidJson) {
-    console.log(`${indent}WARNING: ${result.settingsPath} is not a hooks file hippo can merge into; fix it, then run \`hippo hook install codex\`.`);
+    console.log(
+      `${indent}WARNING: ${result.settingsPath} is not a hooks file hippo can merge into; fix it, then run \`hippo ` +
+      `hook install codex\`.`,
+    );
     return;
   }
   const added = [
@@ -31,7 +37,9 @@ export function installCodexMemoryHooks(indent: string): void {
   console.log(`${indent}${CODEX_TRUST_LINE}`);
 }
 
-/** The one line init, hook install, hook uninstall and setup print when Claude Code's settings.json is not JSON hippo can edit and so was
+/**
+ * The one line init, hook install, hook uninstall and setup print when Claude Code's settings.json is not JSON hippo
+ * can edit and so was
  * left unchanged; true when it printed. */
 export function warnClaudeSettingsUnusable(
   result: Pick<InstallResult, 'settingsPath' | 'invalidJson'>,
@@ -46,22 +54,39 @@ export function warnClaudeSettingsUnusable(
   return true;
 }
 
-/** Machine-level daily runner sweeping all registered workspaces: user crontab on Linux/macOS, a scheduled task on Windows; skips if installed. */
-/** Bound on each schtasks and crontab call, so a scheduler that never answers cannot hang `hippo init` or `hippo setup`. */
+/**
+ * Machine-level daily runner sweeping all registered workspaces: user crontab on Linux/macOS, a scheduled task on
+ * Windows; skips if installed.
+ */
+/**
+ * Bound on each schtasks and crontab call, so a scheduler that never answers cannot hang `hippo init` or `hippo setup`.
+ */
 const SCHEDULER_CALL_TIMEOUT_MS = 30_000;
-// Piped stderr stands in for `2>nul` and `2>/dev/null`, so no shell is needed to keep the scheduler's complaints off the terminal.
-const SCHEDULER_CALL: ExecFileSyncOptionsWithStringEncoding = { encoding: 'utf-8', stdio: 'pipe', windowsHide: true, timeout: SCHEDULER_CALL_TIMEOUT_MS };
+// Piped stderr stands in for `2>nul` and `2>/dev/null`, so no shell is needed to keep the scheduler's complaints off
+// the terminal.
+const SCHEDULER_CALL: ExecFileSyncOptionsWithStringEncoding = {
+  encoding: 'utf-8',
+  stdio: 'pipe',
+  windowsHide: true,
+  timeout: SCHEDULER_CALL_TIMEOUT_MS,
+};
 
 /** Runs one scheduler program from argv with no shell; tests hand in a stand-in so no real schtasks or crontab runs. */
 type RunScheduler = (file: string, args: readonly string[], opts: ExecFileSyncOptionsWithStringEncoding) => string;
 
-/** Node kills a child at its timeout and reports ETIMEDOUT; every other failure here means the scheduler refused or is missing. */
+/**
+ * Node kills a child at its timeout and reports ETIMEDOUT; every other failure here means the scheduler refused or is
+ * missing.
+ */
 function schedulerTimedOut<E>(err: E): boolean {
   return err instanceof Error && 'code' in err && err.code === 'ETIMEDOUT';
 }
 
 function warnSchedulerTimedOut(command: string): void {
-  console.log(`   ${command} did not answer within ${SCHEDULER_CALL_TIMEOUT_MS / 1000} s and was stopped, so the daily runner is not scheduled.`);
+  console.log(
+    `   ${command} did not answer within ${SCHEDULER_CALL_TIMEOUT_MS / 1000} s and was stopped, so the daily runner ` +
+    `is not scheduled.`,
+  );
 }
 
 export function setupDailySchedule(globalRoot: string, run: RunScheduler = execFileSync): void {
@@ -102,7 +127,10 @@ function scheduleOnWindows(taskName: string, cmd: string, run: RunScheduler): vo
     if (schedulerTimedOut(err)) warnSchedulerTimedOut('schtasks /create');
     // No admin rights or schtasks unavailable, fall back to printing instructions
     console.log(`   To schedule the machine-level daily runner, run:`);
-    console.log(`   schtasks /create /tn "${taskName}" /tr "${quoteInsideWindowsArg(buildWindowsTaskRun(cmd))}" /sc daily /st 06:15`);
+    console.log(
+      `   schtasks /create /tn "${taskName}" /tr "${quoteInsideWindowsArg(buildWindowsTaskRun(cmd))}" /sc daily /st ` +
+      `06:15`,
+    );
   }
 }
 

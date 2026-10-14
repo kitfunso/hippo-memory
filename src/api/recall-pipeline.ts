@@ -129,8 +129,12 @@ interface RankState {
   goalRecallLog: GoalRecallLogRow[];
 }
 
-/** Ranks memories for a query as `hippo recall` does, through the `limit` slice. Reads stores, embeddings and physics state; writes and prints nothing
- *  (notes go to `ctx.note`). The caller supplies the cost function and reranker in `opts` and persists the returned goal-log rows. */
+/**
+ * Ranks memories for a query as `hippo recall` does, through the `limit` slice. Reads stores, embeddings and physics
+ * state; writes and prints nothing
+ * (notes go to `ctx.note`). The caller supplies the cost function and reranker in `opts` and persists the returned
+ * goal-log rows.
+ */
 export async function rankRecall(ctx: RankRecallCtx, opts: RankRecallOpts): Promise<RankRecallResult> {
   const pool = loadRecallPool(ctx, opts);
   const state: RankState = { results: [], droppedPreRank: pool.dropped, graphAdded: 0, goalRecallLog: [] };
@@ -166,7 +170,12 @@ function loadRecallPool(ctx: RankRecallCtx, opts: RankRecallOpts): RecallPool {
   // An explicit --scope unlocks that envelope scope; the regex-only `<source>:private:*` deny is the JS half below.
   const requested = opts.explicitScope || undefined;
   const loadSuperseded = opts.includeSuperseded || Boolean(opts.asOf);
-  const load = { tenantId: ctx.tenantId, requestedScope: requested, explicitScopeMode: 'additive', includeSuperseded: loadSuperseded } as const;
+  const load = {
+    tenantId: ctx.tenantId,
+    requestedScope: requested,
+    explicitScopeMode: 'additive',
+    includeSuperseded: loadSuperseded,
+  } as const;
   let local = loadRecallEntries(ctx.hippoRoot, opts.query, load);
   let global = ctx.globalRoot ? loadRecallEntries(ctx.globalRoot, opts.query, load) : [];
   // SQL-excluded rows are pre-candidate, so the total is taken before the JS filters, which normally drop nothing.
@@ -180,46 +189,108 @@ function loadRecallPool(ctx: RankRecallCtx, opts: RankRecallOpts): RecallPool {
   return { local, global, total, dropped: total - (local.length + global.length) };
 }
 
+function graphStreamSearch(
+  ctx: RankRecallCtx,
+  opts: RankRecallOpts,
+  graphStream: NonNullable<RankRecallOpts['search']['graphStream']>,
+  pool: RecallPool,
+): Promise<SearchResult[]> {
+  const { query, budget, cost, includeSuperseded, asOf, activeScope: scope, search } = opts;
+  const { mmr, mmrLambda, minResults } = search;
+  const globalRoot = pool.global.length > 0 ? ctx.globalRoot : undefined;
+  // Without embeddings hybridSearch falls back to BM25-only and the stream is inert; say so rather than no-op.
+  if (!isEmbeddingAvailable()) {
+    ctx.note?.(
+      '[note] --graph-stream needs embeddings (rrf fusion); none available, so the graph stream is inert. Run ' +
+      '`hippo embed` first.',
+    );
+  }
+  if (globalRoot)
+    ctx.note?.('[note] --graph-stream searches the local store only; global graph fusion is a follow-up.');
+  // With seedCount or fewer candidates every one is a seed and the stream degrades to the 2-list fusion.
+  return hybridSearch(query, pool.local, {
+    budget, cost, hippoRoot: ctx.hippoRoot, mmr, mmrLambda, minResults, scope, includeSuperseded, asOf,
+    scoring: 'rrf',
+    graphStream: {
+      weight: DEFAULT_GRAPH_STREAM_WEIGHT,
+      tenantId: ctx.tenantId,
+      hops: graphStream.hops,
+      seedCount: graphStream.seeds,
+    },
+  });
+}
+
+function multihopPoolSearch(ctx: RankRecallCtx, opts: RankRecallOpts, pool: RecallPool): SearchResult[] {
+  const { query, budget, cost, includeSuperseded, asOf, search } = opts;
+  const { minResults } = search;
+  // Unlike rankBothStores below, multihop ranks one pooled list, so a shared memory's two copies both compete.
+  const allEntries = oneCopyPerMemory(pool.local, pool.global, evalNow()).flat();
+  return multihopSearch(query, allEntries, {
+    budget,
+    cost,
+    hippoRoot: ctx.hippoRoot,
+    minResults,
+    includeSuperseded,
+    asOf,
+  });
+}
+
+function poolVectorCandidates(ctx: RankRecallCtx, opts: RankRecallOpts) {
+  const requested = opts.explicitScope || undefined;
+  return {
+    tenantId: ctx.tenantId,
+    scope: recallScopeFilter(requested, 'additive'),
+    includeSuperseded: opts.includeSuperseded || Boolean(opts.asOf),
+    admit: (e: MemoryEntry) => passesCliRecallScopeFilter(e.scope ?? null, requested),
+  };
+}
+
 async function searchPool(ctx: RankRecallCtx, opts: RankRecallOpts, pool: RecallPool): Promise<SearchResult[]> {
   const { query, budget, cost, includeSuperseded, asOf, activeScope: scope, search } = opts;
   const { mmr, mmrLambda, minResults, explain } = search;
   const globalRoot = pool.global.length > 0 ? ctx.globalRoot : undefined;
-  if (search.graphStream) {
-    // Without embeddings hybridSearch falls back to BM25-only and the stream is inert; say so rather than no-op.
-    if (!isEmbeddingAvailable()) {
-      ctx.note?.('[note] --graph-stream needs embeddings (rrf fusion); none available, so the graph stream is inert. Run `hippo embed` first.');
-    }
-    if (globalRoot) ctx.note?.('[note] --graph-stream searches the local store only; global graph fusion is a follow-up.');
-    // With seedCount or fewer candidates every one is a seed and the stream degrades to the 2-list fusion.
-    return hybridSearch(query, pool.local, {
-      budget, cost, hippoRoot: ctx.hippoRoot, mmr, mmrLambda, minResults, scope, includeSuperseded, asOf,
-      scoring: 'rrf',
-      graphStream: { weight: DEFAULT_GRAPH_STREAM_WEIGHT, tenantId: ctx.tenantId, hops: search.graphStream.hops, seedCount: search.graphStream.seeds },
-    });
-  }
-  if (search.multihop) {
-    // Unlike rankBothStores below, multihop ranks one pooled list, so a shared memory's two copies both compete.
-    const allEntries = oneCopyPerMemory(pool.local, pool.global, evalNow()).flat();
-    return multihopSearch(query, allEntries, { budget, cost, hippoRoot: ctx.hippoRoot, minResults, includeSuperseded, asOf });
-  }
-  const requested = opts.explicitScope || undefined;
-  const vectorCandidates = {
-    tenantId: ctx.tenantId,
-    scope: recallScopeFilter(requested, 'additive'),
-    includeSuperseded: includeSuperseded || Boolean(asOf),
-    admit: (e: MemoryEntry) => passesCliRecallScopeFilter(e.scope ?? null, requested),
-  };
+  if (search.graphStream) return graphStreamSearch(ctx, opts, search.graphStream, pool);
+  if (search.multihop) return multihopPoolSearch(ctx, opts, pool);
+  const vectorCandidates = poolVectorCandidates(ctx, opts);
   if (globalRoot) {
-    // The pool already holds searchBothHybrid's additive-scope load for each store, so rank it rather than read both stores again.
-    return rankBothStores(query, { local: ctx.hippoRoot, global: globalRoot }, { local: pool.local, global: pool.global }, vectorCandidates, {
-      budget, cost, explain, mmr, mmrLambda, localBump: search.localBump, minResults, scope, tenantId: ctx.tenantId,
-      includeSuperseded, asOf,
-    });
+    // The pool already holds searchBothHybrid's additive-scope load for each store, so rank it rather than read both
+    // stores again.
+    return rankBothStores(
+      query,
+      { local: ctx.hippoRoot, global: globalRoot },
+      { local: pool.local, global: pool.global },
+      vectorCandidates,
+      {
+        budget,
+        cost,
+        explain,
+        mmr,
+        mmrLambda,
+        localBump: search.localBump,
+        minResults,
+        scope,
+        tenantId: ctx.tenantId,
+        includeSuperseded,
+        asOf,
+      },
+    );
   }
   const physics = search.usePhysics ? search.physicsConfig : null;
-  // Physics takes no MMR; explain drops minResults and includeSuperseded to hold its output steady; asOf must reach physics or later rows leak.
-  const tuning = !physics ? { mmr, mmrLambda, minResults, includeSuperseded, asOf } : explain ? { asOf } : { minResults, includeSuperseded, asOf };
-  return searchByEngine(hippoDbSource(ctx.hippoRoot), query, pool.local, physics, { budget, cost, scope, explain, vectorCandidates, ...tuning });
+  // Physics takes no MMR; explain drops minResults and includeSuperseded to hold its output steady; asOf must reach
+  // physics or later rows leak.
+  const tuning = !physics
+    ? { mmr, mmrLambda, minResults, includeSuperseded, asOf }
+    : explain
+      ? { asOf }
+      : { minResults, includeSuperseded, asOf };
+  return searchByEngine(hippoDbSource(ctx.hippoRoot), query, pool.local, physics, {
+    budget,
+    cost,
+    scope,
+    explain,
+    vectorCandidates,
+    ...tuning,
+  });
 }
 
 /** The CLI core holds no store: it ranks on hippo.db under its root, as its loads above do. */
@@ -263,40 +334,74 @@ function byScore(results: SearchResult[]): SearchResult[] {
   return results.sort((a, b) => compareScoresDesc(a.score, b.score));
 }
 
+function demoteConflictPeers(opts: RankRecallOpts, state: RankState): void {
+  // Recorded conflicts only: a lexical-overlap gate once wrecked benchmark recall. Down-rank, never delete.
+  const presentIds = new Set(state.results.map((r) => r.entry.id));
+  state.results = byScore(
+    state.results.map((r) => {
+      const hasPeerInResults = (r.entry.conflicts_with || []).some((peerId) => presentIds.has(peerId));
+      if (!hasPeerInResults) return r;
+      const next = { ...r, score: r.score * CONFLICT_PEER_MULTIPLIER };
+      return traced(opts, r, next, {
+        stage: 'interference',
+        multiplier: CONFLICT_PEER_MULTIPLIER,
+        scoreBefore: r.score,
+        scoreAfter: next.score,
+      });
+    }),
+  );
+}
+
+function applyValueAware(opts: RankRecallOpts, state: RankState): void {
+  // Wider clamp than the always-on outcome boost, so outcome history can decide the order.
+  state.results = byScore(
+    state.results.map((r) => {
+      const pos = r.entry.outcome_positive ?? 0;
+      const neg = r.entry.outcome_negative ?? 0;
+      if (pos === 0 && neg === 0) return r;
+      const valueMult = Math.max(
+        VALUE_MULT_MIN,
+        Math.min(VALUE_MULT_MAX, 1 + VALUE_MULT_SLOPE * Math.tanh(pos - neg)),
+      );
+      const next = { ...r, score: r.score * valueMult };
+      return traced(opts, r, next, {
+        stage: 'value',
+        multiplier: valueMult,
+        scoreBefore: r.score,
+        scoreAfter: next.score,
+      });
+    }),
+  );
+}
+
+function applyUtilityRank(opts: RankRecallOpts, state: RankState): void {
+  // utility = score * (0.5 + 0.5 * strength) * (1 - min(0.3, tokens / 10000)); long evidence-rich rows pay for
+  // length.
+  state.results = byScore(
+    state.results.map((r) => {
+      const strength = isJsonNumber(r.entry.strength) ? r.entry.strength : 1.0;
+      const utilityMult =
+        (STRENGTH_RANK_FLOOR + STRENGTH_RANK_SPAN * strength) *
+        (1 - Math.min(UTILITY_LENGTH_PENALTY_CAP, (r.tokens || 0) / UTILITY_LENGTH_TOKENS));
+      const utility = r.score * utilityMult;
+      return traced(
+        opts,
+        r,
+        { ...r, score: utility },
+        { stage: 'utility', multiplier: utilityMult, scoreBefore: r.score, scoreAfter: utility },
+      );
+    }),
+  );
+}
+
 function applyPfcRerankers(opts: RankRecallOpts, state: RankState): void {
   if (opts.evcAdaptive && state.results.length >= 2) state.results = evcAdaptive(opts.query, state.results);
   if (opts.filterConflicts) {
     dropUnless(state, (r) => !r.entry.superseded_by);
-    // Recorded conflicts only: a lexical-overlap gate once wrecked benchmark recall. Down-rank, never delete.
-    const presentIds = new Set(state.results.map((r) => r.entry.id));
-    state.results = byScore(state.results.map((r) => {
-      const hasPeerInResults = (r.entry.conflicts_with || []).some((peerId) => presentIds.has(peerId));
-      if (!hasPeerInResults) return r;
-      const next = { ...r, score: r.score * CONFLICT_PEER_MULTIPLIER };
-      return traced(opts, r, next, { stage: 'interference', multiplier: CONFLICT_PEER_MULTIPLIER, scoreBefore: r.score, scoreAfter: next.score });
-    }));
+    demoteConflictPeers(opts, state);
   }
-  if (opts.valueAware && state.results.length >= 1) {
-    // Wider clamp than the always-on outcome boost, so outcome history can decide the order.
-    state.results = byScore(state.results.map((r) => {
-      const pos = r.entry.outcome_positive ?? 0;
-      const neg = r.entry.outcome_negative ?? 0;
-      if (pos === 0 && neg === 0) return r;
-      const valueMult = Math.max(VALUE_MULT_MIN, Math.min(VALUE_MULT_MAX, 1 + VALUE_MULT_SLOPE * Math.tanh(pos - neg)));
-      const next = { ...r, score: r.score * valueMult };
-      return traced(opts, r, next, { stage: 'value', multiplier: valueMult, scoreBefore: r.score, scoreAfter: next.score });
-    }));
-  }
-  if (opts.rerankUtility) {
-    // utility = score * (0.5 + 0.5 * strength) * (1 - min(0.3, tokens / 10000)); long evidence-rich rows pay for length.
-    state.results = byScore(state.results.map((r) => {
-      const strength = isJsonNumber(r.entry.strength) ? r.entry.strength : 1.0;
-      const utilityMult =
-        (STRENGTH_RANK_FLOOR + STRENGTH_RANK_SPAN * strength) * (1 - Math.min(UTILITY_LENGTH_PENALTY_CAP, (r.tokens || 0) / UTILITY_LENGTH_TOKENS));
-      const utility = r.score * utilityMult;
-      return traced(opts, r, { ...r, score: utility }, { stage: 'utility', multiplier: utilityMult, scoreBefore: r.score, scoreAfter: utility });
-    }));
-  }
+  if (opts.valueAware && state.results.length >= 1) applyValueAware(opts, state);
+  if (opts.rerankUtility) applyUtilityRank(opts, state);
 }
 
 // A recorded conflict peer in the same result list is cut to this share of its score.
@@ -351,13 +456,23 @@ function evcAdaptive(query: string, results: SearchResult[]): SearchResult[] {
   return [...onTopic, ...offTopic, ...results.slice(poolSize)];
 }
 
-async function applyReranker(opts: RankRecallOpts, reranker: RecallReranker, results: SearchResult[]): Promise<SearchResult[]> {
+async function applyReranker(
+  opts: RankRecallOpts,
+  reranker: RecallReranker,
+  results: SearchResult[],
+): Promise<SearchResult[]> {
   const { fn, topK } = reranker;
   const rerankInput = results.slice(0, topK).map((r, i) => ({ ...r, preRerankRank: i + 1 }));
   const reranked = await fn(opts.query, rerankInput, { topK });
   // The reranker's score becomes `score` so later stages that sort by score keep its order.
   const withPostRank = reranked.map((r, i) =>
-    traced(opts, r, { ...r, score: r.rerankScore, postRerankRank: i + 1 }, { stage: 'reranker', scoreBefore: r.score, scoreAfter: r.rerankScore }));
+    traced(
+      opts,
+      r,
+      { ...r, score: r.rerankScore, postRerankRank: i + 1 },
+      { stage: 'reranker', scoreBefore: r.score, scoreAfter: r.rerankScore },
+    ),
+  );
   return [...withPostRank, ...results.slice(topK)];
 }
 
@@ -365,13 +480,19 @@ function applyGoalBoosts(ctx: RankRecallCtx, opts: RankRecallOpts, state: RankSt
   const goalTag = opts.goalTag ?? '';
   if (goalTag) {
     // Its own trace stage: `goal` is the explicit flag, `goal-boost` the session stack it replaces.
-    state.results = byScore(state.results.map((r) => {
-      if (!r.entry.tags?.includes(goalTag)) return r;
-      const boosted = { ...r, score: r.score * GOAL_TAG_BOOST };
-      return traced(opts, r, boosted, {
-        stage: 'goal', multiplier: GOAL_TAG_BOOST, scoreBefore: r.score, scoreAfter: r.score * GOAL_TAG_BOOST, note: `--goal ${goalTag}`
-      });
-    }));
+    state.results = byScore(
+      state.results.map((r) => {
+        if (!r.entry.tags?.includes(goalTag)) return r;
+        const boosted = { ...r, score: r.score * GOAL_TAG_BOOST };
+        return traced(opts, r, boosted, {
+          stage: 'goal',
+          multiplier: GOAL_TAG_BOOST,
+          scoreBefore: r.score,
+          scoreAfter: r.score * GOAL_TAG_BOOST,
+          note: `--goal ${goalTag}`,
+        });
+      }),
+    );
     return;
   }
   if (!opts.sessionId) return;
@@ -379,7 +500,11 @@ function applyGoalBoosts(ctx: RankRecallCtx, opts: RankRecallOpts, state: RankSt
   const goalBoostTrace = opts.why ? new Map<string, RerankStep>() : undefined;
   const session = { sessionId: opts.sessionId, tenantId: ctx.tenantId };
   // The log may name global rows; the store drops those when it writes, as it does for api.recall.
-  const boost = boostByGoals(state.results, activeGoalsWithPolicies(ctx.hippoRoot, session), { ...session, limit: opts.limit, trace: goalBoostTrace });
+  const boost = boostByGoals(state.results, activeGoalsWithPolicies(ctx.hippoRoot, session), {
+    ...session,
+    limit: opts.limit,
+    trace: goalBoostTrace,
+  });
   state.results = boost.results;
   state.goalRecallLog = boost.log;
   if (goalBoostTrace && goalBoostTrace.size > 0) {
@@ -392,13 +517,20 @@ function applyGoalBoosts(ctx: RankRecallCtx, opts: RankRecallOpts, state: RankSt
 
 /** Soft-demotes rarely recalled rows: score *= max(0.5, retrieval_count / T); never drops one. */
 function applySalience(opts: RankRecallOpts, threshold: number, results: SearchResult[]): SearchResult[] {
-  return byScore(results.map((r) => {
-    const count = r.entry.retrieval_count ?? 0;
-    if (count >= threshold) return r;
-    const mult = Math.max(SALIENCE_MIN_MULTIPLIER, count / threshold);
-    const next = { ...r, score: r.score * mult };
-    return traced(opts, r, next, { stage: 'retrieval-count-downweight', multiplier: mult, scoreBefore: r.score, scoreAfter: next.score });
-  }));
+  return byScore(
+    results.map((r) => {
+      const count = r.entry.retrieval_count ?? 0;
+      if (count >= threshold) return r;
+      const mult = Math.max(SALIENCE_MIN_MULTIPLIER, count / threshold);
+      const next = { ...r, score: r.score * mult };
+      return traced(opts, r, next, {
+        stage: 'retrieval-count-downweight',
+        multiplier: mult,
+        scoreBefore: r.score,
+        scoreAfter: next.score,
+      });
+    }),
+  );
 }
 
 function dropUnless(state: RankState, keep: (r: SearchResult) => boolean): void {

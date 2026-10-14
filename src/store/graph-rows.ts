@@ -1,4 +1,5 @@
-// The graph's entity, relation and queue rows as hippo.db holds them, and the types every reader and writer of them shares.
+// The graph's entity, relation and queue rows as hippo.db holds them, and the types every reader and writer of them
+// shares.
 
 export type EntityType = 'person' | 'project' | 'customer' | 'system' | 'policy' | 'decision';
 export type RelationType = 'owns' | 'supersedes' | 'depends-on' | 'blocked-by' | 'references';
@@ -35,7 +36,8 @@ export interface Entity {
   tenantId: string;
   entityType: EntityType;
   name: string;
-  /** The consolidated source memory this entity came from; NULL once the mirror is forgotten/pruned (ON DELETE SET NULL), then provenance is source_object. */
+  /** The consolidated source memory this entity came from; NULL once the mirror is forgotten/pruned (ON DELETE SET
+   * NULL), then provenance is source_object. */
   memoryId: string | null;
   sourceKind: SourceKind;
   /** The authoritative object this entity is anchored to (object-provenance path).
@@ -84,8 +86,8 @@ export interface RelationRow {
 }
 
 export function rowToEntity(row: EntityRow): Entity {
-  // SAFETY: entity_type/source_kind/source_object_type are DB CHECK-constrained to exactly the EntityType/SourceKind/SourceObjectType enum values,
-  // so the row's column values match those types.
+  // SAFETY: entity_type/source_kind/source_object_type are DB CHECK-constrained to exactly the
+  // EntityType/SourceKind/SourceObjectType enum values, so the row's column values match those types.
   return {
     id: row.id,
     tenantId: row.tenant_id,
@@ -99,8 +101,8 @@ export function rowToEntity(row: EntityRow): Entity {
   };
 }
 export function rowToRelation(row: RelationRow): Relation {
-  // SAFETY: rel_type/source_kind/source_object_type are DB CHECK-constrained to exactly the RelationType/SourceKind/SourceObjectType enum values,
-  // so the row's column values match those types.
+  // SAFETY: rel_type/source_kind/source_object_type are DB CHECK-constrained to exactly the
+  // RelationType/SourceKind/SourceObjectType enum values, so the row's column values match those types.
   return {
     id: row.id,
     tenantId: row.tenant_id,
@@ -115,8 +117,10 @@ export function rowToRelation(row: RelationRow): Relation {
   };
 }
 
-export const ENTITY_COLS = `id, tenant_id, entity_type, name, memory_id, source_kind, source_object_type, source_object_id, created_at`;
-export const RELATION_COLS = `id, tenant_id, from_entity_id, to_entity_id, rel_type, memory_id, source_kind, source_object_type, source_object_id, created_at`;
+export const ENTITY_COLS = `id, tenant_id, entity_type, name, memory_id, source_kind, source_object_type, ` +
+`source_object_id, created_at`;
+export const RELATION_COLS = `id, tenant_id, from_entity_id, to_entity_id, rel_type, memory_id, source_kind, ` +
+`source_object_type, source_object_id, created_at`;
 
 export interface GraphQueueItem {
   id: number;

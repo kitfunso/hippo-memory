@@ -3,7 +3,11 @@ import { writeEntry } from '../store/entry-writes.js';
 import { loadConfig } from '../core/config.js';
 import { RejectedValueError } from '../core/api-errors.js';
 import { redactSecretsStrict } from '../util/secret-detect.js';
-import { type AnthropicMessageFailure, describeMessageFailure, sendAnthropicMessage } from '../util/anthropic-messages.js';
+import {
+  type AnthropicMessageFailure,
+  describeMessageFailure,
+  sendAnthropicMessage,
+} from '../util/anthropic-messages.js';
 import { neverAutoShareTags } from '../sharing/share.js';
 import { errorMessage, log } from '../util/log.js';
 import { isJsonString, type JsonValue } from '../util/json.js';
@@ -19,7 +23,10 @@ export interface ExtractOptions {
   apiKey: string;
   model?: string;
   fetcher?: typeof fetch;
-  /** Told why a call produced nothing, so callers can surface it instead of guessing; `failure` is set when the API call itself failed. */
+  /**
+   * Told why a call produced nothing, so callers can surface it instead of guessing; `failure` is set when the API call
+   * itself failed.
+   */
   onError?: (msg: string, failure?: AnthropicMessageFailure) => void;
 }
 
@@ -95,7 +102,8 @@ function parseExtractedFacts(parsed: (RawExtractedFact | null)[]): ExtractedFact
     const tags = Array.isArray(itemTags)
       ? itemTags.filter((t) => isJsonString(t))
       : [];
-    // SAFETY: the isJsonString + validValences.has guard below confirms item.valence is one of the four literal strings of EmotionalValence.
+    // SAFETY: the isJsonString + validValences.has guard below confirms item.valence is one of the four literal strings
+    // of EmotionalValence.
     const valence: EmotionalValence = isJsonString(item.valence) && validValences.has(item.valence)
       ? (item.valence as EmotionalValence)
       : 'neutral';
@@ -130,7 +138,8 @@ export function storeExtractedFacts(
     }
     const entry = buildExtractedEntry(fact, source, inheritedTags, baseHalfLifeDays);
 
-    // A refusal is per-VALUE: one rejected fact must not drop the rest of the batch; writeEntry already audited it (reject_refusal), so skip and count.
+    // A refusal is per-VALUE: one rejected fact must not drop the rest of the batch; writeEntry already audited it
+    // (reject_refusal), so skip and count.
     try {
       writeEntry(hippoRoot, entry);
     } catch (err) {

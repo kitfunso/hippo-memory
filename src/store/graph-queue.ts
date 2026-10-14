@@ -1,11 +1,13 @@
-// The graph extraction queue: the consolidated memories that wait for a graph rebuild, and the watermark the sleep drain marks them by.
+// The graph extraction queue: the consolidated memories that wait for a graph rebuild, and the watermark the sleep
+// drain marks them by.
 import { onHandle } from './open.js';
 import { assertTenantId } from './tenant.js';
 import { errorMessage, log } from '../util/log.js';
 import { type GraphQueueItem, type QueueRow, rowToQueueItem, QUEUE_COLS } from './graph-rows.js';
 import { resolveConsolidatedSource } from './graph-writes.js';
 
-/** Enqueue a consolidated memory for later graph extraction; rejects a raw / missing / cross-tenant memory (the DB trigger is the backstop). */
+/** Enqueue a consolidated memory for later graph extraction; rejects a raw / missing / cross-tenant memory (the DB
+ * trigger is the backstop). */
 function enqueueExtraction(
   hippoRoot: string,
   tenantId: string,
@@ -23,14 +25,16 @@ function enqueueExtraction(
     `).run(tenantId, memoryId, sourceKind, now);
     const id = Number(result.lastInsertRowid ?? 0);
     // SAFETY: row's shape matches the columns named in QUEUE_COLS above.
-    const row = db.prepare(`SELECT ${QUEUE_COLS} FROM graph_extraction_queue WHERE id = ?`).get(id) as QueueRow | undefined;
+    const row = db.prepare(`SELECT ${QUEUE_COLS} FROM graph_extraction_queue WHERE id = ?`).get(id) as
+      QueueRow | undefined;
     if (!row) throw new Error('enqueueExtraction: failed to reload queue item');
     return rowToQueueItem(row);
   });
 }
 
-/** Fail-soft producer hook: mark a tenant dirty for graph re-extraction by enqueuing its consolidated mirror memory. NEVER throws: a failed dirty signal
- * must not abort an object write. Call POST-COMMIT from the graph-source save/close mutations; a null memoryId (forgotten mirror) is a no-op. */
+/** Fail-soft producer hook: mark a tenant dirty for graph re-extraction by enqueuing its consolidated mirror memory.
+ * NEVER throws: a failed dirty signal must not abort an object write. Call POST-COMMIT from the graph-source save/close
+ * mutations; a null memoryId (forgotten mirror) is a no-op. */
 export function markGraphDirty(hippoRoot: string, tenantId: string, memoryId: string | null): void {
   if (!memoryId) return;
   try {
@@ -44,8 +48,9 @@ export function markGraphDirty(hippoRoot: string, tenantId: string, memoryId: st
   }
 }
 
-/** Mark every pending item for a tenant with `id <= maxId` processed in one UPDATE (status/processed_at only, so the source guard trigger is not involved).
- * The watermark excludes items enqueued after the drain snapshot. Returns the count marked. */
+/** Mark every pending item for a tenant with `id <= maxId` processed in one UPDATE (status/processed_at only, so the
+ * source guard trigger is not involved). The watermark excludes items enqueued after the drain snapshot. Returns the
+ * count marked. */
 export function markPendingProcessedUpTo(
   hippoRoot: string,
   tenantId: string,
@@ -63,8 +68,9 @@ export function markPendingProcessedUpTo(
   });
 }
 
-/** Dirty tenants awaiting graph re-extraction, each with the MAX pending queue id at read time (a watermark); host-wide, as sleep is cross-tenant.
- * The drain marks only items at or below it processed, so items enqueued DURING the rebuild stay pending (no lost update). */
+/** Dirty tenants awaiting graph re-extraction, each with the MAX pending queue id at read time (a watermark);
+ * host-wide, as sleep is cross-tenant. The drain marks only items at or below it processed, so items enqueued DURING
+ * the rebuild stay pending (no lost update). */
 export function loadPendingExtractionTenants(
   hippoRoot: string,
 ): { tenantId: string; maxPendingId: number }[] {

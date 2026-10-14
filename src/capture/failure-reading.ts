@@ -1,4 +1,5 @@
-// What a PostToolUseFailure payload says, read with no store, so a hook with no store sends the same reading the local log keeps.
+// What a PostToolUseFailure payload says, read with no store, so a hook with no store sends the same reading the local
+// log keeps.
 import { redactSecretsStrict } from '../util/secret-detect.js';
 import { scrubForSharing } from './share-scrub.js';
 import { blockHash } from '../util/token-text.js';
@@ -8,7 +9,10 @@ import type { CaptureErrorOutcome, RoutineRule } from '../store/failure-log.js';
 
 const COMMAND_HEAD_WORDS = 2;
 
-/** What {@link lessonFromFailure} read from a payload; `detail` is the finer failure-log key (untruncated, command head). */
+/**
+ * What {@link lessonFromFailure} read from a payload; `detail` is the finer failure-log key (untruncated, command
+ * head).
+ */
 export type FailureReading =
   | { text: string; detail: string }
   | { skip: 'skipped-routine'; rule: RoutineRule; text: string; detail: string }
@@ -27,7 +31,8 @@ interface ToolFailurePayload {
 export const FAILURE_TEXT_MAX_CHARS = 200;
 
 /** The user, a permission prompt or a hook said no: routine, not a lesson. */
-const DECLINED = /user (?:doesn't|does not) want|denied by (?:the )?user|user (?:rejected|declined|denied)|permission to use|was blocked by (?:a )?hook/i;
+const DECLINED =
+  /user (?:doesn't|does not) want|denied by (?:the )?user|user (?:rejected|declined|denied)|permission to use|was blocked by (?:a )?hook/i;
 
 /** The OS or a remote host refused access (EACCES, SSH publickey): routine too, but nobody declined anything. */
 const OS_PERMISSION = /permission denied/i;
@@ -40,8 +45,18 @@ const NO_MATCH = /\bno (?:matches|files|results) found\b/i;
 /** Shell commands whose exit code 1 means "nothing found" or "differs", not an error. */
 const QUIET_EXIT_1 = /^\s*(?:grep|rg|egrep|fgrep|find|test|\[|diff|cmp|git diff|git grep)\b/;
 
-// Claude Code's tool names, then the Copilot CLI's and VS Code's; tests/copilot-failure-reading.test.ts cites where each comes from.
-const SEARCH_TOOLS: ReadonlySet<string> = new Set(['Grep', 'Glob', 'grep', 'glob', 'rg', 'grep_search', 'file_search', 'semantic_search']);
+// Claude Code's tool names, then the Copilot CLI's and VS Code's; tests/copilot-failure-reading.test.ts cites where
+// each comes from.
+const SEARCH_TOOLS: ReadonlySet<string> = new Set([
+  'Grep',
+  'Glob',
+  'grep',
+  'glob',
+  'rg',
+  'grep_search',
+  'file_search',
+  'semantic_search',
+]);
 const SHELL_TOOLS: ReadonlySet<string> = new Set(['Bash', 'bash', 'powershell', 'run_in_terminal']);
 
 /** A non-blank string field of the payload, or null. */
@@ -61,18 +76,27 @@ export function failureHash(text: string): string {
   return blockHash(failureSignature(text));
 }
 
-/** The memory text for a failure payload, or why it is not stored; a routine skip keeps its text for the log. `scrub` runs before the
+/**
+ * The memory text for a failure payload, or why it is not stored; a routine skip keeps its text for the log. `scrub`
+ * runs before the
  * cap, as a mask can be longer than what it hides. Pure. */
-export function lessonFromFailure(payload: JsonValue, scrub: (text: string) => string = (text) => text): FailureReading {
+export function lessonFromFailure(
+  payload: JsonValue,
+  scrub: (text: string) => string = (text) => text,
+): FailureReading {
   if (!isJsonObjectLiteral(payload)) return { skip: 'skipped-invalid', text: null, detail: null };
   // SAFETY: isJsonObjectLiteral narrowed payload to a plain JSON object; the fields read are all optional.
   const p = payload as ToolFailurePayload;
   if (p.is_interrupt === true) return { skip: 'skipped-interrupt', text: null, detail: null };
-  if (!isJsonString(p.error) || p.error.trim().length < 12) return { skip: 'skipped-invalid', text: null, detail: null };
+  if (!isJsonString(p.error) || p.error.trim().length < 12)
+    return { skip: 'skipped-invalid', text: null, detail: null };
   const tool = isJsonString(p.tool_name) ? p.tool_name : 'tool';
   const error = redactSecretsStrict(p.error.replace(/\s+/g, ' ').trim());
   const text = truncateCodePointSafe(scrub(`${tool}: ${error}`), FAILURE_TEXT_MAX_CHARS);
-  const command = isJsonObjectLiteral(p.tool_input) && isJsonString(p.tool_input['command']) ? p.tool_input['command'].replace(LEADING_CD, '') : '';
+  const command =
+    isJsonObjectLiteral(p.tool_input) && isJsonString(p.tool_input['command'])
+      ? p.tool_input['command'].replace(LEADING_CD, '')
+      : '';
   const head = command.trim().split(/\s+/).slice(0, COMMAND_HEAD_WORDS).join(' ');
   const detail = `${tool}${head ? ` ${head}` : ''}: ${error}`;
   const routine = (rule: RoutineRule): FailureReading => ({ skip: 'skipped-routine', rule, text, detail });
@@ -84,7 +108,9 @@ export function lessonFromFailure(payload: JsonValue, scrub: (text: string) => s
   return { text, detail };
 }
 
-/** A failure as it may leave the machine: the capped lesson text and the detail's hash, never the untruncated detail. */
+/**
+ * A failure as it may leave the machine: the capped lesson text and the detail's hash, never the untruncated detail.
+ */
 export interface FailureReport {
   /** The payload's tool name; null when it named none. */
   tool: string | null;

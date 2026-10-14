@@ -91,14 +91,17 @@ export function sessionTotals(
   db: DatabaseSyncLike, tenantId: string, sinceIso: string, rereadSurfaces: readonly TokenSurface[],
 ): SessionTotalsRow | undefined {
   // SAFETY: the SELECT names exactly these four aggregate columns.
-  return db.prepare(
-    `SELECT COUNT(DISTINCT session_id) AS sessions,
-            COUNT(DISTINCT CASE WHEN event <> 'reset' AND surface IN (${placeholders(rereadSurfaces.length)}) THEN session_id END) AS hook_sessions,
+  return db
+    .prepare(
+      `SELECT COUNT(DISTINCT session_id) AS sessions,
+            COUNT(DISTINCT CASE WHEN event <> 'reset' AND surface IN (${placeholders(rereadSurfaces.length)}) THEN
+            session_id END) AS hook_sessions,
             COUNT(DISTINCT CASE WHEN event = 'reread' THEN session_id END) AS reread_sessions,
             SUM(CASE WHEN event = 'inject' THEN tokens ELSE 0 END) AS tokens
      FROM token_ledger
      WHERE tenant_id = ? AND ts >= ? AND session_id IS NOT NULL AND event <> 'arm'`,
-  ).get(...rereadSurfaces, tenantId, sinceIso) as SessionTotalsRow | undefined;
+    )
+    .get(...rereadSurfaces, tenantId, sinceIso) as SessionTotalsRow | undefined;
 }
 
 export interface SessionTokenRow {
@@ -138,7 +141,10 @@ export function injectedBlocks(
 }
 
 export function deleteRereadRows(db: DatabaseSyncLike, tenantId: string, sessionId: string): void {
-  db.prepare(`DELETE FROM token_ledger WHERE tenant_id = ? AND session_id = ? AND event = 'reread'`).run(tenantId, sessionId);
+  db.prepare(`DELETE FROM token_ledger WHERE tenant_id = ? AND session_id = ? AND event = 'reread'`).run(
+    tenantId,
+    sessionId,
+  );
 }
 
 /** The first stored pilot arm hash for a session, optionally of one tenant. */

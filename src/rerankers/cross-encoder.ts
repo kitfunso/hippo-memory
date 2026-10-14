@@ -44,8 +44,8 @@ async function importModelClasses(importModule: ImportModule): Promise<Required<
   return { AutoTokenizer: tok, AutoModelForSequenceClassification: seq };
 }
 
-// NOT the text-classification pipeline: this is a num_labels=1 regression head and that pipeline softmaxes a length-1 logit vector (always 1.0).
-// Read the logit, then squash it.
+// NOT the text-classification pipeline: this is a num_labels=1 regression head and that pipeline softmaxes a length-1
+// logit vector (always 1.0). Read the logit, then squash it.
 async function buildPipeline(importModule: ImportModule): Promise<CrossEncoderFn> {
   const mod = await importModelClasses(importModule);
   const [tokenizer, model] = await Promise.all([
@@ -90,7 +90,8 @@ async function scoreHead(
         ceScore = await pipe(query, r.entry.content);
         succeeded++;
       } catch (err) {
-        // One bad inference must not sink the whole pass; a pass where every call fails is warned about by the outage tracker below.
+        // One bad inference must not sink the whole pass; a pass where every call fails is warned about by the outage
+        // tracker below.
         log.debug(`cross-encoder inference failed, keeping the base score: ${errorMessage(err)}`, errorFields(err));
         ceScore = r.score;
       }
@@ -110,7 +111,8 @@ async function scoreHead(
   return { results: scored, succeeded };
 }
 
-/** Track 2 reranker: MS-MARCO MiniLM cross-encoder, identity fallback if the model will not load. Each instance owns its model and outage warning. */
+/** Track 2 reranker: MS-MARCO MiniLM cross-encoder, identity fallback if the model will not load. Each instance owns
+ * its model and outage warning. */
 export function createCrossEncoderReranker(importModule: ImportModule = importTransformers): RerankerFn {
   const outage = createOutageWarning('cross-encoder', 'falling back to identity ordering');
   // The outage warning already says each failure, at most once per window, so the loads report nothing themselves.
@@ -119,7 +121,8 @@ export function createCrossEncoderReranker(importModule: ImportModule = importTr
     const head = results.slice(0, options?.topK ?? DEFAULT_CROSS_ENCODER_TOP_K);
     let pipe: CrossEncoderFn;
     try {
-      // One shared load per backoff window: two first calls fetch the model once, and a failure is not fetched again on every recall.
+      // One shared load per backoff window: two first calls fetch the model once, and a failure is not fetched again on
+      // every recall.
       pipe = await pipelines.load(MODEL_NAME, () => buildPipeline(importModule));
     } catch (err) {
       // A silent identity fallback otherwise reads as a working reranker.

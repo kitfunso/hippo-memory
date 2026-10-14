@@ -35,7 +35,8 @@ export function clusterFacts(facts: MemoryEntry[]): FactCluster[] {
   );
 
   const tagSets = entityTags.map((tags) => new Set(tags));
-  // Every tag indexed, not a prefix: a repeated tag counts twice in `shared`, so the prefix-filter bound would not hold.
+  // Every tag indexed, not a prefix: a repeated tag counts twice in `shared`, so the prefix-filter bound would not
+  // hold.
   const partnersOf = overlapPartners(tagSets, () => 1);
   const assigned = new Set<number>();
   const clusters: FactCluster[] = [];
@@ -78,8 +79,8 @@ export interface DagBuildResult {
   rejected: number;
 }
 
-// Partition before clustering so one LLM summary never mixes tenants; Map keeps insertion order, so a single-tenant store iterates as before.
-// buildEntityProfiles partitions its L2s with this same key.
+// Partition before clustering so one LLM summary never mixes tenants; Map keeps insertion order, so a single-tenant
+// store iterates as before. buildEntityProfiles partitions its L2s with this same key.
 function partitionFactsByTenant(unparented: MemoryEntry[]): Map<string, MemoryEntry[]> {
   const unparentedByTenant = new Map<string, MemoryEntry[]>();
   for (const fact of unparented) {
@@ -102,7 +103,8 @@ interface PartitionHome {
 /** The L2 summary entry for one cluster, landing in the facts' own tenant and scope. */
 function createClusterSummaryEntry(summary: string, cluster: FactCluster, home: PartitionHome): MemoryEntry {
   const memberCreatedAts = cluster.members.map((m) => m.created).sort();
-    // Every cluster member shares home.tenantId (tenant partition above), so the summary lands in the facts' tenant, not 'default'.
+    // Every cluster member shares home.tenantId (tenant partition above), so the summary lands in the facts' tenant,
+    // not 'default'.
   const summaryEntry = createMemory(summary, {
     layer: Layer.Semantic,
     tags: [...cluster.entityTags, ...neverAutoShareTags(cluster.members), 'dag-summary'],
@@ -151,7 +153,10 @@ async function summarizeCluster(
   }
   result.summariesCreated++;
 
-  result.factsLinked += writeEntriesTogether(hippoRoot, cluster.members.map((member) => ({ ...member, dag_parent_id: summaryEntry.id })));
+  result.factsLinked += writeEntriesTogether(
+    hippoRoot,
+    cluster.members.map((member) => ({ ...member, dag_parent_id: summaryEntry.id })),
+  );
   // Member writes just marked this fresh summary dirty; clear it, or the same sleep cycle's
   // rebuild pass would re-rebuild every new summary at twice the LLM cost.
   clearSummaryDirtyAfterBuild(hippoRoot, summaryEntry.id, summaryEntry.tenant_id, 'buildDag');
@@ -275,8 +280,9 @@ function summaryLabel(summary: MemoryEntry): string {
     : summary.content.slice(0, SUMMARY_FALLBACK_CHARS);
 }
 
-/** Sleep-cycle phase draining the dirty L2 summary queue; one throwing rebuild does not abort the rest.
- * A concurrent sleep's second writer gets changed=false (UPDATE requires summary_dirty=1) and is skipped silently; a tombstone hit counts as `refused`. */
+/** Sleep-cycle phase draining the dirty L2 summary queue; one throwing rebuild does not abort the rest. A concurrent
+ * sleep's second writer gets changed=false (UPDATE requires summary_dirty=1) and is skipped silently; a tombstone hit
+ * counts as `refused`. */
 export async function rebuildDirtySummaries(
   hippoRoot: string,
   opts: DagSummaryOptions & { cap?: number },
@@ -306,7 +312,8 @@ export async function rebuildDirtySummaries(
       await new Promise((resolve) => setImmediate(resolve));
     }
     try {
-      await rebuildOneSummary(hippoRoot, summary, opts, result, childrenByParent.get(childrenKey(summary.tenant_id, summary.id)) ?? [], queuedIds);
+      const children = childrenByParent.get(childrenKey(summary.tenant_id, summary.id)) ?? [];
+      await rebuildOneSummary(hippoRoot, summary, opts, result, children, queuedIds);
     } catch (err) {
       // One throw doesn't abort the queue; log enough to triage an exotic
       // failure (SQLite I/O, prepare), since audit() already catches its own.
@@ -382,14 +389,20 @@ async function profileCluster(
   } catch (err) {
     if (err instanceof RejectedValueError) {
       result.rejected++;
-      log.warn(`buildEntityProfiles: cluster "${cluster.label}" skipped: profile matches a rejected value`, errorFields(err));
+      log.warn(
+        `buildEntityProfiles: cluster "${cluster.label}" skipped: profile matches a rejected value`,
+        errorFields(err),
+      );
       return;
     }
     throw err;
   }
   result.profilesCreated++;
 
-  result.l2sLinked += writeEntriesTogether(hippoRoot, cluster.members.map((member) => ({ ...member, dag_parent_id: profileEntry.id })));
+  result.l2sLinked += writeEntriesTogether(
+    hippoRoot,
+    cluster.members.map((member) => ({ ...member, dag_parent_id: profileEntry.id })),
+  );
   // Re-linking just marked the fresh L3 dirty; clear it so this cycle's rebuild skips it.
   // The distinct source tags the audit row.
   clearSummaryDirtyAfterBuild(

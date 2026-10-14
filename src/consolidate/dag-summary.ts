@@ -1,4 +1,5 @@
-// The one LLM call behind every DAG summary, kept apart from the graph writes so its request bytes are tested on their own.
+// The one LLM call behind every DAG summary, kept apart from the graph writes so its request bytes are tested on their
+// own.
 import { redactSecretsStrict } from '../util/secret-detect.js';
 import { describeMessageFailure, sendAnthropicMessage } from '../util/anthropic-messages.js';
 import { certainDefect } from '../core/memory-quality.js';

@@ -1,10 +1,22 @@
-/** Moves a store's memories to a new default half-life: only memories still on the old base are rescaled (`deriveHalfLife(from, entry)` plus recall bonus).
- * Memories hippo shortened since, or with their own fixed half-life, keep theirs; rescales are audit-logged and `meta` records the base, so it runs once. */
+/**
+ * Moves a store's memories to a new default half-life: only memories still on the old base are rescaled
+ * (`deriveHalfLife(from, entry)` plus recall bonus).
+ * Memories hippo shortened since, or with their own fixed half-life, keep theirs; rescales are audit-logged and `meta`
+ * records the base, so it runs once.
+ */
 import { deriveHalfLife, type MemoryEntry } from '../core/memory.js';
 import { HALF_LIFE_BASE_META_KEY, LEGACY_TYPED_HALF_LIFE } from '../store/open.js';
 import { moveHalfLives, recordedHalfLifeBase, type HalfLifeRows } from '../store/half-life.js';
 
-const TYPED_SOURCES: ReadonlySet<string> = new Set(['decision', 'incident', 'process', 'policy', 'skill', 'project_brief', 'customer_note']);
+const TYPED_SOURCES: ReadonlySet<string> = new Set([
+  'decision',
+  'incident',
+  'process',
+  'policy',
+  'skill',
+  'project_brief',
+  'customer_note',
+]);
 
 export { HALF_LIFE_BASE_META_KEY, LEGACY_TYPED_HALF_LIFE };
 
@@ -42,7 +54,10 @@ export function planHalfLifeMigration(entries: readonly MemoryEntry[], from: num
   });
 }
 
-/** Memories of decisions, incidents and other objects still on the flat 90 days, as copies on `to` that keep their recall bonus. Pure. */
+/**
+ * Memories of decisions, incidents and other objects still on the flat 90 days, as copies on `to` that keep their
+ * recall bonus. Pure.
+ */
 export function planTypedHalfLifeMigration(entries: readonly MemoryEntry[], to: number): MemoryEntry[] {
   return entries.flatMap((e) => {
     const bonus = TYPED_SOURCES.has(e.source) ? halfLifeRecallBonus(e, LEGACY_TYPED_HALF_LIFE) : null;
@@ -56,8 +71,15 @@ export function storeHalfLifeBase(hippoRoot: string): number {
   return recordedHalfLifeBase(hippoRoot);
 }
 
-/** Move the store's memories, and those of objects on the old flat 90 days, from their recorded base to `to`, once; `dryRun` writes nothing. */
-export function migrateDefaultHalfLife(hippoRoot: string, to: number, opts: { dryRun?: boolean; actor?: string } = {}): HalfLifeMigrationResult {
+/**
+ * Move the store's memories, and those of objects on the old flat 90 days, from their recorded base to `to`, once;
+ * `dryRun` writes nothing.
+ */
+export function migrateDefaultHalfLife(
+  hippoRoot: string,
+  to: number,
+  opts: { dryRun?: boolean; actor?: string } = {},
+): HalfLifeMigrationResult {
   const dryRun = opts.dryRun ?? false;
   const { from, outcome } = moveHalfLives(hippoRoot, to, { dryRun, actor: opts.actor ?? 'system' }, (rows) => {
     const { basePlan, typedPlan } = planMoves(rows, to);
@@ -73,7 +95,15 @@ export function migrateDefaultHalfLife(hippoRoot: string, to: number, opts: { dr
     };
   });
   const moved = outcome ?? { rescaled: 0, typed: 0, kept: 0, halfLives: new Map<string, number>() };
-  return { from, to, rescaled: moved.rescaled, typed: moved.typed, kept: moved.kept, dryRun, halfLives: moved.halfLives };
+  return {
+    from,
+    to,
+    rescaled: moved.rescaled,
+    typed: moved.typed,
+    kept: moved.kept,
+    dryRun,
+    halfLives: moved.halfLives,
+  };
 }
 
 /** The base move and the move of object memories, planned from one read of the store. Pure. */
@@ -82,15 +112,25 @@ function planMoves(rows: HalfLifeRows, to: number) {
   const objects = objectMemoryIds(rows.objectRows);
   const losers = conflictLosers(rows.conflictAudits, rows.resolvedConflicts);
   const copies = new Set(all.flatMap((e) => (e.superseded_by ? [e.superseded_by] : [])));
-  // Provenance before shape: an object's memory came from its writer, a supersede copy from the base (it keeps the source). Shape decides the rest.
+  // Provenance before shape: an object's memory came from its writer, a supersede copy from the base (it keeps the
+  // source). Shape decides the rest.
   const objectWritten = (e: MemoryEntry) =>
-    objects.all.has(e.id) || (!copies.has(e.id) && TYPED_SOURCES.has(e.source) && halfLifeRecallBonus(e, LEGACY_TYPED_HALF_LIFE) !== null);
-  const typedPlan = typedPending ? planTypedHalfLifeMigration(all.filter((e) => objectWritten(e) && !objects.retired.has(e.id) && !losers.has(e.id)), to) : [];
+    objects.all.has(e.id) ||
+    (!copies.has(e.id) && TYPED_SOURCES.has(e.source) && halfLifeRecallBonus(e, LEGACY_TYPED_HALF_LIFE) !== null);
+  const typedPlan = typedPending
+    ? planTypedHalfLifeMigration(
+        all.filter((e) => objectWritten(e) && !objects.retired.has(e.id) && !losers.has(e.id)),
+        to,
+      )
+    : [];
   const basePlan = planHalfLifeMigration(typedPending ? all.filter((e) => !objectWritten(e)) : all, rows.from, to);
   return { basePlan, typedPlan };
 }
 
-/** Memories behind every object, and those behind a superseded or closed one. Retiring an object leaves its memory untouched, so only its table knows. */
+/**
+ * Memories behind every object, and those behind a superseded or closed one. Retiring an object leaves its memory
+ * untouched, so only its table knows.
+ */
 function objectMemoryIds(objectRows: HalfLifeRows['objectRows']) {
   const all = new Set<string>();
   const retired = new Set<string>();
@@ -103,7 +143,10 @@ function objectMemoryIds(objectRows: HalfLifeRows['objectRows']) {
 
 /** Memories that lost a conflict, which resolveConflict halved untagged. A resolved conflict with no audit
  * row (resolved before resolves were audited, or found stale) names no winner, so both sides count. */
-function conflictLosers(audited: HalfLifeRows['conflictAudits'], resolved: HalfLifeRows['resolvedConflicts']): Set<string> {
+function conflictLosers(
+  audited: HalfLifeRows['conflictAudits'],
+  resolved: HalfLifeRows['resolvedConflicts'],
+): Set<string> {
   const losers = new Set(audited.map((a) => a.loserId));
   const named = new Set(audited.map((a) => a.conflictId));
   for (const c of resolved) if (!named.has(c.id)) losers.add(c.memory_a_id).add(c.memory_b_id);

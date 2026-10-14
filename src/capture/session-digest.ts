@@ -105,18 +105,26 @@ function noteCwd(state: ScanState, cwd: string): void {
 function editTarget(block: TranscriptItem): string | null {
   const input = block.input;
   if (!isObjectLike(input)) return null;
-  if (block.name === 'NotebookEdit') return 'notebook_path' in input && isStringValue(input.notebook_path) ? input.notebook_path : null;
+  if (block.name === 'NotebookEdit')
+    return 'notebook_path' in input && isStringValue(input.notebook_path) ? input.notebook_path : null;
   return 'file_path' in input && isStringValue(input.file_path) ? input.file_path : null;
 }
 
 function readClaudeAssistant(record: TranscriptRecord, state: ScanState): void {
   const blocks = messageItems(record);
   for (const block of blocks) {
-    if (block.type !== 'tool_use' || !isStringValue(block.name) || !CLAUDE_EDIT_TOOLS.has(block.name) || !isStringValue(block.id)) continue;
+    if (
+      block.type !== 'tool_use' ||
+      !isStringValue(block.name) ||
+      !CLAUDE_EDIT_TOOLS.has(block.name) ||
+      !isStringValue(block.id)
+    )
+      continue;
     const target = editTarget(block);
     if (target) state.pending.push({ callId: block.id, filePath: target, base: state.cwd });
   }
-  // Sidechain edits changed files, but a sub-agent's reply is not this session's closing message, nor is Claude Code's own notice.
+  // Sidechain edits changed files, but a sub-agent's reply is not this session's closing message, nor is Claude Code's
+  // own notice.
   if (record.isMeta === true || record.isSidechain === true || isSynthetic(record)) return;
   for (let i = blocks.length - 1; i >= 0; i--) {
     const text = blocks[i].type === 'text' ? blocks[i].text : undefined;
@@ -134,7 +142,8 @@ function isSynthetic(record: TranscriptRecord): boolean {
 
 function readClaudeResults(record: TranscriptRecord, state: ScanState): void {
   for (const block of messageItems(record)) {
-    if (block.type === 'tool_result' && isStringValue(block.tool_use_id) && block.is_error !== true) state.landed.add(block.tool_use_id);
+    if (block.type === 'tool_result' && isStringValue(block.tool_use_id) && block.is_error !== true)
+      state.landed.add(block.tool_use_id);
   }
 }
 
@@ -215,7 +224,8 @@ function readCodexItem(item: TranscriptItem, state: ScanState): void {
       readCodexMessage(item, state);
       return;
     case 'custom_tool_call':
-      if (item.name === 'apply_patch' && isStringValue(item.call_id) && isStringValue(item.input)) addPatch(state, item.call_id, item.input, state.cwd);
+      if (item.name === 'apply_patch' && isStringValue(item.call_id) && isStringValue(item.input))
+        addPatch(state, item.call_id, item.input, state.cwd);
       return;
     case 'function_call':
       readCodexFunctionCall(item, state);
@@ -223,13 +233,15 @@ function readCodexItem(item: TranscriptItem, state: ScanState): void {
     case 'local_shell_call': {
       const action = item.action;
       if (!isStringValue(item.call_id) || !isObjectLike(action) || !('command' in action)) return;
-      const workdir = 'working_directory' in action && isStringValue(action.working_directory) ? action.working_directory : null;
+      const workdir =
+        'working_directory' in action && isStringValue(action.working_directory) ? action.working_directory : null;
       addShellPatch(state, item.call_id, action.command, workdir);
       return;
     }
     case 'function_call_output':
     case 'custom_tool_call_output':
-      if (isStringValue(item.call_id) && outputText(item.output).includes(PATCH_SUCCESS_LINE)) state.landed.add(item.call_id);
+      if (isStringValue(item.call_id) && outputText(item.output).includes(PATCH_SUCCESS_LINE))
+        state.landed.add(item.call_id);
       return;
   }
 }
@@ -248,12 +260,20 @@ function visitRecord(record: TranscriptRecord, state: ScanState): void {
   if (!payload) return;
   if (record.type === 'response_item') {
     readCodexItem(payload, state);
-  } else if (record.type === 'event_msg' && payload.type === 'patch_apply_end' && payload.success === true && isStringValue(payload.call_id)) {
+  } else if (
+    record.type === 'event_msg' &&
+    payload.type === 'patch_apply_end' &&
+    payload.success === true &&
+    isStringValue(payload.call_id)
+  ) {
     state.landed.add(payload.call_id);
   }
 }
 
-/** One pass over a Claude Code or Codex transcript: the turns capture reads, the closing message, and the edits that landed. */
+/**
+ * One pass over a Claude Code or Codex transcript: the turns capture reads, the closing message, and the edits that
+ * landed.
+ */
 export function scanSessionTranscript(jsonl: string): SessionScan {
   const state: ScanState = {
     cwd: null, firstCwd: null, pending: [], landed: new Set(), claudeFinal: '', codexFinal: '', codexUnphased: '',
@@ -294,7 +314,9 @@ export function readSessionScan(transcriptPath: string, log: (message: string) =
 
 let existsProbe: (p: string) => boolean = fs.existsSync;
 
-/** Test-only seam, the scheduler's pattern: lets a test prove a network path never reaches the probe. Null restores it. */
+/**
+ * Test-only seam, the scheduler's pattern: lets a test prove a network path never reaches the probe. Null restores it.
+ */
 export function _setDigestExistsProbeForTests(probe: ((p: string) => boolean) | null): void {
   existsProbe = probe ?? fs.existsSync;
 }
@@ -304,7 +326,10 @@ function isNetworkPath(p: string): boolean {
   return /^[\\/]{2}(?:(?![?.][\\/])|[?.][\\/]UNC[\\/])/i.test(p);
 }
 
-/** The store root is realpath'd; transcript paths are not, and a deleted file has no realpath of its own. Null for a network path. */
+/**
+ * The store root is realpath'd; transcript paths are not, and a deleted file has no realpath of its own. Null for a
+ * network path.
+ */
 export function realFsPath(p: string): string | null {
   if (isNetworkPath(p)) return null;
   const abs = nativePath(p);
@@ -320,7 +345,10 @@ export function realFsPath(p: string): string | null {
   return path.join(fs.realpathSync.native(head), ...rest);
 }
 
-/** Repo-relative with forward slashes, '' for the root itself, null outside the repo or when the path cannot be resolved. */
+/**
+ * Repo-relative with forward slashes, '' for the root itself, null outside the repo or when the path cannot be
+ * resolved.
+ */
 export function repoRelative(p: string, repoRoot: string): string | null {
   let rel: string;
   try {
@@ -473,7 +501,9 @@ function rankedSentences(finalText: string, windows: ReadonlySet<string>, repoRo
 function changedLine(files: readonly string[]): string {
   for (let shown = Math.min(files.length, MAX_FILES); shown > 0; shown--) {
     const more = files.length - shown;
-    const line = maskEmails(redactSecretsStrict(`Changed: ${files.slice(0, shown).join(', ')}${more > 0 ? ` (+${more} more)` : ''}`));
+    const line = maskEmails(
+      redactSecretsStrict(`Changed: ${files.slice(0, shown).join(', ')}${more > 0 ? ` (+${more} more)` : ''}`),
+    );
     if (line.length <= MAX_DIGEST_CHARS) return line;
   }
   return '';
@@ -525,9 +555,18 @@ export interface DigestOutcome {
   files: number;
 }
 
-/** What hippo could have injected into the session: any live digest (prompt recall reaches old ones) and the ambient handoff, never this session's own. */
+/**
+ * What hippo could have injected into the session: any live digest (prompt recall reaches old ones) and the ambient
+ * handoff, never this session's own.
+ */
 function injectedTexts(hippoRoot: string, opts: SessionDigestOptions): string[] {
-  const digests = loadLiveContentsBySourceAndTag(hippoRoot, opts.tenantId, SESSION_DIGEST_TAG, SESSION_DIGEST_TAG, opts.key);
+  const digests = loadLiveContentsBySourceAndTag(
+    hippoRoot,
+    opts.tenantId,
+    SESSION_DIGEST_TAG,
+    SESSION_DIGEST_TAG,
+    opts.key,
+  );
   const handoff = loadLatestHandoff(hippoRoot, opts.tenantId, undefined, {
     unfinishedOnly: true,
     maxAgeMs: SNAPSHOT_AMBIENT_MAX_AGE_MS,

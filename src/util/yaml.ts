@@ -1,4 +1,7 @@
-/** Minimal YAML frontmatter serializer/deserializer with no external deps: simple key-value pairs and inline arrays, enough for the MemoryEntry schema. */
+/**
+ * Minimal YAML frontmatter serializer/deserializer with no external deps: simple key-value pairs and inline arrays,
+ * enough for the MemoryEntry schema.
+ */
 
 type YamlValue = string | number | boolean | null | string[] | number[];
 

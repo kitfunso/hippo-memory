@@ -1,4 +1,7 @@
-/** Physics state persistence: particle state (position, velocity, mass, charge, temperature) in SQLite, with BLOB columns for 384-dim vectors. */
+/**
+ * Physics state persistence: particle state (position, velocity, mass, charge, temperature) in SQLite, with BLOB
+ * columns for 384-dim vectors.
+ */
 
 import { evalNow, strengthAblation } from '../core/ablation.js';
 import type { DatabaseSyncLike } from './index.js';
@@ -130,7 +133,10 @@ export function savePhysicsState(
 
 const RESET_BATCH = 64;
 
-/** Drops every particle, then seeds one per entry that has an embedding; `entries` may be read lazily, as each batch is written before the next is read. */
+/**
+ * Drops every particle, then seeds one per entry that has an embedding; `entries` may be read lazily, as each batch is
+ * written before the next is read.
+ */
 export function resetAllPhysicsState(
   db: DatabaseSyncLike,
   entries: Iterable<MemoryEntry>,
@@ -158,7 +164,10 @@ export function resetAllPhysicsState(
   });
 }
 
-/** Refresh mass, charge and temperature for existing particles from current memory attributes (called during consolidation). */
+/**
+ * Refresh mass, charge and temperature for existing particles from current memory attributes (called during
+ * consolidation).
+ */
 export function refreshParticleProperties(
   particles: PhysicsParticle[],
   entries: Map<string, MemoryEntry>,

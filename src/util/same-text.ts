@@ -13,7 +13,9 @@ export function mergedText(header: string, texts: readonly string[]): string {
   return `${header}\n\n${texts.map((t) => `- ${t.trim().replace(/\n/g, '\n  ')}`).join('\n')}`;
 }
 
-/** Each source text a sleep-merged row holds; a two-row merge by an older release kept one text whole after its header. */
+/**
+ * Each source text a sleep-merged row holds; a two-row merge by an older release kept one text whole after its header.
+ */
 export function heldTexts(entry: Text): string[] {
   const cut = entry.content.indexOf('\n\n');
   if (entry.source !== 'consolidation' || cut < 0) return [];
@@ -27,7 +29,9 @@ export function heldTextKeys(entry: Text): string[] {
   return [duplicateKey(entry.content), ...heldTexts(entry).map(duplicateKey)];
 }
 
-/** The longest word of a text: every row holding the text word for word contains it, so a store lookup can filter on it. */
+/**
+ * The longest word of a text: every row holding the text word for word contains it, so a store lookup can filter on it.
+ */
 export function longestWord(text: string): string {
   return duplicateKey(text).split(' ').reduce((best, w) => (w.length > best.length ? w : best), '');
 }
@@ -36,7 +40,10 @@ export function storedTextKeys(entries: readonly Text[]): Set<string> {
   return new Set(entries.flatMap(heldTextKeys));
 }
 
-/** A final result list without copies: drops each unpinned row a sleep-merged row in the list holds word for word, and each later unpinned copy of a text. */
+/**
+ * A final result list without copies: drops each unpinned row a sleep-merged row in the list holds word for word, and
+ * each later unpinned copy of a text.
+ */
 export function dropHeldCopies<T>(rows: readonly T[], textOf: (row: T) => Text): T[] {
   const held = new Set(rows.flatMap((r) => heldTextKeys(textOf(r)).slice(1)));
   const seen = new Set<string>();

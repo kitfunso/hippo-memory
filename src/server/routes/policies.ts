@@ -14,7 +14,8 @@ import {
   type VersionedRouteConfig,
 } from './object-routes.js';
 
-// The date fields get a type and length check only: the store parses the date, and the cap bounds a junk string before it reaches the Date parser.
+// The date fields get a type and length check only: the store parses the date, and the cap bounds a junk string before
+// it reaches the Date parser.
 const MAX_DATE_LEN = 64;
 
 const policyRoutes: VersionedRouteConfig<'policy', SavePolicyOpts> = {
@@ -27,7 +28,14 @@ const policyRoutes: VersionedRouteConfig<'policy', SavePolicyOpts> = {
     const validFrom = optionalString(body, 'validFrom', MAX_DATE_LEN);
     const validTo = optionalString(body, 'validTo', MAX_DATE_LEN);
     const changeSummary = optionalString(body, 'changeSummary', MAX_SHORT_FIELD_LEN);
-    return (existing, id) => ({ policyName: existing.policyName, policyText, validFrom, validTo, changeSummary, supersedesPolicyId: id });
+    return (existing, id) => ({
+      policyName: existing.policyName,
+      policyText,
+      validFrom,
+      validTo,
+      changeSummary,
+      supersedesPolicyId: id,
+    });
   },
 };
 

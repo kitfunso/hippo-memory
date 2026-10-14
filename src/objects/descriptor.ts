@@ -1,4 +1,5 @@
-// The words and rules that differ between the typed objects (decision, project brief and the rest), held as data so one lifecycle serves every kind.
+// The words and rules that differ between the typed objects (decision, project brief and the rest), held as data so one
+// lifecycle serves every kind.
 // A kind's table, columns and audit keys sit behind the `objects` store group.
 
 import type { KeysetPosition } from '../util/keyset.js';

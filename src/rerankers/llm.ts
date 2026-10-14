@@ -17,8 +17,12 @@ interface FetchHeaders {
   authorization?: string;
 }
 
-/** Track 3 reranker (skeleton): listwise LLM rerank on a customer-supplied OpenAI-compatible endpoint, gated on HIPPO_LLM_RERANKER_URL against accidental cost.
- * Timeout is 30s for the whole call, retries included (HIPPO_LLM_RERANKER_TIMEOUT_MS); any failure falls back to identity ordering, so recall never hangs. */
+/**
+ * Track 3 reranker (skeleton): listwise LLM rerank on a customer-supplied OpenAI-compatible endpoint, gated on
+ * HIPPO_LLM_RERANKER_URL against accidental cost.
+ * Timeout is 30s for the whole call, retries included (HIPPO_LLM_RERANKER_TIMEOUT_MS); any failure falls back to
+ * identity ordering, so recall never hangs.
+ */
 export function createLlmReranker(): RerankerFn {
   const outage = createOutageWarning('llm', 'keeping the input order');
   return async (query, results, options?: RerankerOptions): Promise<RerankResult[]> => {
@@ -60,7 +64,8 @@ function replyText(body: JsonValue): string {
 async function requestPermutation(url: string, query: string, head: readonly SearchResult[]): Promise<number[]> {
   const key = envLlmRerankerKey();
   const prompt = [
-    `Rerank the candidates below by relevance to the query. Output a JSON array of indices (zero-indexed) in best-first order.`,
+    `Rerank the candidates below by relevance to the query. Output a JSON array of indices (zero-indexed) in ` +
+    `best-first order.`,
     `Query: ${redactSecretsStrict(query)}`,
     ...head.map((r, i) => `[${i}] ${redactSecretsStrict(r.entry.content)}`),
     `Output format: [<int>, <int>, ...] with all ${head.length} indices.`,

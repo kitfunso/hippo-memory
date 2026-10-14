@@ -1,11 +1,15 @@
-// Which pilot arm a session is in: the rate comes from the ledger store's config, the arm row from src/store/pilot-arm.ts.
+// Which pilot arm a session is in: the rate comes from the ledger store's config, the arm row from
+// src/store/pilot-arm.ts.
 import { loadConfig } from '../core/config.js';
 import { ledgerRoot, onLedgerRoot, type LedgerRootOpts } from './ledger-db.js';
 import { pilotArmOnRoot } from '../store/ledger-turn.js';
 import { hashArm, type PilotArm } from '../store/pilot-arm.js';
 
 export interface SessionArmOpts extends LedgerRootOpts {
-  /** Only the caller tenant's arm row counts, so a caller holding another tenant's session id cannot claim that session's arm. */
+  /**
+   * Only the caller tenant's arm row counts, so a caller holding another tenant's session id cannot claim that
+   * session's arm.
+   */
   readonly ownTenantOnly?: boolean;
 }
 
@@ -20,6 +24,8 @@ export function sessionPilotArm(
   const rate = loadConfig(root).pilot.holdoutRateBp;
   if (rate <= 0) return null;
   const { ownTenantOnly } = opts;
-  const arm = onLedgerRoot(hippoRoot, opts, (at) => pilotArmOnRoot(at, tenantId, sessionId, rate, { write, ownTenantOnly }));
+  const arm = onLedgerRoot(hippoRoot, opts, (at) =>
+    pilotArmOnRoot(at, tenantId, sessionId, rate, { write, ownTenantOnly }),
+  );
   return arm ?? hashArm(sessionId, rate);
 }

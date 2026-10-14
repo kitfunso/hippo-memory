@@ -26,7 +26,10 @@ export async function repairQualityOnceAt(root: string, tenantId: string): Promi
     const review = result.issues.filter((issue) => issue.disposition === 'review').length;
     if (review > 0) {
       const lead = moved > 0 ? `  ${review} more` : `Checked old automatic memories once after the upgrade: ${review}`;
-      console.log(`${lead} ${review === 1 ? 'looks' : 'look'} doubtful and ${review === 1 ? 'was' : 'were'} kept; hippo audit repair${scope} lists them.`);
+      console.log(
+        `${lead} ${review === 1 ? 'looks' : 'look'} doubtful and ${review === 1 ? 'was' : 'were'} kept; hippo audit ` +
+        `repair${scope} lists them.`,
+      );
     }
     for (const warning of result.warnings) log.warn(warning);
   } catch (err) {

@@ -191,7 +191,10 @@ export interface EvalComparison {
   onlyInCurrent: string[];
 }
 
-/** Compute pairwise deltas between a baseline and a current eval summary, matching cases by EvalCase.id; mismatches land in the onlyIn arrays. */
+/**
+ * Compute pairwise deltas between a baseline and a current eval summary, matching cases by EvalCase.id; mismatches land
+ * in the onlyIn arrays.
+ */
 export function compareSummaries(baseline: EvalSummary, current: EvalSummary): EvalComparison {
   const aggregate: EvalDelta = {
     mrr: current.meanMrr - baseline.meanMrr,
@@ -236,7 +239,10 @@ export function compareSummaries(baseline: EvalSummary, current: EvalSummary): E
   };
 }
 
-/** For each memory, use its first 8 content words as a trivial query and expect that memory back: a smoke test for recall. */
+/**
+ * For each memory, use its first 8 content words as a trivial query and expect that memory back: a smoke test for
+ * recall.
+ */
 export function bootstrapCorpus(entries: MemoryEntry[], maxCases = 50): EvalCase[] {
   const cases: EvalCase[] = [];
   for (const e of entries) {

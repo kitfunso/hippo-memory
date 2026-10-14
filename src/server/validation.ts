@@ -5,17 +5,23 @@ import { HttpError, readBody } from '../util/http-util.js';
 import { DEFAULT_LIST_LIMIT, MAX_ID_LEN, MAX_LIST_LIMIT, resolveListLimit } from '../util/limits.js';
 import { type JsonValue, isJsonString, isJsonObject } from '../util/json.js';
 
-// Runtime membership check for a `ReadonlySet<T>` of string-literal members: Set<T>.has gives no narrowing, so this is the one place the `as T` assertion lives
+// Runtime membership check for a `ReadonlySet<T>` of string-literal members: Set<T>.has gives no narrowing, so this is
+// the one place the `as T` assertion lives
 // and callers narrow via the `value is T` return.
 export function isSetMember<T extends string>(set: ReadonlySet<T>, value: string): value is T {
-  // SAFETY: `value as T` is discarded unless `set.has` (the real runtime check) confirms membership; the `value is T` return type does the narrowing.
+  // SAFETY: `value as T` is discarded unless `set.has` (the real runtime check) confirms membership; the `value is T`
+  // return type does the narrowing.
   return set.has(value as T);
 }
 
 // Cap for short free-text HTTP fields (names, text, context, change summaries) on the object routes.
 export const MAX_SHORT_FIELD_LEN = 4096;
 
-export function parseListLimit(limitRaw: string | null, defaultLimit = DEFAULT_LIST_LIMIT, maxLimit = MAX_LIST_LIMIT): number {
+export function parseListLimit(
+  limitRaw: string | null,
+  defaultLimit = DEFAULT_LIST_LIMIT,
+  maxLimit = MAX_LIST_LIMIT,
+): number {
   const limit = resolveListLimit(limitRaw === null ? undefined : Number(limitRaw), defaultLimit, maxLimit);
   if (limit === undefined) throw new HttpError(400, `limit must be a positive integer <= ${maxLimit}`);
   return limit;
@@ -53,7 +59,9 @@ export function getStringArray(obj: Record<string, JsonValue>, key: string): str
   return v;
 }
 
-/** Keeps only `name` and `aliases`: a client's `legacy_name` is a folder name, which must never become a row's origin. */
+/**
+ * Keeps only `name` and `aliases`: a client's `legacy_name` is a folder name, which must never become a row's origin.
+ */
 export function getCallerProject(body: Record<string, JsonValue>): RememberOpts['project'] {
   const v = body.project;
   if (v === undefined || v === null) return undefined;
@@ -67,8 +75,12 @@ export function getCallerProject(body: Record<string, JsonValue>): RememberOpts[
   return { name: v.name, aliases: v.aliases };
 }
 
-/** Charset + length validation for `:id` captures, called right after `matchPath` so empty/overlong/illegal ids get a 400, not "not found".
- * Allows every production id shape (`mem_<hex>`, `sess-<id>`, Slack ids) plus `:` and `.`; no `/`, since `rejectEncodedSlash` stops `%2F` smuggling. */
+/**
+ * Charset + length validation for `:id` captures, called right after `matchPath` so empty/overlong/illegal ids get a
+ * 400, not "not found".
+ * Allows every production id shape (`mem_<hex>`, `sess-<id>`, Slack ids) plus `:` and `.`; no `/`, since
+ * `rejectEncodedSlash` stops `%2F` smuggling.
+ */
 const ID_SEGMENT_RE = /^[A-Za-z0-9_:.-]+$/;
 export function validateIdSegment(id: string, fieldName: string): void {
   if (id.length === 0) throw new HttpError(400, `${fieldName} is required`);
