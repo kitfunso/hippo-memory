@@ -8,6 +8,7 @@ import { flagIsTrue, stringFlagOrExit, type CommandContext, stringFlag, numberFl
 import { requireInit } from './shared.js';
 import { errorMessage } from '../util/log.js';
 import { fail } from './exit.js';
+import { cliStore } from './api-context.js';
 import { DEFAULT_DASHBOARD_PORT, DEFAULT_SERVER_HOST, DEFAULT_SERVER_PORT } from '../server/defaults.js';
 
 export async function handleDashboard({ hippoRoot, flags }: CommandContext): Promise<void> {
@@ -26,7 +27,7 @@ export async function handleMcp(): Promise<void> {
   // stdio loop here. (HTTP/SSE transport is wired in src/server.ts and
   // imports the same module without triggering stdin handlers.)
   const mod = await import('../mcp/server.js');
-  mod.startStdioLoop();
+  mod.startStdioLoop(cliStore);
   // Server runs until stdin closes, so we never reach here
   await new Promise(() => {}); // hang forever
 }

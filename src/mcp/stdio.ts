@@ -5,9 +5,8 @@ import { errorFields, errorMessage, log } from '../util/log.js';
 import { requestDeadlineMs } from '../util/request-scope.js';
 import { MAX_BODY_BYTES } from '../util/http-util.js';
 import { parseFrame, type FrameRemainder } from './framing.js';
-import { mcpErrorResponse, type McpRequest, type McpResponse } from './protocol.js';
+import { mcpErrorResponse, type McpRequest, type McpResponse, type StoreOpener } from './protocol.js';
 import { handleMcpRequest } from './request.js';
-import { sqliteStore } from '../store/sqlite/store.js';
 import { type JsonValue, isJsonNumber, isJsonString, isJsonObject } from '../util/json.js';
 import { randomUUID } from 'node:crypto';
 import { currentRequestId, runWithRequestId } from '../util/request-scope.js';
@@ -113,7 +112,7 @@ function watchDeadline(req: McpRequest, owedReply: boolean, abort: AbortControll
   };
 }
 
-function dispatch(body: string, abort: AbortController): void {
+function dispatch(body: string, abort: AbortController, openStore: StoreOpener): void {
   let parsed: JsonValue;
   try {
     parsed = JSON.parse(body);
@@ -129,14 +128,14 @@ function dispatch(body: string, abort: AbortController): void {
   const req = parsed;
   if (req.method.startsWith('notifications/')) {
     const stopWatching = watchDeadline(req, false, abort);
-    track(req.method, handleMcpRequest(req, undefined, sqliteStore).then(() => {}).catch((err) => {
+    track(req.method, handleMcpRequest(req, undefined, openStore).then(() => {}).catch((err) => {
       log.error(`mcp notification ${req.method} failed: ${errorMessage(err)}`, errorFields(err));
     }).finally(stopWatching));
     return;
   }
   // A frame with no id is a notification under any method name, and JSON-RPC forbids answering one.
   const timedOut = watchDeadline(req, isJsonString(req.id) || isJsonNumber(req.id), abort);
-  track(req.method, handleMcpRequest(req, undefined, sqliteStore).then((resp) => { if (!timedOut() && resp) send(resp); }).catch((err) => {
+  track(req.method, handleMcpRequest(req, undefined, openStore).then((resp) => { if (!timedOut() && resp) send(resp); }).catch((err) => {
     if (timedOut() && err instanceof DOMException && err.name === 'TimeoutError') log.debug(`mcp: ${callName(req)} stopped at its deadline`);
     else if (timedOut()) log.error(`mcp: ${callName(req)} failed after its timeout reply: ${errorMessage(err)}`, errorFields(err));
     else send(mcpErrorResponse(req.id, err, undefined, callName(req)));
@@ -144,8 +143,8 @@ function dispatch(body: string, abort: AbortController): void {
 }
 
 /** Wires stdin/stdout to the dispatcher; idempotent. Only the entrypoint (cli.ts `hippo mcp`, or this file run directly) should call it, so the HTTP daemon
- * (which imports `handleMcpRequest`) does not steal stdin or exit when its parent closes a pipe. */
-export function startStdioLoop(): void {
+ * (which imports `handleMcpRequest`) does not steal stdin or exit when its parent closes a pipe. The caller picks the store, so src/mcp names no adapter. */
+export function startStdioLoop(openStore: StoreOpener): void {
   process.stdin.on('data', (raw: Buffer) => {
     const chunk = withoutRefused(raw);
     pending.push(chunk);
@@ -170,7 +169,7 @@ export function startStdioLoop(): void {
       // One id per frame, so the error reply and every line logged for the call name the same request.
       if (result.kind === 'message') {
         const abort = new AbortController();
-        runWithRequestId(randomUUID(), () => dispatch(result.body, abort), undefined, abort.signal);
+        runWithRequestId(randomUUID(), () => dispatch(result.body, abort, openStore), undefined, abort.signal);
       }
     }
     pending = buffer.length > 0 ? [buffer] : [];
