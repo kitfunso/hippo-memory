@@ -1,5 +1,6 @@
 // Pilot arm: one token_ledger row per session names its arm, `hippo` or `holdout`, so a pilot can compare them.
-// `items` holds the holdout rate in basis points; readers outside this repo depend on these rows, so their shape is fixed.
+// `items` holds the holdout rate in basis points; readers outside this repo depend on these rows, so their shape is
+// fixed.
 import { createHash } from 'node:crypto';
 import { HOOK_DB_WAIT_MS, scopedBusyWait, withWriteScope, type DatabaseSyncLike } from '../db/index.js';
 import { errorMessage, log } from '../util/log.js';
@@ -14,16 +15,22 @@ export function hashArm(sessionId: string, rateBp: number): PilotArm {
   return bucket < rateBp ? 'holdout' : 'hippo';
 }
 
-/** The session's first stored arm, or null; never writes. Without `tenantId` any tenant's row counts, since on one machine a session has one arm. */
+/** The session's first stored arm, or null; never writes. Without `tenantId` any tenant's row counts, since on one
+ * machine a session has one arm. */
 export function readPilotArm(db: DatabaseSyncLike, sessionId: string, tenantId?: string): PilotArm | null {
   const row = firstPilotArmHash(db, sessionId, tenantId);
   return row?.block_hash === 'holdout' || row?.block_hash === 'hippo' ? row.block_hash : null;
 }
 
 /** The stored arm, else the hash arm written once; on any error the hash arm comes back unrecorded. */
-// The wait is the caller's lock-wait scope (a hook's 1 s, a server request's 250 ms); it holds on a handle opened in that scope.
+// The wait is the caller's lock-wait scope (a hook's 1 s, a server request's 250 ms); it holds on a handle opened in
+// that scope.
 export function ensurePilotArm(
-  db: DatabaseSyncLike, tenantId: string, sessionId: string, rateBp: number, opts: { ownTenantOnly?: boolean; now?: string } = {},
+  db: DatabaseSyncLike,
+  tenantId: string,
+  sessionId: string,
+  rateBp: number,
+  opts: { ownTenantOnly?: boolean; now?: string } = {},
 ): PilotArm {
   const hashed = hashArm(sessionId, rateBp);
   const readTenant = opts.ownTenantOnly ? tenantId : undefined;
@@ -31,13 +38,27 @@ export function ensurePilotArm(
     // A stored row is the common case after the first prompt, so it must not take the write lock.
     const existing = readPilotArm(db, sessionId, readTenant);
     if (existing !== null) return existing;
-    return withWriteScope(db, 'pilot_arm', () => {
-      const stored = readPilotArm(db, sessionId, readTenant);
-      if (stored === null) {
-        recordTokenUse(db, { tenantId, sessionId, surface: 'pilot', event: 'arm', items: rateBp, tokens: 0, hash: hashed, now: opts.now });
-      }
-      return stored ?? hashed;
-    }, { busyWaitMs: scopedBusyWait() ?? HOOK_DB_WAIT_MS });
+    return withWriteScope(
+      db,
+      'pilot_arm',
+      () => {
+        const stored = readPilotArm(db, sessionId, readTenant);
+        if (stored === null) {
+          recordTokenUse(db, {
+            tenantId,
+            sessionId,
+            surface: 'pilot',
+            event: 'arm',
+            items: rateBp,
+            tokens: 0,
+            hash: hashed,
+            now: opts.now,
+          });
+        }
+        return stored ?? hashed;
+      },
+      { busyWaitMs: scopedBusyWait() ?? HOOK_DB_WAIT_MS },
+    );
   } catch (err) {
     // A prompt hook must not fail on pilot bookkeeping; concurrent callers still agree on the hash arm.
     log.debug(`pilot arm not stored, using the hash arm: ${errorMessage(err)}`);

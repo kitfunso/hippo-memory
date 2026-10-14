@@ -1,4 +1,5 @@
-// The graph reads a view and a traversal share. Each opens hippo.db itself unless the caller hands it the handle its snapshot runs on.
+// The graph reads a view and a traversal share. Each opens hippo.db itself unless the caller hands it the handle its
+// snapshot runs on.
 import { DEFAULT_LIST_LIMIT } from '../util/limits.js';
 import { openHippoDb, closeHippoDb, withReadSnapshot, type DatabaseSyncLike } from '../db/index.js';
 import { onHandle } from './open.js';
@@ -23,8 +24,8 @@ import { placeholders } from '../util/sql.js';
 const DEFAULT_GRAPH_PAGE_SIZE = DEFAULT_LIST_LIMIT;
 const DEFAULT_GRAPH_SCAN_LIMIT = 1000;
 
-/** Entities with an exact `name`, bounded by `limit` in SQL with a deterministic order, so graph-view focus finds `--entity NAME` directly
- * without materializing every same-name row. */
+/** Entities with an exact `name`, bounded by `limit` in SQL with a deterministic order, so graph-view focus finds
+ * `--entity NAME` directly without materializing every same-name row. */
 export function loadEntitiesByName(
   hippoRoot: string,
   tenantId: string,
@@ -60,7 +61,9 @@ export function loadEntities(
   assertTenantId('loadEntities', tenantId);
   const limit = opts.limit ?? DEFAULT_GRAPH_PAGE_SIZE;
   if (opts.entityType && !GRAPH_ENTITY_TYPES.has(opts.entityType)) {
-    throw new Error(`loadEntities: entityType must be one of ${Array.from(GRAPH_ENTITY_TYPES).join('|')}; got ${opts.entityType}`);
+    throw new Error(
+      `loadEntities: entityType must be one of ${Array.from(GRAPH_ENTITY_TYPES).join('|')}; got ${opts.entityType}`,
+    );
   }
   const ownDb = txDb ? null : openHippoDb(hippoRoot);
   const db = txDb ?? ownDb!;
@@ -120,7 +123,8 @@ export function loadRelations(
  *  (leaves headroom for the tenant_id param + the doubled list in neighbour lookups). */
 export const IN_LIST_CHUNK = 400;
 
-/** Load entities by primary id (the BFS-reached rows whose `memory_id` maps back to a recall result). Tenant-scoped, read-only. */
+/** Load entities by primary id (the BFS-reached rows whose `memory_id` maps back to a recall result). Tenant-scoped,
+ * read-only. */
 export function loadEntitiesByIds(
   hippoRoot: string,
   tenantId: string,
@@ -149,8 +153,9 @@ export function loadEntitiesByIds(
   }
 }
 
-/** All relations touching ANY of `entityIds` in EITHER direction: the per-hop neighbour query for multi-hop traversal, one query for the whole frontier
- * (no N+1). `limit` caps rows and must be a non-negative integer (raw `LIMIT ?` rejects a fraction). */
+/** All relations touching ANY of `entityIds` in EITHER direction: the per-hop neighbour query for multi-hop traversal,
+ * one query for the whole frontier (no N+1). `limit` caps rows and must be a non-negative integer (raw `LIMIT ?`
+ * rejects a fraction). */
 export function loadNeighborRelations(
   hippoRoot: string,
   tenantId: string,
@@ -167,8 +172,8 @@ export function loadNeighborRelations(
   const ownDb = txDb ? null : openHippoDb(hippoRoot);
   const db = txDb ?? ownDb!;
   try {
-    // `limit` applies PER CHUNK, so a frontier over IN_LIST_CHUNK ids could return limit*chunks rows before the dedup below;
-    // harmless today (frontier <= maxNeighbors 200, one chunk, BFS re-enforces the fanout cap).
+    // `limit` applies PER CHUNK, so a frontier over IN_LIST_CHUNK ids could return limit*chunks rows before the dedup
+    // below; harmless today (frontier <= maxNeighbors 200, one chunk, BFS re-enforces the fanout cap).
     const byId = new Map<number, Relation>();
     for (let i = 0; i < entityIds.length; i += IN_LIST_CHUNK) {
       const slice = entityIds.slice(i, i + IN_LIST_CHUNK);
@@ -188,8 +193,9 @@ export function loadNeighborRelations(
   }
 }
 
-/** Relations with BOTH endpoints in `entityIds` (edges AMONG the set), for the graph-view focus subgraph; `LIMIT` caps only intra-union edges,
- * so no out-of-union row evicts a valid one. The caller bounds `entityIds` (<= view limit), so a single query is safe. */
+/** Relations with BOTH endpoints in `entityIds` (edges AMONG the set), for the graph-view focus subgraph; `LIMIT` caps
+ * only intra-union edges, so no out-of-union row evicts a valid one. The caller bounds `entityIds` (<= view limit), so
+ * a single query is safe. */
 export function loadRelationsAmong(
   hippoRoot: string,
   tenantId: string,
@@ -220,8 +226,8 @@ export function loadRelationsAmong(
   }
 }
 
-/** Map consolidated source memory ids to their graph entities: the SEED step of multi-hop recall. Tenant-scoped, read-only; chunks the IN-list under the
- * SQLite variable cap. */
+/** Map consolidated source memory ids to their graph entities: the SEED step of multi-hop recall. Tenant-scoped,
+ * read-only; chunks the IN-list under the SQLite variable cap. */
 export function loadEntitiesByMemoryId(
   hippoRoot: string,
   tenantId: string,
@@ -247,13 +253,17 @@ export function loadEntitiesByMemoryId(
   });
 }
 
-/** The stored rows a rebuild diffs against, read on the caller's handle so the diff and the apply can share one write lock. */
+/** The stored rows a rebuild diffs against, read on the caller's handle so the diff and the apply can share one write
+ * lock. */
 export function storedGraphOn(db: DatabaseSyncLike, tenantId: string, memoryIds: readonly string[]): StoredGraph {
   const kinds = memoryKindsOn(db, memoryIds);
   // SAFETY: the SELECT names exactly the columns of StoredEntity.
-  const entities = db.prepare(
-    `SELECT id, entity_type, name, memory_id, source_kind, source_object_type, source_object_id FROM entities WHERE tenant_id = ? ORDER BY id`,
-  ).all(tenantId) as StoredEntity[];
+  const entities = db
+    .prepare(
+      `SELECT id, entity_type, name, memory_id, source_kind, source_object_type, source_object_id FROM entities ` +
+      `WHERE tenant_id = ? ORDER BY id`,
+    )
+    .all(tenantId) as StoredEntity[];
   // SAFETY: the SELECT names exactly the columns of StoredRelation.
   const relations = db.prepare(
     `SELECT id, from_entity_id, to_entity_id, rel_type, memory_id, source_kind, source_object_type, source_object_id ` +
@@ -278,7 +288,8 @@ export function loadStoredGraph(hippoRoot: string, tenantId: string, memoryIds: 
 }
 
 /** Run `fn` in ONE read transaction (a single WAL snapshot) so every `load*` read via `txDb` sees a consistent view
- * even if a rebuild commits concurrently (it clears and reinserts entities, so separate reads could mix old entity ids with new relation ids). */
+ * even if a rebuild commits concurrently (it clears and reinserts entities, so separate reads could mix old entity ids
+ * with new relation ids). */
 export function withGraphReadSnapshot<T>(
   hippoRoot: string,
   fn: (txDb: DatabaseSyncLike) => T,

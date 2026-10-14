@@ -1,4 +1,5 @@
-// What the store workers refused, timed out and replaced since the process started; /health reports them beside the audit failure count.
+// What the store workers refused, timed out and replaced since the process started; /health reports them beside the
+// audit failure count.
 
 /** Counted on the server thread, across every executor of the process. */
 export const workerCounts = {

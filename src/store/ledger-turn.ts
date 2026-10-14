@@ -1,4 +1,5 @@
-// One hook or context turn's token-ledger work by store root: each call opens hippo.db, runs on one connection and closes it.
+// One hook or context turn's token-ledger work by store root: each call opens hippo.db, runs on one connection and
+// closes it.
 import { isSqliteBusy, noteStoreBusy } from '../db/index.js';
 import { errorFields, errorMessage, log } from '../util/log.js';
 import type { DeliveryEventInput } from './delivery-recorder.js';
@@ -43,7 +44,8 @@ export type DeliveryWrite = (input: DeliveryEventInput) => number | null;
 /** The token rows of one turn and the delivery event that follows them. */
 export interface LedgerTurn {
   readonly uses: readonly TokenUse[];
-  /** Makes each row its own attempt: a failed one is reported here and the rest still run. Without it the first failure throws. */
+  /** Makes each row its own attempt: a failed one is reported here and the rest still run. Without it the first failure
+   * throws. */
   readonly onRowError?: <E>(error: E) => void;
   /** Runs after the rows with a writer on their connection, so the delivery event costs no second open. */
   readonly delivery?: (write: DeliveryWrite) => void;
@@ -77,10 +79,16 @@ export function lastSentOnSurface(
 
 /** The session's pilot arm: `write` books it as ensurePilotArm does, else the stored arm or the hash arm. */
 export function pilotArmOnRoot(
-  hippoRoot: string, tenantId: string, sessionId: string, rateBp: number, opts: { write: boolean; ownTenantOnly?: boolean },
+  hippoRoot: string,
+  tenantId: string,
+  sessionId: string,
+  rateBp: number,
+  opts: { write: boolean; ownTenantOnly?: boolean },
 ): PilotArm {
   const { ownTenantOnly } = opts;
-  return onHandle(hippoRoot, (db) => opts.write
-    ? ensurePilotArm(db, tenantId, sessionId, rateBp, { ownTenantOnly })
-    : readPilotArm(db, sessionId, ownTenantOnly ? tenantId : undefined) ?? hashArm(sessionId, rateBp));
+  return onHandle(hippoRoot, (db) =>
+    opts.write
+      ? ensurePilotArm(db, tenantId, sessionId, rateBp, { ownTenantOnly })
+      : (readPilotArm(db, sessionId, ownTenantOnly ? tenantId : undefined) ?? hashArm(sessionId, rateBp)),
+  );
 }

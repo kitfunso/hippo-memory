@@ -6,7 +6,8 @@ import { onHandle } from '../open.js';
 import type { Quarantine, Sync } from '../port.js';
 import { approveQuarantinedAt, listQuarantinedAt, rejectQuarantinedAt } from '../quarantine.js';
 
-/** After the commit, best effort: a failed rewrite leaves the markdown mirror showing the quarantine scope, which still hides the memory. */
+/** After the commit, best effort: a failed rewrite leaves the markdown mirror showing the quarantine scope, which still
+ * hides the memory. */
 function rewriteMirror(hippoRoot: string, tenantId: string, id: string): void {
   try {
     const restored = readEntry(hippoRoot, id, tenantId);
@@ -24,11 +25,13 @@ export function sqliteQuarantine(hippoRoot: string): Sync<Quarantine> {
       if (result.outcome === 'approved') rewriteMirror(hippoRoot, tenantId, id);
       return result;
     },
-    rejectQuarantined: (tenantId, id, actor) => onHandle(hippoRoot, (db) => rejectQuarantinedAt(db, tenantId, id, actor)),
+    rejectQuarantined: (tenantId, id, actor) =>
+      onHandle(hippoRoot, (db) => rejectQuarantinedAt(db, tenantId, id, actor)),
   };
 }
 
-/** The group as a served store answers it: each call runs at once and resolves through a Promise, so a throw rejects as another store's would. */
+/** The group as a served store answers it: each call runs at once and resolves through a Promise, so a throw rejects as
+ * another store's would. */
 export function servedQuarantine(sync: Sync<Quarantine>): Quarantine {
   return {
     listQuarantined: async (tenantId, query) => sync.listQuarantined(tenantId, query),

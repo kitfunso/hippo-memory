@@ -68,7 +68,8 @@ export interface StoreInventory {
   readonly tables: JsonObject;
 }
 
-/** Schema version, oldest allowed binary and row count of every table, for a support bundle; never reads a memory column. */
+/** Schema version, oldest allowed binary and row count of every table, for a support bundle; never reads a memory
+ * column. */
 export function readStoreInventory(hippoRoot: string): StoreInventory {
   return onHandle(hippoRoot, (db) => {
     const schemaVersion = getSchemaVersion(db);

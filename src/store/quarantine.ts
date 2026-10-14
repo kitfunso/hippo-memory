@@ -4,7 +4,13 @@ import { appendAuditEvent } from './audit.js';
 import { withWriteScopeOr, type DatabaseSyncLike } from '../db/index.js';
 import { keysetAfter, type KeysetPosition } from '../util/keyset.js';
 import { selectEntriesByIds } from './entry-reads.js';
-import type { QuarantineApproval, QuarantineListQuery, QuarantineRefusal, QuarantineRejection, QuarantinedMemory } from './port.js';
+import type {
+  QuarantineApproval,
+  QuarantineListQuery,
+  QuarantineRefusal,
+  QuarantineRejection,
+  QuarantinedMemory,
+} from './port.js';
 
 export const QUARANTINE_SCOPE_PREFIX = 'quarantine:private:';
 
@@ -66,17 +72,26 @@ function listQuarantineRows(
   limit = DEFAULT_LIST_LIMIT,
   afterRow?: KeysetPosition,
 ): QuarantineRow[] {
-  // A pending row whose memory was deleted (e.g. Slack message_deleted) is dead; keep its history, drop it from the queue.
-  const live = status === 'pending'
-    ? ' AND EXISTS (SELECT 1 FROM memories m WHERE m.id = memory_quarantine.memory_id AND m.tenant_id = memory_quarantine.tenant_id)'
-    : '';
+  // A pending row whose memory was deleted (e.g. Slack message_deleted) is dead; keep its history, drop it from the
+  // queue.
+  const live =
+    status === 'pending'
+      ? ' AND EXISTS (SELECT 1 FROM memories m WHERE m.id = memory_quarantine.memory_id AND m.tenant_id = ' +
+      'memory_quarantine.tenant_id)'
+      : '';
   const after = keysetAfter('quarantined_at', 'memory_id', afterRow);
   const order = 'ORDER BY quarantined_at DESC, memory_id DESC LIMIT ?';
-  const rows = status === 'all'
-    ? db.prepare(`SELECT ${SELECT_COLUMNS} FROM memory_quarantine WHERE tenant_id = ?${after.sql} ${order}`)
-        .all(tenantId, ...after.params, limit)
-    : db.prepare(`SELECT ${SELECT_COLUMNS} FROM memory_quarantine WHERE tenant_id = ? AND status = ?${live}${after.sql} ${order}`)
-        .all(tenantId, status, ...after.params, limit);
+  const rows =
+    status === 'all'
+      ? db
+          .prepare(`SELECT ${SELECT_COLUMNS} FROM memory_quarantine WHERE tenant_id = ?${after.sql} ${order}`)
+          .all(tenantId, ...after.params, limit)
+      : db
+          .prepare(
+            `SELECT ${SELECT_COLUMNS} FROM memory_quarantine WHERE tenant_id = ? AND status = ?${live}${after.sql} ` +
+            `${order}`,
+          )
+          .all(tenantId, status, ...after.params, limit);
   // SAFETY: both branches select SELECT_COLUMNS, matching QuarantineDbRow's field set.
   return (rows as QuarantineDbRow[]).map(fromDbRow);
 }
@@ -105,19 +120,31 @@ export function recordQuarantine(db: DatabaseSyncLike, opts: RecordQuarantineOpt
 }
 
 function approveQuarantineRow(db: DatabaseSyncLike, tenantId: string, memoryId: string, decidedBy: string): void {
-  db.prepare(`UPDATE memory_quarantine SET status = 'approved', decided_at = ?, decided_by = ? WHERE tenant_id = ? AND memory_id = ?`)
-    .run(new Date().toISOString(), decidedBy, tenantId, memoryId);
+  db.prepare(
+    `UPDATE memory_quarantine SET status = 'approved', decided_at = ?, decided_by = ? WHERE tenant_id = ? AND ` +
+    `memory_id = ?`,
+  ).run(new Date().toISOString(), decidedBy, tenantId, memoryId);
 }
 
 function rejectQuarantineRow(db: DatabaseSyncLike, tenantId: string, memoryId: string, decidedBy: string): void {
-  db.prepare(`UPDATE memory_quarantine SET status = 'rejected', decided_at = ?, decided_by = ? WHERE tenant_id = ? AND memory_id = ?`)
-    .run(new Date().toISOString(), decidedBy, tenantId, memoryId);
+  db.prepare(
+    `UPDATE memory_quarantine SET status = 'rejected', decided_at = ?, decided_by = ? WHERE tenant_id = ? AND ` +
+    `memory_id = ?`,
+  ).run(new Date().toISOString(), decidedBy, tenantId, memoryId);
 }
 
 /** A page of the tenant's records, each with its memory's content read in the same query batch. */
-export function listQuarantinedAt(db: DatabaseSyncLike, tenantId: string, { status, limit, after }: QuarantineListQuery): QuarantinedMemory[] {
+export function listQuarantinedAt(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  { status, limit, after }: QuarantineListQuery,
+): QuarantinedMemory[] {
   const rows = listQuarantineRows(db, tenantId, status, limit, after);
-  const entries = selectEntriesByIds(db, rows.map((row) => row.memoryId), tenantId);
+  const entries = selectEntriesByIds(
+    db,
+    rows.map((row) => row.memoryId),
+    tenantId,
+  );
   return rows.map((row) => ({ ...row, content: entries.get(row.memoryId)?.content ?? null }));
 }
 
@@ -130,7 +157,12 @@ function pendingOrRefusal(db: DatabaseSyncLike, tenantId: string, id: string): Q
 }
 
 /** Puts the memory back under its original scope; the scope guard refuses a row moved since it was quarantined. */
-export function approveQuarantinedAt(db: DatabaseSyncLike, tenantId: string, id: string, actor: string): QuarantineApproval {
+export function approveQuarantinedAt(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  id: string,
+  actor: string,
+): QuarantineApproval {
   return withWriteScopeOr<QuarantineApproval, QuarantineApproval>(db, 'quarantine_approve', (rollback) => {
     const row = pendingOrRefusal(db, tenantId, id);
     if ('outcome' in row) return rollback(row);
@@ -140,13 +172,24 @@ export function approveQuarantinedAt(db: DatabaseSyncLike, tenantId: string, id:
       .run(row.originalScope, id, tenantId, quarantineScope);
     if (Number(updated.changes ?? 0) !== 1) return rollback({ outcome: 'scope_moved' });
     approveQuarantineRow(db, tenantId, id, actor);
-    appendAuditEvent(db, { tenantId, actor, op: 'quarantine_approve', targetId: id, metadata: { originalScope: row.originalScope } });
+    appendAuditEvent(db, {
+      tenantId,
+      actor,
+      op: 'quarantine_approve',
+      targetId: id,
+      metadata: { originalScope: row.originalScope },
+    });
     return { outcome: 'approved' };
   });
 }
 
 /** Marks the record rejected; the memory row is left as stored. */
-export function rejectQuarantinedAt(db: DatabaseSyncLike, tenantId: string, id: string, actor: string): QuarantineRejection {
+export function rejectQuarantinedAt(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  id: string,
+  actor: string,
+): QuarantineRejection {
   return withWriteScopeOr<QuarantineRejection, QuarantineRejection>(db, 'quarantine_reject', (rollback) => {
     const row = pendingOrRefusal(db, tenantId, id);
     if ('outcome' in row) return rollback(row);

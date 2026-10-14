@@ -12,8 +12,9 @@ export type OpPlaces<G> = { readonly [M in keyof G]: OpPlace };
 
 type BaseMethods = Omit<HippoStore, keyof StoreGroups | 'kind' | 'close'>;
 
-/** Store methods answered by a worker, base ones under `base`. Tagged by effect, not name: predictionBaserate (audit row) and bumpRecallStats
- * (stats.json) are writes. A read that opens through `openStore` is a read: the writer runs that open's setup before any reader serves. */
+/** Store methods answered by a worker, base ones under `base`. Tagged by effect, not name: predictionBaserate (audit
+ * row) and bumpRecallStats (stats.json) are writes. A read that opens through `openStore` is a read: the writer runs
+ * that open's setup before any reader serves. */
 export const WORKER_OPS = {
   base: {
     findApiKey: 'read',
@@ -102,9 +103,12 @@ export const WORKER_OPS = {
   readiness: {
     ping: 'read',
   },
-} as const satisfies { readonly [G in keyof StoreGroups]?: OpPlaces<StoreGroups[G]> } & { readonly base: Partial<OpPlaces<BaseMethods>> };
+} as const satisfies { readonly [G in keyof StoreGroups]?: OpPlaces<StoreGroups[G]> } & {
+  readonly base: Partial<OpPlaces<BaseMethods>>;
+};
 
-/** Sent by the executor itself and by no store method: the writer runs the store's open-time setup once, before any reader is sent a job. */
+/** Sent by the executor itself and by no store method: the writer runs the store's open-time setup once, before any
+ * reader is sent a job. */
 export const STORE_SETUP_OP = 'setup';
 
 export type WorkerGroup = keyof typeof WORKER_OPS;
@@ -117,7 +121,8 @@ export interface WorkerInit {
   readonly mode: OpMode;
   /** Lock wait of the thread's connection. */
   readonly busyWaitMs: number;
-  /** One shared integer the writer sets to a job's id before that job may commit; the server thread reads it when the job passes its deadline. */
+  /** One shared integer the writer sets to a job's id before that job may commit; the server thread reads it when the
+   * job passes its deadline. */
   readonly commitFlag?: SharedArrayBuffer;
 }
 
@@ -132,7 +137,8 @@ export interface Job {
   readonly walPages: number;
 }
 
-/** Both kinds carry the audit rows the job failed to write, since the count `/health` reports lives on the server thread. */
+/** Both kinds carry the audit rows the job failed to write, since the count `/health` reports lives on the server
+ * thread. */
 export type Reply =
   | { readonly id: number; readonly ok: true; readonly value: unknown; readonly auditFailures: number }
   | { readonly id: number; readonly ok: false; readonly error: WireError; readonly auditFailures: number };

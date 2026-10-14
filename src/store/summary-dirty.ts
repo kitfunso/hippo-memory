@@ -2,7 +2,8 @@
 import { appendAuditEvent, reportAuditWriteFailure } from './audit.js';
 import type { DatabaseSyncLike } from '../db/index.js';
 
-/** Runs in the caller's transaction so the mark commits or rolls back with the child change; only a 0 to 1 flip is audited. */
+/** Runs in the caller's transaction so the mark commits or rolls back with the child change; only a 0 to 1 flip is
+ * audited. */
 export function markSummaryDirtyInTx(
   db: DatabaseSyncLike,
   summaryId: string,
