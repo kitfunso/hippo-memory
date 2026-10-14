@@ -25,7 +25,8 @@ export interface CallerItems {
   readonly origins: readonly string[];
 }
 
-/** A caller's items, already scrubbed, under its record: a retry of a finished request answers with the first count, and a `summarised` one is reused. */
+/** A caller's items, already scrubbed, under its record: a retry of a finished request answers with the first count,
+ * and a `summarised` one is reused. */
 export function saveCallerItems(hippoRoot: string, tenantId: string, req: CallerItems, log: Log): number {
   return onHandle(hippoRoot, (db) => {
     const earlier = compactionByRequest(db, tenantId, req.requestId, req.sessionId);

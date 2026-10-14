@@ -4,7 +4,14 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { DEFAULT_HALF_LIFE_DAYS, type MemoryEntry, Layer } from '../core/memory.js';
 import {
-  closeHippoDb, currentRequestStores, type DatabaseSyncLike, openHippoDb, getMeta, setMeta, withWriteScope, pruneConsolidationRuns,
+  closeHippoDb,
+  currentRequestStores,
+  type DatabaseSyncLike,
+  openHippoDb,
+  getMeta,
+  setMeta,
+  withWriteScope,
+  pruneConsolidationRuns,
 } from '../db/index.js';
 import { openHippoDbWithFacts } from '../db/open.js';
 import { RejectedValueError } from '../core/api-errors.js';
@@ -24,7 +31,8 @@ export function initStore(hippoRoot: string): void {
 export function openStore(hippoRoot: string, opts?: { busyWaitMs?: number }): DatabaseSyncLike {
   // Open first: a folder marked for another store must refuse before any mirror folder appears.
   const { db, facts } = openHippoDbWithFacts(hippoRoot, opts);
-  // A store worker's reader: its writer ran the steps below before this thread was sent a job, and this connection cannot write them.
+  // A store worker's reader: its writer ran the steps below before this thread was sent a job, and this connection
+  // cannot write them.
   if (currentRequestStores()?.setupDoneFor === hippoRoot) return db;
   try {
     ensureMirrorDirectories(hippoRoot);
@@ -41,7 +49,10 @@ export function openStore(hippoRoot: string, opts?: { busyWaitMs?: number }): Da
       closeHippoDb(db);
     } catch (closeErr) {
       // The init error is the one thrown; the close failure is only logged.
-      log.error(`openStore: closing the handle after a failed init failed: ${errorMessage(closeErr)}`, errorFields(closeErr));
+      log.error(
+        `openStore: closing the handle after a failed init failed: ${errorMessage(closeErr)}`,
+        errorFields(closeErr),
+      );
     }
     throw error;
   }
@@ -49,7 +60,11 @@ export function openStore(hippoRoot: string, opts?: { busyWaitMs?: number }): Da
 
 /** One call on a handle of its own, closed after (a request scope's handle stays open);
  *  pass openStore where the call also sets up mirror folders and legacy rows. */
-export function onHandle<T>(hippoRoot: string, fn: (db: DatabaseSyncLike) => T, open: (hippoRoot: string) => DatabaseSyncLike = openHippoDb): T {
+export function onHandle<T>(
+  hippoRoot: string,
+  fn: (db: DatabaseSyncLike) => T,
+  open: (hippoRoot: string) => DatabaseSyncLike = openHippoDb,
+): T {
   const db = open(hippoRoot);
   try {
     return fn(db);
@@ -62,11 +77,12 @@ export function onHandle<T>(hippoRoot: string, fn: (db: DatabaseSyncLike) => T, 
 export const HALF_LIFE_BASE_META_KEY = 'default_half_life_base';
 /** `meta` key set once no memory of a decision, incident or other object sits on the old flat 90 days. */
 export const TYPED_HALF_LIFE_META_KEY = 'typed_half_life_on_default';
-/** The flat half-life the decision, incident and other object writers gave their memories before they took the default. */
+/** The flat half-life the decision, incident and other object writers gave their memories before they took the
+ * default. */
 export const LEGACY_TYPED_HALF_LIFE = 90;
 
-/** A store with no memories starts on the current default half-life base so `hippo sleep` never migrates it; one that holds memories but no recorded base
- * predates the record and keeps the legacy 7-day base until sleep migrates it. */
+/** A store with no memories starts on the current default half-life base so `hippo sleep` never migrates it; one that
+ * holds memories but no recorded base predates the record and keeps the legacy 7-day base until sleep migrates it. */
 function recordHalfLifeBaseForNewStore(db: DatabaseSyncLike): void {
   if (getMeta(db, HALF_LIFE_BASE_META_KEY, '') !== '') return;
   if (db.prepare(`SELECT 1 AS x FROM memories LIMIT 1`).get() !== undefined) return;
@@ -107,7 +123,12 @@ function importLegacyEntries(db: DatabaseSyncLike, hippoRoot: string, legacyEntr
     } catch (err) {
       if (err instanceof RejectedValueError) {
         rejectedCount++;
-        audit(db, 'reject_refusal', { targetId: err.entryId, metadata: { digest: err.digest, reason: err.reason }, actor: 'cli', tenantId: err.tenantId });
+        audit(db, 'reject_refusal', {
+          targetId: err.entryId,
+          metadata: { digest: err.digest, reason: err.reason },
+          actor: 'cli',
+          tenantId: err.tenantId,
+        });
         continue;
       }
       throw err;
@@ -132,7 +153,9 @@ function importLegacyIndexAndStats(db: DatabaseSyncLike, hippoRoot: string): voi
   setMeta(db, 'total_forgotten', String(Number(legacyStats.total_forgotten ?? 0)));
 
   const runs = Array.isArray(legacyStats.consolidation_runs) ? legacyStats.consolidation_runs : [];
-  const insertRun = db.prepare(`INSERT INTO consolidation_runs(timestamp, decayed, merged, removed) VALUES (?, ?, ?, ?)`);
+  const insertRun = db.prepare(
+    `INSERT INTO consolidation_runs(timestamp, decayed, merged, removed) VALUES (?, ?, ?, ?)`,
+  );
   for (const run of runs) {
     if (!isJsonObject(run)) continue;
     const row = run;
@@ -185,7 +208,8 @@ function loadLegacyIndexFile(hippoRoot: string): HippoIndex {
   const indexPath = path.join(hippoRoot, 'index.json');
   const empty: HippoIndex = { version: 1, entries: {}, last_retrieval_ids: [], last_trace_id: null };
   if (!fs.existsSync(indexPath)) return empty;
-  // SAFETY: index.json is written by writeIndexMirror as a HippoIndex; readers default every field, so only the object shape is checked.
+  // SAFETY: index.json is written by writeIndexMirror as a HippoIndex; readers default every field, so only the object
+  // shape is checked.
   return (readLegacyJsonObject(indexPath) as HippoIndex | null) ?? empty;
 }
 

@@ -1,4 +1,5 @@
-// The dead-letter statements both connectors share; each connector names its table and columns and maps rows to its own item type.
+// The dead-letter statements both connectors share; each connector names its table and columns and maps rows to its own
+// item type.
 
 import type { DatabaseSyncLike } from '../../db/index.js';
 import { placeholders } from '../../util/sql.js';
@@ -10,7 +11,11 @@ export type DlqRawValue = string | number | bigint | null;
 export type DlqRawRow = Record<string, DlqRawValue>;
 
 /** Inserts one row, stamping received_at; `columns` pairs each column name with its value, in insert order. */
-export function insertDlqRow(db: DatabaseSyncLike, table: DlqTable, columns: ReadonlyArray<readonly [string, string | null]>): number {
+export function insertDlqRow(
+  db: DatabaseSyncLike,
+  table: DlqTable,
+  columns: ReadonlyArray<readonly [string, string | null]>,
+): number {
   const names = [...columns.map(([name]) => name), 'received_at'];
   const values = [...columns.map(([, value]) => value), new Date().toISOString()];
   const result = db

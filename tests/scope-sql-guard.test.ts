@@ -16,8 +16,8 @@ const DOC_LINES = new Set([
   "api/assemble.ts: * When undefined, default-deny applies to every `<source>:private:*` and `unknown:legacy` row. */",
   "store/handoffs.ts: // continuity excludes slack:private:* and 'unknown:legacy'.",
   "store/sessions.ts: // continuity reads applies to slack:private:* and 'unknown:legacy' rows.",
-  "store/search-rows.ts: /** Recall-mode loader: scope predicate in SQL so `unknown:legacy` cannot leak. Empty `requestedScope` default-denies (admits `ownScope`); else exact match.",
-  "store/search-rows.ts: * SQL `NOT LIKE '%:private:%'` runs before the LIMIT so private rows cannot starve admitted ones; `passesScopeFilterForRecall` is the exact post-filter. */",
+  "store/search-rows.ts: /** Recall-mode loader: scope predicate in SQL so `unknown:legacy` cannot leak. Empty `requestedScope` default-denies",
+  "store/search-rows.ts: * (admits `ownScope`); else exact match. SQL `NOT LIKE '%:private:%'` runs before the LIMIT so private rows cannot",
 ]);
 
 function hitsIn(file: string, text: string): string[] {

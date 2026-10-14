@@ -15,13 +15,14 @@ export function resolveTenantId(opts: ResolveOpts): string {
     if (!ctx.valid || !ctx.tenantId) throw new Error('invalid api key');
     return ctx.tenantId;
   }
-  // Empty/whitespace-only HIPPO_TENANT must fall through to 'default': `??` only catches undefined, so '' leaked through and broke every downstream tenant
-  // filter.
+  // Empty/whitespace-only HIPPO_TENANT must fall through to 'default': `??` only catches undefined, so '' leaked
+  // through and broke every downstream tenant filter.
   return envTenant();
 }
 
-/** Runtime guard for tenant id args: an older JS caller can pass a `sessionId` as the tenant (`loadLatestHandoff(root, 'sess-abc')`) and silently get null.
- * Rejects values starting `sess-` / `sess_`; a tenant literally named `sess-...` is refused, an accepted tradeoff. */
+/** Runtime guard for tenant id args: an older JS caller can pass a `sessionId` as the tenant (`loadLatestHandoff(root,
+ * 'sess-abc')`) and silently get null. Rejects values starting `sess-` / `sess_`; a tenant literally named `sess-...`
+ * is refused, an accepted tradeoff. */
 export function assertTenantId(fnName: string, value: JsonValue): asserts value is string {
   if (typeof value !== 'string' || value.length === 0) {
     throw new Error(`${fnName}: tenantId is required (got ${typeof value})`);
