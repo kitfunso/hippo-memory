@@ -117,11 +117,7 @@ async function cmdAssemble(hippoRoot: string, tenantId: string, sessionId: strin
   const freshTailCount = numberFlag(flags, 'fresh-tail');
   const summarizeOlder = flags['no-summarize-older'] !== true;
   const scope = stringFlag(flags, 'scope') || undefined;
-  const ctx: api.Context = {
-    hippoRoot,
-    tenantId,
-    actor: api.adminActor('cli:assemble'),
-  };
+  const ctx: api.StoreContext = { ...cliApiContext(hippoRoot, tenantId), actor: api.adminActor('cli:assemble') };
   const opts: api.AssembleOpts = {};
   if (Number.isFinite(budget) && budget! > 0) opts.budget = budget;
   if (Number.isFinite(freshTailCount) && freshTailCount! >= 0) opts.freshTailCount = freshTailCount;
@@ -158,11 +154,7 @@ async function cmdDrillDown(hippoRoot: string, tenantId: string, summaryId: stri
     }
     depth = rawDepth;
   }
-  const ctx: api.Context = {
-    hippoRoot,
-    tenantId,
-    actor: api.adminActor('cli:drill'),
-  };
+  const ctx: api.StoreContext = { ...cliApiContext(hippoRoot, tenantId), actor: api.adminActor('cli:drill') };
   const opts: api.DrillDownOpts = {};
   if (Number.isFinite(limit) && limit! > 0) opts.limit = limit;
   if (Number.isFinite(budget) && budget! > 0) opts.budget = budget;

@@ -16,10 +16,11 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { remember, type HippoDbContext } from '../src/api/index.js';
+import { remember, type StoreContext } from '../src/api/index.js';
 import { pushGoal, completeGoal } from '../src/store/goals.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { makeEnv, type TestEnv } from './_helpers/cli-env.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 const CLI = join(process.cwd(), 'dist', 'cli.js');
 
@@ -63,7 +64,7 @@ function setStrength(root: string, memId: string, strength: number) {
   }
 }
 
-const ctx = (root: string): HippoDbContext => ({ hippoRoot: root, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } });
+const ctx = (root: string): StoreContext => (apiCtx(root, 'default', { subject: 'cli', role: 'admin' }));
 
 describe('outcome propagation E2E (recall -> log -> completeGoal)', () => {
   let env: TestEnv;

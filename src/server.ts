@@ -1,13 +1,30 @@
 import {
-  type Actor, authCreateSelf, type AuthCreateSelfOpts, type AuthCreateSelfResult, authRevoke, type AuthRevokeResult, type Context,
+  type Actor, authCreate as createKey, type AuthCreateOpts, type AuthCreateResult, authCreateSelf as createSelfKey, type AuthCreateSelfOpts,
+  type AuthCreateSelfResult, authRevoke as revokeKey, type AuthRevokeResult, type Context,
 } from './api/index.js';
+import { promptHookContext as renderPromptHook, type PromptHookOpts, type PromptHookRequest } from './api/prompt-hook.js';
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from './core/api-errors.js';
+import { withStore } from './store/sqlite/store.js';
 
 export { serve } from './server/boot.js';
 
+// An add-on hands in a Context with no store, so each entry that needs one fills it with hippo.db under the Context's root.
+function authCreate(ctx: Context, opts: AuthCreateOpts): Promise<AuthCreateResult> {
+  return createKey(withStore(ctx), opts);
+}
+function authCreateSelf(ctx: Context, opts: AuthCreateSelfOpts): Promise<AuthCreateSelfResult> {
+  return createSelfKey(withStore(ctx), opts);
+}
+function authRevoke(ctx: Context, keyId: string): Promise<AuthRevokeResult> {
+  return revokeKey(withStore(ctx), keyId);
+}
+function promptHookContext(ctx: Context, req: PromptHookRequest, opts?: PromptHookOpts): ReturnType<typeof renderPromptHook> {
+  return renderPromptHook(withStore(ctx), req, opts);
+}
+
 // Add-on packages mint and revoke keys through these without importing the whole api surface.
 export {
-  authCreateSelf, authRevoke, BadRequestError, ConflictError, ForbiddenError, NotFoundError,
+  authCreate, authCreateSelf, authRevoke, BadRequestError, ConflictError, ForbiddenError, NotFoundError, promptHookContext,
   type AuthCreateSelfOpts, type AuthCreateSelfResult, type AuthRevokeResult, type Context, type Actor,
 };
 export { isCrossSite, LOOPBACK_HOST_HEADER } from './util/http-util.js';
@@ -18,12 +35,12 @@ export type { AddonCall, AddonRoute, AuthResolver, RateLimitSpec, ResolvedBearer
 export type { HippoStore } from './store/index.js';
 // An add-on route replies 4xx with HttpError, renders the prompt hook elsewhere with promptHookContext, and types its body as JsonValue.
 export { HttpError } from './util/http-util.js';
-export { promptHookContext, type CallerProject } from './api/prompt-hook.js';
+export type { CallerProject } from './api/prompt-hook.js';
 export type { JsonValue } from './util/json.js';
 // A session-end route stores the turns its caller read from a transcript on the caller's own machine.
 export { captureSessionTexts, type SessionCaptureRequest, type SessionCaptureResult } from './capture/session-texts.js';
 // An add-on's install step mints the first admin key into a store folder it names, which `hippo auth create` cannot reach.
-export { authCreate, type AuthCreateOpts, type AuthCreateResult } from './api/index.js';
+export type { AuthCreateOpts, AuthCreateResult };
 export { ownerOrSubject } from './api/index.js';
 // A route that writes for a session binds it to the caller's owner first.
 export { bindSessionOwner } from './api/session-owners.js';

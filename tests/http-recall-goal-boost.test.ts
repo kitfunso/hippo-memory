@@ -13,6 +13,7 @@ import { pushGoal } from '../src/store/goals.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 function countGoalRecallLogRows(db: DatabaseSyncLike, sessionId: string): number {
   // SAFETY: `SELECT COUNT(*) AS c ...` always returns exactly one row with a
@@ -29,7 +30,7 @@ const sessionId = 'sess-http-1.7.4';
 
 beforeEach(async () => {
   home = makeRoot('http-goal-boost');
-  await remember({ hippoRoot: home, tenantId, actor: { subject: 'test', role: 'admin' } }, {
+  await remember(apiCtx(home, tenantId, { subject: 'test', role: 'admin' }), {
     content: 'auth bug fix details',
     tags: ['fix-auth'],
   });

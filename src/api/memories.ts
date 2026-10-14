@@ -4,18 +4,17 @@ import { loadStrengthTallies, type StrengthTallies } from '../store/candidates.j
 import { countOpenConflicts } from '../store/conflicts.js';
 import { NotFoundError } from '../core/api-errors.js';
 import { canTouchScope } from '../core/recall-scope.js';
-import { storeFor } from '../store/sqlite/store.js';
 import { countAllEntries, loadEntriesByIds, loadEntriesPage, type EntryCursor } from '../store/entry-reads.js';
-import { requireHostAdmin, type Context } from './types.js';
+import { requireHostAdmin, type Context, type StoreContext } from './types.js';
 
 /** The row `id` in the caller's tenant, or null when it is missing or another tenant's. */
-export async function getMemory(ctx: Context, id: string): Promise<MemoryEntry | null> {
-  const [entry] = await storeFor(ctx).entriesByIds([id], ctx.tenantId);
+export async function getMemory(ctx: StoreContext, id: string): Promise<MemoryEntry | null> {
+  const [entry] = await ctx.store.entriesByIds([id], ctx.tenantId);
   return entry ?? null;
 }
 
 /** getMemory, but NotFound when the row is another person's personal one, so the reply does not reveal that the id exists. */
-export async function getTouchableMemory(ctx: Context, id: string): Promise<MemoryEntry | null> {
+export async function getTouchableMemory(ctx: StoreContext, id: string): Promise<MemoryEntry | null> {
   const entry = await getMemory(ctx, id);
   if (!canTouchScope(ctx.actor, entry?.scope ?? null)) throw new NotFoundError(`Memory not found: ${id}`);
   return entry;

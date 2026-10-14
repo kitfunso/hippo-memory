@@ -38,6 +38,7 @@ import { rejectionDigest, insertRejectedValue } from '../src/store/rejection.js'
 import { RejectedValueError } from '../src/core/api-errors.js';
 import * as api from '../src/api/index.js';
 import { WRITE_BUDGET } from '../src/util/write-budget.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const DORMANT_ON = JSON.stringify({ replay: { count: 0 }, dormant: { enabled: true } });
@@ -56,8 +57,8 @@ function aged(entry: MemoryEntry, days: number): MemoryEntry {
   return { ...entry, half_life_days: (entry.half_life_days * 7) / DEFAULT_HALF_LIFE_DAYS, created: then, last_retrieved: then };
 }
 
-function ctxFor(home: string, tenantId = 'default'): api.Context {
-  return { hippoRoot: home, tenantId, actor: { subject: 'test', role: 'admin' } };
+function ctxFor(home: string, tenantId = 'default'): api.StoreContext {
+  return apiCtx(home, tenantId, { subject: 'test', role: 'admin' });
 }
 
 function auditRows(home: string, op: AuditOp): AuditEvent[] {

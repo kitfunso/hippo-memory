@@ -18,6 +18,7 @@ import { loadCustomerNotes, saveCustomerNote } from '../src/objects/customer-not
 import { loadAllPredictions, savePrediction } from '../src/store/predictions.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { type JsonValue, isJsonString, isJsonObject } from '../src/util/json.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 const ROWS = 7;
 const PAGE = 3;
@@ -47,7 +48,7 @@ let handle: ServerHandle;
 let adminKey: CreateApiKeyResult;
 
 async function seedTenant(tenantId: string, count: number): Promise<void> {
-  const ctx: api.HippoDbContext = { hippoRoot: home, tenantId, actor: api.adminActor('test') };
+  const ctx: api.StoreContext = apiCtx(home, tenantId, api.adminActor('test'));
   for (let i = 0; i < count; i++) {
     saveDecision(home, tenantId, { decisionText: `${tenantId} decision ${i}` });
     saveIncident(home, tenantId, { incidentText: `${tenantId} incident ${i}` });
@@ -151,7 +152,7 @@ describe.each(ROUTES)('GET $path paging', (route) => {
 });
 
 describe('no paging params: the body a small store got before cursors existed', () => {
-  const ctx = (): api.HippoDbContext => ({ hippoRoot: home, tenantId: 'default', actor: api.adminActor('test') });
+  const ctx = (): api.StoreContext => (apiCtx(home, 'default', api.adminActor('test')));
   const json = <T>(value: T): JsonValue => JSON.parse(JSON.stringify(value));
 
   // Each reference is the store call the route made before paging, with the same arguments.

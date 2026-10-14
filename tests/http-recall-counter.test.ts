@@ -11,12 +11,13 @@ import { openHippoDb, closeHippoDb, getMeta } from '../src/db/index.js';
 import { remember, retrieve } from '../src/api/index.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { __resetSessionRecallHistoryHttp } from '../src/entry/testing.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 let home: string;
 let handle: ServerHandle;
 
 function ctx() {
-  return { hippoRoot: home, tenantId: 'default', actor: { subject: 'test', role: 'admin' as const } };
+  return apiCtx(home, 'default', { subject: 'test', role: 'admin' as const });
 }
 
 function totalRecalled(): number {

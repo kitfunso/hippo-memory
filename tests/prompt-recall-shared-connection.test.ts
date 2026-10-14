@@ -8,9 +8,10 @@ import { createRequire } from 'module';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { getContext, type Context } from '../src/api/index.js';
+import { getContext, type StoreContext } from '../src/api/index.js';
 import { _resetAblationCacheForTests } from '../src/core/ablation.js';
 import type { DatabaseSyncLike } from '../src/db/index.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 const require = createRequire(import.meta.url);
 // SAFETY: node:sqlite has no bundled types; mirrors tests/db-open-write-free.test.ts.
@@ -23,7 +24,7 @@ const PROJECT = 'proj-a';
 let tmpRoot: string;
 let local: string;
 let globalRoot: string;
-let ctx: Context;
+let ctx: StoreContext;
 
 function enablePromptRecall(root: string) {
   fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({
@@ -41,7 +42,7 @@ beforeEach(() => {
   initStore(local);
   initStore(globalRoot);
   process.env.HIPPO_HOME = globalRoot;
-  ctx = { hippoRoot: local, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
+  ctx = apiCtx(local, 'default', { subject: 'cli', role: 'admin' });
 });
 
 afterEach(() => {

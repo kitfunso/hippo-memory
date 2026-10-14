@@ -17,7 +17,7 @@ import { githubDlq, type DlqBucket } from './dlq.js';
 import { resolveTenantForGitHub } from './tenant-routing.js';
 import { computeDeletionKey as computeGitHubDeletionKey } from './signature.js';
 import { resolveTenantId } from '../../store/tenant.js';
-import type { Context } from '../../api/index.js';
+import type { StoreContext } from '../../api/index.js';
 import type { HippoStore } from '../../store/index.js';
 import {
   HttpError,
@@ -33,7 +33,7 @@ import type { JsonValue } from '../../util/json.js';
 /** GitHub webhook receiver: HMAC SHA-256 over the raw body, event type from the X-GitHub-Event header, tenant by installation.id then repository.full_name.
  *  ACKs 200 on signed envelopes (DLQ too); 401 only on a bad signature; 409 on a delivery id seen in the replay window;
  *  404 when GITHUB_WEBHOOK_SECRET is unset. No Bearer: its route row declares webhook-signature. */
-export async function handleGitHubEventsWebhook(request: WebhookRequest, store?: HippoStore): Promise<void> {
+export async function handleGitHubEventsWebhook(request: WebhookRequest, store: HippoStore): Promise<void> {
   const { req, res, opts } = request;
   // Secret and signature header before the body, so a caller with neither cannot make the server buffer one.
   const secret = envGitHubWebhookSecret();
@@ -112,7 +112,7 @@ type SignedEnvelope = JsonValue & GitHubWebhookEnvelope;
 /** One signed request and where to answer it; every stage below parks into the DLQ through it. */
 interface SignedDelivery {
   hippoRoot: string;
-  store?: HippoStore;
+  store: HippoStore;
   res: ServerResponse;
   rawBody: string;
   eventName: string | null;
@@ -140,7 +140,7 @@ async function parkAndAck(
     installationId: park.installationId,
     repoFullName: park.repoFullName,
   };
-  await parkInDlq(githubDlq, d.hippoRoot, row, d.store);
+  await parkInDlq(githubDlq, d.store, row);
   sendJson(d.res, 200, { ok: true, status: 'dlq' });
 }
 
@@ -155,7 +155,7 @@ async function routeSignedDelivery(d: SignedDelivery): Promise<void> {
 
   // Tenant resolution. Fail closed on multi-tenant installs with unknown
   // routing - same policy as Slack.
-  const resolvedTenant = await resolveTenantForGitHub(d.hippoRoot, routing, d.store);
+  const resolvedTenant = await resolveTenantForGitHub(d.store, routing);
   if (resolvedTenant === null) {
     await parkAndAck(d, {
       ...routing,
@@ -166,7 +166,7 @@ async function routeSignedDelivery(d: SignedDelivery): Promise<void> {
     return;
   }
 
-  const ctx: Context = {
+  const ctx: StoreContext = {
     hippoRoot: d.hippoRoot,
     tenantId: resolvedTenant,
     actor: { subject: 'connector:github', role: 'admin' },
@@ -235,7 +235,7 @@ async function parseEnvelopeOrPark(d: SignedDelivery): Promise<SignedEnvelope | 
 /** Ingests, archives or parks by event header; false when no guard matched the body. */
 async function dispatchGitHubEvent(
   d: SignedDelivery,
-  ctx: Context,
+  ctx: StoreContext,
   body: SignedEnvelope,
   deliveryId: string,
   routing: DlqRouting,

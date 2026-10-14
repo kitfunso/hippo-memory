@@ -11,7 +11,7 @@ import { loadAllEntries, readEntry } from '../store/entry-reads.js';
 import { updateStats } from '../store/index-and-stats.js';
 import { errorMessage, log } from '../util/log.js';
 import { remember } from './remember.js';
-import type { HippoDbContext } from './types.js';
+import type { StoreContext } from './types.js';
 
 const WEAK_HALF_LIFE_FACTOR = 0.5;
 
@@ -47,7 +47,7 @@ export type LocalRememberOutcome =
   | { readonly status: 'skipped'; readonly reason: string; readonly score: number };
 
 /** The gate's verdict on one write, or null where it does not judge: the store has it off, or the write is pinned or forced. */
-function salienceVerdict(ctx: HippoDbContext, input: LocalRememberInput): SalienceResult | null {
+function salienceVerdict(ctx: StoreContext, input: LocalRememberInput): SalienceResult | null {
   const { salience } = loadConfig(ctx.hippoRoot);
   if (!salience.enabled || input.pinned || input.force) return null;
   // computeSalience compares against the last `recentWindow` rows only; below 1 its slice takes every row, so that case still loads them all.
@@ -64,7 +64,7 @@ function salienceVerdict(ctx: HippoDbContext, input: LocalRememberInput): Salien
 }
 
 /** The row `remember` just wrote, as the store holds it: the report, the embedding and the extraction all work on that. */
-function storedEntry(ctx: HippoDbContext, id: string): MemoryEntry {
+function storedEntry(ctx: StoreContext, id: string): MemoryEntry {
   const entry = readEntry(ctx.hippoRoot, id, ctx.tenantId);
   if (!entry) throw new Error(`memory ${id} was written but cannot be read back`);
   return entry;
@@ -81,7 +81,7 @@ function indexInBackground(hippoRoot: string, entry: MemoryEntry): Promise<Embed
 }
 
 /** One local write on hippo.db: gate, write, read-back, counter, then the embedding, started and never awaited. A refused value throws as `remember` does. */
-export async function rememberLocally(ctx: HippoDbContext, input: LocalRememberInput): Promise<LocalRememberOutcome> {
+export async function rememberLocally(ctx: StoreContext, input: LocalRememberInput): Promise<LocalRememberOutcome> {
   const schemaFit = schemaFitInStore(ctx.hippoRoot, ctx.tenantId, input.content, input.fitTags ?? input.tags);
   const verdict = salienceVerdict(ctx, input);
   if (verdict?.decision === 'skip') return { status: 'skipped', reason: verdict.reason, score: verdict.score };
@@ -123,7 +123,7 @@ export type FactExtraction =
   | { readonly status: 'ran'; readonly facts: number; readonly failures: readonly string[] };
 
 /** Extracts facts from a row just stored and stores them beside it. Best-effort: a failure is named in the result, never thrown. */
-export async function extractRememberedFacts(ctx: HippoDbContext, entry: MemoryEntry, request: FactExtractionRequest): Promise<FactExtraction> {
+export async function extractRememberedFacts(ctx: StoreContext, entry: MemoryEntry, request: FactExtractionRequest): Promise<FactExtraction> {
   const { extraction } = loadConfig(ctx.hippoRoot);
   if (!request.requested && extraction.enabled !== true) return { status: 'off' };
   const { apiKey, fetcher } = request;

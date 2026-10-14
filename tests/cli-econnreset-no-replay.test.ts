@@ -10,6 +10,7 @@ import { remember } from '../src/api/index.js';
 import { classifyTransportFailure, HttpResponseError } from '../src/cli/client.js';
 import { boundPort } from './_helpers/listen.js';
 import { ROUTED_CLI_ENV } from './_helpers/routed-cli-env.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 // A server that commits the row then drops the socket looks identical to a
 // refused connection through `isConnectionRefused`, so the CLI used to self-heal
@@ -44,7 +45,7 @@ async function startResettingServer(hippoRoot: string, startedAt: string): Promi
       req.on('end', async () => {
         const body = JSON.parse(Buffer.concat(chunks).toString('utf8'));
         await remember(
-          { hippoRoot, tenantId: 'default', actor: { subject: 'stub', role: 'admin' } },
+          apiCtx(hippoRoot, 'default', { subject: 'stub', role: 'admin' }),
           { content: body.content },
         );
         res.socket?.destroy();

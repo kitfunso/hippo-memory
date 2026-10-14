@@ -12,13 +12,14 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
-import { drillDown, type Context } from '../src/api/index.js';
+import { drillDown, type StoreContext } from '../src/api/index.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 function safeRmSync(p: string): void { try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ } }
-function ctxFor(root: string, tenantId: string = 'default'): Context {
-  return { hippoRoot: root, tenantId, actor: { subject: 'test:v164', role: 'admin' } };
+function ctxFor(root: string, tenantId: string = 'default'): StoreContext {
+  return apiCtx(root, tenantId, { subject: 'test:v164', role: 'admin' });
 }
 function makeSummary(text: string, opts: Partial<MemoryEntry> = {}): MemoryEntry {
   return createMemory(text, {

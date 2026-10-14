@@ -13,11 +13,12 @@ import { deleteEntry, batchWriteAndDelete } from '../src/store/delete-and-batch.
 import { loadAllDirtySummaries } from '../src/store/summaries.js';
 import { consolidate } from '../src/consolidate/sleep.js';
 import { deduplicateStore } from '../src/consolidate/dedupe.js';
-import { sleep, supersede, type Context } from '../src/api/index.js';
+import { sleep, supersede, type StoreContext } from '../src/api/index.js';
 import { runSleep } from '../src/api/sleep-run.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { queryAuditEvents } from '../src/store/audit.js';
 import { sleepResultLines } from '../src/cli/sleep-render.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 /** Sleep and decay here run on the pre-1.46 7-day base, so memories fade within the test's horizon. */
 const createMemory7 = (content: string, options: Parameters<typeof createMemory>[1] = {}) => createMemory(content, { baseHalfLifeDays: 7, ...options });
@@ -35,8 +36,8 @@ function newRoot(configJson?: string): string {
 
 const rawRow = (content: string): MemoryEntry =>
   createMemory7(content, { kind: 'raw', artifact_ref: 'slack://T1/C1/1.0', owner: 'user:U1' });
-const ctxFor = (hippoRoot: string): Context =>
-  ({ hippoRoot, tenantId: 'default', actor: { subject: 'sleep-test', role: 'admin' } });
+const ctxFor = (hippoRoot: string): StoreContext =>
+  (apiCtx(hippoRoot, 'default', { subject: 'sleep-test', role: 'admin' }));
 const sixtyDaysOn = (): Date => new Date(Date.now() + 60 * DAY);
 const CACHE_FACT = 'the build cache lives in /var/cache/hippo on the CI runners';
 

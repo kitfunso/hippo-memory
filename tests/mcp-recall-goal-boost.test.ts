@@ -16,6 +16,8 @@ import { pushGoal } from '../src/store/goals.js';
 import { handleMcpRequest, type McpContext, type McpResponse } from '../src/mcp/server.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { apiCtx } from './_helpers/api-ctx.js';
+import { sqliteStore } from '../src/store/sqlite/store.js';
 
 type HippoRecallToolArgs = {
   query: string;
@@ -67,8 +69,8 @@ describe('MCP hippo_recall session_id goal-stack boost', () => {
   afterEach(() => rmSync(home, { recursive: true, force: true }));
 
   it('session_id schema field is accepted (no validation error) and reaches the boost', async () => {
-    const ctx: McpContext = { hippoRoot: home, tenantId, actor: 'mcp', role: 'admin', hostAdmin: true };
-    await remember({ hippoRoot: home, tenantId, actor: { subject: 'test', role: 'admin' } }, {
+    const ctx: McpContext = { hippoRoot: home, tenantId, actor: 'mcp', role: 'admin', hostAdmin: true , store: sqliteStore(home) };
+    await remember(apiCtx(home, tenantId, { subject: 'test', role: 'admin' }), {
       content: 'auth bug fix details',
       tags: ['fix-auth'],
     });
@@ -97,8 +99,8 @@ describe('MCP hippo_recall session_id goal-stack boost', () => {
   });
 
   it('without session_id, no boost runs and goal_recall_log stays empty (v1.7.3 baseline)', async () => {
-    const ctx: McpContext = { hippoRoot: home, tenantId, actor: 'mcp', role: 'admin', hostAdmin: true };
-    await remember({ hippoRoot: home, tenantId, actor: { subject: 'test', role: 'admin' } }, {
+    const ctx: McpContext = { hippoRoot: home, tenantId, actor: 'mcp', role: 'admin', hostAdmin: true , store: sqliteStore(home) };
+    await remember(apiCtx(home, tenantId, { subject: 'test', role: 'admin' }), {
       content: 'auth bug fix details',
       tags: ['fix-auth'],
     });

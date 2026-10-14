@@ -14,7 +14,7 @@ import { computeAmbientState } from '../core/ambient.js';
 import { loadPendingExtractionTenants, markPendingProcessedUpTo } from '../store/graph-queue.js';
 import { extractGraphChunked, type ExtractResult } from '../graph/extract.js';
 import type { MemoryEntry } from '../core/memory.js';
-import type { Context } from './types.js';
+import type { Context, StoreContext } from './types.js';
 import { removeAuditErrors } from './audit.js';
 import type { SleepOpts, SleepResult } from './sleep.js';
 import { errorMessage } from '../util/log.js';
@@ -62,7 +62,7 @@ interface DirtyTenantSnapshot {
 
 /** `sleep` with its phase dependencies overridable; tests pass stubs here, so the seam never touches the public `SleepOpts`. */
 export async function runSleep(
-  ctx: Context,
+  ctx: StoreContext,
   opts: SleepOpts,
   overrides: Partial<SleepPhases> = {},
 ): Promise<SleepResult> {
@@ -86,7 +86,7 @@ export async function runSleep(
 }
 
 async function runSleepPhases(
-  ctx: Context,
+  ctx: StoreContext,
   opts: SleepOpts,
   phases: SleepPhases,
   counts: SleepCounts,
@@ -190,7 +190,7 @@ interface QualityAuditOptions {
 }
 
 /** `removed` counts audit errors deleted (or that would be under dryRun); `remaining` is what the audit read, less the rows it deleted. */
-async function runQualityAudit(ctx: Context, phases: SleepPhases, options: QualityAuditOptions): Promise<QualityAuditOutcome> {
+async function runQualityAudit(ctx: StoreContext, phases: SleepPhases, options: QualityAuditOptions): Promise<QualityAuditOutcome> {
   const { dryRun, consolidateResult, dedupResult, result, loaded } = options;
   // The load followed consolidation, so only a dry run still holds the rows consolidation would remove; dedup's pairs are gone or would be.
   const planned = new Set([...(dryRun ? consolidateResult.removedIds ?? [] : []), ...dedupResult.pairs.map((p) => p.removed)]);

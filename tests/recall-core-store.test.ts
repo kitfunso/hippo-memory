@@ -10,11 +10,12 @@ import { queryAuditEvents } from '../src/store/audit.js';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
 import { loadConfig } from '../src/core/config.js';
 import type { HippoStore, RecallWrites } from '../src/store/index.js';
-import { adminActor, type Context } from '../src/api/index.js';
+import { adminActor, type StoreContext } from '../src/api/index.js';
 import { retrieve } from '../src/api/recall.js';
 import type { CliCoreRecall } from '../src/api/recall-types.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { portOnlyStore } from './_helpers/port-only-store.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 let home: string;
 let hippoRoot: string;
@@ -59,7 +60,7 @@ describe('retrieve with the CLI ranking core', () => {
     const inner = portOnlyStore(hippoRoot);
     const writes: RecallWrites[] = [];
     const store: HippoStore = { ...inner, finishRecall: async (w) => { writes.push(w); await inner.finishRecall(w); } };
-    const ctx: Context = { hippoRoot, tenantId: 'default', actor: adminActor('cli'), store };
+    const ctx: StoreContext = { hippoRoot, tenantId: 'default', actor: adminActor('cli'), store };
 
     const result = await retrieve(ctx, { query: 'deploy', cliCore: cliCore() });
 
@@ -78,7 +79,7 @@ describe('retrieve with the CLI ranking core', () => {
     const inner = portOnlyStore(secondRoot);
     const writes: RecallWrites[] = [];
     const globalStore: HippoStore = { ...inner, finishRecall: async (w) => { writes.push(w); await inner.finishRecall(w); } };
-    const ctx: Context = { hippoRoot, tenantId: 'default', actor: adminActor('cli') };
+    const ctx: StoreContext = apiCtx(hippoRoot, 'default', adminActor('cli'));
 
     const result = await retrieve(ctx, { query: 'deploy', cliCore: { ...cliCore(), sources: { globalRoot: secondRoot, globalStore } } });
 

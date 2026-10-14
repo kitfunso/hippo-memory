@@ -3,7 +3,7 @@ import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { assemble, retrieve, type Context } from '../src/api/index.js';
+import { assemble, retrieve, type StoreContext } from '../src/api/index.js';
 import { createApiKey } from '../src/store/auth.js';
 import { _resetSharedStoreCacheForTests } from '../src/core/config.js';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
@@ -22,6 +22,7 @@ import { saveSessionHandoff } from '../src/store/handoffs.js';
 import { initStore } from '../src/store/open.js';
 import { saveActiveTaskSnapshot } from '../src/store/sessions.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 const TENANT = 'default';
 const SESSION = 'two-repo-session';
@@ -81,8 +82,8 @@ function expectOnly(seen: readonly string[], present: readonly string[], absent:
   for (const id of absent) expect(seen, `${label} should hide ${id}`).not.toContain(id);
 }
 
-function apiCtx(): Context {
-  return { hippoRoot: store, tenantId: TENANT, actor: { subject: 'api_key:two-repo', role: 'member', owner: 'alice' } };
+function acmeCtx(): StoreContext {
+  return apiCtx(store, TENANT, { subject: 'api_key:two-repo', role: 'member', owner: 'alice' });
 }
 
 function writeConfig(extra: Record<string, JsonValue> = {}): void {
@@ -226,7 +227,7 @@ describe('MCP on a shared store with two repos', () => {
   });
 
   it('assemble cut short by its row cap counts only the caller\'s repo rows, not beta\'s or the NULL-origin one', async () => {
-    const r = await assemble(apiCtx(), SESSION, { project: ACME, rowCap: 1, summarizeOlder: false });
+    const r = await assemble(acmeCtx(), SESSION, { project: ACME, rowCap: 1, summarizeOlder: false });
     expect(r.truncated).toBe(true);
     expect(r.totalRaw).toBe(4);
   });
@@ -276,7 +277,7 @@ describe('MCP on a shared store with two repos', () => {
   });
 
   it('overflow substitution never brings in another repo\'s parent summary', async () => {
-    const summaries = (await retrieve(apiCtx(), { query: 'harbourline', limit: 4, project: ACME })).results.filter((r) => r.isSummary).map((r) => r.id);
+    const summaries = (await retrieve(acmeCtx(), { query: 'harbourline', limit: 4, project: ACME })).results.filter((r) => r.isSummary).map((r) => r.id);
     expect(summaries).toContain(ids.acmeSumO);
     expect(summaries).not.toContain(ids.betaSumO);
   });

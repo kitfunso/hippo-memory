@@ -24,7 +24,8 @@ import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { queryAuditEvents } from '../src/store/audit.js';
-import { remember, sleep, getContext, type Context } from '../src/api/index.js';
+import { remember, sleep, getContext, type StoreContext } from '../src/api/index.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 // The 'consolidate' audit op's metadata is always the flat scalar phase-counter
 // object built at the appendAuditEvent call site for that op in src/api/index.ts --
@@ -56,11 +57,7 @@ describe('api.sleep', () => {
   it('dryRun previews dedup/audit, skips share/ambient, and deletes nothing', async () => {
     const { home, restore } = tmpHome();
     try {
-      const ctx: Context = {
-        hippoRoot: home,
-        tenantId: 'default',
-        actor: { subject: 'cli', role: 'admin' },
-      };
+      const ctx: StoreContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
       await remember(ctx, { content: 'sleep-dry-mem-1', kind: 'distilled' });
 
       const result = await sleep(ctx, { dryRun: true });
@@ -81,11 +78,7 @@ describe('api.sleep', () => {
   it('returns a well-formed zero SleepResult on an empty store', async () => {
     const { home, restore } = tmpHome();
     try {
-      const ctx: Context = {
-        hippoRoot: home,
-        tenantId: 'default',
-        actor: { subject: 'cli', role: 'admin' },
-      };
+      const ctx: StoreContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
 
       const result = await sleep(ctx, { dryRun: false });
 
@@ -105,11 +98,7 @@ describe('api.sleep', () => {
   it('runs the full pipeline on a populated store (counts present and numeric)', async () => {
     const { home, restore } = tmpHome();
     try {
-      const ctx: Context = {
-        hippoRoot: home,
-        tenantId: 'default',
-        actor: { subject: 'cli', role: 'admin' },
-      };
+      const ctx: StoreContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
       for (let i = 0; i < 5; i++) {
         await remember(ctx, {
           content: `unique memory ${i} with some distinct content here for testing`,
@@ -133,11 +122,7 @@ describe('api.sleep', () => {
   it('noShare prevents the auto-share phase (shared remains undefined)', async () => {
     const { home, restore } = tmpHome();
     try {
-      const ctx: Context = {
-        hippoRoot: home,
-        tenantId: 'default',
-        actor: { subject: 'cli', role: 'admin' },
-      };
+      const ctx: StoreContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
       await remember(ctx, {
         content: 'high-value-pattern that might trigger auto-share',
         kind: 'distilled',
@@ -155,7 +140,7 @@ describe('api.sleep', () => {
   it('emits exactly one consolidate audit_log row per invocation with phase counters', async () => {
     const { home, restore } = tmpHome();
     try {
-      const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
+      const ctx: StoreContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
       await remember(ctx, { content: 'before-sleep-1' });
       await remember(ctx, { content: 'before-sleep-2' });
 
@@ -188,7 +173,7 @@ describe('api.sleep', () => {
   it('dryRun also emits one consolidate audit row (with dryRun:true)', async () => {
     const { home, restore } = tmpHome();
     try {
-      const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
+      const ctx: StoreContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
       await remember(ctx, { content: 'dry-run-target' });
 
       await sleep(ctx, { dryRun: true });
@@ -211,11 +196,7 @@ describe('api.sleep', () => {
   it('actor field threads through from ctx (non-cli actor surfaces in audit row)', async () => {
     const { home, restore } = tmpHome();
     try {
-      const ctx: Context = {
-        hippoRoot: home,
-        tenantId: 'default',
-        actor: { subject: 'api_key:hk_test_xyz', role: 'admin' },
-      };
+      const ctx: StoreContext = apiCtx(home, 'default', { subject: 'api_key:hk_test_xyz', role: 'admin' });
       await remember(ctx, { content: 'mcp-actor-target' });
 
       await sleep(ctx, { dryRun: true });

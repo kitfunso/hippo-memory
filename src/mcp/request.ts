@@ -14,7 +14,7 @@ import { PACKAGE_VERSION } from '../util/version.js';
 import { validateToolArgs } from './tool-args.js';
 import { RecallRequestError } from '../api/recall-request.js';
 import { recordTokens } from '../api/tokens.js';
-import { findHippoRoot, mcpActor, type McpContext, type McpRequest, type McpResponse, type ToolHandler } from './protocol.js';
+import { findHippoRoot, mcpActor, type McpContext, type McpRequest, type McpResponse, type StoreOpener, type ToolHandler } from './protocol.js';
 import { TOOLS, TOOLS_BY_NAME, ARGS_CHECKED_BY_API } from './tools.js';
 import { runRecallTool, runAssembleTool, runDrillTool, runContextTool } from './recall-tools.js';
 import { runRememberTool, runOutcomeTool, runLearnTool } from './memory-tools.js';
@@ -31,6 +31,13 @@ function createGlobalStoreOnFirstRun(): string {
   return root;
 }
 
+/** The transport's own store, else the opener's for the folder; stdio is the one caller that passes no context, and it passes an opener. */
+function resolveStore(ctx: McpContext | undefined, makeStore: StoreOpener | undefined, hippoRoot: string): HippoStore {
+  const store = ctx?.store ?? makeStore?.(hippoRoot);
+  if (store === undefined) throw new Error('hippo-mcp: a call with no context needs a store opener');
+  return store;
+}
+
 // ── Token ledger ──
 
 const MCP_TOKEN_SURFACES = new Map<string, TokenSurface>([
@@ -39,12 +46,12 @@ const MCP_TOKEN_SURFACES = new Map<string, TokenSurface>([
 ]);
 
 /** Records the memory text a recall or context tool returned; best-effort (a ledger failure never fails the call), other tools are not recorded. */
-export async function recordMcpTokens(toolName: string, output: string, ctx?: McpContext): Promise<void> {
+export async function recordMcpTokens(toolName: string, output: string, ctx: McpContext | undefined, makeStore?: StoreOpener): Promise<void> {
   const surface = MCP_TOKEN_SURFACES.get(toolName);
   if (!surface || !output) return;
   const hippoRoot = ctx?.hippoRoot ?? findHippoRoot();
   if (!hippoRoot) return;
-  const apiCtx = { hippoRoot, tenantId: ctx?.tenantId ?? resolveTenantId({}), actor: mcpActor(ctx), store: ctx?.store };
+  const apiCtx = { hippoRoot, tenantId: ctx?.tenantId ?? resolveTenantId({}), actor: mcpActor(ctx), store: resolveStore(ctx, makeStore, hippoRoot) };
   await recordTokens(apiCtx, surface, { items: 0, tokens: estimateTokens(output) });
 }
 
@@ -80,7 +87,8 @@ function runsOn(store: HippoStore | undefined, toolName: string): boolean {
 async function executeTool(
   name: string,
   args: Record<string, JsonValue>,
-  ctx?: McpContext,
+  ctx: McpContext | undefined,
+  makeStore: StoreOpener | undefined,
 ): Promise<string> {
   // With a transport context (HTTP), trust it: hippoRoot comes from the server's bound opts and tenantId from the Bearer (or loopback fallback).
   // Stdio walks from cwd / the global root and resolves tenant from HIPPO_TENANT.
@@ -94,7 +102,7 @@ async function executeTool(
   const handler = TOOL_HANDLERS.get(name)?.handler;
   // handleMcpRequest rejects names missing from TOOLS, so reaching here means TOOLS and this table drifted apart.
   if (!handler) throw new Error(`hippo-mcp: tool ${name} is declared but has no handler`);
-  return handler({ args, ctx, hippoRoot, config, tenantId });
+  return handler({ args, ctx, hippoRoot, store: resolveStore(ctx, makeStore, hippoRoot), config, tenantId });
 }
 
 // ── Request handling ──
@@ -110,17 +118,22 @@ function invalidArgs(id: McpResponse['id'], toolName: string, problems: readonly
 
 /** One handle per store for the tool and its ledger row; stdio interleaves calls, so each gets its own scope.
  *  SHORTCUT: the deadline stops a call only between these steps, not a store read or fetch already running; thread the signal into them. */
-function runToolScoped(toolName: string, args: Record<string, JsonValue>, ctx?: McpContext): Promise<string> {
+function runToolScoped(toolName: string, args: Record<string, JsonValue>, ctx: McpContext | undefined, makeStore: StoreOpener | undefined): Promise<string> {
   return runWithRequestStores(async () => {
     currentSignal()?.throwIfAborted();
-    const text = await executeTool(toolName, args, ctx);
+    const text = await executeTool(toolName, args, ctx, makeStore);
     currentSignal()?.throwIfAborted();
-    await recordMcpTokens(toolName, text, ctx);
+    await recordMcpTokens(toolName, text, ctx, makeStore);
     return text;
   });
 }
 
-async function callTool(id: McpRequest['id'], params: McpRequest['params'], ctx?: McpContext): Promise<McpResponse> {
+async function callTool(
+  id: McpRequest['id'],
+  params: McpRequest['params'],
+  ctx: McpContext | undefined,
+  makeStore: StoreOpener | undefined,
+): Promise<McpResponse> {
   const nameValue = params?.name;
   const toolName = isJsonString(nameValue) ? nameValue : '';
   const tool = TOOLS_BY_NAME.get(toolName);
@@ -142,7 +155,7 @@ async function callTool(id: McpRequest['id'], params: McpRequest['params'], ctx?
   if (problems.length > 0) return invalidArgs(id, toolName, problems);
   let output: string;
   try {
-    output = await runToolScoped(toolName, toolArgs, ctx);
+    output = await runToolScoped(toolName, toolArgs, ctx, makeStore);
   } catch (err) {
     if (!(err instanceof RecallRequestError)) throw err;
     return invalidArgs(id, toolName, [err.message]);
@@ -157,10 +170,14 @@ async function callTool(id: McpRequest['id'], params: McpRequest['params'], ctx?
 }
 
 /** Transport-agnostic MCP dispatcher: the stdio loop and the HTTP/SSE transport route every JSON-RPC message through it. Returns null for notifications.
- * Errors thrown by `executeTool` are the caller's problem: wrap with try/catch on the transport side. */
+ * Errors thrown by `executeTool` are the caller's problem: wrap with try/catch on the transport side.
+ * A transport with a context brings its store in it; stdio has none, so it brings an opener for the folder it resolves. */
+export function handleMcpRequest(req: McpRequest, ctx: McpContext): Promise<McpResponse | null>;
+export function handleMcpRequest(req: McpRequest, ctx: undefined, makeStore: StoreOpener): Promise<McpResponse | null>;
 export async function handleMcpRequest(
   req: McpRequest,
-  ctx?: McpContext,
+  ctx: McpContext | undefined,
+  makeStore?: StoreOpener,
 ): Promise<McpResponse | null> {
   const { id, method, params } = req;
 
@@ -184,7 +201,7 @@ export async function handleMcpRequest(
     }
 
     case 'tools/call':
-      return callTool(id, params, ctx);
+      return callTool(id, params, ctx, makeStore);
 
     default:
       // Notifications (no id) must not receive a response

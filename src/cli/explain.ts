@@ -70,7 +70,7 @@ async function cmdExplain(
           explicitScope, activeScope,
           search: { ...engine, multihop: false, explain: true },
         },
-        sources: { globalRoot: explainGlobalOn ? globalRoot : undefined },
+        sources: explainGlobalOn ? { globalRoot, globalStore: cliApiContext(globalRoot, tenantId).store } : undefined,
         inspect: (ranking) => { slot.rank = ranking; },
       },
     },

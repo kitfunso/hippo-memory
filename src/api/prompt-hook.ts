@@ -1,7 +1,7 @@
 // The per-prompt hook's block and ledger rows, rendered here for `hippo context` and for promptHookContext (a remote hook route's call).
 // promptHookContext keeps the server-side copy of the CLI's getContext flags (cli/context.ts);
 // the CLI parity case in tests/prompt-hook-context.test.ts is all that ties the two.
-import { getContext, type Context, type ContextResult, type ContextResultEntry } from './index.js';
+import { getContext, type Context, type ContextResult, type ContextResultEntry, type StoreContext } from './index.js';
 import { BadRequestError } from '../core/api-errors.js';
 import { isSharedStore, loadConfig } from '../core/config.js';
 import { contextBlockLines, contextCost, crossProjectLines, handoffText, sessionTrailText, settleTokens, snapshotText } from './context-render.js';
@@ -252,7 +252,7 @@ export interface CallerProject {
   readonly aliases?: readonly string[];
 }
 
-interface PromptHookRequest {
+export interface PromptHookRequest {
   readonly sessionId: string;
   readonly project: CallerProject;
   readonly payload?: Readonly<Record<string, JsonValue>>;
@@ -260,7 +260,7 @@ interface PromptHookRequest {
   readonly printedHash?: string;
 }
 
-interface PromptHookOpts {
+export interface PromptHookOpts {
   /** The store serves many people, so the caller is not its owner: no global store, no user-global recent rows,
    *  task state only for the caller's own owner and project, and no ledger rows outside this store. */
   readonly sharedStore?: true;
@@ -287,7 +287,7 @@ function assertPromptHookRequest(req: PromptHookRequest): void {
  * `staticHash` is the hash to echo back (null with no static block, a sub-agent or a holdout). Scope detection and delivery-ledger events are CLI-only.
  * Throws BadRequestError past the input caps, and on a shared store for a project assertCallerProject refuses, before any arm is booked. */
 export async function promptHookContext(
-  ctx: Context, req: PromptHookRequest, opts: PromptHookOpts = {},
+  ctx: StoreContext, req: PromptHookRequest, opts: PromptHookOpts = {},
 ): Promise<{ arm: PilotArm | null; stdout: string; staticHash: string | null }> {
   assertPromptHookRequest(req);
   const { sessionId, payload } = req;

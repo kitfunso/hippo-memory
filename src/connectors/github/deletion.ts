@@ -1,6 +1,5 @@
-import { type Context } from '../../api/index.js';
+import { type StoreContext } from '../../api/index.js';
 import { requireGroup } from '../../store/index.js';
-import { storeFor } from '../../store/sqlite/store.js';
 
 export interface DeletionInput {
   /** artifact_ref of the comment, e.g. 'github://acme/repo/issue/42/comment/123'
@@ -23,9 +22,9 @@ export interface DeletionResult {
 
 /** Handle `issue_comment.deleted` and `pull_request_review_comment.deleted`: archive ALL active raw rows for the artifact_ref in one write.
  *  Tenant and kind='raw' filtering are load-bearing: without them a deletion could archive another tenant's row or a distilled row. */
-export async function handleCommentDeleted(ctx: Context, input: DeletionInput): Promise<DeletionResult> {
+export async function handleCommentDeleted(ctx: StoreContext, input: DeletionInput): Promise<DeletionResult> {
   const { artifactRef, idempotencyKey, deliveryId, eventName } = input;
-  const done = await requireGroup(storeFor(ctx), 'connectorEvents').archiveDeletedArtifact({
+  const done = await requireGroup(ctx.store, 'connectorEvents').archiveDeletedArtifact({
     tenantId: ctx.tenantId,
     actor: ctx.actor.subject,
     artifactRef,

@@ -18,14 +18,15 @@ import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, Layer } from '../src/core/memory.js';
-import { retrieve, type Context } from '../src/api/index.js';
+import { retrieve, type StoreContext } from '../src/api/index.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 function safeRmSync(p: string): void {
   try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
 }
-function ctxFor(root: string): Context {
-  return { hippoRoot: root, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
+function ctxFor(root: string): StoreContext {
+  return apiCtx(root, 'default', { subject: 'cli', role: 'admin' });
 }
 function countAuditOps(root: string, op: string): number {
   const db = openHippoDb(root);

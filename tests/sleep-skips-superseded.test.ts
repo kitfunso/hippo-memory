@@ -10,7 +10,8 @@ import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { loadChildrenOfSummary, loadAllL2Summaries } from '../src/store/summaries.js';
 import { consolidate } from '../src/consolidate/sleep.js';
-import { supersede, type Context } from '../src/api/index.js';
+import { supersede, type StoreContext } from '../src/api/index.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 const DAY = 86_400_000;
 const roots: string[] = [];
@@ -22,8 +23,8 @@ function newRoot(): string {
   return root;
 }
 
-const ctxFor = (hippoRoot: string): Context =>
-  ({ hippoRoot, tenantId: 'default', actor: { subject: 'sleep-superseded-test', role: 'admin' } });
+const ctxFor = (hippoRoot: string): StoreContext =>
+  (apiCtx(hippoRoot, 'default', { subject: 'sleep-superseded-test', role: 'admin' }));
 
 afterEach(() => {
   vi.unstubAllGlobals();

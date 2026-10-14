@@ -11,7 +11,7 @@ import { MEMORY_SELECT_COLUMNS } from '../src/store/rows.js';
 import { closeHippoDb } from '../src/db/index.js';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../src/core/memory.js';
 import { readEntry, loadAllEntries, heldIdLookup, loadEntriesByIds } from '../src/store/entry-reads.js';
-import { adminActor, type HippoDbContext } from '../src/api/types.js';
+import { adminActor, type StoreContext } from '../src/api/types.js';
 import { learn, CLI_LEARN } from '../src/api/learn.js';
 import { handleRemember } from '../src/cli/remember.js';
 import { cmdCapture } from '../src/capture/command.js';
@@ -31,6 +31,8 @@ import { buildMemoryDetail } from '../src/dashboard/dashboard-queries.js';
 import { createSnapshotService } from '../src/dashboard/dashboard-snapshot.js';
 import { handleMcpRequest } from '../src/mcp/server.js';
 import { writeSessionDigest } from '../src/capture/session-digest.js';
+import { sqliteStore } from '../src/store/sqlite/store.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 const SIZES = [10, 200] as const;
 const ROW_READ = MEMORY_SELECT_COLUMNS;
@@ -48,8 +50,8 @@ function freshRoot(label: string): string {
   return root;
 }
 
-function ctxFor(root: string): HippoDbContext {
-  return { hippoRoot: root, tenantId: 'default', actor: adminActor('test:query-count') };
+function ctxFor(root: string): StoreContext {
+  return apiCtx(root, 'default', adminActor('test:query-count'));
 }
 
 function memory(content: string, extra: Partial<MemoryEntry> = {}): MemoryEntry {
@@ -543,7 +545,7 @@ describe('hippo_status', () => {
       ]);
       const { result, rowsRead } = await recordStatementsAsync(() => handleMcpRequest(
         { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_status', arguments: {} } },
-        { hippoRoot: root, tenantId: 'default', actor: 'tester', role: 'admin', hostAdmin: true, clientKey: 'client-1' },
+        { hippoRoot: root, tenantId: 'default', actor: 'tester', role: 'admin', hostAdmin: true, clientKey: 'client-1', store: sqliteStore(root) },
       ));
       const reply = JSON.stringify(result);
       expect(reply).toContain(`Memories: ${n} (1 pinned, 1 errors)`);

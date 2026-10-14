@@ -4,6 +4,7 @@ import { sleep } from '../api/sleep.js';
 import { consolidate } from '../consolidate/sleep.js';
 import { runWithRequestStores, SERVER_DB_WAIT_MS } from '../db/index.js';
 import { isStoreBusy } from '../store/sqlite/busy.js';
+import { sqliteStore } from '../store/sqlite/store.js';
 import { errorFields, errorMessage, log } from '../util/log.js';
 import type { SleepJob, SleepReply } from './sleep-offload.js';
 import type { SleepResult } from '../api/sleep.js';
@@ -30,7 +31,7 @@ process.once('message', (message) => {
   const job = message as SleepJob;
   const work = (): Promise<JobResult> => job.kind === 'consolidate'
     ? consolidate(job.hippoRoot)
-    : sleep({ hippoRoot: job.hippoRoot, tenantId: job.tenantId, actor: job.actor }, job.opts);
+    : sleep({ hippoRoot: job.hippoRoot, tenantId: job.tenantId, actor: job.actor, store: sqliteStore(job.hippoRoot) }, job.opts);
   // The server's own request scope and lock wait, so a busy store answers as it did when sleep ran in the server.
   runWithRequestStores(work, { busyWaitMs: SERVER_DB_WAIT_MS })
     .then((result): SleepReply<JobResult> => ({ ok: true, result }), failed)

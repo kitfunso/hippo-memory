@@ -7,6 +7,7 @@ import { MAX_BODY_BYTES } from '../util/http-util.js';
 import { parseFrame, type FrameRemainder } from './framing.js';
 import { mcpErrorResponse, type McpRequest, type McpResponse } from './protocol.js';
 import { handleMcpRequest } from './request.js';
+import { sqliteStore } from '../store/sqlite/store.js';
 import { type JsonValue, isJsonNumber, isJsonString, isJsonObject } from '../util/json.js';
 import { randomUUID } from 'node:crypto';
 import { currentRequestId, runWithRequestId } from '../util/request-scope.js';
@@ -128,14 +129,14 @@ function dispatch(body: string, abort: AbortController): void {
   const req = parsed;
   if (req.method.startsWith('notifications/')) {
     const stopWatching = watchDeadline(req, false, abort);
-    track(req.method, handleMcpRequest(req).then(() => {}).catch((err) => {
+    track(req.method, handleMcpRequest(req, undefined, sqliteStore).then(() => {}).catch((err) => {
       log.error(`mcp notification ${req.method} failed: ${errorMessage(err)}`, errorFields(err));
     }).finally(stopWatching));
     return;
   }
   // A frame with no id is a notification under any method name, and JSON-RPC forbids answering one.
   const timedOut = watchDeadline(req, isJsonString(req.id) || isJsonNumber(req.id), abort);
-  track(req.method, handleMcpRequest(req).then((resp) => { if (!timedOut() && resp) send(resp); }).catch((err) => {
+  track(req.method, handleMcpRequest(req, undefined, sqliteStore).then((resp) => { if (!timedOut() && resp) send(resp); }).catch((err) => {
     if (timedOut() && err instanceof DOMException && err.name === 'TimeoutError') log.debug(`mcp: ${callName(req)} stopped at its deadline`);
     else if (timedOut()) log.error(`mcp: ${callName(req)} failed after its timeout reply: ${errorMessage(err)}`, errorFields(err));
     else send(mcpErrorResponse(req.id, err, undefined, callName(req)));

@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { handleMcpRequest, type McpContext, type McpResponse } from '../src/mcp/server.js';
+import { sqliteStore } from '../src/store/sqlite/store.js';
 
 type Wire = string | number | boolean | null | Wire[] | { [key: string]: Wire };
 
@@ -47,7 +48,7 @@ beforeEach(() => {
   vi.stubEnv('ANTHROPIC_API_KEY', '');
   // The context tool's auto query reads the checkout's git state, which differs between a dev branch and CI.
   vi.stubEnv('GIT_DIR', join(home, 'no-repo'));
-  ctx = { hippoRoot: root, tenantId: 'default', actor: 'tester', role: 'admin', hostAdmin: true, clientKey: 'client-1' };
+  ctx = { hippoRoot: root, tenantId: 'default', actor: 'tester', role: 'admin', hostAdmin: true, clientKey: 'client-1', store: sqliteStore(root) };
 });
 
 afterEach(() => {

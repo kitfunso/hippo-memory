@@ -24,8 +24,9 @@ import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
-import { getContext, type Context } from '../src/api/index.js';
+import { getContext, type StoreContext } from '../src/api/index.js';
 import { hippoOut } from './_helpers/spawn-hippo.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 function tmpHome() {
   const home = mkdtempSync(join(tmpdir(), 'hippo-df3-'));
@@ -69,7 +70,7 @@ describe('includeRecent quality floor (api.getContext)', () => {
   it('test 1 — red-under-old: one junk + four clean recent writes inject only the clean four', async () => {
     const { home, restore } = tmpHome();
     try {
-      const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
+      const ctx: StoreContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
 
       // Real junk text per DF4's flagged auto-learn class (roadmap acceptance,
       // verbatim). Newest of the five, so a naive post-slice would still admit it.
@@ -96,7 +97,7 @@ describe('includeRecent quality floor (api.getContext)', () => {
   it('test 2 — filter-before-slice: backfills past junk to exactly N clean entries, not N-minus-junk', async () => {
     const { home, restore } = tmpHome();
     try {
-      const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
+      const ctx: StoreContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
 
       // 8 recent entries, clean/junk interleaved (3 junk, 5 clean — not a
       // strict 1:1 alternation, because a strict 4/4 split over 8 entries
@@ -135,7 +136,7 @@ describe('includeRecent quality floor (api.getContext)', () => {
   it('test 3 — pinned unaffected: a pinned entry that fails the heuristic still injects', async () => {
     const { home, restore } = tmpHome();
     try {
-      const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
+      const ctx: StoreContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
 
       // Pinned entry with content that would fail isContentWorthStoring
       // (same junk text as test 1) — explicit user intent (pin) wins because
@@ -155,7 +156,7 @@ describe('includeRecent quality floor (api.getContext)', () => {
   it('test 3b — pinned displacement under budget pressure (codex finding): a pinned entry occupying a recent slot must still inject once budget is tight', async () => {
     const { home, restore } = tmpHome();
     try {
-      const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
+      const ctx: StoreContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
 
       // The pinned entry fails isContentWorthStoring and is the NEWEST entry,
       // so it occupies a slot in the recent-N window (includeRecent: 3).
@@ -190,7 +191,7 @@ describe('includeRecent quality floor (api.getContext)', () => {
   it('test 4 — measured-limitation pin: a real mid-sentence fragment is NOT filtered', async () => {
     const { home, restore } = tmpHome();
     try {
-      const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
+      const ctx: StoreContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
 
       // Real live fragment text from the plan's measured-scope table. DF3
       // fixes the vague/no-specificity/version-bump/too-short class; it
@@ -212,7 +213,7 @@ describe('includeRecent quality floor (api.getContext)', () => {
   it('test 5 — includeRecent 0/absent: byte-identical behavior to today (junk never considered)', async () => {
     const { home, restore } = tmpHome();
     try {
-      const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
+      const ctx: StoreContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
 
       // A pinned clean entry plus a recent junk entry. With includeRecent
       // unset/0 the whole recent block (and therefore the new filter) is
@@ -239,7 +240,7 @@ describe('includeRecent quality floor (api.getContext)', () => {
   it('test 3c — repro: shared-budget reserve keeps a pin outside the recent-N window from being displaced by DF3 backfill', async () => {
     const { home, restore } = tmpHome();
     try {
-      const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
+      const ctx: StoreContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
 
       // Executed repro from the ship-gate review. Junk "tmp" (1 token) is
       // the NEWEST entry, three clean 69-70 char entries (18 tokens each)
@@ -274,7 +275,7 @@ describe('includeRecent quality floor (api.getContext)', () => {
   it('test 3d — pins win under heavy budget pressure: budget only fits the pin, all recents are dropped', async () => {
     const { home, restore } = tmpHome();
     try {
-      const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
+      const ctx: StoreContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
 
       // Budget (5) is smaller than any single clean recent entry (18
       // tokens) but fits the pin (4 tokens) alone. pinnedReserve consumes
@@ -296,7 +297,7 @@ describe('includeRecent quality floor (api.getContext)', () => {
   it('test 3e — no under-fill regression: generous budget returns the same entries as before the reserve', async () => {
     const { home, restore } = tmpHome();
     try {
-      const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
+      const ctx: StoreContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
 
       // Pin is the OLDEST entry (outside the includeRecent:3 window, same
       // shape as test 3c) so the three clean entries fill the recent slice
@@ -327,7 +328,7 @@ describe('includeRecent quality floor (api.getContext)', () => {
   it('test 6 — all-recent-junk: recent contributes nothing, no crash, pinned entries still returned', async () => {
     const { home, restore } = tmpHome();
     try {
-      const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
+      const ctx: StoreContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
 
       seed(home, 'surviving pinned rule that must still appear even with all recent junk', { pinned: true, created: '2026-08-20T10:00:03.000Z' });
       seed(home, 'fixed signals', { created: '2026-08-20T10:00:02.000Z' });
@@ -432,11 +433,7 @@ describe('pinned budget reserve dedupes mirrored entries', () => {
     );
     writeEntry(home, recent);
 
-    const ctx: Context = {
-      hippoRoot: home,
-      tenantId: 'default',
-      actor: { subject: 'test', role: 'admin' },
-    };
+    const ctx: StoreContext = apiCtx(home, 'default', { subject: 'test', role: 'admin' });
     // Budget sized from the MEASURED token costs (pin 12, recent 17) so the
     // two cases are actually distinguishable:
     //   deduped reserve   -> 35 - 12 = 23 remaining, recent (17) FITS

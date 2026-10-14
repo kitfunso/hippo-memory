@@ -21,6 +21,7 @@ import { createMemory } from './_helpers/default-half-life-memory.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import * as api from '../src/api/index.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 const PRIVATE_SCOPE = 'slack:private:CSECRET1';
 const PUBLIC_SCOPE = 'slack:public:CGENERAL';
@@ -173,8 +174,8 @@ describe('member-key boundaries in the api layer (every surface goes through it)
     rmSync(home, { recursive: true, force: true });
   });
 
-  const memberCtx = (): api.Context => ({ hippoRoot: home, tenantId: 'default', actor: { subject: 'api_key:m', role: 'member' } });
-  const adminCtx = (): api.HippoDbContext => ({ hippoRoot: home, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } });
+  const memberCtx = (): api.StoreContext => (apiCtx(home, 'default', { subject: 'api_key:m', role: 'member' }));
+  const adminCtx = (): api.StoreContext => (apiCtx(home, 'default', { subject: 'cli', role: 'admin' }));
 
   it('key management refuses a member actor', async () => {
     await expect(api.authCreate(memberCtx(), { role: 'admin' })).rejects.toThrow(api.ForbiddenError);

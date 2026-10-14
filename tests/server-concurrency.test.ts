@@ -7,6 +7,7 @@ import { initStore } from '../src/store/open.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { remember as apiRemember } from '../src/api/index.js';
 import { serve, type ServerHandle } from '../src/server.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 // Minimal fetch-Response-shaped result so the assertions below (res.status,
 // await res.text(), await res.json()) did not need to change when the
@@ -120,7 +121,7 @@ describe('server concurrency — recall + write under single-writer', () => {
       for (let i = 0; i < 100; i++) {
         const term = seedTerms[i % seedTerms.length]!;
         await apiRemember(
-          { hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } },
+          apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' }),
           { content: `seed-${term}-doc-${i} reference content for recall test` },
         );
       }

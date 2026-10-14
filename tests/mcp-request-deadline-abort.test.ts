@@ -7,6 +7,7 @@ import { initStore } from '../src/store/open.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { handleMcpRequest, type McpContext } from '../src/mcp/server.js';
 import { runWithRequestId } from '../src/util/request-scope.js';
+import { sqliteStore } from '../src/store/sqlite/store.js';
 
 let root: string;
 let ctx: McpContext;
@@ -14,7 +15,7 @@ let ctx: McpContext;
 beforeEach(() => {
   root = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-mcp-abort-'));
   initStore(root);
-  ctx = { hippoRoot: root, tenantId: 'default', actor: 'test', role: 'admin' };
+  ctx = { hippoRoot: root, tenantId: 'default', actor: 'test', role: 'admin', store: sqliteStore(root) };
 });
 afterEach(() => fs.rmSync(root, { recursive: true, force: true }));
 

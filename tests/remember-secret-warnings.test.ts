@@ -6,9 +6,11 @@ import * as path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { initStore } from '../src/store/open.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
-import { remember, type HippoDbContext } from '../src/api/index.js';
+import { remember, type StoreContext } from '../src/api/index.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { handleMcpRequest } from '../src/mcp/server.js';
+import { sqliteStore } from '../src/store/sqlite/store.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 // Built at runtime so no token-shaped literal lands in the repo.
 const GHP = 'ghp_' + 'x1Y2z3W4v5'.repeat(3) + 'Q6r7S8';
@@ -16,7 +18,7 @@ const TYPED = `the ci token is ${GHP} for the nightly job`;
 const cli = path.resolve(__dirname, '..', 'dist', 'cli.js');
 
 let root: string;
-const ctx = (): HippoDbContext => ({ hippoRoot: root, tenantId: 'default', actor: { subject: 'test', role: 'admin' } });
+const ctx = (): StoreContext => (apiCtx(root, 'default', { subject: 'test', role: 'admin' }));
 
 beforeEach(() => {
   root = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-remember-warn-'));
@@ -71,7 +73,7 @@ describe('MCP hippo_remember', () => {
   it('appends the warning to the tool result', async () => {
     const response = await handleMcpRequest(
       { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_remember', arguments: { text: TYPED } } },
-      { hippoRoot: root, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true },
+      { hippoRoot: root, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true, store: sqliteStore(root) },
     );
     const text = JSON.stringify(response);
     expect(text).toContain('Remembered [');

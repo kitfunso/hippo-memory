@@ -22,6 +22,7 @@ import { savePhysicsState } from '../src/db/physics-state.js';
 import type { PhysicsParticle } from '../src/core/physics.js';
 import { loadConfig } from '../src/core/config.js';
 import * as api from '../src/api/index.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 // ---------------------------------------------------------------------------
 // extractChurnRefs (pure syntax, no repo access)
@@ -342,7 +343,7 @@ describe('detectChurnStale', () => {
     fs.writeFileSync(path.join(repoDir, 'j.ts'), 'v2');
     commit(repoDir, AFTER_ANCHOR);
 
-    const ctx: api.Context = { hippoRoot, tenantId: 'default', actor: api.adminActor('test') };
+    const ctx: api.StoreContext = apiCtx(hippoRoot, 'default', api.adminActor('test'));
     await api.outcome(ctx, [mem.id], true); // confirmedAt lands after the churn commit, anchor moves past it
 
     const result = detectChurnStale(hippoRoot, repoDir, { tenantId: 'default', projectName: project });
@@ -431,7 +432,7 @@ describe('api.outcome clears churn-stale on a good outcome', () => {
     const mem = createMemory('some tagged content', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: [CHURN_STALE_TAG] });
     writeEntry(hippoRoot, mem);
 
-    const ctx: api.Context = { hippoRoot, tenantId: 'default', actor: api.adminActor('test') };
+    const ctx: api.StoreContext = apiCtx(hippoRoot, 'default', api.adminActor('test'));
     await api.outcome(ctx, [mem.id], true);
 
     expect(readEntry(hippoRoot, mem.id)!.tags).not.toContain(CHURN_STALE_TAG);
@@ -441,7 +442,7 @@ describe('api.outcome clears churn-stale on a good outcome', () => {
     const mem = createMemory('some tagged content', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: [CHURN_STALE_TAG] });
     writeEntry(hippoRoot, mem);
 
-    const ctx: api.Context = { hippoRoot, tenantId: 'default', actor: api.adminActor('test') };
+    const ctx: api.StoreContext = apiCtx(hippoRoot, 'default', api.adminActor('test'));
     await api.outcome(ctx, [mem.id], false);
 
     expect(readEntry(hippoRoot, mem.id)!.tags).toContain(CHURN_STALE_TAG);
@@ -451,7 +452,7 @@ describe('api.outcome clears churn-stale on a good outcome', () => {
     const mem = createMemory('plain content', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: ['other'] });
     writeEntry(hippoRoot, mem);
 
-    const ctx: api.Context = { hippoRoot, tenantId: 'default', actor: api.adminActor('test') };
+    const ctx: api.StoreContext = apiCtx(hippoRoot, 'default', api.adminActor('test'));
     await api.outcome(ctx, [mem.id], true);
 
     expect(readEntry(hippoRoot, mem.id)!.tags).toEqual(['other']);
@@ -560,7 +561,7 @@ describe('CHURN_STALE_RANK_MULTIPLIER in search scoring', () => {
       const b = createMemory('zephyr gearbox notes with a few more words', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: [] });
       const c = createMemory('zephyr gearbox notes with many many more padding words here', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: [] });
       for (const m of [stale, b, c]) writeEntry(hippoRoot, m);
-      const ctx: api.Context = { hippoRoot, tenantId: 'default', actor: api.adminActor('test') };
+      const ctx: api.StoreContext = apiCtx(hippoRoot, 'default', api.adminActor('test'));
       const ids = (await api.retrieve(ctx, { query: 'zephyr' })).results.map((r) => r.id);
       expect(ids).toHaveLength(3);
       expect(ids[0]).not.toBe(stale.id);

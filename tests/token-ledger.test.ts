@@ -19,6 +19,7 @@ import { blockHash } from '../src/util/token-text.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { handleMcpRequest } from '../src/mcp/server.js';
 import { hippoOut } from './_helpers/spawn-hippo.js';
+import { sqliteStore } from '../src/store/sqlite/store.js';
 
 function withDb<T>(root: string, fn: (db: ReturnType<typeof openHippoDb>) => T): T {
   const db = openHippoDb(root);
@@ -227,7 +228,7 @@ describe('ledger on the HTTP and MCP surfaces', () => {
   it('records MCP recall', async () => {
     await handleMcpRequest(
       { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_recall', arguments: { query: 'zanzibar' } } },
-      { hippoRoot: home, tenantId: 'default', actor: 'mcp-test', role: 'admin', hostAdmin: true },
+      { hippoRoot: home, tenantId: 'default', actor: 'mcp-test', role: 'admin', hostAdmin: true, store: sqliteStore(home) },
     );
     expect(surfaces().mcp_recall).toBeGreaterThan(0);
   });

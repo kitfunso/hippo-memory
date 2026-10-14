@@ -17,6 +17,7 @@ import { extractGraph } from '../src/graph/extract.js';
 import * as api from '../src/api/index.js';
 import { consolidate } from '../src/consolidate/sleep.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 const HIPPO_BIN = join(process.cwd(), 'bin', 'hippo.js');
 
@@ -179,7 +180,7 @@ describe('authGrant / authUngrant validation (api layer)', () => {
 
   it('rejects a grant on a revoked key', async () => {
     const member = mintKey(home, 'member');
-    const adminCtx: api.HippoDbContext = { hippoRoot: home, tenantId: 'default', actor: api.adminActor('cli') };
+    const adminCtx: api.StoreContext = apiCtx(home, 'default', api.adminActor('cli'));
     await api.authRevoke(adminCtx, member.keyId);
     expect(() => api.authGrant(adminCtx, member.keyId, PRIVATE_SCOPE)).toThrow(/revoked/);
   });
@@ -205,7 +206,7 @@ describe('authGrant / authUngrant validation (api layer)', () => {
 
   it('writes auth_grant / auth_ungrant audit rows', async () => {
     const member = mintKey(home, 'member');
-    const adminCtx: api.HippoDbContext = { hippoRoot: home, tenantId: 'default', actor: api.adminActor('cli') };
+    const adminCtx: api.StoreContext = apiCtx(home, 'default', api.adminActor('cli'));
     api.authGrant(adminCtx, member.keyId, PRIVATE_SCOPE);
     api.authUngrant(adminCtx, member.keyId, PRIVATE_SCOPE);
 
@@ -243,7 +244,7 @@ describe('supersede keeps the old row\'s scope', () => {
   it('api.supersede: the successor of a private row stays in that scope', async () => {
     const old = createMemory(PRIVATE_TEXT, { layer: Layer.Episodic, scope: PRIVATE_SCOPE });
     writeEntry(home, old);
-    const ctx: api.HippoDbContext = { hippoRoot: home, tenantId: 'default', actor: api.adminActor('cli') };
+    const ctx: api.StoreContext = apiCtx(home, 'default', api.adminActor('cli'));
     const result = await api.supersede(ctx, old.id, 'kowalski payroll rollout moved to friday');
     const successor = readEntry(home, result.newId, 'default');
     expect(successor?.scope).toBe(PRIVATE_SCOPE);

@@ -19,6 +19,7 @@ import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import * as api from '../src/api/index.js';
 import { RejectedValueError } from '../src/core/api-errors.js';
 import { listRejectionsForTenant } from '../src/trust/reject-flow.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 let tmpDir: string;
 
@@ -27,8 +28,8 @@ beforeEach(() => {
   initStore(tmpDir);
 });
 
-function ctx(tenantId: string = 'default'): api.Context {
-  return { hippoRoot: tmpDir, tenantId, actor: { subject: 'cli', role: 'admin' } };
+function ctx(tenantId: string = 'default'): api.StoreContext {
+  return apiCtx(tmpDir, tenantId, { subject: 'cli', role: 'admin' });
 }
 
 describe('api.reject / api.unreject / listRejectionsForTenant', () => {

@@ -6,9 +6,8 @@ import type { QualityRepairResult } from '../store/quality-repair.js';
 import type { AuditMaintenance } from '../store/port.js';
 import { DAY_MS } from '../util/time.js';
 import { requireGroup } from '../store/index.js';
-import { storeFor } from '../store/sqlite/store.js';
 import type { KeysetPosition } from '../util/keyset.js';
-import type { Context } from './types.js';
+import type { StoreContext } from './types.js';
 
 export interface AuditListOpts {
   op?: AuditOp;
@@ -20,8 +19,8 @@ export interface AuditListOpts {
 }
 
 /** Read audit events scoped to `ctx.tenantId` on the store the request runs on. Read-only, no audit emit. */
-export async function auditList(ctx: Context, opts: AuditListOpts): Promise<AuditEvent[]> {
-  return requireGroup(storeFor(ctx), 'auditLog').listAuditEvents({
+export async function auditList(ctx: StoreContext, opts: AuditListOpts): Promise<AuditEvent[]> {
+  return requireGroup(ctx.store, 'auditLog').listAuditEvents({
     tenantId: ctx.tenantId, op: opts.op, since: opts.since, limit: opts.limit, after: opts.after,
   });
 }
@@ -29,12 +28,12 @@ export async function auditList(ctx: Context, opts: AuditListOpts): Promise<Audi
 /** The pass that removes audit errors; it leads the reason on each forget row. */
 export type AuditPass = 'audit --fix' | 'sleep-audit';
 
-function maintenanceOf(ctx: Context): AuditMaintenance {
-  return requireGroup(storeFor(ctx), 'auditMaintenance');
+function maintenanceOf(ctx: StoreContext): AuditMaintenance {
+  return requireGroup(ctx.store, 'auditMaintenance');
 }
 
 /** Delete the memories an audit marked as errors, each with its own forget row, and answer the ids that went: a pinned or raw row stays. */
-export async function removeAuditErrors(ctx: Context, pass: AuditPass, issues: readonly AuditIssue[]): Promise<string[]> {
+export async function removeAuditErrors(ctx: StoreContext, pass: AuditPass, issues: readonly AuditIssue[]): Promise<string[]> {
   const removals = issues
     .filter((issue) => issue.severity === 'error')
     .map((issue) => ({ id: issue.memoryId, reason: `${pass}: ${issue.reason}` }));
@@ -43,18 +42,18 @@ export async function removeAuditErrors(ctx: Context, pass: AuditPass, issues: r
 }
 
 /** The caller's memories run through the quality audit; a memory that backs an object is never marked for removal. */
-export async function auditMemoryQuality(ctx: Context): Promise<AuditResult> {
+export async function auditMemoryQuality(ctx: StoreContext): Promise<AuditResult> {
   const maintenance = maintenanceOf(ctx);
   return auditMemories(await maintenance.tenantEntries(ctx.tenantId), await maintenance.objectBackedIds());
 }
 
 /** Audit repair for the caller's tenant: a preview, or with `apply` the moves of certain defects to dormant storage behind a backup. */
-export async function repairMemoryQuality(ctx: Context, apply: boolean): Promise<QualityRepairResult> {
+export async function repairMemoryQuality(ctx: StoreContext, apply: boolean): Promise<QualityRepairResult> {
   return maintenanceOf(ctx).repairQuality(ctx.tenantId, apply);
 }
 
 /** The repair sleep and the daily runner apply once per store after an upgrade; null when it already ran there. */
-export async function repairMemoryQualityOnce(ctx: Context): Promise<QualityRepairResult | null> {
+export async function repairMemoryQualityOnce(ctx: StoreContext): Promise<QualityRepairResult | null> {
   return maintenanceOf(ctx).repairQualityOnce(ctx.tenantId);
 }
 
@@ -83,7 +82,7 @@ export function computeCutoff(days: number, now: Date = new Date()): string {
 /** Delete the caller's tenant's audit_log rows older than `olderThanDays`, then record an `audit_prune` row as `ctx.actor`; opt-in, since
  *  retention floors (HIPAA, SOX, GDPR) apply. The row is written after the DELETE, so a call never prunes its own record.
  *  Throws on non-positive days or an empty tenant. */
-export async function pruneAuditLog(ctx: Context, opts: PruneAuditOpts): Promise<PruneAuditResult> {
+export async function pruneAuditLog(ctx: StoreContext, opts: PruneAuditOpts): Promise<PruneAuditResult> {
   if (!Number.isFinite(opts.olderThanDays) || opts.olderThanDays <= 0) {
     throw new Error(`pruneAuditLog: olderThanDays must be a positive number, got ${opts.olderThanDays}`);
   }

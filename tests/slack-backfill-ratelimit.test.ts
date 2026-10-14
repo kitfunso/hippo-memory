@@ -4,15 +4,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
-import type { Context } from '../src/api/index.js';
+import type { StoreContext } from '../src/api/index.js';
 import { backfillChannel } from '../src/connectors/slack/backfill.js';
 import { slackHistoryFetcher } from '../src/connectors/slack/web-client.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
-const ctx = (root: string): Context => ({
-  hippoRoot: root,
-  tenantId: 'default',
-  actor: { subject: 'connector:slack', role: 'admin' },
-});
+const ctx = (root: string): StoreContext => (apiCtx(root, 'default', { subject: 'connector:slack', role: 'admin' }));
 
 /**
  * Integration test for rate-limit handling THROUGH the full backfill loop.

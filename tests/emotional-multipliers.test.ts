@@ -38,8 +38,9 @@ import {
   DEFAULT_HALF_LIFE_DAYS,
 } from '../src/core/memory.js';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { retrieve, type Context } from '../src/api/index.js';
+import { retrieve, type StoreContext } from '../src/api/index.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 const ENV_KEY = 'HIPPO_LOSS_AVERSION_RATIO';
 // One instant for every entry age and strength call: two real-clock reads a pause apart moved a ratio past its tolerance.
@@ -287,11 +288,7 @@ describe('behavioral: env=0 ranking effect', () => {
       e.strength = calculateStrength(e, NOW);
       writeEntry(root, e);
     }
-    const ctx: Context = {
-      hippoRoot: root,
-      tenantId: 'default',
-      actor: { subject: 'test:j5-behavioral', role: 'admin' },
-    };
+    const ctx: StoreContext = apiCtx(root, 'default', { subject: 'test:j5-behavioral', role: 'admin' });
     const result = await retrieve(ctx, { query: 'shared ranking keyword variant test' });
     expect(result.results.length).toBeGreaterThanOrEqual(4);
     // Locate the 4 seeded entries via their content marker and read the
@@ -334,11 +331,7 @@ describe('behavioral: env=0 ranking effect', () => {
     // is aged so the stored value matches our test intent).
     baselineEntry.strength = calculateStrength(baselineEntry, NOW);
     writeEntry(root2, baselineEntry);
-    const ctx2: Context = {
-      hippoRoot: root2,
-      tenantId: 'default',
-      actor: { subject: 'test:j5-behavioral-baseline', role: 'admin' },
-    };
+    const ctx2: StoreContext = apiCtx(root2, 'default', { subject: 'test:j5-behavioral-baseline', role: 'admin' });
     const baselineResult = await retrieve(ctx2, { query: 'shared ranking keyword variant test' });
     const baselineNeg = baselineResult.results.find((r) => r.content.includes('variant negative test'))?.strength;
     expect(baselineNeg).toBeDefined();

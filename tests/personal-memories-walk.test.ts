@@ -25,6 +25,7 @@ import { initStore } from '../src/store/open.js';
 import { listRejectionsForTenant } from '../src/trust/reject-flow.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { runInProcess } from './_helpers/run-in-process.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 const A_SCOPE = 'personal:private:oid-a';
 const B_SCOPE = 'personal:private:oid-b';
@@ -67,10 +68,10 @@ function mint(label: string, role: 'admin' | 'member', ownerSubject?: string, ro
   }
 }
 
-function ctxOf(who: Who): api.Context {
+function ctxOf(who: Who): api.StoreContext {
   const subject = `api_key:${keys[who].keyId}`;
-  if (who === 'ADM') return { hippoRoot: store, tenantId: 'default', actor: { subject, role: 'admin' } };
-  return { hippoRoot: store, tenantId: 'default', actor: { subject, role: 'member', owner: who === 'A' ? 'oid-a' : 'oid-b' } };
+  if (who === 'ADM') return apiCtx(store, 'default', { subject, role: 'admin' });
+  return apiCtx(store, 'default', { subject, role: 'member', owner: who === 'A' ? 'oid-a' : 'oid-b' });
 }
 
 async function http(token: string | null, method: string, route: string, body?: JsonValue, extra: Record<string, string> = {}, base = handle!.url): Promise<Reply> {

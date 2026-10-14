@@ -14,8 +14,9 @@ import {
 } from '../src/core/memory.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { getContext, retrieve, type Context } from '../src/api/index.js';
+import { getContext, retrieve, type StoreContext } from '../src/api/index.js';
 import { _resetAblationCacheForTests } from '../src/core/ablation.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 const PROJECT = 'proj-a';
 const OWN = 'sess-own';
@@ -24,7 +25,7 @@ const HIPPO_JS = resolve(__dirname, '..', 'bin', 'hippo.js');
 
 let tmpRoot: string;
 let local: string;
-let ctx: Context;
+let ctx: StoreContext;
 
 const minute = (base: number, i: number): string => new Date(Date.UTC(2026, base, 1, 0, i)).toISOString();
 
@@ -62,7 +63,7 @@ beforeEach(() => {
   initStore(local);
   initStore(globalRoot);
   vi.stubEnv('HIPPO_HOME', globalRoot);
-  ctx = { hippoRoot: local, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
+  ctx = apiCtx(local, 'default', { subject: 'cli', role: 'admin' });
 });
 
 afterEach(() => {

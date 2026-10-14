@@ -11,6 +11,7 @@ import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { serve, type AddonRoute, type ServerHandle } from '../src/server.js';
 import { handleMcpRequest, type McpResponse } from '../src/mcp/server.js';
 import { retrieve, remember } from '../src/api/index.js';
+import { sqliteStore } from '../src/store/sqlite/store.js';
 
 interface Connection { location(): string | null }
 type ConnectionMethod = (this: Connection, ...args: never[]) => void;
@@ -133,7 +134,7 @@ describe('store opens per request', () => {
 
 describe('stdio MCP tool calls', () => {
   it('interleaved calls each open and close their own handle', async () => {
-    const ctx = { hippoRoot: root, tenantId: 'default', actor: 'mcp', role: 'admin' as const, hostAdmin: true as const };
+    const ctx = { hippoRoot: root, tenantId: 'default', actor: 'mcp', role: 'admin' as const, hostAdmin: true as const, store: sqliteStore(root) };
     const reply = (id: number, query: string) =>
       handleMcpRequest({ ...recallOverMcp, id, params: { name: 'hippo_recall', arguments: { query } } }, ctx);
     let replies: Array<McpResponse | null> = [];

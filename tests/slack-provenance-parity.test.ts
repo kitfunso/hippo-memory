@@ -19,13 +19,14 @@ import { ingestMessage } from '../src/connectors/slack/ingest.js';
 import { buildProvenanceCoverage } from '../src/api/provenance-coverage.js';
 import type { ChannelMeta } from '../src/connectors/slack/scope.js';
 import type { SlackMessageEvent } from '../src/connectors/slack/types.js';
-import type { Context } from '../src/api/index.js';
+import type { StoreContext } from '../src/api/index.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 const PUBLIC_CHANNEL: ChannelMeta = { id: 'C01PUB', is_private: false };
 const TEAM_ID = 'T01TEAM';
 
-function ctxFor(root: string): Context {
-  return { hippoRoot: root, tenantId: 'default', actor: { subject: 'connector:slack', role: 'admin' } };
+function ctxFor(root: string): StoreContext {
+  return apiCtx(root, 'default', { subject: 'connector:slack', role: 'admin' });
 }
 
 function makeMessage(i: number, opts: Partial<SlackMessageEvent> = {}): SlackMessageEvent {

@@ -24,7 +24,8 @@ import { type ImportOptions } from '../src/importers/core.js';
 import { initStore } from '../src/store/open.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
-import { remember, type Context } from '../src/api/index.js';
+import { remember, type StoreContext } from '../src/api/index.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 let tmpDir: string; // hippo root (the store)
 let vaultDir: string; // a scratch vault folder we mutate per-test
@@ -509,11 +510,7 @@ describe('importVault (s): vault root IS the store imports nothing', () => {
 //     archive EVERY matching row, not just the last one scanned.
 // ---------------------------------------------------------------------------
 
-const vaultCtx = (): Context => ({
-  hippoRoot: tmpDir,
-  tenantId: 'default',
-  actor: { subject: 'connector:vault', role: 'admin' },
-});
+const vaultCtx = (): StoreContext => (apiCtx(tmpDir, 'default', { subject: 'connector:vault', role: 'admin' }));
 
 /** Inject a SECOND live raw row sharing dup.md's artifactRef + content-hash,
  *  exactly as a concurrent importVault run would. Returns both live row ids. */

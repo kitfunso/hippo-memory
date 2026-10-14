@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { adminActor, type HippoDbContext } from '../../src/api/index.js';
+import { adminActor, type StoreContext } from '../../src/api/index.js';
 import { claudeFolderName } from '../../src/agent-memories/claude-code.js';
 import { emptyTally, totalTally, type ImportReport, type Tally } from '../../src/agent-memories/report.js';
 import type { Machine } from '../../src/agent-memories/sync.js';
@@ -16,6 +16,7 @@ import type { MemoryEntry } from '../../src/core/memory.js';
 import { initStore } from '../../src/store/open.js';
 import { isInitialized } from '../../src/core/project-identity.js';
 import { loadAllEntries } from '../../src/store/entry-reads.js';
+import { apiCtx } from './api-ctx.js';
 
 export interface World {
   readonly dir: string;
@@ -110,7 +111,7 @@ export const toolTally = (report: ImportReport, tool: ToolId): Tally => report.t
 
 export const tally = (report: ImportReport): Tally => totalTally(report);
 
-export const ctxFor = (root: string): HippoDbContext => ({ hippoRoot: root, tenantId: 'default', actor: adminActor('test') });
+export const ctxFor = (root: string): StoreContext => (apiCtx(root, 'default', adminActor('test')));
 
 export const sha = (text: string): string => createHash('sha256').update(text, 'utf8').digest('hex');
 

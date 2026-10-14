@@ -4,7 +4,7 @@ import type { IncomingMessage } from 'node:http';
 import { resolveTenantId } from '../store/tenant.js';
 import { errorFields, errorMessage, log } from '../util/log.js';
 import { API_KEY_PREFIX, verifyApiKeyCached } from '../store/auth.js';
-import { type Actor, type Context, ownerOrSubject } from '../api/index.js';
+import { type Actor, type Context, type StoreContext, ownerOrSubject } from '../api/index.js';
 import { HttpError, isCrossSite, isHeaderString, LOOPBACK_HOST_HEADER } from '../util/http-util.js';
 import { MAX_ID_LEN } from '../util/limits.js';
 import { clientLimitKey } from './client-ip.js';
@@ -257,7 +257,7 @@ function chargeCaller(tenantId: string, actor: Actor, opts: AuthOpts): void {
 
 /** Builds a per-request Context from the Authorization header and remote address; throws HttpError(401) for invalid or missing credentials.
  * Reads the store only for an API-key-shaped Bearer (or any Bearer when no auth resolver is registered), so keyless local requests stay cheap. */
-export async function buildContextWithAuth(req: IncomingMessage, opts: AuthOpts): Promise<Context> {
+export async function buildContextWithAuth(req: IncomingMessage, opts: AuthOpts): Promise<StoreContext> {
   const id = await checkAuth(req, opts);
   const ctx = contextFor(id, opts);
   if (id !== null) chargeCaller(id.tenantId, ctx.actor, opts);
@@ -265,7 +265,7 @@ export async function buildContextWithAuth(req: IncomingMessage, opts: AuthOpts)
 }
 
 /** The auth check again, uncharged, for a handler that authenticated with requireAuth before a slow body read and must re-check right before it acts. */
-export async function recheckContextWithAuth(req: IncomingMessage, opts: AuthOpts): Promise<Context> {
+export async function recheckContextWithAuth(req: IncomingMessage, opts: AuthOpts): Promise<StoreContext> {
   return contextFor(await checkAuth(req, opts), opts);
 }
 
@@ -275,7 +275,7 @@ function keylessLocalActor(opts: AuthOpts): Actor {
   return role === 'admin' ? { subject: 'localhost:cli', role: 'admin', hostAdmin: true } : { subject: 'localhost:cli', role: 'member' };
 }
 
-function contextFor(id: BearerIdentity | null, opts: AuthOpts): Context {
+function contextFor(id: BearerIdentity | null, opts: AuthOpts): StoreContext {
   if (id !== null) return { hippoRoot: opts.hippoRoot, tenantId: id.tenantId, actor: bearerActor(id), store: opts.store };
   return { hippoRoot: opts.hippoRoot, tenantId: resolveTenantId({}), actor: keylessLocalActor(opts), store: opts.store };
 }

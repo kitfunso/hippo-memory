@@ -3,6 +3,7 @@
 // map are in layers.json). Existing upward imports sit in .layers-baseline.json and may go but never grow.
 // A file under src/server/routes/ that names requireGroup or storeFor also fails: routes reach the store through src/api.
 // So does a runtime import from src/cli/** or src/cli.ts into src/store or src/db, unless .cli-store-allowlist.json names it with a reason.
+// So does a runtime import from src/api/**, src/connectors/** or src/mcp/** into src/store/sqlite/**, unless SQLITE_PINNED names it with a reason: they take the store from the Context.
 // layers.json `dbReach` names the folders that reach the db layer only through the store, and each import that may stay, with why.
 // Usage: check-layers.mjs [--list] [--update]. --update rewrites the baseline; it refuses to add an edge or raise a number.
 
@@ -166,6 +167,46 @@ function cliStoreProblems(srcDir) {
   ];
 }
 
+const SQLITE_FROM = ['api/', 'connectors/', 'mcp/'];
+const SQLITE_DIR = 'store/sqlite/';
+// Each runtime import that may stay, as src-relative paths with why.
+const SQLITE_PINNED = [
+  { file: 'mcp/stdio.ts', target: 'store/sqlite/store.ts', why: 'the stdio server is the composition root that builds the SQLite store' },
+  { file: 'api/error-reply.ts', target: 'store/sqlite/busy.ts', why: 'isStoreBusy moves behind the port in D2b' },
+  { file: 'api/ledger-db.ts', target: 'store/sqlite/store.ts', why: 'sqliteSyncStore moves behind the port in D2b' },
+  { file: 'api/sleep-run.ts', target: 'store/sqlite/store.ts', why: 'sqliteSyncStore moves behind the port in D2b' },
+  { file: 'api/auth.ts', target: 'store/sqlite/local.ts', why: 'changeScopeGrant moves behind the port in D2b' },
+];
+
+/** Runtime imports from src/api, src/connectors or src/mcp into src/store/sqlite, one per (file, target), as src-relative paths. */
+function findSqliteReaches(srcDir) {
+  const root = resolve(srcDir);
+  const rel = (p) => relative(root, p).replace(/\\/g, '/');
+  const out = new Map();
+  for (const file of tsFiles(root)) {
+    const from = rel(file);
+    if (!SQLITE_FROM.some((dir) => from.startsWith(dir))) continue;
+    for (const { spec, line, kind } of importsOf(readFileSync(file, 'utf8'))) {
+      const target = kind === 'runtime' ? resolveSpecifier(file, spec) : null;
+      const to = target && rel(target);
+      if (to?.startsWith(SQLITE_DIR) && !out.has(`${from}\t${to}`)) out.set(`${from}\t${to}`, { file: from, target: to, line });
+    }
+  }
+  return [...out.values()];
+}
+
+/** Unpinned SQLite imports, then pinned entries whose file still exists but no longer imports the target. */
+function sqliteReachProblems(srcDir) {
+  const key = (e) => `${e.file}\t${e.target}`;
+  const found = findSqliteReaches(srcDir);
+  const foundKeys = new Set(found.map(key));
+  const pinnedKeys = new Set(SQLITE_PINNED.map(key));
+  return [
+    ...found.filter((e) => !pinnedKeys.has(key(e))).map((e) => `src/${e.file}:${e.line} imports src/${e.target} at runtime; take the store from the Context instead`),
+    ...SQLITE_PINNED.filter((e) => existsSync(join(srcDir, e.file)) && !foundKeys.has(key(e))).map((e) => `pinned: src/${e.file} no longer imports src/${e.target}; delete the entry`),
+  ];
+}
+
 /** Imports from `dbReach.layer` in a `dbReach.from` folder that `dbReach.allowed` does not name, then allowed entries nothing uses or that give no why. */
 function findDbReaches(map, srcDir) {
   const rule = map.dbReach;
@@ -224,6 +265,13 @@ const cliProblems = cliStoreProblems('src');
 if (cliProblems.length > 0 && !args.includes('--list')) {
   console.error('The CLI reaches the store past src/api:');
   for (const p of cliProblems) console.error(`  ${p}`);
+  process.exit(1);
+}
+
+const sqliteProblems = sqliteReachProblems('src');
+if (sqliteProblems.length > 0 && !args.includes('--list')) {
+  console.error('The api, connectors or mcp layer reaches the SQLite adapter; a composition root builds the store and hands it down in the Context:');
+  for (const p of sqliteProblems) console.error(`  ${p}`);
   process.exit(1);
 }
 

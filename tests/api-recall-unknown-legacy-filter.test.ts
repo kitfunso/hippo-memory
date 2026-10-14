@@ -16,14 +16,15 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
-import { retrieve, type Context } from '../src/api/index.js';
+import { retrieve, type StoreContext } from '../src/api/index.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 function safeRmSync(p: string): void {
   try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
 }
-function ctxFor(root: string): Context {
-  return { hippoRoot: root, tenantId: 'default', actor: { subject: 'test:legacy', role: 'admin' } };
+function ctxFor(root: string): StoreContext {
+  return apiCtx(root, 'default', { subject: 'test:legacy', role: 'admin' });
 }
 function makeWithScope(text: string, scope: string | null): MemoryEntry {
   return createMemory(text, {

@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from 'fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { remember, type HippoDbContext } from '../src/api/index.js';
+import { remember, type StoreContext } from '../src/api/index.js';
 import { initStore } from '../src/store/open.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
@@ -17,17 +17,14 @@ import type {
   GitHubPullRequestEvent,
   GitHubPullRequestReviewCommentEvent,
 } from '../src/connectors/github/types.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 // SAFETY: node:sqlite's DatabaseSync is the class db.ts wraps as DatabaseSyncLike.
 const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite') as { DatabaseSync: { prototype: DatabaseSyncLike } };
 
 // -- Test helpers ----------------------------------------------------------
 
-const ctx = (root: string): HippoDbContext => ({
-  hippoRoot: root,
-  tenantId: 'default',
-  actor: { subject: 'connector:github', role: 'admin' },
-});
+const ctx = (root: string): StoreContext => (apiCtx(root, 'default', { subject: 'connector:github', role: 'admin' }));
 
 function makeIssueEvent(overrides: Partial<GitHubIssueEvent['issue']> = {}): GitHubIssueEvent {
   return {

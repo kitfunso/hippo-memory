@@ -8,22 +8,21 @@ import { writeRecallTraceAtRoot } from '../store/recall-trace.js';
 import type { SearchResult } from '../core/search-types.js';
 import { saveIndex } from '../store/index-and-stats.js';
 import { type HippoStore, type RecallWrites } from '../store/index.js';
-import { storeFor } from '../store/sqlite/store.js';
 import { estimateTokens } from '../util/token-text.js';
 import { callerOf, recallAuditMetadata, recallAuditRow, strengthenOf } from './recall-record.js';
 import { RECALL_RECORDING, recordShownRecall } from './recall-finish.js';
 import type { CliCoreRanker, CliCoreRecall, RecallOpts, RecallResult, ShownCliCore } from './recall-types.js';
-import type { Context } from './types.js';
+import type { Context, StoreContext } from './types.js';
 
 // entriesByIds reads at most this many ids a call.
 const ID_READ_CHUNK = 500;
 
-export async function retrieveWithCliCore(ctx: Context, opts: RecallOpts, core: CliCoreRanker): Promise<RecallResult> {
+export async function retrieveWithCliCore(ctx: StoreContext, opts: RecallOpts, core: CliCoreRanker): Promise<RecallResult> {
   // This ranker applies the operator's scope rule and may search a second store, so no bearer client may reach it.
   if (!ctx.actor.hostAdmin) throw new ForbiddenError('The CLI ranking core serves the host admin only');
   const globalRoot = core.sources?.globalRoot;
   // The ranking core reads hippo.db under hippoRoot, yet writes through the caller's store, whose finishRecall skips any id it does not hold.
-  const store = storeFor(ctx);
+  const store = ctx.store;
   const ranking = await rankRecall(
     { hippoRoot: ctx.hippoRoot, globalRoot, tenantId: ctx.tenantId, note: core.note },
     { ...core.rank, query: opts.query, sessionId: opts.sessionId, goalTag: opts.goalTag },
@@ -68,7 +67,7 @@ interface ShownRanking {
 }
 
 /** Audit rows first: a recall they cannot be written for leaves no strengthen, trace, marker or count, as under the other rankers. */
-async function recordShown(ctx: Context, store: HippoStore, opts: RecallOpts, core: CliCoreRecall, done: ShownRanking): Promise<void> {
+async function recordShown(ctx: StoreContext, store: HippoStore, opts: RecallOpts, core: CliCoreRecall, done: ShownRanking): Promise<void> {
   const { ranking, shown, planningAudit } = done;
   const ids = shown.results.map((r) => r.entry.id);
   const recallRow = recallAuditRow(callerOf(ctx), 'recall', undefined, recallAuditMetadata(opts.query, ids.length));
@@ -97,10 +96,10 @@ async function recordShown(ctx: Context, store: HippoStore, opts: RecallOpts, co
   });
 }
 
-/** The second store's writes go where the first's do: the store named for its root, else hippo.db under that root. */
+/** The second store takes its own recall rows, unless it is the root being searched already. */
 function secondStore(ctx: Context, core: CliCoreRecall): HippoStore | undefined {
-  const root = core.sources?.globalRoot;
-  return root !== undefined && root !== ctx.hippoRoot ? storeFor({ hippoRoot: root, store: core.sources?.globalStore }) : undefined;
+  const sources = core.sources;
+  return sources !== undefined && sources.globalRoot !== ctx.hippoRoot ? sources.globalStore : undefined;
 }
 
 // The caller has ranked and is about to print, so a failed audit write is logged and counted, never thrown.

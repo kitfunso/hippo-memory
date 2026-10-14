@@ -13,6 +13,7 @@ import { sharedStoreRefusal } from '../src/mcp/shared-gate.js';
 import { TOOLS } from '../src/mcp/tools.js';
 import { clearProjectIdentityCache } from '../src/core/project-identity.js';
 import { serve, type ServerHandle } from '../src/server.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 type ToolReply = { result?: { content: Array<{ text: string }>; isError?: boolean } };
 const OFF = ['hippo_learn', 'hippo_share', 'hippo_resolve', 'hippo_peers'];
@@ -97,7 +98,7 @@ describe('MCP writes on a shared store', () => {
 
   it('learn with the MCP profile stores NULL rows', async () => {
     const store = flaggedStore();
-    const ctx = { hippoRoot: store, tenantId: 'default', actor: adminActor('shared-store-mcp-test') };
+    const ctx = apiCtx(store, 'default', adminActor('shared-store-mcp-test'));
     const result = await learn(ctx, { repoPath: repoWithOneFix(), days: 7, profile: MCP_LEARN });
     expect(result.added).toBe(1);
     const rows = loadAllEntries(store);

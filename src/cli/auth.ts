@@ -110,7 +110,7 @@ function cmdAuthList(hippoRoot: string, tenantId: string, flags: CliFlags): void
 }
 
 // The local CLI owns every tenant, so revoke and grant run in the key's own tenant.
-async function keyContext(root: string, tenantId: string, keyId: string): Promise<api.HippoDbContext> {
+async function keyContext(root: string, tenantId: string, keyId: string): Promise<api.StoreContext> {
   const hostCtx = cliApiContext(root, tenantId);
   const keyTenant = await api.authKeyTenant(hostCtx, keyId);
   if (keyTenant === undefined) {

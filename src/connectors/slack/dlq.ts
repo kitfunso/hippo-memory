@@ -1,4 +1,4 @@
-import { type Context, adminActor } from '../../api/index.js';
+import { type StoreContext, adminActor } from '../../api/index.js';
 import {
   listSlackDlq,
   markSlackDlqRetried,
@@ -40,7 +40,7 @@ export interface ReplayDlqOpts {
 /** Replay a DLQ row via the normal ingest path (`hippo slack dlq replay <id> [--force]`), re-verifying the signature with the CURRENT secret unless forced.
  *  Rows with a NULL signature need --force; replays use today's routing, because the DLQ exists to be drained after the operator fixed routing. */
 export async function replayDlqEntry(
-  ctx: Pick<Context, 'hippoRoot'>,
+  ctx: Pick<StoreContext, 'hippoRoot' | 'store'>,
   id: number,
   opts: ReplayDlqOpts = {},
 ): Promise<ReplayResult> {
@@ -49,7 +49,7 @@ export async function replayDlqEntry(
     refuseSignature: (row) => refuseSignature(row, opts),
     isEnvelope: isSlackEventEnvelope,
     notEnvelope: 'not an event_callback envelope',
-    reingest: (_row, envelope) => reingest(ctx.hippoRoot, envelope),
+    reingest: (_row, envelope) => reingest(ctx, envelope),
   }, ctx.hippoRoot, id, opts.force === true);
 }
 
@@ -78,13 +78,13 @@ function refuseSignature(row: DlqItem, opts: ReplayDlqOpts): SignatureRefusal | 
   };
 }
 
-async function reingest(hippoRoot: string, envelope: JsonValue & SlackEventEnvelope): Promise<Reingest> {
-  const tenantId = await resolveTenantForSlackTeam(hippoRoot, envelope.team_id);
+async function reingest({ hippoRoot, store }: Pick<StoreContext, 'hippoRoot' | 'store'>, envelope: JsonValue & SlackEventEnvelope): Promise<Reingest> {
+  const tenantId = await resolveTenantForSlackTeam(store, envelope.team_id);
   if (!tenantId) return { ok: false, status: 'unroutable', reason: `team_id ${envelope.team_id} still unroutable` };
   const inner = envelope.event;
   if (!isSlackMessageEvent(inner)) return { ok: false, status: 'unhandled', reason: 'unhandled inner event type' };
 
-  const replayCtx: Context = { hippoRoot, tenantId, actor: adminActor('connector:slack:replay') };
+  const replayCtx: StoreContext = { hippoRoot, tenantId, actor: adminActor('connector:slack:replay'), store };
   if (inner.subtype === 'message_deleted' && inner.deleted_ts) {
     const r = await handleMessageDeleted(replayCtx, {
       teamId: envelope.team_id,

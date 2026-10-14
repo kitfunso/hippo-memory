@@ -13,6 +13,7 @@ import { recordRereads, recordTokenUse } from '../src/store/token-ledger.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 let root: string;
 
@@ -62,7 +63,7 @@ describe('a write scope that fails in the middle rolls back', () => {
     const old = new Date(Date.now() - 100 * 86_400_000).toISOString();
     run(`INSERT INTO audit_log (ts, tenant_id, actor, op, target_id, metadata_json) VALUES ('${old}', 'default', 't', 'recall', NULL, '{}')`);
     refuse('audit_log', "NEW.op = 'audit_prune'");
-    await expect(pruneAuditLog({ hippoRoot: root, tenantId: 'default', actor: adminActor('cli') }, { olderThanDays: 30 })).rejects.toThrow('refused');
+    await expect(pruneAuditLog(apiCtx(root, 'default', adminActor('cli')), { olderThanDays: 30 })).rejects.toThrow('refused');
     expect(count(`SELECT COUNT(*) AS n FROM audit_log WHERE op = 'recall'`)).toBe(1);
   });
 

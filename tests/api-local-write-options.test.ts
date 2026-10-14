@@ -2,7 +2,7 @@
 // and a client that sends the same fields over HTTP or MCP changes nothing.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { rmSync } from 'node:fs';
-import { adminActor, remember, supersede, type HippoDbContext } from '../src/api/index.js';
+import { adminActor, remember, supersede, type StoreContext } from '../src/api/index.js';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
 import { Layer, type MemoryEntry } from '../src/core/memory.js';
 import { createApiKey } from '../src/store/auth.js';
@@ -10,6 +10,7 @@ import { loadAllEntries, readEntry } from '../src/store/entry-reads.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import type { JsonValue } from '../src/util/json.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 const NOTE = 'the billing service retries a failed charge three times';
 const NEWER = 'the billing service retries a failed charge five times';
@@ -26,11 +27,11 @@ const LOCAL = {
 };
 
 let root: string;
-let ctx: HippoDbContext;
+let ctx: StoreContext;
 
 beforeEach(() => {
   root = makeRoot('local-write-options', { config: { embeddings: { enabled: false }, autoSleep: { enabled: false } } });
-  ctx = { hippoRoot: root, tenantId: 'default', actor: adminActor('cli') };
+  ctx = apiCtx(root, 'default', adminActor('cli'));
 });
 
 afterEach(() => {

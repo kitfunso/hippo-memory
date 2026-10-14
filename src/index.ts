@@ -3,6 +3,9 @@
  */
 
 import { createMemory as createStoreMemory, DEFAULT_HALF_LIFE_DAYS, type CreateMemoryOptions, type MemoryEntry } from './core/memory.js';
+import { sleep as sleepOnStore, type SleepOpts, type SleepResult } from './api/sleep.js';
+import type { Context } from './api/types.js';
+import { withStore } from './store/sqlite/store.js';
 export {
   MemoryEntry,
   Layer,
@@ -81,7 +84,11 @@ export { SessionHandoff, HandoffOutcome, HandoffEvidence, isHandoffOutcome } fro
 export { Card, CardStatus, CardRun, CardComment, CardTransitions, isCardStatus, CARD_TRANSITIONS, CARD_LEASE_MS } from './core/card.js';
 export { consolidate } from './consolidate/sleep.js';
 export { ConsolidationResult } from './consolidate/run.js';
-export { sleep, type SleepOpts, type SleepResult } from './api/sleep.js';
+export type { SleepOpts, SleepResult } from './api/sleep.js';
+/** Published signature, so the Context may carry no store: it then runs on hippo.db under its root. */
+export function sleep(ctx: Context, opts?: SleepOpts): Promise<SleepResult> {
+  return sleepOnStore(withStore(ctx), opts);
+}
 // Announced public in CHANGELOG 1.26.3 but never re-exported; the rest of dedupe.js stays internal.
 export { strengthBucket } from './consolidate/dedupe.js';
 

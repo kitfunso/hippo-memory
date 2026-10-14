@@ -18,6 +18,7 @@ import { openHippoDb, closeHippoDb, getSchemaVersion, getCurrentSchemaVersion, t
 import { getContext, adminActor } from '../src/api/index.js';
 import { resetLogOnce } from '../src/util/log.js';
 import { LATEST_SCHEMA_VERSION, LATEST_SCHEMA_VERSION_STR } from './_helpers/schema-version.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 interface ColumnInfo {
   name: string;
@@ -392,7 +393,7 @@ describe('test 6: writeSessionEndHandoff', () => {
 describe('test 7: IC-SMDP fixture, ambient handoff pop-off', () => {
   it('surfaces the newest unfinished handoff, then the next one after each stamp', async () => {
     initStore(root);
-    const ctx = { hippoRoot: root, tenantId: 'default', actor: adminActor('test') };
+    const ctx = apiCtx(root, 'default', adminActor('test'));
 
     for (let i = 1; i <= 10; i++) {
       const sessionId = `sess-${i}`;
@@ -427,7 +428,7 @@ describe('test 8: scope filtering on the continuity read paths', () => {
     saveSessionHandoff(root, 'default', {
       version: 1, sessionId: 'sess-priv', summary: 'private', artifacts: [], scope: 'slack:private:C1',
     });
-    const ctx = { hippoRoot: root, tenantId: 'default', actor: adminActor('test') };
+    const ctx = apiCtx(root, 'default', adminActor('test'));
     const result = await getContext(ctx, { currentSessionId: 'fresh' });
     expect(result.sessionHandoff).toBeUndefined();
   });
@@ -437,7 +438,7 @@ describe('test 8: scope filtering on the continuity read paths', () => {
     saveSessionHandoff(root, 'default', {
       version: 1, sessionId: 'sess-legacy', summary: 'legacy', artifacts: [], scope: 'unknown:legacy',
     });
-    const ctx = { hippoRoot: root, tenantId: 'default', actor: adminActor('test') };
+    const ctx = apiCtx(root, 'default', adminActor('test'));
     const result = await getContext(ctx, { currentSessionId: 'fresh' });
     expect(result.sessionHandoff).toBeUndefined();
   });
@@ -447,7 +448,7 @@ describe('test 8: scope filtering on the continuity read paths', () => {
     saveSessionHandoff(root, 'default', {
       version: 1, sessionId: 'sess-pub', summary: 'public', artifacts: [], scope: null,
     });
-    const ctx = { hippoRoot: root, tenantId: 'default', actor: adminActor('test') };
+    const ctx = apiCtx(root, 'default', adminActor('test'));
     const result = await getContext(ctx, { currentSessionId: 'fresh' });
     expect(result.sessionHandoff?.sessionId).toBe('sess-pub');
   });
@@ -461,7 +462,7 @@ describe('test 8: scope filtering on the continuity read paths', () => {
     saveSessionHandoff(root, 'default', {
       version: 1, sessionId: 'sess-priv-active', summary: 'private handoff', artifacts: [], scope: 'slack:private:C1',
     });
-    const ctx = { hippoRoot: root, tenantId: 'default', actor: adminActor('test') };
+    const ctx = apiCtx(root, 'default', adminActor('test'));
     const result = await getContext(ctx, { currentSessionId: 'sess-priv-active' });
     expect(result.activeSnapshot).toBeUndefined();
     expect(result.sessionHandoff).toBeUndefined();
@@ -476,7 +477,7 @@ describe('test 8: scope filtering on the continuity read paths', () => {
     saveSessionHandoff(root, 'default', {
       version: 1, sessionId: 'sess-b', summary: 'unrelated handoff', artifacts: [],
     });
-    const ctx = { hippoRoot: root, tenantId: 'default', actor: adminActor('test') };
+    const ctx = apiCtx(root, 'default', adminActor('test'));
     const result = await getContext(ctx, { currentSessionId: 'sess-a' });
     // pre-fix: activeSnapshot (scope-filtered) was null, so keying on activeSnapshot?.session_id fell through to the ambient unfinishedOnly lookup and surfaced sess-b's handoff.
     expect(result.activeSnapshot).toBeUndefined();
@@ -495,7 +496,7 @@ describe('test 8: scope filtering on the continuity read paths', () => {
     appendSessionEvent(root, 'default', {
       session_id: 'sess-mix', event_type: 'note', content: 'private event', scope: 'proj:private:x',
     });
-    const ctx = { hippoRoot: root, tenantId: 'default', actor: adminActor('test') };
+    const ctx = apiCtx(root, 'default', adminActor('test'));
     const result = await getContext(ctx, { currentSessionId: 'sess-mix' });
     expect(result.activeSnapshot).toBeUndefined();
     expect(result.recentEvents).toHaveLength(1);

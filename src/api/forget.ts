@@ -3,8 +3,7 @@
 import { BadRequestError, NotFoundError } from '../core/api-errors.js';
 import { rejectValue, unrejectValue, type RejectFlowResult } from '../trust/reject-flow.js';
 import { requireGroup } from '../store/index.js';
-import { storeFor } from '../store/sqlite/store.js';
-import { requireHostAdmin, type Context } from './types.js';
+import { requireHostAdmin, type Context, type StoreContext } from './types.js';
 import { getMemory } from './memories.js';
 import { canTouchScope, personalScopeOf } from '../core/recall-scope.js';
 
@@ -14,8 +13,8 @@ export interface ForgetResult {
   ok: true;
   id: string;
 }
-export async function forget(ctx: Context, id: string): Promise<ForgetResult> {
-  const entryWrites = requireGroup(storeFor(ctx), 'entryWrites');
+export async function forget(ctx: StoreContext, id: string): Promise<ForgetResult> {
+  const entryWrites = requireGroup(ctx.store, 'entryWrites');
   await entryWrites.forget({ tenantId: ctx.tenantId, actor: ctx.actor.subject, ownScope: personalScopeOf(ctx.actor), id });
   return { ok: true, id };
 }
@@ -38,7 +37,7 @@ export interface RejectResult {
 
 /** Tombstones a value's normalized digest so a matching write is refused everywhere until `unreject`; pass exactly one of `memoryId` or `value`.
  * `memoryId` also removes every live tenant row with that digest (not others' personal rows); `reason` is required. Throws on an unknown id or both/neither. */
-export async function reject(ctx: Context, opts: RejectOpts): Promise<RejectResult> {
+export async function reject(ctx: StoreContext, opts: RejectOpts): Promise<RejectResult> {
   if (opts.memoryId !== undefined) {
     // Tenant scope: same not-found-shaped denial as forget/promote; rejectValue tenant-checks too, but pre-checking keeps the error message consistent.
     const entry = await getMemory(ctx, opts.memoryId);

@@ -7,6 +7,7 @@ import { readEntry } from '../src/store/entry-reads.js';
 import { withSharedStoreHandles } from '../src/db/index.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { arr, both, forAll, int, map, oneOf, pick, type Gen } from './_helpers/property.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 // Built from code points, so no invisible character sits in this file.
 const ZWSP = String.fromCodePoint(0x200b);
@@ -96,7 +97,7 @@ describe('injection screening leaves the stored text alone', () => {
   afterAll(() => { rmSync(root, { recursive: true, force: true }); });
 
   it('untrusted content is stored as it was sent, flagged or not', async () => {
-    const ctx: api.HippoDbContext = { hippoRoot: root, tenantId: 'default', actor: api.adminActor('test') };
+    const ctx: api.StoreContext = apiCtx(root, 'default', api.adminActor('test'));
     // A visible word at each end: the store trims what it is given.
     const sent = map(arr(oneOf([PROSE, map(SMUGGLED, (s) => s.content)]), 1, 3), (bodies) => `note ${bodies.join('\n')} end`);
     // Each run is a real write and read, so this one property runs fewer times than the others, on one connection.

@@ -4,7 +4,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { retrieve } from '../src/api/recall.js';
-import { adminActor, type Context, type RecallOpts } from '../src/api/index.js';
+import { adminActor, type RecallOpts, type StoreContext } from '../src/api/index.js';
 import type { RankRecallOpts } from '../src/api/recall-pipeline.js';
 import { loadConfig } from '../src/core/config.js';
 import { _resetAblationCacheForTests } from '../src/core/ablation.js';
@@ -18,6 +18,8 @@ import { onDb } from './_helpers/store-worker-server.js';
 import {
   CLEARED_ENV, FAKE_NOW, freshStore, SESSION, seedPortBranches, seedTemplates, TENANT, type Store, type Templates,
 } from './_helpers/recall-golden-seed.js';
+import { apiCtx } from './_helpers/api-ctx.js';
+import { sqliteStore } from '../src/store/sqlite/store.js';
 
 const MODEL = 'hashed-16';
 // Rows with a vector and no particle rank in physics' classic pool, so both physics pools are pinned.
@@ -81,7 +83,7 @@ const stable = (id: string): string => (id.startsWith('sem_') ? '<claim>' : id);
 let templates: Templates;
 let embeddings: HashedEmbeddings;
 
-const ctxOf = (s: Store): Context => ({ hippoRoot: s.root, tenantId: TENANT, actor: adminActor('golden') });
+const ctxOf = (s: Store): StoreContext => (apiCtx(s.root, TENANT, adminActor('golden')));
 
 async function onStore<T>(fn: (s: Store) => Promise<T>): Promise<T> {
   const s = freshStore(templates, 'local');
@@ -153,7 +155,7 @@ describe('recall ranker goldens', () => {
         sessionId: c.sessionId,
         cliCore: {
           rank: rankOpts(s, c),
-          sources: { globalRoot: c.global ? s.globalRoot : undefined },
+          sources: c.global ? { globalRoot: s.globalRoot, globalStore: sqliteStore(s.globalRoot) } : undefined,
           show: (ranking) => {
             ranked = ranking.results.map((r) => stable(r.entry.id));
             return { results: ranking.results, audit: [], tokens: 0 };

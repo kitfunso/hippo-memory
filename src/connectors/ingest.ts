@@ -1,8 +1,7 @@
 // The write half every connector's ingest shares, after its own pre-check of the event log.
 
-import { remember, type Context, type RememberOpts } from '../api/index.js';
+import { remember, type StoreContext, type RememberOpts } from '../api/index.js';
 import { requireGroup } from '../store/index.js';
-import { storeFor } from '../store/sqlite/store.js';
 import type { ConnectorEvent } from '../store/port.js';
 import { RejectedValueError } from '../core/api-errors.js';
 
@@ -14,7 +13,7 @@ export interface IngestResult {
 }
 
 /** Stores `opts` once per event key; null `opts` (an empty body) and a tombstoned value are logged with no memory, so a redelivery acks instead of retrying. */
-export async function rememberWithEventLog(ctx: Context, event: ConnectorEvent, opts: RememberOpts | null): Promise<IngestResult> {
+export async function rememberWithEventLog(ctx: StoreContext, event: ConnectorEvent, opts: RememberOpts | null): Promise<IngestResult> {
   if (!opts) return markSkipped(ctx, event);
   try {
     // No actor fallback: every caller builds ctx with its connector subject.
@@ -29,7 +28,7 @@ export async function rememberWithEventLog(ctx: Context, event: ConnectorEvent, 
   }
 }
 
-async function markSkipped(ctx: Context, event: ConnectorEvent): Promise<IngestResult> {
-  await requireGroup(storeFor(ctx), 'connectorEvents').markEventSeen(event);
+async function markSkipped(ctx: StoreContext, event: ConnectorEvent): Promise<IngestResult> {
+  await requireGroup(ctx.store, 'connectorEvents').markEventSeen(event);
   return { status: 'skipped', memoryId: null };
 }

@@ -82,7 +82,8 @@ export interface McpContext {
   hostAdmin?: true;
   owner?: string; // copied by mcpActor so MCP task state keys the same as REST
   project?: CallerProject; // from X-Hippo-Project on a shared store: stamps writes, filters reads, keys outcomes
-  store?: HippoStore;
+  /** The store this transport's calls run on; stdio passes no context, so its opener builds one per folder. */
+  store: HippoStore;
   autoSleep?: false;
   /** Set by the HTTP transport so auto-sleep runs off the server's event loop; stdio consolidates in its own process. */
   autoSleepRunner?: AutoSleepRunner;
@@ -109,11 +110,15 @@ export function ownsServerCwd(ctx: McpContext | undefined): boolean {
 
 // ── JSON-ish domain type for untrusted MCP tool-call arguments ──
 
-/** One tool call after the store, config and tenant are resolved; every handler reads the same four. */
+/** Builds the store for a folder; the stdio server is the one transport that passes it. */
+export type StoreOpener = (hippoRoot: string) => HippoStore;
+
+/** One tool call after the store, config and tenant are resolved; every handler reads the same five. */
 export interface ToolCall {
   args: Record<string, JsonValue>;
   ctx?: McpContext;
   hippoRoot: string;
+  store: HippoStore;
   config: ReturnType<typeof loadConfig>;
   tenantId: string;
 }

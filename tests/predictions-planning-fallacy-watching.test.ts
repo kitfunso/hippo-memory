@@ -25,14 +25,15 @@ import { Layer} from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { detectPlanningClaim } from '../src/predictions/planning-fallacy.js';
 import { savePrediction, closePrediction } from '../src/store/predictions.js';
-import { retrieve, type Context } from '../src/api/index.js';
+import { retrieve, type StoreContext } from '../src/api/index.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 function safeRmSync(p: string): void {
   try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
 }
-function ctxFor(root: string): Context {
-  return { hippoRoot: root, tenantId: 'default', actor: { subject: 'test:j32-watch', role: 'admin' } };
+function ctxFor(root: string): StoreContext {
+  return apiCtx(root, 'default', { subject: 'test:j32-watch', role: 'admin' });
 }
 
 // Seed N closed predictions in a class so the baserate hint can fire on a

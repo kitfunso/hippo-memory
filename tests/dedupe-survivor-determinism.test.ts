@@ -24,11 +24,12 @@ import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
-import { remember, type HippoDbContext } from '../src/api/index.js';
+import { remember, type StoreContext } from '../src/api/index.js';
 import { deduplicateStore, strengthBucket } from '../src/consolidate/dedupe.js';
 import { compareEntryIdentity } from '../src/core/compare.js';
 import { consolidate } from '../src/consolidate/sleep.js';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 // Two cases build and consolidate a separate store for each of six ingest orders.
 vi.setConfig({ testTimeout: 30_000 });
@@ -42,8 +43,8 @@ function tmpHome(prefix: string) {
   };
 }
 
-function ctxFor(home: string): HippoDbContext {
-  return { hippoRoot: home, tenantId: 'default', actor: { subject: 'test', role: 'admin' } };
+function ctxFor(home: string): StoreContext {
+  return apiCtx(home, 'default', { subject: 'test', role: 'admin' });
 }
 
 function setStrength(home: string, id: string, strength: number): void {

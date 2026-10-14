@@ -1,15 +1,16 @@
 // `hippo reject` and `hippo invalidate` reach the trust and learn flows through src/api, as HTTP and MCP do.
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
-import { adminActor, ForbiddenError, invalidateMemories, rejectOnHost, remember, type HippoDbContext } from '../src/api/index.js';
+import { adminActor, ForbiddenError, invalidateMemories, rejectOnHost, remember, type HippoDbContext, type StoreContext } from '../src/api/index.js';
 import { readEntry } from '../src/store/entry-reads.js';
 import { handleInvalidate, handleReject } from '../src/cli/curate.js';
 import { listRejectionsForTenant } from '../src/trust/reject-flow.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { runInProcess } from './_helpers/run-in-process.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 let root: string;
-const cli = (tenantId = 'default'): HippoDbContext => ({ hippoRoot: root, tenantId, actor: adminActor('cli') });
+const cli = (tenantId = 'default'): StoreContext => (apiCtx(root, tenantId, adminActor('cli')));
 
 beforeEach(() => {
   root = makeRoot('cli-curate-api', { config: { embeddings: { enabled: false } } });
@@ -44,7 +45,7 @@ describe('the CLI curate verbs go through src/api', () => {
   });
 
   it('rejectOnHost keeps the personal refusal for a personal row by id', async () => {
-    const owner: HippoDbContext = { hippoRoot: root, tenantId: 'default', actor: { subject: 'api_key:hk_a', role: 'member', owner: 'a' } };
+    const owner: StoreContext = apiCtx(root, 'default', { subject: 'api_key:hk_a', role: 'member', owner: 'a' });
     const id = (await remember(owner, { content: 'my own reminder about the dentist', personal: true })).id;
     expect(() => rejectOnHost(cli(), { memoryId: id, reason: 'x' })).toThrow("Personal memories can't be rejected. Use forget to remove it.");
   });

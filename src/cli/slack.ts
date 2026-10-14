@@ -14,6 +14,7 @@ import {
 import { printError } from './output.js';
 import { printSlackBackfillUsage, printSlackWorkspacesUsage } from './usage.js';
 import { type CliFlags, stringFlag, type CommandContext } from './flag-values.js';
+import { cliApiContext } from './api-context.js';
 import { CliExit } from './exit.js';
 
 // Slack subcommands (`hippo slack backfill` / `hippo slack dlq list`)
@@ -34,11 +35,7 @@ function cmdSlackBackfill(hippoRoot: string, tenantId: string, flags: CliFlags):
   const sinceIso = stringFlag(flags, 'since');
   void sinceIso;
   const fetcher = slackHistoryFetcher(token);
-  const ctx = {
-    hippoRoot,
-    tenantId,
-    actor: api.adminActor('cli:slack-backfill'),
-  };
+  const ctx = { ...cliApiContext(hippoRoot, tenantId), actor: api.adminActor('cli:slack-backfill') };
   backfillChannel(ctx, {
     teamId: envSlackTeamId() ?? 'T_UNKNOWN',
     channel: { id: channel, is_private: false },
@@ -62,6 +59,7 @@ function cmdSlackDlqList(hippoRoot: string, tenantId: string, _flags: CliFlags):
 
 async function cmdSlackDlqReplay(
   hippoRoot: string,
+  tenantId: string,
   args: string[],
   flags: CliFlags,
 ): Promise<void> {
@@ -77,7 +75,7 @@ async function cmdSlackDlqReplay(
   }
   const force = flags.force === true;
   const result = await replayDlqEntry(
-    { hippoRoot },
+    cliApiContext(hippoRoot, tenantId),
     id,
     {
       force,
@@ -148,7 +146,7 @@ export async function handleSlack({ hippoRoot, tenantId, args, flags }: CommandC
     return;
   }
   if (sub === 'dlq' && args[1] === 'replay') {
-    await cmdSlackDlqReplay(hippoRoot, args, flags);
+    await cmdSlackDlqReplay(hippoRoot, tenantId, args, flags);
     return;
   }
   if (sub === 'workspaces') {

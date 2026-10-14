@@ -7,6 +7,7 @@ import { RawAppendOnlyError } from '../core/raw-append-only.js';
 import { listTouchableConflicts, resolveConflict } from '../store/conflicts.js';
 import { readEntry } from '../store/entry-reads.js';
 import { writeEntry } from '../store/entry-writes.js';
+import { sqliteStore } from '../store/sqlite/store.js';
 import { ParamError, parseMemoryId, type ActionBody } from './dashboard-params.js';
 import { isLiveMemory } from './dashboard-snapshot.js';
 import type { ForgetResult, ResolveResult } from './dashboard-types.js';
@@ -48,7 +49,7 @@ export function pinMemory(hippoRoot: string, tenantId: string, rawId: string, bo
 export async function markWrong(hippoRoot: string, tenantId: string, rawId: string): Promise<ActionResult> {
   const id = parseMemoryId(rawId);
   if (liveEntry(hippoRoot, tenantId, id) === null) return notFound();
-  const ctx: api.HippoDbContext = { hippoRoot, tenantId, actor: api.adminActor(ACTOR) };
+  const ctx: api.StoreContext = { hippoRoot, tenantId, actor: api.adminActor(ACTOR), store: sqliteStore(hippoRoot) };
   // outcome() answers `applied: 0` for a missing or other-tenant id instead of throwing.
   if ((await api.outcome(ctx, [id], false)).applied === 0) return notFound();
   const entry = readEntry(hippoRoot, id, tenantId);
@@ -59,7 +60,7 @@ export async function markWrong(hippoRoot: string, tenantId: string, rawId: stri
 export async function forgetMemory(hippoRoot: string, tenantId: string, rawId: string): Promise<ActionResult> {
   const id = parseMemoryId(rawId);
   if (liveEntry(hippoRoot, tenantId, id) === null) return notFound();
-  const ctx: api.HippoDbContext = { hippoRoot, tenantId, actor: api.adminActor(ACTOR) };
+  const ctx: api.StoreContext = { hippoRoot, tenantId, actor: api.adminActor(ACTOR), store: sqliteStore(hippoRoot) };
   try {
     const done: ForgetResult = await api.forget(ctx, id);
     return { status: 200, body: done, changed: true };

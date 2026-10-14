@@ -27,14 +27,15 @@ import { extractGraph as realExtractGraph, extractGraphChunked, deriveGraph, loa
 import { graphDelta } from '../src/graph/delta.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { WRITE_BUDGET } from '../src/util/write-budget.js';
-import { sleep, adminActor, type Context } from '../src/api/index.js';
+import { sleep, adminActor, type StoreContext } from '../src/api/index.js';
 import { runSleep, type SleepPhases } from '../src/api/sleep-run.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 const T = 'default';
 
 interface TestCtx {
   hippoRoot: string;
-  ctx: Context;
+  ctx: StoreContext;
   restore: () => void;
 }
 
@@ -47,7 +48,7 @@ function newCtx(): TestCtx {
   const globalTmp = mkdtempSync(join(tmpdir(), 'hippo-sleep-hook-global-'));
   const origHome = process.env.HIPPO_HOME;
   process.env.HIPPO_HOME = globalTmp;
-  const ctx: Context = { hippoRoot, tenantId: T, actor: adminActor('test:sleep-hook') };
+  const ctx = apiCtx(hippoRoot, T, adminActor('test:sleep-hook'));
   return {
     hippoRoot,
     ctx,

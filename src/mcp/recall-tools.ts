@@ -9,7 +9,7 @@ import {
   drillDown as apiDrillDown,
   assemble as apiAssemble,
   getContext as apiGetContext,
-  type Context as ApiContext,
+  type StoreContext,
   type RecallOpts,
   type RecallSuppressionSummary,
 } from '../api/index.js';
@@ -167,16 +167,16 @@ function recallPresenter(budget: number, options: RecallPresenterOptions): NonNu
 }
 
 export async function runRecallTool(call: ToolCall): Promise<string> {
-  const { ctx, hippoRoot, config, tenantId, args } = call;
+  const { ctx, hippoRoot, config, tenantId, args, store } = call;
   // MCP keeps its own band size and search mode, so limit, mode and explain are checked but not passed on.
   const { opts: recallOpts } = parseRecallRequest(toolParams(args));
   const { query, includeContinuity, sessionId } = recallOpts;
   const budget = Number(args.budget) || config.defaultBudget;
-  const apiCtx: ApiContext = {
+  const apiCtx: StoreContext = {
     hippoRoot,
     tenantId,
     actor: mcpActor(ctx),
-    store: ctx?.store,
+    store,
   };
   const anchorRing = sessionRing('mcp', tenantId, sessionId);
   const who = { tenantId, actor: ctx?.actor ?? 'mcp' };
@@ -206,17 +206,17 @@ export async function runRecallTool(call: ToolCall): Promise<string> {
   return rendered.text;
 }
 
-export async function runAssembleTool({ args, ctx, hippoRoot, tenantId }: ToolCall): Promise<string> {
+export async function runAssembleTool({ args, ctx, hippoRoot, tenantId, store }: ToolCall): Promise<string> {
   const sessionId = String(args.session_id || '');
   if (!sessionId) return 'No session_id provided.';
   const budget = Number(args.budget);
   const freshTailCount = Number(args.fresh_tail_count);
   const summarizeOlder = args.summarize_older !== false;
-  const apiCtx: ApiContext = {
+  const apiCtx: StoreContext = {
     hippoRoot,
     tenantId,
     actor: mcpActor(ctx),
-    store: ctx?.store,
+    store,
   };
   const explicitScope = isJsonString(args.scope) && args.scope.length > 0
     ? args.scope
@@ -234,18 +234,18 @@ export async function runAssembleTool({ args, ctx, hippoRoot, tenantId }: ToolCa
   return assembleText(r);
 }
 
-export async function runDrillTool({ args, ctx, hippoRoot, tenantId }: ToolCall): Promise<string> {
+export async function runDrillTool({ args, ctx, hippoRoot, tenantId, store }: ToolCall): Promise<string> {
   const summaryId = String(args.summary_id || '');
   if (!summaryId) return 'No summary_id provided.';
   const limit = Number(args.limit);
   const budget = Number(args.budget);
   // The inputSchema rejects a depth outside 1..10 before this runs, so no silent clamp hides the cap.
   const depth = args.depth === undefined ? undefined : Number(args.depth);
-  const apiCtx: ApiContext = {
+  const apiCtx: StoreContext = {
     hippoRoot,
     tenantId,
     actor: mcpActor(ctx),
-    store: ctx?.store,
+    store,
   };
   const drillExtra: DrillDownExtraOpts = {};
   if (Number.isFinite(limit) && limit > 0) drillExtra.limit = limit;
@@ -269,7 +269,7 @@ function localProject(hippoRoot: string, ownsCwd: boolean): ProjectIdentity {
   return storeProject.name !== '' || !ownsCwd ? storeProject : resolveProjectIdentity(process.cwd());
 }
 
-export async function runContextTool({ args, ctx, hippoRoot, config, tenantId }: ToolCall): Promise<string> {
+export async function runContextTool({ args, ctx, hippoRoot, config, tenantId, store }: ToolCall): Promise<string> {
   // Stdio names no project, and the store's folder or the launch cwd is no caller's; HTTP sends X-Hippo-Project.
   if (isSharedStore(hippoRoot) && ctx?.project === undefined) return 'hippo_context needs a project on a shared store; use hippo_recall';
   const { budget: budgetArg, scope: exactScope } = parseContextRequest(toolParams(args));
@@ -278,7 +278,7 @@ export async function runContextTool({ args, ctx, hippoRoot, config, tenantId }:
   if (budget < memoriesReserve(budget)) return ''; // not even the heading fits, so nothing prints, as at budget 0
   const ownsCwd = ownsServerCwd(ctx);
   const result = await apiGetContext(
-    { hippoRoot, tenantId, actor: mcpActor(ctx), store: ctx?.store },
+    { hippoRoot, tenantId, actor: mcpActor(ctx), store },
     {
       // The server's git state is no remote caller's, so a project or remote caller gets rows by strength without a query.
       q: ctx?.project || !ownsCwd ? undefined : autoDetectContext(),

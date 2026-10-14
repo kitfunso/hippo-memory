@@ -4,7 +4,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { cpSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { reject, type HippoDbContext } from '../src/api/index.js';
+import { reject, type StoreContext } from '../src/api/index.js';
 import { closeHippoDb, openHippoDb, withSqliteBlocked } from '../src/db/index.js';
 import type { MemoryEntry } from '../src/core/memory.js';
 import type { AuditEvent } from '../src/entry/store-kit.js';
@@ -17,6 +17,7 @@ import {
   inMemoryConnectorWritesStore, sqliteConnectorSide, type ConnectorSide, type HeldRecord, type LoggedEvent,
 } from './_helpers/in-memory-connector-writes-store.js';
 import { outcomeOf, seedTwoTenants, TENANT_A, TENANT_B, type GroupCall, type Outcome, type TwoTenantFixture } from './_helpers/store-conformance.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 const NOW = '2026-03-01T12:00:05.000Z';
 const ACTOR = 'connector:slack';
@@ -58,7 +59,7 @@ async function seed(dir: string): Promise<Seeded> {
     rawB: createMemory('globex raw ticket text', { tenantId: TENANT_B, kind: 'raw' }),
   };
   for (const entry of Object.values(rows)) writeEntry(dir, entry, { actor: 'cli' });
-  const ctx: HippoDbContext = { hippoRoot: dir, tenantId: TENANT_A, actor: { subject: 'cli', role: 'admin' } };
+  const ctx: StoreContext = apiCtx(dir, TENANT_A, { subject: 'cli', role: 'admin' });
   await reject(ctx, { value: BANNED, reason: 'wrong date' });
   markSlackEventSeen(dir, EMPTY_EVENT, null);
   return rows;

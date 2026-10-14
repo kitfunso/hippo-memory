@@ -1,6 +1,6 @@
 // Public option and handle types for serve(), plus the /v1 route shape.
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import type { Context } from '../api/index.js';
+import type { StoreContext } from '../api/index.js';
 import type { JsonValue } from '../util/json.js';
 import type { RateLimiter } from './rate-limit.js';
 import type { HippoStore, StoreGroup } from '../store/index.js';
@@ -29,7 +29,7 @@ export type AuthResolver = (token: string) => ResolvedBearer | null | Promise<Re
 
 /** What an add-on route's handler gets: the caller core authenticated and the parsed JSON body. */
 export interface AddonCall {
-  readonly ctx: Context;
+  readonly ctx: StoreContext;
   readonly body: Readonly<Record<string, JsonValue>>;
 }
 
@@ -100,7 +100,7 @@ export interface RouteRequest {
 
 /** A request past the dispatch gate, carrying the caller the gate authenticated. */
 export interface AuthedRouteRequest extends RouteRequest {
-  ctx: Context;
+  ctx: StoreContext;
 }
 
 /** A route's store status: a `storeReady` group, a `sqliteOnly` reason, or neither while it waits for a group; never both. */

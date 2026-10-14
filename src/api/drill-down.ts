@@ -1,14 +1,13 @@
 // DAG drill-down from a summary to its children.
 
 import { requireGroup } from '../store/index.js';
-import { storeFor } from '../store/sqlite/store.js';
 import type { DescendantOrigin, SummaryDescendants } from '../store/port.js';
 import { estimateTokens } from '../util/token-text.js';
 import type { MemoryEntry } from '../core/memory.js';
 import { passesScopeFilterForRecall, personalScopeOf } from '../core/recall-scope.js';
 import { classifyOriginProject } from '../core/project-identity.js';
 import type { CallerProject } from './prompt-hook.js';
-import type { Context } from './types.js';
+import type { StoreContext } from './types.js';
 
 const DEFAULT_DRILL_DOWN_LIMIT = 50;
 
@@ -51,7 +50,7 @@ export type DrillDownOutcome = DrillDownResult | DrillDownFailure;
 /** One step down the DAG from a level-2+ summary to its direct children (the way back from `recall(... summarizeOverflow: true)` substitutions). Only
  * `ctx.tenantId` summaries are reachable; children get recall's scope filter. Returns `DrillDownResult` or `{failure}`; HTTP maps `not_drillable` to 422. */
 export async function drillDown(
-  ctx: Context,
+  ctx: StoreContext,
   summaryId: string,
   opts: DrillDownOpts = {},
 ): Promise<DrillDownOutcome> {
@@ -64,7 +63,7 @@ export async function drillDown(
     passesScopeFilterForRecall(row.scope ?? null, undefined, own)
     && (!opts.project || classifyOriginProject(row.origin_project, opts.project) !== 'cross-project');
   const pastLimit = Math.floor(limit) + 1;
-  const walked = await requireGroup(storeFor(ctx), 'dagReads').summaryWithDescendants(ctx.tenantId, summaryId, {
+  const walked = await requireGroup(ctx.store, 'dagReads').summaryWithDescendants(ctx.tenantId, summaryId, {
     depth,
     // A leaf answers not_drillable, so nothing under it is read.
     admit: (row) => readable(row) && (row.id !== summaryId || isDrillable(row)),

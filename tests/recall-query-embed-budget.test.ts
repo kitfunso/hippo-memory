@@ -17,6 +17,7 @@ import { embedQueryBy } from '../src/search/vector.js';
 import { searchBothHybrid } from '../src/sharing/search-both.js';
 import { resetLogOnce } from '../src/util/log.js';
 import { hashedVector, startHashedEmbeddings, type HashedEmbeddings } from './_helpers/hashed-embedding-server.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 const TENANT = 'default';
 const QUERY = 'deploy';
@@ -46,7 +47,7 @@ function seedStore(): string {
 }
 
 async function recall(root: string): Promise<string[]> {
-  const reply = await retrieve({ hippoRoot: root, tenantId: TENANT, actor: { subject: 'cli', role: 'admin' } }, { query: QUERY, mode: 'hybrid', limit: 20 });
+  const reply = await retrieve(apiCtx(root, TENANT, { subject: 'cli', role: 'admin' }), { query: QUERY, mode: 'hybrid', limit: 20 });
   return reply.results.map((r) => r.content);
 }
 

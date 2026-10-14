@@ -18,15 +18,16 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
-import { remember, type HippoDbContext } from '../src/api/index.js';
+import { remember, type StoreContext } from '../src/api/index.js';
 import { pushGoal, completeGoal } from '../src/store/goals.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 const tenantId = 'default';
 const sessionId = 'sess-no-prop';
 
-function ctx(root: string): HippoDbContext {
-  return { hippoRoot: root, tenantId, actor: { subject: 'cli', role: 'admin' } };
+function ctx(root: string): StoreContext {
+  return apiCtx(root, tenantId, { subject: 'cli', role: 'admin' });
 }
 
 function getStrength(root: string, memId: string): number {

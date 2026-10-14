@@ -17,6 +17,7 @@ import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { hippoRun } from './_helpers/spawn-hippo.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 const SEED = 'fix: retry the upload when the storage token expires mid-transfer';
 const ORDINARY = 'gotcha: powershell 5.1 has no pipeline chain operators, use if blocks';
 
@@ -56,7 +57,7 @@ describe('git-learned rows and the global store', () => {
 
   it('sleep with autoShareOnSleep on does not copy the git-learned row', async () => {
     expect(loadConfig(hippoRoot).autoShareOnSleep).toBe(true);
-    const result = await sleep({ hippoRoot, tenantId: 'default', actor: adminActor('test:gitshare') }, {});
+    const result = await sleep(apiCtx(hippoRoot, 'default', adminActor('test:gitshare')), {});
     expect(result.shared).toBe(1);
     expect(globalContents()).toEqual([ORDINARY]);
   });

@@ -8,6 +8,7 @@ import { mapApiError } from '../src/api/error-reply.js';
 import { canReadScope } from '../src/core/recall-scope.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 const A_SCOPE = 'personal:private:oid-a';
 const CONNECTOR_SCOPE = 'slack:private:C1';
@@ -39,7 +40,7 @@ beforeEach(async () => {
   root = makeRoot('scope-grant-personal', { config: { embeddings: { enabled: false } } });
   keyB = withDb((db) => createApiKey(db, { tenantId: 'default', role: 'member', ownerSubject: 'oid-b' }));
   adminCtx = { hippoRoot: root, tenantId: 'default', actor: api.adminActor('cli') };
-  await api.remember({ hippoRoot: root, tenantId: 'default', actor: { subject: 'api_key:hk_a', role: 'member', owner: 'oid-a' } }, { content: A_TEXT, personal: true });
+  await api.remember(apiCtx(root, 'default', { subject: 'api_key:hk_a', role: 'member', owner: 'oid-a' }), { content: A_TEXT, personal: true });
   handle = await serve({ hippoRoot: root, port: 0 });
 });
 

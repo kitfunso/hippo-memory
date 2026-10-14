@@ -23,6 +23,7 @@ import type {
   GitHubFetcher,
   GitHubBackfillPage,
 } from '../src/connectors/github/octokit-client.js';
+import { sqliteStore } from '../src/store/sqlite/store.js';
 
 const CLI = resolve(__dirname, '..', 'bin', 'hippo.js');
 
@@ -179,7 +180,7 @@ describe('hippo github CLI', () => {
   });
 
   it('dlq list with rows prints bucket and tenant', async () => {
-    await parkInDlq(githubDlq, hippoRoot, {
+    await parkInDlq(githubDlq, sqliteStore(hippoRoot), {
       tenantId: 'default',
       rawPayload: '{"x":1}',
       error: 'bad envelope',
@@ -195,7 +196,7 @@ describe('hippo github CLI', () => {
 
   it('dlq list reads the HIPPO_TENANT tenant, not default', async () => {
     for (const tenantId of ['default', 'acme']) {
-      await parkInDlq(githubDlq, hippoRoot, { tenantId, rawPayload: '{}', error: `err-${tenantId}`, bucket: 'unhandled' });
+      await parkInDlq(githubDlq, sqliteStore(hippoRoot), { tenantId, rawPayload: '{}', error: `err-${tenantId}`, bucket: 'unhandled' });
     }
     const r = runCli(root, ['github', 'dlq', 'list'], { HIPPO_TENANT: 'acme' });
     expect(r.status).toBe(0);
@@ -236,7 +237,7 @@ describe('hippo github CLI', () => {
 
   /** Parks one signed delivery with every column the webhook route writes, and returns the row id. */
   function parkDelivery(eventName: string, body: string, secret: string = SECRET): Promise<number> {
-    return parkInDlq(githubDlq, hippoRoot, {
+    return parkInDlq(githubDlq, sqliteStore(hippoRoot), {
       tenantId: 'default',
       rawPayload: body,
       error: 'unroutable: installation_id=99 repo=acme/repo',

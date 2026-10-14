@@ -12,6 +12,7 @@ import { EXPIRING_KEYS_MIN_BINARY } from '../src/util/version.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { runInProcess } from './_helpers/run-in-process.js';
 import { LATEST_SCHEMA_VERSION } from './_helpers/schema-version.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 let home: string;
 
@@ -35,7 +36,7 @@ function mint(expiresAt?: string): { keyId: string; plaintext: string } {
 
 function selfMint(): Promise<AuthCreateSelfResult> {
   const actor: Actor = { subject: 'alice', role: 'member', viaAuthResolver: true };
-  return authCreateSelf({ hippoRoot: home, tenantId: 'default', actor }, { ttlDays: 30, perSubject: 3 });
+  return authCreateSelf(apiCtx(home, 'default', actor), { ttlDays: 30, perSubject: 3 });
 }
 
 const floor = (): string | undefined => withDb((db) => meta(db, 'min_compatible_binary'));
@@ -195,7 +196,7 @@ describe('key lists', () => {
 
   it('an active list leaves out expired keys, page sizes included, and shows owner and expiry', async () => {
     const keys = threeKeys();
-    const ctx = { hippoRoot: home, tenantId: 'default', actor: adminActor('cli') };
+    const ctx = apiCtx(home, 'default', adminActor('cli'));
     expect((await authListRows(ctx, { active: true })).map((r) => r.key.keyId)).toEqual([keys.plain, keys.live]);
     expect((await authListRows(ctx, { active: false })).map((r) => r.key.keyId)).toEqual([keys.expired, keys.plain, keys.live]);
     const [first] = await authListRows(ctx, { active: true, limit: 1 });

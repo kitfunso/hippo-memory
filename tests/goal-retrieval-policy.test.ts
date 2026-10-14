@@ -14,9 +14,10 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { remember, type Context } from '../src/api/index.js';
+import { remember, type StoreContext } from '../src/api/index.js';
 import { pushGoal } from '../src/store/goals.js';
 import { makeEnv, type TestEnv } from './_helpers/cli-env.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 const CLI = join(process.cwd(), 'dist', 'cli.js');
 
@@ -59,7 +60,7 @@ describe('retrieval policy', () => {
   });
 
   it('error-prioritized policy ranks error-tagged > non-error within same goal', async () => {
-    const ctx: Context = { hippoRoot: env.hippoRoot, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
+    const ctx: StoreContext = apiCtx(env.hippoRoot, 'default', { subject: 'cli', role: 'admin' });
     await remember(ctx, { content: 'note one about auth refactor', tags: ['auth-rewrite'] });
     await remember(ctx, {
       content: 'lesson learned during auth refactor: bare except handler caused a bug',
@@ -79,7 +80,7 @@ describe('retrieval policy', () => {
   });
 
   it('final multiplier never exceeds 3.0x even with extreme policy weights', async () => {
-    const ctx: Context = { hippoRoot: env.hippoRoot, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
+    const ctx: StoreContext = apiCtx(env.hippoRoot, 'default', { subject: 'cli', role: 'admin' });
     await remember(ctx, { content: 'high-error lesson', tags: ['plan-x', 'error'] });
 
     // Baseline: no session → no boost.

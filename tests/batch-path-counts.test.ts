@@ -17,7 +17,8 @@ import { computeAmbientState } from '../src/core/ambient.js';
 import { _resetAblationCacheForTests } from '../src/core/ablation.js';
 import { invalidateMatching } from '../src/learn/invalidation.js';
 import { syncGlobalToLocal } from '../src/sharing/global-sync.js';
-import type { Context } from '../src/api/index.js';
+import type { StoreContext } from '../src/api/index.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 const FULL_ROW = `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories`;
 /** A full-row read of every row in the store, or of every current distilled row: no id, tenant or parent filter. */
@@ -42,8 +43,8 @@ const wholeStoreReads = (statements: readonly string[]): number =>
   statements.filter((sql) => sql.startsWith(FULL_ROW) && WHOLE_STORE_READ.test(sql)).length;
 
 describe('sleep after consolidation', () => {
-  const ctxFor = (hippoRoot: string): Context =>
-    ({ hippoRoot, tenantId: 'default', actor: { subject: 'batch-test', role: 'admin' } });
+  const ctxFor = (hippoRoot: string): StoreContext =>
+    (apiCtx(hippoRoot, 'default', { subject: 'batch-test', role: 'admin' }));
 
   function seeded(): string {
     const home = mkdtempSync(join(tmpdir(), 'hippo-batch-home-'));

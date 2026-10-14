@@ -3,7 +3,6 @@
 import { DEFAULT_LIST_LIMIT } from '../util/limits.js';
 import { DLQ_REDACTED_NOTE, redactPayload } from '../util/secret-detect.js';
 import { requireGroup, type HippoStore } from '../store/index.js';
-import { storeFor } from '../store/sqlite/store.js';
 import type { ConnectorDeadLetter } from '../store/port.js';
 import type { JsonValue } from '../util/json.js';
 import { errorMessage } from '../util/log.js';
@@ -42,12 +41,10 @@ export interface ConnectorDlq<Own, Bucket extends string, Item> {
   readonly bump: (hippoRoot: string, id: number) => void;
 }
 
-/** Parks on `store`, else on hippo.db under `hippoRoot`. */
 export async function parkInDlq<Own, Bucket extends string>(
   dlq: ConnectorDlq<Own, Bucket, unknown>,
-  hippoRoot: string,
+  store: HippoStore,
   opts: ParkOpts<Bucket> & NoInfer<Own>,
-  store?: HippoStore,
 ): Promise<number> {
   const rawPayload = redactPayload(opts.rawPayload);
   // A redacted body can never match its signature, so the row keeps none and replay needs --force.
@@ -60,7 +57,7 @@ export async function parkInDlq<Own, Bucket extends string>(
     bucket: opts.bucket ?? DEFAULT_BUCKET,
     signature: redacted ? null : opts.signature ?? null,
   });
-  return requireGroup(storeFor({ hippoRoot, store }), 'connectorEvents').parkDeadLetter(letter);
+  return requireGroup(store, 'connectorEvents').parkDeadLetter(letter);
 }
 
 export function listDlq<Item>(

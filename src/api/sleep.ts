@@ -1,10 +1,9 @@
 // The sleep cycle: decay, consolidation, dedupe, graph extraction and the other maintenance passes.
 
 import type { AmbientState } from '../core/ambient.js';
-import type { Context } from './types.js';
+import type { StoreContext } from './types.js';
 import { runSleep } from './sleep-run.js';
 import { requireGroup } from '../store/index.js';
-import { storeFor } from '../store/sqlite/store.js';
 
 /** Options for `sleep`, one consolidation cycle on a SQLite store that returns counts; unlike `hippo sleep` it skips the auto-learn step. */
 export interface SleepOpts {
@@ -46,8 +45,8 @@ export interface SleepResult {
 }
 
 /** Sleeps the WHOLE hippoRoot, every tenant, so /v1/sleep stays loopback-only; SQLite only; never auto-deletes pinned, raw, kept or object-backing rows. */
-export async function sleep(ctx: Context, opts: SleepOpts = {}): Promise<SleepResult> {
+export async function sleep(ctx: StoreContext, opts: SleepOpts = {}): Promise<SleepResult> {
   // Sleep reopens hippo.db by folder, here and in its child process.
-  requireGroup(storeFor(ctx), 'localFiles');
+  requireGroup(ctx.store, 'localFiles');
   return runSleep(ctx, opts);
 }

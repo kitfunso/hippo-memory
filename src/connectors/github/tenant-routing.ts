@@ -1,6 +1,5 @@
 import { envGitHubAllowUnknownInstallationFallback, envTenant } from '../../util/env.js';
 import { requireGroup, type HippoStore } from '../../store/index.js';
-import { storeFor } from '../../store/sqlite/store.js';
 
 export interface ResolveArgs {
   /** String form of `installation.id`. `null`/`undefined` means "no installation field" (PAT-mode webhook). */
@@ -11,15 +10,11 @@ export interface ResolveArgs {
 
 /** Resolve a GitHub envelope's tenant_id by installation id, then repository.full_name; the HIPPO_TENANT fallback applies only if both tables are empty.
  *  An unknown installation or repo on a multi-tenant deployment returns null (fail closed); GITHUB_ALLOW_UNKNOWN_INSTALLATION_FALLBACK=1 escapes. */
-export async function resolveTenantForGitHub(
-  hippoRoot: string,
-  args: ResolveArgs,
-  store?: HippoStore,
-): Promise<string | null> {
+export async function resolveTenantForGitHub(store: HippoStore, args: ResolveArgs): Promise<string | null> {
   const envFallback = (): string => envTenant();
   const escapeHatch = envGitHubAllowUnknownInstallationFallback();
 
-  const routing = await requireGroup(storeFor({ hippoRoot, store }), 'connectorEvents').githubRouting(args);
+  const routing = await requireGroup(store, 'connectorEvents').githubRouting(args);
   if (routing.tenant) return routing.tenant;
 
   if (args.installationId) {

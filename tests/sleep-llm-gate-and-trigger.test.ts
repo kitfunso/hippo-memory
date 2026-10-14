@@ -11,7 +11,8 @@ import { writeEntry } from '../src/store/entry-writes.js';
 import { readEntry } from '../src/store/entry-reads.js';
 import { countCreatedSinceLastSleep } from '../src/store/index-and-stats.js';
 import { consolidate } from '../src/consolidate/sleep.js';
-import { remember, type HippoDbContext } from '../src/api/index.js';
+import { remember, type StoreContext } from '../src/api/index.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 const DAY = 86_400_000;
 const roots: string[] = [];
@@ -142,7 +143,7 @@ describe('the auto-sleep trigger', () => {
 describe('the configured base half-life', () => {
   it('api.remember uses defaultHalfLifeDays from config.json', async () => {
     const root = newRoot(JSON.stringify({ defaultHalfLifeDays: 14 }));
-    const ctx: HippoDbContext = { hippoRoot: root, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
+    const ctx: StoreContext = apiCtx(root, 'default', { subject: 'cli', role: 'admin' });
     const { id } = await remember(ctx, { content: 'the on-call rotation hands over every tuesday' });
     expect(readEntry(root, id)?.half_life_days).toBe(14);
   });

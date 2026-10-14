@@ -8,7 +8,7 @@ import { parkInDlq } from '../dlq.js';
 import { slackDlq, type DlqBucket } from './dlq.js';
 import { resolveTenantForSlackTeam } from './tenant-routing.js';
 import { resolveTenantId } from '../../store/tenant.js';
-import type { Context } from '../../api/index.js';
+import type { StoreContext } from '../../api/index.js';
 import type { HippoStore } from '../../store/index.js';
 import { HttpError, JSON_HEADERS, isHeaderString, closeIfBodyUnread, readWebhookBody, sendJson, type WebhookRequest } from '../../util/http-util.js';
 import { type JsonValue, isJsonObject } from '../../util/json.js';
@@ -16,7 +16,7 @@ import { type JsonValue, isJsonObject } from '../../util/json.js';
 /** Slack Events API webhook: HMAC over the raw body with SLACK_SIGNING_SECRET, no Bearer (its route row declares webhook-signature);
  *  malformed payloads go to slack_dlq, ACK 200.
  *  404 (not 503) when the secret is unset, so a probe cannot tell a gated-off route from a missing one. */
-export async function handleSlackEventsWebhook(request: WebhookRequest, store?: HippoStore): Promise<void> {
+export async function handleSlackEventsWebhook(request: WebhookRequest, store: HippoStore): Promise<void> {
   const { req, res, opts } = request;
   // Secret and headers before the body, so a caller with neither cannot make the server buffer one.
   const secret = envSlackSigningSecret();
@@ -53,7 +53,7 @@ export async function handleSlackEventsWebhook(request: WebhookRequest, store?: 
 /** One signed request and where to answer it; every stage below parks into the DLQ through it. */
 interface SignedSlackRequest {
   hippoRoot: string;
-  store?: HippoStore;
+  store: HippoStore;
   res: ServerResponse;
   rawBody: string;
   signature: string;
@@ -73,7 +73,7 @@ async function parkAndAck(
     signature: d.signature,
     slackTimestamp: d.slackTimestamp,
   };
-  await parkInDlq(slackDlq, d.hippoRoot, row, d.store);
+  await parkInDlq(slackDlq, d.store, row);
   sendJson(d.res, 200, { ok: true, status: 'dlq' });
 }
 
@@ -113,7 +113,7 @@ async function routeSignedSlackPayload(d: SignedSlackRequest): Promise<void> {
   // and still ACKs 200 so Slack stops retrying; never call ingest.
   let resolvedTenant: string | null = null;
   if (body !== undefined && isSlackEventEnvelope(body)) {
-    resolvedTenant = await resolveTenantForSlackTeam(d.hippoRoot, body.team_id, d.store);
+    resolvedTenant = await resolveTenantForSlackTeam(d.store, body.team_id);
     if (resolvedTenant === null) {
       await parkAndAck(d, {
         tenantId: null, // unroutable - stored as '__unroutable__'
@@ -127,7 +127,7 @@ async function routeSignedSlackPayload(d: SignedSlackRequest): Promise<void> {
     // Non-envelope payload: use env tenant for the DLQ row's bookkeeping.
     resolvedTenant = resolveTenantId({});
   }
-  const ctx: Context = {
+  const ctx: StoreContext = {
     hippoRoot: d.hippoRoot,
     tenantId: resolvedTenant,
     actor: { subject: 'connector:slack', role: 'admin' },
@@ -149,7 +149,7 @@ async function parkUnparseable(d: SignedSlackRequest, teamIdFromRaw: string | nu
   // Attribute the parse failure to the originating workspace via the regex-extracted
   // team_id; a null or unknown team writes tenantId=null, which lands as '__unroutable__'.
   const parseFailTenant =
-    teamIdFromRaw !== null ? await resolveTenantForSlackTeam(d.hippoRoot, teamIdFromRaw, d.store) : null;
+    teamIdFromRaw !== null ? await resolveTenantForSlackTeam(d.store, teamIdFromRaw) : null;
   await parkAndAck(d, {
     tenantId: parseFailTenant, // null → '__unroutable__' sentinel
     teamId: teamIdFromRaw,
@@ -160,7 +160,7 @@ async function parkUnparseable(d: SignedSlackRequest, teamIdFromRaw: string | nu
 
 async function dispatchSlackEvent(
   d: SignedSlackRequest,
-  ctx: Context,
+  ctx: StoreContext,
   body: JsonValue & SlackEventEnvelope,
 ): Promise<void> {
   const { res } = d;

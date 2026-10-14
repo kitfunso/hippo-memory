@@ -11,7 +11,7 @@
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
-import type { Context } from '../src/api/index.js';
+import type { StoreContext } from '../src/api/index.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { openHippoDb, closeHippoDb, getMeta, setMeta } from '../src/db/index.js';
@@ -22,9 +22,10 @@ import { backfillRepo } from '../src/connectors/github/backfill.js';
 import type { GitHubFetcher, GitHubBackfillPage } from '../src/connectors/github/octokit-client.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { LATEST_SCHEMA_VERSION_STR } from './_helpers/schema-version.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
-function ctx(home: string): Context {
-  return { hippoRoot: home, tenantId: 'default', actor: { subject: 'test', role: 'admin' } };
+function ctx(home: string): StoreContext {
+  return apiCtx(home, 'default', { subject: 'test', role: 'admin' });
 }
 
 // Windows can hold a brief lock on SQLite WAL/shm files after close. Make

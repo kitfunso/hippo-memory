@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import type { Context } from '../src/api/index.js';
+import type { StoreContext } from '../src/api/index.js';
 import { backfillRepo } from '../src/connectors/github/backfill.js';
 import type { GitHubFetcher } from '../src/connectors/github/octokit-client.js';
 import { closeHippoDb, openHippoDb, withReadSnapshot, withWriteScope, type DatabaseSyncLike } from '../src/db/index.js';
@@ -11,6 +11,7 @@ import { resolveCodexSessionTranscript } from '../src/hooks/codex-session.js';
 import { importChatGPT, importClaude } from '../src/importers/sources.js';
 import { detectServer } from '../src/server/server-detect.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 let root: string;
 let stderr: string;
@@ -29,7 +30,7 @@ afterEach(() => {
 });
 
 describe('GitHub backfill rate-limit bound', () => {
-  const ctx = (): Context => ({ hippoRoot: root, tenantId: 'default', actor: { subject: 'connector:github', role: 'admin' } });
+  const ctx = (): StoreContext => (apiCtx(root, 'default', { subject: 'connector:github', role: 'admin' }));
 
   it('stops after five attempts and names the reset time', async () => {
     let calls = 0;

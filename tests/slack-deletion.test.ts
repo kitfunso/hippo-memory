@@ -4,12 +4,13 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 import { initStore } from '../src/store/open.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
-import type { Context } from '../src/api/index.js';
+import type { StoreContext } from '../src/api/index.js';
 import { ingestMessage } from '../src/connectors/slack/ingest.js';
 import { handleMessageDeleted } from '../src/connectors/slack/deletion.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
-const ctx = (root: string): Context => ({ hippoRoot: root, tenantId: 'default', actor: { subject: 'connector:slack', role: 'admin' } });
+const ctx = (root: string): StoreContext => (apiCtx(root, 'default', { subject: 'connector:slack', role: 'admin' }));
 
 describe('handleMessageDeleted', () => {
   let root: string;
@@ -58,7 +59,7 @@ describe('handleMessageDeleted', () => {
 
   it('cross-tenant deletion event cannot archive another tenants row (review patch #1)', async () => {
     // Ingest under tenant 'acme'.
-    const acmeCtx: Context = { hippoRoot: root, tenantId: 'acme', actor: { subject: 'connector:slack', role: 'admin' } };
+    const acmeCtx: StoreContext = apiCtx(root, 'acme', { subject: 'connector:slack', role: 'admin' });
     const ingested = await ingestMessage(acmeCtx, {
       teamId: 'T1',
       channel: { id: 'C1', is_private: false },
@@ -68,7 +69,7 @@ describe('handleMessageDeleted', () => {
     expect(ingested.status).toBe('ingested');
 
     // Fire deletion under tenant 'default' for the same artifact_ref.
-    const defaultCtx: Context = { hippoRoot: root, tenantId: 'default', actor: { subject: 'connector:slack', role: 'admin' } };
+    const defaultCtx: StoreContext = apiCtx(root, 'default', { subject: 'connector:slack', role: 'admin' });
     const r = await handleMessageDeleted(defaultCtx, {
       teamId: 'T1', channelId: 'C1', deletedTs: '1700.0001', eventId: 'EvDelCross',
     });

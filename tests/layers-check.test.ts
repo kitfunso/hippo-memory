@@ -25,6 +25,20 @@ const dbMap = (allowed: DbAllowed) => ({
 });
 const DB_FILES = { 'src/a.ts': '', 'src/b.ts': '', 'src/db/x.ts': 'export const open = 1;\nexport const scope = 2;\nexport type Handle = 3;\n' };
 const SCOPE_ONLY = { 'api/y.ts': { names: ['scope'], why: 'the request scope stays in db' } };
+const SQLITE_MAP = {
+  order: ['low', 'high'],
+  folders: { sub: 'high', api: 'high', connectors: 'high', mcp: 'high', store: 'low' },
+  rootFiles: { 'a.ts': 'low', 'b.ts': 'high' },
+};
+const SQLITE_BASE = {
+  'src/a.ts': '',
+  'src/b.ts': '',
+  'src/api/keep.ts': '',
+  'src/connectors/keep.ts': '',
+  'src/mcp/keep.ts': '',
+  'src/store/sqlite/store.ts': 'export const storeFor = 1;\nexport type S = 1;\n',
+};
+const SQLITE_IMPORT = "export const y = 1;\nimport { storeFor } from '../store/sqlite/store.js';\n";
 
 type Row = {
   name: string;
@@ -162,6 +176,41 @@ const rows: Row[] = [
     map: dbMap({ 'api/y.ts': { names: ['scope'], why: ' ' } }),
     status: 1,
     output: ['dbReach.allowed: api/y.ts gives no why'],
+  },
+  {
+    name: 'a new api file that imports the SQLite adapter at runtime fails with file:line',
+    files: { ...SQLITE_BASE, 'src/api/y.ts': SQLITE_IMPORT },
+    map: SQLITE_MAP,
+    status: 1,
+    output: ['src/api/y.ts:2 imports src/store/sqlite/store.ts at runtime'],
+  },
+  {
+    name: 'a connectors or mcp file that imports the SQLite adapter fails the same way',
+    files: { ...SQLITE_BASE, 'src/connectors/c.ts': SQLITE_IMPORT, 'src/mcp/m.ts': SQLITE_IMPORT },
+    map: SQLITE_MAP,
+    status: 1,
+    output: ['src/connectors/c.ts:2 imports src/store/sqlite/store.ts', 'src/mcp/m.ts:2 imports src/store/sqlite/store.ts'],
+  },
+  {
+    name: 'an api type-only import of the SQLite adapter passes',
+    files: { ...SQLITE_BASE, 'src/api/y.ts': "import type { S } from '../store/sqlite/store.js';\nexport type Y = S;\n" },
+    map: SQLITE_MAP,
+    status: 0,
+    output: ['Layer ratchet OK'],
+  },
+  {
+    name: 'the pinned stdio composition root may import the SQLite adapter',
+    files: { ...SQLITE_BASE, 'src/mcp/stdio.ts': SQLITE_IMPORT },
+    map: SQLITE_MAP,
+    status: 0,
+    output: ['Layer ratchet OK'],
+  },
+  {
+    name: 'a pinned file that no longer imports the SQLite adapter fails as stale',
+    files: { ...SQLITE_BASE, 'src/mcp/stdio.ts': 'export const s = 1;\n' },
+    map: SQLITE_MAP,
+    status: 1,
+    output: ['pinned: src/mcp/stdio.ts no longer imports src/store/sqlite/store.ts'],
   },
 ];
 

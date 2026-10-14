@@ -5,7 +5,7 @@ import type { TokenSurface } from '../store/token-ledger.js';
 import { biasHintEnabled, type RecallHistorySnapshot } from './recall-history.js';
 import { anchorSkippedRows, callerOf, noteRecall, peekSessionRing, sessionRing, type RecallSurface } from './recall-record.js';
 import { recordTokens } from './tokens.js';
-import type { Context } from './types.js';
+import type { Context, StoreContext } from './types.js';
 
 /** How one surface's recall is recorded. The surfaces differ in these three values and in the list they hand over, nowhere else. */
 export interface RecallRecording {
@@ -56,7 +56,7 @@ export interface ShownList {
 }
 
 /** Runs after the recall's own write, in this order: the ring, then the counter, then the ledger. */
-export async function recordShownRecall(ctx: Context, store: HippoStore, how: RecallRecording, shown: ShownList): Promise<void> {
+export async function recordShownRecall(ctx: StoreContext, store: HippoStore, how: RecallRecording, shown: ShownList): Promise<void> {
   // A surface that only peeked has its ring created here, after the write, so a recall that fails cannot LRU-evict a live session.
   const ring = sessionRing(how.ring, ctx.tenantId, shown.sessionId);
   if (ring) noteRecall(ring, shown.query, shown.topId, shown.anchoredOn);

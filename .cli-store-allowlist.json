@@ -30,6 +30,11 @@
     "why": "AUDIT_OPS, the op vocabulary --op is checked against; a constant, not a store read"
   },
   {
+    "file": "cli/api-context.ts",
+    "target": "store/sqlite/store.ts",
+    "why": "the CLI composition root builds the SQLite store each api call runs on"
+  },
+  {
     "file": "cli/status.ts",
     "target": "store/failure-log.ts",
     "why": "FAILURE_LOG_RETENTION_DAYS, the retention the failures verb prints; a constant, not a store read"

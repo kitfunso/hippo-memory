@@ -22,17 +22,19 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { saveActiveTaskSnapshot } from '../src/store/sessions.js';
-import type { Context } from '../src/api/index.js';
+import type { StoreContext } from '../src/api/index.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { retrieve } from '../src/api/index.js';
 import { handleMcpRequest, type McpResponse } from '../src/mcp/server.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { sqliteStore } from '../src/store/sqlite/store.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 // A hippo_context call with no query asks git for the recent work of the checkout, in child processes.
 vi.setConfig({ testTimeout: 30_000 });
 
-function ctx(home: string): Context {
-  return { hippoRoot: home, tenantId: 'default', actor: { subject: 'test', role: 'admin' } };
+function ctx(home: string): StoreContext {
+  return apiCtx(home, 'default', { subject: 'test', role: 'admin' });
 }
 
 type ScopeToolArgs = { query: string } | Record<string, never>;
@@ -49,7 +51,7 @@ function callMcpTool(
       method: 'tools/call',
       params: { name, arguments: args },
     },
-    { hippoRoot: home, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true },
+    { hippoRoot: home, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true, store: sqliteStore(home) },
   );
 }
 

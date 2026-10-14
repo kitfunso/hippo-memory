@@ -21,6 +21,8 @@ import {
   CLEARED_ENV, FAKE_NOW, freshStore, normalise, RECALL_INPUTS, rowsOf, seeded, SESSION, seedTemplates, TENANT, type Store, type Templates,
 } from './_helpers/recall-golden-seed.js';
 import type { CliFlags } from '../src/cli/flag-values.js';
+import { sqliteStore } from '../src/store/sqlite/store.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 type Surface = 'cli' | 'mcp' | 'http';
 const SURFACES: readonly Surface[] = ['cli', 'mcp', 'http'];
@@ -48,7 +50,7 @@ type ToolArgs = Record<string, string | number | boolean>;
 function callTool(root: string, name: string, args: ToolArgs): Promise<McpResponse | null> {
   return handleMcpRequest(
     { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } },
-    { hippoRoot: root, tenantId: TENANT, actor: 'mcp', role: 'admin', hostAdmin: true },
+    { hippoRoot: root, tenantId: TENANT, actor: 'mcp', role: 'admin', hostAdmin: true, store: sqliteStore(root) },
   );
 }
 
@@ -257,7 +259,7 @@ describe('recall surface parity goldens', () => {
     const got = await onFreshStore('local', async (s) => {
       let rankedScore = 0;
       const result = await retrieve(
-        { hippoRoot: s.root, tenantId: TENANT, actor: { subject: 'mcp', role: 'admin' } },
+        apiCtx(s.root, TENANT, { subject: 'mcp', role: 'admin' }),
         {
           query: 'deploy', limit: 50, mode: 'physics', sessionId: SESSION, keepHeldCopies: true, suppressAvailabilityHint: true,
           showRanked: ({ ranked }) => {
@@ -354,7 +356,7 @@ describe('shared store recall, MCP vs HTTP', () => {
       writeEntry(root, seeded('lighthouse rota for the beta repo', 'mem_d18_beta', '2026-01-20T00:00:00.000Z', { origin_project: 'beta' }));
       const mcp = toolReply(await handleMcpRequest(
         { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_recall', arguments: { query: 'lighthouse' } } },
-        { hippoRoot: root, tenantId: TENANT, actor: 'mcp', role: 'admin', hostAdmin: true, project: { name: 'acme', legacyName: 'acme' } },
+        { hippoRoot: root, tenantId: TENANT, actor: 'mcp', role: 'admin', hostAdmin: true, project: { name: 'acme', legacyName: 'acme' }, store: sqliteStore(root) },
       ));
       expect(mcp.isError, mcp.text).toBe(false);
       expect(mcp.text).toContain('the acme repo');

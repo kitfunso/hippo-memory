@@ -5,7 +5,7 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
-  adminActor, auditMemoryQuality, CLI_LEARN, learn, pruneAuditLog, removeAuditErrors, repairMemoryQuality, sleep, type Context,
+  adminActor, auditMemoryQuality, CLI_LEARN, learn, pruneAuditLog, removeAuditErrors, repairMemoryQuality, sleep, type StoreContext,
 } from '../src/api/index.js';
 import { getHippoDbPath, openHippoDb, closeHippoDb, SqliteBlockedError } from '../src/db/index.js';
 import { handleMcpRequest, type McpResponse } from '../src/mcp/server.js';
@@ -39,7 +39,7 @@ function rootWithConfig(label: string): string {
   return root;
 }
 
-const ctxOn = (root: string, store: HippoStore): Context => ({ hippoRoot: root, tenantId: 'default', actor: adminActor('capability-test'), store });
+const ctxOn = (root: string, store: HippoStore): StoreContext => ({ hippoRoot: root, tenantId: 'default', actor: adminActor('capability-test'), store });
 
 describe.each([
   ['sqliteStore', sqliteStore],

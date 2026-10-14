@@ -8,10 +8,11 @@ import {
   closeHippoDb,
   type DatabaseSyncLike,
 } from '../src/db/index.js';
-import type { HippoDbContext } from '../src/api/index.js';
+import type { StoreContext } from '../src/api/index.js';
 import { remember, archiveRaw, retrieve } from '../src/api/index.js';
 import { queryAuditEvents } from '../src/store/audit.js';
 import { recordStatements, countMatching } from './_helpers/count-statements.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 /** Query a single row from the hippo SQLite handle. */
 function queryOne<T>(db: DatabaseSyncLike, sql: string, ...params: unknown[]): T | undefined {
@@ -147,7 +148,7 @@ describe('GDPR Path A completeness fixes', () => {
   it('2b. mirror reaper does NOT delete mirrors of non-archived (live) memories', async () => {
     // Plant a raw_archive row + a UNRELATED live memory with a mirror; reaper
     // must only touch files whose id appears in raw_archive.
-    const ctx: HippoDbContext = { hippoRoot: root, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
+    const ctx: StoreContext = apiCtx(root, 'default', { subject: 'cli', role: 'admin' });
     const live = await remember(ctx, { content: 'i-am-still-alive-content' });
 
     const db1 = openHippoDb(root);
@@ -244,7 +245,7 @@ describe('GDPR Path A completeness fixes', () => {
   // ---------------------------------------------------------------------------
 
   it('3. recall audit_log row stores query_hash + query_length, no query field', async () => {
-    const ctx: HippoDbContext = { hippoRoot: root, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
+    const ctx: StoreContext = apiCtx(root, 'default', { subject: 'cli', role: 'admin' });
     await remember(ctx, { content: 'something to find with the canary query' });
 
     const distinctive = 'gdpr-canary-quaxle-2026';
@@ -269,7 +270,7 @@ describe('GDPR Path A completeness fixes', () => {
   // ---------------------------------------------------------------------------
 
   it('4. full RTBF: original content + query text appear in zero persistent tables after archive', async () => {
-    const ctx: HippoDbContext = { hippoRoot: root, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
+    const ctx: StoreContext = apiCtx(root, 'default', { subject: 'cli', role: 'admin' });
     const canary = 'gdpr-canary-99-special-token-xyz';
 
     // Seed: kind='raw' so it can be archived. Content embeds the canary.
@@ -319,7 +320,7 @@ describe('GDPR Path A completeness fixes', () => {
   });
 
   it('5. cross-recall non-leakage: two recalls before/after archive both leave hash-only audit rows', async () => {
-    const ctx: HippoDbContext = { hippoRoot: root, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
+    const ctx: StoreContext = apiCtx(root, 'default', { subject: 'cli', role: 'admin' });
     const queryText = 'special-private-cross-recall-string';
     const { id } = await remember(ctx, {
       content: `contains ${queryText} as content`,

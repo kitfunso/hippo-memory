@@ -27,6 +27,9 @@ export interface Context {
 
 export type HippoDbContext = Context & { store?: undefined };
 
+/** A Context whose store a composition root already built; every api function that reads or writes the store takes this. */
+export type StoreContext = Context & { readonly store: HippoStore };
+
 /** Builds process-local Actor values (admin and host admin) for CLI and CLI-run connector Contexts; Bearer-authed callers build Actor from the api_keys row
  * instead. */
 export function adminActor(subject: string): Actor {

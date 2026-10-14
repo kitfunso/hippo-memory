@@ -10,6 +10,7 @@ import { readEntry } from '../src/store/entry-reads.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { runInProcess } from './_helpers/run-in-process.js';
+import { sqliteStore } from '../src/store/sqlite/store.js';
 
 const TENANT = 'default';
 const NOT_RESOLVED = 'Could not resolve. Check the conflict ID and --keep value.';
@@ -49,7 +50,7 @@ function supersedeB({ b }: Pair): void {
 }
 
 async function mcpResolve(args: Record<string, string | number | boolean>): Promise<McpResponse | null> {
-  return handleMcpRequest({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_resolve', arguments: args } }, { hippoRoot: root, tenantId: TENANT, actor: 'tester', role: 'admin', hostAdmin: true });
+  return handleMcpRequest({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_resolve', arguments: args } }, { hippoRoot: root, tenantId: TENANT, actor: 'tester', role: 'admin', hostAdmin: true, store: sqliteStore(root) });
 }
 
 function replyText(res: McpResponse | null): string {

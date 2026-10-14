@@ -19,7 +19,8 @@ import type {
   GitHubIssueEvent,
   GitHubIssueCommentEvent,
 } from '../src/connectors/github/types.js';
-import type { Context } from '../src/api/index.js';
+import type { StoreContext } from '../src/api/index.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 const PUBLIC_REPO = {
   full_name: 'acme/public-repo',
@@ -28,8 +29,8 @@ const PUBLIC_REPO = {
   name: 'public-repo',
 } as const;
 
-function ctxFor(root: string): Context {
-  return { hippoRoot: root, tenantId: 'default', actor: { subject: 'connector:github', role: 'admin' } };
+function ctxFor(root: string): StoreContext {
+  return apiCtx(root, 'default', { subject: 'connector:github', role: 'admin' });
 }
 
 function makeIssue(i: number): IngestEvent {

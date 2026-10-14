@@ -6,9 +6,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { cmdCapture } from '../src/capture/command.js';
 import { collectSessionTurns, type SessionTurn } from '../src/capture/transcript.js';
-import { getContext, type Context } from '../src/api/index.js';
+import { getContext, type StoreContext } from '../src/api/index.js';
 import { initStore } from '../src/store/open.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 const TAUGHT = 'No: Put each change note in its own new file under changelog.d/ and never edit CHANGELOG.md by hand, because the release script builds CHANGELOG.md from those files. Please fix it.';
 const USER_DECISION = "Let's go with SQLite for the cache because the app must work offline.";
@@ -18,7 +19,7 @@ const LATER_PROMPT = 'Fix formatCents in src/money.js so it rounds half up';
 describe('capture pins the rules a person states', () => {
   let scratch: string;
   let root: string;
-  let ctx: Context;
+  let ctx: StoreContext;
 
   const capture = (turns: SessionTurn[]) => cmdCapture(root, { source: 'last-session', sessionTurns: turns, dryRun: false, global: false });
   const injected = async () => (await getContext(ctx, { pinnedOnly: true, includeRecent: 5, currentProject: 'project', prompt: LATER_PROMPT }))
@@ -31,7 +32,7 @@ describe('capture pins the rules a person states', () => {
     const global = join(scratch, 'global');
     initStore(global);
     vi.stubEnv('HIPPO_HOME', global);
-    ctx = { hippoRoot: root, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
+    ctx = apiCtx(root, 'default', { subject: 'cli', role: 'admin' });
   });
 
   afterEach(() => {

@@ -8,6 +8,7 @@ import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db/inde
 import { appendAuditEvent, listAuditEventsAfter, queryAuditEvents } from '../src/store/audit.js';
 import { pruneAuditLog } from '../src/api/audit.js';
 import { adminActor } from '../src/api/types.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 const INSERT_SQL =
   'INSERT INTO audit_log (ts, tenant_id, actor, op, target_id, metadata_json) VALUES (?, ?, ?, ?, ?, ?)';
@@ -116,7 +117,7 @@ describe('listAuditEventsAfter', () => {
     add('tenant-a', 4);
     const first = page(0, 3);
     const lastSeen = first[first.length - 1]!.id;
-    await pruneAuditLog({ hippoRoot: home, tenantId: 'tenant-a', actor: adminActor('cli') }, { olderThanDays: 30 });
+    await pruneAuditLog(apiCtx(home, 'tenant-a', adminActor('cli')), { olderThanDays: 30 });
     const rest = listAuditEventsAfter(db, { afterId: lastSeen, limit: 100 });
     expect(rest.every((r) => r.id > lastSeen)).toBe(true);
     expect(new Set(rest.map((r) => r.id)).size).toBe(rest.length);

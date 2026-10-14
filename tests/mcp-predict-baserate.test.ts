@@ -13,6 +13,7 @@ import { rmSync } from 'node:fs';
 import { handleMcpRequest, type McpContext, type McpResponse } from '../src/mcp/server.js';
 import { savePrediction, closePrediction } from '../src/store/predictions.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { sqliteStore } from '../src/store/sqlite/store.js';
 
 type ToolArgs = {
   class_tag?: string;
@@ -77,6 +78,7 @@ describe('mcp hippo_predict_baserate', () => {
       actor: 'mcp:test',
       role: 'admin',
       hostAdmin: true,
+      store: sqliteStore(home),
     });
     const text = extractText(res);
 
@@ -97,6 +99,7 @@ describe('mcp hippo_predict_baserate', () => {
       actor: 'mcp:test',
       role: 'admin',
       hostAdmin: true,
+      store: sqliteStore(home),
     });
     const text = extractText(res);
     expect(text).toContain('No closed predictions');
@@ -111,6 +114,7 @@ describe('mcp hippo_predict_baserate', () => {
       actor: 'mcp:test',
       role: 'admin',
       hostAdmin: true,
+      store: sqliteStore(home),
     });
     expect(res?.result).toMatchObject({ isError: true });
     expect(extractText(res)).toContain('class_tag is required');
@@ -123,6 +127,7 @@ describe('mcp hippo_predict_baserate', () => {
       actor: 'mcp:test',
       role: 'admin',
       hostAdmin: true,
+      store: sqliteStore(home),
     });
     const text = extractText(res);
     expect(text).toContain('No class_tag');

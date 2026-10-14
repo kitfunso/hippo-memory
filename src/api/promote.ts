@@ -7,8 +7,7 @@ import { createSuccessor, type Layer, type MemoryEntry } from '../core/memory.js
 import { promoteToGlobal } from '../sharing/global-store.js';
 import { loadConfig } from '../core/config.js';
 import { requireGroup } from '../store/index.js';
-import { storeFor } from '../store/sqlite/store.js';
-import type { Context } from './types.js';
+import type { Context, StoreContext } from './types.js';
 import { memoryReach } from '../store/tenant-lookup.js';
 import { canTouchScope, personalScopeOf } from '../core/recall-scope.js';
 
@@ -53,12 +52,12 @@ export interface SupersedeOverrides {
   pinned?: boolean;
 }
 export async function supersede(
-  ctx: Context,
+  ctx: StoreContext,
   oldId: string,
   newContent: string,
   overrides: SupersedeOverrides = {},
 ): Promise<SupersedeResult> {
-  const store = storeFor(ctx);
+  const store = ctx.store;
   const entryWrites = requireGroup(store, 'entryWrites');
   const [old] = await store.entriesByIds([oldId], ctx.tenantId);
   const newEntry = createSuccessor(assertSupersedable(ctx, oldId, old ?? null), newContent, {
@@ -75,7 +74,7 @@ export async function supersede(
 }
 
 /** The tenant-scoped row to supersede; another tenant's id, or someone else's personal row, reads as not found. */
-function assertSupersedable(ctx: Context, oldId: string, old: MemoryEntry | null): MemoryEntry {
+function assertSupersedable(ctx: StoreContext, oldId: string, old: MemoryEntry | null): MemoryEntry {
   if (!old || !canTouchScope(ctx.actor, old.scope ?? null)) {
     throw new NotFoundError(`Memory not found: ${oldId}`);
   }
@@ -100,12 +99,12 @@ export interface ArchiveRawResult {
   archivedAt: string;
 }
 export async function archiveRaw(
-  ctx: Context,
+  ctx: StoreContext,
   id: string,
   reason: string,
   opts: ArchiveRawOpts = {},
 ): Promise<ArchiveRawResult> {
-  const store = storeFor(ctx);
+  const store = ctx.store;
   const entryWrites = requireGroup(store, 'entryWrites');
   const archive = { tenantId: ctx.tenantId, actor: ctx.actor.subject, ownScope: personalScopeOf(ctx.actor), id, reason };
   const { event } = opts;

@@ -2,21 +2,20 @@
 
 import { rethrowIfSqliteBlocked } from '../util/sqlite-blocked.js';
 import type { TokenSummary, TokenSurface } from '../store/token-ledger.js';
-import { storeFor } from '../store/sqlite/store.js';
 import type { FailureSummary } from '../store/failure-log.js';
 import { failureLogSummary, tokenUseSummary } from '../store/usage-reports.js';
 import { errorMessage, log } from '../util/log.js';
-import type { Context } from './types.js';
+import type { Context, StoreContext } from './types.js';
 import { DAY_MS } from '../util/time.js';
 
 /** Records memory text handed to an agent in the token ledger. Best-effort: never throws, since a ledger failure must not fail the recall or context call. */
 export async function recordTokens(
-  ctx: Context,
+  ctx: StoreContext,
   surface: TokenSurface,
   use: { items: number; tokens: number; sessionId?: string | null },
 ): Promise<void> {
   try {
-    await storeFor(ctx).recordTokens({
+    await ctx.store.recordTokens({
       tenantId: ctx.tenantId,
       sessionId: use.sessionId ?? null,
       surface,

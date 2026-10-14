@@ -12,7 +12,6 @@ import type { ActiveGoals, GoalRecallLogRow } from '../store/goals.js';
 import { boostByGoals, type GoalStackBoostOpts } from '../search/goal-boost.js';
 import type { ForwardClaimMatch } from '../learn/forward-claim-detector.js';
 import { type HippoStore, type RecallSearchArgs, type RecallWrites } from '../store/index.js';
-import { storeFor } from '../store/sqlite/store.js';
 import { searchByEngine } from '../search/engine.js';
 import { churnStaleFactor } from '../search/boosts.js';
 import type { HybridVectorCandidates } from '../search/vector.js';
@@ -28,7 +27,7 @@ import { detectAnchoring, hashQueryText, biasHintEnabled, type AnchoringHint } f
 import { detectAvailabilityBias, type AvailabilityHint } from './availability.js';
 import { passesScopeFilterForRecall, assertScopeRequestAllowed, personalScopeOf } from '../core/recall-scope.js';
 import type { RecallSuppressionSummary, RecallOpts, RecallResult, RecallResultItem, ContinuityBlock } from './recall-types.js';
-import { type Context, ownerOrSubject, RecallContractError } from './types.js';
+import { type Context, type StoreContext, ownerOrSubject, RecallContractError } from './types.js';
 import { anchoringRows, availabilityRows, callerOf, recallAuditMetadata, recallAuditRow, strengthenOf } from './recall-record.js';
 import { retrieveWithCliCore } from './recall-core.js';
 import { recallLead, recordShownRecall, type ShownList } from './recall-finish.js';
@@ -45,14 +44,14 @@ function inCallerProject(entry: MemoryEntry, opts: RecallOpts): boolean {
 
 /** The one recall entry: ranks with the ranker `opts` names, then writes the recall, and records it in full for a surface that sets `recordAs`.
  *  Only the CLI core ranker writes last_retrieval_ids (contract lock). */
-export async function retrieve(ctx: Context, opts: RecallOpts): Promise<RecallResult> {
+export async function retrieve(ctx: StoreContext, opts: RecallOpts): Promise<RecallResult> {
   assertScopeRequestAllowed(ctx.actor, opts.scope);
   if (opts.cliCore) return retrieveWithCliCore(ctx, opts, opts.cliCore);
   const windowSize = recallWindowSize(opts);
   // From the authenticated actor, never from RecallOpts, which a caller fills in.
   const own = personalScopeOf(ctx.actor) ?? undefined;
   if (opts.showRanked) return retrieveFromStore(ctx, opts, windowSize, opts.showRanked, own);
-  const store = storeFor(ctx);
+  const store = ctx.store;
   const how = opts.recordAs;
   if (!how) return retrieveBand(ctx, store, opts, windowSize, own);
   const result = await retrieveBand(ctx, store, { ...opts, ...recallLead(ctx, how, opts.query, opts.sessionId) }, windowSize, own);
@@ -75,7 +74,7 @@ function shownBand(opts: RecallOpts, result: RecallResult): ShownList {
 }
 
 /** The default ranker: the SQL BM25 band, reordered by hybrid or physics search when `mode` asks. */
-async function retrieveBand(ctx: Context, store: HippoStore, opts: RecallOpts, windowSize: number, own: string | undefined): Promise<RecallResult> {
+async function retrieveBand(ctx: StoreContext, store: HippoStore, opts: RecallOpts, windowSize: number, own: string | undefined): Promise<RecallResult> {
   let candidates = await store.searchRecallEntries(opts.query, recallSearchArgs(ctx, opts, windowSize, own));
   if (opts.mode === 'hybrid' || opts.mode === 'physics') {
     const searchOpts = { budget: Infinity, scope: opts.scope ?? null, vectorCandidates: recallVectorSpec(ctx, opts, own) };
@@ -124,7 +123,7 @@ function recallSearchArgs(ctx: Context, opts: RecallOpts, limit: number, own: st
 }
 
 /** api.retrieve's vector arm: the recall load's exact-scope rule, current rows only. */
-function recallVectorSpec(ctx: Context, opts: RecallOpts, own: string | undefined): HybridVectorCandidates {
+function recallVectorSpec(ctx: StoreContext, opts: RecallOpts, own: string | undefined): HybridVectorCandidates {
   return {
     tenantId: ctx.tenantId,
     scope: recallScopeFilter(opts.scope, 'exact', own),
@@ -139,13 +138,13 @@ const SHOW_RANKED_LEXICAL_WINDOW = 1000;
 
 /** `retrieve` under `showRanked`: physics when `mode` says so, hybrid otherwise, over a wide lexical window plus the nearest vectors. */
 async function retrieveFromStore(
-  ctx: Context,
+  ctx: StoreContext,
   opts: RecallOpts,
   windowSize: number,
   show: NonNullable<RecallOpts['showRanked']>,
   own: string | undefined,
 ): Promise<RecallResult> {
-  const store = storeFor(ctx);
+  const store = ctx.store;
   const loaded = await store.searchRecallEntries(opts.query, recallSearchArgs(ctx, opts, Math.max(windowSize, SHOW_RANKED_LEXICAL_WINDOW), own));
   const pool = loaded.filter((e) => passesScopeFilterForRecall(e.scope ?? null, opts.scope, own));
   // No scope option: the scope boost follows HIPPO_SCOPE and the skill env, as MCP recall always ranked.

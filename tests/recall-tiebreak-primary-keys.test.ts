@@ -19,13 +19,14 @@ import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { Layer, type MemoryEntry} from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { retrieve, type Context } from '../src/api/index.js';
+import { retrieve, type StoreContext } from '../src/api/index.js';
 import { estimateTokens } from '../src/util/token-text.js';
 import type { SearchResult } from '../src/core/search-types.js';
 import { insertEntityAt, insertRelationAt } from './_helpers/graph-seed.js';
 import { graphExpandRecall } from '../src/graph/recall.js';
 import { compareEntryIdentity, type EntryIdentity } from '../src/core/compare.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 function safeRmSync(p: string): void {
   try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
@@ -36,8 +37,8 @@ function safeRmSync(p: string): void {
 // ---------------------------------------------------------------------------
 
 describe('api.ts:833 DAG substitution ordering', () => {
-  function ctxFor(root: string, tenantId: string = 'default'): Context {
-    return { hippoRoot: root, tenantId, actor: { subject: 'test:tiebreak', role: 'admin' } };
+  function ctxFor(root: string, tenantId: string = 'default'): StoreContext {
+    return apiCtx(root, tenantId, { subject: 'test:tiebreak', role: 'admin' });
   }
   function makeLeaf(text: string, opts: Partial<MemoryEntry> = {}): MemoryEntry {
     return createMemory(text, {

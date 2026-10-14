@@ -25,6 +25,7 @@ import { supersede, adminActor } from '../src/api/index.js';
 import { MEMORY_SELECT_COLUMNS } from '../src/store/rows.js';
 import { recordStatements, countMatching, STORE_OPEN } from './_helpers/count-statements.js';
 import { allocatedBytes } from './_helpers/allocated-bytes.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 const dirs: string[] = [];
 afterEach(() => {
@@ -333,7 +334,7 @@ describe('memories of decisions, incidents and other objects pinned to 90 days',
     fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ defaultHalfLifeDays: 30 }));
     migrateDefaultHalfLife(root, 30);
     const decision = saveDecision(root, 'default', { decisionText: 'we release on Mondays' }).memoryId!;
-    const copy = (await supersede({ hippoRoot: root, tenantId: 'default', actor: adminActor('test') }, decision, 'we release on Tuesdays now')).newId;
+    const copy = (await supersede(apiCtx(root, 'default', adminActor('test')), decision, 'we release on Tuesdays now')).newId;
     writeEntry(root, { ...readEntry(root, copy, 'default')!, retrieval_count: 40, half_life_days: 30 + 2 * 40 });
     unrecord(root, TYPED_HALF_LIFE_META_KEY);
 

@@ -1,7 +1,7 @@
 // Conflict resolution never reaches another person's personal row, and a personal value never becomes a tenant-wide tombstone (F1).
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
-import { remember, type Actor, type HippoDbContext } from '../src/api/index.js';
+import { remember, type Actor, type StoreContext } from '../src/api/index.js';
 import { listRejectionsForTenant } from '../src/trust/reject-flow.js';
 import { resolveOpenConflict } from '../src/dashboard/dashboard-actions.js';
 import { mapApiError } from '../src/api/error-reply.js';
@@ -9,6 +9,8 @@ import { handleMcpRequest, type McpContext, type McpResponse } from '../src/mcp/
 import { listMemoryConflicts, replaceDetectedConflicts } from '../src/store/conflicts.js';
 import { readEntry } from '../src/store/entry-reads.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { apiCtx } from './_helpers/api-ctx.js';
+import { sqliteStore } from '../src/store/sqlite/store.js';
 
 const A_TEXT = 'always run the deploy script with --dry-run first';
 const NOT_RESOLVED = 'Could not resolve. Check the conflict ID and --keep value.';
@@ -19,12 +21,12 @@ const actorA: Actor = { subject: 'api_key:hk_a', role: 'member', owner: 'a' };
 const actorB: Actor = { subject: 'api_key:hk_b', role: 'member', owner: 'b' };
 const unownedAdmin: Actor = { subject: 'api_key:hk_admin', role: 'admin' };
 
-function ctxFor(actor: Actor): HippoDbContext {
-  return { hippoRoot: root, tenantId: 'default', actor };
+function ctxFor(actor: Actor): StoreContext {
+  return apiCtx(root, 'default', actor);
 }
 
 async function callTool(actor: Actor, name: string, args: Record<string, string | number | boolean>): Promise<McpResponse | null> {
-  const ctx: McpContext = { hippoRoot: root, tenantId: 'default', actor: actor.subject, role: actor.role };
+  const ctx: McpContext = { hippoRoot: root, tenantId: 'default', actor: actor.subject, role: actor.role , store: sqliteStore(root) };
   if (actor.owner !== undefined) ctx.owner = actor.owner;
   return handleMcpRequest({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } }, ctx);
 }

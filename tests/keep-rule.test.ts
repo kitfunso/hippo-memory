@@ -20,7 +20,8 @@ import { deduplicateStore } from '../src/consolidate/dedupe.js';
 import { auditMemory } from '../src/core/memory-audit.js';
 import { closeHippoDb, openHippoDb, withSharedStoreHandles } from '../src/db/index.js';
 import { NO_MERGE_TAGS } from '../src/sharing/share.js';
-import { forget, listDormant, sleep, supersede, type HippoDbContext } from '../src/api/index.js';
+import { forget, listDormant, sleep, supersede, type StoreContext } from '../src/api/index.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 // Each case commits rows to a real store, so its time follows the runner's disk.
 vi.setConfig({ testTimeout: 30_000 });
@@ -44,7 +45,7 @@ function newRoot(configJson?: string): string {
   return root;
 }
 
-const ctxFor = (hippoRoot: string): HippoDbContext => ({ hippoRoot, tenantId: 'default', actor: { subject: 'keep-rule-test', role: 'admin' } });
+const ctxFor = (hippoRoot: string): StoreContext => (apiCtx(hippoRoot, 'default', { subject: 'keep-rule-test', role: 'admin' }));
 const sixtyDaysOn = (): Date => new Date(Date.now() + 60 * DAY);
 const keptRow = (content: string): MemoryEntry => createMemory7(content, { tags: [TAG], source: KEPT_SOURCE });
 const okFetcher = () => vi.fn<typeof fetch>(async () => new Response(JSON.stringify({ content: [{ text: '[]' }] }), { status: 200 }));

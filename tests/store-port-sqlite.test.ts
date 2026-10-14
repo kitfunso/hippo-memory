@@ -36,6 +36,7 @@ import { hashedVector, startHashedEmbeddings, type HashedEmbeddings } from './_h
 import {
   CLEARED_ENV, FAKE_NOW, freshStore, normalise, rowsOf, seeded, SESSION, seedPortBranches, seedTemplates, statsMirror, TENANT, type Store, type Templates,
 } from './_helpers/recall-golden-seed.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 type Kind = 'local' | 'wide';
 interface Outcome<T> { value: T; rows: unknown; opens: number }
@@ -434,7 +435,7 @@ describe('sqliteStore writes leave the rows the hippo.db functions leave, each o
 
   it('recordTokens writes the ledger row the API helper writes', async () => {
     const { port } = await parity(
-      (s) => recordTokens({ hippoRoot: s.root, tenantId: TENANT, actor: { subject: 'test', role: 'admin' } }, 'http_recall', { items: 2, tokens: 40, sessionId: SESSION }),
+      (s) => recordTokens(apiCtx(s.root, TENANT, { subject: 'test', role: 'admin' }), 'http_recall', { items: 2, tokens: 40, sessionId: SESSION }),
       (store) => store.recordTokens({ tenantId: TENANT, sessionId: SESSION, surface: 'http_recall', event: 'inject', items: 2, tokens: 40 }),
     );
     expect(port.rows).toMatchObject({ ledger: [{ surface: 'http_recall', items: 2, tokens: 40 }] });
@@ -447,7 +448,7 @@ describe('sqliteStore writes leave the rows the hippo.db functions leave, each o
       mkdirSync(join(root, 'hippo.db'));
       const use = { tenantId: TENANT, surface: 'http_recall', event: 'inject', items: 1, tokens: 1 } as const;
       await expect(sqliteStore(root).recordTokens(use)).rejects.toThrow();
-      await expect(recordTokens({ hippoRoot: root, tenantId: TENANT, actor: { subject: 'test', role: 'admin' } }, 'http_recall', use)).resolves.toBeUndefined();
+      await expect(recordTokens(apiCtx(root, TENANT, { subject: 'test', role: 'admin' }), 'http_recall', use)).resolves.toBeUndefined();
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

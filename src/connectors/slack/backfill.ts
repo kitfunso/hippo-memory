@@ -1,4 +1,4 @@
-import type { Context } from '../../api/index.js';
+import type { StoreContext } from '../../api/index.js';
 import { saveSlackCursor, slackCursor } from '../../store/connectors/slack.js';
 import { ingestMessage } from './ingest.js';
 import type { SlackMessageEvent } from './types.js';
@@ -29,7 +29,7 @@ export interface BackfillOpts {
 /** Page through `conversations.history` and ingest each message, persisting the cursor to `slack_cursors` after every page.
  *  The synthesized eventId `backfill:${teamId}:${channelId}:${ts}` makes reruns dedupe via the `slack_event_log` PK. */
 export async function backfillChannel(
-  ctx: Context,
+  ctx: StoreContext,
   opts: BackfillOpts,
 ): Promise<{ ingested: number; pages: number }> {
   // `oldest` (numeric ts) is the resume bound for the first page only; `cursor` starts null and Slack mints the next-page token.

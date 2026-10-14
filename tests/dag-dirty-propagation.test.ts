@@ -18,14 +18,11 @@ import { openHippoDb } from '../src/db/index.js';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../src/core/memory.js';
 import { archiveRawMemory } from '../src/store/raw-archive.js';
 import { invalidateMatching } from '../src/learn/invalidation.js';
-import { supersede, type Context } from '../src/api/index.js';
+import { supersede, type StoreContext } from '../src/api/index.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
-function defaultCtx(hippoRoot: string): Context {
-  return {
-    hippoRoot,
-    tenantId: 'default',
-    actor: { subject: 'test-actor', role: 'admin' },
-  };
+function defaultCtx(hippoRoot: string): StoreContext {
+  return apiCtx(hippoRoot, 'default', { subject: 'test-actor', role: 'admin' });
 }
 
 // loadAllDirtySummaries is the production reader; the tenant filter stands in for the per-tenant wrapper.

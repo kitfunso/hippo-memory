@@ -12,6 +12,8 @@ import { bookTokenUse } from '../src/api/ledger-db.js';
 import { promptHookContext } from '../src/api/prompt-hook.js';
 import { resetLogOnce } from '../src/util/log.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
+import { sqliteStore } from '../src/store/sqlite/store.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 let root: string;
 let stderrSpy: MockInstance<typeof process.stderr.write>;
@@ -54,7 +56,7 @@ afterEach(() => {
 
 describe('token ledger write failures', () => {
   it('api.recordTokens warns once and does not throw', async () => {
-    const ctx = { hippoRoot: root, tenantId: 'default', actor: adminActor('test') };
+    const ctx = apiCtx(root, 'default', adminActor('test'));
     await expect(recordTokens(ctx, 'http_recall', { items: 1, tokens: 10 })).resolves.toBeUndefined();
     await recordTokens(ctx, 'http_recall', { items: 1, tokens: 10 });
     const lines = ledgerLines();
@@ -66,7 +68,7 @@ describe('token ledger write failures', () => {
     writeEntry(root, createMemory('ledger probe note about deploys'));
     const res = await handleMcpRequest(
       { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_recall', arguments: { query: 'deploys' } } },
-      { hippoRoot: root, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true },
+      { hippoRoot: root, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true, store: sqliteStore(root) },
     );
     expect(res?.error).toBeUndefined();
     expect(JSON.stringify(res?.result)).toContain('ledger probe note');
@@ -82,7 +84,7 @@ describe('token ledger write failures', () => {
       // Reads still work, so only the hook's own insert can fail.
       db.exec("CREATE TRIGGER refuse_ledger BEFORE INSERT ON token_ledger BEGIN SELECT RAISE(ABORT, 'ledger insert refused'); END");
       closeHippoDb(db);
-      const out = await promptHookContext({ hippoRoot: store, tenantId: 'default', actor: adminActor('test') }, { sessionId: 's-refused', project: PROJECT });
+      const out = await promptHookContext(apiCtx(store, 'default', adminActor('test')), { sessionId: 's-refused', project: PROJECT });
       expect(out.stdout).toContain('the deploy window opens on Tuesdays');
       const lines = skippedLines();
       expect(lines).toHaveLength(1);
@@ -94,7 +96,7 @@ describe('token ledger write failures', () => {
 
   it('a store with no ledger table is an expected skip: nothing at the default level, one debug line with no stack, and the hook prints its block', async () => {
     pinNote(root);
-    const hook = (sessionId: string) => promptHookContext({ hippoRoot: root, tenantId: 'default', actor: adminActor('test') }, { sessionId, project: PROJECT });
+    const hook = (sessionId: string) => promptHookContext(apiCtx(root, 'default', adminActor('test')), { sessionId, project: PROJECT });
     expect((await hook('s-dropped-1')).stdout).toContain('the deploy window opens on Tuesdays');
     expect(skippedLines()).toEqual([]);
 

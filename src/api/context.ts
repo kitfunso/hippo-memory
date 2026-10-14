@@ -29,7 +29,6 @@ import { detectSecret } from '../util/secret-detect.js';
 import { isSessionDigestRow } from '../core/session-digest-row.js';
 import { addAmbientTallies, ambientStateFromTallies, type AmbientState, type AmbientTallies } from '../core/ambient.js';
 import { hasGroup, requireGroup, sqliteStore, type HippoStore } from '../store/index.js';
-import { storeFor } from '../store/sqlite/store.js';
 import { passesScopeFilterForRecall, assertScopeRequestAllowed, personalScopeOf } from '../core/recall-scope.js';
 import {
   finiteOr,
@@ -43,7 +42,7 @@ import {
 } from './context-select.js';
 import type { ContextOpts, ContextResult, ContextResultEntry } from './context-types.js';
 import { strengthenOf } from './recall-record.js';
-import { type Context, ownerOrSubject } from './types.js';
+import { type Context, type StoreContext, ownerOrSubject } from './types.js';
 
 export { oneCopyPerMemory } from './context-select.js';
 
@@ -151,7 +150,7 @@ interface TaskSections {
 /** Assembles a budget-bounded, tenant-scoped context bundle; mutates `last_retrieval_ids` and emits a 'recall' audit row for non-pinned, non-'*' queries.
  * Returns an empty result when there are no memories, snapshot, handoff or recent events. CLI rendering stays in `cli.ts`. */
 export async function getContext(
-  ctx: Context,
+  ctx: StoreContext,
   opts: ContextOpts = {},
 ): Promise<ContextResult> {
   const budget = opts.budget ?? DEFAULT_CONTEXT_BUDGET;
@@ -160,7 +159,7 @@ export async function getContext(
     return { entries: [], tokens: 0 };
   }
 
-  const plan = planContext(ctx, opts, sourceOf(storeFor(ctx)));
+  const plan = planContext(ctx, opts, sourceOf(ctx.store));
   const sections = await loadTaskSections(ctx, opts, plan, openBlockBudget(plan, opts, budget));
   const admission = ambientAdmission(opts, plan, sections.shownHandoff);
   const pools = await loadPools(ctx, plan, admission, promptRecallRequest(opts, plan));
@@ -454,7 +453,7 @@ function finalizeSelection(picked: ContextResultEntry[], plan: ContextPlan): Fin
 }
 
 // Never touches the index, so it cannot desync last_retrieval_ids from last_trace_id.
-async function traceEmptyContext(ctx: Context, opts: ContextOpts, plan: ContextPlan): Promise<void> {
+async function traceEmptyContext(ctx: StoreContext, opts: ContextOpts, plan: ContextPlan): Promise<void> {
   // No snapshot in this branch, so the caller's own id is the only session to stamp.
   const trace: RecallTraceInput = {
     tenantId: ctx.tenantId,
@@ -466,7 +465,7 @@ async function traceEmptyContext(ctx: Context, opts: ContextOpts, plan: ContextP
   };
   // The empty reply is already decided, so a lost trace is logged and the call still answers.
   try {
-    await storeFor(ctx).finishRecall({ goalLog: [], audit: [], trace });
+    await ctx.store.finishRecall({ goalLog: [], audit: [], trace });
   } catch (error) {
     rethrowIfSqliteBlocked(error);
     log.error(`recall trace write failed: ${errorMessage(error)}`);
@@ -480,7 +479,7 @@ interface RecordedRetrieval {
 
 /** Strengthens and marks the returned rows, then writes the trace and index together. */
 async function recordRetrieval(
-  ctx: Context,
+  ctx: StoreContext,
   opts: ContextOpts,
   plan: ContextPlan,
   selected: ContextResultEntry[],
@@ -502,7 +501,7 @@ async function recordRetrieval(
   };
   const writes = { goalLog: [], audit: [], trace, strengthen: strengthenOf(ctx, retrievedIds) };
   // The last recall feeds only outcomeForLastRecall, so a store that keeps none still finishes the recall without one.
-  const store = storeFor(ctx);
+  const store = ctx.store;
   const traceId = store.lastRecall
     ? await store.lastRecall.finishRecall(writes, plan.hasGlobal ? plan.globalRoot : undefined)
     : await store.finishRecall(writes).then(() => null);

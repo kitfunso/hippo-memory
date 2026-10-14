@@ -8,6 +8,7 @@ import { adminActor, reject } from '../src/api/index.js';
 import { loadEmbeddingIndex } from '../src/store/vector-index.js';
 import { query, Store, type ExtraState } from './_helpers/cli-parity-store.js';
 import { startHashedEmbeddings, type HashedEmbeddings } from './_helpers/hashed-embedding-server.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 const CASE_MS = 180_000;
 const TEXT = 'the billing service retries a failed charge three times';
@@ -70,7 +71,7 @@ describe('hippo remember counts each stored row once (built CLI, no server)', ()
 
   it('a rejected value is refused and not counted', async () => {
     const s = new Store();
-    await reject({ hippoRoot: s.root, tenantId: 'default', actor: adminActor('cli') }, { value: REJECTED, reason: 'wrong' });
+    await reject(apiCtx(s.root, 'default', adminActor('cli')), { value: REJECTED, reason: 'wrong' });
     s.settle();
     s.run('remember', REJECTED);
     s.expectPinned();

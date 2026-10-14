@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { resolveTenantForSlackTeam } from '../src/connectors/slack/tenant-routing.js';
+import { sqliteStore } from '../src/store/sqlite/store.js';
 
 describe('resolveTenantForSlackTeam', () => {
   let root: string;
@@ -24,7 +25,7 @@ describe('resolveTenantForSlackTeam', () => {
       db.prepare(
         `INSERT INTO slack_workspaces (team_id, tenant_id, added_at) VALUES (?, ?, ?)`,
       ).run('TTEAM1', 'tenant-alpha', new Date().toISOString());
-      expect(await resolveTenantForSlackTeam(root, 'TTEAM1')).toBe('tenant-alpha');
+      expect(await resolveTenantForSlackTeam(sqliteStore(root), 'TTEAM1')).toBe('tenant-alpha');
     } finally {
       closeHippoDb(db);
     }
@@ -37,7 +38,7 @@ describe('resolveTenantForSlackTeam', () => {
     try {
       // v0.39 fail-closed contract: empty slack_workspaces means single-
       // workspace install, env fallback is safe.
-      expect(await resolveTenantForSlackTeam(root, 'TANY')).toBe('env-tenant');
+      expect(await resolveTenantForSlackTeam(sqliteStore(root), 'TANY')).toBe('env-tenant');
     } finally {
       if (prev === undefined) delete process.env.HIPPO_TENANT;
       else process.env.HIPPO_TENANT = prev;
@@ -52,11 +53,11 @@ describe('resolveTenantForSlackTeam', () => {
         `INSERT INTO slack_workspaces (team_id, tenant_id, added_at) VALUES (?, ?, ?)`,
       ).run('TTEAM', 'tenant-short', new Date().toISOString());
       // Prefix-extended id must NOT match — fail closed (workspaces non-empty).
-      expect(await resolveTenantForSlackTeam(root, 'TTEAMX')).toBeNull();
+      expect(await resolveTenantForSlackTeam(sqliteStore(root), 'TTEAMX')).toBeNull();
       // Substring must NOT match — fail closed.
-      expect(await resolveTenantForSlackTeam(root, 'TTEA')).toBeNull();
+      expect(await resolveTenantForSlackTeam(sqliteStore(root), 'TTEA')).toBeNull();
       // Exact still works.
-      expect(await resolveTenantForSlackTeam(root, 'TTEAM')).toBe('tenant-short');
+      expect(await resolveTenantForSlackTeam(sqliteStore(root), 'TTEAM')).toBe('tenant-short');
     } finally {
       closeHippoDb(db);
     }

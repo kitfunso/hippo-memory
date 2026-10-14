@@ -4,7 +4,8 @@ import * as path from 'path';
 import { createHash } from 'node:crypto';
 import { createMemory, MemoryEntry } from '../core/memory.js';
 import { loadVaultRawRows, type VaultRawRow } from '../store/entry-reads.js';
-import { remember, archiveRaw, isPrivateScope, type HippoDbContext } from '../api/index.js';
+import { remember, archiveRaw, isPrivateScope, type StoreContext } from '../api/index.js';
+import { sqliteStore } from '../store/sqlite/store.js';
 import { assertClientScope } from '../core/recall-scope.js';
 import { RejectedValueError } from '../core/api-errors.js';
 import { rejectionGuardRefuses } from '../store/rejected-values.js';
@@ -49,12 +50,13 @@ async function syncVaultFolder(folderPath: string, options: ImportOptions, { vau
   const extraTags = options.extraTags ?? [];
   const dryRun = options.dryRun ?? false;
 
-  const ctx: HippoDbContext = {
+  const ctx: StoreContext = {
     hippoRoot,
     tenantId,
     // Process-local actor; the vault importer is a CLI/SDK ingestion path, not
     // a bearer-authed request. archiveRaw / remember thread this into audit.
     actor: { subject: 'connector:vault', role: 'admin' },
+    store: sqliteStore(hippoRoot),
   };
 
   const existing = loadVaultRows(hippoRoot, tenantId, vaultName);
@@ -98,7 +100,7 @@ interface VaultTally {
 }
 
 interface VaultImportRun {
-  ctx: HippoDbContext;
+  ctx: StoreContext;
   folderPath: string;
   vaultName: string;
   scope: string | null;

@@ -14,11 +14,11 @@ const BASERATE_DECIMALS = 3;
 
 const NOT_RESOLVED = 'Could not resolve. Check the conflict ID and --keep value.';
 
-export async function runPredictBaserateTool({ args, ctx, hippoRoot, tenantId }: ToolCall): Promise<string> {
+export async function runPredictBaserateTool({ args, ctx, hippoRoot, tenantId, store }: ToolCall): Promise<string> {
   // Text-only reply, matching the other MCP tools; the group's read writes the audit row, so no surface can skip it.
   const classTag = String(args.class_tag || '').trim();
   if (!classTag) return 'No class_tag provided. Usage: pass class_tag matching a class used in past predictions (e.g. "migration-effort").';
-  const baserate = await predictionBaserate({ hippoRoot, tenantId, actor: mcpActor(ctx), store: ctx?.store }, classTag);
+  const baserate = await predictionBaserate({ hippoRoot, tenantId, actor: mcpActor(ctx), store }, classTag);
   if (baserate.nClosed === 0) {
     return `No closed predictions in class "${classTag}" yet. Create one via hippo_predict (or 'hippo predict ...' CLI) ` +
       `and close it with hippo_predict_close once the actual outcome is known. ` +
@@ -35,9 +35,9 @@ export async function runPredictBaserateTool({ args, ctx, hippoRoot, tenantId }:
   return lines.join('\n');
 }
 
-export function runStatusTool({ ctx, hippoRoot, config, tenantId }: ToolCall): string {
+export function runStatusTool({ ctx, hippoRoot, config, tenantId, store }: ToolCall): string {
   // honors HIPPO_FAKE_NOW (eval-only; see ablation.ts)
-  const tallies = getMemoryStatus({ hippoRoot, tenantId, actor: mcpActor(ctx), store: ctx?.store }, evalNow(), 0.1);
+  const tallies = getMemoryStatus({ hippoRoot, tenantId, actor: mcpActor(ctx), store }, evalNow(), 0.1);
   const avgStrength = tallies.total > 0 ? (tallies.strengthSum / tallies.total).toFixed(2) : '0';
   return [
     `Memories: ${tallies.total} (${tallies.pinned} pinned, ${tallies.errors} errors)`,
@@ -49,15 +49,15 @@ export function runStatusTool({ ctx, hippoRoot, config, tenantId }: ToolCall): s
 }
 
 export function runConflictsTool(call: ToolCall): string {
-  const { ctx, hippoRoot, tenantId } = call;
-  const conflicts = listOpenConflicts({ hippoRoot, tenantId, actor: mcpActor(ctx), store: ctx?.store }, ctx?.project);
+  const { ctx, hippoRoot, tenantId, store } = call;
+  const conflicts = listOpenConflicts({ hippoRoot, tenantId, actor: mcpActor(ctx), store }, ctx?.project);
   if (conflicts.length === 0) return 'No open conflicts.';
   return conflicts.map((c) =>
     `conflict_${c.id}: ${c.memory_a_id} <-> ${c.memory_b_id} (score=${c.score.toFixed(2)}) — ${c.reason}`
   ).join('\n');
 }
 
-export function runResolveTool({ args, ctx, hippoRoot, tenantId }: ToolCall): string {
+export function runResolveTool({ args, ctx, hippoRoot, tenantId, store }: ToolCall): string {
   const conflictId = Number(args.conflict_id);
   const keepId = String(args.keep || '');
   const forget = Boolean(args.forget);
@@ -66,7 +66,7 @@ export function runResolveTool({ args, ctx, hippoRoot, tenantId }: ToolCall): st
   if (isNaN(conflictId) || !keepId) return 'Required: conflict_id and keep.';
   let loserId: string;
   try {
-    const apiCtx = { hippoRoot, tenantId, actor: mcpActor(ctx), store: ctx?.store };
+    const apiCtx = { hippoRoot, tenantId, actor: mcpActor(ctx), store };
     ({ loserId } = resolveMemoryConflict(apiCtx, conflictId, { keepId, forget, rejectLoser, reason }));
   } catch (err) {
     // A missing, unreachable or settled conflict answers alike, so the reply says nothing of a pair the caller cannot touch.
@@ -77,13 +77,13 @@ export function runResolveTool({ args, ctx, hippoRoot, tenantId }: ToolCall): st
   return `Resolved conflict ${conflictId}: kept ${keepId}, ${action} ${loserId}`;
 }
 
-export async function runShareTool({ args, ctx, hippoRoot, tenantId }: ToolCall): Promise<string> {
+export async function runShareTool({ args, ctx, hippoRoot, tenantId, store }: ToolCall): Promise<string> {
   const shareId = String(args.id || '');
   if (!shareId) return 'Required: id (memory ID to share).';
   const force = Boolean(args.force);
   const actor = mcpActor(ctx);
   // Checked before shareMemory, whose personal-row refusal would tell another person the id exists.
-  await getTouchableMemory({ hippoRoot, tenantId, actor, store: ctx?.store }, shareId);
+  await getTouchableMemory({ hippoRoot, tenantId, actor, store }, shareId);
   // Pass tenantId so shareMemory's readEntry filters by tenant; otherwise a Bearer for tenant A could share tenant B's id to the global store.
   // The 'Memory not found' error matches the cross-tenant deny shape elsewhere.
   const shared = shareMemory(hippoRoot, shareId, { force, tenantId });

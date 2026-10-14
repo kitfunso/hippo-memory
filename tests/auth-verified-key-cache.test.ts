@@ -9,10 +9,11 @@ import {
   VerifiedKeyCache,
   type VerifiedApiKey,
 } from '../src/store/auth.js';
-import { authRevoke, authGrant, type Context } from '../src/api/index.js';
+import { authRevoke, authGrant, type StoreContext } from '../src/api/index.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { sqliteStore } from '../src/store/index.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 /** Scrypt runs and store lookups made by `fn` alone. */
 async function counted<T>(fn: () => Promise<T>) {
@@ -40,7 +41,7 @@ describe('verified API key cache', () => {
   const mint = (role: 'admin' | 'member' = 'member'): { keyId: string; plaintext: string } =>
     onDb(home, (db) => createApiKey(db, { tenantId: 'default', label: 'cache-test', role }));
 
-  const adminCtx = (): Context => ({ hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } });
+  const adminCtx = (): StoreContext => (apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' }));
 
   beforeEach(() => {
     home = makeRoot('key-cache');

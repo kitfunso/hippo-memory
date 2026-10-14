@@ -20,7 +20,8 @@ import { isContentWorthStoring } from '../src/core/memory-quality.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
-import { getContext, type Context } from '../src/api/index.js';
+import { getContext, type StoreContext } from '../src/api/index.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 function tmpHome() {
   const home = mkdtempSync(join(tmpdir(), 'hippo-df3-cjk-'));
@@ -59,7 +60,7 @@ describe('CJK-aware substantiveWordCount (src/store/audit.ts)', () => {
   it('(a) a substantive CJK sentence is returned via includeRecent', async () => {
     const { home, restore } = tmpHome();
     try {
-      const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
+      const ctx: StoreContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
       seed(home, CJK_SENTENCE, { created: '2026-08-20T10:00:00.000Z' });
 
       const result = await getContext(ctx, { pinnedOnly: true, includeRecent: 1, budget: 500 });

@@ -11,8 +11,7 @@ import { assertCallerProject } from '../core/project-identity.js';
 import { BadRequestError } from '../core/api-errors.js';
 import { assertClientScope, personalScopeOf } from '../core/recall-scope.js';
 import { requireGroup } from '../store/index.js';
-import { storeFor } from '../store/sqlite/store.js';
-import type { Context } from './types.js';
+import type { Context, StoreContext } from './types.js';
 
 /** Row fields the caller's own process decides, as the CLI does from its flags and its salience gate. */
 export interface RememberLocal {
@@ -119,7 +118,7 @@ function weakened(entry: MemoryEntry, weaken: NonNullable<RememberLocal['weaken'
   return { ...entry, strength: weaken.strength, half_life_days: Math.max(1, entry.half_life_days * weaken.halfLifeFactor) };
 }
 
-function rememberResult(ctx: Context, prepared: PreparedRemember, written?: ConnectorWriteOutcome): RememberResult {
+function rememberResult(ctx: StoreContext, prepared: PreparedRemember, written?: ConnectorWriteOutcome): RememberResult {
   const { entry, detection, warnings } = prepared;
   const result: RememberResult = { id: entry.id, kind: entry.kind, tenantId: ctx.tenantId, halfLifeDays: entry.half_life_days, tags: [...entry.tags] };
   if (detection.flagged) result.quarantined = { reason: detection.reason ?? 'unknown' };
@@ -135,8 +134,8 @@ function quarantineOf({ requestedScope, detection }: PreparedRemember): Connecto
 
 /** Store one memory: the store's entryWrites group writes the row and its one remember audit row, under the caller's subject.
  *  A write that carries a connector event or untrusted content goes through connectorWrites, which commits its companion rows with it. */
-export async function remember(ctx: Context, opts: RememberOpts): Promise<RememberResult> {
-  const store = storeFor(ctx);
+export async function remember(ctx: StoreContext, opts: RememberOpts): Promise<RememberResult> {
+  const store = ctx.store;
   const entryWrites = requireGroup(store, 'entryWrites');
   const prepared = prepareRemember(ctx, opts);
   // A store writes origin_project as given, so the served folder's fallback is stamped here.

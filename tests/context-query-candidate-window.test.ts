@@ -7,10 +7,11 @@ import { DEFAULT_SEARCH_CANDIDATE_LIMIT } from '../src/store/rows.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import type { MemoryEntry } from '../src/core/memory.js';
 import type { DeliveryObserver } from '../src/store/delivery-recorder.js';
-import { getContext, adminActor, type Context } from '../src/api/index.js';
+import { getContext, adminActor, type StoreContext } from '../src/api/index.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { recordStatementsAsync, countMatching } from './_helpers/count-statements.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 const ROWS = 10_000;
 const OWN_ROWS = 10;
@@ -50,7 +51,7 @@ function admitCounter() {
 
 let local = '';
 let global = '';
-let ctx: Context;
+let ctx: StoreContext;
 
 beforeAll(() => {
   local = makeRoot('ctx-window-local');
@@ -58,7 +59,7 @@ beforeAll(() => {
   // Every row matches the query; all but the last OWN_ROWS come from another project.
   fill(local, ROWS, 'local', (i) => (i >= ROWS - OWN_ROWS ? 'proj' : 'other'));
   fill(global, 1_000, 'global', () => '');
-  ctx = { hippoRoot: local, tenantId: 'default', actor: adminActor('test') };
+  ctx = apiCtx(local, 'default', adminActor('test'));
 }, 600_000);
 
 afterAll(() => {

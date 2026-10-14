@@ -21,9 +21,10 @@ import {
   buildEntityProfiles,
   rebuildDirtySummaries,
 } from '../src/consolidate/dag.js';
-import { drillDown, type Context, type DrillDownOutcome, type DrillDownResult } from '../src/api/index.js';
+import { drillDown, type DrillDownOutcome, type DrillDownResult, type StoreContext } from '../src/api/index.js';
 import { hybridSearch } from '../src/search/hybrid.js';
 import { isDagSummary } from '../src/search/boosts.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 function makeOkFetcher(content: string = 'synthetic-entity-profile-content-xyz') {
   return vi.fn<typeof fetch>(async () => {
@@ -86,12 +87,8 @@ function assertDrillDownSucceeded(outcome: DrillDownOutcome): asserts outcome is
   expect('failure' in outcome).toBe(false);
 }
 
-function defaultCtx(hippoRoot: string, tenantId: string = 'default'): Context {
-  return {
-    hippoRoot,
-    tenantId,
-    actor: { subject: 'test:e5', role: 'admin' },
-  };
+function defaultCtx(hippoRoot: string, tenantId: string = 'default'): StoreContext {
+  return apiCtx(hippoRoot, tenantId, { subject: 'test:e5', role: 'admin' });
 }
 
 describe('level-3 entity profiles + drillDown depth', () => {

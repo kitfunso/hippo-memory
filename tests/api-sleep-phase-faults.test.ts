@@ -16,8 +16,9 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { sleep, adminActor, type Context } from '../src/api/index.js';
+import { sleep, adminActor, type StoreContext } from '../src/api/index.js';
 import { runSleep, type SleepPhases } from '../src/api/sleep-run.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 import { initStore } from '../src/store/open.js';
 import { sqliteStore } from '../src/store/index.js';
 import { writeEntry } from '../src/store/entry-writes.js';
@@ -49,11 +50,7 @@ function newCtx() {
   const origHippoHome = process.env.HIPPO_HOME;
   process.env.HIPPO_HOME = globalTmp;
 
-  const ctx: Context = {
-    hippoRoot,
-    tenantId: 'default',
-    actor: adminActor('test:phase-faults'),
-  };
+  const ctx = apiCtx(hippoRoot, 'default', adminActor('test:phase-faults'));
 
   return {
     ctx,
@@ -209,7 +206,7 @@ describe('api.sleep mid-phase failure paths emit partial+errorMessage audit row'
   });
 
   it('a store without local files throws before any phase runs, leaving no audit row', async () => {
-    const ctx: Context = { ...testCtx.ctx, store: { ...sqliteStore(testCtx.ctx.hippoRoot), kind: 'postgres', localFiles: undefined } };
+    const ctx: StoreContext = { ...testCtx.ctx, store: { ...sqliteStore(testCtx.ctx.hippoRoot), kind: 'postgres', localFiles: undefined } };
 
     await expect(sleep(ctx)).rejects.toThrow("the 'postgres' store has no 'localFiles' group");
 

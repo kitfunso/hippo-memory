@@ -197,7 +197,7 @@ async function cmdRecall(
       cliCore: {
         rank: rankOptions(query, flags, o, priced),
         // The global store is a second source for this surface alone, and never when it is the store being searched.
-        sources: { globalRoot: globalRoot !== hippoRoot && priced.globalOn ? globalRoot : undefined },
+        sources: globalRoot !== hippoRoot && priced.globalOn ? { globalRoot, globalStore: cliApiContext(globalRoot, tenantId).store } : undefined,
         note: (line) => printError(line),
         hostSessionId: hostSessionId(),
         show: (rank, planning) => {
@@ -214,7 +214,7 @@ async function cmdRecall(
 }
 
 /** Every flag recall reads, parsed in the order the single-body command checked them. */
-function parseRecallOptions(ctx: api.HippoDbContext, flags: CliFlags) {
+function parseRecallOptions(ctx: api.StoreContext, flags: CliFlags) {
   const budget = parseBudgetFlag(flags['budget'], DEFAULT_RECALL_BUDGET);
   const limit = parseLimitFlag(flags['limit']);
   const asJson = boolFlag(flags, 'json');
@@ -240,7 +240,7 @@ function parseRecallOptions(ctx: api.HippoDbContext, flags: CliFlags) {
 type RecallOptions = ReturnType<typeof parseRecallOptions>;
 
 /** Each entry priced as the line it prints, with the source marker `--why` shows. */
-function priceRecallEntries(ctx: api.HippoDbContext, query: string, o: RecallOptions) {
+function priceRecallEntries(ctx: api.StoreContext, query: string, o: RecallOptions) {
   const origin = cliRecallOrigin(ctx, o.setting);
   const isGlobal = (r: SearchResult): boolean => origin.isGlobal(r.entry.id);
   const entryText = (r: SearchResult): string => recallEntryText(r, query, o.showWhy, isGlobal(r));
@@ -402,7 +402,7 @@ function fitRecallBlock(query: string, o: RecallOptions, ranked: RankedRecall, l
 type FittedRecall = ReturnType<typeof fitRecallBlock>;
 
 /** The presenter `retrieve` calls once ranking ends: fits and renders the block, and names the rows and hint rows to record. */
-function presentRecall(ctx: api.HippoDbContext, query: string, o: RecallOptions, ranked: RankedRecall, planning: PlanningFallacyOutput) {
+function presentRecall(ctx: api.StoreContext, query: string, o: RecallOptions, ranked: RankedRecall, planning: PlanningFallacyOutput) {
   // Loaded before the zero-result branch, so a no-match query with live continuity still returns a resume packet.
   const fit = fitRecallBlock(query, o, ranked, loadCliRecallContinuity(ctx, o.setting, o.includeContinuity), planning);
   const { results, hints } = fit;

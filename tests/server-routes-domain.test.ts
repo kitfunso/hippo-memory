@@ -4,6 +4,7 @@ import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { remember as apiRemember } from '../src/api/index.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 async function jsonAs<T>(res: Response): Promise<T> {
   // SAFETY: every call site below targets one of this file's routes under
@@ -54,11 +55,11 @@ describe('server HTTP routes — memories', () => {
 
   it('GET /v1/memories?q= returns matching results', async () => {
     await apiRemember(
-      { hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } },
+      apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' }),
       { content: 'recall-via-http alpha-token-http sentinel' },
     );
     await apiRemember(
-      { hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } },
+      apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' }),
       { content: 'unrelated noise' },
     );
 
@@ -77,7 +78,7 @@ describe('server HTTP routes — memories', () => {
 
   it('DELETE /v1/memories/:id removes the row', async () => {
     const { id } = await apiRemember(
-      { hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } },
+      apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' }),
       { content: 'forget-canary-target' },
     );
     const res = await fetch(`${handle.url}/v1/memories/${id}`, { method: 'DELETE' });
@@ -107,7 +108,7 @@ describe('server HTTP routes — memories', () => {
 
   it('POST /v1/memories/:id/promote copies to global store', async () => {
     const { id } = await apiRemember(
-      { hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } },
+      apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' }),
       { content: 'promote-canary-payload' },
     );
     const res = await fetch(`${handle.url}/v1/memories/${id}/promote`, { method: 'POST' });
@@ -121,7 +122,7 @@ describe('server HTTP routes — memories', () => {
 
   it('POST /v1/memories/:id/supersede chains old to new', async () => {
     const { id } = await apiRemember(
-      { hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } },
+      apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' }),
       { content: 'supersede-old-content' },
     );
     const res = await fetch(`${handle.url}/v1/memories/${id}/supersede`, {
@@ -324,7 +325,7 @@ describe('server HTTP routes — auth + audit', () => {
   it('GET /v1/audit returns events; filter by op works', async () => {
     // Generate at least one audit event by remembering through the API.
     await apiRemember(
-      { hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } },
+      apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' }),
       { content: 'audit-canary-row' },
     );
 

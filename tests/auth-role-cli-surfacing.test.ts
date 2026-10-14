@@ -18,17 +18,14 @@ import { describe, it, expect } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { authCreate, adminActor, type HippoDbContext } from '../src/api/index.js';
+import { authCreate, adminActor, type StoreContext } from '../src/api/index.js';
 import { listApiKeys } from '../src/store/auth.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 function newCtx(tenantId = 'default') {
   const tmpDir = mkdtempSync(join(tmpdir(), 'hippo-auth-role-cli-'));
-  const ctx: HippoDbContext = {
-    hippoRoot: tmpDir,
-    tenantId,
-    actor: adminActor('cli'),
-  };
+  const ctx: StoreContext = apiCtx(tmpDir, tenantId, adminActor('cli'));
   return {
     ctx,
     tmpDir,

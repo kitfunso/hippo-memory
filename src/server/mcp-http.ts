@@ -1,7 +1,7 @@
 // MCP over HTTP: POST /mcp and the GET /mcp/stream SSE keepalive.
 import { envMcpSseHeartbeatMs, envMcpSseMaxAgeSec, envMcpSseMaxStreams } from '../util/env.js';
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import type { Context } from '../api/index.js';
+import type { StoreContext } from '../api/index.js';
 import { isSharedStore } from '../core/config.js';
 import { handleMcpRequest, mcpErrorResponse, type McpContext, type McpRequest } from '../mcp/server.js';
 import { HttpError, readBody, sendJson } from '../util/http-util.js';
@@ -63,7 +63,7 @@ export function callerProjectFromHeaders(req: IncomingMessage, hippoRoot: string
   return { name, legacyName: name, aliases };
 }
 
-function mcpContextFor(ctx: Context, clientKey: string, autoSleep: McpContext['autoSleep'], project?: CallerProject): McpContext {
+function mcpContextFor(ctx: StoreContext, clientKey: string, autoSleep: McpContext['autoSleep'], project?: CallerProject): McpContext {
   const mcpCtx: McpContext = {
     hippoRoot: ctx.hippoRoot,
     tenantId: ctx.tenantId,

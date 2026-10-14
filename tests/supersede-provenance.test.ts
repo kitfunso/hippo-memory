@@ -8,14 +8,15 @@ import { createMemory, createSuccessor, DEFAULT_HALF_LIFE_DAYS, Layer, type Memo
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { readEntry } from '../src/store/entry-reads.js';
-import { supersede, type HippoDbContext } from '../src/api/index.js';
+import { supersede, type StoreContext } from '../src/api/index.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 let tmpRoot: string;
 let projectStore: string;
 let globalStore: string;
 
-const ctxFor = (hippoRoot: string): HippoDbContext =>
-  ({ hippoRoot, tenantId: 'default', actor: { subject: 'supersede-provenance-test', role: 'admin' } });
+const ctxFor = (hippoRoot: string): StoreContext =>
+  (apiCtx(hippoRoot, 'default', { subject: 'supersede-provenance-test', role: 'admin' }));
 
 function seed(root: string, content: string, extra: Partial<MemoryEntry> = {}): MemoryEntry {
   const entry = { ...createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), ...extra };

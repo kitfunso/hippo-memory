@@ -27,8 +27,9 @@ import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
-import { remember, type HippoDbContext } from '../src/api/index.js';
+import { remember, type StoreContext } from '../src/api/index.js';
 import { deduplicateStore, type DedupPair } from '../src/consolidate/dedupe.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 function tmpHome(prefix: string) {
   const home = mkdtempSync(join(tmpdir(), prefix));
@@ -39,8 +40,8 @@ function tmpHome(prefix: string) {
   };
 }
 
-function ctxFor(home: string, tenantId: string): HippoDbContext {
-  return { hippoRoot: home, tenantId, actor: { subject: 'test', role: 'admin' } };
+function ctxFor(home: string, tenantId: string): StoreContext {
+  return apiCtx(home, tenantId, { subject: 'test', role: 'admin' });
 }
 
 function setStrength(home: string, id: string, strength: number): void {

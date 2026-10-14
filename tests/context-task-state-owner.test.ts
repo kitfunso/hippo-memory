@@ -3,7 +3,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { createApiKey } from '../src/store/auth.js';
-import { getContext, type Context } from '../src/api/index.js';
+import { getContext, type StoreContext } from '../src/api/index.js';
 import { BadRequestError } from '../src/core/api-errors.js';
 import { _resetSharedStoreCacheForTests } from '../src/core/config.js';
 import { promptHookContext } from '../src/api/prompt-hook.js';
@@ -13,6 +13,7 @@ import { saveSessionHandoff } from '../src/store/handoffs.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 const P = { name: 'p', legacyName: 'p' } as const;
 const KEY_A: ContinuityKey = { owner: 'alice', project: ['p'] };
@@ -21,7 +22,7 @@ const KEY_B: ContinuityKey = { owner: 'bob', project: ['p'] };
 let home: string;
 let handle: ServerHandle | undefined;
 
-const ctx = (owner: string): Context => ({ hippoRoot: home, tenantId: 'default', actor: { subject: `api_key:hk_${owner}`, role: 'member', owner } });
+const ctx = (owner: string): StoreContext => (apiCtx(home, 'default', { subject: `api_key:hk_${owner}`, role: 'member', owner }));
 
 function snap(task: string, session: string) {
   return { task, summary: `${task} summary`, next_step: `${task} next`, session_id: session };

@@ -12,6 +12,7 @@ import { Layer, type MemoryEntry} from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { handleMcpRequest, type McpResponse } from '../src/mcp/server.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { sqliteStore } from '../src/store/sqlite/store.js';
 
 type DrillArgs = { summary_id: string; depth?: number };
 
@@ -32,7 +33,7 @@ async function callTool(
       method: 'tools/call',
       params: { name, arguments: args },
     },
-    { ...ctx, role: 'admin', hostAdmin: true },
+    { ...ctx, role: 'admin', hostAdmin: true, store: sqliteStore(ctx.hippoRoot) },
   );
 }
 
@@ -63,7 +64,7 @@ describe('mcp hippo_drill', () => {
   it('hippo_drill is registered in the tools catalogue', async () => {
     const res = await handleMcpRequest(
       { jsonrpc: '2.0', id: 1, method: 'tools/list' },
-      { hippoRoot: home, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true },
+      { hippoRoot: home, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true, store: sqliteStore(home) },
     );
     // SAFETY: `tools/list` responses always carry `result.tools` as the
     // catalogue array; each entry at minimum has its registered `name`.

@@ -16,6 +16,7 @@ import { serveDashboard } from '../src/dashboard/dashboard.js';
 import { boundPort } from './_helpers/listen.js';
 import { handleMcpRequest } from '../src/mcp/server.js';
 import { _resetAblationCacheForTests } from '../src/core/ablation.js';
+import { sqliteStore } from '../src/store/sqlite/store.js';
 
 const DASHBOARD_TOKEN = 'test-dashboard-token';
 
@@ -317,7 +318,7 @@ describe('confidence facets', () => {
         method: 'tools/call',
         params: { name: 'hippo_recall', arguments: { query: 'haddock' } },
       },
-      { hippoRoot, tenantId: 'default', actor: 'test', role: 'admin', hostAdmin: true },
+      { hippoRoot, tenantId: 'default', actor: 'test', role: 'admin', hostAdmin: true, store: sqliteStore(hippoRoot) },
     );
     expect(JSON.stringify(res)).toContain('[stale]');
   }, 30_000);

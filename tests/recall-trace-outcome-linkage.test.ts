@@ -20,7 +20,8 @@ import { execFileSync } from 'node:child_process';
 import { initStore } from '../src/store/open.js';
 import { loadIndex, saveIndex } from '../src/store/index-and-stats.js';
 import { openHippoDb, closeHippoDb, getHippoDbPath, withSharedStoreHandles, type DatabaseSyncLike } from '../src/db/index.js';
-import { remember, retrieve, outcome, outcomeForLastRecall, type HippoDbContext } from '../src/api/index.js';
+import { remember, retrieve, outcome, outcomeForLastRecall, type StoreContext } from '../src/api/index.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 const repoRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 const hippoBin = join(repoRoot, 'bin', 'hippo.js');
@@ -72,7 +73,7 @@ describe('outcomeForLastRecall — no prior trace', () => {
   it('applies the outcome but writes NO recall_trace_outcomes row, and does not throw', async () => {
     const { home, restore } = tmpHome();
     try {
-      const ctx: HippoDbContext = { hippoRoot: home, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
+      const ctx: StoreContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
       const res = await remember(ctx, { content: 'no-trace-outcome-target' });
       // Seed last_retrieval_ids directly WITHOUT ever calling recall()/getContext()
       // — last_trace_id stays unset (fresh store, pre-v40-flow shape).
@@ -103,7 +104,7 @@ describe('api.outcome explicit traceId opt (SDK linkage)', () => {
   it('links to the given trace when a caller supplies traceId explicitly', async () => {
     const { home, restore } = tmpHome();
     try {
-      const ctx: HippoDbContext = { hippoRoot: home, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
+      const ctx: StoreContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
       await remember(ctx, { content: 'explicit-trace-opt-target' });
       const recallResult = await retrieve(ctx, { query: 'explicit-trace-opt-target', limit: 5 });
       expect(recallResult.results.length).toBeGreaterThan(0);
@@ -140,7 +141,7 @@ describe('api.outcome explicit traceId opt (SDK linkage)', () => {
   it('without traceId, no linkage row is written (existing behavior unchanged)', async () => {
     const { home, restore } = tmpHome();
     try {
-      const ctx: HippoDbContext = { hippoRoot: home, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
+      const ctx: StoreContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
       const res = await remember(ctx, { content: 'no-opt-target' });
       await outcome(ctx, [res.id], true);
 
@@ -163,7 +164,7 @@ describe('storage overhead smoke (success criterion 3)', () => {
   it('100 traced recalls of 10 results grow the DB by less than ~250KB', async () => {
     const { home, restore } = tmpHome();
     try {
-      const ctx: HippoDbContext = { hippoRoot: home, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
+      const ctx: StoreContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
       for (let i = 0; i < 15; i++) {
         await remember(ctx, { content: `storage-smoke-target memory number ${i} filler content` });
       }

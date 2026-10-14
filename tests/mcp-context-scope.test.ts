@@ -7,6 +7,7 @@ import { saveSessionHandoff } from '../src/store/handoffs.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { handleMcpRequest, type McpResponse } from '../src/mcp/server.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { sqliteStore } from '../src/store/sqlite/store.js';
 
 // A hippo_context call with no query asks git for the recent work of the checkout, in child processes.
 vi.setConfig({ testTimeout: 30_000 });
@@ -24,7 +25,7 @@ function callTool(
       method: 'tools/call',
       params: { name, arguments: args },
     },
-    { ...ctx, role: 'admin', hostAdmin: true },
+    { ...ctx, role: 'admin', hostAdmin: true, store: sqliteStore(ctx.hippoRoot) },
   );
 }
 

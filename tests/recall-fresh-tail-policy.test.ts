@@ -17,14 +17,15 @@ import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { Layer, type MemoryEntry} from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { retrieve, RecallContractError, type Context } from '../src/api/index.js';
+import { retrieve, RecallContractError, type StoreContext } from '../src/api/index.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 function safeRmSync(p: string): void {
   try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
 }
-function ctxFor(root: string, tenantId: string = 'default'): Context {
-  return { hippoRoot: root, tenantId, actor: { subject: 'test:f5-policy', role: 'admin' } };
+function ctxFor(root: string, tenantId: string = 'default'): StoreContext {
+  return apiCtx(root, tenantId, { subject: 'test:f5-policy', role: 'admin' });
 }
 function makeRaw(text: string, opts: Partial<MemoryEntry> = {}): MemoryEntry {
   return createMemory(text, {

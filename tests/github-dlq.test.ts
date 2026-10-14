@@ -6,16 +6,18 @@ import { initStore } from '../src/store/open.js';
 import { parkInDlq, listDlq } from '../src/connectors/dlq.js';
 import { githubDlq, replayDlqEntry, type DlqBucket } from '../src/connectors/github/dlq.js';
 import { githubDlqEntry } from '../src/store/connectors/github.js';
-import type { Context } from '../src/api/index.js';
+import type { StoreContext } from '../src/api/index.js';
+import { sqliteStore } from '../src/store/sqlite/store.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 describe('github DLQ', () => {
   let root: string;
-  let ctx: Context;
+  let ctx: StoreContext;
 
   beforeEach(() => {
     root = mkdtempSync(join(tmpdir(), 'hippo-github-dlq-'));
     initStore(root);
-    ctx = { hippoRoot: root, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
+    ctx = apiCtx(root, 'default', { subject: 'cli', role: 'admin' });
   });
 
   afterEach(() => {
@@ -24,7 +26,7 @@ describe('github DLQ', () => {
   });
 
   it('parkInDlq round-trips all rich metadata fields', async () => {
-    const id = await parkInDlq(githubDlq, root, {
+    const id = await parkInDlq(githubDlq, sqliteStore(root), {
       tenantId: 'default',
       rawPayload: '{"action":"opened"}',
       error: 'parse fail',
@@ -53,7 +55,7 @@ describe('github DLQ', () => {
   });
 
   it('parkInDlq stores tenantId null as the __unroutable__ sentinel', async () => {
-    const id = await parkInDlq(githubDlq, root, {
+    const id = await parkInDlq(githubDlq, sqliteStore(root), {
       tenantId: null,
       rawPayload: '{}',
       error: 'no tenant',
@@ -74,7 +76,7 @@ describe('github DLQ', () => {
       'unhandled',
     ];
     for (const bucket of buckets) {
-      await parkInDlq(githubDlq, root, {
+      await parkInDlq(githubDlq, sqliteStore(root), {
         tenantId: 'default',
         rawPayload: `{"b":"${bucket}"}`,
         error: bucket,
@@ -90,11 +92,11 @@ describe('github DLQ', () => {
   it('listDlq filters by tenant and orders by received_at ASC', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date('2026-01-01T00:00:00.000Z'));
-    await parkInDlq(githubDlq, root, { tenantId: 'default', rawPayload: '{"i":1}', error: 'first' });
+    await parkInDlq(githubDlq, sqliteStore(root), { tenantId: 'default', rawPayload: '{"i":1}', error: 'first' });
     // A later clock makes received_at differ without a sleep.
     vi.setSystemTime(new Date('2026-01-01T00:00:01.000Z'));
-    await parkInDlq(githubDlq, root, { tenantId: 'default', rawPayload: '{"i":2}', error: 'second' });
-    await parkInDlq(githubDlq, root, { tenantId: 'acme', rawPayload: '{"i":3}', error: 'other tenant' });
+    await parkInDlq(githubDlq, sqliteStore(root), { tenantId: 'default', rawPayload: '{"i":2}', error: 'second' });
+    await parkInDlq(githubDlq, sqliteStore(root), { tenantId: 'acme', rawPayload: '{"i":3}', error: 'other tenant' });
 
     const defaults = listDlq(githubDlq, root, { tenantId: 'default' });
     expect(defaults).toHaveLength(2);
@@ -108,14 +110,14 @@ describe('github DLQ', () => {
 
   it('listDlq honors limit', async () => {
     for (let i = 0; i < 5; i += 1) {
-      await parkInDlq(githubDlq, root, { tenantId: 'default', rawPayload: `{"i":${i}}`, error: `e${i}` });
+      await parkInDlq(githubDlq, sqliteStore(root), { tenantId: 'default', rawPayload: `{"i":${i}}`, error: `e${i}` });
     }
     const items = listDlq(githubDlq, root, { tenantId: 'default', limit: 2 });
     expect(items).toHaveLength(2);
   });
 
   it('dlqEntry returns the row by id and null for unknown ids', async () => {
-    const id = await parkInDlq(githubDlq, root, {
+    const id = await parkInDlq(githubDlq, sqliteStore(root), {
       tenantId: 'default',
       rawPayload: '{}',
       error: 'boom',
@@ -135,7 +137,7 @@ describe('github DLQ', () => {
   });
 
   it('replayDlqEntry on parse-error payload bumps retry_count and reports parse_error', async () => {
-    const id = await parkInDlq(githubDlq, root, {
+    const id = await parkInDlq(githubDlq, sqliteStore(root), {
       tenantId: 'default',
       rawPayload: 'not-json{{{',
       error: 'original parse fail',

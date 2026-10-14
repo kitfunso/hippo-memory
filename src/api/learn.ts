@@ -13,9 +13,8 @@ import { extractPathTags } from '../search/path-context.js';
 import { canReadScope, personalScopeOf } from '../core/recall-scope.js';
 import { duplicateKey, longestWord, storedTextKeys } from '../util/same-text.js';
 import { requireGroup } from '../store/index.js';
-import { storeFor } from '../store/sqlite/store.js';
 import type { LessonWrites } from '../store/port.js';
-import type { Context } from './types.js';
+import type { Context, StoreContext } from './types.js';
 
 /** How a surface writes what it learns. */
 export interface LearnProfile {
@@ -49,7 +48,7 @@ export interface LearnResult {
 type LessonCounts = Pick<LearnResult, 'added' | 'skipped' | 'rejected' | 'invalidations'>;
 
 /** Learn from `repoPath`'s last `days` of commits into the caller's tenant. Host admin only. */
-export async function learn(ctx: Context, opts: LearnOpts): Promise<LearnResult> {
+export async function learn(ctx: StoreContext, opts: LearnOpts): Promise<LearnResult> {
   // It reads the host's own git history, which belongs to the host, not to the caller's tenant.
   if (!ctx.actor.hostAdmin) throw new ForbiddenError('hippo_learn requires a host admin');
   const none = { added: 0, skipped: 0, rejected: 0, lowInfo: 0, invalidations: [] };
@@ -99,14 +98,19 @@ async function landLessons(batch: LessonBatch, queued: readonly QueuedLesson[]):
 }
 
 /** The duplicate keys a batch skips: every readable row's with `existing`, else only the rows holding a lesson's longest word. */
-async function knownKeys(ctx: Context, writes: LessonWrites, lessons: readonly string[], existing: readonly MemoryEntry[] | undefined): Promise<Set<string>> {
+async function knownKeys(
+  ctx: StoreContext,
+  writes: LessonWrites,
+  lessons: readonly string[],
+  existing: readonly MemoryEntry[] | undefined,
+): Promise<Set<string>> {
   return storedTextKeys(existing ?? await writes.textsHoldingWords(ctx.tenantId, lessons.map(longestWord), personalScopeOf(ctx.actor)));
 }
 
-async function writeLessons(ctx: Context, lessons: readonly string[], opts: LearnOpts, config: HippoConfig): Promise<LessonCounts> {
+async function writeLessons(ctx: StoreContext, lessons: readonly string[], opts: LearnOpts, config: HippoConfig): Promise<LessonCounts> {
   const { tenantId } = ctx;
   const { profile } = opts;
-  const store = storeFor(ctx);
+  const store = ctx.store;
   const writes = requireGroup(store, 'lessonWrites');
   // `hippo init` calls this outside any request, so the batch brings its own scope: every read and write below shares one handle.
   return runWithRequestStores(async () => {

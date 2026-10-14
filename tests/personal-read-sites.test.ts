@@ -22,6 +22,7 @@ import { assembleBriefFromReceipts } from '../src/objects/project-briefs.js';
 import { saveItems, type ItemContext } from '../src/store/compactions-record.js';
 import { _resetSharedStoreCacheForTests } from '../src/core/config.js';
 import { clearProjectIdentityCache } from '../src/core/project-identity.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 const T = 'default';
 const OWN_A = 'personal:private:alice';
@@ -196,7 +197,7 @@ describe('admin read sites', () => {
       fs.writeFileSync(path.join(repo, 'db.ts'), 'export const timeout = 30;\n');
       git('add', '.');
       git('commit', '-m', 'fix: pool timeout bumped to 30s in src/db/index.ts');
-      const ctx = { hippoRoot: root, tenantId: T, actor: { ...adminActor('learn-test'), owner: 'alice' } };
+      const ctx = apiCtx(root, T, { ...adminActor('learn-test'), owner: 'alice' });
       const run = () => learn(ctx, { repoPath: repo, days: 7, profile });
       const move = (from: string | null, to: string): void => {
         const row = loadAllEntries(root, T).find((e) => e.source === profile.source && (e.scope ?? null) === from)!;

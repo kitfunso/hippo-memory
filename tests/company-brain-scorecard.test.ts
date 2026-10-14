@@ -16,6 +16,7 @@ import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../src/c
 import { buildProvenanceCoverage } from '../src/api/provenance-coverage.js';
 import { buildCorrectionLatency } from '../src/api/correction-latency.js';
 import { estimateTokens } from '../src/util/token-text.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 let tmpDir: string;
 
@@ -171,14 +172,14 @@ describe('Company Brain continuity scorecard scaffold', () => {
     });
 
     const baseline = await retrieve(
-      { hippoRoot: tmpDir, tenantId: 'default', actor: { subject: 'test', role: 'admin' } },
+      apiCtx(tmpDir, 'default', { subject: 'test', role: 'admin' }),
       { query: 'continuity' },
     );
     expect(baseline.continuity).toBeUndefined();
     expect(baseline.continuityTokens).toBeUndefined();
 
     const onResult = await retrieve(
-      { hippoRoot: tmpDir, tenantId: 'default', actor: { subject: 'test', role: 'admin' } },
+      apiCtx(tmpDir, 'default', { subject: 'test', role: 'admin' }),
       { query: 'continuity', includeContinuity: true },
     );
     expect(onResult.continuity).toBeDefined();

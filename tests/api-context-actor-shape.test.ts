@@ -14,7 +14,8 @@ import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { queryAuditEvents } from '../src/store/audit.js';
-import { adminActor, remember, type Actor, type Context } from '../src/api/index.js';
+import { adminActor, remember, type Actor, type StoreContext } from '../src/api/index.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 describe('Context.actor shape', () => {
   it('Actor is {subject, role}', () => {
@@ -37,7 +38,7 @@ describe('Context.actor shape', () => {
     const home = mkdtempSync(join(tmpdir(), 'hippo-actor-shape-'));
     initStore(home);
     try {
-      const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: adminActor('cli') };
+      const ctx: StoreContext = apiCtx(home, 'default', adminActor('cli'));
       await remember(ctx, { content: 'actor-shape-test-target' });
 
       const db = openHippoDb(home);

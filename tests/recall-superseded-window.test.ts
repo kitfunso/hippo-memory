@@ -9,7 +9,8 @@ import { createMemory } from './_helpers/default-half-life-memory.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadRecallSearchEntries } from '../src/store/search-rows.js';
-import { assemble, retrieve, supersede, type Context } from '../src/api/index.js';
+import { assemble, retrieve, supersede, type StoreContext } from '../src/api/index.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 const roots: string[] = [];
 
@@ -20,8 +21,8 @@ function newRoot(): string {
   return root;
 }
 
-const ctxFor = (hippoRoot: string): Context =>
-  ({ hippoRoot, tenantId: 'default', actor: { subject: 'superseded-window-test', role: 'admin' } });
+const ctxFor = (hippoRoot: string): StoreContext =>
+  (apiCtx(hippoRoot, 'default', { subject: 'superseded-window-test', role: 'admin' }));
 
 afterEach(() => {
   for (const r of roots.splice(0)) rmSync(r, { recursive: true, force: true });

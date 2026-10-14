@@ -9,6 +9,7 @@ import { Layer} from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { handleMcpRequest, type McpResponse } from '../src/mcp/server.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { sqliteStore } from '../src/store/sqlite/store.js';
 
 function safeRmSync(p: string): void { try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ } }
 
@@ -20,7 +21,7 @@ async function callTool(
 ) {
   return handleMcpRequest(
     { jsonrpc: '2.0', id: reqId, method: 'tools/call', params: { name, arguments: args } },
-    { ...ctx, role: 'admin', hostAdmin: true },
+    { ...ctx, role: 'admin', hostAdmin: true, store: sqliteStore(ctx.hippoRoot) },
   );
 }
 function extractText(res: McpResponse | null): string {
@@ -47,7 +48,7 @@ describe('mcp hippo_assemble', () => {
   it('hippo_assemble is in the tools catalogue', async () => {
     const res = await handleMcpRequest(
       { jsonrpc: '2.0', id: 1, method: 'tools/list' },
-      { hippoRoot: home, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true },
+      { hippoRoot: home, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true, store: sqliteStore(home) },
     );
     // SAFETY: tools/list always returns { tools: [...] } per the MCP protocol handler above.
     const listResult = res?.result as { tools?: Array<{ name?: string }> } | undefined;

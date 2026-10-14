@@ -3,7 +3,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest
 import { rmSync } from 'node:fs';
 import {
   adminActor, extractRememberedFacts, reject, rememberLocally,
-  type HippoDbContext, type LocalRememberInput, type LocalRememberOutcome,
+  type LocalRememberInput, type LocalRememberOutcome, type StoreContext,
 } from '../src/api/index.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, Layer, type MemoryEntry } from '../src/core/memory.js';
 import { schemaFitInStore } from '../src/store/candidates.js';
@@ -14,6 +14,7 @@ import { RejectedValueError } from '../src/core/api-errors.js';
 import { loadEmbeddingIndex } from '../src/store/vector-index.js';
 import { startHashedEmbeddings, type HashedEmbeddings } from './_helpers/hashed-embedding-server.js';
 import { makeRoot, type MakeRootOptions } from './_helpers/make-root.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 const TEXT = 'the billing service retries a failed charge three times';
 const SALIENCE_ON = { salience: { enabled: true } };
@@ -24,21 +25,21 @@ afterAll(() => {
 });
 afterEach(() => { vi.unstubAllEnvs(); });
 
-function store(config?: MakeRootOptions['config']): HippoDbContext {
+function store(config?: MakeRootOptions['config']): StoreContext {
   const hippoRoot = makeRoot('local-remember', { config });
   roots.push(hippoRoot);
-  return { hippoRoot, tenantId: 'default', actor: adminActor('cli') };
+  return apiCtx(hippoRoot, 'default', adminActor('cli'));
 }
 
-const counted = (ctx: HippoDbContext): number => Number(loadStats(ctx.hippoRoot).total_remembered);
-const rows = (ctx: HippoDbContext): MemoryEntry[] => loadAllEntries(ctx.hippoRoot, ctx.tenantId);
+const counted = (ctx: StoreContext): number => Number(loadStats(ctx.hippoRoot).total_remembered);
+const rows = (ctx: StoreContext): MemoryEntry[] => loadAllEntries(ctx.hippoRoot, ctx.tenantId);
 
-function seed(ctx: HippoDbContext, content: string, tags: string[]): void {
+function seed(ctx: StoreContext, content: string, tags: string[]): void {
   writeEntry(ctx.hippoRoot, createMemory(content, { tags, baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
 }
 
 /** A store whose last four rows are errors, so a fifth that overlaps them is a repeated error. */
-function storeOfRepeatedErrors(): HippoDbContext {
+function storeOfRepeatedErrors(): StoreContext {
   const ctx = store(SALIENCE_ON);
   for (let n = 1; n <= 4; n++) seed(ctx, `connection timeout on database shard ${n}`, ['error']);
   return ctx;
@@ -171,8 +172,8 @@ describe('extractRememberedFacts', () => {
     { content: 'The billing service retries a failed charge three times before paging', tags: ['topic:billing'], valence: 'neutral' },
   ];
   const answering = (text: string, status = 200): typeof fetch => async () => new Response(JSON.stringify({ content: [{ text }] }), { status });
-  const stored = async (ctx: HippoDbContext): Promise<MemoryEntry> => storedRow(await rememberLocally(ctx, { content: TEXT, tags: ['scope:eng'] }));
-  const extracted = (ctx: HippoDbContext, from: MemoryEntry): MemoryEntry[] => rows(ctx).filter((row) => row.extracted_from === from.id);
+  const stored = async (ctx: StoreContext): Promise<MemoryEntry> => storedRow(await rememberLocally(ctx, { content: TEXT, tags: ['scope:eng'] }));
+  const extracted = (ctx: StoreContext, from: MemoryEntry): MemoryEntry[] => rows(ctx).filter((row) => row.extracted_from === from.id);
 
   it('is off unless the caller or the config asks', async () => {
     const ctx = store();

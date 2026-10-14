@@ -11,7 +11,8 @@ import { loadAllEntries, loadAllEntriesWithBase } from '../src/store/entry-reads
 import { runSleep } from '../src/api/sleep-run.js';
 import { computeAmbientState } from '../src/core/ambient.js';
 import { _resetAblationCacheForTests } from '../src/core/ablation.js';
-import type { Context } from '../src/api/index.js';
+import type { StoreContext } from '../src/api/index.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 const roots: string[] = [];
 
@@ -22,8 +23,8 @@ function newRoot(): string {
   return root;
 }
 
-const ctxFor = (hippoRoot: string): Context =>
-  ({ hippoRoot, tenantId: 'default', actor: { subject: 'one-copy-test', role: 'admin' } });
+const ctxFor = (hippoRoot: string): StoreContext =>
+  (apiCtx(hippoRoot, 'default', { subject: 'one-copy-test', role: 'admin' }));
 
 afterEach(() => {
   vi.unstubAllEnvs();

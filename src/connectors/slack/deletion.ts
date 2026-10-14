@@ -1,6 +1,5 @@
-import { archiveRaw, type Context } from '../../api/index.js';
+import { archiveRaw, type StoreContext } from '../../api/index.js';
 import { requireGroup } from '../../store/index.js';
-import { storeFor } from '../../store/sqlite/store.js';
 import type { ConnectorEvent } from '../../store/port.js';
 
 export interface DeletionInput {
@@ -19,8 +18,8 @@ export interface DeletionResult {
 
 /** Handles Slack `message_deleted`. The store logs the event in the archive's own transaction, so a crash cannot leave a retry
  *  answering `not_found` where `duplicate` is due. */
-export async function handleMessageDeleted(ctx: Context, input: DeletionInput): Promise<DeletionResult> {
-  const events = requireGroup(storeFor(ctx), 'connectorEvents');
+export async function handleMessageDeleted(ctx: StoreContext, input: DeletionInput): Promise<DeletionResult> {
+  const events = requireGroup(ctx.store, 'connectorEvents');
   const event: ConnectorEvent = { connector: 'slack', eventId: input.eventId };
   // The tenant in the lookup is load-bearing: without it a deletion event from
   // tenant A could archive tenant B's raw row sharing the same artifact_ref.

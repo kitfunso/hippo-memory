@@ -18,6 +18,7 @@ import { importGenericFile } from '../src/importers/sources.js';
 import { importVault } from '../src/importers/vault.js';
 import { cmdCapture } from '../src/capture/command.js';
 import { importProjectMemories } from '../src/agent-memories/sync.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 const HIPPO_BIN = path.resolve(__dirname, '..', 'bin', 'hippo.js');
 const CONFIGURED = 730;
@@ -72,7 +73,7 @@ async function added<T>(root: string, write: () => T): Promise<MemoryEntry[]> {
 const writers: [string, (root: string) => Promise<MemoryEntry[]>][] = [
   ['api supersede', (root) => {
     const old = seed(root, 'the deploy window is Tuesday afternoon');
-    const ctx: api.Context = { hippoRoot: root, tenantId: 'default', actor: api.adminActor('cli') };
+    const ctx: api.StoreContext = apiCtx(root, 'default', api.adminActor('cli'));
     return added(root, () => api.supersede(ctx, old.id, 'the deploy window is Thursday morning'));
   }],
   ['CLI supersede', (root) => {
@@ -171,7 +172,7 @@ describe('an invalid configured default half-life', () => {
     fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ defaultHalfLifeDays: value, replay: { count: 0 } }));
     const warn = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     const old = seed(root, 'the deploy window is Tuesday afternoon');
-    const ctx: api.Context = { hippoRoot: root, tenantId: 'default', actor: api.adminActor('cli') };
+    const ctx: api.StoreContext = apiCtx(root, 'default', api.adminActor('cli'));
     const [entry] = await added(root, () => api.supersede(ctx, old.id, 'the deploy window is Thursday morning'));
     expect(entry.half_life_days).toBe(deriveHalfLife(DEFAULT_HALF_LIFE_DAYS, entry));
     expect(warn.mock.calls.some((args) => String(args[0]).includes('"defaultHalfLifeDays"'))).toBe(true);

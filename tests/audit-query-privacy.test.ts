@@ -6,9 +6,11 @@ import { execFileSync } from 'node:child_process';
 import { initStore } from '../src/store/open.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { auditQueryFields } from '../src/store/audit.js';
-import { getContext, retrieve, remember, type Context } from '../src/api/index.js';
+import { getContext, retrieve, remember, type StoreContext } from '../src/api/index.js';
 import { handleMcpRequest, type McpContext } from '../src/mcp/server.js';
 import { serve, type ServerHandle } from '../src/server.js';
+import { apiCtx } from './_helpers/api-ctx.js';
+import { sqliteStore } from '../src/store/sqlite/store.js';
 
 const HIPPO_BIN = join(process.cwd(), 'bin', 'hippo.js');
 const CANARY = 'zqcanaryneedle';
@@ -18,7 +20,7 @@ let home: string;
 let localRoot: string;
 let globalRoot: string;
 let savedHome: string | undefined;
-let ctx: Context;
+let ctx: StoreContext;
 
 interface RecallMetadata {
   query?: string;
@@ -66,7 +68,7 @@ beforeEach(async () => {
   savedHome = process.env.HIPPO_HOME;
   process.env.HIPPO_HOME = globalRoot;
   initStore(localRoot);
-  ctx = { hippoRoot: localRoot, tenantId: 'default', actor: { subject: 'test', role: 'admin' } };
+  ctx = apiCtx(localRoot, 'default', { subject: 'test', role: 'admin' });
   await remember(ctx, { content: `${CANARY} stored memory body` });
 });
 
@@ -113,7 +115,7 @@ describe('census: a canary query reaches no audit metadata value', () => {
       env: { ...process.env, HIPPO_HOME: globalRoot, HIPPO_SKIP_AUTO_INTEGRATIONS: '1' },
       encoding: 'utf-8',
     });
-    const mcpCtx: McpContext = { hippoRoot: localRoot, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true };
+    const mcpCtx: McpContext = { hippoRoot: localRoot, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true , store: sqliteStore(localRoot) };
     await handleMcpRequest(
       { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_recall', arguments: { query: QUERY } } },
       mcpCtx,

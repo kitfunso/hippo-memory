@@ -33,13 +33,14 @@ import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { insertEntityAt, insertRelationAt } from './_helpers/graph-seed.js';
-import { remember, type Context } from '../src/api/index.js';
+import { remember, type StoreContext } from '../src/api/index.js';
 import { makeEnv, type TestEnv } from './_helpers/cli-env.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 const CLI = join(process.cwd(), 'dist', 'cli.js');
 
-function ctxFor(root: string): Context {
-  return { hippoRoot: root, tenantId: 'default', actor: { subject: 'c5-test', role: 'admin' } };
+function ctxFor(root: string): StoreContext {
+  return apiCtx(root, 'default', { subject: 'c5-test', role: 'admin' });
 }
 
 /** Seed `count` distinct memories that all match `keyword`. */

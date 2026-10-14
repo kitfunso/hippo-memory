@@ -33,13 +33,13 @@ function storeOfKind(kind: string): HippoStore {
   return kind === 'sqlite' ? sqliteStore(root) : { ...sqliteStore(root), kind, localFiles: undefined };
 }
 
-const ctxOn = (kind: string | undefined): McpContext => ({
+const ctxOn = (kind: string): McpContext => ({
   hippoRoot: root,
   tenantId: 'default',
   actor: 'mcp',
   role: 'admin',
   hostAdmin: true,
-  store: kind === undefined ? undefined : storeOfKind(kind),
+  store: storeOfKind(kind),
 });
 
 // An add-on store built before the contextReads group.
@@ -73,8 +73,9 @@ describe('store-ready MCP tools', () => {
     expect(readdirSync(root)).toEqual([]);
   });
 
-  it.each([['the sqlite store', 'sqlite'], ['a context with no store', undefined]] as const)('tools/list on %s lists every tool', async (_name, kind) => {
-    const res = await handleMcpRequest({ jsonrpc: '2.0', id: 1, method: 'tools/list' }, ctxOn(kind));
+  it.each([['the sqlite store', 'sqlite'], ['stdio, which brings an opener and no context', undefined]] as const)('tools/list on %s lists every tool', async (_name, kind) => {
+    const list = { jsonrpc: '2.0', id: 1, method: 'tools/list' } as const;
+    const res = kind === undefined ? await handleMcpRequest(list, undefined, sqliteStore) : await handleMcpRequest(list, ctxOn(kind));
     expect(listedNames(res)).toEqual(declared);
   });
 

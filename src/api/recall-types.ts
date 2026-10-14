@@ -65,8 +65,8 @@ export interface RecallOpts {
 
 interface CliCoreRanking {
   rank: Omit<RankRecallOpts, 'query' | 'sessionId' | 'goalTag'>;
-  /** A second store searched beside `ctx.hippoRoot`; its recall rows go to `globalStore`, else hippo.db under `globalRoot`. */
-  sources?: { globalRoot?: string; globalStore?: HippoStore };
+  /** A second store searched beside `ctx.hippoRoot`: ranking reads hippo.db under `globalRoot`, and its recall rows go to `globalStore`. */
+  sources?: { readonly globalRoot: string; readonly globalStore: HippoStore };
   /** Receives each operator note when ranking reaches it. */
   note?: (line: string) => void;
 }

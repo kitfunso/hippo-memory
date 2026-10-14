@@ -28,6 +28,8 @@ import { computeSalience } from '../src/core/salience.js';
 import { heldTexts, mergedText } from '../src/util/same-text.js';
 import { insertDormantRow } from '../src/store/dormant.js';
 import { hippoOut } from './_helpers/spawn-hippo.js';
+import { sqliteStore } from '../src/store/sqlite/store.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 const DAY = 86_400_000;
 const dirs: string[] = [];
@@ -77,7 +79,7 @@ const json = (out: string): { results: { id: string; content: string }[] } => JS
 type ToolArgs = { query?: string; fresh_tail_count?: number; days?: number };
 
 async function mcp(root: string, name: string, args: ToolArgs): Promise<string> {
-  const res = await handleMcpRequest({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } }, { hippoRoot: root, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true });
+  const res = await handleMcpRequest({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } }, { hippoRoot: root, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true, store: sqliteStore(root) });
   // SAFETY: the tools/call case always wraps a tool's output as { content: [{ type: 'text', text }] }.
   const result = res?.result as { content?: { text?: string }[] } | undefined;
   return result?.content?.[0]?.text ?? '';
@@ -340,7 +342,7 @@ describe('merged row', () => {
 describe('a retired version leaves the merged row', () => {
   const OLD = 'The web app dev server runs on port 3000 locally.';
   const NEW = 'The web app dev server now runs on port 5173 locally.';
-  const ctx = (root: string): api.Context => ({ hippoRoot: root, tenantId: 'default', actor: api.adminActor('cli') });
+  const ctx = (root: string): api.StoreContext => (apiCtx(root, 'default', api.adminActor('cli')));
   const recalled = async (root: string): Promise<string> => (await api.retrieve(ctx(root), { query: 'web app dev server port' })).results.map((r) => r.content).join('\n');
   const current = (root: string): string => loadAllEntries(root).filter((e) => !e.superseded_by).map((e) => e.content).join('\n');
 
@@ -421,7 +423,7 @@ describe('recall and context show a merged row, not the sources it holds', () =>
   const FACTS = ['General project context: the staging service listens on port 4400.', 'General project context: the analytics service listens on port 7700.'];
   const QUERY = 'service listens port';
   const copies = (text: string): number => text.split('port 4400').length - 1;
-  const ctx = (root: string): api.Context => ({ hippoRoot: root, tenantId: 'default', actor: api.adminActor('cli') });
+  const ctx = (root: string): api.StoreContext => (apiCtx(root, 'default', api.adminActor('cli')));
 
   async function mergedStore(): Promise<{ root: string; row: MemoryEntry }> {
     vi.stubEnv('HIPPO_HOME', join(tmp(), 'global'));

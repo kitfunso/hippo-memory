@@ -16,6 +16,7 @@ import { saveEmbeddingIndex } from '../src/store/vector-index.js';
 import { resolveEmbeddingProvider } from '../src/embeddings/provider.js';
 import { _resetAblationCacheForTests } from '../src/core/ablation.js';
 import { openHippoDb, closeHippoDb, withSharedStoreHandles } from '../src/db/index.js';
+import { sqliteStore } from '../src/store/sqlite/store.js';
 
 // Every case seeds 26 rows, two of them up to 210 more, in a real store, so its time follows the runner's disk.
 vi.setConfig({ testTimeout: 30_000 });
@@ -77,7 +78,7 @@ function seed(config?: StoreConfig): Seeded {
 function call(home: string, args: Record<string, string | number | boolean>, ctx?: Partial<McpContext>): Promise<McpResponse | null> {
   return handleMcpRequest(
     { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_recall', arguments: args } },
-    { hippoRoot: home, tenantId: TENANT, actor: 'mcp', role: 'admin', hostAdmin: true, ...ctx },
+    { hippoRoot: home, tenantId: TENANT, actor: 'mcp', role: 'admin', hostAdmin: true, ...ctx, store: sqliteStore(home) },
   );
 }
 

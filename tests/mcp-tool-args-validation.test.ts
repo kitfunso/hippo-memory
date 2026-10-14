@@ -7,6 +7,7 @@ import { initStore } from '../src/store/open.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { handleMcpRequest, type McpResponse } from '../src/mcp/server.js';
 import { validateToolArgs, type ToolInputSchema } from '../src/mcp/tool-args.js';
+import { sqliteStore } from '../src/store/sqlite/store.js';
 
 type Wire = string | number | boolean | null | Wire[] | { [key: string]: Wire };
 
@@ -43,7 +44,7 @@ describe('MCP tool argument validation', () => {
   async function call(name: string, args: Wire): Promise<ToolReply> {
     const res = await handleMcpRequest(
       { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } },
-      { hippoRoot: home, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true },
+      { hippoRoot: home, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true, store: sqliteStore(home) },
     );
     return reply(res);
   }

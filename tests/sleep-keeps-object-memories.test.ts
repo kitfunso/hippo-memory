@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { sleep, type Context } from '../src/api/index.js';
+import { sleep, type StoreContext } from '../src/api/index.js';
 import { auditMemories } from '../src/core/memory-audit.js';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
 import { saveDecision } from '../src/objects/decisions.js';
@@ -15,6 +15,7 @@ import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries, readEntry } from '../src/store/entry-reads.js';
 import { batchWriteAndDelete, deleteEntry, memoriesBackingObjects } from '../src/store/delete-and-batch.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 const roots: string[] = [];
 
@@ -30,7 +31,7 @@ afterEach(() => {
   for (const r of roots.splice(0)) rmSync(r, { recursive: true, force: true });
 });
 
-const ctxFor = (hippoRoot: string): Context => ({ hippoRoot, tenantId: 'default', actor: { subject: 'object-memories-test', role: 'admin' } });
+const ctxFor = (hippoRoot: string): StoreContext => (apiCtx(hippoRoot, 'default', { subject: 'object-memories-test', role: 'admin' }));
 
 function run(root: string, sql: string, ...params: string[]): void {
   const db = openHippoDb(root);

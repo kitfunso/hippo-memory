@@ -13,6 +13,7 @@ import { createMemory } from './_helpers/default-half-life-memory.js';
 import { handleMcpRequest, type McpResponse } from '../src/mcp/server.js';
 import { _resetAblationCacheForTests } from '../src/core/ablation.js';
 import { withSharedStoreHandles } from '../src/db/index.js';
+import { sqliteStore } from '../src/store/sqlite/store.js';
 
 // Newest first, as git log prints them.
 const COMMIT_SUBJECTS = [
@@ -137,7 +138,7 @@ describe('request-path output on a fixed store', () => {
   const call = (name: string, args: ToolArgs = {}): Promise<McpResponse | null> =>
     handleMcpRequest(
       { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } },
-      { hippoRoot: localRoot, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true },
+      { hippoRoot: localRoot, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true, store: sqliteStore(localRoot) },
     );
 
   const toolCases: Array<[string, ToolArgs]> = [

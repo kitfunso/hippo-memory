@@ -11,7 +11,7 @@ import { Worker } from 'node:worker_threads';
 import { Layer, type MemoryEntry } from '../src/core/memory.js';
 import { consolidate } from '../src/consolidate/sleep.js';
 import { runSleep } from '../src/api/sleep-run.js';
-import type { Context } from '../src/api/index.js';
+import type { StoreContext } from '../src/api/index.js';
 import { initStore } from '../src/store/open.js';
 import { upsertEntryRow } from '../src/store/entry-row.js';
 import { mergedText } from '../src/util/same-text.js';
@@ -20,6 +20,7 @@ import { _resetAblationCacheForTests } from '../src/core/ablation.js';
 import { closeHippoDb, getHippoDbPath, getMeta, HOOK_DB_WAIT_MS, openHippoDb, runWithRequestStores, withSharedStoreHandles, type DatabaseSyncLike } from '../src/db/index.js';
 import { WRITE_BUDGET, type WriteBudget } from '../src/util/write-budget.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 const yieldOnce = (): Promise<void> => new Promise((resolve) => setImmediate(resolve));
 
@@ -282,7 +283,7 @@ describe('chunked consolidation flush', () => {
       await yieldOnce();
     });
     const fx = seed({ clusters: 12, dormant: 10, filler: 20 });
-    const ctx: Context = { hippoRoot: fx.root, tenantId: 'default', actor: { subject: 'sleep-test', role: 'admin' } };
+    const ctx: StoreContext = apiCtx(fx.root, 'default', { subject: 'sleep-test', role: 'admin' });
     const atNow: typeof consolidate = (root, opts) => consolidate(root, { ...opts, now: NOW, budget: stopsOnSecondPause });
 
     await expect(runSleep(ctx, { noShare: true }, { consolidate: atNow })).rejects.toThrow('stopped between chunks');
@@ -329,7 +330,7 @@ describe('chunked consolidation flush', () => {
     const bad = fx.clusters[3]!;
     onStore(fx.root, (db) => db.exec(
       `CREATE TRIGGER boom BEFORE UPDATE ON memories WHEN NEW.id = '${bad[0]}' BEGIN SELECT RAISE(ABORT, 'boom'); END`));
-    const ctx: Context = { hippoRoot: fx.root, tenantId: 'default', actor: { subject: 'sleep-test', role: 'admin' } };
+    const ctx: StoreContext = apiCtx(fx.root, 'default', { subject: 'sleep-test', role: 'admin' });
     const oneChunk: typeof consolidate = (root, opts) => consolidate(root, { ...opts, now: NOW, budget: budget(Infinity) });
 
     await expect(runSleep(ctx, { noShare: true }, { consolidate: oneChunk })).rejects.toThrow('boom');

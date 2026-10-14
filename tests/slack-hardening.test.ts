@@ -7,7 +7,7 @@ import { createRequire } from 'node:module';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
-import { remember, type HippoDbContext } from '../src/api/index.js';
+import { remember, type StoreContext } from '../src/api/index.js';
 import { Layer } from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { openHippoDb, closeHippoDb, getCurrentSchemaVersion, getSchemaVersion, type DatabaseSyncLike } from '../src/db/index.js';
@@ -22,6 +22,8 @@ import { verifySlackSignature } from '../src/connectors/slack/signature.js';
 import { slackHistoryFetcher } from '../src/connectors/slack/web-client.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { LATEST_SCHEMA_VERSION } from './_helpers/schema-version.js';
+import { sqliteStore } from '../src/store/sqlite/store.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 // SAFETY: node:sqlite's DatabaseSync is the class db.ts wraps as DatabaseSyncLike.
 const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite') as { DatabaseSync: { prototype: DatabaseSyncLike } };
@@ -85,7 +87,7 @@ describe('Slack hardening + migration v19', () => {
     const restore = withEnv('HIPPO_TENANT', 'env-tenant-A');
     const db = openHippoDb(root);
     try {
-      expect(await resolveTenantForSlackTeam(root, 'TUNKNOWN')).toBe('env-tenant-A');
+      expect(await resolveTenantForSlackTeam(sqliteStore(root), 'TUNKNOWN')).toBe('env-tenant-A');
     } finally {
       closeHippoDb(db);
       restore();
@@ -100,7 +102,7 @@ describe('Slack hardening + migration v19', () => {
       db.prepare(
         `INSERT INTO slack_workspaces (team_id, tenant_id, added_at) VALUES (?, ?, ?)`,
       ).run('TKNOWN', 'tenant-known', new Date().toISOString());
-      expect(await resolveTenantForSlackTeam(root, 'TUNKNOWN')).toBeNull();
+      expect(await resolveTenantForSlackTeam(sqliteStore(root), 'TUNKNOWN')).toBeNull();
     } finally {
       closeHippoDb(db);
       restore();
@@ -116,7 +118,7 @@ describe('Slack hardening + migration v19', () => {
       db.prepare(
         `INSERT INTO slack_workspaces (team_id, tenant_id, added_at) VALUES (?, ?, ?)`,
       ).run('TKNOWN', 'tenant-known', new Date().toISOString());
-      expect(await resolveTenantForSlackTeam(root, 'TUNKNOWN')).toBe('env-fallback');
+      expect(await resolveTenantForSlackTeam(sqliteStore(root), 'TUNKNOWN')).toBe('env-fallback');
     } finally {
       closeHippoDb(db);
       r2();
@@ -196,7 +198,7 @@ describe('Slack hardening + migration v19', () => {
 
   // The fast pre-check answers a replay; a second worker whose pre-check ran too early is caught by the event-log insert inside its own write.
   it('ingest race: duplicate event_id yields exactly one memory + skipped_duplicate via afterWrite throw', async () => {
-    const ctx: HippoDbContext = { hippoRoot: root, tenantId: 'default', actor: { subject: 'connector:slack', role: 'admin' } };
+    const ctx: StoreContext = apiCtx(root, 'default', { subject: 'connector:slack', role: 'admin' });
 
     // First call: ordinary ingest succeeds and writes to slack_event_log.
     const r1 = await ingestMessage(ctx, {
@@ -345,7 +347,7 @@ describe('Slack hardening + migration v19', () => {
     }
 
     // Seed the DLQ row.
-    const dlqId = await parkInDlq(slackDlq, root, {
+    const dlqId = await parkInDlq(slackDlq, sqliteStore(root), {
       tenantId: 'default',
       teamId: 'TREPLAY',
       rawPayload: body,
@@ -358,7 +360,7 @@ describe('Slack hardening + migration v19', () => {
     // Replay using the current secret. Use a wide skew override so the test is
     // not flaky against the now/skew check inside verifySlackSignature.
     const result = await replayDlqEntry(
-      { hippoRoot: root },
+      { hippoRoot: root, store: sqliteStore(root) },
       dlqId,
       { signingSecret: SECRET, now: Number(ts), skewSeconds: 60 },
     );

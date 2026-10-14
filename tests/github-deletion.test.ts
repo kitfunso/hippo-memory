@@ -4,19 +4,16 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
-import { remember, retrieve, type HippoDbContext } from '../src/api/index.js';
+import { remember, retrieve, type StoreContext } from '../src/api/index.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { handleCommentDeleted } from '../src/connectors/github/deletion.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 const ARTIFACT = 'github://acme/repo/issue/42/comment/123';
 const SCOPE_PUBLIC = 'github:public:acme/repo';
 const SCOPE_PRIVATE = 'github:private:acme/secret';
 
-const ctxFor = (root: string, tenantId = 'default'): HippoDbContext => ({
-  hippoRoot: root,
-  tenantId,
-  actor: { subject: 'connector:github', role: 'admin' },
-});
+const ctxFor = (root: string, tenantId = 'default'): StoreContext => (apiCtx(root, tenantId, { subject: 'connector:github', role: 'admin' }));
 
 interface SeedOpts {
   tenantId?: string;

@@ -18,14 +18,15 @@ import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
-import { getContext, type Context } from '../src/api/index.js';
+import { getContext, type StoreContext } from '../src/api/index.js';
 import { clearProjectIdentityCache } from '../src/core/project-identity.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 let tmpRoot: string;
 let projA: string;
 let globalStore: string;
 let origHippoHome: string | undefined;
-let ctx: Context;
+let ctx: StoreContext;
 
 const ALPHA = 'ALPHA-RULE deploykey rotation happens on fridays';
 const GLOBAL_PREF = 'GLOBAL-PREF deploykey answers stay under three lines';
@@ -58,7 +59,7 @@ beforeEach(() => {
     closeHippoDb(db);
   }
 
-  ctx = { hippoRoot: projA, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
+  ctx = apiCtx(projA, 'default', { subject: 'cli', role: 'admin' });
 });
 
 afterEach(() => {

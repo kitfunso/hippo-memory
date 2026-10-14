@@ -21,6 +21,7 @@ import { captureError, partitionLessons } from '../src/learn/autolearn.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { addWorkspace } from '../src/connectors/slack/workspaces.js';
 import { replayDlqEntry } from '../src/connectors/slack/dlq.js';
+import { sqliteStore } from '../src/store/sqlite/store.js';
 
 // Built at runtime so no token-shaped literal lands in the repo.
 const GHP = 'ghp_' + 'x1Y2z3W4v5'.repeat(3) + 'Q6r7S8';
@@ -158,8 +159,8 @@ describe('connector webhooks', () => {
     expect(JSON.parse(row.raw_payload).event.text).toBe('bot token [REDACTED] expires on friday');
 
     addWorkspace(root, { teamId: 'T1', tenantId: 'default' });
-    expect((await replayDlqEntry({ hippoRoot: root }, row.id, { signingSecret: SIGNING })).status).toBe('sig_missing');
-    expect((await replayDlqEntry({ hippoRoot: root }, row.id, { force: true })).ok).toBe(true);
+    expect((await replayDlqEntry({ hippoRoot: root, store: sqliteStore(root) }, row.id, { signingSecret: SIGNING })).status).toBe('sig_missing');
+    expect((await replayDlqEntry({ hippoRoot: root, store: sqliteStore(root) }, row.id, { force: true })).ok).toBe(true);
     expectRedacted(storedContents(), SLACK_TOKEN, 'expires on friday');
   });
 

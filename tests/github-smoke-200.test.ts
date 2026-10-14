@@ -15,7 +15,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
-import { remember, retrieve, type Context } from '../src/api/index.js';
+import { remember, retrieve, type StoreContext } from '../src/api/index.js';
 import { ingestEvent, type IngestEvent } from '../src/connectors/github/ingest.js';
 import type { IngestResult } from '../src/connectors/ingest.js';
 import { handleCommentDeleted } from '../src/connectors/github/deletion.js';
@@ -29,6 +29,8 @@ import type {
 } from '../src/connectors/github/types.js';
 import { randomUUID } from 'node:crypto';
 import { makeRoot } from './_helpers/make-root.js';
+import { sqliteStore } from '../src/store/sqlite/store.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 // The one case ingests 200 webhook events, each its own write to a real store.
 vi.setConfig({ testTimeout: 90_000 });
@@ -212,11 +214,7 @@ function buildDeliveryStream(): GeneratedDelivery[] {
   return out;
 }
 
-const ctxFor = (root: string, tenantId = 'default'): Context => ({
-  hippoRoot: root,
-  tenantId,
-  actor: { subject: 'connector:github', role: 'admin' },
-});
+const ctxFor = (root: string, tenantId = 'default'): StoreContext => (apiCtx(root, tenantId, { subject: 'connector:github', role: 'admin' }));
 
 function rawCount(root: string): number {
   const db = openHippoDb(root);
@@ -378,7 +376,7 @@ describe('GitHub connector — 200-event smoke test', () => {
       db.prepare(
         `INSERT INTO github_installations (installation_id, tenant_id, added_at) VALUES (?, ?, ?)`,
       ).run('99999', 'tenant-known', new Date().toISOString());
-      const resolved = await resolveTenantForGitHub(root, { installationId: 'unknown-99' });
+      const resolved = await resolveTenantForGitHub(sqliteStore(root), { installationId: 'unknown-99' });
       expect(resolved).toBeNull();
     } finally {
       closeHippoDb(db);

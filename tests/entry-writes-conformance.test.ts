@@ -2,13 +2,14 @@
 // and the same audit rows, over two tenants with personal, raw, summary and tombstoned rows.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
-import { reject, type HippoDbContext } from '../src/api/index.js';
+import { reject, type StoreContext } from '../src/api/index.js';
 import { CHURN_STALE_TAG, type MemoryEntry } from '../src/core/memory.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import type { AuditEvent } from '../src/entry/store-kit.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { inMemoryEntryWritesStore } from './_helpers/in-memory-entry-writes-store.js';
 import { onBothStores, seedTwoTenants, TENANT_A, TENANT_B, type GroupCall, type SideResult, type TwoTenantFixture } from './_helpers/store-conformance.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 const NOW = '2026-03-01T12:00:05.000Z';
 const ALICE = 'personal:private:alice';
@@ -52,7 +53,7 @@ async function seed(dir: string): Promise<Seeded> {
   const child = a('release notes are drafted on mondays', { dag_parent_id: summary.id });
   const rawChild = a('raw standup transcript about releases', { kind: 'raw', dag_parent_id: summary.id });
   for (const entry of [...Object.values(rows), child, rawChild, summary]) writeEntry(dir, entry, { actor: 'cli' });
-  const ctx: HippoDbContext = { hippoRoot: dir, tenantId: TENANT_A, actor: { subject: 'cli', role: 'admin' } };
+  const ctx: StoreContext = apiCtx(dir, TENANT_A, { subject: 'cli', role: 'admin' });
   await reject(ctx, { value: BANNED, reason: 'wrong date' });
   return { ...rows, summary, child, rawChild };
 }
