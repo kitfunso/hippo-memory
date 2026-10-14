@@ -3,7 +3,7 @@
 // so an operator reading the log sees the error class and stack of every caught failure.
 // Usage: check-caught-error-logs.mjs [--update]. --update rewrites the baseline and refuses to raise a number.
 
-import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import ts from 'typescript';
@@ -69,11 +69,21 @@ export function countUnfieldedLogs(srcDir) {
   return counts;
 }
 
+/** The committed counts, or none when the file is absent; one read, so no exists-then-read race. */
+function readBaseline() {
+  try {
+    return JSON.parse(readFileSync(BASELINE, 'utf8'));
+  } catch (err) {
+    if (err?.code === 'ENOENT') return {};
+    throw err;
+  }
+}
+
 // Guarded so the test can import the functions without running the check.
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const counts = Object.fromEntries(Object.entries(countUnfieldedLogs('src')).map(([f, n]) => [`src/${f}`, n]));
   const total = Object.values(counts).reduce((a, b) => a + b, 0);
-  const base = existsSync(BASELINE) ? JSON.parse(readFileSync(BASELINE, 'utf8')) : {};
+  const base = readBaseline();
   const risen = Object.entries(counts).filter(([f, n]) => n > (base[f] ?? 0));
   if (process.argv.includes('--update')) {
     if (risen.length > 0) { console.error('refusing to raise a number:', risen.map(([f]) => f).join(', ')); process.exit(1); }
