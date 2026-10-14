@@ -1,5 +1,5 @@
 /** Skill object: an agent-followable `instructions` body plus an optional `trigger`, evolving via supersession.
- *  `exportSkills` renders ACTIVE skills into AGENTS.md / CLAUDE.md rules; running code from a skill is deferred (security).
+ *  `skillsMarkdown` renders ACTIVE skills into AGENTS.md / CLAUDE.md rules; running code from a skill is deferred (security).
  *  `trigger` is stored in `trigger_text` because it is a SQLite reserved keyword. */
 
 import { BadRequestError } from '../core/api-errors.js';

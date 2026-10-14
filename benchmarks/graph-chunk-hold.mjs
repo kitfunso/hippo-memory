@@ -11,6 +11,7 @@ import { openHippoDb, closeHippoDb } from '../dist/db/index.js';
 import { saveDecision } from '../dist/objects/decisions.js';
 import { savePolicy } from '../dist/objects/policies.js';
 import { extractGraphChunked } from '../dist/graph/extract.js';
+import { sqliteStore } from '../dist/store/sqlite/store.js';
 
 const LIMIT_MS = 150;
 const TENANT = 'default';
@@ -19,10 +20,11 @@ const DECISIONS = 4_000;
 const MEMORIES = Number(process.argv[2] ?? 20_000);
 
 /** Each decision names two policies, so the graph gets about two references per decision on top of its entities. */
-function seedObjects(root) {
-  for (let p = 0; p < POLICIES; p++) savePolicy(root, TENANT, { policyName: `RetryRule${p}`, policyText: `retry budget ${p}` });
+async function seedObjects(root) {
+  const objects = sqliteStore(root).objects;
+  for (let p = 0; p < POLICIES; p++) await savePolicy(objects, root, TENANT, { policyName: `RetryRule${p}`, policyText: `retry budget ${p}` });
   for (let d = 0; d < DECISIONS; d++) {
-    saveDecision(root, TENANT, { decisionText: `Call ${d} applies RetryRule${d % POLICIES} and RetryRule${(d * 7 + 3) % POLICIES}` });
+    await saveDecision(objects, root, TENANT, { decisionText: `Call ${d} applies RetryRule${d % POLICIES} and RetryRule${(d * 7 + 3) % POLICIES}` });
   }
 }
 
@@ -70,7 +72,7 @@ async function measure(label, root) {
   const started = performance.now();
   let result;
   try {
-    result = await extractGraphChunked(root, TENANT);
+    result = await extractGraphChunked(sqliteStore(root).objects, root, TENANT);
   } finally {
     timer.restore();
   }
@@ -87,7 +89,7 @@ async function measure(label, root) {
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-graph-bench-'));
 try {
   initStore(root);
-  seedObjects(root);
+  await seedObjects(root);
   seedFiller(root, Math.max(0, MEMORIES - memoryCount(root)));
   console.log(`seeded ${POLICIES} policies, ${DECISIONS} decisions, ${memoryCount(root)} memories in ${root}`);
 

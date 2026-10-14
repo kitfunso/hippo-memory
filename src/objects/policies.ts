@@ -1,4 +1,4 @@
-/** Policy object: a rule in force over a valid-time range [valid_from, valid_to), evolving via supersession; `loadPoliciesAsOf` queries it.
+/** Policy object: a rule in force over a valid-time range [valid_from, valid_to), evolving via supersession; `policiesAsOf` queries it.
  *  Transaction-time travel (what we believed at past system time T) is deferred. Superseding keeps the predecessor's valid-time range.
  *  All dates are normalised to ISO-8601 (`toISOString`) at the store boundary so the lexical half-open comparison is sound. */
 

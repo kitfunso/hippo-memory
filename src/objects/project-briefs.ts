@@ -1,5 +1,5 @@
 /** Project_brief object: the living, repo-scoped `summary` of a repository, evolving via supersession.
- *  `refreshBrief` assembles recent `path:<repo>` receipts with a deterministic (no-LLM) assembler; an LLM pipeline is deferred.
+ *  `refreshedBrief` assembles recent `path:<repo>` receipts with a deterministic (no-LLM) assembler; an LLM pipeline is deferred.
  *  The `project_briefs` table is the source of truth; the memory mirror (memory_id NULLABLE, ON DELETE SET NULL) is for recall. */
 
 import { truncateWithEllipsis } from '../util/ellipsize.js';
@@ -40,7 +40,7 @@ export interface SaveProjectBriefOpts {
   supersedesBriefId?: number;
   /** Extra memory tags merged after ['project_brief']. */
   extraTags?: string[];
-  /** Internal: set by refreshBrief to the receipt count so audit metadata marks the write as an auto-refresh
+  /** Internal: set by refreshedBrief to the receipt count so audit metadata marks the write as an auto-refresh
    *  without a 4th audit op. Not part of the CLI/HTTP surface. */
   refreshReceiptCount?: number;
 }
