@@ -48,7 +48,7 @@ function withDb<T>(root: string, fn: (db: DatabaseSyncLike) => T): T {
 }
 
 /** The SQL the store really prepares for one call, picked out by a fragment only that statement holds. */
-function preparedSql(fn: () => unknown, fragment: string): string {
+function preparedSql(fn: () => void, fragment: string): string {
   const { statements } = recordStatements(fn);
   const sql = statements.find((s) => s.includes(fragment));
   if (sql === undefined) throw new Error(`no statement holding ${fragment}`);

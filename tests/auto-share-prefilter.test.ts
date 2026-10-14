@@ -15,6 +15,8 @@ import { quarantineScopeFor } from '../src/trust/quarantine.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { countMatching, recordStatements } from './_helpers/count-statements.js';
 
+type AutoShareStats = NonNullable<NonNullable<Parameters<typeof autoShare>[1]>['stats']>;
+
 /** loadAllEntries' statements: every full row of the store, or of one tenant. */
 const WHOLE_READ = new RegExp(`^SELECT ${MEMORY_SELECT_COLUMNS} FROM memories (WHERE tenant_id = \\? )?ORDER BY created ASC, id ASC$`);
 
@@ -44,7 +46,7 @@ function put(label: string, extra: Partial<MemoryEntry> = {}, tags: string[] = [
 }
 
 /** One row per score signal and per skip rule, each labelled with the transfer score it should get. */
-function seedEveryShape(): Map<string, string> {
+function seedSignalRows(): Map<string, string> {
   const ids = new Map<string, string>();
   ids.set('plain 0.5', put('plain'));
   ids.set('negative 0.55', put('negative', { emotional_valence: 'negative' }));
@@ -87,12 +89,12 @@ const PICKED: ReadonlyArray<[number, string[]]> = [
 
 describe('autoShare prefilter', () => {
   it('picks the same rows, in store order, with the same skip count, on both sides of the neutral score', () => {
-    const ids = seedEveryShape();
+    const ids = seedSignalRows();
     for (const tenantId of ['default', undefined]) {
       for (const [minScore, labels] of PICKED) {
         const wanted = new Set(labels.map((l) => ids.get(l)!));
         if (tenantId === undefined && minScore <= 0.6) wanted.add(ids.get('other error 0.6')!);
-        const stats: { secretSkipped: number; neverAutoShareSkipped?: number } = { secretSkipped: 0 };
+        const stats: AutoShareStats = { secretSkipped: 0 };
         const picked = autoShare(root, { minScore, dryRun: true, tenantId, stats });
         const inOrder = loadAllEntries(root, tenantId).filter((e) => wanted.has(e.id));
         expect(picked.map((e) => e.id), `minScore ${minScore} tenant ${tenantId}`).toEqual(inOrder.map((e) => e.id));

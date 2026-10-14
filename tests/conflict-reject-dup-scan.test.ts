@@ -33,8 +33,19 @@ afterEach(() => {
   rmSync(root, { recursive: true, force: true });
 });
 
+interface ArrayReads<T> {
+  result: T;
+  sql: string[];
+}
+
+interface RejectedLoser {
+  keepId: string;
+  loserId: string;
+  resolve: () => ReturnType<typeof resolveConflict>;
+}
+
 /** SQL of every statement whose rows `fn` took as one array. */
-function arrayReads<T>(fn: () => T): { result: T; sql: string[] } {
+function arrayReads<T>(fn: () => T): ArrayReads<T> {
   const sql: string[] = [];
   const all = StatementSync.prototype.all;
   const spy = vi.spyOn(StatementSync.prototype, 'all').mockImplementation(function (this: StatementProto, ...params: unknown[]) {
@@ -54,7 +65,7 @@ function put(content: string, extra: Partial<MemoryEntry> = {}, tenantId = 'defa
   return entry.id;
 }
 
-function rejectLoser(): { keepId: string; loserId: string; resolve: () => ReturnType<typeof resolveConflict> } {
+function rejectLoser(): RejectedLoser {
   const keepId = put('Always use semicolons in PowerShell');
   const loserId = put(LOSER);
   replaceDetectedConflicts(root, [{ memory_a_id: keepId, memory_b_id: loserId, reason: 'contradictory chaining advice', score: 0.85 }]);
