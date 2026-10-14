@@ -17,7 +17,6 @@ exports[`recall ranker goldens > CLI core ranker: core explain physics 1`] = `
 
 exports[`recall ranker goldens > CLI core ranker: core explicit private scope 1`] = `
 [
-  "<claim>",
   "mem_p_plain",
   "mem_p_pinned",
   "mem_p_trace",
@@ -27,12 +26,12 @@ exports[`recall ranker goldens > CLI core ranker: core explicit private scope 1`
   "mem_p_fill2",
   "mem_x_child1",
   "mem_p_fill4",
+  "mem_p_fill1",
 ]
 `;
 
 exports[`recall ranker goldens > CLI core ranker: core hybrid 1`] = `
 [
-  "<claim>",
   "mem_p_plain",
   "mem_p_pinned",
   "mem_p_trace",
@@ -42,6 +41,7 @@ exports[`recall ranker goldens > CLI core ranker: core hybrid 1`] = `
   "mem_p_fill2",
   "mem_x_child1",
   "mem_p_fill4",
+  "mem_p_fill1",
 ]
 `;
 
@@ -62,7 +62,22 @@ exports[`recall ranker goldens > CLI core ranker: core physics 1`] = `
 
 exports[`recall ranker goldens > CLI core ranker: core physics with the global store 1`] = `
 [
-  "<claim>",
+  "mem_p_plain",
+  "mem_p_pinned",
+  "mem_p_trace",
+  "mem_p_scoped",
+  "mem_p_fill5",
+  "mem_p_new",
+  "mem_p_fill2",
+  "mem_x_child1",
+  "mem_p_fill4",
+  "mem_p_fill1",
+]
+`;
+
+exports[`recall ranker goldens > CLI core ranker: core session goal boost 1`] = `
+[
+  "mem_p_goal",
   "mem_p_plain",
   "mem_p_pinned",
   "mem_p_trace",
@@ -75,26 +90,11 @@ exports[`recall ranker goldens > CLI core ranker: core physics with the global s
 ]
 `;
 
-exports[`recall ranker goldens > CLI core ranker: core session goal boost 1`] = `
-[
-  "<claim>",
-  "mem_p_goal",
-  "mem_p_plain",
-  "mem_p_pinned",
-  "mem_p_trace",
-  "mem_p_scoped",
-  "mem_p_fill5",
-  "mem_p_new",
-  "mem_p_fill2",
-  "mem_x_child1",
-]
-`;
-
 exports[`recall ranker goldens > CLI core ranker: core superseded kept 1`] = `
 [
-  "<claim>",
   "mem_p_new",
   "mem_p_old",
+  "<claim>",
   "mem_p_plain",
   "mem_x_child1",
   "mem_p_trace",
@@ -107,7 +107,6 @@ exports[`recall ranker goldens > CLI core ranker: core superseded kept 1`] = `
 
 exports[`recall ranker goldens > CLI core ranker: core with the global store 1`] = `
 [
-  "<claim>",
   "mem_p_plain",
   "mem_p_pinned",
   "mem_p_trace",
@@ -117,43 +116,44 @@ exports[`recall ranker goldens > CLI core ranker: core with the global store 1`]
   "mem_p_fill2",
   "mem_x_child1",
   "mem_p_fill4",
+  "mem_p_fill1",
 ]
 `;
 
 exports[`recall ranker goldens > MCP wide ranker: wide hybrid 1`] = `
 {
   "band": [
-    "<claim>",
-    "mem_p_fill5",
-    "mem_p_pinned",
-    "mem_x_child1",
-    "mem_x_summary",
-    "mem_p_trace",
-    "mem_x_cafe",
     "mem_p_plain",
+    "mem_p_trace",
+    "mem_p_pinned",
     "mem_p_scoped",
+    "mem_p_fill5",
+    "mem_x_child1",
+    "mem_p_new",
+    "mem_p_fill2",
+    "mem_p_fill4",
     "mem_x_raw",
   ],
   "ranked": [
-    "<claim>",
-    "mem_p_fill5",
-    "mem_p_pinned",
-    "mem_x_child1",
-    "mem_x_summary",
-    "mem_p_trace",
-    "mem_x_cafe",
     "mem_p_plain",
+    "mem_p_trace",
+    "mem_p_pinned",
     "mem_p_scoped",
-    "mem_x_raw",
-    "mem_p_noise",
+    "mem_p_fill5",
+    "mem_x_child1",
     "mem_p_new",
-    "mem_p_goal",
-    "mem_x_child2",
-    "mem_p_fill3",
-    "mem_p_fill1",
     "mem_p_fill2",
     "mem_p_fill4",
+    "mem_x_raw",
+    "mem_p_fill1",
+    "mem_p_fill3",
+    "mem_p_goal",
+    "mem_x_child2",
     "mem_p_fill0",
+    "<claim>",
+    "mem_p_noise",
+    "mem_x_cafe",
+    "mem_x_summary",
   ],
 }
 `;
@@ -250,41 +250,41 @@ exports[`recall ranker goldens > band ranker: fresh tail 1`] = `
 
 exports[`recall ranker goldens > band ranker: goal tag beats the session 1`] = `
 [
-  "<claim>",
-  "mem_p_fill5",
-  "mem_p_pinned",
-  "mem_x_child1",
-  "mem_x_summary",
-  "mem_p_trace",
-  "mem_x_cafe",
   "mem_p_plain",
+  "mem_p_trace",
+  "mem_p_pinned",
   "mem_p_scoped",
+  "mem_p_fill5",
+  "mem_x_child1",
+  "mem_p_new",
+  "mem_p_fill2",
+  "mem_p_fill4",
   "mem_x_raw",
 ]
 `;
 
 exports[`recall ranker goldens > band ranker: hybrid 1`] = `
 [
-  "<claim>",
-  "mem_p_fill5",
-  "mem_p_pinned",
-  "mem_x_child1",
-  "mem_x_summary",
-  "mem_p_trace",
-  "mem_x_cafe",
   "mem_p_plain",
+  "mem_p_trace",
+  "mem_p_pinned",
   "mem_p_scoped",
+  "mem_p_fill5",
+  "mem_x_child1",
+  "mem_p_new",
+  "mem_p_fill2",
+  "mem_p_fill4",
   "mem_x_raw",
 ]
 `;
 
 exports[`recall ranker goldens > band ranker: hybrid rollout limit 5 1`] = `
 [
+  "mem_p_plain",
   "<claim>",
-  "mem_p_fill5",
-  "mem_x_cafe",
-  "mem_x_child1",
+  "mem_p_goal",
   "mem_x_summary",
+  "mem_p_noise",
 ]
 `;
 
