@@ -6,10 +6,10 @@ import type { MemoryEntry } from '../core/memory.js';
 import { writeEntry } from '../store/entry-writes.js';
 import { assertTenantId } from '../store/tenant.js';
 import type { KeysetPosition } from '../util/keyset.js';
+import type { Objects } from '../store/port.js';
 import type { SavableDescriptor } from './descriptor.js';
-import { closeObjectAt, listObjectsAt, objectByIdAt, saveObjectAt } from './lifecycle.js';
+import { closeObject, listObjects, objectById, saveObject } from './lifecycle.js';
 import type { Decision, DecisionStatus } from '../core/object-types.js';
-import { objectIdByMemory } from '../store/sqlite/objects-group.js';
 
 export type { Decision, DecisionStatus } from '../core/object-types.js';
 
@@ -61,12 +61,13 @@ export const DECISION: SavableDescriptor<'decision', SaveDecisionOpts> = {
 /** Create a decision; the memory mirror and the row commit in one transaction.
  *  Superseding CASes the old row (WHERE status='active'), so a duplicate supersede aborts the whole write. */
 export function saveDecision(
+  objects: Objects,
   hippoRoot: string,
   tenantId: string,
   opts: SaveDecisionOpts,
   actor: string = 'cli',
-): Decision {
-  return saveObjectAt(DECISION, { hippoRoot, tenantId, actor }, opts);
+): Promise<Decision> {
+  return saveObject(objects, DECISION, { hippoRoot, tenantId, actor }, opts);
 }
 
 /** Weaken the memory a new decision replaces, once the save has committed: half-life halved to a day at least, marked stale, tagged `superseded`. */
@@ -78,45 +79,45 @@ export function weakenSupersededMemory(hippoRoot: string, entry: MemoryEntry, ac
 
 /** Close (retire) an active decision with no successor; the memory mirror is not mutated. */
 export function closeDecision(
-  hippoRoot: string,
+  objects: Objects,
   tenantId: string,
   id: number,
   actor: string = 'cli',
-): Decision {
-  return closeObjectAt(hippoRoot, DECISION, tenantId, id, actor);
+): Promise<Decision> {
+  return closeObject(objects, DECISION, tenantId, id, actor);
 }
 
 export function loadDecisionById(
-  hippoRoot: string,
+  objects: Objects,
   tenantId: string,
   id: number,
-): Decision | null {
-  return objectByIdAt(hippoRoot, DECISION, tenantId, id);
+): Promise<Decision | null> {
+  return objectById(objects, DECISION, tenantId, id);
 }
 
 export function loadDecisions(
-  hippoRoot: string,
+  objects: Objects,
   tenantId: string,
   opts: ListDecisionsOpts = {},
-): Decision[] {
-  return listObjectsAt(hippoRoot, DECISION, tenantId, opts);
+): Promise<Decision[]> {
+  return listObjects(objects, DECISION, tenantId, opts);
 }
 
 export function loadActiveDecisions(
-  hippoRoot: string,
+  objects: Objects,
   tenantId: string,
   opts: { limit?: number } = {},
-): Decision[] {
-  return loadDecisions(hippoRoot, tenantId, { status: 'active', limit: opts.limit });
+): Promise<Decision[]> {
+  return loadDecisions(objects, tenantId, { status: 'active', limit: opts.limit });
 }
 
 /** Resolve a `--supersedes <memory-id>` to the table id of the ACTIVE decision backed by that memory, or null.
  *  Exported so the CLI's backward-compat path is testable at the store layer. */
-export function resolveActiveDecisionIdByMemory(
-  hippoRoot: string,
+export async function resolveActiveDecisionIdByMemory(
+  objects: Objects,
   tenantId: string,
   memoryId: string,
-): number | null {
+): Promise<number | null> {
   assertTenantId('resolveActiveDecisionIdByMemory', tenantId);
-  return objectIdByMemory(hippoRoot, tenantId, 'decision', 'active', memoryId);
+  return objects.objectIdByMemory(tenantId, 'decision', 'active', memoryId);
 }

@@ -13,6 +13,7 @@ import { insertEntityAt } from './_helpers/graph-seed.js';
 import type { EntityType, SourceObjectType } from '../src/store/graph-rows.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { objectsAt } from './_helpers/objects-at.js';
 
 const T = 'default';
 
@@ -25,8 +26,8 @@ function onStore<R>(home: string, read: (db: DatabaseSyncLike) => R): R {
   }
 }
 
-function deltaOf(home: string, tenant: string = T): GraphOp[] {
-  const derived = deriveGraph(loadGraphSources(home, tenant));
+async function deltaOf(home: string, tenant: string = T): Promise<GraphOp[]> {
+  const derived = deriveGraph(await loadGraphSources(objectsAt(home), tenant));
   return onStore(home, (db) => graphDelta(db, tenant, derived));
 }
 
@@ -52,8 +53,8 @@ function storedByKey(home: string, tenant: string) {
   });
 }
 
-function derivedByKey(home: string, tenant: string) {
-  const g = deriveGraph(loadGraphSources(home, tenant));
+async function derivedByKey(home: string, tenant: string) {
+  const g = deriveGraph(await loadGraphSources(objectsAt(home), tenant));
   return {
     entities: g.entities.map((e) => `${entityKey(e)} ${e.name} ${e.memoryId}`).sort(),
     relations: g.relations.map((r) => `${entityKey(r.from)}>${entityKey(r.to)} ${r.relType} ${r.memoryId} ${r.sourceObject.type}:${r.sourceObject.id}`).sort(),
@@ -70,74 +71,74 @@ function entityIdOf(home: string, type: SourceObjectType, objectId: number): num
 }
 
 /** The object fixtures of tests/graph-cross-object.test.ts, one per case. */
-const CROSS_OBJECT_FIXTURES: Array<[string, (h: string) => void]> = [
-  ['a decision names a policy', (h) => {
-    savePolicy(h, T, { policyName: 'RetryPolicy', policyText: 'retry up to 3x' });
-    saveDecision(h, T, { decisionText: 'We adopt RetryPolicy for all services' });
+const CROSS_OBJECT_FIXTURES: Array<[string, (h: string) => Promise<void>]> = [
+  ['a decision names a policy', async (h) => {
+    await savePolicy(objectsAt(h), h, T, { policyName: 'RetryPolicy', policyText: 'retry up to 3x' });
+    await saveDecision(objectsAt(h), h, T, { decisionText: 'We adopt RetryPolicy for all services' });
   }],
-  ['an object names itself', (h) => { savePolicy(h, T, { policyName: 'SelfRef', policyText: 'SelfRef governs SelfRef itself' }); }],
-  ['a name inside a longer word', (h) => {
-    savePolicy(h, T, { policyName: 'Cache', policyText: 'caching config' });
-    saveDecision(h, T, { decisionText: 'the system cached results last week' });
+  ['an object names itself', async (h) => { await savePolicy(objectsAt(h), h, T, { policyName: 'SelfRef', policyText: 'SelfRef governs SelfRef itself' }); }],
+  ['a name inside a longer word', async (h) => {
+    await savePolicy(objectsAt(h), h, T, { policyName: 'Cache', policyText: 'caching config' });
+    await saveDecision(objectsAt(h), h, T, { decisionText: 'the system cached results last week' });
   }],
-  ['a name below the length floor', (h) => {
-    saveCustomerNote(h, T, { customer: 'Abc', note: 'short name customer' });
-    saveDecision(h, T, { decisionText: 'we onboarded Abc this quarter' });
+  ['a name below the length floor', async (h) => {
+    await saveCustomerNote(objectsAt(h), h, T, { customer: 'Abc', note: 'short name customer' });
+    await saveDecision(objectsAt(h), h, T, { decisionText: 'we onboarded Abc this quarter' });
   }],
-  ['a name above the length cap', (h) => {
+  ['a name above the length cap', async (h) => {
     const text = 'Adopt the new microservices event-driven architecture with sagas and CQRS for the order domain';
-    saveDecision(h, T, { decisionText: text });
-    saveDecision(h, T, { decisionText: `${text} - refined further` });
+    await saveDecision(objectsAt(h), h, T, { decisionText: text });
+    await saveDecision(objectsAt(h), h, T, { decisionText: `${text} - refined further` });
   }],
-  ['a name two entities share', (h) => {
-    savePolicy(h, T, { policyName: 'Shared', policyText: 'a policy' });
-    saveCustomerNote(h, T, { customer: 'Shared', note: 'a customer' });
-    saveDecision(h, T, { decisionText: 'this references Shared somehow' });
+  ['a name two entities share', async (h) => {
+    await savePolicy(objectsAt(h), h, T, { policyName: 'Shared', policyText: 'a policy' });
+    await saveCustomerNote(objectsAt(h), h, T, { customer: 'Shared', note: 'a customer' });
+    await saveDecision(objectsAt(h), h, T, { decisionText: 'this references Shared somehow' });
   }],
-  ['more targets than the per-source cap', (h) => {
+  ['more targets than the per-source cap', async (h) => {
     const names = Array.from({ length: MAX_REFERENCES_PER_OBJECT + 5 }, (_, i) => `PolicyNum${String(i).padStart(3, '0')}`);
-    for (const n of names) savePolicy(h, T, { policyName: n, policyText: 'x' });
-    saveDecision(h, T, { decisionText: `a decision that mentions ${names.join(' and ')}` });
+    for (const n of names) await savePolicy(objectsAt(h), h, T, { policyName: n, policyText: 'x' });
+    await saveDecision(objectsAt(h), h, T, { decisionText: `a decision that mentions ${names.join(' and ')}` });
   }],
-  ['one reference, extracted twice', (h) => {
-    savePolicy(h, T, { policyName: 'CacheTtl', policyText: 'ttl 60s' });
-    saveDecision(h, T, { decisionText: 'tune CacheTtl down' });
+  ['one reference, extracted twice', async (h) => {
+    await savePolicy(objectsAt(h), h, T, { policyName: 'CacheTtl', policyText: 'ttl 60s' });
+    await saveDecision(objectsAt(h), h, T, { decisionText: 'tune CacheTtl down' });
   }],
-  ['a source whose mirror was forgotten', (h) => {
-    savePolicy(h, T, { policyName: 'AlphaPolicy', policyText: 'p' });
-    deleteEntry(h, saveDecision(h, T, { decisionText: 'uses AlphaPolicy heavily' }).memoryId!);
+  ['a source whose mirror was forgotten', async (h) => {
+    await savePolicy(objectsAt(h), h, T, { policyName: 'AlphaPolicy', policyText: 'p' });
+    deleteEntry(h, (await saveDecision(objectsAt(h), h, T, { decisionText: 'uses AlphaPolicy heavily' })).memoryId!);
   }],
-  ['a supersedes pair', (h) => {
-    const d1 = saveDecision(h, T, { decisionText: 'Adopt Postgres' });
-    saveDecision(h, T, { decisionText: 'Adopt Postgres (managed)', supersedesDecisionId: d1.id });
+  ['a supersedes pair', async (h) => {
+    const d1 = await saveDecision(objectsAt(h), h, T, { decisionText: 'Adopt Postgres' });
+    await saveDecision(objectsAt(h), h, T, { decisionText: 'Adopt Postgres (managed)', supersedesDecisionId: d1.id });
   }],
-  ['a project brief source', (h) => {
-    savePolicy(h, T, { policyName: 'GreenPolicy', policyText: 'carbon-aware scheduling' });
-    saveProjectBrief(h, T, { repo: 'myrepo', summary: 'this service enforces GreenPolicy across jobs' });
+  ['a project brief source', async (h) => {
+    await savePolicy(objectsAt(h), h, T, { policyName: 'GreenPolicy', policyText: 'carbon-aware scheduling' });
+    await saveProjectBrief(objectsAt(h), h, T, { repo: 'myrepo', summary: 'this service enforces GreenPolicy across jobs' });
   }],
-  ['a superseded target', (h) => {
-    const p1 = savePolicy(h, T, { policyName: 'OldPol', policyText: 'v1' });
-    savePolicy(h, T, { policyName: 'NewPol', policyText: 'v2', supersedesPolicyId: p1.id });
-    saveDecision(h, T, { decisionText: 'we still cite OldPol but adopt NewPol' });
+  ['a superseded target', async (h) => {
+    const p1 = await savePolicy(objectsAt(h), h, T, { policyName: 'OldPol', policyText: 'v1' });
+    await savePolicy(objectsAt(h), h, T, { policyName: 'NewPol', policyText: 'v2', supersedesPolicyId: p1.id });
+    await saveDecision(objectsAt(h), h, T, { decisionText: 'we still cite OldPol but adopt NewPol' });
   }],
-  ['a superseded source', (h) => {
-    savePolicy(h, T, { policyName: 'LivePolicy', policyText: 'p' });
-    const d1 = saveDecision(h, T, { decisionText: 'd1 leans on LivePolicy' });
-    saveDecision(h, T, { decisionText: 'd2 supersedes the prior call', supersedesDecisionId: d1.id });
+  ['a superseded source', async (h) => {
+    await savePolicy(objectsAt(h), h, T, { policyName: 'LivePolicy', policyText: 'p' });
+    const d1 = await saveDecision(objectsAt(h), h, T, { decisionText: 'd1 leans on LivePolicy' });
+    await saveDecision(objectsAt(h), h, T, { decisionText: 'd2 supersedes the prior call', supersedesDecisionId: d1.id });
   }],
-  ['a name that prefixes a longer one', (h) => {
-    savePolicy(h, T, { policyName: 'postgres', policyText: 'a' });
-    savePolicy(h, T, { policyName: 'postgres pro', policyText: 'b' });
-    saveDecision(h, T, { decisionText: 'migrate to postgres pro this quarter' });
+  ['a name that prefixes a longer one', async (h) => {
+    await savePolicy(objectsAt(h), h, T, { policyName: 'postgres', policyText: 'a' });
+    await savePolicy(objectsAt(h), h, T, { policyName: 'postgres pro', policyText: 'b' });
+    await saveDecision(objectsAt(h), h, T, { decisionText: 'migrate to postgres pro this quarter' });
   }],
-  ['a source naming two targets', (h) => {
-    savePolicy(h, T, { policyName: 'PolicyAlpha', policyText: 'a' });
-    savePolicy(h, T, { policyName: 'PolicyBeta', policyText: 'b' });
-    saveDecision(h, T, { decisionText: 'balance PolicyAlpha against PolicyBeta carefully' });
+  ['a source naming two targets', async (h) => {
+    await savePolicy(objectsAt(h), h, T, { policyName: 'PolicyAlpha', policyText: 'a' });
+    await savePolicy(objectsAt(h), h, T, { policyName: 'PolicyBeta', policyText: 'b' });
+    await saveDecision(objectsAt(h), h, T, { decisionText: 'balance PolicyAlpha against PolicyBeta carefully' });
   }],
-  ['a name in another tenant', (h) => {
-    savePolicy(h, 'tenantA', { policyName: 'TenantAPolicy', policyText: 'p' });
-    saveDecision(h, 'tenantB', { decisionText: 'mentions TenantAPolicy from another tenant' });
+  ['a name in another tenant', async (h) => {
+    await savePolicy(objectsAt(h), h, 'tenantA', { policyName: 'TenantAPolicy', policyText: 'p' });
+    await saveDecision(objectsAt(h), h, 'tenantB', { decisionText: 'mentions TenantAPolicy from another tenant' });
   }],
 ];
 
@@ -146,59 +147,59 @@ describe('graph delta', () => {
   beforeEach(() => { home = makeRoot('graph-delta'); });
   afterEach(() => { rmSync(home, { recursive: true, force: true }); });
 
-  it.each(CROSS_OBJECT_FIXTURES)('deriveGraph gives, by natural key, the rows the rebuild writes: %s', (_, setup) => {
-    setup(home);
+  it.each(CROSS_OBJECT_FIXTURES)('deriveGraph gives, by natural key, the rows the rebuild writes: %s', async (_, setup) => {
+    await setup(home);
     for (const tenant of [T, 'tenantA', 'tenantB']) {
-      extractGraph(home, tenant);
-      expect(derivedByKey(home, tenant)).toEqual(storedByKey(home, tenant));
+      await extractGraph(objectsAt(home), home, tenant);
+      expect(await derivedByKey(home, tenant)).toEqual(storedByKey(home, tenant));
     }
   });
 
-  it('the delta of a graph against itself is empty', () => {
-    savePolicy(home, T, { policyName: 'RetryPolicy', policyText: 'retry 3x' });
-    const d1 = saveDecision(home, T, { decisionText: 'We adopt RetryPolicy for billing' });
-    saveDecision(home, T, { decisionText: 'We adopt RetryPolicy everywhere', supersedesDecisionId: d1.id });
-    deleteEntry(home, saveDecision(home, T, { decisionText: 'RetryPolicy also covers search' }).memoryId!);
-    extractGraph(home, T);
+  it('the delta of a graph against itself is empty', async () => {
+    await savePolicy(objectsAt(home), home, T, { policyName: 'RetryPolicy', policyText: 'retry 3x' });
+    const d1 = await saveDecision(objectsAt(home), home, T, { decisionText: 'We adopt RetryPolicy for billing' });
+    await saveDecision(objectsAt(home), home, T, { decisionText: 'We adopt RetryPolicy everywhere', supersedesDecisionId: d1.id });
+    deleteEntry(home, (await saveDecision(objectsAt(home), home, T, { decisionText: 'RetryPolicy also covers search' })).memoryId!);
+    await extractGraph(objectsAt(home), home, T);
 
-    expect(deltaOf(home)).toEqual([]);
+    expect(await deltaOf(home)).toEqual([]);
   });
 
-  it('a renamed decision gives one entity update and no relation operations', () => {
-    savePolicy(home, T, { policyName: 'RetryPolicy', policyText: 'retry 3x' });
-    const d = saveDecision(home, T, { decisionText: 'We adopt RetryPolicy for billing' });
-    extractGraph(home, T);
+  it('a renamed decision gives one entity update and no relation operations', async () => {
+    await savePolicy(objectsAt(home), home, T, { policyName: 'RetryPolicy', policyText: 'retry 3x' });
+    const d = await saveDecision(objectsAt(home), home, T, { decisionText: 'We adopt RetryPolicy for billing' });
+    await extractGraph(objectsAt(home), home, T);
     onStore(home, (db) => db.prepare(`UPDATE decisions SET decision_text = ? WHERE id = ?`).run('We adopt RetryPolicy for all billing jobs', d.id));
 
-    const ops = deltaOf(home);
+    const ops = await deltaOf(home);
 
     expect(opNames(ops)).toEqual(['updateEntity']);
     expect(ops[0]).toMatchObject({ id: entityIdOf(home, 'decision', d.id), entity: { name: 'We adopt RetryPolicy for all billing jobs' } });
   });
 
-  it('a closed decision gives one entity delete and no inserts', () => {
-    saveDecision(home, T, { decisionText: 'Keep this one' });
-    const gone = saveDecision(home, T, { decisionText: 'Close this one' });
-    extractGraph(home, T);
+  it('a closed decision gives one entity delete and no inserts', async () => {
+    await saveDecision(objectsAt(home), home, T, { decisionText: 'Keep this one' });
+    const gone = await saveDecision(objectsAt(home), home, T, { decisionText: 'Close this one' });
+    await extractGraph(objectsAt(home), home, T);
     // Flipped in SQL: closeDecision also drops the graph row itself, which would leave nothing to diff.
     onStore(home, (db) => db.prepare(`UPDATE decisions SET status = 'closed' WHERE id = ?`).run(gone.id));
 
-    expect(deltaOf(home)).toEqual([{ op: 'deleteEntity', id: entityIdOf(home, 'decision', gone.id) }]);
+    expect(await deltaOf(home)).toEqual([{ op: 'deleteEntity', id: entityIdOf(home, 'decision', gone.id) }]);
   });
 
-  it('a duplicate current entity gives one delete', () => {
-    const d = saveDecision(home, T, { decisionText: 'Adopt Postgres' });
-    extractGraph(home, T);
+  it('a duplicate current entity gives one delete', async () => {
+    const d = await saveDecision(objectsAt(home), home, T, { decisionText: 'Adopt Postgres' });
+    await extractGraph(objectsAt(home), home, T);
     const dup = insertEntityAt(home, T, { entityType: 'decision', name: 'Adopt Postgres', memoryId: d.memoryId, sourceObject: { type: 'decision', id: d.id } });
 
-    expect(deltaOf(home)).toEqual([{ op: 'deleteEntity', id: dup.id }]);
+    expect(await deltaOf(home)).toEqual([{ op: 'deleteEntity', id: dup.id }]);
   });
 
-  it('an entity with no source object gives one delete', () => {
-    const d = saveDecision(home, T, { decisionText: 'Adopt Postgres' });
-    extractGraph(home, T);
+  it('an entity with no source object gives one delete', async () => {
+    const d = await saveDecision(objectsAt(home), home, T, { decisionText: 'Adopt Postgres' });
+    await extractGraph(objectsAt(home), home, T);
     const loose = insertEntityAt(home, T, { entityType: 'system', name: 'Postgres', memoryId: d.memoryId });
 
-    expect(deltaOf(home)).toEqual([{ op: 'deleteEntity', id: loose.id }]);
+    expect(await deltaOf(home)).toEqual([{ op: 'deleteEntity', id: loose.id }]);
   });
 });

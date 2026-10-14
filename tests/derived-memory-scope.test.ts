@@ -14,9 +14,10 @@ import { consolidate } from '../src/consolidate/sleep.js';
 import { deduplicateStore } from '../src/consolidate/dedupe.js';
 import { buildDag, buildEntityProfiles } from '../src/consolidate/dag.js';
 import { storeExtractedFacts, type ExtractedFact } from '../src/learn/extract.js';
-import { saveProjectBrief, assembleBriefFromReceipts } from '../src/objects/project-briefs.js';
+import { saveProjectBrief, briefFromReceipts } from '../src/objects/project-briefs.js';
 import { derivationScope, commonDerivationScope } from '../src/core/recall-scope.js';
 import { placeholders } from '../src/util/sql.js';
+import { objectsAt } from './_helpers/objects-at.js';
 
 function tmpHome(prefix: string = 'hippo-derived-scope-'): string {
   return mkdtempSync(join(tmpdir(), prefix));
@@ -309,16 +310,16 @@ describe('assembleBriefFromReceipts excludes restricted receipts', () => {
     return mem.id;
   }
 
-  it('quotes the public receipt only, excluding a slack:private and a mixed-case Slack:Private receipt', () => {
+  it('quotes the public receipt only, excluding a slack:private and a mixed-case Slack:Private receipt', async () => {
     const home = tmpHome();
     try {
       initStore(home);
-      saveProjectBrief(home, 'default', { repo: 'hippo', summary: 'seed' });
+      await saveProjectBrief(objectsAt(home), home, 'default', { repo: 'hippo', summary: 'seed' });
       addReceipt(home, 'hippo', 'the public deploy went out on schedule', null);
       addReceipt(home, 'hippo', 'the private incident channel discussed the outage', 'slack:private:C1');
       addReceipt(home, 'hippo', 'another restricted note in mixed case', 'Slack:Private:C9');
 
-      const { markdown, receiptCount } = assembleBriefFromReceipts(home, 'default', 'hippo');
+      const { markdown, receiptCount } = await briefFromReceipts(objectsAt(home), 'default', 'hippo');
 
       expect(receiptCount).toBe(1);
       expect(markdown).toContain('the public deploy went out on schedule');

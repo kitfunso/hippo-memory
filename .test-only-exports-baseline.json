@@ -1,5 +1,5 @@
 {
-  "count": 53,
+  "count": 52,
   "exports": [
     "src/api/availability.ts:DEFAULT_RECENCY_WINDOW_MS",
     "src/capture/extract.ts:extractFromText",
@@ -26,7 +26,6 @@
     "src/graph/extract.ts:MAX_REFERENCES_PER_OBJECT",
     "src/graph/extract.ts:MAX_REF_NAME_LEN",
     "src/graph/extract.ts:MIN_REF_NAME_LEN",
-    "src/graph/extract.ts:loadGraphSources",
     "src/mcp/request.ts:recordMcpTokens",
     "src/objects/customer-notes.ts:MAX_NOTE_LEN",
     "src/objects/customer-notes.ts:loadActiveNotesForCustomer",

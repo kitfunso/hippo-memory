@@ -42,6 +42,7 @@ import {
 } from '../src/objects/processes.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { resetLogOnce } from '../src/util/log.js';
+import { objectsAt } from './_helpers/objects-at.js';
 
 function safeRmSync(p: string): void {
   try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
@@ -60,8 +61,8 @@ describe('processes store (first-class object)', () => {
   beforeEach(() => { home = makeRoot('processes'); });
   afterEach(() => safeRmSync(home));
 
-  it('saveProcess creates both memory and processes row + process_create audit, version 1', () => {
-    const proc = saveProcess(home, 'default', {
+  it('saveProcess creates both memory and processes row + process_create audit, version 1', async () => {
+    const proc = await saveProcess(objectsAt(home), home, 'default', {
       processName: 'Release',
       steps: ['run tests', 'bump version', 'publish'],
       description: 'the npm release ritual',
@@ -109,8 +110,8 @@ describe('processes store (first-class object)', () => {
     }
   });
 
-  it('saveProcess without steps/description: bare name content', () => {
-    const proc = saveProcess(home, 'default', { processName: 'Empty', steps: [] });
+  it('saveProcess without steps/description: bare name content', async () => {
+    const proc = await saveProcess(objectsAt(home), home, 'default', { processName: 'Empty', steps: [] });
     expect(proc.steps).toEqual([]);
     expect(proc.description).toBeNull();
     const db = openHippoDb(home);
@@ -141,9 +142,9 @@ describe('processes store (first-class object)', () => {
     expect(countRows(home, 'processes')).toBe(procBefore);
   });
 
-  it('supersede: predecessor -> superseded, new row v2 with change_summary + process_supersede audit', () => {
-    const v1 = saveProcess(home, 'default', { processName: 'Deploy', steps: ['a', 'b'] });
-    const v2 = saveProcess(home, 'default', {
+  it('supersede: predecessor -> superseded, new row v2 with change_summary + process_supersede audit', async () => {
+    const v1 = await saveProcess(objectsAt(home), home, 'default', { processName: 'Deploy', steps: ['a', 'b'] });
+    const v2 = await saveProcess(objectsAt(home), home, 'default', {
       processName: 'Deploy',
       steps: ['a', 'b', 'c'],
       changeSummary: 'added a rollback step',
@@ -154,7 +155,7 @@ describe('processes store (first-class object)', () => {
     expect(v2.changeSummary).toBe('added a rollback step');
     expect(v2.steps).toEqual(['a', 'b', 'c']);
 
-    const reloadedV1 = loadProcessById(home, 'default', v1.id)!;
+    const reloadedV1 = (await loadProcessById(objectsAt(home), 'default', v1.id))!;
     expect(reloadedV1.status).toBe('superseded');
     expect(reloadedV1.supersededBy).toBe(v2.id);
     expect(reloadedV1.supersededAt).not.toBeNull();
@@ -173,43 +174,43 @@ describe('processes store (first-class object)', () => {
     } finally { closeHippoDb(db); }
   });
 
-  it('version chain v1 -> v2 -> v3 is server-derived', () => {
-    const v1 = saveProcess(home, 'default', { processName: 'Chain', steps: ['x'] });
-    const v2 = saveProcess(home, 'default', { processName: 'Chain', steps: ['x', 'y'], supersedesProcessId: v1.id });
-    const v3 = saveProcess(home, 'default', { processName: 'Chain', steps: ['x', 'y', 'z'], supersedesProcessId: v2.id });
+  it('version chain v1 -> v2 -> v3 is server-derived', async () => {
+    const v1 = await saveProcess(objectsAt(home), home, 'default', { processName: 'Chain', steps: ['x'] });
+    const v2 = await saveProcess(objectsAt(home), home, 'default', { processName: 'Chain', steps: ['x', 'y'], supersedesProcessId: v1.id });
+    const v3 = await saveProcess(objectsAt(home), home, 'default', { processName: 'Chain', steps: ['x', 'y', 'z'], supersedesProcessId: v2.id });
     expect(v1.version).toBe(1);
     expect(v2.version).toBe(2);
     expect(v3.version).toBe(3);
-    expect(loadActiveProcesses(home, 'default').map((p) => p.id)).toEqual([v3.id]);
+    expect((await loadActiveProcesses(objectsAt(home), 'default')).map((p) => p.id)).toEqual([v3.id]);
   });
 
-  it('supersede CAS: re-superseding a superseded row throws not-active; missing id throws not-found', () => {
-    const v1 = saveProcess(home, 'default', { processName: 'Once', steps: ['a'] });
-    saveProcess(home, 'default', { processName: 'Once', steps: ['a', 'b'], supersedesProcessId: v1.id });
+  it('supersede CAS: re-superseding a superseded row throws not-active; missing id throws not-found', async () => {
+    const v1 = await saveProcess(objectsAt(home), home, 'default', { processName: 'Once', steps: ['a'] });
+    await saveProcess(objectsAt(home), home, 'default', { processName: 'Once', steps: ['a', 'b'], supersedesProcessId: v1.id });
     // v1 is now superseded; superseding it again must fail.
-    expect(() => saveProcess(home, 'default', {
+    await expect(saveProcess(objectsAt(home), home, 'default', {
       processName: 'Once', steps: ['c'], supersedesProcessId: v1.id,
-    })).toThrow(/not active/);
-    expect(() => saveProcess(home, 'default', {
+    })).rejects.toThrow(/not active/);
+    await expect(saveProcess(objectsAt(home), home, 'default', {
       processName: 'Ghost', steps: ['c'], supersedesProcessId: 99999,
-    })).toThrow(/not found/);
+    })).rejects.toThrow(/not found/);
   });
 
-  it('self-supersede preflight guard: supersede on an empty store throws not-found, creates nothing', () => {
+  it('self-supersede preflight guard: supersede on an empty store throws not-found, creates nothing', async () => {
     const memBefore = countRows(home, 'memories');
     const procBefore = countRows(home, 'processes');
     // No process id 1 exists yet: the preflight must reject BEFORE the INSERT
     // so a new row can never become its own supersede target.
-    expect(() => saveProcess(home, 'default', {
+    await expect(saveProcess(objectsAt(home), home, 'default', {
       processName: 'SelfRef', steps: ['a'], supersedesProcessId: 1,
-    })).toThrow(/not found/);
+    })).rejects.toThrow(/not found/);
     expect(countRows(home, 'processes')).toBe(procBefore);
     expect(countRows(home, 'memories')).toBe(memBefore);
   });
 
-  it('closeProcess flips active -> closed + emits process_close audit', () => {
-    const proc = saveProcess(home, 'default', { processName: 'Retire', steps: ['a'] });
-    const closed = closeProcess(home, 'default', proc.id);
+  it('closeProcess flips active -> closed + emits process_close audit', async () => {
+    const proc = await saveProcess(objectsAt(home), home, 'default', { processName: 'Retire', steps: ['a'] });
+    const closed = await closeProcess(objectsAt(home), 'default', proc.id);
     expect(closed.status).toBe('closed');
     expect(closed.closedAt).not.toBeNull();
     const db = openHippoDb(home);
@@ -222,17 +223,17 @@ describe('processes store (first-class object)', () => {
     } finally { closeHippoDb(db); }
   });
 
-  it('close guard: not-found; cannot close a superseded row; cannot re-close', () => {
-    expect(() => closeProcess(home, 'default', 77777)).toThrow(/not found/);
+  it('close guard: not-found; cannot close a superseded row; cannot re-close', async () => {
+    await expect(closeProcess(objectsAt(home), 'default', 77777)).rejects.toThrow(/not found/);
 
-    const v1 = saveProcess(home, 'default', { processName: 'Sup', steps: ['a'] });
-    saveProcess(home, 'default', { processName: 'Sup', steps: ['a', 'b'], supersedesProcessId: v1.id });
+    const v1 = await saveProcess(objectsAt(home), home, 'default', { processName: 'Sup', steps: ['a'] });
+    await saveProcess(objectsAt(home), home, 'default', { processName: 'Sup', steps: ['a', 'b'], supersedesProcessId: v1.id });
     // v1 is superseded (terminal in the chain) — closing it is not allowed.
-    expect(() => closeProcess(home, 'default', v1.id)).toThrow(/not active/);
+    await expect(closeProcess(objectsAt(home), 'default', v1.id)).rejects.toThrow(/not active/);
 
-    const c = saveProcess(home, 'default', { processName: 'Close', steps: ['a'] });
-    closeProcess(home, 'default', c.id);
-    expect(() => closeProcess(home, 'default', c.id)).toThrow(/not active/);
+    const c = await saveProcess(objectsAt(home), home, 'default', { processName: 'Close', steps: ['a'] });
+    await closeProcess(objectsAt(home), 'default', c.id);
+    await expect(closeProcess(objectsAt(home), 'default', c.id)).rejects.toThrow(/not active/);
   });
 
   it('cross-tenant INSERT trigger raises ABORT on memory tenant mismatch', () => {
@@ -255,9 +256,9 @@ describe('processes store (first-class object)', () => {
     } finally { closeHippoDb(db); }
   });
 
-  it('supersede tenant-match trigger raises ABORT on cross-tenant superseded_by', () => {
-    const a = saveProcess(home, 'tenant-a', { processName: 'A', steps: ['a'] });
-    const b = saveProcess(home, 'tenant-b', { processName: 'B', steps: ['b'] });
+  it('supersede tenant-match trigger raises ABORT on cross-tenant superseded_by', async () => {
+    const a = await saveProcess(objectsAt(home), home, 'tenant-a', { processName: 'A', steps: ['a'] });
+    const b = await saveProcess(objectsAt(home), home, 'tenant-b', { processName: 'B', steps: ['b'] });
     const db = openHippoDb(home);
     try {
       // Pointing tenant-a's row at tenant-b's row as its successor must ABORT.
@@ -267,14 +268,14 @@ describe('processes store (first-class object)', () => {
     } finally { closeHippoDb(db); }
   });
 
-  it('ON DELETE SET NULL: forgetting the memory orphans the process; old versions stay loadable', () => {
-    const v1 = saveProcess(home, 'default', { processName: 'Durable', steps: ['a'] });
-    const v2 = saveProcess(home, 'default', { processName: 'Durable', steps: ['a', 'b'], supersedesProcessId: v1.id });
+  it('ON DELETE SET NULL: forgetting the memory orphans the process; old versions stay loadable', async () => {
+    const v1 = await saveProcess(objectsAt(home), home, 'default', { processName: 'Durable', steps: ['a'] });
+    const v2 = await saveProcess(objectsAt(home), home, 'default', { processName: 'Durable', steps: ['a', 'b'], supersedesProcessId: v1.id });
     // Forget both versions' memory mirrors; the canonical rows must survive.
     deleteEntry(home, v1.memoryId!);
     deleteEntry(home, v2.memoryId!);
-    const reV1 = loadProcessById(home, 'default', v1.id);
-    const reV2 = loadProcessById(home, 'default', v2.id);
+    const reV1 = await loadProcessById(objectsAt(home), 'default', v1.id);
+    const reV2 = await loadProcessById(objectsAt(home), 'default', v2.id);
     expect(reV1).not.toBeNull();
     expect(reV1!.memoryId).toBeNull();
     expect(reV1!.status).toBe('superseded');
@@ -284,36 +285,36 @@ describe('processes store (first-class object)', () => {
     expect(reV2!.status).toBe('active');
   });
 
-  it('loadProcesses status filter; loadActiveProcesses excludes non-active', () => {
-    const a = saveProcess(home, 'default', { processName: 'active-1', steps: ['a'] });
-    const b = saveProcess(home, 'default', { processName: 'to-supersede', steps: ['b'] });
-    const c = saveProcess(home, 'default', { processName: 'to-close', steps: ['c'] });
-    saveProcess(home, 'default', { processName: 'to-supersede', steps: ['b', 'b2'], supersedesProcessId: b.id });
-    closeProcess(home, 'default', c.id);
+  it('loadProcesses status filter; loadActiveProcesses excludes non-active', async () => {
+    const a = await saveProcess(objectsAt(home), home, 'default', { processName: 'active-1', steps: ['a'] });
+    const b = await saveProcess(objectsAt(home), home, 'default', { processName: 'to-supersede', steps: ['b'] });
+    const c = await saveProcess(objectsAt(home), home, 'default', { processName: 'to-close', steps: ['c'] });
+    await saveProcess(objectsAt(home), home, 'default', { processName: 'to-supersede', steps: ['b', 'b2'], supersedesProcessId: b.id });
+    await closeProcess(objectsAt(home), 'default', c.id);
 
-    const active = loadActiveProcesses(home, 'default');
+    const active = await loadActiveProcesses(objectsAt(home), 'default');
     expect(active.every((x) => x.status === 'active')).toBe(true);
     expect(active.some((x) => x.id === a.id)).toBe(true);
     expect(active.some((x) => x.id === b.id)).toBe(false);
     expect(active.some((x) => x.id === c.id)).toBe(false);
 
-    expect(loadProcesses(home, 'default', { status: 'superseded' }).map((x) => x.id)).toEqual([b.id]);
-    expect(loadProcesses(home, 'default', { status: 'closed' }).map((x) => x.id)).toEqual([c.id]);
+    expect((await loadProcesses(objectsAt(home), 'default', { status: 'superseded' })).map((x) => x.id)).toEqual([b.id]);
+    expect((await loadProcesses(objectsAt(home), 'default', { status: 'closed' })).map((x) => x.id)).toEqual([c.id]);
     // a (active), b (superseded), c (closed), b-v2 (active) = 4 total rows.
-    expect(loadProcesses(home, 'default').length).toBe(4);
+    expect((await loadProcesses(objectsAt(home), 'default')).length).toBe(4);
   });
 
-  it('loadProcesses rejects an invalid status', () => {
-    expect(() => {
+  it('loadProcesses rejects an invalid status', async () => {
+    await expect(async () => {
       // @ts-expect-error — runtime validation test
-      loadProcesses(home, 'default', { status: 'retired' });
-    }).toThrow(/status must be one of/);
+      await loadProcesses(objectsAt(home), 'default', { status: 'retired' });
+    }).rejects.toThrow(/status must be one of/);
     expect(VALID_PROCESS_STATES.has('active')).toBe(true);
     expect(VALID_PROCESS_STATES.has('superseded')).toBe(true);
     expect(VALID_PROCESS_STATES.has('closed')).toBe(true);
   });
 
-  it('steps validation: rejects non-array / non-string / empty / cap breaches; trims-then-stores', () => {
+  it('steps validation: rejects non-array / non-string / empty / cap breaches; trims-then-stores', async () => {
     expect(() => validateProcessSteps('not an array')).toThrow(/must be an array/);
     expect(() => validateProcessSteps([1, 2])).toThrow(/not a string/);
     expect(() => validateProcessSteps(['ok', '   '])).toThrow(/is empty/);
@@ -322,23 +323,23 @@ describe('processes store (first-class object)', () => {
     // trim-then-store: a padded step is stored trimmed.
     expect(validateProcessSteps(['  spaced  '])).toEqual(['spaced']);
 
-    const proc = saveProcess(home, 'default', { processName: 'Trim', steps: ['  lead/trail  '] });
+    const proc = await saveProcess(objectsAt(home), home, 'default', { processName: 'Trim', steps: ['  lead/trail  '] });
     expect(proc.steps).toEqual(['lead/trail']);
-    expect(loadProcessById(home, 'default', proc.id)!.steps).toEqual(['lead/trail']);
+    expect((await loadProcessById(objectsAt(home), 'default', proc.id))!.steps).toEqual(['lead/trail']);
     // saveProcess rejects bad steps and writes nothing.
     const before = countRows(home, 'processes');
-    expect(() => saveProcess(home, 'default', { processName: 'Bad', steps: ['', 'x'] })).toThrow(/is empty/);
+    await expect(saveProcess(objectsAt(home), home, 'default', { processName: 'Bad', steps: ['', 'x'] })).rejects.toThrow(/is empty/);
     expect(countRows(home, 'processes')).toBe(before);
   });
 
-  it('tenant scoping: cross-tenant load returns empty', () => {
-    saveProcess(home, 'tenant-a', { processName: 'a-proc', steps: ['a'] });
-    saveProcess(home, 'tenant-b', { processName: 'b-proc', steps: ['b'] });
-    expect(loadProcesses(home, 'tenant-a').length).toBe(1);
-    expect(loadProcesses(home, 'tenant-b').length).toBe(1);
-    expect(loadProcesses(home, 'tenant-c').length).toBe(0);
-    const a = loadProcesses(home, 'tenant-a')[0];
-    expect(loadProcessById(home, 'tenant-b', a.id)).toBeNull();
+  it('tenant scoping: cross-tenant load returns empty', async () => {
+    await saveProcess(objectsAt(home), home, 'tenant-a', { processName: 'a-proc', steps: ['a'] });
+    await saveProcess(objectsAt(home), home, 'tenant-b', { processName: 'b-proc', steps: ['b'] });
+    expect((await loadProcesses(objectsAt(home), 'tenant-a')).length).toBe(1);
+    expect((await loadProcesses(objectsAt(home), 'tenant-b')).length).toBe(1);
+    expect((await loadProcesses(objectsAt(home), 'tenant-c')).length).toBe(0);
+    const a = (await loadProcesses(objectsAt(home), 'tenant-a'))[0];
+    expect(await loadProcessById(objectsAt(home), 'tenant-b', a.id)).toBeNull();
   });
 
   it('schema v32 produces processes table + 3 triggers + 2 indexes', () => {
@@ -361,9 +362,9 @@ describe('processes store (first-class object)', () => {
     } finally { closeHippoDb(db); }
   });
 
-  it('a damaged steps column reads as no steps and warns once per shape', () => {
-    const proc = saveProcess(home, 'default', { processName: 'Damaged', steps: ['a'] });
-    const other = saveProcess(home, 'default', { processName: 'WrongShape', steps: ['a'] });
+  it('a damaged steps column reads as no steps and warns once per shape', async () => {
+    const proc = await saveProcess(objectsAt(home), home, 'default', { processName: 'Damaged', steps: ['a'] });
+    const other = await saveProcess(objectsAt(home), home, 'default', { processName: 'WrongShape', steps: ['a'] });
     const db = openHippoDb(home);
     try {
       db.prepare(`UPDATE processes SET steps = '[private-step' WHERE id = ?`).run(proc.id);
@@ -374,8 +375,8 @@ describe('processes store (first-class object)', () => {
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     let logged: string;
     try {
-      expect(loadProcessById(home, 'default', proc.id)!.steps).toEqual([]);
-      expect(loadProcessById(home, 'default', other.id)!.steps).toEqual([]);
+      expect((await loadProcessById(objectsAt(home), 'default', proc.id))!.steps).toEqual([]);
+      expect((await loadProcessById(objectsAt(home), 'default', other.id))!.steps).toEqual([]);
       logged = stderr.mock.calls.map((c) => String(c[0])).join('');
     } finally {
       stderr.mockRestore();

@@ -8,10 +8,9 @@ import { assertTenantId } from '../store/tenant.js';
 import type { KeysetPosition } from '../util/keyset.js';
 import type { SavableDescriptor } from './descriptor.js';
 import { checkText, requireLine } from './fields.js';
-import { closeObjectAt, listObjectsAt, objectByIdAt, type ObjectSaveSite, saveObject, saveObjectAt } from './lifecycle.js';
+import { closeObject, listObjects, objectById, type ObjectSaveSite, saveObject } from './lifecycle.js';
 import type { BriefReceipt, BriefStatus, ProjectBrief } from '../core/object-types.js';
 import type { ObjectListQuery, Objects } from '../store/port.js';
-import { sqliteObjects } from '../store/sqlite/objects-group.js';
 
 export type { BriefStatus, ProjectBrief } from '../core/object-types.js';
 
@@ -95,49 +94,39 @@ function buildBriefContent(repo: string, summary: string): string {
 
 /** Create a project_brief, or a new version superseding an existing one, in the `objects` store group's one transaction. */
 export function saveProjectBrief(
+  objects: Objects,
   hippoRoot: string,
   tenantId: string,
   opts: SaveProjectBriefOpts,
   actor: string = 'cli',
-): ProjectBrief {
-  return saveObjectAt(PROJECT_BRIEF, { hippoRoot, tenantId, actor }, opts);
+): Promise<ProjectBrief> {
+  return saveObject(objects, PROJECT_BRIEF, { hippoRoot, tenantId, actor }, opts);
 }
 
 /** Close (retire) an active brief; a superseded row is terminal. */
 export function closeProjectBrief(
-  hippoRoot: string,
+  objects: Objects,
   tenantId: string,
   id: number,
   actor: string = 'cli',
-): ProjectBrief {
-  return closeObjectAt(hippoRoot, PROJECT_BRIEF, tenantId, id, actor);
+): Promise<ProjectBrief> {
+  return closeObject(objects, PROJECT_BRIEF, tenantId, id, actor);
 }
 
 export function loadProjectBriefById(
-  hippoRoot: string,
+  objects: Objects,
   tenantId: string,
   id: number,
-): ProjectBrief | null {
-  return objectByIdAt(hippoRoot, PROJECT_BRIEF, tenantId, id);
+): Promise<ProjectBrief | null> {
+  return objectById(objects, PROJECT_BRIEF, tenantId, id);
 }
 
 export function loadProjectBriefs(
-  hippoRoot: string,
+  objects: Objects,
   tenantId: string,
   opts: ListProjectBriefsOpts = {},
-): ProjectBrief[] {
-  return listObjectsAt(hippoRoot, PROJECT_BRIEF, tenantId, { status: opts.status, filter: opts.repo, limit: opts.limit, after: opts.after });
-}
-
-/** The repo's current active brief, or null. The DB allows several active rows per (tenant, repo); the most recent wins. */
-function loadActiveBriefForRepo(
-  hippoRoot: string,
-  tenantId: string,
-  repo: string,
-): ProjectBrief | null {
-  assertTenantId('loadActiveBriefForRepo', tenantId);
-  if (repo === '') return null;
-  return sqliteObjects(hippoRoot).listObjects(tenantId, 'project_brief', newestActive(repo))[0] ?? null;
+): Promise<ProjectBrief[]> {
+  return listObjects(objects, PROJECT_BRIEF, tenantId, { status: opts.status, filter: opts.repo, limit: opts.limit, after: opts.after });
 }
 
 /** An empty filter lists every repo, so the callers refuse an empty repo first. */
@@ -212,16 +201,6 @@ function renderBriefDigest(normalizedRepo: string, receiptCount: number, receipt
 
 /** Assemble the repo's recent receipts into a deterministic markdown digest and return it with the receipt count; never empty (summary is NOT NULL).
  *  The brief's own mirror (source='project_brief') is excluded; the quotes in the JSON-array LIKE are load-bearing (`hip` must not match `path:hippo`). */
-export function assembleBriefFromReceipts(
-  hippoRoot: string,
-  tenantId: string,
-  repo: string,
-) {
-  const normalizedRepo = requiredRepo('assembleBriefFromReceipts', tenantId, repo);
-  return briefDigest(normalizedRepo, sqliteObjects(hippoRoot).briefReceipts(tenantId, receiptTag(normalizedRepo), MAX_BRIEF_RECEIPTS));
-}
-
-/** `assembleBriefFromReceipts` over a served store's group. */
 export async function briefFromReceipts(objects: Objects, tenantId: string, repo: string): Promise<BriefDigest> {
   const normalizedRepo = requiredRepo('assembleBriefFromReceipts', tenantId, repo);
   return briefDigest(normalizedRepo, await objects.briefReceipts(tenantId, receiptTag(normalizedRepo), MAX_BRIEF_RECEIPTS));
@@ -258,19 +237,6 @@ function refreshWrite(normalizedRepo: string, digest: BriefDigest, active: Proje
 
 /** Saves a new version of the repo's brief from its receipts. The receipts are read before
  * the save's transaction, so a receipt written in between shows in the next refresh. */
-export function refreshBrief(
-  hippoRoot: string,
-  tenantId: string,
-  repo: string,
-  actor: string = 'cli',
-): ProjectBrief {
-  const normalizedRepo = requiredRepo('refreshBrief', tenantId, repo);
-  const digest = assembleBriefFromReceipts(hippoRoot, tenantId, normalizedRepo);
-  const active = loadActiveBriefForRepo(hippoRoot, tenantId, normalizedRepo);
-  return saveProjectBrief(hippoRoot, tenantId, refreshWrite(normalizedRepo, digest, active), actor);
-}
-
-/** `refreshBrief` over a served store's group. */
 export async function refreshedBrief(objects: Objects, site: ObjectSaveSite, repo: string): Promise<ProjectBrief> {
   const normalizedRepo = requiredRepo('refreshBrief', site.tenantId, repo);
   const digest = await briefFromReceipts(objects, site.tenantId, normalizedRepo);

@@ -21,7 +21,7 @@ import { loadAllEntries } from '../src/store/entry-reads.js';
 import { MEMORY_BACKED_TABLES } from '../src/store/delete-and-batch.js';
 import { loadStats } from '../src/store/index-and-stats.js';
 import { saveDecision } from '../src/objects/decisions.js';
-import { saveIncident } from '../src/objects/incidents.js';
+import { openIncident } from '../src/objects/incidents.js';
 import { saveProcess } from '../src/objects/processes.js';
 import { savePolicy } from '../src/objects/policies.js';
 import { saveSkill } from '../src/objects/skills.js';
@@ -39,6 +39,7 @@ import { RejectedValueError } from '../src/core/api-errors.js';
 import * as api from '../src/api/index.js';
 import { WRITE_BUDGET } from '../src/util/write-budget.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+import { objectsAt } from './_helpers/objects-at.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const DORMANT_ON = JSON.stringify({ replay: { count: 0 }, dormant: { enabled: true } });
@@ -590,22 +591,22 @@ function linkedRows(home: string, table: string, memoryId: string): number {
   }
 }
 
-const objectSavers: [string, string, (home: string) => { memoryId: string | null }][] = [
-  ['decision', 'decisions', (home) => saveDecision(home, 'default', { decisionText: 'we release on Tuesdays after the staging soak' })],
-  ['incident', 'incidents', (home) => saveIncident(home, 'default', { incidentText: 'the billing cron charged twice on the 1st' })],
-  ['process', 'processes', (home) => saveProcess(home, 'default', { processName: 'Release', steps: ['tag', 'publish'] })],
-  ['policy', 'policies', (home) => savePolicy(home, 'default', { policyName: 'RetryPolicy', policyText: 'retry up to 3x' })],
-  ['skill', 'skills', (home) => saveSkill(home, 'default', { skillName: 'Run tests', instructions: 'npm test before commit' })],
-  ['project brief', 'project_briefs', (home) => saveProjectBrief(home, 'default', { repo: 'acme/billing', summary: 'billing service for Acme' })],
-  ['customer note', 'customer_notes', (home) => saveCustomerNote(home, 'default', { customer: 'Acme', note: 'renewal is due in March' })],
-  ['prediction', 'predictions', (home) => savePrediction(home, 'default', { classTag: 'migration-effort', claimText: 'the migration takes two days' })],
+const objectSavers: [string, string, (home: string) => Promise<{ memoryId: string | null }>][] = [
+  ['decision', 'decisions', async (home) => await saveDecision(objectsAt(home), home, 'default', { decisionText: 'we release on Tuesdays after the staging soak' })],
+  ['incident', 'incidents', async (home) => await openIncident(objectsAt(home), home, 'default', { incidentText: 'the billing cron charged twice on the 1st' }, 'cli')],
+  ['process', 'processes', async (home) => await saveProcess(objectsAt(home), home, 'default', { processName: 'Release', steps: ['tag', 'publish'] })],
+  ['policy', 'policies', async (home) => await savePolicy(objectsAt(home), home, 'default', { policyName: 'RetryPolicy', policyText: 'retry up to 3x' })],
+  ['skill', 'skills', async (home) => await saveSkill(objectsAt(home), home, 'default', { skillName: 'Run tests', instructions: 'npm test before commit' })],
+  ['project brief', 'project_briefs', async (home) => await saveProjectBrief(objectsAt(home), home, 'default', { repo: 'acme/billing', summary: 'billing service for Acme' })],
+  ['customer note', 'customer_notes', async (home) => await saveCustomerNote(objectsAt(home), home, 'default', { customer: 'Acme', note: 'renewal is due in March' })],
+  ['prediction', 'predictions', async (home) => savePrediction(home, 'default', { classTag: 'migration-effort', claimText: 'the migration takes two days' })],
 ];
 
 describe('memories that back a first-class object', () => {
   it.each(objectSavers)('sleep keeps a faded %s memory active, so the object keeps its link', async (_kind, table, save) => {
     const { home, restore } = tmpHome('hippo-dormant-linked-', '{}');
     try {
-      const memoryId = save(home).memoryId!;
+      const memoryId = (await save(home)).memoryId!;
       // Fade it far below the threshold, as years without recall would.
       const faded = aged(loadAllEntries(home).find((e) => e.id === memoryId)!, 3000);
       writeEntry(home, faded);

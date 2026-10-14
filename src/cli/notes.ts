@@ -2,6 +2,7 @@
 
 import * as customerNotesModule from '../objects/customer-notes.js';
 import { stringFlag } from './flag-values.js';
+import type { Objects } from '../store/port.js';
 import { requiredText, versionedVerbs, type VersionedKind } from './versioned-verbs.js';
 
 type CustomerNote = customerNotesModule.CustomerNote;
@@ -11,7 +12,7 @@ function printNoteRow(n: CustomerNote): void {
   if (n.changeSummary) console.log(`    change: ${n.changeSummary}`);
 }
 
-const noteKind = (hippoRoot: string, tenantId: string): VersionedKind<CustomerNote, customerNotesModule.NoteStatus, string> => ({
+const noteKind = (objects: Objects, hippoRoot: string, tenantId: string): VersionedKind<CustomerNote, customerNotesModule.NoteStatus, string> => ({
   names: { cmd: 'note', noun: 'Customer note', idLabel: 'note' },
   plural: 'customer notes',
   states: customerNotesModule.VALID_NOTE_STATES,
@@ -26,13 +27,13 @@ const noteKind = (hippoRoot: string, tenantId: string): VersionedKind<CustomerNo
   bodyRequired: '--text "<note>"',
   body: (flags) => requiredText(flags, 'text'),
   keyOf: (n) => n.customer,
-  save: (customer, note, extraTags, from) => customerNotesModule.saveCustomerNote(hippoRoot, tenantId, {
+  save: (customer, note, extraTags, from) => customerNotesModule.saveCustomerNote(objects, hippoRoot, tenantId, {
     customer, note, extraTags, changeSummary: from?.changeSummary, supersedesNoteId: from?.id,
   }),
   recorded: (n) => `Customer note recorded: #${n.id} (v${n.version}) for customer "${n.customer}"`,
-  list: (opts, flags) => customerNotesModule.loadCustomerNotes(hippoRoot, tenantId, { ...opts, customer: stringFlag(flags, 'customer')?.trim() || undefined }),
-  loadById: (id) => customerNotesModule.loadCustomerNoteById(hippoRoot, tenantId, id),
-  close: (id) => customerNotesModule.closeCustomerNote(hippoRoot, tenantId, id),
+  list: (opts, flags) => customerNotesModule.loadCustomerNotes(objects, tenantId, { ...opts, customer: stringFlag(flags, 'customer')?.trim() || undefined }),
+  loadById: (id) => customerNotesModule.loadCustomerNoteById(objects, tenantId, id),
+  close: (id) => customerNotesModule.closeCustomerNote(objects, tenantId, id),
   printRow: printNoteRow,
   printDetail: (n) => {
     console.log(`  customer: ${n.customer}`);

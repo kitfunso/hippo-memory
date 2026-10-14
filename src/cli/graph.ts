@@ -7,10 +7,13 @@ import { printError } from './output.js';
 import { type CliFlags, stringFlag, type CommandContext } from './flag-values.js';
 import { requireInit } from './shared.js';
 import { fail } from './exit.js';
+import { objectsOf } from '../api/objects.js';
+import { cliApiContext } from './api-context.js';
 import { openInBrowser } from './open-browser.js';
 
-function graphExtract(hippoRoot: string, tenantId: string): void {
-  const result = extractGraph(hippoRoot, tenantId);
+async function graphExtract(hippoRoot: string, tenantId: string): Promise<void> {
+  const ctx = cliApiContext(hippoRoot, tenantId);
+  const result = await extractGraph(objectsOf(ctx), hippoRoot, tenantId);
   const byType = Object.entries(result.byType)
     .map(([t, n]) => `${t} ${n}`)
     .join(', ');
@@ -66,7 +69,7 @@ function graphView(hippoRoot: string, tenantId: string, entity: string | undefin
   if (flags['open'] && format === 'html') openInBrowser(out);
 }
 
-export function handleGraph({ hippoRoot, tenantId, args, flags }: CommandContext): void {
+export async function handleGraph({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
   requireInit(hippoRoot);
   const subcommand = args[0] ?? '';
   if (subcommand === 'extract') return graphExtract(hippoRoot, tenantId);

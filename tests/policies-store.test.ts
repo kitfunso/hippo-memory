@@ -34,11 +34,12 @@ import {
   loadPolicyById,
   loadPolicies,
   loadActivePolicies,
-  loadPoliciesAsOf,
+  policiesAsOf,
   normalizePolicyDate,
   VALID_POLICY_STATES,
 } from '../src/objects/policies.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { objectsAt } from './_helpers/objects-at.js';
 
 function safeRmSync(p: string): void {
   try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
@@ -74,9 +75,9 @@ describe('policies store (bi-temporal first-class object)', () => {
   beforeEach(() => { home = makeRoot('policies'); });
   afterEach(() => safeRmSync(home));
 
-  it('savePolicy creates memory + policies row + policy_create audit; v1; valid_from defaults to creation instant', () => {
+  it('savePolicy creates memory + policies row + policy_create audit; v1; valid_from defaults to creation instant', async () => {
     const before = new Date().toISOString();
-    const p = savePolicy(home, 'default', { policyName: 'Retention', policyText: 'Delete logs after 90d' });
+    const p = await savePolicy(objectsAt(home), home, 'default', { policyName: 'Retention', policyText: 'Delete logs after 90d' });
     expect(p.id).toBeGreaterThan(0);
     expect(p.memoryId).not.toBeNull();
     expect(p.policyName).toBe('Retention');
@@ -116,8 +117,8 @@ describe('policies store (bi-temporal first-class object)', () => {
     } finally { closeHippoDb(db); }
   });
 
-  it('savePolicy with explicit from/to; range in content; canonicalized', () => {
-    const p = savePolicy(home, 'default', {
+  it('savePolicy with explicit from/to; range in content; canonicalized', async () => {
+    const p = await savePolicy(objectsAt(home), home, 'default', {
       policyName: 'Window', policyText: 'rule', validFrom: '2026-01-01', validTo: '2026-06-01',
     });
     expect(p.validFrom).toBe('2026-01-01T00:00:00.000Z');
@@ -134,14 +135,14 @@ describe('policies store (bi-temporal first-class object)', () => {
     expect(countRows(home, 'policies')).toBe(p0);
   });
 
-  it('supersede: predecessor->superseded, v2, change_summary + policy_supersede audit', () => {
-    const v1 = savePolicy(home, 'default', { policyName: 'P', policyText: 'old rule' });
-    const v2 = savePolicy(home, 'default', {
+  it('supersede: predecessor->superseded, v2, change_summary + policy_supersede audit', async () => {
+    const v1 = await savePolicy(objectsAt(home), home, 'default', { policyName: 'P', policyText: 'old rule' });
+    const v2 = await savePolicy(objectsAt(home), home, 'default', {
       policyName: 'P', policyText: 'new rule', changeSummary: 'tightened', supersedesPolicyId: v1.id,
     });
     expect(v2.version).toBe(2);
     expect(v2.changeSummary).toBe('tightened');
-    const reV1 = loadPolicyById(home, 'default', v1.id)!;
+    const reV1 = (await loadPolicyById(objectsAt(home), 'default', v1.id))!;
     expect(reV1.status).toBe('superseded');
     expect(reV1.supersededBy).toBe(v2.id);
     const db = openHippoDb(home);
@@ -151,38 +152,38 @@ describe('policies store (bi-temporal first-class object)', () => {
     } finally { closeHippoDb(db); }
   });
 
-  it('version chain v1->v2->v3 server-derived', () => {
-    const v1 = savePolicy(home, 'default', { policyName: 'C', policyText: 'a' });
-    const v2 = savePolicy(home, 'default', { policyName: 'C', policyText: 'b', supersedesPolicyId: v1.id });
-    const v3 = savePolicy(home, 'default', { policyName: 'C', policyText: 'c', supersedesPolicyId: v2.id });
+  it('version chain v1->v2->v3 server-derived', async () => {
+    const v1 = await savePolicy(objectsAt(home), home, 'default', { policyName: 'C', policyText: 'a' });
+    const v2 = await savePolicy(objectsAt(home), home, 'default', { policyName: 'C', policyText: 'b', supersedesPolicyId: v1.id });
+    const v3 = await savePolicy(objectsAt(home), home, 'default', { policyName: 'C', policyText: 'c', supersedesPolicyId: v2.id });
     expect([v1.version, v2.version, v3.version]).toEqual([1, 2, 3]);
-    expect(loadActivePolicies(home, 'default').map((x) => x.id)).toEqual([v3.id]);
+    expect((await loadActivePolicies(objectsAt(home), 'default')).map((x) => x.id)).toEqual([v3.id]);
   });
 
-  it('supersede CAS: re-superseding a superseded row throws not-active; missing id throws not-found', () => {
-    const v1 = savePolicy(home, 'default', { policyName: 'O', policyText: 'a' });
-    savePolicy(home, 'default', { policyName: 'O', policyText: 'b', supersedesPolicyId: v1.id });
-    expect(() => savePolicy(home, 'default', { policyName: 'O', policyText: 'c', supersedesPolicyId: v1.id })).toThrow(/not active/);
-    expect(() => savePolicy(home, 'default', { policyName: 'X', policyText: 'c', supersedesPolicyId: 99999 })).toThrow(/not found/);
+  it('supersede CAS: re-superseding a superseded row throws not-active; missing id throws not-found', async () => {
+    const v1 = await savePolicy(objectsAt(home), home, 'default', { policyName: 'O', policyText: 'a' });
+    await savePolicy(objectsAt(home), home, 'default', { policyName: 'O', policyText: 'b', supersedesPolicyId: v1.id });
+    await expect(savePolicy(objectsAt(home), home, 'default', { policyName: 'O', policyText: 'c', supersedesPolicyId: v1.id })).rejects.toThrow(/not active/);
+    await expect(savePolicy(objectsAt(home), home, 'default', { policyName: 'X', policyText: 'c', supersedesPolicyId: 99999 })).rejects.toThrow(/not found/);
   });
 
-  it('self-supersede preflight guard: supersede on empty store throws not-found, creates nothing', () => {
+  it('self-supersede preflight guard: supersede on empty store throws not-found, creates nothing', async () => {
     const p0 = countRows(home, 'policies');
-    expect(() => savePolicy(home, 'default', { policyName: 'S', policyText: 'a', supersedesPolicyId: 1 })).toThrow(/not found/);
+    await expect(savePolicy(objectsAt(home), home, 'default', { policyName: 'S', policyText: 'a', supersedesPolicyId: 1 })).rejects.toThrow(/not found/);
     expect(countRows(home, 'policies')).toBe(p0);
   });
 
-  it('close (active->closed); close guard (not-found; cannot-close-superseded; cannot re-close)', () => {
-    expect(() => closePolicy(home, 'default', 77777)).toThrow(/not found/);
-    const v1 = savePolicy(home, 'default', { policyName: 'Sup', policyText: 'a' });
-    savePolicy(home, 'default', { policyName: 'Sup', policyText: 'b', supersedesPolicyId: v1.id });
-    expect(() => closePolicy(home, 'default', v1.id)).toThrow(/not active/);
-    const c = savePolicy(home, 'default', { policyName: 'Cl', policyText: 'a' });
-    closePolicy(home, 'default', c.id);
-    expect(() => closePolicy(home, 'default', c.id)).toThrow(/not active/);
+  it('close (active->closed); close guard (not-found; cannot-close-superseded; cannot re-close)', async () => {
+    await expect(closePolicy(objectsAt(home), 'default', 77777)).rejects.toThrow(/not found/);
+    const v1 = await savePolicy(objectsAt(home), home, 'default', { policyName: 'Sup', policyText: 'a' });
+    await savePolicy(objectsAt(home), home, 'default', { policyName: 'Sup', policyText: 'b', supersedesPolicyId: v1.id });
+    await expect(closePolicy(objectsAt(home), 'default', v1.id)).rejects.toThrow(/not active/);
+    const c = await savePolicy(objectsAt(home), home, 'default', { policyName: 'Cl', policyText: 'a' });
+    await closePolicy(objectsAt(home), 'default', c.id);
+    await expect(closePolicy(objectsAt(home), 'default', c.id)).rejects.toThrow(/not active/);
   });
 
-  it('cross-tenant INSERT trigger + supersede tenant-match trigger raise ABORT', () => {
+  it('cross-tenant INSERT trigger + supersede tenant-match trigger raise ABORT', async () => {
     const mem = createMemory('tenant-a', {
       tags: ['policy'], layer: Layer.Semantic, confidence: 'verified', source: 'policy', tenantId: 'tenant-a',
     });
@@ -195,8 +196,8 @@ describe('policies store (bi-temporal first-class object)', () => {
       }).toThrow(/tenant_id must match memories\.tenant_id/);
     } finally { closeHippoDb(db); }
 
-    const a = savePolicy(home, 'tenant-a', { policyName: 'A', policyText: 'a' });
-    const b = savePolicy(home, 'tenant-b', { policyName: 'B', policyText: 'b' });
+    const a = await savePolicy(objectsAt(home), home, 'tenant-a', { policyName: 'A', policyText: 'a' });
+    const b = await savePolicy(objectsAt(home), home, 'tenant-b', { policyName: 'B', policyText: 'b' });
     const db2 = openHippoDb(home);
     try {
       expect(() => db2.prepare(`UPDATE policies SET superseded_by=? WHERE id=?`).run(b.id, a.id))
@@ -204,48 +205,48 @@ describe('policies store (bi-temporal first-class object)', () => {
     } finally { closeHippoDb(db2); }
   });
 
-  it('ON DELETE SET NULL: forgetting the memory orphans the policy; old versions stay loadable', () => {
-    const v1 = savePolicy(home, 'default', { policyName: 'D', policyText: 'a' });
-    const v2 = savePolicy(home, 'default', { policyName: 'D', policyText: 'b', supersedesPolicyId: v1.id });
+  it('ON DELETE SET NULL: forgetting the memory orphans the policy; old versions stay loadable', async () => {
+    const v1 = await savePolicy(objectsAt(home), home, 'default', { policyName: 'D', policyText: 'a' });
+    const v2 = await savePolicy(objectsAt(home), home, 'default', { policyName: 'D', policyText: 'b', supersedesPolicyId: v1.id });
     deleteEntry(home, v1.memoryId!);
     deleteEntry(home, v2.memoryId!);
-    const reV1 = loadPolicyById(home, 'default', v1.id)!;
+    const reV1 = (await loadPolicyById(objectsAt(home), 'default', v1.id))!;
     expect(reV1.memoryId).toBeNull();
     expect(reV1.status).toBe('superseded');
-    expect(loadPolicyById(home, 'default', v2.id)!.status).toBe('active');
+    expect((await loadPolicyById(objectsAt(home), 'default', v2.id))!.status).toBe('active');
   });
 
-  it('status filters; loadActivePolicies; invalid status', () => {
-    const a = savePolicy(home, 'default', { policyName: 'a', policyText: 'x' });
-    const b = savePolicy(home, 'default', { policyName: 'b', policyText: 'x' });
-    const c = savePolicy(home, 'default', { policyName: 'c', policyText: 'x' });
-    savePolicy(home, 'default', { policyName: 'b', policyText: 'x2', supersedesPolicyId: b.id });
-    closePolicy(home, 'default', c.id);
-    const active = loadActivePolicies(home, 'default');
+  it('status filters; loadActivePolicies; invalid status', async () => {
+    const a = await savePolicy(objectsAt(home), home, 'default', { policyName: 'a', policyText: 'x' });
+    const b = await savePolicy(objectsAt(home), home, 'default', { policyName: 'b', policyText: 'x' });
+    const c = await savePolicy(objectsAt(home), home, 'default', { policyName: 'c', policyText: 'x' });
+    await savePolicy(objectsAt(home), home, 'default', { policyName: 'b', policyText: 'x2', supersedesPolicyId: b.id });
+    await closePolicy(objectsAt(home), 'default', c.id);
+    const active = await loadActivePolicies(objectsAt(home), 'default');
     expect(active.some((x) => x.id === a.id)).toBe(true);
     expect(active.some((x) => x.id === b.id)).toBe(false);
     expect(active.some((x) => x.id === c.id)).toBe(false);
-    expect(loadPolicies(home, 'default', { status: 'closed' }).map((x) => x.id)).toEqual([c.id]);
-    expect(loadPolicies(home, 'default').length).toBe(4);
+    expect((await loadPolicies(objectsAt(home), 'default', { status: 'closed' })).map((x) => x.id)).toEqual([c.id]);
+    expect((await loadPolicies(objectsAt(home), 'default')).length).toBe(4);
     // @ts-expect-error runtime validation
-    expect(() => loadPolicies(home, 'default', { status: 'retired' })).toThrow(/status must be one of/);
+    await expect(loadPolicies(objectsAt(home), 'default', { status: 'retired' })).rejects.toThrow(/status must be one of/);
     expect(VALID_POLICY_STATES.has('active')).toBe(true);
   });
 
-  it('date validation: inverted rejected (writes nothing); malformed rejected; overflow rolls', () => {
+  it('date validation: inverted rejected (writes nothing); malformed rejected; overflow rolls', async () => {
     const p0 = countRows(home, 'policies');
-    expect(() => savePolicy(home, 'default', {
+    await expect(savePolicy(objectsAt(home), home, 'default', {
       policyName: 'Inv', policyText: 'x', validFrom: '2026-06-01', validTo: '2026-01-01',
-    })).toThrow(/must be strictly after/);
-    expect(() => savePolicy(home, 'default', {
+    })).rejects.toThrow(/must be strictly after/);
+    await expect(savePolicy(objectsAt(home), home, 'default', {
       policyName: 'Inv', policyText: 'x', validFrom: '2026-01-01', validTo: '2026-01-01',
-    })).toThrow(/must be strictly after/);
-    expect(() => savePolicy(home, 'default', {
+    })).rejects.toThrow(/must be strictly after/);
+    await expect(savePolicy(objectsAt(home), home, 'default', {
       policyName: 'Bad', policyText: 'x', validFrom: 'not-a-date',
-    })).toThrow(/invalid valid_from/);
+    })).rejects.toThrow(/invalid valid_from/);
     expect(countRows(home, 'policies')).toBe(p0); // nothing persisted on any rejection
     // overflow rolls forward (JS Date), accepted + canonical
-    const roll = savePolicy(home, 'default', { policyName: 'Roll', policyText: 'x', validFrom: '2026-02-30' });
+    const roll = await savePolicy(objectsAt(home), home, 'default', { policyName: 'Roll', policyText: 'x', validFrom: '2026-02-30' });
     expect(roll.validFrom).toBe('2026-03-02T00:00:00.000Z');
   });
 
@@ -255,78 +256,78 @@ describe('policies store (bi-temporal first-class object)', () => {
     expect(() => normalizePolicyDate('garbage')).toThrow(/invalid date/);
   });
 
-  it('as-of query: half-open boundary; open-ended; name filter; excludes superseded/not-yet/expired', () => {
+  it('as-of query: half-open boundary; open-ended; name filter; excludes superseded/not-yet/expired', async () => {
     // Windowed policy [2026-01-01, 2026-06-01)
-    savePolicy(home, 'default', { policyName: 'W', policyText: 'win', validFrom: '2026-01-01', validTo: '2026-06-01' });
+    await savePolicy(objectsAt(home), home, 'default', { policyName: 'W', policyText: 'win', validFrom: '2026-01-01', validTo: '2026-06-01' });
     // Open-ended from 2026-03-01
-    savePolicy(home, 'default', { policyName: 'O', policyText: 'open', validFrom: '2026-03-01' });
+    await savePolicy(objectsAt(home), home, 'default', { policyName: 'O', policyText: 'open', validFrom: '2026-03-01' });
 
     // mid-window: both? W is in force (Jan-Jun), O in force (Mar onward) at 2026-04-01
-    const apr = loadPoliciesAsOf(home, 'default', '2026-04-01').map((x) => x.policyName).sort();
+    const apr = (await policiesAsOf(objectsAt(home), 'default', '2026-04-01')).map((x) => x.policyName).sort();
     expect(apr).toEqual(['O', 'W']);
     // before any: 2025-12-01 -> none
-    expect(loadPoliciesAsOf(home, 'default', '2025-12-01').length).toBe(0);
+    expect((await policiesAsOf(objectsAt(home), 'default', '2025-12-01')).length).toBe(0);
     // == valid_from boundary IS in force
-    expect(loadPoliciesAsOf(home, 'default', '2026-01-01', { name: 'W' }).length).toBe(1);
+    expect((await policiesAsOf(objectsAt(home), 'default', '2026-01-01', { name: 'W' })).length).toBe(1);
     // == valid_to boundary is NOT in force (half-open)
-    expect(loadPoliciesAsOf(home, 'default', '2026-06-01', { name: 'W' }).length).toBe(0);
+    expect((await policiesAsOf(objectsAt(home), 'default', '2026-06-01', { name: 'W' })).length).toBe(0);
     // just before valid_to IS in force
-    expect(loadPoliciesAsOf(home, 'default', '2026-05-31', { name: 'W' }).length).toBe(1);
+    expect((await policiesAsOf(objectsAt(home), 'default', '2026-05-31', { name: 'W' })).length).toBe(1);
     // name filter
-    expect(loadPoliciesAsOf(home, 'default', '2026-04-01', { name: 'O' }).map((x) => x.policyName)).toEqual(['O']);
+    expect((await policiesAsOf(objectsAt(home), 'default', '2026-04-01', { name: 'O' })).map((x) => x.policyName)).toEqual(['O']);
 
     // superseded rows excluded: supersede W, the superseded row must not appear
-    const wRows = loadPolicies(home, 'default', { status: 'active' }).filter((x) => x.policyName === 'W');
-    savePolicy(home, 'default', { policyName: 'W', policyText: 'win2', validFrom: '2026-01-01', validTo: '2026-06-01', supersedesPolicyId: wRows[0].id });
-    const aprAfter = loadPoliciesAsOf(home, 'default', '2026-04-01', { name: 'W' });
+    const wRows = (await loadPolicies(objectsAt(home), 'default', { status: 'active' })).filter((x) => x.policyName === 'W');
+    await savePolicy(objectsAt(home), home, 'default', { policyName: 'W', policyText: 'win2', validFrom: '2026-01-01', validTo: '2026-06-01', supersedesPolicyId: wRows[0].id });
+    const aprAfter = await policiesAsOf(objectsAt(home), 'default', '2026-04-01', { name: 'W' });
     expect(aprAfter.length).toBe(1); // only the active successor, not the superseded original
     expect(aprAfter[0].version).toBe(2);
   });
 
-  it('as-of returns a historically-valid superseded version (codex P2 #2)', () => {
+  it('as-of returns a historically-valid superseded version (codex P2 #2)', async () => {
     // v1 valid Jan-Dec, superseded in May by a successor effective from May.
-    const v1 = savePolicy(home, 'default', { policyName: 'Hist', policyText: 'jan rule', validFrom: '2026-01-01', validTo: '2026-12-01' });
-    savePolicy(home, 'default', { policyName: 'Hist', policyText: 'may rule', validFrom: '2026-05-01', validTo: '2026-12-01', supersedesPolicyId: v1.id });
+    const v1 = await savePolicy(objectsAt(home), home, 'default', { policyName: 'Hist', policyText: 'jan rule', validFrom: '2026-01-01', validTo: '2026-12-01' });
+    await savePolicy(objectsAt(home), home, 'default', { policyName: 'Hist', policyText: 'may rule', validFrom: '2026-05-01', validTo: '2026-12-01', supersedesPolicyId: v1.id });
     // asof March: v1 was in force then; its successor (May) was not yet effective -> v1
-    const march = loadPoliciesAsOf(home, 'default', '2026-03-01', { name: 'Hist' });
+    const march = await policiesAsOf(objectsAt(home), 'default', '2026-03-01', { name: 'Hist' });
     expect(march.length).toBe(1);
     expect(march[0].version).toBe(1);
     expect(march[0].status).toBe('superseded');
     // asof May 15: successor is now effective -> v2 only (v1 shadowed)
-    const may = loadPoliciesAsOf(home, 'default', '2026-05-15', { name: 'Hist' });
+    const may = await policiesAsOf(objectsAt(home), 'default', '2026-05-15', { name: 'Hist' });
     expect(may.length).toBe(1);
     expect(may[0].version).toBe(2);
     expect(may[0].status).toBe('active');
   });
 
-  it('as-of excludes closed policies (transaction-time-travel deferred)', () => {
-    const p = savePolicy(home, 'default', { policyName: 'Cl', policyText: 'x', validFrom: '2026-01-01' });
-    closePolicy(home, 'default', p.id);
-    expect(loadPoliciesAsOf(home, 'default', '2026-06-01', { name: 'Cl' }).length).toBe(0);
+  it('as-of excludes closed policies (transaction-time-travel deferred)', async () => {
+    const p = await savePolicy(objectsAt(home), home, 'default', { policyName: 'Cl', policyText: 'x', validFrom: '2026-01-01' });
+    await closePolicy(objectsAt(home), 'default', p.id);
+    expect((await policiesAsOf(objectsAt(home), 'default', '2026-06-01', { name: 'Cl' })).length).toBe(0);
   });
 
-  it('read-side date-only as-of resolves to end-of-day so a same-day policy is in force (codex P2 #1, round-2 fix)', () => {
+  it('read-side date-only as-of resolves to end-of-day so a same-day policy is in force (codex P2 #1, round-2 fix)', async () => {
     const before = new Date().toISOString();
-    const p = savePolicy(home, 'default', { policyName: 'Today', policyText: 'x' });
+    const p = await savePolicy(objectsAt(home), home, 'default', { policyName: 'Today', policyText: 'x' });
     // valid_from is the honest creation instant, NOT backdated to midnight.
     expect(p.validFrom >= before).toBe(true);
     const today = new Date().toISOString().slice(0, 10);
     // a date-only as-of for today resolves to end-of-day, so a policy created
     // earlier today IS in force.
-    expect(loadPoliciesAsOf(home, 'default', today, { name: 'Today' }).length).toBe(1);
+    expect((await policiesAsOf(objectsAt(home), 'default', today, { name: 'Today' })).length).toBe(1);
     // a precise as-of clearly BEFORE creation correctly excludes it (honest).
-    expect(loadPoliciesAsOf(home, 'default', '2020-01-01T00:00:00.000Z', { name: 'Today' }).length).toBe(0);
+    expect((await policiesAsOf(objectsAt(home), 'default', '2020-01-01T00:00:00.000Z', { name: 'Today' })).length).toBe(0);
   });
 
-  it('CRIT regression: a date-only valid_from is in force for a date-only as-of on the same day (normalization)', () => {
+  it('CRIT regression: a date-only valid_from is in force for a date-only as-of on the same day (normalization)', async () => {
     // Pre-fix, a datetime valid_from vs a date-only asOf produced a lexical-prefix
     // miss. Post-fix both normalize to midnight Z, so the == valid_from boundary holds.
-    savePolicy(home, 'default', { policyName: 'Day', policyText: 'x', validFrom: '2026-01-01' });
-    const hit = loadPoliciesAsOf(home, 'default', '2026-01-01', { name: 'Day' });
+    await savePolicy(objectsAt(home), home, 'default', { policyName: 'Day', policyText: 'x', validFrom: '2026-01-01' });
+    const hit = await policiesAsOf(objectsAt(home), 'default', '2026-01-01', { name: 'Day' });
     expect(hit.length).toBe(1);
     // And a default-valid_from (now) policy is in force for a clearly-future as-of.
-    savePolicy(home, 'default', { policyName: 'Now', policyText: 'x' });
-    expect(loadPoliciesAsOf(home, 'default', '2099-01-01', { name: 'Now' }).length).toBe(1);
+    await savePolicy(objectsAt(home), home, 'default', { policyName: 'Now', policyText: 'x' });
+    expect((await policiesAsOf(objectsAt(home), 'default', '2099-01-01', { name: 'Now' })).length).toBe(1);
   });
 
   it('schema v33 produces policies table + 3 triggers + 3 indexes', () => {

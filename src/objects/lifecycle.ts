@@ -1,5 +1,5 @@
 // Save, close, load-by-id and list for every typed object: the checks, the mirror memory and the error text, over the `objects` store group.
-// Each flow is written twice over the same steps: `...At` answers at once on hippo.db for the CLI, and the other awaits a served store's group for the routes.
+// Each flow runs once, over the `objects` group of whatever store the caller holds: the CLI's, a served one, or a test's.
 // The tenant, the fields and the list status are checked first, so a bad request fails before a store is asked.
 
 import { DEFAULT_LIST_LIMIT } from '../util/limits.js';
@@ -8,7 +8,6 @@ import { loadConfig } from '../core/config.js';
 import { createMemory, Layer, type MemoryEntry } from '../core/memory.js';
 import type { ObjectByKind, ObjectKind, SavableKind } from '../core/object-types.js';
 import { isObjectRefusal, type ObjectClose, type ObjectListQuery, type ObjectRefusal, type Objects, type ObjectSave } from '../store/port.js';
-import { sqliteObjects } from '../store/sqlite/objects-group.js';
 import { assertTenantId } from '../store/tenant.js';
 import type { ObjectDescriptor, ObjectDraft, ObjectListOpts, SavableDescriptor } from './descriptor.js';
 
@@ -22,10 +21,6 @@ function listQuery<K extends ObjectKind>(d: ObjectDescriptor<K>, tenantId: strin
 }
 
 /** Newest first. */
-export function listObjectsAt<K extends ObjectKind>(hippoRoot: string, d: ObjectDescriptor<K>, tenantId: string, opts: ObjectListOpts<K>): ObjectByKind[K][] {
-  return sqliteObjects(hippoRoot).listObjects(tenantId, d.kind, listQuery(d, tenantId, opts));
-}
-
 export async function listObjects<K extends ObjectKind>(
   objects: Objects,
   d: ObjectDescriptor<K>,
@@ -33,11 +28,6 @@ export async function listObjects<K extends ObjectKind>(
   opts: ObjectListOpts<K>
 ): Promise<ObjectByKind[K][]> {
   return objects.listObjects(tenantId, d.kind, listQuery(d, tenantId, opts));
-}
-
-export function objectByIdAt<K extends ObjectKind>(hippoRoot: string, d: ObjectDescriptor<K>, tenantId: string, id: number): ObjectByKind[K] | null {
-  assertTenantId(d.fn.get, tenantId);
-  return sqliteObjects(hippoRoot).objectById(tenantId, d.kind, id);
 }
 
 export async function objectById<K extends ObjectKind>(
@@ -66,11 +56,6 @@ function closed<K extends ObjectKind>(d: ObjectDescriptor<K>, tenantId: string, 
 }
 
 /** Retires one object; its mirror memory stays as saved. */
-export function closeObjectAt<K extends ObjectKind>(hippoRoot: string, d: ObjectDescriptor<K>, tenantId: string, id: number, actor: string): ObjectByKind[K] {
-  const close = closing(d, tenantId, actor);
-  return closed(d, tenantId, id, sqliteObjects(hippoRoot).closeObject(tenantId, d.kind, id, close));
-}
-
 export async function closeObject<K extends ObjectKind>(
   objects: Objects,
   d: ObjectDescriptor<K>,
@@ -131,12 +116,6 @@ function saved<K extends SavableKind, W>(
 }
 
 /** Creates an object, or the version that replaces the one its options name, with its mirror memory in one write. */
-export function saveObjectAt<K extends SavableKind, W>(d: SavableDescriptor<K, W>, site: ObjectSaveSite, opts: W): ObjectByKind[K] {
-  assertTenantId(d.fn.save, site.tenantId);
-  const draft = d.draft(opts);
-  return saved(d, site.tenantId, draft.supersedesId, sqliteObjects(site.hippoRoot).saveObject(site.tenantId, d.kind, objectSave(site, d.kind, draft)));
-}
-
 export async function saveObject<K extends SavableKind, W>(
   objects: Objects,
   d: SavableDescriptor<K, W>,

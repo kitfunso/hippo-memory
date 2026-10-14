@@ -7,10 +7,9 @@ import { BadRequestError } from '../core/api-errors.js';
 import { assertTenantId } from '../store/tenant.js';
 import type { KeysetPosition } from '../util/keyset.js';
 import type { SavableDescriptor } from './descriptor.js';
-import { closeObjectAt, listObjectsAt, objectByIdAt, saveObjectAt } from './lifecycle.js';
+import { closeObject, listObjects, objectById, saveObject } from './lifecycle.js';
 import type { Policy, PolicyStatus } from '../core/object-types.js';
 import type { Objects, PoliciesInForceQuery } from '../store/port.js';
-import { sqliteObjects } from '../store/sqlite/objects-group.js';
 
 export type { Policy, PolicyStatus } from '../core/object-types.js';
 
@@ -113,60 +112,51 @@ export const POLICY: SavableDescriptor<'policy', SavePolicyOpts> = {
 /** Create a policy, or a new version superseding an existing one, in the `objects` store group's one transaction.
  *  valid_from defaults to now; valid_to must be > valid_from (validatePolicyDates). */
 export function savePolicy(
+  objects: Objects,
   hippoRoot: string,
   tenantId: string,
   opts: SavePolicyOpts,
   actor: string = 'cli',
-): Policy {
-  return saveObjectAt(POLICY, { hippoRoot, tenantId, actor }, opts);
+): Promise<Policy> {
+  return saveObject(objects, POLICY, { hippoRoot, tenantId, actor }, opts);
 }
 
 /** Close (retire) an active policy with no successor; CAS on status='active', a superseded row is terminal. */
 export function closePolicy(
-  hippoRoot: string,
+  objects: Objects,
   tenantId: string,
   id: number,
   actor: string = 'cli',
-): Policy {
-  return closeObjectAt(hippoRoot, POLICY, tenantId, id, actor);
+): Promise<Policy> {
+  return closeObject(objects, POLICY, tenantId, id, actor);
 }
 
 export function loadPolicyById(
-  hippoRoot: string,
+  objects: Objects,
   tenantId: string,
   id: number,
-): Policy | null {
-  return objectByIdAt(hippoRoot, POLICY, tenantId, id);
+): Promise<Policy | null> {
+  return objectById(objects, POLICY, tenantId, id);
 }
 
 export function loadPolicies(
-  hippoRoot: string,
+  objects: Objects,
   tenantId: string,
   opts: ListPoliciesOpts = {},
-): Policy[] {
-  return listObjectsAt(hippoRoot, POLICY, tenantId, opts);
+): Promise<Policy[]> {
+  return listObjects(objects, POLICY, tenantId, opts);
 }
 
 export function loadActivePolicies(
-  hippoRoot: string,
+  objects: Objects,
   tenantId: string,
   opts: { limit?: number } = {},
-): Policy[] {
-  return loadPolicies(hippoRoot, tenantId, { status: 'active', limit: opts.limit });
+): Promise<Policy[]> {
+  return loadPolicies(objects, tenantId, { status: 'active', limit: opts.limit });
 }
 
 /** The policies in force at `asOfDate` (valid-time, half-open [valid_from, valid_to)); superseded rows still answer while the successor is not yet effective.
  *  `closed` rows are excluded; a date-only asOfDate means the END of that UTC day (23:59:59.999Z), so a policy created today shows up in "as of today". */
-export function loadPoliciesAsOf(
-  hippoRoot: string,
-  tenantId: string,
-  asOfDate: string,
-  opts: { name?: string; limit?: number } = {},
-): Policy[] {
-  return sqliteObjects(hippoRoot).policiesInForce(tenantId, inForceQuery(tenantId, asOfDate, opts));
-}
-
-/** `loadPoliciesAsOf` over a served store's group. */
 export async function policiesAsOf(objects: Objects, tenantId: string, asOfDate: string, opts: { name?: string; limit?: number } = {}): Promise<Policy[]> {
   return objects.policiesInForce(tenantId, inForceQuery(tenantId, asOfDate, opts));
 }

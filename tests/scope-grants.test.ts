@@ -12,12 +12,13 @@ import { createApiKey, readApiKeyRecord } from '../src/store/auth.js';
 import { Layer } from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { serve, type ServerHandle } from '../src/server.js';
-import { refreshBrief } from '../src/objects/project-briefs.js';
+import { refreshedBrief } from '../src/objects/project-briefs.js';
 import { extractGraph } from '../src/graph/extract.js';
 import * as api from '../src/api/index.js';
 import { consolidate } from '../src/consolidate/sleep.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+import { objectsAt } from './_helpers/objects-at.js';
 
 const HIPPO_BIN = join(process.cwd(), 'bin', 'hippo.js');
 
@@ -291,8 +292,8 @@ describe('graph view carries no private receipt text', () => {
     writeEntry(home, { ...createMemory(PRIVATE_TEXT, { layer: Layer.Episodic, tags: ['path:testrepo'], source: 'test' }), scope: PRIVATE_SCOPE });
     writeEntry(home, { ...createMemory('testrepo release notes went out today', { layer: Layer.Episodic, tags: ['path:testrepo'], source: 'test' }), scope: null });
 
-    refreshBrief(home, 'default', 'testrepo');
-    extractGraph(home, 'default');
+    await refreshedBrief(objectsAt(home), { hippoRoot: home, tenantId: 'default', actor: 'cli' }, 'testrepo');
+    await extractGraph(objectsAt(home), home, 'default');
 
     const res = await fetch(`${handle.url}/v1/graph`, { headers: { authorization: `Bearer ${member.plaintext}` } });
     expect(res.status).toBe(200);

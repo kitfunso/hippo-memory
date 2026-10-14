@@ -21,14 +21,14 @@ export function statusFilter<S extends string>(flags: CliFlags, states: Readonly
 export interface ObjectListSpec<O, S extends string> {
   readonly plural: string;
   readonly states: ReadonlySet<S>;
-  readonly load: (opts: { status?: S; limit: number }) => readonly O[];
+  readonly load: (opts: { status?: S; limit: number }) => Promise<readonly O[]>;
   readonly printRow: (o: O) => void;
 }
 
-export function listObjects<O, S extends string>(flags: CliFlags, spec: ObjectListSpec<O, S>): void {
+export async function listObjects<O, S extends string>(flags: CliFlags, spec: ObjectListSpec<O, S>): Promise<void> {
   const limit = parseListLimit(flags);
   const status = statusFilter(flags, spec.states);
-  const results = spec.load(status === undefined ? { limit } : { status, limit });
+  const results = await spec.load(status === undefined ? { limit } : { status, limit });
   if (results.length === 0) {
     console.log(`No ${spec.plural}.`);
     return;
@@ -65,13 +65,13 @@ export interface ObjectNames {
 }
 
 /** `hippo <cmd> close <id>` for a kind whose close call returns the closed row. */
-export function closeObject(
+export async function closeObject(
   args: string[],
   names: ObjectNames,
-  close: (id: number) => { id: number },
-): void {
+  close: (id: number) => Promise<{ id: number }>,
+): Promise<void> {
   const id = idArgOrExit(args, `Usage: hippo ${names.cmd} close <id>`, names.idLabel);
-  console.log(`${names.noun} #${close(id).id} closed.`);
+  console.log(`${names.noun} #${(await close(id)).id} closed.`);
 }
 
 interface LifecycleTail {

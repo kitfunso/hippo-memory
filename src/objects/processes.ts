@@ -4,9 +4,10 @@
 
 import { BadRequestError } from '../core/api-errors.js';
 import type { KeysetPosition } from '../util/keyset.js';
+import type { Objects } from '../store/port.js';
 import { type JsonValue, isJsonString } from '../util/json.js';
 import type { SavableDescriptor } from './descriptor.js';
-import { closeObjectAt, listObjectsAt, objectByIdAt, saveObjectAt } from './lifecycle.js';
+import { closeObject, listObjects, objectById, saveObject } from './lifecycle.js';
 import type { Process, ProcessStatus } from '../core/object-types.js';
 
 export type { Process, ProcessStatus } from '../core/object-types.js';
@@ -107,44 +108,45 @@ export const PROCESS: SavableDescriptor<'process', SaveProcessOpts> = {
 /** Create a process, or a new version superseding an existing one, in the `objects` store group's one transaction.
  *  The supersede CAS (WHERE status='active' AND id != <new id>) throws on changes===0 so a duplicate supersede aborts the write. */
 export function saveProcess(
+  objects: Objects,
   hippoRoot: string,
   tenantId: string,
   opts: SaveProcessOpts,
   actor: string = 'cli',
-): Process {
-  return saveObjectAt(PROCESS, { hippoRoot, tenantId, actor }, opts);
+): Promise<Process> {
+  return saveObject(objects, PROCESS, { hippoRoot, tenantId, actor }, opts);
 }
 
 /** Close (retire) an active process with no successor; a superseded row cannot be closed. */
 export function closeProcess(
-  hippoRoot: string,
+  objects: Objects,
   tenantId: string,
   id: number,
   actor: string = 'cli',
-): Process {
-  return closeObjectAt(hippoRoot, PROCESS, tenantId, id, actor);
+): Promise<Process> {
+  return closeObject(objects, PROCESS, tenantId, id, actor);
 }
 
 export function loadProcessById(
-  hippoRoot: string,
+  objects: Objects,
   tenantId: string,
   id: number,
-): Process | null {
-  return objectByIdAt(hippoRoot, PROCESS, tenantId, id);
+): Promise<Process | null> {
+  return objectById(objects, PROCESS, tenantId, id);
 }
 
 export function loadProcesses(
-  hippoRoot: string,
+  objects: Objects,
   tenantId: string,
   opts: ListProcessesOpts = {},
-): Process[] {
-  return listObjectsAt(hippoRoot, PROCESS, tenantId, opts);
+): Promise<Process[]> {
+  return listObjects(objects, PROCESS, tenantId, opts);
 }
 
 export function loadActiveProcesses(
-  hippoRoot: string,
+  objects: Objects,
   tenantId: string,
   opts: { limit?: number } = {},
-): Process[] {
-  return loadProcesses(hippoRoot, tenantId, { status: 'active', limit: opts.limit });
+): Promise<Process[]> {
+  return loadProcesses(objects, tenantId, { status: 'active', limit: opts.limit });
 }

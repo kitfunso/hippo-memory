@@ -2,12 +2,15 @@
 
 import { MemoryEntry } from '../core/memory.js';
 import { getMemory } from '../api/memories.js';
+import { objectsOf } from '../api/objects.js';
+import type { Objects } from '../store/port.js';
 import { extractPathTags } from '../search/path-context.js';
 import * as decisionsModule from '../objects/decisions.js';
 import { printError } from './output.js';
 import { nonEmptyStringFlag, type CliFlags, flagIsTrue, stringFlag, type CommandContext } from './flag-values.js';
 import { requireInit } from './shared.js';
 import { cliApiContext } from './api-context.js';
+import type { StoreContext } from '../api/index.js';
 import { closeObject, foundOrExit, idArgOrExit, listObjects, printLifecycleTail, type ObjectNames } from './object-verbs.js';
 import { errorMessage } from '../util/log.js';
 import { fail } from './exit.js';
@@ -21,18 +24,18 @@ function printDecisionRow(d: decisionsModule.Decision): void {
   if (d.context) console.log(`    context: ${d.context}`);
 }
 
-function decideList(hippoRoot: string, tenantId: string, flags: CliFlags): void {
-  listObjects(flags, {
+function decideList(objects: Objects, tenantId: string, flags: CliFlags): Promise<void> {
+  return listObjects(flags, {
     plural: 'decisions',
     states: decisionsModule.VALID_DECISION_STATES,
-    load: (opts) => decisionsModule.loadDecisions(hippoRoot, tenantId, opts),
+    load: (opts) => decisionsModule.loadDecisions(objects, tenantId, opts),
     printRow: printDecisionRow,
   });
 }
 
-function decideGet(hippoRoot: string, tenantId: string, args: string[]): void {
+async function decideGet(objects: Objects, tenantId: string, args: string[]): Promise<void> {
   const id = idArgOrExit(args, 'Usage: hippo decide get <id>', DECISION.idLabel);
-  const decision = foundOrExit(decisionsModule.loadDecisionById(hippoRoot, tenantId, id), DECISION.noun, id);
+  const decision = foundOrExit(await decisionsModule.loadDecisionById(objects, tenantId, id), DECISION.noun, id);
   console.log(`Decision #${decision.id}`);
   console.log(`  status: ${decision.status}`);
   console.log(`  text: ${decision.decisionText}`);
@@ -40,21 +43,24 @@ function decideGet(hippoRoot: string, tenantId: string, args: string[]): void {
   printLifecycleTail(decision);
 }
 
-function decideClose(hippoRoot: string, tenantId: string, args: string[]): void {
-  closeObject(args, DECISION, (id) => decisionsModule.closeDecision(hippoRoot, tenantId, id));
+function decideClose(objects: Objects, tenantId: string, args: string[]): Promise<void> {
+  return closeObject(args, DECISION, (id) => decisionsModule.closeDecision(objects, tenantId, id));
 }
 
 export async function handleDecide({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
   requireInit(hippoRoot);
   const subcommand = args[0] ?? '';
-  if (subcommand === 'list') return decideList(hippoRoot, tenantId, flags);
-  if (subcommand === 'get') return decideGet(hippoRoot, tenantId, args);
-  if (subcommand === 'close') return decideClose(hippoRoot, tenantId, args);
+  const ctx = cliApiContext(hippoRoot, tenantId);
+  const objects = objectsOf(ctx);
+  if (subcommand === 'list') return decideList(objects, tenantId, flags);
+  if (subcommand === 'get') return decideGet(objects, tenantId, args);
+  if (subcommand === 'close') return decideClose(objects, tenantId, args);
   // Default subcommand: create. args[0] is the decision text.
-  await decideCreate(hippoRoot, tenantId, subcommand, flags);
+  await decideCreate(ctx, subcommand, flags);
 }
 
-async function decideCreate(hippoRoot: string, tenantId: string, decisionText: string, flags: CliFlags): Promise<void> {
+async function decideCreate(ctx: StoreContext, decisionText: string, flags: CliFlags): Promise<void> {
+  const { hippoRoot, tenantId } = ctx;
   if (!decisionText) exitWithDecideUsage();
   const context = nonEmptyStringFlag(flags, 'context');
   // A value-less `--supersedes` asks to supersede but gives no memory id: reject it rather
@@ -69,16 +75,16 @@ async function decideCreate(hippoRoot: string, tenantId: string, decisionText: s
   let supersedesDecisionId: number | undefined;
   let oldEntry: MemoryEntry | null = null;
   if (supersedesMemId) {
-    oldEntry = await getMemory(cliApiContext(hippoRoot, tenantId), supersedesMemId);
+    oldEntry = await getMemory(ctx, supersedesMemId);
     if (!oldEntry) {
       fail(`Memory ${supersedesMemId} not found.`);
     }
     supersedesDecisionId =
-      decisionsModule.resolveActiveDecisionIdByMemory(hippoRoot, tenantId, supersedesMemId) ?? undefined;
+      (await decisionsModule.resolveActiveDecisionIdByMemory(objectsOf(ctx), tenantId, supersedesMemId)) ?? undefined;
   }
 
   const decisionPathTags = extractPathTags(process.cwd());
-  const created = decisionsModule.saveDecision(hippoRoot, tenantId, {
+  const created = await decisionsModule.saveDecision(objectsOf(ctx), hippoRoot, tenantId, {
     decisionText,
     context,
     supersedesDecisionId,

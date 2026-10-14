@@ -370,6 +370,8 @@ export interface Objects {
   /** At most `limit` of the tenant's memories carrying `tag` (tag list as JSON, matched between double quotes, unescaped, ASCII case-folded) whose source
    * is not project_brief and whose scope recall admits with no scope asked, newest first by created (text, byte order) then id. No audit row. */
   briefReceipts(tenantId: string, tag: string, limit: number): Promise<BriefReceipt[]>;
+  /** The id of the tenant's newest `kind` row in `status` that `memoryId` mirrors, or null. No audit row. */
+  objectIdByMemory<K extends ObjectKind>(tenantId: string, kind: K, status: ObjectByKind[K]['status'], memoryId: string): Promise<number | null>;
 }
 
 /** One session's unsuperseded raw rows inside a tenant; `origins` keeps those projects' rows and rows of no project, unset keeps every origin. */

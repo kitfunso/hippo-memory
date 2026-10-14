@@ -39,6 +39,7 @@ import {
 import { ConflictError } from '../src/core/api-errors.js';
 import { mapApiError } from '../src/api/error-reply.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { objectsAt } from './_helpers/objects-at.js';
 
 function safeRmSync(p: string): void {
   try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
@@ -79,8 +80,8 @@ describe('decisions store (first-class object)', () => {
   beforeEach(() => { home = makeRoot('decisions'); });
   afterEach(() => safeRmSync(home));
 
-  it('saveDecision creates both memory and decisions row + decision_create audit', () => {
-    const d = saveDecision(home, 'default', {
+  it('saveDecision creates both memory and decisions row + decision_create audit', async () => {
+    const d = await saveDecision(objectsAt(home), home, 'default', {
       decisionText: 'use Postgres',
       context: 'scale and JSONB',
     });
@@ -120,8 +121,8 @@ describe('decisions store (first-class object)', () => {
     }
   });
 
-  it('a supersede that loses its race after the preflight is a ConflictError (409), like the other five save paths', () => {
-    const prior = saveDecision(home, 'default', { decisionText: 'ship on fridays' });
+  it('a supersede that loses its race after the preflight is a ConflictError (409), like the other five save paths', async () => {
+    const prior = await saveDecision(objectsAt(home), home, 'default', { decisionText: 'ship on fridays' });
     const db = openHippoDb(home);
     try {
       // The trigger stands in for a concurrent writer: the preflight sees an active row, the UPDATE changes nothing.
@@ -129,15 +130,15 @@ describe('decisions store (first-class object)', () => {
     } finally { closeHippoDb(db); }
     let thrown: unknown;
     try {
-      saveDecision(home, 'default', { decisionText: 'ship on tuesdays', supersedesDecisionId: prior.id });
+      await saveDecision(objectsAt(home), home, 'default', { decisionText: 'ship on tuesdays', supersedesDecisionId: prior.id });
     } catch (err) { thrown = err; }
     expect(thrown).toBeInstanceOf(ConflictError);
     expect(mapApiError(thrown).status).toBe(409);
     expect(countRows(home, 'decisions')).toBe(1);
   });
 
-  it('saveDecision without context: bare memory content, has_context false', () => {
-    const d = saveDecision(home, 'default', { decisionText: 'adopt trunk-based dev' });
+  it('saveDecision without context: bare memory content, has_context false', async () => {
+    const d = await saveDecision(objectsAt(home), home, 'default', { decisionText: 'adopt trunk-based dev' });
     expect(d.context).toBeNull();
     const db = openHippoDb(home);
     try {
@@ -176,15 +177,15 @@ describe('decisions store (first-class object)', () => {
     expect(countRows(home, 'decisions')).toBe(decBefore);
   });
 
-  it('saveDecision with supersedesDecisionId supersedes the old row atomically + emits decision_supersede', () => {
-    const first = saveDecision(home, 'default', { decisionText: 'use REST' });
-    const second = saveDecision(home, 'default', {
+  it('saveDecision with supersedesDecisionId supersedes the old row atomically + emits decision_supersede', async () => {
+    const first = await saveDecision(objectsAt(home), home, 'default', { decisionText: 'use REST' });
+    const second = await saveDecision(objectsAt(home), home, 'default', {
       decisionText: 'use GraphQL',
       supersedesDecisionId: first.id,
     });
 
     expect(second.status).toBe('active');
-    const reloadedFirst = loadDecisionById(home, 'default', first.id);
+    const reloadedFirst = await loadDecisionById(objectsAt(home), 'default', first.id);
     expect(reloadedFirst!.status).toBe('superseded');
     expect(reloadedFirst!.supersededBy).toBe(second.id);
     expect(reloadedFirst!.supersededAt).not.toBeNull();
@@ -204,52 +205,52 @@ describe('decisions store (first-class object)', () => {
     }
   });
 
-  it('supersede CAS: re-superseding an already-superseded row throws and leaves no orphan', () => {
-    const first = saveDecision(home, 'default', { decisionText: 'version one' });
-    saveDecision(home, 'default', { decisionText: 'version two', supersedesDecisionId: first.id });
+  it('supersede CAS: re-superseding an already-superseded row throws and leaves no orphan', async () => {
+    const first = await saveDecision(objectsAt(home), home, 'default', { decisionText: 'version one' });
+    await saveDecision(objectsAt(home), home, 'default', { decisionText: 'version two', supersedesDecisionId: first.id });
 
     const decBefore = countRows(home, 'decisions');
     const memBefore = countRows(home, 'memories');
-    expect(() => {
-      saveDecision(home, 'default', { decisionText: 'version three', supersedesDecisionId: first.id });
-    }).toThrow(/not active/);
+    await expect(async () => {
+      await saveDecision(objectsAt(home), home, 'default', { decisionText: 'version three', supersedesDecisionId: first.id });
+    }).rejects.toThrow(/not active/);
     // The failed v3 save rolled back: no new decisions row, no new memory.
     expect(countRows(home, 'decisions')).toBe(decBefore);
     expect(countRows(home, 'memories')).toBe(memBefore);
   });
 
-  it('supersede of a non-existent decision throws not found', () => {
-    expect(() => {
-      saveDecision(home, 'default', { decisionText: 'placeholder decision text', supersedesDecisionId: 99999 });
-    }).toThrow(/not found/);
+  it('supersede of a non-existent decision throws not found', async () => {
+    await expect(async () => {
+      await saveDecision(objectsAt(home), home, 'default', { decisionText: 'placeholder decision text', supersedesDecisionId: 99999 });
+    }).rejects.toThrow(/not found/);
   });
 
-  it('preflight prevents self-supersession: superseding the soon-to-be id on an empty store throws not found, creates nothing (codex P1 regression)', () => {
+  it('preflight prevents self-supersession: superseding the soon-to-be id on an empty store throws not found, creates nothing (codex P1 regression)', async () => {
     // Fresh store: the next autoincrement id is 1. Superseding id 1 as the very
     // first op must NOT self-match the row being inserted (which would set it
     // superseded_by itself). Preflight-before-insert => not found + full rollback.
     const decBefore = countRows(home, 'decisions');
     const memBefore = countRows(home, 'memories');
-    expect(() => {
-      saveDecision(home, 'default', { decisionText: 'first decision attempt', supersedesDecisionId: 1 });
-    }).toThrow(/not found/);
+    await expect(async () => {
+      await saveDecision(objectsAt(home), home, 'default', { decisionText: 'first decision attempt', supersedesDecisionId: 1 });
+    }).rejects.toThrow(/not found/);
     expect(countRows(home, 'decisions')).toBe(decBefore);
     expect(countRows(home, 'memories')).toBe(memBefore);
   });
 
-  it('no decision can supersede itself (superseded_by never equals own id)', () => {
-    const first = saveDecision(home, 'default', { decisionText: 'predecessor decision' });
-    const second = saveDecision(home, 'default', { decisionText: 'successor decision', supersedesDecisionId: first.id });
+  it('no decision can supersede itself (superseded_by never equals own id)', async () => {
+    const first = await saveDecision(objectsAt(home), home, 'default', { decisionText: 'predecessor decision' });
+    const second = await saveDecision(objectsAt(home), home, 'default', { decisionText: 'successor decision', supersedesDecisionId: first.id });
     expect(second.id).not.toBe(first.id);
     expect(second.supersededBy).toBeNull();
-    const reFirst = loadDecisionById(home, 'default', first.id);
+    const reFirst = await loadDecisionById(objectsAt(home), 'default', first.id);
     expect(reFirst!.supersededBy).toBe(second.id);
     expect(reFirst!.supersededBy).not.toBe(reFirst!.id);
   });
 
-  it('closeDecision flips active -> closed + emits decision_close audit', () => {
-    const d = saveDecision(home, 'default', { decisionText: 'use webpack' });
-    const closed = closeDecision(home, 'default', d.id);
+  it('closeDecision flips active -> closed + emits decision_close audit', async () => {
+    const d = await saveDecision(objectsAt(home), home, 'default', { decisionText: 'use webpack' });
+    const closed = await closeDecision(objectsAt(home), 'default', d.id);
     expect(closed.status).toBe('closed');
     expect(closed.closedAt).not.toBeNull();
 
@@ -264,16 +265,16 @@ describe('decisions store (first-class object)', () => {
     } finally { closeHippoDb(db); }
   });
 
-  it('close guard: not-found and not-active (already closed / superseded) error clearly', () => {
-    expect(() => closeDecision(home, 'default', 88888)).toThrow(/not found/);
+  it('close guard: not-found and not-active (already closed / superseded) error clearly', async () => {
+    await expect(closeDecision(objectsAt(home), 'default', 88888)).rejects.toThrow(/not found/);
 
-    const d = saveDecision(home, 'default', { decisionText: 'close twice' });
-    closeDecision(home, 'default', d.id);
-    expect(() => closeDecision(home, 'default', d.id)).toThrow(/not active/);
+    const d = await saveDecision(objectsAt(home), home, 'default', { decisionText: 'close twice' });
+    await closeDecision(objectsAt(home), 'default', d.id);
+    await expect(closeDecision(objectsAt(home), 'default', d.id)).rejects.toThrow(/not active/);
 
-    const sup = saveDecision(home, 'default', { decisionText: 'orig' });
-    saveDecision(home, 'default', { decisionText: 'next', supersedesDecisionId: sup.id });
-    expect(() => closeDecision(home, 'default', sup.id)).toThrow(/not active/);
+    const sup = await saveDecision(objectsAt(home), home, 'default', { decisionText: 'orig' });
+    await saveDecision(objectsAt(home), home, 'default', { decisionText: 'next', supersedesDecisionId: sup.id });
+    await expect(closeDecision(objectsAt(home), 'default', sup.id)).rejects.toThrow(/not active/);
   });
 
   it('cross-tenant INSERT trigger raises ABORT on memory tenant mismatch', () => {
@@ -297,9 +298,9 @@ describe('decisions store (first-class object)', () => {
     } finally { closeHippoDb(db); }
   });
 
-  it('superseded_by cross-tenant trigger raises ABORT', () => {
-    const a = saveDecision(home, 'tenant-a', { decisionText: 'a-decision' });
-    const b = saveDecision(home, 'tenant-b', { decisionText: 'b-decision' });
+  it('superseded_by cross-tenant trigger raises ABORT', async () => {
+    const a = await saveDecision(objectsAt(home), home, 'tenant-a', { decisionText: 'a-decision' });
+    const b = await saveDecision(objectsAt(home), home, 'tenant-b', { decisionText: 'b-decision' });
     const db = openHippoDb(home);
     try {
       expect(() => {
@@ -308,58 +309,58 @@ describe('decisions store (first-class object)', () => {
     } finally { closeHippoDb(db); }
   });
 
-  it('ON DELETE SET NULL: forgetting the memory orphans the decision (decay-bug structural proof)', () => {
-    const d = saveDecision(home, 'default', { decisionText: 'survives memory decay' });
+  it('ON DELETE SET NULL: forgetting the memory orphans the decision (decay-bug structural proof)', async () => {
+    const d = await saveDecision(objectsAt(home), home, 'default', { decisionText: 'survives memory decay' });
     expect(d.memoryId).not.toBeNull();
     deleteEntry(home, d.memoryId!);
-    const reloaded = loadDecisionById(home, 'default', d.id);
+    const reloaded = await loadDecisionById(objectsAt(home), 'default', d.id);
     expect(reloaded).not.toBeNull();
     expect(reloaded!.memoryId).toBeNull();
     expect(reloaded!.status).toBe('active');
     expect(reloaded!.decisionText).toBe('survives memory decay');
     // Still surfaces in the authoritative active list even with no memory.
-    const active = loadActiveDecisions(home, 'default');
+    const active = await loadActiveDecisions(objectsAt(home), 'default');
     expect(active.some((x) => x.id === d.id)).toBe(true);
   });
 
-  it('loadDecisions status filter; loadActiveDecisions excludes non-active', () => {
-    const a = saveDecision(home, 'default', { decisionText: 'active-1' });
-    const b = saveDecision(home, 'default', { decisionText: 'to-close' });
-    const c = saveDecision(home, 'default', { decisionText: 'to-supersede' });
-    closeDecision(home, 'default', b.id);
-    saveDecision(home, 'default', { decisionText: 'successor', supersedesDecisionId: c.id });
+  it('loadDecisions status filter; loadActiveDecisions excludes non-active', async () => {
+    const a = await saveDecision(objectsAt(home), home, 'default', { decisionText: 'active-1' });
+    const b = await saveDecision(objectsAt(home), home, 'default', { decisionText: 'to-close' });
+    const c = await saveDecision(objectsAt(home), home, 'default', { decisionText: 'to-supersede' });
+    await closeDecision(objectsAt(home), 'default', b.id);
+    await saveDecision(objectsAt(home), home, 'default', { decisionText: 'successor', supersedesDecisionId: c.id });
 
-    const active = loadActiveDecisions(home, 'default');
+    const active = await loadActiveDecisions(objectsAt(home), 'default');
     expect(active.every((x) => x.status === 'active')).toBe(true);
     expect(active.some((x) => x.id === a.id)).toBe(true);
     expect(active.some((x) => x.id === b.id)).toBe(false);
     expect(active.some((x) => x.id === c.id)).toBe(false);
 
-    const closed = loadDecisions(home, 'default', { status: 'closed' });
+    const closed = await loadDecisions(objectsAt(home), 'default', { status: 'closed' });
     expect(closed.length).toBe(1);
     expect(closed[0].id).toBe(b.id);
 
-    const superseded = loadDecisions(home, 'default', { status: 'superseded' });
+    const superseded = await loadDecisions(objectsAt(home), 'default', { status: 'superseded' });
     expect(superseded.length).toBe(1);
     expect(superseded[0].id).toBe(c.id);
 
-    const all = loadDecisions(home, 'default');
+    const all = await loadDecisions(objectsAt(home), 'default');
     expect(all.length).toBe(4);
   });
 
-  it('loadDecisions rejects an invalid status', () => {
-    expect(() => {
+  it('loadDecisions rejects an invalid status', async () => {
+    await expect(async () => {
       // @ts-expect-error — runtime validation test
-      loadDecisions(home, 'default', { status: 'retired' });
-    }).toThrow(/status must be one of/);
+      await loadDecisions(objectsAt(home), 'default', { status: 'retired' });
+    }).rejects.toThrow(/status must be one of/);
     expect(VALID_DECISION_STATES.has('active')).toBe(true);
     expect(VALID_DECISION_STATES.has('superseded')).toBe(true);
     expect(VALID_DECISION_STATES.has('closed')).toBe(true);
   });
 
-  it('resolveActiveDecisionIdByMemory: row id for first-class, null for legacy/superseded', () => {
-    const d = saveDecision(home, 'default', { decisionText: 'first-class' });
-    expect(resolveActiveDecisionIdByMemory(home, 'default', d.memoryId!)).toBe(d.id);
+  it('resolveActiveDecisionIdByMemory: row id for first-class, null for legacy/superseded', async () => {
+    const d = await saveDecision(objectsAt(home), home, 'default', { decisionText: 'first-class' });
+    expect(await resolveActiveDecisionIdByMemory(objectsAt(home), 'default', d.memoryId!)).toBe(d.id);
 
     // A legacy decision-tagged memory with NO decisions row
     const legacy = createMemory('legacy decision memory', {
@@ -371,22 +372,22 @@ describe('decisions store (first-class object)', () => {
       tenantId: 'default',
     });
     writeEntry(home, legacy);
-    expect(resolveActiveDecisionIdByMemory(home, 'default', legacy.id)).toBeNull();
+    expect(await resolveActiveDecisionIdByMemory(objectsAt(home), 'default', legacy.id)).toBeNull();
 
     // A superseded decision's memory no longer resolves (status != active)
-    const sup = saveDecision(home, 'default', { decisionText: 'old' });
-    saveDecision(home, 'default', { decisionText: 'new', supersedesDecisionId: sup.id });
-    expect(resolveActiveDecisionIdByMemory(home, 'default', sup.memoryId!)).toBeNull();
+    const sup = await saveDecision(objectsAt(home), home, 'default', { decisionText: 'old' });
+    await saveDecision(objectsAt(home), home, 'default', { decisionText: 'new', supersedesDecisionId: sup.id });
+    expect(await resolveActiveDecisionIdByMemory(objectsAt(home), 'default', sup.memoryId!)).toBeNull();
   });
 
-  it('tenant scoping: cross-tenant load returns empty', () => {
-    saveDecision(home, 'tenant-a', { decisionText: 'a-dec' });
-    saveDecision(home, 'tenant-b', { decisionText: 'b-dec' });
-    expect(loadDecisions(home, 'tenant-a').length).toBe(1);
-    expect(loadDecisions(home, 'tenant-b').length).toBe(1);
-    expect(loadDecisions(home, 'tenant-c').length).toBe(0);
-    const a = loadDecisions(home, 'tenant-a')[0];
-    expect(loadDecisionById(home, 'tenant-b', a.id)).toBeNull();
+  it('tenant scoping: cross-tenant load returns empty', async () => {
+    await saveDecision(objectsAt(home), home, 'tenant-a', { decisionText: 'a-dec' });
+    await saveDecision(objectsAt(home), home, 'tenant-b', { decisionText: 'b-dec' });
+    expect((await loadDecisions(objectsAt(home), 'tenant-a')).length).toBe(1);
+    expect((await loadDecisions(objectsAt(home), 'tenant-b')).length).toBe(1);
+    expect((await loadDecisions(objectsAt(home), 'tenant-c')).length).toBe(0);
+    const a = (await loadDecisions(objectsAt(home), 'tenant-a'))[0];
+    expect(await loadDecisionById(objectsAt(home), 'tenant-b', a.id)).toBeNull();
   });
 
   it('schema v30 produces decisions table + triggers + indexes', () => {

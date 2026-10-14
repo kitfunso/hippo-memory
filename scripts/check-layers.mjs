@@ -174,7 +174,6 @@ const SQLITE_PINNED = [
   { file: 'mcp/stdio.ts', target: 'store/sqlite/store.ts', why: 'the stdio server is the composition root that builds the SQLite store' },
   { file: 'api/error-reply.ts', target: 'store/sqlite/busy.ts', why: 'isStoreBusy moves behind the port in D2b' },
   { file: 'api/ledger-db.ts', target: 'store/sqlite/store.ts', why: 'sqliteSyncStore moves behind the port in D2b' },
-  { file: 'api/sleep-run.ts', target: 'store/sqlite/store.ts', why: 'sqliteSyncStore moves behind the port in D2b' },
   { file: 'api/auth.ts', target: 'store/sqlite/local.ts', why: 'changeScopeGrant moves behind the port in D2b' },
 ];
 

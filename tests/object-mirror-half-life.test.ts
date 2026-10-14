@@ -8,7 +8,7 @@ import { loadConfig } from '../src/core/config.js';
 import { saveCustomerNote } from '../src/objects/customer-notes.js';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
 import { saveDecision } from '../src/objects/decisions.js';
-import { saveIncident } from '../src/objects/incidents.js';
+import { openIncident } from '../src/objects/incidents.js';
 import { calculateStrength, deriveHalfLife, type MemoryEntry } from '../src/core/memory.js';
 import { savePolicy } from '../src/objects/policies.js';
 import { saveProcess } from '../src/objects/processes.js';
@@ -16,6 +16,7 @@ import { saveProjectBrief } from '../src/objects/project-briefs.js';
 import { saveSkill } from '../src/objects/skills.js';
 import { readEntry } from '../src/store/entry-reads.js';
 import { initStore, LEGACY_TYPED_HALF_LIFE, TYPED_HALF_LIFE_META_KEY } from '../src/store/open.js';
+import { objectsAt } from './_helpers/objects-at.js';
 
 const FROZEN = new Date('2026-03-01T12:00:00.000Z');
 const TENANT = 'acme';
@@ -44,14 +45,14 @@ function storeWith(migrated: boolean): string {
   return root;
 }
 
-function saveOneOfEach(root: string): void {
-  saveDecision(root, TENANT, { decisionText: 'ship on fridays', context: 'release train' }, ACTOR);
-  saveIncident(root, TENANT, { incidentText: 'checkout latency', context: 'eu-west', extraTags: ['error'] }, ACTOR);
-  saveProcess(root, TENANT, { processName: 'deploy', steps: ['build', 'ship'], description: 'weekly' }, ACTOR);
-  savePolicy(root, TENANT, { policyName: 'retention', policyText: 'keep ninety days', validFrom: '2026-01-01' }, ACTOR);
-  saveSkill(root, TENANT, { skillName: 'triage', instructions: 'read the log first', trigger: 'on page' }, ACTOR);
-  saveProjectBrief(root, TENANT, { repo: 'acme/web', summary: 'storefront', extraTags: ['path:acme/web'] }, ACTOR);
-  saveCustomerNote(root, TENANT, { customer: 'initech', note: 'prefers email' }, ACTOR);
+async function saveOneOfEach(root: string): Promise<void> {
+  await saveDecision(objectsAt(root), root, TENANT, { decisionText: 'ship on fridays', context: 'release train' }, ACTOR);
+  await openIncident(objectsAt(root), root, TENANT, { incidentText: 'checkout latency', context: 'eu-west', extraTags: ['error'] }, ACTOR);
+  await saveProcess(objectsAt(root), root, TENANT, { processName: 'deploy', steps: ['build', 'ship'], description: 'weekly' }, ACTOR);
+  await savePolicy(objectsAt(root), root, TENANT, { policyName: 'retention', policyText: 'keep ninety days', validFrom: '2026-01-01' }, ACTOR);
+  await saveSkill(objectsAt(root), root, TENANT, { skillName: 'triage', instructions: 'read the log first', trigger: 'on page' }, ACTOR);
+  await saveProjectBrief(objectsAt(root), root, TENANT, { repo: 'acme/web', summary: 'storefront', extraTags: ['path:acme/web'] }, ACTOR);
+  await saveCustomerNote(objectsAt(root), root, TENANT, { customer: 'initech', note: 'prefers email' }, ACTOR);
 }
 
 type Column = string | number | null;
@@ -112,9 +113,9 @@ interface TickedSave {
   readonly reads: readonly number[];
 }
 
-function ticked(ticks: readonly number[], save: () => { memoryId: string | null }): TickedSave {
+async function ticked(ticks: readonly number[], save: () => Promise<{ memoryId: string | null }>): Promise<TickedSave> {
   const from = ticks.length;
-  const { memoryId } = save();
+  const { memoryId } = await save();
   return { memoryId, reads: ticks.slice(from) };
 }
 
@@ -128,21 +129,21 @@ describe.each([
   { flag: 'unset', migrated: false },
   { flag: 'set', migrated: true },
 ])('a typed object saved with the typed half-life flag $flag', ({ migrated }) => {
-  it('stores each kind\'s mirror column for column as the commit before the store group did', () => {
+  it('stores each kind\'s mirror column for column as the commit before the store group did', async () => {
     vi.useFakeTimers({ toFake: ['Date'], now: FROZEN });
     const root = storeWith(migrated);
-    saveOneOfEach(root);
+    await saveOneOfEach(root);
     expect(mirrorRows(root)).toEqual(rowsBeforeTheGroup(migrated));
   });
 
-  it('under a clock that ticks, stores the strength the decay function gives the stored row at one of the save\'s own clock reads', () => {
+  it('under a clock that ticks, stores the strength the decay function gives the stored row at one of the save\'s own clock reads', async () => {
     const root = storeWith(migrated);
     const base = migrated ? loadConfig(root).defaultHalfLifeDays : LEGACY_TYPED_HALF_LIFE;
     const ticks = stubTickingClock();
     const saves = [
-      ticked(ticks, () => saveIncident(root, TENANT, { incidentText: 'checkout latency' }, ACTOR)),
-      ticked(ticks, () => saveDecision(root, TENANT, { decisionText: 'ship on fridays' }, ACTOR)),
-      ticked(ticks, () => saveIncident(root, TENANT, { incidentText: 'login errors', extraTags: ['error'] }, ACTOR)),
+      await ticked(ticks, () => openIncident(objectsAt(root), root, TENANT, { incidentText: 'checkout latency' }, ACTOR)),
+      await ticked(ticks, () => saveDecision(objectsAt(root), root, TENANT, { decisionText: 'ship on fridays' }, ACTOR)),
+      await ticked(ticks, () => openIncident(objectsAt(root), root, TENANT, { incidentText: 'login errors', extraTags: ['error'] }, ACTOR)),
     ];
     vi.unstubAllGlobals();
     vi.restoreAllMocks();

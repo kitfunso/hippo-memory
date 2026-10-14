@@ -14,6 +14,7 @@ import { hashedVector } from './_helpers/hashed-embedding-server.js';
 import { leftBehind, type MovedReadsSeed, seedMovedReads, VECTOR_IDENTITY } from './_helpers/moved-reads-seed.js';
 import { FAKE_NOW, freshStore, SESSION, TENANT } from './_helpers/recall-golden-seed.js';
 import { cleanups, holdWriteLock, mirrorFiles, patientStore, undoAll } from './_helpers/store-worker-server.js';
+import { objectsAt } from './_helpers/objects-at.js';
 
 type Served = HippoStore & StoreGroups;
 type Call<T> = (store: Served, seed: MovedReadsSeed) => Promise<T>;
@@ -70,6 +71,7 @@ const READS: readonly Read[] = [
   read('graphReads.graphRows', (s) => s.graphReads.graphRows(TENANT, { limit: 50 }), 'RetryPolicy'),
   read('objects.listObjects', (s) => s.objects.listObjects(TENANT, 'decision', { limit: 5 }), 'We adopt RetryPolicy'),
   read('objects.objectById', (s) => s.objects.objectById(TENANT, 'policy', 1), 'retry up to 3x'),
+  read('objects.objectIdByMemory', async (s) => s.objects.objectIdByMemory(TENANT, 'decision', 'active', (await s.objects.listObjects(TENANT, 'decision', { limit: 1 }))[0]?.memoryId ?? ''), /^[1-9][0-9]*$/),
   read('objects.policiesInForce', (s) => s.objects.policiesInForce(TENANT, { asOf: '9999-12-31T23:59:59.999Z', limit: 5 }), 'RetryPolicy'),
   read('objects.activeSkillsByName', (s) => s.objects.activeSkillsByName(TENANT, 5), 'page the owner, then revert'),
   read('objects.briefReceipts', (s) => s.objects.briefReceipts(TENANT, 'deploy', 5), 'mem_p_plain'),
@@ -136,10 +138,10 @@ describe('a read the op table places on a reader thread', () => {
   let inProcess: Served;
 
   // Reads write nothing, so both stores serve one copy for the whole table.
-  beforeAll(() => {
+  beforeAll(async () => {
     const root = copy();
     // The shared seed has no skill, and the skill read must find one.
-    saveSkill(root, TENANT, { skillName: 'rollback', instructions: 'page the owner, then revert' });
+    await saveSkill(objectsAt(root), root, TENANT, { skillName: 'rollback', instructions: 'page the owner, then revert' });
     onWorkers = workerSqliteStore(root);
     inProcess = sqliteStore(root);
   });

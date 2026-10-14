@@ -11,6 +11,7 @@ import { loadDecisions } from '../objects/decisions.js';
 import { loadPolicies } from '../objects/policies.js';
 import { loadCustomerNotes } from '../objects/customer-notes.js';
 import { loadProjectBriefs } from '../objects/project-briefs.js';
+import type { Objects } from '../store/port.js';
 import { assertTenantId } from '../store/tenant.js';
 import { escapeRegex } from '../util/escape.js';
 
@@ -109,15 +110,15 @@ export interface LoadedType {
  *  one call per status, so MAX_EXTRACT_PER_TYPE is a per-status budget; `hitCap` is set when either load is full. */
 function source<T extends SourceRow>(
   entityType: EntityType,
-  load: (root: string, tenant: string, opts: SourceLoadOpts) => T[],
+  load: (objects: Objects, tenant: string, opts: SourceLoadOpts) => Promise<T[]>,
   nameOf: (row: T) => string,
   textOf: (row: T) => string,
-): (hippoRoot: string, tenantId: string) => LoadedType {
-  return (hippoRoot, tenantId) => {
+): (objects: Objects, tenantId: string) => Promise<LoadedType> {
+  return async (objects, tenantId) => {
     const rows: ExtractRow[] = [];
     let hitCap = false;
     for (const status of ['active', 'superseded'] as const) {
-      const loaded = load(hippoRoot, tenantId, { status, limit: MAX_EXTRACT_PER_TYPE });
+      const loaded = await load(objects, tenantId, { status, limit: MAX_EXTRACT_PER_TYPE });
       if (loaded.length === MAX_EXTRACT_PER_TYPE) hitCap = true;
       for (const r of loaded) {
         rows.push({ entityType, e2Id: r.id, name: nameOf(r), searchText: textOf(r), memoryId: r.memoryId, supersededBy: r.supersededBy });
@@ -127,17 +128,17 @@ function source<T extends SourceRow>(
   };
 }
 
-const GRAPH_SOURCES: ReadonlyArray<(hippoRoot: string, tenantId: string) => LoadedType> = [
+const GRAPH_SOURCES: ReadonlyArray<(objects: Objects, tenantId: string) => Promise<LoadedType>> = [
   source('decision', loadDecisions, (r) => r.decisionText, (r) => [r.decisionText, r.context].filter(Boolean).join(' ')),
   source('policy', loadPolicies, (r) => r.policyName, (r) => [r.policyName, r.policyText].filter(Boolean).join(' ')),
   source('customer', loadCustomerNotes, (r) => r.customer, (r) => [r.customer, r.note].filter(Boolean).join(' ')),
   source('project', loadProjectBriefs, (r) => r.repo, (r) => [r.repo, r.summary].filter(Boolean).join(' ')),
 ];
 
-/** Every source type's rows, each read on its own connection; callers load before any write lock is taken. */
-export function loadGraphSources(hippoRoot: string, tenantId: string): LoadedType[] {
+/** Every source type's rows; callers load before any write lock is taken. */
+export async function loadGraphSources(objects: Objects, tenantId: string): Promise<LoadedType[]> {
   assertTenantId('loadGraphSources', tenantId);
-  return GRAPH_SOURCES.map((load) => load(hippoRoot, tenantId));
+  return Promise.all(GRAPH_SOURCES.map((load) => load(objects, tenantId)));
 }
 
 /** The graph the loaded objects imply, plus the counts ExtractResult reports. */
@@ -298,10 +299,10 @@ function resultOf(derived: DerivedGraph, skipped: number): ExtractResult {
 
 /** Idempotent rebuild of the tenant's graph from its consolidated objects, in one transaction; safe to re-run.
  *  Returns the derived counts and which types hit the per-type cap. */
-export function extractGraph(hippoRoot: string, tenantId: string): ExtractResult {
+export async function extractGraph(objects: Objects, hippoRoot: string, tenantId: string): Promise<ExtractResult> {
   assertTenantId('extractGraph', tenantId);
   // Loaded first: opening a second connection under the rebuild's BEGIN IMMEDIATE dead-locks ('database is locked').
-  const derived = deriveGraph(loadGraphSources(hippoRoot, tenantId));
+  const derived = deriveGraph(await loadGraphSources(objects, tenantId));
   // Diffed and applied under one lock, so two concurrent rebuilds serialize instead of both inserting a missing row.
   const skipped = runGraphRebuildTransaction(hippoRoot, tenantId, (txDb) =>
     applyGraphOps(txDb, tenantId, graphDelta(txDb, tenantId, derived), { from: 0, holdMs: Infinity }).skipped,
@@ -311,9 +312,9 @@ export function extractGraph(hippoRoot: string, tenantId: string): ExtractResult
 
 /** extractGraph for sleep: diffs outside the lock, then applies in transactions of about `budget.holdMs` with a pause
  *  between them. A run stopped between chunks leaves a mixed graph that the next run's diff finishes. */
-export async function extractGraphChunked(hippoRoot: string, tenantId: string, budget: WriteBudget = WRITE_BUDGET): Promise<ExtractResult> {
+export async function extractGraphChunked(objects: Objects, hippoRoot: string, tenantId: string, budget: WriteBudget = WRITE_BUDGET): Promise<ExtractResult> {
   assertTenantId('extractGraphChunked', tenantId);
-  const derived = deriveGraph(loadGraphSources(hippoRoot, tenantId));
+  const derived = deriveGraph(await loadGraphSources(objects, tenantId));
   const ops = readGraphDelta(hippoRoot, tenantId, derived);
   let next = 0;
   let skipped = 0;

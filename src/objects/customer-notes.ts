@@ -2,9 +2,10 @@
  *  The `customer_notes` table is the source of truth; the memory mirror (memory_id NULLABLE, ON DELETE SET NULL) is for recall. */
 
 import type { KeysetPosition } from '../util/keyset.js';
+import type { Objects } from '../store/port.js';
 import type { SavableDescriptor } from './descriptor.js';
 import { checkText, requireLine } from './fields.js';
-import { closeObjectAt, listObjectsAt, objectByIdAt, saveObjectAt } from './lifecycle.js';
+import { closeObject, listObjects, objectById, saveObject } from './lifecycle.js';
 import type { CustomerNote, NoteStatus } from '../core/object-types.js';
 
 export type { CustomerNote, NoteStatus } from '../core/object-types.js';
@@ -82,47 +83,48 @@ export const CUSTOMER_NOTE: SavableDescriptor<'customer_note', SaveCustomerNoteO
 /** Create a customer_note, or a new version superseding an existing one, in the `objects` store group's one transaction.
  *  The mirror carries a `customer:<lc>` tag so scope-aware recall treats the note as entity-local. */
 export function saveCustomerNote(
+  objects: Objects,
   hippoRoot: string,
   tenantId: string,
   opts: SaveCustomerNoteOpts,
   actor: string = 'cli',
-): CustomerNote {
-  return saveObjectAt(CUSTOMER_NOTE, { hippoRoot, tenantId, actor }, opts);
+): Promise<CustomerNote> {
+  return saveObject(objects, CUSTOMER_NOTE, { hippoRoot, tenantId, actor }, opts);
 }
 
 /** Close (retire) an active note; CAS on status='active', 0 changes means not-found or not-active. */
 export function closeCustomerNote(
-  hippoRoot: string,
+  objects: Objects,
   tenantId: string,
   id: number,
   actor: string = 'cli',
-): CustomerNote {
-  return closeObjectAt(hippoRoot, CUSTOMER_NOTE, tenantId, id, actor);
+): Promise<CustomerNote> {
+  return closeObject(objects, CUSTOMER_NOTE, tenantId, id, actor);
 }
 
 export function loadCustomerNoteById(
-  hippoRoot: string,
+  objects: Objects,
   tenantId: string,
   id: number,
-): CustomerNote | null {
-  return objectByIdAt(hippoRoot, CUSTOMER_NOTE, tenantId, id);
+): Promise<CustomerNote | null> {
+  return objectById(objects, CUSTOMER_NOTE, tenantId, id);
 }
 
 export function loadCustomerNotes(
-  hippoRoot: string,
+  objects: Objects,
   tenantId: string,
   opts: ListCustomerNotesOpts = {},
-): CustomerNote[] {
-  return listObjectsAt(hippoRoot, CUSTOMER_NOTE, tenantId, { status: opts.status, filter: opts.customer, limit: opts.limit, after: opts.after });
+): Promise<CustomerNote[]> {
+  return listObjects(objects, CUSTOMER_NOTE, tenantId, { status: opts.status, filter: opts.customer, limit: opts.limit, after: opts.after });
 }
 
 /** All ACTIVE notes for a customer, newest first. Returns a LIST, unlike project_brief's single-or-null
  *  loadActiveBriefForRepo: a customer accrues many notes. */
 export function loadActiveNotesForCustomer(
-  hippoRoot: string,
+  objects: Objects,
   tenantId: string,
   customer: string,
   opts: { limit?: number } = {},
-): CustomerNote[] {
-  return loadCustomerNotes(hippoRoot, tenantId, { customer, status: 'active', limit: opts.limit });
+): Promise<CustomerNote[]> {
+  return loadCustomerNotes(objects, tenantId, { customer, status: 'active', limit: opts.limit });
 }

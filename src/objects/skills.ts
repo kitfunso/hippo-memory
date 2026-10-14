@@ -7,10 +7,9 @@ import { assertTenantId } from '../store/tenant.js';
 import type { KeysetPosition } from '../util/keyset.js';
 import type { SavableDescriptor } from './descriptor.js';
 import { checkText, requireLine } from './fields.js';
-import { closeObjectAt, listObjectsAt, objectByIdAt, saveObjectAt } from './lifecycle.js';
+import { closeObject, listObjects, objectById, saveObject } from './lifecycle.js';
 import type { Skill, SkillStatus } from '../core/object-types.js';
 import type { Objects } from '../store/port.js';
-import { sqliteObjects } from '../store/sqlite/objects-group.js';
 
 export type { Skill, SkillStatus } from '../core/object-types.js';
 
@@ -101,56 +100,51 @@ export const SKILL: SavableDescriptor<'skill', SaveSkillOpts> = {
 
 /** Create a skill, or a new version superseding an existing one, in the `objects` store group's one transaction. */
 export function saveSkill(
+  objects: Objects,
   hippoRoot: string,
   tenantId: string,
   opts: SaveSkillOpts,
   actor: string = 'cli',
-): Skill {
-  return saveObjectAt(SKILL, { hippoRoot, tenantId, actor }, opts);
+): Promise<Skill> {
+  return saveObject(objects, SKILL, { hippoRoot, tenantId, actor }, opts);
 }
 
 /** Close (retire) an active skill; a superseded row is terminal. */
 export function closeSkill(
-  hippoRoot: string,
+  objects: Objects,
   tenantId: string,
   id: number,
   actor: string = 'cli',
-): Skill {
-  return closeObjectAt(hippoRoot, SKILL, tenantId, id, actor);
+): Promise<Skill> {
+  return closeObject(objects, SKILL, tenantId, id, actor);
 }
 
 export function loadSkillById(
-  hippoRoot: string,
+  objects: Objects,
   tenantId: string,
   id: number,
-): Skill | null {
-  return objectByIdAt(hippoRoot, SKILL, tenantId, id);
+): Promise<Skill | null> {
+  return objectById(objects, SKILL, tenantId, id);
 }
 
 export function loadSkills(
-  hippoRoot: string,
+  objects: Objects,
   tenantId: string,
   opts: ListSkillsOpts = {},
-): Skill[] {
-  return listObjectsAt(hippoRoot, SKILL, tenantId, opts);
+): Promise<Skill[]> {
+  return listObjects(objects, SKILL, tenantId, opts);
 }
 
 export function loadActiveSkills(
-  hippoRoot: string,
+  objects: Objects,
   tenantId: string,
   opts: { limit?: number } = {},
-): Skill[] {
-  return loadSkills(hippoRoot, tenantId, { status: 'active', limit: opts.limit });
+): Promise<Skill[]> {
+  return loadSkills(objects, tenantId, { status: 'active', limit: opts.limit });
 }
 
 /** Render the tenant's ACTIVE skills into one AGENTS.md / CLAUDE.md-style markdown block (H2 per skill, ordered by skill_name) and return it; writes no file.
  *  Bounded by MAX_EXPORT_SKILLS rows; instructions are emitted verbatim. */
-export function exportSkills(hippoRoot: string, tenantId: string): string {
-  assertTenantId('exportSkills', tenantId);
-  return skillsBlock(sqliteObjects(hippoRoot).activeSkillsByName(tenantId, MAX_EXPORT_SKILLS));
-}
-
-/** `exportSkills` over a served store's group. */
 export async function skillsMarkdown(objects: Objects, tenantId: string): Promise<string> {
   assertTenantId('exportSkills', tenantId);
   return skillsBlock(await objects.activeSkillsByName(tenantId, MAX_EXPORT_SKILLS));

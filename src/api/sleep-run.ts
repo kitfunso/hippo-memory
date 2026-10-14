@@ -4,7 +4,6 @@ import { loadAllEntries } from '../store/entry-reads.js';
 import { memoriesBackingObjects } from '../store/delete-and-batch.js';
 import { reportAuditWriteFailure } from '../store/audit.js';
 import { auditMemories } from '../core/memory-audit.js';
-import { sqliteSyncStore } from '../store/sqlite/store.js';
 import { AUTO_SHARE_MIN_SCORE, autoShare } from '../sharing/share.js';
 import { consolidate } from '../consolidate/sleep.js';
 import { failedUnitOf } from '../store/delete-and-batch.js';
@@ -15,6 +14,8 @@ import { loadPendingExtractionTenants, markPendingProcessedUpTo } from '../store
 import { extractGraphChunked, type ExtractResult } from '../graph/extract.js';
 import type { MemoryEntry } from '../core/memory.js';
 import type { Context, StoreContext } from './types.js';
+import { objectsOf } from './objects.js';
+import type { Objects } from '../store/port.js';
 import { removeAuditErrors } from './audit.js';
 import type { SleepOpts, SleepResult } from './sleep.js';
 import { errorMessage } from '../util/log.js';
@@ -29,7 +30,7 @@ export interface SleepPhases {
   computeAmbientState: typeof computeAmbientState;
   loadConfig: typeof loadConfig;
   loadPendingExtractionTenants: typeof loadPendingExtractionTenants;
-  extractGraph: (hippoRoot: string, tenantId: string) => ExtractResult | Promise<ExtractResult>;
+  extractGraph: (objects: Objects, hippoRoot: string, tenantId: string) => ExtractResult | Promise<ExtractResult>;
 }
 
 const DEFAULT_SLEEP_PHASES: SleepPhases = {
@@ -81,7 +82,7 @@ export async function runSleep(
     phaseError = err as Error;
     throw err;
   } finally {
-    emitSleepAudit(ctx, opts, dryRun, counts, phaseError);
+    await emitSleepAudit(ctx, opts, dryRun, counts, phaseError);
   }
 }
 
@@ -240,7 +241,7 @@ function summarizeAmbient(ctx: Context, phases: SleepPhases, result: SleepResult
 
 // Phase 6: rebuild the graph of every tenant marked dirty since the last sleep, so graph recall runs on fresh data.
 // Fault-isolated: consolidation has already committed, so no failure here aborts sleep; a failed tenant stays pending.
-async function drainGraphQueue(ctx: Context, phases: SleepPhases, snapshot: DirtyTenantSnapshot, result: SleepResult): Promise<void> {
+async function drainGraphQueue(ctx: StoreContext, phases: SleepPhases, snapshot: DirtyTenantSnapshot, result: SleepResult): Promise<void> {
   try {
     if (snapshot.error) {
       // Core sleep already succeeded; surface the skipped graph refresh as a detail.
@@ -269,14 +270,14 @@ type GraphTotals = NonNullable<SleepResult['graph']>;
 
 /** Rebuilds one dirty tenant's graph into `rebuilt` and drains its queue; a failure is a detail line and the tenant stays pending. */
 async function rebuildDirtyTenant(
-  ctx: Context,
+  ctx: StoreContext,
   phases: SleepPhases,
   dirty: DirtyTenantSnapshot['dirtyTenants'][number],
   rebuilt: GraphTotals,
   result: SleepResult,
 ): Promise<void> {
   try {
-    const ext = await phases.extractGraph(ctx.hippoRoot, dirty.tenantId);
+    const ext = await phases.extractGraph(objectsOf(ctx), ctx.hippoRoot, dirty.tenantId);
     // Count the rebuild as soon as it succeeds — it happened regardless of
     // the drain-mark below.
     rebuilt.tenants += 1;
@@ -313,14 +314,14 @@ interface SleepAuditMetadata {
 }
 
 // One 'consolidate' row per sleep, emitted from finally so a partial failure still reports what got done.
-// Its own handle; an audit failure is logged and never replaces the original phase error.
-function emitSleepAudit(
-  ctx: Context,
+// An audit failure is logged and never replaces the original phase error.
+async function emitSleepAudit(
+  ctx: StoreContext,
   opts: SleepOpts,
   dryRun: boolean,
   counts: SleepCounts,
   phaseError: Error | null,
-): void {
+): Promise<void> {
   try {
     // Tagged '__host__' because sleep is host-wide; the actor still names the operator who ran it.
     const sleepAuditMetadata: SleepAuditMetadata = {
@@ -337,7 +338,7 @@ function emitSleepAudit(
     // A flush stopped between chunks names the unit it would have committed next, so a unit that fails every night can be found.
     const nextUnitIds = failedUnitOf(phaseError);
     if (nextUnitIds) sleepAuditMetadata.nextUnitIds = nextUnitIds;
-    sqliteSyncStore(ctx.hippoRoot).appendAuditEvents([{
+    await ctx.store.appendAuditEvents([{
       tenantId: '__host__',
       actor: ctx.actor.subject,
       op: 'consolidate',

@@ -30,11 +30,12 @@ import {
   loadSkillById,
   loadSkills,
   loadActiveSkills,
-  exportSkills,
+  skillsMarkdown,
   VALID_SKILL_STATES,
   MAX_SKILL_INSTRUCTIONS_LEN,
 } from '../src/objects/skills.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { objectsAt } from './_helpers/objects-at.js';
 
 function safeRmSync(p: string): void {
   try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
@@ -69,8 +70,8 @@ describe('skills store (executable/exportable first-class object)', () => {
   beforeEach(() => { home = makeRoot('skills'); });
   afterEach(() => safeRmSync(home));
 
-  it('saveSkill creates memory + skills row + skill_create audit; v1; trigger null when omitted', () => {
-    const s = saveSkill(home, 'default', { skillName: 'Run tests', instructions: 'npm test before commit' });
+  it('saveSkill creates memory + skills row + skill_create audit; v1; trigger null when omitted', async () => {
+    const s = await saveSkill(objectsAt(home), home, 'default', { skillName: 'Run tests', instructions: 'npm test before commit' });
     expect(s.id).toBeGreaterThan(0);
     expect(s.memoryId).not.toBeNull();
     expect(s.skillName).toBe('Run tests');
@@ -99,8 +100,8 @@ describe('skills store (executable/exportable first-class object)', () => {
     } finally { closeHippoDb(db); }
   });
 
-  it('saveSkill with trigger; memory content has when + instructions', () => {
-    const s = saveSkill(home, 'default', { skillName: 'Lint', instructions: 'run eslint', trigger: 'before push' });
+  it('saveSkill with trigger; memory content has when + instructions', async () => {
+    const s = await saveSkill(objectsAt(home), home, 'default', { skillName: 'Lint', instructions: 'run eslint', trigger: 'before push' });
     expect(s.trigger).toBe('before push');
     const db = openHippoDb(home);
     try {
@@ -119,44 +120,44 @@ describe('skills store (executable/exportable first-class object)', () => {
     expect(countRows(home, 'skills')).toBe(s0);
   });
 
-  it('supersede chain + version + change_summary + skill_supersede audit', () => {
-    const v1 = saveSkill(home, 'default', { skillName: 'S', instructions: 'old' });
-    const v2 = saveSkill(home, 'default', { skillName: 'S', instructions: 'new', changeSummary: 'reworded', supersedesSkillId: v1.id });
-    const v3 = saveSkill(home, 'default', { skillName: 'S', instructions: 'newer', supersedesSkillId: v2.id });
+  it('supersede chain + version + change_summary + skill_supersede audit', async () => {
+    const v1 = await saveSkill(objectsAt(home), home, 'default', { skillName: 'S', instructions: 'old' });
+    const v2 = await saveSkill(objectsAt(home), home, 'default', { skillName: 'S', instructions: 'new', changeSummary: 'reworded', supersedesSkillId: v1.id });
+    const v3 = await saveSkill(objectsAt(home), home, 'default', { skillName: 'S', instructions: 'newer', supersedesSkillId: v2.id });
     expect([v1.version, v2.version, v3.version]).toEqual([1, 2, 3]);
     expect(v2.changeSummary).toBe('reworded');
-    const reV1 = loadSkillById(home, 'default', v1.id)!;
+    const reV1 = (await loadSkillById(objectsAt(home), 'default', v1.id))!;
     expect(reV1.status).toBe('superseded');
     expect(reV1.supersededBy).toBe(v2.id);
-    expect(loadActiveSkills(home, 'default').map((x) => x.id)).toEqual([v3.id]);
+    expect((await loadActiveSkills(objectsAt(home), 'default')).map((x) => x.id)).toEqual([v3.id]);
     const db = openHippoDb(home);
     try {
       expect(db.prepare(`SELECT 1 FROM audit_log WHERE op='skill_supersede' AND target_id=?`).all(String(v1.id)).length).toBe(1);
     } finally { closeHippoDb(db); }
   });
 
-  it('supersede CAS (re-supersede not-active; missing not-found); self-supersede preflight', () => {
-    const v1 = saveSkill(home, 'default', { skillName: 'O', instructions: 'a' });
-    saveSkill(home, 'default', { skillName: 'O', instructions: 'b', supersedesSkillId: v1.id });
-    expect(() => saveSkill(home, 'default', { skillName: 'O', instructions: 'c', supersedesSkillId: v1.id })).toThrow(/not active/);
-    expect(() => saveSkill(home, 'default', { skillName: 'X', instructions: 'c', supersedesSkillId: 99999 })).toThrow(/not found/);
+  it('supersede CAS (re-supersede not-active; missing not-found); self-supersede preflight', async () => {
+    const v1 = await saveSkill(objectsAt(home), home, 'default', { skillName: 'O', instructions: 'a' });
+    await saveSkill(objectsAt(home), home, 'default', { skillName: 'O', instructions: 'b', supersedesSkillId: v1.id });
+    await expect(saveSkill(objectsAt(home), home, 'default', { skillName: 'O', instructions: 'c', supersedesSkillId: v1.id })).rejects.toThrow(/not active/);
+    await expect(saveSkill(objectsAt(home), home, 'default', { skillName: 'X', instructions: 'c', supersedesSkillId: 99999 })).rejects.toThrow(/not found/);
     const s0 = countRows(home, 'skills');
-    expect(() => saveSkill(home, 'default', { skillName: 'Self', instructions: 'a', supersedesSkillId: 1 })).toThrow(/not active|not found/);
+    await expect(saveSkill(objectsAt(home), home, 'default', { skillName: 'Self', instructions: 'a', supersedesSkillId: 1 })).rejects.toThrow(/not active|not found/);
     // (id 1 exists as superseded here, so 'not active'; the empty-store case is covered by other E2 store tests.)
     expect(countRows(home, 'skills')).toBe(s0);
   });
 
-  it('close + close guard (not-found; cannot-close-superseded; cannot re-close)', () => {
-    expect(() => closeSkill(home, 'default', 77777)).toThrow(/not found/);
-    const v1 = saveSkill(home, 'default', { skillName: 'Sup', instructions: 'a' });
-    saveSkill(home, 'default', { skillName: 'Sup', instructions: 'b', supersedesSkillId: v1.id });
-    expect(() => closeSkill(home, 'default', v1.id)).toThrow(/not active/);
-    const c = saveSkill(home, 'default', { skillName: 'Cl', instructions: 'a' });
-    closeSkill(home, 'default', c.id);
-    expect(() => closeSkill(home, 'default', c.id)).toThrow(/not active/);
+  it('close + close guard (not-found; cannot-close-superseded; cannot re-close)', async () => {
+    await expect(closeSkill(objectsAt(home), 'default', 77777)).rejects.toThrow(/not found/);
+    const v1 = await saveSkill(objectsAt(home), home, 'default', { skillName: 'Sup', instructions: 'a' });
+    await saveSkill(objectsAt(home), home, 'default', { skillName: 'Sup', instructions: 'b', supersedesSkillId: v1.id });
+    await expect(closeSkill(objectsAt(home), 'default', v1.id)).rejects.toThrow(/not active/);
+    const c = await saveSkill(objectsAt(home), home, 'default', { skillName: 'Cl', instructions: 'a' });
+    await closeSkill(objectsAt(home), 'default', c.id);
+    await expect(closeSkill(objectsAt(home), 'default', c.id)).rejects.toThrow(/not active/);
   });
 
-  it('cross-tenant INSERT trigger + supersede tenant-match trigger raise ABORT', () => {
+  it('cross-tenant INSERT trigger + supersede tenant-match trigger raise ABORT', async () => {
     const mem = createMemory('tenant-a', {
       tags: ['skill'], layer: Layer.Semantic, confidence: 'verified', source: 'skill', tenantId: 'tenant-a',
     });
@@ -168,8 +169,8 @@ describe('skills store (executable/exportable first-class object)', () => {
           VALUES (?, 'tenant-b', 'x', 'y', 1, 'active', ?)`).run(mem.id, new Date().toISOString());
       }).toThrow(/tenant_id must match memories\.tenant_id/);
     } finally { closeHippoDb(db); }
-    const a = saveSkill(home, 'tenant-a', { skillName: 'A', instructions: 'a' });
-    const b = saveSkill(home, 'tenant-b', { skillName: 'B', instructions: 'b' });
+    const a = await saveSkill(objectsAt(home), home, 'tenant-a', { skillName: 'A', instructions: 'a' });
+    const b = await saveSkill(objectsAt(home), home, 'tenant-b', { skillName: 'B', instructions: 'b' });
     const db2 = openHippoDb(home);
     try {
       expect(() => db2.prepare(`UPDATE skills SET superseded_by=? WHERE id=?`).run(b.id, a.id))
@@ -177,53 +178,53 @@ describe('skills store (executable/exportable first-class object)', () => {
     } finally { closeHippoDb(db2); }
   });
 
-  it('ON DELETE SET NULL: forgetting the memory orphans the skill; old versions loadable', () => {
-    const v1 = saveSkill(home, 'default', { skillName: 'D', instructions: 'a' });
-    const v2 = saveSkill(home, 'default', { skillName: 'D', instructions: 'b', supersedesSkillId: v1.id });
+  it('ON DELETE SET NULL: forgetting the memory orphans the skill; old versions loadable', async () => {
+    const v1 = await saveSkill(objectsAt(home), home, 'default', { skillName: 'D', instructions: 'a' });
+    const v2 = await saveSkill(objectsAt(home), home, 'default', { skillName: 'D', instructions: 'b', supersedesSkillId: v1.id });
     deleteEntry(home, v1.memoryId!);
     deleteEntry(home, v2.memoryId!);
-    expect(loadSkillById(home, 'default', v1.id)!.memoryId).toBeNull();
-    expect(loadSkillById(home, 'default', v1.id)!.status).toBe('superseded');
-    expect(loadSkillById(home, 'default', v2.id)!.status).toBe('active');
+    expect((await loadSkillById(objectsAt(home), 'default', v1.id))!.memoryId).toBeNull();
+    expect((await loadSkillById(objectsAt(home), 'default', v1.id))!.status).toBe('superseded');
+    expect((await loadSkillById(objectsAt(home), 'default', v2.id))!.status).toBe('active');
   });
 
-  it('status filters; loadActiveSkills; invalid status', () => {
-    const a = saveSkill(home, 'default', { skillName: 'a', instructions: 'x' });
-    const b = saveSkill(home, 'default', { skillName: 'b', instructions: 'x' });
-    const c = saveSkill(home, 'default', { skillName: 'c', instructions: 'x' });
-    saveSkill(home, 'default', { skillName: 'b', instructions: 'x2', supersedesSkillId: b.id });
-    closeSkill(home, 'default', c.id);
-    const active = loadActiveSkills(home, 'default');
+  it('status filters; loadActiveSkills; invalid status', async () => {
+    const a = await saveSkill(objectsAt(home), home, 'default', { skillName: 'a', instructions: 'x' });
+    const b = await saveSkill(objectsAt(home), home, 'default', { skillName: 'b', instructions: 'x' });
+    const c = await saveSkill(objectsAt(home), home, 'default', { skillName: 'c', instructions: 'x' });
+    await saveSkill(objectsAt(home), home, 'default', { skillName: 'b', instructions: 'x2', supersedesSkillId: b.id });
+    await closeSkill(objectsAt(home), 'default', c.id);
+    const active = await loadActiveSkills(objectsAt(home), 'default');
     expect(active.some((x) => x.id === a.id)).toBe(true);
     expect(active.some((x) => x.id === b.id)).toBe(false);
-    expect(loadSkills(home, 'default', { status: 'closed' }).map((x) => x.id)).toEqual([c.id]);
-    expect(loadSkills(home, 'default').length).toBe(4);
+    expect((await loadSkills(objectsAt(home), 'default', { status: 'closed' })).map((x) => x.id)).toEqual([c.id]);
+    expect((await loadSkills(objectsAt(home), 'default')).length).toBe(4);
     // @ts-expect-error runtime validation
-    expect(() => loadSkills(home, 'default', { status: 'retired' })).toThrow(/status must be one of/);
+    await expect(loadSkills(objectsAt(home), 'default', { status: 'retired' })).rejects.toThrow(/status must be one of/);
     expect(VALID_SKILL_STATES.has('active')).toBe(true);
   });
 
-  it('validation: missing name/instructions; single-line name; caps', () => {
-    expect(() => saveSkill(home, 'default', { skillName: '   ', instructions: 'x' })).toThrow(/skillName is required/);
-    expect(() => saveSkill(home, 'default', { skillName: 'n', instructions: '  ' })).toThrow(/instructions are required/);
-    expect(() => saveSkill(home, 'default', { skillName: 'bad\nname', instructions: 'x' })).toThrow(/single line/);
-    expect(() => saveSkill(home, 'default', { skillName: 'n', instructions: 'x', trigger: 'multi\n## line' })).toThrow(/trigger must be a single line/);
-    expect(() => saveSkill(home, 'default', { skillName: 'big', instructions: 'y'.repeat(MAX_SKILL_INSTRUCTIONS_LEN + 1) })).toThrow(/instructions exceed/);
+  it('validation: missing name/instructions; single-line name; caps', async () => {
+    await expect(saveSkill(objectsAt(home), home, 'default', { skillName: '   ', instructions: 'x' })).rejects.toThrow(/skillName is required/);
+    await expect(saveSkill(objectsAt(home), home, 'default', { skillName: 'n', instructions: '  ' })).rejects.toThrow(/instructions are required/);
+    await expect(saveSkill(objectsAt(home), home, 'default', { skillName: 'bad\nname', instructions: 'x' })).rejects.toThrow(/single line/);
+    await expect(saveSkill(objectsAt(home), home, 'default', { skillName: 'n', instructions: 'x', trigger: 'multi\n## line' })).rejects.toThrow(/trigger must be a single line/);
+    await expect(saveSkill(objectsAt(home), home, 'default', { skillName: 'big', instructions: 'y'.repeat(MAX_SKILL_INSTRUCTIONS_LEN + 1) })).rejects.toThrow(/instructions exceed/);
   });
 
-  it('exportSkills: active-only, name-ASC, trigger omitted when null, markdown verbatim, empty -> ""', () => {
-    expect(exportSkills(home, 'default')).toBe('');
-    saveSkill(home, 'default', { skillName: 'Bravo', instructions: 'do bravo' });
-    saveSkill(home, 'default', { skillName: 'Alpha', instructions: 'do alpha', trigger: 'on start' });
+  it('exportSkills: active-only, name-ASC, trigger omitted when null, markdown verbatim, empty -> ""', async () => {
+    expect(await skillsMarkdown(objectsAt(home), 'default')).toBe('');
+    await saveSkill(objectsAt(home), home, 'default', { skillName: 'Bravo', instructions: 'do bravo' });
+    await saveSkill(objectsAt(home), home, 'default', { skillName: 'Alpha', instructions: 'do alpha', trigger: 'on start' });
     // a closed + a superseded skill must NOT appear in the export
-    const closed = saveSkill(home, 'default', { skillName: 'Zulu', instructions: 'old' });
-    closeSkill(home, 'default', closed.id);
-    const sup = saveSkill(home, 'default', { skillName: 'Yankee', instructions: 'v1' });
-    saveSkill(home, 'default', { skillName: 'Yankee', instructions: 'v2', supersedesSkillId: sup.id });
+    const closed = await saveSkill(objectsAt(home), home, 'default', { skillName: 'Zulu', instructions: 'old' });
+    await closeSkill(objectsAt(home), 'default', closed.id);
+    const sup = await saveSkill(objectsAt(home), home, 'default', { skillName: 'Yankee', instructions: 'v1' });
+    await saveSkill(objectsAt(home), home, 'default', { skillName: 'Yankee', instructions: 'v2', supersedesSkillId: sup.id });
     // instructions containing its own markdown heading must render verbatim
-    saveSkill(home, 'default', { skillName: 'Charlie', instructions: 'step 1\n## sub-heading\nstep 2' });
+    await saveSkill(objectsAt(home), home, 'default', { skillName: 'Charlie', instructions: 'step 1\n## sub-heading\nstep 2' });
 
-    const md = exportSkills(home, 'default');
+    const md = await skillsMarkdown(objectsAt(home), 'default');
     // name-ASC order (by relative position of each skill's own H2 header). NOTE:
     // we cannot just count all '## ' lines because instructions render VERBATIM,
     // so Charlie's body contains its own '## sub-heading' (the documented v1

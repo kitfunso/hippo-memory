@@ -5,6 +5,9 @@ import { errorMessage } from '../util/log.js';
 import { printError } from './output.js';
 import { nonEmptyStringFlag, stringFlag, type CliFlags, type CommandContext } from './flag-values.js';
 import { requireInit } from './shared.js';
+import { objectsOf } from '../api/objects.js';
+import type { Objects } from '../store/port.js';
+import { cliApiContext } from './api-context.js';
 import { closeObject, foundOrExit, idArgOrExit, listObjects, printLifecycleTail, type ObjectNames } from './object-verbs.js';
 import { CliExit, fail } from './exit.js';
 
@@ -30,17 +33,17 @@ export interface VersionedKind<O extends VersionedRow, S extends string, B> {
   readonly body: (flags: CliFlags, verb: 'new' | 'supersede') => B | undefined;
   /** What a new version keeps from the one it supersedes: the repo, customer or name. */
   readonly keyOf: (o: O) => string;
-  readonly save: (key: string, body: B, extraTags: string[], from?: Succession) => O;
+  readonly save: (key: string, body: B, extraTags: string[], from?: Succession) => Promise<O>;
   /** The first line `new` prints. */
   readonly recorded: (o: O) => string;
-  readonly list: (opts: { status?: S; limit: number }, flags: CliFlags) => readonly O[];
-  readonly loadById: (id: number) => O | null;
-  readonly close: (id: number) => { id: number };
+  readonly list: (opts: { status?: S; limit: number }, flags: CliFlags) => Promise<readonly O[]>;
+  readonly loadById: (id: number) => Promise<O | null>;
+  readonly close: (id: number) => Promise<{ id: number }>;
   readonly printRow: (o: O) => void;
   /** The `get` lines between the header and the lifecycle tail. */
   readonly printDetail: (o: O) => void;
   /** A subcommand only this kind has. */
-  readonly extra?: { readonly sub: string; readonly run: (args: string[], flags: CliFlags) => void };
+  readonly extra?: { readonly sub: string; readonly run: (args: string[], flags: CliFlags) => Promise<void> };
 }
 
 /** A flag that must carry text: its raw value, or undefined when absent or blank. */
@@ -51,11 +54,11 @@ export function requiredText(flags: CliFlags, name: string): string | undefined 
 
 /** The `hippo <cmd>` handler for a kind; `kindAt` binds the descriptor to the store the command runs against. */
 export function versionedVerbs<O extends VersionedRow, S extends string, B>(
-  kindAt: (hippoRoot: string, tenantId: string) => VersionedKind<O, S, B>,
-): (ctx: CommandContext) => void {
-  return ({ hippoRoot, tenantId, args, flags }) => {
+  kindAt: (objects: Objects, hippoRoot: string, tenantId: string) => VersionedKind<O, S, B>,
+): (ctx: CommandContext) => Promise<void> {
+  return async ({ hippoRoot, tenantId, args, flags }) => {
     requireInit(hippoRoot);
-    const kind = kindAt(hippoRoot, tenantId);
+    const kind = kindAt(objectsOf(cliApiContext(hippoRoot, tenantId)), hippoRoot, tenantId);
     const sub = args[0] ?? '';
     if (sub === kind.extra?.sub) return kind.extra.run(args, flags);
     if (sub === 'list') {
@@ -65,44 +68,44 @@ export function versionedVerbs<O extends VersionedRow, S extends string, B>(
     if (sub === 'supersede') return supersedeVersion(kind, args, flags);
     if (sub === 'close') return closeObject(args, kind.names, kind.close);
     // Both `<cmd> new "<key>"` and the bare `<cmd> "<key>"` create.
-    createVersion(kind, sub === 'new' ? (args[1] ?? '') : sub, flags);
+    await createVersion(kind, sub === 'new' ? (args[1] ?? '') : sub, flags);
   };
 }
 
-function getVersion<O extends VersionedRow, S extends string, B>(kind: VersionedKind<O, S, B>, args: string[]): void {
+async function getVersion<O extends VersionedRow, S extends string, B>(kind: VersionedKind<O, S, B>, args: string[]): Promise<void> {
   const id = idArgOrExit(args, `Usage: hippo ${kind.names.cmd} get <id>`, kind.names.idLabel);
-  const o = foundOrExit(kind.loadById(id), kind.names.noun, id);
+  const o = foundOrExit(await kind.loadById(id), kind.names.noun, id);
   console.log(`${kind.names.noun} #${o.id}`);
   kind.printDetail(o);
   printLifecycleTail(o);
 }
 
-function createVersion<O extends VersionedRow, S extends string, B>(kind: VersionedKind<O, S, B>, key: string, flags: CliFlags): void {
+async function createVersion<O extends VersionedRow, S extends string, B>(kind: VersionedKind<O, S, B>, key: string, flags: CliFlags): Promise<void> {
   const body = key ? kind.body(flags, 'new') : undefined;
   if (body === undefined) {
     for (const line of kind.usage) printError(line);
     throw new CliExit(1);
   }
-  const created = saveVersion(kind, key, body);
+  const created = await saveVersion(kind, key, body);
   printSaved(kind.recorded(created), created);
 }
 
-function supersedeVersion<O extends VersionedRow, S extends string, B>(kind: VersionedKind<O, S, B>, args: string[], flags: CliFlags): void {
+async function supersedeVersion<O extends VersionedRow, S extends string, B>(kind: VersionedKind<O, S, B>, args: string[], flags: CliFlags): Promise<void> {
   const id = idArgOrExit(args, kind.supersedeUsage, kind.names.idLabel);
   const body = kind.body(flags, 'supersede');
   if (body === undefined) {
     fail(`hippo ${kind.names.cmd} supersede requires ${kind.bodyRequired} for the new version.`);
   }
   // The lookup only gives a missing id its not-found line; the save's own preflight is the authoritative active-state check.
-  const existing = foundOrExit(kind.loadById(id), kind.names.noun, id);
-  const created = saveVersion(kind, kind.keyOf(existing), body, { id, changeSummary: nonEmptyStringFlag(flags, 'change') });
+  const existing = foundOrExit(await kind.loadById(id), kind.names.noun, id);
+  const created = await saveVersion(kind, kind.keyOf(existing), body, { id, changeSummary: nonEmptyStringFlag(flags, 'change') });
   printSaved(`${kind.names.noun} #${created.id} recorded (v${created.version}), superseding #${id}.`, created);
 }
 
 /** Every kind's save goes through here, so a refused write always prints the store's message and exits 1. */
-function saveVersion<O extends VersionedRow, S extends string, B>(kind: VersionedKind<O, S, B>, key: string, body: B, from?: Succession): O {
+async function saveVersion<O extends VersionedRow, S extends string, B>(kind: VersionedKind<O, S, B>, key: string, body: B, from?: Succession): Promise<O> {
   try {
-    return kind.save(key, body, extractPathTags(process.cwd()), from);
+    return await kind.save(key, body, extractPathTags(process.cwd()), from);
   } catch (e) {
     fail(errorMessage(e));
   }

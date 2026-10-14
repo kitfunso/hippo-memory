@@ -32,6 +32,7 @@ import {
   MAX_NOTE_LEN,
 } from '../src/objects/customer-notes.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { objectsAt } from './_helpers/objects-at.js';
 
 function safeRmSync(p: string): void {
   try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
@@ -61,8 +62,8 @@ describe('customer_notes store (entity-scoped first-class object)', () => {
   beforeEach(() => { home = makeRoot('customer-notes'); });
   afterEach(() => safeRmSync(home));
 
-  it('saveCustomerNote creates memory + row + customer_note_create audit; v1', () => {
-    const n = saveCustomerNote(home, 'default', { customer: 'Acme Corp', note: 'renewal call notes' });
+  it('saveCustomerNote creates memory + row + customer_note_create audit; v1', async () => {
+    const n = await saveCustomerNote(objectsAt(home), home, 'default', { customer: 'Acme Corp', note: 'renewal call notes' });
     expect(n.id).toBeGreaterThan(0);
     expect(n.memoryId).not.toBeNull();
     expect(n.customer).toBe('Acme Corp');
@@ -90,12 +91,12 @@ describe('customer_notes store (entity-scoped first-class object)', () => {
     } finally { closeHippoDb(db); }
   });
 
-  it('memory mirror carries customer:<lc> tag (lowercased); colon in customer is safe', () => {
-    const n = memTags(home, saveCustomerNote(home, 'default', { customer: 'Acme Corp', note: 'x' }).memoryId!);
+  it('memory mirror carries customer:<lc> tag (lowercased); colon in customer is safe', async () => {
+    const n = memTags(home, (await saveCustomerNote(objectsAt(home), home, 'default', { customer: 'Acme Corp', note: 'x' })).memoryId!);
     expect(n).toContain('customer_note');
     expect(n).toContain('customer:acme corp'); // lowercased
     // a customer containing a colon does not corrupt the tag (it is one element)
-    const n2 = saveCustomerNote(home, 'default', { customer: 'acme:corp', note: 'y', extraTags: ['vip'] });
+    const n2 = await saveCustomerNote(objectsAt(home), home, 'default', { customer: 'acme:corp', note: 'y', extraTags: ['vip'] });
     const tags2 = memTags(home, n2.memoryId!);
     expect(tags2).toContain('customer:acme:corp');
     expect(tags2).toContain('vip');
@@ -112,13 +113,13 @@ describe('customer_notes store (entity-scoped first-class object)', () => {
     expect(countRows(home, 'customer_notes')).toBe(c0);
   });
 
-  it('supersede chain + version + change_summary + customer_note_supersede audit', () => {
-    const v1 = saveCustomerNote(home, 'default', { customer: 'c', note: 'old' });
-    const v2 = saveCustomerNote(home, 'default', { customer: 'c', note: 'new', changeSummary: 'fixed typo', supersedesNoteId: v1.id });
-    const v3 = saveCustomerNote(home, 'default', { customer: 'c', note: 'newer', supersedesNoteId: v2.id });
+  it('supersede chain + version + change_summary + customer_note_supersede audit', async () => {
+    const v1 = await saveCustomerNote(objectsAt(home), home, 'default', { customer: 'c', note: 'old' });
+    const v2 = await saveCustomerNote(objectsAt(home), home, 'default', { customer: 'c', note: 'new', changeSummary: 'fixed typo', supersedesNoteId: v1.id });
+    const v3 = await saveCustomerNote(objectsAt(home), home, 'default', { customer: 'c', note: 'newer', supersedesNoteId: v2.id });
     expect([v1.version, v2.version, v3.version]).toEqual([1, 2, 3]);
     expect(v2.changeSummary).toBe('fixed typo');
-    const reV1 = loadCustomerNoteById(home, 'default', v1.id)!;
+    const reV1 = (await loadCustomerNoteById(objectsAt(home), 'default', v1.id))!;
     expect(reV1.status).toBe('superseded');
     expect(reV1.supersededBy).toBe(v2.id);
     const db = openHippoDb(home);
@@ -127,27 +128,27 @@ describe('customer_notes store (entity-scoped first-class object)', () => {
     } finally { closeHippoDb(db); }
   });
 
-  it('supersede CAS (re-supersede not-active; missing not-found); self-supersede preflight', () => {
-    const v1 = saveCustomerNote(home, 'default', { customer: 'o', note: 'a' });
-    saveCustomerNote(home, 'default', { customer: 'o', note: 'b', supersedesNoteId: v1.id });
-    expect(() => saveCustomerNote(home, 'default', { customer: 'o', note: 'c', supersedesNoteId: v1.id })).toThrow(/not active/);
-    expect(() => saveCustomerNote(home, 'default', { customer: 'x', note: 'c', supersedesNoteId: 99999 })).toThrow(/not found/);
+  it('supersede CAS (re-supersede not-active; missing not-found); self-supersede preflight', async () => {
+    const v1 = await saveCustomerNote(objectsAt(home), home, 'default', { customer: 'o', note: 'a' });
+    await saveCustomerNote(objectsAt(home), home, 'default', { customer: 'o', note: 'b', supersedesNoteId: v1.id });
+    await expect(saveCustomerNote(objectsAt(home), home, 'default', { customer: 'o', note: 'c', supersedesNoteId: v1.id })).rejects.toThrow(/not active/);
+    await expect(saveCustomerNote(objectsAt(home), home, 'default', { customer: 'x', note: 'c', supersedesNoteId: 99999 })).rejects.toThrow(/not found/);
     const c0 = countRows(home, 'customer_notes');
-    expect(() => saveCustomerNote(home, 'default', { customer: 'self', note: 'a', supersedesNoteId: 1 })).toThrow(/not active|not found/);
+    await expect(saveCustomerNote(objectsAt(home), home, 'default', { customer: 'self', note: 'a', supersedesNoteId: 1 })).rejects.toThrow(/not active|not found/);
     expect(countRows(home, 'customer_notes')).toBe(c0);
   });
 
-  it('close + close guard (not-found; cannot-close-superseded; cannot re-close)', () => {
-    expect(() => closeCustomerNote(home, 'default', 77777)).toThrow(/not found/);
-    const v1 = saveCustomerNote(home, 'default', { customer: 'sup', note: 'a' });
-    saveCustomerNote(home, 'default', { customer: 'sup', note: 'b', supersedesNoteId: v1.id });
-    expect(() => closeCustomerNote(home, 'default', v1.id)).toThrow(/not active/);
-    const c = saveCustomerNote(home, 'default', { customer: 'cl', note: 'a' });
-    closeCustomerNote(home, 'default', c.id);
-    expect(() => closeCustomerNote(home, 'default', c.id)).toThrow(/not active/);
+  it('close + close guard (not-found; cannot-close-superseded; cannot re-close)', async () => {
+    await expect(closeCustomerNote(objectsAt(home), 'default', 77777)).rejects.toThrow(/not found/);
+    const v1 = await saveCustomerNote(objectsAt(home), home, 'default', { customer: 'sup', note: 'a' });
+    await saveCustomerNote(objectsAt(home), home, 'default', { customer: 'sup', note: 'b', supersedesNoteId: v1.id });
+    await expect(closeCustomerNote(objectsAt(home), 'default', v1.id)).rejects.toThrow(/not active/);
+    const c = await saveCustomerNote(objectsAt(home), home, 'default', { customer: 'cl', note: 'a' });
+    await closeCustomerNote(objectsAt(home), 'default', c.id);
+    await expect(closeCustomerNote(objectsAt(home), 'default', c.id)).rejects.toThrow(/not active/);
   });
 
-  it('cross-tenant INSERT trigger + supersede tenant-match trigger raise ABORT', () => {
+  it('cross-tenant INSERT trigger + supersede tenant-match trigger raise ABORT', async () => {
     const mem = createMemory('tenant-a', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       tags: ['customer_note'], layer: Layer.Semantic, confidence: 'verified', source: 'customer_note', tenantId: 'tenant-a',
@@ -160,8 +161,8 @@ describe('customer_notes store (entity-scoped first-class object)', () => {
           VALUES (?, 'tenant-b', 'x', 'y', 1, 'active', ?)`).run(mem.id, new Date().toISOString());
       }).toThrow(/tenant_id must match memories\.tenant_id/);
     } finally { closeHippoDb(db); }
-    const a = saveCustomerNote(home, 'tenant-a', { customer: 'A', note: 'a' });
-    const b = saveCustomerNote(home, 'tenant-b', { customer: 'B', note: 'b' });
+    const a = await saveCustomerNote(objectsAt(home), home, 'tenant-a', { customer: 'A', note: 'a' });
+    const b = await saveCustomerNote(objectsAt(home), home, 'tenant-b', { customer: 'B', note: 'b' });
     const db2 = openHippoDb(home);
     try {
       expect(() => db2.prepare(`UPDATE customer_notes SET superseded_by=? WHERE id=?`).run(b.id, a.id))
@@ -169,40 +170,40 @@ describe('customer_notes store (entity-scoped first-class object)', () => {
     } finally { closeHippoDb(db2); }
   });
 
-  it('ON DELETE SET NULL: forgetting the memory orphans the note; old versions loadable', () => {
-    const v1 = saveCustomerNote(home, 'default', { customer: 'd', note: 'a' });
-    const v2 = saveCustomerNote(home, 'default', { customer: 'd', note: 'b', supersedesNoteId: v1.id });
+  it('ON DELETE SET NULL: forgetting the memory orphans the note; old versions loadable', async () => {
+    const v1 = await saveCustomerNote(objectsAt(home), home, 'default', { customer: 'd', note: 'a' });
+    const v2 = await saveCustomerNote(objectsAt(home), home, 'default', { customer: 'd', note: 'b', supersedesNoteId: v1.id });
     deleteEntry(home, v1.memoryId!);
     deleteEntry(home, v2.memoryId!);
-    expect(loadCustomerNoteById(home, 'default', v1.id)!.memoryId).toBeNull();
-    expect(loadCustomerNoteById(home, 'default', v1.id)!.status).toBe('superseded');
-    expect(loadCustomerNoteById(home, 'default', v2.id)!.status).toBe('active');
+    expect((await loadCustomerNoteById(objectsAt(home), 'default', v1.id))!.memoryId).toBeNull();
+    expect((await loadCustomerNoteById(objectsAt(home), 'default', v1.id))!.status).toBe('superseded');
+    expect((await loadCustomerNoteById(objectsAt(home), 'default', v2.id))!.status).toBe('active');
   });
 
-  it('status + customer filters; MANY active notes per customer; loadActiveNotesForCustomer; invalid status', () => {
+  it('status + customer filters; MANY active notes per customer; loadActiveNotesForCustomer; invalid status', async () => {
     // a single customer accrues MANY notes (the key difference from project_brief)
-    const a1 = saveCustomerNote(home, 'default', { customer: 'Acme', note: 'note 1' });
-    const a2 = saveCustomerNote(home, 'default', { customer: 'Acme', note: 'note 2' });
-    const b1 = saveCustomerNote(home, 'default', { customer: 'Beta', note: 'b note' });
-    closeCustomerNote(home, 'default', b1.id);
-    const acmeActive = loadActiveNotesForCustomer(home, 'default', 'Acme');
+    const a1 = await saveCustomerNote(objectsAt(home), home, 'default', { customer: 'Acme', note: 'note 1' });
+    const a2 = await saveCustomerNote(objectsAt(home), home, 'default', { customer: 'Acme', note: 'note 2' });
+    const b1 = await saveCustomerNote(objectsAt(home), home, 'default', { customer: 'Beta', note: 'b note' });
+    await closeCustomerNote(objectsAt(home), 'default', b1.id);
+    const acmeActive = await loadActiveNotesForCustomer(objectsAt(home), 'default', 'Acme');
     expect(acmeActive.map((x) => x.id).sort()).toEqual([a1.id, a2.id].sort());
     expect(acmeActive.length).toBe(2); // MANY-per-customer
-    expect(loadCustomerNotes(home, 'default', { customer: 'Beta' }).length).toBe(1);
-    expect(loadCustomerNotes(home, 'default', { customer: 'Beta', status: 'active' }).length).toBe(0); // closed
-    expect(loadCustomerNotes(home, 'default', { status: 'closed' }).map((x) => x.id)).toEqual([b1.id]);
-    expect(loadCustomerNotes(home, 'default').length).toBe(3);
+    expect((await loadCustomerNotes(objectsAt(home), 'default', { customer: 'Beta' })).length).toBe(1);
+    expect((await loadCustomerNotes(objectsAt(home), 'default', { customer: 'Beta', status: 'active' })).length).toBe(0); // closed
+    expect((await loadCustomerNotes(objectsAt(home), 'default', { status: 'closed' })).map((x) => x.id)).toEqual([b1.id]);
+    expect((await loadCustomerNotes(objectsAt(home), 'default')).length).toBe(3);
     // @ts-expect-error runtime validation
-    expect(() => loadCustomerNotes(home, 'default', { status: 'retired' })).toThrow(/status must be one of/);
+    await expect(loadCustomerNotes(objectsAt(home), 'default', { status: 'retired' })).rejects.toThrow(/status must be one of/);
     expect(VALID_NOTE_STATES.has('active')).toBe(true);
   });
 
-  it('validation: missing customer/note; single-line customer; caps', () => {
-    expect(() => saveCustomerNote(home, 'default', { customer: '   ', note: 'x' })).toThrow(/customer is required/);
-    expect(() => saveCustomerNote(home, 'default', { customer: 'c', note: '  ' })).toThrow(/note is required/);
-    expect(() => saveCustomerNote(home, 'default', { customer: 'bad\ncustomer', note: 'x' })).toThrow(/single line/);
-    expect(() => saveCustomerNote(home, 'default', { customer: 'big', note: 'y'.repeat(MAX_NOTE_LEN + 1) })).toThrow(/note exceeds/);
-    expect(() => saveCustomerNote(home, 'default', { customer: 'c', note: 'ok', changeSummary: 'z'.repeat(4097), supersedesNoteId: 1 })).toThrow(/changeSummary exceeds/);
+  it('validation: missing customer/note; single-line customer; caps', async () => {
+    await expect(saveCustomerNote(objectsAt(home), home, 'default', { customer: '   ', note: 'x' })).rejects.toThrow(/customer is required/);
+    await expect(saveCustomerNote(objectsAt(home), home, 'default', { customer: 'c', note: '  ' })).rejects.toThrow(/note is required/);
+    await expect(saveCustomerNote(objectsAt(home), home, 'default', { customer: 'bad\ncustomer', note: 'x' })).rejects.toThrow(/single line/);
+    await expect(saveCustomerNote(objectsAt(home), home, 'default', { customer: 'big', note: 'y'.repeat(MAX_NOTE_LEN + 1) })).rejects.toThrow(/note exceeds/);
+    await expect(saveCustomerNote(objectsAt(home), home, 'default', { customer: 'c', note: 'ok', changeSummary: 'z'.repeat(4097), supersedesNoteId: 1 })).rejects.toThrow(/changeSummary exceeds/);
   });
 
   it('schema v36 produces customer_notes table + 3 triggers + 3 indexes', () => {
