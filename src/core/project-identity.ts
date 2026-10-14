@@ -5,7 +5,7 @@ import * as path from 'path';
 import { BadRequestError } from './api-errors.js';
 import { isSharedStore, loadConfig } from './config.js';
 import { MAX_ID_LEN } from '../util/limits.js';
-import { errorMessage, log } from '../util/log.js';
+import { errorMessage, log, errorFields } from '../util/log.js';
 import { originRemoteId, projectFileId } from './project-remote.js';
 import { realpathOrResolve } from '../util/real-path.js';
 import { placeholders } from '../util/sql.js';
@@ -87,7 +87,8 @@ function isDirectoryAt(p: string): boolean {
   try {
     return fs.statSync(p).isDirectory();
   } catch (err) {
-    log.debug(`project identity: no marker at ${p}: ${errorMessage(err)}`);
+    // Most folders on the walk up hold no marker, so a failed stat is the normal answer.
+    log.debug(`project identity: no marker at ${p}: ${errorMessage(err)}`, errorFields(err));
     return false;
   }
 }

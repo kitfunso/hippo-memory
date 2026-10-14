@@ -3,7 +3,7 @@
 import type { Context } from '../api/types.js';
 import { PRE_COMPACT_INSTRUCTION } from './compaction-record.js';
 import { markSnapshotSavedAt, startCompactionAt } from '../store/compaction-caller.js';
-import { errorMessage, log } from '../util/log.js';
+import { errorMessage, log, errorFields } from '../util/log.js';
 import type { CallerProject } from '../api/prompt-hook.js';
 import { loadActiveTaskSnapshot, saveActiveTaskSnapshot, type ContinuityKey } from '../store/sessions.js';
 import { assertTrigger, bindCaller, callerInHoldout, checkedWorkingState } from './caller-session.js';
@@ -27,7 +27,7 @@ function logged<T>(what: string, fn: () => T): T | null {
   try {
     return fn();
   } catch (err) {
-    log.warn(`pre-compact: ${what}: ${errorMessage(err)}`);
+    log.warn(`pre-compact: ${what}: ${errorMessage(err)}`, errorFields(err));
     return null;
   }
 }

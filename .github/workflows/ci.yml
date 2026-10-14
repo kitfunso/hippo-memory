@@ -54,6 +54,9 @@ jobs:
       # Hand-spelled caught-error text in src/ may fall per file but never rise; use errorMessage().
       - name: Error text ratchet
         run: node scripts/check-error-text.mjs
+      # A log call in a catch block may fall per file but never rise without errorFields(err), so the log keeps the error class and stack.
+      - name: Caught-error log ratchet
+        run: node scripts/check-caught-error-logs.mjs
       # Publish and site-deploy gates that need no build, so a PR learns about them before release day.
       - run: node scripts/check-manifest-versions.mjs
       - run: node scripts/check-graph-writes.mjs

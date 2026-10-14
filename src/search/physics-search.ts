@@ -8,7 +8,7 @@ import { physicsScore as computePhysicsScores, computeMass, type PhysicsParticle
 import { DEFAULT_PHYSICS_CONFIG, type PhysicsConfig } from '../core/physics-config.js';
 import { rethrowIfSqliteBlocked } from '../util/sqlite-blocked.js';
 import { compareScoredResults } from '../core/compare.js';
-import { errorMessage, log } from '../util/log.js';
+import { errorMessage, log, errorFields } from '../util/log.js';
 import type { HippoStore, VectorReads } from '../store/index.js';
 import { churnStaleFactor, summaryMultipliers, summaryScoring, type SummaryScoring } from './boosts.js';
 import { addDagFields, ageInDays } from './breakdown.js';
@@ -112,7 +112,7 @@ async function physicsQueryVector(
     return vec && vec.length > 0 ? vec : null;
   } catch (err) {
     rethrowIfSqliteBlocked(err);
-    log.debug(`physics search: query embed failed, using hybrid: ${errorMessage(err)}`);
+    log.warn(`physics search: query embed failed, using hybrid: ${errorMessage(err)}`, errorFields(err));
     return null;
   }
 }
@@ -125,7 +125,7 @@ async function withVectorCandidates(
     return [...entries, ...await vectorCandidatesOutside(reads, entries, queryVector, spec)];
   } catch (err) {
     rethrowIfSqliteBlocked(err);
-    log.warn(`physics search ranked the lexical pool only; the vector lookup failed: ${errorMessage(err)}`);
+    log.warn(`physics search ranked the lexical pool only; the vector lookup failed: ${errorMessage(err)}`, errorFields(err));
     return entries;
   }
 }
@@ -136,7 +136,7 @@ async function loadCandidateParticles(reads: VectorReads, pool: MemoryEntry[]): 
     return await reads.physicsParticles(pool.map((e) => e.id));
   } catch (err) {
     rethrowIfSqliteBlocked(err);
-    log.debug(`physics search: state load failed, using hybrid: ${errorMessage(err)}`);
+    log.warn(`physics search: state load failed, using hybrid: ${errorMessage(err)}`, errorFields(err));
     return null;
   }
 }

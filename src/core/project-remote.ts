@@ -2,7 +2,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { isObjectLike, isStringValue } from './capture-contract.js';
-import { errorMessage, log } from '../util/log.js';
+import { errorMessage, log, errorFields } from '../util/log.js';
 
 /** The config file git reads for a checkout: `.git/config`, a linked worktree's `<commondir>/config`, a submodule's `<gitdir>/config`. */
 export function gitConfigPath(gitRoot: string): string | null {
@@ -17,7 +17,8 @@ export function gitConfigPath(gitRoot: string): string | null {
     if (!fs.existsSync(commondir)) return path.join(linkDir, 'config');
     return path.join(path.resolve(linkDir, fs.readFileSync(commondir, 'utf8').trim()), 'config');
   } catch (err) {
-    log.debug(`project remote: no git config for ${gitRoot}: ${errorMessage(err)}`);
+    // A folder with no readable .git has no remote to name a project by, so the caller falls back to the folder name.
+    log.debug(`project remote: no git config for ${gitRoot}: ${errorMessage(err)}`, errorFields(err));
     return null;
   }
 }
@@ -115,7 +116,8 @@ export function originRemoteId(gitRoot: string): string | null {
     const url = originUrlFromConfig(fs.readFileSync(file, 'utf8'));
     return url === null ? null : normaliseRemote(url);
   } catch (err) {
-    log.debug(`project remote: ${file} not read: ${errorMessage(err)}`);
+    // A checkout whose .git holds no config has no origin; the project is then named by its folder.
+    log.debug(`project remote: ${file} not read: ${errorMessage(err)}`, errorFields(err));
     return null;
   }
 }
@@ -134,7 +136,7 @@ export function projectFileId(root: string): string | null {
     if (id !== '' && id.length <= 200 && !/[:\s/\\]/.test(id)) return id;
     log.warn(`${file}: "id" must be a non-empty string with no colon, slash or spaces; using the remote or folder name instead`);
   } catch (err) {
-    log.warn(`${file} not read: ${errorMessage(err)}; using the remote or folder name instead`);
+    log.warn(`${file} not read: ${errorMessage(err)}; using the remote or folder name instead`, errorFields(err));
   }
   return null;
 }

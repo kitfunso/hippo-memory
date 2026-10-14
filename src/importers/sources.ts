@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { type ImportResult, type ImportOptions, importEntries } from './core.js';
 import { splitMarkdownFrontmatter, collectMarkdownFiles } from './markdown-parse.js';
-import { errorMessage, log } from '../util/log.js';
+import { errorMessage, log, errorFields } from '../util/log.js';
 import { type JsonValue, isJsonString, isJsonObject } from '../util/json.js';
 
 /** Coerce one imported record (string, `{content|text: ...}` object, or
@@ -31,7 +31,7 @@ function parseChatGPTFile(filePath: string): string[] {
         return parsed.map(extractMemoryText).filter(Boolean);
       }
     } catch (err) {
-      log.warn(`import: ${filePath} is not valid JSON (${errorMessage(err)}); reading it as plain text`);
+      log.warn(`import: ${filePath} is not valid JSON (${errorMessage(err)}); reading it as plain text`, errorFields(err));
     }
   }
 
@@ -121,7 +121,7 @@ function parseClaudeFile(filePath: string): string[] {
         return parsed.map(extractMemoryText).filter(Boolean);
       }
     } catch (err) {
-      log.warn(`import: ${filePath} is not valid JSON (${errorMessage(err)}); reading it as markdown`);
+      log.warn(`import: ${filePath} is not valid JSON (${errorMessage(err)}); reading it as markdown`, errorFields(err));
     }
   }
 

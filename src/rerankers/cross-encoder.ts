@@ -90,8 +90,8 @@ async function scoreHead(
         ceScore = await pipe(query, r.entry.content);
         succeeded++;
       } catch (err) {
-        // One bad inference must not sink the whole pass.
-        log.debug(`cross-encoder inference failed, keeping the base score: ${errorMessage(err)}`);
+        // One bad inference must not sink the whole pass; a pass where every call fails is warned about by the outage tracker below.
+        log.debug(`cross-encoder inference failed, keeping the base score: ${errorMessage(err)}`, errorFields(err));
         ceScore = r.score;
       }
       return {

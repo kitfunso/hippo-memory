@@ -1,0 +1,4 @@
+### Fixed
+
+- **A caught failure now logs its error class and stack.** Every warning and error written from a catch block in capture, db, core, search, embeddings, importers, hooks and util carries `errorClass` and `stack`, so an operator can tell what threw. A new CI ratchet, `scripts/check-caught-error-logs.mjs`, stops a new catch from logging without them.
+- **Failures that were logged at debug now reach the default log level.** An unreadable pre-compact snapshot, an unreadable store marker, a failed `git log` in autolearn, a failed physics-search query embed or state load, a vault note or tag list that could not be read, a physics seed that failed and an unusable embedding config now log at warn (the repeating ones once per process, then at debug). Probes such as "not a git repo" stay at debug.

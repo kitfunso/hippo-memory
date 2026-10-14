@@ -20,7 +20,7 @@ import {
 } from '../store/vector-index.js';
 import { chunked } from '../util/chunked.js';
 import { envByName } from '../util/env.js';
-import { errorCode, errorMessage, log } from '../util/log.js';
+import { errorCode, errorMessage, log, errorFields } from '../util/log.js';
 import { redactSecretsStrict } from '../util/secret-detect.js';
 import { MINUTE_MS } from '../util/time.js';
 
@@ -67,7 +67,7 @@ function resetPhysicsFromIndex(
     resetStoredParticles(hippoRoot, ids, index);
   } catch (err) {
     // Best effort: retrieval still falls back without physics state.
-    log.warn(`physics reset after reindex failed: ${errorMessage(err)}`);
+    log.warn(`physics reset after reindex failed: ${errorMessage(err)}`, errorFields(err));
   }
 }
 
@@ -269,7 +269,7 @@ function embedMemoryInStore(store: HippoStore, provider: EmbeddingProvider, entr
       return 'failed';
     }
   }).catch((err): EmbedOutcome => {
-    log.warn(`skipped embedding ${entry.id} (${errorMessage(err)})`);
+    log.warn(`skipped embedding ${entry.id} (${errorMessage(err)})`, errorFields(err));
     return 'failed';
   });
 }
@@ -299,7 +299,7 @@ export async function embedMemory(
   if (store) return embedMemoryInStore(store, provider, entry);
 
   return withEmbedLock(hippoRoot, () => embedMemoryLocked(hippoRoot, provider, entry)).catch((err): EmbedOutcome => {
-    log.warn(`skipped embedding ${entry.id} (${errorMessage(err)}); run 'hippo embed' to backfill`);
+    log.warn(`skipped embedding ${entry.id} (${errorMessage(err)}); run 'hippo embed' to backfill`, errorFields(err));
     return 'failed';
   });
 }
@@ -351,7 +351,7 @@ function initializePhysicsIfMissing(hippoRoot: string, entry: MemoryEntry, vecto
     seedStoredParticle(hippoRoot, entry, vector);
   } catch (err) {
     // Physics init is best-effort and must not fail the embedding that just landed.
-    log.debug(`physics state not initialised for ${entry.id}: ${errorMessage(err)}`);
+    log.warnThenDebug('physics-state-seed', `physics state not initialised for ${entry.id}: ${errorMessage(err)}`, errorFields(err));
   }
 }
 

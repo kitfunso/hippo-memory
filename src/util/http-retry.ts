@@ -158,6 +158,7 @@ export async function fetchWithRetry(url: string | URL, init: RequestInit, polic
     try {
       await res.body?.cancel();
     } catch (err) {
+      // Best-effort: the response is spent either way, so a failed cancel only leaves the socket to idle out.
       log.debug('http retry: body cancel failed', errorFields(err));
     }
     logRetry(init, url, `status ${res.status}`, attempt, attempts, delay);

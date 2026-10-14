@@ -8,7 +8,7 @@ import { loadAllEntries } from '../store/entry-reads.js';
 import { textOverlap } from '../util/tokenize.js';
 import { assessAutomaticMemory } from '../core/memory-quality.js';
 import { redactSecretsStrict } from '../util/secret-detect.js';
-import { errorMessage, log } from '../util/log.js';
+import { errorMessage, log, errorFields } from '../util/log.js';
 
 const AUTOLEARN_TEXT_CHARS = 500;
 const AUTOLEARN_TAG_CHARS = 30;
@@ -190,7 +190,8 @@ export function isGitRepo(cwd: string): boolean {
     });
     return raw.trim() === 'true';
   } catch (err) {
-    log.debug(`autolearn: not a git repo: ${errorMessage(err)}`);
+    // Asking git about a folder that is no repo is the probe itself, so a failure is the expected answer.
+    log.debug(`autolearn: not a git repo: ${errorMessage(err)}`, errorFields(err));
     return false;
   }
 }
@@ -204,7 +205,7 @@ export function fetchGitLog(cwd: string, days: number): string {
     ], { encoding: 'utf8', cwd, timeout: 10000, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
     return raw;
   } catch (err) {
-    log.debug(`autolearn: git log unavailable: ${errorMessage(err)}`);
+    log.warn(`autolearn: git log unavailable: ${errorMessage(err)}`, errorFields(err));
     return '';
   }
 }

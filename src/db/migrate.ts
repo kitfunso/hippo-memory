@@ -152,7 +152,7 @@ function importLegacyVectors(db: DatabaseSyncLike, hippoRoot: string): void {
   try {
     importLegacyEmbeddingIndex(db, hippoRoot);
   } catch (err) {
-    log.warn(`embeddings.json import failed; the next open retries it (${errorMessage(err)})`, { hippoRoot });
+    log.warn(`embeddings.json import failed; the next open retries it (${errorMessage(err)})`, { hippoRoot, ...errorFields(err) });
   }
 }
 
@@ -185,7 +185,7 @@ function ensureOptionalFts(db: DatabaseSyncLike): void {
       log.warn(`full-text index not set up this open (${errorMessage(err)}); the next open retries`, errorFields(err));
       return;
     }
-    log.warn(`full-text index unavailable (${errorMessage(err)}); search falls back to slower LIKE matching`);
+    log.warn(`full-text index unavailable (${errorMessage(err)}); search falls back to slower LIKE matching`, errorFields(err));
     writeFtsFlag(db, '0');
     return;
   }

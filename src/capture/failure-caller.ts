@@ -5,7 +5,7 @@ import type { Context } from '../api/types.js';
 import { storeLesson } from './capture-error.js';
 import { recordFailureAt, requestOutcomeAt, settleFailureOutcomeAt } from '../store/failure-log-at.js';
 import type { CaptureErrorOutcome, FailureOutcome, RoutineRule } from '../store/failure-log.js';
-import { errorMessage, log } from '../util/log.js';
+import { errorMessage, log, errorFields } from '../util/log.js';
 import type { CallerProject } from '../api/prompt-hook.js';
 import { scrubForSharing } from './share-scrub.js';
 import type { ContinuityKey } from '../store/sessions.js';
@@ -93,6 +93,6 @@ function logOutcome(ctx: Context, req: CallerFailureRequest, key: ContinuityKey,
       ownerSubject: key.owner, originProject: req.project.name, requestId: req.requestId,
     });
   } catch (err) {
-    log.warn(`capture-error: failure not logged: ${errorMessage(err)}`);
+    log.warn(`capture-error: failure not logged: ${errorMessage(err)}`, errorFields(err));
   }
 }
