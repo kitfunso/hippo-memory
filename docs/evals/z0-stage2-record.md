@@ -266,6 +266,16 @@ The one hippo record is voided as `read`. While debugging a test about home fold
 
 On 2026-10-11 at about 18:36 Claude Code stopped the cj and bm chunks, and their hook watchers, for low memory. Another session had started several Python training runs of about 3 GB each, and the box's commit charge reached 119.5 of 133.6 GB. By then cj had 98 records (seed 1 whole, seed 2 at 28 of 70) and bm had 23 of 170. No hippo hook had failed in either. The runner has no resume, so both chunks rerun whole into new out dirs (`cal-cj2`, `cal-bm2`) once the box has the memory. The partial records stay in `cal-cj` and `cal-bm` and decide nothing. The cj seed 1 leak can recur in the rerun, since its task order is the same.
 
+## S7: the plan's weekly limit voided both reruns
+
+`cal-cj2` and `cal-bm2` started on 2026-10-11 at about 19:56 UTC. At about 23:10 UTC the Claude plan reached its weekly limit, which resets on 17 October at 05:00 London time. From then on every session ended at once with `is_error` true, `subtype` "success", zero tokens and the text "You've hit your weekly limit · resets Oct 17, 5am (Europe/London)". The runner's limit test (`LIMIT_RE` in `records.mjs`) matched "hit your limit" and "hit your usage limit" only. So it graded each empty session as a failed task and went on, instead of waiting. Both chunks ran to the end: cj2 has 48 real sessions of 140 ($16.90) and 92 empty ones, bm2 has 56 of 170 ($17.62) and 114 empty ones. Both chunks are void, as a chunk that stops partway is (prereg), and nothing in them decides anything. G3 voided no seed in cj2's 48 real sessions.
+
+The fix is `cb656ba4`. The Claude and Codex limit tests now match "hit your <any words> limit", so the weekly, session and model-named forms all count as a limit. The limit loop now polls every 15 minutes for up to 8 days (`limitMaxWaits` 96 to 768), so a run waits out a weekly reset and is not abandoned after a day. The fix changes only `scripts/token-eval`, so `cb656ba4` becomes the calibration build with the same hippo dist. It runs from a detached worktree at `C:/Users/skf_s/hippo-wt-z0cal3`, and `launch-run.ps1` points there. The S9 freeze tag moves to it.
+
+hook-check found one failed hippo hook per chunk, both in A2 seed 1: in cj a prompt hook cancelled at 9.7 s (1 of A2's 65 hippo hooks), in bm a start hook cancelled at 11.4 s (1 of 82). A5 lost none. Other sessions' Python jobs held the box at the time. As the chunks are void, these count toward no arm's bar.
+
+Both chunks rerun whole on `cb656ba4` into `cal-cj3` and `cal-bm3`, then hippo alone, then Metrolist set X.
+
 ## Contract limits found
 
 - A checker's `CHECK_POST_COMMIT` is a state commit whose parent is the pre-session commit, so the agent's own commits are not visible to it. Commit-message rules are checked from the `git commit` commands in `CHECK_COMMANDS`.
