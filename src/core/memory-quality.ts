@@ -122,8 +122,9 @@ function isSubjectlessOutcome(text: string): boolean {
   return !OUTCOME_DETAIL.test(text.slice(lead[0].length).replace(/\([^)]*\)/g, ' '));
 }
 
+// `(?:.*\S)?` ends the quoted command on a non-space, so it and `\s+` never share a run of spaces (no ReDoS).
 const OUTPUT_LINE =
-  /^(?:\$\s|>\s|(?:stdout|stderr|exit code):|Command\s+['"].*\s+failed\b|Traceback\b|npm\s+(?:ERR|WARN)\b|error\s+TS\d+\b)/i;
+  /^(?:\$\s|>\s|(?:stdout|stderr|exit code):|Command\s+['"](?:.*\S)?\s+failed\b|Traceback\b|npm\s+(?:ERR|WARN)\b|error\s+TS\d+\b)/i;
 const STACK_FRAME = /^at\s+\S.*:\d+(?::\d+)?\)?$/;
 const ERROR_LEAD = /^(?:[\w.$]+Error|[\w.$]+Exception):\s/;
 // Log lines say "after" and "while" too, so only a rule word frees a timestamp or level lead: a dated freeze saying
