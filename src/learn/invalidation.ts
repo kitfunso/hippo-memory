@@ -120,8 +120,9 @@ export async function invalidateMatchingAmong(
   const ids = [...seen.targets, ...seen.skippedPinned];
   const fresh = new Map<string, MemoryEntry>();
   // The port reads at most 500 ids a call.
-  for (const chunk of chunked(ids, 500))
+  for (const chunk of chunked(ids, 500)) {
     for (const entry of await store.entriesByIds(chunk, tenantId)) fresh.set(entry.id, entry);
+  }
   const { result, weakened } = weakenMatches(ids.flatMap((id) => fresh.get(id) ?? []), target);
   if (weakened.length > 0) await requireGroup(store, 'lessonWrites').writeTogether(weakened);
   const byId = new Map(weakened.map((entry) => [entry.id, entry]));
@@ -354,8 +355,9 @@ function collectChurnCandidates(
     if (
       !entry.origin_project ||
       (entry.origin_project !== opts.projectName && entry.origin_project !== opts.legacyName)
-    )
+    ) {
       continue;
+    }
     if (entry.superseded_by) continue;
     if (entry.kind === 'raw' || entry.kind === 'archived') continue;
     if (entry.pinned) {

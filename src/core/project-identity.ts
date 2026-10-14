@@ -54,8 +54,9 @@ export function clearProjectIdentityCache(): void {
 // The global store's config only: a per-store switch would stamp one checkout two ways.
 function remoteRuleOn(): boolean {
   const globalRoot = resolveGlobalRootDir();
-  if (remoteSwitch?.globalRoot !== globalRoot)
+  if (remoteSwitch?.globalRoot !== globalRoot) {
     remoteSwitch = { globalRoot, on: loadConfig(globalRoot).projectIdentity.remote };
+  }
   return remoteSwitch.on;
 }
 
@@ -239,8 +240,9 @@ export const MCP_PROJECT_SCOPED_HEADER = 'X-Hippo-Project-Scoped';
 export function assertCallerProject(project: { readonly name: string; readonly aliases?: readonly string[] }): void {
   const { name, aliases = [] } = project;
   if (name.trim() === '') throw new BadRequestError('project name must not be blank');
-  if (aliases.length > MAX_PROJECT_ALIASES)
+  if (aliases.length > MAX_PROJECT_ALIASES) {
     throw new BadRequestError(`project aliases: at most ${MAX_PROJECT_ALIASES}`);
+  }
   if ([name, ...aliases].some((n) => n.length > MAX_ID_LEN)) {
     throw new BadRequestError(`project names: at most ${MAX_ID_LEN} characters each`);
   }

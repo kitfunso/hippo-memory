@@ -219,8 +219,9 @@ function isAutoShareCandidate(
   stats: AutoShareStats | undefined,
 ): boolean {
   // shareMemory refuses quarantined and personal rows; filtering here keeps sleep from aborting on one.
-  if (isQuarantineScope(entry.scope ?? null) || isPersonalScope(entry.scope ?? null) || !isReusable(entry))
+  if (isQuarantineScope(entry.scope ?? null) || isPersonalScope(entry.scope ?? null) || !isReusable(entry)) {
     return false;
+  }
   // Before the score: these rows describe one project only, and a git seed's 'error' tag clears the bar.
   if (entry.tags.some((t) => NEVER_AUTO_SHARE_TAGS.has(t)) || entry.source.startsWith(AGENT_MEMORY_SOURCE_PREFIX)) {
     if (stats) stats.neverAutoShareSkipped = (stats.neverAutoShareSkipped ?? 0) + 1;

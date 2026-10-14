@@ -420,8 +420,9 @@ function fileStamp(file: string): string | null {
   } catch (err) {
     const code = errorCode(err);
     const message = `config: ${file} could not be reached, read as missing: ${errorMessage(err)}`;
-    if (code === 'EACCES' || code === 'EPERM')
+    if (code === 'EACCES' || code === 'EPERM') {
       log.warnThenDebug(`config-unreachable:${file}:${code}`, message, { path: file, code, ...errorFields(err) });
+    }
     // Any other refusal (ENOTDIR, ELOOP) means the path is simply not there, so only a permission refusal is told.
     else log.debug(message, errorFields(err));
     return null;
