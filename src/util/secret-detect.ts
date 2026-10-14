@@ -35,8 +35,7 @@ const SECRET_PATTERNS: ReadonlyArray<{ name: string; re: RegExp }> = [
   { name: 'google-oauth-token', re: /\bya29\.[\w-]{20,}/ },
   { name: 'slack-webhook', re: /\bhooks\.slack\.com\/(?:services|workflows|triggers)\/[A-Za-z0-9+/]{43,56}/ },
   { name: 'private-key-block', re: /-----BEGIN [A-Z ]*PRIVATE KEY-----/ },
-  // sk-... (OpenAI/Anthropic) and sk_<vendor>_... shapes; both need a key-ish noun in the content (co-occurrence
-  // guard), so prose
+  // sk-... (OpenAI/Anthropic) and sk_<vendor>_... shapes need a key-ish noun nearby (co-occurrence guard), so prose
   // like "the sk- prefix identifies API keys" does not flag but "prod API key sk_live_..." does.
   { name: 'sk-style-key', re: /\bsk-[A-Za-z0-9_-]{20,}/ },
   { name: 'sk-underscore-key', re: /\bsk_[A-Za-z0-9]+_[A-Za-z0-9_]{6,}\b/ },
@@ -158,15 +157,28 @@ export function redactPayload(raw: string): string {
   });
 }
 
+const PEM_BEGIN = /-----BEGIN [A-Z ]*PRIVATE KEY-----/g;
+const PEM_END = /-----END [A-Z ]*PRIVATE KEY-----/g;
+
+/** Each PEM/OpenSSH block through its END line, or to the end of a truncated block; one forward scan, so no ReDoS. */
+function redactPemBlocks(text: string): string {
+  let out = '';
+  let from = 0;
+  PEM_BEGIN.lastIndex = 0;
+  for (let begin = PEM_BEGIN.exec(text); begin; begin = PEM_BEGIN.exec(text)) {
+    PEM_END.lastIndex = PEM_BEGIN.lastIndex;
+    const end = PEM_END.exec(text);
+    out += `${text.slice(from, begin.index)}[REDACTED]`;
+    from = end ? PEM_END.lastIndex : text.length;
+    PEM_BEGIN.lastIndex = from;
+  }
+  return out + text.slice(from);
+}
+
 function redactText(text: string, strict: boolean): string {
   if (!text) return text;
-  let result = text;
-  // PEM/OpenSSH blocks first: SECRET_PATTERNS only matches BEGIN; consume through END, or to the end of a truncated
-  // block.
-  result = result.replace(
-    /-----BEGIN [A-Z ]*PRIVATE KEY-----(?:[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----|[\s\S]*$)/g,
-    '[REDACTED]',
-  );
+  // PEM blocks first: SECRET_PATTERNS only matches the BEGIN line.
+  let result = redactPemBlocks(text);
   for (const { name, re } of SECRET_PATTERNS) {
     if (!strict && CO_OCCURRENCE_GUARDED.has(name) && !KEYISH_CONTEXT_RE.test(text)) continue;
     const flags = re.flags.includes('g') ? re.flags : `${re.flags}g`;
