@@ -37,6 +37,7 @@ import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { initStore } from '../../dist/store/open.js';
+import { sqliteStore } from '../../dist/store/sqlite/store.js';
 import { saveActiveTaskSnapshot, appendSessionEvent } from '../../dist/store/sessions.js';
 import { saveSessionHandoff } from '../../dist/store/handoffs.js';
 import { remember as apiRemember, retrieve as apiRetrieve } from '../../dist/api/index.js';
@@ -186,7 +187,7 @@ async function measure(
   const warmup = Math.max(5, Math.floor(iterations * 0.1));
   for (let i = 0; i < warmup; i++) {
     await apiRetrieve(
-      { hippoRoot: home, tenantId: 'default', actor: { subject: 'bench', role: 'admin' } },
+      { hippoRoot: home, tenantId: 'default', actor: { subject: 'bench', role: 'admin' }, store: sqliteStore(home) },
       { query: queries[i % queries.length]!, includeContinuity },
     );
   }
@@ -196,7 +197,7 @@ async function measure(
     const q = queries[i % queries.length]!;
     const t0 = performance.now();
     await apiRetrieve(
-      { hippoRoot: home, tenantId: 'default', actor: { subject: 'bench', role: 'admin' } },
+      { hippoRoot: home, tenantId: 'default', actor: { subject: 'bench', role: 'admin' }, store: sqliteStore(home) },
       { query: q, includeContinuity },
     );
     samples.push(performance.now() - t0);
@@ -219,7 +220,7 @@ async function main(): Promise<void> {
     const cluster = pick(rng, TAG_CLUSTERS);
     const content = buildContent(rng, cluster);
     apiRemember(
-      { hippoRoot: home, tenantId: 'default', actor: { subject: 'bench', role: 'admin' } },
+      { hippoRoot: home, tenantId: 'default', actor: { subject: 'bench', role: 'admin' }, store: sqliteStore(home) },
       { content, tags: [cluster.tag] },
     );
     if ((i + 1) % 1000 === 0) {
