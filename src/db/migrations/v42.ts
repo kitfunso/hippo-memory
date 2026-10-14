@@ -36,6 +36,8 @@ export const v42: Migration = {
       if (!tableHasColumn(db, 'session_handoffs', 'card_id')) {
         db.exec(`ALTER TABLE session_handoffs ADD COLUMN card_id TEXT`);
       }
-      db.exec(`CREATE INDEX IF NOT EXISTS idx_session_handoffs_tenant_outcome ON session_handoffs(tenant_id, outcome, created_at DESC)`);
+      db.exec(
+        `CREATE INDEX IF NOT EXISTS idx_session_handoffs_tenant_outcome ON session_handoffs(tenant_id, outcome, created_at DESC)`,
+      );
     },
 };

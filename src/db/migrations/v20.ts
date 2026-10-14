@@ -4,7 +4,8 @@ import { warnDamagedColumn } from '../../util/stored-json.js';
 export const v20: Migration = {
     version: 20,
     up: (db) => {
-      // GDPR Path A backfill: redact every existing raw_archive.payload_json to the metadata-only shape (store/raw-archive.ts); unparseable legacy JSON
+      // GDPR Path A backfill: redact every existing raw_archive.payload_json to the metadata-only shape
+      // (store/raw-archive.ts); unparseable legacy JSON
       // gets tenant_id='unknown', kind='unknown'. The audit_log remains the compliance record.
       // SAFETY: rows' shape matches the four columns named in the SELECT above.
       const rows = db

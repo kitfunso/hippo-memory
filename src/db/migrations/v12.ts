@@ -7,6 +7,8 @@ export const v12: Migration = {
       if (!tableHasColumn(db, 'memories', 'extracted_from')) {
         db.exec(`ALTER TABLE memories ADD COLUMN extracted_from TEXT`);
       }
-      db.exec(`CREATE INDEX IF NOT EXISTS idx_memories_extracted_from ON memories(extracted_from) WHERE extracted_from IS NOT NULL`);
+      db.exec(
+        `CREATE INDEX IF NOT EXISTS idx_memories_extracted_from ON memories(extracted_from) WHERE extracted_from IS NOT NULL`,
+      );
     },
 };

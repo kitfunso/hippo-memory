@@ -57,8 +57,10 @@ const CREATE_TRIGGER_TRG_INCIDENTS_TENANT_MATCH_UPDATE_SQL = `
 export const v31: Migration = {
     version: 31,
     up: (db) => {
-      // Incident first-class object: a postmortem capsule with an open -> resolved -> closed lifecycle (no supersede) and linked receipts (JSON ids).
-      // Memory mirror is for recall only (memory_id NULLABLE ON DELETE SET NULL); BEFORE INSERT/UPDATE triggers mirror the v30 tenant-match triggers.
+      // Incident first-class object: a postmortem capsule with an open -> resolved -> closed lifecycle (no supersede)
+      // and linked receipts (JSON ids).
+      // Memory mirror is for recall only (memory_id NULLABLE ON DELETE SET NULL); BEFORE INSERT/UPDATE triggers mirror
+      // the v30 tenant-match triggers.
       if (!tableExists(db, 'incidents')) {
         db.exec(CREATE_TABLE_INCIDENTS_SQL);
         db.exec(CREATE_INDEX_IDX_INCIDENTS_TENANT_STATUS_SQL);

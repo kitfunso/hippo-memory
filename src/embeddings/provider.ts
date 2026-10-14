@@ -1,6 +1,9 @@
-/** Pluggable embedding providers; local `@huggingface/transformers` is the zero-dependency default, OpenAI / Voyage / Cohere are opt-in via native `fetch`.
- * Local `id` is the bare model string, API `id` is `${kind}:${model}`; the stored identity adds `#t<N>` (`embeddingIndexIdentity`), so changes reindex.
- * `embed()` MAY throw on hard transport/auth failure so a reindex aborts atomically; hot paths wrap it and fall back to BM25. */
+/** Pluggable embedding providers; local `@huggingface/transformers` is the zero-dependency default, OpenAI / Voyage /
+ * Cohere are opt-in via native `fetch`.
+ * Local `id` is the bare model string, API `id` is `${kind}:${model}`; the stored identity adds `#t<N>`
+ * (`embeddingIndexIdentity`), so changes reindex.
+ * `embed()` MAY throw on hard transport/auth failure so a reindex aborts atomically; hot paths wrap it and fall back
+ * to BM25. */
 
 import { envByName } from '../util/env.js';
 import {
@@ -42,7 +45,8 @@ const REQUEST_TIMEOUT_MS = 30_000;
 const DEADLINE_RETRY_WAIT_CAP_MS = 2_000;
 
 export interface EmbedCallOptions {
-  /** Ends the whole call when it aborts, every batch and retry included. The local provider stops waiting only on a model download,
+  /** Ends the whole call when it aborts, every batch and retry included. The local provider stops waiting only on a
+   * model download,
    * since nothing stops a load from disk or an in-process inference. */
   signal?: AbortSignal;
 }
@@ -50,7 +54,8 @@ export interface EmbedCallOptions {
 export interface EmbeddingProvider {
   readonly kind: EmbeddingProviderKind;
   readonly model: string;
-  /** Identity recorded in DB meta to drive reindex-on-change: bare model string for local, `${kind}:${model}` for api. */
+  /** Identity recorded in DB meta to drive reindex-on-change: bare model string for local, `${kind}:${model}` for
+   * api. */
   readonly id: string;
   /** Known fixed output dimension, if any (undefined for local / unknown). */
   readonly dimensions?: number;
@@ -73,7 +78,8 @@ class LocalEmbeddingProvider implements EmbeddingProvider {
     return this.enabled && this.embedder.isAvailable();
   }
   async embed(texts: string[], role?: EmbeddingRole, call: EmbedCallOptions = {}): Promise<number[][]> {
-    // A model that cannot load fails the call, as an API outage does; items then run one at a time on the shared pipeline.
+    // A model that cannot load fails the call, as an API outage does; items then run one at a time on the shared
+    // pipeline.
     if (texts.length > 0) await this.embedder.requirePipeline(this.model, call.signal);
     const out: number[][] = [];
     for (const text of texts) {
@@ -161,7 +167,8 @@ const API_PROVIDER_SPECS = {
     }),
     extractVectors: (json) => {
       // Cohere v2 shape: { embeddings: { float: number[][] } }
-      // SAFETY: documented v2 envelope; embedChunk validates the vectors afterward, so a malformed response degrades to [] here and throws there.
+      // SAFETY: documented v2 envelope; embedChunk validates the vectors afterward, so a malformed response degrades to
+      // [] here and throws there.
       const emb = (json as CohereEmbeddingsResponse).embeddings;
       return emb?.float ?? [];
     },
@@ -230,13 +237,19 @@ class ApiEmbeddingProvider implements EmbeddingProvider {
     return out;
   }
 
-  private async embedChunk(chunk: string[], key: string, role?: EmbeddingRole, signal?: AbortSignal): Promise<number[][]> {
+  private async embedChunk(
+    chunk: string[],
+    key: string,
+    role?: EmbeddingRole,
+    signal?: AbortSignal,
+  ): Promise<number[][]> {
     const spec = API_PROVIDER_SPECS[this.kind];
     const resp = await this.postChunk(chunk, key, role, signal);
     const json = await this.responseJson(resp, key, chunk.length);
 
     const vectors = spec.extractVectors(json);
-    // A 200 with the wrong vector count (or any empty/malformed vector) is a provider contract violation, not a per-item miss:
+    // A 200 with the wrong vector count (or any empty/malformed vector) is a provider contract violation, not a
+    // per-item miss:
     // throw so a reindex aborts atomically and the explicit backfill surfaces it, instead of saving []-padded rows.
     if (vectors.length !== chunk.length) {
       throw new Error(
@@ -255,23 +268,30 @@ class ApiEmbeddingProvider implements EmbeddingProvider {
     const spec = API_PROVIDER_SPECS[this.kind];
     const url = `${this.baseUrl.replace(/\/$/, '')}/${spec.path}`;
     try {
-      return await fetchWithRetry(url, {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          authorization: `Bearer ${key}`,
+      return await fetchWithRetry(
+        url,
+        {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            authorization: `Bearer ${key}`,
+          },
+          body: JSON.stringify(spec.buildBody(this.model, chunk.map(redactSecretsStrict), role)),
+          signal,
         },
-        body: JSON.stringify(spec.buildBody(this.model, chunk.map(redactSecretsStrict), role)),
-        signal,
-      }, {
-        timeoutMs: REQUEST_TIMEOUT_MS,
-        // Embedding the same text twice changes nothing on the far side, so a dropped connection or a stalled attempt is replayed.
-        retryTransport: true,
-        maxDelayMs: signal ? DEADLINE_RETRY_WAIT_CAP_MS : undefined,
-      });
+        {
+          timeoutMs: REQUEST_TIMEOUT_MS,
+          // Embedding the same text twice changes nothing on the far side, so a dropped connection or a stalled attempt
+          // is replayed.
+          retryTransport: true,
+          maxDelayMs: signal ? DEADLINE_RETRY_WAIT_CAP_MS : undefined,
+        },
+      );
     } catch (err) {
       const msg = errorMessage(err);
-      throw new Error(redact(`embedding request to ${this.kind} failed: ${msg}`, key), { cause: redactedCause(err, key) });
+      throw new Error(redact(`embedding request to ${this.kind} failed: ${msg}`, key), {
+        cause: redactedCause(err, key),
+      });
     }
   }
 
@@ -295,7 +315,7 @@ class ApiEmbeddingProvider implements EmbeddingProvider {
     } catch (err) {
       const msg = errorMessage(err);
       throw new Error(redact(`${this.kind} embeddings returned invalid JSON: ${msg}`, key), {
-        cause: redactedCause(err instanceof Error && err.cause ? err.cause : err, key)
+        cause: redactedCause(err instanceof Error && err.cause ? err.cause : err, key),
       });
     }
   }
@@ -326,11 +346,13 @@ export interface ResolveProviderOptions {
   model?: string;
   /** Explicit provider override (mainly for tests). */
   provider?: EmbeddingProviderKind;
-  /** The Transformers.js package a local provider loads from, with its own models; the process's shared embedder when unset. */
+  /** The Transformers.js package a local provider loads from, with its own models; the process's shared embedder
+   * when unset. */
   transformers?: LocalTransformers;
 }
 
-/** Build the active embedding provider from config (or an explicit override). A missing key never throws here (it surfaces via `isAvailable()`);
+/** Build the active embedding provider from config (or an explicit override). A missing key never throws here (it
+ * surfaces via `isAvailable()`);
  * only an invalid config (e.g. insecure apiBaseUrl) throws, deliberately loud, so hot-path callers wrap it. */
 export function resolveEmbeddingProvider(
   hippoRoot: string,
@@ -369,19 +391,25 @@ export function resolveEmbeddingProvider(
   return new ApiEmbeddingProvider(kind, model, baseUrl, batchSize, enabled);
 }
 
-/** The reindex identity for the active provider; use it, NOT resolveEmbeddingModel, wherever `embeddingModelRequiresReindex` / stored-model comparisons
+/** The reindex identity for the active provider; use it, NOT resolveEmbeddingModel, wherever
+ * `embeddingModelRequiresReindex` / stored-model comparisons
  * happen. */
 export function resolveEmbeddingIdentity(hippoRoot: string, opts: ResolveProviderOptions = {}): string {
   return resolveEmbeddingProvider(hippoRoot, opts).id;
 }
 
-/** Provider-aware availability for a store (local: dependency installed; api: key present); use where the decision to embed is made. */
+/** Provider-aware availability for a store (local: dependency installed; api: key present); use where the decision
+ * to embed is made. */
 export function isEmbeddingConfigured(hippoRoot: string): boolean {
   try {
     return resolveEmbeddingProvider(hippoRoot).isAvailable();
   } catch (err) {
     // An invalid embedding config must not crash the best-effort ingestion guard, so it reads as not configured.
-    log.warnThenDebug(`embedding-config-unusable:${hippoRoot}`, `embedding config unusable: ${errorMessage(err)}`, errorFields(err));
+    log.warnThenDebug(
+      `embedding-config-unusable:${hippoRoot}`,
+      `embedding config unusable: ${errorMessage(err)}`,
+      errorFields(err),
+    );
     return false;
   }
 }

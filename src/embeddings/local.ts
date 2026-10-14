@@ -13,12 +13,17 @@ interface FetchGate {
   readonly open: () => void;
 }
 
-/** The one call this file makes on a Transformers.js feature-extraction pipeline, and the part of its tensor it reads. */
+/** The one call this file makes on a Transformers.js feature-extraction pipeline, and the part of its tensor it
+ * reads. */
 interface EmbeddingPipeline {
   (input: string, options: { pooling: 'cls' | 'mean'; normalize: boolean }): Promise<{ data: ArrayLike<number> }>;
 }
 
-type PipelineFactory = (task: 'feature-extraction', model: string, options: { quantized: boolean }) => Promise<EmbeddingPipeline>;
+type PipelineFactory = (
+  task: 'feature-extraction',
+  model: string,
+  options: { quantized: boolean },
+) => Promise<EmbeddingPipeline>;
 
 /** The settings written on the package's `env` object. */
 interface TransformersEnv {
@@ -36,7 +41,8 @@ interface TransformersModule {
 
 export const DEFAULT_EMBEDDING_MODEL = 'Xenova/all-MiniLM-L6-v2';
 
-/** BGE was trained with CLS pooling; everything else gets mean, the sentence-transformers default, since CLS degrades mean-trained models. */
+/** BGE was trained with CLS pooling; everything else gets mean, the sentence-transformers default, since CLS
+ * degrades mean-trained models. */
 export function poolingFor(model: string): 'cls' | 'mean' {
   return /\bbge\b/i.test(model) ? 'cls' : 'mean';
 }
@@ -69,7 +75,8 @@ const INSTALLED_TRANSFORMERS: LocalTransformers = {
 export interface LocalEmbedder {
   isAvailable(): boolean;
   /** Throws, with the reason, when the model's pipeline cannot load: a provider-level failure, not a per-item skip.
-   * `signal` ends the wait, never the load, and only once the load is downloading: a load from disk ends soon on its own, a download may not. */
+   * `signal` ends the wait, never the load, and only once the load is downloading: a load from disk ends soon on its
+   * own, a download may not. */
   requirePipeline(model: string, signal?: AbortSignal): Promise<void>;
   /** `text`'s vector, or `[]` when the model is missing or fails; `role` adds e5-style prefixes. */
   embed(text: string, model: string, role?: EmbeddingRole): Promise<number[]>;
@@ -80,7 +87,8 @@ export function createLocalEmbedder(transformers: LocalTransformers = INSTALLED_
   let available: boolean | null = null;
   const gates = new Map<string, FetchGate>();
   const pipelines = createModelLoads<EmbeddingPipeline>(MODEL_LOAD_POLICY, warnLoadFailure);
-  const load = (model: string): Promise<EmbeddingPipeline> => pipelines.load(model, () => createPipeline(transformers, model, gates));
+  const load = (model: string): Promise<EmbeddingPipeline> =>
+    pipelines.load(model, () => createPipeline(transformers, model, gates));
   const isAvailable = (): boolean => (available ??= transformers.installed());
   return {
     isAvailable,
@@ -94,7 +102,11 @@ export function createLocalEmbedder(transformers: LocalTransformers = INSTALLED_
         return Array.from(output.data);
       } catch (err) {
         // The caller sees `[]` and names the memory; the first failure per model is told, the repeats go to debug.
-        log.warnThenDebug(`local-embed:${model}`, `local embedding with ${model} failed: ${errorMessage(err)}`, errorFields(err));
+        log.warnThenDebug(
+          `local-embed:${model}`,
+          `local embedding with ${model} failed: ${errorMessage(err)}`,
+          errorFields(err),
+        );
         return [];
       }
     },
@@ -103,12 +115,20 @@ export function createLocalEmbedder(transformers: LocalTransformers = INSTALLED_
 
 function warnLoadFailure(model: string, err: Error): void {
   const retry = `the next try is in ${MODEL_LOAD_POLICY.backoffMs / MINUTE_MS} minutes`;
-  log.warn(`local embedding model ${model} did not load (${errorMessage(err)}); embeddings stay off and ${retry}`, errorFields(err));
+  log.warn(
+    `local embedding model ${model} did not load (${errorMessage(err)}); embeddings stay off and ${retry}`,
+    errorFields(err),
+  );
 }
 
 /** The model's pipeline; throws the reason it cannot load. */
-async function createPipeline(transformers: LocalTransformers, model: string, gates: Map<string, FetchGate>): Promise<EmbeddingPipeline> {
-  // The package is an optional peer, so the dynamic import is typed by what this file reads; a missing export throws below.
+async function createPipeline(
+  transformers: LocalTransformers,
+  model: string,
+  gates: Map<string, FetchGate>,
+): Promise<EmbeddingPipeline> {
+  // The package is an optional peer, so the dynamic import is typed by what this file reads; a missing export throws
+  // below.
   const imported = await transformers.load();
   if (!imported) throw new Error('no transformers package is installed');
   const { name, mod } = imported;
@@ -131,10 +151,13 @@ async function createPipeline(transformers: LocalTransformers, model: string, ga
   }
 }
 
-/** Whether the load will download: remote models are allowed and no folder the package reads holds the model's ONNX files. */
+/** Whether the load will download: remote models are allowed and no folder the package reads holds the model's ONNX
+ * files. */
 function fetchesWeights(env: TransformersEnv | undefined, model: string): boolean {
   if (env?.allowRemoteModels === false) return false;
-  return ![env?.localModelPath, env?.cacheDir].some((dir) => dir !== undefined && fs.existsSync(path.join(dir, model, 'onnx')));
+  return ![env?.localModelPath, env?.cacheDir].some(
+    (dir) => dir !== undefined && fs.existsSync(path.join(dir, model, 'onnx')),
+  );
 }
 
 function gateOf(gates: Map<string, FetchGate>, model: string): FetchGate {
@@ -157,7 +180,11 @@ function rejectOnAbort(signal: AbortSignal): Promise<never> {
   });
 }
 
-async function waitForPipeline(loading: Promise<EmbeddingPipeline>, downloading?: Promise<void>, signal?: AbortSignal): Promise<void> {
+async function waitForPipeline(
+  loading: Promise<EmbeddingPipeline>,
+  downloading?: Promise<void>,
+  signal?: AbortSignal,
+): Promise<void> {
   try {
     await (downloading && signal ? Promise.race([loading, downloading.then(() => rejectOnAbort(signal))]) : loading);
   } catch (err) {
@@ -189,7 +216,8 @@ export function resolveEmbeddingModel(hippoRoot: string, explicitModel?: string)
   return DEFAULT_EMBEDDING_MODEL;
 }
 
-/** Embeds `text` with the local model, or returns `[]` when Transformers.js is missing or fails; `role` adds e5-style prefixes. */
+/** Embeds `text` with the local model, or returns `[]` when Transformers.js is missing or fails; `role` adds
+ * e5-style prefixes. */
 export function getEmbedding(text: string, model = DEFAULT_EMBEDDING_MODEL, role?: EmbeddingRole): Promise<number[]> {
   return sharedLocalEmbedder.embed(text, model, role);
 }

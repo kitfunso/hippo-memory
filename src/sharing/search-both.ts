@@ -16,7 +16,10 @@ import { errorFields, errorMessage, log } from '../util/log.js';
 
 // The rows are already copied; a failed background embed only delays vectors, so it warns instead of throwing.
 export function logEmbedAllFailure<E>(caller: string, err: E): void {
-  log.warn(`${caller}: background embed failed (${errorMessage(err)}); run 'hippo embed' to backfill`, errorFields(err));
+  log.warn(
+    `${caller}: background embed failed (${errorMessage(err)}); run 'hippo embed' to backfill`,
+    errorFields(err),
+  );
 }
 
 export interface SearchOptions {
@@ -66,7 +69,10 @@ export function searchBoth(
   return results;
 }
 
-function tagLocalAndGlobal(localResults: SearchResult[], globalResults: SearchResult[]): Array<SearchResult & { isGlobal: boolean }> {
+function tagLocalAndGlobal(
+  localResults: SearchResult[],
+  globalResults: SearchResult[],
+): Array<SearchResult & { isGlobal: boolean }> {
   // Tag global results. Local memories get a configurable priority bump.
   return [
     ...localResults.map((r) => ({
@@ -113,11 +119,15 @@ export interface HybridSearchOptions extends SearchOptions {
   summaryDeboost?: number;
   /** Propagated. Default true (1.05 boost if rebuilt within 7d). */
   summaryFreshness?: boolean;
-  /** Optional admission predicate applied to the loaded candidates of BOTH stores before ranking, cross-store dedupe and budgeting,
-   *  so an excluded row cannot shadow its admitted duplicate or saturate the budget. Undefined (recall paths never set it) means no filter. */
+  /** Optional admission predicate applied to the loaded candidates of BOTH stores before ranking, cross-store dedupe
+   * and budgeting,
+   * so an excluded row cannot shadow its admitted duplicate or saturate the budget. Undefined (recall paths never
+   * set it) means no filter. */
   entryFilter?: (entry: MemoryEntry) => boolean;
-  /** Recall scope filter for `searchBothHybrid`: absent is the only unfiltered mode; present uses `loadRecallSearchEntries` plus a JS post-filter.
-   *  `{}` = default-deny (legacy and `<source>:private:*` excluded); `{ requested: 'X' }` = exact; `{ requested: 'X', additive: true }` = default plus X.
+  /** Recall scope filter for `searchBothHybrid`: absent is the only unfiltered mode; present uses
+   * `loadRecallSearchEntries` plus a JS post-filter.
+   * `{}` = default-deny (legacy and `<source>:private:*` excluded); `{ requested: 'X' }` = exact; `{ requested: 'X',
+   * additive: true }` = default plus X.
    *  An object, not `string | null`, because the sibling `scope` option already gives null a different meaning.
    *  Do not pass `{}` casually from non-recall paths. */
   recallScope?: { requested?: string; additive?: boolean; ownScope?: string };
@@ -133,9 +143,11 @@ export async function searchBothHybrid(
 ): Promise<SearchResult[]> {
   const { includeSuperseded, asOf, tenantId, entryFilter, recallScope } = options;
 
-  // With an admission filter, lift the per-store candidate cap (default 200) to a bounded 5000: excluded rows could otherwise fill the window first.
+  // With an admission filter, lift the per-store candidate cap (default 200) to a bounded 5000: excluded rows could
+  // otherwise fill the window first.
   const searchWindow = entryFilter ? 5000 : undefined;
-  // Recall mode: push the scope predicate into SQL like api.recall, so quarantine/private rows never enter the candidates, shadow duplicates or use budget.
+  // Recall mode: push the scope predicate into SQL like api.recall, so quarantine/private rows never enter the
+  // candidates, shadow duplicates or use budget.
   // The JS post-filter below is the regex-only `<source>:private:*` half plus defense in depth on exact match.
   const loadEntries = (root: string): MemoryEntry[] => {
     if (!fs.existsSync(root)) return [];
@@ -151,8 +163,10 @@ export async function searchBothHybrid(
       : loadSearchEntries(root, query, searchWindow, tenantId);
   };
   const passesScope = (e: MemoryEntry): boolean =>
-    !recallScope || (recallScope.additive
-      ? passesCliRecallScopeFilter(e.scope ?? null, recallScope.requested) || passesScopeFilterForRecall(e.scope ?? null, undefined, recallScope.ownScope)
+    !recallScope ||
+    (recallScope.additive
+      ? passesCliRecallScopeFilter(e.scope ?? null, recallScope.requested) ||
+        passesScopeFilterForRecall(e.scope ?? null, undefined, recallScope.ownScope)
       : passesScopeFilterForRecall(e.scope ?? null, recallScope.requested, recallScope.ownScope));
   const admit = (e: MemoryEntry): boolean => passesScope(e) && (!entryFilter || entryFilter(e));
   const localEntries = loadEntries(localRoot).filter(admit);
@@ -161,11 +175,14 @@ export async function searchBothHybrid(
   // The vector arm loads under the same SQL rules as loadEntries, then the same JS admission.
   const vectorCandidates = {
     tenantId,
-    scope: recallScope ? recallScopeFilter(recallScope.requested, recallScope.additive ? 'additive' : 'exact', recallScope.ownScope) : undefined,
+    scope: recallScope
+      ? recallScopeFilter(recallScope.requested, recallScope.additive ? 'additive' : 'exact', recallScope.ownScope)
+      : undefined,
     includeSuperseded: !recallScope || Boolean(includeSuperseded) || Boolean(asOf),
     admit,
   };
-  return rankBothStores(query, { local: localRoot, global: globalRoot }, { local: localEntries, global: globalEntries }, vectorCandidates, options);
+  const roots = { local: localRoot, global: globalRoot };
+  return rankBothStores(query, roots, { local: localEntries, global: globalEntries }, vectorCandidates, options);
 }
 
 /** Hybrid ranking of rows already loaded from each store: the local bump, one copy per text, then the shared budget. */
@@ -177,14 +194,14 @@ export async function rankBothStores(
   options: HybridSearchOptions = {},
 ): Promise<SearchResult[]> {
   const {
-    budget = DEFAULT_RECALL_BUDGET, now = evalNow(), embeddingWeight, explain, mmr, mmrLambda, localBump = DEFAULT_LOCAL_BUMP, minResults, cost, scope,
-    includeSuperseded, asOf, summaryDeboost, summaryFreshness
+    budget = DEFAULT_RECALL_BUDGET, now = evalNow(), embeddingWeight, explain, mmr, mmrLambda,
+    localBump = DEFAULT_LOCAL_BUMP, minResults, cost, scope, includeSuperseded, asOf, summaryDeboost, summaryFreshness,
   } = options;
   if (entries.local.length === 0 && entries.global.length === 0) return [];
   // One deadline for both stores, so a provider that stalls on the first is not waited on again for the second.
   const shared = {
-    budget, now, embeddingWeight, explain, mmr, mmrLambda, minResults, cost, scope, includeSuperseded, asOf, summaryDeboost, summaryFreshness,
-    vectorCandidates, queryEmbedDeadline: startQueryEmbedDeadline(),
+    budget, now, embeddingWeight, explain, mmr, mmrLambda, minResults, cost, scope, includeSuperseded, asOf,
+    summaryDeboost, summaryFreshness, vectorCandidates, queryEmbedDeadline: startQueryEmbedDeadline(),
   };
   const localResults = await hybridSearch(query, entries.local, { ...shared, hippoRoot: roots.local });
   const globalResults = await hybridSearch(query, entries.global, { ...shared, hippoRoot: roots.global });

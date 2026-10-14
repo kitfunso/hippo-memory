@@ -53,10 +53,17 @@ export const v16: Migration = {
       // Composite indexes for recall hot paths. Leading column is tenant_id so
       // single-tenant lookups are O(log n).
       db.exec(`CREATE INDEX IF NOT EXISTS idx_memories_tenant_created ON memories(tenant_id, created)`);
-      db.exec(`CREATE INDEX IF NOT EXISTS idx_working_memory_tenant ON working_memory(tenant_id, importance DESC, created_at DESC)`);
-      db.exec(`CREATE INDEX IF NOT EXISTS idx_consolidation_runs_tenant_ts ON consolidation_runs(tenant_id, timestamp DESC)`);
-      db.exec(`CREATE INDEX IF NOT EXISTS idx_task_snapshots_tenant_status ON task_snapshots(tenant_id, status, updated_at DESC)`);
-      // Stub auth: api_keys (scrypt-hashed; plaintext returned once) and audit_log (append-only mutation trail), both with tenant_id from day 1
+      db.exec(
+        `CREATE INDEX IF NOT EXISTS idx_working_memory_tenant ON working_memory(tenant_id, importance DESC, created_at DESC)`,
+      );
+      db.exec(
+        `CREATE INDEX IF NOT EXISTS idx_consolidation_runs_tenant_ts ON consolidation_runs(tenant_id, timestamp DESC)`,
+      );
+      db.exec(
+        `CREATE INDEX IF NOT EXISTS idx_task_snapshots_tenant_status ON task_snapshots(tenant_id, status, updated_at DESC)`,
+      );
+      // Stub auth: api_keys (scrypt-hashed; plaintext returned once) and audit_log (append-only mutation trail), both
+      // with tenant_id from day 1
       // so future multi-tenant enforcement is a config flip, not a re-migration.
       db.exec(CREATE_TABLE_API_KEYS_SQL);
       db.exec(CREATE_INDEX_IDX_API_KEYS_TENANT_ACTIVE_SQL);

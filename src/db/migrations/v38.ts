@@ -38,8 +38,10 @@ const RELATIONS_TABLE = `
         )
       `;
 
-// entities guard (dual-provenance): at least one valid provenance, no raw. Memory path: source_kind must equal the FK'd memory's kind, plus tenant-match.
-// Object path (memory_id NULL): (type,id) must point at an existing same-tenant object with status active|superseded (4-way CASE per table); all-null aborts.
+// entities guard (dual-provenance): at least one valid provenance, no raw. Memory path: source_kind must equal the FK'd
+// memory's kind, plus tenant-match.
+// Object path (memory_id NULL): (type,id) must point at an existing same-tenant object with status active|superseded
+// (4-way CASE per table); all-null aborts.
 const TRG_ENTITIES_CONSOLIDATED_ONLY_INSERT = `
         CREATE TRIGGER IF NOT EXISTS trg_entities_consolidated_only_insert
         BEFORE INSERT ON entities
@@ -206,7 +208,8 @@ const TRG_RELATIONS_CONSOLIDATED_ONLY_UPDATE = `
         END
       `;
 
-// Recreated verbatim from v37 (relation endpoints cannot move cross-tenant). The memories and graph queue triggers survive: those tables are not dropped.
+// Recreated verbatim from v37 (relation endpoints cannot move cross-tenant). The memories and graph queue triggers
+// survive: those tables are not dropped.
 const TRG_ENTITIES_NO_TENANT_MOVE_WHEN_REFERENCED = `
         CREATE TRIGGER IF NOT EXISTS trg_entities_no_tenant_move_when_referenced
         BEFORE UPDATE ON entities
@@ -220,8 +223,10 @@ const TRG_ENTITIES_NO_TENANT_MOVE_WHEN_REFERENCED = `
 export const v38: Migration = {
     version: 38,
     up: (db) => {
-      // Anchor graph provenance to the authoritative object, not the decaying mirror memory; the graph is a derived cache, so entities/relations are recreated.
-      // memory_id is NULLABLE ON DELETE SET NULL; node:sqlite fires the BEFORE UPDATE guard on that SET NULL, so the UPDATE triggers omit the all-null ABORT.
+      // Anchor graph provenance to the authoritative object, not the decaying mirror memory; the graph is a derived
+      // cache, so entities/relations are recreated.
+      // memory_id is NULLABLE ON DELETE SET NULL; node:sqlite fires the BEFORE UPDATE guard on that SET NULL, so the
+      // UPDATE triggers omit the all-null ABORT.
       recreateGraphTables(db);
       createGraphGuards(db);
     },
@@ -235,7 +240,9 @@ function recreateGraphTables(db: DatabaseSyncLike): void {
   db.exec(ENTITIES_TABLE);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_entities_tenant ON entities(tenant_id)`);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_entities_memory ON entities(memory_id)`);
-  db.exec(`CREATE INDEX IF NOT EXISTS idx_entities_source_object ON entities(source_object_type, source_object_id) WHERE source_object_id IS NOT NULL`);
+  db.exec(
+    `CREATE INDEX IF NOT EXISTS idx_entities_source_object ON entities(source_object_type, source_object_id) WHERE source_object_id IS NOT NULL`,
+  );
 
   db.exec(RELATIONS_TABLE);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_relations_tenant ON relations(tenant_id)`);
@@ -244,7 +251,9 @@ function recreateGraphTables(db: DatabaseSyncLike): void {
   db.exec(`CREATE INDEX IF NOT EXISTS idx_relations_memory ON relations(memory_id)`);
   // Mirrors idx_entities_source_object: removeGraphEntitiesForObject (close-time cleanup)
   // deletes relations by (source_object_type, source_object_id), so index that pair.
-  db.exec(`CREATE INDEX IF NOT EXISTS idx_relations_source_object ON relations(source_object_type, source_object_id) WHERE source_object_id IS NOT NULL`);
+  db.exec(
+    `CREATE INDEX IF NOT EXISTS idx_relations_source_object ON relations(source_object_type, source_object_id) WHERE source_object_id IS NOT NULL`,
+  );
 }
 
 function createGraphGuards(db: DatabaseSyncLike): void {

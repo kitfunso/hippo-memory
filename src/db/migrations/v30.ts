@@ -55,7 +55,8 @@ const TRG_DECISIONS_TENANT_MATCH_UPDATE = `
           END
         `;
 
-// Cross-tenant safety vs the successor decision (self-FK): superseded_by is set only via the supersede UPDATE and the successor,
+// Cross-tenant safety vs the successor decision (self-FK): superseded_by is set only via the supersede UPDATE and the
+// successor,
 // which already exists in the same transaction when this fires, must share the tenant.
 const TRG_DECISIONS_SUPERSEDE_TENANT_MATCH_UPDATE = `
           CREATE TRIGGER IF NOT EXISTS trg_decisions_supersede_tenant_match_update
@@ -73,8 +74,10 @@ const TRG_DECISIONS_SUPERSEDE_TENANT_MATCH_UPDATE = `
 export const v30: Migration = {
     version: 30,
     up: (db) => {
-      // Decision first-class object, the source of truth for `hippo decide`; the memory mirror serves recall only, memory_id NULLABLE ON DELETE SET NULL.
-      // status active|superseded|closed (closed = retired without successor); a same-tenant trigger on superseded_by blocks cross-tenant supersession.
+      // Decision first-class object, the source of truth for `hippo decide`; the memory mirror serves recall only,
+      // memory_id NULLABLE ON DELETE SET NULL.
+      // status active|superseded|closed (closed = retired without successor); a same-tenant trigger on superseded_by
+      // blocks cross-tenant supersession.
       if (!tableExists(db, 'decisions')) {
         db.exec(DECISIONS_TABLE);
         db.exec(IDX_DECISIONS_TENANT_STATUS);

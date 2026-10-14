@@ -10,16 +10,20 @@ import { originRemoteId, projectFileId } from './project-remote.js';
 import { realpathOrResolve } from '../util/real-path.js';
 import { placeholders } from '../util/sql.js';
 
-/** Project = nearest ancestor of cwd with `.hippo` (else `.git`); home and the temp root never are, and no marker means user-global (empty name).
- * Name: `.hippo-project.json`, else the normalised `origin`, else the folder name. Must not import shared.ts / store.ts / api/index.ts (cycle). */
+/** Project = nearest ancestor of cwd with `.hippo` (else `.git`); home and the temp root never are, and no marker means
+ * user-global (empty name).
+ * Name: `.hippo-project.json`, else the normalised `origin`, else the folder name. Must not import shared.ts /
+ * store.ts / api/index.ts (cycle). */
 
 /** The project a working directory belongs to. */
 export interface ProjectIdentity {
   /** Realpath-resolved root directory of the project (the start dir when not in a project). */
   root: string;
-  /** The project id rows are stamped with: the project file's id, the origin remote, or legacyName; '' outside a project. */
+  /** The project id rows are stamped with: the project file's id, the origin remote, or legacyName; '' outside a
+   * project. */
   name: string;
-  /** The folder rule rows written before ids carry: the root's lowercased basename, or its repo's for a linked worktree with no `.hippo`. */
+  /** The folder rule rows written before ids carry: the root's lowercased basename, or its repo's for a linked
+   * worktree with no `.hippo`. */
   legacyName: string;
   /** Every other name this root resolves to (the project file id, the origin remote even
    * with the rule off, legacyName), so rows written under an earlier id stay readable. */
@@ -50,7 +54,8 @@ export function clearProjectIdentityCache(): void {
 // The global store's config only: a per-store switch would stamp one checkout two ways.
 function remoteRuleOn(): boolean {
   const globalRoot = resolveGlobalRootDir();
-  if (remoteSwitch?.globalRoot !== globalRoot) remoteSwitch = { globalRoot, on: loadConfig(globalRoot).projectIdentity.remote };
+  if (remoteSwitch?.globalRoot !== globalRoot)
+    remoteSwitch = { globalRoot, on: loadConfig(globalRoot).projectIdentity.remote };
   return remoteSwitch.on;
 }
 
@@ -93,7 +98,8 @@ function isDirectoryAt(p: string): boolean {
   }
 }
 
-/** Resolves the project identity for a working directory (default process.cwd()); results are cached per resolved input path. */
+/** Resolves the project identity for a working directory (default process.cwd()); results are cached per resolved
+ * input path. */
 export function resolveProjectIdentity(
   cwd?: string,
   opts?: ResolveProjectIdentityOpts,
@@ -115,7 +121,8 @@ export function resolveProjectIdentity(
   let identity: ProjectIdentity;
   const root = hippoRoot ?? gitRoot;
   if (root !== null) {
-    const legacyName = (hippoRoot === null ? linkedWorktreeRepoName(root, home) : null) ?? path.basename(root).toLowerCase();
+    const legacyName =
+      (hippoRoot === null ? linkedWorktreeRepoName(root, home) : null) ?? path.basename(root).toLowerCase();
     identity = { root, ...namesAt(root, legacyName), legacyName, isHome: false };
   } else if (reachedHome || isUnder(start, home)) {
     identity = { root: home, name: '', legacyName: '', isHome: true };
@@ -225,12 +232,15 @@ export function projectNames(project: ProjectRef): readonly string[] {
 export const MAX_PROJECT_ALIASES = 10;
 export const MCP_PROJECT_SCOPED_HEADER = 'X-Hippo-Project-Scoped';
 
-/** Refuses a caller's project that is blank (it would stamp user-global), past the caps, or unlike the resolver's ids: rows match
- * verbatim, so a rewrite would split a project. Inner spaces pass, since a checkout with no remote is named by its folder. */
+/** Refuses a caller's project that is blank (it would stamp user-global), past the caps, or unlike the resolver's ids:
+ * rows match
+ * verbatim, so a rewrite would split a project. Inner spaces pass, since a checkout with no remote is named by its
+ * folder. */
 export function assertCallerProject(project: { readonly name: string; readonly aliases?: readonly string[] }): void {
   const { name, aliases = [] } = project;
   if (name.trim() === '') throw new BadRequestError('project name must not be blank');
-  if (aliases.length > MAX_PROJECT_ALIASES) throw new BadRequestError(`project aliases: at most ${MAX_PROJECT_ALIASES}`);
+  if (aliases.length > MAX_PROJECT_ALIASES)
+    throw new BadRequestError(`project aliases: at most ${MAX_PROJECT_ALIASES}`);
   if ([name, ...aliases].some((n) => n.length > MAX_ID_LEN)) {
     throw new BadRequestError(`project names: at most ${MAX_ID_LEN} characters each`);
   }
@@ -244,8 +254,10 @@ export function originInSql(names: readonly string[], column = 'origin_project')
   return names.length === 0 ? '0' : `${column} IN (${placeholders(names.length)})`;
 }
 
-/** Classifies a memory's origin_project against the active project. An empty current id (home or markerless cwd) puts everything in scope;
- * NULL/undefined origin (legacy row, or a shared-store write naming none) counts as cross-project: deny by default for a security partition. */
+/** Classifies a memory's origin_project against the active project. An empty current id (home or markerless cwd) puts
+ * everything in scope;
+ * NULL/undefined origin (legacy row, or a shared-store write naming none) counts as cross-project: deny by default
+ * for a security partition. */
 export function classifyOriginProject(
   origin: string | null | undefined,
   current: ProjectRef,
@@ -256,7 +268,8 @@ export function classifyOriginProject(
   return projectNames(current).includes(origin) ? 'project' : 'cross-project';
 }
 
-/** The global Hippo store directory ($HIPPO_HOME > $XDG_DATA_HOME/hippo > ~/.hippo); getGlobalRoot (sharing/global-store.ts) returns it.
+/** The global Hippo store directory ($HIPPO_HOME > $XDG_DATA_HOME/hippo > ~/.hippo); getGlobalRoot
+ * (sharing/global-store.ts) returns it.
  * Leaf module so store migrations can use it without importing sharing/ (store cycle). */
 export function resolveGlobalRootDir(): string {
   const hippoHome = envHippoHome();
@@ -266,14 +279,18 @@ export function resolveGlobalRootDir(): string {
   return path.join(os.homedir(), '.hippo');
 }
 
-/** True when `p` IS the global store root, so a global store whose parent chain contains `.git`/`.hippo` (git-managed HIPPO_HOME) still backfills as
- * user-global ('') instead of being stamped with the surrounding repo's name, which would hide the global corpus from every project. */
+/** True when `p` IS the global store root, so a global store whose parent chain contains `.git`/`.hippo` (git-managed
+ * HIPPO_HOME) still backfills as
+ * user-global ('') instead of being stamped with the surrounding repo's name, which would hide the global corpus
+ * from every project. */
 export function isGlobalStoreRoot(p: string): boolean {
   return samePath(realpathOrResolve(path.resolve(p)), realpathOrResolve(resolveGlobalRootDir()));
 }
 
-/** Parses a memory's origin from its provenance `source`: `shared:<project>:<ts>` and `promoted:<localRoot>` name the owning project; the home dir basename
- * maps to '' (user-global). Returns null without origin evidence. Pure string logic, since recorded paths may no longer exist. */
+/** Parses a memory's origin from its provenance `source`: `shared:<project>:<ts>` and `promoted:<localRoot>` name the
+ * owning project; the home dir basename
+ * maps to '' (user-global). Returns null without origin evidence. Pure string logic, since recorded paths may no
+ * longer exist. */
 export function originFromSource(
   source: string | null | undefined,
   homeName?: string,
@@ -295,8 +312,10 @@ export function originFromSource(
   return null;
 }
 
-/** The origin to stamp on a memory written from cwd: its project name, or '' (user-global, injectable everywhere) outside a project.
- *  NULL means no known project: a legacy row with no evidence, or a write to a shared store that named none; ambient context treats it as deny. */
+/** The origin to stamp on a memory written from cwd: its project name, or '' (user-global, injectable everywhere)
+ * outside a project.
+ * NULL means no known project: a legacy row with no evidence, or a write to a shared store that named none; ambient
+ * context treats it as deny. */
 export function deriveOriginProject(
   cwd?: string,
   opts?: ResolveProjectIdentityOpts,
@@ -304,7 +323,8 @@ export function deriveOriginProject(
   return resolveProjectIdentity(cwd, opts).name;
 }
 
-/** The origin for a write that names none: NULL on a shared store, whose folder is no caller's project, else the folder's project. */
+/** The origin for a write that names none: NULL on a shared store, whose folder is no caller's project, else the
+ * folder's project. */
 export function fallbackOrigin(hippoRoot: string): string | null {
   return isSharedStore(hippoRoot) ? null : deriveOriginProject(path.dirname(path.resolve(hippoRoot)));
 }

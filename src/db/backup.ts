@@ -13,7 +13,12 @@ export function backupStore(db: DatabaseSyncLike, hippoRoot: string, label: stri
 }
 
 /** Backs the store up, then runs one transaction; a transaction that throws rolled back, so its backup goes too. */
-export function withBackup<T>(db: DatabaseSyncLike, hippoRoot: string, label: string, transaction: (backup: string) => T): T {
+export function withBackup<T>(
+  db: DatabaseSyncLike,
+  hippoRoot: string,
+  label: string,
+  transaction: (backup: string) => T,
+): T {
   const backup = backupStore(db, hippoRoot, label);
   try {
     return transaction(backup);

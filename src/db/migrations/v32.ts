@@ -59,7 +59,8 @@ const TRG_PROCESSES_TENANT_MATCH_UPDATE = `
           END
         `;
 
-// Cross-tenant safety vs the successor process (self-FK; mirrors the v30 supersede trigger): superseded_by is set only via the supersede UPDATE
+// Cross-tenant safety vs the successor process (self-FK; mirrors the v30 supersede trigger): superseded_by is set only
+// via the supersede UPDATE
 // and the successor, already present in the same transaction, must share the tenant.
 const TRG_PROCESSES_SUPERSEDE_TENANT_MATCH_UPDATE = `
           CREATE TRIGGER IF NOT EXISTS trg_processes_supersede_tenant_match_update
@@ -77,8 +78,10 @@ const TRG_PROCESSES_SUPERSEDE_TENANT_MATCH_UPDATE = `
 export const v32: Migration = {
     version: 32,
     up: (db) => {
-      // Process first-class object (living process map): it evolves via the v30 supersede path, each version recording change_summary and full steps (JSON).
-      // Combines the v31 tenant-match trigger pair with the v30 superseded_by self-FK; version is server-derived (predecessor + 1); only an active head closes.
+      // Process first-class object (living process map): it evolves via the v30 supersede path, each version recording
+      // change_summary and full steps (JSON).
+      // Combines the v31 tenant-match trigger pair with the v30 superseded_by self-FK; version is server-derived
+      // (predecessor + 1); only an active head closes.
       if (!tableExists(db, 'processes')) {
         db.exec(PROCESSES_TABLE);
         db.exec(IDX_PROCESSES_TENANT_STATUS);
