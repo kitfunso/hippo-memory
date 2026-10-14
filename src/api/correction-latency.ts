@@ -31,7 +31,9 @@ function percentile(sorted: number[], q: number): number {
   return sorted[lo] + (sorted[hi] - sorted[lo]) * (idx - lo);
 }
 
-/** Correction latency = `new.created` minus the observation time (the extracted-from row's `created`, else `new.created`).
+/**
+ * Correction latency = `new.created` minus the observation time (the extracted-from row's `created`, else
+ * `new.created`).
  * Manual supersedes have latency 0 and are excluded from percentiles so they do not mask real lag. */
 export function buildCorrectionLatency(entries: MemoryEntry[]): CorrectionLatencyReport {
   const byId = new Map<string, MemoryEntry>();

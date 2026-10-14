@@ -13,7 +13,10 @@ export interface GoalStackBoostOpts {
   sessionId: string;
   tenantId: string;
   limit: number;
-  /** Side-channel: one goal-boost `RerankStep` per boosted row, keyed by `entry.id` (a map because the helper re-spreads rows); only populated when passed. */
+  /**
+   * Side-channel: one goal-boost `RerankStep` per boosted row, keyed by `entry.id` (a map because the helper re-spreads
+   * rows); only populated when passed.
+   */
   trace?: Map<string, RerankStep>;
 }
 
@@ -82,8 +85,12 @@ function buildGoalRecallLog<R extends { entry: MemoryEntry; score: number }>(
   return log;
 }
 
-/** The goal-stack boost over goals already read, touching no store; a caller skips it under an explicit goal tag. Its log covers the top
- *  `limit` rows and keeps those whose memory is global, since only the store can tell them apart; {@link localGoalRecallRows} drops those before the write. */
+/**
+ * The goal-stack boost over goals already read, touching no store; a caller skips it under an explicit goal tag. Its
+ * log covers the top
+ * `limit` rows and keeps those whose memory is global, since only the store can tell them apart; {@link
+ * localGoalRecallRows} drops those before the write.
+ */
 export function boostByGoals<R extends { entry: MemoryEntry; score: number }>(
   results: R[],
   active: ActiveGoals,
@@ -95,7 +102,8 @@ export function boostByGoals<R extends { entry: MemoryEntry; score: number }>(
   const goalsByTag = new Map(active.goals.map((g) => [g.goalName, g]));
   const policiesByGoalId = active.policies;
 
-  // Goal-tag matches per boosted row, keyed by entry id; a side table (not a spread-on marker property) so `boosted` stays exactly R[] with no cast-then-strip.
+  // Goal-tag matches per boosted row, keyed by entry id; a side table (not a spread-on marker property) so `boosted`
+  // stays exactly R[] with no cast-then-strip.
   const matchesByEntryId = new Map<string, string[]>();
 
   const boosted = results
@@ -116,11 +124,12 @@ export function boostByGoals<R extends { entry: MemoryEntry; score: number }>(
         });
       }
       matchesByEntryId.set(r.entry.id, matches);
-      // SAFETY: spreading a generic-constrained `r: R` widens to the spread's plain object type; only `score` changes, so the value still satisfies R.
+      // SAFETY: spreading a generic-constrained `r: R` widens to the spread's plain object type; only `score` changes,
+      // so the value still satisfies R.
       return { ...r, score: r.score * multiplier } as R;
     })
-    // Deliberately a PLAIN stable score sort with no compareEntryIdentity tail: re-sorting an already deterministic ranking inherits its determinism via
-    // stability, and ties keep the prior (meaningful) rank instead of reordering by content.
+    // Deliberately a PLAIN stable score sort with no compareEntryIdentity tail: re-sorting an already deterministic
+    // ranking inherits its determinism via stability, and ties keep the prior (meaningful) rank instead of reordering by content.
     .sort((a, b) => compareScoresDesc(a.score, b.score));
 
   return { results: boosted, log: buildGoalRecallLog(boosted, matchesByEntryId, goalsByTag, opts) };

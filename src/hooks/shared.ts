@@ -28,11 +28,16 @@ export const HIPPO_POST_COMPACT_MARKER = 'hippo post-compact';
 
 /** Copilot's config folder: $COPILOT_HOME, else ~/.copilot under os.homedir(), as the
  * Copilot apps resolve it (a HOME that differs from the profile must not move it). */
-export function copilotHomeDir(home: string = os.homedir(), env: Readonly<Record<string, string | undefined>> = processEnv()): string {
+export function copilotHomeDir(
+  home: string = os.homedir(),
+  env: Readonly<Record<string, string | undefined>> = processEnv(),
+): string {
   return env.COPILOT_HOME || path.join(home, '.copilot');
 }
 
-/** Codex counts as installed only when its config folder exists: Codex itself refuses a CODEX_HOME that is not a folder. */
+/**
+ * Codex counts as installed only when its config folder exists: Codex itself refuses a CODEX_HOME that is not a folder.
+ */
 export function isCodexPresent(home: string = homeDir()): boolean {
   return fs.statSync(codexHomeDir(home), { throwIfNoEntry: false })?.isDirectory() === true;
 }
@@ -42,33 +47,54 @@ export function copilotHooksFile(): string {
   return path.join(copilotHomeDir(), 'hooks', 'hippo.json');
 }
 
-/** Where VS Code's agent finds hippo.json: its docs name ~/.copilot/hooks as the user hooks folder, whatever COPILOT_HOME says. */
+/**
+ * Where VS Code's agent finds hippo.json: its docs name ~/.copilot/hooks as the user hooks folder, whatever
+ * COPILOT_HOME says.
+ */
 export function vscodeUserHooksFile(home: string = os.homedir()): string {
   return path.join(home, '.copilot', 'hooks', 'hippo.json');
 }
 
-/** The VS Code User folders that exist; Stable and Insiders keep their own, and only an edition the user has run has one. */
-export function vscodeUserDirs(env: Readonly<Record<string, string | undefined>> = processEnv(), home: string = os.homedir()): string[] {
+/**
+ * The VS Code User folders that exist; Stable and Insiders keep their own, and only an edition the user has run has
+ * one.
+ */
+export function vscodeUserDirs(
+  env: Readonly<Record<string, string | undefined>> = processEnv(),
+  home: string = os.homedir(),
+): string[] {
   return vscodeDataFolders({ env, home, platform: process.platform })
     .map((dir) => path.join(dir, 'User'))
     .filter((dir) => fs.statSync(dir, { throwIfNoEntry: false })?.isDirectory() === true);
 }
 
-/** Copilot counts as installed only when its config folder or a VS Code User folder exists, so setup never creates ~/.copilot on a machine with neither. */
+/**
+ * Copilot counts as installed only when its config folder or a VS Code User folder exists, so setup never creates
+ * ~/.copilot on a machine with neither.
+ */
 export function isCopilotPresent(home: string = os.homedir()): boolean {
-  return fs.statSync(copilotHomeDir(home), { throwIfNoEntry: false })?.isDirectory() === true || vscodeUserDirs(processEnv(), home).length > 0;
+  return (
+    fs.statSync(copilotHomeDir(home), { throwIfNoEntry: false })?.isDirectory() === true ||
+    vscodeUserDirs(processEnv(), home).length > 0
+  );
 }
 
-/** Codex hashes each hook and skips new or changed ones until the user reviews them in `/hooks`, so the reminder says what they would trust. */
+/**
+ * Codex hashes each hook and skips new or changed ones until the user reviews them in `/hooks`, so the reminder says
+ * what they would trust.
+ */
 export const CODEX_TRUST_LINE =
-  "The per-prompt hook sends your pinned memories plus up to 5 that match the prompt. Codex runs hippo's hooks only after you trust them once in `/hooks`.";
+  "The per-prompt hook sends your pinned memories plus up to 5 that match the prompt. Codex runs hippo's hooks only " +
+  "after you trust them once in `/hooks`.";
 
 /** Default log path consumed by `hippo last-sleep` when a caller passes no --path. */
 export function defaultSleepLogPath(): string {
   return path.join(homeDir(), '.hippo', 'logs', 'last-sleep.log');
 }
 
-/** Diagnostic-only log path for `hippo pre-compact`, kept apart from the SessionEnd sleep log because `hippo last-sleep` truncates that one every SessionStart.
+/**
+ * Diagnostic-only log path for `hippo pre-compact`, kept apart from the SessionEnd sleep log because `hippo last-sleep`
+ * truncates that one every SessionStart.
  * Nothing reads it programmatically; overridden by `--log-file`. */
 export function defaultPreCompactLogPath(): string {
   return path.join(homeDir(), '.hippo', 'logs', 'pre-compact.log');
@@ -78,7 +104,15 @@ export function ensureDir(dir: string): void {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 }
 
-/** Detect which AI coding tools are installed from config directory presence; `hippo setup` uses it to pick JSON-hook installs. */
+const COPILOT_NOTES =
+  'hooks in hooks/hippo.json, the MCP server in ' +
+  'mcp-config.json and a block in copilot-instructions.md; for VS Code, the server in each User mcp.json and ' +
+  'prompts/hippo.instructions.md';
+
+/**
+ * Detect which AI coding tools are installed from config directory presence; `hippo setup` uses it to pick JSON-hook
+ * installs.
+ */
 export function detectInstalledTools(): ToolDetection[] {
   const home = homeDir();
   const exists = (...parts: string[]) => fs.existsSync(path.join(home, ...parts));
@@ -90,25 +124,42 @@ export function detectInstalledTools(): ToolDetection[] {
       configDir: '~/.config/opencode',
       detected: exists('.config', 'opencode'),
       kind: 'plugin',
-      notes: 'installs a TS plugin at ~/.config/opencode/plugins/hippo.ts'
+      notes: 'installs a TS plugin at ~/.config/opencode/plugins/hippo.ts',
     },
-    { name: 'openclaw', configDir: '~/.openclaw', detected: exists('.openclaw'), kind: 'plugin', notes: 'install via `openclaw plugins install hippo-memory`' },
+    {
+      name: 'openclaw',
+      configDir: '~/.openclaw',
+      detected: exists('.openclaw'),
+      kind: 'plugin',
+      notes: 'install via `openclaw plugins install hippo-memory`',
+    },
     {
       name: 'codex',
       configDir: '~/.codex',
       detected: isCodexPresent(home),
       kind: 'wrapper',
-      notes: 'memory hooks in hooks.json, and wraps the detected codex launcher for session-end consolidation'
+      notes: 'memory hooks in hooks.json, and wraps the detected codex launcher for session-end consolidation',
     },
-    { name: 'copilot', configDir: copilotHomeDir(), detected: isCopilotPresent(), kind: 'json-hook', notes: 'hooks in hooks/hippo.json, the MCP server in ' +
-      'mcp-config.json and a block in copilot-instructions.md; for VS Code, the server in each User mcp.json and prompts/hippo.instructions.md' },
+    {
+      name: 'copilot',
+      configDir: copilotHomeDir(),
+      detected: isCopilotPresent(),
+      kind: 'json-hook',
+      notes: COPILOT_NOTES,
+    },
     {
       name: 'cursor',
       configDir: '~/.cursor',
       detected: exists('.cursor'),
       kind: 'markdown-instruction',
-      notes: 'no hook API - patches AGENTS.md in the project'
+      notes: 'no hook API - patches AGENTS.md in the project',
     },
-    { name: 'pi', configDir: '~/.pi', detected: exists('.pi'), kind: 'markdown-instruction', notes: 'no hook API - patches AGENTS.md in the project' },
+    {
+      name: 'pi',
+      configDir: '~/.pi',
+      detected: exists('.pi'),
+      kind: 'markdown-instruction',
+      notes: 'no hook API - patches AGENTS.md in the project',
+    },
   ];
 }

@@ -18,8 +18,12 @@ export interface ImportResult {
   total: number;     // entries found in source
   imported: number;  // actually imported (after dedup)
   skipped: number;   // skipped as duplicates or too short
-  /** Entries refused by the rejection-value guard, kept apart from `skipped` (dedup) so a tombstoned value is distinguishable in summaries.
-   *  Optional because `ImportResult` is exported from the package root and a required field breaks existing consumers; read sites use `?? 0`. */
+  /**
+   * Entries refused by the rejection-value guard, kept apart from `skipped` (dedup) so a tombstoned value is
+   * distinguishable in summaries.
+   * Optional because `ImportResult` is exported from the package root and a required field breaks existing consumers;
+   * read sites use `?? 0`.
+   */
   rejected?: number;
   /** K1 vault import: rows archived this run (changed + source-deleted). In a
    *  dryRun this is the would-be count (a true deletion-sync preview). */
@@ -37,8 +41,12 @@ export interface ImportOptions {
   /** Tenant scope for the dedup read: when set and `global` is false, only this tenant's entries count.
    *  Ignored when `global: true` (host-wide); undefined means host-wide dedup. */
   tenantId?: string;
-  /** K1 vault import only: logical vault name for the `vault:<name>` tag and `artifactRef` key. REQUIRED by importVault (throws if missing or blank),
-   *  because it keys the destructive deletion sync and two vaults sharing a basename would clobber each other. LIKE-escaped by the loader. */
+  /**
+   * K1 vault import only: logical vault name for the `vault:<name>` tag and `artifactRef` key. REQUIRED by importVault
+   * (throws if missing or blank),
+   * because it keys the destructive deletion sync and two vaults sharing a basename would clobber each other.
+   * LIKE-escaped by the loader.
+   */
   name?: string;
   /** K1 vault import only. Memory scope stamped on every imported note. Defaults
    *  to null (unscoped) when unset. */
@@ -64,7 +72,8 @@ export function importEntries(
   let redacted = 0;
   const entries: MemoryEntry[] = [];
 
-  // One scope, so the store opens once however many chunks land: each write, or a dry run's guard probe, shares its handle.
+  // One scope, so the store opens once however many chunks land: each write, or a dry run's guard probe, shares its
+  // handle.
   return withRequestStoresSync(() => {
     for (const raw of chunks) {
       const { chunk, wasRedacted } = prepareImportChunk(raw, allTags);
@@ -132,8 +141,10 @@ function createImportEntry(
   options: ImportOptions,
   baseHalfLifeDays: number,
 ): MemoryEntry {
-  // kind defaults to 'distilled': these exports are curated user pastes, not raw transcripts from a system of record (see MEMORY_ENVELOPE.md).
-  // The write must use the same tenant as the scoped dedup read above: global=true writes host-wide, global=false writes to options.tenantId.
+  // kind defaults to 'distilled': these exports are curated user pastes, not raw transcripts from a system of record
+  // (see MEMORY_ENVELOPE.md).
+  // The write must use the same tenant as the scoped dedup read above: global=true writes host-wide, global=false
+  // writes to options.tenantId.
   return createMemory(chunk, {
     layer: Layer.Episodic,
     tags: allTags,
@@ -146,7 +157,8 @@ function createImportEntry(
 
 /** Writes the entry, or on a dry run only probes the guard; false when a rejected value refuses it. */
 function writeOrProbeImport(targetRoot: string, entry: MemoryEntry, options: ImportOptions): boolean {
-  if (options.dryRun) return !rejectionGuardRefuses(targetRoot, entry.tenant_id ?? DEFAULT_TENANT_ID, entry.id, entry.content);
+  if (options.dryRun)
+    return !rejectionGuardRefuses(targetRoot, entry.tenant_id ?? DEFAULT_TENANT_ID, entry.id, entry.content);
   // A rejection refuses one chunk, not the whole import, so siblings still land.
   try {
     writeEntry(targetRoot, entry);

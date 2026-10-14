@@ -18,7 +18,9 @@ export interface SlackMessageEvent {
   text?: string;
   ts: string;
   thread_ts?: string;
-  /** The `bot_message` subtype carries `bot_id` instead of `user`; transform.ts derives `owner: bot:<bot_id>` from it. */
+  /**
+   * The `bot_message` subtype carries `bot_id` instead of `user`; transform.ts derives `owner: bot:<bot_id>` from it.
+   */
   bot_id?: string;
   /** Present on subtype='message_deleted'. */
   deleted_ts?: string;

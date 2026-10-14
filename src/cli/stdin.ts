@@ -4,7 +4,9 @@ import type { JsonObject } from '../store/working-memory.js';
 
 const DEFAULT_STDIN_WAIT_MS = 1000;
 
-/** `timedOut` means the window closed with stdin still open, so absent `text` is "unknown", not "none", and present `text` may be truncated;
+/**
+ * `timedOut` means the window closed with stdin still open, so absent `text` is "unknown", not "none", and present
+ * `text` may be truncated;
  * treating absence as a manual run is only safe when it is false. */
 export interface BoundedStdin { text?: string; timedOut: boolean; }
 
@@ -12,7 +14,9 @@ function defaultWaitMs(): number {
   return envStdinWaitMs() ?? DEFAULT_STDIN_WAIT_MS;
 }
 
-/** Never blocks: a TTY resolves at once, otherwise waits up to `waitMs` of idle (default 1000ms, or `HIPPO_STDIN_WAIT_MS`),
+/**
+ * Never blocks: a TTY resolves at once, otherwise waits up to `waitMs` of idle (default 1000ms, or
+ * `HIPPO_STDIN_WAIT_MS`),
  * refreshed on each chunk so a slow real write is not cut off, capped at `waitMs * 10`. */
 export function readStdinBounded(waitMs: number = defaultWaitMs()): Promise<BoundedStdin> {
   let stdin: NodeJS.ReadStream;
@@ -51,7 +55,9 @@ const CAMEL_TO_SNAKE: ReadonlyArray<readonly [string, string]> = [
   ['customInstructions', 'custom_instructions'],
 ];
 
-/** Copilot sends `toolArgs` as the model's raw JSON string; Claude Code and VS Code send `tool_input` already parsed. */
+/**
+ * Copilot sends `toolArgs` as the model's raw JSON string; Claude Code and VS Code send `tool_input` already parsed.
+ */
 function parsedToolArgs(value: JsonValue): JsonValue {
   if (!isJsonString(value)) return value;
   try {
@@ -93,7 +99,10 @@ export function normaliseHookPayload(text: string | undefined): string | undefin
   return Object.keys(added).length === 0 ? text : JSON.stringify({ ...payload, ...added });
 }
 
-/** The stdin read every hook verb uses: {@link readStdinBounded}, with the payload passed through {@link normaliseHookPayload}. */
+/**
+ * The stdin read every hook verb uses: {@link readStdinBounded}, with the payload passed through {@link
+ * normaliseHookPayload}.
+ */
 export async function readHookStdin(waitMs?: number): Promise<BoundedStdin> {
   const read = await readStdinBounded(waitMs);
   return { text: normaliseHookPayload(read.text), timedOut: read.timedOut };

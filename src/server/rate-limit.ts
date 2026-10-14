@@ -1,8 +1,13 @@
-/** Per-key token-bucket rate limiter for inbound /v1/* requests, bounding api-key-id enumeration. Dependency-free; the injectable `now` makes it
+/**
+ * Per-key token-bucket rate limiter for inbound /v1/* requests, bounding api-key-id enumeration. Dependency-free; the
+ * injectable `now` makes it
  * unit-testable. */
 
 export interface RateLimiter {
-  /** Consume one token for `key`: true if allowed, false if the bucket is exhausted; `now` (epoch ms) is injectable for deterministic tests. */
+  /**
+   * Consume one token for `key`: true if allowed, false if the bucket is exhausted; `now` (epoch ms) is injectable for
+   * deterministic tests.
+   */
   check(key: string, now?: number): boolean;
   readonly retryAfterSec: number;
 }
@@ -14,7 +19,10 @@ export interface RateLimiterOpts {
   burst: number;
   /** A bucket untouched for this many ms is dropped by the throttled sweep. */
   idleEvictMs: number;
-  /** Hard cap on tracked keys; at the cap the least-recently-used key is evicted only once it has refilled, else unseen keys share one overflow bucket. */
+  /**
+   * Hard cap on tracked keys; at the cap the least-recently-used key is evicted only once it has refilled, else unseen
+   * keys share one overflow bucket.
+   */
   maxKeys: number;
 }
 
@@ -28,7 +36,10 @@ function tokensAt(b: Bucket, now: number, ratePerSec: number, burst: number): nu
   return Math.min(burst, b.tokens + (Math.max(0, now - b.last) / 1000) * ratePerSec);
 }
 
-/** Brings `b` up to `now` and returns it; keeping the later time stops a clock that stepped back and forward again refilling that span twice. */
+/**
+ * Brings `b` up to `now` and returns it; keeping the later time stops a clock that stepped back and forward again
+ * refilling that span twice.
+ */
 function refill(b: Bucket, now: number, ratePerSec: number, burst: number): Bucket {
   b.tokens = tokensAt(b, now, ratePerSec, burst);
   b.last = Math.max(b.last, now);
@@ -41,8 +52,12 @@ function spend(b: Bucket): boolean {
   return allowed;
 }
 
-/** Token-bucket limiter with bounded memory: a sweep (at most once per `idleEvictMs`) drops idle buckets and a `maxKeys` cap bounds the map,
- * so a client rotating source addresses can neither grow it without bound nor evict its own throttled bucket to get a fresh one. */
+/**
+ * Token-bucket limiter with bounded memory: a sweep (at most once per `idleEvictMs`) drops idle buckets and a `maxKeys`
+ * cap bounds the map,
+ * so a client rotating source addresses can neither grow it without bound nor evict its own throttled bucket to get a
+ * fresh one.
+ */
 export function createRateLimiter(opts: RateLimiterOpts): RateLimiter {
   const { ratePerSec, burst, idleEvictMs, maxKeys } = opts;
   const buckets = new Map<string, Bucket>();
@@ -58,7 +73,10 @@ export function createRateLimiter(opts: RateLimiterOpts): RateLimiter {
     }
   }
 
-  /** Frees one slot for an unseen key; false when the least-recently-used bucket is still below burst, since dropping it would reset a throttled caller. */
+  /**
+   * Frees one slot for an unseen key; false when the least-recently-used bucket is still below burst, since dropping it
+   * would reset a throttled caller.
+   */
   function makeRoom(now: number): boolean {
     if (buckets.size < maxKeys) return true;
     const lru = buckets.entries().next().value;

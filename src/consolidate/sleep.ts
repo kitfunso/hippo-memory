@@ -1,4 +1,7 @@
-/** Consolidation engine ("Sleep"): decay pass (drop entries below the strength threshold), merge pass (semantic summaries of overlapping episodics), stats. */
+/**
+ * Consolidation engine ("Sleep"): decay pass (drop entries below the strength threshold), merge pass (semantic
+ * summaries of overlapping episodics), stats.
+ */
 
 import { evalNow, strengthAblation } from '../core/ablation.js';
 import { MemoryEntry, canAutoDelete, type DecayOptions } from '../core/memory.js';
@@ -103,11 +106,16 @@ async function runPassesAfterDecay(run: SleepRun, fetcher: typeof fetch | undefi
 
 // A changed default half-life moves memories still on the old base first,
 // so this pass decays them at the new one (src/consolidate/half-life-migration.ts).
-function migrateHalfLives(hippoRoot: string, dryRun: boolean, result: ConsolidationResult): ReturnType<typeof migrateDefaultHalfLife> {
+function migrateHalfLives(
+  hippoRoot: string,
+  dryRun: boolean,
+  result: ConsolidationResult,
+): ReturnType<typeof migrateDefaultHalfLife> {
   const halfLife = migrateDefaultHalfLife(hippoRoot, loadConfig(hippoRoot).defaultHalfLifeDays, { dryRun });
   if (halfLife.rescaled > 0) {
     result.details.push(
-      `  ⏳ ${dryRun ? 'would move' : 'moved'} ${halfLife.rescaled} memories from the ${halfLife.from}-day to the ${halfLife.to}-day half-life`
+      `  ⏳ ${dryRun ? 'would move' : 'moved'} ${halfLife.rescaled} memories from the ${halfLife.from}-day to the ` +
+      `${halfLife.to}-day half-life`,
     );
   }
   if (halfLife.typed > 0) {
@@ -125,8 +133,11 @@ async function flushPending(run: SleepRun, snapshot: LoadedRows, budget: WriteBu
   if (run.dryRun) return;
   const units = [...run.units, ...familyUnits(pendingWrites, pendingDeletes, pendingDormant, snapshot)];
   const components = groupFlush(pendingWrites, pendingDeletes, pendingDormant, units);
-  // The snapshot keeps what the DAG passes and other writers changed while sleep ran; the wait is sleep's own, not a server request's 250 ms.
-  const left = new Set(await commitInChunks(run.hippoRoot, components, { snapshot, budget, busyWaitMs: SLEEP_DB_WAIT_MS }));
+  // The snapshot keeps what the DAG passes and other writers changed while sleep ran; the wait is sleep's own, not a
+  // server request's 250 ms.
+  const left = new Set(
+    await commitInChunks(run.hippoRoot, components, { snapshot, budget, busyWaitMs: SLEEP_DB_WAIT_MS }),
+  );
   for (const id of [...pendingDeletes, ...pendingDormant.map((m) => m.entry.id)]) {
     if (!left.has(id)) result.details.push(`  ↩  ${id} not removed: pinned or already gone before sleep saved`);
   }
@@ -135,16 +146,22 @@ async function flushPending(run: SleepRun, snapshot: LoadedRows, budget: WriteBu
   result.dormant = pendingDormant.filter((m) => left.has(m.entry.id)).length;
 }
 
-// Dormant retention: a dormant memory nobody restored within dormant.retentionDays is deleted for good (0 keeps forever);
+// Dormant retention: a dormant memory nobody restored within dormant.retentionDays is deleted for good (0 keeps
+// forever);
 // runs even when dormant.enabled is off, so turning it off still ages out what earlier sleeps kept.
 async function expireDormant(run: SleepRun, budget: WriteBudget): Promise<void> {
   const { config, result, dryRun } = run;
   if (!(config.dormant.retentionDays > 0)) return;
   const cutoff = new Date(run.now.getTime() - config.dormant.retentionDays * DAY_MS).toISOString();
-  result.dormantExpired = await expireDormantBefore(run.hippoRoot, cutoff, { dryRun, budget, busyWaitMs: SLEEP_DB_WAIT_MS });
+  result.dormantExpired = await expireDormantBefore(run.hippoRoot, cutoff, {
+    dryRun,
+    budget,
+    busyWaitMs: SLEEP_DB_WAIT_MS,
+  });
   if (result.dormantExpired > 0) {
     result.details.push(
-      `  ⌛ ${dryRun ? 'would expire' : 'expired'} ${result.dormantExpired} dormant memor${result.dormantExpired === 1 ? 'y' : 'ies'} ` +
+      `  ⌛ ${dryRun ? 'would expire' : 'expired'} ${result.dormantExpired} dormant ` +
+      `memor${result.dormantExpired === 1 ? 'y' : 'ies'} ` +
         `older than ${config.dormant.retentionDays} days`,
     );
   }
@@ -157,7 +174,9 @@ function logRun(run: SleepRun, decay: DecayOutcome): void {
   replaceDetectedConflicts(hippoRoot, detectedConflicts, now.toISOString());
 
   if (detectedConflicts.length > 0) {
-    result.details.push(`  ⚠️ detected ${detectedConflicts.length} memory conflict${detectedConflicts.length === 1 ? '' : 's'}`);
+    result.details.push(
+      `  ⚠️ detected ${detectedConflicts.length} memory conflict${detectedConflicts.length === 1 ? '' : 's'}`,
+    );
   }
 
   appendConsolidationRun(hippoRoot, {
@@ -170,7 +189,8 @@ function logRun(run: SleepRun, decay: DecayOutcome): void {
   if (decay.rescuedEntries.length > 0) auditRescues(run, decay);
 }
 
-// One audit row per rescue, written only after the last flush chunk commits, so a run stopped mid-flush asserts no rescue.
+// One audit row per rescue, written only after the last flush chunk commits, so a run stopped mid-flush asserts no
+// rescue.
 function auditRescues(run: SleepRun, { rescuedEntries, rankById }: DecayOutcome): void {
   const { result } = run;
   const rescueEvent = (entry: MemoryEntry): AppendAuditOpts => {

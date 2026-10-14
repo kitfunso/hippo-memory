@@ -1,4 +1,5 @@
-// The checks every caller call shares: ids, project, the session's owner and the pilot arm, all from the request, never the server's env or folder.
+// The checks every caller call shares: ids, project, the session's owner and the pilot arm, all from the request, never
+// the server's env or folder.
 import { BadRequestError } from '../core/api-errors.js';
 import { ownerOrSubject, type Context } from '../api/types.js';
 import { MAX_ID_LEN } from '../util/limits.js';
@@ -10,7 +11,10 @@ import { bindSessionOwner } from '../api/session-owners.js';
 import type { ContinuityKey } from '../store/sessions.js';
 import { fitWorkingState, WORKING_STATE_CAPS, type WorkingState } from './working-state.js';
 
-/** Checks the ids, then binds the session to the caller's owner (a ConflictError when another owner holds it). Returns the key the call's rows go under. */
+/**
+ * Checks the ids, then binds the session to the caller's owner (a ConflictError when another owner holds it). Returns
+ * the key the call's rows go under.
+ */
 export function bindCaller(ctx: Context, sessionId: string, project: CallerProject): ContinuityKey {
   assertCallerIds(sessionId, project);
   if (sessionId.trim() === '') throw new BadRequestError('session id: required');
@@ -22,10 +26,16 @@ export function bindCaller(ctx: Context, sessionId: string, project: CallerProje
 
 /** Read only: the session's first prompt booked its arm, and a holdout session gets nothing from hippo. */
 export function callerInHoldout(ctx: Context, sessionId: string): boolean {
-  return sessionPilotArm(ctx.hippoRoot, ctx.tenantId, sessionId, false, { sharedStore: true, ownTenantOnly: true }) === 'holdout';
+  return (
+    sessionPilotArm(ctx.hippoRoot, ctx.tenantId, sessionId, false, { sharedStore: true, ownTenantOnly: true }) ===
+    'holdout'
+  );
 }
 
-/** Refuses a field past the cap a transcript read gives, naming it; scrubbed again, since the caller's scrub is not trusted, then cut back to the cap. */
+/**
+ * Refuses a field past the cap a transcript read gives, naming it; scrubbed again, since the caller's scrub is not
+ * trusted, then cut back to the cap.
+ */
 export function checkedWorkingState(state: WorkingState | null): WorkingState | null {
   if (state === null) return null;
   for (const field of ['task', 'summary', 'next_step'] as const) {
@@ -37,7 +47,8 @@ export function checkedWorkingState(state: WorkingState | null): WorkingState | 
 }
 
 export function assertTrigger(trigger: string | null): void {
-  if (trigger !== null && trigger.length > MAX_ID_LEN) throw new BadRequestError(`trigger: at most ${MAX_ID_LEN} characters`);
+  if (trigger !== null && trigger.length > MAX_ID_LEN)
+    throw new BadRequestError(`trigger: at most ${MAX_ID_LEN} characters`);
 }
 
 export function assertRequestId(requestId: string): void {

@@ -1,4 +1,5 @@
-// Applies a rebuild's op list on the caller's transaction. The statements and the consolidated-source guard sit in the store's graph writers.
+// Applies a rebuild's op list on the caller's transaction. The statements and the consolidated-source guard sit in the
+// store's graph writers.
 import { assertTenantId } from '../store/tenant.js';
 import { clock } from '../util/write-budget.js';
 import type { DatabaseSyncLike } from '../db/index.js';
@@ -17,9 +18,16 @@ import type { DesiredRelation, GraphOp } from './delta.js';
 function insertDesiredRelation(db: DatabaseSyncLike, tenantId: string, rel: DesiredRelation): boolean {
   const fromEntityId = entityIdBySource(db, tenantId, rel.from.entityType, rel.from.sourceObject);
   const toEntityId = entityIdBySource(db, tenantId, rel.to.entityType, rel.to.sourceObject);
-  if (fromEntityId === undefined || toEntityId === undefined || !objectInForce(db, tenantId, rel.sourceObject)) return false;
+  if (fromEntityId === undefined || toEntityId === undefined || !objectInForce(db, tenantId, rel.sourceObject))
+    return false;
   if (relationPresent(db, tenantId, fromEntityId, toEntityId, rel.relType)) return false;
-  insertRelationRow(db, tenantId, { fromEntityId, toEntityId, relType: rel.relType, memoryId: rel.memoryId, sourceObject: rel.sourceObject });
+  insertRelationRow(db, tenantId, {
+    fromEntityId,
+    toEntityId,
+    relType: rel.relType,
+    memoryId: rel.memoryId,
+    sourceObject: rel.sourceObject,
+  });
   return true;
 }
 
@@ -37,7 +45,10 @@ function applyGraphOp(db: DatabaseSyncLike, tenantId: string, op: GraphOp): bool
       return updateEntityRow(db, tenantId, op.id, op.entity) !== null;
     case 'insertEntity':
       // A mirrorless object closed since the load is never enqueued again, so a stale insert would stay for good.
-      if (!objectInForce(db, tenantId, op.entity.sourceObject) || entityIdBySource(db, tenantId, op.entity.entityType, op.entity.sourceObject) !== undefined)
+      if (
+        !objectInForce(db, tenantId, op.entity.sourceObject) ||
+        entityIdBySource(db, tenantId, op.entity.entityType, op.entity.sourceObject) !== undefined
+      )
         return false;
       insertEntityRow(db, tenantId, op.entity);
       return true;
@@ -51,7 +62,9 @@ export interface ApplyGraphOpsResult {
   readonly skipped: number;
 }
 
-/** Applies `ops` from index `opts.from` on the caller's open transaction and stops at the first op boundary past `opts.holdMs`.
+/**
+ * Applies `ops` from index `opts.from` on the caller's open transaction and stops at the first op boundary past
+ * `opts.holdMs`.
  *  Returns where the next chunk starts and how many ops were skipped as stale. */
 export function applyGraphOps(
   db: DatabaseSyncLike,

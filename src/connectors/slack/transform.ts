@@ -8,8 +8,12 @@ export interface TransformInput {
   message: SlackMessageEvent;
 }
 
-/** Convert a SlackMessageEvent into RememberOpts; returns null when the message has no usable body so the caller marks it seen and skips it.
- *  artifact_ref MUST be `slack://${teamId}/${channelId}/${ts}` (deletion looks it up); owner is never null: `user:<id>`, `bot:<bot_id>`, else `bot:unknown`. */
+/**
+ * Convert a SlackMessageEvent into RememberOpts; returns null when the message has no usable body so the caller marks
+ * it seen and skips it.
+ * artifact_ref MUST be `slack://${teamId}/${channelId}/${ts}` (deletion looks it up); owner is never null: `user:<id>`,
+ * `bot:<bot_id>`, else `bot:unknown`.
+ */
 export function messageToRememberOpts(input: TransformInput): RememberOpts | null {
   const text = input.message.text?.trim();
   if (!text) return null;

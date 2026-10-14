@@ -3,7 +3,15 @@ import { dirname, resolve } from 'node:path';
 import { assertCallerProject, resolveProjectIdentity, type ProjectRef } from '../../core/project-identity.js';
 import { isSharedStore } from '../../core/config.js';
 import { assembleCost, contextCost, drillCost } from '../../api/context-render.js';
-import { assemble, type AssembleOpts, drillDown, type DrillDownOpts, getContext, recordTokens, retrieve } from '../../api/index.js';
+import {
+  assemble,
+  type AssembleOpts,
+  drillDown,
+  type DrillDownOpts,
+  getContext,
+  recordTokens,
+  retrieve,
+} from '../../api/index.js';
 import { RECALL_RECORDING } from '../../api/recall-finish.js';
 import { httpParams, parseContextRequest, parseRecallRequest } from '../../api/recall-request.js';
 import { resetSessionRings } from '../../api/recall-record.js';
@@ -31,9 +39,13 @@ export async function handleRecallMemories({ res, ctx, query }: AuthedRouteReque
   return;
 }
 
-// GET /v1/sessions/:id/assemble?budget=N&freshTail=N&summarizeOlder=0|1: ordered AssembledContextItem[] (fresh-tail raws, summary substitutions, bio-aware
+// GET /v1/sessions/:id/assemble?budget=N&freshTail=N&summarizeOlder=0|1: ordered AssembledContextItem[] (fresh-tail
+// raws, summary substitutions, bio-aware
 // budget fit). Tenant scope from the Bearer; default-deny on private rows.
-export async function handleAssembleSession({ res, ctx, query }: AuthedRouteRequest, assembleMatch: Record<string, string>): Promise<void> {
+export async function handleAssembleSession(
+  { res, ctx, query }: AuthedRouteRequest,
+  assembleMatch: Record<string, string>,
+): Promise<void> {
   validateIdSegment(assembleMatch.id!, 'session id');
   const budgetRaw = query.get('budget');
   const budget = budgetRaw === null ? undefined : Number(budgetRaw);
@@ -59,14 +71,22 @@ export async function handleAssembleSession({ res, ctx, query }: AuthedRouteRequ
   if (summarizeOlder !== undefined) assembleExtra.summarizeOlder = summarizeOlder;
   if (scope !== undefined) assembleExtra.scope = scope;
   const result = await assemble(ctx, assembleMatch.id!, { ...assembleExtra, cost: assembleCost(assembleMatch.id!) });
-  await recordTokens(ctx, 'http_assemble', { items: result.items.length, tokens: result.tokens, sessionId: assembleMatch.id! });
+  await recordTokens(ctx, 'http_assemble', {
+    items: result.items.length,
+    tokens: result.tokens,
+    sessionId: assembleMatch.id!,
+  });
   sendJson(res, 200, result);
   return;
 }
 
-// GET /v1/recall/drill/:id?limit=N&budget=N: companion to /v1/memories; the caller drills into a level-2 summary (RecallResultItem.isSummary) to recover the
+// GET /v1/recall/drill/:id?limit=N&budget=N: companion to /v1/memories; the caller drills into a level-2 summary
+// (RecallResultItem.isSummary) to recover the
 // originals. Tenant-scoped via Bearer; default-deny on private scopes for the summary and its children.
-export async function handleDrillRecall({ res, ctx, query }: AuthedRouteRequest, drillMatch: Record<string, string>): Promise<void> {
+export async function handleDrillRecall(
+  { res, ctx, query }: AuthedRouteRequest,
+  drillMatch: Record<string, string>,
+): Promise<void> {
   validateIdSegment(drillMatch.id!, 'summary id');
   const limitRaw = query.get('limit');
   const limit = limitRaw === null ? undefined : Number(limitRaw);
@@ -108,7 +128,10 @@ export async function handleDrillRecall({ res, ctx, query }: AuthedRouteRequest,
   return;
 }
 
-/** A shared store's folder is no caller's project, so the caller names it (`project`, repeated `alias`); with none, getContext refuses. */
+/**
+ * A shared store's folder is no caller's project, so the caller names it (`project`, repeated `alias`); with none,
+ * getContext refuses.
+ */
 function contextReader(hippoRoot: string, query: URLSearchParams): ProjectRef {
   if (!isSharedStore(hippoRoot)) return resolveProjectIdentity(dirname(resolve(hippoRoot)));
   const name = query.get('project');
@@ -118,8 +141,10 @@ function contextReader(hippoRoot: string, query: URLSearchParams): ProjectRef {
   return { name, legacyName: name, aliases };
 }
 
-// GET /v1/context: a budget-bounded ContextResult JSON, rendered by clients, not the server; tenant-scoped via the Bearer.
-// Pinned-only and '*' fallback skip the recall audit emit (as cmdContext does); a real-query hybrid search emits one 'recall' row.
+// GET /v1/context: a budget-bounded ContextResult JSON, rendered by clients, not the server; tenant-scoped via the
+// Bearer.
+// Pinned-only and '*' fallback skip the recall audit emit (as cmdContext does); a real-query hybrid search emits one
+// 'recall' row.
 export async function handleGetContext({ res, ctx, opts, query }: AuthedRouteRequest): Promise<void> {
   const parsed = parseContextRequest(httpParams(query));
   const result = await getContext(ctx, {

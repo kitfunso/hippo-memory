@@ -21,7 +21,8 @@ export interface AuditResult {
 
 export function auditMemory(entry: MemoryEntry, backsObject = false): AuditIssue | null {
   const issue = classifyMemory(entry);
-  // Error means "auto-remove"; a pinned, raw, kept-for-good or object-backing row is never auto-removed, so it can only warn.
+  // Error means "auto-remove"; a pinned, raw, kept-for-good or object-backing row is never auto-removed, so it can only
+  // warn.
   if (issue?.severity === 'error' && (!canAutoDelete(entry) || backsObject)) {
     const why = entry.pinned ? 'pinned' : entry.kind === 'raw' ? 'raw' : backsObject ? 'backs an object' : 'keep rule';
     return { ...issue, severity: 'warning', reason: `${issue.reason} (${why}, kept)` };
@@ -50,11 +51,21 @@ function classifyMemory(entry: MemoryEntry): AuditIssue | null {
 
   const substantive = substantiveWordCount(content);
   if (substantive < 2) {
-    return { memoryId: entry.id, content, severity: 'warning', reason: `only ${substantive} substantive word(s) — too vague` };
+    return {
+      memoryId: entry.id,
+      content,
+      severity: 'warning',
+      reason: `only ${substantive} substantive word(s) — too vague`,
+    };
   }
 
   if (content.length < 40 && hasNoSpecificity(content)) {
-    return { memoryId: entry.id, content, severity: 'warning', reason: 'no specific details (names, paths, numbers, code)' };
+    return {
+      memoryId: entry.id,
+      content,
+      severity: 'warning',
+      reason: 'no specific details (names, paths, numbers, code)',
+    };
   }
 
   const reason = automaticDefect(entry);

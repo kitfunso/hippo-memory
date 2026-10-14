@@ -1,4 +1,6 @@
-/** Salience gate: decides at memory creation whether content is stored at full strength, starts weakened, or is skipped. */
+/**
+ * Salience gate: decides at memory creation whether content is stored at full strength, starts weakened, or is skipped.
+ */
 
 import type { MemoryEntry } from './memory.js';
 import { textOverlap } from '../util/tokenize.js';
@@ -70,7 +72,8 @@ export function computeSalience(
       if (recentErrors >= opts.maxRepeatErrors) {
         return {
           decision: 'start_weak',
-          reason: `repeat_error (${recentErrors} recent errors, overlap ${(duplicateMatch.overlap * 100).toFixed(0)}% with ${duplicateMatch.matchId})`,
+          reason: `repeat_error (${recentErrors} recent errors, overlap ` +
+            `${(duplicateMatch.overlap * 100).toFixed(0)}% with ${duplicateMatch.matchId})`,
           score: REPEAT_ERROR_SCORE,
         };
       }

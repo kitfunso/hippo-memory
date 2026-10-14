@@ -12,7 +12,9 @@ import { errorMessage } from '../util/log.js';
 const STAMP_DIGITS = 13;
 
 export const SPOOL_DIR = 'compactions-spool';
-/** Starts the log line of a step that broke with an unexpected error, so the session-start banner counts it; a set-aside file is counted
+/**
+ * Starts the log line of a step that broke with an unexpected error, so the session-start banner counts it; a set-aside
+ * file is counted
  * by its `.bad` name instead. */
 export const SPOOL_PROBLEM = 'spool problem: ';
 const LOCK = 'replay.lock';
@@ -54,7 +56,10 @@ export interface SpooledCompaction {
   at: Date;
 }
 
-/** Records one spooled compaction; it calls `recorded` once the store holds the summary, so the file is done even if a later step throws. */
+/**
+ * Records one spooled compaction; it calls `recorded` once the store holds the summary, so the file is done even if a
+ * later step throws.
+ */
 export type SpoolImporter = (spooled: SpooledCompaction, recorded: () => void) => void;
 
 type Settled = 'done' | 'gone' | 'busy';
@@ -101,7 +106,10 @@ function errCode(cause: unknown): string {
   return cause instanceof Error && 'code' in cause && isStringValue(cause.code) ? cause.code : '';
 }
 
-/** Runs one fs step, retrying a busy code briefly; '' when it ran, else the busy code it kept hitting. Any other error throws. */
+/**
+ * Runs one fs step, retrying a busy code briefly; '' when it ran, else the busy code it kept hitting. Any other error
+ * throws.
+ */
 function retryBusy(step: () => void): string {
   for (let retry = 0; ; retry++) {
     try {
@@ -116,7 +124,10 @@ function retryBusy(step: () => void): string {
   }
 }
 
-/** Runs one fs step: ENOENT means gone, a busy code is retried briefly, and any other error is logged and counted busy, so a replay never throws. */
+/**
+ * Runs one fs step: ENOENT means gone, a busy code is retried briefly, and any other error is logged and counted busy,
+ * so a replay never throws.
+ */
 function settleCode(step: () => void, log: Log, what: string): SettledStep {
   try {
     const code = retryBusy(step);
@@ -161,7 +172,14 @@ function spoolFile(hippoRoot: string): string {
   return path.join(hippoRoot, SPOOL_DIR, `${stamp(Date.now())}-${randomBytes(4).toString('hex')}.a0.json`);
 }
 
-export function spool(hippoRoot: string, tenantId: string, payload: PostCompactPayload, text: CompactionText, at: Date, fsx: SpoolFs = fs): void {
+export function spool(
+  hippoRoot: string,
+  tenantId: string,
+  payload: PostCompactPayload,
+  text: CompactionText,
+  at: Date,
+  fsx: SpoolFs = fs,
+): void {
   const file = spoolFile(hippoRoot);
   fsx.mkdirSync(path.dirname(file), { recursive: true });
   const body = {
@@ -188,7 +206,14 @@ export function parseSpooled(text: string, fallbackTenantId: string): SpooledCom
   } catch {
     return null; // a half-written spool file holds no compaction; the caller treats null as unreadable
   }
-  if (!isObjectLike(raw) || !('sessionId' in raw) || !isStringValue(raw.sessionId) || !('summary' in raw) || !isStringValue(raw.summary)) return null;
+  if (
+    !isObjectLike(raw) ||
+    !('sessionId' in raw) ||
+    !isStringValue(raw.sessionId) ||
+    !('summary' in raw) ||
+    !isStringValue(raw.summary)
+  )
+    return null;
   if (!('at' in raw) || !isStringValue(raw.at) || Number.isNaN(Date.parse(raw.at))) return null;
   const items: string[] = 'items' in raw && Array.isArray(raw.items) ? raw.items.filter(isStringValue) : [];
   return {
@@ -205,7 +230,8 @@ export function parseSpooled(text: string, fallbackTenantId: string): SpooledCom
   };
 }
 
-const heldBy = (pid: number | null): string => `spool left to another replayer (lock held by ${pid === null ? 'another process' : `pid ${pid}`})`;
+const heldBy = (pid: number | null): string =>
+  `spool left to another replayer (lock held by ${pid === null ? 'another process' : `pid ${pid}`})`;
 
 function parseLock(text: string): LockBody | null {
   let raw: unknown;
@@ -245,7 +271,10 @@ function createLock(fsx: SpoolFs, lock: string, body: string, log: Log): 'taken'
   }
 }
 
-/** This run's token and take time once it holds `replay.lock`, else null: another replayer holds it, or it could not be made. */
+/**
+ * This run's token and take time once it holds `replay.lock`, else null: another replayer holds it, or it could not be
+ * made.
+ */
 function takeLock(fsx: SpoolFs, dir: string, log: Log): HeldLock | null {
   const lock = path.join(dir, LOCK);
   const token = randomBytes(8).toString('hex');
@@ -277,7 +306,9 @@ function ownsLock(fsx: SpoolFs, dir: string, token: string, log: Log): boolean {
   return false;
 }
 
-/** Removes `replay.lock` only while it holds this run's token, so a run never deletes a successor's lock. Never throws. */
+/**
+ * Removes `replay.lock` only while it holds this run's token, so a run never deletes a successor's lock. Never throws.
+ */
 function releaseLock(fsx: SpoolFs, dir: string, mine: HeldLock, log: Log): void {
   const lock = path.join(dir, LOCK);
   const held = readLock(fsx, lock, log);
@@ -286,7 +317,10 @@ function releaseLock(fsx: SpoolFs, dir: string, mine: HeldLock, log: Log): void 
   if (ours) settle(() => fsx.unlinkSync(lock), log, 'spool lock not released');
 }
 
-/** Claim time sits in the claim's name, so a claim over STALE_MS away from now belongs to a replayer that never finished. True when one was put back. */
+/**
+ * Claim time sits in the claim's name, so a claim over STALE_MS away from now belongs to a replayer that never
+ * finished. True when one was put back.
+ */
 function recoverStaleClaims(fsx: SpoolFs, dir: string, names: readonly string[], log: Log): boolean {
   const now = Date.now();
   // A claim whose unlink stayed busy after its `.bad` landed is a spare copy, not a second failure.
@@ -303,11 +337,17 @@ function recoverStaleClaims(fsx: SpoolFs, dir: string, names: readonly string[],
       settle(() => fsx.unlinkSync(file), log, what);
     } else if (next < MAX_ATTEMPTS) {
       if (settle(() => fsx.renameSync(file, path.join(dir, `${claim.stem}.a${next}.json`)), log, what) === 'done') {
-        log(`spool file ${claim.name} was claimed by a replayer that never finished, put back (try ${next} of ${MAX_ATTEMPTS})`);
+        log(
+          `spool file ${claim.name} was claimed by a replayer that never finished, put back (try ${next} of ` +
+          `${MAX_ATTEMPTS})`,
+        );
         putBackOne = true;
       }
     } else if (moveBad(fsx, dir, file, { stem: claim.stem, attempt: claim.attempt, cause: 'interrupted', log })) {
-      log(`spool file ${claim.name} was claimed by a replayer that never finished ${MAX_ATTEMPTS} times, set aside as .bad`);
+      log(
+        `spool file ${claim.name} was claimed by a replayer that never finished ${MAX_ATTEMPTS} times, set aside as ` +
+        `.bad`,
+      );
     }
   }
   return putBackOne;
@@ -316,7 +356,13 @@ function recoverStaleClaims(fsx: SpoolFs, dir: string, names: readonly string[],
 /** Returns a claim to the waiting files as `<stem>.a<attempt>.json`; one that stays busy is left for stale recovery. */
 function putBack(fsx: SpoolFs, dir: string, claim: string, stem: string, attempt: number, log: Log): void {
   const name = path.basename(claim);
-  if (settle(() => fsx.renameSync(claim, path.join(dir, `${stem}.a${attempt}.json`)), log, `spool file ${name} not put back`) === 'busy') {
+  if (
+    settle(
+      () => fsx.renameSync(claim, path.join(dir, `${stem}.a${attempt}.json`)),
+      log,
+      `spool file ${name} not put back`,
+    ) === 'busy'
+  ) {
     log(`spool file ${name} could not be put back; it returns ${STALE_MS / MINUTE_MS} minutes after its claim`);
   }
 }
@@ -334,7 +380,8 @@ function writeBad(fsx: SpoolFs, dir: string, options: WriteBadOptions): boolean 
   const { stem, cause, text, log, what } = options;
   const tmp = path.join(dir, `${stem}.${cause}.bad.${randomBytes(4).toString('hex')}.tmp`);
   const written = settle(() => fsx.writeFileSync(tmp, text, { encoding: 'utf8', flag: 'wx' }), log, what);
-  const moved = written === 'done' ? settle(() => fsx.renameSync(tmp, path.join(dir, `${stem}.${cause}.bad`)), log, what) : written;
+  const moved =
+    written === 'done' ? settle(() => fsx.renameSync(tmp, path.join(dir, `${stem}.${cause}.bad`)), log, what) : written;
   if (moved !== 'done' && written === 'done') settle(() => fsx.unlinkSync(tmp), log, what);
   return moved === 'done';
 }
@@ -347,12 +394,25 @@ interface MoveBadOptions {
   readonly raw?: string;
 }
 
-/** Sets a claim aside as `.bad` before the claim goes, so a crash between leaves a whole copy; a busy write puts the claim back. */
+/**
+ * Sets a claim aside as `.bad` before the claim goes, so a crash between leaves a whole copy; a busy write puts the
+ * claim back.
+ */
 function moveBad(fsx: SpoolFs, dir: string, claim: string, options: MoveBadOptions): boolean {
   const { stem, attempt, cause, log, raw } = options;
   const what = `spool file ${path.basename(claim)} not set aside`;
   let text = raw ?? '';
-  if (raw === undefined && settle(() => { text = fsx.readFileSync(claim, 'utf8'); }, log, what) !== 'done') return false;
+  if (
+    raw === undefined &&
+    settle(
+      () => {
+        text = fsx.readFileSync(claim, 'utf8');
+      },
+      log,
+      what,
+    ) !== 'done'
+  )
+    return false;
   if (!writeBad(fsx, dir, { stem, cause, text, log, what })) {
     putBack(fsx, dir, claim, stem, attempt, log);
     return false;
@@ -361,7 +421,10 @@ function moveBad(fsx: SpoolFs, dir: string, claim: string, options: MoveBadOptio
   return true;
 }
 
-/** A tmp over STALE_MS old belongs to a spool that never renamed it: a whole one joins the waiting files, a torn one is set aside. True when one joined. */
+/**
+ * A tmp over STALE_MS old belongs to a spool that never renamed it: a whole one joins the waiting files, a torn one is
+ * set aside. True when one joined.
+ */
 function promoteTmp(fsx: SpoolFs, dir: string, names: readonly string[], tenantId: string, log: Log): boolean {
   const now = Date.now();
   let promoted = false;
@@ -372,7 +435,17 @@ function promoteTmp(fsx: SpoolFs, dir: string, names: readonly string[], tenantI
     const what = `spool file ${name} not promoted`;
     let mtime = 0;
     let text = '';
-    if (settle(() => { mtime = fsx.statSync(file).mtimeMs; }, log, what) !== 'done' || Math.abs(now - mtime) <= STALE_MS) continue;
+    if (
+      settle(
+        () => {
+          mtime = fsx.statSync(file).mtimeMs;
+        },
+        log,
+        what,
+      ) !== 'done' ||
+      Math.abs(now - mtime) <= STALE_MS
+    )
+      continue;
     if (m === null) {
       // A `.bad` write cut off before its rename: its source goes only after that rename lands, so this copy is spare.
       settle(() => fsx.unlinkSync(file), log, `spool file ${name} not removed`);
@@ -395,7 +468,8 @@ function promoteTmp(fsx: SpoolFs, dir: string, names: readonly string[], tenantI
 /** Removes a claim once the store holds its summary; a claim left behind is imported again, so the log says so. */
 function removeClaim(fsx: SpoolFs, claim: string, name: string, log: Log): void {
   const removed = settleCode(() => fsx.unlinkSync(claim), log, `spool file ${name} claim not removed`);
-  if (removed.settled === 'busy') log(`spool file ${name} saved; its claim could not be removed (${removed.code}); it will be imported again`);
+  if (removed.settled === 'busy')
+    log(`spool file ${name} saved; its claim could not be removed (${removed.code}); it will be imported again`);
 }
 
 interface ImportFailedOptions {
@@ -405,8 +479,17 @@ interface ImportFailedOptions {
   readonly log: Log;
 }
 
-/** After an importer throw: a busy store stops the run with the count unchanged, any other error counts one try toward .bad. */
-function importFailed(fsx: SpoolFs, dir: string, claim: string, entry: Waiting, options: ImportFailedOptions): FileOutcome {
+/**
+ * After an importer throw: a busy store stops the run with the count unchanged, any other error counts one try toward
+ * .bad.
+ */
+function importFailed(
+  fsx: SpoolFs,
+  dir: string,
+  claim: string,
+  entry: Waiting,
+  options: ImportFailedOptions,
+): FileOutcome {
   const { text, recorded, cause, log } = options;
   const { name } = entry;
   const busy = isSqliteBusy(cause);
@@ -435,7 +518,14 @@ function importFailed(fsx: SpoolFs, dir: string, claim: string, entry: Waiting, 
 }
 
 /** Claims, reads and imports one waiting file; `stop` ends the run because the store is busy. */
-function importFile(fsx: SpoolFs, dir: string, entry: Waiting, tenantId: string, log: Log, importOne: SpoolImporter): FileOutcome {
+function importFile(
+  fsx: SpoolFs,
+  dir: string,
+  entry: Waiting,
+  tenantId: string,
+  log: Log,
+  importOne: SpoolImporter,
+): FileOutcome {
   const { name } = entry;
   const claim = path.join(dir, `${entry.stem}.a${entry.attempt}.claim-${stamp(Date.now())}`);
   const taken = settleCode(() => fsx.renameSync(path.join(dir, name), claim), log, `spool file ${name} not claimed`);
@@ -485,7 +575,10 @@ function mtimeOf(fsx: SpoolFs, file: string): number | null {
   }
 }
 
-/** What doctor reports, read only: files a replay should have taken by now, claims and tmp files a dead process left, and `.bad` files. */
+/**
+ * What doctor reports, read only: files a replay should have taken by now, claims and tmp files a dead process left,
+ * and `.bad` files.
+ */
 export function spoolCounts(hippoRoot: string, now: Date, waitingAfterMs: number, fsx: SpoolFs = fs): SpoolCounts {
   const counts: SpoolCounts = { waiting: 0, stale: 0, bad: 0 };
   const dir = path.join(hippoRoot, SPOOL_DIR);
@@ -507,8 +600,18 @@ export function spoolCounts(hippoRoot: string, now: Date, waitingAfterMs: number
   return counts;
 }
 
-/** One replayer at a time holds `replay.lock`, so only one process claims a file even where Windows lets two renames of it both land. */
-export function importSpool(hippoRoot: string, tenantId: string, log: Log, deadline: number, importOne: SpoolImporter, fsx: SpoolFs = fs): number {
+/**
+ * One replayer at a time holds `replay.lock`, so only one process claims a file even where Windows lets two renames of
+ * it both land.
+ */
+export function importSpool(
+  hippoRoot: string,
+  tenantId: string,
+  log: Log,
+  deadline: number,
+  importOne: SpoolImporter,
+  fsx: SpoolFs = fs,
+): number {
   const dir = path.join(hippoRoot, SPOOL_DIR);
   if (!fsx.existsSync(dir)) return 0;
   const mine = takeLock(fsx, dir, log);

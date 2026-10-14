@@ -22,7 +22,9 @@ export interface SearchOptions {
   asOf?: string;
 }
 
-/** Synchronous BM25 search: relevance * strength * recency and the rank boosts, without embeddings or the outcome nudge. */
+/**
+ * Synchronous BM25 search: relevance * strength * recency and the rank boosts, without embeddings or the outcome nudge.
+ */
 export function search(query: string, entries: MemoryEntry[], options: SearchOptions = {}): SearchResult[] {
   const now = options.now ?? evalNow(); // honors HIPPO_FAKE_NOW (eval-only; see ablation.ts)
   const pool = currentEntries(entries, options);
@@ -49,5 +51,10 @@ export function search(query: string, entries: MemoryEntry[], options: SearchOpt
     scored.push({ entry: pool[i], score, bm25, cosine: 0, tokens: estimateTokens(pool[i].content) });
   }
   scored.sort(compareScoredResults);
-  return fitBudget(withDagChildren(dedupeExtracted(scored), pool), options.budget ?? DEFAULT_RECALL_BUDGET, options.minResults ?? 1, options.cost);
+  return fitBudget(
+    withDagChildren(dedupeExtracted(scored), pool),
+    options.budget ?? DEFAULT_RECALL_BUDGET,
+    options.minResults ?? 1,
+    options.cost,
+  );
 }

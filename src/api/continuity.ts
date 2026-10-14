@@ -84,16 +84,25 @@ export function workingMemoryPush(ctx: Context, opts: Omit<Parameters<typeof wmP
 }
 
 /** The caller's working memory entries, most important first. */
-export function workingMemoryRead(ctx: Context, opts: Omit<NonNullable<Parameters<typeof wmRead>[1]>, 'tenantId'>): WorkingMemoryItem[] {
+export function workingMemoryRead(
+  ctx: Context,
+  opts: Omit<NonNullable<Parameters<typeof wmRead>[1]>, 'tenantId'>,
+): WorkingMemoryItem[] {
   return wmRead(ctx.hippoRoot, { ...opts, tenantId: ctx.tenantId });
 }
 
 /** Delete the caller's working memory entries; returns the count. */
-export function workingMemoryClear(ctx: Context, opts: Omit<NonNullable<Parameters<typeof wmClear>[1]>, 'tenantId'>): number {
+export function workingMemoryClear(
+  ctx: Context,
+  opts: Omit<NonNullable<Parameters<typeof wmClear>[1]>, 'tenantId'>,
+): number {
   return wmClear(ctx.hippoRoot, { ...opts, tenantId: ctx.tenantId });
 }
 
 /** Flush the caller's working memory at session end; returns the count. */
-export function workingMemoryFlush(ctx: Context, opts: Omit<NonNullable<Parameters<typeof wmFlush>[1]>, 'tenantId'>): number {
+export function workingMemoryFlush(
+  ctx: Context,
+  opts: Omit<NonNullable<Parameters<typeof wmFlush>[1]>, 'tenantId'>,
+): number {
   return wmFlush(ctx.hippoRoot, { ...opts, tenantId: ctx.tenantId });
 }

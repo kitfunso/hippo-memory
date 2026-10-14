@@ -2,7 +2,8 @@
 // Field meanings, statuses and how to add a runtime: docs/integrations/agent-inventory.md.
 
 /** A host lifecycle moment hippo can capture from. */
-export type CaptureEvent = 'prompt' | 'tool-failure' | 'pre-compact' | 'post-compact' | 'session-start' | 'session-end' | 'turn-end' | 'reset';
+export type CaptureEvent =
+  'prompt' | 'tool-failure' | 'pre-compact' | 'post-compact' | 'session-start' | 'session-end' | 'turn-end' | 'reset';
 
 /** What hippo read from one host payload, before anything is written. */
 export interface CaptureInput {
@@ -76,7 +77,10 @@ export function readClaudeCodePreCompact(
   }
   const base = { runtime, event: 'pre-compact' as const };
   if (empty) {
-    return { status: 'received', input: { ...base, manual: true, sessionId: null, cwd: null, transcriptPath: null, trigger: null } };
+    return {
+      status: 'received',
+      input: { ...base, manual: true, sessionId: null, cwd: null, transcriptPath: null, trigger: null },
+    };
   }
   let payload: unknown;
   try {
@@ -89,7 +93,8 @@ export function readClaudeCodePreCompact(
     return { status: 'skipped', reason: 'malformed or incomplete PreCompact payload (missing string transcript_path)' };
   }
   const transcriptPath = payload.transcript_path;
-  // Path shape only: CLAUDE_CONFIG_DIR can move the transcript root, and a same-user process can already read every transcript.
+  // Path shape only: CLAUDE_CONFIG_DIR can move the transcript root, and a same-user process can already read every
+  // transcript.
   if (!/\.jsonl$/i.test(transcriptPath)) {
     return { status: 'skipped', reason: `payload transcript_path is not a .jsonl file: ${transcriptPath}` };
   }
@@ -106,7 +111,10 @@ export function readClaudeCodePreCompact(
   };
 }
 
-/** Reads VS Code's per-reply Stop payload. Pass the raw stdin: stdin.ts would give a Copilot CLI agentStop the same snake_case keys. */
+/**
+ * Reads VS Code's per-reply Stop payload. Pass the raw stdin: stdin.ts would give a Copilot CLI agentStop the same
+ * snake_case keys.
+ */
 export function readVscodeStop(stdinText: string | undefined, timedOut: boolean): CaptureReceipt {
   if (!stdinText || stdinText.trim() === '') {
     return timedOut
@@ -122,7 +130,11 @@ export function readVscodeStop(stdinText: string | undefined, timedOut: boolean)
   if (!isObjectLike(payload) || !('hook_event_name' in payload) || payload.hook_event_name !== 'Stop') {
     return { status: 'skipped', reason: 'not a VS Code Stop payload (no snake_case hook_event_name "Stop")' };
   }
-  if (!('transcript_path' in payload) || !isStringValue(payload.transcript_path) || !/\.jsonl$/i.test(payload.transcript_path)) {
+  if (
+    !('transcript_path' in payload) ||
+    !isStringValue(payload.transcript_path) ||
+    !/\.jsonl$/i.test(payload.transcript_path)
+  ) {
     return { status: 'skipped', reason: 'Stop payload names no .jsonl transcript_path' };
   }
   if (!('session_id' in payload) || !isStringValue(payload.session_id) || payload.session_id === '') {
@@ -143,7 +155,10 @@ export function readVscodeStop(stdinText: string | undefined, timedOut: boolean)
 }
 
 /** Reads a Claude Code PostCompact payload; it must name a session, but needs no transcript_path. */
-export function readClaudeCodePostCompact(stdinText: string | undefined, timedOut: boolean): CaptureReceipt<PostCompactInput> {
+export function readClaudeCodePostCompact(
+  stdinText: string | undefined,
+  timedOut: boolean,
+): CaptureReceipt<PostCompactInput> {
   const empty = !stdinText || stdinText.trim() === '';
   if (timedOut && empty) {
     return { status: 'unavailable', reason: 'no PostCompact payload arrived before the stdin wait window closed' };
@@ -154,7 +169,12 @@ export function readClaudeCodePostCompact(stdinText: string | undefined, timedOu
   } catch {
     // Non-JSON stdin leaves payload undefined, which the shape check rejects.
   }
-  if (!isObjectLike(payload) || !('session_id' in payload) || !isStringValue(payload.session_id) || payload.session_id === '') {
+  if (
+    !isObjectLike(payload) ||
+    !('session_id' in payload) ||
+    !isStringValue(payload.session_id) ||
+    payload.session_id === ''
+  ) {
     return { status: 'skipped', reason: 'no PostCompact payload naming a session' };
   }
   return {
@@ -165,9 +185,11 @@ export function readClaudeCodePostCompact(stdinText: string | undefined, timedOu
       manual: false,
       sessionId: payload.session_id,
       cwd: 'cwd' in payload && isStringValue(payload.cwd) ? payload.cwd : null,
-      transcriptPath: 'transcript_path' in payload && isStringValue(payload.transcript_path) ? payload.transcript_path : null,
+      transcriptPath:
+        'transcript_path' in payload && isStringValue(payload.transcript_path) ? payload.transcript_path : null,
       trigger: 'trigger' in payload && isStringValue(payload.trigger) ? payload.trigger : null,
-      compactSummary: 'compact_summary' in payload && isStringValue(payload.compact_summary) ? payload.compact_summary : null,
+      compactSummary:
+        'compact_summary' in payload && isStringValue(payload.compact_summary) ? payload.compact_summary : null,
     },
   };
 }
@@ -185,7 +207,10 @@ export function readSessionEnd(
   }
   const base = { runtime, event: 'session-end' as const };
   if (empty) {
-    return { status: 'received', input: { ...base, manual: true, sessionId: null, cwd: null, transcriptPath: null, trigger: null } };
+    return {
+      status: 'received',
+      input: { ...base, manual: true, sessionId: null, cwd: null, transcriptPath: null, trigger: null },
+    };
   }
   let payload: unknown;
   try {
@@ -202,9 +227,15 @@ export function readSessionEnd(
     input: {
       ...base,
       manual: false,
-      sessionId: 'session_id' in payload && isStringValue(payload.session_id) && payload.session_id !== '' ? payload.session_id : null,
+      sessionId:
+        'session_id' in payload && isStringValue(payload.session_id) && payload.session_id !== ''
+          ? payload.session_id
+          : null,
       cwd: 'cwd' in payload && isStringValue(payload.cwd) ? payload.cwd : null,
-      transcriptPath: 'transcript_path' in payload && isStringValue(payload.transcript_path) && payload.transcript_path !== '' ? payload.transcript_path : null,
+      transcriptPath:
+        'transcript_path' in payload && isStringValue(payload.transcript_path) && payload.transcript_path !== ''
+          ? payload.transcript_path
+          : null,
       // Both hosts name a session end's trigger `reason`.
       trigger: 'reason' in payload && isStringValue(payload.reason) ? payload.reason : null,
     },

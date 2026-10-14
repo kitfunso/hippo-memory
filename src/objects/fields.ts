@@ -1,4 +1,5 @@
-// Field checks the typed objects share. The module passes each error text in full, because the wording differs per type.
+// Field checks the typed objects share. The module passes each error text in full, because the wording differs per
+// type.
 
 import { BadRequestError } from '../core/api-errors.js';
 
@@ -8,7 +9,10 @@ export interface LineMessages {
   readonly tooLong: string;
 }
 
-/** A one-line name such as a repo or a customer: trimmed first, because the trimmed value is what gets stored and matched. */
+/**
+ * A one-line name such as a repo or a customer: trimmed first, because the trimmed value is what gets stored and
+ * matched.
+ */
 export function requireLine(value: string, max: number, m: LineMessages): string {
   const line = (value ?? '').trim();
   if (line.length === 0) throw new BadRequestError(m.required);

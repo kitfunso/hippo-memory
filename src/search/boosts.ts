@@ -17,7 +17,8 @@ const EXTRACTION_TAG_BOOST = 1.3;
 const OUTCOME_NUDGE_SLOPE = 0.15;
 const OUTCOME_NUDGE_MIN = 0.85;
 const OUTCOME_NUDGE_MAX = 1.15;
-// Strength and recency enter the rank as floor + span * signal, so a weak or old memory keeps most of its lexical score.
+// Strength and recency enter the rank as floor + span * signal, so a weak or old memory keeps most of its lexical
+// score.
 export const STRENGTH_RANK_FLOOR = 0.5;
 export const STRENGTH_RANK_SPAN = 0.5;
 const RECENCY_RANK_FLOOR = 0.8;
