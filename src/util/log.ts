@@ -106,9 +106,9 @@ export function errorMessage(cause: unknown): string {
 }
 
 /** One post-compact failure, told once to the hook's output (`say`) and once to the structured log. */
-export function reportCompactionFailure(say: (message: string) => void, step: string, reason: string): void {
+export function reportCompactionFailure(say: (message: string) => void, step: string, reason: string, fields?: LogFields): void {
   say(`${step} failed: ${reason}`);
-  log.error(`post-compact: ${step} failed: ${reason}`);
+  log.error(`post-compact: ${step} failed: ${reason}`, fields);
 }
 
 /** The string `code` of a caught value (an errno name such as EACCES), or '' when it has none. */

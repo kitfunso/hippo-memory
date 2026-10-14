@@ -15,7 +15,7 @@ import { requireInit } from './shared.js';
 import { fmt } from './print.js';
 import { type CliFlags, type CommandContext, boolFlag, numberFlag, stringFlagOrExit } from './flag-values.js';
 import { errorMessage } from '../util/log.js';
-import { CliExit } from './exit.js';
+import { CliExit, fail } from './exit.js';
 
 const HIT_TOP_K = 10;
 const MAX_FAILING_SHOWN = 10;
@@ -59,8 +59,7 @@ async function cmdEval(
   }
 
   if (minMrr !== null && summary.meanMrr < minMrr) {
-    printError(`MRR ${fmt(summary.meanMrr, 4)} below threshold ${minMrr}`);
-    throw new CliExit(1);
+    fail(`MRR ${fmt(summary.meanMrr, 4)} below threshold ${minMrr}`);
   }
 
   if (comparePath) printEvalCompare(summary, comparePath, asJson);
@@ -142,13 +141,11 @@ async function runEvalSuite(hippoRoot: string, flags: CliFlags, asJson: boolean,
 /** Loads the corpus file, exiting with the usage line or the read error when there is none to score. */
 function readCorpus(corpusPath: string | null): EvalCase[] {
   if (!corpusPath) {
-    printError('Usage: hippo eval <corpus.json>  OR  hippo eval --suite [--save-baseline]  OR  hippo eval --bootstrap');
-    throw new CliExit(1);
+    fail('Usage: hippo eval <corpus.json>  OR  hippo eval --suite [--save-baseline]  OR  hippo eval --bootstrap');
   }
 
   if (!fs.existsSync(corpusPath)) {
-    printError(`Corpus file not found: ${corpusPath}`);
-    throw new CliExit(1);
+    fail(`Corpus file not found: ${corpusPath}`);
   }
 
   let cases: EvalCase[];
@@ -157,8 +154,7 @@ function readCorpus(corpusPath: string | null): EvalCase[] {
     cases = Array.isArray(raw) ? raw : raw.cases;
     if (!Array.isArray(cases)) throw new Error('Corpus JSON must be an array or { cases: [...] }');
   } catch (err) {
-    printError(`Failed to read corpus: ${errorMessage(err)}`);
-    throw new CliExit(1);
+    fail(`Failed to read corpus: ${errorMessage(err)}`);
   }
   return cases;
 }
@@ -204,15 +200,13 @@ function printEvalSummary(summary: EvalSummary, showCases: boolean): void {
 
 function printEvalCompare(summary: EvalSummary, comparePath: string, asJson: boolean): void {
   if (!fs.existsSync(comparePath)) {
-    printError(`Baseline file not found: ${comparePath}`);
-    throw new CliExit(1);
+    fail(`Baseline file not found: ${comparePath}`);
   }
   let baseline: EvalSummary;
   try {
     baseline = JSON.parse(fs.readFileSync(comparePath, 'utf8'));
   } catch (err) {
-    printError(`Failed to parse baseline: ${errorMessage(err)}`);
-    throw new CliExit(1);
+    fail(`Failed to parse baseline: ${errorMessage(err)}`);
   }
   const cmp = compareSummaries(baseline, summary);
 

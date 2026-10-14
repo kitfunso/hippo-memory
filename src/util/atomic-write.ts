@@ -1,7 +1,7 @@
 // One way to replace a file a user or another program depends on: write a temp file beside it, then rename over it.
 import * as fs from 'fs';
 import * as path from 'path';
-import { errorMessage, log } from './log.js';
+import { errorMessage, log, errorFields } from './log.js';
 
 const RENAME_RETRY_MS = 1000;
 const WINDOWS_RENAME_REFUSALS = ['EPERM', 'EACCES', 'EBUSY'];
@@ -51,7 +51,7 @@ function removeTemp(tmp: string): void {
   try {
     fs.rmSync(tmp, { force: true });
   } catch (err) {
-    log.warn(`could not remove the temporary file ${tmp}: ${errorMessage(err)}`);
+    log.warn(`could not remove the temporary file ${tmp}: ${errorMessage(err)}`, errorFields(err));
   }
 }
 
@@ -78,7 +78,7 @@ function flushFolder(dir: string): void {
       fs.closeSync(fd);
     }
   } catch (err) {
-    log.warn(`could not flush the folder ${dir} to disk after replacing a file in it: ${errorMessage(err)}`);
+    log.warn(`could not flush the folder ${dir} to disk after replacing a file in it: ${errorMessage(err)}`, errorFields(err));
   }
 }
 
@@ -130,7 +130,8 @@ export function writeFileAtomic(file: string, text: string, opts: { readonly dur
   } catch (err) {
     if (!(err instanceof Error) || !REPLACE_REFUSALS.includes(errnoCode(err))) throw err;
     log.warn(
-      `${target} could not be replaced by a rename (${errnoCode(err)}), so it is written in place: not atomic, a crash mid-write can leave it truncated`
+      `${target} could not be replaced by a rename (${errnoCode(err)}), so it is written in place: not atomic, a crash mid-write can leave it truncated`,
+      errorFields(err),
     );
     writeInPlace(target, text);
   }

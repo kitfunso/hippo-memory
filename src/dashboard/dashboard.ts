@@ -156,7 +156,7 @@ function handleRead(ctx: RouteContext, segments: string[]): boolean {
     const entry = readEntry(hippoRoot, parseMemoryId(a), tenantId);
     if (entry === null || !isLiveMemory(entry)) return sendOrNotFound(res, null);
     const snapshotId = snapshots.get(tenantId, fresh).id;
-    const embedded = snapshots.embeddedIds()?.has(entry.id) ?? false;
+    const embedded = snapshots.isEmbedded(entry.id);
     return sendOrNotFound(res, buildMemoryDetail(hippoRoot, tenantId, entry, { snapshotId, nowMs: ctx.now(), embedded }));
   }
   if (head === 'search' && segments.length === 2) {
@@ -204,7 +204,7 @@ async function handlePost(ctx: RouteContext, segments: string[]): Promise<boolea
   if (result.changed) snapshots.invalidate();
   if (result.entry) {
     // The write is committed, so a rebuild failure must not turn it into a 500: the next read rebuilds.
-    const embedded = snapshots.embeddedIds()?.has(result.entry.id) ?? false;
+    const embedded = snapshots.isEmbedded(result.entry.id);
     const detail = buildMemoryDetail(hippoRoot, tenantId, result.entry, { snapshotId: snapshots.currentId(), nowMs: ctx.now(), embedded });
     jsonResponse(res, detail, result.status);
   } else {

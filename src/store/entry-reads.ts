@@ -513,3 +513,43 @@ export function loadCurrentDistilledEntries(hippoRoot: string): MemoryEntry[] {
     return rows.map(rowToEntry);
   }, openStore);
 }
+
+/** Row traits any one of which lets a row through loadEntriesWithSignals. */
+export interface EntrySignals {
+  tags: readonly string[];
+  sourcePrefix: string;
+  minRetrievals: number;
+  valences: readonly string[];
+}
+
+/** Rows holding at least one signal, in loadAllEntries' order; omitting `tenantId` reads every tenant. A superset: callers re-check each row. */
+export function loadEntriesWithSignals(hippoRoot: string, signals: EntrySignals, tenantId?: string): MemoryEntry[] {
+  // A backslash may hide an escaped tag from instr, so such rows always pass; LIKE folds case, so the prefix match is wider than startsWith.
+  const anyOf = [
+    'pinned != 0', 'retrieval_count >= ?', `emotional_valence IN (${placeholders(signals.valences.length)})`,
+    "source LIKE ? ESCAPE '\\'", "instr(tags_json, '\\') > 0", ...signals.tags.map(() => 'instr(tags_json, ?) > 0'),
+  ];
+  const params = [signals.minRetrievals, ...signals.valences, `${escapeLike(signals.sourcePrefix)}%`, ...signals.tags.map((t) => JSON.stringify(t))];
+  const tenant = tenantId !== undefined ? 'tenant_id = ? AND ' : '';
+  return onHandle(hippoRoot, (db) => {
+    // SAFETY: selects exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
+    const rows = db.prepare(
+      `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE ${tenant}(${anyOf.join(' OR ')}) ORDER BY created ASC, id ASC`,
+    ).all(...(tenantId !== undefined ? [tenantId] : []), ...params) as MemoryRow[];
+    return rows.map(rowToEntry);
+  }, openStore);
+}
+
+/** A tenant's rows from `origins` that nothing superseded and that are neither raw nor archived, in loadAllEntries' order. */
+export function loadCurrentEntriesFromOrigins(hippoRoot: string, tenantId: string, origins: readonly string[]): MemoryEntry[] {
+  return onHandle(hippoRoot, (db) => {
+    // SAFETY: selects exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
+    const rows = db.prepare(
+      `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories
+       WHERE tenant_id = ? AND ${originInSql(origins)} AND COALESCE(superseded_by, '') = ''
+         AND COALESCE(kind, 'distilled') NOT IN ('raw', 'archived')
+       ORDER BY created ASC, id ASC`,
+    ).all(tenantId, ...origins) as MemoryRow[];
+    return rows.map(rowToEntry);
+  }, openStore);
+}

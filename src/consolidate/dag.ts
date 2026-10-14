@@ -144,7 +144,7 @@ async function summarizeCluster(
   } catch (err) {
     if (err instanceof RejectedValueError) {
       result.rejected++;
-      log.warn(`buildDag: cluster "${cluster.label}" skipped: summary matches a rejected value`);
+      log.warn(`buildDag: cluster "${cluster.label}" skipped: summary matches a rejected value`, errorFields(err));
       return;
     }
     throw err;
@@ -382,7 +382,7 @@ async function profileCluster(
   } catch (err) {
     if (err instanceof RejectedValueError) {
       result.rejected++;
-      log.warn(`buildEntityProfiles: cluster "${cluster.label}" skipped: profile matches a rejected value`);
+      log.warn(`buildEntityProfiles: cluster "${cluster.label}" skipped: profile matches a rejected value`, errorFields(err));
       return;
     }
     throw err;

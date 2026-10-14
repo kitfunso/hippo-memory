@@ -73,7 +73,7 @@ function markerKind(marker: string): string {
   try {
     return readFileSync(marker, 'utf8').trim() || 'unknown';
   } catch (err) {
-    log.debug(`${marker} is unreadable, so its store kind reads as unknown: ${errorMessage(err)}`);
+    log.warn(`${marker} is unreadable, so its store kind reads as unknown: ${errorMessage(err)}`, errorFields(err));
     return 'unknown';
   }
 }

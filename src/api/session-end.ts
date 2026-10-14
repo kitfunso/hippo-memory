@@ -137,7 +137,11 @@ export async function sessionEndWork<Scan>(w: SessionEndWork<Scan>): Promise<voi
   const rereadLog = await bookSessionRereads(w.contextFor(w.hippoRoot), w.transcriptPath, w.sessionId)
     .catch((err) => [`re-read count failed: ${errorMessage(err)}`]);
   // Sleep starts the log file afresh, so the lines go in after it; on exit too, in case sleep exits the process.
-  const flushRereadLog = (): void => { for (const line of rereadLog.splice(0)) w.log(line); };
+  // A flushed log drops its exit listener, so a long-lived host does not gain one per session; it stays only while lines wait.
+  const flushRereadLog = (): void => {
+    process.off('exit', flushRereadLog);
+    for (const line of rereadLog.splice(0)) w.log(line);
+  };
   process.once('exit', flushRereadLog);
   // A folder with neither a project nor a global store must not get one made.
   const store = w.storeRoot();

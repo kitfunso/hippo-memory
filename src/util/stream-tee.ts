@@ -1,5 +1,5 @@
 import * as fs from 'fs';
-import { errorMessage, log } from './log.js';
+import { errorMessage, log, errorFields } from './log.js';
 
 // Node's `write` is overloaded (`(chunk, cb?)` vs `(chunk, encoding, cb?)`); this is the union of both parameter lists.
 type StreamWriteArgs = [
@@ -19,7 +19,7 @@ export function teeStdStreams(logFile: string): () => void {
     } catch (err) {
       if (warned) return;
       warned = true;
-      log.warn(`log file ${logFile} is no longer writable; output continues without it: ${errorMessage(err)}`);
+      log.warn(`log file ${logFile} is no longer writable; output continues without it: ${errorMessage(err)}`, errorFields(err));
     }
   };
   const wrapWrite = (origWrite: typeof process.stdout.write): typeof process.stdout.write => {

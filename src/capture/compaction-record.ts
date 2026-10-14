@@ -8,7 +8,7 @@ import {
 } from '../store/compactions-record.js';
 import { resolveTenantId } from '../store/tenant.js';
 import { maskEmails, redactSecretsStrict } from '../util/secret-detect.js';
-import { errorMessage, reportCompactionFailure } from '../util/log.js';
+import { errorFields, errorMessage, reportCompactionFailure } from '../util/log.js';
 import { readTranscriptTail, truncateCodePointSafe } from '../util/transcript-tail.js';
 
 /** Tested verbatim: Claude Code hands PreCompact stdout to the summariser as instructions. */
@@ -68,7 +68,7 @@ function spoolSummary(
     result.deferred = true;
     log(`store busy, summary spooled: ${reason}`);
   } catch (spoolErr) {
-    reportCompactionFailure(log, 'spool', errorMessage(spoolErr));
+    reportCompactionFailure(log, 'spool', errorMessage(spoolErr), errorFields(spoolErr));
   }
 }
 

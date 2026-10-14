@@ -3,10 +3,9 @@
 import * as processesModule from '../objects/processes.js';
 import * as policiesModule from '../objects/policies.js';
 import * as skillsModule from '../objects/skills.js';
-import { printError } from './output.js';
 import { isStringFlag, nonEmptyStringFlag, type CliFlags } from './flag-values.js';
 import { errorMessage } from '../util/log.js';
-import { CliExit } from './exit.js';
+import { fail } from './exit.js';
 import { requiredText, versionedVerbs, type VersionedKind } from './versioned-verbs.js';
 
 type Process = processesModule.Process;
@@ -19,8 +18,7 @@ function collectProcessSteps(stepRaw: string | boolean | string[] | undefined): 
   if (Array.isArray(stepRaw)) return stepRaw;
   if (isStringFlag(stepRaw)) return [stepRaw];
   if (stepRaw === true) {
-    printError('--step requires a value, e.g. hippo process new "<name>" --step "do X".');
-    throw new CliExit(1);
+    fail('--step requires a value, e.g. hippo process new "<name>" --step "do X".');
   }
   return [];
 }
@@ -89,16 +87,14 @@ function printPolicyRow(p: Policy): void {
 function policyAsOf(hippoRoot: string, tenantId: string, args: string[], flags: CliFlags): void {
   const dateRaw = args[1];
   if (!dateRaw) {
-    printError('Usage: hippo policy asof <iso-date> [--name "<policy>"]');
-    throw new CliExit(1);
+    fail('Usage: hippo policy asof <iso-date> [--name "<policy>"]');
   }
   const name = nonEmptyStringFlag(flags, 'name');
   let results;
   try {
     results = policiesModule.loadPoliciesAsOf(hippoRoot, tenantId, dateRaw, { name });
   } catch (e) {
-    printError(errorMessage(e));
-    throw new CliExit(1);
+    fail(errorMessage(e));
   }
   if (results.length === 0) {
     console.log(`No active policies in force at ${dateRaw}${name ? ` for "${name}"` : ''}.`);

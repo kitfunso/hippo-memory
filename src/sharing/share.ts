@@ -6,7 +6,7 @@ import * as path from 'path';
 import { MemoryEntry, generateId, COMPACTION_MEMORY_TAG } from '../core/memory.js';
 import { AGENT_MEMORY_SOURCE_PREFIX, AGENT_MEMORY_TAGS } from '../core/agent-memory-tools.js';
 import { writeEntriesSkippingRejected, writeEntry } from '../store/entry-writes.js';
-import { loadAllEntries, loadEntryTextKeys, readEntry } from '../store/entry-reads.js';
+import { loadAllEntries, loadEntriesWithSignals, loadEntryTextKeys, readEntry, type EntrySignals } from '../store/entry-reads.js';
 import { tallySources } from '../store/candidates.js';
 import { isPersonalScope } from '../core/recall-scope.js';
 import { fallbackOrigin } from '../core/project-identity.js';
@@ -53,6 +53,14 @@ export const NO_MERGE_TAGS: ReadonlySet<string> = new Set([
 
 /** The transfer score a memory needs before sleep or `hippo share --auto` copies it to the global store. */
 export const AUTO_SHARE_MIN_SCORE = 0.6;
+
+/** Every trait that lifts transferScore above 0.5 or makes autoShare skip a row before scoring it. */
+const AUTO_SHARE_SIGNALS: EntrySignals = {
+  tags: [...TRANSFERABLE_TAGS, ...NEVER_AUTO_SHARE_TAGS],
+  sourcePrefix: AGENT_MEMORY_SOURCE_PREFIX,
+  minRetrievals: 3,
+  valences: ['negative', 'critical'],
+};
 
 /** Estimate how well a memory would transfer to other projects.
  *  Returns 0..1 where >0.5 = good candidate for sharing. */
@@ -252,7 +260,10 @@ export function autoShare(
 ): MemoryEntry[] {
   const { minScore = AUTO_SHARE_MIN_SCORE, dryRun = false } = options;
 
-  const localEntries = loadAllEntries(localRoot, options.tenantId);
+  // A row with none of these signals scores at most 0.5, so above that bar only signal rows can share or count as never-auto-share skips.
+  const localEntries = minScore > 0.5
+    ? loadEntriesWithSignals(localRoot, AUTO_SHARE_SIGNALS, options.tenantId)
+    : loadAllEntries(localRoot, options.tenantId);
   initGlobal();
   const globalRoot = getGlobalRoot();
   // Host-wide read. The global store IS the union across all tenants;

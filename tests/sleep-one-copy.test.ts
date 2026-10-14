@@ -13,6 +13,11 @@ import { computeAmbientState } from '../src/core/ambient.js';
 import { _resetAblationCacheForTests } from '../src/core/ablation.js';
 import type { StoreContext } from '../src/api/index.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+import { MEMORY_SELECT_COLUMNS } from '../src/store/rows.js';
+import { countMatching, recordStatementsAsync } from './_helpers/count-statements.js';
+
+/** loadAllEntries' statement with no tenant: every full row of the store. */
+const HOST_WIDE_READ = `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories ORDER BY created ASC, id ASC`;
 
 const roots: string[] = [];
 
@@ -92,5 +97,25 @@ describe('sleep reads the store once after consolidation', () => {
     const after = loadAllEntries(root);
     expect(after.some((e) => e.id === junk.id)).toBe(false);
     expect(result.ambient).toEqual(computeAmbientState(after.filter((e) => !e.superseded_by)));
+  });
+
+  it('adds no whole-store read for the share phase', async () => {
+    const home = mkdtempSync(join(tmpdir(), 'hippo-one-copy-home-'));
+    roots.push(home);
+    vi.stubEnv('HIPPO_HOME', home);
+    vi.stubEnv('HIPPO_FAKE_NOW', '2026-06-01T12:00:00.000Z');
+    _resetAblationCacheForTests();
+    const wholeReads = async (noShare: boolean): Promise<number> => {
+      const root = newRoot();
+      for (const text of ['the deploy runs on friday', 'billing is owned by alice', 'staging restarts on sunday']) {
+        writeEntry(root, createMemory(text, { tags: ['ops'] }));
+      }
+      const { result, statements } = await recordStatementsAsync(() => runSleep(ctxFor(root), { noShare }));
+      expect(result.shared).toBeUndefined();
+      return countMatching(statements, HOST_WIDE_READ);
+    };
+    const withoutShare = await wholeReads(true);
+    expect(withoutShare).toBeGreaterThan(0);
+    expect(await wholeReads(false)).toBe(withoutShare);
   });
 });

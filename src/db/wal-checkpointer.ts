@@ -1,7 +1,7 @@
 // A served store's WAL is checkpointed on a worker thread: the fsync calls of a checkpoint would otherwise stall every request on the event loop.
 import * as path from 'node:path';
 import { Worker } from 'node:worker_threads';
-import { errorMessage, log } from '../util/log.js';
+import { errorFields, errorMessage, log } from '../util/log.js';
 import { DEFAULT_BUSY_WAIT_MS } from './busy.js';
 
 // WAL pages at which a connection checkpoints inside its own commit.
@@ -84,7 +84,7 @@ export function startWalCheckpointer(dbPath: string): WalCheckpointer {
     });
     started.on('error', (err) => {
       end();
-      log.warn(`background checkpoint of ${key} stopped (${errorMessage(err)}); each connection checkpoints inside its own commit again`);
+      log.warn(`background checkpoint of ${key} stopped (${errorMessage(err)}); each connection checkpoints inside its own commit again`, errorFields(err));
     });
     exited = new Promise<void>((resolve) => { started.once('exit', () => resolve()); });
     return started;

@@ -11,7 +11,7 @@ import { type CliFlags, parseBudgetFlag, type CommandContext, flagIsTrue, string
 import { requireInit } from './shared.js';
 import { captureConsole } from './print.js';
 import { CONTENT_PREVIEW_CHARS } from '../util/token-text.js';
-import { CliExit } from './exit.js';
+import { CliExit, fail } from './exit.js';
 
 const TREE_CHILD_PREVIEW_CHARS = 70;
 const TREE_LEAF_PREVIEW_CHARS = 60;
@@ -187,8 +187,7 @@ async function cmdDrillDown(hippoRoot: string, tenantId: string, summaryId: stri
 export async function handleDrill({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
   const summaryId = args[0];
   if (!summaryId) {
-    printError('Usage: hippo drill <summary-id> [--limit N] [--budget N]');
-    throw new CliExit(1);
+    fail('Usage: hippo drill <summary-id> [--limit N] [--budget N]');
   }
   await cmdDrillDown(hippoRoot, tenantId, summaryId, flags);
 }
@@ -196,8 +195,7 @@ export async function handleDrill({ hippoRoot, tenantId, args, flags }: CommandC
 export async function handleAssemble({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
   const sessionId = stringFlag(flags, 'session') ?? args[0];
   if (!sessionId) {
-    printError('Usage: hippo assemble --session <id> [--budget N] [--fresh-tail N] [--no-summarize-older] [--json]');
-    throw new CliExit(1);
+    fail('Usage: hippo assemble --session <id> [--budget N] [--fresh-tail N] [--no-summarize-older] [--json]');
   }
   await cmdAssemble(hippoRoot, tenantId, sessionId, flags);
 }

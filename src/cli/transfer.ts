@@ -32,7 +32,7 @@ import {
   type CliFlags, type CommandContext, boolFlag, flagIsTrue, isStringFlag, nonEmptyStringFlag, numberFlag, stringFlagOrExit, stringListFlag,
 } from './flag-values.js';
 import { CONTENT_PREVIEW_CHARS, DATE_PREFIX_CHARS } from '../util/token-text.js';
-import { CliExit } from './exit.js';
+import { CliExit, fail } from './exit.js';
 
 const STDERR_PREVIEW_CHARS = 80;
 const MAX_ENTRIES_SHOWN = 10;
@@ -51,20 +51,17 @@ function watchedCommand(args: readonly string[], flags: CliFlags): WatchedComman
   if (flags['shell'] !== undefined) {
     const line = nonEmptyStringFlag(flags, 'shell');
     if (line === undefined) {
-      printError(WATCH_USAGE);
-      throw new CliExit(1);
+      fail(WATCH_USAGE);
     }
     // The shell is the feature here: the user's own command line, pipes and && included, opted into by name; argv runs with no shell.
     return { argv: [line], shell: true };
   }
   if (args.length === 0) {
-    printError(WATCH_USAGE);
-    throw new CliExit(1);
+    fail(WATCH_USAGE);
   }
   // A quoted 1.x command line would now run as one program name, so it is refused rather than guessed at.
   if (args.length === 1 && /\s/.test(args[0]!)) {
-    printError(`hippo watch: "${args[0]}" is one argument with spaces. Use \`hippo watch -- cmd args\` or \`hippo watch --shell "<command line>"\`.`);
-    throw new CliExit(1);
+    fail(`hippo watch: "${args[0]}" is one argument with spaces. Use \`hippo watch -- cmd args\` or \`hippo watch --shell "<command line>"\`.`);
   }
   return { argv: [...args], shell: false };
 }
@@ -117,8 +114,7 @@ export async function handleLearn({ hippoRoot, tenantId, flags }: CommandContext
   requireInit(hippoRoot);
 
   if (!flags['git']) {
-    printError('Usage: hippo learn --git [--days <n>] [--repos <paths>]');
-    throw new CliExit(1);
+    fail('Usage: hippo learn --git [--days <n>] [--repos <paths>]');
   }
 
   const days = numberFlag(flags, 'days') ?? 7;
@@ -231,13 +227,11 @@ function importFromFile(targetRoot: string, args: string[], flags: CliFlags, opt
   const { filePath, importer, importerName } = pickImporter(args, flags);
 
   if (!filePath || !importer) {
-    printError('Usage: hippo import <--chatgpt|--claude|--cursor|--file|--markdown|--vault> <path>, or hippo import --agents [--dry-run]');
-    throw new CliExit(1);
+    fail('Usage: hippo import <--chatgpt|--claude|--cursor|--file|--markdown|--vault> <path>, or hippo import --agents [--dry-run]');
   }
 
   if (!fs.existsSync(filePath)) {
-    printError(`File not found: ${filePath}`);
-    throw new CliExit(1);
+    fail(`File not found: ${filePath}`);
   }
 
   const result = importer(filePath, importOptions);
@@ -314,24 +308,20 @@ async function importVaultFolder(
 
 function checkVaultArgs(folderPath: string, flags: CliFlags, useGlobal: boolean): void {
   if (!fs.existsSync(folderPath) || !fs.statSync(folderPath).isDirectory()) {
-    printError(`Vault folder not found (or not a directory): ${folderPath}`);
-    throw new CliExit(1);
+    fail(`Vault folder not found (or not a directory): ${folderPath}`);
   }
   if (useGlobal) {
-    printError('hippo import --vault does not support --global (raw rows are tenant-local).');
-    throw new CliExit(1);
+    fail('hippo import --vault does not support --global (raw rows are tenant-local).');
   }
   if (!isStringFlag(flags['name']) || !flags['name'].trim()) {
     // --name keys the destructive source-deletion sync; a folder-basename default lets same-basename vaults clobber
     // each other, and a valueless `--name` (boolean true) would silently import under vault:true:*.
-    printError('hippo import --vault requires --name <vault> (a non-empty identity key for source-deletion sync).');
-    throw new CliExit(1);
+    fail('hippo import --vault requires --name <vault> (a non-empty identity key for source-deletion sync).');
   }
   if (flags['scope'] !== undefined && (!isStringFlag(flags['scope']) || !flags['scope'].trim())) {
     // Same valueless-flag trap: a bare `--scope` must not become scope "true". The example uses the source-prefixed private form,
     // since a bare `private` scope is not treated as private by recall and importVault rejects it.
-    printError('hippo import --vault: --scope requires a value (e.g. --scope vault:private:notes).');
-    throw new CliExit(1);
+    fail('hippo import --vault: --scope requires a value (e.g. --scope vault:private:notes).');
   }
 }
 
@@ -356,8 +346,7 @@ function cmdPromote(hippoRoot: string, tenantId: string, id: string): void {
   requireInit(hippoRoot);
 
   if (!id) {
-    printError('Usage: hippo promote <id>');
-    throw new CliExit(1);
+    fail('Usage: hippo promote <id>');
   }
 
   const ctx = cliApiContext(hippoRoot, tenantId);
@@ -366,8 +355,7 @@ function cmdPromote(hippoRoot: string, tenantId: string, id: string): void {
     console.log(`Promoted ${id} to global store as ${result.globalId}`);
     console.log(`   Global store: ${getGlobalRoot()}`);
   } catch (err) {
-    printError(`Failed to promote: ${errorMessage(err)}`);
-    throw new CliExit(1);
+    fail(`Failed to promote: ${errorMessage(err)}`);
   }
 }
 
@@ -397,16 +385,14 @@ export async function handleWatch({ hippoRoot, tenantId, args, flags }: CommandC
 export async function handlePromote({ hippoRoot, tenantId, args }: CommandContext): Promise<void> {
   const id = args[0];
   if (!id) {
-    printError('Please provide a memory ID.');
-    throw new CliExit(1);
+    fail('Please provide a memory ID.');
   }
   const promoted = await runViaServerIfAvailable(hippoRoot, async (info, apiKey) => {
     try {
       const result = await client.promote(info.url, apiKey, id);
       console.log(`Promoted ${id} to global store as ${result.globalId}`);
     } catch (err) {
-      printError(`Failed to promote: ${errorMessage(err)}`);
-      throw new CliExit(1);
+      fail(`Failed to promote: ${errorMessage(err)}`);
     }
   });
   if (promoted) return;
@@ -449,13 +435,11 @@ export async function handleShare({ hippoRoot, tenantId, args, flags }: CommandC
         console.log(`Transfer score too low (${fmt(score)}). This memory looks project-specific.`);
         console.log('Use --force to share anyway.');
       } else {
-        printError(`Memory not found: ${shareId}`);
-        throw new CliExit(1);
+        fail(`Memory not found: ${shareId}`);
       }
     }
   } else {
-    printError('Usage: hippo share <memory_id> [--force] or hippo share --auto [--dry-run]');
-    throw new CliExit(1);
+    fail('Usage: hippo share <memory_id> [--force] or hippo share --auto [--dry-run]');
   }
 }
 
