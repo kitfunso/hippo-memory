@@ -6,7 +6,7 @@ import { printError } from './output.js';
 import { nonEmptyStringFlag, stringFlag, type CliFlags, type CommandContext } from './flag-values.js';
 import { requireInit } from './shared.js';
 import { closeObject, foundOrExit, idArgOrExit, listObjects, printLifecycleTail, type ObjectNames } from './object-verbs.js';
-import { CliExit } from './exit.js';
+import { CliExit, fail } from './exit.js';
 
 type VersionedRow = Parameters<typeof printLifecycleTail>[0] & { readonly id: number; readonly version: number };
 
@@ -91,8 +91,7 @@ function supersedeVersion<O extends VersionedRow, S extends string, B>(kind: Ver
   const id = idArgOrExit(args, kind.supersedeUsage, kind.names.idLabel);
   const body = kind.body(flags, 'supersede');
   if (body === undefined) {
-    printError(`hippo ${kind.names.cmd} supersede requires ${kind.bodyRequired} for the new version.`);
-    throw new CliExit(1);
+    fail(`hippo ${kind.names.cmd} supersede requires ${kind.bodyRequired} for the new version.`);
   }
   // The lookup only gives a missing id its not-found line; the save's own preflight is the authoritative active-state check.
   const existing = foundOrExit(kind.loadById(id), kind.names.noun, id);
@@ -105,8 +104,7 @@ function saveVersion<O extends VersionedRow, S extends string, B>(kind: Versione
   try {
     return kind.save(key, body, extractPathTags(process.cwd()), from);
   } catch (e) {
-    printError(errorMessage(e));
-    throw new CliExit(1);
+    fail(errorMessage(e));
   }
 }
 

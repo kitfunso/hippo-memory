@@ -11,7 +11,7 @@ import { rejectionGuardRefuses } from '../store/rejected-values.js';
 import { runWithRequestStores } from '../db/request-stores.js';
 import { loadConfig } from '../core/config.js';
 import { vetSecrets } from '../util/secret-detect.js';
-import { errorMessage, log } from '../util/log.js';
+import { errorMessage, log, errorFields } from '../util/log.js';
 import { type ImportResult, type ImportOptions } from './core.js';
 import { splitMarkdownFrontmatter, frontmatterList, parseWikilinks, collectMarkdownFiles } from './markdown-parse.js';
 import { realpathOrResolve } from '../util/real-path.js';
@@ -225,7 +225,7 @@ function readVaultNote(run: VaultImportRun, relpath: string): string | null {
     return fs.readFileSync(path.join(run.folderPath, relpath), 'utf8');
   } catch (err) {
     // One unreadable note (gone since the listing, or a transient IO error) must not abort the import; a re-run picks it up.
-    log.debug(`vault note skipped: ${relpath}: ${errorMessage(err)}`);
+    log.warnThenDebug(`vault-note-skipped:${run.folderPath}`, `vault note skipped: ${relpath}: ${errorMessage(err)}`, errorFields(err));
     run.tally.skipped++;
     return null;
   }
@@ -301,7 +301,7 @@ function parseJsonArrayLoose(value: string | null | undefined): string[] {
     const parsed: JsonValue = JSON.parse(value);
     return Array.isArray(parsed) ? parsed.filter(isJsonString) : [];
   } catch (err) {
-    log.debug(`import: unreadable tags_json read as no tags: ${errorMessage(err)}`);
+    log.warnThenDebug('import-tags-json-unreadable', `import: unreadable tags_json read as no tags: ${errorMessage(err)}`, errorFields(err));
     return [];
   }
 }

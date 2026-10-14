@@ -10,6 +10,7 @@ import { storedVectorIds } from '../src/db/vector-store.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { buildOverview } from '../src/dashboard/dashboard-queries.js';
 import { embed, isoAgo, makeStore, NOW, seed, type TmpStore } from './_helpers/dashboard-fixture.js';
+import { countMatching, recordStatements } from './_helpers/count-statements.js';
 
 let store: TmpStore;
 
@@ -155,5 +156,47 @@ describe('dashboard snapshot', () => {
     expect(snap.facts).toHaveLength(6);
     expect(JSON.stringify({ ...snap, memo: null, byKey: [...snap.byKey] })).toBe(JSON.stringify({ ...fromWholeRows, memo: null, byKey: [...fromWholeRows.byKey] }));
     expect(JSON.stringify(buildOverview(snap))).toBe(JSON.stringify(buildOverview(fromWholeRows)));
+  });
+
+  it('reads vectors only for its own tenant\'s rows, never the whole vector table', () => {
+    const root = store.hippoRoot;
+    const one = seed(root, 'embedded one');
+    seed(root, 'not embedded');
+    embed(root, [one.id]);
+    const rowsRead = (): number => {
+      const service = createSnapshotService(root, () => NOW);
+      try {
+        const log = recordStatements(() => service.get('default'));
+        expect(log.result.embeddingCoverage).toBe(0.5);
+        expect(countMatching(log.statements, /FROM memory_vectors$/)).toBe(0);
+        return log.rowsRead;
+      } finally {
+        service.close();
+      }
+    };
+    const before = rowsRead();
+    const other = seed(root, 'another tenant', { tenant_id: 'other' });
+    embed(root, [other.id, ...Array.from({ length: 40 }, (_, i) => `orphan-${i}`)]);
+    expect(rowsRead()).toBe(before);
+  });
+
+  it('answers the detail embedded flag from the vector table before a build, then as of the last build', () => {
+    const root = store.hippoRoot;
+    const live = seed(root, 'embedded live');
+    const plain = seed(root, 'not embedded');
+    const replaced = seed(root, 'embedded but replaced', { superseded_by: live.id });
+    embed(root, [live.id, replaced.id, 'orphan-id']);
+    const ids = [live.id, plain.id, replaced.id];
+    const service = createSnapshotService(root, () => NOW);
+    try {
+      expect([...ids, 'orphan-id'].map((id) => service.isEmbedded(id))).toEqual([true, false, true, true]);
+      service.get('default');
+      embed(root, [plain.id]);
+      expect(ids.map((id) => service.isEmbedded(id))).toEqual([true, false, true]);
+      service.get('default', true);
+      expect(ids.map((id) => service.isEmbedded(id))).toEqual([true, true, true]);
+    } finally {
+      service.close();
+    }
   });
 });

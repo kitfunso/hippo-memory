@@ -512,14 +512,20 @@ function tombstoneLoserValue(
   // Remove ALL live same-tenant rows whose digest matches (as reject-flow.ts rejectValue does), not just loserId; the O(N) scan is human-scale.
   // Tenant-scoped ONLY, since tombstones are; `keepId` is excluded even if its content matches, because the human chose to keep it.
   const loserTenantId = loserRow.tenant_id ?? DEFAULT_TENANT_ID;
-  // SAFETY: dupRows' shape matches the four columns named in the SELECT above.
+  // SHORTCUT: streams the tenant to hold only the matches; a stored digest column with a (tenant_id, digest) index would read just those.
+  // SAFETY: each row has the four columns named in the SELECT.
   const dupRows = db
     .prepare(`SELECT id, kind, content, scope FROM memories WHERE tenant_id = ? AND id != ? AND id != ?`)
-    .all(loserTenantId, t.loserId, t.keepId) as Array<{ id: string; kind: string; content: string; scope: string | null }>;
+    .iterate(loserTenantId, t.loserId, t.keepId) as Iterable<{ id: string; kind: string; content: string; scope: string | null }>;
+  const dups: Array<{ id: string; kind: string }> = [];
   for (const dup of dupRows) {
     if (rejectionDigest(dup.content) !== rejectedDigest) continue;
     // Another person's personal row is outside this resolver's reach, as it is outside their recall.
     if (isPersonalScope(dup.scope) && dup.scope !== loserRow.scope) continue;
+    dups.push({ id: dup.id, kind: dup.kind });
+  }
+  // Removed after the read ends, since deleting rows under an open cursor can skip or repeat rows.
+  for (const dup of dups) {
     if (dup.kind === 'raw') {
       archiveRawMemory(db, dup.id, { reason, who: actor });
       removal.extraRemovedRawIds.push(dup.id);

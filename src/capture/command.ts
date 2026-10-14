@@ -10,7 +10,7 @@ import { maskEmails, redactSecretsStrict } from '../util/secret-detect.js';
 import { withRejectionProbe } from '../store/rejection-probe.js';
 import { loadConfig } from '../core/config.js';
 import { classifyOriginProject, projectId, type ProjectRef, isInitialized } from '../core/project-identity.js';
-import { errorMessage, log } from '../util/log.js';
+import { errorMessage, log, errorFields } from '../util/log.js';
 import { teeStdStreams } from '../util/stream-tee.js';
 import { extractFromTexts, type ExtractedItem } from './extract.js';
 import { type SessionTurn, collectSessionTurns, sessionTail, resolveLastSessionTranscript } from './transcript.js';
@@ -72,7 +72,7 @@ function writeLogBanner(logFile: string): boolean {
       'utf8'
     );
   } catch (err) {
-    log.warn(`could not open log file ${logFile}: ${errorMessage(err)}`);
+    log.warn(`could not open log file ${logFile}: ${errorMessage(err)}`, errorFields(err));
     return false;
   }
   return true;

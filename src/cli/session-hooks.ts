@@ -40,7 +40,7 @@ import {
   payloadCwdRoot, runHookWithStores, inPilotHoldout, hostSessionId,
 } from './hook-runtime.js';
 import type { JsonValue } from '../util/json.js';
-import { CliExit } from './exit.js';
+import { CliExit, fail } from './exit.js';
 
 /** SessionStart(compact) injector: prints the task snapshot and session trail lost to compaction; no pinned memories (UserPromptSubmit re-injects them).
  * Every path exits 0: a malformed payload or store read failure degrades to empty stdout, never a throw. */
@@ -637,8 +637,7 @@ export async function handleCapture({ hippoRoot, tenantId, flags }: CommandConte
   }
 
   if (!captureSource) {
-    printError('Usage: hippo capture --stdin|--file <path>|--last-session [--transcript <path>] [--log-file <path>] [--dry-run] [--global]');
-    throw new CliExit(1);
+    fail('Usage: hippo capture --stdin|--file <path>|--last-session [--transcript <path>] [--log-file <path>] [--dry-run] [--global]');
   }
 
   // Bounded, and only when last-session has no explicit path: the

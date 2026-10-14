@@ -4,7 +4,6 @@ import { closeHippoDb, getHippoDbPath, openHippoDbReadOnly, type DatabaseSyncLik
 import { withReadSnapshot } from '../db/busy.js';
 import { pragmaDataVersion } from '../db/meta.js';
 import { tableExists } from '../db/tables.js';
-import { storedVectorIds } from '../db/vector-store.js';
 import type { ConfidenceInputs, Layer, MemoryEntry, MemoryKind, StrengthInputs } from '../core/memory.js';
 import { onHandle, openStore } from './open.js';
 import { QUARANTINE_SCOPE_PREFIX } from './quarantine.js';
@@ -101,10 +100,21 @@ export class DashboardConnection {
     return pragmaDataVersion(this.db);
   }
 
-  /** Ids with a stored vector: none before the connection opens, null on a store older than the vector table (schema v52). */
-  embeddedIds(): ReadonlySet<string> | null {
+  /** Ids of the tenant's rows with a stored vector: none before the connection opens, null on a store older than the vector table (schema v52). */
+  embeddedIds(tenantId: string): ReadonlySet<string> | null {
     if (this.db === null) return new Set();
-    return tableExists(this.db, 'memory_vectors') ? storedVectorIds(this.db) : null;
+    if (!tableExists(this.db, 'memory_vectors')) return null;
+    // SAFETY: the SELECT names the one TEXT id column.
+    const rows = this.db.prepare(
+      'SELECT m.id FROM memories m WHERE m.tenant_id = ? AND EXISTS (SELECT 1 FROM memory_vectors v WHERE v.memory_id = m.id)',
+    ).all(tenantId) as Array<{ id: string }>;
+    return new Set(rows.map((row) => row.id));
+  }
+
+  /** Whether `id` has a stored vector, whatever its tenant and whether or not a memory row holds it. */
+  hasVector(id: string): boolean {
+    if (this.db === null || !tableExists(this.db, 'memory_vectors')) return false;
+    return this.db.prepare('SELECT 1 FROM memory_vectors WHERE memory_id = ?').get(id) !== undefined;
   }
 
   close(): void {

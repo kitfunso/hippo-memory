@@ -26,7 +26,7 @@ import {
 import { requireInit } from './shared.js';
 import { recallEntryText, recallHeading, printActiveTaskSnapshot, printSessionEvents, printHandoff, captureConsole } from './print.js';
 import { hostSessionId, hookStoreRoot } from './hook-runtime.js';
-import { CliExit } from './exit.js';
+import { fail } from './exit.js';
 
 // JSON.stringify keeps quotes or parens in the matched phrase from blurring the line.
 function planningLine(p: PlanningFallacyOutput): string | null {
@@ -66,8 +66,7 @@ interface RecallLateFlags {
 
 function failWith(message: string): () => never {
   return () => {
-    printError(message);
-    throw new CliExit(1);
+    fail(message);
   };
 }
 
@@ -473,8 +472,7 @@ function recallJsonTail(fit: FittedRecall, includeContinuity: boolean | undefine
 export async function handleRecall({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
   const query = args.join(' ').trim();
   if (!query) {
-    printError('Please provide a search query.');
-    throw new CliExit(1);
+    fail('Please provide a search query.');
   }
   await cmdRecall(hookStoreRoot(hippoRoot), tenantId, query, flags);
 }

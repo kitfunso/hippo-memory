@@ -3,8 +3,7 @@
 import { resolveListLimit } from '../util/limits.js';
 import type { RecallSearchOpts } from '../api/recall-pipeline.js';
 import type { HippoConfig } from '../core/config.js';
-import { printError } from './output.js';
-import { CliExit } from './exit.js';
+import { fail } from './exit.js';
 
 export function isBooleanFlag(value: string | boolean | string[] | undefined): value is boolean {
   return typeof value === 'boolean';
@@ -30,14 +29,12 @@ export function parseBudgetFlag(value: string | boolean | string[] | undefined, 
   if (value === undefined) return fallback;
   // A value-less flag and a junk value are different typos; the --hops guard already splits them.
   if (!isStringFlag(value)) {
-    printError('--budget requires an integer value (e.g. --budget 1500).');
-    throw new CliExit(1);
+    fail('--budget requires an integer value (e.g. --budget 1500).');
   }
   // Number(), like the --hops guard: parseInt('12abc') is 12, silently accepting what this message rejects.
   const parsed = Number(value);
   if (!Number.isInteger(parsed) || parsed < 0) {
-    printError(`Invalid --budget: "${value}". Must be a non-negative integer.`);
-    throw new CliExit(1);
+    fail(`Invalid --budget: "${value}". Must be a non-negative integer.`);
   }
   return parsed;
 }
@@ -50,8 +47,7 @@ export function parsePositiveId(idRaw: string | undefined, label: string): numbe
   const s = String(idRaw ?? '').trim();
   const id = parseInt(s, 10);
   if (!/^\d+$/.test(s) || id <= 0 || !Number.isSafeInteger(id)) {
-    printError(`Invalid ${label} id: "${idRaw}" (expected a positive integer).`);
-    throw new CliExit(1);
+    fail(`Invalid ${label} id: "${idRaw}" (expected a positive integer).`);
   }
   return id;
 }
@@ -60,8 +56,7 @@ export function parseListLimit(flags: CliFlags): number {
   const limitRaw = flags['limit'];
   const limit = resolveListLimit(limitRaw !== undefined ? parseInt(String(limitRaw), 10) : undefined);
   if (limit === undefined) {
-    printError(`Invalid --limit: "${limitRaw}". Must be a positive integer.`);
-    throw new CliExit(1);
+    fail(`Invalid --limit: "${limitRaw}". Must be a positive integer.`);
   }
   return limit;
 }
@@ -94,8 +89,7 @@ export function numberFlag(flags: CliFlags, name: string): number | undefined {
   if (!isStringFlag(v)) return undefined;
   const parsed = Number(v);
   if (v.trim() === '' || !Number.isFinite(parsed)) {
-    printError(`Invalid --${name}: "${v}". Must be a number.`);
-    throw new CliExit(1);
+    fail(`Invalid --${name}: "${v}". Must be a number.`);
   }
   return parsed;
 }
@@ -123,8 +117,7 @@ export type EngineFlags = Pick<RecallSearchOpts, 'usePhysics' | 'physicsConfig' 
 export function parseAsOfFlag(flags: CliFlags): string | undefined {
   const asOf = stringFlag(flags, 'as-of');
   if (asOf !== undefined && Number.isNaN(new Date(asOf).getTime())) {
-    printError(`Error: --as-of value "${asOf}" is not a valid ISO date (e.g. 2026-04-22 or 2026-04-22T12:00:00Z).`);
-    throw new CliExit(1);
+    fail(`Error: --as-of value "${asOf}" is not a valid ISO date (e.g. 2026-04-22 or 2026-04-22T12:00:00Z).`);
   }
   return asOf;
 }
@@ -147,6 +140,6 @@ export function engineFlags(flags: CliFlags, config: HippoConfig): EngineFlags {
 export function stringFlagOrExit(flags: CliFlags, key: string): string | undefined {
   const v = flags[key];
   if (v === undefined) return undefined;
-  if (v === true || v === false || Array.isArray(v)) { printError(`--${key} requires a value`); throw new CliExit(1); }
+  if (v === true || v === false || Array.isArray(v)) fail(`--${key} requires a value`);
   return v.trim();
 }

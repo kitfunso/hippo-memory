@@ -8,7 +8,7 @@ import { type PhysicsConfig, DEFAULT_PHYSICS_CONFIG, mergePhysicsConfig } from '
 import { DEFAULT_HALF_LIFE_DAYS } from './memory.js';
 import type { PromptRecallMetric } from './prompt-recall.js';
 import { DEFAULT_LOCAL_BUMP, DEFAULT_RECALL_BUDGET } from './search-types.js';
-import { errorCode, errorMessage, log } from '../util/log.js';
+import { errorCode, errorMessage, log, errorFields } from '../util/log.js';
 import { isJsonObject, type JsonValue } from '../util/json.js';
 
 export type DecayBasis = 'clock' | 'session' | 'adaptive';
@@ -408,8 +408,9 @@ function fileStamp(file: string): string | null {
   } catch (err) {
     const code = errorCode(err);
     const message = `config: ${file} could not be reached, read as missing: ${errorMessage(err)}`;
-    if (code === 'EACCES' || code === 'EPERM') log.warnThenDebug(`config-unreachable:${file}:${code}`, message, { path: file, code });
-    else log.debug(message);
+    if (code === 'EACCES' || code === 'EPERM') log.warnThenDebug(`config-unreachable:${file}:${code}`, message, { path: file, code, ...errorFields(err) });
+    // Any other refusal (ENOTDIR, ELOOP) means the path is simply not there, so only a permission refusal is told.
+    else log.debug(message, errorFields(err));
     return null;
   }
 }
@@ -489,7 +490,8 @@ function sharedStoreKey(hippoRoot: string): string {
   try {
     real = fs.realpathSync.native(hippoRoot);
   } catch (err) {
-    log.debug(`sharedStore: realpath fell back to resolve for ${hippoRoot}: ${errorMessage(err)}`);
+    // A folder that does not exist yet has no real path, so the resolved one stands in.
+    log.debug(`sharedStore: realpath fell back to resolve for ${hippoRoot}: ${errorMessage(err)}`, errorFields(err));
     real = path.resolve(hippoRoot);
   }
   return process.platform === 'win32' ? real.toLowerCase() : real;
