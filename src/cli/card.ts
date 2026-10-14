@@ -50,7 +50,8 @@ function printCard(detail: CardDetail): void {
   if (runs.length > 0) {
     console.log('\n### Runs');
     for (const run of runs) {
-      console.log(`- run ${run.id}: ${run.runtime} started ${run.started}${run.ended ? ` ended ${run.ended} (${run.outcome})` : ' (open)'}`);
+      const ended = run.ended ? ` ended ${run.ended} (${run.outcome})` : ' (open)';
+      console.log(`- run ${run.id}: ${run.runtime} started ${run.started}${ended}`);
     }
   }
 
@@ -90,7 +91,17 @@ function cardRefusal(hippoRoot: string, tenantId: string, id: string): string {
 
 // One entry per subcommand: the flags handleCard actually reads for it, so a typo like
 // --depend-on fails fast instead of silently doing nothing.
-type CardSubcommand = 'create' | 'show' | 'list' | 'claim' | 'heartbeat' | 'block' | 'review' | 'complete' | 'reclaim' | 'comment';
+type CardSubcommand =
+  | 'create'
+  | 'show'
+  | 'list'
+  | 'claim'
+  | 'heartbeat'
+  | 'block'
+  | 'review'
+  | 'complete'
+  | 'reclaim'
+  | 'comment';
 
 const CARD_SUBCOMMAND_FLAGS = {
   create: ['title', 'repo', 'contract', 'budget', 'depends-on'],
@@ -188,7 +199,8 @@ function cardList(hippoRoot: string, tenantId: string, _args: string[], flags: C
     return;
   }
   for (const card of cards) {
-    console.log(`${card.id}\t${card.status}\t${card.title}${card.assigneeRuntime ? `\t(${card.assigneeRuntime})` : ''}`);
+    const assignee = card.assigneeRuntime ? `\t(${card.assigneeRuntime})` : '';
+    console.log(`${card.id}\t${card.status}\t${card.title}${assignee}`);
   }
 }
 
@@ -310,7 +322,8 @@ function cardComment(hippoRoot: string, tenantId: string, args: string[], flags:
   if (!id) {
     throw usageError('comment');
   }
-  // Only show and comment look the card up directly; claim/heartbeat/block/review/complete throw from the store instead.
+  // Only show and comment look the card up directly; claim/heartbeat/block/review/complete throw from the store
+  // instead.
   const ctx = cliApiContext(hippoRoot, tenantId);
   const card = cardsApi.cardLoad(ctx, id);
   if (!card) {

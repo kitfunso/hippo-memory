@@ -1,14 +1,39 @@
-// The hippo-memory/store-kit subpath: the contract for a second HippoStore (port types, row types, hippo.db's rule helpers),
+// The hippo-memory/store-kit subpath: the contract for a second HippoStore (port types, row types, hippo.db's rule
+// helpers),
 // so a store built on it applies hippo.db's rules with the same code.
 
 // An add-on serves from another database by passing serve() its own HippoStore.
 export {
-  hasGroup, sqliteStore,
-  type AmbientCandidateRequest, type ContextReads, type EntryRemoval, type EntryTarget, type EntryWrite, type EntryWrites, type HippoStore,
-  type KeyAudit, type KeyListQuery, type KeyMint, type KeyRevoke, type KeyWrites, type LastRecall, type LastRecallWrites, type OutcomeWrite,
-  type RawArchive, type RecallSearchArgs,
-  type RecallWrites, type SelfKeyMint, type StoreGroup, type StoreGroups, type SupersedeWrite, type VectorReads,
-  type VectorBackfillQuery, type VectorRowWrite, type VectorWrite, type VectorWriteResult, type VectorWrites,
+  hasGroup,
+  sqliteStore,
+  type AmbientCandidateRequest,
+  type ContextReads,
+  type EntryRemoval,
+  type EntryTarget,
+  type EntryWrite,
+  type EntryWrites,
+  type HippoStore,
+  type KeyAudit,
+  type KeyListQuery,
+  type KeyMint,
+  type KeyRevoke,
+  type KeyWrites,
+  type LastRecall,
+  type LastRecallWrites,
+  type OutcomeWrite,
+  type RawArchive,
+  type RecallSearchArgs,
+  type RecallWrites,
+  type SelfKeyMint,
+  type StoreGroup,
+  type StoreGroups,
+  type SupersedeWrite,
+  type VectorReads,
+  type VectorBackfillQuery,
+  type VectorRowWrite,
+  type VectorWrite,
+  type VectorWriteResult,
+  type VectorWrites,
 } from '../store/index.js';
 // An add-on store's entry writes apply an outcome, guard tombstones and check reach exactly as hippo.db does.
 export { entryAfterOutcome } from '../core/memory.js';
@@ -31,16 +56,29 @@ export type { OriginFilter, RecallScopeFilter, VectorCandidateSpec } from '../st
 export type { ContinuityKey } from '../store/sessions.js';
 export type { SessionEvent, TaskSnapshot } from '../store/rows.js';
 export type { SessionHandoff } from '../core/handoff.js';
-export type { AmbientLoadResult, AmbientRecallRequest, ContextCandidateFilter, RecentOrigins } from '../store/candidates.js';
+export type {
+  AmbientLoadResult,
+  AmbientRecallRequest,
+  ContextCandidateFilter,
+  RecentOrigins,
+} from '../store/candidates.js';
 export type { AmbientStoreFilter } from '../store/ambient.js';
 export type { AmbientTallies } from '../core/ambient.js';
 export type { TokenUse } from '../store/token-ledger.js';
 export type { EmbeddingIndexState } from '../store/vector-index.js';
 export type { PhysicsParticle } from '../core/physics.js';
 export { StoreBusyError } from '../store/port.js';
-// An add-on store encodes, decodes and ranks vectors and particles with hippo.db's own code, and drops the index by its rule,
+// An add-on store encodes, decodes and ranks vectors and particles with hippo.db's own code, and drops the index by its
+// rule,
 // so both stores keep the same bytes and return the same ids in the same order.
-export { decodeVector, EMBEDDING_MODEL_META_KEY, encodeVector, rankVectorRows, type VectorMatch, type VectorRow } from '../db/vector-store.js';
+export {
+  decodeVector,
+  EMBEDDING_MODEL_META_KEY,
+  encodeVector,
+  rankVectorRows,
+  type VectorMatch,
+  type VectorRow,
+} from '../db/vector-store.js';
 export { bufferToFloat32, float32ToBuffer } from '../util/vector-codec.js';
 export { replacesIndex } from '../store/vector-index.js';
 // An add-on's ContextReads applies hippo.db's scope, secret, tally and rarest-term rules with the same code.

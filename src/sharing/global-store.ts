@@ -41,17 +41,18 @@ export interface PromoteOptions {
   auditAs?: { tenantId: string; actor: string };
 }
 
-/** Copies a local memory to the global store and returns the copy, which gets a new `g_` id so it cannot collide. */
-export function promoteToGlobal(localRoot: string, id: string, opts?: PromoteOptions): MemoryEntry {
-  const entry = readEntry(localRoot, id, opts?.tenantId);
-  if (!entry) throw new NotFoundError(`Memory not found: ${id}`);
-
+function assertPromotable(id: string, entry: MemoryEntry): void {
   // Same quarantine veto as shareMemory; a promoted copy would have no quarantine record to review.
   if (isQuarantineScope(entry.scope)) {
-    throw new BadRequestError(`Refusing to promote ${id}: it is quarantined pending review. Approve it first via 'hippo quarantine approve ${id}'.`);
+    throw new BadRequestError(
+      `Refusing to promote ${id}: it is quarantined pending review. Approve it first via 'hippo quarantine approve ` +
+      `${id}'.`,
+    );
   }
   if (isPersonalScope(entry.scope ?? null)) {
-    throw new BadRequestError(`Refusing to promote ${id}: it is a personal memory and stays with its owner on this server.`);
+    throw new BadRequestError(
+      `Refusing to promote ${id}: it is a personal memory and stays with its owner on this server.`,
+    );
   }
 
   // Secret producer veto: promote is a producer path to the global store
@@ -63,11 +64,20 @@ export function promoteToGlobal(localRoot: string, id: string, opts?: PromoteOpt
       `Secrets stay in their owning project's store.`,
     );
   }
+}
+
+/** Copies a local memory to the global store and returns the copy, which gets a new `g_` id so it cannot collide. */
+export function promoteToGlobal(localRoot: string, id: string, opts?: PromoteOptions): MemoryEntry {
+  const entry = readEntry(localRoot, id, opts?.tenantId);
+  if (!entry) throw new NotFoundError(`Memory not found: ${id}`);
+
+  assertPromotable(id, entry);
 
   initGlobal();
   const globalRoot = getGlobalRoot();
 
-  // A project store's NULL row gets its folder back; a shared store's folder is no caller's project, so NULL stays and the label names no path.
+  // A project store's NULL row gets its folder back; a shared store's folder is no caller's project, so NULL stays and
+  // the label names no path.
   const globalEntry: MemoryEntry = {
     ...entry,
     id: generateId('g'),
@@ -76,9 +86,17 @@ export function promoteToGlobal(localRoot: string, id: string, opts?: PromoteOpt
   };
 
   const { auditAs } = opts ?? {};
-  const promoteRow = auditAs && ((db: DatabaseSyncLike, globalId: string): void => {
-    appendAuditEvent(db, { tenantId: auditAs.tenantId, actor: auditAs.actor, op: 'promote', targetId: globalId, metadata: { sourceId: id } });
-  });
+  const promoteRow =
+    auditAs &&
+    ((db: DatabaseSyncLike, globalId: string): void => {
+      appendAuditEvent(db, {
+        tenantId: auditAs.tenantId,
+        actor: auditAs.actor,
+        op: 'promote',
+        targetId: globalId,
+        metadata: { sourceId: id },
+      });
+    });
   writeEntryWithHook(globalRoot, globalEntry, { actor: opts?.actor, afterWrite: promoteRow });
 
   // Fire-and-forget: embedMemory gates on availability and never rejects.

@@ -18,7 +18,12 @@ import { getGlobalRoot } from '../sharing/global-store.js';
 import * as api from '../api/index.js';
 import { getMemory } from '../api/memories.js';
 import {
-  correctionLatencyReport, embeddingReindexNeeded, provenanceCoverageReport, storeStatus, storedParticles, vectorSummary,
+  correctionLatencyReport,
+  embeddingReindexNeeded,
+  provenanceCoverageReport,
+  storeStatus,
+  storedParticles,
+  vectorSummary,
 } from '../api/status.js';
 import type { StatusCounts } from '../store/candidates.js';
 import type { Context } from '../api/types.js';
@@ -165,7 +170,8 @@ async function cmdInspect(hippoRoot: string, tenantId: string, id: string): Prom
   console.log(`Memory: ${entry.id}`);
   console.log('---------------------------');
   console.log(`Layer:            ${entry.layer}`);
-  console.log(`Confidence:       ${entry.confidence}${effectiveConfidence !== entry.confidence ? ` (effective: ${effectiveConfidence})` : ''}`);
+  const effective = effectiveConfidence !== entry.confidence ? ` (effective: ${effectiveConfidence})` : '';
+  console.log(`Confidence:       ${entry.confidence}${effective}`);
   console.log(`Created:          ${entry.created} (${fmt(ageDays, 1)}d ago)`);
   console.log(`Last retrieved:   ${entry.last_retrieved} (${fmt(daysSince, 1)}d ago)`);
   console.log(`Retrieval count:  ${entry.retrieval_count}`);
@@ -191,8 +197,8 @@ async function cmdInspect(hippoRoot: string, tenantId: string, id: string): Prom
   console.log(entry.content);
 }
 
-/** `hippo tokens [--days <n>] [--json] [--global]`: the token ledger per surface, tokens saved by skipped unchanged blocks, and re-read hook tokens.
- * Counts are estimates (characters / 4), the same estimate every budget uses. */
+/** `hippo tokens [--days <n>] [--json] [--global]`: the token ledger per surface, tokens saved by skipped unchanged
+ * blocks, and re-read hook tokens. Counts are estimates (characters / 4), the same estimate every budget uses. */
 export function handleTokens({ hippoRoot, tenantId, flags }: CommandContext): void {
   const root = resolveAuthRoot(hippoRoot, flags);
   const ctx = cliApiContext(root, tenantId);
@@ -209,17 +215,21 @@ export function handleTokens({ hippoRoot, tenantId, flags }: CommandContext): vo
   }
   console.log(`Memory text handed to agents, last ${windowDays} days (estimated tokens, characters / 4)\n`);
   console.log(
-    `  ${'surface'.padEnd(14)}${'sent'.padStart(8)}${'tokens'.padStart(12)}${'skipped'.padStart(10)}${'saved'.padStart(12)}`
+    `  ${'surface'.padEnd(14)}${'sent'.padStart(8)}${'tokens'.padStart(12)}${'skipped'.padStart(10)}` +
+    `${'saved'.padStart(12)}`
     + `${'re-read'.padStart(12)}`,
   );
   for (const row of summary.surfaces) {
     console.log(
       `  ${row.surface.padEnd(14)}${String(row.injected).padStart(8)}${String(row.tokens).padStart(12)}`
-      + `${String(row.skipped).padStart(10)}${String(row.tokensAvoided).padStart(12)}${String(row.tokensReread).padStart(12)}`,
+      + `${String(row.skipped).padStart(10)}${String(row.tokensAvoided).padStart(12)}`
+      + `${String(row.tokensReread).padStart(12)}`,
     );
   }
   console.log('');
-  console.log(`  Total sent: ${summary.totalTokens} tokens. Saved by skipping unchanged blocks: ${summary.totalTokensAvoided}.`);
+  console.log(
+    `  Total sent: ${summary.totalTokens} tokens. Saved by skipping unchanged blocks: ${summary.totalTokensAvoided}.`,
+  );
   console.log(
     `  Re-read by later model calls until compaction: ${summary.totalTokensReread} tokens,`
     + ` counted for ${summary.rereadSessions} of ${summary.hookSessions} sessions.`,
@@ -227,7 +237,10 @@ export function handleTokens({ hippoRoot, tenantId, flags }: CommandContext): vo
   if (summary.meanTokensPerSession > 0) {
     console.log(`  Mean per session (rows with a session id): ${summary.meanTokensPerSession} tokens.`);
   }
-  console.log('  Re-reads are counted for hook and compact-resume blocks when a session ends; other surfaces, and open or crashed sessions, show sent only.');
+  console.log(
+    '  Re-reads are counted for hook and compact-resume blocks when a session ends; ' +
+      'other surfaces, and open or crashed sessions, show sent only.',
+  );
   console.log("  Re-reads usually bill at the provider's cached-input rate, a fraction of the full input price.");
 }
 
@@ -266,7 +279,9 @@ export function handleFailures({ hippoRoot, tenantId, flags }: CommandContext): 
   if (summary.rated > 0) {
     const noSession = errors - summary.rated;
     const unrated = noSession > 0 ? ` ${noSession} more had no session id.` : '';
-    console.log(`\n  Repeats: ${summary.repeats} of ${summary.rated} errors first happened in another session.${unrated}`);
+    console.log(
+      `\n  Repeats: ${summary.repeats} of ${summary.rated} errors first happened in another session.${unrated}`,
+    );
   }
 }
 
@@ -285,11 +300,15 @@ export function handleCorrectionLatency({ hippoRoot, tenantId, flags }: CommandC
       if (ms < HOUR_MS) return `${(ms / MINUTE_MS).toFixed(1)}m`;
       return `${(ms / HOUR_MS).toFixed(1)}h`;
     };
-    console.log(`Corrections: ${report.count} total (${report.extractionCount} extraction-driven, ${report.manualCount} manual)`);
+    console.log(
+      `Corrections: ${report.count} total (${report.extractionCount} extraction-driven, ${report.manualCount} manual)`,
+    );
     console.log(`Latency p50: ${fmt(report.p50Ms)}, p95: ${fmt(report.p95Ms)}, max: ${fmt(report.maxMs)}`);
     if (report.extractionCount === 0 && report.manualCount > 0) {
       console.log(`\nAll ${report.manualCount} corrections were manual supersedes: no measurable observation lag.`);
-      console.log(`To measure latency, route corrections through extraction (set new.extracted_from to the raw receipt).`);
+      console.log(
+        `To measure latency, route corrections through extraction (set new.extracted_from to the raw receipt).`,
+      );
     }
   }
 }
@@ -303,7 +322,9 @@ export function handleProvenance({ hippoRoot, tenantId, flags }: CommandContext)
     console.log('No kind=raw memories present. Coverage gate trivially satisfied.');
   } else {
     const pct = (coverage.coverage * 100).toFixed(1);
-    console.log(`Provenance coverage: ${coverage.rawWithEnvelope}/${coverage.rawTotal} raw rows envelope-complete (${pct}%)`);
+    console.log(
+      `Provenance coverage: ${coverage.rawWithEnvelope}/${coverage.rawTotal} raw rows envelope-complete (${pct}%)`,
+    );
     if (coverage.gaps.length > 0) {
       console.log(`\nGaps:`);
       for (const g of coverage.gaps) {
@@ -317,8 +338,9 @@ export function handleProvenance({ hippoRoot, tenantId, flags }: CommandContext)
 }
 
 export function handleDoctor({ flags }: CommandContext): void {
+  const pkgPath = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'package.json');
   // SAFETY: package.json always carries a string "version" (checked at release by check-manifest-versions).
-  const pkg = JSON.parse(fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'package.json'), 'utf-8')) as { version: string };
+  const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8')) as { version: string };
   const report = runDoctor({ version: pkg.version });
   console.log(flags['json'] ? JSON.stringify(report, null, 2) : formatDoctor(report));
   if (!report.ok) throw new CliExit(1);
@@ -349,10 +371,12 @@ export function handleSupportBundle({ flags }: CommandContext): void {
   const kb = Math.round(Buffer.byteLength(json) / 1024);
   console.log(`Wrote ${file} (${kb} KB).`);
   console.log(includeLogs
-    ? `It holds versions, doctor checks, config with secrets removed, store counts, and the last ${TAIL_MAX_LINES} lines of ` +
-      'each hippo log with known secret shapes removed. Those log lines can quote memory text. Read it before you attach it to a ticket.'
-    : 'It holds versions, doctor checks, config with secrets removed, store counts and log file names. It never holds memory text. Read it before you ' +
-      'attach it to a ticket.');
+    ? `It holds versions, doctor checks, config with secrets removed, store counts, ` +
+      `and the last ${TAIL_MAX_LINES} lines of ` +
+      'each hippo log with known secret shapes removed. Those log lines can quote memory text. ' +
+      'Read it before you attach it to a ticket.'
+    : 'It holds versions, doctor checks, config with secrets removed, store counts and log file names. ' +
+      'It never holds memory text. Read it before you attach it to a ticket.');
 }
 
 export async function handleInspect({ hippoRoot, tenantId, args }: CommandContext): Promise<void> {

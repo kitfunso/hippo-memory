@@ -1,4 +1,5 @@
-// The status, list, id and not-found paths the typed-object verbs (process, policy, skill, brief, note, decide, incident, predict) share.
+// The status, list, id and not-found paths the typed-object verbs (process, policy, skill, brief, note, decide,
+// incident, predict) share.
 
 import { parseListLimit, parsePositiveId, stringFlag, type CliFlags } from './flag-values.js';
 import { fail } from './exit.js';

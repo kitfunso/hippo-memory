@@ -1,6 +1,11 @@
-/** Graph-retrieval ranked-list stream for RRF fusion: READ-ONLY, ranks `entries[]` indices by graph proximity to the strong lexical seeds.
- *  Unlike graph recall it only re-ranks in-pool, graph-reached, non-seed entries; scoring seeds would double-count BM25/dense.
- *  The score scale only sets the order inside this stream (RRF re-ranks by 1/(k + graphRank)), so do not tune it for a fused-score effect. */
+/**
+ * Graph-retrieval ranked-list stream for RRF fusion: READ-ONLY, ranks `entries[]` indices by graph proximity to the
+ * strong lexical seeds.
+ * Unlike graph recall it only re-ranks in-pool, graph-reached, non-seed entries; scoring seeds would double-count
+ * BM25/dense.
+ * The score scale only sets the order inside this stream (RRF re-ranks by 1/(k + graphRank)), so do not tune it for a
+ * fused-score effect.
+ */
 import type { MemoryEntry } from '../core/memory.js';
 import { loadEntitiesByMemoryId, loadEntitiesByIds, loadNeighborRelations } from '../store/graph-reads.js';
 import type { Relation } from '../store/graph-rows.js';
@@ -37,7 +42,10 @@ export interface GraphStreamOpts {
   maxNeighbors?: number;
 }
 
-/** Pick the top `seedCount` candidates by best lexical rank (lowest position across BM25 and dense), strength = 1/(bestRank + 1). Pure. */
+/**
+ * Pick the top `seedCount` candidates by best lexical rank (lowest position across BM25 and dense), strength =
+ * 1/(bestRank + 1). Pure.
+ */
 export function selectGraphSeeds(
   bm25Ranked: ReadonlyArray<number>,
   cosineRanked: ReadonlyArray<number>,
@@ -60,7 +68,8 @@ export function selectGraphSeeds(
     .map(([index, best]) => ({ index, strength: 1 / (best + 1) }));
 }
 
-// Pass 1: take the STRONGEST reaching-seed strength per new neighbour across ALL relations at this depth before committing any to `visited`;
+// Pass 1: take the STRONGEST reaching-seed strength per new neighbour across ALL relations at this depth before
+// committing any to `visited`;
 // marking mid-loop would lock a node to whichever relation SQLite returned first and drop a stronger seed's later edge.
 function bestStrengthAtDepth(
   rels: ReadonlyArray<Relation>,
@@ -143,8 +152,12 @@ interface AccumulateForRootOptions {
   readonly tenantId: string;
 }
 
-/** Accumulate per-entryIndex graph-proximity scores from ONE store's graph into `graphScore`; only seeds whose entities live in THIS store are expanded.
- *  A neighbour's score = originSeedStrength x decay^(graph distance); the seed strength is carried unchanged along each BFS path. */
+/**
+ * Accumulate per-entryIndex graph-proximity scores from ONE store's graph into `graphScore`; only seeds whose entities
+ * live in THIS store are expanded.
+ * A neighbour's score = originSeedStrength x decay^(graph distance); the seed strength is carried unchanged along each
+ * BFS path.
+ */
 function accumulateForRoot(
   root: string,
   seeds: ReadonlyArray<GraphSeed>,
@@ -163,7 +176,8 @@ function accumulateForRoot(
   const seedEntities = loadEntitiesByMemoryId(root, tenantId, [...strengthByMemId.keys()]);
   if (seedEntities.length === 0) return;
 
-  // entityId -> origin seed strength. Seeds load by memory id so memoryId is non-null here; the guard keeps the widened (string | null) type honest.
+  // entityId -> origin seed strength. Seeds load by memory id so memoryId is non-null here; the guard keeps the widened
+  // (string | null) type honest.
   const originStrength = new Map<number, number>();
   for (const e of seedEntities) {
     if (e.memoryId === null) continue;
@@ -171,7 +185,13 @@ function accumulateForRoot(
     originStrength.set(e.id, Math.max(originStrength.get(e.id) ?? 0, st));
   }
 
-  const reachedScore = reachedEntityScores(root, tenantId, seedEntities.map((e) => e.id), originStrength, { hops, decay, maxNeighbors });
+  const reachedScore = reachedEntityScores(
+    root,
+    tenantId,
+    seedEntities.map((e) => e.id),
+    originStrength,
+    { hops, decay, maxNeighbors },
+  );
   if (reachedScore.size === 0) return;
 
   // Reached entity ids -> source memory ids -> in-pool entry indices.
@@ -186,8 +206,12 @@ function accumulateForRoot(
   }
 }
 
-/** Produce the graph-retrieval ranked list: `entries[]` indices by graph proximity (desc) to the lexical `seeds`; absent indices fall to rrfFuse absentRank.
- *  Returns `[]` when there are no seeds/entries, the graph is empty, or nothing reached is in-pool, so the caller skips the 3rd fusion list. */
+/**
+ * Produce the graph-retrieval ranked list: `entries[]` indices by graph proximity (desc) to the lexical `seeds`; absent
+ * indices fall to rrfFuse absentRank.
+ * Returns `[]` when there are no seeds/entries, the graph is empty, or nothing reached is in-pool, so the caller skips
+ * the 3rd fusion list.
+ */
 export function graphRankStream(
   entries: ReadonlyArray<MemoryEntry>,
   seeds: ReadonlyArray<GraphSeed>,
@@ -206,11 +230,20 @@ export function graphRankStream(
     ? [opts.hippoRoot, opts.globalRoot]
     : [opts.hippoRoot];
   for (const root of roots) {
-    accumulateForRoot(root, seeds, entries, { memIdToIndex, graphScore, hops, decay, maxNeighbors, tenantId: opts.tenantId });
+    accumulateForRoot(root, seeds, entries, {
+      memIdToIndex,
+      graphScore,
+      hops,
+      decay,
+      maxNeighbors,
+      tenantId: opts.tenantId,
+    });
   }
 
-  // Seed-exclusion guard: graphScore is keyed by entryIndex across roots but each root's visited-set is per-root, so a seed in one store
-  // could score as a neighbour in the other; drop every seed index so "seeds are never graph-scored" holds across roots.
+  // Seed-exclusion guard: graphScore is keyed by entryIndex across roots but each root's visited-set is per-root, so a
+  // seed in one store
+  // could score as a neighbour in the other; drop every seed index so "seeds are never graph-scored" holds across
+  // roots.
   for (const s of seeds) graphScore.delete(s.index);
 
   if (graphScore.size === 0) return [];

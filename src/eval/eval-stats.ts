@@ -1,5 +1,9 @@
-/** Statistics and cost accounting for the token-efficiency evals: cost is priced over four buckets (uncached input, cache write, cache read, output).
- *  Uncertainty uses paired, cluster (same-repository tasks are not independent) and paired-ratio bootstraps; every resampler takes a seed. */
+/**
+ * Statistics and cost accounting for the token-efficiency evals: cost is priced over four buckets (uncached input,
+ * cache write, cache read, output).
+ * Uncertainty uses paired, cluster (same-repository tasks are not independent) and paired-ratio bootstraps; every
+ * resampler takes a seed.
+ */
 
 const DEFAULT_ITERATIONS = 5000;
 const DEFAULT_TWO_LEVEL_ITERATIONS = 10_000;
@@ -17,7 +21,10 @@ export interface Usage {
   outputTokens: number;
 }
 
-/** Prices in dollars per million tokens, taken from the provider's current price page for the exact model; this module has no built-in prices. */
+/**
+ * Prices in dollars per million tokens, taken from the provider's current price page for the exact model; this module
+ * has no built-in prices.
+ */
 export interface Prices {
   inputPerMTok: number;
   cacheWritePerMTok: number;
@@ -47,8 +54,12 @@ export function priceUsage(usage: Usage, prices: Prices): number {
   ) / 1_000_000;
 }
 
-/** Relative cache-bucket prices against the base input price, for cost in "uncached-equivalent tokens" when no dollar prices are given.
- *  Defaults follow Anthropic's ratios (5-minute cache write 1.25x, cache read 0.1x); pass another provider's ratios when needed. */
+/**
+ * Relative cache-bucket prices against the base input price, for cost in "uncached-equivalent tokens" when no dollar
+ * prices are given.
+ * Defaults follow Anthropic's ratios (5-minute cache write 1.25x, cache read 0.1x); pass another provider's ratios when
+ * needed.
+ */
 export interface CacheRatios {
   write: number;
   read: number;
@@ -111,7 +122,10 @@ function mean(xs: number[]): number {
   return xs.length === 0 ? 0 : xs.reduce((s, x) => s + x, 0) / xs.length;
 }
 
-/** Paired bootstrap for the mean of per-task differences (treatment minus control, same task); an interval excluding zero is the bar for a real difference. */
+/**
+ * Paired bootstrap for the mean of per-task differences (treatment minus control, same task); an interval excluding
+ * zero is the bar for a real difference.
+ */
 export function pairedBootstrap(diffs: number[], opts: BootstrapOpts = {}): Estimate {
   const iterations = opts.iterations ?? DEFAULT_ITERATIONS;
   const alpha = opts.alpha ?? DEFAULT_ALPHA;
@@ -127,7 +141,10 @@ export function pairedBootstrap(diffs: number[], opts: BootstrapOpts = {}): Esti
   return { estimate: mean(diffs), ...percentileInterval(samples, alpha), iterations };
 }
 
-/** Cluster bootstrap for the mean of per-task differences: resamples whole clusters (e.g. one repository), because tasks in a cluster are not independent. */
+/**
+ * Cluster bootstrap for the mean of per-task differences: resamples whole clusters (e.g. one repository), because tasks
+ * in a cluster are not independent.
+ */
 export function clusteredPairedBootstrap(
   diffsByCluster: ReadonlyMap<string, number[]>,
   opts: BootstrapOpts = {},
@@ -177,7 +194,9 @@ function costPerResolved(outcomes: ArmOutcome[]): number {
   return resolved === 0 ? Number.POSITIVE_INFINITY : cost / resolved;
 }
 
-/** Cost per resolved task in two arms on the same tasks, with a paired bootstrap (`control[i]` and `treatment[i]` must be the same task).
+/**
+ * Cost per resolved task in two arms on the same tasks, with a paired bootstrap (`control[i]` and `treatment[i]` must
+ * be the same task).
  *  Resamples in which an arm resolves nothing are dropped; `iterations` reports how many were kept. */
 export function costPerResolvedDelta(
   control: ArmOutcome[],

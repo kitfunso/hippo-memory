@@ -23,7 +23,10 @@ export interface RejectFlowOpts {
   memoryId?: string;
   /** Pre-emptive form: reject a value not currently stored (or already gone). */
   value?: string;
-  /** The caller's own personal scope: the only personal rows the sweep may remove. Unset (the CLI) skips every personal row. */
+  /**
+   * The caller's own personal scope: the only personal rows the sweep may remove. Unset (the CLI) skips every personal
+   * row.
+   */
   ownScope?: string;
 }
 
@@ -31,7 +34,9 @@ export type RejectFlowResult = AppliedRejection;
 
 function assertRejectOpts(opts: RejectFlowOpts): void {
   if (!opts.reason.trim()) {
-    throw new Error('reject requires a non-empty --reason (the tombstone stores no content; reason is its only identity).');
+    throw new Error(
+      'reject requires a non-empty --reason (the tombstone stores no content; reason is its only identity).',
+    );
   }
   if (opts.memoryId === undefined && opts.value === undefined) {
     throw new Error('reject requires either a memory id or --value.');
@@ -42,7 +47,8 @@ function assertRejectOpts(opts: RejectFlowOpts): void {
     throw new Error('reject accepts either a memory id or --value, not both.');
   }
   if (opts.value !== undefined && normalizeValueForRejection(opts.value).length === 0) {
-    // Direct api callers can pass strings the CLI flag parser would refuse; an empty-normalized tombstone would refuse nothing and pollute the listing.
+    // Direct api callers can pass strings the CLI flag parser would refuse; an empty-normalized tombstone would refuse
+    // nothing and pollute the listing.
     throw new Error('reject --value requires non-empty content.');
   }
 }
@@ -53,7 +59,8 @@ function contentToReject(opts: RejectFlowOpts, row: RejectionSource | undefined)
     throw new Error(`memory not found: ${opts.memoryId}`);
   }
   // A tombstone is tenant-wide, so one made from personal text would show its reason to everyone.
-  if (isPersonalScope(row.scope)) throw new BadRequestError("Personal memories can't be rejected. Use forget to remove it.");
+  if (isPersonalScope(row.scope))
+    throw new BadRequestError("Personal memories can't be rejected. Use forget to remove it.");
   return row.content;
 }
 
@@ -62,7 +69,10 @@ function inReach(opts: RejectFlowOpts, scope: string | null | undefined): boolea
   return !isPersonalScope(scope) || scope === opts.ownScope;
 }
 
-/** `hippo reject` and `api.reject`: refuses a bad request, then tombstones the value and removes every row in reach that holds it. */
+/**
+ * `hippo reject` and `api.reject`: refuses a bad request, then tombstones the value and removes every row in reach that
+ * holds it.
+ */
 export function rejectValue(opts: RejectFlowOpts): RejectFlowResult {
   assertRejectOpts(opts);
   return applyRejection(opts.hippoRoot, {
@@ -78,7 +88,10 @@ export function rejectValue(opts: RejectFlowOpts): RejectFlowResult {
 
 export type UnrejectOutcome = LiftedRejection;
 
-/** `hippo unreject` and `api.unreject`: lifts the one tombstone a digest or prefix names. The only way to allow a rejected value again. */
+/**
+ * `hippo unreject` and `api.unreject`: lifts the one tombstone a digest or prefix names. The only way to allow a
+ * rejected value again.
+ */
 export function unrejectValue(
   hippoRoot: string,
   tenantId: string,

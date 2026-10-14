@@ -1,5 +1,7 @@
 /** Octokit-shaped HTTP fetcher for the GitHub backfill; tests inject a fake `GitHubFetcher`.
- *  Any non-200 that is not a recognised rate-limit pause MUST throw `GitHubFetchError`, since an empty page would be a silent empty backfill. */
+ * Any non-200 that is not a recognised rate-limit pause MUST throw `GitHubFetchError`, since an empty page would be a
+ * silent empty backfill.
+ */
 
 import { parseRateLimit, type RateLimitInfo } from './ratelimit.js';
 import { fetchWithRetry } from '../../util/http-retry.js';
@@ -52,7 +54,10 @@ const UTF8_MAX_BYTES_PER_CHAR = 4;
 // A page is at most 100 items (per_page=100), each with a body of up to 65,536 characters at 4 bytes, plus its fields.
 const GITHUB_MAX_REPLY_BYTES = 32 * 1024 * 1024;
 
-/** The items of a 200 list reply. A body that is not JSON, is over the cap or is not an array throws, so it never reaches ingest as items. */
+/**
+ * The items of a 200 list reply. A body that is not JSON, is over the cap or is not an array throws, so it never
+ * reaches ingest as items.
+ */
 async function readItems(res: Response, url: string): Promise<JsonValue[]> {
   // The path only: a `next` link comes from the server, so its query string is not ours to print.
   const path = new URL(url).pathname;

@@ -8,7 +8,12 @@ import { recordCompactionStart, recordSnapshotSaved } from '../store/compactions
 import { COMPACTION_DB_WAIT_MS } from '../core/compaction-timing.js';
 import { resolveTenantId } from '../store/tenant.js';
 import { defaultPreCompactLogPath, vscodeUserHooksFile } from '../hooks/shared.js';
-import { readClaudeCodePostCompact, readClaudeCodePreCompact, type CaptureInput, type HookRuntime } from '../core/capture-contract.js';
+import {
+  readClaudeCodePostCompact,
+  readClaudeCodePreCompact,
+  type CaptureInput,
+  type HookRuntime,
+} from '../core/capture-contract.js';
 import { errorMessage, log as logger, errorFields } from '../util/log.js';
 import { resolveLastSessionTranscript } from './transcript.js';
 import { isVscodeTranscript } from './copilot-transcript.js';
@@ -17,8 +22,9 @@ import { mergeWorkingState, transcriptWorkingState, type WorkingState } from './
 // Diagnostic-only log; a long-lived install must not grow it unbounded.
 const PRE_COMPACT_LOG_MAX_BYTES = 256 * 1024;
 
-/** Log-forgery guard: strip C0 control chars (newlines above all) from payload-controlled values so a crafted value cannot inject fake `[hippo]` log lines.
- *  Exported as the one shared guard for every `[hippo]`-prefixed log writer that interpolates payload values. */
+/** Log-forgery guard: strip C0 control chars (newlines above all) from payload-controlled values so a crafted value
+ * cannot inject fake `[hippo]` log lines. Exported as the one shared guard for every `[hippo]`-prefixed log writer that
+ * interpolates payload values. */
 export function sanitizeLogMessage(message: string): string {
   // eslint-disable-next-line no-control-regex
   return message.replace(/[\x00-\x1f]/g, '');
@@ -27,13 +33,15 @@ export function sanitizeLogMessage(message: string): string {
 function appendPreCompactLog(logFile: string, message: string): void {
   try {
     fs.mkdirSync(path.dirname(logFile), { recursive: true });
-    // One handle, so the cap acts on the file it measured; two hooks writing in the same instant can overwrite one diagnostic line, which this log accepts.
+    // One handle, so the cap acts on the file it measured; two hooks writing in the same instant can overwrite one
+    // diagnostic line, which this log accepts.
     const fd = fs.openSync(logFile, fs.constants.O_RDWR | fs.constants.O_CREAT);
     try {
       const size = fs.fstatSync(fd).size;
       const startFresh = size > PRE_COMPACT_LOG_MAX_BYTES; // a dumb cap, no rotation
       if (startFresh) fs.ftruncateSync(fd, 0);
-      fs.writeSync(fd, `[hippo] ${new Date().toISOString()} ${sanitizeLogMessage(message)}\n`, startFresh ? 0 : size, 'utf8');
+      const line = `[hippo] ${new Date().toISOString()} ${sanitizeLogMessage(message)}\n`;
+      fs.writeSync(fd, line, startFresh ? 0 : size, 'utf8');
     } finally {
       fs.closeSync(fd);
     }
@@ -53,8 +61,8 @@ function isReadableFile(filePath: string): boolean {
   }
 }
 
-/** PreCompact stdout is the summariser's instructions; sent before the snapshot work because a locked store can run the hook past its 30
- * s limit, and via writeSync because process.exit drops buffered pipe output. */
+/** PreCompact stdout is the summariser's instructions; sent before the snapshot work because a locked store can run the
+ * hook past its 30 s limit, and via writeSync because process.exit drops buffered pipe output. */
 function printPreCompactInstruction(logFile: string): string | null {
   const text = `${PRE_COMPACT_INSTRUCTION}\n`;
   try {
@@ -72,14 +80,16 @@ const TWIN_FIRE_MS = 10_000;
 function snapshotJustSaved(hippoRoot: string, sessionId: string | null): boolean {
   if (sessionId === null || sessionId === '') return false;
   const active = loadActiveTaskSnapshot(hippoRoot, resolveTenantId({}));
-  return active?.session_id === sessionId && active.source === 'pre-compact' && Date.now() - Date.parse(active.updated_at) < TWIN_FIRE_MS;
+  return active?.session_id === sessionId && active.source === 'pre-compact' &&
+    Date.now() - Date.parse(active.updated_at) < TWIN_FIRE_MS;
 }
 
-/** Runs the PreCompact producer: records the compaction, asks the summariser for memories, saves a working-state snapshot. Never extracts
- * memories itself; SessionEnd capture owns that. */
+/** Runs the PreCompact producer: records the compaction, asks the summariser for memories, saves a working-state
+ * snapshot. Never extracts memories itself; SessionEnd capture owns that. */
 function runPreCompact(hippoRoot: string, options: PreCompactOptions, logFile: string): void {
   const { stdinText, stdinTimedOut = false, runtime = 'claude-code' } = options;
-  // PreCompact fires in every Claude Code project, including ones that never ran `hippo init`; gate before any call that would create a store.
+  // PreCompact fires in every Claude Code project, including ones that never ran `hippo init`; gate before any call
+  // that would create a store.
   if (!isInitialized(hippoRoot)) {
     appendPreCompactLog(logFile, 'skip: store not initialized');
     return;
@@ -91,18 +101,23 @@ function runPreCompact(hippoRoot: string, options: PreCompactOptions, logFile: s
     return;
   }
   const { sessionId, transcriptPath: payloadTranscriptPath } = receipt.input;
-  // With chat.useClaudeHooks on, VS Code runs Claude Code's hooks too; it never sends PostCompact to close a record, nor reads the summariser text.
+  // With chat.useClaudeHooks on, VS Code runs Claude Code's hooks too; it never sends PostCompact to close a record,
+  // nor reads the summariser text.
   const vscode = runtime === 'claude-code' && isVscodeTranscript(payloadTranscriptPath);
   if (vscode && fs.existsSync(vscodeUserHooksFile())) {
     appendPreCompactLog(logFile, 'skip: VS Code payload, hippo.json runs pre-compact for this chat');
     return;
   }
   if (runtime === 'copilot' && snapshotJustSaved(hippoRoot, sessionId)) {
-    appendPreCompactLog(logFile, `skip: snapshot for session ${sessionId} saved under ${TWIN_FIRE_MS / 1000} s ago, by the other preCompact entry`);
+    appendPreCompactLog(
+      logFile,
+      `skip: snapshot for session ${sessionId} saved under ${TWIN_FIRE_MS / 1000} s ago, by the other preCompact entry`,
+    );
     return;
   }
 
-  const recordId = markCompactionBoundary(hippoRoot, options, logFile, receipt.input, runtime === 'claude-code' && !vscode);
+  const closable = runtime === 'claude-code' && !vscode;
+  const recordId = markCompactionBoundary(hippoRoot, options, logFile, receipt.input, closable);
 
   const transcriptPath = resolvePreCompactTranscript(payloadTranscriptPath, stdinText, logFile, runtime);
   if (!transcriptPath) return;
@@ -114,9 +129,15 @@ function runPreCompact(hippoRoot: string, options: PreCompactOptions, logFile: s
   saveDerivedSnapshot(hippoRoot, logFile, sessionId, recordId, derived);
 }
 
-/** Starts the compaction record when the host will close one (`closable`), then tells `onBoundary` what was printed; the record id, or
- * null without a record. */
-function markCompactionBoundary(hippoRoot: string, options: PreCompactOptions, logFile: string, input: CaptureInput, closable: boolean): string | null {
+/** Starts the compaction record when the host will close one (`closable`), then tells `onBoundary` what was printed;
+ * the record id, or null without a record. */
+function markCompactionBoundary(
+  hippoRoot: string,
+  options: PreCompactOptions,
+  logFile: string,
+  input: CaptureInput,
+  closable: boolean,
+): string | null {
   const { sessionId } = input;
   // The record is the "something saved before every compaction", so it lands even when no snapshot is derivable later.
   // Copilot has no PostCompact hook to close a record, so its compactions get the snapshot alone.
@@ -183,18 +204,27 @@ function saveDerivedSnapshot(
   try {
     existing = loadActiveTaskSnapshot(hippoRoot, tenantId);
   } catch (err) {
-    logger.warn(`pre-compact: stored snapshot unreadable, saving the derived one alone: ${errorMessage(err)}`, errorFields(err));
+    logger.warn(
+      `pre-compact: stored snapshot unreadable, saving the derived one alone: ${errorMessage(err)}`,
+      errorFields(err),
+    );
   }
 
-  // Carried-over fields are not re-capped, as `hippo snapshot save` stays uncapped; saveActiveTaskSnapshot scrubs every field.
+  // Carried-over fields are not re-capped, as `hippo snapshot save` stays uncapped; saveActiveTaskSnapshot scrubs every
+  // field.
   const merged = mergeWorkingState(derived, existing, sessionId);
   if (merged === null) {
-    appendPreCompactLog(logFile, 'skip: no snapshot content for this session (nothing derivable; fallback blocked or empty)');
+    appendPreCompactLog(
+      logFile,
+      'skip: no snapshot content for this session (nothing derivable; fallback blocked or empty)',
+    );
   } else {
     try {
       saveActiveTaskSnapshot(hippoRoot, tenantId, { ...merged, source: 'pre-compact', session_id: sessionId });
       appendPreCompactLog(logFile, 'snapshot saved');
-      if (recordId !== null) recordSnapshotSaved(hippoRoot, tenantId, recordId, (message) => appendPreCompactLog(logFile, message));
+      if (recordId !== null) {
+        recordSnapshotSaved(hippoRoot, tenantId, recordId, (message) => appendPreCompactLog(logFile, message));
+      }
     } catch (err) {
       appendPreCompactLog(logFile, `snapshot save failed: ${errorMessage(err)}`);
     }
@@ -210,8 +240,9 @@ export interface PreCompactOptions {
   onBoundary?: (printed: string | null) => void;
 }
 
-/** PreCompact hook entry point. Exit code 2 BLOCKS compaction, so every path (bad stdin, missing transcript, store error) must exit 0 as a logged no-op.
- *  Callers must not wrap this in anything that turns a caught-and-logged failure into a non-zero exit. */
+/** PreCompact hook entry point. Exit code 2 BLOCKS compaction, so every path (bad stdin, missing transcript, store
+ * error) must exit 0 as a logged no-op. Callers must not wrap this in anything that turns a caught-and-logged failure
+ * into a non-zero exit. */
 export async function cmdPreCompact(hippoRoot: string, options: PreCompactOptions): Promise<void> {
   const logFile = options.logFile ?? defaultPreCompactLogPath();
   try {
@@ -233,7 +264,8 @@ export interface PostCompactOptions {
 /** A PostCompact hook has 10 s in all; replay stops starting new records after this. */
 const POST_COMPACT_REPLAY_BUDGET_MS = 6000;
 
-/** PostCompact entry point: saves the summary and its items, replays earlier leftovers, returns the one line to show. Never throws, so the hook exits 0. */
+/** PostCompact entry point: saves the summary and its items, replays earlier leftovers, returns the one line to show.
+ * Never throws, so the hook exits 0. */
 export function cmdPostCompact(hippoRoot: string, options: PostCompactOptions): string | null {
   const logFile = options.logFile ?? defaultPreCompactLogPath();
   const log = (message: string): void => appendPreCompactLog(logFile, `post-compact: ${message}`);

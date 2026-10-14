@@ -25,7 +25,10 @@ export function readTranscriptTail(transcriptPath: string, capBytes: number = PR
   }
 }
 
-/** {@link readTranscriptTail} for a transcript the caller opened and sized, so the size and the bytes come from one file. */
+/**
+ * {@link readTranscriptTail} for a transcript the caller opened and sized, so the size and the bytes come from one
+ * file.
+ */
 export function readOpenTranscriptTail(fd: number, size: number, capBytes: number): string {
   const start = Math.max(0, size - capBytes);
   const length = size - start;

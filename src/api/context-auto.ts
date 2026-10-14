@@ -7,10 +7,18 @@ const SKIPPED_PATH_TERMS = ['src', 'dist', 'test', 'tests', 'node_modules', 'ind
 
 // stderr is dropped because git's warnings (line-ending notices, for one) would otherwise become query terms.
 function readGit(args: string[]): string {
-  return execFileSync('git', args, { encoding: 'utf8', timeout: 3000, stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true }).trim();
+  return execFileSync('git', args, {
+    encoding: 'utf8',
+    timeout: 3000,
+    stdio: ['ignore', 'pipe', 'ignore'],
+    windowsHide: true,
+  }).trim();
 }
 
-/** A context query from the cwd's git state ('' means `getContext` lists by strength); kept out of the api layer, which never shells out. */
+/**
+ * A context query from the cwd's git state ('' means `getContext` lists by strength); kept out of the api layer, which
+ * never shells out.
+ */
 export function autoDetectContext(): string {
   try {
     const diff = readGit(['diff', '--name-only', 'HEAD']);

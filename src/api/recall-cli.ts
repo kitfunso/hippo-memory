@@ -1,4 +1,5 @@
-// What the `hippo recall` verb reads beside its ranking core: the stores it searches, the resume packet and the JSON rows.
+// What the `hippo recall` verb reads beside its ranking core: the stores it searches, the resume packet and the JSON
+// rows.
 
 import { confidenceFacets, Layer } from '../core/memory.js';
 import { isGlobalStoreRoot, isInitialized } from '../core/project-identity.js';
@@ -30,12 +31,19 @@ export interface CliRecallSetting {
 
 /** The active scope merges `--scope` with the detected one, which only boosts. */
 export function cliRecallSetting(ctx: Context, explicitScope: string | null): CliRecallSetting {
-  return { globalRoot: getGlobalRoot(), primaryIsGlobal: isGlobalStoreRoot(ctx.hippoRoot), activeScope: explicitScope || detectScope() };
+  return {
+    globalRoot: getGlobalRoot(),
+    primaryIsGlobal: isGlobalStoreRoot(ctx.hippoRoot),
+    activeScope: explicitScope || detectScope(),
+  };
 }
 
 export interface CliRecallOrigin {
   readonly globalOn: boolean;
-  /** True when a ranked row came from the global store: this store is it, or the global store is on and this one lacks the id. */
+  /**
+   * True when a ranked row came from the global store: this store is it, or the global store is on and this one lacks
+   * the id.
+   */
   readonly isGlobal: (id: string) => boolean;
 }
 
@@ -47,7 +55,12 @@ export function cliRecallOrigin(ctx: Context, setting: CliRecallSetting): CliRec
 
 /** How many of `query`'s search candidates the scope rule hides from a recall asking for `requested`; the read is
  *  window-capped, so this is a floor on a large store. */
-export function scopeHiddenCount(ctx: Context, query: string, globalRoot: string | undefined, requested: string | undefined): number {
+export function scopeHiddenCount(
+  ctx: Context,
+  query: string,
+  globalRoot: string | undefined,
+  requested: string | undefined,
+): number {
   const probe = [
     ...loadSearchEntries(ctx.hippoRoot, query, undefined, ctx.tenantId),
     ...(globalRoot ? loadSearchEntries(globalRoot, query, undefined, ctx.tenantId) : []),
@@ -57,7 +70,8 @@ export function scopeHiddenCount(ctx: Context, query: string, globalRoot: string
 
 /** The active snapshot, its session's latest handoff and last five events, each kept only when its scope passes. */
 export function loadCliRecallContinuity(ctx: Context, setting: CliRecallSetting, wanted: boolean): ContinuityBlock {
-  if (!wanted || setting.primaryIsGlobal) return { activeSnapshot: null, sessionHandoff: null, recentSessionEvents: [] };
+  if (!wanted || setting.primaryIsGlobal)
+    return { activeSnapshot: null, sessionHandoff: null, recentSessionEvents: [] };
   const { hippoRoot, tenantId } = ctx;
   const rawSnapshot = loadActiveTaskSnapshot(hippoRoot, tenantId);
   const sessionId = rawSnapshot?.session_id ?? undefined;
@@ -78,7 +92,10 @@ export interface CliRecallRerankerPick {
   readonly defaultTopK: number;
 }
 
-/** The reranker a `--reranker` name picks and the top-k it takes by default; an unknown name throws, a blank one picks none. */
+/**
+ * The reranker a `--reranker` name picks and the top-k it takes by default; an unknown name throws, a blank one picks
+ * none.
+ */
 export function cliRecallReranker(name: string): CliRecallRerankerPick | null {
   const fn = getReranker(name);
   if (!fn) return null;

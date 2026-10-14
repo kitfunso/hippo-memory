@@ -21,14 +21,20 @@ import type { Context } from './types.js';
 
 const touchable = (ctx: Context): SqlFragment => touchableScopeSql('', personalScopeOf(ctx.actor));
 
-/** A tenant's dormant memories (src/store/dormant.ts): what sleep moved out of active memory when `dormant.enabled` is on. Newest first;
+/**
+ * A tenant's dormant memories (src/store/dormant.ts): what sleep moved out of active memory when `dormant.enabled` is
+ * on. Newest first;
  * `opts.query` keeps rows containing every term (case-insensitive). */
 export function listDormant(ctx: Context, opts: ListDormantOpts = {}): DormantMemory[] {
   return loadDormantMemories(ctx.hippoRoot, ctx.tenantId, opts, touchable(ctx));
 }
 
-/** Restores a dormant memory as if just recalled, with a full half-life; a row set aside by audit repair returns `verified`.
- * Throws if the tenant has no such dormant id or a live memory holds it, and RejectedValueError if the value was since rejected (the dormant copy stays). */
+/**
+ * Restores a dormant memory as if just recalled, with a full half-life; a row set aside by audit repair returns
+ * `verified`.
+ * Throws if the tenant has no such dormant id or a live memory holds it, and RejectedValueError if the value was since
+ * rejected (the dormant copy stays).
+ */
 export function restoreDormant(ctx: Context, id: string): MemoryEntry {
   const outcome = restoreDormantMemory(ctx.hippoRoot, {
     tenantId: ctx.tenantId,
@@ -45,7 +51,8 @@ export function restoreDormant(ctx: Context, id: string): MemoryEntry {
 }
 
 function reviveSnapshot(ctx: Context, dormant: DormantSnapshot, now: Date): MemoryEntry {
-  // A snapshot can predate a field added later: createMemory supplies defaults, then the snapshot overrides every field it carries.
+  // A snapshot can predate a field added later: createMemory supplies defaults, then the snapshot overrides every field
+  // it carries.
   // The placeholder content only meets createMemory's minimum length, so a legacy row under 3 chars still restores.
   const revived: MemoryEntry = {
     ...createMemory('dormant snapshot defaults', { baseHalfLifeDays: loadConfig(ctx.hippoRoot).defaultHalfLifeDays }),
@@ -53,12 +60,23 @@ function reviveSnapshot(ctx: Context, dormant: DormantSnapshot, now: Date): Memo
     last_retrieved: now.toISOString(),
   };
   if (dormant.reason === 'quality-repair') revived.confidence = 'verified';
-  return stampOriginProject(ctx.hippoRoot, { ...revived, strength: calculateStrength(revived, now, { ablation: strengthAblation() }) });
+  return stampOriginProject(ctx.hippoRoot, {
+    ...revived,
+    strength: calculateStrength(revived, now, { ablation: strengthAblation() }),
+  });
 }
 
-/** Permanently deletes a dormant memory, the explicit "forget it for good"; throws when the tenant has no dormant memory with that id. */
+/**
+ * Permanently deletes a dormant memory, the explicit "forget it for good"; throws when the tenant has no dormant memory
+ * with that id.
+ */
 export function forgetDormant(ctx: Context, id: string): void {
-  const forgotten = forgetDormantMemory(ctx.hippoRoot, { tenantId: ctx.tenantId, id, actor: ctx.actor.subject, admit: touchable(ctx) });
+  const forgotten = forgetDormantMemory(ctx.hippoRoot, {
+    tenantId: ctx.tenantId,
+    id,
+    actor: ctx.actor.subject,
+    admit: touchable(ctx),
+  });
   if (!forgotten) throw new NotFoundError(`dormant memory not found: ${id}`);
   // Counted like every other permanent removal (forget, archiveRaw).
   updateStatsUnlessBusy(ctx.hippoRoot, { forgotten: 1 }, `removed ${id}`);

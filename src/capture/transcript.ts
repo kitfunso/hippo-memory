@@ -8,13 +8,18 @@ import { copilotTurn } from './copilot-transcript.js';
 const RECENT_USER_TURNS = 20;
 const RECENT_ASSISTANT_TURNS = 10;
 
-/** Build a compact text summary from a Claude Code / OpenCode / Copilot JSONL transcript: plain user messages and the final assistant text chunk,
+/**
+ * Build a compact text summary from a Claude Code / OpenCode / Copilot JSONL transcript: plain user messages and the
+ * final assistant text chunk,
  *  without thinking, tool_use and tool_result noise. Exported for tests. */
 
 /** Leading markers of the command lines Claude Code writes with type 'user'. */
 const CLAUDE_CODE_COMMAND_PREFIXES = ['<local-command-', '<command-name>', '<command-message>', '<command-args>'];
 
-/** Transcript-line flags isNonHumanUserLine reads (any may be absent); `promptSource: 'system'` marks Claude Code's own notices. */
+/**
+ * Transcript-line flags isNonHumanUserLine reads (any may be absent); `promptSource: 'system'` marks Claude Code's own
+ * notices.
+ */
 interface TranscriptLineFlags {
   type?: unknown;
   isMeta?: unknown;
@@ -24,7 +29,13 @@ interface TranscriptLineFlags {
 }
 
 function isNonHumanUserLine(entry: TranscriptLineFlags, content: string): boolean {
-  if (entry.isMeta === true || entry.isSidechain === true || entry.isCompactSummary === true || entry.promptSource === 'system') return true;
+  if (
+    entry.isMeta === true ||
+    entry.isSidechain === true ||
+    entry.isCompactSummary === true ||
+    entry.promptSource === 'system'
+  )
+    return true;
   const head = content.trimStart();
   return CLAUDE_CODE_COMMAND_PREFIXES.some((p) => head.startsWith(p));
 }
@@ -35,18 +46,25 @@ interface TranscriptMessage {
 
 const NON_HUMAN_BLOCK_PREFIXES = ['<ide_', '[Request interrupted by user'];
 
-/** The human's words on a Claude Code user line, '' when none; VS Code stores prompts as text blocks, beside its own open-file, selection
+/**
+ * The human's words on a Claude Code user line, '' when none; VS Code stores prompts as text blocks, beside its own
+ * open-file, selection
  * and interrupt blocks. */
 export function humanUserText(entry: TranscriptLineFlags, message: TranscriptMessage): string {
   const content = message.content;
   let text = '';
   if (isStringValue(content)) {
     text = content;
-  } else if (Array.isArray(content) && !content.some((b) => isObjectLike(b) && 'type' in b && b.type === 'tool_result')) {
+  } else if (
+    Array.isArray(content) &&
+    !content.some((b) => isObjectLike(b) && 'type' in b && b.type === 'tool_result')
+  ) {
     const parts: string[] = [];
     for (const block of content) {
-      const blockText = isObjectLike(block) && 'type' in block && block.type === 'text' && 'text' in block ? block.text : undefined;
-      if (isStringValue(blockText) && !NON_HUMAN_BLOCK_PREFIXES.some((p) => blockText.trimStart().startsWith(p))) parts.push(blockText);
+      const blockText =
+        isObjectLike(block) && 'type' in block && block.type === 'text' && 'text' in block ? block.text : undefined;
+      if (isStringValue(blockText) && !NON_HUMAN_BLOCK_PREFIXES.some((p) => blockText.trimStart().startsWith(p)))
+        parts.push(blockText);
     }
     text = parts.join('\n');
   }
@@ -86,7 +104,10 @@ export function collectSessionTurns(jsonl: string, visit?: (record: TranscriptRe
   return turns;
 }
 
-/** The turn a Claude Code `user` or `assistant` line carries; null for any other line or one with no human or reply text. */
+/**
+ * The turn a Claude Code `user` or `assistant` line carries; null for any other line or one with no human or reply
+ * text.
+ */
 function claudeCodeTurn(entry: TranscriptRecord): SessionTurn | null {
   if (entry.type !== 'user' && entry.type !== 'assistant') return null;
   const message = 'message' in entry && isObjectLike(entry.message) ? entry.message : undefined;
@@ -111,7 +132,8 @@ function claudeCodeTurn(entry: TranscriptRecord): SessionTurn | null {
   return chunks.length > 0 ? { role: 'assistant', text: chunks.join('\n') } : null;
 }
 
-// Codex stores its own context as user messages: the AGENTS.md text, and one tagged block each for the environment and app state.
+// Codex stores its own context as user messages: the AGENTS.md text, and one tagged block each for the environment and
+// app state.
 const CODEX_INJECTED_USER_TEXT = /^(?:# AGENTS\.md instructions\b|<([A-Za-z][\w-]*)(?:\s[^>]*)?>[\s\S]*<\/\1>$)/;
 
 // Codex rollout transcript shape: response_item -> payload.message
@@ -128,7 +150,13 @@ function codexTurn(entry: TranscriptRecord): SessionTurn | null {
     if (!isObjectLike(block)) continue;
     const blockType = 'type' in block ? block.type : undefined;
     const blockText = 'text' in block ? block.text : undefined;
-    if (role === 'user' && blockType === 'input_text' && isStringValue(blockText) && blockText.trim() && !CODEX_INJECTED_USER_TEXT.test(blockText.trim())) {
+    if (
+      role === 'user' &&
+      blockType === 'input_text' &&
+      isStringValue(blockText) &&
+      blockText.trim() &&
+      !CODEX_INJECTED_USER_TEXT.test(blockText.trim())
+    ) {
       chunks.push(blockText.trim());
     }
     if (role === 'assistant' && blockType === 'output_text' && isStringValue(blockText) && blockText.trim()) {
@@ -170,8 +198,12 @@ export function summariseSessionTurns(turns: readonly SessionTurn[]): string {
   ].join('\n');
 }
 
-/** Resolve a transcript path for `--last-session`: `transcriptPath`, then the stdin JSON payload, then the newest `.jsonl` in the Claude config dir.
- *  The scan runs only with `mayScan` (it spans every project on the box); returns null when nothing resolves, never throws. */
+/**
+ * Resolve a transcript path for `--last-session`: `transcriptPath`, then the stdin JSON payload, then the newest
+ * `.jsonl` in the Claude config dir.
+ * The scan runs only with `mayScan` (it spans every project on the box); returns null when nothing resolves, never
+ * throws.
+ */
 export function resolveLastSessionTranscript(
   explicit: string | undefined,
   stdinText: string | undefined,

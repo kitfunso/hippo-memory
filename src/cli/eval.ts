@@ -8,7 +8,13 @@ import { cliApiContext } from './api-context.js';
 import { loadConfig } from '../core/config.js';
 import { getGlobalRoot } from '../sharing/global-store.js';
 import { runEval, bootstrapCorpus, compareSummaries, type EvalCase, type EvalSummary } from '../eval/eval.js';
-import { runFeatureEval, formatResult, resultToBaseline, detectRegressions, type EvalBaseline } from '../eval/eval-suite.js';
+import {
+  runFeatureEval,
+  formatResult,
+  resultToBaseline,
+  detectRegressions,
+  type EvalBaseline,
+} from '../eval/eval-suite.js';
 import { PACKAGE_VERSION } from '../util/version.js';
 import { printError } from './output.js';
 import { requireInit } from './shared.js';
@@ -24,7 +30,8 @@ const MAX_MISSED_SHOWN = 4;
 const QUERY_PREVIEW_CHARS = 60;
 const MAX_DELTAS_SHOWN = 5;
 
-/** Runs `hippo eval`: --bootstrap writes a corpus, --suite runs the built-in feature eval, else it scores a corpus file. */
+/** Runs `hippo eval`: --bootstrap writes a corpus, --suite runs the built-in feature eval, else it scores a corpus
+ * file. */
 async function cmdEval(
   hippoRoot: string,
   tenantId: string,
@@ -176,7 +183,9 @@ function printEvalSummary(summary: EvalSummary, showCases: boolean): void {
       const hitTop10 = c.returnedIds.slice(0, HIT_TOP_K).filter((id) => expectedSet.has(id));
       const missed = c.case.expectedIds.filter((id) => !c.returnedIds.slice(0, HIT_TOP_K).includes(id));
       console.log();
-      console.log(`[${c.case.id}] R@10=${fmt(c.recallAt10, 2)}  MRR=${fmt(c.mrr, 2)}  expected=${exp}  hit=${hitTop10.length}`);
+      console.log(
+        `[${c.case.id}] R@10=${fmt(c.recallAt10, 2)}  MRR=${fmt(c.mrr, 2)}  expected=${exp}  hit=${hitTop10.length}`,
+      );
       console.log(`  query: ${c.case.query}`);
       console.log(`  top 3: ${c.returnedIds.slice(0, TOP_IDS_SHOWN).join(', ') || '(none)'}`);
       if (missed.length > 0) {

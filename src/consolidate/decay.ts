@@ -15,7 +15,8 @@ export interface DecayOutcome {
   rankById: Map<string, MvRankInfo>;
 }
 
-// Leaving active memory: a raw receipt stays (the append-only trigger aborts DELETE for the whole batch; stored strength refreshed) but sits out this cycle;
+// Leaving active memory: a raw receipt stays (the append-only trigger aborts DELETE for the whole batch; stored
+// strength refreshed) but sits out this cycle;
 // others go dormant when config.dormant is on, else are deleted. Only called for rows `retirable` allows.
 function retireFaded(run: SleepRun, entry: MemoryEntry, strength: number): void {
   const { result } = run;
@@ -25,7 +26,12 @@ function retireFaded(run: SleepRun, entry: MemoryEntry, strength: number): void 
   if (run.config.dormant.enabled && !detectSecret(entry).flagged) {
     result.dormant++;
     result.details.push(`  💤 dormant ${entry.id} ${why}`);
-    run.pendingDormant.push({ entry: { ...entry, strength }, strength, reason: 'decay', dormantAt: run.now.toISOString() });
+    run.pendingDormant.push({
+      entry: { ...entry, strength },
+      strength,
+      reason: 'decay',
+      dormantAt: run.now.toISOString(),
+    });
     return;
   }
   result.removed++;
@@ -44,7 +50,8 @@ function keepSurvivor(run: SleepRun, entry: MemoryEntry, strength: number): Memo
   return updated;
 }
 
-// 1. Decay pass. Memory-value flag OFF runs the single-phase loop below; ON classifies every entry with zero commits, runs rescueSet per tenant, then commits.
+// 1. Decay pass. Memory-value flag OFF runs the single-phase loop below; ON classifies every entry with zero commits,
+// runs rescueSet per tenant, then commits.
 // Rescued entries stay full survivors for this cycle's later passes.
 export function decayPass(run: SleepRun): DecayOutcome {
   if (run.config.memoryValue.enabled) return decayWithMemoryValue(run);
@@ -88,11 +95,18 @@ function classifyByStrength(run: SleepRun) {
   return { strengthById, condemnedIds: new Set(condemned.map((e) => e.id)) };
 }
 
-function reportRescue(result: ConsolidationResult, entry: MemoryEntry, strength: number, rank: MvRankInfo | undefined): void {
+function reportRescue(
+  result: ConsolidationResult,
+  entry: MemoryEntry,
+  strength: number,
+  rank: MvRankInfo | undefined,
+): void {
   const rankNote = rank
     ? ` - rescued (rank ${rank.rank}/${rank.totalNonPinned} in tenant ${rank.tenantId}, top ${rank.keepN})`
     : ' - rescued';
-  result.details.push(`  🛟 ${entry.id} (strength ${strength.toFixed(STRENGTH_DECIMALS)} < ${DECAY_THRESHOLD})${rankNote}`);
+  result.details.push(
+    `  🛟 ${entry.id} (strength ${strength.toFixed(STRENGTH_DECIMALS)} < ${DECAY_THRESHOLD})${rankNote}`,
+  );
 }
 
 function decayWithMemoryValue(run: SleepRun): DecayOutcome {
@@ -105,7 +119,8 @@ function decayWithMemoryValue(run: SleepRun): DecayOutcome {
 
   const { strengthById, condemnedIds } = classifyByStrength(run);
 
-  // Phase 2a: rescue decision (pure compute); runs under --dry-run too (only the pendingDeletes flush and the logRun audit write are !dryRun-gated).
+  // Phase 2a: rescue decision (pure compute); runs under --dry-run too (only the pendingDeletes flush and the logRun
+  // audit write are !dryRun-gated).
 
   // Fail-loud must not depend on condemnation traffic: validate the frozen weights even when nothing is condemned.
   validateWeights();
@@ -113,7 +128,11 @@ function decayWithMemoryValue(run: SleepRun): DecayOutcome {
     // Rank per tenant ONCE: rankById feeds both rescueSet (via precomputedRanks) and the detail/audit
     // context below, so the whole-store ranking runs once per sleep and only when something is condemned.
     rankById = rankNonPinnedByTenant(all, now);
-    rescuedIds = rescueSet(all, condemnedIds, now, { weights: MEMORY_VALUE_WEIGHTS, digest: SOURCE_ARTIFACT_SHA256, precomputedRanks: rankById });
+    rescuedIds = rescueSet(all, condemnedIds, now, {
+      weights: MEMORY_VALUE_WEIGHTS,
+      digest: SOURCE_ARTIFACT_SHA256,
+      precomputedRanks: rankById,
+    });
     reportNonFiniteScores(result, rankById);
   }
 
@@ -123,7 +142,8 @@ function decayWithMemoryValue(run: SleepRun): DecayOutcome {
     const strength = strengthById.get(entry.id)!;
     if (run.retirable(entry) && strength < DECAY_THRESHOLD) {
       if (rescuedIds.has(entry.id)) {
-        // Rescued: standard survivor stored-strength refresh. Confidence is left alone: it is an epistemic tier, not a cached
+        // Rescued: standard survivor stored-strength refresh. Confidence is left alone: it is an epistemic tier, not a
+        // cached
         // computation, so resolveConfidence derives it on read.
         rescuedEntries.push(keepSurvivor(run, entry, strength));
         reportRescue(result, entry, strength, rankById.get(entry.id));

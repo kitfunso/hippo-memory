@@ -29,7 +29,8 @@ const briefRoutes: VersionedRouteConfig<'project_brief', SaveProjectBriefOpts> =
   },
 };
 
-// Routes: /v1/project-briefs (create, list, refresh, show, supersede, close), mirroring /v1/skills; /refresh is ordered before /:id.
+// Routes: /v1/project-briefs (create, list, refresh, show, supersede, close), mirroring /v1/skills; /refresh is ordered
+// before /:id.
 // The store validates and throws; the boundary maps validation -> 400, not-found -> 404, not-active -> 409.
 export async function handleCreateProjectBrief(rr: AuthedRouteRequest): Promise<void> {
   const { ctx } = rr;
@@ -56,7 +57,11 @@ export async function handleRefreshProjectBrief(rr: AuthedRouteRequest): Promise
     sendJson(res, 200, { markdown, receiptCount });
     return;
   }
-  const brief = await refreshedBrief(objectsOf(ctx), { hippoRoot: opts.hippoRoot, tenantId: ctx.tenantId, actor: ctx.actor.subject }, repo);
+  const brief = await refreshedBrief(
+    objectsOf(ctx),
+    { hippoRoot: opts.hippoRoot, tenantId: ctx.tenantId, actor: ctx.actor.subject },
+    repo,
+  );
   sendJson(res, 200, { brief });
 }
 

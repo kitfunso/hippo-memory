@@ -15,7 +15,8 @@ function extractMemoryText(candidate: JsonValue): string {
   return '';
 }
 
-/** Parse a ChatGPT memory export: a JSON array of strings or `{content, created}` objects, `{"memories": [...]}`, or plain text with one memory per line. */
+/** Parse a ChatGPT memory export: a JSON array of strings or `{content, created}` objects, `{"memories": [...]}`, or
+ * plain text with one memory per line. */
 function parseChatGPTFile(filePath: string): string[] {
   const raw = fs.readFileSync(filePath, 'utf8').trim();
 
@@ -31,7 +32,10 @@ function parseChatGPTFile(filePath: string): string[] {
         return parsed.map(extractMemoryText).filter(Boolean);
       }
     } catch (err) {
-      log.warn(`import: ${filePath} is not valid JSON (${errorMessage(err)}); reading it as plain text`, errorFields(err));
+      log.warn(
+        `import: ${filePath} is not valid JSON (${errorMessage(err)}); reading it as plain text`,
+        errorFields(err),
+      );
     }
   }
 
@@ -66,7 +70,8 @@ function splitMarkdown(content: string): string[] {
   return chunks.filter(Boolean);
 }
 
-/** Takes one line into the chunk being built, pushing that chunk when the line ends it; returns the chunk still open. */
+/** Takes one line into the chunk being built, pushing that chunk when the line ends it; returns the chunk still
+ * open. */
 function appendLine(chunks: string[], open: string, line: string): string {
   let current = open;
   const trimmed = line.trim();
@@ -121,7 +126,10 @@ function parseClaudeFile(filePath: string): string[] {
         return parsed.map(extractMemoryText).filter(Boolean);
       }
     } catch (err) {
-      log.warn(`import: ${filePath} is not valid JSON (${errorMessage(err)}); reading it as markdown`, errorFields(err));
+      log.warn(
+        `import: ${filePath} is not valid JSON (${errorMessage(err)}); reading it as markdown`,
+        errorFields(err),
+      );
     }
   }
 
@@ -197,7 +205,8 @@ export function importCursor(sourcePath: string, options: ImportOptions): Import
   return importEntries(chunks, 'import:cursor', ['imported', 'cursor'], options);
 }
 
-/** Split a generic file into chunks: markdown on headings and bullets, plain text on double newlines or one per line. */
+/** Split a generic file into chunks: markdown on headings and bullets, plain text on double newlines or one per
+ * line. */
 function parseGenericFile(filePath: string): string[] {
   const raw = fs.readFileSync(filePath, 'utf8');
   const isMarkdown = filePath.endsWith('.md') || filePath.endsWith('.mdx');

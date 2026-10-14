@@ -9,7 +9,13 @@ import { bm25Score, buildCorpus, entryText, type BM25Corpus } from './bm25.js';
 import { currentEntries } from './as-of.js';
 import { summaryScoring, type BoostContext } from './boosts.js';
 import { temporalContext } from './temporal.js';
-import { denseScores, resolveVectorArm, type HybridVectorCandidates, type VectorArm, type VectorSource } from './vector.js';
+import {
+  denseScores,
+  resolveVectorArm,
+  type HybridVectorCandidates,
+  type VectorArm,
+  type VectorSource,
+} from './vector.js';
 import { fuseRanks, type GraphStreamOptions } from './fusion.js';
 import { scoreHybridPool } from './hybrid-score.js';
 import { applyMmrWindow, applyReranker } from './rerank.js';
@@ -29,7 +35,9 @@ export interface HybridSearchOptions {
   mmrLambda?: number;
   /** 'blend' (weighted sum of BM25 and cosine, default) or 'rrf' (reciprocal rank fusion of their ranks). */
   scoring?: 'blend' | 'rrf';
-  /** Corpus from `buildCorpus` over the same `entries` in the same order (content + tags), reused to skip tokenizing. */
+  /**
+   * Corpus from `buildCorpus` over the same `entries` in the same order (content + tags), reused to skip tokenizing.
+   */
   preparedCorpus?: BM25Corpus;
   /** Minimum number of results to return regardless of budget. Default 1. */
   minResults?: number;
@@ -45,13 +53,21 @@ export interface HybridSearchOptions {
   reranker?: RerankerFn;
   /** Options passed through to the reranker. */
   rerankerOptions?: RerankerOptions;
-  /** Multiplier on DAG summary scores. Default 0.85 (env HIPPO_SUMMARY_DEBOOST overrides; per-call wins). 1.0 disables. */
+  /**
+   * Multiplier on DAG summary scores. Default 0.85 (env HIPPO_SUMMARY_DEBOOST overrides; per-call wins). 1.0 disables.
+   */
   summaryDeboost?: number;
   /** 1.05 micro-boost for summaries rebuilt within 7 days. Default true. */
   summaryFreshness?: boolean;
-  /** Graph-proximity third RRF list; active only with `scoring: 'rrf'`, embeddings and a `hippoRoot`. See src/graph/stream.ts. */
+  /**
+   * Graph-proximity third RRF list; active only with `scoring: 'rrf'`, embeddings and a `hippoRoot`. See
+   * src/graph/stream.ts.
+   */
   graphStream?: GraphStreamOptions;
-  /** Add the rows nearest the query vector, not only rescore `entries`; without it a row no query word matches cannot surface. */
+  /**
+   * Add the rows nearest the query vector, not only rescore `entries`; without it a row no query word matches cannot
+   * surface.
+   */
   vectorCandidates?: HybridVectorCandidates;
   /** Where vectors are read; hippo.db under `hippoRoot` when unset. */
   store?: HippoStore;
@@ -63,8 +79,15 @@ export interface HybridSearchOptions {
 export const DEFAULT_EMBEDDING_WEIGHT = 0.6;
 export const DEFAULT_MMR_LAMBDA = 0.7;
 
-/** BM25 blended with cosine similarity when stored vectors and a provider are available, BM25 * strength * recency otherwise. */
-export async function hybridSearch(query: string, entries: MemoryEntry[], options: HybridSearchOptions = {}): Promise<SearchResult[]> {
+/**
+ * BM25 blended with cosine similarity when stored vectors and a provider are available, BM25 * strength * recency
+ * otherwise.
+ */
+export async function hybridSearch(
+  query: string,
+  entries: MemoryEntry[],
+  options: HybridSearchOptions = {},
+): Promise<SearchResult[]> {
   const now = options.now ?? evalNow(); // honors HIPPO_FAKE_NOW (eval-only; see ablation.ts)
   const embeddingWeight = options.embeddingWeight ?? DEFAULT_EMBEDDING_WEIGHT;
   const pool = currentEntries(entries, options);
@@ -96,8 +119,17 @@ export async function hybridSearch(query: string, entries: MemoryEntry[], option
   return fitBudget(ordered, options.budget ?? DEFAULT_RECALL_BUDGET, options.minResults ?? 1, options.cost);
 }
 
-/** hippo.db under `hippoRoot` when the caller passed no store: the default lives on this exported entry, never inside the vector arm. */
-export function vectorSourceOf({ hippoRoot, store }: { hippoRoot?: string; store?: HippoStore }): VectorSource | undefined {
+/**
+ * hippo.db under `hippoRoot` when the caller passed no store: the default lives on this exported entry, never inside
+ * the vector arm.
+ */
+export function vectorSourceOf({
+  hippoRoot,
+  store,
+}: {
+  hippoRoot?: string;
+  store?: HippoStore;
+}): VectorSource | undefined {
   return hippoRoot ? { root: hippoRoot, store: store ?? sqliteStore(hippoRoot) } : undefined;
 }
 
@@ -113,7 +145,12 @@ function hybridBoostContext(query: string, pool: MemoryEntry[], now: Date, optio
 }
 
 /** MMR when vectors are loaded, then the optional reranker. */
-async function orderHybrid(query: string, scored: SearchResult[], arm: VectorArm, options: HybridSearchOptions): Promise<SearchResult[]> {
+async function orderHybrid(
+  query: string,
+  scored: SearchResult[],
+  arm: VectorArm,
+  options: HybridSearchOptions,
+): Promise<SearchResult[]> {
   const mmrLambda = options.mmrLambda ?? DEFAULT_MMR_LAMBDA;
   const applyMmr = (options.mmr ?? true) && arm.useEmbeddings && scored.length > 1 && mmrLambda < 1;
   const ordered = applyMmr ? applyMmrWindow(scored, arm.embeddingIndex, mmrLambda, options.explain ?? false) : scored;

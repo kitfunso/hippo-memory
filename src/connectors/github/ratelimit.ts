@@ -1,4 +1,5 @@
-/** GitHub rate-limit header parser: 403 with `X-RateLimit-Remaining: 0` is primary, 429 with `Retry-After` is secondary.
+/**
+ * GitHub rate-limit header parser: 403 with `X-RateLimit-Remaining: 0` is primary, 429 with `Retry-After` is secondary.
  *  Backfill must pause and resume rather than error. */
 
 export interface RateLimitInfo {
@@ -6,7 +7,10 @@ export interface RateLimitInfo {
   readonly reason: 'primary' | 'secondary' | 'none';
 }
 
-/** Parse the rate-limit signal from a GitHub response; `headers` are lower-cased and `now` (epoch seconds) is for deterministic tests. */
+/**
+ * Parse the rate-limit signal from a GitHub response; `headers` are lower-cased and `now` (epoch seconds) is for
+ * deterministic tests.
+ */
 export function parseRateLimit(
   headers: Record<string, string | undefined>,
   status: number,

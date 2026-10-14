@@ -2,7 +2,9 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { realpathOrResolve } from '../util/real-path.js';
 
-/** Minimal inline frontmatter split (no YAML dep) on a leading `---\n...\n---\n` block; returns the key-value map plus the body,
+/**
+ * Minimal inline frontmatter split (no YAML dep) on a leading `---\n...\n---\n` block; returns the key-value map plus
+ * the body,
  *  or an empty `fm` and the original content when no well-formed block is present. */
 interface FrontmatterParseResult {
   fm: Record<string, string>;
@@ -21,7 +23,8 @@ export function splitMarkdownFrontmatter(raw: string): FrontmatterParseResult {
     if (!kv) continue;
     let val = kv[2].trim();
     if (val === '') {
-      // YAML block-style list (`key:` then indented `- item` lines, common in Obsidian/Dendron): collect into a comma-joined value for frontmatterList.
+      // YAML block-style list (`key:` then indented `- item` lines, common in Obsidian/Dendron): collect into a
+      // comma-joined value for frontmatterList.
       const items: string[] = [];
       let j = i + 1;
       let item: RegExpMatchArray | null;
@@ -39,7 +42,9 @@ export function splitMarkdownFrontmatter(raw: string): FrontmatterParseResult {
   return { fm, body };
 }
 
-/** Pull a frontmatter field that may be a YAML flow list (`[a, b]`), a comma-separated scalar, or one token into a string[];
+/**
+ * Pull a frontmatter field that may be a YAML flow list (`[a, b]`), a comma-separated scalar, or one token into a
+ * string[];
  *  quotes and brackets are stripped and empty entries dropped. */
 export function frontmatterList(value: string | undefined): string[] {
   if (!value) return [];
@@ -51,7 +56,9 @@ export function frontmatterList(value: string | undefined): string[] {
     .filter(Boolean);
 }
 
-/** Parse `[[wikilinks]]` from body text: `[[target]]` and `[[target|alias]]` both yield `target`; de-duplicated, order-preserving.
+/**
+ * Parse `[[wikilinks]]` from body text: `[[target]]` and `[[target|alias]]` both yield `target`; de-duplicated,
+ * order-preserving.
  *  Embeds (`![[...]]`) match too, because the leading `!` is outside the capture and a candidate target is harmless. */
 export function parseWikilinks(body: string): string[] {
   const out: string[] = [];
@@ -69,11 +76,16 @@ export function parseWikilinks(body: string): string[] {
   return out;
 }
 
-/** Recursively collect files matching `match` (`*.md` default) under `root` as forward-slash relative paths; symlinks are not followed.
- *  Skips dot-directories and the Hippo store path so a vault containing the store never imports its own mirror files; importVault handles root-IS-the-store. */
+/**
+ * Recursively collect files matching `match` (`*.md` default) under `root` as forward-slash relative paths; symlinks
+ * are not followed.
+ * Skips dot-directories and the Hippo store path so a vault containing the store never imports its own mirror files;
+ * importVault handles root-IS-the-store.
+ */
 export function collectMarkdownFiles(root: string, hippoRoot: string, match: RegExp = /\.md$/i): string[] {
   const out: string[] = [];
-  // Canonicalize (realpath) so a non-dot HIPPO_HOME store nested in the vault is skipped even via a junction or Windows case alias.
+  // Canonicalize (realpath) so a non-dot HIPPO_HOME store nested in the vault is skipped even via a junction or Windows
+  // case alias.
   const resolvedHippoRoot = realpathOrResolve(hippoRoot);
   const walk = (dir: string): void => {
     const entries = fs.readdirSync(dir, { withFileTypes: true });

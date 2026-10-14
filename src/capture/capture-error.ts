@@ -16,7 +16,9 @@ import {
 } from './failure-reading.js';
 import type { JsonValue } from '../util/json.js';
 
-/** Store a failure as an error memory unless it is routine or a repeat, and log it either way, even when storing throws. */
+/**
+ * Store a failure as an error memory unless it is routine or a repeat, and log it either way, even when storing throws.
+ */
 export function captureToolFailure(
   hippoRoot: string,
   tenantId: string,
@@ -48,7 +50,13 @@ function logAndReport(
   onLogged?.(id);
 }
 
-function logFailure(hippoRoot: string, tenantId: string, payload: JsonValue, lesson: FailureReading, outcome: FailureOutcome): number {
+function logFailure(
+  hippoRoot: string,
+  tenantId: string,
+  payload: JsonValue,
+  lesson: FailureReading,
+  outcome: FailureOutcome,
+): number {
   const hash = (s: string | null): string | null => (s === null ? null : failureHash(s));
   return recordFailureAt(hippoRoot, {
     tenantId,
@@ -68,7 +76,12 @@ export interface LessonCaller {
   origins: readonly string[];
 }
 
-export function storeLesson(hippoRoot: string, tenantId: string, text: string, caller?: LessonCaller): 'stored' | 'duplicate' {
+export function storeLesson(
+  hippoRoot: string,
+  tenantId: string,
+  text: string,
+  caller?: LessonCaller,
+): 'stored' | 'duplicate' {
   const sig = failureSignature(text);
   const repeat = loadContentsWithTag(hippoRoot, tenantId, 'auto-captured', caller?.origins).some(
     (content) => failureSignature(content) === sig,

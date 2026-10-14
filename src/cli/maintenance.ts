@@ -68,7 +68,9 @@ export function handleDedup({ hippoRoot, tenantId, flags }: CommandContext): voi
   }
 
   const total = countAllMemories(cliApiContext(hippoRoot, tenantId));
-  console.log(`Scanning ${total} memories for duplicates (same text apart from spacing)${dryRun ? ' (dry run)' : ''}...\n`);
+  console.log(
+    `Scanning ${total} memories for duplicates (same text apart from spacing)${dryRun ? ' (dry run)' : ''}...\n`,
+  );
 
   const result = deduplicateStore(hippoRoot, { dryRun });
 
@@ -91,7 +93,9 @@ function printDedupGroups(result: DedupResult, dryRun: boolean): void {
 
   console.log(`${dryRun ? 'Would remove' : 'Removed'} ${result.removed} duplicates:`);
   if (sameLayerSem.length > 0) {
-    console.log(`  ${sameLayerSem.length} redundant semantic memories (consolidation regenerated near-identical patterns)`);
+    console.log(
+      `  ${sameLayerSem.length} redundant semantic memories (consolidation regenerated near-identical patterns)`,
+    );
   }
   if (sameLayerEpi.length > 0) {
     console.log(`  ${sameLayerEpi.length} duplicate episodic memories (same lesson learned from multiple sources)`);
@@ -131,8 +135,8 @@ export async function handleEmbed(
   const root = resolveAuthRoot(hippoRoot, flags);
   const ctx = cliApiContext(root, tenantId);
 
-  // --status and --reset-physics only read cached state, so they must work with no provider key (e.g. removed after an earlier embed);
-  // the provider-availability gate is deferred to the embed path.
+  // --status and --reset-physics only read cached state, so they must work with no provider key (e.g. removed after an
+  // earlier embed); the provider-availability gate is deferred to the embed path.
   if (flags['reset-physics']) {
     resetPhysics(ctx);
     return;
@@ -163,7 +167,9 @@ export async function handleEmbed(
   const embeddedAfter = new Set(after.vectorIds);
   const unembedded = after.memoryIds.filter((id) => !embeddedAfter.has(id)).length;
   if (unembedded > 0) {
-    printError(`${unembedded} memories are still not embedded (the warnings above name them). Re-run \`hippo embed\` to retry.`);
+    printError(
+      `${unembedded} memories are still not embedded (the warnings above name them). Re-run \`hippo embed\` to retry.`,
+    );
     process.exitCode = 1;
   }
 }

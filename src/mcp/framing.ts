@@ -7,7 +7,9 @@ import { MAX_BODY_BYTES } from '../util/http-util.js';
 const HEADER_DELIM = Buffer.from('\r\n\r\n');
 const EMPTY = Buffer.alloc(0);
 
-/** What of a refused frame has not arrived yet: a byte count when its header declared one, else the rest of its line. */
+/**
+ * What of a refused frame has not arrived yet: a byte count when its header declared one, else the rest of its line.
+ */
 export type FrameRemainder = number | 'line';
 
 export type FrameResult =
@@ -15,26 +17,36 @@ export type FrameResult =
   | { kind: 'skip'; rest: Buffer }
   // Over the cap POST /mcp puts on a body, so one client cannot make the process buffer without bound.
   | { kind: 'oversize'; rest: Buffer; remainder: FrameRemainder }
-  // `needs` is the buffer length a Content-Length frame has to reach before it can complete; absent, a newline or the cap decides.
+  // `needs` is the buffer length a Content-Length frame has to reach before it can complete; absent, a newline or the
+  // cap decides.
   | { kind: 'incomplete'; needs?: number };
 
-export function parseFrame(buffer: Buffer): FrameResult {
-  // Strip leading whitespace/newlines between messages.
+function skipWhitespace(buffer: Buffer): number {
   let start = 0;
   while (
     start < buffer.length &&
-    (buffer[start] === 0x0a || buffer[start] === 0x0d ||
-     buffer[start] === 0x20 || buffer[start] === 0x09)
+    (buffer[start] === 0x0a || buffer[start] === 0x0d || buffer[start] === 0x20 || buffer[start] === 0x09)
   ) {
     start++;
   }
+  return start;
+}
+
+function incompleteOrOversize(trimmed: Buffer): FrameResult {
+  return trimmed.length > MAX_BODY_BYTES
+    ? { kind: 'oversize', rest: EMPTY, remainder: 'line' }
+    : { kind: 'incomplete' };
+}
+
+export function parseFrame(buffer: Buffer): FrameResult {
+  const start = skipWhitespace(buffer);
   if (start === buffer.length) return { kind: 'incomplete' };
   const trimmed = buffer.subarray(start);
 
   // LSP-style Content-Length framing.
   if (trimmed[0] === 0x43 /* 'C' */ || trimmed[0] === 0x63 /* 'c' */) {
     const headerEnd = trimmed.indexOf(HEADER_DELIM);
-    if (headerEnd === -1) return trimmed.length > MAX_BODY_BYTES ? { kind: 'oversize', rest: EMPTY, remainder: 'line' } : { kind: 'incomplete' };
+    if (headerEnd === -1) return incompleteOrOversize(trimmed);
     const header = trimmed.subarray(0, headerEnd).toString('utf-8');
     const match = header.match(/Content-Length:\s*(\d+)/i);
     if (!match) return { kind: 'skip', rest: Buffer.from(trimmed.subarray(headerEnd + 4)) };
@@ -42,16 +54,21 @@ export function parseFrame(buffer: Buffer): FrameResult {
     const bodyStart = headerEnd + 4;
     if (contentLength > MAX_BODY_BYTES) {
       const end = bodyStart + contentLength;
-      return { kind: 'oversize', rest: Buffer.from(trimmed.subarray(Math.min(end, trimmed.length))), remainder: Math.max(0, end - trimmed.length) };
+      return {
+        kind: 'oversize',
+        rest: Buffer.from(trimmed.subarray(Math.min(end, trimmed.length))),
+        remainder: Math.max(0, end - trimmed.length),
+      };
     }
-    if (trimmed.length < bodyStart + contentLength) return { kind: 'incomplete', needs: start + bodyStart + contentLength };
+    if (trimmed.length < bodyStart + contentLength)
+      return { kind: 'incomplete', needs: start + bodyStart + contentLength };
     const body = trimmed.subarray(bodyStart, bodyStart + contentLength).toString('utf-8');
     return { kind: 'message', body, rest: Buffer.from(trimmed.subarray(bodyStart + contentLength)) };
   }
 
   // Newline-delimited JSON (MCP spec).
   const newlineIdx = trimmed.indexOf(0x0a);
-  if (newlineIdx === -1) return trimmed.length > MAX_BODY_BYTES ? { kind: 'oversize', rest: EMPTY, remainder: 'line' } : { kind: 'incomplete' };
+  if (newlineIdx === -1) return incompleteOrOversize(trimmed);
   const rest = Buffer.from(trimmed.subarray(newlineIdx + 1));
   if (newlineIdx > MAX_BODY_BYTES) return { kind: 'oversize', rest, remainder: 0 };
   const line = trimmed.subarray(0, newlineIdx).toString('utf-8').trimEnd();

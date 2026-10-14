@@ -7,7 +7,10 @@ export interface VerifyOpts {
   timestamp: string;
   signature: string;
   signingSecret: string;
-  /** Previous signing secret during rotation (SLACK_SIGNING_SECRET_PREVIOUS); the verifier tries `signingSecret` first, then this. */
+  /**
+   * Previous signing secret during rotation (SLACK_SIGNING_SECRET_PREVIOUS); the verifier tries `signingSecret` first,
+   * then this.
+   */
   previousSecret?: string;
   /** Current unix seconds. Injectable for tests. */
   now?: number;

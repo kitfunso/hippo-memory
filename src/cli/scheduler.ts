@@ -33,7 +33,9 @@ export function loadWorkspaceRegistry(globalRoot: string): WorkspaceRegistry {
   try {
     text = fs.readFileSync(registryPath, 'utf8');
   } catch (err) {
-    log.warn(`workspace registry ${registryPath} could not be read (${errorMessage(err)}); starting with no workspaces`);
+    log.warn(
+      `workspace registry ${registryPath} could not be read (${errorMessage(err)}); starting with no workspaces`,
+    );
     return defaultRegistry();
   }
   try {
@@ -57,10 +59,13 @@ function setAsideCorruptRegistry<E>(registryPath: string, err: E): void {
   const aside = `${registryPath}.corrupt-${new Date().toISOString().replace(/[:.]/g, '-')}`;
   try {
     fs.renameSync(registryPath, aside);
-    log.warn(`workspace registry ${registryPath} is corrupt (${reason}); moved it to ${aside} and starting with no workspaces`);
+    log.warn(
+      `workspace registry ${registryPath} is corrupt (${reason}); moved it to ${aside} and starting with no workspaces`,
+    );
   } catch (renameErr) {
     log.warn(
-      `workspace registry ${registryPath} is corrupt (${reason}) and could not be moved aside (${errorMessage(renameErr)}); ` +
+      `workspace registry ${registryPath} is corrupt (${reason}) and could not be moved aside ` +
+      `(${errorMessage(renameErr)}); ` +
         `starting with no workspaces`,
     );
   }
@@ -117,7 +122,10 @@ export function buildWindowsTaskRun(cmd: string): string {
   return `conhost.exe --headless cmd /c ${cmd}`;
 }
 
-/** `text` for the inside of one double-quoted Windows argument: a backslash run before a quote or the end doubles, so no quote ends the argument early. */
+/**
+ * `text` for the inside of one double-quoted Windows argument: a backslash run before a quote or the end doubles, so no
+ * quote ends the argument early.
+ */
 export function quoteInsideWindowsArg(text: string): string {
   return text.replace(/(\\*)"/g, '$1$1\\"').replace(/\\+$/, '$&$&');
 }

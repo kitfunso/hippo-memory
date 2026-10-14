@@ -1,7 +1,15 @@
 // Admin routes: API keys, quarantine and the audit log.
 import { DEFAULT_LIST_LIMIT } from '../../util/limits.js';
 import { AUDIT_OPS, type AuditOp } from '../../store/audit.js';
-import { auditList, authCreate, authListRows, authRevoke, quarantineApprove, quarantineList, quarantineReject } from '../../api/index.js';
+import {
+  auditList,
+  authCreate,
+  authListRows,
+  authRevoke,
+  quarantineApprove,
+  quarantineList,
+  quarantineReject,
+} from '../../api/index.js';
 import { HttpError, readBody, sendJson } from '../../util/http-util.js';
 import { assertCrossTenantAdmin, recheckContextWithAuth } from '../auth.js';
 import { pageOf, parseCursor, setNextCursorHeader } from '../cursor.js';
@@ -16,23 +24,30 @@ const VALID_AUDIT_OPS: ReadonlySet<AuditOp> = new Set<AuditOp>(AUDIT_OPS);
 const MINT_BODY_MAX_BYTES = 4 * 1024;
 const MINT_BODY_DEADLINE_MS = 10_000;
 
-// Cap on GET /v1/audit?limit=: large enough to dump a small deployment's audit log unpaginated, small enough that a client cannot ask for the world.
+// Cap on GET /v1/audit?limit=: large enough to dump a small deployment's audit log unpaginated, small enough that a
+// client cannot ask for the world.
 const MAX_AUDIT_LIMIT = 10000;
 
 // GET /v1/auth/keys had no limit, so its default page is the cap: a deployment below 1000 keys sees no change.
 const MAX_AUTH_KEYS_PAGE = 1000;
 
-// POST /v1/auth/keys: mints a key; plaintext is in the response body (the CLI client, not this layer, carries the "store this somewhere safe" warning).
+// POST /v1/auth/keys: mints a key; plaintext is in the response body (the CLI client, not this layer, carries the
+// "store this somewhere safe" warning).
 export async function handleCreateAuthKey({ req, res, opts }: AuthedRouteRequest): Promise<void> {
-  // The dispatch gate authenticated before the body, so an unknown caller costs no read; this recheck runs the resolver right before the mint.
-  const raw = await readBody(req, { maxBytes: MINT_BODY_MAX_BYTES, deadlineMs: opts.mintBodyDeadlineMs ?? MINT_BODY_DEADLINE_MS });
+  // The dispatch gate authenticated before the body, so an unknown caller costs no read; this recheck runs the resolver
+  // right before the mint.
+  const raw = await readBody(req, {
+    maxBytes: MINT_BODY_MAX_BYTES,
+    deadlineMs: opts.mintBodyDeadlineMs ?? MINT_BODY_DEADLINE_MS,
+  });
   const ctx = await recheckContextWithAuth(req, opts);
   const body = parseJsonObjectText(raw);
   const labelRaw = body['label'];
   if (labelRaw !== undefined && !isJsonString(labelRaw)) {
     throw new HttpError(400, 'label must be a string');
   }
-  // Optional body.role mirrors the --role CLI flag and is validated strictly: anything but 'admin'|'member' is a 400; authCreate refuses a member caller
+  // Optional body.role mirrors the --role CLI flag and is validated strictly: anything but 'admin'|'member' is a 400;
+  // authCreate refuses a member caller
   // with a 403.
   const roleRaw = body['role'];
   let role: 'admin' | 'member' | undefined;
@@ -51,7 +66,8 @@ export async function handleCreateAuthKey({ req, res, opts }: AuthedRouteRequest
   if (noExpiry !== undefined && !isJsonBoolean(noExpiry)) {
     throw new HttpError(400, 'noExpiry must be true or false');
   }
-  // Security: any body `tenantId` is IGNORED; the key is bound to the caller's authenticated tenant, or tenant A could mint a key for tenant B (see
+  // Security: any body `tenantId` is IGNORED; the key is bound to the caller's authenticated tenant, or tenant A could
+  // mint a key for tenant B (see
   // authCreate).
   const result = await authCreate(ctx, {
     label: labelRaw,
@@ -63,7 +79,8 @@ export async function handleCreateAuthKey({ req, res, opts }: AuthedRouteRequest
   return;
 }
 
-// GET /v1/auth/keys?active=true&limit=&cursor=: lists keys visible to ctx.tenantId; `active` defaults to true, ?active=false includes revoked and expired rows.
+// GET /v1/auth/keys?active=true&limit=&cursor=: lists keys visible to ctx.tenantId; `active` defaults to true,
+// ?active=false includes revoked and expired rows.
 export async function handleListAuthKeys({ res, ctx, query }: AuthedRouteRequest): Promise<void> {
   const activeRaw = query.get('active');
   let active = true;
@@ -74,22 +91,30 @@ export async function handleListAuthKeys({ res, ctx, query }: AuthedRouteRequest
   }
   const limit = parseListLimit(query.get('limit'), MAX_AUTH_KEYS_PAGE, MAX_AUTH_KEYS_PAGE);
   const after = parseCursor(query.get('cursor'), 'integer', 'integer');
-  const page = pageOf(await authListRows(ctx, { active, limit: limit + 1, after }), limit, (r) => ({ key: r.rowId, id: r.rowId }));
+  const page = pageOf(await authListRows(ctx, { active, limit: limit + 1, after }), limit, (r) => ({
+    key: r.rowId,
+    id: r.rowId,
+  }));
   setNextCursorHeader(res, page.nextCursor);
   sendJson(res, 200, page.items.map((r) => r.key));
   return;
 }
 
-// DELETE /v1/auth/keys/:keyId revokes: missing or cross-tenant keys are 404 (no leak); a member is 403 on any key but its own or, via the resolver, those it
+// DELETE /v1/auth/keys/:keyId revokes: missing or cross-tenant keys are 404 (no leak); a member is 403 on any key but
+// its own or, via the resolver, those it
 // minted. Returns 200 with the body rather than 204 so the caller sees revokedAt.
-export async function handleRevokeAuthKey({ res, ctx }: AuthedRouteRequest, keyMatch: Record<string, string>): Promise<void> {
+export async function handleRevokeAuthKey(
+  { res, ctx }: AuthedRouteRequest,
+  keyMatch: Record<string, string>,
+): Promise<void> {
   validateIdSegment(keyMatch.keyId!, 'key id');
   const result = await authRevoke(ctx, keyMatch.keyId!);
   sendJson(res, 200, result);
   return;
 }
 
-// GET /v1/quarantine?status=&limit=&cursor=: quarantine review queue. quarantineList carries no role gate itself, so its row's admin gate is the check.
+// GET /v1/quarantine?status=&limit=&cursor=: quarantine review queue. quarantineList carries no role gate itself, so
+// its row's admin gate is the check.
 export async function handleListQuarantine({ res, ctx, query }: AuthedRouteRequest): Promise<void> {
   const statusRaw = query.get('status');
   let status: 'pending' | 'approved' | 'rejected' | 'all' = 'pending';
@@ -101,13 +126,19 @@ export async function handleListQuarantine({ res, ctx, query }: AuthedRouteReque
   }
   const limit = parseListLimit(query.get('limit'));
   const after = parseCursor(query.get('cursor'), 'string', 'string');
-  const page = pageOf(await quarantineList(ctx, { status, limit: limit + 1, after }), limit, (q) => ({ key: q.quarantinedAt, id: q.id }));
+  const page = pageOf(await quarantineList(ctx, { status, limit: limit + 1, after }), limit, (q) => ({
+    key: q.quarantinedAt,
+    id: q.id,
+  }));
   sendJson(res, 200, { quarantine: page.items, next_cursor: page.nextCursor });
   return;
 }
 
 // POST /v1/quarantine/:id/approve: admin only; ForbiddenError falls through to mapApiError's 403.
-export async function handleApproveQuarantine({ res, ctx }: AuthedRouteRequest, quarantineApproveMatch: Record<string, string>): Promise<void> {
+export async function handleApproveQuarantine(
+  { res, ctx }: AuthedRouteRequest,
+  quarantineApproveMatch: Record<string, string>,
+): Promise<void> {
   validateIdSegment(quarantineApproveMatch.id!, 'memory id');
   await quarantineApprove(ctx, quarantineApproveMatch.id!);
   sendJson(res, 200, { approved: quarantineApproveMatch.id });
@@ -115,14 +146,18 @@ export async function handleApproveQuarantine({ res, ctx }: AuthedRouteRequest, 
 }
 
 // POST /v1/quarantine/:id/reject: admin only; ForbiddenError falls through to mapApiError's 403.
-export async function handleRejectQuarantine({ res, ctx }: AuthedRouteRequest, quarantineRejectMatch: Record<string, string>): Promise<void> {
+export async function handleRejectQuarantine(
+  { res, ctx }: AuthedRouteRequest,
+  quarantineRejectMatch: Record<string, string>,
+): Promise<void> {
   validateIdSegment(quarantineRejectMatch.id!, 'memory id');
   await quarantineReject(ctx, quarantineRejectMatch.id!);
   sendJson(res, 200, { rejected: quarantineRejectMatch.id });
   return;
 }
 
-// GET /v1/audit?op=&since=&limit=&cursor=: all three filters are validated at the route boundary so an invalid value is a 400 before the DB is hit.
+// GET /v1/audit?op=&since=&limit=&cursor=: all three filters are validated at the route boundary so an invalid value is
+// a 400 before the DB is hit.
 export async function handleListAudit({ res, ctx, query }: AuthedRouteRequest): Promise<void> {
   const opRaw = query.get('op');
   let op: AuditOp | undefined;
@@ -156,7 +191,10 @@ export async function handleListAudit({ res, ctx, query }: AuthedRouteRequest): 
   const crossTenant = tenantOverride !== null && tenantOverride !== '' && tenantOverride !== ctx.tenantId;
   if (crossTenant) assertCrossTenantAdmin(ctx, '/v1/audit?tenant= for another tenant');
   const effectiveCtx = crossTenant ? { ...ctx, tenantId: tenantOverride } : ctx;
-  const page = pageOf(await auditList(effectiveCtx, { op, since, limit: limit + 1, after }), limit, (e) => ({ key: e.ts, id: e.id }));
+  const page = pageOf(await auditList(effectiveCtx, { op, since, limit: limit + 1, after }), limit, (e) => ({
+    key: e.ts,
+    id: e.id,
+  }));
   setNextCursorHeader(res, page.nextCursor);
   sendJson(res, 200, page.items);
   return;

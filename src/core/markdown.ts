@@ -1,10 +1,20 @@
 import { DEFAULT_TENANT_ID } from '../util/env.js';
-import { type MemoryEntry, Layer, FALLBACK_HALF_LIFE_DAYS, DEFAULT_SCHEMA_FIT, type ConfidenceLevel, type MemoryKind } from './memory.js';
+import {
+  type MemoryEntry,
+  Layer,
+  FALLBACK_HALF_LIFE_DAYS,
+  DEFAULT_SCHEMA_FIT,
+  type ConfidenceLevel,
+  type MemoryKind,
+} from './memory.js';
 import { dumpFrontmatter, parseFrontmatter } from '../util/yaml.js';
 
 type FrontmatterValue = string | number | boolean | null | string[] | number[];
 
-/** Fixed-shape field set for `serializeEntry`'s frontmatter; tenant_id/origin_project are optional so they stay absent from the YAML when unset. */
+/**
+ * Fixed-shape field set for `serializeEntry`'s frontmatter; tenant_id/origin_project are optional so they stay absent
+ * from the YAML when unset.
+ */
 interface EntryFrontmatterFields {
   id: FrontmatterValue;
   created: FrontmatterValue;
@@ -91,7 +101,8 @@ export function serializeEntry(entry: MemoryEntry): string {
   if (entry.origin_project !== undefined) {
     frontmatter['origin_project'] = entry.origin_project;
   }
-  // Spread into a fresh literal: dumpFrontmatter's Record<string, YamlValue> needs an index signature, which the named interface does not structurally provide.
+  // Spread into a fresh literal: dumpFrontmatter's Record<string, YamlValue> needs an index signature, which the named
+  // interface does not structurally provide.
   const fm = dumpFrontmatter({ ...frontmatter });
   return `${fm}\n\n${entry.content}\n`;
 }
@@ -102,8 +113,8 @@ export function deserializeEntry(raw: string): MemoryEntry | null {
 
   if (!data['id'] || !data['layer']) return null;
 
-  // SAFETY: each `as X` narrows a raw YAML field to a MemoryEntry union member; frontmatter is only written by serializeEntry,
-  // so out-of-range values mean hand-edited files, which this parser may accept (permissive parse).
+  // SAFETY: each `as X` narrows a raw YAML field to a MemoryEntry union member; frontmatter is only written by
+  // serializeEntry, so out-of-range values mean hand-edited files, which this parser may accept (permissive parse).
   return {
     id: String(data['id']),
     created: String(data['created'] ?? new Date().toISOString()),
@@ -116,7 +127,8 @@ export function deserializeEntry(raw: string): MemoryEntry | null {
     emotional_valence: (data['emotional_valence'] as MemoryEntry['emotional_valence']) ?? 'neutral',
     schema_fit: Number(data['schema_fit'] ?? DEFAULT_SCHEMA_FIT),
     source: String(data['source'] ?? 'cli'),
-    outcome_score: data['outcome_score'] === null || data['outcome_score'] === undefined ? null : Number(data['outcome_score']),
+    outcome_score:
+      data['outcome_score'] === null || data['outcome_score'] === undefined ? null : Number(data['outcome_score']),
     outcome_positive: Number(data['outcome_positive'] ?? 0),
     outcome_negative: Number(data['outcome_negative'] ?? 0),
     conflicts_with: normalizeStringArray(data['conflicts_with']),
@@ -126,23 +138,32 @@ export function deserializeEntry(raw: string): MemoryEntry | null {
     parents: normalizeStringArray(data['parents']),
     starred: Boolean(data['starred'] ?? false),
     trace_outcome: (data['trace_outcome'] as MemoryEntry['trace_outcome']) ?? null,
-    source_session_id: data['source_session_id'] === null || data['source_session_id'] === undefined
-      ? null
-      : String(data['source_session_id']),
+    source_session_id:
+      nullableString(data['source_session_id']),
     valid_from: data['valid_from'] ? String(data['valid_from']) : String(data['created'] ?? new Date().toISOString()),
-    superseded_by: data['superseded_by'] === null || data['superseded_by'] === undefined
-      ? null
-      : String(data['superseded_by']),
+    superseded_by:
+      nullableString(data['superseded_by']),
     extracted_from: (data['extracted_from'] as string) ?? null,
     dag_level: Number(data['dag_level'] ?? 0),
     dag_parent_id: (data['dag_parent_id'] as string) ?? null,
-    kind: ((data['kind'] as MemoryKind) ?? 'distilled'),
-    scope: data['scope'] === null || data['scope'] === undefined ? null : String(data['scope']),
-    owner: data['owner'] === null || data['owner'] === undefined ? null : String(data['owner']),
-    artifact_ref: data['artifact_ref'] === null || data['artifact_ref'] === undefined ? null : String(data['artifact_ref']),
-    tenant_id: data['tenant_id'] === null || data['tenant_id'] === undefined ? DEFAULT_TENANT_ID : String(data['tenant_id']),
-    origin_project: !('origin_project' in data) ? undefined : data['origin_project'] === null ? null : String(data['origin_project']),
+    kind: (data['kind'] as MemoryKind) ?? 'distilled',
+    scope: nullableString(data['scope']),
+    owner: nullableString(data['owner']),
+    artifact_ref:
+      nullableString(data['artifact_ref']),
+    tenant_id:
+      nullableString(data['tenant_id']) ?? DEFAULT_TENANT_ID,
+    origin_project: originProjectOf(data),
   };
+}
+
+function originProjectOf(data: Record<string, FrontmatterValue>): string | null | undefined {
+  if (!('origin_project' in data)) return undefined;
+  return data['origin_project'] === null ? null : String(data['origin_project']);
+}
+
+function nullableString(value: FrontmatterValue | undefined): string | null {
+  return value === null || value === undefined ? null : String(value);
 }
 
 function normalizeStringArray(value: FrontmatterValue): string[] {

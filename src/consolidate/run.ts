@@ -51,10 +51,16 @@ export function keptAsWritten(entry: MemoryEntry): boolean {
 export function syncFtsIndex(hippoRoot: string, dryRun: boolean, result: ConsolidationResult): void {
   const counts = ftsDrift(hippoRoot, !dryRun);
   if (counts === null) return;
-  result.details.push(`  🔎 ${dryRun ? 'would re-sync' : 're-synced'} the full-text index (${counts.fts} indexed rows for ${counts.memories} memories)`);
+  result.details.push(
+    `  🔎 ${dryRun ? 'would re-sync' : 're-synced'} the full-text index (${counts.fts} indexed rows for ` +
+    `${counts.memories} memories)`,
+  );
 }
 
-/** State every sleep stage reads or appends to; the pending lists are flushed at the end, each of `units` whole in one transaction. */
+/**
+ * State every sleep stage reads or appends to; the pending lists are flushed at the end, each of `units` whole in one
+ * transaction.
+ */
 export interface SleepRun {
   hippoRoot: string;
   now: Date;
@@ -64,7 +70,10 @@ export interface SleepRun {
   result: ConsolidationResult;
   all: MemoryEntry[];
   retirable: (entry: MemoryEntry) => boolean;
-  /** Auto-promote (1.4) and merge (3) write deterministic content through the guard's bypass, so both check tombstones here first. */
+  /**
+   * Auto-promote (1.4) and merge (3) write deterministic content through the guard's bypass, so both check tombstones
+   * here first.
+   */
   tombstones: TombstoneChecks;
   survivors: MemoryEntry[];
   pendingWrites: MemoryEntry[];

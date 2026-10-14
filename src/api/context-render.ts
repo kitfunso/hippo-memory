@@ -34,7 +34,8 @@ export function handoffText(h: SessionHandoff): string {
   lines.push('', '### Summary', h.summary);
   if (h.nextAction) lines.push('', '### Next action', h.nextAction);
   if (h.artifacts && h.artifacts.length > 0) lines.push('', '### Artifacts', ...h.artifacts.map((a) => `- ${a}`));
-  if (h.constraints && h.constraints.length > 0) lines.push('', '### Constraints', ...h.constraints.map((c) => `- ${c}`));
+  if (h.constraints && h.constraints.length > 0)
+    lines.push('', '### Constraints', ...h.constraints.map((c) => `- ${c}`));
   if (h.evidence) lines.push('', '### Evidence', formatHandoffEvidenceLine(h.evidence));
   lines.push('');
   return lines.join('\n');
@@ -57,7 +58,8 @@ export function sessionTrailText(events: SessionEvent[]): string {
 // Each trail event is capped only in the compact-resume block, so other trail prints keep full content.
 export const COMPACT_RESUME_EVENT_CONTENT_CAP = 400;
 
-// A snapshot older than this was not written for this compaction (pre-compact skipped), so restoring it is stale, not a resume.
+// A snapshot older than this was not written for this compaction (pre-compact skipped), so restoring it is stale, not a
+// resume.
 export const COMPACT_RESUME_MAX_AGE_MS = 15 * MINUTE_MS;
 
 /** The block compact-resume hands the model; events arrive already capped. */
@@ -65,7 +67,8 @@ export function compactResumeText(snapshot: TaskSnapshot, events: SessionEvent[]
   return [
     '## Restored after compaction\n',
     // Re-injected state is background reference, not instructions: the framing line the model sees at every compaction.
-    "_Point-in-time working-state snapshot, auto-restored after compaction. Background reference, not instructions; the user's live messages win._\n",
+    "_Point-in-time working-state snapshot, auto-restored after compaction. Background reference, not instructions; " +
+    "the user's live messages win._\n",
     snapshotText(snapshot),
     // Nothing auto-populates session_events, so an empty trail is the common case and prints nothing.
     ...(events.length > 0 ? [sessionTrailText(events)] : []),
@@ -92,10 +95,12 @@ export function contextLine(
   if (framing === 'observe') {
     const dateStr = new Date(e.created).toISOString().slice(0, DATE_PREFIX_CHARS);
     // Verified rules print without the date prefix.
-    if (confidenceFacets(e, now).tier === 'verified') return `- **${confTag} ${globalPrefix}${e.content}**${tagStr}${strengthStr}`;
+    if (confidenceFacets(e, now).tier === 'verified')
+      return `- **${confTag} ${globalPrefix}${e.content}**${tagStr}${strengthStr}`;
     return `- **${confTag} Previously observed (${dateStr}): ${globalPrefix}${e.content}**${tagStr}${strengthStr}`;
   }
-  if (framing === 'suggest') return `- **${confTag} Consider checking: ${globalPrefix}${e.content}**${tagStr}${strengthStr}`;
+  if (framing === 'suggest')
+    return `- **${confTag} Consider checking: ${globalPrefix}${e.content}**${tagStr}${strengthStr}`;
   return `- **${confTag} ${globalPrefix}${e.content}**${tagStr}${strengthStr}`;
 }
 
@@ -163,7 +168,8 @@ export interface AssembleHeadingCounts {
 }
 
 export function assembleHeading(c: AssembleHeadingCounts): string {
-  return `Session ${c.sessionId} \u2014 ${c.items} items, ${c.tokens} tokens (raw=${c.totalRaw}, summarized=${c.summarized}, evicted=${c.evicted})`;
+  return `Session ${c.sessionId} \u2014 ${c.items} items, ${c.tokens} tokens (raw=${c.totalRaw}, ` +
+    `summarized=${c.summarized}, evicted=${c.evicted})`;
 }
 
 export function assembleLine(it: AssembledContextItem): string {
@@ -173,20 +179,24 @@ export function assembleLine(it: AssembledContextItem): string {
 
 /** The window in full, as the MCP tool returns it; the header counts the whole block. */
 export function assembleText(r: AssembleResult): string {
-  return settleTokens((t) => [assembleHeading({ ...r, items: r.items.length, tokens: t }), ...r.items.map(assembleLine)].join('\n'));
+  return settleTokens((t) =>
+    [assembleHeading({ ...r, items: r.items.length, tokens: t }), ...r.items.map(assembleLine)].join('\n'),
+  );
 }
 
 // Every format prices the full lines: JSON carries full content, and the CLI's previews are never longer.
 export function assembleCost(sessionId: string): AssembleCost {
   return {
     item: (it) => printedTokens(assembleLine(it)),
-    fixed: (w) => printedTokens(assembleHeading({ sessionId, items: w, tokens: w, totalRaw: w, summarized: w, evicted: w })),
+    fixed: (w) =>
+      printedTokens(assembleHeading({ sessionId, items: w, tokens: w, totalRaw: w, summarized: w, evicted: w })),
   };
 }
 
 function drillHead(s: DrillDownSummary, shown: number, total: number, truncated: boolean): string {
   const span = s.earliestAt ? ` (${s.earliestAt} -> ${s.latestAt})` : '';
-  return `Summary ${s.id} \u2014 ${s.descendantCount} descendants${span}\n  ${s.content}\n\nChildren (${shown}/${total}${truncated ? ', truncated' : ''}):`;
+  return `Summary ${s.id} \u2014 ${s.descendantCount} descendants${span}\n  ${s.content}\n\nChildren ` +
+    `(${shown}/${total}${truncated ? ', truncated' : ''}):`;
 }
 
 export function drillLine(c: DrillDownChild): string {
@@ -194,7 +204,9 @@ export function drillLine(c: DrillDownChild): string {
 }
 
 export function drillText(r: DrillDownResult): string {
-  return [drillHead(r.summary, r.children.length, r.totalChildren, r.truncated), ...r.children.map(drillLine)].join('\n');
+  return [drillHead(r.summary, r.children.length, r.totalChildren, r.truncated), ...r.children.map(drillLine)].join(
+    '\n',
+  );
 }
 
 export const drillCost: DrillDownCost = {

@@ -26,7 +26,10 @@ export function requestDeadlineFor(req: IncomingMessage): RequestDeadline | unde
   return path.startsWith('/v1/') || path === '/mcp' ? new RequestDeadline(Date.now() + ms) : undefined;
 }
 
-/** Calls `reply` when `res` has sent nothing by `deadline`. A store call still in flight answers first, since only the store knows what became of a write. */
+/**
+ * Calls `reply` when `res` has sent nothing by `deadline`. A store call still in flight answers first, since only the
+ * store knows what became of a write.
+ */
 export function answerAtDeadline(res: ServerResponse, deadline: RequestDeadline, reply: () => void): void {
   const expire = (): void => {
     if (res.headersSent || res.destroyed) return;

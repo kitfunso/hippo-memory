@@ -1,10 +1,23 @@
 // /v1/customer-notes routes.
-import { CUSTOMER_NOTE, MAX_CHANGE_SUMMARY_LEN, MAX_CUSTOMER_LEN, type SaveCustomerNoteOpts } from '../../objects/customer-notes.js';
+import {
+  CUSTOMER_NOTE,
+  MAX_CHANGE_SUMMARY_LEN,
+  MAX_CUSTOMER_LEN,
+  type SaveCustomerNoteOpts,
+} from '../../objects/customer-notes.js';
 import { sendJson } from '../../util/http-util.js';
 import type { AuthedRouteRequest } from '../types.js';
 import { parseJsonBody } from '../validation.js';
 import { saveFor } from '../../api/objects.js';
-import { closeRoute, getRoute, listRoute, optionalString, requiredString, supersedeRoute, type VersionedRouteConfig } from './object-routes.js';
+import {
+  closeRoute,
+  getRoute,
+  listRoute,
+  optionalString,
+  requiredString,
+  supersedeRoute,
+  type VersionedRouteConfig,
+} from './object-routes.js';
 
 const noteRoutes: VersionedRouteConfig<'customer_note', SaveCustomerNoteOpts> = {
   noun: 'customer note',
@@ -19,7 +32,8 @@ const noteRoutes: VersionedRouteConfig<'customer_note', SaveCustomerNoteOpts> = 
   },
 };
 
-// Routes: customer notes under /v1/customer-notes (create, list, show, supersede, close), mirroring /v1/project-briefs. The store validates and throws;
+// Routes: customer notes under /v1/customer-notes (create, list, show, supersede, close), mirroring /v1/project-briefs.
+// The store validates and throws;
 // the boundary maps validation -> 400, not-found -> 404, not-active -> 409.
 export async function handleCreateCustomerNote(rr: AuthedRouteRequest): Promise<void> {
   const { ctx } = rr;

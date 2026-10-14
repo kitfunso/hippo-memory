@@ -5,7 +5,9 @@ import type { PlanningFallacyEvidence } from '../store/planning-fallacy-evidence
 
 const TARGET_ID_CHARS = 100;
 
-/** Surface delivered on `RecallResult.planningFallacyHint` when a recall query carries a forward-prediction phrase and the closest class has closed history,
+/**
+ * Surface delivered on `RecallResult.planningFallacyHint` when a recall query carries a forward-prediction phrase and
+ * the closest class has closed history,
  *  so the agent sees its own track record at the moment of forecasting. */
 export interface PlanningFallacyHint {
   classTag: string;
@@ -14,19 +16,28 @@ export interface PlanningFallacyHint {
   baserateSummary: string;
   /** Discriminator vs hypothetical future manual-override hints. */
   source: 'j3.2-auto';
-  /** The regex match snippet that triggered detection, so the agent sees WHY the hint appeared and can self-correct if detection misfired. */
+  /**
+   * The regex match snippet that triggered detection, so the agent sees WHY the hint appeared and can self-correct if
+   * detection misfired.
+   */
   detectedPhrase: string;
   nClosed: number;
   /** Null only when every closed-row had estimate_value=0 (ratio undefined). */
   meanRatio: number | null;
 }
 
-/** "Watching" variant emitted when the forward-claim regex matched but no baserate hint was returned (no prediction class tag overlaps the query's tokens).
- *  It surfaces the detection plus a one-line suggestion so the agent can re-tag the prediction or pass the suggestion to the user. */
+/**
+ * "Watching" variant emitted when the forward-claim regex matched but no baserate hint was returned (no prediction
+ * class tag overlaps the query's tokens).
+ * It surfaces the detection plus a one-line suggestion so the agent can re-tag the prediction or pass the suggestion to
+ * the user.
+ */
 export interface PlanningFallacyWatching {
   /** The forward-claim phrase the detector matched (verbatim regex match snippet). */
   detectedPhrase: string;
-  /** Why hippo could not produce a baserate hint despite the match: 'no_class_match' (no class scored >=1 on token overlap)
+  /**
+   * Why hippo could not produce a baserate hint despite the match: 'no_class_match' (no class scored >=1 on token
+   * overlap)
    *  or 'tiebreak' (>=2 classes tied at the best score; silent on ambiguity). */
   reason: 'no_class_match' | 'tiebreak';
   /** One-line agent-facing suggestion for how the user can give hippo
@@ -34,7 +45,9 @@ export interface PlanningFallacyWatching {
   suggestion: string;
 }
 
-/** What `decidePlanningFallacy` hands to recall: EITHER `hint` (baserate available) OR `watching` (regex fired, no baserate), or NEITHER (mode=off,
+/**
+ * What `decidePlanningFallacy` hands to recall: EITHER `hint` (baserate available) OR `watching` (regex fired, no
+ * baserate), or NEITHER (mode=off,
  *  no queryText, no regex match, or nClosed=0). Never both. */
 export interface PlanningFallacyOutput {
   hint?: PlanningFallacyHint;
@@ -56,8 +69,12 @@ export interface PlanningFallacyDecision {
 }
 
 /** The forward claim in a recall query; null when HIPPO_AUTODEBIAS=off, the query is empty or no claim matches. */
-export function detectPlanningClaim(queryText: string, opts: ComputePlanningFallacyHintOpts = {}): ForwardClaimMatch | null {
-  // Env read FIRST so AUTODEBIAS=off pays zero regex cost; read per call so tests can toggle it without a module reload.
+export function detectPlanningClaim(
+  queryText: string,
+  opts: ComputePlanningFallacyHintOpts = {},
+): ForwardClaimMatch | null {
+  // Env read FIRST so AUTODEBIAS=off pays zero regex cost; read per call so tests can toggle it without a module
+  // reload.
   const mode: AutodebiasMode =
     opts.mode ?? (envAutodebiasOff() ? 'off' : 'regex');
   if (mode === 'off') return null;
@@ -113,7 +130,8 @@ export function decidePlanningFallacy(
 const TIEBREAK_SUGGESTION =
   'Multiple prediction classes tied on this query. Refine the query or rename overlapping classes to break the tie.';
 const NO_CLASS_MATCH_SUGGESTION =
-  'No matching prediction class for this forward-claim. Tag your prediction with `hippo predict --class <name>` to start tracking this class.';
+  'No matching prediction class for this forward-claim. Tag your prediction with `hippo predict --class <name>` to ' +
+  'start tracking this class.';
 
 function watchingWithAudit(
   tenantId: string,

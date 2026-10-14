@@ -8,7 +8,8 @@ export function _resetSessionRecallHistoryMcpForTests(): void {
   resetSessionRings('mcp');
 }
 
-// Last recalled IDs per client for outcome feedback, so two HTTP-MCP clients on one tenant cannot poison each other: key is `ctx.clientKey` (hash of
+// Last recalled IDs per client for outcome feedback, so two HTTP-MCP clients on one tenant cannot poison each other:
+// key is `ctx.clientKey` (hash of
 // bearer+remoteAddr over HTTP), else 'stdio-${pid}', else `${tenantId}:default` for a McpContext built in tests.
 const MAX_RECALL_CLIENTS = 4096;
 
@@ -26,7 +27,9 @@ class RecentRecalls extends Map<string, string[]> {
 export const lastRecalledIds: Map<string, string[]> = new RecentRecalls();
 export { autoSleepInFlight } from '../api/auto-sleep.js';
 
-export function resolveClientKey(ctx: { clientKey?: string; tenantId: string; project?: { name: string } } | undefined): string {
+export function resolveClientKey(
+  ctx: { clientKey?: string; tenantId: string; project?: { name: string } } | undefined,
+): string {
   const base = ctx?.clientKey ? ctx.clientKey : `stdio-${process.pid}:${ctx?.tenantId || DEFAULT_TENANT_ID}`;
   return ctx?.project ? `${base}:${ctx.project.name}` : base;
 }
