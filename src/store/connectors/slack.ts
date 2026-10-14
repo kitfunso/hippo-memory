@@ -1,5 +1,6 @@
-// Every statement the Slack connector runs on hippo.db: backfill cursors, the event log, the dead-letter queue and workspace routing.
-// `xAt(db, ...)` runs on the caller's handle; the same name without `At` opens hippo.db for that one call.
+// Every statement the Slack connector runs on hippo.db: backfill cursors, the event log, the dead-letter queue and
+// workspace routing. `xAt(db, ...)` runs on the caller's handle; the same name without `At` opens hippo.db for that one
+// call.
 
 import type { DatabaseSyncLike } from '../../db/index.js';
 import { onHandle } from '../open.js';
@@ -20,7 +21,8 @@ export function slackCursorAt(db: DatabaseSyncLike, tenantId: string, channelId:
 export function saveSlackCursorAt(db: DatabaseSyncLike, tenantId: string, channelId: string, latestTs: string): void {
   db.prepare(
     `INSERT INTO slack_cursors (tenant_id, channel_id, latest_ts, updated_at) VALUES (?,?,?,?)
-       ON CONFLICT(tenant_id, channel_id) DO UPDATE SET latest_ts = excluded.latest_ts, updated_at = excluded.updated_at`,
+       ON CONFLICT(tenant_id, channel_id) DO UPDATE SET latest_ts = excluded.latest_ts, updated_at =
+       excluded.updated_at`,
   ).run(tenantId, channelId, latestTs, new Date().toISOString());
 }
 
@@ -59,7 +61,8 @@ export function markSlackEventSeen(hippoRoot: string, eventId: string, memoryId:
 
 // Deletion lookup
 
-/** The raw memory a Slack message became. The tenant filter keeps one tenant's deletion from reaching another's row with the same ref. */
+/** The raw memory a Slack message became. The tenant filter keeps one tenant's deletion from reaching another's row
+ * with the same ref. */
 export function rawMemoryIdForArtifactAt(db: DatabaseSyncLike, artifactRef: string, tenantId: string): string | null {
   // SAFETY: the SELECT projects only `id`; .get() returns undefined when no row matches.
   const row = db

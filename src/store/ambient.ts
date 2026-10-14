@@ -19,7 +19,8 @@ export interface AmbientStoreFilter {
   now: Date;
 }
 
-// SHORTCUT: mirrors loadContextCandidates' WHERE (request-path snapshots pin the match); share it once store.ts is split.
+// SHORTCUT: mirrors loadContextCandidates' WHERE (request-path snapshots pin the match); share it once store.ts is
+// split.
 function contextRowsWhere(tenantId: string, filter: AmbientStoreFilter) {
   const where = ['tenant_id = ?', `COALESCE(superseded_by, '') = ''`, `COALESCE(kind, '') != 'archived'`];
   const params: string[] = [tenantId];
@@ -38,12 +39,14 @@ function contextRowsWhere(tenantId: string, filter: AmbientStoreFilter) {
   return { where, params };
 }
 
-/** A secret tag's row, the half of detectSecret SQL can check; the LIKEs only skip json_each on rows that cannot match. */
+/** A secret tag's row, the half of detectSecret SQL can check; the LIKEs only skip json_each on rows that cannot
+ * match. */
 function secretTaggedSql() {
   const tags = [...SECRET_TAGS];
   return {
     sql: `((${tags.map(() => 'tags_json LIKE ?').join(' OR ')})
-      AND EXISTS (SELECT 1 FROM json_each(${jsonList('tags_json')}) WHERE lower(value) IN (${placeholders(tags.length)})))`,
+      AND EXISTS (SELECT 1 FROM json_each(${jsonList('tags_json')}) WHERE lower(value) IN
+      (${placeholders(tags.length)})))`,
     params: [...tags.map((t) => `%"${t}"%`), ...tags],
   };
 }
@@ -76,7 +79,9 @@ export function loadAmbientTallies(hippoRoot: string, tenantId: string, filter: 
       Record<Exclude<keyof AmbientTallies, 'tagCounts' | 'errors'>, number | bigint> & { tagLists: string };
     const tagCounts = new Map<string, number>();
     let errors = 0;
-    const lists = /* SAFETY: jsonList yields an array per row, joined into one array */ JSON.parse(row.tagLists) as unknown[][];
+    const lists = /* SAFETY: jsonList yields an array per row, joined into one array */ JSON.parse(
+      row.tagLists,
+    ) as unknown[][];
     for (const raw of lists) {
       const tags = raw.map((item) => String(item));
       for (const tag of tags) tagCounts.set(tag, (tagCounts.get(tag) ?? 0) + 1);

@@ -1,4 +1,5 @@
-// Owns hippo.db's stored vectors, the identity of the model that built them, and the particle rows: every read and write of the three.
+// Owns hippo.db's stored vectors, the identity of the model that built them, and the particle rows: every read and
+// write of the three.
 import { getMeta, setMeta, withWriteScope, type DatabaseSyncLike } from '../db/index.js';
 import { onHandle } from './open.js';
 import { DEFAULT_EMBEDDING_MODEL } from '../embeddings/local.js';
@@ -9,7 +10,14 @@ import { initializeParticle } from '../core/physics.js';
 import { float32ToBuffer } from '../util/vector-codec.js';
 import type { VectorBackfillQuery, VectorRowWrite, VectorWrite, VectorWriteResult } from './port.js';
 import {
-  EMBEDDING_MODEL_META_KEY, deleteOrphanVectors, hasStoredVectors, loadVectors, loadVectorViews, replaceAllVectors, storedVectorDims, storedVectorIds,
+  EMBEDDING_MODEL_META_KEY,
+  deleteOrphanVectors,
+  hasStoredVectors,
+  loadVectors,
+  loadVectorViews,
+  replaceAllVectors,
+  storedVectorDims,
+  storedVectorIds,
   upsertVectors,
 } from '../db/vector-store.js';
 import { selectEntriesByIds } from './entry-reads.js';
@@ -57,7 +65,8 @@ export function saveIndexIdentity(hippoRoot: string, identity: string): void {
   });
 }
 
-/** Every stored vector keyed by memory id; `{}` when none. Search reads only the rows it ranks via `loadStoredVectors`. */
+/** Every stored vector keyed by memory id; `{}` when none. Search reads only the rows it ranks via
+ * `loadStoredVectors`. */
 export function loadEmbeddingIndex(hippoRoot: string): Record<string, number[]> {
   return onHandle(hippoRoot, (db) => {
     return Object.fromEntries(loadVectors(db));
@@ -99,8 +108,13 @@ export function saveEmbeddingIndex(hippoRoot: string, index: Record<string, numb
   });
 }
 
-/** Inserts or replaces `rows` under `model`, each row its own commit so a failure keeps the rows before it; returns how many it wrote. */
-export function saveStoredVectors(hippoRoot: string, rows: Iterable<readonly [string, readonly number[]]>, model: string): number {
+/** Inserts or replaces `rows` under `model`, each row its own commit so a failure keeps the rows before it; returns how
+ * many it wrote. */
+export function saveStoredVectors(
+  hippoRoot: string,
+  rows: Iterable<readonly [string, readonly number[]]>,
+  model: string,
+): number {
   return onHandle(hippoRoot, (db) => {
     return upsertVectors(db, rows, model);
   });
@@ -132,23 +146,32 @@ function ownedIds(db: DatabaseSyncLike, ids: readonly string[], tenantId: string
   const owned = new Set<string>();
   for (const chunk of chunked([...new Set(ids)])) {
     // SAFETY: the SELECT names one column, id.
-    const rows = db.prepare(`SELECT id FROM memories WHERE +tenant_id = ? AND id IN (${placeholders(chunk.length)})`).all(
-      tenantId,
-      ...chunk
-    ) as { id: string }[];
+    const rows = db
+      .prepare(`SELECT id FROM memories WHERE +tenant_id = ? AND id IN (${placeholders(chunk.length)})`)
+      .all(tenantId, ...chunk) as { id: string }[];
     for (const row of rows) owned.add(row.id);
   }
   return owned;
 }
 
-// savePhysicsState opens its own transaction and overwrites, so the first particle for a memory is inserted here instead.
+// savePhysicsState opens its own transaction and overwrites, so the first particle for a memory is inserted here
+// instead.
 function insertNewParticles(db: DatabaseSyncLike, rows: readonly VectorRowWrite[]): void {
   const stmt = db.prepare(`
     INSERT INTO memory_physics (memory_id, position_blob, velocity_blob, mass, charge, temperature, last_simulation)
     VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(memory_id) DO NOTHING
   `);
   for (const { memoryId, particle: p } of rows) {
-    if (p) stmt.run(memoryId, float32ToBuffer(p.position), float32ToBuffer(p.velocity), p.mass, p.charge, p.temperature, p.lastSimulation);
+    if (p)
+      stmt.run(
+        memoryId,
+        float32ToBuffer(p.position),
+        float32ToBuffer(p.velocity),
+        p.mass,
+        p.charge,
+        p.temperature,
+        p.lastSimulation,
+      );
   }
 }
 
@@ -157,10 +180,16 @@ export function writeVectorsAt(db: DatabaseSyncLike, write: VectorWrite): Vector
     const replaces = replacesIndex(embeddingIndexStateOn(db), write.model);
     if (replaces && !write.replaceIndex) return { written: 0, modelMismatch: true };
     const owned = ownedIds(db, write.rows.map((r) => r.memoryId), write.tenantId);
-    const rows = write.rows.filter((r) => owned.has(r.memoryId) && r.vector.length > 0 && r.vector.every(Number.isFinite));
+    const rows = write.rows.filter(
+      (r) => owned.has(r.memoryId) && r.vector.length > 0 && r.vector.every(Number.isFinite),
+    );
     if (rows.length === 0) return { written: 0, modelMismatch: false };
     if (replaces) db.exec('DELETE FROM memory_vectors; DELETE FROM memory_physics;');
-    const written = upsertVectors(db, rows.map((r): [string, readonly number[]] => [r.memoryId, r.vector]), write.model);
+    const written = upsertVectors(
+      db,
+      rows.map((r): [string, readonly number[]] => [r.memoryId, r.vector]),
+      write.model,
+    );
     insertNewParticles(db, rows);
     setMeta(db, EMBEDDING_MODEL_META_KEY, write.model);
     return { written, modelMismatch: false };
@@ -193,8 +222,13 @@ function* entriesInPages(db: DatabaseSyncLike, ids: readonly string[]): Generato
   }
 }
 
-/** Replaces every particle under `hippoRoot` with a fresh one per memory in `ids` that has an embedding; returns how many. Rows are read a page at a time. */
-export function resetStoredParticles(hippoRoot: string, ids: readonly string[], embeddingIndex: Record<string, number[]>): number {
+/** Replaces every particle under `hippoRoot` with a fresh one per memory in `ids` that has an embedding; returns how
+ * many. Rows are read a page at a time. */
+export function resetStoredParticles(
+  hippoRoot: string,
+  ids: readonly string[],
+  embeddingIndex: Record<string, number[]>,
+): number {
   return onHandle(hippoRoot, (db) => {
     return resetAllPhysicsState(db, entriesInPages(db, ids), embeddingIndex);
   });

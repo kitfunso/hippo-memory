@@ -1,5 +1,6 @@
-// In-memory observer for one call (a context call, a compaction boundary or a session end): what was considered, why each was rejected, what reached stdout.
-// No DB access (the caller hands build()'s output to src/store/recall-trace.ts); hashes, ids, counts and enums only, never text.
+// In-memory observer for one call (a context call, a compaction boundary or a session end): what was considered, why
+// each was rejected, what reached stdout. No DB access (the caller hands build()'s output to
+// src/store/recall-trace.ts); hashes, ids, counts and enums only, never text.
 import type { MemoryEntry } from '../core/memory.js';
 import { evalNow } from '../core/ablation.js';
 import { scoreOverlap, type PromptRecallGate } from '../core/prompt-recall.js';
@@ -7,7 +8,8 @@ import { hookPayloadSessionId, hookPayloadString, isSubagentPayload } from '../u
 import { blockHash, estimateTokens } from '../util/token-text.js';
 import { errorMessage, log } from '../util/log.js';
 export type DeliveryRuntime = 'claude-code' | 'codex' | 'copilot' | 'unknown';
-export type DeliveryEventType = 'prompt-submit' | 'pinned-manual' | 'pre-compact' | 'compact-resume' | 'session-end' | 'context' | 'tool-failure';
+export type DeliveryEventType =
+  'prompt-submit' | 'pinned-manual' | 'pre-compact' | 'compact-resume' | 'session-end' | 'context' | 'tool-failure';
 /** True for the boundary types: a compaction's two hooks and the end of a session. */
 export const isBoundaryEvent = (type: DeliveryEventType): boolean =>
   type === 'pre-compact' || type === 'compact-resume' || type === 'session-end';
@@ -23,8 +25,8 @@ export type DeliveryOutcome = 'emitted' | 'reused' | 'rejected';
 export type DeliveryRejectReason =
   | 'budget' | 'gate-below-threshold' | 'gate-max-items' | 'duplicate' | 'scope' | 'quality' | 'limit';
 
-/** Row format version in `delivery_events.ledger_version`: 4 = written by a binary that can write `tool-failure` rows and hashes the
- * store's resolved root. */
+/** Row format version in `delivery_events.ledger_version`: 4 = written by a binary that can write `tool-failure` rows
+ * and hashes the store's resolved root. */
 export const DELIVERY_LEDGER_VERSION = 4;
 /** Rejected candidate rows kept per event; the rest only add to `rejected_unlisted`. */
 export const DELIVERY_REJECTED_ROW_CAP = 16;
@@ -108,13 +110,19 @@ export interface DeliveryObserver {
   sections(shown: number, dropped: number): void;
   /** Returns `admit`'s own answer unchanged and lets its throws through. */
   watchAdmit(admit: (e: MemoryEntry) => boolean): (e: MemoryEntry) => boolean;
-  /** The loader's quality floor dropped a row admit let through; with prompt recall on, eligibility reports it instead. */
+  /** The loader's quality floor dropped a row admit let through; with prompt recall on, eligibility reports it
+   * instead. */
   qualityDropped(entry: MemoryEntry, isGlobal: boolean): void;
   disabled(): void;
   /** No `pool` means pin or recent by the entry's own flag. */
   offer(entries: readonly MemoryEntry[], isGlobal: boolean, pool?: DeliveryPool): void;
   reject(entry: MemoryEntry, stage: DeliveryStage, reason: DeliveryRejectReason, score?: number, tokens?: number): void;
-  dropMissing(before: readonly MemoryEntry[], after: readonly MemoryEntry[], stage: DeliveryStage, reason: DeliveryRejectReason): void;
+  dropMissing(
+    before: readonly MemoryEntry[],
+    after: readonly MemoryEntry[],
+    stage: DeliveryStage,
+    reason: DeliveryRejectReason,
+  ): void;
   gated(
     prompt: ReadonlySet<string>,
     candidates: readonly { id: string; tokens: ReadonlySet<string> }[],
@@ -144,7 +152,8 @@ export interface DeliveryRecorder extends DeliveryObserver {
   delivered(outcome: DeliveryOutcomeInput): void;
   /** The failure log row id a `tool-failure` event links to; null when the log write threw. */
   logged(failureId: number | null): void;
-  /** Builds the event and hands it to `write` once per call; throws on an injected fault, and writes nothing once broken. */
+  /** Builds the event and hands it to `write` once per call; throws on an injected fault, and writes nothing once
+   * broken. */
   flush(write: (input: DeliveryEventInput) => number | null): void;
 }
 
@@ -156,7 +165,8 @@ export interface DeliveryRecorderInit {
   tenantId: string;
   stdinText?: string;
   envSessionId?: string;
-  /** Set by the caller's runtime flag; Copilot payloads carry hook_event_name too, so inference would say claude-code. */
+  /** Set by the caller's runtime flag; Copilot payloads carry hook_event_name too, so inference would say
+   * claude-code. */
   runtime?: DeliveryRuntime;
   /** Set by hooks that are not prompt or context calls; without it the payload's hook event decides. */
   eventType?: DeliveryEventType;
@@ -323,7 +333,8 @@ function buildEvent(
   return {
     ts,
     tenantId: init.tenantId,
-    runtime: init.runtime ?? (payload.hostTurnId !== null ? 'codex' : payload.hookEvent !== null ? 'claude-code' : 'unknown'),
+    runtime:
+      init.runtime ?? (payload.hostTurnId !== null ? 'codex' : payload.hookEvent !== null ? 'claude-code' : 'unknown'),
     eventType,
     surface: eventType === 'context' ? 'context' : 'hook',
     storeHash: init.storeHash,
@@ -359,59 +370,113 @@ function buildEvent(
   };
 }
 
-type CandidateMethods = Pick<DeliveryObserver, 'qualityDropped' | 'offer' | 'reject' | 'dropMissing' | 'gated' | 'selected'>;
+type CandidateMethods = Pick<
+  DeliveryObserver,
+  'qualityDropped' | 'offer' | 'reject' | 'dropMissing' | 'gated' | 'selected'
+>;
+
+function markQualityDropped(
+  state: RecorderState,
+  ...[e, isGlobal]: Parameters<DeliveryObserver['qualityDropped']>
+): void {
+  state.filtered.add(e.id);
+  if (!state.candidates.has(e.id)) {
+    state.candidates.set(e.id, {
+      id: e.id,
+      sourceStore: storeOf(isGlobal),
+      pool: 'recent',
+      stage: null,
+      reason: null,
+      score: null,
+      tokens: null,
+    });
+  }
+  rejectId(state, e.id, { stage: 'load', reason: 'quality', score: null, tokens: null });
+}
+
+function offerEntries(state: RecorderState, ...[entries, isGlobal, pool]: Parameters<DeliveryObserver['offer']>): void {
+  for (const e of entries) {
+    const held = state.candidates.get(e.id);
+    const wanted: DeliveryPool = pool ?? (e.pinned ? 'pin' : 'recent');
+    // A loaded recent row the prompt-recall gate then judges belongs to that pool.
+    const relabel = held !== undefined && held.reason === null && held.pool === 'recent' && wanted === 'prompt-recall';
+    if (held !== undefined && !relabel) continue;
+    state.candidates.set(e.id, {
+      id: e.id,
+      sourceStore: storeOf(isGlobal),
+      pool: wanted,
+      stage: null,
+      reason: null,
+      score: null,
+      tokens: null,
+    });
+  }
+}
 
 /** The candidate-tracking half of the observer, each method run through `guard`. */
 function candidateMethods(state: RecorderState, guard: Guard): CandidateMethods {
   return {
-    qualityDropped: (e, isGlobal) => guard(() => {
-      state.filtered.add(e.id);
-      if (!state.candidates.has(e.id)) {
-        state.candidates.set(e.id, {
-          id: e.id, sourceStore: storeOf(isGlobal), pool: 'recent', stage: null, reason: null, score: null, tokens: null,
+    qualityDropped: (...args) => guard(() => markQualityDropped(state, ...args)),
+    offer: (...args) => guard(() => offerEntries(state, ...args)),
+    reject: (e, stage, reason, score, tokens) =>
+      guard(() => rejectId(state, e.id, { stage, reason, score: score ?? null, tokens: tokens ?? null })),
+    dropMissing: (before, after, stage, reason) =>
+      guard(() => {
+        const kept = new Set(after.map((e) => e.id));
+        for (const e of before)
+          if (!kept.has(e.id)) rejectId(state, e.id, { stage, reason, score: null, tokens: null });
+      }),
+    gated: (prompt, items, gate, kept) =>
+      guard(() => {
+        const keptIds = new Set(kept.map((g) => g.item.id));
+        for (const c of items) {
+          if (keptIds.has(c.id)) continue;
+          const { score, shared } = scoreOverlap(prompt, c.tokens, gate.metric);
+          const cleared = score >= gate.threshold && shared >= gate.minShared;
+          rejectId(state, c.id, {
+            stage: 'gate',
+            reason: cleared ? 'gate-max-items' : 'gate-below-threshold',
+            score,
+            tokens: null,
+          });
+        }
+      }),
+    selected: (items) =>
+      guard(() => {
+        state.picked.clear();
+        items.forEach((r, i) => {
+          state.picked.set(r.entry.id, {
+            entry: r.entry,
+            rank: i + 1,
+            score: r.score,
+            tokens: r.tokens,
+            sourceStore: storeOf(r.isGlobal),
+            promptRecall: r.promptRecall === true,
+          });
         });
-      }
-      rejectId(state, e.id, { stage: 'load', reason: 'quality', score: null, tokens: null });
-    }),
-    offer: (entries, isGlobal, pool) => guard(() => {
-      for (const e of entries) {
-        const held = state.candidates.get(e.id);
-        const wanted: DeliveryPool = pool ?? (e.pinned ? 'pin' : 'recent');
-        // A loaded recent row the prompt-recall gate then judges belongs to that pool.
-        const relabel = held !== undefined && held.reason === null && held.pool === 'recent' && wanted === 'prompt-recall';
-        if (held !== undefined && !relabel) continue;
-        state.candidates.set(e.id, {
-          id: e.id, sourceStore: storeOf(isGlobal), pool: wanted, stage: null, reason: null, score: null, tokens: null,
-        });
-      }
-    }),
-    reject: (e, stage, reason, score, tokens) => guard(() => rejectId(state, e.id, { stage, reason, score: score ?? null, tokens: tokens ?? null })),
-    dropMissing: (before, after, stage, reason) => guard(() => {
-      const kept = new Set(after.map((e) => e.id));
-      for (const e of before) if (!kept.has(e.id)) rejectId(state, e.id, { stage, reason, score: null, tokens: null });
-    }),
-    gated: (prompt, items, gate, kept) => guard(() => {
-      const keptIds = new Set(kept.map((g) => g.item.id));
-      for (const c of items) {
-        if (keptIds.has(c.id)) continue;
-        const { score, shared } = scoreOverlap(prompt, c.tokens, gate.metric);
-        const cleared = score >= gate.threshold && shared >= gate.minShared;
-        rejectId(state, c.id, { stage: 'gate', reason: cleared ? 'gate-max-items' : 'gate-below-threshold', score, tokens: null });
-      }
-    }),
-    selected: (items) => guard(() => {
-      state.picked.clear();
-      items.forEach((r, i) => {
-        state.picked.set(r.entry.id, {
-          entry: r.entry, rank: i + 1, score: r.score, tokens: r.tokens,
-          sourceStore: storeOf(r.isGlobal), promptRecall: r.promptRecall === true,
-        });
-      });
-    }),
+      }),
   };
 }
 
 export type DeliveryFault = 'observe' | 'build' | 'flush';
+
+function newRecorderState(): RecorderState {
+  return {
+    candidates: new Map(),
+    picked: new Map(),
+    filtered: new Set(),
+    facts: null,
+    shown: 0,
+    dropped: 0,
+    disabledSeen: false,
+    outcome: { state: 'empty' },
+    queryHash: null,
+    recallTraceId: null,
+    failureId: null,
+    broken: null,
+    flushed: false,
+  };
+}
 
 /** A recorder for one call; every observer method is guarded, and a throw marks it broken instead of escaping. */
 export function createDeliveryRecorder(init: DeliveryRecorderInit): DeliveryRecorder {
@@ -419,10 +484,7 @@ export function createDeliveryRecorder(init: DeliveryRecorderInit): DeliveryReco
   const ts = evalNow().toISOString();
   const fault = init.fault ?? null;
   const payload = readPayload(init);
-  const state: RecorderState = {
-    candidates: new Map(), picked: new Map(), filtered: new Set(), facts: null, shown: 0, dropped: 0,
-    disabledSeen: false, outcome: { state: 'empty' }, queryHash: null, recallTraceId: null, failureId: null, broken: null, flushed: false,
-  };
+  const state = newRecorderState();
 
   const guard = guardFor(state, fault);
   const { qualityDropped, offer, reject, dropMissing, gated, selected } = candidateMethods(state, guard);

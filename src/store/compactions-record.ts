@@ -7,13 +7,39 @@ import { selectItemRows } from '../util/compaction-items.js';
 import { isSharedStore, loadConfig } from '../core/config.js';
 import { closeHippoDb, isSqliteBusy, openHippoDb, withWriteScopeOr, type DatabaseSyncLike } from '../db/index.js';
 import { gatedWrite } from './gated-write.js';
-import { COMPACTION_MEMORY_TAG, COMPACTION_SOURCE_PREFIX, Layer, createMemory, generateId, type MemoryEntry } from '../core/memory.js';
-import { fallbackOrigin, isGlobalStoreRoot, projectId, projectNames, resolveProjectIdentity, type ProjectRef } from '../core/project-identity.js';
 import {
-  closeStartedWithoutSummary, compactionProgress, compactionRowsByRequest, heldMemoryRows, insertStartedCompaction, insertSummarisedCompaction,
-  latestCompactionRows, latestStartedRows, markCompactionDone, markCompactionSummarised, markSnapshotSavedRow, nextCompactionStart, openTranscriptRows,
+  COMPACTION_MEMORY_TAG,
+  COMPACTION_SOURCE_PREFIX,
+  Layer,
+  createMemory,
+  generateId,
+  type MemoryEntry,
+} from '../core/memory.js';
+import {
+  fallbackOrigin,
+  isGlobalStoreRoot,
+  projectId,
+  projectNames,
+  resolveProjectIdentity,
+  type ProjectRef,
+} from '../core/project-identity.js';
+import {
+  closeStartedWithoutSummary,
+  compactionProgress,
+  compactionRowsByRequest,
+  heldMemoryRows,
+  insertStartedCompaction,
+  insertSummarisedCompaction,
+  latestCompactionRows,
+  latestStartedRows,
+  markCompactionDone,
+  markCompactionSummarised,
+  markSnapshotSavedRow,
+  nextCompactionStart,
+  openTranscriptRows,
   stalledSummarisedRows,
-  type CompactionRow, type CompactionStatus,
+  type CompactionRow,
+  type CompactionStatus,
 } from './compactions.js';
 import { strengthenRetrievedOn, writeEntryMirrors } from './entry-writes.js';
 import { isRecallBoostAblated } from '../core/ablation.js';
@@ -45,14 +71,18 @@ export interface CompactionRecord {
 
 export type Log = (message: string) => void;
 
-/** Where the session ran: rows written through the global store or a shared store keep the project the session was in. */
+/** Where the session ran: rows written through the global store or a shared store keep the project the session was
+ * in. */
 function compactionProject(hippoRoot: string, cwd: string | null): ProjectRef {
-  if (!isGlobalStoreRoot(hippoRoot) && !isSharedStore(hippoRoot)) return resolveProjectIdentity(path.dirname(hippoRoot));
-  // No cwd means user-global, as stampOriginProject gives the global store; undefined would fall back to the hook's own cwd.
+  if (!isGlobalStoreRoot(hippoRoot) && !isSharedStore(hippoRoot))
+    return resolveProjectIdentity(path.dirname(hippoRoot));
+  // No cwd means user-global, as stampOriginProject gives the global store; undefined would fall back to the hook's own
+  // cwd.
   return cwd === null ? '' : resolveProjectIdentity(cwd);
 }
 
-/** The record column cannot hold NULL, but an item from an unknown folder on a shared store must not read as user-global. */
+/** The record column cannot hold NULL, but an item from an unknown folder on a shared store must not read as
+ * user-global. */
 function itemOrigin(hippoRoot: string, ctx: ItemContext): string | null {
   return ctx.cwd === null && isSharedStore(hippoRoot) ? fallbackOrigin(hippoRoot) : ctx.originProject;
 }
@@ -95,7 +125,12 @@ export interface CompactionStart {
   transcriptPath: string | null;
 }
 
-export function startCompaction(db: DatabaseSyncLike, tenantId: string, start: CompactionStart, at: Date = new Date()): string {
+export function startCompaction(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  start: CompactionStart,
+  at: Date = new Date(),
+): string {
   const id = generateId('cmp');
   insertStartedCompaction(db, tenantId, { id, ...start, startedAt: at.toISOString() });
   return id;
@@ -106,19 +141,33 @@ export function latestCompaction(db: DatabaseSyncLike, tenantId: string, session
   return latestCompactionRows(db, tenantId, sessionId).map(toRecord)[0] ?? null;
 }
 
-/** The record a caller's request made, whatever state it reached, so a retry neither writes its items twice nor starts a second record.
- * Another session's id is a ConflictError. */
-export function compactionByRequest(db: DatabaseSyncLike, tenantId: string, requestId: string, sessionId: string): CompactionRecord | null {
+/** The record a caller's request made, whatever state it reached, so a retry neither writes its items twice nor starts
+ * a second record. Another session's id is a ConflictError. */
+export function compactionByRequest(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  requestId: string,
+  sessionId: string,
+): CompactionRecord | null {
   const record = compactionRowsByRequest(db, tenantId, requestId).map(toRecord)[0] ?? null;
   // Sessions are owner-bound, so this also keeps one owner from reading or finishing another's record.
-  if (record !== null && record.sessionId !== sessionId) throw new ConflictError('request id belongs to another session');
+  if (record !== null && record.sessionId !== sessionId)
+    throw new ConflictError('request id belongs to another session');
   return record;
 }
 
-/** Pre-compact's record for the compaction that is ending: the session's newest `started` one within REPLAY_AFTER_MS before `at`.
- * An older one is left for the transcript fill. */
+/** Pre-compact's record for the compaction that is ending: the session's newest `started` one within REPLAY_AFTER_MS
+ * before `at`. An older one is left for the transcript fill. */
 function latestStarted(db: DatabaseSyncLike, tenantId: string, sessionId: string, at: Date): CompactionRecord | null {
-  return latestStartedRows(db, tenantId, sessionId, at.toISOString(), new Date(at.getTime() - REPLAY_AFTER_MS).toISOString()).map(toRecord)[0] ?? null;
+  return (
+    latestStartedRows(
+      db,
+      tenantId,
+      sessionId,
+      at.toISOString(),
+      new Date(at.getTime() - REPLAY_AFTER_MS).toISOString(),
+    ).map(toRecord)[0] ?? null
+  );
 }
 
 /** Moves a `started` record to `summarised`; false when another process already moved it.
@@ -131,15 +180,27 @@ interface MarkSummarisedOptions {
 
 function markSummarised(db: DatabaseSyncLike, tenantId: string, id: string, options: MarkSummarisedOptions): boolean {
   const { text, summarisedAt, requestId } = options;
-  return markCompactionSummarised(db, tenantId, id, { summary: text.summary, itemsJson: JSON.stringify(text.items), summarisedAt, requestId });
+  return markCompactionSummarised(db, tenantId, id, {
+    summary: text.summary,
+    itemsJson: JSON.stringify(text.items),
+    summarisedAt,
+    requestId,
+  });
 }
 
 /** Best effort, never throws: a compaction must not fail because its record could not be written. */
-export function recordCompactionStart(hippoRoot: string, start: Omit<CompactionStart, 'originProject'>, log: Log): string | null {
+export function recordCompactionStart(
+  hippoRoot: string,
+  start: Omit<CompactionStart, 'originProject'>,
+  log: Log,
+): string | null {
   let db: DatabaseSyncLike | undefined;
   try {
     db = openHippoDb(hippoRoot, { busyWaitMs: COMPACTION_DB_WAIT_MS });
-    return startCompaction(db, resolveTenantId({}), { ...start, originProject: compactionOrigin(hippoRoot, start.cwd) });
+    return startCompaction(db, resolveTenantId({}), {
+      ...start,
+      originProject: compactionOrigin(hippoRoot, start.cwd),
+    });
   } catch (err) {
     log(`compaction record not started: ${errorMessage(err)}`);
     return null;
@@ -183,7 +244,8 @@ export interface RecordSummaryOptions {
   readonly caller?: SummaryCaller;
 }
 
-/** Puts the summary on the session's `started` record, or inserts a `summarised` one when pre-compact wrote none. One statement each. */
+/** Puts the summary on the session's `started` record, or inserts a `summarised` one when pre-compact wrote none. One
+ * statement each. */
 export function recordSummary(
   db: DatabaseSyncLike,
   hippoRoot: string,
@@ -201,11 +263,26 @@ export function recordSummary(
   const originProject = caller.originProject ?? compactionOrigin(hippoRoot, meta.cwd);
   const id = generateId('cmp');
   insertSummarisedCompaction(
-    db, tenantId, { ...meta, originProject, startedAt: at.toISOString() }, { id, summary: text.summary, itemsJson, summarisedAt: now, requestId },
+    db,
+    tenantId,
+    { ...meta, originProject, startedAt: at.toISOString() },
+    { id, summary: text.summary, itemsJson, summarisedAt: now, requestId },
   );
   return {
-    id, tenantId, sessionId: meta.sessionId, originProject, trigger: meta.trigger, cwd: meta.cwd, transcriptPath: meta.transcriptPath,
-    snapshotSaved: false, startedAt: at.toISOString(), summarisedAt: now, summary: text.summary, items: text.items, itemsWritten: 0, status: 'summarised',
+    id,
+    tenantId,
+    sessionId: meta.sessionId,
+    originProject,
+    trigger: meta.trigger,
+    cwd: meta.cwd,
+    transcriptPath: meta.transcriptPath,
+    snapshotSaved: false,
+    startedAt: at.toISOString(),
+    summarisedAt: now,
+    summary: text.summary,
+    items: text.items,
+    itemsWritten: 0,
+    status: 'summarised',
   };
 }
 
@@ -218,12 +295,26 @@ export interface ItemContext {
   /** Where the session ran, so rows held under the project's older folder name count too. */
   cwd: string | null;
   items: string[];
-  /** Set when another machine sent the items: its audit actor and its project's names, since the server's folder is neither. */
+  /** Set when another machine sent the items: its audit actor and its project's names, since the server's folder is
+   * neither. */
   caller?: { actor: string; origins: readonly string[] };
 }
 
 /** Words whose loss reverses or narrows a statement: "do not", "can't", "only", "unless". */
-const PROTECTED_WORDS = new Set(['not', 'no', 'never', 'none', 'nor', 'without', 'cannot', 't', 'only', 'except', 'unless', 'until']);
+const PROTECTED_WORDS = new Set([
+  'not',
+  'no',
+  'never',
+  'none',
+  'nor',
+  'without',
+  'cannot',
+  't',
+  'only',
+  'except',
+  'unless',
+  'until',
+]);
 /** Below this share of the held text's words, an item is a fragment of something longer, not a restatement. */
 const RESTATE_MIN_SHARE = 0.5;
 
@@ -231,7 +322,8 @@ function words(text: string): string[] {
   return text.normalize('NFC').toLowerCase().split(/[^\p{L}\p{M}\p{N}_]+/u).filter(Boolean);
 }
 
-/** True when `item` is `held` with words left out, in the same order, keeping every number and protected word. Spacing, case and punctuation may differ. */
+/** True when `item` is `held` with words left out, in the same order, keeping every number and protected word. Spacing,
+ * case and punctuation may differ. */
 function restates(item: readonly string[], held: readonly string[]): boolean {
   if (item.length === 0 || item.length < RESTATE_MIN_SHARE * held.length) return false;
   const kept = new Set(item);
@@ -250,9 +342,14 @@ interface Held {
   words: string[];
 }
 
-/** Live rows of one tenant and origin that default recall shows: a compaction often restates what an earlier one, or the user, already saved. */
+/** Live rows of one tenant and origin that default recall shows: a compaction often restates what an earlier one, or
+ * the user, already saved. */
 function heldRows(db: DatabaseSyncLike, tenantId: string, origins: readonly string[]): Held[] {
-  return heldMemoryRows(db, tenantId, origins).map((r) => ({ id: r.id, sessionId: r.source_session_id, words: words(r.content) }));
+  return heldMemoryRows(db, tenantId, origins).map((r) => ({
+    id: r.id,
+    sessionId: r.source_session_id,
+    words: words(r.content),
+  }));
 }
 
 interface ItemWrites {
@@ -279,7 +376,13 @@ function compactionEntry(text: string, ctx: ItemContext, origin: string | null, 
 }
 
 /** Runs inside saveItems' transaction: restatements of held rows are counted, the rest go through the write gate. */
-function writeItemRows(db: DatabaseSyncLike, hippoRoot: string, ctx: ItemContext, rows: readonly string[], baseHalfLifeDays: number): ItemWrites {
+function writeItemRows(
+  db: DatabaseSyncLike,
+  hippoRoot: string,
+  ctx: ItemContext,
+  rows: readonly string[],
+  baseHalfLifeDays: number,
+): ItemWrites {
   const out: ItemWrites = { written: [], repeats: 0, refused: 0, restated: [] };
   const held = heldRows(db, ctx.tenantId, ctx.caller?.origins ?? heldOrigins(hippoRoot, ctx.cwd, ctx.originProject));
   const origin = ctx.caller === undefined ? itemOrigin(hippoRoot, ctx) : ctx.originProject;
@@ -324,7 +427,8 @@ function finishItemWrites(hippoRoot: string, writes: ItemWrites, log: Log): void
   }
 }
 
-/** Items that become rows, then the record `done`, in one transaction so two sessions cannot both insert one text. Mirrors after commit. */
+/** Items that become rows, then the record `done`, in one transaction so two sessions cannot both insert one text.
+ * Mirrors after commit. */
 export function saveItems(db: DatabaseSyncLike, hippoRoot: string, ctx: ItemContext, log: Log): number {
   const usable = ctx.items.filter((item) => !item.includes(REDACTED));
   if (usable.length < ctx.items.length) log(`skipped ${ctx.items.length - usable.length} item(s) as secret`);
@@ -367,7 +471,8 @@ export interface CompactionSaveResult {
   snapshotSaved: boolean;
 }
 
-/** What one PostCompact save did; `spoolReason` is set when the store was busy or would not open, so the caller keeps the summary on disk. */
+/** What one PostCompact save did; `spoolReason` is set when the store was busy or would not open, so the caller keeps
+ * the summary on disk. */
 export interface CompactionSaveOutcome {
   result: CompactionSaveResult;
   spoolReason: string | null;
@@ -386,7 +491,11 @@ interface SaveStep {
 
 function recordStep(step: SaveStep): CompactionRecord | null {
   try {
-    const record = recordSummary(step.db, step.hippoRoot, step.tenantId, { meta: step.meta, text: step.text, at: step.at });
+    const record = recordSummary(step.db, step.hippoRoot, step.tenantId, {
+      meta: step.meta,
+      text: step.text,
+      at: step.at,
+    });
     step.result.snapshotSaved = record.snapshotSaved;
     return record;
   } catch (err) {
@@ -416,7 +525,8 @@ function itemsStep(step: SaveStep, record: CompactionRecord | null): void {
   }
 }
 
-/** The PostCompact store work, on a handle of its own: record the summary, then write its items. Each step is independent. Never throws. */
+/** The PostCompact store work, on a handle of its own: record the summary, then write its items. Each step is
+ * independent. Never throws. */
 export function saveCompactionAt(
   hippoRoot: string,
   meta: Omit<CompactionStart, 'originProject'>,
@@ -447,7 +557,8 @@ export interface SpooledSummary {
   at: Date;
 }
 
-/** Records one spooled summary; it calls `recorded` once the store holds it, so the file is done even if a later step throws. */
+/** Records one spooled summary; it calls `recorded` once the store holds it, so the file is done even if a later step
+ * throws. */
 export type SpoolRecorder = (spooled: SpooledSummary, recorded: () => void) => void;
 
 /** A summary read out of a transcript, scrubbed; `listed` is false when it had no memories section. */
@@ -466,7 +577,8 @@ export interface ReplaySources {
 }
 
 function closeWithoutSummary(db: DatabaseSyncLike, tenantId: string, id: string, log: Log): void {
-  if (closeStartedWithoutSummary(db, tenantId, id) > 0) log(`${id} closed as no-summary: its transcript holds no summary for it`);
+  if (closeStartedWithoutSummary(db, tenantId, id) > 0)
+    log(`${id} closed as no-summary: its transcript holds no summary for it`);
 }
 
 function nextStartedAt(db: DatabaseSyncLike, record: CompactionRecord): string | null {
@@ -475,13 +587,24 @@ function nextStartedAt(db: DatabaseSyncLike, record: CompactionRecord): string |
 
 /** The one place a record becomes the argument saveItems takes. */
 function itemContext(tenantId: string, record: CompactionRecord, items: string[] = record.items): ItemContext {
-  return { tenantId, recordId: record.id, sessionId: record.sessionId, originProject: record.originProject, cwd: record.cwd, items };
+  return {
+    tenantId,
+    recordId: record.id,
+    sessionId: record.sessionId,
+    originProject: record.originProject,
+    cwd: record.cwd,
+    items,
+  };
 }
 
 /** Records a spooled summary, then writes its items. */
 function spoolRecorder(db: DatabaseSyncLike, hippoRoot: string, log: Log): SpoolRecorder {
   return (spooled, recorded) => {
-    const record = recordSummary(db, hippoRoot, spooled.tenantId, { meta: spooled.payload, text: spooled.text, at: spooled.at });
+    const record = recordSummary(db, hippoRoot, spooled.tenantId, {
+      meta: spooled.payload,
+      text: spooled.text,
+      at: spooled.at,
+    });
     // The record holds the items now, so the file is done even if the write below fails.
     recorded();
     saveItems(db, hippoRoot, itemContext(spooled.tenantId, record), log);
@@ -499,9 +622,14 @@ interface ReplayRun {
   readonly deadline: number;
 }
 
-/** Runs `step` over each row until the deadline; a row that will not map or a step that throws is logged and the rest still run.
- * Returns how many `step` finished. */
-function replayEach(run: ReplayRun, rows: CompactionRow[], what: string, step: (record: CompactionRecord) => boolean): number {
+/** Runs `step` over each row until the deadline; a row that will not map or a step that throws is logged and the rest
+ * still run. Returns how many `step` finished. */
+function replayEach(
+  run: ReplayRun,
+  rows: CompactionRow[],
+  what: string,
+  step: (record: CompactionRecord) => boolean,
+): number {
   let finished = 0;
   for (const row of rows) {
     if (Date.now() > run.deadline) break;
@@ -536,7 +664,11 @@ function fillFromTranscript(run: ReplayRun, record: CompactionRecord): boolean {
   const { db, hippoRoot, tenantId, sources, log } = run;
   if (record.transcriptPath === null || !sources.transcriptExists(record.transcriptPath)) return false;
   const next = nextStartedAt(db, record);
-  const found = sources.transcriptText(record.transcriptPath, Date.parse(record.startedAt), next === null ? Number.POSITIVE_INFINITY : Date.parse(next));
+  const found = sources.transcriptText(
+    record.transcriptPath,
+    Date.parse(record.startedAt),
+    next === null ? Number.POSITIVE_INFINITY : Date.parse(next),
+  );
   if (found === null) {
     // The record is past REPLAY_AFTER_MS, so a window that is fully scanned or out of reach stays empty.
     closeWithoutSummary(db, tenantId, record.id, log);
@@ -562,9 +694,15 @@ function replayOpen(run: ReplayRun): number {
   return replayEach(run, open, 'transcript fill', (record) => fillFromTranscript(run, record));
 }
 
-/** Finishes what a killed hook or a busy store left: `summarised` records, spool files, and `started` records the transcript can fill.
- * Returns how many compactions it saved. */
-function replayCompactions(db: DatabaseSyncLike, hippoRoot: string, sources: ReplaySources, log: Log, deadline: number): number {
+/** Finishes what a killed hook or a busy store left: `summarised` records, spool files, and `started` records the
+ * transcript can fill. Returns how many compactions it saved. */
+function replayCompactions(
+  db: DatabaseSyncLike,
+  hippoRoot: string,
+  sources: ReplaySources,
+  log: Log,
+  deadline: number,
+): number {
   const run: ReplayRun = { db, hippoRoot, tenantId: resolveTenantId({}), now: Date.now(), sources, log, deadline };
   return replayStalled(run) + replaySpool(run) + replayOpen(run);
 }
@@ -575,7 +713,12 @@ export interface ReplayOptions {
 }
 
 /** For `hippo sleep` and post-compact: opens the store itself and never throws. */
-export function replayStoredCompactions(hippoRoot: string, sources: ReplaySources, log: Log, opts: ReplayOptions = {}): number {
+export function replayStoredCompactions(
+  hippoRoot: string,
+  sources: ReplaySources,
+  log: Log,
+  opts: ReplayOptions = {},
+): number {
   let db: DatabaseSyncLike | undefined;
   try {
     db = openHippoDb(hippoRoot, { busyWaitMs: opts.busyWaitMs });
