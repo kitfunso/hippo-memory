@@ -1,11 +1,35 @@
 // hippo.db's half of the ConnectorEvents store group: each call on a handle of its own.
-import { archiveDeletedArtifact, githubEventRecord, githubEventSeenAt, githubRouting, insertGitHubDlq, markGitHubEventSeen } from '../connectors/github.js';
-import { insertSlackDlq, markSlackEventSeen, rawMemoryIdForArtifactAt, slackEventRecord, slackEventSeenAt, slackTeamRoute } from '../connectors/slack.js';
+import {
+  archiveDeletedArtifact,
+  githubEventRecord,
+  githubEventSeenAt,
+  githubRouting,
+  insertGitHubDlq,
+  markGitHubEventSeen,
+} from '../connectors/github.js';
+import {
+  insertSlackDlq,
+  markSlackEventSeen,
+  rawMemoryIdForArtifactAt,
+  slackEventRecord,
+  slackEventSeenAt,
+  slackTeamRoute,
+} from '../connectors/slack.js';
 import { onHandle } from '../open.js';
-import type { ArtifactArchive, ConnectorEvent, ConnectorEventRecord, ConnectorEvents, DeletionLookup, DeletionTarget, Sync } from '../port.js';
+import type {
+  ArtifactArchive,
+  ConnectorEvent,
+  ConnectorEventRecord,
+  ConnectorEvents,
+  DeletionLookup,
+  DeletionTarget,
+  Sync,
+} from '../port.js';
 
 function eventRecord(hippoRoot: string, event: ConnectorEvent): ConnectorEventRecord {
-  return event.connector === 'slack' ? slackEventRecord(hippoRoot, event.eventId) : githubEventRecord(hippoRoot, event.idempotencyKey);
+  return event.connector === 'slack'
+    ? slackEventRecord(hippoRoot, event.eventId)
+    : githubEventRecord(hippoRoot, event.idempotencyKey);
 }
 
 function markEventSeen(hippoRoot: string, event: ConnectorEvent): void {
@@ -16,14 +40,26 @@ function markEventSeen(hippoRoot: string, event: ConnectorEvent): void {
 
 function deletionTarget(hippoRoot: string, { event, artifactRef, tenantId }: DeletionLookup): DeletionTarget {
   return onHandle(hippoRoot, (db): DeletionTarget => {
-    const seen = event.connector === 'slack' ? slackEventSeenAt(db, event.eventId) : githubEventSeenAt(db, event.idempotencyKey);
+    const seen =
+      event.connector === 'slack' ? slackEventSeenAt(db, event.eventId) : githubEventSeenAt(db, event.idempotencyKey);
     return seen ? { seen: true } : { seen: false, memoryId: rawMemoryIdForArtifactAt(db, artifactRef, tenantId) };
   });
 }
 
-function archiveArtifact(hippoRoot: string, { tenantId, actor, artifactRef, reason, event }: ArtifactArchive): { duplicate: boolean; archived: number } {
+function archiveArtifact(
+  hippoRoot: string,
+  { tenantId, actor, artifactRef, reason, event }: ArtifactArchive,
+): { duplicate: boolean; archived: number } {
   const { idempotencyKey, deliveryId, eventName } = event;
-  return archiveDeletedArtifact(hippoRoot, { tenantId, artifactRef, idempotencyKey, deliveryId, eventName, reason, who: actor });
+  return archiveDeletedArtifact(hippoRoot, {
+    tenantId,
+    artifactRef,
+    idempotencyKey,
+    deliveryId,
+    eventName,
+    reason,
+    who: actor,
+  });
 }
 
 export function sqliteConnectorEvents(hippoRoot: string): Sync<ConnectorEvents> {
@@ -34,11 +70,13 @@ export function sqliteConnectorEvents(hippoRoot: string): Sync<ConnectorEvents> 
     archiveDeletedArtifact: (archive) => archiveArtifact(hippoRoot, archive),
     slackTeamRoute: (teamId) => slackTeamRoute(hippoRoot, teamId),
     githubRouting: (query) => githubRouting(hippoRoot, query),
-    parkDeadLetter: (letter) => (letter.connector === 'slack' ? insertSlackDlq(hippoRoot, letter) : insertGitHubDlq(hippoRoot, letter)),
+    parkDeadLetter: (letter) =>
+      letter.connector === 'slack' ? insertSlackDlq(hippoRoot, letter) : insertGitHubDlq(hippoRoot, letter),
   };
 }
 
-/** The group as a served store answers it: each call runs at once and resolves through a Promise, so a throw rejects as another store's would. */
+/** The group as a served store answers it: each call runs at once and resolves through a Promise, so a throw rejects as
+ * another store's would. */
 export function servedConnectorEvents(sync: Sync<ConnectorEvents>): ConnectorEvents {
   return {
     eventRecord: async (event) => sync.eventRecord(event),

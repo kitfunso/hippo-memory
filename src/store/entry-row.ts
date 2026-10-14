@@ -42,7 +42,8 @@ const UPSERT_MEMORY_SQL = `
       descendant_count, earliest_at, latest_at,
       dag_level_3_built_at,
       updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+    ?, ?, datetime('now'))
     ON CONFLICT(id) DO UPDATE SET
       created = excluded.created,
       last_retrieved = excluded.last_retrieved,
@@ -137,7 +138,10 @@ export function syncFtsRow(db: ReturnType<typeof openHippoDb>, entry: MemoryEntr
     );
   } catch (err) {
     // The memories table stays authoritative; a stale FTS row only costs recall quality, so the write goes on.
-    log.warnThenDebug('fts-sync', `FTS index update failed for ${entry.id}; keyword recall may miss it: ${errorMessage(err)}`);
+    log.warnThenDebug(
+      'fts-sync',
+      `FTS index update failed for ${entry.id}; keyword recall may miss it: ${errorMessage(err)}`,
+    );
   }
 }
 
@@ -150,12 +154,20 @@ export function deleteFtsRow(db: ReturnType<typeof openHippoDb>, id: string): vo
   try {
     db.prepare(`DELETE FROM memories_fts WHERE id = ?`).run(id);
   } catch (err) {
-    log.warnThenDebug('fts-delete', `FTS index delete failed for ${id}; recall may return a stale hit: ${errorMessage(err)}`);
+    log.warnThenDebug(
+      'fts-delete',
+      `FTS index delete failed for ${id}; recall may return a stale hit: ${errorMessage(err)}`,
+    );
   }
 }
 
-/** One set delete for `staleIds`, because `id` is UNINDEXED and each delete by id scans the whole index; then one insert per row. */
-export function replaceFtsRows(db: ReturnType<typeof openHippoDb>, rows: readonly MemoryEntry[], staleIds: readonly string[]): void {
+/** One set delete for `staleIds`, because `id` is UNINDEXED and each delete by id scans the whole index; then one
+ * insert per row. */
+export function replaceFtsRows(
+  db: ReturnType<typeof openHippoDb>,
+  rows: readonly MemoryEntry[],
+  staleIds: readonly string[],
+): void {
   if (!isFtsAvailable(db)) return;
   let kept: ReadonlySet<string> = new Set();
   if (staleIds.length > 0) {
@@ -164,7 +176,10 @@ export function replaceFtsRows(db: ReturnType<typeof openHippoDb>, rows: readonl
     } catch (err) {
       // Their old rows are still indexed, so inserting them again would index an id twice; only new ids go in.
       kept = new Set(staleIds);
-      log.warnThenDebug('fts-delete', `FTS index delete failed for ${staleIds.length} row(s); recall may return a stale hit: ${errorMessage(err)}`);
+      log.warnThenDebug(
+        'fts-delete',
+        `FTS index delete failed for ${staleIds.length} row(s); recall may return a stale hit: ${errorMessage(err)}`,
+      );
     }
   }
   const toInsert = rows.filter((row) => !kept.has(row.id));
@@ -174,12 +189,16 @@ export function replaceFtsRows(db: ReturnType<typeof openHippoDb>, rows: readonl
     try {
       insert.run(row.id, row.content, row.tags.join(' '));
     } catch (err) {
-      log.warnThenDebug('fts-sync', `FTS index update failed for ${row.id}; keyword recall may miss it: ${errorMessage(err)}`);
+      log.warnThenDebug(
+        'fts-sync',
+        `FTS index update failed for ${row.id}; keyword recall may miss it: ${errorMessage(err)}`,
+      );
     }
   }
 }
 
-/** Row counts of a full-text index that has drifted from `memories`, re-synced after the count when `repair`; null when the two agree or there is no index. */
+/** Row counts of a full-text index that has drifted from `memories`, re-synced after the count when `repair`; null when
+ * the two agree or there is no index. */
 export function ftsDrift(hippoRoot: string, repair: boolean): { memories: number; fts: number } | null {
   const db = openHippoDb(hippoRoot);
   try {
@@ -193,15 +212,17 @@ export function ftsDrift(hippoRoot: string, repair: boolean): { memories: number
   }
 }
 
-/** Stamp origin_project from the store's own location (parent of `<project>/.hippo`; the home store is '' = user-global) when never stamped; returns a copy.
- * NULL is PRESERVED: it means no known project and ambient context denies it, so a writeback must not launder it. */
+/** Stamp origin_project from the store's own location (parent of `<project>/.hippo`; the home store is '' =
+ * user-global) when never stamped; returns a copy. NULL is PRESERVED: it means no known project and ambient context
+ * denies it, so a writeback must not launder it. */
 export function stampOriginProject(hippoRoot: string, entry: MemoryEntry): MemoryEntry {
   if (entry.origin_project !== undefined) return entry;
   return { ...entry, origin_project: fallbackOrigin(hippoRoot) };
 }
 
-/** Import-time variant for a mirror with no origin field (an explicit null stays null), for rows predating the origin column.
- * Like the v39 backfill, the provenance source (`shared:<project>:` / `promoted:<localRoot>`) wins over the destination store's location. */
+/** Import-time variant for a mirror with no origin field (an explicit null stays null), for rows predating the origin
+ * column. Like the v39 backfill, the provenance source (`shared:<project>:` / `promoted:<localRoot>`) wins over the
+ * destination store's location. */
 export function stampOriginProjectForImport(hippoRoot: string, entry: MemoryEntry): MemoryEntry {
   if (entry.origin_project !== undefined) return entry;
   const fromSource = originFromSource(entry.source);

@@ -31,9 +31,12 @@ export function holdSqliteConnection(hippoRoot: string): StoreHolder {
   const hold = (): void => {
     if (heldDb || stopHolding || !existsSync(getHippoDbPath(hippoRoot))) return;
     try {
-      // The 'finish' listener can fire inside a request scope (closing this connection with the request) and inside a `loop: 'off'` block (refusing the open).
-      // The server's lock wait: this open runs on the event loop, where SQLite's 5 s default and the 30 s journal-mode retry would stall every request.
-      heldDb = outsideSqliteOffLoop(() => outsideRequestStores(() => openHippoDb(hippoRoot, { busyWaitMs: SERVER_DB_WAIT_MS })));
+      // The 'finish' listener can fire inside a request scope (closing this connection with the request) and inside a
+      // `loop: 'off'` block (refusing the open). The server's lock wait: this open runs on the event loop, where
+      // SQLite's 5 s default and the 30 s journal-mode retry would stall every request.
+      heldDb = outsideSqliteOffLoop(() =>
+        outsideRequestStores(() => openHippoDb(hippoRoot, { busyWaitMs: SERVER_DB_WAIT_MS })),
+      );
       checkpointer = startWalCheckpointer(getHippoDbPath(hippoRoot));
     } catch (err) {
       stopHolding = true;
@@ -46,7 +49,8 @@ export function holdSqliteConnection(hippoRoot: string): StoreHolder {
   };
   const release = async (): Promise<void> => {
     stopHolding = true;
-    // The worker's connection closes first, so the held one is SQLite's last and its close checkpoints and deletes the WAL.
+    // The worker's connection closes first, so the held one is SQLite's last and its close checkpoints and deletes the
+    // WAL.
     await checkpointer?.stop();
     if (heldDb) closeHippoDb(heldDb);
     heldDb = undefined;

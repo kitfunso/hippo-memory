@@ -1,4 +1,5 @@
-/** Working Memory: bounded buffer for current-state notes, separate from long-term memory; scoped, importance-ranked, evicted past WM_MAX_ENTRIES per scope. */
+/** Working Memory: bounded buffer for current-state notes, separate from long-term memory; scoped, importance-ranked,
+ * evicted past WM_MAX_ENTRIES per scope. */
 
 import { withWriteScope } from '../db/index.js';
 import { onHandle, openStore } from './open.js';
@@ -37,8 +38,8 @@ interface WorkingMemoryRow {
 function rowToItem(row: WorkingMemoryRow): WorkingMemoryItem {
   let metadata: JsonObject = {};
   try {
-    // SAFETY: metadata_json is always written by wmPush via JSON.stringify(opts.metadata ?? {}), so a successful parse yields a plain JSON object;
-    // malformed content falls through to the catch below.
+    // SAFETY: metadata_json is always written by wmPush via JSON.stringify(opts.metadata ?? {}), so a successful parse
+    // yields a plain JSON object; malformed content falls through to the catch below.
     metadata = JSON.parse(row.metadata_json) as JsonObject;
   } catch {
     // The item still lists with its content; only its metadata reads as empty.
@@ -57,8 +58,8 @@ function rowToItem(row: WorkingMemoryRow): WorkingMemoryItem {
   };
 }
 
-/** Push a new entry into working memory; past WM_MAX_ENTRIES the scope's lowest-importance entry is evicted (ties: oldest created_at). Returns the new
- * row ID. */
+/** Push a new entry into working memory; past WM_MAX_ENTRIES the scope's lowest-importance entry is evicted (ties:
+ * oldest created_at). Returns the new row ID. */
 export function wmPush(hippoRoot: string, opts: {
   scope: string;
   content: string;
@@ -74,20 +75,25 @@ export function wmPush(hippoRoot: string, opts: {
     const tenantId = opts.tenantId ?? resolveTenantId({});
 
     return withWriteScope(db, 'wm_push', () => {
-      const result = db.prepare(`
-        INSERT INTO working_memory(scope, session_id, task_id, importance, content, metadata_json, created_at, updated_at, tenant_id)
+      const result = db
+        .prepare(
+          `
+        INSERT INTO working_memory(scope, session_id, task_id, importance, content, metadata_json, created_at,
+        updated_at, tenant_id)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(
-        opts.scope,
-        opts.sessionId ?? null,
-        opts.taskId ?? null,
-        importance,
-        opts.content,
-        JSON.stringify(opts.metadata ?? {}),
-        now,
-        now,
-        tenantId,
-      );
+      `,
+        )
+        .run(
+          opts.scope,
+          opts.sessionId ?? null,
+          opts.taskId ?? null,
+          importance,
+          opts.content,
+          JSON.stringify(opts.metadata ?? {}),
+          now,
+          now,
+          tenantId,
+        );
 
       const id = Number(result.lastInsertRowid ?? 0);
 
@@ -183,7 +189,8 @@ export function wmClear(hippoRoot: string, opts?: {
   }, openStore);
 }
 
-/** Flush working memory after session end: same as wmClear, but marks the session-boundary discard of ephemeral state. Returns the count flushed. */
+/** Flush working memory after session end: same as wmClear, but marks the session-boundary discard of ephemeral state.
+ * Returns the count flushed. */
 export function wmFlush(hippoRoot: string, opts?: {
   scope?: string;
   sessionId?: string;

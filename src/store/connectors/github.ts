@@ -51,17 +51,19 @@ export interface ArtifactDeletion {
   who: string;
 }
 
-/** Archives every active raw row of one tenant's artifact and logs the delete event; a failed archive rolls back the batch and the log row. */
-export function archiveDeletedArtifact(hippoRoot: string, del: ArtifactDeletion): { duplicate: boolean; archived: number } {
+/** Archives every active raw row of one tenant's artifact and logs the delete event; a failed archive rolls back the
+ * batch and the log row. */
+export function archiveDeletedArtifact(
+  hippoRoot: string,
+  del: ArtifactDeletion,
+): { duplicate: boolean; archived: number } {
   return onHandle(hippoRoot, (db) => {
     if (githubEventSeenAt(db, del.idempotencyKey)) return { duplicate: true, archived: 0 };
     const logged = { idempotencyKey: del.idempotencyKey, deliveryId: del.deliveryId, eventName: del.eventName };
 
     // SAFETY: the SELECT projects only the `id` column.
     const rows = db
-      .prepare(
-        `SELECT id FROM memories WHERE artifact_ref = ? AND tenant_id = ? AND kind = 'raw'`,
-      )
+      .prepare(`SELECT id FROM memories WHERE artifact_ref = ? AND tenant_id = ? AND kind = 'raw'`)
       .all(del.artifactRef, del.tenantId) as Array<{ id: string }>;
     const memoryIds = rows.map((r) => r.id);
 
@@ -97,7 +99,8 @@ export interface DlqItem {
   bucket: DlqBucket | string;
 }
 
-/** One github_dlq row to write, already redacted by the caller; the four GitHub-only columns are stored NULL when left out. */
+/** One github_dlq row to write, already redacted by the caller; the four GitHub-only columns are stored NULL when left
+ * out. */
 export interface GitHubDlqInsert {
   tenantId: string;
   rawPayload: string;
@@ -162,7 +165,8 @@ export function markGitHubDlqRetried(hippoRoot: string, id: number): void {
   onHandle(hippoRoot, (db) => markDlqRetried(db, 'github_dlq', id));
 }
 
-/** What the routing tables say about one webhook; `tenant` is the installation match, or the repo match when no installation was sent. */
+/** What the routing tables say about one webhook; `tenant` is the installation match, or the repo match when no
+ * installation was sent. */
 export interface GitHubRouting {
   installations: number;
   repositories: number;
@@ -250,7 +254,8 @@ export function writeHwm(hippoRoot: string, tenantId: string, repo: string, colu
 export function seedCursors(hippoRoot: string, tenantId: string, repo: string, since: string): void {
   onHandle(hippoRoot, (db) => {
     db.prepare(
-      `INSERT INTO github_cursors (tenant_id, repo_full_name, issues_hwm, issue_comments_hwm, pr_review_comments_hwm, updated_at)
+      `INSERT INTO github_cursors (tenant_id, repo_full_name, issues_hwm, issue_comments_hwm, ` +
+      `pr_review_comments_hwm, updated_at)
          VALUES (?, ?, ?, ?, ?, ?)
          ON CONFLICT(tenant_id, repo_full_name) DO UPDATE SET
            issues_hwm = COALESCE(github_cursors.issues_hwm, excluded.issues_hwm),
