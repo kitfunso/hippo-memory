@@ -1,6 +1,6 @@
 import { addTagToEntries, writeEntriesTogether } from '../store/entry-writes.js';
 import { confirmedOutcomeTimes } from '../store/audit.js';
-import { loadAllEntries, loadEntriesMentioning, readEntry } from '../store/entry-reads.js';
+import { loadCurrentEntriesFromOrigins, loadEntriesMentioning, readEntry } from '../store/entry-reads.js';
 import { requireGroup, type HippoStore } from '../store/port.js';
 import { chunked } from '../util/chunked.js';
 import { CHURN_STALE_TAG, type MemoryEntry } from '../core/memory.js';
@@ -529,7 +529,8 @@ export function detectChurnStale(
   const dryRun = opts.dryRun === true;
   if (!opts.projectName) return emptyChurnResult(dryRun);
 
-  const entries = loadAllEntries(hippoRoot, opts.tenantId);
+  const origins = [opts.projectName, opts.legacyName].filter((name): name is string => !!name);
+  const entries = loadCurrentEntriesFromOrigins(hippoRoot, opts.tenantId, origins);
   const { candidates, skippedPinned } = collectChurnCandidates(entries, opts);
   if (candidates.length === 0) return emptyChurnResult(dryRun, skippedPinned);
 
