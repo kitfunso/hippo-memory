@@ -4,7 +4,7 @@ import * as briefsModule from '../objects/project-briefs.js';
 import { errorMessage } from '../util/log.js';
 import { printError } from './output.js';
 import { boolFlag, stringFlag, type CliFlags } from './flag-values.js';
-import { CliExit } from './exit.js';
+import { fail } from './exit.js';
 import { requiredText, versionedVerbs, type VersionedKind } from './versioned-verbs.js';
 
 function printBriefRow(b: briefsModule.ProjectBrief): void {
@@ -15,8 +15,7 @@ function printBriefRow(b: briefsModule.ProjectBrief): void {
 function briefRefresh(hippoRoot: string, tenantId: string, args: string[], flags: CliFlags): void {
   const repoRaw = args[1];
   if (!repoRaw) {
-    printError('Usage: hippo brief refresh "<repo>" [--dry-run]');
-    throw new CliExit(1);
+    fail('Usage: hippo brief refresh "<repo>" [--dry-run]');
   }
   const dryRun = boolFlag(flags, 'dry-run');
   try {
@@ -31,8 +30,7 @@ function briefRefresh(hippoRoot: string, tenantId: string, args: string[], flags
     if (created.changeSummary) console.log(`  change: ${created.changeSummary}`);
     if (created.memoryId) console.log(`  memory: ${created.memoryId}`);
   } catch (e) {
-    printError(errorMessage(e));
-    throw new CliExit(1);
+    fail(errorMessage(e));
   }
 }
 

@@ -32,7 +32,7 @@ import { fmt } from './print.js';
 import { type CliFlags, type CommandContext, boolFlag, flagIsTrue, isOneOf, stringFlag, stringFlagOrExit, stringListFlag } from './flag-values.js';
 import { DAY_MS } from '../util/time.js';
 import { errorMessage } from '../util/log.js';
-import { CliExit } from './exit.js';
+import { CliExit, fail } from './exit.js';
 
 const PARENT_PREVIEW_CHARS = 70;
 const DETAIL_CONTENT_CHARS = 160;
@@ -82,8 +82,7 @@ function parseKindFlag(flags: CliFlags): UserVisibleKind | undefined {
   // so exposing --kind raw would create unforgettable memories. 'archived' is an internal sentinel set only in that transaction.
   if (kindFlag !== undefined && !isOneOf(USER_VISIBLE_KINDS, kindFlag)) {
     printError(`Invalid --kind: "${kindFlagRaw}". Must be one of: ${USER_VISIBLE_KINDS.join(', ')}`);
-    printError(`(kind='raw' is reserved for ingestion connectors; kind='archived' is internal.)`);
-    throw new CliExit(1);
+    fail(`(kind='raw' is reserved for ingestion connectors; kind='archived' is internal.)`);
   }
   return kindFlag;
 }
@@ -100,8 +99,7 @@ function parseRememberEnvelope(flags: CliFlags): RememberEnvelope {
   const ownerRaw = stringFlag(flags, 'owner') ?? null;
   const ownerCheck = validateOwner(ownerRaw, { strict: isStrictOwnerEnv() });
   if (!ownerCheck.ok) {
-    printError(ownerCheck.message);
-    throw new CliExit(1);
+    fail(ownerCheck.message);
   }
   if (ownerCheck.message) printError(ownerCheck.message);
   const owner = ownerCheck.value ?? null;
@@ -188,8 +186,7 @@ function parseLayerFlag(flags: CliFlags): Layer | undefined {
   if (raw === undefined) return undefined;
   const layer = Object.values(Layer).find((l) => l === raw);
   if (layer === undefined) {
-    printError(`Invalid --layer: "${raw}". Must be one of: ${Object.values(Layer).join(', ')}`);
-    throw new CliExit(1);
+    fail(`Invalid --layer: "${raw}". Must be one of: ${Object.values(Layer).join(', ')}`);
   }
   return layer;
 }
@@ -227,8 +224,7 @@ function parseStepsOrExit(stepsJson: string): ReturnType<typeof parseSteps> {
   try {
     return parseSteps(stepsJson);
   } catch (err) {
-    printError(errorMessage(err));
-    throw new CliExit(1);
+    fail(errorMessage(err));
   }
 }
 
@@ -249,12 +245,10 @@ async function cmdTraceRecord(
   const validOutcomes = ['success', 'failure', 'partial'] as const;
 
   if (!task || !stepsJson || !outcome) {
-    printError('Usage: hippo trace record --task <t> --steps <json> --outcome <success|failure|partial> [--session <id>] [--tag <t>]');
-    throw new CliExit(1);
+    fail('Usage: hippo trace record --task <t> --steps <json> --outcome <success|failure|partial> [--session <id>] [--tag <t>]');
   }
   if (!isOneOf(validOutcomes, outcome)) {
-    printError(`Invalid outcome: "${outcome}". Must be one of: ${validOutcomes.join(', ')}.`);
-    throw new CliExit(1);
+    fail(`Invalid outcome: "${outcome}". Must be one of: ${validOutcomes.join(', ')}.`);
   }
 
   const steps = parseStepsOrExit(stepsJson);
@@ -300,8 +294,7 @@ async function cmdTrace(
     sourceLabel = 'global';
   }
   if (!entry) {
-    printError(`Memory not found: ${id}`);
-    throw new CliExit(1);
+    fail(`Memory not found: ${id}`);
   }
 
   const t: TraceView = {
@@ -437,8 +430,7 @@ export async function handleRemember({ hippoRoot, tenantId, args, flags }: Comma
     text = args.join(' ').trim();
   }
   if (!text || text.length < 3) {
-    printError('Memory content too short (minimum 3 characters).');
-    throw new CliExit(1);
+    fail('Memory content too short (minimum 3 characters).');
   }
   // Thin-client routing: simple `remember` calls go over HTTP so the daemon stays the single writer; rich flags need the direct path.
   // The salience gate is not in richFlag and the route does not apply it, so a routed remember stores what a direct one would skip.
@@ -458,8 +450,7 @@ async function rememberViaThinClient(hippoRoot: string, text: string, flags: Cli
   const thinOwnerRaw = stringFlag(flags, 'owner');
   const thinOwnerCheck = validateOwner(thinOwnerRaw, { strict: isStrictOwnerEnv() });
   if (!thinOwnerCheck.ok) {
-    printError(thinOwnerCheck.message);
-    throw new CliExit(1);
+    fail(thinOwnerCheck.message);
   }
   if (thinOwnerCheck.message) printError(thinOwnerCheck.message);
   return runViaServerIfAvailable(hippoRoot, async (info, apiKey) => {
@@ -481,8 +472,7 @@ export async function handleSupersede({ hippoRoot, tenantId, args, flags }: Comm
   const oldId = args[0];
   const newContent = args.slice(1).join(' ').trim();
   if (!oldId || !newContent) {
-    printError('Usage: hippo supersede <old-id> "<new content>" [--layer L] [--tag T] [--pin]');
-    throw new CliExit(1);
+    fail('Usage: hippo supersede <old-id> "<new content>" [--layer L] [--tag T] [--pin]');
   }
   await cmdSupersede(hippoRoot, tenantId, oldId, newContent, flags);
 }
@@ -494,8 +484,7 @@ export async function handleTrace({ hippoRoot, tenantId, args, flags }: CommandC
     return;
   }
   if (!sub) {
-    printError('Usage: hippo trace <memory-id> | hippo trace record --task <t> --steps <json> --outcome <o>');
-    throw new CliExit(1);
+    fail('Usage: hippo trace <memory-id> | hippo trace record --task <t> --steps <json> --outcome <o>');
   }
   await cmdTrace(hippoRoot, tenantId, sub, flags);
 }

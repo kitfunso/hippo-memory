@@ -4,11 +4,10 @@ import { installCrashHandlers } from '../util/crash-handlers.js';
 import { envAllowKeylessLocal, envKeylessLocalRole, envPort, envRequireAuth, envTlsCert, envTlsKey } from '../util/env.js';
 import * as fs from 'fs';
 import * as path from 'path';
-import { printError } from './output.js';
 import { flagIsTrue, stringFlagOrExit, type CommandContext, stringFlag, numberFlag } from './flag-values.js';
 import { requireInit } from './shared.js';
 import { errorMessage } from '../util/log.js';
-import { CliExit } from './exit.js';
+import { fail } from './exit.js';
 import { DEFAULT_DASHBOARD_PORT, DEFAULT_SERVER_HOST, DEFAULT_SERVER_PORT } from '../server/defaults.js';
 
 export async function handleDashboard({ hippoRoot, flags }: CommandContext): Promise<void> {
@@ -39,14 +38,12 @@ function readTlsFiles(flags: CommandContext['flags']): { cert: Buffer; key: Buff
   const keyPath = stringFlagOrExit(flags, 'tls-key') ?? envTlsKey();
   if (certPath === undefined && keyPath === undefined) return undefined;
   if (certPath === undefined || keyPath === undefined) {
-    printError('hippo serve: TLS needs both a certificate and a key: --tls-cert and --tls-key, or HIPPO_TLS_CERT and HIPPO_TLS_KEY.');
-    throw new CliExit(1);
+    fail('hippo serve: TLS needs both a certificate and a key: --tls-cert and --tls-key, or HIPPO_TLS_CERT and HIPPO_TLS_KEY.');
   }
   try {
     return { cert: fs.readFileSync(certPath), key: fs.readFileSync(keyPath) };
   } catch (err) {
-    printError(`hippo serve: cannot read the TLS files: ${errorMessage(err)}`);
-    throw new CliExit(1);
+    fail(`hippo serve: cannot read the TLS files: ${errorMessage(err)}`);
   }
 }
 
@@ -68,8 +65,7 @@ export async function handleServe({ hippoRoot, flags }: CommandContext): Promise
   const portRaw = flags['port'] ?? envPort() ?? DEFAULT_SERVER_PORT;
   const port = Number(portRaw);
   if (!Number.isFinite(port) || port < 0) {
-    printError(`Invalid --port: ${String(portRaw)}`);
-    throw new CliExit(1);
+    fail(`Invalid --port: ${String(portRaw)}`);
   }
   const host = stringFlag(flags, 'host') ?? DEFAULT_SERVER_HOST;
   const tls = readTlsFiles(flags);

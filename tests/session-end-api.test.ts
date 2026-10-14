@@ -59,4 +59,33 @@ describe('sessionEndWork', () => {
     expect(steps).toEqual([]);
     expect(lines).toContain('skip: no hippo store for this folder or globally');
   });
+
+  // A worker process runs many sessions, so a listener per call would pile up until the process exits.
+  it('leaves no exit listener behind once the re-read lines are logged', async () => {
+    saveActiveTaskSnapshot(root, TENANT, { task: 't', summary: 's', next_step: 'n', session_id: 's1' });
+    const before = process.listenerCount('exit');
+    const transcriptPath = `${root}-missing.jsonl`;
+    await sessionEndWork(work({ transcriptPath }));
+    await sessionEndWork(work({ transcriptPath, storeRoot: () => `${root}-missing` }));
+    expect(process.listenerCount('exit')).toBe(before);
+    const reread = lines.filter((l) => l.startsWith('skip re-read count: cannot read the transcript'));
+    expect(reread).toHaveLength(2);
+    const closed = lines.findIndex((l) => l.includes('closed 1 active snapshot(s) for session s1'));
+    expect(closed).toBeGreaterThan(lines.indexOf(reread[0]!));
+  });
+
+  it('still logs the re-read lines at exit when sleep throws before they are written', async () => {
+    const before = process.listeners('exit');
+    await expect(sessionEndWork(work({ transcriptPath: `${root}-missing.jsonl`, sleep: async () => { throw new Error('sleep failed'); } })))
+      .rejects.toThrow('sleep failed');
+    const added = process.listeners('exit').filter((l) => !before.includes(l));
+    expect(added).toHaveLength(1);
+    try {
+      expect(lines.some((l) => l.startsWith('skip re-read count'))).toBe(false);
+      added[0]!(0);
+      expect(lines.some((l) => l.startsWith('skip re-read count'))).toBe(true);
+    } finally {
+      process.off('exit', added[0]!);
+    }
+  });
 });

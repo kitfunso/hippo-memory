@@ -6,7 +6,7 @@ import { buildGraphModel, renderGraphHtml, renderGraphCanvas, DEFAULT_VIEW_LIMIT
 import { printError } from './output.js';
 import { type CliFlags, stringFlag, type CommandContext } from './flag-values.js';
 import { requireInit } from './shared.js';
-import { CliExit } from './exit.js';
+import { fail } from './exit.js';
 import { openInBrowser } from './open-browser.js';
 
 function graphExtract(hippoRoot: string, tenantId: string): void {
@@ -55,8 +55,7 @@ function graphShow(hippoRoot: string, tenantId: string, entity: string | undefin
 function graphView(hippoRoot: string, tenantId: string, entity: string | undefined, flags: CliFlags): void {
   const format = stringFlag(flags, 'format') ?? 'html';
   if (format !== 'html' && format !== 'canvas') {
-    printError("graph view: --format must be 'html' or 'canvas'");
-    throw new CliExit(1);
+    fail("graph view: --format must be 'html' or 'canvas'");
   }
   const model = buildGraphModel(hippoRoot, tenantId, { entity, limit: DEFAULT_VIEW_LIMIT });
   const content = format === 'canvas' ? renderGraphCanvas(model) : renderGraphHtml(model);
@@ -75,11 +74,10 @@ export function handleGraph({ hippoRoot, tenantId, args, flags }: CommandContext
   if (subcommand === 'show') return graphShow(hippoRoot, tenantId, entity, flags);
   if (subcommand === 'view') return graphView(hippoRoot, tenantId, entity, flags);
 
-  printError(
+  fail(
     'Usage:\n' +
       '  hippo graph extract                     Rebuild the entity/relation graph from consolidated objects\n' +
       '  hippo graph show [--entity NAME] [--json]   Inspect entities + their edges (text or JSON)\n' +
       '  hippo graph view [--out FILE] [--open] [--format html|canvas] [--entity NAME]   Generate an interactive node-link diagram',
   );
-  throw new CliExit(1);
 }

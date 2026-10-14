@@ -3,7 +3,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { homeDir } from '../util/agent-homes.js';
-import { errorCode, errorMessage, log as logger } from '../util/log.js';
+import { errorCode, errorMessage, log as logger, errorFields } from '../util/log.js';
 import { isObjectLike, isStringValue, type ProgressCursor } from '../core/capture-contract.js';
 import { SESSION_ID_RE } from './copilot-transcript.js';
 import type { SessionTurn } from './transcript.js';
@@ -84,7 +84,7 @@ function releaseSessionLock(lock: string): void {
     fs.rmSync(lock, { force: true });
   } catch (err) {
     // A lock left behind names this pid, which is dead once the worker exits, so the next taker clears it.
-    logger.debug(`session lock not removed: ${errorMessage(err)}`);
+    logger.debug(`session lock not removed: ${errorMessage(err)}`, errorFields(err));
   }
 }
 
@@ -93,7 +93,7 @@ function queueRun(files: SessionStateFiles, mode: WorkerMode): boolean {
   try {
     fs.mkdirSync(path.dirname(files.queued), { recursive: true });
   } catch (err) {
-    logger.warn(`session worker: cannot create ${path.dirname(files.queued)}, so the ${mode} close is not run: ${errorMessage(err)}`);
+    logger.warn(`session worker: cannot create ${path.dirname(files.queued)}, so the ${mode} close is not run: ${errorMessage(err)}`, errorFields(err));
     return false;
   }
   try {
@@ -103,7 +103,7 @@ function queueRun(files: SessionStateFiles, mode: WorkerMode): boolean {
     return true;
   } catch (err) {
     if (errorCode(err) === 'EEXIST') return true;
-    logger.warn(`session worker: cannot queue the ${mode} close in ${files.queued}, so it is not run: ${errorMessage(err)}`);
+    logger.warn(`session worker: cannot queue the ${mode} close in ${files.queued}, so it is not run: ${errorMessage(err)}`, errorFields(err));
     return false;
   }
 }
@@ -115,7 +115,7 @@ function takeQueued(queued: string): WorkerMode | null {
     fs.renameSync(queued, taken);
   } catch (err) {
     // ENOENT means nothing is queued; any other refusal leaves the request queued for the next round, but is told.
-    if (errorCode(err) !== 'ENOENT') logger.warn(`session worker: cannot take the queued request ${queued}: ${errorMessage(err)}`);
+    if (errorCode(err) !== 'ENOENT') logger.warn(`session worker: cannot take the queued request ${queued}: ${errorMessage(err)}`, errorFields(err));
     return null;
   }
   try {

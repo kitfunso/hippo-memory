@@ -31,7 +31,7 @@ import { fmt } from './print.js';
 import { isJsonObject } from '../util/json.js';
 import { hookStoreRoot } from './hook-runtime.js';
 import { DAY_MS, HOUR_MS, MINUTE_MS } from '../util/time.js';
-import { CliExit } from './exit.js';
+import { CliExit, fail } from './exit.js';
 
 const AT_RISK_BELOW = 0.2;
 
@@ -150,8 +150,7 @@ async function cmdInspect(hippoRoot: string, tenantId: string, id: string): Prom
 
   const entry = await getMemory(cliApiContext(hippoRoot, tenantId), id);
   if (!entry) {
-    printError(`Memory not found: ${id}`);
-    throw new CliExit(1);
+    fail(`Memory not found: ${id}`);
   }
 
   const now = evalNow();
@@ -328,8 +327,7 @@ export function handleDoctor({ flags }: CommandContext): void {
 export function handleSupportBundle({ flags }: CommandContext): void {
   const outFlag = stringFlagOrExit(flags, 'out');
   if (outFlag === '') {
-    printError('--out requires a file path.');
-    throw new CliExit(1);
+    fail('--out requires a file path.');
   }
   const includeLogs = flagIsTrue(flags, 'include-logs');
   const home = envHomeDir() || os.homedir();
@@ -360,8 +358,7 @@ export function handleSupportBundle({ flags }: CommandContext): void {
 export async function handleInspect({ hippoRoot, tenantId, args }: CommandContext): Promise<void> {
   const id = args[0];
   if (!id) {
-    printError('Please provide a memory ID.');
-    throw new CliExit(1);
+    fail('Please provide a memory ID.');
   }
   await cmdInspect(hippoRoot, tenantId, id);
 }

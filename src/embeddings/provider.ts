@@ -13,7 +13,7 @@ import {
   DEFAULT_EMBEDDING_MODEL,
 } from './local.js';
 import { loadConfig } from '../core/config.js';
-import { errorMessage, log } from '../util/log.js';
+import { errorMessage, log, errorFields } from '../util/log.js';
 import { redactSecretsStrict } from '../util/secret-detect.js';
 import { fetchWithRetry } from '../util/http-retry.js';
 import type { JsonValue } from '../util/json.js';
@@ -282,7 +282,8 @@ class ApiEmbeddingProvider implements EmbeddingProvider {
       try {
         detail = await readCappedText(resp, ERROR_BODY_MAX_BYTES);
       } catch (err) {
-        log.debug(`${this.kind} embeddings error body unreadable: ${errorMessage(err)}`);
+        // The error thrown below already carries the status; the body is only extra detail.
+        log.debug(`${this.kind} embeddings error body unreadable: ${errorMessage(err)}`, errorFields(err));
       }
       throw new Error(
         redact(`${this.kind} embeddings HTTP ${resp.status}: ${detail.slice(0, ERROR_DETAIL_CHARS)}`, key),
@@ -380,7 +381,7 @@ export function isEmbeddingConfigured(hippoRoot: string): boolean {
     return resolveEmbeddingProvider(hippoRoot).isAvailable();
   } catch (err) {
     // An invalid embedding config must not crash the best-effort ingestion guard, so it reads as not configured.
-    log.debug(`embedding config unusable: ${errorMessage(err)}`);
+    log.warnThenDebug(`embedding-config-unusable:${hippoRoot}`, `embedding config unusable: ${errorMessage(err)}`, errorFields(err));
     return false;
   }
 }

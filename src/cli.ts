@@ -19,7 +19,7 @@ import { USAGE_HEADER, USAGE_EXAMPLES, printAuditPruneUsage, printSlackBackfillU
 import { type FlagKind, type VerbFlags, flagKind, isKnownFlag, undeclaredFlags } from './cli/flags.js';
 import { COMMANDS } from './cli/verbs.js';
 import type { VerbSpec } from './cli/verb-row.js';
-import { CliExit } from './cli/exit.js';
+import { CliExit, fail } from './cli/exit.js';
 
 // A command that does not honour --dry-run would ignore it and run for real.
 function dryRunRefusal(command: string, spec: VerbSpec | undefined, args: string[], flags: CliFlags): string | null {
@@ -171,8 +171,7 @@ function printVersion(): never {
  *  reject it once here so every command, thin-client relays included, sees only a non-empty string. */
 function rejectEmptyScope(flags: CliFlags): void {
   if ('scope' in flags && (!isStringFlag(flags['scope']) || !flags['scope'].trim())) {
-    printError('--scope requires a non-empty value (e.g. --scope slack:private:C1).');
-    throw new CliExit(1);
+    fail('--scope requires a non-empty value (e.g. --scope slack:private:C1).');
   }
 }
 
@@ -182,8 +181,7 @@ function rejectNonNumericFlags(flags: CliFlags, declared: VerbFlags | undefined)
   for (const [key, raw] of Object.entries(flags)) {
     if (flagKind(declared, key) !== 'number') continue;
     if (!isStringFlag(raw) || !raw.trim() || !Number.isFinite(Number(raw))) {
-      printError(`--${key} requires a numeric value.`);
-      throw new CliExit(1);
+      fail(`--${key} requires a numeric value.`);
     }
   }
 }
@@ -193,8 +191,7 @@ function rejectNonNumericFlags(flags: CliFlags, declared: VerbFlags | undefined)
 function rejectValuedSwitches(flags: CliFlags, declared: VerbFlags | undefined): void {
   for (const [key, raw] of Object.entries(flags)) {
     if (flagKind(declared, key) === 'switch' && !isBooleanFlag(raw)) {
-      printError(`--${key} takes no value`);
-      throw new CliExit(1);
+      fail(`--${key} takes no value`);
     }
   }
 }

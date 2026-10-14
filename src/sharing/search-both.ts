@@ -12,11 +12,11 @@ import { DEFAULT_LOCAL_BUMP, DEFAULT_RECALL_BUDGET, type SearchResult, type Resu
 import { startQueryEmbedDeadline, type HybridVectorCandidates } from '../search/vector.js';
 import { evalNow } from '../core/ablation.js';
 import { duplicateKey } from '../util/same-text.js';
-import { errorMessage, log } from '../util/log.js';
+import { errorFields, errorMessage, log } from '../util/log.js';
 
 // The rows are already copied; a failed background embed only delays vectors, so it warns instead of throwing.
 export function logEmbedAllFailure<E>(caller: string, err: E): void {
-  log.warn(`${caller}: background embed failed (${errorMessage(err)}); run 'hippo embed' to backfill`);
+  log.warn(`${caller}: background embed failed (${errorMessage(err)}); run 'hippo embed' to backfill`, errorFields(err));
 }
 
 export interface SearchOptions {

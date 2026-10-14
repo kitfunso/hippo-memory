@@ -9,7 +9,7 @@ import { COMPACTION_DB_WAIT_MS } from '../core/compaction-timing.js';
 import { resolveTenantId } from '../store/tenant.js';
 import { defaultPreCompactLogPath, vscodeUserHooksFile } from '../hooks/shared.js';
 import { readClaudeCodePostCompact, readClaudeCodePreCompact, type CaptureInput, type HookRuntime } from '../core/capture-contract.js';
-import { errorMessage, log as logger } from '../util/log.js';
+import { errorMessage, log as logger, errorFields } from '../util/log.js';
 import { resolveLastSessionTranscript } from './transcript.js';
 import { isVscodeTranscript } from './copilot-transcript.js';
 import { mergeWorkingState, transcriptWorkingState, type WorkingState } from './working-state.js';
@@ -39,7 +39,7 @@ function appendPreCompactLog(logFile: string, message: string): void {
     }
   } catch (err) {
     // Diagnostic-only; a log write failure must never affect the exit-0 contract.
-    logger.debug(`pre-compact log not written: ${errorMessage(err)}`);
+    logger.debug(`pre-compact log not written: ${errorMessage(err)}`, errorFields(err));
   }
 }
 
@@ -183,7 +183,7 @@ function saveDerivedSnapshot(
   try {
     existing = loadActiveTaskSnapshot(hippoRoot, tenantId);
   } catch (err) {
-    logger.debug(`pre-compact: stored snapshot unreadable, saving the derived one alone: ${errorMessage(err)}`);
+    logger.warn(`pre-compact: stored snapshot unreadable, saving the derived one alone: ${errorMessage(err)}`, errorFields(err));
   }
 
   // Carried-over fields are not re-capped, as `hippo snapshot save` stays uncapped; saveActiveTaskSnapshot scrubs every field.

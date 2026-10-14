@@ -2,7 +2,7 @@
 import type { Context } from '../api/types.js';
 import { COMPACT_RESUME_EVENT_CONTENT_CAP, COMPACT_RESUME_MAX_AGE_MS, compactResumeText } from '../api/context-render.js';
 import { bookTokenUse } from '../api/ledger-db.js';
-import { errorMessage, log } from '../util/log.js';
+import { errorMessage, log, errorFields } from '../util/log.js';
 import type { CallerProject } from '../api/prompt-hook.js';
 import type { SessionEvent } from '../store/rows.js';
 import { listSessionEvents, loadFreshActiveTaskSnapshot } from '../store/sessions.js';
@@ -38,7 +38,7 @@ function sessionTrail(ctx: Context, sessionId: string | null): SessionEvent[] {
     return listSessionEvents(ctx.hippoRoot, ctx.tenantId, { session_id: sessionId })
       .map((e) => ({ ...e, content: truncateCodePointSafe(e.content, COMPACT_RESUME_EVENT_CONTENT_CAP) }));
   } catch (err) {
-    log.warn(`compact-resume: trail skipped: ${errorMessage(err)}`);
+    log.warn(`compact-resume: trail skipped: ${errorMessage(err)}`, errorFields(err));
     return [];
   }
 }
