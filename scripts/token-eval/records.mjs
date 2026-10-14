@@ -2,7 +2,8 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
-const LIMIT_RE = /usage limit|hit your (usage )?limit|limit reached|rate_limit_error|overloaded_error/i;
+// Any "hit your ... limit": Claude Code says usage, session or weekly, and a weekly one voided a calibration run when it went unread.
+const LIMIT_RE = /usage limit|hit your (?:[\w-]+ )*limit|limit reached|rate_limit_error|overloaded_error/i;
 
 /** A plan usage limit or an overload: not a task failure, so the session is rerun. */
 export function isUsageLimit(result, output) {

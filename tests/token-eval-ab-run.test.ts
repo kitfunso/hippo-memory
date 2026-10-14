@@ -175,6 +175,10 @@ describe('Z0 runner plan and reads', () => {
     expect(isUsageLimit({ is_error: true, subtype: 'success', result: 'Claude AI usage limit reached|1790000000' }, 'Claude AI usage limit reached|1790000000')).toBe(true);
     expect(isUsageLimit(null, 'API Error: 529 {"type":"error","error":{"type":"overloaded_error"}}')).toBe(true);
     expect(isUsageLimit(null, "You've hit your limit")).toBe(true);
+    const weekly = "You've hit your weekly limit · resets Oct 17, 5am (Europe/London)";
+    expect(isUsageLimit({ is_error: true, subtype: 'success', result: weekly }, weekly)).toBe(true);
+    expect(isUsageLimit({ is_error: true, subtype: 'success' }, "You've hit your session limit · resets 4pm")).toBe(true);
+    expect(isUsageLimit({ is_error: true, subtype: 'success' }, "You've hit your Opus weekly limit")).toBe(true);
     expect(isUsageLimit({ is_error: false, result: 'the rate limit reached its cap' }, 'the rate limit reached its cap')).toBe(false);
     expect(isUsageLimit({ is_error: true, subtype: 'error_max_budget_usd' }, 'budget limit reached')).toBe(false);
     expect(isUsageLimit({ is_error: true, subtype: 'error_during_execution' }, 'TypeError: x is undefined')).toBe(false);

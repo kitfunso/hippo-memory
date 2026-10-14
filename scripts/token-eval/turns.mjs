@@ -54,7 +54,7 @@ async function withRequestLog(logFile, env, fn) {
 export async function untilNotLimited(ctx, run, t, { args, input, rawName, reset, command = () => `${ctx.claude} ${args().join(' ')}`, env = run.env, isLimit = claudeLimit, redact = (text) => text, logKind = null }) {
   // Every cut-off attempt, its wait and its reset: none of it is the kept attempt's work, so wallMs leaves it out.
   let cutOffMs = 0;
-  // SHORTCUT: 15-minute polls up to 24h; parse the reset time if waits get long.
+  // SHORTCUT: 15-minute polls up to 8 days, so a weekly limit's reset is waited out; parse the reset time if polling costs too much.
   for (let attempt = 1; ; attempt++) {
     const start = performance.now();
     const logFile = logKind ? requestLogFile(run, t.id, logKind, attempt) : null;

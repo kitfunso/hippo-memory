@@ -11,7 +11,7 @@ import { CODEX_INTERNAL_SOURCES, listRollouts, sessionRollouts, rolloutUsage, pa
 import { CODEX_TOKEN_FILES, CODEX_AUTH_RE, defaultAuthFile, openAuthVault, authIn, authOut, redact, removeTokenFiles, readIfPresent } from './codex-auth.mjs';
 
 export const WRAPPER_MARK = 'hippo codex wrapper';
-export const CODEX_LIMIT_RE = /usage limit|hit your (?:usage )?limit|rate[_ ]limit|too many requests/i;
+export const CODEX_LIMIT_RE = /usage limit|hit your (?:[\w-]+ )*limit|rate[_ ]limit|too many requests/i;
 const DEFAULT_WAIT = 'none';
 const HOME_KEYS = new Set(['HOME', 'USERPROFILE', 'APPDATA', 'LOCALAPPDATA']);
 
