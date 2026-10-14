@@ -82,6 +82,9 @@ jobs:
       # A value-less flag arrives as `true`; hand-rolled String(flags[x]) stores that as text.
       - name: CLI flags read only through flag-values helpers
         run: node scripts/check-cli-flags.mjs
+      # A hand-written printError + CliExit(1) pair can drift apart; fail() prints and exits 1 in one call.
+      - name: CLI error exits go through fail()
+        run: node scripts/check-cli-fail.mjs
       - run: node scripts/check-roadmap.mjs
       - run: node scripts/check-agent-inventory.mjs
       - run: node website/scripts/check-readme-sync.mjs

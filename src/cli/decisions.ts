@@ -10,7 +10,7 @@ import { requireInit } from './shared.js';
 import { cliApiContext } from './api-context.js';
 import { closeObject, foundOrExit, idArgOrExit, listObjects, printLifecycleTail, type ObjectNames } from './object-verbs.js';
 import { errorMessage } from '../util/log.js';
-import { CliExit } from './exit.js';
+import { fail } from './exit.js';
 
 const DECISION: ObjectNames = { cmd: 'decide', noun: 'Decision', idLabel: 'decision' };
 
@@ -60,8 +60,7 @@ async function decideCreate(hippoRoot: string, tenantId: string, decisionText: s
   // A value-less `--supersedes` asks to supersede but gives no memory id: reject it rather
   // than silently creating a non-superseding decision.
   if (flagIsTrue(flags, 'supersedes')) {
-    printError('--supersedes requires a memory id, e.g. hippo decide "<text>" --supersedes mem_abc123.');
-    throw new CliExit(1);
+    fail('--supersedes requires a memory id, e.g. hippo decide "<text>" --supersedes mem_abc123.');
   }
   const supersedesMemId = stringFlag(flags, 'supersedes') ?? null;
 
@@ -72,8 +71,7 @@ async function decideCreate(hippoRoot: string, tenantId: string, decisionText: s
   if (supersedesMemId) {
     oldEntry = await getMemory(cliApiContext(hippoRoot, tenantId), supersedesMemId);
     if (!oldEntry) {
-      printError(`Memory ${supersedesMemId} not found.`);
-      throw new CliExit(1);
+      fail(`Memory ${supersedesMemId} not found.`);
     }
     supersedesDecisionId =
       decisionsModule.resolveActiveDecisionIdByMemory(hippoRoot, tenantId, supersedesMemId) ?? undefined;
@@ -98,8 +96,7 @@ function exitWithDecideUsage(): never {
   printError('Usage: hippo decide "<decision>" [--context "<why>"] [--supersedes <memory-id>]');
   printError('       hippo decide list [--status active|superseded|closed|all] [--limit N]');
   printError('       hippo decide get <id>');
-  printError('       hippo decide close <id>');
-  throw new CliExit(1);
+  fail('       hippo decide close <id>');
 }
 
 function weakenOrWarn(hippoRoot: string, oldEntry: MemoryEntry, supersedesMemId: string | null): void {

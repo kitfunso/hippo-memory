@@ -9,7 +9,7 @@ import { printError } from './output.js';
 import { parseListLimit, type CliFlags, stringFlag, type CommandContext } from './flag-values.js';
 import { requireInit } from './shared.js';
 import { foundOrExit, idArgOrExit, requireStatus } from './object-verbs.js';
-import { CliExit } from './exit.js';
+import { fail } from './exit.js';
 
 const BASERATE_DECIMALS = 3;
 const PREDICTION_NOUN = 'Prediction';
@@ -19,14 +19,12 @@ async function predictClose(ctx: Context, args: string[], flags: CliFlags): Prom
   const stateRaw = (stringFlag(flags, 'state') ?? '').trim();
   // SAFETY: Set.has only compares by value, so a string outside the closure states is a plain miss.
   if (!VALID_CLOSURE_STATES.has(stateRaw as ClosureState) || stateRaw === 'open') {
-    printError(`Invalid --state: "${stateRaw}". Must be one of: closed | closed-unknown.`);
-    throw new CliExit(1);
+    fail(`Invalid --state: "${stateRaw}". Must be one of: closed | closed-unknown.`);
   }
   const actualRaw = flags['actual'];
   const actualValue = actualRaw !== undefined ? Number(actualRaw) : undefined;
   if (actualRaw !== undefined && !Number.isFinite(actualValue)) {
-    printError(`Invalid --actual: "${actualRaw}". Must be a number.`);
-    throw new CliExit(1);
+    fail(`Invalid --actual: "${actualRaw}". Must be a number.`);
   }
   const closureNote = stringFlag(flags, 'note');
 
@@ -53,8 +51,7 @@ async function loadPredictionList(ctx: Context, status: string, classTag: string
   const closureState = requireStatus(status, VALID_CLOSURE_STATES);
   if (!classTag) {
     // status filter without class: scan all classes is more complex; v1 requires --class for non-default status
-    printError('--status filter (non-open) requires --class to be set.');
-    throw new CliExit(1);
+    fail('--status filter (non-open) requires --class to be set.');
   }
   return predictionsApi.listPredictions(ctx, {
     classTag,
@@ -104,8 +101,7 @@ async function predictBaserate(ctx: Context, flags: CliFlags): Promise<void> {
   // Reference-class / planning-fallacy detector
   const classTag = stringFlag(flags, 'class')?.trim();
   if (!classTag) {
-    printError('Usage: hippo predict baserate --class <c>');
-    throw new CliExit(1);
+    fail('Usage: hippo predict baserate --class <c>');
   }
   const baserate = await predictionsApi.predictionBaserate(ctx, classTag);
   if (baserate.nClosed === 0) {
@@ -141,19 +137,16 @@ async function predictCreate(ctx: Context, claimText: string, flags: CliFlags): 
     printError('Usage: hippo predict "<claim>" --class <c> [--estimate <v>] [--unit <u>] [--target <YYYY-MM-DD>]');
     printError('       hippo predict close <id> --state <closed|closed-unknown> [--actual <v>] [--note "..."]');
     printError('       hippo predict list [--class X] [--status open|closed|closed-unknown|all] [--limit N]');
-    printError('       hippo predict show <id>');
-    throw new CliExit(1);
+    fail('       hippo predict show <id>');
   }
   const classTag = stringFlag(flags, 'class')?.trim();
   if (!classTag) {
-    printError('--class is required for prediction creation.');
-    throw new CliExit(1);
+    fail('--class is required for prediction creation.');
   }
   const estimateRaw = flags['estimate'];
   const estimateValue = estimateRaw !== undefined ? Number(estimateRaw) : undefined;
   if (estimateRaw !== undefined && !Number.isFinite(estimateValue)) {
-    printError(`Invalid --estimate: "${estimateRaw}". Must be a number.`);
-    throw new CliExit(1);
+    fail(`Invalid --estimate: "${estimateRaw}". Must be a number.`);
   }
   const estimateUnit = stringFlag(flags, 'unit');
   const targetDate = stringFlag(flags, 'target');

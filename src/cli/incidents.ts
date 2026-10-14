@@ -6,7 +6,7 @@ import { printError } from './output.js';
 import { nonEmptyStringFlag, type CliFlags, isStringFlag, stringFlag, type CommandContext } from './flag-values.js';
 import { requireInit } from './shared.js';
 import { closeObject, foundOrExit, idArgOrExit, listObjects, type ObjectNames } from './object-verbs.js';
-import { CliExit } from './exit.js';
+import { fail } from './exit.js';
 
 const INCIDENT: ObjectNames = { cmd: 'incident', noun: 'Incident', idLabel: 'incident' };
 
@@ -47,8 +47,7 @@ function incidentResolve(hippoRoot: string, tenantId: string, args: string[], fl
   const id = idArgOrExit(args, 'Usage: hippo incident resolve <id> --resolution "<text>"', INCIDENT.idLabel);
   const resolutionRaw = stringFlag(flags, 'resolution');
   if (!resolutionRaw?.trim()) {
-    printError('--resolution requires a non-empty value, e.g. hippo incident resolve <id> --resolution "root cause fixed".');
-    throw new CliExit(1);
+    fail('--resolution requires a non-empty value, e.g. hippo incident resolve <id> --resolution "root cause fixed".');
   }
   const resolved = incidentsModule.resolveIncident(hippoRoot, tenantId, id, resolutionRaw);
   console.log(`Incident #${resolved.id} resolved.`);
@@ -77,8 +76,7 @@ function incidentCreate(hippoRoot: string, tenantId: string, incidentText: strin
     printError('       hippo incident list [--status open|resolved|closed|all] [--limit N]');
     printError('       hippo incident get <id>');
     printError('       hippo incident resolve <id> --resolution "<text>"');
-    printError('       hippo incident close <id>');
-    throw new CliExit(1);
+    fail('       hippo incident close <id>');
   }
   const context = nonEmptyStringFlag(flags, 'context');
   // --link is a repeatable flag (collected into an array by parseArgs). A
@@ -90,8 +88,7 @@ function incidentCreate(hippoRoot: string, tenantId: string, incidentText: strin
   } else if (isStringFlag(linkRaw)) {
     linkedMemoryIds = [linkRaw];
   } else if (linkRaw === true) {
-    printError('--link requires a memory id, e.g. hippo incident "<text>" --link mem_abc123.');
-    throw new CliExit(1);
+    fail('--link requires a memory id, e.g. hippo incident "<text>" --link mem_abc123.');
   }
 
   const incidentPathTags = extractPathTags(process.cwd());

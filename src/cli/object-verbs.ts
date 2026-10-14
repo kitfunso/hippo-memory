@@ -1,15 +1,13 @@
 // The status, list, id and not-found paths the typed-object verbs (process, policy, skill, brief, note, decide, incident, predict) share.
 
-import { printError } from './output.js';
 import { parseListLimit, parsePositiveId, stringFlag, type CliFlags } from './flag-values.js';
-import { CliExit } from './exit.js';
+import { fail } from './exit.js';
 
 /** The member of `states` named by `status`, or exit 1 with the message that lists every allowed value. */
 export function requireStatus<S extends string>(status: string, states: ReadonlySet<S>): S {
   const found = [...states].find((s) => s === status);
   if (found === undefined) {
-    printError(`Invalid --status: "${status}". Must be one of: ${[...states, 'all'].join(' | ')}.`);
-    throw new CliExit(1);
+    fail(`Invalid --status: "${status}". Must be one of: ${[...states, 'all'].join(' | ')}.`);
   }
   return found;
 }
@@ -47,16 +45,14 @@ export function idArgOrExit(
 ): number {
   const idRaw = args[1];
   if (!idRaw) {
-    printError(usage);
-    throw new CliExit(1);
+    fail(usage);
   }
   return parsePositiveId(idRaw, label);
 }
 
 export function foundOrExit<O>(found: O | null | undefined, noun: string, id: number): O {
   if (!found) {
-    printError(`${noun} ${id} not found.`);
-    throw new CliExit(1);
+    fail(`${noun} ${id} not found.`);
   }
   return found;
 }

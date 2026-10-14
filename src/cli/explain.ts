@@ -15,7 +15,7 @@ import { printError } from './output.js';
 import { parseLimitFlag, parseBudgetFlag, type CliFlags, type CommandContext, parseAsOfFlag, engineFlags, boolFlag, stringFlagOrExit } from './flag-values.js';
 import { requireInit } from './shared.js';
 import { fmt, recallEntryText, recallHeading } from './print.js';
-import { CliExit } from './exit.js';
+import { fail } from './exit.js';
 
 const EXPLAIN_PREVIEW_CHARS = 48;
 
@@ -187,8 +187,7 @@ function printExplainBreakdown(r: SearchResult, i: number): void {
 export async function handleExplain({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
   const query = args.join(' ').trim();
   if (!query) {
-    printError('Please provide a search query.');
-    throw new CliExit(1);
+    fail('Please provide a search query.');
   }
   await cmdExplain(hippoRoot, tenantId, query, flags);
 }

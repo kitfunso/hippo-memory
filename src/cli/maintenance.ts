@@ -13,7 +13,7 @@ import { printError } from './output.js';
 import { boolFlag, numberFlag, stringFlagOrExit, type CommandContext } from './flag-values.js';
 import { requireInit, resolveAuthRoot } from './shared.js';
 import { errorMessage } from '../util/log.js';
-import { CliExit } from './exit.js';
+import { fail } from './exit.js';
 
 const MAX_FAILED_SHOWN = 5;
 const MAX_PAIRS_SHOWN = 15;
@@ -24,8 +24,7 @@ export async function handleRefine({ hippoRoot, tenantId, flags }: CommandContex
 
   const apiKey = envAnthropicApiKey();
   if (!apiKey) {
-    printError('hippo refine needs ANTHROPIC_API_KEY in the environment.');
-    throw new CliExit(1);
+    fail('hippo refine needs ANTHROPIC_API_KEY in the environment.');
   }
 
   const dryRun = boolFlag(flags, 'dry-run');
