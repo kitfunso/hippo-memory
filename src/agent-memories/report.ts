@@ -25,8 +25,24 @@ export interface Tally {
 
 export function emptyTally(): Tally {
   return {
-    imported: 0, replaced: 0, restored: 0, setAside: 0, untagged: 0, unchanged: 0, adopted: 0, renamed: 0, collapsed: 0, retagged: 0,
-    handedOver: 0, duplicate: 0, secret: 0, short: 0, rejected: 0, unread: 0, unreadable: 0, busy: 0,
+    imported: 0,
+    replaced: 0,
+    restored: 0,
+    setAside: 0,
+    untagged: 0,
+    unchanged: 0,
+    adopted: 0,
+    renamed: 0,
+    collapsed: 0,
+    retagged: 0,
+    handedOver: 0,
+    duplicate: 0,
+    secret: 0,
+    short: 0,
+    rejected: 0,
+    unread: 0,
+    unreadable: 0,
+    busy: 0,
   };
 }
 
@@ -96,11 +112,24 @@ export function totalTally(report: ImportReport): Tally {
 const plural = (n: number, one: string, many: string): string => `${n} ${n === 1 ? one : many}`;
 
 const TALLY_WORDS = {
-  imported: 'new', replaced: 'replaced', restored: 'brought back', setAside: 'set aside', untagged: 'pinned and kept',
-  unchanged: 'unchanged', adopted: 'taken over from the old Claude import', renamed: 'moved to the project id', collapsed: 'duplicates folded',
+  imported: 'new',
+  replaced: 'replaced',
+  restored: 'brought back',
+  setAside: 'set aside',
+  untagged: 'pinned and kept',
+  unchanged: 'unchanged',
+  adopted: 'taken over from the old Claude import',
+  renamed: 'moved to the project id',
+  collapsed: 'duplicates folded',
   retagged: 'retagged',
-  handedOver: 'handed over from the global store', duplicate: 'already stored', secret: 'skipped for a secret', short: 'too short',
-  rejected: 'skipped as rejected', unread: 'files skipped', unreadable: 'unreadable folders', busy: 'busy folders',
+  handedOver: 'handed over from the global store',
+  duplicate: 'already stored',
+  secret: 'skipped for a secret',
+  short: 'too short',
+  rejected: 'skipped as rejected',
+  unread: 'files skipped',
+  unreadable: 'unreadable folders',
+  busy: 'busy folders',
 } as const satisfies Record<keyof Tally, string>;
 
 /** `hippo import --agents`: each tool's home, its folders and what moved; in a dry run, what would have. */
@@ -110,16 +139,25 @@ export function detailLines(report: ImportReport, dryRun: boolean): string[] {
     const found = t.containers.length === 0 ? ' (no memory folders found)' : '';
     lines.push(`  ${t.label}: ${t.homes.length === 0 ? 'not found' : t.homes.join(', ')}${found}`);
     for (const c of t.containers) {
-      lines.push(`    ${c.scope} ${c.path}: ${c.readable ? plural(c.items, 'note', 'notes') : 'unreadable'}, into ${c.store}`);
+      lines.push(
+        `    ${c.scope} ${c.path}: ${c.readable ? plural(c.items, 'note', 'notes') : 'unreadable'}, into ${c.store}`,
+      );
     }
     const moved = TALLY_FIELDS.filter((f) => t.tally[f] > 0).map((f) => `${t.tally[f]} ${TALLY_WORDS[f]}`);
     if (moved.length > 0) lines.push(`    ${dryRun ? 'would be ' : ''}${moved.join(', ')}`);
-    if (t.unlisted > 0) lines.push(`    ${plural(t.unlisted, 'kept row sits', 'kept rows sit')} in folders not listed this run (a moved project's old copy)`);
+    if (t.unlisted > 0)
+      lines.push(
+        `    ${plural(t.unlisted, 'kept row sits', 'kept rows sit')} in folders not listed this run (a moved ` +
+        `project's old copy)`,
+      );
   }
   return lines;
 }
 
-/** "Imported 12 agent memories (Claude Code 10, Codex 2); 1 replaced, 1 set aside, 1 skipped for a secret.", or null when nothing moved. */
+/**
+ * "Imported 12 agent memories (Claude Code 10, Codex 2); 1 replaced, 1 set aside, 1 skipped for a secret.", or null
+ * when nothing moved.
+ */
 export function summaryLine(report: ImportReport): string | null {
   const total = totalTally(report);
   const parts = [

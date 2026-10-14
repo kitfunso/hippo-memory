@@ -26,19 +26,31 @@ const rings = {
 };
 
 /** The session's ring, created on first use; null when anchoring is off or the call has no session. */
-export function sessionRing(surface: RecallSurface, tenantId: string, sessionId: string | undefined): RingBuffer | null {
+export function sessionRing(
+  surface: RecallSurface,
+  tenantId: string,
+  sessionId: string | undefined,
+): RingBuffer | null {
   if (!biasHintEnabled('anchoring') || !sessionId) return null;
   return getOrCreateRing(rings[surface], buildSessionKey(tenantId, sessionId));
 }
 
-/** The session's history, read without creating or touching its ring, so a request that then fails evicts no live session. */
+/**
+ * The session's history, read without creating or touching its ring, so a request that then fails evicts no live
+ * session.
+ */
 export function peekSessionRing(surface: RecallSurface, tenantId: string, sessionId: string): RecallHistorySnapshot {
   const ring = rings[surface].get(buildSessionKey(tenantId, sessionId));
   return ring ? snapshotRing(ring) : [];
 }
 
 /** Records this recall's top row and hint, which the next recall's cooldown reads. */
-export function noteRecall(ring: RingBuffer, query: string, topId: string | null, anchoredOn: string | undefined): void {
+export function noteRecall(
+  ring: RingBuffer,
+  query: string,
+  topId: string | null,
+  anchoredOn: string | undefined,
+): void {
   appendRecall(ring, hashQueryText(query), topId, anchoredOn);
 }
 
@@ -63,7 +75,12 @@ export function strengthenOf(ctx: Context, ids: readonly string[]): NonNullable<
 
 type RecallAuditMetadata = Readonly<Record<string, string | number | null>>;
 
-export function recallAuditRow(who: RecallAuditCaller, op: AuditOp, targetId?: string, metadata?: RecallAuditMetadata): AppendAuditOpts {
+export function recallAuditRow(
+  who: RecallAuditCaller,
+  op: AuditOp,
+  targetId?: string,
+  metadata?: RecallAuditMetadata,
+): AppendAuditOpts {
   return { tenantId: who.tenantId, actor: who.actor, op, targetId, metadata };
 }
 
@@ -72,7 +89,10 @@ export function recallAuditMetadata(query: string, results: number) {
   return { ...auditQueryFields(query), results };
 }
 
-/** No session means no ring; the row hashes with SHA-256/16, since hashQueryText is FNV-1a and easy to reverse on short queries. */
+/**
+ * No session means no ring; the row hashes with SHA-256/16, since hashQueryText is FNV-1a and easy to reverse on short
+ * queries.
+ */
 export function anchorSkippedRows(who: RecallAuditCaller, query: string): AppendAuditOpts[] {
   if (!biasHintEnabled('anchoring')) return [];
   return [recallAuditRow(who, 'recall_anchor_skipped_no_session', undefined, auditQueryFields(query))];
@@ -108,7 +128,9 @@ export interface ShownRecall {
   readonly availability: AvailabilityHint | null;
 }
 
-/** The hint rows for a list a surface showed, so a surface on the store port can hand them to the recall's one write. */
+/**
+ * The hint rows for a list a surface showed, so a surface on the store port can hand them to the recall's one write.
+ */
 export function shownRecallRows(who: RecallAuditCaller, shown: ShownRecall): AppendAuditOpts[] {
   return [
     ...(shown.ring ? [] : anchorSkippedRows(who, shown.query)),

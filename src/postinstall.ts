@@ -10,8 +10,10 @@ function main(): void {
   if (envSkipPostinstall()) return;
 
   try {
-    // Repair-only, for users who opted in (a Codex update can restore the real binary over our shim): swapping the binary from postinstall
-    // is a consent violation that supply-chain scanners read as hijacking, so first install is `hippo hook install codex` only.
+    // Repair-only, for users who opted in (a Codex update can restore the real binary over our shim): swapping the
+    // binary from postinstall
+    // is a consent violation that supply-chain scanners read as hijacking, so first install is `hippo hook install
+    // codex` only.
     repairCodexWrapperIfInstalled();
   } catch (err) {
     // Never fail package install because auto-integration could not be applied.
@@ -31,8 +33,12 @@ function main(): void {
   }
 }
 
-/** Read-only nudge: if Claude Code is detected and the Hippo UserPromptSubmit hook is not installed, point the user at `hippo init`.
- * It never patches ~/.claude/settings.json from a package postinstall: surprising, against least authority, and trips security scanners. */
+/**
+ * Read-only nudge: if Claude Code is detected and the Hippo UserPromptSubmit hook is not installed, point the user at
+ * `hippo init`.
+ * It never patches ~/.claude/settings.json from a package postinstall: surprising, against least authority, and trips
+ * security scanners.
+ */
 function printClaudeCodeNudge(): void {
   const claudeDir = claudeConfigDir(os.homedir());
   if (!fs.existsSync(claudeDir)) return; // Claude Code not installed — silent
@@ -68,7 +74,9 @@ function printClaudeCodeNudge(): void {
   line('');
 }
 
-/** Read-only nudge: if the Codex CLI is on PATH and the session-capture wrapper is not installed, print the opt-in command;
+/**
+ * Read-only nudge: if the Codex CLI is on PATH and the session-capture wrapper is not installed, print the opt-in
+ * command;
  * same least-authority reasoning as the Claude Code nudge, we never swap the user's binary. */
 function printCodexNudge(): void {
   if (isCodexWrapperInstalled()) return;

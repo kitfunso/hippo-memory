@@ -6,7 +6,15 @@ import { graphModelOf } from '../../graph/view.js';
 import { HttpError, sendJson } from '../../util/http-util.js';
 import { sleepInChild } from '../sleep-offload.js';
 import type { AuthedRouteRequest } from '../types.js';
-import { getCallerProject, getString, getStringArray, isSetMember, parseJsonBody, parseListLimit, validateIdSegment } from '../validation.js';
+import {
+  getCallerProject,
+  getString,
+  getStringArray,
+  isSetMember,
+  parseJsonBody,
+  parseListLimit,
+  validateIdSegment,
+} from '../validation.js';
 import { type JsonValue, isJsonString, isJsonBoolean } from '../../util/json.js';
 
 const VALID_KINDS: ReadonlySet<MemoryKind> = new Set(MEMORY_KINDS);
@@ -50,7 +58,10 @@ export async function handleGetGraph({ res, ctx, query }: AuthedRouteRequest): P
 }
 
 // /v1/memories/:id/* and DELETE /v1/memories/:id
-export async function handleArchiveMemory({ req, res, ctx }: AuthedRouteRequest, archiveMatch: Record<string, string>): Promise<void> {
+export async function handleArchiveMemory(
+  { req, res, ctx }: AuthedRouteRequest,
+  archiveMatch: Record<string, string>,
+): Promise<void> {
   validateIdSegment(archiveMatch.id!, 'memory id');
   const body = await parseJsonBody(req, ctx);
   const reason = getString(body, 'reason');
@@ -62,7 +73,10 @@ export async function handleArchiveMemory({ req, res, ctx }: AuthedRouteRequest,
   return;
 }
 
-export async function handleSupersedeMemory({ req, res, ctx }: AuthedRouteRequest, supersedeMatch: Record<string, string>): Promise<void> {
+export async function handleSupersedeMemory(
+  { req, res, ctx }: AuthedRouteRequest,
+  supersedeMatch: Record<string, string>,
+): Promise<void> {
   validateIdSegment(supersedeMatch.id!, 'memory id');
   const body = await parseJsonBody(req, ctx);
   const content = getString(body, 'content');
@@ -74,22 +88,30 @@ export async function handleSupersedeMemory({ req, res, ctx }: AuthedRouteReques
   return;
 }
 
-export async function handlePromoteMemory({ res, ctx }: AuthedRouteRequest, promoteMatch: Record<string, string>): Promise<void> {
+export async function handlePromoteMemory(
+  { res, ctx }: AuthedRouteRequest,
+  promoteMatch: Record<string, string>,
+): Promise<void> {
   validateIdSegment(promoteMatch.id!, 'memory id');
   const result = promote(ctx, promoteMatch.id!);
   sendJson(res, 200, result);
   return;
 }
 
-export async function handleForgetMemory({ res, ctx }: AuthedRouteRequest, idMatch: Record<string, string>): Promise<void> {
+export async function handleForgetMemory(
+  { res, ctx }: AuthedRouteRequest,
+  idMatch: Record<string, string>,
+): Promise<void> {
   validateIdSegment(idMatch.id!, 'memory id');
   const result = await forget(ctx, idMatch.id!);
   sendJson(res, 200, result);
   return;
 }
 
-// POST /v1/outcome: applies a positive/negative outcome to memory ids; without ids it falls back to the last-recall path (api.outcomeForLastRecall)
-// and returns {applied, ids}, so callers can tell "no recent recall" from "all ids skipped". Each applied id writes one audit_log row (op='outcome').
+// POST /v1/outcome: applies a positive/negative outcome to memory ids; without ids it falls back to the last-recall
+// path (api.outcomeForLastRecall)
+// and returns {applied, ids}, so callers can tell "no recent recall" from "all ids skipped". Each applied id writes one
+// audit_log row (op='outcome').
 export async function handleApplyOutcome({ req, res, ctx }: AuthedRouteRequest): Promise<void> {
   const body = await parseJsonBody(req, ctx);
   const good = body['good'];
@@ -106,7 +128,8 @@ export async function handleApplyOutcome({ req, res, ctx }: AuthedRouteRequest):
     if (!idsRaw.every(isNonEmptyId)) {
       throw new HttpError(400, 'ids must be an array of non-empty strings');
     }
-    // DoS cap on ids.length (each id costs ~3 DB ops): N=1000 keeps per-request work sub-second on SQLite. Auth runs first, so only a caller with a key
+    // DoS cap on ids.length (each id costs ~3 DB ops): N=1000 keeps per-request work sub-second on SQLite. Auth runs
+    // first, so only a caller with a key
     // reaches it.
     if (idsRaw.length > 1000) {
       throw new HttpError(400, 'ids exceeds 1000-id cap');
@@ -123,7 +146,8 @@ export async function handleApplyOutcome({ req, res, ctx }: AuthedRouteRequest):
   return;
 }
 
-// POST /v1/sleep: host-wide consolidation (consolidate, dedup, audit, share, ambient); api.sleep spans the WHOLE hippoRoot, cross-tenant by design, so the
+// POST /v1/sleep: host-wide consolidation (consolidate, dedup, audit, share, ambient); api.sleep spans the WHOLE
+// hippoRoot, cross-tenant by design, so the
 // row's host-admin-local gate is the trust boundary. Body {dry_run?, no_share?}; returns SleepResult JSON.
 export async function handleSleep({ req, res, ctx }: AuthedRouteRequest): Promise<void> {
   const body = await parseJsonBody(req, ctx);

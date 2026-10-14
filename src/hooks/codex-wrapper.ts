@@ -363,8 +363,9 @@ export function repairCodexWrapperIfInstalled(hippoCliPath: string = resolveHipp
   if (readCodexWrapperMetadata() === null) {
     return { status: 'not-found' };
   }
-  // A checkout's own `npm install` or CLI would point the user's launcher at a folder that may be deleted.
-  // SHORTCUT: any node_modules copy (npx cache, a project dependency) still repairs; record the opted-in CLI path in the metadata to close that.
+  // A checkout's own `npm install` or CLI would point the user's launcher at a folder that may be deleted. SHORTCUT:
+  // any node_modules copy (npx cache, a project dependency) still repairs; record the opted-in CLI path in the metadata
+  // to close that.
   const packageDir = path.dirname(path.dirname(hippoCliPath));
   if (path.basename(path.dirname(packageDir)).toLowerCase() !== 'node_modules') {
     return { status: 'source-checkout' };

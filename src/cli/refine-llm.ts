@@ -1,4 +1,6 @@
-/** LLM refinement of consolidated semantic memories (`hippo refine`): a separate command so API-key users opt in; idempotent via the `llm-refined` tag.
+/**
+ * LLM refinement of consolidated semantic memories (`hippo refine`): a separate command so API-key users opt in;
+ * idempotent via the `llm-refined` tag.
  * Uses fetch directly (no SDK dependency); on any failure the original memory is untouched. */
 
 import { MemoryEntry, Layer } from '../core/memory.js';
@@ -30,7 +32,10 @@ export interface RefineOptions {
   all?: boolean;
   /** Injected for testing — defaults to the real fetch. */
   fetcher?: typeof fetch;
-  /** Tenant scope: only that tenant's consolidated entries are scanned; cross-tenant parents return null and are skipped. */
+  /**
+   * Tenant scope: only that tenant's consolidated entries are scanned; cross-tenant parents return null and are
+   * skipped.
+   */
   tenantId?: string;
 }
 
@@ -42,7 +47,10 @@ export interface RefineResult {
   details: Array<{ id: string; status: 'refined' | 'skipped' | 'failed'; reason?: string }>;
 }
 
-/** Ask Claude to synthesize a clean semantic memory from the merged content and its sources; returns null when the API call failed. */
+/**
+ * Ask Claude to synthesize a clean semantic memory from the merged content and its sources; returns null when the API
+ * call failed.
+ */
 export async function refineSemanticMemory(
   merged: string,
   sources: MemoryEntry[],
@@ -102,7 +110,10 @@ function isConsolidated(entry: MemoryEntry): boolean {
   return CONSOLIDATED_MARKERS.some((m) => entry.content.startsWith(m));
 }
 
-/** Refine each consolidated semantic memory with the LLM and write it back, tagging `llm-refined` so reruns skip it (unless `all`). */
+/**
+ * Refine each consolidated semantic memory with the LLM and write it back, tagging `llm-refined` so reruns skip it
+ * (unless `all`).
+ */
 export async function refineStore(
   hippoRoot: string,
   opts: RefineOptions,

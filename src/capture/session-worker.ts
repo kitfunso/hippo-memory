@@ -36,7 +36,8 @@ function pidAlive(pid: number): boolean {
   }
 }
 
-/** Windows reuses pids, so past this a lock is stale whatever process it names; a worker rarely waits more than minutes on a busy store. */
+/** Windows reuses pids, so past this a lock is stale whatever process it names; a worker rarely waits more than minutes
+ * on a busy store. */
 const STALE_LOCK_MS = 15 * MINUTE_MS;
 
 /** A dead holder frees its session at once, and any holder at STALE_LOCK_MS. */
@@ -60,7 +61,8 @@ function holderAlive(lock: string): boolean {
 
 type Take = 'taken' | 'held' | 'unusable';
 
-// SHORTCUT: two takers racing one stale-lock cleanup can both run, as every worker did before the lock; an atomic link-based take if that shows up.
+// SHORTCUT: two takers racing one stale-lock cleanup can both run, as every worker did before the lock; an atomic
+// link-based take if that shows up.
 function takeSessionLock(lock: string): Take {
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
@@ -88,12 +90,17 @@ function releaseSessionLock(lock: string): void {
   }
 }
 
-/** False when the request could not be queued; the caller then refuses the run, since an unlocked worker could race a live one. */
+/** False when the request could not be queued; the caller then refuses the run, since an unlocked worker could race a
+ * live one. */
 function queueRun(files: SessionStateFiles, mode: WorkerMode): boolean {
   try {
     fs.mkdirSync(path.dirname(files.queued), { recursive: true });
   } catch (err) {
-    logger.warn(`session worker: cannot create ${path.dirname(files.queued)}, so the ${mode} close is not run: ${errorMessage(err)}`, errorFields(err));
+    logger.warn(
+      `session worker: cannot create ${path.dirname(files.queued)}, ` +
+        `so the ${mode} close is not run: ${errorMessage(err)}`,
+      errorFields(err),
+    );
     return false;
   }
   try {
@@ -103,7 +110,10 @@ function queueRun(files: SessionStateFiles, mode: WorkerMode): boolean {
     return true;
   } catch (err) {
     if (errorCode(err) === 'EEXIST') return true;
-    logger.warn(`session worker: cannot queue the ${mode} close in ${files.queued}, so it is not run: ${errorMessage(err)}`, errorFields(err));
+    logger.warn(
+      `session worker: cannot queue the ${mode} close in ${files.queued}, so it is not run: ${errorMessage(err)}`,
+      errorFields(err),
+    );
     return false;
   }
 }
@@ -115,7 +125,9 @@ function takeQueued(queued: string): WorkerMode | null {
     fs.renameSync(queued, taken);
   } catch (err) {
     // ENOENT means nothing is queued; any other refusal leaves the request queued for the next round, but is told.
-    if (errorCode(err) !== 'ENOENT') logger.warn(`session worker: cannot take the queued request ${queued}: ${errorMessage(err)}`, errorFields(err));
+    if (errorCode(err) !== 'ENOENT') {
+      logger.warn(`session worker: cannot take the queued request ${queued}: ${errorMessage(err)}`, errorFields(err));
+    }
     return null;
   }
   try {
@@ -125,8 +137,13 @@ function takeQueued(queued: string): WorkerMode | null {
   }
 }
 
-/** Runs `work` unless a live worker holds this session, which then runs the request after its own so the last reply is never dropped. */
-export async function runSessionWorker(sessionId: string | null, mode: WorkerMode, work: (mode: WorkerMode) => Promise<void>): Promise<void> {
+/** Runs `work` unless a live worker holds this session, which then runs the request after its own so the last reply is
+ * never dropped. */
+export async function runSessionWorker(
+  sessionId: string | null,
+  mode: WorkerMode,
+  work: (mode: WorkerMode) => Promise<void>,
+): Promise<void> {
   const files = sessionStateFiles(sessionId);
   if (files === null) return work(mode);
   if (!queueRun(files, mode)) return;
@@ -162,14 +179,16 @@ export function turnsAfter(turns: readonly SessionTurn[], position: string | nul
   const count = Number(countText);
   if (!Number.isInteger(count) || count <= 0) return turns;
   if (count <= turns.length && turnKey(turns[count - 1]) === key) return turns.slice(count);
-  // A transcript too big to read whole is read from its tail, so the count shifts; the last turn's text still marks the place.
+  // A transcript too big to read whole is read from its tail, so the count shifts; the last turn's text still marks the
+  // place.
   for (let i = turns.length - 1; i >= 0; i--) {
     if (turnKey(turns[i]) === key) return turns.slice(i + 1);
   }
   return turns;
 }
 
-/** The saved position for this session's transcript; null when none was saved, it names another file, or it is unreadable. */
+/** The saved position for this session's transcript; null when none was saved, it names another file, or it is
+ * unreadable. */
 export function loadTurnPosition(sessionId: string, transcriptPath: string): string | null {
   const file = sessionStateFiles(sessionId)?.cursor;
   if (!file || !fs.existsSync(file)) return null;
@@ -184,11 +203,20 @@ export function loadTurnPosition(sessionId: string, transcriptPath: string): str
 }
 
 // SHORTCUT: one small cursor file per chat is never pruned; prune by age at sleep if the folder grows.
-export function saveTurnPosition(sessionId: string, transcriptPath: string, turns: readonly SessionTurn[], log: (message: string) => void): void {
+export function saveTurnPosition(
+  sessionId: string,
+  transcriptPath: string,
+  turns: readonly SessionTurn[],
+  log: (message: string) => void,
+): void {
   const file = sessionStateFiles(sessionId)?.cursor;
   if (!file) return;
   const cursor: ProgressCursor = {
-    runtime: 'vscode', sessionId, source: transcriptPath, position: turnPosition(turns), updatedAt: new Date().toISOString(),
+    runtime: 'vscode',
+    sessionId,
+    source: transcriptPath,
+    position: turnPosition(turns),
+    updatedAt: new Date().toISOString(),
   };
   const tmp = `${file}.${process.pid}.tmp`;
   try {
@@ -196,7 +224,8 @@ export function saveTurnPosition(sessionId: string, transcriptPath: string, turn
     fs.writeFileSync(tmp, JSON.stringify(cursor));
     fs.renameSync(tmp, file);
   } catch (err) {
-    // Windows refuses the rename (EPERM) while another process has the cursor open; the next reply re-reads these turns, which the dedupe keys absorb.
+    // Windows refuses the rename (EPERM) while another process has the cursor open; the next reply re-reads these
+    // turns, which the dedupe keys absorb.
     log(`cursor not saved: ${errorMessage(err)}`);
   }
 }

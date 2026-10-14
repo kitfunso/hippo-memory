@@ -1,4 +1,5 @@
-// The hippo-memory/project-identity subpath: only what the changelog publishes, so the module's other exports stay internal.
+// The hippo-memory/project-identity subpath: only what the changelog publishes, so the module's other exports stay
+// internal.
 export {
   MAX_PROJECT_ALIASES,
   MCP_PROJECT_SCOPED_HEADER,

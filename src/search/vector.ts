@@ -11,7 +11,10 @@ import { hasGroup, requireGroup, type HippoStore, type VectorReads } from '../st
 import { redactSecretsStrict } from '../util/secret-detect.js';
 import { currentEntries, type CurrentnessOptions } from './as-of.js';
 
-/** hybridSearch's vector arm: which rows it may add, plus the caller's JS admission rules (exact private regex, entry filters). */
+/**
+ * hybridSearch's vector arm: which rows it may add, plus the caller's JS admission rules (exact private regex, entry
+ * filters).
+ */
 export type HybridVectorCandidates = VectorCandidateSpec & { admit?: (entry: MemoryEntry) => boolean };
 
 /** What the vector arm produced; fields fill in step by step, so a late failure keeps the rows already added. */
@@ -38,7 +41,9 @@ export interface VectorArmOptions extends CurrentnessOptions {
 // Jev's default budget (rerankers/jev.ts): each is one off-box call that a recall waits on.
 const QUERY_EMBED_BUDGET_MS = 5_000;
 
-/** How long one recall waits for its query vector, retries included; HIPPO_QUERY_EMBED_TIMEOUT_MS overrides the default. */
+/**
+ * How long one recall waits for its query vector, retries included; HIPPO_QUERY_EMBED_TIMEOUT_MS overrides the default.
+ */
 function queryEmbedBudgetMs(): number {
   return envQueryEmbedTimeoutMs() ?? QUERY_EMBED_BUDGET_MS;
 }
@@ -48,8 +53,15 @@ export function startQueryEmbedDeadline(): AbortSignal {
   return AbortSignal.timeout(queryEmbedBudgetMs());
 }
 
-/** The query's vector, or null when the provider outlasts `deadline`: an API call, or a local model still downloading. Any other failure throws. */
-export async function embedQueryBy(deadline: AbortSignal, provider: EmbeddingProvider, query: string): Promise<number[] | null> {
+/**
+ * The query's vector, or null when the provider outlasts `deadline`: an API call, or a local model still downloading.
+ * Any other failure throws.
+ */
+export async function embedQueryBy(
+  deadline: AbortSignal,
+  provider: EmbeddingProvider,
+  query: string,
+): Promise<number[] | null> {
   try {
     return (await provider.embed([query], 'query', { signal: deadline }))[0] ?? [];
   } catch (err) {
@@ -58,9 +70,14 @@ export async function embedQueryBy(deadline: AbortSignal, provider: EmbeddingPro
   }
 }
 
-// Search runs on every hook prompt, so one line per reason per process says why vectors went unused without flooding stderr.
+// Search runs on every hook prompt, so one line per reason per process says why vectors went unused without flooding
+// stderr.
 function warnBm25Fallback(reason: string, detail: string): void {
-  log.once(`search.bm25-fallback.${reason}`, 'warn', `hybrid search fell back to BM25 only: ${redactSecretsStrict(detail)}`);
+  log.once(
+    `search.bm25-fallback.${reason}`,
+    'warn',
+    `hybrid search fell back to BM25 only: ${redactSecretsStrict(detail)}`,
+  );
 }
 
 function reindexHint(store: HippoStore): string {
@@ -102,11 +119,20 @@ export async function resolveVectorArm(
 }
 
 // Views when the store has them, so a search copies no vector; the number[] copies score the same.
-async function storedVectorsOf(store: HippoStore, reads: VectorReads, ids: readonly string[]): Promise<Map<string, ArrayLike<number>>> {
+async function storedVectorsOf(
+  store: HippoStore,
+  reads: VectorReads,
+  ids: readonly string[],
+): Promise<Map<string, ArrayLike<number>>> {
   return store.vectorViews ? store.vectorViews.storedVectorViews(ids) : reads.storedVectors(ids);
 }
 
-async function fillVectorArm(arm: VectorArm, query: string, { root, store }: VectorSource, options: VectorArmOptions): Promise<void> {
+async function fillVectorArm(
+  arm: VectorArm,
+  query: string,
+  { root, store }: VectorSource,
+  options: VectorArmOptions,
+): Promise<void> {
   const provider = resolveEmbeddingProvider(root);
   if (!provider.isAvailable()) return;
   const reads = requireVectorReads(store);
@@ -121,7 +147,10 @@ async function fillVectorArm(arm: VectorArm, query: string, { root, store }: Vec
   if (vectors.size === 0 && !(spec !== undefined && index.hasVectors)) return;
   const vec = await embedQueryBy(options.queryEmbedDeadline ?? startQueryEmbedDeadline(), provider, query);
   if (vec === null) {
-    warnBm25Fallback('query-embed-budget', `the ${provider.kind} embedding provider gave no query vector within ${queryEmbedBudgetMs()} ms`);
+    warnBm25Fallback(
+      'query-embed-budget',
+      `the ${provider.kind} embedding provider gave no query vector within ${queryEmbedBudgetMs()} ms`,
+    );
     return;
   }
   arm.queryVector = vec;

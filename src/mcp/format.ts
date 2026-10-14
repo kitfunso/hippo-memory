@@ -152,11 +152,13 @@ export function tailSection(rows: RecallResultItem[]): string {
 export function planningSection(r: RecallResult): string {
   if (r.planningFallacyHint) {
     const h = r.planningFallacyHint;
-    return `## Planning fallacy hint\nClass: ${h.classTag}\n${h.baserateSummary}\n(detected: ${JSON.stringify(h.detectedPhrase)})\n\n---\n\n`;
+    return `## Planning fallacy hint\nClass: ${h.classTag}\n${h.baserateSummary}\n(detected: ` +
+      `${JSON.stringify(h.detectedPhrase)})\n\n---\n\n`;
   }
   if (r.planningFallacyWatching) {
     const w = r.planningFallacyWatching;
-    return `## Planning fallacy watch\nReason: ${w.reason}\n${w.suggestion}\n(detected: ${JSON.stringify(w.detectedPhrase)})\n\n---\n\n`;
+    return `## Planning fallacy watch\nReason: ${w.reason}\n${w.suggestion}\n(detected: ` +
+      `${JSON.stringify(w.detectedPhrase)})\n\n---\n\n`;
   }
   return '';
 }

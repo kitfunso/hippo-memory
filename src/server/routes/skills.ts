@@ -26,12 +26,20 @@ const skillRoutes: VersionedRouteConfig<'skill', SaveSkillOpts> = {
     const instructions = requiredString(body, 'instructions', INSTRUCTIONS);
     const trigger = optionalString(body, 'trigger', 1024);
     const changeSummary = optionalString(body, 'changeSummary', MAX_SHORT_FIELD_LEN);
-    return (existing, id) => ({ skillName: existing.skillName, instructions, trigger, changeSummary, supersedesSkillId: id });
+    return (existing, id) => ({
+      skillName: existing.skillName,
+      instructions,
+      trigger,
+      changeSummary,
+      supersedesSkillId: id,
+    });
   },
 };
 
-// Routes: /v1/skills (create, list, export, show, supersede, close), mirroring /v1/processes; "executable" means exportable instruction (no code exec).
-// GET /v1/skills/export renders ACTIVE skills as a markdown block for AGENTS.md or CLAUDE.md and is ordered before /:id.
+// Routes: /v1/skills (create, list, export, show, supersede, close), mirroring /v1/processes; "executable" means
+// exportable instruction (no code exec).
+// GET /v1/skills/export renders ACTIVE skills as a markdown block for AGENTS.md or CLAUDE.md and is ordered before
+// /:id.
 export async function handleCreateSkill(rr: AuthedRouteRequest): Promise<void> {
   const { ctx } = rr;
   const body = await parseJsonBody(rr.req, ctx);

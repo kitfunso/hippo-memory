@@ -1,5 +1,9 @@
-/** Decision object: the `decisions` table is the source of truth, so an in-force decision stays `active` despite memory decay.
- *  The memory mirror (memory_id NULLABLE, ON DELETE SET NULL) is for recall only; saveDecision commits both in one `objects` transaction. */
+/**
+ * Decision object: the `decisions` table is the source of truth, so an in-force decision stays `active` despite memory
+ * decay.
+ * The memory mirror (memory_id NULLABLE, ON DELETE SET NULL) is for recall only; saveDecision commits both in one
+ * `objects` transaction.
+ */
 
 import { BadRequestError } from '../core/api-errors.js';
 import type { MemoryEntry } from '../core/memory.js';
@@ -69,7 +73,10 @@ export function saveDecision(
   return saveObjectAt(DECISION, { hippoRoot, tenantId, actor }, opts);
 }
 
-/** Weaken the memory a new decision replaces, once the save has committed: half-life halved to a day at least, marked stale, tagged `superseded`. */
+/**
+ * Weaken the memory a new decision replaces, once the save has committed: half-life halved to a day at least, marked
+ * stale, tagged `superseded`.
+ */
 export function weakenSupersededMemory(hippoRoot: string, entry: MemoryEntry, actor: string = 'cli'): void {
   const tags = entry.tags.includes(SUPERSEDED_TAG) ? entry.tags : [...entry.tags, SUPERSEDED_TAG];
   const halved = Math.max(1, Math.floor(entry.half_life_days / 2));

@@ -1,15 +1,28 @@
-// One store handle per store for each request (HTTP call, MCP tool call, scoped CLI command), opened lazily and closed with it.
+// One store handle per store for each request (HTTP call, MCP tool call, scoped CLI command), opened lazily and closed
+// with it.
 import * as path from 'node:path';
 import type { DatabaseSyncLike } from './sqlite.js';
 import { connectWithFacts, getHippoDbPath, type OpenedDb } from './connect.js';
-import { currentDeadline, currentRequestId, currentSignal, requestScopes, type RequestScope } from '../util/request-scope.js';
+import {
+  currentDeadline,
+  currentRequestId,
+  currentSignal,
+  requestScopes,
+  type RequestScope,
+} from '../util/request-scope.js';
 
 export interface RequestStoresOptions {
   /** Lock wait of every open in the scope that does not pass its own. */
   readonly busyWaitMs?: number;
-  /** Set for hook scopes: after one lock wait runs out, {@link RequestStores.noteBusy} makes the scope's later writes skip at once. */
+  /**
+   * Set for hook scopes: after one lock wait runs out, {@link RequestStores.noteBusy} makes the scope's later writes
+   * skip at once.
+   */
   readonly failFastWhenBusy?: boolean;
-  /** The store whose open-time setup another connection has already run, so an open in this scope skips it: a store worker's reader, which cannot write it. */
+  /**
+   * The store whose open-time setup another connection has already run, so an open in this scope skips it: a store
+   * worker's reader, which cannot write it.
+   */
   readonly setupDoneFor?: string;
 }
 
@@ -93,7 +106,10 @@ export class RequestStores implements RequestScope {
   }
 }
 
-/** Runs `fn` in a request scope whose handles close when `fn` settles; inside an open scope `fn` joins it and `opts` is ignored. */
+/**
+ * Runs `fn` in a request scope whose handles close when `fn` settles; inside an open scope `fn` joins it and `opts` is
+ * ignored.
+ */
 export async function runWithRequestStores<T>(fn: () => T | Promise<T>, opts?: RequestStoresOptions): Promise<T> {
   const outer = currentRequestStores();
   if (outer && !outer.closed) return fn();
@@ -107,7 +123,9 @@ export async function runWithRequestStores<T>(fn: () => T | Promise<T>, opts?: R
   });
 }
 
-/** runWithRequestStores for a synchronous `fn`, so a batch called from outside any request still opens each store once. */
+/**
+ * runWithRequestStores for a synchronous `fn`, so a batch called from outside any request still opens each store once.
+ */
 export function withRequestStoresSync<T>(fn: () => T): T {
   const outer = currentRequestStores();
   if (outer && !outer.closed) return fn();
@@ -125,7 +143,10 @@ export function currentRequestStores(): RequestStores | undefined {
   return scope instanceof RequestStores ? scope : undefined;
 }
 
-/** Runs `fn` outside every store scope, for a connection that must outlive the request that happens to open it; its log lines keep the request's id. */
+/**
+ * Runs `fn` outside every store scope, for a connection that must outlive the request that happens to open it; its log
+ * lines keep the request's id.
+ */
 export function outsideRequestStores<T>(fn: () => T): T {
   return requestScopes.run({ requestId: currentRequestId() }, fn);
 }

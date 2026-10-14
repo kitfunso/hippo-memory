@@ -1,7 +1,14 @@
-// Project names for every front end: list them, fold one into another, and repair old tags; the store opens hippo.db and owns each transaction.
+// Project names for every front end: list them, fold one into another, and repair old tags; the store opens hippo.db
+// and owns each transaction.
 // SHORTCUT: hippo.db only, since the store port has no project calls; a projects group when a served store needs them.
 import {
-  listProjects, mergeProjects, repairOnceOnSleep, repairProjects, type MergeResult, type ProjectSummary, type RepairResult,
+  listProjects,
+  mergeProjects,
+  repairOnceOnSleep,
+  repairProjects,
+  type MergeResult,
+  type ProjectSummary,
+  type RepairResult,
 } from '../sharing/project-merge.js';
 import { onProjectTags, type ProjectTagStore } from '../store/project-tags.js';
 import type { Context } from './types.js';
@@ -25,7 +32,10 @@ export function listProjectNames(ctx: Context): ProjectSummary[] {
   return onProjects(ctx, listProjects);
 }
 
-/** Folds project `from` into `into`, backed up and audited as `ctx.actor`; throws on user-global, unknown or equal names. */
+/**
+ * Folds project `from` into `into`, backed up and audited as `ctx.actor`; throws on user-global, unknown or equal
+ * names.
+ */
 export function mergeProjectNames(ctx: Context, opts: MergeProjectNamesOpts): MergeResult {
   return onProjects(ctx, (store) => mergeProjects(store, opts));
 }

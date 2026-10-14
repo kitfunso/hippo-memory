@@ -22,10 +22,25 @@ import {
   sessionStartEnvelope,
   toRenderItems,
 } from '../api/prompt-hook.js';
-import { type CliFlags, parseLimitFlag, parseCountFlag, parseBudgetFlag, type CommandContext, flagIsTrue, stringFlagOrExit } from './flag-values.js';
+import {
+  type CliFlags,
+  parseLimitFlag,
+  parseCountFlag,
+  parseBudgetFlag,
+  type CommandContext,
+  flagIsTrue,
+  stringFlagOrExit,
+} from './flag-values.js';
 import { requireInit } from './shared.js';
 import { printActiveTaskSnapshot, printSessionEvents, printHandoff, captureConsole } from './print.js';
-import { hostSessionId, hookStoreRoot, hookRuntime, payloadCwdRoot, runHookWithStores, inPilotHoldout } from './hook-runtime.js';
+import {
+  hostSessionId,
+  hookStoreRoot,
+  hookRuntime,
+  payloadCwdRoot,
+  runHookWithStores,
+  inPilotHoldout,
+} from './hook-runtime.js';
 
 async function cmdContext(
   hippoRoot: string,
@@ -35,7 +50,10 @@ async function cmdContext(
   stdinText?: string
 ): Promise<void> {
   const rec = startDeliveryRecorder(cliApiContext(hippoRoot, tenantId), {
-    stdinText, runtime: hookRuntime(flags), eventType: flagIsTrue(flags, 'pinned-only') ? undefined : 'context', envSessionId: hostSessionId(),
+    stdinText,
+    runtime: hookRuntime(flags),
+    eventType: flagIsTrue(flags, 'pinned-only') ? undefined : 'context',
+    envSessionId: hostSessionId(),
   });
   // No try/finally: a render throw keeps its own exit code and writes no event.
   await renderContext(hippoRoot, tenantId, args, flags, stdinText, rec);
@@ -65,14 +83,20 @@ function readHookPayload(stdinText: string | undefined): HookPayload {
   return { sessionId, prompt };
 }
 
-async function renderContext(
+interface ContextGate {
+  readonly pinnedOnly: boolean;
+  readonly session: ContextSession;
+  readonly budget: number;
+}
+
+/** Null when this call renders nothing: the pilot holdout arm, or a budget of zero. */
+function contextGate(
   hippoRoot: string,
   resolvedTenant: string,
-  args: string[],
   flags: CliFlags,
   stdinText: string | undefined,
   rec: DeliveryRecorder | null,
-): Promise<void> {
+): ContextGate | null {
   // --pinned-only fires on every prompt, even where no local .hippo exists, so it skips requireInit
   // and api.getContext falls back to global-only.
   const pinnedOnly = flagIsTrue(flags, 'pinned-only');
@@ -81,19 +105,34 @@ async function renderContext(
   }
 
   const session = resolveContextSession(stdinText);
-  const { currentSessionId, ledgerSessionId, payloadSessionId } = session;
+  const { currentSessionId, payloadSessionId } = session;
 
   // The pilot arm is booked at the first hook call whatever the flags, so the holdout sees no budget or content branch.
   if (inPilotHoldout(hippoRoot, resolvedTenant, currentSessionId, { write: payloadSessionId !== undefined })) {
     rec?.disabled();
-    return;
+    return null;
   }
 
   const budget = parseBudgetFlag(flags['budget'], DEFAULT_CONTEXT_BUDGET);
   if (budget <= 0) {
     rec?.disabled();
-    return;
+    return null;
   }
+  return { pinnedOnly, session, budget };
+}
+
+async function renderContext(
+  hippoRoot: string,
+  resolvedTenant: string,
+  args: string[],
+  flags: CliFlags,
+  stdinText: string | undefined,
+  rec: DeliveryRecorder | null,
+): Promise<void> {
+  const gate = contextGate(hippoRoot, resolvedTenant, flags, stdinText, rec);
+  if (gate === null) return;
+  const { pinnedOnly, session, budget } = gate;
+  const { ledgerSessionId, payloadSessionId } = session;
 
   // --auto shells out to git, so it stays CLI-side; api.getContext stays host-agnostic and falls back to '*'.
   const query = contextQuery(args, flags);
@@ -110,7 +149,17 @@ async function renderContext(
   }
 
   const envelope = format === 'copilot' ? sessionStartEnvelope(stdinText) : undefined;
-  const view: ContextView = { hippoRoot, tenantId: ctx.tenantId, ledgerSessionId, payloadSessionId, pinnedOnly, framing, rec, result, envelope };
+  const view: ContextView = {
+    hippoRoot,
+    tenantId: ctx.tenantId,
+    ledgerSessionId,
+    payloadSessionId,
+    pinnedOnly,
+    framing,
+    rec,
+    result,
+    envelope,
+  };
   renderContextView(view, format, query);
 }
 
@@ -177,7 +226,10 @@ function buildContextOpts(flags: CliFlags, input: ContextOptsInput): api.Context
     currentSessionId: input.session.currentSessionId,
     prompt: input.session.prompt,
     // JSON is budgeted as the markdown it stands for, so one budget picks the same memories in every format.
-    cost: contextCost(input.format === 'additional-context' || input.format === 'copilot' ? 'additional-context' : 'markdown', input.framing),
+    cost: contextCost(
+      input.format === 'additional-context' || input.format === 'copilot' ? 'additional-context' : 'markdown',
+      input.framing,
+    ),
     deliveryObserver: input.rec ?? undefined,
   };
 }

@@ -15,7 +15,13 @@ import { errorFields, errorMessage, isLevelEnabled, log } from './util/log.js';
 import { STORE_BUSY_MESSAGE } from './store/port.js';
 import { isStoreBusy } from './store/sqlite/busy.js';
 import { type CliFlags, flagIsTrue, isBooleanFlag, isStringFlag } from './cli/flag-values.js';
-import { USAGE_HEADER, USAGE_EXAMPLES, printAuditPruneUsage, printSlackBackfillUsage, printSlackWorkspacesUsage } from './cli/usage.js';
+import {
+  USAGE_HEADER,
+  USAGE_EXAMPLES,
+  printAuditPruneUsage,
+  printSlackBackfillUsage,
+  printSlackWorkspacesUsage,
+} from './cli/usage.js';
 import { type FlagKind, type VerbFlags, flagKind, isKnownFlag, undeclaredFlags } from './cli/flags.js';
 import { COMMANDS } from './cli/verbs.js';
 import type { VerbSpec } from './cli/verb-row.js';
@@ -24,7 +30,9 @@ import { CliExit, fail } from './cli/exit.js';
 // A command that does not honour --dry-run would ignore it and run for real.
 function dryRunRefusal(command: string, spec: VerbSpec | undefined, args: string[], flags: CliFlags): string | null {
   const only = spec?.dryRun;
-  const honoured = only === undefined ? spec?.flags.switches?.includes('dry-run') : only !== false && only.honoured(args, flags);
+  const honoured = only === undefined
+    ? spec?.flags.switches?.includes('dry-run')
+    : only !== false && only.honoured(args, flags);
   if (honoured) return null;
   const where = only ? ` outside \`hippo ${command} ${only.form}\`` : '';
   return `hippo ${command} has no --dry-run${where}, so it would run for real. Nothing was changed.`;
@@ -208,7 +216,9 @@ function checkUnknownFlags(command: string, flags: CliFlags, spec: VerbSpec | un
   }
   // main() refuses --dry-run by name on a verb without one, so that flag is not also called ignored.
   const ignored = declared ? undeclaredFlags(declared, Object.keys(flags)).filter((key) => key !== 'dry-run') : unknown;
-  if (ignored.length > 0) printError(`hippo: ignoring unknown flag ${flagNames(ignored)}. A later release will reject it.`);
+  if (ignored.length > 0) {
+    printError(`hippo: ignoring unknown flag ${flagNames(ignored)}. A later release will reject it.`);
+  }
 }
 
 async function main(

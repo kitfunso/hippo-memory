@@ -50,8 +50,12 @@ const HEREDOC = new RegExp(
 
 /** The script a shell argv runs, for the shells Codex checks for an apply_patch heredoc. */
 function shellScript(argv: readonly string[]): string | null {
-  const exe = path.basename(argv[0] ?? '').toLowerCase().replace(/\.exe$/, '');
-  if ((exe === 'bash' || exe === 'zsh' || exe === 'sh') && argv.length === 3 && (argv[1] === '-lc' || argv[1] === '-c')) return argv[2];
+  const exe = path
+    .basename(argv[0] ?? '')
+    .toLowerCase()
+    .replace(/\.exe$/, '');
+  if ((exe === 'bash' || exe === 'zsh' || exe === 'sh') && argv.length === 3 && (argv[1] === '-lc' || argv[1] === '-c'))
+    return argv[2];
   if (exe === 'pwsh' || exe === 'powershell') {
     const rest = argv.slice(1).filter((a) => a.toLowerCase() !== '-noprofile');
     if (rest.length === 2 && rest[0].toLowerCase() === '-command') return rest[1];

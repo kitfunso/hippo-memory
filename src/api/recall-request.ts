@@ -49,7 +49,10 @@ export interface ParsedRecallRequest {
   readonly explain: boolean;
 }
 
-export type ParsedContextRequest = Pick<ContextOpts, 'q' | 'budget' | 'limit' | 'pinnedOnly' | 'scope' | 'includeRecent' | 'crossProject'>;
+export type ParsedContextRequest = Pick<
+  ContextOpts,
+  'q' | 'budget' | 'limit' | 'pinnedOnly' | 'scope' | 'includeRecent' | 'crossProject'
+>;
 
 function numberParam(params: RequestParams, name: string): number | undefined {
   const value = params.get(name);
@@ -58,7 +61,8 @@ function numberParam(params: RequestParams, name: string): number | undefined {
 
 function nonNegativeParam(params: RequestParams, name: string): number | undefined {
   const n = numberParam(params, name);
-  if (n !== undefined && (!Number.isFinite(n) || n < 0)) throw new RecallRequestError(`${name} must be a non-negative number`);
+  if (n !== undefined && (!Number.isFinite(n) || n < 0))
+    throw new RecallRequestError(`${name} must be a non-negative number`);
   return n;
 }
 
@@ -81,7 +85,8 @@ function stringParam(params: RequestParams, name: string): string | undefined {
 /** An id-shaped string capped at MAX_ID_LEN; empty reads as absent. */
 function idParam(params: RequestParams, name: string): string | undefined {
   const value = params.get(name);
-  if (isJsonString(value) && value.length > MAX_ID_LEN) throw new RecallRequestError(`${name} exceeds ${MAX_ID_LEN}-character cap`);
+  if (isJsonString(value) && value.length > MAX_ID_LEN)
+    throw new RecallRequestError(`${name} exceeds ${MAX_ID_LEN}-character cap`);
   return stringParam(params, name);
 }
 
@@ -131,7 +136,16 @@ export function parseRecallRequest(params: RequestParams): ParsedRecallRequest {
   const sessionId = sessionIdParam(params);
   const explain = flagParam(params, 'explain');
   return {
-    opts: { query, scope, includeContinuity, freshTailCount, freshTailSessionId, summarizeOverflow, scorerWindow, sessionId },
+    opts: {
+      query,
+      scope,
+      includeContinuity,
+      freshTailCount,
+      freshTailSessionId,
+      summarizeOverflow,
+      scorerWindow,
+      sessionId,
+    },
     limit,
     mode,
     explain,
@@ -146,7 +160,8 @@ export function parseContextRequest(params: RequestParams): ParsedContextRequest
   }
   const budget = nonNegativeParam(params, 'budget');
   const limit = numberParam(params, 'limit');
-  if (limit !== undefined && (!Number.isFinite(limit) || limit <= 0)) throw new RecallRequestError('limit must be a positive number');
+  if (limit !== undefined && (!Number.isFinite(limit) || limit <= 0))
+    throw new RecallRequestError('limit must be a positive number');
   const pinnedOnly = flagParam(params, 'pinned_only');
   const scope = idParam(params, 'scope');
   const includeRecent = nonNegativeParam(params, 'include_recent');

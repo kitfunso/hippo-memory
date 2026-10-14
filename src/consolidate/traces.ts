@@ -12,7 +12,8 @@ import { REPLAY_COUNT_DEFAULT, type SleepRun } from './run.js';
 import { type JsonValue, isJsonString } from '../util/json.js';
 import { DAY_MS } from '../util/time.js';
 
-// 1.4. Auto-promote complete sessions to traces: each session in the window with a `session_complete` event and no trace (idempotent via source_session_id)
+// 1.4. Auto-promote complete sessions to traces: each session in the window with a `session_complete` event and no
+// trace (idempotent via source_session_id)
 // is rendered as markdown and persisted as a Layer.Trace memory, which inherits decay, search, replay and physics.
 export function promoteSessionTraces(run: SleepRun): void {
   const { result } = run;
@@ -44,7 +45,8 @@ export function promoteSessionTraces(run: SleepRun): void {
 
   if (result.promotedTraces > 0) {
     result.details.push(
-      `  🧬 promoted ${result.promotedTraces} trace${result.promotedTraces === 1 ? '' : 's'} from completed session${result.promotedTraces === 1 ? '' : 's'}`
+      `  🧬 promoted ${result.promotedTraces} trace${result.promotedTraces === 1 ? '' : 's'} from completed ` +
+      `session${result.promotedTraces === 1 ? '' : 's'}`,
     );
   }
   if (tracesSkippedRejected > 0) {
@@ -57,7 +59,11 @@ export function promoteSessionTraces(run: SleepRun): void {
 type TraceOutcome = 'success' | 'failure' | 'partial';
 
 /** The trace a completed session renders to, or null when it already has one or cannot be promoted. */
-function sessionTrace(run: SleepRun, consolidationTenant: string, sessionId: string): { trace: MemoryEntry; outcome: TraceOutcome } | null {
+function sessionTrace(
+  run: SleepRun,
+  consolidationTenant: string,
+  sessionId: string,
+): { trace: MemoryEntry; outcome: TraceOutcome } | null {
   // Idempotency: skip if a trace for this session already exists.
   if (traceExistsForSession(run.hippoRoot, consolidationTenant, sessionId)) return null;
 
@@ -101,7 +107,9 @@ function sessionTrace(run: SleepRun, consolidationTenant: string, sessionId: str
 }
 
 /** The outcome and title a session's terminal event carries, or null when it has none or the event is malformed. */
-function sessionEnding(events: ReturnType<typeof listSessionEvents>): { outcome: TraceOutcome; summary: string } | null {
+function sessionEnding(
+  events: ReturnType<typeof listSessionEvents>,
+): { outcome: TraceOutcome; summary: string } | null {
   const completeEvent = events.find((e) => e.event_type === 'session_complete');
   if (!completeEvent) return null; // defence-in-depth; findPromotableSessions filters already.
 
@@ -142,12 +150,14 @@ function traceRejected(run: SleepRun, trace: MemoryEntry, sessionId: string): bo
   return true;
 }
 
-// 1.5. Replay pass: rehearse high-value survivors by sampling N memories weighted by outcome, valence, under-rehearsal and idle time,
+// 1.5. Replay pass: rehearse high-value survivors by sampling N memories weighted by outcome, valence, under-rehearsal
+// and idle time,
 // then applying the `markRetrieved` strengthening, so important memories don't fade.
 export function replayPass(run: SleepRun): void {
   const { survivors, now } = run;
   const replayCount = run.config.replay?.count ?? REPLAY_COUNT_DEFAULT;
-  // EVAL-ONLY ablation (see ablation.ts): replay rehearsal is recall strengthening, so the strengthen-off arm silences the whole pass;
+  // EVAL-ONLY ablation (see ablation.ts): replay rehearsal is recall strengthening, so the strengthen-off arm silences
+  // the whole pass;
   // persisting unmutated entries anyway would still refresh updated_at and mirrors.
   if (!(replayCount > 0 && survivors.length > 0 && !isRecallBoostAblated())) return;
   const seed = Math.floor(now.getTime() / 1000) & 0xffffffff;

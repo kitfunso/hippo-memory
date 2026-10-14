@@ -6,9 +6,22 @@ import { type JsonValue, isJsonNumber } from '../../util/json.js';
 import type { AuthedRouteRequest } from '../types.js';
 import { MAX_SHORT_FIELD_LEN, parseJsonBody } from '../validation.js';
 import { saveFor } from '../../api/objects.js';
-import { closeRoute, getRoute, listRoute, type ObjectRouteConfig, optionalString, requiredString, type RequiredStringRule } from './object-routes.js';
+import {
+  closeRoute,
+  getRoute,
+  listRoute,
+  type ObjectRouteConfig,
+  optionalString,
+  requiredString,
+  type RequiredStringRule,
+} from './object-routes.js';
 
-const decisionRoutes: ObjectRouteConfig<'decision'> = { noun: 'decision', field: 'decision', listField: 'decisions', object: DECISION };
+const decisionRoutes: ObjectRouteConfig<'decision'> = {
+  noun: 'decision',
+  field: 'decision',
+  listField: 'decisions',
+  object: DECISION,
+};
 
 const TEXT: RequiredStringRule = { max: MAX_SHORT_FIELD_LEN, untrimmed: true };
 
@@ -21,8 +34,10 @@ function supersededId(body: Record<string, JsonValue>): number | undefined {
   return raw;
 }
 
-// Routes: /v1/decisions (create, list, show, supersede, close), Bearer-authed and tenant-scoped; status is validated against VALID_DECISION_STATES.
-// The HTTP surface has no legacy --supersedes <memory-id> constraint, so it supersedes by table id and never weakens a memory mirror.
+// Routes: /v1/decisions (create, list, show, supersede, close), Bearer-authed and tenant-scoped; status is validated
+// against VALID_DECISION_STATES.
+// The HTTP surface has no legacy --supersedes <memory-id> constraint, so it supersedes by table id and never weakens a
+// memory mirror.
 export async function handleCreateDecision(rr: AuthedRouteRequest): Promise<void> {
   const { req, res, ctx } = rr;
   const body = await parseJsonBody(req, ctx);
@@ -45,7 +60,8 @@ export function handleListDecisions(rr: AuthedRouteRequest): Promise<void> {
   return listRoute(decisionRoutes, rr);
 }
 
-// Not on supersedeRoute: this one answers 201 and leaves the missing-row 404 to the store, where the other five answer 200 after their own lookup.
+// Not on supersedeRoute: this one answers 201 and leaves the missing-row 404 to the store, where the other five answer
+// 200 after their own lookup.
 export async function handleSupersedeDecision(rr: AuthedRouteRequest, match: RegExpMatchArray): Promise<void> {
   const oldId = parseInt(match[1], 10);
   const { ctx } = rr;

@@ -21,7 +21,9 @@ const FIELD_KINDS = [['switches', 'switch'], ['values', 'value'], ['numbers', 'n
 const DECLARED: ReadonlyMap<VerbFlags, ReadonlyMap<string, FlagKind>> = new Map(
   [GLOBAL_FLAGS, ...Object.values(COMMANDS).map((row) => row.flags)].map((verb) => [
     verb,
-    new Map(FIELD_KINDS.flatMap(([field, kind]) => (verb[field] ?? []).map((name): [string, FlagKind] => [name, kind]))),
+    new Map(
+      FIELD_KINDS.flatMap(([field, kind]) => (verb[field] ?? []).map((name): [string, FlagKind] => [name, kind])),
+    ),
   ]),
 );
 

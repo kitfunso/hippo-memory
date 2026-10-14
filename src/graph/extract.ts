@@ -1,10 +1,26 @@
-/** Deterministic entity extraction: the graph is a pure function of the consolidated object tables (decisions, policies, customer_notes, project_briefs).
- *  Writes go through the src/store/graph-writes.ts consolidated-source guard. Pass 3 adds `references` edges by a conservative name-match heuristic. */
+/**
+ * Deterministic entity extraction: the graph is a pure function of the consolidated object tables (decisions, policies,
+ * customer_notes, project_briefs).
+ * Writes go through the src/store/graph-writes.ts consolidated-source guard. Pass 3 adds `references` edges by a
+ * conservative name-match heuristic.
+ */
 
 import { applyGraphOps } from './write.js';
 import { runGraphRebuildTransaction } from '../store/graph-writes.js';
-import { MAX_ENTITY_NAME_LEN, type EntityType, type SourceObjectType, type SourceObjectRef } from '../store/graph-rows.js';
-import { graphDelta, readGraphDelta, type DesiredEntity, type DesiredGraph, type DesiredRelation, type NaturalKey } from './delta.js';
+import {
+  MAX_ENTITY_NAME_LEN,
+  type EntityType,
+  type SourceObjectType,
+  type SourceObjectRef,
+} from '../store/graph-rows.js';
+import {
+  graphDelta,
+  readGraphDelta,
+  type DesiredEntity,
+  type DesiredGraph,
+  type DesiredRelation,
+  type NaturalKey,
+} from './delta.js';
 import { WRITE_BUDGET, type WriteBudget } from '../util/write-budget.js';
 import { SLEEP_DB_WAIT_MS } from '../db/index.js';
 import { loadDecisions } from '../objects/decisions.js';
@@ -14,7 +30,10 @@ import { loadProjectBriefs } from '../objects/project-briefs.js';
 import { assertTenantId } from '../store/tenant.js';
 import { escapeRegex } from '../util/escape.js';
 
-/** Per-type load cap (the loaders default to 100); a type over it is truncated and `ExtractResult.truncated` records that. */
+/**
+ * Per-type load cap (the loaders default to 100); a type over it is truncated and `ExtractResult.truncated` records
+ * that.
+ */
 export const MAX_EXTRACT_PER_TYPE = 10000;
 
 /** A target entity name must be in [MIN, MAX] chars to be matched: MIN skips short, generic words; MAX skips prose
@@ -105,7 +124,9 @@ export interface LoadedType {
   hitCap: boolean;
 }
 
-/** Close over one loader's row type so the table below holds uniform functions. Loads ACTIVE and SUPERSEDED rows (not `closed`),
+/**
+ * Close over one loader's row type so the table below holds uniform functions. Loads ACTIVE and SUPERSEDED rows (not
+ * `closed`),
  *  one call per status, so MAX_EXTRACT_PER_TYPE is a per-status budget; `hitCap` is set when either load is full. */
 function source<T extends SourceRow>(
   entityType: EntityType,
@@ -120,7 +141,14 @@ function source<T extends SourceRow>(
       const loaded = load(hippoRoot, tenantId, { status, limit: MAX_EXTRACT_PER_TYPE });
       if (loaded.length === MAX_EXTRACT_PER_TYPE) hitCap = true;
       for (const r of loaded) {
-        rows.push({ entityType, e2Id: r.id, name: nameOf(r), searchText: textOf(r), memoryId: r.memoryId, supersededBy: r.supersededBy });
+        rows.push({
+          entityType,
+          e2Id: r.id,
+          name: nameOf(r),
+          searchText: textOf(r),
+          memoryId: r.memoryId,
+          supersededBy: r.supersededBy,
+        });
       }
     }
     return { entityType, rows, hitCap };
@@ -128,10 +156,30 @@ function source<T extends SourceRow>(
 }
 
 const GRAPH_SOURCES: ReadonlyArray<(hippoRoot: string, tenantId: string) => LoadedType> = [
-  source('decision', loadDecisions, (r) => r.decisionText, (r) => [r.decisionText, r.context].filter(Boolean).join(' ')),
-  source('policy', loadPolicies, (r) => r.policyName, (r) => [r.policyName, r.policyText].filter(Boolean).join(' ')),
-  source('customer', loadCustomerNotes, (r) => r.customer, (r) => [r.customer, r.note].filter(Boolean).join(' ')),
-  source('project', loadProjectBriefs, (r) => r.repo, (r) => [r.repo, r.summary].filter(Boolean).join(' ')),
+  source(
+    'decision',
+    loadDecisions,
+    (r) => r.decisionText,
+    (r) => [r.decisionText, r.context].filter(Boolean).join(' '),
+  ),
+  source(
+    'policy',
+    loadPolicies,
+    (r) => r.policyName,
+    (r) => [r.policyName, r.policyText].filter(Boolean).join(' '),
+  ),
+  source(
+    'customer',
+    loadCustomerNotes,
+    (r) => r.customer,
+    (r) => [r.customer, r.note].filter(Boolean).join(' '),
+  ),
+  source(
+    'project',
+    loadProjectBriefs,
+    (r) => r.repo,
+    (r) => [r.repo, r.summary].filter(Boolean).join(' '),
+  ),
 ];
 
 /** Every source type's rows, each read on its own connection; callers load before any write lock is taken. */
@@ -170,7 +218,12 @@ export function deriveGraph(loaded: readonly LoadedType[]): DerivedGraph {
   const supersedes = deriveSupersedes(pass);
   const references = deriveReferences(pass.created, supersedes.supersededPairs, pass.truncated);
   return {
-    entities: pass.created.map((e) => ({ entityType: e.entityType, sourceObject: e.sourceObject, name: e.name, memoryId: e.memoryId })),
+    entities: pass.created.map((e) => ({
+      entityType: e.entityType,
+      sourceObject: e.sourceObject,
+      name: e.name,
+      memoryId: e.memoryId,
+    })),
     relations: [...supersedes.relations, ...references],
     byType: pass.byType,
     truncated: pass.truncated,
@@ -262,7 +315,11 @@ function referenceTargets(created: readonly DerivedEntity[]): Map<string, Derive
 
 // Pass 3: a `references` edge when one object's text names another entity, matched on word boundaries,
 // self-skipped, deduped and capped per source; the edge is anchored to the source object.
-function deriveReferences(created: readonly DerivedEntity[], supersededPairs: ReadonlySet<string>, truncated: string[]): DesiredRelation[] {
+function deriveReferences(
+  created: readonly DerivedEntity[],
+  supersededPairs: ReadonlySet<string>,
+  truncated: string[],
+): DesiredRelation[] {
   const byName = referenceTargets(created);
   if (byName.size === 0) return [];
   if (byName.size > MAX_TARGET_NAMES) truncated.push('references-targets');
@@ -283,7 +340,13 @@ function deriveReferences(created: readonly DerivedEntity[], supersededPairs: Re
       if (targets.size >= MAX_REFERENCES_PER_OBJECT) break;
     }
     for (const target of targets.values()) {
-      relations.push({ from: naturalKeyOf(src), to: naturalKeyOf(target), relType: 'references', memoryId: src.memoryId, sourceObject: src.sourceObject });
+      relations.push({
+        from: naturalKeyOf(src),
+        to: naturalKeyOf(target),
+        relType: 'references',
+        memoryId: src.memoryId,
+        sourceObject: src.sourceObject,
+      });
     }
   }
   return relations;
@@ -291,7 +354,13 @@ function deriveReferences(created: readonly DerivedEntity[], supersededPairs: Re
 
 function resultOf(derived: DerivedGraph, skipped: number): ExtractResult {
   const { entities, relations, references, byType, truncated } = derived;
-  const result: ExtractResult = { entities: entities.length, relations: relations.length, references, byType, truncated };
+  const result: ExtractResult = {
+    entities: entities.length,
+    relations: relations.length,
+    references,
+    byType,
+    truncated,
+  };
   if (skipped > 0) result.skipped = skipped;
   return result;
 }
@@ -311,7 +380,11 @@ export function extractGraph(hippoRoot: string, tenantId: string): ExtractResult
 
 /** extractGraph for sleep: diffs outside the lock, then applies in transactions of about `budget.holdMs` with a pause
  *  between them. A run stopped between chunks leaves a mixed graph that the next run's diff finishes. */
-export async function extractGraphChunked(hippoRoot: string, tenantId: string, budget: WriteBudget = WRITE_BUDGET): Promise<ExtractResult> {
+export async function extractGraphChunked(
+  hippoRoot: string,
+  tenantId: string,
+  budget: WriteBudget = WRITE_BUDGET,
+): Promise<ExtractResult> {
   assertTenantId('extractGraphChunked', tenantId);
   const derived = deriveGraph(loadGraphSources(hippoRoot, tenantId));
   const ops = readGraphDelta(hippoRoot, tenantId, derived);
@@ -321,7 +394,8 @@ export async function extractGraphChunked(hippoRoot: string, tenantId: string, b
   while (next < ops.length) {
     if (next > 0) await budget.pause(committedAt);
     const from = next;
-    // Sleep's wait, not a server request's 250 ms: each chunk is a fresh BEGIN IMMEDIATE a hook's write could otherwise fail.
+    // Sleep's wait, not a server request's 250 ms: each chunk is a fresh BEGIN IMMEDIATE a hook's write could otherwise
+    // fail.
     const chunk = runGraphRebuildTransaction(hippoRoot, tenantId, (txDb) =>
       applyGraphOps(txDb, tenantId, ops, { from, holdMs: budget.holdMs, clock: budget.clock }),
     { busyWaitMs: SLEEP_DB_WAIT_MS });

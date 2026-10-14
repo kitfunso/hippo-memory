@@ -1,4 +1,5 @@
-// Claude Code's auto memory: frontmatter `.md` notes in a per-project folder, plus the `autoMemoryDirectory` user folder.
+// Claude Code's auto memory: frontmatter `.md` notes in a per-project folder, plus the `autoMemoryDirectory` user
+// folder.
 import fs from 'node:fs';
 import path from 'node:path';
 import { resolveProjectIdentity, type ProjectIdentity } from '../core/project-identity.js';
@@ -17,12 +18,17 @@ const NAME_SLUG_MAX_CHARS = 200;
 // Keeps a pinned name from carrying a separator or `..` out of the projects folder.
 const PROJECT_DIR_NAME = /^[A-Za-z0-9_-]{1,64}$/;
 
-/** Claude Code's auto memory folder names for a project: its checkout, which subfolders share, or the folder itself outside a repository. */
+/**
+ * Claude Code's auto memory folder names for a project: its checkout, which subfolders share, or the folder itself
+ * outside a repository.
+ */
 function claudeMemoryFolderNames(projectRoot: string, platform: NodeJS.Platform): Set<string> {
   const roots = [projectRoot, realpathOrResolve(projectRoot)];
   const layout = gitLayout(projectRoot);
   if (layout) roots.push(claudeCheckoutRoot(layout.top, layout.gitDir, layout.common));
-  return new Set(roots.map((root) => (platform === 'win32' ? claudeFolderName(root).toLowerCase() : claudeFolderName(root))));
+  return new Set(
+    roots.map((root) => (platform === 'win32' ? claudeFolderName(root).toLowerCase() : claudeFolderName(root))),
+  );
 }
 
 /** Claude Code's rule: a linked worktree shares its main checkout's folder, or the git folder's when that sits outside
@@ -33,7 +39,10 @@ export function claudeCheckoutRoot(top: string, gitDir: string, common: string):
   return fs.existsSync(path.join(common, '.git')) ? top : common;
 }
 
-/** Claude Code's folder name for a path: non-alphanumerics made '-', and a name over 200 characters cut to 200 plus a base-36 hash of the whole path. */
+/**
+ * Claude Code's folder name for a path: non-alphanumerics made '-', and a name over 200 characters cut to 200 plus a
+ * base-36 hash of the whole path.
+ */
 export function claudeFolderName(root: string): string {
   const full = path.resolve(root);
   const name = full.replace(/[^a-zA-Z0-9]/g, '-');
@@ -53,16 +62,28 @@ export const claudeCodeAdapter: Adapter = {
   },
 };
 
-/** A session's own notes folder and nothing else, with no git call, so post-compact can read it inside the hook's time limit. */
+/**
+ * A session's own notes folder and nothing else, with no git call, so post-compact can read it inside the hook's time
+ * limit.
+ */
 export function claudeTranscriptListing(ctx: AdapterContext, transcriptPath: string): Listing {
   const config = claudeConfigDir(ctx.home, ctx.env);
   const folder = path.join(path.dirname(transcriptPath), 'memory');
-  return { tool: 'claude-code', home: config, containers: readFolders([folder], 'project', ctx.platform), warnings: [] };
+  return {
+    tool: 'claude-code',
+    home: config,
+    containers: readFolders([folder], 'project', ctx.platform),
+    warnings: [],
+  };
 }
 
 /** The project a session folder's notes belong to: the one Claude named the folder
  * for, the session's start folder, else cwd or a parent; null when none matches. */
-export function transcriptNotesProject(transcriptPath: string, cwd: string | null, machine: Pick<AdapterContext, 'platform' | 'env'>): ProjectIdentity | null {
+export function transcriptNotesProject(
+  transcriptPath: string,
+  cwd: string | null,
+  machine: Pick<AdapterContext, 'platform' | 'env'>,
+): ProjectIdentity | null {
   const fold = (name: string) => (machine.platform === 'win32' ? name.toLowerCase() : name);
   const folder = fold(path.basename(path.dirname(transcriptPath)));
   const start = transcriptStartCwd(transcriptPath);
@@ -73,9 +94,14 @@ export function transcriptNotesProject(transcriptPath: string, cwd: string | nul
     return from !== null && fs.existsSync(from) ? resolveProjectIdentity(from) : null;
   }
   for (const from of [start, cwd]) {
-    for (let dir = from === null ? null : path.resolve(from); dir !== null; dir = path.dirname(dir) === dir ? null : path.dirname(dir)) {
+    for (
+      let dir = from === null ? null : path.resolve(from);
+      dir !== null;
+      dir = path.dirname(dir) === dir ? null : path.dirname(dir)
+    ) {
       // A folder gone from disk resolves to its bare name, never the project it was in, so it decides nothing.
-      if ([dir, realpathOrResolve(dir)].some((d) => fold(claudeFolderName(d)) === folder)) return fs.existsSync(dir) ? resolveProjectIdentity(dir) : null;
+      if ([dir, realpathOrResolve(dir)].some((d) => fold(claudeFolderName(d)) === folder))
+        return fs.existsSync(dir) ? resolveProjectIdentity(dir) : null;
     }
   }
   return null;
@@ -84,7 +110,10 @@ export function transcriptNotesProject(transcriptPath: string, cwd: string | nul
 // Claude writes the cwd on each message line after a few header lines; 64 KB holds the first with room to spare.
 const START_SCAN_BYTES = 64 * 1024;
 
-/** The cwd on the transcript's first line that has one: the folder Claude named the session folder for, which a folder name alone cannot give back. */
+/**
+ * The cwd on the transcript's first line that has one: the folder Claude named the session folder for, which a folder
+ * name alone cannot give back.
+ */
 function transcriptStartCwd(transcriptPath: string): string | null {
   let fd: number;
   try {

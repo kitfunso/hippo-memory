@@ -1,4 +1,7 @@
-/** The one Anthropic Messages client: sends one user prompt and returns the reply text or a typed failure the caller reacts to. */
+/**
+ * The one Anthropic Messages client: sends one user prompt and returns the reply text or a typed failure the caller
+ * reacts to.
+ */
 
 import { fetchWithRetry, llmTimeoutMs, llmTotalMs } from './http-retry.js';
 import { errorMessage } from './log.js';
@@ -48,7 +51,9 @@ export function isPermanentFailure(failure: AnthropicMessageFailure): boolean {
   return failure.kind === 'http' && PERMANENT_STATUSES.has(failure.status);
 }
 
-/** The start of a failed reply's body, on one line with any key-shaped text masked; empty when the body cannot be read. */
+/**
+ * The start of a failed reply's body, on one line with any key-shaped text masked; empty when the body cannot be read.
+ */
 async function errorSnippet(res: Response): Promise<string> {
   // The status is the failure reported; a body that cannot be read only costs its snippet.
   const body = await readCappedText(res, ERROR_SNIPPET_CHARS * UTF8_MAX_BYTES_PER_CHAR).catch(() => '');
@@ -80,7 +85,8 @@ export async function sendAnthropicMessage(req: AnthropicMessageRequest): Promis
 
   try {
     const data = await readCappedJson(res, MAX_REPLY_BYTES);
-    if (!isJsonObject(data)) return { ok: false, failure: { kind: 'unreadable', message: 'the reply is not a JSON object' } };
+    if (!isJsonObject(data))
+      return { ok: false, failure: { kind: 'unreadable', message: 'the reply is not a JSON object' } };
     const text = firstText(data);
     return text === '' ? { ok: false, failure: { kind: 'empty' } } : { ok: true, text };
   } catch (err) {

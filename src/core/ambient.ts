@@ -1,4 +1,7 @@
-/** Ambient state vector: a compact O(N) summary of the corpus telling the agent "where it is" in knowledge-space without retrieving specific memories. */
+/**
+ * Ambient state vector: a compact O(N) summary of the corpus telling the agent "where it is" in knowledge-space without
+ * retrieving specific memories.
+ */
 
 import { evalNow, strengthAblation } from './ablation.js';
 import type { MemoryEntry } from './memory.js';
@@ -183,7 +186,8 @@ export function renderAmbientSummary(state: AmbientState): string {
 
   if (state.extractionCoverage > T.extractionHigh) parts.push('high extraction coverage');
 
-  if (state.conflictIntensity > T.conflictShown) parts.push(`${(state.conflictIntensity * 100).toFixed(0)}% conflict rate`);
+  if (state.conflictIntensity > T.conflictShown)
+    parts.push(`${(state.conflictIntensity * 100).toFixed(0)}% conflict rate`);
 
   if (state.dagDepth >= T.dagDepthShown) parts.push(`DAG depth ${state.dagDepth}`);
 

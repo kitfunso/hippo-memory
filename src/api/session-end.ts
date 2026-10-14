@@ -5,7 +5,12 @@ import * as path from 'path';
 import type { HandoffEvidence } from '../core/handoff.js';
 import { isInitialized } from '../core/project-identity.js';
 import type { SessionEvent, TaskSnapshot } from '../store/rows.js';
-import { closeTaskSnapshotsForSession, listSessionEvents, loadActiveTaskSnapshot, loadFreshActiveTaskSnapshot } from '../store/sessions.js';
+import {
+  closeTaskSnapshotsForSession,
+  listSessionEvents,
+  loadActiveTaskSnapshot,
+  loadFreshActiveTaskSnapshot,
+} from '../store/sessions.js';
 import { writeSessionEndHandoff } from '../store/handoffs.js';
 import { readApiCalls, recordRereads, type TranscriptCalls } from '../store/token-ledger.js';
 import { getGlobalRoot } from '../sharing/global-store.js';
@@ -17,7 +22,8 @@ import type { Context } from './types.js';
 /** What closing one ended session needs from the host; the two readers run only when the handoff is written. */
 export interface SessionClose {
   sessionId: string | null;
-  /** A reply's end, not the session's: the handoff is updated in place and the snapshot stays for the next compaction. */
+  /** A reply's end, not the session's: the handoff is updated in place and the snapshot stays for the next
+   * compaction. */
   turn: boolean;
   /** The transcript's working state, or null with no readable transcript. */
   workingState: () => Pick<TaskSnapshot, 'task' | 'summary' | 'next_step'> | null;
@@ -26,8 +32,8 @@ export interface SessionClose {
   log: (line: string) => void;
 }
 
-/** Writes the session's handoff, then closes its snapshot unless `turn`; each step logs its own failure and never throws.
- *  The handoff goes first, while the snapshot writeSessionEndHandoff reads is still active. */
+/** Writes the session's handoff, then closes its snapshot unless `turn`; each step logs its own failure and never
+ * throws. The handoff goes first, while the snapshot writeSessionEndHandoff reads is still active. */
 export function closeEndedSession(ctx: Context, close: SessionClose): void {
   if (close.sessionId) writeEndHandoff(ctx, close.sessionId, close);
   if (close.turn) {
@@ -40,14 +46,23 @@ export function closeEndedSession(ctx: Context, close: SessionClose): void {
 function writeEndHandoff(ctx: Context, sessionId: string, close: SessionClose): void {
   try {
     const ownSnapshot = loadActiveTaskSnapshot(ctx.hippoRoot, ctx.tenantId)?.session_id === sessionId;
-    // A never-compacted session has no snapshot; read even when it has one, as another session's PreCompact can take the slot before the write.
+    // A never-compacted session has no snapshot; read even when it has one, as another session's PreCompact can take
+    // the slot before the write.
     const derived = close.workingState();
     if (!ownSnapshot && !derived) {
       close.log('skip: no snapshot or transcript for session');
       return;
     }
-    const handoff = writeSessionEndHandoff(ctx.hippoRoot, { tenantId: ctx.tenantId, sessionId, evidence: close.evidence(), derived, inPlace: close.turn });
-    close.log(handoff ? `wrote handoff for session ${sessionId}` : `skip: kept the existing handoff for session ${sessionId}`);
+    const handoff = writeSessionEndHandoff(ctx.hippoRoot, {
+      tenantId: ctx.tenantId,
+      sessionId,
+      evidence: close.evidence(),
+      derived,
+      inPlace: close.turn,
+    });
+    close.log(
+      handoff ? `wrote handoff for session ${sessionId}` : `skip: kept the existing handoff for session ${sessionId}`,
+    );
   } catch (err) {
     close.log(`handoff write failed: ${errorMessage(err)}`);
   }
@@ -67,8 +82,13 @@ function closeSnapshot(ctx: Context, sessionId: string | null, line: (message: s
   }
 }
 
-/** Books the ending session's re-reads in each store its ledger rows can land in (`ctx.hippoRoot` and global); returns the log lines. */
-export async function bookSessionRereads(ctx: Context, transcriptPath: string | undefined, sessionId: string | null): Promise<string[]> {
+/** Books the ending session's re-reads in each store its ledger rows can land in (`ctx.hippoRoot` and global); returns
+ * the log lines. */
+export async function bookSessionRereads(
+  ctx: Context,
+  transcriptPath: string | undefined,
+  sessionId: string | null,
+): Promise<string[]> {
   if (!transcriptPath || !sessionId) return [];
   let read: TranscriptCalls;
   try {
@@ -76,7 +96,9 @@ export async function bookSessionRereads(ctx: Context, transcriptPath: string | 
   } catch (err) {
     return [`skip re-read count: cannot read the transcript: ${errorMessage(err)}`];
   }
-  const roots = new Set([ctx.hippoRoot, getGlobalRoot()].filter((root) => isInitialized(root)).map((root) => path.resolve(root)));
+  const roots = new Set(
+    [ctx.hippoRoot, getGlobalRoot()].filter((root) => isInitialized(root)).map((root) => path.resolve(root)),
+  );
   const lines: string[] = [];
   let tokens = 0;
   for (const root of roots) {
@@ -91,11 +113,16 @@ export async function bookSessionRereads(ctx: Context, transcriptPath: string | 
   return lines;
 }
 
-/** The block a compaction lost: the fresh task snapshot and its session trail, or null with none or another session's snapshot. */
+/** The block a compaction lost: the fresh task snapshot and its session trail, or null with none or another session's
+ * snapshot. */
 export function compactResumeBlock(ctx: Context, payloadSessionId: string | null): string | null {
   const snapshot = loadFreshActiveTaskSnapshot(ctx.hippoRoot, ctx.tenantId, { maxAgeMs: COMPACT_RESUME_MAX_AGE_MS });
-  // Concurrent sessions must not cross-restore: only when both ids are present and differ, so a manual run with no payload id still prints.
-  if (!snapshot || (payloadSessionId !== null && snapshot.session_id !== null && payloadSessionId !== snapshot.session_id)) return null;
+  // Concurrent sessions must not cross-restore: only when both ids are present and differ, so a manual run with no
+  // payload id still prints.
+  if (!snapshot) return null;
+  if (payloadSessionId !== null && snapshot.session_id !== null && payloadSessionId !== snapshot.session_id) {
+    return null;
+  }
   // A bad trail row costs the trail, not the snapshot; stderr stays out of the model's context.
   let events: SessionEvent[] = [];
   try {
@@ -111,7 +138,8 @@ export function compactResumeBlock(ctx: Context, payloadSessionId: string | null
   return compactResumeText(snapshot, events);
 }
 
-/** What one session-end run needs from its host; the host owns sleep, transcript reading and capture, this module owns the order. */
+/** What one session-end run needs from its host; the host owns sleep, transcript reading and capture, this module owns
+ * the order. */
 export interface SessionEndWork<Scan> {
   mode: 'turn' | 'full';
   hippoRoot: string;
@@ -136,8 +164,9 @@ export interface SessionEndWork<Scan> {
 export async function sessionEndWork<Scan>(w: SessionEndWork<Scan>): Promise<void> {
   const rereadLog = await bookSessionRereads(w.contextFor(w.hippoRoot), w.transcriptPath, w.sessionId)
     .catch((err) => [`re-read count failed: ${errorMessage(err)}`]);
-  // Sleep starts the log file afresh, so the lines go in after it; on exit too, in case sleep exits the process.
-  // A flushed log drops its exit listener, so a long-lived host does not gain one per session; it stays only while lines wait.
+  // Sleep starts the log file afresh, so the lines go in after it; on exit too, in case sleep exits the process. A
+  // flushed log drops its exit listener, so a long-lived host does not gain one per session; it stays only while lines
+  // wait.
   const flushRereadLog = (): void => {
     process.off('exit', flushRereadLog);
     for (const line of rereadLog.splice(0)) w.log(line);

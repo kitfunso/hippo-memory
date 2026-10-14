@@ -29,7 +29,15 @@ import { errorMessage, log } from '../util/log.js';
 import { requireInit, runViaServerIfAvailable, learnFromRepo } from './shared.js';
 import { fmt } from './print.js';
 import {
-  type CliFlags, type CommandContext, boolFlag, flagIsTrue, isStringFlag, nonEmptyStringFlag, numberFlag, stringFlagOrExit, stringListFlag,
+  type CliFlags,
+  type CommandContext,
+  boolFlag,
+  flagIsTrue,
+  isStringFlag,
+  nonEmptyStringFlag,
+  numberFlag,
+  stringFlagOrExit,
+  stringListFlag,
 } from './flag-values.js';
 import { CONTENT_PREVIEW_CHARS, DATE_PREFIX_CHARS } from '../util/token-text.js';
 import { CliExit, fail } from './exit.js';
@@ -53,7 +61,8 @@ function watchedCommand(args: readonly string[], flags: CliFlags): WatchedComman
     if (line === undefined) {
       fail(WATCH_USAGE);
     }
-    // The shell is the feature here: the user's own command line, pipes and && included, opted into by name; argv runs with no shell.
+    // The shell is the feature here: the user's own command line, pipes and && included, opted into by name; argv runs
+    // with no shell.
     return { argv: [line], shell: true };
   }
   if (args.length === 0) {
@@ -61,7 +70,10 @@ function watchedCommand(args: readonly string[], flags: CliFlags): WatchedComman
   }
   // A quoted 1.x command line would now run as one program name, so it is refused rather than guessed at.
   if (args.length === 1 && /\s/.test(args[0]!)) {
-    fail(`hippo watch: "${args[0]}" is one argument with spaces. Use \`hippo watch -- cmd args\` or \`hippo watch --shell "<command line>"\`.`);
+    fail(
+      `hippo watch: "${args[0]}" is one argument with spaces. Use \`hippo watch -- cmd args\` ` +
+        `or \`hippo watch --shell "<command line>"\`.`,
+    );
   }
   return { argv: [...args], shell: false };
 }
@@ -134,7 +146,10 @@ export async function handleLearn({ hippoRoot, tenantId, flags }: CommandContext
       totalSkipped += skipped;
     }
 
-    console.log(`Git learn complete: ${totalAdded} new lessons added, ${totalSkipped} duplicates skipped across ${repos.length} repos.`);
+    console.log(
+      `Git learn complete: ${totalAdded} new lessons added, ` +
+        `${totalSkipped} duplicates skipped across ${repos.length} repos.`,
+    );
   } else {
     const { added, skipped } = await learnFromRepo(hippoRoot, tenantId, process.cwd(), days);
     console.log(`Git learn complete: ${added} new lessons added, ${skipped} duplicates skipped.`);
@@ -143,7 +158,8 @@ export async function handleLearn({ hippoRoot, tenantId, flags }: CommandContext
 
 // Import command
 
-/** The rows are saved either way; a failed backfill only delays vectors, so it warns with how many wait and the command that finishes them. */
+/** The rows are saved either way; a failed backfill only delays vectors, so it warns with how many wait and the command
+ * that finishes them. */
 function warnBackfillFailed<E>(ctx: api.Context, embedCommand: string, err: E): void {
   let waiting: string;
   try {
@@ -153,17 +169,23 @@ function warnBackfillFailed<E>(ctx: api.Context, embedCommand: string, err: E): 
   } catch (countErr) {
     waiting = `an unknown number of (count failed: ${errorMessage(countErr)})`;
   }
-  log.warn(`import: embedding backfill failed (${errorMessage(err)}); ${waiting} rows have no vector; run '${embedCommand}' to backfill`);
+  log.warn(
+    `import: embedding backfill failed (${errorMessage(err)}); ${waiting} rows have no vector; ` +
+      `run '${embedCommand}' to backfill`,
+  );
 }
 
-/** Batch-embed freshly imported rows. The floating promise is deliberate: libuv keeps the process alive until it settles, and awaiting
- *  would block the CLI on model load; `hippo embed` is the backstop if interrupted. */
+/** Batch-embed freshly imported rows. The floating promise is deliberate: libuv keeps the process alive until it
+ * settles, and awaiting would block the CLI on model load; `hippo embed` is the backstop if interrupted. */
 function backfillVectors(ctx: api.Context, embedCommand: string): void {
   void embedMissingMemories(ctx).catch((err) => warnBackfillFailed(ctx, embedCommand, err));
 }
 
 function warnRedacted(count: number | undefined): void {
-  if (count) printError(`Warning: secret-shaped text was redacted from ${count} imported ${count === 1 ? 'entry' : 'entries'} before storing`);
+  if (count) {
+    const noun = count === 1 ? 'entry' : 'entries';
+    printError(`Warning: secret-shaped text was redacted from ${count} imported ${noun} before storing`);
+  }
 }
 
 export async function handleImport({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
@@ -188,8 +210,9 @@ export async function handleImport({ hippoRoot, tenantId, args, flags }: Command
     hippoRoot,
   };
 
-  // Vault import is a FOLDER importer that dispatches apart from the single-file slot below; it writes through tenant-scoped api calls,
-  // so the tenant is resolved and passed through. --global is unsupported (the connector raw-archive path is tenant-local).
+  // Vault import is a FOLDER importer that dispatches apart from the single-file slot below; it writes through
+  // tenant-scoped api calls, so the tenant is resolved and passed through. --global is unsupported (the connector
+  // raw-archive path is tenant-local).
   const vault = stringFlagOrExit(flags, 'vault');
   if (vault) return await importVaultFolder(hippoRoot, tenantId, vault, flags, importOptions, useGlobal, dryRun);
   importFromFile(targetRoot, args, flags, { importOptions, useGlobal, dryRun, tenantId });
@@ -205,11 +228,21 @@ interface PickedImporter {
 
 // Determine which importer to use based on flag
 function pickImporter(args: string[], flags: CliFlags): PickedImporter {
-  if (flags['chatgpt']) return { filePath: stringFlagOrExit(flags, 'chatgpt'), importer: importChatGPT, importerName: 'ChatGPT' };
-  if (flags['claude']) return { filePath: stringFlagOrExit(flags, 'claude'), importer: importClaude, importerName: 'Claude' };
-  if (flags['cursor']) return { filePath: stringFlagOrExit(flags, 'cursor'), importer: importCursor, importerName: 'Cursor' };
-  if (flags['file']) return { filePath: stringFlagOrExit(flags, 'file'), importer: importGenericFile, importerName: 'File' };
-  if (flags['markdown']) return { filePath: stringFlagOrExit(flags, 'markdown'), importer: importMarkdown, importerName: 'Markdown' };
+  if (flags['chatgpt']) {
+    return { filePath: stringFlagOrExit(flags, 'chatgpt'), importer: importChatGPT, importerName: 'ChatGPT' };
+  }
+  if (flags['claude']) {
+    return { filePath: stringFlagOrExit(flags, 'claude'), importer: importClaude, importerName: 'Claude' };
+  }
+  if (flags['cursor']) {
+    return { filePath: stringFlagOrExit(flags, 'cursor'), importer: importCursor, importerName: 'Cursor' };
+  }
+  if (flags['file']) {
+    return { filePath: stringFlagOrExit(flags, 'file'), importer: importGenericFile, importerName: 'File' };
+  }
+  if (flags['markdown']) {
+    return { filePath: stringFlagOrExit(flags, 'markdown'), importer: importMarkdown, importerName: 'Markdown' };
+  }
   // Positional: try to auto-detect from extension
   if (args[0]) return { filePath: args[0], importer: importGenericFile, importerName: 'File' };
   return { filePath: undefined, importer: undefined, importerName: '' };
@@ -227,7 +260,10 @@ function importFromFile(targetRoot: string, args: string[], flags: CliFlags, opt
   const { filePath, importer, importerName } = pickImporter(args, flags);
 
   if (!filePath || !importer) {
-    fail('Usage: hippo import <--chatgpt|--claude|--cursor|--file|--markdown|--vault> <path>, or hippo import --agents [--dry-run]');
+    fail(
+      'Usage: hippo import <--chatgpt|--claude|--cursor|--file|--markdown|--vault> <path>, ' +
+        'or hippo import --agents [--dry-run]',
+    );
   }
 
   if (!fs.existsSync(filePath)) {
@@ -319,8 +355,8 @@ function checkVaultArgs(folderPath: string, flags: CliFlags, useGlobal: boolean)
     fail('hippo import --vault requires --name <vault> (a non-empty identity key for source-deletion sync).');
   }
   if (flags['scope'] !== undefined && (!isStringFlag(flags['scope']) || !flags['scope'].trim())) {
-    // Same valueless-flag trap: a bare `--scope` must not become scope "true". The example uses the source-prefixed private form,
-    // since a bare `private` scope is not treated as private by recall and importVault rejects it.
+    // Same valueless-flag trap: a bare `--scope` must not become scope "true". The example uses the source-prefixed
+    // private form, since a bare `private` scope is not treated as private by recall and importVault rejects it.
     fail('hippo import --vault: --scope requires a value (e.g. --scope vault:private:notes).');
   }
 }
@@ -373,8 +409,8 @@ export function handleSync({ hippoRoot, flags }: CommandContext): void {
   // v39: other-project rows are skipped by default; secrets always are.
   const includeCrossProject = flagIsTrue(flags, 'cross-project');
   const count = syncGlobalToLocal(hippoRoot, globalRoot, { includeCrossProject });
-  console.log(`Synced ${count} global memories into local project.${includeCrossProject ? '' : ' (other-project rows skipped; use --cross-project to ' +
-    'include them)'}`);
+  const skipNote = includeCrossProject ? '' : ' (other-project rows skipped; use --cross-project to include them)';
+  console.log(`Synced ${count} global memories into local project.${skipNote}`);
 }
 
 export async function handleWatch({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
@@ -454,7 +490,10 @@ export function handlePeers({ tenantId, flags }: CommandContext): void {
     const scopeLabel = allTenants ? 'global store (all tenants)' : `global store (tenant "${tenantScope}")`;
     console.log(`${peers.length} project${peers.length === 1 ? '' : 's'} contributing to ${scopeLabel}:\n`);
     for (const p of peers) {
-      console.log(`  ${p.project.padEnd(25)} ${String(p.count).padStart(4)} memories  (latest: ${p.latest.slice(0, DATE_PREFIX_CHARS)})`);
+      console.log(
+        `  ${p.project.padEnd(25)} ${String(p.count).padStart(4)} memories  ` +
+          `(latest: ${p.latest.slice(0, DATE_PREFIX_CHARS)})`,
+      );
     }
   }
 }

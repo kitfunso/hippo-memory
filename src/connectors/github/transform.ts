@@ -8,8 +8,12 @@ import type {
   GitHubRepository,
 } from './types.js';
 
-/** Convert GitHub webhook events into RememberOpts; each returns null when the event has no usable body so the caller marks it seen and skips the insert.
- *  artifact_ref formats (github://<owner/repo>/issue|pull/<n>[/comment|review_comment/<id>]) are stable because deletion looks rows up by them. */
+/**
+ * Convert GitHub webhook events into RememberOpts; each returns null when the event has no usable body so the caller
+ * marks it seen and skips the insert.
+ * artifact_ref formats (github://<owner/repo>/issue|pull/<n>[/comment|review_comment/<id>]) are stable because deletion
+ * looks rows up by them.
+ */
 
 const UNKNOWN_REPO = 'unknown/unknown';
 
@@ -20,7 +24,10 @@ interface OptsParts {
   login: string;
 }
 
-function rememberOpts(repository: GitHubRepository | undefined, { content, refPath, event, login }: OptsParts): RememberOpts {
+function rememberOpts(
+  repository: GitHubRepository | undefined,
+  { content, refPath, event, login }: OptsParts,
+): RememberOpts {
   const repoFull = repository?.full_name ?? UNKNOWN_REPO;
   return {
     content,

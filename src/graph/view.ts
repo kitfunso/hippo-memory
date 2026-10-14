@@ -1,4 +1,6 @@
-/** Graph observability and visualization, READ-ONLY over the entity/relation graph (no writes, so `scripts/check-graph-writes.mjs` stays green).
+/**
+ * Graph observability and visualization, READ-ONLY over the entity/relation graph (no writes, so
+ * `scripts/check-graph-writes.mjs` stays green).
  *  Shared by `hippo graph show|view` and the HTTP `GET /v1/graph` route, which all build the same `GraphModel`. */
 
 import { withGraphReadSnapshot } from '../store/graph-reads.js';
@@ -30,7 +32,9 @@ export interface GraphModel {
 /** Default bound for the CLI viewer / show so an unbounded set is never laid out. */
 export const DEFAULT_VIEW_LIMIT = 500;
 
-/** Build the view-model (reads only); with `opts.entity`, a focus subgraph of the entities named so plus their 1-hop neighbours.
+/**
+ * Build the view-model (reads only); with `opts.entity`, a focus subgraph of the entities named so plus their 1-hop
+ * neighbours.
  *  Dangling edges (an endpoint outside the node set) are always dropped. */
 export function buildGraphModel(
   hippoRoot: string,
@@ -39,7 +43,9 @@ export function buildGraphModel(
 ): GraphModel {
   const limit = opts.limit ?? DEFAULT_VIEW_LIMIT;
   // One read snapshot, so a concurrent graph rebuild cannot make the model mix old entity ids with new relation ids.
-  return withGraphReadSnapshot(hippoRoot, (db) => graphModelOf(graphViewRows(hippoRoot, db, tenantId, { entity: opts.entity, limit, canRead: opts.canRead })));
+  return withGraphReadSnapshot(hippoRoot, (db) =>
+    graphModelOf(graphViewRows(hippoRoot, db, tenantId, { entity: opts.entity, limit, canRead: opts.canRead })),
+  );
 }
 
 /** The reply model of the rows a store read: an edge with an endpoint outside the node set is dropped. */
@@ -141,7 +147,9 @@ function applyDisplacement(
   });
 }
 
-/** Deterministic Fruchterman-Reingold-style force layout: seeded circular init, fixed iterations, no `Math.random`, so one model gives the same positions.
+/**
+ * Deterministic Fruchterman-Reingold-style force layout: seeded circular init, fixed iterations, no `Math.random`, so
+ * one model gives the same positions.
  *  Non-finite coordinates are clamped to the viewport centre and all positions to the bounds. */
 export function layoutGraph(
   model: GraphModel,
@@ -200,22 +208,27 @@ const CLIENT_JS = [
   "  var vb=svg.getAttribute('viewBox').split(' ').map(Number);",
   "  var view={x:vb[0],y:vb[1],w:vb[2],h:vb[3]};",
   "  function apply(){svg.setAttribute('viewBox',view.x+' '+view.y+' '+view.w+' '+view.h);}",
-  "  var panning=false,sx=0,sy=0;",
-  "  svg.addEventListener('mousedown',function(e){if(e.target.closest('.node'))return;panning=true;sx=e.clientX;sy=e.clientY;});",
+  '  var panning=false,sx=0,sy=0;',
+  '  ' +
+    "svg.addEventListener('mousedown',function(e){if(e.target.closest('.node'))return;panning=true;sx=e.clientX;sy=e.clientY;});",
   "  window.addEventListener('mouseup',function(){panning=false;});",
   "  window.addEventListener('mousemove',function(e){if(!panning)return;var r=svg.getBoundingClientRect();var " +
     "k=view.w/r.width;view.x-=(e.clientX-sx)*k;view.y-=(e.clientY-sy)*k;sx=e.clientX;sy=e.clientY;apply();});",
-  "  svg.addEventListener('wheel',function(e){e.preventDefault();var r=svg.getBoundingClientRect();var mx=view.x+(e.clientX-r.left)/r.width*view.w;var " +
-    "my=view.y+(e.clientY-r.top)/r.height*view.h;var " +
-      "f=e.deltaY<0?0.9:1.1;view.x=mx-(mx-view.x)*f;view.y=my-(my-view.y)*f;view.w*=f;view.h*=f;apply();},{passive:false});",
+  "  svg.addEventListener('wheel',function(e){e.preventDefault();var r=svg.getBoundingClientRect();var " +
+  "mx=view.x+(e.clientX-r.left)/r.width*view.w;var " +
+    'my=view.y+(e.clientY-r.top)/r.height*view.h;var ' +
+    'f=e.deltaY<0?0.9:1.1;view.x=mx-(mx-view.x)*f;view.y=my-(my-view.y)*f;view.w*=f;view.h*=f;apply();},{passive:false});',
   "  var data={};try{data=JSON.parse(document.getElementById('graph-data').textContent);}",
   "  catch(e){console.error('hippo graph: embedded model is not valid JSON',e);}",
-  "  var adj={};(data.edges||[]).forEach(function(e){(adj[e.from]=adj[e.from]||[]).push(e.to);(adj[e.to]=adj[e.to]||[]).push(e.from);});",
-  "  var active=null;",
-  "  document.querySelectorAll('.node').forEach(function(g){g.addEventListener('click',function(ev){ev.stopPropagation();var " +
+  '  var ' +
+    'adj={};(data.edges||[]).forEach(function(e){(adj[e.from]=adj[e.from]||[]).push(e.to);(adj[e.to]=adj[e.to]||[]).push(e.from);});',
+  '  var active=null;',
+  '  ' +
+    "document.querySelectorAll('.node').forEach(function(g){g.addEventListener('click',function(ev){ev.stopPropagation();var " +
     "id=g.getAttribute('data-id');if(active===id){clearHi();active=null;return;}active=id;highlight(id);});});",
   "  svg.addEventListener('click',function(){clearHi();active=null;});",
-  "  function clearHi(){svg.classList.remove('focused');document.querySelectorAll('.hi').forEach(function(el){el.classList.remove('hi');});}",
+  '  function ' +
+    "clearHi(){svg.classList.remove('focused');document.querySelectorAll('.hi').forEach(function(el){el.classList.remove('hi');});}",
   "  function highlight(id){clearHi();svg.classList.add('focused');var " +
     "keep={};keep[id]=1;(adj[id]||[]).forEach(function(n){keep[n]=1;});document.querySelectorAll('.node').forEach(" +
     "function(g){if(keep[g.getAttribute('data-id')])g.classList.add('hi');});document.querySelectorAll('.edge').forEach(" +
@@ -260,7 +273,8 @@ function renderNodeSvg(model: GraphModel, pos: Map<number, Point>): string {
     .map((node) => {
       const p = pos.get(node.id);
       if (!p) return '';
-      const label = node.name.length > NODE_LABEL_MAX_CHARS ? node.name.slice(0, NODE_LABEL_MAX_CHARS - 1) + '…' : node.name;
+      const label =
+        node.name.length > NODE_LABEL_MAX_CHARS ? node.name.slice(0, NODE_LABEL_MAX_CHARS - 1) + '…' : node.name;
       return (
         `<g class="node" data-id="${node.id}" transform="translate(${p.x.toFixed(1)},${p.y.toFixed(1)})">` +
         `<title>${escapeHtml(node.type + ': ' + node.name)}</title>` +
@@ -288,8 +302,12 @@ function renderLegend(model: GraphModel): string {
     .join('  ');
 }
 
-/** Render the model as a self-contained, offline interactive HTML node-link diagram with server-side deterministic positions.
- *  The model is inlined as `<script type="application/json">` with `<`, `>`, `&` unicode-escaped so a `</script>` in an entity name cannot break out. */
+/**
+ * Render the model as a self-contained, offline interactive HTML node-link diagram with server-side deterministic
+ * positions.
+ * The model is inlined as `<script type="application/json">` with `<`, `>`, `&` unicode-escaped so a `</script>` in an
+ * entity name cannot break out.
+ */
 export function renderGraphHtml(model: GraphModel): string {
   const pos = layoutGraph(model);
   const edgeSvg = renderEdgeSvg(model, pos);
@@ -315,7 +333,10 @@ export function renderGraphHtml(model: GraphModel): string {
   ].join('\n');
 }
 
-/** Render the model as a JSON Canvas (jsoncanvas.org) document: `text` nodes at the same deterministic layout positions, `edges[]` linking them by id. */
+/**
+ * Render the model as a JSON Canvas (jsoncanvas.org) document: `text` nodes at the same deterministic layout positions,
+ * `edges[]` linking them by id.
+ */
 export function renderGraphCanvas(model: GraphModel): string {
   const pos = layoutGraph(model, { width: 2400, height: 1600 });
   const nodes = model.nodes.map((node) => {

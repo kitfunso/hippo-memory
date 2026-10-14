@@ -35,7 +35,9 @@ export function pragmaDataVersion(db: DatabaseSyncLike): number {
 }
 
 export function setSchemaVersion(db: DatabaseSyncLike, version: number): void {
-  db.prepare(`INSERT INTO meta(key, value) VALUES('schema_version', ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`).run(String(version));
+  db.prepare(
+    `INSERT INTO meta(key, value) VALUES('schema_version', ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`,
+  ).run(String(version));
   db.exec(`PRAGMA user_version = ${Math.max(0, Math.trunc(version))}`);
 }
 
@@ -47,10 +49,16 @@ export function getMeta(db: DatabaseSyncLike, key: string, fallback = ''): strin
 }
 
 export function setMeta(db: DatabaseSyncLike, key: string, value: string): void {
-  db.prepare(`INSERT INTO meta(key, value) VALUES(?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`).run(key, value);
+  db.prepare(`INSERT INTO meta(key, value) VALUES(?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`).run(
+    key,
+    value,
+  );
 }
 
-/** Raise min_compatible_binary to `version`; never lowers it, since an older floor would let back in a binary a newer write already shut out. */
+/**
+ * Raise min_compatible_binary to `version`; never lowers it, since an older floor would let back in a binary a newer
+ * write already shut out.
+ */
 export function raiseMinBinary(db: DatabaseSyncLike, version: string): void {
   const existing = getMeta(db, 'min_compatible_binary');
   if (!existing || compareSemver(version, existing) > 0) setMeta(db, 'min_compatible_binary', version);

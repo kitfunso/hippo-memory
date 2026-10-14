@@ -45,8 +45,14 @@ export function hasNoSpecificity(text: string): boolean {
   const domainAcronyms = (text.match(/\b[A-Z]{2,6}\b/g) ?? []).filter(a => !CHAT_ACRONYMS.test(a));
   if (/\d|[A-Z][a-z]{2,}|[/\\.]|[`_{}()[\]]/.test(text)) return false;
   if (domainAcronyms.length > 0 && /[a-z]/.test(text)) return false;
-  if (/^(?:prefer|use|avoid|never use|don't use)\s+(?!(?:the|that|this|it|them|those|these|one|other|something)\b)\S+/i.test(text)) return false;
-  if (/\b(?:never|always|must)\s+(?!(?:the|that|this|it|them|those|these|one|other|something)\b)\S+/i.test(text)) return false;
+  if (
+    /^(?:prefer|use|avoid|never use|don't use)\s+(?!(?:the|that|this|it|them|those|these|one|other|something)\b)\S+/i.test(
+      text,
+    )
+  )
+    return false;
+  if (/\b(?:never|always|must)\s+(?!(?:the|that|this|it|them|those|these|one|other|something)\b)\S+/i.test(text))
+    return false;
   return text.split(/\s+/).length < 8 && /^[\w\s,.'"-]+$/.test(text);
 }
 
@@ -58,15 +64,23 @@ function isRoutineReleaseActivity(text: string): boolean {
   // "Deploy only after the migration has run" is a rule about releases, not a log line.
   if (RELATION_WORD.test(text) || RULE_WORD.test(text)) return false;
   const subject = text.replace(/^(?:chore|ci|build)(?:\([^)]*\))?:\s*/i, '');
-  if (/^(?:bump|increment|increase|update|set)\s+(?:(?:ios|android|app)\s+)?(?:build(?:\s+number)?|version|release)\s+(?:to\s+)?(?:v?\d|#\d)/i.test(subject))
+  if (
+    /^(?:bump|increment|increase|update|set)\s+(?:(?:ios|android|app)\s+)?(?:build(?:\s+number)?|version|release)\s+(?:to\s+)?(?:v?\d|#\d)/i.test(
+      subject,
+    )
+  )
     return true;
-  return /^(?:deploy(?:ed|ing)?|ship(?:ped|ping)?|release(?:d|ing)?)\s+(?:the\s+)?(?:build|release|version|v?\d)\s*(?:v?\d|#\d|\.\d)/i.test(subject)
-    || /^(?:deployment|release|build)\s+(?:succeeded|completed|finished)\b/i.test(subject);
+  return (
+    /^(?:deploy(?:ed|ing)?|ship(?:ped|ping)?|release(?:d|ing)?)\s+(?:the\s+)?(?:build|release|version|v?\d)\s*(?:v?\d|#\d|\.\d)/i.test(
+      subject,
+    ) || /^(?:deployment|release|build)\s+(?:succeeded|completed|finished)\b/i.test(subject)
+  );
 }
 
 const bareText = (text: string): string => text.replace(/[.!?,;:\s]+$/, '');
 // These endings close whole sentences too ("the branch you push to"), so they are only a possible cut.
-const POSSIBLE_CUT_ENDING = /\b(?:needs to|depends on|requires|while|with|without|into|for|of|by|to|is|are|was|were|must|should|could|would|might)$/i;
+const POSSIBLE_CUT_ENDING =
+  /\b(?:needs to|depends on|requires|while|with|without|into|for|of|by|to|is|are|was|were|must|should|could|would|might)$/i;
 
 /** A short leading condition with no rule word, comma or "then": "If the build fails". */
 function isBareCondition(bare: string): boolean {
@@ -77,8 +91,14 @@ function isDanglingAssertion(text: string): boolean {
   const bare = bareText(text);
   // Only a lowercase start is a cut: "To rebuild the index, run ..." opens an instruction.
   if (/^(?:to|and|for)\s/.test(bare) && bare.length < 50) return true;
-  // Prepositions, modals and "is" can end a whole sentence ("the branch it merges into"), so only cut-off endings count.
-  if (/\b(?:to be|has been|will be|instead of|rather than|such as|than|because|if|unless|when|until|and|or|but)$/i.test(bare) || /\b(?:the|a|an)$/.test(bare))
+  // Prepositions, modals and "is" can end a whole sentence ("the branch it merges into"), so only cut-off endings
+  // count.
+  if (
+    /\b(?:to be|has been|will be|instead of|rather than|such as|than|because|if|unless|when|until|and|or|but)$/i.test(
+      bare,
+    ) ||
+    /\b(?:the|a|an)$/.test(bare)
+  )
     return true;
   return /^(?:if|unless|when|while|until)\b/.test(bare) && isBareCondition(bare);
 }
@@ -89,20 +109,26 @@ function isPossibleFragment(text: string): boolean {
   return POSSIBLE_CUT_ENDING.test(bare) || (/^(?:If|Unless|When|While|Until)\b/.test(bare) && isBareCondition(bare));
 }
 
-const OUTCOME_LEAD = /^(?:succeeds?|succeeded|fails?|failed|passes|passed|completed|done|successful|success|returned|returns|inserted|updated|deleted)\b/i;
-const OUTCOME_DETAIL = /\b(?:for|on|in|at|to|from|with|without|by|after|before|under|is|are|was|were|be|been|will|can|must|should|never|always)\b/i;
+const OUTCOME_LEAD =
+  /^(?:succeeds?|succeeded|fails?|failed|passes|passed|completed|done|successful|success|returned|returns|inserted|updated|deleted)\b/i;
+const OUTCOME_DETAIL =
+  /\b(?:for|on|in|at|to|from|with|without|by|after|before|under|is|are|was|were|be|been|will|can|must|should|never|always)\b/i;
 
 function isSubjectlessOutcome(text: string): boolean {
   const lead = OUTCOME_LEAD.exec(text);
   if (lead === null || RELATION_WORD.test(text)) return false;
-  // "Returns 404 for unknown ids" and "Deleted rows must stay deleted" say when or what; "returned 3 matching rows" does not.
+  // "Returns 404 for unknown ids" and "Deleted rows must stay deleted" say when or what; "returned 3 matching rows"
+  // does not.
   return !OUTCOME_DETAIL.test(text.slice(lead[0].length).replace(/\([^)]*\)/g, ' '));
 }
 
-const OUTPUT_LINE = /^(?:\$\s|>\s|(?:stdout|stderr|exit code):|Command\s+['"].*\s+failed\b|Traceback\b|npm\s+(?:ERR|WARN)\b|error\s+TS\d+\b)/i;
+// `(?:.*\S)?` ends the quoted command on a non-space, so it and `\s+` never share a run of spaces (no ReDoS).
+const OUTPUT_LINE =
+  /^(?:\$\s|>\s|(?:stdout|stderr|exit code):|Command\s+['"](?:.*\S)?\s+failed\b|Traceback\b|npm\s+(?:ERR|WARN)\b|error\s+TS\d+\b)/i;
 const STACK_FRAME = /^at\s+\S.*:\d+(?::\d+)?\)?$/;
 const ERROR_LEAD = /^(?:[\w.$]+Error|[\w.$]+Exception):\s/;
-// Log lines say "after" and "while" too, so only a rule word frees a timestamp or level lead: a dated freeze saying never merge.
+// Log lines say "after" and "while" too, so only a rule word frees a timestamp or level lead: a dated freeze saying
+// never merge.
 const LOG_LEADS = [
   /^\d{4}-\d{2}-\d{2}[T ][\d:.]+(?:Z|[+-][\d:]+)?\s+(?:\[?\w+\]?\s+)?/,
   /^\[(?:info|warn|error|debug)\]/i,
@@ -138,7 +164,12 @@ export function assessAutomaticMemory(content: string): AutomaticMemoryAssessmen
 }
 
 /** Reasons the heuristics can get wrong: repair only lists them for review and derivation still admits them. */
-const UNCERTAIN_REASONS: ReadonlySet<AutomaticMemoryDefect> = new Set(['too-short', 'possible-fragment', 'too-vague', 'no-specificity']);
+const UNCERTAIN_REASONS: ReadonlySet<AutomaticMemoryDefect> = new Set([
+  'too-short',
+  'possible-fragment',
+  'too-vague',
+  'no-specificity',
+]);
 
 export function isCertainReason(reason: AutomaticMemoryDefect | null): boolean {
   return reason !== null && !UNCERTAIN_REASONS.has(reason);
@@ -150,16 +181,22 @@ export function certainDefect(content: string): AutomaticMemoryDefect | null {
   return isCertainReason(reason) ? reason : null;
 }
 
-// Watch failures ('autolearn') and tool failures keep a fixed "Command 'x' failed" format by design, so they are not judged.
+// Watch failures ('autolearn') and tool failures keep a fixed "Command 'x' failed" format by design, so they are not
+// judged.
 const AUTOMATIC_SOURCES = new Set(['capture', 'git-learn', 'git', 'consolidation']);
-// Promote and share rewrite the source but keep the tags, so the writer's tag still marks a copy; elsewhere a person may set it.
+// Promote and share rewrite the source but keep the tags, so the writer's tag still marks a copy; elsewhere a person
+// may set it.
 const AUTOMATIC_TAGS = new Set(['captured', COMPACTION_MEMORY_TAG, 'git-learned']);
 const COPY_SOURCE = /^(?:promoted|shared):/;
-export const BUNDLE_HEADER = /^\[Consolidated(?: from| pattern from) \d+ related memor(?:y|ies)(?:, newest first)?\]\n\n/;
+export const BUNDLE_HEADER =
+  /^\[Consolidated(?: from| pattern from) \d+ related memor(?:y|ies)(?:, newest first)?\]\n\n/;
 
 type Provenance = Pick<MemoryEntry, 'source' | 'confidence' | 'content' | 'extracted_from' | 'dag_level' | 'tags'>;
 
-/** A row hippo wrote that no person vouched for: hippo's writers stamp observed or inferred, a person's edit or restore verified. */
+/**
+ * A row hippo wrote that no person vouched for: hippo's writers stamp observed or inferred, a person's edit or restore
+ * verified.
+ */
 export function isAutomaticEntry(entry: Provenance): boolean {
   if (entry.confidence !== 'observed' && entry.confidence !== 'inferred') return false;
   return AUTOMATIC_SOURCES.has(entry.source) || entry.source.startsWith(COMPACTION_SOURCE_PREFIX)
@@ -167,7 +204,9 @@ export function isAutomaticEntry(entry: Provenance): boolean {
     || entry.extracted_from !== null || entry.dag_level >= 1 || BUNDLE_HEADER.test(entry.content);
 }
 
-/** A bundle's parts are other rows' words, possibly a person's, so a bundle is sure to be junk only when every part is. */
+/**
+ * A bundle's parts are other rows' words, possibly a person's, so a bundle is sure to be junk only when every part is.
+ */
 function bundleParts(entry: Pick<MemoryEntry, 'content'>): string[] {
   return BUNDLE_HEADER.test(entry.content) ? heldTexts({ content: entry.content, source: 'consolidation' }) : [];
 }
@@ -177,7 +216,10 @@ function hasCertainDefect(entry: Pick<MemoryEntry, 'content'>): boolean {
   return (parts.length > 0 ? parts : [entry.content]).every((text) => certainDefect(text) !== null);
 }
 
-/** The audit's check: a person's row is never judged, and a bundle is flagged only when every part is, as reuse and recent context judge it. */
+/**
+ * The audit's check: a person's row is never judged, and a bundle is flagged only when every part is, as reuse and
+ * recent context judge it.
+ */
 export function automaticDefect(entry: Provenance): AutomaticMemoryDefect | null {
   if (!isAutomaticEntry(entry)) return null;
   const parts = bundleParts(entry);
@@ -185,7 +227,10 @@ export function automaticDefect(entry: Provenance): AutomaticMemoryDefect | null
   return reasons.every((reason) => reason !== null) ? reasons[0] ?? null : null;
 }
 
-/** Whether sleep may derive from a row or share it: a person's text and watch failures always, hippo's own text only without a certain defect. */
+/**
+ * Whether sleep may derive from a row or share it: a person's text and watch failures always, hippo's own text only
+ * without a certain defect.
+ */
 export function isReusable(entry: Provenance): boolean {
   return !isAutomaticEntry(entry) || !hasCertainDefect(entry);
 }
@@ -202,7 +247,8 @@ export function isContentWorthStoring(content: string): boolean {
 
 /** Recent-context floor: rows hippo wrote meet the automatic check, a person's rows only the older, looser floor. */
 export function isWorthSurfacing(entry: MemoryEntry): boolean {
-  if (isAutomaticEntry(entry)) return bundleParts(entry).length > 0 ? !hasCertainDefect(entry) : isContentWorthStoring(entry.content);
+  if (isAutomaticEntry(entry))
+    return bundleParts(entry).length > 0 ? !hasCertainDefect(entry) : isContentWorthStoring(entry.content);
   const text = entry.content.trim();
   return text.length >= 10 && !isReleaseCommitNoise(text) && !isFragment(text)
     && substantiveWordCount(text) >= 2 && !(text.length < 40 && hasNoSpecificity(text));

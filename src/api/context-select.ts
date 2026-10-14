@@ -86,7 +86,8 @@ export function oneCopyPerMemory(
   global: readonly MemoryEntry[],
   now: Date,
 ): [MemoryEntry[], MemoryEntry[]] {
-  const score = (e: MemoryEntry, isGlobal: boolean): number => calculateStrength(e, now, { ablation: strengthAblation() }) * (isGlobal ? GLOBAL_DISCOUNT : 1);
+  const score = (e: MemoryEntry, isGlobal: boolean): number =>
+    calculateStrength(e, now, { ablation: strengthAblation() }) * (isGlobal ? GLOBAL_DISCOUNT : 1);
   const best = new Map<string, { entry: MemoryEntry; isGlobal: boolean }>();
   const offer = (entry: MemoryEntry, isGlobal: boolean): void => {
     const held = best.get(entry.content);
@@ -118,7 +119,10 @@ interface PromptCandidate {
   isGlobal: boolean;
 }
 
-/** Pins plus the prompt-recall or recent-N backfill; null means the hook block is turned off, so task state stays out too. */
+/**
+ * Pins plus the prompt-recall or recent-N backfill; null means the hook block is turned off, so task state stays out
+ * too.
+ */
 export function selectPinned(
   opts: ContextOpts,
   plan: ContextPlan,
@@ -141,7 +145,8 @@ export function selectPinned(
   obs?.dropMissing([...localEntries, ...globalEntries], [...localPool, ...globalPool], 'load', 'duplicate');
   const picked: Picked = { items: [], ids: new Set<string>(), used: 0 };
 
-  // Pinned entries are explicit intent, the recent-N list an automatic backfill; both share ONE budget and the recent loop runs first,
+  // Pinned entries are explicit intent, the recent-N list an automatic backfill; both share ONE budget and the recent
+  // loop runs first,
   // so pins are ranked here and reserve their share before it can spend.
   const pinnedLocal = localPool.filter((e) => e.pinned);
   const pinnedGlobal = globalPool.filter((e) => e.pinned);
@@ -150,7 +155,8 @@ export function selectPinned(
 
   // Prompt recall gates the backfill on the prompt instead of recency.
   if (plan.promptRecallPending) {
-    const candidates = (): PromptCandidate[] => promptRecallCandidates(plan, pools, admission.admit, rankedPinned, nowP);
+    const candidates = (): PromptCandidate[] =>
+      promptRecallCandidates(plan, pools, admission.admit, rankedPinned, nowP);
     backfillFromPrompt(opts, plan, { pinnedCfg, candidates, picked, recentBudget });
   } else if (plan.includeRecent > 0) {
     backfillRecent(plan, { localPool, globalPool, picked, recentBudget, nowP });
@@ -174,7 +180,10 @@ function rankPinned(
       const scopeBoost = scopeBoostFor(scopeMatch(entry.tags, plan.activeScope));
       return {
         entry,
-        score: calculateStrength(entry, nowP, { ablation: strengthAblation() }) * (isGlobal ? GLOBAL_DISCOUNT : 1) * scopeBoost,
+        score:
+          calculateStrength(entry, nowP, { ablation: strengthAblation() }) *
+          (isGlobal ? GLOBAL_DISCOUNT : 1) *
+          scopeBoost,
         tokens: plan.price(entry, isGlobal),
         isGlobal,
       };
@@ -183,7 +192,8 @@ function rankPinned(
 }
 
 // Mirrors the pin loop's continue-not-break so a big pin cannot block smaller ones from reserving, and dedupes by id
-// because a synced pin sits in both stores. A pin also in the recent slice is counted twice: recents under-fill, safely.
+// because a synced pin sits in both stores. A pin also in the recent slice is counted twice: recents under-fill,
+// safely.
 function reservePinned(rankedPinned: ContextResultEntry[], effBudget: number): number {
   let pinnedReserve = 0;
   const reservedIds = new Set<string>();
@@ -281,7 +291,12 @@ function promptRecallCandidates(
   const localEligible = (pools.local.recall ?? []).filter(eligible);
   const globalEligible = (pools.global.recall ?? []).filter(eligible);
   const [localCandidates, globalCandidates] = oneCopyPerMemory(localEligible, globalEligible, nowP);
-  obs?.dropMissing([...localEligible, ...globalEligible], [...localCandidates, ...globalCandidates], 'eligible', 'duplicate');
+  obs?.dropMissing(
+    [...localEligible, ...globalEligible],
+    [...localCandidates, ...globalCandidates],
+    'eligible',
+    'duplicate',
+  );
   const seenCandidateIds = new Set<string>();
   const candidateItems: PromptCandidate[] = [];
   // Local wins the id collision (a global row synced into the local store).
@@ -389,21 +404,32 @@ interface SearchBothStoresOptions {
   readonly admit: (e: MemoryEntry) => boolean;
 }
 
-async function searchBothStores(ctx: Context, plan: ContextPlan, options: SearchBothStoresOptions): Promise<ContextResultEntry[]> {
+async function searchBothStores(
+  ctx: Context,
+  plan: ContextPlan,
+  options: SearchBothStoresOptions,
+): Promise<ContextResultEntry[]> {
   const { left, minResults, pools, admit } = options;
   const { cost, price } = plan;
-  // A local pool row is local by construction; sync keeps a global row's id on its local copy, so the global pool is looked up.
+  // A local pool row is local by construction; sync keeps a global row's id on its local copy, so the global pool is
+  // looked up.
   const poolIds = (pool: AmbientLoadResult): string[] => [...pool.entries, ...(pool.recall ?? [])].map((e) => e.id);
   const localIds = new Set(poolIds(pools.local));
   const alsoLocal = heldIdLookup(ctx.hippoRoot, ctx.tenantId, poolIds(pools.global).filter((id) => !localIds.has(id)));
   const isGlobalHit = (e: MemoryEntry): boolean => !localIds.has(e.id) && !alsoLocal(e.id);
   const roots = { local: ctx.hippoRoot, global: plan.globalRoot };
-  const merged = await rankBothStores(plan.query, roots, { local: pools.local.entries, global: pools.global.entries }, contextVectorSpec(ctx, plan, admit), {
-    budget: left,
-    minResults,
-    cost: cost && ((r) => price(r.entry, isGlobalHit(r.entry))),
-    scope: plan.activeScope,
-  });
+  const merged = await rankBothStores(
+    plan.query,
+    roots,
+    { local: pools.local.entries, global: pools.global.entries },
+    contextVectorSpec(ctx, plan, admit),
+    {
+      budget: left,
+      minResults,
+      cost: cost && ((r) => price(r.entry, isGlobalHit(r.entry))),
+      scope: plan.activeScope,
+    },
+  );
   return merged.map((r) => ({
     entry: r.entry,
     score: r.score,
@@ -413,8 +439,17 @@ async function searchBothStores(ctx: Context, plan: ContextPlan, options: Search
 }
 
 /** The vector arm under the lexical window's own tenant, scope and current-row rules. */
-function contextVectorSpec(ctx: Context, plan: ContextPlan, admit: (e: MemoryEntry) => boolean): HybridVectorCandidates {
-  return { tenantId: ctx.tenantId, scope: recallScopeFilter(plan.exactScope, 'exact', plan.ownScope), includeSuperseded: false, admit };
+function contextVectorSpec(
+  ctx: Context,
+  plan: ContextPlan,
+  admit: (e: MemoryEntry) => boolean,
+): HybridVectorCandidates {
+  return {
+    tenantId: ctx.tenantId,
+    scope: recallScopeFilter(plan.exactScope, 'exact', plan.ownScope),
+    includeSuperseded: false,
+    admit,
+  };
 }
 
 interface SearchLocalRowsOptions {
@@ -424,20 +459,30 @@ interface SearchLocalRowsOptions {
   readonly admit: (e: MemoryEntry) => boolean;
 }
 
-async function searchLocalRows(ctx: Context, plan: ContextPlan, options: SearchLocalRowsOptions): Promise<ContextResultEntry[]> {
+async function searchLocalRows(
+  ctx: Context,
+  plan: ContextPlan,
+  options: SearchLocalRowsOptions,
+): Promise<ContextResultEntry[]> {
   const { left, minResults, localEntries, admit } = options;
   const { cost, price, primaryIsGlobal, query, config: ctxConfig } = plan;
   const usePhysicsCtx = ctxConfig.physics?.enabled !== false;
   const localCost = cost && ((r: SearchResult) => price(r.entry, primaryIsGlobal));
   const vectorCandidates = contextVectorSpec(ctx, plan, admit);
   const store = plan.local.store;
-  const ctxResults = await searchByEngine({ root: ctx.hippoRoot, store }, query, localEntries, usePhysicsCtx ? ctxConfig.physics : null, {
-    budget: left,
-    minResults,
-    cost: localCost,
-    scope: plan.activeScope,
-    vectorCandidates,
-  });
+  const ctxResults = await searchByEngine(
+    { root: ctx.hippoRoot, store },
+    query,
+    localEntries,
+    usePhysicsCtx ? ctxConfig.physics : null,
+    {
+      budget: left,
+      minResults,
+      cost: localCost,
+      scope: plan.activeScope,
+      vectorCandidates,
+    },
+  );
   return ctxResults.map((r) => ({
     entry: r.entry,
     score: r.score,

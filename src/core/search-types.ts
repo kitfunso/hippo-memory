@@ -4,7 +4,9 @@ export const DEFAULT_RECALL_BUDGET = 4000;
 // Local memories outrank global ones by this factor; getContext applies it as a 1/x global discount.
 export const DEFAULT_LOCAL_BUMP = 1.2;
 
-/** One score mutation applied after candidate generation; allocated only under `recall --why` or `RecallOpts.explain`. */
+/**
+ * One score mutation applied after candidate generation; allocated only under `recall --why` or `RecallOpts.explain`.
+ */
 export interface RerankStep {
   /** One of: interference, value, utility, reranker, goal-boost, retrieval-count-downweight. */
   stage: string;
@@ -65,7 +67,10 @@ export interface ScoreBreakdown {
   scopeBoost: number;
   /** Extra multiplier applied post-hybrid (e.g. 1.2x for local hits in a local+global merge); 1.0 otherwise. */
   sourceBump: number;
-  /** Immediate outcome nudge, 1 + 0.15*tanh((pos - neg) / 2) clipped to [0.85, 1.15]; separate from the slow strength path. */
+  /**
+   * Immediate outcome nudge, 1 + 0.15*tanh((pos - neg) / 2) clipped to [0.85, 1.15]; separate from the slow strength
+   * path.
+   */
   outcomeBoost: number;
   /** CHURN_STALE_RANK_MULTIPLIER if tagged 'churn-stale', else 1.0. */
   churnStaleMultiplier: number;

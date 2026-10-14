@@ -53,32 +53,39 @@ const NO_BREAK = /(`+)[^`\n]+\1|\b(?:[Ee]\.g|[Ii]\.e|[Vv]s|[Cc]f)\.|\betc\.(?=\s
 function proseOnly(text: string): string {
   let fence: string | null = null;
   let afterProse = false;
-  return text.split('\n').map(line => {
-    const trimmed = line.trimStart();
-    if (fence !== null) {
-      const close = trimmed.match(FENCE_CLOSE);
-      if (close && close[1][0] === fence[0] && close[1].length >= fence.length) fence = null;
-      afterProse = false;
-      return '';
-    }
-    const open = trimmed.match(FENCE_OPEN);
-    if (open && !(open[1][0] === '`' && open[2].includes('`'))) {
-      fence = open[1];
-      afterProse = false;
-      return '';
-    }
-    // Quotes, table rows and indented code are not the speaker's own; indented code cannot interrupt a paragraph or list item.
-    const dropped = /^\s*[>|]/.test(line) || (!afterProse && /^(?: {4}|\t)(?!\s*(?:[-*]|\d+\.)\s)/.test(line));
-    afterProse = !dropped && trimmed !== '' && !/^#{1,6}(?:\s|$)/.test(trimmed);
-    return dropped ? '' : line;
-  }).join('\n');
+  return text
+    .split('\n')
+    .map((line) => {
+      const trimmed = line.trimStart();
+      if (fence !== null) {
+        const close = trimmed.match(FENCE_CLOSE);
+        if (close && close[1][0] === fence[0] && close[1].length >= fence.length) fence = null;
+        afterProse = false;
+        return '';
+      }
+      const open = trimmed.match(FENCE_OPEN);
+      if (open && !(open[1][0] === '`' && open[2].includes('`'))) {
+        fence = open[1];
+        afterProse = false;
+        return '';
+      }
+      // Quotes, table rows and indented code are not the speaker's own; indented code cannot interrupt a paragraph or
+      // list item.
+      const dropped = /^\s*[>|]/.test(line) || (!afterProse && /^(?: {4}|\t)(?!\s*(?:[-*]|\d+\.)\s)/.test(line));
+      afterProse = !dropped && trimmed !== '' && !/^#{1,6}(?:\s|$)/.test(trimmed);
+      return dropped ? '' : line;
+    })
+    .join('\n');
 }
 
 function masked(text: string): string {
   return text.replace(NO_BREAK, span => 'x'.repeat(span.length));
 }
 
-/** A lowercase line continues the line above only when that line has not ended its sentence; "e.g." at a line end has not. */
+/**
+ * A lowercase line continues the line above only when that line has not ended its sentence; "e.g." at a line end has
+ * not.
+ */
 function continues(line: string, previous: string | undefined): boolean {
   if (previous === undefined || !/^[a-z]/.test(line) || LABEL.test(line)) return false;
   return !SENTENCE_END.test(masked(`${previous} ${line}`).slice(0, previous.length));
@@ -118,8 +125,12 @@ function extractFromPatterns(sentence: string, patterns: readonly RegExp[], cate
     .some((match) => !insideBrackets(sentence.slice(0, match.index))));
   if (!keyed) return null;
   const content = sentence
-    .replace(/^(?:decision|plan|rule|important|critical|remember|error|bug|gotcha|watch out|careful|warning|caveat|trap|don't forget|easy to miss):\s*/i, '')
-    .replace(/[.!?\s]+$/, '').trim();
+    .replace(
+      /^(?:decision|plan|rule|important|critical|remember|error|bug|gotcha|watch out|careful|warning|caveat|trap|don't forget|easy to miss):\s*/i,
+      '',
+    )
+    .replace(/[.!?\s]+$/, '')
+    .trim();
   return content.length <= MAX_CHARS ? { content, category, tags: [category, 'captured'] } : null;
 }
 
@@ -136,7 +147,8 @@ function extractSpecSections(text: string): ExtractedItem[] {
     }
     if (/^#+\s/.test(trimmed) || /^[A-Z][a-z]+:$/.test(trimmed)) inSpecSection = false;
     const bullet = trimmed.match(BULLET);
-    const wrapped: boolean = inSpecSection && open && !bullet && trimmed !== '' && (/^\s/.test(line) || continues(trimmed, bullets.at(-1)));
+    const wrapped: boolean =
+      inSpecSection && open && !bullet && trimmed !== '' && (/^\s/.test(line) || continues(trimmed, bullets.at(-1)));
     if (inSpecSection && bullet) bullets.push(bullet[1].trim());
     else if (wrapped) bullets[bullets.length - 1] += ` ${trimmed}`;
     open = inSpecSection && (bullet !== null || wrapped);
@@ -166,12 +178,14 @@ function extractOne(text: string): ExtractedItem[] {
  *  The first `userTexts` texts are a person's own words; on a repeat their copy wins, so it keeps `fromUser`. */
 export function extractFromTexts(texts: readonly string[], userTexts = 0): ExtractedItem[] {
   const seen = new Set<string>();
-  return texts.flatMap((text, i) => extractOne(text).map((item) => (i < userTexts ? { ...item, fromUser: true } : item))).filter((item) => {
-    const key = duplicateKey(item.content);
-    if (seen.has(key) || !assessAutomaticMemory(item.content).accepted) return false;
-    seen.add(key);
-    return true;
-  });
+  return texts
+    .flatMap((text, i) => extractOne(text).map((item) => (i < userTexts ? { ...item, fromUser: true } : item)))
+    .filter((item) => {
+      const key = duplicateKey(item.content);
+      if (seen.has(key) || !assessAutomaticMemory(item.content).accepted) return false;
+      seen.add(key);
+      return true;
+    });
 }
 
 export function extractFromText(text: string): ExtractedItem[] {

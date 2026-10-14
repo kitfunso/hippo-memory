@@ -230,8 +230,13 @@ export const OBJECT_VERBS = {
   }),
   auth: verb(() => import('../auth.js'), 'handleAuth', {
     scoped: true,
-    flags: { switches: ['all', 'global', 'json', 'no-expiry'], values: ['label', 'role', 'tenant'], numbers: ['ttl-days'] },
-    usage: [`
+    flags: {
+      switches: ['all', 'global', 'json', 'no-expiry'],
+      values: ['label', 'role', 'tenant'],
+      numbers: ['ttl-days'],
+    },
+    usage: [
+      `
   auth <sub>               Manage API keys (A5 stub auth)
     auth create            Mint a new API key (plaintext shown ONCE)
       --label <s>          Optional human label

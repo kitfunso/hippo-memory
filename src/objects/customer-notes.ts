@@ -1,5 +1,9 @@
-/** customer_note object: many discrete notes per free-form `customer` column (no entities FK yet), each with its own supersede chain.
- *  The `customer_notes` table is the source of truth; the memory mirror (memory_id NULLABLE, ON DELETE SET NULL) is for recall. */
+/**
+ * customer_note object: many discrete notes per free-form `customer` column (no entities FK yet), each with its own
+ * supersede chain.
+ * The `customer_notes` table is the source of truth; the memory mirror (memory_id NULLABLE, ON DELETE SET NULL) is for
+ * recall.
+ */
 
 import type { KeysetPosition } from '../util/keyset.js';
 import type { SavableDescriptor } from './descriptor.js';
@@ -79,7 +83,8 @@ export const CUSTOMER_NOTE: SavableDescriptor<'customer_note', SaveCustomerNoteO
   },
 };
 
-/** Create a customer_note, or a new version superseding an existing one, in the `objects` store group's one transaction.
+/**
+ * Create a customer_note, or a new version superseding an existing one, in the `objects` store group's one transaction.
  *  The mirror carries a `customer:<lc>` tag so scope-aware recall treats the note as entity-local. */
 export function saveCustomerNote(
   hippoRoot: string,
@@ -113,7 +118,12 @@ export function loadCustomerNotes(
   tenantId: string,
   opts: ListCustomerNotesOpts = {},
 ): CustomerNote[] {
-  return listObjectsAt(hippoRoot, CUSTOMER_NOTE, tenantId, { status: opts.status, filter: opts.customer, limit: opts.limit, after: opts.after });
+  return listObjectsAt(hippoRoot, CUSTOMER_NOTE, tenantId, {
+    status: opts.status,
+    filter: opts.customer,
+    limit: opts.limit,
+    after: opts.after,
+  });
 }
 
 /** All ACTIVE notes for a customer, newest first. Returns a LIST, unlike project_brief's single-or-null

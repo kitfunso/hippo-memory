@@ -161,26 +161,35 @@ const CONTINUITY_INDEX_DDL = [
   `CREATE INDEX IF NOT EXISTS idx_task_snapshots_status_updated ON task_snapshots(status, updated_at DESC, id DESC)`,
   `CREATE INDEX IF NOT EXISTS idx_task_snapshots_tenant_status ON task_snapshots(tenant_id, status, updated_at DESC)`,
   `CREATE INDEX IF NOT EXISTS idx_task_snapshots_tenant_scope ON task_snapshots(tenant_id, scope, status)`,
-  `CREATE INDEX IF NOT EXISTS idx_session_events_session_created ON session_events(session_id, created_at DESC, id DESC)`,
+  `CREATE INDEX IF NOT EXISTS idx_session_events_session_created ON session_events(session_id, created_at DESC, id ` +
+  `DESC)`,
   `CREATE INDEX IF NOT EXISTS idx_session_events_task_created ON session_events(task, created_at DESC, id DESC)`,
-  `CREATE INDEX IF NOT EXISTS idx_session_events_tenant_session ON session_events(tenant_id, session_id, created_at DESC, id DESC)`,
+  `CREATE INDEX IF NOT EXISTS idx_session_events_tenant_session ON session_events(tenant_id, session_id, created_at ` +
+  `DESC, id DESC)`,
   `CREATE INDEX IF NOT EXISTS idx_session_handoffs_session ON session_handoffs(session_id, created_at DESC)`,
-  `CREATE INDEX IF NOT EXISTS idx_session_handoffs_tenant_session ON session_handoffs(tenant_id, session_id, created_at DESC)`,
-  `CREATE INDEX IF NOT EXISTS idx_session_handoffs_tenant_outcome ON session_handoffs(tenant_id, outcome, created_at DESC)`,
+  `CREATE INDEX IF NOT EXISTS idx_session_handoffs_tenant_session ON session_handoffs(tenant_id, session_id, ` +
+  `created_at DESC)`,
+  `CREATE INDEX IF NOT EXISTS idx_session_handoffs_tenant_outcome ON session_handoffs(tenant_id, outcome, created_at ` +
+  `DESC)`,
   `CREATE INDEX IF NOT EXISTS idx_cards_tenant_status ON cards(tenant_id, status, updated_at DESC)`,
   `CREATE INDEX IF NOT EXISTS idx_card_deps_tenant_child ON card_deps(tenant_id, child)`,
   `CREATE INDEX IF NOT EXISTS idx_card_deps_tenant_parent ON card_deps(tenant_id, parent)`,
   `CREATE INDEX IF NOT EXISTS idx_card_runs_tenant_card ON card_runs(tenant_id, card, started DESC)`,
   `CREATE INDEX IF NOT EXISTS idx_card_comments_tenant_card ON card_comments(tenant_id, card_id, created_at DESC)`,
-  `CREATE INDEX IF NOT EXISTS idx_session_handoffs_tenant_card ON session_handoffs(tenant_id, card_id, created_at DESC)`,
-  `CREATE INDEX IF NOT EXISTS idx_task_snapshots_owner ON task_snapshots(tenant_id, owner_subject, origin_project, status, updated_at DESC)`,
-  `CREATE INDEX IF NOT EXISTS idx_session_handoffs_owner ON session_handoffs(tenant_id, owner_subject, origin_project, created_at DESC)`,
+  `CREATE INDEX IF NOT EXISTS idx_session_handoffs_tenant_card ON session_handoffs(tenant_id, card_id, created_at ` +
+  `DESC)`,
+  `CREATE INDEX IF NOT EXISTS idx_task_snapshots_owner ON task_snapshots(tenant_id, owner_subject, origin_project, ` +
+  `status, updated_at DESC)`,
+  `CREATE INDEX IF NOT EXISTS idx_session_handoffs_owner ON session_handoffs(tenant_id, owner_subject, ` +
+  `origin_project, created_at DESC)`,
 ] as const;
 
 // A client retry carries the same request id, so a repeat finds the earlier row instead of writing again.
 const REQUEST_INDEX_DDL = {
-  compactions: `CREATE UNIQUE INDEX IF NOT EXISTS idx_compactions_request ON compactions(tenant_id, request_id) WHERE request_id IS NOT NULL`,
-  failure_log: `CREATE UNIQUE INDEX IF NOT EXISTS idx_failure_log_request ON failure_log(tenant_id, request_id) WHERE request_id IS NOT NULL`,
+  compactions: `CREATE UNIQUE INDEX IF NOT EXISTS idx_compactions_request ON compactions(tenant_id, request_id) ` +
+    `WHERE request_id IS NOT NULL`,
+  failure_log: `CREATE UNIQUE INDEX IF NOT EXISTS idx_failure_log_request ON failure_log(tenant_id, request_id) ` +
+    `WHERE request_id IS NOT NULL`,
 } as const;
 
 // Lives with the other re-asserted DDL so the required-object list below derives from one place.
@@ -195,7 +204,13 @@ export function createdObjectNames(ddl: string): string[] {
 
 /** Every object runMigrations re-asserts on a stamped store; the open fast path requires all of them. */
 export const REQUIRED_SCHEMA_OBJECTS: readonly string[] = Object.freeze(
-  [META_TABLE_DDL, ...CONTINUITY_TABLE_DDL, ...CONTINUITY_INDEX_DDL, ...Object.values(REQUEST_INDEX_DDL), MEMORIES_FTS_DDL].flatMap(createdObjectNames),
+  [
+    META_TABLE_DDL,
+    ...CONTINUITY_TABLE_DDL,
+    ...CONTINUITY_INDEX_DDL,
+    ...Object.values(REQUEST_INDEX_DDL),
+    MEMORIES_FTS_DDL,
+  ].flatMap(createdObjectNames),
 );
 
 // After the loop: tenant_id (v16) and scope (v23) do not exist yet on a genuine old store.

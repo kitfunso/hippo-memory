@@ -4,7 +4,8 @@ import { createJevReranker } from './jev.js';
 import { createLlmReranker } from './llm.js';
 import type { RerankerFn } from './types.js';
 
-// Each reranker is built once here, so its outage warning lasts the process; jev falls back to the same cross-encoder, so one model loads.
+// Each reranker is built once here, so its outage warning lasts the process; jev falls back to the same cross-encoder,
+// so one model loads.
 const crossEncoder = createCrossEncoderReranker();
 const REGISTRY = {
   clef: createClefReranker('clef'),
