@@ -4,11 +4,10 @@ import { ConflictError, NotFoundError } from '../core/api-errors.js';
 import { stampOriginProject } from '../store/entry-row.js';
 import type { ConnectorEvent } from '../store/port.js';
 import { createSuccessor, type Layer, type MemoryEntry } from '../core/memory.js';
-import { promoteToGlobal } from '../sharing/global-store.js';
+import { embedGlobalCopy } from '../sharing/global-store.js';
 import { configOf } from './config-of.js';
 import { narrowStore } from '../store/index.js';
-import type { Context, ContextWith, StoreContext } from './types.js';
-import { memoryReach } from '../store/tenant-lookup.js';
+import type { ContextWith, StoreContext } from './types.js';
 import { canTouchScope, personalScopeOf } from '../core/recall-scope.js';
 
 /** Copies a local memory into the global store; the inner writeEntry emits 'remember' there, and we add a 'promote'
@@ -20,24 +19,26 @@ export interface PromoteResult {
   globalId: string;
 }
 export function promote(
-  ctx: Context,
+  ctx: ContextWith<'localFiles'>,
   id: string,
 ): PromoteResult {
+  const { promotion } = ctx.store.localFiles;
   // promoteToGlobal reads without a tenant filter, so pre-check the row's tenant_id and deny cross-tenant access with
   // archiveRaw's not-found wording (no leak about whether the id exists in another tenant).
-  const reach = memoryReach(ctx.hippoRoot, id);
+  const reach = promotion.reach(id);
   if (reach?.tenantId !== ctx.tenantId || !canTouchScope(ctx.actor, reach.scope)) {
     throw new NotFoundError(`memory not found: ${id}`);
   }
 
   // The 'promote' row commits with the global copy, so no write
   // follows the commit and a busy store fails the whole promote.
-  const globalEntry = promoteToGlobal(ctx.hippoRoot, id, {
+  const globalEntry = promotion.copyToGlobal(id, {
     actor: ctx.actor.subject,
     tenantId: ctx.tenantId,
     auditAs: { tenantId: ctx.tenantId, actor: ctx.actor.subject },
   });
 
+  embedGlobalCopy(globalEntry);
   return { ok: true, sourceId: id, globalId: globalEntry.id };
 }
 

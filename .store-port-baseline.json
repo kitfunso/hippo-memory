@@ -3,7 +3,7 @@
   "openersInCli": 0,
   "storeBranches": 0,
   "routesWithoutStore": 0,
-  "sqliteOnlyRoutes": 2,
+  "sqliteOnlyRoutes": 1,
   "routesOnLoop": 12,
   "twinFunctions": 0,
   "sqlOutside": 0,
@@ -24,7 +24,6 @@
   },
   "sqliteLocalMethods": [],
   "sqliteOnlyRoutesList": [
-    "POST /v1/memories/:id/promote",
     "POST /v1/sleep"
   ],
   "carrierFiles": 0,
