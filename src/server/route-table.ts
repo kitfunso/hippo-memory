@@ -114,10 +114,9 @@ function defineRoute<G extends StoreGroup = 'localFiles'>(route: RouteOf<G>): Ro
   if (route.auth === 'webhook-signature') return route;
   // SAFETY: a row that names no group only exists while G is its 'localFiles' default.
   const group = (route.storeReady ?? 'localFiles') as G;
-  // SAFETY: narrowing wraps the handler and keeps its extra args, so the path or pattern member of Route survives.
-  const handler = narrowed(group, route.handler as (r: AuthedRouteRequest<G>, ...rest: never[]) => Promise<void>);
-  // SAFETY: same reason; the spread keeps path or pattern beside the narrowed handler.
-  return { ...route, handler } as Route;
+  if ('path' in route) return { ...route, handler: narrowed(group, route.handler) };
+  if ('pattern' in route) return { ...route, handler: narrowed(group, route.handler) };
+  return { ...route, handler: narrowed(group, route.handler) };
 }
 
 /** The /v1 routes in dispatch order; the first entry whose method and path match handles the request. Each row's `auth`
