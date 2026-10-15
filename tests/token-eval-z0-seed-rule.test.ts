@@ -97,8 +97,7 @@ describe('Z0 seed rule', () => {
     const records = [...g.records, late];
     const res = run({ records, plan: planOf(records) });
     expect(res).toMatchObject({ code: 1, stdout: '' });
-    expect(res.stderr).toContain('seed must be an integer from 1 to 3');
-    // The record parser stops it first; the rule keeps its own refusal for records that reach it another way.
+    expect(res.stderr).toContain('the rule reads wave 1 only: a scored record has a seed above 3');
     expect(() => seedRule(records, planOf(records), PRICES, { minimumEffect: 0.15, targetZ: 3.5, cap: 9, power: 0.8, sims: 20, seed: 1, bound: 0.8 })).toThrow('wave 1 only');
   });
 

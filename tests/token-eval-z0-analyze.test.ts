@@ -2,7 +2,7 @@
  * The records are synthetic: they test the contract, filters and arithmetic, never hippo. CLI tests: token-eval-z0-analyze-cli.test.ts. */
 import { describe, it, expect } from 'vitest';
 import { addUsage, holmAdjust, priceUsage, verdict } from '../dist/eval/eval-stats.js';
-import { RN_ARMS, parseZ0Records, parsePlan, validateCorpus } from '../scripts/token-eval/z0-records.mjs';
+import { RN_ARMS, parseZ0Records, parsePlan, validateCorpus, validateRecord } from '../scripts/token-eval/z0-records.mjs';
 import { filterRecords, pairTasks } from '../scripts/token-eval/z0-filters.mjs';
 import { BEHAVIOUR_SENTENCE, LESSONS_SENTENCE, NOT_RUN, NO_N_DATA, SPECS, bothCodings, codexApply, computeHypotheses, harmT, holmVerdicts, inSets, repeatMistake, repeatT, rotationSlots } from '../scripts/token-eval/z0-hypotheses.mjs';
 import { g3, g4, g5 } from '../scripts/token-eval/z0-gates.mjs';
@@ -66,6 +66,40 @@ describe('Z0 records contract', () => {
     const { records, plan } = fresh();
     expect(() => validateCorpus([...parse(records), ...parse(records)], plan)).toThrow(/duplicate record for cell .*: runs\.jsonl line 1 and runs\.jsonl line 1$/);
     expect(() => parsePlan('[]', 'plan.json')).toThrow(/^plan\.json: the plan has no cells$/);
+  });
+
+  it('Amendment 2 item 5: seeds above 3 belong to A1, A2, A5, X2 and X3, up to 9, in records and plan cells', () => {
+    const { records, plan } = fresh();
+    const recordAt = (arm: string, seed: number) => ({ ...records.find((r) => r.arm === arm)!, seed });
+    const cellAt = (arm: string, seed: number) => ({ ...plan.find((c) => c.arm === arm)!, seed });
+    const above3 = (arm: string, seed: number) => new RegExp(`seed ${seed} is not run for ${arm}: only A1, A2, A5, X2 and X3 take seeds above 3 \\(Amendment 2 item 5\\)`);
+    const cases: [string, number, RegExp | null][] = [
+      ['A2', 6, null], ['A1', 9, null], ['X2', 9, null], ['X3', 4, null], ['A5', 4, null], ['X1', 3, null], ['A0', 2, null],
+      ['A1', 10, /seed must be an integer from 1 to 9/], ['A2', 0, /seed must be an integer from 1 to 9/],
+      ['A0', 3, /seed 3 is not run for A0 \(prereg 124\)/], ['A0', 4, /seed 4 is not run for A0 \(prereg 124\)/],
+      ['A4', 4, /seed 4 is not run for A4 \(prereg 124\)/], ['X4', 3, /seed 3 is not run for X4 \(prereg 124\)/],
+      ['X1', 4, above3('X1', 4)],
+    ];
+    for (const [arm, seed, error] of cases) {
+      const fromRecord = () => validateRecord(recordAt(arm, seed));
+      const fromCell = () => parsePlan(JSON.stringify([cellAt(arm, seed)]), 'plan.json');
+      for (const load of [fromRecord, fromCell]) {
+        if (error === null) expect(load, `${arm} seed ${seed}`).not.toThrow();
+        else expect(load, `${arm} seed ${seed}`).toThrow(error);
+      }
+    }
+  });
+
+  it('Amendment 2 item 5: wave 1 and wave 2 records load against two plan files and analyze as one corpus', () => {
+    const wave1 = fresh();
+    // The seed rule gave A1, A2 and A5 five seeds: wave 2 repeats their seed-3 sessions as seeds 4 and 5.
+    const late = [4, 5].flatMap((seed) => wave1.records.filter((r) => ['A1', 'A2', 'A5'].includes(r.arm) && r.seed === 3).map((r) => ({ ...structuredClone(r), seed })));
+    const both = { records: [...wave1.records, ...late], plan: [...wave1.plan, ...planOf(late)] };
+    const plans = [wave1.plan, planOf(late)].flatMap((cells) => parsePlan(JSON.stringify(cells), 'plan.json'));
+    expect(() => validateCorpus(parse(both.records), plans)).not.toThrow();
+    expect(analyze(both).status).toBe('valid');
+    const seedsOf = (arm: string): number[] => [...new Set<number>(scoredOf(both).flatMap((r: Z0Record) => (r.arm === arm ? [r.seed] : [])))].sort((x, y) => x - y);
+    expect([seedsOf('A0'), seedsOf('A1'), seedsOf('A2'), seedsOf('X2')]).toEqual([[1, 2], [1, 2, 3, 4, 5], [1, 2, 3, 4, 5], [1, 2, 3]]);
   });
 
   it('25: a timeout or an na final is never resolved, before or after drops', () => {

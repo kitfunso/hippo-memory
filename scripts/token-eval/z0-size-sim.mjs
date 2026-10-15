@@ -5,10 +5,12 @@
 import { combineCodings, holmAdjust, seededRandom, verdict } from '../../dist/eval/eval-stats.js';
 import { incompleteBeta, lnGamma, pooledComponents } from '../../dist/eval/repository-t.js';
 import { CODINGS, SPECS, byCoding, harmT, mean, repeatT, sum } from './z0-hypotheses.mjs';
+import { SEED_CAP } from './z0-records.mjs';
 
+// One number for the rule's cap and the record contract's.
+export { SEED_CAP };
 /** Seeds in the first wave; the seed rule may add more up to SEED_CAP. */
 export const SEEDS = 3;
-export const SEED_CAP = 9;
 /** The seed rule aims for a standard error of at most the minimum effect over this. */
 export const TARGET_Z = 3.5;
 // Holm's strictest level over H1 and H2 (prereg 209): the share of true-zero runs below it is the test's level.
