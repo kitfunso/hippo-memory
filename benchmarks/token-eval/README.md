@@ -84,6 +84,8 @@ This is the only harness that can support a savings claim. It runs real Claude C
 
 Default seeds are A0 and A4 2, the others 3; `--seeds N` lowers every arm to at most N (smoke and calibration runs) and never raises an arm past its prereg count, since the analyzer refuses an A0 or A4 seed 3. Set X adds four Codex arms, X1 to X4; **Set X** below covers them.
 
+Wave 2 (Amendment 2 item 5): after wave 1, `z0-seed-rule.mjs` picks a seed count from 3 to 9 for A1, A2 and A5 and another for X2 and X3. `--seed-rule FILE` runs seeds 4 up to each listed arm's count into a new `--out` with its own `plan.json`; pass `--arms` with the rule's arms only. It refuses a rule that stopped, and with every count at 3 it prints `wave 2 has no sessions`. The analyzer takes both waves' `--plan` and `--runs` files.
+
 **1. Draft tasks from a repository's history** (small bug-fix commits with tests make the best tasks):
 
 ```bash

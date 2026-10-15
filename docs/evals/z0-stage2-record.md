@@ -317,6 +317,25 @@ z0-size on `cal-cj4` and `cal-bm4`, before G5, at 200 simulations: no grid row r
 - A t test over repositories with G-1 degrees of freedom (H1 on repository means, H3 on the pooled ratio with a cluster-robust error) kept every point-variance cell at or under 1.7%, at a cost in power that is gone by 20 repositories: H1 at 20 points, 6 families, 21% against the bootstrap's 59% at 5 repositories, 68% against 82% at 10, 98% against 99% at 20. At the bound, H3 still made 5% to 7% false wins under both tests. Script and logs: `C:/z0-runs/s9/prelim/smallsample.mjs`, `ss-point.log`, `ss-bound.log`.
 - First-try repeats on applies, cj and bm together: A0 23 of 26, A1 3 of 26, A2 1 of 26, A4 2 of 26, A5 4 of 26.
 
+## S9: Amendment 2, fixed repositories
+
+S9 sizing with the repository as the unit found no feasible design (`C:/z0-runs/s9/sizes.json`, `sizes-point.json`). Two set R repositories give the repository variance one degree of freedom, and its 80% bound, 0.708, is 25 times the estimate, 0.028. At that estimate H1 needs 20 scored repositories at 25 points and H4 more than 30, and H2 cannot be sized with one set X repository. Amendment 2 narrows the claim to the scored repositories and makes the family the unit (plan `hippo-archive/z0-amend2-plan.html`, sent to Keith on 2026-10-15).
+
+An outside review (Opus, plan plus prereg and code) found two blockers, both now fixed:
+
+- Power rested on a noise variance measured on 4 degrees of freedom (2 for H2). At its 80% bound a fixed three seeds gives H1 52% power at 5 repositories of 8 families. The fix is the blind seed rule (Amendment 2, item 5).
+- The symmetric delta interval for the cost ratio passed 5.2% to 5.6% of runs at a true 1.10 under the harsher spreads. The log form passes 3.2% to 4.7%. The committed skew check (`z0-skew-check.mjs` at `f21ff8d3`, 20,000 runs a cell) gives the log form 3.44% to 4.59% in the skewed cells, against 5.37% to 6.00% for the symmetric form in four of them; the table is in the analyzer doc.
+
+Probes, all in the session scratchpad and run against `feat/z0-repo-t`:
+
+- `TEST=pooled node crossed-probe.mjs 400 cj4 bm4 ml2` gives the calibration components. H1 (12 units, 2 repositories, 3 families, 2 seeds): noise 0.141 on 4 degrees of freedom, family 0 (bound 0.033), sequence 0 (bound 0.039). H2 (6 units, ml only): noise 0.292 on 2 degrees of freedom.
+- `level-check.mjs` (20,000 runs per cell, 8 families, 3 seeds) gives the share of true-zero runs with p under 0.025: 0.014 to 0.027 with 2 or more repositories, and up to 0.040 with one. At two seeds and the bounds it was 0.027.
+- `node pilot-probe.mjs 4000 5 8` tests the seed rule at 5 repositories of 8 families. At the calibration's family and sequence estimates and noise up to its bound, win power is 0.90 to 0.94 and tie 0.88 to 0.95, with a mean of 3.1 to 5.9 seeds. With family and sequence at their bounds, win is 0.69 to 0.77 and tie 0.58 to 0.69. False win or loss is 0.015 to 0.028.
+- `node pilot-probe.mjs 1500 20 3`: at the bounds, 20 repositories of 3 families reach win 0.85 to 0.88 and tie 0.82 to 0.86. More repositories beat more seeds, because seeds do not shrink the family term.
+- `node h4-pooled-probe.mjs 400 cj4 bm4`: set N had 22 pairs and none resolved on one side only, so the resolve half had no spread. With 5% discordance per side, the H4 gate passes 0.92 at 5 repositories of 40 tasks and 0.95 at 8 of 26. The cost half at a true 1.10 passed 1.0% to 3.7%.
+
+Families per repository are bounded by the distinct conventions a repository has: the development repositories gave 3 (cj), 3 to 4 (bm) and 2 (hp). The sizer therefore searches repository counts at up to 4 families each.
+
 ## Contract limits found
 
 - A checker's `CHECK_POST_COMMIT` is a state commit whose parent is the pre-session commit, so the agent's own commits are not visible to it. Commit-message rules are checked from the `git commit` commands in `CHECK_COMMANDS`.
