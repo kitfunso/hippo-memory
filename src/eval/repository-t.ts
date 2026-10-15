@@ -114,36 +114,6 @@ export function repositoryT(values: readonly number[], nullValue = 0): TestedEst
   return tResult(mean, sd / Math.sqrt(g), g - 1, nullValue);
 }
 
-/** One repository's summed treatment and control values. */
-export interface RepoSums {
-  readonly t: number;
-  readonly c: number;
-}
-
-/** Pooled ratio sum(t) / sum(c) over repositories against a null of 1, with a cluster-robust standard error
- *  (residuals t - ratio x c per repository, scaled by G / (G-1)) and G-1 degrees of freedom. */
-export function clusterRatioT(repos: readonly RepoSums[]): TestedEstimate {
-  const g = repos.length;
-  if (g < 2) return notANumber(1, 0);
-  const c = sum(repos.map((r) => r.c));
-  const ratio = sum(repos.map((r) => r.t)) / c;
-  const squares = sum(repos.map((r) => (r.t - ratio * r.c) ** 2));
-  return tResult(ratio, Math.sqrt((g / (g - 1)) * squares) / Math.abs(c), g - 1, 1);
-}
-
-/** The mean of the per-repository ratios t / c by Cox's lognormal-mean interval: a t interval on the log ratios, centred
- *  on their mean plus half their variance and widened for that variance's own noise; p tests that centre against 1.
- *  Each repository counts once, and `se` is on the log scale. A sum that is not positive gives the not-a-number result. */
-export function coxRatioT(repos: readonly RepoSums[]): TestedEstimate {
-  const g = repos.length;
-  if (g < 2 || !repos.every((r) => r.t > 0 && r.c > 0)) return notANumber(1, 0);
-  const logs = repos.map((r) => Math.log(r.t / r.c));
-  const mean = sum(logs) / g;
-  const s2 = sum(logs.map((y) => (y - mean) ** 2)) / (g - 1);
-  const log = tResult(mean + s2 / 2, Math.sqrt(s2 / g + (s2 * s2) / (2 * (g - 1))), g - 1, 0);
-  return { ...log, estimate: Math.exp(log.estimate), low: Math.exp(log.low), high: Math.exp(log.high), nullValue: 1 };
-}
-
 /** One unit of a family-by-seed table; units that share a (repo, family, seed) cell are averaged. */
 export interface FamilyUnit {
   readonly repo: string;
@@ -260,12 +230,23 @@ function additiveFit(repo: string, t: Table): Fit {
   throw new Error(`additive fit for repository ${repo} did not converge in ${MAX_PASSES} passes`);
 }
 
+// Union-find over the family-seed graph: n - k - s + 1 counts residual df only when the present cells form one block.
+function isConnected(t: Table): boolean {
+  const parent = Array.from({ length: t.k + t.s }, (_, i) => i);
+  const root = (i: number): number => {
+    while (parent[i] !== i) i = parent[i] = parent[parent[i]!]!;
+    return i;
+  };
+  for (const c of t.cells) parent[root(c.f)] = root(t.k + c.s);
+  return new Set(parent.map((_, i) => root(i))).size === 1;
+}
+
 function fitRepo(repo: string, units: readonly FamilyUnit[]): RepoFit {
   const t = tableOf(units);
   const n = t.cells.length;
   const dfE = n - t.k - t.s + 1;
   const base = { k: t.k, s: t.s, n };
-  if (t.k < 2 || t.s < 2 || dfE < 1) return { ...base, est: sum(t.cells.map((c) => c.y)) / n, ms: null };
+  if (t.k < 2 || t.s < 2 || dfE < 1 || !isConnected(t)) return { ...base, est: sum(t.cells.map((c) => c.y)) / n, ms: null };
   const { mu, rss } = additiveFit(repo, t);
   const [dfF, dfQ] = [t.k - 1, t.s - 1];
   // Clamped: both reduced fits nest the additive one, so a negative difference is float noise.
@@ -277,16 +258,59 @@ function fitRepo(repo: string, units: readonly FamilyUnit[]): RepoFit {
 const weighted = (rs: readonly Fitted[], value: (r: Fitted) => number, df: (r: Fitted) => number): number =>
   sum(rs.map((r) => value(r) * df(r))) / sum(rs.map(df));
 
+/** Mean squares pooled over the fitted repositories of a family-by-seed fit, weighted by df, with the mean seeds per family
+ *  (`sBar`) and families per seed (`kBar`) that turn them into variance components; `repos` lists every repository. */
+export interface PooledComponents {
+  readonly repos: readonly { readonly k: number; readonly s: number; readonly n: number }[];
+  readonly F: number;
+  readonly Q: number;
+  readonly E: number;
+  readonly dfF: number;
+  readonly dfQ: number;
+  readonly dfE: number;
+  readonly sBar: number;
+  readonly kBar: number;
+}
+
+type Pooled = Omit<PooledComponents, 'repos'>;
+
+function poolMeanSquares(fitted: readonly Fitted[]): Pooled {
+  return {
+    F: weighted(fitted, (r) => r.ms.F, (r) => r.ms.dfF),
+    Q: weighted(fitted, (r) => r.ms.Q, (r) => r.ms.dfQ),
+    E: weighted(fitted, (r) => r.ms.E, (r) => r.ms.dfE),
+    dfF: sum(fitted.map((r) => r.ms.dfF)),
+    dfQ: sum(fitted.map((r) => r.ms.dfQ)),
+    dfE: sum(fitted.map((r) => r.ms.dfE)),
+    sBar: weighted(fitted, (r) => r.n / r.k, (r) => r.ms.dfF),
+    kBar: weighted(fitted, (r) => r.n / r.s, (r) => r.ms.dfQ),
+  };
+}
+
+function fitAll(units: readonly FamilyUnit[]) {
+  const byRepo = new Map<string, FamilyUnit[]>();
+  for (const u of units) {
+    const list = byRepo.get(u.repo);
+    if (list) list.push(u);
+    else byRepo.set(u.repo, [u]);
+  }
+  const repos = [...byRepo].map(([repo, us]) => fitRepo(repo, us));
+  return { repos, fitted: repos.filter((r): r is Fitted => r.ms !== null) };
+}
+
+/** The pooled mean squares the fixed-repository t test reads, for one repository or more; null when none can be fitted.
+ *  The seed rule and the sizer take their spreads from here, so they cannot drift from the test. */
+export function pooledComponents(units: readonly FamilyUnit[]): PooledComponents | null {
+  const { repos, fitted } = fitAll(units);
+  if (fitted.length === 0) return null;
+  return { repos: repos.map(({ k, s, n }) => ({ k, s, n })), ...poolMeanSquares(fitted) };
+}
+
 // Variance of the mean of the G repository estimates, with Satterthwaite df. Every repository adds its own
 // coefficients (fitted or not); the mean squares are pooled over the fitted ones, weighted by df.
 function varianceOf(repos: readonly RepoFit[], fitted: readonly Fitted[]): Variance {
   const g = repos.length;
-  const [dfF, dfQ, dfE] = [sum(fitted.map((r) => r.ms.dfF)), sum(fitted.map((r) => r.ms.dfQ)), sum(fitted.map((r) => r.ms.dfE))];
-  const F = weighted(fitted, (r) => r.ms.F, (r) => r.ms.dfF);
-  const Q = weighted(fitted, (r) => r.ms.Q, (r) => r.ms.dfQ);
-  const E = weighted(fitted, (r) => r.ms.E, (r) => r.ms.dfE);
-  const sBar = weighted(fitted, (r) => r.n / r.k, (r) => r.ms.dfF);
-  const kBar = weighted(fitted, (r) => r.n / r.s, (r) => r.ms.dfQ);
+  const { F, Q, E, dfF, dfQ, dfE, sBar, kBar } = poolMeanSquares(fitted);
   const useQ = Q > E;
   let [cF, cQ, cE] = [0, 0, 0];
   for (const r of repos) {
@@ -306,18 +330,11 @@ function varianceOf(repos: readonly RepoFit[], fitted: readonly Fitted[]): Varia
 }
 
 /** Mean of the repository estimates with repositories held fixed: the spread is family and seed variation inside each
- *  (additive model y = mu + a_f + b_s), pooled over fitted repositories (two or more families and seeds, one residual
- *  df); a thinner one adds its mean and borrows the pooled spread. Fewer than two repositories or none fitted: NaN. */
+ *  (additive model y = mu + a_f + b_s), pooled over fitted repositories (two or more families and seeds in one connected
+ *  block, one residual df); a thinner or split one adds its mean and borrows the pooled spread. Fewer than two repositories or none fitted: NaN. */
 export function fixedRepositoryT(units: readonly FamilyUnit[], nullValue = 0): TestedEstimate {
   if (units.some((u) => !Number.isFinite(u.value))) return notANumber(nullValue, 0);
-  const byRepo = new Map<string, FamilyUnit[]>();
-  for (const u of units) {
-    const list = byRepo.get(u.repo);
-    if (list) list.push(u);
-    else byRepo.set(u.repo, [u]);
-  }
-  const repos = [...byRepo].map(([repo, us]) => fitRepo(repo, us));
-  const fitted = repos.filter((r): r is Fitted => r.ms !== null);
+  const { repos, fitted } = fitAll(units);
   if (repos.length < 2 || fitted.length === 0) return notANumber(nullValue, 0);
   const { v, df } = varianceOf(repos, fitted);
   return tResult(sum(repos.map((r) => r.est)) / repos.length, Math.sqrt(v), df, nullValue);

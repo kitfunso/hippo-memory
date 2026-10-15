@@ -1,12 +1,11 @@
-/** Student t tests for Z0: table quantiles, closed-form CDFs, the zero-spread rule, one repository, the repository-level
- * ratio intervals (Amendment 1), and the fixed-repository family tests (Amendment 2) against a textbook two-way ANOVA. */
+/** Student t tests for Z0: table quantiles, closed-form CDFs, the zero-spread rule, one repository (Amendment 1), and the
+ * fixed-repository family tests and their pooled mean squares (Amendment 2) against a textbook two-way ANOVA. */
 import { describe, it, expect } from 'vitest';
 import {
-  clusterRatioT,
-  coxRatioT,
   fixedRepositoryRatioT,
   fixedRepositoryT,
   incompleteBeta,
+  pooledComponents,
   repositoryT,
   studentTCdf,
   studentTQuantile,
@@ -64,41 +63,7 @@ describe('repositoryT', () => {
   });
 
   it('gives the not-a-number result for fewer than two repositories', () => {
-    for (const r of [repositoryT([0.4]), repositoryT([]), clusterRatioT([{ t: 2, c: 1 }]), coxRatioT([{ t: 2, c: 1 }])]) {
-      expect([r.estimate, r.low, r.high, r.p].every(Number.isNaN)).toBe(true);
-    }
-  });
-});
-
-describe('ratio intervals', () => {
-  const repos = [{ t: 2, c: 2 }, { t: 3, c: 2 }, { t: 7, c: 6 }];
-
-  it('clusterRatioT: pooled ratio 12/10, residuals -0.4, 0.6, -0.2, se sqrt(1.5 x 0.56) / 10, df 2', () => {
-    const r = clusterRatioT(repos);
-    const se = Math.sqrt(1.5 * 0.56) / 10;
-    const t = 0.2 / se;
-    expect([r.estimate, r.se, r.df, r.nullValue]).toEqual([1.2, expect.closeTo(se, 12), 2, 1]);
-    expect(r.p).toBeCloseTo(1 - t / Math.sqrt(2 + t * t), 12);
-    expect([r.low, r.high]).toEqual([expect.closeTo(1.2 - 4.302653 * se, 5), expect.closeTo(1.2 + 4.302653 * se, 5)]);
-  });
-
-  it('coxRatioT: log ratios -0.2 above and below 0.2 give centre 0.22, se sqrt(0.04 / 3 + 0.0016 / 4), df 2', () => {
-    const r = coxRatioT([0, 0.2, 0.4].map((y) => ({ t: 2 * Math.exp(y), c: 2 })));
-    const se = Math.sqrt(0.04 / 3 + 0.0016 / 4);
-    const t = 0.22 / se;
-    expect([r.estimate, r.se, r.df, r.nullValue]).toEqual([expect.closeTo(Math.exp(0.22), 12), expect.closeTo(se, 12), 2, 1]);
-    expect(r.p).toBeCloseTo(1 - t / Math.sqrt(2 + t * t), 12);
-    expect([r.low, r.high]).toEqual([expect.closeTo(Math.exp(0.22 - 4.302653 * se), 5), expect.closeTo(Math.exp(0.22 + 4.302653 * se), 5)]);
-  });
-
-  it('coxRatioT: a point at the ratio with no spread, p 1 on 1 and 0 off it', () => {
-    const flat = coxRatioT([{ t: 2.2, c: 2 }, { t: 1.1, c: 1 }, { t: 2.2, c: 2 }]);
-    expect([flat.estimate, flat.low, flat.high, flat.p]).toEqual([expect.closeTo(1.1, 12), expect.closeTo(1.1, 12), expect.closeTo(1.1, 12), 0]);
-    expect(coxRatioT([{ t: 3, c: 3 }, { t: 5, c: 5 }]).p).toBe(1);
-  });
-
-  it('coxRatioT: a sum that is not positive gives the not-a-number result', () => {
-    for (const r of [coxRatioT([...repos, { t: 0, c: 1 }]), coxRatioT([...repos, { t: 1, c: 0 }]), coxRatioT([...repos, { t: -1, c: 2 }])]) {
+    for (const r of [repositoryT([0.4]), repositoryT([])]) {
       expect([r.estimate, r.low, r.high, r.p].every(Number.isNaN)).toBe(true);
     }
   });
@@ -213,6 +178,21 @@ describe('fixedRepositoryT', () => {
     expect(Number.isFinite(r.p)).toBe(true);
   });
 
+  it('a table that splits into two family-seed blocks is unfitted: it adds its mean and takes the pooled spread', () => {
+    // 2 families x 2 seeds twice over, sharing no family and no seed: n 8, k 4, s 4, so n - k - s + 1 = 1 would pass as a fit.
+    const block = (families: readonly string[], seeds: readonly number[]): FamilyUnit[] =>
+      families.flatMap((family, i) => seeds.map((seed, j) => ({ repo: 'X', family, seed, value: 1 + 0.9 * i + 0.5 * j + ((i * j) % 2) * 0.3 })));
+    const split = [...block(['f0', 'f1'], [1, 2]), ...block(['f2', 'f3'], [3, 4])];
+    const plain = avg(split.map((u) => u.value));
+    const other = unitsOf('B', GRID_B);
+    const r = fixedRepositoryT([...split, ...other]);
+    expect(r.estimate).toBeCloseTo(avg([plain, anova(GRID_B).grand]), 12);
+    expect(Number.isFinite(r.p)).toBe(true);
+    const pooled = pooledComponents([...split, ...other])!;
+    expect([pooled.dfF, pooled.dfQ, pooled.dfE]).toEqual([2, 2, 4]);
+    expect(pooled.repos).toEqual([{ k: 4, s: 4, n: 8 }, { k: 3, s: 3, n: 9 }]);
+  });
+
   it('gives the not-a-number result for one repository, or when no repository can be fitted', () => {
     expect(isNaNResult(fixedRepositoryT(unitsOf('A', GRID_A)))).toBe(true);
     expect(isNaNResult(fixedRepositoryT([]))).toBe(true);
@@ -231,6 +211,41 @@ describe('fixedRepositoryT', () => {
     expect(rounded(x!.df!)).toBe(rounded(y!.df!));
     const q = studentTQuantile(0.975, rounded(x!.df!));
     for (const e of [x!, y!]) expect((e.high - e.estimate) / e.se!).toBeCloseTo(q, 10);
+  });
+});
+
+describe('pooledComponents', () => {
+  it('is null when no repository can be fitted', () => {
+    const oneSeed = unitsOf('A', GRID_A.map((row) => [row[0]!]));
+    expect(pooledComponents([])).toBeNull();
+    expect(pooledComponents(oneSeed)).toBeNull();
+  });
+
+  it('takes one repository: its mean squares are the textbook ANOVA and sBar, kBar are n / k and n / s', () => {
+    const a = anova(GRID_A);
+    expect(pooledComponents(unitsOf('A', GRID_A))).toEqual({
+      repos: [{ k: 3, s: 3, n: 9 }], F: expect.closeTo(a.F, 12), Q: expect.closeTo(a.Q, 12), E: expect.closeTo(a.E, 12),
+      dfF: 2, dfQ: 2, dfE: 4, sBar: 3, kBar: 3,
+    });
+  });
+
+  it('pools two repositories by df and lists a thin one among the repos without fitting it', () => {
+    const [a, b] = [anova(GRID_A), anova(GRID_B)];
+    const thin = unitsOf('T', GRID_C.map((row) => [row[0]!]));
+    const p = pooledComponents([...unitsOf('A', GRID_A), ...unitsOf('B', GRID_B), ...thin])!;
+    expect([p.F, p.Q, p.E]).toEqual([expect.closeTo(avg([a.F, b.F]), 12), expect.closeTo(avg([a.Q, b.Q]), 12), expect.closeTo(avg([a.E, b.E]), 12)]);
+    expect([p.dfF, p.dfQ, p.dfE]).toEqual([4, 4, 8]);
+    expect(p.repos).toEqual([{ k: 3, s: 3, n: 9 }, { k: 3, s: 3, n: 9 }, { k: 3, s: 1, n: 3 }]);
+  });
+
+  it('an exactly additive table has no residual, and F and Q are the hand-computed mean squares', () => {
+    // y = a_i + b_j with a = (0, 1, 3) and b = (0, 2, 5): F = 3 x 14/3 / 2 = 7, Q = 3 x 38/3 / 2 = 19.
+    const [rows, cols] = [[0, 1, 3], [0, 2, 5]];
+    const grid: Grid = rows.map((x) => cols.map((y) => x + y));
+    const p = pooledComponents(unitsOf('A', grid))!;
+    expect(Math.abs(p.E)).toBeLessThan(1e-12);
+    expect(p.F).toBeCloseTo(7, 12);
+    expect(p.Q).toBeCloseTo(19, 12);
   });
 });
 
