@@ -15,7 +15,7 @@ import {
   indexNeedsRebuild,
   saveStoredEmbeddingModel,
 } from '../store/embeddings/index.js';
-import { loadAllEntryIds, loadEntriesByIds } from '../store/entry-reads.js';
+import { countAllEntries, loadAllEntryIds, loadEntriesByIds } from '../store/entry-reads.js';
 import {
   requireGroup,
   type HippoStore,
@@ -361,7 +361,7 @@ async function embedMemoryLocked(
     if (embeddingModelRequiresReindex(hippoRoot, identity)) {
       // A fire-and-forget write heals a small index inline; a large one is left to `hippo embed`, so no write holds the
       // lock for a whole-store embed.
-      if (loadAllEntryIds(hippoRoot).length > INLINE_REINDEX_MAX_ROWS) {
+      if (countAllEntries(hippoRoot) > INLINE_REINDEX_MAX_ROWS) {
         warnEmbedFailureOnce('index', OTHER_MODEL_INDEX);
         return 'failed';
       }
