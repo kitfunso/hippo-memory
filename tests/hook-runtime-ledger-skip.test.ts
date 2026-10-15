@@ -6,6 +6,7 @@ import * as path from 'node:path';
 import { startDeliveryRecorder, startToolFailureRecorder } from '../src/api/prompt-hook.js';
 import { adminActor } from '../src/api/types.js';
 import { initStore } from '../src/store/open.js';
+import { apiCtx } from './_helpers/api-ctx.js';
 
 describe('startDeliveryRecorder when the recorder cannot start', () => {
   afterEach(() => { vi.restoreAllMocks(); });
@@ -14,7 +15,7 @@ describe('startDeliveryRecorder when the recorder cannot start', () => {
     const err = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     // A number where a root path belongs: path.join throws on it, which is the start-up failure under test.
     const badRoot: string = JSON.parse('42');
-    const ctx = { hippoRoot: badRoot, tenantId: 'default', actor: adminActor('cli') };
+    const ctx = { hippoRoot: badRoot, tenantId: 'default', actor: adminActor('cli'), reach: { hasLocal: true, isGlobal: false, shared: false } };
     expect(startDeliveryRecorder(ctx, { stdinText: undefined, runtime: 'claude-code', envSessionId: undefined })).toBeNull();
     expect(err.mock.calls).toHaveLength(1);
     expect(String(err.mock.calls[0][0])).toMatch(/^\[hippo\] warn: delivery ledger skipped: \S.* ts=\S+\n$/);
@@ -39,7 +40,7 @@ describe('startToolFailureRecorder', () => {
     process.env.HIPPO_HOME = globalRoot;
     const noStore = path.join(tmp, 'proj', '.hippo');
     const start = { stdinText: '{}', runtime: 'claude-code' as const, envSessionId: undefined };
-    expect(startToolFailureRecorder({ hippoRoot: noStore, tenantId: 'default', actor: adminActor('cli') }, start)).toBeNull();
-    expect(startToolFailureRecorder({ hippoRoot: globalRoot, tenantId: 'default', actor: adminActor('cli') }, start)).not.toBeNull();
+    expect(startToolFailureRecorder(apiCtx(noStore), start)).toBeNull();
+    expect(startToolFailureRecorder(apiCtx(globalRoot), start)).not.toBeNull();
   });
 });

@@ -3,15 +3,18 @@ import { errorMessage, log } from '../util/log.js';
 import {
   lastSentOnSurface, noteLedgerRowSkipped, recordLedgerTurn, recordTokensAt, type LedgerTurn,
 } from '../store/ledger-turn.js';
-import type { StoreReach } from '../store/port.js';
+import { hasGroup, type HippoStore, type StoreReach } from '../store/port.js';
 import type { LastSent, TokenSurface, TokenUse } from '../store/token-ledger.js';
 
 /** The slice of a call's store reach that picks the ledger; a shared store has no `global`. */
 export type LedgerReach = Pick<StoreReach, 'hasLocal' | 'global'>;
 
-/** No reach means an integrator's own store (one project, no global beside it); `shared` drops the global store. */
-export function ledgerReachOf(ctx: { readonly reach?: StoreReach }, shared?: boolean): LedgerReach {
-  const hasLocal = ctx.reach?.hasLocal ?? true;
+/** The ledger is SQLite-only: a local store needs a reach that says so and a SQLite store; no reach books nowhere. */
+export function ledgerReachOf(
+  ctx: { readonly reach?: StoreReach; readonly store?: HippoStore },
+  shared?: boolean,
+): LedgerReach {
+  const hasLocal = ctx.reach?.hasLocal === true && (ctx.store === undefined || hasGroup(ctx.store, 'localFiles'));
   return shared === true ? { hasLocal } : { hasLocal, global: ctx.reach?.global };
 }
 

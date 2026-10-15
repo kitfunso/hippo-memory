@@ -24,7 +24,8 @@ export function cliApiContext(hippoRoot: string, tenantId: string): ContextWith<
 
 /** Where a hook on `hippoRoot` books its ledger rows: the folder's store, else the global one, probed once here. */
 export function cliLedgerReach(hippoRoot: string): LedgerReach {
-  return ledgerReachOf({ reach: sqliteReach(hippoRoot, cliStore(hippoRoot)) });
+  const store = cliStore(hippoRoot);
+  return ledgerReachOf({ reach: sqliteReach(hippoRoot, store), store });
 }
 
 /** Stdio is the operator's own process: host admin, the folder's hippo.db, and an auto-sleep that runs in process. */
