@@ -88,8 +88,8 @@ export async function recordMcpTokens(
 
 interface ToolEntry {
   readonly handler: ToolHandler;
-  /** The store group it reaches its store through, so it runs under any store that has it; unset means hippo.db's
-   * local files. */
+  /** The store group it reaches its store through, so it runs under
+   * any store that has it; unset means hippo.db's local files. */
   readonly storeReady?: StoreGroup;
 }
 

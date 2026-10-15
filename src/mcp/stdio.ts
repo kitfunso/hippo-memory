@@ -11,8 +11,8 @@ import { type JsonValue, isJsonNumber, isJsonString, isJsonObject } from '../uti
 import { randomUUID } from 'node:crypto';
 import { currentRequestId, runWithRequestId } from '../util/request-scope.js';
 
-// MCP stdio transport spec: messages are newline-delimited JSON-RPC, no embedded newlines.
-// https://modelcontextprotocol.io/specification/.../basic/transports#stdio
+// MCP stdio transport spec: messages are newline-delimited JSON-RPC, no embedded
+// newlines. https://modelcontextprotocol.io/specification/.../basic/transports#stdio
 function send(msg: McpResponse): void {
   process.stdout.write(JSON.stringify(msg) + '\n');
 }

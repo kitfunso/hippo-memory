@@ -20,8 +20,8 @@ import { withStore } from './store/sqlite/store.js';
 
 export { serve } from './server/boot.js';
 
-// An add-on hands in a Context with no store, so each entry that needs one fills it with hippo.db under the Context's
-// root.
+// An add-on hands in a Context with no store, so each entry that
+// needs one fills it with hippo.db under the Context's root.
 function authCreate(ctx: Context, opts: AuthCreateOpts): Promise<AuthCreateResult> {
   return createKey(withStore(ctx), opts);
 }
@@ -76,14 +76,14 @@ export type { CallerProject } from './api/prompt-hook.js';
 export type { JsonValue } from './util/json.js';
 // A session-end route stores the turns its caller read from a transcript on the caller's own machine.
 export { captureSessionTexts, type SessionCaptureRequest, type SessionCaptureResult } from './capture/session-texts.js';
-// An add-on's install step mints the first admin key into a store folder it names, which `hippo auth create` cannot
-// reach.
+// An add-on's install step mints the first admin key into a
+// store folder it names, which `hippo auth create` cannot reach.
 export type { AuthCreateOpts, AuthCreateResult };
 export { ownerOrSubject } from './api/index.js';
 // A route that writes for a session binds it to the caller's owner first.
 export { bindSessionOwner } from './api/session-owners.js';
-// A hook route for a caller on another machine: each call binds the session, then writes under the caller's owner and
-// project.
+// A hook route for a caller on another machine: each call binds
+// the session, then writes under the caller's owner and project.
 export {
   preCompactForCaller,
   type CallerHookOutput,

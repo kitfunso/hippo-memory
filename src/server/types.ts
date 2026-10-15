@@ -60,8 +60,8 @@ export interface ServeOpts {
   /** How long a request may stay unanswered before one warn names it; the request itself is left alone. Defaults to
    * 60000 ms. */
   slowRequestWarnMs?: number;
-  /** Defaults to hippo.db under `hippoRoot`. A store of another kind runs only the routes ported to it; its caller
-   * closes it. */
+  /** Defaults to hippo.db under `hippoRoot`. A store of another
+   * kind runs only the routes ported to it; its caller closes it. */
   store?: HippoStore;
   autoSleep?: false;
   routes?: readonly AddonRoute[];
@@ -71,14 +71,14 @@ export interface ServeOpts {
   /** PEM certificate and key: serve() then answers HTTPS only. Unset means cleartext
    * HTTP, which needs a TLS-terminating proxy in front on any non-loopback bind. */
   tls?: { cert: string | Buffer; key: string | Buffer };
-  /** Lets a non-loopback bind start without `tls`, for TLS that ends at a proxy in front; else serve() refuses it.
-   * Also HIPPO_ALLOW_CLEARTEXT=1. */
+  /** Lets a non-loopback bind start without `tls`, for TLS that ends at a
+   * proxy in front; else serve() refuses it. Also HIPPO_ALLOW_CLEARTEXT=1. */
   allowCleartext?: boolean;
   /** The role a keyless local request (HIPPO_ALLOW_KEYLESS_LOCAL=1) gets; defaults to HIPPO_KEYLESS_LOCAL_ROLE, else
    * 'member'. Only 'admin' is host admin. */
   keylessLocalRole?: 'member' | 'admin';
-  /** Static JSON served to anyone at GET <path>; built once at boot and never authenticated, so it must hold nothing
-   * secret. */
+  /** Static JSON served to anyone at GET <path>; built once at
+   * boot and never authenticated, so it must hold nothing secret. */
   publicJson?: Readonly<Record<string, JsonValue>>;
   /** Request limits: perCaller after auth, on by default (HIPPO_CALLER_RPS, else 20 per second, burst 40); perAddress
    * replaces HIPPO_V1_RPS when set; 'off' disables either; failedAuthPerAddress guards scrypt. */
@@ -109,8 +109,8 @@ export interface AuthedRouteRequest extends RouteRequest {
   ctx: StoreContext;
 }
 
-/** A route's store status: a `storeReady` group, a `sqliteOnly` reason, or neither while it waits for a group; never
- * both. */
+/** A route's store status: a `storeReady` group, a `sqliteOnly`
+ * reason, or neither while it waits for a group; never both. */
 type StoreStatus = { storeReady?: StoreGroup; sqliteOnly?: never } | { sqliteOnly: string; storeReady?: never };
 
 /** What the dispatch gate proves before a handler runs: any caller, an admin, a host admin on loopback, or nothing, for

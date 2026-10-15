@@ -39,8 +39,8 @@ function isFlagValueNumberLike(value: FlagValue): boolean {
   return isNumberLike(value);
 }
 
-/** Map a parsed envelope + eventName header to an IngestEvent; null for unknown event types or shapes failing the
- * type guards. */
+/** Map a parsed envelope + eventName header to an IngestEvent;
+ * null for unknown event types or shapes failing the type guards. */
 function parsedToIngestEvent(parsed: JsonValue, eventName: string): IngestEvent | null {
   if (eventName === 'issues' && isGitHubIssueEvent(parsed, eventName)) {
     return { eventName: 'issues', payload: parsed };

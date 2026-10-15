@@ -161,8 +161,8 @@ async function drainStream(
   return { ingested, pages, maxUpdatedAt, drained: true };
 }
 
-// A reset hours away must fail the run for a later rerun; sleeping through it would hold the process for the whole
-// window.
+// A reset hours away must fail the run for a later rerun; sleeping
+// through it would hold the process for the whole window.
 const MAX_RATE_LIMIT_ATTEMPTS = 5;
 const MAX_RATE_LIMIT_WAIT_MS = 10 * MINUTE_MS;
 

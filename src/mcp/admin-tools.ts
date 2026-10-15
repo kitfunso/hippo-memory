@@ -75,8 +75,8 @@ export function runResolveTool({ args, ctx, hippoRoot, tenantId, store }: ToolCa
     const apiCtx = { hippoRoot, tenantId, actor: mcpActor(ctx), store };
     ({ loserId } = resolveMemoryConflict(apiCtx, conflictId, { keepId, forget, rejectLoser, reason }));
   } catch (err) {
-    // A missing, unreachable or settled conflict answers alike, so the reply says nothing of a pair the caller cannot
-    // touch.
+    // A missing, unreachable or settled conflict answers alike, so
+    // the reply says nothing of a pair the caller cannot touch.
     if (err instanceof NotFoundError || err instanceof ConflictError) return NOT_RESOLVED;
     throw err;
   }

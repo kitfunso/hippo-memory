@@ -254,8 +254,8 @@ async function dispatchGitHubEvent(
   if (action === null) return false;
 
   if (action.kind === 'manual-review') {
-    // issues.deleted (admin-initiated) is logged, not archived: archiving could lose the memory if the issue moves
-    // between accounts.
+    // issues.deleted (admin-initiated) is logged, not archived: archiving
+    // could lose the memory if the issue moves between accounts.
     await parkAndAck(d, {
       ...routing,
       tenantId: ctx.tenantId,

@@ -137,8 +137,8 @@ export interface ReplaySteps<Item, Envelope extends JsonValue> {
   readonly reingest: (row: Item, envelope: Envelope) => Promise<Reingest>;
 }
 
-/** Re-runs a parked row under today's secret and routing; every attempt past the read is counted once, except a
- * missing signature. */
+/** Re-runs a parked row under today's secret and routing; every
+ * attempt past the read is counted once, except a missing signature. */
 export async function replayParked<Item extends ParkedEntry, Envelope extends JsonValue>(
   steps: ReplaySteps<Item, Envelope>,
   hippoRoot: string,

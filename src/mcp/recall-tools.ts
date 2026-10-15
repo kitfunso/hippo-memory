@@ -61,8 +61,8 @@ interface DrillDownExtraOpts {
   depth?: number;
 }
 
-/** Builds the showRanked callback that renders the list MCP shows, parks the render in `out` and hands back its hint
- * rows. */
+/** Builds the showRanked callback that renders the list MCP
+ * shows, parks the render in `out` and hands back its hint rows. */
 interface RecallPresenterOptions {
   readonly includeContinuity: boolean;
   readonly anchorRing: RingBuffer | null;
@@ -141,8 +141,8 @@ function renderWithinBudget(
 ): RenderedRecall {
   let results = fitBudget(ranked, Math.max(0, limits.room), 1, memoryCost);
   let rendered = render(results);
-  // The hints, Cutoff block and heading vary with the list, so the lowest-ranked entry goes until the whole response
-  // fits.
+  // The hints, Cutoff block and heading vary with the list, so
+  // the lowest-ranked entry goes until the whole response fits.
   while (results.length > 1 && estimateTokens(rendered.text) > limits.budget) {
     results = results.slice(0, -1);
     rendered = render(results);
@@ -153,8 +153,8 @@ function renderWithinBudget(
 function recallPresenter(budget: number, options: RecallPresenterOptions): NonNullable<RecallOpts['showRanked']> {
   const { includeContinuity, anchorRing, queryHash, out, hintRows } = options;
   return ({ ranked, pool, droppedByScope }, apiResult) => {
-    // Sections are paid in print order, ahead of the memories and after the heading; one that does not fit is dropped
-    // whole.
+    // Sections are paid in print order, ahead of the memories and
+    // after the heading; one that does not fit is dropped whole.
     let left = budget - memoriesReserve(budget);
     const pays = (piece: string): boolean => {
       const tokens = estimateTokens(piece);
@@ -184,8 +184,8 @@ function recallPresenter(budget: number, options: RecallPresenterOptions): NonNu
           )
         : [];
       const s = suppressionSummary({ poolSize: pool.length, droppedByScope, cut, list, tail, anchoring });
-      // Anchoring is the stronger pull, so it prints first; the Cutoff block sits above the list, where the agent reads
-      // it.
+      // Anchoring is the stronger pull, so it prints first; the
+      // Cutoff block sits above the list, where the agent reads it.
       let text = biasHintSections(anchoring, availability);
       if (showPlan) text += planPiece;
       text += cutoffSection(s, list.length);
@@ -322,8 +322,8 @@ export async function runContextTool({ args, ctx, hippoRoot, config, tenantId, s
   const result = await apiGetContext(
     { hippoRoot, tenantId, actor: mcpActor(ctx), store },
     {
-      // The server's git state is no remote caller's, so a project or remote caller gets rows by strength without a
-      // query.
+      // The server's git state is no remote caller's, so a project
+      // or remote caller gets rows by strength without a query.
       q: ctx?.project || !ownsCwd ? undefined : autoDetectContext(),
       budget,
       exactScope,

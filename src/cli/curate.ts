@@ -416,8 +416,8 @@ function printDormantRows(rows: ReturnType<typeof api.listDormant>, hasQuery: bo
   console.log('Bring one back: hippo dormant restore <id>   Delete for good: hippo dormant forget <id>');
 }
 
-/** `hippo quarantine [list] [--all] [--json] [--global]`, `quarantine approve <id>`, `quarantine reject <id>`
- * (poisoning defence). */
+/** `hippo quarantine [list] [--all] [--json] [--global]`,
+ * `quarantine approve <id>`, `quarantine reject <id>` (poisoning defence). */
 export async function handleQuarantine({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
   const root = resolveAuthRoot(hippoRoot, flags);
   const ctx = cliApiContext(root, tenantId);

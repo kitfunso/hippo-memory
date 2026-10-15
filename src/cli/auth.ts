@@ -40,11 +40,11 @@ async function cmdAuthCreate(hippoRoot: string, defaultTenantId: string, flags: 
   const ttlDays = ttlFlag === undefined ? undefined : Number(ttlFlag);
   const noExpiry = boolFlag(flags, 'no-expiry');
 
-  // The CLI's --tenant flag is the only legitimate cross-tenant override
-  // (admin minting a key for another tenant from the local machine). It
-  // flows through ctx.tenantId, NOT through opts — authCreate's opts no
-  // longer accepts a tenantId field, so the HTTP layer cannot smuggle a
-  // body.tenantId across.
+  // The CLI's --tenant flag is the only legitimate cross-tenant
+  // override (admin minting a key for another tenant from the
+  // local machine). It flows through ctx.tenantId, NOT through
+  // opts — authCreate's opts no longer accepts a tenantId field,
+  // so the HTTP layer cannot smuggle a body.tenantId across.
   const ctx = cliApiContext(root, tenantFlag ?? defaultTenantId);
   let result: api.AuthCreateResult;
   try {

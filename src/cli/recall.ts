@@ -520,8 +520,8 @@ function fitRecallBlock(
 
 type FittedRecall = ReturnType<typeof fitRecallBlock>;
 
-/** The presenter `retrieve` calls once ranking ends: fits and renders the block, and names the rows and hint rows to
- * record. */
+/** The presenter `retrieve` calls once ranking ends: fits and
+ * renders the block, and names the rows and hint rows to record. */
 function presentRecall(
   ctx: api.StoreContext,
   query: string,
@@ -543,8 +543,8 @@ function presentRecall(
       availability: hints.availability,
     },
   );
-  // The token ledger books the text this recall prints, on whichever exit it takes; the ring keeps the hint the final
-  // detect made.
+  // The token ledger books the text this recall prints, on whichever
+  // exit it takes; the ring keeps the hint the final detect made.
   return { text, shown: { results, audit, tokens: estimateTokens(text), anchoredOn: hints.anchoring?.memoryId } };
 }
 

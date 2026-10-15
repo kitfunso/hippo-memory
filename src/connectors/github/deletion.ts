@@ -20,10 +20,10 @@ export interface DeletionResult {
   archivedCount: number;
 }
 
-/** Handle `issue_comment.deleted` and `pull_request_review_comment.deleted`: archive ALL active raw rows for the
- * artifact_ref in one write.
- * Tenant and kind='raw' filtering are load-bearing: without them a deletion could archive another tenant's row or a
- * distilled row. */
+/** Handle `issue_comment.deleted` and `pull_request_review_comment.deleted`:
+ * archive ALL active raw rows for the artifact_ref in one write. Tenant and
+ * kind='raw' filtering are load-bearing: without them a deletion could
+ * archive another tenant's row or a distilled row. */
 export async function handleCommentDeleted(ctx: StoreContext, input: DeletionInput): Promise<DeletionResult> {
   const { artifactRef, idempotencyKey, deliveryId, eventName } = input;
   const done = await requireGroup(ctx.store, 'connectorEvents').archiveDeletedArtifact({

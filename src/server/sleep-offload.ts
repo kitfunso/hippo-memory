@@ -48,8 +48,8 @@ function runInChild<R>(job: SleepJob): Promise<R> {
     });
     let reply: SleepReply<R> | undefined;
     let timedOut = false;
-    // SIGKILL because the child is inside synchronous SQLite work and cannot run a handler; the OS drops its write
-    // lock.
+    // SIGKILL because the child is inside synchronous SQLite work
+    // and cannot run a handler; the OS drops its write lock.
     const timer = setTimeout(() => {
       timedOut = true;
       child.kill('SIGKILL');
@@ -63,8 +63,8 @@ function runInChild<R>(job: SleepJob): Promise<R> {
       clearTimeout(timer);
       reject(err);
     });
-    // 'close' and not 'exit': it waits for the channel to drain, so the reply is in hand and the child's store handles
-    // are gone.
+    // 'close' and not 'exit': it waits for the channel to drain, so
+    // the reply is in hand and the child's store handles are gone.
     child.once('close', (code, signal) => {
       clearTimeout(timer);
       if (timedOut) {
@@ -83,8 +83,8 @@ function runInChild<R>(job: SleepJob): Promise<R> {
 
 let turn: Promise<void> = Promise.resolve();
 
-// One running and one waiting: each further sleep would only hold a request open behind work the waiting one already
-// covers.
+// One running and one waiting: each further sleep would only hold
+// a request open behind work the waiting one already covers.
 const MAX_SLEEPS_IN_LINE = 2;
 const SLEEP_RETRY_AFTER_SEC = 30;
 let inLine = 0;
@@ -118,8 +118,8 @@ function inTurn<R>(job: SleepJob): Promise<R> {
 /** `sleep` for the HTTP route: same result and errors, run outside the serving process and stopped at the deadline
  * (10 minutes, or HIPPO_SLEEP_TIMEOUT_MS). */
 export function sleepInChild(ctx: StoreContext, opts: SleepOpts): Promise<SleepResult> {
-  // The child reopens the store by path, which only a store of local files has; any other store keeps sleep's own
-  // refusal.
+  // The child reopens the store by path, which only a store of
+  // local files has; any other store keeps sleep's own refusal.
   if (!hasGroup(ctx.store, 'localFiles')) return sleep(ctx, opts);
   return inTurn<SleepResult>({
     kind: 'sleep',
@@ -130,8 +130,8 @@ export function sleepInChild(ctx: StoreContext, opts: SleepOpts): Promise<SleepR
   });
 }
 
-/** The MCP auto-sleep's consolidation, in the same queue and child as POST /v1/sleep; auto-sleep only starts on a
- * hippo.db store. */
+/** The MCP auto-sleep's consolidation, in the same queue and child
+ * as POST /v1/sleep; auto-sleep only starts on a hippo.db store. */
 export async function consolidateInChild(hippoRoot: string): Promise<void> {
   await inTurn<ConsolidationResult>({ kind: 'consolidate', hippoRoot });
 }

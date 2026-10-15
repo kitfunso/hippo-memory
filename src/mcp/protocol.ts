@@ -45,8 +45,8 @@ interface McpResponse {
   error?: { code: number; message: string; data?: { requestId: string } };
 }
 
-/** JSON-RPC reply for a request that threw: typed API errors keep their text; anything else is logged and answered
- * generically. */
+/** JSON-RPC reply for a request that threw: typed API errors keep
+ * their text; anything else is logged and answered generically. */
 export function mcpErrorResponse<E>(
   id: McpResponse['id'],
   err: E,
@@ -92,8 +92,8 @@ export interface McpContext {
   /** The store this transport's calls run on; stdio passes no context, so its opener builds one per folder. */
   store: HippoStore;
   autoSleep?: false;
-  /** Set by the HTTP transport so auto-sleep runs off the server's event loop; stdio consolidates in its own
-   * process. */
+  /** Set by the HTTP transport so auto-sleep runs off the
+   * server's event loop; stdio consolidates in its own process. */
   autoSleepRunner?: AutoSleepRunner;
   /** Per-client key for state isolation under HTTP-MCP: 'stdio-${pid}' for stdio, hash(bearer + remoteAddr) for HTTP
    * (built in src/server/mcp-http.ts); defaults to `${tenantId}:default`. */

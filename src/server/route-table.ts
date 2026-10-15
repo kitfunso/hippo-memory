@@ -622,8 +622,8 @@ async function passAuthGate(
   return ctx;
 }
 
-/** The route as the access line names it; a regex route reads as its pattern would, so no line carries a caller's
- * id. */
+/** The route as the access line names it; a regex route reads
+ * as its pattern would, so no line carries a caller's id. */
 export function routeLabel(route: Route): string {
   if ('path' in route) return route.path;
   if ('pattern' in route) return route.pattern;
@@ -636,16 +636,16 @@ export async function dispatchV1Route(r: RouteRequest, method: string, path: str
     const run = routeMatches(route, method, path);
     if (run === null) continue;
     noteAccess(r.req, { route: routeLabel(route) });
-    // Only a store with worker threads has moved the route's SQLite work; under any other the handler still opens
-    // hippo.db itself.
+    // Only a store with worker threads has moved the route's SQLite
+    // work; under any other the handler still opens hippo.db itself.
     await (route.loop === 'off' && runsOffLoop(r.opts.store) ? withSqliteOffLoop(() => run(r)) : run(r));
     return true;
   }
   return false;
 }
 
-/** Core authenticates and parses before the handler runs, so an add-on route gets the same 401, 400 and 501 as a
- * core one. */
+/** Core authenticates and parses before the handler runs, so an
+ * add-on route gets the same 401, 400 and 501 as a core one. */
 export async function dispatchAddonRoute(
   { req, res, opts }: RouteRequest,
   method: string,
