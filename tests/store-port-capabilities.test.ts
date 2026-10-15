@@ -106,6 +106,14 @@ describe('serve() under a store without local files', () => {
     expect(res.status).toBe(501);
   });
 
+  it('POST /v1/memories/:id/promote answers 501', async () => {
+    const root = newRoot('capability-promote-http');
+    const { plaintext } = keyFor(root, 'default');
+    const handle = await start(root, portOnlyStore(root));
+    const res = await fetch(`${handle.url}/v1/memories/m1/promote`, { method: 'POST', headers: jsonHeaders(plaintext) });
+    expect(res.status).toBe(501);
+  });
+
   it('still fences hippo.db inside a request', async () => {
     const root = newRoot('capability-fence');
     const { plaintext } = keyFor(root, 'default');

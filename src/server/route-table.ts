@@ -182,7 +182,7 @@ export const V1_ROUTES: readonly Route[] = [
     method: 'POST',
     pattern: '/v1/memories/:id/promote',
     auth: 'caller',
-    sqliteOnly: 'copies a memory between the two local hippo.db files',
+    storeReady: 'localFiles',
     handler: handlePromoteMemory,
   }),
   defineRoute({
