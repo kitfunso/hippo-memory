@@ -13,7 +13,7 @@ import { inputHashes, sha256 } from './z0-blind.mjs';
 import { abandonedRuns, filterRecords } from './z0-filters.mjs';
 import { CODINGS, byCoding, codexApply, inSets, mean, repeatMistakeUnits, sum, taskUnits, withoutRuns } from './z0-hypotheses.mjs';
 import { TWO_SEED_ARMS, isString, validateCorpus } from './z0-records.mjs';
-import { SEEDS, confirmSize, harmSizer, ratioSizer, repeatSizer, smallestPassing, varianceComponents } from './z0-size-sim.mjs';
+import { SEEDS, confirmSize, harmSizer, repeatSizer, smallestPassing, varianceComponents } from './z0-size-sim.mjs';
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const SOURCES = ['scripts/token-eval/z0-size.mjs', 'scripts/token-eval/z0-size-sim.mjs'];
@@ -21,12 +21,12 @@ const TOOLS = ['claude-code', 'codex'];
 // SHORTCUT: placeholder quotas in list-price dollars a day, not measured; S9 passes the screen's measured usage per plan window (D7).
 export const QUOTA_USD_PER_DAY = { 'claude-code': 300, codex: 100 };
 export const DEFAULTS = {
-  repos: [5, 6, 8, 10], effects: [0.15, 0.2, 0.25], power: 0.8, sims: 2_000, iterations: 10_000, seed: 1,
-  searchSims: 200, searchIterations: 1_000, maxFamilies: 60, maxNTasks: 600, repoBound: 0.8,
+  repos: [5, 6, 8, 10], effects: [0.15, 0.2, 0.25], power: 0.8, sims: 2_000, seed: 1,
+  searchSims: 200, maxFamilies: 60, maxNTasks: 600, repoBound: 0.8,
 };
 const USAGE = 'usage: z0-size.mjs --runs FILE [--runs FILE ...] --plan FILE [--plan FILE ...] --prices FILE [--drop-list FILE] '
-  + '[--repos 5,6,8,10] [--effects 0.15,0.2,0.25] [--power 0.8] [--sims 2000] [--iterations 10000] [--seed 1] '
-  + '[--search-sims 200] [--search-iterations 1000] [--max-families 60] [--max-n-tasks 600] [--repo-bound 0.8] '
+  + '[--repos 5,6,8,10] [--effects 0.15,0.2,0.25] [--power 0.8] [--sims 2000] [--seed 1] '
+  + '[--search-sims 200] [--max-families 60] [--max-n-tasks 600] [--repo-bound 0.8] '
   + '[--claude-usd-per-day 300] [--codex-usd-per-day 100] [--out FILE]';
 
 const integer = (flag, min) => (v) => {
@@ -48,9 +48,9 @@ const list = (parse) => (v) => v.split(',').map(parse);
 const FLAGS = new Map([
   ['--prices', ['prices', String]], ['--drop-list', ['dropList', String]], ['--out', ['out', String]],
   ['--repos', ['repos', list(integer('--repos', 2))]], ['--effects', ['effects', list(fraction('--effects'))]],
-  ['--power', ['power', fraction('--power')]], ['--sims', ['sims', integer('--sims', 1)]], ['--iterations', ['iterations', integer('--iterations', 1)]],
+  ['--power', ['power', fraction('--power')]], ['--sims', ['sims', integer('--sims', 1)]],
   ['--seed', ['seed', integer('--seed', 1)]], ['--search-sims', ['searchSims', integer('--search-sims', 1)]],
-  ['--search-iterations', ['searchIterations', integer('--search-iterations', 1)]], ['--max-families', ['maxFamilies', integer('--max-families', 1)]],
+  ['--max-families', ['maxFamilies', integer('--max-families', 1)]],
   ['--max-n-tasks', ['maxNTasks', integer('--max-n-tasks', 1)]], ['--repo-bound', ['repoBound', fraction('--repo-bound')]],
   ['--claude-usd-per-day', ['claudeQuota', positive('--claude-usd-per-day')]], ['--codex-usd-per-day', ['codexQuota', positive('--codex-usd-per-day')]],
 ]);
@@ -116,17 +116,15 @@ function harmCalibration(units, bound) {
   return { ...cost, resolve: { pairs: units.length, both, oneSide }, sim: { ...cost.sim, both, oneSide } };
 }
 
-/** The spreads every hypothesis needs, from the records the analyzer would score. */
+/** The spreads each sized hypothesis needs, from the records the analyzer would score. H3 carries no verdict, so it sets no size. */
 export function calibrate(filtered, prices, bound) {
   const s = filtered.scored;
   const planned = (...arms) => arms.every((a) => filtered.arms.includes(a));
   const notPlanned = (arms) => ({ reason: `${arms} not in the calibration plan` });
-  const units = planned('A1', 'A2') ? taskUnits(s, 'A2', 'A1', prices['claude-code'], inSets('R', 'N')) : null;
   return {
     H1: planned('A1', 'A2') ? repeatCalibration(s, 'A2', 'A1', inSets('R'), bound) : notPlanned('A1, A2'),
     H2: planned('X2', 'X3') ? repeatCalibration(s, 'X2', 'X3', codexApply, bound) : notPlanned('X2, X3'),
-    H3: units ? ratioCalibration(units, bound) : notPlanned('A1, A2'),
-    H4: units ? harmCalibration(units.filter((u) => u.set === 'N'), bound) : notPlanned('A1, A2'),
+    H4: planned('A1', 'A2') ? harmCalibration(taskUnits(s, 'A2', 'A1', prices['claude-code'], inSets('N')), bound) : notPlanned('A1, A2'),
   };
 }
 
@@ -211,11 +209,11 @@ function sized(search, repos, unit) {
 /** One grid row: each hypothesis's smallest size at this many repositories, the sets they imply, and their usage. */
 function gridRow(ctx, repos, m) {
   const { searches, layout, arms, table, quota } = ctx;
-  const [h1, h2, h3, h4] = [searches.H1?.(repos, m), searches.H2?.(repos, m), searches.H3?.(repos), searches.H4?.(repos)];
-  const row = { repos, H1: sized(h1, repos, 'families'), H2: sized(h2, repos, 'families'), H3: sized(h3, repos, 'families'), H4: sized(h4, repos, 'tasks') };
-  const fits = ctx.available && [h1, h2, h3, h4].every((x) => x === undefined || x.n !== null);
+  const [h1, h2, h4] = [searches.H1?.(repos, m), searches.H2?.(repos, m), searches.H4?.(repos)];
+  const row = { repos, H1: sized(h1, repos, 'families'), H2: sized(h2, repos, 'families'), H4: sized(h4, repos, 'tasks') };
+  const fits = ctx.available && [h1, h2, h4].every((x) => x === undefined || x.n !== null);
   if (!fits) return { ...row, fits: false };
-  const setR = Math.max(h1.n, h3.n);
+  const setR = h1.n;
   const lessonPerRepo = setR * (layout.R.teachPerFamily + layout.R.applyPerFamily);
   const design = { repos, setR, setN: Math.max(h4.n, Math.round(lessonPerRepo * layout.R.noLessonRatio)), setX: h2 ? h2.n : 0 };
   const use = designUsage(design, layout, arms, table);
@@ -236,16 +234,15 @@ function choose(rows) {
 }
 
 function searchesOf(cal, layout, opts) {
-  const full = { sims: opts.sims, iterations: opts.iterations, seed: opts.seed };
-  const coarse = { ...full, sims: Math.min(opts.searchSims, opts.sims), iterations: Math.min(opts.searchIterations, opts.iterations) };
-  const stages = coarse.sims < full.sims || coarse.iterations < full.iterations ? [coarse, full] : [full];
+  const full = { sims: opts.sims, seed: opts.seed };
+  const coarse = { ...full, sims: Math.min(opts.searchSims, opts.sims) };
+  const stages = coarse.sims < full.sims ? [coarse, full] : [full];
   const sizers = stages.map((stat) => ({
     H1: cal.H1.sim ? repeatSizer(cal.H1.sim, stat, 'H1') : null,
     H2: cal.H2.sim && layout.X ? repeatSizer(cal.H2.sim, stat, 'H2') : null,
-    H3: cal.H3.sim && layout.R ? ratioSizer(cal.H3.sim, layout.R, stat) : null,
     H4: cal.H4.sim ? harmSizer(cal.H4.sim, stat) : null,
   }));
-  // A bisection at the full settings costs hours, so a cheap one finds the size and the full settings confirm it step by step.
+  // Every bisection step at the full sim count re-simulates the design, so a cheap one finds the size and the full count confirms it.
   const search = (h, evaluate, passes, cap) => {
     const found = smallestPassing((n) => evaluate(sizers[0][h], n), passes, cap);
     return stages.length === 1 ? found : confirmSize((n) => evaluate(sizers[1][h], n), passes, cap, found.n);
@@ -259,7 +256,6 @@ function searchesOf(cal, layout, opts) {
   };
   return {
     H1: repeat('H1'), H2: repeat('H2'),
-    H3: sizers[0].H3 ? once((repos) => search('H3', (power, families) => power({ repos, families }), pass, familyCap(repos))) : undefined,
     H4: sizers[0].H4 ? once((repos) => search('H4', (power, tasks) => power({ repos, tasks }), (x) => x.pass >= opts.power, Math.floor(opts.maxNTasks / repos))) : undefined,
   };
 }
@@ -292,9 +288,10 @@ export function sizeZ0(records, planCells, prices, opts) {
 }
 
 const NOTES = [
-  'Power is simulated through the analyzer\'s own bootstraps and verdict rules at Holm\'s strictest level, 0.05/3 (prereg 209); a win needs both codings.',
+  'Power is simulated through the analyzer\'s own t tests over repositories and verdict rules at Holm\'s strictest level, 0.05/2 over H1 and H2 (prereg 209, Amendment 1); a win needs both codings.',
+  'H3 is reported with no verdict, so it sets no size; set R is sized by H1 alone.',
   'The repository variance is taken at its one-sided upper bound (repoBound); the family and seed variances at their point estimates.',
-  'Each size is found by a search at searchSims and searchIterations, then confirmed at sims and iterations one size at a time; reported power is from the full settings.',
+  'Each size is found by a search at searchSims, then confirmed at sims one size at a time; reported power is from the full sim count.',
   'Sessions count each record\'s first session plus its teach and correction resumes; screen sessions are not counted.',
   'Days are list-price dollars of usage over the per-day quota; a quota marked "default assumption" is a placeholder, not a measurement.',
 ];
@@ -312,7 +309,7 @@ export function runCli(argv, cwd = process.cwd()) {
       'claude-code': { usdPerDay: args.claudeQuota ?? QUOTA_USD_PER_DAY['claude-code'], source: args.claudeQuota === null ? 'default assumption' : 'flag' },
       codex: { usdPerDay: args.codexQuota ?? QUOTA_USD_PER_DAY.codex, source: args.codexQuota === null ? 'default assumption' : 'flag' },
     };
-    const settings = { ...Object.fromEntries(Object.keys(DEFAULTS).map((k) => [k, args[k]])), seeds: SEEDS, holmLevel: 0.05 / 3, quota };
+    const settings = { ...Object.fromEntries(Object.keys(DEFAULTS).map((k) => [k, args[k]])), seeds: SEEDS, holmLevel: 0.05 / 2, quota };
     const sizing = sizeZ0(inputs.records, inputs.planCells, inputs.prices, { ...settings, dropList: inputs.dropList });
     const hashes = [...inputHashes(args, cwd), ...SOURCES.map((f) => ({ role: 'source', file: f, sha256: sha256(path.join(REPO, f)) }))];
     report = { schema: 'z0-size/1', settings, inputs: hashes, warnings: inputs.warnings, ...sizing, notes: NOTES };
