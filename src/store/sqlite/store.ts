@@ -9,6 +9,7 @@ import { planningFallacyEvidenceAt } from '../planning-fallacy-evidence.js';
 import { recordTokenUse } from '../token-ledger.js';
 import { loadAmbientCandidates, loadContextCandidates } from '../candidates.js';
 import { loadEntriesByIds, loadFreshRawMemories } from '../entry-reads.js';
+import { sqliteAgentImport } from './agent-import.js';
 import { servedCards, sqliteCards } from './cards-group.js';
 import { servedConflicts, sqliteConflicts } from './conflicts-group.js';
 import { servedDormant, sqliteDormant } from './dormant-group.js';
@@ -78,7 +79,7 @@ export function sqliteSyncStore(
 ): SqliteSyncStore & Sync<Omit<StoreGroups, AsyncOnly | 'localFiles'>> & Pick<StoreGroups, 'localFiles'> {
   return {
     kind: 'sqlite',
-    localFiles: { hippoRoot, consolidation: sqliteConsolidation(hippoRoot) },
+    localFiles: { hippoRoot, consolidation: sqliteConsolidation(hippoRoot), agentImport: sqliteAgentImport },
     ...sqliteBaseReads(hippoRoot),
     ...sqliteRecallWrites(hippoRoot),
     keyAudit: sqliteKeyAudit(hippoRoot),

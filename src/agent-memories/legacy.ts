@@ -1,10 +1,9 @@
 // Rows the old Claude import wrote (`claude-memory:<file>`), taken over by the notes they came from (plan design 10).
 import path from 'node:path';
-import type { DatabaseSyncLike } from '../db/index.js';
 import type { MemoryEntry } from '../core/memory.js';
 import { duplicateKey } from '../util/same-text.js';
 import { maskEmails } from '../util/secret-detect.js';
-import { selectLiveEntriesBySourcePrefix } from '../store/entry-reads.js';
+import type { ImportTarget } from '../store/port/agent-import.js';
 import { matchLegacy, type LegacyTarget } from './plan.js';
 import { MIN_ITEM_CHARS, storedText } from './source.js';
 import type { Container, Listing } from './types.js';
@@ -50,7 +49,7 @@ function legacyTargets(containers: readonly Container[]): LegacyTargets {
  * Matched once across all the store's Claude folders, before any container's transaction; each adoption re-checks its
  * row inside one.
  */
-export function legacyWork(db: DatabaseSyncLike, tenantId: string, listings: readonly Listing[]): LegacyWork {
+export function legacyWork(target: ImportTarget, listings: readonly Listing[]): LegacyWork {
   const containers = listings
     .filter((l) => l.tool === 'claude-code')
     .flatMap((l) => l.containers)
@@ -58,7 +57,7 @@ export function legacyWork(db: DatabaseSyncLike, tenantId: string, listings: rea
   const rows =
     containers.length === 0
       ? []
-      : selectLiveEntriesBySourcePrefix(db, tenantId, LEGACY_SOURCE_PREFIX).filter((r) => r.tags.includes(LEGACY_TAG));
+      : target.liveBySourcePrefix(LEGACY_SOURCE_PREFIX).filter((r) => r.tags.includes(LEGACY_TAG));
   const byContainer = new Map<string, ContainerLegacy>();
   if (rows.length === 0) return { byContainer, adopted: new Set() };
 

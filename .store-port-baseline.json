@@ -10,8 +10,8 @@
   "txLiterals": 0,
   "tenantResolvesInCli": 0,
   "storeImportsInCli": 4,
-  "storeImportsInDomain": 33,
-  "handleHoldersOutside": 4,
+  "storeImportsInDomain": 14,
+  "handleHoldersOutside": 1,
   "storeFilesWithoutSql": 2,
   "storeFilesWithoutSqlList": [
     "src/store/delivery-recorder.ts",
@@ -20,9 +20,6 @@
   "openersOutsideByFile": {},
   "sqlOutsideByFile": {},
   "handleHoldersOutsideByFile": {
-    "src/agent-memories/apply.ts": 1,
-    "src/agent-memories/legacy.ts": 1,
-    "src/agent-memories/sync.ts": 1,
     "src/entry/sqlite-handles.ts": 1
   },
   "sqliteLocalMethods": [],

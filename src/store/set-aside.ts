@@ -1,12 +1,11 @@
 // Takes an imported agent note out of recall on the caller's transaction; the note sync and the project repair both use
 // it.
 import { appendAuditEvent } from './audit.js';
+import { SYNC_ACTOR } from '../core/agent-memory-tools.js';
 import type { DatabaseSyncLike } from '../db/index.js';
 import { insertDormantRow } from './dormant.js';
 import { calculateStrength, type MemoryEntry } from '../core/memory.js';
 import { deleteEntryRowInTx, setEntryTagsInTx } from './entry-writes.js';
-
-export const SYNC_ACTOR = 'agent-memories';
 
 export type SetAsideWhy = 'note-gone' | 'note-changed' | 'handover' | 'project-merge' | 'project-repair';
 export type SetAsideResult =
