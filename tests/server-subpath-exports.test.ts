@@ -35,6 +35,13 @@ const STORE_KIT_TYPES = [
   'RecallSearchArgs', 'RecallTraceInput', 'RecallWrites', 'RecentOrigins', 'RetrievalPolicy', 'SelfKeyMint', 'SessionEvent', 'SessionHandoff',
   'StoreGroup', 'StoreGroups', 'StoreWith', 'StrengthenOptions', 'SupersedeWrite', 'TaskSnapshot', 'TokenUse', 'VectorBackfillQuery', 'VectorCandidateSpec',
   'VectorMatch', 'VectorReads', 'VectorRow', 'VectorRowWrite', 'VectorWrite', 'VectorWriteResult', 'VectorWrites',
+  // The session and admin groups (port-groups.ts).
+  'Card', 'CardComment', 'CardCreate', 'CardDetail', 'CardRun', 'CardStatus', 'Cards', 'CompleteGoalOpts',
+  'Conflicts', 'Dormant', 'DormantMemory', 'DormantRestoreOutcome', 'DormantRestoreRequest', 'DormantSnapshot',
+  'EntryCursor', 'EntryPage', 'FailureSummary', 'Goals', 'HandoffFilter', 'HandoffOutcome', 'ListDormantOpts',
+  'MemoryConflict', 'PushGoalOpts', 'Reports', 'ResolveConflictOpts', 'ResolveConflictRequest',
+  'SessionEndHandoffRequest', 'SessionEventInput', 'Sessions', 'SnapshotInput', 'StrengthTallies', 'TokenSummary',
+  'WorkingMemoryFilter', 'WorkingMemoryItem', 'WorkingMemoryPush',
 ];
 
 const sorted = (names: readonly string[]): string[] => [...names].sort();
