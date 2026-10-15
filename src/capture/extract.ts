@@ -45,10 +45,13 @@ const MAX_REPLY_SENTENCES = 4;
 // Imperatives that end in "ed" ("never embed secrets") are not past tense.
 const IMPERATIVE_ED = 'seed|feed|embed|need|proceed|exceed|succeed|speed|heed|bleed|breed|shred';
 const PAST_VERB = String.raw`(?:\w+ly\s+)?(?:(?!(?:${IMPERATIVE_ED})\b)\w{2,}ed|was|were|had|did|got)\b`;
+// "Secrets are never logged" is a passive rule, not narration.
 const PAST_NARRATION = new RegExp(
-  String.raw`\b(?:always|never)\s+${PAST_VERB}|^(?:i|we|it|that|this|they|he|she)\s+${PAST_VERB}`,
+  String.raw`(?<!\b(?:is|are|be|been|being|gets?)\s+)\b(?:always|never)\s+${PAST_VERB}|` +
+    String.raw`^(?:i|we|it|that|this|they|he|she)\s+${PAST_VERB}`,
   'i',
 );
+const ASSESSMENT = /^(?:it|that|this)(?:'s|\s+(?:is|was|looks|seems|works|sounds))\b/i;
 const THE_TASK = String.raw`(?:it|this|that|them)`;
 const ONE_OFF = new RegExp(
   String.raw`\bplease\s+\w+\s+${THE_TASK}\b|\b(?:fix|redo|revert|rerun|retry|undo)\s+${THE_TASK}\b|` +
@@ -146,8 +149,9 @@ function insideBrackets(lead: string): boolean {
 }
 
 function isReplyRule(sentence: string): boolean {
-  const statement = sentence.match(REPLY_FORM)?.[1];
-  return statement !== undefined && statement.trim().split(/\s+/).length >= MIN_REPLY_WORDS;
+  const statement = sentence.match(REPLY_FORM)?.[1]?.trim();
+  if (statement === undefined || ASSESSMENT.test(statement)) return false;
+  return statement.split(/\s+/).length >= MIN_REPLY_WORDS;
 }
 
 /** True when a person's sentence states a rule that outlasts the task; narration and one-off requests are not. */

@@ -91,6 +91,8 @@ const STANDING = [
   'Not quite: name the branch after the ticket, because the bot reads it.',
   'Correct, put secrets in the vault, because the env file is committed.',
   'Never embed secrets in the build.',
+  'Secrets are never logged.',
+  'Branch names are always prefixed with the ticket id.',
 ];
 const NOT_STANDING = [
   'It always marked the override as off.',
@@ -102,6 +104,9 @@ const NOT_STANDING = [
   'Make sure the tests pass this time.',
   'No, I tried that already, because it failed.',
   'Yes, keep doing that, because it works.',
+  'Yes, that is fine, because the build passed.',
+  "No, that's wrong, because the count is off.",
+  'Right, it works now, because the cache was cleared.',
 ];
 
 describe('isStandingRule', () => {
