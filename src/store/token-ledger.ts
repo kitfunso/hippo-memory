@@ -1,15 +1,14 @@
-/** Token ledger: one row per block of memory text sent to an agent on any surface, with its token cost; the input for
- * the token-savings evals. Backs inject-only-on-change: the hook records a `skip` when the block hash matches the
- * session's last; `reread` rows cover {@link REREAD_SURFACES} blocks. Counts use {@link estimateTokens} (chars / 4);
- * rows never hold content or query text. Writes are best-effort: a ledger failure must not break recall. */
+/** Token ledger: one row per block of memory text sent to an agent, with its token cost; backs the hook's send-once
+ * marks ({@link sentInWindow}) and the token-savings evals. Counts are chars / 4; rows hold no content or query text.
+ * Writes are best-effort: a ledger failure must not break recall. */
 import { open } from 'node:fs/promises';
 import { withWriteScope, type DatabaseSyncLike } from '../db/index.js';
 import { onHandle } from './open.js';
 import { type JsonValue, isJsonString, isJsonObjectLiteral } from '../util/json.js';
 import { DAY_MS } from '../util/time.js';
 import {
-  countSkipsAfter, deleteRereadRows, injectedBlocks, insertTokenRow, latestInjectOrReset,
-  pruneTokenRowsBefore, sessionTokenRows, sessionTotals, surfaceTotals,
+  commitPendingRow, deleteRereadRows, injectedBlocks, insertTokenRow, pruneTokenRowsBefore, sessionTokenRows,
+  sessionTotals, surfaceTotals, windowRows,
 } from './token-ledger-rows.js';
 import { DATE_PREFIX_CHARS } from '../util/token-text.js';
 
@@ -38,8 +37,8 @@ export const TOKEN_SURFACES: readonly TokenSurface[] = [
  * one session id. */
 export const REREAD_SURFACES: readonly TokenSurface[] = ['hook', 'hook_recall', 'compact_resume'];
 
-/** What happened to a block: `inject` (sent), `skip` (identical to the last injected block), `reset` (host compacted,
- * next must send), `reread` (tokens later calls read again, booked at session end), `arm` (pilot assignment;
+/** What happened to a block: `inject` (sent), `skip` (text the context window already held, not sent), `reset` (host
+ * compacted, next must send), `reread` (tokens later calls read again, booked at session end), `arm` (pilot assignment;
  * `block_hash` is `hippo` or `holdout`, `items` the holdout rate in bp). */
 export type TokenEvent = 'inject' | 'skip' | 'reset' | 'reread' | 'arm';
 
@@ -59,6 +58,11 @@ export interface TokenUse {
   tokens: number;
   /** {@link blockHash} of the text, when the caller wants change detection. */
   hash?: string | null;
+  /** Keys of the sections and memories this hook call printed; set, even empty, the row is one turn of the session's
+   * send window ({@link sentInWindow}). Unset on every other row. */
+  sentKeys?: readonly string[] | null;
+  /** The keys count as sent only once the caller echoes `hash` ({@link commitPendingKeys}). */
+  pending?: boolean;
   /** Override the timestamp (tests). ISO string. */
   now?: string;
 }
@@ -66,6 +70,7 @@ export interface TokenUse {
 /** Append one ledger row and prune rows past {@link TOKEN_LEDGER_RETENTION_DAYS}. */
 export function recordTokenUse(db: DatabaseSyncLike, use: TokenUse): void {
   const now = use.now ?? new Date().toISOString();
+  const keys = use.sentKeys ? [...use.sentKeys] : null;
   insertTokenRow(db, {
     ts: now,
     tenantId: use.tenantId,
@@ -75,40 +80,53 @@ export function recordTokenUse(db: DatabaseSyncLike, use: TokenUse): void {
     items: Math.max(0, Math.round(use.items)),
     tokens: Math.max(0, Math.round(use.tokens)),
     blockHash: use.hash ?? null,
+    sentKeys: keys && JSON.stringify(use.pending ? { pending: keys } : keys),
   });
   const cutoff = new Date(Date.parse(now) - TOKEN_LEDGER_RETENTION_DAYS * DAY_MS).toISOString();
   pruneTokenRowsBefore(db, cutoff);
 }
 
-/** What a session last sent on a surface, for {@link lastSentState}. */
-export interface LastSent {
-  /** {@link blockHash} of the last injected block. */
-  hash: string;
-  /** Consecutive `skip` rows since that injection. */
-  skipsSince: number;
+/** When a key was last sent: the 1-based turn of its sending call in the window. */
+export interface SentMark {
+  turn: number;
 }
 
-/** The last block this session injected on `surface`, or null if none, a `reset` came after it, or there is no session
- * id (the caller then always injects). */
-export function lastSentState(
-  db: DatabaseSyncLike,
-  tenantId: string,
-  sessionId: string | null | undefined,
-  surface: TokenSurface,
-): LastSent | null {
-  if (!sessionId) return null;
-  const anchor = latestInjectOrReset(db, tenantId, sessionId, surface);
-  if (!anchor || anchor.event === 'reset' || !anchor.block_hash) return null;
-  const skips = countSkipsAfter(db, tenantId, sessionId, surface, anchor.id);
-  return { hash: anchor.block_hash, skipsSince: Number(skips?.n ?? 0) };
+/** A session's send window on one surface: the turns since its latest `reset` and each key's last printed send. */
+export interface SendWindow {
+  /** Hook calls booked in the window; the next call's turn. */
+  turn: number;
+  sent: ReadonlyMap<string, SentMark>;
 }
 
-/** Whether a block identical to the session's last injection should be skipped; `refreshTurns` resends it after that
- * many consecutive skips so a long session still sees its pinned rules, 0 never resends. */
-export function shouldSkipUnchanged(last: LastSent | null, hash: string, refreshTurns: number): boolean {
-  if (!last || last.hash !== hash) return false;
-  if (refreshTurns > 0 && last.skipsSince >= refreshTurns) return false;
-  return true;
+/** The send window of `sessionId` on `surface`. Rows with no `sentKeys` (older binaries, bypass calls) are neither
+ * turns nor marks, and pending keys count as a turn but never as sent. */
+export function sentInWindow(
+  db: DatabaseSyncLike, tenantId: string, sessionId: string, surface: TokenSurface,
+): SendWindow {
+  const rows = windowRows(db, tenantId, sessionId, surface);
+  const sent = new Map<string, SentMark>();
+  rows.forEach((row, i) => {
+    for (const key of printedKeys(row.sent_keys)) sent.set(key, { turn: i + 1 });
+  });
+  return { turn: rows.length, sent };
+}
+
+function printedKeys(text: string): string[] {
+  let value: JsonValue;
+  try {
+    // SAFETY: JSON.parse returns a JSON value by definition.
+    value = JSON.parse(text) as JsonValue;
+  } catch {
+    return []; // a torn row must never suppress a send
+  }
+  return Array.isArray(value) ? value.filter(isJsonString) : [];
+}
+
+/** Marks the keys of the newest pending row whose hash the caller echoed as printed; true when one was pending. */
+export function commitPendingKeys(
+  db: DatabaseSyncLike, tenantId: string, sessionId: string, surface: TokenSurface, hash: string,
+): boolean {
+  return commitPendingRow(db, tenantId, sessionId, surface, hash);
 }
 
 /** Per-surface totals for {@link summarizeTokenUse}. */

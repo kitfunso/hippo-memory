@@ -45,7 +45,7 @@ import {
   type ContextPools,
   type ContextSource,
 } from './context-select.js';
-import type { ContextOpts, ContextResult, ContextResultEntry } from './context-types.js';
+import type { ContextOpts, ContextResult, ContextResultEntry, HandoffMode } from './context-types.js';
 import { strengthenOf } from './recall-record.js';
 import { tokenPurse } from './recall-render.js';
 import { type Context, type ContextWith, type StoreContext, ownerOrSubject } from './types.js';
@@ -165,6 +165,7 @@ interface TaskSections {
   activeSnapshot: TaskSnapshot | null;
   shownSnapshot: TaskSnapshot | null;
   shownHandoff: SessionHandoff | null;
+  handoffMode: HandoffMode;
   shownEvents: SessionEvent[];
   left: number;
 }
@@ -217,7 +218,7 @@ export async function getContext(
     entries: recorded.items,
     tokens,
     activeSnapshot: sections.shownSnapshot ?? undefined,
-    sessionHandoff: sections.shownHandoff ?? undefined,
+    ...handoffResult(sections),
     recentEvents: sections.shownEvents.length > 0 ? sections.shownEvents : undefined,
     ambientState: recorded.ambientState,
   };
@@ -419,7 +420,9 @@ async function loadTaskSections(
     raw.handoff && passesScopeFilterForRecall(rowScope(raw.handoff), exactScope, ownScope) ? raw.handoff : null;
   const recentSessionEvents = raw.events.filter((e) => passesScopeFilterForRecall(rowScope(e), exactScope, ownScope));
   const shownSnapshot = activeSnapshot && (!cost || pays(cost.snapshot(activeSnapshot))) ? activeSnapshot : null;
-  const shownHandoff = sessionHandoff && (!cost || pays(cost.handoff(sessionHandoff))) ? sessionHandoff : null;
+  const handoffMode = sessionHandoff ? handoffModeFor(opts, sessionHandoff) : 'full';
+  const shownHandoff =
+    sessionHandoff && (!cost || pays(cost.handoff(sessionHandoff, handoffMode))) ? sessionHandoff : null;
   const shownEvents =
     recentSessionEvents.length > 0 && (!cost || pays(cost.trail(recentSessionEvents))) ? recentSessionEvents : [];
   plan.obs?.sections(
@@ -428,7 +431,20 @@ async function loadTaskSections(
       Number(sessionHandoff !== shownHandoff) +
       Number(recentSessionEvents.length !== shownEvents.length),
   );
-  return { activeSnapshot, shownSnapshot, shownHandoff, shownEvents, left: left() };
+  return { activeSnapshot, shownSnapshot, shownHandoff, handoffMode, shownEvents, left: left() };
+}
+
+// A session's own handoff is its working state, so only another session's shrinks to the pointer.
+function handoffModeFor(opts: ContextOpts, h: SessionHandoff): HandoffMode {
+  return opts.handoffMode === 'pointer' && h.sessionId !== opts.currentSessionId ? 'pointer' : 'full';
+}
+
+// The mode is left out of a full print, so every reader's result reads as before.
+function handoffResult(s: TaskSections): Pick<ContextResult, 'sessionHandoff' | 'handoffMode'> {
+  const sessionHandoff = s.shownHandoff ?? undefined;
+  return sessionHandoff && s.handoffMode === 'pointer'
+    ? { sessionHandoff, handoffMode: 'pointer' }
+    : { sessionHandoff };
 }
 
 function ambientAdmission(opts: ContextOpts, plan: ContextPlan, shownHandoff: SessionHandoff | null): ContextAdmission {

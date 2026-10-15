@@ -14,14 +14,15 @@ import { cliApiContext } from './api-context.js';
 import { renderAmbientSummary } from '../core/ambient.js';
 import { contextBlockLines, contextCost, crossProjectLines, settleTokens } from '../api/context-render.js';
 import {
-  additionalContextOutput,
   type ContextView,
   flushDeliveryRecorder,
   hasContextData,
+  renderHookContext,
   startDeliveryRecorder,
   sessionStartEnvelope,
   toRenderItems,
 } from '../api/prompt-hook.js';
+import { ownerOrSubject } from '../api/types.js';
 import {
   type CliFlags,
   parseLimitFlag,
@@ -162,8 +163,9 @@ async function renderContext(
     result,
     reach: ledgerReachOf(ctx),
     envelope,
+    owner: ctx.reach?.shared ? ownerOrSubject(ctx.actor) : undefined,
   };
-  renderContextView(view, format, query);
+  await renderContextView(view, format, query);
 }
 
 function contextQuery(args: string[], flags: CliFlags): string {
@@ -171,15 +173,30 @@ function contextQuery(args: string[], flags: CliFlags): string {
   return !query && flags['auto'] ? autoDetectContext() : query;
 }
 
-function renderContextView(view: ContextView, format: string, query: string): void {
+async function renderContextView(view: ContextView, format: string, query: string): Promise<void> {
   if (format === 'json') {
     renderContextJson(view, query);
   } else if (format === 'additional-context' || format === 'copilot') {
-    const stdout = additionalContextOutput(view);
-    if (stdout) process.stdout.write(stdout);
+    await printHookContext(view);
   } else {
     renderContextMarkdown(view);
   }
+}
+
+/** Books the rows only once stdout took the text, so a mark never claims a block the host did not get. */
+async function printHookContext(view: ContextView): Promise<void> {
+  const rendered = renderHookContext(view);
+  if (rendered.stdout && !(await writeStdout(rendered.stdout))) return;
+  rendered.book();
+}
+
+function writeStdout(text: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    process.stdout.write(text, (error) => {
+      if (error) log.warn(`hook block not written, so not marked sent: ${errorMessage(error)}`, errorFields(error));
+      resolve(!error);
+    });
+  });
 }
 
 interface ContextSession {
@@ -228,6 +245,8 @@ function buildContextOpts(flags: CliFlags, input: ContextOptsInput): api.Context
     crossProject,
     currentSessionId: input.session.currentSessionId,
     prompt: input.session.prompt,
+    // Only the per-prompt hook shortens another session's handoff; a session-start reply and every reader get it whole.
+    handoffMode: input.pinnedOnly && input.format === 'additional-context' ? 'pointer' : 'full',
     // JSON is budgeted as the markdown it stands for, so one budget picks the same memories in every format.
     cost: contextCost(
       input.format === 'additional-context' || input.format === 'copilot' ? 'additional-context' : 'markdown',

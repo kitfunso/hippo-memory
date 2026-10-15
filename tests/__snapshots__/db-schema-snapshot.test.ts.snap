@@ -230,6 +230,11 @@ exports[`fresh store schema > matches the pinned sqlite_master and user_version 
       "type": "index",
     },
     {
+      "name": "idx_memories_artifact_ref",
+      "sql": "CREATE INDEX idx_memories_artifact_ref ON memories(tenant_id, artifact_ref) WHERE artifact_ref IS NOT NULL",
+      "type": "index",
+    },
+    {
       "name": "idx_memories_created_drift",
       "sql": "CREATE INDEX idx_memories_created_drift
           ON memories(tenant_id) WHERE superseded_by IS NULL AND (length(created) <> 24 OR created NOT LIKE '%Z')",
@@ -1522,7 +1527,7 @@ exports[`fresh store schema > matches the pinned sqlite_master and user_version 
           items      INTEGER NOT NULL DEFAULT 0,
           tokens     INTEGER NOT NULL DEFAULT 0,
           block_hash TEXT
-        )",
+        , sent_keys TEXT)",
       "type": "table",
     },
     {
@@ -2104,6 +2109,6 @@ exports[`fresh store schema > matches the pinned sqlite_master and user_version 
       "type": "trigger",
     },
   ],
-  "userVersion": 56,
+  "userVersion": 58,
 }
 `;
