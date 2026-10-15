@@ -7,7 +7,7 @@ import { getGlobalRoot, initGlobal } from '../sharing/global-store.js';
 import { loadConfig } from '../core/config.js';
 import { resolveTenantId } from '../store/tenant.js';
 import { runWithRequestStores } from '../db/index.js';
-import { hasGroup, type HippoStore, type StoreGroup } from '../store/index.js';
+import { hasGroup, narrowStore, type HippoStore, type StoreGroup } from '../store/index.js';
 import { type TokenSurface } from '../store/token-ledger.js';
 import { estimateTokens } from '../util/token-text.js';
 import { PACKAGE_VERSION } from '../util/version.js';
@@ -21,6 +21,7 @@ import {
   type McpRequest,
   type McpResponse,
   type StoreOpener,
+  type ToolCall,
   type ToolHandler,
 } from './protocol.js';
 import { TOOLS, TOOLS_BY_NAME, ARGS_CHECKED_BY_API } from './tools.js';
@@ -87,26 +88,34 @@ export async function recordMcpTokens(
 // ── Tool execution ──
 
 interface ToolEntry {
-  readonly handler: ToolHandler;
+  readonly run: ToolHandler;
   /** The store group it reaches its store through, so it runs under
    * any store that has it; unset means hippo.db's local files. */
   readonly storeReady?: StoreGroup;
 }
 
+/** A tool that reaches its store through `group`: the call it gets carries the store narrowed to it. */
+function toolOn<G extends StoreGroup>(group: G, handler: ToolHandler<G>): ToolEntry {
+  return {
+    storeReady: group,
+    run: (call: ToolCall) => handler({ ...call, store: narrowStore(call.store, group) }),
+  };
+}
+
 const TOOL_HANDLERS: ReadonlyMap<string, ToolEntry> = new Map<string, ToolEntry>([
-  ['hippo_recall', { handler: runRecallTool, storeReady: 'base' }],
-  ['hippo_assemble', { handler: runAssembleTool, storeReady: 'dagReads' }],
-  ['hippo_drill', { handler: runDrillTool, storeReady: 'dagReads' }],
-  ['hippo_predict_baserate', { handler: runPredictBaserateTool, storeReady: 'predictions' }],
-  ['hippo_remember', { handler: runRememberTool, storeReady: 'entryWrites' }],
-  ['hippo_outcome', { handler: runOutcomeTool, storeReady: 'entryWrites' }],
-  ['hippo_context', { handler: runContextTool, storeReady: 'contextReads' }],
-  ['hippo_status', { handler: runStatusTool }],
-  ['hippo_learn', { handler: runLearnTool, storeReady: 'lessonWrites' }],
-  ['hippo_conflicts', { handler: runConflictsTool }],
-  ['hippo_resolve', { handler: runResolveTool }],
-  ['hippo_share', { handler: runShareTool }],
-  ['hippo_peers', { handler: runPeersTool }],
+  ['hippo_recall', toolOn('base', runRecallTool)],
+  ['hippo_assemble', toolOn('dagReads', runAssembleTool)],
+  ['hippo_drill', toolOn('dagReads', runDrillTool)],
+  ['hippo_predict_baserate', toolOn('predictions', runPredictBaserateTool)],
+  ['hippo_remember', toolOn('entryWrites', runRememberTool)],
+  ['hippo_outcome', toolOn('entryWrites', runOutcomeTool)],
+  ['hippo_context', toolOn('contextReads', runContextTool)],
+  ['hippo_status', { run: runStatusTool }],
+  ['hippo_learn', toolOn('lessonWrites', runLearnTool)],
+  ['hippo_conflicts', { run: runConflictsTool }],
+  ['hippo_resolve', { run: runResolveTool }],
+  ['hippo_share', { run: runShareTool }],
+  ['hippo_peers', { run: runPeersTool }],
 ]);
 
 /** Stdio serves no store and runs every tool on the folder's hippo.db. */
@@ -129,10 +138,10 @@ async function executeTool(
   // HTTP Bearer for tenant B does not drop to HIPPO_TENANT.
   const tenantId = ctx?.tenantId ?? resolveTenantId({});
 
-  const handler = TOOL_HANDLERS.get(name)?.handler;
+  const run = TOOL_HANDLERS.get(name)?.run;
   // handleMcpRequest rejects names missing from TOOLS, so reaching here means TOOLS and this table drifted apart.
-  if (!handler) throw new Error(`hippo-mcp: tool ${name} is declared but has no handler`);
-  return handler({ args, ctx, hippoRoot, store: resolveStore(ctx, makeStore, hippoRoot), config, tenantId });
+  if (!run) throw new Error(`hippo-mcp: tool ${name} is declared but has no handler`);
+  return run({ args, ctx, hippoRoot, store: resolveStore(ctx, makeStore, hippoRoot), config, tenantId });
 }
 
 // ── Request handling ──

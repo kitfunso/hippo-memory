@@ -43,7 +43,7 @@ export async function handleRecallMemories({ res, ctx, query }: AuthedRouteReque
 // raws, summary substitutions, bio-aware
 // budget fit). Tenant scope from the Bearer; default-deny on private rows.
 export async function handleAssembleSession(
-  { res, ctx, query }: AuthedRouteRequest,
+  { res, ctx, query }: AuthedRouteRequest<'dagReads'>,
   assembleMatch: Record<string, string>,
 ): Promise<void> {
   validateIdSegment(assembleMatch.id!, 'session id');
@@ -84,7 +84,7 @@ export async function handleAssembleSession(
 // (RecallResultItem.isSummary) to recover the
 // originals. Tenant-scoped via Bearer; default-deny on private scopes for the summary and its children.
 export async function handleDrillRecall(
-  { res, ctx, query }: AuthedRouteRequest,
+  { res, ctx, query }: AuthedRouteRequest<'dagReads'>,
   drillMatch: Record<string, string>,
 ): Promise<void> {
   validateIdSegment(drillMatch.id!, 'summary id');
@@ -145,7 +145,7 @@ function contextReader(hippoRoot: string, query: URLSearchParams): ProjectRef {
 // Bearer.
 // Pinned-only and '*' fallback skip the recall audit emit (as cmdContext does); a real-query hybrid search emits one
 // 'recall' row.
-export async function handleGetContext({ res, ctx, opts, query }: AuthedRouteRequest): Promise<void> {
+export async function handleGetContext({ res, ctx, opts, query }: AuthedRouteRequest<'contextReads'>): Promise<void> {
   const parsed = parseContextRequest(httpParams(query));
   const result = await getContext(ctx, {
     ...parsed,

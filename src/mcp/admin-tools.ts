@@ -14,7 +14,9 @@ const BASERATE_DECIMALS = 3;
 
 const NOT_RESOLVED = 'Could not resolve. Check the conflict ID and --keep value.';
 
-export async function runPredictBaserateTool({ args, ctx, hippoRoot, tenantId, store }: ToolCall): Promise<string> {
+export async function runPredictBaserateTool(
+  { args, ctx, hippoRoot, tenantId, store }: ToolCall<'predictions'>
+): Promise<string> {
   // Text-only reply, matching the other MCP tools; the group's read writes the audit row, so no surface can skip it.
   const classTag = String(args.class_tag || '').trim();
   if (!classTag) {

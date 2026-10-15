@@ -1,6 +1,6 @@
 // Public option and handle types for serve(), plus the /v1 route shape.
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import type { StoreContext } from '../api/index.js';
+import type { ContextWith, StoreContext } from '../api/index.js';
 import type { JsonValue } from '../util/json.js';
 import type { RateLimiter } from './rate-limit.js';
 import type { HippoStore, StoreGroup } from '../store/index.js';
@@ -107,13 +107,15 @@ export interface RouteRequest {
 }
 
 /** A request past the dispatch gate, carrying the caller the gate authenticated. */
-export interface AuthedRouteRequest extends RouteRequest {
-  ctx: StoreContext;
+export interface AuthedRouteRequest<G extends StoreGroup = 'base'> extends RouteRequest {
+  ctx: ContextWith<G>;
 }
 
 /** A route's store status: a `storeReady` group, a `sqliteOnly`
  * reason, or neither while it waits for a group; never both. */
-type StoreStatus = { storeReady?: StoreGroup; sqliteOnly?: never } | { sqliteOnly: string; storeReady?: never };
+type StoreStatus<S extends StoreGroup> =
+  | { storeReady?: S; sqliteOnly?: never }
+  | { sqliteOnly: string; storeReady?: never };
 
 /** What the dispatch gate proves before a handler runs: any caller, an admin, a host admin on loopback, or nothing, for
  * a route whose handler checks the sender's signature itself. */
@@ -126,7 +128,14 @@ export type RouteEndpoint<R> =
 
 /** One /v1 route: an exact path, a matchPath pattern, or a regex, each paired with one method's handler. Under another
  * store it runs only with its store's `storeReady` group; `loop: 'off'` runs its SQLite work on a worker thread. */
-export type Route = { method: string; loop?: 'off' } & StoreStatus & (
-  | ({ auth: Exclude<RouteAuth, 'webhook-signature'> } & RouteEndpoint<AuthedRouteRequest>)
-  | ({ auth: 'webhook-signature' } & RouteEndpoint<RouteRequest>)
-);
+export type RouteOf<G extends StoreGroup, S extends StoreGroup = G> =
+  & { method: string; loop?: 'off' }
+  & StoreStatus<S>
+  & (
+    | ({ auth: Exclude<RouteAuth, 'webhook-signature'> } & RouteEndpoint<AuthedRouteRequest<G>>)
+    | ({ auth: 'webhook-signature' } & RouteEndpoint<RouteRequest>)
+  );
+
+/** A route as the table holds it, its handler's group erased: `defineRoute` is where a handler's group meets the
+ * row's `storeReady`. */
+export type Route = RouteOf<'base', StoreGroup>;

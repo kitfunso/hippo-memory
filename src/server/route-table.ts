@@ -1,7 +1,8 @@
-import type { StoreContext } from '../api/index.js';
+import { narrowContext, type StoreContext } from '../api/index.js';
 import { handleGitHubEventsWebhook } from '../connectors/github/webhook.js';
+import type { ConnectorStore } from '../connectors/store.js';
 import { handleSlackEventsWebhook } from '../connectors/slack/webhook.js';
-import { hasGroup, requireGroup, type HippoStore, type StoreGroup } from '../store/index.js';
+import { hasGroup, narrowStore, type StoreGroup } from '../store/index.js';
 import { HttpError, JSON_HEADERS, sendJson, STORE_NOT_PORTED_MESSAGE, type WebhookRequest } from '../util/http-util.js';
 import { assertCrossTenantAdmin, buildContextWithAuth, isLoopback } from './auth.js';
 import { matchPath, noteAccess } from './request.js';
@@ -85,494 +86,547 @@ import {
   handleSupersedeSkill,
 } from './routes/skills.js';
 import { parseJsonBody } from './validation.js';
-import type { AuthedRouteRequest, ResolvedServeOpts, Route, RouteRequest, RouteEndpoint } from './types.js';
+import type { AuthedRouteRequest, ResolvedServeOpts, Route, RouteOf, RouteRequest, RouteEndpoint } from './types.js';
 
 const WEBHOOK_GROUPS = ['entryWrites', 'connectorWrites', 'connectorEvents'] as const;
 
 /** A store missing a group a delivery writes through refuses the webhook up front, so no delivery is acknowledged
  * and then half stored. */
-function webhook(handle: (r: WebhookRequest, store: HippoStore) => Promise<void>): (r: RouteRequest) => Promise<void> {
+function webhook(
+  handle: (r: WebhookRequest, store: ConnectorStore) => Promise<void>,
+): (r: RouteRequest) => Promise<void> {
   return async ({ req, res, opts }) => {
-    for (const group of WEBHOOK_GROUPS) requireGroup(opts.store, group);
-    await handle({ req, res, opts }, opts.store);
+    await handle({ req, res, opts }, narrowStore(opts.store, ...WEBHOOK_GROUPS));
   };
+}
+
+/** A handler that gets its request with the ctx narrowed to `group`, which the dispatch gate has already proved. */
+function narrowed<G extends StoreGroup, A extends unknown[]>(
+  group: G,
+  handler: (r: AuthedRouteRequest<G>, ...rest: A) => Promise<void>,
+): (r: AuthedRouteRequest, ...rest: A) => Promise<void> {
+  return (r, ...rest) => handler({ ...r, ctx: narrowContext(r.ctx, group) }, ...rest);
+}
+
+/** One table row: the handler's group must be the row's `storeReady` (a row naming none needs `localFiles`), so a
+ * handler cannot reach a group its gate never checked. */
+function defineRoute<G extends StoreGroup = 'localFiles'>(route: RouteOf<G>): Route {
+  if (route.auth === 'webhook-signature') return route;
+  // SAFETY: a row that names no group only exists while G is its 'localFiles' default.
+  const group = (route.storeReady ?? 'localFiles') as G;
+  if ('path' in route) return { ...route, handler: narrowed(group, route.handler) };
+  if ('pattern' in route) return { ...route, handler: narrowed(group, route.handler) };
+  return { ...route, handler: narrowed(group, route.handler) };
 }
 
 /** The /v1 routes in dispatch order; the first entry whose method and path match handles the request. Each row's `auth`
  * is what the dispatch gate proves before its handler runs, so a handler never checks the caller itself. */
 export const V1_ROUTES: readonly Route[] = [
-  {
+  defineRoute({
     method: 'POST',
     path: '/v1/memories',
     auth: 'caller',
     storeReady: 'entryWrites',
     loop: 'off',
     handler: handleCreateMemory,
-  },
-  { method: 'GET', path: '/v1/graph', auth: 'caller', storeReady: 'graphReads', loop: 'off', handler: handleGetGraph },
-  {
+  }),
+  defineRoute({
+    method: 'GET',
+    path: '/v1/graph',
+    auth: 'caller',
+    storeReady: 'graphReads',
+    loop: 'off',
+    handler: handleGetGraph,
+  }),
+  defineRoute({
     method: 'GET',
     path: '/v1/memories',
     auth: 'caller',
     storeReady: 'base',
     loop: 'off',
     handler: handleRecallMemories,
-  },
-  {
+  }),
+  defineRoute({
     method: 'GET',
     pattern: '/v1/sessions/:id/assemble',
     auth: 'caller',
     storeReady: 'dagReads',
     loop: 'off',
     handler: handleAssembleSession,
-  },
-  {
+  }),
+  defineRoute({
     method: 'GET',
     pattern: '/v1/recall/drill/:id',
     auth: 'caller',
     storeReady: 'dagReads',
     handler: handleDrillRecall,
-  },
-  {
+  }),
+  defineRoute({
     method: 'POST',
     pattern: '/v1/memories/:id/archive',
     auth: 'caller',
     storeReady: 'entryWrites',
     loop: 'off',
     handler: handleArchiveMemory,
-  },
-  {
+  }),
+  defineRoute({
     method: 'POST',
     pattern: '/v1/memories/:id/supersede',
     auth: 'caller',
     storeReady: 'entryWrites',
     loop: 'off',
     handler: handleSupersedeMemory,
-  },
-  {
+  }),
+  defineRoute({
     method: 'POST',
     pattern: '/v1/memories/:id/promote',
     auth: 'caller',
     sqliteOnly: 'copies a memory between the two local hippo.db files',
     handler: handlePromoteMemory,
-  },
-  {
+  }),
+  defineRoute({
     method: 'DELETE',
     pattern: '/v1/memories/:id',
     auth: 'caller',
     storeReady: 'entryWrites',
     loop: 'off',
     handler: handleForgetMemory,
-  },
-  { method: 'POST', path: '/v1/outcome', auth: 'caller', storeReady: 'entryWrites', handler: handleApplyOutcome },
-  { method: 'GET', path: '/v1/context', auth: 'caller', storeReady: 'contextReads', handler: handleGetContext },
-  {
+  }),
+  defineRoute({
+    method: 'POST',
+    path: '/v1/outcome',
+    auth: 'caller',
+    storeReady: 'entryWrites',
+    handler: handleApplyOutcome,
+  }),
+  defineRoute({
+    method: 'GET',
+    path: '/v1/context',
+    auth: 'caller',
+    storeReady: 'contextReads',
+    handler: handleGetContext,
+  }),
+  defineRoute({
     method: 'POST',
     path: '/v1/sleep',
     auth: 'host-admin-local',
     sqliteOnly: 'consolidates every tenant under the local hippo root in this process',
     handler: handleSleep,
-  },
-  {
+  }),
+  defineRoute({
     method: 'POST',
     path: '/v1/auth/keys',
     auth: 'caller',
     storeReady: 'keyWrites',
     loop: 'off',
     handler: handleCreateAuthKey,
-  },
-  {
+  }),
+  defineRoute({
     method: 'GET',
     path: '/v1/auth/keys',
     auth: 'caller',
     storeReady: 'keyWrites',
     loop: 'off',
     handler: handleListAuthKeys,
-  },
-  {
+  }),
+  defineRoute({
     method: 'DELETE',
     pattern: '/v1/auth/keys/:keyId',
     auth: 'caller',
     storeReady: 'keyAudit',
     loop: 'off',
     handler: handleRevokeAuthKey,
-  },
-  {
+  }),
+  defineRoute({
     method: 'GET',
     path: '/v1/quarantine',
     auth: 'admin',
     storeReady: 'quarantine',
     loop: 'off',
     handler: handleListQuarantine,
-  },
-  {
+  }),
+  defineRoute({
     method: 'POST',
     pattern: '/v1/quarantine/:id/approve',
     auth: 'admin',
     storeReady: 'quarantine',
     loop: 'off',
     handler: handleApproveQuarantine,
-  },
-  {
+  }),
+  defineRoute({
     method: 'POST',
     pattern: '/v1/quarantine/:id/reject',
     auth: 'admin',
     storeReady: 'quarantine',
     loop: 'off',
     handler: handleRejectQuarantine,
-  },
-  { method: 'GET', path: '/v1/audit', auth: 'admin', storeReady: 'auditLog', loop: 'off', handler: handleListAudit },
-  {
+  }),
+  defineRoute({
+    method: 'GET',
+    path: '/v1/audit',
+    auth: 'admin',
+    storeReady: 'auditLog',
+    loop: 'off',
+    handler: handleListAudit,
+  }),
+  defineRoute({
     method: 'POST',
     path: '/v1/predictions',
     auth: 'caller',
     storeReady: 'predictions',
     loop: 'off',
     handler: handleCreatePrediction,
-  },
-  {
+  }),
+  defineRoute({
     method: 'GET',
     path: '/v1/predictions',
     auth: 'caller',
     storeReady: 'predictions',
     loop: 'off',
     handler: handleListPredictions,
-  },
-  {
+  }),
+  defineRoute({
     method: 'GET',
     path: '/v1/predictions/stats',
     auth: 'caller',
     storeReady: 'predictions',
     loop: 'off',
     handler: handlePredictionStats,
-  },
-  {
+  }),
+  defineRoute({
     method: 'GET',
     regex: /^\/v1\/predictions\/(\d+)$/,
     auth: 'caller',
     storeReady: 'predictions',
     loop: 'off',
     handler: handleGetPrediction,
-  },
-  {
+  }),
+  defineRoute({
     method: 'POST',
     regex: /^\/v1\/predictions\/(\d+)\/close$/,
     auth: 'caller',
     storeReady: 'predictions',
     loop: 'off',
     handler: handleClosePrediction,
-  },
-  {
+  }),
+  defineRoute({
     method: 'POST',
     path: '/v1/decisions',
     auth: 'caller',
     storeReady: 'objects',
     loop: 'off',
     handler: handleCreateDecision,
-  },
-  {
+  }),
+  defineRoute({
     method: 'GET',
     path: '/v1/decisions',
     auth: 'caller',
     storeReady: 'objects',
     loop: 'off',
     handler: handleListDecisions,
-  },
-  {
+  }),
+  defineRoute({
     method: 'POST',
     regex: /^\/v1\/decisions\/(\d+)\/supersede$/,
     auth: 'caller',
     storeReady: 'objects',
     loop: 'off',
     handler: handleSupersedeDecision,
-  },
-  {
+  }),
+  defineRoute({
     method: 'POST',
     regex: /^\/v1\/decisions\/(\d+)\/close$/,
     auth: 'caller',
     storeReady: 'objects',
     loop: 'off',
     handler: handleCloseDecision,
-  },
-  {
+  }),
+  defineRoute({
     method: 'GET',
     regex: /^\/v1\/decisions\/(\d+)$/,
     auth: 'caller',
     storeReady: 'objects',
     loop: 'off',
     handler: handleGetDecision,
-  },
-  {
+  }),
+  defineRoute({
     method: 'POST',
     path: '/v1/incidents',
     auth: 'caller',
     storeReady: 'objects',
     loop: 'off',
     handler: handleCreateIncident,
-  },
-  {
+  }),
+  defineRoute({
     method: 'GET',
     path: '/v1/incidents',
     auth: 'caller',
     storeReady: 'objects',
     loop: 'off',
     handler: handleListIncidents,
-  },
-  {
+  }),
+  defineRoute({
     method: 'POST',
     regex: /^\/v1\/incidents\/(\d+)\/resolve$/,
     auth: 'caller',
     storeReady: 'objects',
     loop: 'off',
     handler: handleResolveIncident,
-  },
-  {
+  }),
+  defineRoute({
     method: 'POST',
     regex: /^\/v1\/incidents\/(\d+)\/close$/,
     auth: 'caller',
     storeReady: 'objects',
     loop: 'off',
     handler: handleCloseIncident,
-  },
-  {
+  }),
+  defineRoute({
     method: 'GET',
     regex: /^\/v1\/incidents\/(\d+)$/,
     auth: 'caller',
     storeReady: 'objects',
     loop: 'off',
     handler: handleGetIncident,
-  },
-  {
+  }),
+  defineRoute({
     method: 'POST',
     path: '/v1/processes',
     auth: 'caller',
     storeReady: 'objects',
     loop: 'off',
     handler: handleCreateProcess,
-  },
-  {
+  }),
+  defineRoute({
     method: 'GET',
     path: '/v1/processes',
     auth: 'caller',
     storeReady: 'objects',
     loop: 'off',
     handler: handleListProcesses,
-  },
-  {
+  }),
+  defineRoute({
     method: 'POST',
     regex: /^\/v1\/processes\/(\d+)\/supersede$/,
     auth: 'caller',
     storeReady: 'objects',
     loop: 'off',
     handler: handleSupersedeProcess,
-  },
-  {
+  }),
+  defineRoute({
     method: 'POST',
     regex: /^\/v1\/processes\/(\d+)\/close$/,
     auth: 'caller',
     storeReady: 'objects',
     loop: 'off',
     handler: handleCloseProcess,
-  },
-  {
+  }),
+  defineRoute({
     method: 'GET',
     regex: /^\/v1\/processes\/(\d+)$/,
     auth: 'caller',
     storeReady: 'objects',
     loop: 'off',
     handler: handleGetProcess,
-  },
-  {
+  }),
+  defineRoute({
     method: 'POST',
     path: '/v1/policies',
     auth: 'caller',
     storeReady: 'objects',
     loop: 'off',
     handler: handleCreatePolicy,
-  },
-  {
+  }),
+  defineRoute({
     method: 'GET',
     path: '/v1/policies',
     auth: 'caller',
     storeReady: 'objects',
     loop: 'off',
     handler: handleListPolicies,
-  },
-  {
+  }),
+  defineRoute({
     method: 'GET',
     path: '/v1/policies/asof',
     auth: 'caller',
     storeReady: 'objects',
     loop: 'off',
     handler: handlePoliciesAsOf,
-  },
-  {
+  }),
+  defineRoute({
     method: 'POST',
     regex: /^\/v1\/policies\/(\d+)\/supersede$/,
     auth: 'caller',
     storeReady: 'objects',
     loop: 'off',
     handler: handleSupersedePolicy,
-  },
-  {
+  }),
+  defineRoute({
     method: 'POST',
     regex: /^\/v1\/policies\/(\d+)\/close$/,
     auth: 'caller',
     storeReady: 'objects',
     loop: 'off',
     handler: handleClosePolicy,
-  },
-  {
+  }),
+  defineRoute({
     method: 'GET',
     regex: /^\/v1\/policies\/(\d+)$/,
     auth: 'caller',
     storeReady: 'objects',
     loop: 'off',
     handler: handleGetPolicy,
-  },
-  {
+  }),
+  defineRoute({
     method: 'POST',
     path: '/v1/skills',
     auth: 'caller',
     storeReady: 'objects',
     loop: 'off',
     handler: handleCreateSkill,
-  },
-  { method: 'GET', path: '/v1/skills', auth: 'caller', storeReady: 'objects', loop: 'off', handler: handleListSkills },
-  {
+  }),
+  defineRoute({
+    method: 'GET',
+    path: '/v1/skills',
+    auth: 'caller',
+    storeReady: 'objects',
+    loop: 'off',
+    handler: handleListSkills,
+  }),
+  defineRoute({
     method: 'GET',
     path: '/v1/skills/export',
     auth: 'caller',
     storeReady: 'objects',
     loop: 'off',
     handler: handleExportSkills,
-  },
-  {
+  }),
+  defineRoute({
     method: 'POST',
     regex: /^\/v1\/skills\/(\d+)\/supersede$/,
     auth: 'caller',
     storeReady: 'objects',
     loop: 'off',
     handler: handleSupersedeSkill,
-  },
-  {
+  }),
+  defineRoute({
     method: 'POST',
     regex: /^\/v1\/skills\/(\d+)\/close$/,
     auth: 'caller',
     storeReady: 'objects',
     loop: 'off',
     handler: handleCloseSkill,
-  },
-  {
+  }),
+  defineRoute({
     method: 'GET',
     regex: /^\/v1\/skills\/(\d+)$/,
     auth: 'caller',
     storeReady: 'objects',
     loop: 'off',
     handler: handleGetSkill,
-  },
-  {
+  }),
+  defineRoute({
     method: 'POST',
     path: '/v1/project-briefs',
     auth: 'caller',
     storeReady: 'objects',
     loop: 'off',
     handler: handleCreateProjectBrief,
-  },
-  {
+  }),
+  defineRoute({
     method: 'GET',
     path: '/v1/project-briefs',
     auth: 'caller',
     storeReady: 'objects',
     loop: 'off',
     handler: handleListProjectBriefs,
-  },
-  {
+  }),
+  defineRoute({
     method: 'POST',
     path: '/v1/project-briefs/refresh',
     auth: 'caller',
     storeReady: 'objects',
     loop: 'off',
     handler: handleRefreshProjectBrief,
-  },
-  {
+  }),
+  defineRoute({
     method: 'POST',
     regex: /^\/v1\/project-briefs\/(\d+)\/supersede$/,
     auth: 'caller',
     storeReady: 'objects',
     loop: 'off',
     handler: handleSupersedeProjectBrief,
-  },
-  {
+  }),
+  defineRoute({
     method: 'POST',
     regex: /^\/v1\/project-briefs\/(\d+)\/close$/,
     auth: 'caller',
     storeReady: 'objects',
     loop: 'off',
     handler: handleCloseProjectBrief,
-  },
-  {
+  }),
+  defineRoute({
     method: 'GET',
     regex: /^\/v1\/project-briefs\/(\d+)$/,
     auth: 'caller',
     storeReady: 'objects',
     loop: 'off',
     handler: handleGetProjectBrief,
-  },
-  {
+  }),
+  defineRoute({
     method: 'POST',
     path: '/v1/customer-notes',
     auth: 'caller',
     storeReady: 'objects',
     loop: 'off',
     handler: handleCreateCustomerNote,
-  },
-  {
+  }),
+  defineRoute({
     method: 'GET',
     path: '/v1/customer-notes',
     auth: 'caller',
     storeReady: 'objects',
     loop: 'off',
     handler: handleListCustomerNotes,
-  },
-  {
+  }),
+  defineRoute({
     method: 'POST',
     regex: /^\/v1\/customer-notes\/(\d+)\/supersede$/,
     auth: 'caller',
     storeReady: 'objects',
     loop: 'off',
     handler: handleSupersedeCustomerNote,
-  },
-  {
+  }),
+  defineRoute({
     method: 'POST',
     regex: /^\/v1\/customer-notes\/(\d+)\/close$/,
     auth: 'caller',
     storeReady: 'objects',
     loop: 'off',
     handler: handleCloseCustomerNote,
-  },
-  {
+  }),
+  defineRoute({
     method: 'GET',
     regex: /^\/v1\/customer-notes\/(\d+)$/,
     auth: 'caller',
     storeReady: 'objects',
     loop: 'off',
     handler: handleGetCustomerNote,
-  },
-  {
+  }),
+  defineRoute({
     method: 'POST',
     path: '/v1/connectors/slack/events',
     auth: 'webhook-signature',
     storeReady: 'connectorEvents',
     handler: webhook(handleSlackEventsWebhook),
-  },
-  {
+  }),
+  defineRoute({
     method: 'POST',
     path: '/v1/connectors/github/events',
     auth: 'webhook-signature',
     storeReady: 'connectorEvents',
     handler: webhook(handleGitHubEventsWebhook),
-  },
+  }),
 ];
 
 /** The handler bound to this path's params, or null when the path differs. */

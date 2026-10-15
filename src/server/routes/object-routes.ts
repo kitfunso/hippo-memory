@@ -72,7 +72,7 @@ async function found<K extends ObjectKind>(
 
 export async function listRoute<K extends ObjectKind>(
   cfg: ObjectRouteConfig<K>,
-  rr: AuthedRouteRequest,
+  rr: AuthedRouteRequest<'objects'>,
 ): Promise<void> {
   const { res, query, ctx } = rr;
   const status = query.get('status') ?? 'all';
@@ -93,7 +93,7 @@ export async function listRoute<K extends ObjectKind>(
 
 export async function getRoute<K extends ObjectKind>(
   cfg: ObjectRouteConfig<K>,
-  rr: AuthedRouteRequest,
+  rr: AuthedRouteRequest<'objects'>,
   match: RegExpMatchArray,
 ): Promise<void> {
   const id = parseInt(match[1], 10);
@@ -103,7 +103,7 @@ export async function getRoute<K extends ObjectKind>(
 
 export async function closeRoute<K extends ObjectKind>(
   cfg: ObjectRouteConfig<K>,
-  rr: AuthedRouteRequest,
+  rr: AuthedRouteRequest<'objects'>,
   match: RegExpMatchArray,
 ): Promise<void> {
   const id = parseInt(match[1], 10);
@@ -114,7 +114,7 @@ export async function closeRoute<K extends ObjectKind>(
 }
 
 export async function supersedeRoute<K extends SavableKind, W>(
-  cfg: VersionedRouteConfig<K, W>, rr: AuthedRouteRequest, match: RegExpMatchArray,
+  cfg: VersionedRouteConfig<K, W>, rr: AuthedRouteRequest<'objects'>, match: RegExpMatchArray,
 ): Promise<void> {
   const id = parseInt(match[1], 10);
   const { ctx } = rr;

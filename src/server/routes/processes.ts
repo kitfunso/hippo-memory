@@ -66,7 +66,7 @@ const processRoutes: VersionedRouteConfig<'process', SaveProcessOpts> = {
 // version that reuses the predecessor's name.
 // DoS caps: processName/description/changeSummary MAX_SHORT_FIELD_LEN, steps MAX_PROCESS_STEPS x MAX_PROCESS_STEP_LEN
 // (validateProcessStepsBody).
-export async function handleCreateProcess(rr: AuthedRouteRequest): Promise<void> {
+export async function handleCreateProcess(rr: AuthedRouteRequest<'objects'>): Promise<void> {
   const { ctx } = rr;
   const body = await parseJsonBody(rr.req, ctx);
   const process = await saveFor(ctx, PROCESS, {
@@ -77,18 +77,18 @@ export async function handleCreateProcess(rr: AuthedRouteRequest): Promise<void>
   sendJson(rr.res, 201, { process });
 }
 
-export function handleListProcesses(rr: AuthedRouteRequest): Promise<void> {
+export function handleListProcesses(rr: AuthedRouteRequest<'objects'>): Promise<void> {
   return listRoute(processRoutes, rr);
 }
 
-export function handleSupersedeProcess(rr: AuthedRouteRequest, match: RegExpMatchArray): Promise<void> {
+export function handleSupersedeProcess(rr: AuthedRouteRequest<'objects'>, match: RegExpMatchArray): Promise<void> {
   return supersedeRoute(processRoutes, rr, match);
 }
 
-export function handleCloseProcess(rr: AuthedRouteRequest, match: RegExpMatchArray): Promise<void> {
+export function handleCloseProcess(rr: AuthedRouteRequest<'objects'>, match: RegExpMatchArray): Promise<void> {
   return closeRoute(processRoutes, rr, match);
 }
 
-export function handleGetProcess(rr: AuthedRouteRequest, match: RegExpMatchArray): Promise<void> {
+export function handleGetProcess(rr: AuthedRouteRequest<'objects'>, match: RegExpMatchArray): Promise<void> {
   return getRoute(processRoutes, rr, match);
 }

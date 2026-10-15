@@ -16,27 +16,27 @@ import {
   type PromptHookRequest,
 } from './api/prompt-hook.js';
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from './core/api-errors.js';
-import { withStore } from './store/sqlite/store.js';
+import { withStoreGroups } from './store/sqlite/store.js';
 
 export { serve } from './server/boot.js';
 
 // An add-on hands in a Context with no store, so each entry that
 // needs one fills it with hippo.db under the Context's root.
 function authCreate(ctx: Context, opts: AuthCreateOpts): Promise<AuthCreateResult> {
-  return createKey(withStore(ctx), opts);
+  return createKey(withStoreGroups(ctx, 'keyWrites'), opts);
 }
 function authCreateSelf(ctx: Context, opts: AuthCreateSelfOpts): Promise<AuthCreateSelfResult> {
-  return createSelfKey(withStore(ctx), opts);
+  return createSelfKey(withStoreGroups(ctx, 'keyWrites'), opts);
 }
 function authRevoke(ctx: Context, keyId: string): Promise<AuthRevokeResult> {
-  return revokeKey(withStore(ctx), keyId);
+  return revokeKey(withStoreGroups(ctx, 'keyAudit'), keyId);
 }
 function promptHookContext(
   ctx: Context,
   req: PromptHookRequest,
   opts?: PromptHookOpts,
 ): ReturnType<typeof renderPromptHook> {
-  return renderPromptHook(withStore(ctx), req, opts);
+  return renderPromptHook(withStoreGroups(ctx, 'contextReads'), req, opts);
 }
 
 // Add-on packages mint and revoke keys through these without importing the whole api surface.

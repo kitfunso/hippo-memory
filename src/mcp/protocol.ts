@@ -12,7 +12,7 @@ import type { Actor as ApiActor } from '../api/index.js';
 import { findHippoStoreDir, type ResolveProjectIdentityOpts } from '../core/project-identity.js';
 import { type JsonValue } from '../util/json.js';
 import type { CallerProject } from '../api/prompt-hook.js';
-import type { HippoStore } from '../store/index.js';
+import type { HippoStore, StoreGroup, StoreWith } from '../store/index.js';
 import type { AutoSleepRunner } from '../api/auto-sleep.js';
 
 // ── Find hippo root ──
@@ -125,14 +125,15 @@ export function ownsServerCwd(ctx: McpContext | undefined): boolean {
 /** Builds the store for a folder; the stdio server is the one transport that passes it. */
 export type StoreOpener = (hippoRoot: string) => HippoStore;
 
-/** One tool call after the store, config and tenant are resolved; every handler reads the same five. */
-export interface ToolCall {
+/** One tool call after the store, config and tenant are resolved; every handler reads the same five. `G` is the group
+ * the dispatch gate proved on the store. */
+export interface ToolCall<G extends StoreGroup = 'base'> {
   args: Record<string, JsonValue>;
   ctx?: McpContext;
   hippoRoot: string;
-  store: HippoStore;
+  store: StoreWith<G>;
   config: ReturnType<typeof loadConfig>;
   tenantId: string;
 }
 
-export type ToolHandler = (call: ToolCall) => string | Promise<string>;
+export type ToolHandler<G extends StoreGroup = 'base'> = (call: ToolCall<G>) => string | Promise<string>;
