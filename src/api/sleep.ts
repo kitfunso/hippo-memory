@@ -51,6 +51,5 @@ export interface SleepResult {
 /** Sleeps the WHOLE hippoRoot, every tenant, so /v1/sleep stays loopback-only; SQLite only; never auto-deletes pinned,
  * raw, kept or object-backing rows. */
 export async function sleep(ctx: ContextWith<'localFiles'>, opts: SleepOpts = {}): Promise<SleepResult> {
-  // Sleep reopens hippo.db by folder, here and in its child process.
-  return runSleep(narrowContext(ctx, 'auditMaintenance', 'objects'), opts);
+  return runSleep(narrowContext(ctx, 'auditMaintenance', 'objects', 'localFiles'), opts);
 }

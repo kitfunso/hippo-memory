@@ -4,8 +4,7 @@ import { jaccardMinShared, overlapPartners } from './overlap-index.js';
 import { compareEntryIdentity } from '../core/compare.js';
 import { duplicateKey, mergedText } from '../util/same-text.js';
 import { successorAfterRetirement } from '../core/merged-row.js';
-import { rejectionDigest } from '../store/rejection.js';
-import { reportAuditWriteFailure } from '../store/audit.js';
+import { rejectionDigest } from '../core/rejection-digest.js';
 import { derivationScope, derivationPartitionKey } from '../core/recall-scope.js';
 import { jaccardSets } from './conflicts.js';
 import { keptAsWritten, type SleepRun } from './run.js';
@@ -213,20 +212,16 @@ function mergeRejected(
   // the old format digested the uncapped list, so rows past the cap were rejected too
   const rejected = newHit ? cluster : related;
   for (const e of rejected) used.add(e.id);
-  try {
-    tombstones.audit({
-      tenantId: semantic.tenant_id,
-      actor: 'sleep',
-      op: 'reject_refusal',
-      metadata: {
-        digest: mergeDigest,
-        reason: tombstone.reason,
-        sourceIds: rejected.map((e) => e.id),
-      },
-    });
-  } catch (error) {
-    reportAuditWriteFailure('reject_refusal', String(error));
-  }
+  tombstones.auditOrCount({
+    tenantId: semantic.tenant_id,
+    actor: 'sleep',
+    op: 'reject_refusal',
+    metadata: {
+      digest: mergeDigest,
+      reason: tombstone.reason,
+      sourceIds: rejected.map((e) => e.id),
+    },
+  });
   return true;
 }
 

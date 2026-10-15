@@ -26,6 +26,8 @@ import { drillDown, type DrillDownOutcome, type DrillDownResult } from '../src/a
 import { hybridSearch } from '../src/search/hybrid.js';
 import { isDagSummary } from '../src/search/boosts.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+import { sqliteConsolidation } from '../src/store/sqlite/consolidation-group.js';
+import { sqliteSyncStore } from '../src/store/sqlite/store.js';
 
 function makeOkFetcher(content: string = 'synthetic-entity-profile-content-xyz') {
   return vi.fn<typeof fetch>(async () => {
@@ -111,7 +113,7 @@ describe('level-3 entity profiles + drillDown depth', () => {
     [l2a, l2b, l2c].forEach((e) => writeEntry(hippoRoot, e));
 
     const fetcher = makeOkFetcher('synthetic-alice-entity-profile-content-zzz');
-    const result = await buildEntityProfiles(hippoRoot, [l2a, l2b, l2c], {
+    const result = await buildEntityProfiles(sqliteSyncStore(hippoRoot).localFiles, [l2a, l2b, l2c], {
       apiKey: 'test-key',
       fetcher,
     });
@@ -157,7 +159,7 @@ describe('level-3 entity profiles + drillDown depth', () => {
   it('test #2: no clustering below threshold — 1 L2 summary -> 0 profiles', async () => {
     const l2 = makeL2Summary('alone fact content', 'alice');
     writeEntry(hippoRoot, l2);
-    const result = await buildEntityProfiles(hippoRoot, [l2], {
+    const result = await buildEntityProfiles(sqliteSyncStore(hippoRoot).localFiles, [l2], {
       apiKey: 'k',
       fetcher: makeOkFetcher(),
     });
@@ -173,7 +175,7 @@ describe('level-3 entity profiles + drillDown depth', () => {
     const unparented2 = makeL2Summary('unlinked alice topic two', 'alice');
     [parented, unparented1, unparented2].forEach((e) => writeEntry(hippoRoot, e));
 
-    const result = await buildEntityProfiles(hippoRoot, [parented, unparented1, unparented2], {
+    const result = await buildEntityProfiles(sqliteSyncStore(hippoRoot).localFiles, [parented, unparented1, unparented2], {
       apiKey: 'k',
       fetcher: makeOkFetcher(),
     });
@@ -198,7 +200,7 @@ describe('level-3 entity profiles + drillDown depth', () => {
     writeEntry(hippoRoot, l2a);
     writeEntry(hippoRoot, l2b);
 
-    await buildEntityProfiles(hippoRoot, [l2a, l2b], {
+    await buildEntityProfiles(sqliteSyncStore(hippoRoot).localFiles, [l2a, l2b], {
       apiKey: 'k',
       fetcher: makeOkFetcher('alice-clean-profile-content-zzz'),
     });
@@ -279,7 +281,7 @@ describe('level-3 entity profiles + drillDown depth', () => {
       );
     });
 
-    const result = await rebuildDirtySummaries(hippoRoot, {
+    const result = await rebuildDirtySummaries(sqliteConsolidation(hippoRoot), {
       apiKey: 'k',
       fetcher,
       cap: 20,
@@ -465,7 +467,7 @@ describe('level-3 entity profiles + drillDown depth', () => {
     [...tenantAL2s, ...tenantBL2s].forEach((e) => writeEntry(hippoRoot, e));
 
     const result = await buildEntityProfiles(
-      hippoRoot,
+      sqliteSyncStore(hippoRoot).localFiles,
       [...tenantAL2s, ...tenantBL2s],
       { apiKey: 'k', fetcher: makeOkFetcher('synthetic-multi-tenant-profile-content-xyz') },
     );

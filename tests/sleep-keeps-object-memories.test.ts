@@ -18,6 +18,7 @@ import { loadAllEntries, readEntry } from '../src/store/entry-reads.js';
 import { batchWriteAndDelete, deleteEntry, memoriesBackingObjects } from '../src/store/delete-and-batch.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 import { objectsAt } from './_helpers/objects-at.js';
+import { sqliteConsolidation } from '../src/store/sqlite/consolidation-group.js';
 
 const roots: string[] = [];
 
@@ -124,6 +125,6 @@ it('control: a plain weaker copy is still removed by dedupe', () => {
   writeEntry(root, keeper);
   writeEntry(root, copy);
 
-  expect(deduplicateStore(root).removed).toBe(1);
+  expect(deduplicateStore(sqliteConsolidation(root)).removed).toBe(1);
   expect(readEntry(root, copy.id)).toBeNull();
 });

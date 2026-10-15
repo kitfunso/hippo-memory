@@ -6,8 +6,7 @@
  */
 
 import { textOverlap } from '../util/tokenize.js';
-import { loadCurrentDistilledEntries } from '../store/entry-reads.js';
-import { deleteEntriesOneByOne, memoriesBackingObjects } from '../store/delete-and-batch.js';
+import type { Consolidation } from '../store/port.js';
 import { compareEntryIdentity } from '../core/compare.js';
 import { canAutoDelete, type MemoryEntry } from '../core/memory.js';
 import { derivationPartitionKey } from '../core/recall-scope.js';
@@ -116,7 +115,7 @@ export interface LoadedStore {
   readonly backing: ReadonlySet<string>;
 }
 
-/** The rows loadCurrentDistilledEntries selects, picked from a whole-store read. */
+/** The rows currentDistilledEntries selects, picked from a whole-store read. */
 const isCurrentDistilled = (e: MemoryEntry): boolean => (e.kind ?? 'distilled') === 'distilled' && !e.superseded_by;
 
 /**
@@ -124,20 +123,20 @@ const isCurrentDistilled = (e: MemoryEntry): boolean => (e.kind ?? 'distilled') 
  * duplicates (isolation boundary).
  * Higher strength wins, then more retrievals; `threshold` is accepted for old callers and ignored. */
 export function deduplicateStore(
-  hippoRoot: string,
+  store: Consolidation,
   options: { threshold?: number; dryRun?: boolean; actor?: string; loaded?: LoadedStore } = {}
 ): DedupResult {
   const dryRun = options.dryRun ?? false;
   // Only current distilled rows compete: raw rows are append-only (the delete
   // trigger would abort sleep mid-loop) and superseded rows are history.
-  const entries = options.loaded?.entries.filter(isCurrentDistilled) ?? loadCurrentDistilledEntries(hippoRoot);
+  const entries = options.loaded?.entries.filter(isCurrentDistilled) ?? store.currentDistilledEntries();
   const entriesByTenant = entriesByPartition(entries);
 
   // Shared across tenant groups: ids are globally unique UUIDs, so `removed` cannot collide across tenants and
   // deleteEntry deletes by primary key alone.
   const removed = new Set<string>();
   const pairs: DedupPair[] = [];
-  const backing = options.loaded?.backing ?? memoriesBackingObjects(hippoRoot);
+  const backing = options.loaded?.backing ?? store.objectBackedIds();
 
   for (const tenantEntries of entriesByTenant.values()) {
     // The survivor total order (see the file-level docstring), scoped per
@@ -146,13 +145,13 @@ export function deduplicateStore(
     pairs.push(...partitionPairs(tenantEntries, removed, backing));
   }
 
-  const done = dryRun ? pairs : deletePairs(hippoRoot, pairs, options.actor);
+  const done = dryRun ? pairs : deletePairs(store, pairs, options.actor);
   return { removed: done.length, pairs: done };
 }
 
 /** The pairs whose loser was deleted; one store handle, one transaction per delete. */
-function deletePairs(hippoRoot: string, pairs: readonly DedupPair[], actor: string | undefined): DedupPair[] {
+function deletePairs(store: Consolidation, pairs: readonly DedupPair[], actor: string | undefined): DedupPair[] {
   const targets = pairs.map((p) => ({ id: p.removed, reason: `dedup: duplicate of ${p.kept}` }));
-  const gone = deleteEntriesOneByOne(hippoRoot, targets, { actor, automatic: true });
+  const gone = store.deleteOneByOne(targets, { actor, automatic: true });
   return pairs.filter((_, i) => gone[i]);
 }

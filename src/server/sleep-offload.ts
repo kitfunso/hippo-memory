@@ -120,7 +120,8 @@ function inTurn<R>(job: SleepJob): Promise<R> {
 export function sleepInChild(ctx: ContextWith<'localFiles'>, opts: SleepOpts): Promise<SleepResult> {
   return inTurn<SleepResult>({
     kind: 'sleep',
-    hippoRoot: ctx.hippoRoot,
+    // The child reopens the folder the served store owns.
+    hippoRoot: ctx.store.localFiles.hippoRoot,
     tenantId: ctx.tenantId,
     actor: ctx.actor,
     opts,

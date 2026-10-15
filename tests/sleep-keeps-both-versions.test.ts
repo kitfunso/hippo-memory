@@ -31,6 +31,7 @@ import { insertDormantRow } from '../src/store/dormant.js';
 import { hippoOut } from './_helpers/spawn-hippo.js';
 import { sqliteStore } from '../src/store/sqlite/store.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+import { sqliteConsolidation } from '../src/store/sqlite/consolidation-group.js';
 
 const DAY = 86_400_000;
 const dirs: string[] = [];
@@ -116,7 +117,7 @@ async function sleepMany(root: string): Promise<void> {
   const start = Date.now();
   for (const day of [1, 2, 3, 4, 5, 6, 7, 600]) {
     await consolidate(root, { now: new Date(start + day * DAY) });
-    deduplicateStore(root);
+    deduplicateStore(sqliteConsolidation(root));
   }
 }
 
@@ -179,7 +180,7 @@ describe('sleep keeps both versions', () => {
     ];
     for (const text of pairs.flat()) writeEntry(root, createMemory(text));
 
-    expect(deduplicateStore(root).removed).toBe(0);
+    expect(deduplicateStore(sqliteConsolidation(root)).removed).toBe(0);
     expect(loadAllEntries(root)).toHaveLength(6);
   });
 
@@ -188,7 +189,7 @@ describe('sleep keeps both versions', () => {
     const text = 'The staging service listens on port 4400.';
     for (const t of [text, text.replace(' ', '  ')]) writeEntry(root, createMemory(t));
 
-    expect(deduplicateStore(root, { threshold: 1 }).removed).toBe(1);
+    expect(deduplicateStore(sqliteConsolidation(root), { threshold: 1 }).removed).toBe(1);
     expect(loadAllEntries(root)).toHaveLength(1);
 
     const cli = newRoot();

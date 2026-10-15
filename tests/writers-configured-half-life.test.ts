@@ -20,6 +20,7 @@ import { importVault } from '../src/importers/vault.js';
 import { cmdCapture } from '../src/capture/command.js';
 import { importProjectMemories } from '../src/agent-memories/sync.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+import { sqliteSyncStore } from '../src/store/sqlite/store.js';
 
 const HIPPO_BIN = path.resolve(__dirname, '..', 'bin', 'hippo.js');
 const CONFIGURED = 730;
@@ -142,12 +143,12 @@ const writers: [string, (root: string) => Promise<MemoryEntry[]>][] = [
   ['DAG summary', (root) => {
     const facts = ['alice filed X', 'alice noted Y', 'alice closed Z'].map((c) =>
       seed(root, c, { layer: Layer.Episodic, dagLevel: 1, tags: ['extracted', 'speaker:alice'] }));
-    return added(root, () => buildDag(root, facts, { apiKey: 'test-key', fetcher: fetcher('alice files, notes and closes tickets') }));
+    return added(root, () => buildDag(sqliteSyncStore(root).localFiles, facts, { apiKey: 'test-key', fetcher: fetcher('alice files, notes and closes tickets') }));
   }],
   ['DAG entity profile', (root) => {
     const l2s = ['alice prefers python type hints', 'alice owns the API layer'].map((c) =>
       seed(root, c, { layer: Layer.Semantic, tags: ['speaker:alice', 'dag-summary'], confidence: 'inferred', dagLevel: 2 }));
-    return added(root, () => buildEntityProfiles(root, l2s, { apiKey: 'test-key', fetcher: fetcher('alice is the typed-python API owner') }));
+    return added(root, () => buildEntityProfiles(sqliteSyncStore(root).localFiles, l2s, { apiKey: 'test-key', fetcher: fetcher('alice is the typed-python API owner') }));
   }],
 ];
 

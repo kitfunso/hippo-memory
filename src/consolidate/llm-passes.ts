@@ -27,6 +27,8 @@ function sleepLlm(run: SleepRun, fetcher: typeof fetch | undefined) {
 
 type SleepLlm = ReturnType<typeof sleepLlm>;
 
+const dagStore = (run: SleepRun) => ({ hippoRoot: run.hippoRoot, consolidation: run.store });
+
 export async function llmPasses(run: SleepRun, fetcher: typeof fetch | undefined): Promise<void> {
   // 1.6. Batch extraction — extract facts from episodic memories missing them
   const extractedFromIds = new Set(
@@ -96,7 +98,7 @@ async function dagBuildPass(run: SleepRun, { apiKey, llmError, llmOpts }: SleepL
   if (!(apiKey && extractedFacts.length >= 3 && !run.dryRun)) return;
   try {
     const { buildDag } = await import('./dag.js');
-    const dagResult = await buildDag(run.hippoRoot, extractedFacts, { ...llmOpts, onError: llmError('dag') });
+    const dagResult = await buildDag(dagStore(run), extractedFacts, { ...llmOpts, onError: llmError('dag') });
     run.result.dagCandidateClusters = dagResult.candidateClusters;
     run.result.dagSummariesCreated = dagResult.summariesCreated;
     if (dagResult.summariesCreated > 0) {
@@ -120,7 +122,7 @@ async function dagRebuildPass(run: SleepRun, { llmError, llmOpts }: SleepLlm): P
     const rawCap = envDagRebuildCap();
     // Hard ceiling so a misconfigured env can't burn unbounded LLM cost.
     const cap = rawCap !== undefined ? Math.min(rawCap, 1000) : 20;
-    const rebuildResult = await rebuildDirtySummaries(run.hippoRoot, {
+    const rebuildResult = await rebuildDirtySummaries(run.store, {
       ...llmOpts,
       onError: llmError('dag rebuild'),
       cap,
@@ -152,14 +154,13 @@ async function dagRebuildPass(run: SleepRun, { llmError, llmOpts }: SleepLlm): P
 
 // 1.9. DAG entity profiles: cluster L2 summaries into per-entity L3 profiles; runs even when 1.7 was skipped
 // (re-clusters existing L2s every sleep).
-// Uses loadAllL2Summaries, not `survivors`: phase 1.7 wrote new L2s via writeEntry without pushing them into survivors.
+// Reads the stored L2s, not `survivors`: phase 1.7 wrote new L2s via writeEntry without pushing them into survivors.
 async function entityProfilePass(run: SleepRun, { llmError, llmOpts }: SleepLlm): Promise<void> {
   try {
     const { buildEntityProfiles } = await import('./dag.js');
-    const { loadAllL2Summaries } = await import('../store/summaries.js');
-    const l2Summaries = loadAllL2Summaries(run.hippoRoot);
+    const l2Summaries = run.store.unprofiledTopicSummaries();
     if (l2Summaries.length >= 2) {
-      const profileResult = await buildEntityProfiles(run.hippoRoot, l2Summaries, {
+      const profileResult = await buildEntityProfiles(dagStore(run), l2Summaries, {
         ...llmOpts,
         onError: llmError('dag profiles'),
       });

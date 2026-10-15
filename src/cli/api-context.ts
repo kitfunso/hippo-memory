@@ -4,6 +4,7 @@ import { loadConfig } from '../core/config.js';
 import { runConsolidation } from '../consolidate/sleep.js';
 import type { McpHost } from '../mcp/protocol.js';
 import type { HippoStore, StoreGroup, StoreGroups } from '../store/index.js';
+import type { LocalFiles } from '../store/port.js';
 import {
   runDetachedSqliteRequest, runSqliteRequest, sqliteReach, sqliteStore, sqliteSyncStore,
 } from '../store/sqlite/store.js';
@@ -11,6 +12,11 @@ import {
 /** The store the CLI and the stdio MCP server open; the adapter is named here so src/mcp never imports it. */
 function cliStore(hippoRoot: string): HippoStore & StoreGroups {
   return sqliteStore(hippoRoot);
+}
+
+/** The folder's hippo.db for a verb that runs a sleep pass by itself. */
+export function cliLocalFiles(hippoRoot: string): LocalFiles {
+  return sqliteSyncStore(hippoRoot).localFiles;
 }
 
 /** The request scope a scoped CLI verb and the stdio MCP server run in; named here so no other surface opens one. */
@@ -47,7 +53,7 @@ export const cliStdioHost: McpHost = {
       store,
       reach: sqliteReach(hippoRoot, store),
       autoSleepRunner: (root) =>
-        runDetachedSqliteRequest(() => runConsolidation(sqliteSyncStore(root).localFiles)).then(() => {}),
+        runDetachedSqliteRequest(() => runConsolidation(cliLocalFiles(root))).then(() => {}),
     };
   },
   runRequest: cliRequest,

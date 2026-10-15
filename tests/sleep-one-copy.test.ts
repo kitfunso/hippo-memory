@@ -10,6 +10,7 @@ import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries, loadAllEntriesWithBase } from '../src/store/entry-reads.js';
 import { runSleep } from '../src/api/sleep-run.js';
+import type { Consolidation } from '../src/store/port.js';
 import { computeAmbientState } from '../src/core/ambient.js';
 import { _resetAblationCacheForTests } from '../src/core/ablation.js';
 import { apiCtx } from './_helpers/api-ctx.js';
@@ -86,9 +87,9 @@ describe('sleep reads the store once after consolidation', () => {
     writeEntry(root, junk);
 
     let loads = 0;
-    const counting = (hippoRoot: string, tenantId?: string) => {
+    const counting = (store: Consolidation) => {
       loads++;
-      return loadAllEntries(hippoRoot, tenantId);
+      return store.allEntries();
     };
     const result = await runSleep(ctxFor(root), { noShare: true }, { loadAllEntries: counting });
 

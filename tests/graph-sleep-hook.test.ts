@@ -208,8 +208,8 @@ describe('sleep enqueue-hook', () => {
     // FK-cascade-deletes, so a drain-TIME tenant load would drop T entirely. The
     // dirty-tenant snapshot taken before the deleting phases must still rebuild T.
     const phases: Partial<SleepPhases> = {
-      deduplicateStore: (root) => {
-        deleteEntry(root, d.memoryId!);
+      deduplicateStore: () => {
+        deleteEntry(tc.hippoRoot, d.memoryId!);
         return { removed: 1, pairs: [] };
       },
     };

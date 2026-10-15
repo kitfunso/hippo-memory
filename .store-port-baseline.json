@@ -3,14 +3,14 @@
   "openersInCli": 0,
   "storeBranches": 0,
   "routesWithoutStore": 0,
-  "sqliteOnlyRoutes": 2,
+  "sqliteOnlyRoutes": 1,
   "routesOnLoop": 12,
   "twinFunctions": 0,
   "sqlOutside": 0,
   "txLiterals": 0,
   "tenantResolvesInCli": 0,
   "storeImportsInCli": 4,
-  "storeImportsInDomain": 14,
+  "storeImportsInDomain": 7,
   "handleHoldersOutside": 1,
   "storeFilesWithoutSql": 2,
   "storeFilesWithoutSqlList": [
@@ -24,8 +24,7 @@
   },
   "sqliteLocalMethods": [],
   "sqliteOnlyRoutesList": [
-    "POST /v1/memories/:id/promote",
-    "POST /v1/sleep"
+    "POST /v1/memories/:id/promote"
   ],
   "carrierFiles": 0,
   "carrierFilesList": []

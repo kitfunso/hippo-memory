@@ -211,7 +211,7 @@ export const V1_ROUTES: readonly Route[] = [
     method: 'POST',
     path: '/v1/sleep',
     auth: 'host-admin-local',
-    sqliteOnly: 'consolidates every tenant under the local hippo root in this process',
+    storeReady: 'localFiles',
     handler: handleSleep,
   }),
   defineRoute({

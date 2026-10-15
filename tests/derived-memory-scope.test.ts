@@ -18,6 +18,8 @@ import { saveProjectBrief, briefFromReceipts } from '../src/objects/project-brie
 import { derivationScope, commonDerivationScope } from '../src/core/recall-scope.js';
 import { placeholders } from '../src/util/sql.js';
 import { objectsAt } from './_helpers/objects-at.js';
+import { sqliteConsolidation } from '../src/store/sqlite/consolidation-group.js';
+import { sqliteSyncStore } from '../src/store/sqlite/store.js';
 
 function tmpHome(prefix: string = 'hippo-derived-scope-'): string {
   return mkdtempSync(join(tmpdir(), prefix));
@@ -109,7 +111,7 @@ describe('dedupe partitions by restricted scope', () => {
       writeEntry(home, { ...priv, strength: 0.9 });
       writeEntry(home, { ...pub, strength: 0.1 });
 
-      expect(deduplicateStore(home).removed).toBe(0);
+      expect(deduplicateStore(sqliteConsolidation(home)).removed).toBe(0);
       expect(loadAllEntries(home).map((e) => e.scope).sort()).toEqual([null, 'slack:private:C1'].sort());
     } finally {
       rmSync(home, { recursive: true, force: true });
@@ -185,7 +187,7 @@ describe('dag buildDag / buildEntityProfiles partition by scope', () => {
       for (const f of [...privFacts, ...pubFacts]) writeEntry(home, f);
 
       const fetcher = makeOkFetcher('synthetic-scope-partitioned-summary');
-      const result = await buildDag(home, [...privFacts, ...pubFacts], { apiKey: 'test-key', fetcher });
+      const result = await buildDag(sqliteSyncStore(home).localFiles, [...privFacts, ...pubFacts], { apiKey: 'test-key', fetcher });
 
       expect(result.candidateClusters).toBe(2);
       expect(result.summariesCreated).toBe(2);
@@ -240,7 +242,7 @@ describe('dag buildDag / buildEntityProfiles partition by scope', () => {
       for (const l2 of [...privL2s, ...pubL2s]) writeEntry(home, l2);
 
       const fetcher = makeOkFetcher('synthetic-scope-partitioned-profile');
-      const result = await buildEntityProfiles(home, [...privL2s, ...pubL2s], { apiKey: 'k', fetcher });
+      const result = await buildEntityProfiles(sqliteSyncStore(home).localFiles, [...privL2s, ...pubL2s], { apiKey: 'k', fetcher });
 
       expect(result.profilesCreated).toBe(2);
       expect(result.l2sLinked).toBe(6);

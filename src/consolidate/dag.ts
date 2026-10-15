@@ -1,13 +1,5 @@
 import { createMemory, Layer, type MemoryEntry } from '../core/memory.js';
-import { writeEntry, writeEntriesTogether } from '../store/entry-writes.js';
-import {
-  loadAllDirtySummaries,
-  loadChildrenOfSummary,
-  loadChildrenOfSummaries,
-  childrenKey,
-  applyRebuildResult,
-  clearSummaryDirtyAfterBuild,
-} from '../store/summaries.js';
+import type { Consolidation, LocalFiles } from '../store/port.js';
 import { RejectedValueError } from '../core/api-errors.js';
 import { generateDagSummary, type DagSummaryOptions } from './dag-summary.js';
 import { overlapPartners } from './overlap-index.js';
@@ -20,6 +12,9 @@ const SUMMARY_FALLBACK_CHARS = 40;
 const DEFAULT_REBUILD_CAP = 20;
 // Facts join a cluster when their tag sets overlap at least this much.
 const CLUSTER_JACCARD_MIN = 0.5;
+
+/** Sleep's store, with the folder whose config sets a new summary's half-life. */
+type DagStore = Pick<LocalFiles, 'hippoRoot' | 'consolidation'>;
 
 export interface FactCluster {
   label: string;
@@ -125,7 +120,7 @@ function createClusterSummaryEntry(summary: string, cluster: FactCluster, home: 
 
 /** Summarize one eligible cluster, write the summary, then re-parent its members under it. */
 async function summarizeCluster(
-  hippoRoot: string,
+  store: Consolidation,
   cluster: FactCluster,
   home: PartitionHome,
   opts: DagSummaryOptions,
@@ -142,7 +137,7 @@ async function summarizeCluster(
   // A refused summary skips only this cluster. writeEntry's guard reads tenantId off the entry
   // (home.tenantId), so it already checks this tenant's tombstones: no separate check here.
   try {
-    writeEntry(hippoRoot, summaryEntry);
+    store.writeEntry(summaryEntry);
   } catch (err) {
     if (err instanceof RejectedValueError) {
       result.rejected++;
@@ -153,22 +148,21 @@ async function summarizeCluster(
   }
   result.summariesCreated++;
 
-  result.factsLinked += writeEntriesTogether(
-    hippoRoot,
+  result.factsLinked += store.writeTogether(
     cluster.members.map((member) => ({ ...member, dag_parent_id: summaryEntry.id })),
   );
   // Member writes just marked this fresh summary dirty; clear it, or the same sleep cycle's
   // rebuild pass would re-rebuild every new summary at twice the LLM cost.
-  clearSummaryDirtyAfterBuild(hippoRoot, summaryEntry.id, summaryEntry.tenant_id, 'buildDag');
+  store.clearSummaryDirty(summaryEntry.id, summaryEntry.tenant_id, 'buildDag');
 }
 
 export async function buildDag(
-  hippoRoot: string,
+  local: DagStore,
   facts: MemoryEntry[],
   opts: DagSummaryOptions,
 ): Promise<DagBuildResult> {
   const result: DagBuildResult = { candidateClusters: 0, summariesCreated: 0, factsLinked: 0, rejected: 0 };
-  const baseHalfLifeDays = loadConfig(hippoRoot).defaultHalfLifeDays;
+  const baseHalfLifeDays = loadConfig(local.hippoRoot).defaultHalfLifeDays;
 
   const unparented = facts.filter(
     (f) => f.dag_level === 1 && !f.dag_parent_id && f.tags.includes('extracted'),
@@ -186,7 +180,7 @@ export async function buildDag(
     result.candidateClusters += eligibleClusters.length;
 
     for (const cluster of eligibleClusters) {
-      await summarizeCluster(hippoRoot, cluster, home, opts, result);
+      await summarizeCluster(local.consolidation, cluster, home, opts, result);
     }
   }
 
@@ -206,7 +200,7 @@ export interface DagRebuildResult {
 
 /** Regenerate one dirty summary from its children and tally the outcome; throws reach the caller's isolation. */
 async function rebuildOneSummary(
-  hippoRoot: string,
+  store: Consolidation,
   summary: MemoryEntry,
   opts: DagSummaryOptions,
   result: DagRebuildResult,
@@ -215,11 +209,11 @@ async function rebuildOneSummary(
 ): Promise<void> {
   // A queued child may have been rebuilt earlier in this drain, so its preloaded content is stale: reread then.
   const children = preloaded.some((c) => queuedIds.has(c.id))
-    ? loadChildrenOfSummary(hippoRoot, summary.id, summary.tenant_id)
+    ? store.childrenOfSummary(summary.id, summary.tenant_id)
     : preloaded;
 
   if (children.length === 0) {
-    clearZeroChildSummary(hippoRoot, summary, result);
+    clearZeroChildSummary(store, summary, result);
     return;
   }
 
@@ -236,7 +230,7 @@ async function rebuildOneSummary(
   }
 
   const childCreatedAts = children.map((c) => c.created).sort();
-  const { changed, refused } = applyRebuildResult(hippoRoot, summary, {
+  const { changed, refused } = store.applyRebuild(summary, {
     content: newContent,
     descendant_count: children.length,
     earliest_at: childCreatedAts[0],
@@ -255,8 +249,8 @@ async function rebuildOneSummary(
 }
 
 /** Zero-child case: clear dirty + zero counts, no LLM call, no rebuild_count bump. */
-function clearZeroChildSummary(hippoRoot: string, summary: MemoryEntry, result: DagRebuildResult): void {
-  const { changed } = applyRebuildResult(hippoRoot, summary, {
+function clearZeroChildSummary(store: Consolidation, summary: MemoryEntry, result: DagRebuildResult): void {
+  const { changed } = store.applyRebuild(summary, {
     content: summary.content,
     descendant_count: 0,
     earliest_at: null,
@@ -284,12 +278,12 @@ function summaryLabel(summary: MemoryEntry): string {
  * sleep's second writer gets changed=false (UPDATE requires summary_dirty=1) and is skipped silently; a tombstone hit
  * counts as `refused`. */
 export async function rebuildDirtySummaries(
-  hippoRoot: string,
+  store: Consolidation,
   opts: DagSummaryOptions & { cap?: number },
 ): Promise<DagRebuildResult> {
   const cap = opts.cap ?? DEFAULT_REBUILD_CAP;
   // One past the cap tells whether more were waiting without reading the rest.
-  const dirty = loadAllDirtySummaries(hippoRoot, cap + 1);
+  const dirty = store.dirtySummaries(cap + 1);
   const capped = dirty.length > cap;
   const queue = dirty.slice(0, cap);
 
@@ -302,7 +296,7 @@ export async function rebuildDirtySummaries(
     capped,
   };
 
-  const childrenByParent = loadChildrenOfSummaries(hippoRoot, queue);
+  const childrenOf = store.childrenOfSummaries(queue);
   const queuedIds = new Set(queue.map((s) => s.id));
 
   for (const [index, summary] of queue.entries()) {
@@ -312,8 +306,7 @@ export async function rebuildDirtySummaries(
       await new Promise((resolve) => setImmediate(resolve));
     }
     try {
-      const children = childrenByParent.get(childrenKey(summary.tenant_id, summary.id)) ?? [];
-      await rebuildOneSummary(hippoRoot, summary, opts, result, children, queuedIds);
+      await rebuildOneSummary(store, summary, opts, result, childrenOf(summary), queuedIds);
     } catch (err) {
       // One throw doesn't abort the queue; log enough to triage an exotic
       // failure (SQLite I/O, prepare), since audit() already catches its own.
@@ -366,7 +359,7 @@ function createProfileEntry(summary: string, cluster: FactCluster, home: Partiti
 
 /** Profile one eligible cluster of L2s, write it, then re-link the L2s under it. */
 async function profileCluster(
-  hippoRoot: string,
+  store: Consolidation,
   cluster: FactCluster,
   home: PartitionHome,
   opts: DagSummaryOptions,
@@ -385,7 +378,7 @@ async function profileCluster(
   const profileEntry = createProfileEntry(summary, cluster, home);
   // A refused profile skips only this cluster; the re-linking below never runs for it.
   try {
-    writeEntry(hippoRoot, profileEntry);
+    store.writeEntry(profileEntry);
   } catch (err) {
     if (err instanceof RejectedValueError) {
       result.rejected++;
@@ -399,14 +392,12 @@ async function profileCluster(
   }
   result.profilesCreated++;
 
-  result.l2sLinked += writeEntriesTogether(
-    hippoRoot,
+  result.l2sLinked += store.writeTogether(
     cluster.members.map((member) => ({ ...member, dag_parent_id: profileEntry.id })),
   );
   // Re-linking just marked the fresh L3 dirty; clear it so this cycle's rebuild skips it.
   // The distinct source tags the audit row.
-  clearSummaryDirtyAfterBuild(
-    hippoRoot,
+  store.clearSummaryDirty(
     profileEntry.id,
     home.tenantId,
     'buildEntityProfiles',
@@ -417,7 +408,7 @@ async function profileCluster(
 /** Build L3 entity profiles by clustering L2 summaries sharing entity tags (2+ L2s per entity).
  * Each L2 link write marks the new L3 dirty, so clear it or the same cycle re-rebuilds it. */
 export async function buildEntityProfiles(
-  hippoRoot: string,
+  local: DagStore,
   l2Summaries: MemoryEntry[],
   opts: DagSummaryOptions,
 ): Promise<EntityProfilesBuildResult> {
@@ -428,7 +419,7 @@ export async function buildEntityProfiles(
     failed: 0,
     rejected: 0,
   };
-  const baseHalfLifeDays = loadConfig(hippoRoot).defaultHalfLifeDays;
+  const baseHalfLifeDays = loadConfig(local.hippoRoot).defaultHalfLifeDays;
 
   // Only L2 with no L3 parent yet (avoid re-clustering already-profiled L2s).
   const unparented = l2Summaries.filter(
@@ -447,7 +438,7 @@ export async function buildEntityProfiles(
     result.candidateClusters += eligible.length;
 
     for (const cluster of eligible) {
-      await profileCluster(hippoRoot, cluster, home, opts, result);
+      await profileCluster(local.consolidation, cluster, home, opts, result);
     }
   }
 

@@ -33,8 +33,9 @@ import { buildMemoryDetail } from '../src/dashboard/dashboard-queries.js';
 import { createSnapshotService } from '../src/dashboard/dashboard-snapshot.js';
 import { handleMcpRequest } from '../src/mcp/server.js';
 import { writeSessionDigest } from '../src/capture/session-digest.js';
-import { sqliteStore } from '../src/store/sqlite/store.js';
+import { sqliteStore, sqliteSyncStore } from '../src/store/sqlite/store.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+import { sqliteConsolidation } from '../src/store/sqlite/consolidation-group.js';
 
 const SIZES = [10, 200] as const;
 const ROW_READ = MEMORY_SELECT_COLUMNS;
@@ -294,7 +295,7 @@ describe('deduplicateStore', () => {
       const root = freshRoot('qc-dedupe');
       const originals = rows(n, 'dedupe');
       seed(root, [...originals, ...originals.map((e) => memory(e.content))]);
-      const { result, statements } = recordStatements(() => deduplicateStore(root));
+      const { result, statements } = recordStatements(() => deduplicateStore(sqliteConsolidation(root)));
       expect(result.removed).toBe(n);
       return countMatching(statements, STORE_OPEN);
     });
@@ -469,7 +470,7 @@ describe('buildDag', () => {
       seed(root, facts);
       const mirrorsRewritten = ageMirrors(root);
       const fetcher: typeof fetch = async () => new Response(JSON.stringify({ content: [{ text: 'alice keeps the zephyrine cache warm across every deploy' }] }), { status: 200 });
-      const { result, statements } = await recordStatementsAsync(() => buildDag(root, facts, { apiKey: 'test-key', fetcher }));
+      const { result, statements } = await recordStatementsAsync(() => buildDag(sqliteSyncStore(root).localFiles, facts, { apiKey: 'test-key', fetcher }));
       expect(result).toMatchObject({ summariesCreated: 1, factsLinked: n });
       const stored = loadAllEntries(root);
       const parentId = stored.find((e) => e.dag_level === 2)?.id;

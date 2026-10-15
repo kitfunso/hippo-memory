@@ -5,7 +5,7 @@ import { deduplicateStore } from '../consolidate/dedupe.js';
 import { resolveEmbeddingProvider, type EmbeddingProvider } from '../embeddings/provider.js';
 import { embedCoverage, embedMissingMemories, resetPhysicsFromVectors, storedVectorCount } from '../api/embeddings.js';
 import { countAllMemories } from '../api/memories.js';
-import { cliApiContext } from './api-context.js';
+import { cliApiContext, cliLocalFiles } from './api-context.js';
 import type * as api from '../api/index.js';
 import { loadConfig } from '../core/config.js';
 import { refineStore } from './refine-llm.js';
@@ -72,7 +72,7 @@ export async function handleDedup({ hippoRoot, tenantId, flags }: CommandContext
     `Scanning ${total} memories for duplicates (same text apart from spacing)${dryRun ? ' (dry run)' : ''}...\n`,
   );
 
-  const result = deduplicateStore(hippoRoot, { dryRun });
+  const result = deduplicateStore(cliLocalFiles(hippoRoot).consolidation, { dryRun });
 
   if (result.removed === 0) {
     console.log('No duplicates found.');
