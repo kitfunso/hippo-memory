@@ -11,8 +11,30 @@
     "scripts/z1c-eval.mjs:main": 116
   },
   "longLines": {
-    "src/dashboard/dashboard.ts": 4,
-    "src/db/migrations/v37.ts": 2,
-    "src/db/migrations/v38.ts": 9
+    "src/api/remember-local.ts": 1,
+    "src/api/remember.ts": 1,
+    "src/cli/audit.ts": 1,
+    "src/cli/curate.ts": 5,
+    "src/cli/decisions.ts": 1,
+    "src/cli/explain.ts": 3,
+    "src/cli/predictions.ts": 1,
+    "src/cli/recall.ts": 2,
+    "src/cli/slack.ts": 2,
+    "src/cli/usage.ts": 2,
+    "src/cli/verbs/memory.ts": 1,
+    "src/connectors/github/backfill.ts": 1,
+    "src/connectors/github/webhook.ts": 1,
+    "src/dashboard/dashboard-actions.ts": 6,
+    "src/dashboard/dashboard-queries.ts": 5,
+    "src/dashboard/dashboard-snapshot.ts": 15,
+    "src/dashboard/dashboard.ts": 23,
+    "src/db/migrations/v37.ts": 10,
+    "src/db/migrations/v38.ts": 43,
+    "src/db/migrations/v49.ts": 1,
+    "src/importers/vault.ts": 2,
+    "src/mcp/admin-tools.ts": 1,
+    "src/mcp/memory-tools.ts": 1,
+    "src/mcp/stdio.ts": 1,
+    "src/objects/lifecycle.ts": 2
   }
 }

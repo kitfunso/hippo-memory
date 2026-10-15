@@ -93,8 +93,8 @@ function buildBriefContent(repo: string, summary: string): string {
   return `${repo}\n\n${summary}`;
 }
 
-/** Create a project_brief, or a new version superseding an existing one, in the `objects` store group's
- *  one transaction. */
+/** Create a project_brief, or a new version superseding an
+ *  existing one, in the `objects` store group's one transaction. */
 export function saveProjectBrief(
   objects: Objects,
   hippoRoot: string,
