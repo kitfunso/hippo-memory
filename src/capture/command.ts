@@ -97,7 +97,9 @@ function cmdCaptureCore(
         `No hippo store at ${hippoRoot} (searched ${process.cwd()} and its parents up to your home directory). ` +
           `Run \`hippo init\` first.`,
       );
-      process.exit(1);
+      // Set, not exit, so cmdCapture's finally restores the tee'd stdio.
+      process.exitCode = 1;
+      return;
     }
   }
 
@@ -171,17 +173,20 @@ function readCaptureTexts(options: CaptureOptions): { texts: string[]; userTexts
         return { texts: [fs.readFileSync(0, 'utf8')], userTexts: 0 };
       } catch {
         console.error('No input on stdin. Pipe text in or use --file <path>.');
-        process.exit(1);
+        process.exitCode = 1;
+        return null;
       }
     }
     case 'file': {
       if (!options.filePath) {
         console.error('Missing file path. Usage: hippo capture --file <path>');
-        process.exit(1);
+        process.exitCode = 1;
+        return null;
       }
       if (!fs.existsSync(options.filePath)) {
         console.error(`File not found: ${options.filePath}`);
-        process.exit(1);
+        process.exitCode = 1;
+        return null;
       }
       return { texts: [fs.readFileSync(options.filePath, 'utf8')], userTexts: 0 };
     }
