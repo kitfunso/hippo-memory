@@ -91,8 +91,11 @@ const STANDING = [
   'Not quite: name the branch after the ticket, because the bot reads it.',
   'Correct, put secrets in the vault, because the env file is committed.',
   'Never embed secrets in the build.',
-  'Secrets are never logged.',
-  'Branch names are always prefixed with the ticket id.',
+  'Every query must use bound parameters.',
+  'In this repo, never commit generated files.',
+  'Remember: tag releases from main.',
+  'Avoid global state in the request handlers.',
+  'Never print `not yet built` in the status line.',
 ];
 const NOT_STANDING = [
   'It always marked the override as off.',
@@ -107,6 +110,17 @@ const NOT_STANDING = [
   'Yes, that is fine, because the build passed.',
   "No, that's wrong, because the count is off.",
   'Right, it works now, because the cache was cleared.',
+  'Secrets are never logged.',
+  'The cache never stores a token.',
+  'Make sure the header matches the logo colour.',
+  'Valid ids must keep working.',
+  'You must choose one of these:',
+  'Yes, with luck it lands today, because the queue is short.',
+  'You must accept the store terms before you upload.',
+  'Never log them.',
+  'Note: never filters a result, only flags the row.',
+  'Never ship the new pricing page yet.',
+  'Never touch the payment code in this branch.',
 ];
 
 describe('isStandingRule', () => {
@@ -114,7 +128,8 @@ describe('isStandingRule', () => {
   it.each(NOT_STANDING)('rejects %s', (sentence) => expect(isStandingRule(sentence)).toBe(false));
 
   it('lets a standing phrase override a one-off marker', () => {
-    expect(isStandingRule('Always run the linter first, not just this time.')).toBe(true);
+    expect(isStandingRule('Going forward, always run the linter first, not just this time.')).toBe(true);
+    expect(isStandingRule('Always run the linter first, just this time.')).toBe(false);
     expect(isStandingRule('From now on make sure the tests pass.')).toBe(true);
   });
 });

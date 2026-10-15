@@ -45,20 +45,38 @@ const MAX_REPLY_SENTENCES = 4;
 // Imperatives that end in "ed" ("never embed secrets") are not past tense.
 const IMPERATIVE_ED = 'seed|feed|embed|need|proceed|exceed|succeed|speed|heed|bleed|breed|shred';
 const PAST_VERB = String.raw`(?:\w+ly\s+)?(?:(?!(?:${IMPERATIVE_ED})\b)\w{2,}ed|was|were|had|did|got)\b`;
-// "Secrets are never logged" is a passive rule, not narration.
 const PAST_NARRATION = new RegExp(
-  String.raw`(?<!\b(?:is|are|be|been|being|gets?)\s+)\b(?:always|never)\s+${PAST_VERB}|` +
-    String.raw`^(?:i|we|it|that|this|they|he|she)\s+${PAST_VERB}`,
+  String.raw`\b(?:always|never)\s+${PAST_VERB}|^(?:i|we|it|that|this|they|he|she)\s+${PAST_VERB}`,
   'i',
 );
-const ASSESSMENT = /^(?:it|that|this)(?:'s|\s+(?:is|was|looks|seems|works|sounds))\b/i;
+const ASSESSMENT = new RegExp(
+  String.raw`^(?:with|without|of|by|from|at|on)\b|^(?:it|that|this)(?:'s|\s+(?:is|was|looks|seems|works|sounds))\b`,
+  'i',
+);
+// A pin is an instruction: in real use most keyword sentences are descriptions, specs or one-off requests.
+const SCOPE_LEAD = new RegExp(
+  String.raw`^(?:(?:also|and|so|then|again|critically|importantly|please|here|from now on|going forward|` +
+    String.raw`in (?:the )?future|in this (?:project|repo|codebase))\b\s*[,:]?\s*)+`,
+  'i',
+);
+const INSTRUCTION = /^(?:never|always|avoid)\s+\w|^(?:make sure|ensure)\s+(?:every|each|all|any|no)\s+\w/i;
+const UNIVERSAL_RULE = /^(?:every|each|all|any|no)\s+[^,]*?\b(?:must|should|never|always)\b/i;
+// "Never log them" cannot stand alone; "never filters" describes code.
+const DANGLING = /\b(?:them|it|this|that|these|those)\W*$/i;
+const DESCRIPTION = /\b(?:always|never)\s+(?:\w+ly\s+)?\w+[^su\W]s\b/i;
+const RULE_LABEL = /^(?:the rule is|rule|important|critical|remember)\s*:/i;
+const STANDING_MARK = new RegExp(
+  String.raw`\b(?:from now on|going forward|in (?:the )?future|every (?:future )?session|every time|whenever|` +
+    String.raw`new rule|in this (?:project|repo|codebase))\b`,
+  'i',
+);
 const THE_TASK = String.raw`(?:it|this|that|them)`;
 const ONE_OFF = new RegExp(
   String.raw`\bplease\s+\w+\s+${THE_TASK}\b|\b(?:fix|redo|revert|rerun|retry|undo)\s+${THE_TASK}\b|` +
-    String.raw`\bthis time\b|\bfor now\b|\bright now\b|\bnow\b\W*$`,
+    String.raw`\bthis time\b|\bfor now\b|\bright now\b|\bnow\b\W*$|\byet\b|` +
+    String.raw`\b(?:in|for) this (?:build|plan|note|task|pr|session|run|branch|change|ticket)\b`,
   'i',
 );
-const STANDING = /\b(?:every time|whenever|from now on|in (?:the )?future|going forward|always|never)\b/i;
 const BECAUSE = /\bbecause\b/i;
 const MAX_CHARS = 500;
 const BULLET = /^(?:[-*]|\d+\.)\s+(?:\[[ xX]\]\s+)?(.+)/;
@@ -156,11 +174,19 @@ function isReplyRule(sentence: string): boolean {
 
 /** True when a person's sentence states a rule that outlasts the task; narration and one-off requests are not. */
 export function isStandingRule(sentence: string): boolean {
-  const s = sentence.replace(REPLY_OPENER_START, '');
+  const s = sentence.replace(REPLY_OPENER_START, '').replace(/`[^`]*`/g, '`code`');
   const head = s.split(BECAUSE)[0];
-  if (PAST_NARRATION.test(head)) return false;
-  if (ONE_OFF.test(head) && !STANDING.test(head)) return false;
-  return RULE_PATTERNS.some((pattern) => pattern.test(s)) || isReplyRule(sentence);
+  if (s.trimEnd().endsWith(':') || PAST_NARRATION.test(head) || DESCRIPTION.test(head)) return false;
+  if (DANGLING.test(head.replace(/[\s,;.!]+$/, ''))) return false;
+  if (ONE_OFF.test(head) && !STANDING_MARK.test(head)) return false;
+  return isInstruction(head) || isReplyRule(sentence);
+}
+
+function isInstruction(head: string): boolean {
+  const clauses = [head, head.slice(head.indexOf(':') + 1)].map((c) => c.trim().replace(SCOPE_LEAD, ''));
+  if (clauses.some((c) => INSTRUCTION.test(c) || UNIVERSAL_RULE.test(c))) return true;
+  if (RULE_LABEL.test(head)) return true;
+  return STANDING_MARK.test(head) && RULE_PATTERNS.some((pattern) => pattern.test(head));
 }
 
 function extractFromPatterns(sentence: string, patterns: readonly RegExp[], category: string): ExtractedItem | null {

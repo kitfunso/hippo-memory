@@ -284,7 +284,7 @@ function captureEntry(item: ExtractedItem, options: CaptureWriteOptions, baseHal
   // kind stays 'distilled': these are curated items, not raw transcript (see MEMORY_ENVELOPE.md).
   // The write tenant must match the dedup read's, or scoped dedup passes and the row lands in 'default'.
   // A rule the person stated is pinned, so it injects even when a later prompt shares none of its words.
-  // Narration and one-off requests are stored but not pinned.
+  // Only standing instructions pin; descriptions, specs and one-off requests are stored unpinned.
   // SHORTCUT: every standing rule pins; cap or age these pins if a store's pins outgrow the hook budget.
   const created = createMemory(item.content, {
     layer: Layer.Episodic,
