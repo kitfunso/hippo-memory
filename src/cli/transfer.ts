@@ -5,7 +5,7 @@ import * as fs from 'fs';
 import { isInitialized } from '../core/project-identity.js';
 import { RejectedValueError } from '../core/api-errors.js';
 import { embedCoverage, embedMissingMemories } from '../api/embeddings.js';
-import { captureError, runWatched } from '../learn/autolearn.js';
+import { captureError, runWatched, runWatchedLine } from '../learn/autolearn.js';
 import { currentMachine, importAtSessionEnd, importForStore } from '../agent-memories/sync.js';
 import { detailLines } from '../agent-memories/report.js';
 import { getGlobalRoot, initGlobal } from '../sharing/global-store.js';
@@ -80,7 +80,7 @@ function watchedCommand(args: readonly string[], flags: CliFlags): WatchedComman
 
 async function cmdWatch(argv: string[], shell: boolean, hippoRoot: string, tenantId: string): Promise<void> {
   const command = argv.join(' ');
-  const { exitCode, stderr } = await runWatched(argv, undefined, { shell });
+  const { exitCode, stderr } = await (shell ? runWatchedLine(argv[0]!) : runWatched(argv));
 
   if (exitCode === 0) {
     // Success: no noise

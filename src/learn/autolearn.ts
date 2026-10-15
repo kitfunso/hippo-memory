@@ -1,7 +1,7 @@
 /** Auto-learn from errors and git history.
  *  Agents learn from failures without explicit hippo remember calls. */
 
-import { execFileSync, spawn, type SpawnOptions } from 'child_process';
+import { execFileSync, spawn, type ChildProcess, type SpawnOptions } from 'child_process';
 import { spawnArgv } from '../util/spawn-argv.js';
 import { MemoryEntry, createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../core/memory.js';
 import { loadAllEntries, loadEntriesMentioning } from '../store/entry-reads.js';
@@ -108,11 +108,11 @@ export function partitionLessons(lessons: string[]) {
 // Never matches a real tag; the exact textOverlap re-check drops any row the content filter let through.
 const NO_TAG = '~no-such-tag~';
 
-/** Rows that can pass the overlap test: those sharing a token with the lesson. Falls back to every row when the
- * filter cannot be a superset (no tokens, non-ASCII tokens, or a threshold below zero). */
+/** Rows that can pass the overlap test: those sharing a token with the lesson. Falls back to every row when every row
+ * can match (no tokens, or a threshold below zero). */
 function candidateEntries(hippoRoot: string, lesson: string, threshold: number, tenantId?: string): MemoryEntry[] {
   const tokens = tokenize(lesson);
-  if (tokens.length === 0 || threshold < 0 || tokens.some((t) => !/^[\x20-\x7e]+$/.test(t))) {
+  if (tokens.length === 0 || threshold < 0) {
     return loadAllEntries(hippoRoot, tenantId);
   }
   return loadEntriesMentioning(hippoRoot, tokens, NO_TAG, tenantId);
@@ -153,11 +153,6 @@ export class RunWatchedTimeoutError extends Error {
   }
 }
 
-export interface RunWatchedOptions {
-  /** Join argv with spaces and run it as one shell command line; only for text the caller wrote itself. */
-  shell?: boolean;
-}
-
 /** Run argv[0] with the rest as its arguments and no shell, so `;`, `&` and `$()` reach it literally; stderr streams
  * live.
  * Returns: { exitCode, stderr } with only the last 64 KiB of stderr; rejects with RunWatchedTimeoutError past
@@ -165,14 +160,23 @@ export interface RunWatchedOptions {
 export function runWatched(
   argv: readonly string[],
   deadlineMs: number = RUN_WATCHED_DEADLINE_MS,
-  opts: RunWatchedOptions = {},
 ): Promise<{ exitCode: number; stderr: string }> {
-  return new Promise((resolve, reject) => {
-    const options: SpawnOptions = { stdio: ['inherit', 'inherit', 'pipe'], windowsHide: true };
-    const child = opts.shell
-      ? spawn(argv.join(' '), { ...options, windowsHide: true, shell: true })
-      : spawnArgv(argv, options);
+  return watchChild(spawnArgv(argv, WATCHED_SPAWN_OPTIONS), deadlineMs);
+}
 
+/** Run `line` as one shell command line, for text the caller wrote itself (`hippo watch --shell`); same result and
+ * deadline as runWatched. */
+export function runWatchedLine(
+  line: string,
+  deadlineMs: number = RUN_WATCHED_DEADLINE_MS,
+): Promise<{ exitCode: number; stderr: string }> {
+  return watchChild(spawn(line, { ...WATCHED_SPAWN_OPTIONS, shell: true }), deadlineMs);
+}
+
+const WATCHED_SPAWN_OPTIONS: SpawnOptions = { stdio: ['inherit', 'inherit', 'pipe'], windowsHide: true };
+
+function watchChild(child: ChildProcess, deadlineMs: number): Promise<{ exitCode: number; stderr: string }> {
+  return new Promise((resolve, reject) => {
     let tail = Buffer.alloc(0);
 
     child.stderr?.on('data', (chunk: Buffer) => {

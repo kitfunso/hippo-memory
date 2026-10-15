@@ -15,6 +15,7 @@ import { pushGoal, activeGoalsWithPolicies } from '../src/store/goals.js';
 import { updateStats, appendConsolidationRun } from '../src/store/index-and-stats.js';
 import { finishRecallAt } from '../src/store/sqlite/last-recall-group.js';
 import { loadAmbientCandidates } from '../src/store/candidates.js';
+import { flushStatsMirrors } from '../src/store/mirrors.js';
 
 const roots: string[] = [];
 
@@ -118,6 +119,7 @@ describe('updateStats', () => {
     const root = freshRoot('hp-stats-file');
     for (const i of [3, 1, 2]) appendConsolidationRun(root, run(i));
     updateStats(root, { recalled: 1 });
+    flushStatsMirrors(root);
     // SAFETY: writeStatsMirror serializes a LegacyStats, whose counters and runs carry these fields.
     const stats = JSON.parse(fs.readFileSync(path.join(root, 'stats.json'), 'utf8')) as StatsFile;
     expect(stats.total_recalled).toBe(1);

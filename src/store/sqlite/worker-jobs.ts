@@ -7,6 +7,7 @@ import { loadStoredVectorViews } from '../vector-index.js';
 import { requestScopes } from '../../util/request-scope.js';
 import { initStore } from '../open.js';
 import { watchCommits } from './commit-watch.js';
+import { flushStatsMirrors } from '../mirrors.js';
 import { encodeError } from './error-codec.js';
 import { sqliteSyncStore } from './store.js';
 import { PackedVectors, packVectors } from './vector-pack.js';
@@ -145,6 +146,7 @@ export function serveJobs(port: MessagePort, init: WorkerInit): void {
   port.on('message', (message: Job | 'stop') => {
     if (message === 'stop') {
       void last.then(() => {
+        flushStatsMirrors(init.hippoRoot);
         stores.close();
         port.close();
       });

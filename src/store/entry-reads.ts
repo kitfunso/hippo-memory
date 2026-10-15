@@ -1,5 +1,5 @@
 import type { MemoryEntry } from '../core/memory.js';
-import { closeHippoDb, type DatabaseSyncLike } from '../db/index.js';
+import { closeHippoDb, ftsRowCounts, isFtsAvailable, type DatabaseSyncLike } from '../db/index.js';
 import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry, parseJsonArray } from './rows.js';
 import { onHandle, openStore } from './open.js';
 import { escapeLike } from '../util/escape.js';
@@ -256,7 +256,35 @@ export function countAllEntries(hippoRoot: string): number {
 }
 
 // The only code points whose JS toLowerCase yields ASCII, which SQLite's ASCII-only LIKE folding cannot see.
-const FOLDS_TO_ASCII = ['\u0130', '\u212A'];
+const FOLDS_TO_ASCII = ['İ', 'K'];
+
+// Chars or bytes differ only when a non-ASCII char is present; the check never decodes the value.
+const hasNonAscii = (column: string): string => `length(${column}) != length(CAST(${column} AS BLOB))`;
+
+/** The FTS5 phrase for `text`: its ASCII alphanumeric runs in order, which is how unicode61 splits it; null when it
+ * holds none (the phrase would be empty) or any non-ASCII char. */
+function ftsPhrase(text: string): string | null {
+  if (!/^[ -~]*$/.test(text)) return null;
+  const pieces = text.match(/[A-Za-z0-9]+/g);
+  return pieces === null ? null : `"${pieces.join(' ')}"`;
+}
+
+/** MATCH expression whose hits include every row the LIKE path would keep, or null when some token or the tag has no
+ * FTS form. Rows with non-ASCII text are added by the caller: JS tokenizers drop those chars, unicode61 keeps them. */
+function ftsMentionQuery(tokens: readonly string[], tag: string | null): string | null {
+  const parts: string[] = [];
+  for (const t of new Set(tokens)) {
+    const phrase = ftsPhrase(t);
+    if (phrase === null) return null;
+    parts.push(phrase);
+  }
+  if (tag !== null) {
+    const phrase = ftsPhrase(tag);
+    if (phrase === null) return null;
+    parts.push(`tags : ${phrase}`);
+  }
+  return parts.length === 0 ? null : parts.join(' OR ');
+}
 
 /** A superset, in loadAllEntries' order, of the rows whose lowercased content holds any of `tokens` or whose lowercased
  * tags hold `tag`.
@@ -272,7 +300,8 @@ export function loadEntriesMentioning(
   const params: string[] = [...likes];
   // A tag needing JSON escapes or case folding past ASCII is not
   // found by a substring of tags_json, so every tagged row stays in.
-  if (/^[\x20-\x7e]*$/.test(tag) && !/["\\]/.test(tag)) {
+  const plainTag = /^[ -~]*$/.test(tag) && !/["\\]/.test(tag);
+  if (plainTag) {
     clauses.push(`tags_json LIKE ? ESCAPE '\\'`);
     params.push(`%${escapeLike(tag)}%`);
   } else clauses.push(`COALESCE(tags_json, '[]') != '[]'`);
@@ -281,20 +310,31 @@ export function loadEntriesMentioning(
     params.push(ch, ch);
   }
   const tenantClause = tenantId !== undefined ? 'tenant_id = ? AND ' : '';
+  const tenantParams = tenantId !== undefined ? [tenantId] : [];
   return onHandle(
     hippoRoot,
     (db) => {
+      const ftsQuery = plainTag && isFtsAvailable(db) && ftsInSync(db) ? ftsMentionQuery(tokens, tag) : null;
+      const where = ftsQuery === null
+        ? clauses.join(' OR ')
+        : `id IN (SELECT id FROM memories_fts WHERE memories_fts MATCH ?) OR ${hasNonAscii('content')} OR ` +
+          hasNonAscii('tags_json');
       // SAFETY: selects exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
       const rows = db
         .prepare(
           `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories ` +
-            `WHERE ${tenantClause}(${clauses.join(' OR ')}) ORDER BY created ASC, id ASC`,
+            `WHERE ${tenantClause}(${where}) ORDER BY created ASC, id ASC`,
         )
-        .all(...(tenantId !== undefined ? [tenantId] : []), ...params) as MemoryRow[];
+        .all(...tenantParams, ...(ftsQuery === null ? params : [ftsQuery])) as MemoryRow[];
       return rows.map(rowToEntry);
     },
     openStore,
   );
+}
+
+function ftsInSync(db: DatabaseSyncLike): boolean {
+  const counts = ftsRowCounts(db);
+  return counts !== null && counts.memories === counts.fts;
 }
 
 export interface EntryTextKey {

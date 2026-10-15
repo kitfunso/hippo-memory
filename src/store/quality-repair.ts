@@ -134,7 +134,7 @@ function planRows(db: DatabaseSyncLike, tenantId: string) {
         : { id: entry.id, ...issue, disposition: 'protected', protection: kept },
     );
   }
-  return { total: entries.length, issues };
+  return { total: entries.length, issues, all };
 }
 
 function unsupportedPreview(db: DatabaseSyncLike, tenantId: string) {
@@ -159,15 +159,17 @@ function unsupportedPreview(db: DatabaseSyncLike, tenantId: string) {
   return { total: rows.length, issues };
 }
 
-function initialResult(db: DatabaseSyncLike, root: string, tenantId: string): QualityRepairResult {
+/** The plan plus the tenant rows it was read from, so the apply step does not read them again. */
+function plannedResult(db: DatabaseSyncLike, root: string, tenantId: string) {
   const blockers = capabilityBlockers(db);
   const schema = pragmaUserVersion(db);
-  const plan = blockers.length > 0 ? unsupportedPreview(db, tenantId) : planRows(db, tenantId);
-  return {
+  const plan = blockers.length > 0 ? { ...unsupportedPreview(db, tenantId), all: [] } : planRows(db, tenantId);
+  const result: QualityRepairResult = {
     root, schema, supported: blockers.length === 0, blockers,
     total: plan.total,
     issues: plan.issues, appliedIds: [], backup: null, warnings: [],
   };
+  return { result, all: plan.all };
 }
 
 // No rejection record, as in project repair: the writers refuse these defects themselves, and a record would also
@@ -202,9 +204,9 @@ function applyPlan(
   doneKey?: string,
 ): QualityRepairResult {
   return withWriteScope(db, 'quality_repair_apply', () => {
-    const result = initialResult(db, root, tenantId);
+    const { result, all } = plannedResult(db, root, tenantId);
     if (!result.supported) throw new Error(`Quality repair capability changed: ${result.blockers.join('; ')}`);
-    const entries = new Map(selectAllEntries(db, tenantId).map((entry) => [entry.id, entry]));
+    const entries = new Map(all.map((entry) => [entry.id, entry]));
     const appliedIds: string[] = [];
     const warnings: string[] = [];
     const now = new Date();
@@ -223,7 +225,7 @@ function repairOn(
   root: string,
   opts: { tenantId: string; apply?: boolean; doneKey?: string },
 ): QualityRepairResult {
-  const initial = withTrialScope(db, 'quality_repair_plan', () => initialResult(db, root, opts.tenantId));
+  const initial = withTrialScope(db, 'quality_repair_plan', () => plannedResult(db, root, opts.tenantId).result);
   if (!opts.apply || !initial.supported || !initial.issues.some((issue) => issue.disposition === 'set-aside')) {
     return initial;
   }

@@ -1,9 +1,9 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { repairQualityOnce } from '../src/store/quality-repair.js';
+import { repairAutomaticMemories, repairQualityOnce } from '../src/store/quality-repair.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
@@ -47,6 +47,21 @@ describe('repairQualityOnce', () => {
     const later = seed(root, CUT);
     expect(repairQualityOnce(root, 'default')).toBeNull();
     expect(ids(root)).toEqual([person.id, later.id].sort());
+  });
+
+  it('reads the rows once per plan, and the apply plans once under its lock', () => {
+    seed(root, CUT);
+    const spy = vi.spyOn(DatabaseSync.prototype, 'prepare');
+    const fullReads = () => spy.mock.calls.map((call) => String(call[0])).filter((text) => /FROM memories\s+WHERE tenant_id = \? ORDER BY created/.test(text)).length;
+    try {
+      repairAutomaticMemories(root, { tenantId: 'default' });
+      expect(fullReads()).toBe(1);
+      spy.mockClear();
+      repairAutomaticMemories(root, { tenantId: 'default', apply: true });
+      expect(fullReads()).toBe(2);
+    } finally {
+      spy.mockRestore();
+    }
   });
 
   it('marks a clean store done without a backup', () => {

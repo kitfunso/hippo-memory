@@ -8,6 +8,7 @@ import { writeEntry } from '../src/store/entry-writes.js';
 import { readEntry, loadAllEntries } from '../src/store/entry-reads.js';
 import { deleteEntry } from '../src/store/delete-and-batch.js';
 import { loadSearchEntries } from '../src/store/search-rows.js';
+import { flushStatsMirrors } from '../src/store/mirrors.js';
 import { loadIndex, rebuildIndex, loadStats, updateStats } from '../src/store/index-and-stats.js';
 import {
   saveActiveTaskSnapshot,
@@ -230,6 +231,7 @@ describe('stats tracking', () => {
     expect(stats.total_remembered).toBe(2);
     expect(stats.total_recalled).toBe(1);
     expect(stats.total_forgotten).toBe(1);
+    flushStatsMirrors(tmpDir);
     expect(JSON.parse(fs.readFileSync(path.join(tmpDir, 'stats.json'), 'utf8'))).toEqual(stats);
   });
 });

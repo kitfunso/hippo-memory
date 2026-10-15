@@ -14,6 +14,7 @@ import { appendSessionEvent, saveActiveTaskSnapshot } from '../../src/store/sess
 import { saveSessionHandoff } from '../../src/store/handoffs.js';
 import { closePrediction, savePrediction } from '../../src/store/predictions.js';
 import type { RecallResult } from '../../src/api/index.js';
+import { flushStatsMirrors } from '../../src/store/mirrors.js';
 
 export const FAKE_NOW = '2026-02-01T00:00:00.000Z';
 export const SESSION = 'golden-session';
@@ -194,6 +195,7 @@ export function rowsOf(root: string) {
 
 /** The stats.json mirror the SQLite store rewrites after each counter bump, or null before the first. */
 export function statsMirror(root: string): string | null {
+  flushStatsMirrors(root);
   const file = join(root, 'stats.json');
   return existsSync(file) ? readFileSync(file, 'utf8') : null;
 }
