@@ -249,14 +249,19 @@ export type Family<T> = readonly T[];
 /** One repository's families; a task with no lesson is a family of one. */
 export type Repository<T> = readonly Family<T>[];
 
-/** An {@link Estimate} with a two-sided p-value from the same resamples. */
+/** An {@link Estimate} with a two-sided p-value, from bootstrap resamples or from a t test over repositories. */
 export interface TestedEstimate extends Estimate {
-  /** 2 x min(share <= null, share >= null), capped at 1; NaN with fewer than two repositories. */
+  /** Bootstrap: 2 x min(share <= null, share >= null) of the resamples, capped at 1. t test: the two-sided Student t p.
+   *  NaN with fewer than two repositories. */
   readonly p: number;
-  /** Non-finite resamples, dropped; `iterations + dropped` is the number requested. */
+  /** Non-finite resamples, dropped; `iterations + dropped` is the number requested. Both are 0 for a t test. */
   readonly dropped: number;
   /** The null the p-value tested against; {@link verdict} reads its sides from here. */
   readonly nullValue: number;
+  /** Degrees of freedom of a t test (repositories minus 1); absent on a bootstrap. */
+  readonly df?: number;
+  /** Standard error of a t test; absent on a bootstrap. */
+  readonly se?: number;
 }
 
 /** Options for {@link twoLevelBootstrap}. */
@@ -267,7 +272,8 @@ export interface TwoLevelOpts extends BootstrapOpts {
   readonly nullValue?: number;
 }
 
-function notANumber(nullValue: number, dropped: number): TestedEstimate {
+/** The result with nothing to test: estimate, bounds and p all NaN. */
+export function notANumber(nullValue: number, dropped: number): TestedEstimate {
   const nan = Number.NaN;
   return { estimate: nan, low: nan, high: nan, p: nan, iterations: 0, dropped, nullValue };
 }

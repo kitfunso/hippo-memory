@@ -12,7 +12,7 @@ import { ALL_ARMS } from './z0-records.mjs';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, '..', '..');
 export const MODULES = ['records', 'filters', 'hypotheses', 'gates', 'blind', 'analyze'].map((m) => `scripts/token-eval/z0-${m}.mjs`)
-  .concat(['src/eval/eval-stats.ts', 'dist/eval/eval-stats.js']);
+  .concat(['eval-stats', 'repository-t'].flatMap((m) => [`src/eval/${m}.ts`, `dist/eval/${m}.js`]));
 export const SEALED = 'hypotheses sealed until unblinded';
 const ARM_WORD = new RegExp(`\\b(${ALL_ARMS.join('|')})\\b`, 'g');
 
@@ -94,7 +94,7 @@ export function unblindRefusal(args, gates, cwd) {
 
 export const sha256 = (file) => createHash('sha256').update(fs.readFileSync(file)).digest('hex');
 
-/** sha256 of every input, labelled as given on argv, and of the analyzer and eval-stats sources, labelled repo-relative. */
+/** sha256 of every input, labelled as given on argv, and of the analyzer and statistics sources, labelled repo-relative. */
 export function inputHashes(args, cwd) {
   const inputs = [
     ...args.runs.map((f) => ['runs', f]), ...args.plan.map((f) => ['plan', f]), ['prices', args.prices],

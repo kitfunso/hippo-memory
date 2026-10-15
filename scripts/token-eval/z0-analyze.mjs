@@ -149,7 +149,12 @@ export function buildReport(analysis, inputs, args, codes, hashes) {
 
 const f3 = (x) => (Number.isFinite(x) ? x.toFixed(3) : 'n/a');
 const pct = (x) => `${(100 * x).toFixed(1)}%`;
-const est = (e) => (isString(e) ? e : `${f3(e.estimate)} [${f3(e.low)}, ${f3(e.high)}]`);
+// A t result names its df, and its bootstrap twin prints beside it for comparison only.
+const est = (e) => {
+  if (isString(e)) return e;
+  const twin = e.bootstrap ? `, bootstrap [${f3(e.bootstrap.low)}, ${f3(e.bootstrap.high)}]` : '';
+  return `${f3(e.estimate)} [${f3(e.low)}, ${f3(e.high)}]${e.df === undefined ? '' : ` t(${e.df})`}${twin}`;
+};
 const pairText = (p) => (isString(p) ? p : `violation ${est(p.violation)} (${p.violation.units} units); excluded ${est(p.excluded)} (${p.excluded.units} units)`);
 
 function gateLines(r) {
@@ -165,13 +170,21 @@ function gateLines(r) {
   ];
 }
 
+const secondaryLines = (h3) => [
+  'secondary, not tested in the family:',
+  isString(h3) ? `H3 ${h3}` : `H3 cost ratio ${est(h3)}; first session ${est(h3.firstSession)}; extra turns ${est(h3.extra)}; retry-voided positions ${pct(h3.retryVoidedShare)}`,
+];
+
 function hypothesisLines(h) {
-  const lines = [];
-  for (const name of h.order) {
+  const family = Object.keys(h.verdicts);
+  const lines = [`primary family: ${family.join(', ')} (Holm, 0.05 over ${family.length})`];
+  // H3 prints right after the family, wherever a failed H4 or a loss moved the family in the order.
+  const lastFamily = Math.max(...family.map((n) => h.order.indexOf(n)));
+  h.order.forEach((name, i) => {
     if (name === 'H4') {
       const g = h.H4;
       if (isString(g)) lines.push(`H4 ${g}`);
-      else lines.push(`H4 ${g.gate.pass ? 'pass' : 'FAIL'}: ${g.reason ?? `set N cost ratio ${est(g.costRatio)}, resolve difference ${est(g.resolveDiff)}`}`);
+      else lines.push(`H4 ${g.gate.pass ? 'pass' : 'FAIL'}: ${g.reason ?? `set N cost ratio ${est(g.costRatio)}; resolve difference ${est(g.resolveDiff)}`}`);
     } else if (name === 'attribution') {
       const a = h.attribution;
       lines.push(isString(a) ? `attribution ${a}` : `attribution: ${a.sentence ?? a.reason}; A2 vs A5 ${a.violation === undefined ? NOT_RUN : pairText(a)}`);
@@ -179,12 +192,10 @@ function hypothesisLines(h) {
       const v = h.verdicts[name];
       const small = v.final.verdict === 'win' && !v.final.reachesMinimum ? ' (small win)' : '';
       const ps = v.violation ? `, adjusted p ${f3(v.violation.adjustedP)} / ${f3(v.excluded.adjustedP)}` : '';
-      const detail = name === 'H3' && !isString(h.H3)
-        ? `ratio ${est(h.H3)}; first session ${est(h.H3.firstSession)}, extra turns ${est(h.H3.extra)}; retry-voided positions ${pct(h.H3.retryVoidedShare)}`
-        : pairText(h[name]);
-      lines.push(`${name} ${v.final.verdict}${small}${ps}: ${detail}`);
+      lines.push(`${name} ${v.final.verdict}${small}${ps}: ${pairText(h[name])}`);
     }
-  }
+    if (i === lastFamily) lines.push(...secondaryLines(h.H3));
+  });
   return lines;
 }
 

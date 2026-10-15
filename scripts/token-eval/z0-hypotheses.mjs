@@ -1,19 +1,22 @@
-/** Z0 analyzer, part 3 of 6: units, bootstraps, H1-H4, one Holm procedure per coding, attribution, reported estimates.
- * The repeat-mistake rate reads each lesson's `first` verdict only (prereg 151); H3 and H4 read Claude Code records only. */
+/** Z0 analyzer, part 3 of 6: units, t tests over repositories with bootstrap twins, H1-H4, one Holm procedure per coding
+ * over H1 and H2, attribution, reported estimates. The repeat-mistake rate reads each lesson's `first` verdict only (prereg 151);
+ * H3 and H4 read Claude Code records only. */
 
 import { addUsage, combineCodings, harmGate, holmAdjust, priceUsage, twoLevelBootstrap, verdict } from '../../dist/eval/eval-stats.js';
+import { clusterRatioT, coxRatioT, repositoryT } from '../../dist/eval/repository-t.js';
 import { pairTasks } from './z0-filters.mjs';
 import { TWO_SEED_ARMS, positionKey, runKey } from './z0-records.mjs';
 
 export const CODINGS = ['violation', 'excluded'];
-export const HYPOTHESES = ['H1', 'H2', 'H3'];
+/** The primary family (Amendment 1): H3 is reported beside it with no verdict. */
+export const HYPOTHESES = ['H1', 'H2'];
 export const NOT_RUN = 'not run';
 export const NA = 'n/a';
 /** @typedef {import('../../src/eval/eval-stats.js').VerdictSpec} VerdictSpec */
 /** @type {VerdictSpec} */
 const REPEAT_SPEC = { helpful: 'lower', tieBand: [-0.15, 0.15], minimumEffectAt: -0.15 };
-/** @type {Record<'H1' | 'H2' | 'H3', VerdictSpec>} */
-export const SPECS = { H1: REPEAT_SPEC, H2: REPEAT_SPEC, H3: { helpful: 'lower', tieBand: [0.95, 1 / 0.95], minimumEffectAt: 0.95 } };
+/** @type {Record<'H1' | 'H2', VerdictSpec>} */
+export const SPECS = { H1: REPEAT_SPEC, H2: REPEAT_SPEC };
 export const LESSONS_SENTENCE = "hippo's lessons cut repeat mistakes";
 export const BEHAVIOUR_SENTENCE = 'installing hippo changed behaviour, and this run cannot say its lessons did';
 export const NO_N_DATA = 'no set N data';
@@ -48,10 +51,19 @@ export function blocks(units) {
 }
 
 /** Units are finite by construction, so a dropped resample is a bug, never data. */
-export function meanBootstrap(units, opts) {
+function meanBootstrap(units, opts) {
   const e = twoLevelBootstrap(blocks(units), (us) => mean(us.map((u) => u.value)), { iterations: opts.iterations, seed: opts.seed, nullValue: 0 });
   if (e.dropped > 0) throw new Error(`repeat-mistake bootstrap dropped ${e.dropped} resamples; every unit must be finite`);
   return e;
+}
+
+// The sizer passes no resample count, since only the t result decides; the analyzer always passes one.
+const twin = (opts, run) => (opts.iterations === undefined ? {} : { bootstrap: run() });
+
+/** The t test over repository means against 0 (each repository counts once), plus `bootstrap` when `opts.iterations` is set. */
+export function repeatT(units, opts) {
+  const means = blocks(units).map((fams) => mean(fams.flat().map((u) => u.value)));
+  return { ...repositoryT(means, 0), ...twin(opts, () => meanBootstrap(units, opts)) };
 }
 
 /** One unit per (repo, family, seed) holding a scored apply record in either arm; its value is the mean over
@@ -83,7 +95,7 @@ export function repeatMistakeUnits(scored, armT, armC, coding, keep) {
 
 export function repeatMistake(scored, armT, armC, coding, opts, keep) {
   const { units, dropped } = repeatMistakeUnits(scored, armT, armC, coding, keep);
-  return { ...meanBootstrap(units, opts), units: units.length, droppedUnits: dropped };
+  return { ...repeatT(units, opts), units: units.length, droppedUnits: dropped };
 }
 
 export const bothCodings = (scored, armT, armC, opts, keep) => byCoding((c) => repeatMistake(scored, armT, armC, c, opts, keep));
@@ -98,13 +110,31 @@ export function taskUnits(scored, armT, armC, prices, keep) {
 
 export const ratioOf = (field) => (us) => sum(us.map((u) => u.t[field])) / sum(us.map((u) => u.c[field]));
 
-export function ratioBootstrap(units, field, opts) {
+function ratioBootstrap(units, field, opts) {
   return twoLevelBootstrap(blocks(units), ratioOf(field), { iterations: opts.iterations, seed: opts.seed, nullValue: 1 });
 }
 
-const resolveDiff = (us) => mean(us.map((u) => u.t.resolved)) - mean(us.map((u) => u.c.resolved));
+const repoSums = (units, field) => blocks(units).map((fams) => ({ t: sum(fams.flat().map((u) => u.t[field])), c: sum(fams.flat().map((u) => u.c[field])) }));
 
-/** Holm once per coding over (H1, H2, H3), then combine the codings (reading 4); a hypothesis not run enters as NaN. */
+/** The pooled ratio of `field` with a cluster-robust t interval over repositories, plus `bootstrap` when `opts.iterations` is set. */
+export function ratioT(units, field, opts) {
+  return { ...clusterRatioT(repoSums(units, field)), ...twin(opts, () => ratioBootstrap(units, field, opts)) };
+}
+
+// A unit may sum `n` pairs (the sizer folds seeds into one unit); the difference stays per pair.
+const resolveDiff = (us) => (sum(us.map((u) => u.t.resolved)) - sum(us.map((u) => u.c.resolved))) / sum(us.map((u) => u.n ?? 1));
+
+/** H4 on set N units: the cost ratio and each repository's resolve difference under the t test, and the gate they give.
+ * The cost ratio takes Cox's interval on log repository ratios: skewed costs let symmetric bounds pass a true 1.10 too often
+ * (Amendment 1 skew check, analyzer doc). */
+export function harmT(nUnits, opts) {
+  const costRatio = { ...coxRatioT(repoSums(nUnits, 'cost')), ...twin(opts, () => ratioBootstrap(nUnits, 'cost', opts)) };
+  const boot = () => twoLevelBootstrap(blocks(nUnits), resolveDiff, { iterations: opts.iterations, seed: opts.seed, nullValue: 0 });
+  const resolve = { ...repositoryT(blocks(nUnits).map((fams) => resolveDiff(fams.flat())), 0), ...twin(opts, boot) };
+  return { costRatio, resolveDiff: resolve, gate: harmGate(costRatio, resolve) };
+}
+
+/** Holm once per coding over (H1, H2), then combine the codings (reading 4); a hypothesis not run enters as NaN. */
 export function holmVerdicts(estimatesByCoding, specs = SPECS) {
   const per = byCoding((coding) => {
     const ests = HYPOTHESES.map((h) => estimatesByCoding[coding][h]);
@@ -138,9 +168,7 @@ function harmGateOf(units, setNPlanned, opts) {
   if (units === null || !setNPlanned) return null;
   const nUnits = units.filter((u) => u.set === 'N');
   if (nUnits.length === 0) return { reason: NO_N_DATA, gate: { pass: false, costOk: false, resolveOk: false } };
-  const costRatio = ratioBootstrap(nUnits, 'cost', opts);
-  const resolve = twoLevelBootstrap(blocks(nUnits), resolveDiff, { iterations: opts.iterations, seed: opts.seed, nullValue: 0 });
-  return { costRatio, resolveDiff: resolve, gate: harmGate(costRatio, resolve) };
+  return harmT(nUnits, opts);
 }
 
 const plannedArms = (filtered) => {
@@ -155,14 +183,14 @@ export function computeHypotheses(filtered, prices, opts) {
   const h1 = runs('A1', 'A2') ? bothCodings(s, 'A2', 'A1', opts, inSets('R')) : null;
   const h2 = runs('X2', 'X3') ? bothCodings(s, 'X2', 'X3', opts, codexApply) : null;
   const units = runs('A1', 'A2') ? taskUnits(s, 'A2', 'A1', prices['claude-code'], inSets('R', 'N')) : null;
-  const h3 = units && ratioBootstrap(units, 'cost', opts);
+  const h3 = units && ratioT(units, 'cost', opts);
   const h4 = harmGateOf(units, filtered.sets.includes('N'), opts);
-  const verdicts = holmVerdicts(byCoding((c) => ({ H1: h1?.[c] ?? null, H2: h2?.[c] ?? null, H3: h3 })));
+  const verdicts = holmVerdicts(byCoding((c) => ({ H1: h1?.[c] ?? null, H2: h2?.[c] ?? null })));
   const attribution = h1 ? attributionOf(verdicts.H1.final.verdict, runs('A5') ? bothCodings(s, 'A2', 'A5', opts, inSets('R')) : null) : NOT_RUN;
   const h3Block = h3 && {
     ...h3,
-    firstSession: ratioBootstrap(units, 'first', opts),
-    extra: ratioBootstrap(units, 'extra', opts),
+    firstSession: ratioT(units, 'first', opts),
+    extra: ratioT(units, 'extra', opts),
     retryVoidedShare: filtered.retryVoided.share,
   };
   return { order: reportOrder(verdicts, h4), verdicts, H1: h1 ?? NOT_RUN, H2: h2 ?? NOT_RUN, H3: h3Block ?? NOT_RUN, H4: h4 ?? NOT_RUN, attribution };
@@ -286,7 +314,7 @@ export function armRate(s, arm, coding, keep, opts) {
     groups.set(key, g);
   }
   const units = [...groups.values()].map((g) => ({ repo: g.repo, family: g.family, value: mean(g.fails) }));
-  return units.length === 0 ? NA : { ...meanBootstrap(units, opts), units: units.length };
+  return units.length === 0 ? NA : { ...repeatT(units, opts), units: units.length };
 }
 
 /** Prereg 198 asks for the rate itself by tasks since teach; the A2-minus-A1 difference sits beside it in `bySinceTeach`.
@@ -307,7 +335,7 @@ export function computeReported(records, filtered, prices, opts) {
   const s = filtered.scored;
   const runs = plannedArms(filtered);
   const pair = (rs, t, c, keep) => (runs(t, c) ? bothCodings(rs, t, c, opts, keep) : NOT_RUN);
-  const h3 = (rs, keep) => (runs('A1', 'A2') ? ratioBootstrap(taskUnits(rs, 'A2', 'A1', prices['claude-code'], keep), 'cost', opts) : NOT_RUN);
+  const h3 = (rs, keep) => (runs('A1', 'A2') ? ratioT(taskUnits(rs, 'A2', 'A1', prices['claude-code'], keep), 'cost', opts) : NOT_RUN);
   const setR = inSets('R');
   const noUnion = withoutRuns(s, filtered.carryUnion);
   return {

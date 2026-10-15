@@ -14,6 +14,7 @@ import {
   verdict,
   combineCodings,
   harmGate,
+  notANumber,
   type Estimate,
   type Repository,
   type TestedEstimate,
@@ -432,5 +433,17 @@ describe('harmGate', () => {
     expect(harmGate(upper(1.2), lower(0.01))).toEqual({ pass: false, costOk: false, resolveOk: true });
     expect(harmGate(upper(Number.NaN), lower(0.01)).pass).toBe(false);
     expect(harmGate(upper(1), lower(Number.NaN))).toEqual({ pass: false, costOk: true, resolveOk: false });
+  });
+
+  it('fails an unbounded cost interval', () => {
+    expect(harmGate(upper(Number.POSITIVE_INFINITY), lower(0.01))).toEqual({ pass: false, costOk: false, resolveOk: true });
+  });
+});
+
+describe('notANumber', () => {
+  it('carries the null and the dropped count, with NaN estimate, bounds and p', () => {
+    const r = notANumber(1, 3);
+    expect([r.nullValue, r.dropped, r.iterations]).toEqual([1, 3, 0]);
+    expect([r.estimate, r.low, r.high, r.p].every(Number.isNaN)).toBe(true);
   });
 });
