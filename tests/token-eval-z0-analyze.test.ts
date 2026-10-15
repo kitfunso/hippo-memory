@@ -296,7 +296,7 @@ describe('Z0 hypotheses', () => {
       const units = vals.map((value, i) => ({ repo: `r${Math.floor(i / per)}`, family: `r${Math.floor(i / per)}f${Math.floor((i % per) / 2)}`, seed: 1 + (i % 2), value }));
       const e = repeatT(units, STAT);
       // The Amendment 1 view keeps the repos - 1 df; the decision test carries the Satterthwaite df.
-      expect([e.across.t.df, e.across.perRepository.length, e.bootstrap.iterations]).toEqual([repos - 1, repos, STAT.iterations]);
+      expect([e.across!.t.df, e.across!.perRepository.length, e.bootstrap.iterations]).toEqual([repos - 1, repos, STAT.iterations]);
       expect(e.df).toBeGreaterThan(0);
       return { e, v: verdict(e, e.p, SPECS.H1) };
     };
@@ -314,11 +314,11 @@ describe('Z0 hypotheses', () => {
   it('5b: repeatT adds the across-repositories view and the bootstrap twin only when iterations is set', () => {
     const units = Array.from({ length: 24 }, (_, i) => ({ repo: `r${i % 3}`, family: `f${i % 3}-${Math.floor(i / 6)}`, seed: 1 + (Math.floor(i / 3) % 2), value: 0.02 * (i % 5) - 0.04 }));
     const plain = repeatT(units, {});
-    expect([Object.keys(plain).includes('across'), Object.keys(plain).includes('bootstrap'), plain.df > 0]).toEqual([false, false, true]);
+    expect([Object.keys(plain).includes('across'), Object.keys(plain).includes('bootstrap'), plain.df! > 0]).toEqual([false, false, true]);
     const full = repeatT(units, STAT);
-    expect([full.across.perRepository.length, full.across.t.df]).toEqual([3, 2]);
+    expect([full.across!.perRepository.length, full.across!.t.df]).toEqual([3, 2]);
     expect([full.estimate, full.p, full.low, full.high]).toEqual([plain.estimate, plain.p, plain.low, plain.high]);
-    expect(full.across.t.estimate).toBeCloseTo(full.across.perRepository.reduce((s: number, x: number) => s + x, 0) / 3, 12);
+    expect(full.across!.t.estimate).toBeCloseTo(full.across!.perRepository.reduce((s: number, x: number) => s + x, 0) / 3, 12);
   });
 
   it('6: H3 is the ratio of summed costs on heterogeneous tasks, with its splits and no verdict', () => {
@@ -342,7 +342,7 @@ describe('Z0 hypotheses', () => {
     // The stratified twin resamples families inside each repository, so it should land near the t interval.
     expect([h.H3.bootstrap.low, h.H3.bootstrap.high]).toEqual([expect.closeTo(h.H3.low, 1), expect.closeTo(h.H3.high, 1)]);
     expect([h.H3.firstSession.estimate, h.H3.extra.estimate].every(Number.isFinite)).toBe(true);
-    expect([h.H3.firstSession.df, h.H3.extra.df].every((d: number) => d > 0)).toBe(true);
+    expect([h.H3.firstSession.df, h.H3.extra.df].every((d) => d !== undefined && d > 0)).toBe(true);
   });
 
   it('7: H4 fails on cost or on resolve and leads the report', () => {

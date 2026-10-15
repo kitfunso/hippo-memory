@@ -146,9 +146,9 @@ describe('Z0 sizing', () => {
     const cells = (units: Unit[], key: 'family' | 'seed') => [...new Set(units.map((u) => u[key]))].map((k) => units.filter((u) => u[key] === k).map((u) => u.value));
     for (const values of cells(byFamily!, 'family')) expect(Math.max(...values) - Math.min(...values)).toBeLessThan(1e-12);
     for (const r of ['r0', 'r1']) {
-      for (const values of cells(bySeed!.filter((u) => u.repo === r), 'seed')) expect(Math.max(...values) - Math.min(...values)).toBeLessThan(1e-12);
+      for (const values of cells(bySeed!.filter((u: Unit) => u.repo === r), 'seed')) expect(Math.max(...values) - Math.min(...values)).toBeLessThan(1e-12);
     }
-    expect(new Set(bySeed!.filter((u) => u.repo === 'r0').map((u) => u.seed)).size).toBe(4);
+    expect(new Set(bySeed!.filter((u: Unit) => u.repo === 'r0').map((u: Unit) => u.seed)).size).toBe(4);
   });
 
   it('draws 3 to 9 seeds under the rule and extends the same families, or stops after wave 1', () => {
@@ -196,7 +196,7 @@ describe('Z0 sizing', () => {
     const flat = both(spread(0, 0, 0));
     const design = { repos: 4, families: 3 };
     const flatLevel = levelCheck(flat, flat, design, 0.2, { sims: 30, seed: 1 });
-    expect(flatLevel.cells.map((c: { name: string; coding: string }) => `${c.name}/${c.coding}`)).toEqual(
+    expect(flatLevel.cells.map((c) => `${c.name}/${c.coding}`)).toEqual(
       ['rule at bounds', 'three seeds', 'two seeds at bounds', '0/1 values'].flatMap((n) => ['violation', 'excluded'].map((c) => `${n}/${c}`)));
     expect(flatLevel.ceiling).toBeCloseTo(0.025 + 2 * Math.sqrt((0.025 * 0.975) / 30), 12);
     for (const c of flatLevel.cells.slice(0, 6)) expect([c.level, c.runs]).toEqual([0, 30]);
