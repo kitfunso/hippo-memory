@@ -81,7 +81,12 @@ export function sqliteSyncStore(
 ): SqliteSyncStore & Sync<Omit<StoreGroups, AsyncOnly | 'localFiles'>> & Pick<StoreGroups, 'localFiles'> {
   return {
     kind: 'sqlite',
-    localFiles: { hippoRoot, consolidation: sqliteConsolidation(hippoRoot), agentImport: sqliteAgentImport, promotion: sqlitePromotion(hippoRoot) },
+    localFiles: {
+      hippoRoot,
+      consolidation: sqliteConsolidation(hippoRoot),
+      agentImport: sqliteAgentImport,
+      promotion: sqlitePromotion(hippoRoot),
+    },
     ...sqliteBaseReads(hippoRoot),
     ...sqliteRecallWrites(hippoRoot),
     keyAudit: sqliteKeyAudit(hippoRoot),
