@@ -10,7 +10,7 @@ import { saveActiveTaskSnapshot, appendSessionEvent } from '../src/store/session
 import { saveSessionHandoff } from '../src/store/handoffs.js';
 import { loadConfig } from '../src/core/config.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { adminActor, type HippoDbContext } from '../src/api/index.js';
+import { cliApiContext } from '../src/cli/api-context.js';
 import { rankRecall } from '../src/api/recall-pipeline.js';
 import { handoffText, snapshotText } from '../src/api/context-render.js';
 import {
@@ -21,7 +21,7 @@ let home: string;
 let hippoRoot: string;
 let globalRoot: string;
 
-const ctx = (): HippoDbContext => ({ hippoRoot, tenantId: 'default', actor: adminActor('cli') });
+const ctx = () => cliApiContext(hippoRoot, 'default');
 const setting = (activeScope: string | null, primaryIsGlobal = false): CliRecallSetting => ({ globalRoot, primaryIsGlobal, activeScope });
 
 async function rankDeploy() {
@@ -91,27 +91,27 @@ describe('cliRecallSetting and cliRecallOrigin', () => {
 });
 
 describe('loadCliRecallContinuity', () => {
-  it('returns the snapshot and handoff that render, and drops private trail rows with no scope asked', () => {
+  it('returns the snapshot and handoff that render, and drops private trail rows with no scope asked', async () => {
     seedContinuity();
-    const c = loadCliRecallContinuity(ctx(), setting(null), true);
+    const c = await loadCliRecallContinuity(ctx(), setting(null), true);
     expect(snapshotText(c.activeSnapshot!)).toContain('Route recall through the api');
     expect(handoffText(c.sessionHandoff!)).toContain('Pick up at the test file.');
     expect(c.recentSessionEvents.map((e) => e.content).sort()).toEqual(['open trail event', 'team trail event']);
   });
 
-  it('keeps only the rows in the active scope, so a row from another scope drops', () => {
+  it('keeps only the rows in the active scope, so a row from another scope drops', async () => {
     seedContinuity();
-    const c = loadCliRecallContinuity(ctx(), setting('team-a'), true);
+    const c = await loadCliRecallContinuity(ctx(), setting('team-a'), true);
     expect(c.activeSnapshot).toBeNull();
     expect(c.sessionHandoff).toBeNull();
     expect(c.recentSessionEvents.map((e) => e.content)).toEqual(['team trail event']);
   });
 
-  it('reads nothing when continuity is not asked for or the store searched is the global one', () => {
+  it('reads nothing when continuity is not asked for or the store searched is the global one', async () => {
     seedContinuity();
     const empty = { activeSnapshot: null, sessionHandoff: null, recentSessionEvents: [] };
-    expect(loadCliRecallContinuity(ctx(), setting(null), false)).toEqual(empty);
-    expect(loadCliRecallContinuity(ctx(), setting(null, true), true)).toEqual(empty);
+    expect(await loadCliRecallContinuity(ctx(), setting(null), false)).toEqual(empty);
+    expect(await loadCliRecallContinuity(ctx(), setting(null, true), true)).toEqual(empty);
   });
 });
 

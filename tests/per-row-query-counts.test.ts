@@ -11,7 +11,7 @@ import { writeEntry, strengthenRetrieved } from '../src/store/entry-writes.js';
 import { MEMORY_SELECT_COLUMNS } from '../src/store/rows.js';
 import { closeHippoDb } from '../src/db/index.js';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../src/core/memory.js';
-import { readEntry, loadAllEntries, heldIdLookup, loadEntriesByIds } from '../src/store/entry-reads.js';
+import { readEntry, loadAllEntries, loadEntriesByIds } from '../src/store/entry-reads.js';
 import { adminActor } from '../src/api/types.js';
 import { learn, CLI_LEARN } from '../src/api/learn.js';
 import { handleRemember } from '../src/cli/remember.js';
@@ -584,12 +584,12 @@ describe('an id-list read of one tenant', () => {
     const ids = entries.map((e) => e.id);
     const { result, statements } = await recordStatementsAsync(async () => {
       await outcome(ctxFor(root), ids, true);
-      return { held: heldIdLookup(root, 'default', ids)(ids[0]), listed: loadEntriesByIds(root, ids, 'default').length };
+      return { held: (await sqliteStore(root).entriesByIds(ids, 'default')).some((e) => e.id === ids[0]), listed: loadEntriesByIds(root, ids, 'default').length };
     });
     expect(result).toEqual({ held: true, listed: 10 });
 
     const idReads = [...new Set(statements.filter((sql) => sql.includes('FROM memories WHERE id IN (')))];
-    expect(idReads).toHaveLength(3);
+    expect(idReads).toHaveLength(2);
     const db = openStore(root);
     try {
       for (const sql of idReads) {

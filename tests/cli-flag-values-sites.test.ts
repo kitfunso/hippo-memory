@@ -26,10 +26,10 @@ const c = (args: string[], flags: CliFlags): CommandContext => ({ hippoRoot: roo
 async function stored() {
   const ctx = cliApiContext(root, 'default');
   return {
-    snapshot: Boolean(snapshotLoad(ctx)),
-    events: sessionEventList(ctx, { limit: 50 }).length,
-    handoff: Boolean(handoffLatest(ctx)),
-    working: workingMemoryRead(ctx, { limit: 50 }).length,
+    snapshot: Boolean(await snapshotLoad(ctx)),
+    events: (await sessionEventList(ctx, { limit: 50 })).length,
+    handoff: Boolean(await handoffLatest(ctx)),
+    working: (await workingMemoryRead(ctx, { limit: 50 })).length,
     memories: (await listMemories(ctx)).length,
   };
 }
@@ -94,22 +94,22 @@ describe('a text flag with a value', () => {
   it('snapshot save keeps the task, summary and next step it was given', async () => {
     const result = await runInProcess(() => handleSnapshot(c(['save'], { task: 'ship', summary: 'half done', 'next-step': 'merge', source: 'test' })));
     expect(result.status).toBe(0);
-    expect(snapshotLoad(cliApiContext(root, 'default'))).toMatchObject({ task: 'ship', summary: 'half done', next_step: 'merge', source: 'test' });
+    expect(await snapshotLoad(cliApiContext(root, 'default'))).toMatchObject({ task: 'ship', summary: 'half done', next_step: 'merge', source: 'test' });
   });
 
   it('session log and handoff create store the text they were given', async () => {
     const log = await runInProcess(() => handleSession(c(['log'], { id: 's1', content: 'tried the fix', type: 'attempt' })));
     expect(log.status).toBe(0);
-    expect(sessionEventList(cliApiContext(root, 'default'), { limit: 5 })).toMatchObject([{ session_id: 's1', content: 'tried the fix', event_type: 'attempt' }]);
+    expect(await sessionEventList(cliApiContext(root, 'default'), { limit: 5 })).toMatchObject([{ session_id: 's1', content: 'tried the fix', event_type: 'attempt' }]);
     const made = await runInProcess(() => handleHandoff(c(['create'], { summary: 'stopped at step 2', next: 'run the suite', session: 's1' })));
     expect(made.status).toBe(0);
-    expect(handoffLatest(cliApiContext(root, 'default'), 's1')).toMatchObject({ summary: 'stopped at step 2', nextAction: 'run the suite' });
+    expect(await handoffLatest(cliApiContext(root, 'default'), 's1')).toMatchObject({ summary: 'stopped at step 2', nextAction: 'run the suite' });
   });
 
   it('wm push stores the scope and content it was given', async () => {
     const result = await runInProcess(() => handleWm(c(['push'], { scope: 'plan', content: 'check the lease' })));
     expect(result.status).toBe(0);
-    expect(workingMemoryRead(cliApiContext(root, 'default'), { limit: 5 })).toMatchObject([{ scope: 'plan', content: 'check the lease' }]);
+    expect(await workingMemoryRead(cliApiContext(root, 'default'), { limit: 5 })).toMatchObject([{ scope: 'plan', content: 'check the lease' }]);
   });
 
   it('trace record and remember store a row from their text flags', async () => {

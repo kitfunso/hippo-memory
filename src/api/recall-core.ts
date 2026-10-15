@@ -9,18 +9,14 @@ import {
   type PlanningFallacyDecision,
 } from '../predictions/planning-fallacy.js';
 import { rankRecall, type RankRecallResult } from './recall-pipeline.js';
-import { writeRecallTraceAtRoot } from '../store/recall-trace.js';
 import type { SearchResult } from '../core/search-types.js';
-import { saveIndex } from '../store/index-and-stats.js';
-import { type HippoStore, type RecallWrites } from '../store/index.js';
+import type { HippoStore, LastRecallWrites } from '../store/index.js';
+import type { RecallTraceInput } from '../store/recall-trace.js';
 import { estimateTokens } from '../util/token-text.js';
-import { callerOf, recallAuditMetadata, recallAuditRow, strengthenOf } from './recall-record.js';
+import { callerOf, heldIds, recallAuditMetadata, recallAuditRow, strengthenOf } from './recall-record.js';
 import { RECALL_RECORDING, recordShownRecall } from './recall-finish.js';
 import type { CliCoreRanker, CliCoreRecall, RecallOpts, RecallResult, ShownCliCore } from './recall-types.js';
-import type { Context, StoreContext } from './types.js';
-
-// entriesByIds reads at most this many ids a call.
-const ID_READ_CHUNK = 500;
+import { narrowContext, type Context, type StoreContext } from './types.js';
 
 export async function retrieveWithCliCore(
   ctx: StoreContext,
@@ -47,7 +43,7 @@ export async function retrieveWithCliCore(
     return resultOf(ranking, ranking.results);
   }
   const planning = await planningFor(ctx, store, opts.query);
-  const shown = core.show(ranking, planning?.output ?? {});
+  const shown = await core.show(ranking, planning?.output ?? {});
   await recordShown(ctx, store, opts, core, { ranking, shown, planningAudit: planning?.audit });
   const result = resultOf(ranking, shown.results);
   if (planning?.output.hint) result.planningFallacyHint = planning.output.hint;
@@ -101,17 +97,20 @@ async function recordShown(
   const recallRow = recallAuditRow(callerOf(ctx), 'recall', undefined, recallAuditMetadata(opts.query, ids.length));
   const second = secondStore(ctx, core);
   const heldElsewhere = second !== undefined ? await idsNotHeld(store, ids, ctx.tenantId) : [];
-  const audited = await finishOrReport(store, {
+  const writes = {
     goalLog: ranking.goalRecallLog,
     audit: [...(planningAudit ? [planningAudit] : []), ...shown.audit, recallRow],
     strengthen: strengthenOf(ctx, ids),
-  });
+    trace: traceOf(ctx, opts, core, shown.results),
+  };
+  const audited = await finishOrReport(() => finishShown(ctx, writes, ids.length > 0));
   if (audited) {
     // The second store logs that it was searched, and strengthens only the rows the first does not hold.
     if (second !== undefined) {
-      await finishOrReport(second, { goalLog: [], audit: [recallRow], strengthen: strengthenOf(ctx, heldElsewhere) });
+      await finishOrReport(() =>
+        second.finishRecall({ goalLog: [], audit: [recallRow], strengthen: strengthenOf(ctx, heldElsewhere) }),
+      );
     }
-    traceAndMark(ctx, opts, core, shown.results);
   }
   // The caller prints whether or not the record was written, so the ring and the ledger still take this list; `written`
   // holds back the count.
@@ -134,9 +133,9 @@ function secondStore(ctx: Context, core: CliCoreRecall): HippoStore | undefined 
 }
 
 // The caller has ranked and is about to print, so a failed audit write is logged and counted, never thrown.
-async function finishOrReport(store: HippoStore, writes: RecallWrites): Promise<boolean> {
+async function finishOrReport(finish: () => Promise<number | null | void>): Promise<boolean> {
   try {
-    await store.finishRecall(writes);
+    await finish();
     return true;
   } catch (err) {
     reportAuditWriteFailure('recall', String(err));
@@ -145,27 +144,30 @@ async function finishOrReport(store: HippoStore, writes: RecallWrites): Promise<
 }
 
 async function idsNotHeld(store: HippoStore, ids: readonly string[], tenantId: string): Promise<string[]> {
-  const held = new Set<string>();
-  for (let i = 0; i < ids.length; i += ID_READ_CHUNK) {
-    for (const entry of await store.entriesByIds(ids.slice(i, i + ID_READ_CHUNK), tenantId)) held.add(entry.id);
-  }
+  const held = await heldIds(store, ids, tenantId);
   return ids.filter((id) => !held.has(id));
 }
 
-function traceAndMark(ctx: Context, opts: RecallOpts, core: CliCoreRecall, shown: readonly SearchResult[]): void {
-  // An empty list is traced too, so a coverage gap still reaches the training corpus.
-  const traceId = writeRecallTraceAtRoot(ctx.hippoRoot, {
+// An empty list is traced too, so a coverage gap still reaches the training corpus.
+function traceOf(
+  ctx: Context,
+  opts: RecallOpts,
+  core: CliCoreRecall,
+  shown: readonly SearchResult[],
+): RecallTraceInput {
+  return {
     tenantId: ctx.tenantId,
     sessionId: opts.sessionId || core.hostSessionId || null,
     pipeline: 'cli',
     query: opts.query,
     explainMode: core.rank.why === true,
     results: shown.map((r) => ({ memoryId: r.entry.id, score: r.score, rerankSteps: r.rerankTrace })),
-  });
-  if (shown.length === 0) return;
-  // One write for both markers, so `hippo outcome` never pairs these ids with an older trace.
-  saveIndex(ctx.hippoRoot, {
-    last_retrieval_ids: shown.map((r) => r.entry.id),
-    last_trace_id: traceId !== null ? String(traceId) : null,
-  });
+  };
+}
+
+// A non-empty list is also the last recall, one write with its trace so `hippo outcome` never pairs these ids with an
+// older trace; an empty one leaves the marker on the previous recall.
+function finishShown(ctx: StoreContext, writes: LastRecallWrites, marks: boolean): Promise<number | null | void> {
+  if (!marks) return ctx.store.finishRecall(writes);
+  return narrowContext(ctx, 'lastRecall').store.lastRecall.finishRecall(writes, undefined);
 }

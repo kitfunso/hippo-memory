@@ -2,7 +2,7 @@
  * LC1 recall-trace helper unit tests
  * (docs/plans/2026-08-02-lc1-recall-trace-persistence.md).
  *
- * Covers writeRecallTrace / writeRecallTraceAtRoot / recordTraceOutcome in
+ * Covers writeRecallTrace / recordTraceOutcome in
  * isolation, against a scratch HIPPO_HOME (never a repo checkout).
  *
  * readLastTraceId / writeLastTraceId were DELETED (F1(e) structural fix,
@@ -17,7 +17,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
-import { writeRecallTrace, writeRecallTraceAtRoot, recordTraceOutcome } from '../src/store/recall-trace.js';
+import { writeRecallTrace, recordTraceOutcome } from '../src/store/recall-trace.js';
 
 // Row shapes mirror the recall_traces / recall_trace_results /
 // recall_trace_outcomes tables created in src/db/index.ts (openHippoDb migration).
@@ -239,37 +239,6 @@ describe('writeRecallTrace', () => {
           traceId,
         );
         expect(rows.map((r) => r.result_rank)).toEqual([1, 2]);
-      } finally {
-        closeHippoDb(db);
-      }
-    } finally {
-      restore();
-    }
-  });
-});
-
-describe('writeRecallTraceAtRoot', () => {
-  it('opens its own connection, writes the trace, and returns the new trace id', () => {
-    // F1 structural fix: this function no longer touches last_trace_id at
-    // all — that is now the CALLER's job (fold the returned id into
-    // HippoIndex.last_trace_id, then a single saveIndex call persists it
-    // atomically with last_retrieval_ids). See tests/recall-trace-
-    // wiring.test.ts for the caller-side lockstep behavior.
-    const { home, restore } = tmpHome();
-    try {
-      const traceId = writeRecallTraceAtRoot(home, {
-        tenantId: 'default',
-        pipeline: 'context',
-        query: 'q',
-        results: [{ memoryId: 'mem-a', score: 1 }],
-      });
-      expect(traceId).not.toBeNull();
-
-      const db = openHippoDb(home);
-      try {
-        const trace = queryRow<RecallTraceRow>(db, `SELECT * FROM recall_traces WHERE id = ?`, traceId);
-        expect(trace).toBeDefined();
-        expect(trace.pipeline).toBe('context');
       } finally {
         closeHippoDb(db);
       }

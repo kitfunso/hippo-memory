@@ -166,7 +166,7 @@ describe('published runtime exports', () => {
       LOOPBACK_HOST_HEADER
       NotFoundError
       authCreate authCreateSelf authRevoke
-      bindSessionOwner
+      bindSessionOwner bindSessionOwnerOn
       captureFailureForCaller captureSessionTexts clientIpForRateLimit compactResumeForCaller
       isCrossSite isLoopback isReservedActor
       ownerOrSubject

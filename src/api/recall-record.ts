@@ -13,8 +13,20 @@ import {
   type AnchoringHint,
   type RecallHistorySnapshot,
 } from './recall-history.js';
-import type { RecallWrites } from '../store/index.js';
+import type { HippoStore, RecallWrites } from '../store/index.js';
 import type { Context } from './types.js';
+
+// entriesByIds reads at most this many ids a call.
+const ID_READ_CHUNK = 500;
+
+/** The ids among `ids` that a tenant's rows in `store` hold. */
+export async function heldIds(store: HippoStore, ids: readonly string[], tenantId: string): Promise<Set<string>> {
+  const held = new Set<string>();
+  for (let i = 0; i < ids.length; i += ID_READ_CHUNK) {
+    for (const entry of await store.entriesByIds(ids.slice(i, i + ID_READ_CHUNK), tenantId)) held.add(entry.id);
+  }
+  return held;
+}
 
 export type RecallSurface = 'cli' | 'mcp' | 'http';
 

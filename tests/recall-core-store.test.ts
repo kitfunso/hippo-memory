@@ -10,7 +10,10 @@ import { writeEntry } from '../src/store/entry-writes.js';
 import { queryAuditEvents } from '../src/store/audit.js';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
 import { loadConfig } from '../src/core/config.js';
-import type { HippoStore, RecallWrites } from '../src/store/index.js';
+import { sqliteStore, type HippoStore, type LastRecallWrites, type RecallWrites } from '../src/store/index.js';
+import { loadIndex } from '../src/store/index-and-stats.js';
+import { outcomeForLastRecall } from '../src/api/index.js';
+import { withSqliteAllowed } from '../src/db/index.js';
 import { adminActor } from '../src/api/index.js';
 import { retrieve } from '../src/api/recall.js';
 import type { CliCoreRecall } from '../src/api/recall-types.js';
@@ -60,7 +63,17 @@ describe('retrieve with the CLI ranking core', () => {
   it('writes the recall through a store that is not hippo.db when the context carries one', async () => {
     const inner = portOnlyStore(hippoRoot);
     const writes: RecallWrites[] = [];
-    const store: HippoStore = { ...inner, finishRecall: async (w) => { writes.push(w); await inner.finishRecall(w); } };
+    const lastRecall = sqliteStore(hippoRoot).lastRecall;
+    const store: HippoStore = {
+      ...inner,
+      lastRecall: {
+        ...lastRecall,
+        finishRecall: async (w: LastRecallWrites, root) => {
+          writes.push(w);
+          return withSqliteAllowed(() => lastRecall.finishRecall(w, root));
+        },
+      },
+    };
     const ctx: StoreContext = { hippoRoot, tenantId: 'default', actor: adminActor('cli'), store };
 
     const result = await retrieve(ctx, { query: 'deploy', cliCore: cliCore() });
@@ -71,6 +84,24 @@ describe('retrieve with the CLI ranking core', () => {
     expect(writes[0]!.audit.map((a) => a.op)).toEqual(['recall']);
     expect([...(writes[0]!.strengthen?.ids ?? [])].sort()).toEqual(['mem_core_0', 'mem_core_1']);
     expect(recallRowsInHippoDb()).toBe(1);
+    expect(writes[0]!.trace?.results).toHaveLength(2);
+  });
+
+  it('leaves the last-recall marker on the previous recall when a later recall shows nothing', async () => {
+    const ctx: FullContext = apiCtx(hippoRoot, 'default', adminActor('cli'));
+    await retrieve(ctx, { query: 'deploy', cliCore: cliCore() });
+    const marked = loadIndex(hippoRoot);
+    expect([...marked.last_retrieval_ids].sort()).toEqual(['mem_core_0', 'mem_core_1']);
+
+    const empty = await retrieve(ctx, { query: 'zzqqxx nomatch', cliCore: cliCore() });
+
+    expect(empty.results).toEqual([]);
+    const after = loadIndex(hippoRoot);
+    expect(after.last_retrieval_ids).toEqual(marked.last_retrieval_ids);
+    expect(after.last_trace_id).toBe(marked.last_trace_id);
+    const outcome = await outcomeForLastRecall(ctx, true);
+    expect(outcome.applied).toBe(2);
+    expect([...outcome.ids].sort()).toEqual(['mem_core_0', 'mem_core_1']);
   });
 
   it('writes the second store\'s recall rows through the store named for that root', async () => {

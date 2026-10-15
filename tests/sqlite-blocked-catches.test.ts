@@ -9,7 +9,6 @@ import { SqliteBlockedError, withSqliteBlocked } from '../src/db/index.js';
 import { recordTokens } from '../src/api/index.js';
 import { recordMcpTokens } from '../src/mcp/request.js';
 import { strengthenRetrieved } from '../src/store/entry-writes.js';
-import { writeRecallTraceAtRoot } from '../src/store/recall-trace.js';
 import { resolveIndexedEmbeddingModel } from '../src/store/embeddings/index.js';
 import { resolveVectorArm } from '../src/search/vector.js';
 import { sqliteStore } from '../src/store/index.js';
@@ -35,9 +34,6 @@ const ROWS: readonly Row[] = [
   }, 'returned'],
   ['store/entry-writes.ts strengthenRetrieved', /strengthenRetrieved/,
     async (root) => `found ${strengthenRetrieved(root, [entry.id], { recallBoostAblated: false }).size}`, 'found 0'],
-  ['recall-trace.ts writeRecallTraceAtRoot', /writeRecallTraceAtRoot/, async (root) => String(writeRecallTraceAtRoot(root, {
-    tenantId: 'default', sessionId: null, pipeline: 'mcp', query: 'deploy', results: [],
-  })), 'null'],
   ['embeddings.ts loadStoredEmbeddingModel', /loadStoredEmbeddingModel/, async (root) => String(resolveIndexedEmbeddingModel(root, {})), 'null'],
   ['search/vector.ts resolveVectorArm', /fillVectorArm/,
     async (root) => `embeddings ${(await resolveVectorArm('deploy', [], { root, store: sqliteStore(root) }, {})).useEmbeddings}`, 'embeddings false'],

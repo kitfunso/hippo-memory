@@ -17,7 +17,7 @@ import { _resetSessionRecallHistoryMcpForTests } from '../src/mcp/server.js';
 import { lastRecalledIds } from '../src/mcp/session-state.js';
 import { loadPhysicsState, resetAllPhysicsState } from '../src/db/physics-state.js';
 import { planningFallacyEvidenceAt } from '../src/store/planning-fallacy-evidence.js';
-import { writeRecallTraceAtRoot } from '../src/store/recall-trace.js';
+import { writeRecallTrace } from '../src/store/recall-trace.js';
 import { serve } from '../src/server.js';
 import {
   sqliteStore, type ActiveGoals, type ContinuityKey, type GoalRecallLogRow, type HippoStore, type MemoryEntry,
@@ -386,10 +386,10 @@ describe('sqliteStore writes leave the rows the hippo.db functions leave, each o
         );
         writeGoalRecallLog(db, localGoalRecallRows(db, boost.log));
         for (const event of events) appendAuditEvent(db, event);
+        writeRecallTrace(db, trace);
       } finally {
         closeHippoDb(db);
       }
-      writeRecallTraceAtRoot(s.root, trace);
       strengthenRetrieved(s.root, strengthen.ids, strengthen.opts);
     }, (store) => store.finishRecall(finishWrites()));
     // The global row's memory lives in another store, so its log row is dropped.

@@ -5,19 +5,12 @@ import * as path from 'path';
 import type { HandoffEvidence } from '../core/handoff.js';
 import { isInitialized } from '../core/project-identity.js';
 import type { SessionEvent, TaskSnapshot } from '../store/rows.js';
-import {
-  closeTaskSnapshotsForSession,
-  listSessionEvents,
-  loadActiveTaskSnapshot,
-  loadFreshActiveTaskSnapshot,
-} from '../store/sessions.js';
-import { writeSessionEndHandoff } from '../store/handoffs.js';
 import { readApiCalls, recordRereads, type TranscriptCalls } from '../store/token-ledger.js';
 import { getGlobalRoot } from '../sharing/global-store.js';
 import { truncateCodePointSafe } from '../util/transcript-tail.js';
 import { errorMessage, log } from '../util/log.js';
 import { COMPACT_RESUME_EVENT_CONTENT_CAP, COMPACT_RESUME_MAX_AGE_MS, compactResumeText } from './context-render.js';
-import type { Context } from './types.js';
+import type { Context, ContextWith } from './types.js';
 
 /** What closing one ended session needs from the host; the two readers run only when the handoff is written. */
 export interface SessionClose {
@@ -34,18 +27,19 @@ export interface SessionClose {
 
 /** Writes the session's handoff, then closes its snapshot unless `turn`; each step logs its own failure and never
  * throws. The handoff goes first, while the snapshot writeSessionEndHandoff reads is still active. */
-export function closeEndedSession(ctx: Context, close: SessionClose): void {
-  if (close.sessionId) writeEndHandoff(ctx, close.sessionId, close);
+export async function closeEndedSession(ctx: ContextWith<'sessions'>, close: SessionClose): Promise<void> {
+  if (close.sessionId) await writeEndHandoff(ctx, close.sessionId, close);
   if (close.turn) {
     close.log('skip snapshot close: turn mode');
     return;
   }
-  closeSnapshot(ctx, close.sessionId, close.log);
+  await closeSnapshot(ctx, close.sessionId, close.log);
 }
 
-function writeEndHandoff(ctx: Context, sessionId: string, close: SessionClose): void {
+async function writeEndHandoff(ctx: ContextWith<'sessions'>, sessionId: string, close: SessionClose): Promise<void> {
+  const { sessions } = ctx.store;
   try {
-    const ownSnapshot = loadActiveTaskSnapshot(ctx.hippoRoot, ctx.tenantId)?.session_id === sessionId;
+    const ownSnapshot = (await sessions.loadSnapshot(ctx.tenantId, null))?.session_id === sessionId;
     // A never-compacted session has no snapshot; read even when it has one, as another session's PreCompact can take
     // the slot before the write.
     const derived = close.workingState();
@@ -53,8 +47,7 @@ function writeEndHandoff(ctx: Context, sessionId: string, close: SessionClose): 
       close.log('skip: no snapshot or transcript for session');
       return;
     }
-    const handoff = writeSessionEndHandoff(ctx.hippoRoot, {
-      tenantId: ctx.tenantId,
+    const handoff = await sessions.writeSessionEndHandoff(ctx.tenantId, {
       sessionId,
       evidence: close.evidence(),
       derived,
@@ -69,10 +62,14 @@ function writeEndHandoff(ctx: Context, sessionId: string, close: SessionClose): 
 }
 
 // If session-end never fires (crash, kill -9), the freshness bound in loadFreshActiveTaskSnapshot is the backstop.
-function closeSnapshot(ctx: Context, sessionId: string | null, line: (message: string) => void): void {
+async function closeSnapshot(
+  ctx: ContextWith<'sessions'>,
+  sessionId: string | null,
+  line: (message: string) => void,
+): Promise<void> {
   try {
     if (sessionId) {
-      const closed = closeTaskSnapshotsForSession(ctx.hippoRoot, ctx.tenantId, sessionId);
+      const closed = await ctx.store.sessions.closeSessionSnapshots(ctx.tenantId, sessionId, 'session-ended', null);
       line(`closed ${closed} active snapshot(s) for session ${sessionId}`);
     } else {
       line('skip: no session_id in SessionEnd payload, active snapshot left untouched');
@@ -115,8 +112,12 @@ export async function bookSessionRereads(
 
 /** The block a compaction lost: the fresh task snapshot and its session trail, or null with none or another session's
  * snapshot. */
-export function compactResumeBlock(ctx: Context, payloadSessionId: string | null): string | null {
-  const snapshot = loadFreshActiveTaskSnapshot(ctx.hippoRoot, ctx.tenantId, { maxAgeMs: COMPACT_RESUME_MAX_AGE_MS });
+export async function compactResumeBlock(
+  ctx: ContextWith<'sessions'>,
+  payloadSessionId: string | null,
+): Promise<string | null> {
+  const { sessions } = ctx.store;
+  const snapshot = await sessions.loadFreshSnapshot(ctx.tenantId, { maxAgeMs: COMPACT_RESUME_MAX_AGE_MS }, null);
   // Concurrent sessions must not cross-restore: only when both ids are present and differ, so a manual run with no
   // payload id still prints.
   if (!snapshot) return null;
@@ -127,7 +128,7 @@ export function compactResumeBlock(ctx: Context, payloadSessionId: string | null
   let events: SessionEvent[] = [];
   try {
     if (snapshot.session_id) {
-      events = listSessionEvents(ctx.hippoRoot, ctx.tenantId, { session_id: snapshot.session_id }).map((e) => ({
+      events = (await sessions.listEvents(ctx.tenantId, { sessionId: snapshot.session_id })).map((e) => ({
         ...e,
         content: truncateCodePointSafe(e.content, COMPACT_RESUME_EVENT_CONTENT_CAP),
       }));
@@ -147,7 +148,7 @@ export interface SessionEndWork<Scan> {
   sessionId: string | null;
   transcriptPath: string | undefined;
   /** Builds the call context for one store root. */
-  contextFor: (root: string) => Context;
+  contextFor: (root: string) => ContextWith<'sessions'>;
   /** The store the run captures into: the project store, else global. */
   storeRoot: () => string;
   /** One line to the session-end log; `startFresh` restarts the file. */
@@ -186,7 +187,7 @@ export async function sessionEndWork<Scan>(w: SessionEndWork<Scan>): Promise<voi
   w.digest(scan, (line) => w.log(line));
   // Only this session's snapshot, and only after sleep and capture.
   const closeLog = (line: string): void => w.log(line);
-  closeEndedSession(w.contextFor(store), {
+  await closeEndedSession(w.contextFor(store), {
     sessionId: w.sessionId,
     turn: w.mode === 'turn',
     workingState: () => (w.transcriptPath ? w.workingState(closeLog) : null),

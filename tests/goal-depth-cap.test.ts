@@ -3,7 +3,9 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
-import { pushGoal, getActiveGoals } from '../src/store/goals.js';
+import { activeGoalsWithPolicies, pushGoal } from '../src/store/goals.js';
+
+const activeGoalsOf = (root: string, opts: { sessionId: string; tenantId: string }) => activeGoalsWithPolicies(root, opts).goals;
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 
 describe('goal stack depth cap', () => {
@@ -17,9 +19,9 @@ describe('goal stack depth cap', () => {
 
   it('keeps three goals active and evicts on the fourth push', () => {
     for (const goalName of ['a', 'b', 'c']) pushGoal(root, { ...ctx, goalName });
-    expect(getActiveGoals(root, ctx)).toHaveLength(3);
+    expect(activeGoalsOf(root, ctx)).toHaveLength(3);
     pushGoal(root, { ...ctx, goalName: 'd' });
-    expect(getActiveGoals(root, ctx).map((g) => g.goalName)).toEqual(['b', 'c', 'd']);
+    expect(activeGoalsOf(root, ctx).map((g) => g.goalName)).toEqual(['b', 'c', 'd']);
   });
 
   it('auto-suspends the oldest active goal when pushing the 4th', () => {
@@ -28,7 +30,7 @@ describe('goal stack depth cap', () => {
     pushGoal(root, { ...ctx, goalName: 'recent' });
     pushGoal(root, { ...ctx, goalName: 'newest' });
 
-    const active = getActiveGoals(root, ctx);
+    const active = activeGoalsOf(root, ctx);
     expect(active).toHaveLength(3);
     expect(active.map((g) => g.goalName)).toEqual(['middle', 'recent', 'newest']);
 
@@ -49,9 +51,9 @@ describe('goal stack depth cap', () => {
     pushGoal(root, { sessionId: 's1', tenantId: 'default', goalName: 'A3' });
     pushGoal(root, { sessionId: 's2', tenantId: 'default', goalName: 'B1' });
     pushGoal(root, { sessionId: 's1', tenantId: 't2', goalName: 'C1' });
-    expect(getActiveGoals(root, { sessionId: 's1', tenantId: 'default' })).toHaveLength(3);
-    expect(getActiveGoals(root, { sessionId: 's2', tenantId: 'default' })).toHaveLength(1);
-    expect(getActiveGoals(root, { sessionId: 's1', tenantId: 't2' })).toHaveLength(1);
+    expect(activeGoalsOf(root, { sessionId: 's1', tenantId: 'default' })).toHaveLength(3);
+    expect(activeGoalsOf(root, { sessionId: 's2', tenantId: 'default' })).toHaveLength(1);
+    expect(activeGoalsOf(root, { sessionId: 's1', tenantId: 't2' })).toHaveLength(1);
   });
 
   it('serialized pushes never leave more than 3 active (post-Task-3 BEGIN IMMEDIATE)', () => {
@@ -61,7 +63,7 @@ describe('goal stack depth cap', () => {
     for (let i = 0; i < 10; i++) {
       pushGoal(root, { ...ctx, goalName: `g${i}` });
     }
-    expect(getActiveGoals(root, ctx)).toHaveLength(3);
+    expect(activeGoalsOf(root, ctx)).toHaveLength(3);
     const db = openHippoDb(root);
     try {
       // SAFETY: literal COUNT(*) query against the known goal_stack schema

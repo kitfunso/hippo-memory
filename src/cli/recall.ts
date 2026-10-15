@@ -253,8 +253,8 @@ async function cmdRecall(
           : undefined,
       note: (line) => printError(line),
       hostSessionId: hostSessionId(),
-      show: (rank, planning) => {
-        slot.presented = presentRecall(ctx, query, o, { rank, ...priced }, planning);
+      show: async (rank, planning) => {
+        slot.presented = await presentRecall(ctx, query, o, { rank, ...priced }, planning);
         return slot.presented.shown;
       },
     },
@@ -505,7 +505,7 @@ type FittedRecall = ReturnType<typeof fitRecallBlock>;
 
 /** The presenter `retrieve` calls once ranking ends: fits and
  * renders the block, and names the rows and hint rows to record. */
-function presentRecall(
+async function presentRecall(
   ctx: api.StoreContext,
   query: string,
   o: RecallOptions,
@@ -513,7 +513,8 @@ function presentRecall(
   planning: PlanningFallacyOutput,
 ) {
   // Loaded before the zero-result branch, so a no-match query with live continuity still returns a resume packet.
-  const fit = fitRecallBlock(query, o, ranked, loadCliRecallContinuity(ctx, o.setting, o.includeContinuity), planning);
+  const loaded = await loadCliRecallContinuity(ctx, o.setting, o.includeContinuity);
+  const fit = fitRecallBlock(query, o, ranked, loaded, planning);
   const { results, hints } = fit;
   const text = recallOutput(query, o, fit, ranked.isGlobal);
   const audit = shownRecallRows(
@@ -531,7 +532,7 @@ function presentRecall(
   return { text, shown: { results, audit, tokens: estimateTokens(text), anchoredOn: hints.anchoring?.memoryId } };
 }
 
-type PresentedRecall = ReturnType<typeof presentRecall>;
+type PresentedRecall = Awaited<ReturnType<typeof presentRecall>>;
 
 /** Where the presenter parks what it built; a `let` it assigned would read as never-assigned after the await. */
 interface PresentedSlot { presented?: PresentedRecall }

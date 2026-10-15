@@ -34,7 +34,7 @@ import { fail } from './exit.js';
 
 const ISO_DATETIME_CHARS = 19;
 
-function snapshotSave(hippoRoot: string, tenantId: string, flags: CliFlags): void {
+async function snapshotSave(hippoRoot: string, tenantId: string, flags: CliFlags): Promise<void> {
   const task = stringFlagOrExit(flags, 'task') ?? '';
   const summary = stringFlagOrExit(flags, 'summary') ?? '';
   const nextStep = stringFlagOrExit(flags, 'next-step') ?? '';
@@ -47,7 +47,7 @@ function snapshotSave(hippoRoot: string, tenantId: string, flags: CliFlags): voi
     );
   }
 
-  const snapshot = apiSnapshotSave(cliApiContext(hippoRoot, tenantId), {
+  const snapshot = await apiSnapshotSave(cliApiContext(hippoRoot, tenantId), {
     task,
     summary,
     next_step: nextStep,
@@ -63,8 +63,9 @@ function snapshotSave(hippoRoot: string, tenantId: string, flags: CliFlags): voi
   }
 }
 
-function snapshotClear(hippoRoot: string, tenantId: string, flags: CliFlags): void {
-  const cleared = apiSnapshotClear(cliApiContext(hippoRoot, tenantId), stringFlagOrExit(flags, 'status') ?? 'cleared');
+async function snapshotClear(hippoRoot: string, tenantId: string, flags: CliFlags): Promise<void> {
+  const status = stringFlagOrExit(flags, 'status') ?? 'cleared';
+  const cleared = await apiSnapshotClear(cliApiContext(hippoRoot, tenantId), status);
   if (!cleared) {
     console.log('No active task snapshot to clear.');
     return;
@@ -72,8 +73,8 @@ function snapshotClear(hippoRoot: string, tenantId: string, flags: CliFlags): vo
   console.log('Cleared active task snapshot.');
 }
 
-function snapshotShow(hippoRoot: string, tenantId: string, flags: CliFlags): void {
-  const snapshot = snapshotLoad(cliApiContext(hippoRoot, tenantId));
+async function snapshotShow(hippoRoot: string, tenantId: string, flags: CliFlags): Promise<void> {
+  const snapshot = await snapshotLoad(cliApiContext(hippoRoot, tenantId));
   if (!snapshot) {
     if (flags['json']) {
       console.log(JSON.stringify({ snapshot: null }));
@@ -91,7 +92,7 @@ function snapshotShow(hippoRoot: string, tenantId: string, flags: CliFlags): voi
   printActiveTaskSnapshot(snapshot);
 }
 
-export function handleSnapshot({ hippoRoot, tenantId, args, flags }: CommandContext): void {
+export async function handleSnapshot({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
   requireInit(hippoRoot);
 
   const subcommand = args[0] ?? 'show';
@@ -111,7 +112,7 @@ interface SessionArgs {
   readonly limit: number;
 }
 
-function sessionLog(hippoRoot: string, tenantId: string, s: SessionArgs, flags: CliFlags): void {
+async function sessionLog(hippoRoot: string, tenantId: string, s: SessionArgs, flags: CliFlags): Promise<void> {
   const eventType = stringFlagOrExit(flags, 'type') ?? 'note';
   const content = stringFlagOrExit(flags, 'content') ?? '';
 
@@ -122,7 +123,7 @@ function sessionLog(hippoRoot: string, tenantId: string, s: SessionArgs, flags: 
     );
   }
 
-  const event = sessionEventAppend(cliApiContext(hippoRoot, tenantId), {
+  const event = await sessionEventAppend(cliApiContext(hippoRoot, tenantId), {
     session_id: s.sessionId,
     task: s.task || null,
     event_type: eventType || 'note',
@@ -135,9 +136,9 @@ function sessionLog(hippoRoot: string, tenantId: string, s: SessionArgs, flags: 
   console.log(`   Type: ${event.event_type}`);
 }
 
-function sessionShow(hippoRoot: string, tenantId: string, s: SessionArgs, flags: CliFlags): void {
-  const events = sessionEventList(cliApiContext(hippoRoot, tenantId), {
-    session_id: s.sessionId || undefined,
+async function sessionShow(hippoRoot: string, tenantId: string, s: SessionArgs, flags: CliFlags): Promise<void> {
+  const events = await sessionEventList(cliApiContext(hippoRoot, tenantId), {
+    sessionId: s.sessionId || undefined,
     task: s.task || undefined,
     limit: s.limit,
   });
@@ -150,8 +151,8 @@ function sessionShow(hippoRoot: string, tenantId: string, s: SessionArgs, flags:
   printSessionEvents(events);
 }
 
-function sessionLatest(hippoRoot: string, tenantId: string, s: SessionArgs, flags: CliFlags): void {
-  const { snapshot, events } = continuityLatest(cliApiContext(hippoRoot, tenantId), {
+async function sessionLatest(hippoRoot: string, tenantId: string, s: SessionArgs, flags: CliFlags): Promise<void> {
+  const { snapshot, events } = await continuityLatest(cliApiContext(hippoRoot, tenantId), {
     sessionId: s.sessionId,
     limit: s.limit,
   });
@@ -175,7 +176,7 @@ type SessionCompleteMetadata = {
   summary?: string;
 };
 
-function sessionComplete(hippoRoot: string, tenantId: string, s: SessionArgs, flags: CliFlags): void {
+async function sessionComplete(hippoRoot: string, tenantId: string, s: SessionArgs, flags: CliFlags): Promise<void> {
   const { sessionId, task } = s;
   const outcomeRaw = stringFlagOrExit(flags, 'outcome') ?? '';
   const summary = stringFlagOrExit(flags, 'summary') ?? '';
@@ -191,7 +192,7 @@ function sessionComplete(hippoRoot: string, tenantId: string, s: SessionArgs, fl
   const metadata: SessionCompleteMetadata = { ended_at: new Date().toISOString() };
   if (summary) metadata.summary = summary;
 
-  const event = sessionEventAppend(cliApiContext(hippoRoot, tenantId), {
+  const event = await sessionEventAppend(cliApiContext(hippoRoot, tenantId), {
     session_id: sessionId,
     task: task || null,
     event_type: 'session_complete',
@@ -202,13 +203,13 @@ function sessionComplete(hippoRoot: string, tenantId: string, s: SessionArgs, fl
 
   console.log(`Completed session ${event.session_id} with outcome=${outcome} (event #${event.id})`);
 
-  const stamped = handoffStampOutcome(cliApiContext(hippoRoot, tenantId), sessionId, outcome);
+  const stamped = await handoffStampOutcome(cliApiContext(hippoRoot, tenantId), sessionId, outcome);
   if (stamped > 0) {
     console.log(`Stamped outcome on handoff for session ${sessionId}`);
   }
 }
 
-export function handleSession({ hippoRoot, tenantId, args, flags }: CommandContext): void {
+export async function handleSession({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
   requireInit(hippoRoot);
 
   const subcommand = args[0] ?? 'show';
@@ -226,8 +227,8 @@ export function handleSession({ hippoRoot, tenantId, args, flags }: CommandConte
   fail('Usage: hippo session <log|show|latest|resume|complete>');
 }
 
-function sessionResume(hippoRoot: string, tenantId: string, sessionId: string): void {
-  const handoff = apiHandoffLatest(cliApiContext(hippoRoot, tenantId), sessionId || undefined);
+async function sessionResume(hippoRoot: string, tenantId: string, sessionId: string): Promise<void> {
+  const handoff = await apiHandoffLatest(cliApiContext(hippoRoot, tenantId), sessionId || undefined);
   if (!handoff) {
     console.log('No handoff to resume from.');
     return;
@@ -277,7 +278,7 @@ const HANDOFF_CREATE_USAGE = 'Usage: hippo handoff create --summary "..." [--nex
   '[--constraint <text>...] [--outcome <success|failure|partial>] [--target-runtime <name>] [--card-id <id>] ' +
   '[--tests <pass|fail|unknown>]';
 
-function handoffCreate(hippoRoot: string, tenantId: string, flags: CliFlags): void {
+async function handoffCreate(hippoRoot: string, tenantId: string, flags: CliFlags): Promise<void> {
   const summary = stringFlagOrExit(flags, 'summary') ?? '';
   if (!summary) {
     fail(HANDOFF_CREATE_USAGE);
@@ -302,7 +303,7 @@ function handoffCreate(hippoRoot: string, tenantId: string, flags: CliFlags): vo
     testStatus === 'pass' || testStatus === 'fail' ? testStatus : 'unknown',
   );
 
-  const handoff = handoffSave(cliApiContext(hippoRoot, tenantId), {
+  const handoff = await handoffSave(cliApiContext(hippoRoot, tenantId), {
     version: 1,
     sessionId,
     repoRoot: process.cwd(),
@@ -320,7 +321,7 @@ function handoffCreate(hippoRoot: string, tenantId: string, flags: CliFlags): vo
   printCreatedHandoff(handoff);
 }
 
-function printCreatedHandoff(handoff: ReturnType<typeof handoffSave>): void {
+function printCreatedHandoff(handoff: Awaited<ReturnType<typeof handoffSave>>): void {
   console.log(`Created session handoff for session ${handoff.sessionId}`);
   console.log(`   Summary: ${handoff.summary}`);
   if (handoff.nextAction) console.log(`   Next: ${handoff.nextAction}`);
@@ -336,9 +337,9 @@ function printCreatedHandoff(handoff: ReturnType<typeof handoffSave>): void {
   if (handoff.evidence) console.log(`   Evidence: ${formatHandoffEvidenceLine(handoff.evidence)}`);
 }
 
-function handoffLatest(hippoRoot: string, tenantId: string, flags: CliFlags): void {
+async function handoffLatest(hippoRoot: string, tenantId: string, flags: CliFlags): Promise<void> {
   const sessionId = (stringFlagOrExit(flags, 'session') ?? stringFlagOrExit(flags, 'id') ?? '') || undefined;
-  const handoff = apiHandoffLatest(cliApiContext(hippoRoot, tenantId), sessionId);
+  const handoff = await apiHandoffLatest(cliApiContext(hippoRoot, tenantId), sessionId);
 
   if (!handoff) {
     if (flags['json']) {
@@ -357,7 +358,7 @@ function handoffLatest(hippoRoot: string, tenantId: string, flags: CliFlags): vo
   printHandoff(handoff);
 }
 
-function handoffShow(hippoRoot: string, tenantId: string, args: string[], flags: CliFlags): void {
+async function handoffShow(hippoRoot: string, tenantId: string, args: string[], flags: CliFlags): Promise<void> {
   const idArg = args[1];
   if (!idArg) {
     fail('Usage: hippo handoff show <id> [--json]');
@@ -368,7 +369,7 @@ function handoffShow(hippoRoot: string, tenantId: string, args: string[], flags:
     fail(`Invalid handoff ID: ${idArg}`);
   }
 
-  const handoff = handoffById(cliApiContext(hippoRoot, tenantId), handoffId);
+  const handoff = await handoffById(cliApiContext(hippoRoot, tenantId), handoffId);
 
   if (!handoff) {
     if (flags['json']) {
@@ -387,7 +388,7 @@ function handoffShow(hippoRoot: string, tenantId: string, args: string[], flags:
   printHandoff(handoff);
 }
 
-export function handleHandoff({ hippoRoot, tenantId, args, flags }: CommandContext): void {
+export async function handleHandoff({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
   requireInit(hippoRoot);
 
   const subcommand = args[0] ?? 'latest';
@@ -423,9 +424,9 @@ function printCurrentState(snapshot: TaskSnapshot | null, events: SessionEvent[]
   }
 }
 
-function currentShow(hippoRoot: string, tenantId: string, flags: CliFlags): void {
+async function currentShow(hippoRoot: string, tenantId: string, flags: CliFlags): Promise<void> {
   const asJson = boolFlag(flags, 'json');
-  const { snapshot, events } = continuityLatest(cliApiContext(hippoRoot, tenantId), { limit: 5 });
+  const { snapshot, events } = await continuityLatest(cliApiContext(hippoRoot, tenantId), { limit: 5 });
 
   if (asJson) {
     console.log(JSON.stringify({
@@ -449,7 +450,7 @@ function currentShow(hippoRoot: string, tenantId: string, flags: CliFlags): void
   printCurrentState(snapshot, events);
 }
 
-export function handleCurrent({ hippoRoot, tenantId, args, flags }: CommandContext): void {
+export async function handleCurrent({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
   requireInit(hippoRoot);
 
   const subcommand = args[0] ?? 'show';
@@ -461,7 +462,7 @@ export function handleCurrent({ hippoRoot, tenantId, args, flags }: CommandConte
 
 // Working Memory
 
-export function handleWm({ hippoRoot, tenantId, args, flags }: CommandContext): void {
+export async function handleWm({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
   requireInit(hippoRoot);
 
   const subcommand = args[0] ?? '';
@@ -472,7 +473,7 @@ export function handleWm({ hippoRoot, tenantId, args, flags }: CommandContext): 
     const scope = stringFlagOrExit(flags, 'scope') || undefined;
     const sessionId = stringFlagOrExit(flags, 'session') || undefined;
 
-    const count = workingMemoryClear(cliApiContext(hippoRoot, tenantId), { scope, sessionId });
+    const count = await workingMemoryClear(cliApiContext(hippoRoot, tenantId), { scope, sessionId });
     console.log(`Cleared ${count} working memory entries.`);
     return;
   }
@@ -481,7 +482,7 @@ export function handleWm({ hippoRoot, tenantId, args, flags }: CommandContext): 
     const scope = stringFlagOrExit(flags, 'scope') || undefined;
     const sessionId = stringFlagOrExit(flags, 'session') || undefined;
 
-    const count = workingMemoryFlush(cliApiContext(hippoRoot, tenantId), { scope, sessionId });
+    const count = await workingMemoryFlush(cliApiContext(hippoRoot, tenantId), { scope, sessionId });
     console.log(`Flushed ${count} working memory entries.`);
     return;
   }
@@ -491,7 +492,7 @@ export function handleWm({ hippoRoot, tenantId, args, flags }: CommandContext): 
 
 const WM_DEFAULT_IMPORTANCE = 0.5;
 
-function wmPushCmd(hippoRoot: string, tenantId: string, flags: CliFlags): void {
+async function wmPushCmd(hippoRoot: string, tenantId: string, flags: CliFlags): Promise<void> {
   const scope = stringFlagOrExit(flags, 'scope') ?? 'default';
   const content = stringFlagOrExit(flags, 'content') ?? '';
   const importance = numberFlag(flags, 'importance') ?? WM_DEFAULT_IMPORTANCE;
@@ -502,7 +503,7 @@ function wmPushCmd(hippoRoot: string, tenantId: string, flags: CliFlags): void {
     fail('Usage: hippo wm push --scope <scope> --content "..." [--importance 0.8] [--session <id>] [--task <id>]');
   }
 
-  const id = workingMemoryPush(cliApiContext(hippoRoot, tenantId), {
+  const id = await workingMemoryPush(cliApiContext(hippoRoot, tenantId), {
     scope,
     content,
     importance,
@@ -513,12 +514,12 @@ function wmPushCmd(hippoRoot: string, tenantId: string, flags: CliFlags): void {
   console.log(`Pushed working memory #${id} (scope=${scope}, importance=${importance})`);
 }
 
-function wmReadCmd(hippoRoot: string, tenantId: string, flags: CliFlags): void {
+async function wmReadCmd(hippoRoot: string, tenantId: string, flags: CliFlags): Promise<void> {
   const scope = stringFlagOrExit(flags, 'scope') || undefined;
   const sessionId = stringFlagOrExit(flags, 'session') || undefined;
   const limit = numberFlag(flags, 'limit') || 20;
 
-  const items = workingMemoryRead(cliApiContext(hippoRoot, tenantId), { scope, sessionId, limit });
+  const items = await workingMemoryRead(cliApiContext(hippoRoot, tenantId), { scope, sessionId, limit });
 
   if (flags['json']) {
     console.log(JSON.stringify({ items }, null, 2));

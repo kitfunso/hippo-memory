@@ -158,7 +158,11 @@ export function seedContextGlobal(dir: string): void {
 export function contextRowsOf(root: string) {
   const db = openHippoDb(root);
   try {
-    return { ...rowsOf(root), strengthened: db.prepare('SELECT id, retrieval_count, last_retrieved, half_life_days, strength FROM memories ORDER BY id').all() };
+    const rows = rowsOf(root);
+    // The audit row is written by the store, and a worker-thread store stamps the real clock, not the faked Date.
+    // SAFETY: rowsOf selects ts, tenant_id, actor, op, target_id and metadata_json for the audit rows.
+    const audit = (rows.audit as Array<{ ts: string; op: string }>).map((row) => ({ ...row, ts: 'stamped' }));
+    return { ...rows, audit, strengthened: db.prepare('SELECT id, retrieval_count, last_retrieved, half_life_days, strength FROM memories ORDER BY id').all() };
   } finally {
     closeHippoDb(db);
   }

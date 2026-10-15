@@ -12,13 +12,11 @@ import { explainMatch } from '../search/explain.js';
 import { fitBudget } from '../search/finalize.js';
 import { getGlobalRoot } from '../sharing/global-store.js';
 import { detectScope } from '../core/active-scope.js';
-import { loadLatestHandoff } from '../store/handoffs.js';
 import { loadIndex } from '../store/index-and-stats.js';
 import type { ContinuityBlock } from '../store/port.js';
 import { passesCliRecallScopeFilter, passesScopeFilterForRecall } from '../core/recall-scope.js';
 import { loadSearchEntries } from '../store/search-rows.js';
-import { listSessionEvents, loadActiveTaskSnapshot } from '../store/sessions.js';
-import type { Context } from './types.js';
+import type { Context, StoreContext } from './types.js';
 
 export { DEFAULT_MAX_NEIGHBORS, MAX_HOPS } from '../graph/recall.js';
 
@@ -69,15 +67,16 @@ export function scopeHiddenCount(
 }
 
 /** The active snapshot, its session's latest handoff and last five events, each kept only when its scope passes. */
-export function loadCliRecallContinuity(ctx: Context, setting: CliRecallSetting, wanted: boolean): ContinuityBlock {
+export async function loadCliRecallContinuity(
+  ctx: StoreContext,
+  setting: CliRecallSetting,
+  wanted: boolean,
+): Promise<ContinuityBlock> {
   if (!wanted || setting.primaryIsGlobal) {
     return { activeSnapshot: null, sessionHandoff: null, recentSessionEvents: [] };
   }
-  const { hippoRoot, tenantId } = ctx;
-  const rawSnapshot = loadActiveTaskSnapshot(hippoRoot, tenantId);
-  const sessionId = rawSnapshot?.session_id ?? undefined;
-  const rawHandoff = sessionId ? loadLatestHandoff(hippoRoot, tenantId, sessionId) : null;
-  const rawEvents = sessionId ? listSessionEvents(hippoRoot, tenantId, { session_id: sessionId, limit: 5 }) : [];
+  const { activeSnapshot: rawSnapshot, sessionHandoff: rawHandoff, recentSessionEvents: rawEvents } =
+    await ctx.store.continuity(ctx.tenantId, 5, null);
   // The same shared scope rule as api.recall; the active scope merges --scope and detectScope().
   const effectiveScope = setting.activeScope || undefined;
   const passes = (r: { scope?: string | null }): boolean => passesScopeFilterForRecall(r.scope ?? null, effectiveScope);

@@ -1,7 +1,7 @@
 // sessionEndWork runs from the api with no CLI: real store, host steps passed in.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { rmSync } from 'node:fs';
-import { adminActor, type Context } from '../src/api/index.js';
+import { cliApiContext } from '../src/cli/api-context.js';
 import { sessionEndWork, type SessionEndWork } from '../src/api/session-end.js';
 import { loadActiveTaskSnapshot, saveActiveTaskSnapshot } from '../src/store/sessions.js';
 import { makeRoot } from './_helpers/make-root.js';
@@ -25,7 +25,7 @@ function work(over: Partial<SessionEndWork<string>> = {}): SessionEndWork<string
     tenantId: TENANT,
     sessionId: 's1',
     transcriptPath: undefined,
-    contextFor: (hippoRoot): Context => ({ hippoRoot, tenantId: TENANT, actor: adminActor('test') }),
+    contextFor: (hippoRoot) => cliApiContext(hippoRoot, TENANT),
     storeRoot: () => root,
     log: (line) => { lines.push(line); },
     sleep: async () => { steps.push('sleep'); },

@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest';
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
 const SERVER_VALUES = [
-  'authCreate', 'authCreateSelf', 'authRevoke', 'bindSessionOwner', 'captureFailureForCaller', 'captureSessionTexts',
+  'authCreate', 'authCreateSelf', 'authRevoke', 'bindSessionOwner', 'bindSessionOwnerOn', 'captureFailureForCaller', 'captureSessionTexts',
   'clientIpForRateLimit', 'compactResumeForCaller', 'isCrossSite', 'isLoopback', 'isReservedActor', 'LOOPBACK_HOST_HEADER',
   'ownerOrSubject', 'preCompactForCaller', 'promptHookContext', 'saveCompactionItemsForCaller', 'serve', 'sessionEndHandoffForCaller',
   'BadRequestError', 'ConflictError', 'ForbiddenError', 'HttpError', 'NotFoundError',

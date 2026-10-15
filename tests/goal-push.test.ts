@@ -4,10 +4,12 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
-import { pushGoal, getActiveGoals } from '../src/store/goals.js';
+import { activeGoalsWithPolicies, pushGoal } from '../src/store/goals.js';
+
+const activeGoalsOf = (root: string, opts: { sessionId: string; tenantId: string }) => activeGoalsWithPolicies(root, opts).goals;
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 
-describe('pushGoal + getActiveGoals', () => {
+describe('pushGoal + activeGoalsOf', () => {
   let root: string;
   beforeEach(() => {
     root = mkdtempSync(join(tmpdir(), 'hippo-b3-push-'));
@@ -24,7 +26,7 @@ describe('pushGoal + getActiveGoals', () => {
     expect(goal.id).toMatch(/^g_/);
     expect(goal.status).toBe('active');
 
-    const active = getActiveGoals(root, { sessionId: 's1', tenantId: 'default' });
+    const active = activeGoalsOf(root, { sessionId: 's1', tenantId: 'default' });
     expect(active).toHaveLength(1);
     expect(active[0].goalName).toBe('review auth code');
   });
@@ -33,9 +35,9 @@ describe('pushGoal + getActiveGoals', () => {
     pushGoal(root, { sessionId: 's1', tenantId: 'default', goalName: 'A' });
     pushGoal(root, { sessionId: 's2', tenantId: 'default', goalName: 'B' });
     pushGoal(root, { sessionId: 's1', tenantId: 't2', goalName: 'C' });
-    expect(getActiveGoals(root, { sessionId: 's1', tenantId: 'default' })[0].goalName).toBe('A');
-    expect(getActiveGoals(root, { sessionId: 's2', tenantId: 'default' })[0].goalName).toBe('B');
-    expect(getActiveGoals(root, { sessionId: 's1', tenantId: 't2' })[0].goalName).toBe('C');
+    expect(activeGoalsOf(root, { sessionId: 's1', tenantId: 'default' })[0].goalName).toBe('A');
+    expect(activeGoalsOf(root, { sessionId: 's2', tenantId: 'default' })[0].goalName).toBe('B');
+    expect(activeGoalsOf(root, { sessionId: 's1', tenantId: 't2' })[0].goalName).toBe('C');
   });
 
   it('attaches retrieval policy when provided (no FK error)', () => {
@@ -46,7 +48,7 @@ describe('pushGoal + getActiveGoals', () => {
       policy: { policyType: 'error-prioritized', errorPriority: 2.0 },
     });
     expect(g.retrievalPolicyId).toBeDefined();
-    expect(getActiveGoals(root, { sessionId: 's1', tenantId: 'default' })[0].retrievalPolicyId).toBe(g.retrievalPolicyId);
+    expect(activeGoalsOf(root, { sessionId: 's1', tenantId: 'default' })[0].retrievalPolicyId).toBe(g.retrievalPolicyId);
   });
   function goalRowCount(): number {
     const db = openHippoDb(root);

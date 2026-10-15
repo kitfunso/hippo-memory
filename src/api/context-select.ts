@@ -2,7 +2,6 @@
 
 import { recallScopeFilter } from '../store/search-rows.js';
 import type { AmbientLoadResult } from '../store/candidates.js';
-import { heldIdLookup } from '../store/entry-reads.js';
 import { calculateStrength, type MemoryEntry } from '../core/memory.js';
 import { auditQueryFields, recordAuditEvent, type AppendAuditOpts } from '../store/audit.js';
 import type { ContextReads, HippoStore } from '../store/index.js';
@@ -26,6 +25,7 @@ import {
 } from '../core/prompt-recall.js';
 import type { DeliveryObserver } from '../store/delivery-recorder.js';
 import type { ContextCost, ContextOpts, ContextResultEntry } from './context-types.js';
+import { heldIds } from './recall-record.js';
 import type { Context } from './types.js';
 
 const GLOBAL_DISCOUNT = 1 / DEFAULT_LOCAL_BUMP;
@@ -415,8 +415,12 @@ async function searchBothStores(
   // looked up.
   const poolIds = (pool: AmbientLoadResult): string[] => [...pool.entries, ...(pool.recall ?? [])].map((e) => e.id);
   const localIds = new Set(poolIds(pools.local));
-  const alsoLocal = heldIdLookup(ctx.hippoRoot, ctx.tenantId, poolIds(pools.global).filter((id) => !localIds.has(id)));
-  const isGlobalHit = (e: MemoryEntry): boolean => !localIds.has(e.id) && !alsoLocal(e.id);
+  const alsoLocal = await heldIds(
+    plan.local.store,
+    poolIds(pools.global).filter((id) => !localIds.has(id)),
+    ctx.tenantId,
+  );
+  const isGlobalHit = (e: MemoryEntry): boolean => !localIds.has(e.id) && !alsoLocal.has(e.id);
   const roots = { local: ctx.hippoRoot, global: plan.globalRoot };
   const merged = await rankBothStores(
     plan.query,
@@ -499,10 +503,6 @@ async function auditContextRecall(ctx: Context, plan: ContextPlan, resultCount: 
     op: 'recall',
     metadata: { ...auditQueryFields(plan.query), results: resultCount, mode: 'context' },
   };
-  if (plan.other) {
-    await plan.other.appendAuditEvents([row]);
-    return;
-  }
-  if (plan.hasLocal) recordAuditEvent(ctx.hippoRoot, row);
+  if (plan.hasLocal) await plan.local.store.appendAuditEvents([row]);
   if (plan.hasGlobal && !plan.primaryIsGlobal) recordAuditEvent(plan.globalRoot, row);
 }

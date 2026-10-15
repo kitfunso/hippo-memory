@@ -82,10 +82,10 @@ function cardRunFlag(flags: CliFlags): number | undefined {
 }
 
 // Reads after the store already refused, so this only explains the refusal, never changes it.
-function cardRefusal(hippoRoot: string, tenantId: string, id: string): string {
+async function cardRefusal(hippoRoot: string, tenantId: string, id: string): Promise<string> {
   const ctx = cliApiContext(hippoRoot, tenantId);
-  const card = cardsApi.cardLoad(ctx, id);
-  const liveRun = cardsApi.cardRuns(ctx, id).find((r) => !r.ended);
+  const card = await cardsApi.cardLoad(ctx, id);
+  const liveRun = (await cardsApi.cardRuns(ctx, id)).find((r) => !r.ended);
   return `status ${card?.status ?? 'unknown'}, live run ${liveRun?.id ?? 'none'}`;
 }
 
@@ -116,10 +116,10 @@ const CARD_SUBCOMMAND_FLAGS = {
   comment: ['body', 'author'],
 } satisfies Record<CardSubcommand, string[]>;
 
-type CardHandler = (hippoRoot: string, tenantId: string, args: string[], flags: CliFlags) => void;
+type CardHandler = (hippoRoot: string, tenantId: string, args: string[], flags: CliFlags) => Promise<void>;
 
 /** Runs `hippo card <subcommand>`: rejects flags the subcommand never reads, then hands off to its handler. */
-export function handleCard({ hippoRoot, tenantId, args, flags }: CommandContext): void {
+export function handleCard({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
   requireInit(hippoRoot);
   const subcommand = args[0] ?? '';
 
@@ -135,10 +135,10 @@ export function handleCard({ hippoRoot, tenantId, args, flags }: CommandContext)
       fail(`Unknown flag --${key} for hippo card ${subcommand}. Valid flags: ${valid}`);
     }
   }
-  CARD_HANDLERS[known](hippoRoot, tenantId, args, flags);
+  return CARD_HANDLERS[known](hippoRoot, tenantId, args, flags);
 }
 
-function cardCreate(hippoRoot: string, tenantId: string, _args: string[], flags: CliFlags): void {
+async function cardCreate(hippoRoot: string, tenantId: string, _args: string[], flags: CliFlags): Promise<void> {
   const title = stringFlagOrExit(flags, 'title') ?? '';
   if (!title) {
     throw usageError('create');
@@ -161,19 +161,19 @@ function cardCreate(hippoRoot: string, tenantId: string, _args: string[], flags:
 
   let card: Card;
   try {
-    card = cardsApi.cardCreate(cliApiContext(hippoRoot, tenantId), { title, repo, contract, budget, dependsOn });
+    card = await cardsApi.cardCreate(cliApiContext(hippoRoot, tenantId), { title, repo, contract, budget, dependsOn });
   } catch (error) {
     fail(errorMessage(error));
   }
   console.log(`Created card ${card.id} (status: ${card.status})`);
 }
 
-function cardShow(hippoRoot: string, tenantId: string, args: string[], flags: CliFlags): void {
+async function cardShow(hippoRoot: string, tenantId: string, args: string[], flags: CliFlags): Promise<void> {
   const id = args[1];
   if (!id) {
     throw usageError('show');
   }
-  const detail = cardsApi.cardDetail(cliApiContext(hippoRoot, tenantId), id);
+  const detail = await cardsApi.cardDetail(cliApiContext(hippoRoot, tenantId), id);
   if (!detail) {
     fail(`No card found with id ${id}.`);
   }
@@ -184,12 +184,12 @@ function cardShow(hippoRoot: string, tenantId: string, args: string[], flags: Cl
   printCard(detail);
 }
 
-function cardList(hippoRoot: string, tenantId: string, _args: string[], flags: CliFlags): void {
+async function cardList(hippoRoot: string, tenantId: string, _args: string[], flags: CliFlags): Promise<void> {
   const status = stringFlagOrExit(flags, 'status');
   if (status !== undefined && !isCardStatus(status)) {
     fail(`Invalid status: "${status}".`);
   }
-  const cards = cardsApi.cardList(cliApiContext(hippoRoot, tenantId), { status });
+  const cards = await cardsApi.cardList(cliApiContext(hippoRoot, tenantId), { status });
   if (flags['json']) {
     console.log(JSON.stringify({ cards }, null, 2));
     return;
@@ -204,7 +204,7 @@ function cardList(hippoRoot: string, tenantId: string, _args: string[], flags: C
   }
 }
 
-function cardClaim(hippoRoot: string, tenantId: string, args: string[], flags: CliFlags): void {
+async function cardClaim(hippoRoot: string, tenantId: string, args: string[], flags: CliFlags): Promise<void> {
   const id = args[1];
   const runtime = stringFlagOrExit(flags, 'runtime') ?? '';
   if (!id || !runtime) {
@@ -213,7 +213,7 @@ function cardClaim(hippoRoot: string, tenantId: string, args: string[], flags: C
   const sessionId = stringFlagOrExit(flags, 'session') || undefined;
   let card: (Card & { runId: number }) | null;
   try {
-    card = cardsApi.cardClaim(cliApiContext(hippoRoot, tenantId), id, runtime, sessionId);
+    card = await cardsApi.cardClaim(cliApiContext(hippoRoot, tenantId), id, runtime, sessionId);
   } catch (error) {
     fail(errorMessage(error));
   }
@@ -223,7 +223,7 @@ function cardClaim(hippoRoot: string, tenantId: string, args: string[], flags: C
   console.log(`Claimed card ${card.id} for ${runtime} (run ${card.runId}, lease until ${card.leaseUntil})`);
 }
 
-function cardHeartbeat(hippoRoot: string, tenantId: string, args: string[], flags: CliFlags): void {
+async function cardHeartbeat(hippoRoot: string, tenantId: string, args: string[], flags: CliFlags): Promise<void> {
   const id = args[1];
   const runId = cardRunFlag(flags);
   if (!id || runId === undefined) {
@@ -231,17 +231,17 @@ function cardHeartbeat(hippoRoot: string, tenantId: string, args: string[], flag
   }
   let card: Card | null;
   try {
-    card = cardsApi.cardHeartbeat(cliApiContext(hippoRoot, tenantId), id, runId);
+    card = await cardsApi.cardHeartbeat(cliApiContext(hippoRoot, tenantId), id, runId);
   } catch (error) {
     fail(errorMessage(error));
   }
   if (!card) {
-    fail(`Could not heartbeat card ${id} (${cardRefusal(hippoRoot, tenantId, id)}).`);
+    fail(`Could not heartbeat card ${id} (${await cardRefusal(hippoRoot, tenantId, id)}).`);
   }
   console.log(`Heartbeat card ${card.id}: lease until ${card.leaseUntil}`);
 }
 
-function cardBlock(hippoRoot: string, tenantId: string, args: string[], flags: CliFlags): void {
+async function cardBlock(hippoRoot: string, tenantId: string, args: string[], flags: CliFlags): Promise<void> {
   const id = args[1];
   const reason = stringFlagOrExit(flags, 'reason') ?? '';
   if (!id || !reason) {
@@ -250,18 +250,18 @@ function cardBlock(hippoRoot: string, tenantId: string, args: string[], flags: C
   const runId = cardRunFlag(flags);
   let card: Card | null;
   try {
-    card = cardsApi.cardBlock(cliApiContext(hippoRoot, tenantId), id, reason, runId);
+    card = await cardsApi.cardBlock(cliApiContext(hippoRoot, tenantId), id, reason, runId);
   } catch (error) {
     fail(errorMessage(error));
   }
   if (!card) {
-    const why = runId === undefined ? 'not running' : cardRefusal(hippoRoot, tenantId, id);
+    const why = runId === undefined ? 'not running' : await cardRefusal(hippoRoot, tenantId, id);
     fail(`Could not block card ${id} (${why}).`);
   }
   console.log(`Blocked card ${card.id}`);
 }
 
-function cardReview(hippoRoot: string, tenantId: string, args: string[], flags: CliFlags): void {
+async function cardReview(hippoRoot: string, tenantId: string, args: string[], flags: CliFlags): Promise<void> {
   const id = args[1];
   if (!id) {
     throw usageError('review');
@@ -269,18 +269,18 @@ function cardReview(hippoRoot: string, tenantId: string, args: string[], flags: 
   const runId = cardRunFlag(flags);
   let card: Card | null;
   try {
-    card = cardsApi.cardReview(cliApiContext(hippoRoot, tenantId), id, runId);
+    card = await cardsApi.cardReview(cliApiContext(hippoRoot, tenantId), id, runId);
   } catch (error) {
     fail(errorMessage(error));
   }
   if (!card) {
-    const why = runId === undefined ? 'not running' : cardRefusal(hippoRoot, tenantId, id);
+    const why = runId === undefined ? 'not running' : await cardRefusal(hippoRoot, tenantId, id);
     fail(`Could not move card ${id} to review (${why}).`);
   }
   console.log(`Card ${card.id} moved to review`);
 }
 
-function cardComplete(hippoRoot: string, tenantId: string, args: string[], flags: CliFlags): void {
+async function cardComplete(hippoRoot: string, tenantId: string, args: string[], flags: CliFlags): Promise<void> {
   const id = args[1];
   const outcomeRaw = flags['outcome'];
   if (!id || !isHandoffOutcome(outcomeRaw)) {
@@ -289,12 +289,12 @@ function cardComplete(hippoRoot: string, tenantId: string, args: string[], flags
   const runId = cardRunFlag(flags);
   let result: { card: Card; promotedChildren: string[] } | null;
   try {
-    result = cardsApi.cardComplete(cliApiContext(hippoRoot, tenantId), id, outcomeRaw, runId);
+    result = await cardsApi.cardComplete(cliApiContext(hippoRoot, tenantId), id, outcomeRaw, runId);
   } catch (error) {
     fail(errorMessage(error));
   }
   if (!result) {
-    const why = runId === undefined ? 'not in review' : cardRefusal(hippoRoot, tenantId, id);
+    const why = runId === undefined ? 'not in review' : await cardRefusal(hippoRoot, tenantId, id);
     fail(`Could not complete card ${id} (${why}).`);
   }
   console.log(`Completed card ${result.card.id} (status: ${result.card.status})`);
@@ -303,11 +303,11 @@ function cardComplete(hippoRoot: string, tenantId: string, args: string[], flags
   }
 }
 
-function cardReclaim(hippoRoot: string, tenantId: string, args: string[]): void {
+async function cardReclaim(hippoRoot: string, tenantId: string, args: string[]): Promise<void> {
   if (args.length > 1) {
     throw usageError('reclaim');
   }
-  const ids = cardsApi.cardReclaimExpired(cliApiContext(hippoRoot, tenantId));
+  const ids = await cardsApi.cardReclaimExpired(cliApiContext(hippoRoot, tenantId));
   if (ids.length === 0) {
     console.log('No expired leases.');
     return;
@@ -317,7 +317,7 @@ function cardReclaim(hippoRoot: string, tenantId: string, args: string[]): void 
   }
 }
 
-function cardComment(hippoRoot: string, tenantId: string, args: string[], flags: CliFlags): void {
+async function cardComment(hippoRoot: string, tenantId: string, args: string[], flags: CliFlags): Promise<void> {
   const id = args[1];
   if (!id) {
     throw usageError('comment');
@@ -325,7 +325,7 @@ function cardComment(hippoRoot: string, tenantId: string, args: string[], flags:
   // Only show and comment look the card up directly; claim/heartbeat/block/review/complete throw from the store
   // instead.
   const ctx = cliApiContext(hippoRoot, tenantId);
-  const card = cardsApi.cardLoad(ctx, id);
+  const card = await cardsApi.cardLoad(ctx, id);
   if (!card) {
     fail(`No card found with id ${id}.`);
   }
@@ -334,7 +334,7 @@ function cardComment(hippoRoot: string, tenantId: string, args: string[], flags:
     throw usageError('comment');
   }
   const author = stringFlagOrExit(flags, 'author') || 'cli';
-  const comment = cardsApi.cardComment(ctx, id, author, body);
+  const comment = await cardsApi.cardComment(ctx, id, author, body);
   console.log(`Added comment ${comment.id} to card ${id}`);
 }
 

@@ -93,7 +93,7 @@ interface CliCoreRanking {
 export interface CliCoreRecall extends CliCoreRanking {
   /** The host agent's session: it stamps the token ledger row, and the trace when the recall names no session. */
   hostSessionId?: string;
-  show: (ranking: RankRecallResult, planning: PlanningFallacyOutput) => ShownCliCore;
+  show: (ranking: RankRecallResult, planning: PlanningFallacyOutput) => ShownCliCore | Promise<ShownCliCore>;
 }
 
 /** A read-only look at the ranking (`hippo explain`): no hint is evaluated and nothing is written. */

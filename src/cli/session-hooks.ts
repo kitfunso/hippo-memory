@@ -72,12 +72,12 @@ import { CliExit, fail } from './exit.js';
 /** SessionStart(compact) injector: prints the task snapshot and session trail lost to compaction; no pinned memories
  * (UserPromptSubmit re-injects them). Every path exits 0: a malformed payload or store read failure degrades to empty
  * stdout, never a throw. */
-function cmdCompactResume(
+async function cmdCompactResume(
   hippoRoot: string,
   tenantId: string,
   stdinText: string | undefined,
   stdinTimedOut: boolean,
-): void {
+): Promise<void> {
   let rec: DeliveryRecorder | null = null;
   try {
     // Gate on the non-exiting isInitialized check first: the store reads below call initStore, which would
@@ -105,7 +105,7 @@ function cmdCompactResume(
       rec?.disabled();
     }
 
-    if (!suppressOutput) restoreCompactSnapshot(hippoRoot, tenantId, payloadSessionId, rec);
+    if (!suppressOutput) await restoreCompactSnapshot(hippoRoot, tenantId, payloadSessionId, rec);
   } catch (err) {
     if (err instanceof CliExit) throw err;
     // Empty stdout on any store error, never a crashed SessionStart; the reason goes to stderr, which the model never
@@ -117,13 +117,13 @@ function cmdCompactResume(
   throw new CliExit(0);
 }
 
-function restoreCompactSnapshot(
+async function restoreCompactSnapshot(
   hippoRoot: string,
   tenantId: string,
   payloadSessionId: string | null,
   rec: DeliveryRecorder | null,
-): void {
-  const text = compactResumeBlock(cliApiContext(hippoRoot, tenantId), payloadSessionId);
+): Promise<void> {
+  const text = await compactResumeBlock(cliApiContext(hippoRoot, tenantId), payloadSessionId);
   if (text === null) return;
   // Printed in one write so the ledger books exactly the text the model is handed.
   console.log(text);
@@ -719,9 +719,9 @@ export async function handleCaptureError({ hippoRoot, tenantId, flags }: Command
 
 export async function handleCompactResume({ hippoRoot, tenantId }: CommandContext): Promise<void> {
   const { text: stdinText, timedOut: stdinTimedOut } = await readHookStdin();
-  await runHookWithStores(() => {
+  await runHookWithStores(async () => {
     resetHookInjection(hippoRoot, tenantId, stdinText, 'compact');
-    cmdCompactResume(hookStoreRoot(hippoRoot), tenantId, stdinText, stdinTimedOut);
+    await cmdCompactResume(hookStoreRoot(hippoRoot), tenantId, stdinText, stdinTimedOut);
   });
 }
 
