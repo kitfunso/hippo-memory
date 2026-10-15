@@ -158,13 +158,13 @@ beforeAll(async () => {
   ids.teamTeal = await post(keys.B.plaintext, { content: TEAL, project: alpha });
 
   const summary = seedRow('umberline rollup for the walk session', A_SCOPE, '',
-    { layer: Layer.Semantic, dag_level: 2, confidence: 'inferred', tags: ['dag-summary'] }, { descendant_count: 1 });
+    { layer: Layer.Semantic, dagLevel: 2, confidence: 'inferred', tags: ['dag-summary'] }, { descendant_count: 1 });
   ids.summary = summary.id;
   ids.child = seedRow('the umberline ledger closed at noon', A_SCOPE, '', {
-    layer: Layer.Episodic, kind: 'raw', confidence: 'observed', dag_level: 1, dag_parent_id: summary.id, source_session_id: SESSION,
+    layer: Layer.Episodic, kind: 'raw', confidence: 'observed', dagLevel: 1, dagParentId: summary.id, sourceSessionId: SESSION,
   }).id;
   ids.teamRaw = seedRow('the tealraw ledger opened at nine', null, 'alpha',
-    { layer: Layer.Episodic, kind: 'raw', confidence: 'observed', source_session_id: SESSION }).id;
+    { layer: Layer.Episodic, kind: 'raw', confidence: 'observed', sourceSessionId: SESSION }).id;
 });
 
 afterAll(async () => {

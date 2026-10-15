@@ -203,9 +203,13 @@ function bootRateLimiter(perAddress: RateLimitSpec | 'off' | undefined): RateLim
   if (perAddress !== undefined) return limiterFor(perAddress);
   // Per-IP rate limiter for /v1/* and /mcp*, built here (not at module scope) so HIPPO_V1_RPS is read at boot and a
   // test can set it before serve().
-  // A non-positive or non-finite value disables limiting (the opt-out knob).
-  const v1Rps = Number(envV1Rps() ?? 20);
-  return Number.isFinite(v1Rps) && v1Rps > 0 ? limiterFor({ ratePerSec: v1Rps, burst: v1Rps * 2 }) : undefined;
+  // A typo must not switch the limit off, so only an explicit 0 does.
+  const raw = envV1Rps();
+  const v1Rps = raw === undefined ? 20 : Number(raw);
+  if (!Number.isFinite(v1Rps) || v1Rps < 0) {
+    throw new Error(`HIPPO_V1_RPS must be a number of at least 0 (0 turns the per-address limit off), not '${raw}'`);
+  }
+  return v1Rps > 0 ? limiterFor({ ratePerSec: v1Rps, burst: v1Rps * 2 }) : undefined;
 }
 
 const DEFAULT_FAILED_AUTH: RateLimitSpec = { ratePerSec: 20, burst: 40 };

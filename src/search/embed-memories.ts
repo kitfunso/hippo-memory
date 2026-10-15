@@ -27,7 +27,7 @@ import {
 } from '../store/port.js';
 import {
   indexedModel,
-  pruneStoredVectors,
+  pruneStoredVectorsListPending,
   replacesIndex,
   resetStoredParticles,
   saveEmbeddingIndex,
@@ -332,14 +332,16 @@ export async function embedMemory(
   store?: HippoStore,
 ): Promise<EmbedOutcome> {
   let provider: EmbeddingProvider;
+  let available: boolean;
   try {
     provider = resolveEmbeddingProvider(hippoRoot, { model });
+    available = provider.isAvailable();
   } catch (err) {
     // Callers fire and forget, so this must resolve: a bad config warns once instead of rejecting.
     warnEmbedFailureOnce('config', errorMessage(err), err);
     return 'failed';
   }
-  if (!provider.isAvailable()) return 'off';
+  if (!available) return 'off';
   if (store) return embedMemoryInStore(store, provider, entry);
 
   return withEmbedLock(hippoRoot, () => embedMemoryLocked(hippoRoot, provider, entry)).catch((err): EmbedOutcome => {
@@ -490,8 +492,7 @@ export async function embedAll(
     // Host-wide by design: embedAll backfills all tenants'
     // entries into the per-host index; per-tenant filtering
     // would produce partial indices and break recall.
-    const embedded = pruneStoredVectors(hippoRoot);
-    const pending = loadAllEntryIds(hippoRoot).filter((id) => !embedded.has(id));
+    const pending = pruneStoredVectorsListPending(hippoRoot);
     const { count, backfillError } = await backfillPending(
       hippoRoot,
       provider,

@@ -273,7 +273,7 @@ function simulate(tasks: Task[], mode: 'none' | 'static' | 'hippo'): SimResult[]
         const lesson = createMemory(cat.lesson, {
           baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
           tags: [...cat.tags, 'error'],
-          emotional_valence: 'negative',
+          emotionalValence: 'negative',
         });
         writeEntry(tmpDir, lesson);
       }

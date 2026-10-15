@@ -4,14 +4,15 @@
 import { execFileSync, spawn, type SpawnOptions } from 'child_process';
 import { spawnArgv } from '../util/spawn-argv.js';
 import { MemoryEntry, createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../core/memory.js';
-import { loadAllEntries } from '../store/entry-reads.js';
-import { textOverlap } from '../util/tokenize.js';
+import { loadAllEntries, loadEntriesMentioning } from '../store/entry-reads.js';
+import { textOverlap, tokenize } from '../util/tokenize.js';
 import { assessAutomaticMemory } from '../core/memory-quality.js';
 import { redactSecretsStrict } from '../util/secret-detect.js';
 import { errorMessage, log, errorFields } from '../util/log.js';
 
 const AUTOLEARN_TEXT_CHARS = 500;
 const AUTOLEARN_TAG_CHARS = 30;
+const MAX_LESSON_CHARS = 500;
 
 /** A memory of a failed command, "Command '<cmd>' failed: <truncated stderr>"; `hippo watch` stores its text and
  * tags through remember. */
@@ -23,7 +24,7 @@ export function captureError(
 ): MemoryEntry {
   // Truncate to first 500 chars to avoid storing megabytes of build logs
   const clean = redactSecretsStrict(stderr);
-  const wasTruncated = clean.length > 500;
+  const wasTruncated = clean.length > AUTOLEARN_TEXT_CHARS;
   const truncated = clean.slice(0, AUTOLEARN_TEXT_CHARS).trim();
   const suffix = wasTruncated ? ' [truncated]' : '';
   // Strip leading env var assignments (KEY=val or key=val) before the actual command name
@@ -76,7 +77,7 @@ export function extractLessons(gitLog: string, customPatterns?: string[]): strin
       if (m) {
         // For conventional commits: use group 3 (message after prefix), group 2, or full match
         const lesson = (m[3] ?? m[2] ?? m[0]).trim();
-        if (lesson.length > 5 && lesson.length < 500) {
+        if (lesson.length > 5 && lesson.length < MAX_LESSON_CHARS) {
           lessons.push(lesson);
         }
         break;
@@ -104,6 +105,19 @@ export function partitionLessons(lessons: string[]) {
   return { kept, dropped };
 }
 
+// Never matches a real tag; the exact textOverlap re-check drops any row the content filter let through.
+const NO_TAG = '~no-such-tag~';
+
+/** Rows that can pass the overlap test: those sharing a token with the lesson. Falls back to every row when the
+ * filter cannot be a superset (no tokens, non-ASCII tokens, or a threshold below zero). */
+function candidateEntries(hippoRoot: string, lesson: string, threshold: number, tenantId?: string): MemoryEntry[] {
+  const tokens = tokenize(lesson);
+  if (tokens.length === 0 || threshold < 0 || tokens.some((t) => !/^[\x20-\x7e]+$/.test(t))) {
+    return loadAllEntries(hippoRoot, tenantId);
+  }
+  return loadEntriesMentioning(hippoRoot, tokens, NO_TAG, tenantId);
+}
+
 /** Check if a substantially similar memory already exists: true if overlap > threshold (default 0.7).
  * `tenantId` applies only on the root-string overload; a pre-loaded MemoryEntry[] is already scoped, so it is
  * ignored there. */
@@ -115,7 +129,7 @@ export function deduplicateLesson(
 ): boolean {
   const entries = Array.isArray(hippoRootOrEntries)
     ? hippoRootOrEntries
-    : loadAllEntries(hippoRootOrEntries, tenantId);
+    : candidateEntries(hippoRootOrEntries, lesson, threshold, tenantId);
 
   for (const entry of entries) {
     const overlap = textOverlap(lesson, entry.content);

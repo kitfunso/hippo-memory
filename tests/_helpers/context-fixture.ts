@@ -48,7 +48,7 @@ function memoryRows(): MemoryEntry[] {
     a('other project vault path lives in its runbook', 'mem_a_secret_other', 45, { origin_project: 'other' }, { tags: ['Token'] }),
     a('user global vault path lives in the home runbook', 'mem_a_secret_global', 46, { origin_project: '' }, { tags: ['password'] }),
     a('build failed when the zebra cache was cold', 'mem_a_error', 47, { conflicts_with: ['mem_a_own_1'] }, {
-      tags: ['error:build'], layer: Layer.Semantic, emotional_valence: 'negative', schema_fit: 0.9, extracted_from: 'mem_a_own_0', dag_level: 2,
+      tags: ['error:build'], layer: Layer.Semantic, emotionalValence: 'negative', schemaFit: 0.9, extractedFrom: 'mem_a_own_0', dagLevel: 2,
     }),
     a('legacy row with no recorded origin about the rollout', 'mem_a_no_origin', 48, { origin_project: null }),
     a('rollout lesson that decays within a day', 'mem_a_decayed', 200, { half_life_days: 1 }),

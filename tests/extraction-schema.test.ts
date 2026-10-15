@@ -45,7 +45,7 @@ describe('extracted_from field', () => {
     const extracted = createMemory('Alice likes coffee', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       layer: Layer.Semantic,
-      extracted_from: source.id,
+      extractedFrom: source.id,
     });
     expect(extracted.extracted_from).toBe(source.id);
 

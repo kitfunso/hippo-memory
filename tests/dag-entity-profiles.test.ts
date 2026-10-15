@@ -46,7 +46,7 @@ function makeL2Summary(
     layer: Layer.Semantic,
     tags: [`speaker:${speaker}`, 'dag-summary'],
     confidence: 'inferred',
-    dag_level: 2,
+    dagLevel: 2,
   });
   if (parentId !== undefined) s.dag_parent_id = parentId ?? null;
   return s;
@@ -58,7 +58,7 @@ function makeL3Profile(content: string, speaker: string = 'alice'): MemoryEntry 
     layer: Layer.Semantic,
     tags: [`speaker:${speaker}`, 'dag-entity-profile'],
     confidence: 'inferred',
-    dag_level: 3,
+    dagLevel: 3,
   });
   return s;
 }
@@ -68,8 +68,8 @@ function makeL1Fact(parentId: string, content: string): MemoryEntry {
     baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
     layer: Layer.Episodic,
     tags: ['extracted'],
-    dag_level: 1,
-    dag_parent_id: parentId,
+    dagLevel: 1,
+    dagParentId: parentId,
   });
   return c;
 }

@@ -276,7 +276,7 @@ describe('Company Brain provenance coverage scorecard', () => {
         baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
         kind: 'raw',
         owner: 'user:keith',
-        artifact_ref: 'slack://team/eng/1714500000.001',
+        artifactRef: 'slack://team/eng/1714500000.001',
         source: 'slack',
       }),
     );
@@ -286,7 +286,7 @@ describe('Company Brain provenance coverage scorecard', () => {
         baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
         kind: 'raw',
         owner: 'agent:hippo',
-        artifact_ref: 'gh://hippo/hippo-memory/pull/42',
+        artifactRef: 'gh://hippo/hippo-memory/pull/42',
         source: 'github',
       }),
     );
@@ -331,7 +331,7 @@ describe('Company Brain provenance coverage scorecard', () => {
         baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
         kind: 'raw',
         owner: 'user:keith',
-        artifact_ref: 'slack://team/eng/1714500001.002',
+        artifactRef: 'slack://team/eng/1714500001.002',
         source: 'slack',
       }),
     );
@@ -341,7 +341,7 @@ describe('Company Brain provenance coverage scorecard', () => {
         baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
         kind: 'raw',
         owner: 'agent:hippo',
-        artifact_ref: 'gh://hippo/hippo-memory/pull/43',
+        artifactRef: 'gh://hippo/hippo-memory/pull/43',
         source: 'github',
       }),
     );
@@ -389,7 +389,7 @@ describe('Company Brain correction-latency scorecard', () => {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       kind: 'raw',
       owner: 'user:keith',
-      artifact_ref: 'slack://team/eng/1714600100.001',
+      artifactRef: 'slack://team/eng/1714600100.001',
     });
     rawReceipt.created = '2026-04-01T10:00:00.000Z';
 
@@ -398,7 +398,7 @@ describe('Company Brain correction-latency scorecard', () => {
 
     const newFact = createMemory('belief: tier is 120', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-      extracted_from: rawReceipt.id,
+      extractedFrom: rawReceipt.id,
     });
     newFact.created = '2026-04-01T10:30:00.000Z';
     oldFact.superseded_by = newFact.id;
@@ -445,14 +445,14 @@ describe('Company Brain correction-latency scorecard', () => {
         baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
         kind: 'raw',
         owner: 'user:keith',
-        artifact_ref: `slack://team/eng/${i}`,
+        artifactRef: `slack://team/eng/${i}`,
       });
       raw.created = baseRaw;
 
       const oldFact = createMemory(`belief ${i} v1`, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
       oldFact.created = '2026-03-01T00:00:00.000Z';
 
-      const newFact = createMemory(`belief ${i} v2`, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, extracted_from: raw.id });
+      const newFact = createMemory(`belief ${i} v2`, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, extractedFrom: raw.id });
       newFact.created = new Date(
         new Date(baseRaw).getTime() + lagMin * 60 * 1000,
       ).toISOString();

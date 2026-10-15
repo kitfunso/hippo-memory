@@ -77,7 +77,7 @@ function seedLocal(root: string): string {
     seeded('deploy target was the old staging cluster', 'mem_p_old', '2026-01-02T00:00:00.000Z', { superseded_by: 'mem_p_new' }),
     seeded('deploy target is the new staging cluster in eu west', 'mem_p_new', '2026-01-25T00:00:00.000Z'),
     seeded('deploy goal work: migrate the rollout scripts to the new runner', 'mem_p_goal', '2026-01-15T00:00:00.000Z', { retrieval_count: 3 }, { tags: ['goal-alpha'] }),
-    seeded('deploy trace: ran the canary and promoted it', 'mem_p_trace', '2026-01-22T00:00:00.000Z', {}, { layer: Layer.Trace, trace_outcome: 'success' }),
+    seeded('deploy trace: ran the canary and promoted it', 'mem_p_trace', '2026-01-22T00:00:00.000Z', {}, { layer: Layer.Trace, traceOutcome: 'success' }),
     seeded('unrelated note about lunch options near the office', 'mem_p_noise', '2026-01-21T00:00:00.000Z'),
   ];
   for (let i = 0; i < 6; i++) {

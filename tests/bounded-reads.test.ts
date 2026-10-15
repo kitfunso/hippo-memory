@@ -80,7 +80,7 @@ describe('rebuildDirtySummaries', () => {
   function seededDirty(n: number): string {
     const root = newRoot('bounded-dirty');
     const summaries = Array.from({ length: n }, (_, i) => ({
-      ...createMemory(`summary ${i}`, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Semantic, tags: ['dag-summary'], dag_level: 2 }),
+      ...createMemory(`summary ${i}`, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Semantic, tags: ['dag-summary'], dagLevel: 2 }),
       latest_at: new Date(Date.UTC(2026, 0, 1 + i)).toISOString(),
     }));
     writeEntriesTogether(root, summaries);

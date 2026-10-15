@@ -44,7 +44,7 @@ describe('automatic rows with a certain defect stay local', () => {
     const source = createMemory('Notes on the uploader and its storage token handling.', { layer: Layer.Episodic });
     writeEntry(root, source);
     const fact = (content: string) => ({
-      ...createMemory(content, { layer: Layer.Semantic, tags: ['extracted', 'topic:upload'], source: 'capture', confidence: 'inferred', extracted_from: source.id }),
+      ...createMemory(content, { layer: Layer.Semantic, tags: ['extracted', 'topic:upload'], source: 'capture', confidence: 'inferred', extractedFrom: source.id }),
       dag_level: 1,
     });
     for (const content of [1, 2, 3].map((n) => `Upload fact ${n}: the storage token can expire mid-transfer.`).concat(DEFECT)) writeEntry(root, fact(content));

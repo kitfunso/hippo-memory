@@ -92,8 +92,8 @@ function sessionTrace(
     renderTraceContent({ task: summary, steps, outcome }),
     {
       layer: Layer.Trace,
-      trace_outcome: outcome,
-      source_session_id: sessionId,
+      traceOutcome: outcome,
+      sourceSessionId: sessionId,
       tags: ['auto-promoted'],
       source: 'auto-promote',
       scope: sessionScope.scope,

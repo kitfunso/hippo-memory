@@ -117,7 +117,7 @@ function suppressionCounts(i: SuppressionInputs): SuppressionCounts {
   };
 }
 
-function renderWithinBudget(
+function fitMcpRecall(
   ranked: SearchResult[],
   limits: { room: number; budget: number },
   render: (cut: SearchResult[]) => RenderedRecall,
@@ -166,7 +166,7 @@ function recallPresenter(budget: number, options: RecallPresenterOptions): NonNu
       text += formatMemories(list) + tailSection(tail) + (showContinuity ? continuityPiece : '');
       return { anchoring, availability, text, list };
     };
-    const rendered = renderWithinBudget(ranked, { room: purse.left(), budget }, render);
+    const rendered = fitMcpRecall(ranked, { room: purse.left(), budget }, render);
     out.rendered = rendered;
     return { ids: rendered.list.map((r) => r.entry.id), audit: hintRows(rendered) };
   };

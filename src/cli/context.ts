@@ -32,6 +32,7 @@ import {
   stringFlagOrExit,
 } from './flag-values.js';
 import { requireInit } from './shared.js';
+import { errorFields, errorMessage, log } from '../util/log.js';
 import { printActiveTaskSnapshot, printSessionEvents, printHandoff, captureConsole } from './print.js';
 import {
   hostSessionId,
@@ -76,8 +77,9 @@ function readHookPayload(stdinText: string | undefined): HookPayload {
       const raw = isJsonObject(payload) ? payload['prompt'] : undefined;
       if (isJsonString(sid) && sid.trim() !== '') sessionId = sid;
       if (isJsonString(raw)) prompt = raw;
-    } catch {
+    } catch (err) {
       // Malformed/non-JSON stdin: fall through to the env fallback below.
+      log.debug(`context: hook payload is not JSON: ${errorMessage(err)}`, errorFields(err));
     }
   }
   return { sessionId, prompt };

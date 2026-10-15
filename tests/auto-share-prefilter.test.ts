@@ -40,7 +40,7 @@ afterEach(() => {
 });
 
 function put(label: string, extra: Partial<MemoryEntry> = {}, tags: string[] = [], tenantId = 'default'): string {
-  const entry = { ...createMemory(`${label}: the step needs its flag or the command silently does nothing`, { tags, emotional_valence: 'neutral', tenantId }), ...extra };
+  const entry = { ...createMemory(`${label}: the step needs its flag or the command silently does nothing`, { tags, emotionalValence: 'neutral', tenantId }), ...extra };
   writeEntry(root, entry);
   return entry.id;
 }

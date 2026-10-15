@@ -30,10 +30,10 @@ function makeRaw(text: string, sessionId: string, opts: Partial<MemoryEntry> = {
     kind: 'raw',
     scope: opts.scope ?? null,
     tenantId: opts.tenant_id ?? 'default',
-    source_session_id: sessionId,
+    sourceSessionId: sessionId,
     tags: opts.tags ?? [],
-    dag_level: opts.dag_level ?? 0,
-    dag_parent_id: opts.dag_parent_id ?? undefined,
+    dagLevel: opts.dag_level ?? 0,
+    dagParentId: opts.dag_parent_id ?? undefined,
   });
   if (opts.created) e.created = opts.created;
   if (opts.strength !== undefined) e.strength = opts.strength;
@@ -45,7 +45,7 @@ function makeSummary(text: string, opts: Partial<MemoryEntry> = {}): MemoryEntry
     baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
     layer: Layer.Semantic,
     confidence: 'inferred',
-    dag_level: 2,
+    dagLevel: 2,
     tags: ['dag-summary'],
     scope: opts.scope ?? null,
     tenantId: opts.tenant_id ?? 'default',

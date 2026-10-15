@@ -7,6 +7,8 @@ import { envPath, envPathExt } from './env.js';
 
 /** Quotes one cmd.exe argument; each `%` leaves the quotes as `^%`, so no %NAME% pair can expand. */
 export function quoteCmdArg(arg: string): string {
+  // cmd.exe ends the command line at CR or LF, so what follows would run as a new command.
+  if (/[\r\n]/.test(arg)) throw new Error('cmd.exe argument contains a CR or LF, which would start a new command');
   if (arg.length === 0) return '""';
   if (!/[ \t"&()^<>|%!]/.test(arg)) return arg;
   return `"${arg.replace(/"/g, '""').replace(/%/g, '"^%"')}"`;
@@ -26,14 +28,12 @@ function isFile(candidate: string): boolean {
 }
 
 /**
- * The file `command` names on win32: as given when it has a folder, else the first hit in the working folder then PATH,
- * trying each PATHEXT.
+ * The file `command` names on win32: as given when it has a folder, else the first hit on PATH (never the working
+ * folder, where a project file could stand in for a tool), trying each PATHEXT.
  */
 function resolveWindowsCommand(command: string): string | null {
   const exts = (envPathExt() ?? DEFAULT_PATHEXT).split(';').filter((ext) => ext.length > 0);
-  const dirs = /[\\/]/.test(command)
-    ? ['']
-    : [process.cwd(), ...(envPath() ?? '').split(path.delimiter).filter((dir) => dir.length > 0)];
+  const dirs = /[\\/]/.test(command) ? [''] : (envPath() ?? '').split(path.delimiter).filter((dir) => dir.length > 0);
   for (const dir of dirs) {
     const base = dir === '' ? command : path.join(dir, command);
     const candidates =

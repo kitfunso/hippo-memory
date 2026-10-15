@@ -236,7 +236,7 @@ describe('assemble and drill', () => {
 
   function seedSession(n: number): string[] {
     return Array.from({ length: n }, (_, i) => {
-      const e = createMemory(line(i), { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Buffer, kind: 'raw', source_session_id: sid, tags: TAGS });
+      const e = createMemory(line(i), { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Buffer, kind: 'raw', sourceSessionId: sid, tags: TAGS });
       e.created = new Date(Date.UTC(2026, 0, 1 + i)).toISOString();
       writeEntry(hippoDir, e);
       return e.id;
@@ -244,11 +244,11 @@ describe('assemble and drill', () => {
   }
 
   function seedSummary(children: number): string {
-    const s = createMemory('Rollup of the rollback runbook thread', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Semantic, dag_level: 2, tags: ['dag-summary'] });
+    const s = createMemory('Rollup of the rollback runbook thread', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Semantic, dagLevel: 2, tags: ['dag-summary'] });
     s.descendant_count = children;
     writeEntry(hippoDir, s);
     for (let i = 0; i < children; i++) {
-      const c = createMemory(line(i), { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, dag_level: 1, dag_parent_id: s.id, tags: TAGS });
+      const c = createMemory(line(i), { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, dagLevel: 1, dagParentId: s.id, tags: TAGS });
       c.created = new Date(Date.UTC(2026, 0, 1 + i)).toISOString();
       writeEntry(hippoDir, c);
     }

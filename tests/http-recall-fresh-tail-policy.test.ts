@@ -86,7 +86,7 @@ describe('GET /v1/memories fresh-tail policy', () => {
         baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
         layer: Layer.Buffer,
         kind: 'raw',
-        source_session_id: 'sess-A',
+        sourceSessionId: 'sess-A',
       }));
     }
     const res = await fetch(

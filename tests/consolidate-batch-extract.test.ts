@@ -51,7 +51,7 @@ describe('Batch extraction during consolidation', () => {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       layer: Layer.Semantic,
       tags: ['extracted'],
-      extracted_from: ep.id,
+      extractedFrom: ep.id,
     });
     writeEntry(tmpDir, fact);
 

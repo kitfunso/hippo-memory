@@ -419,28 +419,29 @@ export function canAutoDelete(
   return !entry.pinned && entry.kind !== 'raw' && !isKeptForGood(entry);
 }
 
+/** Options are camelCase; `MemoryEntry` keeps the snake_case stored-row names. */
 export interface CreateMemoryOptions {
   layer?: Layer;
   tags?: string[];
-  emotional_valence?: EmotionalValence;
+  emotionalValence?: EmotionalValence;
   pinned?: boolean;
-  schema_fit?: number;
+  schemaFit?: number;
   source?: string;
   confidence?: ConfidenceLevel;
   /**
    * The store's `loadConfig(hippoRoot).defaultHalfLifeDays`; required so no writer silently gets the compiled default.
    */
   baseHalfLifeDays: number;
-  trace_outcome?: TraceOutcome;
-  source_session_id?: string | null;
-  valid_from?: string;
-  extracted_from?: string;
-  dag_level?: number;
-  dag_parent_id?: string;
+  traceOutcome?: TraceOutcome;
+  sourceSessionId?: string | null;
+  validFrom?: string;
+  extractedFrom?: string;
+  dagLevel?: number;
+  dagParentId?: string;
   kind?: MemoryKind;
   scope?: string | null;
   owner?: string | null;
-  artifact_ref?: string | null;
+  artifactRef?: string | null;
   tenantId?: string;
 }
 
@@ -455,8 +456,8 @@ export function createMemory(content: string, options: Partial<CreateMemoryOptio
   const now = evalNow().toISOString(); // honors HIPPO_FAKE_NOW (eval-only)
   const layer = options.layer ?? Layer.Episodic;
   const tags = options.tags ?? [];
-  const emotional_valence = options.emotional_valence ?? inferValence(tags);
-  const schema_fit = options.schema_fit ?? DEFAULT_SCHEMA_FIT;
+  const emotional_valence = options.emotionalValence ?? inferValence(tags);
+  const schema_fit = options.schemaFit ?? DEFAULT_SCHEMA_FIT;
 
   const half_life_days = deriveHalfLife(options.baseHalfLifeDays ?? DEFAULT_HALF_LIFE_DAYS, { tags, schema_fit });
 
@@ -481,17 +482,17 @@ export function createMemory(content: string, options: Partial<CreateMemoryOptio
     content,
     parents: [],
     starred: false,
-    trace_outcome: options.trace_outcome ?? null,
-    source_session_id: options.source_session_id ?? null,
-    valid_from: options.valid_from ?? now,
+    trace_outcome: options.traceOutcome ?? null,
+    source_session_id: options.sourceSessionId ?? null,
+    valid_from: options.validFrom ?? now,
     superseded_by: null,
-    extracted_from: options.extracted_from ?? null,
-    dag_level: options.dag_level ?? 0,
-    dag_parent_id: options.dag_parent_id ?? null,
+    extracted_from: options.extractedFrom ?? null,
+    dag_level: options.dagLevel ?? 0,
+    dag_parent_id: options.dagParentId ?? null,
     kind: options.kind ?? 'distilled',
     scope: options.scope ?? null,
     owner: options.owner ?? null,
-    artifact_ref: options.artifact_ref ?? null,
+    artifact_ref: options.artifactRef ?? null,
     tenant_id: options.tenantId ?? DEFAULT_TENANT_ID,
   };
 
@@ -506,9 +507,9 @@ function assertValidMemoryInput(content: string, options: Partial<CreateMemoryOp
   }
 
   const validOutcomes: (string | null)[] = ['success', 'failure', 'partial', null];
-  if (options.trace_outcome !== undefined && !validOutcomes.includes(options.trace_outcome)) {
+  if (options.traceOutcome !== undefined && !validOutcomes.includes(options.traceOutcome)) {
     throw new BadRequestError(
-      `Invalid trace_outcome: ${options.trace_outcome}. Must be 'success', 'failure', 'partial', or null.`,
+      `Invalid trace_outcome: ${options.traceOutcome}. Must be 'success', 'failure', 'partial', or null.`,
     );
   }
 }
@@ -530,7 +531,7 @@ export function createSuccessor(
     confidence: 'verified',
     tenantId: opts.tenantId,
     scope: old.scope,
-    source_session_id: old.source_session_id,
+    sourceSessionId: old.source_session_id,
     baseHalfLifeDays: opts.baseHalfLifeDays,
   });
   // A legacy null origin has nothing to carry, so the store stamps it from its own location.

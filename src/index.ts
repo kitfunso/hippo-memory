@@ -26,11 +26,48 @@ export {
   computeSchemaFit
 } from './core/memory.js';
 
+/** Published options keep their snake_case names; core's CreateMemoryOptions is camelCase. */
+type PublicCreateMemoryOptions = Omit<
+  CreateMemoryOptions,
+  | 'emotionalValence'
+  | 'schemaFit'
+  | 'traceOutcome'
+  | 'sourceSessionId'
+  | 'validFrom'
+  | 'extractedFrom'
+  | 'dagLevel'
+  | 'dagParentId'
+  | 'artifactRef'
+> & {
+  emotional_valence?: CreateMemoryOptions['emotionalValence'];
+  schema_fit?: CreateMemoryOptions['schemaFit'];
+  trace_outcome?: CreateMemoryOptions['traceOutcome'];
+  source_session_id?: CreateMemoryOptions['sourceSessionId'];
+  valid_from?: CreateMemoryOptions['validFrom'];
+  extracted_from?: CreateMemoryOptions['extractedFrom'];
+  dag_level?: CreateMemoryOptions['dagLevel'];
+  dag_parent_id?: CreateMemoryOptions['dagParentId'];
+  artifact_ref?: CreateMemoryOptions['artifactRef'];
+};
+
 /** Published signature, so `baseHalfLifeDays` stays optional
  * here; hippo's own writers use the strict one in memory.ts. */
-export function createMemory(content: string, options: Partial<CreateMemoryOptions> = {}): MemoryEntry {
+export function createMemory(content: string, options: Partial<PublicCreateMemoryOptions> = {}): MemoryEntry {
+  const {
+    emotional_valence, schema_fit, trace_outcome, source_session_id, valid_from,
+    extracted_from, dag_level, dag_parent_id, artifact_ref, ...rest
+  } = options;
   return createStoreMemory(content, {
-    ...options,
+    ...rest,
+    emotionalValence: emotional_valence,
+    schemaFit: schema_fit,
+    traceOutcome: trace_outcome,
+    sourceSessionId: source_session_id,
+    validFrom: valid_from,
+    extractedFrom: extracted_from,
+    dagLevel: dag_level,
+    dagParentId: dag_parent_id,
+    artifactRef: artifact_ref,
     baseHalfLifeDays: options.baseHalfLifeDays ?? DEFAULT_HALF_LIFE_DAYS,
   });
 }

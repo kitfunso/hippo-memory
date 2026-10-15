@@ -30,7 +30,7 @@ function makeSummary(text: string, opts: Partial<MemoryEntry> = {}): MemoryEntry
     layer: Layer.Semantic,
     tags: opts.tags ?? ['dag-summary'],
     confidence: 'inferred',
-    dag_level: 2,
+    dagLevel: 2,
     scope: opts.scope ?? null,
     tenantId: opts.tenant_id ?? 'default',
   });
@@ -41,8 +41,8 @@ function makeChild(text: string, parentId: string, opts: Partial<MemoryEntry> = 
     baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
     layer: Layer.Episodic,
     confidence: 'observed',
-    dag_level: opts.dag_level ?? 1,
-    dag_parent_id: parentId,
+    dagLevel: opts.dag_level ?? 1,
+    dagParentId: parentId,
     scope: opts.scope ?? null,
     tenantId: opts.tenant_id ?? 'default',
   });
@@ -81,7 +81,7 @@ describe('drillDown', () => {
     const leaf = createMemory('leaf body', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       layer: Layer.Buffer,
-      dag_level: 0,
+      dagLevel: 0,
       tenantId: 'default',
     });
     writeEntry(root, leaf);

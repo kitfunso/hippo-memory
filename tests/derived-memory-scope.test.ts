@@ -177,10 +177,10 @@ describe('dag buildDag / buildEntityProfiles partition by scope', () => {
     try {
       initStore(home);
       const privFacts = ['alice filed X', 'alice noted Y', 'alice closed Z'].map((c) =>
-        createMemory(c, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic, dag_level: 1, tags: ['extracted', 'speaker:alice'], scope: 'slack:private:C1' }),
+        createMemory(c, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic, dagLevel: 1, tags: ['extracted', 'speaker:alice'], scope: 'slack:private:C1' }),
       );
       const pubFacts = ['alice shipped P', 'alice reviewed Q', 'alice merged R'].map((c) =>
-        createMemory(c, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic, dag_level: 1, tags: ['extracted', 'speaker:alice'], scope: null }),
+        createMemory(c, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic, dagLevel: 1, tags: ['extracted', 'speaker:alice'], scope: null }),
       );
       for (const f of [...privFacts, ...pubFacts]) writeEntry(home, f);
 
@@ -225,7 +225,7 @@ describe('dag buildDag / buildEntityProfiles partition by scope', () => {
       initStore(home);
       const makeL2 = (content: string, scope: string | null) => createMemory(content, {
         baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-        layer: Layer.Semantic, tags: ['speaker:alice', 'dag-summary'], confidence: 'inferred', dag_level: 2, scope,
+        layer: Layer.Semantic, tags: ['speaker:alice', 'dag-summary'], confidence: 'inferred', dagLevel: 2, scope,
       });
       const privL2s = [
         'alice prefers python type hints privately',

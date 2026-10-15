@@ -224,7 +224,9 @@ export function purgeMirrorBestEffort(
   try {
     removeEntryMirrors(hippoRoot, id);
     return true;
-  } catch {
+  } catch (firstErr) {
+    log.debug(`${logPrefix}: mirror cleanup for ${id} failed once, retrying: ${errorMessage(firstErr)}`,
+      errorFields(firstErr));
     try {
       removeEntryMirrors(hippoRoot, id);
       return true;

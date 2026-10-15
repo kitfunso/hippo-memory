@@ -8,16 +8,27 @@ import { estimateTokens } from '../util/token-text.js';
 import { dropHeldCopies } from '../util/same-text.js';
 import * as api from '../api/index.js';
 import type { PlanningFallacyOutput } from '../predictions/planning-fallacy.js';
-import { hashQueryText } from '../api/recall-history.js';
-import { sessionRing, shownRecallRows } from '../api/recall-record.js';
 import {
   availabilityPool,
   cutoffClauses,
   detectRecallHints,
+  handoffText,
+  hashQueryText,
+  printedTokens,
+  sessionRing,
+  sessionTrailText,
+  settleTokens,
+  shownRecallRows,
   shrinkToFit,
+  snapshotText,
   suppressionSummary,
   tokenPurse,
-} from '../api/recall-render.js';
+  type RankRecallResult,
+  type RankStage,
+  type RecallGraphHops,
+  type RecallGraphStream,
+  type RecallReranker,
+} from '../api/cli-surface.js';
 import {
   cliRecallOrigin,
   cliRecallReranker,
@@ -30,14 +41,6 @@ import {
   type CliRecallRerankerPick,
 } from '../api/recall-cli.js';
 import { cliApiContext } from './api-context.js';
-import type {
-  RankRecallResult,
-  RankStage,
-  RecallGraphHops,
-  RecallGraphStream,
-  RecallReranker,
-} from '../api/recall-pipeline.js';
-import { handoffText, printedTokens, sessionTrailText, settleTokens, snapshotText } from '../api/context-render.js';
 import { printError } from './output.js';
 import {
   parseLimitFlag,

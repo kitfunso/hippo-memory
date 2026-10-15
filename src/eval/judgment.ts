@@ -5,7 +5,7 @@
 import { ConfidenceLevel, EmotionalValence } from '../core/memory.js';
 import { fetchWithRetry } from '../util/http-retry.js';
 import { errorFields, errorMessage, log } from '../util/log.js';
-import { readCappedJson } from '../util/capped-json.js';
+import { readCappedJson, readCappedText } from '../util/capped-json.js';
 import { type JsonValue, isJsonNumber, isJsonObject, isJsonString } from '../util/json.js';
 
 const ENDPOINT = 'https://api.typesafe.ai/v1/systemone';
@@ -35,6 +35,7 @@ export interface JudgeOptions {
 
 // An honest reply is three short answers, a few hundred bytes; 1 MiB leaves room for a verbose envelope.
 const JUDGE_MAX_REPLY_BYTES = 1024 * 1024;
+const JUDGE_MAX_ERROR_BYTES = 4096;
 
 /**
  * One named answer of a Jev reply `{ answers: { <name>: Answer } }`; an empty object when the reply has none of that
@@ -117,7 +118,10 @@ async function post(content: string, opts: JudgeOptions): Promise<Response | nul
   }
   if (res.ok) return res;
   // The body is the server's reply, never the request, so it cannot hold the key.
-  const snippet = (await res.text().catch(() => '')).slice(0, 200);
+  const snippet = (await readCappedText(res, JUDGE_MAX_ERROR_BYTES).catch((err) => {
+    log.debug(`judge: error body unreadable: ${errorMessage(err)}`, errorFields(err));
+    return '';
+  })).slice(0, 200);
   log.warn('judge: non-2xx reply', { status: res.status, body: snippet });
   return null;
 }

@@ -141,12 +141,12 @@ const writers: [string, (root: string) => Promise<MemoryEntry[]>][] = [
   }],
   ['DAG summary', (root) => {
     const facts = ['alice filed X', 'alice noted Y', 'alice closed Z'].map((c) =>
-      seed(root, c, { layer: Layer.Episodic, dag_level: 1, tags: ['extracted', 'speaker:alice'] }));
+      seed(root, c, { layer: Layer.Episodic, dagLevel: 1, tags: ['extracted', 'speaker:alice'] }));
     return added(root, () => buildDag(root, facts, { apiKey: 'test-key', fetcher: fetcher('alice files, notes and closes tickets') }));
   }],
   ['DAG entity profile', (root) => {
     const l2s = ['alice prefers python type hints', 'alice owns the API layer'].map((c) =>
-      seed(root, c, { layer: Layer.Semantic, tags: ['speaker:alice', 'dag-summary'], confidence: 'inferred', dag_level: 2 }));
+      seed(root, c, { layer: Layer.Semantic, tags: ['speaker:alice', 'dag-summary'], confidence: 'inferred', dagLevel: 2 }));
     return added(root, () => buildEntityProfiles(root, l2s, { apiKey: 'test-key', fetcher: fetcher('alice is the typed-python API owner') }));
   }],
 ];

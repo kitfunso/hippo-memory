@@ -170,10 +170,10 @@ function buildExtractedEntry(
   return { ...createMemory(fact.content, {
     layer: Layer.Semantic,
     tags,
-    emotional_valence: fact.valence,
+    emotionalValence: fact.valence,
     confidence: 'inferred',
     source: source.source,
-    extracted_from: source.id,
+    extractedFrom: source.id,
     scope: source.scope,
     // Without it createMemory stamps 'default', and extracted facts leave
     // the tenant of the episodic memory they were extracted from.

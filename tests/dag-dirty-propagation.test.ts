@@ -43,13 +43,13 @@ describe('child-write dirty-flag propagation', () => {
 
   it('test #1: invalidateMatching → writeEntry on fact with dag_parent_id → parent marked dirty', () => {
     // Setup: summary + child fact whose content matches an invalidation target.
-    const summary = createMemory('python deployment runbook', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Semantic, dag_level: 2 });
+    const summary = createMemory('python deployment runbook', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Semantic, dagLevel: 2 });
     writeEntry(hippoRoot, summary);
     const fact = createMemory('use FRED cache for tips_10y series', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       layer: Layer.Episodic,
-      dag_level: 1,
-      dag_parent_id: summary.id,
+      dagLevel: 1,
+      dagParentId: summary.id,
       tags: ['fred', 'cache'],
     });
     writeEntry(hippoRoot, fact);
@@ -69,13 +69,13 @@ describe('child-write dirty-flag propagation', () => {
   });
 
   it('test #2: supersede with dag_parent_id → OLD parent marked dirty + NEW parent marked dirty (same parent, idempotent)', async () => {
-    const summary = createMemory('test summary 2', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Semantic, dag_level: 2 });
+    const summary = createMemory('test summary 2', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Semantic, dagLevel: 2 });
     writeEntry(hippoRoot, summary);
     const oldFact = createMemory('old fact', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       layer: Layer.Episodic,
-      dag_level: 1,
-      dag_parent_id: summary.id,
+      dagLevel: 1,
+      dagParentId: summary.id,
     });
     writeEntry(hippoRoot, oldFact);
     // Clear initial dirty flag from the writeEntry above.
@@ -103,13 +103,13 @@ describe('child-write dirty-flag propagation', () => {
   });
 
   it('test #3: deleteEntry on fact with dag_parent_id → parent marked dirty', () => {
-    const summary = createMemory('test summary 3', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Semantic, dag_level: 2 });
+    const summary = createMemory('test summary 3', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Semantic, dagLevel: 2 });
     writeEntry(hippoRoot, summary);
     const fact = createMemory('to be deleted', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       layer: Layer.Episodic,
-      dag_level: 1,
-      dag_parent_id: summary.id,
+      dagLevel: 1,
+      dagParentId: summary.id,
     });
     writeEntry(hippoRoot, fact);
     // Clear initial flag.
@@ -123,13 +123,13 @@ describe('child-write dirty-flag propagation', () => {
   });
 
   it('test #4: archiveRawMemory on raw row with dag_parent_id → parent marked dirty', () => {
-    const summary = createMemory('test summary 4', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Semantic, dag_level: 2 });
+    const summary = createMemory('test summary 4', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Semantic, dagLevel: 2 });
     writeEntry(hippoRoot, summary);
     const rawChild = createMemory('raw child to archive', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       layer: Layer.Buffer,
-      dag_level: 1,
-      dag_parent_id: summary.id,
+      dagLevel: 1,
+      dagParentId: summary.id,
     });
     // Force kind='raw' since createMemory defaults to 'distilled'.
     writeEntry(hippoRoot, rawChild);
@@ -144,13 +144,13 @@ describe('child-write dirty-flag propagation', () => {
   });
 
   it('test #5: writeEntry on fact WITHOUT dag_parent_id → no parent dirty-mark (early-exit verified)', () => {
-    const orphan = createMemory('no parent fact', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic, dag_level: 1 });
+    const orphan = createMemory('no parent fact', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic, dagLevel: 1 });
     writeEntry(hippoRoot, orphan); // dag_parent_id defaults to null
     expect(dirtyFor(hippoRoot, 'default')).toEqual([]);
   });
 
   it('test #6: cross-tenant safety — child tenant mismatched with parent tenant → no dirty-mark', () => {
-    const summary = createMemory('tenant1 summary', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Semantic, dag_level: 2 });
+    const summary = createMemory('tenant1 summary', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Semantic, dagLevel: 2 });
     writeEntry(hippoRoot, summary);
     // Manually move summary to tenant1.
     const db = openHippoDb(hippoRoot);
@@ -160,8 +160,8 @@ describe('child-write dirty-flag propagation', () => {
     const child = createMemory('default-tenant child', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       layer: Layer.Episodic,
-      dag_level: 1,
-      dag_parent_id: summary.id, // points across tenant boundary
+      dagLevel: 1,
+      dagParentId: summary.id, // points across tenant boundary
     });
     writeEntry(hippoRoot, child);
     // Assert: tenant1 sees no dirty (the writeEntry hook called with child's
@@ -179,15 +179,15 @@ describe('child-write dirty-flag propagation', () => {
   });
 
   it('test #7: idempotency — 5 child writes under same parent → 1 audit row + parent stays dirty', () => {
-    const summary = createMemory('summary 7', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Semantic, dag_level: 2 });
+    const summary = createMemory('summary 7', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Semantic, dagLevel: 2 });
     writeEntry(hippoRoot, summary);
     // Write 5 children under the same parent.
     for (let i = 0; i < 5; i++) {
       const child = createMemory(`child ${i}`, {
         baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
         layer: Layer.Episodic,
-        dag_level: 1,
-        dag_parent_id: summary.id,
+        dagLevel: 1,
+        dagParentId: summary.id,
       });
       writeEntry(hippoRoot, child);
     }
@@ -210,7 +210,7 @@ describe('child-write dirty-flag propagation', () => {
     // Independent-review-critic R1 HIGH catch: consolidate.ts/sleep flushes
     // pendingWrites + pendingDeletes through batchWriteAndDelete every cycle.
     // Without this hook the dominant mutation source bypasses E2 entirely.
-    const summary = createMemory('batch test summary', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Semantic, dag_level: 2 });
+    const summary = createMemory('batch test summary', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Semantic, dagLevel: 2 });
     writeEntry(hippoRoot, summary);
     // Clear initial dirty flag from the writeEntry above.
     const db0 = openHippoDb(hippoRoot);
@@ -221,8 +221,8 @@ describe('child-write dirty-flag propagation', () => {
     const childToDelete = createMemory('child to delete', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       layer: Layer.Episodic,
-      dag_level: 1,
-      dag_parent_id: summary.id,
+      dagLevel: 1,
+      dagParentId: summary.id,
     });
     writeEntry(hippoRoot, childToDelete);
     // Clear the flag again (writeEntry just marked it dirty via S1).
@@ -234,8 +234,8 @@ describe('child-write dirty-flag propagation', () => {
     const newBatchChild = createMemory('batch child', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       layer: Layer.Episodic,
-      dag_level: 1,
-      dag_parent_id: summary.id,
+      dagLevel: 1,
+      dagParentId: summary.id,
     });
     batchWriteAndDelete(hippoRoot, [newBatchChild], [childToDelete.id]);
 
@@ -253,7 +253,7 @@ describe('child-write dirty-flag propagation', () => {
   });
 
   it('test #8: orphan child (parent deleted) → markSummaryDirtyInTx no-ops, no exception', () => {
-    const summary = createMemory('to be deleted parent', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Semantic, dag_level: 2 });
+    const summary = createMemory('to be deleted parent', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Semantic, dagLevel: 2 });
     writeEntry(hippoRoot, summary);
     // Delete the summary. Now the parent id is dangling.
     deleteEntry(hippoRoot, summary.id, { actor: 'test' });
@@ -261,8 +261,8 @@ describe('child-write dirty-flag propagation', () => {
     const orphan = createMemory('orphan child', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       layer: Layer.Episodic,
-      dag_level: 1,
-      dag_parent_id: summary.id, // points to deleted parent
+      dagLevel: 1,
+      dagParentId: summary.id, // points to deleted parent
     });
     // Must not throw.
     expect(() => writeEntry(hippoRoot, orphan)).not.toThrow();

@@ -78,7 +78,7 @@ describe('mcp hippo_drill', () => {
       layer: Layer.Semantic,
       tags: ['dag-summary', 'topic:alpha'],
       confidence: 'inferred',
-      dag_level: 2,
+      dagLevel: 2,
     });
     summary.descendant_count = 3;
     writeEntry(home, summary);
@@ -86,8 +86,8 @@ describe('mcp hippo_drill', () => {
       const c = createMemory(`alpha detail event ${i}`, {
         layer: Layer.Episodic,
         confidence: 'observed',
-        dag_level: 1,
-        dag_parent_id: summary.id,
+        dagLevel: 1,
+        dagParentId: summary.id,
       });
       writeEntry(home, c);
     }
@@ -107,7 +107,7 @@ describe('mcp hippo_drill', () => {
     const leaf = createMemory('plain leaf body', {
       layer: Layer.Buffer,
       confidence: 'observed',
-      dag_level: 0,
+      dagLevel: 0,
     });
     writeEntry(home, leaf);
     const res = await callTool(3, 'hippo_drill', { summary_id: leaf.id }, {
@@ -124,7 +124,7 @@ describe('mcp hippo_drill', () => {
       layer: Layer.Semantic,
       tags: ['dag-summary'],
       confidence: 'inferred',
-      dag_level: 2,
+      dagLevel: 2,
       tenantId: 'other',
     });
     writeEntry(home, summary);

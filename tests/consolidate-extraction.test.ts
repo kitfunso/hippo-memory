@@ -27,13 +27,13 @@ describe('Extracted fact protection', () => {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       layer: Layer.Semantic,
       tags: ['extracted'],
-      extracted_from: 'source-memory-1',
+      extractedFrom: 'source-memory-1',
     });
     const fact2 = createMemory('the deployment uses kubernetes pods on port 8080 with nginx', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       layer: Layer.Semantic,
       tags: ['extracted'],
-      extracted_from: 'source-memory-2',
+      extractedFrom: 'source-memory-2',
     });
 
     writeEntry(tmpDir, fact1);
@@ -76,13 +76,13 @@ describe('Extracted fact protection', () => {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       layer: Layer.Episodic,
       tags: ['extracted'],
-      extracted_from: 'source-memory-1',
+      extractedFrom: 'source-memory-1',
     });
     const fact2 = createMemory('never use port 3000 for the dev server', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       layer: Layer.Episodic,
       tags: ['extracted'],
-      extracted_from: 'source-memory-2',
+      extractedFrom: 'source-memory-2',
     });
 
     writeEntry(tmpDir, fact1);

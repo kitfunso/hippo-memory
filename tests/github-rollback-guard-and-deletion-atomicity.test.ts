@@ -111,7 +111,7 @@ describe('deletion atomicity', () => {
         kind: 'raw',
         scope: 'github:private:acme/secret-repo',
         owner: 'user:github:alice',
-        artifact_ref: ref,
+        artifactRef: ref,
         tags: ['source:github'],
         tenantId: 'default',
       });

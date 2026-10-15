@@ -5,7 +5,7 @@ import type { StoreContext } from '../api/index.js';
 import { isSharedStore } from '../core/config.js';
 import { handleMcpRequest, mcpErrorResponse, type McpContext, type McpRequest } from '../mcp/server.js';
 import { HttpError, readBody, sendJson } from '../util/http-util.js';
-import { log } from '../util/log.js';
+import { errorFields, log } from '../util/log.js';
 import { assertCallerProject } from '../core/project-identity.js';
 import type { CallerProject } from '../api/prompt-hook.js';
 import { buildContextWithAuth, heartbeatVerdict, readAuthHeader, requireAuth } from './auth.js';
@@ -185,10 +185,8 @@ export async function handleMcpStream(
 }
 
 function keepStreamAlive(req: IncomingMessage, res: ServerResponse, opts: ResolvedServeOpts): void {
-  const heartbeatMs =
-    envMcpSseHeartbeatMs() ?? DEFAULT_SSE_HEARTBEAT_MS;
-  const maxAgeMs =
-    (envMcpSseMaxAgeSec() ?? DEFAULT_SSE_MAX_AGE_SEC) * 1000;
+  const heartbeatMs = envMcpSseHeartbeatMs() ?? DEFAULT_SSE_HEARTBEAT_MS;
+  const maxAgeMs = (envMcpSseMaxAgeSec() ?? DEFAULT_SSE_MAX_AGE_SEC) * 1000;
   const startedAt = Date.now();
   let closed = false;
   let checking = false;
@@ -209,7 +207,7 @@ function keepStreamAlive(req: IncomingMessage, res: ServerResponse, opts: Resolv
     }
     if (checking) return;
     checking = true;
-    void heartbeatVerdict(req, opts).then((verdict) => {
+    heartbeatVerdict(req, opts).then((verdict) => {
       checking = false;
       if (!closed && verdict === 'unavailable') log.warn('heartbeat tick skipped: auth check unavailable');
       if (closed || verdict === 'unavailable') return;
@@ -218,11 +216,11 @@ function keepStreamAlive(req: IncomingMessage, res: ServerResponse, opts: Resolv
         clearInterval(ping);
         return;
       }
-      try {
-        res.write(': ping\n\n');
-      } catch {
-        clearInterval(ping); // the client hung up; stop pinging a dead socket
-      }
+      if (!writePing(res)) clearInterval(ping);
+    }).catch((err) => {
+      // Without the reset `checking` stays true and the heartbeat never runs again.
+      checking = false;
+      log.warn('heartbeat tick failed', errorFields(err));
     });
   }, heartbeatMs);
   // Don't keep the event loop alive just for this timer — the server's
@@ -233,6 +231,16 @@ function keepStreamAlive(req: IncomingMessage, res: ServerResponse, opts: Resolv
     closed = true;
     clearInterval(ping);
   });
+}
+
+/** False when the client hung up, so the caller stops pinging a dead socket. */
+function writePing(res: ServerResponse): boolean {
+  try {
+    res.write(': ping\n\n');
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function endStreamWithReason(res: ServerResponse, reason: string): void {

@@ -10,7 +10,7 @@ function fakeEntry(overrides: Partial<MemoryEntry>): MemoryEntry {
   const base = createMemory(padded, {
     layer: Layer.Episodic,
     tags: [],
-    emotional_valence: 'neutral',
+    emotionalValence: 'neutral',
   });
   return { ...base, ...overrides, content: padded };
 }

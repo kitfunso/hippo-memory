@@ -70,6 +70,8 @@ afterAll(async () => {
 describe('HTTP input validation', () => {
   const bad: Array<[string, string, string, Body | undefined, RegExp]> = [
     ['memory kind', 'POST', '/v1/memories', { content: 'a fact', kind: 'opinion' }, /invalid kind: opinion/],
+    ['memory scope type', 'POST', '/v1/memories', { content: 'a fact', scope: 123 }, /scope must be a string/],
+    ['memory tags type', 'POST', '/v1/memories', { content: 'a fact', tags: ['a', 1] }, /tags must be an array of strings/],
     ['outcome ids type', 'POST', '/v1/outcome', { good: true, ids: 'mem_1' }, /ids must be an array/],
     ['sleep no_share type', 'POST', '/v1/sleep', { no_share: 'yes' }, /no_share must be a boolean/],
     ['key label type', 'POST', '/v1/auth/keys', { label: 7 }, /label must be a string/],

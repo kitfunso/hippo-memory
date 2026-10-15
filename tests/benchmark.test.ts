@@ -1,5 +1,6 @@
 /**
  * Retrieval Quality Benchmark for Hippo.
+ * Measures quality, not speed: the CI step "Perf regression gate" is the performance gate.
  *
  * Seeds 50+ real memories from MEMORY.md (lessons learned in production)
  * and validates that natural-language queries surface the right memories.
@@ -69,7 +70,7 @@ beforeAll(() => {
 3. Let Keith decide when to promote/replace
 Violating this destroys live PnL history.`, {
     tags: ['production', 'rule', 'critical'],
-    emotional_valence: 'critical',
+    emotionalValence: 'critical',
     pinned: true,
   });
 
@@ -83,7 +84,7 @@ Natgas V3 was overwritten without versioning; the only recovery was git log.`, {
 crashes on emoji characters. Example crash: print("✅ Success!"). Use plain ASCII:
 print("OK") or print("[OK]"). Affects all Windows Python scripts including data refresh.`, {
     tags: ['platform', 'windows', 'encoding', 'error'],
-    emotional_valence: 'negative',
+    emotionalValence: 'negative',
   });
 
   seed('powershell_semicolons', `PowerShell uses semicolons not && to chain commands.
@@ -91,7 +92,7 @@ Correct: npm run build; npx wrangler deploy
 Wrong:   npm run build && npx wrangler deploy
 The && operator causes silent failure in PowerShell; use ; instead.`, {
     tags: ['platform', 'powershell', 'windows', 'error'],
-    emotional_valence: 'negative',
+    emotionalValence: 'negative',
   });
 
   // ── Data pipeline errors ──────────────────────────────────────────────────
@@ -99,7 +100,7 @@ The && operator causes silent failure in PowerShell; use ; instead.`, {
 fred_weekly.parquet during daily refresh, breaking the gold model. Always verify cache contents
 after refresh failures. The data_fetchers.py mapping exists but the fetcher may silently skip series.`, {
     tags: ['data-pipeline', 'fred', 'error', 'gold-model'],
-    emotional_valence: 'negative',
+    emotionalValence: 'negative',
   });
 
   seed('fred_fallback', `FRED as fallback for dead data URLs. IMF External_Data.xlsx and FAO food price
@@ -112,7 +113,7 @@ PFOODINDEXM, PMETAINDEXM). FRED is more reliable than scraping institutional web
 NatGas at /natural-gas/stor/wkly was unaffected. This broke 9 of 10 EIA series silently because
 exceptions were swallowed. Always log failed API calls, don't just pass.`, {
     tags: ['data-pipeline', 'eia', 'api', 'error'],
-    emotional_valence: 'negative',
+    emotionalValence: 'negative',
   });
 
   seed('staleness_hides_ok', `Data source staleness can hide behind OK reports. Daily cache refresh
@@ -120,7 +121,7 @@ reported "14/14 OK" while 5+ sources were silently stale (WB date format change,
 2023, IndexMundi SSL expired, Drought Monitor API redesigned, EIA path change). Always verify the
 actual data, not just the exit code. Added staleness checker that flags parquets >14 days old.`, {
     tags: ['data-pipeline', 'staleness', 'monitoring', 'error'],
-    emotional_valence: 'negative',
+    emotionalValence: 'negative',
   });
 
   seed('wb_column_names', `WB Pink Sheet column names must be preserved exactly. Production models
@@ -128,7 +129,7 @@ reference original column names like "Coconut oil", "Wheat, US SRW", "DAP". Neve
 WB Pink Sheet columns without checking all 24 production models first. Silent column mismatch returns
 None signal instead of erroring.`, {
     tags: ['data-pipeline', 'world-bank', 'columns', 'error'],
-    emotional_valence: 'negative',
+    emotionalValence: 'negative',
   });
 
   seed('cache_column_mismatch', `Cache column mismatches break models silently. Production models
@@ -136,7 +137,7 @@ reference columns (dbc, slx, uup, tips_10y) that weren't in daily_cache_refresh.
 Models return None signal instead of erroring. Cross-check: scan all *_production_std.py for
 yf["col"]/fred["col"] references and verify they exist in the cache parquets.`, {
     tags: ['data-pipeline', 'cache', 'columns', 'error'],
-    emotional_valence: 'negative',
+    emotionalValence: 'negative',
   });
 
   seed('fred_column_alias', `FRED cache column alias map. Production models reference names that differ
@@ -183,7 +184,7 @@ you'd scroll past, rewrite it.`, {
 The commit message and PRODUCTION_MANIFEST were both falsified. Always run
 python production/{commodity}_production_std.py and compare output to claimed metrics.`, {
     tags: ['sub-agent', 'verification', 'metrics', 'error', 'critical'],
-    emotional_valence: 'critical',
+    emotionalValence: 'critical',
   });
 
   seed('subagent_novel_data', `Suggest novel data sources proactively. Keith asked many times what data
@@ -217,7 +218,7 @@ The fix:
 3. Run ONCE, accept the result  - no iteration based on backtest results
 Honest results (theory-only 6 features): Sharpe 0.87, not 1.02 or 1.74.`, {
     tags: ['quant', 'data-mining', 'feature-selection', 'backtest', 'error'],
-    emotional_valence: 'negative',
+    emotionalValence: 'negative',
   });
 
   seed('equal_weight_beats_optimization', `Equal weight beats portfolio optimization. Exp 9 confirmed
@@ -246,7 +247,7 @@ features (3 generic features per commodity) gave completely wrong results. XGBoo
 LogReg 10/17 with proxy features, but LogReg actually wins 10/17 with real production features.
 Always use paper/extract_production_data.py to capture actual X, y from production models.`, {
     tags: ['quant', 'features', 'proxy', 'error', 'paper'],
-    emotional_valence: 'negative',
+    emotionalValence: 'negative',
   });
 
   seed('backtest_engine_refactor', `Backtest engine refactor changed model scores. V2 manifest claimed
@@ -280,7 +281,7 @@ All others use walk_forward_predict with LogisticRegression.`, {
 The bt_production_*.csv files use uniform 4-lot positions. Don't use these for LinkedIn posts or
 any public-facing PnL claims. Historical live PnL is sacrosanct; never overwrite it.`, {
     tags: ['quant', 'production', 'pnl', 'critical'],
-    emotional_valence: 'critical',
+    emotionalValence: 'critical',
   });
 
   // ── Frontend/deploy rules ─────────────────────────────────────────────────
@@ -296,7 +297,7 @@ Shared constants: production/shared_constants.py <-> website/frontend/src/lib/tr
 Any change to RISK_PER_TRADE, position sizing, or signal thresholds must be updated in BOTH files.
 Mismatch causes silent wrong sizing on the frontend dashboard.`, {
     tags: ['frontend', 'backend', 'constants', 'sync', 'error'],
-    emotional_valence: 'negative',
+    emotionalValence: 'negative',
   });
 
   seed('frontend_reasoning_text', `Frontend reasoning text must reflect actual features. Softs SHORT

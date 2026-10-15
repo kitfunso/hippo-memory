@@ -232,10 +232,10 @@ describe('MCP hippo_recall ranking', () => {
 
   it('overflowed children of a level-2 summary bring the summary into the tail', async () => {
     const s = track(seed());
-    const parent = add(s, 'SUM', 'rollup summary of the child notes', { dag_level: 2, tags: ['dag-summary'] });
+    const parent = add(s, 'SUM', 'rollup summary of the child notes', { dagLevel: 2, tags: ['dag-summary'] });
     // One connection for the seed loop: a close per write checkpoints the WAL, which is slow on Windows.
     await withSharedStoreHandles(() => {
-      for (let i = 0; i < 3; i++) add(s, `K${i}`, `beta zz child ${i}`, { dag_level: 0, dag_parent_id: parent.id });
+      for (let i = 0; i < 3; i++) add(s, `K${i}`, `beta zz child ${i}`, { dagLevel: 0, dagParentId: parent.id });
       for (let i = 0; i < 60; i++) add(s, `B${i}`, `beta row ${i}`);
     });
     expect(observe(s, textOf(await call(s.home, { query: 'beta', budget: 200 })))).toEqual(EXPECTED.dagOverflow);

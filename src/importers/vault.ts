@@ -230,7 +230,7 @@ async function writeChangedNote(
     tags,
     scope: run.scope,
     owner: 'agent:vault-import',
-    artifact_ref: artifactRef,
+    artifactRef: artifactRef,
     tenantId: ctx.tenantId,
     baseHalfLifeDays: run.baseHalfLifeDays,
   });

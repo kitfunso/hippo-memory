@@ -84,9 +84,9 @@ function mem(id: string, content: string, opts: {
     layer: opts.layer ?? Layer.Episodic,
     tags: opts.tags ?? [],
     baseHalfLifeDays: 30,
-    extracted_from: opts.extracted_from,
-    dag_level: opts.dag_level,
-    dag_parent_id: opts.dag_parent_id,
+    extractedFrom: opts.extracted_from,
+    dagLevel: opts.dag_level,
+    dagParentId: opts.dag_parent_id,
   });
   entry.id = id;
   if (opts.created) entry.created = opts.created;

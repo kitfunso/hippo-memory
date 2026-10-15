@@ -47,15 +47,18 @@ export function parseJsonObjectText(raw: string): Record<string, JsonValue> {
   }
 }
 
+/** Absent (undefined or null) is undefined; a present value of the wrong type is a 400, never a silent default. */
 export function getString(obj: Record<string, JsonValue>, key: string): string | undefined {
   const v = obj[key];
-  return isJsonString(v) ? v : undefined;
+  if (v === undefined || v === null) return undefined;
+  if (!isJsonString(v)) throw new HttpError(400, `${key} must be a string`);
+  return v;
 }
 
 export function getStringArray(obj: Record<string, JsonValue>, key: string): string[] | undefined {
   const v = obj[key];
-  if (!Array.isArray(v)) return undefined;
-  if (!v.every(isJsonString)) return undefined;
+  if (v === undefined || v === null) return undefined;
+  if (!Array.isArray(v) || !v.every(isJsonString)) throw new HttpError(400, `${key} must be an array of strings`);
   return v;
 }
 
