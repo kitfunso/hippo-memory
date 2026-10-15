@@ -40,15 +40,8 @@ import { loadRecallEntries } from '../search-rows.js';
 import { type ContinuityKey, listSessionEvents, loadActiveTaskSnapshot } from '../sessions.js';
 import { entriesWithoutVectorAt, loadStoredVectorViews, writeVectorsAt } from '../vector-index.js';
 
-/** `ctx` with its store filled: the one it carries, else hippo.db
- * under its root, for a public entry whose SDK caller gave none. */
-export function withStore<C extends { readonly hippoRoot: string; readonly store?: HippoStore }>(
-  ctx: C,
-): C & { readonly store: HippoStore } {
-  return { ...ctx, store: ctx.store ?? sqliteStore(ctx.hippoRoot) };
-}
-
-/** `withStore` that also proves the groups, so a public entry given a store without them still answers 501. */
+/** `ctx` with its store filled (the one it carries, else hippo.db under its root) and its groups proven,
+ * so a public entry given a store without them still answers 501. */
 export function withStoreGroups<
   C extends { readonly hippoRoot: string; readonly store?: HippoStore },
   G extends StoreGroup,

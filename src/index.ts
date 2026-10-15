@@ -104,7 +104,7 @@ export { consolidate } from './consolidate/sleep.js';
 export { ConsolidationResult } from './consolidate/run.js';
 export type { SleepOpts, SleepResult } from './api/sleep.js';
 /** Published signature, so the Context may carry no store: it then runs on hippo.db under its root. */
-export function sleep(ctx: Context, opts?: SleepOpts): Promise<SleepResult> {
+export async function sleep(ctx: Context, opts?: SleepOpts): Promise<SleepResult> {
   return sleepOnStore(withStoreGroups(ctx, 'localFiles'), opts);
 }
 // Announced public in CHANGELOG 1.26.3 but never re-exported; the rest of dedupe.js stays internal.

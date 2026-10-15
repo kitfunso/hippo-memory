@@ -22,16 +22,16 @@ export { serve } from './server/boot.js';
 
 // An add-on hands in a Context with no store, so each entry that
 // needs one fills it with hippo.db under the Context's root.
-function authCreate(ctx: Context, opts: AuthCreateOpts): Promise<AuthCreateResult> {
+async function authCreate(ctx: Context, opts: AuthCreateOpts): Promise<AuthCreateResult> {
   return createKey(withStoreGroups(ctx, 'keyWrites'), opts);
 }
-function authCreateSelf(ctx: Context, opts: AuthCreateSelfOpts): Promise<AuthCreateSelfResult> {
+async function authCreateSelf(ctx: Context, opts: AuthCreateSelfOpts): Promise<AuthCreateSelfResult> {
   return createSelfKey(withStoreGroups(ctx, 'keyWrites'), opts);
 }
-function authRevoke(ctx: Context, keyId: string): Promise<AuthRevokeResult> {
+async function authRevoke(ctx: Context, keyId: string): Promise<AuthRevokeResult> {
   return revokeKey(withStoreGroups(ctx, 'keyAudit'), keyId);
 }
-function promptHookContext(
+async function promptHookContext(
   ctx: Context,
   req: PromptHookRequest,
   opts?: PromptHookOpts,

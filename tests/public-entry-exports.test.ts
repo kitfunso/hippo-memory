@@ -190,6 +190,7 @@ describe('published runtime exports', () => {
       float32ToBuffer ftsTermParts
       hasGroup
       isSharedStore
+      narrowStore
       ownScopeTouches
       passesScopeFilterForRecall
       rankVectorRows rarestFtsQuery rejectionDigest replacesIndex
