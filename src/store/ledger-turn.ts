@@ -70,6 +70,11 @@ export function recordLedgerTurn(hippoRoot: string, turn: LedgerTurn): void {
   });
 }
 
+/** Books one token row in the store at `hippoRoot`. */
+export function recordTokensAt(hippoRoot: string, use: TokenUse): void {
+  onHandle(hippoRoot, (db) => recordTokenUse(db, use));
+}
+
 /** What the session last sent on `surface`, or null, as lastSentState reads it. */
 export function lastSentOnSurface(
   hippoRoot: string, tenantId: string, sessionId: string | null | undefined, surface: TokenSurface,

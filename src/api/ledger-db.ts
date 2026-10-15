@@ -1,9 +1,10 @@
 // The store the token ledger writes to for a caller's root; context, recall and the session hooks share it.
 import { errorMessage, log } from '../util/log.js';
 import { getGlobalRoot } from '../sharing/global-store.js';
-import { lastSentOnSurface, noteLedgerRowSkipped, recordLedgerTurn, type LedgerTurn } from '../store/ledger-turn.js';
+import {
+  lastSentOnSurface, noteLedgerRowSkipped, recordLedgerTurn, recordTokensAt, type LedgerTurn,
+} from '../store/ledger-turn.js';
 import { isInitialized } from '../core/project-identity.js';
-import { sqliteSyncStore } from '../store/sqlite/store.js';
 import type { LastSent, TokenSurface, TokenUse } from '../store/token-ledger.js';
 
 export interface LedgerRootOpts {
@@ -50,7 +51,7 @@ export function onLedgerRoot<T>(
 
 /** Books one row in ledgerRoot's store, best-effort. */
 export function bookTokenUse(hippoRoot: string, use: TokenUse, opts?: LedgerRootOpts): void {
-  onLedgerRoot(hippoRoot, opts, (root) => sqliteSyncStore(root).recordTokens(use));
+  onLedgerRoot(hippoRoot, opts, (root) => recordTokensAt(root, use));
 }
 
 /** Books a turn's rows and then its delivery event on one connection of ledgerRoot's store, best-effort. */
