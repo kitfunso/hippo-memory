@@ -486,8 +486,7 @@ function fitRecallBlock(
 
   // The baserate hint depends on the query alone, so `retrieve` evaluates it and this only prices the line.
   const planText = planningLine(planning);
-  const planTokens = planText === null ? 0 : printedTokens(`${planText}
-`);
+  const planTokens = planText === null ? 0 : printedTokens(`${planText}\n`);
   const showPlan = planText !== null && planTokens <= left;
   if (showPlan) left -= planTokens;
   const cmdPlanningFallacyHint = showPlan ? (planning.hint ?? null) : null;
