@@ -1,5 +1,4 @@
-import { refreshParticleProperties } from '../db/physics-state.js';
-import { loadStoredParticles, saveStoredParticles } from '../store/vector-index.js';
+import { refreshParticleProperties } from '../core/particle-refresh.js';
 import { simulate, type ForceContext, type PhysicsParticle } from '../core/physics.js';
 import type { MemoryEntry } from '../core/memory.js';
 import type { SleepRun } from './run.js';
@@ -26,7 +25,7 @@ export function physicsPass(run: SleepRun, maxParticles: number = SLEEP_PHYSICS_
 
 function simulateStoredParticles(run: SleepRun, maxParticles: number): void {
   const { result, survivors } = run;
-  const stored = loadStoredParticles(run.hippoRoot);
+  const stored = run.store.storedParticles();
   if (stored.length === 0) return;
 
   // Build entry lookup for property refresh
@@ -35,7 +34,7 @@ function simulateStoredParticles(run: SleepRun, maxParticles: number): void {
   refreshParticleProperties(particles, entryMap, run.now);
 
   const stats = simulate(particles, survivorForces(run));
-  saveStoredParticles(run.hippoRoot, particles);
+  run.store.saveParticles(particles);
 
   result.physicsSimulated = stats.particleCount;
   const capped =

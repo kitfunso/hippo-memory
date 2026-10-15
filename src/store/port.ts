@@ -638,7 +638,9 @@ export interface VectorViews {
  * process, the global store) may run. */
 export interface LocalFiles {
   readonly hippoRoot: string;
+  readonly consolidation: import('./port/consolidation.js').Consolidation;
 }
+export type { Consolidation } from './port/consolidation.js';
 
 /** The reads and writes behind the memory-quality audit, its repair and audit-log retention. */
 export interface AuditMaintenance {

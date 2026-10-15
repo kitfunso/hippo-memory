@@ -2,21 +2,12 @@
  * paraphrase matching is out of scope. db-agnostic (helpers take a `DatabaseSyncLike`) and imports nothing from the
  * store layer above it, which imports this (the reverse is a cycle). */
 
-import { createHash } from 'node:crypto';
+import { normalizeValueForRejection, rejectionDigest } from '../core/rejection-digest.js';
 import type { DatabaseSyncLike } from '../db/index.js';
 import { RejectedValueError } from '../core/api-errors.js';
 
-/** Normalize content for rejection digests: NFC, lowercase, collapse whitespace runs, trim. No punctuation stripping:
- * over-normalizing causes false refusals, worse than misses. */
-export function normalizeValueForRejection(content: string): string {
-  return content.normalize('NFC').toLowerCase().replace(/\s+/g, ' ').trim();
-}
-
-/** Full 64-char sha256 hex of the normalized content: a tombstone key needs collision resistance, not the 16-char
- * redaction hash used for query hashing. */
-export function rejectionDigest(content: string): string {
-  return createHash('sha256').update(normalizeValueForRejection(content)).digest('hex');
-}
+// store-kit publishes rejectionDigest from this path.
+export { normalizeValueForRejection, rejectionDigest };
 
 export interface RejectedValueRow {
   tenantId: string;

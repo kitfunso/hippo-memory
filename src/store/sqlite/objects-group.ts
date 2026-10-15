@@ -4,7 +4,7 @@ import { getMeta, withWriteScopeOr, type DatabaseSyncLike } from '../../db/index
 import { escapeLike } from '../../util/escape.js';
 import { keysetAfter } from '../../util/keyset.js';
 import { chunked } from '../../util/chunked.js';
-import { calculateStrength, deriveHalfLife, type MemoryEntry } from '../../core/memory.js';
+import { calculateStrength, deriveHalfLife, LEGACY_TYPED_HALF_LIFE, type MemoryEntry } from '../../core/memory.js';
 import { scopeAdmitSql } from '../rule-sql.js';
 import type { JsonObject } from '../working-memory.js';
 import { stampOriginProject, upsertEntryRow } from '../entry-row.js';
@@ -20,7 +20,7 @@ import type {
   SavableKind,
   Skill,
 } from '../../core/object-types.js';
-import { LEGACY_TYPED_HALF_LIFE, onHandle, openStore, TYPED_HALF_LIFE_META_KEY } from '../open.js';
+import { onHandle, openStore, TYPED_HALF_LIFE_META_KEY } from '../open.js';
 import {
   isObjectRefusal,
   type IncidentOpen,

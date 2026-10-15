@@ -9,13 +9,13 @@ import { saveCustomerNote } from '../src/objects/customer-notes.js';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
 import { saveDecision } from '../src/objects/decisions.js';
 import { openIncident } from '../src/objects/incidents.js';
-import { calculateStrength, deriveHalfLife, type MemoryEntry } from '../src/core/memory.js';
+import { calculateStrength, deriveHalfLife, LEGACY_TYPED_HALF_LIFE, type MemoryEntry } from '../src/core/memory.js';
 import { savePolicy } from '../src/objects/policies.js';
 import { saveProcess } from '../src/objects/processes.js';
 import { saveProjectBrief } from '../src/objects/project-briefs.js';
 import { saveSkill } from '../src/objects/skills.js';
 import { readEntry } from '../src/store/entry-reads.js';
-import { initStore, LEGACY_TYPED_HALF_LIFE, TYPED_HALF_LIFE_META_KEY } from '../src/store/open.js';
+import { initStore, TYPED_HALF_LIFE_META_KEY } from '../src/store/open.js';
 import { objectsAt } from './_helpers/objects-at.js';
 
 const FROZEN = new Date('2026-03-01T12:00:00.000Z');

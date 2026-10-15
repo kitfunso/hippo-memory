@@ -4,6 +4,7 @@
 // functions, SQL prepared outside the data layer, hand-written BEGIN literals) are counted and may fall but never rise above .store-port-baseline.json.
 // routesOnLoop counts the routes whose SQLite work still runs on the server thread: V1_ROUTES rows without `loop: 'off'`, plus the routes outside that table.
 // carrierFiles counts src files that name andThen, onStore or StoreReply, the removed sync-or-async reply carrier; the list is pinned so a new file fails even when another stops.
+// storeImportsInDomain counts value imports, re-exports and import() calls from src/consolidate, src/agent-memories and src/learn into src/store or src/db: domain code reaches hippo.db through the port.
 // storeFilesWithoutSql counts src/store files that run no SQL on hippo.db and are not on DB_DEFINITION_FILES; the list is pinned, so a pure helper filed under src/store fails.
 // A file under src/server/routes or src/cli that feeds a recall ring, counts recall stats or books a recall token row fails outright.
 // Usage: check-store-port.mjs [--list] [--update]. --update lowers the baseline and refuses to raise any number.
@@ -16,7 +17,7 @@ const BASELINE = '.store-port-baseline.json';
 const OPENERS = new Set(['openHippoDb', 'openHippoDbReadOnly', 'openStore', 'onHandle']);
 const TWIN_SUFFIX = /(ThroughStore|OnHippoDb|UnderStore|OnStore)$/;
 const NUMBERS = ['openersOutside', 'openersInCli', 'storeBranches', 'routesWithoutStore', 'sqliteOnlyRoutes', 'routesOnLoop', 'twinFunctions',
-  'sqlOutside', 'txLiterals', 'tenantResolvesInCli', 'storeImportsInCli', 'handleHoldersOutside', 'storeFilesWithoutSql'];
+  'sqlOutside', 'txLiterals', 'tenantResolvesInCli', 'storeImportsInCli', 'storeImportsInDomain', 'handleHoldersOutside', 'storeFilesWithoutSql'];
 const BY_FILE_KEYS = ['openersOutsideByFile', 'sqlOutsideByFile', 'handleHoldersOutsideByFile'];
 const HANDLE_TYPES = new Set(['DatabaseSyncLike', 'DatabaseSync']);
 // Routes dispatched outside V1_ROUTES. Named here so the count cannot read 0 while they answer on the server thread; a name leaves when its route does.
@@ -27,6 +28,7 @@ const DB_DEFINITION_FILES = {
   'src/store/graph-rows.ts': 'graph row shapes of hippo.db',
   'src/store/rule-sql.ts': 'SQL text that other store files run',
   'src/store/port.ts': 'the store port every backend implements',
+  'src/store/port/': 'store port groups kept apart from port.ts',
   'src/store/port-groups.ts': 'the session and admin groups of the store port',
   'src/store/busy.ts': 'the busy error and busy check of the store port',
   'src/store/narrow.ts': 'the run-time proof behind StoreWith, part of the port contract',
@@ -155,6 +157,23 @@ const namesOnlyTypes = (clause) => clause.isTypeOnly ||
 function countStoreImports(file, sf) {
   return sf.statements.filter((s) => ts.isImportDeclaration(s) && ts.isStringLiteral(s.moduleSpecifier) &&
     reachesDataLayer(file, s.moduleSpecifier.text) && !(s.importClause && namesOnlyTypes(s.importClause))).length;
+}
+
+const isDomain = (f) => /^src\/(consolidate|agent-memories|learn)\//.test(f);
+const isValueImport = (s) => ts.isImportDeclaration(s) && !(s.importClause && namesOnlyTypes(s.importClause));
+const isValueReexport = (s) => ts.isExportDeclaration(s) && !s.isTypeOnly &&
+  !(s.exportClause && ts.isNamedExports(s.exportClause) && s.exportClause.elements.every((e) => e.isTypeOnly));
+
+/** Value imports, value re-exports and `import()` calls of src/store or src/db: what domain code reads past the port. */
+function countDomainStoreImports(file, sf) {
+  const reaches = (spec) => spec && ts.isStringLiteral(spec) && reachesDataLayer(file, spec.text);
+  let n = sf.statements.filter((s) => (isValueImport(s) || isValueReexport(s)) && reaches(s.moduleSpecifier)).length;
+  const visit = (node) => {
+    if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword && reaches(node.arguments[0])) n++;
+    ts.forEachChild(node, visit);
+  };
+  visit(sf);
+  return n;
 }
 
 function countTwins(sf) {
@@ -308,6 +327,7 @@ function measure() {
     if (file !== TX_OWNER) out.txLiterals += countTxLiterals(sf);
     if (file.startsWith('src/cli/')) out.tenantResolvesInCli += countTenantResolves(sf);
     if (file.startsWith('src/cli/')) out.storeImportsInCli += countStoreImports(file, sf);
+    if (isDomain(file)) out.storeImportsInDomain += countDomainStoreImports(file, sf);
     if (file.startsWith('src/api/')) out.storeBranches += countStoreBranches(sf);
     out.twinFunctions += countTwins(sf);
     if (usesCarrier(sf)) carrierFilesList.push(file);

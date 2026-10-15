@@ -4,9 +4,9 @@
  * Memories hippo shortened since, or with their own fixed half-life, keep theirs; rescales are audit-logged and `meta`
  * records the base, so it runs once.
  */
-import { deriveHalfLife, type MemoryEntry } from '../core/memory.js';
-import { HALF_LIFE_BASE_META_KEY, LEGACY_TYPED_HALF_LIFE } from '../store/open.js';
-import { moveHalfLives, recordedHalfLifeBase, type HalfLifeRows } from '../store/half-life.js';
+import { deriveHalfLife, LEGACY_TYPED_HALF_LIFE, type MemoryEntry } from '../core/memory.js';
+import type { HalfLifeRows } from '../store/half-life.js';
+import type { Consolidation } from '../store/port.js';
 
 const TYPED_SOURCES: ReadonlySet<string> = new Set([
   'decision',
@@ -17,8 +17,6 @@ const TYPED_SOURCES: ReadonlySet<string> = new Set([
   'project_brief',
   'customer_note',
 ]);
-
-export { HALF_LIFE_BASE_META_KEY, LEGACY_TYPED_HALF_LIFE };
 
 /** What {@link migrateDefaultHalfLife} did, or would do under `dryRun`. */
 export interface HalfLifeMigrationResult {
@@ -67,8 +65,8 @@ export function planTypedHalfLifeMigration(entries: readonly MemoryEntry[], to: 
 }
 
 /** The base this store's memories are on. */
-export function storeHalfLifeBase(hippoRoot: string): number {
-  return recordedHalfLifeBase(hippoRoot);
+export function storeHalfLifeBase(store: Consolidation): number {
+  return store.halfLifeBase();
 }
 
 /**
@@ -76,12 +74,12 @@ export function storeHalfLifeBase(hippoRoot: string): number {
  * `dryRun` writes nothing.
  */
 export function migrateDefaultHalfLife(
-  hippoRoot: string,
+  store: Consolidation,
   to: number,
   opts: { dryRun?: boolean; actor?: string } = {},
 ): HalfLifeMigrationResult {
   const dryRun = opts.dryRun ?? false;
-  const { from, outcome } = moveHalfLives(hippoRoot, to, { dryRun, actor: opts.actor ?? 'system' }, (rows) => {
+  const { from, outcome } = store.moveHalfLives(to, { dryRun, actor: opts.actor ?? 'system' }, (rows) => {
     const { basePlan, typedPlan } = planMoves(rows, to);
     const plan = [...basePlan, ...typedPlan];
     return {

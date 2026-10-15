@@ -155,7 +155,7 @@ export function listTouchableConflicts(
   });
 }
 
-type DetectedConflict = { memory_a_id: string; memory_b_id: string; reason: string; score: number };
+export type DetectedConflict = { memory_a_id: string; memory_b_id: string; reason: string; score: number };
 type SameTenant = (a: string, b: string) => boolean;
 
 export function replaceDetectedConflicts(

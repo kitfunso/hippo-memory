@@ -1,11 +1,10 @@
 import { isRecallBoostAblated, strengthAblation } from '../core/ablation.js';
 import { MemoryEntry, Layer, createMemory, markRetrieved } from '../core/memory.js';
-import { findPromotableSessions, traceExistsForSession, listSessionEvents } from '../store/sessions.js';
-import { rejectionDigest } from '../store/rejection.js';
+import { rejectionDigest } from '../core/rejection-digest.js';
+import type { SessionEvent } from '../store/rows.js';
 import { sampleForReplay } from './replay.js';
 import { renderTraceContent } from './trace.js';
-import { resolveTenantId } from '../store/tenant.js';
-import { reportAuditWriteFailure } from '../store/audit.js';
+import { envTenant } from '../util/env.js';
 import { commonDerivationScope } from '../core/recall-scope.js';
 import { log } from '../util/log.js';
 import { REPLAY_COUNT_DEFAULT, type SleepRun } from './run.js';
@@ -23,8 +22,8 @@ export function promoteSessionTraces(run: SleepRun): void {
   const sinceMs = run.now.getTime() - windowDays * DAY_MS;
   // Auto-trace runs single-tenant (the env-resolved tenant); consolidating
   // every tenant needs a per-tenant loop layered on top of this.
-  const consolidationTenant = resolveTenantId({});
-  const promotable = findPromotableSessions(run.hippoRoot, consolidationTenant, sinceMs);
+  const consolidationTenant = envTenant();
+  const promotable = run.store.promotableSessions(consolidationTenant, sinceMs);
 
   for (const session of promotable) {
     const built = sessionTrace(run, consolidationTenant, session.session_id);
@@ -65,9 +64,9 @@ function sessionTrace(
   sessionId: string,
 ): { trace: MemoryEntry; outcome: TraceOutcome } | null {
   // Idempotency: skip if a trace for this session already exists.
-  if (traceExistsForSession(run.hippoRoot, consolidationTenant, sessionId)) return null;
+  if (run.store.traceExists(consolidationTenant, sessionId)) return null;
 
-  const events = listSessionEvents(run.hippoRoot, consolidationTenant, {
+  const events = run.store.sessionEvents(consolidationTenant, {
     session_id: sessionId,
     limit: 1000,
   });
@@ -108,7 +107,7 @@ function sessionTrace(
 
 /** The outcome and title a session's terminal event carries, or null when it has none or the event is malformed. */
 function sessionEnding(
-  events: ReturnType<typeof listSessionEvents>,
+  events: readonly SessionEvent[],
 ): { outcome: TraceOutcome; summary: string } | null {
   const completeEvent = events.find((e) => e.event_type === 'session_complete');
   if (!completeEvent) return null; // defence-in-depth; findPromotableSessions filters already.
@@ -133,20 +132,16 @@ function traceRejected(run: SleepRun, trace: MemoryEntry, sessionId: string): bo
   const traceDigest = rejectionDigest(trace.content);
   const tombstone = run.tombstones.find(trace.tenant_id, traceDigest);
   if (!tombstone) return false;
-  try {
-    run.tombstones.audit({
-      tenantId: trace.tenant_id,
-      actor: 'sleep',
-      op: 'reject_refusal',
-      metadata: {
-        digest: traceDigest,
-        reason: tombstone.reason,
-        sourceSessionId: sessionId,
-      },
-    });
-  } catch (error) {
-    reportAuditWriteFailure('reject_refusal', String(error));
-  }
+  run.tombstones.auditOrCount({
+    tenantId: trace.tenant_id,
+    actor: 'sleep',
+    op: 'reject_refusal',
+    metadata: {
+      digest: traceDigest,
+      reason: tombstone.reason,
+      sourceSessionId: sessionId,
+    },
+  });
   return true;
 }
 

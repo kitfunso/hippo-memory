@@ -391,6 +391,10 @@ export function resolveConfidence(entry: MemoryEntry, now: Date = evalNow()): Co
  *  `hippo sleep` moves memories still on an older base (src/consolidate/half-life-migration.ts). */
 export const DEFAULT_HALF_LIFE_DAYS = 365;
 
+/** The flat half-life the decision, incident and other object writers gave their memories before they took the
+ * default. */
+export const LEGACY_TYPED_HALF_LIFE = 90;
+
 export const COMPACTION_MEMORY_TAG = 'compaction-memory';
 export const COMPACTION_SOURCE_PREFIX = 'compaction:';
 

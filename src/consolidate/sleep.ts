@@ -4,17 +4,13 @@
  */
 
 import { evalNow, strengthAblation } from '../core/ablation.js';
-import { MemoryEntry, canAutoDelete, type DecayOptions } from '../core/memory.js';
-import { loadAllEntriesWithBase } from '../store/entry-reads.js';
-import { commitInChunks, memoriesBackingObjects, type LoadedRows } from '../store/delete-and-batch.js';
-import { appendConsolidationRun, loadSessionDecayContext, incrementSleepCount } from '../store/index-and-stats.js';
-import { replaceDetectedConflicts } from '../store/conflicts.js';
-import { SLEEP_DB_WAIT_MS } from '../db/index.js';
-import { expireDormantBefore } from '../store/dormant.js';
+import { MemoryEntry, canAutoDelete, LEGACY_TYPED_HALF_LIFE, type DecayOptions } from '../core/memory.js';
+import type { LoadedRows } from '../store/delete-and-batch.js';
+import type { AppendAuditOpts } from '../store/audit.js';
+import type { Consolidation, LocalFiles } from '../store/port.js';
+import { sqliteSyncStore } from '../store/sqlite/store.js';
 import { loadConfig } from '../core/config.js';
-import { type AppendAuditOpts, recordAuditEventsRowByRow, reportAuditWriteFailure } from '../store/audit.js';
-import { lazyTombstoneChecks } from '../store/tombstone-checks.js';
-import { migrateDefaultHalfLife, LEGACY_TYPED_HALF_LIFE } from './half-life-migration.js';
+import { migrateDefaultHalfLife } from './half-life-migration.js';
 import { errorFields, errorMessage, log } from '../util/log.js';
 import { WRITE_BUDGET, type WriteBudget } from '../util/write-budget.js';
 import { type DecayOutcome, decayPass } from './decay.js';
@@ -27,33 +23,41 @@ import { llmPasses } from './llm-passes.js';
 import { physicsPass } from './physics-pass.js';
 import { DAY_MS } from '../util/time.js';
 
+type ConsolidateOptions = { dryRun?: boolean; now?: Date; fetcher?: typeof fetch; budget?: WriteBudget };
+
 /**
- * Run a full consolidation pass.
+ * Run a full consolidation pass on the hippo.db under `hippoRoot`.
  */
-export async function consolidate(
-  hippoRoot: string,
-  options: { dryRun?: boolean; now?: Date; fetcher?: typeof fetch; budget?: WriteBudget } = {}
+export async function consolidate(hippoRoot: string, options: ConsolidateOptions = {}): Promise<ConsolidationResult> {
+  return runConsolidation(sqliteSyncStore(hippoRoot).localFiles, options);
+}
+
+/** A full consolidation pass whose store work goes through `local.consolidation`. */
+export async function runConsolidation(
+  local: LocalFiles,
+  options: ConsolidateOptions = {},
 ): Promise<ConsolidationResult> {
+  const { hippoRoot, consolidation: store } = local;
   const now = options.now ?? evalNow(); // honors HIPPO_FAKE_NOW (eval-only; see ablation.ts)
   const dryRun = options.dryRun ?? false;
   const result = newConsolidationResult(dryRun);
-  const halfLife = migrateHalfLives(hippoRoot, dryRun, result);
-  syncFtsIndex(hippoRoot, dryRun, result);
+  const halfLife = migrateHalfLives(local, dryRun, result);
+  syncFtsIndex(store, dryRun, result);
 
   // Host-wide by design: per-tenant filtering would mean N runs per host and no cross-tenant dedup.
   // The api.sleep audit row tags this with the admin synthetic actor.
-  const { entries: all, base: snapshot } = loadAllEntriesWithBase(hippoRoot);
+  const { entries: all, base: snapshot } = store.entriesWithBase();
   if (dryRun) for (const e of all) e.half_life_days = halfLife.halfLives.get(e.id) ?? e.half_life_days;
-  const backingObjects = memoriesBackingObjects(hippoRoot);
+  const backingObjects = store.objectBackedIds();
   // Retirable: auto-deletable (never pinned, raw or kept for good) and not backing a first-class object.
   const retirable = (entry: MemoryEntry): boolean => canAutoDelete(entry) && !backingObjects.has(entry.id);
 
   const config = loadConfig(hippoRoot);
-  const decayOpts = sessionDecayOptions(hippoRoot, config);
+  const decayOpts = sessionDecayOptions(store, config);
 
   const run: SleepRun = {
-    hippoRoot, now, dryRun, config, decayOpts, result, all, retirable,
-    tombstones: lazyTombstoneChecks(hippoRoot, dryRun),
+    hippoRoot, store, now, dryRun, config, decayOpts, result, all, retirable,
+    tombstones: store.tombstoneChecks(dryRun),
     survivors: [],
     // Collect all writes/deletes and batch them at the end
     pendingWrites: [],
@@ -73,8 +77,8 @@ export async function consolidate(
 }
 
 // Load decay options from config + session context
-function sessionDecayOptions(hippoRoot: string, config: SleepRun['config']): DecayOptions {
-  const sessionCtx = loadSessionDecayContext(hippoRoot);
+function sessionDecayOptions(store: Consolidation, config: SleepRun['config']): DecayOptions {
+  const sessionCtx = store.sessionDecayContext();
   return {
     decayBasis: config.decayBasis,
     avgSessionIntervalDays: sessionCtx.avgSessionIntervalDays,
@@ -107,11 +111,12 @@ async function runPassesAfterDecay(run: SleepRun, fetcher: typeof fetch | undefi
 // A changed default half-life moves memories still on the old base first,
 // so this pass decays them at the new one (src/consolidate/half-life-migration.ts).
 function migrateHalfLives(
-  hippoRoot: string,
+  local: LocalFiles,
   dryRun: boolean,
   result: ConsolidationResult,
 ): ReturnType<typeof migrateDefaultHalfLife> {
-  const halfLife = migrateDefaultHalfLife(hippoRoot, loadConfig(hippoRoot).defaultHalfLifeDays, { dryRun });
+  const to = loadConfig(local.hippoRoot).defaultHalfLifeDays;
+  const halfLife = migrateDefaultHalfLife(local.consolidation, to, { dryRun });
   if (halfLife.rescaled > 0) {
     result.details.push(
       `  ⏳ ${dryRun ? 'would move' : 'moved'} ${halfLife.rescaled} memories from the ${halfLife.from}-day to the ` +
@@ -133,11 +138,8 @@ async function flushPending(run: SleepRun, snapshot: LoadedRows, budget: WriteBu
   if (run.dryRun) return;
   const units = [...run.units, ...familyUnits(pendingWrites, pendingDeletes, pendingDormant, snapshot)];
   const components = groupFlush(pendingWrites, pendingDeletes, pendingDormant, units);
-  // The snapshot keeps what the DAG passes and other writers changed while sleep ran; the wait is sleep's own, not a
-  // server request's 250 ms.
-  const left = new Set(
-    await commitInChunks(run.hippoRoot, components, { snapshot, budget, busyWaitMs: SLEEP_DB_WAIT_MS }),
-  );
+  // The snapshot keeps what the DAG passes and other writers changed while sleep ran.
+  const left = new Set(await run.store.commitFlush(components, { snapshot, budget }));
   for (const id of [...pendingDeletes, ...pendingDormant.map((m) => m.entry.id)]) {
     if (!left.has(id)) result.details.push(`  ↩  ${id} not removed: pinned or already gone before sleep saved`);
   }
@@ -153,11 +155,7 @@ async function expireDormant(run: SleepRun, budget: WriteBudget): Promise<void> 
   const { config, result, dryRun } = run;
   if (!(config.dormant.retentionDays > 0)) return;
   const cutoff = new Date(run.now.getTime() - config.dormant.retentionDays * DAY_MS).toISOString();
-  result.dormantExpired = await expireDormantBefore(run.hippoRoot, cutoff, {
-    dryRun,
-    budget,
-    busyWaitMs: SLEEP_DB_WAIT_MS,
-  });
+  result.dormantExpired = await run.store.expireDormant(cutoff, { dryRun, budget });
   if (result.dormantExpired > 0) {
     result.details.push(
       `  ⌛ ${dryRun ? 'would expire' : 'expired'} ${result.dormantExpired} dormant ` +
@@ -169,9 +167,9 @@ async function expireDormant(run: SleepRun, budget: WriteBudget): Promise<void> 
 
 // 4. Log run
 function logRun(run: SleepRun, decay: DecayOutcome): void {
-  const { hippoRoot, now, result } = run;
+  const { store, now, result } = run;
   const detectedConflicts = detectConflicts(run.survivors, now, run.decayOpts, decay.rescuedIds);
-  replaceDetectedConflicts(hippoRoot, detectedConflicts, now.toISOString());
+  store.replaceConflicts(detectedConflicts, now.toISOString());
 
   if (detectedConflicts.length > 0) {
     result.details.push(
@@ -179,13 +177,13 @@ function logRun(run: SleepRun, decay: DecayOutcome): void {
     );
   }
 
-  appendConsolidationRun(hippoRoot, {
+  store.recordRun({
     timestamp: now.toISOString(),
     decayed: result.decayed,
     merged: result.merged,
     removed: result.removed,
   });
-  incrementSleepCount(hippoRoot);
+  store.countSleep();
   if (decay.rescuedEntries.length > 0) auditRescues(run, decay);
 }
 
@@ -207,9 +205,7 @@ function auditRescues(run: SleepRun, { rescuedEntries, rankById }: DecayOutcome)
   };
   try {
     // Row by row: one failed audit write must not silently drop every remaining row.
-    const failed = recordAuditEventsRowByRow(run.hippoRoot, rescuedEntries.map(rescueEvent));
-    for (const { event, error } of failed) reportAuditWriteFailure('mv_rescue', String(error), event.targetId);
-    const auditFailures = failed.length;
+    const auditFailures = run.store.auditEachRow(rescuedEntries.map(rescueEvent));
     if (auditFailures > 0) {
       result.details.push(
         `  ⚠️ memory-value: ${auditFailures} mv_rescue audit row${auditFailures === 1 ? '' : 's'} ` +

@@ -17,6 +17,7 @@ import { servedReports, sqliteReports } from './reports-group.js';
 import { servedSessions, sqliteSessions } from './sessions-group.js';
 import { servedConnectorEvents, sqliteConnectorEvents } from './connector-events-group.js';
 import { servedConnectorWrites, sqliteConnectorWrites } from './connector-writes-group.js';
+import { sqliteConsolidation } from './consolidation-group.js';
 import { sqliteDagReads } from './dag-reads-group.js';
 import { sqliteEntryWrites } from './entry-writes-group.js';
 import {
@@ -67,14 +68,17 @@ type AsyncOnly = 'vectors';
 
 /** The port as hippo.db answers it: each call runs to its end
  * and returns the value, so no write scope spans an await. */
-export type SqliteSyncStore = Sync<Omit<HippoStore, AsyncOnly>>;
+// LocalFiles is written synchronous already, and Sync would erase its plain methods.
+export type SqliteSyncStore = Sync<Omit<HippoStore, AsyncOnly | 'localFiles'>> & Pick<HippoStore, 'localFiles'>;
 
 /** The built-in store: hippo.db under the port's own method names, each call on its own short-lived handles, so close
  * has nothing to release. */
-export function sqliteSyncStore(hippoRoot: string): SqliteSyncStore & Sync<Omit<StoreGroups, AsyncOnly>> {
+export function sqliteSyncStore(
+  hippoRoot: string,
+): SqliteSyncStore & Sync<Omit<StoreGroups, AsyncOnly | 'localFiles'>> & Pick<StoreGroups, 'localFiles'> {
   return {
     kind: 'sqlite',
-    localFiles: { hippoRoot },
+    localFiles: { hippoRoot, consolidation: sqliteConsolidation(hippoRoot) },
     ...sqliteBaseReads(hippoRoot),
     ...sqliteRecallWrites(hippoRoot),
     keyAudit: sqliteKeyAudit(hippoRoot),

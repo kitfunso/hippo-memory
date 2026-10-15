@@ -1,10 +1,12 @@
 import { type ContextWith, adminActor } from '../api/index.js';
 import { ledgerReachOf, type LedgerReach } from '../api/ledger-db.js';
 import { loadConfig } from '../core/config.js';
-import { consolidate } from '../consolidate/sleep.js';
+import { runConsolidation } from '../consolidate/sleep.js';
 import type { McpHost } from '../mcp/protocol.js';
 import type { HippoStore, StoreGroup, StoreGroups } from '../store/index.js';
-import { runDetachedSqliteRequest, runSqliteRequest, sqliteReach, sqliteStore } from '../store/sqlite/store.js';
+import {
+  runDetachedSqliteRequest, runSqliteRequest, sqliteReach, sqliteStore, sqliteSyncStore,
+} from '../store/sqlite/store.js';
 
 /** The store the CLI and the stdio MCP server open; the adapter is named here so src/mcp never imports it. */
 function cliStore(hippoRoot: string): HippoStore & StoreGroups {
@@ -44,7 +46,8 @@ export const cliStdioHost: McpHost = {
       stdio: true,
       store,
       reach: sqliteReach(hippoRoot, store),
-      autoSleepRunner: (root) => runDetachedSqliteRequest(() => consolidate(root)).then(() => {}),
+      autoSleepRunner: (root) =>
+        runDetachedSqliteRequest(() => runConsolidation(sqliteSyncStore(root).localFiles)).then(() => {}),
     };
   },
   runRequest: cliRequest,

@@ -12,7 +12,7 @@ import { closeHippoDb, openHippoDb } from '../src/db/index.js';
 import { loadPhysicsState, savePhysicsState } from '../src/db/physics-state.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntriesTogether } from '../src/store/entry-writes.js';
-import { lazyTombstoneChecks } from '../src/store/tombstone-checks.js';
+import { sqliteSyncStore } from '../src/store/sqlite/store.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 
 const roots: string[] = [];
@@ -41,9 +41,10 @@ function storedParticles(root: string): Map<string, PhysicsParticle> {
 
 /** The state consolidate hands the physics pass after decay, with every entry a survivor and nothing pending. */
 function sleepRunOver(root: string, entries: MemoryEntry[]): SleepRun {
+  const store = sqliteSyncStore(root).localFiles.consolidation;
   return {
-    hippoRoot: root, now: new Date('2026-01-03T00:00:00.000Z'), dryRun: false, config: loadConfig(root), decayOpts: {},
-    result: newConsolidationResult(false), all: entries, retirable: () => false, tombstones: lazyTombstoneChecks(root, false),
+    hippoRoot: root, store, now: new Date('2026-01-03T00:00:00.000Z'), dryRun: false, config: loadConfig(root), decayOpts: {},
+    result: newConsolidationResult(false), all: entries, retirable: () => false, tombstones: store.tombstoneChecks(false),
     survivors: entries, pendingWrites: [], pendingDeletes: [], pendingDormant: [], units: [],
   };
 }
