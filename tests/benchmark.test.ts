@@ -1,5 +1,6 @@
 /**
  * Retrieval Quality Benchmark for Hippo.
+ * Measures quality, not speed: the CI step "Perf regression gate" is the performance gate.
  *
  * Seeds 50+ real memories from MEMORY.md (lessons learned in production)
  * and validates that natural-language queries surface the right memories.

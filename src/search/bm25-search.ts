@@ -22,6 +22,20 @@ export interface SearchOptions {
   asOf?: string;
 }
 
+type Corpus = ReturnType<typeof buildCorpus>;
+
+// Keyed on the caller's array so multihop's two passes share one build;
+// the pool identity check keeps a mutated array honest.
+const corpusCache = new WeakMap<MemoryEntry[], { pool: MemoryEntry[]; corpus: Corpus }>();
+
+function corpusFor(entries: MemoryEntry[], pool: MemoryEntry[]): Corpus {
+  const hit = corpusCache.get(entries);
+  if (hit && hit.pool.length === pool.length && hit.pool.every((e, i) => e === pool[i])) return hit.corpus;
+  const corpus = buildCorpus(pool.map(entryText));
+  corpusCache.set(entries, { pool: pool.slice(), corpus });
+  return corpus;
+}
+
 /**
  * Synchronous BM25 search: relevance * strength * recency and the rank boosts, without embeddings or the outcome nudge.
  */
@@ -32,7 +46,7 @@ export function search(query: string, entries: MemoryEntry[], options: SearchOpt
   const queryTerms = tokenize(query);
   if (queryTerms.length === 0) return [];
 
-  const corpus = buildCorpus(pool.map(entryText));
+  const corpus = corpusFor(entries, pool);
   const ctx: BoostContext = {
     now,
     pathTags: extractPathTags(process.cwd()),

@@ -95,7 +95,7 @@ jobs:
       # Tests are type-checked so a wrong-shaped call cannot pass.
       - run: npm run typecheck:tests
       - run: node scripts/check-openclaw-dist.mjs
-      - name: Request-path timing at 10k memories
+      - name: Perf regression gate
         run: node scripts/check-request-path-timing.mjs
       # Small N keeps it near 30 s; the 10k-memory ROADMAP gate (benchmarks/a1/p99-recall.ts defaults) stays a manual run.
       # Written to the job summary and never gated: a runner stall moves p99 with no code change. The step above gates the same request on statements, rows and store opens.

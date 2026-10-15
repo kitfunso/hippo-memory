@@ -120,11 +120,19 @@ export function saveStoredVectors(
   });
 }
 
-/** Drops the vectors of deleted memories under `hippoRoot`, then returns the ids that still have one. */
-export function pruneStoredVectors(hippoRoot: string): Set<string> {
+/** Drops the vectors of deleted memories under `hippoRoot`, then returns the ids with no vector, oldest first. */
+export function pruneStoredVectorsListPending(hippoRoot: string): string[] {
   return onHandle(hippoRoot, (db) => {
     deleteOrphanVectors(db);
-    return storedVectorIds(db);
+    // SAFETY: the SELECT names exactly the one column read.
+    const rows = db
+      .prepare(
+        `SELECT id FROM memories
+         WHERE NOT EXISTS (SELECT 1 FROM memory_vectors v WHERE v.memory_id = memories.id)
+         ORDER BY created ASC, id ASC`,
+      )
+      .all() as Array<{ id: string }>;
+    return rows.map((r) => r.id);
   });
 }
 

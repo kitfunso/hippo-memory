@@ -27,7 +27,7 @@ import {
 } from '../store/port.js';
 import {
   indexedModel,
-  pruneStoredVectors,
+  pruneStoredVectorsListPending,
   replacesIndex,
   resetStoredParticles,
   saveEmbeddingIndex,
@@ -490,8 +490,7 @@ export async function embedAll(
     // Host-wide by design: embedAll backfills all tenants'
     // entries into the per-host index; per-tenant filtering
     // would produce partial indices and break recall.
-    const embedded = pruneStoredVectors(hippoRoot);
-    const pending = loadAllEntryIds(hippoRoot).filter((id) => !embedded.has(id));
+    const pending = pruneStoredVectorsListPending(hippoRoot);
     const { count, backfillError } = await backfillPending(
       hippoRoot,
       provider,

@@ -484,6 +484,13 @@ describe('deduplicateLesson', () => {
     const isDup = deduplicateLesson(tmpDir, unrelated);
     expect(isDup).toBe(false);
   });
+
+  it('matches the full-scan answer for a lesson with SQL wildcard characters and an unrelated row', () => {
+    writeEntry(tmpDir, createMemory('retry_budget 100% spent on cache', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
+    writeEntry(tmpDir, createMemory('zzz qqq', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
+    expect(deduplicateLesson(tmpDir, 'retry_budget 100% spent on cache')).toBe(true);
+    expect(deduplicateLesson(tmpDir, 'retry%budget 100_ spent')).toBe(false);
+  });
 });
 
 // ---------------------------------------------------------------------------
