@@ -11,11 +11,12 @@
  * (`private-secret-marker-N` etc.) makes the no-scope denial check greppable.
  */
 
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
-import { remember, retrieve, type StoreContext } from '../src/api/index.js';
+import { remember, retrieve } from '../src/api/index.js';
 import { ingestEvent, type IngestEvent } from '../src/connectors/github/ingest.js';
 import type { IngestResult } from '../src/connectors/ingest.js';
 import { handleCommentDeleted } from '../src/connectors/github/deletion.js';
@@ -214,7 +215,7 @@ function buildDeliveryStream(): GeneratedDelivery[] {
   return out;
 }
 
-const ctxFor = (root: string, tenantId = 'default'): StoreContext => (apiCtx(root, tenantId, { subject: 'connector:github', role: 'admin' }));
+const ctxFor = (root: string, tenantId = 'default'): FullContext => (apiCtx(root, tenantId, { subject: 'connector:github', role: 'admin' }));
 
 function rawCount(root: string): number {
   const db = openHippoDb(root);

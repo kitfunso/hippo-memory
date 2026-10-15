@@ -11,6 +11,7 @@
  * Admins (tenant owners, the local CLI, loopback without a key) keep full
  * access. Real HTTP server on port 0, real SQLite, no mocks.
  */
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
@@ -174,8 +175,8 @@ describe('member-key boundaries in the api layer (every surface goes through it)
     rmSync(home, { recursive: true, force: true });
   });
 
-  const memberCtx = (): api.StoreContext => (apiCtx(home, 'default', { subject: 'api_key:m', role: 'member' }));
-  const adminCtx = (): api.StoreContext => (apiCtx(home, 'default', { subject: 'cli', role: 'admin' }));
+  const memberCtx = (): FullContext => (apiCtx(home, 'default', { subject: 'api_key:m', role: 'member' }));
+  const adminCtx = (): FullContext => (apiCtx(home, 'default', { subject: 'cli', role: 'admin' }));
 
   it('key management refuses a member actor', async () => {
     await expect(api.authCreate(memberCtx(), { role: 'admin' })).rejects.toThrow(api.ForbiddenError);

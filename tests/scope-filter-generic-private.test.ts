@@ -18,11 +18,11 @@
  * not just to slack/github by coincidence of test fixture choice.
  */
 
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { saveActiveTaskSnapshot } from '../src/store/sessions.js';
-import type { StoreContext } from '../src/api/index.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { retrieve } from '../src/api/index.js';
 import { handleMcpRequest, type McpResponse } from '../src/mcp/server.js';
@@ -33,7 +33,7 @@ import { apiCtx } from './_helpers/api-ctx.js';
 // A hippo_context call with no query asks git for the recent work of the checkout, in child processes.
 vi.setConfig({ testTimeout: 30_000 });
 
-function ctx(home: string): StoreContext {
+function ctx(home: string): FullContext {
   return apiCtx(home, 'default', { subject: 'test', role: 'admin' });
 }
 

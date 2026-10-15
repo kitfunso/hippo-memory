@@ -1,10 +1,11 @@
 // Every automatic delete (sleep's dedupe, audit and consolidation flush, and the automatic deleteEntry that `hippo audit --fix`
 // also calls) leaves a memory that backs a decision, incident or other object in place: deleting it would null the object's link.
+import type { FullContext } from './_helpers/api-ctx.js';
 import { afterEach, describe, expect, it } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { sleep, type StoreContext } from '../src/api/index.js';
+import { sleep } from '../src/api/index.js';
 import { auditMemories } from '../src/core/memory-audit.js';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
 import { saveDecision } from '../src/objects/decisions.js';
@@ -32,7 +33,7 @@ afterEach(() => {
   for (const r of roots.splice(0)) rmSync(r, { recursive: true, force: true });
 });
 
-const ctxFor = (hippoRoot: string): StoreContext => (apiCtx(hippoRoot, 'default', { subject: 'object-memories-test', role: 'admin' }));
+const ctxFor = (hippoRoot: string): FullContext => (apiCtx(hippoRoot, 'default', { subject: 'object-memories-test', role: 'admin' }));
 
 function run(root: string, sql: string, ...params: string[]): void {
   const db = openHippoDb(root);

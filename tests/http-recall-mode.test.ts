@@ -1,6 +1,7 @@
 // GET /v1/memories ignored `mode` and never strengthened what it returned,
 // so HTTP callers got a flat BM25 band and their memories decayed as if unread.
 
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -12,7 +13,7 @@ import { loadEntriesByIds } from '../src/store/entry-reads.js';
 import { loadIndex } from '../src/store/index-and-stats.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { __resetSessionRecallHistoryHttp } from '../src/entry/testing.js';
-import { retrieve, supersede, type StoreContext } from '../src/api/index.js';
+import { retrieve, supersede } from '../src/api/index.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 
 let home: string;
@@ -63,7 +64,7 @@ describe('GET /v1/memories honours mode and strengthens', () => {
   });
 
   it.each(['bm25', 'hybrid'])('mode=%s and api.recall never return a superseded row', async (mode) => {
-    const ctx: StoreContext = apiCtx(home, 'default', { subject: 'test', role: 'admin' });
+    const ctx: FullContext = apiCtx(home, 'default', { subject: 'test', role: 'admin' });
     const { newId } = await supersede(ctx, weakId, 'alpha epsilon zeta');
     const ids = await recallIds(`q=alpha&mode=${mode}`);
     expect(ids).toContain(newId);

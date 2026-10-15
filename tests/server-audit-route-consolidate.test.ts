@@ -14,9 +14,10 @@
  * Real HTTP server (serve port:0), per-test isolated local + global stores.
  */
 
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
-import { remember, sleep, outcome, type StoreContext } from '../src/api/index.js';
+import { remember, sleep, outcome } from '../src/api/index.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { apiCtx } from './_helpers/api-ctx.js';
@@ -48,7 +49,7 @@ describe('GET /v1/audit?op=<op> — consolidate + outcome wiring', () => {
 
   it('round-trips a consolidate row written by api.sleep', async () => {
     // Seed: write one row by invoking api.sleep, then query via HTTP.
-    const ctx: StoreContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
+    const ctx: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
     await remember(ctx, { content: 'seed-for-consolidate' });
     await sleep(ctx, { dryRun: true });
 
@@ -66,7 +67,7 @@ describe('GET /v1/audit?op=<op> — consolidate + outcome wiring', () => {
   });
 
   it('round-trips an outcome row (pre-existing drift the v1.11.5 Set update closes)', async () => {
-    const ctx: StoreContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
+    const ctx: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
     const m1 = await remember(ctx, { content: 'outcome-target' });
     await outcome(ctx, [m1.id], true);
 

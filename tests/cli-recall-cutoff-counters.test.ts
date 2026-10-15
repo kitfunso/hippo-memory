@@ -24,6 +24,7 @@
 // initStore + api.remember for seeding, execFileSync against dist/cli.js
 // for the recall itself (real DB, real CLI, project convention).
 
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, afterEach } from 'vitest';
 import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -33,13 +34,13 @@ import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { insertEntityAt, insertRelationAt } from './_helpers/graph-seed.js';
-import { remember, type StoreContext } from '../src/api/index.js';
+import { remember } from '../src/api/index.js';
 import { makeEnv, type TestEnv } from './_helpers/cli-env.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 
 const CLI = join(process.cwd(), 'dist', 'cli.js');
 
-function ctxFor(root: string): StoreContext {
+function ctxFor(root: string): FullContext {
   return apiCtx(root, 'default', { subject: 'c5-test', role: 'admin' });
 }
 

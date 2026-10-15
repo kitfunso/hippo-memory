@@ -1,4 +1,5 @@
 // promptHookContext answers a store-less laptop's per-prompt hook with the bytes the local hook would print.
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -8,7 +9,7 @@ import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { saveActiveTaskSnapshot } from '../src/store/sessions.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
-import { adminActor, type StoreContext } from '../src/api/index.js';
+import { adminActor } from '../src/api/index.js';
 import { BadRequestError } from '../src/core/api-errors.js';
 import { MAX_ID_LEN } from '../src/util/limits.js';
 import { hashArm } from '../src/store/pilot-arm.js';
@@ -60,7 +61,7 @@ function pin(store: string, content: string, origin: string): void {
   writeEntry(store, { ...createMemory(content), pinned: true, origin_project: origin });
 }
 
-const ctxFor = (store: string): StoreContext => (apiCtx(store, 'default', adminActor('prompt-hook-test')));
+const ctxFor = (store: string): FullContext => (apiCtx(store, 'default', adminActor('prompt-hook-test')));
 
 function ledger(store: string, where: string): LedgerRow[] {
   const db = openHippoDb(store);
@@ -154,7 +155,7 @@ describe('promptHookContext', () => {
 
   it('books the holdout arm row under the caller tenant, never the default one', async () => {
     const store = makeProject(path.join(tmp, 'p'), 10000);
-    const ctx: StoreContext = apiCtx(store, 't1', adminActor('prompt-hook-test'));
+    const ctx: FullContext = apiCtx(store, 't1', adminActor('prompt-hook-test'));
     expect(await promptHookContext(ctx, { sessionId: 'h-t1', project: PROJECT_P })).toEqual({ arm: 'holdout', ...NOTHING });
     expect(ledger(store, `event = 'arm'`).map((r) => [r.session_id, r.tenant_id])).toEqual([['h-t1', 't1']]);
   });
@@ -272,7 +273,7 @@ describe('promptHookContext', () => {
   it('books a caller arm row even when another tenant already holds that session id', async () => {
     const store = makeProject(path.join(tmp, 'p'), 10000);
     for (const tenantId of ['t-a', 't-b']) {
-      const ctx: StoreContext = apiCtx(store, tenantId, adminActor('prompt-hook-test'));
+      const ctx: FullContext = apiCtx(store, tenantId, adminActor('prompt-hook-test'));
       expect((await promptHookContext(ctx, { sessionId: 'same-id', project: PROJECT_P })).arm).toBe('holdout');
     }
     expect(ledger(store, `event = 'arm'`).map((r) => r.tenant_id)).toEqual(['t-a', 't-b']);
@@ -331,7 +332,7 @@ describe('promptHookContext on a shared store', () => {
     pin(store, 'PINNED: always check the rollback plan', 'p');
     saveActiveTaskSnapshot(store, 'default', { task: 'ship', summary: 'half done', next_step: 'run tests', session_id: 'owner' }, { owner: 'prompt-hook-test', project: ['p'] });
     expect((await ask(store, 'someone-else', false)).stdout).toContain('Active Task Snapshot');
-    const otherCtx: StoreContext = { ...ctxFor(store), actor: { subject: 'api_key:hk_other', role: 'member' } };
+    const otherCtx: FullContext = { ...ctxFor(store), actor: { subject: 'api_key:hk_other', role: 'member' } };
     const other = await promptHookContext(otherCtx, { sessionId: 'someone-else-shared', project: PROJECT_P }, SHARED);
     expect(other.stdout).toContain('rollback plan');
     expect(other.stdout).not.toContain('Active Task Snapshot');

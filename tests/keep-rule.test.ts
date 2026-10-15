@@ -1,5 +1,6 @@
 // An imported agent memory (a tool's tag and a source starting with that tool's prefix) is kept for good: never auto-deleted,
 // decayed away or made dormant. The tag alone is not enough, since merge copies source tags onto rows sourced 'consolidation'.
+import type { FullContext } from './_helpers/api-ctx.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -20,7 +21,7 @@ import { deduplicateStore } from '../src/consolidate/dedupe.js';
 import { auditMemory } from '../src/core/memory-audit.js';
 import { closeHippoDb, openHippoDb, withSharedStoreHandles } from '../src/db/index.js';
 import { NO_MERGE_TAGS } from '../src/sharing/share.js';
-import { forget, listDormant, sleep, supersede, type StoreContext } from '../src/api/index.js';
+import { forget, listDormant, sleep, supersede } from '../src/api/index.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 
 // Each case commits rows to a real store, so its time follows the runner's disk.
@@ -45,7 +46,7 @@ function newRoot(configJson?: string): string {
   return root;
 }
 
-const ctxFor = (hippoRoot: string): StoreContext => (apiCtx(hippoRoot, 'default', { subject: 'keep-rule-test', role: 'admin' }));
+const ctxFor = (hippoRoot: string): FullContext => (apiCtx(hippoRoot, 'default', { subject: 'keep-rule-test', role: 'admin' }));
 const sixtyDaysOn = (): Date => new Date(Date.now() + 60 * DAY);
 const keptRow = (content: string): MemoryEntry => createMemory7(content, { tags: [TAG], source: KEPT_SOURCE });
 const okFetcher = () => vi.fn<typeof fetch>(async () => new Response(JSON.stringify({ content: [{ text: '[]' }] }), { status: 200 }));

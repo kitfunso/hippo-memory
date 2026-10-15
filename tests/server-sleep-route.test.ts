@@ -17,9 +17,9 @@
  * Real HTTP server (serve port:0), per-test isolated local + global stores.
  */
 
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
-import type { StoreContext } from '../src/api/index.js';
 import { remember } from '../src/api/index.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
@@ -79,7 +79,7 @@ describe('POST /v1/sleep', () => {
   });
 
   it('dry_run=true previews dedup/audit and skips share/ambient', async () => {
-    const ctx: StoreContext = apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' });
+    const ctx: FullContext = apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' });
     await remember(ctx, { content: 'dry-run-canary' });
 
     const res = await fetch(`${handle.url}/v1/sleep`, {
@@ -103,7 +103,7 @@ describe('POST /v1/sleep', () => {
   });
 
   it('runs the full pipeline on a populated store', async () => {
-    const ctx: StoreContext = apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' });
+    const ctx: FullContext = apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' });
     for (let i = 0; i < 5; i++) {
       await remember(ctx, { content: `populate ${i} ${'x'.repeat(50)}` });
     }
@@ -120,7 +120,7 @@ describe('POST /v1/sleep', () => {
   });
 
   it('no_share=true keeps shared undefined', async () => {
-    const ctx: StoreContext = apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' });
+    const ctx: FullContext = apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' });
     await remember(ctx, { content: 'high-value would-trigger-share' });
 
     const res = await fetch(`${handle.url}/v1/sleep`, {
@@ -148,8 +148,8 @@ describe('POST /v1/sleep', () => {
     // Seed near-duplicate memories under two tenants. Run /v1/sleep (default
     // Bearer). Verify both tenants' rows are visible to dedupe (they share
     // hippoRoot).
-    const tenantA: StoreContext = apiCtx(home, 'tenant_a', { subject: 'localhost:cli', role: 'admin' });
-    const tenantB: StoreContext = apiCtx(home, 'tenant_b', { subject: 'localhost:cli', role: 'admin' });
+    const tenantA: FullContext = apiCtx(home, 'tenant_a', { subject: 'localhost:cli', role: 'admin' });
+    const tenantB: FullContext = apiCtx(home, 'tenant_b', { subject: 'localhost:cli', role: 'admin' });
     const dupContent = 'highly similar content x'.repeat(20);
     await remember(tenantA, { content: dupContent + ' tenant_a marker' });
     await remember(tenantB, { content: dupContent + ' tenant_b marker' });

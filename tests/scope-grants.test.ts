@@ -1,5 +1,6 @@
 /** Scope grants (ROADMAP Part VIII EI2): a member key reads a restricted scope
  *  only after an explicit grant. Real HTTP server, real SQLite, no mocks. */
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
@@ -97,7 +98,7 @@ describe('scope grants over HTTP', () => {
 
   it('a grant admits the named scope over HTTP and MCP, other restricted scopes stay denied, ungrant revokes it', async () => {
     const member = mintKey(home, 'member');
-    const adminCtx: api.StoreContext = apiCtx(home, 'default', api.adminActor('cli'));
+    const adminCtx: FullContext = apiCtx(home, 'default', api.adminActor('cli'));
 
     await api.authGrant(adminCtx, member.keyId, PRIVATE_SCOPE);
 
@@ -168,20 +169,20 @@ describe('authGrant / authUngrant validation (api layer)', () => {
 
   it('a member actor cannot grant', async () => {
     const member = mintKey(home, 'member');
-    const memberCtx: api.StoreContext = apiCtx(home, 'default', { subject: `api_key:${member.keyId}`, role: 'member' });
+    const memberCtx: FullContext = apiCtx(home, 'default', { subject: `api_key:${member.keyId}`, role: 'member' });
     await expect(api.authGrant(memberCtx, member.keyId, PRIVATE_SCOPE)).rejects.toThrow(api.ForbiddenError);
     await expect(api.authUngrant(memberCtx, member.keyId, PRIVATE_SCOPE)).rejects.toThrow(api.ForbiddenError);
   });
 
   it('rejects a key belonging to another tenant', async () => {
     const other = mintKey(home, 'member', 'other-tenant');
-    const adminCtx: api.StoreContext = apiCtx(home, 'default', api.adminActor('cli'));
+    const adminCtx: FullContext = apiCtx(home, 'default', api.adminActor('cli'));
     await expect(api.authGrant(adminCtx, other.keyId, PRIVATE_SCOPE)).rejects.toThrow(/Unknown key_id/);
   });
 
   it('rejects a grant on a revoked key', async () => {
     const member = mintKey(home, 'member');
-    const adminCtx: api.StoreContext = apiCtx(home, 'default', api.adminActor('cli'));
+    const adminCtx: FullContext = apiCtx(home, 'default', api.adminActor('cli'));
     await api.authRevoke(adminCtx, member.keyId);
     await expect(api.authGrant(adminCtx, member.keyId, PRIVATE_SCOPE)).rejects.toThrow(/revoked/);
   });
@@ -201,13 +202,13 @@ describe('authGrant / authUngrant validation (api layer)', () => {
 
   it('rejects an unrestricted scope', async () => {
     const member = mintKey(home, 'member');
-    const adminCtx: api.StoreContext = apiCtx(home, 'default', api.adminActor('cli'));
+    const adminCtx: FullContext = apiCtx(home, 'default', api.adminActor('cli'));
     await expect(api.authGrant(adminCtx, member.keyId, 'slack:public:general')).rejects.toThrow();
   });
 
   it('writes auth_grant / auth_ungrant audit rows', async () => {
     const member = mintKey(home, 'member');
-    const adminCtx: api.StoreContext = apiCtx(home, 'default', api.adminActor('cli'));
+    const adminCtx: FullContext = apiCtx(home, 'default', api.adminActor('cli'));
     await api.authGrant(adminCtx, member.keyId, PRIVATE_SCOPE);
     await api.authUngrant(adminCtx, member.keyId, PRIVATE_SCOPE);
 
@@ -219,7 +220,7 @@ describe('authGrant / authUngrant validation (api layer)', () => {
 
   it('grantScope is idempotent and the key record reflects it', async () => {
     const member = mintKey(home, 'member');
-    const adminCtx: api.StoreContext = apiCtx(home, 'default', api.adminActor('cli'));
+    const adminCtx: FullContext = apiCtx(home, 'default', api.adminActor('cli'));
     await api.authGrant(adminCtx, member.keyId, PRIVATE_SCOPE);
     await api.authGrant(adminCtx, member.keyId, PRIVATE_SCOPE);
     const db = openHippoDb(home);
@@ -245,7 +246,7 @@ describe('supersede keeps the old row\'s scope', () => {
   it('api.supersede: the successor of a private row stays in that scope', async () => {
     const old = createMemory(PRIVATE_TEXT, { layer: Layer.Episodic, scope: PRIVATE_SCOPE });
     writeEntry(home, old);
-    const ctx: api.StoreContext = apiCtx(home, 'default', api.adminActor('cli'));
+    const ctx: FullContext = apiCtx(home, 'default', api.adminActor('cli'));
     const result = await api.supersede(ctx, old.id, 'kowalski payroll rollout moved to friday');
     const successor = readEntry(home, result.newId, 'default');
     expect(successor?.scope).toBe(PRIVATE_SCOPE);

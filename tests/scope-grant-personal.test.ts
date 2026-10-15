@@ -1,4 +1,5 @@
 // No grant opens a personal scope: granting one is a 400, a grant row already stored opens nothing, and ungrant still clears it (F8).
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import * as api from '../src/api/index.js';
@@ -17,7 +18,7 @@ const A_TEXT = 'quartzlamp is the alias for my deploy script';
 let root: string;
 let handle: ServerHandle;
 let keyB: { plaintext: string; keyId: string };
-let adminCtx: api.StoreContext;
+let adminCtx: FullContext;
 
 function withDb<T>(fn: (db: ReturnType<typeof openHippoDb>) => T): T {
   const db = openHippoDb(root);

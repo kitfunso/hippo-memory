@@ -1,3 +1,4 @@
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -7,7 +8,7 @@ import { createRequire } from 'node:module';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
-import { remember, type StoreContext } from '../src/api/index.js';
+import { remember } from '../src/api/index.js';
 import { Layer } from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { openHippoDb, closeHippoDb, getCurrentSchemaVersion, getSchemaVersion, type DatabaseSyncLike } from '../src/db/index.js';
@@ -198,7 +199,7 @@ describe('Slack hardening + migration v19', () => {
 
   // The fast pre-check answers a replay; a second worker whose pre-check ran too early is caught by the event-log insert inside its own write.
   it('ingest race: duplicate event_id yields exactly one memory + skipped_duplicate via afterWrite throw', async () => {
-    const ctx: StoreContext = apiCtx(root, 'default', { subject: 'connector:slack', role: 'admin' });
+    const ctx: FullContext = apiCtx(root, 'default', { subject: 'connector:slack', role: 'admin' });
 
     // First call: ordinary ingest succeeds and writes to slack_event_log.
     const r1 = await ingestMessage(ctx, {

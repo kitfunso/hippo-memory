@@ -11,6 +11,7 @@
  *   - the quality audit, for any receipt shorter than 10 characters ("lgtm").
  * Real SQLite throughout, no mocks.
  */
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -47,7 +48,7 @@ function aged(entry: MemoryEntry, days: number): MemoryEntry {
   return { ...entry, created: then, last_retrieved: then };
 }
 
-function ctxFor(home: string): api.StoreContext {
+function ctxFor(home: string): FullContext {
   return apiCtx(home, 'default', { subject: 'test', role: 'admin' });
 }
 

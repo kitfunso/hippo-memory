@@ -18,10 +18,10 @@
  * Real HTTP server (serve port:0), per-test isolated local + global stores.
  */
 
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { loadIndex, saveIndex } from '../src/store/index-and-stats.js';
-import type { StoreContext } from '../src/api/index.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { queryAuditEvents } from '../src/store/audit.js';
 import { remember } from '../src/api/index.js';
@@ -62,7 +62,7 @@ describe('POST /v1/outcome', () => {
   });
 
   it('with ids returns applied:N (200)', async () => {
-    const ctx: StoreContext = apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' });
+    const ctx: FullContext = apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' });
     const m1 = await remember(ctx, { content: 'outcome-target-1' });
     const m2 = await remember(ctx, { content: 'outcome-target-2' });
 
@@ -77,7 +77,7 @@ describe('POST /v1/outcome', () => {
   });
 
   it('without ids uses last-recall (returns {applied, ids})', async () => {
-    const ctx: StoreContext = apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' });
+    const ctx: FullContext = apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' });
     const m1 = await remember(ctx, { content: 'last-recall-mem-1' });
     const m2 = await remember(ctx, { content: 'last-recall-mem-2' });
     const idx = loadIndex(home);
@@ -134,7 +134,7 @@ describe('POST /v1/outcome', () => {
   });
 
   it('emits one audit_log row per applied id (op=outcome)', async () => {
-    const ctx: StoreContext = apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' });
+    const ctx: FullContext = apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' });
     const m1 = await remember(ctx, { content: 'audit-trail-1' });
     const m2 = await remember(ctx, { content: 'audit-trail-2' });
 
@@ -161,7 +161,7 @@ describe('POST /v1/outcome', () => {
     // ctx.tenantId resolves to 'default' (the unauthenticated localhost
     // default). default cannot read tenant_b's memory -> readEntry returns
     // null -> applied stays 0, no audit row written.
-    const tenantBCtx: StoreContext = apiCtx(home, 'tenant_b', { subject: 'localhost:cli', role: 'admin' });
+    const tenantBCtx: FullContext = apiCtx(home, 'tenant_b', { subject: 'localhost:cli', role: 'admin' });
     const tenantBMem = await remember(tenantBCtx, { content: 'belongs-to-tenant-b' });
 
     const res = await fetch(`${handle.url}/v1/outcome`, {
@@ -195,7 +195,7 @@ describe('POST /v1/outcome', () => {
     // This route hit has no Bearer, so ctx.tenantId = 'default'. We seed
     // last_retrieval_ids with a tenant_b memory id and verify the
     // 'default' caller cannot see it.
-    const tenantBCtx: StoreContext = apiCtx(home, 'tenant_b', { subject: 'localhost:cli', role: 'admin' });
+    const tenantBCtx: FullContext = apiCtx(home, 'tenant_b', { subject: 'localhost:cli', role: 'admin' });
     const tenantBMem = await remember(tenantBCtx, { content: 'tenant-b-secret-id' });
     const idx = loadIndex(home);
     idx.last_retrieval_ids = [tenantBMem.id];
@@ -230,7 +230,7 @@ describe('POST /v1/outcome', () => {
   });
 
   it('1000 ids at boundary returns 200 (cap-exclusive)', async () => {
-    const ctx: StoreContext = apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' });
+    const ctx: FullContext = apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' });
     // Seed 3 real memories so applied > 0 confirms route ran.
     const m1 = await remember(ctx, { content: 'boundary-mem-1' });
     const m2 = await remember(ctx, { content: 'boundary-mem-2' });

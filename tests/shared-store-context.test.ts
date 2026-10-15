@@ -1,4 +1,5 @@
 // Context reads on a store flagged `"sharedStore": true` must name the caller's project, so no member sees another's rows.
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -6,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { adminActor, getContext, type StoreContext } from '../src/api/index.js';
+import { adminActor, getContext } from '../src/api/index.js';
 import { BadRequestError } from '../src/core/api-errors.js';
 import { _resetSharedStoreCacheForTests } from '../src/core/config.js';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
@@ -164,7 +165,7 @@ describe('context reads on a shared store', () => {
 
   it("getContext refuses a caller with no project", async () => {
     await start(true);
-    const ctx: StoreContext = apiCtx(home, 'default', adminActor('shared-ctx-test'));
+    const ctx: FullContext = apiCtx(home, 'default', adminActor('shared-ctx-test'));
     await expect(getContext(ctx, { currentProject: '' })).rejects.toBeInstanceOf(BadRequestError);
     await expect(getContext(ctx, { currentProject: { name: '  ', legacyName: '' } })).rejects.toBeInstanceOf(BadRequestError);
   });
@@ -202,7 +203,7 @@ describe('the prompt hook on a shared store', () => {
   const PILOT = { pilot: { holdoutRateBp: 10000 } };
 
   async function refusesBeforeTheArm(root: string, opts: { sharedStore?: true }): Promise<void> {
-    const ctx: StoreContext = apiCtx(root, 'default', adminActor('shared-ctx-test'));
+    const ctx: FullContext = apiCtx(root, 'default', adminActor('shared-ctx-test'));
     const names = ['', '  ', 'Acme/App'];
     for (const [i, name] of names.entries()) {
       await expect(promptHookContext(ctx, { sessionId: `s-${i}`, project: { name, legacyName: '' } }, opts)).rejects.toBeInstanceOf(BadRequestError);

@@ -5,18 +5,20 @@ import {
   type SavePredictionOpts,
 } from '../store/predictions.js';
 import { loadConfig } from '../core/config.js';
-import { requireGroup } from '../store/index.js';
 import type { PredictionClose, PredictionSave, Predictions } from '../store/port.js';
-import type { StoreContext } from './types.js';
+import type { ContextWith } from './types.js';
 
-const predictionsOf = (ctx: StoreContext): Predictions => requireGroup(ctx.store, 'predictions');
+const predictionsOf = (ctx: ContextWith<'predictions'>): Predictions => ctx.store.predictions;
 
-export async function savePrediction(ctx: StoreContext, input: PredictionSave): Promise<Prediction> {
+export async function savePrediction(ctx: ContextWith<'predictions'>, input: PredictionSave): Promise<Prediction> {
   return predictionsOf(ctx).savePrediction(ctx.tenantId, input, ctx.actor.subject);
 }
 
 /** A claim saved with its recall mirror, built under the store root's half-life as the HTTP create route builds it. */
-export async function recordPrediction(ctx: StoreContext, claim: SavePredictionOpts): Promise<Prediction> {
+export async function recordPrediction(
+  ctx: ContextWith<'predictions'>,
+  claim: SavePredictionOpts,
+): Promise<Prediction> {
   return savePrediction(ctx, {
     ...claim,
     mirror: predictionMirror(ctx.tenantId, claim, loadConfig(ctx.hippoRoot).defaultHalfLifeDays),
@@ -24,20 +26,27 @@ export async function recordPrediction(ctx: StoreContext, claim: SavePredictionO
 }
 
 export async function listPredictions(
-  ctx: StoreContext,
+  ctx: ContextWith<'predictions'>,
   query: Parameters<Predictions['listPredictions']>[1],
 ): Promise<Prediction[]> {
   return predictionsOf(ctx).listPredictions(ctx.tenantId, query);
 }
 
-export async function predictionBaserate(ctx: StoreContext, classTag: string): Promise<PredictionBaserate> {
+export async function predictionBaserate(
+  ctx: ContextWith<'predictions'>,
+  classTag: string,
+): Promise<PredictionBaserate> {
   return predictionsOf(ctx).predictionBaserate(ctx.tenantId, classTag, ctx.actor.subject);
 }
 
-export async function predictionById(ctx: StoreContext, id: number): Promise<Prediction | null> {
+export async function predictionById(ctx: ContextWith<'predictions'>, id: number): Promise<Prediction | null> {
   return predictionsOf(ctx).predictionById(ctx.tenantId, id);
 }
 
-export async function closePrediction(ctx: StoreContext, id: number, close: PredictionClose): Promise<Prediction> {
+export async function closePrediction(
+  ctx: ContextWith<'predictions'>,
+  id: number,
+  close: PredictionClose,
+): Promise<Prediction> {
   return predictionsOf(ctx).closePrediction(ctx.tenantId, id, close, ctx.actor.subject);
 }

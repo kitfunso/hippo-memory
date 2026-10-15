@@ -1,12 +1,13 @@
 // A rule the person states is pinned at capture, so the prompt hook injects it on a later prompt that shares none of its words.
 // Real SQLite stores in tmp dirs, no mocks.
+import type { FullContext } from './_helpers/api-ctx.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { cmdCapture } from '../src/capture/command.js';
 import { collectSessionTurns, type SessionTurn } from '../src/capture/transcript.js';
-import { getContext, type StoreContext } from '../src/api/index.js';
+import { getContext } from '../src/api/index.js';
 import { initStore } from '../src/store/open.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { apiCtx } from './_helpers/api-ctx.js';
@@ -19,7 +20,7 @@ const LATER_PROMPT = 'Fix formatCents in src/money.js so it rounds half up';
 describe('capture pins the rules a person states', () => {
   let scratch: string;
   let root: string;
-  let ctx: StoreContext;
+  let ctx: FullContext;
 
   const capture = (turns: SessionTurn[]) => cmdCapture(root, { source: 'last-session', sessionTurns: turns, dryRun: false, global: false });
   const injected = async () => (await getContext(ctx, { pinnedOnly: true, includeRecent: 5, currentProject: 'project', prompt: LATER_PROMPT }))

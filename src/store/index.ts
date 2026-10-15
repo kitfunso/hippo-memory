@@ -22,7 +22,6 @@ export type {
   SelfKeyMint,
   StoreGroup,
   StoreGroups,
-  StoreWith,
   SupersedeWrite,
   VectorBackfillQuery,
   VectorReads,
@@ -31,5 +30,6 @@ export type {
   VectorWriteResult,
   VectorWrites,
 } from './port.js';
-export { hasGroup, narrowStore, requireGroup } from './port.js';
+export { hasGroup, requireGroup } from './port.js';
+export { narrowStore, type StoreWith } from './narrow.js';
 export { sqliteStore } from './sqlite/store.js';

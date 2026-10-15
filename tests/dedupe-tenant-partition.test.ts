@@ -20,6 +20,7 @@
  * tests/dedupe-survivor-determinism.test.ts and tests/api-sleep.test.ts.
  */
 
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -27,7 +28,7 @@ import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
-import { remember, type StoreContext } from '../src/api/index.js';
+import { remember } from '../src/api/index.js';
 import { deduplicateStore, type DedupPair } from '../src/consolidate/dedupe.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 
@@ -40,7 +41,7 @@ function tmpHome(prefix: string) {
   };
 }
 
-function ctxFor(home: string, tenantId: string): StoreContext {
+function ctxFor(home: string, tenantId: string): FullContext {
   return apiCtx(home, tenantId, { subject: 'test', role: 'admin' });
 }
 

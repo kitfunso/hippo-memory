@@ -1,9 +1,9 @@
 // The GitHub rate-limit wait is bounded, a failed rollback cannot hide the original error, and four silent fallbacks now log.
+import type { FullContext } from './_helpers/api-ctx.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import type { StoreContext } from '../src/api/index.js';
 import { backfillRepo } from '../src/connectors/github/backfill.js';
 import type { GitHubFetcher } from '../src/connectors/github/octokit-client.js';
 import { closeHippoDb, openHippoDb, withReadSnapshot, withWriteScope, type DatabaseSyncLike } from '../src/db/index.js';
@@ -30,7 +30,7 @@ afterEach(() => {
 });
 
 describe('GitHub backfill rate-limit bound', () => {
-  const ctx = (): StoreContext => (apiCtx(root, 'default', { subject: 'connector:github', role: 'admin' }));
+  const ctx = (): FullContext => (apiCtx(root, 'default', { subject: 'connector:github', role: 'admin' }));
 
   it('stops after five attempts and names the reset time', async () => {
     let calls = 0;

@@ -1,10 +1,11 @@
 // ConnectorWrites answers alike on hippo.db and on a store held in memory: the same outcomes, the same errors, the same entries,
 // event log rows, quarantine records and audit rows, over two tenants. The last block holds hippo.db to all-or-nothing.
+import type { FullContext } from './_helpers/api-ctx.js';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cpSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { reject, type StoreContext } from '../src/api/index.js';
+import { reject } from '../src/api/index.js';
 import { closeHippoDb, openHippoDb, withSqliteBlocked } from '../src/db/index.js';
 import type { MemoryEntry } from '../src/core/memory.js';
 import type { AuditEvent } from '../src/entry/store-kit.js';
@@ -59,7 +60,7 @@ async function seed(dir: string): Promise<Seeded> {
     rawB: createMemory('globex raw ticket text', { tenantId: TENANT_B, kind: 'raw' }),
   };
   for (const entry of Object.values(rows)) writeEntry(dir, entry, { actor: 'cli' });
-  const ctx: StoreContext = apiCtx(dir, TENANT_A, { subject: 'cli', role: 'admin' });
+  const ctx: FullContext = apiCtx(dir, TENANT_A, { subject: 'cli', role: 'admin' });
   await reject(ctx, { value: BANNED, reason: 'wrong date' });
   markSlackEventSeen(dir, EMPTY_EVENT, null);
   return rows;

@@ -9,6 +9,7 @@
  * widened to L2+L3 with E4 deboost still firing.
  */
 
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -21,7 +22,7 @@ import {
   buildEntityProfiles,
   rebuildDirtySummaries,
 } from '../src/consolidate/dag.js';
-import { drillDown, type DrillDownOutcome, type DrillDownResult, type StoreContext } from '../src/api/index.js';
+import { drillDown, type DrillDownOutcome, type DrillDownResult } from '../src/api/index.js';
 import { hybridSearch } from '../src/search/hybrid.js';
 import { isDagSummary } from '../src/search/boosts.js';
 import { apiCtx } from './_helpers/api-ctx.js';
@@ -87,7 +88,7 @@ function assertDrillDownSucceeded(outcome: DrillDownOutcome): asserts outcome is
   expect('failure' in outcome).toBe(false);
 }
 
-function defaultCtx(hippoRoot: string, tenantId: string = 'default'): StoreContext {
+function defaultCtx(hippoRoot: string, tenantId: string = 'default'): FullContext {
   return apiCtx(hippoRoot, tenantId, { subject: 'test:e5', role: 'admin' });
 }
 

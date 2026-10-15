@@ -4,6 +4,7 @@
  * Real-DB per project convention for the store-level tests.
  */
 
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -16,7 +17,7 @@ import { createMemory } from './_helpers/default-half-life-memory.js';
 import { shareMemory, autoShare } from '../src/sharing/share.js';
 import { syncGlobalToLocal } from '../src/sharing/global-sync.js';
 import { promoteToGlobal, getGlobalRoot } from '../src/sharing/global-store.js';
-import { getContext, type StoreContext } from '../src/api/index.js';
+import { getContext } from '../src/api/index.js';
 import { clearProjectIdentityCache } from '../src/core/project-identity.js';
 import { ASSIGNED_SECRET_LINES, ORDINARY_CONFIG_LINES } from './_helpers/secret-shapes.js';
 import { fastestRatio, type TimedRun } from './_helpers/fastest-ratio.js';
@@ -285,7 +286,7 @@ describe('producer + sync vetoes (real stores)', () => {
   it('ambient context never injects a secret outside its owning project, even cross-project or with isolation off', async () => {
     writeEntry(globalStore, { ...createMemory(SECRET_ROW, { pinned: true }), origin_project: 'proj-b' });
     writeEntry(globalStore, { ...createMemory('a user-global secret sk_vendor_cafe0123456', { pinned: true }), origin_project: '' });
-    const ctx: StoreContext = apiCtx(projA, 'default', { subject: 'cli', role: 'admin' });
+    const ctx: FullContext = apiCtx(projA, 'default', { subject: 'cli', role: 'admin' });
 
     const base = await getContext(ctx, { pinnedOnly: true, currentProject: 'proj-a' });
     expect(base.entries).toHaveLength(0);

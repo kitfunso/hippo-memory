@@ -1,10 +1,11 @@
 // Scratch homes, projects and stores for the agent memory sync tests; nothing here reads the real home.
+import type { FullContext } from './api-ctx.js';
 import { createHash } from 'node:crypto';
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { adminActor, type StoreContext } from '../../src/api/index.js';
+import { adminActor } from '../../src/api/index.js';
 import { claudeFolderName } from '../../src/agent-memories/claude-code.js';
 import { emptyTally, totalTally, type ImportReport, type Tally } from '../../src/agent-memories/report.js';
 import type { Machine } from '../../src/agent-memories/sync.js';
@@ -111,7 +112,7 @@ export const toolTally = (report: ImportReport, tool: ToolId): Tally => report.t
 
 export const tally = (report: ImportReport): Tally => totalTally(report);
 
-export const ctxFor = (root: string): StoreContext => (apiCtx(root, 'default', adminActor('test')));
+export const ctxFor = (root: string): FullContext => (apiCtx(root, 'default', adminActor('test')));
 
 export const sha = (text: string): string => createHash('sha256').update(text, 'utf8').digest('hex');
 

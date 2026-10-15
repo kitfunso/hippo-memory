@@ -1,3 +1,4 @@
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
@@ -6,13 +7,12 @@ import { initStore } from '../src/store/open.js';
 import { parkInDlq, listDlq } from '../src/connectors/dlq.js';
 import { githubDlq, replayDlqEntry, type DlqBucket } from '../src/connectors/github/dlq.js';
 import { githubDlqEntry } from '../src/store/connectors/github.js';
-import type { StoreContext } from '../src/api/index.js';
 import { sqliteStore } from '../src/store/sqlite/store.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 
 describe('github DLQ', () => {
   let root: string;
-  let ctx: StoreContext;
+  let ctx: FullContext;
 
   beforeEach(() => {
     root = mkdtempSync(join(tmpdir(), 'hippo-github-dlq-'));

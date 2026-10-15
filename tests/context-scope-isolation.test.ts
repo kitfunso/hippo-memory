@@ -10,6 +10,7 @@
  * Real-DB per project convention.
  */
 
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -18,7 +19,7 @@ import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
-import { getContext, type StoreContext } from '../src/api/index.js';
+import { getContext } from '../src/api/index.js';
 import { clearProjectIdentityCache } from '../src/core/project-identity.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 
@@ -26,7 +27,7 @@ let tmpRoot: string;
 let projA: string;
 let globalStore: string;
 let origHippoHome: string | undefined;
-let ctx: StoreContext;
+let ctx: FullContext;
 
 const ALPHA = 'ALPHA-RULE deploykey rotation happens on fridays';
 const GLOBAL_PREF = 'GLOBAL-PREF deploykey answers stay under three lines';

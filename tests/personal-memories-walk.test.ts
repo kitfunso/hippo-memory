@@ -1,4 +1,5 @@
 // The personal-memories plan's lane T walk, written from the plan alone: one shared-store server, callers A, B and an unowned admin.
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -68,7 +69,7 @@ function mint(label: string, role: 'admin' | 'member', ownerSubject?: string, ro
   }
 }
 
-function ctxOf(who: Who): api.StoreContext {
+function ctxOf(who: Who): FullContext {
   const subject = `api_key:${keys[who].keyId}`;
   if (who === 'ADM') return apiCtx(store, 'default', { subject, role: 'admin' });
   return apiCtx(store, 'default', { subject, role: 'member', owner: who === 'A' ? 'oid-a' : 'oid-b' });

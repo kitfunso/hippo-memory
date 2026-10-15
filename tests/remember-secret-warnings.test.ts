@@ -1,4 +1,5 @@
 // remember tells its caller when the content looks like a secret: HTTP and MCP carry `warnings`, the CLI prints them to stderr.
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -6,7 +7,7 @@ import * as path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { initStore } from '../src/store/open.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
-import { remember, type StoreContext } from '../src/api/index.js';
+import { remember } from '../src/api/index.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { handleMcpRequest } from '../src/mcp/server.js';
 import { sqliteStore } from '../src/store/sqlite/store.js';
@@ -18,7 +19,7 @@ const TYPED = `the ci token is ${GHP} for the nightly job`;
 const cli = path.resolve(__dirname, '..', 'dist', 'cli.js');
 
 let root: string;
-const ctx = (): StoreContext => (apiCtx(root, 'default', { subject: 'test', role: 'admin' }));
+const ctx = (): FullContext => (apiCtx(root, 'default', { subject: 'test', role: 'admin' }));
 
 beforeEach(() => {
   root = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-remember-warn-'));

@@ -9,11 +9,12 @@
 // (memory, goal) pair is logged into goal_recall_log.
 //
 // Real DB, real CLI subprocess — no mocks.
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { remember, type StoreContext } from '../src/api/index.js';
+import { remember } from '../src/api/index.js';
 import { pushGoal, completeGoal } from '../src/store/goals.js';
 import { makeEnv, type TestEnv } from './_helpers/cli-env.js';
 import { apiCtx } from './_helpers/api-ctx.js';
@@ -63,7 +64,7 @@ describe('cli recall + active goal stack', () => {
   });
 
   it('without active goals (no HIPPO_SESSION_ID), top-3 unchanged from baseline', async () => {
-    const ctx: StoreContext = apiCtx(env.hippoRoot, 'default', { subject: 'cli', role: 'admin' });
+    const ctx: FullContext = apiCtx(env.hippoRoot, 'default', { subject: 'cli', role: 'admin' });
     await remember(ctx, { content: 'plan note one for the auth migration' });
     await remember(ctx, { content: 'plan note two for the auth migration' });
     await remember(ctx, { content: 'plan note three for the auth migration' });
@@ -76,7 +77,7 @@ describe('cli recall + active goal stack', () => {
   });
 
   it('with HIPPO_SESSION_ID set and an active goal whose name matches a tag, tagged memories surface in top-2', async () => {
-    const ctx: StoreContext = apiCtx(env.hippoRoot, 'default', { subject: 'cli', role: 'admin' });
+    const ctx: FullContext = apiCtx(env.hippoRoot, 'default', { subject: 'cli', role: 'admin' });
     await remember(ctx, { content: 'plan note one for the auth migration' });
     await remember(ctx, { content: 'plan note two for the auth migration' });
     await remember(ctx, { content: 'plan note three for the auth migration' });
@@ -92,7 +93,7 @@ describe('cli recall + active goal stack', () => {
   });
 
   it('completed goals do not affect ranking (test asserts ORDER, not just length)', async () => {
-    const ctx: StoreContext = apiCtx(env.hippoRoot, 'default', { subject: 'cli', role: 'admin' });
+    const ctx: FullContext = apiCtx(env.hippoRoot, 'default', { subject: 'cli', role: 'admin' });
     await remember(ctx, { content: 'plan note one for the auth migration' });
     await remember(ctx, { content: 'plan note two for the auth migration' });
     await remember(ctx, { content: 'marker tagged A: auth migration step', tags: ['auth-rewrite'] });
@@ -118,7 +119,7 @@ describe('cli recall + active goal stack', () => {
   });
 
   it('explicit --goal still works as a manual override (MVP behavior preserved)', async () => {
-    const ctx: StoreContext = apiCtx(env.hippoRoot, 'default', { subject: 'cli', role: 'admin' });
+    const ctx: FullContext = apiCtx(env.hippoRoot, 'default', { subject: 'cli', role: 'admin' });
     await remember(ctx, { content: 'plan note one for the auth migration' });
     await remember(ctx, { content: 'plan note two for the auth migration' });
     await remember(ctx, { content: 'plan note three for the auth migration' });
@@ -134,7 +135,7 @@ describe('cli recall + active goal stack', () => {
   // Active goal `auth-rewrite` on session, but CLI passes --goal other-tag. Top
   // results should contain other-tag-tagged memories, NOT auth-rewrite ones.
   it('explicit --goal flag overrides the active goal stack (MVP wins)', async () => {
-    const ctx: StoreContext = apiCtx(env.hippoRoot, 'default', { subject: 'cli', role: 'admin' });
+    const ctx: FullContext = apiCtx(env.hippoRoot, 'default', { subject: 'cli', role: 'admin' });
     await remember(ctx, { content: 'plan note alpha untagged content one' });
     await remember(ctx, { content: 'plan note beta untagged content two' });
     await remember(ctx, { content: 'plan note gamma untagged content three' });
@@ -166,7 +167,7 @@ describe('cli recall + active goal stack', () => {
   // HIPPO_SESSION_ID is set but the (tenant, session) has zero active goals.
   // Recall must succeed and produce the same baseline ordering as the no-session case.
   it('empty active-goal list is a no-op (no errors, baseline ranking)', async () => {
-    const ctx: StoreContext = apiCtx(env.hippoRoot, 'default', { subject: 'cli', role: 'admin' });
+    const ctx: FullContext = apiCtx(env.hippoRoot, 'default', { subject: 'cli', role: 'admin' });
     await remember(ctx, { content: 'plan note one for the auth migration' });
     await remember(ctx, { content: 'plan note two for the auth migration' });
     await remember(ctx, { content: 'plan note three for the auth migration' });

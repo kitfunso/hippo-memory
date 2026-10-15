@@ -8,18 +8,19 @@
  * Real SQLite store + real server, no mocks.
  */
 
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { serve, type ServerHandle } from '../src/server.js';
-import { remember, type RecallResult, type StoreContext } from '../src/api/index.js';
+import { remember, type RecallResult } from '../src/api/index.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 
 let home: string;
 let handle: ServerHandle;
-let ctx: StoreContext;
+let ctx: FullContext;
 
 beforeEach(async () => {
   home = mkdtempSync(join(tmpdir(), 'hippo-a7-http-'));

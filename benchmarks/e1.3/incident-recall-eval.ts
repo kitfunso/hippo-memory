@@ -21,7 +21,8 @@ import { readFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { ingestMessage } from '../../src/connectors/slack/ingest.js';
-import { retrieve, adminActor, type StoreContext } from '../../src/api/index.js';
+import { retrieve, adminActor } from '../../src/api/index.js';
+import type { ConnectorContext } from '../../src/connectors/store.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 
 interface TranscriptMessage {
@@ -61,7 +62,7 @@ export async function runIncidentRecallEval(opts: {
   const scenarios = JSON.parse(
     readFileSync(join(here, 'scenarios.json'), 'utf-8'),
   ) as Scenario[];
-  const ctx: StoreContext = {
+  const ctx: ConnectorContext = {
     hippoRoot: opts.hippoRoot,
     tenantId: 'default',
     actor: adminActor('eval:slack'),

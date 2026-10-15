@@ -13,12 +13,13 @@
  * Real DB throughout (project convention).
  */
 
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
-import { retrieve, type StoreContext } from '../src/api/index.js';
+import { retrieve } from '../src/api/index.js';
 import {
   hashQueryText,
   type RecallHistorySnapshot,
@@ -30,7 +31,7 @@ import { apiCtx } from './_helpers/api-ctx.js';
 function safeRmSync(p: string): void {
   try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
 }
-function ctxFor(root: string, subject: string = 'cli'): StoreContext {
+function ctxFor(root: string, subject: string = 'cli'): FullContext {
   return apiCtx(root, 'default', { subject, role: 'admin' });
 }
 
@@ -181,7 +182,7 @@ describe('api.recall anchoringHint', () => {
     ];
     // ctx is tenant-default; snapshot rows reference memId which is also tenant-default.
     // Pass to a tenant-b ctx — top will be null (no matching memory in tenant-b).
-    const ctxB: StoreContext = apiCtx(root, 'tenant-b', { subject: 'cli', role: 'admin' });
+    const ctxB: FullContext = apiCtx(root, 'tenant-b', { subject: 'cli', role: 'admin' });
     const result = await retrieve(ctxB, { query: 'frobnicate baz quux', recallHistory: snapshot });
     // No matching memory in tenant-b → top null → R2 cannot fire (current can't extend dominance).
     expect(result.anchoringHint).toBeUndefined();

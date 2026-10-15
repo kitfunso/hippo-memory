@@ -16,6 +16,7 @@
  * file-private.
  */
 
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -24,7 +25,7 @@ import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
-import { remember, type StoreContext } from '../src/api/index.js';
+import { remember } from '../src/api/index.js';
 import { deduplicateStore, strengthBucket } from '../src/consolidate/dedupe.js';
 import { compareEntryIdentity } from '../src/core/compare.js';
 import { consolidate } from '../src/consolidate/sleep.js';
@@ -43,7 +44,7 @@ function tmpHome(prefix: string) {
   };
 }
 
-function ctxFor(home: string): StoreContext {
+function ctxFor(home: string): FullContext {
   return apiCtx(home, 'default', { subject: 'test', role: 'admin' });
 }
 

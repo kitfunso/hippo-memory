@@ -1,9 +1,10 @@
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { remember, type StoreContext } from '../src/api/index.js';
+import { remember } from '../src/api/index.js';
 import { initStore } from '../src/store/open.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
@@ -24,7 +25,7 @@ const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite') as { Data
 
 // -- Test helpers ----------------------------------------------------------
 
-const ctx = (root: string): StoreContext => (apiCtx(root, 'default', { subject: 'connector:github', role: 'admin' }));
+const ctx = (root: string): FullContext => (apiCtx(root, 'default', { subject: 'connector:github', role: 'admin' }));
 
 function makeIssueEvent(overrides: Partial<GitHubIssueEvent['issue']> = {}): GitHubIssueEvent {
   return {

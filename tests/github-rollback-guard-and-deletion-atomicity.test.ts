@@ -9,9 +9,9 @@
  *   - P1: backfill issues HWM ignored skipped PR items, looping on PR-only pages.
  */
 
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
-import type { StoreContext } from '../src/api/index.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { openHippoDb, closeHippoDb, getMeta, setMeta } from '../src/db/index.js';
@@ -24,7 +24,7 @@ import { makeRoot } from './_helpers/make-root.js';
 import { LATEST_SCHEMA_VERSION_STR } from './_helpers/schema-version.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 
-function ctx(home: string): StoreContext {
+function ctx(home: string): FullContext {
   return apiCtx(home, 'default', { subject: 'test', role: 'admin' });
 }
 

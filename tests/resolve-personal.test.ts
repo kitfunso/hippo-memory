@@ -1,7 +1,8 @@
 // Conflict resolution never reaches another person's personal row, and a personal value never becomes a tenant-wide tombstone (F1).
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
-import { remember, type Actor, type StoreContext } from '../src/api/index.js';
+import { remember, type Actor } from '../src/api/index.js';
 import { listRejectionsForTenant } from '../src/trust/reject-flow.js';
 import { resolveOpenConflict } from '../src/dashboard/dashboard-actions.js';
 import { mapApiError } from '../src/api/error-reply.js';
@@ -21,7 +22,7 @@ const actorA: Actor = { subject: 'api_key:hk_a', role: 'member', owner: 'a' };
 const actorB: Actor = { subject: 'api_key:hk_b', role: 'member', owner: 'b' };
 const unownedAdmin: Actor = { subject: 'api_key:hk_admin', role: 'admin' };
 
-function ctxFor(actor: Actor): StoreContext {
+function ctxFor(actor: Actor): FullContext {
   return apiCtx(root, 'default', actor);
 }
 

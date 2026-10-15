@@ -5,7 +5,7 @@ import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeF
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
-  archiveRaw, forget, outcome, outcomeForLastRecall, remember, supersede, type Actor, type ArchiveRawResult, type ForgetResult,
+  archiveRaw, forget, outcome, outcomeForLastRecall, narrowContext, remember, supersede, type Actor, type ArchiveRawResult, type ForgetResult,
   type OutcomeResult, type RememberResult, type SupersedeResult,
 } from '../src/api/index.js';
 import { closeHippoDb, openHippoDb, withSqliteBlocked } from '../src/db/index.js';
@@ -94,8 +94,11 @@ describe('the api with ctx.store', () => {
     const before = auditIdsOnHippoDb(storeRoot);
     const ctx = { hippoRoot: markedFolder(), tenantId: TENANT_A, actor: admin, store: portOnlyStoreWithoutVectorReads(storeRoot) };
     const calls = [
-      () => remember(ctx, { content: 'deploys go out on tuesdays' }), () => outcome(ctx, ['mem_x'], true), () => supersede(ctx, 'mem_x', 'new text'),
-      () => archiveRaw(ctx, 'mem_x', 'r'), () => forget(ctx, 'mem_x'),
+      async () => remember(narrowContext(ctx, 'entryWrites'), { content: 'deploys go out on tuesdays' }),
+      async () => outcome(narrowContext(ctx, 'entryWrites'), ['mem_x'], true),
+      async () => supersede(narrowContext(ctx, 'entryWrites'), 'mem_x', 'new text'),
+      async () => archiveRaw(narrowContext(ctx, 'entryWrites'), 'mem_x', 'r'),
+      async () => forget(narrowContext(ctx, 'entryWrites'), 'mem_x'),
     ];
     for (const call of calls) await expect(call()).rejects.toThrow(new StoreNotPortedError('port-only', 'entryWrites'));
     expect(auditIdsOnHippoDb(storeRoot)).toEqual(before);

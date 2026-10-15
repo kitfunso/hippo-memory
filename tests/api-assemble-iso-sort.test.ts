@@ -1,3 +1,4 @@
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -5,7 +6,7 @@ import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
-import { assemble, type StoreContext } from '../src/api/index.js';
+import { assemble } from '../src/api/index.js';
 import { seededRandom } from '../src/eval/eval-stats.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 
@@ -107,7 +108,7 @@ describe('assemble ISO sort: integration', () => {
       writeEntry(root, e);
     }
 
-    const ctx: StoreContext = apiCtx(root, 'default', { subject: 'test:f4-int', role: 'admin' });
+    const ctx: FullContext = apiCtx(root, 'default', { subject: 'test:f4-int', role: 'admin' });
     const result = await assemble(ctx, sess, { budget: 10_000 });
 
     // Strip down to the createdAt strings on returned items, in returned order.

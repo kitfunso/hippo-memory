@@ -1,10 +1,11 @@
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach } from 'vitest';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { loadAllEntries, readEntry } from '../src/store/entry-reads.js';
-import { remember, type StoreContext } from '../src/api/index.js';
+import { remember } from '../src/api/index.js';
 import { BadRequestError } from '../src/core/api-errors.js';
 import { _resetSharedStoreCacheForTests } from '../src/core/config.js';
 import { clearProjectIdentityCache } from '../src/core/project-identity.js';
@@ -59,7 +60,7 @@ describe("api.remember stamps the caller's project", () => {
   });
 
   /** A store inside a git checkout named `proj`, so the folder stamp is `proj`. */
-  function storeCtx(flagged: boolean): StoreContext {
+  function storeCtx(flagged: boolean): FullContext {
     mkdirSync(join(tmp, 'proj', '.git'), { recursive: true });
     const store = join(tmp, 'proj', '.hippo');
     mkdirSync(store, { recursive: true });
@@ -68,7 +69,7 @@ describe("api.remember stamps the caller's project", () => {
     return apiCtx(store, 'default', { subject: 'cli', role: 'admin' });
   }
 
-  const originOf = (ctx: StoreContext, id: string): string | null | undefined => readEntry(ctx.hippoRoot, id)?.origin_project;
+  const originOf = (ctx: FullContext, id: string): string | null | undefined => readEntry(ctx.hippoRoot, id)?.origin_project;
 
   it('a shared store with no project stamps NULL', async () => {
     const ctx = storeCtx(true);

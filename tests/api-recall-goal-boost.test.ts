@@ -6,12 +6,13 @@
  * HTTP -- those have their own integration tests).
  */
 
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach } from 'vitest';
 import path from 'node:path';
 import os from 'node:os';
 import fs from 'node:fs';
 import { initStore } from '../src/store/open.js';
-import { remember, retrieve, type StoreContext } from '../src/api/index.js';
+import { remember, retrieve } from '../src/api/index.js';
 import { pushGoal } from '../src/store/goals.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
 import { apiCtx } from './_helpers/api-ctx.js';
@@ -26,7 +27,7 @@ function countRows(db: DatabaseSyncLike, sql: string, ...params: unknown[]): num
 
 describe('api.recall + RecallOpts.sessionId goal-stack boost', () => {
   let hippoRoot: string;
-  let ctx: StoreContext;
+  let ctx: FullContext;
   const tenantId = 'default';
   const sessionId = 'sess-api-1.7.4';
 

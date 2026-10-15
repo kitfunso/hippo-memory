@@ -1,12 +1,11 @@
 // Session context assembly under a token budget.
 
-import { requireGroup } from '../store/index.js';
 import { estimateTokens } from '../util/token-text.js';
 import type { MemoryEntry } from '../core/memory.js';
 import { passesScopeFilterForRecall, assertScopeRequestAllowed, personalScopeOf } from '../core/recall-scope.js';
 import { classifyOriginProject, projectNames } from '../core/project-identity.js';
 import type { CallerProject } from './prompt-hook.js';
-import type { StoreContext } from './types.js';
+import type { ContextWith } from './types.js';
 
 const DEFAULT_FRESH_TAIL_COUNT = 10;
 const DEFAULT_ROW_CAP = 5000;
@@ -71,7 +70,7 @@ export interface AssembleResult {
  *  tail is never evicted).
  * Returns `items: []` for an empty sessionId, no raws, or when every row fails the scope/tenant filter. */
 export async function assemble(
-  ctx: StoreContext,
+  ctx: ContextWith<'dagReads'>,
   sessionId: string,
   opts: AssembleOpts = {},
 ): Promise<AssembleResult> {
@@ -122,14 +121,14 @@ interface ScopedRaws {
 }
 
 async function loadScopedRaws(
-  ctx: StoreContext,
+  ctx: ContextWith<'dagReads'>,
   sessionId: string,
   opts: AssembleOpts,
   own: string | undefined,
 ): Promise<ScopedRaws> {
   const rowCap = opts.rowCap ?? DEFAULT_ROW_CAP;
   const origins = opts.project ? projectNames(opts.project) : undefined;
-  const dag = requireGroup(ctx.store, 'dagReads');
+  const dag = ctx.store.dagReads;
   const rows = await dag.sessionRawEntries({ tenantId: ctx.tenantId, sessionId, cap: rowCap, origins });
   const truncated = rows.length === rowCap;
   // `scoped.length` under-counts a capped session, so totalRaw falls back to a COUNT below.
@@ -179,7 +178,7 @@ interface SubstitutedOlder {
 }
 
 async function substituteSummaries(
-  ctx: StoreContext,
+  ctx: ContextWith<'dagReads'>,
   olderRows: MemoryEntry[],
   scope: string | undefined,
   own: string | undefined,

@@ -1,5 +1,6 @@
 // Supersede hands the old row's origin and session to its replacement, so a project row stays in its project.
 // Real SQLite stores in tmp dirs, no mocks.
+import type { FullContext } from './_helpers/api-ctx.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -8,14 +9,14 @@ import { createMemory, createSuccessor, DEFAULT_HALF_LIFE_DAYS, Layer, type Memo
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { readEntry } from '../src/store/entry-reads.js';
-import { supersede, type StoreContext } from '../src/api/index.js';
+import { supersede } from '../src/api/index.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 
 let tmpRoot: string;
 let projectStore: string;
 let globalStore: string;
 
-const ctxFor = (hippoRoot: string): StoreContext =>
+const ctxFor = (hippoRoot: string): FullContext =>
   (apiCtx(hippoRoot, 'default', { subject: 'supersede-provenance-test', role: 'admin' }));
 
 function seed(root: string, content: string, extra: Partial<MemoryEntry> = {}): MemoryEntry {

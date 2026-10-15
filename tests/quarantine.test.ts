@@ -1,5 +1,6 @@
 /** CD5 quarantine tier: connector-flagged content is held under `quarantine:private:*` until an admin decides. Real SQLite, real HTTP + MCP, no mocks. */
 
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -29,11 +30,11 @@ const HIPPO_BIN = join(process.cwd(), 'bin', 'hippo.js');
 
 const ISOLATION_OFF = { config: { contextProjectIsolation: false } };
 
-function adminCtx(home: string): api.StoreContext {
+function adminCtx(home: string): FullContext {
   return apiCtx(home, 'default', api.adminActor('test'));
 }
 
-function memberCtx(home: string, keyId = 'k1'): api.StoreContext {
+function memberCtx(home: string, keyId = 'k1'): FullContext {
   return apiCtx(home, 'default', { subject: `api_key:${keyId}`, role: 'member' });
 }
 
@@ -161,7 +162,7 @@ describe('recall visibility and the approve/reject lifecycle', () => {
   });
 
   it('another tenant cannot see, approve or reject the row', async () => {
-    const other: api.StoreContext = apiCtx(home, 'other', api.adminActor('test'));
+    const other: FullContext = apiCtx(home, 'other', api.adminActor('test'));
     expect(await api.quarantineList(other, { status: 'all' })).toHaveLength(0);
     await expect(api.quarantineApprove(other, id)).rejects.toThrow(/not quarantined/);
     await expect(api.quarantineReject(other, id)).rejects.toThrow(/not quarantined/);
@@ -401,7 +402,7 @@ describe('CLI drive via the built binary', () => {
       execFileSync('node', [HIPPO_BIN, 'init', '--no-hooks', '--no-schedule', '--no-learn'], { cwd: cliHome, env });
       const hippoDir = join(cliHome, '.hippo');
 
-      const ctx: api.StoreContext = apiCtx(hippoDir, 'default', api.adminActor('cli'));
+      const ctx: FullContext = apiCtx(hippoDir, 'default', api.adminActor('cli'));
       const result = await ingestEvent(ctx, { event: githubCommentEvent(INJECTION), rawBody: 'x', deliveryId: 'd1' });
 
       const listOut = execFileSync('node', [HIPPO_BIN, 'quarantine', 'list', '--json'], { cwd: cliHome, env }).toString();

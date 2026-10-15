@@ -1,5 +1,6 @@
 // Z1's prompt-recall FTS query reopened the store getContext's ambient
 // load had just opened and closed. Real SQLite stores in tmp dirs, no mocks.
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -8,7 +9,7 @@ import { createRequire } from 'module';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { getContext, type StoreContext } from '../src/api/index.js';
+import { getContext } from '../src/api/index.js';
 import { _resetAblationCacheForTests } from '../src/core/ablation.js';
 import type { DatabaseSyncLike } from '../src/db/index.js';
 import { apiCtx } from './_helpers/api-ctx.js';
@@ -24,7 +25,7 @@ const PROJECT = 'proj-a';
 let tmpRoot: string;
 let local: string;
 let globalRoot: string;
-let ctx: StoreContext;
+let ctx: FullContext;
 
 function enablePromptRecall(root: string) {
   fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({

@@ -1,4 +1,5 @@
 // Every stored version of a fact survives until one is retired: sleep never drops a value's text, and the paths below never skip a new value as a copy of an old one.
+import type { FullContext } from './_helpers/api-ctx.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
@@ -342,7 +343,7 @@ describe('merged row', () => {
 describe('a retired version leaves the merged row', () => {
   const OLD = 'The web app dev server runs on port 3000 locally.';
   const NEW = 'The web app dev server now runs on port 5173 locally.';
-  const ctx = (root: string): api.StoreContext => (apiCtx(root, 'default', api.adminActor('cli')));
+  const ctx = (root: string): FullContext => (apiCtx(root, 'default', api.adminActor('cli')));
   const recalled = async (root: string): Promise<string> => (await api.retrieve(ctx(root), { query: 'web app dev server port' })).results.map((r) => r.content).join('\n');
   const current = (root: string): string => loadAllEntries(root).filter((e) => !e.superseded_by).map((e) => e.content).join('\n');
 
@@ -423,7 +424,7 @@ describe('recall and context show a merged row, not the sources it holds', () =>
   const FACTS = ['General project context: the staging service listens on port 4400.', 'General project context: the analytics service listens on port 7700.'];
   const QUERY = 'service listens port';
   const copies = (text: string): number => text.split('port 4400').length - 1;
-  const ctx = (root: string): api.StoreContext => (apiCtx(root, 'default', api.adminActor('cli')));
+  const ctx = (root: string): FullContext => (apiCtx(root, 'default', api.adminActor('cli')));
 
   async function mergedStore(): Promise<{ root: string; row: MemoryEntry }> {
     vi.stubEnv('HIPPO_HOME', join(tmp(), 'global'));

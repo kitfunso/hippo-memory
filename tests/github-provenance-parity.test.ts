@@ -7,6 +7,7 @@
  * dropping the `user:github:<login>` owner stamp and slipping past CI.
  */
 
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -19,7 +20,6 @@ import type {
   GitHubIssueEvent,
   GitHubIssueCommentEvent,
 } from '../src/connectors/github/types.js';
-import type { StoreContext } from '../src/api/index.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 
 const PUBLIC_REPO = {
@@ -29,7 +29,7 @@ const PUBLIC_REPO = {
   name: 'public-repo',
 } as const;
 
-function ctxFor(root: string): StoreContext {
+function ctxFor(root: string): FullContext {
   return apiCtx(root, 'default', { subject: 'connector:github', role: 'admin' });
 }
 

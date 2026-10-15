@@ -18,6 +18,7 @@
  * Real HTTP server (serve port:0), per-test isolated local + global stores.
  */
 
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -25,7 +26,6 @@ import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { saveActiveTaskSnapshot } from '../src/store/sessions.js';
-import type { StoreContext } from '../src/api/index.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { queryAuditEvents } from '../src/store/audit.js';
 import { remember } from '../src/api/index.js';
@@ -72,7 +72,7 @@ describe('GET /v1/context', () => {
   });
 
   it('returns entries within budget (200)', async () => {
-    const ctx: StoreContext = apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' });
+    const ctx: FullContext = apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' });
     for (let i = 0; i < 5; i++) {
       await remember(ctx, { content: `ctx-route-mem-${i}` });
     }
@@ -85,7 +85,7 @@ describe('GET /v1/context', () => {
   });
 
   it('honors tight budget cap', async () => {
-    const ctx: StoreContext = apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' });
+    const ctx: FullContext = apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' });
     for (let i = 0; i < 10; i++) {
       await remember(ctx, { content: `padding ${'x'.repeat(200)} content ${i}` });
     }
@@ -108,7 +108,7 @@ describe('GET /v1/context', () => {
     initStore(projHippo);
     const projHandle = await serve({ hippoRoot: projHippo, port: 0 });
     try {
-      const ctx: StoreContext = apiCtx(projHippo, 'default', { subject: 'localhost:cli', role: 'admin' });
+      const ctx: FullContext = apiCtx(projHippo, 'default', { subject: 'localhost:cli', role: 'admin' });
       await remember(ctx, { content: 'ownrow deploykey local fact' });
       // Cross-project row in the GLOBAL store (the 2026-07-01 leak shape).
       writeEntry(globalHome, {
@@ -136,7 +136,7 @@ describe('GET /v1/context', () => {
   });
 
   it('v39 secret veto at the HTTP surface: secret rows never inject, even with cross_project=1', async () => {
-    const ctx: StoreContext = apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' });
+    const ctx: FullContext = apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' });
     await remember(ctx, { content: 'harmless deploykey row' });
     // Secret-bearing rows: one cross-project, one with no origin — neither
     // may ambient-inject regardless of the cross_project override.
@@ -160,7 +160,7 @@ describe('GET /v1/context', () => {
   });
 
   it('budget=0 short-circuits to empty result', async () => {
-    const ctx: StoreContext = apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' });
+    const ctx: FullContext = apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' });
     await remember(ctx, { content: 'budget-zero' });
 
     const res = await fetch(`${handle.url}/v1/context?budget=0`);
@@ -182,7 +182,7 @@ describe('GET /v1/context', () => {
 
   it('pinned_only filters to pinned entries only', async () => {
     // Seed: 2 unpinned + 1 pinned. Default-tenant memories.
-    const ctx: StoreContext = apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' });
+    const ctx: FullContext = apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' });
     await remember(ctx, { content: 'unpinned-1' });
     await remember(ctx, { content: 'unpinned-2' });
     // Use store-level write for pinned to keep the test simple.
@@ -216,7 +216,7 @@ describe('GET /v1/context', () => {
       session_id: 'sess-ctx-route',
       scope: null,
     });
-    const ctx: StoreContext = apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' });
+    const ctx: FullContext = apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' });
     await remember(ctx, { content: 'snapshot-companion' });
 
     const res = await fetch(`${handle.url}/v1/context?budget=1500`);
@@ -230,8 +230,8 @@ describe('GET /v1/context', () => {
   });
 
   it('tenant scoping: default Bearer does not see tenant_b memories', async () => {
-    const ctxA: StoreContext = apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' });
-    const ctxB: StoreContext = apiCtx(home, 'tenant_b', { subject: 'localhost:cli', role: 'admin' });
+    const ctxA: FullContext = apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' });
+    const ctxB: FullContext = apiCtx(home, 'tenant_b', { subject: 'localhost:cli', role: 'admin' });
     await remember(ctxA, { content: 'belongs-to-default' });
     await remember(ctxB, { content: 'belongs-to-tenant-B' });
 
@@ -256,7 +256,7 @@ describe('GET /v1/context', () => {
   });
 
   it('q at 1024-char boundary returns 200', async () => {
-    const ctx: StoreContext = apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' });
+    const ctx: FullContext = apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' });
     await remember(ctx, { content: 'boundary-test' });
     const q = 'a'.repeat(1024);
     const res = await fetch(`${handle.url}/v1/context?q=${q}`);
@@ -264,7 +264,7 @@ describe('GET /v1/context', () => {
   });
 
   it('q=foo emits exactly one recall audit row (row-count delta)', async () => {
-    const ctx: StoreContext = apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' });
+    const ctx: FullContext = apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' });
     await remember(ctx, { content: 'foo bar baz' });
     await remember(ctx, { content: 'foo qux' });
     await remember(ctx, { content: 'unrelated content' });
@@ -316,7 +316,7 @@ describe('GET /v1/context - ambientState field', () => {
 
   it('is present with a populated totalMemories when ambient is on and entries are admitted', async () => {
     await startServer(true);
-    const ctx: StoreContext = apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' });
+    const ctx: FullContext = apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' });
     await remember(ctx, { content: 'ambient-route-marker-row' });
 
     const res = await fetch(`${handle.url}/v1/context?budget=1500`);
@@ -334,7 +334,7 @@ describe('GET /v1/context - ambientState field', () => {
 
   it('is absent when ambient is off in config, while the existing fields are unchanged', async () => {
     await startServer(false);
-    const ctx: StoreContext = apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' });
+    const ctx: FullContext = apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' });
     await remember(ctx, { content: 'ambient-off-marker-row' });
 
     const res = await fetch(`${handle.url}/v1/context?budget=1500`);

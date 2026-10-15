@@ -1,4 +1,5 @@
 // P7 gate: getContext with a query ranks recall's FTS candidate window from each store, never the whole store.
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { join } from 'node:path';
@@ -7,7 +8,7 @@ import { DEFAULT_SEARCH_CANDIDATE_LIMIT } from '../src/store/rows.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import type { MemoryEntry } from '../src/core/memory.js';
 import type { DeliveryObserver } from '../src/store/delivery-recorder.js';
-import { getContext, adminActor, type StoreContext } from '../src/api/index.js';
+import { getContext, adminActor } from '../src/api/index.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { recordStatementsAsync, countMatching } from './_helpers/count-statements.js';
@@ -51,7 +52,7 @@ function admitCounter() {
 
 let local = '';
 let global = '';
-let ctx: StoreContext;
+let ctx: FullContext;
 
 beforeAll(() => {
   local = makeRoot('ctx-window-local');

@@ -12,6 +12,7 @@
  * latin word count, counted separately so a run isn't scored twice.
  */
 
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -20,7 +21,7 @@ import { isContentWorthStoring } from '../src/core/memory-quality.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
-import { getContext, type StoreContext } from '../src/api/index.js';
+import { getContext } from '../src/api/index.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 
 function tmpHome() {
@@ -60,7 +61,7 @@ describe('CJK-aware substantiveWordCount (src/store/audit.ts)', () => {
   it('(a) a substantive CJK sentence is returned via includeRecent', async () => {
     const { home, restore } = tmpHome();
     try {
-      const ctx: StoreContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
+      const ctx: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
       seed(home, CJK_SENTENCE, { created: '2026-08-20T10:00:00.000Z' });
 
       const result = await getContext(ctx, { pinnedOnly: true, includeRecent: 1, budget: 500 });

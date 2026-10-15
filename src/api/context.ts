@@ -34,7 +34,7 @@ import { promptTokens } from '../core/prompt-recall.js';
 import { detectSecret } from '../util/secret-detect.js';
 import { isSessionDigestRow } from '../core/session-digest-row.js';
 import { addAmbientTallies, ambientStateFromTallies, type AmbientState, type AmbientTallies } from '../core/ambient.js';
-import { hasGroup, requireGroup, sqliteStore, type HippoStore } from '../store/index.js';
+import { hasGroup, sqliteStore, type StoreWith } from '../store/index.js';
 import { passesScopeFilterForRecall, assertScopeRequestAllowed, personalScopeOf } from '../core/recall-scope.js';
 import {
   finiteOr,
@@ -49,7 +49,7 @@ import {
 import type { ContextOpts, ContextResult, ContextResultEntry } from './context-types.js';
 import { strengthenOf } from './recall-record.js';
 import { tokenPurse } from './recall-render.js';
-import { type Context, type StoreContext, ownerOrSubject } from './types.js';
+import { type Context, type ContextWith, type StoreContext, ownerOrSubject } from './types.js';
 
 export { oneCopyPerMemory } from './context-select.js';
 
@@ -99,8 +99,8 @@ interface RecentRequest {
 }
 
 /** A store's base search and context reads; a store without the group throws StoreNotPortedError. */
-function sourceOf(store: HippoStore): ContextSource {
-  return { store, reads: requireGroup(store, 'contextReads') };
+function sourceOf(store: StoreWith<'contextReads'>): ContextSource {
+  return { store, reads: store.contextReads };
 }
 
 /** What one store's ambient read is asked for. `recent`, `recall`
@@ -171,7 +171,7 @@ interface TaskSections {
  * row for non-pinned, non-'*' queries. Returns an empty result when there are no memories, snapshot, handoff or recent
  * events. CLI rendering stays in `cli.ts`. */
 export async function getContext(
-  ctx: StoreContext,
+  ctx: ContextWith<'contextReads'>,
   opts: ContextOpts = {},
 ): Promise<ContextResult> {
   const budget = opts.budget ?? DEFAULT_CONTEXT_BUDGET;

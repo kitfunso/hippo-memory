@@ -8,18 +8,19 @@
  * `result.total` (misleading metadata — we want the actual rows checked).
  */
 
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
-import { retrieve, type StoreContext } from '../src/api/index.js';
+import { retrieve } from '../src/api/index.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 
 function safeRmSync(p: string): void {
   try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
 }
-function ctxFor(root: string, tenantId: string): StoreContext {
+function ctxFor(root: string, tenantId: string): FullContext {
   return apiCtx(root, tenantId, { subject: 'test:tenant-iso', role: 'admin' });
 }
 function makeRaw(text: string, tenantId: string): MemoryEntry {

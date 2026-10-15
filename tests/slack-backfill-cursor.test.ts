@@ -1,9 +1,9 @@
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
-import type { StoreContext } from '../src/api/index.js';
 import {
   backfillChannel,
   type SlackHistoryFetcher,
@@ -12,7 +12,7 @@ import {
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 
-const ctx = (root: string): StoreContext => (apiCtx(root, 'default', { subject: 'connector:slack', role: 'admin' }));
+const ctx = (root: string): FullContext => (apiCtx(root, 'default', { subject: 'connector:slack', role: 'admin' }));
 
 describe('backfillChannel cursor / oldest semantics', () => {
   let root: string;

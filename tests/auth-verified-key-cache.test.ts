@@ -1,3 +1,4 @@
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 
@@ -9,7 +10,7 @@ import {
   VerifiedKeyCache,
   type VerifiedApiKey,
 } from '../src/store/auth.js';
-import { authRevoke, authGrant, type StoreContext } from '../src/api/index.js';
+import { authRevoke, authGrant } from '../src/api/index.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { sqliteStore } from '../src/store/index.js';
 import { makeRoot } from './_helpers/make-root.js';
@@ -41,7 +42,7 @@ describe('verified API key cache', () => {
   const mint = (role: 'admin' | 'member' = 'member'): { keyId: string; plaintext: string } =>
     onDb(home, (db) => createApiKey(db, { tenantId: 'default', label: 'cache-test', role }));
 
-  const adminCtx = (): StoreContext => (apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' }));
+  const adminCtx = (): FullContext => (apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' }));
 
   beforeEach(() => {
     home = makeRoot('key-cache');

@@ -14,12 +14,13 @@
  *   - graph-recall.ts:248  graph-hop ordering (hops asc, then score desc)
  */
 
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { Layer, type MemoryEntry} from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { retrieve, type StoreContext } from '../src/api/index.js';
+import { retrieve } from '../src/api/index.js';
 import { estimateTokens } from '../src/util/token-text.js';
 import type { SearchResult } from '../src/core/search-types.js';
 import { insertEntityAt, insertRelationAt } from './_helpers/graph-seed.js';
@@ -37,7 +38,7 @@ function safeRmSync(p: string): void {
 // ---------------------------------------------------------------------------
 
 describe('api.ts:833 DAG substitution ordering', () => {
-  function ctxFor(root: string, tenantId: string = 'default'): StoreContext {
+  function ctxFor(root: string, tenantId: string = 'default'): FullContext {
     return apiCtx(root, tenantId, { subject: 'test:tiebreak', role: 'admin' });
   }
   function makeLeaf(text: string, opts: Partial<MemoryEntry> = {}): MemoryEntry {

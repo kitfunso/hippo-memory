@@ -1,7 +1,8 @@
 // reject and authKeyTenant read through ctx.store when the context names one, never the folder hippoRoot names.
+import type { FullContext } from './_helpers/api-ctx.js';
 import { afterEach, describe, expect, it } from 'vitest';
 import { rmSync } from 'node:fs';
-import { adminActor, authCreate, authKeyTenant, NotFoundError, reject, type StoreContext } from '../src/api/index.js';
+import { adminActor, authCreate, authKeyTenant, NotFoundError, reject } from '../src/api/index.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { readEntry } from '../src/store/entry-reads.js';
 import { writeEntry } from '../src/store/entry-writes.js';
@@ -24,7 +25,7 @@ function root(): string {
   return made;
 }
 
-function ctxAt(hippoRoot: string): StoreContext {
+function ctxAt(hippoRoot: string): FullContext {
   return apiCtx(hippoRoot, TENANT, adminActor('cli'));
 }
 

@@ -14,18 +14,19 @@
  * vitest (would mock process.exit / stdout), so the contract is locked at
  * the api/db layer.
  */
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { authCreate, adminActor, type StoreContext } from '../src/api/index.js';
+import { authCreate, adminActor } from '../src/api/index.js';
 import { listApiKeys } from '../src/store/auth.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 
 function newCtx(tenantId = 'default') {
   const tmpDir = mkdtempSync(join(tmpdir(), 'hippo-auth-role-cli-'));
-  const ctx: StoreContext = apiCtx(tmpDir, tenantId, adminActor('cli'));
+  const ctx: FullContext = apiCtx(tmpDir, tenantId, adminActor('cli'));
   return {
     ctx,
     tmpDir,

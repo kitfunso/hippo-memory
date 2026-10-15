@@ -1,5 +1,6 @@
 // Every path that writes a new memory starts it on the store's configured default
 // half-life, never the compiled one. Real stores and the built CLI; only the LLM fetch is stubbed.
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -73,7 +74,7 @@ async function added<T>(root: string, write: () => T): Promise<MemoryEntry[]> {
 const writers: [string, (root: string) => Promise<MemoryEntry[]>][] = [
   ['api supersede', (root) => {
     const old = seed(root, 'the deploy window is Tuesday afternoon');
-    const ctx: api.StoreContext = apiCtx(root, 'default', api.adminActor('cli'));
+    const ctx: FullContext = apiCtx(root, 'default', api.adminActor('cli'));
     return added(root, () => api.supersede(ctx, old.id, 'the deploy window is Thursday morning'));
   }],
   ['CLI supersede', (root) => {
@@ -172,7 +173,7 @@ describe('an invalid configured default half-life', () => {
     fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ defaultHalfLifeDays: value, replay: { count: 0 } }));
     const warn = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     const old = seed(root, 'the deploy window is Tuesday afternoon');
-    const ctx: api.StoreContext = apiCtx(root, 'default', api.adminActor('cli'));
+    const ctx: FullContext = apiCtx(root, 'default', api.adminActor('cli'));
     const [entry] = await added(root, () => api.supersede(ctx, old.id, 'the deploy window is Thursday morning'));
     expect(entry.half_life_days).toBe(deriveHalfLife(DEFAULT_HALF_LIFE_DAYS, entry));
     expect(warn.mock.calls.some((args) => String(args[0]).includes('"defaultHalfLifeDays"'))).toBe(true);

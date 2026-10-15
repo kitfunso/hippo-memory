@@ -1,11 +1,12 @@
 // With ctx.store, connector ingest and deletion run on the store's connectorEvents and connectorWrites groups from the entry point
 // down, and both webhooks serve from a folder that never holds a hippo.db.
+import type { ConnectorContext } from '../src/connectors/store.js';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createHmac, randomBytes } from 'node:crypto';
 import { cpSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { Actor, StoreContext } from '../src/api/index.js';
+import type { Actor } from '../src/api/index.js';
 import { handleCommentDeleted } from '../src/connectors/github/deletion.js';
 import { ingestEvent } from '../src/connectors/github/ingest.js';
 import { handleMessageDeleted } from '../src/connectors/slack/deletion.js';
@@ -83,8 +84,8 @@ describe('the connector entry points on a store with connectorEvents', () => {
   it('ingest, redelivery, empty body, deletion and unknown deletion answer from the store with hippo.db blocked and none created in hippoRoot', async () => {
     const hippoRoot = markedFolder();
     const memory = inMemoryConnectorEventsStore(copyOf());
-    const slack: StoreContext = { hippoRoot, tenantId: TENANT_A, actor: slackActor, store: memory.store };
-    const github: StoreContext = { ...slack, actor: githubActor };
+    const slack: ConnectorContext = { hippoRoot, tenantId: TENANT_A, actor: slackActor, store: memory.store };
+    const github: ConnectorContext = { ...slack, actor: githubActor };
     const message = (eventId: string, text: string, ts: string) =>
       ingestMessage(slack, { teamId: 'T1', channel: { id: 'C1', is_private: false }, message: { type: 'message', channel: 'C1', user: 'U1', text, ts }, eventId });
     const comment = (deliveryId: string) => ingestEvent(github, {

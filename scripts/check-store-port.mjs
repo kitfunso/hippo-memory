@@ -27,6 +27,7 @@ const DB_DEFINITION_FILES = {
   'src/store/graph-rows.ts': 'graph row shapes of hippo.db',
   'src/store/rule-sql.ts': 'SQL text that other store files run',
   'src/store/port.ts': 'the store port every backend implements',
+  'src/store/narrow.ts': 'the run-time proof behind StoreWith, part of the port contract',
   'src/store/index.ts': 'the published entry of the store port',
   'src/store/sqlite/': 'the SQLite adapter and its executor plumbing',
 };
@@ -179,6 +180,9 @@ const rowLabel = (row, sf) => {
 
 const isOffLoop = (p) => ts.isPropertyAssignment(p) && ts.isIdentifier(p.name) && p.name.text === 'loop' && ts.isStringLiteralLike(p.initializer) && p.initializer.text === 'off';
 
+// defineRoute({...}) wraps each row to type its handler; the row is still its first argument.
+const unwrapDefineRoute = (el) => (ts.isCallExpression(el) && ts.isIdentifier(el.expression) && el.expression.text === 'defineRoute' && el.arguments.length === 1 ? el.arguments[0] : el);
+
 /** Reads the V1_ROUTES array literal: rows with neither a string-literal storeReady nor a non-empty string-literal sqliteOnly, the sorted `METHOD path` of the sqliteOnly rows,
  *  and the rows that do not declare `loop: 'off'` plus every route outside the table. */
 function readRoutes(sf) {
@@ -196,7 +200,8 @@ function readRoutes(sf) {
   let without = 0;
   let onLoop = OFF_TABLE_ROUTES.length;
   const sqliteOnly = [];
-  for (const row of array.elements) {
+  for (const element of array.elements) {
+    const row = unwrapDefineRoute(element);
     const at = `row at line ${sf.getLineAndCharacterOfPosition(row.getStart(sf)).line + 1}`;
     if (!ts.isObjectLiteralExpression(row)) return routeFail(`has a spread or non-object element (${at})`);
     if (!row.properties.some(isOffLoop)) onLoop++;

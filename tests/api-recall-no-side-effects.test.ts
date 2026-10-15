@@ -19,13 +19,14 @@
  * Real-DB per project convention.
  */
 
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { loadIndex } from '../src/store/index-and-stats.js';
-import { remember, retrieve, getContext, type StoreContext } from '../src/api/index.js';
+import { remember, retrieve, getContext } from '../src/api/index.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 
 function tmpHome() {
@@ -50,7 +51,7 @@ describe('api.recall divergence from cmdRecall (no last_retrieval_ids side-effec
   it('api.recall does NOT write last_retrieval_ids; api.getContext DOES', async () => {
     const { home, restore } = tmpHome();
     try {
-      const ctx: StoreContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
+      const ctx: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
       await remember(ctx, { content: 'recall-divergence-target-1' });
       await remember(ctx, { content: 'recall-divergence-target-2 also matches' });
 
@@ -79,7 +80,7 @@ describe('api.recall divergence from cmdRecall (no last_retrieval_ids side-effec
   it('batched api.recall calls leave last_retrieval_ids untouched (no overwrite race)', async () => {
     const { home, restore } = tmpHome();
     try {
-      const ctx: StoreContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
+      const ctx: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
       await remember(ctx, { content: 'batched-A' });
       await remember(ctx, { content: 'batched-B' });
       await remember(ctx, { content: 'batched-C' });

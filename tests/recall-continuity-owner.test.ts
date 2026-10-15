@@ -1,9 +1,10 @@
 // Recall's continuity block on a shared store is the caller's own task state, keyed by owner and project, or empty.
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { createApiKey } from '../src/store/auth.js';
-import { retrieve, type StoreContext } from '../src/api/index.js';
+import { retrieve } from '../src/api/index.js';
 import { _resetSharedStoreCacheForTests } from '../src/core/config.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { saveActiveTaskSnapshot } from '../src/store/sessions.js';
@@ -19,7 +20,7 @@ const EMPTY = { activeSnapshot: null, sessionHandoff: null, recentSessionEvents:
 let home: string;
 let handle: ServerHandle | undefined;
 
-const ctx = (owner: string): StoreContext => (apiCtx(home, 'default', { subject: `api_key:hk_${owner}`, role: 'member', owner }));
+const ctx = (owner: string): FullContext => (apiCtx(home, 'default', { subject: `api_key:hk_${owner}`, role: 'member', owner }));
 
 function snap(task: string, session: string) {
   return { task, summary: `${task} summary`, next_step: `${task} next`, session_id: session };

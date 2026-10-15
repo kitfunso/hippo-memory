@@ -6,10 +6,10 @@ import {
   type ApiKeyListItem, type ApiKeyListRow, type ApiKeyRecord, type ListApiKeysOpts, type NewApiKey,
 } from '../store/auth.js';
 import type { KeysetPosition } from '../util/keyset.js';
-import { requireGroup, type HippoStore, type KeyMint, type SelfKeyMint } from '../store/index.js';
+import type { KeyMint, SelfKeyMint, StoreWith } from '../store/index.js';
 import type { ApiKeyOwner } from '../store/tenant-lookup.js';
 import { DAY_MS } from '../util/time.js';
-import { requireHostAdmin, type Actor, type Context, type StoreContext } from './types.js';
+import { requireHostAdmin, type Actor, type Context, type ContextWith, type StoreContext } from './types.js';
 
 const API_KEY_SUBJECT = 'api_key:';
 
@@ -42,9 +42,9 @@ export interface AuthCreateResult {
 /** Mints a key always bound to `ctx.tenantId`; opts cannot override the tenant, or
  * tenant A could mint a key for tenant B. Admin only (ForbiddenError otherwise), and a
  * key never outranks its minter: a resolver admin is tenant-only, so it mints members. */
-export async function authCreate(ctx: StoreContext, opts: AuthCreateOpts): Promise<AuthCreateResult> {
+export async function authCreate(ctx: ContextWith<'keyWrites'>, opts: AuthCreateOpts): Promise<AuthCreateResult> {
   // The key and its auth_create row commit together on every store, so a failed audit write leaves no key.
-  const keyWrites = requireGroup(ctx.store, 'keyWrites');
+  const keyWrites = ctx.store.keyWrites;
   const { plaintext, mint } = adminKeyMint(ctx, opts);
   await keyWrites.createApiKey(mint);
   return createResult(mint, plaintext);
@@ -132,8 +132,11 @@ function assertSelfMintOpts({ ttlDays, perSubject }: AuthCreateSelfOpts): void {
 
 /** Mint a member key for the caller an auth resolver vouched for, whatever its role; the
  * binary floor, the cap's revokes, the mint and its audit rows commit or fail together. */
-export async function authCreateSelf(ctx: StoreContext, opts: AuthCreateSelfOpts): Promise<AuthCreateSelfResult> {
-  const keyWrites = requireGroup(ctx.store, 'keyWrites');
+export async function authCreateSelf(
+  ctx: ContextWith<'keyWrites'>,
+  opts: AuthCreateSelfOpts,
+): Promise<AuthCreateSelfResult> {
+  const keyWrites = ctx.store.keyWrites;
   const { plaintext, mint } = selfKeyMint(ctx, opts);
   await keyWrites.createSelfApiKey(mint);
   return selfResult(mint, plaintext);
@@ -168,7 +171,7 @@ function selfResult({ key }: SelfKeyMint, plaintext: string): AuthCreateSelfResu
 type KeyListOpts = { active: boolean; limit?: number; after?: KeysetPosition };
 
 /** One page of the caller's tenant's keys, newest first, with the row ids a next-page cursor is built from. */
-export async function authListRows(ctx: StoreContext, opts: KeyListOpts): Promise<ApiKeyListRow[]> {
+export async function authListRows(ctx: ContextWith<'keyWrites'>, opts: KeyListOpts): Promise<ApiKeyListRow[]> {
   return listRows(ctx, ctx.store, opts);
 }
 
@@ -179,8 +182,8 @@ export function authListAllTenants(ctx: Context, active: boolean): ApiKeyListIte
   return listApiKeys(ctx.hippoRoot, { active });
 }
 
-async function listRows(ctx: Context, store: HippoStore, opts: KeyListOpts): Promise<ApiKeyListRow[]> {
-  const keyWrites = requireGroup(store, 'keyWrites');
+async function listRows(ctx: Context, store: StoreWith<'keyWrites'>, opts: KeyListOpts): Promise<ApiKeyListRow[]> {
+  const keyWrites = store.keyWrites;
   const keyId = memberKeyIdOf(ctx.actor);
   const record = keyId === null ? undefined : await store.findApiKey(keyId);
   const filter = memberListFilter(ctx.actor, record?.ownerSubject);
@@ -233,9 +236,9 @@ export interface AuthRevokeResult {
 /** Revoke a key in the caller's tenant: a member API key may revoke only itself, a resolver member only the keys it
  *  minted.
  *  The revoke and its auth_revoke row commit together on either store, so a failed audit write leaves the key live. */
-export async function authRevoke(ctx: StoreContext, keyId: string): Promise<AuthRevokeResult> {
+export async function authRevoke(ctx: ContextWith<'keyAudit'>, keyId: string): Promise<AuthRevokeResult> {
   const store = ctx.store;
-  const keyAudit = requireGroup(store, 'keyAudit');
+  const keyAudit = store.keyAudit;
   assertMemberKeyRevokesSelf(ctx, keyId);
   const record = await store.findApiKey(keyId);
   assertMayRevoke(ctx, keyId, keyOwnerOf(record));
@@ -275,23 +278,27 @@ export interface AuthGrantResult {
 }
 
 /** Grant `keyId` read access to one restricted `scope`. Admin only. */
-export async function authGrant(ctx: StoreContext, keyId: string, scope: string): Promise<AuthGrantResult> {
+export async function authGrant(ctx: ContextWith<'keyGrants'>, keyId: string, scope: string): Promise<AuthGrantResult> {
   return changeGrant(ctx, keyId, scope, 'auth_grant');
 }
 
 /** Revoke `keyId`'s grant on `scope`. Same authorization and lookup rules as authGrant. */
-export async function authUngrant(ctx: StoreContext, keyId: string, scope: string): Promise<AuthGrantResult> {
+export async function authUngrant(
+  ctx: ContextWith<'keyGrants'>,
+  keyId: string,
+  scope: string,
+): Promise<AuthGrantResult> {
   return changeGrant(ctx, keyId, scope, 'auth_ungrant');
 }
 
 async function changeGrant(
-  ctx: StoreContext, keyId: string, scope: string, op: 'auth_grant' | 'auth_ungrant',
+  ctx: ContextWith<'keyGrants'>, keyId: string, scope: string, op: 'auth_grant' | 'auth_ungrant',
 ): Promise<AuthGrantResult> {
   if (ctx.actor.role !== 'admin') {
     throw new ForbiddenError('Only an admin key can change scope grants');
   }
   const change = { tenantId: ctx.tenantId, keyId, scope, op, actor: ctx.actor.subject };
-  await requireGroup(ctx.store, 'keyGrants').changeScopeGrant(change);
+  await ctx.store.keyGrants.changeScopeGrant(change);
 
   return { ok: true };
 }

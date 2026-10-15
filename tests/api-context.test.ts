@@ -20,13 +20,14 @@
  *     so hasGlobal=false and the test stays local-only.
  */
 
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { saveActiveTaskSnapshot } from '../src/store/sessions.js';
-import { remember, getContext, type StoreContext } from '../src/api/index.js';
+import { remember, getContext } from '../src/api/index.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 
 function tmpHome() {
@@ -56,7 +57,7 @@ describe('api.getContext', () => {
   it('returns an empty result on an empty store', async () => {
     const { home, restore } = tmpHome();
     try {
-      const ctx: StoreContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
+      const ctx: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
       const result = await getContext(ctx, {});
       expect(result.entries).toEqual([]);
       expect(result.tokens).toBe(0);
@@ -70,7 +71,7 @@ describe('api.getContext', () => {
   it("'*' fallback returns memories within budget, strongest first", async () => {
     const { home, restore } = tmpHome();
     try {
-      const ctx: StoreContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
+      const ctx: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
       for (let i = 0; i < 5; i++) {
         await remember(ctx, {
           content: `getcontext-fallback-mem-${i}`,
@@ -97,7 +98,7 @@ describe('api.getContext', () => {
   it('limit caps the number of entries returned', async () => {
     const { home, restore } = tmpHome();
     try {
-      const ctx: StoreContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
+      const ctx: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
       for (let i = 0; i < 4; i++) await remember(ctx, { content: `getcontext-limit-${i}`, kind: 'distilled' });
 
       const result = await getContext(ctx, { budget: 1500, limit: 2 });
@@ -111,7 +112,7 @@ describe('api.getContext', () => {
   it('honors a tight budget cap (excludes overflow entries)', async () => {
     const { home, restore } = tmpHome();
     try {
-      const ctx: StoreContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
+      const ctx: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
       // Seed 10 longish memories so total tokens >> tight budget
       for (let i = 0; i < 10; i++) {
         await remember(ctx, {
@@ -133,8 +134,8 @@ describe('api.getContext', () => {
   it('tenant scoping: tenant_a does not see tenant_b memories', async () => {
     const { home, restore } = tmpHome();
     try {
-      const ctxA: StoreContext = apiCtx(home, 'tenant_a', { subject: 'cli', role: 'admin' });
-      const ctxB: StoreContext = apiCtx(home, 'tenant_b', { subject: 'cli', role: 'admin' });
+      const ctxA: FullContext = apiCtx(home, 'tenant_a', { subject: 'cli', role: 'admin' });
+      const ctxB: FullContext = apiCtx(home, 'tenant_b', { subject: 'cli', role: 'admin' });
       await remember(ctxA, { content: 'belongs-to-tenant-A', kind: 'distilled' });
       await remember(ctxB, { content: 'belongs-to-tenant-B', kind: 'distilled' });
 
@@ -156,7 +157,7 @@ describe('api.getContext', () => {
   it('returns activeSnapshot when one is set for the active session', async () => {
     const { home, restore } = tmpHome();
     try {
-      const ctx: StoreContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
+      const ctx: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
       saveActiveTaskSnapshot(home, ctx.tenantId, {
         task: 'Test task for api.getContext',
         summary: 'Stub for the activeSnapshot return path',
@@ -180,7 +181,7 @@ describe('api.getContext', () => {
   it('budget=0 short-circuits to an empty result', async () => {
     const { home, restore } = tmpHome();
     try {
-      const ctx: StoreContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
+      const ctx: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
       await remember(ctx, { content: 'budget-zero-test', kind: 'distilled' });
 
       const result = await getContext(ctx, { budget: 0 });

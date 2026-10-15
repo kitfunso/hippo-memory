@@ -10,11 +10,12 @@
 // Real DB, real CLI subprocess. Same isolation harness as Task 6
 // (cwd tempdir, separate HIPPO_HOME global root, HIPPO_SKIP_AUTO_INTEGRATIONS=1)
 // to keep dev-machine memories from leaking into tests.
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { remember, type StoreContext } from '../src/api/index.js';
+import { remember } from '../src/api/index.js';
 import { pushGoal } from '../src/store/goals.js';
 import { makeEnv, type TestEnv } from './_helpers/cli-env.js';
 import { apiCtx } from './_helpers/api-ctx.js';
@@ -60,7 +61,7 @@ describe('retrieval policy', () => {
   });
 
   it('error-prioritized policy ranks error-tagged > non-error within same goal', async () => {
-    const ctx: StoreContext = apiCtx(env.hippoRoot, 'default', { subject: 'cli', role: 'admin' });
+    const ctx: FullContext = apiCtx(env.hippoRoot, 'default', { subject: 'cli', role: 'admin' });
     await remember(ctx, { content: 'note one about auth refactor', tags: ['auth-rewrite'] });
     await remember(ctx, {
       content: 'lesson learned during auth refactor: bare except handler caused a bug',
@@ -80,7 +81,7 @@ describe('retrieval policy', () => {
   });
 
   it('final multiplier never exceeds 3.0x even with extreme policy weights', async () => {
-    const ctx: StoreContext = apiCtx(env.hippoRoot, 'default', { subject: 'cli', role: 'admin' });
+    const ctx: FullContext = apiCtx(env.hippoRoot, 'default', { subject: 'cli', role: 'admin' });
     await remember(ctx, { content: 'high-error lesson', tags: ['plan-x', 'error'] });
 
     // Baseline: no session → no boost.

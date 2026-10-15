@@ -6,6 +6,7 @@
  * idempotency across N child writes, orphan-child no-op.
  */
 
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -18,10 +19,10 @@ import { openHippoDb } from '../src/db/index.js';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../src/core/memory.js';
 import { archiveRawMemory } from '../src/store/raw-archive.js';
 import { invalidateMatching } from '../src/learn/invalidation.js';
-import { supersede, type StoreContext } from '../src/api/index.js';
+import { supersede } from '../src/api/index.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 
-function defaultCtx(hippoRoot: string): StoreContext {
+function defaultCtx(hippoRoot: string): FullContext {
   return apiCtx(hippoRoot, 'default', { subject: 'test-actor', role: 'admin' });
 }
 

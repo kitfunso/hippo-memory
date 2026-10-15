@@ -13,7 +13,7 @@ import { computeAmbientState } from '../core/ambient.js';
 import { loadPendingExtractionTenants, markPendingProcessedUpTo } from '../store/graph-queue.js';
 import { extractGraphChunked, type ExtractResult } from '../graph/extract.js';
 import type { MemoryEntry } from '../core/memory.js';
-import type { Context, StoreContext } from './types.js';
+import type { Context, ContextWith, StoreContext } from './types.js';
 import { objectsOf } from './objects.js';
 import type { Objects } from '../store/port.js';
 import { removeAuditErrors } from './audit.js';
@@ -65,7 +65,7 @@ interface DirtyTenantSnapshot {
 /** `sleep` with its phase dependencies overridable; tests pass
  * stubs here, so the seam never touches the public `SleepOpts`. */
 export async function runSleep(
-  ctx: StoreContext,
+  ctx: ContextWith<'auditMaintenance' | 'objects'>,
   opts: SleepOpts,
   overrides: Partial<SleepPhases> = {},
 ): Promise<SleepResult> {
@@ -90,7 +90,7 @@ export async function runSleep(
 }
 
 async function runSleepPhases(
-  ctx: StoreContext,
+  ctx: ContextWith<'auditMaintenance' | 'objects'>,
   opts: SleepOpts,
   phases: SleepPhases,
   counts: SleepCounts,
@@ -199,7 +199,7 @@ interface QualityAuditOptions {
 /** `removed` counts audit errors deleted (or that would be under dryRun); `remaining` is what the audit read, less the
  * rows it deleted. */
 async function runQualityAudit(
-  ctx: StoreContext,
+  ctx: ContextWith<'auditMaintenance'>,
   phases: SleepPhases,
   options: QualityAuditOptions,
 ): Promise<QualityAuditOutcome> {
@@ -262,7 +262,7 @@ function summarizeAmbient(
 // Phase 6: rebuild the graph of every tenant marked dirty since the last sleep, so graph recall runs on fresh data.
 // Fault-isolated: consolidation has already committed, so no failure here aborts sleep; a failed tenant stays pending.
 async function drainGraphQueue(
-  ctx: StoreContext,
+  ctx: ContextWith<'objects'>,
   phases: SleepPhases,
   snapshot: DirtyTenantSnapshot,
   result: SleepResult,
@@ -296,7 +296,7 @@ type GraphTotals = NonNullable<SleepResult['graph']>;
 /** Rebuilds one dirty tenant's graph into `rebuilt` and drains its
  * queue; a failure is a detail line and the tenant stays pending. */
 async function rebuildDirtyTenant(
-  ctx: StoreContext,
+  ctx: ContextWith<'objects'>,
   phases: SleepPhases,
   dirty: DirtyTenantSnapshot['dirtyTenants'][number],
   rebuilt: GraphTotals,

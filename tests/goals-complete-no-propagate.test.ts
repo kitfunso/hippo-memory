@@ -13,12 +13,13 @@
  * the log row.
  */
 
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
-import { remember, type StoreContext } from '../src/api/index.js';
+import { remember } from '../src/api/index.js';
 import { pushGoal, completeGoal } from '../src/store/goals.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { apiCtx } from './_helpers/api-ctx.js';
@@ -26,7 +27,7 @@ import { apiCtx } from './_helpers/api-ctx.js';
 const tenantId = 'default';
 const sessionId = 'sess-no-prop';
 
-function ctx(root: string): StoreContext {
+function ctx(root: string): FullContext {
   return apiCtx(root, tenantId, { subject: 'cli', role: 'admin' });
 }
 

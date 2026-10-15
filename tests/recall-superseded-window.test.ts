@@ -1,5 +1,6 @@
 // Superseded rows must not use up the recall candidate window, and a superseded
 // summary must never stand in for its children in recall overflow or assemble.
+import type { FullContext } from './_helpers/api-ctx.js';
 import { afterEach, describe, expect, it } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -9,7 +10,7 @@ import { createMemory } from './_helpers/default-half-life-memory.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadRecallSearchEntries } from '../src/store/search-rows.js';
-import { assemble, retrieve, supersede, type StoreContext } from '../src/api/index.js';
+import { assemble, retrieve, supersede } from '../src/api/index.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 
 const roots: string[] = [];
@@ -21,7 +22,7 @@ function newRoot(): string {
   return root;
 }
 
-const ctxFor = (hippoRoot: string): StoreContext =>
+const ctxFor = (hippoRoot: string): FullContext =>
   (apiCtx(hippoRoot, 'default', { subject: 'superseded-window-test', role: 'admin' }));
 
 afterEach(() => {

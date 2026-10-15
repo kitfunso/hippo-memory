@@ -7,11 +7,12 @@
  * tests/api-sleep-phase-faults.test.ts.
  */
 
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { sleep, adminActor, type StoreContext } from '../src/api/index.js';
+import { sleep, adminActor } from '../src/api/index.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
@@ -27,7 +28,7 @@ const CLEAN_ROW = 'gotcha: powershell 5.1 has no pipeline chain operators, use i
 describe('api.sleep secretSkipped counter', () => {
   let tmpDir: string;
   let globalTmp: string;
-  let ctx: StoreContext;
+  let ctx: FullContext;
 
   beforeEach(() => {
     tmpDir = mkdtempSync(join(tmpdir(), 'hippo-sleep-secretskip-'));

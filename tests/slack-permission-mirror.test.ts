@@ -1,14 +1,14 @@
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { initStore } from '../src/store/open.js';
-import type { StoreContext } from '../src/api/index.js';
 import { ingestMessage } from '../src/connectors/slack/ingest.js';
 import { retrieve } from '../src/api/index.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 
-const ctx = (root: string): StoreContext => (apiCtx(root, 'default', { subject: 'connector:slack', role: 'admin' }));
+const ctx = (root: string): FullContext => (apiCtx(root, 'default', { subject: 'connector:slack', role: 'admin' }));
 
 describe('slack permission mirroring', () => {
   let root: string;
@@ -74,8 +74,8 @@ describe('slack permission mirroring', () => {
   // with scope='slack:private:CSHARED'. Tenant A queries the same scope string
   // and must get nothing — recall is tenant-scoped before scope-scoped.
   it('tenant-mismatched scope does not leak across tenants', async () => {
-    const ctxA = (r: string): StoreContext => (apiCtx(r, 'tenantA', { subject: 'cli', role: 'admin' }));
-    const ctxB = (r: string): StoreContext => (apiCtx(r, 'tenantB', { subject: 'cli', role: 'admin' }));
+    const ctxA = (r: string): FullContext => (apiCtx(r, 'tenantA', { subject: 'cli', role: 'admin' }));
+    const ctxB = (r: string): FullContext => (apiCtx(r, 'tenantB', { subject: 'cli', role: 'admin' }));
     await ingestMessage(ctxB(root), {
       teamId: 'T1',
       channel: { id: 'CSHARED', is_private: true },

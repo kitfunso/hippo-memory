@@ -1,14 +1,15 @@
 // Pins how recallFrom drops same-text copies across its bands and counts them in the suppression summary.
 
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
-import { retrieve, type StoreContext } from '../src/api/index.js';
+import { retrieve } from '../src/api/index.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 
-function ctxFor(root: string): StoreContext {
+function ctxFor(root: string): FullContext {
   return apiCtx(root, 'default', { subject: 'test:held', role: 'admin' });
 }
 

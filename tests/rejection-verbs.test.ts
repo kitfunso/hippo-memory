@@ -4,6 +4,7 @@
  * docs/plans/2026-08-15-at1-rejected-value-tombstone.md
  */
 
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -28,7 +29,7 @@ beforeEach(() => {
   initStore(tmpDir);
 });
 
-function ctx(tenantId: string = 'default'): api.StoreContext {
+function ctx(tenantId: string = 'default'): FullContext {
   return apiCtx(tmpDir, tenantId, { subject: 'cli', role: 'admin' });
 }
 

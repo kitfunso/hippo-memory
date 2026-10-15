@@ -92,7 +92,11 @@ async function cmdForget(
   }
 }
 
-async function archiveForgottenRaw(ctx: api.StoreContext, id: string, reason: string | null): Promise<void> {
+async function archiveForgottenRaw(
+  ctx: api.ContextWith<'entryWrites'>,
+  id: string,
+  reason: string | null,
+): Promise<void> {
   if (!reason) {
     fail(ARCHIVE_REASON_REQUIRED);
   }
@@ -442,7 +446,11 @@ export async function handleQuarantine({ hippoRoot, tenantId, args, flags }: Com
   printQuarantineRows(rows);
 }
 
-async function decideQuarantined(ctx: api.StoreContext, sub: 'approve' | 'reject', id: string): Promise<void> {
+async function decideQuarantined(
+  ctx: api.ContextWith<'quarantine'>,
+  sub: 'approve' | 'reject',
+  id: string,
+): Promise<void> {
   if (!id) {
     fail(`Usage: hippo quarantine ${sub} <id>`);
   }

@@ -1,6 +1,7 @@
 // H3, H11, L2: sleep calls the LLM only when allowed and never with a secret in the
 // prompt, auto-sleep counts only what arrived since the last sleep, and remember
 // honours the configured half-life.
+import type { FullContext } from './_helpers/api-ctx.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -11,7 +12,7 @@ import { writeEntry } from '../src/store/entry-writes.js';
 import { readEntry } from '../src/store/entry-reads.js';
 import { countCreatedSinceLastSleep } from '../src/store/index-and-stats.js';
 import { consolidate } from '../src/consolidate/sleep.js';
-import { remember, type StoreContext } from '../src/api/index.js';
+import { remember } from '../src/api/index.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 
 const DAY = 86_400_000;
@@ -143,7 +144,7 @@ describe('the auto-sleep trigger', () => {
 describe('the configured base half-life', () => {
   it('api.remember uses defaultHalfLifeDays from config.json', async () => {
     const root = newRoot(JSON.stringify({ defaultHalfLifeDays: 14 }));
-    const ctx: StoreContext = apiCtx(root, 'default', { subject: 'cli', role: 'admin' });
+    const ctx: FullContext = apiCtx(root, 'default', { subject: 'cli', role: 'admin' });
     const { id } = await remember(ctx, { content: 'the on-call rotation hands over every tuesday' });
     expect(readEntry(root, id)?.half_life_days).toBe(14);
   });

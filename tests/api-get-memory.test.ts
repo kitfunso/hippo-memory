@@ -1,9 +1,10 @@
 // getMemory replaces readEntry in CLI verbs, so it must answer exactly what readEntry answers for every kind of row an id can name.
+import type { FullContext } from './_helpers/api-ctx.js';
 import { afterEach, describe, expect, it } from 'vitest';
 import { rmSync } from 'node:fs';
 import { getMemory } from '../src/api/memories.js';
 import { archiveRaw } from '../src/api/promote.js';
-import { adminActor, type StoreContext } from '../src/api/types.js';
+import { adminActor } from '../src/api/types.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, type CreateMemoryOptions, type MemoryEntry } from '../src/core/memory.js';
 import { insertDormantRow } from '../src/store/dormant.js';
 import { readEntry } from '../src/store/entry-reads.js';
@@ -26,7 +27,7 @@ function root(): string {
   return made;
 }
 
-function ctxAt(hippoRoot: string): StoreContext {
+function ctxAt(hippoRoot: string): FullContext {
   return apiCtx(hippoRoot, TENANT, adminActor('test'));
 }
 

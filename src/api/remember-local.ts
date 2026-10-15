@@ -12,7 +12,7 @@ import { loadAllEntries, readEntry } from '../store/entry-reads.js';
 import { updateStats } from '../store/index-and-stats.js';
 import { errorMessage, log } from '../util/log.js';
 import { remember } from './remember.js';
-import type { StoreContext } from './types.js';
+import type { ContextWith, StoreContext } from './types.js';
 
 const WEAK_HALF_LIFE_FACTOR = 0.5;
 
@@ -96,7 +96,10 @@ function indexInBackground(hippoRoot: string, entry: MemoryEntry): Promise<Embed
 
 /** One local write on hippo.db: gate, write, read-back, counter, then the embedding, started and never awaited. A
  * refused value throws as `remember` does. */
-export async function rememberLocally(ctx: StoreContext, input: LocalRememberInput): Promise<LocalRememberOutcome> {
+export async function rememberLocally(
+  ctx: ContextWith<'entryWrites'>,
+  input: LocalRememberInput,
+): Promise<LocalRememberOutcome> {
   const schemaFit = schemaFitInStore(ctx.hippoRoot, ctx.tenantId, input.content, input.fitTags ?? input.tags);
   const verdict = salienceVerdict(ctx, input);
   if (verdict?.decision === 'skip') return { status: 'skipped', reason: verdict.reason, score: verdict.score };

@@ -1,7 +1,7 @@
 import { addTagToEntries, writeEntriesTogether } from '../store/entry-writes.js';
 import { confirmedOutcomeTimes } from '../store/audit.js';
 import { loadCurrentEntriesFromOrigins, loadEntriesMentioning, readEntry } from '../store/entry-reads.js';
-import { requireGroup, type HippoStore } from '../store/port.js';
+import type { StoreWith } from '../store/index.js';
 import { chunked } from '../util/chunked.js';
 import { CHURN_STALE_TAG, type MemoryEntry } from '../core/memory.js';
 import {
@@ -111,7 +111,7 @@ export function invalidateMatching(
  * Each match is read again before it is weakened, so a row another writer changed since the list was read is never
  * written back stale. */
 export async function invalidateMatchingAmong(
-  store: HippoStore,
+  store: StoreWith<'lessonWrites'>,
   live: MemoryEntry[],
   target: InvalidationTarget,
   tenantId?: string,
@@ -124,7 +124,7 @@ export async function invalidateMatchingAmong(
     for (const entry of await store.entriesByIds(chunk, tenantId)) fresh.set(entry.id, entry);
   }
   const { result, weakened } = weakenMatches(ids.flatMap((id) => fresh.get(id) ?? []), target);
-  if (weakened.length > 0) await requireGroup(store, 'lessonWrites').writeTogether(weakened);
+  if (weakened.length > 0) await store.lessonWrites.writeTogether(weakened);
   const byId = new Map(weakened.map((entry) => [entry.id, entry]));
   for (let i = 0; i < live.length; i++) live[i] = byId.get(live[i].id) ?? live[i];
   return result;

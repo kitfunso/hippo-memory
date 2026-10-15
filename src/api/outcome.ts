@@ -1,9 +1,9 @@
 // Outcome feedback on recalled memories.
 
 import { personalScopeOf } from '../core/recall-scope.js';
-import { requireGroup } from '../store/index.js';
 import { HttpError } from '../util/http-util.js';
-import type { StoreContext } from './types.js';
+import { narrowStore } from '../store/index.js';
+import type { ContextWith, StoreContext } from './types.js';
 
 /** An id outside ctx.tenantId, or in someone else's personal scope, is skipped,
  *  so a stale id never fails the call. `appliedIds` holds only the ids applied:
@@ -15,19 +15,19 @@ export interface OutcomeResult {
 /** `opts.traceId` links the outcome to the recall trace it judges. Only outcomeForLastRecall sends one: explicit ids
  * may follow no recall at all. */
 export async function outcome(
-  ctx: StoreContext,
+  ctx: ContextWith<'entryWrites'>,
   ids: ReadonlyArray<string>,
   good: boolean,
   opts?: { traceId?: number },
 ): Promise<OutcomeResult> {
   const store = ctx.store;
-  const entryWrites = requireGroup(store, 'entryWrites');
+  const entryWrites = store.entryWrites;
   const write = { tenantId: ctx.tenantId, actor: ctx.actor.subject, ownScope: personalScopeOf(ctx.actor), ids, good };
   const traceId = opts?.traceId;
   // Recall traces live beside the last recall, so only a store with the lastRecall group can link one.
   const appliedIds = traceId === undefined
     ? await entryWrites.applyOutcome(write)
-    : await requireGroup(store, 'lastRecall').applyTracedOutcome(write, traceId);
+    : await narrowStore(store, 'lastRecall').lastRecall.applyTracedOutcome(write, traceId);
   return { applied: appliedIds.length, appliedIds };
 }
 

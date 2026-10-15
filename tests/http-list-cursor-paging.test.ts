@@ -1,5 +1,6 @@
 /** Keyset cursor paging on the /v1 list routes, against a real SQLite store and a real server: no mocks. */
 
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { serve, type ServerHandle } from '../src/server.js';
@@ -49,7 +50,7 @@ let handle: ServerHandle;
 let adminKey: CreateApiKeyResult;
 
 async function seedTenant(tenantId: string, count: number): Promise<void> {
-  const ctx: api.StoreContext = apiCtx(home, tenantId, api.adminActor('test'));
+  const ctx: FullContext = apiCtx(home, tenantId, api.adminActor('test'));
   for (let i = 0; i < count; i++) {
     await saveDecision(objectsAt(home), home, tenantId, { decisionText: `${tenantId} decision ${i}` });
     await openIncident(objectsAt(home), home, tenantId, { incidentText: `${tenantId} incident ${i}` }, 'cli');
@@ -153,7 +154,7 @@ describe.each(ROUTES)('GET $path paging', (route) => {
 });
 
 describe('no paging params: the body a small store got before cursors existed', () => {
-  const ctx = (): api.StoreContext => (apiCtx(home, 'default', api.adminActor('test')));
+  const ctx = (): FullContext => (apiCtx(home, 'default', api.adminActor('test')));
   const json = <T>(value: T): JsonValue => JSON.parse(JSON.stringify(value));
 
   // Each reference is the store call the route made before paging, with the same arguments.

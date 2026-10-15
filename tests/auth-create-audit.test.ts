@@ -4,18 +4,19 @@
  * Closes the v1.12.3 CHANGELOG-flagged deferral. Mirrors auth_revoke audit
  * coverage (already locked in tests/audit.test.ts and the M1 fix history).
  */
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { authCreate, authRevoke, adminActor, type StoreContext } from '../src/api/index.js';
+import { authCreate, authRevoke, adminActor } from '../src/api/index.js';
 import { queryAuditEvents } from '../src/store/audit.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 
 function newCtx(tenantId = 'default') {
   const tmpDir = mkdtempSync(join(tmpdir(), 'hippo-auth-create-audit-'));
-  const ctx: StoreContext = apiCtx(tmpDir, tenantId, adminActor('cli'));
+  const ctx: FullContext = apiCtx(tmpDir, tenantId, adminActor('cli'));
   return {
     ctx,
     tmpDir,

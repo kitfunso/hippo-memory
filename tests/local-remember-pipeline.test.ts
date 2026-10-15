@@ -1,9 +1,10 @@
 // rememberLocally and extractRememberedFacts on a real store: what each ending stores, counts and answers.
+import type { FullContext } from './_helpers/api-ctx.js';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import {
   adminActor, extractRememberedFacts, reject, rememberLocally,
-  type LocalRememberInput, type LocalRememberOutcome, type StoreContext,
+  type LocalRememberInput, type LocalRememberOutcome,
 } from '../src/api/index.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, Layer, type MemoryEntry } from '../src/core/memory.js';
 import { schemaFitInStore } from '../src/store/candidates.js';
@@ -25,21 +26,21 @@ afterAll(() => {
 });
 afterEach(() => { vi.unstubAllEnvs(); });
 
-function store(config?: MakeRootOptions['config']): StoreContext {
+function store(config?: MakeRootOptions['config']): FullContext {
   const hippoRoot = makeRoot('local-remember', { config });
   roots.push(hippoRoot);
   return apiCtx(hippoRoot, 'default', adminActor('cli'));
 }
 
-const counted = (ctx: StoreContext): number => Number(loadStats(ctx.hippoRoot).total_remembered);
-const rows = (ctx: StoreContext): MemoryEntry[] => loadAllEntries(ctx.hippoRoot, ctx.tenantId);
+const counted = (ctx: FullContext): number => Number(loadStats(ctx.hippoRoot).total_remembered);
+const rows = (ctx: FullContext): MemoryEntry[] => loadAllEntries(ctx.hippoRoot, ctx.tenantId);
 
-function seed(ctx: StoreContext, content: string, tags: string[]): void {
+function seed(ctx: FullContext, content: string, tags: string[]): void {
   writeEntry(ctx.hippoRoot, createMemory(content, { tags, baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
 }
 
 /** A store whose last four rows are errors, so a fifth that overlaps them is a repeated error. */
-function storeOfRepeatedErrors(): StoreContext {
+function storeOfRepeatedErrors(): FullContext {
   const ctx = store(SALIENCE_ON);
   for (let n = 1; n <= 4; n++) seed(ctx, `connection timeout on database shard ${n}`, ['error']);
   return ctx;
@@ -172,8 +173,8 @@ describe('extractRememberedFacts', () => {
     { content: 'The billing service retries a failed charge three times before paging', tags: ['topic:billing'], valence: 'neutral' },
   ];
   const answering = (text: string, status = 200): typeof fetch => async () => new Response(JSON.stringify({ content: [{ text }] }), { status });
-  const stored = async (ctx: StoreContext): Promise<MemoryEntry> => storedRow(await rememberLocally(ctx, { content: TEXT, tags: ['scope:eng'] }));
-  const extracted = (ctx: StoreContext, from: MemoryEntry): MemoryEntry[] => rows(ctx).filter((row) => row.extracted_from === from.id);
+  const stored = async (ctx: FullContext): Promise<MemoryEntry> => storedRow(await rememberLocally(ctx, { content: TEXT, tags: ['scope:eng'] }));
+  const extracted = (ctx: FullContext, from: MemoryEntry): MemoryEntry[] => rows(ctx).filter((row) => row.extracted_from === from.id);
 
   it('is off unless the caller or the config asks', async () => {
     const ctx = store();

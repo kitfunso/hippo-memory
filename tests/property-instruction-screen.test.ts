@@ -1,4 +1,5 @@
 // Injection screening over generated text: a flagged phrase stays flagged with invisible characters inside it, ordinary prose in many scripts never flags, and screening never changes what is stored.
+import type { FullContext } from './_helpers/api-ctx.js';
 import { afterAll, beforeAll, describe, it, expect } from 'vitest';
 import { rmSync } from 'node:fs';
 import * as api from '../src/api/index.js';
@@ -97,7 +98,7 @@ describe('injection screening leaves the stored text alone', () => {
   afterAll(() => { rmSync(root, { recursive: true, force: true }); });
 
   it('untrusted content is stored as it was sent, flagged or not', async () => {
-    const ctx: api.StoreContext = apiCtx(root, 'default', api.adminActor('test'));
+    const ctx: FullContext = apiCtx(root, 'default', api.adminActor('test'));
     // A visible word at each end: the store trims what it is given.
     const sent = map(arr(oneOf([PROSE, map(SMUGGLED, (s) => s.content)]), 1, 3), (bodies) => `note ${bodies.join('\n')} end`);
     // Each run is a real write and read, so this one property runs fewer times than the others, on one connection.

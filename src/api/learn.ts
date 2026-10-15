@@ -18,9 +18,8 @@ import { createMemory, Layer, schemaFitFrom, schemaFitSourceOf, type MemoryEntry
 import { extractPathTags } from '../search/path-context.js';
 import { canReadScope, personalScopeOf } from '../core/recall-scope.js';
 import { duplicateKey, longestWord, storedTextKeys } from '../util/same-text.js';
-import { requireGroup } from '../store/index.js';
 import type { LessonWrites } from '../store/port.js';
-import type { Context, StoreContext } from './types.js';
+import type { Context, ContextWith, StoreContext } from './types.js';
 
 /** How a surface writes what it learns. */
 export interface LearnProfile {
@@ -62,7 +61,7 @@ export interface LearnResult {
 type LessonCounts = Pick<LearnResult, 'added' | 'skipped' | 'rejected' | 'invalidations'>;
 
 /** Learn from `repoPath`'s last `days` of commits into the caller's tenant. Host admin only. */
-export async function learn(ctx: StoreContext, opts: LearnOpts): Promise<LearnResult> {
+export async function learn(ctx: ContextWith<'lessonWrites'>, opts: LearnOpts): Promise<LearnResult> {
   // It reads the host's own git history, which belongs to the host, not to the caller's tenant.
   if (!ctx.actor.hostAdmin) throw new ForbiddenError('hippo_learn requires a host admin');
   const none = { added: 0, skipped: 0, rejected: 0, lowInfo: 0, invalidations: [] };
@@ -150,7 +149,7 @@ function newLessonMemory(lesson: string, profile: LearnProfile, inputs: LessonMe
 }
 
 async function writeLessons(
-  ctx: StoreContext,
+  ctx: ContextWith<'lessonWrites'>,
   lessons: readonly string[],
   opts: LearnOpts,
   config: HippoConfig,
@@ -158,7 +157,7 @@ async function writeLessons(
   const { tenantId } = ctx;
   const { profile } = opts;
   const store = ctx.store;
-  const writes = requireGroup(store, 'lessonWrites');
+  const writes = store.lessonWrites;
   // `hippo init` calls this outside any request, so the batch brings
   // its own scope: every read and write below shares one handle.
   return runWithRequestStores(async () => {

@@ -4,7 +4,7 @@ import * as path from 'path';
 import { createHash } from 'node:crypto';
 import { createMemory, MemoryEntry } from '../core/memory.js';
 import { loadVaultRawRows, type VaultRawRow } from '../store/entry-reads.js';
-import { remember, archiveRaw, isPrivateScope, type StoreContext } from '../api/index.js';
+import { remember, archiveRaw, isPrivateScope, type ContextWith } from '../api/index.js';
 import { sqliteStore } from '../store/sqlite/store.js';
 import { assertClientScope } from '../core/recall-scope.js';
 import { RejectedValueError } from '../core/api-errors.js';
@@ -57,7 +57,7 @@ async function syncVaultFolder(
   const extraTags = options.extraTags ?? [];
   const dryRun = options.dryRun ?? false;
 
-  const ctx: StoreContext = {
+  const ctx: ContextWith<'entryWrites'> = {
     hippoRoot,
     tenantId,
     // Process-local actor; the vault importer is a CLI/SDK ingestion path, not
@@ -107,7 +107,7 @@ interface VaultTally {
 }
 
 interface VaultImportRun {
-  ctx: StoreContext;
+  ctx: ContextWith<'entryWrites'>;
   folderPath: string;
   vaultName: string;
   scope: string | null;

@@ -9,6 +9,7 @@
  * dormant, and a dormant memory older than `retentionDays` (default 180, 0 =
  * forever) is deleted for good. Real SQLite throughout.
  */
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, vi } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -58,7 +59,7 @@ function aged(entry: MemoryEntry, days: number): MemoryEntry {
   return { ...entry, half_life_days: (entry.half_life_days * 7) / DEFAULT_HALF_LIFE_DAYS, created: then, last_retrieved: then };
 }
 
-function ctxFor(home: string, tenantId = 'default'): api.StoreContext {
+function ctxFor(home: string, tenantId = 'default'): FullContext {
   return apiCtx(home, tenantId, { subject: 'test', role: 'admin' });
 }
 

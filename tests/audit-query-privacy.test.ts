@@ -1,3 +1,4 @@
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, mkdirSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -6,7 +7,7 @@ import { execFileSync } from 'node:child_process';
 import { initStore } from '../src/store/open.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { auditQueryFields } from '../src/store/audit.js';
-import { getContext, retrieve, remember, type StoreContext } from '../src/api/index.js';
+import { getContext, retrieve, remember } from '../src/api/index.js';
 import { handleMcpRequest, type McpContext } from '../src/mcp/server.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { apiCtx } from './_helpers/api-ctx.js';
@@ -20,7 +21,7 @@ let home: string;
 let localRoot: string;
 let globalRoot: string;
 let savedHome: string | undefined;
-let ctx: StoreContext;
+let ctx: FullContext;
 
 interface RecallMetadata {
   query?: string;

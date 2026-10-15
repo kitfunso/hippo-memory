@@ -1,3 +1,4 @@
+import type { FullContext } from './_helpers/api-ctx.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -6,7 +7,7 @@ import { cmdCapture } from '../src/capture/command.js';
 import { extractFromText, extractFromTexts } from '../src/capture/extract.js';
 import { sessionTail, summariseSessionTurns, type SessionTurn } from '../src/capture/transcript.js';
 import { extractLessons, partitionLessons } from '../src/learn/autolearn.js';
-import { getContext, type StoreContext } from '../src/api/index.js';
+import { getContext } from '../src/api/index.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, Layer } from '../src/core/memory.js';
 import { initStore, openStore } from '../src/store/open.js';
 import { closeHippoDb } from '../src/db/index.js';
@@ -133,7 +134,7 @@ describe('capture retains complete supported assertions', () => {
 describe('automatic quality does not govern manual or trusted import storage', () => {
   let scratch: string;
   let root: string;
-  let ctx: StoreContext;
+  let ctx: FullContext;
 
   beforeEach(() => {
     scratch = mkdtempSync(join(tmpdir(), 'hippo-quality-context-'));

@@ -1,5 +1,6 @@
 // `hippo context` renders the ambient state getContext returns, so the printed summary counts the rows the context admitted.
 
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -9,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
-import { getContext, type StoreContext } from '../src/api/index.js';
+import { getContext } from '../src/api/index.js';
 import { computeAmbientState, renderAmbientSummary } from '../src/core/ambient.js';
 import { _resetAblationCacheForTests } from '../src/core/ablation.js';
 import { apiCtx } from './_helpers/api-ctx.js';
@@ -47,7 +48,7 @@ describe('`hippo context` prints the ambient summary getContext computed', () =>
 describe('ambient summary: byte-identical, both v39 exclusion classes excluded', () => {
   let tmpRoot: string;
   let projA: string;
-  let ctx: StoreContext;
+  let ctx: FullContext;
 
   beforeEach(() => {
     process.env.HIPPO_FAKE_NOW = FAKE_NOW;
@@ -110,7 +111,7 @@ describe('ambient summary: avgStrength reflects post-retrieval strength, not the
     const projA = path.join(tmpRoot, 'proj-a', '.hippo');
     fs.mkdirSync(projA, { recursive: true });
     initStore(projA);
-    const ctx: StoreContext = apiCtx(projA, 'default', { subject: 'cli', role: 'admin' });
+    const ctx: FullContext = apiCtx(projA, 'default', { subject: 'cli', role: 'admin' });
 
     // Half-life 7 days, aged ~8 months before the call below: pre-retrieval
     // strength decays to near zero.

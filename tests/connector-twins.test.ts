@@ -1,8 +1,9 @@
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { adminActor, type StoreContext } from '../src/api/index.js';
+import { adminActor } from '../src/api/index.js';
 import { initStore } from '../src/store/open.js';
 import { githubEventRecord } from '../src/store/connectors/github.js';
 import { slackEventRecord } from '../src/store/connectors/slack.js';
@@ -16,7 +17,7 @@ import { apiCtx } from './_helpers/api-ctx.js';
 
 describe('GitHub and Slack share one event log and DLQ vocabulary', () => {
   let root: string;
-  let ctx: StoreContext;
+  let ctx: FullContext;
   beforeEach(() => {
     root = mkdtempSync(join(tmpdir(), 'hippo-connector-twins-'));
     initStore(root);

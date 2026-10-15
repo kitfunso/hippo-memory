@@ -1,9 +1,10 @@
 // On a shared store getContext's task state keys on owner and project, so each developer gets their own, across sessions.
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { createApiKey } from '../src/store/auth.js';
-import { getContext, type StoreContext } from '../src/api/index.js';
+import { getContext } from '../src/api/index.js';
 import { BadRequestError } from '../src/core/api-errors.js';
 import { _resetSharedStoreCacheForTests } from '../src/core/config.js';
 import { promptHookContext } from '../src/api/prompt-hook.js';
@@ -22,7 +23,7 @@ const KEY_B: ContinuityKey = { owner: 'bob', project: ['p'] };
 let home: string;
 let handle: ServerHandle | undefined;
 
-const ctx = (owner: string): StoreContext => (apiCtx(home, 'default', { subject: `api_key:hk_${owner}`, role: 'member', owner }));
+const ctx = (owner: string): FullContext => (apiCtx(home, 'default', { subject: `api_key:hk_${owner}`, role: 'member', owner }));
 
 function snap(task: string, session: string) {
   return { task, summary: `${task} summary`, next_step: `${task} next`, session_id: session };

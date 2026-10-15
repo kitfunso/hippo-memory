@@ -12,10 +12,11 @@
  * Project rule: always use real DB for tests.
  */
 
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
-import { retrieve, type StoreContext } from '../src/api/index.js';
+import { retrieve } from '../src/api/index.js';
 import { savePrediction, closePrediction } from '../src/store/predictions.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { apiCtx } from './_helpers/api-ctx.js';
@@ -23,7 +24,7 @@ import { apiCtx } from './_helpers/api-ctx.js';
 function safeRmSync(p: string): void {
   try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
 }
-function ctxFor(root: string, subject: string = 'cli'): StoreContext {
+function ctxFor(root: string, subject: string = 'cli'): FullContext {
   return apiCtx(root, 'default', { subject, role: 'admin' });
 }
 
@@ -145,14 +146,14 @@ describe('api.recall planningFallacyHint', () => {
 
   it('actor attribution: MCP-originated recall writes audit row with actor=mcp (not cli default)', async () => {
     seedMigrationEffortBaserate(root);
-    const mcpCtx: StoreContext = apiCtx(root, 'default', { subject: 'mcp', role: 'admin' });
+    const mcpCtx: FullContext = apiCtx(root, 'default', { subject: 'mcp', role: 'admin' });
     await retrieve(mcpCtx, { query: 'migration effort will take 3 days' });
     expect(lastAuditActor(root, 'recall_autodebias_hint')).toBe('mcp');
   });
 
   it('actor attribution: HTTP api_key:* subject flows through to audit', async () => {
     seedMigrationEffortBaserate(root);
-    const httpCtx: StoreContext = apiCtx(root, 'default', { subject: 'api_key:hk_demo123', role: 'admin' });
+    const httpCtx: FullContext = apiCtx(root, 'default', { subject: 'api_key:hk_demo123', role: 'admin' });
     await retrieve(httpCtx, { query: 'migration effort will take 3 days' });
     expect(lastAuditActor(root, 'recall_autodebias_hint')).toBe('api_key:hk_demo123');
   });
@@ -192,7 +193,7 @@ describe('api.recall planningFallacyHint', () => {
 
   it('cross-tenant scoping: tenant-b query gets no hint from tenant-a predictions', async () => {
     // Seed tenant-a only.
-    const ctxA: StoreContext = apiCtx(root, 'tenant-a', { subject: 'cli', role: 'admin' });
+    const ctxA: FullContext = apiCtx(root, 'tenant-a', { subject: 'cli', role: 'admin' });
     const pairs: Array<[number, number]> = [[2, 4], [3, 6]];
     for (const [est, act] of pairs) {
       const p = savePrediction(root, 'tenant-a', { classTag: 'migration-effort', claimText: 'tenant a prediction', estimateValue: est });
@@ -202,7 +203,7 @@ describe('api.recall planningFallacyHint', () => {
     const resultA = await retrieve(ctxA, { query: 'migration effort will take 3 days' });
     expect(resultA.planningFallacyHint).toBeDefined();
     // Tenant-b query gets nothing.
-    const ctxB: StoreContext = apiCtx(root, 'tenant-b', { subject: 'cli', role: 'admin' });
+    const ctxB: FullContext = apiCtx(root, 'tenant-b', { subject: 'cli', role: 'admin' });
     const resultB = await retrieve(ctxB, { query: 'migration effort will take 3 days' });
     expect(resultB.planningFallacyHint).toBeUndefined();
   });

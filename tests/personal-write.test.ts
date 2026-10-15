@@ -1,9 +1,10 @@
 // A personal write lands in the caller's own scope with origin '', and no client, vault or CLI can type a personal scope.
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { remember, type Actor, type StoreContext } from '../src/api/index.js';
+import { remember, type Actor } from '../src/api/index.js';
 import { BadRequestError } from '../src/core/api-errors.js';
 import { createApiKey } from '../src/store/auth.js';
 import { handleRemember } from '../src/cli/remember.js';
@@ -20,7 +21,7 @@ const NO_OWNER_TEXT = 'personal memories need a key its owner minted, or a sign-
 
 let root: string;
 
-function ctxFor(actor: Actor): StoreContext {
+function ctxFor(actor: Actor): FullContext {
   return apiCtx(root, 'default', actor);
 }
 

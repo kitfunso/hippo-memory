@@ -1,10 +1,11 @@
 // Ids and order from each ranker retrieve() names (the SQL band, the MCP wide list, the CLI core) over one seeded store,
 // pinned so a change to how any of them picks its search engine cannot move a ranking.
+import type { FullContext } from './_helpers/api-ctx.js';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { retrieve } from '../src/api/recall.js';
-import { adminActor, type RecallOpts, type StoreContext } from '../src/api/index.js';
+import { adminActor, type RecallOpts } from '../src/api/index.js';
 import type { RankRecallOpts } from '../src/api/recall-pipeline.js';
 import { loadConfig } from '../src/core/config.js';
 import { _resetAblationCacheForTests } from '../src/core/ablation.js';
@@ -83,7 +84,7 @@ const stable = (id: string): string => (id.startsWith('sem_') ? '<claim>' : id);
 let templates: Templates;
 let embeddings: HashedEmbeddings;
 
-const ctxOf = (s: Store): StoreContext => (apiCtx(s.root, TENANT, adminActor('golden')));
+const ctxOf = (s: Store): FullContext => (apiCtx(s.root, TENANT, adminActor('golden')));
 
 async function onStore<T>(fn: (s: Store) => Promise<T>): Promise<T> {
   const s = freshStore(templates, 'local');

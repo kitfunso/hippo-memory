@@ -1,8 +1,9 @@
 // The row fields `api.remember` and `api.supersede` take from a caller in this process reach the row,
 // and a client that sends the same fields over HTTP or MCP changes nothing.
+import type { FullContext } from './_helpers/api-ctx.js';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { rmSync } from 'node:fs';
-import { adminActor, remember, supersede, type StoreContext } from '../src/api/index.js';
+import { adminActor, remember, supersede } from '../src/api/index.js';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
 import { Layer, type MemoryEntry } from '../src/core/memory.js';
 import { createApiKey } from '../src/store/auth.js';
@@ -27,7 +28,7 @@ const LOCAL = {
 };
 
 let root: string;
-let ctx: StoreContext;
+let ctx: FullContext;
 
 beforeEach(() => {
   root = makeRoot('local-write-options', { config: { embeddings: { enabled: false }, autoSleep: { enabled: false } } });

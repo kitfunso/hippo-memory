@@ -10,6 +10,7 @@
  * Real SQLite (temp dirs), no mocks.
  */
 
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -27,7 +28,7 @@ import { extractGraph as realExtractGraph, extractGraphChunked, deriveGraph, loa
 import { graphDelta } from '../src/graph/delta.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { WRITE_BUDGET } from '../src/util/write-budget.js';
-import { sleep, adminActor, type StoreContext } from '../src/api/index.js';
+import { sleep, adminActor } from '../src/api/index.js';
 import { runSleep, type SleepPhases } from '../src/api/sleep-run.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 import { objectsAt } from './_helpers/objects-at.js';
@@ -36,7 +37,7 @@ const T = 'default';
 
 interface TestCtx {
   hippoRoot: string;
-  ctx: StoreContext;
+  ctx: FullContext;
   restore: () => void;
 }
 

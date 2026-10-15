@@ -1,7 +1,8 @@
 // The api reads behind the MCP admin tools: status counts, open conflicts and the personal-row guard.
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
-import { remember, listOpenConflicts, type Actor, type StoreContext } from '../src/api/index.js';
+import { remember, listOpenConflicts, type Actor } from '../src/api/index.js';
 import { getMemoryStatus, getTouchableMemory } from '../src/api/memories.js';
 import { NotFoundError } from '../src/core/api-errors.js';
 import { replaceDetectedConflicts } from '../src/store/conflicts.js';
@@ -11,7 +12,7 @@ import { apiCtx } from './_helpers/api-ctx.js';
 let root: string;
 const actorA: Actor = { subject: 'api_key:hk_a', role: 'member', owner: 'a' };
 const actorB: Actor = { subject: 'api_key:hk_b', role: 'member', owner: 'b' };
-const ctxFor = (actor: Actor): StoreContext => (apiCtx(root, 'default', actor));
+const ctxFor = (actor: Actor): FullContext => (apiCtx(root, 'default', actor));
 
 beforeEach(() => {
   root = makeRoot('api-admin-reads', { config: { embeddings: { enabled: false } } });

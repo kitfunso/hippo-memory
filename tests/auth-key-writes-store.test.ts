@@ -5,7 +5,7 @@ import { cpSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } fr
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
-  authCreate, authCreateSelf, authListRows,
+  authCreate, authCreateSelf, authListRows, narrowContext,
   type AuthCreateResult, type AuthCreateSelfResult,
 } from '../src/api/index.js';
 import { verifyApiKeyCached, type ApiKeyListItem, type ApiKeyListRow } from '../src/store/auth.js';
@@ -119,9 +119,9 @@ describe('authCreate and authCreateSelf with ctx.store', () => {
     const before = hippoDbState(storeRoot);
     const ctx = { hippoRoot: markedFolder(), tenantId: TENANT_A, actor: admin, store: portOnlyStoreWithoutVectorReads(storeRoot) };
     const calls: (() => Promise<AuthCreateResult | AuthCreateSelfResult | ApiKeyListRow[]>)[] = [
-      () => authCreate(ctx, { label: 'x' }),
-      () => authCreateSelf({ ...ctx, actor: resolverMember }, { ttlDays: 1, perSubject: 1 }),
-      () => authListRows(ctx, { active: false, limit: 5 }),
+      async () => authCreate(narrowContext(ctx, 'keyWrites'), { label: 'x' }),
+      async () => authCreateSelf(narrowContext({ ...ctx, actor: resolverMember }, 'keyWrites'), { ttlDays: 1, perSubject: 1 }),
+      async () => authListRows(narrowContext(ctx, 'keyWrites'), { active: false, limit: 5 }),
     ];
     for (const call of calls) {
       await expect(call()).rejects.toThrow(StoreNotPortedError);

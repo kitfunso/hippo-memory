@@ -15,6 +15,7 @@
  * Real-DB per project convention. Scratch HIPPO_HOME, never a repo checkout.
  */
 
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -26,7 +27,7 @@ import { writeEntry } from '../src/store/entry-writes.js';
 import { loadIndex } from '../src/store/index-and-stats.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { remember, retrieve, getContext, type StoreContext } from '../src/api/index.js';
+import { remember, retrieve, getContext } from '../src/api/index.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 
 // Invoke this worktree's own bin/hippo.js directly (not the `hippo` binary
@@ -98,7 +99,7 @@ describe('api.recall — trace wiring', () => {
   it('writes exactly one recall_traces row (pipeline=api) with the full returned id+rank+score list', async () => {
     const { home, restore } = tmpHome();
     try {
-      const ctx: StoreContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
+      const ctx: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
       await remember(ctx, { content: 'recall-trace-target-alpha' });
       await remember(ctx, { content: 'recall-trace-target-beta also matches' });
 
@@ -127,7 +128,7 @@ describe('api.recall — trace wiring', () => {
   it('does NOT write last_trace_id (v1.11.5 no-side-effects contract, extended)', async () => {
     const { home, restore } = tmpHome();
     try {
-      const ctx: StoreContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
+      const ctx: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
       await remember(ctx, { content: 'recall-trace-no-side-effect-target' });
 
       expect(lastTraceId(home)).toBeNull();
@@ -147,7 +148,7 @@ describe('api.recall — trace wiring', () => {
   it('batched api.recall calls each insert their own trace row (no overwrite race)', async () => {
     const { home, restore } = tmpHome();
     try {
-      const ctx: StoreContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
+      const ctx: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
       await remember(ctx, { content: 'batched-trace-A' });
       await remember(ctx, { content: 'batched-trace-B' });
       await remember(ctx, { content: 'batched-trace-C' });
@@ -165,7 +166,7 @@ describe('api.recall — trace wiring', () => {
   it('F2: suppressRecallTrace:true writes NO trace row', async () => {
     const { home, restore } = tmpHome();
     try {
-      const ctx: StoreContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
+      const ctx: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
       await remember(ctx, { content: 'suppressed-trace-target' });
 
       const result = await retrieve(ctx, { query: 'suppressed-trace-target', limit: 5, suppressRecallTrace: true });
@@ -182,7 +183,7 @@ describe('api.getContext — trace wiring', () => {
   it('writes a trace (pipeline=context) + last_trace_id for a real-query recall, atomically with last_retrieval_ids', async () => {
     const { home, restore } = tmpHome();
     try {
-      const ctx: StoreContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
+      const ctx: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
       await remember(ctx, { content: 'context-trace-target-gamma' });
 
       const result = await getContext(ctx, { q: 'context-trace-target', budget: 1000 });
@@ -204,7 +205,7 @@ describe('api.getContext — trace wiring', () => {
   it('pinnedOnly writes NO trace row and leaves last_trace_id untouched', async () => {
     const { home, restore } = tmpHome();
     try {
-      const ctx: StoreContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
+      const ctx: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
       writeEntry(home, createMemory('pinned-context-trace-delta', { pinned: true }));
 
       const result = await getContext(ctx, { pinnedOnly: true, budget: 1000 });
@@ -220,7 +221,7 @@ describe('api.getContext — trace wiring', () => {
   it('F5: the bare zero-result/no-continuity early return still writes an empty trace (result_count 0), but never touches last_retrieval_ids/last_trace_id', async () => {
     const { home, restore } = tmpHome();
     try {
-      const ctx: StoreContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
+      const ctx: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
       // A memory exists, but the query matches nothing, and there is no
       // active task snapshot / handoff / recent session events — this is
       // the bare `return { entries: [], tokens: 0 }` early-return path
@@ -255,7 +256,7 @@ describe('api.getContext — trace wiring', () => {
   it('stamps the trace session_id from opts.currentSessionId on a real-query recall', async () => {
     const { home, restore } = tmpHome();
     try {
-      const ctx: StoreContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
+      const ctx: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
       await remember(ctx, { content: 'context-trace-target-caller-session' });
 
       const result = await getContext(ctx, { q: 'context-trace-target-caller', budget: 1000, currentSessionId: 'sess-caller-1' });
@@ -272,7 +273,7 @@ describe('api.getContext — trace wiring', () => {
   it('F5 + caller id: the zero-result early-return trace also stamps opts.currentSessionId', async () => {
     const { home, restore } = tmpHome();
     try {
-      const ctx: StoreContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
+      const ctx: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
       disableEmbeddings(home);
       await remember(ctx, { content: 'context-empty-baseline-caller unrelated content' });
 

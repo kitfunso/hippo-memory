@@ -7,6 +7,7 @@
  * audit_log round-trip: the actor.subject is what shows up in the audit row.
  */
 
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -14,7 +15,7 @@ import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { queryAuditEvents } from '../src/store/audit.js';
-import { adminActor, remember, type Actor, type StoreContext } from '../src/api/index.js';
+import { adminActor, remember, type Actor } from '../src/api/index.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 
 describe('Context.actor shape', () => {
@@ -38,7 +39,7 @@ describe('Context.actor shape', () => {
     const home = mkdtempSync(join(tmpdir(), 'hippo-actor-shape-'));
     initStore(home);
     try {
-      const ctx: StoreContext = apiCtx(home, 'default', adminActor('cli'));
+      const ctx: FullContext = apiCtx(home, 'default', adminActor('cli'));
       await remember(ctx, { content: 'actor-shape-test-target' });
 
       const db = openHippoDb(home);

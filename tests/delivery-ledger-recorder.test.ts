@@ -1,4 +1,5 @@
 // getContext with the delivery observer attached: same result, no writes, and a reason for every rejected candidate.
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -6,7 +7,7 @@ import * as path from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
-import { getContext, type ContextOpts, type StoreContext } from '../src/api/index.js';
+import { getContext, type ContextOpts } from '../src/api/index.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { _resetAblationCacheForTests } from '../src/core/ablation.js';
 import type { HippoConfig } from '../src/core/config.js';
@@ -23,7 +24,7 @@ const PROMPT = 'how should the postgres migration rollback plan work';
 let tmpRoot: string;
 let local: string;
 let globalRoot: string;
-let ctx: StoreContext;
+let ctx: FullContext;
 
 function seed(root: string, content: string, extra: Partial<MemoryEntry> = {}): MemoryEntry {
   const entry = { ...createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), origin_project: PROJECT, ...extra };

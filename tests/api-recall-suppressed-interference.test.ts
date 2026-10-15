@@ -13,11 +13,12 @@
  * Real DB throughout (project convention).
  */
 
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
-import { retrieve, type StoreContext } from '../src/api/index.js';
+import { retrieve } from '../src/api/index.js';
 import { hashQueryText, type RecallHistorySnapshot, type RecallHistoryEntry } from '../src/api/recall-history.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { apiCtx } from './_helpers/api-ctx.js';
@@ -51,7 +52,7 @@ describe('suppressedByInterference counter', () => {
 
   it('was always 0 pre-v1.13.2 (no anchoring snapshot → stays 0)', async () => {
     seed(root, 'foo bar baz');
-    const ctx: StoreContext = apiCtx(root, 'default', { subject: 'cli', role: 'admin' });
+    const ctx: FullContext = apiCtx(root, 'default', { subject: 'cli', role: 'admin' });
     const result = await retrieve(ctx, { query: 'foo bar baz' });
     expect(result.suppressionSummary!.suppressedByInterference).toBe(0);
   });
@@ -59,7 +60,7 @@ describe('suppressedByInterference counter', () => {
   it('is 0 on R1 query_repeat (only memory_dominance counts as interference)', async () => {
     const id = seed(root, 'foo bar baz');
     const realHash = hashQueryText('foo bar baz');
-    const ctx: StoreContext = apiCtx(root, 'default', { subject: 'cli', role: 'admin' });
+    const ctx: FullContext = apiCtx(root, 'default', { subject: 'cli', role: 'admin' });
     // Snapshot: SAME queryHash as current call returning same top → R1 fires.
     const result = await retrieve(ctx, { query: 'foo bar baz', recallHistory: [entry(realHash, id)] });
     // R1 fires (or doesn't, depending on cooldown); either way suppressedByInterference
@@ -73,7 +74,7 @@ describe('suppressedByInterference counter', () => {
       entry(111, id),
       entry(222, id),
     ];
-    const ctx: StoreContext = apiCtx(root, 'default', { subject: 'cli', role: 'admin' });
+    const ctx: FullContext = apiCtx(root, 'default', { subject: 'cli', role: 'admin' });
     const result = await retrieve(ctx, { query: 'foo bar baz', recallHistory: snapshot });
     expect(result.suppressionSummary!.suppressedByInterference).toBe(1);
   });

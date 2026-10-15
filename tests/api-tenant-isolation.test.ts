@@ -1,3 +1,4 @@
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createRequire } from 'node:module';
 import { rmSync } from 'node:fs';
@@ -9,7 +10,6 @@ import {
   remember,
   promote,
   supersede,
-  type StoreContext,
 } from '../src/api/index.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { makeRoot } from './_helpers/make-root.js';
@@ -84,7 +84,7 @@ describe('api tenant isolation', () => {
 
   // The loser read the row before the winner committed, so its early check passed: only the guarded UPDATE can refuse it.
   it('supersede refuses the writer that read the row before another connection superseded it', async () => {
-    const alpha = (): StoreContext => (apiCtx(home, 'alpha', { subject: 'cli', role: 'admin' }));
+    const alpha = (): FullContext => (apiCtx(home, 'alpha', { subject: 'cli', role: 'admin' }));
     const created = await remember(alpha(), { content: 'alpha-row supersede CAS race canary' });
 
     const winners: string[] = [];

@@ -1,4 +1,5 @@
 // Store passes that walk many rows open the store once and read rows in chunked IN lists, so query counts stay flat as rows grow.
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -11,7 +12,7 @@ import { MEMORY_SELECT_COLUMNS } from '../src/store/rows.js';
 import { closeHippoDb } from '../src/db/index.js';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../src/core/memory.js';
 import { readEntry, loadAllEntries, heldIdLookup, loadEntriesByIds } from '../src/store/entry-reads.js';
-import { adminActor, type StoreContext } from '../src/api/types.js';
+import { adminActor } from '../src/api/types.js';
 import { learn, CLI_LEARN } from '../src/api/learn.js';
 import { handleRemember } from '../src/cli/remember.js';
 import { cmdCapture } from '../src/capture/command.js';
@@ -50,7 +51,7 @@ function freshRoot(label: string): string {
   return root;
 }
 
-function ctxFor(root: string): StoreContext {
+function ctxFor(root: string): FullContext {
   return apiCtx(root, 'default', adminActor('test:query-count'));
 }
 

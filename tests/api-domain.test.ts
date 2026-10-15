@@ -1,3 +1,4 @@
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -17,7 +18,6 @@ import {
   authListRows,
   authRevoke,
   auditList,
-  type StoreContext,
 } from '../src/api/index.js';
 import { appendAuditEvent } from '../src/store/audit.js';
 import { apiCtx } from './_helpers/api-ctx.js';
@@ -239,8 +239,8 @@ describe('api domain — archive_raw / auth / audit', () => {
   });
 
   it('authCreate + authList + authRevoke flow with cross-tenant guard', async () => {
-    const ctxA: StoreContext = apiCtx(home, 'tenant-a', { subject: 'cli', role: 'admin' });
-    const ctxB: StoreContext = apiCtx(home, 'tenant-b', { subject: 'cli', role: 'admin' });
+    const ctxA: FullContext = apiCtx(home, 'tenant-a', { subject: 'cli', role: 'admin' });
+    const ctxB: FullContext = apiCtx(home, 'tenant-b', { subject: 'cli', role: 'admin' });
 
     const k1 = await authCreate(ctxA, { label: 'first' });
     expect(k1.keyId).toMatch(/^hk_/);

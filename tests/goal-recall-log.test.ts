@@ -6,11 +6,12 @@
 // Uses the Task-6 isolation harness pattern: separate cwd tempdir, isolated
 // HIPPO_HOME global root, HIPPO_SKIP_AUTO_INTEGRATIONS=1, initStore on the
 // per-test .hippo dir. This prevents dev-machine memories from leaking in.
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { remember, type StoreContext } from '../src/api/index.js';
+import { remember } from '../src/api/index.js';
 import { pushGoal } from '../src/store/goals.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { makeEnv, type TestEnv } from './_helpers/cli-env.js';
@@ -36,7 +37,7 @@ function runRecall(env: TestEnv, query: string, sessionId: string, extraArgs: st
   );
 }
 
-const ctx = (root: string): StoreContext => (apiCtx(root, 'default', { subject: 'cli', role: 'admin' }));
+const ctx = (root: string): FullContext => (apiCtx(root, 'default', { subject: 'cli', role: 'admin' }));
 
 describe('goal_recall_log captured from real CLI recall', () => {
   let env: TestEnv;

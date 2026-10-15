@@ -1,7 +1,8 @@
 // A by-id write on another person's personal row answers exactly as a missing id does (D6, F13), the owner still gets through, and no reject sweep reaches another person's row.
+import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
-import { reject, remember, supersede, type Actor, type RejectResult, type StoreContext } from '../src/api/index.js';
+import { reject, remember, supersede, type Actor, type RejectResult } from '../src/api/index.js';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
 import { insertDormantRow, readDormantSnapshot } from '../src/store/dormant.js';
 import { mapApiError } from '../src/api/error-reply.js';
@@ -23,7 +24,7 @@ const outsiders: ReadonlyArray<[string, Actor]> = [['another owner', actorB], ['
 
 type ByIdCall = () => void | Promise<McpResponse | RejectResult | null>;
 
-function ctxFor(actor: Actor): StoreContext {
+function ctxFor(actor: Actor): FullContext {
   return apiCtx(root, 'default', actor);
 }
 

@@ -21,19 +21,19 @@ const SERVER_TYPES = [
 ];
 const STORE_KIT_VALUES = [
   'bufferToFloat32', 'decodeVector', 'EMBEDDING_MODEL_META_KEY', 'encodeVector', 'entryAfterOutcome', 'float32ToBuffer', 'ftsTermParts',
-  'hasGroup', 'isSharedStore', 'OTHER_STORE_MARKER', 'ownScopeTouches', 'passesScopeFilterForRecall', 'rankVectorRows', 'rarestFtsQuery',
+  'hasGroup', 'isSharedStore', 'OTHER_STORE_MARKER', 'narrowStore', 'ownScopeTouches', 'passesScopeFilterForRecall', 'rankVectorRows', 'rarestFtsQuery',
   'RECALL_DEFAULT_DENY_SCOPES', 'RejectedValueError', 'rejectionDigest', 'replacesIndex', 'SECRET_TAGS', 'sqliteStore', 'StoreBusyError',
   'tallyAmbientEntries',
 ];
 const STORE_KIT_TYPES = [
   'ActiveGoals', 'AmbientCandidateRequest', 'AmbientLoadResult', 'AmbientRecallRequest', 'AmbientStoreFilter', 'AmbientTallies',
   'ApiKeyListItem', 'ApiKeyListRow', 'ApiKeyRecord', 'AppendAuditOpts', 'AuditEvent', 'ClassResolution', 'ContextCandidateFilter',
-  'ContextReads', 'ContinuityBlock', 'ContinuityKey', 'EmbeddingIndexState', 'EntryRemoval', 'EntryTarget', 'EntryWrite', 'EntryWrites',
+  'ContextReads', 'ContextWith', 'ContinuityBlock', 'ContinuityKey', 'EmbeddingIndexState', 'EntryRemoval', 'EntryTarget', 'EntryWrite', 'EntryWrites',
   'GetActiveGoalsOpts', 'Goal', 'GoalRecallLogRow', 'HippoDbContext', 'HippoStore', 'KeyAudit', 'KeyListQuery', 'KeyMint', 'KeyRevoke',
   'KeysetPosition', 'KeyWrites', 'LastRecall', 'LastRecallWrites', 'ListApiKeysOpts', 'ListAuditAfterOpts', 'MemoryEntry', 'NewApiKey',
   'OriginFilter', 'OutcomeWrite', 'PhysicsParticle', 'PlanningFallacyEvidence', 'PredictionBaserate', 'RawArchive', 'RecallScopeFilter',
   'RecallSearchArgs', 'RecallTraceInput', 'RecallWrites', 'RecentOrigins', 'RetrievalPolicy', 'SelfKeyMint', 'SessionEvent', 'SessionHandoff',
-  'StoreGroup', 'StoreGroups', 'StrengthenOptions', 'SupersedeWrite', 'TaskSnapshot', 'TokenUse', 'VectorBackfillQuery', 'VectorCandidateSpec',
+  'StoreGroup', 'StoreGroups', 'StoreWith', 'StrengthenOptions', 'SupersedeWrite', 'TaskSnapshot', 'TokenUse', 'VectorBackfillQuery', 'VectorCandidateSpec',
   'VectorMatch', 'VectorReads', 'VectorRow', 'VectorRowWrite', 'VectorWrite', 'VectorWriteResult', 'VectorWrites',
 ];
 

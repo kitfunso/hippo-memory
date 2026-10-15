@@ -5,7 +5,7 @@ import { cpSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { _resetAblationCacheForTests } from '../src/core/ablation.js';
-import { getContext, type Actor, type ContextOpts, type ContextResult } from '../src/api/index.js';
+import { getContext, narrowContext, type Actor, type ContextOpts, type ContextResult } from '../src/api/index.js';
 import { _resetSharedStoreCacheForTests, markSharedStore } from '../src/core/config.js';
 import { closeHippoDb, openHippoDb, setMeta, withSqliteBlocked } from '../src/db/index.js';
 import { StoreNotPortedError } from '../src/util/sqlite-blocked.js';
@@ -296,8 +296,8 @@ async function runPass(c: Omit<Case, 'name' | 'expected'>, { withGlobal, embedde
     const ctx = { hippoRoot: root, tenantId: c.tenantId ?? TENANT_A, actor: c.actor ?? ADMIN, store: store ?? sqliteStore(root) };
     const opts: ContextOpts = { currentProject: PROJECT, ...c.opts };
     const result = store && store.kind !== 'sqlite'
-      ? await withSqliteBlocked(store.kind, () => getContext(ctx, opts))
-      : await getContext(ctx, opts);
+      ? await withSqliteBlocked(store.kind, async () => getContext(narrowContext(ctx, 'contextReads'), opts))
+      : await getContext(narrowContext(ctx, 'contextReads'), opts);
     await store?.close();
     return {
       result,
@@ -392,7 +392,7 @@ describe('getContext on a store held in memory, with hippo.db blocked', () => {
     try {
       const store = portOnlyStore(home);
       const ctx = { hippoRoot: home, tenantId: TENANT_A, actor: ADMIN, store };
-      await expect(withSqliteBlocked(store.kind, () => getContext(ctx, { currentProject: PROJECT }))).rejects.toBeInstanceOf(StoreNotPortedError);
+      await expect(withSqliteBlocked(store.kind, async () => getContext(narrowContext(ctx, 'contextReads'), { currentProject: PROJECT }))).rejects.toBeInstanceOf(StoreNotPortedError);
       expect(readdirSync(home)).toEqual([]);
     } finally {
       rmSync(home, { recursive: true, force: true });

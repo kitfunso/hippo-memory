@@ -1,4 +1,5 @@
 // Sleep never builds a new memory from a superseded one, so an old claim cannot come back as a current row.
+import type { FullContext } from './_helpers/api-ctx.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -10,7 +11,7 @@ import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { loadChildrenOfSummary, loadAllL2Summaries } from '../src/store/summaries.js';
 import { consolidate } from '../src/consolidate/sleep.js';
-import { supersede, type StoreContext } from '../src/api/index.js';
+import { supersede } from '../src/api/index.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 
 const DAY = 86_400_000;
@@ -23,7 +24,7 @@ function newRoot(): string {
   return root;
 }
 
-const ctxFor = (hippoRoot: string): StoreContext =>
+const ctxFor = (hippoRoot: string): FullContext =>
   (apiCtx(hippoRoot, 'default', { subject: 'sleep-superseded-test', role: 'admin' }));
 
 afterEach(() => {
