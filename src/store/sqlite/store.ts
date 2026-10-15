@@ -19,6 +19,7 @@ import { servedSessions, sqliteSessions } from './sessions-group.js';
 import { servedConnectorEvents, sqliteConnectorEvents } from './connector-events-group.js';
 import { servedConnectorWrites, sqliteConnectorWrites } from './connector-writes-group.js';
 import { sqliteConsolidation } from './consolidation-group.js';
+import { sqliteLearning } from './learning-group.js';
 import { sqliteDagReads } from './dag-reads-group.js';
 import { sqliteEntryWrites } from './entry-writes-group.js';
 import {
@@ -80,7 +81,12 @@ export function sqliteSyncStore(
 ): SqliteSyncStore & Sync<Omit<StoreGroups, AsyncOnly | 'localFiles'>> & Pick<StoreGroups, 'localFiles'> {
   return {
     kind: 'sqlite',
-    localFiles: { hippoRoot, consolidation: sqliteConsolidation(hippoRoot), agentImport: sqliteAgentImport },
+    localFiles: {
+      hippoRoot,
+      consolidation: sqliteConsolidation(hippoRoot),
+      agentImport: sqliteAgentImport,
+      learning: sqliteLearning(hippoRoot),
+    },
     ...sqliteBaseReads(hippoRoot),
     ...sqliteRecallWrites(hippoRoot),
     keyAudit: sqliteKeyAudit(hippoRoot),
