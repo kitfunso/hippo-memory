@@ -144,7 +144,8 @@ export function writeFileAtomic(file: string, text: string, opts: { readonly dur
   } catch (err) {
     if (!(err instanceof Error) || !REPLACE_REFUSALS.includes(errnoCode(err))) throw err;
     log.warn(
-      `${target} could not be replaced by a rename (${errnoCode(err)}), so it is written in place: not atomic, a crash mid-write can leave it truncated`,
+      `${target} could not be replaced by a rename (${errnoCode(err)}), so it is ` +
+        `written in place: not atomic, a crash mid-write can leave it truncated`,
       errorFields(err),
     );
     writeInPlace(target, text);

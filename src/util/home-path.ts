@@ -6,7 +6,9 @@ const WIN_SEP = String.raw`(?:[\\/]|%5[Cc]|%2[Ff])`;
 const WIN_CHAR = String.raw`(?:(?!%5[Cc]|%2[Ff])[^\\/:*?"<>|\s])`;
 // A Windows name never holds a quote, so JSON stops it; one with spaces runs to a separator, quote,
 // closing mark or line end, leaving the mark, as stopping at its first word leaks the surname.
-const WIN_USER = String.raw`(?:${WIN_CHAR}+(?: ${WIN_CHAR}+){0,3}(?=${WIN_SEP}|["'\`)\]>,;]|\.(?=\s|$)|(?<!\.)(?:[^\S ]|$))(?<![\`)\],;'])|${WIN_CHAR}+)`;
+const WIN_USER =
+  String.raw`(?:${WIN_CHAR}+(?: ${WIN_CHAR}+){0,3}(?=${WIN_SEP}|["'\`)\]>,;]|\.(?=\s|$)|` +
+  String.raw`(?<!\.)(?:[^\S ]|$))(?<![\`)\],;'])|${WIN_CHAR}+)`;
 
 // Slash-led homes with their case spelled out and no flag, so one pattern can hold all four: Git Bash and WSL mounts,
 // Linux, root and macOS.

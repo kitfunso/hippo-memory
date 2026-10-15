@@ -24,8 +24,10 @@ export class IncompatibleBinaryError extends Error {}
 function assertMinBinary(minRequired: string | null | undefined): void {
   if (minRequired && compareSemver(minRequired, PACKAGE_VERSION) > 0) {
     throw new IncompatibleBinaryError(
-      `hippo-memory: this database requires hippo-memory >= ${minRequired}, but the running binary is ${PACKAGE_VERSION}. ` +
-        `Upgrade hippo-memory to open it; an older binary does not know this schema and could expose private rows or damage the store.`,
+      `hippo-memory: this database requires hippo-memory >= ` +
+        `${minRequired}, but the running binary is ${PACKAGE_VERSION}. ` +
+        `Upgrade hippo-memory to open it; an older binary does not know ` +
+        `this schema and could expose private rows or damage the store.`,
     );
   }
 }
@@ -51,13 +53,14 @@ const sqlList = (names: readonly string[]): string => names.map((n) => `'${n}'`)
 
 /** The fast path's single probe: versions, the binary minimum, the FTS flag, and counts of the meta defaults and
  * required objects. */
+const REQUIRED_OBJECTS = sqlList(REQUIRED_SCHEMA_OBJECTS);
 export const SCHEMA_PROBE_SQL = `SELECT
   (SELECT user_version FROM pragma_user_version) AS user_version,
   (SELECT value FROM meta WHERE key = 'schema_version') AS schema_version,
   (SELECT value FROM meta WHERE key = 'min_compatible_binary') AS min_binary,
   (SELECT value FROM meta WHERE key = 'fts5_available') AS fts5,
   (SELECT COUNT(*) FROM meta WHERE key IN (${sqlList(META_DEFAULTS.map(([key]) => key))})) AS meta_keys,
-  (SELECT COUNT(*) FROM sqlite_master WHERE type IN ('table', 'index') AND name IN (${sqlList(REQUIRED_SCHEMA_OBJECTS)})) AS objects,
+  (SELECT COUNT(*) FROM sqlite_master WHERE type IN ('table', 'index') AND name IN (${REQUIRED_OBJECTS})) AS objects,
   (SELECT MAX(id) FROM raw_archive) AS archive_top,
   (SELECT 1 FROM memories LIMIT 1) AS has_memories`;
 

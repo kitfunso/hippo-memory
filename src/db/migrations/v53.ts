@@ -14,7 +14,8 @@ export const v53: Migration = {
         }
         if (!tableHasColumn(db, 'api_keys', 'expires_at')) db.exec(`ALTER TABLE api_keys ADD COLUMN expires_at TEXT`);
         db.exec(
-          `CREATE INDEX IF NOT EXISTS idx_api_keys_live_owner ON api_keys(tenant_id, owner_subject) WHERE revoked_at IS NULL`,
+          `CREATE INDEX IF NOT EXISTS idx_api_keys_live_owner ` +
+            `ON api_keys(tenant_id, owner_subject) WHERE revoked_at IS NULL`,
         );
       }
     },

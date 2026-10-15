@@ -27,7 +27,8 @@ export const v39: Migration = {
         // named in the SELECT above.
         const sourcedRows = db
           .prepare(
-            `SELECT id, source FROM memories WHERE origin_project IS NULL AND (source LIKE 'shared:%' OR source LIKE 'promoted:%')`,
+            `SELECT id, source FROM memories WHERE origin_project IS NULL ` +
+              `AND (source LIKE 'shared:%' OR source LIKE 'promoted:%')`,
           )
           .all() as Array<{ id: string; source: string }>;
         const setOrigin = db.prepare(`UPDATE memories SET origin_project = ? WHERE id = ?`);

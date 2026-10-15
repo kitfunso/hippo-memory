@@ -149,7 +149,8 @@ export function projectFileId(root: string): string | null {
     // No slash: a committed file in an untrusted clone must not claim a remote-shaped id like `github.com/acme/api`.
     if (id !== '' && id.length <= 200 && !/[:\s/\\]/.test(id)) return id;
     log.warn(
-      `${file}: "id" must be a non-empty string with no colon, slash or spaces; using the remote or folder name instead`,
+      `${file}: "id" must be a non-empty string with no colon, slash or spaces; ` +
+        'using the remote or folder name instead',
     );
   } catch (err) {
     log.warn(`${file} not read: ${errorMessage(err)}; using the remote or folder name instead`, errorFields(err));

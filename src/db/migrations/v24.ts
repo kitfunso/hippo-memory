@@ -65,7 +65,8 @@ export const v24: Migration = {
 
       db.exec(CREATE_TABLE_GITHUB_EVENT_LOG_SQL);
       db.exec(
-        `CREATE INDEX IF NOT EXISTS idx_github_event_log_memory ON github_event_log(memory_id) WHERE memory_id IS NOT NULL`,
+        `CREATE INDEX IF NOT EXISTS idx_github_event_log_memory ` +
+          `ON github_event_log(memory_id) WHERE memory_id IS NOT NULL`,
       );
       db.exec(`CREATE INDEX IF NOT EXISTS idx_github_event_log_delivery ON github_event_log(delivery_id)`);
 
@@ -84,7 +85,8 @@ export const v24: Migration = {
       // Rollback-safety guard: an older binary lacks the *:private:* default-deny and would leak
       // github:private:* rows; the startup guard refuses a DB whose min_compatible_binary is newer.
       db.prepare(
-        `INSERT INTO meta(key, value) VALUES('min_compatible_binary', ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`,
+        `INSERT INTO meta(key, value) VALUES('min_compatible_binary', ?) ` +
+          `ON CONFLICT(key) DO UPDATE SET value=excluded.value`,
       ).run('1.2.1');
     },
 };

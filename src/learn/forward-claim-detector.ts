@@ -11,7 +11,9 @@
  */
 // Shared duration suffix: needs a digit + unit (`<N> unit`, `a/an unit`, `one unit`) so 'will take ownership' and 'ship
 // in Docker' do not match.
-const DURATION_TAIL = String.raw`(?:about|around|~|≈)?\s*(?:\d+|a|an|one)\s*(?:day|week|month|hour|hr|min(?:ute)?|sec(?:ond)?)s?\b`;
+const DURATION_TAIL =
+  String.raw`(?:about|around|~|≈)?\s*(?:\d+|a|an|one)\s*` +
+  String.raw`(?:day|week|month|hour|hr|min(?:ute)?|sec(?:ond)?)s?\b`;
 
 const FORWARD_CLAIM_PATTERNS: ReadonlyArray<RegExp> = [
   // Verb + duration tail: requires `<verb> take <N> <unit>`, because a bare `will take` matched `who will take

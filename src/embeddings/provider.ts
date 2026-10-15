@@ -372,7 +372,8 @@ export function resolveEmbeddingProvider(
     // Fail loud on a typo'd provider rather than silently using local (which
     // would reindex with the local model and clobber the intended identity).
     throw new Error(
-      `Unknown embeddings.provider '${requested}'. Valid values: local, ${API_PROVIDER_KINDS.filter((k) => k !== 'local').join(', ')}.`,
+      `Unknown embeddings.provider '${requested}'. Valid values: local, ` +
+        `${API_PROVIDER_KINDS.filter((k) => k !== 'local').join(', ')}.`,
     );
   }
 

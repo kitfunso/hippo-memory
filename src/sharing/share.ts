@@ -158,7 +158,8 @@ function assertShareable(entry: MemoryEntry, id: string): void {
   // A quarantined row is unreviewed input, not a lesson; sharing it would spread poison globally.
   if (isQuarantineScope(entry.scope)) {
     throw new BadRequestError(
-      `Refusing to share ${id}: it is quarantined pending review. Approve it first via 'hippo quarantine approve ${id}'.`,
+      `Refusing to share ${id}: it is quarantined pending review. ` +
+        `Approve it first via 'hippo quarantine approve ${id}'.`,
     );
   }
   if (isPersonalScope(entry.scope ?? null)) {

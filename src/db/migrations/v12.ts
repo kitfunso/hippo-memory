@@ -8,7 +8,8 @@ export const v12: Migration = {
         db.exec(`ALTER TABLE memories ADD COLUMN extracted_from TEXT`);
       }
       db.exec(
-        `CREATE INDEX IF NOT EXISTS idx_memories_extracted_from ON memories(extracted_from) WHERE extracted_from IS NOT NULL`,
+        `CREATE INDEX IF NOT EXISTS idx_memories_extracted_from ` +
+          `ON memories(extracted_from) WHERE extracted_from IS NOT NULL`,
       );
     },
 };

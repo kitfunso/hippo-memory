@@ -129,7 +129,8 @@ export function boostByGoals<R extends { entry: MemoryEntry; score: number }>(
       return { ...r, score: r.score * multiplier } as R;
     })
     // Deliberately a PLAIN stable score sort with no compareEntryIdentity tail: re-sorting an already deterministic
-    // ranking inherits its determinism via stability, and ties keep the prior (meaningful) rank instead of reordering by content.
+    // ranking inherits its determinism via stability, and ties keep the prior (meaningful) rank instead of reordering
+    // by content.
     .sort((a, b) => compareScoresDesc(a.score, b.score));
 
   return { results: boosted, log: buildGoalRecallLog(boosted, matchesByEntryId, goalsByTag, opts) };

@@ -40,7 +40,11 @@ const BULLET = /^(?:[-*]|\d+\.)\s+(?:\[[ xX]\]\s+)?(.+)/;
 const LABEL = /^(?:decision|rule|error|bug|gotcha|important|critical|remember|plan):/i;
 const SENTENCE_END = /[.!?]["')\]]*$/;
 const SPEC_HEADING_PATTERNS = [
-  /^#+\s*(?:features?|requirements?|specs?|specifications?|plan|design|architecture|interface|api|todo|tasks?|implementation|notes?)(?:\s|:|$)/i,
+  new RegExp(
+    String.raw`^#+\s*(?:features?|requirements?|specs?|specifications?|plan|design|architecture|interface|api|todo|` +
+      String.raw`tasks?|implementation|notes?)(?:\s|:|$)`,
+    'i',
+  ),
   /^(?:features?|requirements?|specs?|specifications?|plan|design|tasks?|implementation)(?:\s*:|$)/i,
 ];
 // A list item may open a fence on its own line: "- ```".
@@ -126,7 +130,11 @@ function extractFromPatterns(sentence: string, patterns: readonly RegExp[], cate
   if (!keyed) return null;
   const content = sentence
     .replace(
-      /^(?:decision|plan|rule|important|critical|remember|error|bug|gotcha|watch out|careful|warning|caveat|trap|don't forget|easy to miss):\s*/i,
+      new RegExp(
+        String.raw`^(?:decision|plan|rule|important|critical|remember|error|bug|gotcha|watch out|careful|warning|` +
+          String.raw`caveat|trap|don't forget|easy to miss):\s*`,
+        'i',
+      ),
       '',
     )
     .replace(/[.!?\s]+$/, '')

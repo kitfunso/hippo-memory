@@ -29,7 +29,11 @@ const INSTRUCTION_PATTERNS: ReadonlyArray<{ name: string; re: RegExp }> = [
   // "always"/"never" alone (ordinary PR prose) doesn't flag without an agent-facing target nearby too.
   {
     name: 'standing-order',
-    re: /\b(?:from now on|whenever you|always|never)\b[^.\n]{0,50}\b(?:you must|(?:the ai|the assistant|the agent|claude|copilot)\s+(?:must|should|will)\b)/i,
+    re: new RegExp(
+      String.raw`\b(?:from now on|whenever you|always|never)\b[^.\n]{0,50}\b(?:you must|` +
+        String.raw`(?:the ai|the assistant|the agent|claude|copilot)\s+(?:must|should|will)\b)`,
+      'i',
+    ),
   },
   {
     name: 'concealment',
@@ -37,11 +41,19 @@ const INSTRUCTION_PATTERNS: ReadonlyArray<{ name: string; re: RegExp }> = [
   },
   {
     name: 'remote-script-exec',
-    re: /\b(?:curl|wget)\b[^\n|]{0,80}\|\s*(?:sudo\s+)?(?:sh|bash|zsh)\b|\biex\s*\(\s*(?:iwr|invoke-webrequest|new-object\s+net\.webclient)/i,
+    re: new RegExp(
+      String.raw`\b(?:curl|wget)\b[^\n|]{0,80}\|\s*(?:sudo\s+)?(?:sh|bash|zsh)\b|` +
+        String.raw`\biex\s*\(\s*(?:iwr|invoke-webrequest|new-object\s+net\.webclient)`,
+      'i',
+    ),
   },
   {
     name: 'exfiltration',
-    re: /\b(?:send|post|upload|exfiltrate)\b[^.\n]{0,40}\b(?:secrets?|tokens?|api[- ]?keys?|credentials?|env(?:ironment)? variables?)\b/i,
+    re: new RegExp(
+      String.raw`\b(?:send|post|upload|exfiltrate)\b[^.\n]{0,40}\b` +
+        String.raw`(?:secrets?|tokens?|api[- ]?keys?|credentials?|env(?:ironment)? variables?)\b`,
+      'i',
+    ),
   },
   { name: 'unicode-tag-chars', re: /[\u{E0000}-\u{E007F}]/u },
 ];

@@ -75,10 +75,12 @@ export const v22: Migration = {
       db.exec(BACKFILL_SESSION_HANDOFFS_TENANT_SQL);
 
       db.exec(
-        `CREATE INDEX IF NOT EXISTS idx_session_events_tenant_session ON session_events(tenant_id, session_id, created_at DESC, id DESC)`,
+        `CREATE INDEX IF NOT EXISTS idx_session_events_tenant_session ` +
+          `ON session_events(tenant_id, session_id, created_at DESC, id DESC)`,
       );
       db.exec(
-        `CREATE INDEX IF NOT EXISTS idx_session_handoffs_tenant_session ON session_handoffs(tenant_id, session_id, created_at DESC)`,
+        `CREATE INDEX IF NOT EXISTS idx_session_handoffs_tenant_session ` +
+          `ON session_handoffs(tenant_id, session_id, created_at DESC)`,
       );
     },
 };

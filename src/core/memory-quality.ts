@@ -40,47 +40,53 @@ export function isReleaseCommitNoise(text: string): boolean {
     || /^WIP\b/i.test(text);
 }
 
+const NOT_FILLER_WORD = String.raw`(?!(?:the|that|this|it|them|those|these|one|other|something)\b)\S+`;
+const PREFER_TARGET = new RegExp(String.raw`^(?:prefer|use|avoid|never use|don't use)\s+` + NOT_FILLER_WORD, 'i');
+const ALWAYS_NEVER_TARGET = new RegExp(String.raw`\b(?:never|always|must)\s+` + NOT_FILLER_WORD, 'i');
+
 /** Short preferences and rules carry a useful relationship even without a path or number. */
 export function hasNoSpecificity(text: string): boolean {
   const domainAcronyms = (text.match(/\b[A-Z]{2,6}\b/g) ?? []).filter(a => !CHAT_ACRONYMS.test(a));
   if (/\d|[A-Z][a-z]{2,}|[/\\.]|[`_{}()[\]]/.test(text)) return false;
   if (domainAcronyms.length > 0 && /[a-z]/.test(text)) return false;
-  if (
-    /^(?:prefer|use|avoid|never use|don't use)\s+(?!(?:the|that|this|it|them|those|these|one|other|something)\b)\S+/i.test(
-      text,
-    )
-  )
-    return false;
-  if (/\b(?:never|always|must)\s+(?!(?:the|that|this|it|them|those|these|one|other|something)\b)\S+/i.test(text))
-    return false;
+  if (PREFER_TARGET.test(text)) return false;
+  if (ALWAYS_NEVER_TARGET.test(text)) return false;
   return text.split(/\s+/).length < 8 && /^[\w\s,.'"-]+$/.test(text);
 }
 
 const RELATION_WORD = /\b(?:when|if|unless|because|since|after|before|until|while|so|instead)\b/i;
 const RULE_WORD = /\b(?:never|always|must|don't|do not|make sure|ensure|prefer|avoid)\b/i;
 
+const VERSION_BUMP = new RegExp(
+  String.raw`^(?:bump|increment|increase|update|set)\s+(?:(?:ios|android|app)\s+)?` +
+    String.raw`(?:build(?:\s+number)?|version|release)\s+(?:to\s+)?(?:v?\d|#\d)`,
+  'i',
+);
+const DEPLOY_ACTION = new RegExp(
+  String.raw`^(?:deploy(?:ed|ing)?|ship(?:ped|ping)?|release(?:d|ing)?)\s+(?:the\s+)?` +
+    String.raw`(?:build|release|version|v?\d)\s*(?:v?\d|#\d|\.\d)`,
+  'i',
+);
+
 function isRoutineReleaseActivity(text: string): boolean {
   if (isReleaseCommitNoise(text)) return true;
   // "Deploy only after the migration has run" is a rule about releases, not a log line.
   if (RELATION_WORD.test(text) || RULE_WORD.test(text)) return false;
   const subject = text.replace(/^(?:chore|ci|build)(?:\([^)]*\))?:\s*/i, '');
-  if (
-    /^(?:bump|increment|increase|update|set)\s+(?:(?:ios|android|app)\s+)?(?:build(?:\s+number)?|version|release)\s+(?:to\s+)?(?:v?\d|#\d)/i.test(
-      subject,
-    )
-  )
-    return true;
+  if (VERSION_BUMP.test(subject)) return true;
   return (
-    /^(?:deploy(?:ed|ing)?|ship(?:ped|ping)?|release(?:d|ing)?)\s+(?:the\s+)?(?:build|release|version|v?\d)\s*(?:v?\d|#\d|\.\d)/i.test(
-      subject,
-    ) || /^(?:deployment|release|build)\s+(?:succeeded|completed|finished)\b/i.test(subject)
+    DEPLOY_ACTION.test(subject) ||
+    /^(?:deployment|release|build)\s+(?:succeeded|completed|finished)\b/i.test(subject)
   );
 }
 
 const bareText = (text: string): string => text.replace(/[.!?,;:\s]+$/, '');
 // These endings close whole sentences too ("the branch you push to"), so they are only a possible cut.
-const POSSIBLE_CUT_ENDING =
-  /\b(?:needs to|depends on|requires|while|with|without|into|for|of|by|to|is|are|was|were|must|should|could|would|might)$/i;
+const POSSIBLE_CUT_ENDING = new RegExp(
+  String.raw`\b(?:needs to|depends on|requires|while|with|without|into|for|of|by|to|is|are|was|were|` +
+    String.raw`must|should|could|would|might)$`,
+  'i',
+);
 
 /** A short leading condition with no rule word, comma or "then": "If the build fails". */
 function isBareCondition(bare: string): boolean {
@@ -98,8 +104,9 @@ function isDanglingAssertion(text: string): boolean {
       bare,
     ) ||
     /\b(?:the|a|an)$/.test(bare)
-  )
+  ) {
     return true;
+  }
   return /^(?:if|unless|when|while|until)\b/.test(bare) && isBareCondition(bare);
 }
 
@@ -109,10 +116,16 @@ function isPossibleFragment(text: string): boolean {
   return POSSIBLE_CUT_ENDING.test(bare) || (/^(?:If|Unless|When|While|Until)\b/.test(bare) && isBareCondition(bare));
 }
 
-const OUTCOME_LEAD =
-  /^(?:succeeds?|succeeded|fails?|failed|passes|passed|completed|done|successful|success|returned|returns|inserted|updated|deleted)\b/i;
-const OUTCOME_DETAIL =
-  /\b(?:for|on|in|at|to|from|with|without|by|after|before|under|is|are|was|were|be|been|will|can|must|should|never|always)\b/i;
+const OUTCOME_LEAD = new RegExp(
+  String.raw`^(?:succeeds?|succeeded|fails?|failed|passes|passed|completed|done|successful|success|` +
+    String.raw`returned|returns|inserted|updated|deleted)\b`,
+  'i',
+);
+const OUTCOME_DETAIL = new RegExp(
+  String.raw`\b(?:for|on|in|at|to|from|with|without|by|after|before|under|is|are|was|were|be|been|` +
+    String.raw`will|can|must|should|never|always)\b`,
+  'i',
+);
 
 function isSubjectlessOutcome(text: string): boolean {
   const lead = OUTCOME_LEAD.exec(text);
@@ -123,8 +136,11 @@ function isSubjectlessOutcome(text: string): boolean {
 }
 
 // `(?:.*\S)?` ends the quoted command on a non-space, so it and `\s+` never share a run of spaces (no ReDoS).
-const OUTPUT_LINE =
-  /^(?:\$\s|>\s|(?:stdout|stderr|exit code):|Command\s+['"](?:.*\S)?\s+failed\b|Traceback\b|npm\s+(?:ERR|WARN)\b|error\s+TS\d+\b)/i;
+const OUTPUT_LINE = new RegExp(
+  String.raw`^(?:\$\s|>\s|(?:stdout|stderr|exit code):|Command\s+['"](?:.*\S)?\s+failed\b|` +
+    String.raw`Traceback\b|npm\s+(?:ERR|WARN)\b|error\s+TS\d+\b)`,
+  'i',
+);
 const STACK_FRAME = /^at\s+\S.*:\d+(?::\d+)?\)?$/;
 const ERROR_LEAD = /^(?:[\w.$]+Error|[\w.$]+Exception):\s/;
 // Log lines say "after" and "while" too, so only a rule word frees a timestamp or level lead: a dated freeze saying
@@ -247,8 +263,9 @@ export function isContentWorthStoring(content: string): boolean {
 
 /** Recent-context floor: rows hippo wrote meet the automatic check, a person's rows only the older, looser floor. */
 export function isWorthSurfacing(entry: MemoryEntry): boolean {
-  if (isAutomaticEntry(entry))
+  if (isAutomaticEntry(entry)) {
     return bundleParts(entry).length > 0 ? !hasCertainDefect(entry) : isContentWorthStoring(entry.content);
+  }
   const text = entry.content.trim();
   return text.length >= 10 && !isReleaseCommitNoise(text) && !isFragment(text)
     && substantiveWordCount(text) >= 2 && !(text.length < 40 && hasNoSpecificity(text));

@@ -754,7 +754,8 @@ export function formatResult(result: EvalSuiteResult, baseline?: EvalBaseline): 
     `verdict`,
   );
   lines.push(
-    `${'─'.repeat(24)}-|-${'─'.repeat(8)}-|-${'─'.repeat(8)}-|-${'─'.repeat(8)}-|-${'─'.repeat(12)}-|${'─'.repeat(8)}`,
+    `${'─'.repeat(24)}-|-${'─'.repeat(8)}-|-${'─'.repeat(8)}-|-` +
+      `${'─'.repeat(8)}-|-${'─'.repeat(12)}-|${'─'.repeat(8)}`,
   );
 
   let report: RegressionReport | undefined;

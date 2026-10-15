@@ -90,7 +90,8 @@ export function selectChildrenByParent(
     // SAFETY: selects exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
     const rows = db
       .prepare(
-        `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE dag_parent_id IN (${marks})${tenantClause} ORDER BY created ASC, id ASC`,
+        `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories ` +
+          `WHERE dag_parent_id IN (${marks})${tenantClause} ORDER BY created ASC, id ASC`,
       )
       .all(...chunk, ...tenantArgs) as MemoryRow[];
     for (const row of rows) {
@@ -121,12 +122,14 @@ export function loadEntriesByIds(
       tenantId !== undefined
         ? (db
             .prepare(
-              `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id IN (${marks}) AND ${TENANT_IS} ORDER BY created ASC, content ASC, id ASC`,
+              `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id IN (${marks}) ` +
+                `AND ${TENANT_IS} ORDER BY created ASC, content ASC, id ASC`,
             )
             .all(...capped, tenantId) as MemoryRow[])
         : (db
             .prepare(
-              `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id IN (${marks}) ORDER BY created ASC, content ASC, id ASC`,
+              `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories ` +
+                `WHERE id IN (${marks}) ORDER BY created ASC, content ASC, id ASC`,
             )
             .all(...capped) as MemoryRow[]);
     return rows.map(rowToEntry);
@@ -150,7 +153,8 @@ export function loadSessionRawMemories(
   if (!sessionId) return [];
   return onHandle(hippoRoot, (db) => {
     const params: Array<string | number> = [];
-    let sql = `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE kind = 'raw' AND source_session_id = ? AND superseded_by IS NULL`;
+    let sql = `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE kind = 'raw' ` +
+      `AND source_session_id = ? AND superseded_by IS NULL`;
     params.push(sessionId);
     if (tenantId !== undefined) {
       sql += ' AND tenant_id = ?';
@@ -187,7 +191,8 @@ export function countSessionRawMemories(
   if (!sessionId) return 0;
   return onHandle(hippoRoot, (db) => {
     const params: Array<string> = [];
-    let sql = `SELECT COUNT(*) AS c FROM memories WHERE kind = 'raw' AND source_session_id = ? AND superseded_by IS NULL`;
+    let sql = `SELECT COUNT(*) AS c FROM memories WHERE kind = 'raw' ` +
+      `AND source_session_id = ? AND superseded_by IS NULL`;
     params.push(sessionId);
     if (tenantId !== undefined) {
       sql += ' AND tenant_id = ?';
@@ -305,7 +310,8 @@ export function loadEntriesMentioning(
       // SAFETY: selects exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
       const rows = db
         .prepare(
-          `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE ${tenantClause}(${clauses.join(' OR ')}) ORDER BY created ASC, id ASC`,
+          `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories ` +
+            `WHERE ${tenantClause}(${clauses.join(' OR ')}) ORDER BY created ASC, id ASC`,
         )
         .all(...(tenantId !== undefined ? [tenantId] : []), ...params) as MemoryRow[];
       return rows.map(rowToEntry);
@@ -446,7 +452,8 @@ export function selectLiveEntriesBySourcePrefix(db: DatabaseSyncLike, tenantId: 
   // SAFETY: selects exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
   const rows = db
     .prepare(
-      `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE tenant_id = ? AND superseded_by IS NULL AND source LIKE ? ESCAPE '\\'`,
+      `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE tenant_id = ? ` +
+        `AND superseded_by IS NULL AND source LIKE ? ESCAPE '\\'`,
     )
     .all(tenantId, `${escapeLike(prefix)}%`) as MemoryRow[];
   return rows.map(rowToEntry).filter((entry) => entry.source.startsWith(prefix));
@@ -470,7 +477,8 @@ export function loadContentsWithTag(
       /** SAFETY: rows' shape matches the two columns named in the SELECT below. */
       const rows = db
         .prepare(
-          `SELECT content, tags_json FROM memories WHERE tenant_id = ? AND instr(tags_json, ?) > 0${inProject} AND ${admit.sql}`,
+          `SELECT content, tags_json FROM memories WHERE tenant_id = ? ` +
+            `AND instr(tags_json, ?) > 0${inProject} AND ${admit.sql}`,
         )
         .all(tenantId, JSON.stringify(tag), ...(origins ?? []), ...admit.params) as Array<{
         content: string;
@@ -519,7 +527,8 @@ export function selectPreviewRows(db: DatabaseSyncLike, columns: ReadonlySet<str
   const tenant = columns.has('tenant_id') ? ' WHERE tenant_id = ?' : '';
   const column = (name: string, fallback: string): string => (columns.has(name) ? name : `${fallback} AS ${name}`);
   const statement = db.prepare(
-    `SELECT id, content, ${column('source', "''")}, ${column('confidence', 'NULL')}, ${column('extracted_from', 'NULL')}, ` +
+    `SELECT id, content, ${column('source', "''")}, ` +
+      `${column('confidence', 'NULL')}, ${column('extracted_from', 'NULL')}, ` +
       `${column('dag_level', '0')}, ${column('tags_json', "'[]'")} FROM memories${tenant}`,
   );
   // SAFETY: the SELECT names every PreviewRow field, each a literal fallback when its column is missing.
@@ -650,7 +659,8 @@ export function loadEntriesWithSignals(hippoRoot: string, signals: EntrySignals,
     // SAFETY: selects exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
     const rows = db
       .prepare(
-        `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE ${tenant}(${anyOf.join(' OR ')}) ORDER BY created ASC, id ASC`,
+        `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories ` +
+          `WHERE ${tenant}(${anyOf.join(' OR ')}) ORDER BY created ASC, id ASC`,
       )
       .all(...(tenantId !== undefined ? [tenantId] : []), ...params) as MemoryRow[];
     return rows.map(rowToEntry);

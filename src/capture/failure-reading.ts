@@ -31,8 +31,11 @@ interface ToolFailurePayload {
 export const FAILURE_TEXT_MAX_CHARS = 200;
 
 /** The user, a permission prompt or a hook said no: routine, not a lesson. */
-const DECLINED =
-  /user (?:doesn't|does not) want|denied by (?:the )?user|user (?:rejected|declined|denied)|permission to use|was blocked by (?:a )?hook/i;
+const DECLINED = new RegExp(
+  String.raw`user (?:doesn't|does not) want|denied by (?:the )?user|user (?:rejected|declined|denied)|` +
+    String.raw`permission to use|was blocked by (?:a )?hook`,
+  'i',
+);
 
 /** The OS or a remote host refused access (EACCES, SSH publickey): routine too, but nobody declined anything. */
 const OS_PERMISSION = /permission denied/i;
@@ -88,8 +91,9 @@ export function lessonFromFailure(
   // SAFETY: isJsonObjectLiteral narrowed payload to a plain JSON object; the fields read are all optional.
   const p = payload as ToolFailurePayload;
   if (p.is_interrupt === true) return { skip: 'skipped-interrupt', text: null, detail: null };
-  if (!isJsonString(p.error) || p.error.trim().length < 12)
+  if (!isJsonString(p.error) || p.error.trim().length < 12) {
     return { skip: 'skipped-invalid', text: null, detail: null };
+  }
   const tool = isJsonString(p.tool_name) ? p.tool_name : 'tool';
   const error = redactSecretsStrict(p.error.replace(/\s+/g, ' ').trim());
   const text = truncateCodePointSafe(scrub(`${tool}: ${error}`), FAILURE_TEXT_MAX_CHARS);

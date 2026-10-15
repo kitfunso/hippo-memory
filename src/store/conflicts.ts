@@ -308,7 +308,8 @@ function rebuildConflictsWithJson(db: DatabaseSyncLike, { sameTenant, storedRefs
   // Only a row holding refs, or due some, can change. Compare-and-set, so a writer since the read keeps its value and
   // the next sleep redoes the row.
   const update = db.prepare(
-    `UPDATE memories SET conflicts_with_json = ?, updated_at = datetime('now') WHERE id = ? AND conflicts_with_json IS ?`,
+    `UPDATE memories SET conflicts_with_json = ?, updated_at = datetime('now') ` +
+      `WHERE id = ? AND conflicts_with_json IS ?`,
   );
   const changedIds: string[] = [];
   for (const id of new Set([...storedRefs.keys(), ...refMap.keys()])) {
@@ -466,7 +467,8 @@ function selectConflictRow(
 function weakenConflictLoser(db: DatabaseSyncLike, t: ResolveTarget): LoserRemoval {
   // Halve the loser's half-life (weakens it over time)
   db.prepare(
-    `UPDATE memories SET half_life_days = MAX(1, half_life_days / 2), updated_at = datetime('now') WHERE id = ?${t.scope.memScope}`,
+    `UPDATE memories SET half_life_days = MAX(1, half_life_days / 2), updated_at = datetime('now') ` +
+      `WHERE id = ?${t.scope.memScope}`,
   ).run(t.loserId, ...t.scope.memArgs);
   return {
     loserRemoved: false,
@@ -702,7 +704,8 @@ export function conflictResolveAuditsAt(db: DatabaseSyncLike): Array<{ conflictI
   // SAFETY: SELECT of two fields every conflict_resolve audit row carries (ConflictResolveMeta above).
   return db
     .prepare(
-      `SELECT json_extract(metadata_json, '$.conflictId') AS conflictId, json_extract(metadata_json, '$.loserId') AS loserId ` +
+      `SELECT json_extract(metadata_json, '$.conflictId') ` +
+      `AS conflictId, json_extract(metadata_json, '$.loserId') AS loserId ` +
         `FROM audit_log WHERE op = 'conflict_resolve'`,
     )
     .all() as { conflictId: number; loserId: string }[];

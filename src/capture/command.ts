@@ -26,12 +26,14 @@ export interface CaptureOptions {
   stdinText?: string;
   stdinTimedOut?: boolean;
   sessionTurns?: readonly SessionTurn[];
-  /** Tee stdout/stderr to this log file while capture runs, so SessionEnd output (lost in TUI teardown) shows via `hippo last-sleep`.
+  /** Tee stdout/stderr to this log file while capture runs, so SessionEnd output (lost in TUI teardown) shows via
+   *  `hippo last-sleep`.
    *  Appends, because `hippo sleep` writes the same file first. */
   logFile?: string;
   dryRun: boolean;
   global: boolean;
-  /** Tenant scope for the dedup read in `cmdCaptureCore`: when set and `global` is false, only this tenant's memories count.
+  /** Tenant scope for the dedup read in `cmdCaptureCore`: when set and `global` is false, only this tenant's
+   *  memories count.
    *  Undefined means host-wide dedup; ignored when `global: true`. */
   tenantId?: string;
   /** The session's project: rows are stamped with its id, and dedup reads its rows under either name. */
@@ -42,7 +44,8 @@ export function cmdCapture(
   hippoRoot: string,
   options: CaptureOptions
 ): void {
-  // Tee to a log file for the SessionEnd hook; APPEND, because `hippo sleep` runs first in that sequence and already wrote its header and body.
+  // Tee to a log file for the SessionEnd hook; APPEND, because `hippo sleep` runs first in that sequence and already
+  // wrote its header and body.
   const restoreStdio = options.logFile ? beginLogTee(options.logFile) : null;
   try {
     cmdCaptureCore(hippoRoot, options);
@@ -90,7 +93,10 @@ function cmdCaptureCore(
     initGlobal();
   } else {
     if (!isInitialized(hippoRoot)) {
-      console.error(`No hippo store at ${hippoRoot} (searched ${process.cwd()} and its parents up to your home directory). Run \`hippo init\` first.`);
+      console.error(
+        `No hippo store at ${hippoRoot} (searched ${process.cwd()} and its parents up to your home directory). ` +
+          `Run \`hippo init\` first.`,
+      );
       process.exit(1);
     }
   }
@@ -104,7 +110,8 @@ function cmdCaptureCore(
     return;
   }
 
-  // Scrub once here, as the snapshot fields are: every source can carry a pasted token (AGENTS.md: no secrets in memories).
+  // Scrub once here, as the snapshot fields are: every source can carry a pasted token (AGENTS.md: no secrets in
+  // memories).
   const extracted = extractFromTexts(texts.map((text) => maskEmails(redactSecretsStrict(text))), userTexts);
 
   if (extracted.length === 0) {
@@ -123,11 +130,20 @@ function cmdCaptureCore(
   printCaptureTally(options, captureExtractedItems(targetRoot, writeOpts, extracted, keys));
 }
 
-// Dedup only against rows this capture's reader sees: another tenant's or project's rows are hidden, so they must not stop its own copy.
+// Dedup only against rows this capture's reader sees: another tenant's or project's rows are hidden, so they must not
+// stop its own copy.
 // Only a row holding an item's longest word can hold that item, so the store returns those rows and no others.
-function storedKeysInView(targetRoot: string, options: CaptureOptions, extracted: readonly ExtractedItem[]): Set<string> {
+function storedKeysInView(
+  targetRoot: string,
+  options: CaptureOptions,
+  extracted: readonly ExtractedItem[],
+): Set<string> {
   const stored = loadTextsHoldingWords(
-    targetRoot, options.global ? undefined : options.tenantId, extracted.map((item) => longestWord(item.content)), undefined, EVERY_SCOPE,
+    targetRoot,
+    options.global ? undefined : options.tenantId,
+    extracted.map((item) => longestWord(item.content)),
+    undefined,
+    EVERY_SCOPE,
   );
   const origin = options.originProject;
   return storedTextKeys(origin === undefined
@@ -145,7 +161,8 @@ function printCaptureTally(options: CaptureOptions, { captured, skipped, rejecte
   );
 }
 
-/** The raw texts for the chosen source, one per session turn, the person's turns first; null after printing why a last-session capture has nothing.
+/** The raw texts for the chosen source, one per session turn, the person's turns first; null after printing why a
+ *  last-session capture has nothing.
  *  Only a session says who spoke, so a piped or file capture counts no user texts. */
 function readCaptureTexts(options: CaptureOptions): { texts: string[]; userTexts: number } | null {
   switch (options.source) {
@@ -171,7 +188,11 @@ function readCaptureTexts(options: CaptureOptions): { texts: string[]; userTexts
     case 'last-session': {
       let turns = options.sessionTurns;
       if (!turns) {
-        const resolved = resolveLastSessionTranscript(options.transcriptPath, options.stdinText, { mayScan: !options.stdinTimedOut });
+        const resolved = resolveLastSessionTranscript(
+          options.transcriptPath,
+          options.stdinText,
+          { mayScan: !options.stdinTimedOut },
+        );
         if (!resolved) {
           console.log('No transcript found. Pass --transcript <path> or run from a SessionEnd hook.');
           return null;
@@ -218,9 +239,16 @@ export function captureExtractedItems(
   if (!options.dryRun) {
     const outcomes = writeCapturedItems(
       targetRoot,
-      extracted.map((item) => ({ content: item.content, makeEntry: () => captureEntry(item, options, baseHalfLifeDays) })),
+      extracted.map((item) => ({
+        content: item.content,
+        makeEntry: () => captureEntry(item, options, baseHalfLifeDays),
+      })),
       keys,
-      { actor: options.actor, lean: options.lean, onCaptured: options.lean ? undefined : (entry) => void embedMemory(targetRoot, entry) },
+      {
+        actor: options.actor,
+        lean: options.lean,
+        onCaptured: options.lean ? undefined : (entry) => void embedMemory(targetRoot, entry),
+      },
     );
     for (const outcome of outcomes) tally[outcome]++;
     return tally;
@@ -262,5 +290,6 @@ function captureEntry(item: ExtractedItem, options: CaptureWriteOptions, baseHal
     source_session_id: options.sessionId,
     baseHalfLifeDays,
   });
-  return options.originProject === undefined ? created : { ...created, origin_project: projectId(options.originProject) };
+  if (options.originProject === undefined) return created;
+  return { ...created, origin_project: projectId(options.originProject) };
 }

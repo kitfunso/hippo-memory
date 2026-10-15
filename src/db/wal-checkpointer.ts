@@ -97,7 +97,8 @@ export function startWalCheckpointer(dbPath: string): WalCheckpointer {
     started.on('error', (err) => {
       end();
       log.warn(
-        `background checkpoint of ${key} stopped (${errorMessage(err)}); each connection checkpoints inside its own commit again`,
+        `background checkpoint of ${key} stopped (${errorMessage(err)}); ` +
+          `each connection checkpoints inside its own commit again`,
         errorFields(err),
       );
     });

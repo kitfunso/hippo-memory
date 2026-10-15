@@ -19,7 +19,8 @@ export const v56: Migration = {
       for (const table of OBJECT_TABLES) {
         if (!tableExists(db, table)) continue;
         db.exec(
-          `CREATE INDEX IF NOT EXISTS idx_${table}_tenant_status_created ON ${table}(tenant_id, status, created_at DESC, id DESC)`,
+          `CREATE INDEX IF NOT EXISTS idx_${table}_tenant_status_created ` +
+            `ON ${table}(tenant_id, status, created_at DESC, id DESC)`,
         );
       }
       // Source leads so a tenant-only query cannot pick this over idx_memories_tenant_created and change the order of

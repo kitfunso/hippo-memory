@@ -29,7 +29,8 @@ export interface DashboardRows {
 // Full content stays: dashboard-snapshot's Fact.lower serves search over the whole text, so a preview would change
 // which rows match.
 const LIVE_COLUMNS =
-  'id, created, last_retrieved, retrieval_count, half_life_days, layer, tags_json, emotional_valence, outcome_positive, ' +
+  'id, created, last_retrieved, retrieval_count, half_life_days, ' +
+  'layer, tags_json, emotional_valence, outcome_positive, ' +
   'outcome_negative, pinned, confidence, content, superseded_by, kind, scope, origin_project';
 type LiveRow = Pick<
   MemoryRow,
@@ -54,7 +55,8 @@ type LiveRow = Pick<
 
 // SQL twins of isQuarantineScope and of the two halves of isLiveMemory; substr compares bytes, as startsWith does,
 // where LIKE would fold case.
-const QUARANTINED = `(scope IS NOT NULL AND substr(scope, 1, ${QUARANTINE_SCOPE_PREFIX.length}) = '${QUARANTINE_SCOPE_PREFIX}')`;
+const QUARANTINED = `(scope IS NOT NULL ` +
+  `AND substr(scope, 1, ${QUARANTINE_SCOPE_PREFIX.length}) = '${QUARANTINE_SCOPE_PREFIX}')`;
 const SUPERSEDED_BY = `(superseded_by IS NOT NULL AND superseded_by <> '')`;
 const KIND = `COALESCE(kind, 'distilled')`;
 const LIVE = `NOT ${SUPERSEDED_BY} AND ${KIND} IN ('raw', 'distilled') AND NOT ${QUARANTINED}`;
@@ -130,7 +132,8 @@ export class DashboardConnection {
     // SAFETY: the SELECT names the one TEXT id column.
     const rows = this.db
       .prepare(
-        'SELECT m.id FROM memories m WHERE m.tenant_id = ? AND EXISTS (SELECT 1 FROM memory_vectors v WHERE v.memory_id = m.id)',
+        'SELECT m.id FROM memories m WHERE m.tenant_id = ? ' +
+          'AND EXISTS (SELECT 1 FROM memory_vectors v WHERE v.memory_id = m.id)',
       )
       .all(tenantId) as Array<{ id: string }>;
     return new Set(rows.map((row) => row.id));

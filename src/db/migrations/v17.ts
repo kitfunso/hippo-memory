@@ -12,7 +12,8 @@ export const v17: Migration = {
         )
       `);
       db.exec(
-        `CREATE INDEX IF NOT EXISTS idx_slack_event_log_memory ON slack_event_log(memory_id) WHERE memory_id IS NOT NULL`,
+        `CREATE INDEX IF NOT EXISTS idx_slack_event_log_memory ` +
+          `ON slack_event_log(memory_id) WHERE memory_id IS NOT NULL`,
       );
       db.exec(`
         CREATE TABLE IF NOT EXISTS slack_cursors (

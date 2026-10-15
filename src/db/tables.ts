@@ -27,7 +27,8 @@ export function listTableNames(db: DatabaseSyncLike): string[] {
   // SAFETY: each row's shape matches the single `name` column named in the SELECT below.
   const rows = db
     .prepare(
-      `SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND sql NOT LIKE 'CREATE VIRTUAL TABLE%' ORDER BY name`,
+      `SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ` +
+        `AND sql NOT LIKE 'CREATE VIRTUAL TABLE%' ORDER BY name`,
     )
     .all() as { name: string }[];
   return rows.map((r) => r.name);

@@ -199,7 +199,8 @@ function warnEmbedFailureOnce(source: string, rawMessage: string, cause?: unknow
     seen.suppressed += 1;
     if (now - seen.lastNoticeAt >= EMBED_SUPPRESSED_SUMMARY_INTERVAL_MS) {
       log.warn(
-        `${seen.suppressed} more embedding errors from ${source} since the last notice; memories are still stored without embeddings.`,
+        `${seen.suppressed} more embedding errors from ${source} since ` +
+          `the last notice; memories are still stored without embeddings.`,
       );
       seen.suppressed = 0;
       seen.lastNoticeAt = now;

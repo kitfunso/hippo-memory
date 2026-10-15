@@ -104,7 +104,9 @@ export function savePhysicsState(
   if (particles.length === 0) return;
 
   const stmt = db.prepare(`
-    INSERT INTO memory_physics (memory_id, position_blob, velocity_blob, mass, charge, temperature, last_simulation, updated_at)
+    INSERT INTO memory_physics (
+      memory_id, position_blob, velocity_blob, mass, charge, temperature, last_simulation, updated_at
+    )
     VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
     ON CONFLICT(memory_id) DO UPDATE SET
       position_blob = excluded.position_blob,
