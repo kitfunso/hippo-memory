@@ -14,6 +14,10 @@ import type {
 
 export const QUARANTINE_SCOPE_PREFIX = 'quarantine:private:';
 
+export function isQuarantineScope(scope: string | null | undefined): boolean {
+  return scope != null && scope.startsWith(QUARANTINE_SCOPE_PREFIX);
+}
+
 /** Scope a quarantined memory is stored under; matches PRIVATE_SCOPE_RE so every default-deny site hides it. */
 export function quarantineScopeFor(original: string | null): string {
   return `${QUARANTINE_SCOPE_PREFIX}${original ?? 'unscoped'}`;
