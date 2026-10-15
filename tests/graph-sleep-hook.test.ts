@@ -20,7 +20,7 @@ import { deleteEntry } from '../src/store/delete-and-batch.js';
 import { saveDecision, closeDecision } from '../src/objects/decisions.js';
 import { savePolicy } from '../src/objects/policies.js';
 import { saveProjectBrief, refreshedBrief } from '../src/objects/project-briefs.js';
-import { applyGraphOps } from '../src/store/graph-writes.js';
+import { applyGraphOps } from '../src/store/graph-apply.js';
 import { loadPendingExtractionTenants, markGraphDirty } from '../src/store/graph-queue.js';
 import { loadExtractionQueue } from './_helpers/graph-queue.js';
 import { loadEntities, loadRelations } from '../src/store/graph-reads.js';

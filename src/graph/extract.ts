@@ -2,7 +2,7 @@
  *  (decisions, policies, customer_notes, project_briefs). Writes go through the src/store/graph-writes.ts
  *  consolidated-source guard. Pass 3 adds `references` edges by a conservative name-match heuristic. */
 
-import { applyGraphOps, rebuildGraphUnderLock } from '../store/graph-writes.js';
+import { applyGraphOps, rebuildGraphUnderLock } from '../store/graph-apply.js';
 import {
   MAX_ENTITY_NAME_LEN,
   type EntityType,

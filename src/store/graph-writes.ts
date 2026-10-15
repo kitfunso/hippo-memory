@@ -4,8 +4,6 @@ import { openHippoDb, closeHippoDb, withWriteScope, type DatabaseSyncLike } from
 import { onHandle } from './open.js';
 import { assertTenantId } from './tenant.js';
 import { errorMessage, log } from '../util/log.js';
-import { clock } from '../util/write-budget.js';
-import { storedGraphOn } from './graph-reads.js';
 import {
   type EntityType,
   type RelationType,
@@ -20,9 +18,6 @@ import {
   type InsertEntityOpts,
   type InsertRelationOpts,
   type UpdateEntityOpts,
-  type DesiredRelation,
-  type GraphOp,
-  type StoredGraph,
   type EntityRow,
   type RelationRow,
   rowToEntity,
@@ -196,7 +191,7 @@ function checkedName(label: string, raw: string | undefined): string {
 
 /** Renames an entity or moves its memory provenance in place on the caller's handle, keeping id and created_at; null
  * when the row is gone. A delete plus an insert would cascade away every relation that points at it. */
-function updateEntityRow(
+export function updateEntityRow(
   db: DatabaseSyncLike,
   tenantId: string,
   id: number,
@@ -338,7 +333,7 @@ export function deleteRelationRow(db: DatabaseSyncLike, tenantId: string, id: nu
 /** Runs one tenant's graph writes in `fn` on `txDb` under one BEGIN IMMEDIATE, so two rebuilds serialize instead of
  * interleaving and a throw rolls back the whole chunk. The sole sanctioned place to wrap graph writes in a
  * transaction. */
-function runGraphRebuildTransaction<T>(
+export function runGraphRebuildTransaction<T>(
   hippoRoot: string,
   tenantId: string,
   fn: (txDb: DatabaseSyncLike) => T,
@@ -351,111 +346,6 @@ function runGraphRebuildTransaction<T>(
   } finally {
     closeHippoDb(db);
   }
-}
-
-function insertDesiredRelation(db: DatabaseSyncLike, tenantId: string, rel: DesiredRelation): boolean {
-  const fromEntityId = entityIdBySource(db, tenantId, rel.from.entityType, rel.from.sourceObject);
-  const toEntityId = entityIdBySource(db, tenantId, rel.to.entityType, rel.to.sourceObject);
-  if (fromEntityId === undefined || toEntityId === undefined || !objectInForce(db, tenantId, rel.sourceObject)) {
-    return false;
-  }
-  if (relationPresent(db, tenantId, fromEntityId, toEntityId, rel.relType)) return false;
-  insertRelationRow(db, tenantId, {
-    fromEntityId,
-    toEntityId,
-    relType: rel.relType,
-    memoryId: rel.memoryId,
-    sourceObject: rel.sourceObject,
-  });
-  return true;
-}
-
-/** Applies one op; false when a writer since the diff made it stale, which the next run's diff repairs. */
-function applyGraphOp(db: DatabaseSyncLike, tenantId: string, op: GraphOp): boolean {
-  switch (op.op) {
-    case 'deleteEntity':
-      deleteEntityRow(db, tenantId, op.id);
-      return true;
-    case 'deleteRelation':
-      deleteRelationRow(db, tenantId, op.id);
-      return true;
-    case 'updateEntity':
-      if (!objectInForce(db, tenantId, op.entity.sourceObject)) return false;
-      return updateEntityRow(db, tenantId, op.id, op.entity) !== null;
-    case 'insertEntity':
-      // A mirrorless object closed since the load is never enqueued again, so a stale insert would stay for good.
-      if (
-        !objectInForce(db, tenantId, op.entity.sourceObject) ||
-        entityIdBySource(db, tenantId, op.entity.entityType, op.entity.sourceObject) !== undefined
-      ) {
-        return false;
-      }
-      insertEntityRow(db, tenantId, op.entity);
-      return true;
-    case 'insertRelation':
-      return insertDesiredRelation(db, tenantId, op.relation);
-  }
-}
-
-export interface ApplyGraphOpsResult {
-  readonly next: number;
-  readonly skipped: number;
-}
-
-export interface ApplyGraphOpsOptions {
-  readonly from: number;
-  readonly holdMs: number;
-  readonly clock?: () => number;
-}
-
-function applyGraphOpsOn(
-  db: DatabaseSyncLike,
-  tenantId: string,
-  ops: readonly GraphOp[],
-  opts: ApplyGraphOpsOptions,
-): ApplyGraphOpsResult {
-  const now = opts.clock ?? clock;
-  const begunAt = now();
-  let next = opts.from;
-  let skipped = 0;
-  while (next < ops.length) {
-    if (!applyGraphOp(db, tenantId, ops[next])) skipped += 1;
-    next += 1;
-    if (now() - begunAt >= opts.holdMs) break;
-  }
-  return { next, skipped };
-}
-
-/**
- * Applies `ops` from index `opts.from` in one rebuild transaction and stops at the first op boundary past
- * `opts.holdMs`.
- *  Returns where the next chunk starts and how many ops were skipped as stale. */
-export function applyGraphOps(
-  hippoRoot: string,
-  tenantId: string,
-  ops: readonly GraphOp[],
-  opts: ApplyGraphOpsOptions & { readonly busyWaitMs?: number },
-): ApplyGraphOpsResult {
-  return runGraphRebuildTransaction(
-    hippoRoot,
-    tenantId,
-    (db) => applyGraphOpsOn(db, tenantId, ops, opts),
-    { busyWaitMs: opts.busyWaitMs },
-  );
-}
-
-/** Reads the stored graph, diffs it with `diff` and applies every op under one lock, so two concurrent rebuilds
- * serialize instead of both inserting a missing row. Returns how many ops were skipped as stale. */
-export function rebuildGraphUnderLock(
-  hippoRoot: string,
-  tenantId: string,
-  memoryIds: readonly string[],
-  diff: (stored: StoredGraph) => readonly GraphOp[],
-): number {
-  return runGraphRebuildTransaction(hippoRoot, tenantId, (db) => {
-    const ops = diff(storedGraphOn(db, tenantId, memoryIds));
-    return applyGraphOpsOn(db, tenantId, ops, { from: 0, holdMs: Infinity }).skipped;
-  });
 }
 
 /** Remove graph rows sourced from one MIRRORLESS object by (type, id) on close: with no mirror memory `markGraphDirty`

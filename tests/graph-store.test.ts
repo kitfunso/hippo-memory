@@ -14,7 +14,7 @@ import { deleteEntry } from '../src/store/delete-and-batch.js';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { openHippoDb, closeHippoDb, withWriteScope } from '../src/db/index.js';
 import { insertEntityAt, insertRelationAt } from './_helpers/graph-seed.js';
-import { insertEntityRow, insertRelationRow } from '../src/store/graph-writes.js';
+import { insertEntityRow, insertRelationRow, updateEntityRow } from '../src/store/graph-writes.js';
 import { markGraphDirty, markPendingProcessedUpTo } from '../src/store/graph-queue.js';
 import { loadEntitiesByIds, loadEntities, loadRelations } from '../src/store/graph-reads.js';
 import { MAX_ENTITY_NAME_LEN } from '../src/store/graph-rows.js';
@@ -73,6 +73,7 @@ describe('graph store (graph-on-consolidated guard)', () => {
       expect(() => withWriteScope(txDb, 'graph_rollback_test', () => {
         const added = insertEntityRow(txDb, 'default', { entityType: 'system', name: 'added', memoryId: md });
         insertRelationRow(txDb, 'default', { fromEntityId: kept.id, toEntityId: added.id, relType: 'depends-on', memoryId: md });
+        updateEntityRow(txDb, 'default', kept.id, { name: 'renamed', memoryId: md });
         throw new Error('rollback');
       })).toThrow('rollback');
     } finally {
