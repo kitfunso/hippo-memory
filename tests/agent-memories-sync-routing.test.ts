@@ -189,7 +189,7 @@ describe('agent memory sync: routing and sharing', () => {
     expect(agentRows(w.local)).toEqual([]);
   });
 
-  it('hippo sync never copies an agent memory row, tagged or restored, into a project store', () => {
+  it('hippo sync never copies an agent memory row, tagged or restored, into a project store', async () => {
     writeConfig(w.local, null);
     const dir = userNotes(w);
     note(dir, 'u.md', USER_NOTE);
@@ -198,7 +198,7 @@ describe('agent memory sync: routing and sharing', () => {
     const goneId = liveRows(w.global).find((e) => e.content.startsWith('This user note'))?.id ?? '';
     unlinkSync(gone);
     importForStore(w.local, opts());
-    restoreDormant(ctxFor(w.global), goneId);
+    await restoreDormant(ctxFor(w.global), goneId);
     plainRow(w.global, CONTROL, '');
 
     expect(syncGlobalToLocal(w.local, w.global)).toBe(1);
@@ -206,7 +206,7 @@ describe('agent memory sync: routing and sharing', () => {
     expect(loadAllEntries(w.local).map((e) => e.content)).toEqual([CONTROL]);
   });
 
-  it('an imported row is never auto-shared, restored or not', () => {
+  it('an imported row is never auto-shared, restored or not', async () => {
     writeConfig(w.local, null);
     const dir = projectNotes(w);
     note(dir, 'deploy.md', DEPLOY);
@@ -215,7 +215,7 @@ describe('agent memory sync: routing and sharing', () => {
     const goneId = liveRows(w.local).find((e) => e.content.startsWith('This project note'))?.id ?? '';
     unlinkSync(gone);
     importForStore(w.local, opts());
-    restoreDormant(ctxFor(w.local), goneId);
+    await restoreDormant(ctxFor(w.local), goneId);
     plainRow(w.local, CONTROL, 'proj');
 
     const stats = { secretSkipped: 0, neverAutoShareSkipped: 0 };

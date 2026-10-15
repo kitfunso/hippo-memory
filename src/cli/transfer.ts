@@ -498,11 +498,11 @@ export function handlePeers({ tenantId, flags }: CommandContext): void {
   }
 }
 
-export function handleExport({ hippoRoot, tenantId, args, flags }: CommandContext): void {
+export async function handleExport({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
   requireInit(hippoRoot);
   const format = stringFlagOrExit(flags, 'format') || 'json';
   const outputPath = args[0] || null;
-  const entries = listMemories(cliApiContext(hippoRoot, tenantId));
+  const entries = await listMemories(cliApiContext(hippoRoot, tenantId));
 
   let output: string;
   if (format === 'markdown' || format === 'md') {

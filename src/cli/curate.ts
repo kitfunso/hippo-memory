@@ -87,7 +87,7 @@ async function cmdForget(
     await api.forget(ctx, id);
     console.log(`Forgot ${id}`);
   } catch (err) {
-    reportForgetFailure(ctx, id, err);
+    await reportForgetFailure(ctx, id, err);
     throw new CliExit(1);
   }
 }
@@ -108,12 +108,12 @@ async function archiveForgottenRaw(
   }
 }
 
-function reportForgetFailure(ctx: api.StoreContext, id: string, cause: unknown): void {
+async function reportForgetFailure(ctx: api.ContextWith<'dormant'>, id: string, cause: unknown): Promise<void> {
   if (cause instanceof RawAppendOnlyError) {
     // The delete was refused by the append-only trigger — this is a raw
     // memory, not a missing one. Point the user at the archive path.
     printError(rawForgetRefusal(id));
-  } else if (api.isDormant(ctx, id)) {
+  } else if (await api.isDormant(ctx, id)) {
     // Sleep moved it to the dormant store: it is not in active memory, so
     // point at the command that owns it.
     printError(
@@ -146,12 +146,11 @@ async function previewForget(hippoRoot: string, tenantId: string, id: string, ar
   console.log(`Would ${archive ? 'archive' : 'forget'} ${id} (dry run, nothing changed): "${snippet}"`);
 }
 
-export function handleConflicts({ hippoRoot, tenantId, flags }: CommandContext): void {
+export async function handleConflicts({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
   requireInit(hippoRoot);
 
-  const conflicts = api.listConflicts(cliApiContext(hippoRoot, tenantId), stringFlagOrExit(flags, 'status') ?? 'open', {
-    everyTenant: true,
-  });
+  const status = stringFlagOrExit(flags, 'status') ?? 'open';
+  const conflicts = await api.listConflicts(cliApiContext(hippoRoot, tenantId), status, { everyTenant: true });
   if (flags['json']) {
     console.log(JSON.stringify({ conflicts }, null, 2));
     return;
@@ -173,7 +172,7 @@ export function handleConflicts({ hippoRoot, tenantId, flags }: CommandContext):
 
 /** Shown when --keep is missing, to help the user decide. */
 async function showConflictForResolve(hippoRoot: string, conflictId: number, tenantId: string): Promise<void> {
-  const conflicts = api.listConflicts(cliApiContext(hippoRoot, tenantId), 'open');
+  const conflicts = await api.listConflicts(cliApiContext(hippoRoot, tenantId), 'open');
   const conflict = conflicts.find((c) => c.id === conflictId);
   if (!conflict) {
     fail(`Conflict ${conflictId} not found or already resolved.`);
@@ -222,7 +221,7 @@ export async function handleResolve({ hippoRoot, tenantId, args, flags }: Comman
   // --reason is optional here, unlike `hippo reject`: resolve already has the conflict id and keepId.
   const rejectLoser = boolFlag(flags, 'reject-loser');
   const reasonFlag = stringFlag(flags, 'reason');
-  const result = api.resolveMemoryConflict(cliApiContext(hippoRoot, tenantId), conflictId, {
+  const result = await api.resolveMemoryConflict(cliApiContext(hippoRoot, tenantId), conflictId, {
     keepId,
     forget: forgetLoser,
     rejectLoser,
@@ -346,19 +345,19 @@ export function handleUnreject({ hippoRoot, tenantId, args, flags }: CommandCont
 
 /** `hippo dormant [list|restore <id>|forget <id>]`: dormant memories are what sleep keeps instead of deleting
  * (on by default; `"dormant": { "enabled": false }` in .hippo/config.json deletes instead). */
-export function handleDormant({ hippoRoot, tenantId, args, flags }: CommandContext): void {
+export async function handleDormant({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
   const root = resolveAuthRoot(hippoRoot, flags);
   const ctx = cliApiContext(root, tenantId);
   const sub = args[0];
 
   if (sub === 'restore' || sub === 'forget') {
-    changeDormant(ctx, sub, (args[1] ?? '').trim());
+    await changeDormant(ctx, sub, (args[1] ?? '').trim());
     return;
   }
 
   const queryArgs = sub === 'list' ? args.slice(1) : args;
   const limit = parseCountFlag(flags['limit']);
-  const rows = api.listDormant(ctx, {
+  const rows = await api.listDormant(ctx, {
     query: queryArgs.join(' '),
     limit: limit > 0 ? limit : undefined,
   });
@@ -370,16 +369,16 @@ export function handleDormant({ hippoRoot, tenantId, args, flags }: CommandConte
   printDormantRows(rows, queryArgs.length > 0, root);
 }
 
-function changeDormant(ctx: api.StoreContext, sub: 'restore' | 'forget', id: string): void {
+async function changeDormant(ctx: api.ContextWith<'dormant'>, sub: 'restore' | 'forget', id: string): Promise<void> {
   if (!id) {
     fail(`Usage: hippo dormant ${sub} <id>`);
   }
   try {
     if (sub === 'restore') {
-      api.restoreDormant(ctx, id);
+      await api.restoreDormant(ctx, id);
       console.log(`Restored ${id} to active memory.`);
     } else {
-      api.forgetDormant(ctx, id);
+      await api.forgetDormant(ctx, id);
       console.log(`Forgot dormant memory ${id} permanently.`);
     }
   } catch (err) {
@@ -394,7 +393,7 @@ function changeDormant(ctx: api.StoreContext, sub: 'restore' | 'forget', id: str
   }
 }
 
-function printDormantRows(rows: ReturnType<typeof api.listDormant>, hasQuery: boolean, root: string): void {
+function printDormantRows(rows: Awaited<ReturnType<typeof api.listDormant>>, hasQuery: boolean, root: string): void {
   if (rows.length === 0) {
     console.log(hasQuery ? 'No dormant memories match.' : 'No dormant memories.');
     if (!loadConfig(root).dormant.enabled) {

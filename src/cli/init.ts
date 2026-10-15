@@ -143,7 +143,7 @@ async function cmdInitScan(scanDir: string, tenantId: string, flags: CliFlags): 
     totalLowInfo += lowInfo;
 
     const status = alreadyExists ? 'existing' : 'new';
-    const entries = listMemories(cliApiContext(path.join(repo, '.hippo'), tenantId), { everyTenant: true });
+    const entries = await listMemories(cliApiContext(path.join(repo, '.hippo'), tenantId), { everyTenant: true });
     console.log(
       `  ${path.basename(repo).padEnd(25)} ${status.padEnd(10)} ${entries.length} ` +
       `memories${added > 0 ? ` (+${added} from git)` : ''}`,

@@ -43,9 +43,11 @@ export async function runPredictBaserateTool(
   return lines.join('\n');
 }
 
-export function runStatusTool({ ctx, hippoRoot, config, tenantId, store }: ToolCall): string {
+export async function runStatusTool(
+  { ctx, hippoRoot, config, tenantId, store }: ToolCall<'reports'>,
+): Promise<string> {
   // honors HIPPO_FAKE_NOW (eval-only; see ablation.ts)
-  const tallies = getMemoryStatus({ hippoRoot, tenantId, actor: mcpActor(ctx), store }, evalNow(), 0.1);
+  const tallies = await getMemoryStatus({ hippoRoot, tenantId, actor: mcpActor(ctx), store }, evalNow(), 0.1);
   const avgStrength = tallies.total > 0 ? (tallies.strengthSum / tallies.total).toFixed(2) : '0';
   return [
     `Memories: ${tallies.total} (${tallies.pinned} pinned, ${tallies.errors} errors)`,
@@ -56,16 +58,18 @@ export function runStatusTool({ ctx, hippoRoot, config, tenantId, store }: ToolC
   ].join('\n');
 }
 
-export function runConflictsTool(call: ToolCall): string {
+export async function runConflictsTool(call: ToolCall<'conflicts'>): Promise<string> {
   const { ctx, hippoRoot, tenantId, store } = call;
-  const conflicts = listOpenConflicts({ hippoRoot, tenantId, actor: mcpActor(ctx), store }, ctx?.project);
+  const conflicts = await listOpenConflicts({ hippoRoot, tenantId, actor: mcpActor(ctx), store }, ctx?.project);
   if (conflicts.length === 0) return 'No open conflicts.';
   return conflicts.map((c) =>
     `conflict_${c.id}: ${c.memory_a_id} <-> ${c.memory_b_id} (score=${c.score.toFixed(2)}) — ${c.reason}`
   ).join('\n');
 }
 
-export function runResolveTool({ args, ctx, hippoRoot, tenantId, store }: ToolCall): string {
+export async function runResolveTool(
+  { args, ctx, hippoRoot, tenantId, store }: ToolCall<'conflicts'>,
+): Promise<string> {
   const conflictId = Number(args.conflict_id);
   const keepId = String(args.keep || '');
   const forget = Boolean(args.forget);
@@ -75,7 +79,7 @@ export function runResolveTool({ args, ctx, hippoRoot, tenantId, store }: ToolCa
   let loserId: string;
   try {
     const apiCtx = { hippoRoot, tenantId, actor: mcpActor(ctx), store };
-    ({ loserId } = resolveMemoryConflict(apiCtx, conflictId, { keepId, forget, rejectLoser, reason }));
+    ({ loserId } = await resolveMemoryConflict(apiCtx, conflictId, { keepId, forget, rejectLoser, reason }));
   } catch (err) {
     // A missing, unreachable or settled conflict answers alike, so
     // the reply says nothing of a pair the caller cannot touch.

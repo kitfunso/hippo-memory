@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { countMatching, recordStatements } from './_helpers/count-statements.js';
+import { countMatching, recordStatements, recordStatementsAsync } from './_helpers/count-statements.js';
 import { cliApiContext } from '../src/cli/api-context.js';
 import { listMemories } from '../src/api/memories.js';
 import { loadContextCandidates } from '../src/store/candidates.js';
@@ -69,24 +69,24 @@ describe('listMemories paging', () => {
   it('pages the same rows in the same order as one whole read', async () => {
     await seed(7);
     const ctx = cliApiContext(root, 'default');
-    const { result, statements } = recordStatements(() => listMemories(ctx, {}, { pageSize: 3 }));
+    const { result, statements } = await recordStatementsAsync(() => listMemories(ctx, {}, { pageSize: 3 }));
     expect(result.map((e) => e.id)).toEqual(loadAllEntries(root, 'default').map((e) => e.id));
     expect(countMatching(statements, /FROM memories .*LIMIT \?/)).toBe(3);
   });
 
   it('pages past ties on created, and an empty store gives no rows', async () => {
     const ctx = cliApiContext(root, 'default');
-    expect(listMemories(ctx, {}, { pageSize: 2 })).toEqual([]);
+    expect(await listMemories(ctx, {}, { pageSize: 2 })).toEqual([]);
     await withSharedStoreHandles(() => {
       for (let i = 0; i < 5; i++) writeEntry(root, { ...createMemory(`tied row ${i}`, { tenantId: 'default' }), created: '2026-02-02T00:00:00.000Z' });
     });
-    expect(listMemories(ctx, {}, { pageSize: 2 }).map((e) => e.id)).toEqual(loadAllEntries(root, 'default').map((e) => e.id));
+    expect((await listMemories(ctx, {}, { pageSize: 2 })).map((e) => e.id)).toEqual(loadAllEntries(root, 'default').map((e) => e.id));
   });
 
   it('reads every row across the default page boundary', async () => {
     await seed(1003);
     const ctx = cliApiContext(root, 'default');
-    const { result, statements } = recordStatements(() => listMemories(ctx));
+    const { result, statements } = await recordStatementsAsync(() => listMemories(ctx));
     expect(result.map((e) => e.id)).toEqual(loadAllEntries(root, 'default').map((e) => e.id));
     expect(countMatching(statements, /FROM memories .*LIMIT \?/)).toBe(2);
   });

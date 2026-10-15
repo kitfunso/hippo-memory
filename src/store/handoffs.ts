@@ -83,7 +83,7 @@ export function saveSessionHandoff(
   }
 }
 
-interface HandoffFilter {
+export interface HandoffFilter {
   unfinishedOnly?: boolean;
   maxAgeMs?: number;
   scopeFilter?: 'default-deny';

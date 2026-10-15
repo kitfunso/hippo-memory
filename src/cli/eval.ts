@@ -45,7 +45,7 @@ async function cmdEval(
   // Suite mode doesn't need an initialized store
   if (!flags['suite']) requireInit(hippoRoot);
 
-  const entries = flags['suite'] ? [] : listMemories(cliApiContext(hippoRoot, tenantId), { everyTenant: true });
+  const entries = flags['suite'] ? [] : await listMemories(cliApiContext(hippoRoot, tenantId), { everyTenant: true });
 
   if (flags['bootstrap']) {
     writeBootstrapCorpus(entries, flags);

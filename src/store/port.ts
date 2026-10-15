@@ -45,6 +45,7 @@ import type { SessionEvent, TaskSnapshot } from './rows.js';
 import type { OriginFilter, VectorCandidateSpec } from './search-rows.js';
 import type { ContinuityKey } from './sessions.js';
 import type { TokenUse } from './token-ledger.js';
+import type { SessionAndAdminGroups } from './port-groups.js';
 
 /** The arguments of `loadRecallSearchEntries` after the query, by name. */
 export interface RecallSearchArgs {
@@ -677,7 +678,7 @@ export interface LessonWrites {
 
 /** The optional groups: a store sets each one whole or leaves
  * it unset, and a route or MCP tool names the one it needs. */
-export interface StoreGroups {
+export interface StoreGroups extends SessionAndAdminGroups {
   /** Unset on any store but hippo.db; a request then runs fenced from
    * hippo.db, and a route or tool that names no group answers 501. */
   readonly localFiles: LocalFiles;

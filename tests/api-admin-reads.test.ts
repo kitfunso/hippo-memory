@@ -27,11 +27,11 @@ describe('api admin reads', () => {
     const team = (await remember(ctxFor(actorB), { content: 'deploy without --dry-run' })).id;
     replaceDetectedConflicts(root, [{ memory_a_id: personal, memory_b_id: team, reason: 'contradiction', score: 0.9 }]);
 
-    const status = getMemoryStatus(ctxFor(actorA), new Date(), 0.1);
+    const status = await getMemoryStatus(ctxFor(actorA), new Date(), 0.1);
     expect(status.total).toBe(2);
     expect(status.openConflicts).toBe(1);
-    expect(listOpenConflicts(ctxFor(actorA))).toHaveLength(1);
-    expect(listOpenConflicts(ctxFor(actorB))).toHaveLength(0);
+    expect(await listOpenConflicts(ctxFor(actorA))).toHaveLength(1);
+    expect(await listOpenConflicts(ctxFor(actorB))).toHaveLength(0);
     await expect(getTouchableMemory(ctxFor(actorB), personal)).rejects.toBeInstanceOf(NotFoundError);
     expect((await getTouchableMemory(ctxFor(actorA), personal))?.id).toBe(personal);
   });

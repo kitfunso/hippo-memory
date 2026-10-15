@@ -372,8 +372,8 @@ async function traceLineage(hippoRoot: string, globalRoot: string, entry: Memory
 
   // Open conflicts involving this memory.
   const allConflicts = [
-    ...api.listConflicts(cliApiContext(hippoRoot, tenantId), 'open'),
-    ...(isInitialized(globalRoot) ? api.listConflicts(cliApiContext(globalRoot, tenantId), 'open') : []),
+    ...(await api.listConflicts(cliApiContext(hippoRoot, tenantId), 'open')),
+    ...(isInitialized(globalRoot) ? await api.listConflicts(cliApiContext(globalRoot, tenantId), 'open') : []),
   ];
   const myConflicts = allConflicts.filter((c) => c.memory_a_id === id || c.memory_b_id === id);
   return { parentPreviews, myConflicts };

@@ -2,31 +2,21 @@
 
 import { ConflictError, NotFoundError } from '../core/api-errors.js';
 import { stampOriginProject } from '../store/entry-row.js';
-import { updateStatsUnlessBusy } from '../store/index-and-stats.js';
-import {
-  loadDormantMemories,
-  holdsDormantMemory,
-  restoreDormantMemory,
-  forgetDormantMemory,
-  type DormantMemory,
-  type DormantSnapshot,
-  type ListDormantOpts,
-} from '../store/dormant.js';
+import type { DormantMemory, DormantSnapshot, ListDormantOpts } from '../store/dormant.js';
 import { strengthAblation } from '../core/ablation.js';
 import { createMemory, calculateStrength, type MemoryEntry } from '../core/memory.js';
 import { loadConfig } from '../core/config.js';
 import { canTouchScope, personalScopeOf } from '../core/recall-scope.js';
-import { touchableScopeSql, type SqlFragment } from '../store/rule-sql.js';
-import type { Context } from './types.js';
+import type { Context, ContextWith } from './types.js';
 
-const touchable = (ctx: Context): SqlFragment => touchableScopeSql('', personalScopeOf(ctx.actor));
+type DormantContext = ContextWith<'dormant'>;
 
 /**
  * A tenant's dormant memories (src/store/dormant.ts): what sleep moved out of active memory when `dormant.enabled` is
  * on. Newest first;
  * `opts.query` keeps rows containing every term (case-insensitive). */
-export function listDormant(ctx: Context, opts: ListDormantOpts = {}): DormantMemory[] {
-  return loadDormantMemories(ctx.hippoRoot, ctx.tenantId, opts, touchable(ctx));
+export function listDormant(ctx: DormantContext, opts: ListDormantOpts = {}): Promise<DormantMemory[]> {
+  return ctx.store.dormant.list(ctx.tenantId, personalScopeOf(ctx.actor), opts);
 }
 
 /**
@@ -35,9 +25,8 @@ export function listDormant(ctx: Context, opts: ListDormantOpts = {}): DormantMe
  * Throws if the tenant has no such dormant id or a live memory holds it, and RejectedValueError if the value was since
  * rejected (the dormant copy stays).
  */
-export function restoreDormant(ctx: Context, id: string): MemoryEntry {
-  const outcome = restoreDormantMemory(ctx.hippoRoot, {
-    tenantId: ctx.tenantId,
+export async function restoreDormant(ctx: DormantContext, id: string): Promise<MemoryEntry> {
+  const outcome = await ctx.store.dormant.restore(ctx.tenantId, {
     id,
     actor: ctx.actor.subject,
     inReach: (scope) => canTouchScope(ctx.actor, scope),
@@ -70,19 +59,12 @@ function reviveSnapshot(ctx: Context, dormant: DormantSnapshot, now: Date): Memo
  * Permanently deletes a dormant memory, the explicit "forget it for good"; throws when the tenant has no dormant memory
  * with that id.
  */
-export function forgetDormant(ctx: Context, id: string): void {
-  const forgotten = forgetDormantMemory(ctx.hippoRoot, {
-    tenantId: ctx.tenantId,
-    id,
-    actor: ctx.actor.subject,
-    admit: touchable(ctx),
-  });
+export async function forgetDormant(ctx: DormantContext, id: string): Promise<void> {
+  const forgotten = await ctx.store.dormant.forget(ctx.tenantId, personalScopeOf(ctx.actor), id, ctx.actor.subject);
   if (!forgotten) throw new NotFoundError(`dormant memory not found: ${id}`);
-  // Counted like every other permanent removal (forget, archiveRaw).
-  updateStatsUnlessBusy(ctx.hippoRoot, { forgotten: 1 }, `removed ${id}`);
 }
 
 /** Whether the tenant holds a dormant memory with this id that the caller may touch (for "not found" hints). */
-export function isDormant(ctx: Context, id: string): boolean {
-  return holdsDormantMemory(ctx.hippoRoot, ctx.tenantId, id, touchable(ctx));
+export function isDormant(ctx: DormantContext, id: string): Promise<boolean> {
+  return ctx.store.dormant.holds(ctx.tenantId, personalScopeOf(ctx.actor), id);
 }

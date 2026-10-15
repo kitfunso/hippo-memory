@@ -4,7 +4,7 @@
  * Uses fetch directly (no SDK dependency); on any failure the original memory is untouched. */
 
 import { MemoryEntry, Layer } from '../core/memory.js';
-import { REFINED_TAG, storeRefinement, type Context } from '../api/index.js';
+import { REFINED_TAG, storeRefinement, type StoreContext } from '../api/index.js';
 import { listMemories, listMemoriesByIds, type TenantReach } from '../api/memories.js';
 import { cliApiContext } from './api-context.js';
 import { chunked } from '../util/chunked.js';
@@ -129,7 +129,7 @@ export async function refineStore(
   // No tenant means every tenant, so the ctx's own tenant is never read.
   const ctx = cliApiContext(hippoRoot, opts.tenantId ?? '');
   const reach: TenantReach = { everyTenant: opts.tenantId === undefined };
-  const entries = listMemories(ctx, reach);
+  const entries = await listMemories(ctx, reach);
   let processed = 0;
 
   for (const entry of entries) {
@@ -152,7 +152,7 @@ export async function refineStore(
 }
 
 async function refineOneEntry(
-  ctx: Context,
+  ctx: StoreContext,
   reach: TenantReach,
   entry: MemoryEntry,
   opts: RefineOptions,
@@ -163,9 +163,8 @@ async function refineOneEntry(
   const parentIds = Array.isArray(entry.parents) ? entry.parents : [];
   // Parent lookup is tenant-scoped; cross-tenant parents are absent and skipped,
   // so refine still works from the merged content alone.
-  const found = new Map(
-    chunked(parentIds).flatMap((chunk) => listMemoriesByIds(ctx, chunk, reach)).map((p) => [p.id, p]),
-  );
+  const chunks = await Promise.all(chunked(parentIds).map((chunk) => listMemoriesByIds(ctx, chunk, reach)));
+  const found = new Map(chunks.flat().map((p) => [p.id, p]));
   const sources = parentIds.flatMap((pid) => found.get(pid) ?? []);
 
   const refined = await refineSemanticMemory(entry.content, sources, {
@@ -186,7 +185,7 @@ async function refineOneEntry(
     return;
   }
 
-  storeRefinement(cliApiContext(ctx.hippoRoot, entry.tenant_id), entry, refined);
+  await storeRefinement(cliApiContext(ctx.hippoRoot, entry.tenant_id), entry, refined);
   result.refined++;
   result.details.push({ id: entry.id, status: 'refined' });
 }

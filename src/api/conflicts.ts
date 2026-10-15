@@ -1,17 +1,13 @@
 // Conflict resolution for every front end, so the reach, status, pair and liveness checks live in one place.
-// SHORTCUT: hippo.db only, since the store port has no conflict calls; a conflicts group when a served store needs
-// them.
 import { BadRequestError, ConflictError, NotFoundError } from '../core/api-errors.js';
 import type { MemoryEntry } from '../core/memory.js';
-import { listMemoryConflicts, listTouchableConflicts, resolveConflict } from '../store/conflicts.js';
-import { loadEntriesByIds } from '../store/entry-reads.js';
 import { chunked } from '../util/chunked.js';
 import { passesScopeFilterForRecall, personalScopeOf } from '../core/recall-scope.js';
 import type { MemoryConflict } from '../store/rows.js';
 import { classifyOriginProject } from '../core/project-identity.js';
 import type { CallerProject } from './prompt-hook.js';
 import { isQuarantineScope } from '../trust/quarantine.js';
-import { requireHostAdmin, type Context } from './types.js';
+import { requireHostAdmin, type ContextWith } from './types.js';
 import type { TenantReach } from './memories.js';
 
 export interface ResolveMemoryConflictOpts {
@@ -42,26 +38,27 @@ function isLive(entry: Pick<MemoryEntry, 'superseded_by' | 'kind' | 'scope'>): b
  * `ctx.actor`.
  * NotFound: missing, untouchable or no longer live. Conflict: already resolved. BadRequest: `keepId` outside the pair.
  */
-export function resolveMemoryConflict(
-  ctx: Context,
+export async function resolveMemoryConflict(
+  ctx: ContextWith<'conflicts'>,
   conflictId: number,
   opts: ResolveMemoryConflictOpts,
-): ResolveMemoryConflictResult {
+): Promise<ResolveMemoryConflictResult> {
   // Read with every status, so a resolved conflict answers 409 while one holding another person's personal row stays a
   // 404.
-  const conflict = listTouchableConflicts(ctx.hippoRoot, '*', ctx.tenantId, ctx.actor).find((c) => c.id === conflictId);
+  const touchable = await ctx.store.conflicts.listTouchable(ctx.tenantId, '*', ctx.actor);
+  const conflict = touchable.find((c) => c.id === conflictId);
   if (!conflict) throw new NotFoundError(`conflict not found: ${conflictId}`);
   if (conflict.status !== 'open') throw new ConflictError(`conflict ${conflictId} is already resolved`);
   const pair = [conflict.memory_a_id, conflict.memory_b_id];
   if (!pair.includes(opts.keepId)) {
     throw new BadRequestError(`keep must be one of the two memories in conflict ${conflictId}: ${pair.join(', ')}`);
   }
-  if (loadEntriesByIds(ctx.hippoRoot, pair, ctx.tenantId).filter(isLive).length < pair.length) {
+  if ((await ctx.store.entriesByIds(pair, ctx.tenantId)).filter(isLive).length < pair.length) {
     throw new NotFoundError(`conflict ${conflictId} names a memory that is superseded, archived or quarantined`);
   }
-  const resolved = resolveConflict(
-    ctx.hippoRoot,
-    { conflictId, keepId: opts.keepId, forgetLoser: opts.forget === true, tenantId: ctx.tenantId },
+  const resolved = await ctx.store.conflicts.resolve(
+    ctx.tenantId,
+    { conflictId, keepId: opts.keepId, forgetLoser: opts.forget === true },
     {
       rejectLoserValue: opts.rejectLoser === true,
       reason: opts.reason,
@@ -75,17 +72,17 @@ export function resolveMemoryConflict(
 
 /** Open conflicts whose two rows the caller may touch; with `project`, only pairs it could also recall:
  *  its repo or user-global, and no scope it was not asked for. */
-export function listOpenConflicts(ctx: Context, project?: CallerProject): MemoryConflict[] {
-  const touchable = listTouchableConflicts(ctx.hippoRoot, 'open', ctx.tenantId, ctx.actor);
+export async function listOpenConflicts(
+  ctx: ContextWith<'conflicts'>,
+  project?: CallerProject,
+): Promise<MemoryConflict[]> {
+  const touchable = await ctx.store.conflicts.listTouchable(ctx.tenantId, 'open', ctx.actor);
   if (!project) return touchable;
   const own = personalScopeOf(ctx.actor);
   const ids = [...new Set(touchable.flatMap((c) => [c.memory_a_id, c.memory_b_id]))];
-  // loadEntriesByIds reads at most one chunk of ids per call.
-  const rows = new Map(
-    chunked(ids)
-      .flatMap((chunk) => loadEntriesByIds(ctx.hippoRoot, chunk, ctx.tenantId))
-      .map((row) => [row.id, row]),
-  );
+  // entriesByIds reads at most one chunk of ids per call.
+  const chunks = await Promise.all(chunked(ids).map((chunk) => ctx.store.entriesByIds(chunk, ctx.tenantId)));
+  const rows = new Map(chunks.flat().map((row) => [row.id, row]));
   const shown = (id: string): boolean => {
     const row = rows.get(id);
     return row !== undefined && classifyOriginProject(row.origin_project, project) !== 'cross-project'
@@ -97,7 +94,11 @@ export function listOpenConflicts(ctx: Context, project?: CallerProject): Memory
 /**
  * Conflicts with `status` ('*' for any) in reach, with no scope filter: the host's own view, so the host admin only.
  */
-export function listConflicts(ctx: Context, status: string, reach: TenantReach = {}): MemoryConflict[] {
+export async function listConflicts(
+  ctx: ContextWith<'conflicts'>,
+  status: string,
+  reach: TenantReach = {},
+): Promise<MemoryConflict[]> {
   requireHostAdmin(ctx, 'Listing conflicts past the scope check');
-  return listMemoryConflicts(ctx.hippoRoot, status, reach.everyTenant ? undefined : ctx.tenantId);
+  return ctx.store.conflicts.list(reach.everyTenant ? null : ctx.tenantId, status);
 }

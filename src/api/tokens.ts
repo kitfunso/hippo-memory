@@ -3,9 +3,8 @@
 import { rethrowIfSqliteBlocked } from '../util/sqlite-blocked.js';
 import type { TokenSummary, TokenSurface } from '../store/token-ledger.js';
 import type { FailureSummary } from '../store/failure-log.js';
-import { failureLogSummary, tokenUseSummary } from '../store/usage-reports.js';
 import { errorMessage, log } from '../util/log.js';
-import type { Context, StoreContext } from './types.js';
+import type { ContextWith, StoreContext } from './types.js';
 import { DAY_MS } from '../util/time.js';
 
 /** Records memory text handed to an agent in the token ledger. Best-effort: never throws, since a ledger failure must
@@ -32,13 +31,13 @@ export async function recordTokens(
 
 /** Token ledger totals for the tenant over the last `days` days (default 30): tokens sent, skipped as unchanged and
  * re-read, per surface, with session counts and mean tokens per session. */
-export function tokenSummary(ctx: Context, opts: { days?: number } = {}): TokenSummary {
-  return tokenUseSummary(ctx.hippoRoot, ctx.tenantId, reportWindowStart(opts.days));
+export function tokenSummary(ctx: ContextWith<'reports'>, opts: { days?: number } = {}): Promise<TokenSummary> {
+  return ctx.store.reports.tokenUse(ctx.tenantId, reportWindowStart(opts.days));
 }
 
 /** Failed tool calls by outcome, and repeats across sessions, over the last `days` days (default 30). */
-export function failureSummary(ctx: Context, opts: { days?: number } = {}): FailureSummary {
-  return failureLogSummary(ctx.hippoRoot, ctx.tenantId, reportWindowStart(opts.days));
+export function failureSummary(ctx: ContextWith<'reports'>, opts: { days?: number } = {}): Promise<FailureSummary> {
+  return ctx.store.reports.failures(ctx.tenantId, reportWindowStart(opts.days));
 }
 
 function reportWindowStart(days: number | undefined): string {

@@ -8,7 +8,7 @@ import {
   schemaFitFrom,
 } from '../core/memory.js';
 import { strengthSql } from './rule-sql.js';
-import { withReadSnapshot } from '../db/index.js';
+import { type DatabaseSyncLike, withReadSnapshot } from '../db/index.js';
 import { rewardFactorSql, scopeAdmitSql, type SqlFragment } from './rule-sql.js';
 import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry, parseJsonArray } from './rows.js';
 import { onHandle, openStore } from './open.js';
@@ -385,33 +385,37 @@ export function loadStrengthTallies(
   now: Date,
   atRiskBelow: number,
 ): StrengthTallies {
+  return onHandle(hippoRoot, (db) => strengthTalliesAt(db, tenantId, now, atRiskBelow), openStore);
+}
+
+/** loadStrengthTallies on a handle the caller holds, so it can share a snapshot with other reads. */
+export function strengthTalliesAt(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  now: Date,
+  atRiskBelow: number,
+): StrengthTallies {
   // An unparseable date scores NULL in SQL and 0 in calculateStrength.
   const strength = `COALESCE(${strengthSql(now)}, 0)`;
-  return onHandle(
-    hippoRoot,
-    (db) => {
-      // SAFETY: one aggregate row whose columns are the aliases named below.
-      const row = db
-        .prepare(
-          `SELECT
+  // SAFETY: one aggregate row whose columns are the aliases named below.
+  const row = db
+    .prepare(
+      `SELECT
       COUNT(*) AS total,
       COALESCE(SUM(pinned != 0), 0) AS pinned,
       COALESCE(SUM(EXISTS (SELECT 1 FROM json_each(${jsonList('tags_json')}) WHERE value = 'error')), 0) AS errors,
       COALESCE(SUM(${strength}), 0) AS strengthSum,
       COALESCE(SUM(COALESCE(pinned, 0) = 0 AND ${strength} < ?), 0) AS atRisk
       FROM memories WHERE tenant_id = ?`,
-        )
-        .get(atRiskBelow, tenantId) as Record<keyof StrengthTallies, number | bigint>;
-      return {
-        total: Number(row.total),
-        pinned: Number(row.pinned),
-        errors: Number(row.errors),
-        strengthSum: Number(row.strengthSum),
-        atRisk: Number(row.atRisk),
-      };
-    },
-    openStore,
-  );
+    )
+    .get(atRiskBelow, tenantId) as Record<keyof StrengthTallies, number | bigint>;
+  return {
+    total: Number(row.total),
+    pinned: Number(row.pinned),
+    errors: Number(row.errors),
+    strengthSum: Number(row.strengthSum),
+    atRisk: Number(row.atRisk),
+  };
 }
 
 /** What `hippo status` prints about the whole store: every tenant and superseded rows too. */

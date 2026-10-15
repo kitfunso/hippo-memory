@@ -9,6 +9,12 @@ import { planningFallacyEvidenceAt } from '../planning-fallacy-evidence.js';
 import { recordTokenUse } from '../token-ledger.js';
 import { loadAmbientCandidates, loadContextCandidates } from '../candidates.js';
 import { loadEntriesByIds, loadFreshRawMemories } from '../entry-reads.js';
+import { servedCards, sqliteCards } from './cards-group.js';
+import { servedConflicts, sqliteConflicts } from './conflicts-group.js';
+import { servedDormant, sqliteDormant } from './dormant-group.js';
+import { servedGoals, sqliteGoals } from './goals-group.js';
+import { servedReports, sqliteReports } from './reports-group.js';
+import { servedSessions, sqliteSessions } from './sessions-group.js';
 import { servedConnectorEvents, sqliteConnectorEvents } from './connector-events-group.js';
 import { servedConnectorWrites, sqliteConnectorWrites } from './connector-writes-group.js';
 import { sqliteDagReads } from './dag-reads-group.js';
@@ -36,6 +42,7 @@ import {
   type KeyWrites, type Readiness, type StoreGroup, type StoreGroups, type Sync, type VectorViews,
   type VectorWrites,
 } from '../port.js';
+import type { SessionAndAdminGroups } from '../port-groups.js';
 import { loadRecallEntries } from '../search-rows.js';
 import { type ContinuityKey, listSessionEvents, loadActiveTaskSnapshot } from '../sessions.js';
 import { entriesWithoutVectorAt, loadStoredVectorViews, writeVectorsAt } from '../vector-index.js';
@@ -87,6 +94,12 @@ export function sqliteSyncStore(hippoRoot: string): SqliteSyncStore & Sync<Omit<
     lastRecall: sqliteLastRecall(hippoRoot),
     auditMaintenance: sqliteAuditMaintenance(hippoRoot),
     lessonWrites: sqliteLessonWrites(hippoRoot),
+    sessions: sqliteSessions(hippoRoot),
+    cards: sqliteCards(hippoRoot),
+    goals: sqliteGoals(hippoRoot),
+    conflicts: sqliteConflicts(hippoRoot),
+    dormant: sqliteDormant(hippoRoot),
+    reports: sqliteReports(hippoRoot),
     close() {},
   };
 }
@@ -214,7 +227,19 @@ export function sqliteStore(hippoRoot: string): HippoStore & StoreGroups {
     lastRecall: servedLastRecall(sync.lastRecall),
     auditMaintenance: servedAuditMaintenance(sync.auditMaintenance),
     lessonWrites: servedLessonWrites(sync.lessonWrites),
+    ...servedSessionAndAdminGroups(sync),
     close: async () => sync.close(),
+  };
+}
+
+function servedSessionAndAdminGroups(sync: SyncStoreGroups): SessionAndAdminGroups {
+  return {
+    sessions: servedSessions(sync.sessions),
+    cards: servedCards(sync.cards),
+    goals: servedGoals(sync.goals),
+    conflicts: servedConflicts(sync.conflicts),
+    dormant: servedDormant(sync.dormant),
+    reports: servedReports(sync.reports),
   };
 }
 
