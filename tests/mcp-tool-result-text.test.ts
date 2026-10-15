@@ -73,7 +73,7 @@ describe('MCP tool reply text', () => {
     expect(await call('hippo_outcome', { good: true })).toMatchInlineSnapshot(`"Applied positive outcome to 1 memories"`);
     expect(await call('hippo_recall', { query: 'nothing matches zebra quartz' })).toMatchInlineSnapshot(`
       "## Cutoff
-      Showing 0 of 2 candidates; 2 dropped to fit limit.
+      Showing 0 of 2 candidates; 2 not shown (rank, budget or limit).
 
       ---
 

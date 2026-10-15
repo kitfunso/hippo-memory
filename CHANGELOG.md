@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- MCP recall now reports cut results with the same wording as the CLI.
+
 ## 2.0.0 - 2026-10-11
 
 ### Changed

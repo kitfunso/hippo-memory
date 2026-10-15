@@ -269,7 +269,7 @@ const EXPECTED = {
   tightBudget: {
     ranked: ['SC1', 'L1', 'L2'],
     tail: [],
-    cutoff: 'Showing 3 of 11 candidates; 8 dropped to fit limit.',
+    cutoff: 'Showing 3 of 11 candidates; 8 not shown (rank, budget or limit).',
   },
   explicitScope: {
     ranked: ['SC1', 'SC2'],
@@ -279,7 +279,7 @@ const EXPECTED = {
   continuity: {
     ranked: ['SC1', 'L1', 'L2', 'D1', 'P1', 'L4', 'SC2', 'L3', 'C1'],
     tail: [],
-    cutoff: 'Showing 9 of 11 candidates; 2 dropped to fit limit.',
+    cutoff: 'Showing 9 of 11 candidates; 2 not shown (rank, budget or limit).',
   },
   physicsNoEmbeddings: {
     ranked: ['X1', 'SC1', 'L1', 'L2', 'D1', 'P1', 'L4', 'SC2', 'L3', 'C1', 'L5', 'G1'],
@@ -309,11 +309,11 @@ const EXPECTED = {
   windowEdge: {
     ranked: ['F0', 'F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8', 'F9', 'W1', 'F10', 'F100', 'F101', 'F102', 'F103', 'F104', 'F105', 'F106', 'F107', 'F108', 'F109', 'F11', 'F110', 'F111'],
     tail: [],
-    cutoff: 'Showing 25 of 213 candidates; 188 dropped to fit limit.',
+    cutoff: 'Showing 25 of 213 candidates; 188 not shown (rank, budget or limit).',
   },
   dagOverflow: {
-    ranked: ['B0', 'B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B8', 'B9', 'B10', 'B11', 'B12', 'B13'],
+    ranked: ['B0', 'B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B8', 'B9', 'B10', 'B11', 'B12'],
     tail: ['SUM'],
-    cutoff: 'Showing 14 of 63 candidates; 49 dropped to fit limit; 1 summary substitutions added.',
+    cutoff: 'Showing 13 of 63 candidates; 50 not shown (rank, budget or limit); 1 summary substitutions added.',
   },
 } satisfies Record<string, Observed>;
