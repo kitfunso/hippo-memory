@@ -38,6 +38,26 @@ const sections = (text) => {
   return out;
 };
 
+/** Chars one injection sends today and under the plan: the handoff shrinks to a pointer, and an entry sent within its life is skipped. */
+const injectionChars = (parts, sent, n) => {
+  let now = 0;
+  let plan = 0;
+  for (const part of parts) {
+    now += part.length;
+    if (part.startsWith('## Session Handoff')) { plan += Math.min(part.length, POINTER); continue; }
+    const perEntry = /^## (Project|Prompt-Relevant) Memory/.test(part);
+    const life = part.startsWith('## Project Memory') ? PIN_REFRESH : MARK_LIFE;
+    for (const key of perEntry ? part.split('\n') : [part]) {
+      const entry = !perEntry || key.startsWith('- **');
+      const last = sent.get(key);
+      if (entry && last !== undefined && n - last < life) continue;
+      if (entry) sent.set(key, n);
+      plan += key.length + (perEntry ? 1 : 0);
+    }
+  }
+  return { now, plan };
+};
+
 /** Cost of one session transcript per arm, with the injection and compaction counts behind it. */
 export const simulate = (file, memChars, blockChars) => {
   const zero = () => Object.fromEntries(ARMS.map((a) => [a, 0]));
@@ -69,22 +89,7 @@ export const simulate = (file, memChars, blockChars) => {
       const parts = sections(text);
       if (parts.length === 0) continue;
       s.injections++;
-      let now = 0;
-      let plan = 0;
-      for (const part of parts) {
-        now += part.length;
-        if (part.startsWith('## Session Handoff')) { plan += Math.min(part.length, POINTER); continue; }
-        const perEntry = /^## (Project|Prompt-Relevant) Memory/.test(part);
-        const life = part.startsWith('## Project Memory') ? PIN_REFRESH : MARK_LIFE;
-        const keys = perEntry ? part.split('\n') : [part];
-        for (const key of keys) {
-          const entry = !perEntry || key.startsWith('- **');
-          const last = sent.get(key);
-          if (entry && last !== undefined && s.injections - last < life) continue;
-          if (entry) sent.set(key, s.injections);
-          plan += key.length + (perEntry ? 1 : 0);
-        }
-      }
+      const { now, plan } = injectionChars(parts, sent, s.injections);
       s.injChars += now;
       s.keptChars += plan;
       add({ now, plan });
