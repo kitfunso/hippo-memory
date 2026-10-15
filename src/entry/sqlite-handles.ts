@@ -1,4 +1,4 @@
-// The root export of the SQLite handle helpers: same functions as store-kit's, kept here so the 2.x root keeps them.
+// The SQLite handle helpers the 2.x package root still exports; the root drops them in 3.0.
 import {
   closeHippoDb as closeHandle,
   type DatabaseSyncLike as HandleType,
@@ -6,11 +6,11 @@ import {
   openHippoDbReadOnly as openHandleReadOnly,
 } from '../db/index.js';
 
-/** @deprecated Moves to 'hippo-memory/store-kit' in 3.0; import it from there. */
+/** @deprecated The package root stops exporting this in 3.0. */
 export const openHippoDb = openHandle;
-/** @deprecated Moves to 'hippo-memory/store-kit' in 3.0; import it from there. */
+/** @deprecated The package root stops exporting this in 3.0. */
 export const openHippoDbReadOnly = openHandleReadOnly;
-/** @deprecated Moves to 'hippo-memory/store-kit' in 3.0; import it from there. */
+/** @deprecated The package root stops exporting this in 3.0. */
 export const closeHippoDb = closeHandle;
-/** @deprecated Moves to 'hippo-memory/store-kit' in 3.0; import it from there. */
+/** @deprecated The package root stops exporting this in 3.0. */
 export type DatabaseSyncLike = HandleType;
