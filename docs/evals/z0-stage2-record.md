@@ -313,7 +313,8 @@ z0-size on `cal-cj4` and `cal-bm4`, before G5, at 200 simulations: no grid row r
 
 - H3 (hippo at most 0.95 of built-in memory's cost) reaches at most 25% power in every run, even with the repository variance at its point estimate. Hippo cost more than built-in memory on cj and less on bm, and that spread between repositories (an SD of about 0.15 on the log ratio) is about three times the 5% saving.
 - D6 takes the repository variance at a one-sided 80% bound and assumed five calibration repositories. With two, the bound puts H1's at 0.708 against an estimate of 0.028. At the point estimates, H1 fits at 25 points with 6 repositories of 6 families, and at 20 points with 10 of 6; H4 fits with 10 repositories of 26 no-lesson tasks.
-- At 5 repositories, 5% (H1) and 7.5% (H3) of true-zero simulations were called wins, against a Holm level of about 1.7%; at 10, 2% and 1.5%. A 1000-simulation check is running.
+- The two-level bootstrap of prereg 189 calls too many wins with few repositories. At the D6 bound, 1000 simulations at 60 families: 5.0% (H1) and 16.6% (H3) of true-zero runs were wins at 5 repositories, 2.2% and 9.9% at 10, against Holm's 1.7%. At the point variance, 2000 simulations: 2.9% and 5.6% at 5 repositories of 6 families, 1.7% and 3.0% at 10, 1.2% and 1.9% at 20.
+- A t test over repositories with G-1 degrees of freedom (H1 on repository means, H3 on the pooled ratio with a cluster-robust error) kept every point-variance cell at or under 1.7%, at a cost in power that is gone by 20 repositories: H1 at 20 points, 6 families, 21% against the bootstrap's 59% at 5 repositories, 68% against 82% at 10, 98% against 99% at 20. At the bound, H3 still made 5% to 7% false wins under both tests. Script and logs: `C:/z0-runs/s9/prelim/smallsample.mjs`, `ss-point.log`, `ss-bound.log`.
 - First-try repeats on applies, cj and bm together: A0 23 of 26, A1 3 of 26, A2 1 of 26, A4 2 of 26, A5 4 of 26.
 
 ## Contract limits found
