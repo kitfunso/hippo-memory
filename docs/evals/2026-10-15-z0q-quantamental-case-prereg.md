@@ -77,7 +77,7 @@ So "not detectable" is the likely outcome unless built-in memory finds these les
 
 ## Budget and schedule
 
-About $12 for the screen and about $135 for the main run (450 sessions at about $0.30, from Z0 calibration), on the monthly free Console credit through Z0's swap proxy, capped at $170. The main run is chunked by seed so a cap stop loses one chunk, not the run. A scheduled job starts the paid steps on the first day from 2 to 12 November 2026 on which the freeze tag, the authored task set and a credit check are all in place.
+About $12 for the screen and about $135 for the main run (450 sessions at about $0.30, from Z0 calibration), on the monthly free Console credit through Z0's swap proxy, capped at $170. The main run is one runner invocation over the four arms at their seeds (45 sessions per arm and seed), as Z0 calibration runs. At the cap the proxy answers 429 and the runner waits, as the calibration build makes it, until the proxy is moved to the plan login, so a cap stop delays the run and never cuts it. A scheduled job starts the paid steps on the first day from 2 to 12 November 2026 on which the freeze tag, the authored task set and a credit check are all in place.
 
 ## Stages
 
