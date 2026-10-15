@@ -294,6 +294,28 @@ The Metrolist set X chunk did not start the first time (`cal-ml`, about 05:50 UT
 
 The Console credit has $150 of room for Z0. A detached guard (`C:/z0-runs/api-route/flip-to-plan.ps1`) reads the proxy's tally each minute and writes `plan` to its mode file at $145. From then on, new requests go through the plan login at no cost. Until its weekly reset (17 October, 05:00 London time) the runner waits there, as `cb656ba4` makes it, and then runs on. The model and pins are the same on both routes.
 
+`cal-bm4` recorded all 170 sessions (last start 07:58 UTC on 2026-10-15), at $54.12 by its records. No sequence was voided and no session is invalid. hook-check found A2's 82 hippo hooks all delivered. A5 lost 2 of 47, both in one seed 2 session: a start hook cancelled at 10.9 s and a prompt hook at 14.9 s. That session is listed as a G1 delivery void.
+
+The first bm4 regrade refused to start: every record lists `CLAUDE_CODE_OAUTH_TOKEN` among its env keys, because the runner strips it only from setup and test envs, and the regrade stops on a key the run had. The regrade compares names, never values (G5 reading 16), so `C:/z0-runs/s9/g5-run.ps1` sets a placeholder. The real token stays disabled.
+
+## S9: G5 on Comonicon.jl, round 1
+
+The blind reader's round 1 (seed 41, 30 pairs) disagreed with the checkers on 7 pairs, 23%. That is over 10%, so G5 failed and a checker fix became allowed (reading 19). Both causes were checker defects:
+
+- `cj-f1-l1` judged `src/` only, but the repository's `format-pr.yml` formats the whole tree. Five disagreements were 108-character lines in test files, all in teach cells. The checker now reads every `.jl` file. On the saved diffs this changes teach verdicts only: every apply with a long test line already failed on `src/`.
+- `lib.mjs` counted the message of a commit that `git commit --amend` replaced, so a corrected message could never pass. Two disagreements. An amend now replaces the message before it, and `--amend --no-edit` keeps it.
+
+The S3 proof of the fixed checkers (`C:/z0-runs/s3/proof-cj-g5fix.log`) passed 8 of 9 tasks. On `cj-f1-a1` the widened checker fails the validation's good commit `b1c322d4`, which leaves a 161-character line in `test/frontend/cast.jl`; it was written when the checker read `src/` only. A corrected good commit, `134a0984` on ref `task/cj-f1-a1/good-g5`, splits that line as the `src/` line already is. Run directly, the checker passes it and fails the bad commit `d433c50f`. Pointing `validation.json` at it waits for Keith, and the post-fix regrade and round 2 wait for the proof. The proof's stub preflight also flags `cj-f4-l1`'s key phrase in a stub tree; `cj-f4` is not in calibration.
+
+## S9: preliminary sizing
+
+z0-size on `cal-cj4` and `cal-bm4`, before G5, at 200 simulations: no grid row reaches 80% power at a minimum effect of 15, 20 or 25 points, up to 40 repositories and 600 families. Under prereg 215 the run does not start, and the needed sizes are reported (`C:/z0-runs/s9/prelim/report.html`).
+
+- H3 (hippo at most 0.95 of built-in memory's cost) reaches at most 25% power in every run, even with the repository variance at its point estimate. Hippo cost more than built-in memory on cj and less on bm, and that spread between repositories (an SD of about 0.15 on the log ratio) is about three times the 5% saving.
+- D6 takes the repository variance at a one-sided 80% bound and assumed five calibration repositories. With two, the bound puts H1's at 0.708 against an estimate of 0.028. At the point estimates, H1 fits at 25 points with 6 repositories of 6 families, and at 20 points with 10 of 6; H4 fits with 10 repositories of 26 no-lesson tasks.
+- At 5 repositories, 5% (H1) and 7.5% (H3) of true-zero simulations were called wins, against a Holm level of about 1.7%; at 10, 2% and 1.5%. A 1000-simulation check is running.
+- First-try repeats on applies, cj and bm together: A0 23 of 26, A1 3 of 26, A2 1 of 26, A4 2 of 26, A5 4 of 26.
+
 ## Contract limits found
 
 - A checker's `CHECK_POST_COMMIT` is a state commit whose parent is the pre-session commit, so the agent's own commits are not visible to it. Commit-message rules are checked from the `git commit` commands in `CHECK_COMMANDS`.
