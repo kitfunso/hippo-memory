@@ -3,6 +3,7 @@
 import type { AmbientTallies } from '../core/ambient.js';
 import type { AmbientStoreFilter } from './ambient.js';
 import type { ApiKeyListRow, ApiKeyRecord, ListApiKeysOpts, NewApiKey } from './auth.js';
+import type { ScopeGrantChange } from './key-writes.js';
 import type { AppendAuditOpts, AuditEvent, AuditPrune, ListAuditAfterOpts, QueryAuditOpts } from './audit.js';
 import type { QualityRepairResult } from './quality-repair.js';
 import { StoreNotPortedError } from '../util/sqlite-blocked.js';
@@ -267,6 +268,11 @@ export interface KeyWrites {
   /** As `listApiKeyRows`: newest inserted first, each with its scope grants; `active` drops revoked rows and an
    * expires_at not above now's toISOString. */
   listApiKeys(query: KeyListQuery): Promise<ApiKeyListRow[]>;
+}
+
+export interface KeyGrants {
+  /** Checks the key under the write lock; the change and its auth_grant or auth_ungrant row commit together. */
+  changeScopeGrant(change: ScopeGrantChange): Promise<void>;
 }
 
 /** A claim to save and the memory row that mirrors it into recall: core builds it with
@@ -685,6 +691,8 @@ export interface StoreGroups {
   readonly vectorViews: VectorViews;
   readonly keyAudit: KeyAudit;
   readonly keyWrites: KeyWrites;
+  /** Unset on a store without it, where the CLI's auth grant and ungrant answer 501. */
+  readonly keyGrants: KeyGrants;
   /** embedMemory and embedAll with a store need it and `vectors`. */
   readonly vectorWrites: VectorWrites;
   readonly entryWrites: EntryWrites;

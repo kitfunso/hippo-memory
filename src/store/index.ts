@@ -11,6 +11,7 @@ export type {
   KeyListQuery,
   KeyMint,
   KeyRevoke,
+  KeyGrants,
   KeyWrites,
   LastRecall,
   LastRecallWrites,

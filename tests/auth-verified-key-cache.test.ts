@@ -83,7 +83,7 @@ describe('verified API key cache', () => {
   it('an in-process scope grant shows on the next verify', async () => {
     const key = mint();
     expect((await verify(key.plaintext))!.scopes).toEqual([]);
-    authGrant(adminCtx(), key.keyId, 'slack:private:C123');
+    await authGrant(adminCtx(), key.keyId, 'slack:private:C123');
     expect((await verify(key.plaintext))!.scopes).toEqual(['slack:private:C123']);
   });
 
@@ -217,7 +217,7 @@ describe('VerifiedKeyCache', () => {
     expect([cache.has('hash-b', 'hk_b.s'), cache.has('hash-a', 'hk_a.s'), cache.has('hash-c', 'hk_c.s')]).toEqual([false, true, true]);
   });
 
-  it('a wrong secret misses without evicting the proved one', () => {
+  it('a wrong secret misses without evicting the proved one', async () => {
     const cache = new VerifiedKeyCache(2);
     cache.add('hash-a', 'hk_a.s');
     expect(cache.has('hash-a', 'hk_a.wrong')).toBe(false);

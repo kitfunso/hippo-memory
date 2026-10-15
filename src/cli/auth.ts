@@ -144,8 +144,8 @@ async function cmdAuthScopeGrant(
 ): Promise<void> {
   const ctx = await keyContext(resolveAuthRoot(hippoRoot, flags), tenantId, keyId);
   try {
-    if (grant) api.authGrant(ctx, keyId, scope);
-    else api.authUngrant(ctx, keyId, scope);
+    if (grant) await api.authGrant(ctx, keyId, scope);
+    else await api.authUngrant(ctx, keyId, scope);
   } catch (err) {
     fail(`Error: ${errorMessage(err)}`);
   }

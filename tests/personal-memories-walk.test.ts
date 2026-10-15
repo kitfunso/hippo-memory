@@ -421,8 +421,8 @@ describe('personal memories walk (plan lane T)', () => {
   });
 
   it('line 11: api.authGrant of A\'s scope is 400, and a resolver scope list naming it opens nothing (F8)', async () => {
-    expect(() => api.authGrant(ctxOf('ADM'), keys.B.keyId, A_SCOPE)).toThrow(BadRequestError);
-    expect(api.authGrant(ctxOf('ADM'), keys.B.keyId, 'slack:private:C9')).toEqual({ ok: true });
+    await expect(api.authGrant(ctxOf('ADM'), keys.B.keyId, A_SCOPE)).rejects.toThrow(BadRequestError);
+    expect(await api.authGrant(ctxOf('ADM'), keys.B.keyId, 'slack:private:C9')).toEqual({ ok: true });
 
     const scoped = `q=zircon&scope=${encodeURIComponent(A_SCOPE)}`;
     expect((await recallIds(SIGNIN_A, scoped)).ids).toContain(ids.aZircon);
@@ -434,7 +434,7 @@ describe('personal memories walk (plan lane T)', () => {
 
   it('line 12: GET /v1/memories?scope=slack:private:C1 reads for a granted member and ADM, unchanged', async () => {
     const granted = mint('walk-c', 'member');
-    api.authGrant(ctxOf('ADM'), granted.keyId, 'slack:private:C1');
+    await api.authGrant(ctxOf('ADM'), granted.keyId, 'slack:private:C1');
     const slack = seedRow('the kowalskiwharf payroll rollout starts thursday', 'slack:private:C1', null);
     const route = `q=kowalskiwharf&scope=${encodeURIComponent('slack:private:C1')}`;
     for (const token of [granted.plaintext, keys.ADM.plaintext]) {

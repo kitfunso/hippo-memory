@@ -28,11 +28,11 @@ import { sqliteVectorReads } from './vector-reads-group.js';
 import { loadLatestHandoff } from '../handoffs.js';
 import { updateStats } from '../index-and-stats.js';
 import { auditHighIdAt, revokeKeyAt } from '../key-audit.js';
-import { createKeyAt, createSelfKeyAt } from '../key-writes.js';
+import { changeScopeGrantAt, createKeyAt, createSelfKeyAt } from '../key-writes.js';
 import { onHandle } from '../open.js';
 import type {
-  AuditLog, ContextReads, ContinuityBlock, HippoStore, KeyAudit, KeyWrites, Readiness, StoreGroups, Sync, VectorViews,
-  VectorWrites,
+  AuditLog, ContextReads, ContinuityBlock, HippoStore, KeyAudit, KeyGrants, KeyWrites, Readiness, StoreGroups, Sync,
+  VectorViews, VectorWrites,
 } from '../port.js';
 import { loadRecallEntries } from '../search-rows.js';
 import { type ContinuityKey, listSessionEvents, loadActiveTaskSnapshot } from '../sessions.js';
@@ -64,6 +64,7 @@ export function sqliteSyncStore(hippoRoot: string): SqliteSyncStore & Sync<Omit<
     ...sqliteRecallWrites(hippoRoot),
     keyAudit: sqliteKeyAudit(hippoRoot),
     keyWrites: sqliteKeyWrites(hippoRoot),
+    keyGrants: sqliteKeyGrants(hippoRoot),
     vectorViews: sqliteVectorViews(hippoRoot),
     vectorWrites: sqliteVectorWrites(hippoRoot),
     entryWrites: sqliteEntryWrites(hippoRoot),
@@ -236,8 +237,8 @@ function servedBaseMethods(sync: SyncStoreGroups): ServedBaseMethods {
   };
 }
 
-function servedKeyGroups(sync: SyncStoreGroups): Pick<StoreGroups, 'keyAudit' | 'keyWrites'> {
-  const { keyAudit, keyWrites } = sync;
+function servedKeyGroups(sync: SyncStoreGroups): Pick<StoreGroups, 'keyAudit' | 'keyWrites' | 'keyGrants'> {
+  const { keyAudit, keyWrites, keyGrants } = sync;
   return {
     keyAudit: {
       revokeApiKey: async (revoke) => keyAudit.revokeApiKey(revoke),
@@ -248,6 +249,9 @@ function servedKeyGroups(sync: SyncStoreGroups): Pick<StoreGroups, 'keyAudit' | 
       createApiKey: async (mint) => keyWrites.createApiKey(mint),
       createSelfApiKey: async (mint) => keyWrites.createSelfApiKey(mint),
       listApiKeys: async (query) => keyWrites.listApiKeys(query),
+    },
+    keyGrants: {
+      changeScopeGrant: async (change) => keyGrants.changeScopeGrant(change),
     },
   };
 }
@@ -322,6 +326,14 @@ function sqliteKeyWrites(hippoRoot: string): Sync<KeyWrites> {
     },
     listApiKeys(query) {
       return onHandle(hippoRoot, (db) => listApiKeyRows(db, query));
+    },
+  };
+}
+
+function sqliteKeyGrants(hippoRoot: string): Sync<KeyGrants> {
+  return {
+    changeScopeGrant(change) {
+      onHandle(hippoRoot, (db) => changeScopeGrantAt(db, change));
     },
   };
 }

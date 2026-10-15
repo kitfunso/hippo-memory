@@ -97,9 +97,9 @@ describe('scope grants over HTTP', () => {
 
   it('a grant admits the named scope over HTTP and MCP, other restricted scopes stay denied, ungrant revokes it', async () => {
     const member = mintKey(home, 'member');
-    const adminCtx: api.HippoDbContext = { hippoRoot: home, tenantId: 'default', actor: api.adminActor('cli') };
+    const adminCtx: api.StoreContext = apiCtx(home, 'default', api.adminActor('cli'));
 
-    api.authGrant(adminCtx, member.keyId, PRIVATE_SCOPE);
+    await api.authGrant(adminCtx, member.keyId, PRIVATE_SCOPE);
 
     const scoped = await get(`/v1/memories?q=kowalski&scope=${encodeURIComponent(PRIVATE_SCOPE)}`, member.plaintext);
     expect(scoped.status).toBe(200);
@@ -118,7 +118,7 @@ describe('scope grants over HTTP', () => {
     const otherDenied = await get(`/v1/memories?q=kowalski&scope=${encodeURIComponent(OTHER_PRIVATE_SCOPE)}`, member.plaintext);
     expect(otherDenied.status).toBe(403);
 
-    api.authUngrant(adminCtx, member.keyId, PRIVATE_SCOPE);
+    await api.authUngrant(adminCtx, member.keyId, PRIVATE_SCOPE);
     const afterUngrant = await get(`/v1/memories?q=kowalski&scope=${encodeURIComponent(PRIVATE_SCOPE)}`, member.plaintext);
     expect(afterUngrant.status).toBe(403);
   });
@@ -166,24 +166,24 @@ describe('authGrant / authUngrant validation (api layer)', () => {
     rmSync(home, { recursive: true, force: true });
   });
 
-  it('a member actor cannot grant', () => {
+  it('a member actor cannot grant', async () => {
     const member = mintKey(home, 'member');
-    const memberCtx: api.HippoDbContext = { hippoRoot: home, tenantId: 'default', actor: { subject: `api_key:${member.keyId}`, role: 'member' } };
-    expect(() => api.authGrant(memberCtx, member.keyId, PRIVATE_SCOPE)).toThrow(api.ForbiddenError);
-    expect(() => api.authUngrant(memberCtx, member.keyId, PRIVATE_SCOPE)).toThrow(api.ForbiddenError);
+    const memberCtx: api.StoreContext = apiCtx(home, 'default', { subject: `api_key:${member.keyId}`, role: 'member' });
+    await expect(api.authGrant(memberCtx, member.keyId, PRIVATE_SCOPE)).rejects.toThrow(api.ForbiddenError);
+    await expect(api.authUngrant(memberCtx, member.keyId, PRIVATE_SCOPE)).rejects.toThrow(api.ForbiddenError);
   });
 
-  it('rejects a key belonging to another tenant', () => {
+  it('rejects a key belonging to another tenant', async () => {
     const other = mintKey(home, 'member', 'other-tenant');
-    const adminCtx: api.HippoDbContext = { hippoRoot: home, tenantId: 'default', actor: api.adminActor('cli') };
-    expect(() => api.authGrant(adminCtx, other.keyId, PRIVATE_SCOPE)).toThrow(/Unknown key_id/);
+    const adminCtx: api.StoreContext = apiCtx(home, 'default', api.adminActor('cli'));
+    await expect(api.authGrant(adminCtx, other.keyId, PRIVATE_SCOPE)).rejects.toThrow(/Unknown key_id/);
   });
 
   it('rejects a grant on a revoked key', async () => {
     const member = mintKey(home, 'member');
     const adminCtx: api.StoreContext = apiCtx(home, 'default', api.adminActor('cli'));
     await api.authRevoke(adminCtx, member.keyId);
-    expect(() => api.authGrant(adminCtx, member.keyId, PRIVATE_SCOPE)).toThrow(/revoked/);
+    await expect(api.authGrant(adminCtx, member.keyId, PRIVATE_SCOPE)).rejects.toThrow(/revoked/);
   });
 
   it('CLI grant runs in the key\'s own tenant', () => {
@@ -199,17 +199,17 @@ describe('authGrant / authUngrant validation (api layer)', () => {
     }
   });
 
-  it('rejects an unrestricted scope', () => {
+  it('rejects an unrestricted scope', async () => {
     const member = mintKey(home, 'member');
-    const adminCtx: api.HippoDbContext = { hippoRoot: home, tenantId: 'default', actor: api.adminActor('cli') };
-    expect(() => api.authGrant(adminCtx, member.keyId, 'slack:public:general')).toThrow();
+    const adminCtx: api.StoreContext = apiCtx(home, 'default', api.adminActor('cli'));
+    await expect(api.authGrant(adminCtx, member.keyId, 'slack:public:general')).rejects.toThrow();
   });
 
   it('writes auth_grant / auth_ungrant audit rows', async () => {
     const member = mintKey(home, 'member');
     const adminCtx: api.StoreContext = apiCtx(home, 'default', api.adminActor('cli'));
-    api.authGrant(adminCtx, member.keyId, PRIVATE_SCOPE);
-    api.authUngrant(adminCtx, member.keyId, PRIVATE_SCOPE);
+    await api.authGrant(adminCtx, member.keyId, PRIVATE_SCOPE);
+    await api.authUngrant(adminCtx, member.keyId, PRIVATE_SCOPE);
 
     const grants = await api.auditList(adminCtx, { op: 'auth_grant' });
     expect(grants.some((e) => e.targetId === member.keyId)).toBe(true);
@@ -217,11 +217,11 @@ describe('authGrant / authUngrant validation (api layer)', () => {
     expect(ungrants.some((e) => e.targetId === member.keyId)).toBe(true);
   });
 
-  it('grantScope is idempotent and the key record reflects it', () => {
+  it('grantScope is idempotent and the key record reflects it', async () => {
     const member = mintKey(home, 'member');
-    const adminCtx: api.HippoDbContext = { hippoRoot: home, tenantId: 'default', actor: api.adminActor('cli') };
-    api.authGrant(adminCtx, member.keyId, PRIVATE_SCOPE);
-    api.authGrant(adminCtx, member.keyId, PRIVATE_SCOPE);
+    const adminCtx: api.StoreContext = apiCtx(home, 'default', api.adminActor('cli'));
+    await api.authGrant(adminCtx, member.keyId, PRIVATE_SCOPE);
+    await api.authGrant(adminCtx, member.keyId, PRIVATE_SCOPE);
     const db = openHippoDb(home);
     try {
       expect((readApiKeyRecord(db, member.keyId)?.scopes ?? [])).toEqual([PRIVATE_SCOPE]);
@@ -251,7 +251,7 @@ describe('supersede keeps the old row\'s scope', () => {
     expect(successor?.scope).toBe(PRIVATE_SCOPE);
   });
 
-  it('CLI supersede: the successor of a private row stays in that scope', () => {
+  it('CLI supersede: the successor of a private row stays in that scope', async () => {
     const cliHome = mkdtempSync(join(tmpdir(), 'hippo-scope-grants-cli-'));
     try {
       const env = { HIPPO_HOME: join(cliHome, 'global-hippo'), HIPPO_SKIP_AUTO_INTEGRATIONS: '1' };

@@ -289,7 +289,7 @@ describe('consolidation conflicts', () => {
 });
 
 describe('fresh store schema', () => {
-  it('is at the latest version and has memory_quarantine', () => {
+  it('is at the latest version and has memory_quarantine', async () => {
     const home = makeRoot('quarantine', ISOLATION_OFF);
     try {
       expect(getCurrentSchemaVersion()).toBe(LATEST_SCHEMA_VERSION);
@@ -364,7 +364,7 @@ describe('quarantine over HTTP and MCP', () => {
     expect(quarantineScope).toBe('quarantine:private:github:private:acme/demo');
 
     const member = mintKey('member');
-    api.authGrant(adminCtx(home), member.keyId, 'github:private:acme/demo');
+    await api.authGrant(adminCtx(home), member.keyId, 'github:private:acme/demo');
     const grantedButEmpty = await get('/v1/memories?q=wipe.sh&scope=github:private:acme/demo', member.plaintext);
     expect(grantedButEmpty.status).toBe(200);
     expect(await grantedButEmpty.text()).not.toContain('wipe.sh');

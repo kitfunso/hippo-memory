@@ -170,9 +170,7 @@ function cliStoreProblems(srcDir) {
 const SQLITE_FROM = ['api/', 'connectors/', 'mcp/'];
 const SQLITE_DIR = 'store/sqlite/';
 // Each runtime import that may stay, as src-relative paths with why.
-const SQLITE_PINNED = [
-  { file: 'api/auth.ts', target: 'store/sqlite/local.ts', why: 'changeScopeGrant moves behind the port in D2b' },
-];
+const SQLITE_PINNED = [];
 
 /** Runtime imports from src/api, src/connectors or src/mcp into src/store/sqlite, one per (file, target), as src-relative paths. */
 function findSqliteReaches(srcDir) {

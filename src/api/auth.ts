@@ -7,7 +7,6 @@ import {
 } from '../store/auth.js';
 import type { KeysetPosition } from '../util/keyset.js';
 import { requireGroup, type HippoStore, type KeyMint, type SelfKeyMint } from '../store/index.js';
-import { changeScopeGrant } from '../store/sqlite/local.js';
 import type { ApiKeyOwner } from '../store/tenant-lookup.js';
 import { DAY_MS } from '../util/time.js';
 import { requireHostAdmin, type Actor, type Context, type StoreContext } from './types.js';
@@ -276,20 +275,23 @@ export interface AuthGrantResult {
 }
 
 /** Grant `keyId` read access to one restricted `scope`. Admin only. */
-export function authGrant(ctx: Context, keyId: string, scope: string): AuthGrantResult {
+export async function authGrant(ctx: StoreContext, keyId: string, scope: string): Promise<AuthGrantResult> {
   return changeGrant(ctx, keyId, scope, 'auth_grant');
 }
 
 /** Revoke `keyId`'s grant on `scope`. Same authorization and lookup rules as authGrant. */
-export function authUngrant(ctx: Context, keyId: string, scope: string): AuthGrantResult {
+export async function authUngrant(ctx: StoreContext, keyId: string, scope: string): Promise<AuthGrantResult> {
   return changeGrant(ctx, keyId, scope, 'auth_ungrant');
 }
 
-/** hippo.db only: both callers are synchronous published functions, so no store's Promise can answer them. */
-function changeGrant(ctx: Context, keyId: string, scope: string, op: 'auth_grant' | 'auth_ungrant'): AuthGrantResult {
+async function changeGrant(
+  ctx: StoreContext, keyId: string, scope: string, op: 'auth_grant' | 'auth_ungrant',
+): Promise<AuthGrantResult> {
   if (ctx.actor.role !== 'admin') {
     throw new ForbiddenError('Only an admin key can change scope grants');
   }
-  changeScopeGrant(ctx.hippoRoot, { tenantId: ctx.tenantId, keyId, scope, op, actor: ctx.actor.subject });
+  const change = { tenantId: ctx.tenantId, keyId, scope, op, actor: ctx.actor.subject };
+  await requireGroup(ctx.store, 'keyGrants').changeScopeGrant(change);
+
   return { ok: true };
 }

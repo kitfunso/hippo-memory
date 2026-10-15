@@ -36,10 +36,8 @@ const SQLITE_BASE = {
   'src/api/keep.ts': '',
   'src/connectors/keep.ts': '',
   'src/mcp/keep.ts': '',
-  'src/store/sqlite/local.ts': 'export const changeScopeGrant = 1;\n',
   'src/store/sqlite/store.ts': 'export const storeFor = 1;\nexport type S = 1;\n',
 };
-const LOCAL_IMPORT = "export const y = 1;\nimport { changeScopeGrant } from '../store/sqlite/local.js';\n";
 const SQLITE_IMPORT ="export const y = 1;\nimport { storeFor } from '../store/sqlite/store.js';\n";
 
 type Row = {
@@ -199,20 +197,6 @@ const rows: Row[] = [
     map: SQLITE_MAP,
     status: 0,
     output: ['Layer ratchet OK'],
-  },
-  {
-    name: 'a pinned file may import the SQLite adapter',
-    files: { ...SQLITE_BASE, 'src/api/auth.ts': LOCAL_IMPORT },
-    map: SQLITE_MAP,
-    status: 0,
-    output: ['Layer ratchet OK'],
-  },
-  {
-    name: 'a pinned file that no longer imports the SQLite adapter fails as stale',
-    files: { ...SQLITE_BASE, 'src/api/auth.ts': 'export const s = 1;\n' },
-    map: SQLITE_MAP,
-    status: 1,
-    output: ['pinned: src/api/auth.ts no longer imports src/store/sqlite/local.ts'],
   },
 ];
 
