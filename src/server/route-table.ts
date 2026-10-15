@@ -1,9 +1,7 @@
 import type { StoreContext } from '../api/index.js';
 import { handleGitHubEventsWebhook } from '../connectors/github/webhook.js';
 import { handleSlackEventsWebhook } from '../connectors/slack/webhook.js';
-import { withSqliteOffLoop } from '../db/index.js';
 import { hasGroup, requireGroup, type HippoStore, type StoreGroup } from '../store/index.js';
-import { runsOffLoop } from '../store/sqlite/worker-store.js';
 import { HttpError, JSON_HEADERS, sendJson, STORE_NOT_PORTED_MESSAGE, type WebhookRequest } from '../util/http-util.js';
 import { assertCrossTenantAdmin, buildContextWithAuth, isLoopback } from './auth.js';
 import { matchPath, noteAccess } from './request.js';
@@ -638,7 +636,7 @@ export async function dispatchV1Route(r: RouteRequest, method: string, path: str
     noteAccess(r.req, { route: routeLabel(route) });
     // Only a store with worker threads has moved the route's SQLite
     // work; under any other the handler still opens hippo.db itself.
-    await (route.loop === 'off' && runsOffLoop(r.opts.store) ? withSqliteOffLoop(() => run(r)) : run(r));
+    await (route.loop === 'off' ? r.opts.offLoop(() => run(r)) : run(r));
     return true;
   }
   return false;

@@ -1,11 +1,13 @@
 import { envAllowCleartext, envCallerRps, envPort, envRequireAuth, envV1Rps } from '../util/env.js';
 import type { IncomingMessage, Server, ServerResponse } from 'node:http';
 import { detectServer, removePidfileIfOwned, writePidfile } from './server-detect.js';
-import { outsideSqliteOffLoop, runWithRequestStores, SERVER_DB_WAIT_MS, withSqliteBlocked } from '../db/index.js';
+import {
+  outsideSqliteOffLoop, runWithRequestStores, SERVER_DB_WAIT_MS, withSqliteBlocked, withSqliteOffLoop,
+} from '../db/index.js';
 import { hasGroup, type HippoStore } from '../store/index.js';
 import { isStoreBusy } from '../api/busy.js';
 import { holdSqliteConnection, type StoreHolder } from '../store/sqlite/held-connection.js';
-import { workerSqliteStore } from '../store/sqlite/worker-store.js';
+import { runsOffLoop, workerSqliteStore } from '../store/sqlite/worker-store.js';
 import { markSharedStore } from '../core/config.js';
 import { auditWriteFailureCount } from '../store/audit.js';
 import { PACKAGE_VERSION } from '../util/version.js';
@@ -489,11 +491,13 @@ function servedOptsFor(
   publicJsonBodies: ReadonlyMap<string, string>,
   { callerLimiter, failedAuthLimiter }: BootedLimiters,
 ): ResolvedServeOpts {
+  const store = opts.store ?? workerSqliteStore(opts.hippoRoot);
   return {
     ...opts,
     routes,
     publicJsonBodies,
-    store: opts.store ?? workerSqliteStore(opts.hippoRoot),
+    store,
+    offLoop: runsOffLoop(store) ? withSqliteOffLoop : (run) => run(),
     callerLimiter,
     failedAuthLimiter,
     authResolver: outsideRouteBlock(opts.authResolver),
