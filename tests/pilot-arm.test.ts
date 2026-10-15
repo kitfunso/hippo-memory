@@ -193,7 +193,7 @@ describe('pilot arm helpers', () => {
     db.exec('DROP TABLE token_ledger');
     try {
       ensurePilotArm(db, 'default', 's1', 10000);
-      bookTokenUse(root, { tenantId: 'default', surface: 'hook', event: 'inject', items: 1, tokens: 40 });
+      bookTokenUse(root, { tenantId: 'default', surface: 'hook', event: 'inject', items: 1, tokens: 40 }, { hasLocal: true });
     } finally {
       delete process.env.HIPPO_LOG;
     }

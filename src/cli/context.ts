@@ -5,7 +5,7 @@ import { isSubagentPayload } from '../util/hook-payload.js';
 import { estimateTokens } from '../util/token-text.js';
 import { autoDetectContext } from '../api/context-auto.js';
 import { detectScope } from '../core/active-scope.js';
-import { bookLedgerTurn } from '../api/ledger-db.js';
+import { bookLedgerTurn, ledgerReachOf } from '../api/ledger-db.js';
 import { readHookStdin } from './stdin.js';
 import { isJsonObject, isJsonString, type JsonValue } from '../util/json.js';
 import * as api from '../api/index.js';
@@ -158,6 +158,7 @@ async function renderContext(
     framing,
     rec,
     result,
+    reach: ledgerReachOf(ctx),
     envelope,
   };
   renderContextView(view, format, query);
@@ -263,7 +264,7 @@ function renderContextJson(view: ContextView, query: string): void {
       event: 'inject', items: output.length, tokens: estimateTokens(jsonText),
     }],
     delivery: (write) => flushDeliveryRecorder(rec, write),
-  });
+  }, view.reach);
 }
 
 /** The default format; the header figure counts the whole block, sections included, as the ledger does. */
@@ -296,7 +297,7 @@ function renderContextMarkdown(view: ContextView): void {
       event: 'inject', items: renderItems.length, tokens: estimateTokens(text),
     }],
     delivery: (write) => flushDeliveryRecorder(rec, write),
-  });
+  }, view.reach);
 }
 
 function printCrossProjectSection(items: api.ContextResultEntry[]): void {

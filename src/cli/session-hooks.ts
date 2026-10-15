@@ -45,7 +45,7 @@ import type { DeliveryRecorder } from '../store/delivery-recorder.js';
 import { printError } from './output.js';
 import { cmdLastSleep } from './last-sleep.js';
 import { readCompactResumePayload } from './compact-resume-payload.js';
-import { cliApiContext } from './api-context.js';
+import { cliApiContext, cliLedgerReach } from './api-context.js';
 import {
   type CliFlags,
   type CommandContext,
@@ -138,7 +138,7 @@ async function restoreCompactSnapshot(
       tokens: estimateTokens(text),
     }],
     delivery: (write) => flushDeliveryRecorder(rec, write),
-  });
+  }, cliLedgerReach(hippoRoot));
 }
 
 /** SessionEnd entry: TUI teardown kills children still running, so read stdin inline, spawn a detached child that runs
@@ -294,7 +294,10 @@ function sessionEndWork(hippoRoot: string, tenantId: string, flags: CliFlags, mo
     sessionId,
     transcriptPath,
     contextFor: (root) => cliApiContext(root, tenantId),
-    storeRoot: () => hookStoreRoot(hippoRoot),
+    storeRoot: () => {
+      const root = hookStoreRoot(hippoRoot);
+      return isInitialized(root) ? root : null;
+    },
     log: (line, opts) => appendSessionEndCloseLog(logFile, line, opts),
     sleep: () => (mode === 'turn' && sessionId
       ? sleepIfDue(hippoRoot, tenantId, flags, logFile, transcriptPath, sessionId)

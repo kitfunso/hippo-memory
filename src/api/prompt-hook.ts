@@ -23,7 +23,7 @@ import type { HookRuntime } from '../core/capture-contract.js';
 import { realpathOrResolve } from '../util/real-path.js';
 import { MAX_ID_LEN } from '../util/limits.js';
 import { isJsonString, type JsonValue } from '../util/json.js';
-import { bookLedgerTurn, ledgerLastSent, ledgerRoot } from './ledger-db.js';
+import { bookLedgerTurn, ledgerLastSent, ledgerReachOf, ledgerRoot, type LedgerReach } from './ledger-db.js';
 import { noteLedgerRowSkipped } from '../store/ledger-turn.js';
 import type { MemoryEntry } from '../core/memory.js';
 import { sessionPilotArm } from './pilot-arm.js';
@@ -52,7 +52,7 @@ export interface DeliveryStart {
 export function startDeliveryRecorder(ctx: Context, start: DeliveryStart): DeliveryRecorder | null {
   try {
     // The same store the token ledger writes to, so its config governs both.
-    const root = ledgerRoot(ctx.hippoRoot);
+    const root = ledgerRoot(ctx.hippoRoot, ledgerReachOf(ctx));
     if (root === null || !loadConfig(root).deliveryLedger.enabled) return null;
     return createDeliveryRecorder({
       root,
@@ -79,7 +79,7 @@ export function startToolFailureRecorder(
   start: Omit<DeliveryStart, 'eventType'>,
 ): DeliveryRecorder | null {
   try {
-    const root = ledgerRoot(ctx.hippoRoot);
+    const root = ledgerRoot(ctx.hippoRoot, ledgerReachOf(ctx));
     if (root === null || realpathOrResolve(root) !== realpathOrResolve(ctx.hippoRoot)) return null;
     return startDeliveryRecorder(ctx, { ...start, eventType: 'tool-failure' });
   } catch (error) {
@@ -109,8 +109,8 @@ export interface ContextView {
   readonly framing: string;
   readonly rec: DeliveryRecorder | null;
   readonly result: ContextResult;
-  /** Ledger rows stay in `hippoRoot`, never the global store; see promptHookContext. */
-  readonly sharedStore?: boolean;
+  /** Where the ledger rows go; a shared store's reach has no global store, see promptHookContext. */
+  readonly reach: LedgerReach;
   /** The static block's hash the caller says it printed last. Undefined keeps the ledger-only skip rule;
    *  a string or null also needs that hash to match, because the ledger counts blocks a caller that prints elsewhere
    *  may never have shown. */
@@ -245,7 +245,6 @@ function skipUnchangedStatic(
   staticCount: number,
 ): boolean {
   const { hippoRoot, payloadSessionId, rec } = view;
-  const ledgerOpts = { sharedStore: view.sharedStore };
   if (!view.pinnedOnly || payloadSessionId === undefined) return false;
   // Session start is the only injection Copilot gets, so a resumed session needs the whole block again.
   if (view.envelope === 'copilot-session-start' || view.envelope === 'vscode-session-start') return false;
@@ -258,7 +257,7 @@ function skipUnchangedStatic(
   const staticHash = blockHash(staticBlock);
   // Before the ledger read, so a caller that did not print this block books no skip row.
   if (view.printedHash !== undefined && view.printedHash !== staticHash) return false;
-  const last = ledgerLastSent(hippoRoot, view.tenantId, payloadSessionId, surface, ledgerOpts);
+  const last = ledgerLastSent(hippoRoot, view.tenantId, payloadSessionId, surface, view.reach);
   if (!shouldSkipUnchanged(last ?? null, staticHash, refreshTurns)) return false;
   bookLedgerTurn(hippoRoot, {
     uses: [{
@@ -269,7 +268,7 @@ function skipUnchangedStatic(
       rec?.delivered({ state: 'reused', staticHash, staticReused: true });
       flushDeliveryRecorder(rec, write);
     },
-  }, ledgerOpts);
+  }, view.reach);
   return true;
 }
 
@@ -297,7 +296,7 @@ function recordAdditionalContextRows(
       onRowError: noteLedgerRowSkipped,
       delivery: (write) => flushDeliveryRecorder(view.rec, write),
     },
-    { sharedStore: view.sharedStore },
+    view.reach,
   );
 }
 
@@ -367,7 +366,8 @@ export async function promptHookContext(
   // The test the local hook runs on its stdin, so a sub-agent books no arm and no session rows here either.
   const subagent = payload !== undefined && isSubagentPayload(JSON.stringify(payload));
   const ledgerSessionId = subagent ? undefined : sessionId;
-  const arm = sessionPilotArm(ctx.hippoRoot, ctx.tenantId, sessionId, !subagent, { sharedStore, ownTenantOnly: true });
+  const reach = ledgerReachOf(ctx, sharedStore);
+  const arm = sessionPilotArm(ctx.hippoRoot, ctx.tenantId, sessionId, !subagent, { reach, ownTenantOnly: true });
   if (arm === 'holdout') return { arm, ...NOTHING_RENDERED };
   const prompt = payload?.prompt;
   const result = await getContext(ctx, {
@@ -384,7 +384,7 @@ export async function promptHookContext(
   const rendered = hasContextData(result)
     ? renderAdditionalContext({
         hippoRoot: ctx.hippoRoot, tenantId: ctx.tenantId, ledgerSessionId, payloadSessionId: ledgerSessionId,
-        pinnedOnly: true, framing: HOOK_FRAMING, rec: null, result, sharedStore, printedHash: req.printedHash ?? null,
+        pinnedOnly: true, framing: HOOK_FRAMING, rec: null, result, reach, printedHash: req.printedHash ?? null,
       })
     : NOTHING_RENDERED;
   // A sub-agent's output is not the session's, so its caller must not record it as printed.

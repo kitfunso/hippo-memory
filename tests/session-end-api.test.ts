@@ -55,7 +55,7 @@ describe('sessionEndWork', () => {
   });
 
   it('skips every step when no store exists', async () => {
-    await sessionEndWork(work({ storeRoot: () => `${root}-missing` }));
+    await sessionEndWork(work({ storeRoot: () => null }));
     expect(steps).toEqual([]);
     expect(lines).toContain('skip: no hippo store for this folder or globally');
   });
@@ -66,7 +66,7 @@ describe('sessionEndWork', () => {
     const before = process.listenerCount('exit');
     const transcriptPath = `${root}-missing.jsonl`;
     await sessionEndWork(work({ transcriptPath }));
-    await sessionEndWork(work({ transcriptPath, storeRoot: () => `${root}-missing` }));
+    await sessionEndWork(work({ transcriptPath, storeRoot: () => null }));
     expect(process.listenerCount('exit')).toBe(before);
     const reread = lines.filter((l) => l.startsWith('skip re-read count: cannot read the transcript'));
     expect(reread).toHaveLength(2);

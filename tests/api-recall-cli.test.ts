@@ -77,12 +77,15 @@ describe('fitRecallRows', () => {
 
 describe('cliRecallSetting and cliRecallOrigin', () => {
   it('names the global store and marks a row global only when this store lacks it and the global store is on', () => {
-    const s = cliRecallSetting(ctx(), 'team-a');
-    expect(s).toEqual({ globalRoot, primaryIsGlobal: false, activeScope: 'team-a' });
-    const off = cliRecallOrigin(ctx(), s);
+    const absent = cliRecallSetting(ctx(), 'team-a');
+    expect(absent).toEqual({ globalRoot: '', primaryIsGlobal: false, activeScope: 'team-a' });
+    const off = cliRecallOrigin(ctx(), absent);
     expect(off.globalOn).toBe(false);
     expect(off.isGlobal('mem_elsewhere')).toBe(false);
+    // The reach is probed when the context is built, so the global store is seen by a context built after it exists.
     initStore(globalRoot);
+    const s = cliRecallSetting(ctx(), 'team-a');
+    expect(s).toEqual({ globalRoot, primaryIsGlobal: false, activeScope: 'team-a' });
     const on = cliRecallOrigin(ctx(), s);
     expect(on.globalOn).toBe(true);
     expect(on.isGlobal('mem_cli_0')).toBe(false);

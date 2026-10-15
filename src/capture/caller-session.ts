@@ -4,6 +4,7 @@ import { BadRequestError } from '../core/api-errors.js';
 import { ownerOrSubject, type Context } from '../api/types.js';
 import { MAX_ID_LEN } from '../util/limits.js';
 import { sessionPilotArm } from '../api/pilot-arm.js';
+import { ledgerReachOf } from '../api/ledger-db.js';
 import { assertCallerIds, type CallerProject } from '../api/prompt-hook.js';
 import { assertCallerProject, projectNames } from '../core/project-identity.js';
 import { maskEmails, redactSecretsStrict } from '../util/secret-detect.js';
@@ -26,10 +27,8 @@ export function bindCaller(ctx: Context, sessionId: string, project: CallerProje
 
 /** Read only: the session's first prompt booked its arm, and a holdout session gets nothing from hippo. */
 export function callerInHoldout(ctx: Context, sessionId: string): boolean {
-  return (
-    sessionPilotArm(ctx.hippoRoot, ctx.tenantId, sessionId, false, { sharedStore: true, ownTenantOnly: true }) ===
-    'holdout'
-  );
+  const reach = ledgerReachOf(ctx, true);
+  return sessionPilotArm(ctx.hippoRoot, ctx.tenantId, sessionId, false, { reach, ownTenantOnly: true }) === 'holdout';
 }
 
 /**

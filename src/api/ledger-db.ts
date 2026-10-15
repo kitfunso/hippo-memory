@@ -1,40 +1,34 @@
 // The store the token ledger writes to for a caller's root; context, recall and the session hooks share it.
 import { errorMessage, log } from '../util/log.js';
-import { getGlobalRoot } from '../sharing/global-store.js';
 import {
   lastSentOnSurface, noteLedgerRowSkipped, recordLedgerTurn, recordTokensAt, type LedgerTurn,
 } from '../store/ledger-turn.js';
-import { isInitialized } from '../core/project-identity.js';
+import type { StoreReach } from '../store/port.js';
 import type { LastSent, TokenSurface, TokenUse } from '../store/token-ledger.js';
 
-export interface LedgerRootOpts {
-  /** The store serves many people, so the global store of the user running it belongs to none of them. */
-  readonly sharedStore?: boolean;
+/** The slice of a call's store reach that picks the ledger; a shared store has no `global`. */
+export type LedgerReach = Pick<StoreReach, 'hasLocal' | 'global'>;
+
+/** No reach means an integrator's own store (one project, no global beside it); `shared` drops the global store. */
+export function ledgerReachOf(ctx: { readonly reach?: StoreReach }, shared?: boolean): LedgerReach {
+  const hasLocal = ctx.reach?.hasLocal ?? true;
+  return shared === true ? { hasLocal } : { hasLocal, global: ctx.reach?.global };
 }
 
-/**
- * `hippoRoot` when it holds a store, else the global store (the prompt hook fires where no local one exists), else
- * null.
- */
-export function ledgerRoot(hippoRoot: string, opts?: LedgerRootOpts): string | null {
-  if (isInitialized(hippoRoot)) return hippoRoot;
-  if (opts?.sharedStore) return null;
-  const globalRoot = getGlobalRoot();
-  return isInitialized(globalRoot) ? globalRoot : null;
+/** `hippoRoot` when the call has a store of its own, else the global store (the prompt hook fires where none is). */
+export function ledgerRoot(hippoRoot: string, reach: LedgerReach): string | null {
+  return reach.hasLocal ? hippoRoot : (reach.global?.root ?? null);
 }
 
-/**
- * Runs `call` on ledgerRoot's store root. Best-effort: undefined on any failure, because a ledger failure must not
- * break context or recall.
- */
+/** Runs `call` on ledgerRoot's store root; undefined on any failure, since a ledger failure must not break recall. */
 export function onLedgerRoot<T>(
   hippoRoot: string,
-  opts: LedgerRootOpts | undefined,
+  reach: LedgerReach,
   call: (root: string) => T,
 ): T | undefined {
   let root: string | null = null;
   try {
-    root = ledgerRoot(hippoRoot, opts);
+    root = ledgerRoot(hippoRoot, reach);
   } catch (error) {
     // An unreadable store root means no ledger write; the ledger must never break context or recall.
     log.debug(`token ledger skipped, store root unreadable: ${errorMessage(error)}`);
@@ -50,13 +44,13 @@ export function onLedgerRoot<T>(
 }
 
 /** Books one row in ledgerRoot's store, best-effort. */
-export function bookTokenUse(hippoRoot: string, use: TokenUse, opts?: LedgerRootOpts): void {
-  onLedgerRoot(hippoRoot, opts, (root) => recordTokensAt(root, use));
+export function bookTokenUse(hippoRoot: string, use: TokenUse, reach: LedgerReach): void {
+  onLedgerRoot(hippoRoot, reach, (root) => recordTokensAt(root, use));
 }
 
 /** Books a turn's rows and then its delivery event on one connection of ledgerRoot's store, best-effort. */
-export function bookLedgerTurn(hippoRoot: string, turn: LedgerTurn, opts?: LedgerRootOpts): void {
-  onLedgerRoot(hippoRoot, opts, (root) => recordLedgerTurn(root, turn));
+export function bookLedgerTurn(hippoRoot: string, turn: LedgerTurn, reach: LedgerReach): void {
+  onLedgerRoot(hippoRoot, reach, (root) => recordLedgerTurn(root, turn));
 }
 
 /** What the session last sent on `surface` in ledgerRoot's store; undefined with no ledger or a failed read. */
@@ -65,7 +59,7 @@ export function ledgerLastSent(
   tenantId: string,
   sessionId: string | null | undefined,
   surface: TokenSurface,
-  opts?: LedgerRootOpts,
+  reach: LedgerReach,
 ): LastSent | null | undefined {
-  return onLedgerRoot(hippoRoot, opts, (root) => lastSentOnSurface(root, tenantId, sessionId, surface));
+  return onLedgerRoot(hippoRoot, reach, (root) => lastSentOnSurface(root, tenantId, sessionId, surface));
 }

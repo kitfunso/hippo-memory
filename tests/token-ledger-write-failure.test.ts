@@ -112,7 +112,7 @@ describe('token ledger write failures', () => {
   it('a hippo.db that is not a database is an expected skip: nothing at the default level, one debug line with no stack', () => {
     const store = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-ledger-notadb-'));
     const write = (): void => {
-      bookTokenUse(store, { tenantId: 'default', surface: 'hook', event: 'inject', items: 1, tokens: 40 });
+      bookTokenUse(store, { tenantId: 'default', surface: 'hook', event: 'inject', items: 1, tokens: 40 }, { hasLocal: true });
     };
     try {
       initStore(store);

@@ -7,6 +7,7 @@ import type { HookRuntime } from '../core/capture-contract.js';
 import { isSqliteBusy, noteStoreBusy, runWithRequestStores, HOOK_DB_WAIT_MS } from '../db/index.js';
 import { bookTokenUse } from '../api/ledger-db.js';
 import { sessionPilotArm } from '../api/pilot-arm.js';
+import { cliLedgerReach } from './api-context.js';
 import { hookPayloadSessionId, hookPayloadString, isSubagentPayload } from '../util/hook-payload.js';
 import { importAtSessionEnd, currentMachine } from '../agent-memories/sync.js';
 import { summaryLine } from '../agent-memories/report.js';
@@ -86,7 +87,7 @@ export function resetHookInjection(
   if (sessionId === null || isSubagentPayload(stdinText)) return;
   bookTokenUse(hippoRoot, {
     tenantId, sessionId, surface: 'hook', event: 'reset', items: 0, tokens: 0,
-  });
+  }, cliLedgerReach(hippoRoot));
 }
 
 /**
@@ -146,5 +147,6 @@ export function inPilotHoldout(
   sessionId: string | undefined,
   opts: { write: boolean },
 ): boolean {
-  return sessionPilotArm(hippoRoot, tenantId, sessionId, opts.write) === 'holdout';
+  const reach = cliLedgerReach(hippoRoot);
+  return sessionPilotArm(hippoRoot, tenantId, sessionId, opts.write, { reach }) === 'holdout';
 }

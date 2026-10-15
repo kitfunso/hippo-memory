@@ -2,7 +2,6 @@
 // rows.
 
 import { confidenceFacets, Layer } from '../core/memory.js';
-import { isGlobalStoreRoot, isInitialized } from '../core/project-identity.js';
 import type { ResultCost, SearchResult } from '../core/search-types.js';
 import { getReranker } from '../rerankers/index.js';
 import { isClefModel } from '../rerankers/clef.js';
@@ -10,7 +9,6 @@ import { JEV_DEFAULT_TOP_K } from '../rerankers/jev.js';
 import type { RerankerFn } from '../rerankers/types.js';
 import { explainMatch } from '../search/explain.js';
 import { fitBudget } from '../search/finalize.js';
-import { getGlobalRoot } from '../sharing/global-store.js';
 import { detectScope } from '../core/active-scope.js';
 import { loadIndex } from '../store/index-and-stats.js';
 import type { ContinuityBlock } from '../store/port.js';
@@ -20,7 +18,7 @@ import type { Context, StoreContext } from './types.js';
 
 export { DEFAULT_MAX_NEIGHBORS, MAX_HOPS } from '../graph/recall.js';
 
-/** The global store beside this one, whether this one is it, and the scope that boosts rows. */
+/** The global store beside this one ('' when the call reaches none), whether this one is it, and the boosting scope. */
 export interface CliRecallSetting {
   readonly globalRoot: string;
   readonly primaryIsGlobal: boolean;
@@ -30,8 +28,8 @@ export interface CliRecallSetting {
 /** The active scope merges `--scope` with the detected one, which only boosts. */
 export function cliRecallSetting(ctx: Context, explicitScope: string | null): CliRecallSetting {
   return {
-    globalRoot: getGlobalRoot(),
-    primaryIsGlobal: isGlobalStoreRoot(ctx.hippoRoot),
+    globalRoot: ctx.reach?.global?.root ?? '',
+    primaryIsGlobal: ctx.reach?.isGlobal ?? false,
     activeScope: explicitScope || detectScope(),
   };
 }
@@ -47,7 +45,7 @@ export interface CliRecallOrigin {
 
 export function cliRecallOrigin(ctx: Context, setting: CliRecallSetting): CliRecallOrigin {
   const localIndex = loadIndex(ctx.hippoRoot);
-  const globalOn = isInitialized(setting.globalRoot);
+  const globalOn = ctx.reach?.global !== undefined;
   return { globalOn, isGlobal: (id) => setting.primaryIsGlobal || (globalOn && !localIndex.entries[id]) };
 }
 

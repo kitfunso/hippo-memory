@@ -3,10 +3,8 @@
 
 import * as path from 'path';
 import type { HandoffEvidence } from '../core/handoff.js';
-import { isInitialized } from '../core/project-identity.js';
 import type { SessionEvent, TaskSnapshot } from '../store/rows.js';
 import { readApiCalls, recordRereads, type TranscriptCalls } from '../store/token-ledger.js';
-import { getGlobalRoot } from '../sharing/global-store.js';
 import { truncateCodePointSafe } from '../util/transcript-tail.js';
 import { errorMessage, log } from '../util/log.js';
 import { COMPACT_RESUME_EVENT_CONTENT_CAP, COMPACT_RESUME_MAX_AGE_MS, compactResumeText } from './context-render.js';
@@ -94,7 +92,8 @@ export async function bookSessionRereads(
     return [`skip re-read count: cannot read the transcript: ${errorMessage(err)}`];
   }
   const roots = new Set(
-    [ctx.hippoRoot, getGlobalRoot()].filter((root) => isInitialized(root)).map((root) => path.resolve(root)),
+    [(ctx.reach?.hasLocal ?? true) ? ctx.hippoRoot : null, ctx.reach?.global?.root]
+      .flatMap((root) => (root ? [path.resolve(root)] : [])),
   );
   const lines: string[] = [];
   let tokens = 0;
@@ -149,8 +148,8 @@ export interface SessionEndWork<Scan> {
   transcriptPath: string | undefined;
   /** Builds the call context for one store root. */
   contextFor: (root: string) => ContextWith<'sessions'>;
-  /** The store the run captures into: the project store, else global. */
-  storeRoot: () => string;
+  /** The store the run captures into: the project store, else global; null when neither exists. */
+  storeRoot: () => string | null;
   /** One line to the session-end log; `startFresh` restarts the file. */
   log: (line: string, opts?: { startFresh?: boolean }) => void;
   sleep: () => Promise<void>;
@@ -175,7 +174,7 @@ export async function sessionEndWork<Scan>(w: SessionEndWork<Scan>): Promise<voi
   process.once('exit', flushRereadLog);
   // A folder with neither a project nor a global store must not get one made.
   const store = w.storeRoot();
-  if (!isInitialized(store)) {
+  if (store === null) {
     w.log('skip: no hippo store for this folder or globally', { startFresh: true });
     flushRereadLog();
     return;

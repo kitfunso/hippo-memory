@@ -6,7 +6,7 @@ import {
   COMPACT_RESUME_MAX_AGE_MS,
   compactResumeText,
 } from '../api/context-render.js';
-import { bookTokenUse } from '../api/ledger-db.js';
+import { bookTokenUse, ledgerReachOf } from '../api/ledger-db.js';
 import { errorMessage, log, errorFields } from '../util/log.js';
 import type { CallerProject } from '../api/prompt-hook.js';
 import type { SessionEvent } from '../store/rows.js';
@@ -45,7 +45,7 @@ export function compactResumeForCaller(ctx: Context, req: CallerCompactResumeReq
     event: 'inject',
     items: 1,
     tokens: estimateTokens(text),
-  }, { sharedStore: true });
+  }, ledgerReachOf(ctx, true));
   return { stdout: text };
 }
 
