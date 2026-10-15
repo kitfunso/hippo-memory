@@ -4,7 +4,8 @@
 import { execFileSync, spawn, type ChildProcess, type SpawnOptions } from 'child_process';
 import { spawnArgv } from '../util/spawn-argv.js';
 import { MemoryEntry, createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../core/memory.js';
-import { loadAllEntries, loadEntriesMentioning } from '../store/entry-reads.js';
+import type { Learning } from '../store/port/learning.js';
+import { localFilesAt } from './roots.js';
 import { textOverlap, tokenize } from '../util/tokenize.js';
 import { assessAutomaticMemory } from '../core/memory-quality.js';
 import { redactSecretsStrict } from '../util/secret-detect.js';
@@ -110,12 +111,12 @@ const NO_TAG = '~no-such-tag~';
 
 /** Rows that can pass the overlap test: those sharing a token with the lesson. Falls back to every row when every row
  * can match (no tokens, or a threshold below zero). */
-function candidateEntries(hippoRoot: string, lesson: string, threshold: number, tenantId?: string): MemoryEntry[] {
+function candidateEntries(learning: Learning, lesson: string, threshold: number, tenantId?: string): MemoryEntry[] {
   const tokens = tokenize(lesson);
   if (tokens.length === 0 || threshold < 0) {
-    return loadAllEntries(hippoRoot, tenantId);
+    return learning.allEntries(tenantId);
   }
-  return loadEntriesMentioning(hippoRoot, tokens, NO_TAG, tenantId);
+  return learning.entriesMentioning(tokens, NO_TAG, tenantId);
 }
 
 /** Check if a substantially similar memory already exists: true if overlap > threshold (default 0.7).
@@ -127,16 +128,17 @@ export function deduplicateLesson(
   threshold = 0.7,
   tenantId?: string,
 ): boolean {
-  const entries = Array.isArray(hippoRootOrEntries)
-    ? hippoRootOrEntries
-    : candidateEntries(hippoRootOrEntries, lesson, threshold, tenantId);
+  if (Array.isArray(hippoRootOrEntries)) return overlapsAny(hippoRootOrEntries, lesson, threshold);
+  return isDuplicateLesson(localFilesAt(hippoRootOrEntries).learning, lesson, threshold, tenantId);
+}
 
-  for (const entry of entries) {
-    const overlap = textOverlap(lesson, entry.content);
-    if (overlap > threshold) return true;
-  }
+/** deduplicateLesson against the memories `learning` holds. */
+function isDuplicateLesson(learning: Learning, lesson: string, threshold = 0.7, tenantId?: string): boolean {
+  return overlapsAny(candidateEntries(learning, lesson, threshold, tenantId), lesson, threshold);
+}
 
-  return false;
+function overlapsAny(entries: readonly MemoryEntry[], lesson: string, threshold: number): boolean {
+  return entries.some((entry) => textOverlap(lesson, entry.content) > threshold);
 }
 
 /** The most stderr `runWatched` returns; the terminal still gets all of it. */

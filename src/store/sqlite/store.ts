@@ -19,6 +19,7 @@ import { servedSessions, sqliteSessions } from './sessions-group.js';
 import { servedConnectorEvents, sqliteConnectorEvents } from './connector-events-group.js';
 import { servedConnectorWrites, sqliteConnectorWrites } from './connector-writes-group.js';
 import { sqliteConsolidation } from './consolidation-group.js';
+import { sqliteLearning } from './learning-group.js';
 import { sqlitePromotion } from './promotion-group.js';
 import { sqliteDagReads } from './dag-reads-group.js';
 import { sqliteEntryWrites } from './entry-writes-group.js';
@@ -86,6 +87,7 @@ export function sqliteSyncStore(
       consolidation: sqliteConsolidation(hippoRoot),
       agentImport: sqliteAgentImport,
       promotion: sqlitePromotion(hippoRoot),
+      learning: sqliteLearning(hippoRoot),
     },
     ...sqliteBaseReads(hippoRoot),
     ...sqliteRecallWrites(hippoRoot),
