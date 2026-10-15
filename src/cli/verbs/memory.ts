@@ -8,6 +8,8 @@ import { DEFAULT_EMBEDDING_WEIGHT } from '../../search/hybrid.js';
 import { DEFAULT_GRAPH_HOPS, DEFAULT_GRAPH_SEED_COUNT } from '../../graph/stream.js';
 import { type VerbSpec, verb } from '../verb-row.js';
 
+const VALUE_CLIP = `clip(1 + ${VALUE_MULT_SLOPE}*tanh(pos - neg), ${VALUE_MULT_MIN}, ${VALUE_MULT_MAX})`;
+
 export const MEMORY_VERBS = {
   init: verb(() => import('../init.js'), 'handleInit', {
     repairsCodexWrapper: true,
@@ -96,8 +98,7 @@ export const MEMORY_VERBS = {
                            lexical inference. Default off.
     --value-aware          Boost memories with positive cumulative outcomes and
                            demote those with negative ones during ranking:
-                           multiplier clip(1 + ${VALUE_MULT_SLOPE}*tanh(pos - neg),
-                           ${VALUE_MULT_MIN}, ${VALUE_MULT_MAX}).
+                           multiplier ${VALUE_CLIP}.
                            Reads outcome_positive and outcome_negative. Default off.
     --rerank-utility       Re-sort results by utility = score * (0.5 + 0.5 * strength)
                            * (1 - cost_factor), where cost_factor =
