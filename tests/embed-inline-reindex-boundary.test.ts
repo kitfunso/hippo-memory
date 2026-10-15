@@ -5,7 +5,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { isJsonObject, type JsonValue } from '../src/util/json.js';
 import { initStore } from '../src/store/open.js';
-import { writeEntry } from '../src/store/entry-writes.js';
+import { batchWriteAndDelete } from '../src/store/delete-and-batch.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../src/core/memory.js';
 import { embedMemory } from '../src/search/embed-memories.js';
 import { embeddingIndexIdentity, saveStoredEmbeddingModel } from '../src/store/embeddings/index.js';
@@ -37,11 +37,11 @@ afterEach(() => {
 });
 
 function seed(rows: number): MemoryEntry {
-  let last!: MemoryEntry;
-  for (let i = 0; i < rows; i++) {
-    last = createMemory(`inline reindex boundary row ${i}`, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
-    writeEntry(root, last);
-  }
+  // One transaction: a write per row timed out on the Windows runner at 257 rows.
+  const entries = Array.from({ length: rows }, (_row, i) =>
+    createMemory(`inline reindex boundary row ${i}`, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
+  batchWriteAndDelete(root, entries, []);
+  const last = entries[rows - 1]!;
   saveStoredVectors(root, [[last.id, [0, 1]]], embeddingIndexIdentity('old-m'));
   saveStoredEmbeddingModel(root, 'old-m');
   return last;
