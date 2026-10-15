@@ -80,6 +80,9 @@ export function ambientSecretAdmit(e: MemoryEntry, currentProject: ProjectRef): 
 /** Tokens a context block may use when the caller sets no budget; the hook command and the CLI default match it. */
 export const DEFAULT_CONTEXT_BUDGET = 1500;
 
+// The plan's query when the caller gave none: context then ranks by strength instead of searching.
+export const NO_QUERY = '*';
+
 /** Most rows per store a no-query context reads; past it, ranking and ambientState see the strongest by decay. */
 const CONTEXT_CANDIDATE_CAP = 2000;
 
@@ -190,7 +193,7 @@ export async function getContext(
 
   const picked = plan.pinnedOnly
     ? selectPinned(opts, plan, sections.left, pools, admission)
-    : plan.query === '*'
+    : plan.query === NO_QUERY
       ? selectStrongest(plan, sections.left, pools)
       : await selectBySearch(ctx, plan, sections.left, pools, admission);
   if (picked === null) {
@@ -285,7 +288,7 @@ function entryPricer(cost: ContextOpts['cost'], currentProject: ContextPlan['cur
 function planContext(ctx: Context, opts: ContextOpts, local: ContextSource): ContextPlan {
   const pinnedOnly = opts.pinnedOnly === true;
   const { other, hasLocal, globalRoot, sharedStore, hasGlobal, primaryIsGlobal } = storesInReach(ctx, opts, local);
-  const query = (opts.q ?? '').trim() || '*';
+  const query = (opts.q ?? '').trim() || NO_QUERY;
 
   // opts.scope is only the tag boost, opts.exactScope the envelope request; other-project memories are
   // excluded unless the caller asks for them (crossProject) or isolation is disabled.
@@ -470,7 +473,7 @@ async function loadPools(
 ): Promise<ContextPools> {
   const { obs, pinnedOnly, primaryIsGlobal, hasGlobal, exactScope, ownScope } = plan;
   const recent: RecentRequest = { needed: plan.includeRecent, origins: recentOrigins(plan) };
-  const searches = plan.query !== '*' && !pinnedOnly;
+  const searches = plan.query !== NO_QUERY && !pinnedOnly;
   const searchesBoth = searches && hasGlobal && !primaryIsGlobal;
   const poolAdmit = searchesBoth ? admission.bothStoresAdmit : admission.admit;
   const loadAdmit = obs ? obs.watchAdmit(poolAdmit) : poolAdmit;
@@ -512,7 +515,7 @@ function finalizeSelection(picked: ContextResultEntry[], plan: ContextPlan): Fin
   const { obs } = plan;
   // Ranking reports nothing itself, so its results are offered here and the cuts below can name what they drop.
   if (!plan.pinnedOnly && obs) {
-    const pool = plan.query === '*' ? 'strength' : 'search';
+    const pool = plan.query === NO_QUERY ? 'strength' : 'search';
     obs.offer(picked.filter((r) => r.isGlobal !== true).map((r) => r.entry), false, pool);
     obs.offer(picked.filter((r) => r.isGlobal === true).map((r) => r.entry), true, pool);
   }

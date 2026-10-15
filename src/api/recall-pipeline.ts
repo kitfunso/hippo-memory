@@ -19,7 +19,18 @@ import { STRENGTH_RANK_FLOOR, STRENGTH_RANK_SPAN } from '../search/boosts.js';
 import { hybridSearch, vectorSourceOf } from '../search/hybrid.js';
 import { searchByEngine } from '../search/engine.js';
 import type { VectorSource } from '../search/vector.js';
-import type { RerankStep, ResultCost, SearchResult } from '../core/search-types.js';
+import {
+  CONFLICT_PEER_MULTIPLIER,
+  SALIENCE_MIN_MULTIPLIER,
+  UTILITY_LENGTH_PENALTY_CAP,
+  UTILITY_LENGTH_TOKENS,
+  VALUE_MULT_MAX,
+  VALUE_MULT_MIN,
+  VALUE_MULT_SLOPE,
+  type RerankStep,
+  type ResultCost,
+  type SearchResult,
+} from '../core/search-types.js';
 import { rankBothStores } from '../sharing/search-both.js';
 import { loadRecallEntries, recallScopeFilter } from '../store/search-rows.js';
 import { isJsonNumber } from '../util/json.js';
@@ -405,20 +416,11 @@ function applyPfcRerankers(opts: RankRecallOpts, state: RankState): void {
   if (opts.rerankUtility) applyUtilityRank(opts, state);
 }
 
-// A recorded conflict peer in the same result list is cut to this share of its score.
-const CONFLICT_PEER_MULTIPLIER = 0.3;
-// The value-aware clamp is wider than the always-on outcome nudge, so outcome history can decide the order.
-const VALUE_MULT_SLOPE = 0.3;
-const VALUE_MULT_MIN = 0.7;
-const VALUE_MULT_MAX = 1.3;
-const UTILITY_LENGTH_PENALTY_CAP = 0.3;
-const UTILITY_LENGTH_TOKENS = 10000;
 // evcAdaptive acts when the top hits overlap this much; it keeps rows near the best score or covering the query.
 const NEAR_DUPLICATE_OVERLAP_MIN = 0.4;
 const SCORE_FLOOR_FRACTION = 0.5;
 const QUERY_COVERAGE_MIN = 0.6;
 const GOAL_TAG_BOOST = 1.5;
-const SALIENCE_MIN_MULTIPLIER = 0.5;
 
 /** When the top hits are near-duplicates (same topic, different facts), surface the newest on-topic row first. */
 function evcAdaptive(query: string, results: SearchResult[]): SearchResult[] {

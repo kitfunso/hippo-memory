@@ -4,7 +4,8 @@ import { SECRET_TAGS } from '../util/secret-detect.js';
 import { onHandle, openStore } from './open.js';
 import { jsonList } from './candidates.js';
 import { originInSql } from '../core/project-identity.js';
-import { AMBIENT_FRESH_WINDOW_MS, HIGH_SCHEMA_FIT_ABOVE, isErrorTagged, type AmbientTallies } from '../core/ambient.js';
+import { AMBIENT_FRESH_WINDOW_MS, isErrorTagged, type AmbientTallies } from '../core/ambient.js';
+import { HIGH_SCHEMA_FIT } from '../core/memory.js';
 import { placeholders } from '../util/sql.js';
 
 /** The rows an ambient summary describes: a context read's envelope, origin partition and tag secret veto. */
@@ -75,7 +76,7 @@ export function loadAmbientTallies(hippoRoot: string, tenantId: string, filter: 
       FROM memories
       WHERE ${where.join(' AND ')}
         AND ((${originInSql(filter.currentProject)} AND origin_project != '') OR NOT ${secret.sql})`,
-    ).get(freshAfter, HIGH_SCHEMA_FIT_ABOVE, ...params, ...filter.currentProject, ...secret.params) as
+    ).get(freshAfter, HIGH_SCHEMA_FIT, ...params, ...filter.currentProject, ...secret.params) as
       Record<Exclude<keyof AmbientTallies, 'tagCounts' | 'errors'>, number | bigint> & { tagLists: string };
     const tagCounts = new Map<string, number>();
     let errors = 0;

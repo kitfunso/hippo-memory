@@ -20,7 +20,7 @@ import { fuseRanks, type GraphStreamOptions } from './fusion.js';
 import { scoreHybridPool } from './hybrid-score.js';
 import { applyMmrWindow, applyReranker } from './rerank.js';
 import { dedupeExtracted, fitBudget, withDagChildren } from './finalize.js';
-import { DEFAULT_RECALL_BUDGET, type ResultCost, type SearchResult } from '../core/search-types.js';
+import { DEFAULT_MMR_LAMBDA, DEFAULT_RECALL_BUDGET, type ResultCost, type SearchResult } from '../core/search-types.js';
 import { sqliteStore, type HippoStore } from '../store/index.js';
 
 export interface HybridSearchOptions {
@@ -75,9 +75,8 @@ export interface HybridSearchOptions {
   queryEmbedDeadline?: AbortSignal;
 }
 
-// Share of the blended score that cosine takes, and the relevance side of the MMR relevance-versus-diversity trade.
+// Share of the blended score that cosine takes.
 export const DEFAULT_EMBEDDING_WEIGHT = 0.6;
-export const DEFAULT_MMR_LAMBDA = 0.7;
 
 /**
  * BM25 blended with cosine similarity when stored vectors and a provider are available, BM25 * strength * recency

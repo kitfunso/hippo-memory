@@ -9,7 +9,7 @@ import { bookLedgerTurn, ledgerReachOf } from '../api/ledger-db.js';
 import { readHookStdin } from './stdin.js';
 import { isJsonObject, isJsonString, type JsonValue } from '../util/json.js';
 import * as api from '../api/index.js';
-import { DEFAULT_CONTEXT_BUDGET } from '../api/context.js';
+import { DEFAULT_CONTEXT_BUDGET, NO_QUERY } from '../api/context.js';
 import { cliApiContext } from './api-context.js';
 import { renderAmbientSummary } from '../core/ambient.js';
 import { contextBlockLines, contextCost, crossProjectLines, settleTokens } from '../api/context-render.js';
@@ -251,7 +251,7 @@ function renderContextJson(view: ContextView, query: string): void {
     category: r.category ?? null,
   }));
   const jsonText = JSON.stringify({
-    query: query || '*',
+    query: query || NO_QUERY,
     activeSnapshot: result.activeSnapshot ?? null,
     sessionHandoff: result.sessionHandoff ?? null,
     recentSessionEvents: result.recentEvents ?? [],

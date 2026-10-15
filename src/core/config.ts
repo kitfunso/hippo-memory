@@ -7,7 +7,7 @@ import * as path from 'path';
 import { type PhysicsConfig, DEFAULT_PHYSICS_CONFIG, mergePhysicsConfig } from './physics-config.js';
 import { DEFAULT_HALF_LIFE_DAYS } from './memory.js';
 import type { PromptRecallMetric } from './prompt-recall.js';
-import { DEFAULT_LOCAL_BUMP, DEFAULT_RECALL_BUDGET } from './search-types.js';
+import { DEFAULT_LOCAL_BUMP, DEFAULT_MMR_LAMBDA, DEFAULT_RECALL_BUDGET } from './search-types.js';
 import { errorCode, errorMessage, log, errorFields } from '../util/log.js';
 import { isJsonObject, type JsonValue } from '../util/json.js';
 
@@ -185,7 +185,7 @@ export const DEFAULT_CONFIG: HippoConfig = {
   physics: { ...DEFAULT_PHYSICS_CONFIG },
   mmr: {
     enabled: true,
-    lambda: 0.7,
+    lambda: DEFAULT_MMR_LAMBDA,
   },
   search: {
     localBump: DEFAULT_LOCAL_BUMP,

@@ -93,6 +93,9 @@ export interface MemoryEntry {
   bm25_score?: number;
 }
 
+/** Named dag_level values; level 0 is a raw leaf. */
+export const DAG_LEVEL = { extracted: 1, topic: 2, entity: 3 } as const;
+
 /** Tag on a memory whose named file/symbol/script changed after it was stored. */
 export const CHURN_STALE_TAG = 'churn-stale';
 
@@ -282,7 +285,8 @@ function retrievalBoostFor(entry: StrengthInputs, ablation: StrengthAblation): n
     : 1 + RETRIEVAL_BOOST_SLOPE * Math.log2(entry.retrieval_count + 1);
 }
 
-const HIGH_SCHEMA_FIT = 0.7;
+/** A memory counts as high schema fit strictly above this. */
+export const HIGH_SCHEMA_FIT = 0.7;
 const HIGH_FIT_HALF_LIFE_FACTOR = 1.5;
 const LOW_SCHEMA_FIT = 0.3;
 const LOW_FIT_HALF_LIFE_FACTOR = 0.5;

@@ -1,7 +1,7 @@
 // DAG summary verbs: `hippo dag`, `hippo assemble` and `hippo drill`.
 
 import { truncateWithEllipsis } from '../util/ellipsize.js';
-import type { MemoryEntry } from '../core/memory.js';
+import { DAG_LEVEL, type MemoryEntry } from '../core/memory.js';
 import * as api from '../api/index.js';
 import { assembleCost, assembleHeading, drillCost, settleTokens } from '../api/context-render.js';
 import { listMemories } from '../api/memories.js';
@@ -37,7 +37,7 @@ export async function handleDag({ hippoRoot, tenantId, flags }: CommandContext):
   for (const entry of entries) {
     const level = entry.dag_level ?? 0;
     byLevel.set(level, (byLevel.get(level) ?? 0) + 1);
-    if (level === 1 && !entry.dag_parent_id) unlinked++;
+    if (level === DAG_LEVEL.extracted && !entry.dag_parent_id) unlinked++;
   }
 
   if (isStats) {
@@ -70,8 +70,8 @@ function groupByParent(entries: readonly MemoryEntry[]): Map<string, MemoryEntry
 
 function printDagTree(entries: readonly MemoryEntry[]): void {
   // Tree view: L3 entity profiles as roots with L2 children indented, then orphan L2 summaries at top level.
-  const profiles = entries.filter((e) => e.dag_level === 3);
-  const l2List = entries.filter((e) => e.dag_level === 2);
+  const profiles = entries.filter((e) => e.dag_level === DAG_LEVEL.entity);
+  const l2List = entries.filter((e) => e.dag_level === DAG_LEVEL.topic);
   const orphanL2 = l2List.filter((e) => !e.dag_parent_id);
   const childL2ByProfile = new Map<string, typeof l2List>();
   for (const l2 of l2List) {

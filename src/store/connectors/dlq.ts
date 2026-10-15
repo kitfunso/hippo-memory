@@ -55,3 +55,57 @@ export function markDlqRetried(db: DatabaseSyncLike, table: DlqTable, id: number
   db.prepare(`UPDATE ${table} SET retried_at = ?, retry_count = retry_count + 1 WHERE id = ?`)
     .run(new Date().toISOString(), id);
 }
+
+type DlqKind = 'int' | 'text' | 'nullableText' | 'count' | 'bucket';
+
+/** One DLQ column: the item field it fills, its kind, and whether insert writes it (the database sets the rest). */
+export interface DlqColumn {
+  field: string;
+  column: string;
+  kind: DlqKind;
+  insert?: true;
+}
+
+function coerceDlqValue(kind: DlqKind, raw: DlqRawValue | undefined): string | number | null {
+  switch (kind) {
+    case 'int': return Number(raw);
+    case 'count': return Number(raw ?? 0);
+    case 'text': return String(raw);
+    case 'nullableText': return raw == null ? null : String(raw);
+    case 'bucket': return raw == null ? 'parse_error' : String(raw);
+  }
+}
+
+export interface DlqAccess<Item, Insert> {
+  insert(db: DatabaseSyncLike, row: Insert): number;
+  list(db: DatabaseSyncLike, tenantId: string, limit: number): Item[];
+  get(db: DatabaseSyncLike, id: number): Item | null;
+  markRetried(db: DatabaseSyncLike, id: number): void;
+}
+
+/** The four statements and the row mapping of one dead-letter table, driven by its column map. */
+export function dlqAccess<Item, Insert extends object>(
+  table: DlqTable,
+  columns: readonly DlqColumn[],
+): DlqAccess<Item, Insert> {
+  const selectColumns = columns.map((c) => c.column).join(', ');
+  const insertColumns = columns.filter((c) => c.insert);
+  // SAFETY: the column map names every field of Item with the kind that coerces it.
+  const toItem = (raw: DlqRawRow): Item => Object.fromEntries(
+    columns.map((c) => [c.field, coerceDlqValue(c.kind, raw[c.column])]),
+  ) as Item;
+  return {
+    insert: (db, row) => {
+      // SAFETY: every insert field of the column map is a string, null or absent on Insert.
+      const fields = row as Record<string, string | null | undefined>;
+      const pairs = insertColumns.map((c) => [c.column, fields[c.field] ?? null] as const);
+      return insertDlqRow(db, table, pairs);
+    },
+    list: (db, tenantId, limit) => listDlqRows(db, table, selectColumns, tenantId, limit).map(toItem),
+    get: (db, id) => {
+      const row = getDlqRow(db, table, selectColumns, id);
+      return row ? toItem(row) : null;
+    },
+    markRetried: (db, id) => markDlqRetried(db, table, id),
+  };
+}
