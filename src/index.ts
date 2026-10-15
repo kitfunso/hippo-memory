@@ -51,19 +51,18 @@ type PublicCreateMemoryOptions = CreateMemoryOptions & {
 /** Published signature, so `baseHalfLifeDays` stays optional
  * here; hippo's own writers use the strict one in memory.ts. */
 export function createMemory(content: string, options: Partial<PublicCreateMemoryOptions> = {}): MemoryEntry {
-  const o = options;
   return createStoreMemory(content, {
-    ...o,
-    emotionalValence: o.emotionalValence ?? o.emotional_valence,
-    schemaFit: o.schemaFit ?? o.schema_fit,
-    traceOutcome: o.traceOutcome ?? o.trace_outcome,
-    sourceSessionId: o.sourceSessionId ?? o.source_session_id,
-    validFrom: o.validFrom ?? o.valid_from,
-    extractedFrom: o.extractedFrom ?? o.extracted_from,
-    dagLevel: o.dagLevel ?? o.dag_level,
-    dagParentId: o.dagParentId ?? o.dag_parent_id,
-    artifactRef: o.artifactRef ?? o.artifact_ref,
-    baseHalfLifeDays: o.baseHalfLifeDays ?? DEFAULT_HALF_LIFE_DAYS,
+    ...options,
+    emotionalValence: options.emotionalValence ?? options.emotional_valence,
+    schemaFit: options.schemaFit ?? options.schema_fit,
+    traceOutcome: options.traceOutcome ?? options.trace_outcome,
+    sourceSessionId: options.sourceSessionId ?? options.source_session_id,
+    validFrom: options.validFrom ?? options.valid_from,
+    extractedFrom: options.extractedFrom ?? options.extracted_from,
+    dagLevel: options.dagLevel ?? options.dag_level,
+    dagParentId: options.dagParentId ?? options.dag_parent_id,
+    artifactRef: options.artifactRef ?? options.artifact_ref,
+    baseHalfLifeDays: options.baseHalfLifeDays ?? DEFAULT_HALF_LIFE_DAYS,
   });
 }
 export { search } from './search/bm25-search.js';
