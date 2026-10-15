@@ -39,9 +39,20 @@
     "anti-slop/no-unknown-type-aliases": "error",
     "anti-slop/no-unsafe-dictionary-type": "error",
     "anti-slop/no-widen-then-assert": "error",
-    "anti-slop/require-safety-comment-for-type-assertion": "error"
+    "anti-slop/require-safety-comment-for-type-assertion": "error",
+    "curly": ["error", "multi-line"]
   },
   "overrides": [
-    { "files": ["deploy/**/*.mjs"], "rules": { "anti-slop/no-runtime-typeof": "off" } }
+    { "files": ["deploy/**/*.mjs"], "rules": { "anti-slop/no-runtime-typeof": "off" } },
+    {
+      "files": [
+        "scripts/z1-replay.mjs",
+        "scripts/e1-lifecycle/**",
+        "scripts/z6-supersession/**",
+        "scripts/token-eval/**",
+        "benchmarks/**"
+      ],
+      "rules": { "curly": "off" }
+    }
   ]
 }

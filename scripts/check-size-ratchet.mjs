@@ -1,6 +1,7 @@
 #!/usr/bin/env node
-// CI size gate. No file over 800 lines, no function over 50 in src/ (80 in scripts/) and no src/ line over 160 characters is the goal;
-// existing offenders sit in .size-baseline.json and may shrink or go but never grow, and no new one may appear.
+// CI size gate. No file over 800 lines, no function over 50 in src/ (80 in scripts/) and no src/ line over 120
+// characters is the goal; existing offenders sit in .size-baseline.json and may shrink or go but never grow, and no new
+// one may appear.
 // Usage: check-size-ratchet.mjs [--list] [--update]. --update rewrites the baseline; run it only after shrinking offenders.
 
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -9,7 +10,7 @@ import ts from 'typescript';
 
 const BASELINE = '.size-baseline.json';
 const FILE_LIMIT = 800;
-const LINE_LIMIT = 160;
+const LINE_LIMIT = 120;
 const FUNCTION_LIMITS = { src: 50, scripts: 80 };
 const SCAN_DIRS = Object.keys(FUNCTION_LIMITS);
 const LIMITS_TEXT = `${FUNCTION_LIMITS.src} in src and ${FUNCTION_LIMITS.scripts} in scripts`;
