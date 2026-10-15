@@ -58,8 +58,9 @@ export function recallScopeFilter(
   mode: 'exact' | 'additive',
   ownScope?: string,
 ): RecallScopeFilter {
-  if (!requestedScope || (mode === 'additive' && isPersonalScope(requestedScope)))
+  if (!requestedScope || (mode === 'additive' && isPersonalScope(requestedScope))) {
     return { mode: 'default-deny', ownScope };
+  }
   return mode === 'additive'
     ? { mode: 'default-deny-or-exact', value: requestedScope, ownScope }
     : { mode: 'exact', value: requestedScope };
@@ -176,8 +177,9 @@ function selectFtsCandidates(db: DatabaseSyncLike, terms: string[], p: SearchPre
   } catch (err) {
     // A query FTS5 cannot parse is expected input; anything else means the index itself is broken.
     const message = errorMessage(err);
-    if (!FTS_QUERY_SYNTAX_RE.test(message))
+    if (!FTS_QUERY_SYNTAX_RE.test(message)) {
       log.once('fts-match-fallback', 'warn', `FTS search failed, using the slower LIKE match: ${message}`);
+    }
     return [];
   }
 }

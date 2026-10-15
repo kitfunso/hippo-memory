@@ -60,8 +60,9 @@ export function parseFrame(buffer: Buffer): FrameResult {
         remainder: Math.max(0, end - trimmed.length),
       };
     }
-    if (trimmed.length < bodyStart + contentLength)
+    if (trimmed.length < bodyStart + contentLength) {
       return { kind: 'incomplete', needs: start + bodyStart + contentLength };
+    }
     const body = trimmed.subarray(bodyStart, bodyStart + contentLength).toString('utf-8');
     return { kind: 'message', body, rest: Buffer.from(trimmed.subarray(bodyStart + contentLength)) };
   }

@@ -105,8 +105,9 @@ function noteCwd(state: ScanState, cwd: string): void {
 function editTarget(block: TranscriptItem): string | null {
   const input = block.input;
   if (!isObjectLike(input)) return null;
-  if (block.name === 'NotebookEdit')
+  if (block.name === 'NotebookEdit') {
     return 'notebook_path' in input && isStringValue(input.notebook_path) ? input.notebook_path : null;
+  }
   return 'file_path' in input && isStringValue(input.file_path) ? input.file_path : null;
 }
 
@@ -118,8 +119,9 @@ function readClaudeAssistant(record: TranscriptRecord, state: ScanState): void {
       !isStringValue(block.name) ||
       !CLAUDE_EDIT_TOOLS.has(block.name) ||
       !isStringValue(block.id)
-    )
+    ) {
       continue;
+    }
     const target = editTarget(block);
     if (target) state.pending.push({ callId: block.id, filePath: target, base: state.cwd });
   }
@@ -142,8 +144,9 @@ function isSynthetic(record: TranscriptRecord): boolean {
 
 function readClaudeResults(record: TranscriptRecord, state: ScanState): void {
   for (const block of messageItems(record)) {
-    if (block.type === 'tool_result' && isStringValue(block.tool_use_id) && block.is_error !== true)
+    if (block.type === 'tool_result' && isStringValue(block.tool_use_id) && block.is_error !== true) {
       state.landed.add(block.tool_use_id);
+    }
   }
 }
 
@@ -224,8 +227,9 @@ function readCodexItem(item: TranscriptItem, state: ScanState): void {
       readCodexMessage(item, state);
       return;
     case 'custom_tool_call':
-      if (item.name === 'apply_patch' && isStringValue(item.call_id) && isStringValue(item.input))
+      if (item.name === 'apply_patch' && isStringValue(item.call_id) && isStringValue(item.input)) {
         addPatch(state, item.call_id, item.input, state.cwd);
+      }
       return;
     case 'function_call':
       readCodexFunctionCall(item, state);
@@ -240,8 +244,9 @@ function readCodexItem(item: TranscriptItem, state: ScanState): void {
     }
     case 'function_call_output':
     case 'custom_tool_call_output':
-      if (isStringValue(item.call_id) && outputText(item.output).includes(PATCH_SUCCESS_LINE))
+      if (isStringValue(item.call_id) && outputText(item.output).includes(PATCH_SUCCESS_LINE)) {
         state.landed.add(item.call_id);
+      }
       return;
   }
 }

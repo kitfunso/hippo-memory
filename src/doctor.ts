@@ -104,8 +104,9 @@ function codexCheck(home: string): DoctorCheck {
     ['hippo compact-resume', 'resume after compaction'],
   ];
   const missing = codexHooks.filter(([marker]) => !text.includes(marker)).map(([, what]) => what);
-  if (missing.length === 0)
+  if (missing.length === 0) {
     return { id: 'codex', status: 'pass', detail: `Codex: hippo memory hooks installed. ${CODEX_TRUST_LINE}` };
+  }
   return {
     id: 'codex',
     status: 'warn',
@@ -360,10 +361,12 @@ function memoriesCheck(memories: number | null, dormant: number | null): DoctorC
 function ftsCheck(fts: StoreHealth['fts']): DoctorCheck {
   if (!fts.ok) return { id: 'fts', status: 'warn', detail: `cannot read the full-text index: ${fts.message}` };
   const counts = fts.value;
-  if (counts === null)
+  if (counts === null) {
     return { id: 'fts', status: 'info', detail: 'no full-text index; search uses slower LIKE matching' };
-  if (counts.memories === counts.fts)
+  }
+  if (counts.memories === counts.fts) {
     return { id: 'fts', status: 'pass', detail: `full-text index in sync (${counts.fts} rows)` };
+  }
   return {
     id: 'fts',
     status: 'warn',

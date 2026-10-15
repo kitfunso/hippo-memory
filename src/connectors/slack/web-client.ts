@@ -29,8 +29,9 @@ async function readHistoryReply(r: Response, url: URL): Promise<{ [key: string]:
     throw new Error(`${where}: ${errorMessage(err)}`, { cause: err });
   }
   if (!isJsonObject(body)) throw new Error(`${where}: the reply is not a JSON object`);
-  if (body.messages !== undefined && !Array.isArray(body.messages))
+  if (body.messages !== undefined && !Array.isArray(body.messages)) {
     throw new Error(`${where}: \`messages\` is not an array`);
+  }
   return body;
 }
 

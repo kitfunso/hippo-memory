@@ -275,8 +275,9 @@ function transcriptHandoffSource(
     existing.taskId === derived.task &&
     existing.summary === derived.summary &&
     existing.nextAction === derived.next_step
-  )
+  ) {
     return null;
+  }
   return { snapshot: { ...derived, scope: null }, evidence: { ...evidence, derivedFrom: 'transcript' } };
 }
 

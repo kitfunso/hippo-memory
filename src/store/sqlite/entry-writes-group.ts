@@ -114,8 +114,9 @@ function assertInReach(db: DatabaseSyncLike, target: EntryTarget, id: string): v
  * holds. */
 function assertIdInTenant(db: DatabaseSyncLike, entry: MemoryEntry): void {
   const holder = selectMemoryReach(db, entry.id)?.tenantId;
-  if (holder !== undefined && holder !== entry.tenant_id)
+  if (holder !== undefined && holder !== entry.tenant_id) {
     throw new ConflictError(`Memory ${entry.id} belongs to another tenant`);
+  }
 }
 
 /** The refusal row lands after `write` has rolled back, in a fresh implicit transaction the aborted one cannot undo. */

@@ -100,8 +100,9 @@ async function handleRequest(
   const routeRequest: RouteRequest = { req, res, opts, query };
   if (
     await runWithRequestStores(() => dispatchScopedRoute(routeRequest, method, path), { busyWaitMs: SERVER_DB_WAIT_MS })
-  )
+  ) {
     return;
+  }
 
   // A scope of its own, which the heartbeat timer keeps after it closes, so the key check and every
   // heartbeat wait the server's lock wait. Store-ready: the stream only authenticates, through the port.
@@ -213,10 +214,12 @@ function bootRateLimiter(perAddress: RateLimitSpec | 'off' | undefined): RateLim
 const DEFAULT_FAILED_AUTH: RateLimitSpec = { ratePerSec: 20, burst: 40 };
 
 function assertRateLimitSpec(name: string, { ratePerSec, burst }: RateLimitSpec): void {
-  if (!Number.isFinite(ratePerSec) || ratePerSec <= 0)
+  if (!Number.isFinite(ratePerSec) || ratePerSec <= 0) {
     throw new Error(`rateLimits.${name}.ratePerSec must be a finite number above 0`);
-  if (!Number.isFinite(burst) || burst < 1)
+  }
+  if (!Number.isFinite(burst) || burst < 1) {
     throw new Error(`rateLimits.${name}.burst must be a finite number of at least 1`);
+  }
 }
 
 interface BootedLimiters {
@@ -235,8 +238,9 @@ function defaultCallerSpec(): RateLimitSpec | 'off' {
   const raw = envCallerRps();
   const rps = raw === undefined ? DEFAULT_CALLER_RPS : Number(raw);
   // A typo must not switch the limit off, so only an explicit 0 does.
-  if (!Number.isFinite(rps) || rps < 0)
+  if (!Number.isFinite(rps) || rps < 0) {
     throw new Error(`HIPPO_CALLER_RPS must be a number of at least 0 (0 turns the per-caller limit off), not '${raw}'`);
+  }
   return rps === 0 ? 'off' : { ratePerSec: rps, burst: Math.max(1, rps * 2) };
 }
 
@@ -279,9 +283,11 @@ function replyWithFailure<E>(req: IncomingMessage, res: ServerResponse, err: E, 
     try { res.end(); } catch { /* socket already gone */ }
     return;
   }
-  if (isStoreBusy(err)) res.setHeader('Retry-After', '1');
-  else if (err instanceof HttpError && err.retryAfterSec !== undefined)
+  if (isStoreBusy(err)) {
+    res.setHeader('Retry-After', '1');
+  } else if (err instanceof HttpError && err.retryAfterSec !== undefined) {
     res.setHeader('Retry-After', String(err.retryAfterSec));
+  }
   if (mapped.status === 500) {
     // The id lets an operator find the logged cause without the client seeing internal text.
     sendJson(res, 500, { error: mapped.message, requestId });
@@ -298,8 +304,9 @@ function replyWithFailure<E>(req: IncomingMessage, res: ServerResponse, err: E, 
   }
   // readBody hit its cap or deadline, so close once the 413 or 408 is out rather than drain what the client keeps
   // sending.
-  if (err instanceof BodyTooLargeError || err instanceof BodyTimeoutError)
+  if (err instanceof BodyTooLargeError || err instanceof BodyTimeoutError) {
     res.once('finish', () => closeAfterReply(req));
+  }
   sendError(res, mapped.status, mapped.message);
 }
 
@@ -365,10 +372,11 @@ function answerRequest(
   runWithRequestId(
     requestId,
     () => {
-      if (deadline)
+      if (deadline) {
         answerAtDeadline(res, deadline, () =>
           replyOrClose(req, res, new DeadlineExceededError(HANDLER_LATE), requestId),
         );
+      }
       handle().then(
         () => {
           if (isAbandoned(res)) logLateFinish(req, requestId);

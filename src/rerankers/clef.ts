@@ -114,8 +114,9 @@ export function parseClefReply(
   if (!isJsonObject(reply)) return 'reply has no result object';
 
   const actual = reply.model;
-  if (actual !== undefined && (!isJsonString(actual) || actual.trim() !== model))
+  if (actual !== undefined && (!isJsonString(actual) || actual.trim() !== model)) {
     return 'reply names a different model';
+  }
   if (actual === undefined && requireModel) return 'reply does not name its model';
 
   const answers = reply.answers;

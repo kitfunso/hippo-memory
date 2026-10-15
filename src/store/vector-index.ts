@@ -162,7 +162,7 @@ function insertNewParticles(db: DatabaseSyncLike, rows: readonly VectorRowWrite[
     VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(memory_id) DO NOTHING
   `);
   for (const { memoryId, particle: p } of rows) {
-    if (p)
+    if (p) {
       stmt.run(
         memoryId,
         float32ToBuffer(p.position),
@@ -172,6 +172,7 @@ function insertNewParticles(db: DatabaseSyncLike, rows: readonly VectorRowWrite[
         p.temperature,
         p.lastSimulation,
       );
+    }
   }
 }
 

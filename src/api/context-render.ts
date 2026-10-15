@@ -34,8 +34,9 @@ export function handoffText(h: SessionHandoff): string {
   lines.push('', '### Summary', h.summary);
   if (h.nextAction) lines.push('', '### Next action', h.nextAction);
   if (h.artifacts && h.artifacts.length > 0) lines.push('', '### Artifacts', ...h.artifacts.map((a) => `- ${a}`));
-  if (h.constraints && h.constraints.length > 0)
+  if (h.constraints && h.constraints.length > 0) {
     lines.push('', '### Constraints', ...h.constraints.map((c) => `- ${c}`));
+  }
   if (h.evidence) lines.push('', '### Evidence', formatHandoffEvidenceLine(h.evidence));
   lines.push('');
   return lines.join('\n');
@@ -95,12 +96,14 @@ export function contextLine(
   if (framing === 'observe') {
     const dateStr = new Date(e.created).toISOString().slice(0, DATE_PREFIX_CHARS);
     // Verified rules print without the date prefix.
-    if (confidenceFacets(e, now).tier === 'verified')
+    if (confidenceFacets(e, now).tier === 'verified') {
       return `- **${confTag} ${globalPrefix}${e.content}**${tagStr}${strengthStr}`;
+    }
     return `- **${confTag} Previously observed (${dateStr}): ${globalPrefix}${e.content}**${tagStr}${strengthStr}`;
   }
-  if (framing === 'suggest')
+  if (framing === 'suggest') {
     return `- **${confTag} Consider checking: ${globalPrefix}${e.content}**${tagStr}${strengthStr}`;
+  }
   return `- **${confTag} ${globalPrefix}${e.content}**${tagStr}${strengthStr}`;
 }
 

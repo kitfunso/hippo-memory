@@ -192,8 +192,9 @@ class WorkerPool implements SqliteExecutor {
   #setupEnded(failure: Error | undefined): void {
     this.#setup = failure === undefined ? 'done' : 'none';
     for (const lane of this.#readers) {
-      if (failure !== undefined)
+      if (failure !== undefined) {
         for (const waiting of lane.queue.splice(0)) finish(waiting, () => waiting.fail(failure));
+      }
       this.#pump(lane);
     }
   }
@@ -274,8 +275,9 @@ class WorkerPool implements SqliteExecutor {
   async close(): Promise<void> {
     this.#closed = true;
     for (const lane of [this.#writer, ...this.#readers]) {
-      for (const pending of lane.queue.splice(0))
+      for (const pending of lane.queue.splice(0)) {
         finish(pending, () => pending.fail(new StoreBusyError(EXECUTOR_CLOSED)));
+      }
       // An idle thread is unreferenced, and the process must not end before the thread has closed its connection.
       lane.worker?.ref();
       // Read after the reply of a job still running; the thread then closes its connection and ends.

@@ -95,8 +95,9 @@ async function readReply<T>(
   guard?: (body: { [key: string]: JsonValue }) => boolean,
 ): Promise<T> {
   const body = await readCappedJson(res, MAX_REPLY_BYTES);
-  if (!isJsonObject(body))
+  if (!isJsonObject(body)) {
     throw new MalformedReplyError(route, body === null ? 'null' : Array.isArray(body) ? 'array' : 'a scalar');
+  }
   if (guard && !guard(body)) throw new MalformedReplyError(route, 'unexpected fields');
   const reply: JsonValue = body;
   // SAFETY: the reply comes from hippo's own server, whose route returns this api result as JSON.

@@ -216,12 +216,14 @@ function configuredTools(root: string, warnings: string[]): Set<ToolId> | null {
 function knownTools(ids: readonly string[], where: string, warnings: string[]): Set<ToolId> {
   const out = new Set<ToolId>();
   for (const id of ids) {
-    if (isToolId(id)) out.add(id);
-    else
+    if (isToolId(id)) {
+      out.add(id);
+    } else {
       warnings.push(
         `${where}: unknown agent memory tool "${id}" ignored (known: ` +
         `${AGENT_MEMORY_TOOLS.map((t) => t.id).join(', ')})`,
       );
+    }
   }
   return out;
 }
@@ -366,7 +368,7 @@ function syncStore(
       remembered += outcome.tally.imported + outcome.tally.replaced;
       if (!session.dryRun) afterCommit(store.root, outcome, report);
     }
-    if (session.dryRun)
+    if (session.dryRun) {
       out.unlisted += unlistedRows(store.db, tenantId, {
         tool,
         scope: pass.scope,
@@ -374,6 +376,7 @@ function syncStore(
         platform: opts.machine.platform,
         partition: partition === null ? null : [partition, ...earlier],
       });
+    }
   }
   if (remembered > 0 && !session.dryRun) bumpRemembered(store.root, remembered, report);
   return synced;
@@ -536,8 +539,9 @@ function handOver(
     // Names folded into this project's in the global store were its rows too.
     const names = projectNames(resolveProjectIdentity(projectRoot));
     const origins = [...new Set([...names, ...namesFoldedInto(projectTagReads(db, tenantId), names), ''])];
-    for (const work of synced)
+    for (const work of synced) {
       handOverContainer(db, globalRoot, tenantId, work, { origins, platform: opts.machine.platform, report });
+    }
   } catch (err) {
     report.warnings.push(
       `global copies not handed over: ${isSqliteBusy(err) ? 'the global store was busy' : errorMessage(err)}`,

@@ -47,8 +47,9 @@ export function checkedWorkingState(state: WorkingState | null): WorkingState | 
 }
 
 export function assertTrigger(trigger: string | null): void {
-  if (trigger !== null && trigger.length > MAX_ID_LEN)
+  if (trigger !== null && trigger.length > MAX_ID_LEN) {
     throw new BadRequestError(`trigger: at most ${MAX_ID_LEN} characters`);
+  }
 }
 
 export function assertRequestId(requestId: string): void {

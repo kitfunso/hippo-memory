@@ -70,8 +70,9 @@ export function scopeHiddenCount(
 
 /** The active snapshot, its session's latest handoff and last five events, each kept only when its scope passes. */
 export function loadCliRecallContinuity(ctx: Context, setting: CliRecallSetting, wanted: boolean): ContinuityBlock {
-  if (!wanted || setting.primaryIsGlobal)
+  if (!wanted || setting.primaryIsGlobal) {
     return { activeSnapshot: null, sessionHandoff: null, recentSessionEvents: [] };
+  }
   const { hippoRoot, tenantId } = ctx;
   const rawSnapshot = loadActiveTaskSnapshot(hippoRoot, tenantId);
   const sessionId = rawSnapshot?.session_id ?? undefined;

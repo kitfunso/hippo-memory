@@ -696,14 +696,18 @@ async function processFile(filePath, mode, ctx, z1Configs, arm = 'z1', collectJu
             record(secondary.a0.lifetime, snap.a0.lifetime, err, byId);
             record(secondary.a1.reset, snap.a1.reset, err, byId);
             record(secondary.a1.lifetime, snap.a1.lifetime, err, byId);
-            if (runZ1 && !isZ1b) snap.z1.forEach((s, i) => {
-              record(z1FileAccs[i].reset.secondary, s.reset, err, byId);
-              record(z1FileAccs[i].lifetime.secondary, s.lifetime, err, byId);
-            });
-            if (isZ1b) snap.z1b.forEach((s, i) => {
-              record(z1bFileAccs[i].reset.secondary, s.reset, err, byId);
-              record(z1bFileAccs[i].lifetime.secondary, s.lifetime, err, byId);
-            });
+            if (runZ1 && !isZ1b) {
+              snap.z1.forEach((s, i) => {
+                record(z1FileAccs[i].reset.secondary, s.reset, err, byId);
+                record(z1FileAccs[i].lifetime.secondary, s.lifetime, err, byId);
+              });
+            }
+            if (isZ1b) {
+              snap.z1b.forEach((s, i) => {
+                record(z1bFileAccs[i].reset.secondary, s.reset, err, byId);
+                record(z1bFileAccs[i].lifetime.secondary, s.lifetime, err, byId);
+              });
+            }
           }
           if (firstErr.has(es)) {
             if (isScoredFailure) {
@@ -711,28 +715,32 @@ async function processFile(filePath, mode, ctx, z1Configs, arm = 'z1', collectJu
               record(primary.a0.lifetime, snap.a0.lifetime, err, byId);
               record(primary.a1.reset, snap.a1.reset, err, byId);
               record(primary.a1.lifetime, snap.a1.lifetime, err, byId);
-              if (runZ1 && !isZ1b) snap.z1.forEach((s, i) => {
-                record(z1FileAccs[i].reset.primary, s.reset, err, byId);
-                record(z1FileAccs[i].lifetime.primary, s.lifetime, err, byId);
-              });
-              if (isZ1b) snap.z1b.forEach((s, i) => {
-                record(z1bFileAccs[i].reset.primary, s.reset, err, byId);
-                record(z1bFileAccs[i].lifetime.primary, s.lifetime, err, byId);
-                const added = [...s.reset].some((id) => !snap.a1.reset.has(id));
-                if (added) {
-                  z1bFileAccs[i].addedEvents++;
-                  const sent = z1bStates[i].lastSentItems; // most recent block sent before this event's own injection
-                  const tItems = sent.items.slice(0, z1Configs[i].maxItems);
-                  for (const it of tItems) {
-                    const age = sent.ts - Date.parse(it.created); // age against the block's originating failure, not this repeat
-                    if (age >= 0 && age <= 10 * 60 * 1000) z1bFileAccs[i].recalledCreatedWithin10MinEligible++;
+              if (runZ1 && !isZ1b) {
+                snap.z1.forEach((s, i) => {
+                  record(z1FileAccs[i].reset.primary, s.reset, err, byId);
+                  record(z1FileAccs[i].lifetime.primary, s.lifetime, err, byId);
+                });
+              }
+              if (isZ1b) {
+                snap.z1b.forEach((s, i) => {
+                  record(z1bFileAccs[i].reset.primary, s.reset, err, byId);
+                  record(z1bFileAccs[i].lifetime.primary, s.lifetime, err, byId);
+                  const added = [...s.reset].some((id) => !snap.a1.reset.has(id));
+                  if (added) {
+                    z1bFileAccs[i].addedEvents++;
+                    const sent = z1bStates[i].lastSentItems; // most recent block sent before this event's own injection
+                    const tItems = sent.items.slice(0, z1Configs[i].maxItems);
+                    for (const it of tItems) {
+                      const age = sent.ts - Date.parse(it.created); // age against the block's originating failure, not this repeat
+                      if (age >= 0 && age <= 10 * 60 * 1000) z1bFileAccs[i].recalledCreatedWithin10MinEligible++;
+                    }
+                    if (collectJudge) {
+                      const eventId = ctx.judgeEventCounter.n++;
+                      judgeItems.push(...buildJudgeEntries(eventId, cmd, err, tItems, z1Configs[i].maxItems, a1Order, byId, session));
+                    }
                   }
-                  if (collectJudge) {
-                    const eventId = ctx.judgeEventCounter.n++;
-                    judgeItems.push(...buildJudgeEntries(eventId, cmd, err, tItems, z1Configs[i].maxItems, a1Order, byId, session));
-                  }
-                }
-              });
+                });
+              }
             }
           } else {
             firstErr.set(es, true);
@@ -786,32 +794,36 @@ async function processFile(filePath, mode, ctx, z1Configs, arm = 'z1', collectJu
             record(primary.a0.lifetime, dLife0, ff.err, byId);
             record(primary.a1.reset, dReset1, ff.err, byId);
             record(primary.a1.lifetime, dLife1, ff.err, byId);
-            if (runZ1 && !isZ1b) z1States.forEach((s, i) => {
-              const dReset = setDiff(s.reset, ff.snap.z1[i].reset);
-              const dLife = setDiff(s.lifetime, ff.snap.z1[i].lifetime);
-              record(z1FileAccs[i].reset.primary, dReset, ff.err, byId);
-              record(z1FileAccs[i].lifetime.primary, dLife, ff.err, byId);
-            });
-            if (isZ1b) z1bStates.forEach((s, i) => {
-              const dReset = setDiff(s.reset, ff.snap.z1b[i].reset);
-              const dLife = setDiff(s.lifetime, ff.snap.z1b[i].lifetime);
-              record(z1bFileAccs[i].reset.primary, dReset, ff.err, byId);
-              record(z1bFileAccs[i].lifetime.primary, dLife, ff.err, byId);
-              const added = [...dReset].some((id) => !dReset1.has(id));
-              if (added) {
-                z1bFileAccs[i].addedEvents++;
-                const sent = s.lastSentItems; // live: no block fires on a success line
-                const tItems = sent.items.slice(0, z1Configs[i].maxItems);
-                for (const it of tItems) {
-                  const age = sent.ts - Date.parse(it.created); // age against the originating failure, not this success line
-                  if (age >= 0 && age <= 10 * 60 * 1000) z1bFileAccs[i].recalledCreatedWithin10MinEligible++;
+            if (runZ1 && !isZ1b) {
+              z1States.forEach((s, i) => {
+                const dReset = setDiff(s.reset, ff.snap.z1[i].reset);
+                const dLife = setDiff(s.lifetime, ff.snap.z1[i].lifetime);
+                record(z1FileAccs[i].reset.primary, dReset, ff.err, byId);
+                record(z1FileAccs[i].lifetime.primary, dLife, ff.err, byId);
+              });
+            }
+            if (isZ1b) {
+              z1bStates.forEach((s, i) => {
+                const dReset = setDiff(s.reset, ff.snap.z1b[i].reset);
+                const dLife = setDiff(s.lifetime, ff.snap.z1b[i].lifetime);
+                record(z1bFileAccs[i].reset.primary, dReset, ff.err, byId);
+                record(z1bFileAccs[i].lifetime.primary, dLife, ff.err, byId);
+                const added = [...dReset].some((id) => !dReset1.has(id));
+                if (added) {
+                  z1bFileAccs[i].addedEvents++;
+                  const sent = s.lastSentItems; // live: no block fires on a success line
+                  const tItems = sent.items.slice(0, z1Configs[i].maxItems);
+                  for (const it of tItems) {
+                    const age = sent.ts - Date.parse(it.created); // age against the originating failure, not this success line
+                    if (age >= 0 && age <= 10 * 60 * 1000) z1bFileAccs[i].recalledCreatedWithin10MinEligible++;
+                  }
+                  if (collectJudge) {
+                    const eventId = ctx.judgeEventCounter.n++;
+                    judgeItems.push(...buildJudgeEntries(eventId, ff.cmd, ff.err, tItems, z1Configs[i].maxItems, ff.a1OrderSnapshot, byId, session));
+                  }
                 }
-                if (collectJudge) {
-                  const eventId = ctx.judgeEventCounter.n++;
-                  judgeItems.push(...buildJudgeEntries(eventId, ff.cmd, ff.err, tItems, z1Configs[i].maxItems, ff.a1OrderSnapshot, byId, session));
-                }
-              }
-            });
+              });
+            }
           }
           firstFail.delete(cs);
         }

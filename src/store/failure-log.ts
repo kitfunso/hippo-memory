@@ -82,8 +82,9 @@ export function requestOutcome(
     .get<{ outcome: FailureOutcome; session_id: string | null } | undefined>(tenantId, requestId);
   if (row === undefined) return null;
   // Sessions are owner-bound, so this also keeps one owner from reading or settling another's row; compared as stored.
-  if (row.session_id !== sessionId.slice(0, MAX_FIELD))
+  if (row.session_id !== sessionId.slice(0, MAX_FIELD)) {
     throw new ConflictError('request id belongs to another session');
+  }
   return row.outcome;
 }
 

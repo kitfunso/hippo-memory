@@ -102,8 +102,9 @@ function lastTurnText(
     if (entry.type !== role) continue;
     // An isMeta line holds an earlier compact summary and an isSidechain one is a sub-agent turn; neither is this
     // session's own.
-    if (('isMeta' in entry && entry.isMeta === true) || ('isSidechain' in entry && entry.isSidechain === true))
+    if (('isMeta' in entry && entry.isMeta === true) || ('isSidechain' in entry && entry.isSidechain === true)) {
       continue;
+    }
     const message = 'message' in entry && isObjectLike(entry.message) ? entry.message : undefined;
     if (!message) continue;
     const text = textOf(entry, message);
@@ -141,8 +142,9 @@ export function transcriptWorkingState(
     // megabytes back: grow the window a bounded number of times until both turns are in it.
     const size = fs.statSync(transcriptPath).size;
     for (const cap of [PRE_COMPACT_TAIL_BYTES, PRE_COMPACT_TAIL_BYTES * 4, PRE_COMPACT_TAIL_BYTES * 16]) {
-      if (cap > PRE_COMPACT_TAIL_BYTES)
+      if (cap > PRE_COMPACT_TAIL_BYTES) {
         log(`tail window grown to ${cap} bytes (last ${rawTask ? 'assistant' : 'user'} turn is further back)`);
+      }
       tail = readTranscriptTail(transcriptPath, cap);
       rawTask = lastTurnText(tail, 'user', humanUserText);
       rawNextStep = lastTurnText(tail, 'assistant', lastTextBlock);

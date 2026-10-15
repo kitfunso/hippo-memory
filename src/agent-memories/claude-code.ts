@@ -100,8 +100,9 @@ export function transcriptNotesProject(
       dir = path.dirname(dir) === dir ? null : path.dirname(dir)
     ) {
       // A folder gone from disk resolves to its bare name, never the project it was in, so it decides nothing.
-      if ([dir, realpathOrResolve(dir)].some((d) => fold(claudeFolderName(d)) === folder))
+      if ([dir, realpathOrResolve(dir)].some((d) => fold(claudeFolderName(d)) === folder)) {
         return fs.existsSync(dir) ? resolveProjectIdentity(dir) : null;
+      }
     }
   }
   return null;

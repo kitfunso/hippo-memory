@@ -80,8 +80,9 @@ function ownFields(err: Error) {
 
 /** Worker side. A thrown value that is not an Error carries its text and no class. */
 export function encodeError<E>(err: E, depth = 0): WireError {
-  if (!(err instanceof Error))
+  if (!(err instanceof Error)) {
     return { classes: [], message: errorMessage(err), stack: undefined, fields: {}, cause: undefined };
+  }
   const cause = err.cause === undefined || depth >= MAX_CAUSES ? undefined : encodeError(err.cause, depth + 1);
   return { classes: classNames(err), message: err.message, stack: err.stack, fields: ownFields(err), cause };
 }
@@ -92,12 +93,13 @@ export function decodeError(wire: WireError): Error {
   const thrown = wire.classes[0];
   const known = wire.classes.find((name) => PROTOTYPES.has(name)) ?? 'Error';
   const unlisted = thrown !== undefined && thrown !== known;
-  if (unlisted)
+  if (unlisted) {
     log.once(
       `store-worker-error:${thrown}`,
       'warn',
       `a store worker threw ${thrown}, which the error codec does not list; it arrives as ${known}`,
     );
+  }
   // A listed ancestor still maps to its status, so its text stays as thrown; under plain Error the class survives only
   // in the message.
   const message = unlisted && known === 'Error' ? `${thrown}: ${wire.message}` : wire.message;

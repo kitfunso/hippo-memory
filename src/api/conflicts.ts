@@ -53,8 +53,9 @@ export function resolveMemoryConflict(
   if (!conflict) throw new NotFoundError(`conflict not found: ${conflictId}`);
   if (conflict.status !== 'open') throw new ConflictError(`conflict ${conflictId} is already resolved`);
   const pair = [conflict.memory_a_id, conflict.memory_b_id];
-  if (!pair.includes(opts.keepId))
+  if (!pair.includes(opts.keepId)) {
     throw new BadRequestError(`keep must be one of the two memories in conflict ${conflictId}: ${pair.join(', ')}`);
+  }
   if (loadEntriesByIds(ctx.hippoRoot, pair, ctx.tenantId).filter(isLive).length < pair.length) {
     throw new NotFoundError(`conflict ${conflictId} names a memory that is superseded, archived or quarantined`);
   }

@@ -57,8 +57,9 @@ export function detectConflicts(
       if (survivors[i].layer === Layer.Trace && survivors[j].layer === Layer.Trace) continue;
       if (survivors[i].superseded_by || survivors[j].superseded_by) continue;
       if (!recalledTogether(survivors[i], survivors[j])) continue;
-      if ([survivors[i], survivors[j]].some((e) => e.tags.includes('extracted') || e.tags.includes('session-digest')))
+      if ([survivors[i], survivors[j]].some((e) => e.tags.includes('extracted') || e.tags.includes('session-digest'))) {
         continue;
+      }
       const reasonAndScore = describeConflict(profiles[i], profiles[j]);
       if (!reasonAndScore) continue;
       detected.push({

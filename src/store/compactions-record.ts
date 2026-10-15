@@ -74,8 +74,9 @@ export type Log = (message: string) => void;
 /** Where the session ran: rows written through the global store or a shared store keep the project the session was
  * in. */
 function compactionProject(hippoRoot: string, cwd: string | null): ProjectRef {
-  if (!isGlobalStoreRoot(hippoRoot) && !isSharedStore(hippoRoot))
+  if (!isGlobalStoreRoot(hippoRoot) && !isSharedStore(hippoRoot)) {
     return resolveProjectIdentity(path.dirname(hippoRoot));
+  }
   // No cwd means user-global, as stampOriginProject gives the global store; undefined would fall back to the hook's own
   // cwd.
   return cwd === null ? '' : resolveProjectIdentity(cwd);
@@ -151,8 +152,9 @@ export function compactionByRequest(
 ): CompactionRecord | null {
   const record = compactionRowsByRequest(db, tenantId, requestId).map(toRecord)[0] ?? null;
   // Sessions are owner-bound, so this also keeps one owner from reading or finishing another's record.
-  if (record !== null && record.sessionId !== sessionId)
+  if (record !== null && record.sessionId !== sessionId) {
     throw new ConflictError('request id belongs to another session');
+  }
   return record;
 }
 
@@ -577,8 +579,9 @@ export interface ReplaySources {
 }
 
 function closeWithoutSummary(db: DatabaseSyncLike, tenantId: string, id: string, log: Log): void {
-  if (closeStartedWithoutSummary(db, tenantId, id) > 0)
+  if (closeStartedWithoutSummary(db, tenantId, id) > 0) {
     log(`${id} closed as no-summary: its transcript holds no summary for it`);
+  }
 }
 
 function nextStartedAt(db: DatabaseSyncLike, record: CompactionRecord): string | null {

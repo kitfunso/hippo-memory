@@ -122,8 +122,12 @@ export function generateProtocol(opts) {
 
   // Unique (entity, attribute) per fact.
   const pairs = [];
-  for (const h of ENTITY_HEADS) for (const u of ENTITY_UNITS) for (const a of ATTRIBUTES) {
-    pairs.push({ entity: `${h} ${u}`, attribute: a });
+  for (const h of ENTITY_HEADS) {
+    for (const u of ENTITY_UNITS) {
+      for (const a of ATTRIBUTES) {
+        pairs.push({ entity: `${h} ${u}`, attribute: a });
+      }
+    }
   }
   if (pairs.length < numFacts) throw new Error(`vocab too small: ${pairs.length} < ${numFacts}`);
   const chosen = shuffle(rand, pairs).slice(0, numFacts);

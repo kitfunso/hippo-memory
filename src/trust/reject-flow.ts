@@ -59,8 +59,9 @@ function contentToReject(opts: RejectFlowOpts, row: RejectionSource | undefined)
     throw new Error(`memory not found: ${opts.memoryId}`);
   }
   // A tombstone is tenant-wide, so one made from personal text would show its reason to everyone.
-  if (isPersonalScope(row.scope))
+  if (isPersonalScope(row.scope)) {
     throw new BadRequestError("Personal memories can't be rejected. Use forget to remove it.");
+  }
   return row.content;
 }
 

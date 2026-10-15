@@ -205,8 +205,9 @@ function graphStreamSearch(
       '`hippo embed` first.',
     );
   }
-  if (globalRoot)
+  if (globalRoot) {
     ctx.note?.('[note] --graph-stream searches the local store only; global graph fusion is a follow-up.');
+  }
   // With seedCount or fewer candidates every one is a seed and the stream degrades to the 2-list fusion.
   return hybridSearch(query, pool.local, {
     budget, cost, hippoRoot: ctx.hippoRoot, mmr, mmrLambda, minResults, scope, includeSuperseded, asOf,

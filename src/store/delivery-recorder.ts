@@ -423,8 +423,9 @@ function candidateMethods(state: RecorderState, guard: Guard): CandidateMethods 
     dropMissing: (before, after, stage, reason) =>
       guard(() => {
         const kept = new Set(after.map((e) => e.id));
-        for (const e of before)
+        for (const e of before) {
           if (!kept.has(e.id)) rejectId(state, e.id, { stage, reason, score: null, tokens: null });
+        }
       }),
     gated: (prompt, items, gate, kept) =>
       guard(() => {

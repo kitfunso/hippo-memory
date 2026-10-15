@@ -122,8 +122,9 @@ function rewriteOn<T>(
     withWriteScope(db, TX_LABEL, () => body(tx, backup)),
   );
   // After commit, as the agent memory sync does: a stale mirror would bring the old tag back on the next rebuild.
-  for (const entry of selectEntriesByIds(db, done.rewrite, scope.tenantId).values())
+  for (const entry of selectEntriesByIds(db, done.rewrite, scope.tenantId).values()) {
     writeEntryMirrors(scope.hippoRoot, entry);
+  }
   for (const id of done.purge) removeEntryMirrors(scope.hippoRoot, id);
   return done.result;
 }

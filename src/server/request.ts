@@ -25,13 +25,17 @@ export function logRequestFailure<E>(req: IncomingMessage, err: E, status: numbe
   const message = errorMessage(err);
   const line = `${req.method ?? 'GET'} ${(req.url ?? '/').split('?')[0]} failed: ${message}`;
   // A 5xx that tells the caller when to retry is back-pressure too.
-  if (isStoreBusy(err) || (status >= 500 && err instanceof HttpError && err.retryAfterSec !== undefined))
+  if (isStoreBusy(err) || (status >= 500 && err instanceof HttpError && err.retryAfterSec !== undefined)) {
     log.warn(line, { status });
-  else if (status >= 500 && status !== 501) log.error(line, { status, ...errorFields(err) });
-  // A failed login is the one 4xx an operator needs by default; the id (never the credential) is stamped from the
-  // request scope.
-  else if (status === 401 || status === 403) log.warn(line, { status });
-  else log.info(line, { status });
+  } else if (status >= 500 && status !== 501) {
+    log.error(line, { status, ...errorFields(err) });
+  } else if (status === 401 || status === 403) {
+    // A failed login is the one 4xx an operator needs by default; the id (never the credential) is stamped from the
+    // request scope.
+    log.warn(line, { status });
+  } else {
+    log.info(line, { status });
+  }
 }
 
 /** The status and client message for a failed request; a held write lock is a retryable 503, never a 500. */

@@ -30,9 +30,11 @@ function loggedMemory(db: DatabaseSyncLike, event: ConnectorEvent): string | nul
  * them. */
 function writeWithCompanions(db: DatabaseSyncLike, { entry, actor, event, quarantine }: ConnectorWrite): void {
   writeInOwnTenant(db, entry, actor, (handle, memoryId) => {
-    if (quarantine) recordQuarantine(handle, {
-      tenantId: entry.tenant_id, memoryId, originalScope: quarantine.originalScope, reason: quarantine.reason, actor,
-    });
+    if (quarantine) {
+      recordQuarantine(handle, {
+        tenantId: entry.tenant_id, memoryId, originalScope: quarantine.originalScope, reason: quarantine.reason, actor,
+      });
+    }
     if (event && !logEvent(handle, event, memoryId)) throw new EventAlreadyLogged();
   });
 }

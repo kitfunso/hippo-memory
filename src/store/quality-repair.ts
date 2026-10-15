@@ -60,8 +60,9 @@ function capabilityBlockers(db: DatabaseSyncLike): string[] {
     if (columns.size === 0) blockers.push(`missing table: ${table}`);
     else for (const column of required) if (!columns.has(column)) blockers.push(`missing column: ${table}.${column}`);
   }
-  if (blockers.some((blocker) => blocker === 'missing table: meta' || blocker.startsWith('missing column: meta.')))
+  if (blockers.some((blocker) => blocker === 'missing table: meta' || blocker.startsWith('missing column: meta.'))) {
     return blockers;
+  }
   assertBinaryCompatible(db);
   if (getMeta(db, 'fts5_available', '0') === '1') {
     const columns = tableColumns(db, 'memories_fts');
@@ -223,8 +224,9 @@ function repairOn(
   opts: { tenantId: string; apply?: boolean; doneKey?: string },
 ): QualityRepairResult {
   const initial = withTrialScope(db, 'quality_repair_plan', () => initialResult(db, root, opts.tenantId));
-  if (!opts.apply || !initial.supported || !initial.issues.some((issue) => issue.disposition === 'set-aside'))
+  if (!opts.apply || !initial.supported || !initial.issues.some((issue) => issue.disposition === 'set-aside')) {
     return initial;
+  }
   db.exec('PRAGMA foreign_keys = ON');
   const result = withBackup(db, root, 'before-quality-repair', (backup) =>
     applyPlan(db, root, opts.tenantId, backup, opts.doneKey),

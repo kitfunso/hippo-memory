@@ -186,8 +186,9 @@ export function renderAmbientSummary(state: AmbientState): string {
 
   if (state.extractionCoverage > T.extractionHigh) parts.push('high extraction coverage');
 
-  if (state.conflictIntensity > T.conflictShown)
+  if (state.conflictIntensity > T.conflictShown) {
     parts.push(`${(state.conflictIntensity * 100).toFixed(0)}% conflict rate`);
+  }
 
   if (state.dagDepth >= T.dagDepthShown) parts.push(`DAG depth ${state.dagDepth}`);
 

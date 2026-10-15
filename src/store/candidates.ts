@@ -273,8 +273,9 @@ export function loadTextsHoldingWords(
           source: string | null;
           origin_project: string | null;
         }>;
-        for (const row of rows)
+        for (const row of rows) {
           out.push({ content: row.content, source: row.source ?? 'cli', origin_project: row.origin_project });
+        }
       }
       return out;
     },

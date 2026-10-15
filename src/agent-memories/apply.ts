@@ -147,8 +147,9 @@ class ContainerRun {
       const source = this.w.prefix + row.source.slice(old.length);
       if (
         renameEntrySourceAndOriginAt(this.s.db, row.tenant_id, row.id, { from: row.source, to: source, origin }) === 0
-      )
+      ) {
         continue;
+      }
       moved++;
       this.mirror.push({ ...row, source, origin_project: origin ?? row.origin_project });
     }
@@ -157,8 +158,9 @@ class ContainerRun {
       moved === 0 &&
       (this.w.container.items.length === 0 ||
         selectLiveEntriesBySourcePrefix(this.s.db, this.s.tenantId, this.w.prefix).length > 0)
-    )
+    ) {
       return;
+    }
     for (const snap of dormantSnapshotsBySourcePrefix(this.s.db, this.s.tenantId, old)) {
       const source = this.w.prefix + snap.entry.source.slice(old.length);
       replaceDormantEntry(this.s.db, this.s.tenantId, snap.entry.id, {
@@ -183,8 +185,9 @@ class ContainerRun {
     if (item.text.trim().length < MIN_ITEM_CHARS) return 'short';
     // Imported rows reach prompts, so the bar is text leaving the machine: Bearer headers and JWTs count too.
     if (redactSecretsStrict(item.text) !== item.text) return 'secret';
-    if (findRejectedValue(this.s.db, this.s.tenantId, rejectionDigest(storedText(item.text))) !== null)
+    if (findRejectedValue(this.s.db, this.s.tenantId, rejectionDigest(storedText(item.text))) !== null) {
       return 'rejected';
+    }
     return null;
   }
 
@@ -290,8 +293,9 @@ class ContainerRun {
           strength: calculateStrength(revived, now, { ablation: strengthAblation() }),
         }),
       )
-    )
+    ) {
       return;
+    }
     deleteDormantRow(this.s.db, this.s.tenantId, dormantId);
     appendAuditEvent(this.s.db, {
       tenantId: this.s.tenantId,

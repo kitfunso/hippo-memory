@@ -21,8 +21,9 @@ function isCorePath(method: string, path: string): boolean {
 export function assertAddonRoutes(routes: readonly AddonRoute[]): void {
   const seen = new Set<string>();
   for (const { path } of routes) {
-    if (!isPlainV1Path(path))
+    if (!isPlainV1Path(path)) {
       throw new Error(`add-on route '${path}' is not a plain /v1/ path (segments use A-Z a-z 0-9 . _ ~ -)`);
+    }
     if (seen.has(path)) throw new Error(`add-on route '${path}' is registered twice`);
     if (isCorePath('POST', path)) throw new Error(`add-on route '${path}' is already served by core`);
     seen.add(path);
@@ -35,8 +36,9 @@ const PUBLIC_JSON_MAX_BYTES = 64 * 1024;
 export function assertPublicJson(publicJson: Readonly<Record<string, JsonValue>>): ReadonlyMap<string, string> {
   const bodies = new Map<string, string>();
   for (const [path, value] of Object.entries(publicJson)) {
-    if (!isPlainV1Path(path))
+    if (!isPlainV1Path(path)) {
       throw new Error(`public JSON path '${path}' is not a plain /v1/ path (segments use A-Z a-z 0-9 . _ ~ -)`);
+    }
     if (isCorePath('GET', path)) throw new Error(`public JSON path '${path}' is already served by core`);
     const text = JSON.stringify(value);
     if (text === undefined) throw new Error(`public JSON at '${path}' is not JSON`);

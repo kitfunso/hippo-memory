@@ -110,10 +110,11 @@ async function cmdSleepCore(
   // Finishes compactions a killed or busy post-compact hook left; never throws, and a dry run writes nothing.
   if (!flags['dry-run']) {
     const finished = replayCompactionsAt(hippoRoot, (message) => log.warn(`compaction replay: ${message}`));
-    if (finished > 0)
+    if (finished > 0) {
       console.log(
         `Finished saving ${finished} compaction${finished === 1 ? '' : 's'} left over from earlier sessions.`,
       );
+    }
     repairProjectTagsOnce(hippoRoot, tenantId);
     await repairQualityOnceAt(hippoRoot, tenantId);
   }

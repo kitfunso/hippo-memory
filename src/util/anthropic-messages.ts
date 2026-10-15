@@ -85,8 +85,9 @@ export async function sendAnthropicMessage(req: AnthropicMessageRequest): Promis
 
   try {
     const data = await readCappedJson(res, MAX_REPLY_BYTES);
-    if (!isJsonObject(data))
+    if (!isJsonObject(data)) {
       return { ok: false, failure: { kind: 'unreadable', message: 'the reply is not a JSON object' } };
+    }
     const text = firstText(data);
     return text === '' ? { ok: false, failure: { kind: 'empty' } } : { ok: true, text };
   } catch (err) {

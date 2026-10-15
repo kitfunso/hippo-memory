@@ -34,8 +34,9 @@ function isNonHumanUserLine(entry: TranscriptLineFlags, content: string): boolea
     entry.isSidechain === true ||
     entry.isCompactSummary === true ||
     entry.promptSource === 'system'
-  )
+  ) {
     return true;
+  }
   const head = content.trimStart();
   return CLAUDE_CODE_COMMAND_PREFIXES.some((p) => head.startsWith(p));
 }
@@ -63,8 +64,9 @@ export function humanUserText(entry: TranscriptLineFlags, message: TranscriptMes
     for (const block of content) {
       const blockText =
         isObjectLike(block) && 'type' in block && block.type === 'text' && 'text' in block ? block.text : undefined;
-      if (isStringValue(blockText) && !NON_HUMAN_BLOCK_PREFIXES.some((p) => blockText.trimStart().startsWith(p)))
+      if (isStringValue(blockText) && !NON_HUMAN_BLOCK_PREFIXES.some((p) => blockText.trimStart().startsWith(p))) {
         parts.push(blockText);
+      }
     }
     text = parts.join('\n');
   }

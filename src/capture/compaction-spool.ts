@@ -212,8 +212,9 @@ export function parseSpooled(text: string, fallbackTenantId: string): SpooledCom
     !isStringValue(raw.sessionId) ||
     !('summary' in raw) ||
     !isStringValue(raw.summary)
-  )
+  ) {
     return null;
+  }
   if (!('at' in raw) || !isStringValue(raw.at) || Number.isNaN(Date.parse(raw.at))) return null;
   const items: string[] = 'items' in raw && Array.isArray(raw.items) ? raw.items.filter(isStringValue) : [];
   return {
@@ -411,8 +412,9 @@ function moveBad(fsx: SpoolFs, dir: string, claim: string, options: MoveBadOptio
       log,
       what,
     ) !== 'done'
-  )
+  ) {
     return false;
+  }
   if (!writeBad(fsx, dir, { stem, cause, text, log, what })) {
     putBack(fsx, dir, claim, stem, attempt, log);
     return false;
@@ -444,8 +446,9 @@ function promoteTmp(fsx: SpoolFs, dir: string, names: readonly string[], tenantI
         what,
       ) !== 'done' ||
       Math.abs(now - mtime) <= STALE_MS
-    )
+    ) {
       continue;
+    }
     if (m === null) {
       // A `.bad` write cut off before its rename: its source goes only after that rename lands, so this copy is spare.
       settle(() => fsx.unlinkSync(file), log, `spool file ${name} not removed`);
@@ -468,8 +471,9 @@ function promoteTmp(fsx: SpoolFs, dir: string, names: readonly string[], tenantI
 /** Removes a claim once the store holds its summary; a claim left behind is imported again, so the log says so. */
 function removeClaim(fsx: SpoolFs, claim: string, name: string, log: Log): void {
   const removed = settleCode(() => fsx.unlinkSync(claim), log, `spool file ${name} claim not removed`);
-  if (removed.settled === 'busy')
+  if (removed.settled === 'busy') {
     log(`spool file ${name} saved; its claim could not be removed (${removed.code}); it will be imported again`);
+  }
 }
 
 interface ImportFailedOptions {

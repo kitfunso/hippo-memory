@@ -35,8 +35,9 @@ export function keyCheckBounds(maxKeys: number): KeyCheckBounds {
     admit(keyId, address) {
       // Each answers in the words an existing limit uses: the request limit's for a full queue, the address's scrypt
       // bucket's for spent tries.
-      if (inFlight >= MAX_IN_FLIGHT && waiting.length >= MAX_WAITING)
+      if (inFlight >= MAX_IN_FLIGHT && waiting.length >= MAX_WAITING) {
         throw new HttpError(429, 'rate limit exceeded', 1);
+      }
       if (!perKeyAddress.check(`${keyId}\u0000${address}`)) {
         throw new HttpError(429, 'too many key checks from this address', perKeyAddress.retryAfterSec);
       }

@@ -145,8 +145,9 @@ async function healthMatchesPidfile(hippoRoot: string, info: ServerInfo): Promis
     }
     return true;
   } catch (err) {
-    if (err instanceof Error && err.name === 'TimeoutError')
+    if (err instanceof Error && err.name === 'TimeoutError') {
       throw new ServerUnresponsiveError(info, probeMs, { cause: err });
+    }
     // A refusal or a non-JSON body proves no hippo server answers there; any other failure may be a live server, so the
     // file stays.
     if (isConnectionRefused(err) || err instanceof SyntaxError) {

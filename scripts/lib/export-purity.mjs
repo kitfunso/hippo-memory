@@ -34,10 +34,14 @@ function declareReExport(mod, st) {
   if (!st.moduleSpecifier) return;
   const spec = st.moduleSpecifier.text;
   const clause = st.exportClause;
-  if (!clause) mod.stars.push(spec);
-  else if (ts.isNamespaceExport(clause)) mod.decls.set(clause.name.text, { kind: 'import', spec, imported: '*', typeOnly: !!st.isTypeOnly });
-  else for (const el of clause.elements) {
-    if (!mod.decls.has(el.name.text)) mod.decls.set(el.name.text, { kind: 'import', spec, imported: (el.propertyName ?? el.name).text, typeOnly: !!st.isTypeOnly || !!el.isTypeOnly });
+  if (!clause) {
+    mod.stars.push(spec);
+  } else if (ts.isNamespaceExport(clause)) {
+    mod.decls.set(clause.name.text, { kind: 'import', spec, imported: '*', typeOnly: !!st.isTypeOnly });
+  } else {
+    for (const el of clause.elements) {
+      if (!mod.decls.has(el.name.text)) mod.decls.set(el.name.text, { kind: 'import', spec, imported: (el.propertyName ?? el.name).text, typeOnly: !!st.isTypeOnly || !!el.isTypeOnly });
+    }
   }
 }
 

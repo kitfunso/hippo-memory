@@ -84,8 +84,9 @@ function eachStoredVector(
 ): void {
   const read = (rows: Iterable<unknown>): void => {
     // SAFETY: both SELECTs below name exactly these two columns; node:sqlite returns BLOBs as Uint8Array.
-    for (const row of rows as Iterable<{ memory_id: string; vector: Uint8Array }>)
+    for (const row of rows as Iterable<{ memory_id: string; vector: Uint8Array }>) {
       take(row.memory_id, decodeVector(row.vector));
+    }
   };
   if (ids === undefined) {
     read(db.prepare('SELECT memory_id, vector FROM memory_vectors').iterate());

@@ -95,8 +95,9 @@ function parseExtractedFacts(parsed: (RawExtractedFact | null)[]): ExtractedFact
       !item ||
       !isJsonString(item.content) ||
       item.content.length < 3
-    )
+    ) {
       continue;
+    }
 
     const itemTags = item.tags;
     const tags = Array.isArray(itemTags)

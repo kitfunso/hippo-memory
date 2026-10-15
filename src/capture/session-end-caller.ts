@@ -33,12 +33,15 @@ function checkedEvidence(evidence: CallerEvidence | null): CallerEvidence | null
   if (evidence === null) return null;
   const { gitRef = null, dirtyTree = null, testStatus = null } = evidence;
   // `git rev-parse HEAD` gives 40 hex, or 64 in a SHA-256 repository.
-  if (gitRef !== null && !/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(gitRef))
+  if (gitRef !== null && !/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(gitRef)) {
     throw new BadRequestError('evidence gitRef: 40 or 64 lowercase hex characters or ' + 'null');
-  if (dirtyTree !== null && dirtyTree !== true && dirtyTree !== false)
+  }
+  if (dirtyTree !== null && dirtyTree !== true && dirtyTree !== false) {
     throw new BadRequestError('evidence dirtyTree: true, false or null');
-  if (testStatus !== null && !TEST_STATUSES.has(testStatus))
+  }
+  if (testStatus !== null && !TEST_STATUSES.has(testStatus)) {
     throw new BadRequestError('evidence testStatus: pass, fail, unknown or null');
+  }
   return { gitRef, dirtyTree, testStatus };
 }
 

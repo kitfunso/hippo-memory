@@ -69,8 +69,9 @@ function copyMissingRows(localRoot: string, globalRoot: string, includeCrossProj
       // down.
       if (!entry || localText.has(textKey(entry))) continue;
       if (detectSecret(entry).flagged) continue;
-      if (!includeCrossProject && classifyOriginProject(entry.origin_project, currentProject) === 'cross-project')
+      if (!includeCrossProject && classifyOriginProject(entry.origin_project, currentProject) === 'cross-project') {
         continue;
+      }
       if (put(entry)) localText.add(textKey(entry));
       else rejected++;
     }

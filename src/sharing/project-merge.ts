@@ -100,8 +100,9 @@ export function listProjects(store: ProjectTagReads): ProjectSummary[] {
 
 /** Refuses user-global and unknown: they are not projects, and folding them would leak or hide every row. */
 export function validateMergeNames(from: string, into: string): string | null {
-  if (from.trim() === '' || into.trim() === '')
+  if (from.trim() === '' || into.trim() === '') {
     return 'both project names are required; user-global and unknown rows cannot be merged';
+  }
   if (from === into) return `${from} is already ${into}`;
   return null;
 }
@@ -200,10 +201,11 @@ function strayImports(store: ProjectTagReads, hippoRoot: string): MemoryEntry[] 
     // the id.
     const [names] = ids.values();
     const own = new Set([...names, ...foldedInto(edges, names)]);
-    for (const origin of new Set([...origins, ...own]))
+    for (const origin of new Set([...origins, ...own])) {
       (own.has(origin) ? right : wrong).add(
         containerPrefix('claude-code', containerId(dir, 'project', platform, origin)),
       );
+    }
   }
   const prefix = (e: MemoryEntry) => e.source.slice(0, e.source.indexOf('/', tool.length) + 1);
   const misfiled = live.filter((e) => wrong.has(prefix(e)));
@@ -222,13 +224,15 @@ function planFolds(
 ): Pick<RepairResult, 'folds' | 'collisions'> {
   // A name someone merged into by hand stays: undoing their choice would rest on the resolver alone.
   const chosen = new Set(store.auditEvents('project_merge').map((e) => e.metadata.into));
-  if (!isGlobalStoreRoot(hippoRoot))
+  if (!isGlobalStoreRoot(hippoRoot)) {
     return { folds: ownLegacyFold(store, hippoRoot).filter((f) => !chosen.has(f.from)), collisions: [] };
+  }
   const rows = store.compactionOriginsWithCwd();
   const today = new Map<string, Set<string>>();
   for (const { origin, cwd } of rows) {
-    if (fs.existsSync(cwd))
+    if (fs.existsSync(cwd)) {
       today.set(origin, (today.get(origin) ?? new Set<string>()).add(resolveProjectIdentity(cwd).name));
+    }
   }
   const folds: ProjectFold[] = [];
   const collisions: ProjectCollision[] = [];

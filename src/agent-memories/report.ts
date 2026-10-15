@@ -145,11 +145,12 @@ export function detailLines(report: ImportReport, dryRun: boolean): string[] {
     }
     const moved = TALLY_FIELDS.filter((f) => t.tally[f] > 0).map((f) => `${t.tally[f]} ${TALLY_WORDS[f]}`);
     if (moved.length > 0) lines.push(`    ${dryRun ? 'would be ' : ''}${moved.join(', ')}`);
-    if (t.unlisted > 0)
+    if (t.unlisted > 0) {
       lines.push(
         `    ${plural(t.unlisted, 'kept row sits', 'kept rows sit')} in folders not listed this run (a moved ` +
         `project's old copy)`,
       );
+    }
   }
   return lines;
 }

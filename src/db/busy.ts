@@ -35,8 +35,9 @@ export function execWithBusyRetry(db: DatabaseSyncLike, sql: string, timeoutMs =
 const SAVEPOINT_NAME_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
 function assertSavepointName(name: string): void {
-  if (!SAVEPOINT_NAME_RE.test(name))
+  if (!SAVEPOINT_NAME_RE.test(name)) {
     throw new Error(`invalid savepoint name ${JSON.stringify(name)}: use letters, digits and _ only`);
+  }
 }
 
 function undoScope(db: DatabaseSyncLike, top: boolean, name: string): void {
