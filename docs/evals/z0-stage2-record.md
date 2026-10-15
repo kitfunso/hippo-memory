@@ -284,6 +284,16 @@ The runner is unchanged. `launch-run.ps1 -ApiRoute` passes `ANTHROPIC_BASE_URL` 
 
 The proxy tallies each reply's usage at Opus 5.5 list prices. On a test call its figure matched Claude Code's `total_cost_usd` ($0.378). At $150, or when the credit balance runs out, it answers 429 `rate_limit_error`, so the runner waits instead of grading empty sessions. Writing `plan` to its mode file sends traffic back through the plan login. The account's limits read 10,000 requests, 10M input tokens and 2M output tokens a minute.
 
+## S7: the Console-route chunks
+
+`cal-cj4` recorded all 140 sessions by about 04:55 UTC on 2026-10-15, at $41.93 by its records. No sequence was voided for a leak and no session is invalid, so the seed 1 leak in `cal-cj` did not recur. hook-check found one failed hippo hook in each memory arm, both in seed 1: an A2 prompt hook cancelled at 11.1 s (1 of A2's 69 hippo hooks) and an A5 start hook cancelled at 5.7 s (1 of 34). Both sessions are listed as G1 delivery voids.
+
+Its G5 regrade started next. Claude Code's low-memory reaper stopped it at about 05:51 UTC, and it resumed at about 06:00 UTC from its own ledger (`g5/regrade.jsonl`), so no regraded record was lost.
+
+The Metrolist set X chunk did not start the first time (`cal-ml`, about 05:50 UTC). The runner refused it because the pins file had no Codex version or model, and set X runs Codex. `pins-cb656ba4-x.json` adds `codexVersion` "codex-cli 0.153.4" and `codexModel` "gpt-5.6-sol" to the calibration pins and changes nothing else. `cal-ml2` started on it at about 06:02 UTC.
+
+The Console credit has $150 of room for Z0. A detached guard (`C:/z0-runs/api-route/flip-to-plan.ps1`) reads the proxy's tally each minute and writes `plan` to its mode file at $145. From then on, new requests go through the plan login at no cost. Until its weekly reset (17 October, 05:00 London time) the runner waits there, as `cb656ba4` makes it, and then runs on. The model and pins are the same on both routes.
+
 ## Contract limits found
 
 - A checker's `CHECK_POST_COMMIT` is a state commit whose parent is the pre-session commit, so the agent's own commits are not visible to it. Commit-message rules are checked from the `git commit` commands in `CHECK_COMMANDS`.
