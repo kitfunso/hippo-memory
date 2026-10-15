@@ -1,7 +1,7 @@
 // Request context (caller identity and tenant) shared by every API module, plus the recall contract error.
 
 import { BadRequestError, ForbiddenError } from '../core/api-errors.js';
-import type { HippoStore } from '../store/index.js';
+import type { HippoStore, StoreGroup, StoreWith } from '../store/index.js';
 
 /** Actor identity + role for a Context: the audit-log subject (pass `ctx.actor.subject` to audit helpers) and the role
  *  for admin gating.
@@ -32,6 +32,9 @@ export type HippoDbContext = Context & { store?: undefined };
 /** A Context whose store a composition root already built; every
  * api function that reads or writes the store takes this. */
 export type StoreContext = Context & { readonly store: HippoStore };
+
+/** A Context whose store a gate proved holds `G`; the api function reads `ctx.store.<group>` directly. */
+export type ContextWith<G extends StoreGroup> = Context & { readonly store: StoreWith<G> };
 
 /** Builds process-local Actor values (admin and host admin) for CLI and CLI-run connector Contexts; Bearer-authed
  * callers build Actor from the api_keys row instead. */

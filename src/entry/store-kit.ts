@@ -5,6 +5,7 @@
 // An add-on serves from another database by passing serve() its own HippoStore.
 export {
   hasGroup,
+  narrowStore,
   sqliteStore,
   type AmbientCandidateRequest,
   type ContextReads,
@@ -27,6 +28,7 @@ export {
   type SelfKeyMint,
   type StoreGroup,
   type StoreGroups,
+  type StoreWith,
   type SupersedeWrite,
   type VectorReads,
   type VectorBackfillQuery,
@@ -40,7 +42,7 @@ export { entryAfterOutcome } from '../core/memory.js';
 export { rejectionDigest } from '../store/rejection.js';
 export { RejectedValueError } from '../core/api-errors.js';
 export { ownScopeTouches } from '../core/recall-scope.js';
-export type { HippoDbContext } from '../api/types.js';
+export type { ContextWith, HippoDbContext } from '../api/types.js';
 export type { ApiKeyListItem, ApiKeyListRow, ApiKeyRecord, ListApiKeysOpts, NewApiKey } from '../store/auth.js';
 export type { KeysetPosition } from '../util/keyset.js';
 // The types HippoStore's methods take and return, so an add-on store can implement them from this subpath.

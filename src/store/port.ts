@@ -730,6 +730,15 @@ export function requireGroup<G extends keyof StoreGroups>(store: HippoStore, gro
   return methods;
 }
 
+/** A store a gate proved holds `G`, so a handler reads `store.<group>` with no run-time check. */
+export type StoreWith<G extends StoreGroup> = HippoStore & Pick<StoreGroups, Exclude<G, 'base'>>;
+
+/** The one run-time check behind a `StoreWith`: throws StoreNotPortedError for the first missing group. */
+export function narrowStore<G extends StoreGroup>(store: HippoStore, ...groups: readonly [G, ...G[]]): StoreWith<G> {
+  for (const group of groups) if (!hasGroup(store, group)) throw new StoreNotPortedError(store.kind, group);
+  return store as StoreWith<G>;
+}
+
 export const STORE_BUSY_MESSAGE = 'store busy (another hippo process holds the write lock); retry shortly';
 
 /** A store behind the port throws this when its lock wait runs
