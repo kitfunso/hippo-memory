@@ -15,15 +15,15 @@ import {
 import { recordTokens } from './tokens.js';
 import type { Context, StoreContext } from './types.js';
 
-/** How one surface's recall is recorded. The surfaces differ in these three values and in the list they hand over,
- * nowhere else. */
+/** How one surface's recall is recorded. The surfaces differ in
+ * these three values and in the list they hand over, nowhere else. */
 export interface RecallRecording {
   /** Whose session rings the recall reads and feeds. */
   readonly ring: RecallSurface;
   /** The label of its token ledger row. */
   readonly ledger: TokenSurface;
-  /** 'every': an empty list still reaches the stats write, which then only rewrites stats.json; 'shown': an empty list
-   * skips it. */
+  /** 'every': an empty list still reaches the stats write, which
+   * then only rewrites stats.json; 'shown': an empty list skips it. */
   readonly stats: 'every' | 'shown';
 }
 
@@ -79,8 +79,8 @@ export async function recordShownRecall(
   how: RecallRecording,
   shown: ShownList,
 ): Promise<void> {
-  // A surface that only peeked has its ring created here, after the write, so a recall that fails cannot LRU-evict a
-  // live session.
+  // A surface that only peeked has its ring created here, after the
+  // write, so a recall that fails cannot LRU-evict a live session.
   const ring = sessionRing(how.ring, ctx.tenantId, shown.sessionId);
   if (ring) noteRecall(ring, shown.query, shown.topId, shown.anchoredOn);
   // A recall with no audit row counts nothing, as it strengthens and traces nothing.

@@ -46,14 +46,14 @@ export interface RememberOpts {
   event?: ConnectorEvent;
   /** Connector-ingested content an agent doesn't control; gates detectInstruction. CLI/HTTP/MCP never set this. */
   untrusted?: boolean;
-  /** The caller's project: its name becomes the row's origin. Without it the store's fallback applies (NULL on a shared
-   * store). */
+  /** The caller's project: its name becomes the row's origin. Without
+   * it the store's fallback applies (NULL on a shared store). */
   project?: { readonly name: string; readonly aliases?: readonly string[] };
   /** Store it in the caller's own personal scope, readable by its owner alone in every project; needs an owner on the
    * actor and no `scope`. */
   personal?: boolean;
-  /** Never set from a request body: a route or tool that copied it would let a client pin a row or pick its layer and
-   * source. */
+  /** Never set from a request body: a route or tool that copied it
+   * would let a client pin a row or pick its layer and source. */
   local?: RememberLocal;
 }
 
@@ -73,8 +73,8 @@ export interface RememberResult {
   duplicate?: { memoryId: string | null };
 }
 
-/** The scope a write lands in: the caller's own personal scope when asked for, else the client's, which may not be a
- * personal one. */
+/** The scope a write lands in: the caller's own personal scope when
+ * asked for, else the client's, which may not be a personal one. */
 function rememberScope(ctx: Context, opts: RememberOpts): string | null {
   if (!opts.personal) {
     assertClientScope(opts.scope);
@@ -123,8 +123,8 @@ function prepareRemember(ctx: Context, opts: RememberOpts): PreparedRemember {
     baseHalfLifeDays: loadConfig(ctx.hippoRoot).defaultHalfLifeDays,
   });
   const entry = local.weaken ? weakened(created, local.weaken) : created;
-  // Aliases only widen what a reader matches; a row has one origin. A personal row's '' follows its owner into every
-  // project.
+  // Aliases only widen what a reader matches; a row has one origin.
+  // A personal row's '' follows its owner into every project.
   const origin = opts.personal ? '' : opts.project?.name;
   const stamped = origin !== undefined ? { ...entry, origin_project: origin } : entry;
   return { entry: stamped, requestedScope, detection, warnings: vetted.warnings };

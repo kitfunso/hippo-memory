@@ -21,8 +21,8 @@ function keyIdOfSubject(subject: string): string | null {
 
 export interface AuthCreateOpts {
   label?: string;
-  /** Defaults to `'member'`, which admin-gated routes such as `POST /v1/sleep` refuse; an admin key has to be asked for
-   * by name. */
+  /** Defaults to `'member'`, which admin-gated routes such as
+   * `POST /v1/sleep` refuse; an admin key has to be asked for by name. */
   role?: 'admin' | 'member';
   /** Days until the key expires: above 0 and at most 3650. Defaults to 90. */
   ttlDays?: number;
@@ -40,9 +40,9 @@ export interface AuthCreateResult {
   expiresAt: string | null;
 }
 
-/** Mints a key always bound to `ctx.tenantId`; opts cannot override the tenant, or tenant A could mint a key for tenant
- * B. Admin only (ForbiddenError otherwise), and a key never outranks its minter: a resolver admin is tenant-only, so it
- * mints members. */
+/** Mints a key always bound to `ctx.tenantId`; opts cannot override the tenant, or
+ * tenant A could mint a key for tenant B. Admin only (ForbiddenError otherwise), and a
+ * key never outranks its minter: a resolver admin is tenant-only, so it mints members. */
 export async function authCreate(ctx: StoreContext, opts: AuthCreateOpts): Promise<AuthCreateResult> {
   // The key and its auth_create row commit together on every store, so a failed audit write leaves no key.
   const keyWrites = requireGroup(ctx.store, 'keyWrites');
@@ -173,8 +173,8 @@ export async function authListRows(ctx: StoreContext, opts: KeyListOpts): Promis
   return listRows(ctx, ctx.store, opts);
 }
 
-/** Every tenant's keys in the store, live ones only unless `active` is false; the host's own view, so the host admin
- * only. */
+/** Every tenant's keys in the store, live ones only unless
+ * `active` is false; the host's own view, so the host admin only. */
 export function authListAllTenants(ctx: Context, active: boolean): ApiKeyListItem[] {
   requireHostAdmin(ctx, "Listing every tenant's keys");
   return listApiKeys(ctx.hippoRoot, { active });

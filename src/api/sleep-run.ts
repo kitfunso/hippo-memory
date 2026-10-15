@@ -62,8 +62,8 @@ interface DirtyTenantSnapshot {
   error: string | null;
 }
 
-/** `sleep` with its phase dependencies overridable; tests pass stubs here, so the seam never touches the public
- * `SleepOpts`. */
+/** `sleep` with its phase dependencies overridable; tests pass
+ * stubs here, so the seam never touches the public `SleepOpts`. */
 export async function runSleep(
   ctx: StoreContext,
   opts: SleepOpts,
@@ -293,8 +293,8 @@ async function drainGraphQueue(
 
 type GraphTotals = NonNullable<SleepResult['graph']>;
 
-/** Rebuilds one dirty tenant's graph into `rebuilt` and drains its queue; a failure is a detail line and the tenant
- * stays pending. */
+/** Rebuilds one dirty tenant's graph into `rebuilt` and drains its
+ * queue; a failure is a detail line and the tenant stays pending. */
 async function rebuildDirtyTenant(
   ctx: StoreContext,
   phases: SleepPhases,
@@ -361,8 +361,8 @@ async function emitSleepAudit(
       triggeredByTenant: ctx.tenantId, // preserve for audit forensics
     };
     if (phaseError) sleepAuditMetadata.errorMessage = phaseError.message;
-    // A flush stopped between chunks names the unit it would have committed next, so a unit that fails every night can
-    // be found.
+    // A flush stopped between chunks names the unit it would have
+    // committed next, so a unit that fails every night can be found.
     const nextUnitIds = failedUnitOf(phaseError);
     if (nextUnitIds) sleepAuditMetadata.nextUnitIds = nextUnitIds;
     await ctx.store.appendAuditEvents([{

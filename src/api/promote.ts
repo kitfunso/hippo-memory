@@ -30,8 +30,8 @@ export function promote(
     throw new NotFoundError(`memory not found: ${id}`);
   }
 
-  // The 'promote' row commits with the global copy, so no write follows the commit and a busy store fails the whole
-  // promote.
+  // The 'promote' row commits with the global copy, so no write
+  // follows the commit and a busy store fails the whole promote.
   const globalEntry = promoteToGlobal(ctx.hippoRoot, id, {
     actor: ctx.actor.subject,
     tenantId: ctx.tenantId,
@@ -48,8 +48,8 @@ export interface SupersedeResult {
   oldId: string;
   newId: string;
 }
-/** What the successor takes instead of the old row's value. Never set from a request body: the CLI fills it from its
- * flags. */
+/** What the successor takes instead of the old row's value. Never
+ * set from a request body: the CLI fills it from its flags. */
 export interface SupersedeOverrides {
   layer?: Layer;
   tags?: string[];

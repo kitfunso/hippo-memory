@@ -58,8 +58,8 @@ export interface AssembleResult {
   sessionId: string;
   items: AssembledContextItem[];
   tokens: number;
-  /** Tenant + scope-filtered raw row count, uncapped by `rowCap`, so "session has N msgs" stays accurate for a windowed
-   * items[]. */
+  /** Tenant + scope-filtered raw row count, uncapped by `rowCap`,
+   * so "session has N msgs" stays accurate for a windowed items[]. */
   totalRaw: number;
   summarized: number;
   evicted: number;

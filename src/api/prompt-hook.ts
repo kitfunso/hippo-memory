@@ -87,8 +87,8 @@ export function startToolFailureRecorder(
   }
 }
 
-/** With `write`, stores on the token ledger's connection (same store); without it, opens its own. A second flush is a
- * no-op. */
+/** With `write`, stores on the token ledger's connection (same
+ * store); without it, opens its own. A second flush is a no-op. */
 export function flushDeliveryRecorder(rec: DeliveryRecorder | null, write?: DeliveryWrite): void {
   if (rec === null) return;
   try {
@@ -118,8 +118,8 @@ export interface ContextView {
   readonly envelope?: HookEnvelope;
 }
 
-/** `copilot-session-start` is the Copilot harness's top-level reply, `vscode-session-start` the nested one VS Code
- * Local reads. */
+/** `copilot-session-start` is the Copilot harness's top-level reply,
+ * `vscode-session-start` the nested one VS Code Local reads. */
 export type HookEnvelope = 'user-prompt-submit' | 'copilot-session-start' | 'vscode-session-start';
 
 /** A Copilot sessionStart reply's wrapper, picked by the sender's casing: stdin.ts keeps a camelCase `sessionId`, which
@@ -308,8 +308,8 @@ const HOOK_FRAMING = 'observe';
 // blockHash's shape (token-ledger.ts).
 const BLOCK_HASH_RE = /^[0-9a-f]{16}$/;
 
-/** The project a hook caller runs in: its id, the folder name its older rows carry, and any other names it resolves
- * to. */
+/** The project a hook caller runs in: its id, the folder name
+ * its older rows carry, and any other names it resolves to. */
 export interface CallerProject {
   readonly name: string;
   readonly legacyName: string;
@@ -320,8 +320,8 @@ export interface PromptHookRequest {
   readonly sessionId: string;
   readonly project: CallerProject;
   readonly payload?: Readonly<Record<string, JsonValue>>;
-  /** The staticHash of the last reply whose stdout the caller printed in this session; absent, the block is always
-   * sent. */
+  /** The staticHash of the last reply whose stdout the caller
+   * printed in this session; absent, the block is always sent. */
   readonly printedHash?: string;
 }
 

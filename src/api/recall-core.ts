@@ -1,5 +1,5 @@
-// The CLI ranking core as a ranker of retrieve(): rank, let the caller pick the list it shows, then record that list
-// once.
+// The CLI ranking core as a ranker of retrieve(): rank, let the
+// caller pick the list it shows, then record that list once.
 
 import { ForbiddenError } from '../core/api-errors.js';
 import { reportAuditWriteFailure, type AppendAuditOpts } from '../store/audit.js';
@@ -87,8 +87,8 @@ interface ShownRanking {
   readonly planningAudit: AppendAuditOpts | undefined;
 }
 
-/** Audit rows first: a recall they cannot be written for leaves no strengthen, trace, marker or count, as under the
- * other rankers. */
+/** Audit rows first: a recall they cannot be written for leaves no
+ * strengthen, trace, marker or count, as under the other rankers. */
 async function recordShown(
   ctx: StoreContext,
   store: HippoStore,

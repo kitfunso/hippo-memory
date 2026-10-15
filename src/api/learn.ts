@@ -1,5 +1,5 @@
-// Git auto-learn: fix/revert/bug commit subjects become memories. `hippo learn`, init, sleep and MCP hippo_learn share
-// it.
+// Git auto-learn: fix/revert/bug commit subjects become memories.
+// `hippo learn`, init, sleep and MCP hippo_learn share it.
 
 import { ForbiddenError } from '../core/api-errors.js';
 import { fetchGitLog, extractLessons, partitionLessons, isGitRepo } from '../learn/autolearn.js';
@@ -80,8 +80,8 @@ export async function learn(ctx: StoreContext, opts: LearnOpts): Promise<LearnRe
 
 interface QueuedLesson { entry: MemoryEntry; key: string }
 
-/** Where a batch writes and what it has learned so far: `live` and `keys` follow every write, so a later lesson matches
- * against them. */
+/** Where a batch writes and what it has learned so far: `live` and
+ * `keys` follow every write, so a later lesson matches against them. */
 interface LessonBatch {
   readonly ctx: Context;
   readonly writes: LessonWrites;
@@ -114,8 +114,8 @@ async function landLessons(batch: LessonBatch, queued: readonly QueuedLesson[]):
   for (const entry of landed) void embedMemory(ctx.hippoRoot, entry, undefined, ctx.store);
 }
 
-/** The duplicate keys a batch skips: every readable row's with `existing`, else only the rows holding a lesson's
- * longest word. */
+/** The duplicate keys a batch skips: every readable row's with
+ * `existing`, else only the rows holding a lesson's longest word. */
 async function knownKeys(
   ctx: StoreContext,
   writes: LessonWrites,
@@ -159,11 +159,11 @@ async function writeLessons(
   const { profile } = opts;
   const store = ctx.store;
   const writes = requireGroup(store, 'lessonWrites');
-  // `hippo init` calls this outside any request, so the batch brings its own scope: every read and write below shares
-  // one handle.
+  // `hippo init` calls this outside any request, so the batch brings
+  // its own scope: every read and write below shares one handle.
   return runWithRequestStores(async () => {
-    // One read serves the batch: invalidation matches against `live`, which follows every write below, as a reload per
-    // lesson did.
+    // One read serves the batch: invalidation matches against `live`,
+    // which follows every write below, as a reload per lesson did.
     const live = profile.full ? await writes.tenantEntries(tenantId) : [];
     // Schema fit needs every row; without it, only rows holding a lesson's longest word can be its copy. Learn is
     // host-admin only, so both read what an admin can.
@@ -198,8 +198,8 @@ async function writeLessons(
 
 export type { InvalidationOptions, InvalidationResult, InvalidationTarget };
 
-/** `hippo invalidate`: weakens the caller's tenant's memories that reference `target.from`, or only the one
- * `options.onlyId` names. */
+/** `hippo invalidate`: weakens the caller's tenant's memories that
+ * reference `target.from`, or only the one `options.onlyId` names. */
 export function invalidateMemories(
   ctx: Context,
   target: InvalidationTarget,

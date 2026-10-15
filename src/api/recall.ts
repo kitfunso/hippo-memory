@@ -78,8 +78,8 @@ export async function retrieve(ctx: StoreContext, opts: RecallOpts): Promise<Rec
   return result;
 }
 
-/** What the band ranker hands to the record: the rows it returns, and the continuity block the reply carries beside
- * them. */
+/** What the band ranker hands to the record: the rows it returns,
+ * and the continuity block the reply carries beside them. */
 function shownBand(opts: RecallOpts, result: RecallResult): ShownList {
   return {
     query: opts.query,
@@ -173,8 +173,8 @@ function recallVectorSpec(ctx: StoreContext, opts: RecallOpts, own: string | und
 // Tag, pin and recency boosts can lift a row from deep in the BM25 order, so MCP ranks a wide lexical window.
 const SHOW_RANKED_LEXICAL_WINDOW = 1000;
 
-/** `retrieve` under `showRanked`: physics when `mode` says so, hybrid otherwise, over a wide lexical window plus the
- * nearest vectors. */
+/** `retrieve` under `showRanked`: physics when `mode` says so, hybrid
+ * otherwise, over a wide lexical window plus the nearest vectors. */
 async function retrieveFromStore(
   ctx: StoreContext,
   opts: RecallOpts,
@@ -207,7 +207,7 @@ async function retrieveFromStore(
     { ranked, pool: withVectorCandidates(pool, ranked), droppedByScope: loaded.length - pool.length },
     result,
   );
-  const { shownRow, trace } = shownRecallRows(ctx, opts, shown.ids, ranked);
+  const { shownRow, trace } = shownAuditAndTrace(ctx, opts, shown.ids, ranked);
   await finishBandRecall(
     store,
     ctx,
@@ -246,7 +246,7 @@ function withVectorCandidates(pool: MemoryEntry[], ranked: RankedResults): Memor
   return [...pool, ...ranked.map((r) => r.entry).filter((e) => !inPool.has(e.id))];
 }
 
-function shownRecallRows(ctx: StoreContext, opts: RecallOpts, shownIds: readonly string[], ranked: RankedResults) {
+function shownAuditAndTrace(ctx: StoreContext, opts: RecallOpts, shownIds: readonly string[], ranked: RankedResults) {
   const scores = new Map(ranked.map((r) => [r.entry.id, r.score]));
   const shownRow = recallAuditRow(callerOf(ctx), 'recall', undefined, recallAuditMetadata(opts.query, shownIds.length));
   const trace = opts.suppressRecallTrace
@@ -559,8 +559,8 @@ function substituteOverflow(
   }));
 }
 
-/** Overflowed leaf rows by summary parent, kept only for a parent with 2+ of them that is not already in the base
- * band. */
+/** Overflowed leaf rows by summary parent, kept only for a
+ * parent with 2+ of them that is not already in the base band. */
 function overflowGroups(window: CandidateWindow, limit: number): Map<string, MemoryEntry[]> {
   // The goal boost only re-scores the base band, so its ids are known before the boost runs.
   const baseIds = new Set(window.baseSlice.map((e) => e.id));

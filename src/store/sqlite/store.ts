@@ -38,20 +38,20 @@ import { loadRecallEntries } from '../search-rows.js';
 import { type ContinuityKey, listSessionEvents, loadActiveTaskSnapshot } from '../sessions.js';
 import { entriesWithoutVectorAt, loadStoredVectorViews, writeVectorsAt } from '../vector-index.js';
 
-/** `ctx` with its store filled: the one it carries, else hippo.db under its root, for a public entry whose SDK caller
- * gave none. */
+/** `ctx` with its store filled: the one it carries, else hippo.db
+ * under its root, for a public entry whose SDK caller gave none. */
 export function withStore<C extends { readonly hippoRoot: string; readonly store?: HippoStore }>(
   ctx: C,
 ): C & { readonly store: HippoStore } {
   return { ...ctx, store: ctx.store ?? sqliteStore(ctx.hippoRoot) };
 }
 
-/** Not on the synchronous store: the nearest-row scan yields to the event loop, so this group answers only through
- * Promises. */
+/** Not on the synchronous store: the nearest-row scan yields to
+ * the event loop, so this group answers only through Promises. */
 type AsyncOnly = 'vectors';
 
-/** The port as hippo.db answers it: each call runs to its end and returns the value, so no write scope spans an
- * await. */
+/** The port as hippo.db answers it: each call runs to its end
+ * and returns the value, so no write scope spans an await. */
 export type SqliteSyncStore = Sync<Omit<HippoStore, AsyncOnly>>;
 
 /** The built-in store: hippo.db under the port's own method names, each call on its own short-lived handles, so close

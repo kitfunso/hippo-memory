@@ -112,8 +112,8 @@ function resolved(tenantId: string, id: number, written: Incident | ObjectRefusa
   );
 }
 
-/** Moves an open incident to resolved and keeps it on record; a missing incident and one that is not open are told
- * apart. */
+/** Moves an open incident to resolved and keeps it on record;
+ * a missing incident and one that is not open are told apart. */
 export async function resolveOpenIncident(
   objects: Objects,
   tenantId: string,

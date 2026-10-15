@@ -24,8 +24,8 @@ export async function forget(ctx: StoreContext, id: string): Promise<ForgetResul
   return { ok: true, id };
 }
 
-// Reject administration is Context-based and tenant-checked; it shares one transaction flow with `hippo reject` via
-// src/trust/reject-flow.ts.
+// Reject administration is Context-based and tenant-checked; it shares
+// one transaction flow with `hippo reject` via src/trust/reject-flow.ts.
 
 export interface RejectOpts {
   /** By-id form: reject the CURRENT content of an existing memory. */

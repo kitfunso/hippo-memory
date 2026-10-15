@@ -180,8 +180,8 @@ async function importVaultNote(run: VaultImportRun, relpath: string): Promise<vo
   const artifactRef = `vault:${run.vaultName}:${relpath}`;
   run.seen.add(artifactRef);
 
-  // The content hash covers the RAW file bytes (deterministic, no Date/random) so frontmatter edits are idempotent like
-  // body edits.
+  // The content hash covers the RAW file bytes (deterministic, no
+  // Date/random) so frontmatter edits are idempotent like body edits.
   const rawFileContent = readVaultNote(run, relpath);
   if (rawFileContent === null) return;
   const hash = createHash('sha256').update(rawFileContent).digest('hex');
@@ -247,8 +247,8 @@ function readVaultNote(run: VaultImportRun, relpath: string): string | null {
   try {
     return fs.readFileSync(path.join(run.folderPath, relpath), 'utf8');
   } catch (err) {
-    // One unreadable note (gone since the listing, or a transient IO error) must not abort the import; a re-run picks
-    // it up.
+    // One unreadable note (gone since the listing, or a transient
+    // IO error) must not abort the import; a re-run picks it up.
     log.warnThenDebug(
       `vault-note-skipped:${run.folderPath}`,
       `vault note skipped: ${relpath}: ${errorMessage(err)}`,
@@ -309,8 +309,8 @@ async function storeVaultNote(
   tags: string[],
   artifactRef: string,
 ): Promise<boolean> {
-  // A dry run writes nothing; it asks the guard remember() uses, so its `rejected` count matches what a real run would
-  // refuse.
+  // A dry run writes nothing; it asks the guard remember() uses,
+  // so its `rejected` count matches what a real run would refuse.
   if (run.dryRun) return !rejectionGuardRefuses(run.ctx.hippoRoot, run.ctx.tenantId, echo.id, echo.content);
   try {
     // A rejected note must not stop the scan or the deletion sync. Its priors are archived by now, so a rerun meets

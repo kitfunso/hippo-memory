@@ -34,8 +34,8 @@ export interface RecallOpts {
   /** Fresh tail (default 0 = off, capped at 200): prepend the last N kind='raw' rows (tenant + scope filtered, deduped
    * against BM25 hits) even when the query terms miss. */
   freshTailCount?: number;
-  /** Restricts the fresh-tail window to one session; without it the tail is tenant-wide and surfaces newest rows across
-   * ALL sessions. */
+  /** Restricts the fresh-tail window to one session; without it the
+   * tail is tenant-wide and surfaces newest rows across ALL sessions. */
   freshTailSessionId?: string;
   /** Include a continuity block (active task snapshot, latest matching handoff, recent session events); default false
    * to keep the hot path cheap. With no active snapshot, sessionHandoff is null and recentSessionEvents is [], so a
@@ -81,15 +81,15 @@ export interface RecallOpts {
 
 interface CliCoreRanking {
   rank: Omit<RankRecallOpts, 'query' | 'sessionId' | 'goalTag'>;
-  /** A second store searched beside `ctx.hippoRoot`: ranking reads hippo.db under `globalRoot`, and its recall rows go
-   * to `globalStore`. */
+  /** A second store searched beside `ctx.hippoRoot`: ranking reads
+   * hippo.db under `globalRoot`, and its recall rows go to `globalStore`. */
   sources?: { readonly globalRoot: string; readonly globalStore: HippoStore };
   /** Receives each operator note when ranking reaches it. */
   note?: (line: string) => void;
 }
 
-/** A recall the caller prints. `show` runs once ranking ends, unless it halted; `retrieve` then records the list it
- * returns. */
+/** A recall the caller prints. `show` runs once ranking ends,
+ * unless it halted; `retrieve` then records the list it returns. */
 export interface CliCoreRecall extends CliCoreRanking {
   /** The host agent's session: it stamps the token ledger row, and the trace when the recall names no session. */
   hostSessionId?: string;
@@ -121,8 +121,8 @@ export interface ShownRanking {
   audit: readonly AppendAuditOpts[];
 }
 
-/** `ranked`: every scored row, best first, goal boost applied, entries as loaded; `pool`: the store after the scope
- * filter. */
+/** `ranked`: every scored row, best first, goal boost applied,
+ * entries as loaded; `pool`: the store after the scope filter. */
 export interface StoreRanking {
   ranked: SearchResult[];
   pool: MemoryEntry[];
@@ -143,8 +143,8 @@ export interface RecallResultItem {
   substitutedFor?: string[];
   /** Cached descendant count from schema v25; non-zero for level-2+ rows. */
   descendantCount?: number;
-  /** True for rows from the most-recent-N kind='raw' window rather than the BM25 match; render them in a separate
-   * "recent" band. */
+  /** True for rows from the most-recent-N kind='raw' window rather
+   * than the BM25 match; render them in a separate "recent" band. */
   isFreshTail?: boolean;
   /** Ordered lifecycle re-ranking steps that mutated this row's `score` after candidate generation (on the api
    * pipeline, only goal-boost). Populated ONLY when `RecallOpts.explain` is set; absent otherwise. */

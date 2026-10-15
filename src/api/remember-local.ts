@@ -21,8 +21,8 @@ export interface LocalRememberInput {
   readonly content: string;
   /** Every tag the row stores; the salience gate reads these. */
   readonly tags: readonly string[];
-  /** The tags schema fit is scored on, for a caller that added path and scope tags of its own to `tags`; without it,
-   * `tags`. */
+  /** The tags schema fit is scored on, for a caller that added
+   * path and scope tags of its own to `tags`; without it, `tags`. */
   readonly fitTags?: readonly string[];
   readonly kind?: MemoryKind;
   readonly scope?: string;
@@ -54,8 +54,8 @@ export type LocalRememberOutcome =
     }
   | { readonly status: 'skipped'; readonly reason: string; readonly score: number };
 
-/** The gate's verdict on one write, or null where it does not judge: the store has it off, or the write is pinned or
- * forced. */
+/** The gate's verdict on one write, or null where it does not
+ * judge: the store has it off, or the write is pinned or forced. */
 function salienceVerdict(ctx: StoreContext, input: LocalRememberInput): SalienceResult | null {
   const { salience } = loadConfig(ctx.hippoRoot);
   if (!salience.enabled || input.pinned || input.force) return null;
@@ -73,16 +73,16 @@ function salienceVerdict(ctx: StoreContext, input: LocalRememberInput): Salience
   });
 }
 
-/** The row `remember` just wrote, as the store holds it: the report, the embedding and the extraction all work on
- * that. */
+/** The row `remember` just wrote, as the store holds it: the
+ * report, the embedding and the extraction all work on that. */
 function storedEntry(ctx: StoreContext, id: string): MemoryEntry {
   const entry = readEntry(ctx.hippoRoot, id, ctx.tenantId);
   if (!entry) throw new Error(`memory ${id} was written but cannot be read back`);
   return entry;
 }
 
-/** Best-effort and slow (a model load or a network call), so the caller is not held for it; a row left out of the index
- * is logged. */
+/** Best-effort and slow (a model load or a network call), so the
+ * caller is not held for it; a row left out of the index is logged. */
 function indexInBackground(hippoRoot: string, entry: MemoryEntry): Promise<EmbedOutcome> {
   return embedMemory(hippoRoot, entry).then((outcome) => {
     if (outcome === 'failed') {
@@ -139,8 +139,8 @@ export type FactExtraction =
   | { readonly status: 'no_key' }
   | { readonly status: 'ran'; readonly facts: number; readonly failures: readonly string[] };
 
-/** Extracts facts from a row just stored and stores them beside it. Best-effort: a failure is named in the result,
- * never thrown. */
+/** Extracts facts from a row just stored and stores them beside it.
+ * Best-effort: a failure is named in the result, never thrown. */
 export async function extractRememberedFacts(
   ctx: StoreContext,
   entry: MemoryEntry,

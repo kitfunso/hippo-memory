@@ -102,8 +102,8 @@ function sourceOf(store: HippoStore): ContextSource {
   return { store, reads: requireGroup(store, 'contextReads') };
 }
 
-/** What one store's ambient read is asked for. `recent`, `recall` and `onQualityDrop` apply to the pinned-only branch
- * alone. */
+/** What one store's ambient read is asked for. `recent`, `recall`
+ * and `onQualityDrop` apply to the pinned-only branch alone. */
 interface LoadAmbientEntriesOptions {
   readonly pinnedOnly: boolean;
   readonly recent: RecentRequest;
@@ -151,8 +151,8 @@ async function loadAmbientEntries(
     recall,
     origins: recent.origins,
   });
-  // Pins and recent rows reach core only through the store's own call to admit, so core applies it again with the
-  // tenant.
+  // Pins and recent rows reach core only through the store's own
+  // call to admit, so core applies it again with the tenant.
   const entries = loaded.entries.filter((e) => ownTenant(e) && recheck(e));
   return loaded.recall ? { entries, recall: loaded.recall.filter(ownTenant) } : { entries };
 }
@@ -230,8 +230,8 @@ function nothingToInject(plan: ContextPlan, pools: AmbientPools, noSections: boo
 
 const isolationWarned = new Set<string>();
 
-/** A laptop config copied onto a team store must not open every member's rows to every prompt, so the flag loses
- * there. */
+/** A laptop config copied onto a team store must not open every
+ * member's rows to every prompt, so the flag loses there. */
 function warnIsolationIgnored(hippoRoot: string): void {
   if (isolationWarned.has(hippoRoot)) return;
   isolationWarned.add(hippoRoot);
@@ -365,8 +365,8 @@ const NO_TASK_STATE: RawTaskState = { snapshot: null, handoff: null, events: [] 
 async function loadRawTaskState(ctx: Context, opts: ContextOpts, plan: ContextPlan): Promise<RawTaskState> {
   if (!plan.hasLocalTaskState) return NO_TASK_STATE;
   const { store, reads } = plan.local;
-  // On a shared store task state is one person's, keyed by owner and project so it follows them into their next
-  // session.
+  // On a shared store task state is one person's, keyed by owner
+  // and project so it follows them into their next session.
   const key: ContinuityKey | null = plan.sharedStore
     ? { owner: ownerOrSubject(ctx.actor), project: projectNames(plan.currentProject) }
     : null;
@@ -383,8 +383,8 @@ async function loadRawTaskState(ctx: Context, opts: ContextOpts, plan: ContextPl
   };
 }
 
-// Sections print ahead of the memories, so they are paid first; one that does not fit is dropped, as an oversize entry
-// is.
+// Sections print ahead of the memories, so they are paid first;
+// one that does not fit is dropped, as an oversize entry is.
 async function loadTaskSections(
   ctx: Context,
   opts: ContextOpts,
@@ -438,16 +438,16 @@ function ambientAdmission(opts: ContextOpts, plan: ContextPlan, shownHandoff: Se
     ownSessionId !== '' &&
     e.source_session_id === ownSessionId &&
     e.tags.includes(COMPACTION_MEMORY_TAG);
-  // Superseded rows never inject; which rows reach ambientAdmitEntry matters because it regex-scans content for
-  // secrets.
+  // Superseded rows never inject; which rows reach ambientAdmitEntry
+  // matters because it regex-scans content for secrets.
   const admit = (e: MemoryEntry): boolean => !e.superseded_by && !isOwnCompactionItem(e) && ambientAdmit(e);
   // The two-store search has always ranked a session's own compaction items; only the local search drops them.
   const bothStoresAdmit = (e: MemoryEntry): boolean => !e.superseded_by && ambientAdmit(e);
   return { ambientAdmit, admit, bothStoresAdmit };
 }
 
-/** Origins the recent backfill may read past its first window; on a shared store, only the caller's own project
- * rows. */
+/** Origins the recent backfill may read past its first window;
+ * on a shared store, only the caller's own project rows. */
 function recentOrigins(plan: ContextPlan): RecentOrigins | undefined {
   if (plan.sharedStore) return { names: projectNames(plan.currentProject).filter((n) => n !== ''), userGlobal: false };
   return plan.originProject && { names: plan.originProject, userGlobal: true };
@@ -519,8 +519,8 @@ function finalizeSelection(picked: ContextResultEntry[], plan: ContextPlan): Fin
   selected = heldDropped;
   const tokens = selected.reduce((sum, r) => sum + r.tokens, 0);
 
-  // Every returned entry carries its origin and how it relates to the active project, so renderers can mark
-  // cross-project rows.
+  // Every returned entry carries its origin and how it relates to
+  // the active project, so renderers can mark cross-project rows.
   selected = selected.map((r) => ({
     ...r,
     origin: r.entry.origin_project ?? null,
