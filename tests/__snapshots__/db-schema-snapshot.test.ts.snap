@@ -1522,7 +1522,7 @@ exports[`fresh store schema > matches the pinned sqlite_master and user_version 
           items      INTEGER NOT NULL DEFAULT 0,
           tokens     INTEGER NOT NULL DEFAULT 0,
           block_hash TEXT
-        )",
+        , sent_keys TEXT)",
       "type": "table",
     },
     {
@@ -2104,6 +2104,6 @@ exports[`fresh store schema > matches the pinned sqlite_master and user_version 
       "type": "trigger",
     },
   ],
-  "userVersion": 56,
+  "userVersion": 57,
 }
 `;

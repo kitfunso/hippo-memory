@@ -1513,7 +1513,7 @@ exports[`upgrading a populated v1 store to the latest schema > ends with the pin
           items      INTEGER NOT NULL DEFAULT 0,
           tokens     INTEGER NOT NULL DEFAULT 0,
           block_hash TEXT
-        )",
+        , sent_keys TEXT)",
       "type": "table",
     },
     {
@@ -2095,6 +2095,6 @@ exports[`upgrading a populated v1 store to the latest schema > ends with the pin
       "type": "trigger",
     },
   ],
-  "userVersion": 56,
+  "userVersion": 57,
 }
 `;

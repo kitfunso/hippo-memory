@@ -8,8 +8,8 @@ import { onHandle } from './open.js';
 import { type JsonValue, isJsonString, isJsonObjectLiteral } from '../util/json.js';
 import { DAY_MS } from '../util/time.js';
 import {
-  countSkipsAfter, deleteRereadRows, injectedBlocks, insertTokenRow, latestInjectOrReset,
-  pruneTokenRowsBefore, sessionTokenRows, sessionTotals, surfaceTotals,
+  commitPendingRow, countSkipsAfter, deleteRereadRows, injectedBlocks, insertTokenRow, latestInjectOrReset,
+  pruneTokenRowsBefore, sessionTokenRows, sessionTotals, surfaceTotals, windowRows,
 } from './token-ledger-rows.js';
 import { DATE_PREFIX_CHARS } from '../util/token-text.js';
 
@@ -59,6 +59,11 @@ export interface TokenUse {
   tokens: number;
   /** {@link blockHash} of the text, when the caller wants change detection. */
   hash?: string | null;
+  /** Keys of the sections and memories this hook call printed; set, even empty, the row is one turn of the session's
+   * send window ({@link sentInWindow}). Unset on every other row. */
+  sentKeys?: readonly string[] | null;
+  /** The keys count as sent only once the caller echoes `hash` ({@link commitPendingKeys}). */
+  pending?: boolean;
   /** Override the timestamp (tests). ISO string. */
   now?: string;
 }
@@ -66,6 +71,7 @@ export interface TokenUse {
 /** Append one ledger row and prune rows past {@link TOKEN_LEDGER_RETENTION_DAYS}. */
 export function recordTokenUse(db: DatabaseSyncLike, use: TokenUse): void {
   const now = use.now ?? new Date().toISOString();
+  const keys = use.sentKeys ? [...use.sentKeys] : null;
   insertTokenRow(db, {
     ts: now,
     tenantId: use.tenantId,
@@ -75,9 +81,53 @@ export function recordTokenUse(db: DatabaseSyncLike, use: TokenUse): void {
     items: Math.max(0, Math.round(use.items)),
     tokens: Math.max(0, Math.round(use.tokens)),
     blockHash: use.hash ?? null,
+    sentKeys: keys && JSON.stringify(use.pending ? { pending: keys } : keys),
   });
   const cutoff = new Date(Date.parse(now) - TOKEN_LEDGER_RETENTION_DAYS * DAY_MS).toISOString();
   pruneTokenRowsBefore(db, cutoff);
+}
+
+/** When a key was last sent: the 1-based turn of its sending call in the window. */
+export interface SentMark {
+  turn: number;
+}
+
+/** A session's send window on one surface: the turns since its latest `reset` and each key's last printed send. */
+export interface SendWindow {
+  /** Hook calls booked in the window; the next call's turn. */
+  turn: number;
+  sent: ReadonlyMap<string, SentMark>;
+}
+
+/** The send window of `sessionId` on `surface`. Rows with no `sentKeys` (older binaries, bypass calls) are neither
+ * turns nor marks, and pending keys count as a turn but never as sent. */
+export function sentInWindow(
+  db: DatabaseSyncLike, tenantId: string, sessionId: string, surface: TokenSurface,
+): SendWindow {
+  const rows = windowRows(db, tenantId, sessionId, surface);
+  const sent = new Map<string, SentMark>();
+  rows.forEach((row, i) => {
+    for (const key of printedKeys(row.sent_keys)) sent.set(key, { turn: i + 1 });
+  });
+  return { turn: rows.length, sent };
+}
+
+function printedKeys(text: string): string[] {
+  let value: JsonValue;
+  try {
+    // SAFETY: JSON.parse returns a JSON value by definition.
+    value = JSON.parse(text) as JsonValue;
+  } catch {
+    return []; // a torn row must never suppress a send
+  }
+  return Array.isArray(value) ? value.filter(isJsonString) : [];
+}
+
+/** Marks the keys of the newest pending row whose hash the caller echoed as printed; true when one was pending. */
+export function commitPendingKeys(
+  db: DatabaseSyncLike, tenantId: string, sessionId: string, surface: TokenSurface, hash: string,
+): boolean {
+  return commitPendingRow(db, tenantId, sessionId, surface, hash);
 }
 
 /** What a session last sent on a surface, for {@link lastSentState}. */

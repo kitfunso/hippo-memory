@@ -12,13 +12,48 @@ export interface TokenRowInput {
   items: number;
   tokens: number;
   blockHash: string | null;
+  /** JSON text: a key array once printed, `{"pending":[...]}` until the caller echoes the block hash. */
+  sentKeys: string | null;
 }
 
 export function insertTokenRow(db: DatabaseSyncLike, row: TokenRowInput): void {
   db.prepare(
-    `INSERT INTO token_ledger (ts, tenant_id, session_id, surface, event, items, tokens, block_hash)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-  ).run(row.ts, row.tenantId, row.sessionId, row.surface, row.event, row.items, row.tokens, row.blockHash);
+    `INSERT INTO token_ledger (ts, tenant_id, session_id, surface, event, items, tokens, block_hash, sent_keys)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).run(
+    row.ts, row.tenantId, row.sessionId, row.surface, row.event, row.items, row.tokens, row.blockHash, row.sentKeys,
+  );
+}
+
+export interface WindowRow {
+  id: number;
+  sent_keys: string;
+}
+
+/** The session's rows carrying sent keys on a surface after its latest reset, oldest first. */
+export function windowRows(db: DatabaseSyncLike, tenantId: string, sessionId: string, surface: string): WindowRow[] {
+  // SAFETY: the SELECT names exactly these two columns, sent_keys NOT NULL by the WHERE.
+  return db.prepare(
+    `SELECT id, sent_keys FROM token_ledger
+     WHERE tenant_id = ? AND session_id = ? AND surface = ? AND sent_keys IS NOT NULL
+       AND id > COALESCE((SELECT MAX(id) FROM token_ledger
+                          WHERE tenant_id = ? AND session_id = ? AND surface = ? AND event = 'reset'), 0)
+     ORDER BY id`,
+  ).all(tenantId, sessionId, surface, tenantId, sessionId, surface) as WindowRow[];
+}
+
+/** Turns the newest pending row whose block hash the caller echoed into a printed one; true when a row changed. */
+export function commitPendingRow(
+  db: DatabaseSyncLike, tenantId: string, sessionId: string, surface: string, blockHash: string,
+): boolean {
+  const res = db.prepare(
+    `UPDATE token_ledger SET sent_keys = json_extract(sent_keys, '$.pending')
+     WHERE id = (SELECT id FROM token_ledger
+                 WHERE tenant_id = ? AND session_id = ? AND surface = ? AND block_hash = ?
+                   AND json_valid(sent_keys) AND json_type(sent_keys, '$.pending') = 'array'
+                 ORDER BY id DESC LIMIT 1)`,
+  ).run(tenantId, sessionId, surface, blockHash);
+  return Number(res.changes ?? 0) > 0;
 }
 
 export function pruneTokenRowsBefore(db: DatabaseSyncLike, cutoffIso: string): void {
