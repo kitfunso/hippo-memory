@@ -38,6 +38,8 @@ export interface CallOptions {
   /** Epoch milliseconds by which the call's request must be answered; absent means the call waits as long as it
    * takes. */
   readonly deadlineAt?: number | undefined;
+  /** Aborts when the request is abandoned; a call still queued then is dropped and never runs. */
+  readonly signal?: AbortSignal | undefined;
 }
 
 export interface ExecutorOptions {
@@ -67,6 +69,7 @@ interface Pending {
   readonly settle: (reply: Reply) => void;
   readonly fail: (err: Error) => void;
   readonly deadlineAt: number | undefined;
+  readonly signal?: AbortSignal | undefined;
   timer: NodeJS.Timeout | undefined;
   /** Set once the caller has its answer, so nothing that happens to the job later reaches it. */
   answered: boolean;
@@ -132,7 +135,7 @@ class WorkerPool implements SqliteExecutor {
     this.#writeGraceMs = opts.writeGraceMs ?? DEFAULT_WRITE_GRACE_MS;
   }
 
-  call<T>(op: string, args: readonly unknown[], { mode, requestId, deadlineAt }: CallOptions): Promise<T> {
+  call<T>(op: string, args: readonly unknown[], { mode, requestId, deadlineAt, signal }: CallOptions): Promise<T> {
     return new Promise<T>((resolve, reject) => {
       if (this.#closed) {
         reject(new StoreBusyError(EXECUTOR_CLOSED));
@@ -161,6 +164,7 @@ class WorkerPool implements SqliteExecutor {
         settle,
         fail: reject,
         deadlineAt,
+        signal,
         timer: undefined,
         answered: false,
       };
@@ -298,7 +302,14 @@ class WorkerPool implements SqliteExecutor {
     if (lane.running !== undefined) return;
     // Setup comes first: a reader sent a job before it would open a store whose setup it cannot write.
     if (lane.mode === 'read' && this.#setup !== 'done') return;
-    const next = lane.queue.shift();
+    let next = lane.queue.shift();
+    // Its request was abandoned while it waited, so no one is left to read what it would do.
+    while (next?.signal?.aborted) {
+      workerCounts.jobsExpired += 1;
+      const dropped = next;
+      finish(dropped, () => dropped.fail(new StoreBusyError(EXPIRED_WAITING)));
+      next = lane.queue.shift();
+    }
     if (next === undefined) return;
     // Started by the first call and never at boot, so a server that only answers /health opens no thread.
     // Outside that call's request scope, or the thread's listeners would log every later event under its request id.

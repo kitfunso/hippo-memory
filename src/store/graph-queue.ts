@@ -2,7 +2,7 @@
 // drain marks them by.
 import { onHandle } from './open.js';
 import { assertTenantId } from './tenant.js';
-import { errorMessage, log } from '../util/log.js';
+import { errorMessage, log, errorFields } from '../util/log.js';
 import { type GraphQueueItem, type QueueRow, rowToQueueItem, QUEUE_COLS } from './graph-rows.js';
 import { resolveConsolidatedSource } from './graph-writes.js';
 
@@ -44,6 +44,7 @@ export function markGraphDirty(hippoRoot: string, tenantId: string, memoryId: st
     // swallowed so the already-committed object write is never rolled back.
     log.warn(
       `markGraphDirty: enqueue failed for tenant=${tenantId} memory=${memoryId}: ${errorMessage(err)}`,
+      errorFields(err),
     );
   }
 }

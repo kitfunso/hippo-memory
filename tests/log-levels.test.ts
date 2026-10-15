@@ -102,6 +102,21 @@ describe('log level filtering', () => {
   });
 });
 
+describe('warnThenSample', () => {
+  it('warns on the first failure, then again with the count on every 100th', () => {
+    process.env.HIPPO_LOG = 'warn';
+    for (let i = 0; i < 250; i++) log.warnThenSample('fts-sync', 'FTS update failed');
+    expect(lines()).toEqual([
+      `[hippo] warn: FTS update failed ts=${AT}
+`,
+      `[hippo] warn: FTS update failed (100 more since the first warning) ts=${AT}
+`,
+      `[hippo] warn: FTS update failed (200 more since the first warning) ts=${AT}
+`,
+    ]);
+  });
+});
+
 describe('log fields', () => {
   it('appends the request id and other fields as key=value, skipping undefined', () => {
     expect(formatLogLine('warn', 'boom', { requestId: 'abc-123', status: 503, extra: undefined }))

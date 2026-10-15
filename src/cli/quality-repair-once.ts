@@ -1,7 +1,7 @@
 // Sleep and the daily runner clean a store's old automatic memories once, so an upgrade needs no command.
 
 import * as path from 'path';
-import { errorMessage, log } from '../util/log.js';
+import { errorMessage, log, errorFields } from '../util/log.js';
 import { getGlobalRoot } from '../sharing/global-store.js';
 import { repairMemoryQualityOnce } from '../api/audit.js';
 import { cliApiContext } from './api-context.js';
@@ -33,6 +33,6 @@ export async function repairQualityOnceAt(root: string, tenantId: string): Promi
     }
     for (const warning of result.warnings) log.warn(warning);
   } catch (err) {
-    log.warn(`memory quality repair skipped, tried again next time: ${errorMessage(err)}`);
+    log.warn(`memory quality repair skipped, tried again next time: ${errorMessage(err)}`, errorFields(err));
   }
 }

@@ -11,7 +11,7 @@ import * as client from './client.js';
 import { type ServerInfo, detectServer, removePidfileIfOwned } from '../server/server-detect.js';
 import { learn, CLI_LEARN } from '../api/index.js';
 import { cliApiContext } from './api-context.js';
-import { errorMessage, log } from '../util/log.js';
+import { errorMessage, log, errorFields } from '../util/log.js';
 import { printError } from './output.js';
 import type { CliFlags } from './flag-values.js';
 
@@ -88,7 +88,7 @@ export async function runViaServerIfAvailable(
     const failure = err instanceof Error ? client.classifyTransportFailure(err) : 'none';
     if (failure === 'never-sent') {
       failIfServerRequired('the server pidfile was stale (connection refused)');
-      log.warn('stale server pidfile detected, falling back to direct mode');
+      log.warn('stale server pidfile detected, falling back to direct mode', errorFields(err));
       // Clear the pidfile only if it still names the dead server we just
       // probed — a newer server may have rewritten it (removePidfileIfOwned).
       removePidfileIfOwned(hippoRoot, { pid: info.pid, startedAt: info.started_at });

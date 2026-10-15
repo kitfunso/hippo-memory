@@ -18,7 +18,7 @@ describe('startDeliveryRecorder when the recorder cannot start', () => {
     const ctx = { hippoRoot: badRoot, tenantId: 'default', actor: adminActor('cli'), reach: { hasLocal: true, isGlobal: false, shared: false } };
     expect(startDeliveryRecorder(ctx, { stdinText: undefined, runtime: 'claude-code', envSessionId: undefined })).toBeNull();
     expect(err.mock.calls).toHaveLength(1);
-    expect(String(err.mock.calls[0][0])).toMatch(/^\[hippo\] warn: delivery ledger skipped: \S.* ts=\S+\n$/);
+    expect(String(err.mock.calls[0][0])).toMatch(/^\[hippo\] warn: delivery ledger skipped: \S.* ts=\S+ errorClass=\w+ stack=.*\n$/);
   });
 });
 

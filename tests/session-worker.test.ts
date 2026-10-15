@@ -90,6 +90,23 @@ describe('runSessionWorker', () => {
     expect(fs.readdirSync(sessions)).toEqual([]);
   });
 
+  it('lets only one of two acquirers in one process run at a time', async () => {
+    let active = 0;
+    let peak = 0;
+    const runs: WorkerMode[] = [];
+    const work = async (mode: WorkerMode): Promise<void> => {
+      active++;
+      peak = Math.max(peak, active);
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      runs.push(mode);
+      active--;
+    };
+    await Promise.all([runSessionWorker(ID, 'turn', work), runSessionWorker(ID, 'turn', work)]);
+    expect(peak).toBe(1);
+    expect(runs.length).toBeGreaterThanOrEqual(1);
+    expect(fs.readdirSync(sessions)).toEqual([]);
+  });
+
   it('runs a request that another reply queued while the work ran, before it lets go', async () => {
     const runs: WorkerMode[] = [];
     await runSessionWorker(ID, 'turn', async (mode) => {

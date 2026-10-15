@@ -23,6 +23,7 @@ import type { RerankStep, ResultCost, SearchResult } from '../core/search-types.
 import { rankBothStores } from '../sharing/search-both.js';
 import { loadRecallEntries, recallScopeFilter } from '../store/search-rows.js';
 import { isJsonNumber } from '../util/json.js';
+import { currentSignal } from '../util/request-scope.js';
 import { textOverlap, tokenize as tokenizeQuery } from '../util/tokenize.js';
 
 /** Stores rankRecall reads and where it sends operator notes. */
@@ -150,6 +151,8 @@ export async function rankRecall(ctx: RankRecallCtx, opts: RankRecallOpts): Prom
   });
 
   state.results = await searchPool(ctx, opts, pool);
+  // A request past its deadline during the search has no caller left for the later stages.
+  currentSignal()?.throwIfAborted();
   if (opts.haltBefore === 'expand') return done(true);
   if (opts.graphHops) expandGraph(ctx, opts, opts.graphHops, state);
   applyPfcRerankers(opts, state);

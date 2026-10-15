@@ -1,6 +1,6 @@
 // Best-effort browser launch for CLI verbs that write a file.
 import { spawn } from 'child_process';
-import { errorMessage, log } from '../util/log.js';
+import { errorMessage, log, errorFields } from '../util/log.js';
 
 /** The part of a child process the launch reads. */
 interface Launched {
@@ -44,6 +44,6 @@ export function openInBrowser(out: string, launch: Launcher = spawn): void {
     child.unref();
   } catch (err) {
     // The file is written and its path printed above, so a browser that will not start costs nothing.
-    log.debug(`browser not opened: ${errorMessage(err)}`);
+    log.debug(`browser not opened: ${errorMessage(err)}`, errorFields(err));
   }
 }

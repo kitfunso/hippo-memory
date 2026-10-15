@@ -28,7 +28,7 @@ import {
 import type { StatusCounts } from '../store/candidates.js';
 import type { Context } from '../api/types.js';
 import { cliApiContext } from './api-context.js';
-import { errorMessage, log } from '../util/log.js';
+import { errorMessage, log, errorFields } from '../util/log.js';
 import { printError } from './output.js';
 import { parseCountFlag, type CommandContext, stringFlagOrExit, flagIsTrue } from './flag-values.js';
 import { requireInit, resolveAuthRoot } from './shared.js';
@@ -140,7 +140,7 @@ function printPhysicsStatus(ctx: Context): void {
     }
   } catch (err) {
     // The physics table may not exist yet, so status prints without that line.
-    log.debug(`physics status skipped: ${errorMessage(err)}`);
+    log.debug(`physics status skipped: ${errorMessage(err)}`, errorFields(err));
   }
 }
 

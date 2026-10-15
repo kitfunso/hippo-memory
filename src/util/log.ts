@@ -92,6 +92,23 @@ function warnThenDebug(key: string, message: string, fields?: LogFields): void {
   write(sightOnceKey(key) === 'new' ? 'warn' : 'debug', message, fields);
 }
 
+const SAMPLE_EVERY = 100;
+const repeatCounts = new Map<string, number>();
+
+/** Warn the first time `key` is seen, then count repeats at debug and warn again with the running count on every
+ * 100th, so a failure that keeps happening stays visible without flooding stderr. */
+function warnThenSample(key: string, message: string, fields?: LogFields): void {
+  if (sightOnceKey(key) === 'new') {
+    write('warn', message, fields);
+    return;
+  }
+  // Counts only keys sightOnceKey recorded, so the map is bounded by ONCE_KEY_CAP.
+  const seen = (repeatCounts.get(key) ?? 0) + 1;
+  repeatCounts.set(key, seen);
+  if (seen % SAMPLE_EVERY === 0) write('warn', `${message} (${seen} more since the first warning)`, fields);
+  else write('debug', message, fields);
+}
+
 /** The class name and stack of a thrown value, as log fields; a non-Error throw has no stack. */
 export function errorFields<E>(err: E): LogFields {
   if (!(err instanceof Error)) return { errorClass: 'NonError' };
@@ -105,6 +122,7 @@ export const log = {
   debug: (message: string, fields?: LogFields): void => write('debug', message, fields),
   once,
   warnThenDebug,
+  warnThenSample,
 } as const;
 
 /** Message for a caught value of unknown shape. `cause` names the sanctioned unknown-input case (error-cause
@@ -132,5 +150,6 @@ export function errorCode(cause: unknown): string {
 /** Test hook: forget which once-keys have fired. */
 export function resetLogOnce(): void {
   onceKeys.clear();
+  repeatCounts.clear();
   onceCapReported = false;
 }

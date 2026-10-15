@@ -20,7 +20,7 @@ import { BadRequestError } from '../core/api-errors.js';
 import { isSharedStore } from '../core/config.js';
 import { configOf } from './config-of.js';
 import { rethrowIfSqliteBlocked } from '../util/sqlite-blocked.js';
-import { errorMessage, log } from '../util/log.js';
+import { errorMessage, log, errorFields } from '../util/log.js';
 import {
   resolveProjectIdentity,
   classifyOriginProject,
@@ -555,7 +555,7 @@ async function traceEmptyContext(ctx: StoreContext, opts: ContextOpts, plan: Con
     await ctx.store.finishRecall({ goalLog: [], audit: [], trace });
   } catch (error) {
     rethrowIfSqliteBlocked(error);
-    log.error(`recall trace write failed: ${errorMessage(error)}`);
+    log.error(`recall trace write failed: ${errorMessage(error)}`, errorFields(error));
   }
 }
 

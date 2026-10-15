@@ -1,4 +1,5 @@
-// The deadline of a served request: past it the caller gets a 504, whatever the handler is still waiting on.
+// The deadline of a served request: past it the caller gets a 504 and the request's abort signal fires, whatever the
+// handler is still waiting on.
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { RequestDeadline, requestDeadlineMs } from '../util/request-scope.js';
 
@@ -30,7 +31,12 @@ export function requestDeadlineFor(req: IncomingMessage): RequestDeadline | unde
  * Calls `reply` when `res` has sent nothing by `deadline`. A store call still in flight answers first, since only the
  * store knows what became of a write.
  */
-export function answerAtDeadline(res: ServerResponse, deadline: RequestDeadline, reply: () => void): void {
+export function answerAtDeadline(
+  res: ServerResponse,
+  deadline: RequestDeadline,
+  reply: () => void,
+  onDeadline: () => void = () => {},
+): void {
   const expire = (): void => {
     if (res.headersSent || res.destroyed) return;
     handlerDeadlines += 1;
@@ -38,7 +44,11 @@ export function answerAtDeadline(res: ServerResponse, deadline: RequestDeadline,
     reply();
   };
   // One turn of the loop later, so a handler that fails on the store's answer sends that answer itself.
-  const timer = setTimeout(() => deadline.onceIdle(() => setImmediate(expire)), deadline.at - Date.now());
+  const timer = setTimeout(() => {
+    // Before the wait for store calls, so a call still queued is dropped rather than run for a caller who left.
+    onDeadline();
+    deadline.onceIdle(() => setImmediate(expire));
+  }, deadline.at - Date.now());
   // The open socket keeps the process alive; this timer alone must not.
   timer.unref();
   const clear = (): void => clearTimeout(timer);

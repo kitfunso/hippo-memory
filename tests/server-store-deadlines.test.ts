@@ -9,6 +9,7 @@ import { closeHippoDb, getHippoDbPath, openHippoDb, type DatabaseSyncLike } from
 import { STORE_BUSY_MESSAGE, StoreBusyError } from '../src/store/port.js';
 import type { JsonValue } from '../src/util/json.js';
 import { log, type LogFields } from '../src/util/log.js';
+import { currentSignal } from '../src/util/request-scope.js';
 import { serve, type AuthResolver, type ServeOpts, type ServerHandle } from '../src/server.js';
 import { type CallOptions, createSqliteExecutor, type ExecutorOptions, type SqliteExecutor } from '../src/store/sqlite/executor.js';
 import { initStore } from '../src/store/open.js';
@@ -399,6 +400,45 @@ describe('the handler deadline', () => {
     expect(after.handler_deadlines).toBe(before.handler_deadlines + 1);
     expect(errors.mock.calls.map((call) => call[0])).toEqual([expect.stringContaining('POST /v1/slow failed: the request did not finish by its deadline')]);
     expect(warns.mock.calls.filter(([message]) => message.includes(LATE))).toEqual([]);
+  });
+
+  it('aborts the signal of a handler that runs past the deadline, and not one that finishes inside it', async () => {
+    const root = newRoot();
+    let release = (): void => {};
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    let seen = (_aborted: boolean): void => {};
+    const afterGate = new Promise<boolean>((resolve) => { seen = resolve; });
+    const routes = [
+      { path: '/v1/slow', handler: async () => { await gate; seen(currentSignal()?.aborted === true); return {}; } },
+      { path: '/v1/quick', handler: async () => ({ aborted: currentSignal()?.aborted === true }) },
+    ];
+    const server = await start(root, { routes });
+    vi.spyOn(log, 'error').mockImplementation(() => {});
+
+    deadline(SHORT_DEADLINE_MS);
+    await expectDeadlineReply(await post(server, '/v1/slow', {}), 'did not finish by its deadline');
+    release();
+    expect(await afterGate).toBe(true);
+    const quick = await post(server, '/v1/quick', {});
+    expect(await quick.json()).toEqual({ aborted: false });
+  });
+
+  it('drops a store call still queued when its request is aborted, without running it', async () => {
+    const root = newRoot();
+    initStore(root);
+    const controller = new AbortController();
+    const { executor } = watched(createSqliteExecutor(root, { busyWaitMs: LONG_WAIT_MS }));
+    cleanups.push(() => executor.close());
+    const lock = holdWriteLock(root);
+    const first = executor.call(SAVE, [{ claim: 'held' }], { mode: 'write', requestId: 'a' });
+    first.catch(() => {});
+    const second = executor.call(SAVE, [{ claim: 'dropped' }], { mode: 'write', requestId: 'b', signal: controller.signal });
+    const outcome = expect(second).rejects.toBeInstanceOf(StoreBusyError);
+    controller.abort();
+    lock.release();
+    await first.catch(() => {});
+    await outcome;
+    expect(claims(root)).not.toContain('dropped');
   });
 
   it('logs one warn line when the handler fails after the 504, with the request id and the route and none of the error text', async () => {

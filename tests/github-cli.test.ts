@@ -18,7 +18,7 @@ import { initStore } from '../src/store/open.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { parkInDlq, listDlq } from '../src/connectors/dlq.js';
 import { githubDlq } from '../src/connectors/github/dlq.js';
-import { cmdGitHubBackfill } from '../src/cli/github.js';
+import { cmdGitHubBackfill, GitHubPayloadParseError, parseParkedPayload } from '../src/cli/github.js';
 import type {
   GitHubFetcher,
   GitHubBackfillPage,
@@ -363,5 +363,24 @@ describe('hippo github CLI', () => {
     expect(await ingestedOfThreeIssues('acme/widgets', max)).toBe(expected);
     const stored = loadAllEntries(hippoRoot).filter((e) => e.artifact_ref?.startsWith('github://acme/widgets/issue/'));
     expect(stored).toHaveLength(expected);
+  });
+});
+
+describe('parseParkedPayload', () => {
+  it('throws a typed error naming the command and the first 200 characters', () => {
+    const raw = `{bad${'x'.repeat(300)}`;
+    let caught: unknown;
+    try {
+      parseParkedPayload(raw);
+    } catch (err) {
+      caught = err;
+    }
+    expect(caught).toBeInstanceOf(GitHubPayloadParseError);
+    // SAFETY: the instanceof check above proved caught is a GitHubPayloadParseError, which extends Error.
+    const message = (caught as Error).message;
+    expect(message).toContain('hippo github dlq replay');
+    expect(message).toContain(raw.slice(0, 200));
+    expect(message).not.toContain(raw.slice(0, 201));
+    expect(parseParkedPayload('{"a":1}')).toEqual({ a: 1 });
   });
 });

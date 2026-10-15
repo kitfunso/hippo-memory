@@ -20,7 +20,7 @@ import { getGlobalRoot, initGlobal } from '../sharing/global-store.js';
 import { registerWorkspace } from './scheduler.js';
 import { type CliFlags, numberFlag, stringFlag, type CommandContext } from './flag-values.js';
 import { printAgentImport } from './print.js';
-import { errorCode, errorMessage, log } from '../util/log.js';
+import { errorCode, errorFields, errorMessage, log } from '../util/log.js';
 import { installCodexMemoryHooks, setupDailySchedule, warnClaudeSettingsUnusable } from './install-steps.js';
 import { learnFromRepo, skipLearnOnSharedStore } from './shared.js';
 import { HOOK_MARKERS, HOOKS, hippoBlock } from '../hooks/hook-blocks.js';
@@ -46,7 +46,8 @@ function scanForGitRepos(rootDir: string, maxDepth = 2): string[] {
     } catch (err) {
       const code = errorCode(err);
       if (!QUIET_SCAN_ERRORS.has(code)) {
-        log.warn(`repo scan skipped ${dir}`, { code: code || 'unknown', reason: errorMessage(err) });
+        const fields = { code: code || 'unknown', reason: errorMessage(err), ...errorFields(err) };
+        log.warn(`repo scan skipped ${dir}`, fields);
       }
     }
   }

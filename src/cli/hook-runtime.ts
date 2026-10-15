@@ -14,7 +14,7 @@ import { summaryLine } from '../agent-memories/report.js';
 import { getHippoRoot, isInitialized } from '../core/project-identity.js';
 import { getGlobalRoot } from '../sharing/global-store.js';
 import { sanitizeLogMessage } from '../capture/compact.js';
-import { errorMessage, log } from '../util/log.js';
+import { errorMessage, log, errorFields } from '../util/log.js';
 import type { CliFlags } from './flag-values.js';
 
 /**
@@ -53,7 +53,7 @@ export function appendSessionEndCloseLog(
     write(logFile, `[hippo] ${new Date().toISOString()} ${sanitizeLogMessage(message)}\n`, 'utf8');
   } catch (err) {
     // Best-effort only: a log-write failure must never fail the hook.
-    log.debug(`session-end log not written: ${errorMessage(err)}`);
+    log.debug(`session-end log not written: ${errorMessage(err)}`, errorFields(err));
   }
 }
 
@@ -120,7 +120,10 @@ export function payloadCwdRoot(hippoRoot: string, stdinText: string | undefined,
     // folder too.
     process.chdir(cwd);
   } catch (err) {
-    log.warn(`hippo: payload cwd ${cwd} is not usable, so the hook stays in ${process.cwd()}: ${errorMessage(err)}`);
+    log.warn(
+      `hippo: payload cwd ${cwd} is not usable, so the hook stays in ${process.cwd()}: ${errorMessage(err)}`,
+      errorFields(err),
+    );
     return hippoRoot;
   }
   return getHippoRoot(process.cwd());

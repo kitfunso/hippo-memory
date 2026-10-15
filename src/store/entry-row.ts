@@ -3,7 +3,7 @@ import type { MemoryEntry } from '../core/memory.js';
 import { closeHippoDb, ftsRowCounts, openHippoDb, isFtsAvailable, repairFtsDrift } from '../db/index.js';
 import { fallbackOrigin, originFromSource } from '../core/project-identity.js';
 import { checkRejectionGuard } from './rejection.js';
-import { errorMessage, log } from '../util/log.js';
+import { errorMessage, log, errorFields } from '../util/log.js';
 
 /** A 1.x JS caller's `tenantId` would otherwise fall through to the default tenant without a sound. */
 function rejectLegacyTenantKey(entry: MemoryEntry): void {
@@ -138,9 +138,10 @@ export function syncFtsRow(db: ReturnType<typeof openHippoDb>, entry: MemoryEntr
     );
   } catch (err) {
     // The memories table stays authoritative; a stale FTS row only costs recall quality, so the write goes on.
-    log.warnThenDebug(
+    log.warnThenSample(
       'fts-sync',
       `FTS index update failed for ${entry.id}; keyword recall may miss it: ${errorMessage(err)}`,
+      errorFields(err),
     );
   }
 }
@@ -154,9 +155,10 @@ export function deleteFtsRow(db: ReturnType<typeof openHippoDb>, id: string): vo
   try {
     db.prepare(`DELETE FROM memories_fts WHERE id = ?`).run(id);
   } catch (err) {
-    log.warnThenDebug(
+    log.warnThenSample(
       'fts-delete',
       `FTS index delete failed for ${id}; recall may return a stale hit: ${errorMessage(err)}`,
+      errorFields(err),
     );
   }
 }
@@ -176,9 +178,10 @@ export function replaceFtsRows(
     } catch (err) {
       // Their old rows are still indexed, so inserting them again would index an id twice; only new ids go in.
       kept = new Set(staleIds);
-      log.warnThenDebug(
+      log.warnThenSample(
         'fts-delete',
         `FTS index delete failed for ${staleIds.length} row(s); recall may return a stale hit: ${errorMessage(err)}`,
+        errorFields(err),
       );
     }
   }
@@ -189,9 +192,10 @@ export function replaceFtsRows(
     try {
       insert.run(row.id, row.content, row.tags.join(' '));
     } catch (err) {
-      log.warnThenDebug(
+      log.warnThenSample(
         'fts-sync',
         `FTS index update failed for ${row.id}; keyword recall may miss it: ${errorMessage(err)}`,
+        errorFields(err),
       );
     }
   }

@@ -124,7 +124,7 @@ function maybeRepairCodexWrapper(currentCommand: string, flags: CliFlags): void 
   try {
     repairCodexWrapperIfInstalled();
   } catch (err) {
-    log.debug(`codex wrapper not repaired: ${errorMessage(err)}`);
+    log.debug(`codex wrapper not repaired: ${errorMessage(err)}`, errorFields(err));
   }
 }
 

@@ -187,7 +187,7 @@ export function loadLegacyEntriesFromMarkdown(hippoRoot: string): MemoryEntry[] 
         const entry = deserializeEntry(fs.readFileSync(path.join(dir, file), 'utf8'));
         if (entry) entries.push(entry);
       } catch (err) {
-        log.warn(`store: skipped unreadable legacy file ${file}: ${errorMessage(err)}`);
+        log.warn(`store: skipped unreadable legacy file ${file}: ${errorMessage(err)}`, errorFields(err));
       }
     }
   }
@@ -199,7 +199,7 @@ function readLegacyJsonObject(file: string): { [key: string]: JsonValue } | null
   try {
     parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
   } catch (err) {
-    log.warn(`store: unreadable ${path.basename(file)} read as empty: ${errorMessage(err)}`);
+    log.warn(`store: unreadable ${path.basename(file)} read as empty: ${errorMessage(err)}`, errorFields(err));
     return null;
   }
   if (!isJsonObject(parsed)) {

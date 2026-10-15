@@ -3,7 +3,7 @@
 import { rethrowIfSqliteBlocked } from '../util/sqlite-blocked.js';
 import type { TokenSummary, TokenSurface } from '../store/token-ledger.js';
 import type { FailureSummary } from '../store/failure-log.js';
-import { errorMessage, log } from '../util/log.js';
+import { errorMessage, log, errorFields } from '../util/log.js';
 import type { ContextWith, StoreContext } from './types.js';
 import { DAY_MS } from '../util/time.js';
 
@@ -25,7 +25,11 @@ export async function recordTokens(
     });
   } catch (err) {
     rethrowIfSqliteBlocked(err);
-    log.warnThenDebug('api-token-ledger', `token ledger write failed; the reply is unaffected: ${errorMessage(err)}`);
+    log.warnThenDebug(
+      'api-token-ledger',
+      `token ledger write failed; the reply is unaffected: ${errorMessage(err)}`,
+      errorFields(err),
+    );
   }
 }
 
