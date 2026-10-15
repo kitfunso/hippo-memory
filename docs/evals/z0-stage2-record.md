@@ -336,6 +336,14 @@ Probes, all in the session scratchpad and run against `feat/z0-repo-t`:
 
 Families per repository are bounded by the distinct conventions a repository has: the development repositories gave 3 (cj), 3 to 4 (bm) and 2 (hp). The sizer therefore searches repository counts at up to 4 families each.
 
+## S9: sizing under Amendment 2
+
+`bash C:/z0-runs/s9/size-a2.sh 229.2 cj4 bm4 ml2` on `d06ae697` (`C:/z0-runs/s9/sizes-a2-d06ae697.json`; 2,000 runs a row, 20,000 a level cell). At the preregistered 15 points the sizer picks 12 repositories: set R 24 families, set N 48 tasks, set X 48 families, 5,751 sessions, $1,135 of Claude and $449 of Codex at list price ($1,925 and $723 if every rule arm reaches 9 seeds). H1 has 0.81 power at the point spreads and 0.22 at their 80% bounds, where the rule stops 75% of runs; H2 has 0.92 and 0.00; H4 passes 0.85 with 36 tasks. No row passes at the bounds. At 20 points: 10 repositories, 3,752 sessions, $750. At 25 points: 5 repositories, 2,672 sessions, $545.
+
+The level holds for H1 at every effect (at most 2.3%). It fails for H2 at 15 and 25 points. Set X calibration has one repository, so H2's bounds are wide and the rule stops almost every run there: all 20,000 at 15 points, all but 14 at 20, all but 106 at 25, where 5.7% of the runs it let go were false wins against a 5.5% bar. A cell the rule empties fails by design (the test at `tests/token-eval-z0-size.test.ts` asserts it), because the rule's level there is unmeasured. The freeze at 15 points therefore waits for a second set X repository in calibration. The run itself waits for funding: $1,135 is past the $200 a month of free Console credit.
+
+`d06ae697` fixed the level check on the way: it judged every cell against 0.025 plus 2 simulation errors of all 20,000 runs, even when the rule left a few hundred, which fails a sound test about half the time. Each cell now uses its own run count. No verdict above changed.
+
 ## Contract limits found
 
 - A checker's `CHECK_POST_COMMIT` is a state commit whose parent is the pre-session commit, so the agent's own commits are not visible to it. Commit-message rules are checked from the `git commit` commands in `CHECK_COMMANDS`.
