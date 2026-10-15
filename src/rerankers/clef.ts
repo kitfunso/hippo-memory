@@ -13,6 +13,7 @@ import { rerankerPost, RERANKER_MAX_REPLY_BYTES } from './remote.js';
 import { readCappedJson } from '../util/capped-json.js';
 import { type JsonValue, isJsonObject, isJsonString } from '../util/json.js';
 import { errorMessage } from '../util/log.js';
+import { isLoopbackHost } from '../util/net.js';
 
 const RAY_ID_MAX_CHARS = 64;
 
@@ -35,11 +36,6 @@ interface ClefRoute {
   url: string;
   token: string | undefined;
   backend: Exclude<RerankProvenance['backend'], 'native'>;
-}
-
-// Plain http would put the token and the memory text on the wire, so only the local machine may use it.
-function isLoopback(hostname: string): boolean {
-  return hostname === 'localhost' || hostname === '[::1]' || /^127(\.\d{1,3}){3}$/.test(hostname);
 }
 
 interface ClefScores {
@@ -79,7 +75,8 @@ export function resolveClefRoute(model: ClefModel): ClefRoute {
     if (parsed.username || parsed.password) {
       throw new Error('HIPPO_CLEF_ENDPOINT must not embed credentials; set HIPPO_CLEF_ENDPOINT_TOKEN');
     }
-    if (parsed.protocol === 'http:' && !isLoopback(parsed.hostname)) {
+    // Plain http would put the token and the memory text on the wire, so only the local machine may use it.
+    if (parsed.protocol === 'http:' && !isLoopbackHost(parsed.hostname)) {
       throw new Error('HIPPO_CLEF_ENDPOINT must use https unless it is on this machine');
     }
     const endpointToken = envClefEndpointToken();

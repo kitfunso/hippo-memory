@@ -4,7 +4,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { detectRealCodexPath, isCodexWrapperInstalled, repairCodexWrapperIfInstalled } from './hooks/codex-wrapper.js';
 import { claudeConfigDir } from './util/agent-homes.js';
-import { errorMessage, log } from './util/log.js';
+import { errorFields, errorMessage, log } from './util/log.js';
 
 function main(): void {
   if (envSkipPostinstall()) return;
@@ -17,7 +17,7 @@ function main(): void {
     repairCodexWrapperIfInstalled();
   } catch (err) {
     // Never fail package install because auto-integration could not be applied.
-    log.debug(`postinstall: codex wrapper not repaired: ${errorMessage(err)}`);
+    log.warn(`postinstall: codex wrapper not repaired: ${errorMessage(err)}`, errorFields(err));
   }
 
   try {

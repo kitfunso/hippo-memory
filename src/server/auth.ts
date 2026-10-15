@@ -14,16 +14,10 @@ import { keyCheckBounds } from './key-check-bounds.js';
 import type { AuthResolver, ResolvedBearer, ResolvedServeOpts } from './types.js';
 import { isJsonString } from '../util/json.js';
 import { MINUTE_MS } from '../util/time.js';
+import { isLoopbackAddress } from '../util/net.js';
 
-/** Recognises loopback remote addresses, including the IPv6-mapped '::ffff:127.0.0.1' Node reports on dual-stack
- * sockets; anything else is remote. */
-export function isLoopback(remoteAddress: string | undefined): boolean {
-  if (!remoteAddress) return false;
-  if (remoteAddress === '127.0.0.1') return true;
-  if (remoteAddress === '::1') return true;
-  if (remoteAddress === '::ffff:127.0.0.1') return true;
-  return false;
-}
+/** Kept under its old name because src/server.ts publishes it. */
+export const isLoopback = isLoopbackAddress;
 
 // A proxy on this host (nginx, Caddy, cloudflared) connects
 // from loopback, so these headers mean the caller is not local.
@@ -52,13 +46,13 @@ function isForeignPage(req: IncomingMessage): boolean {
 /** True only for a request made on this machine by its own user: a proxy and a browser page are loopback too, so the
  * socket alone proves nothing. */
 export function isLocalCaller(req: IncomingMessage): boolean {
-  return isLoopback(req.socket.remoteAddress) && proxyHeaderOf(req) === undefined && !isForeignPage(req);
+  return isLoopbackAddress(req.socket.remoteAddress) && proxyHeaderOf(req) === undefined && !isForeignPage(req);
 }
 
 // The throwing twin of isLocalCaller, for the no-key fallback:
 // each refusal has its own status, and a proxied one is logged.
 function assertLocalCaller(req: IncomingMessage): void {
-  if (!isLoopback(req.socket.remoteAddress)) throw new HttpError(401, 'auth required');
+  if (!isLoopbackAddress(req.socket.remoteAddress)) throw new HttpError(401, 'auth required');
   const proxyHeader = proxyHeaderOf(req);
   if (proxyHeader !== undefined) {
     log.warn(

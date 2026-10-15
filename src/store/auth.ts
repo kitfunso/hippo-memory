@@ -12,6 +12,24 @@ export const API_KEY_PREFIX = 'hk_';
 const ID_LEN = 24;       // base32 chars after prefix
 const SECRET_LEN = 32;   // base32 chars after dot
 const SCRYPT_KEYLEN = 32;
+// Node's defaults, written out so a hash states the cost it was made with.
+const SCRYPT_N = 16384;
+const SCRYPT_R = 8;
+const SCRYPT_P = 1;
+const SCRYPT_MAXMEM = 64 * 1024 * 1024;
+// A stored row must not be able to make verify hang or exhaust memory.
+const SCRYPT_MAX_N = 2 ** 20;
+const SCRYPT_MAX_R = 32;
+const SCRYPT_MAX_P = 16;
+
+interface ScryptParams {
+  readonly N: number;
+  readonly r: number;
+  readonly p: number;
+  readonly maxmem: number;
+}
+
+const DEFAULT_SCRYPT: ScryptParams = { N: SCRYPT_N, r: SCRYPT_R, p: SCRYPT_P, maxmem: SCRYPT_MAXMEM };
 
 const BASE32 = 'abcdefghijklmnopqrstuvwxyz234567';
 const MINTED_KEY_PATTERN = new RegExp(`^${API_KEY_PREFIX}[a-z2-7]{${ID_LEN}}\\.[a-z2-7]{${SECRET_LEN}}$`);
@@ -24,10 +42,10 @@ function randBase32(n: number): string {
 }
 
 function hashKey(plaintext: string): string {
-  // Format: scrypt$<saltHex>$<hashHex>
+  // Format: scrypt2$<N>$<r>$<p>$<saltHex>$<hashHex>
   const salt = randomBytes(16);
-  const hash = scryptSync(plaintext, salt, SCRYPT_KEYLEN);
-  return `scrypt$${salt.toString('hex')}$${hash.toString('hex')}`;
+  const hash = scryptSync(plaintext, salt, SCRYPT_KEYLEN, DEFAULT_SCRYPT);
+  return `scrypt2$${SCRYPT_N}$${SCRYPT_R}$${SCRYPT_P}$${salt.toString('hex')}$${hash.toString('hex')}`;
 }
 
 /** Counts since process start, so a flood of bad tokens shows as scrypt work, not just as 401s. */
@@ -42,22 +60,39 @@ export function apiKeyVerifyStats(): ApiKeyVerifyStats {
   return { ...verifyStats };
 }
 
-/** What a stored `scrypt$<saltHex>$<hashHex>` value asks of a derivation, with the one compare the sync and the pooled
- * check share. */
+/** What a stored `scrypt$<saltHex>$<hashHex>` or `scrypt2$<N>$<r>$<p>$<saltHex>$<hashHex>` value asks of a derivation,
+ * with the one compare the sync and the pooled check share. */
 interface StoredScrypt {
   readonly salt: Buffer;
   readonly keylen: number;
+  readonly params: ScryptParams;
   matches(derived: Buffer): boolean;
 }
 
-/** Null when `stored` has another shape. */
+function validCost(n: number, r: number, p: number): boolean {
+  const powerOfTwo = Number.isInteger(n) && n >= 2 && (n & (n - 1)) === 0;
+  return powerOfTwo && n <= SCRYPT_MAX_N && Number.isInteger(r) && r >= 1 && r <= SCRYPT_MAX_R
+    && Number.isInteger(p) && p >= 1 && p <= SCRYPT_MAX_P && 128 * n * r <= SCRYPT_MAXMEM;
+}
+
+/** Null when `stored` has another shape or asks for more work than a verify may do. */
 function storedScrypt(stored: string): StoredScrypt | null {
   const parts = stored.split('$');
-  if (parts.length !== 3 || parts[0] !== 'scrypt') return null;
-  const expected = Buffer.from(parts[2]!, 'hex');
+  let params = DEFAULT_SCRYPT;
+  if (parts.length !== 3 && parts.length !== 6) return null;
+  const hashHex = parts[parts.length - 1]!;
+  const saltHex = parts[parts.length - 2]!;
+  if (parts.length === 3 && parts[0] !== 'scrypt') return null;
+  if (parts.length === 6) {
+    const [n, r, p] = [Number(parts[1]), Number(parts[2]), Number(parts[3])];
+    if (parts[0] !== 'scrypt2' || !validCost(n, r, p)) return null;
+    params = { N: n, r, p, maxmem: SCRYPT_MAXMEM };
+  }
+  const expected = Buffer.from(hashHex, 'hex');
   return {
-    salt: Buffer.from(parts[1]!, 'hex'),
+    salt: Buffer.from(saltHex, 'hex'),
     keylen: expected.length,
+    params,
     matches: (derived) => expected.length === derived.length && timingSafeEqual(expected, derived),
   };
 }
@@ -66,10 +101,11 @@ function verifyKey(plaintext: string, stored: string): boolean {
   const parsed = storedScrypt(stored);
   if (!parsed) return false;
   verifyStats.scryptRuns++;
-  return parsed.matches(scryptSync(plaintext, parsed.salt, parsed.keylen));
+  return parsed.matches(scryptSync(plaintext, parsed.salt, parsed.keylen, parsed.params));
 }
 
-const scryptOffLoop: (password: string, salt: Buffer, keylen: number) => Promise<Buffer> = promisify(scrypt);
+const scryptOffLoop: (password: string, salt: Buffer, keylen: number, params: ScryptParams) => Promise<Buffer> =
+  promisify(scrypt);
 
 export interface CreateApiKeyOpts {
   tenantId: string;
@@ -307,7 +343,7 @@ async function secretMatches(
   if (running) return running;
   const derive = (): Promise<Buffer> => {
     verifyStats.scryptRuns++;
-    return scryptOffLoop(plaintext, parsed.salt, parsed.keylen);
+    return scryptOffLoop(plaintext, parsed.salt, parsed.keylen, parsed.params);
   };
   const check = (bound ? bound(keyId, derive) : derive()).then((derived) => {
     const matched = parsed.matches(derived);
