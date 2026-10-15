@@ -11,6 +11,7 @@ import type { Consolidation } from '../port/consolidation.js';
 import { findPromotableSessions, listSessionEvents, traceExistsForSession } from '../sessions.js';
 import { lazyTombstoneChecks } from '../tombstone-checks.js';
 import { loadStoredParticles, saveStoredParticles } from '../vector-index.js';
+import { errorMessage } from '../../util/log.js';
 
 /** Sleep's store work on the hippo.db under `hippoRoot`, each call on its own short-lived handle. */
 export function sqliteConsolidation(hippoRoot: string): Consolidation {
@@ -36,7 +37,7 @@ export function sqliteConsolidation(hippoRoot: string): Consolidation {
     countSleep: () => incrementSleepCount(hippoRoot),
     auditEachRow(events) {
       const failed = recordAuditEventsRowByRow(hippoRoot, events);
-      for (const { event, error } of failed) reportAuditWriteFailure(event.op, String(error), event.targetId);
+      for (const { event, error } of failed) reportAuditWriteFailure(event.op, errorMessage(error), event.targetId);
       return failed.length;
     },
   };

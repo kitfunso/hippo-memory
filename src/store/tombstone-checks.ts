@@ -2,6 +2,7 @@
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../db/index.js';
 import { type AppendAuditOpts, appendAuditEvent, reportAuditWriteFailure } from './audit.js';
 import { findRejectedValue, type RejectedValueRow } from './rejection.js';
+import { errorMessage } from '../util/log.js';
 
 /** Tombstone lookups and their refusal audit rows on one handle: opened on first use, never under dryRun, closed
  * once. */
@@ -37,7 +38,7 @@ export function lazyTombstoneChecks(hippoRoot: string, dryRun: boolean): Tombsto
       try {
         this.audit(event);
       } catch (error) {
-        reportAuditWriteFailure(event.op, String(error), event.targetId);
+        reportAuditWriteFailure(event.op, errorMessage(error), event.targetId);
       }
     },
     close() {
