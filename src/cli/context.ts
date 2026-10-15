@@ -23,7 +23,6 @@ import {
   toRenderItems,
 } from '../api/prompt-hook.js';
 import { ownerOrSubject } from '../api/types.js';
-import { errorFields, errorMessage, log } from '../util/log.js';
 import {
   type CliFlags,
   parseLimitFlag,
