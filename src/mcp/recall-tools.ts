@@ -183,6 +183,7 @@ export async function runRecallTool(call: ToolCall): Promise<string> {
     tenantId,
     actor: mcpActor(ctx),
     store,
+    reach: ctx?.reach,
   };
   const anchorRing = sessionRing('mcp', tenantId, sessionId);
   const who = { tenantId, actor: ctx?.actor ?? 'mcp' };
@@ -288,7 +289,7 @@ export async function runContextTool(
   { args, ctx, hippoRoot, config, tenantId, store }: ToolCall<'contextReads'>
 ): Promise<string> {
   // Stdio names no project, and the store's folder or the launch cwd is no caller's; HTTP sends X-Hippo-Project.
-  if (isSharedStore(hippoRoot) && ctx?.project === undefined) {
+  if ((ctx?.reach ? ctx.reach.shared : isSharedStore(hippoRoot)) && ctx?.project === undefined) {
     return 'hippo_context needs a project on a shared store; use hippo_recall';
   }
   const { budget: budgetArg, scope: exactScope } = parseContextRequest(toolParams(args));
@@ -297,7 +298,7 @@ export async function runContextTool(
   if (budget < memoriesReserve(budget)) return ''; // not even the heading fits, so nothing prints, as at budget 0
   const ownsCwd = ownsServerCwd(ctx);
   const result = await apiGetContext(
-    { hippoRoot, tenantId, actor: mcpActor(ctx), store },
+    { hippoRoot, tenantId, actor: mcpActor(ctx), store, reach: ctx?.reach },
     {
       // The server's git state is no remote caller's, so a project
       // or remote caller gets rows by strength without a query.

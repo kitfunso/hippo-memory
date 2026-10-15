@@ -52,7 +52,8 @@ function admitCounter() {
 
 let local = '';
 let global = '';
-let ctx: FullContext;
+// Built per call: the reach is probed against whatever HIPPO_HOME the test stubbed just before.
+const ctxNow = (): FullContext => apiCtx(local, 'default', adminActor('test'));
 
 beforeAll(() => {
   local = makeRoot('ctx-window-local');
@@ -60,7 +61,6 @@ beforeAll(() => {
   // Every row matches the query; all but the last OWN_ROWS come from another project.
   fill(local, ROWS, 'local', (i) => (i >= ROWS - OWN_ROWS ? 'proj' : 'other'));
   fill(global, 1_000, 'global', () => '');
-  ctx = apiCtx(local, 'default', adminActor('test'));
 }, 600_000);
 
 afterAll(() => {
@@ -74,7 +74,7 @@ describe('getContext with a query reads the FTS candidate window', () => {
   it('ranks at most the window from a 10k-row local store', async () => {
     vi.stubEnv('HIPPO_HOME', join(local, 'no-global'));
     const counter = admitCounter();
-    const result = await getContext(ctx, { q: QUERY, currentProject: '', deliveryObserver: counter.obs });
+    const result = await getContext(ctxNow(), { q: QUERY, currentProject: '', deliveryObserver: counter.obs });
 
     expect(result.entries.length).toBeGreaterThan(0);
     expect(counter.calls()).toBe(DEFAULT_SEARCH_CANDIDATE_LIMIT);
@@ -84,7 +84,7 @@ describe('getContext with a query reads the FTS candidate window', () => {
   it('ranks at most one window per store when the global store exists', async () => {
     vi.stubEnv('HIPPO_HOME', global);
     const counter = admitCounter();
-    const result = await getContext(ctx, { q: QUERY, currentProject: '', deliveryObserver: counter.obs });
+    const result = await getContext(ctxNow(), { q: QUERY, currentProject: '', deliveryObserver: counter.obs });
 
     // Both stores hold more matches than the window, so each fills it exactly.
     expect(result.entries.length).toBeGreaterThan(0);
@@ -95,7 +95,7 @@ describe('getContext with a query reads the FTS candidate window', () => {
   it("keeps other projects out of the window, so they cannot crowd out this project's rows", async () => {
     vi.stubEnv('HIPPO_HOME', join(local, 'no-global'));
     const counter = admitCounter();
-    const result = await getContext(ctx, { q: QUERY, currentProject: 'proj', budget: 5000, deliveryObserver: counter.obs });
+    const result = await getContext(ctxNow(), { q: QUERY, currentProject: 'proj', budget: 5000, deliveryObserver: counter.obs });
 
     expect(result.entries).toHaveLength(OWN_ROWS);
     expect(result.entries.every((r) => r.entry.origin_project === 'proj')).toBe(true);
@@ -108,7 +108,7 @@ describe('getContext with a query labels each result local or global', () => {
 
   it('reads no index of the 10k-row local store to do it', async () => {
     vi.stubEnv('HIPPO_HOME', global);
-    const { result, statements, rowsRead } = await recordStatementsAsync(() => getContext(ctx, { q: QUERY, currentProject: '' }));
+    const { result, statements, rowsRead } = await recordStatementsAsync(() => getContext(ctxNow(), { q: QUERY, currentProject: '' }));
 
     expect(result.entries.length).toBeGreaterThan(0);
     expect(countMatching(statements, INDEX_READ)).toBe(0);
@@ -138,7 +138,7 @@ describe('getContext with a query labels each result local or global', () => {
       }
       vi.stubEnv('HIPPO_HOME', small);
       const counter = admitCounter();
-      const result = await getContext(ctx, { q: QUERY, currentProject: '', budget: 1_000_000, deliveryObserver: counter.obs });
+      const result = await getContext(ctxNow(), { q: QUERY, currentProject: '', budget: 1_000_000, deliveryObserver: counter.obs });
 
       const labels = new Map(result.entries.map((r) => [r.entry.id, r.isGlobal]));
       expect(labels.get(synced.id)).toBe(false);

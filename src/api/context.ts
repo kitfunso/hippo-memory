@@ -13,7 +13,6 @@ import type { SessionHandoff } from '../core/handoff.js';
 import { estimateTokens } from '../util/token-text.js';
 import { markRetrieved, type MemoryEntry, COMPACTION_MEMORY_TAG } from '../core/memory.js';
 import { isWorthSurfacing } from '../core/memory-quality.js';
-import { getGlobalRoot } from '../sharing/global-store.js';
 import type { RecallTraceInput } from '../store/recall-trace.js';
 import { evalNow, strengthAblation } from '../core/ablation.js';
 import { dropHeldCopies } from '../util/same-text.js';
@@ -24,8 +23,6 @@ import { errorMessage, log } from '../util/log.js';
 import {
   resolveProjectIdentity,
   classifyOriginProject,
-  isGlobalStoreRoot,
-  isInitialized,
   projectId,
   projectNames,
   type ProjectRef,
@@ -34,7 +31,8 @@ import { promptTokens } from '../core/prompt-recall.js';
 import { detectSecret } from '../util/secret-detect.js';
 import { isSessionDigestRow } from '../core/session-digest-row.js';
 import { addAmbientTallies, ambientStateFromTallies, type AmbientState, type AmbientTallies } from '../core/ambient.js';
-import { hasGroup, sqliteStore, type StoreWith } from '../store/index.js';
+import { hasGroup, type StoreWith } from '../store/index.js';
+import type { StoreReach } from '../store/port.js';
 import { passesScopeFilterForRecall, assertScopeRequestAllowed, personalScopeOf } from '../core/recall-scope.js';
 import {
   finiteOr,
@@ -244,15 +242,29 @@ function warnIsolationIgnored(hippoRoot: string): void {
 /** Which stores this read can draw on, and what kind the primary one is. */
 function storesInReach(ctx: Context, opts: ContextOpts, local: ContextSource) {
   const other = hasGroup(local.store, 'localFiles') ? undefined : local.store;
-  // Global memories do not establish a project boundary for task state.
-  const hasLocal = other !== undefined || isInitialized(ctx.hippoRoot);
-  const globalRoot = getGlobalRoot();
+  // No reach means an integrator's own store: one project, no global store beside it.
+  const reach: StoreReach =
+    ctx.reach ?? { hasLocal: true, isGlobal: false, shared: isSharedStore(ctx.hippoRoot) };
   // The store's own flag counts too, so no surface can read a shared store as its owner.
-  const sharedStore = opts.sharedStore === true || isSharedStore(ctx.hippoRoot);
+  const sharedStore = opts.sharedStore === true || reach.shared;
   // A store serving many people is not its operator's, so the operator's own global store stays out.
-  const hasGlobal = !sharedStore && other === undefined && isInitialized(globalRoot);
-  const primaryIsGlobal = isGlobalStoreRoot(ctx.hippoRoot);
-  return { other, hasLocal, globalRoot, sharedStore, hasGlobal, primaryIsGlobal };
+  const hasGlobal = !sharedStore && other === undefined && reach.global !== undefined;
+  // Global memories do not establish a project boundary for task state.
+  return {
+    other,
+    hasLocal: other !== undefined || reach.hasLocal,
+    globalRoot: reach.global?.root ?? '',
+    sharedStore,
+    hasGlobal,
+    primaryIsGlobal: reach.isGlobal,
+  };
+}
+
+/** The operator's global store, which planContext proved present before it set hasGlobal. */
+function globalSource(ctx: Context): ContextSource {
+  const global = ctx.reach?.global;
+  if (global === undefined) throw new Error('hasGlobal without a global store in reach');
+  return sourceOf(global.store);
 }
 
 /** Prices one entry against the budget: the caller's cost model when it gave one, else a token estimate. */
@@ -481,7 +493,7 @@ async function loadPools(
     : { entries: [] };
   const global: AmbientLoadResult =
     hasGlobal && !primaryIsGlobal
-      ? await loadAmbientEntries(sourceOf(sqliteStore(plan.globalRoot)), ctx.tenantId, {
+      ? await loadAmbientEntries(globalSource(ctx), ctx.tenantId, {
           ...read,
           onQualityDrop: qualityDrop(true),
         })
@@ -603,7 +615,7 @@ async function readAmbientState(ctx: Context, plan: ContextPlan): Promise<Ambien
   };
   const sources = [
     ...(plan.hasLocal ? [plan.local.reads] : []),
-    ...(plan.hasGlobal && !plan.primaryIsGlobal ? [sourceOf(sqliteStore(plan.globalRoot)).reads] : []),
+    ...(plan.hasGlobal && !plan.primaryIsGlobal ? [globalSource(ctx).reads] : []),
   ];
   const tallies: AmbientTallies[] = [];
   for (const reads of sources) tallies.push(await reads.ambientTallies(ctx.tenantId, filter));

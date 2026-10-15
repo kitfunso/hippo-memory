@@ -395,7 +395,7 @@ async function readRecall(
 
 // On a shared store the tenant's newest row is another developer's; no project keys to nothing, so the block is empty.
 function continuityKey(ctx: Context, opts: RecallOpts): ContinuityKey | null {
-  if (!isSharedStore(ctx.hippoRoot)) return null;
+  if (!(ctx.reach ? ctx.reach.shared : isSharedStore(ctx.hippoRoot))) return null;
   return { owner: ownerOrSubject(ctx.actor), project: opts.project ? projectNames(opts.project) : [] };
 }
 

@@ -37,7 +37,7 @@ const { openHippoDb, closeHippoDb } = await load('db/index.js');
 const { createApiKey } = await load('store/auth.js');
 const { getContext, adminActor } = await load('api/index.js');
 const { handleMcpRequest } = await load('mcp/server.js');
-const { runSqliteRequest, sqliteStore } = await load('store/sqlite/store.js');
+const { runSqliteRequest, sqliteReach, sqliteStore } = await load('store/sqlite/store.js');
 const { workerSqliteStore } = await load('store/sqlite/worker-store.js');
 const { serve } = await load('server.js');
 
@@ -119,9 +119,10 @@ const copyRoot = path.join(tmp, 'copy', '.hippo');
 fs.cpSync(localRoot, copyRoot, { recursive: true });
 
 const localStore = sqliteStore(localRoot);
-const ctx = { hippoRoot: localRoot, tenantId: 'default', actor: adminActor('ci:timing'), store: localStore };
+const reach = sqliteReach(localRoot, localStore);
+const ctx = { hippoRoot: localRoot, tenantId: 'default', actor: adminActor('ci:timing'), store: localStore, reach };
 const mcpCtx = {
-  hippoRoot: localRoot, tenantId: 'default', actor: 'ci:timing', role: 'admin', hostAdmin: true, store: localStore,
+  hippoRoot: localRoot, tenantId: 'default', actor: 'ci:timing', role: 'admin', hostAdmin: true, store: localStore, reach,
 };
 // A transport runs each tool call inside its host's request scope (the server per request, stdio per frame).
 const tool = (name, args = {}) => async () => {
@@ -130,11 +131,11 @@ const tool = (name, args = {}) => async () => {
   if (res?.error || res?.result?.isError) throw new Error(`${name} failed: ${JSON.stringify(res)}`);
 };
 
-// With no global store a context query searches the local store alone, a separate load path.
+// With no global store a context query searches the local store alone, a separate load path; reach is probed afresh.
 const withoutGlobal = (run) => async () => {
   process.env.HIPPO_HOME = path.join(tmp, 'no-global');
   try {
-    await run();
+    await run({ ...ctx, reach: sqliteReach(localRoot, localStore) });
   } finally {
     process.env.HIPPO_HOME = globalRoot;
   }
@@ -173,7 +174,7 @@ const cases = [
   ['getContext, no query', () => getContext(ctx, { currentProject: 'proj' }), [330, 5335, 11]],
   ['getContext, query', () => getContext(ctx, { q: 'kafka redis', currentProject: 'proj' }), [375, 665, 16]],
   ['getContext, pinned only', () => getContext(ctx, { pinnedOnly: true, includeRecent: 5, currentProject: 'proj' }), [42, 141, 5]],
-  ['getContext, local query', withoutGlobal(() => getContext(ctx, { q: 'kafka redis', currentProject: 'proj' })), [325, 395, 10]],
+  ['getContext, local query', withoutGlobal((c) => getContext(c, { q: 'kafka redis', currentProject: 'proj' })), [325, 395, 10]],
   ['ambient tallies, 2 stores', () => {
     for (const root of [localRoot, globalRoot]) loadAmbientTallies(root, 'default', { project: ['proj'], currentProject: ['proj'], now: new Date() });
   }, [19, 6, 2]],

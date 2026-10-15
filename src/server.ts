@@ -16,7 +16,8 @@ import {
   type PromptHookRequest,
 } from './api/prompt-hook.js';
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from './core/api-errors.js';
-import { withStoreGroups } from './store/sqlite/store.js';
+import { hasGroup } from './store/port.js';
+import { sqliteReach, withStoreGroups } from './store/sqlite/store.js';
 
 export { serve } from './server/boot.js';
 
@@ -36,7 +37,11 @@ async function promptHookContext(
   req: PromptHookRequest,
   opts?: PromptHookOpts,
 ): ReturnType<typeof renderPromptHook> {
-  return renderPromptHook(withStoreGroups(ctx, 'contextReads'), req, opts);
+  const filled = withStoreGroups(ctx, 'contextReads');
+  // Only hippo.db has a global store beside it; an add-on's own store reads as one project.
+  const sqliteBacked = ctx.store === undefined || hasGroup(ctx.store, 'localFiles');
+  const reach = ctx.reach ?? (sqliteBacked ? sqliteReach(ctx.hippoRoot, filled.store, opts?.sharedStore) : undefined);
+  return renderPromptHook({ ...filled, reach }, req, opts);
 }
 
 // Add-on packages mint and revoke keys through these without importing the whole api surface.

@@ -24,7 +24,7 @@ import { inMemoryContextStore, type InMemoryContextStore } from './_helpers/in-m
 import { portOnlyStore } from './_helpers/port-only-store.js';
 import { CLEARED_ENV, statsMirror } from './_helpers/recall-golden-seed.js';
 import { seedTwoTenants, TENANT_A, TENANT_B } from './_helpers/store-conformance.js';
-import { sqliteStore } from '../src/store/sqlite/store.js';
+import { sqliteReach, sqliteStore } from '../src/store/sqlite/store.js';
 
 type Block = Exclude<keyof ContextResult, 'entries' | 'tokens'>;
 
@@ -293,7 +293,10 @@ async function runPass(c: Omit<Case, 'name' | 'expected'>, { withGlobal, embedde
     if (c.shared) markSharedStore(root);
     prepare?.(root, globalRoot);
     const store = makeStore?.(root);
-    const ctx = { hippoRoot: root, tenantId: c.tenantId ?? TENANT_A, actor: c.actor ?? ADMIN, store: store ?? sqliteStore(root) };
+    const served = store ?? sqliteStore(root);
+    // A store of another kind gets no reach: the api reads it as one project with no global store.
+    const reach = served.kind === 'sqlite' ? sqliteReach(root, served) : undefined;
+    const ctx = { hippoRoot: root, tenantId: c.tenantId ?? TENANT_A, actor: c.actor ?? ADMIN, store: served, reach };
     const opts: ContextOpts = { currentProject: PROJECT, ...c.opts };
     const result = store && store.kind !== 'sqlite'
       ? await withSqliteBlocked(store.kind, async () => getContext(narrowContext(ctx, 'contextReads'), opts))

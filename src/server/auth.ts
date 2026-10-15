@@ -2,6 +2,7 @@
 import { envAllowKeylessLocal, envKeylessLocalRole, envRequireAuth } from '../util/env.js';
 import type { IncomingMessage } from 'node:http';
 import { resolveTenantId } from '../store/tenant.js';
+import { sqliteReach } from '../store/sqlite/store.js';
 import { errorFields, errorMessage, log } from '../util/log.js';
 import { API_KEY_PREFIX, verifyApiKeyCached } from '../store/auth.js';
 import { type Actor, type Context, type StoreContext, ownerOrSubject } from '../api/index.js';
@@ -303,14 +304,17 @@ function keylessLocalActor(opts: AuthOpts): Actor {
 }
 
 function contextFor(id: BearerIdentity | null, opts: AuthOpts): StoreContext {
+  // Per request, never cached at serve: the global store can be created while the server runs.
+  const reach = sqliteReach(opts.hippoRoot, opts.store);
   if (id !== null) {
-    return { hippoRoot: opts.hippoRoot, tenantId: id.tenantId, actor: bearerActor(id), store: opts.store };
+    return { hippoRoot: opts.hippoRoot, tenantId: id.tenantId, actor: bearerActor(id), store: opts.store, reach };
   }
   return {
     hippoRoot: opts.hippoRoot,
     tenantId: resolveTenantId({}),
     actor: keylessLocalActor(opts),
     store: opts.store,
+    reach,
   };
 }
 

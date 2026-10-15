@@ -26,7 +26,7 @@ export interface Context {
   tenantId: string;
   actor: Actor;
   store?: HippoStore;
-  /** Set by a composition root; the api falls back to probing the disk where it is absent. */
+  /** Set by a composition root. Absent, the api reads one project and no global store, as for an integrator's store. */
   reach?: StoreReach;
 }
 

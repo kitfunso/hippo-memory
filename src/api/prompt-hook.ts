@@ -28,7 +28,7 @@ import { noteLedgerRowSkipped } from '../store/ledger-turn.js';
 import type { MemoryEntry } from '../core/memory.js';
 import { sessionPilotArm } from './pilot-arm.js';
 import type { PilotArm } from '../store/pilot-arm.js';
-import { assertCallerProject, isGlobalStoreRoot, MAX_PROJECT_ALIASES } from '../core/project-identity.js';
+import { assertCallerProject, MAX_PROJECT_ALIASES } from '../core/project-identity.js';
 import type { DeliveryWrite } from '../store/ledger-turn.js';
 import { writeDeliveryEventAtRoot } from '../store/recall-trace.js';
 import { shouldSkipUnchanged, type TokenSurface, type TokenUse } from '../store/token-ledger.js';
@@ -57,7 +57,8 @@ export function startDeliveryRecorder(ctx: Context, start: DeliveryStart): Deliv
     return createDeliveryRecorder({
       root,
       storeHash: blockHash(realpathOrResolve(root)),
-      writeStore: isGlobalStoreRoot(root) ? 'global' : 'local',
+      // ledgerRoot falls back to the global root only when the primary is not initialized.
+      writeStore: root !== ctx.hippoRoot || ctx.reach?.isGlobal === true ? 'global' : 'local',
       tenantId: ctx.tenantId,
       stdinText: start.stdinText,
       envSessionId: start.envSessionId,
@@ -361,7 +362,8 @@ export async function promptHookContext(
   assertPromptHookRequest(req);
   const { sessionId, payload } = req;
   const { sharedStore } = opts;
-  if (sharedStore || isSharedStore(ctx.hippoRoot)) assertCallerProject(req.project);
+  const sharedByReach = ctx.reach ? ctx.reach.shared : isSharedStore(ctx.hippoRoot);
+  if (sharedStore || sharedByReach) assertCallerProject(req.project);
   // The test the local hook runs on its stdin, so a sub-agent books no arm and no session rows here either.
   const subagent = payload !== undefined && isSubagentPayload(JSON.stringify(payload));
   const ledgerSessionId = subagent ? undefined : sessionId;
