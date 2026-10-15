@@ -8,7 +8,8 @@ type StreamWriteArgs = [
   cb?: (err?: Error) => void,
 ];
 
-/** Mirrors every stdout and stderr chunk to `logFile` until the returned restore runs; an append failure warns once and never stops the real write. */
+/** Mirrors every stdout and stderr chunk to `logFile` until the returned restore runs; an append failure warns once
+ * and never stops the real write. */
 export function teeStdStreams(logFile: string): () => void {
   const origStdoutWrite = process.stdout.write.bind(process.stdout);
   const origStderrWrite = process.stderr.write.bind(process.stderr);
@@ -19,16 +20,21 @@ export function teeStdStreams(logFile: string): () => void {
     } catch (err) {
       if (warned) return;
       warned = true;
-      log.warn(`log file ${logFile} is no longer writable; output continues without it: ${errorMessage(err)}`, errorFields(err));
+      log.warn(
+        `log file ${logFile} is no longer writable; output continues without it: ${errorMessage(err)}`,
+        errorFields(err),
+      );
     }
   };
   const wrapWrite = (origWrite: typeof process.stdout.write): typeof process.stdout.write => {
     const wrapped = (...args: StreamWriteArgs): boolean => {
       tee(args[0]);
-      // SAFETY: forwarding the exact arguments the real overloaded `write` received is safe; `StreamWriteArgs` is the union of both overloads' parameter lists.
+      // SAFETY: forwarding the exact arguments the real overloaded `write` received is safe; `StreamWriteArgs` is the
+      // union of both overloads' parameter lists.
       return (origWrite as (...args: StreamWriteArgs) => boolean)(...args);
     };
-    // SAFETY: `wrapped` matches both real `write` overload shapes; TS cannot verify one implementation covers an overloaded type.
+    // SAFETY: `wrapped` matches both real `write` overload shapes; TS cannot verify one implementation covers an
+    // overloaded type.
     return wrapped as typeof process.stdout.write;
   };
   process.stdout.write = wrapWrite(origStdoutWrite);

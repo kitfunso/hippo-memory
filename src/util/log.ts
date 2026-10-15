@@ -6,7 +6,8 @@ import { currentRequestId } from './request-scope.js';
 
 export type LogLevel = 'error' | 'warn' | 'info' | 'debug';
 
-/** Extra key=value pairs appended to the line. `ts` and, inside a request, `requestId` are added to every line written. */
+/** Extra key=value pairs appended to the line. `ts` and, inside a request, `requestId` are added to every line
+ * written. */
 export interface LogFields {
   ts?: string;
   requestId?: string;
@@ -60,7 +61,8 @@ const ONCE_KEY_CAP = 1_000;
 const onceKeys = new Set<string>();
 let onceCapReported = false;
 
-/** 'new' records the key and 'seen' is a repeat. 'uncounted' is an unseen key once the set is full: it is not recorded, and the first one says so at warn. */
+/** 'new' records the key and 'seen' is a repeat. 'uncounted' is an unseen key once the set is full: it is not
+ * recorded, and the first one says so at warn. */
 function sightOnceKey(key: string): 'new' | 'seen' | 'uncounted' {
   if (onceKeys.has(key)) return 'seen';
   if (onceKeys.size < ONCE_KEY_CAP) {
@@ -69,18 +71,23 @@ function sightOnceKey(key: string): 'new' | 'seen' | 'uncounted' {
   }
   if (!onceCapReported) {
     onceCapReported = true;
-    write('warn', `log: ${ONCE_KEY_CAP} once-only warnings were written; further new ones in this process log at debug`);
+    write(
+      'warn',
+      `log: ${ONCE_KEY_CAP} once-only warnings were written; further new ones in this process log at debug`,
+    );
   }
   return 'uncounted';
 }
 
-/** Write `message` at `level` the first time `key` is seen in this process; later calls are dropped. Past the key cap an unseen key logs at debug. */
+/** Write `message` at `level` the first time `key` is seen in this process; later calls are dropped. Past the key
+ * cap an unseen key logs at debug. */
 function once(key: string, level: LogLevel, message: string, fields?: LogFields): void {
   const sighting = sightOnceKey(key);
   if (sighting !== 'seen') write(sighting === 'new' ? level : 'debug', message, fields);
 }
 
-/** Warn the first time `key` is seen in this process, then log at debug, so a repeating failure stays findable without flooding stderr. */
+/** Warn the first time `key` is seen in this process, then log at debug, so a repeating failure stays findable
+ * without flooding stderr. */
 function warnThenDebug(key: string, message: string, fields?: LogFields): void {
   write(sightOnceKey(key) === 'new' ? 'warn' : 'debug', message, fields);
 }
@@ -100,13 +107,19 @@ export const log = {
   warnThenDebug,
 } as const;
 
-/** Message for a caught value of unknown shape. `cause` names the sanctioned unknown-input case (error-cause enrichment). */
+/** Message for a caught value of unknown shape. `cause` names the sanctioned unknown-input case (error-cause
+ * enrichment). */
 export function errorMessage(cause: unknown): string {
   return cause instanceof Error ? cause.message : String(cause);
 }
 
 /** One post-compact failure, told once to the hook's output (`say`) and once to the structured log. */
-export function reportCompactionFailure(say: (message: string) => void, step: string, reason: string, fields?: LogFields): void {
+export function reportCompactionFailure(
+  say: (message: string) => void,
+  step: string,
+  reason: string,
+  fields?: LogFields,
+): void {
   say(`${step} failed: ${reason}`);
   log.error(`post-compact: ${step} failed: ${reason}`, fields);
 }

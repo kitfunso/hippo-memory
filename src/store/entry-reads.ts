@@ -11,10 +11,12 @@ import { placeholders } from '../util/sql.js';
 
 const MAX_IDS_PER_READ = 500;
 
-// The plus keeps SQLite on the primary key for an id list: with a bare tenant_id it walks every row of the tenant instead.
+// The plus keeps SQLite on the primary key for an id list: with a bare tenant_id it walks every row of the tenant
+// instead.
 export const TENANT_IS = '+tenant_id = ?';
 
-/** Read a memory entry by ID. With `tenantId` the read is tenant-scoped (cross-tenant returns null); omitted, no tenant filter is applied. */
+/** Read a memory entry by ID. With `tenantId` the read is tenant-scoped (cross-tenant returns null); omitted, no
+ * tenant filter is applied. */
 export function readEntry(hippoRoot: string, id: string, tenantId?: string): MemoryEntry | null {
   return onHandle(hippoRoot, (db) => {
     // SAFETY: both branches select exactly MEMORY_SELECT_COLUMNS, matching
@@ -30,7 +32,8 @@ export function readEntry(hippoRoot: string, id: string, tenantId?: string): Mem
   }, openStore);
 }
 
-/** Answers whether a tenant's rows in this store hold an id: `ids` are looked up now, one query per chunk, and any other id on its first ask. */
+/** Answers whether a tenant's rows in this store hold an id: `ids` are looked up now, one query per chunk, and any
+ * other id on its first ask. */
 export function heldIdLookup(hippoRoot: string, tenantId: string, ids: readonly string[]): (id: string) => boolean {
   const held = new Map<string, boolean>();
   const lookUp = (asked: readonly string[]): void => {
@@ -52,7 +55,8 @@ export function heldIdLookup(hippoRoot: string, tenantId: string, ids: readonly 
   };
 }
 
-/** Rows by id on the caller's handle, one query per chunk; an id missing or in another tenant is absent from the map. */
+/** Rows by id on the caller's handle, one query per chunk; an id missing or in another tenant is absent from the
+ * map. */
 export function selectEntriesByIds(
   db: DatabaseSyncLike,
   ids: readonly string[],
@@ -84,9 +88,11 @@ export function selectChildrenByParent(
   for (const chunk of chunked([...new Set(parentIds)])) {
     const marks = placeholders(chunk.length);
     // SAFETY: selects exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
-    const rows = db.prepare(
-      `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE dag_parent_id IN (${marks})${tenantClause} ORDER BY created ASC, id ASC`,
-    ).all(...chunk, ...tenantArgs) as MemoryRow[];
+    const rows = db
+      .prepare(
+        `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE dag_parent_id IN (${marks})${tenantClause} ORDER BY created ASC, id ASC`,
+      )
+      .all(...chunk, ...tenantArgs) as MemoryRow[];
     for (const row of rows) {
       const entry = rowToEntry(row);
       const parentId = entry.dag_parent_id ?? '';
@@ -98,7 +104,8 @@ export function selectChildrenByParent(
   return byParent;
 }
 
-/** Batched lookup, capped at 500 ids per call to keep IN(?,?,...) within SQLite limits; tenant filter enforced when `tenantId` is passed. */
+/** Batched lookup, capped at 500 ids per call to keep IN(?,?,...) within SQLite limits; tenant filter enforced when
+ * `tenantId` is passed. */
 export function loadEntriesByIds(
   hippoRoot: string,
   ids: readonly string[],
@@ -110,13 +117,18 @@ export function loadEntriesByIds(
     const marks = placeholders(capped.length);
     // Without ORDER BY, rows follow SQLite's IN(...) scan order, undefined w.r.t. `ids`.
     // SAFETY: both branches select exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
-    const rows = tenantId !== undefined
-      ? db.prepare(
-          `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id IN (${marks}) AND ${TENANT_IS} ORDER BY created ASC, content ASC, id ASC`,
-        ).all(...capped, tenantId) as MemoryRow[]
-      : db.prepare(
-          `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id IN (${marks}) ORDER BY created ASC, content ASC, id ASC`,
-        ).all(...capped) as MemoryRow[];
+    const rows =
+      tenantId !== undefined
+        ? (db
+            .prepare(
+              `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id IN (${marks}) AND ${TENANT_IS} ORDER BY created ASC, content ASC, id ASC`,
+            )
+            .all(...capped, tenantId) as MemoryRow[])
+        : (db
+            .prepare(
+              `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id IN (${marks}) ORDER BY created ASC, content ASC, id ASC`,
+            )
+            .all(...capped) as MemoryRow[]);
     return rows.map(rowToEntry);
   }, openStore);
 }
@@ -126,7 +138,8 @@ function originClause(origins: readonly string[] | undefined): string {
 }
 
 /** All `kind='raw'` rows for a session, tenant-scoped, oldest-first, excluding superseded; `[]` for an empty sessionId.
- * With `cap`, the NEWEST rows are loaded (DESC LIMIT, reversed client-side); ASC + LIMIT would drop the newest and break fresh-tail in assemble. */
+ * With `cap`, the NEWEST rows are loaded (DESC LIMIT, reversed client-side); ASC + LIMIT would drop the newest and
+ * break fresh-tail in assemble. */
 export function loadSessionRawMemories(
   hippoRoot: string,
   sessionId: string,
@@ -159,8 +172,10 @@ export function loadSessionRawMemories(
   }, openStore);
 }
 
-/** Pre-cap, scope-aware row count for a session, so `assemble` reports the full size without leaking rows the caller could not load. Mirrors
- * `passesScopeFilterForRecall`'s default-deny: explicit scope matches exactly, none admits only `ownScope`. `tenantId` undefined counts cross-tenant. */
+/** Pre-cap, scope-aware row count for a session, so `assemble` reports the full size without leaking rows the caller
+ * could not load. Mirrors
+ * `passesScopeFilterForRecall`'s default-deny: explicit scope matches exactly, none admits only `ownScope`.
+ * `tenantId` undefined counts cross-tenant. */
 export function countSessionRawMemories(
   hippoRoot: string,
   sessionId: string,
@@ -194,8 +209,10 @@ export function countSessionRawMemories(
   }, openStore);
 }
 
-/** Last N kind='raw' memories by `created` desc, tenant-scoped, max 200; pass `sessionId` or concurrent sessions show up in each other's fresh tail.
- * The tenant-wide shape is discouraged: `api.recall` throws `RecallContractError` for it when `HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL=1`. */
+/** Last N kind='raw' memories by `created` desc, tenant-scoped, max 200; pass `sessionId` or concurrent sessions show
+ * up in each other's fresh tail.
+ * The tenant-wide shape is discouraged: `api.recall` throws `RecallContractError` for it when
+ * `HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL=1`. */
 export function loadFreshRawMemories(
   hippoRoot: string,
   count: number,
@@ -228,18 +245,22 @@ export function loadFreshRawMemories(
   }, openStore);
 }
 
-/** Load all entries from SQLite; omitting `tenantId` yields all rows (legacy). Recall paths that surface results to a user MUST pass a resolved tenant. */
+/** Load all entries from SQLite; omitting `tenantId` yields all rows (legacy). Recall paths that surface results to
+ * a user MUST pass a resolved tenant. */
 export function loadAllEntries(hippoRoot: string, tenantId?: string): MemoryEntry[] {
   return onHandle(hippoRoot, (db) => {
     return selectAllEntries(db, tenantId);
   }, openStore);
 }
 
-/** Every tenant's memory ids in loadAllEntries' order, for a caller that reads the rows a page at a time instead of holding them all. */
+/** Every tenant's memory ids in loadAllEntries' order, for a caller that reads the rows a page at a time instead of
+ * holding them all. */
 export function loadAllEntryIds(hippoRoot: string): string[] {
   return onHandle(hippoRoot, (db) => {
     // SAFETY: the SELECT names exactly the one column read.
-    return (db.prepare('SELECT id FROM memories ORDER BY created ASC, id ASC').all() as Array<{ id: string }>).map((row) => row.id);
+    return (db.prepare('SELECT id FROM memories ORDER BY created ASC, id ASC').all() as Array<{ id: string }>).map(
+      (row) => row.id,
+    );
   }, openStore);
 }
 
@@ -255,13 +276,20 @@ export function countAllEntries(hippoRoot: string): number {
 // The only code points whose JS toLowerCase yields ASCII, which SQLite's ASCII-only LIKE folding cannot see.
 const FOLDS_TO_ASCII = ['\u0130', '\u212A'];
 
-/** A superset, in loadAllEntries' order, of the rows whose lowercased content holds any of `tokens` or whose lowercased tags hold `tag`.
+/** A superset, in loadAllEntries' order, of the rows whose lowercased content holds any of `tokens` or whose lowercased
+ * tags hold `tag`.
  * The caller re-checks each row exactly; this only spares decoding rows that cannot match. */
-export function loadEntriesMentioning(hippoRoot: string, tokens: readonly string[], tag: string, tenantId?: string): MemoryEntry[] {
+export function loadEntriesMentioning(
+  hippoRoot: string,
+  tokens: readonly string[],
+  tag: string,
+  tenantId?: string,
+): MemoryEntry[] {
   const likes = [...new Set(tokens)].map((t) => `%${escapeLike(t)}%`);
   const clauses = likes.map(() => `content LIKE ? ESCAPE '\\'`);
   const params: string[] = [...likes];
-  // A tag needing JSON escapes or case folding past ASCII is not found by a substring of tags_json, so every tagged row stays in.
+  // A tag needing JSON escapes or case folding past ASCII is not found by a substring of tags_json, so every tagged row
+  // stays in.
   if (/^[\x20-\x7e]*$/.test(tag) && !/["\\]/.test(tag)) {
     clauses.push(`tags_json LIKE ? ESCAPE '\\'`);
     params.push(`%${escapeLike(tag)}%`);
@@ -271,13 +299,19 @@ export function loadEntriesMentioning(hippoRoot: string, tokens: readonly string
     params.push(ch, ch);
   }
   const tenantClause = tenantId !== undefined ? 'tenant_id = ? AND ' : '';
-  return onHandle(hippoRoot, (db) => {
-    // SAFETY: selects exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
-    const rows = db.prepare(
-      `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE ${tenantClause}(${clauses.join(' OR ')}) ORDER BY created ASC, id ASC`,
-    ).all(...(tenantId !== undefined ? [tenantId] : []), ...params) as MemoryRow[];
-    return rows.map(rowToEntry);
-  }, openStore);
+  return onHandle(
+    hippoRoot,
+    (db) => {
+      // SAFETY: selects exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
+      const rows = db
+        .prepare(
+          `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE ${tenantClause}(${clauses.join(' OR ')}) ORDER BY created ASC, id ASC`,
+        )
+        .all(...(tenantId !== undefined ? [tenantId] : []), ...params) as MemoryRow[];
+      return rows.map(rowToEntry);
+    },
+    openStore,
+  );
 }
 
 export interface EntryTextKey {
@@ -287,7 +321,8 @@ export interface EntryTextKey {
   source: string;
 }
 
-/** The rows in loadAllEntries' order (every tenant unless one is named), with only the columns that say whether another store already holds each. */
+/** The rows in loadAllEntries' order (every tenant unless one is named), with only the columns that say whether
+ * another store already holds each. */
 export function loadEntryTextKeys(hippoRoot: string, tenantId?: string): EntryTextKey[] {
   return onHandle(hippoRoot, (db) => {
     const where = tenantId !== undefined ? 'WHERE tenant_id = ? ' : '';
@@ -295,7 +330,12 @@ export function loadEntryTextKeys(hippoRoot: string, tenantId?: string): EntryTe
     const rows = db.prepare(`SELECT id, tenant_id, content, source FROM memories ${where}ORDER BY created ASC, id ASC`)
       .all(...(tenantId !== undefined ? [tenantId] : [])) as
       Array<{ id: string; tenant_id: string | null; content: string; source: string }>;
-    return rows.map((row) => ({ id: row.id, tenant_id: row.tenant_id ?? DEFAULT_TENANT_ID, content: row.content, source: row.source }));
+    return rows.map((row) => ({
+      id: row.id,
+      tenant_id: row.tenant_id ?? DEFAULT_TENANT_ID,
+      content: row.content,
+      source: row.source,
+    }));
   }, openStore);
 }
 
@@ -304,7 +344,8 @@ export interface EntriesWithBase {
   base: { get(id: string): MemoryEntry | undefined };
 }
 
-/** Every entry plus a by-id lookup of each as loaded, rebuilt from its row on first use, so no deep copy of the store is kept. */
+/** Every entry plus a by-id lookup of each as loaded, rebuilt from its row on first use, so no deep copy of the
+ * store is kept. */
 export function loadAllEntriesWithBase(hippoRoot: string): EntriesWithBase {
   const db = openStore(hippoRoot);
   let rows: MemoryRow[];
@@ -349,10 +390,17 @@ export interface EntryPage {
 }
 
 /** Up to `limit` rows in loadAllEntries' order, starting after `after`; omitting `tenantId` reads every tenant. */
-export function loadEntriesPage(hippoRoot: string, tenantId: string | undefined, page: { limit: number; after?: EntryCursor }): EntryPage {
+export function loadEntriesPage(
+  hippoRoot: string,
+  tenantId: string | undefined,
+  page: { limit: number; after?: EntryCursor },
+): EntryPage {
   const where: string[] = [];
   const params: Array<string | number> = [];
-  if (tenantId !== undefined) { where.push('tenant_id = ?'); params.push(tenantId); }
+  if (tenantId !== undefined) {
+    where.push('tenant_id = ?');
+    params.push(tenantId);
+  }
   if (page.after) {
     where.push('(created > ? OR (created = ? AND id > ?))');
     params.push(page.after.created, page.after.created, page.after.id);
@@ -360,13 +408,19 @@ export function loadEntriesPage(hippoRoot: string, tenantId: string | undefined,
   const clause = where.length > 0 ? `WHERE ${where.join(' AND ')} ` : '';
   // One extra row says whether another page follows without a count.
   params.push(page.limit + 1);
-  return onHandle(hippoRoot, (db) => {
-    // SAFETY: selects exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
-    const rows = db.prepare(`SELECT ${MEMORY_SELECT_COLUMNS} FROM memories ${clause}ORDER BY created ASC, id ASC LIMIT ?`).all(...params) as MemoryRow[];
-    const entries = rows.slice(0, page.limit).map(rowToEntry);
-    const last = entries[entries.length - 1];
-    return { entries, next: rows.length > page.limit && last ? { created: last.created, id: last.id } : null };
-  }, openStore);
+  return onHandle(
+    hippoRoot,
+    (db) => {
+      // SAFETY: selects exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
+      const rows = db
+        .prepare(`SELECT ${MEMORY_SELECT_COLUMNS} FROM memories ${clause}ORDER BY created ASC, id ASC LIMIT ?`)
+        .all(...params) as MemoryRow[];
+      const entries = rows.slice(0, page.limit).map(rowToEntry);
+      const last = entries[entries.length - 1];
+      return { entries, next: rows.length > page.limit && last ? { created: last.created, id: last.id } : null };
+    },
+    openStore,
+  );
 }
 
 /** Every memory row on an open connection, so a caller can read inside its own transaction. */
@@ -374,34 +428,58 @@ export function selectAllEntries(db: DatabaseSyncLike, tenantId?: string): Memor
   return selectAllRows(db, tenantId).map(rowToEntry);
 }
 
-/** The columns a text match needs, for every row of a tenant in loadAllEntries' order: callers read whole rows only for the ids that match. */
-export function selectTenantTexts(db: DatabaseSyncLike, tenantId: string): Array<{ id: string; content: string; source: string; scope: string | null }> {
+/** The columns a text match needs, for every row of a tenant in loadAllEntries' order: callers read whole rows only
+ * for the ids that match. */
+export function selectTenantTexts(
+  db: DatabaseSyncLike,
+  tenantId: string,
+): Array<{ id: string; content: string; source: string; scope: string | null }> {
   // SAFETY: rows' shape matches the four columns named in the SELECT.
-  return db.prepare('SELECT id, content, source, scope FROM memories WHERE tenant_id = ? ORDER BY created ASC, id ASC').all(tenantId) as
-    Array<{ id: string; content: string; source: string; scope: string | null }>;
+  return db
+    .prepare('SELECT id, content, source, scope FROM memories WHERE tenant_id = ? ORDER BY created ASC, id ASC')
+    .all(tenantId) as Array<{ id: string; content: string; source: string; scope: string | null }>;
 }
 
-/** Live rows whose source starts with `prefix`, on the caller's handle; LIKE folds case, so the prefix is checked again exactly. */
+/** Live rows whose source starts with `prefix`, on the caller's handle; LIKE folds case, so the prefix is checked
+ * again exactly. */
 export function selectLiveEntriesBySourcePrefix(db: DatabaseSyncLike, tenantId: string, prefix: string): MemoryEntry[] {
   // SAFETY: selects exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
-  const rows = db.prepare(
-    `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE tenant_id = ? AND superseded_by IS NULL AND source LIKE ? ESCAPE '\\'`,
-  ).all(tenantId, `${escapeLike(prefix)}%`) as MemoryRow[];
+  const rows = db
+    .prepare(
+      `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE tenant_id = ? AND superseded_by IS NULL AND source LIKE ? ESCAPE '\\'`,
+    )
+    .all(tenantId, `${escapeLike(prefix)}%`) as MemoryRow[];
   return rows.map(rowToEntry).filter((entry) => entry.source.startsWith(prefix));
 }
 
-// Content of every team-visible tenant row tagged `tag`, without reading the rest of the store; `origins` keeps one project's rows and user-global ones.
-// No owner: a personal or connector-private row must never answer `duplicate` for, or stop, a team copy. `instr` prefilters; `includes` re-checks.
-export function loadContentsWithTag(hippoRoot: string, tenantId: string, tag: string, origins?: readonly string[]): string[] {
-  return onHandle(hippoRoot, (db) => {
-    const inProject = origins === undefined ? '' : ` AND (origin_project = '' OR ${originInSql(origins)})`;
-    const admit = scopeAdmitSql('');
-    /** SAFETY: rows' shape matches the two columns named in the SELECT below. */
-    const rows = db.prepare(
-      `SELECT content, tags_json FROM memories WHERE tenant_id = ? AND instr(tags_json, ?) > 0${inProject} AND ${admit.sql}`,
-    ).all(tenantId, JSON.stringify(tag), ...(origins ?? []), ...admit.params) as Array<{ content: string; tags_json: string }>;
-    return rows.filter((r) => parseJsonArray(r.tags_json).includes(tag)).map((r) => r.content);
-  }, openStore);
+// Content of every team-visible tenant row tagged `tag`, without reading the rest of the store; `origins` keeps one
+// project's rows and user-global ones.
+// No owner: a personal or connector-private row must never answer `duplicate` for, or stop, a team copy. `instr`
+// prefilters; `includes` re-checks.
+export function loadContentsWithTag(
+  hippoRoot: string,
+  tenantId: string,
+  tag: string,
+  origins?: readonly string[],
+): string[] {
+  return onHandle(
+    hippoRoot,
+    (db) => {
+      const inProject = origins === undefined ? '' : ` AND (origin_project = '' OR ${originInSql(origins)})`;
+      const admit = scopeAdmitSql('');
+      /** SAFETY: rows' shape matches the two columns named in the SELECT below. */
+      const rows = db
+        .prepare(
+          `SELECT content, tags_json FROM memories WHERE tenant_id = ? AND instr(tags_json, ?) > 0${inProject} AND ${admit.sql}`,
+        )
+        .all(tenantId, JSON.stringify(tag), ...(origins ?? []), ...admit.params) as Array<{
+        content: string;
+        tags_json: string;
+      }>;
+      return rows.filter((r) => parseJsonArray(r.tags_json).includes(tag)).map((r) => r.content);
+    },
+    openStore,
+  );
 }
 
 export interface VaultRawRow {
@@ -411,7 +489,8 @@ export interface VaultRawRow {
   scope: string | null;
 }
 
-/** Live raw rows whose artifact_ref matches a LIKE pattern, for one tenant; the store is set up first when it is new. */
+/** Live raw rows whose artifact_ref matches a LIKE pattern, for one tenant; the store is set up first when it is
+ * new. */
 export function loadVaultRawRows(hippoRoot: string, likeParam: string, tenantId: string): VaultRawRow[] {
   return onHandle(hippoRoot, (db) => {
     // SAFETY: query selects exactly the columns of VaultRawRow, in the same
@@ -453,26 +532,42 @@ export function entryIdTakenAt(db: DatabaseSyncLike, id: string): boolean {
 }
 
 /** The text, tenant and scope of memory `id`, or undefined when no row holds it. */
-export function entryRejectRowAt(db: DatabaseSyncLike, id: string): { content: string; tenant_id: string; scope: string | null } | undefined {
+export function entryRejectRowAt(
+  db: DatabaseSyncLike,
+  id: string,
+): { content: string; tenant_id: string; scope: string | null } | undefined {
   // SAFETY: row's shape matches the three columns named in the SELECT.
-  return db
-    .prepare(`SELECT content, tenant_id, scope FROM memories WHERE id = ?`)
-    .get(id) as { content: string; tenant_id: string; scope: string | null } | undefined;
+  return db.prepare(`SELECT content, tenant_id, scope FROM memories WHERE id = ?`).get(id) as
+    { content: string; tenant_id: string; scope: string | null } | undefined;
 }
 
 /** Memory ids held by each typed-object table, with the status of the object that holds them. */
-const OBJECT_TABLES = ['decisions', 'incidents', 'processes', 'policies', 'skills', 'project_briefs', 'customer_notes'] as const;
+const OBJECT_TABLES = [
+  'decisions',
+  'incidents',
+  'processes',
+  'policies',
+  'skills',
+  'project_briefs',
+  'customer_notes',
+] as const;
 
 export function objectMemoryRowsAt(db: DatabaseSyncLike): Array<{ memory_id: string; status: string }> {
   const out: Array<{ memory_id: string; status: string }> = [];
   for (const table of OBJECT_TABLES) {
     // SAFETY: SELECT of two TEXT columns, filtered to a non-null memory_id.
-    out.push(...(db.prepare(`SELECT memory_id, status FROM ${table} WHERE memory_id IS NOT NULL`).all() as { memory_id: string; status: string }[]));
+    out.push(
+      ...(db.prepare(`SELECT memory_id, status FROM ${table} WHERE memory_id IS NOT NULL`).all() as {
+        memory_id: string;
+        status: string;
+      }[]),
+    );
   }
   return out;
 }
 
-/** Live rows of a tenant whose source does not start with `sourcePrefix`; `origins` (global store only) limits them to user-global rows and those projects. */
+/** Live rows of a tenant whose source does not start with `sourcePrefix`; `origins` (global store only) limits them
+ * to user-global rows and those projects. */
 export function selectRowsOutsideSourcePrefixAt(
   db: DatabaseSyncLike, tenantId: string, sourcePrefix: string, origins: readonly string[] | null,
 ): Array<{ id: string; content: string; source: string }> {
@@ -487,21 +582,34 @@ export function selectRowsOutsideSourcePrefixAt(
 
 /** Content of a tenant's live rows written by `source` and tagged `tag` that no extraction produced,
  * in loadAllEntries' order and in every scope; `exceptSessionId` drops one session's own rows. */
-export function loadLiveContentsBySourceAndTag(hippoRoot: string, tenantId: string, source: string, tag: string, exceptSessionId: string): string[] {
-  return onHandle(hippoRoot, (db) => {
-    /** SAFETY: rows' shape matches the two columns named in the SELECT below. */
-    const rows = db.prepare(
-      `SELECT content, tags_json FROM memories
+export function loadLiveContentsBySourceAndTag(
+  hippoRoot: string,
+  tenantId: string,
+  source: string,
+  tag: string,
+  exceptSessionId: string,
+): string[] {
+  return onHandle(
+    hippoRoot,
+    (db) => {
+      /** SAFETY: rows' shape matches the two columns named in the SELECT below. */
+      const rows = db
+        .prepare(
+          `SELECT content, tags_json FROM memories
        WHERE tenant_id = ? AND source = ? AND instr(tags_json, ?) > 0
          AND COALESCE(extracted_from, '') = '' AND COALESCE(superseded_by, '') = ''
          AND (source_session_id IS NULL OR source_session_id != ?)
        ORDER BY created ASC, id ASC`,
-    ).all(tenantId, source, JSON.stringify(tag), exceptSessionId) as Array<{ content: string; tags_json: string }>;
-    return rows.filter((r) => parseJsonArray(r.tags_json).includes(tag)).map((r) => r.content);
-  }, openStore);
+        )
+        .all(tenantId, source, JSON.stringify(tag), exceptSessionId) as Array<{ content: string; tags_json: string }>;
+      return rows.filter((r) => parseJsonArray(r.tags_json).includes(tag)).map((r) => r.content);
+    },
+    openStore,
+  );
 }
 
-/** Every tenant's distilled rows nothing has superseded, in loadAllEntries' order: the rows that can be each other's duplicate. */
+/** Every tenant's distilled rows nothing has superseded, in loadAllEntries' order: the rows that can be each other's
+ * duplicate. */
 export function loadCurrentDistilledEntries(hippoRoot: string): MemoryEntry[] {
   return onHandle(hippoRoot, (db) => {
     // SAFETY: selects exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
@@ -522,34 +630,54 @@ export interface EntrySignals {
   valences: readonly string[];
 }
 
-/** Rows holding at least one signal, in loadAllEntries' order; omitting `tenantId` reads every tenant. A superset: callers re-check each row. */
+/** Rows holding at least one signal, in loadAllEntries' order; omitting `tenantId` reads every tenant. A superset:
+ * callers re-check each row. */
 export function loadEntriesWithSignals(hippoRoot: string, signals: EntrySignals, tenantId?: string): MemoryEntry[] {
-  // A backslash may hide an escaped tag from instr, so such rows always pass; LIKE folds case, so the prefix match is wider than startsWith.
+  // A backslash may hide an escaped tag from instr, so such rows always pass; LIKE folds case, so the prefix match is
+  // wider than startsWith.
   const anyOf = [
     'pinned != 0', 'retrieval_count >= ?', `emotional_valence IN (${placeholders(signals.valences.length)})`,
     "source LIKE ? ESCAPE '\\'", "instr(tags_json, '\\') > 0", ...signals.tags.map(() => 'instr(tags_json, ?) > 0'),
   ];
-  const params = [signals.minRetrievals, ...signals.valences, `${escapeLike(signals.sourcePrefix)}%`, ...signals.tags.map((t) => JSON.stringify(t))];
+  const params = [
+    signals.minRetrievals,
+    ...signals.valences,
+    `${escapeLike(signals.sourcePrefix)}%`,
+    ...signals.tags.map((t) => JSON.stringify(t)),
+  ];
   const tenant = tenantId !== undefined ? 'tenant_id = ? AND ' : '';
   return onHandle(hippoRoot, (db) => {
     // SAFETY: selects exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
-    const rows = db.prepare(
-      `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE ${tenant}(${anyOf.join(' OR ')}) ORDER BY created ASC, id ASC`,
-    ).all(...(tenantId !== undefined ? [tenantId] : []), ...params) as MemoryRow[];
+    const rows = db
+      .prepare(
+        `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE ${tenant}(${anyOf.join(' OR ')}) ORDER BY created ASC, id ASC`,
+      )
+      .all(...(tenantId !== undefined ? [tenantId] : []), ...params) as MemoryRow[];
     return rows.map(rowToEntry);
   }, openStore);
 }
 
-/** A tenant's rows from `origins` that nothing superseded and that are neither raw nor archived, in loadAllEntries' order. */
-export function loadCurrentEntriesFromOrigins(hippoRoot: string, tenantId: string, origins: readonly string[]): MemoryEntry[] {
-  return onHandle(hippoRoot, (db) => {
-    // SAFETY: selects exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
-    const rows = db.prepare(
-      `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories
+/** A tenant's rows from `origins` that nothing superseded and that are neither raw nor archived, in loadAllEntries'
+ * order. */
+export function loadCurrentEntriesFromOrigins(
+  hippoRoot: string,
+  tenantId: string,
+  origins: readonly string[],
+): MemoryEntry[] {
+  return onHandle(
+    hippoRoot,
+    (db) => {
+      // SAFETY: selects exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
+      const rows = db
+        .prepare(
+          `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories
        WHERE tenant_id = ? AND ${originInSql(origins)} AND COALESCE(superseded_by, '') = ''
          AND COALESCE(kind, 'distilled') NOT IN ('raw', 'archived')
        ORDER BY created ASC, id ASC`,
-    ).all(tenantId, ...origins) as MemoryRow[];
-    return rows.map(rowToEntry);
-  }, openStore);
+        )
+        .all(tenantId, ...origins) as MemoryRow[];
+      return rows.map(rowToEntry);
+    },
+    openStore,
+  );
 }

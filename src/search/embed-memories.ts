@@ -9,14 +9,30 @@ import { loadConfig } from '../core/config.js';
 import { initializeParticle } from '../core/physics.js';
 import { resolveEmbeddingProvider, type EmbeddingProvider } from '../embeddings/provider.js';
 import {
-  embeddingIndexIdentity, embeddingInputText, embeddingModelRequiresReindex, indexNeedsRebuild, saveStoredEmbeddingModel,
+  embeddingIndexIdentity,
+  embeddingInputText,
+  embeddingModelRequiresReindex,
+  indexNeedsRebuild,
+  saveStoredEmbeddingModel,
 } from '../store/embeddings/index.js';
 import { loadAllEntryIds, loadEntriesByIds } from '../store/entry-reads.js';
 import {
-  requireGroup, type HippoStore, type VectorReads, type VectorRowWrite, type VectorWrite, type VectorWriteResult, type VectorWrites,
+  requireGroup,
+  type HippoStore,
+  type VectorReads,
+  type VectorRowWrite,
+  type VectorWrite,
+  type VectorWriteResult,
+  type VectorWrites,
 } from '../store/port.js';
 import {
-  indexedModel, pruneStoredVectors, replacesIndex, resetStoredParticles, saveEmbeddingIndex, saveStoredVectors, seedStoredParticle,
+  indexedModel,
+  pruneStoredVectors,
+  replacesIndex,
+  resetStoredParticles,
+  saveEmbeddingIndex,
+  saveStoredVectors,
+  seedStoredParticle,
 } from '../store/vector-index.js';
 import { chunked } from '../util/chunked.js';
 import { envByName } from '../util/env.js';
@@ -127,7 +143,8 @@ async function acquireEmbedFileLock(hippoRoot: string): Promise<() => void> {
     } catch (err) {
       if (!(err instanceof Error && 'code' in err && err.code === 'EEXIST')) throw err;
     }
-    // SHORTCUT: two waiters can both break one dead holder's lock; a vector lost that way is backfilled by the next `hippo embed`.
+    // SHORTCUT: two waiters can both break one dead holder's lock; a vector lost that way is backfilled by the next
+    // `hippo embed`.
     if (!embedLockHolderAlive(lockPath)) {
       fs.rmSync(lockPath, { force: true });
       continue;
@@ -148,7 +165,8 @@ async function withEmbedLock<T>(hippoRoot: string, fn: () => Promise<T>): Promis
   });
 }
 
-// A store keeps each write whole in its own transaction, and a lock file in hippoRoot would not reach a worker on another host.
+// A store keeps each write whole in its own transaction, and a lock file in hippoRoot would not reach a worker on
+// another host.
 async function withProcessEmbedLock<T>(fn: () => Promise<T>): Promise<T> {
   let resolve!: () => void;
   const next = new Promise<void>(r => { resolve = r; });
@@ -162,7 +180,8 @@ async function withProcessEmbedLock<T>(fn: () => Promise<T>): Promise<T> {
   }
 }
 
-// A bad key fails every write; one full warning per distinct failure tells the user, and a count of the repeats follows at most once per interval.
+// A bad key fails every write; one full warning per distinct failure tells the user, and a count of the repeats follows
+// at most once per interval.
 const EMBED_WARN_KEY_CAP = 64;
 const EMBED_SUPPRESSED_SUMMARY_INTERVAL_MS = MINUTE_MS;
 const embedFailureSeen = new Map<string, { lastNoticeAt: number; suppressed: number }>();
@@ -179,7 +198,9 @@ function warnEmbedFailureOnce(source: string, rawMessage: string, cause?: unknow
   if (seen) {
     seen.suppressed += 1;
     if (now - seen.lastNoticeAt >= EMBED_SUPPRESSED_SUMMARY_INTERVAL_MS) {
-      log.warn(`${seen.suppressed} more embedding errors from ${source} since the last notice; memories are still stored without embeddings.`);
+      log.warn(
+        `${seen.suppressed} more embedding errors from ${source} since the last notice; memories are still stored without embeddings.`,
+      );
       seen.suppressed = 0;
       seen.lastNoticeAt = now;
     }
@@ -202,15 +223,22 @@ function vectorGroups(store: HippoStore): readonly [VectorReads, VectorWrites] {
   return [requireGroup(store, 'vectors'), requireGroup(store, 'vectorWrites')];
 }
 
-/** Writes one page's vectors, one writeVectors per tenant, and stops at the first refused write; `withParticles` seeds each memory's particle. */
+/** Writes one page's vectors, one writeVectors per tenant, and stops at the first refused write; `withParticles`
+ * seeds each memory's particle. */
 async function writeVectorPage(
-  writes: VectorWrites, write: Pick<VectorWrite, 'model' | 'replaceIndex'>, page: readonly MemoryEntry[], vectors: readonly number[][], withParticles: boolean,
+  writes: VectorWrites,
+  write: Pick<VectorWrite, 'model' | 'replaceIndex'>,
+  page: readonly MemoryEntry[],
+  vectors: readonly number[][],
+  withParticles: boolean,
 ): Promise<VectorWriteResult> {
   const byTenant = new Map<string, VectorRowWrite[]>();
   page.forEach((entry, i) => {
     const vector = vectors[i];
     if (!vector || vector.length === 0) return noteSkippedEmbedding(entry.id);
-    const row: VectorRowWrite = withParticles ? { memoryId: entry.id, vector, particle: initializeParticle(entry, vector) } : { memoryId: entry.id, vector };
+    const row: VectorRowWrite = withParticles
+      ? { memoryId: entry.id, vector, particle: initializeParticle(entry, vector) }
+      : { memoryId: entry.id, vector };
     byTenant.set(entry.tenant_id, [...(byTenant.get(entry.tenant_id) ?? []), row]);
   });
   let written = 0;
@@ -224,17 +252,27 @@ async function writeVectorPage(
 
 const OTHER_MODEL_INDEX = "the vector index was built by another embedding model; run 'hippo embed' to rebuild it";
 
-/** Embeds every memory with no vector under `model`, page by page, so a provider failure keeps the pages written; a rebuild reseeds the particles it drops. */
-async function backfillInStore(writes: VectorWrites, provider: EmbeddingProvider, model: string, rebuild: boolean): Promise<number> {
+/** Embeds every memory with no vector under `model`, page by page, so a provider failure keeps the pages written; a
+ * rebuild reseeds the particles it drops. */
+async function backfillInStore(
+  writes: VectorWrites,
+  provider: EmbeddingProvider,
+  model: string,
+  rebuild: boolean,
+): Promise<number> {
   let count = 0;
   let afterId: string | undefined;
   for (;;) {
     const page = await writes.entriesWithoutVector({ model, afterId, limit: STORE_PAGE });
     if (page.length === 0) return count;
     afterId = page[page.length - 1].id;
-    const vectors = await provider.embed(page.map((e) => embeddingInputText(e)), 'passage');
+    const vectors = await provider.embed(
+      page.map((e) => embeddingInputText(e)),
+      'passage',
+    );
     const result = await writeVectorPage(writes, { model, replaceIndex: rebuild }, page, vectors, rebuild);
-    // Another process rebuilt the index mid-run; every later page would be refused too, after paying the provider for it.
+    // Another process rebuilt the index mid-run; every later page would be refused too, after paying the provider for
+    // it.
     if (result.modelMismatch) throw new Error(OTHER_MODEL_INDEX);
     count += result.written;
   }
@@ -247,8 +285,10 @@ async function embedAllInStore(store: HippoStore, provider: EmbeddingProvider): 
   return backfillInStore(writes, provider, embeddingIndexIdentity(provider.id), rebuild);
 }
 
-/** embedMemory on a store; like the hippo.db path it resolves whatever fails. Unlike it, it leaves a model change to embedAll, so a stale
- *  read here never drops another process's rebuild; the read only saves a paid embed call, as the write refuses another model itself. */
+/** embedMemory on a store; like the hippo.db path it resolves whatever fails. Unlike it, it leaves a model change to
+ * embedAll, so a stale
+ * read here never drops another process's rebuild; the read only saves a paid embed call, as the write refuses
+ * another model itself. */
 function embedMemoryInStore(store: HippoStore, provider: EmbeddingProvider, entry: MemoryEntry): Promise<EmbedOutcome> {
   return withProcessEmbedLock(async () => {
     const [reads, writes] = vectorGroups(store);
@@ -276,11 +316,14 @@ function embedMemoryInStore(store: HippoStore, provider: EmbeddingProvider, entr
 
 const INLINE_REINDEX_MAX_ROWS = 256;
 
-/** `off` is a provider that is disabled or not installed, which is a choice; `failed` is a memory that stays out of the vector index. */
+/** `off` is a provider that is disabled or not installed, which is a choice; `failed` is a memory that stays out of
+ * the vector index. */
 export type EmbedOutcome = 'indexed' | 'off' | 'failed';
 
-/** Embed a single memory entry and cache the result in the embedding index; with `store`, through its vectorWrites, never opening hippo.db.
- *  Resolves whatever fails, so a caller that fires and forgets stays safe; the outcome says whether the memory reached the index. */
+/** Embed a single memory entry and cache the result in the embedding index; with `store`, through its vectorWrites,
+ * never opening hippo.db.
+ * Resolves whatever fails, so a caller that fires and forgets stays safe; the outcome says whether the memory
+ * reached the index. */
 export async function embedMemory(
   hippoRoot: string,
   entry: MemoryEntry,
@@ -304,13 +347,19 @@ export async function embedMemory(
   });
 }
 
-/** Best-effort: an embedding failure (API down, bad key, 5xx) must not reject the caller's write; the existing index is left as-is.
+/** Best-effort: an embedding failure (API down, bad key, 5xx) must not reject the caller's write; the existing index is
+ * left as-is.
  *  Failures surface on the explicit `hippo embed` / `embedAll` path. */
-async function embedMemoryLocked(hippoRoot: string, provider: EmbeddingProvider, entry: MemoryEntry): Promise<EmbedOutcome> {
+async function embedMemoryLocked(
+  hippoRoot: string,
+  provider: EmbeddingProvider,
+  entry: MemoryEntry,
+): Promise<EmbedOutcome> {
   try {
     const identity = provider.id;
     if (embeddingModelRequiresReindex(hippoRoot, identity)) {
-      // A fire-and-forget write heals a small index inline; a large one is left to `hippo embed`, so no write holds the lock for a whole-store embed.
+      // A fire-and-forget write heals a small index inline; a large one is left to `hippo embed`, so no write holds the
+      // lock for a whole-store embed.
       if (loadAllEntryIds(hippoRoot).length > INLINE_REINDEX_MAX_ROWS) {
         warnEmbedFailureOnce('index', OTHER_MODEL_INDEX);
         return 'failed';
@@ -333,11 +382,14 @@ async function embedMemoryLocked(hippoRoot: string, provider: EmbeddingProvider,
   }
 }
 
-// Every page is embedded before one transaction replaces the index, and the identity is saved only after that: a provider failure or a crash
-// at any earlier point leaves the old identity, so embeddingModelRequiresReindex has the next run rebuild from the start.
+// Every page is embedded before one transaction replaces the index, and the identity is saved only after that: a
+// provider failure or a crash
+// at any earlier point leaves the old identity, so embeddingModelRequiresReindex has the next run rebuild from the
+// start.
 async function rebuildIndexForProvider(hippoRoot: string, provider: EmbeddingProvider): Promise<number> {
   const identity = provider.id;
-  // Host-wide rebuild: one embedding index per hippoRoot, keyed by tenant-scoped entry.id; per-tenant indices would be a larger architecture change.
+  // Host-wide rebuild: one embedding index per hippoRoot, keyed by tenant-scoped entry.id; per-tenant indices would be
+  // a larger architecture change.
   const ids = loadAllEntryIds(hippoRoot);
   const rebuiltIndex = await rebuildEmbeddingIndex(hippoRoot, ids, provider);
   saveEmbeddingIndex(hippoRoot, rebuiltIndex, embeddingIndexIdentity(identity));
@@ -351,13 +403,18 @@ function initializePhysicsIfMissing(hippoRoot: string, entry: MemoryEntry, vecto
     seedStoredParticle(hippoRoot, entry, vector);
   } catch (err) {
     // Physics init is best-effort and must not fail the embedding that just landed.
-    log.warnThenDebug('physics-state-seed', `physics state not initialised for ${entry.id}: ${errorMessage(err)}`, errorFields(err));
+    log.warnThenDebug(
+      'physics-state-seed',
+      `physics state not initialised for ${entry.id}: ${errorMessage(err)}`,
+      errorFields(err),
+    );
   }
 }
 
 /** Throws when an unavailable provider is a misconfiguration rather than an intentional no-op. */
 function throwIfProviderKeyMissing(hippoRoot: string, provider: EmbeddingProvider): void {
-  // A configured API provider with a missing key is a misconfiguration: surface it so callers of the exported embedAll() learn nothing was written.
+  // A configured API provider with a missing key is a misconfiguration: surface it so callers of the exported
+  // embedAll() learn nothing was written.
   // Local-not-installed and an explicit enabled=false stay silent no-ops.
   const cfg = loadConfig(hippoRoot).embeddings;
   if (
@@ -372,8 +429,10 @@ function throwIfProviderKeyMissing(hippoRoot: string, provider: EmbeddingProvide
   }
 }
 
-// Embeds entries without a cached vector in save-checkpointed chunks; a `[]` row means that item could not be embedded and is retried next run.
-// On a hard provider failure mid-backfill the chunks already embedded are persisted (paid progress), then it stops and resumes next run.
+// Embeds entries without a cached vector in save-checkpointed chunks; a `[]` row means that item could not be embedded
+// and is retried next run.
+// On a hard provider failure mid-backfill the chunks already embedded are persisted (paid progress), then it stops and
+// resumes next run.
 async function backfillPending(
   hippoRoot: string,
   provider: EmbeddingProvider,
@@ -407,8 +466,10 @@ async function backfillPending(
   return { count, backfillError };
 }
 
-/** Embeds every entry with no cached vector, prunes vectors of deleted memories, and returns how many it embedded; `provider` defaults to the
- *  configured one. With `store`, every tenant's memories with no vector for the provider's model go through its `vectorWrites`, never hippo.db. */
+/** Embeds every entry with no cached vector, prunes vectors of deleted memories, and returns how many it embedded;
+ * `provider` defaults to the
+ * configured one. With `store`, every tenant's memories with no vector for the provider's model go through its
+ * `vectorWrites`, never hippo.db. */
 export async function embedAll(
   hippoRoot: string,
   model?: string,
@@ -425,11 +486,17 @@ export async function embedAll(
     const identity = provider.id;
     if (embeddingModelRequiresReindex(hippoRoot, identity)) return rebuildIndexForProvider(hippoRoot, provider);
 
-    // Host-wide by design: embedAll backfills all tenants' entries into the per-host index; per-tenant filtering would produce partial indices and break
+    // Host-wide by design: embedAll backfills all tenants' entries into the per-host index; per-tenant filtering would
+    // produce partial indices and break
     // recall.
     const embedded = pruneStoredVectors(hippoRoot);
     const pending = loadAllEntryIds(hippoRoot).filter((id) => !embedded.has(id));
-    const { count, backfillError } = await backfillPending(hippoRoot, provider, pending, embeddingIndexIdentity(identity));
+    const { count, backfillError } = await backfillPending(
+      hippoRoot,
+      provider,
+      pending,
+      embeddingIndexIdentity(identity),
+    );
 
     saveStoredEmbeddingModel(hippoRoot, identity);
 

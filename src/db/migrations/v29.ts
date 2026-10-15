@@ -59,8 +59,10 @@ const CREATE_TRIGGER_TRG_PREDICTIONS_TENANT_MATCH_UPDATE_SQL = `
 export const v29: Migration = {
     version: 29,
     up: (db) => {
-      // Prediction first-class object: claim_text is duplicated so deleting the memory loses nothing; memory_id is NULLABLE ON DELETE SET NULL.
-      // Tenant-match triggers replace a composite FK, which is incompatible with ON DELETE SET NULL; closure_state is CHECKed to open|closed|closed-unknown.
+      // Prediction first-class object: claim_text is duplicated so deleting the memory loses nothing; memory_id is
+      // NULLABLE ON DELETE SET NULL.
+      // Tenant-match triggers replace a composite FK, which is incompatible with ON DELETE SET NULL; closure_state is
+      // CHECKed to open|closed|closed-unknown.
       if (!tableExists(db, 'predictions')) {
         db.exec(CREATE_TABLE_PREDICTIONS_SQL);
         db.exec(CREATE_INDEX_IDX_PREDICTIONS_TENANT_CLASS_SQL);

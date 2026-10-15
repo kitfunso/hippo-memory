@@ -46,7 +46,8 @@ const GRAPH_EXTRACTION_QUEUE_TABLE = `
           )
         `;
 
-// entities guard: source_kind must equal the FK'd memory's actual kind (raw or a lying source_kind ABORTs) and tenant must match,
+// entities guard: source_kind must equal the FK'd memory's actual kind (raw or a lying source_kind ABORTs) and tenant
+// must match,
 // on INSERT and on UPDATE (when memory_id/source_kind/tenant_id change).
 const TRG_ENTITIES_CONSOLIDATED_ONLY_INSERT = `
           CREATE TRIGGER IF NOT EXISTS trg_entities_consolidated_only_insert
@@ -149,7 +150,8 @@ const TRG_GRAPH_QUEUE_CONSOLIDATED_ONLY_UPDATE = `
           END
         `;
 
-// Reverse guard: graph triggers fire only on graph-table writes, so reclassifying an indexed memory to raw (or tenant) would break the no-raw invariant.
+// Reverse guard: graph triggers fire only on graph-table writes, so reclassifying an indexed memory to raw (or tenant)
+// would break the no-raw invariant.
 // Block both while the graph references the memory; the EXISTS checks run only when kind becomes raw or tenant changes.
 const TRG_MEMORIES_GRAPH_REFERENCED_GUARD = `
           CREATE TRIGGER IF NOT EXISTS trg_memories_graph_referenced_guard
@@ -165,7 +167,8 @@ const TRG_MEMORIES_GRAPH_REFERENCED_GUARD = `
           END
         `;
 
-// Second reverse guard: the entity UPDATE trigger does not re-validate existing relations, so a cross-tenant entity move would leave a tenant-A relation
+// Second reverse guard: the entity UPDATE trigger does not re-validate existing relations, so a cross-tenant entity
+// move would leave a tenant-A relation
 // pointing at a tenant-B entity. Block the tenant move while any relation references the entity.
 const TRG_ENTITIES_NO_TENANT_MOVE_WHEN_REFERENCED = `
           CREATE TRIGGER IF NOT EXISTS trg_entities_no_tenant_move_when_referenced
@@ -180,8 +183,10 @@ const TRG_ENTITIES_NO_TENANT_MOVE_WHEN_REFERENCED = `
 export const v37: Migration = {
     version: 37,
     up: (db) => {
-      // Graph-on-consolidated guard: entities, relations and graph_extraction_queue may reference only consolidated memories (distilled|superseded), never raw.
-      // The kind match needs a subquery, so it is a BEFORE INSERT and UPDATE trigger (INSERT-only is bypassable). rel_type avoids the reserved word REFERENCES.
+      // Graph-on-consolidated guard: entities, relations and graph_extraction_queue may reference only consolidated
+      // memories (distilled|superseded), never raw.
+      // The kind match needs a subquery, so it is a BEFORE INSERT and UPDATE trigger (INSERT-only is bypassable).
+      // rel_type avoids the reserved word REFERENCES.
       if (!tableExists(db, 'entities')) {
         db.exec(ENTITIES_TABLE);
         db.exec(`CREATE INDEX IF NOT EXISTS idx_entities_tenant ON entities(tenant_id)`);

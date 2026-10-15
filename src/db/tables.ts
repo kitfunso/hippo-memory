@@ -17,16 +17,19 @@ export function tableExists(db: DatabaseSyncLike, tableName: string): boolean {
   if (!/^[a-z_]+$/i.test(tableName)) throw new Error(`Invalid table name: ${tableName}`);
   // SAFETY: row's shape matches the single `name` column named in the
   // SELECT above.
-  const row = db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name = ?`).get(tableName) as { name?: string } | undefined;
+  const row = db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name = ?`).get(tableName) as
+    { name?: string } | undefined;
   return !!row?.name;
 }
 
 /** Names of the real tables, without sqlite internals and FTS virtual tables. */
 export function listTableNames(db: DatabaseSyncLike): string[] {
   // SAFETY: each row's shape matches the single `name` column named in the SELECT below.
-  const rows = db.prepare(
-    `SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND sql NOT LIKE 'CREATE VIRTUAL TABLE%' ORDER BY name`,
-  ).all() as { name: string }[];
+  const rows = db
+    .prepare(
+      `SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND sql NOT LIKE 'CREATE VIRTUAL TABLE%' ORDER BY name`,
+    )
+    .all() as { name: string }[];
   return rows.map((r) => r.name);
 }
 
@@ -34,16 +37,22 @@ export function listTableNames(db: DatabaseSyncLike): string[] {
 export function countTableRows(db: DatabaseSyncLike, table: string): number | null {
   try {
     // SAFETY: COUNT(*) returns one row with one numeric column.
-    const row = db.prepare(`SELECT COUNT(*) AS n FROM "${table.replace(/"/g, '""')}"`).get() as { n: number } | undefined;
+    const row = db.prepare(`SELECT COUNT(*) AS n FROM "${table.replace(/"/g, '""')}"`).get() as
+      { n: number } | undefined;
     return Number(row?.n ?? 0);
   } catch (err) {
     // Callers treat an uncountable table as unknown; the bundle and doctor still finish.
-    log.warn(`could not count rows in table ${table}`, { table, code: errorCode(err) || 'unknown', ...errorFields(err) });
+    log.warn(`could not count rows in table ${table}`, {
+      table,
+      code: errorCode(err) || 'unknown',
+      ...errorFields(err),
+    });
     return null;
   }
 }
 
-/** Sleep runs a store keeps; stats.json lists exactly these, so a recall's stats rewrite reads a fixed number of rows. */
+/** Sleep runs a store keeps; stats.json lists exactly these, so a recall's stats rewrite reads a fixed number of
+ * rows. */
 export const CONSOLIDATION_RUNS_KEPT = 50;
 
 export function pruneConsolidationRuns(db: DatabaseSyncLike, keep = CONSOLIDATION_RUNS_KEPT): void {

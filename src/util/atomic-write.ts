@@ -5,7 +5,8 @@ import { errorMessage, log, errorFields } from './log.js';
 
 const RENAME_RETRY_MS = 1000;
 const WINDOWS_RENAME_REFUSALS = ['EPERM', 'EACCES', 'EBUSY'];
-// A rename can be refused where an in-place write still works (a bind-mounted file, a read-only folder), so these fall back to one.
+// A rename can be refused where an in-place write still works (a bind-mounted file, a read-only folder), so these fall
+// back to one.
 const REPLACE_REFUSALS = ['EBUSY', 'EXDEV', 'EACCES', 'EPERM'];
 // Matches the usual SYMLOOP_MAX, so a link cycle ends in an error instead of a hang.
 const MAX_LINK_HOPS = 40;
@@ -14,7 +15,8 @@ function errnoCode(err: Error): string {
   return 'code' in err ? String(err.code) : '';
 }
 
-/** Windows refuses a rename onto a file another program has open, usually for a moment, so a refusal is retried before it is reported. */
+/** Windows refuses a rename onto a file another program has open, usually for a moment, so a refusal is retried
+ * before it is reported. */
 function renameOnto(tmp: string, target: string): void {
   const deadline = Date.now() + RENAME_RETRY_MS;
   const idle = new Int32Array(new SharedArrayBuffer(4));
@@ -23,7 +25,8 @@ function renameOnto(tmp: string, target: string): void {
       fs.renameSync(tmp, target);
       return;
     } catch (err) {
-      const transient = process.platform === 'win32' && err instanceof Error && WINDOWS_RENAME_REFUSALS.includes(errnoCode(err));
+      const transient =
+        process.platform === 'win32' && err instanceof Error && WINDOWS_RENAME_REFUSALS.includes(errnoCode(err));
       const left = deadline - Date.now();
       if (!transient || left <= 0) throw err;
       Atomics.wait(idle, 0, 0, Math.min(pause, left));
@@ -31,7 +34,8 @@ function renameOnto(tmp: string, target: string): void {
   }
 }
 
-/** Where a write to `file` lands: through any symlink, a dangling one included, so a dotfile manager's link survives. */
+/** Where a write to `file` lands: through any symlink, a dangling one included, so a dotfile manager's link
+ * survives. */
 function writeTarget(file: string): string {
   let target = file;
   for (let hop = 0; hop < MAX_LINK_HOPS && fs.lstatSync(target, { throwIfNoEntry: false })?.isSymbolicLink(); hop++) {
@@ -46,7 +50,8 @@ function keepAccess(tmp: string, old: fs.Stats): void {
   if (process.getuid?.() === 0) fs.chownSync(tmp, old.uid, old.gid);
 }
 
-/** Cleanup must not hide the failure that made it necessary, so a cleanup error is logged and the first error stays the one thrown. */
+/** Cleanup must not hide the failure that made it necessary, so a cleanup error is logged and the first error stays
+ * the one thrown. */
 function removeTemp(tmp: string): void {
   try {
     fs.rmSync(tmp, { force: true });
@@ -55,7 +60,8 @@ function removeTemp(tmp: string): void {
   }
 }
 
-/** Flushed before the rename, or a crash soon after could leave the file's name on bytes that never reached the disk. */
+/** Flushed before the rename, or a crash soon after could leave the file's name on bytes that never reached the
+ * disk. */
 function writeFlushed(tmp: string, text: string, old: fs.Stats | undefined, durable: boolean): void {
   const fd = fs.openSync(tmp, 'w', (old?.mode ?? 0o666) & 0o777);
   try {
@@ -67,7 +73,8 @@ function writeFlushed(tmp: string, text: string, old: fs.Stats | undefined, dura
   }
 }
 
-/** Stores the rename itself. Windows cannot flush a folder handle, and a failure here costs durability, not content, so it only warns. */
+/** Stores the rename itself. Windows cannot flush a folder handle, and a failure here costs durability, not content,
+ * so it only warns. */
 function flushFolder(dir: string): void {
   if (process.platform === 'win32') return;
   try {
@@ -78,7 +85,10 @@ function flushFolder(dir: string): void {
       fs.closeSync(fd);
     }
   } catch (err) {
-    log.warn(`could not flush the folder ${dir} to disk after replacing a file in it: ${errorMessage(err)}`, errorFields(err));
+    log.warn(
+      `could not flush the folder ${dir} to disk after replacing a file in it: ${errorMessage(err)}`,
+      errorFields(err),
+    );
   }
 }
 
@@ -94,7 +104,8 @@ function replaceViaTemp(target: string, text: string, old: fs.Stats | undefined,
   if (durable) flushFolder(path.dirname(target));
 }
 
-/** The pre-rename write: it truncates first, so it is only the fallback, but it needs just a writable file and keeps hard links together. */
+/** The pre-rename write: it truncates first, so it is only the fallback, but it needs just a writable file and keeps
+ * hard links together. */
 function writeInPlace(target: string, text: string): void {
   try {
     fs.writeFileSync(target, text, 'utf8');
@@ -107,8 +118,10 @@ function writeInPlace(target: string, text: string): void {
   }
 }
 
-/** Replaces `file` through a flushed temp file and a rename, so a reader, or a crash at any point, finds the old content or the new, whole.
- *  A file with other hard links, or a rename the platform refuses (logged), is written in place: a crash mid-write can leave it truncated.
+/** Replaces `file` through a flushed temp file and a rename, so a reader, or a crash at any point, finds the old
+ * content or the new, whole.
+ * A file with other hard links, or a rename the platform refuses (logged), is written in place: a crash mid-write can
+ * leave it truncated.
  *  `durable: false` skips the fsyncs for derived files that can be rebuilt; a reader still never sees a torn file. */
 export function writeFileAtomic(file: string, text: string, opts: { readonly durable?: boolean } = {}): void {
   const durable = opts.durable !== false;
@@ -117,7 +130,8 @@ export function writeFileAtomic(file: string, text: string, opts: { readonly dur
   if (old === undefined) {
     fs.mkdirSync(path.dirname(target), { recursive: true });
   } else {
-    // A rename replaces a read-only file that the in-place write refused, and Windows would retry that refusal for a second.
+    // A rename replaces a read-only file that the in-place write refused, and Windows would retry that refusal for a
+    // second.
     fs.accessSync(target, fs.constants.W_OK);
   }
   if (old !== undefined && old.nlink > 1) {

@@ -4,8 +4,10 @@ import type { Migration } from './types.js';
 export const v28: Migration = {
     version: 28,
     up: (db) => {
-      // Dirty-flag persistence for level-2 DAG summaries; dag_level_3_built_at lands now so the entity-profile path needs no second migration.
-      // Columns are additive and DEFAULTed/nullable, so no min_compatible_binary bump. Column-only guard: memories comes from v1 and always exists.
+      // Dirty-flag persistence for level-2 DAG summaries; dag_level_3_built_at lands now so the entity-profile path
+      // needs no second migration.
+      // Columns are additive and DEFAULTed/nullable, so no min_compatible_binary bump. Column-only guard: memories
+      // comes from v1 and always exists.
       if (!tableHasColumn(db, 'memories', 'summary_dirty')) {
         db.exec(`ALTER TABLE memories ADD COLUMN summary_dirty INTEGER NOT NULL DEFAULT 0`);
       }

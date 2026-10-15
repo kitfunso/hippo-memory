@@ -1,4 +1,5 @@
-/** One retry policy for outbound HTTP: a timeout on every attempt, backoff on 429 and 5xx, and on a dropped connection where a replay is safe. */
+/** One retry policy for outbound HTTP: a timeout on every attempt, backoff on 429 and 5xx, and on a dropped
+ * connection where a replay is safe. */
 
 import { MINUTE_MS } from './time.js';
 import { envLlmTimeoutMs } from './env.js';
@@ -9,14 +10,16 @@ export interface RetryPolicy {
   timeoutMs: number;
   /** Total attempts including the first. */
   attempts?: number;
-  /** Limit on the whole call, waits included: an attempt is cut short at it and no retry starts whose wait would reach it. */
+  /** Limit on the whole call, waits included: an attempt is cut short at it and no retry starts whose wait would
+   * reach it. */
   totalMs?: number;
   baseDelayMs?: number;
   /** A Retry-After longer than this hands the response back, so a caller with its own long pause keeps it. */
   maxDelayMs?: number;
   /** Which responses to retry; defaults to 429 and 5xx. A write narrows it to answers that prove nothing committed. */
   retryOn?: (res: Response) => boolean;
-  /** Also retry a dropped connection or a timed-out attempt. On for GET and HEAD; any other method turns it on only when a replay cannot commit twice. */
+  /** Also retry a dropped connection or a timed-out attempt. On for GET and HEAD; any other method turns it on only
+   * when a replay cannot commit twice. */
   retryTransport?: boolean;
   fetchFn?: typeof fetch;
   /** Replaces the timer between attempts. A caller `signal` that aborts still ends the wait at once. */
@@ -31,12 +34,14 @@ const DEFAULT_BASE_DELAY_MS = 250;
 const DEFAULT_MAX_DELAY_MS = 8_000;
 const DEFAULT_LLM_TIMEOUT_MS = MINUTE_MS;
 
-/** LLM calls (consolidation refine, DAG summaries, fact extraction) share one budget; `HIPPO_LLM_TIMEOUT_MS` overrides it. */
+/** LLM calls (consolidation refine, DAG summaries, fact extraction) share one budget; `HIPPO_LLM_TIMEOUT_MS`
+ * overrides it. */
 export function llmTimeoutMs(): number {
   return envLlmTimeoutMs() ?? DEFAULT_LLM_TIMEOUT_MS;
 }
 
-/** One LLM call with its retries: two full attempts and the longest wait between them, where three slow failures would hold a sleep for 3x the timeout. */
+/** One LLM call with its retries: two full attempts and the longest wait between them, where three slow failures
+ * would hold a sleep for 3x the timeout. */
 export function llmTotalMs(): number {
   return 2 * llmTimeoutMs() + DEFAULT_MAX_DELAY_MS;
 }
@@ -59,7 +64,8 @@ const TRANSIENT_CODES: ReadonlySet<string> = new Set([
   'ECONNRESET', 'ETIMEDOUT', 'EAI_AGAIN', 'UND_ERR_SOCKET', 'UND_ERR_CONNECT_TIMEOUT', 'UND_ERR_HEADERS_TIMEOUT',
 ]);
 
-/** A dropped connection, a DNS hiccup or a timed-out attempt: faults a second try can clear. A refused connection is not one. */
+/** A dropped connection, a DNS hiccup or a timed-out attempt: faults a second try can clear. A refused connection is
+ * not one. */
 export function isTransientTransportError<E>(err: E): boolean {
   if (!(err instanceof Error)) return false;
   if (err.name === 'TimeoutError') return true;
@@ -83,10 +89,21 @@ function redactedTarget(url: string | URL): string {
   }
 }
 
-function logRetry(init: RequestInit, url: string | URL, reason: string, attempt: number, attempts: number, delayMs: number): void {
+function logRetry(
+  init: RequestInit,
+  url: string | URL,
+  reason: string,
+  attempt: number,
+  attempts: number,
+  delayMs: number,
+): void {
   // Debug: an attempt that may still succeed is not a warning, and the caller reports the final failure.
   log.debug('http retry', {
-    method: (init.method ?? 'GET').toUpperCase(), target: redactedTarget(url), reason, attempt: `${attempt}/${attempts}`, delayMs: Math.round(delayMs),
+    method: (init.method ?? 'GET').toUpperCase(),
+    target: redactedTarget(url),
+    reason,
+    attempt: `${attempt}/${attempts}`,
+    delayMs: Math.round(delayMs),
   });
 }
 
@@ -98,8 +115,13 @@ const timerSleep = (ms: number, cancel?: AbortSignal): Promise<void> => new Prom
   cancel?.addEventListener('abort', () => clearTimeout(timer), { once: true });
 });
 
-/** The wait between attempts. With a caller signal it ends the moment that signal aborts and rejects with its reason, so no further attempt starts. */
-async function backoffWait(ms: number, sleep: Sleep | undefined, signal: AbortSignal | null | undefined): Promise<void> {
+/** The wait between attempts. With a caller signal it ends the moment that signal aborts and rejects with its
+ * reason, so no further attempt starts. */
+async function backoffWait(
+  ms: number,
+  sleep: Sleep | undefined,
+  signal: AbortSignal | null | undefined,
+): Promise<void> {
   if (!signal) return (sleep ?? timerSleep)(ms);
   signal.throwIfAborted();
   const left = new AbortController();

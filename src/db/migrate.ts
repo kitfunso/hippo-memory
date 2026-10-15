@@ -5,7 +5,12 @@ import type { DatabaseSyncLike } from './sqlite.js';
 import { execWithBusyRetry, withWriteScope } from './busy.js';
 import { tableExists } from './tables.js';
 import { ensureMetaTable, getMeta, getSchemaVersion, setMeta, setSchemaVersion } from './meta.js';
-import { MEMORIES_FTS_DDL, REQUIRED_SCHEMA_OBJECTS, ensureContinuityIndexes, ensureContinuityTables } from './continuity.js';
+import {
+  MEMORIES_FTS_DDL,
+  REQUIRED_SCHEMA_OBJECTS,
+  ensureContinuityIndexes,
+  ensureContinuityTables,
+} from './continuity.js';
 import { CURRENT_SCHEMA_VERSION, MIGRATIONS } from './migrations/index.js';
 import { placeholders } from '../util/sql.js';
 
@@ -20,12 +25,13 @@ function assertMinBinary(minRequired: string | null | undefined): void {
   if (minRequired && compareSemver(minRequired, PACKAGE_VERSION) > 0) {
     throw new IncompatibleBinaryError(
       `hippo-memory: this database requires hippo-memory >= ${minRequired}, but the running binary is ${PACKAGE_VERSION}. ` +
-      `Upgrade hippo-memory to open it; an older binary does not know this schema and could expose private rows or damage the store.`,
+        `Upgrade hippo-memory to open it; an older binary does not know this schema and could expose private rows or damage the store.`,
     );
   }
 }
 
-/** Refuse a store stamped for a newer binary. Fails closed: runMigrations creates meta first, so a failed read is a real error. */
+/** Refuse a store stamped for a newer binary. Fails closed: runMigrations creates meta first, so a failed read is a
+ * real error. */
 export function assertBinaryCompatible(db: DatabaseSyncLike): void {
   assertMinBinary(getMeta(db, 'min_compatible_binary'));
 }
@@ -43,7 +49,8 @@ const META_DEFAULTS: ReadonlyArray<readonly [string, string]> = [
 // Names come from our own constants and match \w+, so inlining them as literals is safe.
 const sqlList = (names: readonly string[]): string => names.map((n) => `'${n}'`).join(', ');
 
-/** The fast path's single probe: versions, the binary minimum, the FTS flag, and counts of the meta defaults and required objects. */
+/** The fast path's single probe: versions, the binary minimum, the FTS flag, and counts of the meta defaults and
+ * required objects. */
 export const SCHEMA_PROBE_SQL = `SELECT
   (SELECT user_version FROM pragma_user_version) AS user_version,
   (SELECT value FROM meta WHERE key = 'schema_version') AS schema_version,
@@ -72,7 +79,8 @@ export interface OpenFacts {
   readonly hasMemories: boolean;
 }
 
-/** The probe's facts when the store is current and whole, so the open can skip every DDL statement; else null. Runs the binary check either way. */
+/** The probe's facts when the store is current and whole, so the open can skip every DDL statement; else null. Runs
+ * the binary check either way. */
 function currentStoreFacts(db: DatabaseSyncLike): OpenFacts | null {
   let probe: SchemaProbe | undefined;
   try {
@@ -93,7 +101,8 @@ function currentStoreFacts(db: DatabaseSyncLike): OpenFacts | null {
   return current ? { archiveTop: Number(probe.archive_top ?? 0), hasMemories: probe.has_memories !== null } : null;
 }
 
-/** Brings the store to the current schema; returns the probe's facts when it was current already, null after any repair. */
+/** Brings the store to the current schema; returns the probe's facts when it was current already, null after any
+ * repair. */
 export function runMigrations(db: DatabaseSyncLike, hippoRoot?: string, busyWaitMs?: number): OpenFacts | null {
   const facts = currentStoreFacts(db);
   if (!facts) migrateAndHeal(db, hippoRoot, busyWaitMs);
@@ -152,7 +161,10 @@ function importLegacyVectors(db: DatabaseSyncLike, hippoRoot: string): void {
   try {
     importLegacyEmbeddingIndex(db, hippoRoot);
   } catch (err) {
-    log.warn(`embeddings.json import failed; the next open retries it (${errorMessage(err)})`, { hippoRoot, ...errorFields(err) });
+    log.warn(`embeddings.json import failed; the next open retries it (${errorMessage(err)})`, {
+      hippoRoot,
+      ...errorFields(err),
+    });
   }
 }
 
@@ -160,7 +172,8 @@ function ensureMetaDefaults(db: DatabaseSyncLike): void {
   // Read-first: an already-current store has all 7 keys, so this is one SELECT and zero writes instead of 7 no-op
   // INSERT OR IGNOREs, each of which takes a RESERVED lock even when nothing changes.
   const keys = META_DEFAULTS.map(([key]) => key);
-  // SAFETY: the statement selects only the `key` column of `meta`, which is TEXT NOT NULL, so each row is { key: string }.
+  // SAFETY: the statement selects only the `key` column of `meta`, which is TEXT NOT NULL, so each row is { key: string
+  // }.
   const present = new Set(
     (db
       .prepare(`SELECT key FROM meta WHERE key IN (${placeholders(keys.length)})`)
@@ -185,7 +198,10 @@ function ensureOptionalFts(db: DatabaseSyncLike): void {
       log.warn(`full-text index not set up this open (${errorMessage(err)}); the next open retries`, errorFields(err));
       return;
     }
-    log.warn(`full-text index unavailable (${errorMessage(err)}); search falls back to slower LIKE matching`, errorFields(err));
+    log.warn(
+      `full-text index unavailable (${errorMessage(err)}); search falls back to slower LIKE matching`,
+      errorFields(err),
+    );
     writeFtsFlag(db, '0');
     return;
   }
@@ -197,7 +213,8 @@ function writeFtsFlag(db: DatabaseSyncLike, flag: '0' | '1'): void {
   if (getMeta(db, 'fts5_available') !== flag) setMeta(db, 'fts5_available', flag);
 }
 
-/** Row counts of `memories` and its full-text index, which differ once the index drifts; null when either table is missing. */
+/** Row counts of `memories` and its full-text index, which differ once the index drifts; null when either table is
+ * missing. */
 export function ftsRowCounts(db: DatabaseSyncLike): { memories: number; fts: number } | null {
   if (!tableExists(db, 'memories_fts') || !tableExists(db, 'memories')) return null;
   // SAFETY: this get() result's shape matches the single aliased `c` column named in the SELECT.
@@ -209,7 +226,8 @@ export function ftsRowCounts(db: DatabaseSyncLike): { memories: number; fts: num
   return { memories: Number(memories), fts: Number(fts) };
 }
 
-/** Re-syncs `memories_fts` with `memories` when their counts differ and returns whether it did; sleep runs it because a fast open does not. */
+/** Re-syncs `memories_fts` with `memories` when their counts differ and returns whether it did; sleep runs it
+ * because a fast open does not. */
 export function repairFtsDrift(db: DatabaseSyncLike): boolean {
   const counts = ftsRowCounts(db);
   if (counts === null || counts.memories === counts.fts) return false;
