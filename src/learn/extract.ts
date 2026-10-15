@@ -1,5 +1,6 @@
 import { MemoryEntry, Layer, EmotionalValence, createMemory } from '../core/memory.js';
-import { writeEntry } from '../store/entry-writes.js';
+import type { LocalFiles } from '../store/port/local-files.js';
+import { localFilesAt } from './roots.js';
 import { loadConfig } from '../core/config.js';
 import { RejectedValueError } from '../core/api-errors.js';
 import { redactSecretsStrict } from '../util/secret-detect.js';
@@ -117,11 +118,12 @@ function parseExtractedFacts(parsed: (RawExtractedFact | null)[]): ExtractedFact
 
 const INHERITABLE_PREFIXES = ['conv:', 'session:', 'scope:', 'path:'];
 
-export function storeExtractedFacts(
-  hippoRoot: string,
-  source: MemoryEntry,
-  facts: ExtractedFact[],
-): MemoryEntry[] {
+export function storeExtractedFacts(hippoRoot: string, source: MemoryEntry, facts: ExtractedFact[]): MemoryEntry[] {
+  return storeFacts(localFilesAt(hippoRoot), source, facts);
+}
+
+/** storeExtractedFacts into the store `files` names. */
+function storeFacts(files: LocalFiles, source: MemoryEntry, facts: ExtractedFact[]): MemoryEntry[] {
   const inheritedTags = [
     ...source.tags.filter((t) => INHERITABLE_PREFIXES.some((p) => t.startsWith(p))),
     ...neverAutoShareTags([source]),
@@ -129,7 +131,7 @@ export function storeExtractedFacts(
 
   const entries: MemoryEntry[] = [];
   let rejected = 0;
-  const baseHalfLifeDays = loadConfig(hippoRoot).defaultHalfLifeDays;
+  const baseHalfLifeDays = loadConfig(files.hippoRoot).defaultHalfLifeDays;
 
   for (const fact of facts) {
     const defect = certainDefect(fact.content);
@@ -142,7 +144,7 @@ export function storeExtractedFacts(
     // A refusal is per-VALUE: one rejected fact must not drop the rest of the batch; writeEntry already audited it
     // (reject_refusal), so skip and count.
     try {
-      writeEntry(hippoRoot, entry);
+      files.learning.writeEntry(entry);
     } catch (err) {
       if (err instanceof RejectedValueError) {
         rejected++;
