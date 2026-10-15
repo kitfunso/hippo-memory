@@ -37,7 +37,7 @@ const { openHippoDb, closeHippoDb } = await load('db/index.js');
 const { createApiKey } = await load('store/auth.js');
 const { getContext, adminActor } = await load('api/index.js');
 const { handleMcpRequest } = await load('mcp/server.js');
-const { sqliteStore } = await load('store/sqlite/store.js');
+const { runSqliteRequest, sqliteStore } = await load('store/sqlite/store.js');
 const { workerSqliteStore } = await load('store/sqlite/worker-store.js');
 const { serve } = await load('server.js');
 
@@ -123,8 +123,10 @@ const ctx = { hippoRoot: localRoot, tenantId: 'default', actor: adminActor('ci:t
 const mcpCtx = {
   hippoRoot: localRoot, tenantId: 'default', actor: 'ci:timing', role: 'admin', hostAdmin: true, store: localStore,
 };
+// A transport runs each tool call inside its host's request scope (the server per request, stdio per frame).
 const tool = (name, args = {}) => async () => {
-  const res = await handleMcpRequest({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } }, mcpCtx);
+  const call = { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } };
+  const res = await runSqliteRequest(() => handleMcpRequest(call, mcpCtx), 'server');
   if (res?.error || res?.result?.isError) throw new Error(`${name} failed: ${JSON.stringify(res)}`);
 };
 
