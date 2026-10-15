@@ -46,8 +46,11 @@ function scanForGitRepos(rootDir: string, maxDepth = 2): string[] {
     } catch (err) {
       const code = errorCode(err);
       if (!QUIET_SCAN_ERRORS.has(code)) {
-        const fields = { code: code || 'unknown', reason: errorMessage(err), ...errorFields(err) };
-        log.warn(`repo scan skipped ${dir}`, fields);
+        log.warn(`repo scan skipped ${dir}`, {
+          code: code || 'unknown',
+          reason: errorMessage(err),
+          ...errorFields(err),
+        });
       }
     }
   }
