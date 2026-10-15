@@ -74,7 +74,13 @@ export async function handleIncident({ hippoRoot, tenantId, args, flags }: Comma
   await incidentCreate(objects, hippoRoot, tenantId, subcommand === 'open' ? (args[1] ?? '') : subcommand, flags);
 }
 
-async function incidentCreate(objects: Objects, hippoRoot: string, tenantId: string, incidentText: string, flags: CliFlags): Promise<void> {
+async function incidentCreate(
+  objects: Objects,
+  hippoRoot: string,
+  tenantId: string,
+  incidentText: string,
+  flags: CliFlags,
+): Promise<void> {
   if (!incidentText) {
     printError('Usage: hippo incident "<incident>" [--context "<details>"] [--link <memory-id>]...');
     printError('       hippo incident list [--status open|resolved|closed|all] [--limit N]');

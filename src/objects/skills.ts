@@ -1,6 +1,6 @@
 /** Skill object: an agent-followable `instructions` body plus an optional `trigger`, evolving via supersession.
- *  `skillsMarkdown` renders ACTIVE skills into AGENTS.md / CLAUDE.md rules; running code from a skill is deferred (security).
- *  `trigger` is stored in `trigger_text` because it is a SQLite reserved keyword. */
+ *  `skillsMarkdown` renders ACTIVE skills into AGENTS.md / CLAUDE.md rules; running code from a skill is deferred
+ *  (security). `trigger` is stored in `trigger_text` because it is a SQLite reserved keyword. */
 
 import { BadRequestError } from '../core/api-errors.js';
 import { assertTenantId } from '../store/tenant.js';
@@ -48,7 +48,8 @@ export interface ListSkillsOpts {
   after?: KeysetPosition;
 }
 
-/** The trigger as stored, or null for none. One line, because a newline would forge a heading inside the exported **When:** line. */
+/** The trigger as stored, or null for none. One line, because a newline would forge a heading inside the
+ *  exported **When:** line. */
 function checkTrigger(trigger: string | undefined): string | null {
   if (trigger === undefined || trigger === null || trigger.trim().length === 0) return null;
   if (trigger.length > MAX_SKILL_TRIGGER_LEN) {
@@ -143,8 +144,8 @@ export function loadActiveSkills(
   return loadSkills(objects, tenantId, { status: 'active', limit: opts.limit });
 }
 
-/** Render the tenant's ACTIVE skills into one AGENTS.md / CLAUDE.md-style markdown block (H2 per skill, ordered by skill_name) and return it; writes no file.
- *  Bounded by MAX_EXPORT_SKILLS rows; instructions are emitted verbatim. */
+/** Render the tenant's ACTIVE skills into one AGENTS.md / CLAUDE.md-style markdown block (H2 per skill, ordered by
+ *  skill_name) and return it; writes no file. Bounded by MAX_EXPORT_SKILLS rows; instructions are emitted verbatim. */
 export async function skillsMarkdown(objects: Objects, tenantId: string): Promise<string> {
   assertTenantId('exportSkills', tenantId);
   return skillsBlock(await objects.activeSkillsByName(tenantId, MAX_EXPORT_SKILLS));

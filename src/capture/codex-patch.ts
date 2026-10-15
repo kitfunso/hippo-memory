@@ -54,7 +54,8 @@ function shellScript(argv: readonly string[]): string | null {
     .basename(argv[0] ?? '')
     .toLowerCase()
     .replace(/\.exe$/, '');
-  if ((exe === 'bash' || exe === 'zsh' || exe === 'sh') && argv.length === 3 && (argv[1] === '-lc' || argv[1] === '-c')) {
+  const isPosixShell = exe === 'bash' || exe === 'zsh' || exe === 'sh';
+  if (isPosixShell && argv.length === 3 && (argv[1] === '-lc' || argv[1] === '-c')) {
     return argv[2];
   }
   if (exe === 'pwsh' || exe === 'powershell') {

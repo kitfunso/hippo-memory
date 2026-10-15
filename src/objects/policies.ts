@@ -1,6 +1,6 @@
-/** Policy object: a rule in force over a valid-time range [valid_from, valid_to), evolving via supersession; `policiesAsOf` queries it.
- *  Transaction-time travel (what we believed at past system time T) is deferred. Superseding keeps the predecessor's valid-time range.
- *  All dates are normalised to ISO-8601 (`toISOString`) at the store boundary so the lexical half-open comparison is sound. */
+/** Policy object: a rule in force over a valid-time range [valid_from, valid_to), evolving via supersession;
+ *  `policiesAsOf` queries it. Transaction-time travel (beliefs at past system time T) is deferred. Superseding
+ *  keeps the predecessor's range. Dates are ISO-8601 (`toISOString`) at the store boundary so comparison is lexical. */
 
 import { DEFAULT_LIST_LIMIT } from '../util/limits.js';
 import { BadRequestError } from '../core/api-errors.js';
@@ -155,14 +155,24 @@ export function loadActivePolicies(
   return loadPolicies(objects, tenantId, { status: 'active', limit: opts.limit });
 }
 
-/** The policies in force at `asOfDate` (valid-time, half-open [valid_from, valid_to)); superseded rows still answer while the successor is not yet effective.
- *  `closed` rows are excluded; a date-only asOfDate means the END of that UTC day (23:59:59.999Z), so a policy created today shows up in "as of today". */
-export async function policiesAsOf(objects: Objects, tenantId: string, asOfDate: string, opts: { name?: string; limit?: number } = {}): Promise<Policy[]> {
+/** The policies in force at `asOfDate` (valid-time, half-open [valid_from, valid_to)); superseded rows still answer
+ *  while the successor is not yet effective. `closed` rows are excluded; a date-only asOfDate means the END of that
+ *  UTC day (23:59:59.999Z), so a policy created today shows up in "as of today". */
+export async function policiesAsOf(
+  objects: Objects,
+  tenantId: string,
+  asOfDate: string,
+  opts: { name?: string; limit?: number } = {},
+): Promise<Policy[]> {
   return objects.policiesInForce(tenantId, inForceQuery(tenantId, asOfDate, opts));
 }
 
 /** The as-of read, checked before a store is asked. */
-function inForceQuery(tenantId: string, asOfDate: string, opts: { name?: string; limit?: number }): PoliciesInForceQuery {
+function inForceQuery(
+  tenantId: string,
+  asOfDate: string,
+  opts: { name?: string; limit?: number },
+): PoliciesInForceQuery {
   assertTenantId('loadPoliciesAsOf', tenantId);
   // A bare date means the whole of that day, so it reads as the day's last instant; a datetime is used as given.
   const asOf = /^\d{4}-\d{2}-\d{2}$/.test(asOfDate.trim())

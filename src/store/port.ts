@@ -435,7 +435,12 @@ export interface Objects {
    * newest first by created (text, byte order) then id. No audit row. */
   briefReceipts(tenantId: string, tag: string, limit: number): Promise<BriefReceipt[]>;
   /** The id of the tenant's newest `kind` row in `status` that `memoryId` mirrors, or null. No audit row. */
-  objectIdByMemory<K extends ObjectKind>(tenantId: string, kind: K, status: ObjectByKind[K]['status'], memoryId: string): Promise<number | null>;
+  objectIdByMemory<K extends ObjectKind>(
+    tenantId: string,
+    kind: K,
+    status: ObjectByKind[K]['status'],
+    memoryId: string,
+  ): Promise<number | null>;
 }
 
 /** One session's unsuperseded raw rows inside a tenant; `origins` keeps those projects' rows and rows of no project,

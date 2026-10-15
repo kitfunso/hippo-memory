@@ -1,4 +1,5 @@
-// One handler set for the kinds that evolve by supersession (brief, note, policy, process, skill), each driven by a descriptor.
+// One handler set for the kinds that evolve by supersession (brief, note, policy, process, skill),
+// each driven by a descriptor.
 
 import { extractPathTags } from '../search/path-context.js';
 import { errorMessage } from '../util/log.js';
@@ -8,7 +9,14 @@ import { requireInit } from './shared.js';
 import { objectsOf } from '../api/objects.js';
 import type { Objects } from '../store/port.js';
 import { cliApiContext } from './api-context.js';
-import { closeObject, foundOrExit, idArgOrExit, listObjects, printLifecycleTail, type ObjectNames } from './object-verbs.js';
+import {
+  closeObject,
+  foundOrExit,
+  idArgOrExit,
+  listObjects,
+  printLifecycleTail,
+  type ObjectNames,
+} from './object-verbs.js';
 import { CliExit, fail } from './exit.js';
 
 type VersionedRow = Parameters<typeof printLifecycleTail>[0] & { readonly id: number; readonly version: number };
@@ -62,7 +70,12 @@ export function versionedVerbs<O extends VersionedRow, S extends string, B>(
     const sub = args[0] ?? '';
     if (sub === kind.extra?.sub) return kind.extra.run(args, flags);
     if (sub === 'list') {
-      return listObjects(flags, { plural: kind.plural, states: kind.states, load: (opts) => kind.list(opts, flags), printRow: kind.printRow });
+      return listObjects(flags, {
+        plural: kind.plural,
+        states: kind.states,
+        load: (opts) => kind.list(opts, flags),
+        printRow: kind.printRow,
+      });
     }
     if (sub === 'get') return getVersion(kind, args);
     if (sub === 'supersede') return supersedeVersion(kind, args, flags);
@@ -72,7 +85,10 @@ export function versionedVerbs<O extends VersionedRow, S extends string, B>(
   };
 }
 
-async function getVersion<O extends VersionedRow, S extends string, B>(kind: VersionedKind<O, S, B>, args: string[]): Promise<void> {
+async function getVersion<O extends VersionedRow, S extends string, B>(
+  kind: VersionedKind<O, S, B>,
+  args: string[],
+): Promise<void> {
   const id = idArgOrExit(args, `Usage: hippo ${kind.names.cmd} get <id>`, kind.names.idLabel);
   const o = foundOrExit(await kind.loadById(id), kind.names.noun, id);
   console.log(`${kind.names.noun} #${o.id}`);
@@ -80,7 +96,11 @@ async function getVersion<O extends VersionedRow, S extends string, B>(kind: Ver
   printLifecycleTail(o);
 }
 
-async function createVersion<O extends VersionedRow, S extends string, B>(kind: VersionedKind<O, S, B>, key: string, flags: CliFlags): Promise<void> {
+async function createVersion<O extends VersionedRow, S extends string, B>(
+  kind: VersionedKind<O, S, B>,
+  key: string,
+  flags: CliFlags,
+): Promise<void> {
   const body = key ? kind.body(flags, 'new') : undefined;
   if (body === undefined) {
     for (const line of kind.usage) printError(line);
@@ -90,20 +110,33 @@ async function createVersion<O extends VersionedRow, S extends string, B>(kind: 
   printSaved(kind.recorded(created), created);
 }
 
-async function supersedeVersion<O extends VersionedRow, S extends string, B>(kind: VersionedKind<O, S, B>, args: string[], flags: CliFlags): Promise<void> {
+async function supersedeVersion<O extends VersionedRow, S extends string, B>(
+  kind: VersionedKind<O, S, B>,
+  args: string[],
+  flags: CliFlags,
+): Promise<void> {
   const id = idArgOrExit(args, kind.supersedeUsage, kind.names.idLabel);
   const body = kind.body(flags, 'supersede');
   if (body === undefined) {
     fail(`hippo ${kind.names.cmd} supersede requires ${kind.bodyRequired} for the new version.`);
   }
-  // The lookup only gives a missing id its not-found line; the save's own preflight is the authoritative active-state check.
+  // The lookup only gives a missing id its not-found line; the save's own preflight is the
+  // authoritative active-state check.
   const existing = foundOrExit(await kind.loadById(id), kind.names.noun, id);
-  const created = await saveVersion(kind, kind.keyOf(existing), body, { id, changeSummary: nonEmptyStringFlag(flags, 'change') });
+  const created = await saveVersion(kind, kind.keyOf(existing), body, {
+    id,
+    changeSummary: nonEmptyStringFlag(flags, 'change'),
+  });
   printSaved(`${kind.names.noun} #${created.id} recorded (v${created.version}), superseding #${id}.`, created);
 }
 
 /** Every kind's save goes through here, so a refused write always prints the store's message and exits 1. */
-async function saveVersion<O extends VersionedRow, S extends string, B>(kind: VersionedKind<O, S, B>, key: string, body: B, from?: Succession): Promise<O> {
+async function saveVersion<O extends VersionedRow, S extends string, B>(
+  kind: VersionedKind<O, S, B>,
+  key: string,
+  body: B,
+  from?: Succession,
+): Promise<O> {
   try {
     return await kind.save(key, body, extractPathTags(process.cwd()), from);
   } catch (e) {
