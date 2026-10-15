@@ -8,9 +8,16 @@ import { estimateTokens } from '../util/token-text.js';
 import { dropHeldCopies } from '../util/same-text.js';
 import * as api from '../api/index.js';
 import type { PlanningFallacyOutput } from '../predictions/planning-fallacy.js';
-import { detectAnchoring, hashQueryText, biasHintEnabled, snapshotRing } from '../api/recall-history.js';
+import { hashQueryText } from '../api/recall-history.js';
 import { sessionRing, shownRecallRows } from '../api/recall-record.js';
-import { detectAvailabilityBias } from '../api/availability.js';
+import {
+  availabilityPool,
+  cutoffClauses,
+  detectRecallHints,
+  shrinkToFit,
+  suppressionSummary,
+  tokenPurse,
+} from '../api/recall-render.js';
 import {
   cliRecallOrigin,
   cliRecallReranker,
@@ -72,13 +79,7 @@ function planningLine(p: PlanningFallacyOutput): string | null {
 }
 
 function cutoffLine(shown: number, s: api.RecallSuppressionSummary): string | null {
-  const clauses: string[] = [];
-  // The residual covers rank, budget and limit drops alike, and fires with no --limit at all.
-  if (s.droppedByBudget > 0) clauses.push(`${s.droppedByBudget} not shown (rank, budget or limit)`);
-  if (s.droppedPreRank > 0) clauses.push(`${s.droppedPreRank} filtered pre-rank`);
-  if (s.summarySubstitutionsAdded > 0) clauses.push(`${s.summarySubstitutionsAdded} summary substitutions added`);
-  if (s.freshTailAdded > 0) clauses.push(`${s.freshTailAdded} fresh-tail added`);
-  if (s.suppressedByInterference > 0) clauses.push(`${s.suppressedByInterference} suppressed by interference`);
+  const clauses = cutoffClauses(s);
   return clauses.length > 0
     ? `Cutoff: showing ${shown} of ${s.totalCandidates} candidates; ${clauses.join('; ')}.`
     : null;
@@ -349,29 +350,23 @@ function recallHinter(query: string, o: RecallOptions, rank: RankedRecall['rank'
   // HIPPO_ANCHORING=off and HIPPO_AVAILABILITY=off skip the work entirely.
   const anchorRing = sessionRing('cli', tenantId, sessionId);
   const queryHash = hashQueryText(query);
-  const availabilityPool = biasHintEnabled('availability')
-    ? [...rank.localEntries, ...rank.globalEntries].map((e) => ({ id: e.id, created: e.created }))
-    : null;
+  const pool = availabilityPool(() => [...rank.localEntries, ...rank.globalEntries]);
   const hintsFor = (list: SearchResult[], held: number) => {
-    const anchoring = anchorRing
-      ? detectAnchoring(snapshotRing(anchorRing), queryHash, list[0]?.entry.id ?? null)
-      : null;
-    const availability = availabilityPool
-      ? detectAvailabilityBias({
-          topK: list.map((r) => ({ id: r.entry.id, created: r.entry.created })),
-          pool: availabilityPool,
-        })
-      : null;
-    const summary: api.RecallSuppressionSummary = {
-      // The published total includes graph-surfaced rows, so total == preRank + byBudget + returned holds for callers.
-      totalCandidates: rank.totalCandidates + rank.graphAdded,
-      droppedPreRank: rank.droppedPreRank + held,
-      droppedByBudget: Math.max(0, rank.totalCandidates + rank.graphAdded - rank.droppedPreRank - held - list.length),
-      summarySubstitutionsAdded: 0,
-      freshTailAdded: 0,
-      // A query_repeat is a re-ask, not competition.
-      suppressedByInterference: anchoring?.reason === 'memory_dominance' ? 1 : 0,
-    };
+    const { anchoring, availability } = detectRecallHints({ list, pool, anchorRing, queryHash });
+    const summary = suppressionSummary(
+      {
+        // The total includes graph-surfaced rows, so total == preRank + byBudget + returned holds for callers.
+        totalCandidates: rank.totalCandidates + rank.graphAdded,
+        droppedPreRank: rank.droppedPreRank + held,
+        droppedByBudget: Math.max(
+          0,
+          rank.totalCandidates + rank.graphAdded - rank.droppedPreRank - held - list.length,
+        ),
+        summarySubstitutionsAdded: 0,
+        freshTailAdded: 0,
+      },
+      anchoring,
+    );
     return { anchoring, availability, summary };
   };
   return { anchorRing, hintsFor };
@@ -429,19 +424,14 @@ function renderRecallBlock(list: SearchResult[], h: RecallHints, v: RecallRender
 /** Pays the continuity sections in print order after the header; one that does not fit is dropped. */
 function payContinuity(loaded: api.ContinuityBlock, sectionBudget: number) {
   let { activeSnapshot, sessionHandoff, recentSessionEvents } = loaded;
-  let left = sectionBudget;
-  const pays = (tokens: number): boolean => {
-    if (tokens > left) return false;
-    left -= tokens;
-    return true;
-  };
+  const { pays, left } = tokenPurse(sectionBudget);
   if (activeSnapshot && !pays(printedTokens(snapshotText(activeSnapshot)))) activeSnapshot = null;
   if (sessionHandoff && !pays(printedTokens(handoffText(sessionHandoff)))) sessionHandoff = null;
   if (recentSessionEvents.length > 0 && !pays(printedTokens(sessionTrailText(recentSessionEvents)))) {
     recentSessionEvents = [];
   }
   const continuity: api.ContinuityBlock = { activeSnapshot, sessionHandoff, recentSessionEvents };
-  return { continuity, left, continuityTokens: sectionBudget - left };
+  return { continuity, continuityTokens: sectionBudget - left() };
 }
 
 /** Drops the lowest-ranked entry until the whole block, hints and header included, fits the budget. */
@@ -453,19 +443,12 @@ function renderWithinBudget(
   budget: number,
 ) {
   // Copies go after every cut, so a merged row the budget drops never hides its sources.
-  const shown = (n: number): SearchResult[] => dropHeldCopies(fitted.slice(0, n), (r) => r.entry);
-  let kept = fitted.length;
-  let results = shown(kept);
-  let hints = hintsFor(results, kept - results.length);
-  let recallText = renderRecallBlock(results, hints, view);
-  // The hints, Cutoff line and header vary with the list, so the lowest-ranked entry goes until the whole block fits.
-  while (kept > floor && estimateTokens(recallText) > budget) {
-    kept--;
-    results = shown(kept);
-    hints = hintsFor(results, kept - results.length);
-    recallText = renderRecallBlock(results, hints, view);
-  }
-  return { results, hints, recallText };
+  const render = (kept: number) => {
+    const results = dropHeldCopies(fitted.slice(0, kept), (r) => r.entry);
+    const hints = hintsFor(results, kept - results.length);
+    return { results, hints, recallText: renderRecallBlock(results, hints, view) };
+  };
+  return shrinkToFit(fitted.length, floor, budget, render, (r) => r.recallText);
 }
 
 /** Pays the continuity sections and the plan hint first, then fits the memories into what is left. */

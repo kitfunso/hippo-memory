@@ -48,6 +48,7 @@ import {
 } from './context-select.js';
 import type { ContextOpts, ContextResult, ContextResultEntry } from './context-types.js';
 import { strengthenOf } from './recall-record.js';
+import { tokenPurse } from './recall-render.js';
 import { type Context, type StoreContext, ownerOrSubject } from './types.js';
 
 export { oneCopyPerMemory } from './context-select.js';
@@ -392,12 +393,7 @@ async function loadTaskSections(
   startLeft: number,
 ): Promise<TaskSections> {
   const { exactScope, ownScope, cost } = plan;
-  let left = startLeft;
-  const pays = (tokens: number): boolean => {
-    if (tokens > left) return false;
-    left -= tokens;
-    return true;
-  };
+  const { pays, left } = tokenPurse(startLeft);
   const rowScope = (r: { scope?: string | null } | null | undefined): string | null => r?.scope ?? null;
   const raw = await loadRawTaskState(ctx, opts, plan);
   // The same envelope rule ambientAdmitEntry applies to memory rows.
@@ -416,7 +412,7 @@ async function loadTaskSections(
       Number(sessionHandoff !== shownHandoff) +
       Number(recentSessionEvents.length !== shownEvents.length),
   );
-  return { activeSnapshot, shownSnapshot, shownHandoff, shownEvents, left };
+  return { activeSnapshot, shownSnapshot, shownHandoff, shownEvents, left: left() };
 }
 
 function ambientAdmission(opts: ContextOpts, plan: ContextPlan, shownHandoff: SessionHandoff | null): ContextAdmission {
