@@ -3,7 +3,7 @@
 // CLI parity case in tests/prompt-hook-context.test.ts is all that ties the two.
 import { getContext, type Context, type ContextResult, type ContextResultEntry, type ContextWith } from './index.js';
 import { BadRequestError } from '../core/api-errors.js';
-import { isSharedStore, loadConfig } from '../core/config.js';
+import { type HippoConfig, isSharedStore, loadConfig } from '../core/config.js';
 import {
   contextBlockLines,
   contextCost,
@@ -102,6 +102,8 @@ export function flushDeliveryRecorder(rec: DeliveryRecorder | null, write?: Deli
 /** What one render needs once api.getContext has answered. */
 export interface ContextView {
   readonly hippoRoot: string;
+  /** The caller's Context config, else the folder's config.json is read. */
+  readonly config?: HippoConfig;
   readonly tenantId: string;
   readonly ledgerSessionId: string | undefined;
   readonly payloadSessionId: string | undefined;
@@ -248,7 +250,7 @@ function skipUnchangedStatic(
   if (!view.pinnedOnly || payloadSessionId === undefined) return false;
   // Session start is the only injection Copilot gets, so a resumed session needs the whole block again.
   if (view.envelope === 'copilot-session-start' || view.envelope === 'vscode-session-start') return false;
-  const injectCfg = loadConfig(hippoRoot).pinnedInject;
+  const injectCfg = (view.config ?? loadConfig(hippoRoot)).pinnedInject;
   if (injectCfg.skipUnchanged === false) return false;
   const refreshTurns = Number.isFinite(injectCfg.refreshTurns) && injectCfg.refreshTurns >= 0
     ? injectCfg.refreshTurns
@@ -383,8 +385,9 @@ export async function promptHookContext(
   });
   const rendered = hasContextData(result)
     ? renderAdditionalContext({
-        hippoRoot: ctx.hippoRoot, tenantId: ctx.tenantId, ledgerSessionId, payloadSessionId: ledgerSessionId,
-        pinnedOnly: true, framing: HOOK_FRAMING, rec: null, result, reach, printedHash: req.printedHash ?? null,
+        hippoRoot: ctx.hippoRoot, config: ctx.config, tenantId: ctx.tenantId, ledgerSessionId,
+        payloadSessionId: ledgerSessionId, pinnedOnly: true, framing: HOOK_FRAMING, rec: null, result, reach,
+        printedHash: req.printedHash ?? null,
       })
     : NOTHING_RENDERED;
   // A sub-agent's output is not the session's, so its caller must not record it as printed.

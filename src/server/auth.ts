@@ -1,6 +1,7 @@
 // Bearer and loopback auth for the HTTP server.
 import { envAllowKeylessLocal, envKeylessLocalRole, envRequireAuth } from '../util/env.js';
 import type { IncomingMessage } from 'node:http';
+import { loadConfig } from '../core/config.js';
 import { resolveTenantId } from '../store/tenant.js';
 import { sqliteReach } from '../store/sqlite/store.js';
 import { errorFields, errorMessage, log } from '../util/log.js';
@@ -306,8 +307,11 @@ function keylessLocalActor(opts: AuthOpts): Actor {
 function contextFor(id: BearerIdentity | null, opts: AuthOpts): StoreContext {
   // Per request, never cached at serve: the global store can be created while the server runs.
   const reach = sqliteReach(opts.hippoRoot, opts.store);
+  // loadConfig caches by file mtime, so each request still sees an edit made while the server runs.
+  const config = loadConfig(opts.hippoRoot);
   if (id !== null) {
-    return { hippoRoot: opts.hippoRoot, tenantId: id.tenantId, actor: bearerActor(id), store: opts.store, reach };
+    const actor = bearerActor(id);
+    return { hippoRoot: opts.hippoRoot, tenantId: id.tenantId, actor, store: opts.store, reach, config };
   }
   return {
     hippoRoot: opts.hippoRoot,
@@ -315,6 +319,7 @@ function contextFor(id: BearerIdentity | null, opts: AuthOpts): StoreContext {
     actor: keylessLocalActor(opts),
     store: opts.store,
     reach,
+    config,
   };
 }
 

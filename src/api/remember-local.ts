@@ -3,7 +3,7 @@
 // is a second step, which the caller runs after it has reported the write. Nothing here prints; the caller reports from
 // what comes back.
 
-import { loadConfig } from '../core/config.js';
+import { configOf } from './config-of.js';
 import type { ConfidenceLevel, Layer, MemoryEntry, MemoryKind } from '../core/memory.js';
 import { computeSalience, type SalienceResult } from '../core/salience.js';
 import { loadNewestEntries, schemaFitInStore } from '../store/candidates.js';
@@ -57,7 +57,7 @@ export type LocalRememberOutcome =
 /** The gate's verdict on one write, or null where it does not
  * judge: the store has it off, or the write is pinned or forced. */
 function salienceVerdict(ctx: StoreContext, input: LocalRememberInput): SalienceResult | null {
-  const { salience } = loadConfig(ctx.hippoRoot);
+  const { salience } = configOf(ctx);
   if (!salience.enabled || input.pinned || input.force) return null;
   // computeSalience compares against the last `recentWindow` rows only; below 1 its slice takes every row, so that case
   // still loads them all.
@@ -149,7 +149,7 @@ export async function extractRememberedFacts(
   entry: MemoryEntry,
   request: FactExtractionRequest,
 ): Promise<FactExtraction> {
-  const { extraction } = loadConfig(ctx.hippoRoot);
+  const { extraction } = configOf(ctx);
   if (!request.requested && extraction.enabled !== true) return { status: 'off' };
   const { apiKey, fetcher } = request;
   if (!apiKey) return { status: 'no_key' };

@@ -1,5 +1,6 @@
 import { type ContextWith, adminActor } from '../api/index.js';
 import { ledgerReachOf, type LedgerReach } from '../api/ledger-db.js';
+import { loadConfig } from '../core/config.js';
 import { consolidate } from '../consolidate/sleep.js';
 import type { McpHost } from '../mcp/protocol.js';
 import type { HippoStore, StoreGroup, StoreGroups } from '../store/index.js';
@@ -19,7 +20,9 @@ export function cliRequest<T>(run: () => T | Promise<T>): Promise<T> {
 // root is a parameter because some verbs target the global store.
 export function cliApiContext(hippoRoot: string, tenantId: string): ContextWith<StoreGroup> {
   const store = cliStore(hippoRoot);
-  return { hippoRoot, tenantId, actor: adminActor('cli'), store, reach: sqliteReach(hippoRoot, store) };
+  // Read here, once per command, so a long-lived caller of this function never pins a stale config.
+  const config = loadConfig(hippoRoot);
+  return { hippoRoot, tenantId, actor: adminActor('cli'), store, reach: sqliteReach(hippoRoot, store), config };
 }
 
 /** Where a hook on `hippoRoot` books its ledger rows: the folder's store, else the global one, probed once here. */

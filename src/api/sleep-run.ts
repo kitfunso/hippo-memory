@@ -228,7 +228,7 @@ async function runQualityAudit(
 }
 
 function shareOnSleep(ctx: Context, phases: SleepPhases, result: SleepResult): void {
-  const sleepConfig = phases.loadConfig(ctx.hippoRoot);
+  const sleepConfig = ctx.config ?? phases.loadConfig(ctx.hippoRoot);
   if (!sleepConfig.autoShareOnSleep) return;
   // Both skip counters are surfaced so the secret veto and the rejection tombstone are observable, not silent.
   const autoShareStats = { secretSkipped: 0, rejectedSkipped: 0 };
@@ -251,7 +251,7 @@ function summarizeAmbient(
   result: SleepResult,
   loaded: readonly MemoryEntry[],
 ): number {
-  const postSleepConfig = phases.loadConfig(ctx.hippoRoot);
+  const postSleepConfig = ctx.config ?? phases.loadConfig(ctx.hippoRoot);
   if (!postSleepConfig.ambient.enabled) return 0;
   const postSleepEntries = loaded.filter((e) => !e.superseded_by);
   if (postSleepEntries.length === 0) return 0;

@@ -4,7 +4,7 @@ import {
   type PredictionBaserate,
   type SavePredictionOpts,
 } from '../store/predictions.js';
-import { loadConfig } from '../core/config.js';
+import { configOf } from './config-of.js';
 import type { PredictionClose, PredictionSave, Predictions } from '../store/port.js';
 import type { ContextWith } from './types.js';
 
@@ -21,7 +21,7 @@ export async function recordPrediction(
 ): Promise<Prediction> {
   return savePrediction(ctx, {
     ...claim,
-    mirror: predictionMirror(ctx.tenantId, claim, loadConfig(ctx.hippoRoot).defaultHalfLifeDays),
+    mirror: predictionMirror(ctx.tenantId, claim, configOf(ctx).defaultHalfLifeDays),
   });
 }
 

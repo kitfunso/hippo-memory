@@ -9,7 +9,6 @@ import { loadConfig } from '../core/config.js';
 import {
   closeHippoDb,
   isSqliteBusy,
-  openHippoDb,
   outsideRequestStores,
   withWriteScope,
   type DatabaseSyncLike,
@@ -22,7 +21,7 @@ import {
 } from '../core/project-identity.js';
 import { duplicateKey, heldTextKeys } from '../util/same-text.js';
 import { removeEntryMirrors } from '../store/mirrors.js';
-import { initStore } from '../store/open.js';
+import { initStore, openBareHandle } from '../store/open.js';
 import { writeEntryMirrors } from '../store/entry-writes.js';
 import { selectLiveEntriesBySourcePrefix, selectRowsOutsideSourcePrefixAt } from '../store/entry-reads.js';
 import { updateStats } from '../store/index-and-stats.js';
@@ -292,14 +291,14 @@ function openTarget(target: string, hasItems: boolean, opts: SyncOptions): OpenS
     if (!hasItems) return null;
     initStore(target);
   }
-  const db = openHippoDb(target, { busyWaitMs: opts.busyWaitMs });
+  const db = openBareHandle(target, { busyWaitMs: opts.busyWaitMs });
   return { db, root: target, global, close: () => closeHippoDb(db) };
 }
 
 function emptyStandIn(global: boolean): OpenStore {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-agent-memories-'));
   // Its folder is deleted at close, so a request scope must not keep the file open past that.
-  const db = outsideRequestStores(() => openHippoDb(root));
+  const db = outsideRequestStores(() => openBareHandle(root));
   return {
     db, root, global,
     close: () => {
@@ -533,7 +532,7 @@ function handOver(
   if (synced.length === 0 || !isInitialized(globalRoot)) return;
   let db: DatabaseSyncLike | undefined;
   try {
-    db = openHippoDb(globalRoot, { busyWaitMs: opts.busyWaitMs });
+    db = openBareHandle(globalRoot, { busyWaitMs: opts.busyWaitMs });
     const tenantId = resolveTenantId({});
     // A folder with no git and no marker wrote as '' before its store existed, and as its own name after.
     // Names folded into this project's in the global store were its rows too.

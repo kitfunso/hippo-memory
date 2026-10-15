@@ -65,6 +65,8 @@ jobs:
       # Files over 800 lines and functions over 50 in src/ (80 in scripts/) may shrink but never grow, and no new one may appear.
       - name: Size ratchet
         run: node scripts/check-size-ratchet.mjs
+      - name: API root-keyed store call ratchet
+        run: node scripts/check-api-root-calls.mjs
       - name: process.env read only through src/util/env.ts
         run: node scripts/check-env-reads.mjs
       - name: process.exit only in the files check-process-exit lists

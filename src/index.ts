@@ -188,4 +188,4 @@ export {
   type QueryAuditOpts,
   type ListAuditAfterOpts,
 } from './store/audit.js';
-export { openHippoDb, openHippoDbReadOnly, closeHippoDb, type DatabaseSyncLike } from './db/index.js';
+export * from './entry/sqlite-handles.js';

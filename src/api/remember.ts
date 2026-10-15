@@ -12,7 +12,7 @@ import {
   type MemoryKind,
   type TraceOutcome,
 } from '../core/memory.js';
-import { loadConfig } from '../core/config.js';
+import { configOf } from './config-of.js';
 import { vetSecrets } from '../util/secret-detect.js';
 import { assertCallerProject } from '../core/project-identity.js';
 import { BadRequestError } from '../core/api-errors.js';
@@ -120,7 +120,7 @@ function prepareRemember(ctx: Context, opts: RememberOpts): PreparedRemember {
     artifact_ref: opts.artifactRef ?? null,
     tags: opts.tags,
     tenantId: ctx.tenantId,
-    baseHalfLifeDays: loadConfig(ctx.hippoRoot).defaultHalfLifeDays,
+    baseHalfLifeDays: configOf(ctx).defaultHalfLifeDays,
   });
   const entry = local.weaken ? weakened(created, local.weaken) : created;
   // Aliases only widen what a reader matches; a row has one origin.

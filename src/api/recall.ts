@@ -19,7 +19,8 @@ import type { RerankStep } from '../core/search-types.js';
 import type { PhysicsConfig } from '../core/physics-config.js';
 import { compareEntryIdentity } from '../core/compare.js';
 import { dropHeldCopies, duplicateKey, storedTextKeys } from '../util/same-text.js';
-import { isSharedStore, loadConfig } from '../core/config.js';
+import { isSharedStore } from '../core/config.js';
+import { configOf } from './config-of.js';
 import { classifyOriginProject, projectNames } from '../core/project-identity.js';
 import { decidePlanningFallacy, detectPlanningClaim } from '../predictions/planning-fallacy.js';
 import type { PlanningFallacyEvidence } from '../store/planning-fallacy-evidence.js';
@@ -143,7 +144,7 @@ async function finishBandRecall(
 
 /** `mode` names the engine: physics with the store's config, hybrid otherwise. */
 function physicsFor(ctx: Context, opts: RecallOpts): PhysicsConfig | null {
-  return opts.mode === 'physics' ? loadConfig(ctx.hippoRoot).physics : null;
+  return opts.mode === 'physics' ? configOf(ctx).physics : null;
 }
 
 /** The recall load's arguments: exact scope, current rows only, the caller's project and personal scope. */

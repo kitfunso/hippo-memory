@@ -5,7 +5,7 @@ import { stampOriginProject } from '../store/entry-row.js';
 import type { DormantMemory, DormantSnapshot, ListDormantOpts } from '../store/dormant.js';
 import { strengthAblation } from '../core/ablation.js';
 import { createMemory, calculateStrength, type MemoryEntry } from '../core/memory.js';
-import { loadConfig } from '../core/config.js';
+import { configOf } from './config-of.js';
 import { canTouchScope, personalScopeOf } from '../core/recall-scope.js';
 import type { Context, ContextWith } from './types.js';
 
@@ -44,7 +44,7 @@ function reviveSnapshot(ctx: Context, dormant: DormantSnapshot, now: Date): Memo
   // it carries.
   // The placeholder content only meets createMemory's minimum length, so a legacy row under 3 chars still restores.
   const revived: MemoryEntry = {
-    ...createMemory('dormant snapshot defaults', { baseHalfLifeDays: loadConfig(ctx.hippoRoot).defaultHalfLifeDays }),
+    ...createMemory('dormant snapshot defaults', { baseHalfLifeDays: configOf(ctx).defaultHalfLifeDays }),
     ...dormant.entry,
     last_retrieved: now.toISOString(),
   };

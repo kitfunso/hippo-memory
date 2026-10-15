@@ -2,6 +2,7 @@
 
 import { BadRequestError, ForbiddenError } from '../core/api-errors.js';
 import { narrowStore, type HippoStore, type StoreGroup, type StoreWith } from '../store/index.js';
+import type { HippoConfig } from '../core/config.js';
 import type { StoreReach } from '../store/port.js';
 
 /** Actor identity + role for a Context: the audit-log subject (pass `ctx.actor.subject` to audit helpers) and the role
@@ -28,6 +29,8 @@ export interface Context {
   store?: HippoStore;
   /** Set by a composition root. Absent, the api reads one project and no global store, as for an integrator's store. */
   reach?: StoreReach;
+  /** Set by a composition root per command or request; absent, the api reads the store's config.json. */
+  config?: HippoConfig;
 }
 
 export type HippoDbContext = Context & { store?: undefined };

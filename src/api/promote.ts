@@ -5,7 +5,7 @@ import { stampOriginProject } from '../store/entry-row.js';
 import type { ConnectorEvent } from '../store/port.js';
 import { createSuccessor, type Layer, type MemoryEntry } from '../core/memory.js';
 import { promoteToGlobal } from '../sharing/global-store.js';
-import { loadConfig } from '../core/config.js';
+import { configOf } from './config-of.js';
 import { narrowStore } from '../store/index.js';
 import type { Context, ContextWith, StoreContext } from './types.js';
 import { memoryReach } from '../store/tenant-lookup.js';
@@ -66,7 +66,7 @@ export async function supersede(
   const [old] = await store.entriesByIds([oldId], ctx.tenantId);
   const newEntry = createSuccessor(assertSupersedable(ctx, oldId, old ?? null), newContent, {
     tenantId: ctx.tenantId,
-    baseHalfLifeDays: loadConfig(ctx.hippoRoot).defaultHalfLifeDays,
+    baseHalfLifeDays: configOf(ctx).defaultHalfLifeDays,
     layer: overrides.layer,
     tags: overrides.tags,
     pinned: overrides.pinned,
