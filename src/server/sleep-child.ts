@@ -3,7 +3,7 @@
 import { sleep } from '../api/sleep.js';
 import { consolidate } from '../consolidate/sleep.js';
 import { runWithRequestStores, SERVER_DB_WAIT_MS } from '../db/index.js';
-import { isStoreBusy } from '../store/sqlite/busy.js';
+import { isStoreBusy } from '../api/busy.js';
 import { sqliteStore } from '../store/sqlite/store.js';
 import { errorFields, errorMessage, log } from '../util/log.js';
 import type { SleepJob, SleepReply } from './sleep-offload.js';

@@ -10,7 +10,7 @@ import {
 } from '../util/http-util.js';
 import { SqliteBlockedError } from '../util/sqlite-blocked.js';
 import { STORE_BUSY_MESSAGE } from '../store/port.js';
-import { isStoreBusy } from '../store/sqlite/busy.js';
+import { isStoreBusy } from './busy.js';
 
 /** The status and client-facing message for one failed request. */
 export interface ApiErrorReply {

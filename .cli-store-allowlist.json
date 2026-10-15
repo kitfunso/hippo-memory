@@ -11,11 +11,6 @@
   },
   {
     "file": "cli.ts",
-    "target": "store/sqlite/busy.ts",
-    "why": "isStoreBusy picks that exit message; error classification, not a store read"
-  },
-  {
-    "file": "cli.ts",
     "target": "db/request-stores.ts",
     "why": "opens the per-process handle scope a scoped verb runs in, as the server and MCP entry points do"
   },

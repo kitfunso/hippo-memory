@@ -47,6 +47,10 @@
     "layer": "db",
     "from": ["api", "mcp", "server"],
     "allowed": {
+      "api/busy.ts": {
+        "names": ["isSqliteBusy"],
+        "why": "a raw SQLITE_BUSY from a by-path read must still map to 503; the code check stays in src/db with the SQLite error codes"
+      },
       "api/auto-sleep.ts": {
         "names": ["outsideRequestStores", "runWithRequestStores", "scopedBusyWait"],
         "why": "starts the background sleep in its own RequestStores scope with the caller's lock wait; the ambient scope stays in src/db until its owner moves it"

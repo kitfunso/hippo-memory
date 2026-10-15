@@ -13,7 +13,7 @@ import { printGitHubBackfillUsage } from './cli/github.js';
 import { printError } from './cli/output.js';
 import { errorFields, errorMessage, isLevelEnabled, log } from './util/log.js';
 import { STORE_BUSY_MESSAGE } from './store/port.js';
-import { isStoreBusy } from './store/sqlite/busy.js';
+import { isStoreBusy } from './api/busy.js';
 import { type CliFlags, flagIsTrue, isBooleanFlag, isStringFlag } from './cli/flag-values.js';
 import {
   USAGE_HEADER,
