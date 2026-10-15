@@ -153,6 +153,11 @@ export class RunWatchedTimeoutError extends Error {
   }
 }
 
+export interface RunWatchedOptions {
+  /** Join argv with spaces and run it as one shell command line; kept for 2.x callers, new code uses runWatchedLine. */
+  shell?: boolean;
+}
+
 /** Run argv[0] with the rest as its arguments and no shell, so `;`, `&` and `$()` reach it literally; stderr streams
  * live.
  * Returns: { exitCode, stderr } with only the last 64 KiB of stderr; rejects with RunWatchedTimeoutError past
@@ -160,7 +165,9 @@ export class RunWatchedTimeoutError extends Error {
 export function runWatched(
   argv: readonly string[],
   deadlineMs: number = RUN_WATCHED_DEADLINE_MS,
+  opts: RunWatchedOptions = {},
 ): Promise<{ exitCode: number; stderr: string }> {
+  if (opts.shell) return runWatchedLine(argv.join(' '), deadlineMs);
   return watchChild(spawnArgv(argv, WATCHED_SPAWN_OPTIONS), deadlineMs);
 }
 

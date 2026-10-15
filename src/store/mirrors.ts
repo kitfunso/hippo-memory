@@ -362,6 +362,7 @@ function putStatsMirror(hippoRoot: string, stats: LegacyStats): void {
  * database counters are always current. */
 export function writeStatsMirror(hippoRoot: string, stats: LegacyStats): void {
   const key = path.resolve(hippoRoot);
+  dropIdleStatsMirrors();
   const state = statsMirrors.get(key) ?? { lastWrite: 0 };
   statsMirrors.set(key, state);
   const wait = state.lastWrite + STATS_MIRROR_INTERVAL_MS - Date.now();
@@ -380,6 +381,16 @@ export function writeStatsMirror(hippoRoot: string, stats: LegacyStats): void {
   state.timer.unref();
 }
 
+// A root idle for a full interval needs no throttle state, so the map holds only recently written roots.
+function dropIdleStatsMirrors(): void {
+  const now = Date.now();
+  for (const [root, state] of statsMirrors) {
+    if (state.timer === undefined && state.pending === undefined && now - state.lastWrite >= STATS_MIRROR_INTERVAL_MS) {
+      statsMirrors.delete(root);
+    }
+  }
+}
+
 /** Write any held stats.json now, for one root or all; store close and process exit call it. */
 export function flushStatsMirrors(hippoRoot?: string): void {
   const key = hippoRoot === undefined ? undefined : path.resolve(hippoRoot);
@@ -388,10 +399,8 @@ export function flushStatsMirrors(hippoRoot?: string): void {
     if (state.timer !== undefined) clearTimeout(state.timer);
     state.timer = undefined;
     const stats = state.pending;
-    state.pending = undefined;
-    if (stats === undefined) continue;
-    state.lastWrite = Date.now();
-    putStatsMirror(root, stats);
+    statsMirrors.delete(root);
+    if (stats !== undefined) putStatsMirror(root, stats);
   }
 }
 

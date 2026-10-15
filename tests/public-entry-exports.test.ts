@@ -149,7 +149,7 @@ describe('published runtime exports', () => {
       openHippoDb openHippoDbReadOnly
       partitionLessons physicsSearch promoteToGlobal
       queryAuditEvents
-      readEntry rebuildIndex reclaimExpiredCards renderAmbientSummary replaceDetectedConflicts resolveConfidence resolveConflict resultToBaseline reviewCard runFeatureEval runWatched
+      readEntry rebuildIndex reclaimExpiredCards renderAmbientSummary replaceDetectedConflicts resolveConfidence resolveConflict resultToBaseline reviewCard runFeatureEval runWatched runWatchedLine
       saveActiveTaskSnapshot saveEmbeddingIndex saveSessionHandoff search searchBoth searchBothHybrid shareMemory sleep stampHandoffOutcome strengthBucket syncGlobalToLocal
       temporalBoost textOverlap tokenize transferScore
       wmClear wmFlush wmPush wmRead writeEntry writeSessionEndHandoff",
