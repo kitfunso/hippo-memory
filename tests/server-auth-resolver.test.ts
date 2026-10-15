@@ -683,6 +683,7 @@ describe('package surface', () => {
   });
 
   it.each(['authCreateSelf', 'AuthCreateSelfOpts', 'AuthCreateSelfResult'])('exports %s on the built server entry', (name) => {
+    // The built d.ts text is what a consumer's compiler reads, so text is the contract here.
     const dts = readFileSync(join(root, 'dist', 'server.d.ts'), 'utf-8');
     expect(dts).toMatch(new RegExp(`^export \\{[^}]*\\b${name}\\b`, 'm'));
   });

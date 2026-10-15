@@ -187,6 +187,7 @@ function trapCaught(trap: TrapDefinition): boolean {
 // Trap file content assertions (static code review — no LLM needed)
 // ---------------------------------------------------------------------------
 
+// The trap repo is a fixture whose planted flaws are its text, so the text is the contract.
 describe('Trap repo files contain expected issues', () => {
   const repoDir = path.join(__dirname, 'traps', 'trap-repo', 'src');
 

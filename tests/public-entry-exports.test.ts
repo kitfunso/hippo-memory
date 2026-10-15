@@ -45,6 +45,7 @@ describe('package entry re-exports strengthBucket', () => {
     expect(realpathSync(fileURLToPath(out.url))).toBe(realpathSync(resolve(REPO_ROOT, 'dist', 'index.js')));
     expect(out.type).toBe('function');
     expect(out.one).toBe(100);
+    // The published d.ts text is what consumers compile against, so text is the contract.
     const dts = readFileSync(resolve(REPO_ROOT, 'dist', 'index.d.ts'), 'utf-8');
     expect(dts).toMatch(/^export \{ strengthBucket \} from '\.\/consolidate\/dedupe\.js';$/m);
   });
@@ -81,6 +82,7 @@ describe('package entry re-exports sleep', () => {
     const out = importBuiltEntry<{ type: string; admin: boolean }>(script);
     expect(out.type).toBe('function');
     expect(out.admin).toBe(false);
+    // The published d.ts text is what consumers compile against, so text is the contract.
     const dts = readFileSync(resolve(REPO_ROOT, 'dist', 'index.d.ts'), 'utf-8');
     expect(dts).toMatch(/^export type \{ SleepOpts, SleepResult \} from '\.\/api\/sleep\.js';$/m);
     // The published signature takes the public Context, which may carry no store.

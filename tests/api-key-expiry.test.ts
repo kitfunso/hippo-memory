@@ -251,13 +251,10 @@ describe('expired keys over MCP and the stream', () => {
     const reader = res.body!.getReader();
     const decoder = new TextDecoder();
     let buf = '';
-    const deadline = Date.now() + 6000;
-    while (Date.now() < deadline && !buf.includes('auth_revoked')) {
-      const r = await Promise.race([
-        reader.read(),
-        new Promise<{ value: undefined; done: true }>((ok) => setTimeout(() => ok({ value: undefined, done: true }), 300)),
-      ]);
-      if (r.value) buf += decoder.decode(r.value);
+    // The 100 ms heartbeat wakes each read, and the server ends the stream after auth_revoked, so the loop waits on events, not a clock.
+    for (let r = await reader.read(); !r.done; r = await reader.read()) {
+      buf += decoder.decode(r.value);
+      if (buf.includes('auth_revoked')) break;
     }
     ac.abort();
     expect(buf).toContain('auth_revoked');
