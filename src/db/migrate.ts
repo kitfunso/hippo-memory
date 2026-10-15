@@ -51,9 +51,9 @@ const META_DEFAULTS: ReadonlyArray<readonly [string, string]> = [
 // Names come from our own constants and match \w+, so inlining them as literals is safe.
 const sqlList = (names: readonly string[]): string => names.map((n) => `'${n}'`).join(', ');
 
+const REQUIRED_OBJECTS = sqlList(REQUIRED_SCHEMA_OBJECTS);
 /** The fast path's single probe: versions, the binary minimum, the FTS flag, and counts of the meta defaults and
  * required objects. */
-const REQUIRED_OBJECTS = sqlList(REQUIRED_SCHEMA_OBJECTS);
 export const SCHEMA_PROBE_SQL = `SELECT
   (SELECT user_version FROM pragma_user_version) AS user_version,
   (SELECT value FROM meta WHERE key = 'schema_version') AS schema_version,
