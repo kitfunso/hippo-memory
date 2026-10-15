@@ -70,12 +70,11 @@ export interface HippoConfig {
   pinnedInject: {
     enabled: boolean;
     budget: number;
-    /** Skip a block identical to the one already injected this session
-     *  Default true. Needs a session id from the hook payload. */
+    /** Send each memory and section once per context window, leaving out what the window already holds. Default true.
+     *  Needs a session id from the hook payload. */
     skipUnchanged: boolean;
-    /** Resend an unchanged block after this many consecutive skips, so long sessions still see pinned rules near the
-     * latest turn (default 10; 0 never
-     * resends). */
+    /** Resend a pinned memory this many turns after its last send, so long sessions still see pinned rules near the
+     * latest turn (default 10; 0 leaves pins to the 25-turn mark life every other part has). */
     refreshTurns: number;
     /** Gate the hook's backfill on the prompt's own content instead of the five
      *  newest memories. Default true: the same overlap for fewer tokens. */

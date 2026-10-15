@@ -1,15 +1,14 @@
-/** Token ledger: one row per block of memory text sent to an agent on any surface, with its token cost; the input for
- * the token-savings evals. Backs inject-only-on-change: the hook records a `skip` when the block hash matches the
- * session's last; `reread` rows cover {@link REREAD_SURFACES} blocks. Counts use {@link estimateTokens} (chars / 4);
- * rows never hold content or query text. Writes are best-effort: a ledger failure must not break recall. */
+/** Token ledger: one row per block of memory text sent to an agent, with its token cost; backs the hook's send-once
+ * marks ({@link sentInWindow}) and the token-savings evals. Counts are chars / 4; rows hold no content or query text.
+ * Writes are best-effort: a ledger failure must not break recall. */
 import { open } from 'node:fs/promises';
 import { withWriteScope, type DatabaseSyncLike } from '../db/index.js';
 import { onHandle } from './open.js';
 import { type JsonValue, isJsonString, isJsonObjectLiteral } from '../util/json.js';
 import { DAY_MS } from '../util/time.js';
 import {
-  commitPendingRow, countSkipsAfter, deleteRereadRows, injectedBlocks, insertTokenRow, latestInjectOrReset,
-  pruneTokenRowsBefore, sessionTokenRows, sessionTotals, surfaceTotals, windowRows,
+  commitPendingRow, deleteRereadRows, injectedBlocks, insertTokenRow, pruneTokenRowsBefore, sessionTokenRows,
+  sessionTotals, surfaceTotals, windowRows,
 } from './token-ledger-rows.js';
 import { DATE_PREFIX_CHARS } from '../util/token-text.js';
 
@@ -38,8 +37,8 @@ export const TOKEN_SURFACES: readonly TokenSurface[] = [
  * one session id. */
 export const REREAD_SURFACES: readonly TokenSurface[] = ['hook', 'hook_recall', 'compact_resume'];
 
-/** What happened to a block: `inject` (sent), `skip` (identical to the last injected block), `reset` (host compacted,
- * next must send), `reread` (tokens later calls read again, booked at session end), `arm` (pilot assignment;
+/** What happened to a block: `inject` (sent), `skip` (text the context window already held, not sent), `reset` (host
+ * compacted, next must send), `reread` (tokens later calls read again, booked at session end), `arm` (pilot assignment;
  * `block_hash` is `hippo` or `holdout`, `items` the holdout rate in bp). */
 export type TokenEvent = 'inject' | 'skip' | 'reset' | 'reread' | 'arm';
 
@@ -128,37 +127,6 @@ export function commitPendingKeys(
   db: DatabaseSyncLike, tenantId: string, sessionId: string, surface: TokenSurface, hash: string,
 ): boolean {
   return commitPendingRow(db, tenantId, sessionId, surface, hash);
-}
-
-/** What a session last sent on a surface, for {@link lastSentState}. */
-export interface LastSent {
-  /** {@link blockHash} of the last injected block. */
-  hash: string;
-  /** Consecutive `skip` rows since that injection. */
-  skipsSince: number;
-}
-
-/** The last block this session injected on `surface`, or null if none, a `reset` came after it, or there is no session
- * id (the caller then always injects). */
-export function lastSentState(
-  db: DatabaseSyncLike,
-  tenantId: string,
-  sessionId: string | null | undefined,
-  surface: TokenSurface,
-): LastSent | null {
-  if (!sessionId) return null;
-  const anchor = latestInjectOrReset(db, tenantId, sessionId, surface);
-  if (!anchor || anchor.event === 'reset' || !anchor.block_hash) return null;
-  const skips = countSkipsAfter(db, tenantId, sessionId, surface, anchor.id);
-  return { hash: anchor.block_hash, skipsSince: Number(skips?.n ?? 0) };
-}
-
-/** Whether a block identical to the session's last injection should be skipped; `refreshTurns` resends it after that
- * many consecutive skips so a long session still sees its pinned rules, 0 never resends. */
-export function shouldSkipUnchanged(last: LastSent | null, hash: string, refreshTurns: number): boolean {
-  if (!last || last.hash !== hash) return false;
-  if (refreshTurns > 0 && last.skipsSince >= refreshTurns) return false;
-  return true;
 }
 
 /** Per-surface totals for {@link summarizeTokenUse}. */

@@ -1,10 +1,10 @@
 // The store the token ledger writes to for a caller's root; context, recall and the session hooks share it.
 import { errorMessage, log } from '../util/log.js';
 import {
-  lastSentOnSurface, noteLedgerRowSkipped, recordLedgerTurn, recordTokensAt, type LedgerTurn,
+  noteLedgerRowSkipped, recordLedgerTurn, recordTokensAt, sendWindowAt, type LedgerTurn,
 } from '../store/ledger-turn.js';
 import { hasGroup, type HippoStore, type StoreReach } from '../store/port.js';
-import type { LastSent, TokenSurface, TokenUse } from '../store/token-ledger.js';
+import type { SendWindow, TokenSurface, TokenUse } from '../store/token-ledger.js';
 
 /** The slice of a call's store reach that picks the ledger; a shared store has no `global`. */
 export type LedgerReach = Pick<StoreReach, 'hasLocal' | 'global'>;
@@ -56,13 +56,15 @@ export function bookLedgerTurn(hippoRoot: string, turn: LedgerTurn, reach: Ledge
   onLedgerRoot(hippoRoot, reach, (root) => recordLedgerTurn(root, turn));
 }
 
-/** What the session last sent on `surface` in ledgerRoot's store; undefined with no ledger or a failed read. */
-export function ledgerLastSent(
+/** The session's send window on `surface` in ledgerRoot's store, after committing an echoed pending row; undefined
+ * with no ledger or a failed read. */
+export function ledgerSendWindow(
   hippoRoot: string,
   tenantId: string,
-  sessionId: string | null | undefined,
+  sessionId: string,
   surface: TokenSurface,
+  echoed: string | null,
   reach: LedgerReach,
-): LastSent | null | undefined {
-  return onLedgerRoot(hippoRoot, reach, (root) => lastSentOnSurface(root, tenantId, sessionId, surface));
+): SendWindow | undefined {
+  return onLedgerRoot(hippoRoot, reach, (root) => sendWindowAt(root, tenantId, sessionId, surface, echoed));
 }

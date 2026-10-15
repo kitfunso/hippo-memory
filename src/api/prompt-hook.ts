@@ -17,13 +17,16 @@ import {
   createDeliveryRecorder,
   type DeliveryEventType,
   type DeliveryFault,
+  type DeliveryOutcomeInput,
   type DeliveryRecorder,
 } from '../store/delivery-recorder.js';
 import type { HookRuntime } from '../core/capture-contract.js';
 import { realpathOrResolve } from '../util/real-path.js';
 import { MAX_ID_LEN } from '../util/limits.js';
 import { isJsonString, type JsonValue } from '../util/json.js';
-import { bookLedgerTurn, ledgerLastSent, ledgerReachOf, ledgerRoot, type LedgerReach } from './ledger-db.js';
+import { bookLedgerTurn, ledgerReachOf, ledgerRoot, ledgerSendWindow, type LedgerReach } from './ledger-db.js';
+import { EMPTY_WINDOW, isFresh, memoryKey, refreshTurnsOf, sectionKey, type SendRule } from './send-once.js';
+import { ownerOrSubject } from './types.js';
 import { noteLedgerRowSkipped } from '../store/ledger-turn.js';
 import type { MemoryEntry } from '../core/memory.js';
 import { sessionPilotArm } from './pilot-arm.js';
@@ -31,7 +34,7 @@ import type { PilotArm } from '../store/pilot-arm.js';
 import { assertCallerProject, MAX_PROJECT_ALIASES } from '../core/project-identity.js';
 import type { DeliveryWrite } from '../store/ledger-turn.js';
 import { writeDeliveryEventAtRoot } from '../store/recall-trace.js';
-import { shouldSkipUnchanged, type TokenSurface, type TokenUse } from '../store/token-ledger.js';
+import type { TokenSurface, TokenUse } from '../store/token-ledger.js';
 import { hookPayloadString, isSubagentPayload } from '../util/hook-payload.js';
 import { blockHash, estimateTokens } from '../util/token-text.js';
 import { errorMessage, log } from '../util/log.js';
@@ -113,10 +116,11 @@ export interface ContextView {
   readonly result: ContextResult;
   /** Where the ledger rows go; a shared store's reach has no global store, see promptHookContext. */
   readonly reach: LedgerReach;
-  /** The static block's hash the caller says it printed last. Undefined keeps the ledger-only skip rule;
-   *  a string or null also needs that hash to match, because the ledger counts blocks a caller that prints elsewhere
-   *  may never have shown. */
+  /** Set only by a remote caller, which prints elsewhere: the hash of the last reply it printed, null for none. Its
+   *  marks stay pending until a later call echoes them; the local CLI books its rows once stdout took the text. */
   readonly printedHash?: string | null;
+  /** On a shared store, the caller's owner, which every send mark carries. */
+  readonly owner?: string;
   /** The reply's JSON wrapper; absent means Claude Code's UserPromptSubmit. */
   readonly envelope?: HookEnvelope;
 }
@@ -137,13 +141,15 @@ function hookReply(envelope: HookEnvelope, additionalContext: string): string {
   return JSON.stringify({ hookSpecificOutput: { hookEventName, additionalContext } });
 }
 
-/** A hook render's stdout and the hash of the static block it carries, null when it carries none. */
-interface RenderedContext {
+/** A hook render's stdout, the hash a remote caller echoes once it printed it (null when nothing prints), and the
+ * booking of its ledger rows, which the local CLI runs only once stdout took the text. */
+export interface RenderedContext {
   readonly stdout: string;
   readonly staticHash: string | null;
+  readonly book: () => void;
 }
 
-const NOTHING_RENDERED: RenderedContext = Object.freeze({ stdout: '', staticHash: null });
+const NOTHING_RENDERED: RenderedContext = Object.freeze({ stdout: '', staticHash: null, book: () => undefined });
 
 export function hasContextData(result: ContextResult): boolean {
   return Boolean(
@@ -160,28 +166,55 @@ export function toRenderItems(entries: ContextResultEntry[]): RenderItem[] {
   return entries.map((r) => ({ entry: r.entry, score: r.score, tokens: r.tokens, isGlobal: r.isGlobal ?? false }));
 }
 
-/** The hook format's stdout, '' when nothing is sent: a skippable static block (snapshot, handoff, events, pins,
- * recent-N) and a never-skipped recall block. */
-export function additionalContextOutput(view: ContextView): string {
-  return renderAdditionalContext(view).stdout;
+/** One section or memory of the hook block, with the key its send is marked under. */
+interface Keyed<T> {
+  readonly key: string;
+  readonly pinned: boolean;
+  readonly part: T;
 }
 
-function renderStaticBlock(
-  view: ContextView,
-  staticItems: RenderItem[],
-  staticCrossEntries: ContextResultEntry[],
-): string {
-  const { result, framing } = view;
-  return settleTokens((t) =>
+interface HookParts {
+  readonly sections: readonly Keyed<string>[];
+  readonly statics: readonly Keyed<ContextResultEntry>[];
+  readonly cross: readonly Keyed<ContextResultEntry>[];
+  readonly recall: readonly Keyed<ContextResultEntry>[];
+}
+
+interface HookText {
+  readonly staticText: string;
+  readonly recallText: string;
+}
+
+function hookParts(view: ContextView): HookParts {
+  const { result, owner } = view;
+  const section = (kind: 'snapshot' | 'handoff' | 'trail', text: string): Keyed<string> =>
+    ({ key: sectionKey(kind, text, owner), pinned: false, part: text });
+  const memory = (r: ContextResultEntry): Keyed<ContextResultEntry> =>
+    ({ key: memoryKey(r.entry, owner), pinned: r.entry.pinned, part: r });
+  const events = result.recentEvents ?? [];
+  return {
+    sections: [
+      ...(result.activeSnapshot ? [section('snapshot', snapshotText(result.activeSnapshot))] : []),
+      ...(result.sessionHandoff ? [section('handoff', handoffText(result.sessionHandoff))] : []),
+      ...(events.length > 0 ? [section('trail', sessionTrailText(events))] : []),
+    ],
+    statics: result.entries.filter((r) => r.category !== 'cross-project' && !r.promptRecall).map(memory),
+    cross: result.entries.filter((r) => r.category === 'cross-project' && !r.promptRecall).map(memory),
+    recall: result.entries.filter((r) => r.promptRecall).map(memory),
+  };
+}
+
+function renderParts(parts: HookParts, framing: string): HookText {
+  const staticItems = toRenderItems(parts.statics.map((k) => k.part));
+  const staticText = settleTokens((t) =>
     [
-      ...(result.activeSnapshot ? [snapshotText(result.activeSnapshot)] : []),
-      ...(result.sessionHandoff ? [handoffText(result.sessionHandoff)] : []),
-      ...(result.recentEvents && result.recentEvents.length > 0 ? [sessionTrailText(result.recentEvents)] : []),
+      ...parts.sections.map((k) => k.part),
       // No live strength percentage, so an unchanged set of memories renders byte-identically turn after turn.
       ...(staticItems.length > 0 ? contextBlockLines(staticItems, t, framing, { showStrength: false }) : []),
-      ...crossProjectLines(staticCrossEntries),
+      ...crossProjectLines(parts.cross.map((k) => k.part)),
     ].join('\n'),
   );
+  return { staticText, recallText: renderRecallBlock(toRenderItems(parts.recall.map((k) => k.part)), framing) };
 }
 
 function renderRecallBlock(recallItems: RenderItem[], framing: ContextView['framing']): string {
@@ -191,113 +224,124 @@ function renderRecallBlock(recallItems: RenderItem[], framing: ContextView['fram
   );
 }
 
-function renderAdditionalContext(view: ContextView): RenderedContext {
-  const { result, rec, framing } = view;
-  const staticEntries = result.entries.filter((r) => r.category !== 'cross-project' && !r.promptRecall);
-  const staticCrossEntries = result.entries.filter((r) => r.category === 'cross-project' && !r.promptRecall);
-  const staticItems = toRenderItems(staticEntries);
-  const recallItems = toRenderItems(result.entries.filter((r) => r.promptRecall));
-
-  const staticBlock = renderStaticBlock(view, staticItems, staticCrossEntries);
-  const recallBlock = renderRecallBlock(recallItems, framing);
-  if (!staticBlock.trim() && !recallBlock.trim()) {
-    rec?.delivered({ state: 'empty' });
-    return NOTHING_RENDERED;
-  }
-
-  const surface: TokenSurface = view.pinnedOnly ? 'hook' : 'context';
-  const sendStatic =
-    staticBlock.trim().length > 0 && !skipUnchangedStatic(view, surface, staticBlock, recallBlock, staticItems.length);
-
-  const finalStatic = sendStatic ? staticBlock : '';
-  const additionalContext = finalStatic && recallBlock
-    ? `${finalStatic}\n\n${recallBlock}`
-    : finalStatic || recallBlock;
-  const staticReused = !sendStatic && staticBlock.trim().length > 0;
-  if (!additionalContext.trim()) {
-    rec?.delivered({ state: 'reused', staticHash: blockHash(staticBlock), staticReused });
-    return NOTHING_RENDERED;
-  }
-
-  const stdout = hookReply(view.envelope ?? 'user-prompt-submit', additionalContext);
-  rec?.delivered({
-    state: staticReused ? 'reused-recall-sent' : 'sent',
-    staticHash: staticBlock.trim() ? blockHash(staticBlock) : null,
-    recallHash: recallBlock ? blockHash(recallBlock) : null,
-    emittedText: additionalContext,
-    staticReused,
-  });
-  if (finalStatic || recallBlock) {
-    recordAdditionalContextRows(
-      view,
-      surface,
-      { text: finalStatic, items: staticItems.length },
-      { text: recallBlock, items: recallItems.length },
-    );
-  }
-  return { stdout, staticHash: finalStatic ? blockHash(finalStatic) : null };
+function filterParts(parts: HookParts, rule: SendRule): HookParts {
+  const keep = <T>(list: readonly Keyed<T>[]): Keyed<T>[] => list.filter((k) => isFresh(rule, k.key, k.pinned));
+  return {
+    sections: keep(parts.sections), statics: keep(parts.statics), cross: keep(parts.cross), recall: keep(parts.recall),
+  };
 }
 
-/** True, after booking the skip row, when the hook may omit a static block this session already holds. */
-function skipUnchangedStatic(
-  view: ContextView,
-  surface: TokenSurface,
-  staticBlock: string,
-  recallBlock: string,
-  staticCount: number,
-): boolean {
-  const { hippoRoot, payloadSessionId, rec } = view;
-  if (!view.pinnedOnly || payloadSessionId === undefined) return false;
+const memoriesOf = (parts: HookParts): Keyed<ContextResultEntry>[] =>
+  [...parts.statics, ...parts.cross, ...parts.recall];
+const tokensOf = (text: HookText): number => estimateTokens(text.staticText) + estimateTokens(text.recallText);
+
+function joinBlocks({ staticText, recallText }: HookText): string {
+  const joined = staticText && recallText ? `${staticText}\n\n${recallText}` : staticText || recallText;
+  return joined.trim() ? joined : '';
+}
+
+/** The hook format's render: a static block (snapshot, handoff, trail, pins, recent-N) and a prompt-recall block, each
+ * part left out while the session's context window still holds it. */
+export function renderHookContext(view: ContextView): RenderedContext {
+  const parts = hookParts(view);
+  const full = renderParts(parts, view.framing);
+  if (!full.staticText.trim() && !full.recallText.trim()) {
+    view.rec?.delivered({ state: 'empty' });
+    return NOTHING_RENDERED;
+  }
+  const rule = sendRule(view);
+  const shown = rule ? filterParts(parts, rule) : parts;
+  const printed = rule ? renderParts(shown, view.framing) : full;
+  const text = joinBlocks(printed);
+  const shownIds = new Set(memoriesOf(shown).map((k) => k.part.entry.id));
+  const reusedIds = memoriesOf(parts).map((k) => k.part.entry.id).filter((id) => !shownIds.has(id));
+  view.rec?.delivered(deliveryOutcome(full, printed, text, reusedIds));
+  const hash = text ? blockHash(text) : null;
+  const uses = rule ? windowUses(view, { parts, shown, full, printed, hash }) : bypassUses(view, parts, printed);
+  return {
+    stdout: text ? hookReply(view.envelope ?? 'user-prompt-submit', text) : '',
+    staticHash: hash,
+    book: () => bookHookRows(view, uses),
+  };
+}
+
+function deliveryOutcome(full: HookText, printed: HookText, text: string, reusedIds: string[]): DeliveryOutcomeInput {
+  const staticHeld = full.staticText.trim() !== '' && printed.staticText.trim() === '';
+  const shownStatic = printed.staticText.trim() ? printed.staticText : full.staticText;
+  return {
+    state: !text ? 'reused' : staticHeld ? 'reused-recall-sent' : 'sent',
+    staticHash: shownStatic.trim() ? blockHash(shownStatic) : null,
+    recallHash: printed.recallText ? blockHash(printed.recallText) : null,
+    emittedText: text || undefined,
+    reusedIds,
+  };
+}
+
+/** Null when this call sends everything and marks nothing: a non-hook render, no payload session (a sub-agent), a
+ * session start, or skipUnchanged off. */
+function sendRule(view: ContextView): SendRule | null {
+  const { hippoRoot, payloadSessionId } = view;
+  if (!view.pinnedOnly || payloadSessionId === undefined) return null;
   // Session start is the only injection Copilot gets, so a resumed session needs the whole block again.
-  if (view.envelope === 'copilot-session-start' || view.envelope === 'vscode-session-start') return false;
+  if (view.envelope === 'copilot-session-start' || view.envelope === 'vscode-session-start') return null;
   const injectCfg = (view.config ?? loadConfig(hippoRoot)).pinnedInject;
-  if (injectCfg.skipUnchanged === false) return false;
-  const refreshTurns = Number.isFinite(injectCfg.refreshTurns) && injectCfg.refreshTurns >= 0
-    ? injectCfg.refreshTurns
-    : 10;
-  // Hashed on the static text alone so an unchanged pin set still skips while recall varies.
-  const staticHash = blockHash(staticBlock);
-  // Before the ledger read, so a caller that did not print this block books no skip row.
-  if (view.printedHash !== undefined && view.printedHash !== staticHash) return false;
-  const last = ledgerLastSent(hippoRoot, view.tenantId, payloadSessionId, surface, view.reach);
-  if (!shouldSkipUnchanged(last ?? null, staticHash, refreshTurns)) return false;
-  bookLedgerTurn(hippoRoot, {
-    uses: [{
-      tenantId: view.tenantId, sessionId: payloadSessionId, surface, event: 'skip',
-      items: staticCount, tokens: estimateTokens(staticBlock), hash: staticHash,
-    }],
-    delivery: recallBlock.trim() ? undefined : (write) => {
-      rec?.delivered({ state: 'reused', staticHash, staticReused: true });
-      flushDeliveryRecorder(rec, write);
-    },
-  }, view.reach);
-  return true;
+  if (injectCfg.skipUnchanged === false) return null;
+  const echoed = view.printedHash ?? null;
+  const window = ledgerSendWindow(hippoRoot, view.tenantId, payloadSessionId, 'hook', echoed, view.reach);
+  return { window: window ?? EMPTY_WINDOW, refreshTurns: refreshTurnsOf(injectCfg.refreshTurns) };
 }
 
-interface InjectedBlock { readonly text: string; readonly items: number }
+interface HookTurn {
+  readonly parts: HookParts;
+  readonly shown: HookParts;
+  readonly full: HookText;
+  readonly printed: HookText;
+  readonly hash: string | null;
+}
 
-/** One connection for both rows; a failed row is logged and the other still lands, because a ledger failure must not
+/** One `hook` row per call is the window's turn, carrying the printed keys (pending for a remote caller until it echoes
+ * the hash); the tokens left out go on a skip row. */
+function windowUses(view: ContextView, turn: HookTurn): TokenUse[] {
+  const { parts, shown, full, printed, hash } = turn;
+  const base = { tenantId: view.tenantId, sessionId: view.ledgerSessionId, surface: 'hook' } as const;
+  const avoided = Math.max(0, tokensOf(full) - tokensOf(printed));
+  const held = parts.statics.length - shown.statics.length;
+  const sentKeys = [...shown.sections, ...memoriesOf(shown)].map((k) => k.key);
+  const marks = { hash, sentKeys, pending: view.printedHash !== undefined && sentKeys.length > 0 };
+  const sentStatic = printed.staticText !== '';
+  const turnRow: TokenUse = sentStatic
+    ? { ...base, ...marks, event: 'inject', items: shown.statics.length, tokens: estimateTokens(printed.staticText) }
+    : { ...base, ...marks, event: 'skip', items: held, tokens: avoided };
+  return [
+    turnRow,
+    ...(printed.recallText ? [recallUse(view, shown, printed.recallText)] : []),
+    ...(sentStatic && avoided > 0 ? [{ ...base, event: 'skip' as const, items: held, tokens: avoided }] : []),
+  ];
+}
+
+function bypassUses(view: ContextView, parts: HookParts, printed: HookText): TokenUse[] {
+  const surface: TokenSurface = view.pinnedOnly ? 'hook' : 'context';
+  const { staticText, recallText } = printed;
+  const staticUse: TokenUse = {
+    tenantId: view.tenantId, sessionId: view.ledgerSessionId, surface, event: 'inject',
+    items: parts.statics.length, tokens: estimateTokens(staticText), hash: blockHash(staticText),
+  };
+  return [...(staticText ? [staticUse] : []), ...(recallText ? [recallUse(view, parts, recallText)] : [])];
+}
+
+function recallUse(view: ContextView, parts: HookParts, text: string): TokenUse {
+  return {
+    tenantId: view.tenantId, sessionId: view.ledgerSessionId, surface: 'hook_recall', event: 'inject',
+    items: parts.recall.length, tokens: estimateTokens(text), hash: blockHash(text),
+  };
+}
+
+/** One connection for every row; a failed row is logged and the rest still land, because a ledger failure must not
  * break the hook. */
-function recordAdditionalContextRows(
-  view: ContextView,
-  surface: TokenSurface,
-  staticPart: InjectedBlock,
-  recallPart: InjectedBlock,
-): void {
-  const row = (part: InjectedBlock, on: TokenSurface): TokenUse => ({
-    tenantId: view.tenantId, sessionId: view.ledgerSessionId, surface: on, event: 'inject',
-    items: part.items, tokens: estimateTokens(part.text), hash: blockHash(part.text),
-  });
+function bookHookRows(view: ContextView, uses: readonly TokenUse[]): void {
   bookLedgerTurn(
     view.hippoRoot,
-    {
-      uses: [
-        ...(staticPart.text ? [row(staticPart, surface)] : []),
-        ...(recallPart.text ? [row(recallPart, 'hook_recall')] : []),
-      ],
-      onRowError: noteLedgerRowSkipped,
-      delivery: (write) => flushDeliveryRecorder(view.rec, write),
-    },
+    { uses, onRowError: noteLedgerRowSkipped, delivery: (write) => flushDeliveryRecorder(view.rec, write) },
     view.reach,
   );
 }
@@ -322,8 +366,8 @@ export interface PromptHookRequest {
   readonly sessionId: string;
   readonly project: CallerProject;
   readonly payload?: Readonly<Record<string, JsonValue>>;
-  /** The staticHash of the last reply whose stdout the caller
-   * printed in this session; absent, the block is always sent. */
+  /** The staticHash of the last reply whose stdout the caller printed in this session; absent, no earlier reply counts
+   * as printed, so every part is sent. */
   readonly printedHash?: string;
 }
 
@@ -351,12 +395,9 @@ function assertPromptHookRequest(req: PromptHookRequest): void {
   }
 }
 
-/** The text `hippo context --pinned-only --include-recent 5 --format additional-context` prints for this session, read
- * on `ctx`'s store for its project. Omits an unchanged static block only when `printedHash` matches; `arm` is the
- * ledger arm (`hippo` or `holdout`, null at rate 0); a holdout gets empty stdout. `staticHash` is the hash to echo back
- * (null with no static block, a sub-agent or a holdout). Scope detection and delivery-ledger events are CLI-only.
- * Throws BadRequestError past the input caps, and on a shared store for a project assertCallerProject refuses, before
- * any arm is booked. */
+/** What HIPPO_PINNED_INJECT_COMMAND prints for this session; a part an earlier reply carried is left out only once
+ * `printedHash` echoes that reply. A holdout gets empty stdout; `staticHash` is the hash to echo, null with no stdout
+ * or for a sub-agent. Throws BadRequestError past the input caps or for a project a shared store refuses. */
 export async function promptHookContext(
   ctx: ContextWith<'contextReads'>, req: PromptHookRequest, opts: PromptHookOpts = {},
 ): Promise<{ arm: PilotArm | null; stdout: string; staticHash: string | null }> {
@@ -364,13 +405,14 @@ export async function promptHookContext(
   const { sessionId, payload } = req;
   const { sharedStore } = opts;
   const sharedByReach = ctx.reach ? ctx.reach.shared : isSharedStore(ctx.hippoRoot);
-  if (sharedStore || sharedByReach) assertCallerProject(req.project);
+  const shared = sharedStore === true || sharedByReach;
+  if (shared) assertCallerProject(req.project);
   // The test the local hook runs on its stdin, so a sub-agent books no arm and no session rows here either.
   const subagent = payload !== undefined && isSubagentPayload(JSON.stringify(payload));
   const ledgerSessionId = subagent ? undefined : sessionId;
   const reach = ledgerReachOf(ctx, sharedStore);
   const arm = sessionPilotArm(ctx.hippoRoot, ctx.tenantId, sessionId, !subagent, { reach, ownTenantOnly: true });
-  if (arm === 'holdout') return { arm, ...NOTHING_RENDERED };
+  if (arm === 'holdout') return { arm, stdout: '', staticHash: null };
   const prompt = payload?.prompt;
   const result = await getContext(ctx, {
     budget: HOOK_BUDGET,
@@ -384,12 +426,14 @@ export async function promptHookContext(
     sharedStore,
   });
   const rendered = hasContextData(result)
-    ? renderAdditionalContext({
+    ? renderHookContext({
         hippoRoot: ctx.hippoRoot, config: ctx.config, tenantId: ctx.tenantId, ledgerSessionId,
         payloadSessionId: ledgerSessionId, pinnedOnly: true, framing: HOOK_FRAMING, rec: null, result, reach,
-        printedHash: req.printedHash ?? null,
+        printedHash: req.printedHash ?? null, owner: shared ? ownerOrSubject(ctx.actor) : undefined,
       })
     : NOTHING_RENDERED;
+  // The rows book now, pending: this caller says it printed the reply only by echoing its hash next time.
+  rendered.book();
   // A sub-agent's output is not the session's, so its caller must not record it as printed.
   return { arm, stdout: rendered.stdout, staticHash: subagent ? null : rendered.staticHash };
 }

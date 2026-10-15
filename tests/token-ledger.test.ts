@@ -13,9 +13,7 @@ import { writeEntry } from '../src/store/entry-writes.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { Layer } from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import {
-  recordTokenUse, lastSentState, shouldSkipUnchanged, summarizeTokenUse, sentInWindow, commitPendingKeys,
-} from '../src/store/token-ledger.js';
+import { recordTokenUse, summarizeTokenUse, sentInWindow, commitPendingKeys } from '../src/store/token-ledger.js';
 import { hookPayloadSessionId } from '../src/util/hook-payload.js';
 import { blockHash } from '../src/util/token-text.js';
 import { serve, type ServerHandle } from '../src/server.js';
@@ -39,30 +37,6 @@ describe('token ledger helpers', () => {
     initStore(home);
   });
   afterEach(() => rmSync(home, { recursive: true, force: true }));
-
-  it('tracks the last injected block per session and surface, and resets', () => {
-    withDb(home, (db) => {
-      expect(lastSentState(db, 'default', 's1', 'hook')).toBeNull();
-      recordTokenUse(db, { tenantId: 'default', sessionId: 's1', surface: 'hook', event: 'inject', items: 2, tokens: 100, hash: 'aaa' });
-      recordTokenUse(db, { tenantId: 'default', sessionId: 's1', surface: 'hook', event: 'skip', items: 2, tokens: 100, hash: 'aaa' });
-      recordTokenUse(db, { tenantId: 'default', sessionId: 's2', surface: 'hook', event: 'inject', items: 1, tokens: 40, hash: 'bbb' });
-      expect(lastSentState(db, 'default', 's1', 'hook')).toEqual({ hash: 'aaa', skipsSince: 1 });
-      expect(lastSentState(db, 'default', 's1', 'context')).toBeNull();
-      expect(lastSentState(db, 'other', 's1', 'hook')).toBeNull();
-      expect(lastSentState(db, 'default', null, 'hook')).toBeNull();
-      recordTokenUse(db, { tenantId: 'default', sessionId: 's1', surface: 'hook', event: 'reset', items: 0, tokens: 0 });
-      expect(lastSentState(db, 'default', 's1', 'hook')).toBeNull();
-    });
-  });
-
-  it('skips an unchanged block until refreshTurns consecutive skips', () => {
-    expect(shouldSkipUnchanged(null, 'h', 10)).toBe(false);
-    expect(shouldSkipUnchanged({ hash: 'x', skipsSince: 0 }, 'h', 10)).toBe(false);
-    expect(shouldSkipUnchanged({ hash: 'h', skipsSince: 0 }, 'h', 10)).toBe(true);
-    expect(shouldSkipUnchanged({ hash: 'h', skipsSince: 9 }, 'h', 10)).toBe(true);
-    expect(shouldSkipUnchanged({ hash: 'h', skipsSince: 10 }, 'h', 10)).toBe(false);
-    expect(shouldSkipUnchanged({ hash: 'h', skipsSince: 500 }, 'h', 0)).toBe(true);
-  });
 
   it('reads each key\'s last send turn in the window, and a reset reopens it', () => {
     withDb(home, (db) => {

@@ -1,3 +1,4 @@
 ### Changed
 
 - **Schema v57 adds `token_ledger.sent_keys`.** Each per-prompt hook row records which memories and sections it printed, so the hook can tell what the agent's current context window already holds. Older rows stay NULL and never stop a send; no backfill, and an older binary still writes.
+- **The per-prompt hook sends each memory once per context window.** It used to re-send the whole block whenever any part changed; now it prints only the memories and sections the window does not hold. An edited memory prints again at once, a pin again 10 turns after its last send (`pinnedInject.refreshTurns`, where 0 now means the 25-turn limit every other part has), and anything else after 25 turns. A compaction reopens the window. A remote caller's marks count only once its next request echoes the printed hash. Sub-agents, Copilot session start and `skipUnchanged: false` still get the whole block every time.

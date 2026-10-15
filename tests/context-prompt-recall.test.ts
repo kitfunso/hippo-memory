@@ -329,7 +329,7 @@ describe('hippo context --pinned-only --format additional-context prompt recall 
     }
   });
 
-  it('skips the repeated static block but still emits a relevant recall section', () => {
+  it('on a repeated prompt holds the pin and recall already printed, and sends only a newly relevant recall', () => {
     seedCli('the deploy rollback plan for the postgres migration', { created: '2026-01-01T00:00:00.000Z' });
     seedCli('PINNED: always check the rollback plan before deploy', { pinned: true });
 
@@ -337,24 +337,27 @@ describe('hippo context --pinned-only --format additional-context prompt recall 
     const payload = JSON.stringify({ session_id: sessionId, prompt: 'postgres migration rollback plan' });
     const first = runHippo(['context', '--pinned-only', '--include-recent', '5', '--format', 'additional-context'], payload);
     expect(JSON.parse(first).hookSpecificOutput.additionalContext).toContain('PINNED: always check the rollback plan');
+    seedCli('the postgres migration rollback plan needs a review by the database team');
 
     const second = runHippo(['context', '--pinned-only', '--include-recent', '5', '--format', 'additional-context'], payload);
     const context: string = JSON.parse(second).hookSpecificOutput.additionalContext;
     expect(context).not.toContain('PINNED: always check the rollback plan');
+    expect(context).not.toContain('the deploy rollback plan for the postgres migration');
     expect(context).toContain('## Prompt-Relevant Memory');
-    expect(context).toContain('the deploy rollback plan for the postgres migration');
+    expect(context).toContain('needs a review by the database team');
   });
 
-  it('keeps a cross-project recall in the always-sent section on a repeated prompt', () => {
+  it('prints a cross-project recall under Prompt-Relevant Memory, and holds it on a repeated prompt', () => {
     seedCli('the deploy rollback plan for the postgres migration', { origin_project: 'some-other-project' });
     seedCli('PINNED: always check the rollback plan before deploy', { pinned: true });
 
     const payload = JSON.stringify({ session_id: 'sess-z1-cli-x', prompt: 'postgres migration rollback plan' });
     const args = ['context', '--pinned-only', '--include-recent', '5', '--cross-project', '--format', 'additional-context'];
-    runHippo(args, payload);
     const context: string = JSON.parse(runHippo(args, payload)).hookSpecificOutput.additionalContext;
+    const recallSection = context.slice(context.indexOf('## Prompt-Relevant Memory'));
     expect(context).toContain('## Prompt-Relevant Memory');
-    expect(context).toContain('the deploy rollback plan for the postgres migration');
+    expect(recallSection).toContain('the deploy rollback plan for the postgres migration');
+    expect(runHippo(args, payload)).toBe('');
   });
 
   it('malformed stdin still works exactly as today (no crash, graceful fallback)', () => {

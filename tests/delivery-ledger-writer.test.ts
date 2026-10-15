@@ -365,7 +365,7 @@ describe('createDeliveryRecorder row building', () => {
     expect([input.selectedTokens, input.emittedCount]).toEqual([12, 2]);
   });
 
-  it('keeps the first rejection, lets selection override any rejection, and marks a skipped static block reused', () => {
+  it('keeps the first rejection, lets selection override any rejection, and marks a memory the window held reused', () => {
     const rec = recorder();
     const [a, b, c] = [mem(1, { pinned: true }), mem(2), mem(3)];
     rec.offer([a, b, c], false);
@@ -373,7 +373,7 @@ describe('createDeliveryRecorder row building', () => {
     rec.reject(b, 'budget', 'budget');
     rec.reject(a, 'budget', 'budget');
     rec.selected([{ entry: a, score: 1, tokens: 3 }, { entry: c, score: 1, tokens: 3, promptRecall: true }]);
-    rec.delivered({ state: 'reused-recall-sent', staticReused: true, emittedText: 'recall only' });
+    rec.delivered({ state: 'reused-recall-sent', reusedIds: ['m001'], emittedText: 'recall only' });
     const rows = new Map(built(rec).candidates.map((r) => [r.memoryId, r]));
     expect([rows.get('m001')?.outcome, rows.get('m001')?.pool]).toEqual(['reused', 'pin']);
     expect([rows.get('m002')?.stage, rows.get('m002')?.reason]).toEqual(['eligible', 'quality']);

@@ -60,34 +60,6 @@ export function pruneTokenRowsBefore(db: DatabaseSyncLike, cutoffIso: string): v
   db.prepare(`DELETE FROM token_ledger WHERE ts < ?`).run(cutoffIso);
 }
 
-export interface LedgerAnchor {
-  id: number;
-  event: string;
-  block_hash: string | null;
-}
-
-/** The session's newest inject or reset row on a surface. */
-export function latestInjectOrReset(
-  db: DatabaseSyncLike, tenantId: string, sessionId: string, surface: string,
-): LedgerAnchor | undefined {
-  // SAFETY: the SELECT names exactly these three columns.
-  return db.prepare(
-    `SELECT id, event, block_hash FROM token_ledger
-     WHERE tenant_id = ? AND session_id = ? AND surface = ? AND event IN ('inject', 'reset')
-     ORDER BY id DESC LIMIT 1`,
-  ).get(tenantId, sessionId, surface) as LedgerAnchor | undefined;
-}
-
-export function countSkipsAfter(
-  db: DatabaseSyncLike, tenantId: string, sessionId: string, surface: string, afterId: number,
-): { n: number } | undefined {
-  // SAFETY: the SELECT names exactly this one aggregate column.
-  return db.prepare(
-    `SELECT COUNT(*) AS n FROM token_ledger
-     WHERE tenant_id = ? AND session_id = ? AND surface = ? AND event = 'skip' AND id > ?`,
-  ).get(tenantId, sessionId, surface, afterId) as { n: number } | undefined;
-}
-
 export interface SurfaceTotalsRow {
   surface: string;
   injected: number;
