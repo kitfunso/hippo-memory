@@ -81,6 +81,15 @@ function takeSessionLock(lock: string): Take {
   return 'held';
 }
 
+const warnedLocks = new Set<string>();
+
+// The lock is best-effort, so the work still runs; the line says why it ran without one.
+function warnUnusableLockOnce(lock: string): void {
+  if (warnedLocks.has(lock)) return;
+  warnedLocks.add(lock);
+  logger.warn(`session worker: lock ${lock} cannot be created or cleared, so the work runs without it`);
+}
+
 function releaseSessionLock(lock: string): void {
   try {
     fs.rmSync(lock, { force: true });
@@ -148,7 +157,10 @@ export async function runSessionWorker(
   if (files === null) return work(mode);
   if (!queueRun(files, mode)) return;
   for (let take = takeSessionLock(files.lock); take !== 'held'; take = takeSessionLock(files.lock)) {
-    if (take === 'unusable') return work(mode);
+    if (take === 'unusable') {
+      warnUnusableLockOnce(files.lock);
+      return work(mode);
+    }
     let ran = false;
     try {
       for (let next = takeQueued(files.queued); next !== null; next = takeQueued(files.queued)) {

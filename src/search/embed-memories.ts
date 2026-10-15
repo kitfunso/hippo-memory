@@ -332,14 +332,16 @@ export async function embedMemory(
   store?: HippoStore,
 ): Promise<EmbedOutcome> {
   let provider: EmbeddingProvider;
+  let available: boolean;
   try {
     provider = resolveEmbeddingProvider(hippoRoot, { model });
+    available = provider.isAvailable();
   } catch (err) {
     // Callers fire and forget, so this must resolve: a bad config warns once instead of rejecting.
     warnEmbedFailureOnce('config', errorMessage(err), err);
     return 'failed';
   }
-  if (!provider.isAvailable()) return 'off';
+  if (!available) return 'off';
   if (store) return embedMemoryInStore(store, provider, entry);
 
   return withEmbedLock(hippoRoot, () => embedMemoryLocked(hippoRoot, provider, entry)).catch((err): EmbedOutcome => {
