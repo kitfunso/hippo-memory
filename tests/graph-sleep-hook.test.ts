@@ -25,8 +25,7 @@ import { loadPendingExtractionTenants, markGraphDirty } from '../src/store/graph
 import { loadExtractionQueue } from './_helpers/graph-queue.js';
 import { loadEntities, loadRelations } from '../src/store/graph-reads.js';
 import { extractGraph as realExtractGraph, extractGraphChunked, deriveGraph, loadGraphSources } from '../src/graph/extract.js';
-import { graphDelta } from '../src/graph/delta.js';
-import { openHippoDb, closeHippoDb } from '../src/db/index.js';
+import { readGraphDelta } from '../src/graph/delta.js';
 import { WRITE_BUDGET } from '../src/util/write-budget.js';
 import { sleep, adminActor } from '../src/api/index.js';
 import { runSleep, type SleepPhases } from '../src/api/sleep-run.js';
@@ -268,12 +267,7 @@ describe('sleep enqueue-hook', () => {
 
     expect(pending(tc.hippoRoot)).toHaveLength(0);
     const desired = deriveGraph(await loadGraphSources(objectsAt(tc.hippoRoot), T));
-    const db = openHippoDb(tc.hippoRoot);
-    try {
-      expect(graphDelta(db, T, desired)).toEqual([]);
-    } finally {
-      closeHippoDb(db);
-    }
+    expect(readGraphDelta(tc.hippoRoot, T, desired)).toEqual([]);
     expect(loadRelations(tc.hippoRoot, T, { limit: 100 })).toHaveLength(3);
   });
 

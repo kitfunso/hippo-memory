@@ -8,7 +8,7 @@ import { savePolicy } from '../src/objects/policies.js';
 import { saveCustomerNote } from '../src/objects/customer-notes.js';
 import { saveProjectBrief } from '../src/objects/project-briefs.js';
 import { extractGraph, deriveGraph, loadGraphSources, MAX_REFERENCES_PER_OBJECT } from '../src/graph/extract.js';
-import { graphDelta, entityKey, type GraphOp } from '../src/graph/delta.js';
+import { readGraphDelta, entityKey, type GraphOp } from '../src/graph/delta.js';
 import { insertEntityAt } from './_helpers/graph-seed.js';
 import type { EntityType, SourceObjectType } from '../src/store/graph-rows.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
@@ -28,7 +28,7 @@ function onStore<R>(home: string, read: (db: DatabaseSyncLike) => R): R {
 
 async function deltaOf(home: string, tenant: string = T): Promise<GraphOp[]> {
   const derived = deriveGraph(await loadGraphSources(objectsAt(home), tenant));
-  return onStore(home, (db) => graphDelta(db, tenant, derived));
+  return readGraphDelta(home, tenant, derived);
 }
 
 const opNames = (ops: GraphOp[]): string[] => ops.map((o) => o.op);

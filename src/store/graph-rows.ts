@@ -215,3 +215,34 @@ export interface StoredGraph {
   readonly entities: readonly StoredEntity[];
   readonly relations: readonly StoredRelation[];
 }
+
+/** What names an object-derived entity across rebuilds; v38 has no UNIQUE on it, so the diff keeps one row per key. */
+export interface NaturalKey {
+  readonly entityType: EntityType;
+  readonly sourceObject: SourceObjectRef;
+}
+
+export interface DesiredEntity extends NaturalKey {
+  readonly name: string;
+  readonly memoryId: string | null;
+}
+
+export interface DesiredRelation {
+  readonly from: NaturalKey;
+  readonly to: NaturalKey;
+  readonly relType: RelationType;
+  readonly memoryId: string | null;
+  readonly sourceObject: SourceObjectRef;
+}
+
+export interface DesiredGraph {
+  readonly entities: readonly DesiredEntity[];
+  readonly relations: readonly DesiredRelation[];
+}
+
+export type GraphOp =
+  | { readonly op: 'deleteEntity'; readonly id: number }
+  | { readonly op: 'updateEntity'; readonly id: number; readonly entity: DesiredEntity }
+  | { readonly op: 'insertEntity'; readonly entity: DesiredEntity }
+  | { readonly op: 'deleteRelation'; readonly id: number }
+  | { readonly op: 'insertRelation'; readonly relation: DesiredRelation };

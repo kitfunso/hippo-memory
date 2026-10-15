@@ -2,8 +2,7 @@
  *  (decisions, policies, customer_notes, project_briefs). Writes go through the src/store/graph-writes.ts
  *  consolidated-source guard. Pass 3 adds `references` edges by a conservative name-match heuristic. */
 
-import { applyGraphOps } from './write.js';
-import { runGraphRebuildTransaction } from '../store/graph-writes.js';
+import { applyGraphOps, rebuildGraphUnderLock } from '../store/graph-writes.js';
 import {
   MAX_ENTITY_NAME_LEN,
   type EntityType,
@@ -11,7 +10,8 @@ import {
   type SourceObjectRef,
 } from '../store/graph-rows.js';
 import {
-  graphDelta,
+  diffGraph,
+  memoryIdsOf,
   readGraphDelta,
   type DesiredEntity,
   type DesiredGraph,
@@ -352,8 +352,8 @@ export async function extractGraph(objects: Objects, hippoRoot: string, tenantId
   // Loaded first: opening a second connection under the rebuild's BEGIN IMMEDIATE dead-locks ('database is locked').
   const derived = deriveGraph(await loadGraphSources(objects, tenantId));
   // Diffed and applied under one lock, so two concurrent rebuilds serialize instead of both inserting a missing row.
-  const skipped = runGraphRebuildTransaction(hippoRoot, tenantId, (txDb) =>
-    applyGraphOps(txDb, tenantId, graphDelta(txDb, tenantId, derived), { from: 0, holdMs: Infinity }).skipped,
+  const skipped = rebuildGraphUnderLock(hippoRoot, tenantId, memoryIdsOf(derived), (stored) =>
+    diffGraph(stored, derived),
   );
   return resultOf(derived, skipped);
 }
@@ -377,9 +377,12 @@ export async function extractGraphChunked(
     const from = next;
     // Sleep's wait, not a server request's 250 ms: each chunk is a fresh BEGIN IMMEDIATE
     // a hook's write could otherwise fail.
-    const chunk = runGraphRebuildTransaction(hippoRoot, tenantId, (txDb) =>
-      applyGraphOps(txDb, tenantId, ops, { from, holdMs: budget.holdMs, clock: budget.clock }),
-    { busyWaitMs: SLEEP_DB_WAIT_MS });
+    const chunk = applyGraphOps(hippoRoot, tenantId, ops, {
+      from,
+      holdMs: budget.holdMs,
+      clock: budget.clock,
+      busyWaitMs: SLEEP_DB_WAIT_MS,
+    });
     committedAt = budget.clock();
     next = chunk.next;
     skipped += chunk.skipped;

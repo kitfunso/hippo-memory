@@ -4,7 +4,7 @@ import { BadRequestError, NotFoundError } from '../core/api-errors.js';
 import * as fs from 'fs';
 import { MemoryEntry, generateId } from '../core/memory.js';
 import { initStore } from '../store/open.js';
-import { writeEntryWithHook } from '../store/entry-writes.js';
+import { writePromotedEntry } from '../store/entry-writes.js';
 import { readEntry } from '../store/entry-reads.js';
 import { isPersonalScope } from '../core/recall-scope.js';
 import { fallbackOrigin, resolveGlobalRootDir } from '../core/project-identity.js';
@@ -12,8 +12,6 @@ import { isSharedStore } from '../core/config.js';
 import { detectSecret } from '../util/secret-detect.js';
 import { isQuarantineScope } from '../trust/quarantine.js';
 import { embedMemory } from '../search/embed-memories.js';
-import type { DatabaseSyncLike } from '../db/index.js';
-import { appendAuditEvent } from '../store/audit.js';
 
 /** Returns the path to the global Hippo store.
  *  Resolution order: $HIPPO_HOME > $XDG_DATA_HOME/hippo > ~/.hippo/ */
@@ -85,19 +83,7 @@ export function promoteToGlobal(localRoot: string, id: string, opts?: PromoteOpt
     origin_project: entry.origin_project ?? fallbackOrigin(localRoot),
   };
 
-  const { auditAs } = opts ?? {};
-  const promoteRow =
-    auditAs &&
-    ((db: DatabaseSyncLike, globalId: string): void => {
-      appendAuditEvent(db, {
-        tenantId: auditAs.tenantId,
-        actor: auditAs.actor,
-        op: 'promote',
-        targetId: globalId,
-        metadata: { sourceId: id },
-      });
-    });
-  writeEntryWithHook(globalRoot, globalEntry, { actor: opts?.actor, afterWrite: promoteRow });
+  writePromotedEntry(globalRoot, globalEntry, { actor: opts?.actor, sourceId: id, auditAs: opts?.auditAs });
 
   // Fire-and-forget: embedMemory gates on availability and never rejects.
   void embedMemory(globalRoot, globalEntry);

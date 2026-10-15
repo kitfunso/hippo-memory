@@ -8,11 +8,8 @@ import { getGlobalRoot } from './sharing/global-store.js';
 import { readStoreHealth, type StoreHealth } from './store/diagnostics.js';
 import { loadConfig } from './core/config.js';
 import {
-  openHippoDbReadOnly,
-  closeHippoDb,
   getCurrentSchemaVersion,
   IncompatibleBinaryError,
-  type DatabaseSyncLike,
 } from './db/index.js';
 import { REPLAY_AFTER_MS, TRANSCRIPT_FILL_WINDOW_MS } from './core/compaction-timing.js';
 import { SPOOL_DIR, spoolCounts, type SpoolCounts, type SpoolFs } from './capture/compaction-spool.js';
@@ -20,7 +17,7 @@ import { isEmbeddingAvailable } from './embeddings/local.js';
 import { CODEX_TRUST_LINE, isCodexPresent } from './hooks/shared.js';
 import { claudeConfigDir, codexHomeDir } from './util/agent-homes.js';
 import { planProjectRepair } from './sharing/project-merge.js';
-import { projectTagReads } from './store/project-tags.js';
+import { readProjectTags } from './store/project-tags.js';
 import { resolveTenantId } from './store/tenant.js';
 import { errorMessage, log } from './util/log.js';
 import { readJsonFile, type JsonValue, isJsonObjectLiteral } from './util/json.js';
@@ -229,10 +226,8 @@ function compactionsCheck(
 
 /** Old project tags in the global store, counted by the repair's own plan so a truly user-global merge never warns. */
 function projectsCheck(globalRoot: string): DoctorCheck {
-  let db: DatabaseSyncLike | null = null;
   try {
-    db = openHippoDbReadOnly(globalRoot);
-    const r = planProjectRepair(projectTagReads(db, resolveTenantId({})), globalRoot);
+    const r = readProjectTags(globalRoot, resolveTenantId({}), (reads) => planProjectRepair(reads, globalRoot));
     const found = [
       r.copies.length > 0 ? `${r.copies.length} imported notes copied under the wrong project` : '',
       r.folds.length > 0
@@ -257,8 +252,6 @@ function projectsCheck(globalRoot: string): DoctorCheck {
       };
   } catch (err) {
     return { id: 'projects', status: 'info', detail: `project tags not checked (${errorMessage(err)})` };
-  } finally {
-    if (db !== null) closeHippoDb(db);
   }
 }
 

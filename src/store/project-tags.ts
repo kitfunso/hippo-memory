@@ -1,6 +1,14 @@
 // The rows `hippo projects` and sleep's tag repair read and write, bound to one hippo.db handle and tenant,
 // so the merge and repair rules in src/sharing/project-merge.ts decide without holding the handle.
-import { getMeta, setMeta, withTrialScope, withWriteScope, type DatabaseSyncLike } from '../db/index.js';
+import {
+  closeHippoDb,
+  getMeta,
+  openHippoDbReadOnly,
+  setMeta,
+  withTrialScope,
+  withWriteScope,
+  type DatabaseSyncLike,
+} from '../db/index.js';
 import { withBackup } from '../db/backup.js';
 import { calculateStrength, type MemoryEntry } from '../core/memory.js';
 import { appendAuditEvent, queryAuditEvents, type AppendAuditOpts, type AuditEvent } from './audit.js';
@@ -94,6 +102,16 @@ export function projectTagReads(db: DatabaseSyncLike, tenantId: string): Project
     compactionOriginsWithCwd: () => compactionOriginsWithCwd(db, tenantId),
     holdsOrigin: (table, name) => holdsOrigin(db, table, tenantId, name),
   };
+}
+
+/** `projectTagReads` on a read-only handle this call opens and closes, for doctor; `fn` must finish with the reads. */
+export function readProjectTags<T>(hippoRoot: string, tenantId: string, fn: (reads: ProjectTagReads) => T): T {
+  const db = openHippoDbReadOnly(hippoRoot);
+  try {
+    return fn(projectTagReads(db, tenantId));
+  } finally {
+    closeHippoDb(db);
+  }
 }
 
 function projectTagWrites(db: DatabaseSyncLike, { tenantId, actor }: ProjectTagScope): ProjectTagWrites {

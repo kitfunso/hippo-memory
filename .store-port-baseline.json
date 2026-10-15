@@ -1,5 +1,5 @@
 {
-  "openersOutside": 6,
+  "openersOutside": 5,
   "openersInCli": 0,
   "storeBranches": 0,
   "routesWithoutStore": 0,
@@ -10,7 +10,7 @@
   "txLiterals": 0,
   "tenantResolvesInCli": 0,
   "storeImportsInCli": 4,
-  "handleHoldersOutside": 8,
+  "handleHoldersOutside": 4,
   "storeFilesWithoutSql": 3,
   "storeFilesWithoutSqlList": [
     "src/store/card-detail.ts",
@@ -19,7 +19,6 @@
   ],
   "openersOutsideByFile": {
     "src/agent-memories/sync.ts": 3,
-    "src/doctor.ts": 1,
     "src/index.ts": 2
   },
   "sqlOutsideByFile": {},
@@ -27,11 +26,7 @@
     "src/agent-memories/apply.ts": 1,
     "src/agent-memories/legacy.ts": 1,
     "src/agent-memories/sync.ts": 1,
-    "src/doctor.ts": 1,
-    "src/graph/delta.ts": 1,
-    "src/graph/write.ts": 1,
-    "src/index.ts": 1,
-    "src/sharing/global-store.ts": 1
+    "src/index.ts": 1
   },
   "sqliteLocalMethods": [],
   "sqliteOnlyRoutesList": [
