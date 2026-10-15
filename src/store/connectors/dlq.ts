@@ -25,7 +25,7 @@ export type DlqRawValue = string | number | bigint | null;
 export type DlqRawRow = Record<string, DlqRawValue>;
 
 /** Inserts one row, stamping received_at; `columns` pairs each column name with its value, in insert order. */
-export function insertDlqRow(
+function insertDlqRow(
   db: DatabaseSyncLike,
   table: DlqTable,
   columns: ReadonlyArray<readonly [string, string | null]>,
@@ -40,7 +40,7 @@ export function insertDlqRow(
   return Number(result.lastInsertRowid);
 }
 
-export function listDlqRows(
+function listDlqRows(
   db: DatabaseSyncLike,
   table: DlqTable,
   selectColumns: string,
@@ -61,7 +61,7 @@ export function listDlqRows(
     .all(tenantId, limit) as DlqRawRow[];
 }
 
-export function getDlqRow(db: DatabaseSyncLike, table: DlqTable, selectColumns: string, id: number): DlqRawRow | null {
+function getDlqRow(db: DatabaseSyncLike, table: DlqTable, selectColumns: string, id: number): DlqRawRow | null {
   assertTable(table);
   assertColumns(selectColumns.split(',').map((name) => name.trim()));
   // SAFETY: the caller's selectColumns names exactly the fields its rowToItem reads.
@@ -71,7 +71,7 @@ export function getDlqRow(db: DatabaseSyncLike, table: DlqTable, selectColumns: 
   return row ?? null;
 }
 
-export function markDlqRetried(db: DatabaseSyncLike, table: DlqTable, id: number): void {
+function markDlqRetried(db: DatabaseSyncLike, table: DlqTable, id: number): void {
   assertTable(table);
   db.prepare(`UPDATE ${table} SET retried_at = ?, retry_count = retry_count + 1 WHERE id = ?`)
     .run(new Date().toISOString(), id);
