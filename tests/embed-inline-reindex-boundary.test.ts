@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { isJsonObject } from '../src/util/json.js';
+import { isJsonObject, type JsonValue } from '../src/util/json.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../src/core/memory.js';
@@ -22,7 +22,8 @@ beforeEach(() => {
   savedKey = process.env[KEY_ENV];
   process.env[KEY_ENV] = ['sk', 'test'].join('-');
   vi.stubGlobal('fetch', vi.fn(async (_url: string | URL, init?: RequestInit) => {
-    const body: unknown = JSON.parse(String(init?.body));
+    // SAFETY: the stub only receives the embeddings request body, which is JSON.
+    const body = JSON.parse(String(init?.body)) as JsonValue;
     const input = isJsonObject(body) && Array.isArray(body.input) ? body.input : [];
     return new Response(JSON.stringify({ data: input.map((_text, index) => ({ index, embedding: [1, 0] })) }));
   }));
