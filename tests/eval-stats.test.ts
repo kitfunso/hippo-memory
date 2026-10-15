@@ -435,7 +435,7 @@ describe('harmGate', () => {
     expect(harmGate(upper(1), lower(Number.NaN))).toEqual({ pass: false, costOk: true, resolveOk: false });
   });
 
-  it('fails an unbounded cost interval, as Fieller gives when the control sums are not clear of zero', () => {
+  it('fails an unbounded cost interval', () => {
     expect(harmGate(upper(Number.POSITIVE_INFINITY), lower(0.01))).toEqual({ pass: false, costOk: false, resolveOk: true });
   });
 });

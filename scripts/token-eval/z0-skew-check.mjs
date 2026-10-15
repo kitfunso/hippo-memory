@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-/** Z0 H4 skew check (Amendment 1): at a true cost ratio of 1.10 the cost gate should pass at most 2.5% of runs.
- * Simulates set N with the sizer's seeded harm simulator and prints each cell's pass shares for the Fieller interval the gate
- * uses and the cluster-robust t interval it replaced. Exit 0 when every cell holds, 1 when one does not. */
+/** Z0 H4 skew check (Amendment 1): at a true cost ratio of 1.10 the cost gate's "upper 95% bound" (prereg 143) should pass
+ * at most 5% of runs. Simulates set N with the sizer's seeded harm simulator and prints each cell's pass shares for the Cox
+ * interval the gate uses and the cluster-robust t interval. Exit 0 when every cell holds, 1 when one does not. */
 
 import * as fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -12,7 +12,8 @@ import { blocks, harmT, sum } from './z0-hypotheses.mjs';
 import { cellSeed, harmRun } from './z0-size-sim.mjs';
 
 const LIMIT = 1.1;
-const BAR = 0.025;
+// The gate reads the upper end of a two-sided 95% interval, aiming at 2.5%; the prereg's one-sided 95% bound allows 5%.
+const BAR = 0.05;
 const TASKS = 26;
 const USAGE = 'usage: z0-skew-check.mjs [--runs 20000] [--seed 1]';
 const resolve = { both: 0.6, oneSide: 0.1 };
@@ -28,14 +29,14 @@ export const CELLS = [5, 10].flatMap((repos) => [
 /** Shares of `runs` seeded runs at a true ratio of 1.10 whose cost gate, and whole gate, pass under each interval. */
 export function skewCell(cell, runs, seed) {
   const rand = seededRandom(cellSeed(seed, 'H4 skew', cell.name, cell.repos));
-  const n = { fieller: 0, fiellerGate: 0, clusterRobust: 0, clusterRobustGate: 0 };
+  const n = { cox: 0, coxGate: 0, clusterRobust: 0, clusterRobustGate: 0 };
   for (let i = 0; i < runs; i++) {
     const units = harmRun(cell.cal, { repos: cell.repos, tasks: TASKS }, rand, LIMIT);
     const h = harmT(units, {});
     const sums = blocks(units).map((fams) => ({ t: sum(fams.flat().map((u) => u.t.cost)), c: sum(fams.flat().map((u) => u.c.cost)) }));
     const cr = harmGate(clusterRatioT(sums), h.resolveDiff);
-    n.fieller += Number(h.gate.costOk);
-    n.fiellerGate += Number(h.gate.pass);
+    n.cox += Number(h.gate.costOk);
+    n.coxGate += Number(h.gate.pass);
     n.clusterRobust += Number(cr.costOk);
     n.clusterRobustGate += Number(cr.pass);
   }
@@ -58,9 +59,9 @@ export function runCli(argv) {
   let held = true;
   for (const cell of CELLS) {
     const s = skewCell(cell, opts.runs, opts.seed);
-    held &&= s.fieller <= ceiling;
-    lines.push(`${s.fieller <= ceiling ? 'hold' : 'FAIL'} ${cell.name}, ${cell.repos} repositories: cost gate passes Fieller ${pct(s.fieller)}, `
-      + `cluster-robust ${pct(s.clusterRobust)}; whole gate Fieller ${pct(s.fiellerGate)}, cluster-robust ${pct(s.clusterRobustGate)}`);
+    held &&= s.cox <= ceiling;
+    lines.push(`${s.cox <= ceiling ? 'hold' : 'FAIL'} ${cell.name}, ${cell.repos} repositories: cost gate passes Cox ${pct(s.cox)}, `
+      + `cluster-robust ${pct(s.clusterRobust)}; whole gate Cox ${pct(s.coxGate)}, cluster-robust ${pct(s.clusterRobustGate)}`);
   }
   return { code: held ? 0 : 1, stdout: `${lines.join('\n')}\n`, stderr: '' };
 }

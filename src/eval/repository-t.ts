@@ -124,21 +124,15 @@ export function clusterRatioT(repos: readonly RepoSums[]): TestedEstimate {
   return tResult(ratio, Math.sqrt((g / (g - 1)) * squares) / Math.abs(c), g - 1, 1);
 }
 
-/** The pooled ratio with Fieller's 95% interval: every r whose repository differences t - r x c pass the one-sample
- *  t test, so p against 1 is that test on t - c. Unlike the symmetric interval it carries the control sums' own spread.
- *  When the control sums are not clear of zero the set is unbounded, and the bounds are infinite. */
-export function fiellerRatioT(repos: readonly RepoSums[]): TestedEstimate {
+/** The mean of the per-repository ratios t / c by Cox's lognormal-mean interval: a t interval on the log ratios, centred
+ *  on their mean plus half their variance and widened for that variance's own noise; p tests that centre against 1.
+ *  Each repository counts once, and `se` is on the log scale. A sum that is not positive gives the not-a-number result. */
+export function coxRatioT(repos: readonly RepoSums[]): TestedEstimate {
   const g = repos.length;
-  if (g < 2) return notANumber(1, 0);
-  const [tm, cm] = [sum(repos.map((r) => r.t)) / g, sum(repos.map((r) => r.c)) / g];
-  const q = criticalValue(g - 1) ** 2 / (g * (g - 1));
-  const dev = repos.map((r) => [r.t - tm, r.c - cm] as const);
-  const [tt, tc, cc] = [sum(dev.map(([x]) => x * x)), sum(dev.map(([x, y]) => x * y)), sum(dev.map(([, y]) => y * y))];
-  // (tm - r cm)^2 <= q x sum((t - tm) - r (c - cm))^2, a quadratic a r^2 - 2 b r + k <= 0.
-  const [a, b, k] = [cm * cm - q * cc, tm * cm - q * tc, tm * tm - q * tt];
-  const { p } = repositoryT(repos.map((r) => r.t - r.c), 0);
-  const base = { estimate: tm / cm, p, iterations: 0, dropped: 0, nullValue: 1, df: g - 1 };
-  if (!(a > 0)) return { ...base, low: -Infinity, high: Infinity };
-  const root = Math.sqrt(Math.max(0, b * b - a * k));
-  return { ...base, low: (b - root) / a, high: (b + root) / a };
+  if (g < 2 || !repos.every((r) => r.t > 0 && r.c > 0)) return notANumber(1, 0);
+  const logs = repos.map((r) => Math.log(r.t / r.c));
+  const mean = sum(logs) / g;
+  const s2 = sum(logs.map((y) => (y - mean) ** 2)) / (g - 1);
+  const log = tResult(mean + s2 / 2, Math.sqrt(s2 / g + (s2 * s2) / (2 * (g - 1))), g - 1, 0);
+  return { ...log, estimate: Math.exp(log.estimate), low: Math.exp(log.low), high: Math.exp(log.high), nullValue: 1 };
 }

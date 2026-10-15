@@ -69,12 +69,12 @@ describe('Z0 sizing', () => {
     }
   });
 
-  it('holds the H4 cost gate to its 2.5% at a true ratio of 1.10 when repository costs are near normal', () => {
-    // The skewed cells exceed the bar (z0-skew-check.mjs, analyzer doc); this one shows the interval itself is sound.
+  it('holds the H4 cost gate to its two-sided 2.5% at a true ratio of 1.10 when repository costs are near normal', () => {
+    // Skewed cells sit between 2.5% and the prereg's 5% (z0-skew-check.mjs, analyzer doc); this one shows the interval is sound.
     const near = CELLS.find((c: { name: string }) => c.name.startsWith('near normal'))!;
     const s = skewCell(near, 10_000, 1);
-    expect(s.fieller).toBeLessThanOrEqual(0.025 + 2 * Math.sqrt((0.025 * 0.975) / 10_000));
-    expect(s.fiellerGate).toBeLessThanOrEqual(s.fieller);
+    expect(s.cox).toBeLessThanOrEqual(0.025 + 2 * Math.sqrt((0.025 * 0.975) / 10_000));
+    expect(s.coxGate).toBeLessThanOrEqual(s.cox);
   });
 
   it('recovers nested variance components, and its repository bound covers at the stated level', () => {

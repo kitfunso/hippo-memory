@@ -3,7 +3,7 @@
  * H3 and H4 read Claude Code records only. */
 
 import { addUsage, combineCodings, harmGate, holmAdjust, priceUsage, twoLevelBootstrap, verdict } from '../../dist/eval/eval-stats.js';
-import { clusterRatioT, fiellerRatioT, repositoryT } from '../../dist/eval/repository-t.js';
+import { clusterRatioT, coxRatioT, repositoryT } from '../../dist/eval/repository-t.js';
 import { pairTasks } from './z0-filters.mjs';
 import { TWO_SEED_ARMS, positionKey, runKey } from './z0-records.mjs';
 
@@ -125,10 +125,10 @@ export function ratioT(units, field, opts) {
 const resolveDiff = (us) => (sum(us.map((u) => u.t.resolved)) - sum(us.map((u) => u.c.resolved))) / sum(us.map((u) => u.n ?? 1));
 
 /** H4 on set N units: the cost ratio and each repository's resolve difference under the t test, and the gate they give.
- * The cost ratio takes Fieller's interval, the same t test inverted, which passed the gate less often than the symmetric one
- * at a true 1.10 (Amendment 1 skew check, analyzer doc). */
+ * The cost ratio takes Cox's interval on log repository ratios: skewed costs let symmetric bounds pass a true 1.10 too often
+ * (Amendment 1 skew check, analyzer doc). */
 export function harmT(nUnits, opts) {
-  const costRatio = { ...fiellerRatioT(repoSums(nUnits, 'cost')), ...twin(opts, () => ratioBootstrap(nUnits, 'cost', opts)) };
+  const costRatio = { ...coxRatioT(repoSums(nUnits, 'cost')), ...twin(opts, () => ratioBootstrap(nUnits, 'cost', opts)) };
   const boot = () => twoLevelBootstrap(blocks(nUnits), resolveDiff, { iterations: opts.iterations, seed: opts.seed, nullValue: 0 });
   const resolve = { ...repositoryT(blocks(nUnits).map((fams) => resolveDiff(fams.flat())), 0), ...twin(opts, boot) };
   return { costRatio, resolveDiff: resolve, gate: harmGate(costRatio, resolve) };

@@ -1,7 +1,7 @@
 /** Student t tests over repositories (Z0 Amendment 1): table quantiles, closed-form CDFs, the zero-spread rule,
- * one repository, and cluster-robust and Fieller ratio intervals worked by hand. */
+ * one repository, and cluster-robust and Cox ratio intervals worked by hand. */
 import { describe, it, expect } from 'vitest';
-import { clusterRatioT, fiellerRatioT, incompleteBeta, repositoryT, studentTCdf, studentTQuantile } from '../src/eval/repository-t.js';
+import { clusterRatioT, coxRatioT, incompleteBeta, repositoryT, studentTCdf, studentTQuantile } from '../src/eval/repository-t.js';
 
 // t(0.975, df) from printed tables, to six decimals.
 const TABLE: readonly (readonly [number, number])[] = [[1, 12.706205], [2, 4.302653], [4, 2.776445], [9, 2.262157], [30, 2.042272]];
@@ -53,7 +53,7 @@ describe('repositoryT', () => {
   });
 
   it('gives the not-a-number result for fewer than two repositories', () => {
-    for (const r of [repositoryT([0.4]), repositoryT([]), clusterRatioT([{ t: 2, c: 1 }]), fiellerRatioT([{ t: 2, c: 1 }])]) {
+    for (const r of [repositoryT([0.4]), repositoryT([]), clusterRatioT([{ t: 2, c: 1 }]), coxRatioT([{ t: 2, c: 1 }])]) {
       expect([r.estimate, r.low, r.high, r.p].every(Number.isNaN)).toBe(true);
     }
   });
@@ -71,24 +71,24 @@ describe('ratio intervals', () => {
     expect([r.low, r.high]).toEqual([expect.closeTo(1.2 - 4.302653 * se, 5), expect.closeTo(1.2 + 4.302653 * se, 5)]);
   });
 
-  it('fiellerRatioT: each bound is a ratio whose repository differences sit exactly at p 0.05', () => {
-    const steady = [{ t: 2.4, c: 2 }, { t: 2.6, c: 2.5 }, { t: 3.9, c: 3 }, { t: 3.1, c: 2.5 }];
-    const r = fiellerRatioT(steady);
-    const at = (ratio: number) => repositoryT(steady.map((x) => x.t - ratio * x.c)).p;
-    expect([r.estimate, r.df, r.nullValue]).toEqual([expect.closeTo(1.2, 12), 3, 1]);
-    expect(Number.isFinite(r.low) && Number.isFinite(r.high) && r.low < r.estimate && r.estimate < r.high).toBe(true);
-    expect([at(r.low), at(r.high)]).toEqual([expect.closeTo(0.05, 9), expect.closeTo(0.05, 9)]);
-    expect([at(r.low + 1e-6), at(r.high - 1e-6)].every((p) => p > 0.05)).toBe(true);
-    expect(r.p).toBe(at(1));
-    // Controls of 2, 2 and 6 over 2 df are not clear of zero, so the same set with the first three is unbounded.
-    expect(fiellerRatioT(repos).high).toBe(Number.POSITIVE_INFINITY);
+  it('coxRatioT: log ratios -0.2 above and below 0.2 give centre 0.22, se sqrt(0.04 / 3 + 0.0016 / 4), df 2', () => {
+    const r = coxRatioT([0, 0.2, 0.4].map((y) => ({ t: 2 * Math.exp(y), c: 2 })));
+    const se = Math.sqrt(0.04 / 3 + 0.0016 / 4);
+    const t = 0.22 / se;
+    expect([r.estimate, r.se, r.df, r.nullValue]).toEqual([expect.closeTo(Math.exp(0.22), 12), expect.closeTo(se, 12), 2, 1]);
+    expect(r.p).toBeCloseTo(1 - t / Math.sqrt(2 + t * t), 12);
+    expect([r.low, r.high]).toEqual([expect.closeTo(Math.exp(0.22 - 4.302653 * se), 5), expect.closeTo(Math.exp(0.22 + 4.302653 * se), 5)]);
   });
 
-  it('fiellerRatioT: unbounded when the control sums are not clear of zero, a point with no spread', () => {
-    const loose = fiellerRatioT([{ t: 1, c: 1 }, { t: 12, c: 10 }, { t: 0.2, c: 0.1 }]);
-    expect([loose.low, loose.high]).toEqual([Number.NEGATIVE_INFINITY, Number.POSITIVE_INFINITY]);
-    const flat = fiellerRatioT([{ t: 2.2, c: 2 }, { t: 2.2, c: 2 }, { t: 2.2, c: 2 }]);
-    expect([flat.low, flat.high]).toEqual([expect.closeTo(1.1, 9), expect.closeTo(1.1, 9)]);
-    expect(flat.p).toBe(0);
+  it('coxRatioT: a point at the ratio with no spread, p 1 on 1 and 0 off it', () => {
+    const flat = coxRatioT([{ t: 2.2, c: 2 }, { t: 1.1, c: 1 }, { t: 2.2, c: 2 }]);
+    expect([flat.estimate, flat.low, flat.high, flat.p]).toEqual([expect.closeTo(1.1, 12), expect.closeTo(1.1, 12), expect.closeTo(1.1, 12), 0]);
+    expect(coxRatioT([{ t: 3, c: 3 }, { t: 5, c: 5 }]).p).toBe(1);
+  });
+
+  it('coxRatioT: a sum that is not positive gives the not-a-number result', () => {
+    for (const r of [coxRatioT([...repos, { t: 0, c: 1 }]), coxRatioT([...repos, { t: 1, c: 0 }]), coxRatioT([...repos, { t: -1, c: 2 }])]) {
+      expect([r.estimate, r.low, r.high, r.p].every(Number.isNaN)).toBe(true);
+    }
   });
 });
