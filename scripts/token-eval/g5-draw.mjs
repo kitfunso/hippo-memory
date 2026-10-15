@@ -13,6 +13,75 @@ const HIDDEN_WORDS = ['hippo', 'memory/', 'claude-config', 'codex-home', ...READ
 // Strings that name a memory tool, a home or a hidden marker: any of them left in a blinded file could show the arm.
 export const FORBIDDEN = [...HIDDEN_WORDS, '.hippo', 'hippo-home', '[command hidden]', '[tool]'];
 export const isHiddenCommand = (command) => leakScan(command, HIDDEN_WORDS).length > 0;
+
+/** A command with its hidden segments cut out (R4), or null when no plain segment is left or the command does not parse. */
+export function visibleCommand(command) {
+  if (!isHiddenCommand(command)) return command;
+  const kept = (shellSegments(command) ?? []).filter((s) => s.text.trim() && !isHiddenCommand(s.text));
+  if (kept.length === 0) return null;
+  const glue = (s) => (s.before === '\n' ? '\n' : s.before === ';' ? '; ' : ` ${s.before} `);
+  return kept.map((s, i) => (i === 0 ? '' : glue(s)) + s.text.trim()).join('');
+}
+
+/** Top-level `;`, `&&`, `||` and newline segments, each with the separator before it; quotes, parens and heredoc bodies stay whole. */
+export function shellSegments(command) {
+  const out = [];
+  const docs = [];
+  let start = 0;
+  let before = '';
+  let quote = null;
+  let depth = 0;
+  let i = 0;
+  while (i < command.length) {
+    const ch = command[i];
+    if (quote === "'") quote = ch === "'" ? null : quote;
+    else if (ch === '\\') i++;
+    else if (quote === '"') quote = ch === '"' ? null : quote;
+    else if (ch === "'" || ch === '"') quote = ch;
+    else if (ch === '(') depth++;
+    else if (ch === ')') depth = Math.max(0, depth - 1);
+    else if (command.startsWith('<<', i) && command[i + 2] !== '<') {
+      const m = /^<<-?\s*(['"]?)([A-Za-z_]\w*)\1/.exec(command.slice(i));
+      if (m) {
+        docs.push(m[2]);
+        i += m[0].length;
+        continue;
+      }
+    } else if (ch === '\n' && docs.length) {
+      i = heredocEnd(command, i, docs.splice(0));
+      if (i < 0) return null;
+      continue;
+    } else if (depth === 0) {
+      const sep = ch === '\n' || ch === ';' ? ch : ['&&', '||'].find((s) => command.startsWith(s, i));
+      if (sep) {
+        out.push({ before, text: command.slice(start, i) });
+        before = sep;
+        i += sep.length;
+        start = i;
+        continue;
+      }
+    }
+    i++;
+  }
+  if (quote || docs.length) return null;
+  out.push({ before, text: command.slice(start) });
+  return out;
+}
+
+/** From the newline that opens heredoc bodies, the index of the newline (or end) after the last delimiter line; -1 when one is unterminated. */
+function heredocEnd(command, at, delimiters) {
+  let j = at;
+  for (const d of delimiters) {
+    for (let found = false; !found; ) {
+      if (j >= command.length) return -1;
+      const eol = command.indexOf('\n', j + 1);
+      const end = eol < 0 ? command.length : eol;
+      found = command.slice(j + 1, end).replace(/^\t+/, '').trimEnd() === d;
+      j = end;
+    }
+  }
+  return j;
+}
 // An arm or seed named as its own word shows the arm as plainly as a path; arms keep their case, so code like x1 survives.
 const ARM_WORD = new RegExp(`\\b(?:${ALL_ARMS.join('|')})\\b`, 'g');
 const SEED_WORD = /\bseed\d+\b/gi;

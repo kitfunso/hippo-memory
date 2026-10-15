@@ -7,7 +7,7 @@ import { readerDiff } from './grading.mjs';
 import { lessonIndex } from './lessons.mjs';
 import { listGrades, readRows, rowsFile } from './regrade.mjs';
 import { flipsOf, postfixCheckers } from './g5-flips.mjs';
-import { FORBIDDEN, isHiddenCommand, blindLeaks, equalShares, fenced, fillStrata, labelsTemplate, parseLabels, proportional, redactor, seededOrder } from './g5-draw.mjs';
+import { FORBIDDEN, visibleCommand, blindLeaks, equalShares, fenced, fillStrata, labelsTemplate, parseLabels, proportional, redactor, seededOrder } from './g5-draw.mjs';
 
 const VERDICTS = ['pass', 'fail', 'na'];
 const sealed = (out, name) => path.join(out, 'g5', 'sealed', name);
@@ -94,8 +94,8 @@ export function pairDiff(out, e, which) {
 function renderPair(ctx, p) {
   const g = p.entry.grade;
   const commands = (p.which === 'first' ? g.commandsFirst : g.commandsFinal) ?? [];
-  // Tested after redaction, so a memory word in the out dir's own path does not hide a plain command.
-  const kept = commands.filter((c) => !isHiddenCommand(ctx.redact(c)));
+  // Cut after redaction, so a memory word in the out dir's own path does not hide a plain command; chained plain parts stay.
+  const kept = commands.map((c) => visibleCommand(ctx.redact(c))).filter((c) => c !== null);
   const text = [
     '## Task', ctx.text.prompt(g.sequence, g.taskId), '', '## Rule', ctx.text.lesson(g.lessonId).rule, '',
     '## Commands the agent ran', kept.length ? fenced(ctx.redact(kept.join('\n\n')), 'sh') : '(none)', '',
