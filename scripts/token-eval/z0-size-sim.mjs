@@ -248,7 +248,7 @@ function binaryRun(cal, design, rand) {
 
 /** The level of the H1 or H2 test at a chosen design: the share of true-zero runs whose p is below Holm's strictest 0.025,
  * per coding, under the seed rule at the bounds, 3 and 2 fixed seeds, and 0/1 values. Stopped runs are left out of both counts.
- * `held` is true when every level is at most 2 simulation errors above 0.025.
+ * `held` is true when every level is at most 2 simulation errors of its own run count above 0.025; a cell with no run fails.
  * @param {Record<string, any>} calPoint @param {Record<string, any>} calUpper
  * @param {{repos: number, families: number}} design @param {number} m
  * @param {{sims: number, seed: number, cap?: number, targetZ?: number, label?: string}} opts */
@@ -264,10 +264,12 @@ export function levelCheck(calPoint, calUpper, design, m, opts) {
   const cells = cases.flatMap(([name, make]) => {
     const rand = seededRandom(cellSeed(opts.seed, 'level', opts.label ?? '', name, design.repos, design.families, m));
     const runs = Array.from({ length: opts.sims }, () => make(rand)).filter((r) => !r.stopped);
-    return CODINGS.map((coding) => ({ name, coding, level: share(runs, (r) => r.est[coding].p < LEVEL), runs: runs.length }));
+    // The rule's cell keeps only the runs it let go, so its simulation error is from that count, not from sims.
+    const ceiling = LEVEL + 2 * sd((LEVEL * (1 - LEVEL)) / runs.length);
+    const stopShare = 1 - runs.length / opts.sims;
+    return CODINGS.map((coding) => ({ name, coding, level: share(runs, (r) => r.est[coding].p < LEVEL), runs: runs.length, stopShare, ceiling }));
   });
-  const ceiling = LEVEL + 2 * sd((LEVEL * (1 - LEVEL)) / opts.sims);
-  return { cells, ceiling, held: cells.every((c) => c.level <= ceiling) };
+  return { cells, held: cells.every((c) => c.level <= c.ceiling) };
 }
 
 function memoized(evaluate) {

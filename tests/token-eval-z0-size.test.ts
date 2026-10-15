@@ -198,7 +198,7 @@ describe('Z0 sizing', () => {
     const flatLevel = levelCheck(flat, flat, design, 0.2, { sims: 30, seed: 1 });
     expect(flatLevel.cells.map((c) => `${c.name}/${c.coding}`)).toEqual(
       ['rule at bounds', 'three seeds', 'two seeds at bounds', '0/1 values'].flatMap((n) => ['violation', 'excluded'].map((c) => `${n}/${c}`)));
-    expect(flatLevel.ceiling).toBeCloseTo(0.025 + 2 * Math.sqrt((0.025 * 0.975) / 30), 12);
+    expect(flatLevel.cells[2]!.ceiling).toBeCloseTo(0.025 + 2 * Math.sqrt((0.025 * 0.975) / 30), 12);
     for (const c of flatLevel.cells.slice(0, 6)) expect([c.level, c.runs]).toEqual([0, 30]);
     const noisy = both(spread(0.02, 0.02, 0.1));
     const level = levelCheck(noisy, noisy, design, 0.2, { sims: 60, seed: 2 });
@@ -209,6 +209,13 @@ describe('Z0 sizing', () => {
     const none = levelCheck(stopping, stopping, { repos: 6, families: 3 }, 0.15, { sims: 10, seed: 1 });
     expect(none.cells[0]).toMatchObject({ name: 'rule at bounds', runs: 0 });
     expect([Number.isNaN(none.cells[0].level), none.held]).toEqual([true, false]);
+    // A rule that stops some runs is judged on the runs it let go, so its bar is wider than the fixed-seed cells'.
+    const some = levelCheck(both(spread(0.05, 0, 0.05)), both(spread(0.05, 0, 0.05)), { repos: 6, families: 3 }, 0.15, { sims: 40, seed: 1 });
+    const [ruled, fixed] = [some.cells[0]!, some.cells[2]!];
+    expect(ruled.runs > 0 && ruled.runs < 40).toBe(true);
+    expect([ruled.stopShare, fixed.runs, fixed.stopShare]).toEqual([1 - ruled.runs / 40, 40, 0]);
+    expect(ruled.ceiling).toBeCloseTo(0.025 + 2 * Math.sqrt((0.025 * 0.975) / ruled.runs), 12);
+    expect(fixed.ceiling).toBeCloseTo(0.025 + 2 * Math.sqrt((0.025 * 0.975) / 40), 12);
   });
 
   it('finds the smallest passing size by search, and the confirm step corrects a coarse start either way', () => {

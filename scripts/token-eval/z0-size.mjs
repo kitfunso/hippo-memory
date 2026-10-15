@@ -342,7 +342,7 @@ const NOTES = [
   'Families per repository are capped at maxFamiliesPerRepo. Each size is found by a search at searchSims, then confirmed at sims one size at a time; reported power is from the full sim count.',
   'Sessions count each record\'s first session plus its teach and correction resumes, at the rule\'s mean seeds; screen sessions are not counted. usageAtCap prices the rule\'s arms at seedCap.',
   'Days are list-price dollars of usage over the per-day quota; a quota marked "default assumption" is a placeholder, not a measurement.',
-  'level is the share of true-zero runs below Holm\'s strictest 0.025, at the chosen design under the seed rule at the bounds, 3 seeds, 2 seeds at the bounds and 0/1 values. It is read against 0.025 plus 2 simulation errors; held: false stops the freeze.',
+  'level is the share of true-zero runs below Holm\'s strictest 0.025, at the chosen design under the seed rule at the bounds, 3 seeds, 2 seeds at the bounds and 0/1 values. Each cell is read against 0.025 plus 2 simulation errors of the runs it kept (the rule\'s cell drops the runs it stopped), and a cell with no run fails; held: false stops the freeze.',
 ];
 
 /** @param {string[]} argv @param {string} [cwd] */
