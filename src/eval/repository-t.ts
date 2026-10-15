@@ -1,5 +1,6 @@
-/** Student t tests over repositories, with G-1 degrees of freedom: one value per repository, so a shared-store fault
- *  counts once. The t distribution is written here because the package carries no statistics library. */
+/** Student t tests for Z0. The repositories are fixed and the family is the unit (Amendment 2): a variance-components
+ *  t over family-by-seed tables with Satterthwaite df, plus the older one-value-per-repository tests (G-1 df).
+ *  The t distribution is written here because the package carries no statistics library. */
 
 import { notANumber, type TestedEstimate } from './eval-stats.js';
 
@@ -76,10 +77,16 @@ export function studentTQuantile(p: number, df: number): number {
 }
 
 const critical = new Map<number, number>();
-// The sizer asks for the same few df thousands of times, so each df's critical value is found once.
+// The sizer asks for the same few df thousands of times; Satterthwaite df are fractional, so the key is df to
+// three decimals and the quantile is taken at that rounded df, or the cache would never hit.
 function criticalValue(df: number): number {
-  if (!critical.has(df)) critical.set(df, studentTQuantile(1 - ALPHA / 2, df));
-  return critical.get(df)!;
+  const key = Math.round(df * 1000) / 1000;
+  let q = critical.get(key);
+  if (q === undefined) {
+    q = studentTQuantile(1 - ALPHA / 2, key);
+    critical.set(key, q);
+  }
+  return q;
 }
 
 const sum = (xs: readonly number[]): number => xs.reduce((s, x) => s + x, 0);
@@ -135,4 +142,207 @@ export function coxRatioT(repos: readonly RepoSums[]): TestedEstimate {
   const s2 = sum(logs.map((y) => (y - mean) ** 2)) / (g - 1);
   const log = tResult(mean + s2 / 2, Math.sqrt(s2 / g + (s2 * s2) / (2 * (g - 1))), g - 1, 0);
   return { ...log, estimate: Math.exp(log.estimate), low: Math.exp(log.low), high: Math.exp(log.high), nullValue: 1 };
+}
+
+/** One unit of a family-by-seed table; units that share a (repo, family, seed) cell are averaged. */
+export interface FamilyUnit {
+  readonly repo: string;
+  readonly family: string;
+  readonly seed: number;
+  readonly value: number;
+}
+
+interface Cell {
+  readonly f: number;
+  readonly s: number;
+  readonly y: number;
+}
+
+interface Table {
+  readonly cells: readonly Cell[];
+  readonly k: number;
+  readonly s: number;
+}
+
+// Mean squares of the family + seed model (F family, Q seed, E residual) with their degrees of freedom.
+interface Components {
+  readonly F: number;
+  readonly Q: number;
+  readonly E: number;
+  readonly dfF: number;
+  readonly dfQ: number;
+  readonly dfE: number;
+}
+
+// `ms` is null for a repository too thin to fit: its mean enters the estimate, and the pooled components give its variance.
+interface RepoFit {
+  readonly est: number;
+  readonly k: number;
+  readonly s: number;
+  readonly n: number;
+  readonly ms: Components | null;
+}
+
+type Fitted = RepoFit & { readonly ms: Components };
+
+interface Fit {
+  readonly mu: number;
+  readonly rss: number;
+}
+
+interface Variance {
+  readonly v: number;
+  readonly df: number;
+}
+
+const MAX_PASSES = 1000;
+const CONVERGED = 1e-12;
+
+function tableOf(units: readonly FamilyUnit[]): Table {
+  const families = new Map<string, number>();
+  const seeds = new Map<number, number>();
+  const sums = new Map<string, { f: number; s: number; total: number; count: number }>();
+  const indexOf = <K>(ids: Map<K, number>, key: K): number => {
+    if (!ids.has(key)) ids.set(key, ids.size);
+    return ids.get(key)!;
+  };
+  for (const u of units) {
+    const [f, s] = [indexOf(families, u.family), indexOf(seeds, u.seed)];
+    const cell = sums.get(`${f}/${s}`) ?? { f, s, total: 0, count: 0 };
+    cell.total += u.value;
+    cell.count++;
+    sums.set(`${f}/${s}`, cell);
+  }
+  const cells = [...sums.values()].map((c) => ({ f: c.f, s: c.s, y: c.total / c.count }));
+  return { cells, k: families.size, s: seeds.size };
+}
+
+function levelMeans(cells: readonly Cell[], size: number, level: (c: Cell) => number, value: (c: Cell) => number): number[] {
+  const total = Array.from({ length: size }, () => 0);
+  const count = Array.from({ length: size }, () => 0);
+  for (const c of cells) {
+    total[level(c)]! += value(c);
+    count[level(c)]!++;
+  }
+  return total.map((x, i) => x / count[i]!);
+}
+
+// Writes the centred effects into `effects` and returns the shift, which belongs to the intercept.
+function centreInto(effects: number[], raw: readonly number[]): number {
+  const shift = sum(raw) / raw.length;
+  raw.forEach((x, i) => {
+    effects[i] = x - shift;
+  });
+  return shift;
+}
+
+/** Residual sum of squares about the level means of one factor: the fit with the other factor left out. */
+function rssAbout(cells: readonly Cell[], size: number, level: (c: Cell) => number): number {
+  const means = levelMeans(cells, size, level, (c) => c.y);
+  return sum(cells.map((c) => (c.y - means[level(c)]!) ** 2));
+}
+
+/** Least squares for y = mu + a_f + b_s on the cells present, by alternating means with a and b centred each pass. */
+function additiveFit(repo: string, t: Table): Fit {
+  const a = Array.from({ length: t.k }, () => 0);
+  const b = Array.from({ length: t.s }, () => 0);
+  let mu = sum(t.cells.map((c) => c.y)) / t.cells.length;
+  for (let pass = 0; pass < MAX_PASSES; pass++) {
+    const before = [mu, ...a, ...b];
+    const shiftA = centreInto(a, levelMeans(t.cells, t.k, (c) => c.f, (c) => c.y - mu - b[c.s]!));
+    mu += shiftA;
+    const shiftB = centreInto(b, levelMeans(t.cells, t.s, (c) => c.s, (c) => c.y - mu - a[c.f]!));
+    mu += shiftB;
+    mu = sum(t.cells.map((c) => c.y - a[c.f]! - b[c.s]!)) / t.cells.length;
+    const change = Math.max(...[mu, ...a, ...b].map((x, i) => Math.abs(x - before[i]!)));
+    if (change < CONVERGED) return { mu, rss: sum(t.cells.map((c) => (c.y - mu - a[c.f]! - b[c.s]!) ** 2)) };
+  }
+  throw new Error(`additive fit for repository ${repo} did not converge in ${MAX_PASSES} passes`);
+}
+
+function fitRepo(repo: string, units: readonly FamilyUnit[]): RepoFit {
+  const t = tableOf(units);
+  const n = t.cells.length;
+  const dfE = n - t.k - t.s + 1;
+  const base = { k: t.k, s: t.s, n };
+  if (t.k < 2 || t.s < 2 || dfE < 1) return { ...base, est: sum(t.cells.map((c) => c.y)) / n, ms: null };
+  const { mu, rss } = additiveFit(repo, t);
+  const [dfF, dfQ] = [t.k - 1, t.s - 1];
+  // Clamped: both reduced fits nest the additive one, so a negative difference is float noise.
+  const ssF = Math.max(0, rssAbout(t.cells, t.s, (c) => c.s) - rss);
+  const ssQ = Math.max(0, rssAbout(t.cells, t.k, (c) => c.f) - rss);
+  return { ...base, est: mu, ms: { F: ssF / dfF, Q: ssQ / dfQ, E: rss / dfE, dfF, dfQ, dfE } };
+}
+
+const weighted = (rs: readonly Fitted[], value: (r: Fitted) => number, df: (r: Fitted) => number): number =>
+  sum(rs.map((r) => value(r) * df(r))) / sum(rs.map(df));
+
+// Variance of the mean of the G repository estimates, with Satterthwaite df. Every repository adds its own
+// coefficients (fitted or not); the mean squares are pooled over the fitted ones, weighted by df.
+function varianceOf(repos: readonly RepoFit[], fitted: readonly Fitted[]): Variance {
+  const g = repos.length;
+  const [dfF, dfQ, dfE] = [sum(fitted.map((r) => r.ms.dfF)), sum(fitted.map((r) => r.ms.dfQ)), sum(fitted.map((r) => r.ms.dfE))];
+  const F = weighted(fitted, (r) => r.ms.F, (r) => r.ms.dfF);
+  const Q = weighted(fitted, (r) => r.ms.Q, (r) => r.ms.dfQ);
+  const E = weighted(fitted, (r) => r.ms.E, (r) => r.ms.dfE);
+  const sBar = weighted(fitted, (r) => r.n / r.k, (r) => r.ms.dfF);
+  const kBar = weighted(fitted, (r) => r.n / r.s, (r) => r.ms.dfQ);
+  const useQ = Q > E;
+  let [cF, cQ, cE] = [0, 0, 0];
+  for (const r of repos) {
+    const family = 1 / (sBar * r.k);
+    cF += family;
+    cE += 1 / r.n - family;
+    if (useQ) {
+      const seed = 1 / (kBar * r.s);
+      cQ += seed;
+      cE -= seed;
+    }
+  }
+  const terms = [[(cF * F) / (g * g), dfF], [(cQ * Q) / (g * g), dfQ], [(cE * E) / (g * g), dfE]].filter(([x]) => x !== 0);
+  const v = sum(terms.map(([x]) => x!));
+  if (v > 0) return { v, df: (v * v) / sum(terms.map(([x, d]) => (x! * x!) / d!)) };
+  return { v: (cF * F) / (g * g), df: dfF };
+}
+
+/** Mean of the repository estimates with repositories held fixed: the spread is family and seed variation inside each
+ *  (additive model y = mu + a_f + b_s), pooled over fitted repositories (two or more families and seeds, one residual
+ *  df); a thinner one adds its mean and borrows the pooled spread. Fewer than two repositories or none fitted: NaN. */
+export function fixedRepositoryT(units: readonly FamilyUnit[], nullValue = 0): TestedEstimate {
+  if (units.some((u) => !Number.isFinite(u.value))) return notANumber(nullValue, 0);
+  const byRepo = new Map<string, FamilyUnit[]>();
+  for (const u of units) {
+    const list = byRepo.get(u.repo);
+    if (list) list.push(u);
+    else byRepo.set(u.repo, [u]);
+  }
+  const repos = [...byRepo].map(([repo, us]) => fitRepo(repo, us));
+  const fitted = repos.filter((r): r is Fitted => r.ms !== null);
+  if (repos.length < 2 || fitted.length === 0) return notANumber(nullValue, 0);
+  const { v, df } = varianceOf(repos, fitted);
+  return tResult(sum(repos.map((r) => r.est)) / repos.length, Math.sqrt(v), df, nullValue);
+}
+
+/** One (repo, family, seed) cell's summed treatment and control values. */
+export interface RatioCell {
+  readonly repo: string;
+  readonly family: string;
+  readonly seed: number;
+  readonly t: number;
+  readonly c: number;
+}
+
+/** The pooled ratio sum(t) / sum(c) against 1; its spread is fixedRepositoryT on the residuals (t - R c) / mean(c).
+ *  The interval is on the log scale (`se` too): with skewed costs the symmetric R +- t se passed 5.2-5.6% at a true
+ *  1.10, over the 5% bar, and the log form passed 3.2-4.7%. */
+export function fixedRepositoryRatioT(cells: readonly RatioCell[]): TestedEstimate {
+  const [totalT, totalC] = [sum(cells.map((x) => x.t)), sum(cells.map((x) => x.c))];
+  if (!(totalT > 0 && totalC > 0)) return notANumber(1, 0);
+  const ratio = totalT / totalC;
+  const cBar = totalC / cells.length;
+  const residuals = cells.map(({ repo, family, seed, t, c }) => ({ repo, family, seed, value: (t - ratio * c) / cBar }));
+  const { se, df } = fixedRepositoryT(residuals, 0);
+  if (se === undefined || df === undefined || !Number.isFinite(se)) return notANumber(1, 0);
+  const log = tResult(Math.log(ratio), se / ratio, df, 0);
+  return { ...log, estimate: ratio, low: Math.exp(log.low), high: Math.exp(log.high), nullValue: 1 };
 }
