@@ -11,9 +11,8 @@
   "tenantResolvesInCli": 0,
   "storeImportsInCli": 4,
   "handleHoldersOutside": 4,
-  "storeFilesWithoutSql": 3,
+  "storeFilesWithoutSql": 2,
   "storeFilesWithoutSqlList": [
-    "src/store/card-detail.ts",
     "src/store/delivery-recorder.ts",
     "src/store/embeddings/index.ts"
   ],

@@ -216,7 +216,7 @@ describe('sleep with decay forced', () => {
     expect(readEntry(root, kept.id)).not.toBeNull();
     expect(readEntry(root, merged.id)).toBeNull();
     expect(readEntry(root, plain.id)).toBeNull();
-    expect(listDormant(ctxFor(root)).map((m) => m.id).sort()).toEqual(name === 'dormant on' ?[merged.id, plain.id].sort() : []);
+    expect((await listDormant(ctxFor(root))).map((m) => m.id).sort()).toEqual(name === 'dormant on' ?[merged.id, plain.id].sort() : []);
   });
 
   it('with the learned memory-value rescue on, the kept row still stays active and never goes dormant', async () => {
@@ -228,7 +228,7 @@ describe('sleep with decay forced', () => {
     await consolidate(root, { now: sixtyDaysOn() });
 
     expect(readEntry(root, kept.id)).not.toBeNull();
-    expect(listDormant(ctxFor(root)).map((m) => m.id)).not.toContain(kept.id);
+    expect((await listDormant(ctxFor(root))).map((m) => m.id)).not.toContain(kept.id);
   });
 
   it('a kept row survives a second sleep further on', async () => {
@@ -265,7 +265,7 @@ describe('a memory saved from a compaction fades like any other', () => {
 
     await consolidate(root, { now: sixtyDaysOn() });
     expect(readEntry(root, faded.id)).toBeNull();
-    expect(listDormant(ctxFor(root)).map((m) => m.id)).toEqual([faded.id]);
+    expect((await listDormant(ctxFor(root))).map((m) => m.id)).toEqual([faded.id]);
   });
 });
 

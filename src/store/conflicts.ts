@@ -102,11 +102,14 @@ const OPEN_IN_TENANT = `FROM memory_conflicts mc
 
 /** How many open conflicts listMemoryConflicts returns for a tenant, without loading one. */
 export function countOpenConflicts(hippoRoot: string, tenantId: string): number {
-  return onHandle(hippoRoot, (db) => {
-    // SAFETY: one row with the single aliased count column.
-    const row = db.prepare(`SELECT COUNT(*) AS n ${OPEN_IN_TENANT}`).get(tenantId, tenantId) as { n: number | bigint };
-    return Number(row.n);
-  }, openStore);
+  return onHandle(hippoRoot, (db) => countOpenConflictsAt(db, tenantId), openStore);
+}
+
+/** countOpenConflicts on a handle the caller holds, so it can share a snapshot with other reads. */
+export function countOpenConflictsAt(db: DatabaseSyncLike, tenantId: string): number {
+  // SAFETY: one row with the single aliased count column.
+  const row = db.prepare(`SELECT COUNT(*) AS n ${OPEN_IN_TENANT}`).get(tenantId, tenantId) as { n: number | bigint };
+  return Number(row.n);
 }
 
 /** One open conflict of a memory, with the row on its other side. */

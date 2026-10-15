@@ -52,7 +52,7 @@ function rowToCard(row: CardRow): Card {
   };
 }
 
-function loadCardRow(db: DatabaseSyncLike, tenantId: string, id: string): Card | null {
+export function loadCardRow(db: DatabaseSyncLike, tenantId: string, id: string): Card | null {
   // SAFETY: row's shape matches CARD_COLUMNS; status only ever holds a CardStatus value.
   const row = db.prepare(`SELECT ${CARD_COLUMNS} FROM cards WHERE id = ? AND tenant_id = ?`).get(id, tenantId) as
     CardRow | undefined;
@@ -286,58 +286,70 @@ export function listCards(hippoRoot: string, tenantId: string, opts: { status?: 
 /** Returns this card's parent and child ids from card_deps. */
 export function loadCardDeps(hippoRoot: string, tenantId: string, id: string) {
   assertTenantId('loadCardDeps', tenantId);
-  return onHandle(hippoRoot, (db) => {
-    // SAFETY: rows' shape matches the single `parent` column named in the SELECT below.
-    const parents = (db.prepare(`SELECT parent FROM card_deps WHERE tenant_id = ? AND child = ?`).all(
-      tenantId,
-      id
-    ) as Array<{ parent: string }>).map((r) => r.parent);
-    // SAFETY: rows' shape matches the single `child` column named in the SELECT below.
-    const children = (db.prepare(`SELECT child FROM card_deps WHERE tenant_id = ? AND parent = ?`).all(
-      tenantId,
-      id
-    ) as Array<{ child: string }>).map((r) => r.child);
-    return { parents, children };
-  }, openStore);
+  return onHandle(hippoRoot, (db) => loadCardDepsAt(db, tenantId, id), openStore);
+}
+
+export function loadCardDepsAt(db: DatabaseSyncLike, tenantId: string, id: string) {
+  // SAFETY: rows' shape matches the single `parent` column named in the SELECT below.
+  const parents = (db.prepare(`SELECT parent FROM card_deps WHERE tenant_id = ? AND child = ?`).all(
+    tenantId,
+    id
+  ) as Array<{ parent: string }>).map((r) => r.parent);
+  // SAFETY: rows' shape matches the single `child` column named in the SELECT below.
+  const children = (db.prepare(`SELECT child FROM card_deps WHERE tenant_id = ? AND parent = ?`).all(
+    tenantId,
+    id
+  ) as Array<{ child: string }>).map((r) => r.child);
+  return { parents, children };
 }
 
 /** Returns this card's run history, most recent first. */
 export function loadCardRuns(hippoRoot: string, tenantId: string, id: string): CardRun[] {
   assertTenantId('loadCardRuns', tenantId);
-  return onHandle(hippoRoot, (db) => {
-    // SAFETY: rows' shape matches CardRunRow.
-    const rows = db.prepare(`
-      SELECT id, card, runtime, session_id, started, ended, outcome
-      FROM card_runs WHERE tenant_id = ? AND card = ? ORDER BY started DESC, id DESC
-    `).all(tenantId, id) as CardRunRow[];
-    return rows.map(rowToCardRun);
-  }, openStore);
+  return onHandle(hippoRoot, (db) => loadCardRunsAt(db, tenantId, id), openStore);
+}
+
+export function loadCardRunsAt(db: DatabaseSyncLike, tenantId: string, id: string): CardRun[] {
+  // SAFETY: rows' shape matches CardRunRow.
+  const rows = db.prepare(`
+    SELECT id, card, runtime, session_id, started, ended, outcome
+    FROM card_runs WHERE tenant_id = ? AND card = ? ORDER BY started DESC, id DESC
+  `).all(tenantId, id) as CardRunRow[];
+  return rows.map(rowToCardRun);
 }
 
 /** Returns this card's comments, most recent first. */
 export function loadCardComments(hippoRoot: string, tenantId: string, id: string): CardComment[] {
   assertTenantId('loadCardComments', tenantId);
-  return onHandle(hippoRoot, (db) => {
-    // SAFETY: rows' shape matches CardCommentRow.
-    const rows = db.prepare(`
-      SELECT id, card_id, author, body, created_at
-      FROM card_comments WHERE tenant_id = ? AND card_id = ? ORDER BY created_at DESC, id DESC
-    `).all(tenantId, id) as CardCommentRow[];
-    return rows.map(rowToCardComment);
-  }, openStore);
+  return onHandle(hippoRoot, (db) => loadCardCommentsAt(db, tenantId, id), openStore);
+}
+
+export function loadCardCommentsAt(db: DatabaseSyncLike, tenantId: string, id: string): CardComment[] {
+  // SAFETY: rows' shape matches CardCommentRow.
+  const rows = db.prepare(`
+    SELECT id, card_id, author, body, created_at
+    FROM card_comments WHERE tenant_id = ? AND card_id = ? ORDER BY created_at DESC, id DESC
+  `).all(tenantId, id) as CardCommentRow[];
+  return rows.map(rowToCardComment);
 }
 
 /** Read side of the card <-> handoff round trip: the newest handoff filed against this card. */
 export function loadLatestHandoffForCard(hippoRoot: string, tenantId: string, cardId: string): SessionHandoff | null {
   assertTenantId('loadLatestHandoffForCard', tenantId);
-  return onHandle(hippoRoot, (db) => {
-    // SAFETY: row's shape matches HANDOFF_COLUMNS.
-    const row = db.prepare(`
-      SELECT ${HANDOFF_COLUMNS} FROM session_handoffs
-      WHERE tenant_id = ? AND card_id = ? ORDER BY created_at DESC, id DESC LIMIT 1
-    `).get(tenantId, cardId) as SessionHandoffRow | undefined;
-    return row ? rowToSessionHandoff(row) : null;
-  }, openStore);
+  return onHandle(hippoRoot, (db) => loadLatestHandoffForCardAt(db, tenantId, cardId), openStore);
+}
+
+export function loadLatestHandoffForCardAt(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  cardId: string,
+): SessionHandoff | null {
+  // SAFETY: row's shape matches HANDOFF_COLUMNS.
+  const row = db.prepare(`
+    SELECT ${HANDOFF_COLUMNS} FROM session_handoffs
+    WHERE tenant_id = ? AND card_id = ? ORDER BY created_at DESC, id DESC LIMIT 1
+  `).get(tenantId, cardId) as SessionHandoffRow | undefined;
+  return row ? rowToSessionHandoff(row) : null;
 }
 
 /** Atomic claim: WHERE status IN (ready, blocked) AND assignee_runtime IS NULL decides the race. Throws on an unknown

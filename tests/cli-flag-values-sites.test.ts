@@ -23,14 +23,14 @@ const STEPS = JSON.stringify([{ action: 'ran the build', observation: 'it passed
 let root = '';
 const c = (args: string[], flags: CliFlags): CommandContext => ({ hippoRoot: root, tenantId: 'default', args, flags });
 
-function stored() {
+async function stored() {
   const ctx = cliApiContext(root, 'default');
   return {
     snapshot: Boolean(snapshotLoad(ctx)),
     events: sessionEventList(ctx, { limit: 50 }).length,
     handoff: Boolean(handoffLatest(ctx)),
     working: workingMemoryRead(ctx, { limit: 50 }).length,
-    memories: listMemories(ctx).length,
+    memories: (await listMemories(ctx)).length,
   };
 }
 const NOTHING = { snapshot: false, events: 0, handoff: false, working: 0, memories: 0 };
@@ -86,7 +86,7 @@ describe('a text flag with no value', () => {
     const result = await runInProcess(run);
     expect(result.status).toBe(1);
     expect(result.stderr).toContain(`--${flag} requires a value`);
-    expect(stored()).toEqual(NOTHING);
+    expect(await stored()).toEqual(NOTHING);
   });
 });
 
@@ -118,7 +118,7 @@ describe('a text flag with a value', () => {
     expect(trace.stdout).toContain('Recorded trace');
     const remembered = await runInProcess(() => handleRemember(c(['the deploy runs at noon'], { scope: 'team' })));
     expect(remembered.status).toBe(0);
-    expect(listMemories(cliApiContext(root, 'default'))).toHaveLength(2);
+    expect(await listMemories(cliApiContext(root, 'default'))).toHaveLength(2);
   });
 
   it('export and import read their format and file flags', async () => {

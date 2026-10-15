@@ -26,9 +26,9 @@ const DAG_HEAD_CHARS = 120;
 const DAG_SUMMARY_PREVIEW_CHARS = 200;
 const DAG_CHILD_PREVIEW_CHARS = 100;
 
-export function handleDag({ hippoRoot, tenantId, flags }: CommandContext): void {
+export async function handleDag({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
   requireInit(hippoRoot);
-  const entries = listMemories(cliApiContext(hippoRoot, tenantId), { everyTenant: true });
+  const entries = await listMemories(cliApiContext(hippoRoot, tenantId), { everyTenant: true });
   const isStats = flagIsTrue(flags, 'stats');
 
   const byLevel = new Map<number, number>();

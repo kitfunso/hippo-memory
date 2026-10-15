@@ -59,7 +59,7 @@ export async function handleRefine({ hippoRoot, tenantId, flags }: CommandContex
   }
 }
 
-export function handleDedup({ hippoRoot, tenantId, flags }: CommandContext): void {
+export async function handleDedup({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
   requireInit(hippoRoot);
 
   const dryRun = boolFlag(flags, 'dry-run');
@@ -67,7 +67,7 @@ export function handleDedup({ hippoRoot, tenantId, flags }: CommandContext): voi
     printError('hippo dedup: --threshold is ignored; a duplicate is the same text apart from spacing.');
   }
 
-  const total = countAllMemories(cliApiContext(hippoRoot, tenantId));
+  const total = await countAllMemories(cliApiContext(hippoRoot, tenantId));
   console.log(
     `Scanning ${total} memories for duplicates (same text apart from spacing)${dryRun ? ' (dry run)' : ''}...\n`,
   );

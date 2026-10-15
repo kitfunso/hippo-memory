@@ -57,7 +57,7 @@ function assertKeyedOnSharedStore(fn: string, hippoRoot: string, key: Continuity
   }
 }
 
-type SnapshotInput = {
+export type SnapshotInput = {
   task: string;
   summary: string;
   next_step: string;
@@ -272,7 +272,7 @@ export function closeTaskSnapshotsForSession(
   }
 }
 
-interface SessionEventInput {
+export interface SessionEventInput {
   session_id: string;
   event_type: string;
   content: string;

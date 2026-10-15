@@ -30,6 +30,18 @@ export type {
   VectorWriteResult,
   VectorWrites,
 } from './port.js';
+export type {
+  CardCreate,
+  Cards,
+  Conflicts,
+  Dormant,
+  DormantRestoreRequest,
+  Goals,
+  Reports,
+  Sessions,
+  WorkingMemoryFilter,
+  WorkingMemoryPush,
+} from './port-groups.js';
 export { hasGroup, requireGroup } from './port.js';
 export { narrowStore, type StoreWith } from './narrow.js';
 export { sqliteStore } from './sqlite/store.js';

@@ -110,10 +110,10 @@ const TOOL_HANDLERS: ReadonlyMap<string, ToolEntry> = new Map<string, ToolEntry>
   ['hippo_remember', toolOn('entryWrites', runRememberTool)],
   ['hippo_outcome', toolOn('entryWrites', runOutcomeTool)],
   ['hippo_context', toolOn('contextReads', runContextTool)],
-  ['hippo_status', { run: runStatusTool }],
+  ['hippo_status', toolOn('reports', runStatusTool)],
   ['hippo_learn', toolOn('lessonWrites', runLearnTool)],
-  ['hippo_conflicts', { run: runConflictsTool }],
-  ['hippo_resolve', { run: runResolveTool }],
+  ['hippo_conflicts', toolOn('conflicts', runConflictsTool)],
+  ['hippo_resolve', toolOn('conflicts', runResolveTool)],
   ['hippo_share', { run: runShareTool }],
   ['hippo_peers', { run: runPeersTool }],
 ]);

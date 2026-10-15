@@ -52,9 +52,9 @@ describe('MemoryEntry 2.0 shape', () => {
     }
   });
 
-  it('emits tenant_id and a boolean summary_dirty in the export JSON', () => {
+  it('emits tenant_id and a boolean summary_dirty in the export JSON', async () => {
     writeEntry(root, createMemory('exported note', { tenantId: 'acme' }));
-    const exported = JSON.parse(JSON.stringify(listMemories(cliApiContext(root, 'acme')), null, 2));
+    const exported = JSON.parse(JSON.stringify(await listMemories(cliApiContext(root, 'acme')), null, 2));
     expect(exported).toHaveLength(1);
     expect(exported[0]).toMatchObject({ tenant_id: 'acme', summary_dirty: false });
     expect(exported[0]).not.toHaveProperty('tenantId');

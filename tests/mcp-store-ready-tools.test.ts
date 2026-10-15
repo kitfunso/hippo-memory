@@ -54,7 +54,7 @@ function listedNames(res: McpResponse | null): string[] {
 const declared = TOOLS.map((t) => t.name);
 const notPorted = { jsonrpc: '2.0', id: 1, error: { code: -32603, message: STORE_NOT_PORTED_MESSAGE } };
 // The stub carries every group sqliteStore sets, so the tools that name one run on it.
-const READY = ['hippo_recall', 'hippo_assemble', 'hippo_drill', 'hippo_predict_baserate', 'hippo_remember', 'hippo_outcome', 'hippo_context', 'hippo_learn'];
+const READY = ['hippo_recall', 'hippo_assemble', 'hippo_drill', 'hippo_predict_baserate', 'hippo_remember', 'hippo_outcome', 'hippo_context', 'hippo_learn', 'hippo_status', 'hippo_conflicts', 'hippo_resolve'];
 const ready = declared.filter((name) => READY.includes(name));
 
 describe('store-ready MCP tools', () => {

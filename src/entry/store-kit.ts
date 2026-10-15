@@ -8,11 +8,17 @@ export {
   narrowStore,
   sqliteStore,
   type AmbientCandidateRequest,
+  type CardCreate,
+  type Cards,
+  type Conflicts,
   type ContextReads,
+  type Dormant,
+  type DormantRestoreRequest,
   type EntryRemoval,
   type EntryTarget,
   type EntryWrite,
   type EntryWrites,
+  type Goals,
   type HippoStore,
   type KeyAudit,
   type KeyListQuery,
@@ -25,7 +31,9 @@ export {
   type RawArchive,
   type RecallSearchArgs,
   type RecallWrites,
+  type Reports,
   type SelfKeyMint,
+  type Sessions,
   type StoreGroup,
   type StoreGroups,
   type StoreWith,
@@ -36,6 +44,8 @@ export {
   type VectorWrite,
   type VectorWriteResult,
   type VectorWrites,
+  type WorkingMemoryFilter,
+  type WorkingMemoryPush,
 } from '../store/index.js';
 // An add-on store's entry writes apply an outcome, guard tombstones and check reach exactly as hippo.db does.
 export { entryAfterOutcome } from '../core/memory.js';
@@ -57,7 +67,21 @@ export type { StrengthenOptions } from '../store/entry-writes.js';
 export type { OriginFilter, RecallScopeFilter, VectorCandidateSpec } from '../store/search-rows.js';
 export type { ContinuityKey } from '../store/sessions.js';
 export type { SessionEvent, TaskSnapshot } from '../store/rows.js';
-export type { SessionHandoff } from '../core/handoff.js';
+export type { HandoffOutcome, SessionHandoff } from '../core/handoff.js';
+// The types the Sessions, Cards, Goals, Conflicts, Dormant and Reports groups take and return.
+export type { Card, CardComment, CardRun, CardStatus } from '../core/card.js';
+export type { CardDetail } from '../store/card-detail.js';
+export type { CompleteGoalOpts, PushGoalOpts } from '../store/goals.js';
+export type { HandoffFilter, SessionEndHandoffRequest } from '../store/handoffs.js';
+export type { ResolveConflictOpts, ResolveConflictRequest } from '../store/conflicts.js';
+export type { DormantMemory, DormantRestoreOutcome, DormantSnapshot, ListDormantOpts } from '../store/dormant.js';
+export type { EntryCursor, EntryPage } from '../store/entry-reads.js';
+export type { FailureSummary } from '../store/failure-log.js';
+export type { MemoryConflict } from '../store/rows.js';
+export type { SessionEventInput, SnapshotInput } from '../store/sessions.js';
+export type { StrengthTallies } from '../store/candidates.js';
+export type { TokenSummary } from '../store/token-ledger.js';
+export type { WorkingMemoryItem } from '../store/working-memory.js';
 export type {
   AmbientLoadResult,
   AmbientRecallRequest,

@@ -385,8 +385,8 @@ describe('a retired version leaves the merged row', () => {
     await api.forget(ctx(root), row.id); // sleep's decay pass moves a row this way: dormant copy in, live row out
 
     const out = hippo(root, 'reject', old.id, '--reason', 'the port moved');
-    const [dormant] = api.listDormant(ctx(root));
-    const restored = api.restoreDormant(ctx(root), dormant.id);
+    const [dormant] = await api.listDormant(ctx(root));
+    const restored = await api.restoreDormant(ctx(root), dormant.id);
 
     expect(current(root)).not.toContain(OLD);
     expect(await recalled(root)).not.toContain('port 3000');

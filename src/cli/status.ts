@@ -199,11 +199,11 @@ async function cmdInspect(hippoRoot: string, tenantId: string, id: string): Prom
 
 /** `hippo tokens [--days <n>] [--json] [--global]`: the token ledger per surface, tokens saved by skipped unchanged
  * blocks, and re-read hook tokens. Counts are estimates (characters / 4), the same estimate every budget uses. */
-export function handleTokens({ hippoRoot, tenantId, flags }: CommandContext): void {
+export async function handleTokens({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
   const root = resolveAuthRoot(hippoRoot, flags);
   const ctx = cliApiContext(root, tenantId);
   const days = parseCountFlag(flags['days']);
-  const summary = api.tokenSummary(ctx, { days: days > 0 ? days : undefined });
+  const summary = await api.tokenSummary(ctx, { days: days > 0 ? days : undefined });
   if (flags['json']) {
     console.log(JSON.stringify(summary, null, 2));
     return;
@@ -245,13 +245,13 @@ export function handleTokens({ hippoRoot, tenantId, flags }: CommandContext): vo
 }
 
 /** `hippo failures [--days <n>] [--json] [--global]`: failed tool calls by outcome, and repeats across sessions. */
-export function handleFailures({ hippoRoot, tenantId, flags }: CommandContext): void {
+export async function handleFailures({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
   // The store the capture-error hook writes to; a report never creates one.
   const root = flags['global'] ? getGlobalRoot() : hookStoreRoot(hippoRoot);
   requireInit(root);
   const ctx = cliApiContext(root, tenantId);
   const days = parseCountFlag(flags['days']);
-  const summary = api.failureSummary(ctx, { days: days > 0 ? days : undefined });
+  const summary = await api.failureSummary(ctx, { days: days > 0 ? days : undefined });
   if (flags['json']) {
     console.log(JSON.stringify(summary, null, 2));
     return;

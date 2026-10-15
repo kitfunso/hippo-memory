@@ -12,6 +12,7 @@ import { invalidateMatching } from '../src/learn/invalidation.js';
 import { rebuildDirtySummaries } from '../src/consolidate/dag.js';
 import { countAllMemories } from '../src/api/memories.js';
 import { adminActor } from '../src/api/types.js';
+import { sqliteStore } from '../src/store/sqlite/store.js';
 
 const roots: string[] = [];
 
@@ -108,15 +109,16 @@ describe('rebuildDirtySummaries', () => {
 });
 
 describe('countAllMemories', () => {
-  it('counts every tenant\'s rows without reading them', () => {
-    const read = [10, 200].map((n) => {
+  it('counts every tenant\'s rows without reading them', async () => {
+    const read: number[] = [];
+    for (const n of [10, 200]) {
       const root = newRoot('bounded-count');
       writeEntriesTogether(root, [...padding(n), memory('acme row', { tenant_id: 'acme' })]);
-      const ctx = { hippoRoot: root, tenantId: 'default', actor: adminActor('test:count') };
-      const { result, rowsRead } = recordStatements(() => countAllMemories(ctx));
+      const ctx = { hippoRoot: root, tenantId: 'default', actor: adminActor('test:count'), store: sqliteStore(root) };
+      const { result, rowsRead } = await recordStatementsAsync(() => countAllMemories(ctx));
       expect(result).toBe(n + 1);
-      return rowsRead;
-    });
+      read.push(rowsRead);
+    }
     expect(read[1]).toBe(read[0]);
   });
 });

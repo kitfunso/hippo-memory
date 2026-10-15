@@ -16,7 +16,8 @@ import { createMemory } from './_helpers/default-half-life-memory.js';
 import { Layer, type MemoryEntry } from '../src/core/memory.js';
 import { savePrediction } from '../src/store/predictions.js';
 import { mergedText } from '../src/util/same-text.js';
-import { restoreDormant, type Context } from '../src/api/index.js';
+import { restoreDormant } from '../src/api/index.js';
+import { apiCtx, type FullContext } from './_helpers/api-ctx.js';
 import { importForStore } from '../src/agent-memories/sync.js';
 import { closeWorld, note, openWorld, projectNotes } from './_helpers/agent-memories-world.js';
 
@@ -44,12 +45,12 @@ function withDb<T>(fn: (db: InstanceType<typeof DatabaseSync>) => T): T {
   try { return fn(db); } finally { db.close(); }
 }
 
-const ctx = (): Context => ({ hippoRoot: root, tenantId: 'default', actor: { subject: 'test', role: 'admin' } });
+const ctx = (): FullContext => apiCtx(root, 'default', { subject: 'test', role: 'admin' });
 const run = (apply = false) => repairAutomaticMemories(root, { tenantId: 'default', apply });
 const dispositionOf = (id: string) => run().issues.find((issue) => issue.id === id)?.disposition;
 
 describe('recoverable automatic memory quality repair', () => {
-  it('previews without writes, then preserves full history, audits each move, and leaves a restored row alone', () => {
+  it('previews without writes, then preserves full history, audits each move, and leaves a restored row alone', async () => {
     const bad = seed('Found local migration files to be', { retrieval_count: 7, tags: ['error', 'captured'] });
     const good = seed('Keep test schema setup outside production migrations because production applies every sorted migration.');
     const before = readFileSync(join(root, 'hippo.db'));
@@ -71,7 +72,7 @@ describe('recoverable automatic memory quality repair', () => {
     expect(withDb((db) => findRejectedValue(db, 'default', rejectionDigest(bad.content)))).toBeNull();
     expect(run(true)).toMatchObject({ appliedIds: [], backup: null });
 
-    expect(restoreDormant(ctx(), bad.id)).toMatchObject({ id: bad.id, content: bad.content, retrieval_count: 7, confidence: 'verified' });
+    expect(await restoreDormant(ctx(), bad.id)).toMatchObject({ id: bad.id, content: bad.content, retrieval_count: 7, confidence: 'verified' });
     expect(run(true)).toMatchObject({ appliedIds: [], backup: null, issues: [] });
     const typed = createMemory(bad.content, { source: 'cli' });
     writeEntry(root, typed);
