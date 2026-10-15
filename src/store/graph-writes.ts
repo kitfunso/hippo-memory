@@ -196,7 +196,7 @@ function checkedName(label: string, raw: string | undefined): string {
 
 /** Renames an entity or moves its memory provenance in place on the caller's handle, keeping id and created_at; null
  * when the row is gone. A delete plus an insert would cascade away every relation that points at it. */
-export function updateEntityRow(
+function updateEntityRow(
   db: DatabaseSyncLike,
   tenantId: string,
   id: number,
@@ -338,7 +338,7 @@ export function deleteRelationRow(db: DatabaseSyncLike, tenantId: string, id: nu
 /** Runs one tenant's graph writes in `fn` on `txDb` under one BEGIN IMMEDIATE, so two rebuilds serialize instead of
  * interleaving and a throw rolls back the whole chunk. The sole sanctioned place to wrap graph writes in a
  * transaction. */
-export function runGraphRebuildTransaction<T>(
+function runGraphRebuildTransaction<T>(
   hippoRoot: string,
   tenantId: string,
   fn: (txDb: DatabaseSyncLike) => T,

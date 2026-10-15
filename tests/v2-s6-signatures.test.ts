@@ -2,7 +2,8 @@
 
 import { describe, it, expect, expectTypeOf, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
-import { writeEntry, writeEntryWithHook, type WriteEntryOptions } from '../src/store/entry-writes.js';
+import { writeEntry, type WriteEntryOptions } from '../src/store/entry-writes.js';
+import { writeEntryThenFail } from './_helpers/failing-write.js';
 import { loadRecallEntries, loadRecallSearchEntries } from '../src/store/search-rows.js';
 import type { PromoteOptions } from '../src/sharing/global-store.js';
 import { confidenceFacets, type ConfidenceInputs } from '../src/core/memory.js';
@@ -40,9 +41,9 @@ describe('writeEntry options', () => {
     expectTypeOf<PromoteOptions>().not.toHaveProperty('afterWrite');
   });
 
-  it('writeEntryWithHook rolls the row back when its hook throws', () => {
+  it('a failure after the INSERT rolls the row back', () => {
     const mem = createMemory('numbat termite log', { tenantId: 'default' });
-    expect(() => writeEntryWithHook(root, mem, { afterWrite: () => { throw new Error('forced'); } })).toThrow('forced');
+    expect(() => writeEntryThenFail(root, mem)).toThrow('forced');
     expect(readEntry(root, mem.id, 'default')).toBeNull();
   });
 });

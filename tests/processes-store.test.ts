@@ -24,7 +24,8 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
-import { writeEntry, writeEntryWithHook } from '../src/store/entry-writes.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { writeEntryThenFail } from './_helpers/failing-write.js';
 import { deleteEntry } from '../src/store/delete-and-batch.js';
 import { Layer} from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
@@ -134,10 +135,8 @@ describe('processes store (first-class object)', () => {
       tenantId: 'default',
     });
     expect(() => {
-      writeEntryWithHook(home, mem, {
-        afterWrite: () => { throw new Error('forced afterWrite failure'); },
-      });
-    }).toThrow('forced afterWrite failure');
+      writeEntryThenFail(home, mem);
+    }).toThrow('forced');
     expect(countRows(home, 'memories')).toBe(memBefore);
     expect(countRows(home, 'processes')).toBe(procBefore);
   });

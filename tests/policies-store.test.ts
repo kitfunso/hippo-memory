@@ -23,7 +23,8 @@
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
-import { writeEntry, writeEntryWithHook } from '../src/store/entry-writes.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { writeEntryThenFail } from './_helpers/failing-write.js';
 import { deleteEntry } from '../src/store/delete-and-batch.js';
 import { Layer} from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
@@ -130,7 +131,7 @@ describe('policies store (bi-temporal first-class object)', () => {
     const mem = createMemory('throwing policy', {
       tags: ['policy'], layer: Layer.Semantic, confidence: 'verified', source: 'policy', tenantId: 'default',
     });
-    expect(() => writeEntryWithHook(home, mem, { afterWrite: () => { throw new Error('forced'); } })).toThrow('forced');
+    expect(() => writeEntryThenFail(home, mem)).toThrow('forced');
     expect(countRows(home, 'memories')).toBe(m0);
     expect(countRows(home, 'policies')).toBe(p0);
   });

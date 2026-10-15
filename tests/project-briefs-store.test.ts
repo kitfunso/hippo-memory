@@ -23,7 +23,8 @@
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
-import { writeEntry, writeEntryWithHook } from '../src/store/entry-writes.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { writeEntryThenFail } from './_helpers/failing-write.js';
 import { deleteEntry } from '../src/store/delete-and-batch.js';
 import { Layer} from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
@@ -120,7 +121,7 @@ describe('project_briefs store (repo-scoped / auto-refreshes first-class object)
     const mem = createMemory('throwing brief', {
       tags: ['project_brief'], layer: Layer.Semantic, confidence: 'verified', source: 'project_brief', tenantId: 'default',
     });
-    expect(() => writeEntryWithHook(home, mem, { afterWrite: () => { throw new Error('forced'); } })).toThrow('forced');
+    expect(() => writeEntryThenFail(home, mem)).toThrow('forced');
     expect(countRows(home, 'memories')).toBe(m0);
     expect(countRows(home, 'project_briefs')).toBe(b0);
   });

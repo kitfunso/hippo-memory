@@ -20,11 +20,12 @@ import { deleteEntry } from '../src/store/delete-and-batch.js';
 import { saveDecision, closeDecision } from '../src/objects/decisions.js';
 import { savePolicy } from '../src/objects/policies.js';
 import { saveProjectBrief, refreshedBrief } from '../src/objects/project-briefs.js';
-import { runGraphRebuildTransaction, insertEntityRow } from '../src/store/graph-writes.js';
+import { applyGraphOps } from '../src/store/graph-writes.js';
 import { loadPendingExtractionTenants, markGraphDirty } from '../src/store/graph-queue.js';
 import { loadExtractionQueue } from './_helpers/graph-queue.js';
 import { loadEntities, loadRelations } from '../src/store/graph-reads.js';
 import { extractGraph as realExtractGraph, extractGraphChunked, deriveGraph, loadGraphSources } from '../src/graph/extract.js';
+import type { EntityType } from '../src/store/graph-rows.js';
 import { readGraphDelta } from '../src/graph/delta.js';
 import { WRITE_BUDGET } from '../src/util/write-budget.js';
 import { sleep, adminActor } from '../src/api/index.js';
@@ -229,17 +230,21 @@ describe('sleep enqueue-hook', () => {
     expect(pending(tc.hippoRoot)).toHaveLength(1); // item left pending, recovered next sleep
   });
 
-  it('16. atomic rebuild: runGraphRebuildTransaction rolls back all writes on a throw (codex P2)', async () => {
+  it('16. atomic rebuild: applyGraphOps rolls back all writes on a throw (codex P2)', async () => {
     const d = await saveDecision(objectsAt(tc.hippoRoot), tc.hippoRoot, T, { decisionText: 'Adopt Postgres as the system of record' });
     // A rebuild that inserts then throws must leave NO partial graph rows: the
     // whole transaction rolls back. This is what makes extractGraph atomic, so two
     // concurrent rebuilds serialize on the write lock instead of duplicating rows.
+    const entity = (entityType: EntityType, memoryId: string) =>
+      ({ entityType, name: entityType, memoryId, sourceObject: { type: 'decision', id: d.id } as const });
+    // The second op names another tenant's memory, so its insert throws after the first one wrote.
+    const foreign = await saveDecision(objectsAt(tc.hippoRoot), tc.hippoRoot, 'other', { decisionText: 'Adopt Redis as a cache' });
     expect(() =>
-      runGraphRebuildTransaction(tc.hippoRoot, T, (txDb) => {
-        insertEntityRow(txDb, T, { entityType: 'policy', name: 'TempEntity', memoryId: d.memoryId! });
-        throw new Error('mid-rebuild boom');
-      }),
-    ).toThrow('mid-rebuild boom');
+      applyGraphOps(tc.hippoRoot, T, [
+        { op: 'insertEntity', entity: entity('policy', d.memoryId!) },
+        { op: 'insertEntity', entity: entity('system', foreign.memoryId!) },
+      ], { from: 0, holdMs: Infinity }),
+    ).toThrow();
     expect(loadEntities(tc.hippoRoot, T, { limit: 100 })).toHaveLength(0); // insert rolled back
   });
 

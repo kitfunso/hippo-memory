@@ -32,7 +32,7 @@ export function writeEntry(hippoRoot: string, entry: MemoryEntry, opts?: WriteEn
 }
 
 /** writeEntry for store code that needs the write's own handle: `opts.afterWrite` shares the INSERT's SAVEPOINT. */
-export function writeEntryWithHook(hippoRoot: string, entry: MemoryEntry, opts?: WriteEntryInternalOptions): void {
+function writeEntryWithHook(hippoRoot: string, entry: MemoryEntry, opts?: WriteEntryInternalOptions): void {
   onHandle(hippoRoot, (db) => {
     writeEntryOn(db, hippoRoot, entry, opts);
   }, openStore);
