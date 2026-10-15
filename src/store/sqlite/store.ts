@@ -13,7 +13,12 @@ import { servedConnectorEvents, sqliteConnectorEvents } from './connector-events
 import { servedConnectorWrites, sqliteConnectorWrites } from './connector-writes-group.js';
 import { sqliteDagReads } from './dag-reads-group.js';
 import { sqliteEntryWrites } from './entry-writes-group.js';
-import { servedAuditMaintenance, servedLessonWrites, sqliteAuditMaintenance, sqliteLessonWrites } from './maintenance-groups.js';
+import {
+  servedAuditMaintenance,
+  servedLessonWrites,
+  sqliteAuditMaintenance,
+  sqliteLessonWrites,
+} from './maintenance-groups.js';
 import { finishRecallAt, servedLastRecall, sqliteLastRecall } from './last-recall-group.js';
 import { servedGraphReads, sqliteGraphReads } from './graph-reads-group.js';
 import { servedObjects, sqliteObjects } from './objects-group.js';
@@ -33,18 +38,24 @@ import { loadRecallEntries } from '../search-rows.js';
 import { type ContinuityKey, listSessionEvents, loadActiveTaskSnapshot } from '../sessions.js';
 import { entriesWithoutVectorAt, loadStoredVectorViews, writeVectorsAt } from '../vector-index.js';
 
-/** `ctx` with its store filled: the one it carries, else hippo.db under its root, for a public entry whose SDK caller gave none. */
-export function withStore<C extends { readonly hippoRoot: string; readonly store?: HippoStore }>(ctx: C): C & { readonly store: HippoStore } {
+/** `ctx` with its store filled: the one it carries, else hippo.db under its root, for a public entry whose SDK caller
+ * gave none. */
+export function withStore<C extends { readonly hippoRoot: string; readonly store?: HippoStore }>(
+  ctx: C,
+): C & { readonly store: HippoStore } {
   return { ...ctx, store: ctx.store ?? sqliteStore(ctx.hippoRoot) };
 }
 
-/** Not on the synchronous store: the nearest-row scan yields to the event loop, so this group answers only through Promises. */
+/** Not on the synchronous store: the nearest-row scan yields to the event loop, so this group answers only through
+ * Promises. */
 type AsyncOnly = 'vectors';
 
-/** The port as hippo.db answers it: each call runs to its end and returns the value, so no write scope spans an await. */
+/** The port as hippo.db answers it: each call runs to its end and returns the value, so no write scope spans an
+ * await. */
 export type SqliteSyncStore = Sync<Omit<HippoStore, AsyncOnly>>;
 
-/** The built-in store: hippo.db under the port's own method names, each call on its own short-lived handles, so close has nothing to release. */
+/** The built-in store: hippo.db under the port's own method names, each call on its own short-lived handles, so close
+ * has nothing to release. */
 export function sqliteSyncStore(hippoRoot: string): SqliteSyncStore & Sync<Omit<StoreGroups, AsyncOnly>> {
   return {
     kind: 'sqlite',
@@ -75,7 +86,13 @@ export function sqliteSyncStore(hippoRoot: string): SqliteSyncStore & Sync<Omit<
 
 type SqliteBaseReads = Pick<
   SqliteSyncStore,
-  'findApiKey' | 'searchRecallEntries' | 'entriesByIds' | 'activeGoals' | 'freshRawEntries' | 'continuity' | 'planningFallacyEvidence'
+  | 'findApiKey'
+  | 'searchRecallEntries'
+  | 'entriesByIds'
+  | 'activeGoals'
+  | 'freshRawEntries'
+  | 'continuity'
+  | 'planningFallacyEvidence'
 >;
 
 function sqliteBaseReads(hippoRoot: string): SqliteBaseReads {
@@ -104,7 +121,10 @@ function sqliteBaseReads(hippoRoot: string): SqliteBaseReads {
   };
 }
 
-type SqliteRecallWrites = Pick<SqliteSyncStore, 'appendAuditEvents' | 'finishRecall' | 'bumpRecallStats' | 'recordTokens'>;
+type SqliteRecallWrites = Pick<
+  SqliteSyncStore,
+  'appendAuditEvents' | 'finishRecall' | 'bumpRecallStats' | 'recordTokens'
+>;
 
 function sqliteRecallWrites(hippoRoot: string): SqliteRecallWrites {
   return {
@@ -165,7 +185,8 @@ function sqliteReadiness(hippoRoot: string): Sync<Readiness> {
 
 type SyncStoreGroups = ReturnType<typeof sqliteSyncStore>;
 
-/** `sqliteSyncStore` as a served store: each method runs at once and answers through a Promise, so a throw rejects as another store's would. */
+/** `sqliteSyncStore` as a served store: each method runs at once and answers through a Promise, so a throw rejects as
+ * another store's would. */
 export function sqliteStore(hippoRoot: string): HippoStore & StoreGroups {
   const sync = sqliteSyncStore(hippoRoot);
   return {
@@ -203,9 +224,11 @@ function servedBaseMethods(sync: SyncStoreGroups): ServedBaseMethods {
     searchRecallEntries: async (query, args) => sync.searchRecallEntries(query, args),
     entriesByIds: async (ids, tenantId) => sync.entriesByIds(ids, tenantId),
     activeGoals: async (opts) => sync.activeGoals(opts),
-    freshRawEntries: async (count, tenantId, sessionId, origins) => sync.freshRawEntries(count, tenantId, sessionId, origins),
+    freshRawEntries: async (count, tenantId, sessionId, origins) =>
+      sync.freshRawEntries(count, tenantId, sessionId, origins),
     continuity: async (tenantId, eventLimit, key) => sync.continuity(tenantId, eventLimit, key),
-    planningFallacyEvidence: async (tenantId, classQueryTokens) => sync.planningFallacyEvidence(tenantId, classQueryTokens),
+    planningFallacyEvidence: async (tenantId, classQueryTokens) =>
+      sync.planningFallacyEvidence(tenantId, classQueryTokens),
     appendAuditEvents: async (events) => sync.appendAuditEvents(events),
     finishRecall: async (writes) => sync.finishRecall(writes),
     bumpRecallStats: async (recalled) => sync.bumpRecallStats(recalled),
@@ -269,7 +292,13 @@ function servedDagAndAudit(sync: SyncStoreGroups): Pick<StoreGroups, 'dagReads' 
 function sqliteContextReads(hippoRoot: string): Sync<ContextReads> {
   return {
     unfinishedHandoff(tenantId, maxAgeMs, key) {
-      return loadLatestHandoff(hippoRoot, tenantId, undefined, { unfinishedOnly: true, maxAgeMs, scopeFilter: 'default-deny' }, key ?? undefined);
+      return loadLatestHandoff(
+        hippoRoot,
+        tenantId,
+        undefined,
+        { unfinishedOnly: true, maxAgeMs, scopeFilter: 'default-deny' },
+        key ?? undefined,
+      );
     },
     ambientCandidates(tenantId, { recentNeeded, admit, recall, origins }) {
       return loadAmbientCandidates(hippoRoot, tenantId, recentNeeded, admit, recall, origins);
@@ -312,12 +341,19 @@ function sqliteKeyAudit(hippoRoot: string): Sync<KeyAudit> {
 }
 
 /** sqliteStore's continuity read, for the synchronous recall that cannot await the port. */
-function continuityAt(hippoRoot: string, tenantId: string, eventLimit: number, key: ContinuityKey | null): ContinuityBlock {
+function continuityAt(
+  hippoRoot: string,
+  tenantId: string,
+  eventLimit: number,
+  key: ContinuityKey | null,
+): ContinuityBlock {
   const activeSnapshot = loadActiveTaskSnapshot(hippoRoot, tenantId, key ?? undefined);
   const sessionId = activeSnapshot?.session_id ?? undefined;
   return {
     activeSnapshot,
     sessionHandoff: sessionId ? loadLatestHandoff(hippoRoot, tenantId, sessionId, {}, key ?? undefined) : null,
-    recentSessionEvents: sessionId ? listSessionEvents(hippoRoot, tenantId, { session_id: sessionId, limit: eventLimit }) : [],
+    recentSessionEvents: sessionId
+      ? listSessionEvents(hippoRoot, tenantId, { session_id: sessionId, limit: eventLimit })
+      : [],
   };
 }

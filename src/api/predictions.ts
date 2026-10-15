@@ -1,4 +1,9 @@
-import { predictionMirror, type Prediction, type PredictionBaserate, type SavePredictionOpts } from '../store/predictions.js';
+import {
+  predictionMirror,
+  type Prediction,
+  type PredictionBaserate,
+  type SavePredictionOpts,
+} from '../store/predictions.js';
 import { loadConfig } from '../core/config.js';
 import { requireGroup } from '../store/index.js';
 import type { PredictionClose, PredictionSave, Predictions } from '../store/port.js';
@@ -12,10 +17,16 @@ export async function savePrediction(ctx: StoreContext, input: PredictionSave): 
 
 /** A claim saved with its recall mirror, built under the store root's half-life as the HTTP create route builds it. */
 export async function recordPrediction(ctx: StoreContext, claim: SavePredictionOpts): Promise<Prediction> {
-  return savePrediction(ctx, { ...claim, mirror: predictionMirror(ctx.tenantId, claim, loadConfig(ctx.hippoRoot).defaultHalfLifeDays) });
+  return savePrediction(ctx, {
+    ...claim,
+    mirror: predictionMirror(ctx.tenantId, claim, loadConfig(ctx.hippoRoot).defaultHalfLifeDays),
+  });
 }
 
-export async function listPredictions(ctx: StoreContext, query: Parameters<Predictions['listPredictions']>[1]): Promise<Prediction[]> {
+export async function listPredictions(
+  ctx: StoreContext,
+  query: Parameters<Predictions['listPredictions']>[1],
+): Promise<Prediction[]> {
   return predictionsOf(ctx).listPredictions(ctx.tenantId, query);
 }
 

@@ -2,7 +2,12 @@
  * Hippo public API  - re-exports for programmatic use.
  */
 
-import { createMemory as createStoreMemory, DEFAULT_HALF_LIFE_DAYS, type CreateMemoryOptions, type MemoryEntry } from './core/memory.js';
+import {
+  createMemory as createStoreMemory,
+  DEFAULT_HALF_LIFE_DAYS,
+  type CreateMemoryOptions,
+  type MemoryEntry,
+} from './core/memory.js';
 import { sleep as sleepOnStore, type SleepOpts, type SleepResult } from './api/sleep.js';
 import type { Context } from './api/types.js';
 import { withStore } from './store/sqlite/store.js';
@@ -21,9 +26,13 @@ export {
   computeSchemaFit
 } from './core/memory.js';
 
-/** Published signature, so `baseHalfLifeDays` stays optional here; hippo's own writers use the strict one in memory.ts. */
+/** Published signature, so `baseHalfLifeDays` stays optional here; hippo's own writers use the strict one in
+ * memory.ts. */
 export function createMemory(content: string, options: Partial<CreateMemoryOptions> = {}): MemoryEntry {
-  return createStoreMemory(content, { ...options, baseHalfLifeDays: options.baseHalfLifeDays ?? DEFAULT_HALF_LIFE_DAYS });
+  return createStoreMemory(content, {
+    ...options,
+    baseHalfLifeDays: options.baseHalfLifeDays ?? DEFAULT_HALF_LIFE_DAYS,
+  });
 }
 export { search } from './search/bm25-search.js';
 export { hybridSearch } from './search/hybrid.js';
@@ -81,7 +90,16 @@ export {
 // Feature 5: Session handoff
 export { SessionHandoff, HandoffOutcome, HandoffEvidence, isHandoffOutcome } from './core/handoff.js';
 // W2a: work-queue cards
-export { Card, CardStatus, CardRun, CardComment, CardTransitions, isCardStatus, CARD_TRANSITIONS, CARD_LEASE_MS } from './core/card.js';
+export {
+  Card,
+  CardStatus,
+  CardRun,
+  CardComment,
+  CardTransitions,
+  isCardStatus,
+  CARD_TRANSITIONS,
+  CARD_LEASE_MS,
+} from './core/card.js';
 export { consolidate } from './consolidate/sleep.js';
 export { ConsolidationResult } from './consolidate/run.js';
 export type { SleepOpts, SleepResult } from './api/sleep.js';

@@ -21,7 +21,8 @@ function keyIdOfSubject(subject: string): string | null {
 
 export interface AuthCreateOpts {
   label?: string;
-  /** Defaults to `'member'`, which admin-gated routes such as `POST /v1/sleep` refuse; an admin key has to be asked for by name. */
+  /** Defaults to `'member'`, which admin-gated routes such as `POST /v1/sleep` refuse; an admin key has to be asked for
+   * by name. */
   role?: 'admin' | 'member';
   /** Days until the key expires: above 0 and at most 3650. Defaults to 90. */
   ttlDays?: number;
@@ -39,8 +40,9 @@ export interface AuthCreateResult {
   expiresAt: string | null;
 }
 
-/** Mints a key always bound to `ctx.tenantId`; opts cannot override the tenant, or tenant A could mint a key for tenant B.
- * Admin only (ForbiddenError otherwise), and a key never outranks its minter: a resolver admin is tenant-only, so it mints members. */
+/** Mints a key always bound to `ctx.tenantId`; opts cannot override the tenant, or tenant A could mint a key for tenant
+ * B. Admin only (ForbiddenError otherwise), and a key never outranks its minter: a resolver admin is tenant-only, so it
+ * mints members. */
 export async function authCreate(ctx: StoreContext, opts: AuthCreateOpts): Promise<AuthCreateResult> {
   // The key and its auth_create row commit together on every store, so a failed audit write leaves no key.
   const keyWrites = requireGroup(ctx.store, 'keyWrites');
@@ -118,7 +120,8 @@ export interface AuthCreateSelfResult extends AuthCreateResult {
   expiresAt: string;
 }
 
-/** A RangeError, not a 4xx, since the operator's config sets these; the ttl ceiling keeps toISOString in range and a departed user's key short-lived. */
+/** A RangeError, not a 4xx, since the operator's config sets these; the ttl ceiling keeps toISOString in range and a
+ * departed user's key short-lived. */
 function assertSelfMintOpts({ ttlDays, perSubject }: AuthCreateSelfOpts): void {
   if (!Number.isFinite(ttlDays) || ttlDays <= 0 || ttlDays > MAX_TTL_DAYS) {
     throw new RangeError(`authCreateSelf: ttlDays must be above 0 and at most ${MAX_TTL_DAYS}, got ${String(ttlDays)}`);
@@ -150,7 +153,12 @@ function selfKeyMint(ctx: Context, opts: AuthCreateSelfOpts): KeyMintPlan<SelfKe
   // Same op and actor as an admin mint, so a lookup by audit row finds this key too.
   return {
     plaintext: made.plaintext,
-    mint: { key: made.key, actor: subject, metadata: { label, role: 'member', self: true, expiresAt }, perSubject: opts.perSubject }
+    mint: {
+      key: made.key,
+      actor: subject,
+      metadata: { label, role: 'member', self: true, expiresAt },
+      perSubject: opts.perSubject,
+    },
   };
 }
 
@@ -165,7 +173,8 @@ export async function authListRows(ctx: StoreContext, opts: KeyListOpts): Promis
   return listRows(ctx, ctx.store, opts);
 }
 
-/** Every tenant's keys in the store, live ones only unless `active` is false; the host's own view, so the host admin only. */
+/** Every tenant's keys in the store, live ones only unless `active` is false; the host's own view, so the host admin
+ * only. */
 export function authListAllTenants(ctx: Context, active: boolean): ApiKeyListItem[] {
   requireHostAdmin(ctx, "Listing every tenant's keys");
   return listApiKeys(ctx.hippoRoot, { active });
@@ -184,8 +193,12 @@ function memberKeyIdOf(actor: Actor): string | null {
   return actor.role === 'admin' || actor.viaAuthResolver ? null : keyIdOfSubject(actor.subject);
 }
 
-/** A member sees only the keys its person minted, or just its own key when that has no owner; an admin sees the whole tenant; null means no keys. */
-function memberListFilter(actor: Actor, owner: string | null | undefined): Pick<ListApiKeysOpts, 'ownerSubject' | 'keyId'> | null {
+/** A member sees only the keys its person minted, or just its own key when that has no owner; an admin sees the whole
+ * tenant; null means no keys. */
+function memberListFilter(
+  actor: Actor,
+  owner: string | null | undefined,
+): Pick<ListApiKeysOpts, 'ownerSubject' | 'keyId'> | null {
   if (actor.role === 'admin') return {};
   if (actor.viaAuthResolver) return { ownerSubject: actor.subject };
   const keyId = memberKeyIdOf(actor);
@@ -193,10 +206,15 @@ function memberListFilter(actor: Actor, owner: string | null | undefined): Pick<
   return owner ? { ownerSubject: owner } : { keyId };
 }
 
-/** Throws unless `ctx` may revoke `keyId`; a member gets one answer for a missing, foreign or unowned key, so it cannot probe key ids. */
+/** Throws unless `ctx` may revoke `keyId`; a member gets one answer for a missing, foreign or unowned key, so it cannot
+ * probe key ids. */
 function assertMayRevoke(ctx: Context, keyId: string, row: ApiKeyOwner | undefined): asserts row is ApiKeyOwner {
   const { actor } = ctx;
-  if (actor.role !== 'admin' && actor.viaAuthResolver && (row?.tenantId !== ctx.tenantId || row.ownerSubject !== actor.subject)) {
+  if (
+    actor.role !== 'admin' &&
+    actor.viaAuthResolver &&
+    (row?.tenantId !== ctx.tenantId || row.ownerSubject !== actor.subject)
+  ) {
     throw new ForbiddenError('A member can revoke only the keys it minted');
   }
   // Cross-tenant access denied: same message as missing key, no info leak.
@@ -213,7 +231,8 @@ export interface AuthRevokeResult {
   revokedAt: string;
 }
 
-/** Revoke a key in the caller's tenant: a member API key may revoke only itself, a resolver member only the keys it minted.
+/** Revoke a key in the caller's tenant: a member API key may revoke only itself, a resolver member only the keys it
+ *  minted.
  *  The revoke and its auth_revoke row commit together on either store, so a failed audit write leaves the key live. */
 export async function authRevoke(ctx: StoreContext, keyId: string): Promise<AuthRevokeResult> {
   const store = ctx.store;
@@ -232,7 +251,14 @@ function assertMemberKeyRevokesSelf(ctx: Context, keyId: string): void {
 }
 
 function keyOwnerOf(record: ApiKeyRecord | null): ApiKeyOwner | undefined {
-  return record ? { tenantId: record.tenantId, revokedAt: record.revokedAt, role: record.role, ownerSubject: record.ownerSubject ?? null } : undefined;
+  return record
+    ? {
+        tenantId: record.tenantId,
+        revokedAt: record.revokedAt,
+        role: record.role,
+        ownerSubject: record.ownerSubject ?? null,
+      }
+    : undefined;
 }
 
 /** The tenant that owns `keyId`, or undefined for an unknown key. Host admin only: it reads across tenants,

@@ -32,8 +32,13 @@ function maintenanceOf(ctx: StoreContext): AuditMaintenance {
   return requireGroup(ctx.store, 'auditMaintenance');
 }
 
-/** Delete the memories an audit marked as errors, each with its own forget row, and answer the ids that went: a pinned or raw row stays. */
-export async function removeAuditErrors(ctx: StoreContext, pass: AuditPass, issues: readonly AuditIssue[]): Promise<string[]> {
+/** Delete the memories an audit marked as errors, each with its own forget row, and answer the ids that went: a pinned
+ * or raw row stays. */
+export async function removeAuditErrors(
+  ctx: StoreContext,
+  pass: AuditPass,
+  issues: readonly AuditIssue[],
+): Promise<string[]> {
   const removals = issues
     .filter((issue) => issue.severity === 'error')
     .map((issue) => ({ id: issue.memoryId, reason: `${pass}: ${issue.reason}` }));
@@ -47,7 +52,8 @@ export async function auditMemoryQuality(ctx: StoreContext): Promise<AuditResult
   return auditMemories(await maintenance.tenantEntries(ctx.tenantId), await maintenance.objectBackedIds());
 }
 
-/** Audit repair for the caller's tenant: a preview, or with `apply` the moves of certain defects to dormant storage behind a backup. */
+/** Audit repair for the caller's tenant: a preview, or with `apply` the moves of certain defects to dormant storage
+ * behind a backup. */
 export async function repairMemoryQuality(ctx: StoreContext, apply: boolean): Promise<QualityRepairResult> {
   return maintenanceOf(ctx).repairQuality(ctx.tenantId, apply);
 }
@@ -79,9 +85,9 @@ export function computeCutoff(days: number, now: Date = new Date()): string {
   return cutoff.toISOString();
 }
 
-/** Delete the caller's tenant's audit_log rows older than `olderThanDays`, then record an `audit_prune` row as `ctx.actor`; opt-in, since
- *  retention floors (HIPAA, SOX, GDPR) apply. The row is written after the DELETE, so a call never prunes its own record.
- *  Throws on non-positive days or an empty tenant. */
+/** Delete the caller's tenant's audit_log rows older than `olderThanDays`, then record an `audit_prune` row as
+ * `ctx.actor`; opt-in, since retention floors (HIPAA, SOX, GDPR) apply. The row is written after the DELETE, so a call
+ * never prunes its own record. Throws on non-positive days or an empty tenant. */
 export async function pruneAuditLog(ctx: StoreContext, opts: PruneAuditOpts): Promise<PruneAuditResult> {
   if (!Number.isFinite(opts.olderThanDays) || opts.olderThanDays <= 0) {
     throw new Error(`pruneAuditLog: olderThanDays must be a positive number, got ${opts.olderThanDays}`);

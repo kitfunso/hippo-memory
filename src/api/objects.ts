@@ -11,6 +11,15 @@ export function objectsOf(ctx: StoreContext): Objects {
 }
 
 /** Saves through the request's store as the authenticated caller. */
-export function saveFor<K extends SavableKind, W>(ctx: StoreContext, d: SavableDescriptor<K, W>, write: W): Promise<ObjectByKind[K]> {
-  return saveObject(objectsOf(ctx), d, { hippoRoot: ctx.hippoRoot, tenantId: ctx.tenantId, actor: ctx.actor.subject }, write);
+export function saveFor<K extends SavableKind, W>(
+  ctx: StoreContext,
+  d: SavableDescriptor<K, W>,
+  write: W,
+): Promise<ObjectByKind[K]> {
+  return saveObject(
+    objectsOf(ctx),
+    d,
+    { hippoRoot: ctx.hippoRoot, tenantId: ctx.tenantId, actor: ctx.actor.subject },
+    write,
+  );
 }

@@ -11,8 +11,9 @@ import type { Context, StoreContext } from './types.js';
 import { memoryReach } from '../store/tenant-lookup.js';
 import { canTouchScope, personalScopeOf } from '../core/recall-scope.js';
 
-/** Copies a local memory into the global store; the inner writeEntry emits 'remember' there, and we add a 'promote' audit event so intent stays distinct.
- * promoteToGlobal reads via `readEntry` with no tenant filter and keeps the entry's existing tenantId on the global side. */
+/** Copies a local memory into the global store; the inner writeEntry emits 'remember' there, and we add a 'promote'
+ * audit event so intent stays distinct. promoteToGlobal reads via `readEntry` with no tenant filter and keeps the
+ * entry's existing tenantId on the global side. */
 export interface PromoteResult {
   ok: true;
   sourceId: string;
@@ -22,14 +23,15 @@ export function promote(
   ctx: Context,
   id: string,
 ): PromoteResult {
-  // promoteToGlobal reads without a tenant filter, so pre-check the row's tenant_id and deny cross-tenant access with archiveRaw's not-found wording
-  // (no leak about whether the id exists in another tenant).
+  // promoteToGlobal reads without a tenant filter, so pre-check the row's tenant_id and deny cross-tenant access with
+  // archiveRaw's not-found wording (no leak about whether the id exists in another tenant).
   const reach = memoryReach(ctx.hippoRoot, id);
   if (reach?.tenantId !== ctx.tenantId || !canTouchScope(ctx.actor, reach.scope)) {
     throw new NotFoundError(`memory not found: ${id}`);
   }
 
-  // The 'promote' row commits with the global copy, so no write follows the commit and a busy store fails the whole promote.
+  // The 'promote' row commits with the global copy, so no write follows the commit and a busy store fails the whole
+  // promote.
   const globalEntry = promoteToGlobal(ctx.hippoRoot, id, {
     actor: ctx.actor.subject,
     tenantId: ctx.tenantId,
@@ -39,13 +41,15 @@ export function promote(
   return { ok: true, sourceId: id, globalId: globalEntry.id };
 }
 
-/** Replace an old memory with new content, chaining old.superseded_by = new.id; the store commits both rows and the audit row together. */
+/** Replace an old memory with new content, chaining old.superseded_by = new.id; the store commits both rows and the
+ * audit row together. */
 export interface SupersedeResult {
   ok: true;
   oldId: string;
   newId: string;
 }
-/** What the successor takes instead of the old row's value. Never set from a request body: the CLI fills it from its flags. */
+/** What the successor takes instead of the old row's value. Never set from a request body: the CLI fills it from its
+ * flags. */
 export interface SupersedeOverrides {
   layer?: Layer;
   tags?: string[];
@@ -69,7 +73,13 @@ export async function supersede(
   });
   // A store writes origin_project as given, so the served folder's fallback is stamped here.
   const successor = stampOriginProject(ctx.hippoRoot, newEntry);
-  await entryWrites.supersede({ tenantId: ctx.tenantId, actor: ctx.actor.subject, ownScope: personalScopeOf(ctx.actor), oldId, successor });
+  await entryWrites.supersede({
+    tenantId: ctx.tenantId,
+    actor: ctx.actor.subject,
+    ownScope: personalScopeOf(ctx.actor),
+    oldId,
+    successor,
+  });
   return { ok: true, oldId, newId: successor.id };
 }
 
@@ -90,7 +100,8 @@ function assertSupersedable(ctx: StoreContext, oldId: string, old: MemoryEntry |
 /** Archive a kind='raw' memory: its metadata moves to raw_archive and the row is
  * deleted. The store writes the one archive_raw audit row, under the caller's subject. */
 export interface ArchiveRawOpts {
-  /** The connector event this archive answers. The store logs it in the archive's own transaction, so a redelivery finds it logged. */
+  /** The connector event this archive answers. The store logs it in the archive's own transaction, so a redelivery
+   * finds it logged. */
   event?: ConnectorEvent;
 }
 
@@ -106,7 +117,13 @@ export async function archiveRaw(
 ): Promise<ArchiveRawResult> {
   const store = ctx.store;
   const entryWrites = requireGroup(store, 'entryWrites');
-  const archive = { tenantId: ctx.tenantId, actor: ctx.actor.subject, ownScope: personalScopeOf(ctx.actor), id, reason };
+  const archive = {
+    tenantId: ctx.tenantId,
+    actor: ctx.actor.subject,
+    ownScope: personalScopeOf(ctx.actor),
+    id,
+    reason,
+  };
   const { event } = opts;
   const archivedAt = event
     ? await requireGroup(store, 'connectorWrites').archiveConnectorEntry({ ...archive, event })

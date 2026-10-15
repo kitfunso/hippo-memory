@@ -1,11 +1,24 @@
-// The per-prompt hook's block and ledger rows, rendered here for `hippo context` and for promptHookContext (a remote hook route's call).
-// promptHookContext keeps the server-side copy of the CLI's getContext flags (cli/context.ts);
-// the CLI parity case in tests/prompt-hook-context.test.ts is all that ties the two.
+// The per-prompt hook's block and ledger rows, rendered here for `hippo context` and for promptHookContext (a remote
+// hook route's call). promptHookContext keeps the server-side copy of the CLI's getContext flags (cli/context.ts); the
+// CLI parity case in tests/prompt-hook-context.test.ts is all that ties the two.
 import { getContext, type Context, type ContextResult, type ContextResultEntry, type StoreContext } from './index.js';
 import { BadRequestError } from '../core/api-errors.js';
 import { isSharedStore, loadConfig } from '../core/config.js';
-import { contextBlockLines, contextCost, crossProjectLines, handoffText, sessionTrailText, settleTokens, snapshotText } from './context-render.js';
-import { createDeliveryRecorder, type DeliveryEventType, type DeliveryFault, type DeliveryRecorder } from '../store/delivery-recorder.js';
+import {
+  contextBlockLines,
+  contextCost,
+  crossProjectLines,
+  handoffText,
+  sessionTrailText,
+  settleTokens,
+  snapshotText,
+} from './context-render.js';
+import {
+  createDeliveryRecorder,
+  type DeliveryEventType,
+  type DeliveryFault,
+  type DeliveryRecorder,
+} from '../store/delivery-recorder.js';
 import type { HookRuntime } from '../core/capture-contract.js';
 import { realpathOrResolve } from '../util/real-path.js';
 import { MAX_ID_LEN } from '../util/limits.js';
@@ -58,8 +71,12 @@ export function startDeliveryRecorder(ctx: Context, start: DeliveryStart): Deliv
   }
 }
 
-/** A recorder for `hippo capture-error`, only when the failure log and the ledger are one store, so `failure_id` never points into another. */
-export function startToolFailureRecorder(ctx: Context, start: Omit<DeliveryStart, 'eventType'>): DeliveryRecorder | null {
+/** A recorder for `hippo capture-error`, only when the failure log and the ledger are one store, so `failure_id` never
+ * points into another. */
+export function startToolFailureRecorder(
+  ctx: Context,
+  start: Omit<DeliveryStart, 'eventType'>,
+): DeliveryRecorder | null {
   try {
     const root = ledgerRoot(ctx.hippoRoot);
     if (root === null || realpathOrResolve(root) !== realpathOrResolve(ctx.hippoRoot)) return null;
@@ -70,7 +87,8 @@ export function startToolFailureRecorder(ctx: Context, start: Omit<DeliveryStart
   }
 }
 
-/** With `write`, stores on the token ledger's connection (same store); without it, opens its own. A second flush is a no-op. */
+/** With `write`, stores on the token ledger's connection (same store); without it, opens its own. A second flush is a
+ * no-op. */
 export function flushDeliveryRecorder(rec: DeliveryRecorder | null, write?: DeliveryWrite): void {
   if (rec === null) return;
   try {
@@ -93,16 +111,19 @@ export interface ContextView {
   /** Ledger rows stay in `hippoRoot`, never the global store; see promptHookContext. */
   readonly sharedStore?: boolean;
   /** The static block's hash the caller says it printed last. Undefined keeps the ledger-only skip rule;
-   *  a string or null also needs that hash to match, because the ledger counts blocks a caller that prints elsewhere may never have shown. */
+   *  a string or null also needs that hash to match, because the ledger counts blocks a caller that prints elsewhere
+   *  may never have shown. */
   readonly printedHash?: string | null;
   /** The reply's JSON wrapper; absent means Claude Code's UserPromptSubmit. */
   readonly envelope?: HookEnvelope;
 }
 
-/** `copilot-session-start` is the Copilot harness's top-level reply, `vscode-session-start` the nested one VS Code Local reads. */
+/** `copilot-session-start` is the Copilot harness's top-level reply, `vscode-session-start` the nested one VS Code
+ * Local reads. */
 export type HookEnvelope = 'user-prompt-submit' | 'copilot-session-start' | 'vscode-session-start';
 
-/** A Copilot sessionStart reply's wrapper, picked by the sender's casing: stdin.ts keeps a camelCase `sessionId`, which only the Copilot harness sends. */
+/** A Copilot sessionStart reply's wrapper, picked by the sender's casing: stdin.ts keeps a camelCase `sessionId`, which
+ * only the Copilot harness sends. */
 export function sessionStartEnvelope(stdinText: string | undefined): HookEnvelope {
   return hookPayloadString(stdinText, 'sessionId') !== null ? 'copilot-session-start' : 'vscode-session-start';
 }
@@ -136,9 +157,35 @@ export function toRenderItems(entries: ContextResultEntry[]): RenderItem[] {
   return entries.map((r) => ({ entry: r.entry, score: r.score, tokens: r.tokens, isGlobal: r.isGlobal ?? false }));
 }
 
-/** The hook format's stdout, '' when nothing is sent: a skippable static block (snapshot, handoff, events, pins, recent-N) and a never-skipped recall block. */
+/** The hook format's stdout, '' when nothing is sent: a skippable static block (snapshot, handoff, events, pins,
+ * recent-N) and a never-skipped recall block. */
 export function additionalContextOutput(view: ContextView): string {
   return renderAdditionalContext(view).stdout;
+}
+
+function renderStaticBlock(
+  view: ContextView,
+  staticItems: RenderItem[],
+  staticCrossEntries: ContextResultEntry[],
+): string {
+  const { result, framing } = view;
+  return settleTokens((t) =>
+    [
+      ...(result.activeSnapshot ? [snapshotText(result.activeSnapshot)] : []),
+      ...(result.sessionHandoff ? [handoffText(result.sessionHandoff)] : []),
+      ...(result.recentEvents && result.recentEvents.length > 0 ? [sessionTrailText(result.recentEvents)] : []),
+      // No live strength percentage, so an unchanged set of memories renders byte-identically turn after turn.
+      ...(staticItems.length > 0 ? contextBlockLines(staticItems, t, framing, { showStrength: false }) : []),
+      ...crossProjectLines(staticCrossEntries),
+    ].join('\n'),
+  );
+}
+
+function renderRecallBlock(recallItems: RenderItem[], framing: ContextView['framing']): string {
+  if (recallItems.length === 0) return '';
+  return settleTokens((t) =>
+    contextBlockLines(recallItems, t, framing, { showStrength: false, heading: 'Prompt-Relevant Memory' }).join('\n'),
+  );
 }
 
 function renderAdditionalContext(view: ContextView): RenderedContext {
@@ -148,24 +195,16 @@ function renderAdditionalContext(view: ContextView): RenderedContext {
   const staticItems = toRenderItems(staticEntries);
   const recallItems = toRenderItems(result.entries.filter((r) => r.promptRecall));
 
-  const staticBlock = settleTokens((t) => [
-    ...(result.activeSnapshot ? [snapshotText(result.activeSnapshot)] : []),
-    ...(result.sessionHandoff ? [handoffText(result.sessionHandoff)] : []),
-    ...(result.recentEvents && result.recentEvents.length > 0 ? [sessionTrailText(result.recentEvents)] : []),
-    // No live strength percentage, so an unchanged set of memories renders byte-identically turn after turn.
-    ...(staticItems.length > 0 ? contextBlockLines(staticItems, t, framing, { showStrength: false }) : []),
-    ...crossProjectLines(staticCrossEntries),
-  ].join('\n'));
-  const recallBlock = recallItems.length > 0
-    ? settleTokens((t) => contextBlockLines(recallItems, t, framing, { showStrength: false, heading: 'Prompt-Relevant Memory' }).join('\n'))
-    : '';
+  const staticBlock = renderStaticBlock(view, staticItems, staticCrossEntries);
+  const recallBlock = renderRecallBlock(recallItems, framing);
   if (!staticBlock.trim() && !recallBlock.trim()) {
     rec?.delivered({ state: 'empty' });
     return NOTHING_RENDERED;
   }
 
   const surface: TokenSurface = view.pinnedOnly ? 'hook' : 'context';
-  const sendStatic = staticBlock.trim().length > 0 && !skipUnchangedStatic(view, surface, staticBlock, recallBlock, staticItems.length);
+  const sendStatic =
+    staticBlock.trim().length > 0 && !skipUnchangedStatic(view, surface, staticBlock, recallBlock, staticItems.length);
 
   const finalStatic = sendStatic ? staticBlock : '';
   const additionalContext = finalStatic && recallBlock
@@ -186,13 +225,24 @@ function renderAdditionalContext(view: ContextView): RenderedContext {
     staticReused,
   });
   if (finalStatic || recallBlock) {
-    recordAdditionalContextRows(view, surface, { text: finalStatic, items: staticItems.length }, { text: recallBlock, items: recallItems.length });
+    recordAdditionalContextRows(
+      view,
+      surface,
+      { text: finalStatic, items: staticItems.length },
+      { text: recallBlock, items: recallItems.length },
+    );
   }
   return { stdout, staticHash: finalStatic ? blockHash(finalStatic) : null };
 }
 
 /** True, after booking the skip row, when the hook may omit a static block this session already holds. */
-function skipUnchangedStatic(view: ContextView, surface: TokenSurface, staticBlock: string, recallBlock: string, staticCount: number): boolean {
+function skipUnchangedStatic(
+  view: ContextView,
+  surface: TokenSurface,
+  staticBlock: string,
+  recallBlock: string,
+  staticCount: number,
+): boolean {
   const { hippoRoot, payloadSessionId, rec } = view;
   const ledgerOpts = { sharedStore: view.sharedStore };
   if (!view.pinnedOnly || payloadSessionId === undefined) return false;
@@ -224,17 +274,30 @@ function skipUnchangedStatic(view: ContextView, surface: TokenSurface, staticBlo
 
 interface InjectedBlock { readonly text: string; readonly items: number }
 
-/** One connection for both rows; a failed row is logged and the other still lands, because a ledger failure must not break the hook. */
-function recordAdditionalContextRows(view: ContextView, surface: TokenSurface, staticPart: InjectedBlock, recallPart: InjectedBlock): void {
+/** One connection for both rows; a failed row is logged and the other still lands, because a ledger failure must not
+ * break the hook. */
+function recordAdditionalContextRows(
+  view: ContextView,
+  surface: TokenSurface,
+  staticPart: InjectedBlock,
+  recallPart: InjectedBlock,
+): void {
   const row = (part: InjectedBlock, on: TokenSurface): TokenUse => ({
     tenantId: view.tenantId, sessionId: view.ledgerSessionId, surface: on, event: 'inject',
     items: part.items, tokens: estimateTokens(part.text), hash: blockHash(part.text),
   });
-  bookLedgerTurn(view.hippoRoot, {
-    uses: [...(staticPart.text ? [row(staticPart, surface)] : []), ...(recallPart.text ? [row(recallPart, 'hook_recall')] : [])],
-    onRowError: noteLedgerRowSkipped,
-    delivery: (write) => flushDeliveryRecorder(view.rec, write),
-  }, { sharedStore: view.sharedStore });
+  bookLedgerTurn(
+    view.hippoRoot,
+    {
+      uses: [
+        ...(staticPart.text ? [row(staticPart, surface)] : []),
+        ...(recallPart.text ? [row(recallPart, 'hook_recall')] : []),
+      ],
+      onRowError: noteLedgerRowSkipped,
+      delivery: (write) => flushDeliveryRecorder(view.rec, write),
+    },
+    { sharedStore: view.sharedStore },
+  );
 }
 
 // The flags HIPPO_PINNED_INJECT_COMMAND gives the local hook; the CLI parity test fails if the two drift.
@@ -245,7 +308,8 @@ const HOOK_FRAMING = 'observe';
 // blockHash's shape (token-ledger.ts).
 const BLOCK_HASH_RE = /^[0-9a-f]{16}$/;
 
-/** The project a hook caller runs in: its id, the folder name its older rows carry, and any other names it resolves to. */
+/** The project a hook caller runs in: its id, the folder name its older rows carry, and any other names it resolves
+ * to. */
 export interface CallerProject {
   readonly name: string;
   readonly legacyName: string;
@@ -256,7 +320,8 @@ export interface PromptHookRequest {
   readonly sessionId: string;
   readonly project: CallerProject;
   readonly payload?: Readonly<Record<string, JsonValue>>;
-  /** The staticHash of the last reply whose stdout the caller printed in this session; absent, the block is always sent. */
+  /** The staticHash of the last reply whose stdout the caller printed in this session; absent, the block is always
+   * sent. */
   readonly printedHash?: string;
 }
 
@@ -269,7 +334,9 @@ export interface PromptHookOpts {
 /** The caps on a hook caller's session id and project names, so a caller other than an HTTP route is bounded too. */
 export function assertCallerIds(sessionId: string, project: CallerProject): void {
   const { name, legacyName, aliases = [] } = project;
-  if (aliases.length > MAX_PROJECT_ALIASES) throw new BadRequestError(`project aliases: at most ${MAX_PROJECT_ALIASES}`);
+  if (aliases.length > MAX_PROJECT_ALIASES) {
+    throw new BadRequestError(`project aliases: at most ${MAX_PROJECT_ALIASES}`);
+  }
   if ([sessionId, name, legacyName, ...aliases].some((v) => v.length > MAX_ID_LEN)) {
     throw new BadRequestError(`session id and project names: at most ${MAX_ID_LEN} characters each`);
   }
@@ -282,10 +349,12 @@ function assertPromptHookRequest(req: PromptHookRequest): void {
   }
 }
 
-/** The text `hippo context --pinned-only --include-recent 5 --format additional-context` prints for this session, read on `ctx`'s store for its project.
- * Omits an unchanged static block only when `printedHash` matches; `arm` is the ledger arm (`hippo` or `holdout`, null at rate 0); a holdout gets empty stdout.
- * `staticHash` is the hash to echo back (null with no static block, a sub-agent or a holdout). Scope detection and delivery-ledger events are CLI-only.
- * Throws BadRequestError past the input caps, and on a shared store for a project assertCallerProject refuses, before any arm is booked. */
+/** The text `hippo context --pinned-only --include-recent 5 --format additional-context` prints for this session, read
+ * on `ctx`'s store for its project. Omits an unchanged static block only when `printedHash` matches; `arm` is the
+ * ledger arm (`hippo` or `holdout`, null at rate 0); a holdout gets empty stdout. `staticHash` is the hash to echo back
+ * (null with no static block, a sub-agent or a holdout). Scope detection and delivery-ledger events are CLI-only.
+ * Throws BadRequestError past the input caps, and on a shared store for a project assertCallerProject refuses, before
+ * any arm is booked. */
 export async function promptHookContext(
   ctx: StoreContext, req: PromptHookRequest, opts: PromptHookOpts = {},
 ): Promise<{ arm: PilotArm | null; stdout: string; staticHash: string | null }> {

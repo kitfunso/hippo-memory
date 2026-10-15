@@ -1,4 +1,5 @@
-// Git auto-learn: fix/revert/bug commit subjects become memories. `hippo learn`, init, sleep and MCP hippo_learn share it.
+// Git auto-learn: fix/revert/bug commit subjects become memories. `hippo learn`, init, sleep and MCP hippo_learn share
+// it.
 
 import { ForbiddenError } from '../core/api-errors.js';
 import { fetchGitLog, extractLessons, partitionLessons, isGitRepo } from '../learn/autolearn.js';
@@ -6,7 +7,12 @@ import { type HippoConfig, loadConfig } from '../core/config.js';
 import { runWithRequestStores } from '../db/request-stores.js';
 import { embedMemory } from '../search/embed-memories.js';
 import {
-  extractInvalidationTarget, invalidateMatching, invalidateMatchingAmong, type InvalidationOptions, type InvalidationResult, type InvalidationTarget,
+  extractInvalidationTarget,
+  invalidateMatching,
+  invalidateMatchingAmong,
+  type InvalidationOptions,
+  type InvalidationResult,
+  type InvalidationTarget,
 } from '../learn/invalidation.js';
 import { createMemory, Layer, schemaFitFrom, schemaFitSourceOf, type MemoryEntry } from '../core/memory.js';
 import { extractPathTags } from '../search/path-context.js';
@@ -25,8 +31,16 @@ export interface LearnProfile {
 }
 
 // SHORTCUT: two profiles keep each surface's rows as they were; fold MCP onto the CLI profile once it may invalidate.
-export const CLI_LEARN: LearnProfile = Object.freeze({ tags: Object.freeze(['error', 'git-learned']), source: 'git-learn', full: true });
-export const MCP_LEARN: LearnProfile = Object.freeze({ tags: Object.freeze(['git-learned']), source: 'git', full: false });
+export const CLI_LEARN: LearnProfile = Object.freeze({
+  tags: Object.freeze(['error', 'git-learned']),
+  source: 'git-learn',
+  full: true,
+});
+export const MCP_LEARN: LearnProfile = Object.freeze({
+  tags: Object.freeze(['git-learned']),
+  source: 'git',
+  full: false,
+});
 
 export interface LearnOpts {
   repoPath: string;
@@ -58,14 +72,16 @@ export async function learn(ctx: StoreContext, opts: LearnOpts): Promise<LearnRe
   const config = loadConfig(ctx.hippoRoot);
   const parsed = extractLessons(gitLog, config.gitLearnPatterns);
   if (parsed.length === 0) return { status: 'no-lessons', ...none };
-  // The gate filters the loop input, so a dropped lesson neither stores nor invalidates; docs/decisions git-learn-gate-placement says why.
+  // The gate filters the loop input, so a dropped lesson neither stores nor invalidates; docs/decisions
+  // git-learn-gate-placement says why.
   const { kept, dropped } = partitionLessons(parsed);
   return { status: 'scanned', lowInfo: dropped.length, ...await writeLessons(ctx, kept, opts, config) };
 }
 
 interface QueuedLesson { entry: MemoryEntry; key: string }
 
-/** Where a batch writes and what it has learned so far: `live` and `keys` follow every write, so a later lesson matches against them. */
+/** Where a batch writes and what it has learned so far: `live` and `keys` follow every write, so a later lesson matches
+ * against them. */
 interface LessonBatch {
   readonly ctx: Context;
   readonly writes: LessonWrites;
@@ -75,7 +91,8 @@ interface LessonBatch {
   readonly full: boolean;
 }
 
-/** Writes `queued` in one transaction; a refused lesson is dropped from `live` and `keys` and must not abort the rest of the git-log scan. */
+/** Writes `queued` in one transaction; a refused lesson is dropped from `live` and `keys` and must not abort the rest
+ * of the git-log scan. */
 async function landLessons(batch: LessonBatch, queued: readonly QueuedLesson[]): Promise<void> {
   if (queued.length === 0) return;
   const { ctx, writes, live, keys, counts } = batch;
@@ -97,27 +114,59 @@ async function landLessons(batch: LessonBatch, queued: readonly QueuedLesson[]):
   for (const entry of landed) void embedMemory(ctx.hippoRoot, entry, undefined, ctx.store);
 }
 
-/** The duplicate keys a batch skips: every readable row's with `existing`, else only the rows holding a lesson's longest word. */
+/** The duplicate keys a batch skips: every readable row's with `existing`, else only the rows holding a lesson's
+ * longest word. */
 async function knownKeys(
   ctx: StoreContext,
   writes: LessonWrites,
   lessons: readonly string[],
   existing: readonly MemoryEntry[] | undefined,
 ): Promise<Set<string>> {
-  return storedTextKeys(existing ?? await writes.textsHoldingWords(ctx.tenantId, lessons.map(longestWord), personalScopeOf(ctx.actor)));
+  return storedTextKeys(
+    existing ?? (await writes.textsHoldingWords(ctx.tenantId, lessons.map(longestWord), personalScopeOf(ctx.actor))),
+  );
 }
 
-async function writeLessons(ctx: StoreContext, lessons: readonly string[], opts: LearnOpts, config: HippoConfig): Promise<LessonCounts> {
+interface LessonMemoryInputs {
+  readonly tenantId: string;
+  readonly config: HippoConfig;
+  readonly fitSource: ReturnType<typeof schemaFitSourceOf> | undefined;
+  readonly pathTags: readonly string[];
+}
+
+function newLessonMemory(lesson: string, profile: LearnProfile, inputs: LessonMemoryInputs): MemoryEntry {
+  const { tenantId, config, fitSource, pathTags } = inputs;
+  const entry = createMemory(lesson, {
+    layer: Layer.Episodic,
+    tags: [...profile.tags],
+    source: profile.source,
+    confidence: 'observed',
+    schema_fit: fitSource && schemaFitFrom(lesson, [...profile.tags], fitSource),
+    tenantId,
+    baseHalfLifeDays: config.defaultHalfLifeDays,
+  });
+  for (const tag of pathTags) if (!entry.tags.includes(tag)) entry.tags.push(tag);
+  return entry;
+}
+
+async function writeLessons(
+  ctx: StoreContext,
+  lessons: readonly string[],
+  opts: LearnOpts,
+  config: HippoConfig,
+): Promise<LessonCounts> {
   const { tenantId } = ctx;
   const { profile } = opts;
   const store = ctx.store;
   const writes = requireGroup(store, 'lessonWrites');
-  // `hippo init` calls this outside any request, so the batch brings its own scope: every read and write below shares one handle.
+  // `hippo init` calls this outside any request, so the batch brings its own scope: every read and write below shares
+  // one handle.
   return runWithRequestStores(async () => {
-    // One read serves the batch: invalidation matches against `live`, which follows every write below, as a reload per lesson did.
+    // One read serves the batch: invalidation matches against `live`, which follows every write below, as a reload per
+    // lesson did.
     const live = profile.full ? await writes.tenantEntries(tenantId) : [];
-    // Schema fit needs every row; without it, only rows holding a lesson's longest word can be its copy. Learn is host-admin only, so
-    // both read what an admin can.
+    // Schema fit needs every row; without it, only rows holding a lesson's longest word can be its copy. Learn is
+    // host-admin only, so both read what an admin can.
     const existing = profile.full ? live.filter((e) => e.scope == null || canReadScope(ctx.actor, e.scope)) : undefined;
     // Each lesson is scored against `existing` as it was before the batch, so its tag counts and texts are read once.
     const fitSource = existing && schemaFitSourceOf(existing);
@@ -137,16 +186,7 @@ async function writeLessons(ctx: StoreContext, lessons: readonly string[], opts:
         const { invalidated } = await invalidateMatchingAmong(store, live, target, tenantId);
         if (invalidated > 0) batch.counts.invalidations.push({ from: target.from, count: invalidated });
       }
-      const entry = createMemory(lesson, {
-        layer: Layer.Episodic,
-        tags: [...profile.tags],
-        source: profile.source,
-        confidence: 'observed',
-        schema_fit: fitSource && schemaFitFrom(lesson, [...profile.tags], fitSource),
-        tenantId,
-        baseHalfLifeDays: config.defaultHalfLifeDays,
-      });
-      for (const tag of pathTags) if (!entry.tags.includes(tag)) entry.tags.push(tag);
+      const entry = newLessonMemory(lesson, profile, { tenantId, config, fitSource, pathTags });
       queue.push({ entry, key });
       if (profile.full) live.push(entry);
       batch.keys.add(key);
@@ -158,7 +198,12 @@ async function writeLessons(ctx: StoreContext, lessons: readonly string[], opts:
 
 export type { InvalidationOptions, InvalidationResult, InvalidationTarget };
 
-/** `hippo invalidate`: weakens the caller's tenant's memories that reference `target.from`, or only the one `options.onlyId` names. */
-export function invalidateMemories(ctx: Context, target: InvalidationTarget, options: InvalidationOptions): InvalidationResult {
+/** `hippo invalidate`: weakens the caller's tenant's memories that reference `target.from`, or only the one
+ * `options.onlyId` names. */
+export function invalidateMemories(
+  ctx: Context,
+  target: InvalidationTarget,
+  options: InvalidationOptions,
+): InvalidationResult {
   return invalidateMatching(ctx.hippoRoot, target, ctx.tenantId, options);
 }

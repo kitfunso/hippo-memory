@@ -1,23 +1,42 @@
-// Save, close, load-by-id and list for every typed object: the checks, the mirror memory and the error text, over the `objects` store group.
-// Each flow runs once, over the `objects` group of whatever store the caller holds: the CLI's, a served one, or a test's.
-// The tenant, the fields and the list status are checked first, so a bad request fails before a store is asked.
+// Save, close, load-by-id and list for every typed object: the checks, the mirror memory and the error text, over the
+// `objects` store group. Each flow runs once, over the `objects` group of whatever store the caller holds: the CLI's, a
+// served one, or a test's. The tenant, the fields and the list status are checked first, so a bad request fails before
+// a store is asked.
 
 import { DEFAULT_LIST_LIMIT } from '../util/limits.js';
 import { BadRequestError, ConflictError, NotFoundError } from '../core/api-errors.js';
 import { loadConfig } from '../core/config.js';
 import { createMemory, Layer, type MemoryEntry } from '../core/memory.js';
 import type { ObjectByKind, ObjectKind, SavableKind } from '../core/object-types.js';
-import { isObjectRefusal, type ObjectClose, type ObjectListQuery, type ObjectRefusal, type Objects, type ObjectSave } from '../store/port.js';
+import {
+  isObjectRefusal,
+  type ObjectClose,
+  type ObjectListQuery,
+  type ObjectRefusal,
+  type Objects,
+  type ObjectSave,
+} from '../store/port.js';
 import { assertTenantId } from '../store/tenant.js';
 import type { ObjectDescriptor, ObjectDraft, ObjectListOpts, SavableDescriptor } from './descriptor.js';
 
 /** An empty status or filter lists every row, as an absent one does. */
-function listQuery<K extends ObjectKind>(d: ObjectDescriptor<K>, tenantId: string, opts: ObjectListOpts<K>): ObjectListQuery<K> {
+function listQuery<K extends ObjectKind>(
+  d: ObjectDescriptor<K>,
+  tenantId: string,
+  opts: ObjectListOpts<K>,
+): ObjectListQuery<K> {
   assertTenantId(d.fn.list, tenantId);
   if (opts.status && !d.states.has(opts.status)) {
-    throw new BadRequestError(`${d.fn.list}: status must be one of ${Array.from(d.states).join('|')}; got ${opts.status}`);
+    throw new BadRequestError(
+      `${d.fn.list}: status must be one of ${Array.from(d.states).join('|')}; got ${opts.status}`,
+    );
   }
-  return { status: opts.status || undefined, filter: opts.filter || undefined, limit: opts.limit ?? DEFAULT_LIST_LIMIT, after: opts.after };
+  return {
+    status: opts.status || undefined,
+    filter: opts.filter || undefined,
+    limit: opts.limit ?? DEFAULT_LIST_LIMIT,
+    after: opts.after,
+  };
 }
 
 /** Newest first. */
@@ -45,9 +64,16 @@ function closing<K extends ObjectKind>(d: ObjectDescriptor<K>, tenantId: string,
   return { from: d.closableFrom, actor, at: new Date().toISOString() };
 }
 
-function closed<K extends ObjectKind>(d: ObjectDescriptor<K>, tenantId: string, id: number, written: ObjectByKind[K] | ObjectRefusal): ObjectByKind[K] {
+function closed<K extends ObjectKind>(
+  d: ObjectDescriptor<K>,
+  tenantId: string,
+  id: number,
+  written: ObjectByKind[K] | ObjectRefusal,
+): ObjectByKind[K] {
   if (!isObjectRefusal(written)) return written;
-  if (written.refused === 'missing') throw new NotFoundError(`${d.fn.close}: ${d.label} ${id} not found for tenant ${tenantId}`);
+  if (written.refused === 'missing') {
+    throw new NotFoundError(`${d.fn.close}: ${d.label} ${id} not found for tenant ${tenantId}`);
+  }
   if (written.refused !== 'status') throw new NotFoundError(`${d.fn.close}: ${d.label} ${id} not found after UPDATE`);
   const closable = d.closableFrom.join(' or ');
   throw new ConflictError(
@@ -93,7 +119,14 @@ export interface ObjectSaveSite {
 
 function objectSave<K extends SavableKind>(site: ObjectSaveSite, kind: K, draft: ObjectDraft<K>): ObjectSave<K> {
   const mirror = objectMirror(site.hippoRoot, site.tenantId, kind, draft);
-  return { mirror, fields: draft.fields, supersedesId: draft.supersedesId, changeSummary: draft.changeSummary, actor: site.actor, at: draft.at };
+  return {
+    mirror,
+    fields: draft.fields,
+    supersedesId: draft.supersedesId,
+    changeSummary: draft.changeSummary,
+    actor: site.actor,
+    at: draft.at,
+  };
 }
 
 function saved<K extends SavableKind, W>(
@@ -107,9 +140,13 @@ function saved<K extends SavableKind, W>(
     case 'missing':
       throw new NotFoundError(`${d.fn.save}: ${d.label} ${replaced} to supersede not found for tenant ${tenantId}`);
     case 'status':
-      throw new ConflictError(`${d.fn.save}: ${d.label} ${replaced} is not active (status='${written.status}'); only active ${d.plural} can be superseded.`);
+      throw new ConflictError(
+        `${d.fn.save}: ${d.label} ${replaced} is not active (status='${written.status}'); only active ${d.plural} can be superseded.`,
+      );
     case 'raced':
-      throw new ConflictError(`${d.fn.save}: ${d.label} ${replaced} could not be superseded (no longer active or self-reference).`);
+      throw new ConflictError(
+        `${d.fn.save}: ${d.label} ${replaced} could not be superseded (no longer active or self-reference).`,
+      );
     case 'vanished':
       throw new Error(`${d.fn.save}: failed to reload saved ${d.label} row`);
   }
@@ -124,5 +161,10 @@ export async function saveObject<K extends SavableKind, W>(
 ): Promise<ObjectByKind[K]> {
   assertTenantId(d.fn.save, site.tenantId);
   const draft = d.draft(opts);
-  return saved(d, site.tenantId, draft.supersedesId, await objects.saveObject(site.tenantId, d.kind, objectSave(site, d.kind, draft)));
+  return saved(
+    d,
+    site.tenantId,
+    draft.supersedesId,
+    await objects.saveObject(site.tenantId, d.kind, objectSave(site, d.kind, draft)),
+  );
 }

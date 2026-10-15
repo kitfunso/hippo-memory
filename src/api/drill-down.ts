@@ -14,17 +14,30 @@ const DEFAULT_DRILL_DOWN_LIMIT = 50;
 export interface DrillDownOpts {
   /** Cap on number of children returned. Default 50. */
   limit?: number;
-  /** Token budget: children append in created order until the next would exceed it (cost: printed line under `cost`, else ceil(content.length / 4)).
-   * For depth > 1 the budget is global and cumulative, not per level. */
+  /** Token budget: children append in created order until the next would exceed it (cost: printed line under `cost`,
+   * else ceil(content.length / 4)). For depth > 1 the budget is global and cumulative, not per level. */
   budget?: number;
-  /** Levels to walk down (default 1 = direct children); capped at 10 internally. BFS dedups with a visited Set, defensive against shared-child anomalies. */
+  /** Levels to walk down (default 1 = direct children); capped at 10 internally. BFS dedups with a visited Set,
+   * defensive against shared-child anomalies. */
   depth?: number;
   cost?: DrillDownCost;
   project?: CallerProject;
 }
 
-export interface DrillDownSummary { id: string; content: string; descendantCount: number; earliestAt: string | null; latestAt: string | null }
-export interface DrillDownChild { id: string; content: string; layer: string; dagLevel: number; created: string }
+export interface DrillDownSummary {
+  id: string;
+  content: string;
+  descendantCount: number;
+  earliestAt: string | null;
+  latestAt: string | null;
+}
+export interface DrillDownChild {
+  id: string;
+  content: string;
+  layer: string;
+  dagLevel: number;
+  created: string;
+}
 
 // Absent, the budget pays for child content alone. `fixed` gets the largest child count the heading can print.
 export interface DrillDownCost {
@@ -39,16 +52,17 @@ export interface DrillDownResult {
   truncated: boolean;
 }
 
-/** `not_found` covers missing, wrong-tenant AND scope-blocked, because distinguishing scope_blocked leaked private-row existence to no-scope callers.
- *  `not_drillable`: the id is a leaf row (level 0/1), which the caller can act on. */
+/** `not_found` covers missing, wrong-tenant AND scope-blocked, because distinguishing scope_blocked leaked private-row
+ * existence to no-scope callers. `not_drillable`: the id is a leaf row (level 0/1), which the caller can act on. */
 export interface DrillDownFailure {
   failure: 'not_found' | 'not_drillable';
 }
 
 export type DrillDownOutcome = DrillDownResult | DrillDownFailure;
 
-/** One step down the DAG from a level-2+ summary to its direct children (the way back from `recall(... summarizeOverflow: true)` substitutions). Only
- * `ctx.tenantId` summaries are reachable; children get recall's scope filter. Returns `DrillDownResult` or `{failure}`; HTTP maps `not_drillable` to 422. */
+/** One step down the DAG from a level-2+ summary to its direct children (the way back from `recall(...
+ * summarizeOverflow: true)` substitutions). Only `ctx.tenantId` summaries are reachable; children get recall's scope
+ * filter. Returns `DrillDownResult` or `{failure}`; HTTP maps `not_drillable` to 422. */
 export async function drillDown(
   ctx: StoreContext,
   summaryId: string,
@@ -83,7 +97,11 @@ function isDrillable(row: MemoryEntry): boolean {
   return (row.dag_level ?? 0) >= 2;
 }
 
-function drillResult({ summary, levels, sizes: counted }: SummaryDescendants, opts: DrillDownOpts, limit: number): DrillDownResult {
+function drillResult(
+  { summary, levels, sizes: counted }: SummaryDescendants,
+  opts: DrillDownOpts,
+  limit: number,
+): DrillDownResult {
   const collected = levels.flat();
   const sizes = counted ?? levels.map((level) => level.length);
   const total = sizes.reduce((sum, n) => sum + n, 0);

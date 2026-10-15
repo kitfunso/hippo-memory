@@ -58,7 +58,8 @@ export interface AssembleResult {
   sessionId: string;
   items: AssembledContextItem[];
   tokens: number;
-  /** Tenant + scope-filtered raw row count, uncapped by `rowCap`, so "session has N msgs" stays accurate for a windowed items[]. */
+  /** Tenant + scope-filtered raw row count, uncapped by `rowCap`, so "session has N msgs" stays accurate for a windowed
+   * items[]. */
   totalRaw: number;
   summarized: number;
   evicted: number;
@@ -66,7 +67,8 @@ export interface AssembleResult {
   truncated: boolean;
 }
 
-/** Chronological context window for a session; over budget, evicts the lowest-strength non-fresh-tail item first (fresh tail is never evicted).
+/** Chronological context window for a session; over budget, evicts the lowest-strength non-fresh-tail item first (fresh
+ *  tail is never evicted).
  * Returns `items: []` for an empty sessionId, no raws, or when every row fails the scope/tenant filter. */
 export async function assemble(
   ctx: StoreContext,
@@ -119,7 +121,12 @@ interface ScopedRaws {
   truncated: boolean;
 }
 
-async function loadScopedRaws(ctx: StoreContext, sessionId: string, opts: AssembleOpts, own: string | undefined): Promise<ScopedRaws> {
+async function loadScopedRaws(
+  ctx: StoreContext,
+  sessionId: string,
+  opts: AssembleOpts,
+  own: string | undefined,
+): Promise<ScopedRaws> {
   const rowCap = opts.rowCap ?? DEFAULT_ROW_CAP;
   const origins = opts.project ? projectNames(opts.project) : undefined;
   const dag = requireGroup(ctx.store, 'dagReads');
@@ -133,7 +140,13 @@ async function loadScopedRaws(ctx: StoreContext, sessionId: string, opts: Assemb
   if (truncated) {
     // The COUNT applies the same default-deny scope rule in SQL, so a no-scope
     // caller cannot infer private rows by comparing totalRaw to items.length.
-    totalRaw = await dag.sessionRawCount({ tenantId: ctx.tenantId, sessionId, scope: opts.scope, ownScope: own, origins });
+    totalRaw = await dag.sessionRawCount({
+      tenantId: ctx.tenantId,
+      sessionId,
+      scope: opts.scope,
+      ownScope: own,
+      origins,
+    });
   } else {
     totalRaw = scoped.length;
   }

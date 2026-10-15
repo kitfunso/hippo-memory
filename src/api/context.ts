@@ -22,7 +22,13 @@ import { isSharedStore, loadConfig } from '../core/config.js';
 import { rethrowIfSqliteBlocked } from '../util/sqlite-blocked.js';
 import { errorMessage, log } from '../util/log.js';
 import {
-  resolveProjectIdentity, classifyOriginProject, isGlobalStoreRoot, isInitialized, projectId, projectNames, type ProjectRef,
+  resolveProjectIdentity,
+  classifyOriginProject,
+  isGlobalStoreRoot,
+  isInitialized,
+  projectId,
+  projectNames,
+  type ProjectRef,
 } from '../core/project-identity.js';
 import { promptTokens } from '../core/prompt-recall.js';
 import { detectSecret } from '../util/secret-detect.js';
@@ -46,8 +52,9 @@ import { type Context, type StoreContext, ownerOrSubject } from './types.js';
 
 export { oneCopyPerMemory } from './context-select.js';
 
-/** The single ambient-injection admission policy, shared by getContext and the CLI ambient-state summary so they cannot drift.
- * Secret veto is unconditional (flagged rows inject only in their own project); private scopes need `exactScope`, other projects `includeCrossProject`. */
+/** The single ambient-injection admission policy, shared by getContext and the CLI ambient-state summary so they cannot
+ * drift. Secret veto is unconditional (flagged rows inject only in their own project); private scopes need
+ * `exactScope`, other projects `includeCrossProject`. */
 function ambientAdmitEntry(
   e: MemoryEntry,
   currentProject: ProjectRef,
@@ -61,7 +68,8 @@ function ambientAdmitEntry(
   return classifyOriginProject(e.origin_project, currentProject) !== 'cross-project';
 }
 
-/** The secret half of the ambient policy alone, for callers with their own scope rule: a flagged row is admitted only inside its owning project. */
+/** The secret half of the ambient policy alone, for callers with their own scope rule: a flagged row is admitted only
+ * inside its owning project. */
 export function ambientSecretAdmit(e: MemoryEntry, currentProject: ProjectRef): boolean {
   if (!detectSecret(e).flagged) return true;
   const origin = e.origin_project;
@@ -94,7 +102,8 @@ function sourceOf(store: HippoStore): ContextSource {
   return { store, reads: requireGroup(store, 'contextReads') };
 }
 
-/** What one store's ambient read is asked for. `recent`, `recall` and `onQualityDrop` apply to the pinned-only branch alone. */
+/** What one store's ambient read is asked for. `recent`, `recall` and `onQualityDrop` apply to the pinned-only branch
+ * alone. */
 interface LoadAmbientEntriesOptions {
   readonly pinnedOnly: boolean;
   readonly recent: RecentRequest;
@@ -107,7 +116,11 @@ interface LoadAmbientEntriesOptions {
 }
 
 // The pinned-only branch needs pins and recent-N candidates, not the corpus.
-async function loadAmbientEntries(source: ContextSource, tenantId: string, options: LoadAmbientEntriesOptions): Promise<AmbientLoadResult> {
+async function loadAmbientEntries(
+  source: ContextSource,
+  tenantId: string,
+  options: LoadAmbientEntriesOptions,
+): Promise<AmbientLoadResult> {
   const { pinnedOnly, recent, admit, recheck, window, recall, onQualityDrop } = options;
   const ownTenant = (e: MemoryEntry): boolean => e.tenant_id === tenantId;
   if (!pinnedOnly) {
@@ -132,8 +145,14 @@ async function loadAmbientEntries(source: ContextSource, tenantId: string, optio
     onQualityDrop?.(e);
     return false;
   };
-  const loaded = await source.reads.ambientCandidates(tenantId, { recentNeeded: recent.needed, admit: admitAmbient, recall, origins: recent.origins });
-  // Pins and recent rows reach core only through the store's own call to admit, so core applies it again with the tenant.
+  const loaded = await source.reads.ambientCandidates(tenantId, {
+    recentNeeded: recent.needed,
+    admit: admitAmbient,
+    recall,
+    origins: recent.origins,
+  });
+  // Pins and recent rows reach core only through the store's own call to admit, so core applies it again with the
+  // tenant.
   const entries = loaded.entries.filter((e) => ownTenant(e) && recheck(e));
   return loaded.recall ? { entries, recall: loaded.recall.filter(ownTenant) } : { entries };
 }
@@ -147,8 +166,9 @@ interface TaskSections {
   left: number;
 }
 
-/** Assembles a budget-bounded, tenant-scoped context bundle; mutates `last_retrieval_ids` and emits a 'recall' audit row for non-pinned, non-'*' queries.
- * Returns an empty result when there are no memories, snapshot, handoff or recent events. CLI rendering stays in `cli.ts`. */
+/** Assembles a budget-bounded, tenant-scoped context bundle; mutates `last_retrieval_ids` and emits a 'recall' audit
+ * row for non-pinned, non-'*' queries. Returns an empty result when there are no memories, snapshot, handoff or recent
+ * events. CLI rendering stays in `cli.ts`. */
 export async function getContext(
   ctx: StoreContext,
   opts: ContextOpts = {},
@@ -164,7 +184,7 @@ export async function getContext(
   const admission = ambientAdmission(opts, plan, sections.shownHandoff);
   const pools = await loadPools(ctx, plan, admission, promptRecallRequest(opts, plan));
   const noSections = !sections.shownSnapshot && !sections.shownHandoff && sections.shownEvents.length === 0;
-  if (!plan.promptRecallPending && pools.local.entries.length === 0 && pools.global.entries.length === 0 && noSections) {
+  if (nothingToInject(plan, pools, noSections)) {
     return { entries: [], tokens: 0 };
   }
 
@@ -200,13 +220,24 @@ export async function getContext(
   };
 }
 
+type AmbientPools = Awaited<ReturnType<typeof loadPools>>;
+
+function nothingToInject(plan: ContextPlan, pools: AmbientPools, noSections: boolean): boolean {
+  return (
+    !plan.promptRecallPending && pools.local.entries.length === 0 && pools.global.entries.length === 0 && noSections
+  );
+}
+
 const isolationWarned = new Set<string>();
 
-/** A laptop config copied onto a team store must not open every member's rows to every prompt, so the flag loses there. */
+/** A laptop config copied onto a team store must not open every member's rows to every prompt, so the flag loses
+ * there. */
 function warnIsolationIgnored(hippoRoot: string): void {
   if (isolationWarned.has(hippoRoot)) return;
   isolationWarned.add(hippoRoot);
-  log.warn(`${hippoRoot}: "contextProjectIsolation": false is ignored on a shared store; a read opts in with cross_project.`);
+  log.warn(
+    `${hippoRoot}: "contextProjectIsolation": false is ignored on a shared store; a read opts in with cross_project.`,
+  );
 }
 
 /** Which stores this read can draw on, and what kind the primary one is. */
@@ -225,9 +256,16 @@ function storesInReach(ctx: Context, opts: ContextOpts, local: ContextSource) {
 
 /** Prices one entry against the budget: the caller's cost model when it gave one, else a token estimate. */
 function entryPricer(cost: ContextOpts['cost'], currentProject: ContextPlan['currentProject']): ContextPlan['price'] {
-  return (entry: MemoryEntry, isGlobal: boolean, promptRecall?: boolean): number => cost
-    ? cost.entry({ entry, isGlobal, promptRecall, origin: entry.origin_project ?? null, category: classifyOriginProject(entry.origin_project, currentProject) })
-    : estimateTokens(entry.content);
+  return (entry: MemoryEntry, isGlobal: boolean, promptRecall?: boolean): number =>
+    cost
+      ? cost.entry({
+          entry,
+          isGlobal,
+          promptRecall,
+          origin: entry.origin_project ?? null,
+          category: classifyOriginProject(entry.origin_project, currentProject),
+        })
+      : estimateTokens(entry.content);
 }
 
 function planContext(ctx: Context, opts: ContextOpts, local: ContextSource): ContextPlan {
@@ -242,7 +280,9 @@ function planContext(ctx: Context, opts: ContextOpts, local: ContextSource): Con
   const currentProject =
     opts.currentProject ?? resolveProjectIdentity(process.cwd());
   // A caller with no project reads every row as its own; on a shared store those rows are other people's.
-  if (sharedStore && projectId(currentProject).trim() === '') throw new BadRequestError('a shared store needs the caller\'s project');
+  if (sharedStore && projectId(currentProject).trim() === '') {
+    throw new BadRequestError("a shared store needs the caller's project");
+  }
   if (sharedStore && !isolationEnabled) warnIsolationIgnored(ctx.hippoRoot);
   const includeCrossProject = opts.crossProject === true || (!isolationEnabled && !sharedStore);
 
@@ -285,7 +325,11 @@ function promptRecallRequest(opts: ContextOpts, plan: ContextPlan): AmbientRecal
     ? Array.from(promptTokens(opts.prompt ?? ''))
     : [];
   return promptRecallTerms.length > 0
-    ? { terms: promptRecallTerms, limit: Math.floor(finiteOr(pinnedInject.promptRecallCandidates, 100, 1)), ownScope: plan.ownScope }
+    ? {
+        terms: promptRecallTerms,
+        limit: Math.floor(finiteOr(pinnedInject.promptRecallCandidates, 100, 1)),
+        ownScope: plan.ownScope,
+      }
     : undefined;
 }
 
@@ -293,7 +337,11 @@ function promptRecallRequest(opts: ContextOpts, plan: ContextPlan): AmbientRecal
 function openBlockBudget(plan: ContextPlan, opts: ContextOpts, budget: number): number {
   const { config, cost, obs, pinnedOnly, promptRecallPending } = plan;
   const blockBudget = pinnedOnly && opts.budget === undefined ? config.pinnedInject.budget : budget;
-  obs?.facts({ projectName: projectId(plan.currentProject), budgetTokens: blockBudget, promptRecall: promptRecallPending });
+  obs?.facts({
+    projectName: projectId(plan.currentProject),
+    budgetTokens: blockBudget,
+    promptRecall: promptRecallPending,
+  });
   if (pinnedOnly && !config.pinnedInject.enabled) obs?.disabled();
   if (!pinnedOnly) obs?.queried(plan.query);
   return cost
@@ -317,7 +365,8 @@ const NO_TASK_STATE: RawTaskState = { snapshot: null, handoff: null, events: [] 
 async function loadRawTaskState(ctx: Context, opts: ContextOpts, plan: ContextPlan): Promise<RawTaskState> {
   if (!plan.hasLocalTaskState) return NO_TASK_STATE;
   const { store, reads } = plan.local;
-  // On a shared store task state is one person's, keyed by owner and project so it follows them into their next session.
+  // On a shared store task state is one person's, keyed by owner and project so it follows them into their next
+  // session.
   const key: ContinuityKey | null = plan.sharedStore
     ? { owner: ownerOrSubject(ctx.actor), project: projectNames(plan.currentProject) }
     : null;
@@ -327,11 +376,21 @@ async function loadRawTaskState(ctx: Context, opts: ContextOpts, plan: ContextPl
   // The block's handoff and events are the raw snapshot's session's, so they stand only while that snapshot is fresh.
   if (snapshot?.session_id) return { snapshot, handoff: block.sessionHandoff, events: block.recentSessionEvents };
   // An unfinished handoff's scope is admitted in the read, so a newer denied row can't hide an older eligible one.
-  return { snapshot, handoff: await reads.unfinishedHandoff(ctx.tenantId, SNAPSHOT_AMBIENT_MAX_AGE_MS, key), events: [] };
+  return {
+    snapshot,
+    handoff: await reads.unfinishedHandoff(ctx.tenantId, SNAPSHOT_AMBIENT_MAX_AGE_MS, key),
+    events: [],
+  };
 }
 
-// Sections print ahead of the memories, so they are paid first; one that does not fit is dropped, as an oversize entry is.
-async function loadTaskSections(ctx: Context, opts: ContextOpts, plan: ContextPlan, startLeft: number): Promise<TaskSections> {
+// Sections print ahead of the memories, so they are paid first; one that does not fit is dropped, as an oversize entry
+// is.
+async function loadTaskSections(
+  ctx: Context,
+  opts: ContextOpts,
+  plan: ContextPlan,
+  startLeft: number,
+): Promise<TaskSections> {
   const { exactScope, ownScope, cost } = plan;
   let left = startLeft;
   const pays = (tokens: number): boolean => {
@@ -342,15 +401,20 @@ async function loadTaskSections(ctx: Context, opts: ContextOpts, plan: ContextPl
   const rowScope = (r: { scope?: string | null } | null | undefined): string | null => r?.scope ?? null;
   const raw = await loadRawTaskState(ctx, opts, plan);
   // The same envelope rule ambientAdmitEntry applies to memory rows.
-  const activeSnapshot = raw.snapshot && passesScopeFilterForRecall(rowScope(raw.snapshot), exactScope, ownScope) ? raw.snapshot : null;
-  const sessionHandoff = raw.handoff && passesScopeFilterForRecall(rowScope(raw.handoff), exactScope, ownScope) ? raw.handoff : null;
+  const activeSnapshot =
+    raw.snapshot && passesScopeFilterForRecall(rowScope(raw.snapshot), exactScope, ownScope) ? raw.snapshot : null;
+  const sessionHandoff =
+    raw.handoff && passesScopeFilterForRecall(rowScope(raw.handoff), exactScope, ownScope) ? raw.handoff : null;
   const recentSessionEvents = raw.events.filter((e) => passesScopeFilterForRecall(rowScope(e), exactScope, ownScope));
   const shownSnapshot = activeSnapshot && (!cost || pays(cost.snapshot(activeSnapshot))) ? activeSnapshot : null;
   const shownHandoff = sessionHandoff && (!cost || pays(cost.handoff(sessionHandoff))) ? sessionHandoff : null;
-  const shownEvents = recentSessionEvents.length > 0 && (!cost || pays(cost.trail(recentSessionEvents))) ? recentSessionEvents : [];
+  const shownEvents =
+    recentSessionEvents.length > 0 && (!cost || pays(cost.trail(recentSessionEvents))) ? recentSessionEvents : [];
   plan.obs?.sections(
     Number(shownSnapshot !== null) + Number(shownHandoff !== null) + Number(shownEvents.length > 0),
-    Number(activeSnapshot !== shownSnapshot) + Number(sessionHandoff !== shownHandoff) + Number(recentSessionEvents.length !== shownEvents.length),
+    Number(activeSnapshot !== shownSnapshot) +
+      Number(sessionHandoff !== shownHandoff) +
+      Number(recentSessionEvents.length !== shownEvents.length),
   );
   return { activeSnapshot, shownSnapshot, shownHandoff, shownEvents, left };
 }
@@ -359,7 +423,13 @@ function ambientAdmission(opts: ContextOpts, plan: ContextPlan, shownHandoff: Se
   const transcriptHandoffSession = shownHandoff?.evidence?.derivedFrom === 'transcript' ? shownHandoff.sessionId : null;
   const ambientAdmit = (e: MemoryEntry): boolean => {
     // A printed handoff already carries the session's closing message, which its digest would print a second time.
-    if (transcriptHandoffSession !== null && e.source_session_id === transcriptHandoffSession && isSessionDigestRow(e)) return false;
+    if (
+      transcriptHandoffSession !== null &&
+      e.source_session_id === transcriptHandoffSession &&
+      isSessionDigestRow(e)
+    ) {
+      return false;
+    }
     return ambientAdmitEntry(e, plan.currentProject, plan.includeCrossProject, plan.exactScope, plan.ownScope);
   };
   const ownSessionId = opts.currentSessionId || '';
@@ -368,14 +438,16 @@ function ambientAdmission(opts: ContextOpts, plan: ContextPlan, shownHandoff: Se
     ownSessionId !== '' &&
     e.source_session_id === ownSessionId &&
     e.tags.includes(COMPACTION_MEMORY_TAG);
-  // Superseded rows never inject; which rows reach ambientAdmitEntry matters because it regex-scans content for secrets.
+  // Superseded rows never inject; which rows reach ambientAdmitEntry matters because it regex-scans content for
+  // secrets.
   const admit = (e: MemoryEntry): boolean => !e.superseded_by && !isOwnCompactionItem(e) && ambientAdmit(e);
   // The two-store search has always ranked a session's own compaction items; only the local search drops them.
   const bothStoresAdmit = (e: MemoryEntry): boolean => !e.superseded_by && ambientAdmit(e);
   return { ambientAdmit, admit, bothStoresAdmit };
 }
 
-/** Origins the recent backfill may read past its first window; on a shared store, only the caller's own project rows. */
+/** Origins the recent backfill may read past its first window; on a shared store, only the caller's own project
+ * rows. */
 function recentOrigins(plan: ContextPlan): RecentOrigins | undefined {
   if (plan.sharedStore) return { names: projectNames(plan.currentProject).filter((n) => n !== ''), userGlobal: false };
   return plan.originProject && { names: plan.originProject, userGlobal: true };
@@ -411,9 +483,13 @@ async function loadPools(
   const local: AmbientLoadResult = plan.hasLocal
     ? await loadAmbientEntries(plan.local, ctx.tenantId, { ...read, onQualityDrop: qualityDrop(primaryIsGlobal) })
     : { entries: [] };
-  const global: AmbientLoadResult = hasGlobal && !primaryIsGlobal
-    ? await loadAmbientEntries(sourceOf(sqliteStore(plan.globalRoot)), ctx.tenantId, { ...read, onQualityDrop: qualityDrop(true) })
-    : { entries: [] };
+  const global: AmbientLoadResult =
+    hasGlobal && !primaryIsGlobal
+      ? await loadAmbientEntries(sourceOf(sqliteStore(plan.globalRoot)), ctx.tenantId, {
+          ...read,
+          onQualityDrop: qualityDrop(true),
+        })
+      : { entries: [] };
   return { local, global };
 }
 
@@ -437,12 +513,14 @@ function finalizeSelection(picked: ContextResultEntry[], plan: ContextPlan): Fin
     obs?.dropMissing(selected.map((r) => r.entry), cut.map((r) => r.entry), 'limit', 'limit');
     selected = cut;
   }
-  const heldDropped = dropHeldCopies(selected, (r) => r.entry); // after the last cut, so a merged row that was cut hides nothing
+  // After the last cut, so a merged row that was cut hides nothing.
+  const heldDropped = dropHeldCopies(selected, (r) => r.entry);
   obs?.dropMissing(selected.map((r) => r.entry), heldDropped.map((r) => r.entry), 'limit', 'duplicate');
   selected = heldDropped;
   const tokens = selected.reduce((sum, r) => sum + r.tokens, 0);
 
-  // Every returned entry carries its origin and how it relates to the active project, so renderers can mark cross-project rows.
+  // Every returned entry carries its origin and how it relates to the active project, so renderers can mark
+  // cross-project rows.
   selected = selected.map((r) => ({
     ...r,
     origin: r.entry.origin_project ?? null,

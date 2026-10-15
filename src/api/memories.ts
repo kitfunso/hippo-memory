@@ -13,7 +13,8 @@ export async function getMemory(ctx: StoreContext, id: string): Promise<MemoryEn
   return entry ?? null;
 }
 
-/** getMemory, but NotFound when the row is another person's personal one, so the reply does not reveal that the id exists. */
+/** getMemory, but NotFound when the row is another person's personal one, so the reply does not reveal that the id
+ * exists. */
 export async function getTouchableMemory(ctx: StoreContext, id: string): Promise<MemoryEntry | null> {
   const entry = await getMemory(ctx, id);
   if (!canTouchScope(ctx.actor, entry?.scope ?? null)) throw new NotFoundError(`Memory not found: ${id}`);
@@ -24,7 +25,8 @@ export interface MemoryStatus extends StrengthTallies {
   openConflicts: number;
 }
 
-/** Tenant-wide counts behind the status verbs: strength tallies at `now` (at risk is under `atRiskBelow`) and open conflicts. */
+/** Tenant-wide counts behind the status verbs: strength tallies at `now` (at risk is under `atRiskBelow`) and open
+ * conflicts. */
 export function getMemoryStatus(ctx: Context, now: Date, atRiskBelow: number): MemoryStatus {
   return {
     ...loadStrengthTallies(ctx.hippoRoot, ctx.tenantId, now, atRiskBelow),

@@ -1,6 +1,7 @@
-// The local remember pipeline for a caller in this process (`hippo remember`, `hippo watch`): schema fit, the salience gate, the
-// write, the read-back, the `remembered` counter and the embedding kick-off, in that order. Fact extraction is a second step,
-// which the caller runs after it has reported the write. Nothing here prints; the caller reports from what comes back.
+// The local remember pipeline for a caller in this process (`hippo remember`, `hippo watch`): schema fit, the salience
+// gate, the write, the read-back, the `remembered` counter and the embedding kick-off, in that order. Fact extraction
+// is a second step, which the caller runs after it has reported the write. Nothing here prints; the caller reports from
+// what comes back.
 
 import { loadConfig } from '../core/config.js';
 import type { ConfidenceLevel, Layer, MemoryEntry, MemoryKind } from '../core/memory.js';
@@ -20,7 +21,8 @@ export interface LocalRememberInput {
   readonly content: string;
   /** Every tag the row stores; the salience gate reads these. */
   readonly tags: readonly string[];
-  /** The tags schema fit is scored on, for a caller that added path and scope tags of its own to `tags`; without it, `tags`. */
+  /** The tags schema fit is scored on, for a caller that added path and scope tags of its own to `tags`; without it,
+   * `tags`. */
   readonly fitTags?: readonly string[];
   readonly kind?: MemoryKind;
   readonly scope?: string;
@@ -40,17 +42,25 @@ export interface StartedWeak {
   readonly strength: number;
 }
 
-/** `stored` carries the row as the store holds it after the write, and `embedding`, which settles with whether the row reached the vector index
- *  (a caller may ignore it; a failure is also logged). `skipped` is the gate dropping the write, with nothing stored or counted. */
+/** `stored` carries the row as the store holds it after the write, and `embedding`, which settles with whether the row
+ * reached the vector index (a caller may ignore it; a failure is also logged). `skipped` is the gate dropping the
+ * write, with nothing stored or counted. */
 export type LocalRememberOutcome =
-  | { readonly status: 'stored'; readonly entry: MemoryEntry; readonly embedding: Promise<EmbedOutcome>; readonly startedWeak?: StartedWeak }
+  | {
+      readonly status: 'stored';
+      readonly entry: MemoryEntry;
+      readonly embedding: Promise<EmbedOutcome>;
+      readonly startedWeak?: StartedWeak;
+    }
   | { readonly status: 'skipped'; readonly reason: string; readonly score: number };
 
-/** The gate's verdict on one write, or null where it does not judge: the store has it off, or the write is pinned or forced. */
+/** The gate's verdict on one write, or null where it does not judge: the store has it off, or the write is pinned or
+ * forced. */
 function salienceVerdict(ctx: StoreContext, input: LocalRememberInput): SalienceResult | null {
   const { salience } = loadConfig(ctx.hippoRoot);
   if (!salience.enabled || input.pinned || input.force) return null;
-  // computeSalience compares against the last `recentWindow` rows only; below 1 its slice takes every row, so that case still loads them all.
+  // computeSalience compares against the last `recentWindow` rows only; below 1 its slice takes every row, so that case
+  // still loads them all.
   const window = Math.trunc(salience.recentWindow);
   const recent = Number.isSafeInteger(window) && window >= 1
     ? loadNewestEntries(ctx.hippoRoot, ctx.tenantId, window)
@@ -63,29 +73,35 @@ function salienceVerdict(ctx: StoreContext, input: LocalRememberInput): Salience
   });
 }
 
-/** The row `remember` just wrote, as the store holds it: the report, the embedding and the extraction all work on that. */
+/** The row `remember` just wrote, as the store holds it: the report, the embedding and the extraction all work on
+ * that. */
 function storedEntry(ctx: StoreContext, id: string): MemoryEntry {
   const entry = readEntry(ctx.hippoRoot, id, ctx.tenantId);
   if (!entry) throw new Error(`memory ${id} was written but cannot be read back`);
   return entry;
 }
 
-/** Best-effort and slow (a model load or a network call), so the caller is not held for it; a row left out of the index is logged. */
+/** Best-effort and slow (a model load or a network call), so the caller is not held for it; a row left out of the index
+ * is logged. */
 function indexInBackground(hippoRoot: string, entry: MemoryEntry): Promise<EmbedOutcome> {
   return embedMemory(hippoRoot, entry).then((outcome) => {
     if (outcome === 'failed') {
-      log.warn(`memory ${entry.id} is stored but not in the vector index, so recall by meaning will miss it; run 'hippo embed' to index it`);
+      log.warn(
+        `memory ${entry.id} is stored but not in the vector index, so recall by meaning will miss it; run 'hippo embed' to index it`,
+      );
     }
     return outcome;
   });
 }
 
-/** One local write on hippo.db: gate, write, read-back, counter, then the embedding, started and never awaited. A refused value throws as `remember` does. */
+/** One local write on hippo.db: gate, write, read-back, counter, then the embedding, started and never awaited. A
+ * refused value throws as `remember` does. */
 export async function rememberLocally(ctx: StoreContext, input: LocalRememberInput): Promise<LocalRememberOutcome> {
   const schemaFit = schemaFitInStore(ctx.hippoRoot, ctx.tenantId, input.content, input.fitTags ?? input.tags);
   const verdict = salienceVerdict(ctx, input);
   if (verdict?.decision === 'skip') return { status: 'skipped', reason: verdict.reason, score: verdict.score };
-  const startedWeak = verdict?.decision === 'start_weak' ? { reason: verdict.reason, strength: verdict.score } : undefined;
+  const startedWeak =
+    verdict?.decision === 'start_weak' ? { reason: verdict.reason, strength: verdict.score } : undefined;
   const { id } = await remember(ctx, {
     content: input.content,
     kind: input.kind,
@@ -116,14 +132,20 @@ export interface FactExtractionRequest {
   readonly fetcher?: typeof fetch;
 }
 
-/** `off`: nobody asked. `no_key`: asked, with no key to call the model. `ran`: the facts the model gave and each reason it gave fewer. */
+/** `off`: nobody asked. `no_key`: asked, with no key to call the model. `ran`: the facts the model gave and each reason
+ * it gave fewer. */
 export type FactExtraction =
   | { readonly status: 'off' }
   | { readonly status: 'no_key' }
   | { readonly status: 'ran'; readonly facts: number; readonly failures: readonly string[] };
 
-/** Extracts facts from a row just stored and stores them beside it. Best-effort: a failure is named in the result, never thrown. */
-export async function extractRememberedFacts(ctx: StoreContext, entry: MemoryEntry, request: FactExtractionRequest): Promise<FactExtraction> {
+/** Extracts facts from a row just stored and stores them beside it. Best-effort: a failure is named in the result,
+ * never thrown. */
+export async function extractRememberedFacts(
+  ctx: StoreContext,
+  entry: MemoryEntry,
+  request: FactExtractionRequest,
+): Promise<FactExtraction> {
   const { extraction } = loadConfig(ctx.hippoRoot);
   if (!request.requested && extraction.enabled !== true) return { status: 'off' };
   const { apiKey, fetcher } = request;
@@ -133,7 +155,14 @@ export async function extractRememberedFacts(ctx: StoreContext, entry: MemoryEnt
   try {
     // Loaded on demand, so a write that extracts nothing does not pay for the module.
     const { extractFacts, storeExtractedFacts } = await import('../learn/extract.js');
-    const found = await extractFacts(entry.content, { apiKey, model: extraction.model, fetcher, onError: (msg) => { failures.push(msg); } });
+    const found = await extractFacts(entry.content, {
+      apiKey,
+      model: extraction.model,
+      fetcher,
+      onError: (msg) => {
+        failures.push(msg);
+      },
+    });
     if (found.length > 0) {
       storeExtractedFacts(ctx.hippoRoot, entry, found);
       facts = found.length;

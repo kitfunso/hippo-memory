@@ -4,7 +4,14 @@ import { stampOriginProject } from '../store/entry-row.js';
 import type { ConnectorEvent, ConnectorWrite, ConnectorWriteOutcome } from '../store/port.js';
 import { detectInstruction } from './instruction-detect.js';
 import { quarantineScopeFor } from '../trust/quarantine.js';
-import { createMemory, type ConfidenceLevel, type Layer, type MemoryEntry, type MemoryKind, type TraceOutcome } from '../core/memory.js';
+import {
+  createMemory,
+  type ConfidenceLevel,
+  type Layer,
+  type MemoryEntry,
+  type MemoryKind,
+  type TraceOutcome,
+} from '../core/memory.js';
 import { loadConfig } from '../core/config.js';
 import { vetSecrets } from '../util/secret-detect.js';
 import { assertCallerProject } from '../core/project-identity.js';
@@ -22,7 +29,8 @@ export interface RememberLocal {
   schemaFit?: number;
   traceOutcome?: TraceOutcome;
   sourceSessionId?: string | null;
-  /** A salience gate's start-weak verdict: the row starts at `strength`, and its half-life is multiplied by `halfLifeFactor`, never below one day. */
+  /** A salience gate's start-weak verdict: the row starts at `strength`, and its half-life is multiplied by
+   * `halfLifeFactor`, never below one day. */
   weaken?: { readonly strength: number; readonly halfLifeFactor: number };
 }
 
@@ -33,16 +41,19 @@ export interface RememberOpts {
   owner?: string;
   artifactRef?: string;
   tags?: string[];
-  /** The connector event this write answers. The store logs it in the memory's own transaction; an event logged before stores nothing and
-   * answers `duplicate`. */
+  /** The connector event this write answers. The store logs it in the memory's own transaction; an event logged before
+   * stores nothing and answers `duplicate`. */
   event?: ConnectorEvent;
   /** Connector-ingested content an agent doesn't control; gates detectInstruction. CLI/HTTP/MCP never set this. */
   untrusted?: boolean;
-  /** The caller's project: its name becomes the row's origin. Without it the store's fallback applies (NULL on a shared store). */
+  /** The caller's project: its name becomes the row's origin. Without it the store's fallback applies (NULL on a shared
+   * store). */
   project?: { readonly name: string; readonly aliases?: readonly string[] };
-  /** Store it in the caller's own personal scope, readable by its owner alone in every project; needs an owner on the actor and no `scope`. */
+  /** Store it in the caller's own personal scope, readable by its owner alone in every project; needs an owner on the
+   * actor and no `scope`. */
   personal?: boolean;
-  /** Never set from a request body: a route or tool that copied it would let a client pin a row or pick its layer and source. */
+  /** Never set from a request body: a route or tool that copied it would let a client pin a row or pick its layer and
+   * source. */
   local?: RememberLocal;
 }
 
@@ -57,11 +68,13 @@ export interface RememberResult {
   quarantined?: { reason: string };
   /** Set only when the content held secret material: untrusted text had it redacted, typed text was stored as sent. */
   warnings?: string[];
-  /** Set only when the write's event was logged before: nothing was stored, so `id` names no row; `memoryId` is the id the first write logged. */
+  /** Set only when the write's event was logged before: nothing was stored, so `id` names no row; `memoryId` is the id
+   * the first write logged. */
   duplicate?: { memoryId: string | null };
 }
 
-/** The scope a write lands in: the caller's own personal scope when asked for, else the client's, which may not be a personal one. */
+/** The scope a write lands in: the caller's own personal scope when asked for, else the client's, which may not be a
+ * personal one. */
 function rememberScope(ctx: Context, opts: RememberOpts): string | null {
   if (!opts.personal) {
     assertClientScope(opts.scope);
@@ -71,8 +84,10 @@ function rememberScope(ctx: Context, opts: RememberOpts): string | null {
   if (opts.scope !== undefined) throw new BadRequestError('send personal or scope, not both');
   const own = personalScopeOf(ctx.actor);
   if (own === null) {
-    throw new BadRequestError('personal memories need a key its owner minted, or a sign-in; owner ids over 239 characters or with control characters cannot ' +
-      'hold them');
+    throw new BadRequestError(
+      'personal memories need a key its owner minted, or a sign-in; owner ids over 239 characters or with control characters cannot ' +
+        'hold them',
+    );
   }
   return own;
 }
@@ -108,19 +123,34 @@ function prepareRemember(ctx: Context, opts: RememberOpts): PreparedRemember {
     baseHalfLifeDays: loadConfig(ctx.hippoRoot).defaultHalfLifeDays,
   });
   const entry = local.weaken ? weakened(created, local.weaken) : created;
-  // Aliases only widen what a reader matches; a row has one origin. A personal row's '' follows its owner into every project.
+  // Aliases only widen what a reader matches; a row has one origin. A personal row's '' follows its owner into every
+  // project.
   const origin = opts.personal ? '' : opts.project?.name;
   const stamped = origin !== undefined ? { ...entry, origin_project: origin } : entry;
   return { entry: stamped, requestedScope, detection, warnings: vetted.warnings };
 }
 
 function weakened(entry: MemoryEntry, weaken: NonNullable<RememberLocal['weaken']>): MemoryEntry {
-  return { ...entry, strength: weaken.strength, half_life_days: Math.max(1, entry.half_life_days * weaken.halfLifeFactor) };
+  return {
+    ...entry,
+    strength: weaken.strength,
+    half_life_days: Math.max(1, entry.half_life_days * weaken.halfLifeFactor),
+  };
 }
 
-function rememberResult(ctx: StoreContext, prepared: PreparedRemember, written?: ConnectorWriteOutcome): RememberResult {
+function rememberResult(
+  ctx: StoreContext,
+  prepared: PreparedRemember,
+  written?: ConnectorWriteOutcome,
+): RememberResult {
   const { entry, detection, warnings } = prepared;
-  const result: RememberResult = { id: entry.id, kind: entry.kind, tenantId: ctx.tenantId, halfLifeDays: entry.half_life_days, tags: [...entry.tags] };
+  const result: RememberResult = {
+    id: entry.id,
+    kind: entry.kind,
+    tenantId: ctx.tenantId,
+    halfLifeDays: entry.half_life_days,
+    tags: [...entry.tags],
+  };
   if (detection.flagged) result.quarantined = { reason: detection.reason ?? 'unknown' };
   if (warnings.length > 0) result.warnings = [...warnings];
   if (written?.outcome === 'duplicate') result.duplicate = { memoryId: written.memoryId };
@@ -132,8 +162,9 @@ function quarantineOf({ requestedScope, detection }: PreparedRemember): Connecto
   return detection.flagged ? { originalScope: requestedScope, reason: detection.reason ?? 'unknown' } : undefined;
 }
 
-/** Store one memory: the store's entryWrites group writes the row and its one remember audit row, under the caller's subject.
- *  A write that carries a connector event or untrusted content goes through connectorWrites, which commits its companion rows with it. */
+/** Store one memory: the store's entryWrites group writes the row and its one remember audit row, under the caller's
+ * subject. A write that carries a connector event or untrusted content goes through connectorWrites, which commits its
+ * companion rows with it. */
 export async function remember(ctx: StoreContext, opts: RememberOpts): Promise<RememberResult> {
   const store = ctx.store;
   const entryWrites = requireGroup(store, 'entryWrites');
@@ -145,6 +176,10 @@ export async function remember(ctx: StoreContext, opts: RememberOpts): Promise<R
     return rememberResult(ctx, prepared);
   }
   const connectorWrites = requireGroup(store, 'connectorWrites');
-  const written = await connectorWrites.writeConnectorEntry({ ...write, event: opts.event, quarantine: quarantineOf(prepared) });
+  const written = await connectorWrites.writeConnectorEntry({
+    ...write,
+    event: opts.event,
+    quarantine: quarantineOf(prepared),
+  });
   return rememberResult(ctx, prepared, written);
 }

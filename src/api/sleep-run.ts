@@ -20,7 +20,8 @@ import { removeAuditErrors } from './audit.js';
 import type { SleepOpts, SleepResult } from './sleep.js';
 import { errorMessage } from '../util/log.js';
 
-/** Test-only seam: `runSleep` overrides force a phase to throw into emitSleepAudit's `partial: true` row; production never sets them. */
+/** Test-only seam: `runSleep` overrides force a phase to throw into emitSleepAudit's `partial: true` row; production
+ * never sets them. */
 export interface SleepPhases {
   consolidate: typeof consolidate;
   deduplicateStore: typeof deduplicateStore;
@@ -61,7 +62,8 @@ interface DirtyTenantSnapshot {
   error: string | null;
 }
 
-/** `sleep` with its phase dependencies overridable; tests pass stubs here, so the seam never touches the public `SleepOpts`. */
+/** `sleep` with its phase dependencies overridable; tests pass stubs here, so the seam never touches the public
+ * `SleepOpts`. */
 export async function runSleep(
   ctx: StoreContext,
   opts: SleepOpts,
@@ -70,15 +72,16 @@ export async function runSleep(
   const dryRun = Boolean(opts.dryRun);
   const phases: SleepPhases = { ...DEFAULT_SLEEP_PHASES, ...overrides };
 
-  // Phase counters for the consolidate audit emit (in finally), accumulated per phase so a partial failure still reports what got done.
+  // Phase counters for the consolidate audit emit (in finally), accumulated per phase so a partial failure still
+  // reports what got done.
   const counts: SleepCounts = { consolidation: 0, dedup: 0, auditDeleted: 0, ambient: 0 };
   let phaseError: Error | null = null;
 
   try {
     return await runSleepPhases(ctx, opts, phases, counts);
   } catch (err) {
-    // SAFETY: phaseError is only read via phaseError.message / (phaseError !== null) below, safe even if a non-Error was thrown;
-    // this mirrors the lenient (err as Error) pattern used through this catch chain.
+    // SAFETY: phaseError is only read via phaseError.message / (phaseError !== null) below, safe even if a non-Error
+    // was thrown; this mirrors the lenient (err as Error) pattern used through this catch chain.
     phaseError = err as Error;
     throw err;
   } finally {
@@ -100,9 +103,12 @@ async function runSleepPhases(
   counts.consolidation = consolidateResult.semanticCreated + consolidateResult.merged;
   const result = sleepResultFrom(consolidateResult, dryRun);
 
-  // Consolidate's own read predates its writes, so it cannot stand in for this one.
-  // One read after consolidation serves dedup, the audit and ambient: dedup reports every row it deletes, so later phases subtract.
-  const loaded: LoadedStore = { entries: phases.loadAllEntries(ctx.hippoRoot), backing: memoriesBackingObjects(ctx.hippoRoot) };
+  // Consolidate's own read predates its writes, so it cannot stand in for this one. One read after consolidation serves
+  // dedup, the audit and ambient: dedup reports every row it deletes, so later phases subtract.
+  const loaded: LoadedStore = {
+    entries: phases.loadAllEntries(ctx.hippoRoot),
+    backing: memoriesBackingObjects(ctx.hippoRoot),
+  };
 
   // Phase 2: Dedup (post-consolidate near-duplicate cleanup).
   const dedupResult = phases.deduplicateStore(ctx.hippoRoot, { dryRun, actor: ctx.actor.subject, loaded });
@@ -190,11 +196,20 @@ interface QualityAuditOptions {
   readonly loaded: LoadedStore;
 }
 
-/** `removed` counts audit errors deleted (or that would be under dryRun); `remaining` is what the audit read, less the rows it deleted. */
-async function runQualityAudit(ctx: StoreContext, phases: SleepPhases, options: QualityAuditOptions): Promise<QualityAuditOutcome> {
+/** `removed` counts audit errors deleted (or that would be under dryRun); `remaining` is what the audit read, less the
+ * rows it deleted. */
+async function runQualityAudit(
+  ctx: StoreContext,
+  phases: SleepPhases,
+  options: QualityAuditOptions,
+): Promise<QualityAuditOutcome> {
   const { dryRun, consolidateResult, dedupResult, result, loaded } = options;
-  // The load followed consolidation, so only a dry run still holds the rows consolidation would remove; dedup's pairs are gone or would be.
-  const planned = new Set([...(dryRun ? consolidateResult.removedIds ?? [] : []), ...dedupResult.pairs.map((p) => p.removed)]);
+  // The load followed consolidation, so only a dry run still holds the rows consolidation would remove; dedup's pairs
+  // are gone or would be.
+  const planned = new Set([
+    ...(dryRun ? (consolidateResult.removedIds ?? []) : []),
+    ...dedupResult.pairs.map((p) => p.removed),
+  ]);
   const allEntries = loaded.entries.filter((e) => !planned.has(e.id));
   const auditOut = phases.auditMemories(allEntries, loaded.backing);
   if (auditOut.issues.length === 0) return { removed: 0, remaining: allEntries };
@@ -230,7 +245,12 @@ function shareOnSleep(ctx: Context, phases: SleepPhases, result: SleepResult): v
 }
 
 /** Returns the ambient total the audit row reports: 0 when ambient is off or no current row is left. */
-function summarizeAmbient(ctx: Context, phases: SleepPhases, result: SleepResult, loaded: readonly MemoryEntry[]): number {
+function summarizeAmbient(
+  ctx: Context,
+  phases: SleepPhases,
+  result: SleepResult,
+  loaded: readonly MemoryEntry[],
+): number {
   const postSleepConfig = phases.loadConfig(ctx.hippoRoot);
   if (!postSleepConfig.ambient.enabled) return 0;
   const postSleepEntries = loaded.filter((e) => !e.superseded_by);
@@ -241,7 +261,12 @@ function summarizeAmbient(ctx: Context, phases: SleepPhases, result: SleepResult
 
 // Phase 6: rebuild the graph of every tenant marked dirty since the last sleep, so graph recall runs on fresh data.
 // Fault-isolated: consolidation has already committed, so no failure here aborts sleep; a failed tenant stays pending.
-async function drainGraphQueue(ctx: StoreContext, phases: SleepPhases, snapshot: DirtyTenantSnapshot, result: SleepResult): Promise<void> {
+async function drainGraphQueue(
+  ctx: StoreContext,
+  phases: SleepPhases,
+  snapshot: DirtyTenantSnapshot,
+  result: SleepResult,
+): Promise<void> {
   try {
     if (snapshot.error) {
       // Core sleep already succeeded; surface the skipped graph refresh as a detail.
@@ -268,7 +293,8 @@ async function drainGraphQueue(ctx: StoreContext, phases: SleepPhases, snapshot:
 
 type GraphTotals = NonNullable<SleepResult['graph']>;
 
-/** Rebuilds one dirty tenant's graph into `rebuilt` and drains its queue; a failure is a detail line and the tenant stays pending. */
+/** Rebuilds one dirty tenant's graph into `rebuilt` and drains its queue; a failure is a detail line and the tenant
+ * stays pending. */
 async function rebuildDirtyTenant(
   ctx: StoreContext,
   phases: SleepPhases,
@@ -335,7 +361,8 @@ async function emitSleepAudit(
       triggeredByTenant: ctx.tenantId, // preserve for audit forensics
     };
     if (phaseError) sleepAuditMetadata.errorMessage = phaseError.message;
-    // A flush stopped between chunks names the unit it would have committed next, so a unit that fails every night can be found.
+    // A flush stopped between chunks names the unit it would have committed next, so a unit that fails every night can
+    // be found.
     const nextUnitIds = failedUnitOf(phaseError);
     if (nextUnitIds) sleepAuditMetadata.nextUnitIds = nextUnitIds;
     await ctx.store.appendAuditEvents([{

@@ -8,7 +8,8 @@ import { errorMessage, log } from '../util/log.js';
 import type { Context, StoreContext } from './types.js';
 import { DAY_MS } from '../util/time.js';
 
-/** Records memory text handed to an agent in the token ledger. Best-effort: never throws, since a ledger failure must not fail the recall or context call. */
+/** Records memory text handed to an agent in the token ledger. Best-effort: never throws, since a ledger failure must
+ * not fail the recall or context call. */
 export async function recordTokens(
   ctx: StoreContext,
   surface: TokenSurface,
@@ -29,8 +30,8 @@ export async function recordTokens(
   }
 }
 
-/** Token ledger totals for the tenant over the last `days` days (default 30): tokens sent, skipped as unchanged and re-read,
- * per surface, with session counts and mean tokens per session. */
+/** Token ledger totals for the tenant over the last `days` days (default 30): tokens sent, skipped as unchanged and
+ * re-read, per surface, with session counts and mean tokens per session. */
 export function tokenSummary(ctx: Context, opts: { days?: number } = {}): TokenSummary {
   return tokenUseSummary(ctx.hippoRoot, ctx.tenantId, reportWindowStart(opts.days));
 }

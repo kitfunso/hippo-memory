@@ -4,9 +4,12 @@ import { requireGroup } from '../store/index.js';
 import type { GraphRows } from '../store/port.js';
 import type { StoreContext } from './types.js';
 
-/** The entity a graph read focuses on. Capped at the 512 entity-name cap, not the id-shaped 256, so a long decision or policy name stays focusable. */
+/** The entity a graph read focuses on. Capped at the 512 entity-name cap, not the id-shaped 256, so a long decision or
+ * policy name stays focusable. */
 export function graphEntityOf(raw: string | null): string | undefined {
-  if (raw !== null && raw.length > MAX_ENTITY_NAME_LEN) throw new BadRequestError(`entity exceeds the ${MAX_ENTITY_NAME_LEN}-character cap`);
+  if (raw !== null && raw.length > MAX_ENTITY_NAME_LEN) {
+    throw new BadRequestError(`entity exceeds the ${MAX_ENTITY_NAME_LEN}-character cap`);
+  }
   return raw ?? undefined;
 }
 
