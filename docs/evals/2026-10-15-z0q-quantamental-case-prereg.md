@@ -41,7 +41,7 @@ Each lesson's key phrase comes from the rule's wording and appears in no task ba
 
 **Seeds.** A1 and A2 run three seeds. A0 and A4 run two, as in Z0 (prereg 124).
 
-**Environment.** A venv built from `production/requirements.txt` pins, with no editable install. The `qm` launch case sets `PYTHONNOUSERSITE`, `PIP_NO_INDEX`, `PYTHONDONTWRITEBYTECODE`, `VIRTUAL_ENV`, the venv first on `PATH`, and an absolute `PYTHONPATH` to each session's `work/production`. The arm environment carries no service key, and the analysis checks every record's `envKeys` for one. The venv's site-packages are hashed before and after each chunk; a change voids the chunk.
+**Environment.** A venv built from `production/requirements.txt` pins, with no editable install. The `qm` launch case sets `PYTHONNOUSERSITE`, `PIP_NO_INDEX`, `PYTHONDONTWRITEBYTECODE`, `VIRTUAL_ENV`, and the venv first on `PATH`. The runner gives every arm one environment, so a per-session `PYTHONPATH` is not possible; instead the venv's `sitecustomize.py` walks up from the working directory to the checkout's `production/` and puts it on `sys.path`, as the repository's editable install would. Outside a checkout, `shared_constants` does not import. The arm environment carries no service key, and the analysis checks every record's `envKeys` for one. The venv's site-packages are hashed before and after each chunk; a change voids the chunk.
 
 **Extra void.** Any session whose transcript names the owner's Quantamental checkout or the case study's scratch folder is void under G1.
 
