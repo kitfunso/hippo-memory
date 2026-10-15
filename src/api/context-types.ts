@@ -7,6 +7,9 @@ import type { DeliveryObserver } from '../store/delivery-recorder.js';
 import type { AmbientState } from '../core/ambient.js';
 import type { ProjectRef } from '../core/project-identity.js';
 
+/** How another session's handoff prints: whole, or as one line naming the command that prints it. */
+export type HandoffMode = 'full' | 'pointer';
+
 /**
  * Options for `getContext`: a budget-bounded bundle of recalled memories, active task snapshot, handoff and recent
  * events.
@@ -52,6 +55,8 @@ export interface ContextOpts {
   currentSessionId?: string | null;
   /** Raw hook-payload prompt; only the pinned-only branch reads it, gated on `pinnedInject.promptRecall`. */
   prompt?: string;
+  /** Default 'full'; under 'pointer' the caller's own session's handoff still prints whole. */
+  handoffMode?: HandoffMode;
   /** What the budget pays for, from the caller that renders the block. Absent = the memory text alone. */
   cost?: ContextCost;
   /** @internal The CLI's delivery-ledger observer; it only reads, so selection is the same with or without it. */
@@ -67,7 +72,7 @@ export interface ContextCost {
   fixed: (budget: number, can: { cross: boolean; promptRecall: boolean; ambient: boolean }) => number;
   /** Tokens of the sections printed ahead of the memories, each as printed. */
   snapshot: (s: TaskSnapshot) => number;
-  handoff: (h: SessionHandoff) => number;
+  handoff: (h: SessionHandoff, mode: HandoffMode) => number;
   trail: (events: SessionEvent[]) => number;
 }
 
@@ -94,6 +99,8 @@ export interface ContextResult {
   tokens: number;
   activeSnapshot?: TaskSnapshot | null;
   sessionHandoff?: SessionHandoff | null;
+  /** Set only when sessionHandoff prints as the pointer. */
+  handoffMode?: HandoffMode;
   recentEvents?: SessionEvent[];
   /** The ambient landscape summary over every live row the read may see in the local and global stores,
    * not just the rows loaded. Present only when ambient config is on, the caller is not pinned-only, and an entry was

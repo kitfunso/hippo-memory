@@ -8,7 +8,7 @@ import {
   contextBlockLines,
   contextCost,
   crossProjectLines,
-  handoffText,
+  handoffSectionText,
   sessionTrailText,
   settleTokens,
   snapshotText,
@@ -192,10 +192,11 @@ function hookParts(view: ContextView): HookParts {
   const memory = (r: ContextResultEntry): Keyed<ContextResultEntry> =>
     ({ key: memoryKey(r.entry, owner), pinned: r.entry.pinned, part: r });
   const events = result.recentEvents ?? [];
+  const handoff = result.sessionHandoff;
   return {
     sections: [
       ...(result.activeSnapshot ? [section('snapshot', snapshotText(result.activeSnapshot))] : []),
-      ...(result.sessionHandoff ? [section('handoff', handoffText(result.sessionHandoff))] : []),
+      ...(handoff ? [section('handoff', handoffSectionText(handoff, result.handoffMode ?? 'full'))] : []),
       ...(events.length > 0 ? [section('trail', sessionTrailText(events))] : []),
     ],
     statics: result.entries.filter((r) => r.category !== 'cross-project' && !r.promptRecall).map(memory),
@@ -350,6 +351,7 @@ function bookHookRows(view: ContextView, uses: readonly TokenUse[]): void {
 const HOOK_INCLUDE_RECENT = 5;
 const HOOK_BUDGET = DEFAULT_CONTEXT_BUDGET;
 const HOOK_FRAMING = 'observe';
+const HOOK_HANDOFF_MODE = 'pointer';
 
 // blockHash's shape (token-ledger.ts).
 const BLOCK_HASH_RE = /^[0-9a-f]{16}$/;
@@ -422,6 +424,7 @@ export async function promptHookContext(
     currentProject: req.project,
     currentSessionId: sessionId,
     prompt: isJsonString(prompt) ? prompt : undefined,
+    handoffMode: HOOK_HANDOFF_MODE,
     cost: contextCost('additional-context', HOOK_FRAMING),
     sharedStore,
   });

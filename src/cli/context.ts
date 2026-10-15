@@ -246,6 +246,8 @@ function buildContextOpts(flags: CliFlags, input: ContextOptsInput): api.Context
     crossProject,
     currentSessionId: input.session.currentSessionId,
     prompt: input.session.prompt,
+    // Only the per-prompt hook shortens another session's handoff; a session-start reply and every reader get it whole.
+    handoffMode: input.pinnedOnly && input.format === 'additional-context' ? 'pointer' : 'full',
     // JSON is budgeted as the markdown it stands for, so one budget picks the same memories in every format.
     cost: contextCost(
       input.format === 'additional-context' || input.format === 'copilot' ? 'additional-context' : 'markdown',
