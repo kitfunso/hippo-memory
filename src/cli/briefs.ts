@@ -13,7 +13,13 @@ function printBriefRow(b: briefsModule.ProjectBrief): void {
   if (b.changeSummary) console.log(`    change: ${b.changeSummary}`);
 }
 
-async function briefRefresh(objects: Objects, hippoRoot: string, tenantId: string, args: string[], flags: CliFlags): Promise<void> {
+async function briefRefresh(
+  objects: Objects,
+  hippoRoot: string,
+  tenantId: string,
+  args: string[],
+  flags: CliFlags,
+): Promise<void> {
   const repoRaw = args[1];
   if (!repoRaw) {
     fail('Usage: hippo brief refresh "<repo>" [--dry-run]');
@@ -35,7 +41,11 @@ async function briefRefresh(objects: Objects, hippoRoot: string, tenantId: strin
   }
 }
 
-const briefKind = (objects: Objects, hippoRoot: string, tenantId: string): VersionedKind<briefsModule.ProjectBrief, briefsModule.BriefStatus, string> => ({
+const briefKind = (
+  objects: Objects,
+  hippoRoot: string,
+  tenantId: string,
+): VersionedKind<briefsModule.ProjectBrief, briefsModule.BriefStatus, string> => ({
   names: { cmd: 'brief', noun: 'Project brief', idLabel: 'brief' },
   plural: 'project briefs',
   states: briefsModule.VALID_BRIEF_STATES,
@@ -51,11 +61,20 @@ const briefKind = (objects: Objects, hippoRoot: string, tenantId: string): Versi
   bodyRequired: '--summary "<text>"',
   body: (flags) => requiredText(flags, 'summary'),
   keyOf: (b) => b.repo,
-  save: (repo, summary, extraTags, from) => briefsModule.saveProjectBrief(objects, hippoRoot, tenantId, {
-    repo, summary, extraTags, changeSummary: from?.changeSummary, supersedesBriefId: from?.id,
-  }),
+  save: (repo, summary, extraTags, from) =>
+    briefsModule.saveProjectBrief(objects, hippoRoot, tenantId, {
+      repo,
+      summary,
+      extraTags,
+      changeSummary: from?.changeSummary,
+      supersedesBriefId: from?.id,
+    }),
   recorded: (b) => `Project brief recorded: #${b.id} (v${b.version}) for repo "${b.repo}"`,
-  list: (opts, flags) => briefsModule.loadProjectBriefs(objects, tenantId, { ...opts, repo: stringFlag(flags, 'repo')?.trim() || undefined }),
+  list: (opts, flags) =>
+    briefsModule.loadProjectBriefs(objects, tenantId, {
+      ...opts,
+      repo: stringFlag(flags, 'repo')?.trim() || undefined,
+    }),
   loadById: (id) => briefsModule.loadProjectBriefById(objects, tenantId, id),
   close: (id) => briefsModule.closeProjectBrief(objects, tenantId, id),
   printRow: printBriefRow,

@@ -17,7 +17,13 @@ import { autoDetectContext } from '../api/context-auto.js';
 import { resolveProjectIdentity, type ProjectIdentity } from '../core/project-identity.js';
 import { isSharedStore } from '../core/config.js';
 import type { AppendAuditOpts } from '../store/audit.js';
-import { detectAnchoring, hashQueryText, biasHintEnabled, snapshotRing, type RingBuffer } from '../api/recall-history.js';
+import {
+  detectAnchoring,
+  hashQueryText,
+  biasHintEnabled,
+  snapshotRing,
+  type RingBuffer,
+} from '../api/recall-history.js';
 import { detectAvailabilityBias } from '../api/availability.js';
 import { estimateTokens } from '../util/token-text.js';
 import { assembleCost, assembleText, drillCost, drillText } from '../api/context-render.js';
@@ -41,8 +47,8 @@ import { isJsonString } from '../util/json.js';
 import { parseContextRequest, parseRecallRequest, toolParams } from '../api/recall-request.js';
 import { noteRecall, sessionRing, shownRecallRows } from '../api/recall-record.js';
 
-// Named shapes for optional fields each api.* call only wants when the caller supplied them: build `extra`, then spread once,
-// which keeps per-field omission without the `...(cond ? { field } : {})` pattern.
+// Named shapes for optional fields each api.* call only wants when the caller supplied them: build `extra`, then spread
+// once, which keeps per-field omission without the `...(cond ? { field } : {})` pattern.
 interface AssembleExtraOpts {
   budget?: number;
   freshTailCount?: number;
@@ -55,7 +61,8 @@ interface DrillDownExtraOpts {
   depth?: number;
 }
 
-/** Builds the showRanked callback that renders the list MCP shows, parks the render in `out` and hands back its hint rows. */
+/** Builds the showRanked callback that renders the list MCP shows, parks the render in `out` and hands back its hint
+ * rows. */
 interface RecallPresenterOptions {
   readonly includeContinuity: boolean;
   readonly anchorRing: RingBuffer | null;
@@ -85,8 +92,13 @@ function detectBiasHints(
   return { anchoring, availability };
 }
 
-function biasHintSections(anchoring: RenderedRecall['anchoring'], availability: RenderedRecall['availability']): string {
-  let text = anchoring ? `## Anchoring hint\n${anchoring.summary}\n[anchored_on: ${anchoring.memoryId}]\n\n---\n\n` : '';
+function biasHintSections(
+  anchoring: RenderedRecall['anchoring'],
+  availability: RenderedRecall['availability'],
+): string {
+  let text = anchoring
+    ? `## Anchoring hint\n${anchoring.summary}\n[anchored_on: ${anchoring.memoryId}]\n\n---\n\n`
+    : '';
   if (availability) text += `## Availability bias\n${availability.summary}\n\n---\n\n`;
   return text;
 }
@@ -102,6 +114,26 @@ function cutoffSection(s: RecallSuppressionSummary, shown: number): string {
   return `## Cutoff\nShowing ${shown} of ${s.totalCandidates} candidates; ${cutoffClauses.join('; ')}.\n\n---\n\n`;
 }
 
+interface SuppressionInputs {
+  readonly poolSize: number;
+  readonly droppedByScope: number;
+  readonly cut: SearchResult[];
+  readonly list: SearchResult[];
+  readonly tail: ReadonlyArray<{ isSummary?: boolean; isFreshTail?: boolean }>;
+  readonly anchoring: RenderedRecall['anchoring'];
+}
+
+function suppressionSummary(i: SuppressionInputs): RecallSuppressionSummary {
+  return {
+    totalCandidates: i.poolSize + i.droppedByScope,
+    droppedPreRank: i.droppedByScope + i.cut.length - i.list.length, // the bucket CLI and API recall use for copies
+    droppedByBudget: Math.max(0, i.poolSize - i.cut.length), // an upper bound: rows that never matched count too
+    summarySubstitutionsAdded: i.tail.filter((r) => r.isSummary).length,
+    freshTailAdded: i.tail.filter((r) => r.isFreshTail && !r.isSummary).length,
+    suppressedByInterference: i.anchoring?.reason === 'memory_dominance' ? 1 : 0,
+  };
+}
+
 function renderWithinBudget(
   ranked: SearchResult[],
   limits: { room: number; budget: number },
@@ -109,7 +141,8 @@ function renderWithinBudget(
 ): RenderedRecall {
   let results = fitBudget(ranked, Math.max(0, limits.room), 1, memoryCost);
   let rendered = render(results);
-  // The hints, Cutoff block and heading vary with the list, so the lowest-ranked entry goes until the whole response fits.
+  // The hints, Cutoff block and heading vary with the list, so the lowest-ranked entry goes until the whole response
+  // fits.
   while (results.length > 1 && estimateTokens(rendered.text) > limits.budget) {
     results = results.slice(0, -1);
     rendered = render(results);
@@ -120,7 +153,8 @@ function renderWithinBudget(
 function recallPresenter(budget: number, options: RecallPresenterOptions): NonNullable<RecallOpts['showRanked']> {
   const { includeContinuity, anchorRing, queryHash, out, hintRows } = options;
   return ({ ranked, pool, droppedByScope }, apiResult) => {
-    // Sections are paid in print order, ahead of the memories and after the heading; one that does not fit is dropped whole.
+    // Sections are paid in print order, ahead of the memories and after the heading; one that does not fit is dropped
+    // whole.
     let left = budget - memoriesReserve(budget);
     const pays = (piece: string): boolean => {
       const tokens = estimateTokens(piece);
@@ -132,27 +166,26 @@ function recallPresenter(budget: number, options: RecallPresenterOptions): NonNu
     const showPlan = planPiece !== '' && pays(planPiece);
     const tailRows = apiResult.results.filter((r) => r.isFreshTail || r.isSummary);
     const showTail = tailRows.length > 0 && pays(tailSection(tailRows));
-    const continuityPiece = includeContinuity && apiResult.continuity ? `\n\n${formatContinuityBlock(apiResult.continuity)}` : '';
+    const continuityPiece =
+      includeContinuity && apiResult.continuity ? `\n\n${formatContinuityBlock(apiResult.continuity)}` : '';
     const showContinuity = continuityPiece !== '' && pays(continuityPiece);
 
     // The hints and Cutoff block describe the list MCP shows, not the window band in apiResult.
     const render = (cut: SearchResult[]): RenderedRecall => {
-      const list = dropHeldCopies(cut, (r) => r.entry); // after every cut, so a merged row cut here never hides its sources
+      // After every cut, so a merged row cut here never hides its sources.
+      const list = dropHeldCopies(cut, (r) => r.entry);
       const { anchoring, availability } = detectBiasHints(list, pool, anchorRing, queryHash);
       const shownIds = new Set(list.map((r) => r.entry.id));
       const shownKeys = storedTextKeys(list.map((r) => r.entry));
       const tail = showTail
-        ? dropHeldCopies(tailRows.filter((r) => !shownIds.has(r.id) && !shownKeys.has(duplicateKey(r.content))), (r) => r)
+        ? dropHeldCopies(
+            tailRows.filter((r) => !shownIds.has(r.id) && !shownKeys.has(duplicateKey(r.content))),
+            (r) => r,
+          )
         : [];
-      const s: RecallSuppressionSummary = {
-        totalCandidates: pool.length + droppedByScope,
-        droppedPreRank: droppedByScope + cut.length - list.length, // the bucket CLI and API recall put hidden copies in
-        droppedByBudget: Math.max(0, pool.length - cut.length), // an upper bound: rows that never matched count too
-        summarySubstitutionsAdded: tail.filter((r) => r.isSummary).length,
-        freshTailAdded: tail.filter((r) => r.isFreshTail && !r.isSummary).length,
-        suppressedByInterference: anchoring?.reason === 'memory_dominance' ? 1 : 0,
-      };
-      // Anchoring is the stronger pull, so it prints first; the Cutoff block sits above the list, where the agent reads it.
+      const s = suppressionSummary({ poolSize: pool.length, droppedByScope, cut, list, tail, anchoring });
+      // Anchoring is the stronger pull, so it prints first; the Cutoff block sits above the list, where the agent reads
+      // it.
       let text = biasHintSections(anchoring, availability);
       if (showPlan) text += planPiece;
       text += cutoffSection(s, list.length);
@@ -192,16 +225,22 @@ export async function runRecallTool(call: ToolCall): Promise<string> {
     keepHeldCopies: true,
     project: ctx?.project,
     showRanked: recallPresenter(budget, {
-      includeContinuity, anchorRing, queryHash, out,
-      hintRows: ({ list, anchoring, availability }) => shownRecallRows(who, {
-        query, ring: anchorRing, topId: list[0]?.entry.id ?? null, anchoring, availability,
-      }),
+      includeContinuity,
+      anchorRing,
+      queryHash,
+      out,
+      hintRows: ({ list, anchoring, availability }) =>
+        shownRecallRows(who, { query, ring: anchorRing, topId: list[0]?.entry.id ?? null, anchoring, availability }),
     }),
   });
   const { rendered } = out;
   if (!rendered) throw new Error('hippo_recall: api.retrieve returned without calling showRanked');
-  lastRecalledIds.set(resolveClientKey(ctx), rendered.list.map((r) => r.entry.id));
-  // Fed once the recall's rows are written, after the final detect: anchoredOn feeds the cooldown for the next recall on this session.
+  lastRecalledIds.set(
+    resolveClientKey(ctx),
+    rendered.list.map((r) => r.entry.id),
+  );
+  // Fed once the recall's rows are written, after the final detect: anchoredOn feeds the cooldown for the next recall
+  // on this session.
   if (anchorRing) noteRecall(anchorRing, query, rendered.list[0]?.entry.id ?? null, rendered.anchoring?.memoryId);
   return rendered.text;
 }
@@ -263,7 +302,8 @@ export async function runDrillTool({ args, ctx, hippoRoot, tenantId, store }: To
   return drillText(r);
 }
 
-// The served store names the project (an HTTP daemon runs from anywhere); the global root names none, so only an owner of the server cwd falls back to it.
+// The served store names the project (an HTTP daemon runs from anywhere); the global root names none, so only an owner
+// of the server cwd falls back to it.
 function localProject(hippoRoot: string, ownsCwd: boolean): ProjectIdentity {
   const storeProject = resolveProjectIdentity(path.dirname(path.resolve(hippoRoot)));
   return storeProject.name !== '' || !ownsCwd ? storeProject : resolveProjectIdentity(process.cwd());
@@ -271,7 +311,9 @@ function localProject(hippoRoot: string, ownsCwd: boolean): ProjectIdentity {
 
 export async function runContextTool({ args, ctx, hippoRoot, config, tenantId, store }: ToolCall): Promise<string> {
   // Stdio names no project, and the store's folder or the launch cwd is no caller's; HTTP sends X-Hippo-Project.
-  if (isSharedStore(hippoRoot) && ctx?.project === undefined) return 'hippo_context needs a project on a shared store; use hippo_recall';
+  if (isSharedStore(hippoRoot) && ctx?.project === undefined) {
+    return 'hippo_context needs a project on a shared store; use hippo_recall';
+  }
   const { budget: budgetArg, scope: exactScope } = parseContextRequest(toolParams(args));
   const budget = budgetArg ?? config.defaultContextBudget;
   if (budget === 0) return '';
@@ -280,7 +322,8 @@ export async function runContextTool({ args, ctx, hippoRoot, config, tenantId, s
   const result = await apiGetContext(
     { hippoRoot, tenantId, actor: mcpActor(ctx), store },
     {
-      // The server's git state is no remote caller's, so a project or remote caller gets rows by strength without a query.
+      // The server's git state is no remote caller's, so a project or remote caller gets rows by strength without a
+      // query.
       q: ctx?.project || !ownsCwd ? undefined : autoDetectContext(),
       budget,
       exactScope,

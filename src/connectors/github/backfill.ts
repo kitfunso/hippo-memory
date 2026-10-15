@@ -1,5 +1,5 @@
-/** Paginated backfill of the GitHub issues, issue-comments and PR-review-comments streams, each with its own high-water mark (HWM).
- *  An HWM is persisted only after its stream fully drains, so a crash in stream 2 leaves stream 1 committed and stream 2 resumes from its prior HWM.
+/** Paginated backfill of the GitHub issues, issue-comments and PR-review-comments streams, each with its own HWM.
+ *  An HWM (high-water mark) is saved only after its stream fully drains, so a crash in stream 2 keeps stream 1.
  *  `repository.private` is left undefined (REST lists omit it), so scopeFromRepository falls through to private. */
 
 import type { StoreContext } from '../../api/index.js';
@@ -105,8 +105,8 @@ function isCommentItem(x: JsonValue): x is JsonValue & (IssueCommentItem | PrRev
   return isGitHubUser(x.user);
 }
 
-/** Drain one stream end-to-end, pausing on rate-limit and throwing on any other fetch error so the caller leaves the HWM unchanged.
- *  Callers MUST NOT advance the HWM when drained=false, or a capped run would skip the unfetched tail. */
+/** Drain one stream end-to-end, pausing on rate-limit and throwing on any other fetch error so the caller leaves the
+ * HWM unchanged. Callers MUST NOT advance the HWM when drained=false, or a capped run would skip the unfetched tail. */
 interface DrainStreamOptions {
   readonly toIngestEvent: (item: JsonValue) => IngestEvent | null;
   readonly fetcher: GitHubFetcher;
@@ -161,7 +161,8 @@ async function drainStream(
   return { ingested, pages, maxUpdatedAt, drained: true };
 }
 
-// A reset hours away must fail the run for a later rerun; sleeping through it would hold the process for the whole window.
+// A reset hours away must fail the run for a later rerun; sleeping through it would hold the process for the whole
+// window.
 const MAX_RATE_LIMIT_ATTEMPTS = 5;
 const MAX_RATE_LIMIT_WAIT_MS = 10 * MINUTE_MS;
 

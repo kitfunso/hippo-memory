@@ -43,7 +43,8 @@ function isRoutableRequest(v: JsonValue): v is JsonValue & McpRequest {
   return isJsonObject(v) && isJsonString(v.method);
 }
 
-/** A frame that parsed but names no method: with an id it is a request owed an answer; without one it is a notification, which JSON-RPC forbids answering. */
+/** A frame that parsed but names no method: with an id it is a request owed an answer; without one it is a
+ * notification, which JSON-RPC forbids answering. */
 function answerUnroutable(frame: JsonValue): void {
   const id = isJsonObject(frame) ? frame.id : undefined;
   if (isJsonString(id) || isJsonNumber(id)) {
@@ -53,7 +54,8 @@ function answerUnroutable(frame: JsonValue): void {
   log.warn('mcp: dropped a frame with no method and no id; it cannot be routed or answered');
 }
 
-/** How long stdin's end waits for calls still running, so a client that closes right after its last request still gets the reply. */
+/** How long stdin's end waits for calls still running, so a client that closes right after its last request still
+ * gets the reply. */
 const STDIN_END_DRAIN_MS = 5000;
 
 // Calls dispatched and not yet answered, each with the method the drain names if it is still running at the bound.
@@ -72,7 +74,10 @@ async function exitWhenDrained(): Promise<void> {
     clearTimeout(bound);
   }
   for (const method of inFlight.values()) {
-    log.warn(`mcp: ${method} was still running ${STDIN_END_DRAIN_MS} ms after stdin closed; exiting without its reply`, { method });
+    log.warn(
+      `mcp: ${method} was still running ${STDIN_END_DRAIN_MS} ms after stdin closed; exiting without its reply`,
+      { method },
+    );
   }
   exitAfterFlush(0);
 }
@@ -86,8 +91,8 @@ function callName(req: McpRequest): string {
   return isJsonString(tool) ? `${req.method} ${tool.slice(0, 128)}` : req.method;
 }
 
-/** Answers `req` with one timeout error at the deadline a served request has. The returned function stops the timer and says whether that
- * answer went out, so a later reply is dropped. */
+/** Answers `req` with one timeout error at the deadline a served request has. The returned function stops the timer and
+ * says whether that answer went out, so a later reply is dropped. */
 function watchDeadline(req: McpRequest, owedReply: boolean, abort: AbortController): () => boolean {
   const ms = requestDeadlineMs();
   if (ms === 0) return () => false;
@@ -95,7 +100,9 @@ function watchDeadline(req: McpRequest, owedReply: boolean, abort: AbortControll
   const timer = setTimeout(() => {
     expired = true;
     const name = callName(req);
-    log.warn(`mcp: ${name} did not answer within ${ms} ms; its next step is cancelled and its reply will be dropped`, { method: req.method });
+    log.warn(`mcp: ${name} did not answer within ${ms} ms; its next step is cancelled and its reply will be dropped`, {
+      method: req.method,
+    });
     abort.abort(new DOMException(`${name} did not finish within ${ms} ms`, 'TimeoutError'));
     if (!owedReply) return;
     const requestId = currentRequestId();
@@ -135,15 +142,26 @@ function dispatch(body: string, abort: AbortController, openStore: StoreOpener):
   }
   // A frame with no id is a notification under any method name, and JSON-RPC forbids answering one.
   const timedOut = watchDeadline(req, isJsonString(req.id) || isJsonNumber(req.id), abort);
-  track(req.method, handleMcpRequest(req, undefined, openStore).then((resp) => { if (!timedOut() && resp) send(resp); }).catch((err) => {
-    if (timedOut() && err instanceof DOMException && err.name === 'TimeoutError') log.debug(`mcp: ${callName(req)} stopped at its deadline`);
-    else if (timedOut()) log.error(`mcp: ${callName(req)} failed after its timeout reply: ${errorMessage(err)}`, errorFields(err));
-    else send(mcpErrorResponse(req.id, err, undefined, callName(req)));
-  }));
+  track(
+    req.method,
+    handleMcpRequest(req, undefined, openStore)
+      .then((resp) => {
+        if (!timedOut() && resp) send(resp);
+      })
+      .catch((err) => {
+        if (timedOut() && err instanceof DOMException && err.name === 'TimeoutError') {
+          log.debug(`mcp: ${callName(req)} stopped at its deadline`);
+        } else if (timedOut()) {
+          log.error(`mcp: ${callName(req)} failed after its timeout reply: ${errorMessage(err)}`, errorFields(err));
+        } else send(mcpErrorResponse(req.id, err, undefined, callName(req)));
+      }),
+  );
 }
 
-/** Wires stdin/stdout to the dispatcher; idempotent. Only the entrypoint (cli.ts `hippo mcp`, or this file run directly) should call it, so the HTTP daemon
- * (which imports `handleMcpRequest`) does not steal stdin or exit when its parent closes a pipe. The caller picks the store, so src/mcp names no adapter. */
+/** Wires stdin/stdout to the dispatcher; idempotent. Only the entrypoint (cli.ts `hippo mcp`, or this file run
+ * directly) should call it, so the HTTP daemon
+ * (which imports `handleMcpRequest`) does not steal stdin or exit when its parent closes a pipe. The caller picks
+ * the store, so src/mcp names no adapter. */
 export function startStdioLoop(openStore: StoreOpener): void {
   process.stdin.on('data', (raw: Buffer) => {
     const chunk = withoutRefused(raw);

@@ -1,5 +1,5 @@
-// Entry of the process that runs one POST /v1/sleep or MCP auto-sleep; sleep-offload.ts starts it and nothing imports it.
-// The sleep modules alone: the api barrel loads far more than one sleep needs, and every sleep pays for the start.
+// Entry of the process that runs one POST /v1/sleep or MCP auto-sleep; sleep-offload.ts starts it and nothing imports
+// it. The sleep modules alone: the api barrel loads far more than one sleep needs, and every sleep pays for the start.
 import { sleep } from '../api/sleep.js';
 import { consolidate } from '../consolidate/sleep.js';
 import { runWithRequestStores, SERVER_DB_WAIT_MS } from '../db/index.js';
@@ -13,7 +13,12 @@ import type { ConsolidationResult } from '../consolidate/run.js';
 type JobResult = SleepResult | ConsolidationResult;
 
 function failed<E>(err: E): SleepReply<never> {
-  return { ok: false, busy: isStoreBusy(err), message: errorMessage(err), stack: err instanceof Error ? err.stack : undefined };
+  return {
+    ok: false,
+    busy: isStoreBusy(err),
+    message: errorMessage(err),
+    stack: err instanceof Error ? err.stack : undefined,
+  };
 }
 
 /** Resolves to the exit code once the channel has taken the reply, or failed to. */
@@ -29,9 +34,13 @@ function sendReply(reply: SleepReply<JobResult>): Promise<number> {
 process.once('message', (message) => {
   // SAFETY: sleep-offload.ts is the only writer on this channel and sends exactly one SleepJob.
   const job = message as SleepJob;
-  const work = (): Promise<JobResult> => job.kind === 'consolidate'
-    ? consolidate(job.hippoRoot)
-    : sleep({ hippoRoot: job.hippoRoot, tenantId: job.tenantId, actor: job.actor, store: sqliteStore(job.hippoRoot) }, job.opts);
+  const work = (): Promise<JobResult> =>
+    job.kind === 'consolidate'
+      ? consolidate(job.hippoRoot)
+      : sleep(
+          { hippoRoot: job.hippoRoot, tenantId: job.tenantId, actor: job.actor, store: sqliteStore(job.hippoRoot) },
+          job.opts,
+        );
   // The server's own request scope and lock wait, so a busy store answers as it did when sleep ran in the server.
   runWithRequestStores(work, { busyWaitMs: SERVER_DB_WAIT_MS })
     .then((result): SleepReply<JobResult> => ({ ok: true, result }), failed)

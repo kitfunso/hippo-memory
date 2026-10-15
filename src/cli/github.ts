@@ -29,7 +29,8 @@ function isFlagString(value: FlagValue): value is string {
   return typeof value === 'string';
 }
 
-// FlagValue never includes `number`, so a `value is number` predicate on it would not type-check; the generic wrapper narrows any type T instead.
+// FlagValue never includes `number`, so a `value is number` predicate on it would not type-check; the generic wrapper
+// narrows any type T instead.
 function isNumberLike<T>(value: T): value is T & number {
   return typeof value === 'number';
 }
@@ -38,7 +39,8 @@ function isFlagValueNumberLike(value: FlagValue): boolean {
   return isNumberLike(value);
 }
 
-/** Map a parsed envelope + eventName header to an IngestEvent; null for unknown event types or shapes failing the type guards. */
+/** Map a parsed envelope + eventName header to an IngestEvent; null for unknown event types or shapes failing the
+ * type guards. */
 function parsedToIngestEvent(parsed: JsonValue, eventName: string): IngestEvent | null {
   if (eventName === 'issues' && isGitHubIssueEvent(parsed, eventName)) {
     return { eventName: 'issues', payload: parsed };

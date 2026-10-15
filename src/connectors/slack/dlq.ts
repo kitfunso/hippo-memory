@@ -37,8 +37,8 @@ export interface ReplayDlqOpts {
   skewSeconds?: number;
 }
 
-/** Replay a DLQ row via the normal ingest path (`hippo slack dlq replay <id> [--force]`), re-verifying the signature with the CURRENT secret unless forced.
- *  Rows with a NULL signature need --force; replays use today's routing, because the DLQ exists to be drained after the operator fixed routing. */
+/** Replay a DLQ row via the normal ingest path (`hippo slack dlq replay <id> [--force]`), re-verifying the signature
+ * with the CURRENT secret unless forced. A NULL signature needs --force; replays use today's routing. */
 export async function replayDlqEntry(
   ctx: Pick<StoreContext, 'hippoRoot' | 'store'>,
   id: number,
@@ -78,7 +78,10 @@ function refuseSignature(row: DlqItem, opts: ReplayDlqOpts): SignatureRefusal | 
   };
 }
 
-async function reingest({ hippoRoot, store }: Pick<StoreContext, 'hippoRoot' | 'store'>, envelope: JsonValue & SlackEventEnvelope): Promise<Reingest> {
+async function reingest(
+  { hippoRoot, store }: Pick<StoreContext, 'hippoRoot' | 'store'>,
+  envelope: JsonValue & SlackEventEnvelope,
+): Promise<Reingest> {
   const tenantId = await resolveTenantForSlackTeam(store, envelope.team_id);
   if (!tenantId) return { ok: false, status: 'unroutable', reason: `team_id ${envelope.team_id} still unroutable` };
   const inner = envelope.event;

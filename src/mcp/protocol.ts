@@ -32,8 +32,8 @@ interface McpRequest {
   jsonrpc: '2.0';
   id: number | string;
   method: string;
-  // Kept as Record<string, JsonValue>: wire params are always parsed JSON, and every read of `params` (tools/call below) narrows via the isJson* predicates
-  // first.
+  // Kept as Record<string, JsonValue>: wire params are always parsed JSON, and every read of `params` (tools/call
+  // below) narrows via the isJson* predicates first.
   params?: Record<string, JsonValue>;
 }
 
@@ -45,8 +45,14 @@ interface McpResponse {
   error?: { code: number; message: string; data?: { requestId: string } };
 }
 
-/** JSON-RPC reply for a request that threw: typed API errors keep their text; anything else is logged and answered generically. */
-export function mcpErrorResponse<E>(id: McpResponse['id'], err: E, requestId: string = currentRequestId() ?? randomUUID(), call?: string): McpResponse {
+/** JSON-RPC reply for a request that threw: typed API errors keep their text; anything else is logged and answered
+ * generically. */
+export function mcpErrorResponse<E>(
+  id: McpResponse['id'],
+  err: E,
+  requestId: string = currentRequestId() ?? randomUUID(),
+  call?: string,
+): McpResponse {
   const where = call === undefined ? '' : ` (${call})`;
   const { status, message } = mapApiError(err);
   if (status === 503) {
@@ -67,13 +73,14 @@ export function mcpErrorResponse<E>(id: McpResponse['id'], err: E, requestId: st
 
 export type { McpRequest, McpResponse };
 
-/** Optional context from a non-stdio transport (the HTTP server's bound hippoRoot and auth-resolved tenantId/actor), so executeTool skips the
- * findHippoRoot() walk and the env-based resolveTenantId({}) fallback, which would pick the wrong store and tenant for HTTP callers. Stdio passes nothing. */
+/** Optional context from a non-stdio transport (the HTTP server's bound hippoRoot and auth-resolved tenantId/actor), so
+ * executeTool skips the findHippoRoot() walk and the env-based tenant fallback, which would pick the wrong store. */
 export interface McpContext {
   hippoRoot: string;
   tenantId: string;
   actor: string;
-  /** The caller's authenticated role. Required so no transport can forget it; only stdio, which passes no context, is admin without one. */
+  /** The caller's authenticated role. Required so no transport can forget it; only stdio, which passes no context,
+   * is admin without one. */
   role: 'admin' | 'member';
   /** Scope grants for the HTTP-MCP caller's key. Absent for stdio (admin, needs none). */
   scopes?: readonly string[];
@@ -85,18 +92,23 @@ export interface McpContext {
   /** The store this transport's calls run on; stdio passes no context, so its opener builds one per folder. */
   store: HippoStore;
   autoSleep?: false;
-  /** Set by the HTTP transport so auto-sleep runs off the server's event loop; stdio consolidates in its own process. */
+  /** Set by the HTTP transport so auto-sleep runs off the server's event loop; stdio consolidates in its own
+   * process. */
   autoSleepRunner?: AutoSleepRunner;
-  /** Per-client key for state isolation under HTTP-MCP: 'stdio-${pid}' for stdio, hash(bearer + remoteAddr) for HTTP (built in src/server/mcp-http.ts);
-   * defaults to `${tenantId}:default`. */
+  /** Per-client key for state isolation under HTTP-MCP: 'stdio-${pid}' for stdio, hash(bearer + remoteAddr) for HTTP
+   * (built in src/server/mcp-http.ts); defaults to `${tenantId}:default`. */
   clientKey?: string;
 }
 
-/** The api-layer actor for a tool call. Only stdio passes no context: it is the local operator, host admin. Any context runs as its own role, and an
- * untyped caller that sends none runs as a member, so a missing role fails closed. */
+/** The api-layer actor for a tool call. Only stdio passes no context: it is the local operator, host admin. Any context
+ * runs as its own role, and an untyped caller that sends none runs as a member, so a missing role fails closed. */
 export function mcpActor(ctx: McpContext | undefined): ApiActor {
   if (ctx === undefined) return { subject: 'mcp', role: 'admin', hostAdmin: true };
-  const actor: ApiActor = { subject: ctx.actor ?? 'mcp', role: ctx.role === 'admin' ? 'admin' : 'member', scopes: ctx.scopes };
+  const actor: ApiActor = {
+    subject: ctx.actor ?? 'mcp',
+    role: ctx.role === 'admin' ? 'admin' : 'member',
+    scopes: ctx.scopes,
+  };
   if (ctx.viaAuthResolver) actor.viaAuthResolver = true;
   if (ctx.hostAdmin) actor.hostAdmin = true;
   if (ctx.owner !== undefined) actor.owner = ctx.owner;

@@ -25,7 +25,9 @@ function collectProcessSteps(stepRaw: string | boolean | string[] | undefined): 
 }
 
 function printProcessRow(proc: Process): void {
-  console.log(`#${proc.id} [${proc.status}] v${proc.version} steps=${proc.steps.length} memory=${proc.memoryId ?? '-'}`);
+  console.log(
+    `#${proc.id} [${proc.status}] v${proc.version} steps=${proc.steps.length} memory=${proc.memoryId ?? '-'}`,
+  );
   console.log(`    ${proc.processName}`);
   if (proc.changeSummary) console.log(`    change: ${proc.changeSummary}`);
 }
@@ -35,7 +37,11 @@ interface ProcessBody {
   readonly description: string | undefined;
 }
 
-const processKind = (objects: Objects, hippoRoot: string, tenantId: string): VersionedKind<Process, processesModule.ProcessStatus, ProcessBody> => ({
+const processKind = (
+  objects: Objects,
+  hippoRoot: string,
+  tenantId: string,
+): VersionedKind<Process, processesModule.ProcessStatus, ProcessBody> => ({
   names: { cmd: 'process', noun: 'Process', idLabel: 'process' },
   plural: 'processes',
   states: processesModule.VALID_PROCESS_STATES,
@@ -46,7 +52,8 @@ const processKind = (objects: Objects, hippoRoot: string, tenantId: string): Ver
     '       hippo process supersede <id> --step "<text>" [--change "<summary>"]',
     '       hippo process close <id>',
   ],
-  supersedeUsage: 'Usage: hippo process supersede <id> --step "<text>" [--step ...] [--change "<summary>"] [--description "<text>"]',
+  supersedeUsage:
+    'Usage: hippo process supersede <id> --step "<text>" [--step ...] [--change "<summary>"] [--description "<text>"]',
   bodyRequired: 'at least one --step "<text>"',
   body: (flags, verb) => {
     const steps = collectProcessSteps(flags['step']);
@@ -55,9 +62,14 @@ const processKind = (objects: Objects, hippoRoot: string, tenantId: string): Ver
     return { steps, description: nonEmptyStringFlag(flags, 'description') };
   },
   keyOf: (proc) => proc.processName,
-  save: (processName, body, extraTags, from) => processesModule.saveProcess(objects, hippoRoot, tenantId, {
-    processName, ...body, extraTags, changeSummary: from?.changeSummary, supersedesProcessId: from?.id,
-  }),
+  save: (processName, body, extraTags, from) =>
+    processesModule.saveProcess(objects, hippoRoot, tenantId, {
+      processName,
+      ...body,
+      extraTags,
+      changeSummary: from?.changeSummary,
+      supersedesProcessId: from?.id,
+    }),
   recorded: (proc) => `Process recorded: #${proc.id} (v${proc.version}, ${proc.steps.length} steps)`,
   list: (opts) => processesModule.loadProcesses(objects, tenantId, opts),
   loadById: (id) => processesModule.loadProcessById(objects, tenantId, id),
@@ -111,7 +123,11 @@ interface PolicyBody {
   readonly validTo: string | undefined;
 }
 
-const policyKind = (objects: Objects, hippoRoot: string, tenantId: string): VersionedKind<Policy, policiesModule.PolicyStatus, PolicyBody> => ({
+const policyKind = (
+  objects: Objects,
+  hippoRoot: string,
+  tenantId: string,
+): VersionedKind<Policy, policiesModule.PolicyStatus, PolicyBody> => ({
   names: { cmd: 'policy', noun: 'Policy', idLabel: 'policy' },
   plural: 'policies',
   states: policiesModule.VALID_POLICY_STATES,
@@ -123,7 +139,8 @@ const policyKind = (objects: Objects, hippoRoot: string, tenantId: string): Vers
     '       hippo policy supersede <id> --text "<rule>" [--from] [--to] [--change "<summary>"]',
     '       hippo policy close <id>',
   ],
-  supersedeUsage: 'Usage: hippo policy supersede <id> --text "<rule>" [--from <iso>] [--to <iso>] [--change "<summary>"]',
+  supersedeUsage:
+    'Usage: hippo policy supersede <id> --text "<rule>" [--from <iso>] [--to <iso>] [--change "<summary>"]',
   bodyRequired: '--text "<rule>"',
   body: (flags) => {
     const policyText = requiredText(flags, 'text');
@@ -131,9 +148,14 @@ const policyKind = (objects: Objects, hippoRoot: string, tenantId: string): Vers
     return { policyText, validFrom: nonEmptyStringFlag(flags, 'from'), validTo: nonEmptyStringFlag(flags, 'to') };
   },
   keyOf: (p) => p.policyName,
-  save: (policyName, body, extraTags, from) => policiesModule.savePolicy(objects, hippoRoot, tenantId, {
-    policyName, ...body, extraTags, changeSummary: from?.changeSummary, supersedesPolicyId: from?.id,
-  }),
+  save: (policyName, body, extraTags, from) =>
+    policiesModule.savePolicy(objects, hippoRoot, tenantId, {
+      policyName,
+      ...body,
+      extraTags,
+      changeSummary: from?.changeSummary,
+      supersedesPolicyId: from?.id,
+    }),
   recorded: (p) => `Policy recorded: #${p.id} (v${p.version}, effective ${policyRange(p)})`,
   list: (opts) => policiesModule.loadPolicies(objects, tenantId, opts),
   loadById: (id) => policiesModule.loadPolicyById(objects, tenantId, id),
@@ -173,7 +195,11 @@ interface SkillBody {
   readonly trigger: string | undefined;
 }
 
-const skillKind = (objects: Objects, hippoRoot: string, tenantId: string): VersionedKind<Skill, skillsModule.SkillStatus, SkillBody> => ({
+const skillKind = (
+  objects: Objects,
+  hippoRoot: string,
+  tenantId: string,
+): VersionedKind<Skill, skillsModule.SkillStatus, SkillBody> => ({
   names: { cmd: 'skill', noun: 'Skill', idLabel: 'skill' },
   plural: 'skills',
   states: skillsModule.VALID_SKILL_STATES,
@@ -185,7 +211,8 @@ const skillKind = (objects: Objects, hippoRoot: string, tenantId: string): Versi
     '       hippo skill supersede <id> --instructions "<text>" [--trigger] [--change "<summary>"]',
     '       hippo skill close <id>',
   ],
-  supersedeUsage: 'Usage: hippo skill supersede <id> --instructions "<text>" [--trigger "<when>"] [--change "<summary>"]',
+  supersedeUsage:
+    'Usage: hippo skill supersede <id> --instructions "<text>" [--trigger "<when>"] [--change "<summary>"]',
   bodyRequired: '--instructions "<text>"',
   body: (flags) => {
     const instructions = requiredText(flags, 'instructions');
@@ -193,9 +220,14 @@ const skillKind = (objects: Objects, hippoRoot: string, tenantId: string): Versi
     return { instructions, trigger: nonEmptyStringFlag(flags, 'trigger') };
   },
   keyOf: (s) => s.skillName,
-  save: (skillName, body, extraTags, from) => skillsModule.saveSkill(objects, hippoRoot, tenantId, {
-    skillName, ...body, extraTags, changeSummary: from?.changeSummary, supersedesSkillId: from?.id,
-  }),
+  save: (skillName, body, extraTags, from) =>
+    skillsModule.saveSkill(objects, hippoRoot, tenantId, {
+      skillName,
+      ...body,
+      extraTags,
+      changeSummary: from?.changeSummary,
+      supersedesSkillId: from?.id,
+    }),
   recorded: (s) => `Skill recorded: #${s.id} (v${s.version})`,
   list: (opts) => skillsModule.loadSkills(objects, tenantId, opts),
   loadById: (id) => skillsModule.loadSkillById(objects, tenantId, id),

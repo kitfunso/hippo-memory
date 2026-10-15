@@ -10,12 +10,20 @@ import { resolveTenantForSlackTeam } from './tenant-routing.js';
 import { resolveTenantId } from '../../store/tenant.js';
 import type { StoreContext } from '../../api/index.js';
 import type { HippoStore } from '../../store/index.js';
-import { HttpError, JSON_HEADERS, isHeaderString, closeIfBodyUnread, readWebhookBody, sendJson, type WebhookRequest } from '../../util/http-util.js';
+import {
+  HttpError,
+  JSON_HEADERS,
+  isHeaderString,
+  closeIfBodyUnread,
+  readWebhookBody,
+  sendJson,
+  type WebhookRequest,
+} from '../../util/http-util.js';
 import { type JsonValue, isJsonObject } from '../../util/json.js';
 
-/** Slack Events API webhook: HMAC over the raw body with SLACK_SIGNING_SECRET, no Bearer (its route row declares webhook-signature);
- *  malformed payloads go to slack_dlq, ACK 200.
- *  404 (not 503) when the secret is unset, so a probe cannot tell a gated-off route from a missing one. */
+/** Slack Events API webhook: HMAC over the raw body with SLACK_SIGNING_SECRET, no Bearer (its route row declares
+ * webhook-signature); malformed payloads go to slack_dlq, ACK 200. 404 (not 503) when the secret is unset, so a probe
+ * cannot tell a gated-off route from a missing one. */
 export async function handleSlackEventsWebhook(request: WebhookRequest, store: HippoStore): Promise<void> {
   const { req, res, opts } = request;
   // Secret and headers before the body, so a caller with neither cannot make the server buffer one.
@@ -47,7 +55,14 @@ export async function handleSlackEventsWebhook(request: WebhookRequest, store: H
   ) {
     throw new HttpError(401, 'invalid Slack signature');
   }
-  await routeSignedSlackPayload({ hippoRoot: opts.hippoRoot, store, res, rawBody, signature: sigStr, slackTimestamp: tsStr });
+  await routeSignedSlackPayload({
+    hippoRoot: opts.hippoRoot,
+    store,
+    res,
+    rawBody,
+    signature: sigStr,
+    slackTimestamp: tsStr,
+  });
 }
 
 /** One signed request and where to answer it; every stage below parks into the DLQ through it. */
@@ -109,8 +124,8 @@ async function routeSignedSlackPayload(d: SignedSlackRequest): Promise<void> {
     return;
   }
   if (answerUrlVerification(res, body)) return;
-  // Fail closed: resolveTenantForSlackTeam returns null for an unknown team on a non-empty slack_workspaces; park it in slack_dlq (bucket='unroutable')
-  // and still ACKs 200 so Slack stops retrying; never call ingest.
+  // Fail closed: resolveTenantForSlackTeam returns null for an unknown team on a non-empty slack_workspaces; park it in
+  // slack_dlq (bucket='unroutable') and still ACKs 200 so Slack stops retrying; never call ingest.
   let resolvedTenant: string | null = null;
   if (body !== undefined && isSlackEventEnvelope(body)) {
     resolvedTenant = await resolveTenantForSlackTeam(d.store, body.team_id);
@@ -178,7 +193,8 @@ async function dispatchSlackEvent(
     }
     const r = await ingestMessage(ctx, {
       teamId: body.team_id,
-      // Channel privacy is not on the inner event, so channel_type is the proxy: 'group'|'im'|'mpim' private, 'channel' public, unknown private.
+      // Channel privacy is not on the inner event, so channel_type is the proxy: 'group'|'im'|'mpim' private, 'channel'
+      // public, unknown private.
       channel: {
         id: inner.channel,
         is_private: inner.channel_type !== 'channel',

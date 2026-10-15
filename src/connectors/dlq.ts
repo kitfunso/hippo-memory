@@ -1,4 +1,5 @@
-// The dead-letter queue every webhook connector parks into: one redaction, one unroutable sentinel, one set of defaults, one replay result.
+// The dead-letter queue every webhook connector parks into: one redaction, one unroutable sentinel, one set of
+// defaults, one replay result.
 
 import { DEFAULT_LIST_LIMIT } from '../util/limits.js';
 import { DLQ_REDACTED_NOTE, redactPayload } from '../util/secret-detect.js';
@@ -31,8 +32,8 @@ export interface ParkedRow<Bucket extends string> {
   signature: string | null;
 }
 
-/** What one connector supplies: the tag that names its table to the store, its list, its one-row read and its retry bump.
- * `Own` is the columns only its table has. */
+/** What one connector supplies: the tag that names its table to the store, its list, its one-row read and its retry
+ * bump. `Own` is the columns only its table has. */
 export interface ConnectorDlq<Own, Bucket extends string, Item> {
   readonly letter: (row: ParkedRow<Bucket> & Own) => ConnectorDeadLetter;
   readonly list: (hippoRoot: string, tenantId: string, limit: number) => Item[];
@@ -136,7 +137,8 @@ export interface ReplaySteps<Item, Envelope extends JsonValue> {
   readonly reingest: (row: Item, envelope: Envelope) => Promise<Reingest>;
 }
 
-/** Re-runs a parked row under today's secret and routing; every attempt past the read is counted once, except a missing signature. */
+/** Re-runs a parked row under today's secret and routing; every attempt past the read is counted once, except a
+ * missing signature. */
 export async function replayParked<Item extends ParkedEntry, Envelope extends JsonValue>(
   steps: ReplaySteps<Item, Envelope>,
   hippoRoot: string,
@@ -161,7 +163,12 @@ export async function replayParked<Item extends ParkedEntry, Envelope extends Js
   const outcome = await steps.reingest(row, parsed);
   if (!outcome.ok) return failAndBump(steps.dlq, hippoRoot, row, outcome.status, outcome.reason);
   steps.dlq.bump(hippoRoot, row.id);
-  const result: ReplayResult = { ok: true, status: outcome.status, memoryId: outcome.memoryId, retryCount: row.retryCount + 1 };
+  const result: ReplayResult = {
+    ok: true,
+    status: outcome.status,
+    memoryId: outcome.memoryId,
+    retryCount: row.retryCount + 1,
+  };
   if (outcome.reason !== undefined) result.reason = outcome.reason;
   return result;
 }

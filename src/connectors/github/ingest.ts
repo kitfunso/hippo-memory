@@ -1,6 +1,6 @@
 // GitHub event ingest, once per idempotency key. The key comes from the event's own content, never from the unsigned
-// X-GitHub-Delivery header, so a replay cannot get past it by rotating the delivery id. The pre-check is only the fast path:
-// the store logs the key in the memory's own transaction, which is what holds when two workers race.
+// X-GitHub-Delivery header, so a replay cannot get past it by rotating the delivery id. The pre-check is only the fast
+// path: the store logs the key in the memory's own transaction, which is what holds when two workers race.
 
 import type { StoreContext, RememberOpts } from '../../api/index.js';
 import { requireGroup } from '../../store/index.js';
@@ -85,7 +85,12 @@ export async function ingestEvent(ctx: StoreContext, input: IngestInput): Promis
     eventArtifactRef(input.event),
     eventUpdatedAt(input.event),
   );
-  const event: ConnectorEvent = { connector: 'github', idempotencyKey, deliveryId: input.deliveryId, eventName: input.event.eventName };
+  const event: ConnectorEvent = {
+    connector: 'github',
+    idempotencyKey,
+    deliveryId: input.deliveryId,
+    eventName: input.event.eventName,
+  };
 
   // Fast path: pre-check. Avoids running the transform / opening a write tx
   // for the common already-seen case (GitHub auto-retries with the same body).

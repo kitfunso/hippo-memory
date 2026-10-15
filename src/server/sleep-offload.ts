@@ -1,4 +1,5 @@
-// POST /v1/sleep and the MCP auto-sleep run their consolidation in a child process, so the server keeps answering and a stuck run can be stopped.
+// POST /v1/sleep and the MCP auto-sleep run their consolidation in a child process, so the server keeps answering and a
+// stuck run can be stopped.
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { sleep, type Actor, type SleepOpts, type SleepResult, type StoreContext } from '../api/index.js';
@@ -9,9 +10,16 @@ import { HttpError } from '../util/http-util.js';
 
 const DEFAULT_SLEEP_DEADLINE_MS = 600_000;
 
-/** What the child needs to rebuild the request's context (the store handle itself cannot cross a process boundary), or the store an auto-sleep consolidates. */
+/** What the child needs to rebuild the request's context (the store handle itself cannot cross a process boundary),
+ * or the store an auto-sleep consolidates. */
 export type SleepJob =
-  | { readonly kind: 'sleep'; readonly hippoRoot: string; readonly tenantId: string; readonly actor: Actor; readonly opts: SleepOpts }
+  | {
+      readonly kind: 'sleep';
+      readonly hippoRoot: string;
+      readonly tenantId: string;
+      readonly actor: Actor;
+      readonly opts: SleepOpts;
+    }
   | { readonly kind: 'consolidate'; readonly hippoRoot: string };
 
 export type SleepReply<R = SleepResult> =
@@ -36,22 +44,37 @@ function runInChild<R>(job: SleepJob): Promise<R> {
     // The child's stderr is the server's log, so Node's SQLite notice would repeat there on every sleep.
     const child = spawn(process.execPath, ['--disable-warning=ExperimentalWarning', CHILD_ENTRY], {
       stdio: ['ignore', 'inherit', 'inherit', 'ipc'],
-      windowsHide: true
+      windowsHide: true,
     });
     let reply: SleepReply<R> | undefined;
     let timedOut = false;
-    // SIGKILL because the child is inside synchronous SQLite work and cannot run a handler; the OS drops its write lock.
-    const timer = setTimeout(() => { timedOut = true; child.kill('SIGKILL'); }, deadlineMs);
+    // SIGKILL because the child is inside synchronous SQLite work and cannot run a handler; the OS drops its write
+    // lock.
+    const timer = setTimeout(() => {
+      timedOut = true;
+      child.kill('SIGKILL');
+    }, deadlineMs);
     child.once('message', (message) => {
-      // SAFETY: sleep-child.ts is the only writer on this channel and sends exactly one SleepReply for the job it was given.
+      // SAFETY: sleep-child.ts is the only writer on this channel and sends exactly one SleepReply for the job it was
+      // given.
       reply = message as SleepReply<R>;
     });
-    child.once('error', (err) => { clearTimeout(timer); reject(err); });
-    // 'close' and not 'exit': it waits for the channel to drain, so the reply is in hand and the child's store handles are gone.
+    child.once('error', (err) => {
+      clearTimeout(timer);
+      reject(err);
+    });
+    // 'close' and not 'exit': it waits for the channel to drain, so the reply is in hand and the child's store handles
+    // are gone.
     child.once('close', (code, signal) => {
       clearTimeout(timer);
-      if (timedOut) reject(new HttpError(504, `sleep did not finish within ${deadlineMs} ms and was stopped; the next sleep carries on from there`));
-      else if (reply?.ok) resolve(reply.result);
+      if (timedOut) {
+        reject(
+          new HttpError(
+            504,
+            `sleep did not finish within ${deadlineMs} ms and was stopped; the next sleep carries on from there`,
+          ),
+        );
+      } else if (reply?.ok) resolve(reply.result);
       else reject(failureOf(reply, code, signal));
     });
     child.send(job);
@@ -60,31 +83,55 @@ function runInChild<R>(job: SleepJob): Promise<R> {
 
 let turn: Promise<void> = Promise.resolve();
 
-// One running and one waiting: each further sleep would only hold a request open behind work the waiting one already covers.
+// One running and one waiting: each further sleep would only hold a request open behind work the waiting one already
+// covers.
 const MAX_SLEEPS_IN_LINE = 2;
 const SLEEP_RETRY_AFTER_SEC = 30;
 let inLine = 0;
 
 function inTurn<R>(job: SleepJob): Promise<R> {
   if (inLine >= MAX_SLEEPS_IN_LINE) {
-    return Promise.reject(new HttpError(503, 'a sleep is already running and another is waiting; retry when one has finished', SLEEP_RETRY_AFTER_SEC));
+    return Promise.reject(
+      new HttpError(
+        503,
+        'a sleep is already running and another is waiting; retry when one has finished',
+        SLEEP_RETRY_AFTER_SEC,
+      ),
+    );
   }
   inLine += 1;
-  // One sleep at a time, as on the server's single thread: a second one waits its turn and does not fight the first for the write lock.
+  // One sleep at a time, as on the server's single thread: a second one waits its turn and does not fight the first for
+  // the write lock.
   const run = turn.then(() => runInChild<R>(job));
   // A failed sleep reaches its own caller through `run`; the queue only needs to know the turn is over.
-  turn = run.then(() => undefined, () => undefined).finally(() => { inLine -= 1; });
+  turn = run
+    .then(
+      () => undefined,
+      () => undefined,
+    )
+    .finally(() => {
+      inLine -= 1;
+    });
   return run;
 }
 
-/** `sleep` for the HTTP route: same result and errors, run outside the serving process and stopped at the deadline (10 minutes, or HIPPO_SLEEP_TIMEOUT_MS). */
+/** `sleep` for the HTTP route: same result and errors, run outside the serving process and stopped at the deadline
+ * (10 minutes, or HIPPO_SLEEP_TIMEOUT_MS). */
 export function sleepInChild(ctx: StoreContext, opts: SleepOpts): Promise<SleepResult> {
-  // The child reopens the store by path, which only a store of local files has; any other store keeps sleep's own refusal.
+  // The child reopens the store by path, which only a store of local files has; any other store keeps sleep's own
+  // refusal.
   if (!hasGroup(ctx.store, 'localFiles')) return sleep(ctx, opts);
-  return inTurn<SleepResult>({ kind: 'sleep', hippoRoot: ctx.hippoRoot, tenantId: ctx.tenantId, actor: ctx.actor, opts });
+  return inTurn<SleepResult>({
+    kind: 'sleep',
+    hippoRoot: ctx.hippoRoot,
+    tenantId: ctx.tenantId,
+    actor: ctx.actor,
+    opts,
+  });
 }
 
-/** The MCP auto-sleep's consolidation, in the same queue and child as POST /v1/sleep; auto-sleep only starts on a hippo.db store. */
+/** The MCP auto-sleep's consolidation, in the same queue and child as POST /v1/sleep; auto-sleep only starts on a
+ * hippo.db store. */
 export async function consolidateInChild(hippoRoot: string): Promise<void> {
   await inTurn<ConsolidationResult>({ kind: 'consolidate', hippoRoot });
 }

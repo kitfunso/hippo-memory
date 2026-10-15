@@ -20,8 +20,8 @@ import { consolidateInChild } from './sleep-offload.js';
 const DEFAULT_SSE_HEARTBEAT_MS = MINUTE_MS;
 const DEFAULT_SSE_MAX_AGE_SEC = 3600;
 
-/** Per-client key for MCP state isolation under HTTP-MCP (scopes `lastRecalledIds`): sha256 of the token (16 hex chars, so the raw bearer is never logged)
- * plus the client address the rate limiter keys on, so clients sharing a key stay separable behind a trusted proxy too; 'noauth' covers loopback no-auth. */
+/** Per-client key for MCP state isolation under HTTP-MCP (scopes `lastRecalledIds`): sha256 of the token (16 hex chars,
+ * so the raw bearer is never logged) plus the client address the rate limiter keys on; 'noauth' covers loopback. */
 function buildMcpClientKey(req: IncomingMessage): string {
   const auth = readAuthHeader(req);
   const tokenHash = auth.kind === 'bearer'
@@ -31,8 +31,8 @@ function buildMcpClientKey(req: IncomingMessage): string {
 }
 
 // MCP-over-HTTP/SSE: POST /mcp answers a JSON-RPC request synchronously; GET /mcp/stream is a keepalive-only SSE stream
-// (`: ping` every DEFAULT_SSE_HEARTBEAT_MS, 60 s) in v1.
-// Both dispatch to handleMcpRequest as stdio does. Auth matches /v1/* (Bearer via `requireAuth`, loopback fallback); SSE is checked once at stream-open.
+// (`: ping` every DEFAULT_SSE_HEARTBEAT_MS, 60 s) in v1. Both dispatch to handleMcpRequest as stdio does. Auth matches
+// /v1/* (Bearer via `requireAuth`, loopback fallback); SSE is checked once at stream-open.
 
 // Percent-encoded by the client, so any lowercase Unicode name fits a Latin-1 header.
 const HEADER_PIECE = /^[A-Za-z0-9\-_.!~*'()%]+$/;
@@ -46,7 +46,8 @@ function decodeHeaderPiece(raw: string, header: string): string {
   }
 }
 
-/** On a shared store, the caller's project from X-Hippo-Project and the comma-separated X-Hippo-Project-Aliases; any other store ignores both. */
+/** On a shared store, the caller's project from X-Hippo-Project and the comma-separated X-Hippo-Project-Aliases; any
+ * other store ignores both. */
 export function callerProjectFromHeaders(req: IncomingMessage, hippoRoot: string): CallerProject | undefined {
   if (!isSharedStore(hippoRoot)) return undefined;
   const names = req.headersDistinct['x-hippo-project'];
@@ -55,15 +56,23 @@ export function callerProjectFromHeaders(req: IncomingMessage, hippoRoot: string
     if (aliasHeaders !== undefined) throw new HttpError(400, 'X-Hippo-Project-Aliases needs X-Hippo-Project');
     return undefined;
   }
-  if (names.length > 1 || (aliasHeaders?.length ?? 0) > 1) throw new HttpError(400, 'send X-Hippo-Project and X-Hippo-Project-Aliases once each');
+  if (names.length > 1 || (aliasHeaders?.length ?? 0) > 1) {
+    throw new HttpError(400, 'send X-Hippo-Project and X-Hippo-Project-Aliases once each');
+  }
   const name = decodeHeaderPiece(names[0]!, 'X-Hippo-Project');
   const rawAliases = aliasHeaders?.[0] ?? '';
-  const aliases = rawAliases === '' ? [] : rawAliases.split(',').map((a) => decodeHeaderPiece(a, 'X-Hippo-Project-Aliases'));
+  const aliases =
+    rawAliases === '' ? [] : rawAliases.split(',').map((a) => decodeHeaderPiece(a, 'X-Hippo-Project-Aliases'));
   assertCallerProject({ name, aliases });
   return { name, legacyName: name, aliases };
 }
 
-function mcpContextFor(ctx: StoreContext, clientKey: string, autoSleep: McpContext['autoSleep'], project?: CallerProject): McpContext {
+function mcpContextFor(
+  ctx: StoreContext,
+  clientKey: string,
+  autoSleep: McpContext['autoSleep'],
+  project?: CallerProject,
+): McpContext {
   const mcpCtx: McpContext = {
     hippoRoot: ctx.hippoRoot,
     tenantId: ctx.tenantId,
@@ -85,8 +94,8 @@ function mcpContextFor(ctx: StoreContext, clientKey: string, autoSleep: McpConte
 }
 
 export async function handleMcpPost(req: IncomingMessage, res: ServerResponse, opts: ResolvedServeOpts): Promise<void> {
-  // Same Context the /v1/* routes use, so MCP tool calls inherit the bound hippoRoot and the auth-resolved tenantId/actor; otherwise executeTool would walk
-  // from cwd and read HIPPO_TENANT, dropping a valid Bearer for tenant B to the env's tenant.
+  // Same Context the /v1/* routes use, so tool calls inherit the bound hippoRoot and the auth-resolved tenantId/actor;
+  // else executeTool walks from cwd and reads HIPPO_TENANT, dropping a valid Bearer for tenant B to the env's tenant.
   const ctx = await buildContextWithAuth(req, opts);
   noteAccess(req, { tenant: ctx.tenantId });
   const project = callerProjectFromHeaders(req, ctx.hippoRoot);
@@ -100,15 +109,20 @@ export async function handleMcpPost(req: IncomingMessage, res: ServerResponse, o
   if (!isJsonObject(mcpReq) || !isJsonString(mcpReq.method)) {
     throw new HttpError(400, 'JSON-RPC body must include a method string');
   }
-  // SAFETY: validated above as a plain JSON object with a string method; the other McpRequest wire fields (jsonrpc, id, params) are checked or defaulted in
-  // handleMcpRequest.
+  // SAFETY: validated above as a plain JSON object with a string method; the other McpRequest wire fields (jsonrpc, id,
+  // params) are checked or defaulted in handleMcpRequest.
   const rpcReq = mcpReq as McpRequest & Record<string, JsonValue>;
   let mcpRes;
   try {
     mcpRes = await handleMcpRequest(rpcReq, mcpContextFor(ctx, buildMcpClientKey(req), opts.autoSleep, project));
   } catch (err) {
     const tool = rpcReq.params?.name;
-    mcpRes = mcpErrorResponse(rpcReq.id, err, undefined, isJsonString(tool) ? `${rpcReq.method} ${tool.slice(0, 128)}` : rpcReq.method);
+    mcpRes = mcpErrorResponse(
+      rpcReq.id,
+      err,
+      undefined,
+      isJsonString(tool) ? `${rpcReq.method} ${tool.slice(0, 128)}` : rpcReq.method,
+    );
   }
   if (mcpRes === null) {
     // Notification — no body, 202 Accepted.
@@ -134,7 +148,9 @@ function acquireStreamSlot(req: IncomingMessage, res: ServerResponse, slots: Map
   const max = envMcpSseMaxStreams() ?? DEFAULT_MAX_STREAMS_PER_CLIENT;
   const key = streamSlotKey(req);
   const open = slots.get(key) ?? 0;
-  if (open >= max) throw new HttpError(429, `too many open streams for this client (limit ${max}); close one first`, 60);
+  if (open >= max) {
+    throw new HttpError(429, `too many open streams for this client (limit ${max}); close one first`, 60);
+  }
   slots.set(key, open + 1);
   res.once('close', () => {
     const left = (slots.get(key) ?? 1) - 1;
@@ -162,8 +178,8 @@ export async function handleMcpStream(
   // waiting for the first keepalive interval.
   res.write(': ping\n\n');
 
-  // SSE hardening: the heartbeat re-validates the bearer (MCP_SSE_HEARTBEAT_MS, default 60000) and closes with 'auth_revoked' if the key was revoked or
-  // rotated; MCP_SSE_MAX_AGE_SEC (default 3600) caps stream lifetime and closes with 'max_age_exceeded'.
+  // SSE hardening: the heartbeat re-validates the bearer (MCP_SSE_HEARTBEAT_MS, default 60000) and closes with
+  // 'auth_revoked' if the key was revoked or rotated; MCP_SSE_MAX_AGE_SEC (default 3600) ends it as 'max_age_exceeded'.
   keepStreamAlive(req, res, opts);
 }
 

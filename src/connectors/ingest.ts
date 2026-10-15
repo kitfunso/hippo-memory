@@ -12,8 +12,13 @@ export interface IngestResult {
   memoryId: string | null;
 }
 
-/** Stores `opts` once per event key; null `opts` (an empty body) and a tombstoned value are logged with no memory, so a redelivery acks instead of retrying. */
-export async function rememberWithEventLog(ctx: StoreContext, event: ConnectorEvent, opts: RememberOpts | null): Promise<IngestResult> {
+/** Stores `opts` once per event key; null `opts` (an empty body) and a tombstoned value are logged with no memory,
+ * so a redelivery acks instead of retrying. */
+export async function rememberWithEventLog(
+  ctx: StoreContext,
+  event: ConnectorEvent,
+  opts: RememberOpts | null,
+): Promise<IngestResult> {
   if (!opts) return markSkipped(ctx, event);
   try {
     // No actor fallback: every caller builds ctx with its connector subject.

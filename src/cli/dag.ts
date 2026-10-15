@@ -7,7 +7,14 @@ import { assembleCost, assembleHeading, drillCost, settleTokens } from '../api/c
 import { listMemories } from '../api/memories.js';
 import { cliApiContext } from './api-context.js';
 import { printError } from './output.js';
-import { type CliFlags, parseBudgetFlag, type CommandContext, flagIsTrue, stringFlag, numberFlag } from './flag-values.js';
+import {
+  type CliFlags,
+  parseBudgetFlag,
+  type CommandContext,
+  flagIsTrue,
+  stringFlag,
+  numberFlag,
+} from './flag-values.js';
 import { requireInit } from './shared.js';
 import { captureConsole } from './print.js';
 import { CONTENT_PREVIEW_CHARS } from '../util/token-text.js';

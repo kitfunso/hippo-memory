@@ -132,8 +132,16 @@ async function cmdAuthRevoke(hippoRoot: string, tenantId: string, keyId: string,
   console.log(`Revoked ${keyId} at ${revokedAt}`);
 }
 
-/** `hippo auth grant|ungrant <key_id> <scope>`, routed through api so the tenant, restricted-scope and audit checks live in one place. */
-async function cmdAuthScopeGrant(hippoRoot: string, tenantId: string, keyId: string, scope: string, grant: boolean, flags: CliFlags): Promise<void> {
+/** `hippo auth grant|ungrant <key_id> <scope>`, routed through api so the tenant, restricted-scope and audit checks
+ * live in one place. */
+async function cmdAuthScopeGrant(
+  hippoRoot: string,
+  tenantId: string,
+  keyId: string,
+  scope: string,
+  grant: boolean,
+  flags: CliFlags,
+): Promise<void> {
   const ctx = await keyContext(resolveAuthRoot(hippoRoot, flags), tenantId, keyId);
   try {
     if (grant) api.authGrant(ctx, keyId, scope);

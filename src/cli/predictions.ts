@@ -15,7 +15,11 @@ const BASERATE_DECIMALS = 3;
 const PREDICTION_NOUN = 'Prediction';
 
 async function predictClose(ctx: StoreContext, args: string[], flags: CliFlags): Promise<void> {
-  const id = idArgOrExit(args, 'Usage: hippo predict close <id> --state <closed|closed-unknown> [--actual <v>] [--note "..."]', 'prediction');
+  const id = idArgOrExit(
+    args,
+    'Usage: hippo predict close <id> --state <closed|closed-unknown> [--actual <v>] [--note "..."]',
+    'prediction',
+  );
   const stateRaw = (stringFlag(flags, 'state') ?? '').trim();
   // SAFETY: Set.has only compares by value, so a string outside the closure states is a plain miss.
   if (!VALID_CLOSURE_STATES.has(stateRaw as ClosureState) || stateRaw === 'open') {
@@ -34,10 +38,17 @@ async function predictClose(ctx: StoreContext, args: string[], flags: CliFlags):
     actualValue,
     closureNote,
   });
-  console.log(`Prediction ${closed.id} closed: state=${closed.closureState}${closed.actualValue !== null ? ` actual=${closed.actualValue}` : ''}`);
+  console.log(
+    `Prediction ${closed.id} closed: state=${closed.closureState}${closed.actualValue !== null ? ` actual=${closed.actualValue}` : ''}`,
+  );
 }
 
-async function loadPredictionList(ctx: StoreContext, status: string, classTag: string, limit: number): Promise<Prediction[]> {
+async function loadPredictionList(
+  ctx: StoreContext,
+  status: string,
+  classTag: string,
+  limit: number,
+): Promise<Prediction[]> {
   if (status === 'open') {
     return predictionsApi.listPredictions(ctx, {
       classTag: classTag || undefined,
@@ -72,7 +83,8 @@ async function predictList(ctx: StoreContext, flags: CliFlags): Promise<void> {
   }
   console.log(`Found ${results.length} predictions:\n`);
   for (const p of results) {
-    const estPart = p.estimateValue !== null ? ` estimate=${p.estimateValue}${p.estimateUnit ? ` ${p.estimateUnit}` : ''}` : '';
+    const estPart =
+      p.estimateValue !== null ? ` estimate=${p.estimateValue}${p.estimateUnit ? ` ${p.estimateUnit}` : ''}` : '';
     const actPart = p.actualValue !== null ? ` actual=${p.actualValue}` : '';
     const tgtPart = p.targetDate ? ` target=${p.targetDate}` : '';
     console.log(`#${p.id} [${p.closureState}] class=${p.classTag}${estPart}${actPart}${tgtPart}`);
@@ -88,7 +100,9 @@ async function predictShow(ctx: StoreContext, args: string[]): Promise<void> {
   console.log(`  class: ${pred.classTag}`);
   console.log(`  claim: ${pred.claimText}`);
   console.log(`  state: ${pred.closureState}`);
-  if (pred.estimateValue !== null) console.log(`  estimate: ${pred.estimateValue}${pred.estimateUnit ? ' ' + pred.estimateUnit : ''}`);
+  if (pred.estimateValue !== null) {
+    console.log(`  estimate: ${pred.estimateValue}${pred.estimateUnit ? ' ' + pred.estimateUnit : ''}`);
+  }
   if (pred.targetDate) console.log(`  target: ${pred.targetDate}`);
   if (pred.actualValue !== null) console.log(`  actual: ${pred.actualValue}`);
   if (pred.closedAt) console.log(`  closed: ${pred.closedAt}`);
@@ -113,10 +127,14 @@ async function predictBaserate(ctx: StoreContext, flags: CliFlags): Promise<void
   console.log(baserate.summary);
   console.log(`  n_closed:         ${baserate.nClosed}`);
   console.log(`  n_ratio_eligible: ${baserate.nRatioEligible}`);
-  if (baserate.meanEstimate !== null) console.log(`  mean_estimate:    ${baserate.meanEstimate.toFixed(BASERATE_DECIMALS)}`);
-  if (baserate.meanActual !== null)   console.log(`  mean_actual:      ${baserate.meanActual.toFixed(BASERATE_DECIMALS)}`);
-  if (baserate.meanRatio !== null)    console.log(`  mean_ratio:       ${baserate.meanRatio.toFixed(BASERATE_DECIMALS)}x`);
-  if (baserate.p50Ratio !== null)     console.log(`  p50_ratio:        ${baserate.p50Ratio.toFixed(BASERATE_DECIMALS)}x`);
+  if (baserate.meanEstimate !== null) {
+    console.log(`  mean_estimate:    ${baserate.meanEstimate.toFixed(BASERATE_DECIMALS)}`);
+  }
+  if (baserate.meanActual !== null) {
+    console.log(`  mean_actual:      ${baserate.meanActual.toFixed(BASERATE_DECIMALS)}`);
+  }
+  if (baserate.meanRatio !== null) console.log(`  mean_ratio:       ${baserate.meanRatio.toFixed(BASERATE_DECIMALS)}x`);
+  if (baserate.p50Ratio !== null) console.log(`  p50_ratio:        ${baserate.p50Ratio.toFixed(BASERATE_DECIMALS)}x`);
   if (baserate.mae !== null)          console.log(`  mae:              ${baserate.mae.toFixed(BASERATE_DECIMALS)}`);
 }
 

@@ -12,25 +12,58 @@ import { detectAnchoring, hashQueryText, biasHintEnabled, snapshotRing } from '.
 import { sessionRing, shownRecallRows } from '../api/recall-record.js';
 import { detectAvailabilityBias } from '../api/availability.js';
 import {
-  cliRecallOrigin, cliRecallReranker, cliRecallSetting, DEFAULT_MAX_NEIGHBORS, fitRecallRows, loadCliRecallContinuity, MAX_HOPS, recallJsonRow,
+  cliRecallOrigin,
+  cliRecallReranker,
+  cliRecallSetting,
+  DEFAULT_MAX_NEIGHBORS,
+  fitRecallRows,
+  loadCliRecallContinuity,
+  MAX_HOPS,
+  recallJsonRow,
   type CliRecallRerankerPick,
 } from '../api/recall-cli.js';
 import { cliApiContext } from './api-context.js';
-import type { RankRecallResult, RankStage, RecallGraphHops, RecallGraphStream, RecallReranker } from '../api/recall-pipeline.js';
+import type {
+  RankRecallResult,
+  RankStage,
+  RecallGraphHops,
+  RecallGraphStream,
+  RecallReranker,
+} from '../api/recall-pipeline.js';
 import { handoffText, printedTokens, sessionTrailText, settleTokens, snapshotText } from '../api/context-render.js';
 import { printError } from './output.js';
 import {
-  parseLimitFlag, parseBudgetFlag, type CliFlags, type CommandContext, parseAsOfFlag, engineFlags, boolFlag, flagIsTrue, isBooleanFlag, isStringFlag,
-  numberFlag, stringFlag, stringFlagOrExit,
+  parseLimitFlag,
+  parseBudgetFlag,
+  type CliFlags,
+  type CommandContext,
+  parseAsOfFlag,
+  engineFlags,
+  boolFlag,
+  flagIsTrue,
+  isBooleanFlag,
+  isStringFlag,
+  numberFlag,
+  stringFlag,
+  stringFlagOrExit,
 } from './flag-values.js';
 import { requireInit } from './shared.js';
-import { recallEntryText, recallHeading, printActiveTaskSnapshot, printSessionEvents, printHandoff, captureConsole } from './print.js';
+import {
+  recallEntryText,
+  recallHeading,
+  printActiveTaskSnapshot,
+  printSessionEvents,
+  printHandoff,
+  captureConsole,
+} from './print.js';
 import { hostSessionId, hookStoreRoot } from './hook-runtime.js';
 import { fail } from './exit.js';
 
 // JSON.stringify keeps quotes or parens in the matched phrase from blurring the line.
 function planningLine(p: PlanningFallacyOutput): string | null {
-  if (p.hint) return `Planning fallacy hint (class: ${p.hint.classTag}): ${p.hint.baserateSummary} [detected: ${JSON.stringify(p.hint.detectedPhrase)}]`;
+  if (p.hint) {
+    return `Planning fallacy hint (class: ${p.hint.classTag}): ${p.hint.baserateSummary} [detected: ${JSON.stringify(p.hint.detectedPhrase)}]`;
+  }
   if (p.watching) {
     return `Planning fallacy: watching this query (reason: ${p.watching.reason}). ${p.watching.suggestion} ` +
       `[detected: ${JSON.stringify(p.watching.detectedPhrase)}]`;
@@ -46,7 +79,9 @@ function cutoffLine(shown: number, s: api.RecallSuppressionSummary): string | nu
   if (s.summarySubstitutionsAdded > 0) clauses.push(`${s.summarySubstitutionsAdded} summary substitutions added`);
   if (s.freshTailAdded > 0) clauses.push(`${s.freshTailAdded} fresh-tail added`);
   if (s.suppressedByInterference > 0) clauses.push(`${s.suppressedByInterference} suppressed by interference`);
-  return clauses.length > 0 ? `Cutoff: showing ${shown} of ${s.totalCandidates} candidates; ${clauses.join('; ')}.` : null;
+  return clauses.length > 0
+    ? `Cutoff: showing ${shown} of ${s.totalCandidates} candidates; ${clauses.join('; ')}.`
+    : null;
 }
 
 /** A flag value, or the deferred error that rejects it. */
@@ -74,7 +109,9 @@ function failWith(message: string): () => never {
 function parseGraphStreamFlags(flags: CliFlags): RecallGraphStream {
   let hops: number | undefined;
   if (flags['graph-hops'] !== undefined) {
-    if (isBooleanFlag(flags['graph-hops'])) failWith(`--graph-hops requires an integer value 1..${MAX_HOPS} (e.g. --graph-hops 2).`)();
+    if (isBooleanFlag(flags['graph-hops'])) {
+      failWith(`--graph-hops requires an integer value 1..${MAX_HOPS} (e.g. --graph-hops 2).`)();
+    }
     const h = Number(flags['graph-hops']);
     if (!Number.isInteger(h) || h < 1 || h > MAX_HOPS) {
       failWith(`Invalid --graph-hops: "${stringFlag(flags, 'graph-hops')}". Must be an integer 1..${MAX_HOPS}.`)();
@@ -83,9 +120,13 @@ function parseGraphStreamFlags(flags: CliFlags): RecallGraphStream {
   }
   let seeds: number | undefined;
   if (flags['graph-seeds'] !== undefined) {
-    if (isBooleanFlag(flags['graph-seeds'])) failWith('--graph-seeds requires a positive integer value (e.g. --graph-seeds 10).')();
+    if (isBooleanFlag(flags['graph-seeds'])) {
+      failWith('--graph-seeds requires a positive integer value (e.g. --graph-seeds 10).')();
+    }
     const s = Number(flags['graph-seeds']);
-    if (!Number.isInteger(s) || s < 1) failWith(`Invalid --graph-seeds: "${stringFlag(flags, 'graph-seeds')}". Must be a positive integer.`)();
+    if (!Number.isInteger(s) || s < 1) {
+      failWith(`Invalid --graph-seeds: "${stringFlag(flags, 'graph-seeds')}". Must be a positive integer.`)();
+    }
     seeds = s;
   }
   return { hops, seeds };
@@ -94,7 +135,9 @@ function parseGraphStreamFlags(flags: CliFlags): RecallGraphStream {
 function parseHopsFlags(flags: CliFlags): ParsedFlag<RecallGraphHops> {
   if (flags['hops'] === undefined) return {};
   // A value-less `--hops` parses as true, and Number(true) === 1 would silently run a 1-hop expansion.
-  if (isBooleanFlag(flags['hops'])) return { fail: failWith(`--hops requires an integer value 0..${MAX_HOPS} (e.g. --hops 1).`) };
+  if (isBooleanFlag(flags['hops'])) {
+    return { fail: failWith(`--hops requires an integer value 0..${MAX_HOPS} (e.g. --hops 1).`) };
+  }
   const hops = Number(flags['hops']);
   if (!Number.isInteger(hops) || hops < 0 || hops > MAX_HOPS) {
     return { fail: failWith(`Invalid --hops: "${stringFlag(flags, 'hops')}". Must be an integer 0..${MAX_HOPS}.`) };
@@ -143,10 +186,14 @@ function parseSalienceFlag(flags: CliFlags): ParsedFlag<number> {
 
 function parseChoiceFlag(flags: CliFlags, name: 'outcome' | 'layer', valid: readonly string[]): ParsedFlag<string> {
   const raw = flags[name];
-  if (raw !== undefined && !isStringFlag(raw)) return { fail: failWith(`--${name} requires a value. Must be one of: ${valid.join(', ')}.`) };
+  if (raw !== undefined && !isStringFlag(raw)) {
+    return { fail: failWith(`--${name} requires a value. Must be one of: ${valid.join(', ')}.`) };
+  }
   const value = raw?.trim() ?? '';
   if (!value) return {};
-  if (!valid.includes(value)) return { fail: failWith(`Invalid --${name}: "${value}". Must be one of: ${valid.join(', ')}.`) };
+  if (!valid.includes(value)) {
+    return { fail: failWith(`Invalid --${name}: "${value}". Must be one of: ${valid.join(', ')}.`) };
+  }
   return { value };
 }
 
@@ -158,7 +205,11 @@ function parseRecallLateFlags(flags: CliFlags): RecallLateFlags {
   const outcome = parseChoiceFlag(flags, 'outcome', ['success', 'failure', 'partial']);
   const layer = parseChoiceFlag(flags, 'layer', Object.values(Layer));
   const staged: ReadonlyArray<readonly [RankStage, (() => never) | undefined]> = [
-    ['expand', graphHops.fail], ['rerank', reranker.fail], ['salience', salience.fail], ['outcome', outcome.fail], ['layer', layer.fail],
+    ['expand', graphHops.fail],
+    ['rerank', reranker.fail],
+    ['salience', salience.fail],
+    ['outcome', outcome.fail],
+    ['layer', layer.fail],
   ];
   let error: LateFlagError | undefined;
   for (const [stage, fail] of staged) {
@@ -174,7 +225,8 @@ function parseRecallLateFlags(flags: CliFlags): RecallLateFlags {
   };
 }
 
-/** Runs `hippo recall`: the flags name the ranking core and this verb's presenter, `retrieve` ranks and records, then the block prints. */
+/** Runs `hippo recall`: the flags name the ranking core and this verb's presenter, `retrieve` ranks and records,
+ * then the block prints. */
 async function cmdRecall(
   hippoRoot: string,
   tenantId: string,
@@ -187,25 +239,25 @@ async function cmdRecall(
   const priced = priceRecallEntries(ctx, query, o);
   const { globalRoot } = o.setting;
   const slot: PresentedSlot = {};
-  await api.retrieve(
-    ctx,
-    {
-      query,
-      goalTag: o.goalTag,
-      sessionId: o.sessionId,
-      cliCore: {
-        rank: rankOptions(query, flags, o, priced),
-        // The global store is a second source for this surface alone, and never when it is the store being searched.
-        sources: globalRoot !== hippoRoot && priced.globalOn ? { globalRoot, globalStore: cliApiContext(globalRoot, tenantId).store } : undefined,
-        note: (line) => printError(line),
-        hostSessionId: hostSessionId(),
-        show: (rank, planning) => {
-          slot.presented = presentRecall(ctx, query, o, { rank, ...priced }, planning);
-          return slot.presented.shown;
-        },
+  await api.retrieve(ctx, {
+    query,
+    goalTag: o.goalTag,
+    sessionId: o.sessionId,
+    cliCore: {
+      rank: rankOptions(query, flags, o, priced),
+      // The global store is a second source for this surface alone, and never when it is the store being searched.
+      sources:
+        globalRoot !== hippoRoot && priced.globalOn
+          ? { globalRoot, globalStore: cliApiContext(globalRoot, tenantId).store }
+          : undefined,
+      note: (line) => printError(line),
+      hostSessionId: hostSessionId(),
+      show: (rank, planning) => {
+        slot.presented = presentRecall(ctx, query, o, { rank, ...priced }, planning);
+        return slot.presented.shown;
       },
     },
-  );
+  });
   // A late flag is rejected where the ranking halted, after the notes its earlier stages printed.
   o.late.error?.fail();
   if (!slot.presented) throw new Error('recall ranked but presented nothing');
@@ -250,12 +302,23 @@ function priceRecallEntries(ctx: api.StoreContext, query: string, o: RecallOptio
 type PricedEntries = ReturnType<typeof priceRecallEntries>;
 
 /** The ranking core's options; a late flag error halts it before the stage that reads the flag. */
-function rankOptions(query: string, flags: CliFlags, o: RecallOptions, priced: PricedEntries): api.CliCoreRecall['rank'] {
+function rankOptions(
+  query: string,
+  flags: CliFlags,
+  o: RecallOptions,
+  priced: PricedEntries,
+): api.CliCoreRecall['rank'] {
   // Engines spend the budget on the text each result prints as, less the header, so selection and print agree.
   const entryBudget = Math.max(0, o.budget - printedTokens(recallHeading(o.budget, o.budget, query)));
   return {
-    budget: entryBudget, cost: priced.printCost, limit: o.limit, why: o.showWhy, includeSuperseded: o.includeSuperseded, asOf: o.asOf,
-    explicitScope: o.explicitScope, activeScope: o.setting.activeScope,
+    budget: entryBudget,
+    cost: priced.printCost,
+    limit: o.limit,
+    why: o.showWhy,
+    includeSuperseded: o.includeSuperseded,
+    asOf: o.asOf,
+    explicitScope: o.explicitScope,
+    activeScope: o.setting.activeScope,
     search: {
       ...engineFlags(flags, o.config),
       multihop: flagIsTrue(flags, 'multihop') || o.config.multihop.enabled,
@@ -290,9 +353,14 @@ function recallHinter(query: string, o: RecallOptions, rank: RankedRecall['rank'
     ? [...rank.localEntries, ...rank.globalEntries].map((e) => ({ id: e.id, created: e.created }))
     : null;
   const hintsFor = (list: SearchResult[], held: number) => {
-    const anchoring = anchorRing ? detectAnchoring(snapshotRing(anchorRing), queryHash, list[0]?.entry.id ?? null) : null;
+    const anchoring = anchorRing
+      ? detectAnchoring(snapshotRing(anchorRing), queryHash, list[0]?.entry.id ?? null)
+      : null;
     const availability = availabilityPool
-      ? detectAvailabilityBias({ topK: list.map((r) => ({ id: r.entry.id, created: r.entry.created })), pool: availabilityPool })
+      ? detectAvailabilityBias({
+          topK: list.map((r) => ({ id: r.entry.id, created: r.entry.created })),
+          pool: availabilityPool,
+        })
       : null;
     const summary: api.RecallSuppressionSummary = {
       // The published total includes graph-surfaced rows, so total == preRank + byBudget + returned holds for callers.
@@ -301,7 +369,8 @@ function recallHinter(query: string, o: RecallOptions, rank: RankedRecall['rank'
       droppedByBudget: Math.max(0, rank.totalCandidates + rank.graphAdded - rank.droppedPreRank - held - list.length),
       summarySubstitutionsAdded: 0,
       freshTailAdded: 0,
-      suppressedByInterference: anchoring?.reason === 'memory_dominance' ? 1 : 0, // a query_repeat is a re-ask, not competition
+      // A query_repeat is a re-ask, not competition.
+      suppressedByInterference: anchoring?.reason === 'memory_dominance' ? 1 : 0,
     };
     return { anchoring, availability, summary };
   };
@@ -344,7 +413,9 @@ function renderRecallBlock(list: SearchResult[], h: RecallHints, v: RecallRender
     // Anchoring is the stronger pull, so it prints first; the Cutoff line sits above the list, where a reader sees it.
     if (h.anchoring) { console.log(`[anchored_on: ${h.anchoring.memoryId}] ${h.anchoring.summary}`); console.log(); }
     if (h.availability) {
-      console.log(`Availability bias (${h.availability.recentCount}/${h.availability.returnedCount} recent): ${h.availability.summary}`);
+      console.log(
+        `Availability bias (${h.availability.recentCount}/${h.availability.returnedCount} recent): ${h.availability.summary}`,
+      );
       console.log();
     }
     if (showPlan) { console.log(planText); console.log(); }
@@ -355,37 +426,36 @@ function renderRecallBlock(list: SearchResult[], h: RecallHints, v: RecallRender
   }));
 }
 
-/** Pays the continuity sections and the plan hint first, then fits the memories into what is left. */
-function fitRecallBlock(query: string, o: RecallOptions, ranked: RankedRecall, loaded: api.ContinuityBlock, planning: PlanningFallacyOutput) {
-  const { budget } = o;
+/** Pays the continuity sections in print order after the header; one that does not fit is dropped. */
+function payContinuity(loaded: api.ContinuityBlock, sectionBudget: number) {
   let { activeSnapshot, sessionHandoff, recentSessionEvents } = loaded;
-  // Sections print ahead of the memories, so they are paid first, after the header; one that does not fit is dropped.
-  const sectionBudget = budget - printedTokens(recallHeading(budget, budget, query));
   let left = sectionBudget;
-  const pays = (tokens: number): boolean => { if (tokens > left) return false; left -= tokens; return true; };
+  const pays = (tokens: number): boolean => {
+    if (tokens > left) return false;
+    left -= tokens;
+    return true;
+  };
   if (activeSnapshot && !pays(printedTokens(snapshotText(activeSnapshot)))) activeSnapshot = null;
   if (sessionHandoff && !pays(printedTokens(handoffText(sessionHandoff)))) sessionHandoff = null;
-  if (recentSessionEvents.length > 0 && !pays(printedTokens(sessionTrailText(recentSessionEvents)))) recentSessionEvents = [];
-  const continuityTokens = sectionBudget - left;
+  if (recentSessionEvents.length > 0 && !pays(printedTokens(sessionTrailText(recentSessionEvents)))) {
+    recentSessionEvents = [];
+  }
   const continuity: api.ContinuityBlock = { activeSnapshot, sessionHandoff, recentSessionEvents };
-  const hasContinuity = activeSnapshot !== null || sessionHandoff !== null || recentSessionEvents.length > 0;
+  return { continuity, left, continuityTokens: sectionBudget - left };
+}
 
-  // The baserate hint depends on the query alone, so `retrieve` evaluates it and this only prices the line.
-  const planText = planningLine(planning);
-  const showPlan = planText !== null && pays(printedTokens(`${planText}\n`));
-  const cmdPlanningFallacyHint = showPlan ? planning.hint ?? null : null;
-  const cmdPlanningFallacyWatching = showPlan ? planning.watching ?? null : null;
-
-  // The first --min-results are kept whatever they cost (the documented exception); the rest skip and continue.
-  const floor = o.minResults ?? 1;
-  const fitted = fitRecallRows(ranked.rank.results, left, floor, ranked.printCost);
+/** Drops the lowest-ranked entry until the whole block, hints and header included, fits the budget. */
+function renderWithinBudget(
+  fitted: SearchResult[],
+  hintsFor: (list: SearchResult[], held: number) => RecallHints,
+  view: RecallRenderView,
+  floor: number,
+  budget: number,
+) {
   // Copies go after every cut, so a merged row the budget drops never hides its sources.
   const shown = (n: number): SearchResult[] => dropHeldCopies(fitted.slice(0, n), (r) => r.entry);
   let kept = fitted.length;
   let results = shown(kept);
-
-  const { anchorRing, hintsFor } = recallHinter(query, o, ranked.rank);
-  const view: RecallRenderView = { query, showWhy: o.showWhy, showPlan, planText, hasContinuity, continuity, entryText: ranked.entryText };
   let hints = hintsFor(results, kept - results.length);
   let recallText = renderRecallBlock(results, hints, view);
   // The hints, Cutoff line and header vary with the list, so the lowest-ranked entry goes until the whole block fits.
@@ -395,21 +465,87 @@ function fitRecallBlock(query: string, o: RecallOptions, ranked: RankedRecall, l
     hints = hintsFor(results, kept - results.length);
     recallText = renderRecallBlock(results, hints, view);
   }
-  return { results, hints, recallText, continuity, continuityTokens, cmdPlanningFallacyHint, cmdPlanningFallacyWatching, anchorRing };
+  return { results, hints, recallText };
+}
+
+/** Pays the continuity sections and the plan hint first, then fits the memories into what is left. */
+function fitRecallBlock(
+  query: string,
+  o: RecallOptions,
+  ranked: RankedRecall,
+  loaded: api.ContinuityBlock,
+  planning: PlanningFallacyOutput,
+) {
+  const { budget } = o;
+  // Sections print ahead of the memories, so they are paid first, after the header; one that does not fit is dropped.
+  const sectionBudget = budget - printedTokens(recallHeading(budget, budget, query));
+  const { continuity, continuityTokens } = payContinuity(loaded, sectionBudget);
+  let left = sectionBudget - continuityTokens;
+  const { activeSnapshot, sessionHandoff, recentSessionEvents } = continuity;
+  const hasContinuity = activeSnapshot !== null || sessionHandoff !== null || recentSessionEvents.length > 0;
+
+  // The baserate hint depends on the query alone, so `retrieve` evaluates it and this only prices the line.
+  const planText = planningLine(planning);
+  const planTokens = planText === null ? 0 : printedTokens(`${planText}
+`);
+  const showPlan = planText !== null && planTokens <= left;
+  if (showPlan) left -= planTokens;
+  const cmdPlanningFallacyHint = showPlan ? (planning.hint ?? null) : null;
+  const cmdPlanningFallacyWatching = showPlan ? (planning.watching ?? null) : null;
+
+  // The first --min-results are kept whatever they cost (the documented exception); the rest skip and continue.
+  const floor = o.minResults ?? 1;
+  const fitted = fitRecallRows(ranked.rank.results, left, floor, ranked.printCost);
+  const { anchorRing, hintsFor } = recallHinter(query, o, ranked.rank);
+  const view: RecallRenderView = {
+    query,
+    showWhy: o.showWhy,
+    showPlan,
+    planText,
+    hasContinuity,
+    continuity,
+    entryText: ranked.entryText,
+  };
+  const { results, hints, recallText } = renderWithinBudget(fitted, hintsFor, view, floor, budget);
+  return {
+    results,
+    hints,
+    recallText,
+    continuity,
+    continuityTokens,
+    cmdPlanningFallacyHint,
+    cmdPlanningFallacyWatching,
+    anchorRing,
+  };
 }
 
 type FittedRecall = ReturnType<typeof fitRecallBlock>;
 
-/** The presenter `retrieve` calls once ranking ends: fits and renders the block, and names the rows and hint rows to record. */
-function presentRecall(ctx: api.StoreContext, query: string, o: RecallOptions, ranked: RankedRecall, planning: PlanningFallacyOutput) {
+/** The presenter `retrieve` calls once ranking ends: fits and renders the block, and names the rows and hint rows to
+ * record. */
+function presentRecall(
+  ctx: api.StoreContext,
+  query: string,
+  o: RecallOptions,
+  ranked: RankedRecall,
+  planning: PlanningFallacyOutput,
+) {
   // Loaded before the zero-result branch, so a no-match query with live continuity still returns a resume packet.
   const fit = fitRecallBlock(query, o, ranked, loadCliRecallContinuity(ctx, o.setting, o.includeContinuity), planning);
   const { results, hints } = fit;
   const text = recallOutput(query, o, fit, ranked.isGlobal);
-  const audit = shownRecallRows({ tenantId: o.tenantId, actor: 'cli' }, {
-    query, ring: fit.anchorRing, topId: results[0]?.entry.id ?? null, anchoring: hints.anchoring, availability: hints.availability,
-  });
-  // The token ledger books the text this recall prints, on whichever exit it takes; the ring keeps the hint the final detect made.
+  const audit = shownRecallRows(
+    { tenantId: o.tenantId, actor: 'cli' },
+    {
+      query,
+      ring: fit.anchorRing,
+      topId: results[0]?.entry.id ?? null,
+      anchoring: hints.anchoring,
+      availability: hints.availability,
+    },
+  );
+  // The token ledger books the text this recall prints, on whichever exit it takes; the ring keeps the hint the final
+  // detect made.
   return { text, shown: { results, audit, tokens: estimateTokens(text), anchoredOn: hints.anchoring?.memoryId } };
 }
 
@@ -419,12 +555,19 @@ type PresentedRecall = ReturnType<typeof presentRecall>;
 interface PresentedSlot { presented?: PresentedRecall }
 
 /** What this recall prints: the JSON object, or the fitted block. */
-function recallOutput(query: string, o: RecallOptions, fit: FittedRecall, isGlobal: (r: SearchResult) => boolean): string {
+function recallOutput(
+  query: string,
+  o: RecallOptions,
+  fit: FittedRecall,
+  isGlobal: (r: SearchResult) => boolean,
+): string {
   const { asJson, includeContinuity } = o;
   const { results, recallText } = fit;
   if (results.length === 0) {
     // HTTP and MCP surface the hint whatever matched, so the zero-result JSON keeps it for parity.
-    return asJson ? JSON.stringify({ query, results: [], total: 0, ...recallJsonTail(fit, includeContinuity) }) : recallText;
+    return asJson
+      ? JSON.stringify({ query, results: [], total: 0, ...recallJsonTail(fit, includeContinuity) })
+      : recallText;
   }
   if (!asJson) return recallText;
   const output = results.map((r) => recallJsonRow(r, query, o.showWhy, isGlobal(r)));

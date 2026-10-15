@@ -13,7 +13,8 @@ import type { AuthResolver, ResolvedBearer, ResolvedServeOpts } from './types.js
 import { isJsonString } from '../util/json.js';
 import { MINUTE_MS } from '../util/time.js';
 
-/** Recognises loopback remote addresses, including the IPv6-mapped '::ffff:127.0.0.1' Node reports on dual-stack sockets; anything else is remote. */
+/** Recognises loopback remote addresses, including the IPv6-mapped '::ffff:127.0.0.1' Node reports on dual-stack
+ * sockets; anything else is remote. */
 export function isLoopback(remoteAddress: string | undefined): boolean {
   if (!remoteAddress) return false;
   if (remoteAddress === '127.0.0.1') return true;
@@ -22,9 +23,16 @@ export function isLoopback(remoteAddress: string | undefined): boolean {
   return false;
 }
 
-// A proxy on this host (nginx, Caddy, cloudflared) connects from loopback, so these headers mean the caller is not local.
+// A proxy on this host (nginx, Caddy, cloudflared) connects from loopback, so these headers mean the caller is not
+// local.
 const PROXY_HEADERS = [
-  'forwarded', 'x-forwarded-for', 'x-forwarded-host', 'x-forwarded-proto', 'x-real-ip', 'cf-connecting-ip', 'true-client-ip',
+  'forwarded',
+  'x-forwarded-for',
+  'x-forwarded-host',
+  'x-forwarded-proto',
+  'x-real-ip',
+  'cf-connecting-ip',
+  'true-client-ip',
   'fly-client-ip',
 ] as const;
 
@@ -32,18 +40,21 @@ function proxyHeaderOf(req: IncomingMessage): string | undefined {
   return PROXY_HEADERS.find((name) => req.headers[name] !== undefined);
 }
 
-/** A page in a browser on this machine: another site's request, or a hostile name resolved to loopback (DNS rebinding). */
+/** A page in a browser on this machine: another site's request, or a hostile name resolved to loopback (DNS
+ * rebinding). */
 function isForeignPage(req: IncomingMessage): boolean {
   const host = req.headers.host;
   return (host !== undefined && !LOOPBACK_HOST_HEADER.test(host)) || isCrossSite(req);
 }
 
-/** True only for a request made on this machine by its own user: a proxy and a browser page are loopback too, so the socket alone proves nothing. */
+/** True only for a request made on this machine by its own user: a proxy and a browser page are loopback too, so the
+ * socket alone proves nothing. */
 export function isLocalCaller(req: IncomingMessage): boolean {
   return isLoopback(req.socket.remoteAddress) && proxyHeaderOf(req) === undefined && !isForeignPage(req);
 }
 
-// The throwing twin of isLocalCaller, for the no-key fallback: each refusal has its own status, and a proxied one is logged.
+// The throwing twin of isLocalCaller, for the no-key fallback: each refusal has its own status, and a proxied one is
+// logged.
 function assertLocalCaller(req: IncomingMessage): void {
   if (!isLoopback(req.socket.remoteAddress)) throw new HttpError(401, 'auth required');
   const proxyHeader = proxyHeaderOf(req);
@@ -59,14 +70,15 @@ function assertLocalCaller(req: IncomingMessage): void {
   }
 }
 
-/** The 401 a keyless request from this machine gets by default; it names both fixes, since an upgrade is where most people meet it. */
+/** The 401 a keyless request from this machine gets by default; it names both fixes, since an upgrade is where most
+ * people meet it. */
 const KEY_REQUIRED_MESSAGE =
   'auth required: this server takes no request without an API key. Mint one with `hippo auth create` and send it as ' +
-  '"Authorization: Bearer <key>" (the hippo CLI reads HIPPO_API_KEY), or start the server with HIPPO_ALLOW_KEYLESS_LOCAL=1 ' +
-  'to let requests from this machine in without a key.';
+  '"Authorization: Bearer <key>" (the hippo CLI reads HIPPO_API_KEY), or start the server with ' +
+  'HIPPO_ALLOW_KEYLESS_LOCAL=1 to let requests from this machine in without a key.';
 
-/** Reads the Authorization header case-insensitively (name and RFC 6750 'Bearer' scheme): { kind: 'absent' }, { kind: 'malformed' } (set but not 'Bearer
- * <token>'), or { kind: 'bearer', token } for a non-empty token. */
+/** Reads the Authorization header case-insensitively (name and RFC 6750 'Bearer' scheme): { kind: 'absent' },
+ * { kind: 'malformed' } (set but not 'Bearer <token>'), or { kind: 'bearer', token } for a non-empty token. */
 type AuthHeader =
   | { kind: 'absent' }
   | { kind: 'malformed' }
@@ -88,8 +100,11 @@ export function readAuthHeader(req: IncomingMessage): AuthHeader {
   return { kind: 'bearer', token };
 }
 
-type AuthOpts = Pick<ResolvedServeOpts, 'hippoRoot' | 'authResolver' | 'authResolverTimeoutMs' | 'store' | 'callerLimiter'>
-  & Partial<Pick<ResolvedServeOpts, 'failedAuthLimiter' | 'keylessLocalRole'>>;
+type AuthOpts = Pick<
+  ResolvedServeOpts,
+  'hippoRoot' | 'authResolver' | 'authResolverTimeoutMs' | 'store' | 'callerLimiter'
+> &
+  Partial<Pick<ResolvedServeOpts, 'failedAuthLimiter' | 'keylessLocalRole'>>;
 
 // Built-in actors are the bare names below or `<name>:<detail>`; a plain prefix would also reject `clinton@corp`.
 const RESERVED_ACTOR_NAMES = [
@@ -167,7 +182,8 @@ interface BearerIdentity extends ResolvedBearer {
 
 const DEFAULT_RESOLVER_DEADLINE_MS = 5000;
 
-/** Runs only before scrypt, so junk, unknown, revoked and expired tokens and a proven key's re-check never spend a colleague's budget. */
+/** Runs only before scrypt, so junk, unknown, revoked and expired tokens and a proven key's re-check never spend a
+ * colleague's budget. */
 function chargeScryptRun(req: IncomingMessage, opts: AuthOpts): void {
   const limiter = opts.failedAuthLimiter;
   // Reserving rather than peeking bounds scrypt runs exactly, even when concurrent misses await a slow store.
@@ -183,16 +199,23 @@ async function resolveBearer(req: IncomingMessage, token: string, opts: AuthOpts
     const t = opts.authResolverTimeoutMs;
     const deadlineMs = t !== undefined && Number.isFinite(t) && t > 0 ? t : DEFAULT_RESOLVER_DEADLINE_MS;
     const clean = await askResolver(opts.authResolver, token, deadlineMs);
-    return { ...clean, viaAuthResolver: true, owner: clean.subject }; // a resolver vouches for a person, never names one
+    // A resolver vouches for a person, never names one.
+    return { ...clean, viaAuthResolver: true, owner: clean.subject };
   }
   const key = await verifyApiKeyCached(token, opts.store, (keyId, derive) => {
-    // The key's own bucket first, so a flood on one key id ends at its five tries and leaves the address's budget to the callers who share it.
+    // The key's own bucket first, so a flood on one key id ends at its five tries and leaves the address's budget to
+    // the callers who share it.
     keyChecks.admit(keyId, clientLimitKey(req));
     chargeScryptRun(req, opts);
     return keyChecks.run(derive);
   });
   if (!key) throw new HttpError(401, 'invalid api key');
-  const id: BearerIdentity = { tenantId: key.tenantId, subject: `api_key:${key.keyId}`, role: key.role, scopes: key.scopes };
+  const id: BearerIdentity = {
+    tenantId: key.tenantId,
+    subject: `api_key:${key.keyId}`,
+    role: key.role,
+    scopes: key.scopes,
+  };
   if (key.ownerSubject) id.owner = key.ownerSubject;
   return id;
 }
@@ -255,8 +278,8 @@ function chargeCaller(tenantId: string, actor: Actor, opts: AuthOpts): void {
   throw new HttpError(429, 'rate limit exceeded for this caller', limiter.retryAfterSec);
 }
 
-/** Builds a per-request Context from the Authorization header and remote address; throws HttpError(401) for invalid or missing credentials.
- * Reads the store only for an API-key-shaped Bearer (or any Bearer when no auth resolver is registered), so keyless local requests stay cheap. */
+/** Builds a per-request Context from the Authorization header and remote address; throws HttpError(401) on bad ones.
+ * Reads the store only for an API-key-shaped Bearer (or any Bearer with no resolver), so keyless calls stay cheap. */
 export async function buildContextWithAuth(req: IncomingMessage, opts: AuthOpts): Promise<StoreContext> {
   const id = await checkAuth(req, opts);
   const ctx = contextFor(id, opts);
@@ -264,31 +287,46 @@ export async function buildContextWithAuth(req: IncomingMessage, opts: AuthOpts)
   return ctx;
 }
 
-/** The auth check again, uncharged, for a handler that authenticated with requireAuth before a slow body read and must re-check right before it acts. */
+/** The auth check again, uncharged, for a handler that authenticated with requireAuth before a slow body read and
+ * must re-check right before it acts. */
 export async function recheckContextWithAuth(req: IncomingMessage, opts: AuthOpts): Promise<StoreContext> {
   return contextFor(await checkAuth(req, opts), opts);
 }
 
-/** The keyless local caller: any process on this machine can reach loopback, so it is a member unless the operator names admin. */
+/** The keyless local caller: any process on this machine can reach loopback, so it is a member unless the operator
+ * names admin. */
 function keylessLocalActor(opts: AuthOpts): Actor {
   const role = opts.keylessLocalRole ?? envKeylessLocalRole();
-  return role === 'admin' ? { subject: 'localhost:cli', role: 'admin', hostAdmin: true } : { subject: 'localhost:cli', role: 'member' };
+  return role === 'admin'
+    ? { subject: 'localhost:cli', role: 'admin', hostAdmin: true }
+    : { subject: 'localhost:cli', role: 'member' };
 }
 
 function contextFor(id: BearerIdentity | null, opts: AuthOpts): StoreContext {
-  if (id !== null) return { hippoRoot: opts.hippoRoot, tenantId: id.tenantId, actor: bearerActor(id), store: opts.store };
-  return { hippoRoot: opts.hippoRoot, tenantId: resolveTenantId({}), actor: keylessLocalActor(opts), store: opts.store };
+  if (id !== null) {
+    return { hippoRoot: opts.hippoRoot, tenantId: id.tenantId, actor: bearerActor(id), store: opts.store };
+  }
+  return {
+    hippoRoot: opts.hippoRoot,
+    tenantId: resolveTenantId({}),
+    actor: keylessLocalActor(opts),
+    store: opts.store,
+  };
 }
 
-/** Auth check for routes that need no tenant Context (e.g. the MCP transport, which resolves its own root): throws HttpError 401 like buildContextWithAuth.
- * A keyless local request passes only under HIPPO_ALLOW_KEYLESS_LOCAL=1. */
+/** Auth check for routes that need no tenant Context (e.g. the MCP transport, which resolves its own root): throws
+ * HttpError 401 like buildContextWithAuth. A keyless local request passes only under HIPPO_ALLOW_KEYLESS_LOCAL=1. */
 export async function requireAuth(req: IncomingMessage, opts: AuthOpts): Promise<void> {
   const id = await checkAuth(req, opts);
   if (id !== null) chargeCaller(id.tenantId, bearerActor(id), opts);
 }
 
-/** Never rejects or charges a caller bucket: an outage (5xx) or a throttle (429) skips one tick; only a definite 4xx denial closes the stream. */
-export async function heartbeatVerdict(req: IncomingMessage, opts: AuthOpts): Promise<'ok' | 'revoked' | 'unavailable'> {
+/** Never rejects or charges a caller bucket: an outage (5xx) or a throttle (429) skips one tick; only a definite 4xx
+ * denial closes the stream. */
+export async function heartbeatVerdict(
+  req: IncomingMessage,
+  opts: AuthOpts,
+): Promise<'ok' | 'revoked' | 'unavailable'> {
   try {
     await checkAuth(req, opts);
     return 'ok';

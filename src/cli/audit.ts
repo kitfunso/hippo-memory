@@ -31,7 +31,8 @@ function readAuditOp(flags: CliFlags): AuditOp | undefined {
     const expected = Array.from(VALID_AUDIT_OPS).join(' | ');
     fail(`Unknown --op value: ${opFlag}. Expected one of: ${expected}.`);
   }
-  // SAFETY: the exit above rejects every non-empty opFlag outside VALID_AUDIT_OPS, and an empty one is returned as given.
+  // SAFETY: the exit above rejects every non-empty opFlag outside VALID_AUDIT_OPS, and an empty one is returned as
+  // given.
   return opFlag as AuditOp | undefined;
 }
 
@@ -105,7 +106,9 @@ async function cmdAuditPrune(hippoRoot: string, ctxTenantId: string, flags: CliF
     return;
   }
   const verb = dryRun ? 'would delete' : 'deleted';
-  console.log(`audit prune: ${verb} ${result.count} row${result.count === 1 ? '' : 's'} for tenant "${tenantId}" with ts < ${result.cutoff}`);
+  console.log(
+    `audit prune: ${verb} ${result.count} row${result.count === 1 ? '' : 's'} for tenant "${tenantId}" with ts < ${result.cutoff}`,
+  );
   if (dryRun) {
     console.log('(dry-run; re-run without --dry-run to actually delete)');
   }
@@ -126,26 +129,47 @@ async function cmdAuditLog(hippoRoot: string, tenantId: string, args: string[], 
 
 async function auditRepair(hippoRoot: string, tenantId: string, flags: CliFlags): Promise<void> {
   const apply = flagIsTrue(flags, 'apply') && flags['dry-run'] !== true;
-  const result = await api.repairMemoryQuality(cliApiContext(flags['global'] ? getGlobalRoot() : hippoRoot, tenantId), apply);
+  const result = await api.repairMemoryQuality(
+    cliApiContext(flags['global'] ? getGlobalRoot() : hippoRoot, tenantId),
+    apply,
+  );
   if (flags['json']) {
     console.log(JSON.stringify(result));
     return;
   }
-  console.log(`Quality repair ${apply ? 'apply' : 'preview'}: ${result.issues.length} issue(s) across ${result.total} memories.`);
-  for (const issue of result.issues) console.log(`  [${issue.disposition}] ${issue.id}: ${issue.reason}${issue.protection ? ` (${issue.protection})` : ''}`);
+  console.log(
+    `Quality repair ${apply ? 'apply' : 'preview'}: ${result.issues.length} issue(s) across ${result.total} memories.`,
+  );
+  for (const issue of result.issues) {
+    console.log(
+      `  [${issue.disposition}] ${issue.id}: ${issue.reason}${issue.protection ? ` (${issue.protection})` : ''}`,
+    );
+  }
   for (const blocker of result.blockers) {
     console.log(`  Blocked: ${blocker}. Repair never upgrades a store; ` +
       'any other hippo command does, then run repair again.');
   }
   const restore = `hippo dormant restore <id>${flags['global'] ? ' --global' : ''}`;
-  if (result.backup) console.log(`Backup: ${result.backup}\nMoved ${result.appliedIds.length} memories to dormant storage. Recovery: ${restore}.`);
-  else if (apply && result.supported) console.log('Nothing moved: no unprotected memory has a certain defect.');
+  if (result.backup) {
+    console.log(
+      `Backup: ${result.backup}\nMoved ${result.appliedIds.length} memories to dormant storage. Recovery: ${restore}.`,
+    );
+  } else if (apply && result.supported) console.log('Nothing moved: no unprotected memory has a certain defect.');
   for (const warning of result.warnings) console.log(`Warning: ${warning}`);
-  if (!apply) console.log('Preview only. Add --apply to move set-aside memories to dormant storage. Pin a review memory to keep it.');
+  if (!apply) {
+    console.log(
+      'Preview only. Add --apply to move set-aside memories to dormant storage. Pin a review memory to keep it.',
+    );
+  }
 }
 
-async function fixAuditErrors(hippoRoot: string, tenantId: string, result: AuditResult, flags: CliFlags): Promise<void> {
-  const errors = result.issues.filter(i => i.severity === 'error');
+async function fixAuditErrors(
+  hippoRoot: string,
+  tenantId: string,
+  result: AuditResult,
+  flags: CliFlags,
+): Promise<void> {
+  const errors = result.issues.filter((i) => i.severity === 'error');
   if (errors.length > 0 && flagIsTrue(flags, 'dry-run')) {
     console.log(`\nWould remove ${errors.length} error-severity memories (dry run, nothing deleted).`);
     console.log(`${result.issues.length - errors.length} warnings would remain (review manually).`);
@@ -164,7 +188,8 @@ export async function handleAudit({ hippoRoot, tenantId, args, flags }: CommandC
     await auditRepair(hippoRoot, tenantId, flags);
     return;
   }
-  // `audit list` and `audit prune` are the audit-log subcommands; other forms (no sub, --fix) keep the memory-quality auditor.
+  // `audit list` and `audit prune` are the audit-log subcommands; other forms (no sub, --fix) keep the memory-quality
+  // auditor.
   if (args[0] === 'list' || args[0] === 'prune') {
     await cmdAuditLog(hippoRoot, tenantId, args, flags);
     return;

@@ -14,24 +14,42 @@ import { PACKAGE_VERSION } from '../util/version.js';
 import { validateToolArgs } from './tool-args.js';
 import { RecallRequestError } from '../api/recall-request.js';
 import { recordTokens } from '../api/tokens.js';
-import { findHippoRoot, mcpActor, type McpContext, type McpRequest, type McpResponse, type StoreOpener, type ToolHandler } from './protocol.js';
+import {
+  findHippoRoot,
+  mcpActor,
+  type McpContext,
+  type McpRequest,
+  type McpResponse,
+  type StoreOpener,
+  type ToolHandler,
+} from './protocol.js';
 import { TOOLS, TOOLS_BY_NAME, ARGS_CHECKED_BY_API } from './tools.js';
 import { runRecallTool, runAssembleTool, runDrillTool, runContextTool } from './recall-tools.js';
 import { runRememberTool, runOutcomeTool, runLearnTool } from './memory-tools.js';
-import { runPredictBaserateTool, runStatusTool, runConflictsTool, runResolveTool, runShareTool, runPeersTool } from './admin-tools.js';
+import {
+  runPredictBaserateTool,
+  runStatusTool,
+  runConflictsTool,
+  runResolveTool,
+  runShareTool,
+  runPeersTool,
+} from './admin-tools.js';
 import { sharedStoreRefusal } from './shared-gate.js';
 import { type JsonValue, isJsonString, isJsonObject } from '../util/json.js';
 
-/** Zero-install first run (`npx -y hippo-memory mcp`, no store anywhere): create the global store instead of failing every tool call, and say so on stderr
- * (stdout carries the protocol). A later `hippo init` project store takes precedence. */
+/** Zero-install first run (`npx -y hippo-memory mcp`, no store anywhere): create the global store instead of failing
+ * every tool call, and say so on stderr (stdout carries the protocol). A later `hippo init` project store wins. */
 function createGlobalStoreOnFirstRun(): string {
   initGlobal();
   const root = getGlobalRoot();
-  log.warn(`no memory store found; created the global store at ${root}. Run \`hippo init\` in a project for a project store.`);
+  log.warn(
+    `no memory store found; created the global store at ${root}. Run \`hippo init\` in a project for a project store.`,
+  );
   return root;
 }
 
-/** The transport's own store, else the opener's for the folder; stdio is the one caller that passes no context, and it passes an opener. */
+/** The transport's own store, else the opener's for the folder; stdio is the one caller that passes no context, and
+ * it passes an opener. */
 function resolveStore(ctx: McpContext | undefined, makeStore: StoreOpener | undefined, hippoRoot: string): HippoStore {
   const store = ctx?.store ?? makeStore?.(hippoRoot);
   if (store === undefined) throw new Error('hippo-mcp: a call with no context needs a store opener');
@@ -45,13 +63,24 @@ const MCP_TOKEN_SURFACES = new Map<string, TokenSurface>([
   ['hippo_context', 'mcp_context'],
 ]);
 
-/** Records the memory text a recall or context tool returned; best-effort (a ledger failure never fails the call), other tools are not recorded. */
-export async function recordMcpTokens(toolName: string, output: string, ctx: McpContext | undefined, makeStore?: StoreOpener): Promise<void> {
+/** Records the memory text a recall or context tool returned; best-effort (a ledger failure never fails the call),
+ * other tools are not recorded. */
+export async function recordMcpTokens(
+  toolName: string,
+  output: string,
+  ctx: McpContext | undefined,
+  makeStore?: StoreOpener,
+): Promise<void> {
   const surface = MCP_TOKEN_SURFACES.get(toolName);
   if (!surface || !output) return;
   const hippoRoot = ctx?.hippoRoot ?? findHippoRoot();
   if (!hippoRoot) return;
-  const apiCtx = { hippoRoot, tenantId: ctx?.tenantId ?? resolveTenantId({}), actor: mcpActor(ctx), store: resolveStore(ctx, makeStore, hippoRoot) };
+  const apiCtx = {
+    hippoRoot,
+    tenantId: ctx?.tenantId ?? resolveTenantId({}),
+    actor: mcpActor(ctx),
+    store: resolveStore(ctx, makeStore, hippoRoot),
+  };
   await recordTokens(apiCtx, surface, { items: 0, tokens: estimateTokens(output) });
 }
 
@@ -59,7 +88,8 @@ export async function recordMcpTokens(toolName: string, output: string, ctx: Mcp
 
 interface ToolEntry {
   readonly handler: ToolHandler;
-  /** The store group it reaches its store through, so it runs under any store that has it; unset means hippo.db's local files. */
+  /** The store group it reaches its store through, so it runs under any store that has it; unset means hippo.db's
+   * local files. */
   readonly storeReady?: StoreGroup;
 }
 
@@ -90,13 +120,13 @@ async function executeTool(
   ctx: McpContext | undefined,
   makeStore: StoreOpener | undefined,
 ): Promise<string> {
-  // With a transport context (HTTP), trust it: hippoRoot comes from the server's bound opts and tenantId from the Bearer (or loopback fallback).
-  // Stdio walks from cwd / the global root and resolves tenant from HIPPO_TENANT.
+  // With a transport context (HTTP), trust it: hippoRoot comes from the server's bound opts and tenantId from the
+  // Bearer (or loopback fallback). Stdio walks from cwd / the global root and resolves tenant from HIPPO_TENANT.
   const hippoRoot = ctx?.hippoRoot ?? findHippoRoot() ?? createGlobalStoreOnFirstRun();
 
   const config = loadConfig(hippoRoot);
-  // Every store read here is tenant-isolated, resolved once per tool call; prefer the transport's ctx.tenantId so an HTTP Bearer for tenant B
-  // does not drop to HIPPO_TENANT.
+  // Every store read here is tenant-isolated, resolved once per tool call; prefer the transport's ctx.tenantId so an
+  // HTTP Bearer for tenant B does not drop to HIPPO_TENANT.
   const tenantId = ctx?.tenantId ?? resolveTenantId({});
 
   const handler = TOOL_HANDLERS.get(name)?.handler;
@@ -112,13 +142,21 @@ function invalidArgs(id: McpResponse['id'], toolName: string, problems: readonly
   return {
     jsonrpc: '2.0',
     id,
-    result: { content: [{ type: 'text', text: `Invalid arguments for ${toolName}: ${problems.join('; ')}` }], isError: true },
+    result: {
+      content: [{ type: 'text', text: `Invalid arguments for ${toolName}: ${problems.join('; ')}` }],
+      isError: true,
+    },
   };
 }
 
 /** One handle per store for the tool and its ledger row; stdio interleaves calls, so each gets its own scope.
- *  SHORTCUT: the deadline stops a call only between these steps, not a store read or fetch already running; thread the signal into them. */
-function runToolScoped(toolName: string, args: Record<string, JsonValue>, ctx: McpContext | undefined, makeStore: StoreOpener | undefined): Promise<string> {
+ * SHORTCUT: the deadline stops a call only between these steps, not a running store read or fetch; thread the signal */
+function runToolScoped(
+  toolName: string,
+  args: Record<string, JsonValue>,
+  ctx: McpContext | undefined,
+  makeStore: StoreOpener | undefined,
+): Promise<string> {
   return runWithRequestStores(async () => {
     currentSignal()?.throwIfAborted();
     const text = await executeTool(toolName, args, ctx, makeStore);
@@ -145,7 +183,9 @@ async function callTool(
     return { jsonrpc: '2.0', id, error: { code: -32603, message: STORE_NOT_PORTED_MESSAGE } };
   }
   const refusal = sharedStoreRefusal(toolName, ctx);
-  if (refusal !== undefined) return { jsonrpc: '2.0', id, result: { content: [{ type: 'text', text: refusal }], isError: true } };
+  if (refusal !== undefined) {
+    return { jsonrpc: '2.0', id, result: { content: [{ type: 'text', text: refusal }], isError: true } };
+  }
   const argumentsValue = params?.arguments;
   if (argumentsValue !== undefined && argumentsValue !== null && !isJsonObject(argumentsValue)) {
     return { jsonrpc: '2.0', id, error: { code: -32602, message: `${toolName}: arguments must be an object` } };
@@ -169,9 +209,9 @@ async function callTool(
   };
 }
 
-/** Transport-agnostic MCP dispatcher: the stdio loop and the HTTP/SSE transport route every JSON-RPC message through it. Returns null for notifications.
- * Errors thrown by `executeTool` are the caller's problem: wrap with try/catch on the transport side.
- * A transport with a context brings its store in it; stdio has none, so it brings an opener for the folder it resolves. */
+/** Transport-agnostic MCP dispatcher: the stdio loop and the HTTP/SSE transport route every JSON-RPC message through
+ * it. Returns null for notifications. `executeTool` errors are the caller's problem: wrap with try/catch in the
+ * transport. A transport with a context brings its store; stdio has none, so it brings an opener for its folder. */
 export function handleMcpRequest(req: McpRequest, ctx: McpContext): Promise<McpResponse | null>;
 export function handleMcpRequest(req: McpRequest, ctx: undefined, makeStore: StoreOpener): Promise<McpResponse | null>;
 export async function handleMcpRequest(

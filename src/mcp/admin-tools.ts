@@ -17,17 +17,23 @@ const NOT_RESOLVED = 'Could not resolve. Check the conflict ID and --keep value.
 export async function runPredictBaserateTool({ args, ctx, hippoRoot, tenantId, store }: ToolCall): Promise<string> {
   // Text-only reply, matching the other MCP tools; the group's read writes the audit row, so no surface can skip it.
   const classTag = String(args.class_tag || '').trim();
-  if (!classTag) return 'No class_tag provided. Usage: pass class_tag matching a class used in past predictions (e.g. "migration-effort").';
+  if (!classTag) {
+    return 'No class_tag provided. Usage: pass class_tag matching a class used in past predictions (e.g. "migration-effort").';
+  }
   const baserate = await predictionBaserate({ hippoRoot, tenantId, actor: mcpActor(ctx), store }, classTag);
   if (baserate.nClosed === 0) {
-    return `No closed predictions in class "${classTag}" yet. Create one via hippo_predict (or 'hippo predict ...' CLI) ` +
+    return (
+      `No closed predictions in class "${classTag}" yet. Create one via hippo_predict (or 'hippo predict ...' CLI) ` +
       `and close it with hippo_predict_close once the actual outcome is known. ` +
-      `Base rates need closed predictions with numeric actual_value to compute.`;
+      `Base rates need closed predictions with numeric actual_value to compute.`
+    );
   }
   const lines: string[] = [baserate.summary, ''];
   lines.push(`n_closed:         ${baserate.nClosed}`);
   lines.push(`n_ratio_eligible: ${baserate.nRatioEligible}`);
-  if (baserate.meanEstimate !== null) lines.push(`mean_estimate:    ${baserate.meanEstimate.toFixed(BASERATE_DECIMALS)}`);
+  if (baserate.meanEstimate !== null) {
+    lines.push(`mean_estimate:    ${baserate.meanEstimate.toFixed(BASERATE_DECIMALS)}`);
+  }
   if (baserate.meanActual !== null)   lines.push(`mean_actual:      ${baserate.meanActual.toFixed(BASERATE_DECIMALS)}`);
   if (baserate.meanRatio !== null)    lines.push(`mean_ratio:       ${baserate.meanRatio.toFixed(BASERATE_DECIMALS)}x`);
   if (baserate.p50Ratio !== null)     lines.push(`p50_ratio:        ${baserate.p50Ratio.toFixed(BASERATE_DECIMALS)}x`);
@@ -69,7 +75,8 @@ export function runResolveTool({ args, ctx, hippoRoot, tenantId, store }: ToolCa
     const apiCtx = { hippoRoot, tenantId, actor: mcpActor(ctx), store };
     ({ loserId } = resolveMemoryConflict(apiCtx, conflictId, { keepId, forget, rejectLoser, reason }));
   } catch (err) {
-    // A missing, unreachable or settled conflict answers alike, so the reply says nothing of a pair the caller cannot touch.
+    // A missing, unreachable or settled conflict answers alike, so the reply says nothing of a pair the caller cannot
+    // touch.
     if (err instanceof NotFoundError || err instanceof ConflictError) return NOT_RESOLVED;
     throw err;
   }
@@ -84,8 +91,8 @@ export async function runShareTool({ args, ctx, hippoRoot, tenantId, store }: To
   const actor = mcpActor(ctx);
   // Checked before shareMemory, whose personal-row refusal would tell another person the id exists.
   await getTouchableMemory({ hippoRoot, tenantId, actor, store }, shareId);
-  // Pass tenantId so shareMemory's readEntry filters by tenant; otherwise a Bearer for tenant A could share tenant B's id to the global store.
-  // The 'Memory not found' error matches the cross-tenant deny shape elsewhere.
+  // Pass tenantId so shareMemory's readEntry filters by tenant; otherwise a Bearer for tenant A could share tenant B's
+  // id to the global store. The 'Memory not found' error matches the cross-tenant deny shape elsewhere.
   const shared = shareMemory(hippoRoot, shareId, { force, tenantId });
   if (!shared) return 'Transfer score too low. Use force=true to override.';
   return `Shared [${shared.id}] to global store. Source: ${shared.source}`;
@@ -95,5 +102,7 @@ export function runPeersTool({ tenantId }: ToolCall): string {
   // Tenant-scope peer discovery to the caller, as hippo_share does; undefined would list host-wide.
   const peers = listPeers(undefined, tenantId);
   if (peers.length === 0) return 'No peers found.';
-  return peers.map((p) => `${p.project}: ${p.count} memories (latest: ${p.latest.slice(0, DATE_PREFIX_CHARS)})`).join('\n');
+  return peers
+    .map((p) => `${p.project}: ${p.count} memories (latest: ${p.latest.slice(0, DATE_PREFIX_CHARS)})`)
+    .join('\n');
 }

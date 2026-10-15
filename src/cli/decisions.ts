@@ -11,7 +11,14 @@ import { nonEmptyStringFlag, type CliFlags, flagIsTrue, stringFlag, type Command
 import { requireInit } from './shared.js';
 import { cliApiContext } from './api-context.js';
 import type { StoreContext } from '../api/index.js';
-import { closeObject, foundOrExit, idArgOrExit, listObjects, printLifecycleTail, type ObjectNames } from './object-verbs.js';
+import {
+  closeObject,
+  foundOrExit,
+  idArgOrExit,
+  listObjects,
+  printLifecycleTail,
+  type ObjectNames,
+} from './object-verbs.js';
 import { errorMessage } from '../util/log.js';
 import { fail } from './exit.js';
 
@@ -70,8 +77,8 @@ async function decideCreate(ctx: StoreContext, decisionText: string, flags: CliF
   }
   const supersedesMemId = stringFlag(flags, 'supersedes') ?? null;
 
-  // Commit the table create+supersede first (inside saveDecision's SAVEPOINT) and weaken the old memory last, best-effort,
-  // so a memory-write failure cannot leave the memory stale while the table shows the supersession.
+  // Commit the table create+supersede first (inside saveDecision's SAVEPOINT) and weaken the old memory last,
+  // best-effort, so a memory-write failure cannot leave the memory stale while the table shows the supersession.
   let supersedesDecisionId: number | undefined;
   let oldEntry: MemoryEntry | null = null;
   if (supersedesMemId) {
@@ -111,7 +118,9 @@ function weakenOrWarn(hippoRoot: string, oldEntry: MemoryEntry, supersedesMemId:
   try {
     decisionsModule.weakenSupersededMemory(hippoRoot, oldEntry);
   } catch (e) {
-    printError(`  warning: decision recorded and superseded, but failed to weaken the prior memory ${supersedesMemId}: ${errorMessage(e)}`);
+    printError(
+      `  warning: decision recorded and superseded, but failed to weaken the prior memory ${supersedesMemId}: ${errorMessage(e)}`,
+    );
   }
 }
 

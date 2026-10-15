@@ -12,7 +12,16 @@ import { getMemory } from '../api/memories.js';
 import * as client from './client.js';
 import { cliApiContext } from './api-context.js';
 import { printError } from './output.js';
-import { type CliFlags, parseCountFlag, type CommandContext, boolFlag, flagIsTrue, nonEmptyStringFlag, stringFlag, stringFlagOrExit } from './flag-values.js';
+import {
+  type CliFlags,
+  parseCountFlag,
+  type CommandContext,
+  boolFlag,
+  flagIsTrue,
+  nonEmptyStringFlag,
+  stringFlag,
+  stringFlagOrExit,
+} from './flag-values.js';
 import { requireInit, runChurnStaleForRepo, runViaServerIfAvailable, resolveAuthRoot } from './shared.js';
 import { fmt } from './print.js';
 import { errorMessage } from '../util/log.js';
@@ -136,7 +145,9 @@ async function previewForget(hippoRoot: string, tenantId: string, id: string, ar
 export function handleConflicts({ hippoRoot, tenantId, flags }: CommandContext): void {
   requireInit(hippoRoot);
 
-  const conflicts = api.listConflicts(cliApiContext(hippoRoot, tenantId), stringFlagOrExit(flags, 'status') ?? 'open', { everyTenant: true });
+  const conflicts = api.listConflicts(cliApiContext(hippoRoot, tenantId), stringFlagOrExit(flags, 'status') ?? 'open', {
+    everyTenant: true,
+  });
   if (flags['json']) {
     console.log(JSON.stringify({ conflicts }, null, 2));
     return;
@@ -181,7 +192,9 @@ async function showConflictForResolve(hippoRoot: string, conflictId: number, ten
     console.log(`      ${truncateWithEllipsis(entryB.content, CONFLICT_PREVIEW_CHARS)}`);
   }
   console.log('');
-  console.log(`Resolve with: hippo resolve ${conflictId} --keep <memory_id> [--forget] [--reject-loser [--reason "<why>"]]`);
+  console.log(
+    `Resolve with: hippo resolve ${conflictId} --keep <memory_id> [--forget] [--reject-loser [--reason "<why>"]]`,
+  );
 }
 
 export async function handleResolve({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
@@ -268,7 +281,9 @@ function printRejected(result: ReturnType<typeof api.rejectOnHost>, reason: stri
       console.log(`  Merged rows that held it keep their other texts in: ${result.successorIds.join(', ')}`);
     }
     if (result.dormantSuccessorIds.length > 0) {
-      console.log(`  Dormant merged rows that held it keep their other texts in: ${result.dormantSuccessorIds.join(', ')}`);
+      console.log(
+        `  Dormant merged rows that held it keep their other texts in: ${result.dormantSuccessorIds.join(', ')}`,
+      );
     }
   } else {
     console.log('  No live rows matched (pre-emptive tombstone).');
@@ -320,7 +335,9 @@ export function handleUnreject({ hippoRoot, tenantId, args, flags }: CommandCont
     throw new CliExit(1);
   }
 
-  console.log(`Unrejected [${outcome.digest.slice(0, DIGEST_DISPLAY_CHARS)}...] (was: ${outcome.reason ?? 'none given'})`);
+  console.log(
+    `Unrejected [${outcome.digest.slice(0, DIGEST_DISPLAY_CHARS)}...] (was: ${outcome.reason ?? 'none given'})`,
+  );
 }
 
 /** `hippo dormant [list|restore <id>|forget <id>]`: dormant memories are what sleep keeps instead of deleting
@@ -363,7 +380,9 @@ function changeDormant(ctx: api.StoreContext, sub: 'restore' | 'forget', id: str
     }
   } catch (err) {
     if (err instanceof RejectedValueError) {
-      printError(`Cannot restore ${id}: its value was rejected (${err.reason ?? 'no reason given'}). Run \`hippo unreject\` first to allow it.`);
+      printError(
+        `Cannot restore ${id}: its value was rejected (${err.reason ?? 'no reason given'}). Run \`hippo unreject\` first to allow it.`,
+      );
     } else {
       printError(`Could not ${sub} ${id}: ${errorMessage(err)}`);
     }
@@ -375,12 +394,16 @@ function printDormantRows(rows: ReturnType<typeof api.listDormant>, hasQuery: bo
   if (rows.length === 0) {
     console.log(hasQuery ? 'No dormant memories match.' : 'No dormant memories.');
     if (!loadConfig(root).dormant.enabled) {
-      console.log(`Sleep deletes faded memories. To keep them dormant instead, set "dormant": { "enabled": true } in ${path.join(root, 'config.json')}.`);
+      console.log(
+        `Sleep deletes faded memories. To keep them dormant instead, set "dormant": { "enabled": true } in ${path.join(root, 'config.json')}.`,
+      );
     }
     return;
   }
 
-  console.log(`${rows.length} dormant memor${rows.length === 1 ? 'y' : 'ies'}${hasQuery ? ' matching' : ''} (newest first):\n`);
+  console.log(
+    `${rows.length} dormant memor${rows.length === 1 ? 'y' : 'ies'}${hasQuery ? ' matching' : ''} (newest first):\n`,
+  );
   for (const row of rows) {
     const preview = truncateWithEllipsis(row.content, DORMANT_PREVIEW_CHARS);
     console.log(`--- ${row.id}`);
@@ -393,7 +416,8 @@ function printDormantRows(rows: ReturnType<typeof api.listDormant>, hasQuery: bo
   console.log('Bring one back: hippo dormant restore <id>   Delete for good: hippo dormant forget <id>');
 }
 
-/** `hippo quarantine [list] [--all] [--json] [--global]`, `quarantine approve <id>`, `quarantine reject <id>` (poisoning defence). */
+/** `hippo quarantine [list] [--all] [--json] [--global]`, `quarantine approve <id>`, `quarantine reject <id>`
+ * (poisoning defence). */
 export async function handleQuarantine({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
   const root = resolveAuthRoot(hippoRoot, flags);
   const ctx = cliApiContext(root, tenantId);
@@ -440,7 +464,9 @@ function printQuarantineRows(rows: Awaited<ReturnType<typeof api.quarantineList>
   for (const row of rows) {
     console.log(`--- ${row.id} [${row.status}]`);
     console.log(`    ${row.contentPreview}`);
-    console.log(`    ${row.reason}, original scope ${row.originalScope ?? '(none)'}, quarantined ${row.quarantinedAt.slice(0, DATE_PREFIX_CHARS)}`);
+    console.log(
+      `    ${row.reason}, original scope ${row.originalScope ?? '(none)'}, quarantined ${row.quarantinedAt.slice(0, DATE_PREFIX_CHARS)}`,
+    );
     console.log('');
   }
   console.log('Approve: hippo quarantine approve <id>   Reject: hippo quarantine reject <id>');
@@ -502,11 +528,15 @@ function invalidateChurn(hippoRoot: string, tenantId: string, args: string[], fl
     if (result.preview.length === 0) {
       console.log(`No churn-stale candidates in ${root}.`);
     } else if (churnDryRun) {
-      console.log(`DRY RUN - ${result.marked} memories in ${root} WOULD be tagged churn-stale (${result.alreadyMarked} already tagged):`);
+      console.log(
+        `DRY RUN - ${result.marked} memories in ${root} WOULD be tagged churn-stale (${result.alreadyMarked} already tagged):`,
+      );
     } else {
       console.log(`Tagged ${result.marked} memories churn-stale in ${root} (${result.alreadyMarked} already tagged):`);
     }
-    result.preview.forEach(p => console.log(`   ${p.id}  ${p.evidence}  ${p.already ? '(already) ' : ''}${p.headline}`));
+    result.preview.forEach((p) =>
+      console.log(`   ${p.id}  ${p.evidence}  ${p.already ? '(already) ' : ''}${p.headline}`),
+    );
     if (result.skippedPinned.length > 0) {
       console.log(`Skipped ${result.skippedPinned.length} pinned: ${result.skippedPinned.join(', ')}`);
     }

@@ -31,7 +31,8 @@ function cmdSlackBackfill(hippoRoot: string, tenantId: string, flags: CliFlags):
     printError('SLACK_BOT_TOKEN is not set. Backfill requires a Slack bot token with channels:history scope.');
     throw new CliExit(2);
   }
-  // --since is advisory in V1: the slack_cursors row drives resume, so the backfill loop always continues where it left off (keeps idempotency clean).
+  // --since is advisory in V1: the slack_cursors row drives resume, so the backfill loop always continues where it left
+  // off (keeps idempotency clean).
   const sinceIso = stringFlag(flags, 'since');
   void sinceIso;
   const fetcher = slackHistoryFetcher(token);
