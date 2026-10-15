@@ -97,10 +97,8 @@ function codexStateTexts(root, surfaces, g3) {
   for (const { e, bytes } of surfaceBytes(root, surfaces, ['codexState'])) {
     const db = CODEX_DB.exec(e.path);
     const at = db ? `codex-home/${db[1]}` : e.path;
-    if (db || (g3 && CODEX_G3_ONLY.test(e.path))) {
-      texts.set(at, `${texts.get(at) ?? ''}
+    if (db || (g3 && CODEX_G3_ONLY.test(e.path))) texts.set(at, `${texts.get(at) ?? ''}
 ${fold(bytes)}`);
-    }
   }
   return texts;
 }

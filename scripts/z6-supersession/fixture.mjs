@@ -93,10 +93,8 @@ function fixtureProblems(fx) {
     if (s.answer?.toLowerCase() !== expected?.toLowerCase()) bad(`${tag}: answer must be "${expected}"`);
     for (const m of new Set(markers)) for (const f of fillers) if (hasWord(f, m)) bad(`${tag}: marker "${m}" appears in a background/interleave note`);
   });
-  for (const [cat, doms] of Object.entries(CELLS)) {
-    for (const [dom, n] of Object.entries(doms)) {
-      if ((counts[`${cat}/${dom}`] ?? 0) !== n) bad(`cell ${cat}/${dom}: want ${n}, have ${counts[`${cat}/${dom}`] ?? 0}`);
-    }
+  for (const [cat, doms] of Object.entries(CELLS)) for (const [dom, n] of Object.entries(doms)) {
+    if ((counts[`${cat}/${dom}`] ?? 0) !== n) bad(`cell ${cat}/${dom}: want ${n}, have ${counts[`${cat}/${dom}`] ?? 0}`);
   }
   return problems;
 }

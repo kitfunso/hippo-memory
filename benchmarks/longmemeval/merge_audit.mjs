@@ -41,13 +41,11 @@ const holds = (text, sid, withSnippet) =>
 const merged = slept.filter((r) => r.layer === 'semantic');
 const multiQuestion = merged.filter((r) => new Set(sessionTags(r).flatMap((s) => owners.get(s) ?? [])).size > 1);
 let inRow = 0, elsewhere = 0, missing = 0;
-for (const r of merged) {
-  for (const s of sessionTags(r)) {
-    if (r.content.includes(`[Session: ${s}]`)) continue;
-    if (holds(r.content, s, true)) inRow++;
-    else if (slept.some((x) => holds(x.content, s, true))) elsewhere++;
-    else missing++;
-  }
+for (const r of merged) for (const s of sessionTags(r)) {
+  if (r.content.includes(`[Session: ${s}]`)) continue;
+  if (holds(r.content, s, true)) inRow++;
+  else if (slept.some((x) => holds(x.content, s, true))) elsewhere++;
+  else missing++;
 }
 console.log(`rows: never-slept ${never.length}, slept ${slept.length} (${merged.length} merged by sleep, ` +
   `${merged.filter((r) => sessionTags(r).length > 1).length} tagged with more than one session, ${multiQuestion.length} with sessions of more than one question)`);
