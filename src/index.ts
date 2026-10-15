@@ -26,49 +26,44 @@ export {
   computeSchemaFit
 } from './core/memory.js';
 
-/** Published options keep their snake_case names; core's CreateMemoryOptions is camelCase. */
-type PublicCreateMemoryOptions = Omit<
-  CreateMemoryOptions,
-  | 'emotionalValence'
-  | 'schemaFit'
-  | 'traceOutcome'
-  | 'sourceSessionId'
-  | 'validFrom'
-  | 'extractedFrom'
-  | 'dagLevel'
-  | 'dagParentId'
-  | 'artifactRef'
-> & {
+/** Core's camelCase options, plus the snake_case spellings 2.0 published; the camelCase key wins when both are set. */
+type PublicCreateMemoryOptions = CreateMemoryOptions & {
+  /** @deprecated Use emotionalValence; removed in 3.0. */
   emotional_valence?: CreateMemoryOptions['emotionalValence'];
+  /** @deprecated Use schemaFit; removed in 3.0. */
   schema_fit?: CreateMemoryOptions['schemaFit'];
+  /** @deprecated Use traceOutcome; removed in 3.0. */
   trace_outcome?: CreateMemoryOptions['traceOutcome'];
+  /** @deprecated Use sourceSessionId; removed in 3.0. */
   source_session_id?: CreateMemoryOptions['sourceSessionId'];
+  /** @deprecated Use validFrom; removed in 3.0. */
   valid_from?: CreateMemoryOptions['validFrom'];
+  /** @deprecated Use extractedFrom; removed in 3.0. */
   extracted_from?: CreateMemoryOptions['extractedFrom'];
+  /** @deprecated Use dagLevel; removed in 3.0. */
   dag_level?: CreateMemoryOptions['dagLevel'];
+  /** @deprecated Use dagParentId; removed in 3.0. */
   dag_parent_id?: CreateMemoryOptions['dagParentId'];
+  /** @deprecated Use artifactRef; removed in 3.0. */
   artifact_ref?: CreateMemoryOptions['artifactRef'];
 };
 
 /** Published signature, so `baseHalfLifeDays` stays optional
  * here; hippo's own writers use the strict one in memory.ts. */
 export function createMemory(content: string, options: Partial<PublicCreateMemoryOptions> = {}): MemoryEntry {
-  const {
-    emotional_valence, schema_fit, trace_outcome, source_session_id, valid_from,
-    extracted_from, dag_level, dag_parent_id, artifact_ref, ...rest
-  } = options;
+  const o = options;
   return createStoreMemory(content, {
-    ...rest,
-    emotionalValence: emotional_valence,
-    schemaFit: schema_fit,
-    traceOutcome: trace_outcome,
-    sourceSessionId: source_session_id,
-    validFrom: valid_from,
-    extractedFrom: extracted_from,
-    dagLevel: dag_level,
-    dagParentId: dag_parent_id,
-    artifactRef: artifact_ref,
-    baseHalfLifeDays: options.baseHalfLifeDays ?? DEFAULT_HALF_LIFE_DAYS,
+    ...o,
+    emotionalValence: o.emotionalValence ?? o.emotional_valence,
+    schemaFit: o.schemaFit ?? o.schema_fit,
+    traceOutcome: o.traceOutcome ?? o.trace_outcome,
+    sourceSessionId: o.sourceSessionId ?? o.source_session_id,
+    validFrom: o.validFrom ?? o.valid_from,
+    extractedFrom: o.extractedFrom ?? o.extracted_from,
+    dagLevel: o.dagLevel ?? o.dag_level,
+    dagParentId: o.dagParentId ?? o.dag_parent_id,
+    artifactRef: o.artifactRef ?? o.artifact_ref,
+    baseHalfLifeDays: o.baseHalfLifeDays ?? DEFAULT_HALF_LIFE_DAYS,
   });
 }
 export { search } from './search/bm25-search.js';
