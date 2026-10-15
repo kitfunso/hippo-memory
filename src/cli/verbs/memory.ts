@@ -8,6 +8,7 @@ import { type VerbSpec, verb } from '../verb-row.js';
 export const MEMORY_VERBS = {
   init: verb(() => import('../init.js'), 'handleInit', {
     repairsCodexWrapper: true,
+    scoped: true,
     flags: { switches: ['global', 'no-hooks', 'no-learn', 'no-schedule'], values: ['scan'], numbers: ['days'] },
     usage: [`
   init                     Create .hippo/ structure in current directory
