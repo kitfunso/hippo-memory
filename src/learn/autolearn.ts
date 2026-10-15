@@ -177,7 +177,7 @@ export function runWatchedLine(
   line: string,
   deadlineMs: number = RUN_WATCHED_DEADLINE_MS,
 ): Promise<{ exitCode: number; stderr: string }> {
-  return watchChild(spawn(line, { ...WATCHED_SPAWN_OPTIONS, shell: true }), deadlineMs);
+  return watchChild(spawn(line, { ...WATCHED_SPAWN_OPTIONS, windowsHide: true, shell: true }), deadlineMs);
 }
 
 const WATCHED_SPAWN_OPTIONS: SpawnOptions = { stdio: ['inherit', 'inherit', 'pipe'], windowsHide: true };
