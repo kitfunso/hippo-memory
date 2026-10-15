@@ -2,6 +2,7 @@ import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createRequire } from 'node:module';
 import { rmSync } from 'node:fs';
+import { withStoreGroups } from '../src/store/sqlite/store.js';
 import { readEntry } from '../src/store/entry-reads.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
 import { createApiKey } from '../src/store/auth.js';
@@ -56,7 +57,7 @@ describe('api tenant isolation', () => {
 
     expect(() =>
       promote(
-        { hippoRoot: home, tenantId: 'bravo', actor: { subject: 'api_key:bravo-key', role: 'admin' } },
+        withStoreGroups({ hippoRoot: home, tenantId: 'bravo', actor: { subject: 'api_key:bravo-key', role: 'admin' } }, 'localFiles'),
         created.id,
       ),
     ).toThrow(/memory not found/i);
