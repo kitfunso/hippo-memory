@@ -37,8 +37,8 @@ import { auditingRefusal } from './entry-writes-group.js';
 import { type ColumnValue, insertSpec, rowSpec, type RowByKind } from './object-rows.js';
 import { placeholders } from '../../util/sql.js';
 
-/** The group with each answer as its value; spelled out because `Sync<Objects>` would widen each method's kind to every
- * kind. */
+/** The group with each answer as its value; spelled out because
+ * `Sync<Objects>` would widen each method's kind to every kind. */
 export interface SyncObjects {
   listObjects<K extends ObjectKind>(tenantId: string, kind: K, query: ObjectListQuery<K>): ObjectByKind[K][];
   objectById<K extends ObjectKind>(tenantId: string, kind: K, id: number): ObjectByKind[K] | null;
@@ -256,8 +256,8 @@ function insertRow<K extends SavableKind>(db: DatabaseSyncLike, row: NewRow<K>):
   return Number(result.lastInsertRowid ?? 0);
 }
 
-/** The status guard sits in the UPDATE, so a row another writer retired since the preflight fails the whole save; false
- * says so. */
+/** The status guard sits in the UPDATE, so a row another writer
+ * retired since the preflight fails the whole save; false says so. */
 function supersedeRow<K extends SavableKind>(
   db: DatabaseSyncLike,
   row: NewRow<K>,
@@ -475,8 +475,8 @@ function resolveRow(
   });
 }
 
-/** The successor is joined in so a superseded version is kept only while the row that replaced it is not yet in
- * force. */
+/** The successor is joined in so a superseded version is kept
+ * only while the row that replaced it is not yet in force. */
 function policiesInForce(db: DatabaseSyncLike, tenantId: string, query: PoliciesInForceQuery): Policy[] {
   const { asOf, name } = query;
   const nameClause = name !== undefined ? 'AND p.policy_name = ?' : '';

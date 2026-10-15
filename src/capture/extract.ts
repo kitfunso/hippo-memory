@@ -73,8 +73,8 @@ function proseOnly(text: string): string {
         afterProse = false;
         return '';
       }
-      // Quotes, table rows and indented code are not the speaker's own; indented code cannot interrupt a paragraph or
-      // list item.
+      // Quotes, table rows and indented code are not the speaker's
+      // own; indented code cannot interrupt a paragraph or list item.
       const dropped = /^\s*[>|]/.test(line) || (!afterProse && /^(?: {4}|\t)(?!\s*(?:[-*]|\d+\.)\s)/.test(line));
       afterProse = !dropped && trimmed !== '' && !/^#{1,6}(?:\s|$)/.test(trimmed);
       return dropped ? '' : line;
@@ -87,8 +87,8 @@ function masked(text: string): string {
 }
 
 /**
- * A lowercase line continues the line above only when that line has not ended its sentence; "e.g." at a line end has
- * not.
+ * A lowercase line continues the line above only when that line
+ * has not ended its sentence; "e.g." at a line end has not.
  */
 function continues(line: string, previous: string | undefined): boolean {
   if (previous === undefined || !/^[a-z]/.test(line) || LABEL.test(line)) return false;

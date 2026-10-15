@@ -108,9 +108,9 @@ export const PROCESS: SavableDescriptor<'process', SaveProcessOpts> = {
   },
 };
 
-/** Create a process, or a new version superseding an existing one, in the `objects` store group's one transaction.
- * The supersede CAS (WHERE status='active' AND id != <new id>) throws on changes===0 so a duplicate supersede aborts
- * the write.
+/** Create a process, or a new version superseding an existing one, in the `objects`
+ * store group's one transaction. The supersede CAS (WHERE status='active' AND id
+ * != <new id>) throws on changes===0 so a duplicate supersede aborts the write.
  */
 export function saveProcess(
   objects: Objects,

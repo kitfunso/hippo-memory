@@ -5,8 +5,8 @@ import * as path from 'path';
 import { isObjectLike, isStringValue } from './capture-contract.js';
 import { errorMessage, log, errorFields } from '../util/log.js';
 
-/** The config file git reads for a checkout: `.git/config`, a linked worktree's `<commondir>/config`, a submodule's
- * `<gitdir>/config`. */
+/** The config file git reads for a checkout: `.git/config`, a linked
+ * worktree's `<commondir>/config`, a submodule's `<gitdir>/config`. */
 export function gitConfigPath(gitRoot: string): string | null {
   const marker = path.join(gitRoot, '.git');
   try {
@@ -36,8 +36,8 @@ function gitFilePointer(marker: string): string | null {
   }
 }
 
-/** One config value with git's quoting: `"` toggles quoting, backslash escapes, and an unquoted `#` or `;` starts a
- * comment. */
+/** One config value with git's quoting: `"` toggles quoting,
+ * backslash escapes, and an unquoted `#` or `;` starts a comment. */
 function configValue(raw: string): string {
   let out = '';
   let quoted = false;
@@ -60,8 +60,8 @@ function configValue(raw: string): string {
 const SECTION = /^\[\s*([A-Za-z0-9.-]+)(?:\s+"((?:[^"\\]|\\.)*)")?\s*\](.*)$/;
 const ENTRY = /^([A-Za-z][A-Za-z0-9-]*)\s*(?:=(.*))?$/;
 
-/** `remote.origin.url` from a config file's text, the first value as git fetch uses; the subsection name is
- * case-sensitive. */
+/** `remote.origin.url` from a config file's text, the first value
+ * as git fetch uses; the subsection name is case-sensitive. */
 export function originUrlFromConfig(text: string): string | null {
   let inOrigin = false;
   for (const raw of text.split(/\r?\n/)) {
@@ -137,8 +137,8 @@ export function originRemoteId(gitRoot: string): string | null {
 
 export const PROJECT_FILE = '.hippo-project.json';
 
-/** The `id` a team committed in `.hippo-project.json` at root, lowercased like every project name; null when absent
- * or unusable. */
+/** The `id` a team committed in `.hippo-project.json` at root,
+ * lowercased like every project name; null when absent or unusable. */
 export function projectFileId(root: string): string | null {
   const file = path.join(root, PROJECT_FILE);
   if (!fs.existsSync(file)) return null;

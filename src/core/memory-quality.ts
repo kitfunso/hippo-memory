@@ -97,8 +97,8 @@ function isDanglingAssertion(text: string): boolean {
   const bare = bareText(text);
   // Only a lowercase start is a cut: "To rebuild the index, run ..." opens an instruction.
   if (/^(?:to|and|for)\s/.test(bare) && bare.length < 50) return true;
-  // Prepositions, modals and "is" can end a whole sentence ("the branch it merges into"), so only cut-off endings
-  // count.
+  // Prepositions, modals and "is" can end a whole sentence ("the
+  // branch it merges into"), so only cut-off endings count.
   if (
     /\b(?:to be|has been|will be|instead of|rather than|such as|than|because|if|unless|when|until|and|or|but)$/i.test(
       bare,
@@ -130,8 +130,8 @@ const OUTCOME_DETAIL = new RegExp(
 function isSubjectlessOutcome(text: string): boolean {
   const lead = OUTCOME_LEAD.exec(text);
   if (lead === null || RELATION_WORD.test(text)) return false;
-  // "Returns 404 for unknown ids" and "Deleted rows must stay deleted" say when or what; "returned 3 matching rows"
-  // does not.
+  // "Returns 404 for unknown ids" and "Deleted rows must stay
+  // deleted" say when or what; "returned 3 matching rows" does not.
   return !OUTCOME_DETAIL.test(text.slice(lead[0].length).replace(/\([^)]*\)/g, ' '));
 }
 
@@ -143,8 +143,8 @@ const OUTPUT_LINE = new RegExp(
 );
 const STACK_FRAME = /^at\s+\S.*:\d+(?::\d+)?\)?$/;
 const ERROR_LEAD = /^(?:[\w.$]+Error|[\w.$]+Exception):\s/;
-// Log lines say "after" and "while" too, so only a rule word frees a timestamp or level lead: a dated freeze saying
-// never merge.
+// Log lines say "after" and "while" too, so only a rule word frees
+// a timestamp or level lead: a dated freeze saying never merge.
 const LOG_LEADS = [
   /^\d{4}-\d{2}-\d{2}[T ][\d:.]+(?:Z|[+-][\d:]+)?\s+(?:\[?\w+\]?\s+)?/,
   /^\[(?:info|warn|error|debug)\]/i,
@@ -197,8 +197,8 @@ export function certainDefect(content: string): AutomaticMemoryDefect | null {
   return isCertainReason(reason) ? reason : null;
 }
 
-// Watch failures ('autolearn') and tool failures keep a fixed "Command 'x' failed" format by design, so they are not
-// judged.
+// Watch failures ('autolearn') and tool failures keep a fixed
+// "Command 'x' failed" format by design, so they are not judged.
 const AUTOMATIC_SOURCES = new Set(['capture', 'git-learn', 'git', 'consolidation']);
 // Promote and share rewrite the source but keep the tags, so the writer's tag still marks a copy; elsewhere a person
 // may set it.
@@ -210,8 +210,8 @@ export const BUNDLE_HEADER =
 type Provenance = Pick<MemoryEntry, 'source' | 'confidence' | 'content' | 'extracted_from' | 'dag_level' | 'tags'>;
 
 /**
- * A row hippo wrote that no person vouched for: hippo's writers stamp observed or inferred, a person's edit or restore
- * verified.
+ * A row hippo wrote that no person vouched for: hippo's writers
+ * stamp observed or inferred, a person's edit or restore verified.
  */
 export function isAutomaticEntry(entry: Provenance): boolean {
   if (entry.confidence !== 'observed' && entry.confidence !== 'inferred') return false;

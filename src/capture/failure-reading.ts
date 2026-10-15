@@ -1,5 +1,5 @@
-// What a PostToolUseFailure payload says, read with no store, so a hook with no store sends the same reading the local
-// log keeps.
+// What a PostToolUseFailure payload says, read with no store, so a
+// hook with no store sends the same reading the local log keeps.
 import { redactSecretsStrict } from '../util/secret-detect.js';
 import { scrubForSharing } from './share-scrub.js';
 import { blockHash } from '../util/token-text.js';
@@ -10,8 +10,8 @@ import type { CaptureErrorOutcome, RoutineRule } from '../store/failure-log.js';
 const COMMAND_HEAD_WORDS = 2;
 
 /**
- * What {@link lessonFromFailure} read from a payload; `detail` is the finer failure-log key (untruncated, command
- * head).
+ * What {@link lessonFromFailure} read from a payload; `detail`
+ * is the finer failure-log key (untruncated, command head).
  */
 export type FailureReading =
   | { text: string; detail: string }

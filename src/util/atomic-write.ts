@@ -34,8 +34,8 @@ function renameOnto(tmp: string, target: string): void {
   }
 }
 
-/** Where a write to `file` lands: through any symlink, a dangling one included, so a dotfile manager's link
- * survives. */
+/** Where a write to `file` lands: through any symlink, a
+ * dangling one included, so a dotfile manager's link survives. */
 function writeTarget(file: string): string {
   let target = file;
   for (let hop = 0; hop < MAX_LINK_HOPS && fs.lstatSync(target, { throwIfNoEntry: false })?.isSymbolicLink(); hop++) {
@@ -60,8 +60,8 @@ function removeTemp(tmp: string): void {
   }
 }
 
-/** Flushed before the rename, or a crash soon after could leave the file's name on bytes that never reached the
- * disk. */
+/** Flushed before the rename, or a crash soon after could
+ * leave the file's name on bytes that never reached the disk. */
 function writeFlushed(tmp: string, text: string, old: fs.Stats | undefined, durable: boolean): void {
   const fd = fs.openSync(tmp, 'w', (old?.mode ?? 0o666) & 0o777);
   try {
@@ -130,8 +130,8 @@ export function writeFileAtomic(file: string, text: string, opts: { readonly dur
   if (old === undefined) {
     fs.mkdirSync(path.dirname(target), { recursive: true });
   } else {
-    // A rename replaces a read-only file that the in-place write refused, and Windows would retry that refusal for a
-    // second.
+    // A rename replaces a read-only file that the in-place write
+    // refused, and Windows would retry that refusal for a second.
     fs.accessSync(target, fs.constants.W_OK);
   }
   if (old !== undefined && old.nlink > 1) {

@@ -1,5 +1,5 @@
-// The async store interface and its groups; type-only apart from the store errors, so an add-on can build a store on it
-// alone.
+// The async store interface and its groups; type-only apart from
+// the store errors, so an add-on can build a store on it alone.
 import type { AmbientTallies } from '../core/ambient.js';
 import type { AmbientStoreFilter } from './ambient.js';
 import type { ApiKeyListRow, ApiKeyRecord, ListApiKeysOpts, NewApiKey } from './auth.js';
@@ -59,9 +59,9 @@ export interface RecallSearchArgs {
 
 /** Everything one recall writes once its reply is decided, so a store writes it on one connection. */
 export interface RecallWrites {
-  /** Insert or ignore on (memory_id, goal_id), so the first row wins, a duplicate inside this batch included. First
-   * drop a row whose memory_id is in no memories row of this store, whatever that row's tenant, as
-   * `localGoalRecallRows` does. */
+  /** Insert or ignore on (memory_id, goal_id), so the first row wins, a duplicate
+   * inside this batch included. First drop a row whose memory_id is in no memories
+   * row of this store, whatever that row's tenant, as `localGoalRecallRows` does. */
   readonly goalLog: readonly GoalRecallLogRow[];
   /** In the order they happened. */
   readonly audit: readonly AppendAuditOpts[];
@@ -97,8 +97,8 @@ export interface VectorWrite {
   readonly tenantId: string;
   /** The index identity the vectors were built by, `embeddingIndexIdentity(provider.id)`. */
   readonly model: string;
-  /** Set only by embedAll's rebuild, so a write that read the index state before another process rebuilt it cannot drop
-   * that rebuild. */
+  /** Set only by embedAll's rebuild, so a write that read the index
+   * state before another process rebuilt it cannot drop that rebuild. */
   readonly replaceIndex: boolean;
   readonly rows: readonly VectorRowWrite[];
 }
@@ -120,9 +120,9 @@ export interface VectorBackfillQuery {
   readonly tenantId?: string;
 }
 
-/** The writes behind embed on write and the backfill: core computes each vector, the store only keeps it.
- * A store deletes a memory's vector and particle when the memory is deleted (hippo.db does it by trigger and
- * foreign-key cascade). */
+/** The writes behind embed on write and the backfill: core computes each vector,
+ * the store only keeps it. A store deletes a memory's vector and particle when
+ * the memory is deleted (hippo.db does it by trigger and foreign-key cascade). */
 export interface VectorWrites {
   /** Memories of any kind with no vector stored under `query.model`, by id ascending in byte order. */
   entriesWithoutVector(query: VectorBackfillQuery): Promise<MemoryEntry[]>;
@@ -144,8 +144,8 @@ export interface KeyAudit {
    * transaction, then resolves to `at`. A revoked key resolves to its own revoked_at and writes nothing; a key missing
    * from `tenantId` rejects with NotFoundError `Unknown key_id: <keyId>`. */
   revokeApiKey(revoke: KeyRevoke): Promise<string>;
-  /** As `listAuditEventsAfter`: rows above `afterId` in ascending id order, with its RangeErrors, limit clamp and
-   * tenant filter. */
+  /** As `listAuditEventsAfter`: rows above `afterId` in ascending
+   * id order, with its RangeErrors, limit clamp and tenant filter. */
   auditEventsAfter(opts: ListAuditAfterOpts): Promise<AuditEvent[]>;
   /** The highest audit id ever assigned, pruned rows included, 0 before the first; a tail that sees it drop knows the
    * log was restored. */
@@ -175,8 +175,8 @@ export interface ContextReads {
   /** As `loadContextCandidates`: at most `filter.cap` live rows, pins and then the least decayed first, returned by
    * created, then id. */
   contextCandidates(tenantId: string, filter: ContextCandidateFilter): Promise<MemoryEntry[]>;
-  /** As `loadAmbientTallies`: one aggregate over the live, unarchived rows `filter` admits, less other projects'
-   * secret-tagged rows. */
+  /** As `loadAmbientTallies`: one aggregate over the live, unarchived
+   * rows `filter` admits, less other projects' secret-tagged rows. */
   ambientTallies(tenantId: string, filter: AmbientStoreFilter): Promise<AmbientTallies>;
 }
 
@@ -185,8 +185,8 @@ export interface EntryWrite {
   readonly actor: string;
 }
 
-/** Who acts on which of a tenant's rows; `ownScope` is the caller's personal scope, so every other personal row is out
- * of reach. */
+/** Who acts on which of a tenant's rows; `ownScope` is the caller's
+ * personal scope, so every other personal row is out of reach. */
 export interface EntryTarget {
   readonly tenantId: string;
   readonly actor: string;
@@ -311,9 +311,9 @@ export interface Predictions {
   predictionBaserate(tenantId: string, classTag: string, actor: string): Promise<PredictionBaserate>;
 }
 
-/** Which of a tenant's rows of one kind a list reads: every status when `status` is unset, every value of the kind's
- * one filter column (customer, repo) when `filter` is. Neither is ever empty; a kind with no filter column ignores
- * `filter`. */
+/** Which of a tenant's rows of one kind a list reads: every status when `status` is
+ * unset, every value of the kind's one filter column (customer, repo) when `filter`
+ * is. Neither is ever empty; a kind with no filter column ignores `filter`. */
 export interface ObjectListQuery<K extends ObjectKind = ObjectKind> {
   readonly status?: ObjectByKind[K]['status'];
   readonly filter?: string;
@@ -389,13 +389,13 @@ export interface PoliciesInForceQuery {
   readonly limit: number;
 }
 
-/** The reads and writes behind the typed-object routes. An audit row names the object under the kind's id key
- * (decision_id, incident_id, ...). A row belongs to one tenant: another tenant's id reads as missing in every
- * method. */
+/** The reads and writes behind the typed-object routes. An audit row names the
+ * object under the kind's id key (decision_id, incident_id, ...). A row
+ * belongs to one tenant: another tenant's id reads as missing in every method. */
 export interface Objects {
-  /** At most `limit` rows of the kind, newest first: by createdAt compared as text in byte order, then by id, both
-   * descending, so the order is total. `after` keeps only the rows below its (createdAt, id) pair in that order. No
-   * audit row. */
+  /** At most `limit` rows of the kind, newest first: by createdAt compared as text
+   * in byte order, then by id, both descending, so the order is total. `after`
+   * keeps only the rows below its (createdAt, id) pair in that order. No audit row. */
   listObjects<K extends ObjectKind>(tenantId: string, kind: K, query: ObjectListQuery<K>): Promise<ObjectByKind[K][]>;
   /** The tenant's row; null for a missing id or another tenant's. No audit row. */
   objectById<K extends ObjectKind>(tenantId: string, kind: K, id: number): Promise<ObjectByKind[K] | null>;
@@ -464,16 +464,16 @@ export type DescendantOrigin = Pick<MemoryEntry, 'scope' | 'origin_project'>;
 export interface DescendantPage {
   /** How many rows the caller reads whole, counted from the first row of the first level. */
   readonly rows: number;
-  /** `DescendantWalk.admit` for a row under the summary, judged on these two fields alone; the two must agree on every
-   * such row. */
+  /** `DescendantWalk.admit` for a row under the summary, judged on
+   * these two fields alone; the two must agree on every such row. */
   readonly admit: (row: DescendantOrigin) => boolean;
 }
 
 export interface DescendantWalk {
   /** Levels to read under the summary. */
   readonly depth: number;
-  /** Asked of the summary, then of each child read: a refused row is left out of the answer and nothing under it is
-   * read. */
+  /** Asked of the summary, then of each child read: a refused
+   * row is left out of the answer and nothing under it is read. */
   readonly admit: (row: MemoryEntry) => boolean;
   /** Set by a caller that shows only the first rows. A store may ignore it; one that honours it returns just those rows
    * and counts every level in `sizes`. */
@@ -505,9 +505,9 @@ export interface DagReads {
 
 /** The read behind the audit list. It writes no audit row. */
 export interface AuditLog {
-  /** One tenant's rows newest first, by ts then id descending, narrowed by `op` and by `since` (ts at or after it);
-   * `limit` is clamped to 1..10001 and defaults to 100, and `after` resumes below the (ts, id) position a page ended
-   * on. */
+  /** One tenant's rows newest first, by ts then id descending, narrowed by `op` and
+   * by `since` (ts at or after it); `limit` is clamped to 1..10001 and defaults to
+   * 100, and `after` resumes below the (ts, id) position a page ended on. */
   listAuditEvents(query: QueryAuditOpts): Promise<AuditEvent[]>;
 }
 
@@ -524,8 +524,8 @@ export type LastRecallWrites = RecallWrites & Required<Pick<RecallWrites, 'stren
 export interface LastRecall {
   /** entryWrites.applyOutcome, then a link from recall trace `traceId` to the ids applied; resolves to those ids. */
   applyTracedOutcome(outcome: OutcomeWrite, traceId: number): Promise<string[]>;
-  /** applyTracedOutcome on the ids and trace of the last recall, read together so an outcome never pairs them with an
-   * older trace. */
+  /** applyTracedOutcome on the ids and trace of the last recall, read
+   * together so an outcome never pairs them with an older trace. */
   applyOutcomeToLast(target: EntryTarget, good: boolean): Promise<string[]>;
   /** finishRecall, then the ids this store lacks strengthened under `globalRoot`, then the ids and their trace saved as
    * the last recall in one write; resolves to the trace id, null when none was asked or its write failed. */
@@ -555,8 +555,8 @@ export type QuarantineApproval =
   { readonly outcome: 'approved' } | QuarantineRefusal | { readonly outcome: 'scope_moved' };
 export type QuarantineRejection = { readonly outcome: 'rejected' } | QuarantineRefusal;
 
-/** The review queue behind the quarantine routes. A refusal is a resolved value, never a rejection, and writes
- * nothing. */
+/** The review queue behind the quarantine routes. A refusal is
+ * a resolved value, never a rejection, and writes nothing. */
 export interface Quarantine {
   /** At most `limit` of the tenant's records, newest first (quarantinedAt as text in byte order, then memoryId, both
    * descending); `after` keeps only records below its pair. 'pending' leaves out a record whose memory row is gone;
@@ -639,8 +639,8 @@ export interface AuditMaintenance {
     removals: readonly { readonly id: string; readonly reason: string }[],
     actor: string,
   ): Promise<string[]>;
-  /** Counts (dryRun) or deletes the tenant's audit rows before `cutoff`, then appends one audit_prune row; resolves to
-   * the count. */
+  /** Counts (dryRun) or deletes the tenant's audit rows before
+   * `cutoff`, then appends one audit_prune row; resolves to the count. */
   pruneAuditRows(prune: AuditPrune): Promise<number>;
   /** A preview, or with `apply` the moves of certain defects to dormant storage behind a backup. */
   repairQuality(tenantId: string, apply: boolean): Promise<QualityRepairResult>;
@@ -655,8 +655,8 @@ export interface LessonWrites {
   /** Content, source and origin of the tenant's rows holding any of `words`, among the rows a team member or
    * `ownScope`'s owner may touch. */
   textsHoldingWords(tenantId: string, words: readonly string[], ownScope: string | null): Promise<HeldText[]>;
-  /** Writes each entry in one transaction; a rejected value writes its refusal row and is skipped. Resolves to the ids
-   * written. */
+  /** Writes each entry in one transaction; a rejected value writes
+   * its refusal row and is skipped. Resolves to the ids written. */
   writeSkippingRejected(entries: readonly MemoryEntry[], actor: string): Promise<string[]>;
   /** Rewrites each entry in one transaction, all or none. */
   writeTogether(entries: readonly MemoryEntry[]): Promise<void>;
@@ -664,11 +664,11 @@ export interface LessonWrites {
   bumpRemembered(count: number): Promise<void>;
 }
 
-/** The optional groups: a store sets each one whole or leaves it unset, and a route or MCP tool names the one it
- * needs. */
+/** The optional groups: a store sets each one whole or leaves
+ * it unset, and a route or MCP tool names the one it needs. */
 export interface StoreGroups {
-  /** Unset on any store but hippo.db; a request then runs fenced from hippo.db, and a route or tool that names no group
-   * answers 501. */
+  /** Unset on any store but hippo.db; a request then runs fenced from
+   * hippo.db, and a route or tool that names no group answers 501. */
   readonly localFiles: LocalFiles;
   /** Unset on a store without it, where the quality audit, its repair and audit prune answer 501. */
   readonly auditMaintenance: AuditMaintenance;
@@ -708,8 +708,8 @@ export function hasGroup(store: HippoStore, group: StoreGroup): boolean {
   return group === 'base' || store[group] !== undefined;
 }
 
-/** The group's methods; a store without them throws StoreNotPortedError, which answers 501 as any unported path
- * does. */
+/** The group's methods; a store without them throws
+ * StoreNotPortedError, which answers 501 as any unported path does. */
 export function requireGroup<G extends keyof StoreGroups>(store: HippoStore, group: G): StoreGroups[G] {
   const groups: Partial<StoreGroups> = store;
   const methods = groups[group];
@@ -719,8 +719,8 @@ export function requireGroup<G extends keyof StoreGroups>(store: HippoStore, gro
 
 export const STORE_BUSY_MESSAGE = 'store busy (another hippo process holds the write lock); retry shortly';
 
-/** A store behind the port throws this when its lock wait runs out, so the server answers 503 as it does for a busy
- * hippo.db. */
+/** A store behind the port throws this when its lock wait runs
+ * out, so the server answers 503 as it does for a busy hippo.db. */
 export class StoreBusyError extends Error {
   constructor(message: string = STORE_BUSY_MESSAGE, options?: ErrorOptions) {
     super(message, options);
@@ -742,9 +742,9 @@ export interface HippoStore extends Partial<StoreGroups> {
   entriesByIds(ids: readonly string[], tenantId?: string): Promise<MemoryEntry[]>;
   /** The session's active goals and their policies, read together so a goal and its policy never disagree. */
   activeGoals(opts: GetActiveGoalsOpts): Promise<ActiveGoals>;
-  /** The first `count` (at most 200) unsuperseded raw rows a tenant, a non-empty session id and non-null `origins`
-   * (those projects and user-global rows) must narrow, by created descending, then content and id ascending, as
-   * `loadFreshRawMemories` does. */
+  /** The first `count` (at most 200) unsuperseded raw rows a tenant, a non-empty session
+   * id and non-null `origins` (those projects and user-global rows) must narrow, by
+   * created descending, then content and id ascending, as `loadFreshRawMemories` does. */
   freshRawEntries(
     count: number,
     tenantId: string | undefined,
@@ -759,12 +759,12 @@ export interface HippoStore extends Partial<StoreGroups> {
   planningFallacyEvidence(tenantId: string, classQueryTokens: readonly string[]): Promise<PlanningFallacyEvidence>;
   /** Appends the rows in order, all or none. */
   appendAuditEvents(events: readonly AppendAuditOpts[]): Promise<void>;
-  /** Writes the goal log and audit rows in one transaction and rejects with none written if it fails. Then the trace
-   * and the strengthen, each on its own: a failure there logs and still resolves, since the reply is already
-   * decided. */
+  /** Writes the goal log and audit rows in one transaction and rejects with none
+   * written if it fails. Then the trace and the strengthen, each on its own: a
+   * failure there logs and still resolves, since the reply is already decided. */
   finishRecall(writes: RecallWrites): Promise<void>;
-  /** Adds `recalled` to the one store-wide total_recalled counter, no tenant; the SQLite store also rewrites
-   * stats.json. */
+  /** Adds `recalled` to the one store-wide total_recalled counter,
+   * no tenant; the SQLite store also rewrites stats.json. */
   bumpRecallStats(recalled: number): Promise<void>;
   /** One token-ledger row. Throws, so the caller decides whether a ledger failure matters. */
   recordTokens(use: TokenUse): Promise<void>;

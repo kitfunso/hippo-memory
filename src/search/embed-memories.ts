@@ -165,8 +165,8 @@ async function withEmbedLock<T>(hippoRoot: string, fn: () => Promise<T>): Promis
   });
 }
 
-// A store keeps each write whole in its own transaction, and a lock file in hippoRoot would not reach a worker on
-// another host.
+// A store keeps each write whole in its own transaction, and a
+// lock file in hippoRoot would not reach a worker on another host.
 async function withProcessEmbedLock<T>(fn: () => Promise<T>): Promise<T> {
   let resolve!: () => void;
   const next = new Promise<void>(r => { resolve = r; });
@@ -272,8 +272,8 @@ async function backfillInStore(
       'passage',
     );
     const result = await writeVectorPage(writes, { model, replaceIndex: rebuild }, page, vectors, rebuild);
-    // Another process rebuilt the index mid-run; every later page would be refused too, after paying the provider for
-    // it.
+    // Another process rebuilt the index mid-run; every later page
+    // would be refused too, after paying the provider for it.
     if (result.modelMismatch) throw new Error(OTHER_MODEL_INDEX);
     count += result.written;
   }
@@ -383,10 +383,10 @@ async function embedMemoryLocked(
   }
 }
 
-// Every page is embedded before one transaction replaces the index, and the identity is saved only after that: a
-// provider failure or a crash
-// at any earlier point leaves the old identity, so embeddingModelRequiresReindex has the next run rebuild from the
-// start.
+// Every page is embedded before one transaction replaces the index, and
+// the identity is saved only after that: a provider failure or a crash
+// at any earlier point leaves the old identity, so
+// embeddingModelRequiresReindex has the next run rebuild from the start.
 async function rebuildIndexForProvider(hippoRoot: string, provider: EmbeddingProvider): Promise<number> {
   const identity = provider.id;
   // Host-wide rebuild: one embedding index per hippoRoot, keyed by tenant-scoped entry.id; per-tenant indices would be
@@ -487,9 +487,9 @@ export async function embedAll(
     const identity = provider.id;
     if (embeddingModelRequiresReindex(hippoRoot, identity)) return rebuildIndexForProvider(hippoRoot, provider);
 
-    // Host-wide by design: embedAll backfills all tenants' entries into the per-host index; per-tenant filtering would
-    // produce partial indices and break
-    // recall.
+    // Host-wide by design: embedAll backfills all tenants'
+    // entries into the per-host index; per-tenant filtering
+    // would produce partial indices and break recall.
     const embedded = pruneStoredVectors(hippoRoot);
     const pending = loadAllEntryIds(hippoRoot).filter((id) => !embedded.has(id));
     const { count, backfillError } = await backfillPending(

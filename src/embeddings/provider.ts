@@ -1,9 +1,9 @@
-/** Pluggable embedding providers; local `@huggingface/transformers` is the zero-dependency default, OpenAI / Voyage /
- * Cohere are opt-in via native `fetch`.
- * Local `id` is the bare model string, API `id` is `${kind}:${model}`; the stored identity adds `#t<N>`
- * (`embeddingIndexIdentity`), so changes reindex.
- * `embed()` MAY throw on hard transport/auth failure so a reindex aborts atomically; hot paths wrap it and fall back
- * to BM25. */
+/** Pluggable embedding providers; local `@huggingface/transformers` is the
+ * zero-dependency default, OpenAI / Voyage / Cohere are opt-in via native
+ * `fetch`. Local `id` is the bare model string, API `id` is `${kind}:${model}`;
+ * the stored identity adds `#t<N>` (`embeddingIndexIdentity`), so changes
+ * reindex. `embed()` MAY throw on hard transport/auth failure so a reindex
+ * aborts atomically; hot paths wrap it and fall back to BM25. */
 
 import { envByName } from '../util/env.js';
 import {
@@ -54,8 +54,8 @@ export interface EmbedCallOptions {
 export interface EmbeddingProvider {
   readonly kind: EmbeddingProviderKind;
   readonly model: string;
-  /** Identity recorded in DB meta to drive reindex-on-change: bare model string for local, `${kind}:${model}` for
-   * api. */
+  /** Identity recorded in DB meta to drive reindex-on-change:
+   * bare model string for local, `${kind}:${model}` for api. */
   readonly id: string;
   /** Known fixed output dimension, if any (undefined for local / unknown). */
   readonly dimensions?: number;
@@ -78,8 +78,8 @@ class LocalEmbeddingProvider implements EmbeddingProvider {
     return this.enabled && this.embedder.isAvailable();
   }
   async embed(texts: string[], role?: EmbeddingRole, call: EmbedCallOptions = {}): Promise<number[][]> {
-    // A model that cannot load fails the call, as an API outage does; items then run one at a time on the shared
-    // pipeline.
+    // A model that cannot load fails the call, as an API outage
+    // does; items then run one at a time on the shared pipeline.
     if (texts.length > 0) await this.embedder.requirePipeline(this.model, call.signal);
     const out: number[][] = [];
     for (const text of texts) {
@@ -281,8 +281,8 @@ class ApiEmbeddingProvider implements EmbeddingProvider {
         },
         {
           timeoutMs: REQUEST_TIMEOUT_MS,
-          // Embedding the same text twice changes nothing on the far side, so a dropped connection or a stalled attempt
-          // is replayed.
+          // Embedding the same text twice changes nothing on the far side,
+          // so a dropped connection or a stalled attempt is replayed.
           retryTransport: true,
           maxDelayMs: signal ? DEADLINE_RETRY_WAIT_CAP_MS : undefined,
         },
@@ -346,8 +346,8 @@ export interface ResolveProviderOptions {
   model?: string;
   /** Explicit provider override (mainly for tests). */
   provider?: EmbeddingProviderKind;
-  /** The Transformers.js package a local provider loads from, with its own models; the process's shared embedder
-   * when unset. */
+  /** The Transformers.js package a local provider loads from, with
+   * its own models; the process's shared embedder when unset. */
   transformers?: LocalTransformers;
 }
 
@@ -392,9 +392,9 @@ export function resolveEmbeddingProvider(
   return new ApiEmbeddingProvider(kind, model, baseUrl, batchSize, enabled);
 }
 
-/** The reindex identity for the active provider; use it, NOT resolveEmbeddingModel, wherever
- * `embeddingModelRequiresReindex` / stored-model comparisons
- * happen. */
+/** The reindex identity for the active provider; use it, NOT
+ * resolveEmbeddingModel, wherever `embeddingModelRequiresReindex`
+ * / stored-model comparisons happen. */
 export function resolveEmbeddingIdentity(hippoRoot: string, opts: ResolveProviderOptions = {}): string {
   return resolveEmbeddingProvider(hippoRoot, opts).id;
 }

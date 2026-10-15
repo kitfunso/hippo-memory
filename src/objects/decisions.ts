@@ -1,8 +1,8 @@
 /**
- * Decision object: the `decisions` table is the source of truth, so an in-force decision stays `active` despite memory
- * decay.
- * The memory mirror (memory_id NULLABLE, ON DELETE SET NULL) is for recall only; saveDecision commits both in one
- * `objects` transaction.
+ * Decision object: the `decisions` table is the source of truth, so an
+ * in-force decision stays `active` despite memory decay. The memory
+ * mirror (memory_id NULLABLE, ON DELETE SET NULL) is for recall only;
+ * saveDecision commits both in one `objects` transaction.
  */
 
 import { BadRequestError } from '../core/api-errors.js';

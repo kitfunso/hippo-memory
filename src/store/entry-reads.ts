@@ -11,8 +11,8 @@ import { placeholders } from '../util/sql.js';
 
 const MAX_IDS_PER_READ = 500;
 
-// The plus keeps SQLite on the primary key for an id list: with a bare tenant_id it walks every row of the tenant
-// instead.
+// The plus keeps SQLite on the primary key for an id list: with
+// a bare tenant_id it walks every row of the tenant instead.
 export const TENANT_IS = '+tenant_id = ?';
 
 /** Read a memory entry by ID. With `tenantId` the read is tenant-scoped (cross-tenant returns null); omitted, no
@@ -55,8 +55,8 @@ export function heldIdLookup(hippoRoot: string, tenantId: string, ids: readonly 
   };
 }
 
-/** Rows by id on the caller's handle, one query per chunk; an id missing or in another tenant is absent from the
- * map. */
+/** Rows by id on the caller's handle, one query per chunk; an
+ * id missing or in another tenant is absent from the map. */
 export function selectEntriesByIds(
   db: DatabaseSyncLike,
   ids: readonly string[],
@@ -214,10 +214,10 @@ export function countSessionRawMemories(
   }, openStore);
 }
 
-/** Last N kind='raw' memories by `created` desc, tenant-scoped, max 200; pass `sessionId` or concurrent sessions show
- * up in each other's fresh tail.
- * The tenant-wide shape is discouraged: `api.recall` throws `RecallContractError` for it when
- * `HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL=1`. */
+/** Last N kind='raw' memories by `created` desc, tenant-scoped, max 200; pass
+ * `sessionId` or concurrent sessions show up in each other's fresh tail. The
+ * tenant-wide shape is discouraged: `api.recall` throws `RecallContractError`
+ * for it when `HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL=1`. */
 export function loadFreshRawMemories(
   hippoRoot: string,
   count: number,
@@ -293,8 +293,8 @@ export function loadEntriesMentioning(
   const likes = [...new Set(tokens)].map((t) => `%${escapeLike(t)}%`);
   const clauses = likes.map(() => `content LIKE ? ESCAPE '\\'`);
   const params: string[] = [...likes];
-  // A tag needing JSON escapes or case folding past ASCII is not found by a substring of tags_json, so every tagged row
-  // stays in.
+  // A tag needing JSON escapes or case folding past ASCII is not
+  // found by a substring of tags_json, so every tagged row stays in.
   if (/^[\x20-\x7e]*$/.test(tag) && !/["\\]/.test(tag)) {
     clauses.push(`tags_json LIKE ? ESCAPE '\\'`);
     params.push(`%${escapeLike(tag)}%`);
@@ -446,8 +446,8 @@ export function selectTenantTexts(
     .all(tenantId) as Array<{ id: string; content: string; source: string; scope: string | null }>;
 }
 
-/** Live rows whose source starts with `prefix`, on the caller's handle; LIKE folds case, so the prefix is checked
- * again exactly. */
+/** Live rows whose source starts with `prefix`, on the caller's
+ * handle; LIKE folds case, so the prefix is checked again exactly. */
 export function selectLiveEntriesBySourcePrefix(db: DatabaseSyncLike, tenantId: string, prefix: string): MemoryEntry[] {
   // SAFETY: selects exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
   const rows = db
@@ -497,8 +497,8 @@ export interface VaultRawRow {
   scope: string | null;
 }
 
-/** Live raw rows whose artifact_ref matches a LIKE pattern, for one tenant; the store is set up first when it is
- * new. */
+/** Live raw rows whose artifact_ref matches a LIKE pattern,
+ * for one tenant; the store is set up first when it is new. */
 export function loadVaultRawRows(hippoRoot: string, likeParam: string, tenantId: string): VaultRawRow[] {
   return onHandle(hippoRoot, (db) => {
     // SAFETY: query selects exactly the columns of VaultRawRow, in the same
@@ -617,8 +617,8 @@ export function loadLiveContentsBySourceAndTag(
   );
 }
 
-/** Every tenant's distilled rows nothing has superseded, in loadAllEntries' order: the rows that can be each other's
- * duplicate. */
+/** Every tenant's distilled rows nothing has superseded, in
+ * loadAllEntries' order: the rows that can be each other's duplicate. */
 export function loadCurrentDistilledEntries(hippoRoot: string): MemoryEntry[] {
   return onHandle(hippoRoot, (db) => {
     // SAFETY: selects exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
@@ -667,8 +667,8 @@ export function loadEntriesWithSignals(hippoRoot: string, signals: EntrySignals,
   }, openStore);
 }
 
-/** A tenant's rows from `origins` that nothing superseded and that are neither raw nor archived, in loadAllEntries'
- * order. */
+/** A tenant's rows from `origins` that nothing superseded and
+ * that are neither raw nor archived, in loadAllEntries' order. */
 export function loadCurrentEntriesFromOrigins(
   hippoRoot: string,
   tenantId: string,

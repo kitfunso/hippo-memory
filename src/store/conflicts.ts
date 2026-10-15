@@ -84,8 +84,8 @@ export function listMemoryConflicts(
   tenantId?: string,
 ): MemoryConflict[] {
   return onHandle(hippoRoot, (db) => {
-    // '*' is a sentinel for no status filter; the 4 SQL branches below cover {tenanted | unscoped} x {all-statuses |
-    // specific-status}.
+    // '*' is a sentinel for no status filter; the 4 SQL branches below
+    // cover {tenanted | unscoped} x {all-statuses | specific-status}.
     const allStatuses = status === '*';
     const rows = tenantId !== undefined
       ? selectConflictRowsInTenant(db, status, allStatuses, tenantId)
@@ -115,8 +115,8 @@ export interface OpenConflictOf {
   other: MemoryEntry;
 }
 
-/** A tenant's open conflicts naming `memoryId`, in listMemoryConflicts' order, each with its other member read in
- * one batch. */
+/** A tenant's open conflicts naming `memoryId`, in listMemoryConflicts'
+ * order, each with its other member read in one batch. */
 export function loadOpenConflictsOf(hippoRoot: string, tenantId: string, memoryId: string): OpenConflictOf[] {
   return onHandle(hippoRoot, (db) => {
     // SAFETY: selects CONFLICT_COLS_MC, MemoryConflictRow's columns.
@@ -296,8 +296,8 @@ function rebuildConflictsWithJson(db: DatabaseSyncLike, { sameTenant, storedRefs
 
   const refMap = new Map<string, Set<string>>();
   for (const row of openConflicts) {
-    // Skip cross-tenant pairs so a stale row never seeds a foreign id
-    // into conflicts_with_json.
+    // Skip cross-tenant pairs so a stale row never
+    // seeds a foreign id into conflicts_with_json.
     if (!sameTenant(row.memory_a_id, row.memory_b_id)) continue;
     if (!refMap.has(row.memory_a_id)) refMap.set(row.memory_a_id, new Set());
     if (!refMap.has(row.memory_b_id)) refMap.set(row.memory_b_id, new Set());
@@ -332,8 +332,8 @@ export interface ResolveConflictOpts {
   reason?: string;
 }
 
-/** Metadata shape of the `conflict_resolve` audit row; rejectedDigest is set only when the loser's value was also
- * tombstoned. */
+/** Metadata shape of the `conflict_resolve` audit row; rejectedDigest
+ * is set only when the loser's value was also tombstoned. */
 interface ConflictResolveMeta {
   conflictId: number;
   keepId: string;

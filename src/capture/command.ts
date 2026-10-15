@@ -110,8 +110,8 @@ function cmdCaptureCore(
     return;
   }
 
-  // Scrub once here, as the snapshot fields are: every source can carry a pasted token (AGENTS.md: no secrets in
-  // memories).
+  // Scrub once here, as the snapshot fields are: every source can
+  // carry a pasted token (AGENTS.md: no secrets in memories).
   const extracted = extractFromTexts(texts.map((text) => maskEmails(redactSecretsStrict(text))), userTexts);
 
   if (extracted.length === 0) {

@@ -1,5 +1,5 @@
-// The dashboard snapshot's read of one tenant: live rows with only the columns it shows, and SQL counts of the rows it
-// leaves out.
+// The dashboard snapshot's read of one tenant: live rows with only
+// the columns it shows, and SQL counts of the rows it leaves out.
 import * as fs from 'fs';
 import { closeHippoDb, getHippoDbPath, openHippoDbReadOnly, type DatabaseSyncLike } from '../db/index.js';
 import { withReadSnapshot } from '../db/busy.js';

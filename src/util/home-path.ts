@@ -1,5 +1,5 @@
-// Home-directory paths name their user, so text bound for a shared store tests or masks them here; no imports keep it
-// light.
+// Home-directory paths name their user, so text bound for a shared
+// store tests or masks them here; no imports keep it light.
 
 // VS Code writes file links URL-encoded, so a separator may be %5C or %2F.
 const WIN_SEP = String.raw`(?:[\\/]|%5[Cc]|%2[Ff])`;
@@ -51,10 +51,10 @@ const MASK = '[home]';
 const allOf = (re: RegExp): RegExp => new RegExp(re.source, `${re.flags}g`);
 const [DRIVE_HOMES, LONG_PATHS, SHARE_HOMES, SHORT_NAMES] = [DRIVE_HOME, LONG_PATH, SHARE_HOME, SHORT_NAME].map(allOf);
 
-// A home glued after another starts where a mask will end, which no guard refuses: one match takes the whole run, as
-// masking one a pass costs a pass per home.
-// A run holds only shapes whose own step is not still to come, so a later step meets the same text it would without the
-// run.
+// A home glued after another starts where a mask will end, which no guard
+// refuses: one match takes the whole run, as masking one a pass costs a
+// pass per home. A run holds only shapes whose own step is not still to
+// come, so a later step meets the same text it would without the run.
 const runFrom = (start: string, ...glued: readonly string[]): RegExp =>
   new RegExp(`${start}(?:${glued.join('|')})*`, 'g');
 const MOUNT_RUNS = runFrom(MOUNT_START, MOUNT_HOME);

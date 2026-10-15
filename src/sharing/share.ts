@@ -49,8 +49,8 @@ export function neverAutoShareTags(sources: readonly MemoryEntry[]): string[] {
   return [...NEVER_AUTO_SHARE_TAGS].filter((tag) => sources.some((s) => s.tags.includes(tag)));
 }
 
-/** Tags whose rows sleep keeps as written: never merged, never sent to LLM extraction. Conflict detection keeps its
- * own list. */
+/** Tags whose rows sleep keeps as written: never merged, never
+ * sent to LLM extraction. Conflict detection keeps its own list. */
 export const NO_MERGE_TAGS: ReadonlySet<string> = new Set([
   'extracted',
   'session-digest',
@@ -131,8 +131,8 @@ function toGlobalEntry(localRoot: string, entry: MemoryEntry, force: boolean): M
   const score = transferScore(entry);
   if (score < 0.3 && !force) return null;
 
-  // The label keeps the folder name for a user-global row; a NULL row gets `shared::`, which originFromSource reads as
-  // no project.
+  // The label keeps the folder name for a user-global row; a NULL
+  // row gets `shared::`, which originFromSource reads as no project.
   const fallbackName = path.basename(path.resolve(localRoot, '..'));
   const originName = entry.origin_project ?? fallbackOrigin(localRoot);
   const label = originName === '' ? fallbackName : (originName ?? '');
@@ -290,8 +290,8 @@ export function autoShare(
 ): MemoryEntry[] {
   const { minScore = AUTO_SHARE_MIN_SCORE, dryRun = false } = options;
 
-  // A row with none of these signals scores at most 0.5, so above that bar only signal rows can share or count as
-  // never-auto-share skips.
+  // A row with none of these signals scores at most 0.5, so above that
+  // bar only signal rows can share or count as never-auto-share skips.
   const localEntries = minScore > 0.5
     ? loadEntriesWithSignals(localRoot, AUTO_SHARE_SIGNALS, options.tenantId)
     : loadAllEntries(localRoot, options.tenantId);
