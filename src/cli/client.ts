@@ -9,6 +9,7 @@ import type { RememberOpts, RememberResult } from '../api/index.js';
 import { fetchWithRetry } from '../util/http-retry.js';
 import { readCappedJson } from '../util/capped-json.js';
 import { isJsonObject, isJsonString, type JsonValue } from '../util/json.js';
+import { errorFields, errorMessage, log } from '../util/log.js';
 import { isObjectLike } from '../core/capture-contract.js';
 
 /** A write the local server has not answered in this long is stuck; the caller treats it as delivery-unknown. */
@@ -71,8 +72,9 @@ async function throwForStatus(res: Response): Promise<never> {
     if (isJsonObject(body) && isJsonString(body.error) && body.error.length > 0) {
       message = body.error;
     }
-  } catch {
+  } catch (err) {
     // body wasn't JSON or ran past the cap; fall back to status line.
+    log.debug(`server error body unreadable (${errorMessage(err)}); using the status line`, errorFields(err));
   }
   throw new HttpResponseError(message, res.status);
 }
