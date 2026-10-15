@@ -28,6 +28,7 @@ const DB_DEFINITION_FILES = {
   'src/store/rule-sql.ts': 'SQL text that other store files run',
   'src/store/port.ts': 'the store port every backend implements',
   'src/store/port-groups.ts': 'the session and admin groups of the store port',
+  'src/store/busy.ts': 'the busy error and busy check of the store port',
   'src/store/narrow.ts': 'the run-time proof behind StoreWith, part of the port contract',
   'src/store/index.ts': 'the published entry of the store port',
   'src/store/sqlite/': 'the SQLite adapter and its executor plumbing',

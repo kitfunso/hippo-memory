@@ -5,7 +5,9 @@ import { errorFields, errorMessage, log } from '../util/log.js';
 import { requestDeadlineMs } from '../util/request-scope.js';
 import { MAX_BODY_BYTES } from '../util/http-util.js';
 import { parseFrame, type FrameRemainder } from './framing.js';
-import { mcpErrorResponse, type McpRequest, type McpResponse, type StoreOpener } from './protocol.js';
+import { findHippoRoot, mcpErrorResponse, type McpHost, type McpRequest, type McpResponse } from './protocol.js';
+import { resolveTenantId } from '../store/tenant.js';
+import { getGlobalRoot, initGlobal } from '../sharing/global-store.js';
 import { handleMcpRequest } from './request.js';
 import { type JsonValue, isJsonNumber, isJsonString, isJsonObject } from '../util/json.js';
 import { randomUUID } from 'node:crypto';
@@ -119,7 +121,27 @@ function watchDeadline(req: McpRequest, owedReply: boolean, abort: AbortControll
   };
 }
 
-function dispatch(body: string, abort: AbortController, openStore: StoreOpener): void {
+/** Zero-install first run (`npx -y hippo-memory mcp`, no store anywhere): create the global store instead of failing
+ * every tool call, and say so on stderr (stdout carries the protocol). A later `hippo init` project store wins. */
+function createGlobalStoreOnFirstRun(): string {
+  initGlobal();
+  const root = getGlobalRoot();
+  log.warn(
+    `no memory store found; created the global store at ${root}. Run \`hippo init\` in a project for a project store.`,
+  );
+  return root;
+}
+
+/** Runs one frame in the host's scope; only a tool call builds a context, so tools/list never creates a store. */
+function handleFrame(req: McpRequest, host: McpHost): Promise<McpResponse | null> {
+  return host.runRequest(() => {
+    if (req.method !== 'tools/call') return handleMcpRequest(req, undefined);
+    const root = findHippoRoot() ?? createGlobalStoreOnFirstRun();
+    return handleMcpRequest(req, host.contextFor(root, resolveTenantId({})));
+  });
+}
+
+function dispatch(body: string, abort: AbortController, host: McpHost): void {
   let parsed: JsonValue;
   try {
     parsed = JSON.parse(body);
@@ -135,7 +157,7 @@ function dispatch(body: string, abort: AbortController, openStore: StoreOpener):
   const req = parsed;
   if (req.method.startsWith('notifications/')) {
     const stopWatching = watchDeadline(req, false, abort);
-    track(req.method, handleMcpRequest(req, undefined, openStore).then(() => {}).catch((err) => {
+    track(req.method, handleFrame(req, host).then(() => {}).catch((err) => {
       log.error(`mcp notification ${req.method} failed: ${errorMessage(err)}`, errorFields(err));
     }).finally(stopWatching));
     return;
@@ -144,7 +166,7 @@ function dispatch(body: string, abort: AbortController, openStore: StoreOpener):
   const timedOut = watchDeadline(req, isJsonString(req.id) || isJsonNumber(req.id), abort);
   track(
     req.method,
-    handleMcpRequest(req, undefined, openStore)
+    handleFrame(req, host)
       .then((resp) => {
         if (!timedOut() && resp) send(resp);
       })
@@ -161,8 +183,8 @@ function dispatch(body: string, abort: AbortController, openStore: StoreOpener):
 /** Wires stdin/stdout to the dispatcher; idempotent. Only the entrypoint (cli.ts `hippo mcp`, or this file run
  * directly) should call it, so the HTTP daemon
  * (which imports `handleMcpRequest`) does not steal stdin or exit when its parent closes a pipe. The caller picks
- * the store, so src/mcp names no adapter. */
-export function startStdioLoop(openStore: StoreOpener): void {
+ * the host, so src/mcp names no store adapter and no scope plumbing. */
+export function startStdioLoop(host: McpHost): void {
   process.stdin.on('data', (raw: Buffer) => {
     const chunk = withoutRefused(raw);
     pending.push(chunk);
@@ -187,7 +209,7 @@ export function startStdioLoop(openStore: StoreOpener): void {
       // One id per frame, so the error reply and every line logged for the call name the same request.
       if (result.kind === 'message') {
         const abort = new AbortController();
-        runWithRequestId(randomUUID(), () => dispatch(result.body, abort, openStore), undefined, abort.signal);
+        runWithRequestId(randomUUID(), () => dispatch(result.body, abort, host), undefined, abort.signal);
       }
     }
     pending = buffer.length > 0 ? [buffer] : [];

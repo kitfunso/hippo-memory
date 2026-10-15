@@ -2,6 +2,7 @@
 
 import { BadRequestError, ForbiddenError } from '../core/api-errors.js';
 import { narrowStore, type HippoStore, type StoreGroup, type StoreWith } from '../store/index.js';
+import type { StoreReach } from '../store/port.js';
 
 /** Actor identity + role for a Context: the audit-log subject (pass `ctx.actor.subject` to audit helpers) and the role
  *  for admin gating.
@@ -25,6 +26,8 @@ export interface Context {
   tenantId: string;
   actor: Actor;
   store?: HippoStore;
+  /** Set by a composition root; the api falls back to probing the disk where it is absent. */
+  reach?: StoreReach;
 }
 
 export type HippoDbContext = Context & { store?: undefined };

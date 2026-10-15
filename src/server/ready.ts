@@ -1,4 +1,3 @@
-import { SERVER_DB_WAIT_MS, runWithRequestStores } from '../db/index.js';
 import { errorFields, errorMessage, log } from '../util/log.js';
 import type { HippoStore } from '../store/index.js';
 
@@ -19,7 +18,7 @@ function createReadyProbe(readiness: { ping(): Promise<void> }, now: () => numbe
   async function read(): Promise<boolean> {
     let ok = true;
     try {
-      await runWithRequestStores(() => readiness.ping(), { busyWaitMs: SERVER_DB_WAIT_MS });
+      await readiness.ping();
     } catch (err) {
       log.warn(`GET /ready: the store did not answer: ${errorMessage(err)}`, errorFields(err));
       ok = false;

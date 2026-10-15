@@ -254,7 +254,7 @@ async function main(
     throw new CliExit(1);
   }
   const run = (): void | Promise<void> => spec.run({ hippoRoot, tenantId: resolveTenantId({}), args, flags });
-  await (spec.scoped ? (await import('./db/request-stores.js')).runWithRequestStores(run) : run());
+  await (spec.scoped ? (await import('./cli/api-context.js')).cliRequest(run) : run());
 }
 
 export async function runCli(argv: string[] = process.argv): Promise<void> {

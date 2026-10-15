@@ -1,4 +1,5 @@
 // Store passes that walk many rows open the store once and read rows in chunked IN lists, so query counts stay flat as rows grow.
+import { cliRequest } from '../src/cli/api-context.js';
 import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
@@ -343,7 +344,8 @@ describe('learn', () => {
     const root = freshRoot('qc-learn');
     fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ embeddings: { enabled: false } }));
     seed(root, [...rows(n, 'learn'), memory('the quuxlib client retries twice'), memory('quuxlib client timeouts are 30s')]);
-    const { result, statements } = await recordStatementsAsync(() => learn(ctxFor(root), { repoPath: repo, days: 7, profile: CLI_LEARN }));
+    const { result, statements } = await recordStatementsAsync(() =>
+      cliRequest(() => learn(ctxFor(root), { repoPath: repo, days: 7, profile: CLI_LEARN })));
     return { root, result, statements, opens: countMatching(statements, STORE_OPEN), tenantReads: countMatching(statements, TENANT_READ) };
   }
 

@@ -2,8 +2,6 @@
 
 import { errorFields, errorMessage, log } from '../util/log.js';
 import { countCreatedSinceLastSleep } from '../store/index-and-stats.js';
-import { consolidate } from '../consolidate/sleep.js';
-import { outsideRequestStores, runWithRequestStores, scopedBusyWait } from '../db/index.js';
 import { resolveTenantId } from '../store/tenant.js';
 import type { HippoConfig } from '../core/config.js';
 
@@ -11,7 +9,7 @@ export const autoSleepInFlight = new Set<string>();
 
 /**
  * Runs one auto-sleep consolidation of `hippoRoot`: the HTTP server passes one that runs it off its event loop, in a
- * child process.
+ * child process; stdio passes one that runs it in its own.
  */
 export type AutoSleepRunner = (hippoRoot: string) => Promise<void>;
 
@@ -31,14 +29,13 @@ export function autoSleepDue(hippoRoot: string, tenantId: string, config: HippoC
 
 /**
  * One run per store at a time; `allowed` is the caller's own gate. Consolidation is host-wide, so only the host tenant
- * may start it.
- * Without `run`, it runs in process. */
+ * may start it. */
 export function startAutoSleepIfDue(
   hippoRoot: string,
   tenantId: string,
   config: HippoConfig['autoSleep'],
   allowed: boolean,
-  run?: AutoSleepRunner,
+  run: AutoSleepRunner,
 ): void {
   if (
     !allowed ||
@@ -49,12 +46,7 @@ export function startAutoSleepIfDue(
   ) return;
   autoSleepInFlight.add(hippoRoot);
   // Fire-and-forget (never block the response); an unhandled rejection would kill the server, so log it.
-  // Its own scope: the call's closes a handle the sleep still holds across its pauses, but the caller's lock wait
-  // carries over.
-  const busyWaitMs = scopedBusyWait();
-  const started: Promise<unknown> = run
-    ? run(hippoRoot)
-    : outsideRequestStores(() => runWithRequestStores(() => consolidate(hippoRoot), { busyWaitMs }));
+  const started = run(hippoRoot);
   started
     .catch((err) => {
       log.error(`auto-sleep consolidate failed (tenant ${tenantId}): ${errorMessage(err)}`, errorFields(err));

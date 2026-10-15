@@ -73,9 +73,9 @@ describe('store-ready MCP tools', () => {
     expect(readdirSync(root)).toEqual([]);
   });
 
-  it.each([['the sqlite store', 'sqlite'], ['stdio, which brings an opener and no context', undefined]] as const)('tools/list on %s lists every tool', async (_name, kind) => {
+  it.each([['the sqlite store', 'sqlite'], ['stdio, which brings no context for a list', undefined]] as const)('tools/list on %s lists every tool', async (_name, kind) => {
     const list = { jsonrpc: '2.0', id: 1, method: 'tools/list' } as const;
-    const res = kind === undefined ? await handleMcpRequest(list, undefined, sqliteStore) : await handleMcpRequest(list, ctxOn(kind));
+    const res = kind === undefined ? await handleMcpRequest(list, undefined) : await handleMcpRequest(list, ctxOn(kind));
     expect(listedNames(res)).toEqual(declared);
   });
 

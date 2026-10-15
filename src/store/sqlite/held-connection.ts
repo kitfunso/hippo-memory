@@ -8,7 +8,12 @@ import {
   outsideRequestStores,
   outsideSqliteOffLoop,
   SERVER_DB_WAIT_MS,
+  withSqliteBlocked,
+  withSqliteOffLoop,
 } from '../../db/index.js';
+import { hasGroup, type HippoStore } from '../port.js';
+import { runSqliteRequest } from './request-scope.js';
+import { runsOffLoop } from './worker-store.js';
 import { startWalCheckpointer, type WalCheckpointer } from '../../db/wal-checkpointer.js';
 import { errorMessage, log } from '../../util/log.js';
 
@@ -17,7 +22,7 @@ export interface StoreHolder {
   hold: () => void;
   afterResponse: () => void;
   release: () => Promise<void>;
-  /** Runs one request, inside the fence that keeps hippo.db shut when the store is not it. */
+  /** Runs one request in the server's scope, inside the fence that keeps hippo.db shut when the store is not it. */
   runRequest: (run: () => Promise<void>) => Promise<void>;
 }
 
@@ -55,5 +60,31 @@ export function holdSqliteConnection(hippoRoot: string): StoreHolder {
     if (heldDb) closeHippoDb(heldDb);
     heldDb = undefined;
   };
-  return { hold, afterResponse, release, runRequest: (run) => run() };
+  return { hold, afterResponse, release, runRequest: (run) => runSqliteRequest(run, 'server') };
+}
+
+/** The holder for the store a server serves: hippo.db's held connection, else a fence that keeps hippo.db shut. */
+export function createStoreHolder(hippoRoot: string, store: HippoStore): StoreHolder {
+  if (hasGroup(store, 'localFiles')) return holdSqliteConnection(hippoRoot);
+  log.info(`serve: the '${store.kind}' store serves ${hippoRoot}, so no hippo.db connection is held`);
+  // A missed port under another store would otherwise create and write a hippo.db that store never reads.
+  return {
+    hold: () => {},
+    afterResponse: () => {},
+    release: async () => {},
+    runRequest: (run) => runSqliteRequest(() => withSqliteBlocked(store.kind, run), 'server'),
+  };
+}
+
+/** Runs a route's store work off the event loop when the store has a worker, else in place. */
+export function offLoopFor(store: HippoStore): <T>(run: () => T) => T {
+  return runsOffLoop(store) ? withSqliteOffLoop : (run) => run();
+}
+
+// A plugin's resolver may read hippo.db through this package's synchronous functions, so it runs outside the block of a
+// `loop: 'off'` route.
+export function outsideRouteBlock<A extends readonly unknown[], R>(
+  resolver: ((...args: A) => R) | undefined,
+): ((...args: A) => R) | undefined {
+  return resolver && ((...args) => outsideSqliteOffLoop(() => resolver(...args)));
 }

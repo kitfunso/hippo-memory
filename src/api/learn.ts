@@ -4,7 +4,6 @@
 import { ForbiddenError } from '../core/api-errors.js';
 import { fetchGitLog, extractLessons, partitionLessons, isGitRepo } from '../learn/autolearn.js';
 import { type HippoConfig, loadConfig } from '../core/config.js';
-import { runWithRequestStores } from '../db/request-stores.js';
 import { embedMemory } from '../search/embed-memories.js';
 import {
   extractInvalidationTarget,
@@ -158,41 +157,37 @@ async function writeLessons(
   const { profile } = opts;
   const store = ctx.store;
   const writes = store.lessonWrites;
-  // `hippo init` calls this outside any request, so the batch brings
-  // its own scope: every read and write below shares one handle.
-  return runWithRequestStores(async () => {
-    // One read serves the batch: invalidation matches against `live`,
-    // which follows every write below, as a reload per lesson did.
-    const live = profile.full ? await writes.tenantEntries(tenantId) : [];
-    // Schema fit needs every row; without it, only rows holding a lesson's longest word can be its copy. Learn is
-    // host-admin only, so both read what an admin can.
-    const existing = profile.full ? live.filter((e) => e.scope == null || canReadScope(ctx.actor, e.scope)) : undefined;
-    // Each lesson is scored against `existing` as it was before the batch, so its tag counts and texts are read once.
-    const fitSource = existing && schemaFitSourceOf(existing);
-    const batch: LessonBatch = {
-      ctx, writes, live, keys: await knownKeys(ctx, writes, lessons, existing), full: profile.full,
-      counts: { added: 0, skipped: 0, rejected: 0, invalidations: [] },
-    };
-    const pathTags = profile.full ? extractPathTags(opts.repoPath) : [];
-    // Lessons queue and land in one transaction; an invalidation reads the store, so it flushes the queue first.
-    const queue: QueuedLesson[] = [];
-    for (const lesson of lessons) {
-      const key = duplicateKey(lesson);
-      if (batch.keys.has(key)) { batch.counts.skipped++; continue; }
-      const target = profile.full ? extractInvalidationTarget(lesson) : null;
-      if (target) {
-        await landLessons(batch, queue.splice(0));
-        const { invalidated } = await invalidateMatchingAmong(store, live, target, tenantId);
-        if (invalidated > 0) batch.counts.invalidations.push({ from: target.from, count: invalidated });
-      }
-      const entry = newLessonMemory(lesson, profile, { tenantId, config, fitSource, pathTags });
-      queue.push({ entry, key });
-      if (profile.full) live.push(entry);
-      batch.keys.add(key);
+  // One read serves the batch: invalidation matches against `live`,
+  // which follows every write below, as a reload per lesson did.
+  const live = profile.full ? await writes.tenantEntries(tenantId) : [];
+  // Schema fit needs every row; without it, only rows holding a lesson's longest word can be its copy. Learn is
+  // host-admin only, so both read what an admin can.
+  const existing = profile.full ? live.filter((e) => e.scope == null || canReadScope(ctx.actor, e.scope)) : undefined;
+  // Each lesson is scored against `existing` as it was before the batch, so its tag counts and texts are read once.
+  const fitSource = existing && schemaFitSourceOf(existing);
+  const batch: LessonBatch = {
+    ctx, writes, live, keys: await knownKeys(ctx, writes, lessons, existing), full: profile.full,
+    counts: { added: 0, skipped: 0, rejected: 0, invalidations: [] },
+  };
+  const pathTags = profile.full ? extractPathTags(opts.repoPath) : [];
+  // Lessons queue and land in one transaction; an invalidation reads the store, so it flushes the queue first.
+  const queue: QueuedLesson[] = [];
+  for (const lesson of lessons) {
+    const key = duplicateKey(lesson);
+    if (batch.keys.has(key)) { batch.counts.skipped++; continue; }
+    const target = profile.full ? extractInvalidationTarget(lesson) : null;
+    if (target) {
+      await landLessons(batch, queue.splice(0));
+      const { invalidated } = await invalidateMatchingAmong(store, live, target, tenantId);
+      if (invalidated > 0) batch.counts.invalidations.push({ from: target.from, count: invalidated });
     }
-    await landLessons(batch, queue.splice(0));
-    return batch.counts;
-  });
+    const entry = newLessonMemory(lesson, profile, { tenantId, config, fitSource, pathTags });
+    queue.push({ entry, key });
+    if (profile.full) live.push(entry);
+    batch.keys.add(key);
+  }
+  await landLessons(batch, queue.splice(0));
+  return batch.counts;
 }
 
 export type { InvalidationOptions, InvalidationResult, InvalidationTarget };

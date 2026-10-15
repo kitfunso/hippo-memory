@@ -4,7 +4,6 @@
  * and swallowed, never breaking the surrounding call. */
 
 import { openHippoDb, closeHippoDb, withWriteScope, type DatabaseSyncLike } from '../db/index.js';
-import { rethrowIfSqliteBlocked } from '../util/sqlite-blocked.js';
 import type { RerankStep } from '../core/search-types.js';
 import { DELIVERY_LEDGER_VERSION, isBoundaryEvent, type DeliveryEventInput } from './delivery-recorder.js';
 import { errorFields, errorMessage, log } from '../util/log.js';
@@ -21,7 +20,7 @@ export interface RecallTraceResultInput {
   rerankSteps?: RerankStep[];
 }
 
-/** Input to `writeRecallTrace` / `writeRecallTraceAtRoot`. */
+/** Input to `writeRecallTrace`. */
 export interface RecallTraceInput {
   tenantId: string;
   sessionId?: string | null;
@@ -51,8 +50,7 @@ function sanitizeRerankSteps(
 }
 
 /** Insert a `recall_traces` row and its results rows in ONE transaction on the given connection. Fail-soft: logs to
- * stderr and returns null on failure. api.recall/getContext reach this via `finishRecallAt` on their own handle; CLI
- * cmdRecall uses `writeRecallTraceAtRoot` (its audit handle is closed). */
+ * stderr and returns null on failure. api.recall/getContext reach this via `finishRecallAt` on their own handle. */
 export function writeRecallTrace(db: DatabaseSyncLike, input: RecallTraceInput): number | null {
   try {
     const queryHash = blockHash(input.query);
@@ -95,25 +93,6 @@ export function writeRecallTrace(db: DatabaseSyncLike, input: RecallTraceInput):
   } catch (error) {
     log.error(`recall trace write failed: ${errorMessage(error)}`, errorFields(error));
     return null;
-  }
-}
-
-/** Short-lived connection at `root`: writes the trace, closes; returns the id or null (fail-soft). For CLI cmdRecall;
- * api.recall must reuse its open handle. LOCKSTEP: never touches `last_trace_id`, which advances only in the same
- * `saveIndex` write as `last_retrieval_ids`; the caller sets it from the id. */
-export function writeRecallTraceAtRoot(root: string, input: RecallTraceInput): number | null {
-  let db: DatabaseSyncLike;
-  try {
-    db = openHippoDb(root);
-  } catch (error) {
-    rethrowIfSqliteBlocked(error);
-    log.error(`recall trace connection failed: ${errorMessage(error)}`, errorFields(error));
-    return null;
-  }
-  try {
-    return writeRecallTrace(db, input);
-  } finally {
-    closeHippoDb(db);
   }
 }
 

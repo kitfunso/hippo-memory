@@ -1,12 +1,8 @@
 // Transport-agnostic request handling: tool dispatch table, tool execution and the JSON-RPC method switch.
 
-import { log } from '../util/log.js';
 import { currentSignal } from '../util/request-scope.js';
 import { STORE_NOT_PORTED_MESSAGE } from '../util/http-util.js';
-import { getGlobalRoot, initGlobal } from '../sharing/global-store.js';
 import { loadConfig } from '../core/config.js';
-import { resolveTenantId } from '../store/tenant.js';
-import { runWithRequestStores } from '../db/index.js';
 import { hasGroup, narrowStore, type HippoStore, type StoreGroup } from '../store/index.js';
 import { type TokenSurface } from '../store/token-ledger.js';
 import { estimateTokens } from '../util/token-text.js';
@@ -15,12 +11,10 @@ import { validateToolArgs } from './tool-args.js';
 import { RecallRequestError } from '../api/recall-request.js';
 import { recordTokens } from '../api/tokens.js';
 import {
-  findHippoRoot,
   mcpActor,
   type McpContext,
   type McpRequest,
   type McpResponse,
-  type StoreOpener,
   type ToolCall,
   type ToolHandler,
 } from './protocol.js';
@@ -38,25 +32,6 @@ import {
 import { sharedStoreRefusal } from './shared-gate.js';
 import { type JsonValue, isJsonString, isJsonObject } from '../util/json.js';
 
-/** Zero-install first run (`npx -y hippo-memory mcp`, no store anywhere): create the global store instead of failing
- * every tool call, and say so on stderr (stdout carries the protocol). A later `hippo init` project store wins. */
-function createGlobalStoreOnFirstRun(): string {
-  initGlobal();
-  const root = getGlobalRoot();
-  log.warn(
-    `no memory store found; created the global store at ${root}. Run \`hippo init\` in a project for a project store.`,
-  );
-  return root;
-}
-
-/** The transport's own store, else the opener's for the folder; stdio is the one caller that passes no context, and
- * it passes an opener. */
-function resolveStore(ctx: McpContext | undefined, makeStore: StoreOpener | undefined, hippoRoot: string): HippoStore {
-  const store = ctx?.store ?? makeStore?.(hippoRoot);
-  if (store === undefined) throw new Error('hippo-mcp: a call with no context needs a store opener');
-  return store;
-}
-
 // ── Token ledger ──
 
 const MCP_TOKEN_SURFACES = new Map<string, TokenSurface>([
@@ -66,22 +41,10 @@ const MCP_TOKEN_SURFACES = new Map<string, TokenSurface>([
 
 /** Records the memory text a recall or context tool returned; best-effort (a ledger failure never fails the call),
  * other tools are not recorded. */
-export async function recordMcpTokens(
-  toolName: string,
-  output: string,
-  ctx: McpContext | undefined,
-  makeStore?: StoreOpener,
-): Promise<void> {
+export async function recordMcpTokens(toolName: string, output: string, ctx: McpContext): Promise<void> {
   const surface = MCP_TOKEN_SURFACES.get(toolName);
   if (!surface || !output) return;
-  const hippoRoot = ctx?.hippoRoot ?? findHippoRoot();
-  if (!hippoRoot) return;
-  const apiCtx = {
-    hippoRoot,
-    tenantId: ctx?.tenantId ?? resolveTenantId({}),
-    actor: mcpActor(ctx),
-    store: resolveStore(ctx, makeStore, hippoRoot),
-  };
+  const apiCtx = { hippoRoot: ctx.hippoRoot, tenantId: ctx.tenantId, actor: mcpActor(ctx), store: ctx.store };
   await recordTokens(apiCtx, surface, { items: 0, tokens: estimateTokens(output) });
 }
 
@@ -118,30 +81,21 @@ const TOOL_HANDLERS: ReadonlyMap<string, ToolEntry> = new Map<string, ToolEntry>
   ['hippo_peers', { run: runPeersTool }],
 ]);
 
-/** Stdio serves no store and runs every tool on the folder's hippo.db. */
+/** A call with no context yet (tools/list on stdio) lists every tool. */
 function runsOn(store: HippoStore | undefined, toolName: string): boolean {
   return store === undefined || hasGroup(store, TOOL_HANDLERS.get(toolName)?.storeReady ?? 'localFiles');
 }
 
-async function executeTool(
-  name: string,
-  args: Record<string, JsonValue>,
-  ctx: McpContext | undefined,
-  makeStore: StoreOpener | undefined,
-): Promise<string> {
-  // With a transport context (HTTP), trust it: hippoRoot comes from the server's bound opts and tenantId from the
-  // Bearer (or loopback fallback). Stdio walks from cwd / the global root and resolves tenant from HIPPO_TENANT.
-  const hippoRoot = ctx?.hippoRoot ?? findHippoRoot() ?? createGlobalStoreOnFirstRun();
-
+async function executeTool(name: string, args: Record<string, JsonValue>, ctx: McpContext): Promise<string> {
+  // The transport's context is trusted: its hippoRoot, store and tenantId were bound by the host (the HTTP server's
+  // Bearer, or the stdio host's folder walk and HIPPO_TENANT).
+  const { hippoRoot, tenantId } = ctx;
   const config = loadConfig(hippoRoot);
-  // Every store read here is tenant-isolated, resolved once per tool call; prefer the transport's ctx.tenantId so an
-  // HTTP Bearer for tenant B does not drop to HIPPO_TENANT.
-  const tenantId = ctx?.tenantId ?? resolveTenantId({});
 
   const run = TOOL_HANDLERS.get(name)?.run;
   // handleMcpRequest rejects names missing from TOOLS, so reaching here means TOOLS and this table drifted apart.
   if (!run) throw new Error(`hippo-mcp: tool ${name} is declared but has no handler`);
-  return run({ args, ctx, hippoRoot, store: resolveStore(ctx, makeStore, hippoRoot), config, tenantId });
+  return run({ args, ctx, hippoRoot, store: ctx.store, config, tenantId });
 }
 
 // ── Request handling ──
@@ -158,28 +112,20 @@ function invalidArgs(id: McpResponse['id'], toolName: string, problems: readonly
   };
 }
 
-/** One handle per store for the tool and its ledger row; stdio interleaves calls, so each gets its own scope.
+/** The tool and its ledger row run in the caller's request scope, which the host (server or stdio) opens.
  * SHORTCUT: the deadline stops a call only between these steps, not a running store read or fetch; thread the signal */
-function runToolScoped(
-  toolName: string,
-  args: Record<string, JsonValue>,
-  ctx: McpContext | undefined,
-  makeStore: StoreOpener | undefined,
-): Promise<string> {
-  return runWithRequestStores(async () => {
-    currentSignal()?.throwIfAborted();
-    const text = await executeTool(toolName, args, ctx, makeStore);
-    currentSignal()?.throwIfAborted();
-    await recordMcpTokens(toolName, text, ctx, makeStore);
-    return text;
-  });
+async function runTool(toolName: string, args: Record<string, JsonValue>, ctx: McpContext): Promise<string> {
+  currentSignal()?.throwIfAborted();
+  const text = await executeTool(toolName, args, ctx);
+  currentSignal()?.throwIfAborted();
+  await recordMcpTokens(toolName, text, ctx);
+  return text;
 }
 
 async function callTool(
   id: McpRequest['id'],
   params: McpRequest['params'],
-  ctx: McpContext | undefined,
-  makeStore: StoreOpener | undefined,
+  ctx: McpContext,
 ): Promise<McpResponse> {
   const nameValue = params?.name;
   const toolName = isJsonString(nameValue) ? nameValue : '';
@@ -188,7 +134,7 @@ async function callTool(
     return { jsonrpc: '2.0', id, error: { code: -32602, message: `Unknown tool: ${toolName.slice(0, 128)}` } };
   }
   // The same refusal a ported tool gives when it reaches hippo.db, so a client handles one shape.
-  if (!runsOn(ctx?.store, toolName)) {
+  if (!runsOn(ctx.store, toolName)) {
     return { jsonrpc: '2.0', id, error: { code: -32603, message: STORE_NOT_PORTED_MESSAGE } };
   }
   const refusal = sharedStoreRefusal(toolName, ctx);
@@ -204,7 +150,7 @@ async function callTool(
   if (problems.length > 0) return invalidArgs(id, toolName, problems);
   let output: string;
   try {
-    output = await runToolScoped(toolName, toolArgs, ctx, makeStore);
+    output = await runTool(toolName, toolArgs, ctx);
   } catch (err) {
     if (!(err instanceof RecallRequestError)) throw err;
     return invalidArgs(id, toolName, [err.message]);
@@ -220,14 +166,8 @@ async function callTool(
 
 /** Transport-agnostic MCP dispatcher: the stdio loop and the HTTP/SSE transport route every JSON-RPC message through
  * it. Returns null for notifications. `executeTool` errors are the caller's problem: wrap with try/catch in the
- * transport. A transport with a context brings its store; stdio has none, so it brings an opener for its folder. */
-export function handleMcpRequest(req: McpRequest, ctx: McpContext): Promise<McpResponse | null>;
-export function handleMcpRequest(req: McpRequest, ctx: undefined, makeStore: StoreOpener): Promise<McpResponse | null>;
-export async function handleMcpRequest(
-  req: McpRequest,
-  ctx: McpContext | undefined,
-  makeStore?: StoreOpener,
-): Promise<McpResponse | null> {
+ * transport. Only `tools/call` needs the context, so stdio builds one for that method alone. */
+export async function handleMcpRequest(req: McpRequest, ctx: McpContext | undefined): Promise<McpResponse | null> {
   const { id, method, params } = req;
 
   switch (method) {
@@ -250,7 +190,8 @@ export async function handleMcpRequest(
     }
 
     case 'tools/call':
-      return callTool(id, params, ctx, makeStore);
+      if (ctx === undefined) throw new Error('hippo-mcp: tools/call needs a context');
+      return callTool(id, params, ctx);
 
     default:
       // Notifications (no id) must not receive a response

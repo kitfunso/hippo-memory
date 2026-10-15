@@ -29,6 +29,6 @@ const isMainModule = (() => {
 
 if (isMainModule) {
   // The CLI owns the store build, so running this file directly opens the same store `hippo mcp` does.
-  const { cliStore } = await import('../cli/api-context.js');
-  startStdioLoop(cliStore);
+  const { cliStdioHost } = await import('../cli/api-context.js');
+  startStdioLoop(cliStdioHost);
 }

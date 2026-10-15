@@ -100,7 +100,7 @@ describe('hippo_learn scans the server cwd only for stdio or a host admin', () =
   });
 
   it('learns for stdio, the local operator, as before', async () => {
-    const text = await runLearnTool({ args: { days: 3650 }, ctx: undefined, hippoRoot, config: loadConfig(hippoRoot), tenantId: 'default', store: sqliteStore(hippoRoot) });
+    const text = await runLearnTool({ args: { days: 3650 }, ctx: { hippoRoot, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true, stdio: true, store: sqliteStore(hippoRoot) }, hippoRoot, config: loadConfig(hippoRoot), tenantId: 'default', store: sqliteStore(hippoRoot) });
     expect(text).toMatch(/^Git learn: 1 new/);
     expect(loadAllEntries(hippoRoot).some((e) => e.content.includes('retry loop'))).toBe(true);
   });

@@ -39,9 +39,11 @@ import { onHandle } from '../open.js';
 import { narrowStore, type StoreWith } from '../narrow.js';
 import {
   type AuditLog, type ContextReads, type ContinuityBlock, type HippoStore, type KeyAudit, type KeyGrants,
-  type KeyWrites, type Readiness, type StoreGroup, type StoreGroups, type Sync, type VectorViews,
-  type VectorWrites,
+  type KeyWrites, type Readiness, type StoreGroup, type StoreGroups, type StoreReach, type Sync, type VectorViews,
+  type VectorWrites, hasGroup,
 } from '../port.js';
+import { isSharedStore } from '../../core/config.js';
+import { isGlobalStoreRoot, isInitialized, resolveGlobalRootDir } from '../../core/project-identity.js';
 import type { SessionAndAdminGroups } from '../port-groups.js';
 import { loadRecallEntries } from '../search-rows.js';
 import { type ContinuityKey, listSessionEvents, loadActiveTaskSnapshot } from '../sessions.js';
@@ -201,6 +203,24 @@ function sqliteReadiness(hippoRoot: string): Sync<Readiness> {
       onHandle(hippoRoot, (db) => { db.prepare('SELECT 1').get(); });
     },
   };
+}
+
+/** The composition roots reach the request scope through the adapter's one entry. */
+export { runDetachedSqliteRequest, runSqliteRequest } from './request-scope.js';
+
+/** What a call on `store` reaches, probed as the api's own context plan did (`shared` is the transport's flag). */
+export function sqliteReach(hippoRoot: string, store: HippoStore, shared?: boolean): StoreReach {
+  const other = hasGroup(store, 'localFiles') ? undefined : store;
+  const sharedStore = shared === true || isSharedStore(hippoRoot);
+  const globalRoot = resolveGlobalRootDir();
+  const canReadGlobal = !sharedStore && other === undefined && isInitialized(globalRoot);
+  const reach: StoreReach = {
+    hasLocal: other !== undefined || isInitialized(hippoRoot),
+    isGlobal: isGlobalStoreRoot(hippoRoot),
+    shared: sharedStore,
+  };
+  if (!canReadGlobal) return reach;
+  return { ...reach, global: { root: globalRoot, store: narrowStore(sqliteStore(globalRoot), 'contextReads') } };
 }
 
 type SyncStoreGroups = ReturnType<typeof sqliteSyncStore>;

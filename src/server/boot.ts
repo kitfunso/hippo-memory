@@ -1,13 +1,12 @@
 import { envAllowCleartext, envCallerRps, envPort, envRequireAuth, envV1Rps } from '../util/env.js';
 import type { IncomingMessage, Server, ServerResponse } from 'node:http';
 import { detectServer, removePidfileIfOwned, writePidfile } from './server-detect.js';
-import {
-  outsideSqliteOffLoop, runWithRequestStores, SERVER_DB_WAIT_MS, withSqliteBlocked, withSqliteOffLoop,
-} from '../db/index.js';
 import { hasGroup, type HippoStore } from '../store/index.js';
 import { isStoreBusy } from '../api/busy.js';
-import { holdSqliteConnection, type StoreHolder } from '../store/sqlite/held-connection.js';
-import { runsOffLoop, workerSqliteStore } from '../store/sqlite/worker-store.js';
+import {
+  createStoreHolder, offLoopFor, outsideRouteBlock, type StoreHolder,
+} from '../store/sqlite/held-connection.js';
+import { workerSqliteStore } from '../store/sqlite/worker-store.js';
 import { markSharedStore } from '../core/config.js';
 import { auditWriteFailureCount } from '../store/audit.js';
 import { PACKAGE_VERSION } from '../util/version.js';
@@ -48,7 +47,7 @@ import {
 import { assertTlsOrCleartextAllowed, createListener } from './tls.js';
 import { assertAddonRoutes, assertPublicJson } from './route-checks.js';
 import { dispatchAddonRoute, dispatchPublicJson, dispatchV1Route } from './route-table.js';
-import type { AuthResolver, RateLimitSpec, ResolvedServeOpts, RouteRequest, ServeOpts, ServerHandle } from './types.js';
+import type { RateLimitSpec, ResolvedServeOpts, RouteRequest, ServeOpts, ServerHandle } from './types.js';
 
 // server.address() returns AddressInfo once a TCP socket is bound; null before
 // listening, a string only for pipe/unix-socket listeners (never used here).
@@ -100,17 +99,13 @@ async function handleRequest(
   enforceRateLimit(req, path, limiter);
 
   const routeRequest: RouteRequest = { req, res, opts, query };
-  if (
-    await runWithRequestStores(() => dispatchScopedRoute(routeRequest, method, path), { busyWaitMs: SERVER_DB_WAIT_MS })
-  ) {
-    return;
-  }
+  if (await dispatchScopedRoute(routeRequest, method, path)) return;
 
-  // A scope of its own, which the heartbeat timer keeps after it closes, so the key check and every
-  // heartbeat wait the server's lock wait. Store-ready: the stream only authenticates, through the port.
+  // The request scope (the server's lock wait) is kept by the heartbeat timer after it closes, so the key check and
+  // every heartbeat wait that long. Store-ready: the stream only authenticates, through the port.
   if (method === 'GET' && path === '/mcp/stream') {
     noteAccess(req, { route: path });
-    await runWithRequestStores(() => handleMcpStream(req, res, opts, streamSlots), { busyWaitMs: SERVER_DB_WAIT_MS });
+    await handleMcpStream(req, res, opts, streamSlots);
     return;
   }
 
@@ -258,24 +253,6 @@ function bootLimiters(rateLimits: ServeOpts['rateLimits']): BootedLimiters {
     callerLimiter: perCaller === 'off' ? undefined : limiterFor(perCaller),
     failedAuthLimiter: limiterFor(failedAuthPerAddress),
   };
-}
-
-function createStoreHolder(hippoRoot: string, store: HippoStore): StoreHolder {
-  if (hasGroup(store, 'localFiles')) return holdSqliteConnection(hippoRoot);
-  log.info(`serve: the '${store.kind}' store serves ${hippoRoot}, so no hippo.db connection is held`);
-  // A missed port under another store would otherwise create and write a hippo.db that store never reads.
-  return {
-    hold: () => {},
-    afterResponse: () => {},
-    release: async () => {},
-    runRequest: (run) => withSqliteBlocked(store.kind, run),
-  };
-}
-
-// A plugin's resolver may read hippo.db through this package's synchronous functions, so it runs outside the block of a
-// `loop: 'off'` route.
-function outsideRouteBlock(resolver: AuthResolver | undefined): AuthResolver | undefined {
-  return resolver && ((token) => outsideSqliteOffLoop(() => resolver(token)));
 }
 
 function replyWithFailure<E>(req: IncomingMessage, res: ServerResponse, err: E, requestId: string): void {
@@ -497,7 +474,7 @@ function servedOptsFor(
     routes,
     publicJsonBodies,
     store,
-    offLoop: runsOffLoop(store) ? withSqliteOffLoop : (run) => run(),
+    offLoop: offLoopFor(store),
     callerLimiter,
     failedAuthLimiter,
     authResolver: outsideRouteBlock(opts.authResolver),

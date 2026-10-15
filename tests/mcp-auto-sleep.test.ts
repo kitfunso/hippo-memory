@@ -7,7 +7,7 @@ import { initStore } from '../src/store/open.js';
 import { handleMcpRequest } from '../src/mcp/server.js';
 import { currentRequestStores, runWithRequestStores, type RequestStores } from '../src/db/index.js';
 import { sleepRuns } from './_helpers/sleep-runs.js';
-import { sqliteStore } from '../src/store/sqlite/store.js';
+import { cliStdioHost } from '../src/cli/api-context.js';
 
 const roots: string[] = [];
 
@@ -20,7 +20,7 @@ afterEach(() => {
 function remember(hippoRoot: string, text: string) {
   return handleMcpRequest(
     { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_remember', arguments: { text } } },
-    { hippoRoot, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true, store: sqliteStore(hippoRoot) },
+    cliStdioHost.contextFor(hippoRoot, 'default'),
   );
 }
 

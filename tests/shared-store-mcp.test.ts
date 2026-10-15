@@ -9,6 +9,7 @@ import { loadAllEntries } from '../src/store/entry-reads.js';
 import { adminActor, learn, MCP_LEARN } from '../src/api/index.js';
 import { _resetSharedStoreCacheForTests } from '../src/core/config.js';
 import type { JsonValue } from '../src/util/json.js';
+import { cliStdioHost } from '../src/cli/api-context.js';
 import { sharedStoreRefusal } from '../src/mcp/shared-gate.js';
 import { TOOLS } from '../src/mcp/tools.js';
 import { clearProjectIdentityCache } from '../src/core/project-identity.js';
@@ -138,7 +139,8 @@ describe('the MCP tool gate on a shared store', () => {
     expect(loadAllEntries(store)).toEqual([]);
   });
 
-  it('leaves stdio alone: no context means no shared store to gate', () => {
-    for (const { name } of TOOLS) expect(sharedStoreRefusal(name, undefined), name).toBeUndefined();
+  it('leaves stdio alone: the stdio host is never gated on a shared store', () => {
+    const ctx = cliStdioHost.contextFor(flaggedStore(), 'default');
+    for (const { name } of TOOLS) expect(sharedStoreRefusal(name, ctx), name).toBeUndefined();
   });
 });

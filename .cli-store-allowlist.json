@@ -10,11 +10,6 @@
     "why": "STORE_BUSY_MESSAGE, the exit message for a busy store; a constant, not a store read"
   },
   {
-    "file": "cli.ts",
-    "target": "db/request-stores.ts",
-    "why": "opens the per-process handle scope a scoped verb runs in, as the server and MCP entry points do"
-  },
-  {
     "file": "cli/hook-runtime.ts",
     "target": "db/index.ts",
     "why": "the hook's handle scope, wait budget and busy classification, the same process plumbing as src/cli.ts dispatch"

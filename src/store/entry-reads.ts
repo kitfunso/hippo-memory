@@ -32,29 +32,6 @@ export function readEntry(hippoRoot: string, id: string, tenantId?: string): Mem
   }, openStore);
 }
 
-/** Answers whether a tenant's rows in this store hold an id: `ids` are looked up now, one query per chunk, and any
- * other id on its first ask. */
-export function heldIdLookup(hippoRoot: string, tenantId: string, ids: readonly string[]): (id: string) => boolean {
-  const held = new Map<string, boolean>();
-  const lookUp = (asked: readonly string[]): void => {
-    onHandle(hippoRoot, (db) => {
-      for (const chunk of chunked([...new Set(asked)])) {
-        for (const id of chunk) held.set(id, false);
-        // SAFETY: rows' shape matches the single `id` column selected.
-        const rows = db.prepare(
-          `SELECT id FROM memories WHERE id IN (${placeholders(chunk.length)}) AND ${TENANT_IS}`,
-        ).all(...chunk, tenantId) as Array<{ id: string }>;
-        for (const row of rows) held.set(row.id, true);
-      }
-    }, openStore);
-  };
-  if (ids.length > 0) lookUp(ids);
-  return (id) => {
-    if (!held.has(id)) lookUp([id]);
-    return held.get(id) === true;
-  };
-}
-
 /** Rows by id on the caller's handle, one query per chunk; an
  * id missing or in another tenant is absent from the map. */
 export function selectEntriesByIds(

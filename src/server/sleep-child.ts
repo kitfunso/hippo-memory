@@ -2,8 +2,8 @@
 // it. The sleep modules alone: the api barrel loads far more than one sleep needs, and every sleep pays for the start.
 import { sleep } from '../api/sleep.js';
 import { consolidate } from '../consolidate/sleep.js';
-import { runWithRequestStores, SERVER_DB_WAIT_MS } from '../db/index.js';
 import { isStoreBusy } from '../api/busy.js';
+import { runSqliteRequest } from '../store/sqlite/request-scope.js';
 import { sqliteStore } from '../store/sqlite/store.js';
 import { errorFields, errorMessage, log } from '../util/log.js';
 import type { SleepJob, SleepReply } from './sleep-offload.js';
@@ -42,7 +42,7 @@ process.once('message', (message) => {
           job.opts,
         );
   // The server's own request scope and lock wait, so a busy store answers as it did when sleep ran in the server.
-  runWithRequestStores(work, { busyWaitMs: SERVER_DB_WAIT_MS })
+  runSqliteRequest(work, 'server')
     .then((result): SleepReply<JobResult> => ({ ok: true, result }), failed)
     // Exit only once the reply is written, or the parent could see the process end first.
     .then(sendReply)

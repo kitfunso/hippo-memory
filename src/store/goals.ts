@@ -205,12 +205,6 @@ export interface GetActiveGoalsOpts {
   tenantId: string;
 }
 
-export function getActiveGoals(hippoRoot: string, opts: GetActiveGoalsOpts): Goal[] {
-  return onHandle(hippoRoot, (db) => {
-    return getActiveGoalsWithDb(db, opts);
-  });
-}
-
 /** A session's active goals, oldest first, and the retrieval policy of each goal that names one. */
 export interface ActiveGoals {
   readonly goals: Goal[];

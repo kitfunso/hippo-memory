@@ -12,7 +12,6 @@ import { stripComments } from './lib/source-text.mjs';
 export const RECALL_ONLY = [
   'rankRecall',
   'writeRecallTrace',
-  'writeRecallTraceAtRoot',
   'writeGoalRecallLog',
   'finishRecall',
   'finishRecallAt',

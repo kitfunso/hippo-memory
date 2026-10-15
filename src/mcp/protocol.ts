@@ -13,6 +13,7 @@ import { findHippoStoreDir, type ResolveProjectIdentityOpts } from '../core/proj
 import { type JsonValue } from '../util/json.js';
 import type { CallerProject } from '../api/prompt-hook.js';
 import type { HippoStore, StoreGroup, StoreWith } from '../store/index.js';
+import type { StoreReach } from '../store/port.js';
 import type { AutoSleepRunner } from '../api/auto-sleep.js';
 
 // ── Find hippo root ──
@@ -89,11 +90,14 @@ export interface McpContext {
   hostAdmin?: true;
   owner?: string; // copied by mcpActor so MCP task state keys the same as REST
   project?: CallerProject; // from X-Hippo-Project on a shared store: stamps writes, filters reads, keys outcomes
-  /** The store this transport's calls run on; stdio passes no context, so its opener builds one per folder. */
+  /** The store this transport's calls run on. */
   store: HippoStore;
+  /** Set by the stdio host: the operator's own process, so no shared-store gate applies. */
+  stdio?: true;
+  reach?: StoreReach;
   autoSleep?: false;
-  /** Set by the HTTP transport so auto-sleep runs off the
-   * server's event loop; stdio consolidates in its own process. */
+  /** How an auto-sleep runs: the HTTP transport runs it off the server's event loop, stdio in its own process.
+   * Without one, no auto-sleep starts. */
   autoSleepRunner?: AutoSleepRunner;
   /** Per-client key for state isolation under HTTP-MCP: 'stdio-${pid}' for stdio, hash(bearer + remoteAddr) for HTTP
    * (built in src/server/mcp-http.ts); defaults to `${tenantId}:default`. */
@@ -122,14 +126,18 @@ export function ownsServerCwd(ctx: McpContext | undefined): boolean {
 
 // ── JSON-ish domain type for untrusted MCP tool-call arguments ──
 
-/** Builds the store for a folder; the stdio server is the one transport that passes it. */
-export type StoreOpener = (hippoRoot: string) => HippoStore;
+/** What the stdio transport takes from its composition root: the context for a folder, and the scope each frame runs
+ * in. The root names the store adapter and the scope plumbing, so src/mcp names neither. */
+export interface McpHost {
+  contextFor(hippoRoot: string, tenantId: string): McpContext;
+  runRequest<T>(run: () => Promise<T>): Promise<T>;
+}
 
 /** One tool call after the store, config and tenant are resolved; every handler reads the same five. `G` is the group
  * the dispatch gate proved on the store. */
 export interface ToolCall<G extends StoreGroup = 'base'> {
   args: Record<string, JsonValue>;
-  ctx?: McpContext;
+  ctx: McpContext;
   hippoRoot: string;
   store: StoreWith<G>;
   config: ReturnType<typeof loadConfig>;

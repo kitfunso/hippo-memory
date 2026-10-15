@@ -11,9 +11,10 @@ const OFF_ON_SHARED: ReadonlyMap<string, string> = new Map([
 ]);
 const OPEN_WITHOUT_PROJECT: ReadonlySet<string> = new Set(['hippo_predict_baserate']);
 
-/** The refusal text for this call, or undefined when it may run; stdio passes no context and is never gated. */
-export function sharedStoreRefusal(name: string, ctx: McpContext | undefined): string | undefined {
-  if (ctx === undefined || !isSharedStore(ctx.hippoRoot)) return undefined;
+/** The refusal text for this call, or undefined when it may run; the stdio host is the operator's own process and is
+ * never gated. */
+export function sharedStoreRefusal(name: string, ctx: McpContext): string | undefined {
+  if (ctx.stdio === true || !isSharedStore(ctx.hippoRoot)) return undefined;
   const off = OFF_ON_SHARED.get(name);
   if (off !== undefined) return `${name} is off on a shared store: it ${off}`;
   if (OPEN_WITHOUT_PROJECT.has(name) || ctx.project !== undefined) return undefined;

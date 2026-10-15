@@ -6,6 +6,7 @@ import type { ApiKeyListRow, ApiKeyRecord, ListApiKeysOpts, NewApiKey } from './
 import type { ScopeGrantChange } from './key-writes.js';
 import type { AppendAuditOpts, AuditEvent, AuditPrune, ListAuditAfterOpts, QueryAuditOpts } from './audit.js';
 import type { QualityRepairResult } from './quality-repair.js';
+import type { StoreWith } from './narrow.js';
 import { StoreNotPortedError } from '../util/sqlite-blocked.js';
 import type { EmbeddingIndexState } from './vector-index.js';
 import type { Entity, Relation } from './graph-rows.js';
@@ -731,16 +732,15 @@ export function requireGroup<G extends keyof StoreGroups>(store: HippoStore, gro
   return methods;
 }
 
-export const STORE_BUSY_MESSAGE = 'store busy (another hippo process holds the write lock); retry shortly';
-
-/** A store behind the port throws this when its lock wait runs
- * out, so the server answers 503 as it does for a busy hippo.db. */
-export class StoreBusyError extends Error {
-  constructor(message: string = STORE_BUSY_MESSAGE, options?: ErrorOptions) {
-    super(message, options);
-    this.name = 'StoreBusyError';
-  }
+/** Which stores a call reaches, probed once by a composition root so the api reads this instead of the disk. */
+export interface StoreReach {
+  readonly hasLocal: boolean; // the primary store has a project of its own, or is not hippo.db
+  readonly isGlobal: boolean; // the primary root is the operator's global store
+  readonly shared: boolean; // a store serving many people, so the operator's global store stays out
+  readonly global?: { readonly root: string; readonly store: StoreWith<'contextReads'> }; // set only when readable
 }
+
+export { isStoreBusy, STORE_BUSY_MESSAGE, StoreBusyError } from './busy.js';
 
 /** What `serve()` reads and writes through. Each method is atomic and no transaction spans an
  * await, since SQLite's lock wait blocks the event loop; a lock timeout throws `StoreBusyError`. */
