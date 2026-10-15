@@ -57,7 +57,7 @@ describe('schema v25 — DAG summary metadata', () => {
       layer: Layer.Semantic,
       tags: ['dag-summary'],
       confidence: 'inferred',
-      dag_level: 2,
+      dagLevel: 2,
     });
     summary.descendant_count = 7;
     summary.earliest_at = '2026-01-01T00:00:00.000Z';
@@ -72,9 +72,9 @@ describe('schema v25 — DAG summary metadata', () => {
   });
 
   it('loadEntriesByIds returns matching rows scoped to tenant', () => {
-    const a = createMemory('row A', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Buffer, dag_level: 0 });
-    const b = createMemory('row B', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Buffer, dag_level: 0 });
-    const c = createMemory('row C', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Buffer, dag_level: 0, tenantId: 'other' });
+    const a = createMemory('row A', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Buffer, dagLevel: 0 });
+    const b = createMemory('row B', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Buffer, dagLevel: 0 });
+    const c = createMemory('row C', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Buffer, dagLevel: 0, tenantId: 'other' });
     writeEntry(root, a);
     writeEntry(root, b);
     writeEntry(root, c);
@@ -93,7 +93,7 @@ describe('schema v25 — DAG summary metadata', () => {
     const parent: MemoryEntry = createMemory('parent', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       layer: Layer.Semantic,
-      dag_level: 2,
+      dagLevel: 2,
     });
     parent.descendant_count = 2;
     writeEntry(root, parent);
@@ -101,22 +101,22 @@ describe('schema v25 — DAG summary metadata', () => {
     const child1: MemoryEntry = createMemory('child 1', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       layer: Layer.Episodic,
-      dag_level: 1,
-      dag_parent_id: parent.id,
+      dagLevel: 1,
+      dagParentId: parent.id,
     });
     child1.created = '2026-01-01T00:00:00.000Z';
     const child2: MemoryEntry = createMemory('child 2', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       layer: Layer.Episodic,
-      dag_level: 1,
-      dag_parent_id: parent.id,
+      dagLevel: 1,
+      dagParentId: parent.id,
     });
     child2.created = '2026-01-02T00:00:00.000Z';
     const grandchild: MemoryEntry = createMemory('grandchild', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       layer: Layer.Buffer,
-      dag_level: 0,
-      dag_parent_id: child1.id,
+      dagLevel: 0,
+      dagParentId: child1.id,
     });
     writeEntry(root, child1);
     writeEntry(root, child2);

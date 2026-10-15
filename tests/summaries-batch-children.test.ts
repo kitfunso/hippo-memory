@@ -19,7 +19,7 @@ describe('loadChildrenOfSummaries', () => {
     const parents = Array.from({ length: 520 }, (_, i) => ({ id: `parent_${i}`, tenant_id: 'default' }));
     const entries = parents
       .filter((_, i) => i % 3 !== 2) // every third parent stays childless
-      .map((p) => createMemory(`child of ${p.id}`, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, dag_parent_id: p.id }));
+      .map((p) => createMemory(`child of ${p.id}`, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, dagParentId: p.id }));
     writeEntriesTogether(root, entries);
     const batched = loadChildrenOfSummaries(root, parents);
     for (const p of [parents[0], parents[2], parents[510], parents[519]]) {

@@ -168,8 +168,8 @@ function semanticSummary(
     ...createMemory(mergedContent, {
       layer: Layer.Semantic,
       tags: allTags,
-      emotional_valence: maxValence,
-      schema_fit: MERGED_SCHEMA_FIT,
+      emotionalValence: maxValence,
+      schemaFit: MERGED_SCHEMA_FIT,
       source: 'consolidation',
       confidence: 'inferred',
       tenantId: partition.tenantId,

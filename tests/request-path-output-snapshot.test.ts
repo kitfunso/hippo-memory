@@ -46,7 +46,7 @@ function localRow(i: number): MemoryEntry {
     layer: i % 3 === 0 ? Layer.Semantic : Layer.Episodic,
     tags: i % 8 === 0 ? ['error'] : i % 29 === 9 ? ['secret'] : [`t${i % 4}`],
     pinned: i % 25 === 0,
-    emotional_valence: i % 9 === 0 ? 'negative' : 'neutral',
+    emotionalValence: i % 9 === 0 ? 'negative' : 'neutral',
     scope: i % 17 === 3 ? 'slack:private:c1' : i % 19 === 4 ? 'unknown:legacy' : i % 13 === 5 ? 'team:x' : null,
     tenantId: i % 15 === 14 ? 'acme' : 'default',
   });

@@ -39,10 +39,10 @@ function seedVersions(root: string, oldCreatedFirst: boolean) {
 }
 
 function summaryWithChildren(root: string, childText: string, leafOptions: Parameters<typeof createMemory>[1]): MemoryEntry {
-  const summary = createMemory('a rollup of three older rows', { layer: Layer.Semantic, confidence: 'inferred', dag_level: 2, tags: ['dag-summary'] });
+  const summary = createMemory('a rollup of three older rows', { layer: Layer.Semantic, confidence: 'inferred', dagLevel: 2, tags: ['dag-summary'] });
   writeEntry(root, summary);
   for (let i = 0; i < 3; i++) {
-    const leaf = createMemory(`${childText} ${i}`, { ...leafOptions, layer: Layer.Buffer, dag_level: 1, dag_parent_id: summary.id });
+    const leaf = createMemory(`${childText} ${i}`, { ...leafOptions, layer: Layer.Buffer, dagLevel: 1, dagParentId: summary.id });
     writeEntry(root, { ...leaf, created: `2026-01-1${i}T00:00:00.000Z` });
   }
   return summary;
@@ -88,7 +88,7 @@ describe('a superseded summary never stands in for its children', () => {
 
   it('in assemble', async () => {
     const root = newRoot();
-    const summary = summaryWithChildren(root, 'older detail', { kind: 'raw', source_session_id: 'sess-s' });
+    const summary = summaryWithChildren(root, 'older detail', { kind: 'raw', sourceSessionId: 'sess-s' });
     const summaryIds = async (): Promise<string[]> =>
       (await assemble(ctxFor(root), 'sess-s', { freshTailCount: 1, budget: 100000 })).items.filter((it) => it.isSummary).map((it) => it.id);
 

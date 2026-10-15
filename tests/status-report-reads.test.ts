@@ -33,10 +33,10 @@ function at(entry: MemoryEntry, iso: string): MemoryEntry {
 }
 
 function seed(): void {
-  const raw = at(createMemory('slack: tier moved to 120', { kind: 'raw', owner: 'user:keith', artifact_ref: 'slack://a/1' }), '2026-04-01T10:00:00.000Z');
+  const raw = at(createMemory('slack: tier moved to 120', { kind: 'raw', owner: 'user:keith', artifactRef: 'slack://a/1' }), '2026-04-01T10:00:00.000Z');
   const rawGap = at(createMemory('slack: owner and ref missing', { kind: 'raw' }), '2026-04-01T11:00:00.000Z');
   const oldFact = at(createMemory('belief: tier is 100'), '2026-03-15T00:00:00.000Z');
-  const newFact = at(createMemory('belief: tier is 120', { extracted_from: raw.id }), '2026-04-01T10:30:00.000Z');
+  const newFact = at(createMemory('belief: tier is 120', { extractedFrom: raw.id }), '2026-04-01T10:30:00.000Z');
   oldFact.superseded_by = newFact.id;
   const oldManual = at(createMemory('belief: seats are 5'), '2026-03-16T00:00:00.000Z');
   const newManual = at(createMemory('belief: seats are 6'), '2026-04-02T00:00:00.000Z');

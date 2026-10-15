@@ -97,7 +97,7 @@ function makeSummary(
     layer: Layer.Semantic,
     tags,
     confidence: 'inferred',
-    dag_level: 2,
+    dagLevel: 2,
   });
   s.tenant_id = tenantId;
   return s;
@@ -113,8 +113,8 @@ function makeChild(
     baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
     layer: Layer.Episodic,
     tags,
-    dag_level: 1,
-    dag_parent_id: parentId,
+    dagLevel: 1,
+    dagParentId: parentId,
   });
   c.tenant_id = tenantId;
   return c;
@@ -499,9 +499,9 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
 
   it('test #10: REGRESSION LOCK — buildDag clean-up. Born-dirty fix: brand-new summaries are NOT re-rebuilt on same sleep cycle.', async () => {
     // Setup 3 extracted facts (buildDag's minimum cluster size) sharing entity tags
-    const factA = createMemory('alice did X', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic, dag_level: 1, tags: ['extracted', 'speaker:alice'] });
-    const factB = createMemory('alice said Y', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic, dag_level: 1, tags: ['extracted', 'speaker:alice'] });
-    const factC = createMemory('alice noted Z', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic, dag_level: 1, tags: ['extracted', 'speaker:alice'] });
+    const factA = createMemory('alice did X', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic, dagLevel: 1, tags: ['extracted', 'speaker:alice'] });
+    const factB = createMemory('alice said Y', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic, dagLevel: 1, tags: ['extracted', 'speaker:alice'] });
+    const factC = createMemory('alice noted Z', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic, dagLevel: 1, tags: ['extracted', 'speaker:alice'] });
     writeEntry(hippoRoot, factA);
     writeEntry(hippoRoot, factB);
     writeEntry(hippoRoot, factC);
@@ -559,7 +559,7 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
       createMemory(c, {
         baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
         layer: Layer.Episodic,
-        dag_level: 1,
+        dagLevel: 1,
         tags: ['extracted', 'speaker:alice'],
         tenantId: 'tenant-a',
       }),
@@ -568,7 +568,7 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
       createMemory(c, {
         baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
         layer: Layer.Episodic,
-        dag_level: 1,
+        dagLevel: 1,
         tags: ['extracted', 'speaker:alice'],
         tenantId: 'tenant-b',
       }),

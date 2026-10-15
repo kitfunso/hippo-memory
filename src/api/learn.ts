@@ -139,7 +139,7 @@ function newLessonMemory(lesson: string, profile: LearnProfile, inputs: LessonMe
     tags: [...profile.tags],
     source: profile.source,
     confidence: 'observed',
-    schema_fit: fitSource && schemaFitFrom(lesson, [...profile.tags], fitSource),
+    schemaFit: fitSource && schemaFitFrom(lesson, [...profile.tags], fitSource),
     tenantId,
     baseHalfLifeDays: config.defaultHalfLifeDays,
   });

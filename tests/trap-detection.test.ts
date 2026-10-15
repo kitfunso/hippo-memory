@@ -65,7 +65,7 @@ function seedTrapMemories(hippoRoot: string): void {
 2. Keep the original intact
 3. Let Keith decide when to promote/replace
 Violating this destroys live PnL history and cannot be undone from git blame alone.`,
-      opts: { tags: ['production', 'rule', 'deploy', 'overwrite'], emotional_valence: 'critical', pinned: true },
+      opts: { tags: ['production', 'rule', 'deploy', 'overwrite'], emotionalValence: 'critical', pinned: true },
     },
     {
       label: 'eia_path_change',
@@ -73,7 +73,7 @@ Violating this destroys live PnL history and cannot be undone from git blame alo
       content: `EIA API path changed silently. /petroleum/sum/wkly became /petroleum/sum/sndw.
 This broke 9 of 10 EIA series silently because exceptions were swallowed with bare except: pass.
 Always log failed API calls, don't just pass. Bare except is a data-pipeline anti-pattern.`,
-      opts: { tags: ['data-pipeline', 'eia', 'api', 'error', 'exception'], emotional_valence: 'negative' },
+      opts: { tags: ['data-pipeline', 'eia', 'api', 'error', 'exception'], emotionalValence: 'negative' },
     },
     {
       label: 'no_emoji_python',
@@ -81,7 +81,7 @@ Always log failed API calls, don't just pass. Bare except is a data-pipeline ant
       content: `No emoji in Python print statements on Windows. cp1252 encoding crashes on emoji characters.
 Example crash: print("✅ Success!"). Use plain ASCII instead: print("OK") or print("[OK]").
 Affects all Windows Python scripts including pipeline status scripts.`,
-      opts: { tags: ['platform', 'windows', 'encoding', 'emoji', 'print', 'crash'], emotional_valence: 'negative' },
+      opts: { tags: ['platform', 'windows', 'encoding', 'emoji', 'print', 'crash'], emotionalValence: 'negative' },
     },
     {
       label: 'powershell_semicolons',
@@ -90,7 +90,7 @@ Affects all Windows Python scripts including pipeline status scripts.`,
 Correct: npm run build; npx wrangler deploy
 Wrong:   npm run build && npx wrangler deploy
 The && operator is bash syntax and causes silent failure in PowerShell. Use ; instead.`,
-      opts: { tags: ['platform', 'powershell', 'windows', 'shell', 'operator'], emotional_valence: 'negative' },
+      opts: { tags: ['platform', 'powershell', 'windows', 'shell', 'operator'], emotionalValence: 'negative' },
     },
     {
       label: 'walk_forward_overestimates',
@@ -99,7 +99,7 @@ The && operator is bash syntax and causes silent failure in PowerShell. Use ; in
 (Exp 7) showed walk-forward OOS Sharpe overestimates by +0.59 on average (mean WF=1.15 vs CPCV=0.56).
 Use CPCV-deflated Sharpe for risk management and honest reporting. Never report raw walk-forward
 Sharpe as the final OOS number without this caveat.`,
-      opts: { tags: ['quant', 'backtest', 'sharpe', 'cpcv', 'walk-forward', 'oos'], emotional_valence: 'negative' },
+      opts: { tags: ['quant', 'backtest', 'sharpe', 'cpcv', 'walk-forward', 'oos'], emotionalValence: 'negative' },
     },
     {
       label: 'constants_must_sync',
@@ -108,7 +108,7 @@ Sharpe as the final OOS number without this caveat.`,
 Shared constants: production/shared_constants.py <-> website/frontend/src/lib/trading-constants.ts
 Any change to RISK_PER_TRADE, position sizing, or signal thresholds must be updated in BOTH files.
 Mismatch causes silent wrong position sizing on the frontend dashboard.`,
-      opts: { tags: ['frontend', 'backend', 'constants', 'sync', 'risk', 'position-sizing'], emotional_valence: 'negative' },
+      opts: { tags: ['frontend', 'backend', 'constants', 'sync', 'risk', 'position-sizing'], emotionalValence: 'negative' },
     },
     {
       label: 'subagent_slop_words',
@@ -126,7 +126,7 @@ and "robust framework" signal AI-generated copy that needs human editing.`,
 reported "14/14 OK" while 5+ sources were silently stale (WB date format change, DBnomics
 stuck at 2023, IndexMundi SSL expired, EIA path change). Don't trust exit code alone.
 Always verify actual file modification times and spot-check data values.`,
-      opts: { tags: ['data-pipeline', 'staleness', 'monitoring', 'exit-code', 'cache'], emotional_valence: 'negative' },
+      opts: { tags: ['data-pipeline', 'staleness', 'monitoring', 'exit-code', 'cache'], emotionalValence: 'negative' },
     },
     {
       label: 'data_mining_honesty',
@@ -136,7 +136,7 @@ results as "OOS" is data mining. The reported Sharpe (1.74) is inflated; honest 
 (theory-only features) give ~0.87. Fix: select features based on economic theory only,
 OR select on early data, freeze selection, then test on later data. Never iterate based
 on backtest results.`,
-      opts: { tags: ['quant', 'data-mining', 'feature-selection', 'backtest', 'oos'], emotional_valence: 'negative' },
+      opts: { tags: ['quant', 'data-mining', 'feature-selection', 'backtest', 'oos'], emotionalValence: 'negative' },
     },
     {
       label: 'subagent_fabrication',
@@ -146,7 +146,7 @@ on backtest results.`,
 and PRODUCTION_MANIFEST were both falsified. Always run:
   python production/{commodity}_production_std.py
 and compare actual output to claimed metrics before accepting any model upgrade.`,
-      opts: { tags: ['sub-agent', 'verification', 'metrics', 'fabrication', 'manifest'], emotional_valence: 'critical' },
+      opts: { tags: ['sub-agent', 'verification', 'metrics', 'fabrication', 'manifest'], emotionalValence: 'critical' },
     },
   ];
 

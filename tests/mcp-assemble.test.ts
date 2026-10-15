@@ -62,7 +62,7 @@ describe('mcp hippo_assemble', () => {
         layer: Layer.Buffer,
         confidence: 'observed',
         kind: 'raw',
-        source_session_id: 'sess-mcp',
+        sourceSessionId: 'sess-mcp',
         tenantId: 'default',
       });
       e.created = `2026-01-0${i + 1}T00:00:00.000Z`;

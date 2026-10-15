@@ -44,7 +44,7 @@ function seed(): void {
   const rows = Object.entries(SCOPES).map(([k, scope]) => mem(`zebrafish note ${k} keeps the build cache warm`, { scope, tags: [`who:${k}`, 'path:hippo'] }));
   batchWriteAndDelete(root, rows, []);
   saveEmbeddingIndex(root, Object.fromEntries(rows.map((e) => [e.id, QUERY])));
-  for (const k of ['a', 'b', 'team'] as const) writeEntry(root, mem(`raw transcript line from ${k}`, { scope: SCOPES[k], kind: 'raw', source_session_id: 'sess-1' }));
+  for (const k of ['a', 'b', 'team'] as const) writeEntry(root, mem(`raw transcript line from ${k}`, { scope: SCOPES[k], kind: 'raw', sourceSessionId: 'sess-1' }));
 }
 
 const keysOf = (entries: readonly MemoryEntry[]): string[] =>

@@ -126,12 +126,12 @@ describe('session digest read plan', () => {
   it('returns the same digests, in store order, as a filter over every row', () => {
     const root = newRoot();
     const digest = (content: string, extra: Partial<CreateMemoryOptions> = {}, tags = ['session-digest']): MemoryEntry =>
-      createMemory(content, { source: 'session-digest', tags, source_session_id: 's2', ...extra });
+      createMemory(content, { source: 'session-digest', tags, sourceSessionId: 's2', ...extra });
     const entries = [
       digest('digest from another session'),
-      digest('digest from this session', { source_session_id: 's1' }),
-      digest('digest with no session', { source_session_id: null }),
-      digest('digest extracted from a row', { extracted_from: 'mem-x' }),
+      digest('digest from this session', { sourceSessionId: 's1' }),
+      digest('digest with no session', { sourceSessionId: null }),
+      digest('digest extracted from a row', { extractedFrom: 'mem-x' }),
       digest('digest without the tag', {}, ['other']),
       digest('digest of another tenant', { tenantId: 'other' }),
       createMemory('tagged row from the cli', { tags: ['session-digest'] }),

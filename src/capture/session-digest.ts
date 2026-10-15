@@ -609,7 +609,7 @@ export function writeSessionDigest(hippoRoot: string, scan: SessionScan, opts: S
       tags: [SESSION_DIGEST_TAG],
       source: SESSION_DIGEST_TAG,
       confidence: 'observed',
-      source_session_id: opts.key,
+      sourceSessionId: opts.key,
       tenantId: opts.tenantId,
       baseHalfLifeDays: loadConfig(hippoRoot).defaultHalfLifeDays,
     }),

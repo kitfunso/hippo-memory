@@ -103,7 +103,7 @@ describe('mcp hippo_recall fresh-tail policy', () => {
       writeEntry(home, createMemory(`event ${i}`, {
         layer: Layer.Buffer,
         kind: 'raw',
-        source_session_id: 'sess-A',
+        sourceSessionId: 'sess-A',
       }));
     }
     const res = await callTool(
@@ -154,7 +154,7 @@ describe('mcp hippo_recall fresh tail on a shared store', () => {
 
   it("keeps the tail to the caller's project, with or without a session id", async () => {
     const rows = (['acme', 'beta', null] as const).map((origin) => {
-      const entry = { ...createMemory(`tail row from ${origin ?? 'no project'}`, { layer: Layer.Buffer, kind: 'raw', source_session_id: 'sess-A' }), origin_project: origin };
+      const entry = { ...createMemory(`tail row from ${origin ?? 'no project'}`, { layer: Layer.Buffer, kind: 'raw', sourceSessionId: 'sess-A' }), origin_project: origin };
       writeEntry(shared, entry);
       return entry;
     });

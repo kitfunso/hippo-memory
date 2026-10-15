@@ -187,7 +187,7 @@ describe('valued --scope regression coverage', () => {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       kind: 'raw',
       tenantId: 'default',
-      source_session_id: sessionId,
+      sourceSessionId: sessionId,
       scope,
     });
     writeEntry(hippoDir, mkRaw('null scope row content here', null));

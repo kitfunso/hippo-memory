@@ -25,8 +25,8 @@ describe('DAG construction during consolidation', () => {
         baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
         layer: Layer.Semantic,
         tags: ['extracted', 'speaker:John', 'topic:basketball'],
-        extracted_from: `source-${i}`,
-        dag_level: 1,
+        extractedFrom: `source-${i}`,
+        dagLevel: 1,
       });
       writeEntry(hippoRoot, fact);
     }

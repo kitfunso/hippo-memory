@@ -196,7 +196,7 @@ describe('rejection guard', () => {
       initStore(home);
       const summary = createMemory('old summary content', {
         layer: Layer.Semantic,
-        dag_level: 2,
+        dagLevel: 2,
         confidence: 'inferred',
       });
       writeEntry(home, summary);

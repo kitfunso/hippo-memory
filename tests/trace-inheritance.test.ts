@@ -41,7 +41,7 @@ describe('Trace layer inherits core memory mechanics', () => {
   it('traces decay via the standard strength calculation', () => {
     const trace = createMemory7('Task: deploy\nOutcome: success\nSteps:\n  1. push', {
       layer: Layer.Trace,
-      trace_outcome: 'success',
+      traceOutcome: 'success',
     });
 
     // Back-date last_retrieved by many half-lives so strength drops.
@@ -61,7 +61,7 @@ describe('Trace layer inherits core memory mechanics', () => {
   it('traces appear in hybridSearch results when text matches', async () => {
     const trace = createMemory7(
       'Task: refactor authentication module\nOutcome: success\nSteps:\n  1. split session store',
-      { layer: Layer.Trace, trace_outcome: 'success' },
+      { layer: Layer.Trace, traceOutcome: 'success' },
     );
     writeEntry(tmpDir, trace);
 
@@ -82,7 +82,7 @@ describe('Trace layer inherits core memory mechanics', () => {
     const traces = Array.from({ length: 5 }, (_, i) =>
       createMemory7(
         `Task: scenario ${i}\nOutcome: success\nSteps:\n  1. step ${i}`,
-        { layer: Layer.Trace, trace_outcome: 'success' },
+        { layer: Layer.Trace, traceOutcome: 'success' },
       ),
     );
 
@@ -96,7 +96,7 @@ describe('Trace layer inherits core memory mechanics', () => {
     // Persist a trace.
     const trace = createMemory7(
       'Task: physics trace\nOutcome: success\nSteps:\n  1. do thing',
-      { layer: Layer.Trace, trace_outcome: 'success' },
+      { layer: Layer.Trace, traceOutcome: 'success' },
     );
     writeEntry(tmpDir, trace);
 

@@ -102,7 +102,7 @@ describe('assemble ISO sort: integration', () => {
         confidence: 'observed',
         kind: 'raw',
         tenantId: 'default',
-        source_session_id: sess,
+        sourceSessionId: sess,
       });
       e.created = expectedTimestamps[i]!;
       writeEntry(root, e);

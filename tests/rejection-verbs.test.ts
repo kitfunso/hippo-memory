@@ -66,7 +66,7 @@ describe('api.reject / api.unreject / listRejectionsForTenant', () => {
   it('reject purges the trace-layer markdown mirror (P1 fix: removeEntryMirrors previously skipped Layer.Trace)', async () => {
     const trace = createMemory('trace: read config.ts -> rotated the deploy key -> success', {
       layer: Layer.Trace,
-      trace_outcome: 'success',
+      traceOutcome: 'success',
     });
     writeEntry(tmpDir, trace);
     const mirrorPath = path.join(tmpDir, Layer.Trace, `${trace.id}.md`);

@@ -36,7 +36,7 @@ describe('GET /v1/recall/drill/:id', () => {
       layer: Layer.Semantic,
       tags: ['dag-summary'],
       confidence: 'inferred',
-      dag_level: 2,
+      dagLevel: 2,
     });
     summary.descendant_count = 3;
     writeEntry(home, summary);
@@ -45,8 +45,8 @@ describe('GET /v1/recall/drill/:id', () => {
         baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
         layer: Layer.Episodic,
         confidence: 'observed',
-        dag_level: 1,
-        dag_parent_id: summary.id,
+        dagLevel: 1,
+        dagParentId: summary.id,
       }));
     }
 
@@ -77,7 +77,7 @@ describe('GET /v1/recall/drill/:id', () => {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       layer: Layer.Buffer,
       confidence: 'observed',
-      dag_level: 0,
+      dagLevel: 0,
     });
     writeEntry(home, leaf);
     const res = await fetch(`${handle.url}/v1/recall/drill/${leaf.id}`);
@@ -87,7 +87,7 @@ describe('GET /v1/recall/drill/:id', () => {
   it('400 on bad limit', async () => {
     const summary: MemoryEntry = createMemory('any summary', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-      layer: Layer.Semantic, dag_level: 2, confidence: 'inferred',
+      layer: Layer.Semantic, dagLevel: 2, confidence: 'inferred',
     });
     writeEntry(home, summary);
     const res = await fetch(`${handle.url}/v1/recall/drill/${summary.id}?limit=0`);
@@ -97,7 +97,7 @@ describe('GET /v1/recall/drill/:id', () => {
   it('400 past the list ceiling in the words the list routes use, and 200 at it', async () => {
     const summary: MemoryEntry = createMemory('any summary', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-      layer: Layer.Semantic, dag_level: 2, confidence: 'inferred',
+      layer: Layer.Semantic, dagLevel: 2, confidence: 'inferred',
     });
     writeEntry(home, summary);
     const over = await fetch(`${handle.url}/v1/recall/drill/${summary.id}?limit=1001`);
@@ -110,7 +110,7 @@ describe('GET /v1/recall/drill/:id', () => {
   it('400 on bad budget', async () => {
     const summary: MemoryEntry = createMemory('any summary', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-      layer: Layer.Semantic, dag_level: 2, confidence: 'inferred',
+      layer: Layer.Semantic, dagLevel: 2, confidence: 'inferred',
     });
     writeEntry(home, summary);
     const res = await fetch(`${handle.url}/v1/recall/drill/${summary.id}?budget=-1`);
@@ -125,13 +125,13 @@ describe('GET /v1/recall/drill/:id', () => {
   it('budget truncates and sets truncated=true', async () => {
     const summary: MemoryEntry = createMemory('topic budget', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-      layer: Layer.Semantic, dag_level: 2, confidence: 'inferred',
+      layer: Layer.Semantic, dagLevel: 2, confidence: 'inferred',
     });
     writeEntry(home, summary);
     for (let i = 0; i < 8; i++) {
       writeEntry(home, createMemory(`detail row content ${i} `.repeat(15), {
         baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-        layer: Layer.Episodic, dag_level: 1, dag_parent_id: summary.id, confidence: 'observed',
+        layer: Layer.Episodic, dagLevel: 1, dagParentId: summary.id, confidence: 'observed',
       }));
     }
     const res = await fetch(`${handle.url}/v1/recall/drill/${summary.id}?budget=80`);

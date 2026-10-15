@@ -28,7 +28,7 @@ import { apiCtx } from './_helpers/api-ctx.js';
 const TENANT = 'default';
 const SESSION = 'two-repo-session';
 const ACME = { name: 'acme', legacyName: 'acme' } as const;
-const SUMMARY: Partial<CreateMemoryOptions> = { layer: Layer.Semantic, dag_level: 2, confidence: 'inferred', tags: ['dag-summary'] };
+const SUMMARY: Partial<CreateMemoryOptions> = { layer: Layer.Semantic, dagLevel: 2, confidence: 'inferred', tags: ['dag-summary'] };
 
 type Repo = 'acme' | 'beta';
 interface Reply { readonly text: string; readonly isError: boolean }
@@ -55,7 +55,7 @@ function seed(content: string, origin: string | null, opts: Partial<CreateMemory
 }
 
 function raw(content: string, origin: string | null, parent?: string): string {
-  return seed(content, origin, { layer: Layer.Episodic, kind: 'raw', confidence: 'observed', source_session_id: SESSION, dag_level: parent ? 1 : 0, dag_parent_id: parent });
+  return seed(content, origin, { layer: Layer.Episodic, kind: 'raw', confidence: 'observed', sourceSessionId: SESSION, dagLevel: parent ? 1 : 0, dagParentId: parent });
 }
 
 async function tool(repo: Repo, name: string, args: Record<string, JsonValue> = {}): Promise<Reply> {
@@ -155,8 +155,8 @@ beforeAll(async () => {
   ids.acmeSumO = seed('overflow rollup for acme', 'acme', SUMMARY);
   ids.betaSumO = seed('overflow rollup for beta', 'beta', SUMMARY);
   for (let i = 0; i < 6; i++) {
-    seed(`harbourline leaf ${i} under the acme rollup`, 'acme', { dag_level: 1, dag_parent_id: ids.acmeSumO });
-    seed(`harbourline leaf ${i} under the beta rollup`, 'acme', { dag_level: 1, dag_parent_id: ids.betaSumO });
+    seed(`harbourline leaf ${i} under the acme rollup`, 'acme', { dagLevel: 1, dagParentId: ids.acmeSumO });
+    seed(`harbourline leaf ${i} under the beta rollup`, 'acme', { dagLevel: 1, dagParentId: ids.betaSumO });
   }
 
   const pair = (a: string, b: string, reason: string) => ({ memory_a_id: a, memory_b_id: b, reason, score: 0.9 });

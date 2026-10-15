@@ -64,7 +64,7 @@ function makeEntry(valence: EmotionalValence, opts: Partial<MemoryEntry> = {}): 
     layer: Layer.Buffer,
     kind: 'raw',
     tenantId: 'default',
-    emotional_valence: valence,
+    emotionalValence: valence,
   });
   e.last_retrieved = fiveDaysAgo;
   e.half_life_days = 3;
@@ -282,7 +282,7 @@ describe('behavioral: env=0 ranking effect', () => {
         layer: Layer.Buffer,
         kind: 'raw',
         tenantId: 'default',
-        emotional_valence: valence,
+        emotionalValence: valence,
       });
       e.last_retrieved = new Date(NOW.getTime() - 5 * 24 * 60 * 60 * 1000).toISOString();
       e.half_life_days = 3;
@@ -320,7 +320,7 @@ describe('behavioral: env=0 ranking effect', () => {
       layer: Layer.Buffer,
       kind: 'raw',
       tenantId: 'default',
-      emotional_valence: 'negative',
+      emotionalValence: 'negative',
     });
     // Force an aged last_retrieved so the stored strength stays unclamped
     // and the env-driven multiplier difference is visible.

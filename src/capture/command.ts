@@ -292,7 +292,7 @@ function captureEntry(item: ExtractedItem, options: CaptureWriteOptions, baseHal
     confidence: 'observed',
     pinned: item.fromUser === true && item.category === 'rule',
     tenantId: options.tenantId,
-    source_session_id: options.sessionId,
+    sourceSessionId: options.sessionId,
     baseHalfLifeDays,
   });
   if (options.originProject === undefined) return created;

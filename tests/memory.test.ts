@@ -58,8 +58,8 @@ describe('Strength formula', () => {
     // Age the memories by 10 days so decay < 1, giving emotional multiplier room to show
     const tenDaysAgo = new Date(now.getTime() - 10 * 24 * 60 * 60 * 1000).toISOString();
 
-    const critical = createMemory7('critical failure', { emotional_valence: 'critical' });
-    const neutral = createMemory7('neutral note', { emotional_valence: 'neutral' });
+    const critical = createMemory7('critical failure', { emotionalValence: 'critical' });
+    const neutral = createMemory7('neutral note', { emotionalValence: 'neutral' });
 
     const crit = { ...critical, last_retrieved: tenDaysAgo };
     const neut = { ...neutral, last_retrieved: tenDaysAgo };
@@ -69,7 +69,7 @@ describe('Strength formula', () => {
   });
 
   it('strength is clamped to [0, 1]', () => {
-    const entry = createMemory7('test', { emotional_valence: 'critical', pinned: false });
+    const entry = createMemory7('test', { emotionalValence: 'critical', pinned: false });
     const s = calculateStrength(entry);
     expect(s).toBeGreaterThanOrEqual(0);
     expect(s).toBeLessThanOrEqual(1);
@@ -279,7 +279,7 @@ describe('MemoryEntry trace fields', () => {
   it('accepts trace_outcome when explicitly provided', () => {
     const m = createMemory7('a trace', {
       layer: Layer.Trace,
-      trace_outcome: 'success',
+      traceOutcome: 'success',
     });
     expect(m.trace_outcome).toBe('success');
   });
@@ -287,8 +287,8 @@ describe('MemoryEntry trace fields', () => {
   it('accepts source_session_id on auto-promoted traces', () => {
     const m = createMemory7('a trace', {
       layer: Layer.Trace,
-      trace_outcome: 'success',
-      source_session_id: 'sess-abc-123',
+      traceOutcome: 'success',
+      sourceSessionId: 'sess-abc-123',
     });
     expect(m.source_session_id).toBe('sess-abc-123');
   });
@@ -304,7 +304,7 @@ describe('MemoryEntry trace fields', () => {
       // throws "Invalid trace_outcome" for any value outside 'success' |
       // 'failure' | 'partial' | null), so the invalid literal must reach
       // the function despite the type system disallowing it structurally.
-      trace_outcome: invalidOutcome as TraceOutcome,
+      traceOutcome: invalidOutcome as TraceOutcome,
     })).toThrow(/trace_outcome/);
   });
 });

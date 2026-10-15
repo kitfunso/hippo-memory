@@ -42,7 +42,7 @@ describe('sleep skips superseded rows', () => {
       writeEntry(root, createMemory(text));
     }
     const facts = ['alice moved the deploy to friday', 'alice owns the billing service', 'alice reviews every schema change', 'alice owns the oldfact payroll service']
-      .map((text) => createMemory(text, { layer: Layer.Semantic, dag_level: 1, tags: ['extracted', 'speaker:alice'] }));
+      .map((text) => createMemory(text, { layer: Layer.Semantic, dagLevel: 1, tags: ['extracted', 'speaker:alice'] }));
     for (const f of facts) writeEntry(root, f);
     await supersede(ctxFor(root), blamed.id, 'the march outage postmortem found no single person at fault');
     await supersede(ctxFor(root), facts[3]!.id, 'bob owns the payroll service');
@@ -67,10 +67,10 @@ describe('sleep skips superseded rows', () => {
 
   it('as DAG rebuild and L3 profile input', async () => {
     const root = newRoot();
-    const summary = createMemory('alice runs billing and payroll', { layer: Layer.Semantic, confidence: 'inferred', dag_level: 2, tags: ['dag-summary'] });
+    const summary = createMemory('alice runs billing and payroll', { layer: Layer.Semantic, confidence: 'inferred', dagLevel: 2, tags: ['dag-summary'] });
     writeEntry(root, summary);
     const [kept, stale] = ['alice runs billing', 'alice runs payroll']
-      .map((text) => createMemory(text, { layer: Layer.Semantic, dag_level: 1, dag_parent_id: summary.id, tags: ['extracted'] }));
+      .map((text) => createMemory(text, { layer: Layer.Semantic, dagLevel: 1, dagParentId: summary.id, tags: ['extracted'] }));
     writeEntry(root, kept!);
     writeEntry(root, stale!);
     await supersede(ctxFor(root), stale!.id, 'bob runs payroll');

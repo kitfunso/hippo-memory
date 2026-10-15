@@ -35,7 +35,7 @@ function makeL2Summary(
     layer: Layer.Semantic,
     tags: ['topic:test', 'dag-summary'],
     confidence: 'inferred',
-    dag_level: 2,
+    dagLevel: 2,
   });
   if (opts.lastRebuiltAt !== undefined) s.last_rebuilt_at = opts.lastRebuiltAt;
   if (opts.rebuildCount !== undefined) s.rebuild_count = opts.rebuildCount;
@@ -48,8 +48,8 @@ function makeL1Fact(content: string, parentId?: string): MemoryEntry {
     baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
     layer: Layer.Episodic,
     tags: ['extracted'],
-    dag_level: 1,
-    dag_parent_id: parentId,
+    dagLevel: 1,
+    dagParentId: parentId,
   });
 }
 

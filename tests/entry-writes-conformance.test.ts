@@ -49,10 +49,10 @@ async function seed(dir: string): Promise<Seeded> {
     noteB: createMemory('globex ships on fridays', { tenantId: TENANT_B }),
     rawB: createMemory('globex raw ticket text', { tenantId: TENANT_B, kind: 'raw' }),
   };
-  const summary = a('summary of the release process', { dag_level: 2 });
+  const summary = a('summary of the release process', { dagLevel: 2 });
   // The children go in first, so the summary starts clean.
-  const child = a('release notes are drafted on mondays', { dag_parent_id: summary.id });
-  const rawChild = a('raw standup transcript about releases', { kind: 'raw', dag_parent_id: summary.id });
+  const child = a('release notes are drafted on mondays', { dagParentId: summary.id });
+  const rawChild = a('raw standup transcript about releases', { kind: 'raw', dagParentId: summary.id });
   for (const entry of [...Object.values(rows), child, rawChild, summary]) writeEntry(dir, entry, { actor: 'cli' });
   const ctx: FullContext = apiCtx(dir, TENANT_A, { subject: 'cli', role: 'admin' });
   await reject(ctx, { value: BANNED, reason: 'wrong date' });
@@ -117,8 +117,8 @@ describe('EntryWrites.writeEntry', () => {
 
   it('marks a clean summary parent dirty once, on the first child write only', async () => {
     const { summary } = seeded;
-    const first = fresh('release branches are cut on wednesdays', { dag_parent_id: summary.id });
-    const second = fresh('release tags are signed by the lead', { dag_parent_id: summary.id });
+    const first = fresh('release branches are cut on wednesdays', { dagParentId: summary.id });
+    const second = fresh('release tags are signed by the lead', { dagParentId: summary.id });
     const write = (entry: MemoryEntry): Call => async (g) => { await g.writeEntry({ entry, actor: ACTOR }); };
     const side = await conforms([write(first), write(second), readBack(TENANT_A, summary.id)]);
     // SAFETY: the third call reads rows back, so it resolved to Row[].

@@ -88,7 +88,7 @@ describe('sleep partitions by origin project', () => {
 
   it('the DAG summarises facts and summaries within a project, and each summary stays in that project', async () => {
     const facts = ['proj-b', 'proj-c'].flatMap((origin) => ['alice filed X', 'alice noted Y', 'alice closed Z'].map((c) =>
-      inProject(createMemory(`${c} in ${origin}`, { layer: Layer.Episodic, dag_level: 1, tags: ['extracted', 'speaker:alice'] }), origin)));
+      inProject(createMemory(`${c} in ${origin}`, { layer: Layer.Episodic, dagLevel: 1, tags: ['extracted', 'speaker:alice'] }), origin)));
     for (const f of facts) writeEntry(home, f);
 
     expect((await buildDag(home, facts, { apiKey: 'k', fetcher: fetcher('alice files, notes and closes tickets') })).summariesCreated).toBe(2);
@@ -96,7 +96,7 @@ describe('sleep partitions by origin project', () => {
     expect(l2s.map((e) => e.origin_project).sort()).toEqual(['proj-b', 'proj-c']);
 
     const more = ['proj-b', 'proj-c'].map((origin) => inProject(createMemory(`alice owns the API layer in ${origin}`, {
-      layer: Layer.Semantic, tags: ['speaker:alice', 'dag-summary'], confidence: 'inferred', dag_level: 2,
+      layer: Layer.Semantic, tags: ['speaker:alice', 'dag-summary'], confidence: 'inferred', dagLevel: 2,
     }), origin));
     for (const l2 of more) writeEntry(home, l2);
 

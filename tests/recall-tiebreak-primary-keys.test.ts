@@ -46,8 +46,8 @@ describe('api.ts:833 DAG substitution ordering', () => {
       layer: Layer.Buffer,
       tags: opts.tags ?? [],
       confidence: 'observed',
-      dag_level: opts.dag_level ?? 0,
-      dag_parent_id: opts.dag_parent_id ?? undefined,
+      dagLevel: opts.dag_level ?? 0,
+      dagParentId: opts.dag_parent_id ?? undefined,
       tenantId: opts.tenant_id ?? 'default',
       kind: opts.kind ?? 'distilled',
     });
@@ -57,7 +57,7 @@ describe('api.ts:833 DAG substitution ordering', () => {
       layer: Layer.Semantic,
       tags: opts.tags ?? ['dag-summary'],
       confidence: 'inferred',
-      dag_level: 2,
+      dagLevel: 2,
       tenantId: opts.tenant_id ?? 'default',
     });
   }

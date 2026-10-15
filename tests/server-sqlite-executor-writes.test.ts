@@ -38,7 +38,7 @@ function contents(root: string): string[] {
 function seedSession(root: string, tenantId: string, sessionId: string, count: number): string[] {
   return Array.from({ length: count }, (_, i) => {
     const entry = createMemory(`${tenantId} ${sessionId} message ${i}`, {
-      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Buffer, confidence: 'observed', kind: 'raw', source_session_id: sessionId, tenantId,
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Buffer, confidence: 'observed', kind: 'raw', sourceSessionId: sessionId, tenantId,
     });
     entry.created = `2026-01-0${i + 1}T00:00:00.000Z`;
     writeEntry(root, entry);

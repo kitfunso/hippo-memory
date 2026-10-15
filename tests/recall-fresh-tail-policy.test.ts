@@ -36,7 +36,7 @@ function makeRaw(text: string, opts: Partial<MemoryEntry> = {}): MemoryEntry {
     scope: opts.scope ?? null,
     tenantId: opts.tenant_id ?? 'default',
     tags: opts.tags ?? [],
-    source_session_id: opts.source_session_id ?? null,
+    sourceSessionId: opts.source_session_id ?? null,
   });
 }
 

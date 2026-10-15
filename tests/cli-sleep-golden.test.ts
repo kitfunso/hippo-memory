@@ -33,7 +33,7 @@ function seedLocal(hippoRoot: string): void {
     seeded('an old note about the retired staging cluster that nobody reads', 'mem_sleep_faded', '2025-03-01T00:00:00.000Z', { strength: 0.01, last_retrieved: '2025-03-01T00:00:00.000Z' }),
     seeded('placeholder junk', 'mem_sleep_junk', '2026-01-25T00:00:00.000Z', { content: 'ok' }),
     seeded('never force push the release branch, it breaks the tag pipeline', 'mem_sleep_pinned', '2026-01-05T00:00:00.000Z', {}, { pinned: true, tags: ['error', 'git'] }),
-    seeded('ran the canary and promoted it after the error budget held', 'mem_sleep_trace', '2026-01-23T00:00:00.000Z', {}, { layer: Layer.Trace, trace_outcome: 'success' }),
+    seeded('ran the canary and promoted it after the error budget held', 'mem_sleep_trace', '2026-01-23T00:00:00.000Z', {}, { layer: Layer.Trace, traceOutcome: 'success' }),
     seeded('the flaky login test fails when the clock crosses midnight utc', 'mem_sleep_valued', '2026-01-15T00:00:00.000Z', { retrieval_count: 6, outcome_positive: 4 }, { tags: ['error', 'testing'] }),
   ];
   for (const row of rows) writeEntry(hippoRoot, row);

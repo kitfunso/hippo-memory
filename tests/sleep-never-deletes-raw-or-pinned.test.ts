@@ -36,7 +36,7 @@ function newRoot(configJson?: string): string {
 }
 
 const rawRow = (content: string): MemoryEntry =>
-  createMemory7(content, { kind: 'raw', artifact_ref: 'slack://T1/C1/1.0', owner: 'user:U1' });
+  createMemory7(content, { kind: 'raw', artifactRef: 'slack://T1/C1/1.0', owner: 'user:U1' });
 const ctxFor = (hippoRoot: string): FullContext =>
   (apiCtx(hippoRoot, 'default', { subject: 'sleep-test', role: 'admin' }));
 const sixtyDaysOn = (): Date => new Date(Date.now() + 60 * DAY);
@@ -194,7 +194,7 @@ describe('a row changed while sleep awaits the LLM keeps the change', () => {
   it('facts linked to a new summary keep the link, so the next sleep pays for no duplicate or rebuild', async () => {
     const root = newRoot();
     const facts = ['alice moved the deploy to friday', 'alice owns the billing service', 'alice reviews every schema change']
-      .map((text) => createMemory7(text, { layer: Layer.Semantic, dag_level: 1, tags: ['extracted', 'speaker:alice'] }));
+      .map((text) => createMemory7(text, { layer: Layer.Semantic, dagLevel: 1, tags: ['extracted', 'speaker:alice'] }));
     for (const f of facts) writeEntry(root, f);
     const fetcher = summarizer('Alice moved the deploy to Friday, owns billing and reviews schema changes.');
 
@@ -211,11 +211,11 @@ describe('a row changed while sleep awaits the LLM keeps the change', () => {
   it('a summary rebuilt during sleep keeps its new text', async () => {
     const root = newRoot();
     const summary = createMemory7('alice owns the billing service', {
-      layer: Layer.Semantic, dag_level: 2, tags: ['speaker:alice', 'dag-summary'],
+      layer: Layer.Semantic, dagLevel: 2, tags: ['speaker:alice', 'dag-summary'],
     });
     writeEntry(root, summary);
     writeEntry(root, createMemory7('alice now also runs the friday deploy', {
-      layer: Layer.Semantic, dag_level: 1, dag_parent_id: summary.id, tags: ['extracted', 'speaker:alice'],
+      layer: Layer.Semantic, dagLevel: 1, dagParentId: summary.id, tags: ['extracted', 'speaker:alice'],
     }));
     const rebuilt = 'Alice owns the billing service and runs the Friday deploy.';
 
