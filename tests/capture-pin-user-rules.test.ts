@@ -67,6 +67,42 @@ describe('capture pins the rules a person states', () => {
     expect(loadAllEntries(root).map((e) => [e.content, e.pinned])).toEqual([[expect.stringContaining('never edit CHANGELOG.md'), false]]);
   });
 
+  it.each([
+    'Never edit CHANGELOG.md by hand.',
+    'No: run the linter first, because CI fails without it.',
+    'Always run the formatter before committing.',
+    'Make sure every migration has a down step.',
+    "No, use pnpm here, because the lockfile is pnpm's.",
+    'Right: keep tests beside the code, because the build globs them.',
+    'Wrong, the config lives in the repo root, because the loader walks up from there.',
+    'Not quite: name the branch after the ticket, because the bot reads it.',
+  ])('pins the standing rule %s', (text) => {
+    capture([{ role: 'user', text }]);
+    expect(loadAllEntries(root).map((e) => [e.content, e.pinned])).toEqual([[text.replace(/\.$/, ''), true]]);
+  });
+
+  it.each([
+    'It always marked the override as off.',
+    'Please fix it and make sure the tests pass.',
+    'It never returned the right count.',
+    'This always happened when the cache was cold.',
+    'Please make sure the build passes now.',
+    'Make sure the tests pass this time.',
+  ])('stores the narration or one-off request %s without pinning it', (text) => {
+    capture([{ role: 'user', text }]);
+    expect(loadAllEntries(root).map((e) => [e.content, e.pinned])).toEqual([[text.replace(/\.$/, ''), false]]);
+  });
+
+  it('stores nothing for a reason with no statement before it', () => {
+    capture([{ role: 'user', text: 'No, because it crashed.' }]);
+    expect(loadAllEntries(root)).toEqual([]);
+  });
+
+  it('the prompt hook injects a correction that opens with No and gives a reason', async () => {
+    capture([{ role: 'user', text: 'No: run the linter first, because CI fails without it. Please fix it.' }]);
+    expect(await injected()).toEqual(['No: run the linter first, because CI fails without it']);
+  });
+
   it('drops the context Codex stores as user messages, so none of it counts as the person speaking', () => {
     const line = (text: string) => JSON.stringify({ type: 'response_item', payload: { type: 'message', role: 'user', content: [{ type: 'input_text', text }] } });
     const jsonl = [

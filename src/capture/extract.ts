@@ -35,6 +35,28 @@ const CATEGORIES = [
   ['decision', DECISION_PATTERNS], ['rule', RULE_PATTERNS],
   ['error', ERROR_PATTERNS], ['preference', PREFERENCE_PATTERNS],
 ] as const;
+// A correction or confirmation: "No: ..., because ...", "Yes, keep doing that: ..., because ...".
+const AFFIRMATION = String.raw`(?:keep doing that|keep it up|that's right|exactly)`;
+const REPLY_OPENER = String.raw`(?:no|yes|right|correct|wrong|not quite)\s*[:,]\s*(?:${AFFIRMATION}\s*[:,]\s*)?`;
+const REPLY_FORM = new RegExp(String.raw`^\s*${REPLY_OPENER}(?!\s*${AFFIRMATION}\b)(.+?)\s*,?\s+because\b`, 'i');
+const REPLY_OPENER_START = new RegExp(String.raw`^\s*${REPLY_OPENER}`, 'i');
+const MIN_REPLY_WORDS = 3;
+const MAX_REPLY_SENTENCES = 4;
+// Imperatives that end in "ed" ("never embed secrets") are not past tense.
+const IMPERATIVE_ED = 'seed|feed|embed|need|proceed|exceed|succeed|speed|heed|bleed|breed|shred';
+const PAST_VERB = String.raw`(?:\w+ly\s+)?(?:(?!(?:${IMPERATIVE_ED})\b)\w{2,}ed|was|were|had|did|got)\b`;
+const PAST_NARRATION = new RegExp(
+  String.raw`\b(?:always|never)\s+${PAST_VERB}|^(?:i|we|it|that|this|they|he|she)\s+${PAST_VERB}`,
+  'i',
+);
+const THE_TASK = String.raw`(?:it|this|that|them)`;
+const ONE_OFF = new RegExp(
+  String.raw`\bplease\s+\w+\s+${THE_TASK}\b|\b(?:fix|redo|revert|rerun|retry|undo)\s+${THE_TASK}\b|` +
+    String.raw`\bthis time\b|\bfor now\b|\bright now\b|\bnow\b\W*$`,
+  'i',
+);
+const STANDING = /\b(?:every time|whenever|from now on|in (?:the )?future|going forward|always|never)\b/i;
+const BECAUSE = /\bbecause\b/i;
 const MAX_CHARS = 500;
 const BULLET = /^(?:[-*]|\d+\.)\s+(?:\[[ xX]\]\s+)?(.+)/;
 const LABEL = /^(?:decision|rule|error|bug|gotcha|important|critical|remember|plan):/i;
@@ -123,11 +145,28 @@ function insideBrackets(lead: string): boolean {
   return (lead.match(/[([{]/g) ?? []).length > (lead.match(/[)\]}]/g) ?? []).length;
 }
 
+function isReplyRule(sentence: string): boolean {
+  const statement = sentence.match(REPLY_FORM)?.[1];
+  return statement !== undefined && statement.trim().split(/\s+/).length >= MIN_REPLY_WORDS;
+}
+
+/** True when a person's sentence states a rule that outlasts the task; narration and one-off requests are not. */
+export function isStandingRule(sentence: string): boolean {
+  const s = sentence.replace(REPLY_OPENER_START, '');
+  const head = s.split(BECAUSE)[0];
+  if (PAST_NARRATION.test(head)) return false;
+  if (ONE_OFF.test(head) && !STANDING.test(head)) return false;
+  return RULE_PATTERNS.some((pattern) => pattern.test(s)) || isReplyRule(sentence);
+}
+
 function extractFromPatterns(sentence: string, patterns: readonly RegExp[], category: string): ExtractedItem | null {
   // A keyword inside brackets does not support a detached assertion; a later one outside them still does.
   const keyed = patterns.some((pattern) => [...sentence.matchAll(new RegExp(pattern.source, `${pattern.flags}g`))]
     .some((match) => !insideBrackets(sentence.slice(0, match.index))));
-  if (!keyed) return null;
+  return keyed ? toItem(sentence, category) : null;
+}
+
+function toItem(sentence: string, category: string): ExtractedItem | null {
   const content = sentence
     .replace(
       new RegExp(
@@ -166,13 +205,31 @@ function extractSpecSections(text: string): ExtractedItem[] {
     .map(content => ({ content, category: 'spec', tags: ['spec', 'captured'] }));
 }
 
-function extractOne(text: string): ExtractedItem[] {
+/** A reply opener plus the sentences up to its reason, read as one rule, since people split a rule over sentences. */
+function replyRule(sentences: readonly string[], start: number): { item: ExtractedItem; end: number } | null {
+  if (!REPLY_OPENER_START.test(sentences[start])) return null;
+  const last = Math.min(sentences.length, start + MAX_REPLY_SENTENCES) - 1;
+  for (let end = start; end <= last && !sentences[end].endsWith('?'); end++) {
+    if (!BECAUSE.test(sentences[end])) continue;
+    const text = sentences.slice(start, end + 1).join(' ');
+    const item = isReplyRule(text) && isStandingRule(text) ? toItem(text, 'rule') : null;
+    return item && { item, end };
+  }
+  return null;
+}
+
+function extractOne(text: string, fromUser: boolean): ExtractedItem[] {
   const prose = proseOnly(text);
   const items = extractSpecSections(prose);
   for (const block of proseBlocks(prose)) {
-    for (const sentence of completeSentences(block)) {
+    const sentences = completeSentences(block);
+    for (let i = 0; i < sentences.length; i++) {
+      const sentence = sentences[i];
       // A question asks rather than states; far over the bound, skip before any pattern runs.
       if (sentence.endsWith('?') || sentence.length > 2 * MAX_CHARS) continue;
+      // Only a person's reply form is read as a rule; agent text keeps the keyword patterns alone.
+      const reply = fromUser ? replyRule(sentences, i) : null;
+      if (reply) { items.push(reply.item); i = reply.end; continue; }
       for (const [category, patterns] of CATEGORIES) {
         const item = extractFromPatterns(sentence, patterns, category);
         if (item) { items.push(item); break; }
@@ -187,7 +244,10 @@ function extractOne(text: string): ExtractedItem[] {
 export function extractFromTexts(texts: readonly string[], userTexts = 0): ExtractedItem[] {
   const seen = new Set<string>();
   return texts
-    .flatMap((text, i) => extractOne(text).map((item) => (i < userTexts ? { ...item, fromUser: true } : item)))
+    .flatMap((text, i) => {
+      const fromUser = i < userTexts;
+      return extractOne(text, fromUser).map((item) => (fromUser ? { ...item, fromUser } : item));
+    })
     .filter((item) => {
       const key = duplicateKey(item.content);
       if (seen.has(key) || !assessAutomaticMemory(item.content).accepted) return false;

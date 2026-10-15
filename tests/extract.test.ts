@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { extractFacts } from '../src/learn/extract.js';
+import { extractFromTexts, isStandingRule } from '../src/capture/extract.js';
 
 function mockFetcher(body: string, ok = true): typeof fetch {
   // A real Response satisfies typeof fetch's return type directly, so no
@@ -76,5 +77,77 @@ describe('extractFacts', () => {
     const facts = await extractFacts('text', { apiKey: 'test', fetcher });
     expect(facts).toHaveLength(1);
     expect(facts[0]!.valence).toBe('neutral');
+  });
+});
+
+const STANDING = [
+  'Never edit CHANGELOG.md by hand.',
+  'No: run the linter first, because CI fails without it.',
+  'Always run the formatter before committing.',
+  'Make sure every migration has a down step.',
+  "No, use pnpm here, because the lockfile is pnpm's.",
+  'Right: keep tests beside the code, because the build globs them.',
+  'Wrong, the config lives in the repo root, because the loader walks up from there.',
+  'Not quite: name the branch after the ticket, because the bot reads it.',
+  'Correct, put secrets in the vault, because the env file is committed.',
+  'Never embed secrets in the build.',
+];
+const NOT_STANDING = [
+  'It always marked the override as off.',
+  'Please fix it and make sure the tests pass.',
+  'It never returned the right count.',
+  'This always happened when the cache was cold.',
+  'Please make sure the build passes now.',
+  'No, because it crashed.',
+  'Make sure the tests pass this time.',
+  'No, I tried that already, because it failed.',
+  'Yes, keep doing that, because it works.',
+];
+
+describe('isStandingRule', () => {
+  it.each(STANDING)('accepts %s', (sentence) => expect(isStandingRule(sentence)).toBe(true));
+  it.each(NOT_STANDING)('rejects %s', (sentence) => expect(isStandingRule(sentence)).toBe(false));
+
+  it('lets a standing phrase override a one-off marker', () => {
+    expect(isStandingRule('Always run the linter first, not just this time.')).toBe(true);
+    expect(isStandingRule('From now on make sure the tests pass.')).toBe(true);
+  });
+});
+
+describe("capture reads a person's reply as a rule", () => {
+  const REPLIES = STANDING.filter((s) => /^(?:no|yes|right|correct|wrong|not quite)\b/i.test(s));
+
+  it.each(REPLIES)('extracts %s as a rule from the person', (reply) => {
+    const [item, ...rest] = extractFromTexts([reply], 1);
+    expect(rest).toEqual([]);
+    expect(item).toMatchObject({ category: 'rule', fromUser: true });
+  });
+
+  it('keeps the whole reply, opener and reason included', () => {
+    const [item] = extractFromTexts(['Yes, keep doing that: squash before merging, because history stays readable.'], 1);
+    expect(item.content).toBe('Yes, keep doing that: squash before merging, because history stays readable');
+  });
+
+  it('joins a reply split over sentences up to the one that gives the reason', () => {
+    const items = extractFromTexts(['No: put each migration in its own file. Name the file after the ticket. Keep it small, because the review bot reads them.'], 1);
+    expect(items.map((i) => i.content)).toEqual([
+      'No: put each migration in its own file. Name the file after the ticket. Keep it small, because the review bot reads them',
+    ]);
+  });
+
+  it('does not reach past four sentences for a reason', () => {
+    const text = 'No: put each migration in its own file. Name the file after the ticket. Keep it small. Review it twice. It reads well, because the bot parses it.';
+    expect(extractFromTexts([text], 1).filter((i) => i.content.startsWith('No:'))).toEqual([]);
+  });
+
+  it('reads agent text with a reply opener exactly as before', () => {
+    expect(extractFromTexts(['No: run the linter first, because CI fails without it.'])).toEqual([]);
+    expect(extractFromTexts(['No, never edit the lockfile by hand, because CI diffs it.'])).toEqual([
+      { content: 'No, never edit the lockfile by hand, because CI diffs it', category: 'rule', tags: ['rule', 'captured'] },
+    ]);
+  });
+
+  it('leaves a bare reason with no statement before it uncaptured', () => {
+    expect(extractFromTexts(['No, because it crashed.'], 1)).toEqual([]);
   });
 });
