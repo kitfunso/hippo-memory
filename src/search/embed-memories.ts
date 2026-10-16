@@ -193,6 +193,13 @@ function embedFailureKey(source: string, cause: unknown): string {
   return `${source}:${kind}`;
 }
 
+// A loop, not /\.+$/: that regex retries from every dot, so a provider error with a long run of dots costs O(n^2).
+function withoutTrailingDots(text: string): string {
+  let end = text.length;
+  while (end > 0 && text[end - 1] === '.') end -= 1;
+  return text.slice(0, end);
+}
+
 function warnEmbedFailureOnce(source: string, rawMessage: string, cause?: unknown): void {
   const key = embedFailureKey(source, cause);
   const now = Date.now();
@@ -218,7 +225,7 @@ function warnEmbedFailureOnce(source: string, rawMessage: string, cause?: unknow
   }
   embedFailureSeen.set(key, { lastNoticeAt: now, suppressed: 0 });
   // Strict scrub: this line can land in a hook log file, and an API may echo the key back in its error body.
-  const message = redactSecretsStrict(rawMessage).replace(/\s+/g, ' ').replace(/\.+$/, '');
+  const message = withoutTrailingDots(redactSecretsStrict(rawMessage).replace(/\s+/g, ' '));
   log.warn(`embedding failed (${source}): ${message}. Memories are stored without embeddings until this is fixed.`);
 }
 

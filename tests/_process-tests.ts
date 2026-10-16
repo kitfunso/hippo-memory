@@ -63,6 +63,7 @@ export const PROCESS_TESTS: readonly string[] = [
   'compaction-replay.test.ts',
   'compaction-save-failures.test.ts',
   'concurrent-writers-wait.test.ts',
+  'config-reads-ratchet.test.ts',
   'connector-events-conformance.test.ts',
   'connector-events-store.test.ts',
   'connector-writes-conformance.test.ts',
