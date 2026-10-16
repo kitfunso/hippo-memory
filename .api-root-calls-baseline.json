@@ -9,7 +9,7 @@
   "src/api/memories/remember.ts": 1,
   "src/api/pilot-arm.ts": 1,
   "src/api/recall/pipeline.ts": 2,
-  "src/api/recall/rows.ts": 2,
+  "src/api/recall/rows.ts": 1,
   "src/api/session-end.ts": 1,
   "src/api/sleep/auto-sleep.ts": 1,
   "src/api/sleep/dormant.ts": 1,

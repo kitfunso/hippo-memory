@@ -73,7 +73,7 @@ async function cmdExplain(
   const engine = engineFlags(flags, config);
   // Priced as recall prints each result, so explain returns what recall's engines would.
   const cost = (r: SearchResult): number =>
-    printedTokens(recallEntryText(r, query, false, origin.isGlobal(r.entry.id)));
+    printedTokens(recallEntryText(r, query, false, origin.isGlobal(r)));
   const entryBudget = Math.max(0, budget - printedTokens(recallHeading(budget, budget, query)));
 
   const slot: InspectedSlot = {};

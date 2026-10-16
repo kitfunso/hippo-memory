@@ -49,6 +49,9 @@ function sanitizeRerankSteps(
   }));
 }
 
+// Six binds a row; 100 rows is 600, under the 999 floor of SQLite's bound-parameter limit.
+const RESULT_ROWS_PER_INSERT = 100;
+
 /** Insert a `recall_traces` row and its results rows in ONE transaction on the given connection. Fail-soft: logs to
  * stderr and returns null on failure. api.recall/getContext reach this via `finishRecallAt` on their own handle. */
 export function writeRecallTrace(db: DatabaseSyncLike, input: RecallTraceInput): number | null {
@@ -73,20 +76,21 @@ export function writeRecallTrace(db: DatabaseSyncLike, input: RecallTraceInput):
       );
       const traceId = Number(traceResult.lastInsertRowid);
 
-      const insertResult = db.prepare(`
-        INSERT INTO recall_trace_results (trace_id, tenant_id, memory_id, result_rank, score, rerank_json)
-        VALUES (?, ?, ?, ?, ?, ?)
-      `);
-      input.results.forEach((r, i) => {
-        insertResult.run(
+      for (let from = 0; from < input.results.length; from += RESULT_ROWS_PER_INSERT) {
+        const chunk = input.results.slice(from, from + RESULT_ROWS_PER_INSERT);
+        const binds = chunk.flatMap((r, i) => [
           traceId,
           input.tenantId,
           r.memoryId,
-          i + 1,
+          from + i + 1,
           r.score,
           r.rerankSteps && r.rerankSteps.length > 0 ? JSON.stringify(sanitizeRerankSteps(r.rerankSteps)) : null,
-        );
-      });
+        ]);
+        db.prepare(`
+          INSERT INTO recall_trace_results (trace_id, tenant_id, memory_id, result_rank, score, rerank_json)
+          VALUES ${chunk.map(() => '(?, ?, ?, ?, ?, ?)').join(', ')}
+        `).run(...binds);
+      }
 
       return traceId;
     });

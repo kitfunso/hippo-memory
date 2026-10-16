@@ -150,13 +150,29 @@ function searchPredicates(
   };
 }
 
+const STATEMENT_CACHE_MAX = 32;
+const statementCache = new WeakMap<DatabaseSyncLike, Map<string, ReturnType<DatabaseSyncLike['prepare']>>>();
+
+/** The hot candidate queries run on every recall; keyed by handle, so a closed handle takes its statements along. */
+function cachedStatement(db: DatabaseSyncLike, sql: string): ReturnType<DatabaseSyncLike['prepare']> {
+  let byText = statementCache.get(db);
+  if (!byText) statementCache.set(db, (byText = new Map()));
+  let stmt = byText.get(sql);
+  if (!stmt) {
+    // Tenant and scope clauses vary the text, so the cap keeps a long-lived handle from growing without bound.
+    if (byText.size >= STATEMENT_CACHE_MAX) byText.clear();
+    byText.set(sql, (stmt = db.prepare(sql)));
+  }
+  return stmt;
+}
+
 /** Every admitted row, oldest first; the no-terms path and the last-resort fallback share it. */
 function selectAllCandidates(db: DatabaseSyncLike, p: SearchPredicates, limit: number): MemoryRow[] {
   const sql = `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories${p.tenantOnlyPredicate}${p.archivedClauseTenantOnly}` +
     `${p.plainScope.sql}${p.currentNoAlias} ORDER BY created ASC, id ASC LIMIT ?`;
   // SAFETY: sql selects exactly MEMORY_SELECT_COLUMNS, whose column list
   // matches MemoryRow's field set.
-  return db.prepare(sql).all(...p.tenantParams, ...p.scopeParams, limit) as MemoryRow[];
+  return cachedStatement(db, sql).all(...p.tenantParams, ...p.scopeParams, limit) as MemoryRow[];
 }
 
 /** FTS5 bm25 matches; empty when none match or FTS5 cannot run the query. */
@@ -166,7 +182,7 @@ function selectFtsCandidates(db: DatabaseSyncLike, terms: string[], p: SearchPre
     // memories_fts has no tenant_id column; filter via the joined memories row (cheap with
     // idx_memories_tenant_created). SAFETY: MEMORY_SEARCH_COLUMNS aliases every column like MEMORY_SELECT_COLUMNS (plus
     // bm25_score), matching MemoryRow.
-    return db.prepare(`
+    return cachedStatement(db, `
         SELECT ${MEMORY_SEARCH_COLUMNS}
         FROM memories m
         JOIN memories_fts f ON f.id = m.id
@@ -204,7 +220,7 @@ function selectLikeCandidates(db: DatabaseSyncLike, terms: string[], p: SearchPr
 
   // SHORTCUT: no index serves a substring, so a match older than the window is missed; an FTS5 trigram index is the
   // upgrade. SAFETY: the outer query selects exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
-  return db.prepare(`
+  return cachedStatement(db, `
     SELECT ${MEMORY_SELECT_COLUMNS}
     FROM (
       SELECT ${MEMORY_SELECT_COLUMNS}, updated_at

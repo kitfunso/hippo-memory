@@ -10,7 +10,6 @@ import type { RerankerFn } from '../../rerankers/types.js';
 import { explainMatch } from '../../search/explain.js';
 import { fitBudget } from '../../search/finalize.js';
 import { detectScope } from '../../core/active-scope.js';
-import { loadIndex } from '../../store/index-and-stats.js';
 import type { ContinuityBlock } from '../../store/port.js';
 import { passesCliRecallScopeFilter, passesScopeFilterForRecall } from '../../core/recall-scope.js';
 import { loadSearchEntries } from '../../store/search-rows.js';
@@ -36,17 +35,13 @@ export function cliRecallSetting(ctx: Context, explicitScope: string | null): Cl
 
 export interface CliRecallOrigin {
   readonly globalOn: boolean;
-  /**
-   * True when a ranked row came from the global store: this store is it, or the global store is on and this one lacks
-   * the id.
-   */
-  readonly isGlobal: (id: string) => boolean;
+  /** True when a ranked row came from the global store: this store is it, or the merge tagged the row global. */
+  readonly isGlobal: (r: SearchResult) => boolean;
 }
 
 export function cliRecallOrigin(ctx: Context, setting: CliRecallSetting): CliRecallOrigin {
-  const localIndex = loadIndex(ctx.hippoRoot);
   const globalOn = ctx.reach?.global !== undefined;
-  return { globalOn, isGlobal: (id) => setting.primaryIsGlobal || (globalOn && !localIndex.entries[id]) };
+  return { globalOn, isGlobal: (r) => setting.primaryIsGlobal || (globalOn && r.isGlobal === true) };
 }
 
 /** How many of `query`'s search candidates the scope rule hides from a recall asking for `requested`; the read is

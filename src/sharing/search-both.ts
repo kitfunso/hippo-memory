@@ -185,6 +185,11 @@ export async function searchBothHybrid(
   return rankBothStores(query, roots, { local: localEntries, global: globalEntries }, vectorCandidates, options);
 }
 
+/** Each store prices its rows already tagged, so a price that reads the store origin sees it before the merge. */
+function pricedAs(cost: ResultCost | undefined, isGlobal: boolean): ResultCost | undefined {
+  return cost && ((r) => cost({ ...r, isGlobal }));
+}
+
 /** Hybrid ranking of rows already loaded from each store: the local bump, one copy per text, then the shared budget. */
 export async function rankBothStores(
   query: string,
@@ -200,11 +205,12 @@ export async function rankBothStores(
   if (entries.local.length === 0 && entries.global.length === 0) return [];
   // One deadline for both stores, so a provider that stalls on the first is not waited on again for the second.
   const shared = {
-    budget, now, embeddingWeight, explain, mmr, mmrLambda, minResults, cost, scope, includeSuperseded, asOf,
+    budget, now, embeddingWeight, explain, mmr, mmrLambda, minResults, scope, includeSuperseded, asOf,
     summaryDeboost, summaryFreshness, vectorCandidates, queryEmbedDeadline: startQueryEmbedDeadline(),
   };
-  const localResults = await hybridSearch(query, entries.local, { ...shared, hippoRoot: roots.local });
-  const globalResults = await hybridSearch(query, entries.global, { ...shared, hippoRoot: roots.global });
+  const side = (isGlobal: boolean) => ({ ...shared, cost: pricedAs(cost, isGlobal) });
+  const localResults = await hybridSearch(query, entries.local, { ...side(false), hippoRoot: roots.local });
+  const globalResults = await hybridSearch(query, entries.global, { ...side(true), hippoRoot: roots.global });
 
   // Tag global results. Local memories get a configurable priority bump.
   const tagged: Array<SearchResult & { isGlobal: boolean }> = [

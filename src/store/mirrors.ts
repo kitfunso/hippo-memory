@@ -426,13 +426,33 @@ export function mirrorBestEffort(what: string, write: () => void): void {
   }
 }
 
+/** Rows per page when every memory is walked, so a large store never sits in memory whole. */
+const MIRROR_PAGE_ROWS = 500;
+
+/** Pages through every row by rowid: each file is independent of the others, so row order does not reach the output,
+ * and rowid keeps each page a seek (no index covers `created, id`). */
+function* pagedMemoryRows(db: ReturnType<typeof openHippoDb>): Generator<MemoryEntry[]> {
+  // SAFETY: this query selects exactly MEMORY_SELECT_COLUMNS beside the rowid, matching MemoryRow's field set.
+  const page = db.prepare(
+    `SELECT rowid AS page_rowid, ${MEMORY_SELECT_COLUMNS} FROM memories WHERE rowid > ? ORDER BY rowid LIMIT ?`,
+  );
+  let after = 0;
+  for (;;) {
+    // SAFETY: the SELECT above names page_rowid plus exactly MEMORY_SELECT_COLUMNS.
+    const rows = page.all(after, MIRROR_PAGE_ROWS) as Array<MemoryRow & { page_rowid: number }>;
+    if (rows.length === 0) return;
+    after = rows[rows.length - 1]!.page_rowid;
+    yield rows.map(rowToEntry);
+  }
+}
+
 export function syncMirrorFiles(hippoRoot: string, db: ReturnType<typeof openHippoDb>): void {
-  // SAFETY: this query selects exactly MEMORY_SELECT_COLUMNS, matching
-  // MemoryRow's field set.
-  const entries = db
-    .prepare(`SELECT ${MEMORY_SELECT_COLUMNS} FROM memories ORDER BY created ASC, id ASC`)
-    .all() as MemoryRow[];
-  syncChangedMirrors(hippoRoot, db, entries.map(rowToEntry));
+  mirrorBestEffort('markdown mirrors', () => {
+    for (const entries of pagedMemoryRows(db)) {
+      for (const entry of entries) writeMarkdownMirror(hippoRoot, entry);
+    }
+  });
+  syncSideMirrors(hippoRoot, db);
 }
 
 /** syncMirrorFiles for a pass that changed only `changed`: the other rows' markdown is already current. */
@@ -444,7 +464,11 @@ export function syncChangedMirrors(
   mirrorBestEffort('markdown mirrors', () => {
     for (const entry of changed) writeMarkdownMirror(hippoRoot, entry);
   });
+  syncSideMirrors(hippoRoot, db);
+}
 
+/** The conflict and stats mirrors, which a full sync and a partial one refresh alike. */
+function syncSideMirrors(hippoRoot: string, db: ReturnType<typeof openHippoDb>): void {
   // SAFETY: conflicts' shape matches the eight columns named in the SELECT
   // above.
   const conflicts = db

@@ -63,7 +63,7 @@ export function loadPhysicsState(
       const chunk = memoryIds.slice(i, i + PHYSICS_ID_CHUNK);
       const marks = placeholders(chunk.length);
       // SAFETY: the SELECT projects exactly the PhysicsRow columns, in order.
-      rows = rows.concat(db.prepare(
+      rows.push(...db.prepare(
         `SELECT memory_id, position_blob, velocity_blob, mass, charge, temperature, last_simulation
          FROM memory_physics WHERE memory_id IN (${marks})`
       ).all(...chunk) as PhysicsRow[]);
