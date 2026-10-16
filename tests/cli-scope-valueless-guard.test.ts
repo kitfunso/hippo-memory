@@ -28,6 +28,7 @@ import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { hippoOut, hippoRun as spawnHippo } from './_helpers/spawn-hippo.js';
+import { ROUTED_CLI_ENV } from './_helpers/routed-cli-env.js';
 
 const HIPPO_BIN = join(process.cwd(), 'bin', 'hippo.js');
 const USAGE_MSG = '--scope requires a non-empty value (e.g. --scope slack:private:C1).';
@@ -65,7 +66,7 @@ function hippoAsync(
   return new Promise((resolve) => {
     const child = spawn('node', [HIPPO_BIN, ...args], {
       cwd,
-      env: { ...process.env, ...env },
+      env: { ...process.env, ...ROUTED_CLI_ENV, ...env },
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     let stdout = '';
