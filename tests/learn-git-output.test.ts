@@ -60,7 +60,7 @@ function seededStore(): string {
 }
 
 function rowsOf(root: string): Record<string, { source: string; confidence: string; tags: string[] }> {
-  return Object.fromEntries(loadAllEntries(root).map((e) => [e.content, { source: e.source, confidence: e.confidence, tags: e.tags }]));
+  return Object.fromEntries(loadAllEntries(root, 'default').map((e) => [e.content, { source: e.source, confidence: e.confidence, tags: e.tags }]));
 }
 
 async function learn(root: string, flags: Record<string, string | boolean>, repo = ''): Promise<{ status: number; stdout: string; stderr: string }> {

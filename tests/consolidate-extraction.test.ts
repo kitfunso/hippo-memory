@@ -43,7 +43,7 @@ describe('Extracted fact protection', () => {
 
     expect(result.merged).toBe(0);
 
-    const remaining = loadAllEntries(tmpDir);
+    const remaining = loadAllEntries(tmpDir, 'default');
     const f1 = remaining.find((e) => e.id === fact1.id);
     const f2 = remaining.find((e) => e.id === fact2.id);
     expect(f1).toBeDefined();

@@ -88,7 +88,7 @@ describe('shared store origin stamp', () => {
   it('the batch write path stamps NULL on a flagged store', () => {
     for (const { store } of layouts(true)) {
       batchWriteAndDelete(store, [createMemory('a consolidated summary of the release notes')], []);
-      const [entry] = loadAllEntries(store);
+      const [entry] = loadAllEntries(store, 'default');
       expect(entry?.origin_project).toBeNull();
     }
   });
@@ -135,7 +135,7 @@ describe('shared store origin stamp', () => {
     writeEntry(getGlobalRoot(), { ...createMemory('my personal shell aliases live in dotfiles'), origin_project: '' });
     for (const { store } of layouts(true)) {
       expect(() => syncGlobalToLocal(store, getGlobalRoot())).toThrow(BadRequestError);
-      expect(loadAllEntries(store)).toHaveLength(0);
+      expect(loadAllEntries(store, 'default')).toHaveLength(0);
     }
   });
 
@@ -144,7 +144,7 @@ describe('shared store origin stamp', () => {
     writeEntry(getGlobalRoot(), { ...createMemory('my personal shell aliases live in dotfiles'), origin_project: '' });
     for (const { store } of layouts(false)) {
       expect(syncGlobalToLocal(store, getGlobalRoot())).toBe(1);
-      expect(loadAllEntries(store)).toHaveLength(1);
+      expect(loadAllEntries(store, 'default')).toHaveLength(1);
     }
   });
 
@@ -205,7 +205,7 @@ function compact(store: string, cwd: string | null): void {
 }
 
 const itemOrigins = (store: string): ReadonlyArray<string | null | undefined> =>
-  loadAllEntries(store).filter((e) => e.tags.includes(COMPACTION_MEMORY_TAG)).map((e) => e.origin_project);
+  loadAllEntries(store, 'default').filter((e) => e.tags.includes(COMPACTION_MEMORY_TAG)).map((e) => e.origin_project);
 
 describe('compaction items', () => {
   it("take the session folder's project on a flagged store", () => {

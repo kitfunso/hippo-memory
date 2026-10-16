@@ -49,7 +49,7 @@ function seed(text: string, origin: string | null): MemoryEntry {
   return entry;
 }
 
-const originOf = (id: string): string | null | undefined => loadAllEntries(hippoRoot).find((e) => e.id === id)?.origin_project;
+const originOf = (id: string): string | null | undefined => loadAllEntries(hippoRoot, 'default').find((e) => e.id === id)?.origin_project;
 
 describe('hippo projects', () => {
   it('lists each project name with its live memory count', async () => {

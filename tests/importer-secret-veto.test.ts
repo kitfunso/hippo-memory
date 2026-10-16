@@ -72,7 +72,7 @@ describe('agent memory import secret veto', () => {
     // Only the benign file is ingested.
     expect([tally.imported, tally.secret]).toEqual([1, 1]);
 
-    const entries = loadAllEntries(hippoRoot);
+    const entries = loadAllEntries(hippoRoot, 'default');
     const joined = entries.map(e => e.content).join('\n');
 
     // The benign lesson is present...

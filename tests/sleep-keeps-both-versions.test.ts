@@ -87,8 +87,8 @@ async function mcp(root: string, name: string, args: ToolArgs): Promise<string> 
   return result?.content?.[0]?.text ?? '';
 }
 
-const merged = (root: string): MemoryEntry[] => loadAllEntries(root).filter((e) => e.source === 'consolidation');
-const activeText = (root: string): string => loadAllEntries(root).map((e) => e.content).join('\n');
+const merged = (root: string): MemoryEntry[] => loadAllEntries(root, 'default').filter((e) => e.source === 'consolidation');
+const activeText = (root: string): string => loadAllEntries(root, 'default').map((e) => e.content).join('\n');
 
 function halfLifeKept(root: string, entries: MemoryEntry[]): void {
   for (const e of entries) expect(readEntry(root, e.id)!.half_life_days).toBe(e.half_life_days);
@@ -154,7 +154,7 @@ describe('sleep keeps both versions', () => {
     const start = Date.now();
 
     expect((await consolidate(root, { now: new Date(start + DAY) })).semanticCreated).toBe(1);
-    const derived = loadAllEntries(root).filter((e) => e.layer === Layer.Semantic);
+    const derived = loadAllEntries(root, 'default').filter((e) => e.layer === Layer.Semantic);
     expect(derived).toHaveLength(1);
     expect([...derived[0].parents].sort()).toEqual([a.id, b.id].sort());
     const demoted = readEntry(root, a.id)!.half_life_days;
@@ -167,7 +167,7 @@ describe('sleep keeps both versions', () => {
     }
     expect(readEntry(root, a.id)!.half_life_days).toBe(demoted);
     expect(readEntry(root, b.id)!.half_life_days).toBe(demoted);
-    expect(loadAllEntries(root).filter((e) => e.layer === Layer.Semantic)).toHaveLength(1);
+    expect(loadAllEntries(root, 'default').filter((e) => e.layer === Layer.Semantic)).toHaveLength(1);
   });
 
   it('dedup keeps a pair whose text differs in a value', () => {
@@ -181,7 +181,7 @@ describe('sleep keeps both versions', () => {
     for (const text of pairs.flat()) writeEntry(root, createMemory(text));
 
     expect(deduplicateStore(sqliteConsolidation(root)).removed).toBe(0);
-    expect(loadAllEntries(root)).toHaveLength(6);
+    expect(loadAllEntries(root, 'default')).toHaveLength(6);
   });
 
   it('dedup removes a copy of the same text whatever the threshold says', () => {
@@ -190,12 +190,12 @@ describe('sleep keeps both versions', () => {
     for (const t of [text, text.replace(' ', '  ')]) writeEntry(root, createMemory(t));
 
     expect(deduplicateStore(sqliteConsolidation(root), { threshold: 1 }).removed).toBe(1);
-    expect(loadAllEntries(root)).toHaveLength(1);
+    expect(loadAllEntries(root, 'default')).toHaveLength(1);
 
     const cli = newRoot();
     for (const t of [text, text.replace(' ', '  ')]) writeEntry(cli, createMemory(t));
     hippo(cli, 'dedup', '--threshold', '1');
-    expect(loadAllEntries(cli)).toHaveLength(1);
+    expect(loadAllEntries(cli, 'default')).toHaveLength(1);
   });
 });
 
@@ -346,7 +346,7 @@ describe('a retired version leaves the merged row', () => {
   const NEW = 'The web app dev server now runs on port 5173 locally.';
   const ctx = (root: string): FullContext => (apiCtx(root, 'default', api.adminActor('cli')));
   const recalled = async (root: string): Promise<string> => (await api.retrieve(ctx(root), { query: 'web app dev server port' })).results.map((r) => r.content).join('\n');
-  const current = (root: string): string => loadAllEntries(root).filter((e) => !e.superseded_by).map((e) => e.content).join('\n');
+  const current = (root: string): string => loadAllEntries(root, 'default').filter((e) => !e.superseded_by).map((e) => e.content).join('\n');
 
   async function mergedPair(): Promise<{ root: string; old: MemoryEntry; next: MemoryEntry; row: MemoryEntry }> {
     vi.stubEnv('HIPPO_HOME', join(tmp(), 'global'));
@@ -367,7 +367,7 @@ describe('a retired version leaves the merged row', () => {
 
     const [kept] = merged(root);
     expect(out).toContain(`keep their other texts in: ${kept.id}`);
-    expect(loadAllEntries(root).map((e) => e.id)).not.toContain(row.id);
+    expect(loadAllEntries(root, 'default').map((e) => e.id)).not.toContain(row.id);
     expect(kept.content).toBe(`[Consolidated from 1 related memory, newest first]\n\n- ${NEW}`);
     expect(kept.parents).toEqual([next.id]);
     expect(current(root)).not.toContain(OLD);
@@ -414,7 +414,7 @@ describe('a retired version leaves the merged row', () => {
 
     await consolidate(root, { now: new Date(Date.now() + DAY) });
 
-    const ids = loadAllEntries(root).map((e) => e.id);
+    const ids = loadAllEntries(root, 'default').map((e) => e.id);
     expect(ids).not.toContain(row.id);
     expect(ids).not.toContain(legacy.id);
     expect(merged(root).map((e) => [e.content, e.parents])).toEqual([[`[Consolidated from 1 related memory, newest first]\n\n- ${NEW}`, [next.id]]]);
@@ -518,7 +518,7 @@ describe('a new value is never skipped as a copy of an old one', () => {
   // Equal for their first 200 characters, all that the old share and search keys compared.
   const LONG_OLD = `${'The deploy runbook covers build, migrate, warm the cache and flip traffic. '.repeat(3)}The dev server port is 3000.`;
   const LONG_NEW = LONG_OLD.replace('3000', '5173');
-  const texts = (root: string): string[] => loadAllEntries(root).map((e) => e.content);
+  const texts = (root: string): string[] => loadAllEntries(root, 'default').map((e) => e.content);
 
   function commit(repo: string, message: string): void {
     const git = (...args: string[]): void => { execFileSync('git', args, { cwd: repo, env: hermeticEnv(), stdio: 'ignore' }); };

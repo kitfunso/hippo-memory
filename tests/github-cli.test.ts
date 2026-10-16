@@ -169,7 +169,7 @@ describe('hippo github CLI', () => {
     expect(json.ingested.issues).toBe(1);
     expect(json.pages.issues).toBe(1);
     // Verify the row actually landed in the store.
-    const all = loadAllEntries(hippoRoot);
+    const all = loadAllEntries(hippoRoot, 'default');
     expect(all.length).toBeGreaterThan(0);
   });
 
@@ -256,7 +256,7 @@ describe('hippo github CLI', () => {
       GITHUB_WEBHOOK_SECRET_PREVIOUS: '',
     });
   const liveRaws = (artifactRef: string) =>
-    loadAllEntries(hippoRoot).filter((e) => e.kind === 'raw' && e.artifact_ref === artifactRef);
+    loadAllEntries(hippoRoot, 'default').filter((e) => e.kind === 'raw' && e.artifact_ref === artifactRef);
   const retryCountOf = (id: number) =>
     listDlq(githubDlq, hippoRoot, { tenantId: 'default' }).find((row) => row.id === id)?.retryCount;
 
@@ -284,13 +284,13 @@ describe('hippo github CLI', () => {
       expect(archived.status).toBe(0);
       expect(archived.stdout).toContain('replay ok: status=replayed memory_id=archived retry_count=1');
       expect(liveRaws(artifactRef)).toHaveLength(0);
-      expect(loadAllEntries(hippoRoot)).toHaveLength(0);
+      expect(loadAllEntries(hippoRoot, 'default')).toHaveLength(0);
 
       // A second replay has nothing left to archive and still stores nothing.
       const again = replay(deleted);
       expect(again.status).toBe(0);
       expect(again.stdout).toContain('replay ok: status=replayed memory_id=(none) retry_count=2');
-      expect(loadAllEntries(hippoRoot)).toHaveLength(0);
+      expect(loadAllEntries(hippoRoot, 'default')).toHaveLength(0);
     },
   );
 
@@ -301,7 +301,7 @@ describe('hippo github CLI', () => {
 
     expect(r.status).toBe(0);
     expect(r.stdout).toContain('replay ok: status=replayed memory_id=(none) retry_count=1');
-    expect(loadAllEntries(hippoRoot)).toHaveLength(0);
+    expect(loadAllEntries(hippoRoot, 'default')).toHaveLength(0);
     expect(retryCountOf(id)).toBe(1);
   });
 
@@ -311,7 +311,7 @@ describe('hippo github CLI', () => {
     const refused = replay(id);
     expect(refused.status).toBe(1);
     expect(refused.stderr).toContain('replay failed: status=sig_fail retry_count=1 reason=signature did not verify');
-    expect(loadAllEntries(hippoRoot)).toHaveLength(0);
+    expect(loadAllEntries(hippoRoot, 'default')).toHaveLength(0);
 
     const rotated = runCli(root, ['github', 'dlq', 'replay', String(id)], {
       GITHUB_WEBHOOK_SECRET: SECRET,
@@ -361,7 +361,7 @@ describe('hippo github CLI', () => {
     [true, 3],
   ] as const)('backfill --max %s ingests %i of three issues', async (max, expected) => {
     expect(await ingestedOfThreeIssues('acme/widgets', max)).toBe(expected);
-    const stored = loadAllEntries(hippoRoot).filter((e) => e.artifact_ref?.startsWith('github://acme/widgets/issue/'));
+    const stored = loadAllEntries(hippoRoot, 'default').filter((e) => e.artifact_ref?.startsWith('github://acme/widgets/issue/'));
     expect(stored).toHaveLength(expected);
   });
 });

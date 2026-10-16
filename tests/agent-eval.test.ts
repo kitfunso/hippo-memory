@@ -241,7 +241,7 @@ function simulate(tasks: Task[], mode: 'none' | 'static' | 'hippo'): SimResult[]
     }
 
     // Search memory for relevant guidance
-    const entries = loadAllEntries(tmpDir);
+    const entries = loadAllEntries(tmpDir, 'default');
     const searchResults = search(task.recallQuery, entries, { budget: 4000 });
     const topIds = searchResults.slice(0, 5);
 

@@ -47,7 +47,7 @@ describe('loadEntriesMentioning on the FTS path', () => {
   afterEach(() => rmSync(root, { recursive: true, force: true }));
 
   it('finds every near-duplicate the full read finds, with and without FTS5', () => {
-    const everyRow = loadAllEntries(root);
+    const everyRow = loadAllEntries(root, 'default');
     for (const lesson of LESSONS) {
       const expected = deduplicateLesson(everyRow, lesson, 0.3);
       expect(deduplicateLesson(root, lesson, 0.3)).toBe(expected);

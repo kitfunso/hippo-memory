@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { initStore } from '../src/store/open.js';
-import { loadAllEntries } from '../src/store/entry-reads.js';
+import { loadEveryTenantEntries } from '../src/store/entry-reads.js';
 import { ingestMessage } from '../src/connectors/slack/ingest.js';
 import { handleMessageDeleted } from '../src/connectors/slack/deletion.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
@@ -34,7 +34,7 @@ describe('handleMessageDeleted', () => {
     });
     expect(result.status).toBe('archived');
 
-    const remaining = loadAllEntries(root).filter((e) => e.id === ingested.memoryId);
+    const remaining = loadEveryTenantEntries(root).filter((e) => e.id === ingested.memoryId);
     expect(remaining).toHaveLength(0);
 
     // raw_archive table now has the row.
@@ -76,7 +76,7 @@ describe('handleMessageDeleted', () => {
     expect(r.status).toBe('not_found');
 
     // Acme row is still there; raw_archive has no row.
-    const remaining = loadAllEntries(root).filter((e) => e.id === ingested.memoryId);
+    const remaining = loadEveryTenantEntries(root).filter((e) => e.id === ingested.memoryId);
     expect(remaining).toHaveLength(1);
     const db = openHippoDb(root);
     try {

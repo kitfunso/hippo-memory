@@ -635,7 +635,8 @@ describe('cli thin-client mode', () => {
   it('remember --scope X relays through a live server and the stored row envelope scope is X', async () => {
     const workspace = makeWorkspace();
     const hippoRoot = join(workspace, '.hippo');
-    const handle: ServerHandle = await serve({ hippoRoot, port: 0 });
+    // A keyless member may not write a private scope it cannot read, so the operator names admin.
+    const handle: ServerHandle = await serve({ hippoRoot, port: 0, keylessLocalRole: 'admin' });
     try {
       const { stdout, stderr } = await runCliAsync(workspace, 'remember', 'thin client scope canary content', '--scope', 'slack:private:CX');
       expect(stdout, `stderr: ${stderr}`).toMatch(/Remembered/);

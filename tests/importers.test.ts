@@ -64,7 +64,7 @@ describe('importChatGPT - JSON array of strings', () => {
     expect(result.skipped).toBe(0);
     expect(result.entries).toHaveLength(3);
 
-    const all = loadAllEntries(tmpDir);
+    const all = loadAllEntries(tmpDir, 'default');
     expect(all).toHaveLength(3);
     expect(all[0].tags).toContain('imported');
     expect(all[0].tags).toContain('chatgpt');
@@ -86,7 +86,7 @@ describe('importChatGPT - object format with memories key', () => {
     expect(result.total).toBe(2);
     expect(result.imported).toBe(2);
 
-    const all = loadAllEntries(tmpDir);
+    const all = loadAllEntries(tmpDir, 'default');
     expect(all.map((e) => e.content)).toContain('Prefer concise answers');
     expect(all.map((e) => e.content)).toContain('Use dark mode everywhere');
   });
@@ -105,7 +105,7 @@ describe('importChatGPT - plain text', () => {
     expect(result.total).toBe(3);
     expect(result.imported).toBe(3);
 
-    const all = loadAllEntries(tmpDir);
+    const all = loadAllEntries(tmpDir, 'default');
     expect(all).toHaveLength(3);
     expect(all.map((e) => e.content)).toContain('I like jazz music');
   });
@@ -137,7 +137,7 @@ describe('importClaude - CLAUDE.md', () => {
     const result = importClaude(file, makeOpts());
     expect(result.imported).toBeGreaterThan(0);
 
-    const all = loadAllEntries(tmpDir);
+    const all = loadAllEntries(tmpDir, 'default');
     const contents = all.map((e) => e.content);
 
     // Should contain rules
@@ -176,7 +176,7 @@ describe('importCursor - .cursorrules', () => {
     const result = importCursor(file, makeOpts());
     expect(result.imported).toBeGreaterThanOrEqual(4);
 
-    const all = loadAllEntries(tmpDir);
+    const all = loadAllEntries(tmpDir, 'default');
     expect(all.some((e) => e.content.includes('Write tests'))).toBe(true);
     expect(all.some((e) => e.content.includes('const'))).toBe(true);
 
@@ -206,7 +206,7 @@ describe('importCursor - .cursor/rules folder', () => {
     const result = importCursor(rules, makeOpts());
 
     expect(result.imported).toBe(3);
-    expect(loadAllEntries(tmpDir).map((e) => e.content).sort()).toEqual([
+    expect(loadAllEntries(tmpDir, 'default').map((e) => e.content).sort()).toEqual([
       'Keep React components under 200 lines',
       'Prefer named exports over default exports',
       'Run the full test suite before every push',
@@ -235,7 +235,7 @@ describe('importGenericFile - markdown', () => {
     const result = importGenericFile(file, makeOpts());
     expect(result.imported).toBeGreaterThanOrEqual(4);
 
-    const all = loadAllEntries(tmpDir);
+    const all = loadAllEntries(tmpDir, 'default');
     expect(all.some((e) => e.content.includes('plural nouns'))).toBe(true);
     expect(all.some((e) => e.content.includes('connection pooling'))).toBe(true);
 
@@ -261,7 +261,7 @@ describe('importGenericFile - plain text', () => {
     const result = importGenericFile(file, makeOpts());
     expect(result.imported).toBe(3);
 
-    const all = loadAllEntries(tmpDir);
+    const all = loadAllEntries(tmpDir, 'default');
     expect(all.map((e) => e.content)).toContain('Always validate user input at the boundary.');
   });
 });
@@ -289,7 +289,7 @@ describe('importMarkdown - MEMORY.md format', () => {
     const result = importMarkdown(file, makeOpts());
     expect(result.imported).toBeGreaterThanOrEqual(4);
 
-    const all = loadAllEntries(tmpDir);
+    const all = loadAllEntries(tmpDir, 'default');
 
     const pipelineMem = all.find((e) => e.content.includes('FRED cache'));
     expect(pipelineMem).toBeDefined();
@@ -325,7 +325,7 @@ describe('dedup: import same file twice', () => {
     expect(r2.skipped).toBe(2);
 
     // Only 2 memories total
-    expect(loadAllEntries(tmpDir)).toHaveLength(2);
+    expect(loadAllEntries(tmpDir, 'default')).toHaveLength(2);
   });
 });
 
@@ -345,7 +345,7 @@ describe('dry-run: nothing written', () => {
     expect(result.entries).toHaveLength(2);
 
     // Nothing on disk
-    expect(loadAllEntries(tmpDir)).toHaveLength(0);
+    expect(loadAllEntries(tmpDir, 'default')).toHaveLength(0);
   });
 });
 
@@ -383,7 +383,7 @@ describe('--global: writes to global store', () => {
       const resultLocal = importChatGPT(file, makeOpts({ global: false }));
       expect(resultLocal.imported).toBe(2);
 
-      const localEntries = loadAllEntries(tmpDir);
+      const localEntries = loadAllEntries(tmpDir, 'default');
       expect(localEntries).toHaveLength(2);
     } finally {
       if (prevHippoHome === undefined) delete process.env.HIPPO_HOME;
@@ -413,7 +413,7 @@ describe('min length filter', () => {
     // Short entries counted as skipped
     expect(result.skipped).toBeGreaterThanOrEqual(3);
 
-    const all = loadAllEntries(tmpDir);
+    const all = loadAllEntries(tmpDir, 'default');
     expect(all).toHaveLength(2);
   });
 });
@@ -431,7 +431,7 @@ describe('confidence tiers on imported memories', () => {
 
     importChatGPT(file, makeOpts());
 
-    const all = loadAllEntries(tmpDir);
+    const all = loadAllEntries(tmpDir, 'default');
     for (const e of all) {
       expect(e.confidence).toBe('observed');
     }
@@ -451,7 +451,7 @@ describe('extraTags option', () => {
 
     importGenericFile(file, makeOpts({ extraTags: ['project-x', 'ops'] }));
 
-    const all = loadAllEntries(tmpDir);
+    const all = loadAllEntries(tmpDir, 'default');
     for (const e of all) {
       expect(e.tags).toContain('imported');
       expect(e.tags).toContain('project-x');
@@ -477,13 +477,13 @@ describe('importEntries', () => {
     expect(result).toMatchObject({ total: 3, imported: 2, skipped: 2, rejected: 0, redacted: 0 });
     expect(result.entries.map((e) => e.content.length)).toEqual([1000, 39]);
     expect(result.entries[0].tags).toEqual(['imported', 'extra']);
-    expect(loadAllEntries(tmpDir).map((e) => e.source)).toEqual(['test-source', 'test-source']);
+    expect(loadAllEntries(tmpDir, 'default').map((e) => e.source)).toEqual(['test-source', 'test-source']);
   });
 
   it('dry run writes nothing and does not dedup within the batch', () => {
     const chunk = 'Prefer small pull requests over large ones.';
     const result = importEntries([chunk, chunk], 'test-source', [], { hippoRoot: tmpDir, dryRun: true });
     expect(result).toMatchObject({ total: 2, imported: 2, skipped: 0, rejected: 0 });
-    expect(loadAllEntries(tmpDir)).toEqual([]);
+    expect(loadAllEntries(tmpDir, 'default')).toEqual([]);
   });
 });

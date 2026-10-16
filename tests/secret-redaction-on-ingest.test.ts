@@ -43,7 +43,7 @@ afterEach(() => {
 });
 
 function storedContents(hippoRoot: string = root): string[] {
-  return loadAllEntries(hippoRoot).map((e) => e.content);
+  return loadAllEntries(hippoRoot, 'default').map((e) => e.content);
 }
 
 function expectRedacted(contents: string[], token: string, keptPhrase: string): void {

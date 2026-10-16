@@ -52,9 +52,9 @@ describe('status report reads', () => {
   it('builds the same correction-latency report from the narrow read as from every row', () => {
     seed();
     const narrow = loadCorrectionEntries(root);
-    expect(narrow.length).toBeLessThan(loadAllEntries(root).length);
+    expect(narrow.length).toBeLessThan(loadAllEntries(root, 'default').length);
     const report = buildCorrectionLatency(narrow);
-    expect(report).toEqual(buildCorrectionLatency(loadAllEntries(root)));
+    expect(report).toEqual(buildCorrectionLatency(loadAllEntries(root, 'default')));
     expect(report.count).toBe(2);
     expect(report.extractionCount).toBe(1);
   });
@@ -62,7 +62,7 @@ describe('status report reads', () => {
   it('builds the same provenance report from the raw rows as from every row', () => {
     seed();
     const report = buildProvenanceCoverage(loadRawEntries(root));
-    expect(report).toEqual(buildProvenanceCoverage(loadAllEntries(root)));
+    expect(report).toEqual(buildProvenanceCoverage(loadAllEntries(root, 'default')));
     expect(report.rawTotal).toBe(2);
     expect(report.gaps).toHaveLength(1);
   });

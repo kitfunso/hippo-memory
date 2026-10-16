@@ -15,7 +15,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { loadAllEntries } from '../src/store/entry-reads.js';
+import { loadEveryTenantEntries } from '../src/store/entry-reads.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { runCli as runCliEntry } from '../src/cli.js';
@@ -121,7 +121,7 @@ describe('CLI tenant-scoping', () => {
     const res = await runCli('tenant_b', 'audit', '--fix');
     expect(res.status, res.out).toBe(0);
     expect(res.out).toContain('Removed 1 error-severity');
-    expect(loadAllEntries(hippoRoot).map((e) => e.id)).toEqual([aJunk]);
+    expect(loadEveryTenantEntries(hippoRoot).map((e) => e.id)).toEqual([aJunk]);
 
     const db = openHippoDb(hippoRoot);
     try {
@@ -145,7 +145,7 @@ describe('CLI tenant-scoping', () => {
     const old = seed('tenant_b', 'B original content');
     const res = await runCli('tenant_b', 'supersede', old, 'B replacement content');
     expect(res.status, res.out).toBe(0);
-    const successor = loadAllEntries(hippoRoot).find((e) => e.content === 'B replacement content');
+    const successor = loadEveryTenantEntries(hippoRoot).find((e) => e.content === 'B replacement content');
     expect(successor?.tenant_id).toBe('tenant_b');
   });
 });

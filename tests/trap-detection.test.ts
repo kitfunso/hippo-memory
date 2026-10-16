@@ -173,7 +173,7 @@ afterAll(() => {
 // ---------------------------------------------------------------------------
 
 function recallTop(query: string, n = 5): string[] {
-  const entries = loadAllEntries(tmpDir);
+  const entries = loadAllEntries(tmpDir, 'default');
   const results = search(query, entries, { budget: 8000 });
   return results.slice(0, n).map((r) => r.entry.id);
 }
@@ -293,7 +293,7 @@ describe('Baseline without memory', () => {
     initStore(emptyDir);
 
     try {
-      const entries = loadAllEntries(emptyDir);
+      const entries = loadAllEntries(emptyDir, 'default');
       const results = search('deploying model to production overwrite file', entries, { budget: 8000 });
       // No memories -> no results -> agent has no guidance
       expect(results.length).toBe(0);
@@ -309,7 +309,7 @@ describe('Baseline without memory', () => {
     let caughtWithout = 0;
     try {
       for (const trap of trapDefs) {
-        const entries = loadAllEntries(emptyDir);
+        const entries = loadAllEntries(emptyDir, 'default');
         const topIds = search(trap.recall_query, entries, { budget: 8000 })
           .slice(0, 5)
           .map((r) => r.entry.id);

@@ -43,7 +43,7 @@ describe('DAG drill-down search', () => {
     writeEntry(hippoRoot, f1);
     writeEntry(hippoRoot, f2);
 
-    const entries = loadAllEntries(hippoRoot);
+    const entries = loadAllEntries(hippoRoot, 'default');
     const results = search('John basketball career goals', entries, { budget: 4000 });
 
     const ids = results.map((r) => r.entry.id);
@@ -59,7 +59,7 @@ describe('DAG drill-down search', () => {
     });
     writeEntry(hippoRoot, fact);
 
-    const entries = loadAllEntries(hippoRoot);
+    const entries = loadAllEntries(hippoRoot, 'default');
     const results = search('Tim reading', entries, { budget: 4000 });
 
     expect(results.some((r) => r.entry.id === fact.id)).toBe(true);

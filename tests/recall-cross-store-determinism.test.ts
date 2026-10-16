@@ -114,8 +114,8 @@ describe('recall cross-store determinism', () => {
   });
 
   it('hybridSearch returns identical top-K content sequences across differently-named fresh stores', async () => {
-    const entriesA = loadAllEntries(storeA);
-    const entriesB = loadAllEntries(storeB);
+    const entriesA = loadAllEntries(storeA, 'default');
+    const entriesB = loadAllEntries(storeB, 'default');
     expect(entriesA.length).toBe(CONTENTS.length);
     expect(entriesB.length).toBe(CONTENTS.length);
 

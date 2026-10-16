@@ -65,7 +65,7 @@ describe('session-end with no payload never scans other projects', () => {
 
     let contents: string[] = [];
     await waitFor(() => {
-      contents = loadAllEntries(getHippoRoot(dir)).map((e) => e.content);
+      contents = loadAllEntries(getHippoRoot(dir), 'default').map((e) => e.content);
       return true;
     }, { ...WORKER_WAIT, what: 'the store readable' });
     expect(contents.filter((c) => c.includes(MARKER))).toEqual([]);

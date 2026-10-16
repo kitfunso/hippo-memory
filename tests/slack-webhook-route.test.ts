@@ -93,7 +93,7 @@ describe('POST /v1/connectors/slack/events', () => {
       body,
     });
     expect(res.status).toBe(200);
-    const entries = loadAllEntries(root);
+    const entries = loadAllEntries(root, 'default');
     const slackRow = entries.find((e) => e.tags.includes('source:slack') && e.kind === 'raw');
     expect(slackRow).toBeDefined();
     expect(slackRow!.owner).toBe('user:U1');

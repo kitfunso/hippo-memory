@@ -311,7 +311,7 @@ describe('HTTP route status table: status and error text per route', () => {
     shows(out.approve, 404, { error: `not quarantined: ${seeded.recall}` });
     shows(out.reject, 404, { error: `not quarantined: ${seeded.recall}` });
     shows(out.audit, 200, expect.arrayContaining([expect.objectContaining({ op: 'auth_revoke', targetId: keyId })]));
-    shows(out.auditBadOp, 400, { error: 'invalid op: nope' });
+    shows(out.auditBadOp, 400, { error: expect.stringMatching(/^op must be one of: remember \| /) });
   });
 
   it('prediction and decision routes with valid input', async () => {

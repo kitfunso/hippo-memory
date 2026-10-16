@@ -43,7 +43,7 @@ describe('consolidate auto-promote: session -> trace', () => {
     expect(result.promotedTraces).toBe(1);
     expect(result.details).toContain('  🧬 promoted 1 trace from completed session');
     expect(result.details.some((l) => l.includes(`from session ${sid} (success)`))).toBe(true);
-    const traces = loadAllEntries(tmpDir).filter((e) => e.layer === Layer.Trace);
+    const traces = loadAllEntries(tmpDir, 'default').filter((e) => e.layer === Layer.Trace);
     expect(traces).toHaveLength(1);
     expect(traces[0].trace_outcome).toBe('success');
     expect(traces[0].source_session_id).toBe(sid);
@@ -65,7 +65,7 @@ describe('consolidate auto-promote: session -> trace', () => {
 
     await consolidate(tmpDir, { now: new Date() });
 
-    const traces = loadAllEntries(tmpDir).filter((e) => e.layer === Layer.Trace);
+    const traces = loadAllEntries(tmpDir, 'default').filter((e) => e.layer === Layer.Trace);
     expect(traces).toHaveLength(0);
   });
 
@@ -78,7 +78,7 @@ describe('consolidate auto-promote: session -> trace', () => {
     const result = await consolidate(tmpDir, { now: new Date() });
 
     expect(result.promotedTraces).toBe(0);
-    expect(loadAllEntries(tmpDir).filter((e) => e.layer === Layer.Trace)).toHaveLength(0);
+    expect(loadAllEntries(tmpDir, 'default').filter((e) => e.layer === Layer.Trace)).toHaveLength(0);
   });
 
   it('does NOT create duplicate traces across repeated sleep runs', async () => {
@@ -98,7 +98,7 @@ describe('consolidate auto-promote: session -> trace', () => {
     await consolidate(tmpDir, { now: new Date() });
     await consolidate(tmpDir, { now: new Date() });
 
-    const traces = loadAllEntries(tmpDir).filter(
+    const traces = loadAllEntries(tmpDir, 'default').filter(
       (e) => e.layer === Layer.Trace && e.source_session_id === sid,
     );
     expect(traces).toHaveLength(1);
@@ -131,7 +131,7 @@ describe('consolidate auto-promote: session -> trace', () => {
 
     await consolidate(tmpDir, { now: new Date() });
 
-    const entries = loadAllEntries(tmpDir);
+    const entries = loadAllEntries(tmpDir, 'default');
     const traceIds = new Set(
       entries.filter((e) => e.layer === Layer.Trace).map((e) => e.id),
     );
@@ -162,7 +162,7 @@ describe('consolidate auto-promote: session -> trace', () => {
 
     await consolidate(tmpDir, { now: new Date() });
 
-    const traces = loadAllEntries(tmpDir).filter((e) => e.layer === Layer.Trace);
+    const traces = loadAllEntries(tmpDir, 'default').filter((e) => e.layer === Layer.Trace);
     expect(traces).toHaveLength(0);
   });
 });

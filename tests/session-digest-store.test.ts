@@ -56,7 +56,7 @@ function scan(finalText: string, over: Partial<SessionScan> = {}): SessionScan {
 }
 
 const write = (key: string, s: SessionScan) => writeSessionDigest(hippoRoot, s, { key, tenantId: 'default' });
-const digests = (): MemoryEntry[] => loadAllEntries(hippoRoot).filter(isSessionDigestRow);
+const digests = (): MemoryEntry[] => loadAllEntries(hippoRoot, 'default').filter(isSessionDigestRow);
 
 describe('writing the digest row', () => {
   it('writes one observed Episodic row tagged session-digest, keyed on the session', () => {
@@ -159,7 +159,7 @@ describe('sharing', () => {
     writeEntry(hippoRoot, createMemory('gotcha: powershell 5.1 has no pipeline chain operators', { tenantId: 'default' }));
     const stats = { secretSkipped: 0, neverAutoShareSkipped: 0 };
     autoShare(hippoRoot, { minScore: 0, stats });
-    expect(loadAllEntries(getGlobalRoot()).map((e) => e.content)).toEqual(['gotcha: powershell 5.1 has no pipeline chain operators']);
+    expect(loadAllEntries(getGlobalRoot(), 'default').map((e) => e.content)).toEqual(['gotcha: powershell 5.1 has no pipeline chain operators']);
     expect(stats.neverAutoShareSkipped).toBe(1);
   });
 
@@ -173,7 +173,7 @@ describe('sharing', () => {
     expect(fact.tags).toContain(SESSION_DIGEST_TAG);
     expect(isSessionDigestRow(fact)).toBe(false);
     autoShare(hippoRoot, { minScore: 0 });
-    expect(loadAllEntries(getGlobalRoot())).toEqual([]);
+    expect(loadAllEntries(getGlobalRoot(), 'default')).toEqual([]);
   });
 });
 
@@ -186,11 +186,11 @@ describe('consolidation leaves digests alone', () => {
     const rows = [base, `${base} again today`, `${base} once more`].map((c) => row(c, digest));
     for (const r of rows) writeEntry(hippoRoot, r);
     const result = await consolidate(hippoRoot, { dryRun: false, now: new Date() });
-    const semantic = loadAllEntries(hippoRoot).filter((e) => e.layer === Layer.Semantic);
+    const semantic = loadAllEntries(hippoRoot, 'default').filter((e) => e.layer === Layer.Semantic);
     if (digest) {
       expect(result.merged).toBe(0);
       expect(semantic).toEqual([]);
-      expect(loadAllEntries(hippoRoot).filter((e) => e.superseded_by)).toEqual([]);
+      expect(loadAllEntries(hippoRoot, 'default').filter((e) => e.superseded_by)).toEqual([]);
     } else {
       expect(result.merged).toBeGreaterThan(0);
     }

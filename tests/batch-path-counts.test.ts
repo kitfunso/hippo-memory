@@ -8,7 +8,7 @@ import { recordStatements, recordStatementsAsync, countMatching, STORE_OPEN } fr
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntriesTogether, writeEntry } from '../src/store/entry-writes.js';
-import { loadAllEntries } from '../src/store/entry-reads.js';
+import { loadEveryTenantEntries } from '../src/store/entry-reads.js';
 import { MEMORY_SELECT_COLUMNS } from '../src/store/rows.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { insertRejectedValue, rejectionDigest } from '../src/store/rejection.js';
@@ -70,7 +70,7 @@ describe('sleep after consolidation', () => {
 
   const contentsByTenant = (root: string) => {
     const out: Record<string, string[]> = {};
-    for (const e of loadAllEntries(root)) (out[e.tenant_id] ??= []).push(e.content);
+    for (const e of loadEveryTenantEntries(root)) (out[e.tenant_id] ??= []).push(e.content);
     for (const list of Object.values(out)) list.sort();
     return out;
   };
@@ -86,7 +86,7 @@ describe('sleep after consolidation', () => {
     ];
     const keptDefault = kept.map((c) => (c === 'the deploy  runs on friday at noon' ? 'the deploy runs on friday at noon' : c));
     expect(contentsByTenant(root)).toEqual({ default: keptDefault, acme: kept });
-    expect(result.ambient).toEqual(computeAmbientState(loadAllEntries(root).filter((e) => !e.superseded_by)));
+    expect(result.ambient).toEqual(computeAmbientState(loadEveryTenantEntries(root).filter((e) => !e.superseded_by)));
   });
 
   it('a dry run reports what a real run would remove and removes nothing', async () => {
@@ -122,7 +122,7 @@ describe('invalidateMatching with onlyId', () => {
       invalidated: 1, targets: [rows[2]!.id], skippedPinned: [], dryRun: false,
       preview: [{ id: rows[2]!.id, headline: 'row 2 about the zephyrine cache' }],
     });
-    const after = new Map(loadAllEntries(root).map((e) => [e.id, e]));
+    const after = new Map(loadEveryTenantEntries(root).map((e) => [e.id, e]));
     expect(after.get(rows[2]!.id)).toMatchObject({ confidence: 'stale', half_life_days: Math.max(1, Math.floor(rows[2]!.half_life_days / 2)) });
     expect(after.get(rows[2]!.id)!.tags).toContain('invalidated');
     expect(after.get(rows[1]!.id)!.confidence).toBe(rows[1]!.confidence);
@@ -139,7 +139,7 @@ describe('invalidateMatching with onlyId', () => {
     expect(invalidateMatching(root, target, 'default', { onlyId: pinned.id }).skippedPinned).toEqual([pinned.id]);
     expect(invalidateMatching(root, target, 'default', { onlyId: 'no-such-id' }).invalidated).toBe(0);
     expect(invalidateMatching(root, target, 'default', { onlyId: plain.id, dryRun: true }).targets).toEqual([plain.id]);
-    expect(loadAllEntries(root).find((e) => e.id === plain.id)!.confidence).toBe(plain.confidence);
+    expect(loadEveryTenantEntries(root).find((e) => e.id === plain.id)!.confidence).toBe(plain.confidence);
   });
 
   it('reads one memory row however many the tenant holds', () => {
@@ -190,7 +190,7 @@ describe('syncGlobalToLocal', () => {
     expect(syncGlobalToLocal(localRoot, globalRoot)).toBe(3);
 
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('skipped 2 rejected value'));
-    const local = new Map(loadAllEntries(localRoot).map((e) => [e.id, e]));
+    const local = new Map(loadEveryTenantEntries(localRoot).map((e) => [e.id, e]));
     expect([...local.keys()].sort()).toEqual([rows[0]!.id, rows[1]!.id, rows[2]!.id, sameText.id, acme.id].sort());
     expect(local.get(acme.id)!.tenant_id).toBe('acme');
     const refusals = (() => {

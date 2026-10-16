@@ -52,7 +52,7 @@ describe('backfill survives 429 + Retry-After through the full loop', () => {
 
     expect(r.ingested).toBe(1);
     expect(fakeFetch).toHaveBeenCalledTimes(2); // 429 + 200 retry.
-    const slackEntries = loadAllEntries(root).filter((e) => e.tags.includes('source:slack'));
+    const slackEntries = loadAllEntries(root, 'default').filter((e) => e.tags.includes('source:slack'));
     expect(slackEntries).toHaveLength(1);
     expect(slackEntries[0].kind).toBe('raw');
     expect(slackEntries[0].content).toBe('rate limit survivor');

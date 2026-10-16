@@ -25,6 +25,7 @@ import { initStore } from '../dist/store/open.js';
 import { sqliteStore } from '../dist/store/sqlite/store.js';
 import { ingestEvent } from '../dist/connectors/github/ingest.js';
 import { ingestMessage } from '../dist/connectors/slack/ingest.js';
+import { adminActor } from '../dist/api/index.js';
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(scriptDir, '..');
@@ -37,7 +38,8 @@ const dataDir = join(root, '.hippo');
 mkdirSync(dataDir, { recursive: true });
 initStore(dataDir);
 
-const ctx = { hippoRoot: dataDir, tenantId: 'default', actor: 'ci:seed', store: sqliteStore(dataDir) };
+// Admin, as the connector webhooks ingest: a restricted-scope write needs a role that can read that scope.
+const ctx = { hippoRoot: dataDir, tenantId: 'default', actor: adminActor('ci:seed'), store: sqliteStore(dataDir) };
 
 const ghEvent = {
   eventName: 'issues',

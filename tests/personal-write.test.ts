@@ -13,7 +13,7 @@ import { mapApiError } from '../src/api/error-reply.js';
 import { importVault } from '../src/importers/vault.js';
 import type { JsonValue } from '../src/util/json.js';
 import { serve, type ServerHandle } from '../src/server.js';
-import { loadAllEntries, readEntry } from '../src/store/entry-reads.js';
+import { loadEveryTenantEntries, readEntry } from '../src/store/entry-reads.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 
@@ -68,7 +68,7 @@ describe('remember with personal', () => {
   ];
   it.each(ownerless)('%s gets a 400 and stores nothing', async (_label, actor) => {
     expect(await refusal(() => remember(ctxFor(actor), { content: 'note for later', personal: true }))).toEqual({ status: 400, message: NO_OWNER_TEXT });
-    expect(loadAllEntries(root)).toHaveLength(0);
+    expect(loadEveryTenantEntries(root)).toHaveLength(0);
   });
 
   it('a 239-character owner fits', async () => {
@@ -80,25 +80,25 @@ describe('remember with personal', () => {
   it('personal with a scope is a 400', async () => {
     expect(await refusal(() => remember(ctxFor(ownerA), { content: 'note', personal: true, scope: 'team' })))
       .toEqual({ status: 400, message: 'send personal or scope, not both' });
-    expect(loadAllEntries(root)).toHaveLength(0);
+    expect(loadEveryTenantEntries(root)).toHaveLength(0);
   });
 
   it('personal with untrusted throws a plain error, never a quarantine row', async () => {
     const fn = async (): Promise<void> => { await remember(ctxFor(ownerA), { content: 'note', personal: true, untrusted: true }); };
     await expect(Promise.resolve().then(fn)).rejects.toThrow(Error);
     expect((await refusal(fn)).status).toBe(500);
-    expect(loadAllEntries(root)).toHaveLength(0);
+    expect(loadEveryTenantEntries(root)).toHaveLength(0);
   });
 });
 
 describe('client scopes', () => {
   it.each(['personal:private:b', 'Personal:x'])('remember refuses %s with a 400', async (scope) => {
     expect((await refusal(() => remember(ctxFor(ownerA), { content: 'note', scope }))).status).toBe(400);
-    expect(loadAllEntries(root)).toHaveLength(0);
+    expect(loadEveryTenantEntries(root)).toHaveLength(0);
   });
 
   it('a connector scope still passes', async () => {
-    const { id } = await remember(ctxFor(ownerA), { content: 'channel note', scope: 'slack:private:C1' });
+    const { id } = await remember(ctxFor({ ...ownerA, scopes: ['slack:private:C1'] }), { content: 'channel note', scope: 'slack:private:C1' });
     expect(readEntry(root, id, 'default')?.scope).toBe('slack:private:C1');
   });
 
@@ -108,9 +108,9 @@ describe('client scopes', () => {
       writeFileSync(join(vault, 'note.md'), '# note\nsome vault text\n');
       await expect(importVault(vault, { hippoRoot: root, tenantId: 'default', name: 'v', scope: 'personal:private:b' })).rejects.toThrow(BadRequestError);
       await expect(importVault(vault, { hippoRoot: root, tenantId: 'default', name: 'v', scope: 'PERSONAL:x' })).rejects.toThrow(BadRequestError);
-      expect(loadAllEntries(root)).toHaveLength(0);
+      expect(loadEveryTenantEntries(root)).toHaveLength(0);
       await importVault(vault, { hippoRoot: root, tenantId: 'default', name: 'v', scope: 'vault:private:v' });
-      expect(loadAllEntries(root).map((e) => e.scope)).toEqual(['vault:private:v']);
+      expect(loadEveryTenantEntries(root).map((e) => e.scope)).toEqual(['vault:private:v']);
     } finally {
       rmSync(vault, { recursive: true, force: true });
     }
@@ -120,12 +120,12 @@ describe('client scopes', () => {
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
     try {
       await expect(handleRemember({ hippoRoot: root, tenantId: 'default', args: ['cli personal attempt'], flags: { force: true, scope: 'personal:private:b' } })).rejects.toThrow(BadRequestError);
-      expect(loadAllEntries(root)).toHaveLength(0);
+      expect(loadEveryTenantEntries(root)).toHaveLength(0);
       await handleRemember({ hippoRoot: root, tenantId: 'default', args: ['cli team note'], flags: { force: true, scope: 'team' } });
     } finally {
       log.mockRestore();
     }
-    expect(loadAllEntries(root).map((e) => e.scope)).toEqual(['team']);
+    expect(loadEveryTenantEntries(root).map((e) => e.scope)).toEqual(['team']);
   });
 });
 
@@ -159,7 +159,7 @@ describe('POST /v1/memories personal field', () => {
     const res = await post({ content: 'a note', personal });
     expect(res.status).toBe(400);
     expect(await res.json()).toEqual({ error: 'personal must be a boolean' });
-    expect(loadAllEntries(root)).toHaveLength(0);
+    expect(loadEveryTenantEntries(root)).toHaveLength(0);
   });
 
   it('personal: true stores the key owner\'s scope and drops a well-formed project', async () => {
@@ -175,12 +175,12 @@ describe('POST /v1/memories personal field', () => {
   it('a malformed project is still a 400 with personal: true', async () => {
     const res = await post({ content: 'a note', personal: true, project: 'alpha' });
     expect(res.status).toBe(400);
-    expect(loadAllEntries(root)).toHaveLength(0);
+    expect(loadEveryTenantEntries(root)).toHaveLength(0);
   });
 
   it('personal: false is a team write', async () => {
     const res = await post({ content: 'team note via the route', personal: false });
     expect(res.status).toBe(200);
-    expect(loadAllEntries(root).map((e) => e.scope)).toEqual([null]);
+    expect(loadEveryTenantEntries(root).map((e) => e.scope)).toEqual([null]);
   });
 });

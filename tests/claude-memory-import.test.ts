@@ -6,7 +6,7 @@ import { execFileSync } from 'child_process';
 import { importProjectMemories } from '../src/agent-memories/sync.js';
 import { totalTally } from '../src/agent-memories/report.js';
 import { initStore } from '../src/store/open.js';
-import { loadAllEntries } from '../src/store/entry-reads.js';
+import { loadEveryTenantEntries } from '../src/store/entry-reads.js';
 
 const learnFromClaude = (hippoRoot: string, home: string): number =>
   totalTally(importProjectMemories(hippoRoot, { machine: { home, env: {}, platform: process.platform } })).imported;
@@ -42,7 +42,7 @@ function git(cwd: string, ...args: string[]): void {
   execFileSync('git', ['-c', 'user.email=test@example.com', '-c', 'user.name=Test', '-c', 'commit.gpgsign=false', ...args], { cwd, stdio: 'ignore' });
 }
 
-const contents = (hippoRoot: string) => loadAllEntries(hippoRoot).map((e) => e.content).join('\n');
+const contents = (hippoRoot: string) => loadEveryTenantEntries(hippoRoot).map((e) => e.content).join('\n');
 
 afterEach(() => {
   for (const dir of made.splice(0)) fs.rmSync(dir, { recursive: true, force: true });

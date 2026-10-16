@@ -6,7 +6,7 @@ import * as path from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { calculateStrength, confidenceFacets, createMemory, DEFAULT_HALF_LIFE_DAYS, Layer, type MemoryEntry } from '../src/core/memory.js';
-import { loadAllEntries } from '../src/store/entry-reads.js';
+import { loadEveryTenantEntries } from '../src/store/entry-reads.js';
 import { loadStatusCounts } from '../src/store/candidates.js';
 import { recordStatements } from './_helpers/count-statements.js';
 import { replaceDetectedConflicts, resolveConflict, listMemoryConflicts } from '../src/store/conflicts.js';
@@ -218,7 +218,7 @@ describe('loadStatusCounts', () => {
     // Written weakest first and created strongest first: a sum over rows in any other order than loadAllEntries' ends on other last bits.
     for (let i = 0; i < 40; i++) row(daysAgo(20), { created: daysAgo(900 - i), half_life_days: 0.5 * 1.18 ** i });
     const now = new Date(NOW);
-    const entries = loadAllEntries(root);
+    const entries = loadEveryTenantEntries(root);
     const strengths = entries.map((e) => calculateStrength(e, now));
     const counts = loadStatusCounts(root, now, 0.2);
     expect(counts.total).toBe(52);

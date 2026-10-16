@@ -34,7 +34,7 @@ describe('schema v3: trace columns', () => {
       sourceSessionId: 'sess-1',
     });
     writeEntry(tmpDir, t);
-    const loaded = loadAllEntries(tmpDir).find((e) => e.id === t.id);
+    const loaded = loadAllEntries(tmpDir, 'default').find((e) => e.id === t.id);
     expect(loaded).toBeDefined();
     expect(loaded!.trace_outcome).toBe('success');
     expect(loaded!.source_session_id).toBe('sess-1');
@@ -45,7 +45,7 @@ describe('schema v3: trace columns', () => {
     initStore(tmpDir);
     const m = createMemory('plain episodic memory content', { layer: Layer.Episodic });
     writeEntry(tmpDir, m);
-    const loaded = loadAllEntries(tmpDir).find((e) => e.id === m.id);
+    const loaded = loadAllEntries(tmpDir, 'default').find((e) => e.id === m.id);
     expect(loaded!.trace_outcome).toBeNull();
     expect(loaded!.source_session_id).toBeNull();
   });
@@ -82,7 +82,7 @@ describe('schema v3: trace columns', () => {
 
     // Now initStore should migrate to v3.
     initStore(tmpDir);
-    const loaded = loadAllEntries(tmpDir).find((e) => e.id === 'mem_legacy_v2');
+    const loaded = loadAllEntries(tmpDir, 'default').find((e) => e.id === 'mem_legacy_v2');
     expect(loaded).toBeDefined();
     expect(loaded!.content).toContain('pre-migration content body');
     expect(loaded!.trace_outcome).toBeNull();

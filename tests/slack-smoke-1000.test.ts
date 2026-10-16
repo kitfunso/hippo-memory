@@ -29,7 +29,7 @@ describe('slack 1000-event smoke (CI subset)', () => {
     expect(result.outboundHttp).toBe(0);
     expect(result.totalIngestCalls).toBe(200);
 
-    const all = loadAllEntries(root).filter((e) => e.tags.includes('source:slack'));
+    const all = loadAllEntries(root, 'default').filter((e) => e.tags.includes('source:slack'));
     expect(all).toHaveLength(100);
     expect(all.every((e) => e.kind === 'raw')).toBe(true);
     expect(all.every((e) => e.tags.includes('source:slack'))).toBe(true);

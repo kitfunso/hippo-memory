@@ -249,7 +249,7 @@ describe('handleCommentDeleted', () => {
     expect(after.results.some((r) => r.content.includes(distinctive))).toBe(false);
 
     // Also confirm the row is gone from memories entirely.
-    const remaining = loadAllEntries(root).filter((e) => e.content.includes(distinctive));
+    const remaining = loadAllEntries(root, 'default').filter((e) => e.content.includes(distinctive));
     expect(remaining).toHaveLength(0);
   });
 });

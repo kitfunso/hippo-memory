@@ -288,7 +288,7 @@ describe('dedupe survivor determinism', () => {
         const result = await consolidate(home, { now });
         expect(result.merged).toBeGreaterThan(0);
 
-        const semantics = loadAllEntries(home).filter(
+        const semantics = loadAllEntries(home, 'default').filter(
           (e) => e.layer === Layer.Semantic && e.content.startsWith('[Consolidated from 2 related memories, newest first]'),
         );
         expect(semantics.length).toBe(1);
@@ -345,7 +345,7 @@ describe('dedupe survivor determinism', () => {
       for (const entry of order) writeEntry(home, entry);
       const result = deduplicateStore(sqliteConsolidation(home));
       expect(result.removed).toBe(order.length - 1);
-      const remaining = loadAllEntries(home);
+      const remaining = loadAllEntries(home, 'default');
       expect(remaining.length).toBe(1);
       return { survivor: remaining[0], pairs: result.pairs };
     } finally {
@@ -391,7 +391,7 @@ describe('dedupe survivor determinism', () => {
         const result = deduplicateStore(sqliteConsolidation(home));
         expect(result.removed).toBe(0);
         expect(result.pairs).toHaveLength(0);
-        const ids = loadAllEntries(home).map((e) => e.id).sort();
+        const ids = loadAllEntries(home, 'default').map((e) => e.id).sort();
         expect(ids).toEqual([raw.id, semantic.id].sort());
       } finally {
         restore();
@@ -413,7 +413,7 @@ describe('dedupe survivor determinism', () => {
       const result = deduplicateStore(sqliteConsolidation(home));
       expect(result.removed).toBe(0);
       expect(result.pairs).toHaveLength(0);
-      const ids = loadAllEntries(home).map((e) => e.id).sort();
+      const ids = loadAllEntries(home, 'default').map((e) => e.id).sort();
       expect(ids).toEqual([successor.id, stale.id, current.id].sort());
     } finally {
       restore();
@@ -445,7 +445,7 @@ describe('dedupe survivor determinism', () => {
         const result = await consolidate(home, { now });
         expect(result.merged).toBeGreaterThan(0);
 
-        const semantics = loadAllEntries(home).filter(
+        const semantics = loadAllEntries(home, 'default').filter(
           (e) => e.layer === Layer.Semantic && e.content.startsWith('[Consolidated pattern from 3 related memories, newest first]'),
         );
         expect(semantics.length).toBe(1);

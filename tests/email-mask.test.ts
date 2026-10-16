@@ -53,12 +53,12 @@ describe('no stored text holds an email address', () => {
     const edits = [{ filePath: path.join(repo, 'exports', `${EMAIL}.csv`), base: null }];
     const scan = { turns: [{ role: 'user' as const, text: 'the export keeps failing' }], finalText: REPLY, cwd: repo, edits };
     expect(writeSessionDigest(hippoRoot, scan, { key: 's1', tenantId: 'default' }).written).toBe(true);
-    expect(loadAllEntries(hippoRoot).map((e) => e.content)).toEqual(['Updated [email] in customer.ts because the export failed.\nChanged: exports/[email]']);
+    expect(loadAllEntries(hippoRoot, 'default').map((e) => e.content)).toEqual(['Updated [email] in customer.ts because the export failed.\nChanged: exports/[email]']);
   });
 
   it('in capture from a transcript', () => {
     cmdCapture(hippoRoot, { source: 'last-session', transcriptPath: transcript(), dryRun: false, global: false });
-    const rows = JSON.stringify(loadAllEntries(hippoRoot));
+    const rows = JSON.stringify(loadAllEntries(hippoRoot, 'default'));
     expect(rows).toContain('[email]');
     expect(rows).not.toContain(EMAIL);
   });

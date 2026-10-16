@@ -56,7 +56,7 @@ describe('hippo learn --git honours config.gitLearnPatterns', () => {
     const env = { ...process.env, HIPPO_HOME: join(repo, 'global') };
     hippoOut(['learn', '--git', '--days', '30'], { cwd: repo, env });
   }
-  const learned = (): string[] => loadAllEntries(join(repo, '.hippo')).map((e) => e.content);
+  const learned = (): string[] => loadAllEntries(join(repo, '.hippo'), 'default').map((e) => e.content);
 
   it('uses the built-in patterns by default', () => {
     learn();

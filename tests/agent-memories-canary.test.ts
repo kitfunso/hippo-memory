@@ -149,7 +149,7 @@ function runWorker(mode: string, run: Run, extraEnv: NodeJS.ProcessEnv): Promise
 }
 
 const everyText = (root: string): string[] =>
-  isInitialized(root) ? [...loadAllEntries(root).map((e) => e.content), ...dormantRows(root).map((d) => d.content)] : [];
+  isInitialized(root) ? [...loadAllEntries(root, 'default').map((e) => e.content), ...dormantRows(root).map((d) => d.content)] : [];
 
 beforeEach(() => {
   w = openWorld();

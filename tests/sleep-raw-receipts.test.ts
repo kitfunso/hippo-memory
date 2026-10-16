@@ -77,7 +77,7 @@ describe('sleep keeps raw receipts instead of aborting on the append-only trigge
 
       const result = await consolidate(home, { now: new Date() });
 
-      const ids = loadAllEntries(home).map((e) => e.id);
+      const ids = loadAllEntries(home, 'default').map((e) => e.id);
       expect(ids).toContain(receipt.id);
       // The ordinary faded memory is still removed: the batch committed.
       expect(ids).not.toContain(faded.id);
@@ -101,7 +101,7 @@ describe('sleep keeps raw receipts instead of aborting on the append-only trigge
 
       await consolidate(home, { now: new Date() });
 
-      expect(loadAllEntries(home).map((e) => e.id)).toContain(receipt.id);
+      expect(loadAllEntries(home, 'default').map((e) => e.id)).toContain(receipt.id);
     } finally {
       restore();
     }

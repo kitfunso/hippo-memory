@@ -40,7 +40,7 @@ async function runVerb(...args: string[]): Promise<{ status: number; stdout: str
 
 const hippo = (...args: string[]) => runVerb('import', ...args);
 
-const contents = (): string[] => loadAllEntries(hippoRoot).map((e) => e.content).sort();
+const contents = (): string[] => loadAllEntries(hippoRoot, 'default').map((e) => e.content).sort();
 
 describe('hippo import --markdown', () => {
   it('a dry run lists what it would import and writes nothing; a re-import skips what is already stored', async () => {

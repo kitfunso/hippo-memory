@@ -227,11 +227,17 @@ export function loadFreshRawMemories(
   }, openStore);
 }
 
-/** Load all entries from SQLite; omitting `tenantId` yields all rows (legacy). Recall paths that surface results to
- * a user MUST pass a resolved tenant. */
-export function loadAllEntries(hippoRoot: string, tenantId?: string): MemoryEntry[] {
+/** Every entry of one tenant. A caller that surfaces rows to a user passes the resolved tenant. */
+export function loadAllEntries(hippoRoot: string, tenantId: string): MemoryEntry[] {
   return onHandle(hippoRoot, (db) => {
     return selectAllEntries(db, tenantId);
+  }, openStore);
+}
+
+/** Every tenant's entries, for host-wide work such as consolidation; never for a request that answers a tenant. */
+export function loadEveryTenantEntries(hippoRoot: string): MemoryEntry[] {
+  return onHandle(hippoRoot, (db) => {
+    return selectAllEntries(db);
   }, openStore);
 }
 

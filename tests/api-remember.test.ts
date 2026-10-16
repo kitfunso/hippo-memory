@@ -98,7 +98,7 @@ describe("api.remember stamps the caller's project", () => {
     for (const project of [{ name: '' }, { name: '   ' }, { name: 'acme/app', aliases: eleven }, { name: 'x'.repeat(257) }]) {
       await expect(remember(ctx, { content: 'release notes go out on tuesdays', project })).rejects.toThrow(BadRequestError);
     }
-    expect(loadAllEntries(ctx.hippoRoot)).toHaveLength(0);
+    expect(loadAllEntries(ctx.hippoRoot, 'default')).toHaveLength(0);
   });
 
   it('a quarantined untrusted write keeps the project origin', async () => {

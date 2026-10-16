@@ -396,7 +396,7 @@ interface QueryCase {
 }
 
 function runQuery(query: string, n = 10): string[] {
-  const entries = loadAllEntries(tmpDir);
+  const entries = loadAllEntries(tmpDir, 'default');
   const results = search(query, entries, { budget: 8000 });
   return results.slice(0, n).map((r) => r.entry.id);
 }
@@ -508,7 +508,7 @@ const TEST_CASES: QueryCase[] = [
 
 describe('Retrieval quality benchmark', () => {
   it('has all seed memories written to the store', () => {
-    const entries = loadAllEntries(tmpDir);
+    const entries = loadAllEntries(tmpDir, 'default');
     // We seed >30 memories explicitly above
     expect(entries.length).toBeGreaterThanOrEqual(30);
   });
@@ -685,7 +685,7 @@ describe('Outcome feedback', () => {
 
 describe('Token budget', () => {
   it('total returned tokens respect budget of 100', () => {
-    const entries = loadAllEntries(tmpDir);
+    const entries = loadAllEntries(tmpDir, 'default');
     const results = search('production deployment rules', entries, { budget: 100 });
 
     const totalTokens = results.reduce((sum, r) => sum + r.tokens, 0);
@@ -697,7 +697,7 @@ describe('Token budget', () => {
     const shortEntry = createMemory7('Use ; not && in PowerShell.');
     writeEntry(tmpDir, shortEntry);
 
-    const entries = loadAllEntries(tmpDir);
+    const entries = loadAllEntries(tmpDir, 'default');
     const results = search('PowerShell', entries, { budget: 50 });
     // The first result is always included even if it exceeds budget
     expect(results.length).toBeGreaterThanOrEqual(1);
@@ -709,7 +709,7 @@ describe('Token budget', () => {
   });
 
   it('minResults guarantees at least N results regardless of budget', () => {
-    const entries = loadAllEntries(tmpDir);
+    const entries = loadAllEntries(tmpDir, 'default');
     const withMin = search('production deployment rules', entries, {
       budget: 100,
       minResults: 5,

@@ -100,7 +100,7 @@ describe('POST /v1/memories on a shared store', () => {
     for (const project of refused) {
       expect((await post(h, { content: ROW, project })).status, JSON.stringify(project).slice(0, 60)).toBe(400);
     }
-    expect(loadAllEntries(store)).toHaveLength(0);
+    expect(loadAllEntries(store, 'default')).toHaveLength(0);
   });
 
   it('accepts the shape the resolver sends: a remote id with its aliases', async () => {

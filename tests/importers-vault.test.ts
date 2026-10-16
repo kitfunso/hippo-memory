@@ -377,7 +377,7 @@ describe('importVault (j) — empty/frontmatter-only notes are skipped, not thro
     expect(result.total).toBe(3);
     expect(result.imported).toBe(1); // only real.md
     expect(result.skipped).toBe(2); // empty + fm-only
-    const raw = loadAllEntries(tmpDir).filter((e) => e.tags.includes('vault:v'));
+    const raw = loadAllEntries(tmpDir, 'default').filter((e) => e.tags.includes('vault:v'));
     expect(raw.length).toBe(1);
     expect(raw[0].content).toContain('genuine note body');
   });
@@ -387,7 +387,7 @@ describe('importVault (k) — a note emptied at source archives its prior memory
   it('archives the prior raw row when a note becomes frontmatter-only (no stale body left live)', async () => {
     writeNote('note.md', 'Original content that is long enough.');
     await importVault(vaultDir, opts({ name: 'v' }));
-    const before = loadAllEntries(tmpDir).filter((e) => e.tags.includes('vault:v'));
+    const before = loadAllEntries(tmpDir, 'default').filter((e) => e.tags.includes('vault:v'));
     expect(before.length).toBe(1);
     const originalId = before[0].id;
     writeNote('note.md', '---\ntags: [y]\n---\n'); // body becomes empty (frontmatter-only)
@@ -395,7 +395,7 @@ describe('importVault (k) — a note emptied at source archives its prior memory
     expect(result.skipped).toBe(1); // nothing storable -> no new write
     expect(result.imported).toBe(0);
     expect(result.archived).toBe(1); // but the stale prior IS archived (codex R12 P2)
-    const after = loadAllEntries(tmpDir).filter((e) => e.tags.includes('vault:v'));
+    const after = loadAllEntries(tmpDir, 'default').filter((e) => e.tags.includes('vault:v'));
     expect(after.length).toBe(0); // prior gone; the deleted body is not left searchable
     const archived = archivedRows();
     expect(archived.length).toBe(1);
@@ -412,14 +412,14 @@ describe('importVault (l) — case-differing vault name does not archive the oth
   it('vault A does not archive vault a rows (LIKE is case-insensitive; exact-prefix filter)', async () => {
     writeNote('m.md', 'content for vault a note, long enough');
     await importVault(vaultDir, opts({ name: 'a' }));
-    const aRows = loadAllEntries(tmpDir).filter((e) => e.tags.includes('vault:a'));
+    const aRows = loadAllEntries(tmpDir, 'default').filter((e) => e.tags.includes('vault:a'));
     expect(aRows.length).toBe(1);
     const aId = aRows[0].id;
     const upperVault = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-vault-A-'));
     try {
       fs.writeFileSync(path.join(upperVault, 'x.md'), 'content for vault A note, long enough', 'utf8');
       await importVault(upperVault, opts({ name: 'A' }));
-      expect(loadAllEntries(tmpDir).filter((e) => e.id === aId).length).toBe(1); // 'a' untouched
+      expect(loadAllEntries(tmpDir, 'default').filter((e) => e.id === aId).length).toBe(1); // 'a' untouched
       expect(archivedRows().length).toBe(0);
     } finally {
       fs.rmSync(upperVault, { recursive: true, force: true });
@@ -433,7 +433,7 @@ describe('importVault (m) — dryRun previews without mutating', () => {
     const result = await importVault(vaultDir, opts({ name: 'v', dryRun: true }));
     expect(result.total).toBe(1);
     expect(result.imported).toBe(1); // preview counts it
-    expect(loadAllEntries(tmpDir).filter((e) => e.tags.includes('vault:v')).length).toBe(0); // nothing written
+    expect(loadAllEntries(tmpDir, 'default').filter((e) => e.tags.includes('vault:v')).length).toBe(0); // nothing written
   });
 });
 
@@ -441,7 +441,7 @@ describe('importVault (n) — block-style frontmatter lists are parsed', () => {
   it('maps tags + aliases written as indented `- item` lists', async () => {
     writeNote('n.md', '---\ntags:\n  - project\n  - urgent\naliases:\n  - Nickname\n---\nBody content here, long enough.');
     await importVault(vaultDir, opts({ name: 'v' }));
-    const row = loadAllEntries(tmpDir).filter((e) => e.tags.includes('vault:v'))[0];
+    const row = loadAllEntries(tmpDir, 'default').filter((e) => e.tags.includes('vault:v'))[0];
     expect(row.tags).toContain('project');
     expect(row.tags).toContain('urgent');
     expect(row.tags).toContain('alias:Nickname');
@@ -467,12 +467,12 @@ describe('importVault (q) — dryRun previews deletions without archiving', () =
     writeNote('keep.md', 'keep this note, long enough to store');
     writeNote('gone.md', 'this note will be removed, long enough');
     await importVault(vaultDir, opts({ name: 'v' }));
-    expect(loadAllEntries(tmpDir).filter((e) => e.tags.includes('vault:v')).length).toBe(2);
+    expect(loadAllEntries(tmpDir, 'default').filter((e) => e.tags.includes('vault:v')).length).toBe(2);
     fs.rmSync(path.join(vaultDir, 'gone.md'));
     const result = await importVault(vaultDir, opts({ name: 'v', dryRun: true }));
     expect(result.archived).toBe(1); // would archive the removed note
     expect(archivedRows().length).toBe(0); // but nothing actually archived
-    expect(loadAllEntries(tmpDir).filter((e) => e.tags.includes('vault:v')).length).toBe(2); // both still live
+    expect(loadAllEntries(tmpDir, 'default').filter((e) => e.tags.includes('vault:v')).length).toBe(2); // both still live
   });
 });
 
@@ -488,7 +488,7 @@ describe('importVault (r): does not import the Hippo store mirror files', () => 
     const result = await importVault(vaultDir, opts({ name: 'v' }));
     expect(result.total).toBe(1); // only real-note.md
     expect(result.imported).toBe(1);
-    const rows = loadAllEntries(tmpDir).filter((e) => e.tags.includes('vault:v'));
+    const rows = loadAllEntries(tmpDir, 'default').filter((e) => e.tags.includes('vault:v'));
     expect(rows.length).toBe(1);
     expect(rows[0].content).toContain('genuine vault note');
   });

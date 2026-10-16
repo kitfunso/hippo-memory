@@ -36,7 +36,7 @@ describe('ambient tallies at the window and threshold edges', () => {
     });
 
     const sql = loadAmbientTallies(root, 'default', { currentProject: [], now: NOW });
-    const js = tallyAmbientEntries(loadAllEntries(root), NOW);
+    const js = tallyAmbientEntries(loadAllEntries(root, 'default'), NOW);
 
     expect(js.fresh).toBe(1);
     expect(js.highSchemaFit).toBe(1);

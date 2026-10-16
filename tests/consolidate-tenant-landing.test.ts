@@ -20,7 +20,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { loadAllEntries } from '../src/store/entry-reads.js';
+import { loadEveryTenantEntries } from '../src/store/entry-reads.js';
 import { appendSessionEvent } from '../src/store/sessions.js';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { consolidate } from '../src/consolidate/sleep.js';
@@ -64,7 +64,7 @@ describe('merge pass partitions by tenant before clustering', () => {
       expect(result.semanticCreated).toBe(2);
       expect(result.merged).toBe(4);
 
-      const allAfter = loadAllEntries(home);
+      const allAfter = loadEveryTenantEntries(home);
       const semanticRows = allAfter.filter((e) => e.layer === Layer.Semantic);
       expect(semanticRows).toHaveLength(2);
 
@@ -115,7 +115,7 @@ describe('trace pass lands in the resolved tenant and stays idempotent there', (
       const firstResult = await consolidate(home, { now: new Date() });
       expect(firstResult.promotedTraces).toBe(1);
 
-      const allAfterFirst = loadAllEntries(home);
+      const allAfterFirst = loadEveryTenantEntries(home);
       const traces = allAfterFirst.filter((e) => e.layer === Layer.Trace);
       expect(traces).toHaveLength(1);
       // (c): the trace landed under the resolved tenant, not 'default' —
@@ -130,7 +130,7 @@ describe('trace pass lands in the resolved tenant and stays idempotent there', (
       const secondResult = await consolidate(home, { now: new Date() });
       expect(secondResult.promotedTraces).toBe(0);
 
-      const allAfterSecond = loadAllEntries(home);
+      const allAfterSecond = loadEveryTenantEntries(home);
       const tracesAfterSecond = allAfterSecond.filter((e) => e.layer === Layer.Trace);
       expect(tracesAfterSecond).toHaveLength(1);
     } finally {
@@ -161,7 +161,7 @@ describe('extract.ts storeExtractedFacts has the same defect, folded in', () => 
       expect(stored).toHaveLength(1);
       expect(stored[0]!.tenant_id).toBe('tenant-extract');
 
-      const persisted = loadAllEntries(home).find((e) => e.id === stored[0]!.id);
+      const persisted = loadEveryTenantEntries(home).find((e) => e.id === stored[0]!.id);
       expect(persisted).toBeDefined();
       expect(persisted!.tenant_id).toBe('tenant-extract');
     } finally {

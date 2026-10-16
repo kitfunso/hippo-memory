@@ -33,7 +33,7 @@ const row = (text: string, origin: string | null, extra: Partial<MemoryEntry> = 
 };
 const note = (text: string, origin: string, extra: Partial<MemoryEntry> = {}): MemoryEntry =>
   row(text, origin, { source: `agent-memory:claude-code:p-0123456789ab/${text.slice(0, 8)}.md#abc`, tags: ['claude-code-memory'], ...extra });
-const byId = () => new Map(loadAllEntries(home).map((e) => [e.id, e]));
+const byId = () => new Map(loadAllEntries(home, 'default').map((e) => [e.id, e]));
 const open = () => (db = openHippoDb(home));
 const ctx = () => cliApiContext(home, T);
 function mirror(id: string): string | null {

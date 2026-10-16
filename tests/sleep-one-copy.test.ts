@@ -50,8 +50,8 @@ describe('loadAllEntriesWithBase', () => {
   it('gives each row as loaded, equal to what loadAllEntries returns', () => {
     const root = seeded();
     const { entries, base } = loadAllEntriesWithBase(root);
-    expect(entries).toEqual(loadAllEntries(root));
-    for (const e of loadAllEntries(root)) expect(base.get(e.id)).toEqual(e);
+    expect(entries).toEqual(loadAllEntries(root, 'default'));
+    for (const e of loadAllEntries(root, 'default')) expect(base.get(e.id)).toEqual(e);
   });
 
   it('stays as loaded after the caller edits the entry in place', () => {
@@ -95,7 +95,7 @@ describe('sleep reads the store once after consolidation', () => {
 
     expect(result.audit?.errorsRemoved).toBe(1);
     expect(loads).toBe(1);
-    const after = loadAllEntries(root);
+    const after = loadAllEntries(root, 'default');
     expect(after.some((e) => e.id === junk.id)).toBe(false);
     expect(result.ambient).toEqual(computeAmbientState(after.filter((e) => !e.superseded_by)));
   });

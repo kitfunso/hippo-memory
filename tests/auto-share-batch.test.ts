@@ -39,7 +39,7 @@ describe('autoShare batching', () => {
       }));
     }
     const { result, statements } = recordStatements(() => autoShare(hippoRoot));
-    expect(loadAllEntries(getGlobalRoot()).map((e) => e.content)).toEqual(expect.arrayContaining(result.map((e) => e.content)));
+    expect(loadAllEntries(getGlobalRoot(), 'default').map((e) => e.content)).toEqual(expect.arrayContaining(result.map((e) => e.content)));
     return { shared: result.length, globalWrites: countMatching(statements, /^BEGIN IMMEDIATE$/) };
   }
 

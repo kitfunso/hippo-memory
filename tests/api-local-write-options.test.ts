@@ -129,7 +129,7 @@ describe('from a client', () => {
     const call = (args: Record<string, JsonValue>) => post('/mcp', { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_remember', arguments: args } });
     await call({ text: NOTE });
     await call({ text: NEWER, local: LOCAL });
-    const stored = (content: string) => settable(loadAllEntries(root).find((entry) => entry.content === content) ?? row(null));
+    const stored = (content: string) => settable(loadAllEntries(root, 'default').find((entry) => entry.content === content) ?? row(null));
     expect(stored(NEWER)).toEqual(stored(NOTE));
     expect(stored(NEWER).pinned).toBe(false);
   });

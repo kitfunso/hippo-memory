@@ -13,7 +13,7 @@ import { EMBEDDING_MODEL_META_KEY } from '../src/db/vector-store.js';
 import { embeddingIndexIdentity, embeddingInputText } from '../src/store/embeddings/index.js';
 import { embedAll, embedMemory } from '../src/search/embed-memories.js';
 import type { EmbeddingProvider } from '../src/embeddings/provider.js';
-import { loadAllEntries, loadAllEntryIds } from '../src/store/entry-reads.js';
+import { loadEveryTenantEntries, loadAllEntryIds } from '../src/store/entry-reads.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { initStore } from '../src/store/open.js';
 import { MEMORY_SELECT_COLUMNS } from '../src/store/rows.js';
@@ -100,7 +100,7 @@ function particleOf(entry: MemoryEntry, vector: number[], at: string): PhysicsPa
 
 /** The state a rebuild under `providerId` must leave: every row in store order, each with a particle dated FAKE_NOW. */
 function rebuiltState(root: string, providerId: string, vectorOf: (entry: MemoryEntry) => number[]): IndexState {
-  const entries = loadAllEntries(root);
+  const entries = loadEveryTenantEntries(root);
   const model = embeddingIndexIdentity(providerId);
   return {
     vectors: entries.map((e) => vectorRow(e, model, vectorOf(e))),
@@ -123,7 +123,7 @@ beforeAll(async () => {
   await embedAll(indexedOld, undefined, fake('fake-old'));
   const db = openHippoDb(indexedOld);
   try {
-    savePhysicsState(db, loadAllEntries(indexedOld).map((e) => initializeParticle(e, fakeVector('fake-old', e), new Date(SEEDED_AT))));
+    savePhysicsState(db, loadEveryTenantEntries(indexedOld).map((e) => initializeParticle(e, fakeVector('fake-old', e), new Date(SEEDED_AT))));
   } finally {
     closeHippoDb(db);
   }
@@ -151,7 +151,7 @@ describe('embedAll backfill on hippo.db', () => {
   it('embeds exactly the 120 rows with no vector, 64 at a time in store order, and leaves the other 180 vectors alone', async () => {
     const root = copyOf(partly);
     const before = indexOn(root);
-    const entries = loadAllEntries(root);
+    const entries = loadEveryTenantEntries(root);
     const embedded = new Set(before.vectors.map((v) => v.memory_id));
     const pending = entries.filter((e) => !embedded.has(e.id));
     expect([entries.length, before.vectors.length, pending.length]).toEqual([ROWS, 180, 120]);
@@ -195,7 +195,7 @@ describe('a model identity change on hippo.db', () => {
     useHashedServer(viaAll);
     useHashedServer(viaOne);
     const before = indexOn(viaOne);
-    await embedMemory(viaOne, loadAllEntries(viaOne)[7]);
+    await embedMemory(viaOne, loadEveryTenantEntries(viaOne)[7]);
     expect(indexOn(viaOne)).toEqual(before);
     expect(await embedAll(viaAll)).toBe(ROWS);
     expect(indexOn(viaAll)).toEqual(rebuiltState(viaAll, HASHED_ID, hashedServerVector));
@@ -204,7 +204,7 @@ describe('a model identity change on hippo.db', () => {
   it('keeps the old vectors, identity and particles when the provider fails part way through the rebuild', async () => {
     const root = copyOf(indexedOld);
     const before = indexOn(root);
-    const last = embeddingInputText(loadAllEntries(root)[ROWS - 1]);
+    const last = embeddingInputText(loadEveryTenantEntries(root)[ROWS - 1]);
     const failing = fake('fake-new', (texts) => {
       if (texts.includes(last)) throw new Error('provider down');
     });
@@ -243,7 +243,7 @@ describe('rows held while embedding hippo.db', () => {
     const index = loadEmbeddingIndex(root);
     const log = recordStatements(() => resetStoredParticles(root, ids, index));
     const { particles } = indexOn(root);
-    const tenantOf = new Map(loadAllEntries(root).map((e) => [e.id, e.tenant_id]));
+    const tenantOf = new Map(loadEveryTenantEntries(root).map((e) => [e.id, e.tenant_id]));
     expect([ids.length, log.result, particles.length]).toEqual([ROWS, 180, 180]);
     expect(particles.map((p) => p.memoryId)).toEqual(Object.keys(index).sort());
     expect(new Set(particles.map((p) => tenantOf.get(p.memoryId)))).toEqual(new Set(TENANTS));

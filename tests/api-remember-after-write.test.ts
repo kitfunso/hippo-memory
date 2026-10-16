@@ -30,6 +30,6 @@ describe('remember with a connector event is transactional', () => {
         event: { connector: 'slack', eventId: 'Ev_doomed' },
       }),
     ).rejects.toThrow(/boom/);
-    expect(loadAllEntries(root).filter((e) => e.content === 'doomed')).toHaveLength(0);
+    expect(loadAllEntries(root, 'default').filter((e) => e.content === 'doomed')).toHaveLength(0);
   });
 });

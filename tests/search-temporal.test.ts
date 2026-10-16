@@ -36,7 +36,7 @@ describe('temporal-aware search', () => {
     });
     writeEntry(hippoRoot, recent);
 
-    const entries = loadAllEntries(hippoRoot);
+    const entries = loadAllEntries(hippoRoot, 'default');
     const results = search('John recently scored points', entries, { budget: 4000 });
 
     expect(results.length).toBeGreaterThanOrEqual(2);
@@ -58,7 +58,7 @@ describe('temporal-aware search', () => {
     });
     writeEntry(hippoRoot, recent);
 
-    const entries = loadAllEntries(hippoRoot);
+    const entries = loadAllEntries(hippoRoot, 'default');
     const results = search('John scored points', entries, { budget: 4000 });
 
     // Without temporal cue, both should appear but temporal boost should not dominate

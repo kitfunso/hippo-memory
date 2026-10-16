@@ -87,7 +87,7 @@ describe('batchWriteAndDelete', () => {
       [toDelete1.id, toDelete2.id],
     );
 
-    const all = loadAllEntries(tmpDir);
+    const all = loadAllEntries(tmpDir, 'default');
     const ids = all.map((e) => e.id);
 
     expect(ids).toContain(toWrite1.id);
@@ -103,7 +103,7 @@ describe('batchWriteAndDelete', () => {
 
     batchWriteAndDelete(tmpDir, [], []);
 
-    const all = loadAllEntries(tmpDir);
+    const all = loadAllEntries(tmpDir, 'default');
     expect(all.length).toBe(1);
   });
 });

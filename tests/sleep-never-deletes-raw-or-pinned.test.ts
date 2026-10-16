@@ -9,7 +9,7 @@ import { Layer, type MemoryEntry } from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { readEntry, loadAllEntries } from '../src/store/entry-reads.js';
+import { readEntry, loadEveryTenantEntries } from '../src/store/entry-reads.js';
 import { deleteEntry, batchWriteAndDelete } from '../src/store/delete-and-batch.js';
 import { loadAllDirtySummaries } from '../src/store/summaries.js';
 import { consolidate } from '../src/consolidate/sleep.js';
@@ -146,7 +146,7 @@ describe('the sleep audit and dedup respect raw and pinned rows', () => {
     expect(result.deduped?.removed).toBe(1);
     expect(result.audit).toEqual({ errorsRemoved: 1, warningCount: 0 });
     expect(result.shared).toBeUndefined();
-    expect(loadAllEntries(root)).toHaveLength(3);
+    expect(loadEveryTenantEntries(root)).toHaveLength(3);
   });
 
   it('the dry-run render says "would" instead of "removed"', () => {
@@ -228,7 +228,7 @@ describe('a row changed while sleep awaits the LLM keeps the change', () => {
   it('a row queued twice in one flush keeps its last version, even a field set back to its loaded value', () => {
     const root = newRoot();
     writeEntry(root, createMemory7('the deploy runs on friday'));
-    const [loaded] = loadAllEntries(root);
+    const [loaded] = loadEveryTenantEntries(root);
     const snapshot = new Map([[loaded!.id, structuredClone(loaded!)]]);
 
     batchWriteAndDelete(root, [{ ...loaded!, strength: 0.5 }, { ...loaded!, retrieval_count: 1 }], [], { snapshot });

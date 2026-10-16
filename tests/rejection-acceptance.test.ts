@@ -23,7 +23,7 @@ import { join } from 'node:path';
 import { openHippoDb, closeHippoDb, getSchemaVersion } from '../src/db/index.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { readEntry, loadAllEntries } from '../src/store/entry-reads.js';
+import { readEntry, loadEveryTenantEntries } from '../src/store/entry-reads.js';
 import { rebuildIndex } from '../src/store/index-and-stats.js';
 import { appendSessionEvent } from '../src/store/sessions.js';
 import { Layer} from '../src/core/memory.js';
@@ -83,7 +83,7 @@ describe('case 1: acceptance (roadmap-verbatim)', () => {
         cmdCapture(home, { source: 'file', filePath: fixturePath, dryRun: false, global: false }),
       ).not.toThrow();
 
-      const contents = loadAllEntries(home).map((e) => e.content);
+      const contents = loadEveryTenantEntries(home).map((e) => e.content);
       expect(contents).not.toContain(xContent);
       expect(contents.some((c) => c.includes('cache dns lookups'))).toBe(true);
       expect(contents.some((c) => c.includes('rotate deploy keys'))).toBe(true);
@@ -180,7 +180,7 @@ describe('case 3: copy-path refusal (syncGlobalToLocal)', () => {
       const count = syncGlobalToLocal(localRoot, globalRoot);
       expect(count).toBe(2); // siblings only — Z was skipped, not counted as copied
 
-      const localContents = loadAllEntries(localRoot).map((e) => e.content);
+      const localContents = loadEveryTenantEntries(localRoot).map((e) => e.content);
       expect(localContents).not.toContain(zContent);
       expect(localContents).toContain('sibling one synced from global');
       expect(localContents).toContain('sibling two synced from global');
@@ -429,7 +429,7 @@ describe('consolidation-loop fix: merge tombstone check', () => {
 
       expect(result.semanticCreated).toBe(0);
 
-      const allAfter = loadAllEntries(home);
+      const allAfter = loadEveryTenantEntries(home);
       // No row anywhere carries the rejected merge digest.
       expect(allAfter.some((e) => rejectionDigest(e.content) === mergedDigest)).toBe(false);
 
@@ -472,7 +472,7 @@ describe('import dry-run tombstone accuracy', () => {
       });
       expect(dryResult.rejected).toBe(1);
       expect(dryResult.imported).toBe(1);
-      expect(loadAllEntries(home).length).toBe(0); // dry-run writes nothing
+      expect(loadEveryTenantEntries(home).length).toBe(0); // dry-run writes nothing
 
       const realResult = importEntries([rejectedChunk, otherChunk], 'import:test', [], {
         hippoRoot: home,
@@ -480,7 +480,7 @@ describe('import dry-run tombstone accuracy', () => {
       });
       expect(realResult.rejected).toBe(1);
       expect(realResult.imported).toBe(1);
-      const contents = loadAllEntries(home).map((e) => e.content);
+      const contents = loadEveryTenantEntries(home).map((e) => e.content);
       expect(contents).not.toContain(rejectedChunk);
       expect(contents).toContain(otherChunk);
     } finally {
@@ -502,12 +502,12 @@ describe('import dry-run tombstone accuracy', () => {
       const dryResult = await importVault(vault, { hippoRoot: home, tenantId: 'default', name: 'notes', dryRun: true });
       expect(dryResult.rejected).toBe(1);
       expect(dryResult.imported).toBe(1);
-      expect(loadAllEntries(home).length).toBe(0); // dry-run writes nothing
+      expect(loadEveryTenantEntries(home).length).toBe(0); // dry-run writes nothing
 
       const realResult = await importVault(vault, { hippoRoot: home, tenantId: 'default', name: 'notes', dryRun: false });
       expect(realResult.rejected).toBe(1);
       expect(realResult.imported).toBe(1);
-      const contents = loadAllEntries(home).map((e) => e.content);
+      const contents = loadEveryTenantEntries(home).map((e) => e.content);
       expect(contents).not.toContain(rejectedNote);
       expect(contents).toContain(otherNote);
     } finally {
@@ -544,11 +544,11 @@ describe('capture dry-run tombstone accuracy', () => {
       logSpy.mockRestore();
 
       expect(dryLogs).toContain(', 1 rejected)');
-      expect(loadAllEntries(home).length).toBe(0); // dry-run writes nothing
+      expect(loadEveryTenantEntries(home).length).toBe(0); // dry-run writes nothing
 
       // Real run agrees: the tombstoned item is refused, the sibling lands.
       cmdCapture(home, { source: 'file', filePath: fixturePath, dryRun: false, global: false });
-      const contents = loadAllEntries(home).map((e) => e.content);
+      const contents = loadEveryTenantEntries(home).map((e) => e.content);
       expect(contents).not.toContain(rejectedContent);
       expect(contents.some((c) => c.includes('rotate deploy keys'))).toBe(true);
     } finally {
@@ -577,7 +577,7 @@ describe('auto-promoted trace tombstone check', () => {
       const firstResult = await consolidate(home, { now: new Date() });
       expect(firstResult.promotedTraces).toBe(1);
 
-      const traceBefore = loadAllEntries(home).find((e) => e.layer === Layer.Trace);
+      const traceBefore = loadEveryTenantEntries(home).find((e) => e.layer === Layer.Trace);
       expect(traceBefore).toBeDefined();
 
       await api.reject(ctx(home), { memoryId: traceBefore!.id, reason: 'trace content was wrong' });
@@ -592,7 +592,7 @@ describe('auto-promoted trace tombstone check', () => {
 
       // Not recreated, and not counted as promoted.
       expect(secondResult.promotedTraces).toBe(0);
-      const tracesAfter = loadAllEntries(home).filter((e) => e.layer === Layer.Trace);
+      const tracesAfter = loadEveryTenantEntries(home).filter((e) => e.layer === Layer.Trace);
       expect(tracesAfter).toHaveLength(0);
 
       const db = openHippoDb(home);
@@ -655,7 +655,7 @@ describe('merge tombstone check uses the destination tenant', () => {
       errorSpy.mockRestore();
 
       expect(result.semanticCreated).toBe(0);
-      const allAfter = loadAllEntries(home);
+      const allAfter = loadEveryTenantEntries(home);
       expect(allAfter.some((e) => rejectionDigest(e.content) === mergedDigest)).toBe(false);
 
       const dbAfter = openHippoDb(home);
@@ -706,7 +706,7 @@ describe('merge tombstone check uses the destination tenant', () => {
       const result = await consolidate(home, { dryRun: false });
 
       expect(result.semanticCreated).toBe(1);
-      const allAfter = loadAllEntries(home);
+      const allAfter = loadEveryTenantEntries(home);
       const semantic = allAfter.find((e) => e.layer === Layer.Semantic && e.content === mergedContent);
       expect(semantic).toBeDefined();
       expect(semantic!.tenant_id).toBe('tenant-a');
@@ -753,7 +753,7 @@ describe('autoShare per-candidate rejection containment', () => {
       expect(shared[0]!.content).toBe(cleanContent);
       expect(stats.rejectedSkipped).toBe(1);
 
-      const globalContents = loadAllEntries(globalRoot).map((e) => e.content);
+      const globalContents = loadEveryTenantEntries(globalRoot).map((e) => e.content);
       expect(globalContents).toContain(cleanContent);
       expect(globalContents).not.toContain(rejectedContent);
     } finally {

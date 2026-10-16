@@ -58,7 +58,7 @@ describe('backfillChannel', () => {
       closeHippoDb(db);
     }
 
-    expect(loadAllEntries(root).filter((e) => e.tags.includes('source:slack'))).toHaveLength(3);
+    expect(loadAllEntries(root, 'default').filter((e) => e.tags.includes('source:slack'))).toHaveLength(3);
   });
 
   it('resumes from the saved cursor (idempotent on rerun)', async () => {
@@ -79,6 +79,6 @@ describe('backfillChannel', () => {
     };
     await backfillChannel(ctx(root), { teamId: 'T1', channel: { id: 'C1' }, fetcher });
     await backfillChannel(ctx(root), { teamId: 'T1', channel: { id: 'C1' }, fetcher });
-    expect(loadAllEntries(root).filter((e) => e.tags.includes('source:slack'))).toHaveLength(1);
+    expect(loadAllEntries(root, 'default').filter((e) => e.tags.includes('source:slack'))).toHaveLength(1);
   });
 });

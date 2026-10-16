@@ -66,6 +66,12 @@ describe('GET /v1/audit?op=<op> — consolidate + outcome wiring', () => {
     expect(body.every((e) => e.op === 'consolidate')).toBe(true);
   });
 
+  it('rejects a malformed ?tenant= with a 400 before the admin check', async () => {
+    const res = await fetch(`${handle.url}/v1/audit?tenant=${encodeURIComponent('a/../b')}`);
+    expect(res.status).toBe(400);
+    expect(await res.text()).toContain('tenant contains invalid characters');
+  });
+
   it('round-trips an outcome row (pre-existing drift the v1.11.5 Set update closes)', async () => {
     const ctx: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
     const m1 = await remember(ctx, { content: 'outcome-target' });

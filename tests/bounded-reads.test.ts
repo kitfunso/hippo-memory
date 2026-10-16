@@ -57,7 +57,7 @@ describe('invalidateMatching without onlyId', () => {
     const result = invalidateMatching(root, target, 'default');
     expect(result.targets).toEqual(order);
     expect(result.skippedPinned).toEqual([hits.pinned.id]);
-    const after = loadAllEntries(root).filter((e) => e.tags.includes('invalidated')).map((e) => e.id).sort();
+    const after = loadAllEntries(root, 'default').filter((e) => e.tags.includes('invalidated')).map((e) => e.id).sort();
     expect(after).toEqual([...expected].sort());
   });
 

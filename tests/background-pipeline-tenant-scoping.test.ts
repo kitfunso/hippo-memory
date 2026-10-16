@@ -11,7 +11,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { loadAllEntries } from '../src/store/entry-reads.js';
+import { loadAllEntries, loadEveryTenantEntries } from '../src/store/entry-reads.js';
 import { createMemory, Layer } from '../src/core/memory.js';
 import { invalidateMatching } from '../src/learn/invalidation.js';
 import { refineStore } from '../src/cli/refine-llm.js';
@@ -249,7 +249,7 @@ describe('per-tenant scoping (cross-tenant leak prevention)', () => {
       global: false,
     });
     // No new entry. Total stays at 2 (tenant-a:1, tenant-b:1).
-    expect(loadAllEntries(hippoRoot).length).toBe(2);
+    expect(loadEveryTenantEntries(hippoRoot).length).toBe(2);
   });
 
   it('case 6: importEntries dedup AND write are both tenant-scoped via options.tenantId', () => {
@@ -287,7 +287,7 @@ describe('per-tenant scoping (cross-tenant leak prevention)', () => {
       { hippoRoot, dryRun: false, global: false },
     );
     expect(result2.imported).toBe(0);
-    expect(loadAllEntries(hippoRoot).length).toBe(2); // tenant-a:1, tenant-b:1
+    expect(loadEveryTenantEntries(hippoRoot).length).toBe(2); // tenant-a:1, tenant-b:1
   });
 
   it('case 7: autoShare({ tenantId: tenant-a }) only considers tenant-a local memories', () => {
@@ -339,7 +339,7 @@ describe('host-wide back-compat parity (current behaviour preserved)', () => {
     seedFor(hippoRoot, 'tenant-b', '[Consolidated from 4 episodic memories] pattern Y', { tags: ['llm-consolidated'], layer: Layer.Semantic });
 
     // Sanity: confirm both entries are visible to host-wide loadAllEntries
-    const allHostWide = loadAllEntries(hippoRoot);
+    const allHostWide = loadEveryTenantEntries(hippoRoot);
     expect(allHostWide.length).toBe(2);
     expect(allHostWide.every((e) => e.content.startsWith('[Consolidated from'))).toBe(true);
 
@@ -358,7 +358,7 @@ describe('host-wide back-compat parity (current behaviour preserved)', () => {
   it('case 10: consolidate runs across all tenants (signature/contract test)', async () => {
     // Signature/contract test, same shape as case 11. The L9 JSDoc at
     // consolidate.ts:106 locks the host-wide intent; this test asserts that
-    // the exact reader call shape consolidate uses (loadAllEntries(hippoRoot)
+    // the exact reader call shape consolidate uses (loadEveryTenantEntries(hippoRoot)
     // with no tenantId) returns both tenants' entries. A future PR that adds
     // tenant scoping to consolidate's internal reader would not directly fail
     // this test — it would fail at the JSDoc-review step and break the
@@ -373,17 +373,17 @@ describe('host-wide back-compat parity (current behaviour preserved)', () => {
     await consolidate(hippoRoot, { dryRun: true });
 
     // Reader-shape contract: host-wide reader returns both tenants.
-    const all = loadAllEntries(hippoRoot);
+    const all = loadEveryTenantEntries(hippoRoot);
     expect(all.length).toBe(2);
     expect(all.map((e) => e.tenant_id).sort()).toEqual(['tenant-a', 'tenant-b']);
   });
 
   it('case 11: host-wide reader semantics for embeddings.ts (signature-only test)', async () => {
     // embedAll + embedMemory rebuild paths require OPENAI_API_KEY to exercise
-    // the actual loadAllEntries(hippoRoot) inside withEmbedLock. In a unit-test
+    // the actual loadEveryTenantEntries(hippoRoot) inside withEmbedLock. In a unit-test
     // env without the API key, embedAll short-circuits at isEmbeddingAvailable.
     // This test therefore asserts the host-wide CONTRACT at the signature/reader
-    // level: a host-wide loadAllEntries(hippoRoot) call (the exact one embedAll
+    // level: a host-wide loadEveryTenantEntries(hippoRoot) call (the exact one embedAll
     // and embedMemory's rebuild branch make) returns ALL tenants' entries —
     // which is the property the rebuild branches rely on.
     seedFor(hippoRoot, 'tenant-a', 'tenant-a memory for embed', {});
@@ -399,7 +399,7 @@ describe('host-wide back-compat parity (current behaviour preserved)', () => {
     // returns both tenants. A future refactor that adds tenant filtering to
     // this exact call shape would fail here and require the L9 JSDoc to be
     // re-evaluated.
-    const hostWideRead = loadAllEntries(hippoRoot);
+    const hostWideRead = loadEveryTenantEntries(hippoRoot);
     expect(hostWideRead.length).toBe(2);
     expect(hostWideRead.map((e) => e.tenant_id).sort()).toEqual(['tenant-a', 'tenant-b']);
   });

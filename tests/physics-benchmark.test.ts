@@ -253,7 +253,7 @@ beforeAll(() => {
 
   const db = openHippoDb(tmpDir);
   try {
-    const entries = loadAllEntries(tmpDir);
+    const entries = loadAllEntries(tmpDir, 'default');
     const resetCount = resetAllPhysicsState(db, entries, embeddingIndex);
 
     // Run 10 sleep cycles to let clusters form
@@ -301,13 +301,13 @@ interface QueryCase {
 }
 
 async function runClassic(query: string): Promise<string[]> {
-  const entries = loadAllEntries(tmpDir);
+  const entries = loadAllEntries(tmpDir, 'default');
   const results = await hybridSearch(query, entries, { budget: 8000, hippoRoot: tmpDir });
   return results.slice(0, 10).map((r) => r.entry.id);
 }
 
 async function runPhysics(query: string, queryEmbedding?: number[]): Promise<string[]> {
-  const entries = loadAllEntries(tmpDir);
+  const entries = loadAllEntries(tmpDir, 'default');
   const results = await physicsSearch(query, entries, {
     budget: 8000,
     hippoRoot: tmpDir,
@@ -488,7 +488,7 @@ describe('Physics vs Classic A/B Benchmark', () => {
     it('energy does not increase over 50 sleep cycles', () => {
       const db = openHippoDb(tmpDir);
       try {
-        const entries = loadAllEntries(tmpDir);
+        const entries = loadAllEntries(tmpDir, 'default');
         resetAllPhysicsState(db, entries, embeddingIndex);
 
         const energyHistory: number[] = [];

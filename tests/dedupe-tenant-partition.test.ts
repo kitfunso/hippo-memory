@@ -26,7 +26,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
-import { loadAllEntries } from '../src/store/entry-reads.js';
+import { loadAllEntries, loadEveryTenantEntries } from '../src/store/entry-reads.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { remember } from '../src/api/index.js';
 import { deduplicateStore, type DedupPair } from '../src/consolidate/dedupe.js';
@@ -77,7 +77,7 @@ describe('deduplicateStore tenant partition', () => {
       expect(result.removed).toBe(0);
       expect(result.pairs).toEqual([]);
 
-      const all = loadAllEntries(home);
+      const all = loadEveryTenantEntries(home);
       expect(all.length).toBe(2);
       const tenantAEntries = loadAllEntries(home, 'tenant-a');
       const tenantBEntries = loadAllEntries(home, 'tenant-b');

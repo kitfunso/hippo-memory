@@ -148,7 +148,7 @@ describe('autoShare', () => {
 
     // We can't easily test autoShare with the real global root,
     // but we can test transferScore filtering
-    const localEntries = loadAllEntries(localDir);
+    const localEntries = loadAllEntries(localDir, 'default');
     const candidates = localEntries.filter((e) => transferScore(e) >= 0.6);
 
     expect(candidates.length).toBe(1);

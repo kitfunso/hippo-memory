@@ -114,7 +114,7 @@ describe('hippo trace record', () => {
       '--outcome', 'success',
     ]);
 
-    const entries = loadAllEntries(hippoDir);
+    const entries = loadAllEntries(hippoDir, 'default');
     const traces = entries.filter((e) => e.layer === 'trace');
     expect(traces).toHaveLength(1);
     expect(traces[0].trace_outcome).toBe('success');

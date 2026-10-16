@@ -15,7 +15,7 @@ const TEAM = 'gotcha: powershell 5.1 has no pipeline chain operators, use if blo
 const MINE = 'gotcha: the staging vpn drops idle sessions after ten minutes, reconnect first';
 
 function globalContents(): string[] {
-  return loadAllEntries(getGlobalRoot()).map((e) => e.content);
+  return loadAllEntries(getGlobalRoot(), 'default').map((e) => e.content);
 }
 
 function refusal(fn: () => void): BadRequestError {

@@ -53,7 +53,7 @@ describe('api.sleep secretSkipped counter', () => {
     const result = await sleep(ctx, {});
     expect(result.secretSkipped).toBe(1);
     expect(result.shared).toBeGreaterThanOrEqual(1);
-    const globalContents = loadAllEntries(getGlobalRoot()).map((e) => e.content);
+    const globalContents = loadAllEntries(getGlobalRoot(), 'default').map((e) => e.content);
     expect(globalContents).toContain(CLEAN_ROW);
     expect(globalContents).not.toContain(SECRET_ROW);
   });
@@ -62,7 +62,7 @@ describe('api.sleep secretSkipped counter', () => {
     const result = await sleep(ctx, { dryRun: true });
     expect(result.secretSkipped).toBeUndefined();
     expect(result.shared).toBeUndefined();
-    expect(loadAllEntries(getGlobalRoot())).toHaveLength(0);
+    expect(loadAllEntries(getGlobalRoot(), 'default')).toHaveLength(0);
   });
 
   it('noShare skips phase 4: no counter', async () => {

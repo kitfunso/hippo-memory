@@ -60,7 +60,7 @@ describe('sleep skips superseded rows', () => {
     expect(sent).toContain('blamed the dropped billing table');
     expect(sent).toContain('alice reviews every schema change');
     expect(sent).not.toMatch(/blamed bob|oldfact/);
-    const current = loadAllEntries(root).filter((e) => !e.superseded_by);
+    const current = loadAllEntries(root, 'default').filter((e) => !e.superseded_by);
     expect(current.some((e) => e.content.startsWith('[Consolidated from 2 related memories, newest first]'))).toBe(true);
     expect(current.map((e) => e.content).join('\n')).not.toMatch(/blamed bob|oldfact/);
   });

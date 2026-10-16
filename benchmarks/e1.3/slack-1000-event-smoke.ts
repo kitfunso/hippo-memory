@@ -75,7 +75,7 @@ export async function runSlackSmoke(opts: SmokeOpts): Promise<SmokeResult> {
     globalThis.fetch = origFetch;
   }
 
-  const uniqueMemories = loadAllEntries(opts.hippoRoot).filter((e) =>
+  const uniqueMemories = loadAllEntries(opts.hippoRoot, 'default').filter((e) =>
     e.tags.includes('source:slack'),
   ).length;
   return {

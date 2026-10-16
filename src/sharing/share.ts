@@ -8,6 +8,7 @@ import { AGENT_MEMORY_SOURCE_PREFIX, AGENT_MEMORY_TAGS } from '../core/agent-mem
 import { writeEntriesSkippingRejected, writeEntry } from '../store/entry-writes.js';
 import {
   loadAllEntries,
+  loadEveryTenantEntries,
   loadEntriesWithSignals,
   loadEntryTextKeys,
   readEntry,
@@ -294,7 +295,7 @@ export function autoShare(
   // bar only signal rows can share or count as never-auto-share skips.
   const localEntries = minScore > 0.5
     ? loadEntriesWithSignals(localRoot, AUTO_SHARE_SIGNALS, options.tenantId)
-    : loadAllEntries(localRoot, options.tenantId);
+    : options.tenantId === undefined ? loadEveryTenantEntries(localRoot) : loadAllEntries(localRoot, options.tenantId);
   initGlobal();
   const globalRoot = getGlobalRoot();
   // Host-wide read. The global store IS the union across all tenants;

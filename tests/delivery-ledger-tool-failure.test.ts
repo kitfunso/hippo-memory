@@ -497,7 +497,7 @@ describe('invariance I4 and the command line', () => {
       return [r.status, r.stdout, r.stderr.split(at.dir).join('<dir>').replace(/\(node:\d+\)/g, '(node:<pid>)')];
     });
     const log = rowsAt(at.hippoRoot, 'SELECT * FROM failure_log ORDER BY id').map((r) => Object.fromEntries(Object.entries(r).filter(([k]) => k !== 'id' && k !== 'ts')));
-    const memories = loadAllEntries(at.hippoRoot).filter((m) => m.source === 'tool-failure').map((m) => ({ content: m.content, tags: m.tags, source: m.source, confidence: m.confidence }));
+    const memories = loadAllEntries(at.hippoRoot, 'default').filter((m) => m.source === 'tool-failure').map((m) => ({ content: m.content, tags: m.tags, source: m.source, confidence: m.confidence }));
     return { runs, log, memories };
   }
   const count = (at: Project): number => num(rowsAt(at.hippoRoot, 'SELECT COUNT(*) AS c FROM delivery_events')[0].c);

@@ -83,7 +83,7 @@ describe('MCP writes on a shared store', () => {
     });
     expect(body.result?.isError).toBe(true);
     expect(body.result?.content[0]?.text).toBe("hippo_remember needs the caller's project on a shared store; the client sends it in the X-Hippo-Project header");
-    expect(loadAllEntries(store)).toEqual([]);
+    expect(loadAllEntries(store, 'default')).toEqual([]);
   });
 
   it('HTTP MCP hippo_remember stamps the X-Hippo-Project name', async () => {
@@ -94,7 +94,7 @@ describe('MCP writes on a shared store', () => {
       arguments: { text: 'the staging database restarts at noon on sundays' },
     }, { 'x-hippo-project': 'acme' });
     expect(body.result?.content[0]?.text).toMatch(/Remembered/);
-    expect(loadAllEntries(store).map((e) => e.origin_project)).toEqual(['acme']);
+    expect(loadAllEntries(store, 'default').map((e) => e.origin_project)).toEqual(['acme']);
   });
 
   it('learn with the MCP profile stores NULL rows', async () => {
@@ -102,7 +102,7 @@ describe('MCP writes on a shared store', () => {
     const ctx = apiCtx(store, 'default', adminActor('shared-store-mcp-test'));
     const result = await learn(ctx, { repoPath: repoWithOneFix(), days: 7, profile: MCP_LEARN });
     expect(result.added).toBe(1);
-    const rows = loadAllEntries(store);
+    const rows = loadAllEntries(store, 'default');
     expect(rows).toHaveLength(1);
     expect(rows[0]?.origin_project).toBeNull();
   });
@@ -136,7 +136,7 @@ describe('the MCP tool gate on a shared store', () => {
         }
       }
     }
-    expect(loadAllEntries(store)).toEqual([]);
+    expect(loadAllEntries(store, 'default')).toEqual([]);
   });
 
   it('leaves stdio alone: the stdio host is never gated on a shared store', () => {

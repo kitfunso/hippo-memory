@@ -472,7 +472,7 @@ describe('buildDag', () => {
       const fetcher: typeof fetch = async () => new Response(JSON.stringify({ content: [{ text: 'alice keeps the zephyrine cache warm across every deploy' }] }), { status: 200 });
       const { result, statements } = await recordStatementsAsync(() => buildDag(sqliteSyncStore(root).localFiles, facts, { apiKey: 'test-key', fetcher }));
       expect(result).toMatchObject({ summariesCreated: 1, factsLinked: n });
-      const stored = loadAllEntries(root);
+      const stored = loadAllEntries(root, 'default');
       const parentId = stored.find((e) => e.dag_level === 2)?.id;
       expect(stored.filter((e) => e.dag_parent_id === parentId)).toHaveLength(n);
       expect(mirrorsRewritten()).toBe(n);

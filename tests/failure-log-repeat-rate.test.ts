@@ -244,7 +244,7 @@ describe('hippo failures', () => {
     const root = join(dir, '.hippo');
     withDb(root, (db) => db.exec('DROP TABLE failure_log'));
     run(['capture-error'], broke('s1'));
-    expect(loadAllEntries(root).map((e) => e.content)).toEqual(['Bash: Exit code 1 Error: something real broke']);
+    expect(loadAllEntries(root, 'default').map((e) => e.content)).toEqual(['Bash: Exit code 1 Error: something real broke']);
   });
 
   it('reads the store the hook fell back to, never creates one, and names errors without a session', () => {

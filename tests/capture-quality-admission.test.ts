@@ -187,6 +187,6 @@ describe('automatic quality does not govern manual or trusted import storage', (
       { role: 'user', text: 'Never deploy on Fridays because the on-call rota is thin.' },
     ];
     cmdCapture(root, { source: 'last-session', sessionTurns: turns, dryRun: false, global: false });
-    expect(loadAllEntries(root).map((entry) => entry.content)).toEqual(['Never deploy on Fridays because the on-call rota is thin']);
+    expect(loadAllEntries(root, 'default').map((entry) => entry.content)).toEqual(['Never deploy on Fridays because the on-call rota is thin']);
   });
 });

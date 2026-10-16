@@ -7,7 +7,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { initStore } from '../src/store/open.js';
-import { loadAllEntries } from '../src/store/entry-reads.js';
+import { loadEveryTenantEntries } from '../src/store/entry-reads.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadConfig } from '../src/core/config.js';
 import { handleMcpRequest, type McpContext, type McpResponse } from '../src/mcp/server.js';
@@ -88,7 +88,7 @@ describe('hippo_learn scans the server cwd only for stdio or a host admin', () =
 
   it('refuses an HTTP-MCP context with no role, so it cannot run the admin-only tool', async () => {
     await expect(callTool('hippo_learn', { days: 3650 }, roleless(hippoRoot))).rejects.toThrow('hippo_learn requires a host admin');
-    expect(loadAllEntries(hippoRoot)).toEqual([]);
+    expect(loadEveryTenantEntries(hippoRoot)).toEqual([]);
   });
 
   it("refuses a remote member and a tenant admin, whose repo is not the server's", async () => {
@@ -96,13 +96,13 @@ describe('hippo_learn scans the server cwd only for stdio or a host admin', () =
       const ctx: McpContext = { hippoRoot, tenantId: 'default', actor: `api_key:${role}`, role , store: sqliteStore(hippoRoot) };
       await expect(callTool('hippo_learn', { days: 3650 }, ctx)).rejects.toThrow('hippo_learn requires a host admin');
     }
-    expect(loadAllEntries(hippoRoot)).toEqual([]);
+    expect(loadEveryTenantEntries(hippoRoot)).toEqual([]);
   });
 
   it('learns for stdio, the local operator, as before', async () => {
     const text = await runLearnTool({ args: { days: 3650 }, ctx: { hippoRoot, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true, stdio: true, store: sqliteStore(hippoRoot) }, hippoRoot, config: loadConfig(hippoRoot), tenantId: 'default', store: sqliteStore(hippoRoot) });
     expect(text).toMatch(/^Git learn: 1 new/);
-    expect(loadAllEntries(hippoRoot).some((e) => e.content.includes('retry loop'))).toBe(true);
+    expect(loadEveryTenantEntries(hippoRoot).some((e) => e.content.includes('retry loop'))).toBe(true);
   });
 });
 

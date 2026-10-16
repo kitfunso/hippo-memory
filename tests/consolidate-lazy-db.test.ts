@@ -40,7 +40,7 @@ describe('consolidateDb lazy open', () => {
       expect(result.merged).toBe(0);
       expect(result.semanticCreated).toBe(0);
       expect(result.promotedTraces).toBe(0);
-      expect(loadAllEntries(home)).toHaveLength(0);
+      expect(loadAllEntries(home, 'default')).toHaveLength(0);
     } finally {
       rmSync(home, { recursive: true, force: true });
     }
@@ -83,7 +83,7 @@ describe('consolidateDb lazy open', () => {
       errorSpy.mockRestore();
 
       expect(result.semanticCreated).toBe(0);
-      const allAfter = loadAllEntries(home);
+      const allAfter = loadAllEntries(home, 'default');
       expect(allAfter.some((e) => rejectionDigest(e.content) === mergedDigest)).toBe(false);
     } finally {
       rmSync(home, { recursive: true, force: true });
@@ -107,7 +107,7 @@ describe('consolidateDb lazy open', () => {
       // Dry-run previews the merge without writing (lazyTombstoneChecks
       // answers null under a dry run before it ever calls openHippoDb).
       expect(result.dryRun).toBe(true);
-      expect(loadAllEntries(home)).toHaveLength(2);
+      expect(loadAllEntries(home, 'default')).toHaveLength(2);
     } finally {
       rmSync(home, { recursive: true, force: true });
     }

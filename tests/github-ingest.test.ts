@@ -163,7 +163,7 @@ describe('ingestEvent', () => {
     expect(result.memoryId).toBeTruthy();
 
     // Memory exists with correct shape.
-    const entries = loadAllEntries(root);
+    const entries = loadAllEntries(root, 'default');
     const ghEntries = entries.filter((e) => e.tags.includes('source:github'));
     expect(ghEntries).toHaveLength(1);
     const entry = ghEntries[0];
@@ -205,7 +205,7 @@ describe('ingestEvent', () => {
     expect(r2.memoryId).toBe(r1.memoryId);
 
     // Still only one memory row.
-    const entries = loadAllEntries(root);
+    const entries = loadAllEntries(root, 'default');
     expect(entries.filter((e) => e.tags.includes('source:github'))).toHaveLength(1);
   });
 
@@ -233,7 +233,7 @@ describe('ingestEvent', () => {
     expect(r1.memoryId).toBeNull();
 
     // No memory row.
-    const entries = loadAllEntries(root);
+    const entries = loadAllEntries(root, 'default');
     expect(entries.filter((e) => e.tags.includes('source:github'))).toHaveLength(0);
 
     // github_event_log row exists with memory_id=NULL.
@@ -288,7 +288,7 @@ describe('ingestEvent', () => {
     expect(r3.status).toBe('ingested');
     expect(r4.status).toBe('ingested');
 
-    const entries = loadAllEntries(root);
+    const entries = loadAllEntries(root, 'default');
     const refs = new Set(entries.map((e) => e.artifact_ref).filter((r): r is string => !!r));
     expect(refs.has('github://acme/demo/issue/42')).toBe(true);
     expect(refs.has('github://acme/demo/issue/42/comment/999')).toBe(true);

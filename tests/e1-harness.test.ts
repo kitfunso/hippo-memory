@@ -95,7 +95,7 @@ describe('E1 driver', () => {
     let storeSeen = false;
     const result = await runArmSeed('full', 3, TINY, (hippoRoot: string) => {
       storeSeen = true;
-      const entries = loadAllEntries(hippoRoot);
+      const entries = loadAllEntries(hippoRoot, 'default');
       expect(entries.length).toBeGreaterThan(0);
       // Every created timestamp lies within the protocol's simulated range -
       // nothing stamped with the real 2026 clock (rev #8 invariant).
@@ -116,7 +116,7 @@ describe('E1 driver', () => {
 
   it('strengthen-off arm: zero retrieval writes, outcome attribution still lands', async () => {
     await runArmSeed('strengthen-off', 3, TINY, (hippoRoot: string) => {
-      const entries = loadAllEntries(hippoRoot);
+      const entries = loadAllEntries(hippoRoot, 'default');
       // No strengthening writes anywhere (rev #10: the arm isolates one mechanism).
       expect(entries.every((e) => e.retrieval_count === 0)).toBe(true);
       // Outcomes still applied via explicit ids (codex round-7 coupling fix):
@@ -127,7 +127,7 @@ describe('E1 driver', () => {
 
   it('probes are read-only: an all-off arm leaves zero retrieval state', async () => {
     await runArmSeed('all-off', 5, TINY, (hippoRoot: string) => {
-      const entries = loadAllEntries(hippoRoot);
+      const entries = loadAllEntries(hippoRoot, 'default');
       // Probes ran every epoch over these entries; none of them wrote back.
       expect(entries.every((e) => e.retrieval_count === 0)).toBe(true);
       expect(entries.every((e) => e.half_life_days <= 90)).toBe(true); // no +2 accumulation beyond derive caps

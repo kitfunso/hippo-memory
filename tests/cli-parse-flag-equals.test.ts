@@ -293,6 +293,6 @@ describe('runCli: --flag=value end-to-end guards', () => {
 
     expect(res.status).toBe(0);
     expect(res.stdout).toContain('Dry run: skipped learning');
-    expect(loadAllEntries(join(tmpDir, '.hippo'))).toEqual([]);
+    expect(loadAllEntries(join(tmpDir, '.hippo'), 'default')).toEqual([]);
   });
 });

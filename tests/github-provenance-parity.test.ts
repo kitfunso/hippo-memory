@@ -90,7 +90,7 @@ describe('GitHub connector — provenance coverage parity', () => {
       });
     }
 
-    const entries = loadAllEntries(root);
+    const entries = loadAllEntries(root, 'default');
     const coverage = buildProvenanceCoverage(entries);
 
     expect(coverage.rawTotal).toBeGreaterThanOrEqual(50);

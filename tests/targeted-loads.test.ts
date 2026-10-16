@@ -49,7 +49,7 @@ describe('loadEntryTextKeys', () => {
   it('holds the same text keys as the whole-row read, for one tenant or all', async () => {
     await seed(5);
     await seed(3, 'acme');
-    const all = storedTextKeys(loadAllEntries(root));
+    const all = storedTextKeys(loadAllEntries(root, 'default'));
     expect(storedTextKeys(loadEntryTextKeys(root))).toEqual(all);
     const acme = storedTextKeys(loadAllEntries(root, 'acme'));
     expect(storedTextKeys(loadEntryTextKeys(root, 'acme'))).toEqual(acme);
