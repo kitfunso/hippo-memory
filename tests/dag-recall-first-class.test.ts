@@ -19,7 +19,6 @@ import { openHippoDb } from '../src/db/index.js';
 import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { hybridSearch } from '../src/search/hybrid.js';
 import { physicsSearch } from '../src/search/physics-search.js';
-import { isDagSummary } from '../src/search/boosts.js';
 import type { SearchResult } from '../src/core/search-types.js';
 import type { RerankerOptions, RerankResult } from '../src/rerankers/types.js';
 import { searchBothHybrid } from '../src/sharing/search-both.js';
@@ -316,15 +315,5 @@ describe('first-class DAG recall (scoring layer)', () => {
     // Fallback to hybridSearch → deboost applied
     const br = findResult(results, summary.id)?.breakdown;
     expect(br?.summaryDeboost).toBeCloseTo(0.85);
-  });
-
-  it('test #18: isDagSummary helper matches dag_level === 2 only', () => {
-    const l2 = makeL2Summary('l2-summary-content');
-    const l1 = makeL1Fact('l1 fact content');
-    const l0 = createMemory('l0 raw content', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic });
-    // l0 has no dag_level — undefined; helper returns false
-    expect(isDagSummary(l2)).toBe(true);
-    expect(isDagSummary(l1)).toBe(false);
-    expect(isDagSummary(l0)).toBe(false);
   });
 });

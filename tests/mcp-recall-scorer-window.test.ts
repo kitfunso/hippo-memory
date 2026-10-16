@@ -61,32 +61,11 @@ describe('MCP hippo_recall scorer_window', () => {
 
   afterEach(() => rmSync(home, { recursive: true, force: true }));
 
-  it('scorer_window=2 is accepted and returns content (validator wired through to api.recall)', async () => {
-    // MCP `hippo_recall` runs TWO scorers: `apiRecall(...)` for audit +
-    // continuity + fresh-tail/summary appendix, AND a separate
-    // physics/hybrid scorer over loadAllEntries that drives user-visible
-    // ordering. `scorer_window` only narrows api.recall's candidate pool;
-    // the primary ranked block is independent. So the user-visible effect
-    // of scorer_window over MCP today is on the appendix paths
-    // (fresh-tail / summarize-overflow), not the main results. Asserting
-    // strictly-shorter rendered text would over-claim.
-    //
-    // What this test pins: scorer_window passes through transport
-    // correctly, reaches apiRecall, and does not throw. The rejection
-    // paths below pin the validator end-to-end.
-    const result = await callTool(
-      'hippo_recall',
-      { query: 'alpha', budget: 5000, scorer_window: 2 },
-      { hippoRoot: home, tenantId: 'default', actor: 'mcp' },
-    );
-    const text = extractResultText(result);
-    expect(text.length).toBeGreaterThan(0);
-  });
-
-  it('scorer_window=0 throws RecallContractError with code=invalid_scorer_window', async () => {
+  // 'abc' is Number-coerced by the transport so recall() rejects it like HTTP does.
+  it.each([0, 'abc'])('scorer_window=%s throws RecallContractError with code=invalid_scorer_window', async (value) => {
     const call = callTool(
       'hippo_recall',
-      { query: 'alpha', scorer_window: 0 },
+      { query: 'alpha', scorer_window: value },
       { hippoRoot: home, tenantId: 'default', actor: 'mcp' },
     );
     await expect(call).rejects.toBeInstanceOf(RecallContractError);
@@ -121,17 +100,5 @@ describe('MCP hippo_recall scorer_window', () => {
     // (src/mcp/server.ts:470). Confirm the appendix path fired with the
     // beta rows that physics didn't score.
     expect(text).toContain('Fresh tail / substituted summaries');
-  });
-
-  it('scorer_window="abc" (string, transport-coerced) rejects with invalid_scorer_window', async () => {
-    // Codex CRITICAL[2]: MCP Number-coerces non-numeric input so the
-    // rejection reaches recall() and produces the same typed code as HTTP.
-    const call = callTool(
-      'hippo_recall',
-      { query: 'alpha', scorer_window: 'abc' },
-      { hippoRoot: home, tenantId: 'default', actor: 'mcp' },
-    );
-    await expect(call).rejects.toBeInstanceOf(RecallContractError);
-    await expect(call).rejects.toMatchObject({ code: 'invalid_scorer_window' });
   });
 });

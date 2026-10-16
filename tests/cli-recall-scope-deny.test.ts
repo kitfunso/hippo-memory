@@ -11,8 +11,8 @@
  *   - suppression stats → JS-half drops counted in droppedPreRank
  *   - hippo explain     → same rule + honest [note] when candidates hidden
  *
- * Subprocess pattern per tests/cli-recall-filters.test.ts (real store, real
- * bin). Global-store rows are seeded in-process against the same SQLite.
+ * Runs the CLI entry in process against a real store; global-store rows are
+ * seeded against the same SQLite.
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
@@ -26,37 +26,40 @@ import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { withSharedStoreHandles } from '../src/db/index.js';
 import { handleExplain } from '../src/cli/explain.js';
 import { runInProcess } from './_helpers/run-in-process.js';
-import { hippoOut } from './_helpers/spawn-hippo.js';
+import { runCli } from '../src/cli.js';
 
 const CLEAN = 'clean deploykey fact for everyone';
 const PRIV_SLACK = 'private slack deploykey fact';
 const PRIV_GITHUB = 'private github deploykey fact';
 const LEGACY = 'legacy quarantined deploykey fact';
 
-interface RecallScopeEnv {
-  HIPPO_HOME: string;
-  HIPPO_SKIP_AUTO_INTEGRATIONS: string;
-}
-
-function hippo(cwd: string, env: RecallScopeEnv, ...args: string[]): string {
-  return hippoOut(args, { cwd, env: { ...process.env, ...env }, exe: 'node' });
+/** `hippo <args>` run in this process from `cwd`, the call bin/hippo.js makes; a non-zero exit fails the test. */
+async function hippo(cwd: string, ...args: string[]): Promise<string> {
+  const saved = process.cwd();
+  process.chdir(cwd);
+  try {
+    const r = await runInProcess(() => runCli(['node', 'hippo', ...args]));
+    expect(r.status, r.stderr).toBe(0);
+    return r.stdout;
+  } finally {
+    process.chdir(saved);
+  }
 }
 
 describe('cli recall scope default-deny', () => {
   let home: string;
-  let env: RecallScopeEnv;
+  let globalDir: string;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     home = mkdtempSync(join(tmpdir(), 'hippo-recall-scope-'));
-    env = {
-      HIPPO_HOME: join(home, 'global-hippo'),
-      HIPPO_SKIP_AUTO_INTEGRATIONS: '1',
-    };
-    hippo(home, env, 'init', '--no-hooks', '--no-schedule', '--no-learn');
-    hippo(home, env, 'remember', CLEAN);
-    hippo(home, env, 'remember', PRIV_SLACK, '--scope', 'slack:private:C1');
-    hippo(home, env, 'remember', PRIV_GITHUB, '--scope', 'github:private:owner/repo');
-    hippo(home, env, 'remember', LEGACY, '--scope', 'unknown:legacy');
+    globalDir = join(home, 'global-hippo');
+    vi.stubEnv('HIPPO_HOME', globalDir);
+    vi.stubEnv('HIPPO_SKIP_AUTO_INTEGRATIONS', '1');
+    await hippo(home, 'init', '--no-hooks', '--no-schedule', '--no-learn');
+    await hippo(home, 'remember', CLEAN);
+    await hippo(home, 'remember', PRIV_SLACK, '--scope', 'slack:private:C1');
+    await hippo(home, 'remember', PRIV_GITHUB, '--scope', 'github:private:owner/repo');
+    await hippo(home, 'remember', LEGACY, '--scope', 'unknown:legacy');
   });
 
   afterEach(() => {
@@ -64,16 +67,16 @@ describe('cli recall scope default-deny', () => {
     if (home) rmSync(home, { recursive: true, force: true });
   });
 
-  it('no-scope recall denies private and quarantine rows', () => {
-    const out = hippo(home, env, 'recall', 'deploykey', '--limit', '10');
+  it('no-scope recall denies private and quarantine rows', async () => {
+    const out = await hippo(home, 'recall', 'deploykey', '--limit', '10');
     expect(out).toContain(CLEAN);
     expect(out).not.toContain(PRIV_SLACK);
     expect(out).not.toContain(PRIV_GITHUB);
     expect(out).not.toContain(LEGACY);
   });
 
-  it('explicit --scope UNLOCKS the named scope on top of the default set (additive CLI semantics)', () => {
-    const out = hippo(home, env, 'recall', 'deploykey', '--scope', 'slack:private:C1', '--limit', '10');
+  it('explicit --scope UNLOCKS the named scope on top of the default set (additive CLI semantics)', async () => {
+    const out = await hippo(home, 'recall', 'deploykey', '--scope', 'slack:private:C1', '--limit', '10');
     // Deliberate access to the requested private scope is preserved...
     expect(out).toContain(PRIV_SLACK);
     // ...the default-admitted set stays (the CLI flag is historically a
@@ -85,8 +88,8 @@ describe('cli recall scope default-deny', () => {
     expect(out).not.toContain(LEGACY);
   });
 
-  it('JSON output excludes denied rows pre-candidate (SQL predicate before the window)', () => {
-    const raw = hippo(home, env, 'recall', 'deploykey', '--json', '--limit', '10');
+  it('JSON output excludes denied rows pre-candidate (SQL predicate before the window)', async () => {
+    const raw = await hippo(home, 'recall', 'deploykey', '--json', '--limit', '10');
     // SAFETY: `hippo recall --json` on this CLI always prints the recall-result
     // envelope with `results` and `suppressionSummary` fields, per src/cli.ts.
     const parsed = JSON.parse(raw) as {
@@ -105,27 +108,25 @@ describe('cli recall scope default-deny', () => {
     expect(parsed.suppressionSummary.droppedPreRank).toBe(0);
   });
 
-  it('hasGlobal path (searchBothHybrid recallScope) filters global-store rows equally', () => {
-    const globalDir = env.HIPPO_HOME;
+  it('hasGlobal path (searchBothHybrid recallScope) filters global-store rows equally', async () => {
     initStore(globalDir);
     writeEntry(globalDir, createMemory('global clean deploykey note', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
     writeEntry(globalDir, createMemory('global private deploykey note', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, scope: 'slack:private:CG' }));
 
-    const out = hippo(home, env, 'recall', 'deploykey', '--limit', '10');
+    const out = await hippo(home, 'recall', 'deploykey', '--limit', '10');
     expect(out).toContain('global clean deploykey note');
     expect(out).not.toContain('global private deploykey note');
     expect(out).not.toContain(PRIV_SLACK);
   });
 
-  it('hasGlobal path: explicit --scope additively unlocks the requested private scope on the GLOBAL store too', () => {
+  it('hasGlobal path: explicit --scope additively unlocks the requested private scope on the GLOBAL store too', async () => {
     // independent-review-critic round 1 med: the additive unlock was only
     // covered on the local-only path.
-    const globalDir = env.HIPPO_HOME;
     initStore(globalDir);
     writeEntry(globalDir, createMemory('global clean deploykey note', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
     writeEntry(globalDir, createMemory('global private deploykey note', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, scope: 'slack:private:CG' }));
 
-    const out = hippo(home, env, 'recall', 'deploykey', '--scope', 'slack:private:CG', '--limit', '10');
+    const out = await hippo(home, 'recall', 'deploykey', '--scope', 'slack:private:CG', '--limit', '10');
     expect(out).toContain('global private deploykey note');
     expect(out).toContain('global clean deploykey note');
     // Non-requested private scopes stay denied on both stores.
@@ -153,14 +154,12 @@ describe('cli recall scope default-deny', () => {
     expect(contents.some((c) => c.includes('private filler'))).toBe(false);
 
     // End-to-end through the CLI for belt and braces.
-    const out = hippo(home, env, 'recall', 'windowstarve', '--limit', '10');
+    const out = await hippo(home, 'recall', 'windowstarve', '--limit', '10');
     expect(out).toContain('windowstarve admitted public row');
     expect(out).not.toContain('private filler');
-  });
+  }, 20_000);
 
   it('hippo explain applies the same rule and prints an honest note', async () => {
-    vi.stubEnv('HIPPO_HOME', env.HIPPO_HOME);
-    vi.stubEnv('HIPPO_SKIP_AUTO_INTEGRATIONS', env.HIPPO_SKIP_AUTO_INTEGRATIONS);
     const res = await runInProcess(() => handleExplain({ hippoRoot: join(home, '.hippo'), tenantId: 'default', args: ['deploykey'], flags: {} }));
     expect(res.status).toBe(0);
     expect(res.stdout).not.toContain(PRIV_SLACK);

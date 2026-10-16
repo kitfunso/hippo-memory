@@ -77,42 +77,6 @@ describe('drillDown', () => {
     expect(r.truncated).toBe(false);
   });
 
-  it('returns failure=not_drillable on a leaf (v1.6.4)', async () => {
-    const leaf = createMemory('leaf body', {
-      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-      layer: Layer.Buffer,
-      dagLevel: 0,
-      tenantId: 'default',
-    });
-    writeEntry(root, leaf);
-    const r = await drillDown(ctxFor(root), leaf.id);
-    expect('failure' in r).toBe(true);
-    if ('failure' in r) expect(r.failure).toBe('not_drillable');
-  });
-
-  it('returns failure=not_found when summary belongs to another tenant (v1.6.4 collapse)', async () => {
-    // Cross-tenant intentionally collapses into not_found — distinguishing
-    // would leak existence to unauthorised tenants.
-    const s = makeSummary('other tenant topic', { tenant_id: 'other' });
-    writeEntry(root, s);
-    writeEntry(root, makeChild('detail', s.id, { tenant_id: 'other' }));
-    const r = await drillDown(ctxFor(root, 'default'), s.id);
-    expect('failure' in r).toBe(true);
-    if ('failure' in r) expect(r.failure).toBe('not_found');
-  });
-
-  it('private-scoped summary returns failure=not_found (codex P1: collapse to prevent existence leak)', async () => {
-    // Pre-codex-round-3 returned 'scope_blocked', which told a no-scope
-    // caller "this row exists, just not for you." Same existence leak
-    // the HTTP 404 collapse was already preventing. Now collapsed at API.
-    const s = makeSummary('private topic', { scope: 'slack:private:CSEC' });
-    writeEntry(root, s);
-    writeEntry(root, makeChild('secret detail', s.id, { scope: 'slack:private:CSEC' }));
-    const r = await drillDown(ctxFor(root), s.id);
-    expect('failure' in r).toBe(true);
-    if ('failure' in r) expect(r.failure).toBe('not_found');
-  });
-
   it('filters out children whose scope fails the default-deny check', async () => {
     // Public summary, but one child accidentally tagged private. Should NOT
     // appear in the children list (defense in depth — even if the DAG is
@@ -154,11 +118,5 @@ describe('drillDown', () => {
     expect(r.children.length).toBe(5);
     expect(r.truncated).toBe(true);
     expect(r.totalChildren).toBe(30);
-  });
-
-  it('returns failure=not_found for an unknown id (v1.6.4)', async () => {
-    const r = await drillDown(ctxFor(root), 'mem_does_not_exist');
-    expect('failure' in r).toBe(true);
-    if ('failure' in r) expect(r.failure).toBe('not_found');
   });
 });

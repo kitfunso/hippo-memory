@@ -12,7 +12,7 @@
 // name:
 //   1. The invariant `totalCandidates == droppedPreRank + droppedByBudget +
 //      returned` holds across several --limit/query combinations, driven
-//      through the real CLI subprocess against a real seeded store.
+//      through the real CLI entry against a real seeded store.
 //   2. The `Cutoff:` line actually PRINTS in CLI text output when a recall
 //      is truncated (the specific gap: no prior test drove the CLI summary
 //      output at all).
@@ -21,15 +21,14 @@
 //
 // Same isolation harness as tests/goal-retrieval-policy.test.ts: per-test cwd
 // tempdir, separate HIPPO_HOME global root, HIPPO_SKIP_AUTO_INTEGRATIONS=1,
-// initStore + api.remember for seeding, execFileSync against dist/cli.js
-// for the recall itself (real DB, real CLI, project convention).
+// initStore + api.remember for seeding, the CLI entry run in process for
+// the recall itself (real DB, real CLI, project convention).
 
 import type { FullContext } from './_helpers/api-ctx.js';
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { execFileSync } from 'node:child_process';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
@@ -37,8 +36,24 @@ import { insertEntityAt, insertRelationAt } from './_helpers/graph-seed.js';
 import { remember } from '../src/api/index.js';
 import { makeEnv, type TestEnv } from './_helpers/cli-env.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+import { runCli } from '../src/cli.js';
+import { runInProcess } from './_helpers/run-in-process.js';
 
-const CLI = join(process.cwd(), 'dist', 'cli.js');
+/** `hippo <args>` run in this process from `cwd` against `globalRoot`, the call bin/hippo.js makes; a non-zero exit fails the test. */
+async function hippo(cwd: string, globalRoot: string, ...args: string[]): Promise<string> {
+  vi.stubEnv('HIPPO_HOME', globalRoot);
+  vi.stubEnv('HIPPO_TENANT', 'default');
+  vi.stubEnv('HIPPO_SKIP_AUTO_INTEGRATIONS', '1');
+  const saved = process.cwd();
+  process.chdir(cwd);
+  try {
+    const r = await runInProcess(() => runCli(['node', 'hippo', ...args]));
+    expect(r.status, r.stderr).toBe(0);
+    return r.stdout;
+  } finally {
+    process.chdir(saved);
+  }
+}
 
 function ctxFor(root: string): FullContext {
   return apiCtx(root, 'default', { subject: 'c5-test', role: 'admin' });
@@ -58,73 +73,27 @@ interface SuppressionSummary {
   droppedByBudget: number;
 }
 
-function recallJsonBudget(
-  env: TestEnv,
-  query: string,
-  budget: number,
-): { results: unknown[]; suppressionSummary: SuppressionSummary } {
-  const raw = execFileSync(
-    'node',
-    [CLI, 'recall', query, '--json', '--budget', String(budget)],
-    {
-      cwd: env.cwd,
-      env: {
-        ...process.env,
-        HIPPO_HOME: env.globalRoot,
-        HIPPO_TENANT: 'default',
-        HIPPO_SKIP_AUTO_INTEGRATIONS: '1',
-      },
-      encoding: 'utf8',
-    },
-  );
-  const start = raw.indexOf('{');
-  return JSON.parse(raw.slice(start));
+type RecallJson = { results: unknown[]; suppressionSummary: SuppressionSummary };
+
+async function recallJsonBudget(env: TestEnv, query: string, budget: number): Promise<RecallJson> {
+  const raw = await hippo(env.cwd, env.globalRoot, 'recall', query, '--json', '--budget', String(budget));
+  return JSON.parse(raw.slice(raw.indexOf('{')));
 }
 
-function recallJson(
-  env: TestEnv,
-  query: string,
-  limit: number,
-): { results: unknown[]; suppressionSummary: SuppressionSummary } {
-  const raw = execFileSync(
-    'node',
-    [CLI, 'recall', query, '--json', '--limit', String(limit)],
-    {
-      cwd: env.cwd,
-      env: {
-        ...process.env,
-        HIPPO_HOME: env.globalRoot,
-        HIPPO_TENANT: 'default',
-        HIPPO_SKIP_AUTO_INTEGRATIONS: '1',
-      },
-      encoding: 'utf8',
-    },
-  );
-  const start = raw.indexOf('{');
-  return JSON.parse(raw.slice(start));
+async function recallJson(env: TestEnv, query: string, limit: number): Promise<RecallJson> {
+  const raw = await hippo(env.cwd, env.globalRoot, 'recall', query, '--json', '--limit', String(limit));
+  return JSON.parse(raw.slice(raw.indexOf('{')));
 }
 
-function recallText(env: TestEnv, query: string, limit: number): string {
-  return execFileSync(
-    'node',
-    [CLI, 'recall', query, '--why', '--limit', String(limit)],
-    {
-      cwd: env.cwd,
-      env: {
-        ...process.env,
-        HIPPO_HOME: env.globalRoot,
-        HIPPO_TENANT: 'default',
-        HIPPO_SKIP_AUTO_INTEGRATIONS: '1',
-      },
-      encoding: 'utf8',
-    },
-  );
+function recallText(env: TestEnv, query: string, limit: number): Promise<string> {
+  return hippo(env.cwd, env.globalRoot, 'recall', query, '--why', '--limit', String(limit));
 }
 
 describe('cmdRecall candidate accounting closes', () => {
   let env: TestEnv;
 
   afterEach(() => {
+    vi.unstubAllEnvs();
     if (env?.cwd) rmSync(env.cwd, { recursive: true, force: true });
   });
 
@@ -138,7 +107,7 @@ describe('cmdRecall candidate accounting closes', () => {
       env = makeEnv(`c5-${keyword}`);
       await seedMatchingMemories(env, keyword, seeded);
 
-      const out = recallJson(env, keyword, limit);
+      const out = await recallJson(env, keyword, limit);
       const s = out.suppressionSummary;
       const returned = out.results.length;
 
@@ -154,7 +123,7 @@ describe('cmdRecall candidate accounting closes', () => {
     env = makeEnv('c5-notrunc');
     await seedMatchingMemories(env, 'widgetdelta', 5);
 
-    const out = recallJson(env, 'widgetdelta', 100);
+    const out = await recallJson(env, 'widgetdelta', 100);
     const s = out.suppressionSummary;
     const returned = out.results.length;
 
@@ -168,6 +137,7 @@ describe('cmdRecall candidate accounting closes', () => {
 describe('graph-expanded recall keeps the published accounting honest', () => {
   let home: string;
   afterEach(() => {
+    vi.unstubAllEnvs();
     if (home) rmSync(home, { recursive: true, force: true });
   });
 
@@ -176,7 +146,7 @@ describe('graph-expanded recall keeps the published accounting honest', () => {
   // the hops path added nothing and the checks were vacuous. This seeds the
   // same shape as tests/graph-recall.test.ts: B is lexically orthogonal to
   // the query and reachable only through a supersedes edge.
-  it('a row surfaced by edge is included in the published total and the invariant closes', () => {
+  it('a row surfaced by edge is included in the published total and the invariant closes', async () => {
     // Same root convention as makeEnv: the store ROOT is the .hippo directory
     // itself. initStore(home) with a bare dir leaves cwd/.hippo uninitialized
     // and the CLI exits "No .hippo directory found".
@@ -204,15 +174,7 @@ describe('graph-expanded recall keeps the published accounting honest', () => {
     // the SINGLE-store graph case. (A worktree cwd would silently merge its
     // local .hippo - remember() writes to cwd/.hippo, HIPPO_HOME only moves
     // the global store. That exact confusion made two earlier probes invalid.)
-    const raw = execFileSync(
-      'node',
-      [CLI, 'recall', 'quokka', '--hops', '1', '--json'],
-      {
-        cwd: home,
-        env: { ...process.env, HIPPO_HOME: globalRoot, HIPPO_TENANT: T, HIPPO_SKIP_AUTO_INTEGRATIONS: '1' },
-        encoding: 'utf8',
-      },
-    );
+    const raw = await hippo(home, globalRoot, 'recall', 'quokka', '--hops', '1', '--json');
     const d = JSON.parse(raw.slice(raw.indexOf('{')));
     const s: SuppressionSummary = d.suppressionSummary;
     const rows: Array<{ entry?: { id: string }; id?: string }> = d.memories ?? d.results ?? [];
@@ -233,6 +195,7 @@ describe('graph-expanded recall keeps the published accounting honest', () => {
 describe('BUDGET-driven truncation is counted (the measured failure)', () => {
   let env: TestEnv;
   afterEach(() => {
+    vi.unstubAllEnvs();
     if (env?.cwd) rmSync(env.cwd, { recursive: true, force: true });
   });
 
@@ -247,7 +210,7 @@ describe('BUDGET-driven truncation is counted (the measured failure)', () => {
     env = makeEnv('c5-budget-gap');
     await seedMatchingMemories(env, 'widgetbudget', 40);
 
-    const out = recallJsonBudget(env, 'widgetbudget', 40);
+    const out = await recallJsonBudget(env, 'widgetbudget', 40);
     const s = out.suppressionSummary;
     const returned = out.results.length;
 
@@ -267,6 +230,7 @@ describe('the `Cutoff:` line prints on a truncated CLI recall', () => {
   let env: TestEnv;
 
   afterEach(() => {
+    vi.unstubAllEnvs();
     if (env?.cwd) rmSync(env.cwd, { recursive: true, force: true });
   });
 
@@ -274,7 +238,7 @@ describe('the `Cutoff:` line prints on a truncated CLI recall', () => {
     env = makeEnv('c5-print-gap');
     await seedMatchingMemories(env, 'widgetepsilon', 30);
 
-    const output = recallText(env, 'widgetepsilon', 5);
+    const output = await recallText(env, 'widgetepsilon', 5);
 
     // This is the specific gap the plan names: no prior test drove the CLI
     // summary output, so the line's guard (`clauses.length > 0`) being
@@ -295,7 +259,7 @@ describe('the `Cutoff:` line prints on a truncated CLI recall', () => {
     env = makeEnv('c5-no-print');
     await seedMatchingMemories(env, 'widgetzeta', 3);
 
-    const output = recallText(env, 'widgetzeta', 100);
+    const output = await recallText(env, 'widgetzeta', 100);
 
     expect(output).not.toMatch(/^Cutoff:/m);
   });

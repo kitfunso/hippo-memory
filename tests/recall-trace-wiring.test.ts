@@ -16,12 +16,10 @@
  */
 
 import type { FullContext } from './_helpers/api-ctx.js';
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { execFileSync } from 'node:child_process';
+import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadIndex } from '../src/store/index-and-stats.js';
@@ -29,12 +27,24 @@ import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db/inde
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { remember, retrieve, getContext } from '../src/api/index.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+import { runCli } from '../src/cli.js';
+import { resetSessionRings } from '../src/api/recall/finish.js';
+import { runInProcess } from './_helpers/run-in-process.js';
 
-// Invoke this worktree's own bin/hippo.js directly (not the `hippo` binary
-// on PATH) so the CLI test exercises THIS build, not whatever hippo-memory
-// install happens to be globally linked.
-const repoRoot = dirname(dirname(fileURLToPath(import.meta.url)));
-const hippoBin = join(repoRoot, 'bin', 'hippo.js');
+const INIT = ['init', '--no-hooks', '--no-schedule', '--no-learn'];
+
+/** `hippo <args>` run in this process from `cwd`, the call bin/hippo.js makes; a non-zero exit fails the test as execFileSync threw. */
+async function hippo(cwd: string, ...args: string[]): Promise<string> {
+  const saved = process.cwd();
+  process.chdir(cwd);
+  try {
+    const r = await runInProcess(() => runCli(['node', 'hippo', ...args]));
+    expect(r.status, r.stderr).toBe(0);
+    return r.stdout;
+  } finally {
+    process.chdir(saved);
+  }
+}
 
 // Zero-result tests must not depend on an optional embedder being installed.
 function disableEmbeddings(storeDir: string) {
@@ -291,174 +301,124 @@ describe('api.getContext — trace wiring', () => {
 });
 
 describe('CLI cmdRecall — trace wiring', () => {
-  it('writes ONE trace (pipeline=cli) at hippoRoot + last_trace_id, atomically with last_retrieval_ids', () => {
-    const hippoRoot = mkdtempSync(join(tmpdir(), 'hippo-cli-recall-trace-'));
-    try {
-      execFileSync('node', [hippoBin, 'init', '--no-hooks', '--no-schedule', '--no-learn'], {
-        cwd: hippoRoot,
-        env: { ...process.env, HIPPO_HOME: hippoRoot },
-      });
-      execFileSync('node', [hippoBin, 'remember', 'cli-trace-target epsilon fact'], {
-        cwd: hippoRoot,
-        env: { ...process.env, HIPPO_HOME: hippoRoot },
-      });
-      const out = execFileSync('node', [hippoBin, 'recall', 'cli-trace-target'], {
-        cwd: hippoRoot,
-        env: { ...process.env, HIPPO_HOME: hippoRoot },
-        encoding: 'utf-8',
-      });
-      expect(out).toContain('cli-trace-target');
+  let hippoRoot: string;
 
-      // The CLI's local store lives at `<cwd>/.hippo` (getHippoRoot,
-      // store/open.ts) — HIPPO_HOME only governs the separate global store.
-      const localStore = join(hippoRoot, '.hippo');
-      const traces = traceRows(localStore, 'cli');
-      expect(traces).toHaveLength(1);
-      const idx = loadIndex(localStore);
-      expect(idx.last_trace_id).toBe(String(traces[0].id));
-      expect(idx.last_retrieval_ids.length).toBeGreaterThan(0);
-    } finally {
-      rmSync(hippoRoot, { recursive: true, force: true });
-    }
+  beforeEach(() => {
+    hippoRoot = mkdtempSync(join(tmpdir(), 'hippo-cli-recall-trace-'));
+    vi.stubEnv('HIPPO_HOME', hippoRoot);
+    resetSessionRings('cli');
   });
 
-  it('a zero-result recall writes an empty trace row (result_count 0, no result rows) but leaves last_trace_id UNCHANGED', () => {
-    // Final-review must-fix: cli.ts's zero-result branch used to return
-    // before the trace-write block entirely, so it wrote NO trace at all.
-    // It must now write a trace (for training-corpus coverage) without
-    // touching localIndex at all — this path never advances
-    // last_retrieval_ids (no memories to update), so last_trace_id must not
-    // advance either (F1 lockstep invariant).
-    const hippoRoot = mkdtempSync(join(tmpdir(), 'hippo-cli-recall-trace-zero-'));
-    try {
-      const env: NodeJS.ProcessEnv = { ...process.env, HIPPO_HOME: hippoRoot };
-      execFileSync('node', [hippoBin, 'init', '--no-hooks', '--no-schedule', '--no-learn'], { cwd: hippoRoot, env });
-      disableEmbeddings(join(hippoRoot, '.hippo'));
-      execFileSync('node', [hippoBin, 'remember', 'zero-result-baseline eta fact'], { cwd: hippoRoot, env });
-      // First recall: populates last_trace_id with a real trace id.
-      execFileSync('node', [hippoBin, 'recall', 'zero-result-baseline'], { cwd: hippoRoot, env, encoding: 'utf-8' });
-
-      const localStore = join(hippoRoot, '.hippo');
-      const baselineTraceId = lastTraceId(localStore);
-      expect(baselineTraceId).not.toBeNull();
-
-      // Second recall: a query that matches nothing.
-      const out = execFileSync(
-        'node',
-        [hippoBin, 'recall', 'zzz-query-matches-absolutely-nothing-xyzzy'],
-        { cwd: hippoRoot, env, encoding: 'utf-8' },
-      );
-      expect(out).toContain('No memories found');
-
-      const traces = traceRows(localStore, 'cli');
-      expect(traces).toHaveLength(2);
-      const zeroTrace = traces.find((t) => t.id !== baselineTraceId);
-      expect(zeroTrace).toBeDefined();
-      expect(zeroTrace!.result_count).toBe(0);
-
-      // SAFETY: recall_traces.id is an INTEGER PRIMARY KEY; node:sqlite
-      // returns it as a JS number for values within safe-integer range.
-      const results = resultRowsFor(localStore, zeroTrace!.id as number);
-      expect(results).toHaveLength(0);
-
-      // last_trace_id must still point at the FIRST (non-empty) trace.
-      expect(lastTraceId(localStore)).toBe(baselineTraceId);
-    } finally {
-      rmSync(hippoRoot, { recursive: true, force: true });
-    }
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    rmSync(hippoRoot, { recursive: true, force: true });
   });
 
-  it('hostSessionId(): falls back to CLAUDE_CODE_SESSION_ID when HIPPO_SESSION_ID is absent', () => {
-    const hippoRoot = mkdtempSync(join(tmpdir(), 'hippo-cli-recall-trace-host1-'));
-    try {
-      const env: NodeJS.ProcessEnv = { ...process.env, HIPPO_HOME: hippoRoot };
-      delete env.HIPPO_SESSION_ID;
-      env.CLAUDE_CODE_SESSION_ID = 'sess-host-1';
-      execFileSync('node', [hippoBin, 'init', '--no-hooks', '--no-schedule', '--no-learn'], { cwd: hippoRoot, env });
-      execFileSync('node', [hippoBin, 'remember', 'host-fallback-target zeta fact'], { cwd: hippoRoot, env });
-      execFileSync('node', [hippoBin, 'recall', 'host-fallback-target'], { cwd: hippoRoot, env, encoding: 'utf-8' });
+  it('writes ONE trace (pipeline=cli) at hippoRoot + last_trace_id, atomically with last_retrieval_ids', async () => {
+    await hippo(hippoRoot, ...INIT);
+    await hippo(hippoRoot, 'remember', 'cli-trace-target epsilon fact');
+    const out = await hippo(hippoRoot, 'recall', 'cli-trace-target');
+    expect(out).toContain('cli-trace-target');
 
-      const traces = traceRows(join(hippoRoot, '.hippo'), 'cli');
-      expect(traces).toHaveLength(1);
-      expect(traces[0].session_id).toBe('sess-host-1');
-    } finally {
-      rmSync(hippoRoot, { recursive: true, force: true });
-    }
+    // The CLI's local store lives at `<cwd>/.hippo` (getHippoRoot,
+    // store/open.ts) — HIPPO_HOME only governs the separate global store.
+    const localStore = join(hippoRoot, '.hippo');
+    const traces = traceRows(localStore, 'cli');
+    expect(traces).toHaveLength(1);
+    const idx = loadIndex(localStore);
+    expect(idx.last_trace_id).toBe(String(traces[0].id));
+    expect(idx.last_retrieval_ids.length).toBeGreaterThan(0);
   });
 
-  it('hostSessionId(): HIPPO_SESSION_ID wins over CLAUDE_CODE_SESSION_ID when both are set', () => {
-    const hippoRoot = mkdtempSync(join(tmpdir(), 'hippo-cli-recall-trace-host2-'));
-    try {
-      const env = { ...process.env, HIPPO_HOME: hippoRoot, HIPPO_SESSION_ID: 'own-1', CLAUDE_CODE_SESSION_ID: 'sess-host-1' };
-      execFileSync('node', [hippoBin, 'init', '--no-hooks', '--no-schedule', '--no-learn'], { cwd: hippoRoot, env });
-      execFileSync('node', [hippoBin, 'remember', 'host-fallback-target-both theta fact'], { cwd: hippoRoot, env });
-      execFileSync('node', [hippoBin, 'recall', 'host-fallback-target-both'], { cwd: hippoRoot, env, encoding: 'utf-8' });
+  it('a zero-result recall writes an empty trace row (result_count 0, no result rows) but leaves last_trace_id UNCHANGED', async () => {
+    // The zero-result branch once returned before the trace write; it must trace without touching localIndex,
+    // since it never advances last_retrieval_ids and last_trace_id moves in lockstep with it.
+    await hippo(hippoRoot, ...INIT);
+    disableEmbeddings(join(hippoRoot, '.hippo'));
+    await hippo(hippoRoot, 'remember', 'zero-result-baseline eta fact');
+    // First recall: populates last_trace_id with a real trace id.
+    await hippo(hippoRoot, 'recall', 'zero-result-baseline');
 
-      const traces = traceRows(join(hippoRoot, '.hippo'), 'cli');
-      expect(traces).toHaveLength(1);
-      expect(traces[0].session_id).toBe('own-1');
-    } finally {
-      rmSync(hippoRoot, { recursive: true, force: true });
-    }
+    const localStore = join(hippoRoot, '.hippo');
+    const baselineTraceId = lastTraceId(localStore);
+    expect(baselineTraceId).not.toBeNull();
+
+    // Second recall: a query that matches nothing.
+    const out = await hippo(hippoRoot, 'recall', 'zzz-query-matches-absolutely-nothing-xyzzy');
+    expect(out).toContain('No memories found');
+
+    const traces = traceRows(localStore, 'cli');
+    expect(traces).toHaveLength(2);
+    const zeroTrace = traces.find((t) => t.id !== baselineTraceId);
+    expect(zeroTrace).toBeDefined();
+    expect(zeroTrace!.result_count).toBe(0);
+
+    // SAFETY: recall_traces.id is an INTEGER PRIMARY KEY; node:sqlite
+    // returns it as a JS number for values within safe-integer range.
+    const results = resultRowsFor(localStore, zeroTrace!.id as number);
+    expect(results).toHaveLength(0);
+
+    // last_trace_id must still point at the FIRST (non-empty) trace.
+    expect(lastTraceId(localStore)).toBe(baselineTraceId);
   });
 
-  it('hostSessionId(): session_id is null when neither var is set', () => {
-    const hippoRoot = mkdtempSync(join(tmpdir(), 'hippo-cli-recall-trace-host3-'));
-    try {
-      const env: NodeJS.ProcessEnv = { ...process.env, HIPPO_HOME: hippoRoot };
-      delete env.HIPPO_SESSION_ID;
-      delete env.CLAUDE_CODE_SESSION_ID;
-      execFileSync('node', [hippoBin, 'init', '--no-hooks', '--no-schedule', '--no-learn'], { cwd: hippoRoot, env });
-      execFileSync('node', [hippoBin, 'remember', 'host-fallback-target-none iota fact'], { cwd: hippoRoot, env });
-      execFileSync('node', [hippoBin, 'recall', 'host-fallback-target-none'], { cwd: hippoRoot, env, encoding: 'utf-8' });
+  it.each([
+    { name: 'falls back to CLAUDE_CODE_SESSION_ID when HIPPO_SESSION_ID is absent', own: '', host: 'sess-host-1', want: 'sess-host-1' },
+    { name: 'HIPPO_SESSION_ID wins over CLAUDE_CODE_SESSION_ID when both are set', own: 'own-1', host: 'sess-host-1', want: 'own-1' },
+    { name: 'session_id is null when neither var is set', own: '', host: '', want: null },
+  ])('hostSessionId(): $name', async ({ own, host, want }) => {
+    vi.stubEnv('HIPPO_SESSION_ID', own);
+    vi.stubEnv('CLAUDE_CODE_SESSION_ID', host);
+    await hippo(hippoRoot, ...INIT);
+    await hippo(hippoRoot, 'remember', 'host-fallback-target zeta fact');
+    await hippo(hippoRoot, 'recall', 'host-fallback-target');
 
-      const traces = traceRows(join(hippoRoot, '.hippo'), 'cli');
-      expect(traces).toHaveLength(1);
-      expect(traces[0].session_id).toBeNull();
-    } finally {
-      rmSync(hippoRoot, { recursive: true, force: true });
-    }
+    const traces = traceRows(join(hippoRoot, '.hippo'), 'cli');
+    expect(traces).toHaveLength(1);
+    expect(traces[0].session_id).toBe(want);
   });
 });
 
 describe('CLI goal-stack boost — ignores the CLAUDE_CODE_SESSION_ID host var', () => {
-  it('boosts under --session-id but not under a bare CLAUDE_CODE_SESSION_ID host var', () => {
-    const hippoRoot = mkdtempSync(join(tmpdir(), 'hippo-cli-goalboost-hostvar-'));
-    try {
-      const env: NodeJS.ProcessEnv = { ...process.env, HIPPO_HOME: hippoRoot };
-      delete env.HIPPO_SESSION_ID;
-      delete env.CLAUDE_CODE_SESSION_ID;
-      execFileSync('node', [hippoBin, 'init', '--no-hooks', '--no-schedule', '--no-learn'], { cwd: hippoRoot, env });
-      disableEmbeddings(join(hippoRoot, '.hippo'));
-      // Tag shares no substring with the query, so any ranking gap is the goal boost, not a tag/query match.
-      execFileSync('node', [hippoBin, 'remember', 'zzgoalboostquery bug fix details', '--tag', 'sprintx'], { cwd: hippoRoot, env });
-      execFileSync('node', [hippoBin, 'remember', 'zzgoalboostquery UI polish', '--tag', 'ui'], { cwd: hippoRoot, env });
-      execFileSync('node', [hippoBin, 'goal', 'push', 'sprintx', '--session-id', 'S'], { cwd: hippoRoot, env });
+  let hippoRoot: string;
 
-      type RecallJson = { results: Array<{ id: string; score: number }> };
-      // SAFETY: parses this test's own `hippo recall --json` output, whose shape (cli.ts's asJson branch) is fixed above.
-      const parse = (out: string): RecallJson => JSON.parse(out) as RecallJson;
+  beforeEach(() => {
+    hippoRoot = mkdtempSync(join(tmpdir(), 'hippo-cli-goalboost-hostvar-'));
+    vi.stubEnv('HIPPO_HOME', hippoRoot);
+    vi.stubEnv('HIPPO_SESSION_ID', '');
+    vi.stubEnv('CLAUDE_CODE_SESSION_ID', '');
+    resetSessionRings('cli');
+  });
 
-      const noSession = parse(
-        execFileSync('node', [hippoBin, 'recall', 'zzgoalboostquery', '--json'], { cwd: hippoRoot, env, encoding: 'utf8' }),
-      );
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    rmSync(hippoRoot, { recursive: true, force: true });
+  });
 
-      // Control: --session-id S makes the boost visible at all (order flips).
-      const control = parse(
-        execFileSync('node', [hippoBin, 'recall', 'zzgoalboostquery', '--json', '--session-id', 'S'], { cwd: hippoRoot, env, encoding: 'utf8' }),
-      );
-      expect(control.results.map((r) => r.id)).not.toEqual(noSession.results.map((r) => r.id));
+  it('boosts under --session-id but not under a bare CLAUDE_CODE_SESSION_ID host var', async () => {
+    await hippo(hippoRoot, ...INIT);
+    disableEmbeddings(join(hippoRoot, '.hippo'));
+    // Tag shares no substring with the query, so any ranking gap is the goal boost, not a tag/query match.
+    await hippo(hippoRoot, 'remember', 'zzgoalboostquery bug fix details', '--tag', 'sprintx');
+    await hippo(hippoRoot, 'remember', 'zzgoalboostquery UI polish', '--tag', 'ui');
+    await hippo(hippoRoot, 'goal', 'push', 'sprintx', '--session-id', 'S');
 
-      // Test arm: CLAUDE_CODE_SESSION_ID=S only -- must match the no-session run, not the control.
-      const hostEnv = { ...env, CLAUDE_CODE_SESSION_ID: 'S' };
-      const host = parse(
-        execFileSync('node', [hippoBin, 'recall', 'zzgoalboostquery', '--json'], { cwd: hippoRoot, env: hostEnv, encoding: 'utf8' }),
-      );
-      // Score has a real-time decay term, so re-running moments apart drifts ~1e-8; toBeCloseTo tolerates that, not a real boost's ~2x jump.
-      expect(host.results.map((r) => r.id)).toEqual(noSession.results.map((r) => r.id));
-      host.results.forEach((r, i) => expect(r.score).toBeCloseTo(noSession.results[i].score, 4));
-    } finally {
-      rmSync(hippoRoot, { recursive: true, force: true });
-    }
+    type RecallJson = { results: Array<{ id: string; score: number }> };
+    // SAFETY: parses this test's own `hippo recall --json` output, whose shape (cli.ts's asJson branch) is fixed above.
+    const recall = async (...flags: string[]): Promise<RecallJson> =>
+      JSON.parse(await hippo(hippoRoot, 'recall', 'zzgoalboostquery', '--json', ...flags)) as RecallJson;
+
+    const noSession = await recall();
+
+    // Control: --session-id S makes the boost visible at all (order flips).
+    const control = await recall('--session-id', 'S');
+    expect(control.results.map((r) => r.id)).not.toEqual(noSession.results.map((r) => r.id));
+
+    // Test arm: CLAUDE_CODE_SESSION_ID=S only -- must match the no-session run, not the control.
+    vi.stubEnv('CLAUDE_CODE_SESSION_ID', 'S');
+    const host = await recall();
+    // Score has a real-time decay term, so re-running moments apart drifts ~1e-8; toBeCloseTo tolerates that, not a real boost's ~2x jump.
+    expect(host.results.map((r) => r.id)).toEqual(noSession.results.map((r) => r.id));
+    host.results.forEach((r, i) => expect(r.score).toBeCloseTo(noSession.results[i].score, 4));
   });
 });
