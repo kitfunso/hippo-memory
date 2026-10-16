@@ -75,6 +75,8 @@ function loadByIdsChunked(root: string, tenantId: string, ids: string[]): Memory
 type HitOpts = Required<Pick<GraphExpandOpts, 'hops' | 'maxNeighbors' | 'tenantId' | 'includeSuperseded'>> & {
   asOfDate: Date | null;
   recallScope: { requested?: string; additive?: boolean; ownScope?: string };
+  /** True when the store being walked is the global one. */
+  global: boolean;
 };
 
 interface RelationWalk {
@@ -197,19 +199,20 @@ function produceHitsForRoot(
     const originScore = baseScoreByMemId.get(origin) ?? baseResults[baseResults.length - 1].score;
     seenMemoryIds.add(mem.id);
     seenContent.add(mem.content);
-    const hit = buildGraphHit(mem, via, originScore);
+    const hit = buildGraphHit(mem, via, originScore, opts.global);
     if (!hitsByOrigin.has(origin)) hitsByOrigin.set(origin, []);
     hitsByOrigin.get(origin)!.push(hit);
   }
 }
 
-function buildGraphHit(mem: MemoryEntry, via: GraphVia, originScore: number): GraphHit {
+function buildGraphHit(mem: MemoryEntry, via: GraphVia, originScore: number, isGlobal: boolean): GraphHit {
   return {
     entry: mem,
     score: originScore * (1 - HOP_DISCOUNT * via.hops),
     bm25: 0, cosine: 0,
     tokens: estimateTokens(mem.content),
     graphVia: via,
+    isGlobal,
   };
 }
 
@@ -269,7 +272,7 @@ export function graphExpandRecall(
   const roots = globalRoot && globalRoot !== hippoRoot ? [hippoRoot, globalRoot] : [hippoRoot];
   for (const root of roots) {
     produceHitsForRoot(root, baseResults, { baseScoreByMemId, seenMemoryIds, seenContent, hitsByOrigin }, {
-      hops, maxNeighbors, tenantId, includeSuperseded, asOfDate, recallScope,
+      hops, maxNeighbors, tenantId, includeSuperseded, asOfDate, recallScope, global: root !== hippoRoot,
     });
   }
 

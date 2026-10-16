@@ -297,7 +297,7 @@ type RecallOptions = ReturnType<typeof parseRecallOptions>;
 /** Each entry priced as the line it prints, with the source marker `--why` shows. */
 function priceRecallEntries(ctx: api.StoreContext, query: string, o: RecallOptions) {
   const origin = cliRecallOrigin(ctx, o.setting);
-  const isGlobal = (r: SearchResult): boolean => origin.isGlobal(r.entry.id);
+  const isGlobal = origin.isGlobal;
   const entryText = (r: SearchResult): string => recallEntryText(r, query, o.showWhy, isGlobal(r));
   const printCost = (r: SearchResult): number => printedTokens(entryText(r));
   return { globalOn: origin.globalOn, isGlobal, entryText, printCost };

@@ -4,6 +4,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import type { SearchResult } from '../src/core/search-types.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { saveActiveTaskSnapshot, appendSessionEvent } from '../src/store/sessions.js';
@@ -81,15 +82,34 @@ describe('cliRecallSetting and cliRecallOrigin', () => {
     expect(absent).toEqual({ globalRoot: '', primaryIsGlobal: false, activeScope: 'team-a' });
     const off = cliRecallOrigin(ctx(), absent);
     expect(off.globalOn).toBe(false);
-    expect(off.isGlobal('mem_elsewhere')).toBe(false);
+    // SAFETY: the origin reads only the isGlobal tag, so a bare id is enough of a row.
+    expect(off.isGlobal({ entry: { id: 'mem_elsewhere' }, isGlobal: true } as SearchResult)).toBe(false);
     // The reach is probed when the context is built, so the global store is seen by a context built after it exists.
     initStore(globalRoot);
     const s = cliRecallSetting(ctx(), 'team-a');
     expect(s).toEqual({ globalRoot, primaryIsGlobal: false, activeScope: 'team-a' });
     const on = cliRecallOrigin(ctx(), s);
     expect(on.globalOn).toBe(true);
-    expect(on.isGlobal('mem_cli_0')).toBe(false);
-    expect(on.isGlobal('mem_elsewhere')).toBe(true);
+    // SAFETY: the origin reads only the isGlobal tag, so a bare id is enough of a row.
+    const row = (isGlobal?: boolean) => ({ entry: { id: 'mem_x' }, isGlobal }) as SearchResult;
+    expect(on.isGlobal(row(false))).toBe(false);
+    expect(on.isGlobal(row())).toBe(false);
+    expect(on.isGlobal(row(true))).toBe(true);
+    expect(cliRecallOrigin(ctx(), { ...s, primaryIsGlobal: true }).isGlobal(row(false))).toBe(true);
+  });
+
+  it('tags a ranked row global when it came from the global store and local when it did not', async () => {
+    initStore(globalRoot);
+    writeEntry(globalRoot, { ...createMemory('deploy rollback checklist lives in the shared runbook'), id: 'mem_glob_0', strength: 1 });
+    const config = loadConfig(hippoRoot);
+    const ranked = await rankRecall({ hippoRoot, globalRoot, tenantId: 'default' }, {
+      query: 'deploy', budget: 4000, cost: (r) => r.tokens, limit: 10, includeSuperseded: false, explicitScope: null, activeScope: null,
+      search: { usePhysics: false, physicsConfig: config.physics, multihop: false, mmr: false, mmrLambda: 0.7, localBump: 1.2, explain: false },
+    });
+    const origin = cliRecallOrigin(ctx(), cliRecallSetting(ctx(), null));
+    const byId = new Map(ranked.results.map((r) => [r.entry.id, origin.isGlobal(r)]));
+    expect(byId.get('mem_glob_0')).toBe(true);
+    expect(byId.get('mem_cli_0')).toBe(false);
   });
 });
 

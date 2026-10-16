@@ -47,6 +47,8 @@ export interface SearchResult {
   postRerankRank?: number;
   /** Set for results reached by graph traversal (`recall --hops N`): how the memory was reached from a lexical seed. */
   graphVia?: { hops: number; relType: string; direction: 'from' | 'to' };
+  /** Set where a recall merges the local and global stores: true when the row came from the global one. */
+  isGlobal?: boolean;
 }
 
 /** What a result costs against a budget: the tokens of the text it prints as. */

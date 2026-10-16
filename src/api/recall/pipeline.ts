@@ -240,14 +240,18 @@ function multihopPoolSearch(ctx: RankRecallCtx, opts: RankRecallOpts, pool: Reca
   const { minResults } = search;
   // Unlike rankBothStores below, multihop ranks one pooled list, so a shared memory's two copies both compete.
   const allEntries = oneCopyPerMemory(pool.local, pool.global, evalNow()).flat();
-  return multihopSearch(query, allEntries, {
+  const globalIds = new Set(pool.global.map((e) => e.id));
+  const localIds = new Set(pool.local.map((e) => e.id));
+  const fromGlobal = (id: string): boolean => globalIds.has(id) && !localIds.has(id);
+  const results = multihopSearch(query, allEntries, {
     budget,
-    cost,
+    cost: cost && ((r) => cost({ ...r, isGlobal: fromGlobal(r.entry.id) })),
     hippoRoot: ctx.hippoRoot,
     minResults,
     includeSuperseded,
     asOf,
   });
+  return results.map((r) => ({ ...r, isGlobal: fromGlobal(r.entry.id) }));
 }
 
 function poolVectorCandidates(ctx: RankRecallCtx, opts: RankRecallOpts) {
