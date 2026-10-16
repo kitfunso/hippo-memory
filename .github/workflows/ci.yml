@@ -267,12 +267,16 @@ jobs:
           HIPPO_REQUIRE_SYMLINKS: '1'
 
   # Every other job is Linux, where platform branches, path case rules and the temp-inside-home layout never run.
+  # One Windows job set the wall time of the whole run, so the Windows suite splits in two.
   suite:
-    name: suite (${{ matrix.os }})
+    name: suite (${{ matrix.os }}, ${{ matrix.shard }})
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, macos-latest]
+        include:
+          - { os: windows-latest, shard: 1/2 }
+          - { os: windows-latest, shard: 2/2 }
+          - { os: macos-latest, shard: 1/1 }
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     steps:
@@ -291,7 +295,7 @@ jobs:
           "TMP=$env:RUNNER_TEMP" >> $env:GITHUB_ENV
       - name: Vitest
         # Four cores on the Windows runner; the config's six workers starve store-heavy files of CPU there.
-        run: npx vitest run ${{ runner.os == 'Windows' && '--maxWorkers=4' || '' }}
+        run: npx vitest run --shard=${{ matrix.shard }} ${{ runner.os == 'Windows' && '--maxWorkers=4' || '' }}
 
   # The dashboard is its own package with its own tests; the root suite never runs them.
   ui:
