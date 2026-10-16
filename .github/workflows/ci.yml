@@ -293,9 +293,31 @@ jobs:
         run: |
           "TEMP=$env:RUNNER_TEMP" >> $env:GITHUB_ENV
           "TMP=$env:RUNNER_TEMP" >> $env:GITHUB_ENV
+      # DIAGNOSTIC, removed before merge: top CPU processes, node count, disk queue and free memory every 15 s.
+      - name: CPU sampler
+        if: runner.os == 'Windows'
+        run: |
+          $script = @'
+          $out = Join-Path $env:RUNNER_TEMP 'cpu-samples.log'
+          "defender realtime: $((Get-MpComputerStatus).RealTimeProtectionEnabled)" | Add-Content $out
+          $prev = @{}
+          while ($true) {
+            $procs = Get-Process | Where-Object { $null -ne $_.CPU }
+            $rows = foreach ($p in $procs) { $k = "$($p.Id)"; $d = $p.CPU - ($prev[$k] ?? 0); $prev[$k] = $p.CPU; [pscustomobject]@{ N = $p.ProcessName; Id = $p.Id; D = [math]::Round($d, 1) } }
+            $top = ($rows | Sort-Object D -Descending | Select-Object -First 8 | ForEach-Object { "$($_.N)#$($_.Id)=$($_.D)" }) -join ' '
+            $c = (Get-Counter '\PhysicalDisk(_Total)\Avg. Disk Queue Length', '\Memory\Available MBytes', '\Processor(_Total)\% Processor Time').CounterSamples | ForEach-Object { [math]::Round($_.CookedValue, 1) }
+            "$(Get-Date -Format HH:mm:ss) node=$(($procs | Where-Object ProcessName -eq 'node').Count) diskq=$($c[0]) freeMB=$($c[1]) cpu=$($c[2]) | $top" | Add-Content $out
+            Start-Sleep -Seconds 15
+          }
+          '@
+          Set-Content -Path (Join-Path $env:RUNNER_TEMP 'sampler.ps1') -Value $script
+          Start-Process pwsh -ArgumentList '-NoProfile', '-File', (Join-Path $env:RUNNER_TEMP 'sampler.ps1') -WindowStyle Hidden
       - name: Vitest
         # Four cores on the Windows runner; the config's six workers starve store-heavy files of CPU there.
         run: npx vitest run --shard=${{ matrix.shard }} ${{ runner.os == 'Windows' && '--maxWorkers=4' || '' }}
+      - name: CPU samples
+        if: always() && runner.os == 'Windows'
+        run: Get-Content (Join-Path $env:RUNNER_TEMP 'cpu-samples.log')
 
   # The dashboard is its own package with its own tests; the root suite never runs them.
   ui:
