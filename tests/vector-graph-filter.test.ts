@@ -3,10 +3,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { buildGraph } from '../src/db/vector-graph-rows.js';
+import { keepVectorGraphLoaded } from '../src/db/vector-graph-search.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { clusteredVectors, nearest, seedVectors, withDb } from './_helpers/vector-graph-seed.js';
 
 vi.setConfig({ testTimeout: 120_000 });
+// The graph answers only in a process that opted in, as serve and MCP stdio do.
+keepVectorGraphLoaded();
 
 let root: string;
 

@@ -32,6 +32,12 @@ interface CachedGraph {
 
 // One loaded graph per store file, kept until a graph write moves its generation; a query reads only that one row.
 const graphs = new Map<string, CachedGraph>();
+let keepLoaded = false;
+
+/** Lets nearest-vector search walk the graph in this process; a host that serves many queries calls it at start. */
+export function keepVectorGraphLoaded(): void {
+  keepLoaded = true;
+}
 
 function mainFile(db: DatabaseSyncLike): string {
   // SAFETY: PRAGMA database_list returns one row per attached database with these two columns among others.
@@ -119,7 +125,8 @@ export function graphCandidates(
   filter: { readonly where: string; readonly params: readonly (string | number)[] },
   opts: VectorSearchOptions,
 ): string[] | null {
-  if (envVectorIndexExact()) return null;
+  // A one-shot process never repays the load: loading the graph reads every node, as the exact scan reads every vector.
+  if (!keepLoaded || envVectorIndexExact()) return null;
   const cached = cachedGraph(db);
   const stored = cached?.stored;
   const minRows = opts.minGraphRows ?? VECTOR_GRAPH_MIN_ROWS;

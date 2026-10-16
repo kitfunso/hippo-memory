@@ -7,12 +7,14 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { buildGraph, loadGraph, mergePending } from '../src/db/vector-graph-rows.js';
-import { saveEmbeddingIndex, saveStoredVectors } from '../src/store/vector-index.js';
+import { keepVectorGraphLoaded, saveEmbeddingIndex, saveStoredVectors } from '../src/store/vector-index.js';
 import type { DatabaseSyncLike } from '../src/db/index.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { MODEL, clusteredVectors, nearest, seedVectors, withDb } from './_helpers/vector-graph-seed.js';
 
 vi.setConfig({ testTimeout: 120_000 });
+// The graph answers only in a process that opted in, as serve and MCP stdio do.
+keepVectorGraphLoaded();
 
 const GRAPH = { minGraphRows: 100, ef: 2000 };
 let root: string;

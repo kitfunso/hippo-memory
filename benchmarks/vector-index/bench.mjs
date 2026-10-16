@@ -41,7 +41,7 @@ const FILTERS = {
   f10: " AND m.scope >= 'b30' AND m.scope < 'b40'",
 };
 const FORCED = { minGraphRows: 1000, minSelectivity: 0 };
-const COLD_RUNS = 7;
+const COLD_RUNS = 11;
 
 if (process.env.BENCH_COLD) {
   await coldChild();
@@ -190,6 +190,9 @@ async function sqliteRun(root, home) {
 
 async function timedRows(db, queries) {
   const { topVectorMatches } = await import('../../dist/db/vector-store.js');
+  const { keepVectorGraphLoaded } = await import('../../dist/db/vector-graph-search.js');
+  // Warm rows stand for serve and MCP stdio, the hosts that opt in.
+  keepVectorGraphLoaded();
   const run = async (label, where, opts, exact) => {
     if (exact) process.env.HIPPO_VECTOR_INDEX = 'exact';
     else delete process.env.HIPPO_VECTOR_INDEX;
@@ -232,7 +235,8 @@ async function worstCase(db, run, report, queries) {
   report(graph, await run('worst', far, {}, true));
 }
 
-// Each cold run is a fresh process that opens the store and times its first f100 query, graph load included.
+// Each cold run is a fresh process that opens the store and times its first f100 query. `cli` is a one-shot command
+// (no opt-in), `exact` forces the scan by env, `graph` opts in and so pays the graph load.
 async function coldRows(root, home, queries) {
   const { spawnSync } = await import('node:child_process');
   const { writeFileSync } = await import('node:fs');
@@ -240,23 +244,28 @@ async function coldRows(root, home, queries) {
   const { fileURLToPath } = await import('node:url');
   const file = join(home, 'queries.json');
   writeFileSync(file, JSON.stringify(queries.slice(0, COLD_RUNS)));
-  const cold = (mode) => p50(Array.from({ length: COLD_RUNS }, (_, i) => {
+  const coldOnce = (mode, i) => {
     const env = { ...process.env, BENCH_COLD: mode, BENCH_ROOT: root, BENCH_QUERIES: file, BENCH_QUERY: String(i) };
     const out = spawnSync(process.execPath, [fileURLToPath(import.meta.url)], { env, encoding: 'utf8' });
     if (out.status !== 0) throw new Error(`cold ${mode} run failed: ${out.stderr}`);
     return Number(out.stdout.trim().split(/\r?\n/).pop());
-  }));
-  const exact = cold('exact');
-  console.log(`sqlite cold f100 (fresh process, first query) exact_p50_ms=${exact} graph_p50_ms=${cold('graph')}`);
+  };
+  const times = { cli: [], exact: [], graph: [] };
+  // Modes take turns within each run, so load on the box drifts across all three alike.
+  for (let i = 0; i < COLD_RUNS; i++) for (const mode of Object.keys(times)) times[mode].push(coldOnce(mode, i));
+  console.log(`sqlite cold f100 (fresh process, first query) cli_p50_ms=${p50(times.cli)} ` +
+    `exact_p50_ms=${p50(times.exact)} graph_opt_in_p50_ms=${p50(times.graph)}`);
 }
 
 async function coldChild() {
   const { readFileSync } = await import('node:fs');
   const { openHippoDb, closeHippoDb } = await import('../../dist/db/index.js');
   const { topVectorMatches } = await import('../../dist/db/vector-store.js');
+  const { keepVectorGraphLoaded } = await import('../../dist/db/vector-graph-search.js');
   const query = JSON.parse(readFileSync(process.env.BENCH_QUERIES, 'utf8'))[Number(process.env.BENCH_QUERY)];
   if (process.env.BENCH_COLD === 'exact') process.env.HIPPO_VECTOR_INDEX = 'exact';
   else delete process.env.HIPPO_VECTOR_INDEX;
+  if (process.env.BENCH_COLD === 'graph') keepVectorGraphLoaded();
   const db = openHippoDb(process.env.BENCH_ROOT);
   const t = await timed(() => topVectorMatches(db, query, K, '', [], {}));
   closeHippoDb(db);

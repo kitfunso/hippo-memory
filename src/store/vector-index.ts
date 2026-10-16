@@ -125,6 +125,9 @@ export function refreshVectorGraph(hippoRoot: string, cap: number): VectorIndexR
   return onHandle(hippoRoot, (db) => refreshGraph(db, cap));
 }
 
+// Long-lived hosts reach the db layer's search switch through the store.
+export { keepVectorGraphLoaded } from '../db/vector-graph-search.js';
+
 /** Inserts or replaces `rows` under `model`, each row its own commit so a failure keeps the rows before it; returns how
  * many it wrote. */
 export function saveStoredVectors(
