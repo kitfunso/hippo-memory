@@ -21,7 +21,7 @@ const SERVER_TYPES = [
 ];
 const STORE_KIT_VALUES = [
   'bufferToFloat32', 'decodeVector', 'EMBEDDING_MODEL_META_KEY', 'encodeVector', 'entryAfterOutcome', 'float32ToBuffer', 'ftsTermParts',
-  'hasGroup', 'isSharedStore', 'OTHER_STORE_MARKER', 'narrowStore', 'ownScopeTouches', 'passesScopeFilterForRecall', 'rankVectorRows', 'rarestFtsQuery',
+  'hasGroup', 'isSharedStore', 'OTHER_STORE_MARKER', 'narrowStore', 'ownScopeTouches', 'passesScopeFilterForRecall', 'physicsSearch', 'rankVectorRows', 'rarestFtsQuery',
   'RECALL_DEFAULT_DENY_SCOPES', 'RejectedValueError', 'rejectionDigest', 'replacesIndex', 'SECRET_TAGS', 'sqliteStore', 'StoreBusyError',
   'tallyAmbientEntries',
 ];
