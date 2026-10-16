@@ -190,6 +190,9 @@ async function runSteps(root: string, store?: HippoStore) {
     for (const [, field = '', value = ''] of (await res.clone().text()).matchAll(NAMED)) run.made.set(`${label}.${field}`, value);
     replies.push(await seen(label, res, keyIds));
   }
+  // stats.json is throttled to one write a second and flushed on close, so the mirrors are read after the stop.
+  await run.server.stop();
+  await store?.close();
   return { replies, audit: auditRows(root, keyIds), stored: storedRows(root, keyIds), mirrors: mirrorFiles(root) };
 }
 
