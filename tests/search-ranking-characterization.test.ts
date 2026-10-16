@@ -17,6 +17,7 @@ import { hybridSearch } from '../src/search/hybrid.js';
 import { physicsSearch } from '../src/search/physics-search.js';
 import type { SearchResult } from '../src/core/search-types.js';
 import type { RerankerFn } from '../src/rerankers/types.js';
+import { loadConfig } from '../src/core/config.js';
 
 const NOW = new Date('2026-09-01T12:00:00.000Z');
 const TENANT = 'default';
@@ -107,7 +108,7 @@ function seedStore(): string {
   for (const e of [...ENTRIES, ...OUTSIDE]) writeEntry(root, e);
   process.env.OPENAI_API_KEY = 'sk-test';
   saveEmbeddingIndex(root, { ...VECTORS, ...OUTSIDE_VECTORS });
-  saveStoredEmbeddingModel(root, resolveEmbeddingProvider(root).id);
+  saveStoredEmbeddingModel(root, resolveEmbeddingProvider(loadConfig(root).embeddings).id);
   const entity = (memoryId: string): number =>
     insertEntityAt(root, TENANT, { entityType: 'decision', name: memoryId.toUpperCase(), memoryId }).id;
   for (const [from, to] of [['z2', 'c1'], ['x1', 'd4'], ['d1', 'd3']]) {

@@ -190,7 +190,7 @@ describe('saveItems for a caller', () => {
   it('keeps the post-compact actor and folder fallback when no caller is set', () => {
     withDb((db) => {
       const ctx: ItemContext = { tenantId: TENANT, recordId: null, sessionId: 's2', originProject: 'acme/app', cwd: null, items: [ITEMS[1]] };
-      expect(saveItems(db, root, ctx, noLog)).toBe(1);
+      expect(saveItems(db, root, ctx, noLog, DEFAULT_HALF_LIFE_DAYS)).toBe(1);
       expect(writtenRows(db, 'compaction:s2')).toEqual([{ content: ITEMS[1], origin_project: null, actor: 'post-compact' }]);
     });
   });

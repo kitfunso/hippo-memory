@@ -9,6 +9,7 @@ import { buildGraphModel } from '../src/graph/view.js';
 import { canReadScope } from '../src/core/recall-scope.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { objectsAt } from './_helpers/objects-at.js';
+import { loadConfig } from '../src/core/config.js';
 
 const T = 'default';
 const OWN_A = 'personal:private:alice';
@@ -42,7 +43,7 @@ describe('graph-view personal scope', () => {
     const ePriv = insertEntityAt(home, T, { entityType: 'decision', name: 'PRIV-A', memoryId: priv.id }).id;
     // A team-sourced edge into A's entity must still go when its endpoint goes.
     insertRelationAt(home, T, { fromEntityId: eTeam, toEntityId: ePriv, relType: 'references', memoryId: team.id });
-    const policy = await savePolicy(objectsAt(home), home, T, { policyName: 'Anchored', policyText: 'kept by its object' });
+    const policy = await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, { policyName: 'Anchored', policyText: 'kept by its object' });
     insertEntityAt(home, T, { entityType: 'policy', name: 'ANCHORED', memoryId: null, sourceObject: { type: 'policy', id: policy.id } });
   });
   afterEach(() => { try { rmSync(home, { recursive: true, force: true }); } catch { /* best-effort */ } });

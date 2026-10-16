@@ -3,7 +3,7 @@ import { MINUTE_MS } from '../util/time.js';
 import { envModelCache } from '../util/env.js';
 import * as fs from 'fs';
 import * as path from 'path';
-import { loadConfig } from '../core/config.js';
+import type { EmbeddingsConfig } from '../core/config.js';
 import { errorFields, errorMessage, log } from '../util/log.js';
 import { createModelLoads, importTransformers, MODEL_LOAD_POLICY, resolveTransformersPackage } from './transformers.js';
 
@@ -202,12 +202,12 @@ export function isEmbeddingAvailable(): boolean {
   return sharedLocalEmbedder.isAvailable();
 }
 
-export function resolveEmbeddingModel(hippoRoot: string, explicitModel?: string): string {
+export function resolveEmbeddingModel(embeddings: EmbeddingsConfig, explicitModel?: string): string {
   const direct = explicitModel?.trim();
   if (direct) return direct;
 
   try {
-    const configured = loadConfig(hippoRoot).embeddings.model?.trim();
+    const configured = embeddings.model?.trim();
     if (configured) return configured;
   } catch (err) {
     log.warn(`embedding model config unreadable, using the default model: ${errorMessage(err)}`, errorFields(err));

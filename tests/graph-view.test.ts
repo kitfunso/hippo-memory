@@ -22,13 +22,14 @@ import {
 import { serve, type ServerHandle } from '../src/server.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { objectsAt } from './_helpers/objects-at.js';
+import { loadConfig } from '../src/core/config.js';
 
 const T = 'default';
 
 /** Seed: a policy + a decision that names it -> 2 entities + 1 `references` edge. */
 async function seedGraph(home: string, tenant = T): Promise<void> {
-  await savePolicy(objectsAt(home), home, tenant, { policyName: 'RetryPolicy', policyText: 'retry up to 3x' });
-  await saveDecision(objectsAt(home), home, tenant, { decisionText: 'We adopt RetryPolicy across all services' });
+  await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, tenant, { policyName: 'RetryPolicy', policyText: 'retry up to 3x' });
+  await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, tenant, { decisionText: 'We adopt RetryPolicy across all services' });
   await extractGraph(objectsAt(home), home, tenant);
 }
 
@@ -90,9 +91,9 @@ describe('graph-view: buildGraphModel (real DB)', () => {
     // Many entities so that a small `limit`, under the old global-cap-then-filter,
     // would miss the focus entity / its neighbour. The by-name focus query (which
     // looks up the entity directly, then its bidirectional edges) must still find it.
-    await savePolicy(objectsAt(home), home, T, { policyName: 'FocusPol', policyText: 'the focus policy' });
-    for (let i = 0; i < 6; i++) await savePolicy(objectsAt(home), home, T, { policyName: `Filler${i}`, policyText: 'x' });
-    await saveDecision(objectsAt(home), home, T, { decisionText: 'We adopt FocusPol across every service now' });
+    await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, { policyName: 'FocusPol', policyText: 'the focus policy' });
+    for (let i = 0; i < 6; i++) await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, { policyName: `Filler${i}`, policyText: 'x' });
+    await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, { decisionText: 'We adopt FocusPol across every service now' });
     await extractGraph(objectsAt(home), home, T);
     const m = buildGraphModel(home, T, { entity: 'FocusPol', limit: 2 });
     expect(m.nodes.some((n) => n.name === 'FocusPol')).toBe(true); // found despite limit 2
@@ -102,9 +103,9 @@ describe('graph-view: buildGraphModel (real DB)', () => {
   });
 
   it('16. focus subgraph includes neighbour-to-neighbour edges, not just focus-touching (codex P2)', async () => {
-    await savePolicy(objectsAt(home), home, T, { policyName: 'PolA', policyText: 'PolA works closely with PolB' });
-    await savePolicy(objectsAt(home), home, T, { policyName: 'PolB', policyText: 'a standalone policy' });
-    await saveDecision(objectsAt(home), home, T, { decisionText: 'Adopt PolA and PolB across the org now' });
+    await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, { policyName: 'PolA', policyText: 'PolA works closely with PolB' });
+    await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, { policyName: 'PolB', policyText: 'a standalone policy' });
+    await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, { decisionText: 'Adopt PolA and PolB across the org now' });
     await extractGraph(objectsAt(home), home, T);
     const m = buildGraphModel(home, T, { entity: 'Adopt PolA and PolB across the org now' });
     const nameById = new Map(m.nodes.map((n) => [n.id, n.name]));
@@ -117,7 +118,7 @@ describe('graph-view: buildGraphModel (real DB)', () => {
   });
 
   it('17. focus on a name shared by many entities is capped to the limit (codex P2)', async () => {
-    for (let i = 0; i < 8; i++) await saveCustomerNote(objectsAt(home), home, T, { customer: 'Acme', note: `note ${i}` });
+    for (let i = 0; i < 8; i++) await saveCustomerNote(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, { customer: 'Acme', note: `note ${i}` });
     await extractGraph(objectsAt(home), home, T);
     const m = buildGraphModel(home, T, { entity: 'Acme', limit: 3 });
     expect(m.nodes.length).toBeLessThanOrEqual(3); // 8 same-name entities capped to 3
@@ -125,8 +126,8 @@ describe('graph-view: buildGraphModel (real DB)', () => {
   });
 
   it('18. focus truncation is reported when the neighbour scan hits the cap (codex P2)', async () => {
-    for (const p of ['PolA', 'PolB', 'PolC', 'PolD']) await savePolicy(objectsAt(home), home, T, { policyName: p, policyText: 'x' });
-    await saveDecision(objectsAt(home), home, T, { decisionText: 'Adopt PolA and PolB and PolC and PolD now' });
+    for (const p of ['PolA', 'PolB', 'PolC', 'PolD']) await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, { policyName: p, policyText: 'x' });
+    await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, { decisionText: 'Adopt PolA and PolB and PolC and PolD now' });
     await extractGraph(objectsAt(home), home, T);
     // limit 3: the decision references 4 policies; one 1-hop neighbour cannot fit,
     // so the model must report truncated (not silently omit a neighbour).
@@ -232,7 +233,7 @@ describe('graph-view: GET /v1/graph (live server)', () => {
   it('12. returns the caller-tenant graph; another tenant\'s entities are absent', async () => {
     await seedGraph(home, T);
     // A separate tenant's graph in the same store must NOT leak to the default caller.
-    await savePolicy(objectsAt(home), home, 'tenantB', { policyName: 'TenantBOnlyPolicy', policyText: 'x' });
+    await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'tenantB', { policyName: 'TenantBOnlyPolicy', policyText: 'x' });
     await extractGraph(objectsAt(home), home, 'tenantB');
 
     const res = await fetch(`${handle.url}/v1/graph`);
@@ -261,7 +262,7 @@ describe('graph-view: GET /v1/graph (live server)', () => {
 
   it('19. accepts a valid entity name longer than 256 chars (codex P2)', async () => {
     const longName = 'Adopt ' + 'X'.repeat(300); // ~306 chars, within MAX_ENTITY_NAME_LEN (512)
-    await saveDecision(objectsAt(home), home, T, { decisionText: longName });
+    await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, { decisionText: longName });
     await extractGraph(objectsAt(home), home, T);
     const res = await fetch(`${handle.url}/v1/graph?entity=${encodeURIComponent(longName)}`);
     expect(res.status).toBe(200); // not a 400 length rejection

@@ -28,6 +28,7 @@ import { initStore } from '../dist/store/open.js';
 import { writeEntry } from '../dist/store/entry-writes.js';
 import { loadAllEntries } from '../dist/store/entry-reads.js';
 import { embedMemory } from '../dist/search/embed-memories.js';
+import { loadConfig } from '../dist/core/config.js';
 import { isEmbeddingAvailable, resolveEmbeddingModel } from '../dist/embeddings/local.js';
 import { openHippoDb, closeHippoDb } from '../dist/db/index.js';
 import { hybridSearch } from '../dist/search/hybrid.js';
@@ -365,7 +366,7 @@ function buildResults(report) {
       ...metadata,
       hippoVersion: '0.31.0',
       generatedAt: new Date().toISOString(),
-      config: { embeddingModel: resolveEmbeddingModel(HIPPO_ROOT) },
+      config: { embeddingModel: resolveEmbeddingModel(loadConfig(HIPPO_ROOT).embeddings) },
     },
     summary: {
       classic: {

@@ -3,6 +3,7 @@
 import { sleep } from '../api/sleep/sleep.js';
 import { runConsolidation } from '../consolidate/sleep.js';
 import { isStoreBusy } from '../store/busy.js';
+import { loadConfig } from '../core/config.js';
 import { runSqliteRequest } from '../store/sqlite/request-scope.js';
 import { sqliteStore, sqliteSyncStore } from '../store/sqlite/store.js';
 import { errorFields, errorMessage, log } from '../util/log.js';
@@ -36,7 +37,7 @@ process.once('message', (message) => {
   const job = message as SleepJob;
   const work = (): Promise<JobResult> =>
     job.kind === 'consolidate'
-      ? runConsolidation(sqliteSyncStore(job.hippoRoot).localFiles)
+      ? runConsolidation(sqliteSyncStore(job.hippoRoot).localFiles, { config: loadConfig(job.hippoRoot) })
       : sleep(
           { hippoRoot: job.hippoRoot, tenantId: job.tenantId, actor: job.actor, store: sqliteStore(job.hippoRoot) },
           job.opts,

@@ -34,6 +34,7 @@ import {
 } from '../src/objects/incidents.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { objectsAt } from './_helpers/objects-at.js';
+import { loadConfig } from '../src/core/config.js';
 
 function safeRmSync(p: string): void {
   try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
@@ -83,7 +84,7 @@ describe('incidents store (first-class object)', () => {
   afterEach(() => safeRmSync(home));
 
   it('saveIncident creates both memory and incidents row + incident_open audit', async () => {
-    const inc = await openIncident(objectsAt(home), home, 'default', {
+    const inc = await openIncident(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
       incidentText: 'DB pool exhausted',
       context: 'spike at 14:00',
     }, 'cli');
@@ -129,7 +130,7 @@ describe('incidents store (first-class object)', () => {
   });
 
   it('saveIncident without context: bare memory content, has_context false', async () => {
-    const inc = await openIncident(objectsAt(home), home, 'default', { incidentText: 'cron job silently failed' }, 'cli');
+    const inc = await openIncident(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { incidentText: 'cron job silently failed' }, 'cli');
     expect(inc.context).toBeNull();
     const db = openHippoDb(home);
     try {
@@ -153,7 +154,7 @@ describe('incidents store (first-class object)', () => {
   });
 
   it('resolveIncident flips open -> resolved + emits incident_resolve audit', async () => {
-    const inc = await openIncident(objectsAt(home), home, 'default', { incidentText: 'API 500s' }, 'cli');
+    const inc = await openIncident(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { incidentText: 'API 500s' }, 'cli');
     const resolved = await resolveOpenIncident(objectsAt(home), 'default', inc.id, 'restarted the worker pool', 'cli');
     expect(resolved.status).toBe('resolved');
     expect(resolved.resolutionText).toBe('restarted the worker pool');
@@ -171,7 +172,7 @@ describe('incidents store (first-class object)', () => {
   });
 
   it('resolve CAS: re-resolving an already-resolved incident throws not-open', async () => {
-    const inc = await openIncident(objectsAt(home), home, 'default', { incidentText: 'resolve twice' }, 'cli');
+    const inc = await openIncident(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { incidentText: 'resolve twice' }, 'cli');
     await resolveOpenIncident(objectsAt(home), 'default', inc.id, 'first resolution', 'cli');
     await expect(resolveOpenIncident(objectsAt(home), 'default', inc.id, 'second resolution', 'cli')).rejects.toThrow(/not open/);
     // not found when the id does not exist
@@ -179,14 +180,14 @@ describe('incidents store (first-class object)', () => {
   });
 
   it('resolveIncident requires a non-empty resolution text', async () => {
-    const inc = await openIncident(objectsAt(home), home, 'default', { incidentText: 'needs resolution' }, 'cli');
+    const inc = await openIncident(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { incidentText: 'needs resolution' }, 'cli');
     await expect(resolveOpenIncident(objectsAt(home), 'default', inc.id, '   ', 'cli')).rejects.toThrow(/resolutionText is required/);
     // The failed resolve left the incident open.
     expect((await loadIncidentById(objectsAt(home), 'default', inc.id))!.status).toBe('open');
   });
 
   it('closeIncident flips open -> closed + emits incident_close audit', async () => {
-    const inc = await openIncident(objectsAt(home), home, 'default', { incidentText: 'close from open' }, 'cli');
+    const inc = await openIncident(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { incidentText: 'close from open' }, 'cli');
     const closed = await closeIncident(objectsAt(home), 'default', inc.id);
     expect(closed.status).toBe('closed');
     expect(closed.closedAt).not.toBeNull();
@@ -203,7 +204,7 @@ describe('incidents store (first-class object)', () => {
   });
 
   it('closeIncident works from resolved (resolved -> closed)', async () => {
-    const inc = await openIncident(objectsAt(home), home, 'default', { incidentText: 'resolve then close' }, 'cli');
+    const inc = await openIncident(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { incidentText: 'resolve then close' }, 'cli');
     await resolveOpenIncident(objectsAt(home), 'default', inc.id, 'fixed root cause', 'cli');
     const closed = await closeIncident(objectsAt(home), 'default', inc.id);
     expect(closed.status).toBe('closed');
@@ -215,13 +216,13 @@ describe('incidents store (first-class object)', () => {
   it('close guard: not-found and already-closed error clearly', async () => {
     await expect(closeIncident(objectsAt(home), 'default', 77777)).rejects.toThrow(/not found/);
 
-    const inc = await openIncident(objectsAt(home), home, 'default', { incidentText: 'close twice' }, 'cli');
+    const inc = await openIncident(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { incidentText: 'close twice' }, 'cli');
     await closeIncident(objectsAt(home), 'default', inc.id);
     await expect(closeIncident(objectsAt(home), 'default', inc.id)).rejects.toThrow(/already closed/);
   });
 
   it('ON DELETE SET NULL: forgetting the memory orphans the incident', async () => {
-    const inc = await openIncident(objectsAt(home), home, 'default', { incidentText: 'survives memory decay' }, 'cli');
+    const inc = await openIncident(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { incidentText: 'survives memory decay' }, 'cli');
     expect(inc.memoryId).not.toBeNull();
     deleteEntry(home, inc.memoryId!);
     const reloaded = await loadIncidentById(objectsAt(home), 'default', inc.id);
@@ -234,9 +235,9 @@ describe('incidents store (first-class object)', () => {
   });
 
   it('loadIncidents status filter; loadOpenIncidents excludes non-open', async () => {
-    const a = await openIncident(objectsAt(home), home, 'default', { incidentText: 'open-1' }, 'cli');
-    const b = await openIncident(objectsAt(home), home, 'default', { incidentText: 'to-resolve' }, 'cli');
-    const c = await openIncident(objectsAt(home), home, 'default', { incidentText: 'to-close' }, 'cli');
+    const a = await openIncident(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { incidentText: 'open-1' }, 'cli');
+    const b = await openIncident(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { incidentText: 'to-resolve' }, 'cli');
+    const c = await openIncident(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { incidentText: 'to-close' }, 'cli');
     await resolveOpenIncident(objectsAt(home), 'default', b.id, 'fixed', 'cli');
     await closeIncident(objectsAt(home), 'default', c.id);
 
@@ -261,7 +262,7 @@ describe('incidents store (first-class object)', () => {
   it('linked_memory_ids round-trips; cross-tenant/nonexistent ids are rejected', async () => {
     const receiptA = seedMemory(home, 'evidence one', 'default');
     const receiptB = seedMemory(home, 'evidence two', 'default');
-    const inc = await openIncident(objectsAt(home), home, 'default', {
+    const inc = await openIncident(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
       incidentText: 'with receipts',
       linkedMemoryIds: [receiptA, receiptB],
     }, 'cli');
@@ -274,7 +275,7 @@ describe('incidents store (first-class object)', () => {
     const incBefore = countRows(home, 'incidents');
     const memBefore = countRows(home, 'memories');
     await expect(async () => {
-      await openIncident(objectsAt(home), home, 'default', {
+      await openIncident(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
         incidentText: 'bad receipt',
         linkedMemoryIds: ['mem_does_not_exist'],
       }, 'cli');
@@ -285,7 +286,7 @@ describe('incidents store (first-class object)', () => {
     // A receipt belonging to another tenant is rejected (cross-tenant leak guard).
     const crossTenantReceipt = seedMemory(home, 'tenant-b evidence', 'tenant-b');
     await expect(async () => {
-      await openIncident(objectsAt(home), home, 'default', {
+      await openIncident(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
         incidentText: 'cross-tenant receipt',
         linkedMemoryIds: [crossTenantReceipt],
       }, 'cli');
@@ -293,7 +294,7 @@ describe('incidents store (first-class object)', () => {
   });
 
   it('resolveActiveIncidentIdByMemory: row id for open, null for resolved/closed', async () => {
-    const inc = await openIncident(objectsAt(home), home, 'default', { incidentText: 'open one' }, 'cli');
+    const inc = await openIncident(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { incidentText: 'open one' }, 'cli');
     expect(await resolveActiveIncidentIdByMemory(objectsAt(home), 'default', inc.memoryId!)).toBe(inc.id);
 
     await resolveOpenIncident(objectsAt(home), 'default', inc.id, 'fixed', 'cli');

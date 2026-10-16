@@ -16,6 +16,7 @@ import { buildDag, buildEntityProfiles } from '../src/consolidate/dag.js';
 import { storeExtractedFacts } from '../src/learn/extract.js';
 import { sqliteConsolidation } from '../src/store/sqlite/consolidation-group.js';
 import { sqliteSyncStore } from '../src/store/sqlite/store.js';
+import { DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 
 let home: string;
 beforeEach(() => {
@@ -83,7 +84,7 @@ describe('sleep partitions by origin project', () => {
     for (const origin of ['proj-b', null]) {
       const source = inProject(createMemory(`alice prefers dark mode in ${origin}`, { layer: Layer.Episodic }), origin);
       writeEntry(home, source);
-      const [fact] = storeExtractedFacts(home, source, [{ content: `alice prefers dark mode (${origin})`, tags: [], valence: 'neutral' }]);
+      const [fact] = storeExtractedFacts(home, source, [{ content: `alice prefers dark mode (${origin})`, tags: [], valence: 'neutral' }], DEFAULT_HALF_LIFE_DAYS);
       expect(live().find((e) => e.id === fact!.id)!.origin_project).toBe(origin);
     }
   });
@@ -93,7 +94,7 @@ describe('sleep partitions by origin project', () => {
       inProject(createMemory(`${c} in ${origin}`, { layer: Layer.Episodic, dagLevel: 1, tags: ['extracted', 'speaker:alice'] }), origin)));
     for (const f of facts) writeEntry(home, f);
 
-    expect((await buildDag(sqliteSyncStore(home).localFiles, facts, { apiKey: 'k', fetcher: fetcher('alice files, notes and closes tickets') })).summariesCreated).toBe(2);
+    expect((await buildDag(sqliteSyncStore(home).localFiles, facts, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, apiKey: 'k', fetcher: fetcher('alice files, notes and closes tickets') })).summariesCreated).toBe(2);
     const l2s = live().filter((e) => e.dag_level === 2);
     expect(l2s.map((e) => e.origin_project).sort()).toEqual(['proj-b', 'proj-c']);
 
@@ -102,7 +103,7 @@ describe('sleep partitions by origin project', () => {
     }), origin));
     for (const l2 of more) writeEntry(home, l2);
 
-    expect((await buildEntityProfiles(sqliteSyncStore(home).localFiles, [...l2s, ...more], { apiKey: 'k', fetcher: fetcher('alice is the typed-python API owner') })).profilesCreated).toBe(2);
+    expect((await buildEntityProfiles(sqliteSyncStore(home).localFiles, [...l2s, ...more], { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, apiKey: 'k', fetcher: fetcher('alice is the typed-python API owner') })).profilesCreated).toBe(2);
     expect(live().filter((e) => e.dag_level === 3).map((e) => e.origin_project).sort()).toEqual(['proj-b', 'proj-c']);
   });
 });

@@ -110,7 +110,8 @@ async function landLessons(batch: LessonBatch, queued: readonly QueuedLesson[]):
   counts.added += landed.length;
   if (!batch.full) return;
   if (landed.length > 0) await writes.bumpRemembered(landed.length);
-  for (const entry of landed) void embedMemory(ctx.hippoRoot, entry, undefined, ctx.store);
+  const { embeddings } = configOf(ctx);
+  for (const entry of landed) void embedMemory(ctx.hippoRoot, entry, undefined, ctx.store, embeddings);
 }
 
 /** The duplicate keys a batch skips: every readable row's with

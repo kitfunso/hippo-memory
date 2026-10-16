@@ -681,6 +681,7 @@ export async function handlePostCompact({ hippoRoot, flags }: CommandContext): P
     afterSave: (transcriptPath, cwd, log) => {
       const report = importSessionFolder(store, transcriptPath, cwd, {
         machine: currentMachine(),
+        configAt: loadConfig,
         busyWaitMs: COMPACTION_DB_WAIT_MS,
       });
       const summary = summaryLine(report);

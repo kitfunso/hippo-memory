@@ -5,3 +5,8 @@ import type { Context } from './types.js';
 export function configOf(ctx: Context): HippoConfig {
   return ctx.config ?? loadConfig(ctx.hippoRoot);
 }
+
+/** The caller's own config when `root` is its store, else that root's file (a ledger can sit on the global store). */
+export function configAtRoot(own: Pick<Context, 'hippoRoot' | 'config'>, root: string): HippoConfig {
+  return root === own.hippoRoot && own.config ? own.config : loadConfig(root);
+}

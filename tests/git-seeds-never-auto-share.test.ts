@@ -76,7 +76,7 @@ describe('git-learned rows and the global store', () => {
   it('a fact extracted from a git-learned row keeps the tag and stays local after three recalls', () => {
     const [fact] = storeExtractedFacts(hippoRoot, seed, [
       { content: 'The uploader retries when the storage token expires mid-transfer.', tags: ['topic:upload'], valence: 'neutral' },
-    ]);
+    ], DEFAULT_HALF_LIFE_DAYS);
     expect(fact.tags).toContain('git-learned');
     const recalled = { ...fact, retrieval_count: 3 };
     writeEntry(hippoRoot, recalled);
@@ -92,14 +92,14 @@ describe('git-learned rows and the global store', () => {
       new Response(JSON.stringify({ content: [{ text: `Upload retry summary number ${++calls} for the storage token.` }] }), { status: 200 });
     const facts = storeExtractedFacts(hippoRoot, seed, [1, 2, 3, 4, 5, 6].map((n): ExtractedFact => (
       { content: `Upload fact ${n}: the storage token can expire mid-transfer.`, tags: ['topic:upload'], valence: 'neutral' }
-    ))).map((f) => ({ ...f, dag_level: 1 }));
-    await buildDag(sqliteSyncStore(hippoRoot).localFiles, facts.slice(0, 3), { apiKey: 'test', fetcher });
-    await buildDag(sqliteSyncStore(hippoRoot).localFiles, facts.slice(3), { apiKey: 'test', fetcher });
+    )), DEFAULT_HALF_LIFE_DAYS).map((f) => ({ ...f, dag_level: 1 }));
+    await buildDag(sqliteSyncStore(hippoRoot).localFiles, facts.slice(0, 3), { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, apiKey: 'test', fetcher });
+    await buildDag(sqliteSyncStore(hippoRoot).localFiles, facts.slice(3), { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, apiKey: 'test', fetcher });
     const summaries = loadAllEntries(hippoRoot, 'default').filter((e) => e.dag_level === 2);
     expect(summaries).toHaveLength(2);
     for (const s of summaries) expect(s.tags).toContain('git-learned');
 
-    await buildEntityProfiles(sqliteSyncStore(hippoRoot).localFiles, summaries, { apiKey: 'test', fetcher });
+    await buildEntityProfiles(sqliteSyncStore(hippoRoot).localFiles, summaries, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, apiKey: 'test', fetcher });
     const profiles = loadAllEntries(hippoRoot, 'default').filter((e) => e.dag_level === 3);
     expect(profiles).toHaveLength(1);
     expect(profiles[0].tags).toContain('git-learned');

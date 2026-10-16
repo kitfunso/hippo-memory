@@ -113,12 +113,12 @@ export const POLICY: SavableDescriptor<'policy', SavePolicyOpts> = {
  *  valid_from defaults to now; valid_to must be > valid_from (validatePolicyDates). */
 export function savePolicy(
   objects: Objects,
-  hippoRoot: string,
+  baseHalfLifeDays: number,
   tenantId: string,
   opts: SavePolicyOpts,
   actor: string = 'cli',
 ): Promise<Policy> {
-  return saveObject(objects, POLICY, { hippoRoot, tenantId, actor }, opts);
+  return saveObject(objects, POLICY, { baseHalfLifeDays, tenantId, actor }, opts);
 }
 
 /** Close (retire) an active policy with no successor; CAS on status='active', a superseded row is terminal. */

@@ -102,12 +102,12 @@ export const SKILL: SavableDescriptor<'skill', SaveSkillOpts> = {
 /** Create a skill, or a new version superseding an existing one, in the `objects` store group's one transaction. */
 export function saveSkill(
   objects: Objects,
-  hippoRoot: string,
+  baseHalfLifeDays: number,
   tenantId: string,
   opts: SaveSkillOpts,
   actor: string = 'cli',
 ): Promise<Skill> {
-  return saveObject(objects, SKILL, { hippoRoot, tenantId, actor }, opts);
+  return saveObject(objects, SKILL, { baseHalfLifeDays, tenantId, actor }, opts);
 }
 
 /** Close (retire) an active skill; a superseded row is terminal. */

@@ -3,7 +3,8 @@
 // CLI parity case in tests/prompt-hook-context.test.ts is all that ties the two.
 import { getContext, type Context, type ContextResult, type ContextResultEntry, type ContextWith } from './index.js';
 import { BadRequestError } from '../core/api-errors.js';
-import { type HippoConfig, isSharedStore, loadConfig } from '../core/config.js';
+import { type HippoConfig, isSharedStore } from '../core/config.js';
+import { configAtRoot } from './config-of.js';
 import {
   contextBlockLines,
   contextCost,
@@ -53,7 +54,7 @@ export function startDeliveryRecorder(ctx: Context, start: DeliveryStart): Deliv
   try {
     // The same store the token ledger writes to, so its config governs both.
     const root = ledgerRoot(ctx.hippoRoot, ledgerReachOf(ctx));
-    if (root === null || !loadConfig(root).deliveryLedger.enabled) return null;
+    if (root === null || !configAtRoot(ctx, root).deliveryLedger.enabled) return null;
     return createDeliveryRecorder({
       root,
       storeHash: blockHash(realpathOrResolve(root)),
@@ -250,7 +251,7 @@ function skipUnchangedStatic(
   if (!view.pinnedOnly || payloadSessionId === undefined) return false;
   // Session start is the only injection Copilot gets, so a resumed session needs the whole block again.
   if (view.envelope === 'copilot-session-start' || view.envelope === 'vscode-session-start') return false;
-  const injectCfg = (view.config ?? loadConfig(hippoRoot)).pinnedInject;
+  const injectCfg = configAtRoot(view, hippoRoot).pinnedInject;
   if (injectCfg.skipUnchanged === false) return false;
   const refreshTurns = Number.isFinite(injectCfg.refreshTurns) && injectCfg.refreshTurns >= 0
     ? injectCfg.refreshTurns
@@ -369,7 +370,8 @@ export async function promptHookContext(
   const subagent = payload !== undefined && isSubagentPayload(JSON.stringify(payload));
   const ledgerSessionId = subagent ? undefined : sessionId;
   const reach = ledgerReachOf(ctx, sharedStore);
-  const arm = sessionPilotArm(ctx.hippoRoot, ctx.tenantId, sessionId, !subagent, { reach, ownTenantOnly: true });
+  const armOpts = { reach, ownTenantOnly: true, config: ctx.config };
+  const arm = sessionPilotArm(ctx.hippoRoot, ctx.tenantId, sessionId, !subagent, armOpts);
   if (arm === 'holdout') return { arm, ...NOTHING_RENDERED };
   const prompt = payload?.prompt;
   const result = await getContext(ctx, {

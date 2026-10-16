@@ -19,6 +19,8 @@ import { loadAllEntries } from '../src/store/entry-reads.js';
 import { loadRecallSearchEntries } from '../src/store/search-rows.js';
 import { initStore } from '../src/store/open.js';
 import { closeWorld, ctxFor, liveRows, note, openWorld, projectNotes, toolTally, withDb, type World } from './_helpers/agent-memories-world.js';
+import { loadConfig } from '../src/core/config.js';
+import { DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 
 // Every sync asks git for each folder's layout in a child process, and a case runs several syncs.
 vi.setConfig({ testTimeout: 30_000 });
@@ -62,7 +64,7 @@ function compaction(id: string, origin: string, cwd: string): void {
 }
 
 const texts = (r: Awaited<ReturnType<typeof getContext>>): string[] => r.entries.map((e) => e.entry.content);
-const sync = (cwd: string) => importAtSessionEnd(cwd, undefined, { machine: w.machine });
+const sync = (cwd: string) => importAtSessionEnd(cwd, undefined, { configAt: loadConfig, machine: w.machine });
 const prefixFor = (cwd: string, origin: string): string =>
   containerPrefix('claude-code', containerId(projectNotes(w, cwd), 'project', process.platform, origin));
 
@@ -115,14 +117,14 @@ describe('two repos named api in one global store', () => {
   it('a compaction item the legacy rows already hold is a repeat, not a new row', () => {
     const written = withDb(w.global, (db) => saveItems(db, w.global, {
       tenantId: T, recordId: null, sessionId: 's1', originProject: resolveProjectIdentity(a).name, cwd: a, items: [OLD],
-    }, () => undefined));
+    }, () => undefined, DEFAULT_HALF_LIFE_DAYS));
     expect(written).toBe(0);
   });
 
   it('a record saved under the old name still sees the rows its project holds under the id', () => {
     const written = withDb(w.global, (db) => saveItems(db, w.global, {
       tenantId: T, recordId: null, sessionId: 's2', originProject: 'api', cwd: a, items: [NEW_A],
-    }, () => undefined));
+    }, () => undefined, DEFAULT_HALF_LIFE_DAYS));
     expect(written).toBe(0);
   });
 

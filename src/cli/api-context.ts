@@ -53,7 +53,8 @@ export const cliStdioHost: McpHost = {
       store,
       reach: sqliteReach(hippoRoot, store),
       autoSleepRunner: (root) =>
-        runDetachedSqliteRequest(() => runConsolidation(cliLocalFiles(root))).then(() => {}),
+        runDetachedSqliteRequest(() => runConsolidation(cliLocalFiles(root), { config: loadConfig(root) }))
+          .then(() => {}),
     };
   },
   runRequest: cliRequest,

@@ -6,6 +6,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import { installJsonHooks } from '../hooks/json-hooks.js';
 import { writeFileAtomic } from '../util/atomic-write.js';
+import { loadConfig } from '../core/config.js';
 import { isCodexPresent } from '../hooks/shared.js';
 import { isCodexWrapperInstalled } from '../hooks/codex-wrapper.js';
 import { installOpencodePlugin } from '../hooks/opencode.js';
@@ -88,7 +89,7 @@ async function learnScannedRepo(
     added = result.added;
     lowInfo = result.lowInfo;
   }
-  if (learn) mergeReports(agentImport, importProjectMemories(repoHippo, { machine }));
+  if (learn) mergeReports(agentImport, importProjectMemories(repoHippo, { configAt: loadConfig, machine }));
   return { added, lowInfo };
 }
 
@@ -156,7 +157,7 @@ async function cmdInitScan(scanDir: string, tenantId: string, flags: CliFlags): 
 
   printScanSummary(repos.length, totalLessons, totalLowInfo);
   if (learn) {
-    mergeReports(agentImport, importUserMemories(globalRoot, { machine }));
+    mergeReports(agentImport, importUserMemories(globalRoot, { configAt: loadConfig, machine }));
     printAgentImport(agentImport, '');
   }
   console.log(`Global store: ${globalRoot}`);
@@ -175,7 +176,9 @@ function initGlobalOnly(flags: CliFlags): void {
     initGlobal();
     console.log('Initialized global Hippo store at', globalRoot);
   }
-  if (!flags['no-learn']) printAgentImport(importUserMemories(globalRoot, { machine: currentMachine() }));
+  if (!flags['no-learn']) {
+    printAgentImport(importUserMemories(globalRoot, { configAt: loadConfig, machine: currentMachine() }));
+  }
 }
 
 async function seedFromGitHistory(hippoRoot: string, tenantId: string): Promise<void> {
@@ -230,7 +233,7 @@ export async function handleInit({ hippoRoot, tenantId, flags }: CommandContext)
   if (!alreadyExists && learn && !flags['global']) await seedFromGitHistory(hippoRoot, tenantId);
 
   // Every run, not only the first: an agent's notes change between inits.
-  if (learn) printAgentImport(importForStore(hippoRoot, { machine: currentMachine() }));
+  if (learn) printAgentImport(importForStore(hippoRoot, { configAt: loadConfig, machine: currentMachine() }));
 }
 
 /**

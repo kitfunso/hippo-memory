@@ -66,12 +66,12 @@ export const DECISION: SavableDescriptor<'decision', SaveDecisionOpts> = {
  *  Superseding CASes the old row (WHERE status='active'), so a duplicate supersede aborts the whole write. */
 export function saveDecision(
   objects: Objects,
-  hippoRoot: string,
+  baseHalfLifeDays: number,
   tenantId: string,
   opts: SaveDecisionOpts,
   actor: string = 'cli',
 ): Promise<Decision> {
-  return saveObject(objects, DECISION, { hippoRoot, tenantId, actor }, opts);
+  return saveObject(objects, DECISION, { baseHalfLifeDays, tenantId, actor }, opts);
 }
 
 /**

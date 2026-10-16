@@ -111,7 +111,7 @@ async function retrieveBand(
       vectorCandidates: recallVectorSpec(ctx, opts, own),
     };
     const ranked = await searchByEngine(
-      { root: ctx.hippoRoot, store },
+      { root: ctx.hippoRoot, store, embeddings: configOf(ctx).embeddings },
       opts.query,
       candidates,
       physicsFor(ctx, opts),
@@ -192,7 +192,7 @@ async function retrieveFromStore(
   // No scope option: the scope boost follows HIPPO_SCOPE and the skill env, as MCP recall always ranked.
   const searchOpts = { budget: Infinity, vectorCandidates: recallVectorSpec(ctx, opts, own) };
   const searched = await searchByEngine(
-    { root: ctx.hippoRoot, store },
+    { root: ctx.hippoRoot, store, embeddings: configOf(ctx).embeddings },
     opts.query,
     pool,
     physicsFor(ctx, opts),

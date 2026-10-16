@@ -9,6 +9,7 @@ import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { loadEmbeddingIndex } from '../src/store/vector-index.js';
 import { resolveEmbeddingProvider, type EmbeddingProvider } from '../src/embeddings/provider.js';
 import { handleEmbed } from '../src/cli/maintenance.js';
+import { loadConfig } from '../src/core/config.js';
 
 /** A local provider that answers every text with `vector`, or fails the whole call as an unloadable model does. */
 function localProvider(opts: { available?: boolean; loadError?: string; vector?: number[] }): EmbeddingProvider {
@@ -57,7 +58,7 @@ describe('the local provider with a model that cannot load', () => {
   it('rejects with the reason instead of returning empty vectors', async () => {
     // An empty offline cache cannot hold the model, whether or not a transformers package is installed.
     process.env.HIPPO_MODEL_CACHE = emptyCache;
-    await expect(resolveEmbeddingProvider(root).embed(['a memory'], 'passage')).rejects.toThrow(/did not load: \S/);
+    await expect(resolveEmbeddingProvider(loadConfig(root).embeddings).embed(['a memory'], 'passage')).rejects.toThrow(/did not load: \S/);
   });
 });
 

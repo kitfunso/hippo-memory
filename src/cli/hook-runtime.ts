@@ -4,6 +4,7 @@ import { envClaudeCodeSessionId, envHippoSessionId } from '../util/env.js';
 import * as path from 'path';
 import * as fs from 'fs';
 import type { HookRuntime } from '../core/capture-contract.js';
+import { loadConfig } from '../core/config.js';
 import { isSqliteBusy, noteStoreBusy, runWithRequestStores, HOOK_DB_WAIT_MS } from '../db/index.js';
 import { bookTokenUse } from '../api/ledger-db.js';
 import { sessionPilotArm } from '../api/pilot-arm.js';
@@ -26,7 +27,8 @@ import type { CliFlags } from './flag-values.js';
  */
 export function logSessionEndImport(logFile: string | null, transcriptPath: string | undefined): void {
   try {
-    const report = importAtSessionEnd(process.cwd(), transcriptPath, { machine: currentMachine() });
+    const sync = { configAt: loadConfig, machine: currentMachine() };
+    const report = importAtSessionEnd(process.cwd(), transcriptPath, sync);
     const line = summaryLine(report);
     if (line !== null) appendSessionEndCloseLog(logFile, line);
     for (const warning of report.warnings) appendSessionEndCloseLog(logFile, `agent memories: ${warning}`);

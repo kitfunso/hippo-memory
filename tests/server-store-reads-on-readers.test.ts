@@ -15,6 +15,7 @@ import { leftBehind, type MovedReadsSeed, seedMovedReads, VECTOR_IDENTITY } from
 import { FAKE_NOW, freshStore, SESSION, TENANT } from './_helpers/recall-golden-seed.js';
 import { cleanups, holdWriteLock, mirrorFiles, patientStore, undoAll } from './_helpers/store-worker-server.js';
 import { objectsAt } from './_helpers/objects-at.js';
+import { loadConfig } from '../src/core/config.js';
 
 type Served = HippoStore & StoreGroups;
 type Call<T> = (store: Served, seed: MovedReadsSeed) => Promise<T>;
@@ -141,7 +142,7 @@ describe('a read the op table places on a reader thread', () => {
   beforeAll(async () => {
     const root = copy();
     // The shared seed has no skill, and the skill read must find one.
-    await saveSkill(objectsAt(root), root, TENANT, { skillName: 'rollback', instructions: 'page the owner, then revert' });
+    await saveSkill(objectsAt(root), loadConfig(root).defaultHalfLifeDays, TENANT, { skillName: 'rollback', instructions: 'page the owner, then revert' });
     onWorkers = workerSqliteStore(root);
     inProcess = sqliteStore(root);
   });

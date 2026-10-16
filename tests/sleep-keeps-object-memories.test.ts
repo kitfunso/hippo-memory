@@ -19,6 +19,7 @@ import { batchWriteAndDelete, deleteEntry, memoriesBackingObjects } from '../src
 import { apiCtx } from './_helpers/api-ctx.js';
 import { objectsAt } from './_helpers/objects-at.js';
 import { sqliteConsolidation } from '../src/store/sqlite/consolidation-group.js';
+import { loadConfig } from '../src/core/config.js';
 
 const roots: string[] = [];
 
@@ -56,8 +57,8 @@ function linkOf(root: string, table: string, objectId: number): string | null {
 }
 
 const SAVERS = [
-  ['decision', 'decisions', async (root: string) => await saveDecision(objectsAt(root), root, 'default', { decisionText: 'we release on Tuesdays after the staging soak' })],
-  ['incident', 'incidents', async (root: string) => await openIncident(objectsAt(root), root, 'default', { incidentText: 'the billing cron charged twice on the 1st' }, 'cli')],
+  ['decision', 'decisions', async (root: string) => await saveDecision(objectsAt(root), loadConfig(root).defaultHalfLifeDays, 'default', { decisionText: 'we release on Tuesdays after the staging soak' })],
+  ['incident', 'incidents', async (root: string) => await openIncident(objectsAt(root), loadConfig(root).defaultHalfLifeDays, 'default', { incidentText: 'the billing cron charged twice on the 1st' }, 'cli')],
 ] as const;
 
 describe.each(SAVERS)('a memory that backs a %s', (_kind, table, save) => {

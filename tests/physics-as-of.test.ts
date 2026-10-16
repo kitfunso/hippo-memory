@@ -43,7 +43,7 @@ beforeEach(() => {
   }));
   for (const e of [PRE1, PRE2, POST]) writeEntry(root, { ...e, tags: [...e.tags] });
   saveEmbeddingIndex(root, VECTORS);
-  saveStoredEmbeddingModel(root, resolveEmbeddingProvider(root).id);
+  saveStoredEmbeddingModel(root, resolveEmbeddingProvider(loadConfig(root).embeddings).id);
   const db = openHippoDb(root);
   try {
     savePhysicsState(db, Object.entries(VECTORS).map(([id, position]) => ({

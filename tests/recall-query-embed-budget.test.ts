@@ -18,6 +18,7 @@ import { searchBothHybrid } from '../src/sharing/search-both.js';
 import { resetLogOnce } from '../src/util/log.js';
 import { hashedVector, startHashedEmbeddings, type HashedEmbeddings } from './_helpers/hashed-embedding-server.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+import { loadConfig } from '../src/core/config.js';
 
 const TENANT = 'default';
 const QUERY = 'deploy';
@@ -42,7 +43,7 @@ function seedStore(): string {
     index[entry.id] = vector;
   }
   saveEmbeddingIndex(root, index);
-  saveStoredEmbeddingModel(root, resolveEmbeddingProvider(root).id);
+  saveStoredEmbeddingModel(root, resolveEmbeddingProvider(loadConfig(root).embeddings).id);
   return root;
 }
 

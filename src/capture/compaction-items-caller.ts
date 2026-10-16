@@ -2,6 +2,7 @@
 // retried request id writes nothing twice.
 import { BadRequestError } from '../core/api-errors.js';
 import type { Context } from '../api/types.js';
+import { configOf } from '../api/config-of.js';
 import { COMPACTION_ITEM_MAX_CHARS } from '../util/compaction-items.js';
 import { saveCallerItems } from '../store/compaction-caller.js';
 import { scrubCompactionItems } from './compaction-record.js';
@@ -43,6 +44,7 @@ export function saveCompactionItemsForCaller(ctx: Context, req: CallerItemsReque
       items: scrubCompactionItems(req.items),
       owner: key.owner,
       origins: key.project,
+      baseHalfLifeDays: configOf(ctx).defaultHalfLifeDays,
     },
     (message) => log.info(`post-compact: ${message}`),
   );

@@ -23,6 +23,7 @@ import {
 } from '../src/objects/skills.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { objectsAt } from './_helpers/objects-at.js';
+import { loadConfig } from '../src/core/config.js';
 
 function safeRmSync(p: string): void {
   try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
@@ -53,7 +54,7 @@ describe('skills store (executable/exportable first-class object)', () => {
   afterEach(() => safeRmSync(home));
 
   it('saveSkill creates memory + skills row + skill_create audit; v1; trigger null when omitted', async () => {
-    const s = await saveSkill(objectsAt(home), home, 'default', { skillName: 'Run tests', instructions: 'npm test before commit' });
+    const s = await saveSkill(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { skillName: 'Run tests', instructions: 'npm test before commit' });
     expect(s.id).toBeGreaterThan(0);
     expect(s.memoryId).not.toBeNull();
     expect(s.skillName).toBe('Run tests');
@@ -83,7 +84,7 @@ describe('skills store (executable/exportable first-class object)', () => {
   });
 
   it('saveSkill with trigger; memory content has when + instructions', async () => {
-    const s = await saveSkill(objectsAt(home), home, 'default', { skillName: 'Lint', instructions: 'run eslint', trigger: 'before push' });
+    const s = await saveSkill(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { skillName: 'Lint', instructions: 'run eslint', trigger: 'before push' });
     expect(s.trigger).toBe('before push');
     const db = openHippoDb(home);
     try {
@@ -93,10 +94,10 @@ describe('skills store (executable/exportable first-class object)', () => {
   });
 
   it('status filters; loadActiveSkills', async () => {
-    const a = await saveSkill(objectsAt(home), home, 'default', { skillName: 'a', instructions: 'x' });
-    const b = await saveSkill(objectsAt(home), home, 'default', { skillName: 'b', instructions: 'x' });
-    const c = await saveSkill(objectsAt(home), home, 'default', { skillName: 'c', instructions: 'x' });
-    await saveSkill(objectsAt(home), home, 'default', { skillName: 'b', instructions: 'x2', supersedesSkillId: b.id });
+    const a = await saveSkill(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { skillName: 'a', instructions: 'x' });
+    const b = await saveSkill(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { skillName: 'b', instructions: 'x' });
+    const c = await saveSkill(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { skillName: 'c', instructions: 'x' });
+    await saveSkill(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { skillName: 'b', instructions: 'x2', supersedesSkillId: b.id });
     await closeSkill(objectsAt(home), 'default', c.id);
     const active = await loadActiveSkills(objectsAt(home), 'default');
     expect(active.some((x) => x.id === a.id)).toBe(true);
@@ -106,24 +107,24 @@ describe('skills store (executable/exportable first-class object)', () => {
   });
 
   it('validation: missing name/instructions; single-line name; caps', async () => {
-    await expect(saveSkill(objectsAt(home), home, 'default', { skillName: '   ', instructions: 'x' })).rejects.toThrow(/skillName is required/);
-    await expect(saveSkill(objectsAt(home), home, 'default', { skillName: 'n', instructions: '  ' })).rejects.toThrow(/instructions are required/);
-    await expect(saveSkill(objectsAt(home), home, 'default', { skillName: 'bad\nname', instructions: 'x' })).rejects.toThrow(/single line/);
-    await expect(saveSkill(objectsAt(home), home, 'default', { skillName: 'n', instructions: 'x', trigger: 'multi\n## line' })).rejects.toThrow(/trigger must be a single line/);
-    await expect(saveSkill(objectsAt(home), home, 'default', { skillName: 'big', instructions: 'y'.repeat(MAX_SKILL_INSTRUCTIONS_LEN + 1) })).rejects.toThrow(/instructions exceed/);
+    await expect(saveSkill(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { skillName: '   ', instructions: 'x' })).rejects.toThrow(/skillName is required/);
+    await expect(saveSkill(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { skillName: 'n', instructions: '  ' })).rejects.toThrow(/instructions are required/);
+    await expect(saveSkill(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { skillName: 'bad\nname', instructions: 'x' })).rejects.toThrow(/single line/);
+    await expect(saveSkill(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { skillName: 'n', instructions: 'x', trigger: 'multi\n## line' })).rejects.toThrow(/trigger must be a single line/);
+    await expect(saveSkill(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { skillName: 'big', instructions: 'y'.repeat(MAX_SKILL_INSTRUCTIONS_LEN + 1) })).rejects.toThrow(/instructions exceed/);
   });
 
   it('exportSkills: active-only, name-ASC, trigger omitted when null, markdown verbatim, empty -> ""', async () => {
     expect(await skillsMarkdown(objectsAt(home), 'default')).toBe('');
-    await saveSkill(objectsAt(home), home, 'default', { skillName: 'Bravo', instructions: 'do bravo' });
-    await saveSkill(objectsAt(home), home, 'default', { skillName: 'Alpha', instructions: 'do alpha', trigger: 'on start' });
+    await saveSkill(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { skillName: 'Bravo', instructions: 'do bravo' });
+    await saveSkill(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { skillName: 'Alpha', instructions: 'do alpha', trigger: 'on start' });
     // a closed + a superseded skill must NOT appear in the export
-    const closed = await saveSkill(objectsAt(home), home, 'default', { skillName: 'Zulu', instructions: 'old' });
+    const closed = await saveSkill(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { skillName: 'Zulu', instructions: 'old' });
     await closeSkill(objectsAt(home), 'default', closed.id);
-    const sup = await saveSkill(objectsAt(home), home, 'default', { skillName: 'Yankee', instructions: 'v1' });
-    await saveSkill(objectsAt(home), home, 'default', { skillName: 'Yankee', instructions: 'v2', supersedesSkillId: sup.id });
+    const sup = await saveSkill(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { skillName: 'Yankee', instructions: 'v1' });
+    await saveSkill(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { skillName: 'Yankee', instructions: 'v2', supersedesSkillId: sup.id });
     // instructions containing its own markdown heading must render verbatim
-    await saveSkill(objectsAt(home), home, 'default', { skillName: 'Charlie', instructions: 'step 1\n## sub-heading\nstep 2' });
+    await saveSkill(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { skillName: 'Charlie', instructions: 'step 1\n## sub-heading\nstep 2' });
 
     const md = await skillsMarkdown(objectsAt(home), 'default');
     // name-ASC order (by relative position of each skill's own H2 header). NOTE:

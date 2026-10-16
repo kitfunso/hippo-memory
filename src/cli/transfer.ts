@@ -41,6 +41,7 @@ import {
 } from './flag-values.js';
 import { CONTENT_PREVIEW_CHARS, DATE_PREFIX_CHARS } from '../util/token-text.js';
 import { CliExit, fail } from './exit.js';
+import { loadConfig } from '../core/config.js';
 
 const STDERR_PREVIEW_CHARS = 80;
 const MAX_ENTRIES_SHOWN = 10;
@@ -313,7 +314,7 @@ function printFileImportSummary(
 }
 
 function importAgentMemories(hippoRoot: string, useGlobal: boolean, dryRun: boolean): void {
-  const opts = { machine: currentMachine(), dryRun };
+  const opts = { configAt: loadConfig, machine: currentMachine(), dryRun };
   // A folder without a store of its own imports as session end would there, so its notes are not hidden.
   const report = useGlobal || isInitialized(hippoRoot)
     ? importForStore(useGlobal ? getGlobalRoot() : hippoRoot, opts)

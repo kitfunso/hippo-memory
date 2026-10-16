@@ -26,6 +26,7 @@ import {
 import { makeRoot } from './_helpers/make-root.js';
 import { resetLogOnce } from '../src/util/log.js';
 import { objectsAt } from './_helpers/objects-at.js';
+import { loadConfig } from '../src/core/config.js';
 
 function safeRmSync(p: string): void {
   try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
@@ -45,7 +46,7 @@ describe('processes store (first-class object)', () => {
   afterEach(() => safeRmSync(home));
 
   it('saveProcess creates both memory and processes row + process_create audit, version 1', async () => {
-    const proc = await saveProcess(objectsAt(home), home, 'default', {
+    const proc = await saveProcess(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
       processName: 'Release',
       steps: ['run tests', 'bump version', 'publish'],
       description: 'the npm release ritual',
@@ -94,7 +95,7 @@ describe('processes store (first-class object)', () => {
   });
 
   it('saveProcess without steps/description: bare name content', async () => {
-    const proc = await saveProcess(objectsAt(home), home, 'default', { processName: 'Empty', steps: [] });
+    const proc = await saveProcess(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { processName: 'Empty', steps: [] });
     expect(proc.steps).toEqual([]);
     expect(proc.description).toBeNull();
     const db = openHippoDb(home);
@@ -107,10 +108,10 @@ describe('processes store (first-class object)', () => {
   });
 
   it('loadProcesses status filter; loadActiveProcesses excludes non-active', async () => {
-    const a = await saveProcess(objectsAt(home), home, 'default', { processName: 'active-1', steps: ['a'] });
-    const b = await saveProcess(objectsAt(home), home, 'default', { processName: 'to-supersede', steps: ['b'] });
-    const c = await saveProcess(objectsAt(home), home, 'default', { processName: 'to-close', steps: ['c'] });
-    await saveProcess(objectsAt(home), home, 'default', { processName: 'to-supersede', steps: ['b', 'b2'], supersedesProcessId: b.id });
+    const a = await saveProcess(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { processName: 'active-1', steps: ['a'] });
+    const b = await saveProcess(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { processName: 'to-supersede', steps: ['b'] });
+    const c = await saveProcess(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { processName: 'to-close', steps: ['c'] });
+    await saveProcess(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { processName: 'to-supersede', steps: ['b', 'b2'], supersedesProcessId: b.id });
     await closeProcess(objectsAt(home), 'default', c.id);
 
     const active = await loadActiveProcesses(objectsAt(home), 'default');
@@ -134,18 +135,18 @@ describe('processes store (first-class object)', () => {
     // trim-then-store: a padded step is stored trimmed.
     expect(validateProcessSteps(['  spaced  '])).toEqual(['spaced']);
 
-    const proc = await saveProcess(objectsAt(home), home, 'default', { processName: 'Trim', steps: ['  lead/trail  '] });
+    const proc = await saveProcess(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { processName: 'Trim', steps: ['  lead/trail  '] });
     expect(proc.steps).toEqual(['lead/trail']);
     expect((await loadProcessById(objectsAt(home), 'default', proc.id))!.steps).toEqual(['lead/trail']);
     // saveProcess rejects bad steps and writes nothing.
     const before = countRows(home, 'processes');
-    await expect(saveProcess(objectsAt(home), home, 'default', { processName: 'Bad', steps: ['', 'x'] })).rejects.toThrow(/is empty/);
+    await expect(saveProcess(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { processName: 'Bad', steps: ['', 'x'] })).rejects.toThrow(/is empty/);
     expect(countRows(home, 'processes')).toBe(before);
   });
 
   it('a damaged steps column reads as no steps and warns once per shape', async () => {
-    const proc = await saveProcess(objectsAt(home), home, 'default', { processName: 'Damaged', steps: ['a'] });
-    const other = await saveProcess(objectsAt(home), home, 'default', { processName: 'WrongShape', steps: ['a'] });
+    const proc = await saveProcess(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { processName: 'Damaged', steps: ['a'] });
+    const other = await saveProcess(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { processName: 'WrongShape', steps: ['a'] });
     const db = openHippoDb(home);
     try {
       db.prepare(`UPDATE processes SET steps = '[private-step' WHERE id = ?`).run(proc.id);

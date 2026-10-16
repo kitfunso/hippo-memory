@@ -20,6 +20,7 @@ import {
   agentRows, auditCount, closeWorld, ctxFor, dormantRows, expectedContainer, liveRows, liveTexts, note, openWorld, projectNotes, sha,
   tally, toolTally, withDb, type World,
 } from './_helpers/agent-memories-world.js';
+import { loadConfig } from '../src/core/config.js';
 
 // Every sync asks git for each folder's layout in a child process, and a case runs several syncs.
 vi.setConfig({ testTimeout: 30_000 });
@@ -38,7 +39,7 @@ afterEach(() => closeWorld(w));
 // SAFETY: node:sqlite's DatabaseSync is the class db.ts wraps as DatabaseSyncLike.
 const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite') as { DatabaseSync: { prototype: DatabaseSyncLike } };
 
-const sync = (): ImportReport => importForStore(w.local, { machine: w.machine });
+const sync = (): ImportReport => importForStore(w.local, { configAt: loadConfig, machine: w.machine });
 const claude = (report: ImportReport) => toolTally(report, 'claude-code');
 
 function legacyRow(content: string, file: string): MemoryEntry {
@@ -209,7 +210,7 @@ describe('agent memory sync', () => {
     sync();
     const upper: Machine = { ...w.machine, env: { CLAUDE_CONFIG_DIR: join(w.home, '.claude').toUpperCase() } };
 
-    const again = importProjectMemories(w.local.toUpperCase(), { machine: upper });
+    const again = importProjectMemories(w.local.toUpperCase(), { configAt: loadConfig, machine: upper });
     expect(claude(again)).toMatchObject({ unchanged: 1, imported: 0, setAside: 0 });
     expect(liveRows(w.local)).toHaveLength(1);
   });
@@ -274,7 +275,7 @@ describe('agent memory sync', () => {
     const transcript = join(dirname(note(projectNotes(w, dirname(cwd)), 'queue.md', QUEUE)), '..', 's1.jsonl');
     writeFileSync(transcript, '', 'utf8');
 
-    expect(claude(importAtSessionEnd(cwd, transcript, { machine: w.machine })).imported).toBe(2);
+    expect(claude(importAtSessionEnd(cwd, transcript, { configAt: loadConfig, machine: w.machine })).imported).toBe(2);
     const origin = deriveOriginProject(cwd);
     expect(origin).not.toBe('');
     expect(liveTexts(w.global)).toEqual([DEPLOY, QUEUE].sort());

@@ -23,6 +23,8 @@ export interface CallerItems {
   /** The caller's audit actor and its project's names. */
   readonly owner: string;
   readonly origins: readonly string[];
+  /** The config default the caller's items start on. */
+  readonly baseHalfLifeDays: number;
 }
 
 /** A caller's items, already scrubbed, under its record: a retry of a finished request answers with the first count,
@@ -39,6 +41,6 @@ export function saveCallerItems(hippoRoot: string, tenantId: string, req: Caller
     return saveItems(db, hippoRoot, {
       tenantId, recordId: record.id, sessionId: req.sessionId, originProject: record.originProject, cwd: null,
       items: record.items, caller: { actor: req.owner, origins: req.origins },
-    }, log);
+    }, log, req.baseHalfLifeDays);
   });
 }

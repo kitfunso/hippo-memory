@@ -3,7 +3,8 @@ import { cosineOf } from '../core/cosine.js';
 import { indexNeedsRebuild } from '../store/embeddings/index.js';
 import { indexedModel } from '../store/vector-index.js';
 import type { VectorCandidateSpec } from '../store/search-rows.js';
-import { resolveEmbeddingProvider, type EmbeddingProvider } from '../embeddings/provider.js';
+import { embeddingsConfigOf, resolveEmbeddingProvider, type EmbeddingProvider } from '../embeddings/provider.js';
+import type { EmbeddingsConfig } from '../core/config.js';
 import { rethrowIfSqliteBlocked } from '../util/sqlite-blocked.js';
 import { errorMessage, log } from '../util/log.js';
 import { envQueryEmbedTimeoutMs } from '../util/env.js';
@@ -30,6 +31,8 @@ export interface VectorArm {
 export interface VectorSource {
   readonly root: string;
   readonly store: HippoStore;
+  /** The caller's embeddings config for `root`; absent, `root`'s config.json is read. */
+  readonly embeddings?: EmbeddingsConfig;
 }
 
 export interface VectorArmOptions extends CurrentnessOptions {
@@ -130,10 +133,10 @@ async function storedVectorsOf(
 async function fillVectorArm(
   arm: VectorArm,
   query: string,
-  { root, store }: VectorSource,
+  { root, store, embeddings }: VectorSource,
   options: VectorArmOptions,
 ): Promise<void> {
-  const provider = resolveEmbeddingProvider(root);
+  const provider = resolveEmbeddingProvider(embeddingsConfigOf(root, embeddings));
   if (!provider.isAvailable()) return;
   const reads = requireVectorReads(store);
   const index = await reads.embeddingIndexState();

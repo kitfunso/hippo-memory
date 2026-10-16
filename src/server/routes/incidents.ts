@@ -6,6 +6,7 @@ import type { AuthedRouteRequest } from '../types.js';
 import { MAX_SHORT_FIELD_LEN, parseJsonBody } from '../validation.js';
 import { type JsonValue, isJsonString } from '../../util/json.js';
 import { objectsOf } from '../../api/objects/objects.js';
+import { configOf } from '../../api/config-of.js';
 import {
   closeRoute,
   getRoute,
@@ -45,7 +46,7 @@ function linkedMemoryIds(body: Record<string, JsonValue>): string[] | undefined 
 // VALID_INCIDENT_STATES.
 // Lifecycle is open->resolved->closed (no supersede), so linkedMemoryIds replaces supersedesDecisionId on create.
 export async function handleCreateIncident(rr: AuthedRouteRequest<'objects'>): Promise<void> {
-  const { req, res, opts, ctx } = rr;
+  const { req, res, ctx } = rr;
   const body = await parseJsonBody(req, ctx);
   const write = {
     incidentText: requiredString(body, 'text', { max: MAX_SHORT_FIELD_LEN, untrimmed: true }),
@@ -53,7 +54,8 @@ export async function handleCreateIncident(rr: AuthedRouteRequest<'objects'>): P
     linkedMemoryIds: linkedMemoryIds(body),
   };
   try {
-    const incident = await openIncident(objectsOf(ctx), opts.hippoRoot, ctx.tenantId, write, ctx.actor.subject);
+    const { defaultHalfLifeDays } = configOf(ctx);
+    const incident = await openIncident(objectsOf(ctx), defaultHalfLifeDays, ctx.tenantId, write, ctx.actor.subject);
     sendJson(res, 201, { incident });
   } catch (e) {
     // A missing referenced row is a conflict with the create, not a missing target.

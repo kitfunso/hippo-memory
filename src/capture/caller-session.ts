@@ -28,7 +28,8 @@ export function bindCaller(ctx: Context, sessionId: string, project: CallerProje
 /** Read only: the session's first prompt booked its arm, and a holdout session gets nothing from hippo. */
 export function callerInHoldout(ctx: Context, sessionId: string): boolean {
   const reach = ledgerReachOf(ctx, true);
-  return sessionPilotArm(ctx.hippoRoot, ctx.tenantId, sessionId, false, { reach, ownTenantOnly: true }) === 'holdout';
+  const armOpts = { reach, ownTenantOnly: true, config: ctx.config };
+  return sessionPilotArm(ctx.hippoRoot, ctx.tenantId, sessionId, false, armOpts) === 'holdout';
 }
 
 /**

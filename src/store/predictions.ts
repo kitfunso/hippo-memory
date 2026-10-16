@@ -11,7 +11,6 @@ import { writeEntryAt } from './sqlite/entry-writes-group.js';
 import { assertTenantId } from './tenant.js';
 import { createMemory, Layer, type MemoryEntry, type MemoryKind } from '../core/memory.js';
 import { appendAuditEvent } from './audit.js';
-import { loadConfig } from '../core/config.js';
 import { keysetAfter, type KeysetPosition } from '../util/keyset.js';
 import type { PredictionSave } from './port.js';
 import { type ClosureState, VALID_CLOSURE_STATES } from '../core/prediction.js';
@@ -96,23 +95,6 @@ function rowToPrediction(row: PredictionRow): Prediction {
     closureNote: row.closure_note,
     createdAt: row.created_at,
   };
-}
-
-/** Create a prediction: memory mirror and predictions row land atomically inside `writeEntry`'s SAVEPOINT; any failure
- * rolls back both. The memory (tags `['prediction', classTag]`, kind 'distilled') surfaces in `hippo recall`; the
- * predictions table feeds the planning-fallacy detector. */
-export function savePrediction(
-  hippoRoot: string,
-  tenantId: string,
-  opts: SavePredictionOpts,
-  actor: string = 'cli',
-): Prediction {
-  assertTenantId('savePrediction', tenantId);
-  if (!opts.classTag) throw new BadRequestError('savePrediction: classTag is required');
-  if (!opts.claimText) throw new BadRequestError('savePrediction: claimText is required');
-
-  const mirror = predictionMirror(tenantId, opts, loadConfig(hippoRoot).defaultHalfLifeDays);
-  return writePrediction(hippoRoot, tenantId, { ...opts, mirror }, actor);
 }
 
 /** The memory row that mirrors a claim into recall, built here alone so every store keeps the same row for it. */

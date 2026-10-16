@@ -4,7 +4,6 @@ import { RejectedValueError } from '../core/api-errors.js';
 import { generateDagSummary, type DagSummaryOptions } from './dag-summary.js';
 import { overlapPartners } from './overlap-index.js';
 import { derivationScope, derivationPartitionKey } from '../core/recall-scope.js';
-import { loadConfig } from '../core/config.js';
 import { neverAutoShareTags } from '../sharing/share.js';
 import { errorFields, errorMessage, log } from '../util/log.js';
 
@@ -13,8 +12,11 @@ const DEFAULT_REBUILD_CAP = 20;
 // Facts join a cluster when their tag sets overlap at least this much.
 const CLUSTER_JACCARD_MIN = 0.5;
 
-/** Sleep's store, with the folder whose config sets a new summary's half-life. */
-type DagStore = Pick<LocalFiles, 'hippoRoot' | 'consolidation'>;
+/** Sleep's store. */
+type DagStore = Pick<LocalFiles, 'consolidation'>;
+
+/** The summary options plus the config's default half-life, which new summaries start on. */
+export type DagBuildOptions = DagSummaryOptions & { baseHalfLifeDays: number };
 
 export interface FactCluster {
   label: string;
@@ -159,10 +161,10 @@ async function summarizeCluster(
 export async function buildDag(
   local: DagStore,
   facts: MemoryEntry[],
-  opts: DagSummaryOptions,
+  opts: DagBuildOptions,
 ): Promise<DagBuildResult> {
   const result: DagBuildResult = { candidateClusters: 0, summariesCreated: 0, factsLinked: 0, rejected: 0 };
-  const baseHalfLifeDays = loadConfig(local.hippoRoot).defaultHalfLifeDays;
+  const { baseHalfLifeDays } = opts;
 
   const unparented = facts.filter(
     (f) => f.dag_level === 1 && !f.dag_parent_id && f.tags.includes('extracted'),
@@ -410,7 +412,7 @@ async function profileCluster(
 export async function buildEntityProfiles(
   local: DagStore,
   l2Summaries: MemoryEntry[],
-  opts: DagSummaryOptions,
+  opts: DagBuildOptions,
 ): Promise<EntityProfilesBuildResult> {
   const result: EntityProfilesBuildResult = {
     candidateClusters: 0,
@@ -419,7 +421,7 @@ export async function buildEntityProfiles(
     failed: 0,
     rejected: 0,
   };
-  const baseHalfLifeDays = loadConfig(local.hippoRoot).defaultHalfLifeDays;
+  const { baseHalfLifeDays } = opts;
 
   // Only L2 with no L3 parent yet (avoid re-clustering already-profiled L2s).
   const unparented = l2Summaries.filter(

@@ -20,6 +20,7 @@ import { placeholders } from '../src/util/sql.js';
 import { objectsAt } from './_helpers/objects-at.js';
 import { sqliteConsolidation } from '../src/store/sqlite/consolidation-group.js';
 import { sqliteSyncStore } from '../src/store/sqlite/store.js';
+import { loadConfig } from '../src/core/config.js';
 
 function tmpHome(prefix: string = 'hippo-derived-scope-'): string {
   return mkdtempSync(join(tmpdir(), prefix));
@@ -187,7 +188,7 @@ describe('dag buildDag / buildEntityProfiles partition by scope', () => {
       for (const f of [...privFacts, ...pubFacts]) writeEntry(home, f);
 
       const fetcher = makeOkFetcher('synthetic-scope-partitioned-summary');
-      const result = await buildDag(sqliteSyncStore(home).localFiles, [...privFacts, ...pubFacts], { apiKey: 'test-key', fetcher });
+      const result = await buildDag(sqliteSyncStore(home).localFiles, [...privFacts, ...pubFacts], { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, apiKey: 'test-key', fetcher });
 
       expect(result.candidateClusters).toBe(2);
       expect(result.summariesCreated).toBe(2);
@@ -242,7 +243,7 @@ describe('dag buildDag / buildEntityProfiles partition by scope', () => {
       for (const l2 of [...privL2s, ...pubL2s]) writeEntry(home, l2);
 
       const fetcher = makeOkFetcher('synthetic-scope-partitioned-profile');
-      const result = await buildEntityProfiles(sqliteSyncStore(home).localFiles, [...privL2s, ...pubL2s], { apiKey: 'k', fetcher });
+      const result = await buildEntityProfiles(sqliteSyncStore(home).localFiles, [...privL2s, ...pubL2s], { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, apiKey: 'k', fetcher });
 
       expect(result.profilesCreated).toBe(2);
       expect(result.l2sLinked).toBe(6);
@@ -286,7 +287,7 @@ describe('extract.ts storeExtractedFacts copies the source scope', () => {
       const facts: ExtractedFact[] = [
         { content: 'Alice prefers dark mode', tags: ['speaker:alice'], valence: 'neutral' },
       ];
-      const stored = storeExtractedFacts(home, source, facts);
+      const stored = storeExtractedFacts(home, source, facts, DEFAULT_HALF_LIFE_DAYS);
 
       expect(stored).toHaveLength(1);
       expect(stored[0]!.scope).toBe('slack:private:C1');
@@ -316,7 +317,7 @@ describe('assembleBriefFromReceipts excludes restricted receipts', () => {
     const home = tmpHome();
     try {
       initStore(home);
-      await saveProjectBrief(objectsAt(home), home, 'default', { repo: 'hippo', summary: 'seed' });
+      await saveProjectBrief(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { repo: 'hippo', summary: 'seed' });
       addReceipt(home, 'hippo', 'the public deploy went out on schedule', null);
       addReceipt(home, 'hippo', 'the private incident channel discussed the outage', 'slack:private:C1');
       addReceipt(home, 'hippo', 'another restricted note in mixed case', 'Slack:Private:C9');

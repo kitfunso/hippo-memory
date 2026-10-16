@@ -23,6 +23,7 @@ import { apiCtx } from './_helpers/api-ctx.js';
 import { sqliteSyncStore } from '../src/store/sqlite/store.js';
 import { runCli } from '../src/cli.js';
 import { runInProcess } from './_helpers/run-in-process.js';
+import { loadConfig } from '../src/core/config.js';
 
 const HIPPO_BIN = path.resolve(__dirname, '..', 'bin', 'hippo.js');
 const CONFIGURED = 730;
@@ -122,7 +123,7 @@ const writers: [string, (root: string) => Promise<MemoryEntry[]>][] = [
     const memDir = path.join(home, '.claude', 'projects', project, 'memory');
     fs.mkdirSync(memDir, { recursive: true });
     fs.writeFileSync(path.join(memDir, 'lesson.md'), '---\nname: lesson\n---\nPrefer parameterized queries to string concatenation for SQL.\n');
-    return added(root, () => importProjectMemories(root, { machine: { home, env: {}, platform: process.platform } }));
+    return added(root, () => importProjectMemories(root, { configAt: loadConfig, machine: { home, env: {}, platform: process.platform } }));
   }],
   ['capture', (root) => {
     const file = path.join(tmp(), 'session.txt');
@@ -143,7 +144,7 @@ const writers: [string, (root: string) => Promise<MemoryEntry[]>][] = [
   }],
   ['extracted facts', (root) => {
     const source = seed(root, 'Alice prefers dark mode and vim keybindings');
-    return added(root, () => storeExtractedFacts(root, source, [{ content: 'Alice prefers dark mode', tags: ['speaker:alice'], valence: 'neutral' }]));
+    return added(root, () => storeExtractedFacts(root, source, [{ content: 'Alice prefers dark mode', tags: ['speaker:alice'], valence: 'neutral' }], loadConfig(root).defaultHalfLifeDays));
   }],
   ['sleep: auto-promoted trace', (root) => {
     appendSessionEvent(root, 'default', { session_id: 's1', event_type: 'action', content: 'ran the migration', source: 'agent' });
@@ -159,12 +160,12 @@ const writers: [string, (root: string) => Promise<MemoryEntry[]>][] = [
   ['DAG summary', (root) => {
     const facts = ['alice filed X', 'alice noted Y', 'alice closed Z'].map((c) =>
       seed(root, c, { layer: Layer.Episodic, dagLevel: 1, tags: ['extracted', 'speaker:alice'] }));
-    return added(root, () => buildDag(sqliteSyncStore(root).localFiles, facts, { apiKey: 'test-key', fetcher: fetcher('alice files, notes and closes tickets') }));
+    return added(root, () => buildDag(sqliteSyncStore(root).localFiles, facts, { baseHalfLifeDays: loadConfig(root).defaultHalfLifeDays, apiKey: 'test-key', fetcher: fetcher('alice files, notes and closes tickets') }));
   }],
   ['DAG entity profile', (root) => {
     const l2s = ['alice prefers python type hints', 'alice owns the API layer'].map((c) =>
       seed(root, c, { layer: Layer.Semantic, tags: ['speaker:alice', 'dag-summary'], confidence: 'inferred', dagLevel: 2 }));
-    return added(root, () => buildEntityProfiles(sqliteSyncStore(root).localFiles, l2s, { apiKey: 'test-key', fetcher: fetcher('alice is the typed-python API owner') }));
+    return added(root, () => buildEntityProfiles(sqliteSyncStore(root).localFiles, l2s, { baseHalfLifeDays: loadConfig(root).defaultHalfLifeDays, apiKey: 'test-key', fetcher: fetcher('alice is the typed-python API owner') }));
   }],
 ];
 

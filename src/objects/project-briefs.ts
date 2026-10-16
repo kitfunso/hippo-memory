@@ -97,12 +97,12 @@ function buildBriefContent(repo: string, summary: string): string {
  *  existing one, in the `objects` store group's one transaction. */
 export function saveProjectBrief(
   objects: Objects,
-  hippoRoot: string,
+  baseHalfLifeDays: number,
   tenantId: string,
   opts: SaveProjectBriefOpts,
   actor: string = 'cli',
 ): Promise<ProjectBrief> {
-  return saveObject(objects, PROJECT_BRIEF, { hippoRoot, tenantId, actor }, opts);
+  return saveObject(objects, PROJECT_BRIEF, { baseHalfLifeDays, tenantId, actor }, opts);
 }
 
 /** Close (retire) an active brief; a superseded row is terminal. */

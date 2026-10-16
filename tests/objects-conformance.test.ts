@@ -14,6 +14,7 @@ import type { BriefReceipt, Incident, ObjectByKind, ObjectFields, ObjectKind, Sa
 import type { IncidentOpen, IncidentOpenRefusal, ObjectListQuery, ObjectRefusal, ObjectSave } from '../src/store/port.js';
 import { inMemoryObjectsStore } from './_helpers/in-memory-objects-store.js';
 import { onBothStores, seedTwoTenants, TENANT_A, TENANT_B, type GroupCall, type SideResult, type TwoTenantFixture } from './_helpers/store-conformance.js';
+import { loadConfig } from '../src/core/config.js';
 
 const NOW = '2026-03-01T12:00:00.000Z';
 const T1 = '2026-03-01T12:00:01.000Z';
@@ -121,7 +122,7 @@ interface DraftOpts {
 
 function saving(c: KindCase, n: number, opts: DraftOpts = {}): Draft {
   const { at = T1, group = 'alpha', tenantId = TENANT_A } = opts;
-  const mirror = objectMirror(fixture.dir, tenantId, c.kind, { content: `${c.kind} ${n}`, tags: ['conformance'] });
+  const mirror = objectMirror(loadConfig(fixture.dir).defaultHalfLifeDays, tenantId, c.kind, { content: `${c.kind} ${n}`, tags: ['conformance'] });
   return { n, group, tenantId, save: { mirror, fields: c.fields(n, group), supersedesId: opts.supersedesId, changeSummary: opts.changeSummary, actor: ACTOR, at } };
 }
 
@@ -365,7 +366,7 @@ interface OpeningOpts {
 
 function opening(n: number, opts: OpeningOpts = {}): Opening {
   const { at = T1, tenantId = TENANT_A } = opts;
-  const mirror = objectMirror(fixture.dir, tenantId, 'incident', { content: `incident ${n}`, tags: ['conformance'] });
+  const mirror = objectMirror(loadConfig(fixture.dir).defaultHalfLifeDays, tenantId, 'incident', { content: `incident ${n}`, tags: ['conformance'] });
   return { n, tenantId, open: { mirror, fields: { incidentText: `incident ${n}`, context: opts.context, linkedMemoryIds: opts.links ?? [] }, actor: ACTOR, at } };
 }
 
@@ -547,7 +548,7 @@ interface PutOpts {
 /** A save whose fields and mirror the caller picks, for the reads that turn on them. */
 function put<K extends SavableKind>(kind: K, fields: ObjectFields[K], opts: PutOpts = {}) {
   const { at = T1, tenantId = TENANT_A } = opts;
-  const mirror: MemoryEntry = { ...objectMirror(fixture.dir, tenantId, kind, { content: `${kind} at ${at}`, tags: opts.tags ?? [] }), ...opts.mirror };
+  const mirror: MemoryEntry = { ...objectMirror(loadConfig(fixture.dir).defaultHalfLifeDays, tenantId, kind, { content: `${kind} at ${at}`, tags: opts.tags ?? [] }), ...opts.mirror };
   const saved: ObjectSave<K> = { mirror, fields, supersedesId: opts.supersedesId, actor: ACTOR, at };
   const call: Call = (g) => {
     vi.setSystemTime(new Date(at));

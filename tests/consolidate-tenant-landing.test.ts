@@ -156,7 +156,7 @@ describe('extract.ts storeExtractedFacts has the same defect, folded in', () => 
       const facts: ExtractedFact[] = [
         { content: 'Alice prefers dark mode', tags: ['speaker:alice'], valence: 'neutral' },
       ];
-      const stored = storeExtractedFacts(home, source, facts);
+      const stored = storeExtractedFacts(home, source, facts, DEFAULT_HALF_LIFE_DAYS);
 
       expect(stored).toHaveLength(1);
       expect(stored[0]!.tenant_id).toBe('tenant-extract');

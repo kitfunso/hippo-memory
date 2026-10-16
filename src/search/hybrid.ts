@@ -1,4 +1,5 @@
 import type { MemoryEntry } from '../core/memory.js';
+import type { EmbeddingsConfig } from '../core/config.js';
 import { tokenize } from '../util/tokenize.js';
 import { evalNow } from '../core/ablation.js';
 import { extractPathTags } from './path-context.js';
@@ -27,6 +28,8 @@ export interface HybridSearchOptions {
   budget?: number;
   now?: Date;
   hippoRoot?: string;
+  /** The caller's embeddings config for `hippoRoot`; absent, its config.json is read. */
+  embeddings?: EmbeddingsConfig;
   embeddingWeight?: number;
   explain?: boolean;
   /** Disable MMR re-ranking even when embeddings are available. */
@@ -125,11 +128,13 @@ export async function hybridSearch(
 export function vectorSourceOf({
   hippoRoot,
   store,
+  embeddings,
 }: {
   hippoRoot?: string;
   store?: HippoStore;
+  embeddings?: EmbeddingsConfig;
 }): VectorSource | undefined {
-  return hippoRoot ? { root: hippoRoot, store: store ?? sqliteStore(hippoRoot) } : undefined;
+  return hippoRoot ? { root: hippoRoot, store: store ?? sqliteStore(hippoRoot), embeddings } : undefined;
 }
 
 function hybridBoostContext(query: string, pool: MemoryEntry[], now: Date, options: HybridSearchOptions): BoostContext {

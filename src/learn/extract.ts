@@ -1,7 +1,6 @@
 import { MemoryEntry, Layer, EmotionalValence, createMemory } from '../core/memory.js';
 import type { LocalFiles } from '../store/port/local-files.js';
 import { localFilesAt } from './roots.js';
-import { loadConfig } from '../core/config.js';
 import { RejectedValueError } from '../core/api-errors.js';
 import { redactSecretsStrict } from '../util/secret-detect.js';
 import {
@@ -118,12 +117,16 @@ function parseExtractedFacts(parsed: (RawExtractedFact | null)[]): ExtractedFact
 
 const INHERITABLE_PREFIXES = ['conv:', 'session:', 'scope:', 'path:'];
 
-export function storeExtractedFacts(hippoRoot: string, source: MemoryEntry, facts: ExtractedFact[]): MemoryEntry[] {
-  return storeFacts(localFilesAt(hippoRoot), source, facts);
+export function storeExtractedFacts(
+  hippoRoot: string, source: MemoryEntry, facts: ExtractedFact[], baseHalfLifeDays: number,
+): MemoryEntry[] {
+  return storeFacts(localFilesAt(hippoRoot), source, facts, baseHalfLifeDays);
 }
 
 /** storeExtractedFacts into the store `files` names. */
-function storeFacts(files: LocalFiles, source: MemoryEntry, facts: ExtractedFact[]): MemoryEntry[] {
+function storeFacts(
+  files: LocalFiles, source: MemoryEntry, facts: ExtractedFact[], baseHalfLifeDays: number,
+): MemoryEntry[] {
   const inheritedTags = [
     ...source.tags.filter((t) => INHERITABLE_PREFIXES.some((p) => t.startsWith(p))),
     ...neverAutoShareTags([source]),
@@ -131,7 +134,6 @@ function storeFacts(files: LocalFiles, source: MemoryEntry, facts: ExtractedFact
 
   const entries: MemoryEntry[] = [];
   let rejected = 0;
-  const baseHalfLifeDays = loadConfig(files.hippoRoot).defaultHalfLifeDays;
 
   for (const fact of facts) {
     const defect = certainDefect(fact.content);

@@ -6,6 +6,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { boundPort } from './_helpers/listen.js';
 import { resolveEmbeddingProvider } from '../src/embeddings/provider.js';
+import { loadConfig } from '../src/core/config.js';
 
 const KEY = 'sk-reply-cap-test';
 // One input may reply with up to 64 KiB + 512 KiB; two inputs with 64 KiB + 1 MiB.
@@ -59,7 +60,7 @@ describe('embedding provider reply cap', () => {
 
   it('fails a one-input request whose reply passes the cap, and the server sees the hang-up', async () => {
     handler = (_req, res) => streamForever(res, 200, 'application/json');
-    const err: unknown = await resolveEmbeddingProvider(root).embed(['x']).catch((e) => e);
+    const err: unknown = await resolveEmbeddingProvider(loadConfig(root).embeddings).embed(['x']).catch((e) => e);
     expect(err).toBeInstanceOf(Error);
     if (!(err instanceof Error)) throw new Error('expected a rejection');
     expect(err.message).toContain('openai embeddings returned invalid JSON');
@@ -74,13 +75,13 @@ describe('embedding provider reply cap', () => {
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(JSON.stringify({ data: [{ embedding: [3, 4] }, { embedding: [0, 2] }, { embedding: [1, 0] }] }));
     };
-    const out = await resolveEmbeddingProvider(root).embed(['a', 'b', 'c']);
+    const out = await resolveEmbeddingProvider(loadConfig(root).embeddings).embed(['a', 'b', 'c']);
     expect(out).toEqual([[0.6, 0.8], [0, 1], [1, 0]]);
   });
 
   it('keeps the HTTP message, cuts the detail and stops reading a huge error body', async () => {
     handler = (_req, res) => streamForever(res, 400, 'text/plain');
-    const err: unknown = await resolveEmbeddingProvider(root).embed(['x']).catch((e) => e);
+    const err: unknown = await resolveEmbeddingProvider(loadConfig(root).embeddings).embed(['x']).catch((e) => e);
     expect(err).toBeInstanceOf(Error);
     if (!(err instanceof Error)) throw new Error('expected a rejection');
     expect(err.message).toBe(`openai embeddings HTTP 400: ${' '.repeat(300)}`);

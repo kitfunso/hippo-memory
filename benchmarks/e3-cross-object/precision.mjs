@@ -5,6 +5,7 @@ import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../../dist/store/open.js';
+import { loadConfig } from '../../dist/core/config.js';
 import { saveDecision } from '../../dist/objects/decisions.js';
 import { savePolicy } from '../../dist/objects/policies.js';
 import { saveCustomerNote } from '../../dist/objects/customer-notes.js';
@@ -20,16 +21,16 @@ const T = 'default';
 const objects = sqliteStore(home).objects;
 const intended = new Set(); // `${srcName}=>${tgtName}` genuine references
 
-async function decRef(text, srcName, tgtName) { await saveDecision(objects, home, T, { decisionText: text }); if (tgtName) intended.add(`${srcName}=>${tgtName}`); }
+async function decRef(text, srcName, tgtName) { await saveDecision(objects, loadConfig(home).defaultHalfLifeDays, T, { decisionText: text }); if (tgtName) intended.add(`${srcName}=>${tgtName}`); }
 
 // Targets (policies/customers/projects with identifiable names)
-await savePolicy(objects, home, T, { policyName: 'RetryBudget', policyText: 'cap retries' });
-await savePolicy(objects, home, T, { policyName: 'CacheTTL', policyText: 'ttl 30s' });
-await savePolicy(objects, home, T, { policyName: 'DataRetention', policyText: 'delete after 90d' });
-await saveCustomerNote(objects, home, T, { customer: 'Northwind', note: 'enterprise tier' });
-await saveProjectBrief(objects, home, T, { repo: 'billing-svc', summary: 'invoicing service' });
+await savePolicy(objects, loadConfig(home).defaultHalfLifeDays, T, { policyName: 'RetryBudget', policyText: 'cap retries' });
+await savePolicy(objects, loadConfig(home).defaultHalfLifeDays, T, { policyName: 'CacheTTL', policyText: 'ttl 30s' });
+await savePolicy(objects, loadConfig(home).defaultHalfLifeDays, T, { policyName: 'DataRetention', policyText: 'delete after 90d' });
+await saveCustomerNote(objects, loadConfig(home).defaultHalfLifeDays, T, { customer: 'Northwind', note: 'enterprise tier' });
+await saveProjectBrief(objects, loadConfig(home).defaultHalfLifeDays, T, { repo: 'billing-svc', summary: 'invoicing service' });
 // A GENERIC-WORD entity name trap (plan-eng LOW): a customer literally named "Core".
-await saveCustomerNote(objects, home, T, { customer: 'Core', note: 'a customer literally named Core' });
+await saveCustomerNote(objects, loadConfig(home).defaultHalfLifeDays, T, { customer: 'Core', note: 'a customer literally named Core' });
 
 // GENUINE references (8): decisions/briefs that name a target.
 await decRef('We adopt RetryBudget to cap retry storms', 'We adopt RetryBudget to cap retry storms', 'RetryBudget');
@@ -39,7 +40,7 @@ await decRef('Onboard Northwind onto the new plan', 'Onboard Northwind onto the 
 await decRef('Migrate billing-svc to the shared queue', 'Migrate billing-svc to the shared queue', 'billing-svc');
 await decRef('RetryBudget and CacheTTL must both be tuned together', 'RetryBudget and CacheTTL must both be tuned together', 'RetryBudget');
 intended.add('RetryBudget and CacheTTL must both be tuned together=>CacheTTL'); // 2-target decision
-await saveProjectBrief(objects, home, T, { repo: 'audit-svc', summary: 'enforces DataRetention on every write' });
+await saveProjectBrief(objects, loadConfig(home).defaultHalfLifeDays, T, { repo: 'audit-svc', summary: 'enforces DataRetention on every write' });
 intended.add('audit-svc=>DataRetention');
 
 // DECOYS (should NOT match): word-boundary near-miss + generic prose.

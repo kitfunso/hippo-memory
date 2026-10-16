@@ -147,7 +147,7 @@ describe('deny-only read sites', () => {
     const ctx: ItemContext = { tenantId: T, recordId: null, sessionId: 's1', originProject: 'acme/app', cwd: null, items, caller: { actor: 'alice@acme', origins: ['acme/app'] } };
     const db = openHippoDb(root);
     try {
-      expect(saveItems(db, root, ctx, () => {})).toBe(1);
+      expect(saveItems(db, root, ctx, () => {}, DEFAULT_HALF_LIFE_DAYS)).toBe(1);
       // SAFETY: the SELECT names only the content column.
       const written = db.prepare(`SELECT content FROM memories WHERE source = 'compaction:s1'`).all() as Array<{ content: string }>;
       expect(written.map((r) => r.content)).toEqual([items[0]]);

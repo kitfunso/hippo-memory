@@ -6,6 +6,7 @@ import * as skillsModule from '../objects/skills.js';
 import { isStringFlag, nonEmptyStringFlag, type CliFlags } from './flag-values.js';
 import { errorMessage } from '../util/log.js';
 import { fail } from './exit.js';
+import { loadConfig } from '../core/config.js';
 import type { Objects } from '../store/port.js';
 import { requiredText, versionedVerbs, type VersionedKind } from './versioned-verbs.js';
 
@@ -63,7 +64,7 @@ const processKind = (
   },
   keyOf: (proc) => proc.processName,
   save: (processName, body, extraTags, from) =>
-    processesModule.saveProcess(objects, hippoRoot, tenantId, {
+    processesModule.saveProcess(objects, loadConfig(hippoRoot).defaultHalfLifeDays, tenantId, {
       processName,
       ...body,
       extraTags,
@@ -149,7 +150,7 @@ const policyKind = (
   },
   keyOf: (p) => p.policyName,
   save: (policyName, body, extraTags, from) =>
-    policiesModule.savePolicy(objects, hippoRoot, tenantId, {
+    policiesModule.savePolicy(objects, loadConfig(hippoRoot).defaultHalfLifeDays, tenantId, {
       policyName,
       ...body,
       extraTags,
@@ -221,7 +222,7 @@ const skillKind = (
   },
   keyOf: (s) => s.skillName,
   save: (skillName, body, extraTags, from) =>
-    skillsModule.saveSkill(objects, hippoRoot, tenantId, {
+    skillsModule.saveSkill(objects, loadConfig(hippoRoot).defaultHalfLifeDays, tenantId, {
       skillName,
       ...body,
       extraTags,

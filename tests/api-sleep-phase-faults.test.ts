@@ -25,7 +25,7 @@ import { writeEntry } from '../src/store/entry-writes.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { createMemory, Layer } from '../src/core/memory.js';
 import { queryAuditEvents, type AuditEvent } from '../src/store/audit.js';
-import { loadConfig as realLoadConfig } from '../src/core/config.js';
+import { configOf as realConfigOf } from '../src/api/config-of.js';
 
 function newCtx() {
   const tmpDir = mkdtempSync(join(tmpdir(), 'hippo-sleep-fault-'));
@@ -155,9 +155,9 @@ describe('api.sleep mid-phase failure paths emit partial+errorMessage audit row'
     };
 
     // Phase 4 only runs if config.autoShareOnSleep is true; bypass the gate
-    // by also stubbing loadConfig to force the flag on.
-    stubPhases.loadConfig = (root: string) => {
-      const cfg = realLoadConfig(root);
+    // by also stubbing configOf to force the flag on.
+    stubPhases.configOf = (ctx) => {
+      const cfg = realConfigOf(ctx);
       return { ...cfg, autoShareOnSleep: true };
     };
 

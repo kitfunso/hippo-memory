@@ -28,7 +28,7 @@ import { savePolicy } from '../src/objects/policies.js';
 import { saveSkill } from '../src/objects/skills.js';
 import { saveProjectBrief } from '../src/objects/project-briefs.js';
 import { saveCustomerNote } from '../src/objects/customer-notes.js';
-import { savePrediction } from '../src/store/predictions.js';
+import { savePrediction } from './_helpers/save-prediction.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { queryAuditEvents, type AuditEvent, type AuditOp } from '../src/store/audit.js';
 import { consolidate } from '../src/consolidate/sleep.js';
@@ -593,13 +593,13 @@ function linkedRows(home: string, table: string, memoryId: string): number {
 }
 
 const objectSavers: [string, string, (home: string) => Promise<{ memoryId: string | null }>][] = [
-  ['decision', 'decisions', async (home) => await saveDecision(objectsAt(home), home, 'default', { decisionText: 'we release on Tuesdays after the staging soak' })],
-  ['incident', 'incidents', async (home) => await openIncident(objectsAt(home), home, 'default', { incidentText: 'the billing cron charged twice on the 1st' }, 'cli')],
-  ['process', 'processes', async (home) => await saveProcess(objectsAt(home), home, 'default', { processName: 'Release', steps: ['tag', 'publish'] })],
-  ['policy', 'policies', async (home) => await savePolicy(objectsAt(home), home, 'default', { policyName: 'RetryPolicy', policyText: 'retry up to 3x' })],
-  ['skill', 'skills', async (home) => await saveSkill(objectsAt(home), home, 'default', { skillName: 'Run tests', instructions: 'npm test before commit' })],
-  ['project brief', 'project_briefs', async (home) => await saveProjectBrief(objectsAt(home), home, 'default', { repo: 'acme/billing', summary: 'billing service for Acme' })],
-  ['customer note', 'customer_notes', async (home) => await saveCustomerNote(objectsAt(home), home, 'default', { customer: 'Acme', note: 'renewal is due in March' })],
+  ['decision', 'decisions', async (home) => await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { decisionText: 'we release on Tuesdays after the staging soak' })],
+  ['incident', 'incidents', async (home) => await openIncident(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { incidentText: 'the billing cron charged twice on the 1st' }, 'cli')],
+  ['process', 'processes', async (home) => await saveProcess(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { processName: 'Release', steps: ['tag', 'publish'] })],
+  ['policy', 'policies', async (home) => await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { policyName: 'RetryPolicy', policyText: 'retry up to 3x' })],
+  ['skill', 'skills', async (home) => await saveSkill(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { skillName: 'Run tests', instructions: 'npm test before commit' })],
+  ['project brief', 'project_briefs', async (home) => await saveProjectBrief(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { repo: 'acme/billing', summary: 'billing service for Acme' })],
+  ['customer note', 'customer_notes', async (home) => await saveCustomerNote(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { customer: 'Acme', note: 'renewal is due in March' })],
   ['prediction', 'predictions', async (home) => savePrediction(home, 'default', { classTag: 'migration-effort', claimText: 'the migration takes two days' })],
 ];
 

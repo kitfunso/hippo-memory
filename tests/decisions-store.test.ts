@@ -26,6 +26,7 @@ import { ConflictError } from '../src/core/api-errors.js';
 import { mapApiError } from '../src/api/error-reply.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { objectsAt } from './_helpers/objects-at.js';
+import { loadConfig } from '../src/core/config.js';
 
 function safeRmSync(p: string): void {
   try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
@@ -67,7 +68,7 @@ describe('decisions store (first-class object)', () => {
   afterEach(() => safeRmSync(home));
 
   it('saveDecision creates both memory and decisions row + decision_create audit', async () => {
-    const d = await saveDecision(objectsAt(home), home, 'default', {
+    const d = await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
       decisionText: 'use Postgres',
       context: 'scale and JSONB',
     });
@@ -108,7 +109,7 @@ describe('decisions store (first-class object)', () => {
   });
 
   it('a supersede that loses its race after the preflight is a ConflictError (409), like the other five save paths', async () => {
-    const prior = await saveDecision(objectsAt(home), home, 'default', { decisionText: 'ship on fridays' });
+    const prior = await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { decisionText: 'ship on fridays' });
     const db = openHippoDb(home);
     try {
       // The trigger stands in for a concurrent writer: the preflight sees an active row, the UPDATE changes nothing.
@@ -116,7 +117,7 @@ describe('decisions store (first-class object)', () => {
     } finally { closeHippoDb(db); }
     let thrown: unknown;
     try {
-      await saveDecision(objectsAt(home), home, 'default', { decisionText: 'ship on tuesdays', supersedesDecisionId: prior.id });
+      await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { decisionText: 'ship on tuesdays', supersedesDecisionId: prior.id });
     } catch (err) { thrown = err; }
     expect(thrown).toBeInstanceOf(ConflictError);
     expect(mapApiError(thrown).status).toBe(409);
@@ -124,7 +125,7 @@ describe('decisions store (first-class object)', () => {
   });
 
   it('saveDecision without context: bare memory content, has_context false', async () => {
-    const d = await saveDecision(objectsAt(home), home, 'default', { decisionText: 'adopt trunk-based dev' });
+    const d = await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { decisionText: 'adopt trunk-based dev' });
     expect(d.context).toBeNull();
     const db = openHippoDb(home);
     try {
@@ -142,11 +143,11 @@ describe('decisions store (first-class object)', () => {
   });
 
   it('loadDecisions status filter; loadActiveDecisions excludes non-active', async () => {
-    const a = await saveDecision(objectsAt(home), home, 'default', { decisionText: 'active-1' });
-    const b = await saveDecision(objectsAt(home), home, 'default', { decisionText: 'to-close' });
-    const c = await saveDecision(objectsAt(home), home, 'default', { decisionText: 'to-supersede' });
+    const a = await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { decisionText: 'active-1' });
+    const b = await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { decisionText: 'to-close' });
+    const c = await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { decisionText: 'to-supersede' });
     await closeDecision(objectsAt(home), 'default', b.id);
-    await saveDecision(objectsAt(home), home, 'default', { decisionText: 'successor', supersedesDecisionId: c.id });
+    await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { decisionText: 'successor', supersedesDecisionId: c.id });
 
     const active = await loadActiveDecisions(objectsAt(home), 'default');
     expect(active.every((x) => x.status === 'active')).toBe(true);
@@ -167,7 +168,7 @@ describe('decisions store (first-class object)', () => {
   });
 
   it('resolveActiveDecisionIdByMemory: row id for first-class, null for legacy/superseded', async () => {
-    const d = await saveDecision(objectsAt(home), home, 'default', { decisionText: 'first-class' });
+    const d = await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { decisionText: 'first-class' });
     expect(await resolveActiveDecisionIdByMemory(objectsAt(home), 'default', d.memoryId!)).toBe(d.id);
 
     // A legacy decision-tagged memory with NO decisions row
@@ -183,8 +184,8 @@ describe('decisions store (first-class object)', () => {
     expect(await resolveActiveDecisionIdByMemory(objectsAt(home), 'default', legacy.id)).toBeNull();
 
     // A superseded decision's memory no longer resolves (status != active)
-    const sup = await saveDecision(objectsAt(home), home, 'default', { decisionText: 'old' });
-    await saveDecision(objectsAt(home), home, 'default', { decisionText: 'new', supersedesDecisionId: sup.id });
+    const sup = await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { decisionText: 'old' });
+    await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { decisionText: 'new', supersedesDecisionId: sup.id });
     expect(await resolveActiveDecisionIdByMemory(objectsAt(home), 'default', sup.memoryId!)).toBeNull();
   });
 });

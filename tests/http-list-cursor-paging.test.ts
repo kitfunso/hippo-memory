@@ -16,11 +16,13 @@ import { loadPolicies, savePolicy } from '../src/objects/policies.js';
 import { loadSkills, saveSkill } from '../src/objects/skills.js';
 import { loadProjectBriefs, saveProjectBrief } from '../src/objects/project-briefs.js';
 import { loadCustomerNotes, saveCustomerNote } from '../src/objects/customer-notes.js';
-import { loadAllPredictions, savePrediction } from '../src/store/predictions.js';
+import { loadAllPredictions } from '../src/store/predictions.js';
+import { savePrediction } from './_helpers/save-prediction.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { type JsonValue, isJsonString, isJsonObject } from '../src/util/json.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 import { objectsAt } from './_helpers/objects-at.js';
+import { loadConfig } from '../src/core/config.js';
 
 const ROWS = 7;
 const PAGE = 3;
@@ -52,13 +54,13 @@ let adminKey: CreateApiKeyResult;
 async function seedTenant(tenantId: string, count: number): Promise<void> {
   const ctx: FullContext = apiCtx(home, tenantId, api.adminActor('test'));
   for (let i = 0; i < count; i++) {
-    await saveDecision(objectsAt(home), home, tenantId, { decisionText: `${tenantId} decision ${i}` });
-    await openIncident(objectsAt(home), home, tenantId, { incidentText: `${tenantId} incident ${i}` }, 'cli');
-    await saveProcess(objectsAt(home), home, tenantId, { processName: `${tenantId} process ${i}`, steps: ['one', 'two'] });
-    await savePolicy(objectsAt(home), home, tenantId, { policyName: `${tenantId} policy ${i}`, policyText: 'keep it short' });
-    await saveSkill(objectsAt(home), home, tenantId, { skillName: `${tenantId} skill ${i}`, instructions: 'do the thing' });
-    await saveProjectBrief(objectsAt(home), home, tenantId, { repo: `${tenantId}/repo-${i}`, summary: 'a brief' });
-    await saveCustomerNote(objectsAt(home), home, tenantId, { customer: `${tenantId} customer ${i}`, note: 'a note' });
+    await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, tenantId, { decisionText: `${tenantId} decision ${i}` });
+    await openIncident(objectsAt(home), loadConfig(home).defaultHalfLifeDays, tenantId, { incidentText: `${tenantId} incident ${i}` }, 'cli');
+    await saveProcess(objectsAt(home), loadConfig(home).defaultHalfLifeDays, tenantId, { processName: `${tenantId} process ${i}`, steps: ['one', 'two'] });
+    await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, tenantId, { policyName: `${tenantId} policy ${i}`, policyText: 'keep it short' });
+    await saveSkill(objectsAt(home), loadConfig(home).defaultHalfLifeDays, tenantId, { skillName: `${tenantId} skill ${i}`, instructions: 'do the thing' });
+    await saveProjectBrief(objectsAt(home), loadConfig(home).defaultHalfLifeDays, tenantId, { repo: `${tenantId}/repo-${i}`, summary: 'a brief' });
+    await saveCustomerNote(objectsAt(home), loadConfig(home).defaultHalfLifeDays, tenantId, { customer: `${tenantId} customer ${i}`, note: 'a note' });
     savePrediction(home, tenantId, { classTag: 'paging', claimText: `${tenantId} claim ${i}` });
     const { id } = await api.remember(ctx, { content: `${tenantId} held memory ${i} for review` });
     const db = openHippoDb(home);

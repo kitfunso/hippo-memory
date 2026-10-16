@@ -14,6 +14,7 @@ import type { GraphReads, GraphRows, GraphViewQuery } from '../../src/store/port
 import { inMemoryKeyAuditStore } from './in-memory-key-audit-store.js';
 import { TENANT_A, TENANT_B, type StoreSide } from './store-conformance.js';
 import { objectsAt } from './objects-at.js';
+import { loadConfig } from '../../src/core/config.js';
 
 export interface InMemoryGraphReadsStore extends StoreSide {
   readonly store: HippoStore & { readonly graphReads: GraphReads };
@@ -173,7 +174,7 @@ function seedTenantA(db: Db, dir: string, policyId: number): SeededTenantA {
 
 /** Adds a graph to each of four tenants: A with rows under three scopes, B sharing one name with A, one entity under `solo`, and 405 same-named entities under `bulk`. */
 export async function seedGraphRows(dir: string): Promise<SeededGraph> {
-  const policyId = (await savePolicy(objectsAt(dir), dir, TENANT_A, { policyName: 'Anchored', policyText: 'kept by its object' })).id;
+  const policyId = (await savePolicy(objectsAt(dir), loadConfig(dir).defaultHalfLifeDays, TENANT_A, { policyName: 'Anchored', policyText: 'kept by its object' })).id;
   const db = openHippoDb(dir);
   vi.useFakeTimers({ toFake: ['Date'] });
   try {

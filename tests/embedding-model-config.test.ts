@@ -5,6 +5,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
+import { loadConfig } from '../src/core/config.js';
 
 function writeConfig(hippoRoot: string, model: string): void {
   fs.writeFileSync(
@@ -101,7 +102,7 @@ describe('embedding model configuration', () => {
 
     const { resolveEmbeddingModel } = await import('../src/embeddings/local.js');
 
-    expect(resolveEmbeddingModel(tmpDir)).toBe('custom/model');
+    expect(resolveEmbeddingModel(loadConfig(tmpDir).embeddings)).toBe('custom/model');
   });
 
   it('hybridSearch embeds the query via the provider built from the configured model', async () => {
@@ -118,7 +119,7 @@ describe('embedding model configuration', () => {
       // The provider is built from the configured model (real resolver, no
       // interception): 'voyage:custom/model' proves 'custom/model' flowed
       // from config.json into the provider id.
-      const providerId = resolveEmbeddingProvider(tmpDir).id;
+      const providerId = resolveEmbeddingProvider(loadConfig(tmpDir).embeddings).id;
       expect(providerId).toBe('voyage:custom/model');
 
       const entryId = 'mem_custom_model';
@@ -190,7 +191,7 @@ describe('embedding model configuration', () => {
 
       // In sync (no reindex needed) but genuinely empty: no embeddings.json
       // was ever written for this store, so no candidate has a cached vector.
-      const providerId = resolveEmbeddingProvider(tmpDir).id;
+      const providerId = resolveEmbeddingProvider(loadConfig(tmpDir).embeddings).id;
       saveStoredEmbeddingModel(tmpDir, providerId);
 
       const results = await hybridSearch('query text', [createMemory('query text match', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS })], {

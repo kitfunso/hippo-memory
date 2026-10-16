@@ -16,7 +16,8 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
-import { savePrediction, closePrediction, computePredictionBaserate } from '../src/store/predictions.js';
+import { closePrediction, computePredictionBaserate } from '../src/store/predictions.js';
+import { savePrediction } from './_helpers/save-prediction.js';
 import { makeRoot } from './_helpers/make-root.js';
 
 function safeRmSync(p: string): void {
