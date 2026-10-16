@@ -118,7 +118,6 @@ export const PROCESS_TESTS: readonly string[] = [
   'db-cold-store-concurrency.test.ts',
   'db-continuity-tables-self-heal.test.ts',
   'db-open-pragma-order.test.ts',
-  'decide-predict-cli.test.ts',
   'delivery-ledger-boundary-faults.test.ts',
   'delivery-ledger-boundary.test.ts',
   'delivery-ledger-context.test.ts',

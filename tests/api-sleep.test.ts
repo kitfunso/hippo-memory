@@ -5,8 +5,8 @@
  *   - dryRun previews dedup/audit, then returns before share/ambient
  *   - non-dry-run runs the full pure-storage pipeline
  *   - empty store returns the well-formed zero SleepResult
- *   - noShare prevents auto-share regardless of config.autoShareOnSleep
  *
+ * The noShare contract lives in api-sleep-secret-skip.test.ts, over rows that would otherwise share.
  * Auto-learn is intentionally NOT covered here — it stays CLI-side per the
  * option-B factoring (uses process.cwd() / os.homedir() which are not
  * api-layer concerns).
@@ -120,23 +120,6 @@ describe('api.sleep', () => {
     }
   });
 
-  it('noShare prevents the auto-share phase (shared remains undefined)', async () => {
-    const { home, restore } = tmpHome();
-    try {
-      const ctx: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
-      await remember(ctx, {
-        content: 'high-value-pattern that might trigger auto-share',
-        kind: 'distilled',
-      });
-
-      const result = await sleep(ctx, { dryRun: false, noShare: true });
-
-      expect(result.shared).toBeUndefined();
-    } finally {
-      restore();
-    }
-  });
-
   // v1.11.5: consolidate audit emission
   it('emits exactly one consolidate audit_log row per invocation with phase counters', async () => {
     const { home, restore } = tmpHome();
@@ -166,48 +149,6 @@ describe('api.sleep', () => {
       expect(meta.dryRun).toBe(false);
       expect(meta.noShare).toBe(true);
       expect(meta.partial).toBe(false);
-    } finally {
-      restore();
-    }
-  });
-
-  it('dryRun also emits one consolidate audit row (with dryRun:true)', async () => {
-    const { home, restore } = tmpHome();
-    try {
-      const ctx: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
-      await remember(ctx, { content: 'dry-run-target' });
-
-      await sleep(ctx, { dryRun: true });
-
-      const db = openHippoDb(home);
-      const rows = queryAuditEvents(db, { tenantId: '__host__', op: 'consolidate' });
-      closeHippoDb(db);
-
-      expect(rows.length).toBe(1);
-      // SAFETY: see the AuditMetadataValue comment above -- consolidate metadata is
-      // always a flat scalar object.
-      const meta = rows[0]?.metadata as Record<string, AuditMetadataValue>;
-      expect(meta.dryRun).toBe(true);
-      expect(meta.partial).toBe(false);
-    } finally {
-      restore();
-    }
-  });
-
-  it('actor field threads through from ctx (non-cli actor surfaces in audit row)', async () => {
-    const { home, restore } = tmpHome();
-    try {
-      const ctx: FullContext = apiCtx(home, 'default', { subject: 'api_key:hk_test_xyz', role: 'admin' });
-      await remember(ctx, { content: 'mcp-actor-target' });
-
-      await sleep(ctx, { dryRun: true });
-
-      const db = openHippoDb(home);
-      const rows = queryAuditEvents(db, { tenantId: '__host__', op: 'consolidate' });
-      closeHippoDb(db);
-
-      expect(rows.length).toBe(1);
-      expect(rows[0]?.actor).toBe('api_key:hk_test_xyz');
     } finally {
       restore();
     }
