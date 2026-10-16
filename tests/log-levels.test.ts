@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { formatLogLine, isLevelEnabled, log, logThreshold, resetLogOnce } from '../src/util/log.js';
+import { errorFields, formatLogLine, isLevelEnabled, log, logThreshold, resetLogOnce } from '../src/util/log.js';
 import { runWithRequestId } from '../src/util/request-scope.js';
 import { ownStderr } from './_helpers/own-stderr.js';
 
@@ -132,6 +132,23 @@ describe('log fields', () => {
     runWithRequestId('req-7', () => log.warn('a\nb', { status: 503 }));
     expect(lines().map((line) => JSON.parse(line))).toEqual([{ ts: AT, level: 'warn', msg: 'a\nb', requestId: 'req-7', status: 503 }]);
     expect(lines()[0].endsWith('}\n')).toBe(true);
+  });
+});
+
+describe('errorFields cause chain', () => {
+  it('lists each cause as class: message, five deep at most', () => {
+    let err = new Error('e0');
+    for (let i = 1; i <= 7; i++) err = new Error(`e${i}`, { cause: err });
+    expect(errorFields(err).cause).toBe('Error: e6 <- Error: e5 <- Error: e4 <- Error: e3 <- Error: e2');
+  });
+
+  it('has no cause field for an error without one, names a non-Error cause, and stops at a cycle', () => {
+    expect(errorFields(new Error('plain')).cause).toBeUndefined();
+    expect(errorFields(new Error('top', { cause: 'text' })).cause).toBe('NonError: text');
+    const a = new TypeError('a');
+    const b = new RangeError('b', { cause: a });
+    a.cause = b;
+    expect(errorFields(a).cause).toBe('RangeError: b');
   });
 });
 

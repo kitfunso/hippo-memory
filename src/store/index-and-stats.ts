@@ -92,13 +92,25 @@ export function rebuildIndex(hippoRoot: string): HippoIndex {
   }, openStore);
 }
 
-export function updateStats(
-  hippoRoot: string,
-  delta: { remembered?: number; recalled?: number; forgotten?: number }
-): void {
+type StatsDelta = { remembered?: number; recalled?: number; forgotten?: number };
+
+// Increments a busy store refused, one entry per root, folded into the next update that lands.
+const pendingStats = new Map<string, Required<StatsDelta>>();
+
+function addDelta(a: StatsDelta, b: StatsDelta): Required<StatsDelta> {
+  return {
+    remembered: (a.remembered ?? 0) + (b.remembered ?? 0),
+    recalled: (a.recalled ?? 0) + (b.recalled ?? 0),
+    forgotten: (a.forgotten ?? 0) + (b.forgotten ?? 0),
+  };
+}
+
+export function updateStats(hippoRoot: string, delta: StatsDelta): void {
+  const total = addDelta(pendingStats.get(hippoRoot) ?? {}, delta);
   onHandle(hippoRoot, (db) => {
-    updateStatsOn(db, hippoRoot, delta);
+    updateStatsOn(db, hippoRoot, total);
   }, openStore);
+  pendingStats.delete(hippoRoot);
 }
 
 /** updateStats on the caller's open store, so a loop of writes opens the store once. */
@@ -132,7 +144,8 @@ export function updateStatsUnlessBusy(
     updateStats(hippoRoot, delta);
   } catch (err) {
     if (!isSqliteBusy(err)) throw err;
-    log.warnThenDebug('stats-busy', `${committed}, but the store was busy, so the stats counters were not updated`);
+    pendingStats.set(hippoRoot, addDelta(pendingStats.get(hippoRoot) ?? {}, delta));
+    log.warnThenDebug('stats-busy', `${committed}, but the store was busy; the stats wait for the next update`);
   }
 }
 

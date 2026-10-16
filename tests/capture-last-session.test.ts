@@ -222,6 +222,22 @@ describe('resolveLastSessionTranscript', () => {
     expect(resolveLastSessionTranscript(undefined, undefined, { mayScan: true })).toBe(newer);
   });
 
+  it('skips an entry that vanished after the listing and still finds the newest transcript', (ctx) => {
+    const projects = path.join(tmp.dir, '.claude', 'projects');
+    const proj = path.join(projects, 'proj-a');
+    fs.mkdirSync(proj, { recursive: true });
+    const real = path.join(proj, 'real.jsonl');
+    fs.writeFileSync(real, '{}');
+    try {
+      // A dangling link lists fine and then fails stat with ENOENT, as a file deleted between the two calls does.
+      fs.symlinkSync(path.join(tmp.dir, 'gone.jsonl'), path.join(proj, 'gone.jsonl'));
+      fs.symlinkSync(path.join(tmp.dir, 'gone-dir'), path.join(projects, 'gone-dir'), 'dir');
+    } catch {
+      ctx.skip();
+    }
+    expect(resolveLastSessionTranscript(undefined, undefined, { mayScan: true })).toBe(real);
+  });
+
   it('returns null when no transcript can be located', () => {
     expect(resolveLastSessionTranscript(undefined, undefined, { mayScan: true })).toBeNull();
   });

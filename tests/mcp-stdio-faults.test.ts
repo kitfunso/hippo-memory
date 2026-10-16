@@ -174,6 +174,18 @@ describe('MCP stdio fault handling', () => {
     expect(run.proc.exitCode).toBeNull();
   }, 15000);
 
+  it('exits 0 without a crash trace when the client closes its end of stdout', async () => {
+    const run = start([serverPath]);
+    run.proc.stdout.destroy();
+    // Replies written after the pipe closed fail with EPIPE.
+    for (let id = 1; id <= 5; id++) {
+      run.proc.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id, method: 'tools/list' })}
+`);
+    }
+    expect(await exitWithin(run, 10000)).toBe(0);
+    expect(run.stderr()).not.toMatch(/uncaught exception|EPIPE/);
+  }, 15000);
+
   it('sends the reply of a call still running when stdin closes, then exits 0', async () => {
     // The endpoint answers at once while the store is seeded, then holds the recall's query embedding until the test has closed stdin.
     const embeddings = await heldEmbeddings();

@@ -109,10 +109,25 @@ function warnThenSample(key: string, message: string, fields?: LogFields): void 
   else write('debug', message, fields);
 }
 
-/** The class name and stack of a thrown value, as log fields; a non-Error throw has no stack. */
+const CAUSE_DEPTH = 5;
+
+/** `class: message` for each link of an Error.cause chain, at most CAUSE_DEPTH deep, stopping at a cycle. */
+function causeChain(err: Error): string | undefined {
+  const seen = new Set<unknown>([err]);
+  const links: string[] = [];
+  let next: unknown = err.cause;
+  while (next !== undefined && links.length < CAUSE_DEPTH && !seen.has(next)) {
+    seen.add(next);
+    links.push(next instanceof Error ? `${next.constructor.name}: ${next.message}` : `NonError: ${String(next)}`);
+    next = next instanceof Error ? next.cause : undefined;
+  }
+  return links.length > 0 ? links.join(' <- ') : undefined;
+}
+
+/** The class name, stack and cause chain of a thrown value, as log fields; a non-Error throw has no stack. */
 export function errorFields<E>(err: E): LogFields {
   if (!(err instanceof Error)) return { errorClass: 'NonError' };
-  return { errorClass: err.constructor.name, stack: err.stack };
+  return { errorClass: err.constructor.name, stack: err.stack, cause: causeChain(err) };
 }
 
 export const log = {
