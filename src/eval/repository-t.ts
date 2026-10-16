@@ -1,4 +1,4 @@
-/** Student t tests for Z0. The repositories are fixed and the family is the unit (Amendment 2): a variance-components
+/** Student t tests for the built-in memory eval. The repositories are fixed and the family is the unit (Amendment 2): a variance-components
  *  t over family-by-seed tables with Satterthwaite df, plus the older one-value-per-repository tests (G-1 df).
  *  The t distribution is written here because the package carries no statistics library. */
 
