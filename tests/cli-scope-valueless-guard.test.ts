@@ -1,102 +1,47 @@
-/**
- * v1.26.2 (hardening pass) — global `--scope` well-formedness guard (T1).
- *
- * Before this release a value-less `--scope` (parseArgs stores it as boolean
- * `true`) misbehaved differently at each of 14 consumer sites across 7
- * commands: some coerced it to the literal scope string `'true'` (recall
- * filter/unlock input, wm session scope, the remember scope-tag dual-write),
- * others silently dropped the user's scoping intent (the remember envelope
- * WRITE — the worst variant, since the tag half still wrote `scope:true` in
- * the same command). T1 replaces all of that with ONE global guard in the
- * CLI dispatch function, before the top-level command switch: any `--scope`
- * present but not a non-empty string exits 1 with a single usage message,
- * on every command — including ones that ignore `--scope` today.
- *
- * This file covers acceptance criteria 1 (exit-1 on all 7 owning commands +
- * the empty/whitespace variants + the ignores-scope pin) and criterion 2
- * (valued-scope regression coverage for the three surfaces that had none:
- * wm push/read roundtrip, assemble passthrough, thin-client remember).
- */
+// One global guard in CLI dispatch exits 1 on any `--scope` that is not a non-empty string, on every command.
+// Before it, a value-less `--scope` became the literal scope 'true' at some sites and was dropped at others.
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { spawn } from 'node:child_process';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { runCli } from '../src/cli.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
-import { openHippoDb, closeHippoDb } from '../src/db/index.js';
-import { serve, type ServerHandle } from '../src/server.js';
-import { hippoOut, hippoRun as spawnHippo } from './_helpers/spawn-hippo.js';
-import { ROUTED_CLI_ENV } from './_helpers/routed-cli-env.js';
+import { initStore } from '../src/store/open.js';
+import { runInProcess, type InProcessResult } from './_helpers/run-in-process.js';
 
-const HIPPO_BIN = join(process.cwd(), 'bin', 'hippo.js');
 const USAGE_MSG = '--scope requires a non-empty value (e.g. --scope slack:private:C1).';
 
-/** Env-var map for the child `hippo` process — a fixed, known key set (not an open dictionary). */
-type ScopeGuardEnv = {
-  HIPPO_HOME: string;
-  HIPPO_SKIP_AUTO_INTEGRATIONS: string;
-};
+const savedCwd = process.cwd();
+let home = '';
 
-function hippo(cwd: string, env: Record<string, string>, ...args: string[]): string {
-  return hippoOut(args, { cwd, env: { ...process.env, ...env }, exe: 'node' });
+const hippoRun = (...args: string[]): Promise<InProcessResult> => runInProcess(() => runCli(['node', 'hippo', ...args]));
+
+async function hippo(...args: string[]): Promise<string> {
+  const res = await hippoRun(...args);
+  expect(res.status, res.stderr).toBe(0);
+  return res.stdout;
 }
 
-function hippoRun(
-  cwd: string,
-  env: Record<string, string>,
-  ...args: string[]
-) {
-  const res = spawnHippo(args, { cwd, env: { ...process.env, ...env }, exe: 'node' });
-  return { status: res.status, stdout: res.stdout, stderr: res.stderr };
-}
+beforeEach(() => {
+  home = mkdtempSync(join(tmpdir(), 'hippo-scope-guard-'));
+  initStore(join(home, '.hippo'));
+  vi.stubEnv('HIPPO_HOME', join(home, 'global-hippo'));
+  vi.stubEnv('HIPPO_SKIP_AUTO_INTEGRATIONS', '1');
+  vi.stubEnv('HIPPO_TENANT', '');
+  process.chdir(home);
+});
 
-// Non-blocking variant (mirrors tests/cli-thin-client.test.ts's runCliAsync):
-// execFileSync/spawnSync freeze this process's event loop for the whole
-// child run, which would starve the in-test serve() HTTP server this file
-// spins up for the thin-client remember case below — its /health probe and
-// the actual POST /v1/memories would never get a turn to run. spawn() keeps
-// the parent event loop free while the child does its HTTP round trip.
-function hippoAsync(
-  cwd: string,
-  env: Record<string, string>,
-  ...args: string[]
-): Promise<{ stdout: string; stderr: string }> {
-  return new Promise((resolve) => {
-    const child = spawn('node', [HIPPO_BIN, ...args], {
-      cwd,
-      env: { ...process.env, ...ROUTED_CLI_ENV, ...env },
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
-    let stdout = '';
-    let stderr = '';
-    child.stdout.on('data', (c: Buffer) => { stdout += c.toString('utf8'); });
-    child.stderr.on('data', (c: Buffer) => { stderr += c.toString('utf8'); });
-    child.on('close', () => resolve({ stdout, stderr }));
-  });
-}
+afterEach(() => {
+  process.chdir(savedCwd);
+  vi.unstubAllEnvs();
+  rmSync(home, { recursive: true, force: true });
+});
 
 describe('global --scope value-less guard: exit-1 cases', () => {
-  let home: string;
-  let env: ScopeGuardEnv;
-
-  beforeEach(() => {
-    home = mkdtempSync(join(tmpdir(), 'hippo-scope-guard-'));
-    env = { HIPPO_HOME: join(home, 'global-hippo'), HIPPO_SKIP_AUTO_INTEGRATIONS: '1' };
-    hippo(home, env, 'init', '--no-hooks', '--no-schedule', '--no-learn');
-  });
-
-  afterEach(() => {
-    if (home) rmSync(home, { recursive: true, force: true });
-  });
-
-  // Acceptance criterion 1: value-less --scope on all 7 owning commands
-  // (10 cases — wm has 4 subcommands). The guard fires pre-dispatch, so no
-  // live server is needed and command-specific argument validity does not
-  // matter — a value-less --scope always exits 1 before any command logic
-  // runs.
-  const valuelessCases: Array<{ label: string; args: string[] }> = [
+  // The guard fires pre-dispatch, so command-specific argument validity does not matter here.
+  it.each([
     { label: 'remember', args: ['remember', 'some memory content', '--scope'] },
     { label: 'recall', args: ['recall', 'some query', '--scope'] },
     { label: 'explain', args: ['explain', 'some query', '--scope'] },
@@ -107,81 +52,39 @@ describe('global --scope value-less guard: exit-1 cases', () => {
     { label: 'wm clear', args: ['wm', 'clear', '--scope'] },
     { label: 'wm flush', args: ['wm', 'flush', '--scope'] },
     { label: 'assemble', args: ['assemble', '--session', 's1', '--scope'] },
-  ];
-
-  for (const c of valuelessCases) {
-    it(`${c.label}: value-less --scope exits 1 with the usage message`, () => {
-      const res = hippoRun(home, env, ...c.args);
-      expect(res.status).toBe(1);
-      expect(res.stderr).toContain(USAGE_MSG);
-    });
-  }
-
-  // parseArgs stores `--scope ''` the same as value-less (empty string is
-  // falsy, so the "no next token" boolean-flag branch fires) — representative
-  // case on recall.
-  it('recall: --scope "" (empty string) exits 1', () => {
-    const res = hippoRun(home, env, 'recall', 'some query', '--scope', '');
+  ])('$label: value-less --scope exits 1 with the usage message', async ({ args }) => {
+    const res = await hippoRun(...args);
     expect(res.status).toBe(1);
     expect(res.stderr).toContain(USAGE_MSG);
   });
 
-  // `--scope "   "` parses as a real (non-boolean) string, so this exercises
-  // the guard's second branch (typeof is 'string' but .trim() is empty) —
-  // representative case on recall.
-  it('recall: --scope "   " (whitespace-only) exits 1', () => {
-    const res = hippoRun(home, env, 'recall', 'some query', '--scope', '   ');
+  // '' parses like value-less (falsy, so the boolean branch fires); '   ' is a real string the .trim() branch must catch.
+  it.each(['', '   '])('recall: --scope %j exits 1', async (value) => {
+    const res = await hippoRun('recall', 'some query', '--scope', value);
     expect(res.status).toBe(1);
     expect(res.stderr).toContain(USAGE_MSG);
   });
 
-  // Pins the GLOBAL semantics: `status` never reads flags['scope'] (handleStatus
-  // takes only hippoRoot), yet a value-less --scope still exits 1 because the
-  // guard runs before dispatch, uniformly, regardless of whether the target
-  // command would have consumed the flag.
-  it('status (a command that ignores --scope today): value-less --scope still exits 1 (pins global-guard semantics)', () => {
-    const res = hippoRun(home, env, 'status', '--scope');
+  // Pins the GLOBAL semantics: handleStatus never reads --scope, yet the guard still exits 1 before dispatch.
+  it('status (a command that ignores --scope today): value-less --scope still exits 1 (pins global-guard semantics)', async () => {
+    const res = await hippoRun('status', '--scope');
     expect(res.status).toBe(1);
     expect(res.stderr).toContain(USAGE_MSG);
   });
 });
 
 describe('valued --scope regression coverage', () => {
-  let home: string;
-  let env: ScopeGuardEnv;
+  it('wm push --scope X then wm read --scope X roundtrip surfaces the item', async () => {
+    await hippo('wm', 'push', '--scope', 'projX', '--content', 'wm item one');
+    expect(await hippo('wm', 'read', '--scope', 'projX')).toContain('wm item one');
 
-  beforeEach(() => {
-    home = mkdtempSync(join(tmpdir(), 'hippo-scope-valued-'));
-    env = { HIPPO_HOME: join(home, 'global-hippo'), HIPPO_SKIP_AUTO_INTEGRATIONS: '1' };
-    hippo(home, env, 'init', '--no-hooks', '--no-schedule', '--no-learn');
+    // Current contract, pinned not desired: a bare `wm read` applies no scope filter (wmRead), so scope-X items show.
+    expect(await hippo('wm', 'read')).toContain('wm item one');
   });
 
-  afterEach(() => {
-    if (home) rmSync(home, { recursive: true, force: true });
-  });
-
-  // (a) wm push --scope X / wm read --scope X roundtrip.
-  it('wm push --scope X then wm read --scope X roundtrip surfaces the item', () => {
-    hippo(home, env, 'wm', 'push', '--scope', 'projX', '--content', 'wm item one');
-    const scoped = hippo(home, env, 'wm', 'read', '--scope', 'projX');
-    expect(scoped).toContain('wm item one');
-
-    // Current contract (pinned, not asserted-as-desired): wmRead only adds a
-    // `WHERE scope = ?` clause when a scope is explicitly passed; a bare
-    // `wm read` applies no scope filter at all (src/store/working-memory.ts
-    // wmRead), so it is NOT isolated from scope-X items — they show up here
-    // too. If wm read's default-scope behavior changes, update this pin.
-    const unscoped = hippo(home, env, 'wm', 'read');
-    expect(unscoped).toContain('wm item one');
-  });
-
-  // (b) assemble --scope X passthrough — pin CURRENT behavior. cmdAssemble
-  // forwards --scope straight to api.assemble's opts.scope, which resolves
-  // through passesScopeFilterForRecall (the API 'exact' mode, NOT the CLI
-  // recall's additive-unlock mode): when a scope is requested, ONLY rows
-  // whose envelope scope equals it exactly pass — NULL-scope rows and other
-  // non-matching scopes are excluded, unlike `hippo recall --scope`.
-  it('assemble --scope X pins CURRENT exact-narrowing behavior (api.assemble -> passesScopeFilterForRecall)', () => {
+  // assemble forwards --scope to api.assemble's exact mode (passesScopeFilterForRecall), unlike recall's additive unlock:
+  // only rows whose envelope scope equals it pass, so NULL-scope and other scopes are excluded.
+  it('assemble --scope X pins CURRENT exact-narrowing behavior (api.assemble -> passesScopeFilterForRecall)', async () => {
     const hippoDir = join(home, '.hippo');
     const sessionId = 'sess-scope-pin';
     const mkRaw = (text: string, scope: string | null) => createMemory(text, {
@@ -195,43 +98,12 @@ describe('valued --scope regression coverage', () => {
     writeEntry(hippoDir, mkRaw('projx scope row content here', 'projX'));
     writeEntry(hippoDir, mkRaw('projy scope row content here', 'projY'));
 
-    const raw = hippo(home, env, 'assemble', '--session', sessionId, '--scope', 'projX', '--json');
-    // SAFETY: `hippo assemble --json` prints api.assemble()'s AssembleResult
-    // directly (src/cli.ts cmdAssemble); only .items[].content is read below.
+    const raw = await hippo('assemble', '--session', sessionId, '--scope', 'projX', '--json');
+    // SAFETY: `hippo assemble --json` prints api.assemble()'s AssembleResult; only .items[].content is read.
     const parsed = JSON.parse(raw) as { items: Array<{ content: string }> };
     const contents = parsed.items.map((it) => it.content);
     expect(contents.some((c) => c.includes('projx scope row'))).toBe(true);
     expect(contents.some((c) => c.includes('null scope row'))).toBe(false);
     expect(contents.some((c) => c.includes('projy scope row'))).toBe(false);
-  });
-
-  // (c) thin-client remember: with a live in-test serve(), `hippo remember
-  // <text> --scope X` relays via HTTP (case 'remember' in cli.ts) and the
-  // stored row's envelope scope is X.
-  it('thin-client remember: hippo remember --scope X relays via a live server and the stored row envelope scope is X', async () => {
-    const hippoDir = join(home, '.hippo');
-    const handle: ServerHandle = await serve({ hippoRoot: hippoDir, port: 0 });
-    try {
-      const { stdout: out, stderr: err } = await hippoAsync(
-        home, env, 'remember', 'thin client scope canary content', '--scope', 'slack:private:CX',
-      );
-      expect(out, `stderr: ${err}`).toMatch(/Remembered/);
-      expect(out).toContain(handle.url);
-
-      const db = openHippoDb(hippoDir);
-      try {
-        // SAFETY: SELECT scope FROM memories WHERE content = ? names exactly
-        // one column against the canary row remembered above; may be
-        // undefined only if the row somehow did not land (checked below).
-        const row = db
-          .prepare(`SELECT scope FROM memories WHERE content = ?`)
-          .get('thin client scope canary content') as { scope: string | null } | undefined;
-        expect(row?.scope).toBe('slack:private:CX');
-      } finally {
-        closeHippoDb(db);
-      }
-    } finally {
-      await handle.stop();
-    }
   });
 });

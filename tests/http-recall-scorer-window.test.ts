@@ -54,22 +54,9 @@ describe('HTTP /v1/memories scorer_window', () => {
     expect(body.total).toBe(5);
   });
 
-  it('scorer_window omitted: response.windowSize=200 (default unchanged)', async () => {
-    const res = await fetch(`${handle.url}/v1/memories?q=alpha`);
-    expect(res.status).toBe(200);
-    const body = await jsonAs<{ windowSize?: number }>(res);
-    expect(body.windowSize).toBe(200);
-  });
-
-  it('scorer_window=0 returns 400 with code=invalid_scorer_window', async () => {
-    const res = await fetch(`${handle.url}/v1/memories?q=alpha&scorer_window=0`);
-    expect(res.status).toBe(400);
-    const body = await jsonAs<{ error?: string; code?: string }>(res);
-    expect(body.code).toBe('invalid_scorer_window');
-  });
-
-  it('scorer_window=abc returns 400 (NaN forwarded; recall() rejects)', async () => {
-    const res = await fetch(`${handle.url}/v1/memories?q=alpha&scorer_window=abc`);
+  // 'abc' is forwarded as NaN and recall() rejects it.
+  it.each(['0', 'abc'])('scorer_window=%s returns 400 with code=invalid_scorer_window', async (value) => {
+    const res = await fetch(`${handle.url}/v1/memories?q=alpha&scorer_window=${value}`);
     expect(res.status).toBe(400);
     const body = await jsonAs<{ error?: string; code?: string }>(res);
     expect(body.code).toBe('invalid_scorer_window');

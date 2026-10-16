@@ -138,7 +138,8 @@ describe('fetchWithRetry against a local server', () => {
   });
 
   describe('with a total budget', () => {
-    // The clock moves only by the waits, so the budget is measured on them alone.
+    // The clock moves only by the waits, so the budget is measured on them alone. What is left of it is
+    // also each attempt's real timeout, so every budget here leaves the last attempt hundreds of ms.
     function fakeClock() {
       let clock = 0;
       const sleeps: number[] = [];
@@ -148,9 +149,9 @@ describe('fetchWithRetry against a local server', () => {
     it('hands back the last 5xx once the next wait would pass totalMs, before the attempt cap', async () => {
       const { url, hits } = await startServer([{ status: 503 }]);
       const { sleeps, policy } = fakeClock();
-      const res = await fetchWithRetry(url, {}, { timeoutMs: 2000, attempts: 10, totalMs: 1000, ...policy });
+      const res = await fetchWithRetry(url, {}, { timeoutMs: 2000, attempts: 10, totalMs: 1800, ...policy });
       expect(res.status).toBe(503);
-      // Waits of 125, 250 and 500 end at 875; the next one, 1000, would end past the budget.
+      // Waits of 125, 250 and 500 end at 875; the next one, 1000, would end at 1875, past the budget.
       expect(sleeps).toEqual([125, 250, 500]);
       expect(hits()).toBe(4);
     });
@@ -158,7 +159,8 @@ describe('fetchWithRetry against a local server', () => {
     it('throws the transport error once the next wait would pass totalMs', async () => {
       const { url, hits } = await startServer(['reset']);
       const { sleeps, policy } = fakeClock();
-      await expect(fetchWithRetry(url, {}, { timeoutMs: 2000, attempts: 10, totalMs: 400, ...policy })).rejects.toThrow(/fetch failed|socket/i);
+      await expect(fetchWithRetry(url, {}, { timeoutMs: 2000, attempts: 10, totalMs: 850, ...policy })).rejects.toThrow(/fetch failed|socket/i);
+      // Waits of 125 and 250 end at 375; the next one, 500, would end at 875, past the budget.
       expect(sleeps).toEqual([125, 250]);
       expect(hits()).toBe(3);
     });

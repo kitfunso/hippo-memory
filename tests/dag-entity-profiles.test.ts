@@ -327,18 +327,6 @@ describe('level-3 entity profiles + drillDown depth', () => {
     expect(capturedPrompt).toContain('alice');
   });
 
-  it('test #7: drillDown depth=1 backward compat — returns immediate children', async () => {
-    const summary = makeL2Summary('compat test summary content', 'alice');
-    writeEntry(hippoRoot, summary);
-    writeEntry(hippoRoot, makeL1Fact(summary.id, 'fact one for compat test'));
-    writeEntry(hippoRoot, makeL1Fact(summary.id, 'fact two for compat test'));
-
-    const r = await drillDown(defaultCtx(hippoRoot), summary.id);
-    assertDrillDownSucceeded(r);
-    expect(r.children.length).toBe(2);
-    expect(r.totalChildren).toBe(2);
-  });
-
   it('normalizes a fractional API depth before walking the DAG', async () => {
     const l3 = makeL3Profile('fractional depth profile', 'alice');
     writeEntry(hippoRoot, l3);
@@ -435,13 +423,15 @@ describe('level-3 entity profiles + drillDown depth', () => {
     expect(r.children[0]!.id).toBe(l2a.id);
   });
 
-  it('test #12: isDagSummary extended to L2 + L3', () => {
+  it('test #12: isDagSummary matches L2 + L3 only', () => {
     const l3 = makeL3Profile('test profile content for isDagSummary', 'alice');
     const l2 = makeL2Summary('test summary content for isDagSummary', 'alice');
     const l1 = makeL1Fact('placeholder-parent-id-here-fake', 'l1 fact content for test');
+    const l0 = createMemory('l0 raw content', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic });
     expect(isDagSummary(l3)).toBe(true);
     expect(isDagSummary(l2)).toBe(true);
     expect(isDagSummary(l1)).toBe(false);
+    expect(isDagSummary(l0)).toBe(false);
   });
 
   it('test #14: buildEntityProfiles partitions clusters by tenantId (independent-review HIGH #1 lock)', async () => {

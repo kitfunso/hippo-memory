@@ -162,6 +162,13 @@ describe('api.recall anchoringHint', () => {
     expect(result.suppressionSummary!.suppressedByInterference).toBe(0);
   });
 
+  it('suppressedByInterference stays 0 on R1 query_repeat (only memory_dominance counts)', async () => {
+    const memId = seedQueryMatchingMemory(root, 'foo bar baz');
+    const snapshot: RecallHistorySnapshot = [entry(hashQueryText('foo bar baz'), memId)];
+    const result = await retrieve(ctxFor(root), { query: 'foo bar baz', recallHistory: snapshot });
+    expect(result.suppressionSummary!.suppressedByInterference).toBe(0);
+  });
+
   it('api.recall is return-value pure: identical opts.recallHistory snapshot → identical anchoringHint result', async () => {
     const memId = seedQueryMatchingMemory(root, 'frobnicate baz quux content');
     const snapshot: RecallHistorySnapshot = [

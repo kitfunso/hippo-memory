@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
-import { activeGoalsWithPolicies, pushGoal } from '../src/store/goals.js';
+import { activeGoalsWithPolicies, pushGoal, resumeGoal, suspendGoal } from '../src/store/goals.js';
 
 const activeGoalsOf = (root: string, opts: { sessionId: string; tenantId: string }) => activeGoalsWithPolicies(root, opts).goals;
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
@@ -16,13 +16,6 @@ describe('goal stack depth cap', () => {
     initStore(root);
   });
   afterEach(() => rmSync(root, { recursive: true, force: true }));
-
-  it('keeps three goals active and evicts on the fourth push', () => {
-    for (const goalName of ['a', 'b', 'c']) pushGoal(root, { ...ctx, goalName });
-    expect(activeGoalsOf(root, ctx)).toHaveLength(3);
-    pushGoal(root, { ...ctx, goalName: 'd' });
-    expect(activeGoalsOf(root, ctx).map((g) => g.goalName)).toEqual(['b', 'c', 'd']);
-  });
 
   it('auto-suspends the oldest active goal when pushing the 4th', () => {
     const g1 = pushGoal(root, { ...ctx, goalName: 'oldest' });
@@ -73,5 +66,19 @@ describe('goal stack depth cap', () => {
     } finally {
       closeHippoDb(db);
     }
+  });
+
+  it('suspends the oldest active goal when a resume would pass the cap', () => {
+    const goals = ['g0', 'g1', 'g2'].map((goalName) => pushGoal(root, { ...ctx, goalName }));
+    suspendGoal(root, goals[2]!.id);
+    expect(activeGoalsOf(root, ctx)).toHaveLength(2);
+    pushGoal(root, { ...ctx, goalName: 'g3' });
+    expect(activeGoalsOf(root, ctx)).toHaveLength(3);
+
+    resumeGoal(root, goals[2]!.id);
+    const active = activeGoalsOf(root, ctx).map((g) => g.goalName);
+    expect(active).toHaveLength(3);
+    expect(active).not.toContain('g0');
+    expect(active).toContain('g2');
   });
 });

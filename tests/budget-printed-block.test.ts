@@ -1,6 +1,6 @@
 // A token budget bounds the text that reaches the model, on every surface that prints memories.
-// Real SQLite stores and the built CLI; the long tags make the printed text cost far more than the content.
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+// Real SQLite stores and the CLI entry in process; the long tags make the printed text cost far more than the content.
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -13,7 +13,9 @@ import { estimateTokens } from '../src/util/token-text.js';
 import { assemble, drillDown, type Context } from '../src/api/index.js';
 import { assembleCost, drillCost } from '../src/api/context-render.js';
 import { handleMcpRequest, type McpResponse } from '../src/mcp/server.js';
-import { hippoOut } from './_helpers/spawn-hippo.js';
+import { runCli } from '../src/cli.js';
+import { runInProcess } from './_helpers/run-in-process.js';
+import { withHookStdin } from './_helpers/hook-stdin.js';
 import { sqliteStore } from '../src/store/sqlite/store.js';
 const TAGS = [
   'deployment-pipeline-infrastructure-alpha', 'database-migration-rollback-procedure',
@@ -26,6 +28,7 @@ const OVERSIZE = `Zanzibar ferry timetable: ${Array.from({ length: 300 }, (_, i)
 interface LedgerRow { surface: string; tokens: number }
 type McpArgs = Record<string, string | number | boolean>;
 
+const savedCwd = process.cwd();
 let root: string;
 let hippoDir: string;
 let ids: Map<string, string>;
@@ -44,12 +47,10 @@ function seedNotes(extra: Partial<MemoryEntry> = {}): void {
   for (let i = 0; i < NOTES; i++) ids.set(noteText(i), seed(noteText(i), extra));
 }
 
-function hippo(args: string[], input?: string): string {
-  const env: NodeJS.ProcessEnv = {
-    ...process.env, HIPPO_HOME: path.join(root, 'global'), HOME: root, USERPROFILE: root,
-  };
-  for (const k of ['ANTHROPIC_API_KEY', 'HIPPO_SESSION_ID', 'CLAUDE_CODE_SESSION_ID']) delete env[k];
-  return hippoOut(args, { cwd: root, env, input });
+async function hippo(args: string[], input?: string): Promise<string> {
+  const res = await withHookStdin(input, () => runInProcess(() => runCli(['node', 'hippo', ...args])));
+  expect(res.status, res.stderr).toBe(0);
+  return res.stdout;
 }
 
 // console.log's newline is the terminal's, not the block's.
@@ -110,9 +111,16 @@ beforeEach(() => {
   fs.mkdirSync(hippoDir, { recursive: true });
   initStore(hippoDir);
   ids = new Map();
+  vi.stubEnv('HIPPO_HOME', path.join(root, 'global'));
+  vi.stubEnv('HOME', root);
+  vi.stubEnv('USERPROFILE', root);
+  for (const k of ['ANTHROPIC_API_KEY', 'HIPPO_SESSION_ID', 'CLAUDE_CODE_SESSION_ID']) vi.stubEnv(k, undefined);
+  process.chdir(root);
 });
 
 afterEach(() => {
+  process.chdir(savedCwd);
+  vi.unstubAllEnvs();
   fs.rmSync(root, { recursive: true, force: true });
 });
 
@@ -120,23 +128,23 @@ describe('hippo context', () => {
   it.each([
     ['a query', ['context', 'postgres', 'rollback', '--budget', '400']],
     ['no query', ['context', '--budget', '400']],
-  ])('markdown with %s prints within the budget; the header and the ledger count the block', (_label, args) => {
+  ])('markdown with %s prints within the budget; the header and the ledger count the block', async (_label, args) => {
     seedNotes();
-    const text = block(hippo(args));
+    const text = block(await hippo(args));
     expect(estimateTokens(text)).toBeLessThanOrEqual(400);
     expect(headerTokens(text, /## Project Memory \(\d+ entries, (\d+) tokens\)/)).toBe(estimateTokens(text));
     expectBudgetBinds(text);
     expect(ledger().at(-1)).toEqual({ surface: 'context', tokens: estimateTokens(text) });
   });
 
-  it('the per-prompt hook fits the budget, and each block header and ledger row counts its own block', () => {
+  it('the per-prompt hook fits the budget, and each block header and ledger row counts its own block', async () => {
     fs.writeFileSync(path.join(hippoDir, 'config.json'), JSON.stringify({
       pinnedInject: { promptRecall: true, promptRecallThreshold: 0.1, promptRecallMinShared: 1 },
     }));
     seedNotes();
     seed('Pinned rule one: always run the postgres migration dry run before a deploy', { pinned: true });
     seed('Pinned rule two: never drop a column in the same release that stops reading it', { pinned: true });
-    const out = hippo(['context', '--pinned-only', '--format', 'additional-context', '--budget', '600'],
+    const out = await hippo(['context', '--pinned-only', '--format', 'additional-context', '--budget', '600'],
       JSON.stringify({ session_id: 'sess-budget', prompt: 'postgres migration rollback plan dry run' }));
     // SAFETY: the hook prints one hookSpecificOutput JSON object.
     const ac = (JSON.parse(out) as { hookSpecificOutput: { additionalContext: string } }).hookSpecificOutput.additionalContext;
@@ -154,68 +162,64 @@ describe('hippo context', () => {
     ]);
   });
 
-  it('an entry the budget leaves out gets no retrieval bump and is not in last_retrieval_ids', () => {
+  it('an entry the budget leaves out gets no retrieval bump and is not in last_retrieval_ids', async () => {
     seedNotes();
-    const shown = shownNotes(block(hippo(['context', 'postgres', 'rollback', '--budget', '400']))).map((c) => ids.get(c)!);
+    const shown = shownNotes(block(await hippo(['context', 'postgres', 'rollback', '--budget', '400']))).map((c) => ids.get(c)!);
     expect(shown.length).toBeLessThan(NOTES);
     for (const id of ids.values()) expect(retrievalCount(id)).toBe(shown.includes(id) ? 1 : 0);
     expect([...loadIndex(hippoDir).last_retrieval_ids].sort()).toEqual([...shown].sort());
   });
 
-  it('skips an entry that alone exceeds the budget and keeps filling, with or without a query', () => {
+  it('skips an entry that alone exceeds the budget and keeps filling, with or without a query', async () => {
     const old = new Date(Date.now() - 3 * 86_400_000).toISOString();
     seedNotes({ created: old, last_retrieved: old });
     const big = seed(OVERSIZE);
-    const all = block(hippo(['context', '--budget', '400']));
+    const all = block(await hippo(['context', '--budget', '400']));
     expect(all).not.toContain('Zanzibar');
     expectBudgetBinds(all);
-    expect(hippo(['context', 'zanzibar', 'ferry', '--budget', '400'])).not.toContain('Zanzibar');
+    expect(await hippo(['context', 'zanzibar', 'ferry', '--budget', '400'])).not.toContain('Zanzibar');
     expect(retrievalCount(big)).toBe(0);
   });
 });
 
 describe('hippo recall', () => {
-  it('prints within the budget; the header and the ledger count the block, and JSON picks the same memories', () => {
+  it('prints within the budget; the header and the ledger count the block, and JSON picks the same memories', async () => {
     seedNotes();
-    const text = block(hippo(['recall', 'postgres rollback', '--budget', '400']));
+    const text = block(await hippo(['recall', 'postgres rollback', '--budget', '400']));
     expect(estimateTokens(text)).toBeLessThanOrEqual(400);
     expect(headerTokens(text, /Found \d+ memories \((\d+) tokens\)/)).toBe(estimateTokens(text));
     expectBudgetBinds(text);
     expect(ledger().at(-1)).toEqual({ surface: 'recall', tokens: estimateTokens(text) });
 
-    const json = block(hippo(['recall', 'postgres rollback', '--budget', '400', '--json']));
+    const json = block(await hippo(['recall', 'postgres rollback', '--budget', '400', '--json']));
     // SAFETY: recall --json prints { results: [{ content }] }.
     const picked = (JSON.parse(json) as { results: Array<{ content: string }> }).results.map((r) => r.content);
     expect(picked.sort()).toEqual(shownNotes(text).sort());
     expect(ledger().at(-1)).toEqual({ surface: 'recall', tokens: estimateTokens(json) });
   });
 
-  it('an entry the budget leaves out gets no retrieval bump and is not in last_retrieval_ids', () => {
+  it('an entry the budget leaves out gets no retrieval bump and is not in last_retrieval_ids', async () => {
     seedNotes();
-    const shown = shownNotes(block(hippo(['recall', 'postgres rollback', '--budget', '400']))).map((c) => ids.get(c)!);
+    const shown = shownNotes(block(await hippo(['recall', 'postgres rollback', '--budget', '400']))).map((c) => ids.get(c)!);
     expect(shown.length).toBeLessThan(NOTES);
     for (const id of ids.values()) expect(retrievalCount(id)).toBe(shown.includes(id) ? 1 : 0);
     expect([...loadIndex(hippoDir).last_retrieval_ids].sort()).toEqual([...shown].sort());
   });
 
-  it('keeps its --min-results floor for an entry larger than the whole budget, and says so in the header', () => {
+  it('keeps its --min-results floor for an entry larger than the whole budget, and says so in the header', async () => {
     seedNotes();
     seed(OVERSIZE);
-    const kept = block(hippo(['recall', 'zanzibar ferry', '--budget', '400']));
+    const kept = block(await hippo(['recall', 'zanzibar ferry', '--budget', '400']));
     expect(kept).toContain('Zanzibar ferry timetable');
     expect(headerTokens(kept, /Found \d+ memories \((\d+) tokens\)/)).toBe(estimateTokens(kept));
     expect(estimateTokens(kept)).toBeGreaterThan(400);
-    const floorless = block(hippo(['recall', 'zanzibar ferry', '--budget', '400', '--min-results', '0']));
+    const floorless = block(await hippo(['recall', 'zanzibar ferry', '--budget', '400', '--min-results', '0']));
     expect(floorless).not.toContain('Zanzibar ferry timetable');
     expect(estimateTokens(floorless)).toBeLessThanOrEqual(400);
   });
 });
 
 describe('MCP recall and context', () => {
-  let cwd: string;
-  beforeEach(() => { cwd = process.cwd(); process.chdir(root); }); // hippo_context reads its query from git in the cwd
-  afterEach(() => { process.chdir(cwd); });
-
   it.each([
     ['hippo_recall', 'mcp_recall', { query: 'postgres rollback', budget: 400 }],
     ['hippo_context', 'mcp_context', { budget: 400 }],
@@ -258,7 +262,7 @@ describe('assemble and drill', () => {
   it('the window prints within the budget in MCP and CLI, and its header counts the block', async () => {
     seedSession(8);
     const mcp = await mcpText('hippo_assemble', { session_id: sid, budget: 250, fresh_tail_count: 1 });
-    const cli = block(hippo(['assemble', sid, '--budget', '250', '--fresh-tail', '1']));
+    const cli = block(await hippo(['assemble', sid, '--budget', '250', '--fresh-tail', '1']));
     for (const text of [mcp, cli]) {
       expect(estimateTokens(text)).toBeLessThanOrEqual(250);
       expect(headerTokens(text, /items, (\d+) tokens \(raw=/)).toBe(estimateTokens(text));
@@ -277,7 +281,7 @@ describe('assemble and drill', () => {
   it('drill prints within the budget in MCP and CLI', async () => {
     const id = seedSummary(6);
     const mcp = await mcpText('hippo_drill', { summary_id: id, budget: 200 });
-    const cli = block(hippo(['drill', id, '--budget', '200']));
+    const cli = block(await hippo(['drill', id, '--budget', '200']));
     for (const text of [mcp, cli]) {
       expect(estimateTokens(text)).toBeLessThanOrEqual(200);
       expect(text).toContain(', truncated):');

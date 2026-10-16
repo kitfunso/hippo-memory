@@ -21,6 +21,8 @@ import { cmdCapture } from '../src/capture/command.js';
 import { importProjectMemories } from '../src/agent-memories/sync.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 import { sqliteSyncStore } from '../src/store/sqlite/store.js';
+import { runCli } from '../src/cli.js';
+import { runInProcess } from './_helpers/run-in-process.js';
 
 const HIPPO_BIN = path.resolve(__dirname, '..', 'bin', 'hippo.js');
 const CONFIGURED = 730;
@@ -28,6 +30,7 @@ const CONFIGURED = 730;
 const dirs: string[] = [];
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.unstubAllEnvs();
   while (dirs.length) fs.rmSync(dirs.pop()!, { recursive: true, force: true });
 });
 
@@ -44,12 +47,20 @@ function store(): string {
   return root;
 }
 
-function hippo(root: string, ...args: string[]): void {
-  execFileSync(process.execPath, [HIPPO_BIN, ...args], {
-    cwd: path.dirname(root),
-    env: { ...process.env, HIPPO_SKIP_AUTO_INTEGRATIONS: '1' },
-    stdio: 'ignore',
-  });
+/** `hippo <args>` run in this process from the store's project dir, the call bin/hippo.js makes; returns the exit code. */
+async function hippoStatus(root: string, ...args: string[]): Promise<number> {
+  vi.stubEnv('HIPPO_SKIP_AUTO_INTEGRATIONS', '1');
+  const saved = process.cwd();
+  process.chdir(path.dirname(root));
+  try {
+    return (await runInProcess(() => runCli(['node', 'hippo', ...args]))).status;
+  } finally {
+    process.chdir(saved);
+  }
+}
+
+async function hippo(root: string, ...args: string[]): Promise<void> {
+  expect(await hippoStatus(root, ...args)).toBe(0);
 }
 
 function fetcher(text: string) {
@@ -94,11 +105,16 @@ const writers: [string, (root: string) => Promise<MemoryEntry[]>][] = [
     fs.writeFileSync(path.join(repo, 'a.txt'), 'x');
     git('add', 'a.txt');
     git('commit', '-q', '-m', 'fix: the parser dropped the trailing newline on windows paths during export');
-    return added(root, () => hippo(root, 'learn', '--git', '--days', '30'));
+    // A fresh process names the project from the repo made after the store; in process that git config is never read.
+    return added(root, () => execFileSync(process.execPath, [HIPPO_BIN, 'learn', '--git', '--days', '30'], {
+      cwd: repo,
+      env: { ...process.env, HIPPO_SKIP_AUTO_INTEGRATIONS: '1' },
+      stdio: 'ignore',
+    }));
   }],
-  ['CLI watch', (root) => added(root, () => {
-    // watch exits with the watched command's code, so a failing command throws here.
-    expect(() => hippo(root, 'watch', '--', 'node', '-e', 'process.exit(3)')).toThrow();
+  ['CLI watch', (root) => added(root, async () => {
+    // watch exits with the watched command's code.
+    expect(await hippoStatus(root, 'watch', '--', 'node', '-e', 'process.exit(3)')).toBe(3);
   })],
   ['Claude Code memory import', (root) => {
     const home = tmp();

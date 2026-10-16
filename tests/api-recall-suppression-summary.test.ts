@@ -51,12 +51,11 @@ describe('RecallResult.suppressionSummary', () => {
     expect(result.suppressionSummary).toBeDefined();
     // Each field is a non-negative integer counter (RecallSuppressionSummary,
     // src/api/index.ts); Number.isInteger is the domain-correct runtime shape check.
-    expect(Number.isInteger(result.suppressionSummary!.totalCandidates)).toBe(true);
-    expect(Number.isInteger(result.suppressionSummary!.droppedPreRank)).toBe(true);
-    expect(Number.isInteger(result.suppressionSummary!.droppedByBudget)).toBe(true);
-    expect(Number.isInteger(result.suppressionSummary!.summarySubstitutionsAdded)).toBe(true);
-    expect(Number.isInteger(result.suppressionSummary!.freshTailAdded)).toBe(true);
-    expect(Number.isInteger(result.suppressionSummary!.suppressedByInterference)).toBe(true);
+    const s = result.suppressionSummary!;
+    for (const n of [s.totalCandidates, s.droppedPreRank, s.droppedByBudget, s.summarySubstitutionsAdded, s.freshTailAdded, s.suppressedByInterference]) {
+      expect(Number.isInteger(n)).toBe(true);
+      expect(n).toBeGreaterThanOrEqual(0);
+    }
   });
 
   it('totalCandidates reflects loaded candidate pool (post tenant + SQL scope predicate)', async () => {
@@ -80,36 +79,6 @@ describe('RecallResult.suppressionSummary', () => {
     expect(result.suppressionSummary!.droppedByBudget).toBe(0);
     // suppressionSummary still defined even when no overflow.
     expect(result.suppressionSummary).toBeDefined();
-  });
-
-  it('all 6 counters are non-negative integers', async () => {
-    writeEntry(root, makeRaw('delta'));
-    const result = await retrieve(ctxFor(root), { query: 'delta' });
-    const s = result.suppressionSummary!;
-    expect(Number.isInteger(s.totalCandidates)).toBe(true);
-    expect(s.totalCandidates).toBeGreaterThanOrEqual(0);
-    expect(Number.isInteger(s.droppedPreRank)).toBe(true);
-    expect(s.droppedPreRank).toBeGreaterThanOrEqual(0);
-    expect(Number.isInteger(s.droppedByBudget)).toBe(true);
-    expect(s.droppedByBudget).toBeGreaterThanOrEqual(0);
-    expect(Number.isInteger(s.summarySubstitutionsAdded)).toBe(true);
-    expect(s.summarySubstitutionsAdded).toBeGreaterThanOrEqual(0);
-    expect(Number.isInteger(s.freshTailAdded)).toBe(true);
-    expect(s.freshTailAdded).toBeGreaterThanOrEqual(0);
-    expect(Number.isInteger(s.suppressedByInterference)).toBe(true);
-    expect(s.suppressedByInterference).toBeGreaterThanOrEqual(0);
-  });
-
-  // v0.33 / J1 (v1.13.2): the original "always 0 in v1.12.13" assertion is
-  // RELAXED. J1 lights up the counter via R2 memory_dominance detection,
-  // so the counter now reads 0 when J1 is off OR no R2 fires, and non-zero
-  // when R2 fires. This test asserts the no-history / no-snapshot case
-  // (which keeps the counter at 0). The non-zero-on-R2 case is tested by
-  // tests/api-recall-suppressed-interference.test.ts.
-  it('suppressedByInterference is 0 when J1 is off or no R2 detected (default no-history path)', async () => {
-    writeEntry(root, makeRaw('iota'));
-    const result = await retrieve(ctxFor(root), { query: 'iota' });
-    expect(result.suppressionSummary!.suppressedByInterference).toBe(0);
   });
 
   it('retrieve returns the same ids in the same order and the same summary on a repeat call', async () => {

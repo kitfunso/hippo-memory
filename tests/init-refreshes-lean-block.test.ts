@@ -1,9 +1,10 @@
 // The instruction block asks for nothing a hook already does, and `hippo init` swaps it in for an old block nobody edited.
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { hippoRun } from './_helpers/spawn-hippo.js';
+import { runCli } from '../src/cli.js';
+import { runInProcess } from './_helpers/run-in-process.js';
 const START = '<!-- hippo:start -->';
 const END = '<!-- hippo:end -->';
 // Old blocks used an em dash; spelling it as a code point keeps this source free of them.
@@ -207,6 +208,7 @@ For full integration, copy the hippo-memory Pi extension to \`~/.pi/agent/extens
 const REMEMBER_LINE = 'hippo remember "<what you learned and why>"\n';
 const NO_SECRETS = 'Leave out secrets and personal details:';
 
+const savedCwd = process.cwd();
 let home: string;
 let proj: string;
 
@@ -214,13 +216,26 @@ beforeEach(() => {
   home = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-leanblock-'));
   proj = path.join(home, 'proj');
   fs.mkdirSync(proj);
+  vi.stubEnv('HOME', home);
+  vi.stubEnv('USERPROFILE', home);
+  vi.stubEnv('HIPPO_HOME', path.join(home, 'global'));
 });
-afterEach(() => fs.rmSync(home, { recursive: true, force: true }));
+afterEach(() => {
+  process.chdir(savedCwd);
+  vi.unstubAllEnvs();
+  fs.rmSync(home, { recursive: true, force: true });
+});
 
-function hippo(cwd: string, ...args: string[]): string {
-  const r = hippoRun(args, { cwd, env: { ...process.env, HOME: home, USERPROFILE: home, HIPPO_HOME: path.join(home, 'global') } });
-  expect(r.status, r.stderr).toBe(0);
-  return r.stdout;
+async function hippo(cwd: string, ...args: string[]): Promise<string> {
+  process.chdir(cwd);
+  try {
+    const r = await runInProcess(() => runCli(['node', 'hippo', ...args]));
+    // A verb that sets process.exitCode instead of exiting fails here, as the real process would on exit.
+    expect(r.status || Number(process.exitCode ?? 0), r.stderr).toBe(0);
+    return r.stdout;
+  } finally {
+    process.exitCode = undefined;
+  }
 }
 // Without --no-schedule init would register a real OS task, without --no-learn it would run git.
 const init = (cwd = proj) => hippo(cwd, 'init', '--no-schedule', '--no-learn');
@@ -230,10 +245,10 @@ const inner = (text: string) => text.slice(text.indexOf(START) + START.length, t
 const outside = (text: string) => [text.slice(0, text.indexOf(START) + START.length), text.slice(text.indexOf(END))];
 
 describe('the instruction block', () => {
-  it('asks Claude Code only for task context and error causes, since its hooks capture the session', () => {
+  it('asks Claude Code only for task context and error causes, since its hooks capture the session', async () => {
     write('CLAUDE.md', '# Rules\n');
     write('AGENTS.md', '# Agents\n');
-    init();
+    await init();
     const claude = inner(read('CLAUDE.md'));
     expect(claude).toContain('hippo context --auto --budget 1500');
     expect(claude).toContain('hippo remember "<what went wrong and why>" --error');
@@ -249,9 +264,9 @@ describe('the instruction block', () => {
     expect(codex).toContain(NO_SECRETS);
   });
 
-  it.each(['cursor', 'openclaw', 'opencode', 'pi'])('keeps context, errors and capture, drops the outcome mark and asks for a plain remember for %s, which has no capture hook', (agent) => {
+  it.each(['cursor', 'openclaw', 'opencode', 'pi'])('keeps context, errors and capture, drops the outcome mark and asks for a plain remember for %s, which has no capture hook', async (agent) => {
     write('AGENTS.md', '# Agents\n');
-    hippo(proj, 'hook', 'install', agent);
+    await hippo(proj, 'hook', 'install', agent);
     const text = inner(read('AGENTS.md'));
     expect(text).toContain('hippo context --auto --budget 1500');
     expect(text).toContain('hippo remember "<description of what went wrong>" --error');
@@ -263,16 +278,16 @@ describe('the instruction block', () => {
 });
 
 describe('hippo init on a file that already has a hippo block', () => {
-  it('swaps an unedited old block for the current one and keeps every byte outside the markers', () => {
+  it('swaps an unedited old block for the current one and keeps every byte outside the markers', async () => {
     const claudeBefore = `# Rules\n\nKeep this line.\n\n${START}\n${OLD_CLAUDE}\n${END}\n\nAnd this one.\n`;
     write('CLAUDE.md', claudeBefore);
     write('AGENTS.md', `# Agents\n\n${START}\n\n${OLD_CODEX}\n  \n${END}\n`);
-    const out = init();
+    const out = await init();
 
     const fresh = path.join(home, 'fresh');
     fs.mkdirSync(fresh);
     fs.writeFileSync(path.join(fresh, 'CLAUDE.md'), '# Rules\n');
-    init(fresh);
+    await init(fresh);
 
     const claudeAfter = read('CLAUDE.md');
     expect(outside(claudeAfter)).toEqual(outside(claudeBefore));
@@ -282,69 +297,69 @@ describe('hippo init on a file that already has a hippo block', () => {
     expect(out.match(/Refreshed/g)).toHaveLength(2);
   });
 
-  it('leaves an edited old block alone and prints a hint', () => {
+  it('leaves an edited old block alone and prints a hint', async () => {
     const edited = `# Rules\n\n${START}\n${OLD_CLAUDE}\nAlso run the linter.\n${END}\n`;
     write('CLAUDE.md', edited);
-    const out = init();
+    const out = await init();
     expect(read('CLAUDE.md')).toBe(edited);
     expect(out).toContain('Left the edited hippo block in CLAUDE.md as is');
     expect(out).not.toContain('Refreshed');
   });
 
-  it('refreshes an unedited old block in a CRLF file and keeps its line endings', () => {
+  it('refreshes an unedited old block in a CRLF file and keeps its line endings', async () => {
     const before = `# Rules\n\nKeep this line.\n\n${START}\n${OLD_CLAUDE}\n${END}\n\nAnd this one.\n`.replace(/\n/g, '\r\n');
     write('CLAUDE.md', before);
-    expect(init()).toContain('Refreshed the claude-code hippo block in CLAUDE.md');
+    expect(await init()).toContain('Refreshed the claude-code hippo block in CLAUDE.md');
 
     const fresh = path.join(home, 'fresh');
     fs.mkdirSync(fresh);
     fs.writeFileSync(path.join(fresh, 'CLAUDE.md'), '# Rules\n');
-    init(fresh);
+    await init(fresh);
 
     const after = read('CLAUDE.md');
     expect(outside(after)).toEqual(outside(before));
     expect(inner(after).replace(/\r\n/g, '\n')).toBe(inner(read('CLAUDE.md', fresh)));
     expect(after).not.toMatch(/(^|[^\r])\n/);
-    const out = init();
+    const out = await init();
     expect(read('CLAUDE.md')).toBe(after);
     expect(out).not.toMatch(/Refreshed|Left the edited/);
   });
 
-  it.each(Object.entries(PREVIOUS_AGENTS_BLOCKS))('refreshes the previous %s block to the one that asks for a plain remember', (agent, previous) => {
+  it.each(Object.entries(PREVIOUS_AGENTS_BLOCKS))('refreshes the previous %s block to the one that asks for a plain remember', async (agent, previous) => {
     const before = `# Agents\n\nKeep this line.\n\n${START}\n${previous}\n${END}\n\nAnd this one.\n`;
     write('AGENTS.md', before);
-    expect(init()).toContain(`Refreshed the ${agent} hippo block in AGENTS.md`);
+    expect(await init()).toContain(`Refreshed the ${agent} hippo block in AGENTS.md`);
 
     // `hook install codex` swaps the Codex launcher, so the expected Codex block comes from init in a fresh project.
     const fresh = path.join(home, 'fresh');
     fs.mkdirSync(fresh);
     fs.writeFileSync(path.join(fresh, 'AGENTS.md'), '# Agents\n');
-    if (agent === 'codex') init(fresh);
-    else hippo(fresh, 'hook', 'install', agent);
+    if (agent === 'codex') await init(fresh);
+    else await hippo(fresh, 'hook', 'install', agent);
 
     const after = read('AGENTS.md');
     expect(outside(after)).toEqual(outside(before));
     expect(inner(after)).toBe(inner(read('AGENTS.md', fresh)));
     expect(inner(after)).toContain(REMEMBER_LINE);
     expect(inner(after)).not.toContain('<lesson>');
-    const out = init();
+    const out = await init();
     expect(read('AGENTS.md')).toBe(after);
     expect(out).not.toMatch(/Refreshed|Left the edited/);
   });
 
-  it('leaves the current Claude Code block as it is, since its own auto memory saves what it learns', () => {
+  it('leaves the current Claude Code block as it is, since its own auto memory saves what it learns', async () => {
     const before = `# Rules\n\n${START}\n${CLAUDE_CURRENT}\n${END}\n`;
     write('CLAUDE.md', before);
-    const out = init();
+    const out = await init();
     expect(read('CLAUDE.md')).toBe(before);
     expect(out).not.toMatch(/Refreshed|Left the edited/);
   });
 
-  it('changes nothing on a second run', () => {
+  it('changes nothing on a second run', async () => {
     write('CLAUDE.md', `# Rules\n\n${START}\n${OLD_CLAUDE}\n${END}\n`);
-    expect(init()).toContain('Refreshed the claude-code hippo block in CLAUDE.md');
+    expect(await init()).toContain('Refreshed the claude-code hippo block in CLAUDE.md');
     const once = read('CLAUDE.md');
-    const out = init();
+    const out = await init();
     expect(read('CLAUDE.md')).toBe(once);
     expect(out).not.toMatch(/Refreshed|Left the edited/);
   });

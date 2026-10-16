@@ -9,7 +9,7 @@
  * composition against a second, non-requested private scope. Real SQLite stores,
  * no mocks (repo law).
  */
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -20,7 +20,8 @@ import type { SearchResult } from '../src/core/search-types.js';
 import { insertEntityAt, insertRelationAt } from './_helpers/graph-seed.js';
 import { graphExpandRecall } from '../src/graph/recall.js';
 import { makeRoot } from './_helpers/make-root.js';
-import { hippoOut } from './_helpers/spawn-hippo.js';
+import { runCli } from '../src/cli.js';
+import { runInProcess } from './_helpers/run-in-process.js';
 
 function safeRmSync(p: string): void {
   try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
@@ -43,8 +44,17 @@ function sr(entry: MemoryEntry, score: number): SearchResult {
 function ent(home: string, tenant: string, m: MemoryEntry, name: string): number {
   return insertEntityAt(home, tenant, { entityType: 'decision', name, memoryId: m.id }).id;
 }
-function hippo(cwd: string, env: Record<string, string>, ...args: string[]): string {
-  return hippoOut(args, { cwd, env: { ...process.env, ...env }, exe: 'node' });
+/** `hippo <args>` run in this process from `cwd`, the call bin/hippo.js makes; a non-zero exit fails the test. */
+async function hippo(cwd: string, ...args: string[]): Promise<string> {
+  const saved = process.cwd();
+  process.chdir(cwd);
+  try {
+    const r = await runInProcess(() => runCli(['node', 'hippo', ...args]));
+    expect(r.status, r.stderr).toBe(0);
+    return r.stdout;
+  } finally {
+    process.chdir(saved);
+  }
 }
 
 describe('graph-recall scope parity', () => {
@@ -153,20 +163,21 @@ describe('graph-recall scope parity', () => {
   });
 });
 
-type GraphRecallCliEnv = { HIPPO_HOME: string; HIPPO_SKIP_AUTO_INTEGRATIONS: string };
-
 describe('graph-recall scope parity: CLI e2e', () => {
   let cliHome: string;
-  let env: GraphRecallCliEnv;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     cliHome = mkdtempSync(join(tmpdir(), 'hippo-graphrecall-scope-cli-'));
-    env = { HIPPO_HOME: join(cliHome, 'global-hippo'), HIPPO_SKIP_AUTO_INTEGRATIONS: '1' };
-    hippo(cliHome, env, 'init', '--no-hooks', '--no-schedule', '--no-learn');
+    vi.stubEnv('HIPPO_HOME', join(cliHome, 'global-hippo'));
+    vi.stubEnv('HIPPO_SKIP_AUTO_INTEGRATIONS', '1');
+    await hippo(cliHome, 'init', '--no-hooks', '--no-schedule', '--no-learn');
   });
-  afterEach(() => { if (cliHome) rmSync(cliHome, { recursive: true, force: true }); });
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    if (cliHome) rmSync(cliHome, { recursive: true, force: true });
+  });
 
-  it('`hippo recall <q> --hops 1` denies the private neighbour; `--scope slack:private:dm1 --hops 1` surfaces it', () => {
+  it('`hippo recall <q> --hops 1` denies the private neighbour; `--scope slack:private:dm1 --hops 1` surfaces it', async () => {
     const hippoDir = join(cliHome, '.hippo');
     const T = 'default';
     const seed = mem(hippoDir, T, 'decision alpha about cache invalidation graphhopscope');
@@ -175,11 +186,11 @@ describe('graph-recall scope parity: CLI e2e', () => {
     const ePriv = ent(hippoDir, T, priv, 'PRIV');
     insertRelationAt(hippoDir, T, { fromEntityId: ePriv, toEntityId: eSeed, relType: 'supersedes', memoryId: priv.id });
 
-    const denied = hippo(cliHome, env, 'recall', 'graphhopscope', '--hops', '1', '--limit', '10');
+    const denied = await hippo(cliHome, 'recall', 'graphhopscope', '--hops', '1', '--limit', '10');
     expect(denied).toContain('decision alpha');
     expect(denied).not.toContain('frobnicate');
 
-    const unlocked = hippo(cliHome, env, 'recall', 'graphhopscope', '--hops', '1', '--scope', 'slack:private:dm1', '--limit', '10');
+    const unlocked = await hippo(cliHome, 'recall', 'graphhopscope', '--hops', '1', '--scope', 'slack:private:dm1', '--limit', '10');
     expect(unlocked).toContain('frobnicate');
   });
 });

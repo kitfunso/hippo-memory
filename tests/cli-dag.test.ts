@@ -1,31 +1,40 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { execSync } from 'child_process';
-import { fileURLToPath } from 'url';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { writeEntry } from '../src/store/entry-writes.js';
+import { runCli } from '../src/cli.js';
+import { runInProcess } from './_helpers/run-in-process.js';
 
-// This checkout's own CLI, found from this file: not a global install, nor another worktree's via the cwd.
-const HIPPO = `node ${JSON.stringify(fileURLToPath(new URL('../bin/hippo.js', import.meta.url)))}`;
+/** `hippo <args>` run in this process from `cwd`, the call bin/hippo.js makes; a non-zero exit fails the test. */
+async function hippo(cwd: string, ...args: string[]): Promise<string> {
+  const saved = process.cwd();
+  process.chdir(cwd);
+  try {
+    const r = await runInProcess(() => runCli(['node', 'hippo', ...args]));
+    expect(r.status, r.stderr).toBe(0);
+    return r.stdout;
+  } finally {
+    process.chdir(saved);
+  }
+}
 
 describe('hippo dag', () => {
   let hippoRoot: string;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     hippoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-cli-dag-'));
-    execSync(`${HIPPO} init --no-hooks --no-schedule --no-learn`, {
-      cwd: hippoRoot,
-      env: { ...process.env, HIPPO_HOME: hippoRoot },
-    });
+    vi.stubEnv('HIPPO_HOME', hippoRoot);
+    await hippo(hippoRoot, 'init', '--no-hooks', '--no-schedule', '--no-learn');
   });
 
   afterEach(() => {
+    vi.unstubAllEnvs();
     fs.rmSync(hippoRoot, { recursive: true, force: true });
   });
 
-  it('counts rows per DAG level and the level-1 facts with no parent', () => {
+  it('counts rows per DAG level and the level-1 facts with no parent', async () => {
     const store = path.join(hippoRoot, '.hippo');
     const row = (content: string, dag_level: number, dag_parent_id?: string) => {
       const entry = createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, dagLevel: dag_level, dagParentId: dag_parent_id });
@@ -41,11 +50,7 @@ describe('hippo dag', () => {
     row('Raw note one', 0);
     row('Raw note two', 0);
 
-    const result = execSync(`${HIPPO} dag --stats`, {
-      cwd: hippoRoot,
-      env: { ...process.env, HIPPO_HOME: hippoRoot },
-      encoding: 'utf-8',
-    });
+    const result = await hippo(hippoRoot, 'dag', '--stats');
     expect(result.split(/\r?\n/).map((line) => line.trim()).filter(Boolean)).toEqual([
       'DAG Structure:',
       'Level 3 (entity profiles):  1',
