@@ -395,6 +395,20 @@ Under Amendment 2 item 6 the scored-set inventory picks the repository count, an
 
 The rule-at-bounds cells are the highest in each, 1.9% to 2.3% against ceilings of 2.8% to 2.9%; every other cell is at most 1.7%. So the freeze at 15 points can go ahead at 10 or more repositories, with the count left to the inventory, where 2 to 4 conventions per repository bound the families. Funding is open: every design is past the $200 a month of free Console credit.
 
+## S9: the freeze
+
+Stage 2's check (prereg 240), on the commit that adds this section:
+
+- **Sizes.** `docs/evals/z0-freeze/` holds `sizes-a2x.json` and the four forced counts at 15 points, `sizes-a2x-e0.15-r<N>.json`, from the run above.
+- **Analyzer.** The six `z0-*` modules, and `eval-stats` and `repository-t` in both `src/eval/` and `dist/eval/`, as its reports list them (`MODULES` in `z0-blind.mjs`), plus the seed rule (`z0-seed-rule.mjs`) and the sizer (`z0-size.mjs`, `z0-size-sim.mjs`). `docs/evals/z0-freeze/analyzer.sha256` gives each file's sha256, and the analyzer hash is that file's: `905d91ac2084dbcad6d0f427223a6fac13ff9963e787d95bb6a539cef3d837b8`. After `npm run build`, `sha256sum -c docs/evals/z0-freeze/analyzer.sha256` from the repository root checks it. On this commit its tests passed 82 of 82 (`token-eval-z0-analyze`, `token-eval-z0-analyze-cli`, `repository-t`, `token-eval-z0-size`, `token-eval-z0-seed-rule`).
+- **hippo** is frozen at tag `z0-freeze` on `cb656ba4`, the calibration build every calibration record names (dist hash `59e0c77e`).
+
+From `cb656ba4` to this commit, the diff outside `scripts/`, `docs/`, `tests/` and `changelog.d/` is the analyzer's `src/eval/eval-stats.ts` and `src/eval/repository-t.ts`, and `benchmarks/token-eval/README.md`. The runner pins its own checkout's commit and dist hash, and the analyzer adds files to `dist/eval/`, so the scored run cannot carry `59e0c77e`. Stage 4 runs from a commit whose diff from the tag keeps to those paths, and records that commit and its dist hash beside the tag.
+
+The send-once prompt hook (#893) is not in the frozen build. Calibration measured `cb656ba4`, so a different hippo would need a new calibration; under prereg 245, send-once is scored later as a new A2 arm on the frozen scored families.
+
+Open for the founder's go (prereg 265 to 269): the session ceiling, the minimum effect and the funding. At 15 points the level holds from 10 repositories up. A pick at 20 or 25 points at a count the sizer did not choose first reruns `bash C:/z0-runs/s9/size-a2x-at.sh <repos> <effect>`.
+
 ## Contract limits found
 
 - A checker's `CHECK_POST_COMMIT` is a state commit whose parent is the pre-session commit, so the agent's own commits are not visible to it. Commit-message rules are checked from the `git commit` commands in `CHECK_COMMANDS`.
