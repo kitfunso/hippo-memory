@@ -66,6 +66,23 @@ const CASES = {
   importVault: async (ctx) => () => importVault(vaultFolder(), { hippoRoot: ctx.hippoRoot, tenantId: ctx.tenantId, name: 'notes' }),
 } satisfies Record<string, Case>;
 
+// The key fields each call answers with, so a resolved value that lost its shape fails here.
+const str = expect.any(String);
+const REPLIES = {
+  authCreate: { keyId: str, plaintext: str, tenantId: ACME, role: 'member', expiresAt: str },
+  authCreateSelf: { keyId: str, plaintext: str, tenantId: ACME, role: 'member', expiresAt: str },
+  authListRows: expect.any(Array),
+  authRevoke: { ok: true, revokedAt: str },
+  forget: { ok: true, id: 'mem_plain' },
+  outcome: { applied: 1, appliedIds: ['mem_plain'] },
+  outcomeForLastRecall: { applied: 0, ids: [] },
+  supersede: { ok: true, oldId: 'mem_second', newId: str },
+  archiveRaw: expect.objectContaining({ ok: true }),
+  remember: expect.objectContaining({ id: str, tenantId: ACME, tags: expect.any(Array) }),
+  rememberLocally: expect.objectContaining({ status: 'stored' }),
+  importVault: expect.objectContaining({ total: 1, imported: 1 }),
+};
+
 const STORE_KINDS: ReadonlyArray<readonly [string, (root: string) => HippoStore & StoreGroups]> = [
   ['sqliteStore', sqliteStore],
   ['workerSqliteStore', (root) => workerSqliteStore(root)],
@@ -82,14 +99,14 @@ describe('every api write function answers through a Promise', () => {
   });
 
   describe.each(STORE_KINDS)('on %s', (_kind, open) => {
-    it.each(Object.entries(CASES))('%s returns a thenable that resolves', async (_fn, ready) => {
+    it.each(Object.entries(CASES))('%s returns a thenable that resolves to its result', async (fn, ready) => {
       const root = seededRoot();
       const store = open(root);
       stores.push(store);
       const call = await ready({ hippoRoot: root, tenantId: ACME, actor: HOST, store });
       const reply = call();
       expect(reply).toBeInstanceOf(Promise);
-      await expect(reply).resolves.toBeDefined();
+      await expect(reply).resolves.toEqual(new Map(Object.entries(REPLIES)).get(fn));
     });
   });
 });

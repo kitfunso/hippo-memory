@@ -296,6 +296,8 @@ jobs:
       - name: Vitest
         # Four cores on the Windows runner; the config's six workers starve store-heavy files of CPU there.
         run: npx vitest run --shard=${{ matrix.shard }} ${{ runner.os == 'Windows' && '--maxWorkers=4' || '' }}
+        env:
+          HIPPO_REQUIRE_SYMLINKS: '1'
 
   # The dashboard is its own package with its own tests; the root suite never runs them.
   ui:

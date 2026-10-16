@@ -1,5 +1,6 @@
 // @ts-check
 // v8 coverage that also counts spawned `node dist/cli.js` children, mapped to src/*.ts; plain JS since vitest loads it natively on every Node.
+// SHORTCUT: patches the private remapCoverage/getUntestedFiles of coverage-v8 5.0.3 (no public option rekeys the two pipelines); the guard in getProvider fails loud if they vanish.
 // Children map through tsc's source maps and workers through vite's, which disagree on columns, so each construct gets one shared key.
 import v8 from '@vitest/coverage-v8';
 
