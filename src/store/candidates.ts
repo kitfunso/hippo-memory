@@ -4,7 +4,7 @@ import {
   FALLBACK_HALF_LIFE_DAYS,
   Layer,
   calculateStrength,
-  facetsOf,
+  confidenceFacets,
   schemaFitFrom,
 } from '../core/memory.js';
 import { strengthSql } from './rule-sql.js';
@@ -461,7 +461,7 @@ type StatusColumn =
   | 'outcome_positive'
   | 'outcome_negative';
 type StatusRow = Omit<Pick<MemoryRow, StatusColumn>, 'layer'> & { layer: Layer };
-// What calculateStrength and facetsOf read, plus the layer: no text and no JSON column.
+// What calculateStrength and confidenceFacets read, plus the layer: no text and no JSON column.
 const STATUS_ROW_COLUMNS: readonly StatusColumn[] = [
   'layer', 'confidence', 'pinned', 'created', 'last_retrieved', 'half_life_days', 'retrieval_count',
   'emotional_valence', 'outcome_positive', 'outcome_negative',
@@ -491,7 +491,7 @@ function tallyStatusRows(
       outcome_negative: Number(row.outcome_negative ?? 0),
     };
     const strength = calculateStrength(entry, now);
-    const facets = facetsOf(entry, now);
+    const facets = confidenceFacets(entry, now);
     sums.total++;
     sums.strength += strength;
     byLayer[row.layer] = (byLayer[row.layer] ?? 0) + 1;
