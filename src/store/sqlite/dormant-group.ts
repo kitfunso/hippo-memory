@@ -20,13 +20,3 @@ export function sqliteDormant(hippoRoot: string): Sync<Dormant> {
     },
   };
 }
-
-/** The group as a served store answers it: a throw rejects as another store's would. */
-export function servedDormant(sync: Sync<Dormant>): Dormant {
-  return {
-    list: async (tenantId, ownScope, opts) => sync.list(tenantId, ownScope, opts),
-    holds: async (tenantId, ownScope, id) => sync.holds(tenantId, ownScope, id),
-    restore: async (tenantId, request) => sync.restore(tenantId, request),
-    forget: async (tenantId, ownScope, id, actor) => sync.forget(tenantId, ownScope, id, actor),
-  };
-}

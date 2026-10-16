@@ -36,28 +36,3 @@ export function sqliteSessions(hippoRoot: string): Sync<Sessions> {
       sessionOwnerOrBind(hippoRoot, { tenantId, sessionId, owner, retentionMs }),
   };
 }
-
-/** The group as a served store answers it: a throw rejects as another store's would. */
-export function servedSessions(sync: Sync<Sessions>): Sessions {
-  return {
-    saveSnapshot: async (tenantId, snapshot, key) => sync.saveSnapshot(tenantId, snapshot, key),
-    loadSnapshot: async (tenantId, key) => sync.loadSnapshot(tenantId, key),
-    loadFreshSnapshot: async (tenantId, opts, key) => sync.loadFreshSnapshot(tenantId, opts, key),
-    clearSnapshot: async (tenantId, clearedStatus) => sync.clearSnapshot(tenantId, clearedStatus),
-    closeSessionSnapshots: async (tenantId, sessionId, status, key) =>
-      sync.closeSessionSnapshots(tenantId, sessionId, status, key),
-    appendEvent: async (tenantId, event) => sync.appendEvent(tenantId, event),
-    listEvents: async (tenantId, opts) => sync.listEvents(tenantId, opts),
-    saveHandoff: async (tenantId, handoff, key) => sync.saveHandoff(tenantId, handoff, key),
-    latestHandoff: async (tenantId, sessionId, filter, key) => sync.latestHandoff(tenantId, sessionId, filter, key),
-    handoffById: async (tenantId, id) => sync.handoffById(tenantId, id),
-    stampHandoffOutcome: async (tenantId, sessionId, outcome) =>
-      sync.stampHandoffOutcome(tenantId, sessionId, outcome),
-    writeSessionEndHandoff: async (tenantId, request) => sync.writeSessionEndHandoff(tenantId, request),
-    pushWorkingMemory: async (tenantId, item) => sync.pushWorkingMemory(tenantId, item),
-    readWorkingMemory: async (tenantId, filter) => sync.readWorkingMemory(tenantId, filter),
-    clearWorkingMemory: async (tenantId, filter) => sync.clearWorkingMemory(tenantId, filter),
-    bindSessionOwner: async (tenantId, sessionId, owner, retentionMs) =>
-      sync.bindSessionOwner(tenantId, sessionId, owner, retentionMs),
-  };
-}

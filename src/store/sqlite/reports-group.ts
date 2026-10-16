@@ -23,14 +23,3 @@ export function sqliteReports(hippoRoot: string): Sync<Reports> {
     countEntries: () => countAllEntries(hippoRoot),
   };
 }
-
-/** The group as a served store answers it: a throw rejects as another store's would. */
-export function servedReports(sync: Sync<Reports>): Reports {
-  return {
-    tokenUse: async (tenantId, sinceIso) => sync.tokenUse(tenantId, sinceIso),
-    failures: async (tenantId, sinceIso) => sync.failures(tenantId, sinceIso),
-    memoryStatus: async (tenantId, now, atRiskBelow) => sync.memoryStatus(tenantId, now, atRiskBelow),
-    entriesPage: async (tenantId, page) => sync.entriesPage(tenantId, page),
-    countEntries: async () => sync.countEntries(),
-  };
-}

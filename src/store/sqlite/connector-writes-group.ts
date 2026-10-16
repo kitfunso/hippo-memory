@@ -65,12 +65,3 @@ export function sqliteConnectorWrites(hippoRoot: string): Sync<ConnectorWrites> 
     },
   };
 }
-
-/** The group as a served store answers it: each call runs at once and resolves through a Promise, so a throw rejects as
- * another store's would. */
-export function servedConnectorWrites(sync: Sync<ConnectorWrites>): ConnectorWrites {
-  return {
-    writeConnectorEntry: async (write) => sync.writeConnectorEntry(write),
-    archiveConnectorEntry: async (archive) => sync.archiveConnectorEntry(archive),
-  };
-}

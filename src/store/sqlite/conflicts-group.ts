@@ -10,12 +10,3 @@ export function sqliteConflicts(hippoRoot: string): Sync<Conflicts> {
     resolve: (tenantId, request, opts) => resolveConflict(hippoRoot, { ...request, tenantId }, opts),
   };
 }
-
-/** The group as a served store answers it: a throw rejects as another store's would. */
-export function servedConflicts(sync: Sync<Conflicts>): Conflicts {
-  return {
-    list: async (tenantId, status) => sync.list(tenantId, status),
-    listTouchable: async (tenantId, status, actor) => sync.listTouchable(tenantId, status, actor),
-    resolve: async (tenantId, request, opts) => sync.resolve(tenantId, request, opts),
-  };
-}

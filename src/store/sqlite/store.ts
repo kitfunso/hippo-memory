@@ -10,30 +10,28 @@ import { recordTokenUse } from '../token-ledger.js';
 import { loadAmbientCandidates, loadContextCandidates } from '../candidates.js';
 import { loadEntriesByIds, loadFreshRawMemories } from '../entry-reads.js';
 import { sqliteAgentImport } from './agent-import.js';
-import { servedCards, sqliteCards } from './cards-group.js';
-import { servedConflicts, sqliteConflicts } from './conflicts-group.js';
-import { servedDormant, sqliteDormant } from './dormant-group.js';
-import { servedGoals, sqliteGoals } from './goals-group.js';
-import { servedReports, sqliteReports } from './reports-group.js';
-import { servedSessions, sqliteSessions } from './sessions-group.js';
-import { servedConnectorEvents, sqliteConnectorEvents } from './connector-events-group.js';
-import { servedConnectorWrites, sqliteConnectorWrites } from './connector-writes-group.js';
+import { sqliteCards } from './cards-group.js';
+import { sqliteConflicts } from './conflicts-group.js';
+import { sqliteDormant } from './dormant-group.js';
+import { sqliteGoals } from './goals-group.js';
+import { sqliteReports } from './reports-group.js';
+import { sqliteSessions } from './sessions-group.js';
+import { sqliteConnectorEvents } from './connector-events-group.js';
+import { sqliteConnectorWrites } from './connector-writes-group.js';
 import { sqliteConsolidation } from './consolidation-group.js';
 import { sqliteLearning } from './learning-group.js';
 import { sqlitePromotion } from './promotion-group.js';
 import { sqliteDagReads } from './dag-reads-group.js';
 import { sqliteEntryWrites } from './entry-writes-group.js';
 import {
-  servedAuditMaintenance,
-  servedLessonWrites,
   sqliteAuditMaintenance,
   sqliteLessonWrites,
 } from './maintenance-groups.js';
-import { finishRecallAt, servedLastRecall, sqliteLastRecall } from './last-recall-group.js';
-import { servedGraphReads, sqliteGraphReads } from './graph-reads-group.js';
-import { servedObjects, sqliteObjects } from './objects-group.js';
-import { servedPredictions, sqlitePredictions } from './predictions-group.js';
-import { servedQuarantine, sqliteQuarantine } from './quarantine-group.js';
+import { finishRecallAt, sqliteLastRecall } from './last-recall-group.js';
+import { sqliteGraphReads } from './graph-reads-group.js';
+import { sqliteObjects } from './objects-group.js';
+import { sqlitePredictions } from './predictions-group.js';
+import { sqliteQuarantine } from './quarantine-group.js';
 import { sqliteVectorReads } from './vector-reads-group.js';
 import { loadLatestHandoff } from '../handoffs.js';
 import { updateStats } from '../index-and-stats.js';
@@ -43,13 +41,16 @@ import { changeScopeGrantAt, createKeyAt, createSelfKeyAt } from '../key-writes.
 import { onHandle } from '../open.js';
 import { narrowStore, type StoreWith } from '../narrow.js';
 import {
-  type AuditLog, type ContextReads, type ContinuityBlock, type HippoStore, type KeyAudit, type KeyGrants,
-  type KeyWrites, type Readiness, type StoreGroup, type StoreGroups, type StoreReach, type Sync, type VectorViews,
-  type VectorWrites, hasGroup,
+  type AuditLog, type AuditMaintenance, type ConnectorEvents, type ConnectorWrites, type ContextReads,
+  type ContinuityBlock, type DagReads, type EntryWrites, type GraphReads, type HippoStore, type KeyAudit,
+  type KeyGrants, type KeyWrites, type LastRecall, type LessonWrites, type Objects, type Predictions, type Quarantine,
+  type Readiness, type StoreGroup, type StoreGroups, type StoreReach, type Sync, type VectorViews, type VectorWrites,
+  hasGroup,
 } from '../port.js';
+import type { Cards, Conflicts, Dormant, Goals, Reports, Sessions } from '../port-groups.js';
+import { served } from './served.js';
 import { isSharedStore } from '../../core/config.js';
 import { isGlobalStoreRoot, isInitialized, resolveGlobalRootDir } from '../../core/project-identity.js';
-import type { SessionAndAdminGroups } from '../port-groups.js';
 import { loadRecallEntries } from '../search-rows.js';
 import { type ContinuityKey, listSessionEvents, loadActiveTaskSnapshot } from '../sessions.js';
 import { entriesWithoutVectorAt, loadStoredVectorViews, writeVectorsAt } from '../vector-index.js';
@@ -239,43 +240,40 @@ export function sqliteReach(hippoRoot: string, store: HippoStore, shared?: boole
   return { ...reach, global: { root: globalRoot, store: narrowStore(sqliteStore(globalRoot), 'contextReads') } };
 }
 
-type SyncStoreGroups = ReturnType<typeof sqliteSyncStore>;
-
 /** `sqliteSyncStore` as a served store: each method runs at once and answers through a Promise, so a throw rejects as
  * another store's would. */
 export function sqliteStore(hippoRoot: string): HippoStore & StoreGroups {
   const sync = sqliteSyncStore(hippoRoot);
   return {
-    ...servedBaseMethods(sync),
+    ...served<ServedBaseMethods>(baseMethodsOf(sync)),
     localFiles: sync.localFiles,
     vectors: sqliteVectorReads(hippoRoot),
-    vectorViews: { storedVectorViews: async (ids) => sync.vectorViews.storedVectorViews(ids) },
-    ...servedKeyGroups(sync),
-    ...servedEntryGroups(sync),
-    predictions: servedPredictions(sync.predictions),
-    ...servedDagAndAudit(sync),
-    quarantine: servedQuarantine(sync.quarantine),
-    graphReads: servedGraphReads(sync.graphReads),
-    connectorWrites: servedConnectorWrites(sync.connectorWrites),
-    connectorEvents: servedConnectorEvents(sync.connectorEvents),
-    objects: servedObjects(sqliteObjects(hippoRoot)),
-    readiness: { ping: async () => sync.readiness.ping() },
-    lastRecall: servedLastRecall(sync.lastRecall),
-    auditMaintenance: servedAuditMaintenance(sync.auditMaintenance),
-    lessonWrites: servedLessonWrites(sync.lessonWrites),
-    ...servedSessionAndAdminGroups(sync),
+    vectorViews: served<VectorViews>(sync.vectorViews),
+    keyAudit: served<KeyAudit>(sync.keyAudit),
+    keyWrites: served<KeyWrites>(sync.keyWrites),
+    keyGrants: served<KeyGrants>(sync.keyGrants),
+    vectorWrites: served<VectorWrites>(sync.vectorWrites),
+    entryWrites: served<EntryWrites>(sync.entryWrites),
+    contextReads: served<ContextReads>(sync.contextReads),
+    predictions: served<Predictions>(sync.predictions),
+    dagReads: served<DagReads>(sync.dagReads),
+    auditLog: served<AuditLog>(sync.auditLog),
+    quarantine: served<Quarantine>(sync.quarantine),
+    graphReads: served<GraphReads>(sync.graphReads),
+    connectorWrites: served<ConnectorWrites>(sync.connectorWrites),
+    connectorEvents: served<ConnectorEvents>(sync.connectorEvents),
+    objects: served<Objects>(sqliteObjects(hippoRoot)),
+    readiness: served<Readiness>(sync.readiness),
+    lastRecall: served<LastRecall>(sync.lastRecall),
+    auditMaintenance: served<AuditMaintenance>(sync.auditMaintenance),
+    lessonWrites: served<LessonWrites>(sync.lessonWrites),
+    sessions: served<Sessions>(sync.sessions),
+    cards: served<Cards>(sync.cards),
+    goals: served<Goals>(sync.goals),
+    conflicts: served<Conflicts>(sync.conflicts),
+    dormant: served<Dormant>(sync.dormant),
+    reports: served<Reports>(sync.reports),
     close: async () => sync.close(),
-  };
-}
-
-function servedSessionAndAdminGroups(sync: SyncStoreGroups): SessionAndAdminGroups {
-  return {
-    sessions: servedSessions(sync.sessions),
-    cards: servedCards(sync.cards),
-    goals: servedGoals(sync.goals),
-    conflicts: servedConflicts(sync.conflicts),
-    dormant: servedDormant(sync.dormant),
-    reports: servedReports(sync.reports),
   };
 }
 
@@ -285,79 +283,11 @@ type ServedBaseMethods = Pick<
   | 'planningFallacyEvidence' | 'appendAuditEvents' | 'finishRecall' | 'bumpRecallStats' | 'recordTokens'
 >;
 
-function servedBaseMethods(sync: SyncStoreGroups): ServedBaseMethods {
-  return {
-    kind: sync.kind,
-    findApiKey: async (keyId) => sync.findApiKey(keyId),
-    searchRecallEntries: async (query, args) => sync.searchRecallEntries(query, args),
-    entriesByIds: async (ids, tenantId) => sync.entriesByIds(ids, tenantId),
-    activeGoals: async (opts) => sync.activeGoals(opts),
-    freshRawEntries: async (count, tenantId, sessionId, origins) =>
-      sync.freshRawEntries(count, tenantId, sessionId, origins),
-    continuity: async (tenantId, eventLimit, key) => sync.continuity(tenantId, eventLimit, key),
-    planningFallacyEvidence: async (tenantId, classQueryTokens) =>
-      sync.planningFallacyEvidence(tenantId, classQueryTokens),
-    appendAuditEvents: async (events) => sync.appendAuditEvents(events),
-    finishRecall: async (writes) => sync.finishRecall(writes),
-    bumpRecallStats: async (recalled) => sync.bumpRecallStats(recalled),
-    recordTokens: async (use) => sync.recordTokens(use),
-  };
-}
-
-function servedKeyGroups(sync: SyncStoreGroups): Pick<StoreGroups, 'keyAudit' | 'keyWrites' | 'keyGrants'> {
-  const { keyAudit, keyWrites, keyGrants } = sync;
-  return {
-    keyAudit: {
-      revokeApiKey: async (revoke) => keyAudit.revokeApiKey(revoke),
-      auditEventsAfter: async (opts) => keyAudit.auditEventsAfter(opts),
-      auditHighId: async () => keyAudit.auditHighId(),
-    },
-    keyWrites: {
-      createApiKey: async (mint) => keyWrites.createApiKey(mint),
-      createSelfApiKey: async (mint) => keyWrites.createSelfApiKey(mint),
-      listApiKeys: async (query) => keyWrites.listApiKeys(query),
-    },
-    keyGrants: {
-      changeScopeGrant: async (change) => keyGrants.changeScopeGrant(change),
-    },
-  };
-}
-
-function servedEntryGroups(sync: SyncStoreGroups): Pick<StoreGroups, 'vectorWrites' | 'entryWrites' | 'contextReads'> {
-  const { vectorWrites, entryWrites, contextReads } = sync;
-  return {
-    vectorWrites: {
-      entriesWithoutVector: async (query) => vectorWrites.entriesWithoutVector(query),
-      writeVectors: async (write) => vectorWrites.writeVectors(write),
-    },
-    entryWrites: {
-      writeEntry: async (write) => entryWrites.writeEntry(write),
-      applyOutcome: async (outcome) => entryWrites.applyOutcome(outcome),
-      supersede: async (write) => entryWrites.supersede(write),
-      archiveRaw: async (archive) => entryWrites.archiveRaw(archive),
-      forget: async (removal) => entryWrites.forget(removal),
-    },
-    contextReads: {
-      unfinishedHandoff: async (tenantId, maxAgeMs, key) => contextReads.unfinishedHandoff(tenantId, maxAgeMs, key),
-      ambientCandidates: async (tenantId, request) => contextReads.ambientCandidates(tenantId, request),
-      contextCandidates: async (tenantId, filter) => contextReads.contextCandidates(tenantId, filter),
-      ambientTallies: async (tenantId, filter) => contextReads.ambientTallies(tenantId, filter),
-    },
-  };
-}
-
-function servedDagAndAudit(sync: SyncStoreGroups): Pick<StoreGroups, 'dagReads' | 'auditLog'> {
-  const { dagReads, auditLog } = sync;
-  return {
-    dagReads: {
-      sessionRawEntries: async (query) => dagReads.sessionRawEntries(query),
-      sessionRawCount: async (query) => dagReads.sessionRawCount(query),
-      summaryWithDescendants: async (tenantId, id, walk) => dagReads.summaryWithDescendants(tenantId, id, walk),
-    },
-    auditLog: {
-      listAuditEvents: async (query) => auditLog.listAuditEvents(query),
-    },
-  };
+function baseMethodsOf(sync: SqliteSyncStore): Sync<ServedBaseMethods> {
+  const { kind, findApiKey, searchRecallEntries, entriesByIds, activeGoals, freshRawEntries, continuity,
+    planningFallacyEvidence, appendAuditEvents, finishRecall, bumpRecallStats, recordTokens } = sync;
+  return { kind, findApiKey, searchRecallEntries, entriesByIds, activeGoals, freshRawEntries, continuity,
+    planningFallacyEvidence, appendAuditEvents, finishRecall, bumpRecallStats, recordTokens };
 }
 
 function sqliteContextReads(hippoRoot: string): Sync<ContextReads> {

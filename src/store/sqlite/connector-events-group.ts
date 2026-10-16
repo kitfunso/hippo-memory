@@ -74,17 +74,3 @@ export function sqliteConnectorEvents(hippoRoot: string): Sync<ConnectorEvents> 
       letter.connector === 'slack' ? insertSlackDlq(hippoRoot, letter) : insertGitHubDlq(hippoRoot, letter),
   };
 }
-
-/** The group as a served store answers it: each call runs at once and resolves through a Promise, so a throw rejects as
- * another store's would. */
-export function servedConnectorEvents(sync: Sync<ConnectorEvents>): ConnectorEvents {
-  return {
-    eventRecord: async (event) => sync.eventRecord(event),
-    markEventSeen: async (event) => sync.markEventSeen(event),
-    deletionTarget: async (lookup) => sync.deletionTarget(lookup),
-    archiveDeletedArtifact: async (archive) => sync.archiveDeletedArtifact(archive),
-    slackTeamRoute: async (teamId) => sync.slackTeamRoute(teamId),
-    githubRouting: async (query) => sync.githubRouting(query),
-    parkDeadLetter: async (letter) => sync.parkDeadLetter(letter),
-  };
-}

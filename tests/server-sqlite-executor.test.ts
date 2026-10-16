@@ -9,7 +9,9 @@ import { serve, type ServerHandle } from '../src/server.js';
 import type { HippoStore } from '../src/store/index.js';
 import { predictionMirror } from '../src/store/predictions.js';
 import { createSqliteExecutor } from '../src/store/sqlite/executor.js';
-import { servedPredictions, sqlitePredictions } from '../src/store/sqlite/predictions-group.js';
+import { sqlitePredictions } from '../src/store/sqlite/predictions-group.js';
+import { served } from '../src/store/sqlite/served.js';
+import type { Predictions } from '../src/store/port.js';
 import { sqliteStore } from '../src/store/sqlite/store.js';
 import { workerSqliteStore } from '../src/store/sqlite/worker-store.js';
 import {
@@ -197,7 +199,7 @@ describe("the server-thread block of a `loop: 'off'` route", () => {
     const root = newRoot();
     const info = vi.spyOn(log, 'info');
     // The worker-backed store with one group swapped back to the in-process one: the defect the block exists to catch.
-    const store = Object.assign(workerSqliteStore(root), { predictions: servedPredictions(sqlitePredictions(root)) });
+    const store = Object.assign(workerSqliteStore(root), { predictions: served<Predictions>(sqlitePredictions(root)) });
     const server = await start(root, store);
 
     const res = await send(server);

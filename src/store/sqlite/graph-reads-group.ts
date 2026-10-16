@@ -16,9 +16,3 @@ export function sqliteGraphReads(hippoRoot: string): Sync<GraphReads> {
       ),
   };
 }
-
-/** The group as a served store answers it: the call runs at once and resolves through a Promise, so a throw rejects as
- * another store's would. */
-export function servedGraphReads(sync: Sync<GraphReads>): GraphReads {
-  return { graphRows: async (tenantId, query) => sync.graphRows(tenantId, query) };
-}

@@ -21,17 +21,6 @@ export function sqliteAuditMaintenance(hippoRoot: string): Sync<AuditMaintenance
   };
 }
 
-export function servedAuditMaintenance(sync: Sync<AuditMaintenance>): AuditMaintenance {
-  return {
-    tenantEntries: async (tenantId) => sync.tenantEntries(tenantId),
-    objectBackedIds: async () => sync.objectBackedIds(),
-    deleteAutomatically: async (removals, actor) => sync.deleteAutomatically(removals, actor),
-    pruneAuditRows: async (prune) => sync.pruneAuditRows(prune),
-    repairQuality: async (tenantId, apply) => sync.repairQuality(tenantId, apply),
-    repairQualityOnce: async (tenantId) => sync.repairQualityOnce(tenantId),
-  };
-}
-
 export function sqliteLessonWrites(hippoRoot: string): Sync<LessonWrites> {
   return {
     tenantEntries: (tenantId) => loadAllEntries(hippoRoot, tenantId),
@@ -54,15 +43,5 @@ export function sqliteLessonWrites(hippoRoot: string): Sync<LessonWrites> {
     bumpRemembered(count) {
       updateStats(hippoRoot, { remembered: count });
     },
-  };
-}
-
-export function servedLessonWrites(sync: Sync<LessonWrites>): LessonWrites {
-  return {
-    tenantEntries: async (tenantId) => sync.tenantEntries(tenantId),
-    textsHoldingWords: async (tenantId, words, ownScope) => sync.textsHoldingWords(tenantId, words, ownScope),
-    writeSkippingRejected: async (entries, actor) => sync.writeSkippingRejected(entries, actor),
-    writeTogether: async (entries) => sync.writeTogether(entries),
-    bumpRemembered: async (count) => sync.bumpRemembered(count),
   };
 }

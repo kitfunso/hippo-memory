@@ -24,15 +24,3 @@ export function sqlitePredictions(hippoRoot: string): Sync<Predictions> {
     predictionBaserate: (tenantId, classTag, actor) => computePredictionBaserate(hippoRoot, tenantId, classTag, actor),
   };
 }
-
-/** The group as a served store answers it: each call runs at once and resolves through a Promise, so a throw rejects as
- * another store's would. */
-export function servedPredictions(sync: Sync<Predictions>): Predictions {
-  return {
-    savePrediction: async (tenantId, input, actor) => sync.savePrediction(tenantId, input, actor),
-    closePrediction: async (tenantId, id, close, actor) => sync.closePrediction(tenantId, id, close, actor),
-    predictionById: async (tenantId, id) => sync.predictionById(tenantId, id),
-    listPredictions: async (tenantId, query) => sync.listPredictions(tenantId, query),
-    predictionBaserate: async (tenantId, classTag, actor) => sync.predictionBaserate(tenantId, classTag, actor),
-  };
-}
