@@ -248,8 +248,7 @@ describe('hippo auth create defaults', () => {
     expect(forever.stderr).not.toContain('unknown flag');
     const soon = hippoRun(['auth', 'create', '--global', '--ttl-days', 'soon'], { env, cwd: home });
     // The exit now waits for stderr to drain, so Node's one-time SQLite warning can follow the message.
-    expect([soon.status, soon.stdout, soon.stderr.trim().split('
-')[0]]).toEqual([1, '', '--ttl-days requires a numeric value.']);
+    expect([soon.status, soon.stdout, soon.stderr.trim().split('\n')[0]]).toEqual([1, '', '--ttl-days requires a numeric value.']);
   });
 });
 
