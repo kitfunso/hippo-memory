@@ -1,5 +1,65 @@
 # Changelog
 
+## 2.1.0 - 2026-10-16
+
+### Added
+
+- **`createMemory` takes camelCase option keys.** The package-root `createMemory(content, options)` now accepts `emotionalValence`, `schemaFit`, `traceOutcome`, `sourceSessionId`, `validFrom`, `extractedFrom`, `dagLevel`, `dagParentId` and `artifactRef`, the spellings the rest of hippo uses; when both spellings are set, the camelCase one wins.
+- **Six new optional store groups for integrators.** `Sessions`, `Cards`, `Goals`, `Conflicts`, `Dormant` and `Reports` join the store port, so a custom store can serve snapshots and handoffs, the card board, goals, conflict resolving, dormant memories and the status, token and failure reports. A store without one leaves it unset, and the matching verbs answer 501.
+- **`bindSessionOwnerOn(ctx, sessionId)` binds a session owner through the store's sessions group, for a store that is not hippo.db; `bindSessionOwner` is unchanged.**
+- **`StoreWith` and `ContextWith` types are exported for store implementers.** `hippo-memory/store-kit` now exports `StoreWith<G>`, `ContextWith<G>` and `narrowStore`, so a handler can take a store the gate has already proved holds its groups.
+
+### Changed
+
+- Internal: lint requires braces on split if, for and while bodies, and src lines are capped at 120 characters; no behaviour change.
+- **The snake_case `createMemory` keys, the root `physicsSearch` export and the root SQLite handle exports are removed in 3.0.** The nine snake_case option keys (`emotional_valence` and the rest) keep working in 2.x and are marked `@deprecated` in the types, as are `physicsSearch` (physics ranking stays available by setting `physics.enabled` to `'auto'` or `true` in config) and `openHippoDb`, `openHippoDbReadOnly`, `closeHippoDb` and `DatabaseSyncLike`.
+- **The inline reindex size check counts rows in SQL instead of loading every id.** A write after an embedding model change no longer reads the whole id list just to compare it with the cap.
+- **`stats.json` can now lag the database by up to one second.** The counters in the database update at once; the mirror file is rewritten at most once a second per store and flushed when the store closes and when the process exits.
+- **Near-duplicate and invalidation checks read candidate rows through the full-text index** instead of scanning every row's text, and quality repair reads a store's rows once per plan.
+- **`runWatchedLine(line)` runs one shell command line for `hippo watch --shell`; it is exported beside `runWatched`.** `runWatched` keeps its `shell` option for existing callers.
+- **Auto-share and churn checks read only the rows that can matter.** At the default share bar, `autoShare` reads rows with a transferable tag, a never-share tag or source, three or more retrievals, a pin or a negative valence; churn reads only the project's current rows.
+- **The dashboard checks one vector, not the whole vector table, on a detail read.** The snapshot build reads only its tenant's vector ids.
+- **Duplicate cleanup after a conflict streams the tenant instead of loading it.**
+- **Schema v56 adds list indexes.** The seven object tables gain `(tenant_id, status, created_at DESC, id DESC)` indexes, and `memories` gains `(source, tenant_id, created, id)`, so status pages and per-source reads skip the sort.
+- **`hippo session end` no longer adds a process exit listener per session in a long-lived host.**
+- **The root SQLite handle exports are deprecated.** `openHippoDb`, `openHippoDbReadOnly`, `closeHippoDb` and `DatabaseSyncLike` stay on the package root in 2.x with a `@deprecated` note; the root stops exporting them in 3.0.
+- **Internal:** the CLI's 180 `printError(...)` plus `throw new CliExit(1)` pairs are now one `fail(...)` call from `src/cli/exit.ts`, with the same stderr text and exit code. `scripts/check-cli-fail.mjs` fails CI if the pair comes back.
+- Internal clean-up with no change in behaviour: the transcript scan, the four GitHub event transforms and the status, physics, salience and merge numbers each have one definition now, and a minute is `MINUTE_MS` everywhere in `src/`.
+- Internal: braces on every multi-line if, else, for and while body; no behaviour change.
+- **`hippo recall` on a shared store no longer merges your global store, matching `hippo context`.** A root whose config sets `sharedStore` serves many people, so the global store of the user running the command stays out of its results.
+- Internal: typed objects (decisions, incidents, policies, processes, briefs, notes, skills) run on one async path over the store port; the sync twins are gone. No behaviour change.
+- **Internal:** the MCP server reaches the store only through the api layer, and a busy store maps to 503 in the shared error map that the HTTP server and MCP both use. The memory routes leave the last-recall capability check and the graph entity cap to the api functions they call. Replies are unchanged.
+- **MCP recall reports cut results with the CLI's wording.** The cutoff line now reads "N not shown (rank, budget or limit)" on both surfaces, built by one shared module; the longer line can leave one fewer row under a very tight MCP budget.
+- Internal: src lines in api, importers, objects and store wrapped to 120 characters; no behaviour change.
+- Internal: src lines in api, capture, cli, core, db, embeddings, eval, graph, learn, search, sharing, store and util wrapped to 120 characters; no behaviour change.
+- Internal: src lines in server, cli, mcp and connectors wrapped to 120 characters; no behaviour change.
+- Internal: src lines in the store, db, search and core modules wrapped to 120 characters; no behaviour change.
+- Internal: src lines in the CLI, capture and hooks modules wrapped to 120 characters; no behaviour change.
+- Internal: src lines in the CLI, API, core, eval, MCP and other modules outside the store wrapped to 120 characters; no behaviour change.
+- Internal: src lines in src/store wrapped to 120 characters; no behaviour change.
+- **Internal:** the store is now built once, at the CLI, the server, stdio MCP and the sleep child, and handed down in the request context as `StoreContext`. `src/api` and `src/connectors` no longer build a store, and `scripts/check-layers.mjs` fails CI on a new runtime import of the SQLite adapter from `src/api`, `src/connectors` or `src/mcp`. The public `Context` and every published entry keep their shape.
+- Internal: the conflicts, dormant, status, token and refine api files read and write through the store port instead of opening hippo.db by folder; the CLI and MCP callers await them.
+- **The slow token-eval tests now run on every push to `master` and `next/2.0`, and on any pull request that touches `bin/`.** A core change can no longer skip them.
+- **Four session and hook tests wait through the shared `tests/_helpers/wait-for.ts`.** Teardown in the tenant isolation tests no longer swallows errors, and the coverage provider has tests for its edge cases.
+
+### Fixed
+
+- **A caught failure now logs its error class and stack.** Every warning and error written from a catch block in capture, db, core, search, embeddings, importers, hooks and util carries `errorClass` and `stack`, so an operator can tell what threw. A new CI ratchet, `scripts/check-caught-error-logs.mjs`, stops a new catch from logging without them.
+- **Failures that were logged at debug now reach the default log level.** An unreadable pre-compact snapshot, an unreadable store marker, a failed `git log` in autolearn, a failed physics-search query embed or state load, a vault note or tag list that could not be read, a physics seed that failed and an unusable embedding config now log at warn (the repeating ones once per process, then at debug). Probes such as "not a git repo" stay at debug.
+- **The recall ranker goldens no longer depend on the real date.** The shared seed now writes its rows at the same frozen time that recall reads at. Before this, the prediction's mirror row took the real clock, so its strength kept growing, and from 14 Oct 2026 it reordered the hybrid rankings on every branch.
+- **A bad `HIPPO_V1_RPS` now stops `hippo serve` at boot, and a wrong-typed body field gets a 400.** Before, a non-numeric `HIPPO_V1_RPS` silently turned the /v1 and /mcp limiter off (only an explicit 0 does now), and `{"scope":123}` on `POST /v1/memories` was stored with the default scope. On Windows, a bare command name is looked up on PATH only, never in the working folder, and an argument holding a line break is refused before it reaches cmd.exe. The Codex launcher is repaired only by the hippo CLI that `hippo hook install codex` recorded.
+- **A served request past its deadline now stops its queued work.** The request carries an abort signal that fires at the deadline, so a store call still waiting for a worker is dropped and a recall skips its later stages instead of running for a caller who already got the 504.
+- **A throttled caller can no longer reset its rate limit by rotating addresses.** When the limiter's table is full, a bucket is dropped only once it has refilled; until then new addresses share one bucket. The GitHub webhook also refuses a malformed signature header before it reads the body.
+- **Smaller hardening.** The daily-runner install calls schtasks and crontab with no shell, savepoint names must be plain identifiers, `graph view --open` on Windows will not hand cmd.exe a file name holding `&` or `%`, the dashboard cookie expires after a day, a failed postinstall prints its reason, and the `HIPPO_TRUSTED_PROXIES=*` warning names the risk.
+- **Capture failures now exit 1 after restoring stdio.** A missing store, no stdin, or a missing or absent `--file` used to exit mid-command and leave the log tee in place.
+- **A text flag given with no value now fails instead of storing the word "true".** `hippo snapshot save --summary`, `hippo handoff create --next`, `hippo remember --scope` and the other text flags in the CLI exit 1 with `--<flag> requires a value`, and nothing is written.
+- **Internal:** every CLI flag read goes through the helpers in `src/cli/flag-values.ts`, and `scripts/check-cli-flags.mjs` fails CI on a hand-rolled `String(flags[...])`.
+- `hippo trace record --tag a,b` and `hippo import --tag a,b` now split a comma list into separate tags, as `hippo supersede --tag` already did. A repeated `--tag` still gives one tag per flag.
+
+### Security
+
+- **New API key hashes carry their scrypt cost.** Keys minted from now on are stored as `scrypt2$<N>$<r>$<p>$<salt>$<hash>` (same cost as before: N=16384, r=8, p=1); existing `scrypt$<salt>$<hash>` rows still verify, and a stored cost above N=2^20, r=32 or p=16 is refused before any scrypt runs. Integrators who read `api_keys.key_hash` will see the new prefix. The dead-letter queue statements also refuse any table or column name that is not a known identifier, and a failed Codex wrapper repair at install now logs a warning.
+
 ## 2.0.0 - 2026-10-11
 
 ### Changed
