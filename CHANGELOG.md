@@ -5,6 +5,7 @@
 ### Removed
 
 - **BREAKING: the package root no longer exports SQLite handles.** `openHippoDb`, `openHippoDbReadOnly`, `closeHippoDb` and `DatabaseSyncLike` are gone from `hippo-memory`; use the root's store functions or `sqliteStore` from `hippo-memory/store-kit`. See `docs/UPGRADING-3.0.md`.
+- **BREAKING: `createMemory` takes camelCase option keys only.** The snake_case spellings 2.1 deprecated, such as `emotional_valence` and `artifact_ref`, are now a type error and are ignored at run time; use `emotionalValence`, `artifactRef` and the other camelCase keys. The entry it returns keeps its snake_case fields.
 
 ## 2.1.0 - 2026-10-16
 
