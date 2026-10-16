@@ -123,7 +123,7 @@ describe('canAutoDelete and AUTO_DELETABLE_SQL agree, over pinned x kind x tags 
   it('canAutoDelete gives the table answer for every row', async () => {
     const root = newRoot();
     const table = await seedTable(root);
-    const byId = new Map(loadAllEntries(root).map((e) => [e.id, e]));
+    const byId = new Map(loadAllEntries(root, 'default').map((e) => [e.id, e]));
 
     expect(table).toHaveLength(KEEP_CASES.length * 4);
     for (const row of table) expect(canAutoDelete(byId.get(row.id)!), JSON.stringify(byId.get(row.id))).toBe(row.deletable);
@@ -132,7 +132,7 @@ describe('canAutoDelete and AUTO_DELETABLE_SQL agree, over pinned x kind x tags 
   it('the SQL selects exactly the rows canAutoDelete allows', async () => {
     const root = newRoot();
     const table = await seedTable(root);
-    const fromFunction = loadAllEntries(root).filter(canAutoDelete).map((e) => e.id).sort();
+    const fromFunction = loadAllEntries(root, 'default').filter(canAutoDelete).map((e) => e.id).sort();
 
     expect(sqlDeletableIds(root)).toEqual(fromFunction);
     expect(sqlDeletableIds(root)).toEqual(table.filter((r) => r.deletable).map((r) => r.id).sort());
@@ -368,7 +368,7 @@ describe('kept rows are not merged and not sent to extraction', () => {
     expect(fetcher).not.toHaveBeenCalled();
     expect(result.extractionCandidates).toBe(0);
     expect(result.merged).toBe(0);
-    expect(loadAllEntries(root)).toHaveLength(3);
+    expect(loadAllEntries(root, 'default')).toHaveLength(3);
   });
 
   it('conflict detection still sees a kept row', async () => {

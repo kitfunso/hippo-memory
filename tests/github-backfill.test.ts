@@ -210,7 +210,7 @@ describe('backfillRepo', () => {
     expect(r.ingested.issueComments).toBe(2);
     expect(r.ingested.prReviewComments).toBe(1);
 
-    const entries = loadAllEntries(root).filter((e) =>
+    const entries = loadAllEntries(root, 'default').filter((e) =>
       e.tags.includes('source:github'),
     );
     expect(entries).toHaveLength(6);
@@ -264,7 +264,7 @@ describe('backfillRepo', () => {
     expect(r2.ingested.issueComments).toBe(0);
     expect(r2.ingested.prReviewComments).toBe(0);
 
-    const entries = loadAllEntries(root).filter((e) =>
+    const entries = loadAllEntries(root, 'default').filter((e) =>
       e.tags.includes('source:github'),
     );
     expect(entries).toHaveLength(3);
@@ -295,7 +295,7 @@ describe('backfillRepo', () => {
     });
 
     expect(r.ingested.issues).toBe(3);
-    const entries = loadAllEntries(root).filter((e) =>
+    const entries = loadAllEntries(root, 'default').filter((e) =>
       e.tags.includes('source:github'),
     );
     // Only the 3 non-PR items should have produced memories.
@@ -400,7 +400,7 @@ describe('backfillRepo', () => {
     });
 
     expect(r.ingested.issues).toBe(5);
-    const entries = loadAllEntries(root).filter((e) =>
+    const entries = loadAllEntries(root, 'default').filter((e) =>
       e.tags.includes('source:github'),
     );
     expect(entries).toHaveLength(5);

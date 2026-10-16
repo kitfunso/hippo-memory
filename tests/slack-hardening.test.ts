@@ -172,7 +172,7 @@ describe('Slack hardening + migration v19', () => {
       // Mandatory ACK.
       expect(res.status).toBe(200);
       // No memory created.
-      expect(loadAllEntries(root).filter((e) => e.tags.includes('source:slack'))).toHaveLength(0);
+      expect(loadAllEntries(root, 'default').filter((e) => e.tags.includes('source:slack'))).toHaveLength(0);
       const db = openHippoDb(root);
       try {
         // SAFETY: SELECT explicitly projects these five NOT NULL slack_dlq columns.
@@ -233,7 +233,7 @@ describe('Slack hardening + migration v19', () => {
     const racedEventId = raced.eventId;
     const racedOpts = messageToRememberOpts(raced);
     if (!racedOpts) throw new Error('the raced message has text');
-    const memBefore = loadAllEntries(root).length;
+    const memBefore = loadAllEntries(root, 'default').length;
     const winners: Promise<IngestResult>[] = [];
     let winnerRan = false;
     const { exec } = DatabaseSync.prototype;
@@ -254,7 +254,7 @@ describe('Slack hardening + migration v19', () => {
     expect(settled.map((w) => w.status)).toEqual(['ingested']);
     expect(loser).toEqual({ status: 'skipped_duplicate', memoryId: settled[0].memoryId });
     // One new memory row, the winner's: the loser's write rolled back.
-    expect(loadAllEntries(root).length).toBe(memBefore + 1);
+    expect(loadAllEntries(root, 'default').length).toBe(memBefore + 1);
 
     // slack_event_log still has exactly one row for the raced event_id.
     {
@@ -371,7 +371,7 @@ describe('Slack hardening + migration v19', () => {
     expect(result.memoryId).toBeTruthy();
 
     // Memory exists.
-    const created = loadAllEntries(root).find((e) => e.id === result.memoryId);
+    const created = loadAllEntries(root, 'default').find((e) => e.id === result.memoryId);
     expect(created).toBeDefined();
     expect(created?.kind).toBe('raw');
 

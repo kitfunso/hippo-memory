@@ -134,7 +134,7 @@ describe('hippo context --pinned-only', () => {
 
     // Reload from disk and verify retrieval_count is still 0
     const { loadAllEntries } = await import('../src/store/entry-reads.js');
-    const reloaded = loadAllEntries(hippoDir);
+    const reloaded = loadAllEntries(hippoDir, 'default');
     const target = reloaded.find((e) => e.id === pinned.id);
     expect(target).toBeDefined();
     expect(target!.retrieval_count).toBe(0);

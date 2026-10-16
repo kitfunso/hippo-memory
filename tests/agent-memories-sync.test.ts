@@ -222,7 +222,7 @@ describe('agent memory sync', () => {
     expect(claude(sync())).toMatchObject({ imported: 1, secret: 1 });
     expect(claude(sync())).toMatchObject({ imported: 0, secret: 1 });
     expect(liveTexts(w.local)).toEqual([DEPLOY]);
-    expect(loadAllEntries(w.local).some((e) => e.content.includes(FAKE_KEY))).toBe(false);
+    expect(loadAllEntries(w.local, 'default').some((e) => e.content.includes(FAKE_KEY))).toBe(false);
   });
 
   it('the sync never writes to stdout or stderr, even when it skips, sets aside and warns', () => {
@@ -262,7 +262,7 @@ describe('agent memory sync', () => {
     const result = await consolidate(w.local, { dryRun: false, now: new Date() });
     expect(result).toMatchObject({ merged: 0, extractionCandidates: 0 });
     expect(liveRows(w.local).map((e) => e.id).sort()).toEqual(before);
-    expect(loadAllEntries(w.local).filter((e) => e.layer === Layer.Semantic)).toEqual([]);
+    expect(loadAllEntries(w.local, 'default').filter((e) => e.layer === Layer.Semantic)).toEqual([]);
   });
 
   it('session end in a folder without a store imports the project and session folder notes into the global store with the project as origin', () => {

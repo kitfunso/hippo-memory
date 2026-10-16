@@ -25,7 +25,7 @@ describe('recall with bi-temporal filter', () => {
     hippo(home, globalHome, 'init --no-hooks --no-schedule --no-learn');
     hippo(home, globalHome, 'remember "database is Postgres"');
     const hippoRoot = join(home, '.hippo');
-    const entries = loadAllEntries(hippoRoot);
+    const entries = loadAllEntries(hippoRoot, 'default');
     expect(entries.length).toBe(1);
     const oldId = entries[0].id;
     hippo(home, globalHome, `supersede ${oldId} "database migrated to MySQL"`);
@@ -42,7 +42,7 @@ describe('recall with bi-temporal filter', () => {
     hippo(home, globalHome, 'init --no-hooks --no-schedule --no-learn');
     hippo(home, globalHome, 'remember "database is Postgres"');
     const hippoRoot = join(home, '.hippo');
-    const entries = loadAllEntries(hippoRoot);
+    const entries = loadAllEntries(hippoRoot, 'default');
     expect(entries.length).toBe(1);
     const oldId = entries[0].id;
     hippo(home, globalHome, `supersede ${oldId} "database migrated to MySQL"`);

@@ -30,7 +30,7 @@ describe('ingestMessage', () => {
     expect(r2.status).toBe('duplicate');
     expect(r2.memoryId).toBe(r1.memoryId);
 
-    const entries = loadAllEntries(root);
+    const entries = loadAllEntries(root, 'default');
     const slackEntries = entries.filter((e) => e.source === 'slack' || e.tags.includes('source:slack'));
     expect(slackEntries).toHaveLength(1);
     expect(slackEntries[0].kind).toBe('raw');

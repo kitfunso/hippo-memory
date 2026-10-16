@@ -23,7 +23,7 @@ const SEED = 'fix: retry the upload when the storage token expires mid-transfer'
 const ORDINARY = 'gotcha: powershell 5.1 has no pipeline chain operators, use if blocks';
 
 function globalContents(): string[] {
-  return loadAllEntries(getGlobalRoot()).map((e) => e.content);
+  return loadAllEntries(getGlobalRoot(), 'default').map((e) => e.content);
 }
 
 describe('git-learned rows and the global store', () => {
@@ -95,12 +95,12 @@ describe('git-learned rows and the global store', () => {
     ))).map((f) => ({ ...f, dag_level: 1 }));
     await buildDag(sqliteSyncStore(hippoRoot).localFiles, facts.slice(0, 3), { apiKey: 'test', fetcher });
     await buildDag(sqliteSyncStore(hippoRoot).localFiles, facts.slice(3), { apiKey: 'test', fetcher });
-    const summaries = loadAllEntries(hippoRoot).filter((e) => e.dag_level === 2);
+    const summaries = loadAllEntries(hippoRoot, 'default').filter((e) => e.dag_level === 2);
     expect(summaries).toHaveLength(2);
     for (const s of summaries) expect(s.tags).toContain('git-learned');
 
     await buildEntityProfiles(sqliteSyncStore(hippoRoot).localFiles, summaries, { apiKey: 'test', fetcher });
-    const profiles = loadAllEntries(hippoRoot).filter((e) => e.dag_level === 3);
+    const profiles = loadAllEntries(hippoRoot, 'default').filter((e) => e.dag_level === 3);
     expect(profiles).toHaveLength(1);
     expect(profiles[0].tags).toContain('git-learned');
   });
@@ -144,7 +144,7 @@ describe('hippo share --auto --dry-run', () => {
 
     hippo('init', '--no-hooks', '--no-schedule');
     hippo('remember', ORDINARY, '--error');
-    const entries = loadAllEntries(join(proj, '.hippo'));
+    const entries = loadAllEntries(join(proj, '.hippo'), 'default');
     const seeds = entries.filter((e) => e.source === 'git-learn');
     const ordinaryId = entries.find((e) => e.content === ORDINARY)?.id;
     expect(seeds).toHaveLength(1);

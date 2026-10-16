@@ -65,7 +65,7 @@ describe('a memory row with a damaged JSON column', () => {
     expect(damageLines()[0]).not.toContain(PRIVATE_TEXT);
 
     expect(readEntry(root, entry.id)?.tags).toEqual([]);
-    expect(loadAllEntries(root).map((e) => e.tags)).toEqual([[]]);
+    expect(loadAllEntries(root, 'default').map((e) => e.tags)).toEqual([[]]);
     expect(damageLines()).toHaveLength(1);
   });
 
@@ -78,7 +78,7 @@ describe('a memory row with a damaged JSON column', () => {
     runSql(root, `UPDATE memories SET conflicts_with_json = '[', parents_json = '{' WHERE id = ?`, first.id);
     runSql(root, `UPDATE memories SET tags_json = 'nope' WHERE id = ?`, second.id);
 
-    const read = loadAllEntries(root);
+    const read = loadAllEntries(root, 'default');
 
     expect(read.map((e) => [e.conflicts_with, e.parents, e.tags])).toEqual([[[], [], []], [[], [], []]]);
     expect(damageLines().map((line) => /id=(\S+) column=(\S+)/.exec(line)?.slice(1, 3).join(' ')).sort()).toEqual(
@@ -90,7 +90,7 @@ describe('a memory row with a damaged JSON column', () => {
     const root = newRoot();
     writeEntry(root, createMemory('clean row', { tags: ['a'], baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tenantId: TENANT }));
 
-    expect(loadAllEntries(root).map((e) => e.tags)).toEqual([['a']]);
+    expect(loadAllEntries(root, 'default').map((e) => e.tags)).toEqual([['a']]);
     expect(damageLines()).toEqual([]);
   });
 });

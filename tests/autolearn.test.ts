@@ -275,7 +275,7 @@ describe('write-path gate: CLI `hippo learn --git`', () => {
 
     expect(output).toMatch(/low-information subject\(s\) dropped/);
 
-    const entries = loadAllEntries(path.join(repoDir, '.hippo'));
+    const entries = loadAllEntries(path.join(repoDir, '.hippo'), 'default');
     const contents = entries.map((e) => e.content);
     expect(contents.some((c) => c.includes('fixed signals'))).toBe(false);
     expect(contents.some((c) => c.includes('corrected entry prices'))).toBe(false);
@@ -347,7 +347,7 @@ describe('a gated lesson still invalidates', () => {
     ).toBe(stale.half_life_days);
 
     // ...and the thin subject itself is still not stored.
-    const contents = loadAllEntries(repoRoot).map((e) => e.content);
+    const contents = loadAllEntries(repoRoot, 'default').map((e) => e.content);
     expect(contents.some((c) => c.includes('replace webpack with vite'))).toBe(false);
   });
 });
@@ -390,7 +390,7 @@ describe('write-path gate: MCP hippo_learn tool', () => {
       ?.content?.[0]?.text ?? '';
     expect(text).toMatch(/low-information subjects dropped/);
 
-    const entries = loadAllEntries(hippoRoot);
+    const entries = loadAllEntries(hippoRoot, 'default');
     const contents = entries.map((e) => e.content);
     expect(contents.some((c) => c.includes('fixed signals'))).toBe(false);
     expect(contents.some((c) => c.includes('--include-recent'))).toBe(true);

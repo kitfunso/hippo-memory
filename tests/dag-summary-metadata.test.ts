@@ -60,7 +60,7 @@ describe('schema v25 — DAG summary metadata', () => {
     summary.latest_at = '2026-01-08T00:00:00.000Z';
     writeEntry(root, summary);
 
-    const reloaded = loadAllEntries(root).find((e) => e.id === summary.id);
+    const reloaded = loadAllEntries(root, 'default').find((e) => e.id === summary.id);
     expect(reloaded).toBeDefined();
     expect(reloaded?.descendant_count).toBe(7);
     expect(reloaded?.earliest_at).toBe('2026-01-01T00:00:00.000Z');

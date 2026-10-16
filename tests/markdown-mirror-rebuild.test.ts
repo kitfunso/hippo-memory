@@ -35,7 +35,7 @@ describe('a store rebuilt from its markdown mirror', () => {
 
     initStore(storeRoot);
 
-    const byId = new Map(loadAllEntries(storeRoot).map((e) => [e.id, e]));
+    const byId = new Map(loadAllEntries(storeRoot, 'default').map((e) => [e.id, e]));
     const back = byId.get(fact.id);
     expect(back?.valid_from).toBe('2026-01-02T03:04:05.000Z');
     expect(back?.superseded_by).toBe(summary.id);

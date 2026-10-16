@@ -65,7 +65,7 @@ function userNotes(b: Box): string {
 type MemoryEntryRow = ReturnType<typeof loadAllEntries>[number];
 
 const imported = (root: string): string[] =>
-  isInitialized(root) ? loadAllEntries(root).filter((e) => e.source?.startsWith('agent-memory:')).map((e) => e.content).sort() : [];
+  isInitialized(root) ? loadAllEntries(root, 'default').filter((e) => e.source?.startsWith('agent-memory:')).map((e) => e.content).sort() : [];
 
 const PROJECT_NOTE = 'Run the schema check before this service deploys.';
 const USER_NOTE = 'The user prefers short replies with the answer first.';
@@ -207,7 +207,7 @@ describe('hippo import --agents', () => {
     expect(imported(b.global)).toEqual([]);
 
     hippo(b, b.project, ['import', '--agents']);
-    const byText = new Map(loadAllEntries(b.global).filter((e) => e.source?.startsWith('agent-memory:')).map((e) => [e.content, e.origin_project]));
+    const byText = new Map(loadAllEntries(b.global, 'default').filter((e) => e.source?.startsWith('agent-memory:')).map((e) => [e.content, e.origin_project]));
     expect(byText.get(PROJECT_NOTE)).toBe(deriveOriginProject(b.project));
     expect(byText.get(USER_NOTE)).toBe('');
     expect(isInitialized(join(b.project, '.hippo'))).toBe(false);
@@ -231,7 +231,7 @@ describe('hooks in a folder without a store', () => {
     const payload = JSON.stringify({ session_id: 's1', transcript_path: transcript, cwd: sub, trigger: 'auto' });
     hippo(b, sub, ['post-compact'], { input: payload });
 
-    const rows = loadAllEntries(b.global).filter((e) => e.source?.startsWith('agent-memory:'));
+    const rows = loadAllEntries(b.global, 'default').filter((e) => e.source?.startsWith('agent-memory:'));
     expect(rows.map((e) => e.content)).toEqual([transcriptNote]);
     const origin = deriveOriginProject(b.project);
     expect(origin).not.toBe('');
@@ -253,7 +253,7 @@ describe('hooks in a folder without a store', () => {
 
     hippo(b, sub, ['__session-end-worker', '--transcript', transcript, '--session-id', 's1']);
 
-    const rows = loadAllEntries(b.global).filter((e) => e.source?.startsWith('agent-memory:'));
+    const rows = loadAllEntries(b.global, 'default').filter((e) => e.source?.startsWith('agent-memory:'));
     const origin = deriveOriginProject(b.project);
     const byText = new Map(rows.map((e) => [e.content, e.origin_project]));
     expect([...byText.keys()].sort()).toEqual([PROJECT_NOTE, USER_NOTE, transcriptNote].sort());
@@ -275,7 +275,7 @@ describe('hooks in a folder without a store', () => {
 
     hippo(b, b.project, ['import', '--agents']);
     hippo(b, worktree, ['import', '--agents']);
-    const origins = (): string[] => (isInitialized(b.global) ? loadAllEntries(b.global) : [])
+    const origins = (): string[] => (isInitialized(b.global) ? loadAllEntries(b.global, 'default') : [])
       .filter((e) => e.content === PROJECT_NOTE).map((e) => e.origin_project ?? '').sort();
     expect(origins()).toEqual([main]);
 
@@ -289,7 +289,7 @@ describe('hooks in a folder without a store', () => {
     const plain = tmp();
     note(projectNotes(b, plain), 'schema.md', PROJECT_NOTE);
     hippo(b, plain, ['import', '--agents']);
-    const globalRows = (): MemoryEntryRow[] => (isInitialized(b.global) ? loadAllEntries(b.global) : []).filter((e) => e.content === PROJECT_NOTE);
+    const globalRows = (): MemoryEntryRow[] => (isInitialized(b.global) ? loadAllEntries(b.global, 'default') : []).filter((e) => e.content === PROJECT_NOTE);
     expect(globalRows().map((e) => e.origin_project)).toEqual(['']);
 
     hippo(b, plain, ['init', '--no-hooks', '--no-schedule']);

@@ -17,7 +17,7 @@ import { describe, it, expect, beforeEach, afterEach, afterAll, vi } from 'vites
 import { consolidate } from '../src/consolidate/sleep.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { loadAllEntries } from '../src/store/entry-reads.js';
+import { loadEveryTenantEntries } from '../src/store/entry-reads.js';
 import { batchWriteAndDelete } from '../src/store/delete-and-batch.js';
 import { loadSessionDecayContext } from '../src/store/index-and-stats.js';
 import { listMemoryConflicts } from '../src/store/conflicts.js';
@@ -172,7 +172,7 @@ describe('(a) feature parity vs extract.mjs computeFeatures', () => {
       },
     ];
     for (const e of built) writeEntry(dir, e);
-    const loaded = loadAllEntries(dir);
+    const loaded = loadEveryTenantEntries(dir);
     expect(loaded.length).toBe(built.length);
 
     for (const entry of loaded) {
@@ -211,7 +211,7 @@ describe('(b) normalization parity vs evaluate.mjs min-max', () => {
       half_life_days: 7 + i,
     }));
     for (const e of built) writeEntry(dir, e);
-    const loaded = loadAllEntries(dir);
+    const loaded = loadEveryTenantEntries(dir);
 
     const raw = new Map(loaded.map((e) => [e.id, computeMvFeatures(e, NOW)]));
     const minMax: Record<string, { min: number; max: number }> = {};
@@ -257,7 +257,7 @@ describe('(b) normalization parity vs evaluate.mjs min-max', () => {
       ),
     ];
     for (const e of built) writeEntry(dir, e);
-    const loaded = loadAllEntries(dir);
+    const loaded = loadEveryTenantEntries(dir);
     const scores = scoreEntries(loaded, NOW);
 
     const sortedByLength = [...loaded].sort((a, b) => a.content.length - b.content.length);
@@ -338,7 +338,7 @@ describe('(d) flag-off byte-identical', () => {
     // `created` value (all healthy entries created within the same test
     // tick; all condemned/pinned entries sharing the identical
     // ancientDate(3650) string) tie-break on id, not insertion order.
-    const loadedBeforeSleep = loadAllEntries(dir);
+    const loadedBeforeSleep = loadEveryTenantEntries(dir);
     const config = loadConfig(dir);
     const sessionCtx = loadSessionDecayContext(dir);
     const decayOpts: DecayOptions = {
@@ -371,7 +371,7 @@ describe('(d) flag-off byte-identical', () => {
     // of result.details, in loadAllEntries order.
     expect(result.details).toEqual(expectedRemovedDetails);
 
-    const remainingIds = new Set(loadAllEntries(dir).map((e) => e.id));
+    const remainingIds = new Set(loadEveryTenantEntries(dir).map((e) => e.id));
     expect(remainingIds).toEqual(expectedSurvivorIds);
     for (const id of expectedRemovedIds) expect(remainingIds.has(id)).toBe(false);
 
@@ -410,7 +410,7 @@ describe('(e) rescue semantics', () => {
 
     expect(result.details).toContain('  ⚠️ memory-value: 1 mv_rescue audit row failed to write (the rescue itself still landed)');
     expect(new Set(auditRescueRows(dir, 'ta').map((e) => e.targetId))).toEqual(new Set([built[0]!.id, built[2]!.id]));
-    expect(loadAllEntries(dir).map((e) => e.id)).toContain(refused);
+    expect(loadEveryTenantEntries(dir).map((e) => e.id)).toContain(refused);
   });
 
   it('rescued entries get the standard survivor bookkeeping refresh (stored strength), confidence tier preserved', async () => {
@@ -436,7 +436,7 @@ describe('(e) rescue semantics', () => {
 
     await consolidate(dir, { now: NOW });
 
-    const after = loadAllEntries(dir);
+    const after = loadEveryTenantEntries(dir);
     for (const orig of rescuedSrc) {
       const refreshed = after.find((e) => e.id === orig.id);
       expect(refreshed, `expected rescued entry ${orig.id} to survive`).toBeDefined();
@@ -476,7 +476,7 @@ describe('(e) rescue semantics', () => {
     const result = await consolidate(dir, { now: NOW });
     expect(result.merged).toBeGreaterThanOrEqual(2);
 
-    const after = loadAllEntries(dir);
+    const after = loadEveryTenantEntries(dir);
     const semanticSummary = after.find(
       (e) => e.layer === Layer.Semantic && e.content.startsWith('[Consolidated'),
     );
@@ -551,7 +551,7 @@ describe('(e) rescue semantics', () => {
     expect(result.removed).toBe(1);
     expect(result.details.some((l) => l.includes('🛟'))).toBe(false);
 
-    const remaining = loadAllEntries(dir);
+    const remaining = loadEveryTenantEntries(dir);
     expect(remaining.find((e) => e.id === lonely.id)).toBeUndefined();
     expect(auditRescueRows(dir, 'tf').length).toBe(0);
   });
@@ -576,7 +576,7 @@ describe('(f) pinned exemption unchanged', () => {
     const result = await consolidate(dir, { now: NOW });
     expect(result.removed).toBe(0);
 
-    const remaining = loadAllEntries(dir);
+    const remaining = loadEveryTenantEntries(dir);
     expect(remaining.find((e) => e.id === entry.id)).toBeDefined();
     expect(auditRescueRows(dir, 'default').length).toBe(0);
   });
@@ -609,7 +609,7 @@ describe('(g) fail-loud on a malformed weights constant', () => {
     const condemned = condemnedEntry('an entry that would otherwise be condemned and evaluated');
     writeEntry(dir, condemned);
     for (let i = 0; i < 9; i++) writeEntry(dir, condemnedEntry(`filler tenant-mate ${i}`));
-    const all = loadAllEntries(dir);
+    const all = loadEveryTenantEntries(dir);
     const badWeights = { ...MEMORY_VALUE_WEIGHTS, strength: Number.POSITIVE_INFINITY };
 
     expect(() => rescueSet(all, new Set([condemned.id]), NOW, { weights: badWeights, digest: SOURCE_ARTIFACT_SHA256 })).toThrow(
@@ -694,7 +694,7 @@ describe('(h) scale characterization', () => {
     enableMemoryValue(dir, { replay: { count: 0 }, autoTraceCapture: false });
     batchWriteAndDelete(dir, entries, []);
 
-    const loaded = loadAllEntries(dir);
+    const loaded = loadEveryTenantEntries(dir);
     expect(loaded.length).toBe(entries.length);
 
     const config = loadConfig(dir);
@@ -762,7 +762,7 @@ describe('(h) scale characterization', () => {
     // decisions must match the pure-function prediction above. ---
     const result = await consolidate(dir, { now: NOW });
     expect(result.removed).toBe(condemnedIds.size - rescued1.size);
-    const finalIds = new Set(loadAllEntries(dir).map((e) => e.id));
+    const finalIds = new Set(loadEveryTenantEntries(dir).map((e) => e.id));
     for (const id of condemnedIds) {
       expect(finalIds.has(id)).toBe(rescued1.has(id));
     }
@@ -905,11 +905,11 @@ describe('(i) dry-run parity', () => {
       expect(dryRemovedIds).toEqual(expectedDeleted);
 
       // Dry-run: store untouched, zero audit rows.
-      expect(loadAllEntries(dirDry).length).toBe(built.length);
+      expect(loadEveryTenantEntries(dirDry).length).toBe(built.length);
       expect(auditRescueRows(dirDry, 'ti').length).toBe(0);
 
       // Real run: expected deletes gone, expected rescues present, audit rows match.
-      const realIds = new Set(loadAllEntries(dirReal).map((e) => e.id));
+      const realIds = new Set(loadEveryTenantEntries(dirReal).map((e) => e.id));
       for (const id of expectedRescued) expect(realIds.has(id)).toBe(true);
       for (const id of expectedDeleted) expect(realIds.has(id)).toBe(false);
 

@@ -78,9 +78,9 @@ function seed(root: string, content: string, opts: Partial<Parameters<typeof cre
 
 /** The memories `write` added to the store. */
 async function added<T>(root: string, write: () => T): Promise<MemoryEntry[]> {
-  const before = new Set(loadAllEntries(root).map((e) => e.id));
+  const before = new Set(loadAllEntries(root, 'default').map((e) => e.id));
   await write();
-  return loadAllEntries(root).filter((e) => !before.has(e.id));
+  return loadAllEntries(root, 'default').filter((e) => !before.has(e.id));
 }
 
 const writers: [string, (root: string) => Promise<MemoryEntry[]>][] = [

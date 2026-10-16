@@ -83,7 +83,7 @@ describe.each(SAVERS)('a memory that backs a %s', (_kind, table, save) => {
     run(root, `UPDATE memories SET content = 'nope' WHERE id = ?`, object.memoryId!);
 
     const backingSet = memoriesBackingObjects(root);
-    expect(auditMemories(loadAllEntries(root), backingSet).issues).toMatchObject([
+    expect(auditMemories(loadAllEntries(root, 'default'), backingSet).issues).toMatchObject([
       { memoryId: object.memoryId, severity: 'warning', reason: expect.stringContaining('backs an object') },
     ]);
     const result = await sleep(ctxFor(root), { noShare: true });

@@ -76,7 +76,7 @@ function bulkLegacyStore(n: number): string {
 }
 const legacy = (content: string, options: Partial<CreateMemoryOptions> = {}) => createMemory(content, { baseHalfLifeDays: 7, ...options });
 function byContent(root: string): Map<string, number> {
-  return new Map(loadAllEntries(root).map((e) => [e.content, e.half_life_days]));
+  return new Map(loadAllEntries(root, 'default').map((e) => [e.content, e.half_life_days]));
 }
 
 describe('default half-life migration', () => {
@@ -170,7 +170,7 @@ describe('default half-life migration', () => {
     expect([...byContent(root).values()]).toEqual([7]);
     expect(storeHalfLifeBase(local(root))).toBe(7);
     expect(migrateDefaultHalfLife(local(root), 7)).toMatchObject({ rescaled: 0 });
-    expect(planHalfLifeMigration(loadAllEntries(root), 7, 7)).toEqual([]);
+    expect(planHalfLifeMigration(loadAllEntries(root, 'default'), 7, 7)).toEqual([]);
   });
 
   it('sleep moves a pre-1.46 store to the new default before decaying', async () => {

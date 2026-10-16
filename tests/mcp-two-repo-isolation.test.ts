@@ -290,10 +290,10 @@ describe('MCP on a shared store with two repos', () => {
 
     await shown('beta', 'hippo_recall', { query: 'lighthouse' });
     await shown('acme', 'hippo_recall', { query: 'lighthouse' });
-    const before = new Map(loadAllEntries(store).map((e) => [e.id, e.outcome_positive]));
+    const before = new Map(loadAllEntries(store, 'default').map((e) => [e.id, e.outcome_positive]));
     const applied = await tool('acme', 'hippo_outcome', { good: true });
     expect(applied.text).toMatch(/Applied positive outcome to [1-9]\d* memories/);
-    const touched = loadAllEntries(store).filter((e) => e.outcome_positive !== before.get(e.id)).map((e) => e.id);
+    const touched = loadAllEntries(store, 'default').filter((e) => e.outcome_positive !== before.get(e.id)).map((e) => e.id);
     expectOnly(touched, [ids.acme], HIDDEN_FROM_ACME(), 'acme outcome');
   });
 });

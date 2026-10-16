@@ -26,13 +26,13 @@ describe('a tool call at its request deadline', () => {
     const abort = new AbortController();
     abort.abort(new DOMException('hippo_remember did not finish within 5 ms', 'TimeoutError'));
     await expect(runWithRequestId('req-abort', () => handleMcpRequest(REMEMBER, ctx), undefined, abort.signal)).rejects.toMatchObject({ name: 'TimeoutError' });
-    expect(loadAllEntries(root)).toHaveLength(0);
+    expect(loadAllEntries(root, 'default')).toHaveLength(0);
   });
 
   it('runs the same call to completion while the signal stays quiet', async () => {
     const abort = new AbortController();
     const reply = await runWithRequestId('req-ok', () => handleMcpRequest(REMEMBER, ctx), undefined, abort.signal);
     expect(reply?.error).toBeUndefined();
-    expect(loadAllEntries(root)).toHaveLength(1);
+    expect(loadAllEntries(root, 'default')).toHaveLength(1);
   });
 });

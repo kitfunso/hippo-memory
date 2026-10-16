@@ -5,7 +5,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
-import { loadAllEntries } from '../src/store/entry-reads.js';
+import { loadEveryTenantEntries } from '../src/store/entry-reads.js';
 import { runCli } from '../src/cli.js';
 import { runInProcess } from './_helpers/run-in-process.js';
 
@@ -64,10 +64,10 @@ describe('hippo capture --file', () => {
     expect(dry.stdout).toContain('[capture] (spec) retries are capped at five attempts per batch');
     expect(dry.stdout).not.toContain('tiny');
     expect(dry.stdout).not.toContain('(spec) the importer was written');
-    expect(loadAllEntries(join(cwd, '.hippo'))).toHaveLength(0);
+    expect(loadEveryTenantEntries(join(cwd, '.hippo'))).toHaveLength(0);
 
     expect((await capture('--file', notes)).status).toBe(0);
-    const specRows = loadAllEntries(join(cwd, '.hippo')).filter((e) => e.tags.includes('spec'));
+    const specRows = loadEveryTenantEntries(join(cwd, '.hippo')).filter((e) => e.tags.includes('spec'));
     expect(specRows.map((e) => e.content).sort()).toEqual([
       'retries are capped at five attempts per batch',
       'the importer accepts utf-16 encoded files',
@@ -90,7 +90,7 @@ describe('hippo capture --file', () => {
     const r = await capture('--file', file('empty.md', '   \n'));
     expect(r.status).toBe(0);
     expect(r.stdout).toContain('No text to capture from.');
-    expect(loadAllEntries(join(cwd, '.hippo'))).toHaveLength(0);
+    expect(loadEveryTenantEntries(join(cwd, '.hippo'))).toHaveLength(0);
   });
 
   it('refuses to run without a store and tells the user to run hippo init', async () => {

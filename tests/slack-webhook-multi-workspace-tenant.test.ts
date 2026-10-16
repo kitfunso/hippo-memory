@@ -29,7 +29,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createHmac } from 'node:crypto';
 import { initStore } from '../src/store/open.js';
-import { loadAllEntries } from '../src/store/entry-reads.js';
+import { loadEveryTenantEntries } from '../src/store/entry-reads.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 
@@ -116,7 +116,7 @@ describe('POST /v1/connectors/slack/events multi-workspace tenant routing', () =
   });
 
   function entriesByTenant(tenantId: string) {
-    return loadAllEntries(root)
+    return loadEveryTenantEntries(root)
       .filter((e) => e.tags.includes('source:slack'))
       .filter((e) => e.tenant_id === tenantId);
   }
@@ -210,7 +210,7 @@ describe('POST /v1/connectors/slack/events multi-workspace tenant routing', () =
     // No memory in any of the three tenants.
     expect(entriesByTenant('known-tenant')).toHaveLength(0);
     expect(entriesByTenant('deployment-fallback')).toHaveLength(0);
-    expect(loadAllEntries(root).filter((e) => e.tags.includes('source:slack'))).toHaveLength(0);
+    expect(loadEveryTenantEntries(root).filter((e) => e.tags.includes('source:slack'))).toHaveLength(0);
   });
 
   it('single-workspace install (empty slack_workspaces) routes via HIPPO_TENANT', async () => {

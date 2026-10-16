@@ -307,7 +307,7 @@ describe('Company Brain provenance coverage scorecard', () => {
       }),
     );
 
-    const entries = loadAllEntries(tmpDir);
+    const entries = loadAllEntries(tmpDir, 'default');
     const coverage = buildProvenanceCoverage(entries);
 
     expect(coverage.rawTotal).toBe(3);
@@ -346,7 +346,7 @@ describe('Company Brain provenance coverage scorecard', () => {
       }),
     );
 
-    const coverage = buildProvenanceCoverage(loadAllEntries(tmpDir));
+    const coverage = buildProvenanceCoverage(loadAllEntries(tmpDir, 'default'));
 
     expect(coverage.rawTotal).toBe(2);
     expect(coverage.coverage).toBe(1);

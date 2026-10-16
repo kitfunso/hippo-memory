@@ -44,7 +44,7 @@ describe('Decay pass', () => {
     const result = await consolidate(tmpDir, { now: new Date() });
     expect(result.removed).toBeGreaterThan(0);
 
-    const remaining = loadAllEntries(tmpDir);
+    const remaining = loadAllEntries(tmpDir, 'default');
     expect(remaining.find((e) => e.id === ancient.id)).toBeUndefined();
   });
 
@@ -58,7 +58,7 @@ describe('Decay pass', () => {
 
     await consolidate(tmpDir, { now: new Date() });
 
-    const remaining = loadAllEntries(tmpDir);
+    const remaining = loadAllEntries(tmpDir, 'default');
     const found = remaining.find((e) => e.id === ancient.id);
     expect(found?.content).toBe('permanent rule');
     expect(found?.pinned).toBe(true);
@@ -78,7 +78,7 @@ describe('Decay pass', () => {
     expect(result.removed).toBeGreaterThan(0);
 
     // Entry should still be on disk
-    const remaining = loadAllEntries(tmpDir);
+    const remaining = loadAllEntries(tmpDir, 'default');
     expect(remaining.find((e) => e.id === ancient.id)).toBeDefined();
   });
 
@@ -149,7 +149,7 @@ describe('Replay pass (integration)', () => {
 
     // Load all entries and check: exactly 5 should have retrieval_count > 0
     // (only replay bumps retrieval_count during consolidate)
-    const after = loadAllEntries(tmpDir);
+    const after = loadAllEntries(tmpDir, 'default');
     const rehearsed = after.filter((e) => e.retrieval_count > 0);
     expect(rehearsed).toHaveLength(5);
 
@@ -182,7 +182,7 @@ describe('Replay pass (integration)', () => {
     const result = await consolidate(tmpDir, { now: new Date() });
 
     expect(result.replayed).toBe(0);
-    const after = loadAllEntries(tmpDir);
+    const after = loadAllEntries(tmpDir, 'default');
     const touched = after.filter((e) => e.retrieval_count > 0);
     expect(touched).toHaveLength(0);
   });
@@ -201,7 +201,7 @@ describe('Replay pass (integration)', () => {
 
     expect(result.replayed).toBe(2);
     expect(result.details.some((l) => /^ {2}💭 replayed 2 memories: /.test(l))).toBe(true);
-    const after = loadAllEntries(tmpDir);
+    const after = loadAllEntries(tmpDir, 'default');
     const touched = after.filter((e) => e.retrieval_count > 0);
     expect(touched).toHaveLength(2);
   });
@@ -223,7 +223,7 @@ describe('Merge pass', () => {
     expect(result.semanticCreated).toBeGreaterThan(0);
     expect(result.details.some((l) => l.startsWith('  🔀 merged 2 episodic entries into semantic: '))).toBe(true);
 
-    const all = loadAllEntries(tmpDir);
+    const all = loadAllEntries(tmpDir, 'default');
     const semantics = all.filter((e) => e.layer === Layer.Semantic);
     expect(semantics.length).toBeGreaterThan(0);
   });
@@ -507,7 +507,7 @@ describe('Physics pass', () => {
     const ids = seedConflictingParticles(true);
     const now = new Date();
     const seeded = storedParticles();
-    const entries = loadAllEntries(tmpDir);
+    const entries = loadAllEntries(tmpDir, 'default');
     expect(entries.find((e) => e.id === ids.a)?.conflicts_with).toEqual([ids.b]);
     expect(entries.map((e) => e.half_life_days)).toEqual([30, 30, 30]);
 

@@ -21,7 +21,7 @@ function seed(store: string, content: string, extra: Partial<MemoryEntry> = {}):
   writeEntry(store, entry);
   return entry;
 }
-const ids = (store: string) => loadAllEntries(store).map((entry) => entry.id).sort();
+const ids = (store: string) => loadAllEntries(store, 'default').map((entry) => entry.id).sort();
 function flag(store: string): string {
   const db = new DatabaseSync(join(store, 'hippo.db'));
   try { return getMeta(db, 'quality_repair_auto'); } finally { db.close(); }

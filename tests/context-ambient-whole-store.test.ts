@@ -122,7 +122,7 @@ describe('SQL ambient tallies match the JS tallies over the same rows', () => {
     }
 
     const sql = loadAmbientTallies(store, 'default', { currentProject: [], now: NOW });
-    const js = tallyAmbientEntries(loadAllEntries(store).filter((e) => !e.superseded_by), NOW);
+    const js = tallyAmbientEntries(loadAllEntries(store, 'default').filter((e) => !e.superseded_by), NOW);
 
     expect({ ...sql, strengthSum: 0 }).toEqual({ ...js, strengthSum: 0 });
     expect(sql.strengthSum).toBeCloseTo(js.strengthSum, 9);

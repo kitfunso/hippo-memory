@@ -72,7 +72,7 @@ describe('embedMemory provider failure', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(warnings()).toHaveLength(1);
 
-    expect(loadAllEntries(root)).toHaveLength(2);
+    expect(loadAllEntries(root, 'default')).toHaveLength(2);
     expect(loadEmbeddingIndex(root)).toEqual({});
   });
 

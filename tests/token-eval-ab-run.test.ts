@@ -246,7 +246,7 @@ describe('Z0 runner end to end (fake Claude Code)', () => {
     expect(get('A1', 'a2').repeatedErrors).toBe(1);
 
     // A2 captures the FIX lesson through its shim and injects it on a2; A5's shim drops it.
-    const store = (arm: string) => loadAllEntries(join(out, 'runs', 'seqA', arm, 'seed1', 'work', '.hippo'));
+    const store = (arm: string) => loadAllEntries(join(out, 'runs', 'seqA', arm, 'seed1', 'work', '.hippo'), 'default');
     const lesson = (arm: string) => store(arm).some((e: { content: string }) => e.content.includes('operator flipped'));
     expect(lesson('A2')).toBe(true);
     expect(lesson('A5')).toBe(false);
@@ -383,7 +383,7 @@ describe('Z0 runner end to end (fake Claude Code)', () => {
     const out = tmp('ab-run-leak-');
     const spec = validateTasks({ sequences: [{ id: 'seqK', cluster: 'c', repo: r.repo, fixedOrder: true, tasks: [task(r, 'k1', `look around PLANT:${gold}`), task(r, 'k2', 'FIX add in lib.js')] }] });
     await run(spec, ['A2'], out);
-    expect(loadAllEntries(join(out, 'runs', 'seqK', 'A2', 'seed1', 'work', '.hippo')).some((e: { content: string }) => e.content.includes(gold))).toBe(true);
+    expect(loadAllEntries(join(out, 'runs', 'seqK', 'A2', 'seed1', 'work', '.hippo'), 'default').some((e: { content: string }) => e.content.includes(gold))).toBe(true);
     const [k1, k2] = readRecords(out);
     expect(k1).toMatchObject({ taskId: 'k1', invalid: null, leak: false });
     for (const x of [k1, k2]) validateRecord(x);
@@ -514,7 +514,7 @@ describe('Z0 runner end to end (fake Claude Code)', () => {
     expect(existsSync(join(realHome, '.claude', 'settings.json'))).toBe(false);
     const store = join(out, 'runs', 'seqI', 'A2', 'seed1', 'work', '.hippo');
     expect(existsSync(store)).toBe(true);
-    expect(loadAllEntries(store).some((e: { content: string }) => e.content.includes('SENTINEL-ab-run-leak'))).toBe(false);
+    expect(loadAllEntries(store, 'default').some((e: { content: string }) => e.content.includes('SENTINEL-ab-run-leak'))).toBe(false);
   }, 60_000);
 
   it('validates and plans a run with dist/ absent (no build needed to dry-run)', () => {

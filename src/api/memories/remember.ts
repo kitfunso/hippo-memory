@@ -75,7 +75,7 @@ export interface RememberResult {
 }
 
 /** The scope a write lands in: the caller's own personal scope when asked for, else the client's, which may not be a
- * personal or quarantine one and must be one the same actor could read (a write into a private scope needs its grant). */
+ * personal or quarantine one and must be one the same actor could read (a private scope needs its grant). */
 function rememberScope(ctx: Context, opts: RememberOpts): string | null {
   if (!opts.personal) {
     assertClientScope(opts.scope);

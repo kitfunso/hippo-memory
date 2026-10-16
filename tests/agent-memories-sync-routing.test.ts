@@ -203,7 +203,7 @@ describe('agent memory sync: routing and sharing', () => {
 
     expect(syncGlobalToLocal(w.local, w.global)).toBe(1);
     expect(agentRows(w.local)).toEqual([]);
-    expect(loadAllEntries(w.local).map((e) => e.content)).toEqual([CONTROL]);
+    expect(loadAllEntries(w.local, 'default').map((e) => e.content)).toEqual([CONTROL]);
   });
 
   it('an imported row is never auto-shared, restored or not', async () => {

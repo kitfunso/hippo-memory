@@ -85,7 +85,7 @@ describe('consolidate() merge pass partitions by scope', () => {
       expect(result.merged).toBe(4);
       expect(result.semanticCreated).toBe(2);
 
-      const semantics = loadAllEntries(home).filter((e) => e.layer === Layer.Semantic);
+      const semantics = loadAllEntries(home, 'default').filter((e) => e.layer === Layer.Semantic);
       expect(semantics).toHaveLength(2);
 
       const privateSemantic = semantics.find((s) => s.scope === 'slack:private:C1');
@@ -112,7 +112,7 @@ describe('dedupe partitions by restricted scope', () => {
       writeEntry(home, { ...pub, strength: 0.1 });
 
       expect(deduplicateStore(sqliteConsolidation(home)).removed).toBe(0);
-      expect(loadAllEntries(home).map((e) => e.scope).sort()).toEqual([null, 'slack:private:C1'].sort());
+      expect(loadAllEntries(home, 'default').map((e) => e.scope).sort()).toEqual([null, 'slack:private:C1'].sort());
     } finally {
       rmSync(home, { recursive: true, force: true });
     }
@@ -137,7 +137,7 @@ describe('auto-promote stamps the session scope, or skips a mixed one', () => {
       expect(result.promotedTraces).toBe(1);
       expect(result.tracesSkippedMixedScope).toBe(0);
 
-      const traces = loadAllEntries(home).filter((e) => e.layer === Layer.Trace);
+      const traces = loadAllEntries(home, 'default').filter((e) => e.layer === Layer.Trace);
       expect(traces).toHaveLength(1);
       expect(traces[0]!.scope).toBe('slack:private:C1');
     } finally {
@@ -165,7 +165,7 @@ describe('auto-promote stamps the session scope, or skips a mixed one', () => {
       expect(result.promotedTraces).toBe(0);
       expect(result.tracesSkippedMixedScope).toBe(1);
 
-      const traces = loadAllEntries(home).filter((e) => e.layer === Layer.Trace);
+      const traces = loadAllEntries(home, 'default').filter((e) => e.layer === Layer.Trace);
       expect(traces).toHaveLength(0);
     } finally {
       rmSync(home, { recursive: true, force: true });
@@ -290,7 +290,7 @@ describe('extract.ts storeExtractedFacts copies the source scope', () => {
 
       expect(stored).toHaveLength(1);
       expect(stored[0]!.scope).toBe('slack:private:C1');
-      const persisted = loadAllEntries(home).find((e) => e.id === stored[0]!.id);
+      const persisted = loadAllEntries(home, 'default').find((e) => e.id === stored[0]!.id);
       expect(persisted!.scope).toBe('slack:private:C1');
     } finally {
       rmSync(home, { recursive: true, force: true });

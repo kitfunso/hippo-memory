@@ -121,7 +121,7 @@ describe('dormant memories are on by default, with an opt-out', () => {
 
       expect(result.removed).toBe(1);
       expect(result.dormant).toBe(0);
-      expect(loadAllEntries(home).map((e) => e.id)).not.toContain(faded.id);
+      expect(loadAllEntries(home, 'default').map((e) => e.id)).not.toContain(faded.id);
       expect(countDormantRows(home)).toBe(0);
     } finally {
       restore();
@@ -164,7 +164,7 @@ describe('dormant memories are on by default, with an opt-out', () => {
       expect(result.removed).toBe(1);
       expect(result.dormant).toBe(1);
       expect((await api.listDormant(ctxFor(home))).map((m) => m.id)).toEqual([plain.id]);
-      expect(loadAllEntries(home)).toEqual([]);
+      expect(loadAllEntries(home, 'default')).toEqual([]);
     } finally {
       restore();
     }
@@ -185,7 +185,7 @@ describe('a faded credential-tagged memory', () => {
       expect(result.removedIds).toEqual([tagged.id]);
       expect(result.details.some((l) => l.startsWith(`  🗑  removed ${tagged.id} (strength `))).toBe(true);
       expect(await api.listDormant(ctxFor(home))).toEqual([]);
-      expect(loadAllEntries(home)).toEqual([]);
+      expect(loadAllEntries(home, 'default')).toEqual([]);
     } finally {
       restore();
     }
@@ -301,7 +301,7 @@ describe('with dormant memories enabled', () => {
       expect(result.removed).toBe(0);
       expect(result.dormant).toBe(1);
       expect(result.details.some((d) => d.includes(faded.id) && d.includes('dormant'))).toBe(true);
-      expect(loadAllEntries(home).map((e) => e.id)).toEqual([fresh.id]);
+      expect(loadAllEntries(home, 'default').map((e) => e.id)).toEqual([fresh.id]);
       // The markdown mirror goes too, so a bootstrap of an empty table
       // cannot re-import the row as active.
       expect(entryMirrorFiles(home, faded.id)).toEqual([]);
@@ -361,7 +361,7 @@ describe('with dormant memories enabled', () => {
       const result = await consolidate(home, { now: new Date() });
 
       expect(result.dormant).toBe(0);
-      expect(loadAllEntries(home).map((e) => e.id).sort()).toEqual([pinned.id, receipt.id].sort());
+      expect(loadAllEntries(home, 'default').map((e) => e.id).sort()).toEqual([pinned.id, receipt.id].sort());
       expect(await api.listDormant(ctxFor(home))).toEqual([]);
     } finally {
       restore();
@@ -378,7 +378,7 @@ describe('with dormant memories enabled', () => {
 
       expect(result.dormant).toBe(1);
       expect(result.details.some((l) => l.startsWith(`  💤 dormant ${faded.id} (strength `))).toBe(true);
-      expect(loadAllEntries(home).map((e) => e.id)).toEqual([faded.id]);
+      expect(loadAllEntries(home, 'default').map((e) => e.id)).toEqual([faded.id]);
       expect(countDormantRows(home)).toBe(0);
     } finally {
       restore();
@@ -452,7 +452,7 @@ describe('listing, restoring and forgetting dormant memories', () => {
 
       const next = await consolidate(home, { now: new Date() });
       expect(next.dormant).toBe(0);
-      expect(loadAllEntries(home).map((e) => e.id)).toContain(ids[0]);
+      expect(loadAllEntries(home, 'default').map((e) => e.id)).toContain(ids[0]);
 
       // The restore is logged as a "forgot it, then needed it" label.
       const db = openHippoDb(home);
@@ -529,7 +529,7 @@ describe('listing, restoring and forgetting dormant memories', () => {
       }
       await expect(api.restoreDormant(ctxFor(home), ids[0])).rejects.toThrow(RejectedValueError);
       expect((await api.listDormant(ctxFor(home))).map((m) => m.id)).toEqual([ids[0]]);
-      expect(loadAllEntries(home).map((e) => e.id)).not.toContain(ids[0]);
+      expect(loadAllEntries(home, 'default').map((e) => e.id)).not.toContain(ids[0]);
       expect(auditRows(home, 'reject_refusal').map((e) => [e.targetId, e.actor])).toEqual([[ids[0], 'test']]);
     } finally {
       restore();
@@ -609,14 +609,14 @@ describe('memories that back a first-class object', () => {
     try {
       const memoryId = (await save(home)).memoryId!;
       // Fade it far below the threshold, as years without recall would.
-      const faded = aged(loadAllEntries(home).find((e) => e.id === memoryId)!, 3000);
+      const faded = aged(loadAllEntries(home, 'default').find((e) => e.id === memoryId)!, 3000);
       writeEntry(home, faded);
       expect(calculateStrength(faded)).toBeLessThan(0.05);
 
       const result = await consolidate(home);
       expect(result.dormant).toBe(0);
       expect(result.removed).toBe(0);
-      expect(loadAllEntries(home).map((e) => e.id)).toContain(memoryId);
+      expect(loadAllEntries(home, 'default').map((e) => e.id)).toContain(memoryId);
       expect(linkedRows(home, table, memoryId)).toBe(1);
     } finally {
       restore();
@@ -636,7 +636,7 @@ describe('memories that back a first-class object', () => {
       }
 
       await expect(consolidate(home)).rejects.toThrow(/no such column/);
-      expect(loadAllEntries(home).map((e) => e.id)).toContain(faded.id);
+      expect(loadAllEntries(home, 'default').map((e) => e.id)).toContain(faded.id);
     } finally {
       restore();
     }

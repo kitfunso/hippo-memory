@@ -154,7 +154,7 @@ describe('syncGlobalToLocal', () => {
     const count = syncGlobalToLocal(localRoot, globalRoot);
     expect(count).toBe(2);
 
-    const localEntries = loadAllEntries(localRoot);
+    const localEntries = loadAllEntries(localRoot, 'default');
     const ids = localEntries.map((e) => e.id);
     expect(ids).toContain(entry1.id);
     expect(ids).toContain(entry2.id);

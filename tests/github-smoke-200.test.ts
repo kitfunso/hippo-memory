@@ -285,7 +285,7 @@ describe('GitHub connector — 200-event smoke test', () => {
     expect(activeCount).toBe(195);
 
     // ---- (2)(3)(4) Tag / scope / owner invariants on every active row ----
-    const allEntries = loadAllEntries(root);
+    const allEntries = loadAllEntries(root, 'default');
     const ghEntries = allEntries.filter((e) => e.tags.includes('source:github'));
     expect(ghEntries).toHaveLength(195);
 

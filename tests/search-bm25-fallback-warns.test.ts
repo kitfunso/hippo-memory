@@ -50,7 +50,7 @@ describe('hybridSearch BM25 fallback', () => {
     await embedMemory(root, entry);
     useModel('another-model');
 
-    const entries = loadAllEntries(root);
+    const entries = loadAllEntries(root, 'default');
     const first = await hybridSearch('deploy fridays', entries, { hippoRoot: root });
     await hybridSearch('deploy fridays', entries, { hippoRoot: root });
 
@@ -66,7 +66,7 @@ describe('hybridSearch BM25 fallback', () => {
     await embedMemory(root, entry);
     vi.stubGlobal('fetch', vi.fn(async () => new Response('upstream down', { status: 500 })));
 
-    const entries = loadAllEntries(root);
+    const entries = loadAllEntries(root, 'default');
     await hybridSearch('deploy fridays', entries, { hippoRoot: root });
     await hybridSearch('deploy fridays', entries, { hippoRoot: root });
 

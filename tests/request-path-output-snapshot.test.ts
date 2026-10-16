@@ -162,9 +162,9 @@ describe('request-path output on a fixed store', () => {
     const repo = join(tmp, 'repo');
     gitRepoWithCommits(repo);
     process.chdir(repo);
-    const before = new Set(loadAllEntries(localRoot).map((e) => e.id));
+    const before = new Set(loadAllEntries(localRoot, 'default').map((e) => e.id));
     const out = textOf(await call('hippo_learn'));
-    const added = loadAllEntries(localRoot).filter((e) => !before.has(e.id)).map((e) => e.content).sort();
+    const added = loadAllEntries(localRoot, 'default').filter((e) => !before.has(e.id)).map((e) => e.content).sort();
     expect({ out, added }).toMatchSnapshot();
   });
 });

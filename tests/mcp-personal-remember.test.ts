@@ -59,7 +59,7 @@ describe('hippo_remember personal over HTTP MCP', () => {
     const reply = await callTool(keyA, 'hippo_remember', { text: NOTE, personal: true });
     expect(reply.error).toBeUndefined();
     expect(reply.result?.content[0]?.text).toMatch(/^Remembered \[/);
-    const rows = loadAllEntries(root);
+    const rows = loadAllEntries(root, 'default');
     expect(rows).toHaveLength(1);
     expect(rows[0]?.scope).toBe('personal:private:oid-a');
     expect(rows[0]?.origin_project).toBe('');
@@ -70,11 +70,11 @@ describe('hippo_remember personal over HTTP MCP', () => {
     const refused = await callTool(keyAdmin, 'hippo_remember', { text: NOTE, personal: true });
     expect(refused.result).toBeUndefined();
     expect(refused.error?.message).toBe(NO_OWNER_TEXT);
-    expect(loadAllEntries(root)).toHaveLength(0);
+    expect(loadAllEntries(root, 'default')).toHaveLength(0);
 
     const team = await callTool(keyAdmin, 'hippo_remember', { text: 'team note from the admin key' });
     expect(team.error).toBeUndefined();
-    expect(loadAllEntries(root).map((e) => e.scope)).toEqual([null]);
+    expect(loadAllEntries(root, 'default').map((e) => e.scope)).toEqual([null]);
   });
 
   // Needs lane A's read sites (the owner's own scope admitted on recall); red on lane B alone.

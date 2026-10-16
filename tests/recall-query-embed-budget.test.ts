@@ -151,7 +151,7 @@ describe("a recall's query embedding", () => {
     embeddings.setFault('stall');
     const before = embeddings.requests();
 
-    const ranked = await physicsSearch(QUERY, loadAllEntries(root), { hippoRoot: root, budget: 1_000_000 });
+    const ranked = await physicsSearch(QUERY, loadAllEntries(root, 'default'), { hippoRoot: root, budget: 1_000_000 });
 
     expect(ranked.map((r) => r.entry.content)).toEqual([LEXICAL]);
     expect(embeddings.requests() - before).toBe(1);

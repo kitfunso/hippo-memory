@@ -6,7 +6,7 @@ import { spawnSync } from 'node:child_process';
 import { repairAutomaticMemories } from '../src/store/quality-repair.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { loadAllEntries } from '../src/store/entry-reads.js';
+import { loadEveryTenantEntries } from '../src/store/entry-reads.js';
 import { entryMirrorFiles } from './_helpers/entry-mirror-files.js';
 import { DatabaseSync } from '../src/db/sqlite.js';
 import { STORE_BUSY_MESSAGE } from '../src/store/port.js';
@@ -63,7 +63,7 @@ describe('recoverable automatic memory quality repair', () => {
     expect(applied.appliedIds).toEqual([bad.id]);
     expect(existsSync(applied.backup!)).toBe(true);
     expect(entryMirrorFiles(root, bad.id)).toEqual([]);
-    expect(loadAllEntries(root).map((entry) => entry.id)).toEqual([good.id]);
+    expect(loadEveryTenantEntries(root).map((entry) => entry.id)).toEqual([good.id]);
     const snapshot = withDb((db) => readDormantSnapshot(db, 'default', bad.id));
     expect(snapshot?.entry).toMatchObject({ content: bad.content, retrieval_count: 7, tags: bad.tags, source: bad.source });
     expect(withDb((db) => db.prepare("SELECT target_id, metadata_json FROM audit_log WHERE op = 'quality_repair'").all())).toEqual([
@@ -76,7 +76,7 @@ describe('recoverable automatic memory quality repair', () => {
     expect(run(true)).toMatchObject({ appliedIds: [], backup: null, issues: [] });
     const typed = createMemory(bad.content, { source: 'cli' });
     writeEntry(root, typed);
-    expect(loadAllEntries(root).map((entry) => entry.id)).toContain(typed.id);
+    expect(loadEveryTenantEntries(root).map((entry) => entry.id)).toContain(typed.id);
   });
 
   it('keeps pinned, raw, imported, kept-for-good and object-backed memories with their links', () => {
@@ -97,7 +97,7 @@ describe('recoverable automatic memory quality repair', () => {
     ]));
     // An agent's note is never judged, even when it carries a hippo writer's tag.
     for (const row of [imported, kept]) expect(result.issues.map((issue) => issue.id)).not.toContain(row.id);
-    expect(loadAllEntries(root)).toHaveLength(6);
+    expect(loadEveryTenantEntries(root)).toHaveLength(6);
     expect(withDb((db) => db.prepare('SELECT memory_id FROM predictions WHERE id = ?').get(prediction.id))).toEqual({ memory_id: backing.id });
   });
 
@@ -153,7 +153,7 @@ describe('recoverable automatic memory quality repair', () => {
     ]));
     for (const row of [trace, promoted, digest]) expect(result.issues.map((issue) => issue.id)).not.toContain(row.id);
     expect(result.appliedIds).toEqual([]);
-    expect(loadAllEntries(root)).toHaveLength(6);
+    expect(loadEveryTenantEntries(root)).toHaveLength(6);
   });
 
   it('sets a bundle aside only when every part is a certain defect and every parent is automatic', () => {
@@ -186,7 +186,7 @@ describe('recoverable automatic memory quality repair', () => {
     const bad = seed('succeeds (inserts or updates)');
     withDb((db) => db.exec("CREATE TRIGGER refuse_repair_audit BEFORE INSERT ON audit_log WHEN NEW.op = 'quality_repair' BEGIN SELECT RAISE(ABORT, 'audit unavailable'); END"));
     expect(() => run(true)).toThrow(/audit unavailable/);
-    expect(loadAllEntries(root).map((entry) => entry.id)).toContain(bad.id);
+    expect(loadEveryTenantEntries(root).map((entry) => entry.id)).toContain(bad.id);
     expect(withDb((db) => readDormantSnapshot(db, 'default', bad.id))).toBeNull();
     expect(readdirSync(join(root, 'backups'))).toEqual([]);
   });
@@ -195,7 +195,7 @@ describe('recoverable automatic memory quality repair', () => {
     const bad = seed('succeeds (inserts or updates)');
     writeFileSync(join(root, 'backups'), 'blocks the backup directory');
     expect(() => run(true)).toThrow();
-    expect(loadAllEntries(root).map((entry) => entry.id)).toContain(bad.id);
+    expect(loadEveryTenantEntries(root).map((entry) => entry.id)).toContain(bad.id);
     expect(withDb((db) => readDormantSnapshot(db, 'default', bad.id))).toBeNull();
   });
 
@@ -233,7 +233,7 @@ describe('recoverable automatic memory quality repair', () => {
     const result = run(true);
     expect(result.appliedIds).toEqual([mine.id]);
     expect(JSON.stringify(result)).not.toContain(mine.content);
-    expect(loadAllEntries(root).map((entry) => entry.id)).toContain(other.id);
+    expect(loadEveryTenantEntries(root).map((entry) => entry.id)).toContain(other.id);
   });
 
   it('still imports a note a person wrote after a captured copy was repaired', () => {
@@ -244,7 +244,7 @@ describe('recoverable automatic memory quality repair', () => {
       expect(repairAutomaticMemories(world.local, { tenantId: 'default', apply: true }).appliedIds).toEqual([bad.id]);
       note(projectNotes(world), 'result.md', bad.content);
       importForStore(world.local, { machine: world.machine });
-      expect(loadAllEntries(world.local).map((entry) => entry.content)).toEqual([bad.content]);
+      expect(loadEveryTenantEntries(world.local).map((entry) => entry.content)).toEqual([bad.content]);
     } finally { closeWorld(world); }
   });
 });
@@ -270,11 +270,11 @@ describe('hippo audit repair', () => {
     const globalBad = seedIn(global, 'Found local migration files to be');
     expect(JSON.parse(cli('--json').stdout)).toMatchObject({ appliedIds: [], issues: [{ id: bad.id, disposition: 'set-aside' }] });
     expect(JSON.parse(cli('--apply', '--dry-run', '--json').stdout)).toMatchObject({ appliedIds: [], backup: null });
-    expect(loadAllEntries(local).map((entry) => entry.id)).toEqual([bad.id]);
+    expect(loadEveryTenantEntries(local).map((entry) => entry.id)).toEqual([bad.id]);
     const applied = cli('--apply', '--global');
     expect(applied.stdout).toContain(`Moved 1 memories to dormant storage. Recovery: hippo dormant restore <id> --global.`);
-    expect(loadAllEntries(global).map((entry) => entry.id)).not.toContain(globalBad.id);
-    expect(loadAllEntries(local).map((entry) => entry.id)).toEqual([bad.id]);
+    expect(loadEveryTenantEntries(global).map((entry) => entry.id)).not.toContain(globalBad.id);
+    expect(loadEveryTenantEntries(local).map((entry) => entry.id)).toEqual([bad.id]);
   });
 
   it('reports a busy store plainly and removes the backup a failed apply wrote', () => {
@@ -287,6 +287,6 @@ describe('hippo audit repair', () => {
     expect(result.status).toBe(1);
     expect(result.stderr).toContain(STORE_BUSY_MESSAGE);
     expect(readdirSync(join(local, 'backups'))).toEqual([]);
-    expect(loadAllEntries(local).map((entry) => entry.id)).toEqual([bad.id]);
+    expect(loadEveryTenantEntries(local).map((entry) => entry.id)).toEqual([bad.id]);
   }, 30000);
 });

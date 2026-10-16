@@ -8,7 +8,7 @@ import { autoShare } from '../src/sharing/share.js';
 import { initGlobal } from '../src/sharing/global-store.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { loadAllEntries } from '../src/store/entry-reads.js';
+import { loadAllEntries, loadEveryTenantEntries } from '../src/store/entry-reads.js';
 import { MEMORY_SELECT_COLUMNS } from '../src/store/rows.js';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
 import { quarantineScopeFor } from '../src/trust/quarantine.js';
@@ -96,7 +96,7 @@ describe('autoShare prefilter', () => {
         if (tenantId === undefined && minScore <= 0.6) wanted.add(ids.get('other error 0.6')!);
         const stats: AutoShareStats = { secretSkipped: 0 };
         const picked = autoShare(root, { minScore, dryRun: true, tenantId, stats });
-        const inOrder = loadAllEntries(root, tenantId).filter((e) => wanted.has(e.id));
+        const inOrder = (tenantId === undefined ? loadEveryTenantEntries(root) : loadAllEntries(root, tenantId)).filter((e) => wanted.has(e.id));
         expect(picked.map((e) => e.id), `minScore ${minScore} tenant ${tenantId}`).toEqual(inOrder.map((e) => e.id));
         expect(picked).toEqual(inOrder);
         expect(stats.neverAutoShareSkipped).toBe(tenantId === undefined ? 4 : 3);

@@ -13,7 +13,7 @@ import { closeHippoDb, openHippoDb } from '../src/db/index.js';
 import { deriveOriginProject } from '../src/core/project-identity.js';
 import { insertRejectedValue, normalizeValueForRejection, rejectionDigest } from '../src/store/rejection.js';
 import { mergedText } from '../src/util/same-text.js';
-import { loadAllEntries } from '../src/store/entry-reads.js';
+import { loadAllEntries, loadEveryTenantEntries } from '../src/store/entry-reads.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { initStore } from '../src/store/open.js';
 import { initProject, removeScratch, runHippo, scratch } from './_helpers/compaction-hooks.js';
@@ -83,7 +83,7 @@ describe('captureSessionTexts', () => {
       expect(r).toMatchObject({ source: 'capture', tenant_id: 't1', origin_project: 'acme-web', source_session_id: 'sess-1' });
     }
     expect(auditActors('remember', 't1')).toEqual([ACTOR, ACTOR, ACTOR]);
-    expect(loadAllEntries(root)).toHaveLength(3);
+    expect(loadEveryTenantEntries(root)).toHaveLength(3);
   });
 
   it('never stamps the folder of a store whose parent is no project', () => {
@@ -105,12 +105,12 @@ describe('captureSessionTexts', () => {
   it('writes under the context tenant whatever else the request carries', () => {
     const smuggled = { ...req(TEXTS), global: true, tenantId: undefined, dryRun: true };
     expect(captureSessionTexts(ctxFor(root, 't9'), smuggled).captured).toBe(3);
-    expect(loadAllEntries(root).map((r) => r.tenant_id)).toEqual(['t9', 't9', 't9']);
+    expect(loadEveryTenantEntries(root).map((r) => r.tenant_id)).toEqual(['t9', 't9', 't9']);
   });
 
   it('throws on an empty project name and writes nothing', () => {
     expect(() => captureSessionTexts(ctxFor(root), req(TEXTS, { project: { name: '', legacyName: 'web' } }))).toThrow('project name must not be blank');
-    expect(loadAllEntries(root)).toEqual([]);
+    expect(loadEveryTenantEntries(root)).toEqual([]);
   });
 
   // The shared store's own check: rows match names verbatim, so a rewritten name would split a project.
@@ -122,13 +122,13 @@ describe('captureSessionTexts', () => {
     ['eleven aliases', { name: 'api', legacyName: 'api', aliases: Array.from({ length: 11 }, (_, i) => `a${i}`) }],
   ])('throws on %s and writes nothing', (_name, project) => {
     expect(() => captureSessionTexts(ctxFor(root), req(TEXTS, { project }))).toThrow(BadRequestError);
-    expect(loadAllEntries(root)).toEqual([]);
+    expect(loadEveryTenantEntries(root)).toEqual([]);
   });
 
   it('captures for a lower-case name with aliases beside an upper-case legacy name', () => {
     const project = { name: 'api', legacyName: 'Api', aliases: ['acme-api', 'api-old'] };
     expect(captureSessionTexts(ctxFor(root), req(TEXTS, { project })).captured).toBe(3);
-    expect(loadAllEntries(root).map((r) => r.origin_project)).toEqual(['api', 'api', 'api']);
+    expect(loadEveryTenantEntries(root).map((r) => r.origin_project)).toEqual(['api', 'api', 'api']);
   });
 
   it.each([
@@ -137,7 +137,7 @@ describe('captureSessionTexts', () => {
     ['a whitespace project name', { project: { name: '   ', legacyName: 'web' } }],
   ])('throws on %s and writes nothing', (_name, over) => {
     expect(() => captureSessionTexts(ctxFor(root), req(TEXTS, over))).toThrow(BadRequestError);
-    expect(loadAllEntries(root)).toEqual([]);
+    expect(loadEveryTenantEntries(root)).toEqual([]);
   });
 
   it('scrubs the texts again, so a bearer token, an email and a home path never land', () => {
@@ -201,7 +201,7 @@ describe('captureSessionTexts caps', () => {
     ['257 KiB in all', [...Array.from({ length: 8 }, () => 'a'.repeat(32 * 1024)), 'a'.repeat(1024)]],
   ])('rejects %s as a bad request and writes nothing', (_name, texts) => {
     expect(() => captureSessionTexts(ctxFor(root), req(texts))).toThrow(BadRequestError);
-    expect(loadAllEntries(root)).toEqual([]);
+    expect(loadEveryTenantEntries(root)).toEqual([]);
   });
 
   it('writes the newest 50 of 60 items and counts the rest as skipped', () => {

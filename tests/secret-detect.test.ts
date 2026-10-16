@@ -213,9 +213,9 @@ describe('producer + sync vetoes (real stores)', () => {
 
   it('shareMemory refuses a secret row even with force', () => {
     writeEntry(projA, createMemory(SECRET_ROW, { pinned: true }));
-    const [row] = loadAllEntries(projA);
+    const [row] = loadAllEntries(projA, 'default');
     expect(() => shareMemory(projA, row.id, { force: true })).toThrow(/secret/i);
-    expect(loadAllEntries(getGlobalRoot())).toHaveLength(0);
+    expect(loadAllEntries(getGlobalRoot(), 'default')).toHaveLength(0);
   });
 
   it('autoShare silently skips secret rows and still shares clean ones', () => {
@@ -244,24 +244,24 @@ describe('producer + sync vetoes (real stores)', () => {
     const candidates = autoShare(projA, { minScore: 0.6, dryRun: true, stats });
     expect(candidates).toHaveLength(0);
     expect(stats.secretSkipped).toBe(1);
-    expect(loadAllEntries(getGlobalRoot())).toHaveLength(0);
+    expect(loadAllEntries(getGlobalRoot(), 'default')).toHaveLength(0);
   });
 
   it('promoteToGlobal refuses a secret row and stamps origin on clean promotes', () => {
     writeEntry(projA, createMemory(SECRET_ROW, { pinned: true }));
     writeEntry(projA, createMemory(CLEAN_ROW, { pinned: true }));
-    const rows = loadAllEntries(projA);
+    const rows = loadAllEntries(projA, 'default');
     const secretRow = rows.find((e) => e.content === SECRET_ROW)!;
     const cleanRow = rows.find((e) => e.content === CLEAN_ROW)!;
     expect(() => promoteToGlobal(projA, secretRow.id)).toThrow(/secret/i);
     const promoted = promoteToGlobal(projA, cleanRow.id);
     expect(promoted.origin_project).toBe('proj-a');
-    expect(loadAllEntries(getGlobalRoot()).map((e) => e.content)).toEqual([CLEAN_ROW]);
+    expect(loadAllEntries(getGlobalRoot(), 'default').map((e) => e.content)).toEqual([CLEAN_ROW]);
   });
 
   it('shareMemory stamps the canonical origin on the global copy', () => {
     writeEntry(projA, createMemory(CLEAN_ROW, { pinned: true }));
-    const [row] = loadAllEntries(projA);
+    const [row] = loadAllEntries(projA, 'default');
     const globalCopy = shareMemory(projA, row.id, { force: true });
     expect(globalCopy?.origin_project).toBe('proj-a');
     expect(globalCopy?.source).toMatch(/^shared:proj-a:/);
@@ -274,13 +274,13 @@ describe('producer + sync vetoes (real stores)', () => {
 
     const count = syncGlobalToLocal(projA, globalStore);
     expect(count).toBe(1);
-    const local = loadAllEntries(projA);
+    const local = loadAllEntries(projA, 'default');
     expect(local.map((e) => e.content)).toEqual([CLEAN_ROW]);
     expect(local[0].origin_project).toBe('');
 
     const withCross = syncGlobalToLocal(projA, globalStore, { includeCrossProject: true });
     expect(withCross).toBe(1); // proj-b row now copies; the secret still never does
-    expect(loadAllEntries(projA).map((e) => e.content)).not.toContain(SECRET_ROW);
+    expect(loadAllEntries(projA, 'default').map((e) => e.content)).not.toContain(SECRET_ROW);
   });
 
   it('ambient context never injects a secret outside its owning project, even cross-project or with isolation off', async () => {

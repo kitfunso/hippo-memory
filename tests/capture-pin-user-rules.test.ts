@@ -43,7 +43,7 @@ describe('capture pins the rules a person states', () => {
 
   it("pins the person's rule and leaves their decision and the agent's rule unpinned", () => {
     capture([{ role: 'user', text: `${TAUGHT} ${USER_DECISION}` }, { role: 'assistant', text: AGENT_RULE }]);
-    const rows = loadAllEntries(root);
+    const rows = loadAllEntries(root, 'default');
     expect(rows.filter((e) => e.pinned).map((e) => e.content)).toEqual([expect.stringContaining('never edit CHANGELOG.md')]);
     expect(rows.find((e) => e.content.startsWith("Let's go with SQLite"))?.pinned).toBe(false);
     expect(rows.find((e) => e.content.startsWith('The deploy script'))?.pinned).toBe(false);
@@ -56,7 +56,7 @@ describe('capture pins the rules a person states', () => {
 
   it("the same rule from the agent stays behind the prompt gate", async () => {
     capture([{ role: 'assistant', text: TAUGHT }]);
-    expect(loadAllEntries(root).map((e) => e.content)).toEqual([expect.stringContaining('never edit CHANGELOG.md')]);
+    expect(loadAllEntries(root, 'default').map((e) => e.content)).toEqual([expect.stringContaining('never edit CHANGELOG.md')]);
     expect(await injected()).toEqual([]);
   });
 
@@ -64,7 +64,7 @@ describe('capture pins the rules a person states', () => {
     const file = join(scratch, 'notes.md');
     writeFileSync(file, TAUGHT);
     cmdCapture(root, { source: 'file', filePath: file, dryRun: false, global: false });
-    expect(loadAllEntries(root).map((e) => [e.content, e.pinned])).toEqual([[expect.stringContaining('never edit CHANGELOG.md'), false]]);
+    expect(loadAllEntries(root, 'default').map((e) => [e.content, e.pinned])).toEqual([[expect.stringContaining('never edit CHANGELOG.md'), false]]);
   });
 
   it('drops the context Codex stores as user messages, so none of it counts as the person speaking', () => {

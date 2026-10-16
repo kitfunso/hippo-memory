@@ -35,7 +35,7 @@ describe('writeEntry origin stamping (v39)', () => {
   it('stamps the store-derived project origin when the entry has none', () => {
     const storeRoot = makeProjectStore('proj-a');
     writeEntry(storeRoot, createMemory('remember this fact about proj a'));
-    const [entry] = loadAllEntries(storeRoot);
+    const [entry] = loadAllEntries(storeRoot, 'default');
     expect(entry.origin_project).toBe('proj-a');
   });
 
@@ -43,7 +43,7 @@ describe('writeEntry origin stamping (v39)', () => {
     const storeRoot = makeProjectStore('proj-a');
     const entry = { ...createMemory('a row shared from elsewhere'), origin_project: 'proj-b' };
     writeEntry(storeRoot, entry);
-    const [loaded] = loadAllEntries(storeRoot);
+    const [loaded] = loadAllEntries(storeRoot, 'default');
     expect(loaded.origin_project).toBe('proj-b');
   });
 
@@ -51,14 +51,14 @@ describe('writeEntry origin stamping (v39)', () => {
     const storeRoot = makeProjectStore('proj-a');
     const entry = { ...createMemory('a user-global preference'), origin_project: '' };
     writeEntry(storeRoot, entry);
-    const [loaded] = loadAllEntries(storeRoot);
+    const [loaded] = loadAllEntries(storeRoot, 'default');
     expect(loaded.origin_project).toBe('');
   });
 
   it('stamps origins on the batch write path too (consolidate bypasses writeEntry)', () => {
     const storeRoot = makeProjectStore('proj-a');
     batchWriteAndDelete(storeRoot, [createMemory('a consolidated semantic summary row')], []);
-    const [entry] = loadAllEntries(storeRoot);
+    const [entry] = loadAllEntries(storeRoot, 'default');
     expect(entry.origin_project).toBe('proj-a');
   });
 
@@ -71,11 +71,11 @@ describe('writeEntry origin stamping (v39)', () => {
     } finally {
       closeHippoDb(db);
     }
-    const [legacy] = loadAllEntries(storeRoot);
+    const [legacy] = loadAllEntries(storeRoot, 'default');
     expect(legacy.origin_project).toBeNull();
     // Simulate the markRetrieved writeback: writeEntry on the loaded row.
     writeEntry(storeRoot, legacy);
-    expect(loadAllEntries(storeRoot)[0].origin_project).toBeNull();
+    expect(loadAllEntries(storeRoot, 'default')[0].origin_project).toBeNull();
     // The pure helper preserves null too.
     expect(stampOriginProject(storeRoot, { ...legacy, origin_project: null }).origin_project).toBeNull();
   });
@@ -120,7 +120,7 @@ describe('markdown mirror round-trip', () => {
     fs.writeFileSync(path.join(storeRoot, 'episodic', `${legacy.id}.md`), serializeEntry(legacy));
 
     initStore(storeRoot);
-    const byId = new Map(loadAllEntries(storeRoot).map((e) => [e.id, e.origin_project]));
+    const byId = new Map(loadAllEntries(storeRoot, 'default').map((e) => [e.id, e.origin_project]));
     expect(byId.get(unknown.id)).toBeNull();
     expect(byId.get(legacy.id)).toBe('proj-a');
   });
@@ -148,7 +148,7 @@ describe('v39 migration backfill', () => {
     } finally {
       closeHippoDb(db);
     }
-    const [entry] = loadAllEntries(storeRoot);
+    const [entry] = loadAllEntries(storeRoot, 'default');
     expect(entry.origin_project).toBe('proj-a');
   });
 
@@ -160,7 +160,7 @@ describe('v39 migration backfill', () => {
     regressStoreToV38(storeRoot);
 
     closeHippoDb(openHippoDb(storeRoot)); // migrate
-    const entries = loadAllEntries(storeRoot);
+    const entries = loadAllEntries(storeRoot, 'default');
     const fromB = entries.find((e) => e.source.startsWith('shared:Proj-B'));
     const fromHome = entries.find((e) => e.source.startsWith(`shared:${homeName}`));
     expect(fromB?.origin_project).toBe('proj-b');
@@ -174,7 +174,7 @@ describe('v39 migration backfill', () => {
     regressStoreToV38(storeRoot);
 
     closeHippoDb(openHippoDb(storeRoot)); // migrate
-    const [entry] = loadAllEntries(storeRoot);
+    const [entry] = loadAllEntries(storeRoot, 'default');
     expect(entry.origin_project).toBe('proj-b');
   });
 
@@ -191,7 +191,7 @@ describe('v39 migration backfill', () => {
     fs.writeFileSync(path.join(storeRoot, 'episodic', `${plainRow.id}.md`), serializeEntry(plainRow));
 
     initStore(storeRoot); // bootstrapLegacyStore imports the markdown
-    const entries = loadAllEntries(storeRoot);
+    const entries = loadAllEntries(storeRoot, 'default');
     const shared = entries.find((e) => e.source.startsWith('shared:'));
     const plain = entries.find((e) => !e.source.startsWith('shared:'));
     expect(shared?.origin_project).toBe('proj-b');
@@ -226,7 +226,7 @@ describe('v39 migration backfill', () => {
       writeEntry(globalRoot, { ...createMemory('a user-global lesson in a dotfiles-managed store'), origin_project: '' });
       regressStoreToV38(globalRoot);
       closeHippoDb(openHippoDb(globalRoot)); // migrate
-      const [entry] = loadAllEntries(globalRoot);
+      const [entry] = loadAllEntries(globalRoot, 'default');
       expect(entry.origin_project).toBe('');
     } finally {
       if (origHippoHome !== undefined) process.env.HIPPO_HOME = origHippoHome;
@@ -239,9 +239,9 @@ describe('v39 migration backfill', () => {
     writeEntry(storeRoot, createMemory('row for idempotency check'));
     regressStoreToV38(storeRoot);
     closeHippoDb(openHippoDb(storeRoot));
-    const first = loadAllEntries(storeRoot).map((e) => [e.id, e.origin_project]);
+    const first = loadAllEntries(storeRoot, 'default').map((e) => [e.id, e.origin_project]);
     closeHippoDb(openHippoDb(storeRoot));
-    const second = loadAllEntries(storeRoot).map((e) => [e.id, e.origin_project]);
+    const second = loadAllEntries(storeRoot, 'default').map((e) => [e.id, e.origin_project]);
     expect(second).toEqual(first);
   });
 });

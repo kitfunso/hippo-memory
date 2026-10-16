@@ -174,7 +174,7 @@ describe('hippo capture-error --runtime copilot (critic test 5)', () => {
       const r = runHippo(['capture-error', '--runtime', 'copilot'], s.dir, s.env, copilotPayload(name, s.proj));
       expect(r.status, r.stderr).toBe(0);
     }
-    expect(loadAllEntries(s.hippoRoot).filter((e) => e.tags.includes('error'))).toEqual([]);
+    expect(loadAllEntries(s.hippoRoot, 'default').filter((e) => e.tags.includes('error'))).toEqual([]);
     expect(rows<FailureRow>(`SELECT session_id, tool, outcome, skip_rule FROM failure_log ORDER BY rowid`)).toEqual([
       { session_id: SESSION, tool: 'grep', outcome: 'skipped-routine', skip_rule: 'search-tool' },
       { session_id: SESSION, tool: 'bash', outcome: 'skipped-routine', skip_rule: 'quiet-exit' },
@@ -184,7 +184,7 @@ describe('hippo capture-error --runtime copilot (critic test 5)', () => {
   it('stores a real failure in the payload cwd store', () => {
     const r = runHippo(['capture-error', '--runtime', 'copilot'], s.dir, s.env, copilotPayload('postToolUseFailureBuild', s.proj));
     expect(r.status, r.stderr).toBe(0);
-    expect(loadAllEntries(s.hippoRoot).filter((e) => e.tags.includes('error')).map((e) => e.content)).toEqual([
+    expect(loadAllEntries(s.hippoRoot, 'default').filter((e) => e.tags.includes('error')).map((e) => e.content)).toEqual([
       'bash: Command failed with exit code 2: tsc reported TS2345 in src/auth/client.ts',
     ]);
   });
@@ -209,7 +209,7 @@ describe('hippo session-end --runtime copilot (critic test 6)', () => {
     const log = await waitForLog(logFile, WORKER_DONE);
     expect(log).toContain('capturing session...');
     expect(log).not.toContain('skip capture');
-    expect(loadAllEntries(s.hippoRoot).some((e) => e.content.includes('retry budget at three attempts'))).toBe(true);
+    expect(loadAllEntries(s.hippoRoot, 'default').some((e) => e.content.includes('retry budget at three attempts'))).toBe(true);
   });
 
   it('with no --log-file logs to copilot-sleep.log under the hippo logs folder, the file the hooks table used to name', async () => {
@@ -307,7 +307,7 @@ function writeVscodeTranscript(text: string, sessionId = VSCODE_SESSION): string
 
 describe('hippo session-end --runtime copilot --turn (the VS Code Stop hook)', () => {
   const logFile = (): string => path.join(s.dir, 'turn.log');
-  const memoriesWith = (text: string, hippoRoot = s.hippoRoot): number => loadAllEntries(hippoRoot).filter((e) => e.content.includes(text)).length;
+  const memoriesWith = (text: string, hippoRoot = s.hippoRoot): number => loadAllEntries(hippoRoot, 'default').filter((e) => e.content.includes(text)).length;
   const stopArgs = (log: string): string[] => ['session-end', '--runtime', 'copilot', '--turn', '--log-file', log];
   const sessionFile = (suffix: string, id = VSCODE_SESSION): string => path.join(s.dir, '.hippo', 'sessions', `${id}${suffix}`);
 

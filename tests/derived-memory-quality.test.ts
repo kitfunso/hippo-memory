@@ -28,7 +28,7 @@ describe('quality at automatic derivation boundaries', () => {
     const result = await consolidate(root);
     expect(result.merged).toBe(0);
     expect(result.extractionCandidates).toBe(0);
-    expect(loadAllEntries(root).map((entry) => entry.content)).toEqual(inputs);
+    expect(loadAllEntries(root, 'default').map((entry) => entry.content)).toEqual(inputs);
   });
 
   it("derives from a person's rows whatever the automatic check says of the text", async () => {
@@ -69,7 +69,7 @@ describe('quality at automatic derivation boundaries', () => {
     ]);
     expect(facts).toHaveLength(1);
     expect(facts[0].content).toContain('must exclude test schema setup');
-    expect(loadAllEntries(root)).toHaveLength(2);
+    expect(loadAllEntries(root, 'default')).toHaveLength(2);
   });
 
   it('refuses incomplete generated summary prose through the shared new/rebuild summary boundary', async () => {

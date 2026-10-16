@@ -70,7 +70,7 @@ function claudeWorker(sessionId: string, transcript: string): string {
   return fs.readFileSync(log, 'utf8');
 }
 
-const digests = () => loadAllEntries(path.join(repo, '.hippo')).filter(isSessionDigestRow);
+const digests = () => loadAllEntries(path.join(repo, '.hippo'), 'default').filter(isSessionDigestRow);
 
 // Each worker run spawns node and runs sleep, so a busy full suite can take several times the solo run.
 const SLOW = { timeout: 120_000 };
@@ -155,7 +155,7 @@ describe('a folder with only the global store', SLOW, () => {
     expect(hippo(codexRollout(folder), undefined, folder).status).toBe(0);
     expect(fs.readFileSync(log, 'utf8')).toContain('digest: skip: this folder has no store of its own');
 
-    const global = loadAllEntries(globalRoot);
+    const global = loadAllEntries(globalRoot, 'default');
     expect(global.some((e) => e.content.includes(RULE) && e.origin_project === 'billing')).toBe(true);
     expect(loadLatestHandoff(globalRoot, 'default', 'G1')).not.toBeNull();
     expect(global.filter(isSessionDigestRow)).toEqual([]);
@@ -174,7 +174,7 @@ describe('context prints the handoff or the digest, never both', SLOW, () => {
 
   it('hides the digest behind its own session handoff, even when it is the only memory', () => {
     claudeWorker('S1', claudeTranscript('s1'));
-    expect(loadAllEntries(path.join(repo, '.hippo')).map((e) => e.id)).toEqual([sessionDigestId('default', 'S1')]);
+    expect(loadAllEntries(path.join(repo, '.hippo'), 'default').map((e) => e.id)).toEqual([sessionDigestId('default', 'S1')]);
     const text = context('additional-context');
     expect(text).toContain('## Session Handoff');
     expect(text).not.toContain('Changed:');

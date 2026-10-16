@@ -65,7 +65,7 @@ describe('Trace layer inherits core memory mechanics', () => {
     );
     writeEntry(tmpDir, trace);
 
-    const entries = loadAllEntries(tmpDir);
+    const entries = loadAllEntries(tmpDir, 'default');
     const results = await hybridSearch('refactor authentication', entries, {
       hippoRoot: tmpDir,
       budget: 4000,
@@ -120,7 +120,7 @@ describe('Trace layer inherits core memory mechanics', () => {
     // with physics state — no layer-specific crash, no data loss.
     const result = await consolidate(tmpDir, { now: new Date() });
     expect(result.dryRun).toBe(false);
-    const survivors = loadAllEntries(tmpDir);
+    const survivors = loadAllEntries(tmpDir, 'default');
     expect(survivors.find((e) => e.id === trace.id)).toBeDefined();
   });
 });

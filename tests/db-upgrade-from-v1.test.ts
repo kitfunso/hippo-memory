@@ -61,7 +61,7 @@ describe('upgrading a populated v1 store to the latest schema', () => {
       closeHippoDb(db);
     }
 
-    const entries = loadAllEntries(root);
+    const entries = loadAllEntries(root, 'default');
     expect(entries.map((e) => e.id).sort()).toEqual(['mem_old_1', 'mem_old_2']);
     const lesson = readEntry(root, 'mem_old_1')!;
     expect(lesson.content).toBe('a pinned semantic lesson from the first release');
@@ -89,6 +89,6 @@ describe('upgrading a populated v1 store to the latest schema', () => {
     } finally {
       closeHippoDb(db);
     }
-    expect(loadAllEntries(root)).toHaveLength(2);
+    expect(loadAllEntries(root, 'default')).toHaveLength(2);
   });
 });

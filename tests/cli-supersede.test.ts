@@ -40,7 +40,7 @@ describe('hippo supersede', () => {
   it('creates new memory and links old one via superseded_by', async () => {
     await hippo('remember', 'X is true');
     const hippoRoot = join(home, '.hippo');
-    const entries = loadAllEntries(hippoRoot);
+    const entries = loadAllEntries(hippoRoot, 'default');
     expect(entries.length).toBeGreaterThan(0);
     const oldId = entries[0].id;
 
@@ -104,7 +104,7 @@ describe('hippo supersede', () => {
   it('errors if old id is already superseded', async () => {
     await hippo('remember', 'first version of fact');
     const hippoRoot = join(home, '.hippo');
-    const entries = loadAllEntries(hippoRoot);
+    const entries = loadAllEntries(hippoRoot, 'default');
     const aId = entries[0].id;
     await hippo('supersede', aId, 'second version of fact');
     const err = await hippoErr('supersede', aId, 'third version of fact');

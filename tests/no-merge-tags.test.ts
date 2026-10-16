@@ -54,7 +54,7 @@ describe('NO_MERGE_TAGS', () => {
       const result = await sleepOver([tag]);
       expect(result.extractionCandidates).toBe(0);
       expect(result.merged).toBe(0);
-      expect(loadAllEntries(hippoRoot).filter((e) => e.layer === Layer.Semantic)).toEqual([]);
+      expect(loadAllEntries(hippoRoot, 'default').filter((e) => e.layer === Layer.Semantic)).toEqual([]);
     } finally {
       if (probe) tags.delete(tag);
     }

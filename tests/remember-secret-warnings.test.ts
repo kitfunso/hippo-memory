@@ -35,13 +35,13 @@ describe('api.remember', () => {
     const result = await remember(ctx(), { content: TYPED });
     expect(result.warnings).toHaveLength(1);
     expect(result.warnings![0]).toContain('pattern:github-token');
-    expect(loadAllEntries(root)[0].content).toBe(TYPED);
+    expect(loadAllEntries(root, 'default')[0].content).toBe(TYPED);
   });
 
   it('redacts untrusted text and warns', async () => {
     const result = await remember(ctx(), { content: TYPED, untrusted: true });
     expect(result.warnings).toEqual([expect.stringContaining('redacted')]);
-    expect(loadAllEntries(root)[0].content).not.toContain(GHP);
+    expect(loadAllEntries(root, 'default')[0].content).not.toContain(GHP);
   });
 
   it('leaves the field off when nothing looks like a secret', async () => {

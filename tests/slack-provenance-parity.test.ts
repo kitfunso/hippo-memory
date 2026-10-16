@@ -64,11 +64,11 @@ describe('Slack connector — provenance coverage parity', () => {
         eventId: `Ev${i}`,
       });
     }
-    const coverage = buildProvenanceCoverage(loadAllEntries(root));
+    const coverage = buildProvenanceCoverage(loadAllEntries(root, 'default'));
     expect(coverage.gaps).toHaveLength(0);
     expect(coverage.coverage).toBe(1);
 
-    const slackEntries = loadAllEntries(root).filter(
+    const slackEntries = loadAllEntries(root, 'default').filter(
       (e) => e.kind === 'raw' && e.tags.includes('source:slack'),
     );
     expect(slackEntries.length).toBeGreaterThanOrEqual(25);
@@ -101,9 +101,9 @@ describe('Slack connector — provenance coverage parity', () => {
       message: userless,
       eventId: 'EvBot',
     });
-    const coverage = buildProvenanceCoverage(loadAllEntries(root));
+    const coverage = buildProvenanceCoverage(loadAllEntries(root, 'default'));
     expect(coverage.gaps).toHaveLength(0);
-    const botRow = loadAllEntries(root).find(
+    const botRow = loadAllEntries(root, 'default').find(
       (e) => e.tags.includes('source:slack') && e.owner?.startsWith('bot:'),
     );
     expect(botRow?.owner).toBe('bot:B01ABCD');
@@ -119,11 +119,11 @@ describe('Slack connector — provenance coverage parity', () => {
       message: reply,
       eventId: 'EvReply',
     });
-    const replyRow = loadAllEntries(root).find((e) =>
+    const replyRow = loadAllEntries(root, 'default').find((e) =>
       e.tags.includes('thread:1700000000.000001'),
     );
     expect(replyRow?.owner).toMatch(/^user:U/);
-    expect(buildProvenanceCoverage(loadAllEntries(root)).gaps).toHaveLength(0);
+    expect(buildProvenanceCoverage(loadAllEntries(root, 'default')).gaps).toHaveLength(0);
   });
 
   it('message_changed edits do not create coverage gaps', async () => {
@@ -140,6 +140,6 @@ describe('Slack connector — provenance coverage parity', () => {
     await ingestMessage(ctx, {
       teamId: TEAM_ID, channel: PUBLIC_CHANNEL, message: edited, eventId: 'EvEdit',
     });
-    expect(buildProvenanceCoverage(loadAllEntries(root)).gaps).toHaveLength(0);
+    expect(buildProvenanceCoverage(loadAllEntries(root, 'default')).gaps).toHaveLength(0);
   });
 });

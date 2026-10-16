@@ -202,7 +202,7 @@ describe('a memory with a copy in the global store', () => {
     hippo(['promote', remember(older)]);
 
     expect(hippo(['sync']).stdout).toContain('Synced 0 global memories');
-    expect(loadAllEntries(path.join(project, '.hippo')).filter((e) => e.content === older)).toHaveLength(1);
+    expect(loadAllEntries(path.join(project, '.hippo'), 'default').filter((e) => e.content === older)).toHaveLength(1);
   });
 
   it('lands once in another project when `hippo sync` finds two global copies', () => {
@@ -214,7 +214,7 @@ describe('a memory with a copy in the global store', () => {
     hippo(['init', '--no-hooks', '--no-schedule', '--no-learn']);
 
     hippo(['sync', '--cross-project']);
-    expect(loadAllEntries(path.join(project, '.hippo')).filter((e) => e.content === older)).toHaveLength(1);
+    expect(loadAllEntries(path.join(project, '.hippo'), 'default').filter((e) => e.content === older)).toHaveLength(1);
   });
 
   it('is reached once by graph expansion, and a copy of a base result is not reached at all', () => {

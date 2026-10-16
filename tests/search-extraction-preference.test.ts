@@ -39,7 +39,7 @@ describe('extraction-aware search preference', () => {
     });
     writeEntry(hippoDir, fact);
 
-    const entries = loadAllEntries(hippoDir);
+    const entries = loadAllEntries(hippoDir, 'default');
     const results = search('LeBron basketball points', entries, { budget: 10000 });
 
     expect(results.length).toBeGreaterThanOrEqual(1);
@@ -68,7 +68,7 @@ describe('extraction-aware search preference', () => {
     writeEntry(hippoDir, mem1);
     writeEntry(hippoDir, mem2);
 
-    const entries = loadAllEntries(hippoDir);
+    const entries = loadAllEntries(hippoDir, 'default');
     const results = search('Python TypeScript programming', entries, { budget: 10000 });
 
     const ids = results.map((r) => r.entry.id);
@@ -90,7 +90,7 @@ describe('extraction-aware search preference', () => {
     writeEntry(hippoDir, tagged);
     writeEntry(hippoDir, untagged);
 
-    const entries = loadAllEntries(hippoDir);
+    const entries = loadAllEntries(hippoDir, 'default');
     const results = search('gold inflation futures', entries, { budget: 10000 });
 
     expect(results.length).toBe(2);
@@ -117,7 +117,7 @@ describe('extraction-aware search preference', () => {
     });
     writeEntry(hippoDir, fact);
 
-    const entries = loadAllEntries(hippoDir);
+    const entries = loadAllEntries(hippoDir, 'default');
     const results = search('FRED CPI data stale refresh', entries, { budget: 10000 });
 
     const ids = results.map((r) => r.entry.id);

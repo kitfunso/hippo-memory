@@ -29,7 +29,7 @@ const fetcher = (text: string) => vi.fn<typeof fetch>(async () => new Response(
   JSON.stringify({ content: [{ text }] }), { status: 200, headers: { 'content-type': 'application/json' } },
 ));
 const inProject = (entry: MemoryEntry, origin: string | null): MemoryEntry => ({ ...entry, origin_project: origin });
-const live = () => loadAllEntries(home).filter((e) => !e.superseded_by);
+const live = () => loadAllEntries(home, 'default').filter((e) => !e.superseded_by);
 
 describe('sleep partitions by origin project', () => {
   it('the merge pass merges within a project only, and the merged row stays in that project', async () => {

@@ -30,8 +30,8 @@ async function seedBaserateWithNoMemories(): Promise<void> {
     closePrediction(root, 'default', p.id, { closureState: 'closed', actualValue: actual });
   }
   const ctx: FullContext = apiCtx(root, 'default', { subject: 'cli', role: 'admin' });
-  for (const entry of loadAllEntries(root)) await forget(ctx, entry.id);
-  expect(loadAllEntries(root)).toEqual([]);
+  for (const entry of loadAllEntries(root, 'default')) await forget(ctx, entry.id);
+  expect(loadAllEntries(root, 'default')).toEqual([]);
 }
 
 async function recall(flags: Record<string, boolean> = {}): Promise<string> {

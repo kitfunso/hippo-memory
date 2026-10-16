@@ -213,11 +213,11 @@ describe('a project store with an id', () => {
     const store = join(svc, '.hippo');
     initStore(store);
     const old = pinned(store, 'The svc store wrote this before ids.', 'svc');
-    expect(loadAllEntries(store).find((e) => e.id === old.id)?.origin_project).toBe('svc');
+    expect(loadAllEntries(store, 'default').find((e) => e.id === old.id)?.origin_project).toBe('svc');
 
     const r = repairProjectNames(cliApiContext(store, T), { dryRun: false });
     expect(r.folds).toEqual([{ from: 'svc', into: 'github.com/acme/svc' }]);
-    expect(loadAllEntries(store).find((e) => e.id === old.id)?.origin_project).toBe('github.com/acme/svc');
+    expect(loadAllEntries(store, 'default').find((e) => e.id === old.id)?.origin_project).toBe('github.com/acme/svc');
     expect(withDb(store, (db) => planProjectRepair(projectTagReads(db, T), store)).folds).toEqual([]);
   });
 
@@ -240,7 +240,7 @@ describe('repair on sleep', () => {
     const old = pinned(store, 'The svc store wrote this before ids.', 'svc');
     const first = repairProjectNamesOnce(cliApiContext(store, T));
     expect(first).toMatchObject({ folds: [{ from: 'svc', into: 'github.com/acme/svc' }], backup: expect.any(String) });
-    expect(loadAllEntries(store).find((e) => e.id === old.id)?.origin_project).toBe('github.com/acme/svc');
+    expect(loadAllEntries(store, 'default').find((e) => e.id === old.id)?.origin_project).toBe('github.com/acme/svc');
     pinned(store, 'A later row under the old name.', 'svc');
     expect(repairProjectNamesOnce(cliApiContext(store, T))).toBeNull();
   });
@@ -251,7 +251,7 @@ describe('repair on sleep', () => {
     pinned(w.global, 'OLD-API rows under the folder name.', 'api');
     compaction('c-a', 'api', a);
     expect(repairProjectNamesOnce(cliApiContext(w.global, T))).toBeNull();
-    expect(loadAllEntries(w.global).map((e) => e.origin_project)).toEqual(['api']);
+    expect(loadAllEntries(w.global, 'default').map((e) => e.origin_project)).toEqual(['api']);
     expect(withDb(w.global, (db) => planProjectRepair(projectTagReads(db, T), w.global)).folds).toEqual([{ from: 'api', into: 'github.com/acme-pay/api' }]);
   });
 });

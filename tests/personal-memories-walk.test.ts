@@ -417,7 +417,7 @@ describe('personal memories walk (plan lane T)', () => {
     await post(keys.A.plaintext, { content: item, personal: true, project: { name: 'alpha' } });
     const req = (sessionId: string) => ({ sessionId, project: { name: 'alpha', legacyName: 'alpha' }, texts: [said] });
     expect(captureSessionTexts(ctxOf('B'), req('walk-capture-1'))).toMatchObject({ captured: 1, skipped: 0 });
-    expect(loadAllEntries(store).filter((e) => e.content === item && !e.scope)).toHaveLength(1);
+    expect(loadAllEntries(store, 'default').filter((e) => e.content === item && !e.scope)).toHaveLength(1);
     expect(captureSessionTexts(ctxOf('B'), req('walk-capture-2'))).toMatchObject({ captured: 0, skipped: 1 });
   });
 
@@ -470,7 +470,7 @@ describe('personal memories walk (plan lane T)', () => {
     const r = await http(null, 'POST', '/v1/sleep', { no_share: true });
     expect(r.status, r.text).toBe(200);
 
-    const derived = loadAllEntries(store).filter((e) => e.source === 'consolidation' && e.content.includes('cobaltfern'));
+    const derived = loadAllEntries(store, 'default').filter((e) => e.source === 'consolidation' && e.content.includes('cobaltfern'));
     const markerOf = (e: MemoryEntry): string[] => [...scopeOf.keys()].filter((m) => e.content.includes(m));
     expect(derived.flatMap(markerOf).sort()).toEqual([...scopeOf.keys()].sort());
     for (const e of derived) {
@@ -487,7 +487,7 @@ describe('personal memories walk (plan lane T)', () => {
     expect((await run({})).stdout).toContain(team.id);
     const scoped = await run({ scope: A_SCOPE });
     expect(scoped.stdout).toContain(team.id);
-    const personal = loadAllEntries(store).filter((e) => e.scope?.startsWith('personal:'));
+    const personal = loadAllEntries(store, 'default').filter((e) => e.scope?.startsWith('personal:'));
     expect(personal.map((e) => e.id)).toContain(mine.id);
     expect(personal.filter((e) => scoped.stdout.includes(e.id)).map((e) => e.id)).toEqual([]);
   });

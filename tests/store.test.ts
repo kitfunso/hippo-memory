@@ -91,7 +91,7 @@ describe('store initialization', () => {
       },
     ]);
 
-    expect(loadAllEntries(tmpDir).map((entry) => entry.id).sort()).toEqual([
+    expect(loadAllEntries(tmpDir, 'default').map((entry) => entry.id).sort()).toEqual([
       'mem_legacy_alpha',
       'mem_legacy_beta',
     ]);
@@ -309,13 +309,13 @@ describe('loadAllEntries', () => {
     ];
     for (const e of entries) writeEntry(tmpDir, e);
 
-    const all = loadAllEntries(tmpDir);
+    const all = loadAllEntries(tmpDir, 'default');
     expect(all).toHaveLength(3);
   });
 
   it('returns empty array for fresh store', () => {
     initStore(tmpDir);
-    expect(loadAllEntries(tmpDir)).toHaveLength(0);
+    expect(loadAllEntries(tmpDir, 'default')).toHaveLength(0);
   });
 });
 
