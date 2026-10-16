@@ -1,51 +1,25 @@
-// tests/goal-retrieval-policy.test.ts
-//
-// B3 Task 7: dlPFC depth — retrieval policy weighting with hard-capped final
-// multiplier. Verifies the policy-aware extension to the active-goal boost
-// block in src/cli.ts:
-//   - error-prioritized policy ranks error-tagged > non-error within a goal.
-//   - composed multiplier is hard-capped at MAX_FINAL_MULTIPLIER (3.0x), even
-//     with an extreme errorPriority (e.g. 9.0).
-//
-// Real DB, real CLI subprocess. Same isolation harness as Task 6
-// (cwd tempdir, separate HIPPO_HOME global root, HIPPO_SKIP_AUTO_INTEGRATIONS=1)
-// to keep dev-machine memories from leaking into tests.
+// B3 Task 7: CLI recall, run in process, weights an active goal's retrieval policy: error-prioritized ranks
+// error-tagged rows first, and the composed multiplier stays under MAX_FINAL_MULTIPLIER (3.0x) at errorPriority 9.0.
 import type { FullContext } from './_helpers/api-ctx.js';
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
-import { join } from 'node:path';
-import { execFileSync } from 'node:child_process';
 import { remember } from '../src/api/index.js';
+import { resetSessionRings } from '../src/api/recall/finish.js';
+import { runCli } from '../src/cli.js';
 import { pushGoal } from '../src/store/goals.js';
 import { makeEnv, type TestEnv } from './_helpers/cli-env.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+import { runInProcess } from './_helpers/run-in-process.js';
 
-const CLI = join(process.cwd(), 'dist', 'cli.js');
+const savedCwd = process.cwd();
 
-function recallCli(
-  env: TestEnv,
-  query: string,
-  sessionId: string,
-): Array<{ content: string; score: number }> {
-  const cliEnv: NodeJS.ProcessEnv = {
-    ...process.env,
-    HIPPO_HOME: env.globalRoot,
-    HIPPO_TENANT: 'default',
-    HIPPO_SKIP_AUTO_INTEGRATIONS: '1',
-  };
-  if (sessionId) cliEnv.HIPPO_SESSION_ID = sessionId;
-
-  const raw = execFileSync(
-    'node',
-    [CLI, 'recall', query, '--json', '--budget', '4000'],
-    {
-      cwd: env.cwd,
-      env: cliEnv,
-      encoding: 'utf8',
-    },
-  );
-  const start = raw.indexOf('{');
-  const parsed = JSON.parse(raw.slice(start));
+/** `hippo recall <query> --json` in this process under `sessionId` ('' for none), with the empty recall rings a fresh `hippo` starts with. */
+async function recallCli(query: string, sessionId: string): Promise<Array<{ content: string; score: number }>> {
+  vi.stubEnv('HIPPO_SESSION_ID', sessionId);
+  resetSessionRings('cli');
+  const res = await runInProcess(() => runCli(['node', 'hippo', 'recall', query, '--json', '--budget', '4000']));
+  expect(res.status, res.stderr).toBe(0);
+  const parsed = JSON.parse(res.stdout.slice(res.stdout.indexOf('{')));
   return parsed.results ?? [];
 }
 
@@ -54,10 +28,17 @@ describe('retrieval policy', () => {
 
   beforeEach(() => {
     env = makeEnv('b3-pol');
+    vi.stubEnv('HIPPO_HOME', env.globalRoot);
+    vi.stubEnv('HIPPO_TENANT', 'default');
+    vi.stubEnv('HIPPO_SKIP_AUTO_INTEGRATIONS', '1');
+    // The CLI looks for the store in `.hippo` under the working directory.
+    process.chdir(env.cwd);
   });
 
   afterEach(() => {
-    if (env?.cwd) rmSync(env.cwd, { recursive: true, force: true });
+    process.chdir(savedCwd);
+    vi.unstubAllEnvs();
+    rmSync(env.cwd, { recursive: true, force: true });
   });
 
   it('error-prioritized policy ranks error-tagged > non-error within same goal', async () => {
@@ -76,7 +57,7 @@ describe('retrieval policy', () => {
       policy: { policyType: 'error-prioritized', errorPriority: 3.0 },
     });
 
-    const top = recallCli(env, 'auth refactor', 's-p1');
+    const top = await recallCli('auth refactor', 's-p1');
     expect(top[0].content).toContain('lesson learned');
   });
 
@@ -85,7 +66,7 @@ describe('retrieval policy', () => {
     await remember(ctx, { content: 'high-error lesson', tags: ['plan-x', 'error'] });
 
     // Baseline: no session → no boost.
-    const base = recallCli(env, 'high-error lesson', '');
+    const base = await recallCli('high-error lesson', '');
     const baseScore = base[0]?.score ?? 1.0;
 
     pushGoal(env.hippoRoot, {
@@ -94,7 +75,7 @@ describe('retrieval policy', () => {
       goalName: 'plan-x',
       policy: { policyType: 'error-prioritized', errorPriority: 9.0 },
     });
-    const boosted = recallCli(env, 'high-error lesson', 's-p2');
+    const boosted = await recallCli('high-error lesson', 's-p2');
     const boostedScore = boosted[0]?.score ?? 0;
 
     // Allow tiny floating-point slop above 3.0x base.
