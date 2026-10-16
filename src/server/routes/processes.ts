@@ -4,7 +4,7 @@ import { HttpError, sendJson } from '../../util/http-util.js';
 import type { AuthedRouteRequest } from '../types.js';
 import { MAX_SHORT_FIELD_LEN, parseJsonBody } from '../validation.js';
 import { type JsonValue, isJsonString } from '../../util/json.js';
-import { saveFor } from '../../api/objects.js';
+import { saveFor } from '../../api/objects/objects.js';
 import {
   closeRoute,
   getRoute,

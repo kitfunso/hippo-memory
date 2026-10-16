@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { handleRecall } from '../src/cli/recall.js';
-import { resetSessionRings } from '../src/api/recall-record.js';
+import { resetSessionRings } from '../src/api/recall/finish.js';
 import { runInProcess } from './_helpers/run-in-process.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';

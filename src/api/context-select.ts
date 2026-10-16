@@ -25,7 +25,7 @@ import {
 } from '../core/prompt-recall.js';
 import type { DeliveryObserver } from '../store/delivery-recorder.js';
 import type { ContextCost, ContextOpts, ContextResultEntry } from './context-types.js';
-import { heldIds } from './recall-record.js';
+import { heldIds } from './recall/finish.js';
 import type { Context } from './types.js';
 
 const GLOBAL_DISCOUNT = 1 / DEFAULT_LOCAL_BUMP;

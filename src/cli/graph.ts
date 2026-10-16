@@ -7,7 +7,7 @@ import { printError } from './output.js';
 import { type CliFlags, stringFlag, type CommandContext } from './flag-values.js';
 import { requireInit } from './shared.js';
 import { fail } from './exit.js';
-import { objectsOf } from '../api/objects.js';
+import { objectsOf } from '../api/objects/objects.js';
 import { cliApiContext } from './api-context.js';
 import { openInBrowser } from './open-browser.js';
 

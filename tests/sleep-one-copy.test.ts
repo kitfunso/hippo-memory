@@ -9,7 +9,7 @@ import { createMemory } from './_helpers/default-half-life-memory.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries, loadAllEntriesWithBase } from '../src/store/entry-reads.js';
-import { runSleep } from '../src/api/sleep-run.js';
+import { runSleep } from '../src/api/sleep/sleep-run.js';
 import type { Consolidation } from '../src/store/port.js';
 import { computeAmbientState } from '../src/core/ambient.js';
 import { _resetAblationCacheForTests } from '../src/core/ablation.js';

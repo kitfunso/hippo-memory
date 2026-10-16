@@ -3,7 +3,7 @@ import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { remember, listOpenConflicts, type Actor } from '../src/api/index.js';
-import { getMemoryStatus, getTouchableMemory } from '../src/api/memories.js';
+import { getMemoryStatus, getTouchableMemory } from '../src/api/memories/memories.js';
 import { NotFoundError } from '../src/core/api-errors.js';
 import { replaceDetectedConflicts } from '../src/store/conflicts.js';
 import { makeRoot } from './_helpers/make-root.js';

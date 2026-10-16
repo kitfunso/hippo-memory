@@ -8,7 +8,7 @@ import { restoreDormant } from '../src/api/index.js';
 import { gitLayout } from '../src/agent-memories/git.js';
 import { containerId, containerPrefix } from '../src/agent-memories/source.js';
 import { importAtSessionEnd, importForStore, importProjectMemories, importSessionFolder } from '../src/agent-memories/sync.js';
-import { repairProjectNames } from '../src/api/projects.js';
+import { repairProjectNames } from '../src/api/objects/projects.js';
 import { cliApiContext } from '../src/cli/api-context.js';
 import type { ImportReport } from '../src/agent-memories/report.js';
 import { createMemory, type MemoryEntry } from '../src/core/memory.js';

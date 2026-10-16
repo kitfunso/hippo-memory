@@ -15,7 +15,7 @@ import { loadAllDirtySummaries } from '../src/store/summaries.js';
 import { consolidate } from '../src/consolidate/sleep.js';
 import { deduplicateStore } from '../src/consolidate/dedupe.js';
 import { sleep, supersede } from '../src/api/index.js';
-import { runSleep } from '../src/api/sleep-run.js';
+import { runSleep } from '../src/api/sleep/sleep-run.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { queryAuditEvents } from '../src/store/audit.js';
 import { sleepResultLines } from '../src/cli/sleep-render.js';

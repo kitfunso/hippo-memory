@@ -1,6 +1,6 @@
 // First-class object, server, goal and auth verbs, in `hippo help` order.
 
-import { DEFAULT_KEY_TTL_DAYS, MAX_TTL_DAYS } from '../../api/auth.js';
+import { DEFAULT_KEY_TTL_DAYS, MAX_TTL_DAYS } from '../../api/auth/auth.js';
 import { DEFAULT_SERVER_HOST, DEFAULT_SERVER_PORT } from '../../server/defaults.js';
 import { type VerbSpec, verb } from '../verb-row.js';
 

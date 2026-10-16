@@ -104,7 +104,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   if (hits.length > 0) {
     console.error(`\n${hits.length} recall ranking or recording reference(s) in the CLI under ${srcDir}/:`);
     for (const h of hits) console.error(`  ${srcDir}/${h.file}:${h.line}: ${h.name}`);
-    console.error('\nFix: pass the input to retrieve() (src/api/recall.ts) and let it rank and record; the CLI parses flags and prints.\n');
+    console.error('\nFix: pass the input to retrieve() (src/api/recall/recall.ts) and let it rank and record; the CLI parses flags and prints.\n');
   }
   const writes = findCliStoreWrites(srcDir);
   if (writes.length > 0) {

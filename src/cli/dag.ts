@@ -4,7 +4,7 @@ import { truncateWithEllipsis } from '../util/ellipsize.js';
 import { DAG_LEVEL, type MemoryEntry } from '../core/memory.js';
 import * as api from '../api/index.js';
 import { assembleCost, assembleHeading, drillCost, settleTokens } from '../api/context-render.js';
-import { listMemories } from '../api/memories.js';
+import { listMemories } from '../api/memories/memories.js';
 import { cliApiContext } from './api-context.js';
 import { printError } from './output.js';
 import {

@@ -11,7 +11,7 @@ import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
 import { parseOlderThanFlag } from '../src/cli/audit-prune.js';
-import { pruneAuditLog, computeCutoff } from '../src/api/audit.js';
+import { pruneAuditLog, computeCutoff } from '../src/api/auth/audit.js';
 import { adminActor } from '../src/api/types.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 

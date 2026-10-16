@@ -11,7 +11,7 @@ import { createRequire, syncBuiltinESMExports } from 'node:module';
 import { Worker } from 'node:worker_threads';
 import { Layer, type MemoryEntry } from '../src/core/memory.js';
 import { consolidate, runConsolidation } from '../src/consolidate/sleep.js';
-import { runSleep } from '../src/api/sleep-run.js';
+import { runSleep } from '../src/api/sleep/sleep-run.js';
 import { initStore } from '../src/store/open.js';
 import { upsertEntryRow } from '../src/store/entry-row.js';
 import { mergedText } from '../src/util/same-text.js';

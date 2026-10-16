@@ -9,7 +9,7 @@ import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { handleRecall } from '../src/cli/recall.js';
-import { resetSessionRings } from '../src/api/recall-record.js';
+import { resetSessionRings } from '../src/api/recall/finish.js';
 import { handleMcpRequest, _resetSessionRecallHistoryMcpForTests, type McpResponse } from '../src/mcp/server.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { __resetSessionRecallHistoryHttp } from '../src/entry/testing.js';
@@ -237,7 +237,7 @@ describe('recall surface parity goldens', () => {
     const got = await onFreshStore('local', async (s) => {
       const r = await viaMcp(s, { query: 'deploy', budget: 80 });
       const recallRow = auditOps(s.root).find((a) => a.op === 'recall');
-      // SAFETY: the 'recall' audit row's metadata is { query_hash, query_length, results } (src/api/recall-record.ts).
+      // SAFETY: the 'recall' audit row's metadata is { query_hash, query_length, results } (src/api/recall/finish.ts).
       const metadata = JSON.parse(recallRow!.metadata_json) as { results: number };
       return { shownHeading: /Found \d+ memor[a-z]*/.exec(r.output)?.[0] ?? null, auditResults: metadata.results };
     });

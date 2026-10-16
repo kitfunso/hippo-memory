@@ -11,7 +11,7 @@ import { createMemory } from './_helpers/default-half-life-memory.js';
 import { pushGoal } from '../src/store/goals.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { loadConfig } from '../src/core/config.js';
-import { rankRecall, type RankRecallCtx, type RankRecallOpts } from '../src/api/recall-pipeline.js';
+import { rankRecall, type RankRecallCtx, type RankRecallOpts } from '../src/api/recall/pipeline.js';
 import type { RerankerFn } from '../src/rerankers/types.js';
 
 let home: string;

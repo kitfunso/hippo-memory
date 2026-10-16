@@ -1,13 +1,13 @@
 // Entry of the process that runs one POST /v1/sleep or MCP auto-sleep; sleep-offload.ts starts it and nothing imports
 // it. The sleep modules alone: the api barrel loads far more than one sleep needs, and every sleep pays for the start.
-import { sleep } from '../api/sleep.js';
+import { sleep } from '../api/sleep/sleep.js';
 import { runConsolidation } from '../consolidate/sleep.js';
 import { isStoreBusy } from '../api/busy.js';
 import { runSqliteRequest } from '../store/sqlite/request-scope.js';
 import { sqliteStore, sqliteSyncStore } from '../store/sqlite/store.js';
 import { errorFields, errorMessage, log } from '../util/log.js';
 import type { SleepJob, SleepReply } from './sleep-offload.js';
-import type { SleepResult } from '../api/sleep.js';
+import type { SleepResult } from '../api/sleep/sleep.js';
 import type { ConsolidationResult } from '../consolidate/run.js';
 
 type JobResult = SleepResult | ConsolidationResult;

@@ -33,7 +33,7 @@ import {
   type HookRuntime,
 } from '../core/capture-contract.js';
 import { loadConfig } from '../core/config.js';
-import { autoSleepDue } from '../api/auto-sleep.js';
+import { autoSleepDue } from '../api/sleep/auto-sleep.js';
 import { COMPACTION_DB_WAIT_MS } from '../core/compaction-timing.js';
 import { compactResumeBlock, sessionEndWork as runSessionEnd } from '../api/session-end.js';
 import { normaliseHookPayload, readHookStdin, readStdinBounded, type BoundedStdin } from './stdin.js';

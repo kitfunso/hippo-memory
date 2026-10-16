@@ -16,7 +16,7 @@ import { PACKAGE_VERSION } from '../util/version.js';
 import { FAILURE_LOG_RETENTION_DAYS } from '../store/failure-log.js';
 import { getGlobalRoot } from '../sharing/global-store.js';
 import * as api from '../api/index.js';
-import { getMemory } from '../api/memories.js';
+import { getMemory } from '../api/memories/memories.js';
 import {
   correctionLatencyReport,
   embeddingReindexNeeded,

@@ -11,7 +11,7 @@ import { isCodexWrapperInstalled } from '../hooks/codex-wrapper.js';
 import { installOpencodePlugin } from '../hooks/opencode.js';
 import { initMemoryStore } from '../api/store-init.js';
 import { isInitialized } from '../core/project-identity.js';
-import { listMemories } from '../api/memories.js';
+import { listMemories } from '../api/memories/memories.js';
 import { cliApiContext } from './api-context.js';
 import { isGitRepo } from '../learn/autolearn.js';
 import { currentMachine, importForStore, importProjectMemories, importUserMemories } from '../agent-memories/sync.js';

@@ -13,7 +13,7 @@ import { MEMORY_SELECT_COLUMNS } from '../src/store/rows.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { insertRejectedValue, rejectionDigest } from '../src/store/rejection.js';
 import { queryAuditEvents } from '../src/store/audit.js';
-import { runSleep } from '../src/api/sleep-run.js';
+import { runSleep } from '../src/api/sleep/sleep-run.js';
 import { computeAmbientState } from '../src/core/ambient.js';
 import { _resetAblationCacheForTests } from '../src/core/ablation.js';
 import { invalidateMatching } from '../src/learn/invalidation.js';

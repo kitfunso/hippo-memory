@@ -8,7 +8,7 @@ import { type TokenSurface } from '../store/token-ledger.js';
 import { estimateTokens } from '../util/token-text.js';
 import { PACKAGE_VERSION } from '../util/version.js';
 import { validateToolArgs } from './tool-args.js';
-import { RecallRequestError } from '../api/recall-request.js';
+import { RecallRequestError } from '../api/recall/request.js';
 import { recordTokens } from '../api/tokens.js';
 import {
   mcpActor,

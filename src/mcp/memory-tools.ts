@@ -1,7 +1,7 @@
 // Write-side tool handlers: hippo_remember, hippo_outcome and hippo_learn.
 
 import { hasGroup } from '../store/index.js';
-import { startAutoSleepIfDue } from '../api/auto-sleep.js';
+import { startAutoSleepIfDue } from '../api/sleep/auto-sleep.js';
 import {
   remember as apiRemember,
   outcome as apiOutcome,

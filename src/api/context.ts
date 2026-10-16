@@ -46,8 +46,8 @@ import {
   type ContextSource,
 } from './context-select.js';
 import type { ContextOpts, ContextResult, ContextResultEntry } from './context-types.js';
-import { strengthenOf } from './recall-record.js';
-import { tokenPurse } from './recall-render.js';
+import { strengthenOf } from './recall/finish.js';
+import { tokenPurse } from './recall/render.js';
 import { type Context, type ContextWith, type StoreContext, ownerOrSubject } from './types.js';
 
 export { oneCopyPerMemory } from './context-select.js';

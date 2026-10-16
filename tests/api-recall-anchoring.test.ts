@@ -24,7 +24,7 @@ import {
   hashQueryText,
   type RecallHistorySnapshot,
   type RecallHistoryEntry,
-} from '../src/api/recall-history.js';
+} from '../src/api/recall/finish.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 

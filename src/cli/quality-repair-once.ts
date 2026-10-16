@@ -3,7 +3,7 @@
 import * as path from 'path';
 import { errorMessage, log, errorFields } from '../util/log.js';
 import { getGlobalRoot } from '../sharing/global-store.js';
-import { repairMemoryQualityOnce } from '../api/audit.js';
+import { repairMemoryQualityOnce } from '../api/auth/audit.js';
 import { cliApiContext } from './api-context.js';
 
 /** Fault-isolated like the project tag repair: a failure warns, leaves the store unmarked and runs again next time. */

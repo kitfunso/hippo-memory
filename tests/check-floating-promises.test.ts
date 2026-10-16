@@ -82,14 +82,14 @@ describe('check-floating-api', { timeout: 30_000 }, () => {
   beforeEach(() => { dir = mkdtempSync(join(tmpdir(), 'floating-api-')); });
   afterEach(() => { rmSync(dir, { recursive: true, force: true }); });
 
-  /** The hits for one test file that imports a stand-in forget from src/api/forget.ts. */
+  /** The hits for one test file that imports a stand-in forget from src/api/memories/forget.ts. */
   function hitsFor(body: string): { file: string; line: number; why: string }[] {
-    mkdirSync(join(dir, 'src', 'api'), { recursive: true });
+    mkdirSync(join(dir, 'src', 'api', 'memories'), { recursive: true });
     mkdirSync(join(dir, 'tests'));
     const files = {
       'lib.d.ts': `${MINIMAL_LIB}\ndeclare function expect(x: unknown): { rejects: unknown; toThrow(): void };`,
-      'src/api/forget.ts': 'export async function forget(id: string): Promise<string> { return id; }\nexport async function other(): Promise<number> { return 1; }\n',
-      'tests/use.test.ts': `import { forget, other } from '../src/api/forget';\n${body}`,
+      'src/api/memories/forget.ts': 'export async function forget(id: string): Promise<string> { return id; }\nexport async function other(): Promise<number> { return 1; }\n',
+      'tests/use.test.ts': `import { forget, other } from '../src/api/memories/forget';\n${body}`,
     };
     for (const [name, text] of Object.entries(files)) writeFileSync(join(dir, name), text, 'utf8');
     const program = ts.createProgram(Object.keys(files).map((name) => join(dir, name)), {

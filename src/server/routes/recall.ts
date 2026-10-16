@@ -12,9 +12,9 @@ import {
   recordTokens,
   retrieve,
 } from '../../api/index.js';
-import { RECALL_RECORDING } from '../../api/recall-finish.js';
-import { httpParams, parseContextRequest, parseRecallRequest } from '../../api/recall-request.js';
-import { resetSessionRings } from '../../api/recall-record.js';
+import { RECALL_RECORDING } from '../../api/recall/finish.js';
+import { httpParams, parseContextRequest, parseRecallRequest } from '../../api/recall/request.js';
+import { resetSessionRings } from '../../api/recall/finish.js';
 import { HttpError, sendJson } from '../../util/http-util.js';
 import type { AuthedRouteRequest } from '../types.js';
 import { MAX_LIST_LIMIT } from '../../util/limits.js';

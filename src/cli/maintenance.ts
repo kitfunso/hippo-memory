@@ -4,7 +4,7 @@ import { envAnthropicApiKey } from '../util/env.js';
 import { deduplicateStore } from '../consolidate/dedupe.js';
 import { resolveEmbeddingProvider, type EmbeddingProvider } from '../embeddings/provider.js';
 import { embedCoverage, embedMissingMemories, resetPhysicsFromVectors, storedVectorCount } from '../api/embeddings.js';
-import { countAllMemories } from '../api/memories.js';
+import { countAllMemories } from '../api/memories/memories.js';
 import { cliApiContext, cliLocalFiles } from './api-context.js';
 import type * as api from '../api/index.js';
 import { loadConfig } from '../core/config.js';

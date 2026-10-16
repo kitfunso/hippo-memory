@@ -8,7 +8,7 @@ import {
   type CreateMemoryOptions,
   type MemoryEntry,
 } from './core/memory.js';
-import { sleep as sleepOnStore, type SleepOpts, type SleepResult } from './api/sleep.js';
+import { sleep as sleepOnStore, type SleepOpts, type SleepResult } from './api/sleep/sleep.js';
 import type { Context } from './api/types.js';
 import { withStoreGroups } from './store/sqlite/store.js';
 export {
@@ -133,7 +133,7 @@ export {
 } from './core/card.js';
 export { consolidate } from './consolidate/sleep.js';
 export { ConsolidationResult } from './consolidate/run.js';
-export type { SleepOpts, SleepResult } from './api/sleep.js';
+export type { SleepOpts, SleepResult } from './api/sleep/sleep.js';
 /** Published signature, so the Context may carry no store: it then runs on hippo.db under its root. */
 export async function sleep(ctx: Context, opts?: SleepOpts): Promise<SleepResult> {
   return sleepOnStore(withStoreGroups(ctx, 'localFiles'), opts);

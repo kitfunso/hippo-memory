@@ -2,7 +2,7 @@
 import { HttpError, sendJson } from '../../util/http-util.js';
 import { type JsonValue, isJsonString } from '../../util/json.js';
 import type { ObjectDescriptor, ObjectListOpts, SavableDescriptor } from '../../objects/descriptor.js';
-import { objectsOf, saveFor } from '../../api/objects.js';
+import { objectsOf, saveFor } from '../../api/objects/objects.js';
 import { closeObject, listObjects, objectById } from '../../objects/lifecycle.js';
 import type { ObjectByKind, ObjectKind, SavableKind } from '../../core/object-types.js';
 import type { Objects } from '../../store/port.js';

@@ -3,7 +3,7 @@
 import * as path from 'path';
 import * as fs from 'fs';
 import type { MemoryEntry } from '../core/memory.js';
-import { listMemories } from '../api/memories.js';
+import { listMemories } from '../api/memories/memories.js';
 import { cliApiContext } from './api-context.js';
 import { loadConfig } from '../core/config.js';
 import { getGlobalRoot } from '../sharing/global-store.js';

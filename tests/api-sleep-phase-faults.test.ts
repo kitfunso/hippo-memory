@@ -17,7 +17,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { sleep, adminActor, narrowContext } from '../src/api/index.js';
-import { runSleep, type SleepPhases } from '../src/api/sleep-run.js';
+import { runSleep, type SleepPhases } from '../src/api/sleep/sleep-run.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 import { initStore } from '../src/store/open.js';
 import { sqliteStore } from '../src/store/index.js';

@@ -10,7 +10,7 @@ import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { appendSessionEvent, saveActiveTaskSnapshot } from '../src/store/sessions.js';
 import { saveSessionHandoff } from '../src/store/handoffs.js';
 import { handleRecall } from '../src/cli/recall.js';
-import { resetSessionRings } from '../src/api/recall-record.js';
+import { resetSessionRings } from '../src/api/recall/finish.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { __resetSessionRecallHistoryHttp } from '../src/entry/testing.js';
 import type { RecallResult } from '../src/api/index.js';

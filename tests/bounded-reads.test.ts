@@ -10,7 +10,7 @@ import { loadAllDirtySummaries } from '../src/store/summaries.js';
 import { openHippoDb } from '../src/db/index.js';
 import { invalidateMatching } from '../src/learn/invalidation.js';
 import { rebuildDirtySummaries } from '../src/consolidate/dag.js';
-import { countAllMemories } from '../src/api/memories.js';
+import { countAllMemories } from '../src/api/memories/memories.js';
 import { adminActor } from '../src/api/types.js';
 import { sqliteStore } from '../src/store/sqlite/store.js';
 import { sqliteConsolidation } from '../src/store/sqlite/consolidation-group.js';

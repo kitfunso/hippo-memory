@@ -9,7 +9,7 @@ import { withRequestStoresSync } from '../src/db/request-stores.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../src/core/memory.js';
 import { loadConfig } from '../src/core/config.js';
-import { rankRecall, type RankRecallOpts } from '../src/api/recall-pipeline.js';
+import { rankRecall, type RankRecallOpts } from '../src/api/recall/pipeline.js';
 import { searchBothHybrid } from '../src/sharing/search-both.js';
 import { pushGoal, activeGoalsWithPolicies } from '../src/store/goals.js';
 import { updateStats, appendConsolidationRun } from '../src/store/index-and-stats.js';

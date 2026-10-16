@@ -1,7 +1,7 @@
 // The api internals the recall CLI reads; off api/index.ts because server.ts publishes names from that barrel.
 
-export { hashQueryText } from './recall-history.js';
-export { sessionRing, shownRecallRows } from './recall-record.js';
+export { hashQueryText } from './recall/finish.js';
+export { sessionRing, shownRecallRows } from './recall/finish.js';
 export {
   availabilityPool,
   cutoffClauses,
@@ -9,7 +9,7 @@ export {
   shrinkToFit,
   suppressionSummary,
   tokenPurse,
-} from './recall-render.js';
+} from './recall/render.js';
 export { handoffText, printedTokens, sessionTrailText, settleTokens, snapshotText } from './context-render.js';
 export type {
   RankRecallResult,
@@ -17,4 +17,4 @@ export type {
   RecallGraphHops,
   RecallGraphStream,
   RecallReranker,
-} from './recall-pipeline.js';
+} from './recall/pipeline.js';

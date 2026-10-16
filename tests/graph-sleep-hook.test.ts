@@ -29,7 +29,7 @@ import type { EntityType } from '../src/store/graph-rows.js';
 import { readGraphDelta } from '../src/graph/delta.js';
 import { WRITE_BUDGET } from '../src/util/write-budget.js';
 import { sleep, adminActor } from '../src/api/index.js';
-import { runSleep, type SleepPhases } from '../src/api/sleep-run.js';
+import { runSleep, type SleepPhases } from '../src/api/sleep/sleep-run.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 import { objectsAt } from './_helpers/objects-at.js';
 

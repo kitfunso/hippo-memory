@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { handoffLatest, sessionEventList, snapshotLoad, workingMemoryRead } from '../src/api/continuity.js';
-import { listMemories } from '../src/api/memories.js';
+import { listMemories } from '../src/api/memories/memories.js';
 import { cliApiContext } from '../src/cli/api-context.js';
 import { handleHandoff, handleSession, handleSnapshot, handleWm } from '../src/cli/continuity.js';
 import { handleConflicts, handleOutcome, handleResolve } from '../src/cli/curate.js';
