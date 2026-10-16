@@ -2,42 +2,26 @@
  * E2 policy first-class object (bi-temporal-first) - store-layer tests.
  * Docs: docs/plans/2026-05-30-e2-policy-object.md
  *
- * Covers:
+ * Covers what only policies have; the shared lifecycle rules run per kind in typed-object-store.test.ts.
  * 1. savePolicy creates memory + policies row (+ policy_create audit); v1; valid_from defaults to now; valid_to null
  * 2. savePolicy with explicit from/to; memory content has name + text + range
- * 3. SAVEPOINT atomicity
- * 4. supersede: predecessor->superseded, v2, change_summary, policy_supersede audit
- * 5. version chain v1->v2->v3
- * 6. supersede CAS (re-supersede fails not-active; missing id not-found)
- * 7. self-supersede preflight guard (empty store)
- * 8. close (active->closed); close guard (not-found; cannot-close-superseded)
- * 9. cross-tenant INSERT trigger; supersede tenant-match trigger
- * 10. ON DELETE SET NULL + old version loadable
- * 11. status filters; loadActivePolicies; invalid status
- * 12. DATE validation: inverted valid_to rejected (writes nothing); malformed rejected; overflow rolls; default now
- * 13. normalizePolicyDate canonicalization (date-only -> midnight Z; invalid throws)
- * 14. AS-OF query: half-open boundary; open-ended; name filter; excludes superseded/not-yet/expired
- * 15. CRIT regression: a date-only valid_from is returned by a date-only as-of for the same day (normalization)
- * 16. schema v33 table + 3 triggers + 3 indexes
+ * 3. status filters; loadActivePolicies
+ * 4. DATE validation: inverted valid_to rejected (writes nothing); malformed rejected; overflow rolls; default now
+ * 5. normalizePolicyDate canonicalization (date-only -> midnight Z; invalid throws)
+ * 6. AS-OF query: half-open boundary; open-ended; name filter; excludes superseded/not-yet/expired
+ * 7. CRIT regression: a date-only valid_from is returned by a date-only as-of for the same day (normalization)
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
-import { writeEntry } from '../src/store/entry-writes.js';
-import { writeEntryThenFail } from './_helpers/failing-write.js';
-import { deleteEntry } from '../src/store/delete-and-batch.js';
-import { Layer} from '../src/core/memory.js';
-import { createMemory } from './_helpers/default-half-life-memory.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
 import {
   savePolicy,
   closePolicy,
-  loadPolicyById,
   loadPolicies,
   loadActivePolicies,
   policiesAsOf,
   normalizePolicyDate,
-  VALID_POLICY_STATES,
 } from '../src/objects/policies.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { objectsAt } from './_helpers/objects-at.js';
@@ -126,98 +110,7 @@ describe('policies store (bi-temporal first-class object)', () => {
     expect(p.validTo).toBe('2026-06-01T00:00:00.000Z');
   });
 
-  it('SAVEPOINT atomicity: writeEntry throw rolls back both', () => {
-    const m0 = countRows(home, 'memories'); const p0 = countRows(home, 'policies');
-    const mem = createMemory('throwing policy', {
-      tags: ['policy'], layer: Layer.Semantic, confidence: 'verified', source: 'policy', tenantId: 'default',
-    });
-    expect(() => writeEntryThenFail(home, mem)).toThrow('forced');
-    expect(countRows(home, 'memories')).toBe(m0);
-    expect(countRows(home, 'policies')).toBe(p0);
-  });
-
-  it('supersede: predecessor->superseded, v2, change_summary + policy_supersede audit', async () => {
-    const v1 = await savePolicy(objectsAt(home), home, 'default', { policyName: 'P', policyText: 'old rule' });
-    const v2 = await savePolicy(objectsAt(home), home, 'default', {
-      policyName: 'P', policyText: 'new rule', changeSummary: 'tightened', supersedesPolicyId: v1.id,
-    });
-    expect(v2.version).toBe(2);
-    expect(v2.changeSummary).toBe('tightened');
-    const reV1 = (await loadPolicyById(objectsAt(home), 'default', v1.id))!;
-    expect(reV1.status).toBe('superseded');
-    expect(reV1.supersededBy).toBe(v2.id);
-    const db = openHippoDb(home);
-    try {
-      const rows = db.prepare(`SELECT 1 FROM audit_log WHERE op='policy_supersede' AND target_id=?`).all(String(v1.id));
-      expect(rows.length).toBe(1);
-    } finally { closeHippoDb(db); }
-  });
-
-  it('version chain v1->v2->v3 server-derived', async () => {
-    const v1 = await savePolicy(objectsAt(home), home, 'default', { policyName: 'C', policyText: 'a' });
-    const v2 = await savePolicy(objectsAt(home), home, 'default', { policyName: 'C', policyText: 'b', supersedesPolicyId: v1.id });
-    const v3 = await savePolicy(objectsAt(home), home, 'default', { policyName: 'C', policyText: 'c', supersedesPolicyId: v2.id });
-    expect([v1.version, v2.version, v3.version]).toEqual([1, 2, 3]);
-    expect((await loadActivePolicies(objectsAt(home), 'default')).map((x) => x.id)).toEqual([v3.id]);
-  });
-
-  it('supersede CAS: re-superseding a superseded row throws not-active; missing id throws not-found', async () => {
-    const v1 = await savePolicy(objectsAt(home), home, 'default', { policyName: 'O', policyText: 'a' });
-    await savePolicy(objectsAt(home), home, 'default', { policyName: 'O', policyText: 'b', supersedesPolicyId: v1.id });
-    await expect(savePolicy(objectsAt(home), home, 'default', { policyName: 'O', policyText: 'c', supersedesPolicyId: v1.id })).rejects.toThrow(/not active/);
-    await expect(savePolicy(objectsAt(home), home, 'default', { policyName: 'X', policyText: 'c', supersedesPolicyId: 99999 })).rejects.toThrow(/not found/);
-  });
-
-  it('self-supersede preflight guard: supersede on empty store throws not-found, creates nothing', async () => {
-    const p0 = countRows(home, 'policies');
-    await expect(savePolicy(objectsAt(home), home, 'default', { policyName: 'S', policyText: 'a', supersedesPolicyId: 1 })).rejects.toThrow(/not found/);
-    expect(countRows(home, 'policies')).toBe(p0);
-  });
-
-  it('close (active->closed); close guard (not-found; cannot-close-superseded; cannot re-close)', async () => {
-    await expect(closePolicy(objectsAt(home), 'default', 77777)).rejects.toThrow(/not found/);
-    const v1 = await savePolicy(objectsAt(home), home, 'default', { policyName: 'Sup', policyText: 'a' });
-    await savePolicy(objectsAt(home), home, 'default', { policyName: 'Sup', policyText: 'b', supersedesPolicyId: v1.id });
-    await expect(closePolicy(objectsAt(home), 'default', v1.id)).rejects.toThrow(/not active/);
-    const c = await savePolicy(objectsAt(home), home, 'default', { policyName: 'Cl', policyText: 'a' });
-    await closePolicy(objectsAt(home), 'default', c.id);
-    await expect(closePolicy(objectsAt(home), 'default', c.id)).rejects.toThrow(/not active/);
-  });
-
-  it('cross-tenant INSERT trigger + supersede tenant-match trigger raise ABORT', async () => {
-    const mem = createMemory('tenant-a', {
-      tags: ['policy'], layer: Layer.Semantic, confidence: 'verified', source: 'policy', tenantId: 'tenant-a',
-    });
-    writeEntry(home, mem);
-    const db = openHippoDb(home);
-    try {
-      expect(() => {
-        db.prepare(`INSERT INTO policies(memory_id, tenant_id, policy_name, policy_text, valid_from, version, status, created_at)
-          VALUES (?, 'tenant-b', 'x', 'y', ?, 1, 'active', ?)`).run(mem.id, new Date().toISOString(), new Date().toISOString());
-      }).toThrow(/tenant_id must match memories\.tenant_id/);
-    } finally { closeHippoDb(db); }
-
-    const a = await savePolicy(objectsAt(home), home, 'tenant-a', { policyName: 'A', policyText: 'a' });
-    const b = await savePolicy(objectsAt(home), home, 'tenant-b', { policyName: 'B', policyText: 'b' });
-    const db2 = openHippoDb(home);
-    try {
-      expect(() => db2.prepare(`UPDATE policies SET superseded_by=? WHERE id=?`).run(b.id, a.id))
-        .toThrow(/superseded_by must reference a policy in the same tenant/);
-    } finally { closeHippoDb(db2); }
-  });
-
-  it('ON DELETE SET NULL: forgetting the memory orphans the policy; old versions stay loadable', async () => {
-    const v1 = await savePolicy(objectsAt(home), home, 'default', { policyName: 'D', policyText: 'a' });
-    const v2 = await savePolicy(objectsAt(home), home, 'default', { policyName: 'D', policyText: 'b', supersedesPolicyId: v1.id });
-    deleteEntry(home, v1.memoryId!);
-    deleteEntry(home, v2.memoryId!);
-    const reV1 = (await loadPolicyById(objectsAt(home), 'default', v1.id))!;
-    expect(reV1.memoryId).toBeNull();
-    expect(reV1.status).toBe('superseded');
-    expect((await loadPolicyById(objectsAt(home), 'default', v2.id))!.status).toBe('active');
-  });
-
-  it('status filters; loadActivePolicies; invalid status', async () => {
+  it('status filters; loadActivePolicies', async () => {
     const a = await savePolicy(objectsAt(home), home, 'default', { policyName: 'a', policyText: 'x' });
     const b = await savePolicy(objectsAt(home), home, 'default', { policyName: 'b', policyText: 'x' });
     const c = await savePolicy(objectsAt(home), home, 'default', { policyName: 'c', policyText: 'x' });
@@ -229,9 +122,6 @@ describe('policies store (bi-temporal first-class object)', () => {
     expect(active.some((x) => x.id === c.id)).toBe(false);
     expect((await loadPolicies(objectsAt(home), 'default', { status: 'closed' })).map((x) => x.id)).toEqual([c.id]);
     expect((await loadPolicies(objectsAt(home), 'default')).length).toBe(4);
-    // @ts-expect-error runtime validation
-    await expect(loadPolicies(objectsAt(home), 'default', { status: 'retired' })).rejects.toThrow(/status must be one of/);
-    expect(VALID_POLICY_STATES.has('active')).toBe(true);
   });
 
   it('date validation: inverted rejected (writes nothing); malformed rejected; overflow rolls', async () => {
@@ -329,26 +219,5 @@ describe('policies store (bi-temporal first-class object)', () => {
     // And a default-valid_from (now) policy is in force for a clearly-future as-of.
     await savePolicy(objectsAt(home), home, 'default', { policyName: 'Now', policyText: 'x' });
     expect((await policiesAsOf(objectsAt(home), 'default', '2099-01-01', { name: 'Now' })).length).toBe(1);
-  });
-
-  it('schema v33 produces policies table + 3 triggers + 3 indexes', () => {
-    const db = openHippoDb(home);
-    try {
-      expect(db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name='policies'`).get()).toBeDefined();
-      const triggers = queryAll<{ name: string }>(
-        db,
-        `SELECT name FROM sqlite_master WHERE type='trigger' AND name LIKE 'trg_policies_%'`,
-      ).map((t) => t.name);
-      expect(triggers).toContain('trg_policies_tenant_match_insert');
-      expect(triggers).toContain('trg_policies_tenant_match_update');
-      expect(triggers).toContain('trg_policies_supersede_tenant_match_update');
-      const indexes = queryAll<{ name: string }>(
-        db,
-        `SELECT name FROM sqlite_master WHERE type='index' AND name LIKE 'idx_policies_%'`,
-      ).map((i) => i.name);
-      expect(indexes).toContain('idx_policies_tenant_status');
-      expect(indexes).toContain('idx_policies_memory');
-      expect(indexes).toContain('idx_policies_asof');
-    } finally { closeHippoDb(db); }
   });
 });

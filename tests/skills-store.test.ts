@@ -2,37 +2,23 @@
  * E2 skill first-class object (executable/exportable) - store-layer tests.
  * Docs: docs/plans/2026-05-30-e2-skill-object.md
  *
- * Covers:
+ * Covers what only skills have; the shared lifecycle rules run per kind in typed-object-store.test.ts.
  * 1. saveSkill creates memory + skills row (+ skill_create audit), v1, trigger null when omitted
  * 2. saveSkill with trigger; memory content has name + when + instructions
- * 3. SAVEPOINT atomicity
- * 4. supersede chain + version + change_summary + skill_supersede audit
- * 5. supersede CAS (re-supersede not-active; missing not-found); self-supersede preflight
- * 6. close + close guard (not-found; cannot-close-superseded)
- * 7. cross-tenant INSERT trigger + supersede tenant-match trigger
- * 8. ON DELETE SET NULL + old version loadable
- * 9. status filters; loadActiveSkills; invalid status
- * 10. validation: missing name/instructions; name single-line (newline rejected); caps
- * 11. EXPORT: active-only, name-ASC, trigger omitted when null, '##' in instructions verbatim, empty -> ''
- * 12. schema v34 table + 3 triggers + 2 indexes
+ * 3. status filters; loadActiveSkills
+ * 4. validation: missing name/instructions; name single-line (newline rejected); caps
+ * 5. EXPORT: active-only, name-ASC, trigger omitted when null, '##' in instructions verbatim, empty -> ''
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
-import { writeEntry } from '../src/store/entry-writes.js';
-import { writeEntryThenFail } from './_helpers/failing-write.js';
-import { deleteEntry } from '../src/store/delete-and-batch.js';
-import { Layer } from '../src/core/memory.js';
-import { createMemory } from './_helpers/default-half-life-memory.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
 import {
   saveSkill,
   closeSkill,
-  loadSkillById,
   loadSkills,
   loadActiveSkills,
   skillsMarkdown,
-  VALID_SKILL_STATES,
   MAX_SKILL_INSTRUCTIONS_LEN,
 } from '../src/objects/skills.js';
 import { makeRoot } from './_helpers/make-root.js';
@@ -40,11 +26,6 @@ import { objectsAt } from './_helpers/objects-at.js';
 
 function safeRmSync(p: string): void {
   try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
-}
-function countRows(home: string, table: string): number {
-  const db = openHippoDb(home);
-  try { return getRow<{ c: number }>(db, `SELECT COUNT(*) as c FROM ${table}`).c; }
-  finally { closeHippoDb(db); }
 }
 
 function getRow<T>(db: DatabaseSyncLike, sql: string, ...params: unknown[]): T {
@@ -111,85 +92,7 @@ describe('skills store (executable/exportable first-class object)', () => {
     } finally { closeHippoDb(db); }
   });
 
-  it('SAVEPOINT atomicity: writeEntry throw rolls back both', () => {
-    const m0 = countRows(home, 'memories'); const s0 = countRows(home, 'skills');
-    const mem = createMemory('throwing skill', {
-      tags: ['skill'], layer: Layer.Semantic, confidence: 'verified', source: 'skill', tenantId: 'default',
-    });
-    expect(() => writeEntryThenFail(home, mem)).toThrow('forced');
-    expect(countRows(home, 'memories')).toBe(m0);
-    expect(countRows(home, 'skills')).toBe(s0);
-  });
-
-  it('supersede chain + version + change_summary + skill_supersede audit', async () => {
-    const v1 = await saveSkill(objectsAt(home), home, 'default', { skillName: 'S', instructions: 'old' });
-    const v2 = await saveSkill(objectsAt(home), home, 'default', { skillName: 'S', instructions: 'new', changeSummary: 'reworded', supersedesSkillId: v1.id });
-    const v3 = await saveSkill(objectsAt(home), home, 'default', { skillName: 'S', instructions: 'newer', supersedesSkillId: v2.id });
-    expect([v1.version, v2.version, v3.version]).toEqual([1, 2, 3]);
-    expect(v2.changeSummary).toBe('reworded');
-    const reV1 = (await loadSkillById(objectsAt(home), 'default', v1.id))!;
-    expect(reV1.status).toBe('superseded');
-    expect(reV1.supersededBy).toBe(v2.id);
-    expect((await loadActiveSkills(objectsAt(home), 'default')).map((x) => x.id)).toEqual([v3.id]);
-    const db = openHippoDb(home);
-    try {
-      expect(db.prepare(`SELECT 1 FROM audit_log WHERE op='skill_supersede' AND target_id=?`).all(String(v1.id)).length).toBe(1);
-    } finally { closeHippoDb(db); }
-  });
-
-  it('supersede CAS (re-supersede not-active; missing not-found); self-supersede preflight', async () => {
-    const v1 = await saveSkill(objectsAt(home), home, 'default', { skillName: 'O', instructions: 'a' });
-    await saveSkill(objectsAt(home), home, 'default', { skillName: 'O', instructions: 'b', supersedesSkillId: v1.id });
-    await expect(saveSkill(objectsAt(home), home, 'default', { skillName: 'O', instructions: 'c', supersedesSkillId: v1.id })).rejects.toThrow(/not active/);
-    await expect(saveSkill(objectsAt(home), home, 'default', { skillName: 'X', instructions: 'c', supersedesSkillId: 99999 })).rejects.toThrow(/not found/);
-    const s0 = countRows(home, 'skills');
-    await expect(saveSkill(objectsAt(home), home, 'default', { skillName: 'Self', instructions: 'a', supersedesSkillId: 1 })).rejects.toThrow(/not active|not found/);
-    // (id 1 exists as superseded here, so 'not active'; the empty-store case is covered by other E2 store tests.)
-    expect(countRows(home, 'skills')).toBe(s0);
-  });
-
-  it('close + close guard (not-found; cannot-close-superseded; cannot re-close)', async () => {
-    await expect(closeSkill(objectsAt(home), 'default', 77777)).rejects.toThrow(/not found/);
-    const v1 = await saveSkill(objectsAt(home), home, 'default', { skillName: 'Sup', instructions: 'a' });
-    await saveSkill(objectsAt(home), home, 'default', { skillName: 'Sup', instructions: 'b', supersedesSkillId: v1.id });
-    await expect(closeSkill(objectsAt(home), 'default', v1.id)).rejects.toThrow(/not active/);
-    const c = await saveSkill(objectsAt(home), home, 'default', { skillName: 'Cl', instructions: 'a' });
-    await closeSkill(objectsAt(home), 'default', c.id);
-    await expect(closeSkill(objectsAt(home), 'default', c.id)).rejects.toThrow(/not active/);
-  });
-
-  it('cross-tenant INSERT trigger + supersede tenant-match trigger raise ABORT', async () => {
-    const mem = createMemory('tenant-a', {
-      tags: ['skill'], layer: Layer.Semantic, confidence: 'verified', source: 'skill', tenantId: 'tenant-a',
-    });
-    writeEntry(home, mem);
-    const db = openHippoDb(home);
-    try {
-      expect(() => {
-        db.prepare(`INSERT INTO skills(memory_id, tenant_id, skill_name, instructions, version, status, created_at)
-          VALUES (?, 'tenant-b', 'x', 'y', 1, 'active', ?)`).run(mem.id, new Date().toISOString());
-      }).toThrow(/tenant_id must match memories\.tenant_id/);
-    } finally { closeHippoDb(db); }
-    const a = await saveSkill(objectsAt(home), home, 'tenant-a', { skillName: 'A', instructions: 'a' });
-    const b = await saveSkill(objectsAt(home), home, 'tenant-b', { skillName: 'B', instructions: 'b' });
-    const db2 = openHippoDb(home);
-    try {
-      expect(() => db2.prepare(`UPDATE skills SET superseded_by=? WHERE id=?`).run(b.id, a.id))
-        .toThrow(/superseded_by must reference a skill in the same tenant/);
-    } finally { closeHippoDb(db2); }
-  });
-
-  it('ON DELETE SET NULL: forgetting the memory orphans the skill; old versions loadable', async () => {
-    const v1 = await saveSkill(objectsAt(home), home, 'default', { skillName: 'D', instructions: 'a' });
-    const v2 = await saveSkill(objectsAt(home), home, 'default', { skillName: 'D', instructions: 'b', supersedesSkillId: v1.id });
-    deleteEntry(home, v1.memoryId!);
-    deleteEntry(home, v2.memoryId!);
-    expect((await loadSkillById(objectsAt(home), 'default', v1.id))!.memoryId).toBeNull();
-    expect((await loadSkillById(objectsAt(home), 'default', v1.id))!.status).toBe('superseded');
-    expect((await loadSkillById(objectsAt(home), 'default', v2.id))!.status).toBe('active');
-  });
-
-  it('status filters; loadActiveSkills; invalid status', async () => {
+  it('status filters; loadActiveSkills', async () => {
     const a = await saveSkill(objectsAt(home), home, 'default', { skillName: 'a', instructions: 'x' });
     const b = await saveSkill(objectsAt(home), home, 'default', { skillName: 'b', instructions: 'x' });
     const c = await saveSkill(objectsAt(home), home, 'default', { skillName: 'c', instructions: 'x' });
@@ -200,9 +103,6 @@ describe('skills store (executable/exportable first-class object)', () => {
     expect(active.some((x) => x.id === b.id)).toBe(false);
     expect((await loadSkills(objectsAt(home), 'default', { status: 'closed' })).map((x) => x.id)).toEqual([c.id]);
     expect((await loadSkills(objectsAt(home), 'default')).length).toBe(4);
-    // @ts-expect-error runtime validation
-    await expect(loadSkills(objectsAt(home), 'default', { status: 'retired' })).rejects.toThrow(/status must be one of/);
-    expect(VALID_SKILL_STATES.has('active')).toBe(true);
   });
 
   it('validation: missing name/instructions; single-line name; caps', async () => {
@@ -244,25 +144,5 @@ describe('skills store (executable/exportable first-class object)', () => {
     // Yankee shows the active v2
     expect(md).toContain('## Yankee\n\nv2');
     expect(md).not.toContain('v1');
-  });
-
-  it('schema v34 produces skills table + 3 triggers + 2 indexes', () => {
-    const db = openHippoDb(home);
-    try {
-      expect(db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name='skills'`).get()).toBeDefined();
-      const triggers = getRows<{ name: string }>(
-        db,
-        `SELECT name FROM sqlite_master WHERE type='trigger' AND name LIKE 'trg_skills_%'`,
-      ).map((t) => t.name);
-      expect(triggers).toContain('trg_skills_tenant_match_insert');
-      expect(triggers).toContain('trg_skills_tenant_match_update');
-      expect(triggers).toContain('trg_skills_supersede_tenant_match_update');
-      const indexes = getRows<{ name: string }>(
-        db,
-        `SELECT name FROM sqlite_master WHERE type='index' AND name LIKE 'idx_skills_%'`,
-      ).map((i) => i.name);
-      expect(indexes).toContain('idx_skills_tenant_status');
-      expect(indexes).toContain('idx_skills_memory');
-    } finally { closeHippoDb(db); }
   });
 });

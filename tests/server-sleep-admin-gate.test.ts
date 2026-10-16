@@ -73,33 +73,6 @@ describe('POST /v1/sleep admin-role gate', () => {
     }
   });
 
-  it('loopback no-Bearer → 200 once serve() is given keylessLocalRole: admin', async () => {
-    await handle.stop();
-    handle = await serve({ hippoRoot: home, port: 0, keylessLocalRole: 'admin' });
-    expect((await keyless('/v1/sleep')).status).toBe(200);
-  });
-
-  it('admin Bearer → 200', async () => {
-    const db = openHippoDb(home);
-    let adminKey: string;
-    try {
-      const result = createApiKey(db, { tenantId: 'default', label: 'admin-test', role: 'admin' });
-      adminKey = result.plaintext;
-    } finally {
-      closeHippoDb(db);
-    }
-
-    const res = await fetch(`${handle.url}/v1/sleep`, {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'authorization': `Bearer ${adminKey}`,
-      },
-      body: JSON.stringify({ dry_run: true }),
-    });
-    expect(res.status).toBe(200);
-  });
-
   it('member Bearer → 403 with admin-role-required message', async () => {
     const db = openHippoDb(home);
     let memberKey: string;

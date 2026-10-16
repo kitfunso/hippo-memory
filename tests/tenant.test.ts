@@ -12,37 +12,15 @@ describe('resolveTenantId', () => {
     expect(resolveTenantId({})).toBe('default');
   });
 
-  it('returns env value when set', () => {
-    process.env.HIPPO_TENANT = 'acme';
+  it.each([
+    ['acme', 'acme'],
+    ['', 'default'],
+    ['   ', 'default'],
+    ['  acme  ', 'acme'],
+  ])('HIPPO_TENANT=%j resolves to %s', (env, expected) => {
+    process.env.HIPPO_TENANT = env;
     try {
-      expect(resolveTenantId({})).toBe('acme');
-    } finally {
-      delete process.env.HIPPO_TENANT;
-    }
-  });
-
-  it('empty HIPPO_TENANT falls through to "default"', () => {
-    process.env.HIPPO_TENANT = '';
-    try {
-      expect(resolveTenantId({})).toBe('default');
-    } finally {
-      delete process.env.HIPPO_TENANT;
-    }
-  });
-
-  it('whitespace-only HIPPO_TENANT falls through to "default"', () => {
-    process.env.HIPPO_TENANT = '   ';
-    try {
-      expect(resolveTenantId({})).toBe('default');
-    } finally {
-      delete process.env.HIPPO_TENANT;
-    }
-  });
-
-  it('trims surrounding whitespace from HIPPO_TENANT', () => {
-    process.env.HIPPO_TENANT = '  acme  ';
-    try {
-      expect(resolveTenantId({})).toBe('acme');
+      expect(resolveTenantId({})).toBe(expected);
     } finally {
       delete process.env.HIPPO_TENANT;
     }

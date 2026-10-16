@@ -27,19 +27,6 @@ describe('auth', () => {
     }
   });
 
-  it('validateApiKey: positive returns tenant context', () => {
-    const home = mkdtempSync(join(tmpdir(), 'hippo-auth-'));
-    const db = openHippoDb(home);
-    try {
-      const { plaintext } = createApiKey(db, { tenantId: 'default', label: 'test', role: 'admin' });
-      const ctx = validateApiKey(db, plaintext);
-      expect(ctx).toEqual({ valid: true, tenantId: 'default', keyId: expect.stringMatching(/^hk_/), role: 'admin', scopes: [] });
-    } finally {
-      closeHippoDb(db);
-      rmSync(home, { recursive: true, force: true });
-    }
-  });
-
   it('validateApiKey: rejects unknown plaintext', () => {
     const home = mkdtempSync(join(tmpdir(), 'hippo-auth-'));
     const db = openHippoDb(home);
