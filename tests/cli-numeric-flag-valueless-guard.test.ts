@@ -9,15 +9,13 @@ import { join } from 'node:path';
 import { runCli as runCliEntry } from '../src/cli.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { initStore } from '../src/store/open.js';
-import { clearProjectIdentityCache } from '../src/core/project-identity.js';
 import { runInProcess, type InProcessResult } from './_helpers/run-in-process.js';
 
 const savedCwd = process.cwd();
 let home = '';
 
 // The guard sits in main() before any verb, so the whole entry runs in process; no process boundary is under test.
-// A spawned hippo starts with an empty project-identity cache, so each in-process run clears it first.
-const hippoRun = (...args: string[]): Promise<InProcessResult> => runInProcess(() => { clearProjectIdentityCache(); return runCliEntry(['node', 'hippo', ...args]); });
+const hippoRun = (...args: string[]): Promise<InProcessResult> => runInProcess(() => runCliEntry(['node', 'hippo', ...args]));
 
 beforeEach(() => {
   home = mkdtempSync(join(tmpdir(), 'hippo-numeric-guard-'));

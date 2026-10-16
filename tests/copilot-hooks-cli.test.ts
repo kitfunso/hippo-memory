@@ -11,7 +11,6 @@ import type { JsonValue } from '../src/util/json.js';
 import { runCli } from '../src/cli.js';
 import { initStore } from '../src/store/open.js';
 import { compactionRows, runHippo } from './_helpers/compaction-hooks.js';
-import { clearProjectIdentityCache } from '../src/core/project-identity.js';
 import { runInProcess } from './_helpers/run-in-process.js';
 import { lockWaitAskedMs, tracingLockWaits } from './_helpers/lock-waits.js';
 import { holdStoreWriteLock, releaseStoreWriteLock } from './_helpers/store-write-lock.js';
@@ -40,8 +39,7 @@ async function pin(text: string, global: boolean): Promise<void> {
   const cwd = process.cwd();
   process.chdir(s.proj);
   try {
-    // A spawned hippo starts with an empty project-identity cache, so each in-process run clears it first.
-    const r = await runInProcess(() => { clearProjectIdentityCache(); return runCli(['node', 'hippo', 'remember', text, '--pin', ...(global ? ['--global'] : [])]); });
+    const r = await runInProcess(() => runCli(['node', 'hippo', 'remember', text, '--pin', ...(global ? ['--global'] : [])]));
     expect(r.status, r.stderr).toBe(0);
   } finally {
     process.chdir(cwd);

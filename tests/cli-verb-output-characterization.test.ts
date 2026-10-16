@@ -5,7 +5,6 @@ import * as path from 'node:path';
 import { makeRoot } from './_helpers/make-root.js';
 import { initStore } from '../src/store/open.js';
 import { runCli } from '../src/cli.js';
-import { clearProjectIdentityCache } from '../src/core/project-identity.js';
 import { runInProcess, type InProcessResult } from './_helpers/run-in-process.js';
 
 const savedCwd = process.cwd();
@@ -28,8 +27,7 @@ afterEach(() => {
   fs.rmSync(root, { recursive: true, force: true });
 });
 
-// A spawned hippo starts with an empty project-identity cache, so each in-process run clears it first.
-const run = (...args: string[]): Promise<InProcessResult> => runInProcess(() => { clearProjectIdentityCache(); return runCli(['node', 'hippo', ...args]); });
+const run = (...args: string[]): Promise<InProcessResult> => runInProcess(() => runCli(['node', 'hippo', ...args]));
 
 async function remember(text: string, ...extra: string[]): Promise<string> {
   const r = await run('remember', text, '--force', ...extra);

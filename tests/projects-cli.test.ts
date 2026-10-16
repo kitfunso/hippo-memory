@@ -10,7 +10,6 @@ import { loadAllEntries } from '../src/store/entry-reads.js';
 import { Layer, type MemoryEntry } from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { runCli } from '../src/cli.js';
-import { clearProjectIdentityCache } from '../src/core/project-identity.js';
 import { runInProcess } from './_helpers/run-in-process.js';
 
 const savedCwd = process.cwd();
@@ -35,8 +34,7 @@ afterEach(() => {
 // A verb that sets process.exitCode instead of exiting reports it here, as the real process would on exit.
 async function runVerb(...args: string[]): Promise<{ status: number; stdout: string; stderr: string }> {
   try {
-    // A spawned hippo starts with an empty project-identity cache, so each in-process run clears it first.
-    const r = await runInProcess(() => { clearProjectIdentityCache(); return runCli(['node', 'hippo', ...args]); });
+    const r = await runInProcess(() => runCli(['node', 'hippo', ...args]));
     return { status: r.status || Number(process.exitCode ?? 0), stdout: r.stdout, stderr: r.stderr };
   } finally {
     process.exitCode = undefined;

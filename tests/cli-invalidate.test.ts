@@ -13,14 +13,12 @@ import { writeEntry } from '../src/store/entry-writes.js';
 import { readEntry } from '../src/store/entry-reads.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { runCli as runCliEntry } from '../src/cli.js';
-import { clearProjectIdentityCache } from '../src/core/project-identity.js';
 import { runInProcess } from './_helpers/run-in-process.js';
 
 const savedCwd = process.cwd();
 
 async function runCli(args: string[], opts: { ok?: boolean } = {}): Promise<{ stdout: string; stderr: string }> {
-  // A spawned hippo starts with an empty project-identity cache, so each in-process run clears it first.
-  const res = await runInProcess(() => { clearProjectIdentityCache(); return runCliEntry(['node', 'hippo', ...args]); });
+  const res = await runInProcess(() => runCliEntry(['node', 'hippo', ...args]));
   if (res.status === 0) return { stdout: res.stdout, stderr: '' };
   if (opts.ok === false) return { stdout: res.stdout, stderr: res.stderr };
   throw new Error(`CLI exit ${res.status}: ${res.stderr}

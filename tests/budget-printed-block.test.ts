@@ -14,7 +14,6 @@ import { assemble, drillDown, type Context } from '../src/api/index.js';
 import { assembleCost, drillCost } from '../src/api/context-render.js';
 import { handleMcpRequest, type McpResponse } from '../src/mcp/server.js';
 import { runCli } from '../src/cli.js';
-import { clearProjectIdentityCache } from '../src/core/project-identity.js';
 import { runInProcess } from './_helpers/run-in-process.js';
 import { withHookStdin } from './_helpers/hook-stdin.js';
 import { sqliteStore } from '../src/store/sqlite/store.js';
@@ -49,8 +48,7 @@ function seedNotes(extra: Partial<MemoryEntry> = {}): void {
 }
 
 async function hippo(args: string[], input?: string): Promise<string> {
-  // A spawned hippo starts with an empty project-identity cache, so each in-process run clears it first.
-  const res = await withHookStdin(input, () => runInProcess(() => { clearProjectIdentityCache(); return runCli(['node', 'hippo', ...args]); }));
+  const res = await withHookStdin(input, () => runInProcess(() => runCli(['node', 'hippo', ...args])));
   expect(res.status, res.stderr).toBe(0);
   return res.stdout;
 }

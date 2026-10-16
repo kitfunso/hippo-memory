@@ -3,15 +3,16 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { runCli } from '../src/cli.js';
-import { clearProjectIdentityCache } from '../src/core/project-identity.js';
 import { runInProcess } from './_helpers/run-in-process.js';
+
+// The first case runs two full `hippo init`s and four more verbs, too slow for the 5 s unit default on a busy runner.
+vi.setConfig({ testTimeout: 30_000 });
 
 const savedCwd = process.cwd();
 let home = '';
 
 async function hippo(...args: string[]): Promise<string> {
-  // A spawned hippo starts with an empty project-identity cache, so each in-process run clears it first.
-  const res = await runInProcess(() => { clearProjectIdentityCache(); return runCli(['node', 'hippo', ...args]); });
+  const res = await runInProcess(() => runCli(['node', 'hippo', ...args]));
   expect(res.status, res.stderr).toBe(0);
   return res.stdout;
 }

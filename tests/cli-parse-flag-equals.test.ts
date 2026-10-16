@@ -11,7 +11,6 @@ import { undeclaredFlags, type VerbFlags } from '../src/cli/flags.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { initStore } from '../src/store/open.js';
 import { ownStderr } from './_helpers/own-stderr.js';
-import { clearProjectIdentityCache } from '../src/core/project-identity.js';
 import { runInProcess, type InProcessResult } from './_helpers/run-in-process.js';
 
 const argv = (...rest: string[]) => ['node', 'hippo', ...rest];
@@ -168,8 +167,7 @@ describe('runCli: --flag=value end-to-end guards', () => {
   const savedCwd = process.cwd();
   let tmpDir: string;
 
-  // A spawned hippo starts with an empty project-identity cache, so each in-process run clears it first.
-  const runCli = (args: string[]): Promise<InProcessResult> => runInProcess(() => { clearProjectIdentityCache(); return runCliEntry(['node', 'hippo', ...args]); });
+  const runCli = (args: string[]): Promise<InProcessResult> => runInProcess(() => runCliEntry(['node', 'hippo', ...args]));
 
   beforeEach(() => {
     tmpDir = mkdtempSync(join(tmpdir(), 'hippo-cli-flag-equals-'));

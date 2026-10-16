@@ -4,7 +4,6 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { runCli } from '../src/cli.js';
 import { initStore } from '../src/store/open.js';
-import { clearProjectIdentityCache } from '../src/core/project-identity.js';
 import { runInProcess } from './_helpers/run-in-process.js';
 
 const savedCwd = process.cwd();
@@ -23,8 +22,7 @@ describe('hippo drill CLI', () => {
     vi.stubEnv('HIPPO_HOME', join(home, '.hippo-global'));
     process.chdir(home);
 
-    // A spawned hippo starts with an empty project-identity cache, so each in-process run clears it first.
-    const res = await runInProcess(() => { clearProjectIdentityCache(); return runCli(['node', 'hippo', 'drill', 'missing', '--depth', '1.5']); });
+    const res = await runInProcess(() => runCli(['node', 'hippo', 'drill', 'missing', '--depth', '1.5']));
     expect(res.status).toBe(2);
     expect(res.stderr).toContain('--depth must be an integer between 1 and 10');
   });

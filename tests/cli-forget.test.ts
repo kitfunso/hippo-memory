@@ -6,7 +6,6 @@ import { initStore } from '../src/store/open.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { queryAuditEvents } from '../src/store/audit.js';
 import { runCli as runCliEntry } from '../src/cli.js';
-import { clearProjectIdentityCache } from '../src/core/project-identity.js';
 import { runInProcess } from './_helpers/run-in-process.js';
 
 // A3: `hippo forget` on a raw (append-only) memory must not dead-end with a
@@ -26,8 +25,7 @@ const RAW_COLS =
 async function runCli(cwd: string, ...args: string[]): Promise<{ out: string; status: number }> {
   process.chdir(cwd);
   try {
-    // A spawned hippo starts with an empty project-identity cache, so each in-process run clears it first.
-    const res = await runInProcess(() => { clearProjectIdentityCache(); return runCliEntry(['node', 'hippo', ...args]); });
+    const res = await runInProcess(() => runCliEntry(['node', 'hippo', ...args]));
     return { out: res.status === 0 ? res.stdout : res.stdout + res.stderr, status: res.status };
   } finally {
     process.chdir(savedCwd);

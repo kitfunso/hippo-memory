@@ -7,7 +7,6 @@ import { readEntry, loadAllEntries } from '../src/store/entry-reads.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { runCli } from '../src/cli.js';
 import { initStore } from '../src/store/open.js';
-import { clearProjectIdentityCache } from '../src/core/project-identity.js';
 import { runInProcess } from './_helpers/run-in-process.js';
 
 const savedCwd = process.cwd();
@@ -27,14 +26,13 @@ afterEach(() => {
 });
 
 async function hippo(...args: string[]): Promise<string> {
-  // A spawned hippo starts with an empty project-identity cache, so each in-process run clears it first.
-  const res = await runInProcess(() => { clearProjectIdentityCache(); return runCli(['node', 'hippo', ...args]); });
+  const res = await runInProcess(() => runCli(['node', 'hippo', ...args]));
   expect(res.status, res.stderr).toBe(0);
   return res.stdout.trim();
 }
 
 async function hippoErr(...args: string[]): Promise<string> {
-  const res = await runInProcess(() => { clearProjectIdentityCache(); return runCli(['node', 'hippo', ...args]); });
+  const res = await runInProcess(() => runCli(['node', 'hippo', ...args]));
   return res.status === 0 ? '' : (res.stderr || res.stdout).trim();
 }
 

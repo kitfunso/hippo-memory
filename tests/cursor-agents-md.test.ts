@@ -5,7 +5,6 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { runCli } from '../src/cli.js';
-import { clearProjectIdentityCache } from '../src/core/project-identity.js';
 import { runInProcess } from './_helpers/run-in-process.js';
 const START = '<!-- hippo:start -->';
 // What hippo wrote to .cursorrules before this change, trimmed.
@@ -34,8 +33,7 @@ afterEach(() => {
 
 async function hippo(...args: string[]): Promise<string> {
   try {
-    // A spawned hippo starts with an empty project-identity cache, so each in-process run clears it first.
-    const r = await runInProcess(() => { clearProjectIdentityCache(); return runCli(['node', 'hippo', ...args]); });
+    const r = await runInProcess(() => runCli(['node', 'hippo', ...args]));
     // A verb that sets process.exitCode instead of exiting fails here, as the real process would on exit.
     expect(r.status || Number(process.exitCode ?? 0), r.stderr).toBe(0);
     return r.stdout;

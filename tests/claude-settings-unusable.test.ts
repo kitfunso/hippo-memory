@@ -4,7 +4,6 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { runCli } from '../src/cli.js';
-import { clearProjectIdentityCache } from '../src/core/project-identity.js';
 import { runInProcess } from './_helpers/run-in-process.js';
 
 const savedCwd = process.cwd();
@@ -35,8 +34,7 @@ async function hippo(...args: string[]): Promise<string> {
   vi.stubEnv('PATH', path.join(root, 'empty-path'));
   process.chdir(path.join(root, 'repo'));
   try {
-    // A spawned hippo starts with an empty project-identity cache, so each in-process run clears it first.
-    const r = await runInProcess(() => { clearProjectIdentityCache(); return runCli(['node', 'hippo', ...args, '--no-schedule', '--no-learn']); });
+    const r = await runInProcess(() => runCli(['node', 'hippo', ...args, '--no-schedule', '--no-learn']));
     // A verb that sets process.exitCode instead of exiting fails here, as the real process would on exit.
     expect(r.status || Number(process.exitCode ?? 0), r.stderr).toBe(0);
     return r.stdout;

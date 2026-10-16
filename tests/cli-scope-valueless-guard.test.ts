@@ -9,7 +9,6 @@ import { runCli } from '../src/cli.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { initStore } from '../src/store/open.js';
-import { clearProjectIdentityCache } from '../src/core/project-identity.js';
 import { runInProcess, type InProcessResult } from './_helpers/run-in-process.js';
 
 const USAGE_MSG = '--scope requires a non-empty value (e.g. --scope slack:private:C1).';
@@ -17,8 +16,7 @@ const USAGE_MSG = '--scope requires a non-empty value (e.g. --scope slack:privat
 const savedCwd = process.cwd();
 let home = '';
 
-// A spawned hippo starts with an empty project-identity cache, so each in-process run clears it first.
-const hippoRun = (...args: string[]): Promise<InProcessResult> => runInProcess(() => { clearProjectIdentityCache(); return runCli(['node', 'hippo', ...args]); });
+const hippoRun = (...args: string[]): Promise<InProcessResult> => runInProcess(() => runCli(['node', 'hippo', ...args]));
 
 async function hippo(...args: string[]): Promise<string> {
   const res = await hippoRun(...args);

@@ -3,14 +3,12 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { runCli } from '../src/cli.js';
-import { clearProjectIdentityCache } from '../src/core/project-identity.js';
 import { runInProcess, type InProcessResult } from './_helpers/run-in-process.js';
 
 const savedCwd = process.cwd();
 let home = '';
 
-// A spawned hippo starts with an empty project-identity cache, so each in-process run clears it first.
-const run = (...args: string[]): Promise<InProcessResult> => runInProcess(() => { clearProjectIdentityCache(); return runCli(['node', 'hippo', ...args]); });
+const run = (...args: string[]): Promise<InProcessResult> => runInProcess(() => runCli(['node', 'hippo', ...args]));
 
 async function hippo(...args: string[]): Promise<string> {
   const res = await run(...args);

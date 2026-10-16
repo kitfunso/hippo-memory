@@ -19,7 +19,6 @@ import { loadAllEntries } from '../src/store/entry-reads.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { runCli as runCliEntry } from '../src/cli.js';
-import { clearProjectIdentityCache } from '../src/core/project-identity.js';
 import { runInProcess } from './_helpers/run-in-process.js';
 
 const savedCwd = process.cwd();
@@ -32,8 +31,7 @@ interface CliRunResult {
 // Mirrors the old spawned helper: stdout alone on success, stdout and stderr together on failure.
 async function runCli(tenant: string, ...args: string[]): Promise<CliRunResult> {
   vi.stubEnv('HIPPO_TENANT', tenant);
-  // A spawned hippo starts with an empty project-identity cache, so each in-process run clears it first.
-  const res = await runInProcess(() => { clearProjectIdentityCache(); return runCliEntry(['node', 'hippo', ...args]); });
+  const res = await runInProcess(() => runCliEntry(['node', 'hippo', ...args]));
   return { out: res.status === 0 ? res.stdout : res.stdout + res.stderr, status: res.status };
 }
 
