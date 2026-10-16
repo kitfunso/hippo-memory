@@ -1,60 +1,48 @@
-/**
- * A7 recall-trace — CLI `recall --why`.
- *
- * Drives the real `bin/hippo.js` against a real SQLite store. A single "hero"
- * memory is engineered to qualify for every CLI-drivable lifecycle stage so
- * its rerankTrace is the full ordered chain. Asserts:
- *  - text --why: each fired stage appears IN ORDER and the chain is contiguous
- *    (each step's scoreBefore == prior step's scoreAfter).
- *  - JSON --why: rerankTrace present per item.
- *  - backward-compat: default recall (no --why) carries no trace + output is
- *    free of any ranking/rerankTrace markers.
- */
+// A7 recall-trace: CLI `recall --why` on a hero memory that fires every CLI-drivable rerank stage, so its trace is the
+// full ordered chain. No-trace default output and the `--goal` stage are pinned in tests/cli-recall-golden.test.ts.
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { pushGoal } from '../src/store/goals.js';
-import { hippoOut } from './_helpers/spawn-hippo.js';
+import { resetSessionRings } from '../src/api/recall/finish.js';
+import { runCli } from '../src/cli.js';
+import { runInProcess } from './_helpers/run-in-process.js';
 
-function hippo(cwd: string, env: Record<string, string>, ...args: string[]): string {
-  return hippoOut(args, { cwd, env: { ...process.env, ...env }, exe: 'node' });
-}
-
-/** The env passed to the child `hippo` process: a fixed key set, plus an
- *  index signature so it still satisfies `Record<string, string>` at the
- *  spawn boundary. */
-interface CliEnv {
-  [key: string]: string;
-  HIPPO_HOME: string;
-  HIPPO_SKIP_AUTO_INTEGRATIONS: string;
+/** `hippo <args>` run in this process from `cwd`, the call bin/hippo.js makes; a non-zero exit fails the test. */
+async function hippo(cwd: string, ...args: string[]): Promise<string> {
+  const saved = process.cwd();
+  process.chdir(cwd);
+  try {
+    const r = await runInProcess(() => runCli(['node', 'hippo', ...args]));
+    expect(r.status, r.stderr).toBe(0);
+    return r.stdout;
+  } finally {
+    process.chdir(saved);
+  }
 }
 
 describe('recall --why rerankTrace', () => {
   let home: string;
-  let localRoot: string;
-  let env: CliEnv;
   const tenantId = 'default';
   const sessionId = 'sess-a7-cli';
   let heroId: string;
-  let peerId: string;
+  const WHY_ARGS = ['recall', 'auth', '--why', '--filter-conflicts', '--value-aware', '--rerank-utility', '--salience-threshold', '5', '--limit', '10'];
 
-  beforeEach(() => {
+  beforeEach(async () => {
     home = mkdtempSync(join(tmpdir(), 'hippo-a7-cli-'));
-    localRoot = join(home, '.hippo');
-    env = {
-      HIPPO_HOME: join(home, 'global-hippo'),
-      HIPPO_SKIP_AUTO_INTEGRATIONS: '1',
-    };
-    hippo(home, env, 'init', '--no-hooks', '--no-schedule', '--no-learn');
+    const localRoot = join(home, '.hippo');
+    vi.stubEnv('HIPPO_HOME', join(home, 'global-hippo'));
+    vi.stubEnv('HIPPO_SKIP_AUTO_INTEGRATIONS', '1');
+    resetSessionRings('cli');
+    await hippo(home, 'init', '--no-hooks', '--no-schedule', '--no-learn');
 
     // peer: matches the query and is referenced by the hero's conflicts_with,
     // so --filter-conflicts fires the interference stage on the hero.
     const peer = createMemory('auth token refresh peer', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: ['ui'], tenantId });
-    peerId = peer.id;
     writeEntry(localRoot, peer);
 
     // hero: qualifies for value (outcomes set), utility (always), goal-boost
@@ -65,7 +53,7 @@ describe('recall --why rerankTrace', () => {
       tags: ['fix-auth'],
       tenantId,
     });
-    hero.conflicts_with = [peerId];
+    hero.conflicts_with = [peer.id];
     hero.outcome_positive = 3;
     hero.outcome_negative = 0;
     hero.retrieval_count = 1; // below the --salience-threshold below
@@ -73,29 +61,16 @@ describe('recall --why rerankTrace', () => {
     writeEntry(localRoot, hero);
 
     pushGoal(localRoot, { sessionId, tenantId, goalName: 'fix-auth' });
+    vi.stubEnv('HIPPO_SESSION_ID', sessionId);
   });
 
   afterEach(() => {
+    vi.unstubAllEnvs();
     if (home) rmSync(home, { recursive: true, force: true });
   });
 
-  function recallWhyText(): string {
-    return hippo(
-      home,
-      { ...env, HIPPO_SESSION_ID: sessionId },
-      'recall', 'auth',
-      '--why',
-      '--filter-conflicts',
-      '--value-aware',
-      '--rerank-utility',
-      '--salience-threshold', '5',
-      '--limit', '10',
-    );
-  }
-
-  it('text --why renders the ordered, contiguous ranking chain on the hero', () => {
-    const out = recallWhyText();
-    // Find the hero's block and its ranking line.
+  it('text --why renders the ordered, contiguous ranking chain on the hero', async () => {
+    const out = await hippo(home, ...WHY_ARGS);
     const lines = out.split('\n');
     const rankingLine = lines.find((l) => l.trim().startsWith('ranking:'));
     expect(rankingLine, `no ranking line in output:\n${out}`).toBeDefined();
@@ -108,18 +83,8 @@ describe('recall --why rerankTrace', () => {
     expect(positions).toEqual(sorted);
   });
 
-  it('JSON --why includes rerankTrace on the hero item, contiguous chain', () => {
-    const out = hippo(
-      home,
-      { ...env, HIPPO_SESSION_ID: sessionId },
-      'recall', 'auth',
-      '--why', '--json',
-      '--filter-conflicts',
-      '--value-aware',
-      '--rerank-utility',
-      '--salience-threshold', '5',
-      '--limit', '10',
-    );
+  it('JSON --why includes rerankTrace on the hero item, contiguous chain', async () => {
+    const out = await hippo(home, ...WHY_ARGS, '--json');
     // SAFETY: `recall --json` output is written by this CLI's own JSON
     // formatter, which always emits `results[].id` and, under `--why`, a
     // `rerankTrace` array of `{stage, scoreBefore, scoreAfter}` steps.
@@ -137,49 +102,5 @@ describe('recall --why rerankTrace', () => {
     for (let i = 1; i < trace.length; i++) {
       expect(trace[i].scoreBefore).toBe(trace[i - 1].scoreAfter);
     }
-  });
-
-  it('backward-compat: default recall (no --why) carries no trace markers', () => {
-    const out = hippo(home, env, 'recall', 'auth', '--limit', '10');
-    expect(out).not.toContain('ranking:');
-    expect(out).not.toContain('rerankTrace');
-
-    const jsonOut = hippo(home, env, 'recall', 'auth', '--json', '--limit', '10');
-    // SAFETY: `recall --json` output is written by this CLI's own JSON
-    // formatter; each result item only needs checking for the ABSENCE of
-    // these two trace fields, so their value type is irrelevant.
-    const parsed = JSON.parse(jsonOut) as {
-      results: Array<{ rerankTrace?: unknown; rerankPipeline?: unknown }>;
-    };
-    for (const item of parsed.results) {
-      expect(item.rerankTrace).toBeUndefined();
-      expect(item.rerankPipeline).toBeUndefined();
-    }
-  });
-
-  it('explicit --goal: recall --why --goal traces the `goal` stage (codex P2 fix)', () => {
-    // No HIPPO_SESSION_ID -> the session goal-boost path does not run; only the
-    // explicit `--goal <tag>` block fires. Before the fix this produced no
-    // ranking line at all for the --goal re-ranker.
-    const out = hippo(
-      home,
-      env,
-      'recall', 'auth',
-      '--why', '--json',
-      '--goal', 'fix-auth',
-      '--limit', '10',
-    );
-    // SAFETY: `recall --why --json` output is written by this CLI's own JSON
-    // formatter, which always emits `results[].id` and a `rerankTrace` array
-    // of `{stage, multiplier}` steps for the `--goal` re-ranker under test.
-    const parsed = JSON.parse(out) as {
-      results: Array<{ id: string; rerankTrace?: Array<{ stage: string; multiplier?: number }> }>;
-    };
-    const hero = parsed.results.find((r) => r.id === heroId);
-    expect(hero, `hero not in results:\n${out}`).toBeDefined();
-    expect(hero!.rerankTrace).toBeDefined();
-    const goalStep = hero!.rerankTrace!.find((s) => s.stage === 'goal');
-    expect(goalStep, 'no `goal` stage in trace').toBeDefined();
-    expect(goalStep!.multiplier).toBe(1.5);
   });
 });

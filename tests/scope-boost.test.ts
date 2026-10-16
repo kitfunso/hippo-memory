@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
@@ -6,14 +6,25 @@ import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { Layer } from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { hippoOut } from './_helpers/spawn-hippo.js';
+import { runCli } from '../src/cli.js';
+import { runInProcess } from './_helpers/run-in-process.js';
 
 let tmpDir: string;
 let hippoDir: string;
 
-function runHippo(args: string[], env?: Record<string, string>): string {
-  const globalDir = path.join(tmpDir, 'global');
-  return hippoOut(args, { env: { ...process.env, HIPPO_HOME: globalDir, HIPPO_SCOPE: '', GSTACK_SKILL: '', OPENCLAW_SKILL: '', ...env }, cwd: tmpDir });
+/** `hippo <args>` run in this process from tmpDir with `env` set, the call bin/hippo.js makes; a non-zero exit fails the test. */
+async function runHippo(args: string[], env: Record<string, string> = {}): Promise<string> {
+  const vars = { HIPPO_HOME: path.join(tmpDir, 'global'), HIPPO_SCOPE: '', GSTACK_SKILL: '', OPENCLAW_SKILL: '', ...env };
+  for (const [name, value] of Object.entries(vars)) vi.stubEnv(name, value);
+  const saved = process.cwd();
+  process.chdir(tmpDir);
+  try {
+    const r = await runInProcess(() => runCli(['node', 'hippo', ...args]));
+    expect(r.status, r.stderr).toBe(0);
+    return r.stdout;
+  } finally {
+    process.chdir(saved);
+  }
 }
 
 beforeEach(() => {
@@ -23,11 +34,12 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.unstubAllEnvs();
   fs.rmSync(tmpDir, { recursive: true, force: true });
 });
 
 describe('scope boost scoring', () => {
-  it('scoped memory ranks higher when scope matches', () => {
+  it('scoped memory ranks higher when scope matches', async () => {
     // Create two memories with similar content but different scope tags
     const scoped = createMemory('always use real DB for integration tests', {
       layer: Layer.Episodic,
@@ -43,7 +55,7 @@ describe('scope boost scoring', () => {
     writeEntry(hippoDir, unscoped);
 
     // Recall with matching scope
-    const out = runHippo(['recall', 'real DB tests', '--scope', 'plan-eng-review', '--json', '--limit', '5']);
+    const out = await runHippo(['recall', 'real DB tests', '--scope', 'plan-eng-review', '--json', '--limit', '5']);
     const parsed = JSON.parse(out);
     expect(parsed.results.length).toBeGreaterThanOrEqual(2);
 
@@ -55,7 +67,7 @@ describe('scope boost scoring', () => {
     expect(scopedResult.score).toBeGreaterThan(unscopedResult.score);
   });
 
-  it('scoped memory ranks lower when scope mismatches', () => {
+  it('scoped memory ranks lower when scope mismatches', async () => {
     const scoped = createMemory('always use real DB for integration tests', {
       layer: Layer.Episodic,
       tags: ['scope:plan-eng-review'],
@@ -70,7 +82,7 @@ describe('scope boost scoring', () => {
     writeEntry(hippoDir, unscoped);
 
     // Recall with mismatching scope: scoped memory gets 0.5x, unscoped gets 1.0x
-    const out = runHippo(['recall', 'real DB tests', '--scope', 'qa', '--json', '--limit', '5']);
+    const out = await runHippo(['recall', 'real DB tests', '--scope', 'qa', '--json', '--limit', '5']);
     const parsed = JSON.parse(out);
     expect(parsed.results.length).toBeGreaterThanOrEqual(2);
 
@@ -82,13 +94,13 @@ describe('scope boost scoring', () => {
     expect(unscopedResult.score).toBeGreaterThan(scopedResult.score);
   });
 
-  it('--scope flag on remember adds scope tag', () => {
-    const out = runHippo(['remember', 'test scope tagging', '--scope', 'design-review']);
+  it('--scope flag on remember adds scope tag', async () => {
+    const out = await runHippo(['remember', 'test scope tagging', '--scope', 'design-review']);
     expect(out).toContain('scope:design-review');
   });
 
-  it('auto-detects scope from HIPPO_SCOPE env var on remember', () => {
-    const out = runHippo(['remember', 'auto scope test'], { HIPPO_SCOPE: 'qa' });
+  it('auto-detects scope from HIPPO_SCOPE env var on remember', async () => {
+    const out = await runHippo(['remember', 'auto scope test'], { HIPPO_SCOPE: 'qa' });
     expect(out).toContain('scope:qa');
   });
 });

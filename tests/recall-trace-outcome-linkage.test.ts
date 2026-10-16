@@ -12,20 +12,30 @@
  */
 
 import type { FullContext } from './_helpers/api-ctx.js';
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { mkdtempSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { execFileSync } from 'node:child_process';
+import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { loadIndex, saveIndex } from '../src/store/index-and-stats.js';
 import { openHippoDb, closeHippoDb, getHippoDbPath, withSharedStoreHandles, type DatabaseSyncLike } from '../src/db/index.js';
 import { remember, retrieve, outcome, outcomeForLastRecall } from '../src/api/index.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+import { runCli } from '../src/cli.js';
+import { runInProcess } from './_helpers/run-in-process.js';
 
-const repoRoot = dirname(dirname(fileURLToPath(import.meta.url)));
-const hippoBin = join(repoRoot, 'bin', 'hippo.js');
+/** `hippo <args>` run in this process from `cwd`, the call bin/hippo.js makes; a non-zero exit fails the test. */
+async function hippo(cwd: string, ...args: string[]): Promise<string> {
+  const saved = process.cwd();
+  process.chdir(cwd);
+  try {
+    const r = await runInProcess(() => runCli(['node', 'hippo', ...args]));
+    expect(r.status, r.stderr).toBe(0);
+    return r.stdout;
+  } finally {
+    process.chdir(saved);
+  }
+}
 
 type RecallTraceRow = { id: number };
 type RecallTraceOutcomeRow = { outcome: string; memory_ids_json: string };
@@ -37,14 +47,14 @@ function tmpHome() {
 }
 
 describe('outcome linkage E2E (CLI recall -> outcome)', () => {
-  it('a cmdRecall-style flow followed by `hippo outcome --good` writes a recall_trace_outcomes row referencing the recall trace', () => {
+  it('a cmdRecall-style flow followed by `hippo outcome --good` writes a recall_trace_outcomes row referencing the recall trace', async () => {
     const hippoRoot = mkdtempSync(join(tmpdir(), 'hippo-cli-outcome-linkage-'));
+    vi.stubEnv('HIPPO_HOME', hippoRoot);
     try {
-      const env = { ...process.env, HIPPO_HOME: hippoRoot };
-      execFileSync('node', [hippoBin, 'init', '--no-hooks', '--no-schedule', '--no-learn'], { cwd: hippoRoot, env });
-      execFileSync('node', [hippoBin, 'remember', 'outcome-link-target zeta fact'], { cwd: hippoRoot, env });
-      execFileSync('node', [hippoBin, 'recall', 'outcome-link-target'], { cwd: hippoRoot, env, encoding: 'utf-8' });
-      const outcomeOut = execFileSync('node', [hippoBin, 'outcome', '--good'], { cwd: hippoRoot, env, encoding: 'utf-8' });
+      await hippo(hippoRoot, 'init', '--no-hooks', '--no-schedule', '--no-learn');
+      await hippo(hippoRoot, 'remember', 'outcome-link-target zeta fact');
+      await hippo(hippoRoot, 'recall', 'outcome-link-target');
+      const outcomeOut = await hippo(hippoRoot, 'outcome', '--good');
       expect(outcomeOut).toContain('Applied');
 
       const localStore = join(hippoRoot, '.hippo');
@@ -65,6 +75,7 @@ describe('outcome linkage E2E (CLI recall -> outcome)', () => {
         closeHippoDb(db);
       }
     } finally {
+      vi.unstubAllEnvs();
       rmSync(hippoRoot, { recursive: true, force: true });
     }
   });

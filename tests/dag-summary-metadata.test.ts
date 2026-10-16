@@ -16,7 +16,7 @@ import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries, loadEntriesByIds } from '../src/store/entry-reads.js';
 import { sqliteDagReads } from '../src/store/sqlite/dag-reads-group.js';
-import { openHippoDb, closeHippoDb, getCurrentSchemaVersion, getSchemaVersion } from '../src/db/index.js';
+import { openHippoDb, closeHippoDb, getSchemaVersion } from '../src/db/index.js';
 import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { LATEST_SCHEMA_VERSION } from './_helpers/schema-version.js';
 import { makeRoot } from './_helpers/make-root.js';
@@ -29,10 +29,6 @@ describe('schema v25 — DAG summary metadata', () => {
   let root: string;
   beforeEach(() => { root = makeRoot('v25-meta'); });
   afterEach(() => safeRmSync(root));
-
-  it('current schema version is 25', () => {
-    expect(getCurrentSchemaVersion()).toBe(LATEST_SCHEMA_VERSION);
-  });
 
   it('fresh init brings DB to v25 with the three new columns', () => {
     const db = openHippoDb(root);

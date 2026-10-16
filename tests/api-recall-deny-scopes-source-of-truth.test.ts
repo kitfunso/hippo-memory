@@ -32,10 +32,4 @@ describe('RECALL_DEFAULT_DENY_SCOPES: single source of truth', () => {
   it('contains unknown:legacy at v1.7.2 ship time (regression-pin)', () => {
     expect(RECALL_DEFAULT_DENY_SCOPES).toContain('unknown:legacy');
   });
-
-  it('is non-empty (codex P1-5: empty list silently allows quarantine)', () => {
-    // Module-load invariant: blanking the array silently allows
-    // unknown:legacy through. Pin loudly so a maintainer sees the test fail.
-    expect(RECALL_DEFAULT_DENY_SCOPES.length).toBeGreaterThan(0);
-  });
 });

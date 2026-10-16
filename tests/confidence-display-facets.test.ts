@@ -3,10 +3,9 @@
 // one indistinguishable at every display site.
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, mkdirSync, rmSync, existsSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
-import { execFileSync } from 'node:child_process';
+import { join } from 'node:path';
 import { request as httpRequest } from 'node:http';
 import type { Server } from 'node:http';
 import { initStore } from '../src/store/open.js';
@@ -17,10 +16,12 @@ import { boundPort } from './_helpers/listen.js';
 import { handleMcpRequest } from '../src/mcp/server.js';
 import { _resetAblationCacheForTests } from '../src/core/ablation.js';
 import { sqliteStore } from '../src/store/sqlite/store.js';
+import { runCli } from '../src/cli.js';
+import { withHookStdin } from './_helpers/hook-stdin.js';
+import { runInProcess } from './_helpers/run-in-process.js';
 
 const DASHBOARD_TOKEN = 'test-dashboard-token';
 
-const CLI = resolve(__dirname, '..', 'bin', 'hippo.js');
 const NOW = new Date('2026-09-07T12:00:00.000Z');
 const DAY = 86_400_000;
 
@@ -38,15 +39,17 @@ function seed(
   return e;
 }
 
-function runCli(cwd: string, args: string[]): string {
-  if (!existsSync(CLI)) {
-    throw new Error(`bin/hippo.js not found at ${CLI} - run \`npm run build\` first`);
+/** `hippo <args>` run in this process from `cwd` with an empty hook stdin, the call bin/hippo.js makes; a non-zero exit fails the test. */
+async function hippo(cwd: string, args: string[]): Promise<string> {
+  const saved = process.cwd();
+  process.chdir(cwd);
+  try {
+    const r = await runInProcess(() => withHookStdin(undefined, () => runCli(['node', 'hippo', ...args])));
+    expect(r.status, r.stderr).toBe(0);
+    return r.stdout;
+  } finally {
+    process.chdir(saved);
   }
-  return execFileSync('node', [CLI, ...args], {
-    cwd,
-    encoding: 'utf8',
-    env: { ...process.env, HIPPO_HOME: join(cwd, '.hippo-global') },
-  });
 }
 
 function get(port: number, path: string): Promise<string> {
@@ -76,8 +79,8 @@ describe('confidence facets', () => {
     initStore(hippoRoot);
     prevHome = process.env.HIPPO_HOME;
     process.env.HIPPO_HOME = join(home, '.hippo-global');
-    // Fixtures are dated from NOW, so the runtime clock has to be NOW too, in
-    // this process and in the CLI that runCli spawns off this env.
+    // Fixtures are dated from NOW, so the runtime clock has to be NOW too,
+    // for the core calls and the CLI verbs this process runs.
     prevNow = process.env.HIPPO_FAKE_NOW;
     process.env.HIPPO_FAKE_NOW = NOW.toISOString();
     _resetAblationCacheForTests();
@@ -172,7 +175,7 @@ describe('confidence facets', () => {
     expect(confidenceFacets(verified, NOW).agedOut).toBe(false);
   });
 
-  it('counts an aged-out observed row under Observed and Aged out, not Stale', () => {
+  it('counts an aged-out observed row under Observed and Aged out, not Stale', async () => {
     seed(hippoRoot, 'an observed row nobody has retrieved lately', {
       confidence: 'observed',
       last_retrieved: ago(45),
@@ -182,49 +185,49 @@ describe('confidence facets', () => {
       last_retrieved: ago(1),
     });
 
-    const out = runCli(home, ['status']);
+    const out = await hippo(home, ['status']);
 
     expect(out).toMatch(/Observed:\s+1/);
     expect(out).toMatch(/Stale:\s+1/);
     expect(out).toMatch(/Aged out:\s+1 {2}\(of the above; excludes pinned, verified\)/);
   });
 
-  it('reports the stored tier and aged_out from recall --why JSON', () => {
+  it('reports the stored tier and aged_out from recall --why JSON', async () => {
     seed(hippoRoot, 'a distinctive haddock fact nobody retrieved lately', {
       confidence: 'observed',
       last_retrieved: ago(45),
     });
 
     const out: { results: Array<{ confidence: string; aged_out: boolean }> } = JSON.parse(
-      runCli(home, ['recall', 'haddock', '--json', '--why']),
+      await hippo(home, ['recall', 'haddock', '--json', '--why']),
     );
 
     expect(out.results[0]!.confidence).toBe('observed');
     expect(out.results[0]!.aged_out).toBe(true);
   });
 
-  it('reports the stored tier and aged_out from explain --json', () => {
+  it('reports the stored tier and aged_out from explain --json', async () => {
     seed(hippoRoot, 'a distinctive haddock fact nobody retrieved lately', {
       confidence: 'observed',
       last_retrieved: ago(45),
     });
 
     const out: { results: Array<{ confidence: string; aged_out: boolean }> } = JSON.parse(
-      runCli(home, ['explain', 'haddock', '--json']),
+      await hippo(home, ['explain', 'haddock', '--json']),
     );
 
     expect(out.results[0]!.confidence).toBe('observed');
     expect(out.results[0]!.aged_out).toBe(true);
   });
 
-  it('omits aged_out from context --format json, which reports post-retrieval state', () => {
+  it('omits aged_out from context --format json, which reports post-retrieval state', async () => {
     seed(hippoRoot, 'a distinctive haddock fact nobody retrieved lately', {
       confidence: 'observed',
       last_retrieved: ago(45),
     });
 
     const payload: { memories: Array<{ content: string; confidence: string }> } = JSON.parse(
-      runCli(home, ['context', 'haddock', '--format', 'json']),
+      await hippo(home, ['context', 'haddock', '--format', 'json']),
     );
 
     const row = payload.memories.find((e) => e.content.includes('haddock'));
@@ -257,22 +260,22 @@ describe('confidence facets', () => {
     expect(detail.agedOut).toBe(true);
   }, 15_000);
 
-  it('renders the pair on hippo trace, the surface that reads without retrieving', () => {
+  it('renders the pair on hippo trace, the surface that reads without retrieving', async () => {
     const e = seed(hippoRoot, 'a traced row nobody has retrieved lately', {
       confidence: 'observed',
       last_retrieved: ago(45),
     });
 
-    expect(runCli(home, ['trace', e.id])).toContain('observed, aged');
+    expect(await hippo(home, ['trace', e.id])).toContain('observed, aged');
 
     const json: { confidence: string; aged_out: boolean } = JSON.parse(
-      runCli(home, ['trace', e.id, '--json']),
+      await hippo(home, ['trace', e.id, '--json']),
     );
     expect(json.confidence).toBe('observed');
     expect(json.aged_out).toBe(true);
   });
 
-  it('keeps the Pinned column aligned when the label carries its aged suffix', () => {
+  it('keeps the Pinned column aligned when the label carries its aged suffix', async () => {
     const aged = seed(hippoRoot, 'a traced row nobody has retrieved lately', {
       confidence: 'observed',
       last_retrieved: ago(45),
@@ -282,15 +285,15 @@ describe('confidence facets', () => {
       last_retrieved: ago(1),
     });
 
-    const line = (id: string): string =>
-      /Confidence:.*/.exec(runCli(home, ['trace', id]))![0];
-    const agedLine = line(aged.id);
+    const line = async (id: string): Promise<string> =>
+      /Confidence:.*/.exec(await hippo(home, ['trace', id]))![0];
+    const agedLine = await line(aged.id);
 
     expect(agedLine).toContain('observed, aged');
-    expect(agedLine.indexOf('Pinned:')).toBe(line(fresh.id).indexOf('Pinned:'));
+    expect(agedLine.indexOf('Pinned:')).toBe((await line(fresh.id)).indexOf('Pinned:'));
   });
 
-  it('renders the pair on hippo recall, while context un-ages what it returns', () => {
+  it('renders the pair on hippo recall, while context un-ages what it returns', async () => {
     seed(hippoRoot, 'a distinctive haddock fact nobody retrieved lately', {
       confidence: 'observed',
       last_retrieved: ago(45),
@@ -300,9 +303,9 @@ describe('confidence facets', () => {
       last_retrieved: ago(45),
     });
 
-    expect(runCli(home, ['recall', 'haddock'])).toContain('[observed, aged]');
-    expect(runCli(home, ['context', 'kipper'])).toContain('[observed]');
-    expect(runCli(home, ['context', 'kipper'])).not.toContain('aged');
+    expect(await hippo(home, ['recall', 'haddock'])).toContain('[observed, aged]');
+    expect(await hippo(home, ['context', 'kipper'])).toContain('[observed]');
+    expect(await hippo(home, ['context', 'kipper'])).not.toContain('aged');
   });
 
   it('renders the stored tier at the MCP compact label', async () => {

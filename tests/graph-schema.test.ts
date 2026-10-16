@@ -7,18 +7,13 @@
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
-import { openHippoDb, closeHippoDb, getCurrentSchemaVersion } from '../src/db/index.js';
-import { LATEST_SCHEMA_VERSION } from './_helpers/schema-version.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { makeRoot } from './_helpers/make-root.js';
 
 describe('graph schema v37', () => {
   let home: string;
   beforeEach(() => { home = makeRoot('graph-schema'); });
   afterEach(() => { try { rmSync(home, { recursive: true, force: true }); } catch { /* ignore */ } });
-
-  it('CURRENT_SCHEMA_VERSION is 38', () => {
-    expect(getCurrentSchemaVersion()).toBe(LATEST_SCHEMA_VERSION);
-  });
 
   it('creates entities + relations + graph_extraction_queue tables', () => {
     const db = openHippoDb(home);

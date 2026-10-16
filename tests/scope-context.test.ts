@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
@@ -6,14 +6,26 @@ import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { Layer } from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { hippoOut } from './_helpers/spawn-hippo.js';
+import { runCli } from '../src/cli.js';
+import { withHookStdin } from './_helpers/hook-stdin.js';
+import { runInProcess } from './_helpers/run-in-process.js';
 
 let tmpDir: string;
 let hippoDir: string;
 
-function runHippo(args: string[]): string {
-  const globalDir = path.join(tmpDir, 'global');
-  return hippoOut(args, { env: { ...process.env, HIPPO_HOME: globalDir, HIPPO_SCOPE: '', GSTACK_SKILL: '', OPENCLAW_SKILL: '' }, cwd: tmpDir });
+/** `hippo <args>` run in this process from tmpDir with an empty hook stdin, the call bin/hippo.js makes; a non-zero exit fails the test. */
+async function runHippo(args: string[]): Promise<string> {
+  const vars = { HIPPO_HOME: path.join(tmpDir, 'global'), HIPPO_SCOPE: '', GSTACK_SKILL: '', OPENCLAW_SKILL: '' };
+  for (const [name, value] of Object.entries(vars)) vi.stubEnv(name, value);
+  const saved = process.cwd();
+  process.chdir(tmpDir);
+  try {
+    const r = await runInProcess(() => withHookStdin(undefined, () => runCli(['node', 'hippo', ...args])));
+    expect(r.status, r.stderr).toBe(0);
+    return r.stdout;
+  } finally {
+    process.chdir(saved);
+  }
 }
 
 beforeEach(() => {
@@ -23,11 +35,12 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.unstubAllEnvs();
   fs.rmSync(tmpDir, { recursive: true, force: true });
 });
 
 describe('scope-aware context injection', () => {
-  it('pinned-only: scoped memory ranks higher when scope matches', () => {
+  it('pinned-only: scoped memory ranks higher when scope matches', async () => {
     const scoped = createMemory('NEVER skip DB migration in eng review', {
       layer: Layer.Episodic,
       tags: ['scope:plan-eng-review'],
@@ -43,7 +56,7 @@ describe('scope-aware context injection', () => {
     writeEntry(hippoDir, scoped);
     writeEntry(hippoDir, unscoped);
 
-    const out = runHippo([
+    const out = await runHippo([
       'context', '--pinned-only', '--scope', 'plan-eng-review',
       '--format', 'json', '--budget', '2000',
     ]);
@@ -58,7 +71,7 @@ describe('scope-aware context injection', () => {
     expect(scopedMem.score).toBeGreaterThan(unscopedMem.score);
   });
 
-  it('pinned-only: scoped memory ranks lower when scope mismatches', () => {
+  it('pinned-only: scoped memory ranks lower when scope mismatches', async () => {
     const scoped = createMemory('NEVER skip DB migration in eng review', {
       layer: Layer.Episodic,
       tags: ['scope:plan-eng-review'],
@@ -74,7 +87,7 @@ describe('scope-aware context injection', () => {
     writeEntry(hippoDir, scoped);
     writeEntry(hippoDir, unscoped);
 
-    const out = runHippo([
+    const out = await runHippo([
       'context', '--pinned-only', '--scope', 'qa',
       '--format', 'json', '--budget', '2000',
     ]);

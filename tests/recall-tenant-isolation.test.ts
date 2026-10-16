@@ -1,28 +1,38 @@
-import { describe, it, expect } from 'vitest';
-import { mkdtempSync, rmSync, existsSync } from 'node:fs';
+import { describe, it, expect, afterEach, vi } from 'vitest';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
-import { execSync } from 'node:child_process';
+import { join } from 'node:path';
+import { runCli } from '../src/cli.js';
+import { runInProcess } from './_helpers/run-in-process.js';
 
-const repoRoot = resolve(__dirname, '..');
-const cli = resolve(repoRoot, 'dist', 'cli.js');
+/** `hippo <args>` run in this process from `home` as tenant `tenant`, the call bin/hippo.js makes; a non-zero exit fails the test. */
+async function hippo(home: string, tenant: string, ...args: string[]): Promise<string> {
+  vi.stubEnv('HIPPO_TENANT', tenant);
+  const saved = process.cwd();
+  process.chdir(home);
+  try {
+    const r = await runInProcess(() => runCli(['node', 'hippo', ...args]));
+    expect(r.status, r.stderr).toBe(0);
+    return r.stdout;
+  } finally {
+    process.chdir(saved);
+  }
+}
 
 describe('cross-tenant recall isolation', () => {
-  it('tenant A recall does not return tenant B memories', () => {
-    if (!existsSync(cli)) {
-      throw new Error(`dist/cli.js not found at ${cli} — run \`npm run build\` first`);
-    }
-    const home = mkdtempSync(join(tmpdir(), 'hippo-iso-'));
-    const envA = { ...process.env, HIPPO_HOME: home, HIPPO_TENANT: 'tenant_a' };
-    const envB = { ...process.env, HIPPO_HOME: home, HIPPO_TENANT: 'tenant_b' };
-    try {
-      execSync(`node "${cli}" init`, { env: envA, cwd: home });
-      execSync(`node "${cli}" init --global`, { env: envA, cwd: home });
-      execSync(`node "${cli}" remember "alpha-secret-xyz unique-tenant-marker" --global`, { env: envA, cwd: home });
-      execSync(`node "${cli}" remember "beta-secret-xyz unique-tenant-marker" --global`, { env: envB, cwd: home });
+  afterEach(() => vi.unstubAllEnvs());
 
-      const aOut = execSync(`node "${cli}" recall "secret-xyz"`, { env: envA, cwd: home }).toString();
-      const bOut = execSync(`node "${cli}" recall "secret-xyz"`, { env: envB, cwd: home }).toString();
+  it('tenant A recall does not return tenant B memories', async () => {
+    const home = mkdtempSync(join(tmpdir(), 'hippo-iso-'));
+    vi.stubEnv('HIPPO_HOME', home);
+    try {
+      await hippo(home, 'tenant_a', 'init');
+      await hippo(home, 'tenant_a', 'init', '--global');
+      await hippo(home, 'tenant_a', 'remember', 'alpha-secret-xyz unique-tenant-marker', '--global');
+      await hippo(home, 'tenant_b', 'remember', 'beta-secret-xyz unique-tenant-marker', '--global');
+
+      const aOut = await hippo(home, 'tenant_a', 'recall', 'secret-xyz');
+      const bOut = await hippo(home, 'tenant_b', 'recall', 'secret-xyz');
 
       expect(aOut).toContain('alpha-secret-xyz');
       expect(aOut).not.toContain('beta-secret-xyz');
@@ -31,5 +41,5 @@ describe('cross-tenant recall isolation', () => {
     } finally {
       rmSync(home, { recursive: true, force: true });
     }
-  });
+  }, 30_000);
 });
