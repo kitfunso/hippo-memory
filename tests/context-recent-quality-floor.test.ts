@@ -10,12 +10,12 @@
  * Real-DB per project convention. Tests 1-6 seed entries directly via
  * `createMemory` + `writeEntry` (so `pinned` and `created` can be set) and
  * assert on `api.getContext`, following the `tmpHome` isolation pattern from
- * tests/api-context.test.ts. Test 7 goes through the built CLI, following
+ * tests/api-context.test.ts. Test 7 goes through the CLI entry, following
  * tests/pinned-inject.test.ts's `runHippo` pattern.
  */
 
 import type { FullContext } from './_helpers/api-ctx.js';
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
@@ -26,7 +26,9 @@ import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { getContext } from '../src/api/index.js';
-import { hippoOut } from './_helpers/spawn-hippo.js';
+import { runCli } from '../src/cli.js';
+import { withHookStdin } from './_helpers/hook-stdin.js';
+import { runInProcess } from './_helpers/run-in-process.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 
 function tmpHome() {
@@ -356,15 +358,25 @@ describe('includeRecent quality floor (CLI end-to-end)', () => {
   });
 
   afterEach(() => {
+    vi.unstubAllEnvs();
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  function runHippo(args: string[]): string {
-    const globalDir = path.join(tmpDir, 'global');
-    return hippoOut(args, { env: { ...process.env, HIPPO_HOME: globalDir }, cwd: tmpDir });
+  /** `hippo <args>` run in this process from tmpDir with an empty hook stdin, the call bin/hippo.js makes; a non-zero exit fails the test. */
+  async function runHippo(args: string[]): Promise<string> {
+    vi.stubEnv('HIPPO_HOME', path.join(tmpDir, 'global'));
+    const saved = process.cwd();
+    process.chdir(tmpDir);
+    try {
+      const r = await runInProcess(() => withHookStdin(undefined, () => runCli(['node', 'hippo', ...args])));
+      expect(r.status, r.stderr).toBe(0);
+      return r.stdout;
+    } finally {
+      process.chdir(saved);
+    }
   }
 
-  it('test 7 — `hippo context --pinned-only --include-recent 5` excludes junk against a seeded store', () => {
+  it('test 7 — `hippo context --pinned-only --include-recent 5` excludes junk against a seeded store', async () => {
     initStore(hippoDir);
     const junk = createMemory('fixed signals', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic });
     const clean = createMemory('clean CLI-seeded memory with plenty of specific detail worth keeping', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic });
@@ -373,7 +385,7 @@ describe('includeRecent quality floor (CLI end-to-end)', () => {
     writeEntry(hippoDir, junk);
     writeEntry(hippoDir, clean);
 
-    const out = runHippo(['context', '--pinned-only', '--include-recent', '5', '--format', 'additional-context', '--budget', '500']);
+    const out = await runHippo(['context', '--pinned-only', '--include-recent', '5', '--format', 'additional-context', '--budget', '500']);
     const parsed = JSON.parse(out);
     const context = parsed.hookSpecificOutput.additionalContext;
 

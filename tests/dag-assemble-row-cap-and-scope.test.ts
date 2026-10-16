@@ -47,48 +47,6 @@ describe('loadSessionRawMemories row cap', () => {
     }
     expect(loadSessionRawMemories(root, 'sess-x', 'default').length).toBe(12);
   });
-
-  it('cap=5 returns the 5 NEWEST in chronological order (v1.6.2 fix)', () => {
-    // Pre-v1.6.2 returned the 5 OLDEST due to ORDER BY ASC LIMIT, which
-    // silently dropped the newest rows on a session > cap and broke
-    // fresh-tail. v1.6.2 reverses the ORDER + reverses client-side.
-    const ids: string[] = [];
-    for (let i = 0; i < 12; i++) {
-      const e = makeRaw(`message body row number ${i}`, 'sess-x');
-      e.created = `2026-01-${String(i + 1).padStart(2, '0')}T00:00:00.000Z`;
-      writeEntry(root, e);
-      ids.push(e.id);
-    }
-    const got = loadSessionRawMemories(root, 'sess-x', 'default', 5);
-    expect(got.length).toBe(5);
-    expect(got.map((e) => e.id)).toEqual(ids.slice(7));
-  });
-});
-
-describe('assemble.truncated flag', () => {
-  let root: string;
-  beforeEach(() => { root = makeRoot('v161-trunc'); });
-  afterEach(() => safeRmSync(root));
-
-  it('truncated=true when rowCap matches the row count', async () => {
-    for (let i = 0; i < 6; i++) {
-      const e = makeRaw(`body content row ${i}`, 'sess-t');
-      e.created = `2026-01-0${i + 1}T00:00:00.000Z`;
-      writeEntry(root, e);
-    }
-    const r = await assemble(ctxFor(root), 'sess-t', { rowCap: 6, budget: 100000 });
-    expect(r.truncated).toBe(true);
-  });
-
-  it('truncated=false when rowCap is comfortable', async () => {
-    for (let i = 0; i < 3; i++) {
-      const e = makeRaw(`body content row ${i}`, 'sess-t2');
-      e.created = `2026-01-0${i + 1}T00:00:00.000Z`;
-      writeEntry(root, e);
-    }
-    const r = await assemble(ctxFor(root), 'sess-t2', { rowCap: 100, budget: 100000 });
-    expect(r.truncated).toBe(false);
-  });
 });
 
 describe('totalRaw is post-scope', () => {

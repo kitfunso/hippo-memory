@@ -1,66 +1,43 @@
-/**
- * L1 — `hippo recall --graph-stream` CLI smoke + flag validation (real subprocess).
- * Docs: docs/plans/2026-06-02-l1-graph-rrf-stream.md
- *
- * The internal scoring-mode switch (blend -> rrf) and the graph fusion are not black-box
- * observable from CLI stdout and the rrf path needs embeddings (unavailable in CI), so the
- * mechanism is covered by the library/fusion unit tests. Here we only assert the flag is
- * wired (exits 0 on a real store) and that --graph-hops / --graph-seeds validation fires.
- */
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+// L1 `recall --graph-stream` range checks the golden matrix misses (docs/plans/2026-06-02-l1-graph-rrf-stream.md).
+// The flag on a real store and the non-integer cases are pinned in tests/cli-recall-golden.test.ts.
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { hippoOut } from './_helpers/spawn-hippo.js';
+import { runCli } from '../src/cli.js';
+import { runInProcess } from './_helpers/run-in-process.js';
 
-interface CliEnv {
-  HIPPO_HOME: string;
-  HIPPO_SKIP_AUTO_INTEGRATIONS: string;
-}
-
-function hippo(cwd: string, env: CliEnv, ...args: string[]): string {
-  return hippoOut(args, { cwd, env: { ...process.env, ...env }, exe: 'node' });
+/** `hippo <args>` run in this process from `cwd`, the call bin/hippo.js makes. */
+async function hippo(cwd: string, ...args: string[]) {
+  const saved = process.cwd();
+  process.chdir(cwd);
+  try {
+    return await runInProcess(() => runCli(['node', 'hippo', ...args]));
+  } finally {
+    process.chdir(saved);
+  }
 }
 
 describe('recall --graph-stream', () => {
   let home: string;
-  let env: CliEnv;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     home = mkdtempSync(join(tmpdir(), 'hippo-l1cli-'));
-    env = { HIPPO_HOME: join(home, 'global-hippo'), HIPPO_SKIP_AUTO_INTEGRATIONS: '1' };
-    hippo(home, env, 'init', '--no-hooks', '--no-schedule', '--no-learn');
+    vi.stubEnv('HIPPO_HOME', join(home, 'global-hippo'));
+    vi.stubEnv('HIPPO_SKIP_AUTO_INTEGRATIONS', '1');
+    expect((await hippo(home, 'init', '--no-hooks', '--no-schedule', '--no-learn')).status).toBe(0);
   });
-  afterEach(() => { if (home) rmSync(home, { recursive: true, force: true }); });
-
-  it('runs without error on a real store (degrades safely; stream inert without embeddings)', () => {
-    hippo(home, env, 'remember', 'cache invalidation decision for the deploy pipeline');
-    // Exits 0 (execFileSync throws on non-zero). Output is the normal recall result.
-    const out = hippo(home, env, 'recall', 'cache', '--graph-stream', '--limit', '5');
-    expect(out).toContain('cache invalidation decision for the deploy pipeline');
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    if (home) rmSync(home, { recursive: true, force: true });
   });
 
-  it('--graph-hops out of range is rejected', () => {
-    let err = '';
-    try { hippo(home, env, 'recall', 'anything', '--graph-stream', '--graph-hops', '99'); }
-    catch (e) {
-      // SAFETY: execFileSync throws a Node child_process error with .stderr
-      // populated as a string (the helper always passes encoding: 'utf-8')
-      // when the child exits non-zero, which is the only throw path here.
-      err = String((e as { stderr?: string }).stderr ?? '');
-    }
-    expect(err).toMatch(/Invalid --graph-hops/);
-  });
-
-  it('--graph-seeds non-positive is rejected', () => {
-    let err = '';
-    try { hippo(home, env, 'recall', 'anything', '--graph-stream', '--graph-seeds', '0'); }
-    catch (e) {
-      // SAFETY: execFileSync throws a Node child_process error with .stderr
-      // populated as a string (the helper always passes encoding: 'utf-8')
-      // when the child exits non-zero, which is the only throw path here.
-      err = String((e as { stderr?: string }).stderr ?? '');
-    }
-    expect(err).toMatch(/Invalid --graph-seeds/);
+  it.each([
+    ['--graph-hops', '99', /Invalid --graph-hops/],
+    ['--graph-seeds', '0', /Invalid --graph-seeds/],
+  ])('%s %s is rejected', async (flag, value, message) => {
+    const r = await hippo(home, 'recall', 'anything', '--graph-stream', flag, value);
+    expect(r.status).toBe(1);
+    expect(r.stderr).toMatch(message);
   });
 });

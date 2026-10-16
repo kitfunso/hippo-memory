@@ -92,6 +92,7 @@ describe('B9 and B10: the ledger never changes either hook', () => {
     const off = project({ ledger: false });
     try {
       const baseline = scenario(off);
+      expect(baseline.status).toEqual([0, 0]);
       expect(baseline.stdout[0]).not.toBe('');
       expect(baseline.stdout[1]).toContain(SNAPSHOT_TASK);
       const on = scenario(p);

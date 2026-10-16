@@ -3,6 +3,7 @@
 import { format } from 'node:util';
 import { vi } from 'vitest';
 import { CliExit } from '../../src/cli/exit.js';
+import { clearProjectIdentityCache } from '../../src/core/project-identity.js';
 
 /** Thrown in place of process.exit so the verb stops where the real process would. */
 export class ExitCalled extends Error {
@@ -33,6 +34,8 @@ export async function runInProcess(fn: () => void | Promise<void>): Promise<InPr
     vi.spyOn(process.stderr, 'write').mockImplementation((chunk: string | Uint8Array) => { keep(err, String(chunk)); return true; }),
     vi.spyOn(process, 'exit').mockImplementation((code?: string | number | null) => { throw (exited ??= new ExitCalled(Number(code ?? 0))); }),
   ];
+  // A spawned hippo starts with no cached project, so one test's project cannot leak into the next.
+  clearProjectIdentityCache();
   try {
     await fn();
   } catch (error) {

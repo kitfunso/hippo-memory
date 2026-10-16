@@ -40,18 +40,24 @@ process.env.HIPPO_ALLOW_KEYLESS_LOCAL = '1';
 process.env.HIPPO_SKIP_SCHEDULE = '1';
 
 // Each of these builds real git repositories and worktrees per case, too slow for every shard; token-eval.yml runs them.
-export const EVAL_TESTS = ['ab-run', 'make-tasks', 'z0-homes', 'z0-turns', 'z0-codex-run', 'z0-codex-guards', 'z0-codex-faults', 'z0-codex-install'].map((name) => `tests/token-eval-${name}.test.ts`);
+export const EVAL_TESTS = [
+  'ab-run', 'make-tasks', 'z0-homes', 'z0-turns', 'z0-regrade', 'z0-regrade-resume', 'z0-readcheck', 'z0-chain', 'z0-surfaces', 'z0-timeout', 'z0-leaks', 'z0-grading',
+  'z0-codex-run', 'z0-codex-guards', 'z0-codex-faults', 'z0-codex-install',
+].map((name) => `tests/token-eval-${name}.test.ts`);
 
 const TEST_GLOBS = ['tests/**/*.test.ts', 'tests/**/*.test.mjs'];
+// GitHub's Windows runners stall their D: temp disk for up to two minutes at 10 ms a write (#903), so a unit test
+// there gets the process tests' budget.
+const UNIT_MS = process.env.GITHUB_ACTIONS === 'true' && process.platform === 'win32' ? 30_000 : 5_000;
 const SKIPPED = [...configDefaults.exclude, ...EVAL_TESTS];
 export { PROCESS_TESTS };
 
 export default defineConfig({
   test: {
-    // A test that starts a process waits on the operating system and keeps 30 s; the rest get 5 s. tests/process-tests-list.test.ts fails when the list goes stale.
+    // A test that starts a process waits on the operating system and keeps 30 s; the rest get UNIT_MS. tests/process-tests-list.test.ts fails when the list goes stale.
     // A file that is slow for a reason this split cannot see raises its own timeout at its top, with one line saying what is slow.
     projects: [
-      { extends: true, test: { name: 'unit', include: TEST_GLOBS, exclude: [...SKIPPED, ...PROCESS_TESTS], testTimeout: 5_000, hookTimeout: 10_000 } },
+      { extends: true, test: { name: 'unit', include: TEST_GLOBS, exclude: [...SKIPPED, ...PROCESS_TESTS], testTimeout: UNIT_MS, hookTimeout: Math.max(UNIT_MS, 10_000) } },
       { extends: true, test: { name: 'process', include: PROCESS_TESTS, exclude: SKIPPED, testTimeout: 30_000, hookTimeout: 30_000 } },
     ],
     environment: 'node',

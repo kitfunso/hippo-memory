@@ -2,13 +2,16 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { ChildProcess } from 'node:child_process';
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { openHippoDb, closeHippoDb, getHippoDbPath, HOOK_DB_WAIT_MS } from '../src/db/index.js';
 import { readDeliveryEvents, type DeliveryEventRow } from '../src/store/recall-trace.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { loadActiveTaskSnapshot, saveActiveTaskSnapshot } from '../src/store/sessions.js';
 import type { JsonValue } from '../src/util/json.js';
-import { compactionRows, initGlobal, initProject, runHippo } from './_helpers/compaction-hooks.js';
+import { runCli } from '../src/cli.js';
+import { initStore } from '../src/store/open.js';
+import { compactionRows, runHippo } from './_helpers/compaction-hooks.js';
+import { runInProcess } from './_helpers/run-in-process.js';
 import { lockWaitAskedMs, tracingLockWaits } from './_helpers/lock-waits.js';
 import { holdStoreWriteLock, releaseStoreWriteLock } from './_helpers/store-write-lock.js';
 import { waitFor } from './_helpers/wait-for.js';
@@ -28,9 +31,20 @@ const CURSOR_SAVE_FAULT = path.resolve(__dirname, '_helpers', 'cursor-save-fault
 let s: CopilotScratch;
 let holder: ChildProcess | null = null;
 
-function pin(text: string, global: boolean): void {
-  const r = runHippo(['remember', text, '--pin', ...(global ? ['--global'] : [])], s.proj, s.env);
-  expect(r.status, r.stderr).toBe(0);
+// Seeding runs the CLI entry in process: remember is setup here, and only the hook runs need a real process.
+async function pin(text: string, global: boolean): Promise<void> {
+  const { HIPPO_HOME, HOME, USERPROFILE, COPILOT_HOME, APPDATA, XDG_CONFIG_HOME } = s.env;
+  for (const [k, v] of Object.entries({ HIPPO_HOME, HOME, USERPROFILE, COPILOT_HOME, APPDATA, XDG_CONFIG_HOME })) vi.stubEnv(k, v);
+  for (const k of ['CLAUDE_CODE_SESSION_ID', 'HIPPO_SESSION_ID']) vi.stubEnv(k, undefined);
+  const cwd = process.cwd();
+  process.chdir(s.proj);
+  try {
+    const r = await runInProcess(() => runCli(['node', 'hippo', 'remember', text, '--pin', ...(global ? ['--global'] : [])]));
+    expect(r.status, r.stderr).toBe(0);
+  } finally {
+    process.chdir(cwd);
+    vi.unstubAllEnvs();
+  }
 }
 
 function patchConfig(hippoRoot: string, patch: { [key: string]: JsonValue }): void {
@@ -69,7 +83,7 @@ function rows<T>(sql: string, hippoRoot = s.hippoRoot): T[] {
 /** A git-marked folder with its own project store, as a second project the hook may run from. */
 function initStoreIn(dir: string): string {
   fs.mkdirSync(path.join(dir, '.git'), { recursive: true });
-  expect(runHippo(['init', '--no-hooks', '--no-schedule', '--no-learn'], dir, s.env).status).toBe(0);
+  initStore(path.join(dir, '.hippo'));
   return path.join(dir, '.hippo');
 }
 
@@ -85,8 +99,8 @@ async function waitForLog(logFile: string, marker: string, timeoutMs = WORKER_WA
 
 beforeEach(() => {
   s = copilotScratch();
-  initProject(s);
-  initGlobal(s);
+  initStore(s.hippoRoot);
+  initStore(s.globalRoot);
 });
 
 afterEach(async () => {
@@ -100,9 +114,9 @@ afterEach(async () => {
 });
 
 describe('hippo context --format copilot', () => {
-  beforeEach(() => {
-    pin(PROJ_PIN, false);
-    pin(GLOBAL_PIN, true);
+  beforeEach(async () => {
+    await pin(PROJ_PIN, false);
+    await pin(GLOBAL_PIN, true);
   });
 
   // Payloads from docs.github.com/en/copilot/reference/hooks-reference; reply formats from the same page and VS Code's toolCallingLoop.ts.
@@ -385,7 +399,7 @@ describe('hippo session-end --runtime copilot --turn (the VS Code Stop hook)', (
     ['with auto-sleep off it skips sleep', { enabled: false, threshold: 1 }, /turn close, session vscode-sess-1: skip sleep, auto-sleep is off\n/],
     ['at the threshold it sleeps', { enabled: true, threshold: 1 }, /consolidating memory\.\.\.[\s\S]*turn close, session vscode-sess-1: ran sleep at \d+ new memories \(threshold 1\)\n/],
   ])('%s', async (_name, autoSleep, line) => {
-    pin(PROJ_PIN, false);
+    await pin(PROJ_PIN, false);
     patchConfig(s.hippoRoot, { autoSleep });
     const log = await stop(writeVscodeTranscript(copilotEventsJsonl()));
     expect(log).toMatch(line);

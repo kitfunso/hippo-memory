@@ -10,7 +10,6 @@ import {
   compactionMemories,
   compactionRows,
   fixturePayload,
-  initProject,
   oneLine,
   postCompactPayload,
   removeScratch,
@@ -332,7 +331,7 @@ describe('hippo sleep finishes what the hook could not', () => {
   const sleep = () => runHippo(['sleep', '--no-learn', '--no-share'], s.proj, s.env);
 
   it('a hook killed after the record step: sleep writes the items once', () => {
-    initProject(s);
+    initStore(s.hippoRoot);
     const hook = runHippo(['post-compact'], s.proj, s.env, fixturePayload(0, { cwd: s.proj }));
     expect(oneLine(hook.stdout)).toBe('Hippo saved 4 memories from this compaction.');
 
@@ -351,7 +350,7 @@ describe('hippo sleep finishes what the hook could not', () => {
   }, 60_000);
 
   it('a dry run replays nothing', () => {
-    initProject(s);
+    initStore(s.hippoRoot);
     seed(s.hippoRoot, { id: 'cmp-1', status: 'summarised', startedMinutesAgo: 30, summarisedMinutesAgo: 20, items: ITEMS });
     expect(runHippo(['sleep', '--no-learn', '--dry-run'], s.proj, s.env).status).toBe(0);
     expect(compactionMemories(s.hippoRoot)).toEqual([]);
@@ -359,7 +358,7 @@ describe('hippo sleep finishes what the hook could not', () => {
   });
 
   it('a locked store makes the hook spool inside its budget, and sleep imports the spool', () => {
-    initProject(s);
+    initStore(s.hippoRoot);
     const db = openHippoDb(s.hippoRoot);
     const waits = path.join(s.dir, 'lock-waits');
     try {
@@ -385,7 +384,7 @@ describe('hippo sleep finishes what the hook could not', () => {
   }, 60_000);
 
   it('the next post-compact also finishes an earlier compaction', () => {
-    initProject(s);
+    initStore(s.hippoRoot);
     seed(s.hippoRoot, { id: 'cmp-1', status: 'summarised', startedMinutesAgo: 30, summarisedMinutesAgo: 20, items: ITEMS, session: 'earlier' });
     const hook = runHippo(['post-compact'], s.proj, s.env, postCompactPayload('s2', s.proj, summaryWith(['The staging database is reset every Sunday night by the platform team.'])));
     expect(oneLine(hook.stdout)).toBe('Hippo saved 1 memory from this compaction.');

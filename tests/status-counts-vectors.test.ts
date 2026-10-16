@@ -1,6 +1,5 @@
 // `hippo status` counts stored vectors from ids and one blob length; it must never decode a vector.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { execFileSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -15,9 +14,11 @@ import { appendConsolidationRun, updateStats } from '../src/store/index-and-stat
 import { DAY_MS } from '../src/util/time.js';
 import { saveStoredVectors, storedVectorSummary } from '../src/store/vector-index.js';
 import { handleStatus } from '../src/cli/status.js';
+import { _resetAblationCacheForTests } from '../src/core/ablation.js';
+import { runCli } from '../src/cli.js';
+import { runInProcess } from './_helpers/run-in-process.js';
 
 type Walk = (this: Float32Array) => IterableIterator<number>;
-const HIPPO_BIN = path.join(process.cwd(), 'bin', 'hippo.js');
 let home: string;
 let root: string;
 
@@ -32,10 +33,21 @@ function liveIds(n: number): string[] {
 const NOW = '2026-06-01T00:00:00.000Z';
 const daysAgo = (days: number): string => new Date(Date.parse(NOW) - days * DAY_MS).toISOString();
 
-function status(): string[] {
+/** `hippo status` run in this process from `home`, the call bin/hippo.js makes; a non-zero exit fails the test. */
+async function status(): Promise<string[]> {
   // No provider key, so the availability line never depends on the machine.
-  const env = { ...process.env, HIPPO_HOME: path.join(home, 'global'), HOME: home, USERPROFILE: home, HIPPO_FAKE_NOW: NOW, OPENAI_API_KEY: undefined };
-  return execFileSync('node', [HIPPO_BIN, 'status'], { cwd: home, env, encoding: 'utf-8' }).split(/\r?\n/);
+  const env = { HIPPO_HOME: path.join(home, 'global'), HOME: home, USERPROFILE: home, HIPPO_FAKE_NOW: NOW, OPENAI_API_KEY: '' };
+  for (const [name, value] of Object.entries(env)) vi.stubEnv(name, value);
+  _resetAblationCacheForTests();
+  const saved = process.cwd();
+  process.chdir(home);
+  try {
+    const r = await runInProcess(() => runCli(['node', 'hippo', 'status']));
+    expect(r.status, r.stderr).toBe(0);
+    return r.stdout.split(/\r?\n/);
+  } finally {
+    process.chdir(saved);
+  }
 }
 
 beforeEach(() => {
@@ -45,6 +57,8 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.unstubAllEnvs();
+  _resetAblationCacheForTests();
   fs.rmSync(home, { recursive: true, force: true });
 });
 
@@ -63,10 +77,10 @@ describe('storedVectorSummary', () => {
 });
 
 describe('hippo status embedding lines', () => {
-  it('prints the same embedded count, dimension and orphan note as before', () => {
+  it('prints the same embedded count, dimension and orphan note as before', async () => {
     const [a, b] = liveIds(3);
     saveStoredVectors(root, [[a, [1, 2, 3, 4]], [b, [4, 3, 2, 1]], ['orphan', [0, 1, 0, 1]]], 'm');
-    const lines = status().filter((l) => l.startsWith('Embedded:') || l.includes('model changed'));
+    const lines = (await status()).filter((l) => l.startsWith('Embedded:') || l.includes('model changed'));
     expect(lines).toEqual([
       'Embedded:          2/3 memories (4-dim) (1 orphaned, run `hippo embed` to prune)',
       '                   model changed, run `hippo embed` to reindex',
@@ -166,10 +180,10 @@ function countLines(layers: string[], health: string[], tiers: string[]): string
 }
 
 describe('hippo status full text', () => {
-  it('prints every count of a store holding each layer, tier, tenant and date shape', () => {
+  it('prints every count of a store holding each layer, tier, tenant and date shape', async () => {
     useKeylessProvider();
     seedEveryCase();
-    expect(status()).toEqual([
+    expect(await status()).toEqual([
       ...countLines(['12', '2', '6', '3', '1'], ['2', '4', '2', '0.59'], ['3', '5', '2', '2', '3']),
       'Total remembered:  5',
       'Total recalled:    3',
@@ -183,9 +197,9 @@ describe('hippo status full text', () => {
     ]);
   });
 
-  it('prints zeros for an empty store', () => {
+  it('prints zeros for an empty store', async () => {
     useKeylessProvider();
-    expect(status()).toEqual([
+    expect(await status()).toEqual([
       ...countLines(['0', '0', '0', '0', '0'], ['0', '0', '0', '0.00'], ['0', '0', '0', '0', '0']),
       'Total remembered:  0',
       'Total recalled:    0',

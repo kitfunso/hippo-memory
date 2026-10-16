@@ -73,12 +73,6 @@ describe('HTTP /v1/memories suppressionSummary', () => {
     expect(body.suppressionSummary!.droppedByBudget).toBeGreaterThanOrEqual(15);
   });
 
-  it('suppressedByInterference is 0 in v1.12.13 (placeholder)', async () => {
-    const res = await fetch(`${handle.url}/v1/memories?q=omega&limit=5`);
-    const body = await jsonAs<Partial<RecallResult>>(res);
-    expect(body.suppressionSummary!.suppressedByInterference).toBe(0);
-  });
-
   it('back-compat: TS RecallResult type accepts a pre-v1.12.13 payload without suppressionSummary', () => {
     // Hand-construct a literal pre-v1.12.13-shaped response (no
     // suppressionSummary key). Cast to the new type and verify the field

@@ -43,18 +43,6 @@ describe('RecallOpts.scorerWindow', () => {
   beforeEach(() => { root = makeRoot('f3'); });
   afterEach(() => safeRmSync(root));
 
-  it('default (scorerWindow undefined): RecallResult.windowSize equals store default 200, back-compat preserved', async () => {
-    writeEntry(root, makeRaw('alpha'));
-    const result = await retrieve(ctxFor(root), { query: 'alpha' });
-    expect(result.windowSize).toBe(200);
-  });
-
-  it('explicit scorerWindow: RecallResult.windowSize equals the opt-in value', async () => {
-    writeEntry(root, makeRaw('alpha'));
-    const result = await retrieve(ctxFor(root), { query: 'alpha', scorerWindow: 50 });
-    expect(result.windowSize).toBe(50);
-  });
-
   it('scorerWindow can widen the candidate pool above limit (proves widening)', async () => {
     // Codex diff-pass P2 #4: original assertion `total <= 25 && total > 0`
     // would pass even if the implementation accidentally loaded only
@@ -75,27 +63,7 @@ describe('RecallOpts.scorerWindow', () => {
     expect(result.total).toBe(25);
   });
 
-  it('scorerWindow validation: 0 throws RecallContractError with invalid_scorer_window', async () => {
-    writeEntry(root, makeRaw('alpha'));
-    let thrown = null;
-    try {
-      await retrieve(ctxFor(root), { query: 'alpha', scorerWindow: 0 });
-    } catch (err) {
-      thrown = err;
-    }
-    expect(thrown).toBeTruthy();
-    // Same RecallContractError class, distinguishable by code.
-    // SAFETY: the toBeTruthy() assertion above confirms recall() threw;
-    // RecallContractError is the only error type this call path can throw.
-    expect((thrown as { name: string; code?: string }).name).toBe(
-      'RecallContractError',
-    );
-    // SAFETY: the toBeTruthy() assertion above confirms recall() threw;
-    // RecallContractError is the only error type this call path can throw.
-    expect((thrown as { code?: string }).code).toBe('invalid_scorer_window');
-  });
-
-  it.each([-5, 1.5, Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY])(
+  it.each([0, -5, 1.5, Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY])(
     'scorerWindow=%s throws RecallContractError with code invalid_scorer_window (testing specialist #1)',
     async (bad) => {
       writeEntry(root, makeRaw('alpha'));

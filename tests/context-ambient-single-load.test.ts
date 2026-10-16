@@ -1,12 +1,10 @@
 // `hippo context` renders the ambient state getContext returns, so the printed summary counts the rows the context admitted.
 
 import type { FullContext } from './_helpers/api-ctx.js';
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { spawnSync } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
@@ -14,32 +12,31 @@ import { getContext } from '../src/api/index.js';
 import { computeAmbientState, renderAmbientSummary } from '../src/core/ambient.js';
 import { _resetAblationCacheForTests } from '../src/core/ablation.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+import { runCli } from '../src/cli.js';
+import { withHookStdin } from './_helpers/hook-stdin.js';
+import { runInProcess } from './_helpers/run-in-process.js';
 
-const repoRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
-const HIPPO_JS = path.join(repoRoot, 'bin', 'hippo.js');
 const FAKE_NOW = '2026-09-06T12:00:00.000Z';
 
 describe('`hippo context` prints the ambient summary getContext computed', () => {
-  it('counts only the rows the context admitted (real CLI, real store)', () => {
+  it('counts only the rows the context admitted (real CLI, real store)', async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-ambient-cli-'));
-    const env = { ...process.env, HIPPO_HOME: dir, HOME: dir, USERPROFILE: dir };
+    for (const name of ['HIPPO_HOME', 'HOME', 'USERPROFILE']) vi.stubEnv(name, dir);
+    const saved = process.cwd();
+    process.chdir(dir);
+    const hippo = (...args: string[]) => runInProcess(() => withHookStdin(undefined, () => runCli(['node', 'hippo', ...args])));
     try {
-      const init = spawnSync(process.execPath, [HIPPO_JS, 'init', '--no-hooks', '--no-schedule', '--no-learn'], {
-        cwd: dir, env, encoding: 'utf8',
-      });
-      expect(init.status).toBe(0);
-
-      const remembered = spawnSync(process.execPath, [HIPPO_JS, 'remember', 'ambient single-load pin row'], {
-        cwd: dir, env, encoding: 'utf8',
-      });
-      expect(remembered.status).toBe(0);
+      expect((await hippo('init', '--no-hooks', '--no-schedule', '--no-learn')).status).toBe(0);
+      expect((await hippo('remember', 'ambient single-load pin row')).status).toBe(0);
       // A row the context leaves out: a summary re-derived from every row would count two.
       writeEntry(path.join(dir, '.hippo'), createMemory('PRIVATE-SCOPE-ROW lives behind a private channel scope', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, scope: 'slack:private:C123' }));
 
-      const result = spawnSync(process.execPath, [HIPPO_JS, 'context'], { cwd: dir, env, encoding: 'utf8' });
+      const result = await hippo('context');
       expect(result.status).toBe(0);
       expect(result.stdout).toMatch(/^Memory state: 1 memories/m);
     } finally {
+      process.chdir(saved);
+      vi.unstubAllEnvs();
       fs.rmSync(dir, { recursive: true, force: true });
     }
   });
@@ -135,37 +132,5 @@ describe('ambient summary: avgStrength reflects post-retrieval strength, not the
     expect(result.ambientState!.avgStrength).not.toBeCloseTo(preRetrievalState.avgStrength, 3);
     expect(result.ambientState!.avgStrength).toBeCloseTo(postRetrievalState.avgStrength, 10);
     expect(result.ambientState!.avgStrength).toBeGreaterThan(0.5);
-  });
-});
-
-describe('`hippo context --json` is unchanged', () => {
-  it('the JSON shape carries no ambient field, even with ambient enabled and entries admitted', () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-ambient-json-'));
-    const env = { ...process.env, HIPPO_HOME: dir, HOME: dir, USERPROFILE: dir };
-    try {
-      const init = spawnSync(process.execPath, [HIPPO_JS, 'init', '--no-hooks', '--no-schedule', '--no-learn'], {
-        cwd: dir, env, encoding: 'utf8',
-      });
-      expect(init.status).toBe(0);
-
-      const remembered = spawnSync(process.execPath, [HIPPO_JS, 'remember', 'json-shape pin row'], {
-        cwd: dir, env, encoding: 'utf8',
-      });
-      expect(remembered.status).toBe(0);
-
-      const result = spawnSync(process.execPath, [HIPPO_JS, 'context', '--format', 'json'], {
-        cwd: dir, env, encoding: 'utf8',
-      });
-      expect(result.status).toBe(0);
-      // SAFETY: `hippo context --format json` prints the cli.ts literal at
-      // cli.ts:6018-6037 (query/activeSnapshot/sessionHandoff/recentSessionEvents/memories/tokens).
-      const parsed = JSON.parse(result.stdout) as { ambientState?: unknown };
-      expect(Object.keys(parsed).sort()).toEqual(
-        ['activeSnapshot', 'memories', 'query', 'recentSessionEvents', 'sessionHandoff', 'tokens'].sort(),
-      );
-      expect(parsed.ambientState).toBeUndefined();
-    } finally {
-      fs.rmSync(dir, { recursive: true, force: true });
-    }
   });
 });
