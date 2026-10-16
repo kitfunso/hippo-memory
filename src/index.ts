@@ -36,7 +36,6 @@ export function createMemory(content: string, options: Partial<CreateMemoryOptio
 }
 export { search } from './search/bm25-search.js';
 export { hybridSearch } from './search/hybrid.js';
-export { physicsSearch } from './search/physics-search.js';
 export { explainMatch, MatchExplanation } from './search/explain.js';
 export { detectTemporalDirection, temporalBoost, computeTemporalRange } from './search/temporal.js';
 export { SearchResult } from './core/search-types.js';
