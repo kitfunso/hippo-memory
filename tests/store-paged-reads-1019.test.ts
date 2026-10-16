@@ -27,7 +27,7 @@ describe('syncMirrorFiles', () => {
   it('rewrites every mirror byte for byte when the rows span more than one page', () => {
     const root = freshRoot();
     writeEntriesTogether(root, Array.from({ length: 530 }, (_, i) => ({ ...createMemory(`paged mirror row number ${i}`), id: `mem_page_${i}` })));
-    const entries = loadAllEntries(root).filter((e) => e.id.startsWith('mem_page_'));
+    const entries = loadAllEntries(root, 'default').filter((e) => e.id.startsWith('mem_page_'));
     expect(entries).toHaveLength(530);
     const files = entries.map((e) => path.join(root, e.layer, `${e.id}.md`));
     for (const f of files) fs.rmSync(f);
