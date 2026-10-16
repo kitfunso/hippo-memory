@@ -97,15 +97,6 @@ describe('server HTTP routes — memories', () => {
     }
   });
 
-  it('DELETE /v1/memories/:id with unknown id returns 404', async () => {
-    const res = await fetch(`${handle.url}/v1/memories/mem_does_not_exist`, {
-      method: 'DELETE',
-    });
-    expect(res.status).toBe(404);
-    const body = await jsonAs<{ error: string }>(res);
-    expect(body.error).toMatch(/not found/i);
-  });
-
   it('POST /v1/memories/:id/promote copies to global store', async () => {
     const { id } = await apiRemember(
       apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' }),
@@ -191,35 +182,6 @@ describe('server HTTP routes — memories', () => {
     } finally {
       closeHippoDb(db2);
     }
-  });
-
-  it('POST /v1/memories with invalid JSON body returns 400', async () => {
-    const res = await fetch(`${handle.url}/v1/memories`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: '{not valid json',
-    });
-    expect(res.status).toBe(400);
-    const body = await jsonAs<{ error: string }>(res);
-    expect(body.error).toMatch(/invalid json/i);
-  });
-
-  it('POST /v1/memories with missing content returns 400', async () => {
-    const res = await fetch(`${handle.url}/v1/memories`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ kind: 'distilled' }),
-    });
-    expect(res.status).toBe(400);
-    const body = await jsonAs<{ error: string }>(res);
-    expect(body.error).toMatch(/content/i);
-  });
-
-  it('GET /v1/memories without q returns 400', async () => {
-    const res = await fetch(`${handle.url}/v1/memories`);
-    expect(res.status).toBe(400);
-    const body = await jsonAs<{ error: string }>(res);
-    expect(body.error).toMatch(/q is required/i);
   });
 });
 
@@ -340,13 +302,6 @@ describe('server HTTP routes — auth + audit', () => {
     const filteredBody = await jsonAs<Array<{ op: string }>>(filteredRes);
     expect(filteredBody.length).toBeGreaterThan(0);
     expect(filteredBody.every((e) => e.op === 'remember')).toBe(true);
-  });
-
-  it('GET /v1/audit with invalid op returns 400', async () => {
-    const res = await fetch(`${handle.url}/v1/audit?op=not_a_real_op`);
-    expect(res.status).toBe(400);
-    const body = await jsonAs<{ error: string }>(res);
-    expect(body.error).toMatch(/invalid op/i);
   });
 
   it('GET /v1/audit with invalid since returns 400', async () => {

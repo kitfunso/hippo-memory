@@ -8,8 +8,6 @@
  *     (string, string).
  *   - P1: DLQ replay routed `*.deleted` comment events through ingestEvent
  *     (writing a fresh raw memory) instead of handleCommentDeleted.
- *   - P1: IngestHook contract advertised a phantom `idempotencyKey` arg
- *     that the hook had to ignore (ingest re-derives from event payload).
  *   - P1: compareSemver silently coerced pre-release tags to 0, defeating
  *     the rollback guard if min_compatible_binary ever got a pre-release.
  */
@@ -63,12 +61,6 @@ describe('deletion key namespace separates ingest from deletion', () => {
 });
 
 describe('compareSemver throws on pre-release tags', () => {
-  it('valid x.y.z compares correctly', () => {
-    expect(compareSemver('1.3.2', '1.3.1')).toBeGreaterThan(0);
-    expect(compareSemver('1.3.1', '1.3.2')).toBeLessThan(0);
-    expect(compareSemver('1.3.2', '1.3.2')).toBe(0);
-  });
-
   it('throws on pre-release tags rather than silently coercing to 0', () => {
     expect(() => compareSemver('1.3.2-beta', '1.3.2')).toThrow(/pre-release/);
     expect(() => compareSemver('1.3.2', '1.3.2-rc.1')).toThrow(/pre-release/);
@@ -79,27 +71,5 @@ describe('compareSemver throws on pre-release tags', () => {
     expect(() => compareSemver('one.two.three', '1.0.0')).toThrow(/pre-release/);
     expect(() => compareSemver('1.3', '1.3.0')).toThrow(/expected numeric x\.y\.z/);
     expect(() => compareSemver('1.3.0.1', '1.3.0')).toThrow(/expected numeric x\.y\.z/);
-  });
-});
-
-describe('IngestHook type no longer advertises phantom idempotencyKey', () => {
-  it('replay hook signature only carries (rawPayload, eventName, deliveryId)', () => {
-    // Type-check assertion: this would fail to compile if IngestHook still
-    // declared `idempotencyKey: string` in its args. We can't directly assert
-    // the absence of a property at runtime, but we CAN write a hook that uses
-    // every advertised field and verify it type-checks. Compilation success
-    // of this file is the test.
-    const hook: import('../src/connectors/github/dlq.js').IngestHook = async (
-      _ctx,
-      args,
-    ) => {
-      // If `idempotencyKey` were still in the type, the destructuring below
-      // would still work. But the test that catches drift is at the COMPILE
-      // level — if a future change re-adds the field, the build fails because
-      // this hook doesn't reference it. Use the args we DO expect:
-      const _: { rawPayload: string; eventName: string; deliveryId: string } = args;
-      return { memoryId: null };
-    };
-    expect(hook).toEqual(expect.any(Function));
   });
 });

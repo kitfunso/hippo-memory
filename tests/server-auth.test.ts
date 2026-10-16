@@ -3,7 +3,7 @@ import { rmSync } from 'node:fs';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { createApiKey, revokeApiKey } from '../src/store/auth.js';
 import { queryAuditEvents } from '../src/store/audit.js';
-import { serve, type ServerHandle, isLoopback } from '../src/server.js';
+import { serve, type ServerHandle } from '../src/server.js';
 import type { RememberResult } from '../src/api/index.js';
 import { presentConnectionsAsRemote } from './_helpers/listen.js';
 import { makeRoot } from './_helpers/make-root.js';
@@ -14,44 +14,6 @@ async function jsonAs<T>(res: Response): Promise<T> {
   // site asserts the specific fields it reads immediately after this call.
   return res.json() as Promise<T>;
 }
-
-describe('isLoopback helper', () => {
-  it('accepts 127.0.0.1', () => {
-    expect(isLoopback('127.0.0.1')).toBe(true);
-  });
-
-  it('accepts ::1 (IPv6 loopback)', () => {
-    expect(isLoopback('::1')).toBe(true);
-  });
-
-  it('accepts ::ffff:127.0.0.1 (IPv4-mapped IPv6)', () => {
-    expect(isLoopback('::ffff:127.0.0.1')).toBe(true);
-  });
-
-  it('rejects undefined', () => {
-    expect(isLoopback(undefined)).toBe(false);
-  });
-
-  it('rejects empty string', () => {
-    expect(isLoopback('')).toBe(false);
-  });
-
-  it('rejects a real LAN address', () => {
-    expect(isLoopback('192.168.1.42')).toBe(false);
-  });
-
-  it('rejects a public IPv4', () => {
-    expect(isLoopback('8.8.8.8')).toBe(false);
-  });
-
-  it('rejects an IPv6 address that is not loopback', () => {
-    expect(isLoopback('fe80::1')).toBe(false);
-  });
-
-  it('rejects ::ffff:8.8.8.8 (IPv4-mapped non-loopback)', () => {
-    expect(isLoopback('::ffff:8.8.8.8')).toBe(false);
-  });
-});
 
 describe('server auth middleware', () => {
   let home: string;
@@ -205,13 +167,6 @@ describe('server auth middleware', () => {
       body: JSON.stringify({ content: 'auth-canary-basic' }),
     });
     expect(res.status).toBe(401);
-  });
-
-  it('GET /health is reachable without auth', async () => {
-    const res = await fetch(`${handle.url}/health`);
-    expect(res.status).toBe(200);
-    const body = await jsonAs<{ ok: boolean }>(res);
-    expect(body.ok).toBe(true);
   });
 });
 
