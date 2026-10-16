@@ -4,10 +4,8 @@ import {
   listPredictions,
   predictionBaserate,
   predictionById,
-  savePrediction,
+  recordPrediction,
 } from '../../api/objects/predictions.js';
-import { loadConfig } from '../../core/config.js';
-import { predictionMirror } from '../../store/predictions.js';
 import { VALID_CLOSURE_STATES } from '../../core/prediction.js';
 import type { PredictionFilter } from '../../store/port.js';
 import { HttpError, sendJson } from '../../util/http-util.js';
@@ -21,7 +19,7 @@ import { isJsonString, isJsonNumber } from '../../util/json.js';
 // against VALID_CLOSURE_STATES.
 // DoS caps: claim MAX_SHORT_FIELD_LEN chars, closureNote 2048.
 export async function handleCreatePrediction(
-  { req, res, ctx, opts }: AuthedRouteRequest
+  { req, res, ctx }: AuthedRouteRequest
 ): Promise<void> {
   const body = await parseJsonBody(req, ctx);
   const claim = body['claim'];
@@ -60,8 +58,7 @@ export async function handleCreatePrediction(
     targetDateValue = targetDate;
   }
   const claimed = { classTag, claimText: claim, estimateValue, estimateUnit, targetDate: targetDateValue };
-  const mirror = predictionMirror(ctx.tenantId, claimed, loadConfig(opts.hippoRoot).defaultHalfLifeDays);
-  const prediction = await savePrediction(ctx, { ...claimed, mirror });
+  const prediction = await recordPrediction(ctx, claimed);
   sendJson(res, 201, { prediction });
 }
 
