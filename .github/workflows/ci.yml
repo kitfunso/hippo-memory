@@ -67,6 +67,8 @@ jobs:
         run: node scripts/check-size-ratchet.mjs
       - name: API root-keyed store call ratchet
         run: node scripts/check-api-root-calls.mjs
+      - name: config.json read only by the surface layer
+        run: node scripts/check-config-reads.mjs
       - name: process.env read only through src/util/env.ts
         run: node scripts/check-env-reads.mjs
       - name: process.exit only in the files check-process-exit lists

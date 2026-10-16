@@ -3,7 +3,7 @@
 import { auditMemories } from '../../core/memory-audit.js';
 import { AUTO_SHARE_MIN_SCORE, autoShare } from '../../sharing/share.js';
 import { runConsolidation } from '../../consolidate/sleep.js';
-import { loadConfig } from '../../core/config.js';
+import { configOf } from '../config-of.js';
 import { deduplicateStore, type LoadedStore } from '../../consolidate/dedupe.js';
 import { computeAmbientState } from '../../core/ambient.js';
 import { extractGraphChunked, type ExtractResult } from '../../graph/extract.js';
@@ -24,7 +24,7 @@ export interface SleepPhases {
   autoShare: typeof autoShare;
   loadAllEntries: (store: Consolidation) => MemoryEntry[];
   computeAmbientState: typeof computeAmbientState;
-  loadConfig: typeof loadConfig;
+  configOf: typeof configOf;
   loadPendingExtractionTenants: (store: Consolidation) => DirtyTenantSnapshot['dirtyTenants'];
   extractGraph: (objects: Objects, hippoRoot: string, tenantId: string) => ExtractResult | Promise<ExtractResult>;
 }
@@ -36,7 +36,7 @@ const DEFAULT_SLEEP_PHASES: SleepPhases = {
   autoShare,
   loadAllEntries: (store) => store.allEntries(),
   computeAmbientState,
-  loadConfig,
+  configOf,
   loadPendingExtractionTenants: (store) => store.dirtyGraphTenants(),
   extractGraph: extractGraphChunked,
 };
@@ -98,7 +98,7 @@ async function runSleepPhases(
 
   // Phase 1: Consolidation.
   const local = ctx.store.localFiles;
-  const consolidateResult = await phases.consolidate(local, { dryRun });
+  const consolidateResult = await phases.consolidate(local, { dryRun, config: phases.configOf(ctx) });
   counts.consolidation = consolidateResult.semanticCreated + consolidateResult.merged;
   const result = sleepResultFrom(consolidateResult, dryRun);
 
@@ -227,7 +227,7 @@ async function runQualityAudit(
 }
 
 function shareOnSleep(ctx: Context, phases: SleepPhases, result: SleepResult): void {
-  const sleepConfig = ctx.config ?? phases.loadConfig(ctx.hippoRoot);
+  const sleepConfig = phases.configOf(ctx);
   if (!sleepConfig.autoShareOnSleep) return;
   // Both skip counters are surfaced so the secret veto and the rejection tombstone are observable, not silent.
   const autoShareStats = { secretSkipped: 0, rejectedSkipped: 0 };
@@ -250,7 +250,7 @@ function summarizeAmbient(
   result: SleepResult,
   loaded: readonly MemoryEntry[],
 ): number {
-  const postSleepConfig = ctx.config ?? phases.loadConfig(ctx.hippoRoot);
+  const postSleepConfig = phases.configOf(ctx);
   if (!postSleepConfig.ambient.enabled) return 0;
   const postSleepEntries = loaded.filter((e) => !e.superseded_by);
   if (postSleepEntries.length === 0) return 0;

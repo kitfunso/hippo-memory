@@ -17,6 +17,7 @@ import { hybridSearch } from '../src/search/hybrid.js';
 import { retrieve, getContext } from '../src/api/index.js';
 import { _resetAblationCacheForTests } from '../src/core/ablation.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+import { loadConfig } from '../src/core/config.js';
 
 const NOW = '2026-09-01T12:00:00.000Z';
 const TENANT = 'default';
@@ -66,7 +67,7 @@ function withEmbeddings(s: Seeded): void {
     else index[id] = label.startsWith('N') ? [0, 0, 1] : [0.6, 0.8, 0];
   }
   saveEmbeddingIndex(s.home, index);
-  saveStoredEmbeddingModel(s.home, resolveEmbeddingProvider(s.home).id);
+  saveStoredEmbeddingModel(s.home, resolveEmbeddingProvider(loadConfig(s.home).embeddings).id);
   vi.stubGlobal('fetch', vi.fn(async (_url: string, init: { body: string }) => {
     // SAFETY: body is the OpenAI embeddings request this provider just serialised.
     const body = JSON.parse(init.body) as { input: string[] };

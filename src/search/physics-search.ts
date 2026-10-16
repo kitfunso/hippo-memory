@@ -3,7 +3,7 @@ import { estimateTokens } from '../util/token-text.js';
 import { evalNow, isRecallBoostAblated, strengthAblation } from '../core/ablation.js';
 import { indexNeedsRebuild } from '../store/embeddings/index.js';
 import { indexedModel } from '../store/vector-index.js';
-import { resolveEmbeddingProvider } from '../embeddings/provider.js';
+import { embeddingsConfigOf, resolveEmbeddingProvider } from '../embeddings/provider.js';
 import { physicsScore as computePhysicsScores, computeMass, type PhysicsParticle } from '../core/physics.js';
 import { DEFAULT_PHYSICS_CONFIG, type PhysicsConfig } from '../core/physics-config.js';
 import { rethrowIfSqliteBlocked } from '../util/sqlite-blocked.js';
@@ -89,14 +89,14 @@ export async function physicsSearchIn(
   const explain = options.explain ?? false;
   const scoring: PhysicsScoring = { now, explain, summary: summaryScoring(options) };
   if (entries.length === 0) return [];
-  const { root, store } = source;
-  const hybrid = { ...options, hippoRoot: root, store };
+  const { root, store, embeddings } = source;
+  const hybrid = { ...options, hippoRoot: root, store, embeddings };
   // memory_physics keeps only current positions and masses, so a past-dated query must rank without them.
   if (options.asOf) return hybridSearch(query, entries, hybrid);
 
   // Shared with every hybrid ranking below, so a provider that stalls here is not waited on a second time.
   const queryEmbedDeadline = startQueryEmbedDeadline();
-  const queryVector = await physicsQueryVector(query, root, store, queryEmbedDeadline, options.queryEmbedding);
+  const queryVector = await physicsQueryVector(query, source, queryEmbedDeadline, options.queryEmbedding);
   if (!queryVector) return hybridSearch(query, entries, { ...hybrid, queryEmbedDeadline });
   // Checked here too, since a caller's own query vector skips the check inside physicsQueryVector.
   const reads = requireVectorReads(store);
@@ -127,12 +127,12 @@ export async function physicsSearchIn(
 
 /** The caller's vector, else the provider's; null sends the caller to hybridSearch. */
 async function physicsQueryVector(
-  query: string, root: string, store: HippoStore, deadline: AbortSignal, given: number[] | undefined,
+  query: string, { root, store, embeddings }: VectorSource, deadline: AbortSignal, given: number[] | undefined,
 ): Promise<number[] | null> {
   if (given && given.length > 0) return given;
   // Physics scores against particle positions, not the stored vector index, so a pruned index must not block it.
   try {
-    const provider = resolveEmbeddingProvider(root);
+    const provider = resolveEmbeddingProvider(embeddingsConfigOf(root, embeddings));
     if (!provider.isAvailable()) return null;
     if (indexNeedsRebuild(indexedModel(await requireVectorReads(store).embeddingIndexState()), provider.id)) {
       return null;

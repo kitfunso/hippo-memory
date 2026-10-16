@@ -514,7 +514,7 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
     const buildResult = await buildDag(
       sqliteSyncStore(hippoRoot).localFiles,
       [factA, factB, factC],
-      { apiKey: 'test-key', fetcher },
+      { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, apiKey: 'test-key', fetcher },
     );
     expect(buildResult.summariesCreated).toBe(1);
 
@@ -581,7 +581,7 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
     // Host-wide input, exactly like consolidate.ts:543's `extractedFacts`
     // (survivors filtered host-wide, no tenant slicing by the caller) —
     // buildDag itself must do the tenant separation, not its caller.
-    const result = await buildDag(sqliteSyncStore(hippoRoot).localFiles, [...aFacts, ...bFacts], {
+    const result = await buildDag(sqliteSyncStore(hippoRoot).localFiles, [...aFacts, ...bFacts], { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       apiKey: 'test-key',
       fetcher,
     });

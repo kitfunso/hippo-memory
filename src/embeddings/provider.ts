@@ -15,7 +15,7 @@ import {
   sharedLocalEmbedder,
   DEFAULT_EMBEDDING_MODEL,
 } from './local.js';
-import { loadConfig } from '../core/config.js';
+import { type EmbeddingsConfig, loadConfig } from '../core/config.js';
 import { errorMessage, log, errorFields } from '../util/log.js';
 import { redactSecretsStrict } from '../util/secret-detect.js';
 import { fetchWithRetry } from '../util/http-retry.js';
@@ -355,10 +355,9 @@ export interface ResolveProviderOptions {
  * surfaces via `isAvailable()`);
  * only an invalid config (e.g. insecure apiBaseUrl) throws, deliberately loud, so hot-path callers wrap it. */
 export function resolveEmbeddingProvider(
-  hippoRoot: string,
+  cfg: EmbeddingsConfig,
   opts: ResolveProviderOptions = {},
 ): EmbeddingProvider {
-  const cfg = loadConfig(hippoRoot).embeddings;
   const requested = opts.provider ?? cfg.provider ?? 'local';
   // An explicit embeddings.enabled=false hard-disables embedding for BOTH local
   // and API providers — for API this prevents unwanted paid off-box calls.
@@ -366,7 +365,7 @@ export function resolveEmbeddingProvider(
 
   if (requested === 'local') {
     const embedder = opts.transformers ? createLocalEmbedder(opts.transformers) : sharedLocalEmbedder;
-    return new LocalEmbeddingProvider(resolveEmbeddingModel(hippoRoot, opts.model), enabled, embedder);
+    return new LocalEmbeddingProvider(resolveEmbeddingModel(cfg, opts.model), enabled, embedder);
   }
   if (!isApiProviderKind(requested)) {
     // Fail loud on a typo'd provider rather than silently using local (which
@@ -395,15 +394,15 @@ export function resolveEmbeddingProvider(
 /** The reindex identity for the active provider; use it, NOT
  * resolveEmbeddingModel, wherever `embeddingModelRequiresReindex`
  * / stored-model comparisons happen. */
-export function resolveEmbeddingIdentity(hippoRoot: string, opts: ResolveProviderOptions = {}): string {
-  return resolveEmbeddingProvider(hippoRoot, opts).id;
+export function resolveEmbeddingIdentity(embeddings: EmbeddingsConfig, opts: ResolveProviderOptions = {}): string {
+  return resolveEmbeddingProvider(embeddings, opts).id;
 }
 
 /** Provider-aware availability for a store (local: dependency installed; api: key present); use where the decision
  * to embed is made. */
-export function isEmbeddingConfigured(hippoRoot: string): boolean {
+export function isEmbeddingConfigured(hippoRoot: string, embeddings: EmbeddingsConfig): boolean {
   try {
-    return resolveEmbeddingProvider(hippoRoot).isAvailable();
+    return resolveEmbeddingProvider(embeddings).isAvailable();
   } catch (err) {
     // An invalid embedding config must not crash the best-effort ingestion guard, so it reads as not configured.
     log.warnThenDebug(
@@ -413,4 +412,9 @@ export function isEmbeddingConfigured(hippoRoot: string): boolean {
     );
     return false;
   }
+}
+
+/** The caller's embeddings config, else `hippoRoot`'s file: the fallback for the published embed and search entries. */
+export function embeddingsConfigOf(hippoRoot: string, given?: EmbeddingsConfig): EmbeddingsConfig {
+  return given ?? loadConfig(hippoRoot).embeddings;
 }

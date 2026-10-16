@@ -54,15 +54,15 @@ export const INCIDENT: ObjectDescriptor<'incident'> = {
   closeRefusal: 'already closed',
 };
 
-/** One open, checked before a store is asked; `hippoRoot` is read only for the configured half-life. */
-function incidentOpen(hippoRoot: string, tenantId: string, opts: SaveIncidentOpts, actor: string): IncidentOpen {
+/** One open, checked before a store is asked; `baseHalfLifeDays` is the config default a new mirror starts on. */
+function incidentOpen(baseHalfLifeDays: number, tenantId: string, opts: SaveIncidentOpts, actor: string): IncidentOpen {
   assertTenantId('saveIncident', tenantId);
   if (!opts.incidentText) throw new BadRequestError('saveIncident: incidentText is required');
   const at = new Date().toISOString();
   const content = opts.context
     ? `${opts.incidentText}\n\nContext: ${opts.context}`
     : opts.incidentText;
-  const mirror = objectMirror(hippoRoot, tenantId, 'incident', { content, tags: opts.extraTags ?? [] });
+  const mirror = objectMirror(baseHalfLifeDays, tenantId, 'incident', { content, tags: opts.extraTags ?? [] });
   const fields = {
     incidentText: opts.incidentText,
     context: opts.context ?? undefined,
@@ -85,12 +85,12 @@ function opened(tenantId: string, written: Incident | IncidentOpenRefusal): Inci
 Context: <context>" when context is given) in one write; a linked memory outside the tenant refuses the whole write. */
 export async function openIncident(
   objects: Objects,
-  hippoRoot: string,
+  baseHalfLifeDays: number,
   tenantId: string,
   opts: SaveIncidentOpts,
   actor: string,
 ): Promise<Incident> {
-  return opened(tenantId, await objects.openIncident(tenantId, incidentOpen(hippoRoot, tenantId, opts, actor)));
+  return opened(tenantId, await objects.openIncident(tenantId, incidentOpen(baseHalfLifeDays, tenantId, opts, actor)));
 }
 
 function resolving(tenantId: string, resolutionText: string, actor: string): IncidentResolve {

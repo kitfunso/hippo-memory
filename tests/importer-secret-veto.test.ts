@@ -17,12 +17,13 @@ import { totalTally, type Tally } from '../src/agent-memories/report.js';
 import { initStore } from '../src/store/open.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { detectSecret } from '../src/util/secret-detect.js';
+import { loadConfig } from '../src/core/config.js';
 
 // An import asks git for the project's layout in a child process, once for each agent tool it reads.
 vi.setConfig({ testTimeout: 30_000 });
 
 const sync = (root: string, home: string): Tally =>
-  totalTally(importProjectMemories(root, { machine: { home, env: {}, platform: process.platform } }));
+  totalTally(importProjectMemories(root, { configAt: loadConfig, machine: { home, env: {}, platform: process.platform } }));
 
 // AWS's own documented example access key — a well-known non-secret placeholder,
 // safe to embed. NEVER put a real credential in a fixture, even here.

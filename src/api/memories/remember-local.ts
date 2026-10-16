@@ -83,8 +83,8 @@ function storedEntry(ctx: StoreContext, id: string): MemoryEntry {
 
 /** Best-effort and slow (a model load or a network call), so the
  * caller is not held for it; a row left out of the index is logged. */
-function indexInBackground(hippoRoot: string, entry: MemoryEntry): Promise<EmbedOutcome> {
-  return embedMemory(hippoRoot, entry).then((outcome) => {
+function indexInBackground(ctx: StoreContext, entry: MemoryEntry): Promise<EmbedOutcome> {
+  return embedMemory(ctx.hippoRoot, entry, undefined, undefined, configOf(ctx).embeddings).then((outcome) => {
     if (outcome === 'failed') {
       log.warn(
         `memory ${entry.id} is stored but not in the vector index, so recall by meaning will miss it; run 'hippo embed' to index it`,
@@ -123,7 +123,7 @@ export async function rememberLocally(
   });
   const entry = storedEntry(ctx, id);
   updateStats(ctx.hippoRoot, { remembered: 1 });
-  const embedding = indexInBackground(ctx.hippoRoot, entry);
+  const embedding = indexInBackground(ctx, entry);
   return startedWeak ? { status: 'stored', entry, embedding, startedWeak } : { status: 'stored', entry, embedding };
 }
 
@@ -149,7 +149,7 @@ export async function extractRememberedFacts(
   entry: MemoryEntry,
   request: FactExtractionRequest,
 ): Promise<FactExtraction> {
-  const { extraction } = configOf(ctx);
+  const { extraction, defaultHalfLifeDays } = configOf(ctx);
   if (!request.requested && extraction.enabled !== true) return { status: 'off' };
   const { apiKey, fetcher } = request;
   if (!apiKey) return { status: 'no_key' };
@@ -167,7 +167,7 @@ export async function extractRememberedFacts(
       },
     });
     if (found.length > 0) {
-      storeExtractedFacts(ctx.hippoRoot, entry, found);
+      storeExtractedFacts(ctx.hippoRoot, entry, found, defaultHalfLifeDays);
       facts = found.length;
     }
   } catch (cause) {

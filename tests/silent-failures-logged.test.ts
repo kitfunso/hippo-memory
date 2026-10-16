@@ -100,7 +100,7 @@ describe('embedding provider', () => {
     try {
       const body = new ReadableStream({ start(c) { c.error(new Error('socket reset mid-body')); } });
       vi.stubGlobal('fetch', vi.fn(async () => new Response(body, { status: 400 })));
-      const provider = resolveEmbeddingProvider(root, {});
+      const provider = resolveEmbeddingProvider(loadConfig(root).embeddings, {});
       await expect(provider.embed(['x'], 'passage')).rejects.toThrow(/HTTP 400/);
       expect(logged().some((l) => l.includes('debug:') && l.includes('socket reset mid-body'))).toBe(true);
     } finally {
@@ -170,7 +170,7 @@ describe('config stamp', () => {
 
 describe('resolveEmbeddingModel', () => {
   it('warns with the reason before it falls back to the default model', () => {
-    // @ts-expect-error a non-string root is the cheapest way to make loadConfig throw
+    // @ts-expect-error a missing embeddings section is the cheapest way to make the model read throw
     const model = resolveEmbeddingModel(undefined);
     expect(model.length).toBeGreaterThan(0);
     expect(logged().some((l) => l.includes('warn: embedding model config unreadable'))).toBe(true);

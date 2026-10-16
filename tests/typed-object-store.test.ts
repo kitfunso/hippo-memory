@@ -21,6 +21,7 @@ import { createMemory } from './_helpers/default-half-life-memory.js';
 import { writeEntryThenFail } from './_helpers/failing-write.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { objectsAt } from './_helpers/objects-at.js';
+import { loadConfig } from '../src/core/config.js';
 
 let home: string;
 beforeEach(() => { home = makeRoot('typed-object-store'); });
@@ -122,7 +123,7 @@ const ids = (rows: ReadonlyArray<{ id: number }>): number[] => rows.map((r) => r
 const LINEAGES: readonly Lineage[] = [
   {
     kind: 'customer_note', table: 'customer_notes', versioned: true,
-    save: async (tenant, body, rev = {}) => note(await saveCustomerNote(objectsAt(home), home, tenant, {
+    save: async (tenant, body, rev = {}) => note(await saveCustomerNote(objectsAt(home), loadConfig(home).defaultHalfLifeDays, tenant, {
       customer: 'c', note: body, changeSummary: rev.changeSummary, supersedesNoteId: rev.supersedes,
     })),
     close: async (id) => note(await closeCustomerNote(objectsAt(home), 'default', id)),
@@ -131,7 +132,7 @@ const LINEAGES: readonly Lineage[] = [
   },
   {
     kind: 'skill', table: 'skills', versioned: true,
-    save: async (tenant, body, rev = {}) => skill(await saveSkill(objectsAt(home), home, tenant, {
+    save: async (tenant, body, rev = {}) => skill(await saveSkill(objectsAt(home), loadConfig(home).defaultHalfLifeDays, tenant, {
       skillName: 'P', instructions: body, changeSummary: rev.changeSummary, supersedesSkillId: rev.supersedes,
     })),
     close: async (id) => skill(await closeSkill(objectsAt(home), 'default', id)),
@@ -140,7 +141,7 @@ const LINEAGES: readonly Lineage[] = [
   },
   {
     kind: 'policy', table: 'policies', versioned: true,
-    save: async (tenant, body, rev = {}) => policy(await savePolicy(objectsAt(home), home, tenant, {
+    save: async (tenant, body, rev = {}) => policy(await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, tenant, {
       policyName: 'P', policyText: body, changeSummary: rev.changeSummary, supersedesPolicyId: rev.supersedes,
     })),
     close: async (id) => policy(await closePolicy(objectsAt(home), 'default', id)),
@@ -149,7 +150,7 @@ const LINEAGES: readonly Lineage[] = [
   },
   {
     kind: 'project_brief', table: 'project_briefs', versioned: true,
-    save: async (tenant, body, rev = {}) => brief(await saveProjectBrief(objectsAt(home), home, tenant, {
+    save: async (tenant, body, rev = {}) => brief(await saveProjectBrief(objectsAt(home), loadConfig(home).defaultHalfLifeDays, tenant, {
       repo: 'r', summary: body, changeSummary: rev.changeSummary, supersedesBriefId: rev.supersedes,
     })),
     close: async (id) => brief(await closeProjectBrief(objectsAt(home), 'default', id)),
@@ -158,7 +159,7 @@ const LINEAGES: readonly Lineage[] = [
   },
   {
     kind: 'process', table: 'processes', versioned: true,
-    save: async (tenant, body, rev = {}) => proc(await saveProcess(objectsAt(home), home, tenant, {
+    save: async (tenant, body, rev = {}) => proc(await saveProcess(objectsAt(home), loadConfig(home).defaultHalfLifeDays, tenant, {
       processName: 'P', steps: body.split(' '), changeSummary: rev.changeSummary, supersedesProcessId: rev.supersedes,
     })),
     close: async (id) => proc(await closeProcess(objectsAt(home), 'default', id)),
@@ -167,7 +168,7 @@ const LINEAGES: readonly Lineage[] = [
   },
   {
     kind: 'decision', table: 'decisions', versioned: false,
-    save: async (tenant, body, rev = {}) => decision(await saveDecision(objectsAt(home), home, tenant, {
+    save: async (tenant, body, rev = {}) => decision(await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, tenant, {
       decisionText: body, supersedesDecisionId: rev.supersedes,
     })),
     close: async (id) => decision(await closeDecision(objectsAt(home), 'default', id)),
@@ -283,43 +284,43 @@ interface Listing {
 const LISTINGS: readonly Listing[] = [
   {
     kind: 'customer_note', states: VALID_NOTE_STATES, expected: ['active', 'superseded', 'closed'],
-    save: async (t, body) => (await saveCustomerNote(objectsAt(home), home, t, { customer: 'c', note: body })).id,
+    save: async (t, body) => (await saveCustomerNote(objectsAt(home), loadConfig(home).defaultHalfLifeDays, t, { customer: 'c', note: body })).id,
     list: async (t, s) => ids(await loadCustomerNotes(objectsAt(home), t, s === undefined ? {} : { status: unchecked(s) })),
     found: async (t, id) => (await loadCustomerNoteById(objectsAt(home), t, id)) !== null,
   },
   {
     kind: 'skill', states: VALID_SKILL_STATES, expected: ['active', 'superseded', 'closed'],
-    save: async (t, body) => (await saveSkill(objectsAt(home), home, t, { skillName: 'P', instructions: body })).id,
+    save: async (t, body) => (await saveSkill(objectsAt(home), loadConfig(home).defaultHalfLifeDays, t, { skillName: 'P', instructions: body })).id,
     list: async (t, s) => ids(await loadSkills(objectsAt(home), t, s === undefined ? {} : { status: unchecked(s) })),
     found: async (t, id) => (await loadSkillById(objectsAt(home), t, id)) !== null,
   },
   {
     kind: 'policy', states: VALID_POLICY_STATES, expected: ['active', 'superseded', 'closed'],
-    save: async (t, body) => (await savePolicy(objectsAt(home), home, t, { policyName: 'P', policyText: body })).id,
+    save: async (t, body) => (await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, t, { policyName: 'P', policyText: body })).id,
     list: async (t, s) => ids(await loadPolicies(objectsAt(home), t, s === undefined ? {} : { status: unchecked(s) })),
     found: async (t, id) => (await loadPolicyById(objectsAt(home), t, id)) !== null,
   },
   {
     kind: 'project_brief', states: VALID_BRIEF_STATES, expected: ['active', 'superseded', 'closed'],
-    save: async (t, body) => (await saveProjectBrief(objectsAt(home), home, t, { repo: 'r', summary: body })).id,
+    save: async (t, body) => (await saveProjectBrief(objectsAt(home), loadConfig(home).defaultHalfLifeDays, t, { repo: 'r', summary: body })).id,
     list: async (t, s) => ids(await loadProjectBriefs(objectsAt(home), t, s === undefined ? {} : { status: unchecked(s) })),
     found: async (t, id) => (await loadProjectBriefById(objectsAt(home), t, id)) !== null,
   },
   {
     kind: 'process', states: VALID_PROCESS_STATES, expected: ['active', 'superseded', 'closed'],
-    save: async (t, body) => (await saveProcess(objectsAt(home), home, t, { processName: 'P', steps: [body] })).id,
+    save: async (t, body) => (await saveProcess(objectsAt(home), loadConfig(home).defaultHalfLifeDays, t, { processName: 'P', steps: [body] })).id,
     list: async (t, s) => ids(await loadProcesses(objectsAt(home), t, s === undefined ? {} : { status: unchecked(s) })),
     found: async (t, id) => (await loadProcessById(objectsAt(home), t, id)) !== null,
   },
   {
     kind: 'decision', states: VALID_DECISION_STATES, expected: ['active', 'superseded', 'closed'],
-    save: async (t, body) => (await saveDecision(objectsAt(home), home, t, { decisionText: body })).id,
+    save: async (t, body) => (await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, t, { decisionText: body })).id,
     list: async (t, s) => ids(await loadDecisions(objectsAt(home), t, s === undefined ? {} : { status: unchecked(s) })),
     found: async (t, id) => (await loadDecisionById(objectsAt(home), t, id)) !== null,
   },
   {
     kind: 'incident', states: VALID_INCIDENT_STATES, expected: ['open', 'resolved', 'closed'],
-    save: async (t, body) => (await openIncident(objectsAt(home), home, t, { incidentText: body }, 'cli')).id,
+    save: async (t, body) => (await openIncident(objectsAt(home), loadConfig(home).defaultHalfLifeDays, t, { incidentText: body }, 'cli')).id,
     list: async (t, s) => ids(await loadIncidents(objectsAt(home), t, s === undefined ? {} : { status: unchecked(s) })),
     found: async (t, id) => (await loadIncidentById(objectsAt(home), t, id)) !== null,
   },

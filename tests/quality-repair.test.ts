@@ -14,12 +14,13 @@ import { readDormantSnapshot } from '../src/store/dormant.js';
 import { findRejectedValue, rejectionDigest } from '../src/store/rejection.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { Layer, type MemoryEntry } from '../src/core/memory.js';
-import { savePrediction } from '../src/store/predictions.js';
+import { savePrediction } from './_helpers/save-prediction.js';
 import { mergedText } from '../src/util/same-text.js';
 import { restoreDormant } from '../src/api/index.js';
 import { apiCtx, type FullContext } from './_helpers/api-ctx.js';
 import { importForStore } from '../src/agent-memories/sync.js';
 import { closeWorld, note, openWorld, projectNotes } from './_helpers/agent-memories-world.js';
+import { loadConfig } from '../src/core/config.js';
 
 const HIPPO_JS = resolve(__dirname, '..', 'bin', 'hippo.js');
 const HEADER = '[Consolidated from 2 related memories, newest first]';
@@ -243,7 +244,7 @@ describe('recoverable automatic memory quality repair', () => {
       writeEntry(world.local, bad);
       expect(repairAutomaticMemories(world.local, { tenantId: 'default', apply: true }).appliedIds).toEqual([bad.id]);
       note(projectNotes(world), 'result.md', bad.content);
-      importForStore(world.local, { machine: world.machine });
+      importForStore(world.local, { configAt: loadConfig, machine: world.machine });
       expect(loadEveryTenantEntries(world.local).map((entry) => entry.content)).toEqual([bad.content]);
     } finally { closeWorld(world); }
   });

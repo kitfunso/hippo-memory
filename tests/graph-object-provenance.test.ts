@@ -23,6 +23,7 @@ import { loadEntities } from '../src/store/graph-reads.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { objectsAt } from './_helpers/objects-at.js';
+import { loadConfig } from '../src/core/config.js';
 
 const T = 'default';
 
@@ -82,11 +83,11 @@ describe('graph provenance is anchored to the first-class object, not its memory
   afterEach(() => { try { rmSync(home, { recursive: true, force: true }); } catch { /* ignore */ } });
 
   it('extract: a policy + a decision that mentions it produce entities + a references arc', async () => {
-    const policy = await savePolicy(objectsAt(home), home, T, {
+    const policy = await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, {
       policyName: 'Data Retention Policy',
       policyText: 'Delete logs after 90 days',
     });
-    const decision = await saveDecision(objectsAt(home), home, T, {
+    const decision = await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, {
       decisionText: 'Adopt the Data Retention Policy for all log pipelines',
     });
 
@@ -114,11 +115,11 @@ describe('graph provenance is anchored to the first-class object, not its memory
   });
 
   it('SUCCESS CRITERION: forget the decision mirror -> the active decision STAYS in the entities table (memory_id NULL, source_object set); its references arc preserved', async () => {
-    await savePolicy(objectsAt(home), home, T, {
+    await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, {
       policyName: 'Data Retention Policy',
       policyText: 'Delete logs after 90 days',
     });
-    const decision = await saveDecision(objectsAt(home), home, T, {
+    const decision = await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, {
       decisionText: 'Adopt the Data Retention Policy for all log pipelines',
     });
 
@@ -154,8 +155,8 @@ describe('graph provenance is anchored to the first-class object, not its memory
   });
 
   it('a closed E2 object is excluded from the graph (status, not mirror presence, drives exclusion)', async () => {
-    const keep = await saveDecision(objectsAt(home), home, T, { decisionText: 'Keep this active decision' });
-    const gone = await saveDecision(objectsAt(home), home, T, { decisionText: 'Retire this one' });
+    const keep = await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, { decisionText: 'Keep this active decision' });
+    const gone = await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, { decisionText: 'Retire this one' });
     await closeDecision(objectsAt(home), T, gone.id);
 
     await extractGraph(objectsAt(home), home, T);
@@ -239,20 +240,20 @@ describe('graph provenance is anchored to the first-class object, not its memory
     // A policy referenced by a decision, and a decision superseded by a successor. Forget
     // the successor's mirror (a supersedes-edge endpoint) AND the referencing decision's
     // mirror; both edges must still be present (anchored to their source objects).
-    const policy = await savePolicy(objectsAt(home), home, T, {
+    const policy = await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, {
       policyName: 'Data Retention Policy',
       policyText: 'Delete logs after 90 days',
     });
-    const v1 = await savePolicy(objectsAt(home), home, T, {
+    const v1 = await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, {
       policyName: 'Access Control Policy',
       policyText: 'least privilege v1',
     });
-    const v2 = await savePolicy(objectsAt(home), home, T, {
+    const v2 = await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, {
       policyName: 'Access Control Policy',
       policyText: 'least privilege v2',
       supersedesPolicyId: v1.id,
     });
-    const decision = await saveDecision(objectsAt(home), home, T, {
+    const decision = await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, {
       decisionText: 'Adopt the Data Retention Policy across all services',
     });
 
@@ -306,7 +307,7 @@ describe('graph provenance is anchored to the first-class object, not its memory
     // The extraction race: a memory id that no longer exists (forgotten mid-rebuild) but a valid
     // source object. insertEntity must anchor to the object (memory_id null), NOT throw - else a
     // mirror forgotten during a rebuild would roll back the WHOLE tenant rebuild.
-    const policy = await savePolicy(objectsAt(home), home, T, { policyName: 'Retention', policyText: 'p' });
+    const policy = await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, { policyName: 'Retention', policyText: 'p' });
     const ent = insertEntityAt(home, T, {
       entityType: 'policy', name: 'Retention', memoryId: 'sem_doesnotexist', sourceObject: { type: 'policy', id: policy.id },
     });
@@ -318,7 +319,7 @@ describe('graph provenance is anchored to the first-class object, not its memory
   });
 
   it('P2 round-4 (codex): an explicit UPDATE re-pointing a row to a bad object ABORTs (object cols changed); memory-only SET NULL still does not', async () => {
-    await savePolicy(objectsAt(home), home, T, { policyName: 'Retention', policyText: 'p' });
+    await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, { policyName: 'Retention', policyText: 'p' });
     await extractGraph(objectsAt(home), home, T);
     const polEnt = entityRows(home).find((e) => e.source_object_type === 'policy')!;
     const db = openHippoDb(home);
@@ -334,7 +335,7 @@ describe('graph provenance is anchored to the first-class object, not its memory
   });
 
   it('P2 round-5 (codex): a tenant-only move of an object-backed (mirrorless) row revalidates the object and ABORTs', async () => {
-    const policy = await savePolicy(objectsAt(home), home, T, { policyName: 'Retention', policyText: 'p' });
+    const policy = await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, { policyName: 'Retention', policyText: 'p' });
     // object-only (mirrorless) entity in tenant T - the memory-path tenant check does not apply.
     const ent = insertEntityAt(home, T, { entityType: 'policy', name: 'Retention', sourceObject: { type: 'policy', id: policy.id } });
     expect(ent.memoryId).toBeNull();
@@ -348,8 +349,8 @@ describe('graph provenance is anchored to the first-class object, not its memory
   });
 
   it('P2-A close lifecycle (codex): closing a MIRRORLESS object removes its graph rows directly (no rebuild)', async () => {
-    const policy = await savePolicy(objectsAt(home), home, T, { policyName: 'Data Retention Policy', policyText: 'Delete logs after 90 days' });
-    const decision = await saveDecision(objectsAt(home), home, T, { decisionText: 'Adopt the Data Retention Policy widely' });
+    const policy = await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, { policyName: 'Data Retention Policy', policyText: 'Delete logs after 90 days' });
+    const decision = await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, { decisionText: 'Adopt the Data Retention Policy widely' });
     // Forget the decision mirror, then extract -> the decision is in the graph, mirrorless.
     deleteEntry(home, decision.memoryId!);
     await extractGraph(objectsAt(home), home, T);
@@ -371,7 +372,7 @@ describe('graph provenance is anchored to the first-class object, not its memory
     // now-closed object until that rebuild runs. If the mirror is then forgotten or pruned
     // (sleep deletes memories BEFORE the graph drain), the FK ON DELETE SET NULL fires the
     // BEFORE UPDATE trigger - which must NOT abort the delete on the object's (closed) status.
-    const decision = await saveDecision(objectsAt(home), home, T, { decisionText: 'Adopt the retention rule for logs' });
+    const decision = await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, { decisionText: 'Adopt the retention rule for logs' });
     await extractGraph(objectsAt(home), home, T);
     expect(entityRows(home).length).toBe(1); // entity created with a live mirror + object (active)
 

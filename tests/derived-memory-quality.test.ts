@@ -11,6 +11,7 @@ import { storeExtractedFacts } from '../src/learn/extract.js';
 import { generateDagSummary } from '../src/consolidate/dag-summary.js';
 import { Layer } from '../src/core/memory.js';
 import { assessAutomaticMemory } from '../src/core/memory-quality.js';
+import { DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 
 const captured = { layer: Layer.Episodic, source: 'capture', confidence: 'observed' } as const;
 let root: string;
@@ -66,7 +67,7 @@ describe('quality at automatic derivation boundaries', () => {
       { content: 'Found local migration files to be', tags: [], valence: 'neutral' },
       { content: 'Production migration files must exclude test schema setup because sorted filenames control application order.', tags: [], valence: 'neutral' },
       { content: 'succeeds (inserts or updates)', tags: [], valence: 'neutral' },
-    ]);
+    ], DEFAULT_HALF_LIFE_DAYS);
     expect(facts).toHaveLength(1);
     expect(facts[0].content).toContain('must exclude test schema setup');
     expect(loadAllEntries(root, 'default')).toHaveLength(2);

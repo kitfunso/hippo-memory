@@ -86,7 +86,7 @@ export function handleStatus({ hippoRoot, tenantId }: CommandContext): void {
 function printEmbeddingStatus(ctx: Context, counts: Pick<StatusCounts, 'total' | 'embedded'>): void {
   const embedProvider = (() => {
     try {
-      return resolveEmbeddingProvider(ctx.hippoRoot);
+      return resolveEmbeddingProvider(loadConfig(ctx.hippoRoot).embeddings);
     } catch {
       // Status reports a bad provider config as "misconfigured" below instead of failing.
       return null;

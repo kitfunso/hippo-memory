@@ -3,6 +3,7 @@ import { saveObject } from '../../objects/lifecycle.js';
 import type { ObjectByKind, SavableKind } from '../../core/object-types.js';
 import type { Objects } from '../../store/port.js';
 import type { ContextWith } from '../types.js';
+import { configOf } from '../config-of.js';
 
 /** The request store's object group; the dispatcher has already answered 501 for a store without it. */
 export function objectsOf(ctx: ContextWith<'objects'>): Objects {
@@ -18,7 +19,7 @@ export function saveFor<K extends SavableKind, W>(
   return saveObject(
     objectsOf(ctx),
     d,
-    { hippoRoot: ctx.hippoRoot, tenantId: ctx.tenantId, actor: ctx.actor.subject },
+    { baseHalfLifeDays: configOf(ctx).defaultHalfLifeDays, tenantId: ctx.tenantId, actor: ctx.actor.subject },
     write,
   );
 }

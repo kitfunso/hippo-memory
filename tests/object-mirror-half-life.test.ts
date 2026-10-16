@@ -46,13 +46,13 @@ function storeWith(migrated: boolean): string {
 }
 
 async function saveOneOfEach(root: string): Promise<void> {
-  await saveDecision(objectsAt(root), root, TENANT, { decisionText: 'ship on fridays', context: 'release train' }, ACTOR);
-  await openIncident(objectsAt(root), root, TENANT, { incidentText: 'checkout latency', context: 'eu-west', extraTags: ['error'] }, ACTOR);
-  await saveProcess(objectsAt(root), root, TENANT, { processName: 'deploy', steps: ['build', 'ship'], description: 'weekly' }, ACTOR);
-  await savePolicy(objectsAt(root), root, TENANT, { policyName: 'retention', policyText: 'keep ninety days', validFrom: '2026-01-01' }, ACTOR);
-  await saveSkill(objectsAt(root), root, TENANT, { skillName: 'triage', instructions: 'read the log first', trigger: 'on page' }, ACTOR);
-  await saveProjectBrief(objectsAt(root), root, TENANT, { repo: 'acme/web', summary: 'storefront', extraTags: ['path:acme/web'] }, ACTOR);
-  await saveCustomerNote(objectsAt(root), root, TENANT, { customer: 'initech', note: 'prefers email' }, ACTOR);
+  await saveDecision(objectsAt(root), loadConfig(root).defaultHalfLifeDays, TENANT, { decisionText: 'ship on fridays', context: 'release train' }, ACTOR);
+  await openIncident(objectsAt(root), loadConfig(root).defaultHalfLifeDays, TENANT, { incidentText: 'checkout latency', context: 'eu-west', extraTags: ['error'] }, ACTOR);
+  await saveProcess(objectsAt(root), loadConfig(root).defaultHalfLifeDays, TENANT, { processName: 'deploy', steps: ['build', 'ship'], description: 'weekly' }, ACTOR);
+  await savePolicy(objectsAt(root), loadConfig(root).defaultHalfLifeDays, TENANT, { policyName: 'retention', policyText: 'keep ninety days', validFrom: '2026-01-01' }, ACTOR);
+  await saveSkill(objectsAt(root), loadConfig(root).defaultHalfLifeDays, TENANT, { skillName: 'triage', instructions: 'read the log first', trigger: 'on page' }, ACTOR);
+  await saveProjectBrief(objectsAt(root), loadConfig(root).defaultHalfLifeDays, TENANT, { repo: 'acme/web', summary: 'storefront', extraTags: ['path:acme/web'] }, ACTOR);
+  await saveCustomerNote(objectsAt(root), loadConfig(root).defaultHalfLifeDays, TENANT, { customer: 'initech', note: 'prefers email' }, ACTOR);
 }
 
 type Column = string | number | null;
@@ -141,9 +141,9 @@ describe.each([
     const base = migrated ? loadConfig(root).defaultHalfLifeDays : LEGACY_TYPED_HALF_LIFE;
     const ticks = stubTickingClock();
     const saves = [
-      await ticked(ticks, () => openIncident(objectsAt(root), root, TENANT, { incidentText: 'checkout latency' }, ACTOR)),
-      await ticked(ticks, () => saveDecision(objectsAt(root), root, TENANT, { decisionText: 'ship on fridays' }, ACTOR)),
-      await ticked(ticks, () => openIncident(objectsAt(root), root, TENANT, { incidentText: 'login errors', extraTags: ['error'] }, ACTOR)),
+      await ticked(ticks, () => openIncident(objectsAt(root), loadConfig(root).defaultHalfLifeDays, TENANT, { incidentText: 'checkout latency' }, ACTOR)),
+      await ticked(ticks, () => saveDecision(objectsAt(root), loadConfig(root).defaultHalfLifeDays, TENANT, { decisionText: 'ship on fridays' }, ACTOR)),
+      await ticked(ticks, () => openIncident(objectsAt(root), loadConfig(root).defaultHalfLifeDays, TENANT, { incidentText: 'login errors', extraTags: ['error'] }, ACTOR)),
     ];
     vi.unstubAllGlobals();
     vi.restoreAllMocks();

@@ -12,6 +12,7 @@ import { saveEmbeddingIndex } from '../src/store/vector-index.js';
 import { resolveEmbeddingProvider } from '../src/embeddings/provider.js';
 import { searchBothHybrid } from '../src/sharing/search-both.js';
 import { recordStatementsAsync } from './_helpers/count-statements.js';
+import { loadConfig } from '../src/core/config.js';
 
 const ROWS = 10_000;
 const FEWER_ROWS = ROWS / 10;
@@ -60,7 +61,7 @@ describe('hybrid recall at 10k rows', () => {
     seed(home, ROWS);
     seed(fewer, FEWER_ROWS);
     process.env.OPENAI_API_KEY = 'sk-test';
-    for (const store of [home, fewer]) saveStoredEmbeddingModel(store, resolveEmbeddingProvider(store).id);
+    for (const store of [home, fewer]) saveStoredEmbeddingModel(store, resolveEmbeddingProvider(loadConfig(store).embeddings).id);
     const queryVector = vector(7);
     vi.stubGlobal('fetch', vi.fn(async () =>
       new Response(JSON.stringify({ data: [{ embedding: queryVector }] }), { status: 200 })));

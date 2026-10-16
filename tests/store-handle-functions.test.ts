@@ -75,7 +75,7 @@ describe('startCompactionAt and markSnapshotSavedAt', () => {
 
 describe('saveCallerItems', () => {
   const req = {
-    sessionId: 's1', trigger: 'auto', requestId: 'req-1', project: 'acme/app', owner: 'bob@acme', origins: ['acme/app'],
+    sessionId: 's1', trigger: 'auto', requestId: 'req-1', project: 'acme/app', owner: 'bob@acme', origins: ['acme/app'], baseHalfLifeDays: 365,
     items: ['The deploy script must run from the repo root, never from a subfolder.'],
   };
 

@@ -114,12 +114,12 @@ export const PROCESS: SavableDescriptor<'process', SaveProcessOpts> = {
  */
 export function saveProcess(
   objects: Objects,
-  hippoRoot: string,
+  baseHalfLifeDays: number,
   tenantId: string,
   opts: SaveProcessOpts,
   actor: string = 'cli',
 ): Promise<Process> {
-  return saveObject(objects, PROCESS, { hippoRoot, tenantId, actor }, opts);
+  return saveObject(objects, PROCESS, { baseHalfLifeDays, tenantId, actor }, opts);
 }
 
 /** Close (retire) an active process with no successor; a superseded row cannot be closed. */

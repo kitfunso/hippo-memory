@@ -21,6 +21,7 @@ import {
 } from './object-verbs.js';
 import { errorMessage } from '../util/log.js';
 import { fail } from './exit.js';
+import { loadConfig } from '../core/config.js';
 
 const DECISION: ObjectNames = { cmd: 'decide', noun: 'Decision', idLabel: 'decision' };
 
@@ -91,7 +92,8 @@ async function decideCreate(ctx: ContextWith<'objects'>, decisionText: string, f
   }
 
   const decisionPathTags = extractPathTags(process.cwd());
-  const created = await decisionsModule.saveDecision(objectsOf(ctx), hippoRoot, tenantId, {
+  const { defaultHalfLifeDays } = loadConfig(hippoRoot);
+  const created = await decisionsModule.saveDecision(objectsOf(ctx), defaultHalfLifeDays, tenantId, {
     decisionText,
     context,
     supersedesDecisionId,

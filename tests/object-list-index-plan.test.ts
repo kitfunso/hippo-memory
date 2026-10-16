@@ -12,6 +12,7 @@ import { recordStatementsAsync } from './_helpers/count-statements.js';
 import { LATEST_SCHEMA_VERSION_STR } from './_helpers/schema-version.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { objectsAt } from './_helpers/objects-at.js';
+import { loadConfig } from '../src/core/config.js';
 
 const OBJECT_TABLES = ['decisions', 'incidents', 'processes', 'policies', 'skills', 'project_briefs', 'customer_notes'];
 const NEW_INDEXES = [...OBJECT_TABLES.map((t) => `idx_${t}_tenant_status_created`), 'idx_memories_source_tenant_created'];
@@ -59,7 +60,7 @@ async function preparedSql(fn: () => void | Promise<void>, fragment: string): Pr
 describe('object list query plan', () => {
   it('lists by status off the new index, with or without a cursor', async () => {
     const root = newRoot();
-    for (const text of ['one', 'two', 'three']) await saveDecision(objectsAt(root), root, 'default', { decisionText: `decide ${text}` });
+    for (const text of ['one', 'two', 'three']) await saveDecision(objectsAt(root), loadConfig(root).defaultHalfLifeDays, 'default', { decisionText: `decide ${text}` });
     const first = (await loadDecisions(objectsAt(root), 'default', { status: 'active', limit: 1 }))[0]!;
     const listSql = await preparedSql(async () => { await loadDecisions(objectsAt(root), 'default', { status: 'active', limit: 2 }); }, 'ORDER BY created_at DESC, id DESC');
     const pageSql = await preparedSql(
@@ -88,8 +89,8 @@ describe('object list query plan', () => {
 
   it('pages in created_at then id order, ties included, at every page size', async () => {
     const root = newRoot();
-    const saved = await Promise.all(['a', 'b', 'c', 'd', 'e'].map((t) => saveDecision(objectsAt(root), root, 'default', { decisionText: `tie ${t}` })));
-    await saveDecision(objectsAt(root), root, 'other', { decisionText: 'another tenant' });
+    const saved = await Promise.all(['a', 'b', 'c', 'd', 'e'].map((t) => saveDecision(objectsAt(root), loadConfig(root).defaultHalfLifeDays, 'default', { decisionText: `tie ${t}` })));
+    await saveDecision(objectsAt(root), loadConfig(root).defaultHalfLifeDays, 'other', { decisionText: 'another tenant' });
     withDb(root, (db) => {
       db.prepare(`UPDATE decisions SET created_at = '2026-01-01T00:00:00.000Z' WHERE id IN (?, ?, ?)`).run(saved[0]!.id, saved[2]!.id, saved[4]!.id);
     });

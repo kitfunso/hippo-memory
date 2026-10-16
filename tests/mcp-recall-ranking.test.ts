@@ -17,6 +17,7 @@ import { resolveEmbeddingProvider } from '../src/embeddings/provider.js';
 import { _resetAblationCacheForTests } from '../src/core/ablation.js';
 import { openHippoDb, closeHippoDb, withSharedStoreHandles } from '../src/db/index.js';
 import { sqliteStore } from '../src/store/sqlite/store.js';
+import { loadConfig } from '../src/core/config.js';
 
 // Every case seeds 26 rows, two of them up to 210 more, in a real store, so its time follows the runner's disk.
 vi.setConfig({ testTimeout: 30_000 });
@@ -126,7 +127,7 @@ function retrievalCounts(s: Seeded): Map<string, number> {
 
 /** Query vector points at S1; lexical hits sit at cosine 0.6; noise is orthogonal. */
 function withEmbeddings(s: Seeded): void {
-  const id = resolveEmbeddingProvider(s.home).id;
+  const id = resolveEmbeddingProvider(loadConfig(s.home).embeddings).id;
   const index: Record<string, number[]> = {};
   for (const [label, memId] of s.idByLabel) {
     index[memId] = label === 'S1' ? [1, 0, 0] : label.startsWith('N') ? [0, 0, 1] : [0.6, 0.8, 0];

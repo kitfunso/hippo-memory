@@ -437,7 +437,7 @@ export interface CreateMemoryOptions {
   source?: string;
   confidence?: ConfidenceLevel;
   /**
-   * The store's `loadConfig(hippoRoot).defaultHalfLifeDays`; required so no writer silently gets the compiled default.
+   * The store config's `defaultHalfLifeDays`; required so no writer silently gets the compiled default.
    */
   baseHalfLifeDays: number;
   traceOutcome?: TraceOutcome;

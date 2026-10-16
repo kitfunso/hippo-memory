@@ -23,6 +23,7 @@ import { openHippoDb, closeHippoDb, getHippoDbPath, runWithRequestStores, type D
 import { WRITE_BUDGET, type WriteBudget } from '../src/util/write-budget.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { objectsAt } from './_helpers/objects-at.js';
+import { loadConfig } from '../src/core/config.js';
 
 // SAFETY: node:sqlite's DatabaseSync is the class db.ts wraps as DatabaseSyncLike.
 const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite') as {
@@ -116,15 +117,15 @@ describe('graph extraction (deterministic, from consolidated first-class objects
 
   it('extracts entities (4 types) + a supersedes relation; excludes closed; idempotent', async () => {
     // decision v1 -> superseded by v2 (active)
-    const d1 = await saveDecision(objectsAt(home), home, 'default', { decisionText: 'Adopt Postgres' });
-    await saveDecision(objectsAt(home), home, 'default', { decisionText: 'Adopt Postgres (managed)', supersedesDecisionId: d1.id });
+    const d1 = await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { decisionText: 'Adopt Postgres' });
+    await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { decisionText: 'Adopt Postgres (managed)', supersedesDecisionId: d1.id });
     // a closed decision (must be excluded)
-    const dc = await saveDecision(objectsAt(home), home, 'default', { decisionText: 'Retired idea' });
+    const dc = await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { decisionText: 'Retired idea' });
     await closeDecision(objectsAt(home), 'default', dc.id);
     // one of each other type
-    await savePolicy(objectsAt(home), home, 'default', { policyName: 'Data retention', policyText: 'Delete logs after 90 days' });
-    await saveCustomerNote(objectsAt(home), home, 'default', { customer: 'Acme Corp', note: 'renewal in Q3' });
-    await saveProjectBrief(objectsAt(home), home, 'default', { repo: 'hippo', summary: 'agent-memory lib' });
+    await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { policyName: 'Data retention', policyText: 'Delete logs after 90 days' });
+    await saveCustomerNote(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { customer: 'Acme Corp', note: 'renewal in Q3' });
+    await saveProjectBrief(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { repo: 'hippo', summary: 'agent-memory lib' });
 
     const r = await extractGraph(objectsAt(home), home, 'default');
     expect(r.byType).toEqual({ decision: 2, policy: 1, customer: 1, project: 1 }); // dc excluded
@@ -161,9 +162,9 @@ describe('graph extraction (deterministic, from consolidated first-class objects
     // v38: extraction anchors provenance to the authoritative E2 object, so an in-force
     // decision STAYS in the graph after its mirror is forgotten (memory_id -> NULL), now
     // anchored via source_object_type/id.
-    const dn = await saveDecision(objectsAt(home), home, 'default', { decisionText: 'Will lose its memory' });
+    const dn = await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { decisionText: 'Will lose its memory' });
     deleteEntry(home, dn.memoryId!); // distilled delete is allowed; decisions.memory_id -> NULL
-    await saveDecision(objectsAt(home), home, 'default', { decisionText: 'Keeps its memory' });
+    await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { decisionText: 'Keeps its memory' });
     const r = await extractGraph(objectsAt(home), home, 'default');
     expect(r.byType.decision).toBe(2); // BOTH extracted (the forgotten-mirror one survives)
     const ents = loadEntities(home, 'default', { limit: 100 });
@@ -178,8 +179,8 @@ describe('graph extraction (deterministic, from consolidated first-class objects
 
   it('skips a supersedes relation when the successor is not extracted (closed)', async () => {
     // d1 superseded by d2, then d2 closed -> d1 superseded (extracted), d2 closed (not)
-    const d1 = await saveDecision(objectsAt(home), home, 'default', { decisionText: 'orig' });
-    const d2 = await saveDecision(objectsAt(home), home, 'default', { decisionText: 'replacement', supersedesDecisionId: d1.id });
+    const d1 = await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { decisionText: 'orig' });
+    const d2 = await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { decisionText: 'replacement', supersedesDecisionId: d1.id });
     await closeDecision(objectsAt(home), 'default', d2.id);
     const r = await extractGraph(objectsAt(home), home, 'default');
     // d1 (superseded) extracted; d2 (closed) excluded -> no relation (successor missing)
@@ -188,10 +189,10 @@ describe('graph extraction (deterministic, from consolidated first-class objects
   });
 
   it('rebuild reflects current state: a brand-new object appears, a closed one disappears, on re-extract', async () => {
-    const d = await saveDecision(objectsAt(home), home, 'default', { decisionText: 'first' });
+    const d = await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { decisionText: 'first' });
     await extractGraph(objectsAt(home), home, 'default');
     expect(entityCount(home)).toBe(1);
-    await saveDecision(objectsAt(home), home, 'default', { decisionText: 'second' });
+    await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { decisionText: 'second' });
     await closeDecision(objectsAt(home), 'default', d.id);
     const r = await extractGraph(objectsAt(home), home, 'default');
     expect(r.byType.decision).toBe(1); // 'second' present, 'first' (now closed) gone
@@ -202,8 +203,8 @@ describe('graph extraction (deterministic, from consolidated first-class objects
     // decisionText is uncapped at source; a >512-char one must NOT throw in insertEntity
     // (which would leave the cleared graph empty + unrebuildable). It is truncated.
     const longText = 'D' + 'x'.repeat(700);
-    await saveDecision(objectsAt(home), home, 'default', { decisionText: longText });
-    await saveDecision(objectsAt(home), home, 'default', { decisionText: 'short one' });
+    await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { decisionText: longText });
+    await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { decisionText: 'short one' });
     const r = await extractGraph(objectsAt(home), home, 'default'); // must not throw
     expect(r.byType.decision).toBe(2);
     const ents = loadEntities(home, 'default', { limit: 100 });
@@ -216,7 +217,7 @@ describe('graph extraction (deterministic, from consolidated first-class objects
   });
 
   it('trims leading whitespace before capping (codex R2: a long whitespace-prefix name must not brick)', async () => {
-    const d = await saveDecision(objectsAt(home), home, 'default', { decisionText: 'placeholder' });
+    const d = await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { decisionText: 'placeholder' });
     // Inject a name whose first 512 chars are whitespace (slice-without-trim would
     // yield a whitespace-only label -> insertEntity trims to '' -> throws -> brick).
     const db = openHippoDb(home);
@@ -236,12 +237,12 @@ describe('graph extraction (deterministic, from consolidated first-class objects
   });
 
   it('a rerun on unchanged objects prepares no write to entities or relations', async () => {
-    const d1 = await saveDecision(objectsAt(home), home, 'default', { decisionText: 'Adopt Postgres' });
-    await saveDecision(objectsAt(home), home, 'default', { decisionText: 'Adopt Postgres (managed) under RetryPolicy', supersedesDecisionId: d1.id });
-    deleteEntry(home, (await saveDecision(objectsAt(home), home, 'default', { decisionText: 'RetryPolicy covers search too' })).memoryId!);
-    await savePolicy(objectsAt(home), home, 'default', { policyName: 'RetryPolicy', policyText: 'retry 3x' });
-    await saveCustomerNote(objectsAt(home), home, 'default', { customer: 'Acme Corp', note: 'renewal in Q3, wants RetryPolicy' });
-    await saveProjectBrief(objectsAt(home), home, 'default', { repo: 'hippo', summary: 'agent-memory lib for Acme Corp' });
+    const d1 = await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { decisionText: 'Adopt Postgres' });
+    await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { decisionText: 'Adopt Postgres (managed) under RetryPolicy', supersedesDecisionId: d1.id });
+    deleteEntry(home, (await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { decisionText: 'RetryPolicy covers search too' })).memoryId!);
+    await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { policyName: 'RetryPolicy', policyText: 'retry 3x' });
+    await saveCustomerNote(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { customer: 'Acme Corp', note: 'renewal in Q3, wants RetryPolicy' });
+    await saveProjectBrief(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { repo: 'hippo', summary: 'agent-memory lib for Acme Corp' });
     const first = await extractGraph(objectsAt(home), home, 'default');
     expect(first.references).toBeGreaterThan(0);
 
@@ -249,8 +250,8 @@ describe('graph extraction (deterministic, from consolidated first-class objects
   });
 
   it('renaming a policy three decisions reference keeps its entity id and all three references', async () => {
-    const pol = await savePolicy(objectsAt(home), home, 'default', { policyName: 'Retry Policy', policyText: 'retry 3x' });
-    for (const team of ['billing', 'search', 'checkout']) await saveDecision(objectsAt(home), home, 'default', { decisionText: `${team} adopts Retry Policy v2` });
+    const pol = await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { policyName: 'Retry Policy', policyText: 'retry 3x' });
+    for (const team of ['billing', 'search', 'checkout']) await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { decisionText: `${team} adopts Retry Policy v2` });
     await extractGraph(objectsAt(home), home, 'default');
     const before = loadEntities(home, 'default', { entityType: 'policy', limit: 10 })[0];
     const db = openHippoDb(home);
@@ -267,10 +268,10 @@ describe('graph extraction (deterministic, from consolidated first-class objects
   });
 
   it('a chunked rebuild commits in several transactions and ends where one transaction would', async () => {
-    await savePolicy(objectsAt(home), home, 'default', { policyName: 'RetryPolicy', policyText: 'retry 3x' });
+    await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { policyName: 'RetryPolicy', policyText: 'retry 3x' });
     let prev: number | undefined;
     for (let i = 0; i < 40; i++) {
-      prev = (await saveDecision(objectsAt(home), home, 'default', { decisionText: `Call ${i} adopts RetryPolicy`, supersedesDecisionId: i % 10 === 9 ? prev : undefined })).id;
+      prev = (await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { decisionText: `Call ${i} adopts RetryPolicy`, supersedesDecisionId: i % 10 === 9 ? prev : undefined })).id;
     }
     const copy = `${home}-copy`;
     cpSync(home, copy, { recursive: true });
@@ -288,9 +289,9 @@ describe('graph extraction (deterministic, from consolidated first-class objects
 
   it('a mirrorless object closed between the load and its chunk gets no entity row', async () => {
     // Loaders return newest first, so the older decision's insert lands in a later chunk than the newer one's.
-    const older = await saveDecision(objectsAt(home), home, 'default', { decisionText: 'Older call, mirror forgotten' });
+    const older = await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { decisionText: 'Older call, mirror forgotten' });
     deleteEntry(home, older.memoryId!);
-    await saveDecision(objectsAt(home), home, 'default', { decisionText: 'Newer call' });
+    await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { decisionText: 'Newer call' });
     let pauses = 0;
     const closeOlderOnce = async (): Promise<void> => {
       if (pauses++ === 0) await closeDecision(objectsAt(home), 'default', older.id);
@@ -305,10 +306,10 @@ describe('graph extraction (deterministic, from consolidated first-class objects
   });
 
   it('an incremental rebuild keeps unchanged rows, so the new entity and relation sort first in the graph reads', async () => {
-    await savePolicy(objectsAt(home), home, 'default', { policyName: 'RetryPolicy', policyText: 'retry 3x' });
-    await saveDecision(objectsAt(home), home, 'default', { decisionText: 'D1 adopts RetryPolicy' });
+    await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { policyName: 'RetryPolicy', policyText: 'retry 3x' });
+    await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { decisionText: 'D1 adopts RetryPolicy' });
     await extractGraph(objectsAt(home), home, 'default');
-    await saveDecision(objectsAt(home), home, 'default', { decisionText: 'D2 adopts RetryPolicy' });
+    await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { decisionText: 'D2 adopts RetryPolicy' });
 
     await extractGraph(objectsAt(home), home, 'default');
 
@@ -323,8 +324,8 @@ describe('graph extraction (deterministic, from consolidated first-class objects
   });
 
   it('a chunked rebuild inside a server request waits out a writer that holds the lock between chunks', async () => {
-    await savePolicy(objectsAt(home), home, 'default', { policyName: 'RetryPolicy', policyText: 'retry 3x' });
-    for (let i = 0; i < 10; i++) await saveDecision(objectsAt(home), home, 'default', { decisionText: `Call ${i} adopts RetryPolicy` });
+    await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { policyName: 'RetryPolicy', policyText: 'retry 3x' });
+    for (let i = 0; i < 10; i++) await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { decisionText: `Call ${i} adopts RetryPolicy` });
     let exited: Promise<unknown[]> | undefined;
     const holdsOnFirstPause = budget(0, async () => {
       if (exited) return yieldOnce();

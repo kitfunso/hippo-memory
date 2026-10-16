@@ -475,7 +475,7 @@ async function searchLocalRows(
   const vectorCandidates = contextVectorSpec(ctx, plan, admit);
   const store = plan.local.store;
   const ctxResults = await searchByEngine(
-    { root: ctx.hippoRoot, store },
+    { root: ctx.hippoRoot, store, embeddings: ctxConfig.embeddings },
     query,
     localEntries,
     usePhysicsCtx ? ctxConfig.physics : null,

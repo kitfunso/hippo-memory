@@ -94,7 +94,7 @@ async function learnBeforeSleep(hippoRoot: string, tenantId: string, flags: CliF
       }
     }
 
-    printAgentImport(importForStore(hippoRoot, { machine: currentMachine() }), '');
+    printAgentImport(importForStore(hippoRoot, { configAt: loadConfig, machine: currentMachine() }), '');
   }
 }
 

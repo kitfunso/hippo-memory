@@ -5,7 +5,6 @@
 
 import { DEFAULT_LIST_LIMIT } from '../util/limits.js';
 import { BadRequestError, ConflictError, NotFoundError } from '../core/api-errors.js';
-import { loadConfig } from '../core/config.js';
 import { createMemory, Layer, type MemoryEntry } from '../core/memory.js';
 import type { ObjectByKind, ObjectKind, SavableKind } from '../core/object-types.js';
 import {
@@ -95,7 +94,7 @@ export async function closeObject<K extends ObjectKind>(
 
 /** The memory a typed object writes beside its row, so recall finds the object. */
 export function objectMirror(
-  hippoRoot: string,
+  baseHalfLifeDays: number,
   tenantId: string,
   source: ObjectKind,
   text: { readonly content: string; readonly tags: readonly string[] }
@@ -105,20 +104,20 @@ export function objectMirror(
     layer: Layer.Semantic,
     confidence: 'verified',
     source,
-    baseHalfLifeDays: loadConfig(hippoRoot).defaultHalfLifeDays,
+    baseHalfLifeDays,
     tenantId,
   });
 }
 
-/** Where a save lands and who makes it; `hippoRoot` is read only for the configured half-life. */
+/** Where a save lands and who makes it; `baseHalfLifeDays` is the config default a new mirror starts on. */
 export interface ObjectSaveSite {
-  readonly hippoRoot: string;
+  readonly baseHalfLifeDays: number;
   readonly tenantId: string;
   readonly actor: string;
 }
 
 function objectSave<K extends SavableKind>(site: ObjectSaveSite, kind: K, draft: ObjectDraft<K>): ObjectSave<K> {
-  const mirror = objectMirror(site.hippoRoot, site.tenantId, kind, draft);
+  const mirror = objectMirror(site.baseHalfLifeDays, site.tenantId, kind, draft);
   return {
     mirror,
     fields: draft.fields,

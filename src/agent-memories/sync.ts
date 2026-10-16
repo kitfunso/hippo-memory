@@ -4,7 +4,7 @@ import { processEnv } from '../util/env.js';
 import os from 'node:os';
 import path from 'node:path';
 import { errorMessage } from '../util/log.js';
-import { loadConfig } from '../core/config.js';
+import type { HippoConfig } from '../core/config.js';
 import type { MemoryEntry } from '../core/memory.js';
 import { namesFoldedInto } from './project-folds.js';
 import {
@@ -59,6 +59,8 @@ export function currentMachine(): Machine {
 
 export interface SyncOptions {
   readonly machine: Machine;
+  /** Reads one store's config; the caller's, so this module never touches config.json. */
+  readonly configAt: (hippoRoot: string) => HippoConfig;
   /** Writes nothing: each container's transaction rolls back, and a missing store is stood in for by an empty one. */
   readonly dryRun?: boolean;
   /** How long a busy store is waited on before its containers are skipped. */
@@ -175,7 +177,10 @@ function context(machine: Machine, extra: Pick<AdapterContext, 'projectRoot'>): 
 /**
  * The variable when set (empty or `none` is off); else the tools both the invoking and the target store's config allow.
  */
-export function allowedTools(env: Machine['env'], invoking: string, target: string, warnings: string[]): Set<ToolId> {
+export function allowedTools(
+  opts: Pick<SyncOptions, 'machine' | 'configAt'>, invoking: string, target: string, warnings: string[],
+): Set<ToolId> {
+  const env = opts.machine.env;
   const fromEnv = env[TOOLS_ENV];
   if (fromEnv !== undefined) {
     const listed =
@@ -187,8 +192,8 @@ export function allowedTools(env: Machine['env'], invoking: string, target: stri
             .filter((t) => t !== '');
     return knownTools(listed, TOOLS_ENV, warnings);
   }
-  const mine = configuredTools(invoking, warnings);
-  const theirs = configuredTools(target, warnings);
+  const mine = configuredTools(opts, invoking, warnings);
+  const theirs = configuredTools(opts, target, warnings);
   return new Set(
     AGENT_MEMORY_TOOLS.map((t) => t.id).filter(
       (id) => (mine === null || mine.has(id)) && (theirs === null || theirs.has(id)),
@@ -196,8 +201,10 @@ export function allowedTools(env: Machine['env'], invoking: string, target: stri
   );
 }
 
-function configuredTools(root: string, warnings: string[]): Set<ToolId> | null {
-  const tools = loadConfig(root).agentMemories.tools;
+function configuredTools(
+  opts: Pick<SyncOptions, 'configAt'>, root: string, warnings: string[],
+): Set<ToolId> | null {
+  const tools = opts.configAt(root).agentMemories.tools;
   return tools === null ? null : knownTools(tools, 'config agentMemories.tools', warnings);
 }
 
@@ -218,7 +225,7 @@ function knownTools(ids: readonly string[], where: string, warnings: string[]): 
 
 function runPass(ai: AgentImport, pass: Pass, opts: SyncOptions): ImportReport {
   const report = emptyReport();
-  const allowed = allowedTools(opts.machine.env, pass.invoking, pass.target, report.warnings);
+  const allowed = allowedTools(opts, pass.invoking, pass.target, report.warnings);
   const listings = ADAPTERS.filter((a) => allowed.has(a.tool)).flatMap((a) => listSafely(a, pass, report));
   const hasItems = listings.some((l) => l.containers.some((c) => c.items.length > 0));
   let store: OpenStore | null = null;
@@ -291,7 +298,7 @@ function storeSession(
   return {
     target: store.target,
     tenantId: store.target.tenantId,
-    baseHalfLifeDays: loadConfig(store.target.root).defaultHalfLifeDays,
+    baseHalfLifeDays: opts.configAt(store.target.root).defaultHalfLifeDays,
     originProject: pass.originProject,
     isDuplicate: duplicateCheck(
       store,

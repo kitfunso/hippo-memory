@@ -5,6 +5,7 @@ import { errorMessage } from '../util/log.js';
 import { printError } from './output.js';
 import { boolFlag, stringFlag, type CliFlags } from './flag-values.js';
 import { fail } from './exit.js';
+import { loadConfig } from '../core/config.js';
 import type { Objects } from '../store/port.js';
 import { requiredText, versionedVerbs, type VersionedKind } from './versioned-verbs.js';
 
@@ -32,7 +33,8 @@ async function briefRefresh(
       console.log(markdown);
       return;
     }
-    const created = await briefsModule.refreshedBrief(objects, { hippoRoot, tenantId, actor: 'cli' }, repoRaw);
+    const { defaultHalfLifeDays: baseHalfLifeDays } = loadConfig(hippoRoot);
+    const created = await briefsModule.refreshedBrief(objects, { baseHalfLifeDays, tenantId, actor: 'cli' }, repoRaw);
     console.log(`Project brief #${created.id} recorded (v${created.version}) for repo "${created.repo}".`);
     if (created.changeSummary) console.log(`  change: ${created.changeSummary}`);
     if (created.memoryId) console.log(`  memory: ${created.memoryId}`);
@@ -62,7 +64,7 @@ const briefKind = (
   body: (flags) => requiredText(flags, 'summary'),
   keyOf: (b) => b.repo,
   save: (repo, summary, extraTags, from) =>
-    briefsModule.saveProjectBrief(objects, hippoRoot, tenantId, {
+    briefsModule.saveProjectBrief(objects, loadConfig(hippoRoot).defaultHalfLifeDays, tenantId, {
       repo,
       summary,
       extraTags,

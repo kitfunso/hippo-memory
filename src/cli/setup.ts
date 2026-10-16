@@ -56,6 +56,7 @@ import { repairQualityOnceAt } from './quality-repair-once.js';
 import { HOOK_MARKERS, HOOKS, hippoBlock, withoutHookBlock } from '../hooks/hook-blocks.js';
 import { escapeRegex } from '../util/escape.js';
 import { fail } from './exit.js';
+import { loadConfig } from '../core/config.js';
 
 // Hook install/uninstall
 
@@ -440,7 +441,8 @@ export function handleSetup({ flags }: CommandContext): void {
 
   if (!flags['no-learn']) {
     console.log('');
-    printAgentImport(importUserMemories(globalRoot, { machine: currentMachine(), dryRun }), dryRun ? '[dry-run] ' : '');
+    const imported = importUserMemories(globalRoot, { configAt: loadConfig, machine: currentMachine(), dryRun });
+    printAgentImport(imported, dryRun ? '[dry-run] ' : '');
   }
 
   console.log('');
@@ -558,7 +560,7 @@ export async function handleDailyRunner({ tenantId }: CommandContext): Promise<v
     }
     await repairQualityOnceAt(globalRoot, tenantId);
   }
-  printAgentImport(importUserMemories(globalRoot, { machine: currentMachine() }), '');
+  printAgentImport(importUserMemories(globalRoot, { configAt: loadConfig, machine: currentMachine() }), '');
   const workspaces = listRegisteredWorkspaces(globalRoot);
 
   if (workspaces.length === 0) {

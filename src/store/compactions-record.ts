@@ -4,7 +4,7 @@ import { ConflictError } from '../core/api-errors.js';
 import { COMPACTION_DB_WAIT_MS, REPLAY_AFTER_MS, TRANSCRIPT_FILL_WINDOW_MS } from '../core/compaction-timing.js';
 import { isStringValue } from '../core/capture-contract.js';
 import { selectItemRows } from '../util/compaction-items.js';
-import { isSharedStore, loadConfig } from '../core/config.js';
+import { isSharedStore } from '../core/config.js';
 import { closeHippoDb, isSqliteBusy, openHippoDb, withWriteScopeOr, type DatabaseSyncLike } from '../db/index.js';
 import { gatedWrite } from './gated-write.js';
 import {
@@ -431,14 +431,15 @@ function finishItemWrites(hippoRoot: string, writes: ItemWrites, log: Log): void
 
 /** Items that become rows, then the record `done`, in one transaction so two sessions cannot both insert one text.
  * Mirrors after commit. */
-export function saveItems(db: DatabaseSyncLike, hippoRoot: string, ctx: ItemContext, log: Log): number {
+export function saveItems(
+  db: DatabaseSyncLike, hippoRoot: string, ctx: ItemContext, log: Log, baseHalfLifeDays: number,
+): number {
   const usable = ctx.items.filter((item) => !item.includes(REDACTED));
   if (usable.length < ctx.items.length) log(`skipped ${ctx.items.length - usable.length} item(s) as secret`);
   const { rows, tooLong, capped } = selectItemRows(usable);
   if (tooLong > 0) log(`item too long: ${tooLong} kept in the record only`);
   if (capped > 0) log(`capped: ${capped} more kept in the record only`);
 
-  const baseHalfLifeDays = loadConfig(hippoRoot).defaultHalfLifeDays;
   let finishedItems = 0;
   const writes = withWriteScopeOr<ItemWrites, null>(db, 'save_items', (rollback) => {
     if (ctx.recordId !== null) {
@@ -489,6 +490,7 @@ interface SaveStep {
   at: Date;
   result: CompactionSaveResult;
   log: Log;
+  baseHalfLifeDays: number;
 }
 
 function recordStep(step: SaveStep): CompactionRecord | null {
@@ -518,7 +520,7 @@ function itemsStep(step: SaveStep, record: CompactionRecord | null): void {
       originProject: record?.originProject ?? compactionOrigin(hippoRoot, meta.cwd),
       cwd: meta.cwd,
       items: step.text.items,
-    }, log);
+    }, log, step.baseHalfLifeDays);
   } catch (err) {
     if (!isSqliteBusy(err) || record === null) throw err;
     // The record already holds the items; sleep finishes them.
@@ -535,12 +537,14 @@ export function saveCompactionAt(
   text: CompactionText,
   at: Date,
   log: Log,
+  baseHalfLifeDays: number,
 ): CompactionSaveOutcome {
   const result: CompactionSaveResult = { written: null, deferred: false, snapshotSaved: false };
   let db: DatabaseSyncLike | undefined;
   try {
     db = openHippoDb(hippoRoot, { busyWaitMs: COMPACTION_DB_WAIT_MS });
-    const step: SaveStep = { db, hippoRoot, tenantId: resolveTenantId({}), meta, text, at, result, log };
+    const tenantId = resolveTenantId({});
+    const step: SaveStep = { db, hippoRoot, tenantId, meta, text, at, result, log, baseHalfLifeDays };
     itemsStep(step, recordStep(step));
   } catch (err) {
     if (isSqliteBusy(err) || db === undefined) return { result, spoolReason: errorMessage(err) };
@@ -601,7 +605,7 @@ function itemContext(tenantId: string, record: CompactionRecord, items: string[]
 }
 
 /** Records a spooled summary, then writes its items. */
-function spoolRecorder(db: DatabaseSyncLike, hippoRoot: string, log: Log): SpoolRecorder {
+function spoolRecorder(db: DatabaseSyncLike, hippoRoot: string, log: Log, baseHalfLifeDays: number): SpoolRecorder {
   return (spooled, recorded) => {
     const record = recordSummary(db, hippoRoot, spooled.tenantId, {
       meta: spooled.payload,
@@ -610,7 +614,7 @@ function spoolRecorder(db: DatabaseSyncLike, hippoRoot: string, log: Log): Spool
     });
     // The record holds the items now, so the file is done even if the write below fails.
     recorded();
-    saveItems(db, hippoRoot, itemContext(spooled.tenantId, record), log);
+    saveItems(db, hippoRoot, itemContext(spooled.tenantId, record), log, baseHalfLifeDays);
   };
 }
 
@@ -623,6 +627,7 @@ interface ReplayRun {
   readonly sources: ReplaySources;
   readonly log: Log;
   readonly deadline: number;
+  readonly baseHalfLifeDays: number;
 }
 
 /** Runs `step` over each row until the deadline; a row that will not map or a step that throws is logged and the rest
@@ -648,14 +653,15 @@ function replayEach(
 function replayStalled(run: ReplayRun): number {
   const stalled = stalledSummarisedRows(run.db, run.tenantId, new Date(run.now - REPLAY_AFTER_MS).toISOString());
   return replayEach(run, stalled, 'replay', (record) => {
-    saveItems(run.db, run.hippoRoot, itemContext(run.tenantId, record), run.log);
+    saveItems(run.db, run.hippoRoot, itemContext(run.tenantId, record), run.log, run.baseHalfLifeDays);
     return true;
   });
 }
 
 function replaySpool(run: ReplayRun): number {
   try {
-    return run.sources.importSpool(run.tenantId, run.deadline, spoolRecorder(run.db, run.hippoRoot, run.log));
+    const { db, hippoRoot, log, baseHalfLifeDays } = run;
+    return run.sources.importSpool(run.tenantId, run.deadline, spoolRecorder(db, hippoRoot, log, baseHalfLifeDays));
   } catch (err) {
     run.log(`spool import failed: ${errorMessage(err)}`);
     return 0;
@@ -683,7 +689,7 @@ function fillFromTranscript(run: ReplayRun, record: CompactionRecord): boolean {
     log(`${record.id} was filled by another process`);
     return false;
   }
-  saveItems(db, hippoRoot, itemContext(tenantId, record, text.items), log);
+  saveItems(db, hippoRoot, itemContext(tenantId, record, text.items), log, run.baseHalfLifeDays);
   return true;
 }
 
@@ -705,14 +711,19 @@ function replayCompactions(
   sources: ReplaySources,
   log: Log,
   deadline: number,
+  baseHalfLifeDays: number,
 ): number {
-  const run: ReplayRun = { db, hippoRoot, tenantId: resolveTenantId({}), now: Date.now(), sources, log, deadline };
+  const run: ReplayRun = {
+    db, hippoRoot, tenantId: resolveTenantId({}), now: Date.now(), sources, log, deadline, baseHalfLifeDays,
+  };
   return replayStalled(run) + replaySpool(run) + replayOpen(run);
 }
 
 export interface ReplayOptions {
   busyWaitMs?: number;
   deadline?: number;
+  /** The config default a replayed item's memory starts on. */
+  baseHalfLifeDays: number;
 }
 
 /** For `hippo sleep` and post-compact: opens the store itself and never throws. */
@@ -720,12 +731,13 @@ export function replayStoredCompactions(
   hippoRoot: string,
   sources: ReplaySources,
   log: Log,
-  opts: ReplayOptions = {},
+  opts: ReplayOptions,
 ): number {
   let db: DatabaseSyncLike | undefined;
   try {
     db = openHippoDb(hippoRoot, { busyWaitMs: opts.busyWaitMs });
-    return replayCompactions(db, hippoRoot, sources, log, opts.deadline ?? Number.POSITIVE_INFINITY);
+    const deadline = opts.deadline ?? Number.POSITIVE_INFINITY;
+    return replayCompactions(db, hippoRoot, sources, log, deadline, opts.baseHalfLifeDays);
   } catch (err) {
     log(`replay failed: ${errorMessage(err)}`);
     return 0;

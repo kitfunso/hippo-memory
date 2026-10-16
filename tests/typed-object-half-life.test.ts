@@ -15,8 +15,9 @@ import { savePolicy } from '../src/objects/policies.js';
 import { saveSkill } from '../src/objects/skills.js';
 import { saveProjectBrief } from '../src/objects/project-briefs.js';
 import { saveCustomerNote } from '../src/objects/customer-notes.js';
-import { savePrediction } from '../src/store/predictions.js';
+import { savePrediction } from './_helpers/save-prediction.js';
 import { objectsAt } from './_helpers/objects-at.js';
+import { loadConfig } from '../src/core/config.js';
 
 const dirs: string[] = [];
 afterEach(() => {
@@ -31,13 +32,13 @@ function store(config: Partial<HippoConfig> | undefined): string {
 }
 
 const writers: [string, (root: string) => Promise<{ memoryId: string | null }>][] = [
-  ['decision', async (root) => await saveDecision(objectsAt(root), root, 'default', { decisionText: 'we release on Tuesdays after the staging soak' })],
-  ['incident', async (root) => await openIncident(objectsAt(root), root, 'default', { incidentText: 'the billing cron charged twice on the 1st' }, 'cli')],
-  ['process', async (root) => await saveProcess(objectsAt(root), root, 'default', { processName: 'Release', steps: ['tag', 'publish'] })],
-  ['policy', async (root) => await savePolicy(objectsAt(root), root, 'default', { policyName: 'RetryPolicy', policyText: 'retry up to 3x' })],
-  ['skill', async (root) => await saveSkill(objectsAt(root), root, 'default', { skillName: 'Run tests', instructions: 'npm test before commit' })],
-  ['project brief', async (root) => await saveProjectBrief(objectsAt(root), root, 'default', { repo: 'acme/billing', summary: 'billing service for Acme' })],
-  ['customer note', async (root) => await saveCustomerNote(objectsAt(root), root, 'default', { customer: 'Acme', note: 'renewal is due in March' })],
+  ['decision', async (root) => await saveDecision(objectsAt(root), loadConfig(root).defaultHalfLifeDays, 'default', { decisionText: 'we release on Tuesdays after the staging soak' })],
+  ['incident', async (root) => await openIncident(objectsAt(root), loadConfig(root).defaultHalfLifeDays, 'default', { incidentText: 'the billing cron charged twice on the 1st' }, 'cli')],
+  ['process', async (root) => await saveProcess(objectsAt(root), loadConfig(root).defaultHalfLifeDays, 'default', { processName: 'Release', steps: ['tag', 'publish'] })],
+  ['policy', async (root) => await savePolicy(objectsAt(root), loadConfig(root).defaultHalfLifeDays, 'default', { policyName: 'RetryPolicy', policyText: 'retry up to 3x' })],
+  ['skill', async (root) => await saveSkill(objectsAt(root), loadConfig(root).defaultHalfLifeDays, 'default', { skillName: 'Run tests', instructions: 'npm test before commit' })],
+  ['project brief', async (root) => await saveProjectBrief(objectsAt(root), loadConfig(root).defaultHalfLifeDays, 'default', { repo: 'acme/billing', summary: 'billing service for Acme' })],
+  ['customer note', async (root) => await saveCustomerNote(objectsAt(root), loadConfig(root).defaultHalfLifeDays, 'default', { customer: 'Acme', note: 'renewal is due in March' })],
   ['prediction', async (root) => savePrediction(root, 'default', { classTag: 'migration-effort', claimText: 'the migration takes two days' })],
 ];
 

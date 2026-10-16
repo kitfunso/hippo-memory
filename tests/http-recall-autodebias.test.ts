@@ -11,7 +11,8 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { serve, type ServerHandle } from '../src/server.js';
-import { savePrediction, closePrediction } from '../src/store/predictions.js';
+import { closePrediction } from '../src/store/predictions.js';
+import { savePrediction } from './_helpers/save-prediction.js';
 import type { RecallResult } from '../src/api/index.js';
 import { makeRoot } from './_helpers/make-root.js';
 

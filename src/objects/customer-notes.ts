@@ -85,12 +85,12 @@ export const CUSTOMER_NOTE: SavableDescriptor<'customer_note', SaveCustomerNoteO
  *  transaction. The mirror carries a `customer:<lc>` tag so scope-aware recall treats the note as entity-local. */
 export function saveCustomerNote(
   objects: Objects,
-  hippoRoot: string,
+  baseHalfLifeDays: number,
   tenantId: string,
   opts: SaveCustomerNoteOpts,
   actor: string = 'cli',
 ): Promise<CustomerNote> {
-  return saveObject(objects, CUSTOMER_NOTE, { hippoRoot, tenantId, actor }, opts);
+  return saveObject(objects, CUSTOMER_NOTE, { baseHalfLifeDays, tenantId, actor }, opts);
 }
 
 /** Close (retire) an active note; CAS on status='active', 0 changes means not-found or not-active. */

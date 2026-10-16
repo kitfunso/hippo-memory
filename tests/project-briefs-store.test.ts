@@ -32,6 +32,7 @@ import {
 } from '../src/objects/project-briefs.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { objectsAt } from './_helpers/objects-at.js';
+import { loadConfig } from '../src/core/config.js';
 
 function safeRmSync(p: string): void {
   try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
@@ -74,7 +75,7 @@ describe('project_briefs store (repo-scoped / auto-refreshes first-class object)
   afterEach(() => safeRmSync(home));
 
   it('saveProjectBrief creates memory + row + project_brief_create audit; v1', async () => {
-    const b = await saveProjectBrief(objectsAt(home), home, 'default', { repo: 'hippo', summary: 'agent-memory lib' });
+    const b = await saveProjectBrief(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { repo: 'hippo', summary: 'agent-memory lib' });
     expect(b.id).toBeGreaterThan(0);
     expect(b.memoryId).not.toBeNull();
     expect(b.repo).toBe('hippo');
@@ -107,10 +108,10 @@ describe('project_briefs store (repo-scoped / auto-refreshes first-class object)
   });
 
   it('status + repo filters; loadActiveBriefForRepo', async () => {
-    const a = await saveProjectBrief(objectsAt(home), home, 'default', { repo: 'alpha', summary: 'x' });
-    const b = await saveProjectBrief(objectsAt(home), home, 'default', { repo: 'beta', summary: 'x' });
-    const c = await saveProjectBrief(objectsAt(home), home, 'default', { repo: 'gamma', summary: 'x' });
-    await saveProjectBrief(objectsAt(home), home, 'default', { repo: 'beta', summary: 'x2', supersedesBriefId: b.id });
+    const a = await saveProjectBrief(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { repo: 'alpha', summary: 'x' });
+    const b = await saveProjectBrief(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { repo: 'beta', summary: 'x' });
+    const c = await saveProjectBrief(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { repo: 'gamma', summary: 'x' });
+    await saveProjectBrief(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { repo: 'beta', summary: 'x2', supersedesBriefId: b.id });
     await closeProjectBrief(objectsAt(home), 'default', c.id);
     expect((await activeBrief(home, 'default', 'alpha'))!.id).toBe(a.id);
     expect(await activeBrief(home, 'default', 'gamma')).toBeNull(); // closed
@@ -121,11 +122,11 @@ describe('project_briefs store (repo-scoped / auto-refreshes first-class object)
   });
 
   it('validation: missing repo/summary; single-line repo; caps', async () => {
-    await expect(saveProjectBrief(objectsAt(home), home, 'default', { repo: '   ', summary: 'x' })).rejects.toThrow(/repo is required/);
-    await expect(saveProjectBrief(objectsAt(home), home, 'default', { repo: 'r', summary: '  ' })).rejects.toThrow(/summary is required/);
-    await expect(saveProjectBrief(objectsAt(home), home, 'default', { repo: 'bad\nrepo', summary: 'x' })).rejects.toThrow(/single line/);
-    await expect(saveProjectBrief(objectsAt(home), home, 'default', { repo: 'big', summary: 'y'.repeat(MAX_BRIEF_SUMMARY_LEN + 1) })).rejects.toThrow(/summary exceeds/);
-    await expect(saveProjectBrief(objectsAt(home), home, 'default', { repo: 'r', summary: 'ok', changeSummary: 'z'.repeat(4097), supersedesBriefId: 1 })).rejects.toThrow(/changeSummary exceeds/);
+    await expect(saveProjectBrief(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { repo: '   ', summary: 'x' })).rejects.toThrow(/repo is required/);
+    await expect(saveProjectBrief(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { repo: 'r', summary: '  ' })).rejects.toThrow(/summary is required/);
+    await expect(saveProjectBrief(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { repo: 'bad\nrepo', summary: 'x' })).rejects.toThrow(/single line/);
+    await expect(saveProjectBrief(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { repo: 'big', summary: 'y'.repeat(MAX_BRIEF_SUMMARY_LEN + 1) })).rejects.toThrow(/summary exceeds/);
+    await expect(saveProjectBrief(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { repo: 'r', summary: 'ok', changeSummary: 'z'.repeat(4097), supersedesBriefId: 1 })).rejects.toThrow(/changeSummary exceeds/);
   });
 
   it('assembleBriefFromReceipts: tenant-isolated path tag match, excludes own brief mirror, DESC order, truncation', async () => {
@@ -140,7 +141,7 @@ describe('project_briefs store (repo-scoped / auto-refreshes first-class object)
     addReceipt(home, 'tenant-b', 'hippo', 'cross-tenant receipt');
     // the brief's OWN mirror (source='project_brief') must be excluded even though
     // it carries the repo path tag
-    const brief = await saveProjectBrief(objectsAt(home), home, 'default', { repo: 'hippo', summary: 'the brief body', extraTags: ['path:hippo'] });
+    const brief = await saveProjectBrief(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { repo: 'hippo', summary: 'the brief body', extraTags: ['path:hippo'] });
     void brief;
 
     const { markdown, receiptCount } = await briefFromReceipts(objectsAt(home), 'default', 'hippo');
@@ -199,7 +200,7 @@ describe('project_briefs store (repo-scoped / auto-refreshes first-class object)
     expect(countRows(home, 'project_briefs')).toBe(b0);
 
     // first refresh creates v1
-    const v1 = await refreshedBrief(objectsAt(home), { hippoRoot: home, tenantId: 'default', actor: 'cli' }, 'hippo');
+    const v1 = await refreshedBrief(objectsAt(home), { baseHalfLifeDays: loadConfig(home).defaultHalfLifeDays, tenantId: 'default', actor: 'cli' }, 'hippo');
     expect(v1.version).toBe(1);
     expect(v1.status).toBe('active');
     expect(v1.summary).toContain('receipt one');
@@ -232,7 +233,7 @@ describe('project_briefs store (repo-scoped / auto-refreshes first-class object)
 
     // a new receipt + a second refresh supersedes v1
     addReceipt(home, 'default', 'hippo', 'receipt two');
-    const v2 = await refreshedBrief(objectsAt(home), { hippoRoot: home, tenantId: 'default', actor: 'cli' }, 'hippo');
+    const v2 = await refreshedBrief(objectsAt(home), { baseHalfLifeDays: loadConfig(home).defaultHalfLifeDays, tenantId: 'default', actor: 'cli' }, 'hippo');
     expect(v2.version).toBe(2);
     expect(v2.changeSummary).toBe('auto-refresh from 2 receipt(s)');
     expect((await loadProjectBriefById(objectsAt(home), 'default', v1.id))!.status).toBe('superseded');
@@ -266,7 +267,7 @@ describe('project_briefs store (repo-scoped / auto-refreshes first-class object)
     expect(assembled.markdown).toContain(`_Auto-assembled from ${kept} of 50 receipt(s)._`);
     expect(assembled.markdown).toContain(`_... ${50 - kept} more receipt(s) omitted (summary cap)._`);
     // refresh must SUCCEED (not throw) and store a valid brief under the cap
-    const b = await refreshedBrief(objectsAt(home), { hippoRoot: home, tenantId: 'default', actor: 'cli' }, 'big');
+    const b = await refreshedBrief(objectsAt(home), { baseHalfLifeDays: loadConfig(home).defaultHalfLifeDays, tenantId: 'default', actor: 'cli' }, 'big');
     expect(b.version).toBe(1);
     expect(b.summary.length).toBeLessThanOrEqual(MAX_BRIEF_SUMMARY_LEN);
     expect((await loadProjectBriefById(objectsAt(home), 'default', b.id))!.summary.length).toBeLessThanOrEqual(MAX_BRIEF_SUMMARY_LEN);

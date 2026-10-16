@@ -5,9 +5,11 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { randomUUID } from 'crypto';
 import type { MemoryEntry } from '../core/memory.js';
-import { loadConfig } from '../core/config.js';
 import { initializeParticle } from '../core/physics.js';
-import { resolveEmbeddingProvider, type EmbeddingProvider } from '../embeddings/provider.js';
+import {
+  embeddingsConfigOf, resolveEmbeddingProvider, type EmbeddingProvider,
+} from '../embeddings/provider.js';
+import type { EmbeddingsConfig } from '../core/config.js';
 import {
   embeddingIndexIdentity,
   embeddingInputText,
@@ -330,11 +332,12 @@ export async function embedMemory(
   entry: MemoryEntry,
   model?: string,
   store?: HippoStore,
+  embeddings?: EmbeddingsConfig,
 ): Promise<EmbedOutcome> {
   let provider: EmbeddingProvider;
   let available: boolean;
   try {
-    provider = resolveEmbeddingProvider(hippoRoot, { model });
+    provider = resolveEmbeddingProvider(embeddingsConfigOf(hippoRoot, embeddings), { model });
     available = provider.isAvailable();
   } catch (err) {
     // Callers fire and forget, so this must resolve: a bad config warns once instead of rejecting.
@@ -415,11 +418,10 @@ function initializePhysicsIfMissing(hippoRoot: string, entry: MemoryEntry, vecto
 }
 
 /** Throws when an unavailable provider is a misconfiguration rather than an intentional no-op. */
-function throwIfProviderKeyMissing(hippoRoot: string, provider: EmbeddingProvider): void {
+function throwIfProviderKeyMissing(cfg: EmbeddingsConfig, provider: EmbeddingProvider): void {
   // A configured API provider with a missing key is a misconfiguration: surface it so callers of the exported
   // embedAll() learn nothing was written.
   // Local-not-installed and an explicit enabled=false stay silent no-ops.
-  const cfg = loadConfig(hippoRoot).embeddings;
   if (
     provider.kind !== 'local' &&
     cfg.enabled !== false &&
@@ -476,11 +478,14 @@ async function backfillPending(
 export async function embedAll(
   hippoRoot: string,
   model?: string,
-  provider: EmbeddingProvider = resolveEmbeddingProvider(hippoRoot, { model }),
+  givenProvider?: EmbeddingProvider,
   store?: HippoStore,
+  embeddings?: EmbeddingsConfig,
 ): Promise<number> {
+  const cfg = embeddingsConfigOf(hippoRoot, embeddings);
+  const provider = givenProvider ?? resolveEmbeddingProvider(cfg, { model });
   if (!provider.isAvailable()) {
-    throwIfProviderKeyMissing(hippoRoot, provider);
+    throwIfProviderKeyMissing(cfg, provider);
     return 0;
   }
   if (store) return withProcessEmbedLock(() => embedAllInStore(store, provider));

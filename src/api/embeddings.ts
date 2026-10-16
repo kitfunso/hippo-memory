@@ -5,12 +5,13 @@ import type { EmbeddingProvider } from '../embeddings/provider.js';
 import { embedAll } from '../search/embed-memories.js';
 import { loadAllEntryIds } from '../store/entry-reads.js';
 import { loadEmbeddingIndex, resetStoredParticles, storedVectorSummary } from '../store/vector-index.js';
+import { configOf } from './config-of.js';
 import { requireHostAdmin, type Context } from './types.js';
 
 /** Embed every memory that has no vector yet; resolves to how many it embedded. */
 export async function embedMissingMemories(ctx: Context, provider?: EmbeddingProvider): Promise<number> {
   requireHostAdmin(ctx, 'Embedding the store');
-  return embedAll(ctx.hippoRoot, undefined, provider);
+  return embedAll(ctx.hippoRoot, undefined, provider, undefined, configOf(ctx).embeddings);
 }
 
 /** How many vectors the store holds, live memory or not. */

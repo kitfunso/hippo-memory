@@ -158,6 +158,9 @@ export interface HippoConfig {
   sharedStore: boolean;
 }
 
+/** The `embeddings` block, which the embedding provider reads alone. */
+export type EmbeddingsConfig = HippoConfig['embeddings'];
+
 export const DEFAULT_CONFIG: HippoConfig = {
   defaultHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
   defaultBudget: DEFAULT_RECALL_BUDGET,

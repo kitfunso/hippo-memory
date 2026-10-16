@@ -20,6 +20,7 @@ import {
   type Scratch,
 } from './_helpers/compaction-hooks.js';
 import { lockWaitAskedMs, tracingLockWaits } from './_helpers/lock-waits.js';
+import { DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 
 const MINUTE = 60_000;
 const ITEMS = [
@@ -272,9 +273,9 @@ describe('two replayers working the same store', () => {
     const db = openHippoDb(s.hippoRoot);
     try {
       const ctx = { tenantId: 'default', recordId: 'cmp-1', sessionId: 's1', originProject: 'proj', cwd: null, items: ITEMS };
-      expect(saveItems(db, s.hippoRoot, ctx, log)).toBe(2);
+      expect(saveItems(db, s.hippoRoot, ctx, log, DEFAULT_HALF_LIFE_DAYS)).toBe(2);
       run(s.hippoRoot, `DELETE FROM memories WHERE instr(tags_json, '"compaction-memory"') > 0`);
-      expect(saveItems(db, s.hippoRoot, ctx, log)).toBe(2);
+      expect(saveItems(db, s.hippoRoot, ctx, log, DEFAULT_HALF_LIFE_DAYS)).toBe(2);
     } finally {
       closeHippoDb(db);
     }

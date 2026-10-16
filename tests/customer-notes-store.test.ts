@@ -21,6 +21,7 @@ import {
 } from '../src/objects/customer-notes.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { objectsAt } from './_helpers/objects-at.js';
+import { loadConfig } from '../src/core/config.js';
 
 function safeRmSync(p: string): void {
   try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
@@ -43,7 +44,7 @@ describe('customer_notes store (entity-scoped first-class object)', () => {
   afterEach(() => safeRmSync(home));
 
   it('saveCustomerNote creates memory + row + customer_note_create audit; v1', async () => {
-    const n = await saveCustomerNote(objectsAt(home), home, 'default', { customer: 'Acme Corp', note: 'renewal call notes' });
+    const n = await saveCustomerNote(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { customer: 'Acme Corp', note: 'renewal call notes' });
     expect(n.id).toBeGreaterThan(0);
     expect(n.memoryId).not.toBeNull();
     expect(n.customer).toBe('Acme Corp');
@@ -72,11 +73,11 @@ describe('customer_notes store (entity-scoped first-class object)', () => {
   });
 
   it('memory mirror carries customer:<lc> tag (lowercased); colon in customer is safe', async () => {
-    const n = memTags(home, (await saveCustomerNote(objectsAt(home), home, 'default', { customer: 'Acme Corp', note: 'x' })).memoryId!);
+    const n = memTags(home, (await saveCustomerNote(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { customer: 'Acme Corp', note: 'x' })).memoryId!);
     expect(n).toContain('customer_note');
     expect(n).toContain('customer:acme corp'); // lowercased
     // a customer containing a colon does not corrupt the tag (it is one element)
-    const n2 = await saveCustomerNote(objectsAt(home), home, 'default', { customer: 'acme:corp', note: 'y', extraTags: ['vip'] });
+    const n2 = await saveCustomerNote(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { customer: 'acme:corp', note: 'y', extraTags: ['vip'] });
     const tags2 = memTags(home, n2.memoryId!);
     expect(tags2).toContain('customer:acme:corp');
     expect(tags2).toContain('vip');
@@ -84,9 +85,9 @@ describe('customer_notes store (entity-scoped first-class object)', () => {
 
   it('status + customer filters; MANY active notes per customer; loadActiveNotesForCustomer', async () => {
     // a single customer accrues MANY notes (the key difference from project_brief)
-    const a1 = await saveCustomerNote(objectsAt(home), home, 'default', { customer: 'Acme', note: 'note 1' });
-    const a2 = await saveCustomerNote(objectsAt(home), home, 'default', { customer: 'Acme', note: 'note 2' });
-    const b1 = await saveCustomerNote(objectsAt(home), home, 'default', { customer: 'Beta', note: 'b note' });
+    const a1 = await saveCustomerNote(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { customer: 'Acme', note: 'note 1' });
+    const a2 = await saveCustomerNote(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { customer: 'Acme', note: 'note 2' });
+    const b1 = await saveCustomerNote(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { customer: 'Beta', note: 'b note' });
     await closeCustomerNote(objectsAt(home), 'default', b1.id);
     const acmeActive = await loadActiveNotesForCustomer(objectsAt(home), 'default', 'Acme');
     expect(acmeActive.map((x) => x.id).sort()).toEqual([a1.id, a2.id].sort());
@@ -98,10 +99,10 @@ describe('customer_notes store (entity-scoped first-class object)', () => {
   });
 
   it('validation: missing customer/note; single-line customer; caps', async () => {
-    await expect(saveCustomerNote(objectsAt(home), home, 'default', { customer: '   ', note: 'x' })).rejects.toThrow(/customer is required/);
-    await expect(saveCustomerNote(objectsAt(home), home, 'default', { customer: 'c', note: '  ' })).rejects.toThrow(/note is required/);
-    await expect(saveCustomerNote(objectsAt(home), home, 'default', { customer: 'bad\ncustomer', note: 'x' })).rejects.toThrow(/single line/);
-    await expect(saveCustomerNote(objectsAt(home), home, 'default', { customer: 'big', note: 'y'.repeat(MAX_NOTE_LEN + 1) })).rejects.toThrow(/note exceeds/);
-    await expect(saveCustomerNote(objectsAt(home), home, 'default', { customer: 'c', note: 'ok', changeSummary: 'z'.repeat(4097), supersedesNoteId: 1 })).rejects.toThrow(/changeSummary exceeds/);
+    await expect(saveCustomerNote(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { customer: '   ', note: 'x' })).rejects.toThrow(/customer is required/);
+    await expect(saveCustomerNote(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { customer: 'c', note: '  ' })).rejects.toThrow(/note is required/);
+    await expect(saveCustomerNote(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { customer: 'bad\ncustomer', note: 'x' })).rejects.toThrow(/single line/);
+    await expect(saveCustomerNote(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { customer: 'big', note: 'y'.repeat(MAX_NOTE_LEN + 1) })).rejects.toThrow(/note exceeds/);
+    await expect(saveCustomerNote(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { customer: 'c', note: 'ok', changeSummary: 'z'.repeat(4097), supersedesNoteId: 1 })).rejects.toThrow(/changeSummary exceeds/);
   });
 });

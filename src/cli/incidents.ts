@@ -10,6 +10,7 @@ import { nonEmptyStringFlag, type CliFlags, isStringFlag, stringFlag, type Comma
 import { requireInit } from './shared.js';
 import { closeObject, foundOrExit, idArgOrExit, listObjects, type ObjectNames } from './object-verbs.js';
 import { fail } from './exit.js';
+import { loadConfig } from '../core/config.js';
 
 const INCIDENT: ObjectNames = { cmd: 'incident', noun: 'Incident', idLabel: 'incident' };
 
@@ -102,7 +103,7 @@ async function incidentCreate(
   }
 
   const incidentPathTags = extractPathTags(process.cwd());
-  const created = await incidentsModule.openIncident(objects, hippoRoot, tenantId, {
+  const created = await incidentsModule.openIncident(objects, loadConfig(hippoRoot).defaultHalfLifeDays, tenantId, {
     incidentText,
     context,
     linkedMemoryIds,

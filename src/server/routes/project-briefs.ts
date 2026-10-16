@@ -6,6 +6,7 @@ import { sendJson } from '../../util/http-util.js';
 import type { AuthedRouteRequest } from '../types.js';
 import { parseJsonBody } from '../validation.js';
 import { objectsOf, saveFor } from '../../api/objects/objects.js';
+import { configOf } from '../../api/config-of.js';
 import {
   closeRoute,
   getRoute,
@@ -49,7 +50,7 @@ export function handleListProjectBriefs(rr: AuthedRouteRequest<'objects'>): Prom
 // The refresh op: must precede the /:id routes (literal 'refresh' is non-numeric
 // so the /(\d+)/ routes would not match it, but order it first).
 export async function handleRefreshProjectBrief(rr: AuthedRouteRequest<'objects'>): Promise<void> {
-  const { req, res, opts, ctx } = rr;
+  const { req, res, ctx } = rr;
   const body = await parseJsonBody(req, ctx);
   const repo = requiredString(body, 'repo', { max: MAX_REPO_LEN });
   if (body['dryRun'] === true) {
@@ -59,7 +60,7 @@ export async function handleRefreshProjectBrief(rr: AuthedRouteRequest<'objects'
   }
   const brief = await refreshedBrief(
     objectsOf(ctx),
-    { hippoRoot: opts.hippoRoot, tenantId: ctx.tenantId, actor: ctx.actor.subject },
+    { baseHalfLifeDays: configOf(ctx).defaultHalfLifeDays, tenantId: ctx.tenantId, actor: ctx.actor.subject },
     repo,
   );
   sendJson(res, 200, { brief });

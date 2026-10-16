@@ -15,6 +15,7 @@ import {
   auditCount, auditTotal, closeWorld, codexSummary, ctxFor, dormantRows, expectedContainer, liveRows, liveTexts, note, openWorld, projectNotes,
   sha, toolTally, withDb, type World,
 } from './_helpers/agent-memories-world.js';
+import { loadConfig } from '../src/core/config.js';
 
 // Every sync asks git for each folder's layout in a child process, and a case runs several syncs.
 vi.setConfig({ testTimeout: 30_000 });
@@ -33,7 +34,7 @@ beforeEach(() => {
 });
 afterEach(() => closeWorld(w));
 
-const sync = (): ImportReport => importForStore(w.local, { machine: w.machine });
+const sync = (): ImportReport => importForStore(w.local, { configAt: loadConfig, machine: w.machine });
 const claude = (report: ImportReport) => toolTally(report, 'claude-code');
 const only = (): MemoryEntry => {
   const rows = liveRows(w.local);

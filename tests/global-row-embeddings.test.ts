@@ -15,6 +15,7 @@ import { loadEmbeddingIndex } from '../src/store/vector-index.js';
 import { isEmbeddingAvailable } from '../src/embeddings/local.js';
 import { skipWithoutEmbeddings } from './_helpers/embedding-backend.js';
 import { resolveEmbeddingProvider } from '../src/embeddings/provider.js';
+import { loadConfig } from '../src/core/config.js';
 
 // docs/plans/2026-07-18-global-row-embeddings.md: rows written to the global
 // store by promote/share/autoShare/sync/import must enter that store's
@@ -55,7 +56,7 @@ async function embeddingIsFunctional(): Promise<boolean> {
   const probeRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-gre-probe-'));
   try {
     initStore(probeRoot);
-    const provider = resolveEmbeddingProvider(probeRoot);
+    const provider = resolveEmbeddingProvider(loadConfig(probeRoot).embeddings);
     const [vector] = await provider.embed(['embedding functional probe'], 'passage');
     _embeddingFunctional = Array.isArray(vector) && vector.length > 0;
   } finally {

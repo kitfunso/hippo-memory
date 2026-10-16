@@ -9,6 +9,7 @@ import { GitReadError, gitLsFilesAtHead } from '../src/learn/churn-git.js';
 import { resolveEmbeddingProvider } from '../src/embeddings/provider.js';
 import { createListener } from '../src/server/tls.js';
 import { parseSteps } from '../src/consolidate/trace.js';
+import { loadConfig } from '../src/core/config.js';
 
 const tmpDirs: string[] = [];
 const servers: http.Server[] = [];
@@ -86,7 +87,7 @@ describe('rethrown errors keep their cause', () => {
 
     it('keeps the transport error when the API port refuses the connection', async () => {
       process.env['OPENAI_API_KEY'] = 'test-key';
-      const provider = resolveEmbeddingProvider(embeddingRoot(await closedPort()));
+      const provider = resolveEmbeddingProvider(loadConfig(embeddingRoot(await closedPort())).embeddings);
       const err = await caught(() => provider.embed(['hello']));
       expect(err.message).toContain('embedding request to openai failed');
       expect(err.cause).toBeInstanceOf(Error);
@@ -95,7 +96,7 @@ describe('rethrown errors keep their cause', () => {
     it('keeps the parse error when a 200 answer is not JSON', async () => {
       process.env['OPENAI_API_KEY'] = 'test-key';
       const port = portOf(await listen((_req, res) => { res.writeHead(200); res.end('not json'); }));
-      const provider = resolveEmbeddingProvider(embeddingRoot(port));
+      const provider = resolveEmbeddingProvider(loadConfig(embeddingRoot(port)).embeddings);
       const err = await caught(() => provider.embed(['hello']));
       expect(err.message).toContain('returned invalid JSON');
       expect(err.cause).toBeInstanceOf(Error);
@@ -104,7 +105,7 @@ describe('rethrown errors keep their cause', () => {
 
     it('keeps the key out of the cause when the transport refuses the header', async () => {
       process.env['OPENAI_API_KEY'] = 'sk-test' + String.fromCharCode(10) + 'SECRETPART';
-      const provider = resolveEmbeddingProvider(embeddingRoot(await closedPort()));
+      const provider = resolveEmbeddingProvider(loadConfig(embeddingRoot(await closedPort())).embeddings);
       const err = await caught(() => provider.embed(['hello']));
       expect(err.cause).toBeInstanceOf(Error);
       expect(inspect(err, { depth: 5 })).not.toContain('SECRETPART');

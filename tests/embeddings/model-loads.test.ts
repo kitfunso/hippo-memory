@@ -7,6 +7,7 @@ import { createModelLoads, MODEL_LOAD_POLICY } from '../../src/embeddings/transf
 import { resolveEmbeddingProvider, type EmbeddingProvider } from '../../src/embeddings/provider.js';
 import { embedQueryBy } from '../../src/search/vector.js';
 import { resetLogOnce } from '../../src/util/log.js';
+import { loadConfig } from '../../src/core/config.js';
 
 type Pipe = (input: string) => Promise<{ data: number[] }>;
 type PipelineFn = (task: string, model: string) => Promise<Pipe>;
@@ -22,7 +23,7 @@ const MODEL = 'test/model';
 /** A local provider over a stand-in for the optional package, which these tests never install; each gets its own loads. */
 function localProvider(pipeline: PipelineFn, cacheDir: string): EmbeddingProvider {
   const transformers = { installed: () => true, load: async () => ({ name: '@huggingface/transformers', mod: { env: { cacheDir }, pipeline } }) };
-  return resolveEmbeddingProvider(tempDir(), { provider: 'local', model: MODEL, transformers });
+  return resolveEmbeddingProvider(loadConfig(tempDir()).embeddings, { provider: 'local', model: MODEL, transformers });
 }
 
 interface Deferred<T> {

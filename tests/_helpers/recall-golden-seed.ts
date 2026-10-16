@@ -12,7 +12,8 @@ import { pushGoal } from '../../src/store/goals.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { appendSessionEvent, saveActiveTaskSnapshot } from '../../src/store/sessions.js';
 import { saveSessionHandoff } from '../../src/store/handoffs.js';
-import { closePrediction, savePrediction } from '../../src/store/predictions.js';
+import { closePrediction } from '../../src/store/predictions.js';
+import { savePrediction } from './save-prediction.js';
 import type { RecallResult } from '../../src/api/index.js';
 import { flushStatsMirrors } from '../../src/store/mirrors.js';
 

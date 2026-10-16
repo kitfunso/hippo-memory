@@ -2,6 +2,7 @@
 
 import * as customerNotesModule from '../objects/customer-notes.js';
 import { stringFlag } from './flag-values.js';
+import { loadConfig } from '../core/config.js';
 import type { Objects } from '../store/port.js';
 import { requiredText, versionedVerbs, type VersionedKind } from './versioned-verbs.js';
 
@@ -31,9 +32,12 @@ const noteKind = (
   bodyRequired: '--text "<note>"',
   body: (flags) => requiredText(flags, 'text'),
   keyOf: (n) => n.customer,
-  save: (customer, note, extraTags, from) => customerNotesModule.saveCustomerNote(objects, hippoRoot, tenantId, {
-    customer, note, extraTags, changeSummary: from?.changeSummary, supersedesNoteId: from?.id,
-  }),
+  save: (customer, note, extraTags, from) => {
+    const { defaultHalfLifeDays } = loadConfig(hippoRoot);
+    return customerNotesModule.saveCustomerNote(objects, defaultHalfLifeDays, tenantId, {
+      customer, note, extraTags, changeSummary: from?.changeSummary, supersedesNoteId: from?.id,
+    });
+  },
   recorded: (n) => `Customer note recorded: #${n.id} (v${n.version}) for customer "${n.customer}"`,
   list: (opts, flags) =>
     customerNotesModule.loadCustomerNotes(objects, tenantId, {

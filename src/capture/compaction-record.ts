@@ -12,6 +12,7 @@ import {
   type ReplayOptions,
   type ReplaySources,
 } from '../store/compactions-record.js';
+import { loadConfig } from '../core/config.js';
 import { resolveTenantId } from '../store/tenant.js';
 import { maskEmails, redactSecretsStrict } from '../util/secret-detect.js';
 import { errorFields, errorMessage, reportCompactionFailure } from '../util/log.js';
@@ -94,7 +95,8 @@ export function saveCompaction(hippoRoot: string, payload: PostCompactPayload, l
   const { found, ...text } = readCompactionText(payload.compactSummary);
   if (!found) log('no memories section');
 
-  const { result, spoolReason } = saveCompactionAt(hippoRoot, payload, text, at, log);
+  const { defaultHalfLifeDays } = loadConfig(hippoRoot);
+  const { result, spoolReason } = saveCompactionAt(hippoRoot, payload, text, at, log, defaultHalfLifeDays);
   if (spoolReason !== null) spoolSummary(hippoRoot, payload, text, at, spoolReason, result, log);
   return result;
 }
@@ -160,6 +162,10 @@ function replaySources(hippoRoot: string, log: Log): ReplaySources {
 }
 
 /** For `hippo sleep` and post-compact: finishes what a killed hook or a busy store left, never throws. */
-export function replayCompactionsAt(hippoRoot: string, log: Log, opts: ReplayOptions = {}): number {
-  return replayStoredCompactions(hippoRoot, replaySources(hippoRoot, log), log, opts);
+export function replayCompactionsAt(
+  hippoRoot: string, log: Log, opts: Omit<ReplayOptions, 'baseHalfLifeDays'> = {},
+): number {
+  return replayStoredCompactions(hippoRoot, replaySources(hippoRoot, log), log, {
+    ...opts, baseHalfLifeDays: loadConfig(hippoRoot).defaultHalfLifeDays,
+  });
 }

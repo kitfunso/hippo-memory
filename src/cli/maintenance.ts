@@ -200,7 +200,7 @@ function readyEmbedProvider(root: string, given?: EmbeddingProvider): EmbeddingP
   // Embedding (unlike status/reset) needs an available provider.
   const embedProvider = given ?? (() => {
     try {
-      return resolveEmbeddingProvider(root);
+      return resolveEmbeddingProvider(loadConfig(root).embeddings);
     } catch (err) {
       printError(errorMessage(err));
       return null;

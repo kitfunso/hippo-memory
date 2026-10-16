@@ -27,7 +27,7 @@ function sleepLlm(run: SleepRun, fetcher: typeof fetch | undefined) {
 
 type SleepLlm = ReturnType<typeof sleepLlm>;
 
-const dagStore = (run: SleepRun) => ({ hippoRoot: run.hippoRoot, consolidation: run.store });
+const dagStore = (run: SleepRun) => ({ consolidation: run.store });
 
 export async function llmPasses(run: SleepRun, fetcher: typeof fetch | undefined): Promise<void> {
   // 1.6. Batch extraction — extract facts from episodic memories missing them
@@ -71,7 +71,7 @@ async function extractionPass(run: SleepRun, llm: SleepLlm, batch: readonly Memo
     try {
       const facts = await extractFacts(candidate.content, { ...llm.llmOpts, onError });
       if (facts.length > 0) {
-        extractedCount += storeExtractedFacts(run.hippoRoot, candidate, facts).length;
+        extractedCount += storeExtractedFacts(run.hippoRoot, candidate, facts, run.config.defaultHalfLifeDays).length;
       }
     } catch (err) {
       report(errorMessage(err));
@@ -98,7 +98,9 @@ async function dagBuildPass(run: SleepRun, { apiKey, llmError, llmOpts }: SleepL
   if (!(apiKey && extractedFacts.length >= 3 && !run.dryRun)) return;
   try {
     const { buildDag } = await import('./dag.js');
-    const dagResult = await buildDag(dagStore(run), extractedFacts, { ...llmOpts, onError: llmError('dag') });
+    const dagResult = await buildDag(dagStore(run), extractedFacts, {
+      ...llmOpts, onError: llmError('dag'), baseHalfLifeDays: run.config.defaultHalfLifeDays,
+    });
     run.result.dagCandidateClusters = dagResult.candidateClusters;
     run.result.dagSummariesCreated = dagResult.summariesCreated;
     if (dagResult.summariesCreated > 0) {
@@ -163,6 +165,7 @@ async function entityProfilePass(run: SleepRun, { llmError, llmOpts }: SleepLlm)
       const profileResult = await buildEntityProfiles(dagStore(run), l2Summaries, {
         ...llmOpts,
         onError: llmError('dag profiles'),
+        baseHalfLifeDays: run.config.defaultHalfLifeDays,
       });
       run.result.entityProfilesCreated = profileResult.profilesCreated;
       if (profileResult.profilesCreated > 0) {

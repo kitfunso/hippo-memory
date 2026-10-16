@@ -9,7 +9,7 @@ import type { LoadedRows } from '../store/delete-and-batch.js';
 import type { AppendAuditOpts } from '../store/audit.js';
 import type { Consolidation, LocalFiles } from '../store/port.js';
 import { sqliteSyncStore } from '../store/sqlite/store.js';
-import { loadConfig } from '../core/config.js';
+import { type HippoConfig, loadConfig } from '../core/config.js';
 import { migrateDefaultHalfLife } from './half-life-migration.js';
 import { errorFields, errorMessage, log } from '../util/log.js';
 import { WRITE_BUDGET, type WriteBudget } from '../util/write-budget.js';
@@ -23,25 +23,30 @@ import { llmPasses } from './llm-passes.js';
 import { physicsPass } from './physics-pass.js';
 import { DAY_MS } from '../util/time.js';
 
-type ConsolidateOptions = { dryRun?: boolean; now?: Date; fetcher?: typeof fetch; budget?: WriteBudget };
+type ConsolidateOptions = {
+  dryRun?: boolean; now?: Date; fetcher?: typeof fetch; budget?: WriteBudget;
+  /** The caller's config for `hippoRoot`; absent, `consolidate` reads the store's config.json. */
+  config?: HippoConfig;
+};
 
 /**
  * Run a full consolidation pass on the hippo.db under `hippoRoot`.
  */
 export async function consolidate(hippoRoot: string, options: ConsolidateOptions = {}): Promise<ConsolidationResult> {
-  return runConsolidation(sqliteSyncStore(hippoRoot).localFiles, options);
+  const config = options.config ?? loadConfig(hippoRoot);
+  return runConsolidation(sqliteSyncStore(hippoRoot).localFiles, { ...options, config });
 }
 
 /** A full consolidation pass whose store work goes through `local.consolidation`. */
 export async function runConsolidation(
   local: LocalFiles,
-  options: ConsolidateOptions = {},
+  options: ConsolidateOptions & { config: HippoConfig },
 ): Promise<ConsolidationResult> {
   const { hippoRoot, consolidation: store } = local;
   const now = options.now ?? evalNow(); // honors HIPPO_FAKE_NOW (eval-only; see ablation.ts)
   const dryRun = options.dryRun ?? false;
   const result = newConsolidationResult(dryRun);
-  const halfLife = migrateHalfLives(local, dryRun, result);
+  const halfLife = migrateHalfLives(local, options.config.defaultHalfLifeDays, dryRun, result);
   syncFtsIndex(store, dryRun, result);
 
   // Host-wide by design: per-tenant filtering would mean N runs per host and no cross-tenant dedup.
@@ -52,7 +57,7 @@ export async function runConsolidation(
   // Retirable: auto-deletable (never pinned, raw or kept for good) and not backing a first-class object.
   const retirable = (entry: MemoryEntry): boolean => canAutoDelete(entry) && !backingObjects.has(entry.id);
 
-  const config = loadConfig(hippoRoot);
+  const { config } = options;
   const decayOpts = sessionDecayOptions(store, config);
 
   const run: SleepRun = {
@@ -112,10 +117,10 @@ async function runPassesAfterDecay(run: SleepRun, fetcher: typeof fetch | undefi
 // so this pass decays them at the new one (src/consolidate/half-life-migration.ts).
 function migrateHalfLives(
   local: LocalFiles,
+  to: number,
   dryRun: boolean,
   result: ConsolidationResult,
 ): ReturnType<typeof migrateDefaultHalfLife> {
-  const to = loadConfig(local.hippoRoot).defaultHalfLifeDays;
   const halfLife = migrateDefaultHalfLife(local.consolidation, to, { dryRun });
   if (halfLife.rescaled > 0) {
     result.details.push(

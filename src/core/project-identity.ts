@@ -51,7 +51,8 @@ export function clearProjectIdentityCache(): void {
   remoteSwitch = null;
 }
 
-// The global store's config only: a per-store switch would stamp one checkout two ways.
+// The global store's config only: a per-store switch would stamp one checkout two ways. Read here and cached, since
+// the published resolveProjectIdentity has callers in every layer and none holds a config.
 function remoteRuleOn(): boolean {
   const globalRoot = resolveGlobalRootDir();
   if (remoteSwitch?.globalRoot !== globalRoot) {

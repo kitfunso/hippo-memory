@@ -12,6 +12,7 @@ import { getReranker } from '../src/rerankers/index.js';
 import { createJevReranker } from '../src/rerankers/jev.js';
 import { resolveEmbeddingProvider } from '../src/embeddings/provider.js';
 import type { JsonValue } from '../src/util/json.js';
+import { loadConfig } from '../src/core/config.js';
 
 const SECRET = 'AKIA' + 'Q7'.repeat(8);
 // Bearer and JWT shapes only the strict redaction catches; a path on the store redaction would leak them.
@@ -93,7 +94,7 @@ describe('secret redaction before memory text leaves the box', () => {
     process.env.OPENAI_API_KEY = 'test-' + 'k'.repeat(8);
     writeFileSync(join(root, 'config.json'), JSON.stringify({ embeddings: { provider: 'openai' } }));
     vi.stubGlobal('fetch', capture({ data: [{ embedding: [1, 0] }] }));
-    await resolveEmbeddingProvider(root).embed([TEXT], 'passage');
+    await resolveEmbeddingProvider(loadConfig(root).embeddings).embed([TEXT], 'passage');
     expectScrubbed();
   });
 });
