@@ -11,7 +11,7 @@ import { sqliteStore } from '../src/store/sqlite/store.js';
 import { workerSqliteStore } from '../src/store/sqlite/worker-store.js';
 import type { JsonValue } from '../src/util/json.js';
 import { log } from '../src/util/log.js';
-import { V1_ROWS } from './_helpers/v1-route-rows.js';
+import { OBJECT_ROW, V1_ROWS } from './_helpers/v1-route-rows.js';
 import { entryMirrorFiles } from './_helpers/entry-mirror-files.js';
 import { loadExtractionQueue } from './_helpers/graph-queue.js';
 import { auditRows, get, holdWriteLock, keyFor, mirrorFiles, newRoot, onDb, patientStore, postText, scrub, seen, start, undoAll } from './_helpers/store-worker-server.js';
@@ -21,7 +21,7 @@ afterEach(undoAll);
 const REFUSED = 'the decision a person rejected';
 const BLOCKED_LINE = 'opened on the server thread by a route';
 
-/** A row of the objects group left on the server thread on purpose, by its label; each needs its reason beside it. */
+/** An object route left on the server thread on purpose, by its label; each needs its reason beside it. */
 const ON_LOOP: readonly string[] = [];
 
 interface ObjectRoute {
@@ -30,10 +30,10 @@ interface ObjectRoute {
   readonly offLoop: boolean;
 }
 
-/** Every V1_ROUTES row that names the objects group, in table order, read from the live table. */
+/** Every V1_ROUTES row under an object kind's path, in table order, read from the live table. */
 function objectRoutes(): ObjectRoute[] {
   return V1_ROWS
-    .filter(({ route }) => route.storeReady === 'objects')
+    .filter(({ key }) => OBJECT_ROW.test(key))
     .map(({ key, route }) => ({ label: key, offLoop: route.loop === 'off' }));
 }
 
@@ -267,7 +267,7 @@ describe('the server-thread block of the object routes', () => {
   const blockedLines = (info: { readonly mock: { readonly calls: ReadonlyArray<readonly unknown[]> } }): string[] =>
     info.mock.calls.map((call) => String(call[0])).filter((line) => line.includes(BLOCKED_LINE));
 
-  it("marks every row of the objects group `loop: 'off'`, and this file sends a request to each", () => {
+  it("marks every object route `loop: 'off'`, and this file sends a request to each", () => {
     const routes = objectRoutes();
 
     expect(routes.filter((route) => !route.offLoop).map((route) => route.label)).toEqual(ON_LOOP);

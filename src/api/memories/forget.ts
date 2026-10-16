@@ -2,7 +2,7 @@
 
 import { BadRequestError, NotFoundError } from '../../core/api-errors.js';
 import { rejectValue, unrejectValue, type RejectFlowResult } from '../../trust/reject-flow.js';
-import { requireHostAdmin, type Context, type ContextWith, type StoreContext } from '../types.js';
+import { requireHostAdmin, type Context, type StoreContext } from '../types.js';
 import { getMemory } from './memories.js';
 import { canTouchScope, personalScopeOf } from '../../core/recall-scope.js';
 
@@ -12,7 +12,7 @@ export interface ForgetResult {
   ok: true;
   id: string;
 }
-export async function forget(ctx: ContextWith<'entryWrites'>, id: string): Promise<ForgetResult> {
+export async function forget(ctx: StoreContext, id: string): Promise<ForgetResult> {
   const entryWrites = ctx.store.entryWrites;
   await entryWrites.forget({
     tenantId: ctx.tenantId,

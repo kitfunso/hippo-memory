@@ -9,7 +9,7 @@ A file imports only from its own layer or a lower one. `layers.json` is the map 
 
 ### Async port
 
-node:sqlite is synchronous, and the store port is async so another store can do I/O. Every api function is async and reaches the store through `storeFor(ctx)`, with or without `ctx.store`. `sqliteStore` runs each method's synchronous body when it is called and resolves the result, so an api function's first store call has run by the time the function returns. A store group the store lacks gives `StoreNotPortedError`, a 501. The last recall and its trace sit in the optional `lastRecall` group, which only the sqlite stores have. `scripts/check-floating-api.mjs` fails on any call to an api write function whose Promise nothing awaits.
+node:sqlite is synchronous, and the store port is async so another store can do I/O. Every api function is async and reaches the store through `storeFor(ctx)`, with or without `ctx.store`. `sqliteStore` runs each method's synchronous body when it is called and resolves the result, so an api function's first store call has run by the time the function returns. Every store group is required except `localFiles`, `vectorViews`, `readiness` and `lastRecall`; a path that needs one of those four on a store without it gives `StoreNotPortedError`, a 501. The last recall and its trace sit in the optional `lastRecall` group, which only the sqlite stores have. `scripts/check-floating-api.mjs` fails on any call to an api write function whose Promise nothing awaits.
 
 ### What lives in src/store
 

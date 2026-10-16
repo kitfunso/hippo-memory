@@ -2,7 +2,7 @@
   "openersOutside": 0,
   "openersInCli": 0,
   "storeBranches": 0,
-  "routesWithoutStore": 0,
+  "routesNeedingHippoDb": 2,
   "sqliteOnlyRoutes": 0,
   "routesOnLoop": 12,
   "twinFunctions": 0,

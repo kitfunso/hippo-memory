@@ -1,6 +1,6 @@
 # Upgrading to 3.0
 
-hippo 3.0 removes names that 2.1 marked `@deprecated`. Nothing else changes: an entry keeps its field names, hippo.db keeps its columns and files on disk keep their format. HTTP and MCP answers keep their shape.
+hippo 3.0 removes names that 2.1 marked `@deprecated`, and a store you build on `hippo-memory/store-kit` must set every store group but four. Nothing else changes: an entry keeps its field names, hippo.db keeps its columns and files on disk keep their format. HTTP and MCP answers keep their shape.
 
 | Removed in 3.0 | Use instead |
 | --- | --- |
@@ -8,3 +8,6 @@ hippo 3.0 removes names that 2.1 marked `@deprecated`. Nothing else changes: an 
 | The snake_case option keys of `createMemory`: `emotional_valence`, `schema_fit`, `trace_outcome`, `source_session_id`, `valid_from`, `extracted_from`, `dag_level`, `dag_parent_id` and `artifact_ref`. | The camelCase keys 2.1 added: `emotionalValence`, `schemaFit`, `traceOutcome`, `sourceSessionId`, `validFrom`, `extractedFrom`, `dagLevel`, `dagParentId` and `artifactRef`. A snake_case key is now a type error and is ignored at run time. The entry that comes back keeps its snake_case field names. |
 | `physicsSearch` on the package root. | `physicsSearch` from `hippo-memory/store-kit`, with the same signature. To rank recall by physics without calling it, set `physics.enabled` to `'auto'` or `true` in config. |
 | `loadAllEntries` needs the tenant id. | Pass `tenantId`: `loadAllEntries(hippoRoot, tenantId)`. Omitting it used to return every tenant's rows; it is now a type error. |
+| A `HippoStore` could leave any store group unset, and each route or MCP tool that named a missing group answered 501. | Set every group. Only `localFiles`, `vectorViews`, `readiness` and `lastRecall` may stay unset; a store without any other group is now a type error. A store that serves only some groups can spread `sqliteStore(hippoRoot)` and replace the groups it serves: under `serve()` the rest reach a fenced hippo.db and answer 501 `store_not_ported`, as before. A route or tool that needs one of the four optional groups still answers 501 on a store without it. |
+| `narrowStore`, `StoreWith<G>` and `ContextWith<G>` from `hippo-memory/store-kit`. | `HippoStore` in place of `StoreWith<G>`, and `StoreContext` (now exported from `hippo-memory/store-kit`) in place of `ContextWith<G>`. Drop each `narrowStore` call: every required group is already set. For one of the four optional groups, call `requireGroup(store, group)`, which returns the group or throws `StoreNotPortedError`, a 501. |
+| An add-on route's `storeReady` gated the route on any store group. | Name one of the four optional groups, or `base`. A required group is always set, so naming one gates nothing. Unset, `storeReady` still means `localFiles`, so the route answers 501 on any store but hippo.db. |

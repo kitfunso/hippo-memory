@@ -10,7 +10,7 @@ import {
 } from '../../src/entry/store-kit.js';
 import { selectAllEntries } from '../../src/store/entry-reads.js';
 import { passesSpec, type FilterRow } from './in-memory-vector-store.js';
-import { portOnlyStoreWithoutVectorReads } from './port-only-store.js';
+import { portOnlyStore } from './port-only-store.js';
 import type { StoreSide } from './store-conformance.js';
 
 export interface InMemoryVectorWritesStore extends StoreSide {
@@ -113,7 +113,7 @@ export function inMemoryVectorWritesStore(hippoRoot: string): InMemoryVectorWrit
     },
   };
   const store: InMemoryVectorWritesStore['store'] = {
-    ...portOnlyStoreWithoutVectorReads(hippoRoot),
+    ...portOnlyStore(hippoRoot),
     kind: 'in-memory',
     vectors: vectorReads,
     vectorWrites,

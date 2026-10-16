@@ -14,7 +14,6 @@ import { writeEntry } from '../src/store/entry-writes.js';
 import { predictionMirror } from '../src/store/predictions.js';
 import { inMemoryDagReadsStore } from './_helpers/in-memory-dag-reads-store.js';
 import { inMemoryPredictionsStore } from './_helpers/in-memory-predictions-store.js';
-import { portOnlyStore } from './_helpers/port-only-store.js';
 import { CLEARED_ENV, seeded } from './_helpers/recall-golden-seed.js';
 import { seedTwoTenants, TENANT_A, TENANT_B, type TwoTenantFixture } from './_helpers/store-conformance.js';
 
@@ -42,9 +41,6 @@ const ctxOn = (kind: string): McpContext => ({
   store: storeOfKind(kind),
 });
 
-// An add-on store built before the contextReads group.
-const ctxWithoutContextReads = (): McpContext => ({ hippoRoot: root, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true, store: portOnlyStore(root) });
-
 function listedNames(res: McpResponse | null): string[] {
   // SAFETY: src/mcp/request.ts answers tools/list with { tools: McpToolDefinition[] }.
   const result = res?.result as { tools: { name: string }[] } | undefined;
@@ -53,24 +49,14 @@ function listedNames(res: McpResponse | null): string[] {
 
 const declared = TOOLS.map((t) => t.name);
 const notPorted = { jsonrpc: '2.0', id: 1, error: { code: -32603, message: STORE_NOT_PORTED_MESSAGE } };
-// The stub carries every group sqliteStore sets, so the tools that name one run on it.
+// The stub lacks only the local files, so every tool but the two that need them runs on it.
 const READY = ['hippo_recall', 'hippo_assemble', 'hippo_drill', 'hippo_predict_baserate', 'hippo_remember', 'hippo_outcome', 'hippo_context', 'hippo_learn', 'hippo_status', 'hippo_conflicts', 'hippo_resolve'];
 const ready = declared.filter((name) => READY.includes(name));
 
 describe('store-ready MCP tools', () => {
-  it('tools/list under another store lists only the tools that name a group it has', async () => {
+  it('tools/list under another store lists only the tools whose optional group it has', async () => {
     const res = await handleMcpRequest({ jsonrpc: '2.0', id: 1, method: 'tools/list' }, ctxOn('stub'));
     expect(listedNames(res)).toEqual(ready);
-  });
-
-  it('tools/list under a store without contextReads leaves hippo_context out, and a call to it answers store_not_ported', async () => {
-    const listed = await handleMcpRequest({ jsonrpc: '2.0', id: 1, method: 'tools/list' }, ctxWithoutContextReads());
-    expect(listedNames(listed)).toEqual(['hippo_recall']);
-    const called = await handleMcpRequest(
-      { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_context', arguments: {} } }, ctxWithoutContextReads(),
-    );
-    expect(called).toEqual(notPorted);
-    expect(readdirSync(root)).toEqual([]);
   });
 
   it.each([['the sqlite store', 'sqlite'], ['stdio, which brings no context for a list', undefined]] as const)('tools/list on %s lists every tool', async (_name, kind) => {

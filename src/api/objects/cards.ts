@@ -4,9 +4,9 @@ import type { Card, CardComment, CardRun, CardStatus } from '../../core/card.js'
 import type { HandoffOutcome } from '../../core/handoff.js';
 import type { CardDetail } from '../../store/card-detail.js';
 import type { CardCreate } from '../../store/index.js';
-import type { ContextWith } from '../types.js';
+import type { StoreContext } from '../types.js';
 
-type Ctx = ContextWith<'cards'>;
+type Ctx = StoreContext;
 
 /** Create a card in the caller's tenant. Throws on an empty title or an unknown dependency. */
 export function cardCreate(ctx: Ctx, input: CardCreate): Promise<Card> {

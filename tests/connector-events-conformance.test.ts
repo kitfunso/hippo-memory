@@ -7,7 +7,6 @@ import { join } from 'node:path';
 import { closeHippoDb, openHippoDb, withSqliteBlocked } from '../src/db/index.js';
 import type { MemoryEntry } from '../src/core/memory.js';
 import type { AuditEvent } from '../src/entry/store-kit.js';
-import { requireGroup } from '../src/store/index.js';
 import { markGitHubEventSeen, type GitHubRouting } from '../src/store/connectors/github.js';
 import { markSlackEventSeen, upsertSlackWorkspace, type SlackTeamRoute } from '../src/store/connectors/slack.js';
 import { writeEntry } from '../src/store/entry-writes.js';
@@ -91,7 +90,7 @@ function copyOfFixture(prepare: (root: string) => void): string {
 }
 
 async function runSide(side: ConnectorEventsSide, calls: readonly Call[], guard: <T>(fn: () => T) => T): Promise<Side> {
-  const group = requireGroup(side.store, 'connectorEvents');
+  const group = side.store.connectorEvents;
   const outcomes: Outcome<Value>[] = [];
   for (const call of calls) outcomes.push(await outcomeOf(() => guard(() => call(group, side.store))));
   await side.store.close();
@@ -115,7 +114,7 @@ const target = (event: ConnectorEvent, artifactRef: string, tenantId: string): C
 const archive = (event: ReturnType<typeof github>, artifactRef: string): Call =>
   (g) => g.archiveDeletedArtifact({ tenantId: TENANT_A, actor: ACTOR, artifactRef, reason: REASON, event });
 const park = (letter: ConnectorDeadLetter): Call => (g) => g.parkDeadLetter(letter);
-const writeRaw = (entry: MemoryEntry): Call => (_g, store) => requireGroup(store, 'connectorWrites').writeConnectorEntry({ entry, actor: ACTOR });
+const writeRaw = (entry: MemoryEntry): Call => (_g, store) => store.connectorWrites.writeConnectorEntry({ entry, actor: ACTOR });
 const readBack = (tenantId: string, ...ids: string[]): Call =>
   async (_g, store) => (await store.entriesByIds(ids, tenantId)).map((e) => ({ id: e.id, tenant_id: e.tenant_id, kind: e.kind }));
 const values = (side: Side): unknown[] => side.outcomes.map((o) => ('value' in o ? o.value : o));

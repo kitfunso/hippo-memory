@@ -5,17 +5,14 @@ import { cpSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } fr
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
-  authCreate, authCreateSelf, authListRows, narrowContext,
-  type AuthCreateResult, type AuthCreateSelfResult,
+  authCreate, authCreateSelf, authListRows,
+  type AuthCreateResult,
 } from '../src/api/index.js';
-import { verifyApiKeyCached, type ApiKeyListItem, type ApiKeyListRow } from '../src/store/auth.js';
+import { verifyApiKeyCached, type ApiKeyListItem } from '../src/store/auth.js';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
-import { StoreNotPortedError } from '../src/util/sqlite-blocked.js';
-import { STORE_NOT_PORTED_MESSAGE } from '../src/util/http-util.js';
 import { serve, type Actor, type ServerHandle } from '../src/server.js';
 import { OTHER_STORE_MARKER, sqliteStore } from '../src/entry/store-kit.js';
 import { inMemoryKeyWritesStore, OWNER, seedOwnedKeys, type OwnedKeys } from './_helpers/in-memory-key-writes-store.js';
-import { portOnlyStoreWithoutVectorReads } from './_helpers/port-only-store.js';
 import { seedTwoTenants, TENANT_A, type TwoTenantFixture } from './_helpers/store-conformance.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 
@@ -114,23 +111,6 @@ describe('authCreate and authCreateSelf with ctx.store', () => {
     expect(readdirSync(hippoRoot)).toEqual([OTHER_STORE_MARKER]);
   });
 
-  it('rejects with StoreNotPortedError on a store without keyWrites, and touches neither hippo.db', async () => {
-    const storeRoot = copyOf();
-    const before = hippoDbState(storeRoot);
-    const ctx = { hippoRoot: markedFolder(), tenantId: TENANT_A, actor: admin, store: portOnlyStoreWithoutVectorReads(storeRoot) };
-    const calls: (() => Promise<AuthCreateResult | AuthCreateSelfResult | ApiKeyListRow[]>)[] = [
-      async () => authCreate(narrowContext(ctx, 'keyWrites'), { label: 'x' }),
-      async () => authCreateSelf(narrowContext({ ...ctx, actor: resolverMember }, 'keyWrites'), { ttlDays: 1, perSubject: 1 }),
-      async () => authListRows(narrowContext(ctx, 'keyWrites'), { active: false, limit: 5 }),
-    ];
-    for (const call of calls) {
-      await expect(call()).rejects.toThrow(StoreNotPortedError);
-      await expect(call()).rejects.toThrow("the 'port-only' store has no 'keyWrites' group");
-    }
-    expect(readdirSync(ctx.hippoRoot)).toEqual([OTHER_STORE_MARKER]);
-    expect(hippoDbState(storeRoot)).toEqual(before);
-  });
-
   it("an API-key admin's mint leaves no key when its audit row fails, on hippo.db's own store and with no store", async () => {
     const root = copyOf();
     breakAuditLog(root);
@@ -174,19 +154,6 @@ describe('POST and GET /v1/auth/keys under another store', () => {
     await handle?.stop();
     handle = undefined;
     vi.unstubAllEnvs();
-  });
-
-  it('answers 501 before the handler on a store without keyWrites, writes nothing, and a bad key is still a 401', async () => {
-    vi.stubEnv('HIPPO_V1_RPS', '0');
-    const root = copyOf();
-    const before = hippoDbState(root);
-    handle = await serve({ hippoRoot: root, port: 0, store: portOnlyStoreWithoutVectorReads(root) });
-    for (const send of [mintVia, listVia]) {
-      const res = await send(handle.url, fixture.tokens.adminA);
-      expect({ status: res.status, body: await res.json() }).toEqual({ status: 501, body: { error: STORE_NOT_PORTED_MESSAGE } });
-      expect((await send(handle.url, `${fixture.keys.adminA}.wrong`)).status).toBe(401);
-    }
-    expect(hippoDbState(root)).toEqual(before);
   });
 
   it('mints and lists through the store that has keyWrites, and the new key works at once', async () => {

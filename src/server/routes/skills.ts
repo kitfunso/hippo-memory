@@ -40,7 +40,7 @@ const skillRoutes: VersionedRouteConfig<'skill', SaveSkillOpts> = {
 // exportable instruction (no code exec).
 // GET /v1/skills/export renders ACTIVE skills as a markdown block for AGENTS.md or CLAUDE.md and is ordered before
 // /:id.
-export async function handleCreateSkill(rr: AuthedRouteRequest<'objects'>): Promise<void> {
+export async function handleCreateSkill(rr: AuthedRouteRequest): Promise<void> {
   const { ctx } = rr;
   const body = await parseJsonBody(rr.req, ctx);
   const skill = await saveFor(ctx, SKILL, {
@@ -51,26 +51,26 @@ export async function handleCreateSkill(rr: AuthedRouteRequest<'objects'>): Prom
   sendJson(rr.res, 201, { skill });
 }
 
-export function handleListSkills(rr: AuthedRouteRequest<'objects'>): Promise<void> {
+export function handleListSkills(rr: AuthedRouteRequest): Promise<void> {
   return listRoute(skillRoutes, rr);
 }
 
 // The export renderer: must precede the /:id GET (literal 'export' is
 // non-numeric so the /(\d+)/ route would not match it, but order it first).
-export async function handleExportSkills(rr: AuthedRouteRequest<'objects'>): Promise<void> {
+export async function handleExportSkills(rr: AuthedRouteRequest): Promise<void> {
   const { res, ctx } = rr;
   const markdown = await skillsMarkdown(objectsOf(ctx), ctx.tenantId);
   sendJson(res, 200, { markdown });
 }
 
-export function handleSupersedeSkill(rr: AuthedRouteRequest<'objects'>, match: RegExpMatchArray): Promise<void> {
+export function handleSupersedeSkill(rr: AuthedRouteRequest, match: RegExpMatchArray): Promise<void> {
   return supersedeRoute(skillRoutes, rr, match);
 }
 
-export function handleCloseSkill(rr: AuthedRouteRequest<'objects'>, match: RegExpMatchArray): Promise<void> {
+export function handleCloseSkill(rr: AuthedRouteRequest, match: RegExpMatchArray): Promise<void> {
   return closeRoute(skillRoutes, rr, match);
 }
 
-export function handleGetSkill(rr: AuthedRouteRequest<'objects'>, match: RegExpMatchArray): Promise<void> {
+export function handleGetSkill(rr: AuthedRouteRequest, match: RegExpMatchArray): Promise<void> {
   return getRoute(skillRoutes, rr, match);
 }

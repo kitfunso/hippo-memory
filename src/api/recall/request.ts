@@ -8,13 +8,13 @@ import {
   type PlanningFallacyDecision,
 } from '../../predictions/planning-fallacy.js';
 import { reportAuditWriteFailure, type AppendAuditOpts } from '../../store/audit.js';
-import type { HippoStore, LastRecallWrites } from '../../store/index.js';
+import { requireGroup, type HippoStore, type LastRecallWrites } from '../../store/index.js';
 import type { RecallTraceInput } from '../../store/recall-trace.js';
 import { type JsonValue, isJsonString } from '../../util/json.js';
 import { MAX_ID_LEN } from '../../util/limits.js';
 import { estimateTokens } from '../../util/token-text.js';
 import type { ContextOpts } from '../context-types.js';
-import { narrowContext, type Context, type StoreContext } from '../types.js';
+import type { Context, StoreContext } from '../types.js';
 import { rankRecall, type RankRecallResult } from './pipeline.js';
 import {
   callerOf,
@@ -345,5 +345,5 @@ function traceOf(
 // older trace; an empty one leaves the marker on the previous recall.
 function finishShown(ctx: StoreContext, writes: LastRecallWrites, marks: boolean): Promise<number | null | void> {
   if (!marks) return ctx.store.finishRecall(writes);
-  return narrowContext(ctx, 'lastRecall').store.lastRecall.finishRecall(writes, undefined);
+  return requireGroup(ctx.store, 'lastRecall').finishRecall(writes, undefined);
 }

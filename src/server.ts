@@ -17,27 +17,27 @@ import {
 } from './api/prompt-hook.js';
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from './core/api-errors.js';
 import { hasGroup } from './store/port.js';
-import { sqliteReach, withStoreGroups } from './store/sqlite/store.js';
+import { sqliteReach, withStore } from './store/sqlite/store.js';
 
 export { serve } from './server/boot.js';
 
 // An add-on hands in a Context with no store, so each entry that
 // needs one fills it with hippo.db under the Context's root.
 async function authCreate(ctx: Context, opts: AuthCreateOpts): Promise<AuthCreateResult> {
-  return createKey(withStoreGroups(ctx, 'keyWrites'), opts);
+  return createKey(withStore(ctx), opts);
 }
 async function authCreateSelf(ctx: Context, opts: AuthCreateSelfOpts): Promise<AuthCreateSelfResult> {
-  return createSelfKey(withStoreGroups(ctx, 'keyWrites'), opts);
+  return createSelfKey(withStore(ctx), opts);
 }
 async function authRevoke(ctx: Context, keyId: string): Promise<AuthRevokeResult> {
-  return revokeKey(withStoreGroups(ctx, 'keyAudit'), keyId);
+  return revokeKey(withStore(ctx), keyId);
 }
 async function promptHookContext(
   ctx: Context,
   req: PromptHookRequest,
   opts?: PromptHookOpts,
 ): ReturnType<typeof renderPromptHook> {
-  const filled = withStoreGroups(ctx, 'contextReads');
+  const filled = withStore(ctx);
   // Only hippo.db has a global store beside it; an add-on's own store reads as one project.
   const sqliteBacked = ctx.store === undefined || hasGroup(ctx.store, 'localFiles');
   const reach = ctx.reach ?? (sqliteBacked ? sqliteReach(ctx.hippoRoot, filled.store, opts?.sharedStore) : undefined);

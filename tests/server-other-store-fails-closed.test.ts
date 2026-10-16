@@ -1,41 +1,35 @@
-// Under a store other than hippo.db, a route not yet ported to it answers 501 and no request opens or creates hippo.db.
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { existsSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+// Under a store other than hippo.db, a route that needs hippo.db's local files answers 501 and no request opens or creates hippo.db.
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { existsSync, mkdtempSync, readdirSync, rmSync } from 'node:fs';
 import { randomBytes, scryptSync } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { closeHippoDb, openHippoDb, SqliteBlockedError } from '../src/db/index.js';
 import { STORE_BUSY_MESSAGE } from '../src/store/port.js';
-import { rethrowIfSqliteBlocked, StoreNotPortedError } from '../src/util/sqlite-blocked.js';
-import { mapApiError } from '../src/api/error-reply.js';
 import { STORE_NOT_PORTED_MESSAGE } from '../src/util/http-util.js';
 import { mcpErrorResponse, type McpRequest } from '../src/mcp/server.js';
+import { TOOLS } from '../src/mcp/tools.js';
 import { initStore } from '../src/store/open.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { sqliteStore, StoreBusyError, type ApiKeyRecord, type ContinuityKey, type HippoStore } from '../src/entry/store-kit.js';
-import { physicsSearch } from '../src/search/physics-search.js';
-import { requireVectorReads } from '../src/search/vector.js';
-import { loadEntriesByIds } from '../src/store/entry-reads.js';
-import { writeEntry } from '../src/store/entry-writes.js';
-import { V1_ROWS } from './_helpers/v1-route-rows.js';
-import { hashedVector, startHashedEmbeddings, type HashedEmbeddings } from './_helpers/hashed-embedding-server.js';
+import { OBJECT_ROW, V1_ROWS } from './_helpers/v1-route-rows.js';
 import { inMemoryGraphReadsStore, seedGraphRows, type SeededGraph } from './_helpers/in-memory-graph-reads-store.js';
 import { inMemoryObjectsStore, type InMemoryObjectsStore } from './_helpers/in-memory-objects-store.js';
 import { inMemoryPredictionsStore, type InMemoryPredictionsStore } from './_helpers/in-memory-predictions-store.js';
 import { HELD, heldAt, heldContent, inMemoryQuarantineStore, seedQuarantineRecords, type InMemoryQuarantineStore } from './_helpers/in-memory-quarantine-store.js';
-import { portOnlyStoreWithoutVectorReads } from './_helpers/port-only-store.js';
-import { seeded } from './_helpers/recall-golden-seed.js';
 import { seedTwoTenants, TENANT_A, type TwoTenantFixture } from './_helpers/store-conformance.js';
 
+/** A V1_ROWS key as a request line, each :param slot filled with 1. */
+const requestLine = (key: string): string => key.replace(/:\w+/g, '1');
 
-/** Every V1_ROUTES entry as 'METHOD /path' beside the group it names, each :param slot filled with 1. */
-function v1Routes(): { route: string; group: string | undefined }[] {
-  return V1_ROWS.map(({ key, route }) => ({ route: key.replace(/:\w+/g, '1'), group: route.storeReady }));
+/** The entries that need hippo.db's local files, which no store but hippo.db's has. */
+function localFileRoutes(): string[] {
+  return V1_ROWS.filter(({ route }) => route.storeReady === 'localFiles' || route.sqliteOnly !== undefined).map(({ key }) => requestLine(key));
 }
 
-/** The entries the stub store cannot run: no group named, or one besides 'base'. */
-function unportedV1Routes(): string[] {
-  return v1Routes().filter((r) => r.group !== 'base').map((r) => r.route);
+/** hippo.db's groups, each fenced by serve() for a 'stub' store so a handler reaching one answers 501, without the optional four. */
+function stubStore(root: string, base: Partial<HippoStore>): HippoStore {
+  return { ...sqliteStore(root), kind: 'stub', localFiles: undefined, vectorViews: undefined, readiness: undefined, lastRecall: undefined, ...base };
 }
 
 const rpc = (method: string, params?: McpRequest['params']): string => JSON.stringify({ jsonrpc: '2.0', id: 1, method, params });
@@ -75,8 +69,7 @@ describe('serve() under a store that is not hippo.db', () => {
     throw new Error('the stub store does not serve recall');
   };
   let addonRuns = 0;
-  const store: HippoStore = {
-    kind: 'stub',
+  const base: Partial<HippoStore> = {
     async findApiKey(keyId: string): Promise<ApiKeyRecord | null> {
       lookups.set(keyId, (lookups.get(keyId) ?? 0) + 1);
       if (keyId === busy.keyId) throw new StoreBusyError();
@@ -104,16 +97,18 @@ describe('serve() under a store that is not hippo.db', () => {
     recordTokens: unported,
     async close(): Promise<void> {},
   };
+  const post = async (path: string, key: TestKey) => fetch(`${handle.url}${path}`, { method: 'POST', headers: { ...bearer(key), 'content-type': 'application/json' }, body: '{}' });
 
   beforeAll(async () => {
     vi.stubEnv('HIPPO_V1_RPS', '0');
     vi.stubEnv('HIPPO_CALLER_RPS', '0');
     root = mkdtempSync(join(tmpdir(), 'hippo-other-store-'));
     handle = await serve({
-      hippoRoot: root, port: 0, store, routes: [
+      hippoRoot: root, port: 0, store: stubStore(root, base), routes: [
         { path: '/v1/x-addon', handler: async () => { addonRuns += 1; return {}; } },
         { path: '/v1/x-addon-base', storeReady: 'base', handler: async ({ ctx }) => ({ tenant: ctx.tenantId }) },
-        { path: '/v1/x-addon-keyaudit', storeReady: 'keyAudit', handler: async () => { addonRuns += 1; return {}; } },
+        { path: '/v1/x-addon-keyaudit', storeReady: 'keyAudit', handler: async ({ ctx }) => ({ tenant: ctx.tenantId }) },
+        { path: '/v1/x-addon-vectorviews', storeReady: 'vectorViews', handler: async () => { addonRuns += 1; return {}; } },
       ],
     });
   });
@@ -124,39 +119,41 @@ describe('serve() under a store that is not hippo.db', () => {
     rmSync(root, { recursive: true, force: true });
   });
 
-  it('answers 501 on every unported /v1 route and both connectors, and never runs the handler', async () => {
-    const routes = unportedV1Routes();
-    expect(routes).toEqual(expect.arrayContaining(['POST /v1/connectors/slack/events', 'POST /v1/connectors/github/events']));
-    expect(routes).toHaveLength(63);
+  it('answers 501 on the /v1 routes that need local files, and never runs the handler', async () => {
+    const routes = localFileRoutes();
+    expect(routes).toEqual(['POST /v1/memories/1/promote', 'POST /v1/sleep']);
     for (const route of routes) {
-      const [method, path] = route.split(' ');
-      const res = await fetch(`${handle.url}${path}`, {
-        method,
-        headers: { ...bearer(valid), 'content-type': 'application/json' },
-        body: method === 'GET' ? undefined : '{}',
-      });
-      expect({ route, status: res.status, body: await res.json() }).toEqual({
-        route,
-        status: 501,
-        body: { error: STORE_NOT_PORTED_MESSAGE },
-      });
+      const res = await post(route.split(' ')[1]!, valid);
+      expect({ route, status: res.status, body: await res.json() }).toEqual({ route, status: 501, body: { error: STORE_NOT_PORTED_MESSAGE } });
     }
   });
 
-  it('answers 501 on an add-on route and never runs its handler; a bad key is still a 401', async () => {
-    const send = async (key: TestKey) => fetch(`${handle.url}/v1/x-addon`, { method: 'POST', headers: { ...bearer(key), 'content-type': 'application/json' }, body: '{}' });
-    const res = await send(valid);
+  it('runs every other /v1 route, and each refuses the call or answers 501 at the fenced hippo.db', async () => {
+    const gated = new Set(localFileRoutes());
+    const replies = new Map<string, number>();
+    for (const route of V1_ROWS.map(({ key }) => requestLine(key)).filter((line) => !gated.has(line))) {
+      const [method, path] = route.split(' ');
+      const res = await fetch(`${handle.url}${path}`, { method, headers: { ...bearer(valid), 'content-type': 'application/json' }, body: method === 'GET' ? undefined : '{}' });
+      replies.set(route, res.status);
+    }
+    expect(replies.size).toBe(V1_ROWS.length - gated.size);
+    expect([...replies].filter(([, status]) => ![400, 401, 403, 404, 501].includes(status))).toEqual([]);
+  });
+
+  it('answers 501 on an add-on route that names no group, and never runs its handler; a bad key is still a 401', async () => {
+    const res = await post('/v1/x-addon', valid);
     expect({ status: res.status, body: await res.json() }).toEqual({ status: 501, body: { error: STORE_NOT_PORTED_MESSAGE } });
-    expect((await send(newKey())).status).toBe(401);
+    expect((await post('/v1/x-addon', newKey())).status).toBe(401);
     expect(addonRuns).toBe(0);
   });
 
-  it('runs an add-on route whose group the store has, and refuses one whose group it lacks', async () => {
-    const post = async (path: string, key: TestKey) => fetch(`${handle.url}${path}`, { method: 'POST', headers: { ...bearer(key), 'content-type': 'application/json' }, body: '{}' });
-    const ran = await post('/v1/x-addon-base', valid);
-    expect({ status: ran.status, body: await ran.json() }).toEqual({ status: 200, body: { tenant: valid.record.tenantId } });
+  it('runs an add-on route that names a required group, and refuses one whose optional group the store lacks', async () => {
+    for (const path of ['/v1/x-addon-base', '/v1/x-addon-keyaudit']) {
+      const ran = await post(path, valid);
+      expect({ path, status: ran.status, body: await ran.json() }).toEqual({ path, status: 200, body: { tenant: valid.record.tenantId } });
+    }
     expect((await post('/v1/x-addon-base', newKey())).status).toBe(401);
-    const refused = await post('/v1/x-addon-keyaudit', valid);
+    const refused = await post('/v1/x-addon-vectorviews', valid);
     expect({ status: refused.status, body: await refused.json() }).toEqual({ status: 501, body: { error: STORE_NOT_PORTED_MESSAGE } });
     expect(addonRuns).toBe(0);
   });
@@ -202,25 +199,22 @@ describe('serve() under a store that is not hippo.db', () => {
     expect({ status: res.status, body: await res.json() }).toEqual({ status: 501, body: { error: STORE_NOT_PORTED_MESSAGE } });
   });
 
-  it('POST /mcp lists only the store-ready tools and refuses the rest with store_not_ported', async () => {
-    const post = async (body: string): Promise<{ status: number; body: unknown }> => {
+  it('POST /mcp lists every tool but the two that need local files, and a call reaching hippo.db answers store_not_ported', async () => {
+    const postMcp = async (body: string): Promise<{ status: number; body: unknown }> => {
       // Another store is shared, and a shared store refuses hippo_recall from a caller that names no project.
       const headers = { ...bearer(valid), 'content-type': 'application/json', 'x-hippo-project': 'p' };
       const res = await fetch(`${handle.url}/mcp`, { method: 'POST', headers, body });
       return { status: res.status, body: await res.json() };
     };
-    const list = await post(rpc('tools/list'));
+    const list = await postMcp(rpc('tools/list'));
     expect(list.status).toBe(200);
+    const listed = TOOLS.map((t) => t.name).filter((name) => name !== 'hippo_share' && name !== 'hippo_peers');
     // SAFETY: a tools/list result carries a tools array of named definitions.
-    expect((list.body as { result: { tools: { name: string }[] } }).result.tools.map((t) => t.name)).toEqual(['hippo_recall']);
-    expect(await post(rpc('tools/call', { name: 'hippo_status', arguments: {} }))).toEqual({
-      status: 200,
-      body: { jsonrpc: '2.0', id: 1, error: { code: -32603, message: STORE_NOT_PORTED_MESSAGE } },
-    });
-    expect(await post(rpc('tools/call', { name: 'hippo_recall', arguments: { query: 'deploy' } }))).toEqual({
-      status: 200,
-      body: { jsonrpc: '2.0', id: 1, error: { code: -32603, message: STORE_NOT_PORTED_MESSAGE } },
-    });
+    expect((list.body as { result: { tools: { name: string }[] } }).result.tools.map((t) => t.name)).toEqual(listed);
+    const notPorted = { status: 200, body: { jsonrpc: '2.0', id: 1, error: { code: -32603, message: STORE_NOT_PORTED_MESSAGE } } };
+    for (const [name, args] of [['hippo_share', { id: 'mem_x' }], ['hippo_status', {}], ['hippo_recall', { query: 'deploy' }]] as const) {
+      expect({ name, ...(await postMcp(rpc('tools/call', { name, arguments: args }))) }).toEqual({ name, ...notPorted });
+    }
   });
 
   it('a SqliteBlockedError inside an MCP tool call answers store_not_ported, not an internal error', () => {
@@ -239,7 +233,7 @@ describe('serve() under a store that is not hippo.db', () => {
   it("asks the store for a key's row on every request, so a revoke written to that store is a 401 on the next one", async () => {
     const key = newKey();
     records.set(key.keyId, key.record);
-    const statusOf = async (): Promise<number> => (await fetch(`${handle.url}/v1/audit`, { headers: bearer(key) })).status;
+    const statusOf = async (): Promise<number> => (await post('/v1/sleep', key)).status;
     expect([await statusOf(), await statusOf()]).toEqual([501, 501]);
     expect(lookups.get(key.keyId)).toBe(2);
     records.set(key.keyId, { ...key.record, revokedAt: new Date().toISOString() });
@@ -552,7 +546,7 @@ describe('serve() under a store that has the objects group', () => {
     expect((await call(memberB, 'POST', '/v1/incidents/1/close', {})).status).toBe(404);
     expect(await call(memberA, 'POST', '/v1/incidents/1/close', {})).toMatchObject({ status: 200, body: { incident: { id: 1, status: 'closed' } } });
 
-    const ported = v1Routes().filter((r) => r.group === 'objects').map((r) => r.route);
+    const ported = V1_ROWS.filter(({ key }) => OBJECT_ROW.test(key)).map(({ key }) => requestLine(key));
     expect(ported).toHaveLength(38);
     expect([...answered].sort()).toEqual([...ported].sort());
     const actor = `api_key:${fixture.keys.memberA}`;
@@ -576,8 +570,7 @@ describe('serve() under another store reads its folder as shared, though no conf
   const notRead = async (): Promise<never> => {
     throw new Error('this recall reads nothing else');
   };
-  const store: HippoStore = {
-    kind: 'stub',
+  const base: Partial<HippoStore> = {
     findApiKey: async (keyId) => (keyId === alice.keyId ? { ...alice.record, ownerSubject: 'alice' } : null),
     searchRecallEntries: async () => [],
     entriesByIds: notRead,
@@ -601,7 +594,7 @@ describe('serve() under another store reads its folder as shared, though no conf
     vi.stubEnv('HIPPO_V1_RPS', '0');
     vi.stubEnv('HIPPO_CALLER_RPS', '0');
     root = mkdtempSync(join(tmpdir(), 'hippo-other-store-shared-'));
-    handle = await serve({ hippoRoot: root, port: 0, store });
+    handle = await serve({ hippoRoot: root, port: 0, store: stubStore(root, base) });
   });
 
   afterAll(async () => {
@@ -623,94 +616,6 @@ describe('serve() under another store reads its folder as shared, though no conf
     expect(res.status).toBe(200);
     expect(keys.at(-1)).toEqual({ owner: 'alice', project: [] });
     expect(await res.json()).toMatchObject({ continuity: { activeSnapshot: null, sessionHandoff: null, recentSessionEvents: [] } });
-  });
-});
-
-describe('a store without the vector reads, under an embedding provider', () => {
-  let root: string;
-  let handle: ServerHandle;
-  let embeddings: HashedEmbeddings;
-  let store: HippoStore;
-
-  beforeAll(async () => {
-    embeddings = await startHashedEmbeddings();
-    root = mkdtempSync(join(tmpdir(), 'hippo-no-vector-reads-'));
-    initStore(root);
-    writeEntry(root, seeded('deploy the api with a blue green rollout', 'mem_deploy', '2026-01-02T00:00:00.000Z'));
-    const embeddingsConfig = { provider: 'openai', model: 'hashed-16', apiBaseUrl: embeddings.url };
-    writeFileSync(join(root, 'config.json'), JSON.stringify({ embeddings: embeddingsConfig, physics: { enabled: true } }));
-    store = portOnlyStoreWithoutVectorReads(root);
-    handle = await serve({ hippoRoot: root, port: 0, store });
-  });
-
-  beforeEach(() => {
-    vi.stubEnv('HIPPO_V1_RPS', '0');
-    vi.stubEnv('HIPPO_CALLER_RPS', '0');
-    vi.stubEnv('HIPPO_HOME', join(root, 'no-global-store'));
-    vi.stubEnv('OPENAI_API_KEY', 'test-key-not-secret');
-  });
-
-  afterEach(() => {
-    vi.unstubAllEnvs();
-  });
-
-  afterAll(async () => {
-    await handle.stop();
-    await embeddings.close();
-    rmSync(root, { recursive: true, force: true });
-  });
-
-  const auditRowCount = (): number => {
-    const db = openHippoDb(root);
-    try {
-      // SAFETY: COUNT(*) AS n is the only column selected.
-      return (db.prepare('SELECT COUNT(*) AS n FROM audit_log').get() as { n: number }).n;
-    } finally {
-      closeHippoDb(db);
-    }
-  };
-
-  it('GET /v1/memories in hybrid and physics mode answers 501 store_not_ported, embeds nothing and writes no audit row', async () => {
-    expect(store.vectors).toBeUndefined();
-    const before = auditRowCount();
-    for (const mode of ['hybrid', 'physics']) {
-      // With no session_id the route owes a recall_anchor_skipped_no_session row; a recall that fails writes none.
-      for (const session of ['', '&session_id=s1']) {
-        const res = await fetch(`${handle.url}/v1/memories?q=deploy&mode=${mode}${session}`);
-        expect({ mode, session, status: res.status, body: await res.json() }).toEqual({ mode, session, status: 501, body: { error: STORE_NOT_PORTED_MESSAGE } });
-      }
-    }
-    expect(embeddings.requests()).toBe(0);
-    expect(auditRowCount()).toBe(before);
-  });
-
-  it('requireVectorReads names the missing group, and that error still maps to the 501', () => {
-    expect(() => requireVectorReads(store)).toThrow(StoreNotPortedError);
-    expect(() => requireVectorReads(store)).toThrow(SqliteBlockedError);
-    expect(() => requireVectorReads(store)).toThrow("the 'port-only' store has no 'vectors' group");
-    const err = new StoreNotPortedError('port-only', 'vectors');
-    expect(mapApiError(err)).toEqual({ status: 501, message: STORE_NOT_PORTED_MESSAGE });
-    expect(() => rethrowIfSqliteBlocked(err)).toThrow(err);
-  });
-
-  it('MCP hippo_recall answers -32603 store_not_ported', async () => {
-    const body = rpc('tools/call', { name: 'hippo_recall', arguments: { query: 'deploy' } });
-    // A shared store refuses hippo_recall from a caller that names no project, before the vector arm.
-    const res = await fetch(`${handle.url}/mcp`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-hippo-project': 'p' }, body });
-    expect(await res.json()).toEqual({ jsonrpc: '2.0', id: 1, error: { code: -32603, message: STORE_NOT_PORTED_MESSAGE } });
-    expect(embeddings.requests()).toBe(0);
-  });
-
-  it('with no provider key the vector arm never starts, so recall still answers', async () => {
-    vi.stubEnv('OPENAI_API_KEY', '');
-    const res = await fetch(`${handle.url}/v1/memories?q=deploy&mode=hybrid`);
-    expect(res.status).toBe(200);
-  });
-
-  it('physicsSearch refuses the store even when the caller brings the query vector', async () => {
-    const entries = loadEntriesByIds(root, ['mem_deploy']);
-    expect(entries).toHaveLength(1);
-    await expect(physicsSearch('deploy', entries, { hippoRoot: root, store, queryEmbedding: hashedVector('deploy') })).rejects.toThrow(SqliteBlockedError);
   });
 });
 

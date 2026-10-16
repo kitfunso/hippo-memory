@@ -33,7 +33,7 @@ const briefRoutes: VersionedRouteConfig<'project_brief', SaveProjectBriefOpts> =
 // Routes: /v1/project-briefs (create, list, refresh, show, supersede, close), mirroring /v1/skills; /refresh is ordered
 // before /:id.
 // The store validates and throws; the boundary maps validation -> 400, not-found -> 404, not-active -> 409.
-export async function handleCreateProjectBrief(rr: AuthedRouteRequest<'objects'>): Promise<void> {
+export async function handleCreateProjectBrief(rr: AuthedRouteRequest): Promise<void> {
   const { ctx } = rr;
   const body = await parseJsonBody(rr.req, ctx);
   const brief = await saveFor(ctx, PROJECT_BRIEF, {
@@ -43,13 +43,13 @@ export async function handleCreateProjectBrief(rr: AuthedRouteRequest<'objects'>
   sendJson(rr.res, 201, { brief });
 }
 
-export function handleListProjectBriefs(rr: AuthedRouteRequest<'objects'>): Promise<void> {
+export function handleListProjectBriefs(rr: AuthedRouteRequest): Promise<void> {
   return listRoute(briefRoutes, rr);
 }
 
 // The refresh op: must precede the /:id routes (literal 'refresh' is non-numeric
 // so the /(\d+)/ routes would not match it, but order it first).
-export async function handleRefreshProjectBrief(rr: AuthedRouteRequest<'objects'>): Promise<void> {
+export async function handleRefreshProjectBrief(rr: AuthedRouteRequest): Promise<void> {
   const { req, res, ctx } = rr;
   const body = await parseJsonBody(req, ctx);
   const repo = requiredString(body, 'repo', { max: MAX_REPO_LEN });
@@ -66,14 +66,14 @@ export async function handleRefreshProjectBrief(rr: AuthedRouteRequest<'objects'
   sendJson(res, 200, { brief });
 }
 
-export function handleSupersedeProjectBrief(rr: AuthedRouteRequest<'objects'>, match: RegExpMatchArray): Promise<void> {
+export function handleSupersedeProjectBrief(rr: AuthedRouteRequest, match: RegExpMatchArray): Promise<void> {
   return supersedeRoute(briefRoutes, rr, match);
 }
 
-export function handleCloseProjectBrief(rr: AuthedRouteRequest<'objects'>, match: RegExpMatchArray): Promise<void> {
+export function handleCloseProjectBrief(rr: AuthedRouteRequest, match: RegExpMatchArray): Promise<void> {
   return closeRoute(briefRoutes, rr, match);
 }
 
-export function handleGetProjectBrief(rr: AuthedRouteRequest<'objects'>, match: RegExpMatchArray): Promise<void> {
+export function handleGetProjectBrief(rr: AuthedRouteRequest, match: RegExpMatchArray): Promise<void> {
   return getRoute(briefRoutes, rr, match);
 }

@@ -6,7 +6,7 @@ import type { MemoryEntry } from '../../core/memory.js';
 import { passesScopeFilterForRecall, personalScopeOf } from '../../core/recall-scope.js';
 import { classifyOriginProject } from '../../core/project-identity.js';
 import type { CallerProject } from '../prompt-hook.js';
-import type { ContextWith } from '../types.js';
+import type { StoreContext } from '../types.js';
 
 const DEFAULT_DRILL_DOWN_LIMIT = 50;
 
@@ -63,7 +63,7 @@ export type DrillDownOutcome = DrillDownResult | DrillDownFailure;
  * summarizeOverflow: true)` substitutions). Only `ctx.tenantId` summaries are reachable; children get recall's scope
  * filter. Returns `DrillDownResult` or `{failure}`; HTTP maps `not_drillable` to 422. */
 export async function drillDown(
-  ctx: ContextWith<'dagReads'>,
+  ctx: StoreContext,
   summaryId: string,
   opts: DrillDownOpts = {},
 ): Promise<DrillDownOutcome> {

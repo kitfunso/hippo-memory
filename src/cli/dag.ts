@@ -124,7 +124,7 @@ async function cmdAssemble(hippoRoot: string, tenantId: string, sessionId: strin
   const freshTailCount = numberFlag(flags, 'fresh-tail');
   const summarizeOlder = flags['no-summarize-older'] !== true;
   const scope = stringFlag(flags, 'scope') || undefined;
-  const ctx: api.ContextWith<'dagReads'> = {
+  const ctx: api.StoreContext = {
     ...cliApiContext(hippoRoot, tenantId),
     actor: api.adminActor('cli:assemble'),
   };
@@ -164,7 +164,7 @@ async function cmdDrillDown(hippoRoot: string, tenantId: string, summaryId: stri
     }
     depth = rawDepth;
   }
-  const ctx: api.ContextWith<'dagReads'> = {
+  const ctx: api.StoreContext = {
     ...cliApiContext(hippoRoot, tenantId),
     actor: api.adminActor('cli:drill'),
   };

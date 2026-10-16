@@ -1,7 +1,7 @@
 // The write half of `hippo refine`: the model call stays with the caller, the rewritten row is stored here.
 
 import type { MemoryEntry } from '../../core/memory.js';
-import type { ContextWith } from '../types.js';
+import type { StoreContext } from '../types.js';
 
 /** Marks a merged memory a model has rewritten, so a later pass skips it. */
 export const REFINED_TAG = 'llm-refined';
@@ -11,7 +11,7 @@ export const REFINED_TAG = 'llm-refined';
  * once.
  */
 export async function storeRefinement(
-  ctx: ContextWith<'entryWrites'>,
+  ctx: StoreContext,
   entry: MemoryEntry,
   refined: string,
 ): Promise<void> {

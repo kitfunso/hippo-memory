@@ -1,6 +1,6 @@
 // A session id belongs to the first owner that binds it, so one developer's client cannot write into another's session.
 import { ConflictError } from '../../core/api-errors.js';
-import { ownerOrSubject, type Context, type ContextWith } from '../types.js';
+import { ownerOrSubject, type Context, type StoreContext } from '../types.js';
 import { sessionOwnerOrBind } from '../../store/sessions.js';
 import { assertTenantId } from '../../store/tenant.js';
 import { DAY_MS } from '../../util/time.js';
@@ -26,7 +26,7 @@ export function bindSessionOwner(ctx: Context, sessionId: string): void {
 
 /** `bindSessionOwner` through the store's sessions group, for a caller whose store is not hippo.db; a failure rejects,
  * never throws. */
-export async function bindSessionOwnerOn(ctx: ContextWith<'sessions'>, sessionId: string): Promise<void> {
+export async function bindSessionOwnerOn(ctx: StoreContext, sessionId: string): Promise<void> {
   assertTenantId('bindSessionOwnerOn', ctx.tenantId);
   const owner = ownerOrSubject(ctx.actor);
   const retentionMs = BINDING_RETENTION_DAYS * DAY_MS;

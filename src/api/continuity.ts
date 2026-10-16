@@ -5,9 +5,9 @@ import type { SessionEvent, TaskSnapshot } from '../store/rows.js';
 import type { SessionEventInput, SnapshotInput } from '../store/sessions.js';
 import type { Sessions } from '../store/index.js';
 import type { WorkingMemoryItem } from '../store/working-memory.js';
-import type { ContextWith } from './types.js';
+import type { StoreContext } from './types.js';
 
-type Ctx = ContextWith<'sessions'>;
+type Ctx = StoreContext;
 
 /** What a snapshot save carries. */
 export type SnapshotSaveInput = SnapshotInput;

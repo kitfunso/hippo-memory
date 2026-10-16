@@ -112,7 +112,7 @@ async function keyContext(
   root: string,
   tenantId: string,
   keyId: string,
-): Promise<api.ContextWith<'keyAudit' | 'keyGrants'>> {
+): Promise<api.StoreContext> {
   const hostCtx = cliApiContext(root, tenantId);
   const keyTenant = await api.authKeyTenant(hostCtx, keyId);
   if (keyTenant === undefined) {

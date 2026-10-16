@@ -7,7 +7,7 @@ import type { MemoryConflict } from '../../store/rows.js';
 import { classifyOriginProject } from '../../core/project-identity.js';
 import type { CallerProject } from '../prompt-hook.js';
 import { isQuarantineScope } from '../../trust/quarantine.js';
-import { requireHostAdmin, type ContextWith } from '../types.js';
+import { requireHostAdmin, type StoreContext } from '../types.js';
 import type { TenantReach } from './memories.js';
 
 export interface ResolveMemoryConflictOpts {
@@ -39,7 +39,7 @@ function isLive(entry: Pick<MemoryEntry, 'superseded_by' | 'kind' | 'scope'>): b
  * NotFound: missing, untouchable or no longer live. Conflict: already resolved. BadRequest: `keepId` outside the pair.
  */
 export async function resolveMemoryConflict(
-  ctx: ContextWith<'conflicts'>,
+  ctx: StoreContext,
   conflictId: number,
   opts: ResolveMemoryConflictOpts,
 ): Promise<ResolveMemoryConflictResult> {
@@ -73,7 +73,7 @@ export async function resolveMemoryConflict(
 /** Open conflicts whose two rows the caller may touch; with `project`, only pairs it could also recall:
  *  its repo or user-global, and no scope it was not asked for. */
 export async function listOpenConflicts(
-  ctx: ContextWith<'conflicts'>,
+  ctx: StoreContext,
   project?: CallerProject,
 ): Promise<MemoryConflict[]> {
   const touchable = await ctx.store.conflicts.listTouchable(ctx.tenantId, 'open', ctx.actor);
@@ -95,7 +95,7 @@ export async function listOpenConflicts(
  * Conflicts with `status` ('*' for any) in reach, with no scope filter: the host's own view, so the host admin only.
  */
 export async function listConflicts(
-  ctx: ContextWith<'conflicts'>,
+  ctx: StoreContext,
   status: string,
   reach: TenantReach = {},
 ): Promise<MemoryConflict[]> {

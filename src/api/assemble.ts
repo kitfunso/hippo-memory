@@ -5,7 +5,7 @@ import type { MemoryEntry } from '../core/memory.js';
 import { passesScopeFilterForRecall, assertScopeRequestAllowed, personalScopeOf } from '../core/recall-scope.js';
 import { classifyOriginProject, projectNames } from '../core/project-identity.js';
 import type { CallerProject } from './prompt-hook.js';
-import type { ContextWith } from './types.js';
+import type { StoreContext } from './types.js';
 
 const DEFAULT_FRESH_TAIL_COUNT = 10;
 const DEFAULT_ROW_CAP = 5000;
@@ -70,7 +70,7 @@ export interface AssembleResult {
  *  tail is never evicted).
  * Returns `items: []` for an empty sessionId, no raws, or when every row fails the scope/tenant filter. */
 export async function assemble(
-  ctx: ContextWith<'dagReads'>,
+  ctx: StoreContext,
   sessionId: string,
   opts: AssembleOpts = {},
 ): Promise<AssembleResult> {
@@ -121,7 +121,7 @@ interface ScopedRaws {
 }
 
 async function loadScopedRaws(
-  ctx: ContextWith<'dagReads'>,
+  ctx: StoreContext,
   sessionId: string,
   opts: AssembleOpts,
   own: string | undefined,
@@ -178,7 +178,7 @@ interface SubstitutedOlder {
 }
 
 async function substituteSummaries(
-  ctx: ContextWith<'dagReads'>,
+  ctx: StoreContext,
   olderRows: MemoryEntry[],
   scope: string | undefined,
   own: string | undefined,

@@ -5,12 +5,9 @@ import { cpSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } fr
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
-import { StoreNotPortedError } from '../src/util/sqlite-blocked.js';
-import { STORE_NOT_PORTED_MESSAGE } from '../src/util/http-util.js';
 import { authRevoke, ForbiddenError, NotFoundError, serve, type Actor, type ServerHandle } from '../src/server.js';
-import { OTHER_STORE_MARKER, type HippoStore } from '../src/entry/store-kit.js';
+import { OTHER_STORE_MARKER } from '../src/entry/store-kit.js';
 import { inMemoryKeyAuditStore } from './_helpers/in-memory-key-audit-store.js';
-import { portOnlyStoreWithoutVectorReads } from './_helpers/port-only-store.js';
 import { seedTwoTenants, TENANT_A, type TwoTenantFixture } from './_helpers/store-conformance.js';
 
 const NOW = '2026-03-01T12:00:00.000Z';
@@ -82,18 +79,6 @@ describe('authRevoke with ctx.store', () => {
     expect(memory.auditRows().at(-1)).toMatchObject({ tenantId: TENANT_A, actor: 'cli', op: 'auth_revoke', targetId: memberA });
   });
 
-  it('rejects with StoreNotPortedError on a store without keyAudit, and touches neither hippo.db', async () => {
-    const hippoRoot = markedFolder();
-    const storeRoot = copyOf();
-    const before = hippoDbState(storeRoot, fixture.keys.memberA);
-    const store: HippoStore = portOnlyStoreWithoutVectorReads(storeRoot);
-    const revoking = authRevoke({ hippoRoot, tenantId: TENANT_A, actor: admin, store }, fixture.keys.memberA);
-    await expect(revoking).rejects.toThrow(StoreNotPortedError);
-    await expect(revoking).rejects.toThrow("the 'port-only' store has no 'keyAudit' group");
-    expect(readdirSync(hippoRoot)).toEqual([OTHER_STORE_MARKER]);
-    expect(hippoDbState(storeRoot, fixture.keys.memberA)).toEqual(before);
-  });
-
   it("keeps hippo.db's checks: a member key revokes only itself, a foreign key is unknown", async () => {
     const memory = inMemoryKeyAuditStore(copyOf());
     const { adminA, memberA, memberB } = fixture.keys;
@@ -117,16 +102,6 @@ describe('DELETE /v1/auth/keys/:keyId under another store', () => {
     await handle?.stop();
     handle = undefined;
     vi.unstubAllEnvs();
-  });
-
-  it('answers 501 before the handler on a store without keyAudit: no audit row, no key change, and a bad key is still a 401', async () => {
-    const root = copyOf();
-    const before = hippoDbState(root, fixture.keys.memberA);
-    handle = await serve({ hippoRoot: root, port: 0, store: portOnlyStoreWithoutVectorReads(root) });
-    const res = await revokeVia(handle.url, fixture.keys.memberA, fixture.tokens.adminA);
-    expect({ status: res.status, body: await res.json() }).toEqual({ status: 501, body: { error: STORE_NOT_PORTED_MESSAGE } });
-    expect((await revokeVia(handle.url, fixture.keys.memberA, `${fixture.keys.adminA}.wrong`)).status).toBe(401);
-    expect(hippoDbState(root, fixture.keys.memberA)).toEqual(before);
   });
 
   it('revokes through the store that has keyAudit, and the revoked key is refused at once', async () => {

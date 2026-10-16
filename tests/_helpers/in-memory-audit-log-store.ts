@@ -5,7 +5,7 @@ import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { type AuditEvent, type HippoStore, type KeysetPosition } from '../../src/entry/store-kit.js';
 import { withSqliteAllowed } from '../../src/db/open.js';
 import type { AuditLog } from '../../src/store/port.js';
-import { portOnlyStoreWithoutVectorReads } from './port-only-store.js';
+import { portOnlyStore } from './port-only-store.js';
 import type { StoreSide } from './store-conformance.js';
 
 export interface InMemoryAuditLogStore extends StoreSide {
@@ -45,7 +45,7 @@ export function inMemoryAuditLogStore(hippoRoot: string): InMemoryAuditLogStore 
     },
   };
   const store: InMemoryAuditLogStore['store'] = {
-    ...portOnlyStoreWithoutVectorReads(hippoRoot),
+    ...portOnlyStore(hippoRoot),
     kind: 'in-memory',
     async appendAuditEvents(events) {
       for (const event of events) {

@@ -1,7 +1,7 @@
 // Request context (caller identity and tenant) shared by every API module, plus the recall contract error.
 
 import { BadRequestError, ForbiddenError } from '../core/api-errors.js';
-import { narrowStore, type HippoStore, type StoreGroup, type StoreWith } from '../store/index.js';
+import type { HippoStore } from '../store/index.js';
 import type { HippoConfig } from '../core/config.js';
 import type { StoreReach } from '../store/port.js';
 
@@ -38,20 +38,6 @@ export type HippoDbContext = Context & { store?: undefined };
 /** A Context whose store a composition root already built; every
  * api function that reads or writes the store takes this. */
 export type StoreContext = Context & { readonly store: HippoStore };
-
-/** A Context whose store a gate proved holds `G`; the api function reads `ctx.store.<group>` directly. */
-export type ContextWith<G extends StoreGroup> = Context & { readonly store: StoreWith<G> };
-
-/** `ctx` itself once its store proves every group, so a gate hands a handler the type with no copy; throws
- * StoreNotPortedError for the first missing one. */
-export function narrowContext<G extends StoreGroup>(
-  ctx: StoreContext,
-  ...groups: readonly [G, ...G[]]
-): ContextWith<G> {
-  narrowStore(ctx.store, ...groups);
-  // SAFETY: narrowStore above proved every group on ctx.store.
-  return ctx as ContextWith<G>;
-}
 
 /** Builds process-local Actor values (admin and host admin) for CLI and CLI-run connector Contexts; Bearer-authed
  * callers build Actor from the api_keys row instead. */

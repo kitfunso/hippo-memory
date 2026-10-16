@@ -18,8 +18,7 @@ import { assertCallerProject } from '../../core/project-identity.js';
 import { BadRequestError } from '../../core/api-errors.js';
 import { assertClientScope, canReadScope, personalScopeOf, ScopeForbiddenError } from '../../core/recall-scope.js';
 import { isQuarantineScope } from '../../trust/quarantine.js';
-import { narrowStore } from '../../store/index.js';
-import type { Context, ContextWith, StoreContext } from '../types.js';
+import type { Context, StoreContext } from '../types.js';
 
 /** Row fields the caller's own process decides, as the CLI does from its flags and its salience gate. */
 export interface RememberLocal {
@@ -171,7 +170,7 @@ function quarantineOf({ requestedScope, detection }: PreparedRemember): Connecto
 /** Store one memory: the store's entryWrites group writes the row and its one remember audit row, under the caller's
  * subject. A write that carries a connector event or untrusted content goes through connectorWrites, which commits its
  * companion rows with it. */
-export async function remember(ctx: ContextWith<'entryWrites'>, opts: RememberOpts): Promise<RememberResult> {
+export async function remember(ctx: StoreContext, opts: RememberOpts): Promise<RememberResult> {
   const store = ctx.store;
   const entryWrites = store.entryWrites;
   const prepared = prepareRemember(ctx, opts);
@@ -181,8 +180,7 @@ export async function remember(ctx: ContextWith<'entryWrites'>, opts: RememberOp
     await entryWrites.writeEntry(write);
     return rememberResult(ctx, prepared);
   }
-  const connectorWrites = narrowStore(store, 'connectorWrites').connectorWrites;
-  const written = await connectorWrites.writeConnectorEntry({
+  const written = await store.connectorWrites.writeConnectorEntry({
     ...write,
     event: opts.event,
     quarantine: quarantineOf(prepared),

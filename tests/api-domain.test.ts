@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
-import { withStoreGroups } from '../src/store/sqlite/store.js';
+import { withStore } from '../src/store/sqlite/store.js';
 import { readEntry } from '../src/store/entry-reads.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { queryAuditEvents } from '../src/store/audit.js';
@@ -106,7 +106,7 @@ describe('api domain — recall/forget/promote/supersede', () => {
     );
 
     const result = promote(
-      withStoreGroups({ hippoRoot: home, tenantId: 'default', actor: { subject: 'api_key:hk_promote', role: 'admin' } }, 'localFiles'),
+      withStore({ hippoRoot: home, tenantId: 'default', actor: { subject: 'api_key:hk_promote', role: 'admin' } }),
       id,
     );
     expect(result.ok).toBe(true);

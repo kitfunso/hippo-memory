@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { appendAuditEvent, listAuditEventsAfter, type AuditEvent } from '../../src/store/audit.js';
 import { createApiKey, revokeApiKey, type CreateApiKeyResult } from '../../src/store/auth.js';
 import { closeHippoDb, openHippoDb, withSqliteBlocked } from '../../src/db/index.js';
-import { requireGroup, sqliteStore, type HippoStore, type StoreGroups } from '../../src/store/index.js';
+import { sqliteStore, type HippoStore, type OptionalGroup, type StoreGroups } from '../../src/store/index.js';
 import { initStore } from '../../src/store/open.js';
 
 export const TENANT_A = 'acme';
@@ -63,8 +63,10 @@ export async function outcomeOf<R>(run: () => Promise<R>): Promise<Outcome<R>> {
   }
 }
 
+type RequiredGroup = Exclude<keyof StoreGroups, OptionalGroup>;
+
 /** One call on a store group; R is every value the calls in one run resolve to. */
-export type GroupCall<G extends keyof StoreGroups, R> = (group: StoreGroups[G], store: HippoStore) => Promise<R>;
+export type GroupCall<G extends RequiredGroup, R> = (group: HippoStore[G], store: HippoStore) => Promise<R>;
 
 export interface SideResult<R> {
   readonly outcomes: readonly Outcome<R>[];
@@ -80,10 +82,10 @@ function auditRowsAt(root: string): AuditEvent[] {
   }
 }
 
-async function runSide<G extends keyof StoreGroups, R>(
+async function runSide<G extends RequiredGroup, R>(
   side: StoreSide, group: G, calls: readonly GroupCall<G, R>[], guard: <T>(fn: () => T) => T,
 ): Promise<SideResult<R>> {
-  const methods = requireGroup(side.store, group);
+  const methods = side.store[group];
   const outcomes: Outcome<R>[] = [];
   for (const call of calls) outcomes.push(await outcomeOf(() => guard(() => call(methods, side.store))));
   await side.store.close();
@@ -91,7 +93,7 @@ async function runSide<G extends keyof StoreGroups, R>(
 }
 
 /** The other side's calls run with hippo.db blocked, so a method that falls back to it throws instead of matching by accident. */
-export async function onBothStores<G extends keyof StoreGroups, R>(
+export async function onBothStores<G extends RequiredGroup, R>(
   fixture: TwoTenantFixture, group: G, makeOther: (root: string) => StoreSide, calls: readonly GroupCall<G, R>[],
 ): Promise<{ readonly sqlite: SideResult<R>; readonly other: SideResult<R> }> {
   const home = mkdtempSync(join(tmpdir(), 'hippo-conformance-'));

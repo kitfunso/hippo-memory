@@ -39,7 +39,7 @@ const policyRoutes: VersionedRouteConfig<'policy', SavePolicyOpts> = {
   },
 };
 
-export async function handleCreatePolicy(rr: AuthedRouteRequest<'objects'>): Promise<void> {
+export async function handleCreatePolicy(rr: AuthedRouteRequest): Promise<void> {
   const { ctx } = rr;
   const body = await parseJsonBody(rr.req, ctx);
   const policy = await saveFor(ctx, POLICY, {
@@ -51,13 +51,13 @@ export async function handleCreatePolicy(rr: AuthedRouteRequest<'objects'>): Pro
   sendJson(rr.res, 201, { policy });
 }
 
-export function handleListPolicies(rr: AuthedRouteRequest<'objects'>): Promise<void> {
+export function handleListPolicies(rr: AuthedRouteRequest): Promise<void> {
   return listRoute(policyRoutes, rr);
 }
 
 // The as-of query: must precede the /:id GET (literal 'asof' is non-numeric so
 // the /(\d+)/ route would not match it, but order it first for clarity).
-export async function handlePoliciesAsOf(rr: AuthedRouteRequest<'objects'>): Promise<void> {
+export async function handlePoliciesAsOf(rr: AuthedRouteRequest): Promise<void> {
   const { res, query, ctx } = rr;
   const date = query.get('date');
   if (date === null || date.length === 0) {
@@ -68,14 +68,14 @@ export async function handlePoliciesAsOf(rr: AuthedRouteRequest<'objects'>): Pro
   sendJson(res, 200, { policies });
 }
 
-export function handleSupersedePolicy(rr: AuthedRouteRequest<'objects'>, match: RegExpMatchArray): Promise<void> {
+export function handleSupersedePolicy(rr: AuthedRouteRequest, match: RegExpMatchArray): Promise<void> {
   return supersedeRoute(policyRoutes, rr, match);
 }
 
-export function handleClosePolicy(rr: AuthedRouteRequest<'objects'>, match: RegExpMatchArray): Promise<void> {
+export function handleClosePolicy(rr: AuthedRouteRequest, match: RegExpMatchArray): Promise<void> {
   return closeRoute(policyRoutes, rr, match);
 }
 
-export function handleGetPolicy(rr: AuthedRouteRequest<'objects'>, match: RegExpMatchArray): Promise<void> {
+export function handleGetPolicy(rr: AuthedRouteRequest, match: RegExpMatchArray): Promise<void> {
   return getRoute(policyRoutes, rr, match);
 }

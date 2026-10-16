@@ -8,7 +8,7 @@ import { readApiCalls, recordRereads, type TranscriptCalls } from '../store/toke
 import { truncateCodePointSafe } from '../util/transcript-tail.js';
 import { errorMessage, log, errorFields } from '../util/log.js';
 import { COMPACT_RESUME_EVENT_CONTENT_CAP, COMPACT_RESUME_MAX_AGE_MS, compactResumeText } from './context-render.js';
-import type { Context, ContextWith } from './types.js';
+import type { Context, StoreContext } from './types.js';
 
 /** What closing one ended session needs from the host; the two readers run only when the handoff is written. */
 export interface SessionClose {
@@ -25,7 +25,7 @@ export interface SessionClose {
 
 /** Writes the session's handoff, then closes its snapshot unless `turn`; each step logs its own failure and never
  * throws. The handoff goes first, while the snapshot writeSessionEndHandoff reads is still active. */
-export async function closeEndedSession(ctx: ContextWith<'sessions'>, close: SessionClose): Promise<void> {
+export async function closeEndedSession(ctx: StoreContext, close: SessionClose): Promise<void> {
   if (close.sessionId) await writeEndHandoff(ctx, close.sessionId, close);
   if (close.turn) {
     close.log('skip snapshot close: turn mode');
@@ -34,7 +34,7 @@ export async function closeEndedSession(ctx: ContextWith<'sessions'>, close: Ses
   await closeSnapshot(ctx, close.sessionId, close.log);
 }
 
-async function writeEndHandoff(ctx: ContextWith<'sessions'>, sessionId: string, close: SessionClose): Promise<void> {
+async function writeEndHandoff(ctx: StoreContext, sessionId: string, close: SessionClose): Promise<void> {
   const { sessions } = ctx.store;
   try {
     const ownSnapshot = (await sessions.loadSnapshot(ctx.tenantId, null))?.session_id === sessionId;
@@ -61,7 +61,7 @@ async function writeEndHandoff(ctx: ContextWith<'sessions'>, sessionId: string, 
 
 // If session-end never fires (crash, kill -9), the freshness bound in loadFreshActiveTaskSnapshot is the backstop.
 async function closeSnapshot(
-  ctx: ContextWith<'sessions'>,
+  ctx: StoreContext,
   sessionId: string | null,
   line: (message: string) => void,
 ): Promise<void> {
@@ -112,7 +112,7 @@ export async function bookSessionRereads(
 /** The block a compaction lost: the fresh task snapshot and its session trail, or null with none or another session's
  * snapshot. */
 export async function compactResumeBlock(
-  ctx: ContextWith<'sessions'>,
+  ctx: StoreContext,
   payloadSessionId: string | null,
 ): Promise<string | null> {
   const { sessions } = ctx.store;
@@ -147,7 +147,7 @@ export interface SessionEndWork<Scan> {
   sessionId: string | null;
   transcriptPath: string | undefined;
   /** Builds the call context for one store root. */
-  contextFor: (root: string) => ContextWith<'sessions'>;
+  contextFor: (root: string) => StoreContext;
   /** The store the run captures into: the project store, else global; null when neither exists. */
   storeRoot: () => string | null;
   /** One line to the session-end log; `startFresh` restarts the file. */

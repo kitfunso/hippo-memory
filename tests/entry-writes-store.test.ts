@@ -5,18 +5,16 @@ import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeF
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
-  archiveRaw, forget, outcome, outcomeForLastRecall, narrowContext, remember, supersede, type Actor, type ArchiveRawResult, type ForgetResult,
+  archiveRaw, forget, outcome, outcomeForLastRecall, remember, supersede, type Actor, type ArchiveRawResult, type ForgetResult,
   type OutcomeResult, type RememberResult, type SupersedeResult,
 } from '../src/api/index.js';
 import { closeHippoDb, openHippoDb, withSqliteBlocked } from '../src/db/index.js';
 import { StoreNotPortedError } from '../src/util/sqlite-blocked.js';
-import { STORE_NOT_PORTED_MESSAGE } from '../src/util/http-util.js';
 import { handleMcpRequest, type McpContext } from '../src/mcp/server.js';
 import { lastRecalledIds, resolveClientKey } from '../src/mcp/session-state.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { OTHER_STORE_MARKER } from '../src/entry/store-kit.js';
 import { inMemoryEntryWritesStore } from './_helpers/in-memory-entry-writes-store.js';
-import { portOnlyStoreWithoutVectorReads } from './_helpers/port-only-store.js';
 import { seedTwoTenants, TENANT_A, type TwoTenantFixture } from './_helpers/store-conformance.js';
 
 const NOW = '2026-03-01T12:00:00.000Z';
@@ -89,27 +87,9 @@ describe('the api with ctx.store', () => {
     expect(ops).toEqual(['remember', 'remember', 'remember', 'outcome', 'remember', 'supersede', 'archive_raw', 'forget']);
   });
 
-  it("rejects with StoreNotPortedError on a store without entryWrites, and leaves the store's hippo.db alone", async () => {
-    const storeRoot = copyOf();
-    const before = auditIdsOnHippoDb(storeRoot);
-    const ctx = { hippoRoot: markedFolder(), tenantId: TENANT_A, actor: admin, store: portOnlyStoreWithoutVectorReads(storeRoot) };
-    const calls = [
-      async () => remember(narrowContext(ctx, 'entryWrites'), { content: 'deploys go out on tuesdays' }),
-      async () => outcome(narrowContext(ctx, 'entryWrites'), ['mem_x'], true),
-      async () => supersede(narrowContext(ctx, 'entryWrites'), 'mem_x', 'new text'),
-      async () => archiveRaw(narrowContext(ctx, 'entryWrites'), 'mem_x', 'r'),
-      async () => forget(narrowContext(ctx, 'entryWrites'), 'mem_x'),
-    ];
-    for (const call of calls) await expect(call()).rejects.toThrow(new StoreNotPortedError('port-only', 'entryWrites'));
-    expect(auditIdsOnHippoDb(storeRoot)).toEqual(before);
-  });
-
-  it("refuses a connector write, the trace link and the last-recall outcome under a store without connectorWrites or lastRecall", async () => {
+  it('refuses the trace link and the last-recall outcome under a store without lastRecall', async () => {
     const ctx = { hippoRoot: markedFolder(), tenantId: TENANT_A, actor: admin, store: inMemoryEntryWritesStore(copyOf()).store };
-    const noGroup = new StoreNotPortedError('in-memory', 'connectorWrites');
-    await expect(remember(ctx, { content: 'connector text', untrusted: true })).rejects.toThrow(noGroup);
     await expect(outcome(ctx, ['mem_x'], true, { traceId: 1 })).rejects.toThrow(new StoreNotPortedError('in-memory', 'lastRecall'));
-    await expect(archiveRaw(ctx, 'mem_x', 'r', { event: { connector: 'slack', eventId: 'Ev_x' } })).rejects.toThrow(noGroup);
     await expect(outcomeForLastRecall(ctx, true)).rejects.toMatchObject({
       status: 501, message: 'this store keeps no last recall: send the ids your recall returned',
     });
@@ -145,21 +125,6 @@ describe('the entry write routes', () => {
     await handle?.stop();
     handle = undefined;
     vi.unstubAllEnvs();
-  });
-
-  it('answer 501 before the handler on a store without entryWrites, and a bad key is still a 401', async () => {
-    const root = copyOf();
-    const before = auditIdsOnHippoDb(root);
-    handle = await serve({ hippoRoot: root, port: 0, store: portOnlyStoreWithoutVectorReads(root) });
-    const token = fixture.tokens.adminA;
-    const replies = await Promise.all([
-      send('/v1/memories', 'POST', token, { content: 'deploys go out on tuesdays' }), send('/v1/memories/mem_x/archive', 'POST', token, { reason: 'r' }),
-      send('/v1/memories/mem_x/supersede', 'POST', token, { content: 'new text' }), send('/v1/memories/mem_x', 'DELETE', token),
-      send('/v1/outcome', 'POST', token, { ids: ['mem_x'], good: true }),
-    ]);
-    for (const res of replies) expect({ status: res.status, body: await res.json() }).toEqual({ status: 501, body: { error: STORE_NOT_PORTED_MESSAGE } });
-    expect((await send('/v1/memories', 'POST', `${token}.wrong`, { content: 'x' })).status).toBe(401);
-    expect(auditIdsOnHippoDb(root)).toEqual(before);
   });
 
   it('serve every entry write through the store that has entryWrites; the last-recall outcome stays 501', async () => {

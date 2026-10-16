@@ -36,7 +36,7 @@ function supersededId(body: Record<string, JsonValue>): number | undefined {
   return raw;
 }
 
-export async function handleCreateDecision(rr: AuthedRouteRequest<'objects'>): Promise<void> {
+export async function handleCreateDecision(rr: AuthedRouteRequest): Promise<void> {
   const { req, res, ctx } = rr;
   const body = await parseJsonBody(req, ctx);
   const write = {
@@ -54,14 +54,14 @@ export async function handleCreateDecision(rr: AuthedRouteRequest<'objects'>): P
   }
 }
 
-export function handleListDecisions(rr: AuthedRouteRequest<'objects'>): Promise<void> {
+export function handleListDecisions(rr: AuthedRouteRequest): Promise<void> {
   return listRoute(decisionRoutes, rr);
 }
 
 // Not on supersedeRoute: this one answers 201 and leaves the missing-row 404 to the store, where the other five answer
 // 200 after their own lookup.
 export async function handleSupersedeDecision(
-  rr: AuthedRouteRequest<'objects'>,
+  rr: AuthedRouteRequest,
   match: RegExpMatchArray,
 ): Promise<void> {
   const oldId = parseInt(match[1], 10);
@@ -75,10 +75,10 @@ export async function handleSupersedeDecision(
   sendJson(rr.res, 201, { decision });
 }
 
-export function handleCloseDecision(rr: AuthedRouteRequest<'objects'>, match: RegExpMatchArray): Promise<void> {
+export function handleCloseDecision(rr: AuthedRouteRequest, match: RegExpMatchArray): Promise<void> {
   return closeRoute(decisionRoutes, rr, match);
 }
 
-export function handleGetDecision(rr: AuthedRouteRequest<'objects'>, match: RegExpMatchArray): Promise<void> {
+export function handleGetDecision(rr: AuthedRouteRequest, match: RegExpMatchArray): Promise<void> {
   return getRoute(decisionRoutes, rr, match);
 }

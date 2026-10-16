@@ -19,9 +19,7 @@ import {
 } from '../store/embeddings/index.js';
 import { countAllEntries, loadAllEntryIds, loadEntriesByIds } from '../store/entry-reads.js';
 import {
-  requireGroup,
   type HippoStore,
-  type VectorReads,
   type VectorRowWrite,
   type VectorWrite,
   type VectorWriteResult,
@@ -229,10 +227,6 @@ function warnEmbedFailureOnce(source: string, rawMessage: string, cause?: unknow
   log.warn(`embedding failed (${source}): ${message}. Memories are stored without embeddings until this is fixed.`);
 }
 
-function vectorGroups(store: HippoStore): readonly [VectorReads, VectorWrites] {
-  return [requireGroup(store, 'vectors'), requireGroup(store, 'vectorWrites')];
-}
-
 /** Writes one page's vectors, one writeVectors per tenant, and stops at the first refused write; `withParticles`
  * seeds each memory's particle. */
 async function writeVectorPage(
@@ -290,7 +284,7 @@ async function backfillInStore(
 
 /** embedAll on a store: a model change re-embeds every memory, and the first page written drops the old index. */
 async function embedAllInStore(store: HippoStore, provider: EmbeddingProvider): Promise<number> {
-  const [reads, writes] = vectorGroups(store);
+  const { vectors: reads, vectorWrites: writes } = store;
   const rebuild = indexNeedsRebuild(indexedModel(await reads.embeddingIndexState()), provider.id);
   return backfillInStore(writes, provider, embeddingIndexIdentity(provider.id), rebuild);
 }
@@ -301,7 +295,7 @@ async function embedAllInStore(store: HippoStore, provider: EmbeddingProvider): 
  * another model itself. */
 function embedMemoryInStore(store: HippoStore, provider: EmbeddingProvider, entry: MemoryEntry): Promise<EmbedOutcome> {
   return withProcessEmbedLock(async () => {
-    const [reads, writes] = vectorGroups(store);
+    const { vectors: reads, vectorWrites: writes } = store;
     const model = embeddingIndexIdentity(provider.id);
     try {
       const refused = replacesIndex(await reads.embeddingIndexState(), model)

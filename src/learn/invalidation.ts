@@ -1,6 +1,6 @@
 import type { Learning } from '../store/port/learning.js';
 import { localFilesAt } from './roots.js';
-import type { StoreWith } from '../store/index.js';
+import type { HippoStore } from '../store/index.js';
 import { chunked } from '../util/chunked.js';
 import { CHURN_STALE_TAG, type MemoryEntry } from '../core/memory.js';
 import {
@@ -120,7 +120,7 @@ function invalidateIn(
  * Each match is read again before it is weakened, so a row another writer changed since the list was read is never
  * written back stale. */
 export async function invalidateMatchingAmong(
-  store: StoreWith<'lessonWrites'>,
+  store: HippoStore,
   live: MemoryEntry[],
   target: InvalidationTarget,
   tenantId?: string,

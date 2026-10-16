@@ -1,16 +1,24 @@
 // A store that answers only through the port: serve() blocks hippo.db for any other kind, so a recall
 // path that still opens hippo.db directly throws, while the port's own methods reach the same rows.
 import { withSqliteAllowed } from '../../src/db/index.js';
-import { sqliteStore, type HippoStore, type VectorReads } from '../../src/store/index.js';
+import { sqliteStore, type HippoStore, type OptionalGroup, type StoreGroups } from '../../src/store/index.js';
+
+const OPTIONAL_GROUPS: ReadonlySet<string> = new Set<OptionalGroup>(['localFiles', 'vectorViews', 'readiness', 'lastRecall']);
 
 function allowed<A extends unknown[], R>(fn: (...args: A) => R): (...args: A) => R {
   return (...args) => withSqliteAllowed(() => fn(...args));
 }
 
-/** The required methods only, as an add-on built before the vector reads has them. Each is listed by hand so a method added to the port fails to compile here until it is wired. */
-export function portOnlyStoreWithoutVectorReads(hippoRoot: string): HippoStore {
+function allowedGroup<T extends object>(group: T): T {
+  // SAFETY: every member of a store group is a method, each swapped for a wrapper of the same signature.
+  return Object.fromEntries(Object.entries(group).map(([name, method]) => [name, allowed(method)])) as T;
+}
+
+/** hippo.db's required groups and none of the optional ones, so no local files: an add-on store at its smallest. Base
+ * methods are listed by hand so one added to the port fails to compile here until it is wired. */
+export function portOnlyStore(hippoRoot: string): HippoStore {
   const inner = sqliteStore(hippoRoot);
-  return {
+  const base = {
     kind: 'port-only',
     findApiKey: allowed(inner.findApiKey),
     searchRecallEntries: allowed(inner.searchRecallEntries),
@@ -25,17 +33,8 @@ export function portOnlyStoreWithoutVectorReads(hippoRoot: string): HippoStore {
     recordTokens: allowed(inner.recordTokens),
     close: allowed(inner.close),
   };
-}
-
-export function portOnlyStore(hippoRoot: string): HippoStore & { readonly vectors: VectorReads } {
-  const { vectors } = sqliteStore(hippoRoot);
-  return {
-    ...portOnlyStoreWithoutVectorReads(hippoRoot),
-    vectors: {
-      embeddingIndexState: allowed(vectors.embeddingIndexState),
-      storedVectors: allowed(vectors.storedVectors),
-      nearestEntries: allowed(vectors.nearestEntries),
-      physicsParticles: allowed(vectors.physicsParticles),
-    },
-  };
+  const groups = Object.entries(inner).filter(([key]) => !(key in base) && !OPTIONAL_GROUPS.has(key));
+  // SAFETY: what is left of sqliteStore's own keys is its required groups, each wrapped whole.
+  const required = Object.fromEntries(groups.map(([key, group]) => [key, allowedGroup(group)])) as Omit<StoreGroups, OptionalGroup>;
+  return { ...base, ...required };
 }

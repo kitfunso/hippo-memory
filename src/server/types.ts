@@ -1,9 +1,9 @@
 // Public option and handle types for serve(), plus the /v1 route shape.
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import type { ContextWith, StoreContext } from '../api/index.js';
+import type { StoreContext } from '../api/index.js';
 import type { JsonValue } from '../util/json.js';
 import type { RateLimiter } from './rate-limit.js';
-import type { HippoStore, StoreGroup } from '../store/index.js';
+import type { HippoStore, OptionalGroup, StoreGroup } from '../store/index.js';
 
 export interface ServerHandle {
   port: number;
@@ -35,7 +35,7 @@ export interface AddonCall {
 }
 
 /** A POST /v1 route an add-on mounts through serve(): core authenticates and parses first, then sends the
- * returned value as 200 JSON. Under another store it runs only when that store has its `storeReady` group. */
+ * returned value as 200 JSON. Unset, `storeReady` means hippo.db's local files; a required group always passes. */
 export interface AddonRoute {
   readonly path: string;
   readonly handler: (call: AddonCall) => Promise<JsonValue>;
@@ -107,14 +107,14 @@ export interface RouteRequest {
 }
 
 /** A request past the dispatch gate, carrying the caller the gate authenticated. */
-export interface AuthedRouteRequest<G extends StoreGroup = 'base'> extends RouteRequest {
-  ctx: ContextWith<G>;
+export interface AuthedRouteRequest extends RouteRequest {
+  ctx: StoreContext;
 }
 
-/** A route's store status: a `storeReady` group, a `sqliteOnly`
- * reason, or neither while it waits for a group; never both. */
-type StoreStatus<S extends StoreGroup> =
-  | { storeReady?: S; sqliteOnly?: never }
+/** A route's store status: the optional group it needs, a `sqliteOnly`
+ * reason, or neither for a route that runs on any store; never both. */
+type StoreStatus =
+  | { storeReady?: OptionalGroup; sqliteOnly?: never }
   | { sqliteOnly: string; storeReady?: never };
 
 /** What the dispatch gate proves before a handler runs: any caller, an admin, a host admin on loopback, or nothing, for
@@ -127,15 +127,11 @@ export type RouteEndpoint<R> =
   | { regex: RegExp; handler: (r: R, match: RegExpMatchArray) => Promise<void> };
 
 /** One /v1 route: an exact path, a matchPath pattern, or a regex, each paired with one method's handler. Under another
- * store it runs only with its store's `storeReady` group; `loop: 'off'` runs its SQLite work on a worker thread. */
-export type RouteOf<G extends StoreGroup, S extends StoreGroup = G> =
+ * store it runs only with its `storeReady` group; `loop: 'off'` runs its SQLite work on a worker thread. */
+export type Route =
   & { method: string; loop?: 'off' }
-  & StoreStatus<S>
+  & StoreStatus
   & (
-    | ({ auth: Exclude<RouteAuth, 'webhook-signature'> } & RouteEndpoint<AuthedRouteRequest<G>>)
+    | ({ auth: Exclude<RouteAuth, 'webhook-signature'> } & RouteEndpoint<AuthedRouteRequest>)
     | ({ auth: 'webhook-signature' } & RouteEndpoint<RouteRequest>)
   );
-
-/** A route as the table holds it, its handler's group erased: `defineRoute` is where a handler's group meets the
- * row's `storeReady`. */
-export type Route = RouteOf<'base', StoreGroup>;

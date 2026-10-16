@@ -42,6 +42,5 @@ export type {
   WorkingMemoryFilter,
   WorkingMemoryPush,
 } from './port-groups.js';
-export { hasGroup, requireGroup } from './port.js';
-export { narrowStore, type StoreWith } from './narrow.js';
+export { hasGroup, requireGroup, type OptionalGroup } from './port.js';
 export { sqliteStore } from './sqlite/store.js';

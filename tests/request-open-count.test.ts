@@ -11,7 +11,7 @@ import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { serve, type AddonRoute, type ServerHandle } from '../src/server.js';
 import { handleMcpRequest, type McpResponse } from '../src/mcp/server.js';
 import { cliStdioHost } from '../src/cli/api-context.js';
-import { retrieve, remember, narrowContext } from '../src/api/index.js';
+import { retrieve, remember } from '../src/api/index.js';
 import { sqliteStore } from '../src/store/sqlite/store.js';
 
 interface Connection { location(): string | null }
@@ -83,7 +83,7 @@ beforeAll(async () => {
   // Boot opens the held connection, so every count below is the requests' own.
   // An add-on route that runs two api helpers, as a hook route does.
   const addon: AddonRoute = { path: '/v1/test/remember-then-recall', handler: async ({ ctx }) => {
-    await remember(narrowContext(ctx, 'entryWrites'), { content: 'the release train leaves every second Wednesday' });
+    await remember(ctx, { content: 'the release train leaves every second Wednesday' });
     return { total: (await retrieve(ctx, { query: 'release train' })).total };
   } };
   server = await serve({ hippoRoot: root, port: 0, routes: [addon] });

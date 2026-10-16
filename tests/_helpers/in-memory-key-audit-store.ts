@@ -9,7 +9,7 @@ import {
   type ApiKeyRecord, type AppendAuditOpts, type AuditEvent, type HippoStore, type KeyAudit, type ListAuditAfterOpts,
 } from '../../src/entry/store-kit.js';
 import type { StoreSide } from './store-conformance.js';
-import { portOnlyStoreWithoutVectorReads } from './port-only-store.js';
+import { portOnlyStore } from './port-only-store.js';
 
 export interface InMemoryKeyAuditStore extends StoreSide {
   readonly store: HippoStore & { readonly keyAudit: KeyAudit };
@@ -70,7 +70,7 @@ export function inMemoryKeyAuditStore(hippoRoot: string): InMemoryKeyAuditStore 
     },
   };
   const store: InMemoryKeyAuditStore['store'] = {
-    ...portOnlyStoreWithoutVectorReads(hippoRoot),
+    ...portOnlyStore(hippoRoot),
     kind: 'in-memory',
     async findApiKey(keyId) {
       const key = keys.get(keyId);

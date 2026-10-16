@@ -6,7 +6,7 @@ import { passesScopeFilterForRecall, type AuditEvent, type HippoStore, type Memo
 import { withSqliteAllowed } from '../../src/db/open.js';
 import type { DagReads, SessionRawQuery } from '../../src/store/port.js';
 import { MEMORY_SELECT_COLUMNS, rowToEntry, type MemoryRow } from '../../src/store/rows.js';
-import { portOnlyStoreWithoutVectorReads } from './port-only-store.js';
+import { portOnlyStore } from './port-only-store.js';
 import type { StoreSide } from './store-conformance.js';
 
 export interface InMemoryDagReadsStore extends StoreSide {
@@ -82,5 +82,5 @@ export function inMemoryDagReadsStore(hippoRoot: string): InMemoryDagReadsStore 
       closeHippoDb(db);
     }
   });
-  return { store: { ...portOnlyStoreWithoutVectorReads(hippoRoot), kind: 'in-memory', dagReads }, auditRows };
+  return { store: { ...portOnlyStore(hippoRoot), kind: 'in-memory', dagReads }, auditRows };
 }

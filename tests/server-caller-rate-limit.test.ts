@@ -176,8 +176,11 @@ describe('per-caller buckets under a store that is not hippo.db', () => {
       closeHippoDb(openHippoDb(root));
       throw new Error('the stub store does not serve recall');
     };
+    // hippo.db's groups, which serve() fences for this kind, less the local files an add-on route needs.
     const store: HippoStore = {
+      ...sqliteStore(root),
       kind: 'stub',
+      localFiles: undefined,
       findApiKey: async () => record,
       searchRecallEntries: unported,
       entriesByIds: unported,
