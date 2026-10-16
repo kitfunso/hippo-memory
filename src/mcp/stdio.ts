@@ -5,7 +5,14 @@ import { errorFields, errorMessage, log } from '../util/log.js';
 import { requestDeadlineMs } from '../util/request-scope.js';
 import { MAX_BODY_BYTES } from '../util/http-util.js';
 import { parseFrame, type FrameRemainder } from './framing.js';
-import { findHippoRoot, mcpErrorResponse, type McpHost, type McpRequest, type McpResponse } from './protocol.js';
+import {
+  callName,
+  findHippoRoot,
+  mcpErrorResponse,
+  type McpHost,
+  type McpRequest,
+  type McpResponse,
+} from './protocol.js';
 import { resolveTenantId } from '../store/tenant.js';
 import { getGlobalRoot, initGlobal } from '../sharing/global-store.js';
 import { handleMcpRequest } from './request.js';
@@ -86,12 +93,6 @@ async function exitWhenDrained(): Promise<void> {
 
 // The code the MCP SDKs give a request that timed out.
 const REQUEST_TIMEOUT_CODE = -32001;
-
-/** The method, with the tool's name for a tool call, so a timeout names what ran. */
-function callName(req: McpRequest): string {
-  const tool = req.params?.name;
-  return isJsonString(tool) ? `${req.method} ${tool.slice(0, 128)}` : req.method;
-}
 
 /** Answers `req` with one timeout error at the deadline a served request has. The returned function stops the timer and
  * says whether that answer went out, so a later reply is dropped. */
