@@ -9,8 +9,7 @@ import {
   STORE_NOT_PORTED_MESSAGE,
 } from '../util/http-util.js';
 import { SqliteBlockedError } from '../util/sqlite-blocked.js';
-import { STORE_BUSY_MESSAGE } from '../store/port.js';
-import { isStoreBusy } from './busy.js';
+import { isStoreBusy, STORE_BUSY_MESSAGE } from '../store/port.js';
 
 /** The status and client-facing message for one failed request. */
 export interface ApiErrorReply {

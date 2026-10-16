@@ -103,7 +103,7 @@ function bootstrapLegacyStore(db: ReturnType<typeof openHippoDb>, hippoRoot: str
   if (legacyEntries.length === 0) return false;
 
   withWriteScope(db, 'bootstrap_legacy_store', () => {
-    importLegacyEntries(db, hippoRoot, legacyEntries);
+    importLegacyEntries(db, hippoRoot, legacyEntries, 'bootstrapLegacyStore');
     importLegacyIndexAndStats(db, hippoRoot);
 
     // Stamp completion even when every row was rejected; see the gate above.
@@ -112,7 +112,12 @@ function bootstrapLegacyStore(db: ReturnType<typeof openHippoDb>, hippoRoot: str
   return true;
 }
 
-function importLegacyEntries(db: DatabaseSyncLike, hippoRoot: string, legacyEntries: MemoryEntry[]): void {
+export function importLegacyEntries(
+  db: DatabaseSyncLike,
+  hippoRoot: string,
+  legacyEntries: MemoryEntry[],
+  caller: string,
+): void {
   // Guard live per row: a stale markdown mirror could resurrect a rejected value. Plain audit()
   // inline, because nothing rolls back on a per-row skip.
   let rejectedCount = 0;
@@ -137,7 +142,7 @@ function importLegacyEntries(db: DatabaseSyncLike, hippoRoot: string, legacyEntr
     }
   }
   if (rejectedCount > 0) {
-    log.warn(`bootstrapLegacyStore: skipped ${rejectedCount} rejected value(s) found in legacy mirrors`);
+    log.warn(`${caller}: skipped ${rejectedCount} rejected value(s) found in legacy mirrors`);
   }
 }
 

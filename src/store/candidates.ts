@@ -184,13 +184,18 @@ const decayRankSql = (): string => `pinned DESC,
     / (half_life_days * ${rewardFactorSql()}) END ASC NULLS LAST,
   id ASC`;
 
-/** Live tenant rows passing `filter`, at most `filter.cap`, in loadAllEntries' order; below the cap, every such row. */
-export function loadContextCandidates(
-  hippoRoot: string,
+export interface ContextRowsWhere {
+  where: string[];
+  params: Array<string | number>;
+}
+
+/** The shared WHERE of a context read: live tenant rows, then `extra` predicates, then the scope and origin rules. */
+export function contextRowsWhere(
   tenantId: string,
-  filter: ContextCandidateFilter,
-): MemoryEntry[] {
-  const where = ['tenant_id = ?', `COALESCE(superseded_by, '') = ''`];
+  filter: Pick<ContextCandidateFilter, 'exactScope' | 'ownScope' | 'project'>,
+  extra: readonly string[] = [],
+): ContextRowsWhere {
+  const where = ['tenant_id = ?', `COALESCE(superseded_by, '') = ''`, ...extra];
   const params: Array<string | number> = [tenantId];
   if (filter.exactScope) {
     where.push('scope = ?');
@@ -204,6 +209,16 @@ export function loadContextCandidates(
     where.push(`(origin_project = '' OR ${originInSql(filter.project)})`);
     params.push(...filter.project);
   }
+  return { where, params };
+}
+
+/** Live tenant rows passing `filter`, at most `filter.cap`, in loadAllEntries' order; below the cap, every such row. */
+export function loadContextCandidates(
+  hippoRoot: string,
+  tenantId: string,
+  filter: ContextCandidateFilter,
+): MemoryEntry[] {
+  const { where, params } = contextRowsWhere(tenantId, filter);
   const cap = Math.max(0, Math.trunc(filter.cap));
   const whereSql = where.join(' AND ');
   return onHandle(
