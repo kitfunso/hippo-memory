@@ -14,3 +14,17 @@ Set on 2026-10-16. A test worker started timing the candidates' test commands be
 - **Fewer than 10.** If the tiers end with fewer than 10 repositories, stage 3 stops and reports, since the go fixed 10.
 
 `C:/z0-runs/scored/pick.mjs` (sha256 `83a0bed66454ddfb5a2a713a8ffdf18072b8781f0b6a53734464219f424789e6`) applies the rule to `testgate.json` and `snapshot-gate.json` and writes `picks.json`. `node C:/z0-runs/scored/pick.mjs --order-only` prints the order; its first 10 are linguist, compose, quivr, zotero-format-metadata, DeepSeek-Reasonix, apollo, comprehensive-rust, ant-design-pro, aspnetcore and rustfs.
+
+## Split rule, set before any family was authored or screened
+
+Set on 2026-10-16. The split uses family numbers only, never how strongly a family screened.
+
+- **Numbers.** Each repository's families are numbered in authoring order, `<key>-f1` upward. An inventory session first lists the repository's usable rules. Family sessions then write up to 4 families each, 12 at most. A top-up session continues the numbering.
+- **Screen in waves.** Families 1 to 8 are screened first, under the keep rule of prereg line 68. Families 9 to 12 are screened only for a repository with no admissible split after wave 1. A void screen session counts as missing. If a family's recorded sessions already fix its verdict, the verdict stands, as for hp-f4 in the stage 2 record; otherwise the family is screened again.
+- **Set N.** Merged against every kept family of the repository. Set R's sequence takes the first 6 in merge order.
+- **Pools.** A pool is 6 kept families. Pools are tried in lexicographic order of their sorted family numbers, so the first is the 6 lowest-numbered kept families.
+- **Splits.** Within a pool, 3 families go to set X and 3 to set R. Splits are tried in lexicographic order of set X's sorted numbers. The first admissible split is taken.
+- **Admissible.** Reversal families in set X and set R differ by at most 1. Each set holds at most 1 template family, so across the 10 repositories each set is at least two thirds maintainer rules (prereg line 51). Set X's lesson tasks draw an order on seeds 1 to 9 as sequence `<key>-x`. Set R's lesson tasks plus its 6 set N tasks draw an order on seeds 1 to 9 as sequence `<key>`. These are the sequence ids the scored spec uses.
+- **No admissible split.** Wave 2 is screened. If there is still none, or fewer than 6 families are kept, a top-up session writes up to 4 more families from unused inventory rules; they are screened and the rule runs again. If the repository still has no admissible split, the next spare replaces it.
+
+`C:/z0-runs/scored/split.mjs` (sha256 `9c4da180d4cfca570475084d509fc0ba9c8206818ca24371b4f12d8bd74c8160`) applies the rule to one repository's merged spec and kept list. It draws orders with the runner commit's `drawOrder` (`45b57c6b`, `scripts/token-eval/lessons.mjs`).
