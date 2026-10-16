@@ -373,6 +373,28 @@ The same defects in chunks that passed G5, sized and left as judged (reading 19)
 - bm-f4-l1 and cj-f2-l1 judge every commit of the session. With their amend fixes in place, judging only the resume's commits moves none of their finals.
 - `cal-ml2`'s `ml-commit-format.mjs` still counts a message that an amend replaced. All 8 of its teach corrections were amends; judged on the resume's commits alone, 7 of those 8 finals would pass.
 
+## S9: G5 on boring-maths set X, round 2
+
+The post-fix regrade on `df959fe0` (`C:/z0-runs/s9/chain-bmx-r2.ps1`) ran all 88 cells with no errors. It moved 16 finals from fail to pass, 8 each of bm-f5-l1 and bm-f5-l2, and no first verdict; no check and no acceptance result changed between its two runs. The blind reader's round 2 (seed 42, 30 of 90 eligible pairs, 6 of them split at a follow-up message) disagreed with the checkers on 0 pairs, so G5 passes for `cal-bmx` (`C:/z0-runs/s7/cal-bmx/grading.json`).
+
+## S9: sizing with two set X repositories
+
+`bash C:/z0-runs/s9/size-a2x.sh 229.2` on `df959fe0` (sizer at `d06ae697`; `C:/z0-runs/s9/sizes-a2x.json`), on all four chunks after G5, with the regraded runs of `cal-cj4`, `cal-bm4` and `cal-bmx`. Set X now has two repositories, so H2's spreads come from 12 units on 4 degrees of freedom: noise 0.167 (bound 0.404), family and sequence 0. H1's are unchanged: noise 0.141 (bound 0.343).
+
+- At the preregistered 15 points every count from 8 repositories up fits, and none passes at the bounds. `choose()` then takes the cheapest fit and checks the level there only: 8 repositories, set R 24 families, set N 48 tasks, set X 32 families, 4,941 sessions, $987 of Claude and $339 of Codex at list price. Its level fails. H1's rule-at-bounds cell gives 3.09% false wins against a ceiling of 2.93%, on the 5,316 of 20,000 runs the rule kept (it stops 73%). H2's level holds there, 2.4% against 2.8%.
+- At 20 points: 20 repositories, passing at the bounds, 5,608 sessions, $1,132, level held. At 25 points: 15 repositories, passing at the bounds, 4,205 sessions, $849, level held.
+
+Under Amendment 2 item 6 the scored-set inventory picks the repository count, and the level must hold at that design. `bash C:/z0-runs/s9/size-a2x-at.sh <N>` forces the count (`sizes-a2x-e0.15-r<N>.json`). At 15 points the level holds at every other fitting count:
+
+| Repositories | Set R / X families, set N tasks | H1 win, point (bounds) | H2 win, point (bounds) | H4 pass | Sessions | Claude | Codex | Claude at the seed cap |
+|---|---|---|---|---|---|---|---|---|
+| 10 | 30 / 30, 60 | 0.913 (0.519) | 0.870 (0.310) | 0.886 | 5,187 | $1,050 | $330 | $1,976 |
+| 12 | 24 / 36, 48 | 0.808 (0.215) | 0.935 (0.554) | 0.849 | 5,011 | $994 | $352 | $1,761 |
+| 15 | 30 / 30, 60 | 0.904 (0.479) | 0.861 (0.308) | 0.928 | 5,182 | $1,050 | $326 | $1,976 |
+| 20 | 40 / 40, 80 | 0.962 (0.722) | 0.951 (0.641) | 0.894 | 5,964 | $1,202 | $373 | $2,635 |
+
+The rule-at-bounds cells are the highest in each, 1.9% to 2.3% against ceilings of 2.8% to 2.9%; every other cell is at most 1.7%. So the freeze at 15 points can go ahead at 10 or more repositories, with the count left to the inventory, where 2 to 4 conventions per repository bound the families. Funding is open: every design is past the $200 a month of free Console credit.
+
 ## Contract limits found
 
 - A checker's `CHECK_POST_COMMIT` is a state commit whose parent is the pre-session commit, so the agent's own commits are not visible to it. Commit-message rules are checked from the `git commit` commands in `CHECK_COMMANDS`.
