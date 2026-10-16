@@ -8,7 +8,7 @@ import { BadRequestError, NotFoundError } from '../core/api-errors.js';
 import { withWriteScope, type DatabaseSyncLike } from '../db/index.js';
 import { onHandle } from './open.js';
 import { writeEntryAt } from './sqlite/entry-writes-group.js';
-import { assertTenantId } from './tenant.js';
+import { assertTenantId } from '../core/tenant-id.js';
 import { createMemory, Layer, type MemoryEntry, type MemoryKind } from '../core/memory.js';
 import { appendAuditEvent } from './audit.js';
 import { keysetAfter, type KeysetPosition } from '../util/keyset.js';

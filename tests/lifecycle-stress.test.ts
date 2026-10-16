@@ -27,7 +27,7 @@ import { isEmbeddingAvailable } from '../src/embeddings/local.js';
 import { loadEmbeddingIndex } from '../src/store/vector-index.js';
 import { skipWithoutEmbeddings } from './_helpers/embedding-backend.js';
 import { physicsSearch } from '../src/search/physics-search.js';
-import { consolidate } from '../src/consolidate/sleep.js';
+import { consolidate } from '../src/index.js';
 import { DEFAULT_PHYSICS_CONFIG } from '../src/core/physics-config.js';
 
 import { injectStream } from '../scripts/lifecycle-stress/inject.mjs';

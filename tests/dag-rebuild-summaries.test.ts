@@ -21,7 +21,7 @@ import { openHippoDb, withSharedStoreHandles, type DatabaseSyncLike } from '../s
 import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { rebuildDirtySummaries, buildDag } from '../src/consolidate/dag.js';
 import * as dagModule from '../src/consolidate/dag.js';
-import { consolidate } from '../src/consolidate/sleep.js';
+import { consolidate } from '../src/index.js';
 import { insertRejectedValue, rejectionDigest, normalizeValueForRejection } from '../src/store/rejection.js';
 import { sqliteConsolidation } from '../src/store/sqlite/consolidation-group.js';
 import { sqliteSyncStore } from '../src/store/sqlite/store.js';

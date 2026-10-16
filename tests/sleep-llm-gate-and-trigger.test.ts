@@ -11,7 +11,7 @@ import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { readEntry } from '../src/store/entry-reads.js';
 import { countCreatedSinceLastSleep } from '../src/store/index-and-stats.js';
-import { consolidate } from '../src/consolidate/sleep.js';
+import { consolidate } from '../src/index.js';
 import { remember } from '../src/api/index.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 

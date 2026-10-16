@@ -11,7 +11,7 @@ import {
 import { withSqliteAllowed } from '../../src/db/open.js';
 import { HANDOFF_COLUMNS } from '../../src/store/handoffs.js';
 import { MEMORY_SELECT_COLUMNS, rowToEntry, type MemoryRow } from '../../src/store/rows.js';
-import { assertTenantId } from '../../src/store/tenant.js';
+import { assertTenantId } from '../../src/core/tenant-id.js';
 import { inMemoryVectorStore } from './in-memory-vector-store.js';
 import type { StoreSide } from './store-conformance.js';
 

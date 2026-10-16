@@ -20,7 +20,7 @@ import {
 import { migrateDefaultHalfLife, storeHalfLifeBase, planHalfLifeMigration } from '../src/consolidate/half-life-migration.js';
 import { sqliteSyncStore } from '../src/store/sqlite/store.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
-import { consolidate } from '../src/consolidate/sleep.js';
+import { consolidate } from '../src/index.js';
 import { saveDecision, closeDecision } from '../src/objects/decisions.js';
 import { openIncident, resolveOpenIncident } from '../src/objects/incidents.js';
 import { saveCustomerNote } from '../src/objects/customer-notes.js';

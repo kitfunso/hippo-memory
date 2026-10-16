@@ -4,7 +4,7 @@
 
 import { DEFAULT_LIST_LIMIT } from '../util/limits.js';
 import { BadRequestError } from '../core/api-errors.js';
-import { assertTenantId } from '../store/tenant.js';
+import { assertTenantId } from '../core/tenant-id.js';
 import type { KeysetPosition } from '../util/keyset.js';
 import type { SavableDescriptor } from './descriptor.js';
 import { closeObject, listObjects, objectById, saveObject } from './lifecycle.js';

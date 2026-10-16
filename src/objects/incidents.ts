@@ -3,7 +3,7 @@
  * NULL) is for recall. linked_memory_ids must all exist in the SAME tenant or save throws before the insert. */
 
 import { BadRequestError, ConflictError, NotFoundError } from '../core/api-errors.js';
-import { assertTenantId } from '../store/tenant.js';
+import { assertTenantId } from '../core/tenant-id.js';
 import type { KeysetPosition } from '../util/keyset.js';
 import type { ObjectDescriptor } from './descriptor.js';
 import { closeObject, listObjects, objectById, objectMirror } from './lifecycle.js';

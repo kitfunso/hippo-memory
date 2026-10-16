@@ -31,7 +31,7 @@ import { saveCustomerNote } from '../src/objects/customer-notes.js';
 import { savePrediction } from './_helpers/save-prediction.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { queryAuditEvents, type AuditEvent, type AuditOp } from '../src/store/audit.js';
-import { consolidate } from '../src/consolidate/sleep.js';
+import { consolidate } from '../src/index.js';
 import { insertDormantRow } from '../src/store/dormant.js';
 import { loadConfig } from '../src/core/config.js';
 import { createMemory, Layer, calculateStrength, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../src/core/memory.js';

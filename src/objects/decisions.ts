@@ -7,10 +7,9 @@
 
 import { BadRequestError } from '../core/api-errors.js';
 import type { MemoryEntry } from '../core/memory.js';
-import { writeEntry } from '../store/entry-writes.js';
-import { assertTenantId } from '../store/tenant.js';
+import { assertTenantId } from '../core/tenant-id.js';
 import type { KeysetPosition } from '../util/keyset.js';
-import type { Objects } from '../store/port.js';
+import type { EntryWrites, Objects } from '../store/port.js';
 import type { SavableDescriptor } from './descriptor.js';
 import { closeObject, listObjects, objectById, saveObject } from './lifecycle.js';
 import type { Decision, DecisionStatus } from '../core/object-types.js';
@@ -78,10 +77,10 @@ export function saveDecision(
  * Weaken the memory a new decision replaces, once the save has committed: half-life halved to a day at least, marked
  * stale, tagged `superseded`.
  */
-export function weakenSupersededMemory(hippoRoot: string, entry: MemoryEntry, actor: string = 'cli'): void {
+export function weakenSupersededMemory(writes: EntryWrites, entry: MemoryEntry, actor: string = 'cli'): Promise<void> {
   const tags = entry.tags.includes(SUPERSEDED_TAG) ? entry.tags : [...entry.tags, SUPERSEDED_TAG];
   const halved = Math.max(1, Math.floor(entry.half_life_days / 2));
-  writeEntry(hippoRoot, { ...entry, half_life_days: halved, confidence: 'stale', tags }, { actor });
+  return writes.writeEntry({ entry: { ...entry, half_life_days: halved, confidence: 'stale', tags }, actor });
 }
 
 /** Close (retire) an active decision with no successor; the memory mirror is not mutated. */

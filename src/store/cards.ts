@@ -8,7 +8,7 @@ import {
   HandoffOutcome,
 } from '../core/handoff.js';
 import { Card, CardStatus, CardRun, CardComment, CARD_LEASE_MS, assertCardTransition } from '../core/card.js';
-import { assertTenantId } from './tenant.js';
+import { assertTenantId } from '../core/tenant-id.js';
 import { onHandle, openStore } from './open.js';
 import { chunked } from '../util/chunked.js';
 import { HANDOFF_COLUMNS } from './handoffs.js';

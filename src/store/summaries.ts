@@ -1,6 +1,6 @@
 import { DAG_LEVEL, type MemoryEntry } from '../core/memory.js';
 import { type DatabaseSyncLike, withWriteScope } from '../db/index.js';
-import { assertTenantId } from './tenant.js';
+import { assertTenantId } from '../core/tenant-id.js';
 import { findRejectedValue, rejectionDigest } from './rejection.js';
 import { log } from '../util/log.js';
 import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry } from './rows.js';

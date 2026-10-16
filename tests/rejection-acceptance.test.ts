@@ -35,7 +35,7 @@ import { cmdCapture } from '../src/capture/command.js';
 import { syncGlobalToLocal } from '../src/sharing/global-sync.js';
 import { autoShare } from '../src/sharing/share.js';
 import * as api from '../src/api/index.js';
-import { consolidate } from '../src/consolidate/sleep.js';
+import { consolidate } from '../src/index.js';
 import { importEntries } from '../src/importers/core.js';
 import { importVault } from '../src/importers/vault.js';
 import { LATEST_SCHEMA_VERSION } from './_helpers/schema-version.js';

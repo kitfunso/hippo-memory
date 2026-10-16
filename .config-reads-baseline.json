@@ -1,5 +1,4 @@
 {
-  "src/consolidate/sleep.ts": 1,
   "src/core/project-identity.ts": 1,
   "src/embeddings/provider.ts": 1
 }

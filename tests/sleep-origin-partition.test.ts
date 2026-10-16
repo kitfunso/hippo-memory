@@ -9,7 +9,7 @@ import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { Layer, type MemoryEntry } from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { consolidate } from '../src/consolidate/sleep.js';
+import { consolidate } from '../src/index.js';
 import { detectConflicts } from '../src/consolidate/conflicts.js';
 import { deduplicateStore } from '../src/consolidate/dedupe.js';
 import { buildDag, buildEntityProfiles } from '../src/consolidate/dag.js';

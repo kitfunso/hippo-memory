@@ -8,8 +8,7 @@ import { MemoryEntry, canAutoDelete, LEGACY_TYPED_HALF_LIFE, type DecayOptions }
 import type { LoadedRows } from '../store/delete-and-batch.js';
 import type { AppendAuditOpts } from '../store/audit.js';
 import type { Consolidation, LocalFiles } from '../store/port.js';
-import { sqliteSyncStore } from '../store/sqlite/store.js';
-import { type HippoConfig, loadConfig } from '../core/config.js';
+import type { HippoConfig } from '../core/config.js';
 import { migrateDefaultHalfLife } from './half-life-migration.js';
 import { errorFields, errorMessage, log } from '../util/log.js';
 import { WRITE_BUDGET, type WriteBudget } from '../util/write-budget.js';
@@ -23,19 +22,11 @@ import { llmPasses } from './llm-passes.js';
 import { physicsPass } from './physics-pass.js';
 import { DAY_MS } from '../util/time.js';
 
-type ConsolidateOptions = {
+export type ConsolidateOptions = {
   dryRun?: boolean; now?: Date; fetcher?: typeof fetch; budget?: WriteBudget;
   /** The caller's config for `hippoRoot`; absent, `consolidate` reads the store's config.json. */
   config?: HippoConfig;
 };
-
-/**
- * Run a full consolidation pass on the hippo.db under `hippoRoot`.
- */
-export async function consolidate(hippoRoot: string, options: ConsolidateOptions = {}): Promise<ConsolidationResult> {
-  const config = options.config ?? loadConfig(hippoRoot);
-  return runConsolidation(sqliteSyncStore(hippoRoot).localFiles, { ...options, config });
-}
 
 /** A full consolidation pass whose store work goes through `local.consolidation`. */
 export async function runConsolidation(

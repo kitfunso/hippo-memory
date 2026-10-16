@@ -3,7 +3,7 @@ import { isSharedStore } from '../core/config.js';
 import { closeHippoDb, HOOK_DB_WAIT_MS, scopedBusyWait, withWriteScope, type DatabaseSyncLike } from '../db/index.js';
 import { raiseMinBinary } from '../db/meta.js';
 import { originInSql } from '../core/project-identity.js';
-import { assertTenantId } from './tenant.js';
+import { assertTenantId } from '../core/tenant-id.js';
 import type { JsonObject } from './working-memory.js';
 import { redactSecretsStrict } from '../util/secret-detect.js';
 import { TASK_OWNER_MIN_BINARY } from '../util/version.js';

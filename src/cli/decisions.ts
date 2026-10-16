@@ -3,7 +3,7 @@
 import { MemoryEntry } from '../core/memory.js';
 import { getMemory } from '../api/memories/memories.js';
 import { objectsOf } from '../api/objects/objects.js';
-import type { Objects } from '../store/port.js';
+import type { EntryWrites, Objects } from '../store/port.js';
 import { extractPathTags } from '../search/path-context.js';
 import * as decisionsModule from '../objects/decisions.js';
 import { printError } from './output.js';
@@ -100,7 +100,7 @@ async function decideCreate(ctx: StoreContext, decisionText: string, flags: CliF
     extraTags: decisionPathTags,
   });
 
-  if (oldEntry) weakenOrWarn(hippoRoot, oldEntry, supersedesMemId);
+  if (oldEntry) await weakenOrWarn(ctx.store.entryWrites, oldEntry, supersedesMemId);
 
   console.log(`Decision recorded: #${created.id}`);
   if (created.memoryId) console.log(`  memory: ${created.memoryId}`);
@@ -114,11 +114,11 @@ function exitWithDecideUsage(): never {
   fail('       hippo decide close <id>');
 }
 
-function weakenOrWarn(hippoRoot: string, oldEntry: MemoryEntry, supersedesMemId: string | null): void {
+async function weakenOrWarn(writes: EntryWrites, oldEntry: MemoryEntry, supersedesMemId: string | null): Promise<void> {
   // Best-effort and last: saveDecision already committed. Failing here would make a retry find no active
   // decision for the old memory and create a duplicate active successor, so warn instead.
   try {
-    decisionsModule.weakenSupersededMemory(hippoRoot, oldEntry);
+    await decisionsModule.weakenSupersededMemory(writes, oldEntry);
   } catch (e) {
     printError(
       `  warning: decision recorded and superseded, but failed to weaken the prior memory ${supersedesMemId}: ${errorMessage(e)}`,

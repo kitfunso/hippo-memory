@@ -25,7 +25,7 @@ import {
   getCurrentSchemaVersion,
 } from '../src/db/index.js';
 import { Layer } from '../src/core/memory.js';
-import { consolidate } from '../src/consolidate/sleep.js';
+import { consolidate } from '../src/index.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));

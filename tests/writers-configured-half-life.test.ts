@@ -12,7 +12,7 @@ import { loadAllEntries, readEntry } from '../src/store/entry-reads.js';
 import { appendSessionEvent } from '../src/store/sessions.js';
 import { createMemory, deriveHalfLife, DEFAULT_HALF_LIFE_DAYS, Layer, type MemoryEntry } from '../src/core/memory.js';
 import * as api from '../src/api/index.js';
-import { consolidate } from '../src/consolidate/sleep.js';
+import { consolidate } from '../src/index.js';
 import { buildDag, buildEntityProfiles } from '../src/consolidate/dag.js';
 import { storeExtractedFacts } from '../src/learn/extract.js';
 import { importGenericFile } from '../src/importers/sources.js';

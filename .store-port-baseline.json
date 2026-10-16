@@ -10,7 +10,7 @@
   "txLiterals": 0,
   "tenantResolvesInCli": 0,
   "storeImportsInCli": 4,
-  "storeImportsInDomain": 3,
+  "storeImportsInDomain": 2,
   "handleHoldersOutside": 0,
   "storeFilesWithoutSql": 2,
   "storeFilesWithoutSqlList": [

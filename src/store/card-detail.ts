@@ -5,7 +5,7 @@ import {
   loadCardCommentsAt, loadCardDepsAt, loadCardRow, loadCardRunsAt, loadLatestHandoffForCardAt,
 } from './cards.js';
 import { onHandle, openStore } from './open.js';
-import { assertTenantId } from './tenant.js';
+import { assertTenantId } from '../core/tenant-id.js';
 
 /** A card plus everything `hippo card show` prints about it. */
 export interface CardDetail {

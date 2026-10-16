@@ -6,7 +6,7 @@ import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { consolidate } from '../src/consolidate/sleep.js';
+import { consolidate } from '../src/index.js';
 import { storeExtractedFacts } from '../src/learn/extract.js';
 import { generateDagSummary } from '../src/consolidate/dag-summary.js';
 import { Layer } from '../src/core/memory.js';

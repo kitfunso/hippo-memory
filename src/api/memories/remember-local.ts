@@ -8,9 +8,8 @@ import type { ConfidenceLevel, Layer, MemoryEntry, MemoryKind } from '../../core
 import { computeSalience, type SalienceResult } from '../../core/salience.js';
 import { loadNewestEntries, schemaFitInStore } from '../../store/candidates.js';
 import { embedMemory, type EmbedOutcome } from '../../search/embed-memories.js';
-import { loadAllEntries, readEntry } from '../../store/entry-reads.js';
-import { updateStats } from '../../store/index-and-stats.js';
 import { errorMessage, log } from '../../util/log.js';
+import { getMemory } from './memories.js';
 import { remember } from './remember.js';
 import type { StoreContext } from '../types.js';
 
@@ -56,7 +55,7 @@ export type LocalRememberOutcome =
 
 /** The gate's verdict on one write, or null where it does not
  * judge: the store has it off, or the write is pinned or forced. */
-function salienceVerdict(ctx: StoreContext, input: LocalRememberInput): SalienceResult | null {
+async function salienceVerdict(ctx: StoreContext, input: LocalRememberInput): Promise<SalienceResult | null> {
   const { salience } = configOf(ctx);
   if (!salience.enabled || input.pinned || input.force) return null;
   // computeSalience compares against the last `recentWindow` rows only; below 1 its slice takes every row, so that case
@@ -64,7 +63,7 @@ function salienceVerdict(ctx: StoreContext, input: LocalRememberInput): Salience
   const window = Math.trunc(salience.recentWindow);
   const recent = Number.isSafeInteger(window) && window >= 1
     ? loadNewestEntries(ctx.hippoRoot, ctx.tenantId, window)
-    : loadAllEntries(ctx.hippoRoot, ctx.tenantId);
+    : await ctx.store.lessonWrites.tenantEntries(ctx.tenantId);
   return computeSalience(input.content, [...input.tags], recent, {
     recentWindow: salience.recentWindow,
     overlapThreshold: salience.overlapThreshold,
@@ -75,8 +74,8 @@ function salienceVerdict(ctx: StoreContext, input: LocalRememberInput): Salience
 
 /** The row `remember` just wrote, as the store holds it: the
  * report, the embedding and the extraction all work on that. */
-function storedEntry(ctx: StoreContext, id: string): MemoryEntry {
-  const entry = readEntry(ctx.hippoRoot, id, ctx.tenantId);
+async function storedEntry(ctx: StoreContext, id: string): Promise<MemoryEntry> {
+  const entry = await getMemory(ctx, id);
   if (!entry) throw new Error(`memory ${id} was written but cannot be read back`);
   return entry;
 }
@@ -101,7 +100,7 @@ export async function rememberLocally(
   input: LocalRememberInput,
 ): Promise<LocalRememberOutcome> {
   const schemaFit = schemaFitInStore(ctx.hippoRoot, ctx.tenantId, input.content, input.fitTags ?? input.tags);
-  const verdict = salienceVerdict(ctx, input);
+  const verdict = await salienceVerdict(ctx, input);
   if (verdict?.decision === 'skip') return { status: 'skipped', reason: verdict.reason, score: verdict.score };
   const startedWeak =
     verdict?.decision === 'start_weak' ? { reason: verdict.reason, strength: verdict.score } : undefined;
@@ -121,8 +120,8 @@ export async function rememberLocally(
       weaken: startedWeak && { strength: startedWeak.strength, halfLifeFactor: WEAK_HALF_LIFE_FACTOR },
     },
   });
-  const entry = storedEntry(ctx, id);
-  updateStats(ctx.hippoRoot, { remembered: 1 });
+  const entry = await storedEntry(ctx, id);
+  await ctx.store.lessonWrites.bumpRemembered(1);
   const embedding = indexInBackground(ctx, entry);
   return startedWeak ? { status: 'stored', entry, embedding, startedWeak } : { status: 'stored', entry, embedding };
 }
