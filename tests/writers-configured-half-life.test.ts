@@ -24,6 +24,7 @@ import { sqliteSyncStore } from '../src/store/sqlite/store.js';
 import { runCli } from '../src/cli.js';
 import { runInProcess } from './_helpers/run-in-process.js';
 
+const HIPPO_BIN = path.resolve(__dirname, '..', 'bin', 'hippo.js');
 const CONFIGURED = 730;
 
 const dirs: string[] = [];
@@ -104,7 +105,12 @@ const writers: [string, (root: string) => Promise<MemoryEntry[]>][] = [
     fs.writeFileSync(path.join(repo, 'a.txt'), 'x');
     git('add', 'a.txt');
     git('commit', '-q', '-m', 'fix: the parser dropped the trailing newline on windows paths during export');
-    return added(root, () => hippo(root, 'learn', '--git', '--days', '30'));
+    // A fresh process names the project from the repo made after the store; in process that git config is never read.
+    return added(root, () => execFileSync(process.execPath, [HIPPO_BIN, 'learn', '--git', '--days', '30'], {
+      cwd: repo,
+      env: { ...process.env, HIPPO_SKIP_AUTO_INTEGRATIONS: '1' },
+      stdio: 'ignore',
+    }));
   }],
   ['CLI watch', (root) => added(root, async () => {
     // watch exits with the watched command's code.
