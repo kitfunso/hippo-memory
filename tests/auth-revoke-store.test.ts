@@ -109,12 +109,14 @@ describe('DELETE /v1/auth/keys/:keyId under another store', () => {
     const before = hippoDbState(root, fixture.keys.memberA);
     const memory = inMemoryKeyAuditStore(root);
     handle = await serve({ hippoRoot: root, port: 0, store: memory.store });
-    // An unported route still verifies the key first, which puts it in the verified-key cache.
-    expect((await fetch(`${handle.url}/v1/graph`, { headers: bearer(fixture.tokens.memberA) })).status).toBe(501);
+    // A route that needs local files still verifies the key first, which puts it in the verified-key cache.
+    const { url } = handle;
+    const sleepAs = async (token: string): Promise<number> => (await fetch(`${url}/v1/sleep`, { method: 'POST', headers: bearer(token) })).status;
+    expect(await sleepAs(fixture.tokens.memberA)).toBe(501);
     const res = await revokeVia(handle.url, fixture.keys.memberA, fixture.tokens.adminA);
     expect(res.status).toBe(200);
     expect(await res.json()).toMatchObject({ ok: true, revokedAt: expect.any(String) });
-    expect((await fetch(`${handle.url}/v1/graph`, { headers: bearer(fixture.tokens.memberA) })).status).toBe(401);
+    expect(await sleepAs(fixture.tokens.memberA)).toBe(401);
     expect(memory.auditRows().at(-1)).toMatchObject({ actor: `api_key:${fixture.keys.adminA}`, op: 'auth_revoke', targetId: fixture.keys.memberA });
     expect(hippoDbState(root, fixture.keys.memberA)).toEqual(before);
   });
