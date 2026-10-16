@@ -51,6 +51,14 @@ Authors run `scripts/token-eval/z0-author.mjs` from the runner commit (`45b57c6b
 - **Linguist and Turing.jl drop out.** Linguist kept 16 rules. Sessions 3 and 4 found every one of theirs a duplicate of a lower-numbered rule, session 1 qualified 2, and li-f5 was removed, so linguist can reach 2 families at most. Turing.jl kept 5 rules and 1 template, gave 4 families and has no unused rule left. Under the split rule each needs a spare, and the walk found none. Hackathon-starter kept 4 rules and 2 templates and gave 3 families; halo kept 6 rules and 1 template and gave 5. Neither has an unused rule left. So at most 7 repositories remain: zotero, rustfs, leakcanary, conductor, nacos, maigret and magnetissimo. Under the fewer-than-10 rule this was reported to Keith on 2026-10-16. Authoring, proofs and set N continue for the other repositories, since both ways forward need them.
 - **Session 3.** Conductor, maigret, leakcanary, zotero and nacos started session 3 (kept rules 8 to 11) at 16:44 to 16:51 on brief `7e80d31cc3ab9c7e`. Their families are screened only if wave 1 leaves no admissible split. Zotero's session 3 found both its rules duplicates of lower-numbered rules and made no family, so zotero has 6.
 
+## Convention pairs, a rule set before any pair was read
+
+Set on 2026-10-16. The stage 2 record (S7, a leak voids Comonicon.jl's seed 1) gave the scored set a rule: two families from one repository may not come from one convention, and no key phrase may be the name of a convention that another family's rule belongs to. The stage 3 family briefs never got that line; their duplicate rule (a lower-numbered rule that asks for the same thing) is narrower. So before the screen, a reader who has seen no screen result reads each same-repository pair of families from their rules, source lines and key phrases.
+
+- **One convention.** If two families' rules are parts of one convention, such as two lines of one commit-message standard, the higher-numbered family leaves, as a duplicate does.
+- **A key phrase that names a convention.** If a lesson's key phrase names a convention that another family's rule belongs to, the lesson takes a new key phrase by the same test as a repair round: the shortest phrase that carries the rule's specific content and appears in no task's base, no prompt, and no other lesson's rule or reason. If none exists, the family leaves.
+- A family that leaves counts as not kept for the split rule.
+
 ## Set N rule, set before any set N task was ported or authored
 
 Set on 2026-10-16. It follows stage 2 (`z0-stage2-record.md`, set N).
@@ -59,3 +67,4 @@ Set on 2026-10-16. It follows stage 2 (`z0-stage2-record.md`, set N).
 - **Authored to fill.** If fewer than 6 survive the merge, a blind author writes new tasks that break a tested behaviour on main, away from the files the families touch.
 - **Merge.** Ported tasks come first, then authored ones, each in id order. A task is dropped if it changes a file that a family task or screen changes, or if its request holds any lesson's key phrase. Set R takes the first 6 (split rule).
 - The porter is `C:/z0-runs/scored/setn/port-history.mjs`; its hash is recorded with the first ported tasks.
+- **Porter hash.** `port-history.mjs` sha256 `cc3e1b94ddd3774b`, launched by `port.ps1` (`1a1d9c619825bac2`). Its last edit added a per-repo list of test files that already fail on the snapshot, which zotero's entry does not use. Zotero kept 7 tasks before its history ran out at 20 attempts; maigret kept 9 in 12 attempts. Repositories run two at a time.
