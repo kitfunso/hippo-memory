@@ -18,7 +18,9 @@ The Z0 prereg requires public repositories (line 56) and rules that maintainers 
 
 ## What changes from the Z0 prereg
 
-**Repository.** One: a clone of Quantamental at `d50f60cd` (tag `zq-base-2026-10-15`), tracked files only, so no `.env` or data cache. Each task's base is the commit before its incident's fix, mapped to its snapshot commit as Z0 does. The eval checkout drops `CLAUDE.md`, `AGENTS.md`, `.claude/`, `LEARNINGS.md`, `docs/`, `PLANS/`, `REVIEW.md` and `website/frontend/FRONTEND_RULES.md`, and its history is truncated. Several of these files state the rules under test.
+**Repository.** One: a clone of Quantamental at `d50f60cd` (tag `zq-base-2026-10-15`), tracked files only, so no `.env` or data cache. The eval checkout drops `CLAUDE.md`, `AGENTS.md`, `.claude/`, `LEARNINGS.md`, `docs/`, `PLANS/`, `REVIEW.md` and `website/frontend/FRONTEND_RULES.md`, and its history is truncated to one snapshot commit (`47ad8630`). Several of these files state the rules under test.
+
+**Task bases.** As in Z0's stage 3, every task's base is one commit on that snapshot, written by the author. A family needs six tasks and each lesson has two to five incidents, many with no test, so bases cannot be the incident commits themselves. Instead a base may take back out what an incident's fix added to state or enforce its rule (a comment, a docstring, a guard test), where an agent doing that task would read or run it. That puts the task back in the state the incident happened in. The author lists every such removal.
 
 **Lessons.** Rules from Quantamental's `CLAUDE.md`, each with at least two incidents in its git history, so all are owner rules and none are template lessons. Six enter the screen:
 
