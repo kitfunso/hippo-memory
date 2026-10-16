@@ -11,7 +11,7 @@
   "tenantResolvesInCli": 0,
   "storeImportsInCli": 4,
   "storeImportsInDomain": 3,
-  "handleHoldersOutside": 1,
+  "handleHoldersOutside": 0,
   "storeFilesWithoutSql": 2,
   "storeFilesWithoutSqlList": [
     "src/store/delivery-recorder.ts",
@@ -19,9 +19,7 @@
   ],
   "openersOutsideByFile": {},
   "sqlOutsideByFile": {},
-  "handleHoldersOutsideByFile": {
-    "src/entry/sqlite-handles.ts": 1
-  },
+  "handleHoldersOutsideByFile": {},
   "sqliteLocalMethods": [],
   "sqliteOnlyRoutesList": [],
   "carrierFiles": 0,
