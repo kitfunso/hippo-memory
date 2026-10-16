@@ -3,7 +3,8 @@
 import { estimateTokens } from '../util/token-text.js';
 import type { MemoryEntry } from '../core/memory.js';
 import { passesScopeFilterForRecall, assertScopeRequestAllowed, personalScopeOf } from '../core/recall-scope.js';
-import { classifyOriginProject, projectNames } from '../core/project-identity.js';
+import { projectNames } from '../core/project-identity.js';
+import { eligibleSummaryParents } from './summary-parents.js';
 import type { CallerProject } from './prompt-hook.js';
 import type { StoreContext } from './types.js';
 
@@ -197,10 +198,7 @@ async function substituteSummaries(
     (pid) => (olderByParent.get(pid)?.length ?? 0) >= 2,
   );
   const parents = eligibleParentIds.length > 0
-    ? (await ctx.store.entriesByIds(eligibleParentIds, ctx.tenantId))
-        .filter((p) => (p.dag_level ?? 0) === 2 && !p.superseded_by)
-        .filter((p) => passesScopeFilterForRecall(p.scope ?? null, scope, own))
-        .filter((p) => !project || classifyOriginProject(p.origin_project, project) !== 'cross-project')
+    ? eligibleSummaryParents(await ctx.store.entriesByIds(eligibleParentIds, ctx.tenantId), scope, own, project)
     : [];
   const claimedRawIds = new Set<string>();
   for (const parent of parents) {

@@ -6,7 +6,7 @@ import { recallScopeFilter } from '../../store/search-rows.js';
 import type { ContinuityKey } from '../../store/sessions.js';
 import { estimateTokens } from '../../util/token-text.js';
 import { formatHandoffEvidenceLine } from '../../core/handoff.js';
-import { DAG_LEVEL, type MemoryEntry } from '../../core/memory.js';
+import type { MemoryEntry } from '../../core/memory.js';
 import type { RecallTraceInput } from '../../store/recall-trace.js';
 import type { ActiveGoals, GoalRecallLogRow } from '../../store/goals.js';
 import { boostByGoals, type GoalStackBoostOpts } from '../../search/goal-boost.js';
@@ -22,6 +22,7 @@ import { compareEntryIdentity } from '../../core/compare.js';
 import { dropHeldCopies, duplicateKey, storedTextKeys } from '../../util/same-text.js';
 import { isSharedStore } from '../../core/config.js';
 import { configOf } from '../config-of.js';
+import { eligibleSummaryParents } from '../summary-parents.js';
 import { classifyOriginProject, projectNames } from '../../core/project-identity.js';
 import { decidePlanningFallacy, detectPlanningClaim } from '../../predictions/planning-fallacy.js';
 import type { PlanningFallacyEvidence } from '../../store/planning-fallacy-evidence.js';
@@ -541,13 +542,7 @@ function substituteOverflow(
   limit: number,
   own: string | undefined,
 ): SummaryDecoration[] {
-  const eligibleParents = parents.filter(
-    (p) =>
-      (p.dag_level ?? 0) === DAG_LEVEL.topic &&
-      !p.superseded_by &&
-      passesScopeFilterForRecall(p.scope ?? null, opts.scope, own) &&
-      inCallerProject(p, opts),
-  );
+  const eligibleParents = eligibleSummaryParents(parents, opts.scope, own, opts.project);
   const maxSub = Math.max(1, Math.ceil(limit * SUMMARY_SUB_FRACTION));
   // Most overflowed children first; compareEntryIdentity only breaks a tie, which used to fall to scan order.
   eligibleParents.sort((a, b) => {
