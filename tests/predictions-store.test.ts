@@ -2,29 +2,24 @@
  * E2 prediction first-class object — store-layer tests.
  * Docs: docs/plans/2026-05-26-e2-prediction-object.md
  *
- * Covers:
+ * Covers what only predictions have; SAVEPOINT rollback and the INSERT tenant trigger run per table in typed-object-store.test.ts.
  * 1. savePrediction creates both memory and predictions row
- * 2. SAVEPOINT atomicity: writeEntry afterWrite throw rolls back BOTH
- *    the memory row AND the predictions row (the canonical injection
- *    pattern from tests/connectors-slack-ingest.test.ts)
- * 3. closePrediction updates the row + emits audit
- * 4. Cross-tenant INSERT trigger: tenant_id mismatch raises ABORT
- * 5. ON DELETE SET NULL: forget the memory, prediction survives with NULL memory_id
- * 6. loadPredictionsByClass filters by class + closure_state
- * 7. loadOpenPredictions excludes closed
- * 8. VALID_CLOSURE_STATES rejection at the closePrediction layer
- * 9. Tenant scoping: cross-tenant load returns empty
- * 10. Schema v29 migration produces predictions table + triggers + indexes
+ * 2. closePrediction updates the row + emits audit
+ * 3. ON DELETE SET NULL: forget the memory, prediction survives with NULL memory_id
+ * 4. loadPredictionsByClass filters by class + closure_state
+ * 5. loadOpenPredictions excludes closed
+ * 6. VALID_CLOSURE_STATES rejection at the closePrediction layer
+ * 7. Tenant scoping: cross-tenant load returns empty
+ * 8. UPDATE trigger, re-close and missing-id guards; the closure_state CHECK constraint
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { writeEntryThenFail } from './_helpers/failing-write.js';
 import { deleteEntry } from '../src/store/delete-and-batch.js';
 import { Layer} from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import {
   savePrediction,
   closePrediction,
@@ -37,13 +32,6 @@ import { makeRoot } from './_helpers/make-root.js';
 
 function safeRmSync(p: string): void {
   try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
-}
-
-function countRows(db: DatabaseSyncLike, table: 'memories' | 'predictions'): number {
-  const row = db.prepare(`SELECT COUNT(*) as c FROM ${table}`).get();
-  // SAFETY: the query always selects a single COUNT(*) aggregate as c, so the
-  // driver always returns one row shaped { c: number }.
-  return (row as { c: number }).c;
 }
 
 describe('predictions store (first-class object)', () => {
@@ -91,55 +79,6 @@ describe('predictions store (first-class object)', () => {
     }
   });
 
-  it('SAVEPOINT atomicity: writeEntry throw rolls back both memory and predictions row', () => {
-    // Inject failure mid-savePrediction by writing a manual memory then
-    // calling writeEntry with an afterWrite that throws. Verify no orphan
-    // memory row OR predictions row land.
-    const memBefore = (() => {
-      const db = openHippoDb(home);
-      try {
-        return countRows(db, 'memories');
-      } finally { closeHippoDb(db); }
-    })();
-    const predBefore = (() => {
-      const db = openHippoDb(home);
-      try {
-        return countRows(db, 'predictions');
-      } finally { closeHippoDb(db); }
-    })();
-
-    const mem = createMemory('throwing prediction', {
-      tags: ['prediction', 'test-class'],
-      layer: Layer.Semantic,
-      confidence: 'observed',
-      source: 'prediction',
-      kind: 'distilled',
-      tenantId: 'default',
-    });
-
-    expect(() => {
-      writeEntryThenFail(home, mem);
-    }).toThrow('forced');
-
-    // Memory row count unchanged (SAVEPOINT rollback)
-    const memAfter = (() => {
-      const db = openHippoDb(home);
-      try {
-        return countRows(db, 'memories');
-      } finally { closeHippoDb(db); }
-    })();
-    expect(memAfter).toBe(memBefore);
-
-    // Predictions row count unchanged
-    const predAfter = (() => {
-      const db = openHippoDb(home);
-      try {
-        return countRows(db, 'predictions');
-      } finally { closeHippoDb(db); }
-    })();
-    expect(predAfter).toBe(predBefore);
-  });
-
   it('closePrediction updates the row + emits predict_close audit', () => {
     const pred = savePrediction(home, 'default', {
       classTag: 'rollout-risk',
@@ -174,32 +113,6 @@ describe('predictions store (first-class object)', () => {
       const meta = JSON.parse(auditRows[0].metadata_json) as { prediction_id: number; closure_state: string; has_actual: boolean };
       expect(meta.closure_state).toBe('closed');
       expect(meta.has_actual).toBe(true);
-    } finally {
-      closeHippoDb(db);
-    }
-  });
-
-  it('cross-tenant INSERT trigger raises ABORT on tenant_id mismatch', () => {
-    // Create a memory under tenant 'tenant-a'
-    const mem = createMemory('tenant-a memory', {
-      tags: ['x'],
-      layer: Layer.Semantic,
-      confidence: 'observed',
-      source: 'test',
-      kind: 'distilled',
-      tenantId: 'tenant-a',
-    });
-    writeEntry(home, mem);
-
-    // Attempt manual cross-tenant INSERT with raw SQL
-    const db = openHippoDb(home);
-    try {
-      expect(() => {
-        db.prepare(`
-          INSERT INTO predictions(memory_id, tenant_id, class_tag, claim_text, closure_state, created_at)
-          VALUES (?, 'tenant-b', 'x', 'cross-tenant attempt', 'open', ?)
-        `).run(mem.id, new Date().toISOString());
-      }).toThrow(/tenant_id must match memories\.tenant_id/);
     } finally {
       closeHippoDb(db);
     }
@@ -363,38 +276,9 @@ describe('predictions store (first-class object)', () => {
     }).toThrow(/not found for tenant/);
   });
 
-  it('schema v29 migration produces predictions table + triggers + indexes', () => {
+  it('CHECK constraint rejects an unknown closure_state', () => {
     const db = openHippoDb(home);
     try {
-      // Table exists
-      // SAFETY: the query selects only the `name` column from sqlite_master, so the
-      // row (if any) is shaped { name: string }.
-      const tableRow = db.prepare(
-        `SELECT name FROM sqlite_master WHERE type='table' AND name='predictions'`
-      ).get() as { name?: string } | undefined;
-      expect(tableRow?.name).toBe('predictions');
-
-      // Triggers exist
-      // SAFETY: the query selects only the `name` column from sqlite_master, so every
-      // row is shaped { name: string }.
-      const triggers = db.prepare(
-        `SELECT name FROM sqlite_master WHERE type='trigger' AND name LIKE 'trg_predictions_%'`
-      ).all() as Array<{ name: string }>;
-      const triggerNames = triggers.map((t) => t.name);
-      expect(triggerNames).toContain('trg_predictions_tenant_match_insert');
-      expect(triggerNames).toContain('trg_predictions_tenant_match_update');
-
-      // Indexes exist
-      // SAFETY: the query selects only the `name` column from sqlite_master, so every
-      // row is shaped { name: string }.
-      const indexes = db.prepare(
-        `SELECT name FROM sqlite_master WHERE type='index' AND name LIKE 'idx_predictions_%'`
-      ).all() as Array<{ name: string }>;
-      const indexNames = indexes.map((i) => i.name);
-      expect(indexNames).toContain('idx_predictions_tenant_class');
-      expect(indexNames).toContain('idx_predictions_memory');
-
-      // CHECK constraint via direct violation attempt
       expect(() => {
         db.prepare(`
           INSERT INTO predictions(tenant_id, class_tag, claim_text, closure_state, created_at)

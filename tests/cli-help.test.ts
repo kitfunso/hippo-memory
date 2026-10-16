@@ -6,6 +6,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { parseArgs, runCli, usageText, verbUsage } from '../src/cli.js';
 import type { VerbFlags } from '../src/cli/flags.js';
 import { COMMANDS } from '../src/cli/verbs.js';
@@ -166,10 +167,10 @@ describe('CLI help output is byte-identical and runs nothing', () => {
     expect(pinned(res)).toMatchSnapshot();
   });
 
-  it('hippo --version prints the package version', async () => {
+  it.each(['--version', '-v'])('hippo %s prints the package version', async (flag) => {
     // SAFETY: package.json always carries a string version.
     const { version } = JSON.parse(readFileSync(join(__dirname, '..', 'package.json'), 'utf8')) as { version: string };
-    expect(pick(await run(['--version']))).toEqual({ status: 0, stdout: `${version}\n`, stderr: '' });
+    expect(pick(await run([flag]))).toEqual({ status: 0, stdout: `${version}\n`, stderr: '' });
   });
 });
 
@@ -183,6 +184,17 @@ describe('built CLI', () => {
     });
     expect({ status: res.status, stdout: res.stdout, stderr: ownStderr(res.stderr) }).toEqual(full);
     expect(written()).toEqual([]);
+  });
+
+  it('importing dist/cli.js runs nothing; only bin/hippo.js and a direct run do', () => {
+    const url = pathToFileURL(resolve(__dirname, '..', 'dist', 'cli.js')).href;
+    const res = spawnSync(process.execPath, ['-e', `import(${JSON.stringify(url)}).then(() => console.log('imported'))`], {
+      cwd: dirs.cwd,
+      env: { ...ENV, HOME: dirs.home, USERPROFILE: dirs.home, HIPPO_HOME: dirs.store, HIPPO_SKIP_AUTO_INTEGRATIONS: '1' },
+      encoding: 'utf8',
+      timeout: 10_000,
+    });
+    expect(res.stdout.trim()).toBe('imported');
   });
 });
 

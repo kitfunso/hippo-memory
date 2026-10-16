@@ -2,40 +2,25 @@
  * E2 decision first-class object — store-layer tests.
  * Docs: docs/plans/2026-05-28-e2-decision-object.md
  *
- * Covers:
+ * Covers what only decisions have; the shared lifecycle rules run per kind in typed-object-store.test.ts.
  * 1. saveDecision creates both the memory mirror and the decisions row
- * 2. saveDecision without context: bare memory content, has_context false
- * 3. SAVEPOINT atomicity: writeEntry afterWrite throw rolls back BOTH
- * 4. saveDecision with supersedesDecisionId supersedes the old row atomically
- * 5. supersede CAS: re-superseding an already-superseded row throws, no orphan
- * 6. supersede of a non-existent decision throws not found
- * 7. closeDecision flips active -> closed + emits decision_close audit
- * 8. close guard: not-found vs not-active (already closed / superseded)
- * 9. cross-tenant INSERT trigger raises ABORT (memory tenant mismatch)
- * 10. superseded_by cross-tenant trigger raises ABORT
- * 11. ON DELETE SET NULL: forget the memory, decision survives (decay-bug proof)
- * 12. loadDecisions status filter; loadActiveDecisions excludes non-active
- * 13. loadDecisions rejects an invalid status
- * 14. resolveActiveDecisionIdByMemory (row id first-class, null legacy/superseded)
- * 15. tenant scoping: cross-tenant load returns empty
- * 16. schema v30 produces decisions table + triggers + indexes
+ * 2. a supersede that loses its race after the preflight is a ConflictError (409)
+ * 3. saveDecision without context: bare memory content, has_context false
+ * 4. loadDecisions status filter; loadActiveDecisions excludes non-active
+ * 5. resolveActiveDecisionIdByMemory (row id first-class, null legacy/superseded)
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { writeEntryThenFail } from './_helpers/failing-write.js';
-import { deleteEntry } from '../src/store/delete-and-batch.js';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
 import {
   saveDecision,
   closeDecision,
-  loadDecisionById,
   loadDecisions,
   loadActiveDecisions,
   resolveActiveDecisionIdByMemory,
-  VALID_DECISION_STATES,
 } from '../src/objects/decisions.js';
 import { ConflictError } from '../src/core/api-errors.js';
 import { mapApiError } from '../src/api/error-reply.js';
@@ -156,172 +141,6 @@ describe('decisions store (first-class object)', () => {
     }
   });
 
-  it('SAVEPOINT atomicity: writeEntry throw rolls back both memory and decisions row', () => {
-    const memBefore = countRows(home, 'memories');
-    const decBefore = countRows(home, 'decisions');
-
-    const mem = createMemory('throwing decision', {
-      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-      tags: ['decision'],
-      layer: Layer.Semantic,
-      confidence: 'verified',
-      source: 'decision',
-      tenantId: 'default',
-    });
-    expect(() => {
-      writeEntryThenFail(home, mem);
-    }).toThrow('forced');
-
-    expect(countRows(home, 'memories')).toBe(memBefore);
-    expect(countRows(home, 'decisions')).toBe(decBefore);
-  });
-
-  it('saveDecision with supersedesDecisionId supersedes the old row atomically + emits decision_supersede', async () => {
-    const first = await saveDecision(objectsAt(home), home, 'default', { decisionText: 'use REST' });
-    const second = await saveDecision(objectsAt(home), home, 'default', {
-      decisionText: 'use GraphQL',
-      supersedesDecisionId: first.id,
-    });
-
-    expect(second.status).toBe('active');
-    const reloadedFirst = await loadDecisionById(objectsAt(home), 'default', first.id);
-    expect(reloadedFirst!.status).toBe('superseded');
-    expect(reloadedFirst!.supersededBy).toBe(second.id);
-    expect(reloadedFirst!.supersededAt).not.toBeNull();
-
-    const db = openHippoDb(home);
-    try {
-      const rows = allRows<{ metadata_json: string }>(
-        db,
-        `SELECT metadata_json FROM audit_log WHERE op = 'decision_supersede' AND target_id = ?`,
-        String(first.id),
-      );
-      expect(rows.length).toBe(1);
-      const meta = parseJson<{ decision_id: number; superseded_by: number }>(rows[0].metadata_json);
-      expect(meta.superseded_by).toBe(second.id);
-    } finally {
-      closeHippoDb(db);
-    }
-  });
-
-  it('supersede CAS: re-superseding an already-superseded row throws and leaves no orphan', async () => {
-    const first = await saveDecision(objectsAt(home), home, 'default', { decisionText: 'version one' });
-    await saveDecision(objectsAt(home), home, 'default', { decisionText: 'version two', supersedesDecisionId: first.id });
-
-    const decBefore = countRows(home, 'decisions');
-    const memBefore = countRows(home, 'memories');
-    await expect(async () => {
-      await saveDecision(objectsAt(home), home, 'default', { decisionText: 'version three', supersedesDecisionId: first.id });
-    }).rejects.toThrow(/not active/);
-    // The failed v3 save rolled back: no new decisions row, no new memory.
-    expect(countRows(home, 'decisions')).toBe(decBefore);
-    expect(countRows(home, 'memories')).toBe(memBefore);
-  });
-
-  it('supersede of a non-existent decision throws not found', async () => {
-    await expect(async () => {
-      await saveDecision(objectsAt(home), home, 'default', { decisionText: 'placeholder decision text', supersedesDecisionId: 99999 });
-    }).rejects.toThrow(/not found/);
-  });
-
-  it('preflight prevents self-supersession: superseding the soon-to-be id on an empty store throws not found, creates nothing (codex P1 regression)', async () => {
-    // Fresh store: the next autoincrement id is 1. Superseding id 1 as the very
-    // first op must NOT self-match the row being inserted (which would set it
-    // superseded_by itself). Preflight-before-insert => not found + full rollback.
-    const decBefore = countRows(home, 'decisions');
-    const memBefore = countRows(home, 'memories');
-    await expect(async () => {
-      await saveDecision(objectsAt(home), home, 'default', { decisionText: 'first decision attempt', supersedesDecisionId: 1 });
-    }).rejects.toThrow(/not found/);
-    expect(countRows(home, 'decisions')).toBe(decBefore);
-    expect(countRows(home, 'memories')).toBe(memBefore);
-  });
-
-  it('no decision can supersede itself (superseded_by never equals own id)', async () => {
-    const first = await saveDecision(objectsAt(home), home, 'default', { decisionText: 'predecessor decision' });
-    const second = await saveDecision(objectsAt(home), home, 'default', { decisionText: 'successor decision', supersedesDecisionId: first.id });
-    expect(second.id).not.toBe(first.id);
-    expect(second.supersededBy).toBeNull();
-    const reFirst = await loadDecisionById(objectsAt(home), 'default', first.id);
-    expect(reFirst!.supersededBy).toBe(second.id);
-    expect(reFirst!.supersededBy).not.toBe(reFirst!.id);
-  });
-
-  it('closeDecision flips active -> closed + emits decision_close audit', async () => {
-    const d = await saveDecision(objectsAt(home), home, 'default', { decisionText: 'use webpack' });
-    const closed = await closeDecision(objectsAt(home), 'default', d.id);
-    expect(closed.status).toBe('closed');
-    expect(closed.closedAt).not.toBeNull();
-
-    const db = openHippoDb(home);
-    try {
-      const rows = allRows<{ metadata_json: string }>(
-        db,
-        `SELECT metadata_json FROM audit_log WHERE op = 'decision_close' AND target_id = ?`,
-        String(d.id),
-      );
-      expect(rows.length).toBe(1);
-    } finally { closeHippoDb(db); }
-  });
-
-  it('close guard: not-found and not-active (already closed / superseded) error clearly', async () => {
-    await expect(closeDecision(objectsAt(home), 'default', 88888)).rejects.toThrow(/not found/);
-
-    const d = await saveDecision(objectsAt(home), home, 'default', { decisionText: 'close twice' });
-    await closeDecision(objectsAt(home), 'default', d.id);
-    await expect(closeDecision(objectsAt(home), 'default', d.id)).rejects.toThrow(/not active/);
-
-    const sup = await saveDecision(objectsAt(home), home, 'default', { decisionText: 'orig' });
-    await saveDecision(objectsAt(home), home, 'default', { decisionText: 'next', supersedesDecisionId: sup.id });
-    await expect(closeDecision(objectsAt(home), 'default', sup.id)).rejects.toThrow(/not active/);
-  });
-
-  it('cross-tenant INSERT trigger raises ABORT on memory tenant mismatch', () => {
-    const mem = createMemory('tenant-a memory', {
-      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-      tags: ['decision'],
-      layer: Layer.Semantic,
-      confidence: 'verified',
-      source: 'decision',
-      tenantId: 'tenant-a',
-    });
-    writeEntry(home, mem);
-    const db = openHippoDb(home);
-    try {
-      expect(() => {
-        db.prepare(`
-          INSERT INTO decisions(memory_id, tenant_id, decision_text, status, created_at)
-          VALUES (?, 'tenant-b', 'cross-tenant attempt', 'active', ?)
-        `).run(mem.id, new Date().toISOString());
-      }).toThrow(/tenant_id must match memories\.tenant_id/);
-    } finally { closeHippoDb(db); }
-  });
-
-  it('superseded_by cross-tenant trigger raises ABORT', async () => {
-    const a = await saveDecision(objectsAt(home), home, 'tenant-a', { decisionText: 'a-decision' });
-    const b = await saveDecision(objectsAt(home), home, 'tenant-b', { decisionText: 'b-decision' });
-    const db = openHippoDb(home);
-    try {
-      expect(() => {
-        db.prepare(`UPDATE decisions SET superseded_by = ? WHERE id = ?`).run(b.id, a.id);
-      }).toThrow(/superseded_by must reference a decision in the same tenant/);
-    } finally { closeHippoDb(db); }
-  });
-
-  it('ON DELETE SET NULL: forgetting the memory orphans the decision (decay-bug structural proof)', async () => {
-    const d = await saveDecision(objectsAt(home), home, 'default', { decisionText: 'survives memory decay' });
-    expect(d.memoryId).not.toBeNull();
-    deleteEntry(home, d.memoryId!);
-    const reloaded = await loadDecisionById(objectsAt(home), 'default', d.id);
-    expect(reloaded).not.toBeNull();
-    expect(reloaded!.memoryId).toBeNull();
-    expect(reloaded!.status).toBe('active');
-    expect(reloaded!.decisionText).toBe('survives memory decay');
-    // Still surfaces in the authoritative active list even with no memory.
-    const active = await loadActiveDecisions(objectsAt(home), 'default');
-    expect(active.some((x) => x.id === d.id)).toBe(true);
-  });
-
   it('loadDecisions status filter; loadActiveDecisions excludes non-active', async () => {
     const a = await saveDecision(objectsAt(home), home, 'default', { decisionText: 'active-1' });
     const b = await saveDecision(objectsAt(home), home, 'default', { decisionText: 'to-close' });
@@ -347,16 +166,6 @@ describe('decisions store (first-class object)', () => {
     expect(all.length).toBe(4);
   });
 
-  it('loadDecisions rejects an invalid status', async () => {
-    await expect(async () => {
-      // @ts-expect-error — runtime validation test
-      await loadDecisions(objectsAt(home), 'default', { status: 'retired' });
-    }).rejects.toThrow(/status must be one of/);
-    expect(VALID_DECISION_STATES.has('active')).toBe(true);
-    expect(VALID_DECISION_STATES.has('superseded')).toBe(true);
-    expect(VALID_DECISION_STATES.has('closed')).toBe(true);
-  });
-
   it('resolveActiveDecisionIdByMemory: row id for first-class, null for legacy/superseded', async () => {
     const d = await saveDecision(objectsAt(home), home, 'default', { decisionText: 'first-class' });
     expect(await resolveActiveDecisionIdByMemory(objectsAt(home), 'default', d.memoryId!)).toBe(d.id);
@@ -377,35 +186,5 @@ describe('decisions store (first-class object)', () => {
     const sup = await saveDecision(objectsAt(home), home, 'default', { decisionText: 'old' });
     await saveDecision(objectsAt(home), home, 'default', { decisionText: 'new', supersedesDecisionId: sup.id });
     expect(await resolveActiveDecisionIdByMemory(objectsAt(home), 'default', sup.memoryId!)).toBeNull();
-  });
-
-  it('tenant scoping: cross-tenant load returns empty', async () => {
-    await saveDecision(objectsAt(home), home, 'tenant-a', { decisionText: 'a-dec' });
-    await saveDecision(objectsAt(home), home, 'tenant-b', { decisionText: 'b-dec' });
-    expect((await loadDecisions(objectsAt(home), 'tenant-a')).length).toBe(1);
-    expect((await loadDecisions(objectsAt(home), 'tenant-b')).length).toBe(1);
-    expect((await loadDecisions(objectsAt(home), 'tenant-c')).length).toBe(0);
-    const a = (await loadDecisions(objectsAt(home), 'tenant-a'))[0];
-    expect(await loadDecisionById(objectsAt(home), 'tenant-b', a.id)).toBeNull();
-  });
-
-  it('schema v30 produces decisions table + triggers + indexes', () => {
-    const db = openHippoDb(home);
-    try {
-      expect(db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name='decisions'`).get()).toBeDefined();
-      const triggers = allRows<{ name: string }>(
-        db,
-        `SELECT name FROM sqlite_master WHERE type='trigger' AND name LIKE 'trg_decisions_%'`,
-      ).map((t) => t.name);
-      expect(triggers).toContain('trg_decisions_tenant_match_insert');
-      expect(triggers).toContain('trg_decisions_tenant_match_update');
-      expect(triggers).toContain('trg_decisions_supersede_tenant_match_update');
-      const indexes = allRows<{ name: string }>(
-        db,
-        `SELECT name FROM sqlite_master WHERE type='index' AND name LIKE 'idx_decisions_%'`,
-      ).map((i) => i.name);
-      expect(indexes).toContain('idx_decisions_tenant_status');
-      expect(indexes).toContain('idx_decisions_memory');
-    } finally { closeHippoDb(db); }
   });
 });

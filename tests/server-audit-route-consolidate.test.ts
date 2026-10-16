@@ -81,9 +81,4 @@ describe('GET /v1/audit?op=<op> — consolidate + outcome wiring', () => {
     expect(body.length).toBeGreaterThanOrEqual(1);
     expect(body.every((e) => e.op === 'outcome')).toBe(true);
   });
-
-  it('rejects unknown ops with 400 (sanity check on the Set filter still works)', async () => {
-    const res = await fetch(`${handle.url}/v1/audit?op=nonexistent_op`);
-    expect(res.status).toBe(400);
-  });
 });

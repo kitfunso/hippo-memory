@@ -1,53 +1,45 @@
-// tests/goal-recall-log.test.ts
-//
-// B3 Task 8: verify goal_recall_log captures memories recalled via real CLI
-// recall under an active goal — and stays empty when no active goal matches.
-//
-// Uses the Task-6 isolation harness pattern: separate cwd tempdir, isolated
-// HIPPO_HOME global root, HIPPO_SKIP_AUTO_INTEGRATIONS=1, initStore on the
-// per-test .hippo dir. This prevents dev-machine memories from leaking in.
+// B3 Task 8: goal_recall_log captures memories CLI recall boosts under an active goal, and stays empty when no
+// active goal matches. Recall runs in process on a per-test store with an isolated HIPPO_HOME.
 import type { FullContext } from './_helpers/api-ctx.js';
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
-import { join } from 'node:path';
-import { execFileSync } from 'node:child_process';
 import { remember } from '../src/api/index.js';
+import { resetSessionRings } from '../src/api/recall/finish.js';
+import { runCli } from '../src/cli.js';
 import { pushGoal } from '../src/store/goals.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { makeEnv, type TestEnv } from './_helpers/cli-env.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+import { runInProcess } from './_helpers/run-in-process.js';
 
-const CLI = join(process.cwd(), 'dist', 'cli.js');
+const savedCwd = process.cwd();
 
-function runRecall(env: TestEnv, query: string, sessionId: string, extraArgs: string[] = []) {
-  return execFileSync(
-    'node',
-    [CLI, 'recall', query, '--json', '--budget', '2000', ...extraArgs],
-    {
-      cwd: env.cwd,
-      env: {
-        ...process.env,
-        HIPPO_HOME: env.globalRoot,
-        HIPPO_TENANT: 'default',
-        HIPPO_SESSION_ID: sessionId,
-        HIPPO_SKIP_AUTO_INTEGRATIONS: '1',
-      },
-      encoding: 'utf8',
-    },
-  );
+/** `hippo recall <query> --json` in this process, with the empty recall rings a fresh `hippo` starts with. */
+async function runRecall(query: string, sessionId: string): Promise<void> {
+  vi.stubEnv('HIPPO_SESSION_ID', sessionId);
+  resetSessionRings('cli');
+  const res = await runInProcess(() => runCli(['node', 'hippo', 'recall', query, '--json', '--budget', '2000']));
+  expect(res.status, res.stderr).toBe(0);
 }
 
 const ctx = (root: string): FullContext => (apiCtx(root, 'default', { subject: 'cli', role: 'admin' }));
 
-describe('goal_recall_log captured from real CLI recall', () => {
+describe('goal_recall_log captured from CLI recall', () => {
   let env: TestEnv;
 
   beforeEach(() => {
     env = makeEnv('b3-recall-log');
+    vi.stubEnv('HIPPO_HOME', env.globalRoot);
+    vi.stubEnv('HIPPO_TENANT', 'default');
+    vi.stubEnv('HIPPO_SKIP_AUTO_INTEGRATIONS', '1');
+    // The CLI looks for the store in `.hippo` under the working directory.
+    process.chdir(env.cwd);
   });
 
   afterEach(() => {
-    if (env?.cwd) rmSync(env.cwd, { recursive: true, force: true });
+    process.chdir(savedCwd);
+    vi.unstubAllEnvs();
+    rmSync(env.cwd, { recursive: true, force: true });
   });
 
   it('top-K boosted memories land in goal_recall_log with the active goal', async () => {
@@ -61,7 +53,7 @@ describe('goal_recall_log captured from real CLI recall', () => {
       goalName: 'auth-rewrite',
     });
 
-    runRecall(env, 'auth refactor', 's-log-1');
+    await runRecall('auth refactor', 's-log-1');
 
     const db = openHippoDb(env.hippoRoot);
     try {
@@ -84,7 +76,7 @@ describe('goal_recall_log captured from real CLI recall', () => {
       goalName: 'auth-rewrite',
     });
 
-    runRecall(env, 'unrelated', 's-log-2');
+    await runRecall('unrelated', 's-log-2');
 
     const db = openHippoDb(env.hippoRoot);
     try {

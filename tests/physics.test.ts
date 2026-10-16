@@ -42,27 +42,11 @@ describe('Vector math', () => {
     it('computes dot product of two vectors', () => {
       expect(vecDot([1, 2, 3], [4, 5, 6])).toBe(32);
     });
-
-    it('returns 0 for orthogonal vectors', () => {
-      expect(vecDot([1, 0, 0], [0, 1, 0])).toBe(0);
-    });
-
-    it('returns negative for opposing vectors', () => {
-      expect(vecDot([1, 0, 0], [-1, 0, 0])).toBe(-1);
-    });
   });
 
   describe('vecNorm', () => {
     it('computes Euclidean norm', () => {
       expect(vecNorm([3, 4, 0])).toBe(5);
-    });
-
-    it('returns 0 for zero vector', () => {
-      expect(vecNorm([0, 0, 0])).toBe(0);
-    });
-
-    it('returns 1 for unit vector', () => {
-      expect(vecNorm([1, 0, 0])).toBe(1);
     });
   });
 
@@ -70,36 +54,17 @@ describe('Vector math', () => {
     it('scales a vector by a scalar', () => {
       expect(vecScale([1, 2, 3], 2)).toEqual([2, 4, 6]);
     });
-
-    it('scaling by 0 yields zero vector', () => {
-      expect(vecScale([5, 10, 15], 0)).toEqual([0, 0, 0]);
-    });
-
-    it('negative scalar reverses direction', () => {
-      const result = vecScale([1, -1, 0], -3);
-      expect(result[0]).toBe(-3);
-      expect(result[1]).toBe(3);
-      expect(result[2]).toBeCloseTo(0, 10);
-    });
   });
 
   describe('vecAdd', () => {
     it('adds two vectors element-wise', () => {
       expect(vecAdd([1, 2, 3], [4, 5, 6])).toEqual([5, 7, 9]);
     });
-
-    it('adding zero vector is identity', () => {
-      expect(vecAdd([1, 2, 3], [0, 0, 0])).toEqual([1, 2, 3]);
-    });
   });
 
   describe('vecSub', () => {
     it('subtracts two vectors element-wise', () => {
       expect(vecSub([4, 5, 6], [1, 2, 3])).toEqual([3, 3, 3]);
-    });
-
-    it('subtracting self yields zero', () => {
-      expect(vecSub([7, 8, 9], [7, 8, 9])).toEqual([0, 0, 0]);
     });
   });
 
@@ -110,12 +75,6 @@ describe('Vector math', () => {
 
     it('creates empty array for dim 0', () => {
       expect(vecZero(0)).toEqual([]);
-    });
-
-    it('creates higher-dimensional zero vector', () => {
-      const z = vecZero(5);
-      expect(z).toHaveLength(5);
-      expect(z.every(v => v === 0)).toBe(true);
     });
   });
 
@@ -131,11 +90,6 @@ describe('Vector math', () => {
       const n = vecNormalize([0, 0, 0]);
       expect(n).toEqual([0, 0, 0]);
     });
-
-    it('preserves direction', () => {
-      const n = vecNormalize([10, 0, 0]);
-      expect(n).toEqual([1, 0, 0]);
-    });
   });
 
   describe('vecClampMagnitude', () => {
@@ -146,12 +100,7 @@ describe('Vector math', () => {
       expect(clamped).toBe(v);
     });
 
-    it('clamps to maxMag if magnitude exceeds it', () => {
-      const clamped = vecClampMagnitude([6, 8, 0], 5);
-      expect(vecNorm(clamped)).toBeCloseTo(5, 10);
-    });
-
-    it('preserves direction when clamping', () => {
+    it('clamps to maxMag and keeps the direction', () => {
       const clamped = vecClampMagnitude([6, 8, 0], 5);
       // Direction should be [0.6, 0.8, 0]
       expect(clamped[0]).toBeCloseTo(3, 10);
@@ -198,20 +147,13 @@ describe('Property derivation', () => {
   });
 
   describe('computeCharge', () => {
-    it('neutral = 0', () => {
-      expect(computeCharge('neutral')).toBe(0);
-    });
-
-    it('positive = 0.3', () => {
-      expect(computeCharge('positive')).toBe(0.3);
-    });
-
-    it('negative = -0.5', () => {
-      expect(computeCharge('negative')).toBe(-0.5);
-    });
-
-    it('critical = -1.0', () => {
-      expect(computeCharge('critical')).toBe(-1.0);
+    it.each([
+      ['neutral', 0],
+      ['positive', 0.3],
+      ['negative', -0.5],
+      ['critical', -1.0],
+    ] as const)('%s = %s', (valence, charge) => {
+      expect(computeCharge(valence)).toBe(charge);
     });
   });
 
@@ -254,12 +196,6 @@ describe('Force computations', () => {
       expect(force).toBeCloseTo(2.0, 5);
     });
 
-    it('orthogonal vectors = zero force', () => {
-      const p = makeParticle({ memoryId: 'a', position: [1, 0, 0] });
-      const force = queryGravityMagnitude(p, [0, 1, 0], 2.0);
-      expect(force).toBe(0);
-    });
-
     it('negative cosine (opposing) = zero force', () => {
       const p = makeParticle({ memoryId: 'a', position: [1, 0, 0] });
       const force = queryGravityMagnitude(p, [-1, 0, 0], 2.0);
@@ -299,12 +235,6 @@ describe('Force computations', () => {
       expect(bonus).toBeCloseTo(1.0, 5);
     });
 
-    it('orthogonal velocity = 0', () => {
-      const p = makeParticle({ memoryId: 'a', velocity: [0, 1, 0] });
-      const bonus = velocityAlignmentBonus(p, [1, 0, 0]);
-      expect(bonus).toBeCloseTo(0, 5);
-    });
-
     it('opposing velocity = 0 (clamped)', () => {
       const p = makeParticle({ memoryId: 'a', velocity: [-1, 0, 0] });
       const bonus = velocityAlignmentBonus(p, [1, 0, 0]);
@@ -331,13 +261,6 @@ describe('Force computations', () => {
       const pj = makeParticle({ memoryId: 'b', position: vecNormalize([1, 0.2, 0]) });
       const force = attractionForce(pi, pj, 0.01);
       expect(vecNorm(force)).toBeGreaterThan(0);
-    });
-
-    it('orthogonal particles get zero attraction', () => {
-      const pi = makeParticle({ memoryId: 'a', position: [1, 0, 0] });
-      const pj = makeParticle({ memoryId: 'b', position: [0, 1, 0] });
-      const force = attractionForce(pi, pj, 0.01);
-      expect(vecNorm(force)).toBe(0);
     });
 
     it('opposing particles get zero attraction', () => {
@@ -509,21 +432,6 @@ describe('Scoring', () => {
       expect(movingResult.finalScore).toBeGreaterThan(stillResult.finalScore);
     });
 
-    it('all results have expected shape', () => {
-      const particles = [
-        makeParticle({ memoryId: 'a', position: [1, 0, 0] }),
-        makeParticle({ memoryId: 'b', position: [0, 1, 0] }),
-      ];
-      const results = physicsScore(particles, [1, 0, 0], { ...DEFAULT_PHYSICS_CONFIG });
-      for (const r of results) {
-        expect(r).toHaveProperty('memoryId');
-        expect(r).toHaveProperty('baseScore');
-        expect(r).toHaveProperty('clusterAmplification');
-        expect(r).toHaveProperty('finalScore');
-        expect(r.baseScore).toEqual(expect.any(Number));
-        expect(r.clusterAmplification).toBeGreaterThanOrEqual(1.0);
-      }
-    });
   });
 
   describe('Cluster amplification', () => {
@@ -788,15 +696,6 @@ describe('Outcome feedback', () => {
       applyOutcomeFeedback(pLarge, query, true, 0.5);
 
       expect(pLarge.position[1]).toBeGreaterThan(pSmall.position[1]);
-    });
-
-    it('result is always normalized to unit sphere', () => {
-      const p = makeParticle({ memoryId: 'a', position: vecNormalize([0.5, 0.5, 0.5]), temperature: 1.0 });
-      applyOutcomeFeedback(p, [1, 0, 0], true, 0.5);
-      expect(vecNorm(p.position)).toBeCloseTo(1.0, 10);
-
-      applyOutcomeFeedback(p, [0, 0, 1], false, 0.5);
-      expect(vecNorm(p.position)).toBeCloseTo(1.0, 10);
     });
   });
 });

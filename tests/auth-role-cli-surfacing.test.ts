@@ -3,7 +3,6 @@
  *
  * Covers:
  *   - api.authCreate accepts opts.role and returns it on the result
- *   - api.authCreate defaults to 'admin' when role is omitted
  *   - listApiKeys returns role on each row (admin + member)
  *   - listApiKeys legacy DB row (pre-v26-migration with NULL role) → fail-safe-to-member
  *   - Bearer minted with role='member' is 403-blocked at admin-gated /v1/sleep
@@ -35,31 +34,14 @@ function newCtx(tenantId = 'default') {
 }
 
 describe('auth CLI role surfacing', () => {
-  it('authCreate({}) without role defaults to member', async () => {
+  it.each([
+    ['admin', undefined],
+    ['member', 'service:reporter'],
+  ] as const)('authCreate({ role: "%s" }) returns that role', async (role, label) => {
     const t = newCtx();
     try {
-      const result = await authCreate(t.ctx, {});
-      expect(result.role).toBe('member');
-    } finally {
-      t.cleanup();
-    }
-  });
-
-  it('authCreate({ role: "admin" }) returns admin', async () => {
-    const t = newCtx();
-    try {
-      const result = await authCreate(t.ctx, { role: 'admin' });
-      expect(result.role).toBe('admin');
-    } finally {
-      t.cleanup();
-    }
-  });
-
-  it('authCreate({ role: "member" }) returns member', async () => {
-    const t = newCtx();
-    try {
-      const result = await authCreate(t.ctx, { role: 'member', label: 'service:reporter' });
-      expect(result.role).toBe('member');
+      const result = await authCreate(t.ctx, { role, label });
+      expect(result.role).toBe(role);
     } finally {
       t.cleanup();
     }

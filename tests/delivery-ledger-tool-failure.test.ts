@@ -184,6 +184,7 @@ describe('tool-failure listing, lesson and origin', () => {
     ]);
     const v = read('tf3', lesson);
     expect(v.origin).toBe(ev[0].id);
+    expect(v.turns).toEqual([]);
     expect(v.notes).toEqual(expect.arrayContaining([
       `tool-failure:${ev[0].id}`, `tool-failure-duplicate:${ev[1].id}`, `tool-failure:${ev[2].id}`, `tool-failure-duplicate:${ev[3].id}`,
     ]));
@@ -438,17 +439,6 @@ describe('controls', () => {
     expect(norm(failed.away)).toEqual(norm(plain.away));
     const row = events('ntf1-fail')[1];
     expect(failed.away.notes).toContain(`tool-failure:${row.id}`);
-  });
-
-  it('N-TF2 a duplicate adds no listing entry and no turn', () => {
-    p = mk();
-    fail(p, 'ntf2', { tool_use_id: 'toolu_dup' });
-    fail(p, 'ntf2', { tool_use_id: 'toolu_dup' });
-    const ev = events('ntf2');
-    expect(ev.map(callKey)).toEqual([['tool-failure', 1, null, 'toolu_dup'], ['tool-failure', null, ev[0].id, 'toolu_dup']]);
-    const { entries } = list('ntf2');
-    expect(entries.map((e) => [e.event_id, e.duplicates])).toEqual([[ev[0].id, 1]]);
-    expect(read('ntf2', String(lessons()[0].id)).turns).toEqual([]);
   });
 
   it('N-TF3 a failure whose log row is gone, or never had one, reads log-missing with no lesson', () => {

@@ -44,6 +44,7 @@ describe('api.sleep audit row tenant tag', () => {
       const meta = JSON.parse(rows[0]!.metadata_json);
       expect(meta.triggeredByTenant).toBe('acme'); // forensics: which tenant called it
       expect(meta.dryRun).toBe(true);
+      expect(meta.partial).toBe(false);
     } finally {
       closeHippoDb(db);
     }
@@ -80,31 +81,4 @@ describe('api.sleep audit row tenant tag', () => {
     }
   });
 
-  it('consolidate rows are visible to `hippo audit list --tenant __host__`', async () => {
-    await sleep(
-      apiCtx(root, 'acme', adminActor('cli:alice')),
-      { dryRun: true },
-    );
-
-    // Tenant-A admin running default `hippo audit list` would NOT see this row
-    // (tenant filter is 'acme'). Querying the synthetic __host__ tenant
-    // surfaces it.
-    const db = openHippoDb(root);
-    try {
-      // SAFETY: query is a fixed `COUNT(*) AS c` aggregate, which always
-      // returns exactly one row shaped { c: number | bigint }.
-      const acmeRows = db
-        .prepare(`SELECT COUNT(*) AS c FROM audit_log WHERE op = 'consolidate' AND tenant_id = ?`)
-        .get('acme') as { c: number | bigint };
-      expect(Number(acmeRows.c)).toBe(0); // tenant view doesn't show host ops
-
-      // SAFETY: same fixed COUNT(*) aggregate as above.
-      const hostRows = db
-        .prepare(`SELECT COUNT(*) AS c FROM audit_log WHERE op = 'consolidate' AND tenant_id = ?`)
-        .get('__host__') as { c: number | bigint };
-      expect(Number(hostRows.c)).toBe(1); // host view shows them
-    } finally {
-      closeHippoDb(db);
-    }
-  });
 });

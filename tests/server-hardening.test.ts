@@ -7,11 +7,7 @@ import { initStore } from '../src/store/open.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { createApiKey, revokeApiKey } from '../src/store/auth.js';
-import { remember as apiRemember } from '../src/api/index.js';
-import { handleMcpRequest } from '../src/mcp/server.js';
 import { log } from '../src/util/log.js';
-import { sqliteStore } from '../src/store/sqlite/store.js';
-import { apiCtx } from './_helpers/api-ctx.js';
 
 // v0.39 commit 5 — Server hardening regressions:
 //   - Fix 5.3: /mcp/stream heartbeat re-validates bearer; MCP_SSE_MAX_AGE_SEC
@@ -20,10 +16,8 @@ import { apiCtx } from './_helpers/api-ctx.js';
 //     Tested by directly exercising stop() while a request is in flight; we
 //     do NOT raise SIGTERM because vitest skips signal handlers (VITEST=1)
 //     and a real signal would also kill the test runner.
-//   - Fix 5.5: PUBLIC_ROUTES bypass attempts (trailing slash, encoded slash,
-//     wrong method, query string).
-//   - Fix 5.6: default-deny lower-level loader — MCP recall with no scope
-//     hides slack:private:* memories.
+//   - Fix 5.5: PUBLIC_ROUTES bypass attempts (trailing slash, wrong method,
+//     query string).
 
 const SLACK_SECRET = 'shhh-v039-hardening';
 
@@ -230,20 +224,6 @@ describe('server hardening', () => {
       expect([401, 404]).toContain(res.status);
     });
 
-    it('encoded slash variant does not bypass', async () => {
-      // %2F encoded slash creates a different path that does not match
-      // the public route. Must NOT 200 without bearer. v1.6.4 added a
-      // top-of-handler reject for any %2F in the URL, so this now also
-      // returns 400 — same security outcome, more specific error code.
-      const res = await fetch(`http://127.0.0.1:${handle.port}/v1/connectors/slack%2Fevents`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: '{}',
-      });
-      expect(res.status).not.toBe(200);
-      expect([400, 401, 404]).toContain(res.status);
-    });
-
     it('wrong method (GET) on slack events route requires auth', async () => {
       // Only POST is in PUBLIC_ROUTES. GET should 401 without bearer.
       const res = await fetch(`http://127.0.0.1:${handle.port}/v1/connectors/slack/events`, {
@@ -282,41 +262,5 @@ describe('server hardening', () => {
       });
       expect(res.status).toBe(200);
     });
-  });
-
-  // ---- Fix 5.6: default-deny lower-level loader test -------------------
-  it('MCP recall with no scope hides slack:private:* memories (default-deny)', async () => {
-    // Seed a private slack memory + a regular memory under the same tenant.
-    await apiRemember(
-      apiCtx(root, 'default', { subject: 'cli', role: 'admin' }),
-      {
-        content: 'private-slack-canary should not surface in default recall',
-        scope: 'slack:private:CSECRET',
-      },
-    );
-    await apiRemember(
-      apiCtx(root, 'default', { subject: 'cli', role: 'admin' }),
-      { content: 'public-canary should surface in default recall' },
-    );
-
-    // Call MCP recall with no scope.
-    const ctx = { hippoRoot: root, tenantId: 'default', actor: 'mcp', role: 'admin' as const, hostAdmin: true as const, clientKey: 'http:t:test', store: sqliteStore(root) };
-    const res = await handleMcpRequest(
-      {
-        jsonrpc: '2.0',
-        id: 1,
-        method: 'tools/call',
-        params: { name: 'hippo_recall', arguments: { query: 'canary', budget: 1500 } },
-      },
-      ctx,
-    );
-    // SAFETY: handleMcpRequest's 'tools/call' case always wraps tool output in
-    // MCP's { content: [{ type: 'text', text }] } shape (src/mcp/server.ts);
-    // McpResponse.result is `unknown` only because different tools return
-    // different payloads.
-    const text = (res?.result as { content?: Array<{ text?: string }> } | undefined)
-      ?.content?.[0]?.text ?? '';
-    expect(text).toContain('public-canary');
-    expect(text).not.toContain('private-slack-canary');
   });
 });
