@@ -13,15 +13,20 @@ export function isStringFlag(value: string | boolean | string[] | undefined): va
   return typeof value === 'string';
 }
 
+// All digits or NaN: parseInt reads "12abc" as 12 and " 12" as 12, which a count flag must refuse.
+function parseWholeNumber(raw: string): number {
+  return /^\d+$/.test(raw) ? Number(raw) : NaN;
+}
+
 export function parseLimitFlag(value: string | boolean | string[] | undefined): number {
   if (!value) return Infinity;
-  const parsed = parseInt(String(value), 10);
+  const parsed = parseWholeNumber(String(value));
   return Number.isFinite(parsed) && parsed >= 1 ? parsed : Infinity;
 }
 
 export function parseCountFlag(value: string | boolean | string[] | undefined): number {
   if (!value || value === true || Array.isArray(value)) return 0;
-  const parsed = parseInt(String(value), 10);
+  const parsed = parseWholeNumber(String(value));
   return Number.isFinite(parsed) && parsed >= 1 ? parsed : 0;
 }
 
@@ -54,7 +59,7 @@ export function parsePositiveId(idRaw: string | undefined, label: string): numbe
 
 export function parseListLimit(flags: CliFlags): number {
   const limitRaw = flags['limit'];
-  const limit = resolveListLimit(limitRaw !== undefined ? parseInt(String(limitRaw), 10) : undefined);
+  const limit = resolveListLimit(limitRaw !== undefined ? parseWholeNumber(String(limitRaw)) : undefined);
   if (limit === undefined) {
     fail(`Invalid --limit: "${limitRaw}". Must be a positive integer.`);
   }

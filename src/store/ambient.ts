@@ -1,9 +1,8 @@
 import { strengthSql } from './rule-sql.js';
-import { scopeAdmitSql } from './rule-sql.js';
 import { SECRET_TAGS } from '../util/secret-detect.js';
 import { onHandle, openStore } from './open.js';
-import { jsonList } from './candidates.js';
 import { originInSql } from '../core/project-identity.js';
+import { contextRowsWhere, jsonList } from './candidates.js';
 import { AMBIENT_FRESH_WINDOW_MS, isErrorTagged, type AmbientTallies } from '../core/ambient.js';
 import { HIGH_SCHEMA_FIT } from '../core/memory.js';
 import { placeholders } from '../util/sql.js';
@@ -18,26 +17,6 @@ export interface AmbientStoreFilter {
   /** The reader's project names: a secret-tagged row counts only inside its own non-empty origin project. */
   currentProject: readonly string[];
   now: Date;
-}
-
-// SHORTCUT: mirrors loadContextCandidates' WHERE (request-path snapshots pin the match); share it once store.ts is
-// split.
-function contextRowsWhere(tenantId: string, filter: AmbientStoreFilter) {
-  const where = ['tenant_id = ?', `COALESCE(superseded_by, '') = ''`, `COALESCE(kind, '') != 'archived'`];
-  const params: string[] = [tenantId];
-  if (filter.exactScope) {
-    where.push('scope = ?');
-    params.push(filter.exactScope);
-  } else {
-    const admit = scopeAdmitSql('', filter.ownScope);
-    where.push(admit.sql);
-    params.push(...admit.params);
-  }
-  if (filter.project !== undefined) {
-    where.push(`(origin_project = '' OR ${originInSql(filter.project)})`);
-    params.push(...filter.project);
-  }
-  return { where, params };
 }
 
 /** A secret tag's row, the half of detectSecret SQL can check; the LIKEs only skip json_each on rows that cannot
@@ -55,7 +34,7 @@ function secretTaggedSql() {
 /** Whole-store ambient tallies in one aggregate pass, no row loaded. Content-pattern secrets and session-local
  *  rows (own compaction items, a printed handoff's digest) still count: only injection drops them. */
 export function loadAmbientTallies(hippoRoot: string, tenantId: string, filter: AmbientStoreFilter): AmbientTallies {
-  const { where, params } = contextRowsWhere(tenantId, filter);
+  const { where, params } = contextRowsWhere(tenantId, filter, [`COALESCE(kind, '') != 'archived'`]);
   const secret = secretTaggedSql();
   const freshAfter = new Date(filter.now.getTime() - AMBIENT_FRESH_WINDOW_MS).toISOString();
   return onHandle(hippoRoot, (db) => {

@@ -2,7 +2,7 @@ import { envAllowCleartext, envCallerRps, envPort, envRequireAuth, envV1Rps } fr
 import type { IncomingMessage, Server, ServerResponse } from 'node:http';
 import { detectServer, removePidfileIfOwned, writePidfile } from './server-detect.js';
 import { hasGroup, type HippoStore } from '../store/index.js';
-import { isStoreBusy } from '../api/busy.js';
+import { isStoreBusy } from '../store/busy.js';
 import {
   createStoreHolder, offLoopFor, outsideRouteBlock, type StoreHolder,
 } from '../store/sqlite/held-connection.js';

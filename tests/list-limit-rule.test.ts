@@ -38,7 +38,7 @@ describe('CLI adapter', () => {
     expect(parseCliLimit({ limit: '25' })).toBe(25);
     expect(parseCliLimit({ limit: '5000' })).toBe(5000);
     const err = vi.spyOn(console, 'error').mockImplementation(() => {});
-    for (const bad of ['0', '-3', 'abc', true]) {
+    for (const bad of ['0', '-3', 'abc', '12abc', ' 12', true]) {
       expect(() => parseCliLimit({ limit: bad })).toThrow(CliExit);
     }
     err.mockRestore();

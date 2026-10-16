@@ -1,4 +1,4 @@
-import { createHmac, timingSafeEqual } from 'crypto';
+import { matchesHmacSha256 } from '../hmac.js';
 
 const DEFAULT_SKEW_SECONDS = 5 * 60;
 
@@ -24,12 +24,7 @@ function verifyOne(
   timestamp: string,
   secret: string,
 ): boolean {
-  if (!signature.startsWith('v0=')) return false;
-  const expected = `v0=${createHmac('sha256', secret).update(`v0:${timestamp}:${rawBody}`).digest('hex')}`;
-  const a = Buffer.from(signature, 'utf8');
-  const b = Buffer.from(expected, 'utf8');
-  if (a.length !== b.length) return false;
-  return timingSafeEqual(a, b);
+  return matchesHmacSha256('v0=', `v0:${timestamp}:${rawBody}`, secret, signature);
 }
 
 export function verifySlackSignature(opts: VerifyOpts): boolean {

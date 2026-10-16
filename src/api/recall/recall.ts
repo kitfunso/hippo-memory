@@ -6,7 +6,7 @@ import { recallScopeFilter } from '../../store/search-rows.js';
 import type { ContinuityKey } from '../../store/sessions.js';
 import { estimateTokens } from '../../util/token-text.js';
 import { formatHandoffEvidenceLine } from '../../core/handoff.js';
-import type { MemoryEntry } from '../../core/memory.js';
+import { DAG_LEVEL, type MemoryEntry } from '../../core/memory.js';
 import type { RecallTraceInput } from '../../store/recall-trace.js';
 import type { ActiveGoals, GoalRecallLogRow } from '../../store/goals.js';
 import { boostByGoals, type GoalStackBoostOpts } from '../../search/goal-boost.js';
@@ -542,7 +542,7 @@ function substituteOverflow(
 ): SummaryDecoration[] {
   const eligibleParents = parents.filter(
     (p) =>
-      (p.dag_level ?? 0) === 2 &&
+      (p.dag_level ?? 0) === DAG_LEVEL.topic &&
       !p.superseded_by &&
       passesScopeFilterForRecall(p.scope ?? null, opts.scope, own) &&
       inCallerProject(p, opts),

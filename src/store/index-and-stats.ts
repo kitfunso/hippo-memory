@@ -6,11 +6,8 @@ import {
   pruneConsolidationRuns,
   getMeta,
 } from '../db/index.js';
-import { RejectedValueError } from '../core/api-errors.js';
 import { log } from '../util/log.js';
 import type { HippoIndex, LegacyStats } from './rows.js';
-import { audit } from './audit-event.js';
-import { stampOriginProjectForImport, upsertEntryRow } from './entry-row.js';
 import {
   buildIndexFromDb,
   readLastRecall,
@@ -19,7 +16,7 @@ import {
   writeStatsMirror,
   buildStatsFromDb,
 } from './mirrors.js';
-import { onHandle, openStore, loadLegacyEntriesFromMarkdown } from './open.js';
+import { importLegacyEntries, onHandle, openStore, loadLegacyEntriesFromMarkdown } from './open.js';
 import { DAY_MS } from '../util/time.js';
 
 /** Load the derived index from SQLite. Read-only: index.json is only ever written by `rebuildIndex`. */
@@ -57,31 +54,7 @@ export function rebuildIndex(hippoRoot: string): HippoIndex {
     const legacyEntries = loadLegacyEntriesFromMarkdown(hippoRoot).filter((entry) => !existingIds.has(entry.id));
     if (legacyEntries.length > 0) {
       withWriteScope(db, 'rebuild_index', () => {
-        // Guard with per-row skip, like bootstrapLegacyStore: a stale markdown mirror could resurrect a
-        // rejected value here. Refusal audit is written inline because nothing rolls back on a skip.
-        let rejectedCount = 0;
-        for (const entry of legacyEntries) {
-          // v39: same store-derived origin stamp as bootstrapLegacyStore.
-          const stamped = stampOriginProjectForImport(hippoRoot, entry);
-          try {
-            upsertEntryRow(db, stamped);
-          } catch (err) {
-            if (err instanceof RejectedValueError) {
-              rejectedCount++;
-              audit(db, 'reject_refusal', {
-                targetId: err.entryId,
-                metadata: { digest: err.digest, reason: err.reason },
-                actor: 'cli',
-                tenantId: err.tenantId
-              });
-              continue;
-            }
-            throw err;
-          }
-        }
-        if (rejectedCount > 0) {
-          log.warn(`rebuildIndex: skipped ${rejectedCount} rejected value(s) found in legacy mirrors`);
-        }
+        importLegacyEntries(db, hippoRoot, legacyEntries, 'rebuildIndex');
       });
     }
 

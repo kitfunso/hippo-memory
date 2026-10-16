@@ -1,4 +1,5 @@
-import { createHmac, createHash, timingSafeEqual } from 'crypto';
+import { createHash } from 'crypto';
+import { matchesHmacSha256 } from '../hmac.js';
 
 export interface VerifyOpts {
   rawBody: string;
@@ -20,12 +21,7 @@ export function isWellFormedGitHubSignature(signature: string): boolean {
 }
 
 function verifyOne(rawBody: string, signature: string, secret: string): boolean {
-  if (!signature.startsWith('sha256=')) return false;
-  const expected = `sha256=${createHmac('sha256', secret).update(rawBody).digest('hex')}`;
-  const a = Buffer.from(signature, 'utf8');
-  const b = Buffer.from(expected, 'utf8');
-  if (a.length !== b.length) return false;
-  return timingSafeEqual(a, b);
+  return matchesHmacSha256('sha256=', rawBody, secret, signature);
 }
 
 export function verifyGitHubSignature(opts: VerifyOpts): boolean {
