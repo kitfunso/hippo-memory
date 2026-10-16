@@ -183,36 +183,21 @@ describe('server Bearer lockdown', () => {
     }
   });
 
-  it.each(AUTHED_ROUTES)(
-    'requires Bearer: $method $pattern (missing header)',
-    async (r) => {
-      const init: RequestInit = {
-        method: r.method,
-        headers: { 'content-type': 'application/json' },
-      };
-      if (r.body !== undefined) init.body = r.body;
+  it('every AUTHED_ROUTES row answers 401 to a missing header and to a bad token', async () => {
+    const open: string[] = [];
+    for (const r of AUTHED_ROUTES) {
       const path = requestPath(r.pattern, r.query);
-      const res = await fetch(`http://127.0.0.1:${handle.port}${path}`, init);
-      const text = await res.text();
-      expect(res.status, `${r.method} ${path} -> ${res.status}: ${text}`).toBe(401);
-    },
-  );
-
-  it.each(AUTHED_ROUTES)(
-    'requires Bearer: $method $pattern (bad token)',
-    async (r) => {
-      const init: RequestInit = {
-        method: r.method,
-        headers: {
-          'content-type': 'application/json',
-          authorization: 'Bearer hk_invalid.deadbeef',
-        },
-      };
-      if (r.body !== undefined) init.body = r.body;
-      const path = requestPath(r.pattern, r.query);
-      const res = await fetch(`http://127.0.0.1:${handle.port}${path}`, init);
-      const text = await res.text();
-      expect(res.status, `${r.method} ${path} -> ${res.status}: ${text}`).toBe(401);
-    },
-  );
+      for (const [label, headers] of [
+        ['missing header', { 'content-type': 'application/json' }],
+        ['bad token', { 'content-type': 'application/json', authorization: 'Bearer hk_invalid.deadbeef' }],
+      ] as const) {
+        const init: RequestInit = { method: r.method, headers };
+        if (r.body !== undefined) init.body = r.body;
+        const res = await fetch(`http://127.0.0.1:${handle.port}${path}`, init);
+        const text = await res.text();
+        if (res.status !== 401) open.push(`${r.method} ${path} (${label}) -> ${res.status}: ${text}`);
+      }
+    }
+    expect(open).toEqual([]);
+  });
 });

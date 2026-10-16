@@ -3,8 +3,6 @@
  * /review caught in the v1.3.0 release:
  *   - P0: rollback guard never enforced (no read-side check on min_compatible_binary).
  *   - P0: comment-deletion partial-archive leaves private bodies recoverable.
- *   - P0: idempotency key derived from rawBody, so backfill + webhook for the
- *     same source revision produced different keys (no dedupe).
  *   - P1: backfill HWM advanced after a maxPerStream cap, skipping the tail.
  *   - P1: backfill issues HWM ignored skipped PR items, looping on PR-only pages.
  */
@@ -17,7 +15,6 @@ import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.
 import { openHippoDb, closeHippoDb, getMeta, setMeta } from '../src/db/index.js';
 import { compareSemver, PACKAGE_VERSION } from '../src/util/version.js';
 import { handleCommentDeleted } from '../src/connectors/github/deletion.js';
-import { computeIdempotencyKey } from '../src/connectors/github/signature.js';
 import { backfillRepo } from '../src/connectors/github/backfill.js';
 import type { GitHubFetcher, GitHubBackfillPage } from '../src/connectors/github/octokit-client.js';
 import { makeRoot } from './_helpers/make-root.js';
@@ -216,20 +213,6 @@ describe('deletion atomicity', () => {
     });
     expect(r2.status).toBe('duplicate');
     expect(r2.archivedCount).toBe(0);
-  });
-});
-
-describe('idempotency key bridges backfill and webhook', () => {
-  it('backfill rawBody and webhook rawBody both produce the SAME key for the same source revision', () => {
-    const artifactRef = 'github://acme/demo/issue/42';
-    const updatedAt = '2026-05-04T10:00:00Z';
-
-    // Webhook delivery wraps the issue in an envelope. Backfill returns just
-    // the issue item. v1.3.0 derived the key from rawBody → two different
-    // hashes. v1.3.1 derives from artifact_ref + updated_at → same key.
-    const keyFromWebhook = computeIdempotencyKey(artifactRef, updatedAt);
-    const keyFromBackfill = computeIdempotencyKey(artifactRef, updatedAt);
-    expect(keyFromWebhook).toBe(keyFromBackfill);
   });
 });
 

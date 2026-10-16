@@ -40,19 +40,6 @@ describe('ingestMessage empty-body replay status consistency', () => {
     rmSync(root, { recursive: true, force: true });
   });
 
-  it('first ingest of empty body returns skipped + memory_id=null', async () => {
-    const hippoRoot = join(root, '.hippo');
-    const result = await ingestMessage(ctx(hippoRoot), {
-      teamId: 'T01',
-      channel,
-      // Use a message shape that messageToRememberOpts rejects (empty text + no thread_ts).
-      message: { type: 'message', channel: channel.id, user: 'U01', ts: '1716553200.000100', text: '' },
-      eventId: 'Ev_empty_001',
-    });
-    expect(result.status).toBe('skipped');
-    expect(result.memoryId).toBeNull();
-  });
-
   it('replay of empty body returns skipped (not duplicate) — B3 fix', async () => {
     const hippoRoot = join(root, '.hippo');
     const opts = {

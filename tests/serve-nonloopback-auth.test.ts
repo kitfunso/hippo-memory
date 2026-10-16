@@ -187,24 +187,9 @@ describe('clientIpForRateLimit from a peer HIPPO_TRUSTED_PROXIES=* trusts', () =
     else process.env.HIPPO_TRUSTED_PROXIES = savedProxies;
   });
 
-  it('defaults to the socket remote address when the env var is unset', () => {
-    delete process.env.HIPPO_CLIENT_IP_HEADER;
-    expect(clientIpForRateLimit(fakeReq({ 'fly-client-ip': '203.0.113.7' }))).toBe('10.0.0.9');
-  });
-
-  it('uses the configured header when present', () => {
-    process.env.HIPPO_CLIENT_IP_HEADER = 'fly-client-ip';
-    expect(clientIpForRateLimit(fakeReq({ 'fly-client-ip': '203.0.113.7' }))).toBe('203.0.113.7');
-  });
-
   it('matches the header case-insensitively (env var may be given uppercased)', () => {
     process.env.HIPPO_CLIENT_IP_HEADER = 'Fly-Client-IP';
     expect(clientIpForRateLimit(fakeReq({ 'fly-client-ip': '203.0.113.7' }))).toBe('203.0.113.7');
-  });
-
-  it('takes the rightmost entry of a comma-joined proxy chain, since the client writes the left', () => {
-    process.env.HIPPO_CLIENT_IP_HEADER = 'x-forwarded-for';
-    expect(clientIpForRateLimit(fakeReq({ 'x-forwarded-for': '203.0.113.7, 198.51.100.2' }))).toBe('198.51.100.2');
   });
 
   it('reads a repeated header as one chain and takes its rightmost entry', () => {

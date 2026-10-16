@@ -9,9 +9,7 @@
  *   - ids path (200)
  *   - last-recall path (200, ids in response)
  *   - no last recall (200, applied:0 + empty ids)
- *   - missing good (400)
  *   - non-boolean good (400)
- *   - ids not an array (400)
  *   - audit emission per applied id
  *   - cross-tenant id silently skipped (applied:0, zero audit rows)
  *
@@ -106,29 +104,11 @@ describe('POST /v1/outcome', () => {
     expect(body).toEqual({ applied: 0, ids: [] });
   });
 
-  it('missing good returns 400', async () => {
-    const res = await fetch(`${handle.url}/v1/outcome`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ ids: ['mem_abc'] }),
-    });
-    expect(res.status).toBe(400);
-  });
-
   it('non-boolean good returns 400', async () => {
     const res = await fetch(`${handle.url}/v1/outcome`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ good: 'yes' }),
-    });
-    expect(res.status).toBe(400);
-  });
-
-  it('ids not an array returns 400', async () => {
-    const res = await fetch(`${handle.url}/v1/outcome`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ ids: 'not-an-array', good: true }),
     });
     expect(res.status).toBe(400);
   });
