@@ -87,6 +87,9 @@ export const WORKER_OPS = {
   },
   graphReads: {
     graphRows: 'read',
+    entitiesForMemories: 'read',
+    entitiesByIds: 'read',
+    neighborRelations: 'read',
   },
   objects: {
     listObjects: 'read',

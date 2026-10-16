@@ -13,6 +13,7 @@ import { estimateTokens } from '../src/util/token-text.js';
 import type { SearchResult } from '../src/core/search-types.js';
 import { insertEntityAt, insertRelationAt } from './_helpers/graph-seed.js';
 import { graphExpandRecall } from '../src/graph/recall.js';
+import { sqliteStore } from '../src/store/sqlite/store.js';
 import { hippoRun } from './_helpers/spawn-hippo.js';
 
 let home: string;
@@ -217,7 +218,7 @@ describe('a memory with a copy in the global store', () => {
     expect(loadAllEntries(path.join(project, '.hippo'), 'default').filter((e) => e.content === older)).toHaveLength(1);
   });
 
-  it('is reached once by graph expansion, and a copy of a base result is not reached at all', () => {
+  it('is reached once by graph expansion, and a copy of a base result is not reached at all', async () => {
     const T = 'default';
     const store = (name: string): string => {
       const root = path.join(home, name);
@@ -249,7 +250,7 @@ describe('a memory with a copy in the global store', () => {
       insertRelationAt(global, T, { fromEntityId: eOther, toEntityId: entity(global, copy), relType: 'references', memoryId: other.id });
     }
 
-    const out = graphExpandRecall([sr(seed, 1), sr(other, 0.9)], { hops: 1, hippoRoot: local, globalRoot: global, tenantId: T, budget: 4000 });
+    const out = await graphExpandRecall([sr(seed, 1), sr(other, 0.9)], { hops: 1, store: sqliteStore(local), global: sqliteStore(global), tenantId: T, budget: 4000 });
     const ids = out.map((r) => r.entry.id);
     for (const text of [rule, older, newest]) expect(out.filter((r) => r.entry.content === text)).toHaveLength(1);
     expect(ids).toContain(linked.id);

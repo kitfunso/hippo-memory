@@ -16,6 +16,7 @@ import type { SearchResult } from '../src/core/search-types.js';
 import { insertEntityAt, insertRelationAt } from './_helpers/graph-seed.js';
 import { loadNeighborRelations, loadEntitiesByMemoryId, loadEntitiesByIds } from '../src/store/graph-reads.js';
 import { graphExpandRecall } from '../src/graph/recall.js';
+import { sqliteStore } from '../src/store/sqlite/store.js';
 import { makeRoot } from './_helpers/make-root.js';
 
 function safeRmSync(p: string): void {
@@ -43,7 +44,7 @@ describe('graph-recall engine', () => {
   beforeEach(() => { home = makeRoot('graphrecall'); });
   afterEach(() => safeRmSync(home));
 
-  it('1-hop surfaces a graph-linked neighbour the lexical search missed (loaded by id, not lexically gated)', () => {
+  it('1-hop surfaces a graph-linked neighbour the lexical search missed (loaded by id, not lexically gated)', async () => {
     const a = mem(home, T, 'decision alpha about cache invalidation strategy');
     const b = mem(home, T, 'wholly unrelated wording xyzzy plugh frobnicate');
     const ea = ent(home, T, a, 'A');
@@ -52,7 +53,7 @@ describe('graph-recall engine', () => {
 
     // base = only A (B is lexically orthogonal, would NOT be in any candidate set).
     const base = [sr(a, 1.0)];
-    const out = graphExpandRecall(base, { hops: 1, hippoRoot: home, tenantId: T, budget: 4000 });
+    const out = await graphExpandRecall(base, { hops: 1, store: sqliteStore(home), tenantId: T, budget: 4000 });
 
     const ids = out.map((r) => r.entry.id);
     expect(ids).toContain(b.id);
@@ -61,7 +62,7 @@ describe('graph-recall engine', () => {
     expect(out[0].entry.id).toBe(a.id); // base result stays first
   });
 
-  it('--hops 2 reaches the 2-hop node; --hops 1 does not', () => {
+  it('--hops 2 reaches the 2-hop node; --hops 1 does not', async () => {
     const a = mem(home, T, 'aaa'); const b = mem(home, T, 'bbb'); const c = mem(home, T, 'ccc');
     const ea = ent(home, T, a, 'A'); const eb = ent(home, T, b, 'B'); const ec = ent(home, T, c, 'C');
     insertRelationAt(home, T, { fromEntityId: ea, toEntityId: eb, relType: 'supersedes', memoryId: a.id });
@@ -70,37 +71,37 @@ describe('graph-recall engine', () => {
 
     // b and c are reached as the `to` endpoint of supersedes edges (superseded), so
     // --include-superseded is needed to surface them; this test is about hop-distance.
-    const one = graphExpandRecall(base, { hops: 1, hippoRoot: home, tenantId: T, budget: 4000, includeSuperseded: true });
+    const one = await graphExpandRecall(base, { hops: 1, store: sqliteStore(home), tenantId: T, budget: 4000, includeSuperseded: true });
     expect(one.map((r) => r.entry.id)).toContain(b.id);
     expect(one.map((r) => r.entry.id)).not.toContain(c.id);
 
-    const two = graphExpandRecall(base, { hops: 2, hippoRoot: home, tenantId: T, budget: 4000, includeSuperseded: true });
+    const two = await graphExpandRecall(base, { hops: 2, store: sqliteStore(home), tenantId: T, budget: 4000, includeSuperseded: true });
     expect(two.map((r) => r.entry.id)).toEqual(expect.arrayContaining([b.id, c.id]));
     expect(two.find((r) => r.entry.id === c.id)!.graphVia!.hops).toBe(2);
   });
 
-  it('traverses bidirectionally (reaches a neighbour linked via to_entity_id)', () => {
+  it('traverses bidirectionally (reaches a neighbour linked via to_entity_id)', async () => {
     const seed = mem(home, T, 'seed'); const other = mem(home, T, 'other');
     const es = ent(home, T, seed, 'S'); const eo = ent(home, T, other, 'O');
     // Edge points O -> S; seed is the `to` endpoint. Traversal must still reach O.
     insertRelationAt(home, T, { fromEntityId: eo, toEntityId: es, relType: 'supersedes', memoryId: other.id });
-    const out = graphExpandRecall([sr(seed, 1.0)], { hops: 1, hippoRoot: home, tenantId: T, budget: 4000 });
+    const out = await graphExpandRecall([sr(seed, 1.0)], { hops: 1, store: sqliteStore(home), tenantId: T, budget: 4000 });
     const hit = out.find((r) => r.entry.id === other.id)!;
     expect(hit).toBeDefined();
     expect(hit.graphVia!.direction).toBe('from'); // O is the `from` endpoint reached from seed's `to` side
   });
 
-  it('visited set makes a cycle terminate without double-counting', () => {
+  it('visited set makes a cycle terminate without double-counting', async () => {
     const a = mem(home, T, 'a'); const b = mem(home, T, 'b');
     const ea = ent(home, T, a, 'A'); const eb = ent(home, T, b, 'B');
     insertRelationAt(home, T, { fromEntityId: ea, toEntityId: eb, relType: 'supersedes', memoryId: a.id });
     insertRelationAt(home, T, { fromEntityId: eb, toEntityId: ea, relType: 'supersedes', memoryId: b.id });
-    const out = graphExpandRecall([sr(a, 1.0)], { hops: 3, hippoRoot: home, tenantId: T, budget: 4000, includeSuperseded: true });
+    const out = await graphExpandRecall([sr(a, 1.0)], { hops: 3, store: sqliteStore(home), tenantId: T, budget: 4000, includeSuperseded: true });
     expect(out.filter((r) => r.entry.id === b.id)).toHaveLength(1);
     expect(out).toHaveLength(2); // a (base) + b (reached once)
   });
 
-  it('respects the per-hop maxNeighbors fanout cap', () => {
+  it('respects the per-hop maxNeighbors fanout cap', async () => {
     const seed = mem(home, T, 'seed');
     const es = ent(home, T, seed, 'S');
     const neighbours = ['nn1', 'nn2', 'nn3', 'nn4', 'nn5'].map((n) => {
@@ -109,15 +110,15 @@ describe('graph-recall engine', () => {
       insertRelationAt(home, T, { fromEntityId: es, toEntityId: e, relType: 'supersedes', memoryId: seed.id });
       return m;
     });
-    const out = graphExpandRecall([sr(seed, 1.0)], {
-      hops: 1, hippoRoot: home, tenantId: T, budget: 100000, maxNeighbors: 2, includeSuperseded: true,
+    const out = await graphExpandRecall([sr(seed, 1.0)], {
+      hops: 1, store: sqliteStore(home), tenantId: T, budget: 100000, maxNeighbors: 2, includeSuperseded: true,
     });
     expect(out.filter((r) => r.graphVia).length).toBe(2);
     // sanity: all 5 neighbours exist, only 2 surfaced
     expect(neighbours).toHaveLength(5);
   });
 
-  it('drops a reached SUPERSEDED memory unless --include-superseded', () => {
+  it('drops a reached SUPERSEDED memory unless --include-superseded', async () => {
     const a = mem(home, T, 'active head decision');
     const old = mem(home, T, 'older superseded predecessor');
     // Mark `old` superseded (point it at `a`).
@@ -127,14 +128,14 @@ describe('graph-recall engine', () => {
     insertRelationAt(home, T, { fromEntityId: ea, toEntityId: eo, relType: 'supersedes', memoryId: a.id });
     const base = [sr(a, 1.0)];
 
-    const dflt = graphExpandRecall(base, { hops: 1, hippoRoot: home, tenantId: T, budget: 4000 });
+    const dflt = await graphExpandRecall(base, { hops: 1, store: sqliteStore(home), tenantId: T, budget: 4000 });
     expect(dflt.map((r) => r.entry.id)).not.toContain(old.id); // superseded dropped by default
 
-    const incl = graphExpandRecall(base, { hops: 1, hippoRoot: home, tenantId: T, budget: 4000, includeSuperseded: true });
+    const incl = await graphExpandRecall(base, { hops: 1, store: sqliteStore(home), tenantId: T, budget: 4000, includeSuperseded: true });
     expect(incl.map((r) => r.entry.id)).toContain(old.id); // surfaced when requested
   });
 
-  it('graph-edge superseded semantics: the newer (from) endpoint shows by default; the older (to) endpoint needs --include-superseded (codex P2)', () => {
+  it('graph-edge superseded semantics: the newer (from) endpoint shows by default; the older (to) endpoint needs --include-superseded (codex P2)', async () => {
     // old <- new : insertRelationAt(from=new, to=old) means "new supersedes old".
     const oldD = mem(home, T, 'the older decision we moved on from');
     const newD = mem(home, T, 'the current decision in force');
@@ -143,30 +144,30 @@ describe('graph-recall engine', () => {
 
     // Seed = the OLD decision (lexical hit). --hops reaches NEW as the `from` endpoint
     // (the current version) -> shown by DEFAULT (no --include-superseded).
-    const fromOld = graphExpandRecall([sr(oldD, 1.0)], { hops: 1, hippoRoot: home, tenantId: T, budget: 4000 });
+    const fromOld = await graphExpandRecall([sr(oldD, 1.0)], { hops: 1, store: sqliteStore(home), tenantId: T, budget: 4000 });
     expect(fromOld.map((r) => r.entry.id)).toContain(newD.id);
     expect(fromOld.find((r) => r.entry.id === newD.id)!.graphVia!.direction).toBe('from');
 
     // Seed = the NEW decision. --hops reaches OLD as the `to` endpoint (superseded) ->
     // DROPPED by default, surfaced only with --include-superseded.
-    const fromNewDefault = graphExpandRecall([sr(newD, 1.0)], { hops: 1, hippoRoot: home, tenantId: T, budget: 4000 });
+    const fromNewDefault = await graphExpandRecall([sr(newD, 1.0)], { hops: 1, store: sqliteStore(home), tenantId: T, budget: 4000 });
     expect(fromNewDefault.map((r) => r.entry.id)).not.toContain(oldD.id);
-    const fromNewIncl = graphExpandRecall([sr(newD, 1.0)], { hops: 1, hippoRoot: home, tenantId: T, budget: 4000, includeSuperseded: true });
+    const fromNewIncl = await graphExpandRecall([sr(newD, 1.0)], { hops: 1, store: sqliteStore(home), tenantId: T, budget: 4000, includeSuperseded: true });
     expect(fromNewIncl.map((r) => r.entry.id)).toContain(oldD.id);
   });
 
-  it('asOf drops a reached memory whose valid_from is after the as-of date', () => {
+  it('asOf drops a reached memory whose valid_from is after the as-of date', async () => {
     const a = mem(home, T, 'seed decision');
     const future = mem(home, T, 'a future-dated linked decision');
     const ea = ent(home, T, a, 'A'); const ef = ent(home, T, future, 'F');
     insertRelationAt(home, T, { fromEntityId: ea, toEntityId: ef, relType: 'supersedes', memoryId: a.id });
     // future.valid_from is "now"; ask as-of a date in the past -> it must be dropped.
-    const out = graphExpandRecall([sr(a, 1.0)], { hops: 1, hippoRoot: home, tenantId: T, budget: 4000, asOf: '2000-01-01' });
+    const out = await graphExpandRecall([sr(a, 1.0)], { hops: 1, store: sqliteStore(home), tenantId: T, budget: 4000, asOf: '2000-01-01' });
     expect(out.map((r) => r.entry.id)).not.toContain(future.id);
     expect(out).toHaveLength(1);
   });
 
-  it('asOf applies the FULL bi-temporal rule: a superseded reached row is dropped once its successor was valid as-of (codex P2)', () => {
+  it('asOf applies the FULL bi-temporal rule: a superseded reached row is dropped once its successor was valid as-of (codex P2)', async () => {
     const seed = mem(home, T, 'current head decision');
     const pred = mem(home, T, 'the predecessor decision lineage');
     pred.valid_from = '2020-01-01T00:00:00.000Z';
@@ -180,16 +181,16 @@ describe('graph-recall engine', () => {
 
     // as-of AFTER the successor became valid -> the predecessor is no longer the valid
     // version, must be DROPPED (not merely valid_from <= asOf).
-    const after = graphExpandRecall([sr(seed, 1.0)], { hops: 1, hippoRoot: home, tenantId: T, budget: 4000, asOf: '2022-01-01' });
+    const after = await graphExpandRecall([sr(seed, 1.0)], { hops: 1, store: sqliteStore(home), tenantId: T, budget: 4000, asOf: '2022-01-01' });
     expect(after.map((r) => r.entry.id)).not.toContain(pred.id);
 
     // as-of BEFORE the successor became valid -> the predecessor WAS the valid version,
     // must be surfaced.
-    const before = graphExpandRecall([sr(seed, 1.0)], { hops: 1, hippoRoot: home, tenantId: T, budget: 4000, asOf: '2020-06-01' });
+    const before = await graphExpandRecall([sr(seed, 1.0)], { hops: 1, store: sqliteStore(home), tenantId: T, budget: 4000, asOf: '2020-06-01' });
     expect(before.map((r) => r.entry.id)).toContain(pred.id);
   });
 
-  it('expands the GLOBAL store too: a seed whose graph lives in globalRoot surfaces its neighbour (codex P2)', () => {
+  it('expands the GLOBAL store too: a seed whose graph lives in globalRoot surfaces its neighbour (codex P2)', async () => {
     const glob = makeRoot('graphrecall');
     try {
       // The seed + its graph live in the GLOBAL store; the local store has no entities.
@@ -197,7 +198,7 @@ describe('graph-recall engine', () => {
       const linked = mem(glob, T, 'a globally-stored linked predecessor');
       const es = ent(glob, T, seed, 'S'); const el = ent(glob, T, linked, 'L');
       insertRelationAt(glob, T, { fromEntityId: es, toEntityId: el, relType: 'supersedes', memoryId: seed.id });
-      const out = graphExpandRecall([sr(seed, 1.0)], { hops: 1, hippoRoot: home, globalRoot: glob, tenantId: T, budget: 4000, includeSuperseded: true });
+      const out = await graphExpandRecall([sr(seed, 1.0)], { hops: 1, store: sqliteStore(home), global: sqliteStore(glob), tenantId: T, budget: 4000, includeSuperseded: true });
       expect(out.map((r) => r.entry.id)).toContain(linked.id);
       expect(out.find((r) => r.entry.id === linked.id)!.graphVia).toBeDefined();
     } finally {
@@ -205,41 +206,41 @@ describe('graph-recall engine', () => {
     }
   });
 
-  it('--hops 0 is a no-op (identity)', () => {
+  it('--hops 0 is a no-op (identity)', async () => {
     const a = mem(home, T, 'a');
     const base = [sr(a, 1.0)];
-    expect(graphExpandRecall(base, { hops: 0, hippoRoot: home, tenantId: T, budget: 4000 })).toBe(base);
+    expect(await graphExpandRecall(base, { hops: 0, store: sqliteStore(home), tenantId: T, budget: 4000 })).toBe(base);
   });
 
-  it('empty graph is a no-op (no throw)', () => {
+  it('empty graph is a no-op (no throw)', async () => {
     const a = mem(home, T, 'a');
     const base = [sr(a, 1.0)];
-    const out = graphExpandRecall(base, { hops: 2, hippoRoot: home, tenantId: T, budget: 4000 });
+    const out = await graphExpandRecall(base, { hops: 2, store: sqliteStore(home), tenantId: T, budget: 4000 });
     expect(out).toBe(base); // no seed entity -> unchanged reference
   });
 
-  it('token budget bounds the augmented set', () => {
+  it('token budget bounds the augmented set', async () => {
     const a = mem(home, T, 'short');
     const big = mem(home, T, 'x'.repeat(8000)); // ~2000 tokens
     const ea = ent(home, T, a, 'A'); const eb = ent(home, T, big, 'B');
     insertRelationAt(home, T, { fromEntityId: ea, toEntityId: eb, relType: 'supersedes', memoryId: a.id });
     // Budget already nearly consumed by the base entry; the big neighbour overflows it.
     // includeSuperseded so the exclusion under test is the BUDGET, not the superseded-endpoint drop.
-    const out = graphExpandRecall([sr(a, 1.0)], { hops: 1, hippoRoot: home, tenantId: T, budget: 10, includeSuperseded: true });
+    const out = await graphExpandRecall([sr(a, 1.0)], { hops: 1, store: sqliteStore(home), tenantId: T, budget: 10, includeSuperseded: true });
     expect(out.map((r) => r.entry.id)).not.toContain(big.id);
   });
 
-  it('does not duplicate a neighbour already present in the base results (it stays a seed, untouched)', () => {
+  it('does not duplicate a neighbour already present in the base results (it stays a seed, untouched)', async () => {
     const a = mem(home, T, 'a'); const b = mem(home, T, 'b');
     const ea = ent(home, T, a, 'A'); const eb = ent(home, T, b, 'B');
     insertRelationAt(home, T, { fromEntityId: ea, toEntityId: eb, relType: 'supersedes', memoryId: a.id });
     const base = [sr(a, 1.0), sr(b, 0.9)]; // b already returned lexically -> it is a seed too
-    const out = graphExpandRecall(base, { hops: 1, hippoRoot: home, tenantId: T, budget: 4000 });
+    const out = await graphExpandRecall(base, { hops: 1, store: sqliteStore(home), tenantId: T, budget: 4000 });
     expect(out.filter((r) => r.entry.id === b.id)).toHaveLength(1);
     expect(out.find((r) => r.entry.id === b.id)!.graphVia).toBeUndefined(); // already-present neighbour left as-is
   });
 
-  it('never reaches another tenant\'s entity', () => {
+  it('never reaches another tenant\'s entity', async () => {
     const a = mem(home, T, 'a');
     const aOther = mem(home, 'other', 'other-tenant');
     const ea = ent(home, T, a, 'A');
@@ -248,7 +249,7 @@ describe('graph-recall engine', () => {
     // graphs are disjoint by construction. Expanding tenant T must not surface 'other'.
     expect(() => insertRelationAt(home, T, { fromEntityId: ea, toEntityId: eo, relType: 'supersedes', memoryId: a.id }))
       .toThrow(/another tenant/i);
-    const out = graphExpandRecall([sr(a, 1.0)], { hops: 2, hippoRoot: home, tenantId: T, budget: 4000 });
+    const out = await graphExpandRecall([sr(a, 1.0)], { hops: 2, store: sqliteStore(home), tenantId: T, budget: 4000 });
     expect(out.map((r) => r.entry.id)).not.toContain(aOther.id);
   });
 });

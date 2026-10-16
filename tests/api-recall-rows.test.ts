@@ -10,6 +10,7 @@ import { writeEntry } from '../src/store/entry-writes.js';
 import { saveActiveTaskSnapshot, appendSessionEvent } from '../src/store/sessions.js';
 import { saveSessionHandoff } from '../src/store/handoffs.js';
 import { loadConfig } from '../src/core/config.js';
+import { sqliteStore } from '../src/store/sqlite/store.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { cliApiContext } from '../src/cli/api-context.js';
 import { rankRecall } from '../src/api/recall/pipeline.js';
@@ -27,7 +28,7 @@ const setting = (activeScope: string | null, primaryIsGlobal = false): CliRecall
 
 async function rankDeploy() {
   const config = loadConfig(hippoRoot);
-  return rankRecall({ hippoRoot, tenantId: 'default' }, {
+  return rankRecall({ store: sqliteStore(hippoRoot), config, tenantId: 'default' }, {
     query: 'deploy', budget: 4000, cost: (r) => r.tokens, limit: 10, includeSuperseded: false, explicitScope: null, activeScope: null,
     search: { usePhysics: false, physicsConfig: config.physics, multihop: false, mmr: false, mmrLambda: 0.7, localBump: 1.2, explain: false },
   });
@@ -102,7 +103,8 @@ describe('cliRecallSetting and cliRecallOrigin', () => {
     initStore(globalRoot);
     writeEntry(globalRoot, { ...createMemory('deploy rollback checklist lives in the shared runbook'), id: 'mem_glob_0', strength: 1 });
     const config = loadConfig(hippoRoot);
-    const ranked = await rankRecall({ hippoRoot, globalRoot, tenantId: 'default' }, {
+    const global = { store: sqliteStore(globalRoot), config: loadConfig(globalRoot) };
+    const ranked = await rankRecall({ store: sqliteStore(hippoRoot), config, global, tenantId: 'default' }, {
       query: 'deploy', budget: 4000, cost: (r) => r.tokens, limit: 10, includeSuperseded: false, explicitScope: null, activeScope: null,
       search: { usePhysics: false, physicsConfig: config.physics, multihop: false, mmr: false, mmrLambda: 0.7, localBump: 1.2, explain: false },
     });

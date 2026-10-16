@@ -1,5 +1,6 @@
 import type { MemoryEntry } from '../core/memory.js';
-import type { EmbeddingsConfig } from '../core/config.js';
+import type { EmbeddingsConfig, HippoConfig } from '../core/config.js';
+import { embeddingsConfigOf, resolveEmbeddingProvider } from '../embeddings/provider.js';
 import { tokenize } from '../util/tokenize.js';
 import { evalNow } from '../core/ablation.js';
 import { extractPathTags } from './path-context.js';
@@ -17,7 +18,7 @@ import {
   type VectorArm,
   type VectorSource,
 } from './vector.js';
-import { fuseRanks, type GraphStreamOptions } from './fusion.js';
+import { fuseRanks, type FusionInput, type GraphStreamOptions } from './fusion.js';
 import { scoreHybridPool } from './hybrid-score.js';
 import { applyMmrWindow, applyReranker } from './rerank.js';
 import { dedupeExtracted, fitBudget, withDagChildren } from './finalize.js';
@@ -63,7 +64,7 @@ export interface HybridSearchOptions {
   /** 1.05 micro-boost for summaries rebuilt within 7 days. Default true. */
   summaryFreshness?: boolean;
   /**
-   * Graph-proximity third RRF list; active only with `scoring: 'rrf'`, embeddings and a `hippoRoot`. See
+   * Graph-proximity third RRF list; active only with `scoring: 'rrf'`, embeddings and a `hippoRoot` or `source`. See
    * src/graph/stream.ts.
    */
   graphStream?: GraphStreamOptions;
@@ -74,6 +75,8 @@ export interface HybridSearchOptions {
   vectorCandidates?: HybridVectorCandidates;
   /** Where vectors are read; hippo.db under `hippoRoot` when unset. */
   store?: HippoStore;
+  /** Where vectors and the graph are read, in place of `hippoRoot`, `store` and `embeddings`. */
+  source?: VectorSource;
   /** The deadline a caller already started for this recall's query embedding; a fresh budget when unset. */
   queryEmbedDeadline?: AbortSignal;
 }
@@ -97,14 +100,15 @@ export async function hybridSearch(
   const queryTerms = tokenize(query);
   if (queryTerms.length === 0) return [];
 
-  const arm = await resolveVectorArm(query, pool, vectorSourceOf(options), options);
+  const source = options.source ?? folderVectorSource(options);
+  const arm = await resolveVectorArm(query, pool, source, options);
   // A prepared corpus covers the caller's entries only, so rows the vector arm added force a rebuild.
   const corpus = (arm.addedRows ? undefined : options.preparedCorpus) ?? buildCorpus(arm.entries.map(entryText));
   const bm25Scores = arm.entries.map((_, i) => bm25Score(corpus, i, queryTerms));
   const dense = denseScores(arm);
   const fusion = { entries: arm.entries, bm25Scores, dense, bm25Weight: 1 - embeddingWeight, embeddingWeight };
   const rrfScores = arm.useEmbeddings && options.scoring === 'rrf'
-    ? fuseRanks({ ...fusion, hippoRoot: options.hippoRoot, graphStream: options.graphStream })
+    ? await fuseRanks({ ...fusion, graph: graphStoresOf(source, options), graphStream: options.graphStream })
     : null;
 
   const scored = scoreHybridPool({
@@ -121,20 +125,36 @@ export async function hybridSearch(
   return fitBudget(ordered, options.budget ?? DEFAULT_RECALL_BUDGET, options.minResults ?? 1, options.cost);
 }
 
+/** The vector arm over `store`, embedding queries with the provider `config` names. */
+export function vectorSourceOf({ store, config }: {
+  store: HippoStore;
+  config: Pick<HippoConfig, 'embeddings'>;
+}): VectorSource {
+  return { store, provider: () => resolveEmbeddingProvider(config.embeddings) };
+}
+
 /**
- * hippo.db under `hippoRoot` when the caller passed no store: the default lives on this exported entry, never inside
- * the vector arm.
+ * hippo.db under `hippoRoot` when the caller passed no store: the folder default lives on the exported entries, never
+ * inside the vector arm.
  */
-export function vectorSourceOf({
-  hippoRoot,
-  store,
-  embeddings,
-}: {
-  hippoRoot?: string;
-  store?: HippoStore;
-  embeddings?: EmbeddingsConfig;
-}): VectorSource | undefined {
-  return hippoRoot ? { root: hippoRoot, store: store ?? sqliteStore(hippoRoot), embeddings } : undefined;
+export function folderVectorSource({
+  hippoRoot, store, embeddings,
+}: Pick<HybridSearchOptions, 'hippoRoot' | 'store' | 'embeddings'>): VectorSource | undefined {
+  if (!hippoRoot) return undefined;
+  return {
+    store: store ?? sqliteStore(hippoRoot),
+    provider: () => resolveEmbeddingProvider(embeddingsConfigOf(hippoRoot, embeddings)),
+  };
+}
+
+// The published GraphStreamOptions names the global store by folder, so it opens there.
+function graphStoresOf(source: VectorSource | undefined, options: HybridSearchOptions): FusionInput['graph'] {
+  if (!source) return undefined;
+  const globalRoot = options.graphStream?.globalRoot;
+  return {
+    store: source.store,
+    global: globalRoot && globalRoot !== options.hippoRoot ? sqliteStore(globalRoot) : undefined,
+  };
 }
 
 function hybridBoostContext(query: string, pool: MemoryEntry[], now: Date, options: HybridSearchOptions): BoostContext {

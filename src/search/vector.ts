@@ -3,8 +3,7 @@ import { cosineOf } from '../core/cosine.js';
 import { indexNeedsRebuild } from '../store/embeddings/index.js';
 import { indexedModel } from '../store/vector-index.js';
 import type { VectorCandidateSpec } from '../store/search-rows.js';
-import { embeddingsConfigOf, resolveEmbeddingProvider, type EmbeddingProvider } from '../embeddings/provider.js';
-import type { EmbeddingsConfig } from '../core/config.js';
+import type { EmbeddingProvider } from '../embeddings/provider.js';
 import { rethrowIfSqliteBlocked } from '../util/sqlite-blocked.js';
 import { errorMessage, log } from '../util/log.js';
 import { envQueryEmbedTimeoutMs } from '../util/env.js';
@@ -27,12 +26,11 @@ export interface VectorArm {
   queryVector: number[];
 }
 
-/** Where the vector arm reads: the embedding provider configured under `root`, and the vectors `store` holds. */
+/** Where the vector arm reads: the vectors `store` holds, embedded by `provider`. */
 export interface VectorSource {
-  readonly root: string;
   readonly store: HippoStore;
-  /** The caller's embeddings config for `root`; absent, `root`'s config.json is read. */
-  readonly embeddings?: EmbeddingsConfig;
+  /** Resolved inside the arm's try, so a bad embeddings config falls back to BM25 rather than failing the search. */
+  readonly provider: () => EmbeddingProvider;
 }
 
 export interface VectorArmOptions extends CurrentnessOptions {
@@ -124,10 +122,11 @@ async function storedVectorsOf(store: HippoStore, ids: readonly string[]): Promi
 async function fillVectorArm(
   arm: VectorArm,
   query: string,
-  { root, store, embeddings }: VectorSource,
+  source: VectorSource,
   options: VectorArmOptions,
 ): Promise<void> {
-  const provider = resolveEmbeddingProvider(embeddingsConfigOf(root, embeddings));
+  const { store } = source;
+  const provider = source.provider();
   if (!provider.isAvailable()) return;
   const index = await store.vectors.embeddingIndexState();
   if (indexNeedsRebuild(indexedModel(index), provider.id)) {

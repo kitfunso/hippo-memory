@@ -4,6 +4,7 @@ import { envHippoSessionId } from '../util/env.js';
 import { Layer } from '../core/memory.js';
 import { DEFAULT_RECALL_BUDGET, type SearchResult } from '../core/search-types.js';
 import { loadConfig } from '../core/config.js';
+import { detectScope } from '../core/active-scope.js';
 import { estimateTokens } from '../util/token-text.js';
 import { dropHeldCopies } from '../util/same-text.js';
 import * as api from '../api/index.js';
@@ -278,7 +279,7 @@ function parseRecallOptions(ctx: api.StoreContext, flags: CliFlags) {
   const asOf = parseAsOfFlag(flags);
   // The explicit --scope is the filter input; the detected scope only boosts, so auto-detection never filters.
   const explicitScope = stringFlagOrExit(flags, 'scope') ?? null;
-  const setting = cliRecallSetting(ctx, explicitScope);
+  const setting = cliRecallSetting(ctx, explicitScope || detectScope());
   const config = loadConfig(ctx.hippoRoot);
   const minResults = numberFlag(flags, 'min-results');
   const graphStream = flagIsTrue(flags, 'graph-stream') ? parseGraphStreamFlags(flags) : undefined;

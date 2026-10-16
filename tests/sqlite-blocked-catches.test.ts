@@ -13,6 +13,7 @@ import { resolveIndexedEmbeddingModel } from '../src/store/embeddings/index.js';
 import { resolveVectorArm } from '../src/search/vector.js';
 import { sqliteStore } from '../src/store/index.js';
 import { physicsSearch } from '../src/search/physics-search.js';
+import { folderVectorSource } from '../src/search/hybrid.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 
@@ -36,7 +37,7 @@ const ROWS: readonly Row[] = [
     async (root) => `found ${strengthenRetrieved(root, [entry.id], { recallBoostAblated: false }).size}`, 'found 0'],
   ['embeddings.ts loadStoredEmbeddingModel', /loadStoredEmbeddingModel/, async (root) => String(resolveIndexedEmbeddingModel(root, {})), 'null'],
   ['search/vector.ts resolveVectorArm', /fillVectorArm/,
-    async (root) => `embeddings ${(await resolveVectorArm('deploy', [], { root, store: sqliteStore(root) }, {})).useEmbeddings}`, 'embeddings false'],
+    async (root) => `embeddings ${(await resolveVectorArm('deploy', [], folderVectorSource({ hippoRoot: root }), {})).useEmbeddings}`, 'embeddings false'],
   ['search/physics-search.ts physicsQueryVector', /physicsQueryVector/,
     async (root) => ranked(await physicsSearch('deploy', [entry], { hippoRoot: root })), 'ranked 1'],
   ['search/physics-search.ts withVectorCandidates', /withVectorCandidates/, async (root) => ranked(await physicsSearch('deploy', [entry], {

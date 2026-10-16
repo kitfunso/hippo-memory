@@ -102,6 +102,22 @@ export function inMemoryGraphReadsStore(hippoRoot: string): InMemoryGraphReadsSt
       if (!rows) return { entities: [], relations: [], truncated: false };
       return structuredClone({ entities: rows.entities.filter(shows), relations: rows.relations.filter(shows), truncated: rows.truncated });
     },
+    async entitiesForMemories(tenantId, memoryIds) {
+      const inBatch = (batch: string[]) => (e: Entity): boolean => e.tenantId === tenantId && e.memoryId !== null && batch.includes(e.memoryId);
+      return structuredClone(batches(memoryIds).flatMap((batch) => copied.entities.filter(inBatch(batch)).sort((a, b) => a.id - b.id)));
+    },
+    async entitiesByIds(tenantId, ids) {
+      const inBatch = (batch: number[]) => (e: Entity): boolean => e.tenantId === tenantId && batch.includes(e.id);
+      return structuredClone(batches(ids).flatMap((batch) => copied.entities.filter(inBatch(batch)).sort((a, b) => a.id - b.id)));
+    },
+    async neighborRelations(tenantId, entityIds, { limit }) {
+      const byId = new Map<number, Relation>();
+      for (const batch of batches(entityIds)) {
+        const touching = copied.relations.filter((r) => r.tenantId === tenantId && (batch.includes(r.fromEntityId) || batch.includes(r.toEntityId)));
+        for (const r of touching.sort(newestFirst).slice(0, limit)) byId.set(r.id, r);
+      }
+      return structuredClone([...byId.values()]);
+    },
   };
   return { store: { ...base.store, graphReads }, auditRows: base.auditRows };
 }

@@ -10,6 +10,7 @@ import { resolveEmbeddingProvider } from '../src/embeddings/provider.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { savePhysicsState } from '../src/db/physics-state.js';
 import { loadConfig } from '../src/core/config.js';
+import { sqliteStore } from '../src/store/sqlite/store.js';
 import { hybridSearch } from '../src/search/hybrid.js';
 import { physicsSearch } from '../src/search/physics-search.js';
 import { rankRecall, type RankRecallOpts } from '../src/api/recall/pipeline.js';
@@ -114,7 +115,7 @@ describe('rankRecall in physics mode with asOf', () => {
     search: { usePhysics, physicsConfig: loadConfig(root).physics, multihop: false, mmr: false, mmrLambda: 0.7, localBump: 1.2, explain },
   });
   const rank = async (explain: boolean, usePhysics: boolean): Promise<string[]> =>
-    (await rankRecall({ hippoRoot: root, tenantId: TENANT }, opts(explain, usePhysics))).results.map((r) => r.entry.id);
+    (await rankRecall({ store: sqliteStore(root), config: loadConfig(root), tenantId: TENANT }, opts(explain, usePhysics))).results.map((r) => r.entry.id);
 
   for (const explain of [false, true]) {
     it(`returns the same rows as the non-physics path${explain ? ' under explain' : ''}`, async () => {

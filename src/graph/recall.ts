@@ -6,13 +6,12 @@
  * Hits inherit their seed's score minus a per-hop discount; both stores are expanded; no writes, so check-graph-writes
  * permits it outside graph.ts.
  */
-import { loadEntriesByIds } from '../store/entry-reads.js';
 import type { MemoryEntry } from '../core/memory.js';
 import { DEFAULT_RECALL_BUDGET, type ResultCost, type SearchResult } from '../core/search-types.js';
 import { estimateTokens } from '../util/token-text.js';
 import { compareEntryIdentity, compareScoresDesc } from '../core/compare.js';
-import { loadEntitiesByMemoryId, loadEntitiesByIds, loadNeighborRelations } from '../store/graph-reads.js';
 import type { Entity } from '../store/graph-rows.js';
+import type { HippoStore } from '../store/index.js';
 import { passesCliRecallScopeFilter, passesScopeFilterForRecall } from '../core/recall-scope.js';
 
 /** Hard cap on `--hops` (a higher value just walks more of a finite graph; this bounds
@@ -23,10 +22,11 @@ export const DEFAULT_MAX_NEIGHBORS = 25;
 /** Per-hop relevance discount: a graph hit inherits its origin seed's score, scaled down
  *  1% per hop, so it ranks just below its seed and orders by hop-distance. */
 const HOP_DISCOUNT = 0.01;
-/** loadEntriesByIds caps each call at 500 ids; chunk to lose none on high fanout. */
+/** entriesByIds caps each call at 500 ids; chunk to lose none on high fanout. */
 const LOAD_CHUNK = 500;
 
 type GraphVia = { hops: number; relType: string; direction: 'from' | 'to' };
+type GraphStore = Pick<HippoStore, 'graphReads' | 'entriesByIds'>;
 type GraphHit = SearchResult & { graphVia: GraphVia };
 
 export interface GraphExpandOpts {
@@ -34,11 +34,11 @@ export interface GraphExpandOpts {
   hops: number;
   /** Per-hop fanout cap. Defaults to DEFAULT_MAX_NEIGHBORS. */
   maxNeighbors?: number;
-  /** The local store root (where local seeds' graph lives). */
-  hippoRoot: string;
-  /** The global store root, when distinct + initialized (where global seeds' graph lives).
+  /** The local store (where local seeds' graph lives). */
+  store: GraphStore;
+  /** The global store, when distinct (where global seeds' graph lives).
    *  A global seed is only expanded if this is provided. */
-  globalRoot?: string;
+  global?: GraphStore;
   tenantId: string;
   /** Mirror the recall handler's hard filters when re-loading graph-reached rows. */
   includeSuperseded?: boolean;
@@ -62,12 +62,12 @@ export interface GraphExpandOpts {
   recallScope?: { requested?: string; additive?: boolean; ownScope?: string };
 }
 
-/** Load memories by id in <=500-id chunks (loadEntriesByIds caps each call at 500). */
-function loadByIdsChunked(root: string, tenantId: string, ids: string[]): MemoryEntry[] {
+/** Load memories by id in <=500-id chunks (entriesByIds caps each call at 500). */
+async function loadByIdsChunked(store: GraphStore, tenantId: string, ids: string[]): Promise<MemoryEntry[]> {
   if (ids.length === 0) return [];
   const out: MemoryEntry[] = [];
   for (let i = 0; i < ids.length; i += LOAD_CHUNK) {
-    out.push(...loadEntriesByIds(root, ids.slice(i, i + LOAD_CHUNK), tenantId));
+    out.push(...await store.entriesByIds(ids.slice(i, i + LOAD_CHUNK), tenantId));
   }
   return out;
 }
@@ -85,13 +85,13 @@ interface RelationWalk {
 }
 
 /** BFS, both directions, up to `hops`: each reached entity's via, and the base memory it descends from. */
-function walkRelations(
-  root: string,
+async function walkRelations(
+  store: GraphStore,
   tenantId: string,
   seedEntities: readonly Entity[],
   hops: number,
   maxNeighbors: number,
-): RelationWalk {
+): Promise<RelationWalk> {
   // `visited` makes expansion cycle-safe; `originMemByEntityId` carries each node's base-result memory id for adjacency
   // placement and score inheritance.
   const visitedEntityIds = new Set<number>(seedEntities.map((e) => e.id));
@@ -104,7 +104,7 @@ function walkRelations(
 
   for (let depth = 1; depth <= hops && frontier.length > 0; depth++) {
     const frontierSet = new Set(frontier);
-    const rels = loadNeighborRelations(root, tenantId, frontier, {
+    const rels = await store.graphReads.neighborRelations(tenantId, frontier, {
       limit: Math.max(maxNeighbors, maxNeighbors * frontier.length),
     });
     const nextFrontier: number[] = [];
@@ -167,25 +167,25 @@ interface HitAccumulators {
 
 /** Traverse one store's graph from its seeds into `hitsByOrigin`. Pure reads; mutates `seenMemoryIds`
  *  and `seenContent` so a memory, or a share/promote copy of it, surfaces at most once across stores. */
-function produceHitsForRoot(
-  root: string,
+async function produceHitsForStore(
+  store: GraphStore,
   baseResults: SearchResult[],
   accumulators: HitAccumulators,
   opts: HitOpts,
-): void {
+): Promise<void> {
   const { baseScoreByMemId, seenMemoryIds, seenContent, hitsByOrigin } = accumulators;
   const { hops, maxNeighbors, tenantId, asOfDate } = opts;
 
   // Seeds = graph entities (in THIS store) whose source memory is a base result.
-  const seedEntities = loadEntitiesByMemoryId(root, tenantId, baseResults.map((r) => r.entry.id));
+  const seedEntities = await store.graphReads.entitiesForMemories(tenantId, baseResults.map((r) => r.entry.id));
   if (seedEntities.length === 0) return;
 
-  const { reached, originMemByEntityId } = walkRelations(root, tenantId, seedEntities, hops, maxNeighbors);
+  const { reached, originMemByEntityId } = await walkRelations(store, tenantId, seedEntities, hops, maxNeighbors);
   if (reached.size === 0) return;
 
-  const reachedEntities = loadEntitiesByIds(root, tenantId, [...reached.keys()]);
-  const loadedById = loadReachedMemories(root, tenantId, reachedEntities, seenMemoryIds);
-  const successorValidFrom = loadSuccessorValidFrom(root, tenantId, loadedById, asOfDate);
+  const reachedEntities = await store.graphReads.entitiesByIds(tenantId, [...reached.keys()]);
+  const loadedById = await loadReachedMemories(store, tenantId, reachedEntities, seenMemoryIds);
+  const successorValidFrom = await loadSuccessorValidFrom(store, tenantId, loadedById, asOfDate);
 
   for (const ent of reachedEntities) {
     if (ent.memoryId === null) continue;      // mirror-less node: not recall-surfaced
@@ -219,31 +219,31 @@ function buildGraphHit(mem: MemoryEntry, via: GraphVia, originScore: number, isG
 // Reached entities -> source memory ids -> load by id (chunked). A mirror-less entity (memoryId === null) has no memory
 // to surface,
 // so drop its null id before it reaches loadByIdsChunked.
-function loadReachedMemories(
-  root: string,
+async function loadReachedMemories(
+  store: GraphStore,
   tenantId: string,
-  reachedEntities: ReturnType<typeof loadEntitiesByIds>,
+  reachedEntities: readonly Entity[],
   seenMemoryIds: Set<string>,
-): Map<string, MemoryEntry> {
+): Promise<Map<string, MemoryEntry>> {
   const needLoad = [...new Set(
     reachedEntities
       .map((e) => e.memoryId)
       .filter((id): id is string => id !== null && !seenMemoryIds.has(id)),
   )];
-  return new Map(loadByIdsChunked(root, tenantId, needLoad).map((m) => [m.id, m]));
+  return new Map((await loadByIdsChunked(store, tenantId, needLoad)).map((m) => [m.id, m]));
 }
 
 // For the bi-temporal as-of rule on a superseded reached row we need its successor's
 // valid_from. Batch-load the successors referenced by the loaded rows.
-function loadSuccessorValidFrom(
-  root: string,
+async function loadSuccessorValidFrom(
+  store: GraphStore,
   tenantId: string,
   loadedById: Map<string, MemoryEntry>,
   asOfDate: Date | null,
-): Map<string, string> {
+): Promise<Map<string, string>> {
   if (!asOfDate) return new Map<string, string>();
   const succIds = [...new Set([...loadedById.values()].map((m) => m.superseded_by).filter((id): id is string => !!id))];
-  return new Map(loadByIdsChunked(root, tenantId, succIds).map((m) => [m.id, m.valid_from]));
+  return new Map((await loadByIdsChunked(store, tenantId, succIds)).map((m) => [m.id, m.valid_from]));
 }
 
 /**
@@ -252,11 +252,11 @@ function loadSuccessorValidFrom(
  * Returns `baseResults` unchanged when `hops <= 0`, there are no base results, or nothing new survives the filters and
  * the token budget.
  */
-export function graphExpandRecall(
+export async function graphExpandRecall(
   baseResults: SearchResult[],
   opts: GraphExpandOpts,
-): SearchResult[] {
-  const { hops, hippoRoot, globalRoot, tenantId } = opts;
+): Promise<SearchResult[]> {
+  const { hops, store, global, tenantId } = opts;
   if (hops <= 0 || baseResults.length === 0) return baseResults;
   const maxNeighbors = opts.maxNeighbors ?? DEFAULT_MAX_NEIGHBORS;
   const includeSuperseded = opts.includeSuperseded ?? false;
@@ -269,10 +269,10 @@ export function graphExpandRecall(
   const hitsByOrigin = new Map<string, GraphHit[]>();
 
   // Expand against each distinct store the seeds may live in (local + global).
-  const roots = globalRoot && globalRoot !== hippoRoot ? [hippoRoot, globalRoot] : [hippoRoot];
-  for (const root of roots) {
-    produceHitsForRoot(root, baseResults, { baseScoreByMemId, seenMemoryIds, seenContent, hitsByOrigin }, {
-      hops, maxNeighbors, tenantId, includeSuperseded, asOfDate, recallScope, global: root !== hippoRoot,
+  const stores = global && global !== store ? [store, global] : [store];
+  for (const each of stores) {
+    await produceHitsForStore(each, baseResults, { baseScoreByMemId, seenMemoryIds, seenContent, hitsByOrigin }, {
+      hops, maxNeighbors, tenantId, includeSuperseded, asOfDate, recallScope, global: each !== store,
     });
   }
 

@@ -6,10 +6,10 @@ import { MemoryEntry } from '../core/memory.js';
 import { loadSearchEntries, loadRecallEntries, recallScopeFilter } from '../store/search-rows.js';
 import { passesScopeFilterForRecall, passesCliRecallScopeFilter } from '../core/recall-scope.js';
 import { search } from '../search/bm25-search.js';
-import { hybridSearch } from '../search/hybrid.js';
+import { folderVectorSource, hybridSearch } from '../search/hybrid.js';
 import { fitBudget } from '../search/finalize.js';
 import { DEFAULT_LOCAL_BUMP, DEFAULT_RECALL_BUDGET, type SearchResult, type ResultCost } from '../core/search-types.js';
-import { startQueryEmbedDeadline, type HybridVectorCandidates } from '../search/vector.js';
+import { startQueryEmbedDeadline, type HybridVectorCandidates, type VectorSource } from '../search/vector.js';
 import { evalNow } from '../core/ablation.js';
 import { duplicateKey } from '../util/same-text.js';
 import { errorFields, errorMessage, log } from '../util/log.js';
@@ -181,8 +181,9 @@ export async function searchBothHybrid(
     includeSuperseded: !recallScope || Boolean(includeSuperseded) || Boolean(asOf),
     admit,
   };
-  const roots = { local: localRoot, global: globalRoot };
-  return rankBothStores(query, roots, { local: localEntries, global: globalEntries }, vectorCandidates, options);
+  const folder = (hippoRoot: string) => folderVectorSource({ hippoRoot });
+  const sources = { local: folder(localRoot), global: folder(globalRoot) };
+  return rankBothStores(query, sources, { local: localEntries, global: globalEntries }, vectorCandidates, options);
 }
 
 /** Each store prices its rows already tagged, so a price that reads the store origin sees it before the merge. */
@@ -193,7 +194,7 @@ function pricedAs(cost: ResultCost | undefined, isGlobal: boolean): ResultCost |
 /** Hybrid ranking of rows already loaded from each store: the local bump, one copy per text, then the shared budget. */
 export async function rankBothStores(
   query: string,
-  roots: { local: string; global: string },
+  sources: { local: VectorSource | undefined; global: VectorSource | undefined },
   entries: { local: MemoryEntry[]; global: MemoryEntry[] },
   vectorCandidates: HybridVectorCandidates,
   options: HybridSearchOptions = {},
@@ -209,8 +210,8 @@ export async function rankBothStores(
     summaryDeboost, summaryFreshness, vectorCandidates, queryEmbedDeadline: startQueryEmbedDeadline(),
   };
   const side = (isGlobal: boolean) => ({ ...shared, cost: pricedAs(cost, isGlobal) });
-  const localResults = await hybridSearch(query, entries.local, { ...side(false), hippoRoot: roots.local });
-  const globalResults = await hybridSearch(query, entries.global, { ...side(true), hippoRoot: roots.global });
+  const localResults = await hybridSearch(query, entries.local, { ...side(false), source: sources.local });
+  const globalResults = await hybridSearch(query, entries.global, { ...side(true), source: sources.global });
 
   // Tag global results. Local memories get a configurable priority bump.
   const tagged: Array<SearchResult & { isGlobal: boolean }> = [

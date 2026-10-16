@@ -3,7 +3,6 @@ import { estimateTokens } from '../util/token-text.js';
 import { evalNow, isRecallBoostAblated, strengthAblation } from '../core/ablation.js';
 import { indexNeedsRebuild } from '../store/embeddings/index.js';
 import { indexedModel } from '../store/vector-index.js';
-import { embeddingsConfigOf, resolveEmbeddingProvider } from '../embeddings/provider.js';
 import { physicsScore as computePhysicsScores, computeMass, type PhysicsParticle } from '../core/physics.js';
 import { DEFAULT_PHYSICS_CONFIG, type PhysicsConfig } from '../core/physics-config.js';
 import { rethrowIfSqliteBlocked } from '../util/sqlite-blocked.js';
@@ -13,7 +12,7 @@ import type { HippoStore, VectorReads } from '../store/index.js';
 import { churnStaleFactor, summaryMultipliers, summaryScoring, type SummaryScoring } from './boosts.js';
 import { addDagFields, ageInDays } from './breakdown.js';
 import { fitBudget } from './finalize.js';
-import { hybridSearch, vectorSourceOf } from './hybrid.js';
+import { folderVectorSource, hybridSearch } from './hybrid.js';
 import { currentEntries } from './as-of.js';
 import {
   embedQueryBy,
@@ -75,7 +74,7 @@ export async function physicsSearch(
   entries: MemoryEntry[],
   options: PhysicsSearchOptions = {},
 ): Promise<SearchResult[]> {
-  const source = entries.length > 0 ? vectorSourceOf(options) : undefined;
+  const source = entries.length > 0 ? folderVectorSource(options) : undefined;
   return source ? physicsSearchIn(source, query, entries, options) : [];
 }
 
@@ -88,8 +87,8 @@ export async function physicsSearchIn(
   const explain = options.explain ?? false;
   const scoring: PhysicsScoring = { now, explain, summary: summaryScoring(options) };
   if (entries.length === 0) return [];
-  const { root, store, embeddings } = source;
-  const hybrid = { ...options, hippoRoot: root, store, embeddings };
+  const { store } = source;
+  const hybrid = { ...options, source };
   // memory_physics keeps only current positions and masses, so a past-dated query must rank without them.
   if (options.asOf) return hybridSearch(query, entries, hybrid);
 
@@ -124,14 +123,14 @@ export async function physicsSearchIn(
 
 /** The caller's vector, else the provider's; null sends the caller to hybridSearch. */
 async function physicsQueryVector(
-  query: string, { root, store, embeddings }: VectorSource, deadline: AbortSignal, given: number[] | undefined,
+  query: string, source: VectorSource, deadline: AbortSignal, given: number[] | undefined,
 ): Promise<number[] | null> {
   if (given && given.length > 0) return given;
   // Physics scores against particle positions, not the stored vector index, so a pruned index must not block it.
   try {
-    const provider = resolveEmbeddingProvider(embeddingsConfigOf(root, embeddings));
+    const provider = source.provider();
     if (!provider.isAvailable()) return null;
-    if (indexNeedsRebuild(indexedModel(await store.vectors.embeddingIndexState()), provider.id)) {
+    if (indexNeedsRebuild(indexedModel(await source.store.vectors.embeddingIndexState()), provider.id)) {
       return null;
     }
     const vec = await embedQueryBy(deadline, provider, query);

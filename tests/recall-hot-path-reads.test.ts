@@ -9,6 +9,7 @@ import { withRequestStoresSync } from '../src/db/request-stores.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../src/core/memory.js';
 import { loadConfig } from '../src/core/config.js';
+import { sqliteStore } from '../src/store/sqlite/store.js';
 import { rankRecall, type RankRecallOpts } from '../src/api/recall/pipeline.js';
 import { searchBothHybrid } from '../src/sharing/search-both.js';
 import { pushGoal, activeGoalsWithPolicies } from '../src/store/goals.js';
@@ -66,7 +67,8 @@ describe('rankRecall with a global store', () => {
       ...Array.from({ length: 6 }, (_, i) => memory(`global note ${i} on the zephyrine cache warmup`)),
       memory('local note 0 on the zephyrine cache eviction'),
     ]);
-    const ctx = { hippoRoot: local, globalRoot: global, tenantId: 'default' };
+    const at = (root: string) => ({ store: sqliteStore(root), config: loadConfig(root) });
+    const ctx = { ...at(local), global: at(global), tenantId: 'default' };
     // Recency reads the clock, so both rankings see one instant.
     vi.useFakeTimers({ toFake: ['Date'], now: Date.now() });
     const { result, statements } = await recordStatementsAsync(() => rankRecall(ctx, recallOpts(local)));
