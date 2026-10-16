@@ -1,9 +1,14 @@
 // Store, recall and maintenance verbs; every verbs/ file keeps its rows in the order `hippo help` lists them.
 
-import { DEFAULT_LOCAL_BUMP, DEFAULT_RECALL_BUDGET } from '../../core/search-types.js';
-import { DEFAULT_EMBEDDING_WEIGHT, DEFAULT_MMR_LAMBDA } from '../../search/hybrid.js';
+import {
+  CONFLICT_PEER_MULTIPLIER, DEFAULT_LOCAL_BUMP, DEFAULT_MMR_LAMBDA, DEFAULT_RECALL_BUDGET, SALIENCE_MIN_MULTIPLIER,
+  UTILITY_LENGTH_PENALTY_CAP, UTILITY_LENGTH_TOKENS, VALUE_MULT_MAX, VALUE_MULT_MIN, VALUE_MULT_SLOPE,
+} from '../../core/search-types.js';
+import { DEFAULT_EMBEDDING_WEIGHT } from '../../search/hybrid.js';
 import { DEFAULT_GRAPH_HOPS, DEFAULT_GRAPH_SEED_COUNT } from '../../graph/stream.js';
 import { type VerbSpec, verb } from '../verb-row.js';
+
+const VALUE_CLIP = `clip(1 + ${VALUE_MULT_SLOPE}*tanh(pos - neg), ${VALUE_MULT_MIN}, ${VALUE_MULT_MAX})`;
 
 export const MEMORY_VERBS = {
   init: verb(() => import('../init.js'), 'handleInit', {
@@ -87,17 +92,17 @@ export const MEMORY_VERBS = {
     --evc-adaptive         When the top results overlap heavily (a conflict
                            cluster), widen the pool and re-rank by recency.
                            Default off.
-    --filter-conflicts     Drop superseded entries and down-weight by 0.3x any
+    --filter-conflicts     Drop superseded entries and down-weight by ${CONFLICT_PEER_MULTIPLIER}x any
                            entry in an open conflict with another result.
                            Uses recorded supersession and conflicts only, never
                            lexical inference. Default off.
     --value-aware          Boost memories with positive cumulative outcomes and
                            demote those with negative ones during ranking:
-                           multiplier clip(1 + 0.3*tanh(pos - neg), 0.7, 1.3).
+                           multiplier ${VALUE_CLIP}.
                            Reads outcome_positive and outcome_negative. Default off.
     --rerank-utility       Re-sort results by utility = score * (0.5 + 0.5 * strength)
                            * (1 - cost_factor), where cost_factor =
-                           min(0.3, tokens / 10000). Default off.
+                           min(${UTILITY_LENGTH_PENALTY_CAP}, tokens / ${UTILITY_LENGTH_TOKENS}). Default off.
     --reranker <name>      Apply a reranker pass after retrieval
                            (cross-encoder|jev|clef-flash|clef|llm) to re-order the
                            top-K candidates. Default unset (no reranker).
@@ -122,7 +127,7 @@ export const MEMORY_VERBS = {
                            on top of base BM25 score, capped at 3.0x.
     --salience-threshold <n>
                            Down-weight memories retrieved fewer than n times:
-                           score *= max(0.5, retrieval_count / n) for entries
+                           score *= max(${SALIENCE_MIN_MULTIPLIER}, retrieval_count / n) for entries
                            with count < n; entries at or above n are unchanged.
                            Salience comes from use, not from lexical overlap.
                            Default off.

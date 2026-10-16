@@ -84,11 +84,11 @@ describe('package entry re-exports sleep', () => {
     expect(out.admin).toBe(false);
     // The published d.ts text is what consumers compile against, so text is the contract.
     const dts = readFileSync(resolve(REPO_ROOT, 'dist', 'index.d.ts'), 'utf-8');
-    expect(dts).toMatch(/^export type \{ SleepOpts, SleepResult \} from '\.\/api\/sleep\.js';$/m);
+    expect(dts).toMatch(/^export type \{ SleepOpts, SleepResult \} from '\.\/api\/sleep\/sleep\.js';$/m);
     // The published signature takes the public Context, which may carry no store.
     expect(dts).toMatch(/^export declare function sleep\(ctx: Context, opts\?: SleepOpts\): Promise<SleepResult>;$/m);
     // The phase-override seam lives in sleep-run.ts, so the public declaration must not name it.
-    expect(readFileSync(resolve(REPO_ROOT, 'dist', 'api', 'sleep.d.ts'), 'utf-8')).not.toMatch(/__phases|SleepPhases/);
+    expect(readFileSync(resolve(REPO_ROOT, 'dist', 'api', 'sleep', 'sleep.d.ts'), 'utf-8')).not.toMatch(/__phases|SleepPhases/);
   });
 });
 

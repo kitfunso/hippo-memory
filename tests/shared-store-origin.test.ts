@@ -16,7 +16,7 @@ import { BadRequestError } from '../src/core/api-errors.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { clearProjectIdentityCache, originFromSource } from '../src/core/project-identity.js';
 import { _resetSharedStoreCacheForTests } from '../src/core/config.js';
-import { repairProjectNamesOnce } from '../src/api/projects.js';
+import { repairProjectNamesOnce } from '../src/api/objects/projects.js';
 import { cliApiContext } from '../src/cli/api-context.js';
 import { saveCompaction } from '../src/capture/compaction-record.js';
 import { COMPACTION_MEMORY_TAG } from '../src/core/memory.js';

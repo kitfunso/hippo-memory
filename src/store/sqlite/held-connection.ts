@@ -15,7 +15,7 @@ import { hasGroup, type HippoStore } from '../port.js';
 import { runSqliteRequest } from './request-scope.js';
 import { runsOffLoop } from './worker-store.js';
 import { startWalCheckpointer, type WalCheckpointer } from '../../db/wal-checkpointer.js';
-import { errorMessage, log } from '../../util/log.js';
+import { errorMessage, log, errorFields } from '../../util/log.js';
 
 /** What the server calls around its responses to keep its store connection. */
 export interface StoreHolder {
@@ -45,7 +45,10 @@ export function holdSqliteConnection(hippoRoot: string): StoreHolder {
       checkpointer = startWalCheckpointer(getHippoDbPath(hippoRoot));
     } catch (err) {
       stopHolding = true;
-      log.warn(`serve: could not hold a store connection; requests still work, only slower: ${errorMessage(err)}`);
+      log.warn(
+        `serve: could not hold a store connection; requests still work, only slower: ${errorMessage(err)}`,
+        errorFields(err),
+      );
     }
   };
   const afterResponse = (): void => {

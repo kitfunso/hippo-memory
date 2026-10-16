@@ -1,6 +1,6 @@
 // The `hippo card` verb (the agent work board); main() loads it lazily from the command table.
 
-import * as cardsApi from '../api/cards.js';
+import * as cardsApi from '../api/objects/cards.js';
 import { cliApiContext } from './api-context.js';
 import { isHandoffOutcome } from '../core/handoff.js';
 import { type Card, isCardStatus } from '../core/card.js';

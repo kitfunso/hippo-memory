@@ -9,7 +9,7 @@ import {
   type Actor, type ContextWith,
 } from '../src/api/index.js';
 import { mapApiError } from '../src/api/error-reply.js';
-import { rememberLocally } from '../src/api/remember-local.js';
+import { rememberLocally } from '../src/api/memories/remember-local.js';
 import { importVault } from '../src/importers/vault.js';
 import { sqliteStore, type HippoStore, type StoreGroups } from '../src/store/index.js';
 import { writeEntry } from '../src/store/entry-writes.js';

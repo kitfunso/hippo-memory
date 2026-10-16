@@ -57,7 +57,7 @@ export type { ApiKeyListItem, ApiKeyListRow, ApiKeyRecord, ListApiKeysOpts, NewA
 export type { KeysetPosition } from '../util/keyset.js';
 // The types HippoStore's methods take and return, so an add-on store can implement them from this subpath.
 export type { AppendAuditOpts, AuditEvent, ListAuditAfterOpts } from '../store/audit.js';
-export type { ContinuityBlock } from '../api/recall-types.js';
+export type { ContinuityBlock } from '../api/recall/types.js';
 export type { ActiveGoals, GetActiveGoalsOpts, Goal, GoalRecallLogRow, RetrievalPolicy } from '../store/goals.js';
 export type { MemoryEntry } from '../core/memory.js';
 export type { ClassResolution, PlanningFallacyEvidence } from '../store/planning-fallacy-evidence.js';

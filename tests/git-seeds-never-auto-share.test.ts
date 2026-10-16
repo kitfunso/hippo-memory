@@ -18,6 +18,7 @@ import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { hippoRun } from './_helpers/spawn-hippo.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+import { sqliteSyncStore } from '../src/store/sqlite/store.js';
 const SEED = 'fix: retry the upload when the storage token expires mid-transfer';
 const ORDINARY = 'gotcha: powershell 5.1 has no pipeline chain operators, use if blocks';
 
@@ -92,13 +93,13 @@ describe('git-learned rows and the global store', () => {
     const facts = storeExtractedFacts(hippoRoot, seed, [1, 2, 3, 4, 5, 6].map((n): ExtractedFact => (
       { content: `Upload fact ${n}: the storage token can expire mid-transfer.`, tags: ['topic:upload'], valence: 'neutral' }
     ))).map((f) => ({ ...f, dag_level: 1 }));
-    await buildDag(hippoRoot, facts.slice(0, 3), { apiKey: 'test', fetcher });
-    await buildDag(hippoRoot, facts.slice(3), { apiKey: 'test', fetcher });
+    await buildDag(sqliteSyncStore(hippoRoot).localFiles, facts.slice(0, 3), { apiKey: 'test', fetcher });
+    await buildDag(sqliteSyncStore(hippoRoot).localFiles, facts.slice(3), { apiKey: 'test', fetcher });
     const summaries = loadAllEntries(hippoRoot).filter((e) => e.dag_level === 2);
     expect(summaries).toHaveLength(2);
     for (const s of summaries) expect(s.tags).toContain('git-learned');
 
-    await buildEntityProfiles(hippoRoot, summaries, { apiKey: 'test', fetcher });
+    await buildEntityProfiles(sqliteSyncStore(hippoRoot).localFiles, summaries, { apiKey: 'test', fetcher });
     const profiles = loadAllEntries(hippoRoot).filter((e) => e.dag_level === 3);
     expect(profiles).toHaveLength(1);
     expect(profiles[0].tags).toContain('git-learned');

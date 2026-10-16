@@ -40,6 +40,8 @@ function pidAlive(pid: number): boolean {
  * on a busy store. */
 const STALE_LOCK_MS = 15 * MINUTE_MS;
 
+const heldHere = new Set<string>();
+
 /** A dead holder frees its session at once, and any holder at STALE_LOCK_MS. */
 function holderAlive(lock: string): boolean {
   let text: string;
@@ -56,7 +58,8 @@ function holderAlive(lock: string): boolean {
   // Empty or torn: its taker is between the create and the write, so it is held.
   if (!held) return true;
   const pid = Number(held[1]);
-  return pid !== process.pid && pidAlive(pid);
+  // Our own pid is live only while this process holds the lock; a leftover from a dead run that reused the pid is not.
+  return pid === process.pid ? heldHere.has(lock) : pidAlive(pid);
 }
 
 type Take = 'taken' | 'held' | 'unusable';
@@ -67,6 +70,7 @@ function takeSessionLock(lock: string): Take {
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       fs.writeFileSync(lock, `${process.pid}:${Date.now()}`, { flag: 'wx' });
+      heldHere.add(lock);
       return 'taken';
     } catch (err) {
       if (!(err instanceof Error && 'code' in err && err.code === 'EEXIST')) return 'unusable';
@@ -91,6 +95,7 @@ function warnUnusableLockOnce(lock: string): void {
 }
 
 function releaseSessionLock(lock: string): void {
+  heldHere.delete(lock);
   try {
     fs.rmSync(lock, { force: true });
   } catch (err) {

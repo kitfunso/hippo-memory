@@ -5,7 +5,7 @@
 
 import { MemoryEntry, Layer } from '../core/memory.js';
 import { REFINED_TAG, storeRefinement, type StoreContext } from '../api/index.js';
-import { listMemories, listMemoriesByIds, type TenantReach } from '../api/memories.js';
+import { listMemories, listMemoriesByIds, type TenantReach } from '../api/memories/memories.js';
 import { cliApiContext } from './api-context.js';
 import { chunked } from '../util/chunked.js';
 import { redactSecretsStrict } from '../util/secret-detect.js';

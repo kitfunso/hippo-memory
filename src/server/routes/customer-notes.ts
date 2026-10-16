@@ -8,7 +8,7 @@ import {
 import { sendJson } from '../../util/http-util.js';
 import type { AuthedRouteRequest } from '../types.js';
 import { parseJsonBody } from '../validation.js';
-import { saveFor } from '../../api/objects.js';
+import { saveFor } from '../../api/objects/objects.js';
 import {
   closeRoute,
   getRoute,

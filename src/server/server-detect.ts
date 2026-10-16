@@ -176,7 +176,7 @@ export async function detectServer(hippoRoot: string): Promise<ServerInfo | null
   try {
     info = JSON.parse(readFileSync(path, 'utf8'));
   } catch (err) {
-    log.warn(`server pidfile ${path} is unreadable (${errorMessage(err)}); removing it`);
+    log.warn(`server pidfile ${path} is unreadable (${errorMessage(err)}); removing it`, errorFields(err));
     removePidfile(hippoRoot);
     return null;
   }

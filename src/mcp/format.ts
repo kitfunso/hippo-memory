@@ -7,7 +7,7 @@ import { confidenceLabel } from '../core/memory.js';
 import type { ContextCost, ContinuityBlock, RecallResult, RecallResultItem } from '../api/index.js';
 import { formatHandoffEvidenceLine, type SessionHandoff } from '../core/handoff.js';
 import { printedTokens } from '../api/context-render.js';
-import { detectAnchoring } from '../api/recall-history.js';
+import { detectAnchoring } from '../api/recall/finish.js';
 import { detectAvailabilityBias } from '../api/availability.js';
 import { estimateTokens } from '../util/token-text.js';
 

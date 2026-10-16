@@ -12,7 +12,7 @@ import { savePhysicsState } from '../src/db/physics-state.js';
 import { loadConfig } from '../src/core/config.js';
 import { hybridSearch } from '../src/search/hybrid.js';
 import { physicsSearch } from '../src/search/physics-search.js';
-import { rankRecall, type RankRecallOpts } from '../src/api/recall-pipeline.js';
+import { rankRecall, type RankRecallOpts } from '../src/api/recall/pipeline.js';
 import type { SearchResult } from '../src/core/search-types.js';
 
 const TENANT = 'default';

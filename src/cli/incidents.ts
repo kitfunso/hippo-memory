@@ -2,7 +2,7 @@
 
 import { extractPathTags } from '../search/path-context.js';
 import * as incidentsModule from '../objects/incidents.js';
-import { objectsOf } from '../api/objects.js';
+import { objectsOf } from '../api/objects/objects.js';
 import type { Objects } from '../store/port.js';
 import { cliApiContext } from './api-context.js';
 import { printError } from './output.js';

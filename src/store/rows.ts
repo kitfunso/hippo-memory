@@ -7,7 +7,7 @@ import {
   type ConfidenceLevel,
   type MemoryKind,
 } from '../core/memory.js';
-import { errorMessage, log } from '../util/log.js';
+import { errorMessage, log, errorFields } from '../util/log.js';
 import { type JsonValue, isJsonObject } from '../util/json.js';
 import { warnDamagedColumn, type StoredJsonSite } from '../util/stored-json.js';
 
@@ -269,7 +269,7 @@ export function parseJsonArray(raw: string | null | undefined, site?: StoredJson
     return Array.isArray(parsed) ? parsed.map((item) => String(item)) : [];
   } catch (err) {
     if (site) warnDamagedColumn(site, 'not valid JSON');
-    else log.debug(`store: corrupt JSON array column read as empty: ${errorMessage(err)}`);
+    else log.debug(`store: corrupt JSON array column read as empty: ${errorMessage(err)}`, errorFields(err));
     return [];
   }
 }

@@ -2,8 +2,8 @@
 import type { FullContext } from './_helpers/api-ctx.js';
 import { afterEach, describe, expect, it } from 'vitest';
 import { rmSync } from 'node:fs';
-import { getMemory } from '../src/api/memories.js';
-import { archiveRaw } from '../src/api/promote.js';
+import { getMemory } from '../src/api/memories/memories.js';
+import { archiveRaw } from '../src/api/memories/promote.js';
 import { adminActor } from '../src/api/types.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, type CreateMemoryOptions, type MemoryEntry } from '../src/core/memory.js';
 import { insertDormantRow } from '../src/store/dormant.js';

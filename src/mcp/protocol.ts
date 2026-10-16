@@ -14,7 +14,7 @@ import { type JsonValue } from '../util/json.js';
 import type { CallerProject } from '../api/prompt-hook.js';
 import type { HippoStore, StoreGroup, StoreWith } from '../store/index.js';
 import type { StoreReach } from '../store/port.js';
-import type { AutoSleepRunner } from '../api/auto-sleep.js';
+import type { AutoSleepRunner } from '../api/sleep/auto-sleep.js';
 
 // ── Find hippo root ──
 

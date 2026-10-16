@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { countMatching, recordStatements, recordStatementsAsync } from './_helpers/count-statements.js';
 import { cliApiContext } from '../src/cli/api-context.js';
-import { listMemories } from '../src/api/memories.js';
+import { listMemories } from '../src/api/memories/memories.js';
 import { loadContextCandidates } from '../src/store/candidates.js';
 import { loadAllEntries, loadEntryTextKeys, readEntry } from '../src/store/entry-reads.js';
 import { strengthenRetrieved, writeEntry, writeEntryDbOnly } from '../src/store/entry-writes.js';

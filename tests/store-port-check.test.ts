@@ -364,7 +364,7 @@ describe('check-store-port.mjs', () => {
 
   it('fails and names each surface file that records a recall itself, in a route or a CLI verb', () => {
     const route = [
-      "import { noteRecall as n } from '../../api/recall-record.js';",
+      "import { noteRecall as n } from '../../api/recall/finish.js';",
       'export const f = (s: any, ctx: any) => {',
       '  s.bumpRecallStats(1);',
       "  recordTokens(ctx, 'http_recall', {});",
@@ -379,7 +379,7 @@ describe('check-store-port.mjs', () => {
         expect(r.stderr).toContain('src/server/routes/recall.ts:3 bumpRecallStats');
         expect(r.stderr).toContain('src/server/routes/recall.ts:4 recordTokens with a recall label');
         expect(r.stderr).toContain('src/cli/recall.ts:1 recordTokens with a recall label');
-        expect(r.stderr).toContain('recall-finish.ts');
+        expect(r.stderr).toContain('recall/finish.ts');
       }
     });
   });
@@ -391,7 +391,7 @@ describe('check-store-port.mjs', () => {
       'export const s = "recordTokens(ctx, \'recall\')";',
       "export const g = (ctx: any) => recordTokens(ctx, 'http_context', { note: 'recalled' });",
     ].join('\n');
-    withFixture({ 'src/api/recall-finish.ts': records, 'src/mcp/recall-tools.ts': records, 'src/server/routes/recall.ts': route }, {}, ({ run }) => {
+    withFixture({ 'src/api/recall/finish.ts': records, 'src/mcp/recall-tools.ts': records, 'src/server/routes/recall.ts': route }, {}, ({ run }) => {
       const r = run();
       expect(r.status, r.stderr).toBe(0);
     });

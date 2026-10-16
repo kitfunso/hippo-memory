@@ -1,6 +1,6 @@
 // First-class object verbs for predictions: record a claim, close it against the actual, and read the class base rate.
 
-import * as predictionsApi from '../api/predictions.js';
+import * as predictionsApi from '../api/objects/predictions.js';
 import type { ContextWith } from '../api/types.js';
 import { type ClosureState, VALID_CLOSURE_STATES } from '../core/prediction.js';
 import type { Prediction } from '../store/predictions.js';

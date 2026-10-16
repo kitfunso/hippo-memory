@@ -6,7 +6,7 @@ import { errorMessage } from '../util/log.js';
 import { printError } from './output.js';
 import { nonEmptyStringFlag, stringFlag, type CliFlags, type CommandContext } from './flag-values.js';
 import { requireInit } from './shared.js';
-import { objectsOf } from '../api/objects.js';
+import { objectsOf } from '../api/objects/objects.js';
 import type { Objects } from '../store/port.js';
 import { cliApiContext } from './api-context.js';
 import {

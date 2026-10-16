@@ -18,7 +18,7 @@ import { autoDetectContext } from '../api/context-auto.js';
 import { resolveProjectIdentity, type ProjectIdentity } from '../core/project-identity.js';
 import { isSharedStore } from '../core/config.js';
 import type { AppendAuditOpts } from '../store/audit.js';
-import { hashQueryText, type RingBuffer } from '../api/recall-history.js';
+import { hashQueryText, type RingBuffer } from '../api/recall/finish.js';
 import {
   availabilityPool,
   cutoffClauses,
@@ -27,7 +27,7 @@ import {
   suppressionSummary,
   tokenPurse,
   type SuppressionCounts,
-} from '../api/recall-render.js';
+} from '../api/recall/render.js';
 import { estimateTokens } from '../util/token-text.js';
 import { assembleCost, assembleText, drillCost, drillText } from '../api/context-render.js';
 import { mcpActor, ownsServerCwd, type ToolCall } from './protocol.js';
@@ -47,8 +47,8 @@ import {
   type RenderSlot,
 } from './format.js';
 import { isJsonString } from '../util/json.js';
-import { parseContextRequest, parseRecallRequest, toolParams } from '../api/recall-request.js';
-import { noteRecall, sessionRing, shownRecallRows } from '../api/recall-record.js';
+import { parseContextRequest, parseRecallRequest, toolParams } from '../api/recall/request.js';
+import { noteRecall, sessionRing, shownRecallRows } from '../api/recall/finish.js';
 
 // Named shapes for optional fields each api.* call only wants when the caller supplied them: build `extra`, then spread
 // once, which keeps per-field omission without the `...(cond ? { field } : {})` pattern.

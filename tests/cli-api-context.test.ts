@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { cliApiContext } from '../src/cli/api-context.js';
 import { initStore } from '../src/store/open.js';
 import { remember } from '../src/api/index.js';
-import { getMemory } from '../src/api/memories.js';
+import { getMemory } from '../src/api/memories/memories.js';
 
 describe('cliApiContext', () => {
   it('carries a SQLite store built on its root, so the api layer never builds one', async () => {

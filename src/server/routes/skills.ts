@@ -3,7 +3,7 @@ import { MAX_SKILL_NAME_LEN, type SaveSkillOpts, SKILL, skillsMarkdown } from '.
 import { sendJson } from '../../util/http-util.js';
 import type { AuthedRouteRequest } from '../types.js';
 import { MAX_SHORT_FIELD_LEN, parseJsonBody } from '../validation.js';
-import { objectsOf, saveFor } from '../../api/objects.js';
+import { objectsOf, saveFor } from '../../api/objects/objects.js';
 import {
   closeRoute,
   getRoute,

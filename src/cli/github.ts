@@ -133,8 +133,27 @@ export function cmdGitHubDlqList(hippoRoot: string, tenantId: string, _flags: Fl
   }
 }
 
+const PAYLOAD_PREVIEW_CHARS = 200;
+
+/** A parked payload that is not JSON, naming the command and the start of the text so the operator can find the row. */
+export class GitHubPayloadParseError extends Error {
+  constructor(command: string, rawPayload: string, cause: unknown) {
+    const start = JSON.stringify(rawPayload.slice(0, PAYLOAD_PREVIEW_CHARS));
+    super(`${command}: payload is not valid JSON (${errorMessage(cause)}); starts with ${start}`, { cause });
+    this.name = 'GitHubPayloadParseError';
+  }
+}
+
+export function parseParkedPayload(rawPayload: string): JsonValue {
+  try {
+    return JSON.parse(rawPayload);
+  } catch (err) {
+    throw new GitHubPayloadParseError('hippo github dlq replay', rawPayload, err);
+  }
+}
+
 const reingestParkedDelivery: IngestHook = async (innerCtx, args) => {
-  const parsed = JSON.parse(args.rawPayload);
+  const parsed = parseParkedPayload(args.rawPayload);
   const event = parsedToIngestEvent(parsed, args.eventName);
   if (!event) {
     return { memoryId: null };

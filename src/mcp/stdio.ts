@@ -145,8 +145,8 @@ function dispatch(body: string, abort: AbortController, host: McpHost): void {
   let parsed: JsonValue;
   try {
     parsed = JSON.parse(body);
-  } catch {
-    log.debug('mcp: answered a frame that is not valid JSON with a parse error');
+  } catch (err) {
+    log.debug('mcp: answered a frame that is not valid JSON with a parse error', errorFields(err));
     send({ jsonrpc: '2.0', id: null, error: { code: -32700, message: 'Parse error' } });
     return;
   }
@@ -172,7 +172,7 @@ function dispatch(body: string, abort: AbortController, host: McpHost): void {
       })
       .catch((err) => {
         if (timedOut() && err instanceof DOMException && err.name === 'TimeoutError') {
-          log.debug(`mcp: ${callName(req)} stopped at its deadline`);
+          log.debug(`mcp: ${callName(req)} stopped at its deadline`, errorFields(err));
         } else if (timedOut()) {
           log.error(`mcp: ${callName(req)} failed after its timeout reply: ${errorMessage(err)}`, errorFields(err));
         } else send(mcpErrorResponse(req.id, err, undefined, callName(req)));

@@ -3,9 +3,9 @@
 import { evalNow } from '../core/ablation.js';
 import { shareMemory, listPeers } from '../sharing/share.js';
 import { ConflictError, NotFoundError } from '../core/api-errors.js';
-import { predictionBaserate } from '../api/predictions.js';
-import { listOpenConflicts, resolveMemoryConflict } from '../api/conflicts.js';
-import { getMemoryStatus, getTouchableMemory } from '../api/memories.js';
+import { predictionBaserate } from '../api/objects/predictions.js';
+import { listOpenConflicts, resolveMemoryConflict } from '../api/memories/conflicts.js';
+import { getMemoryStatus, getTouchableMemory } from '../api/memories/memories.js';
 import { mcpActor, type ToolCall } from './protocol.js';
 import { isJsonString } from '../util/json.js';
 import { DATE_PREFIX_CHARS } from '../util/token-text.js';

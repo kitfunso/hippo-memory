@@ -5,7 +5,7 @@ import {
   predictionBaserate,
   predictionById,
   savePrediction,
-} from '../../api/predictions.js';
+} from '../../api/objects/predictions.js';
 import { loadConfig } from '../../core/config.js';
 import { predictionMirror } from '../../store/predictions.js';
 import { VALID_CLOSURE_STATES } from '../../core/prediction.js';

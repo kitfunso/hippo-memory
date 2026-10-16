@@ -7,7 +7,8 @@ import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { loadAmbientTallies } from '../src/store/ambient.js';
-import { AMBIENT_FRESH_WINDOW_MS, HIGH_SCHEMA_FIT_ABOVE, tallyAmbientEntries } from '../src/core/ambient.js';
+import { AMBIENT_FRESH_WINDOW_MS, tallyAmbientEntries } from '../src/core/ambient.js';
+import { HIGH_SCHEMA_FIT } from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 
 const NOW = new Date('2026-06-15T12:00:00.000Z');
@@ -26,7 +27,7 @@ describe('ambient tallies at the window and threshold edges', () => {
   it('the SQL and JS paths count the same fresh and high-fit rows', () => {
     const edge = NOW.getTime() - AMBIENT_FRESH_WINDOW_MS;
     const ages = [edge - 1000, edge, edge + 1000];
-    const fits = [HIGH_SCHEMA_FIT_ABOVE - 0.01, HIGH_SCHEMA_FIT_ABOVE, HIGH_SCHEMA_FIT_ABOVE + 0.01];
+    const fits = [HIGH_SCHEMA_FIT - 0.01, HIGH_SCHEMA_FIT, HIGH_SCHEMA_FIT + 0.01];
     ages.forEach((created, i) => {
       const e = createMemory(`edge row ${i}`);
       e.created = new Date(created).toISOString();

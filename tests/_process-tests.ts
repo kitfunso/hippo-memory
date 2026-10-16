@@ -38,6 +38,7 @@ export const PROCESS_TESTS: readonly string[] = [
   'card-leases.test.ts',
   'changelog-fragments.test.ts',
   'check-caught-error-logs.test.ts',
+  'check-dts-diff.test.ts',
   'child-process-window-hide.test.ts',
   'churn-staleness.test.ts',
   'claude-memory-import.test.ts',

@@ -33,11 +33,11 @@ import {
   type HookRuntime,
 } from '../core/capture-contract.js';
 import { loadConfig } from '../core/config.js';
-import { autoSleepDue } from '../api/auto-sleep.js';
+import { autoSleepDue } from '../api/sleep/auto-sleep.js';
 import { COMPACTION_DB_WAIT_MS } from '../core/compaction-timing.js';
 import { compactResumeBlock, sessionEndWork as runSessionEnd } from '../api/session-end.js';
 import { normaliseHookPayload, readHookStdin, readStdinBounded, type BoundedStdin } from './stdin.js';
-import { errorMessage, log } from '../util/log.js';
+import { errorMessage, log, errorFields } from '../util/log.js';
 import { cmdShimArgs } from '../util/spawn-argv.js';
 import { bookLedgerTurn } from '../api/ledger-db.js';
 import { flushDeliveryRecorder, startDeliveryRecorder, startToolFailureRecorder } from '../api/prompt-hook.js';
@@ -110,7 +110,7 @@ async function cmdCompactResume(
     if (err instanceof CliExit) throw err;
     // Empty stdout on any store error, never a crashed SessionStart; the reason goes to stderr, which the model never
     // sees.
-    log.warn(`hippo compact-resume: skipped: ${errorMessage(err)}`);
+    log.warn(`hippo compact-resume: skipped: ${errorMessage(err)}`, errorFields(err));
   }
   // A no-op when the token ledger's handle already wrote the row; exit would drop it otherwise.
   flushDeliveryRecorder(rec);
@@ -177,7 +177,7 @@ export async function handleSessionEnd({ hippoRoot, tenantId, flags }: CommandCo
   try {
     spawnSessionEndWorker(sessionEndWorkerArgs(worker));
   } catch (err) {
-    log.debug(`session-end: the worker did not spawn, running inline: ${errorMessage(err)}`);
+    log.debug(`session-end: the worker did not spawn, running inline: ${errorMessage(err)}`, errorFields(err));
     // Inline is the last resort, handed what the child's argv would have carried.
     try {
       await cmdSessionEndWorker(root, tenantId, inlineWorkerFlags(flags, worker));
@@ -467,7 +467,7 @@ export function handleCodexRun({ hippoRoot, tenantId, args }: CommandContext): v
   try {
     cmdLastSleep(hippoRoot, { path: metadata.logFile }, 'terminal');
   } catch (err) {
-    log.debug(`codex run: the last sleep summary was not shown: ${errorMessage(err)}`);
+    log.debug(`codex run: the last sleep summary was not shown: ${errorMessage(err)}`, errorFields(err));
   }
 
   const child = spawnRealCodex(metadata.realCodexPath, args, process.cwd());
@@ -523,7 +523,7 @@ async function launchCodexSessionEndWorker(
       'log-file': logFile,
     });
   } catch (inlineErr) {
-    log.debug(`codex run: the inline session-end failed: ${errorMessage(inlineErr)}`);
+    log.debug(`codex run: the inline session-end failed: ${errorMessage(inlineErr)}`, errorFields(inlineErr));
   }
 }
 
@@ -716,7 +716,7 @@ export async function handleCaptureError({ hippoRoot, tenantId, flags }: Command
     }
   } catch (err) {
     // A malformed payload or store error must never fail the agent's tool call, so it is reported and dropped.
-    log.warn(`failure capture skipped: ${errorMessage(err)}`);
+    log.warn(`failure capture skipped: ${errorMessage(err)}`, errorFields(err));
   }
 }
 

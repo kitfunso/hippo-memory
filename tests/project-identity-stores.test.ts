@@ -10,7 +10,7 @@ import { listDormantSnapshots } from '../src/store/dormant.js';
 import { runDoctor } from '../src/doctor.js';
 import { createMemory, type MemoryEntry } from '../src/core/memory.js';
 import { planProjectRepair } from '../src/sharing/project-merge.js';
-import { mergeProjectNames, repairProjectNames, repairProjectNamesOnce } from '../src/api/projects.js';
+import { mergeProjectNames, repairProjectNames, repairProjectNamesOnce } from '../src/api/objects/projects.js';
 import { projectTagReads } from '../src/store/project-tags.js';
 import { cliApiContext } from '../src/cli/api-context.js';
 import { clearProjectIdentityCache, resolveProjectIdentity } from '../src/core/project-identity.js';

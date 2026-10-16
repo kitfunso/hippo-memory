@@ -8,7 +8,7 @@ import { ledgerReachOf } from '../api/ledger-db.js';
 import { assertCallerIds, type CallerProject } from '../api/prompt-hook.js';
 import { assertCallerProject, projectNames } from '../core/project-identity.js';
 import { maskEmails, redactSecretsStrict } from '../util/secret-detect.js';
-import { bindSessionOwner } from '../api/session-owners.js';
+import { bindSessionOwner } from '../api/auth/session-owners.js';
 import type { ContinuityKey } from '../store/sessions.js';
 import { fitWorkingState, WORKING_STATE_CAPS, type WorkingState } from './working-state.js';
 

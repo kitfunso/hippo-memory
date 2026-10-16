@@ -1,7 +1,7 @@
 // Per-process state the MCP tools share across calls: recall rings, last recalled ids, auto-sleep runs.
 
 import { DEFAULT_TENANT_ID } from '../util/env.js';
-import { resetSessionRings } from '../api/recall-record.js';
+import { resetSessionRings } from '../api/recall/finish.js';
 
 /** Test-only: reset the MCP recall rings. Call from beforeEach. */
 export function _resetSessionRecallHistoryMcpForTests(): void {
@@ -25,7 +25,7 @@ class RecentRecalls extends Map<string, string[]> {
 }
 
 export const lastRecalledIds: Map<string, string[]> = new RecentRecalls();
-export { autoSleepInFlight } from '../api/auto-sleep.js';
+export { autoSleepInFlight } from '../api/sleep/auto-sleep.js';
 
 export function resolveClientKey(
   ctx: { clientKey?: string; tenantId: string; project?: { name: string } } | undefined,

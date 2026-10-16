@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import * as fs from 'node:fs';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
 import { createPhysicsTable, savePhysicsState } from '../src/db/physics-state.js';
-import { pruneAuditLog } from '../src/api/audit.js';
+import { pruneAuditLog } from '../src/api/auth/audit.js';
 import { adminActor } from '../src/api/types.js';
 import { writeRecallTrace } from '../src/store/recall-trace.js';
 import { saveIndex } from '../src/store/index-and-stats.js';

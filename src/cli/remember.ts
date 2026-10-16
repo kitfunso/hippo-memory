@@ -13,7 +13,7 @@ import {
   type MemoryEntry,
 } from '../core/memory.js';
 import * as api from '../api/index.js';
-import { getMemory } from '../api/memories.js';
+import { getMemory } from '../api/memories/memories.js';
 import { ConflictError, NotFoundError } from '../core/api-errors.js';
 import { isInitialized } from '../core/project-identity.js';
 import { RejectedValueError } from '../core/api-errors.js';

@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { cliApiContext } from '../src/cli/api-context.js';
-import { listMemories } from '../src/api/memories.js';
+import { listMemories } from '../src/api/memories/memories.js';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
 import { listDormantSnapshots } from '../src/store/dormant.js';
 import { readEntry } from '../src/store/entry-reads.js';

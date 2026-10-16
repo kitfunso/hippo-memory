@@ -1,8 +1,8 @@
 // First-class object verbs for decisions: record one (optionally superseding an older one's memory), list, get, close.
 
 import { MemoryEntry } from '../core/memory.js';
-import { getMemory } from '../api/memories.js';
-import { objectsOf } from '../api/objects.js';
+import { getMemory } from '../api/memories/memories.js';
+import { objectsOf } from '../api/objects/objects.js';
 import type { Objects } from '../store/port.js';
 import { extractPathTags } from '../search/path-context.js';
 import * as decisionsModule from '../objects/decisions.js';

@@ -6,7 +6,7 @@
 import { evalNow, strengthAblation } from './ablation.js';
 import type { MemoryEntry } from './memory.js';
 import { Layer } from './memory.js';
-import { calculateStrength } from './memory.js';
+import { calculateStrength, HIGH_SCHEMA_FIT } from './memory.js';
 import { DAY_MS } from '../util/time.js';
 
 const STATE_DECIMALS = 3;
@@ -44,8 +44,6 @@ export interface AmbientState {
 
 /** A memory is fresh when created within this window. */
 export const AMBIENT_FRESH_WINDOW_MS = 7 * DAY_MS;
-/** A memory counts as high schema fit strictly above this. */
-export const HIGH_SCHEMA_FIT_ABOVE = 0.7;
 
 /** Row counts and sums an AmbientState is derived from; two stores' tallies add with addAmbientTallies. */
 export interface AmbientTallies {
@@ -103,7 +101,7 @@ export function tallyAmbientEntries(entries: readonly MemoryEntry[], now?: Date)
     if (new Date(entry.created).getTime() > freshAfter) t.fresh++;
     if (entry.emotional_valence === 'negative' || entry.emotional_valence === 'critical') t.negative++;
     if (isErrorTagged(entry.tags)) t.errors++;
-    if (entry.schema_fit > HIGH_SCHEMA_FIT_ABOVE) t.highSchemaFit++;
+    if (entry.schema_fit > HIGH_SCHEMA_FIT) t.highSchemaFit++;
     if (entry.layer === Layer.Semantic) t.semantic++;
     if (entry.layer === Layer.Episodic) t.episodic++;
     t.conflicts += entry.conflicts_with.length;

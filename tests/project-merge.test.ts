@@ -11,7 +11,7 @@ import { Layer, type MemoryEntry } from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
 import { listDormantSnapshots } from '../src/store/dormant.js';
-import { listProjectNames, mergeProjectNames, repairProjectNames } from '../src/api/projects.js';
+import { listProjectNames, mergeProjectNames, repairProjectNames } from '../src/api/objects/projects.js';
 import { cliApiContext } from '../src/cli/api-context.js';
 
 let home: string;

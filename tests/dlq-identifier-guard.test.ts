@@ -4,7 +4,17 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
-import { getDlqRow, insertDlqRow, listDlqRows, markDlqRetried, type DlqTable } from '../src/store/connectors/dlq.js';
+import { dlqAccess, type DlqColumn, type DlqTable } from '../src/store/connectors/dlq.js';
+
+type Row = Record<string, string | number | null>;
+type Insert = Record<string, string | null>;
+
+const COLUMNS: readonly DlqColumn[] = [
+  { field: 'id', column: 'id', kind: 'int' },
+  { field: 'tenantId', column: 'tenant_id', kind: 'text', insert: true },
+  { field: 'rawPayload', column: 'raw_payload', kind: 'text', insert: true },
+  { field: 'error', column: 'error', kind: 'text', insert: true },
+];
 
 describe('dlq identifier guard', () => {
   let root: string;
@@ -22,22 +32,26 @@ describe('dlq identifier guard', () => {
   });
 
   it('accepts the real tables and columns', () => {
-    const id = insertDlqRow(db, 'slack_dlq', [['tenant_id', 't'], ['raw_payload', '{}'], ['error', 'e']]);
-    expect(listDlqRows(db, 'slack_dlq', 'id, tenant_id', 't', 5)).toHaveLength(1);
-    expect(getDlqRow(db, 'slack_dlq', 'id', id)).not.toBeNull();
-    markDlqRetried(db, 'slack_dlq', id);
+    const dlq = dlqAccess<Row, Insert>('slack_dlq', COLUMNS);
+    const id = dlq.insert(db, { tenantId: 't', rawPayload: '{}', error: 'e' });
+    expect(dlq.list(db, 't', 5)).toHaveLength(1);
+    expect(dlq.get(db, id)).not.toBeNull();
+    dlq.markRetried(db, id);
   });
 
   it('refuses a table outside the union', () => {
-    expect(() => insertDlqRow(db, badTable, [['tenant_id', 't']])).toThrow(/Invalid DLQ table/);
-    expect(() => listDlqRows(db, badTable, 'id', 't', 1)).toThrow(/Invalid DLQ table/);
-    expect(() => getDlqRow(db, badTable, 'id', 1)).toThrow(/Invalid DLQ table/);
-    expect(() => markDlqRetried(db, badTable, 1)).toThrow(/Invalid DLQ table/);
+    const dlq = dlqAccess<Row, Insert>(badTable, COLUMNS);
+    expect(() => dlq.insert(db, { tenantId: 't' })).toThrow(/Invalid DLQ table/);
+    expect(() => dlq.list(db, 't', 1)).toThrow(/Invalid DLQ table/);
+    expect(() => dlq.get(db, 1)).toThrow(/Invalid DLQ table/);
+    expect(() => dlq.markRetried(db, 1)).toThrow(/Invalid DLQ table/);
   });
 
   it('refuses a column that is not a plain identifier', () => {
-    expect(() => insertDlqRow(db, 'slack_dlq', [['tenant_id) VALUES (1); --', 't']])).toThrow(/Invalid DLQ column/);
-    expect(() => listDlqRows(db, 'slack_dlq', 'id, (SELECT 1)', 't', 1)).toThrow(/Invalid DLQ column/);
-    expect(() => getDlqRow(db, 'slack_dlq', 'id FROM memories --', 1)).toThrow(/Invalid DLQ column/);
+    const injected = (column: string): DlqColumn[] => [{ field: 'x', column, kind: 'text', insert: true }];
+    expect(() => dlqAccess<Row, Insert>('slack_dlq', injected('tenant_id) VALUES (1); --')).insert(db, { x: 't' }))
+      .toThrow(/Invalid DLQ column/);
+    expect(() => dlqAccess<Row, Insert>('slack_dlq', injected('(SELECT 1)')).list(db, 't', 1)).toThrow(/Invalid DLQ column/);
+    expect(() => dlqAccess<Row, Insert>('slack_dlq', injected('id FROM memories --')).get(db, 1)).toThrow(/Invalid DLQ column/);
   });
 });

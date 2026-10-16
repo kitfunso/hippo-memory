@@ -37,7 +37,7 @@ import { writeDeliveryEventAtRoot } from '../store/recall-trace.js';
 import type { TokenSurface, TokenUse } from '../store/token-ledger.js';
 import { hookPayloadString, isSubagentPayload } from '../util/hook-payload.js';
 import { blockHash, estimateTokens } from '../util/token-text.js';
-import { errorMessage, log } from '../util/log.js';
+import { errorMessage, log, errorFields } from '../util/log.js';
 import { DEFAULT_CONTEXT_BUDGET } from './context.js';
 
 /** What a hook's delivery row says about the call it records. */
@@ -70,7 +70,7 @@ export function startDeliveryRecorder(ctx: Context, start: DeliveryStart): Deliv
       fault: start.fault,
     });
   } catch (error) {
-    log.warn(`delivery ledger skipped: ${errorMessage(error)}`);
+    log.warn(`delivery ledger skipped: ${errorMessage(error)}`, errorFields(error));
     return null;
   }
 }
@@ -86,7 +86,7 @@ export function startToolFailureRecorder(
     if (root === null || realpathOrResolve(root) !== realpathOrResolve(ctx.hippoRoot)) return null;
     return startDeliveryRecorder(ctx, { ...start, eventType: 'tool-failure' });
   } catch (error) {
-    log.warn(`delivery ledger skipped: ${errorMessage(error)}`);
+    log.warn(`delivery ledger skipped: ${errorMessage(error)}`, errorFields(error));
     return null;
   }
 }
@@ -98,7 +98,7 @@ export function flushDeliveryRecorder(rec: DeliveryRecorder | null, write?: Deli
   try {
     rec.flush(write ?? ((input) => writeDeliveryEventAtRoot(rec.root, input)));
   } catch (error) {
-    log.error(`delivery ledger write failed: ${errorMessage(error)}`);
+    log.error(`delivery ledger write failed: ${errorMessage(error)}`, errorFields(error));
   }
 }
 

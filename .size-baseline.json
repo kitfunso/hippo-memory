@@ -11,8 +11,8 @@
     "scripts/z1c-eval.mjs:main": 116
   },
   "longLines": {
-    "src/api/remember-local.ts": 1,
-    "src/api/remember.ts": 1,
+    "src/api/memories/remember-local.ts": 1,
+    "src/api/memories/remember.ts": 1,
     "src/cli/audit.ts": 1,
     "src/cli/curate.ts": 5,
     "src/cli/decisions.ts": 1,

@@ -2,7 +2,7 @@
 
 Date: 2026-10-04
 Status: accepted
-Links: `src/api/learn.ts` (`learn`, shared by `hippo learn --git`, init, sleep and MCP `hippo_learn`); `src/autolearn.ts` `partitionLessons`
+Links: `src/api/sleep/learn.ts` (`learn`, shared by `hippo learn --git`, init, sleep and MCP `hippo_learn`); `src/autolearn.ts` `partitionLessons`
 
 This record holds the reasoning that used to sit as a long comment over the CLI learn loop. The code moved to `api.learn`.
 

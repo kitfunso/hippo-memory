@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
 import { appendAuditEvent, listAuditEventsAfter, queryAuditEvents } from '../src/store/audit.js';
-import { pruneAuditLog } from '../src/api/audit.js';
+import { pruneAuditLog } from '../src/api/auth/audit.js';
 import { adminActor } from '../src/api/types.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 

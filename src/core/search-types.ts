@@ -3,6 +3,17 @@ import type { MemoryEntry } from './memory.js';
 export const DEFAULT_RECALL_BUDGET = 4000;
 // Local memories outrank global ones by this factor; getContext applies it as a 1/x global discount.
 export const DEFAULT_LOCAL_BUMP = 1.2;
+// The relevance side of the MMR relevance-versus-diversity trade; config and hybrid recall both default to it.
+export const DEFAULT_MMR_LAMBDA = 0.7;
+// A recorded conflict peer in the same result list is cut to this share of its score.
+export const CONFLICT_PEER_MULTIPLIER = 0.3;
+// The value-aware clamp is wider than the always-on outcome nudge, so outcome history can decide the order.
+export const VALUE_MULT_SLOPE = 0.3;
+export const VALUE_MULT_MIN = 0.7;
+export const VALUE_MULT_MAX = 1.3;
+export const UTILITY_LENGTH_PENALTY_CAP = 0.3;
+export const UTILITY_LENGTH_TOKENS = 10000;
+export const SALIENCE_MIN_MULTIPLIER = 0.5;
 
 /**
  * One score mutation applied after candidate generation; allocated only under `recall --why` or `RecallOpts.explain`.

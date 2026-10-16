@@ -16,7 +16,7 @@ import { PACKAGE_VERSION } from '../util/version.js';
 import { FAILURE_LOG_RETENTION_DAYS } from '../store/failure-log.js';
 import { getGlobalRoot } from '../sharing/global-store.js';
 import * as api from '../api/index.js';
-import { getMemory } from '../api/memories.js';
+import { getMemory } from '../api/memories/memories.js';
 import {
   correctionLatencyReport,
   embeddingReindexNeeded,
@@ -28,7 +28,7 @@ import {
 import type { StatusCounts } from '../store/candidates.js';
 import type { Context } from '../api/types.js';
 import { cliApiContext } from './api-context.js';
-import { errorMessage, log } from '../util/log.js';
+import { errorMessage, log, errorFields } from '../util/log.js';
 import { printError } from './output.js';
 import { parseCountFlag, type CommandContext, stringFlagOrExit, flagIsTrue } from './flag-values.js';
 import { requireInit, resolveAuthRoot } from './shared.js';
@@ -140,7 +140,7 @@ function printPhysicsStatus(ctx: Context): void {
     }
   } catch (err) {
     // The physics table may not exist yet, so status prints without that line.
-    log.debug(`physics status skipped: ${errorMessage(err)}`);
+    log.debug(`physics status skipped: ${errorMessage(err)}`, errorFields(err));
   }
 }
 

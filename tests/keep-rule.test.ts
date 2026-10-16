@@ -23,6 +23,7 @@ import { closeHippoDb, openHippoDb, withSharedStoreHandles } from '../src/db/ind
 import { NO_MERGE_TAGS } from '../src/sharing/share.js';
 import { forget, listDormant, sleep, supersede } from '../src/api/index.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+import { sqliteConsolidation } from '../src/store/sqlite/consolidation-group.js';
 
 // Each case commits rows to a real store, so its time follows the runner's disk.
 vi.setConfig({ testTimeout: 30_000 });
@@ -281,7 +282,7 @@ describe('dedupe and audit leave a kept row alone', () => {
     writeEntry(root, keeper);
     writeEntry(root, copy);
 
-    deduplicateStore(root);
+    deduplicateStore(sqliteConsolidation(root));
 
     expect(readEntry(root, keeper.id)).not.toBeNull();
     expect(readEntry(root, copy.id) !== null).toBe(survives);

@@ -21,7 +21,7 @@ import { importMarkdown } from '../importers/markdown.js';
 import { importVault } from '../importers/vault.js';
 import { ImportOptions, type ImportResult } from '../importers/core.js';
 import * as api from '../api/index.js';
-import { getMemory, listMemories } from '../api/memories.js';
+import { getMemory, listMemories } from '../api/memories/memories.js';
 import * as client from './client.js';
 import { cliApiContext } from './api-context.js';
 import { printError } from './output.js';

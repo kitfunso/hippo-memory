@@ -4,7 +4,7 @@ import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { handleRecall } from '../src/cli/recall.js';
 import { resolveTenantId } from '../src/store/tenant.js';
-import { peekSessionRing, resetSessionRings } from '../src/api/recall-record.js';
+import { resetSessionRings, sessionRing, snapshotRing } from '../src/api/recall/finish.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { Layer } from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
@@ -36,6 +36,9 @@ async function recallJson(query: string, flags: Flags = { 'session-id': 's1' }):
   // SAFETY: --json prints one object carrying these fields; each test asserts the ones it reads.
   return JSON.parse(await recall(query, { ...flags, json: true })) as RecallJson;
 }
+
+// Reads a ring through its production entry; an empty ring for a surface that never recalled.
+const history = (surface: 'cli' | 'mcp', tenant: string) => snapshotRing(sessionRing(surface, tenant, 's1')!);
 
 describe('hippo recall anchoring hint', () => {
   beforeEach(() => {
@@ -95,8 +98,8 @@ describe('hippo recall anchoring hint', () => {
     const acmeId = seed('acme');
     await recallJson(Q[2]);
 
-    expect(peekSessionRing('cli', 'default', 's1').map((e) => e.topMemoryId)).toEqual([memoryId, memoryId]);
-    expect(peekSessionRing('cli', 'acme', 's1').map((e) => e.topMemoryId)).toEqual([acmeId]);
-    expect(peekSessionRing('mcp', 'default', 's1')).toEqual([]);
+    expect(history('cli', 'default').map((e) => e.topMemoryId)).toEqual([memoryId, memoryId]);
+    expect(history('cli', 'acme').map((e) => e.topMemoryId)).toEqual([acmeId]);
+    expect(history('mcp', 'default')).toEqual([]);
   });
 });

@@ -39,7 +39,7 @@ import {
   MAX_HOPS,
   recallJsonRow,
   type CliRecallRerankerPick,
-} from '../api/recall-cli.js';
+} from '../api/recall/rows.js';
 import { cliApiContext } from './api-context.js';
 import { printError } from './output.js';
 import {

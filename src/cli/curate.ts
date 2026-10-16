@@ -8,7 +8,7 @@ import { loadConfig } from '../core/config.js';
 import { RawAppendOnlyError } from '../core/raw-append-only.js';
 import { isGitRepo } from '../learn/autolearn.js';
 import * as api from '../api/index.js';
-import { getMemory } from '../api/memories.js';
+import { getMemory } from '../api/memories/memories.js';
 import * as client from './client.js';
 import { cliApiContext } from './api-context.js';
 import { printError } from './output.js';

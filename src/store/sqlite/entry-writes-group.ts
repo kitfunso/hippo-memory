@@ -212,6 +212,7 @@ function cleanArchivedMirrors(db: DatabaseSyncLike, hippoRoot: string, id: strin
     log.warnThenDebug(
       'archive-mirror-stamp-busy',
       `archived ${id}; the store was busy, so the mirror reaper will re-check it on the next open`,
+      errorFields(err),
     );
   }
 }

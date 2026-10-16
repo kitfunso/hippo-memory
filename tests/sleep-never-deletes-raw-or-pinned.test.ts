@@ -15,11 +15,12 @@ import { loadAllDirtySummaries } from '../src/store/summaries.js';
 import { consolidate } from '../src/consolidate/sleep.js';
 import { deduplicateStore } from '../src/consolidate/dedupe.js';
 import { sleep, supersede } from '../src/api/index.js';
-import { runSleep } from '../src/api/sleep-run.js';
+import { runSleep } from '../src/api/sleep/sleep-run.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { queryAuditEvents } from '../src/store/audit.js';
 import { sleepResultLines } from '../src/cli/sleep-render.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+import { sqliteConsolidation } from '../src/store/sqlite/consolidation-group.js';
 
 /** Sleep and decay here run on the pre-1.46 7-day base, so memories fade within the test's horizon. */
 const createMemory7 = (content: string, options: Parameters<typeof createMemory>[1] = {}) => createMemory(content, { baseHalfLifeDays: 7, ...options });
@@ -103,7 +104,7 @@ describe('the sleep audit and dedup respect raw and pinned rows', () => {
     writeEntry(root, keeper);
     writeEntry(root, pinnedCopy);
 
-    deduplicateStore(root);
+    deduplicateStore(sqliteConsolidation(root));
 
     expect(readEntry(root, keeper.id)?.content).toBe(CACHE_FACT);
     expect(readEntry(root, pinnedCopy.id)).toMatchObject({ content: CACHE_FACT, pinned: true });

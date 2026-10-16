@@ -38,7 +38,7 @@ const DB_DEFINITION_FILES = {
 const DB_TOUCH_NAMES = new Set([...OPENERS, ...HANDLE_TYPES, 'withWriteScope', 'withWriteScopeOr']);
 const TX_OWNER = 'src/db/busy.ts';
 const CARRIER_NAMES = new Set(['andThen', 'onStore', 'StoreReply']);
-// What src/api/recall-finish.ts does for a surface that passes `recordAs`. No baseline: one hit fails. src/mcp is pending and not read.
+// What src/api/recall/finish.ts does for a surface that passes `recordAs`. No baseline: one hit fails. src/mcp is pending and not read.
 const RECALL_RECORDERS = new Set(['bumpRecallStats', 'noteRecall']);
 const RECALL_LEDGER_LABELS = new Set(['recall', 'http_recall', 'mcp_recall']);
 const recordsItsOwnRecall = (f) => f.startsWith('src/server/routes/') || f.startsWith('src/cli/');
@@ -374,7 +374,7 @@ const strays = strayRecallRecords();
 if (strays.length > 0) {
   console.error('A surface records a recall itself:');
   for (const hit of strays) console.error(`  ${hit}`);
-  console.error('Pass `recordAs` to retrieve() instead: src/api/recall-finish.ts feeds the ring, counts the stats and books the token row.');
+  console.error('Pass `recordAs` to retrieve() instead: src/api/recall/finish.ts feeds the ring, counts the stats and books the token row.');
   process.exit(1);
 }
 

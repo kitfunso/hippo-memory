@@ -10,8 +10,8 @@ import { once } from 'node:events';
 import { createRequire, syncBuiltinESMExports } from 'node:module';
 import { Worker } from 'node:worker_threads';
 import { Layer, type MemoryEntry } from '../src/core/memory.js';
-import { consolidate } from '../src/consolidate/sleep.js';
-import { runSleep } from '../src/api/sleep-run.js';
+import { consolidate, runConsolidation } from '../src/consolidate/sleep.js';
+import { runSleep } from '../src/api/sleep/sleep-run.js';
 import { initStore } from '../src/store/open.js';
 import { upsertEntryRow } from '../src/store/entry-row.js';
 import { mergedText } from '../src/util/same-text.js';
@@ -284,7 +284,7 @@ describe('chunked consolidation flush', () => {
     });
     const fx = seed({ clusters: 12, dormant: 10, filler: 20 });
     const ctx: FullContext = apiCtx(fx.root, 'default', { subject: 'sleep-test', role: 'admin' });
-    const atNow: typeof consolidate = (root, opts) => consolidate(root, { ...opts, now: NOW, budget: stopsOnSecondPause });
+    const atNow: typeof runConsolidation = (local, opts) => runConsolidation(local, { ...opts, now: NOW, budget: stopsOnSecondPause });
 
     await expect(runSleep(ctx, { noShare: true }, { consolidate: atNow })).rejects.toThrow('stopped between chunks');
 
@@ -331,7 +331,7 @@ describe('chunked consolidation flush', () => {
     onStore(fx.root, (db) => db.exec(
       `CREATE TRIGGER boom BEFORE UPDATE ON memories WHEN NEW.id = '${bad[0]}' BEGIN SELECT RAISE(ABORT, 'boom'); END`));
     const ctx: FullContext = apiCtx(fx.root, 'default', { subject: 'sleep-test', role: 'admin' });
-    const oneChunk: typeof consolidate = (root, opts) => consolidate(root, { ...opts, now: NOW, budget: budget(Infinity) });
+    const oneChunk: typeof runConsolidation = (local, opts) => runConsolidation(local, { ...opts, now: NOW, budget: budget(Infinity) });
 
     await expect(runSleep(ctx, { noShare: true }, { consolidate: oneChunk })).rejects.toThrow('boom');
 

@@ -1,7 +1,7 @@
 // Readers that turn parsed CLI flags into typed values, and the flag types they share.
 
 import { resolveListLimit } from '../util/limits.js';
-import type { RecallSearchOpts } from '../api/recall-pipeline.js';
+import type { RecallSearchOpts } from '../api/recall/pipeline.js';
 import type { HippoConfig } from '../core/config.js';
 import { fail } from './exit.js';
 
