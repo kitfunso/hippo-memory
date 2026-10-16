@@ -310,8 +310,9 @@ jobs:
             }
             $io = ($rows | Sort-Object Ops -Descending | Select-Object -First 6 | ForEach-Object { "$($_.N)#$($_.Id)=$($_.Ops)/$($_.MB)MB" }) -join ' '
             $cpu = ($rows | Sort-Object C -Descending | Select-Object -First 4 | ForEach-Object { "$($_.N)#$($_.Id)=$($_.C)s" }) -join ' '
-            $c = (Get-Counter '\LogicalDisk(C:)\Avg. Disk Queue Length', '\LogicalDisk(D:)\Avg. Disk Queue Length', '\Processor(_Total)\% Processor Time').CounterSamples | ForEach-Object { [math]::Round($_.CookedValue, 1) }
-            "$(Get-Date -Format HH:mm:ss) qC=$($c[0]) qD=$($c[1]) cpu=$($c[2]) | ops $io | cpu $cpu" | Add-Content $out
+            $ws = (Get-CimInstance Win32_Process | Sort-Object WorkingSetSize -Descending | Select-Object -First 5 | ForEach-Object { "$($_.Name)#$($_.ProcessId)=$([math]::Round($_.WorkingSetSize / 1MB))MB" }) -join ' '
+            $c = (Get-Counter '\LogicalDisk(C:)\Avg. Disk Queue Length', '\LogicalDisk(D:)\Avg. Disk Queue Length', '\Processor(_Total)\% Processor Time', '\Memory\Available MBytes', '\Memory\Pages Input/sec', '\Memory\Pages Output/sec', '\Cache\Dirty Pages', '\LogicalDisk(D:)\Disk Transfers/sec', '\LogicalDisk(D:)\Avg. Disk sec/Transfer', '\LogicalDisk(D:)\Disk Write Bytes/sec', '\LogicalDisk(C:)\Disk Transfers/sec').CounterSamples | ForEach-Object { [math]::Round($_.CookedValue, 4) }
+            "$(Get-Date -Format HH:mm:ss) qC=$($c[0]) qD=$($c[1]) cpu=$([math]::Round($c[2])) availMB=$($c[3]) pgIn=$($c[4]) pgOut=$($c[5]) dirty=$($c[6]) iopsD=$([math]::Round($c[7])) latD=$([math]::Round($c[8] * 1000, 2))ms wMBD=$([math]::Round($c[9] / 1MB, 1)) iopsC=$([math]::Round($c[10])) | ws $ws | ops $io | cpu $cpu" | Add-Content $out
             Start-Sleep -Seconds 15
           }
           '@
