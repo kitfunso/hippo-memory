@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import * as fs from 'node:fs';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
 import { createDeliveryRecorder, type DeliveryRecorder } from '../src/store/delivery-recorder.js';
-import { lastSentOnSurface, recordLedgerTurn } from '../src/store/ledger-turn.js';
+import { recordLedgerTurn, sendWindowAt } from '../src/store/ledger-turn.js';
 import { readDeliveryEvents } from '../src/store/recall-trace.js';
 import type { TokenUse } from '../src/store/token-ledger.js';
 import { countMatching, recordStatements } from './_helpers/count-statements.js';
@@ -95,12 +95,14 @@ describe('recordLedgerTurn', () => {
   });
 });
 
-describe('lastSentOnSurface', () => {
-  it('reads the last injected hash and the skips since it, and null for a session with no rows', () => {
-    recordLedgerTurn(root, { uses: [use(), use({ event: 'skip' })] });
-    expect(lastSentOnSurface(root, 'default', 's1', 'hook')).toEqual({ hash: HASH, skipsSince: 1 });
-    expect(lastSentOnSurface(root, 'default', 's1', 'context')).toBeNull();
-    expect(lastSentOnSurface(root, 'default', 'other', 'hook')).toBeNull();
-    expect(lastSentOnSurface(root, 'default', undefined, 'hook')).toBeNull();
+describe('sendWindowAt', () => {
+  it('reads the window, and commits the echoed pending row on the same connection first', () => {
+    recordLedgerTurn(root, { uses: [use({ sentKeys: ['mem:a:1'], pending: true }), use({ event: 'skip', hash: null, sentKeys: [] })] });
+    expect(sendWindowAt(root, 'default', 's1', 'hook', null)).toEqual({ turn: 2, sent: new Map() });
+    const log = recordStatements(() => sendWindowAt(root, 'default', 's1', 'hook', HASH));
+    expect(log.result).toEqual({ turn: 2, sent: new Map([['mem:a:1', { turn: 1 }]]) });
+    expect(countMatching(log.statements, STORE_OPEN)).toBe(1);
+    expect(sendWindowAt(root, 'default', 's1', 'context', null)).toEqual({ turn: 0, sent: new Map() });
+    expect(sendWindowAt(root, 'default', 'other', 'hook', null)).toEqual({ turn: 0, sent: new Map() });
   });
 });

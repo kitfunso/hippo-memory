@@ -13,7 +13,7 @@ import { writeEntry } from '../src/store/entry-writes.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { Layer } from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { recordTokenUse, lastSentState, shouldSkipUnchanged, summarizeTokenUse } from '../src/store/token-ledger.js';
+import { recordTokenUse, summarizeTokenUse, sentInWindow, commitPendingKeys } from '../src/store/token-ledger.js';
 import { hookPayloadSessionId } from '../src/util/hook-payload.js';
 import { blockHash } from '../src/util/token-text.js';
 import { serve, type ServerHandle } from '../src/server.js';
@@ -38,28 +38,48 @@ describe('token ledger helpers', () => {
   });
   afterEach(() => rmSync(home, { recursive: true, force: true }));
 
-  it('tracks the last injected block per session and surface, and resets', () => {
+  it('reads each key\'s last send turn in the window, and a reset reopens it', () => {
     withDb(home, (db) => {
-      expect(lastSentState(db, 'default', 's1', 'hook')).toBeNull();
-      recordTokenUse(db, { tenantId: 'default', sessionId: 's1', surface: 'hook', event: 'inject', items: 2, tokens: 100, hash: 'aaa' });
-      recordTokenUse(db, { tenantId: 'default', sessionId: 's1', surface: 'hook', event: 'skip', items: 2, tokens: 100, hash: 'aaa' });
-      recordTokenUse(db, { tenantId: 'default', sessionId: 's2', surface: 'hook', event: 'inject', items: 1, tokens: 40, hash: 'bbb' });
-      expect(lastSentState(db, 'default', 's1', 'hook')).toEqual({ hash: 'aaa', skipsSince: 1 });
-      expect(lastSentState(db, 'default', 's1', 'context')).toBeNull();
-      expect(lastSentState(db, 'other', 's1', 'hook')).toBeNull();
-      expect(lastSentState(db, 'default', null, 'hook')).toBeNull();
+      const turn = (event: 'inject' | 'skip', sentKeys: string[], over: Partial<{ sessionId: string; tenantId: string }> = {}): void =>
+        recordTokenUse(db, { tenantId: 'default', sessionId: 's1', surface: 'hook', event, items: sentKeys.length, tokens: 10, sentKeys, ...over });
+      expect(sentInWindow(db, 'default', 's1', 'hook')).toEqual({ turn: 0, sent: new Map() });
+      turn('inject', ['mem:a:1', 'snapshot:x']);
+      turn('skip', []);
+      turn('inject', ['mem:a:1']);
+      turn('inject', ['mem:b:2'], { sessionId: 's2' });
+      turn('inject', ['mem:c:3'], { tenantId: 'other' });
+      recordTokenUse(db, { tenantId: 'default', sessionId: 's1', surface: 'hook', event: 'inject', items: 1, tokens: 5 });
+      recordTokenUse(db, { tenantId: 'default', sessionId: 's1', surface: 'hook_recall', event: 'inject', items: 1, tokens: 5, sentKeys: ['mem:d:4'] });
+      expect(sentInWindow(db, 'default', 's1', 'hook')).toEqual({
+        turn: 3,
+        sent: new Map([['mem:a:1', { turn: 3 }], ['snapshot:x', { turn: 1 }]]),
+      });
       recordTokenUse(db, { tenantId: 'default', sessionId: 's1', surface: 'hook', event: 'reset', items: 0, tokens: 0 });
-      expect(lastSentState(db, 'default', 's1', 'hook')).toBeNull();
+      expect(sentInWindow(db, 'default', 's1', 'hook')).toEqual({ turn: 0, sent: new Map() });
+      turn('inject', ['mem:a:1']);
+      expect(sentInWindow(db, 'default', 's1', 'hook')).toEqual({ turn: 1, sent: new Map([['mem:a:1', { turn: 1 }]]) });
     });
   });
 
-  it('skips an unchanged block until refreshTurns consecutive skips', () => {
-    expect(shouldSkipUnchanged(null, 'h', 10)).toBe(false);
-    expect(shouldSkipUnchanged({ hash: 'x', skipsSince: 0 }, 'h', 10)).toBe(false);
-    expect(shouldSkipUnchanged({ hash: 'h', skipsSince: 0 }, 'h', 10)).toBe(true);
-    expect(shouldSkipUnchanged({ hash: 'h', skipsSince: 9 }, 'h', 10)).toBe(true);
-    expect(shouldSkipUnchanged({ hash: 'h', skipsSince: 10 }, 'h', 10)).toBe(false);
-    expect(shouldSkipUnchanged({ hash: 'h', skipsSince: 500 }, 'h', 0)).toBe(true);
+  it('counts a pending row as a turn, and its keys as sent only after the caller echoes its hash', () => {
+    withDb(home, (db) => {
+      const pend = (keys: string[], hash: string): void =>
+        recordTokenUse(db, { tenantId: 'default', sessionId: 's1', surface: 'hook', event: 'inject', items: keys.length, tokens: 10, hash, sentKeys: keys, pending: true });
+      pend(['mem:a:1'], 'aaaaaaaaaaaaaaaa');
+      expect(sentInWindow(db, 'default', 's1', 'hook')).toEqual({ turn: 1, sent: new Map() });
+      expect(commitPendingKeys(db, 'default', 's1', 'hook', 'bbbbbbbbbbbbbbbb')).toBe(false);
+      expect(commitPendingKeys(db, 'default', 's2', 'hook', 'aaaaaaaaaaaaaaaa')).toBe(false);
+      expect(commitPendingKeys(db, 'default', 's1', 'hook', 'aaaaaaaaaaaaaaaa')).toBe(true);
+      expect(sentInWindow(db, 'default', 's1', 'hook').sent).toEqual(new Map([['mem:a:1', { turn: 1 }]]));
+      expect(commitPendingKeys(db, 'default', 's1', 'hook', 'aaaaaaaaaaaaaaaa')).toBe(false);
+      pend(['mem:b:2'], 'cccccccccccccccc');
+      pend(['mem:c:3'], 'dddddddddddddddd');
+      expect(commitPendingKeys(db, 'default', 's1', 'hook', 'dddddddddddddddd')).toBe(true);
+      expect(sentInWindow(db, 'default', 's1', 'hook')).toEqual({
+        turn: 3,
+        sent: new Map([['mem:a:1', { turn: 1 }], ['mem:c:3', { turn: 3 }]]),
+      });
+    });
   });
 
   it('summarizes sent and skipped tokens per surface and prunes old rows', () => {
