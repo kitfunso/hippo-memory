@@ -197,6 +197,7 @@ export const PROCESS_TESTS: readonly string[] = [
   'recall-surface-parity-golden.test.ts',
   'recall-vector-reads-parity.test.ts',
   'remember-origin-parity.test.ts',
+  'remember-private-scope-grant.test.ts',
   'remember-secret-warnings.test.ts',
   'request-open-count.test.ts',
   'request-path-output-snapshot.test.ts',
