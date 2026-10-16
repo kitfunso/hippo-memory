@@ -16,7 +16,8 @@ import { configOf } from '../config-of.js';
 import { vetSecrets } from '../../util/secret-detect.js';
 import { assertCallerProject } from '../../core/project-identity.js';
 import { BadRequestError } from '../../core/api-errors.js';
-import { assertClientScope, personalScopeOf } from '../../core/recall-scope.js';
+import { assertClientScope, canReadScope, personalScopeOf, ScopeForbiddenError } from '../../core/recall-scope.js';
+import { isQuarantineScope } from '../../trust/quarantine.js';
 import { narrowStore } from '../../store/index.js';
 import type { Context, ContextWith, StoreContext } from '../types.js';
 
@@ -73,12 +74,17 @@ export interface RememberResult {
   duplicate?: { memoryId: string | null };
 }
 
-/** The scope a write lands in: the caller's own personal scope when
- * asked for, else the client's, which may not be a personal one. */
+/** The scope a write lands in: the caller's own personal scope when asked for, else the client's, which may not be a
+ * personal or quarantine one and must be one the same actor could read (a write into a private scope needs its grant). */
 function rememberScope(ctx: Context, opts: RememberOpts): string | null {
   if (!opts.personal) {
     assertClientScope(opts.scope);
-    return opts.scope ?? null;
+    const scope = opts.scope ?? null;
+    // Only the quarantine step below stamps a quarantine scope, so no client request may name one.
+    if (isQuarantineScope(scope) || (scope !== null && !canReadScope(ctx.actor, scope))) {
+      throw new ScopeForbiddenError(scope!);
+    }
+    return scope;
   }
   if (opts.untrusted) throw new Error('personal memories come from their owner, never from a connector');
   if (opts.scope !== undefined) throw new BadRequestError('send personal or scope, not both');

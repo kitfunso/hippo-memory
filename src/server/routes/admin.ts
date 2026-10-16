@@ -164,7 +164,7 @@ export async function handleListAudit({ res, ctx, query }: AuthedRouteRequest<'a
   let op: AuditOp | undefined;
   if (opRaw !== null) {
     if (!isSetMember(VALID_AUDIT_OPS, opRaw)) {
-      throw new HttpError(400, `invalid op: ${opRaw}`);
+      throw new HttpError(400, `op must be one of: ${[...VALID_AUDIT_OPS].join(' | ')}`);
     }
     op = opRaw;
   }
@@ -173,7 +173,7 @@ export async function handleListAudit({ res, ctx, query }: AuthedRouteRequest<'a
   if (sinceRaw !== null) {
     const parsed = Date.parse(sinceRaw);
     if (!Number.isFinite(parsed)) {
-      throw new HttpError(400, `invalid since: ${sinceRaw}`);
+      throw new HttpError(400, 'since must be an ISO 8601 date');
     }
     since = sinceRaw;
   }
@@ -189,6 +189,7 @@ export async function handleListAudit({ res, ctx, query }: AuthedRouteRequest<'a
   const after = parseCursor(query.get('cursor'), 'string', 'integer');
   // ?tenant=<t> reads another tenant (e.g. '__host__' for consolidate rows); admin only.
   const tenantOverride = query.get('tenant');
+  if (tenantOverride !== null && tenantOverride !== '') validateIdSegment(tenantOverride, 'tenant');
   const crossTenant = tenantOverride !== null && tenantOverride !== '' && tenantOverride !== ctx.tenantId;
   if (crossTenant) assertCrossTenantAdmin(ctx, '/v1/audit?tenant= for another tenant');
   const effectiveCtx = crossTenant ? { ...ctx, tenantId: tenantOverride } : ctx;

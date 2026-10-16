@@ -308,7 +308,8 @@ describe('server HTTP routes — auth + audit', () => {
     const res = await fetch(`${handle.url}/v1/audit?since=not-a-date`);
     expect(res.status).toBe(400);
     const body = await jsonAs<{ error: string }>(res);
-    expect(body.error).toMatch(/invalid since/i);
+    expect(body.error).toBe('since must be an ISO 8601 date');
+    expect(body.error).not.toContain('not-a-date');
   });
 
   it('GET /v1/audit with out-of-range limit returns 400', async () => {
