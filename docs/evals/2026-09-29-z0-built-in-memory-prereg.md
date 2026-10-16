@@ -268,6 +268,8 @@ The run spends plan usage, not billed money, but it is large. Calibration conver
 - **The session ceiling.**
 - **The minimum effect.** Raising it from 15 points cuts the families needed sharply, but a real gain smaller than it then comes out as a tie or a small win.
 
+Set at the go, 2026-10-16: the minimum effect stays at 15 points, and the session ceiling is 9,500 sessions. The scored run uses 10 repositories, the design in `docs/evals/z0-freeze/sizes-a2x-e0.15-r10.json`, and its Claude sessions run on the founder's subscription plan.
+
 ## Review findings applied (2026-09-29)
 
 An adversarial review of the first draft found 14 issues. All were accepted:
