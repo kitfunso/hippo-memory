@@ -348,6 +348,31 @@ The level holds for H1 at every effect (at most 2.3%). It fails for H2 at 15 and
 
 `d06ae697` fixed the level check on the way: it judged every cell against 0.025 plus 2 simulation errors of all 20,000 runs, even when the rule left a few hundred, which fails a sound test about half the time. Each cell now uses its own run count. No verdict above changed.
 
+## S9: G5 on boring-maths set R
+
+Round 1 (seed 41) disagreed on 4 of 30 pairs, 13%, so G5 failed for `cal-bm4`. The fix changed two shared files (judged copies in `C:/z0-runs/s9/bm4-r1-checks/` and `bmx-r1-checks/`):
+
+- `test-commands.mjs` counted `vitest --version` and `--help` as test runs. A vitest call that only prints and exits no longer counts.
+- `commit-messages.mjs` kept the message of a commit that `git commit --amend` replaced, as Comonicon.jl's `lib.mjs` did. An amend now replaces the message before it.
+
+The post-fix regrade moved 14 bm-f4-l1 finals and one first and one final of bm-f5-l1, all from fail to pass. Round 1 rescored on the fixed checkers gives 1 of 30. Round 2 (seed 42) disagreed on 0 of 30, so G5 passes for `cal-bm4` (`C:/z0-runs/s7/cal-bm4/grading.json`).
+
+## S9: G5 on boring-maths set X, round 1
+
+Round 1 (seed 41) disagreed on 4 of 30 pairs, 13%, so G5 failed for `cal-bmx`. All four are bm-f5 finals the checker failed and the reader passed: the agent ran the wrong test command first and the right one after the correction. A final check saw every command of the session, so a rule about which command to run could never pass a corrected session. The correction asks the agent to fix it (prereg lines 105 to 110), so the final check must judge the work after it. The fix:
+
+- The runner hands a final check after a resume the resume's own commands in `CHECK_RESUME_COMMANDS`: what each transcript gained since the first check. The boundary is per transcript file, because a subagent file can sit between the main file's commands, so the first check's list is not always a prefix of the final one. The grading save keeps the list as `commandsResume`. The regrade derives it for an older save from the final list past the first, and faults `resume-commands` when the first is not a prefix. Every final-checked cell in `cal-ml2`, `cal-cj4`, `cal-bmx` and `cal-bm4` has it as a prefix.
+- bm-f5-l1 and bm-f5-l2 judge the resume's commands when those ran tests, else all of them, so a confirmed session that runs nothing more keeps its verdict. The helper sits in `test-commands.mjs`, which only these two import, so no other checker's identity changes.
+- A reader pair for a final check lists the commands before and after the follow-up message, and its label tells the reader to judge those after it when any bear on the rule. `C:/z0-runs/s9/reader-brief.md` gains one line pointing at that label; the round 1 brief is kept as `reader-brief.r1.md`.
+
+On the saved checks no first verdict moves in `cal-bmx` or `cal-bm4`. In `cal-bmx`, 16 teach finals go from fail to pass, and the round 1 sample rescored gives 0 of 30.
+
+The same defects in chunks that passed G5, sized and left as judged (reading 19):
+
+- `cal-bm4` passed with the same bm-f5 checkers. The resume fix would move 22 of its finals from fail to pass (5 apply, 17 teach). Its round 1 reader labelled fail three pairs of the shape `cal-bmx`'s reader labelled pass, because neither the pair file nor the brief marked the follow-up message.
+- bm-f4-l1 and cj-f2-l1 judge every commit of the session. With their amend fixes in place, judging only the resume's commits moves none of their finals.
+- `cal-ml2`'s `ml-commit-format.mjs` still counts a message that an amend replaced. All 8 of its teach corrections were amends; judged on the resume's commits alone, 7 of those 8 finals would pass.
+
 ## Contract limits found
 
 - A checker's `CHECK_POST_COMMIT` is a state commit whose parent is the pre-session commit, so the agent's own commits are not visible to it. Commit-message rules are checked from the `git commit` commands in `CHECK_COMMANDS`.

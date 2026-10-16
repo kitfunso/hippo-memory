@@ -129,16 +129,20 @@ function resetTask(ctx, run, t, stage) {
 /** Run every lesson check through one door, so a broken checker is kept once and never read as a verdict. */
 function checker(ctx, run, t, stage, sessionIds) {
   const state = { error: null, calls: [] };
-  state.check = (lesson, hold = state.calls.length ? null : FIRST_REF) => {
+  state.check = (lesson, hold = state.calls.length ? null : FIRST_REF, since = null) => {
     const work = run.dirs.work;
     const postCommit = stage.fault ? null : guarded(run, t, stage, () => stateCommit(work, stage.pre));
     if (!postCommit) return null;
     if (hold) guarded(run, t, stage, () => holdPre(work, postCommit, hold));
     if (stage.fault) return null;
-    const commands = stage.adapter.commandLog(stage.filesOf(sessionIds));
-    state.calls.push({ lessonId: lesson.id, post: postCommit, commands });
+    const files = stage.filesOf(sessionIds);
+    const commands = stage.adapter.commandLog(files);
+    const perFile = new Map(files.map((f) => [f, stage.adapter.commandLog([f])]));
+    // What each transcript gained since the call `since`, so a subagent file listed after the main one never shifts the boundary.
+    const resumeCommands = since ? files.flatMap((f) => perFile.get(f).slice(since.perFile.get(f)?.length ?? 0)) : null;
+    state.calls.push({ lessonId: lesson.id, post: postCommit, commands, perFile, resumeCommands });
     try {
-      return guarded(run, t, stage, () => runCheck(lesson, { work, env: childEnv(run.env), preCommit: stage.pre, postCommit, commands, scratch: path.join(run.dirs.root, 'scratch') }));
+      return guarded(run, t, stage, () => runCheck(lesson, { work, env: childEnv(run.env), preCommit: stage.pre, postCommit, commands, resumeCommands, scratch: path.join(run.dirs.root, 'scratch') }));
     } catch (err) {
       if (!(err instanceof CheckerError)) throw err;
       writeLog(run, `${t.id}.checker.txt`, `${err.message}\n${err.stderr}`);
@@ -165,7 +169,7 @@ async function lessonTurns(ctx, run, step, stage, sessionIds) {
     const own = c.calls.filter((x) => x.lessonId === lesson.id);
     const stale = old ? c.calls.find((x) => x.lessonId === old.id) : undefined;
     return {
-      staleLesson: old, firstPost: own[0]?.post ?? null, commandsFirst: own[0]?.commands ?? null, commandsFinal: own.at(-1)?.commands ?? null,
+      staleLesson: old, firstPost: own[0]?.post ?? null, commandsFirst: own[0]?.commands ?? null, commandsFinal: own.at(-1)?.commands ?? null, commandsResume: own.at(-1)?.resumeCommands ?? null,
       finalChecked: own.length > 1, finalCheckPost: own.at(-1)?.post ?? null, stalePost: stale?.post ?? null, commandsStale: stale?.commands ?? null,
     };
   };
@@ -205,7 +209,7 @@ async function lessonTurns(ctx, run, step, stage, sessionIds) {
   const resumeId = resume.result?.session_id ?? fresh;
   if (resumeId && !sessionIds.includes(resumeId)) sessionIds.push(resumeId);
   // Prereg 165: a timed-out resume is graded on the state at the kill.
-  const final = (resume.result || timedOut) && !c.error ? c.check(lesson, FINAL_CHECK_REF) : first;
+  const final = (resume.result || timedOut) && !c.error ? c.check(lesson, FINAL_CHECK_REF, c.calls[0]) : first;
   const main = findTranscript(projectsOf(run), sessionIds[0]);
   const grew = Boolean(fresh) || (main !== null && fs.statSync(main).size > resume.bytesBefore);
   // Decision 7: a timed-out teach resume delivered the lesson once its transcript grew past the teach message.
