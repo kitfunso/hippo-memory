@@ -26,12 +26,17 @@ export async function runInProcess(fn: () => void | Promise<void>): Promise<InPr
   // A caller that catches the throw (runCli does) runs on, so output after the first exit is dropped as the real process would.
   const keep = (sink: string[], text: string): void => { if (!exited) sink.push(text); };
   const toErr = (...parts: unknown[]): void => { keep(err, `${format(...parts)}\n`); };
+  // Node's write(chunk, cb) and write(chunk, encoding, cb): the drain callback fires at once, as on a drained stream.
+  const drained = (rest: unknown[]): void => {
+    for (const arg of rest) if (arg instanceof Function) arg();
+  };
+  const priorExitCode = process.exitCode;
   const spies = [
     vi.spyOn(console, 'log').mockImplementation((...parts: unknown[]) => { keep(out, `${format(...parts)}\n`); }),
     vi.spyOn(console, 'error').mockImplementation(toErr),
     vi.spyOn(console, 'warn').mockImplementation(toErr),
-    vi.spyOn(process.stdout, 'write').mockImplementation((chunk: string | Uint8Array) => { keep(out, String(chunk)); return true; }),
-    vi.spyOn(process.stderr, 'write').mockImplementation((chunk: string | Uint8Array) => { keep(err, String(chunk)); return true; }),
+    vi.spyOn(process.stdout, 'write').mockImplementation((chunk: string | Uint8Array, ...rest: unknown[]) => { keep(out, String(chunk)); drained(rest); return true; }),
+    vi.spyOn(process.stderr, 'write').mockImplementation((chunk: string | Uint8Array, ...rest: unknown[]) => { keep(err, String(chunk)); drained(rest); return true; }),
     vi.spyOn(process, 'exit').mockImplementation((code?: string | number | null) => { throw (exited ??= new ExitCalled(Number(code ?? 0))); }),
   ];
   // A spawned hippo starts with no cached project, so one test's project cannot leak into the next.
@@ -44,6 +49,8 @@ export async function runInProcess(fn: () => void | Promise<void>): Promise<InPr
     if (!exited) throw error;
   } finally {
     for (const spy of spies) spy.mockRestore();
+    // Only an exit restores it: a verb that sets exitCode and returns leaves it for the caller to read.
+    if (exited) process.exitCode = priorExitCode;
   }
   return { stdout: out.join(''), stderr: err.join(''), status: exited?.code ?? 0 };
 }

@@ -9,10 +9,16 @@ export interface Shutdown {
 
 function afterFlush(leave: () => void): void {
   let pending = 2;
-  const done = (): void => { if (--pending === 0) leave(); };
+  // The cap is cleared once both streams drain, so `leave` runs once.
+  const cap = setTimeout(leave, 1000);
+  cap.unref();
+  const done = (): void => {
+    if (--pending !== 0) return;
+    clearTimeout(cap);
+    leave();
+  };
   process.stdout.write('', done);
   process.stderr.write('', done);
-  setTimeout(leave, 1000).unref();
 }
 
 /**
