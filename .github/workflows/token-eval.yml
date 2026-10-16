@@ -42,8 +42,11 @@ jobs:
         os: [ubuntu-latest, windows-latest]
         # One Codex file per runner: each runs set X end to end many times, and together they overran one 30-minute job.
         # One shard per -z0-codex- file in EVAL_TESTS; a new file there needs a new shard here.
+        # The harness project splits three ways so its Windows jobs do not set the wall time of a PR's checks.
         part:
-          - { name: harness, args: --project harness }
+          - { name: harness 1/3, args: --project harness --shard=1/3 }
+          - { name: harness 2/3, args: --project harness --shard=2/3 }
+          - { name: harness 3/3, args: --project harness --shard=3/3 }
           - { name: codex 1/4, args: --project codex --shard=1/4 }
           - { name: codex 2/4, args: --project codex --shard=2/4 }
           - { name: codex 3/4, args: --project codex --shard=3/4 }
