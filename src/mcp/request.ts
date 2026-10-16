@@ -3,7 +3,7 @@
 import { currentSignal } from '../util/request-scope.js';
 import { STORE_NOT_PORTED_MESSAGE } from '../util/http-util.js';
 import { loadConfig } from '../core/config.js';
-import { hasGroup, narrowStore, type HippoStore, type StoreGroup } from '../store/index.js';
+import { hasGroup, type HippoStore, type OptionalGroup } from '../store/index.js';
 import { type TokenSurface } from '../store/token-ledger.js';
 import { estimateTokens } from '../util/token-text.js';
 import { PACKAGE_VERSION } from '../util/version.js';
@@ -15,7 +15,6 @@ import {
   type McpContext,
   type McpRequest,
   type McpResponse,
-  type ToolCall,
   type ToolHandler,
 } from './protocol.js';
 import { TOOLS, TOOLS_BY_NAME, ARGS_CHECKED_BY_API } from './tools.js';
@@ -52,38 +51,35 @@ export async function recordMcpTokens(toolName: string, output: string, ctx: Mcp
 
 interface ToolEntry {
   readonly run: ToolHandler;
-  /** The store group it reaches its store through, so it runs under
-   * any store that has it; unset means hippo.db's local files. */
-  readonly storeReady?: StoreGroup;
+  /** The optional group it needs; unset, it runs under any store. */
+  readonly storeReady?: OptionalGroup;
 }
 
-/** A tool that reaches its store through `group`: the call it gets carries the store narrowed to it. */
-function toolOn<G extends StoreGroup>(group: G, handler: ToolHandler<G>): ToolEntry {
-  return {
-    storeReady: group,
-    run: (call: ToolCall) => handler({ ...call, store: narrowStore(call.store, group) }),
-  };
+/** A tool that runs only under a store with the optional `group`. */
+function toolOn(group: OptionalGroup, run: ToolHandler): ToolEntry {
+  return { storeReady: group, run };
 }
 
 const TOOL_HANDLERS: ReadonlyMap<string, ToolEntry> = new Map<string, ToolEntry>([
-  ['hippo_recall', toolOn('base', runRecallTool)],
-  ['hippo_assemble', toolOn('dagReads', runAssembleTool)],
-  ['hippo_drill', toolOn('dagReads', runDrillTool)],
-  ['hippo_predict_baserate', toolOn('predictions', runPredictBaserateTool)],
-  ['hippo_remember', toolOn('entryWrites', runRememberTool)],
-  ['hippo_outcome', toolOn('entryWrites', runOutcomeTool)],
-  ['hippo_context', toolOn('contextReads', runContextTool)],
-  ['hippo_status', toolOn('reports', runStatusTool)],
-  ['hippo_learn', toolOn('lessonWrites', runLearnTool)],
-  ['hippo_conflicts', toolOn('conflicts', runConflictsTool)],
-  ['hippo_resolve', toolOn('conflicts', runResolveTool)],
-  ['hippo_share', { run: runShareTool }],
-  ['hippo_peers', { run: runPeersTool }],
+  ['hippo_recall', { run: runRecallTool }],
+  ['hippo_assemble', { run: runAssembleTool }],
+  ['hippo_drill', { run: runDrillTool }],
+  ['hippo_predict_baserate', { run: runPredictBaserateTool }],
+  ['hippo_remember', { run: runRememberTool }],
+  ['hippo_outcome', { run: runOutcomeTool }],
+  ['hippo_context', { run: runContextTool }],
+  ['hippo_status', { run: runStatusTool }],
+  ['hippo_learn', { run: runLearnTool }],
+  ['hippo_conflicts', { run: runConflictsTool }],
+  ['hippo_resolve', { run: runResolveTool }],
+  ['hippo_share', toolOn('localFiles', runShareTool)],
+  ['hippo_peers', toolOn('localFiles', runPeersTool)],
 ]);
 
 /** A call with no context yet (tools/list on stdio) lists every tool. */
 function runsOn(store: HippoStore | undefined, toolName: string): boolean {
-  return store === undefined || hasGroup(store, TOOL_HANDLERS.get(toolName)?.storeReady ?? 'localFiles');
+  const group = TOOL_HANDLERS.get(toolName)?.storeReady;
+  return store === undefined || group === undefined || hasGroup(store, group);
 }
 
 async function executeTool(name: string, args: Record<string, JsonValue>, ctx: McpContext): Promise<string> {

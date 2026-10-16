@@ -1,14 +1,13 @@
 // getContext on hippo.db returns and records what each case lists; on a store held in memory it answers the same through
 // the store, with hippo.db blocked.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cpSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { _resetAblationCacheForTests } from '../src/core/ablation.js';
-import { getContext, narrowContext, type Actor, type ContextOpts, type ContextResult } from '../src/api/index.js';
+import { getContext, type Actor, type ContextOpts, type ContextResult } from '../src/api/index.js';
 import { _resetSharedStoreCacheForTests, markSharedStore } from '../src/core/config.js';
 import { closeHippoDb, openHippoDb, setMeta, withSqliteBlocked } from '../src/db/index.js';
-import { StoreNotPortedError } from '../src/util/sqlite-blocked.js';
 import { embeddingIndexIdentity } from '../src/store/embeddings/index.js';
 import { resetAllPhysicsState } from '../src/db/physics-state.js';
 import type { HippoStore } from '../src/store/index.js';
@@ -21,7 +20,6 @@ import {
 } from './_helpers/context-fixture.js';
 import { hashedVector, startHashedEmbeddings, type HashedEmbeddings } from './_helpers/hashed-embedding-server.js';
 import { inMemoryContextStore, type InMemoryContextStore } from './_helpers/in-memory-context-store.js';
-import { portOnlyStore } from './_helpers/port-only-store.js';
 import { CLEARED_ENV, statsMirror } from './_helpers/recall-golden-seed.js';
 import { seedTwoTenants, TENANT_A, TENANT_B } from './_helpers/store-conformance.js';
 import { sqliteReach, sqliteStore } from '../src/store/sqlite/store.js';
@@ -299,8 +297,8 @@ async function runPass(c: Omit<Case, 'name' | 'expected'>, { withGlobal, embedde
     const ctx = { hippoRoot: root, tenantId: c.tenantId ?? TENANT_A, actor: c.actor ?? ADMIN, store: served, reach };
     const opts: ContextOpts = { currentProject: PROJECT, ...c.opts };
     const result = store && store.kind !== 'sqlite'
-      ? await withSqliteBlocked(store.kind, async () => getContext(narrowContext(ctx, 'contextReads'), opts))
-      : await getContext(narrowContext(ctx, 'contextReads'), opts);
+      ? await withSqliteBlocked(store.kind, async () => getContext(ctx, opts))
+      : await getContext(ctx, opts);
     await store?.close();
     return {
       result,
@@ -389,16 +387,4 @@ describe('getContext on a store held in memory, with hippo.db blocked', () => {
       expect(embeddings.requests()).toBeGreaterThan(before);
     }
   }, 120_000);
-
-  it('a store without contextReads answers StoreNotPortedError before it reads a row', async () => {
-    const home = mkdtempSync(join(tmpdir(), 'hippo-context-unported-'));
-    try {
-      const store = portOnlyStore(home);
-      const ctx = { hippoRoot: home, tenantId: TENANT_A, actor: ADMIN, store };
-      await expect(withSqliteBlocked(store.kind, async () => getContext(narrowContext(ctx, 'contextReads'), { currentProject: PROJECT }))).rejects.toBeInstanceOf(StoreNotPortedError);
-      expect(readdirSync(home)).toEqual([]);
-    } finally {
-      rmSync(home, { recursive: true, force: true });
-    }
-  });
 });

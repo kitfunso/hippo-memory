@@ -1,5 +1,5 @@
 import { envSlackAllowUnknownTeamFallback, envTenant } from '../../util/env.js';
-import type { StoreWith } from '../../store/index.js';
+import type { HippoStore } from '../../store/index.js';
 import type { SlackTeamRoute } from '../../store/connectors/slack.js';
 
 /** Look up the tenant_id for a Slack team_id; the HIPPO_TENANT fallback applies only when slack_workspaces is empty
@@ -7,7 +7,7 @@ import type { SlackTeamRoute } from '../../store/connectors/slack.js';
  * An unknown team on a multi-workspace install returns null (fail closed); SLACK_ALLOW_UNKNOWN_TEAM_FALLBACK=1 is
  * the emergency escape. */
 export async function resolveTenantForSlackTeam(
-  store: StoreWith<'connectorEvents'>,
+  store: HippoStore,
   teamId: string,
 ): Promise<string | null> {
   return tenantForRoute(await store.connectorEvents.slackTeamRoute(teamId));

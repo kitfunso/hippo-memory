@@ -6,8 +6,8 @@ import type { ConnectorEvent } from '../../store/port.js';
 import { createSuccessor, type Layer, type MemoryEntry } from '../../core/memory.js';
 import { embedGlobalCopy } from '../../sharing/global-store.js';
 import { configOf } from '../config-of.js';
-import { narrowStore } from '../../store/index.js';
-import type { ContextWith, StoreContext } from '../types.js';
+import { requireGroup } from '../../store/index.js';
+import type { StoreContext } from '../types.js';
 import { canTouchScope, personalScopeOf } from '../../core/recall-scope.js';
 
 /** Copies a local memory into the global store; the inner writeEntry emits 'remember' there, and we add a 'promote'
@@ -19,10 +19,10 @@ export interface PromoteResult {
   globalId: string;
 }
 export function promote(
-  ctx: ContextWith<'localFiles'>,
+  ctx: StoreContext,
   id: string,
 ): PromoteResult {
-  const { promotion } = ctx.store.localFiles;
+  const { promotion } = requireGroup(ctx.store, 'localFiles');
   // promoteToGlobal reads without a tenant filter, so pre-check the row's tenant_id and deny cross-tenant access with
   // archiveRaw's not-found wording (no leak about whether the id exists in another tenant).
   const reach = promotion.reach(id);
@@ -57,7 +57,7 @@ export interface SupersedeOverrides {
   pinned?: boolean;
 }
 export async function supersede(
-  ctx: ContextWith<'entryWrites'>,
+  ctx: StoreContext,
   oldId: string,
   newContent: string,
   overrides: SupersedeOverrides = {},
@@ -111,7 +111,7 @@ export interface ArchiveRawResult {
   archivedAt: string;
 }
 export async function archiveRaw(
-  ctx: ContextWith<'entryWrites'>,
+  ctx: StoreContext,
   id: string,
   reason: string,
   opts: ArchiveRawOpts = {},
@@ -127,7 +127,7 @@ export async function archiveRaw(
   };
   const { event } = opts;
   const archivedAt = event
-    ? await narrowStore(store, 'connectorWrites').connectorWrites.archiveConnectorEntry({ ...archive, event })
+    ? await store.connectorWrites.archiveConnectorEntry({ ...archive, event })
     : await entryWrites.archiveRaw(archive);
   return { ok: true, archivedAt };
 }

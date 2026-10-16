@@ -1,14 +1,14 @@
-// What a store can do is the groups it sets: audit and learn run on hippo.db's stores, answer 501 on a store without their group, and
-// a store without local files gets neither sleep nor an unfenced hippo.db.
+// What a store can do is the groups it sets: audit and learn run on hippo.db's stores, and a store without local files
+// gets neither sleep nor an unfenced hippo.db.
 import type { StoreContext } from '../src/api/types.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
-  adminActor, auditMemoryQuality, CLI_LEARN, learn, narrowContext, pruneAuditLog, removeAuditErrors, repairMemoryQuality, sleep,
+  adminActor, auditMemoryQuality, CLI_LEARN, learn, pruneAuditLog, removeAuditErrors, repairMemoryQuality, sleep,
 } from '../src/api/index.js';
-import { getHippoDbPath, openHippoDb, closeHippoDb, SqliteBlockedError } from '../src/db/index.js';
+import { openHippoDb, closeHippoDb, SqliteBlockedError } from '../src/db/index.js';
 import { handleMcpRequest, type McpResponse } from '../src/mcp/server.js';
 import { sqliteStore, type HippoStore } from '../src/store/index.js';
 import { writeEntry } from '../src/store/entry-writes.js';
@@ -50,7 +50,7 @@ describe.each([
     const root = rootWithConfig('capability-sqlite');
     const store = make(root);
     try {
-      const ctx = narrowContext(ctxOn(root, store), 'auditMaintenance', 'lessonWrites');
+      const ctx = ctxOn(root, store);
       const short = createMemory('tiny');
       const kept = createMemory('the release train leaves every Tuesday at noon');
       for (const entry of [short, kept]) writeEntry(root, entry);
@@ -71,29 +71,10 @@ describe.each([
   });
 });
 
-describe('a store without the audit and learn groups', () => {
-  it('answers StoreNotPortedError for audit and learn and creates no hippo.db', async () => {
-    const root = rootWithConfig('capability-other');
-    const repo = repoWithOneFix(root);
-    const dbPath = getHippoDbPath(root);
-    const before = existsSync(dbPath);
-    const ctx = ctxOn(root, portOnlyStore(root));
-    const issue = { memoryId: 'x', content: 'x', severity: 'error' as const, reason: 'too short' };
-    for (const run of [
-      async () => auditMemoryQuality(narrowContext(ctx, 'auditMaintenance')),
-      async () => removeAuditErrors(narrowContext(ctx, 'auditMaintenance'), 'audit --fix', [issue]),
-      async () => repairMemoryQuality(narrowContext(ctx, 'auditMaintenance'), false),
-      async () => pruneAuditLog(narrowContext(ctx, 'auditMaintenance'), { olderThanDays: 30 }),
-      async () => learn(narrowContext(ctx, 'lessonWrites'), { repoPath: repo, days: 7, profile: CLI_LEARN }),
-    ]) {
-      await expect(run()).rejects.toBeInstanceOf(StoreNotPortedError);
-    }
-    expect(existsSync(dbPath)).toBe(before);
-  });
-
-  it('api sleep answers StoreNotPortedError without localFiles', async () => {
+describe('api sleep under a store without local files', () => {
+  it('answers StoreNotPortedError', async () => {
     const root = newRoot('capability-sleep-api');
-    await expect(async () => sleep(narrowContext(ctxOn(root, portOnlyStore(root)), 'localFiles'))).rejects.toThrow("has no 'localFiles' group");
+    await expect(async () => sleep(ctxOn(root, portOnlyStore(root)))).rejects.toThrow(new StoreNotPortedError('port-only', 'localFiles'));
   });
 });
 

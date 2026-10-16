@@ -6,13 +6,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { _resetAblationCacheForTests } from '../src/core/ablation.js';
 import { _resetSharedStoreCacheForTests, markSharedStore } from '../src/core/config.js';
-import { STORE_NOT_PORTED_MESSAGE } from '../src/util/http-util.js';
 import { lastRecalledIds } from '../src/mcp/session-state.js';
 import { serve } from '../src/server.js';
 import { sqliteStore, type HippoStore } from '../src/entry/store-kit.js';
 import { CONTEXT_NOW, contextRowsOf, PROJECT, rounded, seedContextRows } from './_helpers/context-fixture.js';
 import { inMemoryContextStore } from './_helpers/in-memory-context-store.js';
-import { portOnlyStore } from './_helpers/port-only-store.js';
 import { CLEARED_ENV } from './_helpers/recall-golden-seed.js';
 import { seedTwoTenants, type TwoTenantFixture } from './_helpers/store-conformance.js';
 
@@ -104,12 +102,5 @@ describe('context over serve()', () => {
     const inProcess = await runServed(sqliteStore);
     expect(onHippoDb.replies).toEqual(inProcess.replies);
     expect(onHippoDb.rows).toEqual(inProcess.rows);
-  }, 120_000);
-
-  it('a store without contextReads answers store_not_ported on the route and the tool', async () => {
-    const { replies } = await runServed(portOnlyStore);
-    const mcpRefusal = { status: 200, body: { jsonrpc: '2.0', id: 1, error: { code: -32603, message: STORE_NOT_PORTED_MESSAGE } } };
-    const httpRefusal = { status: 501, body: { error: STORE_NOT_PORTED_MESSAGE } };
-    expect(replies).toEqual([httpRefusal, httpRefusal, httpRefusal, mcpRefusal, mcpRefusal]);
   }, 120_000);
 });

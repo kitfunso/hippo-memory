@@ -49,7 +49,7 @@ export function pinMemory(hippoRoot: string, tenantId: string, rawId: string, bo
 export async function markWrong(hippoRoot: string, tenantId: string, rawId: string): Promise<ActionResult> {
   const id = parseMemoryId(rawId);
   if (liveEntry(hippoRoot, tenantId, id) === null) return notFound();
-  const ctx: api.ContextWith<'entryWrites'> = {
+  const ctx: api.StoreContext = {
     hippoRoot,
     tenantId,
     actor: api.adminActor(ACTOR),
@@ -65,7 +65,7 @@ export async function markWrong(hippoRoot: string, tenantId: string, rawId: stri
 export async function forgetMemory(hippoRoot: string, tenantId: string, rawId: string): Promise<ActionResult> {
   const id = parseMemoryId(rawId);
   if (liveEntry(hippoRoot, tenantId, id) === null) return notFound();
-  const ctx: api.ContextWith<'entryWrites'> = {
+  const ctx: api.StoreContext = {
     hippoRoot,
     tenantId,
     actor: api.adminActor(ACTOR),

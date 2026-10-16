@@ -1,4 +1,4 @@
-import type { ConnectorContext } from '../store.js';
+import type { StoreContext } from '../../api/index.js';
 import {
   githubDlqEntry,
   markGitHubDlqRetried,
@@ -38,7 +38,7 @@ export interface ReplayDlqOpts {
 /** Hook the webhook route injects to re-ingest a row, which keeps this module free of every event-type handler.
  *  No `idempotencyKey` field: ingest re-derives it from the parsed event, and a passed-in key could be stale. */
 export type IngestHook = (
-  ctx: ConnectorContext,
+  ctx: StoreContext,
   args: {
     rawPayload: string;
     eventName: string;
@@ -49,7 +49,7 @@ export type IngestHook = (
 /** Replay a DLQ row through the normal ingest path; a failed signature, parse or envelope check bumps retry_count.
  * No `ingestHook` (dry-run): bumps retry_count, returns `replayed` with memoryId=null. Replays use today's routing. */
 export async function replayDlqEntry(
-  ctx: ConnectorContext,
+  ctx: StoreContext,
   id: number,
   opts: ReplayDlqOpts & { ingestHook?: IngestHook } = {},
 ): Promise<ReplayResult> {

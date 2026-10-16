@@ -7,9 +7,9 @@ import { strengthAblation } from '../../core/ablation.js';
 import { createMemory, calculateStrength, type MemoryEntry } from '../../core/memory.js';
 import { configOf } from '../config-of.js';
 import { canTouchScope, personalScopeOf } from '../../core/recall-scope.js';
-import type { Context, ContextWith } from '../types.js';
+import type { Context, StoreContext } from '../types.js';
 
-type DormantContext = ContextWith<'dormant'>;
+type DormantContext = StoreContext;
 
 /**
  * A tenant's dormant memories (src/store/dormant.ts): what sleep moved out of active memory when `dormant.enabled` is

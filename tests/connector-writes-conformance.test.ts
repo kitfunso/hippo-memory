@@ -9,7 +9,6 @@ import { reject } from '../src/api/index.js';
 import { closeHippoDb, openHippoDb, withSqliteBlocked } from '../src/db/index.js';
 import type { MemoryEntry } from '../src/core/memory.js';
 import type { AuditEvent } from '../src/entry/store-kit.js';
-import { requireGroup } from '../src/store/index.js';
 import { markSlackEventSeen } from '../src/store/connectors/slack.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import type { ConnectorEvent, ConnectorWrite, ConnectorWriteOutcome } from '../src/store/port.js';
@@ -73,7 +72,7 @@ function copyOfFixture(): string {
 }
 
 async function runSide(side: ConnectorSide, calls: readonly Call[], guard: <T>(fn: () => T) => T): Promise<Side> {
-  const group = requireGroup(side.store, 'connectorWrites');
+  const group = side.store.connectorWrites;
   const outcomes: Outcome<Value>[] = [];
   for (const call of calls) outcomes.push(await outcomeOf(() => guard(() => call(group, side.store))));
   await side.store.close();
@@ -277,7 +276,7 @@ describe('on hippo.db the companion rows commit with the entry or not at all', (
   ] as const)('a failed insert into %s leaves no memory row, no record and no audit row', async (table, event) => {
     const side = sqliteConnectorSide(copyWithBrokenLog(table));
     const entry = fresh('a line whose event log write fails', { scope: 'quarantine:private:unscoped' });
-    const group = requireGroup(side.store, 'connectorWrites');
+    const group = side.store.connectorWrites;
     await expect(group.writeConnectorEntry({ entry, actor: ACTOR, event, quarantine: { originalScope: null, reason: 'imperative' } })).rejects.toThrow('event log refused');
     expect(await side.store.entriesByIds([entry.id], TENANT_A)).toEqual([]);
     await side.store.close();
@@ -288,7 +287,7 @@ describe('on hippo.db the companion rows commit with the entry or not at all', (
     const { raw } = seeded;
     const root = copyWithBrokenLog('slack_event_log');
     const side = sqliteConnectorSide(root);
-    const group = requireGroup(side.store, 'connectorWrites');
+    const group = side.store.connectorWrites;
     const refused = group.archiveConnectorEntry({ tenantId: TENANT_A, actor: ACTOR, ownScope: null, id: raw.id, reason: 'source deleted', event: slack('Ev_refused') });
     await expect(refused).rejects.toThrow('event log refused');
     expect((await side.store.entriesByIds([raw.id], TENANT_A)).map((e) => [e.id, e.kind])).toEqual([[raw.id, 'raw']]);

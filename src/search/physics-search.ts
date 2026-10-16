@@ -17,7 +17,6 @@ import { hybridSearch, vectorSourceOf } from './hybrid.js';
 import { currentEntries } from './as-of.js';
 import {
   embedQueryBy,
-  requireVectorReads,
   startQueryEmbedDeadline,
   vectorCandidatesOutside,
   type HybridVectorCandidates,
@@ -98,13 +97,11 @@ export async function physicsSearchIn(
   const queryEmbedDeadline = startQueryEmbedDeadline();
   const queryVector = await physicsQueryVector(query, source, queryEmbedDeadline, options.queryEmbedding);
   if (!queryVector) return hybridSearch(query, entries, { ...hybrid, queryEmbedDeadline });
-  // Checked here too, since a caller's own query vector skips the check inside physicsQueryVector.
-  const reads = requireVectorReads(store);
   const pool = currentEntries(
-    await withVectorCandidates(reads, entries, queryVector, options.vectorCandidates),
+    await withVectorCandidates(store.vectors, entries, queryVector, options.vectorCandidates),
     options,
   );
-  const physicsMap = await loadCandidateParticles(reads, pool);
+  const physicsMap = await loadCandidateParticles(store.vectors, pool);
   if (!physicsMap) return hybridSearch(query, pool, { ...hybrid, queryEmbedDeadline });
 
   const pools = splitByParticle(pool, physicsMap, queryVector, now);
@@ -134,7 +131,7 @@ async function physicsQueryVector(
   try {
     const provider = resolveEmbeddingProvider(embeddingsConfigOf(root, embeddings));
     if (!provider.isAvailable()) return null;
-    if (indexNeedsRebuild(indexedModel(await requireVectorReads(store).embeddingIndexState()), provider.id)) {
+    if (indexNeedsRebuild(indexedModel(await store.vectors.embeddingIndexState()), provider.id)) {
       return null;
     }
     const vec = await embedQueryBy(deadline, provider, query);

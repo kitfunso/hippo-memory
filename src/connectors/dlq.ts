@@ -3,7 +3,7 @@
 
 import { DEFAULT_LIST_LIMIT } from '../util/limits.js';
 import { DLQ_REDACTED_NOTE, redactPayload } from '../util/secret-detect.js';
-import type { StoreWith } from '../store/index.js';
+import type { HippoStore } from '../store/index.js';
 import type { ConnectorDeadLetter } from '../store/port.js';
 import type { JsonValue } from '../util/json.js';
 import { errorMessage } from '../util/log.js';
@@ -44,7 +44,7 @@ export interface ConnectorDlq<Own, Bucket extends string, Item> {
 
 export async function parkInDlq<Own, Bucket extends string>(
   dlq: ConnectorDlq<Own, Bucket, unknown>,
-  store: StoreWith<'connectorEvents'>,
+  store: HippoStore,
   opts: ParkOpts<Bucket> & NoInfer<Own>,
 ): Promise<number> {
   const rawPayload = redactPayload(opts.rawPayload);

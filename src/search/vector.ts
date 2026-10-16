@@ -8,7 +8,7 @@ import type { EmbeddingsConfig } from '../core/config.js';
 import { rethrowIfSqliteBlocked } from '../util/sqlite-blocked.js';
 import { errorMessage, log } from '../util/log.js';
 import { envQueryEmbedTimeoutMs } from '../util/env.js';
-import { hasGroup, requireGroup, type HippoStore, type VectorReads } from '../store/index.js';
+import { hasGroup, type HippoStore, type VectorReads } from '../store/index.js';
 import { redactSecretsStrict } from '../util/secret-detect.js';
 import { currentEntries, type CurrentnessOptions } from './as-of.js';
 
@@ -91,11 +91,6 @@ function reindexHint(store: HippoStore): string {
     : `${why}; run 'hippo embed' on the SQLite store, then rebuild the '${store.kind}' database from it`;
 }
 
-/** The store's vector reads; a store without them answers 501, as any unported path does. */
-export function requireVectorReads(store: HippoStore): VectorReads {
-  return requireGroup(store, 'vectors');
-}
-
 /** The nearest admitted rows not already in `entries`. */
 export async function vectorCandidatesOutside(
   reads: VectorReads, entries: readonly MemoryEntry[], queryVector: readonly number[], spec: HybridVectorCandidates,
@@ -122,12 +117,8 @@ export async function resolveVectorArm(
 }
 
 // Views when the store has them, so a search copies no vector; the number[] copies score the same.
-async function storedVectorsOf(
-  store: HippoStore,
-  reads: VectorReads,
-  ids: readonly string[],
-): Promise<Map<string, ArrayLike<number>>> {
-  return store.vectorViews ? store.vectorViews.storedVectorViews(ids) : reads.storedVectors(ids);
+async function storedVectorsOf(store: HippoStore, ids: readonly string[]): Promise<Map<string, ArrayLike<number>>> {
+  return store.vectorViews ? store.vectorViews.storedVectorViews(ids) : store.vectors.storedVectors(ids);
 }
 
 async function fillVectorArm(
@@ -138,14 +129,13 @@ async function fillVectorArm(
 ): Promise<void> {
   const provider = resolveEmbeddingProvider(embeddingsConfigOf(root, embeddings));
   if (!provider.isAvailable()) return;
-  const reads = requireVectorReads(store);
-  const index = await reads.embeddingIndexState();
+  const index = await store.vectors.embeddingIndexState();
   if (indexNeedsRebuild(indexedModel(index), provider.id)) {
     warnBm25Fallback('reindex', reindexHint(store));
     return;
   }
   const spec = options.vectorCandidates;
-  const vectors = await storedVectorsOf(store, reads, arm.entries.map((e) => e.id));
+  const vectors = await storedVectorsOf(store, arm.entries.map((e) => e.id));
   // Only spend a (possibly paid, off-box) query embedding when there is a stored vector this search can use.
   if (vectors.size === 0 && !(spec !== undefined && index.hasVectors)) return;
   const vec = await embedQueryBy(options.queryEmbedDeadline ?? startQueryEmbedDeadline(), provider, query);
@@ -161,11 +151,11 @@ async function fillVectorArm(
     warnBm25Fallback('empty-query-vector', 'the embedding provider returned no vector for the query');
     return;
   }
-  const added = spec ? await vectorCandidatesOutside(reads, arm.entries, arm.queryVector, spec) : [];
+  const added = spec ? await vectorCandidatesOutside(store.vectors, arm.entries, arm.queryVector, spec) : [];
   if (added.length > 0) {
     arm.addedRows = true;
     arm.entries = currentEntries([...arm.entries, ...added], options);
-    for (const [id, v] of await storedVectorsOf(store, reads, added.map((e) => e.id))) vectors.set(id, v);
+    for (const [id, v] of await storedVectorsOf(store, added.map((e) => e.id))) vectors.set(id, v);
   }
   arm.embeddingIndex = Object.fromEntries(vectors);
   arm.useEmbeddings = true;

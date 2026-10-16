@@ -1,4 +1,4 @@
-// The optional store groups for sessions, cards, goals, conflicts, dormant memories and reports; type-only, apart from
+// The store groups for sessions, cards, goals, conflicts, dormant memories and reports; type-only, apart from
 // port.ts so that file stays under the size gate.
 import type { Card, CardComment, CardRun, CardStatus } from '../core/card.js';
 import type { HandoffOutcome, SessionHandoff } from '../core/handoff.js';
@@ -177,18 +177,15 @@ export interface Reports {
   countEntries(): Promise<number>;
 }
 
-/** The groups StoreGroups gains beyond port.ts, each set whole or left unset. */
+/** The groups StoreGroups gains beyond port.ts, each required and set whole. */
 export interface SessionAndAdminGroups {
-  /** Unset on a store without it; the continuity, session-end and working-memory paths then answer 501. */
+  /** The continuity, session-end and working-memory paths. */
   readonly sessions: Sessions;
-  /** Unset on a store without it, where the card verbs answer 501. */
   readonly cards: Cards;
-  /** Unset on a store without it, where the goal verbs answer 501. */
   readonly goals: Goals;
-  /** Unset on a store without it, where conflict listing and resolving answer 501. */
+  /** Conflict listing and resolving. */
   readonly conflicts: Conflicts;
-  /** Unset on a store without it, where the dormant verbs answer 501. */
   readonly dormant: Dormant;
-  /** Unset on a store without it, where status, tokens, failures and the memory listings answer 501. */
+  /** Status, tokens, failures and the memory listings. */
   readonly reports: Reports;
 }

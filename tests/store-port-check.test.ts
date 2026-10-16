@@ -12,7 +12,7 @@ type Counts = {
   openersOutside: number;
   openersInCli: number;
   storeBranches: number;
-  routesWithoutStore: number;
+  routesNeedingHippoDb: number;
   sqliteOnlyRoutes: number;
   routesOnLoop: number;
   twinFunctions: number;
@@ -37,7 +37,7 @@ const zero: Counts = {
   openersOutside: 0,
   openersInCli: 0,
   storeBranches: 0,
-  routesWithoutStore: 0,
+  routesNeedingHippoDb: 0,
   sqliteOnlyRoutes: 0,
   routesOnLoop: 0,
   twinFunctions: 0,
@@ -142,11 +142,11 @@ describe('check-store-port.mjs', () => {
     });
   });
 
-  it('counts store ternaries and kind checks in src/api, twins, and routes without storeReady', () => {
+  it('counts store ternaries and kind checks in src/api, twins, and routes that need hippo.db', () => {
     const api = "export function fooThroughStore() {}\nexport const f = (ctx: any) => (ctx.store ? 1 : 2);\nexport const g = (store: any) => store.kind !== 'sqlite';\nexport const h = ({ store }: any) => (store ? 1 : 2);\n";
-    const server = "const V1_ROUTES = [\n  { method: 'GET', path: '/a', handler: a },\n  { method: 'GET', path: '/b', storeReady: 'base', handler: b },\n];\n";
+    const server = "const V1_ROUTES = [\n  { method: 'GET', path: '/a', handler: a },\n  { method: 'GET', path: '/b', storeReady: 'localFiles', handler: b },\n];\n";
     withFixture({ 'src/api/a.ts': api, 'src/server/route-table.ts': server }, null, ({ run }) => {
-      expect(list(run)).toMatchObject({ storeBranches: '3', twinFunctions: '1', routesWithoutStore: '1' });
+      expect(list(run)).toMatchObject({ storeBranches: '3', twinFunctions: '1', routesNeedingHippoDb: '1' });
     });
   });
 
@@ -168,13 +168,13 @@ describe('check-store-port.mjs', () => {
 
   it("fails when a row drops `loop: 'off'`, and --update locks in a row that gains it", () => {
     const table = (second: string) => `const V1_ROUTES = [\n  { method: 'GET', path: '/a', loop: 'off', handler: a },\n  { method: 'GET', path: '/b', ${second}handler: b },\n];\n`;
-    withFixture({ 'src/server/route-table.ts': table('') }, { routesWithoutStore: 2, routesOnLoop: 5 }, ({ run }) => {
+    withFixture({ 'src/server/route-table.ts': table('') }, { routesOnLoop: 5 }, ({ run }) => {
       const r = run();
       expect(r.status).toBe(1);
       expect(r.stderr).toContain('routesOnLoop: 5 -> 6');
       expect(run('--update').status).toBe(1);
     });
-    withFixture({ 'src/server/route-table.ts': table("loop: 'off', ") }, { routesWithoutStore: 2, routesOnLoop: 6 }, ({ run, baseline }) => {
+    withFixture({ 'src/server/route-table.ts': table("loop: 'off', ") }, { routesOnLoop: 6 }, ({ run, baseline }) => {
       expect(run().status).toBe(0);
       expect(run('--update').status).toBe(0);
       expect(baseline().routesOnLoop).toBe(5);
@@ -303,10 +303,16 @@ describe('check-store-port.mjs', () => {
     });
   });
 
-  it('reads route status from the syntax tree: a comment naming storeReady is still not ported', () => {
-    const table = "const V1_ROUTES = [\n  { method: 'GET', path: '/a', /* storeReady */ handler: a },\n  { method: 'GET', path: '/b', storeReady: 'base', handler: b },\n  { method: 'POST', path: '/c', sqliteOnly: 'runs the local process', handler: c },\n];\n";
+  it('reads route status from the syntax tree: localFiles and sqliteOnly rows need hippo.db, a comment does not', () => {
+    const table = "const V1_ROUTES = [\n  { method: 'GET', path: '/a', /* storeReady: 'localFiles' */ handler: a },\n  { method: 'GET', path: '/b', storeReady: 'localFiles', handler: b },\n  { method: 'GET', path: '/e', storeReady: 'vectorViews', handler: e },\n  { method: 'POST', path: '/c', sqliteOnly: 'runs the local process', handler: c },\n];\n";
     withFixture({ 'src/server/route-table.ts': table }, null, ({ run }) => {
-      expect(list(run)).toMatchObject({ routesWithoutStore: '1', sqliteOnlyRoutes: '1' });
+      expect(list(run)).toMatchObject({ routesNeedingHippoDb: '2', sqliteOnlyRoutes: '1' });
+    });
+    const listed = { routesNeedingHippoDb: 1, sqliteOnlyRoutes: 1, sqliteOnlyRoutesList: ['POST /c'] };
+    withFixture({ 'src/server/route-table.ts': table }, listed, ({ run }) => {
+      const r = run();
+      expect(r.status).toBe(1);
+      expect(r.stderr).toContain('routesNeedingHippoDb: 1 -> 2');
     });
   });
 

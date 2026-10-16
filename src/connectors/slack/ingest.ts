@@ -1,4 +1,4 @@
-import type { ConnectorContext } from '../store.js';
+import type { StoreContext } from '../../api/index.js';
 import type { ConnectorEvent } from '../../store/port.js';
 import { rememberWithEventLog, type IngestResult } from '../ingest.js';
 import { messageToRememberOpts } from './transform.js';
@@ -17,7 +17,7 @@ export interface IngestInput {
  * is only the fast path,
  * the store logs the event in the memory's own transaction, which holds when two workers race. An empty body is
  * logged with no memory. */
-export async function ingestMessage(ctx: ConnectorContext, input: IngestInput): Promise<IngestResult> {
+export async function ingestMessage(ctx: StoreContext, input: IngestInput): Promise<IngestResult> {
   const events = ctx.store.connectorEvents;
   const event: ConnectorEvent = { connector: 'slack', eventId: input.eventId };
   // Idempotency check: if already seen, return the cached memory_id without

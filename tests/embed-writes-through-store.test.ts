@@ -6,7 +6,6 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { _resetAblationCacheForTests } from '../src/core/ablation.js';
 import { closeHippoDb, getMeta, openHippoDb, withSqliteBlocked } from '../src/db/index.js';
-import { StoreNotPortedError } from '../src/util/sqlite-blocked.js';
 import type { EmbeddingProvider } from '../src/embeddings/provider.js';
 import { embeddingIndexIdentity, embeddingInputText } from '../src/store/embeddings/index.js';
 import { embedAll, embedMemory } from '../src/search/embed-memories.js';
@@ -18,7 +17,6 @@ import { initStore } from '../src/store/open.js';
 import { EMBEDDING_MODEL_META_KEY } from '../src/db/vector-store.js';
 import { hashedVector, startHashedEmbeddings, type HashedEmbeddings } from './_helpers/hashed-embedding-server.js';
 import { inMemoryVectorWritesStore } from './_helpers/in-memory-vector-writes-store.js';
-import { portOnlyStore, portOnlyStoreWithoutVectorReads } from './_helpers/port-only-store.js';
 import { seedTwoTenants, TENANT_A, TENANT_B, type TwoTenantFixture } from './_helpers/store-conformance.js';
 
 // Particles weigh a memory by its age, so seeded rows are dated before the fixed clock the embeds run at.
@@ -172,15 +170,6 @@ describe('embedAll with a store', () => {
     expect(await memory.store.vectors.embeddingIndexState()).toEqual({ storedModel: other, hasVectors: true });
     expect([...(await memory.store.vectors.storedVectors(seeded.map((e) => e.id))).keys()]).toEqual([first.id]);
   });
-
-  it('rejects with StoreNotPortedError on a store without vectorWrites, and writes nothing', async () => {
-    const storeRoot = copyOf();
-    const before = indexOn(storeRoot);
-    const running = embedAll(markedFolder(), undefined, provider('fake-a'), portOnlyStore(storeRoot));
-    await expect(running).rejects.toThrow(StoreNotPortedError);
-    await expect(running).rejects.toThrow("the 'port-only' store has no 'vectorWrites' group");
-    expect(indexOn(storeRoot)).toEqual(before);
-  });
 });
 
 describe('embedMemory with a store', () => {
@@ -210,16 +199,5 @@ describe('embedMemory with a store', () => {
     expect(await memory.store.vectors.storedVectors(ids)).toEqual(before);
     expect(before.size).toBe(4);
     expect(await memory.store.vectors.embeddingIndexState()).toEqual({ storedModel: embeddingIndexIdentity('fake-old'), hasVectors: true });
-  });
-
-  it('resolves and logs the skip on a store without the vector groups', async () => {
-    const lines: string[] = [];
-    vi.spyOn(process.stderr, 'write').mockImplementation((chunk: string | Uint8Array) => {
-      lines.push(String(chunk));
-      return true;
-    });
-    const store: HippoStore = portOnlyStoreWithoutVectorReads(copyOf());
-    await expect(embedMemory(markedFolder(hashedConfig()), seeded[0], undefined, store)).resolves.toBe('failed');
-    expect(lines.join('')).toContain(`skipped embedding ${seeded[0].id} (the 'port-only' store has no 'vectors' group`);
   });
 });

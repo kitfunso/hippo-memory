@@ -1,5 +1,4 @@
-import { adminActor } from '../../api/index.js';
-import type { ConnectorContext } from '../store.js';
+import { adminActor, type StoreContext } from '../../api/index.js';
 import {
   listSlackDlq,
   markSlackDlqRetried,
@@ -41,7 +40,7 @@ export interface ReplayDlqOpts {
 /** Replay a DLQ row via the normal ingest path (`hippo slack dlq replay <id> [--force]`), re-verifying the signature
  * with the CURRENT secret unless forced. A NULL signature needs --force; replays use today's routing. */
 export async function replayDlqEntry(
-  ctx: Pick<ConnectorContext, 'hippoRoot' | 'store'>,
+  ctx: Pick<StoreContext, 'hippoRoot' | 'store'>,
   id: number,
   opts: ReplayDlqOpts = {},
 ): Promise<ReplayResult> {
@@ -80,7 +79,7 @@ function refuseSignature(row: DlqItem, opts: ReplayDlqOpts): SignatureRefusal | 
 }
 
 async function reingest(
-  { hippoRoot, store }: Pick<ConnectorContext, 'hippoRoot' | 'store'>,
+  { hippoRoot, store }: Pick<StoreContext, 'hippoRoot' | 'store'>,
   envelope: JsonValue & SlackEventEnvelope,
 ): Promise<Reingest> {
   const tenantId = await resolveTenantForSlackTeam(store, envelope.team_id);
@@ -88,7 +87,7 @@ async function reingest(
   const inner = envelope.event;
   if (!isSlackMessageEvent(inner)) return { ok: false, status: 'unhandled', reason: 'unhandled inner event type' };
 
-  const replayCtx: ConnectorContext = { hippoRoot, tenantId, actor: adminActor('connector:slack:replay'), store };
+  const replayCtx: StoreContext = { hippoRoot, tenantId, actor: adminActor('connector:slack:replay'), store };
   if (inner.subtype === 'message_deleted' && inner.deleted_ts) {
     const r = await handleMessageDeleted(replayCtx, {
       teamId: envelope.team_id,

@@ -1,9 +1,9 @@
-import { type ContextWith, adminActor } from '../api/index.js';
+import { type StoreContext, adminActor } from '../api/index.js';
 import { ledgerReachOf, type LedgerReach } from '../api/ledger-db.js';
 import { loadConfig } from '../core/config.js';
 import { runConsolidation } from '../consolidate/sleep.js';
 import type { McpHost } from '../mcp/protocol.js';
-import type { HippoStore, StoreGroup, StoreGroups } from '../store/index.js';
+import type { HippoStore, StoreGroups } from '../store/index.js';
 import type { LocalFiles } from '../store/port.js';
 import {
   runDetachedSqliteRequest, runSqliteRequest, sqliteReach, sqliteStore, sqliteSyncStore,
@@ -26,7 +26,7 @@ export function cliRequest<T>(run: () => T | Promise<T>): Promise<T> {
 
 // The one place the CLI names its audit actor and builds its store;
 // root is a parameter because some verbs target the global store.
-export function cliApiContext(hippoRoot: string, tenantId: string): ContextWith<StoreGroup> {
+export function cliApiContext(hippoRoot: string, tenantId: string): StoreContext {
   const store = cliStore(hippoRoot);
   // Read here, once per command, so a long-lived caller of this function never pins a stale config.
   const config = loadConfig(hippoRoot);

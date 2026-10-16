@@ -8,7 +8,7 @@ import { listAuditEventsAfter, type AuditEvent, type AuditOp } from '../src/stor
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
 import type { MemoryEntry } from '../src/core/memory.js';
 import { objectMirror } from '../src/objects/lifecycle.js';
-import { requireGroup, sqliteStore } from '../src/store/index.js';
+import { sqliteStore } from '../src/store/index.js';
 import { auditHighIdAt } from '../src/store/key-audit.js';
 import type { BriefReceipt, Incident, ObjectByKind, ObjectFields, ObjectKind, SavableKind } from '../src/core/object-types.js';
 import type { IncidentOpen, IncidentOpenRefusal, ObjectListQuery, ObjectRefusal, ObjectSave } from '../src/store/port.js';
@@ -691,7 +691,7 @@ describe("hippo.db's Objects writes are one transaction each", () => {
     try {
       cpSync(fixture.dir, root, { recursive: true });
       const store = sqliteStore(root);
-      const objects = requireGroup(store, 'objects');
+      const { objects } = store;
       const first = saving(c, 1);
       await objects.saveObject(TENANT_A, c.kind, first.save);
       refuseAuditOps(root, [createOp(c.kind), closeOp(c.kind)]);
@@ -717,7 +717,7 @@ describe("hippo.db's Objects writes are one transaction each", () => {
     try {
       cpSync(fixture.dir, root, { recursive: true });
       const store = sqliteStore(root);
-      const objects = requireGroup(store, 'objects');
+      const { objects } = store;
       const first = opening(1);
       await objects.openIncident(TENANT_A, first.open);
       const held = Array.from({ length: 1200 }, () => mirrorIdOf(first));
@@ -736,7 +736,7 @@ describe("hippo.db's Objects writes are one transaction each", () => {
     try {
       cpSync(fixture.dir, root, { recursive: true });
       const store = sqliteStore(root);
-      const objects = requireGroup(store, 'objects');
+      const { objects } = store;
       const first = opening(1);
       await objects.openIncident(TENANT_A, first.open);
       refuseAuditOps(root, ['incident_open', 'incident_resolve']);

@@ -8,9 +8,9 @@ import { deduplicateStore, type LoadedStore } from '../../consolidate/dedupe.js'
 import { computeAmbientState } from '../../core/ambient.js';
 import { extractGraphChunked, type ExtractResult } from '../../graph/extract.js';
 import type { MemoryEntry } from '../../core/memory.js';
-import type { Context, ContextWith } from '../types.js';
+import type { Context, StoreContext } from '../types.js';
 import { objectsOf } from '../objects/objects.js';
-import type { Consolidation, Objects } from '../../store/port.js';
+import { requireGroup, type Consolidation, type LocalFiles, type Objects } from '../../store/port.js';
 import { removeAuditErrors } from '../auth/audit.js';
 import type { SleepOpts, SleepResult } from './sleep.js';
 import { errorMessage } from '../../util/log.js';
@@ -57,16 +57,17 @@ interface DirtyTenantSnapshot {
   error: string | null;
 }
 
-/** The groups one sleep runs on: hippo.db's own files, the audit pass and the graph's objects. */
-type SleepContext = ContextWith<'auditMaintenance' | 'objects' | 'localFiles'>;
+/** A sleep's context with hippo.db's own files, proved once before any phase runs. */
+type SleepContext = StoreContext & { readonly local: LocalFiles };
 
 /** `sleep` with its phase dependencies overridable; tests pass
  * stubs here, so the seam never touches the public `SleepOpts`. */
 export async function runSleep(
-  ctx: SleepContext,
+  storeCtx: StoreContext,
   opts: SleepOpts,
   overrides: Partial<SleepPhases> = {},
 ): Promise<SleepResult> {
+  const ctx: SleepContext = { ...storeCtx, local: requireGroup(storeCtx.store, 'localFiles') };
   const dryRun = Boolean(opts.dryRun);
   const phases: SleepPhases = { ...DEFAULT_SLEEP_PHASES, ...overrides };
 
@@ -97,7 +98,7 @@ async function runSleepPhases(
   const snapshot = snapshotDirtyTenants(ctx, phases, dryRun);
 
   // Phase 1: Consolidation.
-  const local = ctx.store.localFiles;
+  const { local } = ctx;
   const consolidateResult = await phases.consolidate(local, { dryRun, config: phases.configOf(ctx) });
   counts.consolidation = consolidateResult.semanticCreated + consolidateResult.merged;
   const result = sleepResultFrom(consolidateResult, dryRun);
@@ -136,7 +137,7 @@ function snapshotDirtyTenants(ctx: SleepContext, phases: SleepPhases, dryRun: bo
   const snapshot: DirtyTenantSnapshot = { dirtyTenants: [], error: null };
   if (!dryRun) {
     try {
-      snapshot.dirtyTenants = phases.loadPendingExtractionTenants(ctx.store.localFiles.consolidation);
+      snapshot.dirtyTenants = phases.loadPendingExtractionTenants(ctx.local.consolidation);
     } catch (snapErr) {
       snapshot.error = errorMessage(snapErr);
     }
@@ -198,7 +199,7 @@ interface QualityAuditOptions {
 /** `removed` counts audit errors deleted (or that would be under dryRun); `remaining` is what the audit read, less the
  * rows it deleted. */
 async function runQualityAudit(
-  ctx: ContextWith<'auditMaintenance'>,
+  ctx: StoreContext,
   phases: SleepPhases,
   options: QualityAuditOptions,
 ): Promise<QualityAuditOutcome> {
@@ -316,7 +317,7 @@ async function rebuildDirtyTenant(
     }
     // Watermark drain: only items enqueued before this rebuild started are marked; later arrivals stay pending.
     // Marked only after the last chunk, so a run stopped between chunks leaves the tenant for the next one.
-    ctx.store.localFiles.consolidation.markGraphDrained(dirty.tenantId, dirty.maxPendingId);
+    ctx.local.consolidation.markGraphDrained(dirty.tenantId, dirty.maxPendingId);
   } catch (tenantErr) {
     result.details = [
       ...(result.details ?? []),
@@ -341,7 +342,7 @@ interface SleepAuditMetadata {
 // One 'consolidate' row per sleep, emitted from finally so a partial failure still reports what got done.
 // An audit failure is logged and never replaces the original phase error.
 async function emitSleepAudit(
-  ctx: ContextWith<'localFiles'>,
+  ctx: SleepContext,
   opts: SleepOpts,
   dryRun: boolean,
   counts: SleepCounts,
@@ -362,7 +363,7 @@ async function emitSleepAudit(
     if (phaseError) sleepAuditMetadata.errorMessage = phaseError.message;
     // A flush stopped between chunks names the unit it would have
     // committed next, so a unit that fails every night can be found.
-    const nextUnitIds = ctx.store.localFiles.consolidation.failedUnitOf(phaseError);
+    const nextUnitIds = ctx.local.consolidation.failedUnitOf(phaseError);
     if (nextUnitIds) sleepAuditMetadata.nextUnitIds = nextUnitIds;
     await ctx.store.appendAuditEvents([{
       tenantId: '__host__',
@@ -372,6 +373,6 @@ async function emitSleepAudit(
     }]);
   } catch (auditErr) {
     // Logged, never thrown: a second failure must not mask the original phaseError.
-    ctx.store.localFiles.consolidation.reportAuditFailure('consolidate', String(auditErr));
+    ctx.local.consolidation.reportAuditFailure('consolidate', String(auditErr));
   }
 }

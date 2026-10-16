@@ -6,7 +6,6 @@ import {
   authCreate,
   authListRows,
   authRevoke,
-  narrowContext,
   quarantineApprove,
   quarantineList,
   quarantineReject,
@@ -34,14 +33,14 @@ const MAX_AUTH_KEYS_PAGE = 1000;
 
 // POST /v1/auth/keys: mints a key; plaintext is in the response body (the CLI client, not this layer, carries the
 // "store this somewhere safe" warning).
-export async function handleCreateAuthKey({ req, res, opts }: AuthedRouteRequest<'keyWrites'>): Promise<void> {
+export async function handleCreateAuthKey({ req, res, opts }: AuthedRouteRequest): Promise<void> {
   // The dispatch gate authenticated before the body, so an unknown caller costs no read; this recheck runs the resolver
   // right before the mint.
   const raw = await readBody(req, {
     maxBytes: MINT_BODY_MAX_BYTES,
     deadlineMs: opts.mintBodyDeadlineMs ?? MINT_BODY_DEADLINE_MS,
   });
-  const ctx = narrowContext(await recheckContextWithAuth(req, opts), 'keyWrites');
+  const ctx = await recheckContextWithAuth(req, opts);
   const body = parseJsonObjectText(raw);
   const labelRaw = body['label'];
   if (labelRaw !== undefined && !isJsonString(labelRaw)) {
@@ -82,7 +81,7 @@ export async function handleCreateAuthKey({ req, res, opts }: AuthedRouteRequest
 
 // GET /v1/auth/keys?active=true&limit=&cursor=: lists keys visible to ctx.tenantId; `active` defaults to true,
 // ?active=false includes revoked and expired rows.
-export async function handleListAuthKeys({ res, ctx, query }: AuthedRouteRequest<'keyWrites'>): Promise<void> {
+export async function handleListAuthKeys({ res, ctx, query }: AuthedRouteRequest): Promise<void> {
   const activeRaw = query.get('active');
   let active = true;
   if (activeRaw !== null) {
@@ -105,7 +104,7 @@ export async function handleListAuthKeys({ res, ctx, query }: AuthedRouteRequest
 // its own or, via the resolver, those it
 // minted. Returns 200 with the body rather than 204 so the caller sees revokedAt.
 export async function handleRevokeAuthKey(
-  { res, ctx }: AuthedRouteRequest<'keyAudit'>,
+  { res, ctx }: AuthedRouteRequest,
   keyMatch: Record<string, string>,
 ): Promise<void> {
   validateIdSegment(keyMatch.keyId!, 'key id');
@@ -116,7 +115,7 @@ export async function handleRevokeAuthKey(
 
 // GET /v1/quarantine?status=&limit=&cursor=: quarantine review queue. quarantineList carries no role gate itself, so
 // its row's admin gate is the check.
-export async function handleListQuarantine({ res, ctx, query }: AuthedRouteRequest<'quarantine'>): Promise<void> {
+export async function handleListQuarantine({ res, ctx, query }: AuthedRouteRequest): Promise<void> {
   const statusRaw = query.get('status');
   let status: 'pending' | 'approved' | 'rejected' | 'all' = 'pending';
   if (statusRaw !== null) {
@@ -137,7 +136,7 @@ export async function handleListQuarantine({ res, ctx, query }: AuthedRouteReque
 
 // POST /v1/quarantine/:id/approve: admin only; ForbiddenError falls through to mapApiError's 403.
 export async function handleApproveQuarantine(
-  { res, ctx }: AuthedRouteRequest<'quarantine'>,
+  { res, ctx }: AuthedRouteRequest,
   quarantineApproveMatch: Record<string, string>,
 ): Promise<void> {
   validateIdSegment(quarantineApproveMatch.id!, 'memory id');
@@ -148,7 +147,7 @@ export async function handleApproveQuarantine(
 
 // POST /v1/quarantine/:id/reject: admin only; ForbiddenError falls through to mapApiError's 403.
 export async function handleRejectQuarantine(
-  { res, ctx }: AuthedRouteRequest<'quarantine'>,
+  { res, ctx }: AuthedRouteRequest,
   quarantineRejectMatch: Record<string, string>,
 ): Promise<void> {
   validateIdSegment(quarantineRejectMatch.id!, 'memory id');
@@ -159,7 +158,7 @@ export async function handleRejectQuarantine(
 
 // GET /v1/audit?op=&since=&limit=&cursor=: all three filters are validated at the route boundary so an invalid value is
 // a 400 before the DB is hit.
-export async function handleListAudit({ res, ctx, query }: AuthedRouteRequest<'auditLog'>): Promise<void> {
+export async function handleListAudit({ res, ctx, query }: AuthedRouteRequest): Promise<void> {
   const opRaw = query.get('op');
   let op: AuditOp | undefined;
   if (opRaw !== null) {

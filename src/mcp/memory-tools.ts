@@ -7,13 +7,13 @@ import {
   outcome as apiOutcome,
   learn as apiLearn,
   MCP_LEARN,
-  type ContextWith,
+  type StoreContext,
 } from '../api/index.js';
 import { mcpActor, type ToolCall } from './protocol.js';
 import { lastRecalledIds, resolveClientKey } from './session-state.js';
 
 export async function runRememberTool(
-  { args, ctx, hippoRoot, config, tenantId, store }: ToolCall<'entryWrites'>
+  { args, ctx, hippoRoot, config, tenantId, store }: ToolCall
 ): Promise<string> {
   const text = String(args.text || '');
   if (!text) return 'No text provided.';
@@ -22,7 +22,7 @@ export async function runRememberTool(
   if (args.tag) tags.push(String(args.tag));
   // Route through api/index.ts so audit_log captures the caller identity like CLI/REST: the auth-resolved ctx.actor
   // under HTTP-MCP, 'mcp' for stdio.
-  const apiCtx: ContextWith<'entryWrites'> = {
+  const apiCtx: StoreContext = {
     hippoRoot,
     tenantId,
     actor: mcpActor(ctx),
@@ -46,7 +46,7 @@ export async function runRememberTool(
 }
 
 export async function runOutcomeTool(
-  { args, ctx, hippoRoot, tenantId, store }: ToolCall<'entryWrites'>
+  { args, ctx, hippoRoot, tenantId, store }: ToolCall
 ): Promise<string> {
   const good = Boolean(args.good);
   const clientKey = resolveClientKey(ctx);
@@ -55,7 +55,7 @@ export async function runOutcomeTool(
 
   // Route through src/api/index.ts so audit_log captures the caller identity (auth-resolved ctx.actor under HTTP-MCP,
   // 'mcp' for stdio) and tenant scoping is uniform; outcome() also skips cross-tenant ids silently.
-  const apiCtx: ContextWith<'entryWrites'> = {
+  const apiCtx: StoreContext = {
     hippoRoot,
     tenantId,
     actor: mcpActor(ctx),
@@ -66,7 +66,7 @@ export async function runOutcomeTool(
 }
 
 export async function runLearnTool(
-  { args, ctx, hippoRoot, tenantId, store }: ToolCall<'lessonWrites'>
+  { args, ctx, hippoRoot, tenantId, store }: ToolCall
 ): Promise<string> {
   const days = Number(args.days) || 7;
   // process.cwd() is the server's repo, not a remote caller's, so api learn refuses all but stdio and a host admin

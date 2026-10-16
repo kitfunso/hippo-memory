@@ -8,7 +8,7 @@ import type {
   ApiKeyListRow, ApiKeyRecord, AppendAuditOpts, AuditEvent, HippoStore, KeyListQuery, KeyMint, KeyWrites, NewApiKey,
 } from '../../src/entry/store-kit.js';
 import { FIXTURE_REVOKED_AT, TENANT_A, TENANT_B, type StoreSide, type TwoTenantFixture } from './store-conformance.js';
-import { portOnlyStoreWithoutVectorReads } from './port-only-store.js';
+import { portOnlyStore } from './port-only-store.js';
 
 export interface InMemoryKeyWritesStore extends StoreSide {
   readonly store: HippoStore & { readonly keyWrites: KeyWrites };
@@ -117,7 +117,7 @@ export function inMemoryKeyWritesStore(hippoRoot: string): InMemoryKeyWritesStor
     },
   };
   const store: InMemoryKeyWritesStore['store'] = {
-    ...portOnlyStoreWithoutVectorReads(hippoRoot),
+    ...portOnlyStore(hippoRoot),
     kind: 'in-memory',
     async findApiKey(keyId) {
       const key = keys.get(keyId);

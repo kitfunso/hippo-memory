@@ -1,5 +1,5 @@
 import { envGitHubAllowUnknownInstallationFallback, envTenant } from '../../util/env.js';
-import type { StoreWith } from '../../store/index.js';
+import type { HippoStore } from '../../store/index.js';
 
 export interface ResolveArgs {
   /** String form of `installation.id`. `null`/`undefined` means "no installation field" (PAT-mode webhook). */
@@ -13,7 +13,7 @@ export interface ResolveArgs {
  * empty. An unknown installation or repo on a multi-tenant deployment returns
  * null (fail closed); GITHUB_ALLOW_UNKNOWN_INSTALLATION_FALLBACK=1 escapes. */
 export async function resolveTenantForGitHub(
-  store: StoreWith<'connectorEvents'>,
+  store: HippoStore,
   args: ResolveArgs,
 ): Promise<string | null> {
   const envFallback = (): string => envTenant();

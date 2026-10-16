@@ -6,7 +6,6 @@ import type { ApiKeyListRow, ApiKeyRecord, ListApiKeysOpts, NewApiKey } from './
 import type { ScopeGrantChange } from './key-writes.js';
 import type { AppendAuditOpts, AuditEvent, AuditPrune, ListAuditAfterOpts, QueryAuditOpts } from './audit.js';
 import type { QualityRepairResult } from './quality-repair.js';
-import type { StoreWith } from './narrow.js';
 import type { LocalFiles } from './port/local-files.js';
 import { StoreNotPortedError } from '../util/sqlite-blocked.js';
 import type { EmbeddingIndexState } from './vector-index.js';
@@ -674,23 +673,19 @@ export interface LessonWrites {
   bumpRemembered(count: number): Promise<void>;
 }
 
-/** The optional groups: a store sets each one whole or leaves
- * it unset, and a route or MCP tool names the one it needs. */
+/** Every group a store sets whole; only the four in OptionalGroup may be left unset. */
 export interface StoreGroups extends SessionAndAdminGroups {
   /** Unset on any store but hippo.db; a request then runs fenced from
-   * hippo.db, and a route or tool that names no group answers 501. */
+   * hippo.db, and a route or tool that names `localFiles` answers 501. */
   readonly localFiles: LocalFiles;
-  /** Unset on a store without it, where the quality audit, its repair and audit prune answer 501. */
   readonly auditMaintenance: AuditMaintenance;
-  /** Unset on a store without it, where git learn answers 501. */
   readonly lessonWrites: LessonWrites;
-  /** Unset on a store built before them, where hybrid and physics recall under an embedding provider answer 501. */
   readonly vectors: VectorReads;
   /** Unset on a store without them, where recall scores the number[] copies `vectors` returns, to the same ranking. */
   readonly vectorViews: VectorViews;
   readonly keyAudit: KeyAudit;
   readonly keyWrites: KeyWrites;
-  /** Unset on a store without it, where the CLI's auth grant and ungrant answer 501. */
+  /** The CLI's auth grant and ungrant. */
   readonly keyGrants: KeyGrants;
   /** embedMemory and embedAll with a store need it and `vectors`. */
   readonly vectorWrites: VectorWrites;
@@ -701,10 +696,9 @@ export interface StoreGroups extends SessionAndAdminGroups {
   readonly auditLog: AuditLog;
   readonly quarantine: Quarantine;
   readonly graphReads: GraphReads;
-  /** Unset on a store built before it, where a write that carries a connector event or untrusted content answers
-   * 501. */
+  /** A write that carries a connector event or untrusted content. */
   readonly connectorWrites: ConnectorWrites;
-  /** Unset on a store built before it, where both connector webhooks answer 501. */
+  /** Both connector webhooks' dedup, dead letters and tenant routing. */
   readonly connectorEvents: ConnectorEvents;
   readonly objects: Objects;
   /** Unset on a store built before it, where GET /ready answers 200 with `store: "unchecked"`. */
@@ -714,15 +708,18 @@ export interface StoreGroups extends SessionAndAdminGroups {
   readonly lastRecall: LastRecall;
 }
 
+/** The groups a store may leave unset, each with a fallback or a 501 where it is missing. */
+export type OptionalGroup = 'localFiles' | 'vectorViews' | 'readiness' | 'lastRecall';
+
 export type StoreGroup = 'base' | keyof StoreGroups;
 
 export function hasGroup(store: HippoStore, group: StoreGroup): boolean {
   return group === 'base' || store[group] !== undefined;
 }
 
-/** The group's methods; a store without them throws
+/** The optional group's methods; a store without them throws
  * StoreNotPortedError, which answers 501 as any unported path does. */
-export function requireGroup<G extends keyof StoreGroups>(store: HippoStore, group: G): StoreGroups[G] {
+export function requireGroup<G extends OptionalGroup>(store: HippoStore, group: G): StoreGroups[G] {
   const groups: Partial<StoreGroups> = store;
   const methods = groups[group];
   if (methods === undefined) throw new StoreNotPortedError(store.kind, group);
@@ -734,15 +731,15 @@ export interface StoreReach {
   readonly hasLocal: boolean; // the primary store has a project of its own, or is not hippo.db
   readonly isGlobal: boolean; // the primary root is the operator's global store
   readonly shared: boolean; // a store serving many people, so the operator's global store stays out
-  readonly global?: { readonly root: string; readonly store: StoreWith<'contextReads'> }; // set only when readable
+  readonly global?: { readonly root: string; readonly store: HippoStore }; // set only when readable
 }
 
 export { isStoreBusy, STORE_BUSY_MESSAGE, StoreBusyError } from './busy.js';
 
 /** What `serve()` reads and writes through. Each method is atomic and no transaction spans an
  * await, since SQLite's lock wait blocks the event loop; a lock timeout throws `StoreBusyError`. */
-export interface HippoStore extends Partial<StoreGroups> {
-  /** A name for logs and errors; what a store can do is the groups it sets, `localFiles` above all. */
+export interface HippoStore extends Omit<StoreGroups, OptionalGroup>, Partial<Pick<StoreGroups, OptionalGroup>> {
+  /** A name for logs and errors; what a store can do beyond the required groups is the optional ones it sets. */
   readonly kind: string;
   /** The api_keys row for `keyId` with its scope grants, revoked or not; null when no row matches. */
   findApiKey(keyId: string): Promise<ApiKeyRecord | null>;

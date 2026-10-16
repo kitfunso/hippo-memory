@@ -65,7 +65,7 @@ async function cmdAuditList(hippoRoot: string, tenantId: string, flags: CliFlags
 
   const limit = readAuditLimit(flags);
 
-  const ctx: api.ContextWith<'auditLog'> = {
+  const ctx: api.StoreContext = {
     ...cliApiContext(root, tenantId),
     actor: { subject: 'cli', role: 'admin' },
   };

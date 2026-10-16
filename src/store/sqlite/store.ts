@@ -39,12 +39,11 @@ import { flushStatsMirrors } from '../mirrors.js';
 import { auditHighIdAt, revokeKeyAt } from '../key-audit.js';
 import { changeScopeGrantAt, createKeyAt, createSelfKeyAt } from '../key-writes.js';
 import { onHandle } from '../open.js';
-import { narrowStore, type StoreWith } from '../narrow.js';
 import {
   type AuditLog, type AuditMaintenance, type ConnectorEvents, type ConnectorWrites, type ContextReads,
   type ContinuityBlock, type DagReads, type EntryWrites, type GraphReads, type HippoStore, type KeyAudit,
   type KeyGrants, type KeyWrites, type LastRecall, type LessonWrites, type Objects, type Predictions, type Quarantine,
-  type Readiness, type StoreGroup, type StoreGroups, type StoreReach, type Sync, type VectorViews, type VectorWrites,
+  type Readiness, type StoreGroups, type StoreReach, type Sync, type VectorViews, type VectorWrites,
   hasGroup,
 } from '../port.js';
 import type { Cards, Conflicts, Dormant, Goals, Reports, Sessions } from '../port-groups.js';
@@ -55,16 +54,11 @@ import { loadRecallEntries } from '../search-rows.js';
 import { type ContinuityKey, listSessionEvents, loadActiveTaskSnapshot } from '../sessions.js';
 import { entriesWithoutVectorAt, loadStoredVectorViews, writeVectorsAt } from '../vector-index.js';
 
-/** `ctx` with its store filled (the one it carries, else hippo.db under its root) and its groups proven,
- * so a public entry given a store without them still answers 501. */
-export function withStoreGroups<
-  C extends { readonly hippoRoot: string; readonly store?: HippoStore },
-  G extends StoreGroup,
->(
+/** `ctx` with its store filled: the one it carries, else hippo.db under its root. */
+export function withStore<C extends { readonly hippoRoot: string; readonly store?: HippoStore }>(
   ctx: C,
-  ...groups: readonly [G, ...G[]]
-): C & { readonly store: StoreWith<G> } {
-  return { ...ctx, store: narrowStore(ctx.store ?? sqliteStore(ctx.hippoRoot), ...groups) };
+): C & { readonly store: HippoStore } {
+  return { ...ctx, store: ctx.store ?? sqliteStore(ctx.hippoRoot) };
 }
 
 /** Not on the synchronous store: the nearest-row scan yields to
@@ -237,7 +231,7 @@ export function sqliteReach(hippoRoot: string, store: HippoStore, shared?: boole
     shared: sharedStore,
   };
   if (!canReadGlobal) return reach;
-  return { ...reach, global: { root: globalRoot, store: narrowStore(sqliteStore(globalRoot), 'contextReads') } };
+  return { ...reach, global: { root: globalRoot, store: sqliteStore(globalRoot) } };
 }
 
 /** `sqliteSyncStore` as a served store: each method runs at once and answers through a Promise, so a throw rejects as

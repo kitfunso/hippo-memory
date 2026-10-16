@@ -1,7 +1,7 @@
 // The per-prompt hook's block and ledger rows, rendered here for `hippo context` and for promptHookContext (a remote
 // hook route's call). promptHookContext keeps the server-side copy of the CLI's getContext flags (cli/context.ts); the
 // CLI parity case in tests/prompt-hook-context.test.ts is all that ties the two.
-import { getContext, type Context, type ContextResult, type ContextResultEntry, type ContextWith } from './index.js';
+import { getContext, type Context, type ContextResult, type ContextResultEntry, type StoreContext } from './index.js';
 import { BadRequestError } from '../core/api-errors.js';
 import { type HippoConfig, isSharedStore } from '../core/config.js';
 import { configAtRoot } from './config-of.js';
@@ -359,7 +359,7 @@ function assertPromptHookRequest(req: PromptHookRequest): void {
  * Throws BadRequestError past the input caps, and on a shared store for a project assertCallerProject refuses, before
  * any arm is booked. */
 export async function promptHookContext(
-  ctx: ContextWith<'contextReads'>, req: PromptHookRequest, opts: PromptHookOpts = {},
+  ctx: StoreContext, req: PromptHookRequest, opts: PromptHookOpts = {},
 ): Promise<{ arm: PilotArm | null; stdout: string; staticHash: string | null }> {
   assertPromptHookRequest(req);
   const { sessionId, payload } = req;

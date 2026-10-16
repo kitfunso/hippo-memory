@@ -15,7 +15,7 @@ const BASERATE_DECIMALS = 3;
 const NOT_RESOLVED = 'Could not resolve. Check the conflict ID and --keep value.';
 
 export async function runPredictBaserateTool(
-  { args, ctx, hippoRoot, tenantId, store }: ToolCall<'predictions'>
+  { args, ctx, hippoRoot, tenantId, store }: ToolCall
 ): Promise<string> {
   // Text-only reply, matching the other MCP tools; the group's read writes the audit row, so no surface can skip it.
   const classTag = String(args.class_tag || '').trim();
@@ -44,7 +44,7 @@ export async function runPredictBaserateTool(
 }
 
 export async function runStatusTool(
-  { ctx, hippoRoot, config, tenantId, store }: ToolCall<'reports'>,
+  { ctx, hippoRoot, config, tenantId, store }: ToolCall,
 ): Promise<string> {
   // honors HIPPO_FAKE_NOW (eval-only; see ablation.ts)
   const tallies = await getMemoryStatus({ hippoRoot, tenantId, actor: mcpActor(ctx), store }, evalNow(), 0.1);
@@ -58,7 +58,7 @@ export async function runStatusTool(
   ].join('\n');
 }
 
-export async function runConflictsTool(call: ToolCall<'conflicts'>): Promise<string> {
+export async function runConflictsTool(call: ToolCall): Promise<string> {
   const { ctx, hippoRoot, tenantId, store } = call;
   const conflicts = await listOpenConflicts({ hippoRoot, tenantId, actor: mcpActor(ctx), store }, ctx?.project);
   if (conflicts.length === 0) return 'No open conflicts.';
@@ -68,7 +68,7 @@ export async function runConflictsTool(call: ToolCall<'conflicts'>): Promise<str
 }
 
 export async function runResolveTool(
-  { args, ctx, hippoRoot, tenantId, store }: ToolCall<'conflicts'>,
+  { args, ctx, hippoRoot, tenantId, store }: ToolCall,
 ): Promise<string> {
   const conflictId = Number(args.conflict_id);
   const keepId = String(args.keep || '');

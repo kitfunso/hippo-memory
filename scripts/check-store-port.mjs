@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // CI store-port gate. Every server route should reach the database through the store port, so the leftovers
-// (database openers outside the data layer, store branches in the API, routes not yet store-ready (a sqliteOnly route is counted apart, and its list is pinned), twin
+// (database openers outside the data layer, store branches in the API, routes that need hippo.db (storeReady 'localFiles' or sqliteOnly; sqliteOnly rows are counted apart too, and their list is pinned), twin
 // functions, SQL prepared outside the data layer, hand-written BEGIN literals) are counted and may fall but never rise above .store-port-baseline.json.
 // routesOnLoop counts the routes whose SQLite work still runs on the server thread: V1_ROUTES rows without `loop: 'off'`, plus the routes outside that table.
 // carrierFiles counts src files that name andThen, onStore or StoreReply, the removed sync-or-async reply carrier; the list is pinned so a new file fails even when another stops.
@@ -16,7 +16,7 @@ import ts from 'typescript';
 const BASELINE = '.store-port-baseline.json';
 const OPENERS = new Set(['openHippoDb', 'openHippoDbReadOnly', 'openStore', 'onHandle']);
 const TWIN_SUFFIX = /(ThroughStore|OnHippoDb|UnderStore|OnStore)$/;
-const NUMBERS = ['openersOutside', 'openersInCli', 'storeBranches', 'routesWithoutStore', 'sqliteOnlyRoutes', 'routesOnLoop', 'twinFunctions',
+const NUMBERS = ['openersOutside', 'openersInCli', 'storeBranches', 'routesNeedingHippoDb', 'sqliteOnlyRoutes', 'routesOnLoop', 'twinFunctions',
   'sqlOutside', 'txLiterals', 'tenantResolvesInCli', 'storeImportsInCli', 'storeImportsInDomain', 'handleHoldersOutside', 'storeFilesWithoutSql'];
 const BY_FILE_KEYS = ['openersOutsideByFile', 'sqlOutsideByFile', 'handleHoldersOutsideByFile'];
 const HANDLE_TYPES = new Set(['DatabaseSyncLike', 'DatabaseSync']);
@@ -31,7 +31,6 @@ const DB_DEFINITION_FILES = {
   'src/store/port/': 'store port groups kept apart from port.ts',
   'src/store/port-groups.ts': 'the session and admin groups of the store port',
   'src/store/busy.ts': 'the busy error and busy check of the store port',
-  'src/store/narrow.ts': 'the run-time proof behind StoreWith, part of the port contract',
   'src/store/index.ts': 'the published entry of the store port',
   'src/store/sqlite/': 'the SQLite adapter and its executor plumbing',
 };
@@ -187,7 +186,7 @@ function countTwins(sf) {
 }
 
 const routeFail = (why) => {
-  console.error(`check-store-port: src/server/route-table.ts V1_ROUTES ${why}; the route count would read low. Declare it as an object literal with a string-literal storeReady or sqliteOnly, or update readRoutes.`);
+  console.error(`check-store-port: src/server/route-table.ts V1_ROUTES ${why}; the route count would read low. Declare it as an object literal whose storeReady or sqliteOnly, if any, is a string literal, or update readRoutes.`);
   process.exit(1);
 };
 
@@ -201,10 +200,7 @@ const rowLabel = (row, sf) => {
 
 const isOffLoop = (p) => ts.isPropertyAssignment(p) && ts.isIdentifier(p.name) && p.name.text === 'loop' && ts.isStringLiteralLike(p.initializer) && p.initializer.text === 'off';
 
-// defineRoute({...}) wraps each row to type its handler; the row is still its first argument.
-const unwrapDefineRoute = (el) => (ts.isCallExpression(el) && ts.isIdentifier(el.expression) && el.expression.text === 'defineRoute' && el.arguments.length === 1 ? el.arguments[0] : el);
-
-/** Reads the V1_ROUTES array literal: rows with neither a string-literal storeReady nor a non-empty string-literal sqliteOnly, the sorted `METHOD path` of the sqliteOnly rows,
+/** Reads the V1_ROUTES array literal: rows that need hippo.db (storeReady 'localFiles' or a non-empty string-literal sqliteOnly), the sorted `METHOD path` of the sqliteOnly rows,
  *  and the rows that do not declare `loop: 'off'` plus every route outside the table. */
 function readRoutes(sf) {
   let array;
@@ -218,11 +214,10 @@ function readRoutes(sf) {
   };
   visit(sf);
   if (!array) return routeFail('is not declared as an array literal');
-  let without = 0;
+  let needsHippoDb = 0;
   let onLoop = OFF_TABLE_ROUTES.length;
   const sqliteOnly = [];
-  for (const element of array.elements) {
-    const row = unwrapDefineRoute(element);
+  for (const row of array.elements) {
     const at = `row at line ${sf.getLineAndCharacterOfPosition(row.getStart(sf)).line + 1}`;
     if (!ts.isObjectLiteralExpression(row)) return routeFail(`has a spread or non-object element (${at})`);
     if (!row.properties.some(isOffLoop)) onLoop++;
@@ -234,9 +229,10 @@ function readRoutes(sf) {
     if (only) {
       if (!(ts.isPropertyAssignment(only) && ts.isStringLiteralLike(only.initializer) && only.initializer.text.trim() !== '')) return routeFail(`row ${label} has a sqliteOnly that is not a non-empty string literal`);
       sqliteOnly.push(label);
-    } else if (!store) without++;
+      needsHippoDb++;
+    } else if (store && store.initializer.text === 'localFiles') needsHippoDb++;
   }
-  return { without, sqliteOnly: sqliteOnly.sort(), onLoop };
+  return { needsHippoDb, sqliteOnly: sqliteOnly.sort(), onLoop };
 }
 
 /** True when the file names the reply carrier (`andThen`, `onStore` or `StoreReply`) as an identifier; comments and strings never match. */
@@ -334,7 +330,7 @@ function measure() {
     if (file.startsWith('src/store/') && !isDbDefinitionFile(file) && !touchesHippoDb(sf)) storeFilesWithoutSqlList.push(file);
     if (file === 'src/server/route-table.ts') {
       const routes = readRoutes(sf);
-      out.routesWithoutStore = routes.without;
+      out.routesNeedingHippoDb = routes.needsHippoDb;
       out.sqliteOnlyRoutes = routes.sqliteOnly.length;
       sqliteOnlyRoutesList = routes.sqliteOnly;
       out.routesOnLoop = routes.onLoop;

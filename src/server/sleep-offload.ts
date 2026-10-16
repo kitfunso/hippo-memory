@@ -2,9 +2,9 @@
 // stuck run can be stopped.
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { type Actor, type SleepOpts, type SleepResult, type ContextWith } from '../api/index.js';
+import { type Actor, type SleepOpts, type SleepResult, type StoreContext } from '../api/index.js';
 import type { ConsolidationResult } from '../consolidate/run.js';
-import { StoreBusyError } from '../store/port.js';
+import { requireGroup, StoreBusyError } from '../store/port.js';
 import { envSleepTimeoutMs } from '../util/env.js';
 import { HttpError } from '../util/http-util.js';
 
@@ -117,11 +117,11 @@ function inTurn<R>(job: SleepJob): Promise<R> {
 
 /** `sleep` for the HTTP route: same result and errors, run outside the serving process and stopped at the deadline
  * (10 minutes, or HIPPO_SLEEP_TIMEOUT_MS). */
-export function sleepInChild(ctx: ContextWith<'localFiles'>, opts: SleepOpts): Promise<SleepResult> {
+export function sleepInChild(ctx: StoreContext, opts: SleepOpts): Promise<SleepResult> {
   return inTurn<SleepResult>({
     kind: 'sleep',
     // The child reopens the folder the served store owns.
-    hippoRoot: ctx.store.localFiles.hippoRoot,
+    hippoRoot: requireGroup(ctx.store, 'localFiles').hippoRoot,
     tenantId: ctx.tenantId,
     actor: ctx.actor,
     opts,

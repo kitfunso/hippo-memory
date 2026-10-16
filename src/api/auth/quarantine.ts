@@ -4,7 +4,7 @@ import { ConflictError, ForbiddenError, NotFoundError } from '../../core/api-err
 import type { QuarantineRefusal } from '../../store/port.js';
 import type { QuarantineStatus } from '../../store/quarantine.js';
 import type { KeysetPosition } from '../../util/keyset.js';
-import type { ContextWith } from '../types.js';
+import type { StoreContext } from '../types.js';
 
 export interface QuarantineListItem {
   id: string;
@@ -21,7 +21,7 @@ const QUARANTINE_PREVIEW_CHARS = 200;
 
 /** A tenant's quarantined memories, newest first. Default `status` is 'pending' (the review queue). */
 export async function quarantineList(
-  ctx: ContextWith<'quarantine'>,
+  ctx: StoreContext,
   opts: { status?: QuarantineStatus | 'all'; limit?: number; after?: KeysetPosition } = {},
 ): Promise<QuarantineListItem[]> {
   const rows = await ctx.store.quarantine
@@ -45,7 +45,7 @@ function refusalError(id: string, refusal: QuarantineRefusal): Error {
 
 /** Release a quarantined memory to its original scope. Admin only; the
  * scope guard refuses a row moved since (mirrors restoreDormant). */
-export async function quarantineApprove(ctx: ContextWith<'quarantine'>, id: string): Promise<void> {
+export async function quarantineApprove(ctx: StoreContext, id: string): Promise<void> {
   if (ctx.actor.role !== 'admin') {
     throw new ForbiddenError('Only an admin key can approve a quarantined memory');
   }
@@ -58,7 +58,7 @@ export async function quarantineApprove(ctx: ContextWith<'quarantine'>, id: stri
 }
 
 /** Keep a quarantined memory hidden for good. Admin only; the raw row is untouched (append-only). */
-export async function quarantineReject(ctx: ContextWith<'quarantine'>, id: string): Promise<void> {
+export async function quarantineReject(ctx: StoreContext, id: string): Promise<void> {
   if (ctx.actor.role !== 'admin') {
     throw new ForbiddenError('Only an admin key can reject a quarantined memory');
   }

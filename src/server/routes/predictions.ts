@@ -21,7 +21,7 @@ import { isJsonString, isJsonNumber } from '../../util/json.js';
 // against VALID_CLOSURE_STATES.
 // DoS caps: claim MAX_SHORT_FIELD_LEN chars, closureNote 2048.
 export async function handleCreatePrediction(
-  { req, res, ctx, opts }: AuthedRouteRequest<'predictions'>
+  { req, res, ctx, opts }: AuthedRouteRequest
 ): Promise<void> {
   const body = await parseJsonBody(req, ctx);
   const claim = body['claim'];
@@ -81,7 +81,7 @@ function listFilter(classTag: string | undefined, status: string): PredictionFil
   return { classTag, closureState: status };
 }
 
-export async function handleListPredictions({ res, ctx, query }: AuthedRouteRequest<'predictions'>): Promise<void> {
+export async function handleListPredictions({ res, ctx, query }: AuthedRouteRequest): Promise<void> {
   const classTag = query.get('class') || undefined;
   const status = query.get('status') ?? 'all';
   const limit = parseListLimit(query.get('limit'));
@@ -94,7 +94,7 @@ export async function handleListPredictions({ res, ctx, query }: AuthedRouteRequ
 // Reference-class / planning-fallacy detector; registered BEFORE /v1/predictions/:id so dispatch order cannot matter
 // ('stats' is not a number, but routing
 // it first is safer).
-export async function handlePredictionStats({ res, ctx, query }: AuthedRouteRequest<'predictions'>): Promise<void> {
+export async function handlePredictionStats({ res, ctx, query }: AuthedRouteRequest): Promise<void> {
   const classTag = query.get('class');
   if (!classTag || classTag.length === 0) {
     throw new HttpError(400, 'class param is required');
@@ -107,7 +107,7 @@ export async function handlePredictionStats({ res, ctx, query }: AuthedRouteRequ
 }
 
 export async function handleGetPrediction(
-  { res, ctx }: AuthedRouteRequest<'predictions'>,
+  { res, ctx }: AuthedRouteRequest,
   predictionByIdMatch: RegExpMatchArray,
 ): Promise<void> {
   const id = parseInt(predictionByIdMatch[1], 10);
@@ -119,7 +119,7 @@ export async function handleGetPrediction(
 }
 
 export async function handleClosePrediction(
-  { req, res, ctx }: AuthedRouteRequest<'predictions'>,
+  { req, res, ctx }: AuthedRouteRequest,
   predictionCloseMatch: RegExpMatchArray,
 ): Promise<void> {
   const id = parseInt(predictionCloseMatch[1], 10);

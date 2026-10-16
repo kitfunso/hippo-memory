@@ -20,7 +20,7 @@ import { type JsonValue, isJsonString, isJsonBoolean } from '../../util/json.js'
 const VALID_KINDS: ReadonlySet<MemoryKind> = new Set(MEMORY_KINDS);
 
 // POST /v1/memories
-export async function handleCreateMemory({ req, res, ctx }: AuthedRouteRequest<'entryWrites'>): Promise<void> {
+export async function handleCreateMemory({ req, res, ctx }: AuthedRouteRequest): Promise<void> {
   const body = await parseJsonBody(req, ctx);
   const content = getString(body, 'content');
   if (!content) {
@@ -49,7 +49,7 @@ export async function handleCreateMemory({ req, res, ctx }: AuthedRouteRequest<'
 }
 
 // GET /v1/graph?entity=NAME&limit=N — read-only entity/relation graph (tenant-scoped)
-export async function handleGetGraph({ res, ctx, query }: AuthedRouteRequest<'graphReads'>): Promise<void> {
+export async function handleGetGraph({ res, ctx, query }: AuthedRouteRequest): Promise<void> {
   const entity = graphEntityOf(query.get('entity'));
   const limit = parseListLimit(query.get('limit'));
   const rows = await graphRows(ctx, { entity, limit });
@@ -59,7 +59,7 @@ export async function handleGetGraph({ res, ctx, query }: AuthedRouteRequest<'gr
 
 // /v1/memories/:id/* and DELETE /v1/memories/:id
 export async function handleArchiveMemory(
-  { req, res, ctx }: AuthedRouteRequest<'entryWrites'>,
+  { req, res, ctx }: AuthedRouteRequest,
   archiveMatch: Record<string, string>,
 ): Promise<void> {
   validateIdSegment(archiveMatch.id!, 'memory id');
@@ -74,7 +74,7 @@ export async function handleArchiveMemory(
 }
 
 export async function handleSupersedeMemory(
-  { req, res, ctx }: AuthedRouteRequest<'entryWrites'>,
+  { req, res, ctx }: AuthedRouteRequest,
   supersedeMatch: Record<string, string>,
 ): Promise<void> {
   validateIdSegment(supersedeMatch.id!, 'memory id');
@@ -89,7 +89,7 @@ export async function handleSupersedeMemory(
 }
 
 export async function handlePromoteMemory(
-  { res, ctx }: AuthedRouteRequest<'localFiles'>,
+  { res, ctx }: AuthedRouteRequest,
   promoteMatch: Record<string, string>,
 ): Promise<void> {
   validateIdSegment(promoteMatch.id!, 'memory id');
@@ -99,7 +99,7 @@ export async function handlePromoteMemory(
 }
 
 export async function handleForgetMemory(
-  { res, ctx }: AuthedRouteRequest<'entryWrites'>,
+  { res, ctx }: AuthedRouteRequest,
   idMatch: Record<string, string>,
 ): Promise<void> {
   validateIdSegment(idMatch.id!, 'memory id');
@@ -112,7 +112,7 @@ export async function handleForgetMemory(
 // path (api.outcomeForLastRecall)
 // and returns {applied, ids}, so callers can tell "no recent recall" from "all ids skipped". Each applied id writes one
 // audit_log row (op='outcome').
-export async function handleApplyOutcome({ req, res, ctx }: AuthedRouteRequest<'entryWrites'>): Promise<void> {
+export async function handleApplyOutcome({ req, res, ctx }: AuthedRouteRequest): Promise<void> {
   const body = await parseJsonBody(req, ctx);
   const good = body['good'];
   if (!isJsonBoolean(good)) {
@@ -149,7 +149,7 @@ export async function handleApplyOutcome({ req, res, ctx }: AuthedRouteRequest<'
 // POST /v1/sleep: host-wide consolidation (consolidate, dedup, audit, share, ambient); api.sleep spans the WHOLE
 // hippoRoot, cross-tenant by design, so the
 // row's host-admin-local gate is the trust boundary. Body {dry_run?, no_share?}; returns SleepResult JSON.
-export async function handleSleep({ req, res, ctx }: AuthedRouteRequest<'localFiles'>): Promise<void> {
+export async function handleSleep({ req, res, ctx }: AuthedRouteRequest): Promise<void> {
   const body = await parseJsonBody(req, ctx);
   const dryRunRaw = body['dry_run'];
   if (dryRunRaw !== undefined && !isJsonBoolean(dryRunRaw)) {

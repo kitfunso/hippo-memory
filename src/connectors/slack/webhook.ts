@@ -7,9 +7,9 @@ import { handleMessageDeleted } from './deletion.js';
 import { parkInDlq } from '../dlq.js';
 import { slackDlq, type DlqBucket } from './dlq.js';
 import { resolveTenantForSlackTeam } from './tenant-routing.js';
+import type { StoreContext } from '../../api/index.js';
+import type { HippoStore } from '../../store/index.js';
 import { resolveTenantId } from '../../store/tenant.js';
-import type { ConnectorContext } from '../store.js';
-import type { ConnectorStore } from '../store.js';
 import {
   HttpError,
   JSON_HEADERS,
@@ -24,7 +24,7 @@ import { type JsonValue, isJsonObject } from '../../util/json.js';
 /** Slack Events API webhook: HMAC over the raw body with SLACK_SIGNING_SECRET, no Bearer (its route row declares
  * webhook-signature); malformed payloads go to slack_dlq, ACK 200. 404 (not 503) when the secret is unset, so a probe
  * cannot tell a gated-off route from a missing one. */
-export async function handleSlackEventsWebhook(request: WebhookRequest, store: ConnectorStore): Promise<void> {
+export async function handleSlackEventsWebhook(request: WebhookRequest, store: HippoStore): Promise<void> {
   const { req, res, opts } = request;
   // Secret and headers before the body, so a caller with neither cannot make the server buffer one.
   const secret = envSlackSigningSecret();
@@ -68,7 +68,7 @@ export async function handleSlackEventsWebhook(request: WebhookRequest, store: C
 /** One signed request and where to answer it; every stage below parks into the DLQ through it. */
 interface SignedSlackRequest {
   hippoRoot: string;
-  store: ConnectorStore;
+  store: HippoStore;
   res: ServerResponse;
   rawBody: string;
   signature: string;
@@ -142,7 +142,7 @@ async function routeSignedSlackPayload(d: SignedSlackRequest): Promise<void> {
     // Non-envelope payload: use env tenant for the DLQ row's bookkeeping.
     resolvedTenant = resolveTenantId({});
   }
-  const ctx: ConnectorContext = {
+  const ctx: StoreContext = {
     hippoRoot: d.hippoRoot,
     tenantId: resolvedTenant,
     actor: { subject: 'connector:slack', role: 'admin' },
@@ -175,7 +175,7 @@ async function parkUnparseable(d: SignedSlackRequest, teamIdFromRaw: string | nu
 
 async function dispatchSlackEvent(
   d: SignedSlackRequest,
-  ctx: ConnectorContext,
+  ctx: StoreContext,
   body: JsonValue & SlackEventEnvelope,
 ): Promise<void> {
   const { res } = d;
