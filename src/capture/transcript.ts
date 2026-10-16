@@ -4,6 +4,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { isObjectLike, isStringValue, readSessionEnd } from '../core/capture-contract.js';
 import { copilotTurn } from './copilot-transcript.js';
+import { errorCode, errorFields, errorMessage, log } from '../util/log.js';
 
 const RECENT_USER_TURNS = 20;
 const RECENT_ASSISTANT_TURNS = 10;
@@ -228,20 +229,41 @@ export function resolveLastSessionTranscript(
   if (!fs.existsSync(projectsDir)) return null;
 
   let newest: { path: string; mtime: number } | null = null;
+  let entries: string[];
   try {
-    for (const entry of fs.readdirSync(projectsDir)) {
-      const subDir = path.join(projectsDir, entry);
-      const stat = fs.statSync(subDir);
-      if (!stat.isDirectory()) continue;
-      for (const file of fs.readdirSync(subDir)) {
-        if (!file.endsWith('.jsonl')) continue;
-        const full = path.join(subDir, file);
-        const m = fs.statSync(full).mtimeMs;
-        if (!newest || m > newest.mtime) newest = { path: full, mtime: m };
-      }
-    }
-  } catch {
+    entries = fs.readdirSync(projectsDir);
+  } catch (err) {
+    log.debug(`transcript scan: cannot list ${projectsDir}: ${errorMessage(err)}`, errorFields(err));
     return null; // an unlistable projects dir means no transcript to find; the caller prints that
   }
+  for (const entry of entries) {
+    const subDir = path.join(projectsDir, entry);
+    for (const file of listJsonl(subDir)) {
+      const full = path.join(subDir, file);
+      const m = statMtime(full);
+      if (m !== null && (!newest || m > newest.mtime)) newest = { path: full, mtime: m };
+    }
+  }
   return newest?.path ?? null;
+}
+
+/** mtime of `file`, or null when it vanished after the listing; any other stat error is real. */
+function statMtime(file: string): number | null {
+  try {
+    return fs.statSync(file).mtimeMs;
+  } catch (err) {
+    if (errorCode(err) === 'ENOENT') return null;
+    throw err;
+  }
+}
+
+/** The .jsonl names in `dir`; empty when it is not a directory or vanished after the listing. */
+function listJsonl(dir: string): string[] {
+  try {
+    if (!fs.statSync(dir).isDirectory()) return [];
+    return fs.readdirSync(dir).filter((f) => f.endsWith('.jsonl'));
+  } catch (err) {
+    if (errorCode(err) === 'ENOENT') return [];
+    throw err;
+  }
 }

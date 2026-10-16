@@ -247,7 +247,8 @@ describe('hippo auth create defaults', () => {
     expect(JSON.parse(forever.stdout) as Minted).toMatchObject({ role: 'admin', expiresAt: null });
     expect(forever.stderr).not.toContain('unknown flag');
     const soon = hippoRun(['auth', 'create', '--global', '--ttl-days', 'soon'], { env, cwd: home });
-    expect([soon.status, soon.stdout, soon.stderr.trim()]).toEqual([1, '', '--ttl-days requires a numeric value.']);
+    // The exit now waits for stderr to drain, so Node's one-time SQLite warning can follow the message.
+    expect([soon.status, soon.stdout, soon.stderr.trim().split('\n')[0]]).toEqual([1, '', '--ttl-days requires a numeric value.']);
   });
 });
 

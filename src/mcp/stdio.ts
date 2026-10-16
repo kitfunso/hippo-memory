@@ -218,5 +218,16 @@ export function startStdioLoop(host: McpHost): void {
 
   process.stdin.on('end', () => { void exitWhenDrained(); });
 
+  // A client that hangs up mid-reply makes the next write fail; an unhandled stream error would crash the server.
+  process.stdout.on('error', (err: NodeJS.ErrnoException) => {
+    if (err.code === 'EPIPE' || err.code === 'ERR_STREAM_DESTROYED') {
+      log.debug('mcp: the client closed stdout; exiting', errorFields(err));
+      exitAfterFlush(0);
+      return;
+    }
+    log.error(`mcp: stdout failed: ${errorMessage(err)}`, errorFields(err));
+    exitAfterFlush(1);
+  });
+
   installCrashHandlers('mcp');
 }

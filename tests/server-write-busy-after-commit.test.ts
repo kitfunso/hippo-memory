@@ -138,6 +138,26 @@ describe('routed writes under a busy store', () => {
     expect(forgottenTotal(home)).toBe(before);
   });
 
+  it('a stats increment a busy store refused is added to the next update for that root', async () => {
+    resetLogOnce();
+    // An earlier test left its refused increment pending; land it so this one counts only its own.
+    updateStatsUnlessBusy(home, {}, 'drain');
+    const before = forgottenTotal(home);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    try {
+      await withLockHeld(home, 60_000, async () => {
+        await runWithRequestStores(() => updateStatsUnlessBusy(home, { forgotten: 2 }, 'removed m2'), { busyWaitMs: 50 });
+      });
+    } finally {
+      stderr.mockRestore();
+    }
+    expect(forgottenTotal(home)).toBe(before);
+    updateStatsUnlessBusy(home, { forgotten: 1 }, 'removed m3');
+    expect(forgottenTotal(home)).toBe(before + 3);
+    updateStatsUnlessBusy(home, { forgotten: 1 }, 'removed m4');
+    expect(forgottenTotal(home)).toBe(before + 4);
+  });
+
   it('promote: a busy audit write rolls back the global copy, so a failed promote leaves nothing to duplicate', async () => {
     const { id } = await client.remember(url, undefined, { content: 'promote-audit-busy-canary' });
     const globalDb = openHippoDb(globalHome);

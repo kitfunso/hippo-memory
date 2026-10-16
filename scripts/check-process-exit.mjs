@@ -11,7 +11,6 @@ const OTHER_PR = 'owned by an open pull request';
 
 /** Files under src/ that may call process.exit, each with how many calls and why. A count may fall, never rise. */
 export const ALLOWED = {
-  'cli.ts': { count: 2, reason: 'the entry: one exit for a thrown CliExit, one for any other error' },
   'util/crash-handlers.ts': { count: 1, reason: 'ends the process after a crash or a signal, where no command is left to unwind' },
   'server/sleep-child.ts': { count: 1, reason: 'ends the forked sleep child once its reply is sent' },
   'cli/session-hooks.ts': { count: 3, reason: 'child-process event callbacks of the Codex wrapper, where a throw has no caller' },

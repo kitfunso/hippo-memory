@@ -199,6 +199,22 @@ describe('the progress cursor', () => {
     expect(loadTurnPosition(ID, transcript)).toBeNull();
   });
 
+  it('logs a cursor it cannot read, but not a torn one', () => {
+    const transcript = path.join(fake.home, 'transcripts', `${ID}.jsonl`);
+    const write = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    try {
+      fs.writeFileSync(file('.cursor.json'), '{"source":');
+      expect(loadTurnPosition(ID, transcript)).toBeNull();
+      expect(write).not.toHaveBeenCalled();
+      fs.rmSync(file('.cursor.json'));
+      fs.mkdirSync(file('.cursor.json'));
+      expect(loadTurnPosition(ID, transcript)).toBeNull();
+      expect(write.mock.calls.map((c) => String(c[0])).join('')).toMatch(/warn: session worker: cannot read the cursor .*errorClass=Error/);
+    } finally {
+      write.mockRestore();
+    }
+  });
+
   it('logs a cursor it cannot save and goes on, so the digest and handoff still run', () => {
     const transcript = path.join(fake.home, 'transcripts', `${ID}.jsonl`);
     // A folder in the cursor's place makes the rename fail, as Windows does with EPERM while another process has the file open.

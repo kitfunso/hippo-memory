@@ -11,6 +11,7 @@ import { getHippoRoot } from './core/project-identity.js';
 import { resolveTenantId } from './store/tenant.js';
 import { printGitHubBackfillUsage } from './cli/github.js';
 import { printError } from './cli/output.js';
+import { exitAfterFlush } from './util/crash-handlers.js';
 import { errorFields, errorMessage, isLevelEnabled, log } from './util/log.js';
 import { STORE_BUSY_MESSAGE } from './store/port.js';
 import { isStoreBusy } from './api/busy.js';
@@ -263,14 +264,14 @@ export async function runCli(argv: string[] = process.argv): Promise<void> {
     await main(command, args, flags, getHippoRoot(process.cwd()));
   } catch (err) {
     // The verb printed its own message before it threw, so this branch adds no line.
-    if (err instanceof CliExit) process.exit(err.code);
+    if (err instanceof CliExit) return exitAfterFlush(err.code);
     printError('Error:', isStoreBusy(err) ? STORE_BUSY_MESSAGE : err instanceof Error ? err.message : err);
     // The message alone rarely says where it came from; debug is the level that asks for the rest.
     if (isLevelEnabled('debug')) {
       const { errorClass, stack } = errorFields(err);
       printError(`  thrown as ${errorClass}${stack ? `\n${stack}` : ''}`);
     }
-    process.exit(1);
+    exitAfterFlush(1);
   }
 }
 

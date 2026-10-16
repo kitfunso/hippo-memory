@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { spawnSync } from 'child_process';
 import { summariseTranscript, resolveLastSessionTranscript } from '../src/capture/transcript.js';
+import { trySymlink } from './_helpers/symlink.js';
 import { hippoRun } from './_helpers/spawn-hippo.js';
 
 /**
@@ -220,6 +221,18 @@ describe('resolveLastSessionTranscript', () => {
     fs.utimesSync(older, past, past);
 
     expect(resolveLastSessionTranscript(undefined, undefined, { mayScan: true })).toBe(newer);
+  });
+
+  it('skips an entry that vanished after the listing and still finds the newest transcript', (ctx) => {
+    const projects = path.join(tmp.dir, '.claude', 'projects');
+    const proj = path.join(projects, 'proj-a');
+    fs.mkdirSync(proj, { recursive: true });
+    const real = path.join(proj, 'real.jsonl');
+    fs.writeFileSync(real, '{}');
+    // A dangling link lists fine and then fails stat with ENOENT, as a file deleted between the two calls does.
+    if (!trySymlink(path.join(tmp.dir, 'gone.jsonl'), path.join(proj, 'gone.jsonl'))
+      || !trySymlink(path.join(tmp.dir, 'gone-dir'), path.join(projects, 'gone-dir'), 'dir')) return ctx.skip();
+    expect(resolveLastSessionTranscript(undefined, undefined, { mayScan: true })).toBe(real);
   });
 
   it('returns null when no transcript can be located', () => {
