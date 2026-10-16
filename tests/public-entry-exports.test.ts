@@ -139,7 +139,7 @@ describe('published runtime exports', () => {
       WM_MAX_ENTRIES
       addCardComment appendAuditEvent appendSessionEvent applyOutcome autoShare
       blockCard buildSyntheticCorpus
-      calculateStrength captureError claimCard clearActiveTaskSnapshot closeHippoDb closeTaskSnapshotsForSession completeCard computeAmbientState computeSalience computeSchemaFit computeTemporalRange confidenceFacets consolidate cosineSimilarity createCard createMemory
+      calculateStrength captureError claimCard clearActiveTaskSnapshot closeTaskSnapshotsForSession completeCard computeAmbientState computeSalience computeSchemaFit computeTemporalRange confidenceFacets consolidate cosineSimilarity createCard createMemory
       deduplicateLesson deleteEntry detectRegressions detectTemporalDirection
       embedAll embedMemory estimateTokens explainMatch extractLessons
       fetchGitLog formatAmbientVector formatResult
@@ -148,7 +148,6 @@ describe('published runtime exports', () => {
       importChatGPT importClaude importCursor importEntries importGenericFile importMarkdown importVault initGlobal initStore isCardStatus isEmbeddingAvailable isHandoffOutcome
       listAuditEventsAfter listCards listMemoryConflicts listPeers listSessionEvents loadActiveTaskSnapshot loadAllEntries loadCard loadCardComments loadCardDeps loadCardRuns loadEmbeddingIndex loadFreshActiveTaskSnapshot loadHandoffById loadIndex loadLatestHandoff loadLatestHandoffForCard loadRecallEntries loadSearchEntries loadSessionDecayContext
       markRetrieved multihopSearch
-      openHippoDb openHippoDbReadOnly
       partitionLessons physicsSearch promoteToGlobal
       queryAuditEvents
       readEntry rebuildIndex reclaimExpiredCards renderAmbientSummary replaceDetectedConflicts resolveConfidence resolveConflict resultToBaseline reviewCard runFeatureEval runWatched runWatchedLine

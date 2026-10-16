@@ -220,4 +220,3 @@ export {
   type QueryAuditOpts,
   type ListAuditAfterOpts,
 } from './store/audit.js';
-export * from './entry/sqlite-handles.js';

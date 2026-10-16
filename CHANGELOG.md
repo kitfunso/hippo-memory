@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Removed
+
+- **BREAKING: the package root no longer exports SQLite handles.** `openHippoDb`, `openHippoDbReadOnly`, `closeHippoDb` and `DatabaseSyncLike` are gone from `hippo-memory`; use the root's store functions or `sqliteStore` from `hippo-memory/store-kit`. See `docs/UPGRADING-3.0.md`.
+
 ## 2.1.0 - 2026-10-16
 
 ### Added
