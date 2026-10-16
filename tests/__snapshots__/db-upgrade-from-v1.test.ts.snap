@@ -624,6 +624,21 @@ exports[`upgrading a populated v1 store to the latest schema > ends with the pin
       "type": "index",
     },
     {
+      "name": "sqlite_autoindex_memory_vector_index_meta_1",
+      "sql": null,
+      "type": "index",
+    },
+    {
+      "name": "sqlite_autoindex_memory_vector_nodes_1",
+      "sql": null,
+      "type": "index",
+    },
+    {
+      "name": "sqlite_autoindex_memory_vector_pending_1",
+      "sql": null,
+      "type": "index",
+    },
+    {
       "name": "sqlite_autoindex_memory_vectors_1",
       "sql": null,
       "type": "index",
@@ -1149,6 +1164,26 @@ exports[`upgrading a populated v1 store to the latest schema > ends with the pin
       decided_by     TEXT,
       PRIMARY KEY (tenant_id, memory_id)
     ) WITHOUT ROWID",
+      "type": "table",
+    },
+    {
+      "name": "memory_vector_index_meta",
+      "sql": "CREATE TABLE memory_vector_index_meta (key TEXT PRIMARY KEY, value)",
+      "type": "table",
+    },
+    {
+      "name": "memory_vector_nodes",
+      "sql": "CREATE TABLE memory_vector_nodes (
+          node      INTEGER PRIMARY KEY,
+          memory_id TEXT NOT NULL UNIQUE,
+          level     INTEGER NOT NULL,
+          nbrs      BLOB NOT NULL
+        )",
+      "type": "table",
+    },
+    {
+      "name": "memory_vector_pending",
+      "sql": "CREATE TABLE memory_vector_pending (memory_id TEXT PRIMARY KEY)",
       "type": "table",
     },
     {
@@ -1815,10 +1850,25 @@ exports[`upgrading a populated v1 store to the latest schema > ends with the pin
       "type": "trigger",
     },
     {
+      "name": "trg_memory_vector_nodes_delete",
+      "sql": "CREATE TRIGGER trg_memory_vector_nodes_delete AFTER DELETE ON memory_vectors BEGIN
+          DELETE FROM memory_vector_nodes WHERE memory_id = old.memory_id;
+          DELETE FROM memory_vector_pending WHERE memory_id = old.memory_id;
+        END",
+      "type": "trigger",
+    },
+    {
       "name": "trg_memory_vectors_delete",
       "sql": "CREATE TRIGGER trg_memory_vectors_delete AFTER DELETE ON memories BEGIN
     DELETE FROM memory_vectors WHERE memory_id = old.id;
   END",
+      "type": "trigger",
+    },
+    {
+      "name": "trg_memory_vectors_pending",
+      "sql": "CREATE TRIGGER trg_memory_vectors_pending AFTER INSERT ON memory_vectors BEGIN
+          INSERT OR IGNORE INTO memory_vector_pending (memory_id) VALUES (new.memory_id);
+        END",
       "type": "trigger",
     },
     {
@@ -2100,6 +2150,6 @@ exports[`upgrading a populated v1 store to the latest schema > ends with the pin
       "type": "trigger",
     },
   ],
-  "userVersion": 58,
+  "userVersion": 59,
 }
 `;

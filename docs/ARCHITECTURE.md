@@ -19,6 +19,10 @@ A file belongs in `src/store` only if it runs SQL on hippo.db, holds or opens a 
 
 A production export that no other `src/` file names but a test does is a seam added for the test. `scripts/check-test-only-exports.mjs` finds them and fails CI on any not listed in `.test-only-exports-baseline.json`; exports in a package entry file (derived from `package.json` `exports` and `bin`) are exempt. The list can only shrink: move the helper to `tests/_helpers` or give it a production caller, then run the script with `--update` to lock the lower count in.
 
+## Vector index
+
+Nearest-vector search scans every stored vector until a store holds 20,000 of them (`VECTOR_GRAPH_MIN_ROWS`). At that size `hippo embed` builds an HNSW graph (`src/util/vector-graph.ts`, M 24, efConstruction 300) into the v59 tables `memory_vector_nodes` and `memory_vector_index_meta`. A trigger queues each new vector in `memory_vector_pending`, and each sleep merges up to 5,000 queued rows into the graph, then checks 20 sampled queries against an exact top 10; recall under 0.95 rebuilds the graph. A `generation` meta row moves on every graph write, so concurrent merges retry instead of losing rows and each process reloads its cached graph. `topVectorMatches` walks the graph only when the graph has 20,000 nodes and a 200-node sample says the caller's filter admits at least 10% of them and at least 20,000 rows; the filter runs inside the walk as a point query, and queued rows are scanned exactly and scored beside the walk's hits. A walk that scores 20,000 vectors without finishing falls back to the exact scan. `HIPPO_VECTOR_INDEX=exact` turns the graph off for every query. Benchmark: `MODE=sqlite node benchmarks/vector-index/bench.mjs`.
+
 ## src/core/ablation.ts
 
 EVAL-ONLY lifecycle ablation switches. These env flags exist for controlled experiments on hippo's memory-lifecycle mechanisms (the "lifecycle, ablated" paper protocol): each switch neutralizes exactly ONE mechanism so its causal contribution can be measured in isolation.

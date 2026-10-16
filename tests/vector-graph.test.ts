@@ -7,7 +7,7 @@ import {
   restoreGraph,
   searchGraph,
   type VectorGraph,
-} from '../src/search/vector-graph.js';
+} from '../src/util/vector-graph.js';
 
 const DIM = 64;
 const N = 3000;

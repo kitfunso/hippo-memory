@@ -26,6 +26,7 @@ import {
   type VectorWrites,
 } from '../store/port.js';
 import {
+  buildVectorGraphIfLarge,
   indexedModel,
   pruneStoredVectorsListPending,
   replacesIndex,
@@ -396,6 +397,7 @@ async function rebuildIndexForProvider(hippoRoot: string, provider: EmbeddingPro
   const ids = loadAllEntryIds(hippoRoot);
   const rebuiltIndex = await rebuildEmbeddingIndex(hippoRoot, ids, provider);
   saveEmbeddingIndex(hippoRoot, rebuiltIndex, embeddingIndexIdentity(identity));
+  buildVectorGraphIfLarge(hippoRoot);
   saveStoredEmbeddingModel(hippoRoot, identity);
   resetPhysicsFromIndex(hippoRoot, ids, rebuiltIndex);
   return Object.keys(rebuiltIndex).length;

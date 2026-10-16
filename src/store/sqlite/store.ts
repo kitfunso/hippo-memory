@@ -52,7 +52,7 @@ import { isGlobalStoreRoot, isInitialized, resolveGlobalRootDir } from '../../co
 import type { SessionAndAdminGroups } from '../port-groups.js';
 import { loadRecallEntries } from '../search-rows.js';
 import { type ContinuityKey, listSessionEvents, loadActiveTaskSnapshot } from '../sessions.js';
-import { entriesWithoutVectorAt, loadStoredVectorViews, writeVectorsAt } from '../vector-index.js';
+import { entriesWithoutVectorAt, loadStoredVectorViews, refreshVectorGraph, writeVectorsAt } from '../vector-index.js';
 
 /** `ctx` with its store filled (the one it carries, else hippo.db under its root) and its groups proven,
  * so a public entry given a store without them still answers 501. */
@@ -96,6 +96,7 @@ export function sqliteSyncStore(
     keyGrants: sqliteKeyGrants(hippoRoot),
     vectorViews: sqliteVectorViews(hippoRoot),
     vectorWrites: sqliteVectorWrites(hippoRoot),
+    vectorIndex: { refresh: (cap) => refreshVectorGraph(hippoRoot, cap) },
     entryWrites: sqliteEntryWrites(hippoRoot),
     contextReads: sqliteContextReads(hippoRoot),
     predictions: sqlitePredictions(hippoRoot),
@@ -260,6 +261,7 @@ export function sqliteStore(hippoRoot: string): HippoStore & StoreGroups {
     connectorEvents: servedConnectorEvents(sync.connectorEvents),
     objects: servedObjects(sqliteObjects(hippoRoot)),
     readiness: { ping: async () => sync.readiness.ping() },
+    vectorIndex: { refresh: async (cap) => sync.vectorIndex.refresh(cap) },
     lastRecall: servedLastRecall(sync.lastRecall),
     auditMaintenance: servedAuditMaintenance(sync.auditMaintenance),
     lessonWrites: servedLessonWrites(sync.lessonWrites),

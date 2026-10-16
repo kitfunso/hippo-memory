@@ -74,6 +74,8 @@ export function envAutodebiasOff(): boolean { return raw('HIPPO_AUTODEBIAS') ===
 export function envAnchoringOff(): boolean { return raw('HIPPO_ANCHORING') === 'off'; }
 export function envAvailabilityOff(): boolean { return raw('HIPPO_AVAILABILITY') === 'off'; }
 export function envDagRebuildCap(): number | undefined { return positiveInt('HIPPO_DAG_REBUILD_CAP'); }
+/** HIPPO_VECTOR_INDEX=exact pins nearest-vector search to the full scan, for evals and tests. */
+export function envVectorIndexExact(): boolean { return raw('HIPPO_VECTOR_INDEX') === 'exact'; }
 
 // Paths. HIPPO_HOME and XDG_DATA_HOME come back trimmed, possibly empty.
 export function envHippoHome(): string | undefined { return raw('HIPPO_HOME')?.trim(); }

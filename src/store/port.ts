@@ -8,6 +8,7 @@ import type { AppendAuditOpts, AuditEvent, AuditPrune, ListAuditAfterOpts, Query
 import type { QualityRepairResult } from './quality-repair.js';
 import type { StoreWith } from './narrow.js';
 import type { LocalFiles } from './port/local-files.js';
+import type { VectorIndex } from './port/vector-index.js';
 import { StoreNotPortedError } from '../util/sqlite-blocked.js';
 import type { EmbeddingIndexState } from './vector-index.js';
 import type { Entity, Relation } from './graph-rows.js';
@@ -636,6 +637,7 @@ export interface VectorViews {
 }
 
 export type { AgentImport, Consolidation, ContainerTx, ImportTarget, LocalFiles } from './port/local-files.js';
+export type { VectorIndex, VectorIndexRefresh } from './port/vector-index.js';
 
 /** The reads and writes behind the memory-quality audit, its repair and audit-log retention. */
 export interface AuditMaintenance {
@@ -712,6 +714,8 @@ export interface StoreGroups extends SessionAndAdminGroups {
   /** Unset on a store that keeps no last recall, where outcomeForLastRecall and a traced outcome answer 501 and context
    * writes no last recall. */
   readonly lastRecall: LastRecall;
+  /** Unset on a store that keeps no vector index of its own, where sleep skips the index phase. */
+  readonly vectorIndex: VectorIndex;
 }
 
 export type StoreGroup = 'base' | keyof StoreGroups;

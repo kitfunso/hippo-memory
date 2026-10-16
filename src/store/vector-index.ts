@@ -8,7 +8,14 @@ import type { PhysicsParticle } from '../core/physics.js';
 import { loadPhysicsState, resetAllPhysicsState, savePhysicsState } from '../db/physics-state.js';
 import { initializeParticle } from '../core/physics.js';
 import { float32ToBuffer } from '../util/vector-codec.js';
-import type { VectorBackfillQuery, VectorRowWrite, VectorWrite, VectorWriteResult } from './port.js';
+import type {
+  VectorBackfillQuery,
+  VectorIndexRefresh,
+  VectorRowWrite,
+  VectorWrite,
+  VectorWriteResult,
+} from './port.js';
+import { buildGraphIfLarge, refreshGraph } from '../db/vector-graph-rows.js';
 import {
   EMBEDDING_MODEL_META_KEY,
   deleteOrphanVectors,
@@ -106,6 +113,16 @@ export function saveEmbeddingIndex(hippoRoot: string, index: Record<string, numb
   onHandle(hippoRoot, (db) => {
     replaceAllVectors(db, index, model ?? getMeta(db, EMBEDDING_MODEL_META_KEY, ''));
   });
+}
+
+/** Builds the nearest-vector graph under `hippoRoot` when the store holds 20,000 vectors or more; returns its size. */
+export function buildVectorGraphIfLarge(hippoRoot: string): number {
+  return onHandle(hippoRoot, (db) => buildGraphIfLarge(db));
+}
+
+/** Sleep's vector index phase: a first build on a large store, else a merge of up to `cap` queued vectors. */
+export function refreshVectorGraph(hippoRoot: string, cap: number): VectorIndexRefresh {
+  return onHandle(hippoRoot, (db) => refreshGraph(db, cap));
 }
 
 /** Inserts or replaces `rows` under `model`, each row its own commit so a failure keeps the rows before it; returns how

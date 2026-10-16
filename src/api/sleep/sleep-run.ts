@@ -13,7 +13,7 @@ import { objectsOf } from '../objects/objects.js';
 import type { Consolidation, Objects } from '../../store/port.js';
 import { removeAuditErrors } from '../auth/audit.js';
 import type { SleepOpts, SleepResult } from './sleep.js';
-import { errorMessage } from '../../util/log.js';
+import { errorFields, errorMessage, log } from '../../util/log.js';
 
 /** Test-only seam: `runSleep` overrides force a phase to throw into emitSleepAudit's `partial: true` row; production
  * never sets them. */
@@ -127,7 +127,27 @@ async function runSleepPhases(
   counts.ambient = summarizeAmbient(ctx, phases, result, audited.remaining);
 
   await drainGraphQueue(ctx, phases, snapshot, result);
+  await refreshVectorIndex(ctx, result);
   return result;
+}
+
+/** Queued vectors one sleep merges into the vector graph; the rest wait for the next sleep and stay exact-scanned. */
+const VECTOR_MERGE_CAP = 5_000;
+
+// Phase 7: fold vectors written since the last sleep into the vector graph. SleepResult has no open counter, so the
+// totals go to the log; a failure is a detail line, since search scans whatever the graph lacks.
+async function refreshVectorIndex(ctx: SleepContext, result: SleepResult): Promise<void> {
+  const index = ctx.store.vectorIndex;
+  if (!index) return;
+  try {
+    const done = await index.refresh(VECTOR_MERGE_CAP);
+    if (done.built > 0 || done.merged > 0) {
+      log.info(`vector index: built ${done.built} nodes, merged ${done.merged} queued vectors`);
+    }
+  } catch (err) {
+    log.warn(`vector index refresh failed: ${errorMessage(err)}`, errorFields(err));
+    result.details = [...(result.details ?? []), `vector index: refresh failed (skipped): ${errorMessage(err)}`];
+  }
 }
 
 // Taken before any memory-deleting phase: queue rows cascade-delete with their mirror, so a later read would miss
