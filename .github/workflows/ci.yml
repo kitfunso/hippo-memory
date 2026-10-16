@@ -293,40 +293,9 @@ jobs:
         run: |
           "TEMP=$env:RUNNER_TEMP" >> $env:GITHUB_ENV
           "TMP=$env:RUNNER_TEMP" >> $env:GITHUB_ENV
-      # DIAGNOSTIC, removed before merge: top CPU processes, node count, disk queue and free memory every 15 s.
-      - name: CPU sampler
-        if: runner.os == 'Windows'
-        run: |
-          $script = @'
-          $out = Join-Path $env:RUNNER_TEMP 'cpu-samples.log'
-          "defender realtime: $((Get-MpComputerStatus).RealTimeProtectionEnabled) boot: $((Get-CimInstance Win32_OperatingSystem).LastBootUpTime.ToString('HH:mm:ss'))" | Add-Content $out
-          $prev = @{}
-          while ($true) {
-            $rows = foreach ($p in Get-CimInstance Win32_Process) {
-              $k = "$($p.ProcessId)"
-              $now = @(($p.ReadTransferCount + $p.WriteTransferCount), ($p.ReadOperationCount + $p.WriteOperationCount + $p.OtherOperationCount), (($p.KernelModeTime + $p.UserModeTime) / 1e7))
-              $o = $prev[$k]; $prev[$k] = $now
-              if ($o) { [pscustomobject]@{ N = $p.Name; Id = $p.ProcessId; MB = [math]::Round(($now[0] - $o[0]) / 1MB, 1); Ops = $now[1] - $o[1]; C = [math]::Round($now[2] - $o[2], 1) } }
-            }
-            $io = ($rows | Sort-Object Ops -Descending | Select-Object -First 6 | ForEach-Object { "$($_.N)#$($_.Id)=$($_.Ops)/$($_.MB)MB" }) -join ' '
-            $cpu = ($rows | Sort-Object C -Descending | Select-Object -First 4 | ForEach-Object { "$($_.N)#$($_.Id)=$($_.C)s" }) -join ' '
-            $ws = (Get-CimInstance Win32_Process | Sort-Object WorkingSetSize -Descending | Select-Object -First 5 | ForEach-Object { "$($_.Name)#$($_.ProcessId)=$([math]::Round($_.WorkingSetSize / 1MB))MB" }) -join ' '
-            $c = (Get-Counter '\LogicalDisk(C:)\Avg. Disk Queue Length', '\LogicalDisk(D:)\Avg. Disk Queue Length', '\Processor(_Total)\% Processor Time', '\Memory\Available MBytes', '\Memory\Pages Input/sec', '\Memory\Pages Output/sec', '\Cache\Dirty Pages', '\LogicalDisk(D:)\Disk Transfers/sec', '\LogicalDisk(D:)\Avg. Disk sec/Transfer', '\LogicalDisk(D:)\Disk Write Bytes/sec', '\LogicalDisk(C:)\Disk Transfers/sec').CounterSamples | ForEach-Object { [math]::Round($_.CookedValue, 4) }
-            "$(Get-Date -Format HH:mm:ss) qC=$($c[0]) qD=$($c[1]) cpu=$([math]::Round($c[2])) availMB=$($c[3]) pgIn=$($c[4]) pgOut=$($c[5]) dirty=$($c[6]) iopsD=$([math]::Round($c[7])) latD=$([math]::Round($c[8] * 1000, 2))ms wMBD=$([math]::Round($c[9] / 1MB, 1)) iopsC=$([math]::Round($c[10])) | ws $ws | ops $io | cpu $cpu" | Add-Content $out
-            Start-Sleep -Seconds 15
-          }
-          '@
-          Set-Content -Path (Join-Path $env:RUNNER_TEMP 'sampler.ps1') -Value $script
-          Start-Process pwsh -ArgumentList '-NoProfile', '-File', (Join-Path $env:RUNNER_TEMP 'sampler.ps1') -WindowStyle Hidden
       - name: Vitest
         # Four cores on the Windows runner; the config's six workers starve store-heavy files of CPU there.
         run: npx vitest run --shard=${{ matrix.shard }} ${{ runner.os == 'Windows' && '--maxWorkers=4' || '' }}
-      - name: CPU samples
-        if: always() && runner.os == 'Windows'
-        run: |
-          Get-Content (Join-Path $env:RUNNER_TEMP 'cpu-samples.log')
-          $since = (Get-Date).AddMinutes(-45)
-          Get-ScheduledTask | ForEach-Object { $i = $_ | Get-ScheduledTaskInfo -ErrorAction SilentlyContinue; if ($i -and $i.LastRunTime -gt $since) { "task $($i.LastRunTime.ToString('HH:mm:ss')) $($_.TaskPath)$($_.TaskName) state=$($_.State) result=$($i.LastTaskResult)" } } | Sort-Object
 
   # The dashboard is its own package with its own tests; the root suite never runs them.
   ui:
