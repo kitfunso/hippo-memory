@@ -70,9 +70,7 @@ interface PhysicsScoring {
 
 /** Scores memories by gravity, momentum and cluster amplification; rows without physics state rank through
  * hybridSearch.
- *  Reads hippo.db under `hippoRoot` when no store is passed.
- * @deprecated The root export is removed in 3.0. Set `physics.enabled` to 'auto' or true in config to rank by
- * physics. */
+ *  Reads hippo.db under `hippoRoot` when no store is passed. Published from hippo-memory/store-kit. */
 export async function physicsSearch(
   query: string,
   entries: MemoryEntry[],

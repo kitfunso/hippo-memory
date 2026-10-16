@@ -93,6 +93,8 @@ export type { AmbientTallies } from '../core/ambient.js';
 export type { TokenUse } from '../store/token-ledger.js';
 export type { EmbeddingIndexState } from '../store/vector-index.js';
 export type { PhysicsParticle } from '../core/physics.js';
+// An add-on ranks its own particles by physics with hippo.db's code, by passing its store and root in the options.
+export { physicsSearch } from '../search/physics-search.js';
 export { StoreBusyError } from '../store/port.js';
 // An add-on store encodes, decodes and ranks vectors and particles with hippo.db's own code, and drops the index by its
 // rule,

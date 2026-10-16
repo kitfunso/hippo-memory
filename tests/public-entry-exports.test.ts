@@ -148,7 +148,7 @@ describe('published runtime exports', () => {
       importChatGPT importClaude importCursor importEntries importGenericFile importMarkdown importVault initGlobal initStore isCardStatus isEmbeddingAvailable isHandoffOutcome
       listAuditEventsAfter listCards listMemoryConflicts listPeers listSessionEvents loadActiveTaskSnapshot loadAllEntries loadCard loadCardComments loadCardDeps loadCardRuns loadEmbeddingIndex loadFreshActiveTaskSnapshot loadHandoffById loadIndex loadLatestHandoff loadLatestHandoffForCard loadRecallEntries loadSearchEntries loadSessionDecayContext
       markRetrieved multihopSearch
-      partitionLessons physicsSearch promoteToGlobal
+      partitionLessons promoteToGlobal
       queryAuditEvents
       readEntry rebuildIndex reclaimExpiredCards renderAmbientSummary replaceDetectedConflicts resolveConfidence resolveConflict resultToBaseline reviewCard runFeatureEval runWatched runWatchedLine
       saveActiveTaskSnapshot saveEmbeddingIndex saveSessionHandoff search searchBoth searchBothHybrid shareMemory sleep stampHandoffOutcome strengthBucket syncGlobalToLocal
@@ -193,7 +193,7 @@ describe('published runtime exports', () => {
       isSharedStore
       narrowStore
       ownScopeTouches
-      passesScopeFilterForRecall
+      passesScopeFilterForRecall physicsSearch
       rankVectorRows rarestFtsQuery rejectionDigest replacesIndex
       sqliteStore
       tallyAmbientEntries",
