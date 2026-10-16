@@ -24,21 +24,3 @@ export function sqliteCards(hippoRoot: string): Sync<Cards> {
     comment: (tenantId, cardId, author, body) => addCardComment(hippoRoot, tenantId, cardId, author, body),
   };
 }
-
-/** The group as a served store answers it: a throw rejects as another store's would. */
-export function servedCards(sync: Sync<Cards>): Cards {
-  return {
-    create: async (tenantId, input) => sync.create(tenantId, input),
-    load: async (tenantId, id) => sync.load(tenantId, id),
-    detail: async (tenantId, id) => sync.detail(tenantId, id),
-    list: async (tenantId, opts) => sync.list(tenantId, opts),
-    runs: async (tenantId, id) => sync.runs(tenantId, id),
-    claim: async (tenantId, id, runtime, sessionId) => sync.claim(tenantId, id, runtime, sessionId),
-    heartbeat: async (tenantId, id, runId) => sync.heartbeat(tenantId, id, runId),
-    block: async (tenantId, id, reason, runId) => sync.block(tenantId, id, reason, runId),
-    review: async (tenantId, id, runId) => sync.review(tenantId, id, runId),
-    complete: async (tenantId, id, outcome, runId) => sync.complete(tenantId, id, outcome, runId),
-    reclaimExpired: async (tenantId) => sync.reclaimExpired(tenantId),
-    comment: async (tenantId, cardId, author, body) => sync.comment(tenantId, cardId, author, body),
-  };
-}

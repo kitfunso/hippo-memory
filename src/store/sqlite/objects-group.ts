@@ -29,7 +29,6 @@ import {
   type ObjectClose,
   type ObjectListQuery,
   type ObjectRefusal,
-  type Objects,
   type ObjectSave,
   type PoliciesInForceQuery,
 } from '../port.js';
@@ -78,24 +77,6 @@ export function sqliteObjects(hippoRoot: string): SyncObjects {
     briefReceipts: (tenantId, tag, limit) => onHandle(hippoRoot, (db) => briefReceipts(db, tenantId, tag, limit)),
     objectIdByMemory: (tenantId, kind, status, memoryId) =>
       onHandle(hippoRoot, (db) => idByMemory(db, tenantId, kind, status, memoryId)),
-  };
-}
-
-/** The group as a served store answers it: each call runs at once and resolves through a Promise, so a throw rejects as
- * another store's would. */
-export function servedObjects(sync: SyncObjects): Objects {
-  return {
-    listObjects: async (tenantId, kind, query) => sync.listObjects(tenantId, kind, query),
-    objectById: async (tenantId, kind, id) => sync.objectById(tenantId, kind, id),
-    closeObject: async (tenantId, kind, id, close) => sync.closeObject(tenantId, kind, id, close),
-    saveObject: async (tenantId, kind, save) => sync.saveObject(tenantId, kind, save),
-    openIncident: async (tenantId, open) => sync.openIncident(tenantId, open),
-    resolveIncident: async (tenantId, id, resolve) => sync.resolveIncident(tenantId, id, resolve),
-    policiesInForce: async (tenantId, query) => sync.policiesInForce(tenantId, query),
-    activeSkillsByName: async (tenantId, limit) => sync.activeSkillsByName(tenantId, limit),
-    briefReceipts: async (tenantId, tag, limit) => sync.briefReceipts(tenantId, tag, limit),
-    objectIdByMemory: async (tenantId, kind, status, memoryId) =>
-      sync.objectIdByMemory(tenantId, kind, status, memoryId),
   };
 }
 

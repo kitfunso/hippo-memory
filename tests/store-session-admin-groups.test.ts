@@ -1,4 +1,4 @@
-// The Sessions, Cards, Goals, Conflicts, Dormant and Reports groups answer alike as sqliteX (sync) and servedX (async), on a real store.
+// The Sessions, Cards, Goals, Conflicts, Dormant and Reports groups answer alike as sqliteX (sync) and served (async), on a real store.
 import { afterEach, describe, expect, it } from 'vitest';
 import { rmSync } from 'node:fs';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';

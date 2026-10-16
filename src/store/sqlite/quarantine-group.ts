@@ -29,13 +29,3 @@ export function sqliteQuarantine(hippoRoot: string): Sync<Quarantine> {
       onHandle(hippoRoot, (db) => rejectQuarantinedAt(db, tenantId, id, actor)),
   };
 }
-
-/** The group as a served store answers it: each call runs at once and resolves through a Promise, so a throw rejects as
- * another store's would. */
-export function servedQuarantine(sync: Sync<Quarantine>): Quarantine {
-  return {
-    listQuarantined: async (tenantId, query) => sync.listQuarantined(tenantId, query),
-    approveQuarantined: async (tenantId, id, actor) => sync.approveQuarantined(tenantId, id, actor),
-    rejectQuarantined: async (tenantId, id, actor) => sync.rejectQuarantined(tenantId, id, actor),
-  };
-}

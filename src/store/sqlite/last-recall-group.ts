@@ -56,13 +56,3 @@ export function sqliteLastRecall(hippoRoot: string): Sync<LastRecall> {
     },
   };
 }
-
-/** The group as a served store answers it: the call runs at once and resolves through a Promise, so a throw rejects as
- * another store's would. */
-export function servedLastRecall(sync: Sync<LastRecall>): LastRecall {
-  return {
-    applyTracedOutcome: async (outcome, traceId) => sync.applyTracedOutcome(outcome, traceId),
-    applyOutcomeToLast: async (target, good) => sync.applyOutcomeToLast(target, good),
-    finishRecall: async (writes, globalRoot) => sync.finishRecall(writes, globalRoot),
-  };
-}

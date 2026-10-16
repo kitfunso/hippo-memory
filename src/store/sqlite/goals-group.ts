@@ -13,14 +13,3 @@ export function sqliteGoals(hippoRoot: string): Sync<Goals> {
     resume: (_tenantId, goalId) => resumeGoal(hippoRoot, goalId),
   };
 }
-
-/** The group as a served store answers it: a throw rejects as another store's would. */
-export function servedGoals(sync: Sync<Goals>): Goals {
-  return {
-    push: async (tenantId, goal) => sync.push(tenantId, goal),
-    sessionGoals: async (tenantId, sessionId) => sync.sessionGoals(tenantId, sessionId),
-    complete: async (tenantId, goalId, opts) => sync.complete(tenantId, goalId, opts),
-    suspend: async (tenantId, goalId) => sync.suspend(tenantId, goalId),
-    resume: async (tenantId, goalId) => sync.resume(tenantId, goalId),
-  };
-}
