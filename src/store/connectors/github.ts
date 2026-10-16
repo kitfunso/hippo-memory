@@ -5,7 +5,7 @@ import { archiveRawMemory } from '../raw-archive.js';
 import { onHandle } from '../open.js';
 import type { ConnectorEventRecord } from '../port.js';
 import { eventMemoryAt, eventRecord, eventSeenAt, markEventSeenAt, type EventLogSpec } from './event-log.js';
-import { getDlqRow, insertDlqRow, listDlqRows, markDlqRetried, type DlqRawRow } from './dlq.js';
+import { dlqAccess } from './dlq.js';
 
 /** One github_event_log row to write; `memoryId` is null for an event that produced no memory. */
 export interface GitHubEventLogEntry {
@@ -113,56 +113,36 @@ export interface GitHubDlqInsert {
   bucket: DlqBucket;
 }
 
-const SELECT_COLUMNS = `id, tenant_id, raw_payload, error, event_name, delivery_id,
-            signature, installation_id, repo_full_name, retry_count,
-            received_at, retried_at, bucket`;
-
-function rowToItem(r: DlqRawRow): DlqItem {
-  return {
-    id: Number(r.id),
-    tenantId: String(r.tenant_id),
-    rawPayload: String(r.raw_payload),
-    error: String(r.error),
-    eventName: r.event_name == null ? null : String(r.event_name),
-    deliveryId: r.delivery_id == null ? null : String(r.delivery_id),
-    signature: r.signature == null ? null : String(r.signature),
-    installationId: r.installation_id == null ? null : String(r.installation_id),
-    repoFullName: r.repo_full_name == null ? null : String(r.repo_full_name),
-    retryCount: Number(r.retry_count ?? 0),
-    receivedAt: String(r.received_at),
-    retriedAt: r.retried_at == null ? null : String(r.retried_at),
-    bucket: r.bucket == null ? 'parse_error' : String(r.bucket),
-  };
-}
+const DLQ = dlqAccess<DlqItem, GitHubDlqInsert>('github_dlq', [
+  { field: 'id', column: 'id', kind: 'int' },
+  { field: 'tenantId', column: 'tenant_id', kind: 'text', insert: true },
+  { field: 'rawPayload', column: 'raw_payload', kind: 'text', insert: true },
+  { field: 'error', column: 'error', kind: 'text', insert: true },
+  { field: 'eventName', column: 'event_name', kind: 'nullableText', insert: true },
+  { field: 'deliveryId', column: 'delivery_id', kind: 'nullableText', insert: true },
+  { field: 'signature', column: 'signature', kind: 'nullableText', insert: true },
+  { field: 'installationId', column: 'installation_id', kind: 'nullableText', insert: true },
+  { field: 'repoFullName', column: 'repo_full_name', kind: 'nullableText', insert: true },
+  { field: 'retryCount', column: 'retry_count', kind: 'count' },
+  { field: 'receivedAt', column: 'received_at', kind: 'text' },
+  { field: 'retriedAt', column: 'retried_at', kind: 'nullableText' },
+  { field: 'bucket', column: 'bucket', kind: 'bucket', insert: true },
+]);
 
 export function insertGitHubDlq(hippoRoot: string, row: GitHubDlqInsert): number {
-  return onHandle(hippoRoot, (db) =>
-    insertDlqRow(db, 'github_dlq', [
-      ['tenant_id', row.tenantId],
-      ['raw_payload', row.rawPayload],
-      ['error', row.error],
-      ['event_name', row.eventName ?? null],
-      ['delivery_id', row.deliveryId ?? null],
-      ['signature', row.signature],
-      ['installation_id', row.installationId ?? null],
-      ['repo_full_name', row.repoFullName ?? null],
-      ['bucket', row.bucket],
-    ]));
+  return onHandle(hippoRoot, (db) => DLQ.insert(db, row));
 }
 
 export function listGitHubDlq(hippoRoot: string, tenantId: string, limit: number): DlqItem[] {
-  return onHandle(hippoRoot, (db) => listDlqRows(db, 'github_dlq', SELECT_COLUMNS, tenantId, limit).map(rowToItem));
+  return onHandle(hippoRoot, (db) => DLQ.list(db, tenantId, limit));
 }
 
 export function githubDlqEntry(hippoRoot: string, id: number): DlqItem | null {
-  return onHandle(hippoRoot, (db) => {
-    const row = getDlqRow(db, 'github_dlq', SELECT_COLUMNS, id);
-    return row ? rowToItem(row) : null;
-  });
+  return onHandle(hippoRoot, (db) => DLQ.get(db, id));
 }
 
 export function markGitHubDlqRetried(hippoRoot: string, id: number): void {
-  onHandle(hippoRoot, (db) => markDlqRetried(db, 'github_dlq', id));
+  onHandle(hippoRoot, (db) => DLQ.markRetried(db, id));
 }
 
 /** What the routing tables say about one webhook; `tenant` is the installation match, or the repo match when no

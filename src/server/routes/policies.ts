@@ -39,7 +39,6 @@ const policyRoutes: VersionedRouteConfig<'policy', SavePolicyOpts> = {
   },
 };
 
-// The as-of route is registered BEFORE /:id so the literal 'asof' is matched first; date errors surface as 400.
 export async function handleCreatePolicy(rr: AuthedRouteRequest<'objects'>): Promise<void> {
   const { ctx } = rr;
   const body = await parseJsonBody(rr.req, ctx);

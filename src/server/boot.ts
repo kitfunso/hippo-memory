@@ -351,13 +351,17 @@ function answerRequest(
 ): void {
   const requestId = openRequest(req, res, slowWarnMs);
   const deadline = requestDeadlineFor(req);
+  const abort = deadline ? new AbortController() : undefined;
   // Inside the scope, so the failure reply's log line carries the id too.
   runWithRequestId(
     requestId,
     () => {
       if (deadline) {
-        answerAtDeadline(res, deadline, () =>
-          replyOrClose(req, res, new DeadlineExceededError(HANDLER_LATE), requestId),
+        answerAtDeadline(
+          res,
+          deadline,
+          () => replyOrClose(req, res, new DeadlineExceededError(HANDLER_LATE), requestId),
+          () => abort?.abort(new DeadlineExceededError(HANDLER_LATE)),
         );
       }
       handle().then(
@@ -372,6 +376,7 @@ function answerRequest(
       );
     },
     deadline,
+    abort?.signal,
   );
 }
 

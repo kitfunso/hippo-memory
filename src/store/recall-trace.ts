@@ -396,7 +396,7 @@ export function writeDeliveryEvent(db: DatabaseSyncLike, input: DeliveryEventInp
       return eventId;
     });
   } catch (error) {
-    log.error(`delivery ledger write failed: ${errorMessage(error)}`);
+    log.error(`delivery ledger write failed: ${errorMessage(error)}`, errorFields(error));
     return null;
   }
 }
@@ -408,7 +408,7 @@ export function writeDeliveryEventAtRoot(root: string, input: DeliveryEventInput
   try {
     db = openHippoDb(root);
   } catch (error) {
-    log.error(`delivery ledger write failed: ${errorMessage(error)}`);
+    log.error(`delivery ledger write failed: ${errorMessage(error)}`, errorFields(error));
     return null;
   }
   try {

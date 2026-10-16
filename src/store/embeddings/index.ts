@@ -5,7 +5,7 @@
 import { cosineOf } from '../../core/cosine.js';
 import { EMBEDDING_MODEL_META_KEY } from '../../db/vector-store.js';
 import { indexedModel, saveIndexIdentity, storedIndexState } from '../vector-index.js';
-import { errorMessage, log } from '../../util/log.js';
+import { errorMessage, log, errorFields } from '../../util/log.js';
 import { rethrowIfSqliteBlocked } from '../../util/sqlite-blocked.js';
 
 export { EMBEDDING_MODEL_META_KEY };
@@ -35,7 +35,7 @@ function loadStoredEmbeddingModel(hippoRoot: string): string | null {
     return storedIndexState(hippoRoot).storedModel;
   } catch (err) {
     rethrowIfSqliteBlocked(err);
-    log.debug(`stored embedding model unreadable: ${errorMessage(err)}`);
+    log.debug(`stored embedding model unreadable: ${errorMessage(err)}`, errorFields(err));
     return null;
   }
 }

@@ -6,7 +6,7 @@ import type { HandoffEvidence } from '../core/handoff.js';
 import type { SessionEvent, TaskSnapshot } from '../store/rows.js';
 import { readApiCalls, recordRereads, type TranscriptCalls } from '../store/token-ledger.js';
 import { truncateCodePointSafe } from '../util/transcript-tail.js';
-import { errorMessage, log } from '../util/log.js';
+import { errorMessage, log, errorFields } from '../util/log.js';
 import { COMPACT_RESUME_EVENT_CONTENT_CAP, COMPACT_RESUME_MAX_AGE_MS, compactResumeText } from './context-render.js';
 import type { Context, ContextWith } from './types.js';
 
@@ -133,7 +133,7 @@ export async function compactResumeBlock(
       }));
     }
   } catch (err) {
-    log.warn(`hippo compact-resume: trail skipped: ${errorMessage(err)}`);
+    log.warn(`hippo compact-resume: trail skipped: ${errorMessage(err)}`, errorFields(err));
   }
   return compactResumeText(snapshot, events);
 }

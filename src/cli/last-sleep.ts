@@ -4,7 +4,7 @@ import { isStringValue } from '../core/capture-contract.js';
 import { REPLAY_AFTER_MS } from '../core/compaction-timing.js';
 import { SPOOL_PROBLEM, spoolCounts } from '../capture/compaction-spool.js';
 import { defaultSleepLogPath } from '../hooks/shared.js';
-import { errorMessage, log } from '../util/log.js';
+import { errorMessage, log, errorFields } from '../util/log.js';
 import { truncateCodePointSafe } from '../util/transcript-tail.js';
 import { printError } from './output.js';
 import { type CliFlags, type CommandContext } from './flag-values.js';
@@ -75,7 +75,7 @@ export function cmdLastSleep(
     try {
       fs.unlinkSync(logPath);
     } catch (err) {
-      log.debug(`last-sleep log not removed, it shows again next session: ${errorMessage(err)}`);
+      log.debug(`last-sleep log not removed, it shows again next session: ${errorMessage(err)}`, errorFields(err));
     }
   }
 }

@@ -4,7 +4,7 @@
  */
 
 import { fetchWithRetry, llmTimeoutMs, llmTotalMs } from './http-retry.js';
-import { errorMessage } from './log.js';
+import { errorFields, errorMessage, log } from './log.js';
 import { readCappedJson, readCappedText } from './capped-json.js';
 import { type JsonValue, isJsonObject, isJsonString } from './json.js';
 import { redactSecretsStrict } from './secret-detect.js';
@@ -56,7 +56,10 @@ export function isPermanentFailure(failure: AnthropicMessageFailure): boolean {
  */
 async function errorSnippet(res: Response): Promise<string> {
   // The status is the failure reported; a body that cannot be read only costs its snippet.
-  const body = await readCappedText(res, ERROR_SNIPPET_CHARS * UTF8_MAX_BYTES_PER_CHAR).catch(() => '');
+  const body = await readCappedText(res, ERROR_SNIPPET_CHARS * UTF8_MAX_BYTES_PER_CHAR).catch((err: Error) => {
+    log.warn(`anthropic: could not read the error body of a ${res.status} reply`, errorFields(err));
+    return '';
+  });
   // Masked before the cut, so a key that straddles the cut is never left half shown.
   return redactSecretsStrict(body.replace(/\s+/g, ' ').trim()).slice(0, ERROR_SNIPPET_CHARS);
 }

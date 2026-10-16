@@ -1,6 +1,5 @@
-import { addTagToEntries, writeEntriesTogether } from '../store/entry-writes.js';
-import { confirmedOutcomeTimes } from '../store/audit.js';
-import { loadCurrentEntriesFromOrigins, loadEntriesMentioning, readEntry } from '../store/entry-reads.js';
+import type { Learning } from '../store/port/learning.js';
+import { localFilesAt } from './roots.js';
 import type { StoreWith } from '../store/index.js';
 import { chunked } from '../util/chunked.js';
 import { CHURN_STALE_TAG, type MemoryEntry } from '../core/memory.js';
@@ -96,13 +95,23 @@ export function invalidateMatching(
   tenantId?: string,
   options?: InvalidationOptions,
 ): InvalidationResult {
+  return invalidateIn(localFilesAt(hippoRoot).learning, target, tenantId, options);
+}
+
+/** invalidateMatching on the memories `learning` holds. */
+function invalidateIn(
+  learning: Learning,
+  target: InvalidationTarget,
+  tenantId?: string,
+  options?: InvalidationOptions,
+): InvalidationResult {
   // tenantId opt-in: when set, only that tenant's memories are weakened; undefined is host-wide.
   // The onlyId read is tenant-scoped too, so another tenant's id is invisible here.
   const entries = options?.onlyId === undefined
-    ? loadEntriesMentioning(hippoRoot, invalidationTokenize(target.from), target.from.toLowerCase().trim(), tenantId)
-    : [readEntry(hippoRoot, options.onlyId, tenantId)].filter((entry) => entry !== null);
+    ? learning.entriesMentioning(invalidationTokenize(target.from), target.from.toLowerCase().trim(), tenantId)
+    : [learning.readEntry(options.onlyId, tenantId)].filter((entry) => entry !== null);
   const { result, weakened } = weakenMatches(entries, target, options);
-  writeEntriesTogether(hippoRoot, weakened);
+  learning.writeEntriesTogether(weakened);
   return result;
 }
 
@@ -521,17 +530,16 @@ function churnEvidence(git: ChurnGitView, refs: ChurnRefs, anchor: string): stri
 }
 
 function tagChurnStale(
-  hippoRoot: string,
+  learning: Learning,
   tenantId: string,
   toTag: readonly MemoryEntry[],
   confirmedAt: Map<string, string>,
 ): void {
   // The git calls above can take seconds; a good outcome landing meanwhile moves the anchor past the evidence.
-  const confirmedNow = confirmedOutcomeTimes(hippoRoot, tenantId);
+  const confirmedNow = learning.confirmedOutcomeTimes(tenantId);
   const unconfirmed = toTag.filter((stale) => confirmedNow.get(stale.id) === confirmedAt.get(stale.id));
   if (unconfirmed.length === 0) return;
-  addTagToEntries(
-    hippoRoot,
+  learning.addTagToEntries(
     tenantId,
     unconfirmed.map((stale) => stale.id),
     CHURN_STALE_TAG,
@@ -571,15 +579,20 @@ export function detectChurnStale(
   repoRoot: string,
   opts: DetectChurnStaleOptions,
 ): ChurnStaleResult {
+  return detectChurnIn(localFilesAt(hippoRoot).learning, repoRoot, opts);
+}
+
+/** detectChurnStale on the memories `learning` holds. */
+function detectChurnIn(learning: Learning, repoRoot: string, opts: DetectChurnStaleOptions): ChurnStaleResult {
   const dryRun = opts.dryRun === true;
   if (!opts.projectName) return emptyChurnResult(dryRun);
 
   const origins = [opts.projectName, opts.legacyName].filter((name): name is string => !!name);
-  const entries = loadCurrentEntriesFromOrigins(hippoRoot, opts.tenantId, origins);
+  const entries = learning.currentEntriesFromOrigins(opts.tenantId, origins);
   const { candidates, skippedPinned } = collectChurnCandidates(entries, opts);
   if (candidates.length === 0) return emptyChurnResult(dryRun, skippedPinned);
 
-  const confirmedAt = confirmedOutcomeTimes(hippoRoot, opts.tenantId);
+  const confirmedAt = learning.confirmedOutcomeTimes(opts.tenantId);
   // Compared as epoch ms, not strings: imported rows may carry offsets or other ISO forms.
   const anchorOf = (entry: MemoryEntry): string => {
     const confirmed = confirmedAt.get(entry.id);
@@ -606,7 +619,7 @@ export function detectChurnStale(
     // leave an earlier candidate tagged.
     const toTag = recordChurnEvidence(git, candidates, anchorOf, result);
 
-    if (!dryRun && toTag.length > 0) tagChurnStale(hippoRoot, opts.tenantId, toTag, confirmedAt);
+    if (!dryRun && toTag.length > 0) tagChurnStale(learning, opts.tenantId, toTag, confirmedAt);
   } catch (err) {
     if (err instanceof GitReadError) return emptyChurnResult(dryRun, skippedPinned, err.message);
     throw err;

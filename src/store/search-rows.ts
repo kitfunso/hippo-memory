@@ -4,7 +4,7 @@ import { tokenize } from '../util/tokenize.js';
 import { isPersonalScope } from '../core/recall-scope.js';
 import { scopeAdmitSql, type SqlFragment } from './rule-sql.js';
 import { ftsTermParts, RAREST_TERM_COUNT, rarestFtsQuery } from '../core/prompt-recall.js';
-import { errorMessage, log } from '../util/log.js';
+import { errorMessage, log, errorFields } from '../util/log.js';
 import { originInSql } from '../core/project-identity.js';
 import { topVectorMatches } from '../db/vector-store.js';
 import {
@@ -178,7 +178,8 @@ function selectFtsCandidates(db: DatabaseSyncLike, terms: string[], p: SearchPre
     // A query FTS5 cannot parse is expected input; anything else means the index itself is broken.
     const message = errorMessage(err);
     if (!FTS_QUERY_SYNTAX_RE.test(message)) {
-      log.once('fts-match-fallback', 'warn', `FTS search failed, using the slower LIKE match: ${message}`);
+      const failure = `FTS search failed, using the slower LIKE match: ${message}`;
+      log.once('fts-match-fallback', 'warn', failure, errorFields(err));
     }
     return [];
   }

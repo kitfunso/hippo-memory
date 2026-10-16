@@ -2,7 +2,7 @@
 // the calling thread.
 import { existsSync } from 'node:fs';
 import { getHippoDbPath } from '../../db/index.js';
-import { currentDeadline, currentRequestId } from '../../util/request-scope.js';
+import { currentDeadline, currentRequestId, currentSignal } from '../../util/request-scope.js';
 import type { HippoStore, Readiness, StoreGroups, VectorReads } from '../port.js';
 import { createSqliteExecutor, type SqliteExecutor } from './executor.js';
 import { sqliteStore } from './store.js';
@@ -26,7 +26,12 @@ export function runsOffLoop(store: HippoStore): boolean {
 
 function send<T>(executor: SqliteExecutor, op: string, args: readonly unknown[], mode: OpMode): Promise<T> {
   const deadline = currentDeadline();
-  const call = executor.call<T>(op, args, { mode, requestId: currentRequestId(), deadlineAt: deadline?.at });
+  const call = executor.call<T>(op, args, {
+    mode,
+    requestId: currentRequestId(),
+    deadlineAt: deadline?.at,
+    signal: currentSignal(),
+  });
   // The request's own timer then waits for this call's answer, which names what became of a write.
   return deadline ? deadline.track(call) : call;
 }

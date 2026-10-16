@@ -1,4 +1,4 @@
-import type { MemoryEntry } from '../core/memory.js';
+import { DAG_LEVEL, type MemoryEntry } from '../core/memory.js';
 import { type DatabaseSyncLike, withWriteScope } from '../db/index.js';
 import { assertTenantId } from './tenant.js';
 import { findRejectedValue, rejectionDigest } from './rejection.js';
@@ -25,7 +25,7 @@ export function loadAllL2Summaries(hippoRoot: string): MemoryEntry[] {
     const rows = db.prepare(`
       SELECT ${MEMORY_SELECT_COLUMNS}
         FROM memories
-       WHERE dag_level = 2
+       WHERE dag_level = ${DAG_LEVEL.topic}
          AND dag_parent_id IS NULL
          AND kind != 'archived'
          AND superseded_by IS NULL
@@ -158,7 +158,7 @@ const REBUILD_CONTENT_SQL = `UPDATE memories
                   summary_dirty = 0
             WHERE id = ?
               AND tenant_id = ?
-              AND dag_level IN (2, 3)
+              AND dag_level IN (${DAG_LEVEL.topic}, ${DAG_LEVEL.entity})
               AND summary_dirty = 1
               AND kind != 'archived'`;
 const REBUILD_METADATA_SQL = `UPDATE memories
@@ -168,7 +168,7 @@ const REBUILD_METADATA_SQL = `UPDATE memories
                   summary_dirty = 0
             WHERE id = ?
               AND tenant_id = ?
-              AND dag_level IN (2, 3)
+              AND dag_level IN (${DAG_LEVEL.topic}, ${DAG_LEVEL.entity})
               AND summary_dirty = 1
               AND kind != 'archived'`;
 
@@ -291,7 +291,7 @@ export function clearSummaryDirtyAfterBuild(
          SET summary_dirty = 0
        WHERE id = ?
          AND tenant_id = ?
-         AND dag_level IN (2, 3)
+         AND dag_level IN (${DAG_LEVEL.topic}, ${DAG_LEVEL.entity})
          AND summary_dirty = 1
          AND kind != 'archived'
       RETURNING dag_level

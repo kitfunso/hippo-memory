@@ -3,15 +3,15 @@
   "openersInCli": 0,
   "storeBranches": 0,
   "routesWithoutStore": 0,
-  "sqliteOnlyRoutes": 2,
+  "sqliteOnlyRoutes": 1,
   "routesOnLoop": 12,
   "twinFunctions": 0,
   "sqlOutside": 0,
   "txLiterals": 0,
   "tenantResolvesInCli": 0,
   "storeImportsInCli": 4,
-  "storeImportsInDomain": 33,
-  "handleHoldersOutside": 4,
+  "storeImportsInDomain": 10,
+  "handleHoldersOutside": 1,
   "storeFilesWithoutSql": 2,
   "storeFilesWithoutSqlList": [
     "src/store/delivery-recorder.ts",
@@ -20,14 +20,10 @@
   "openersOutsideByFile": {},
   "sqlOutsideByFile": {},
   "handleHoldersOutsideByFile": {
-    "src/agent-memories/apply.ts": 1,
-    "src/agent-memories/legacy.ts": 1,
-    "src/agent-memories/sync.ts": 1,
     "src/entry/sqlite-handles.ts": 1
   },
   "sqliteLocalMethods": [],
   "sqliteOnlyRoutesList": [
-    "POST /v1/memories/:id/promote",
     "POST /v1/sleep"
   ],
   "carrierFiles": 0,

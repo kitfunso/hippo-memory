@@ -25,6 +25,8 @@ const decisionRoutes: ObjectRouteConfig<'decision'> = {
 
 const TEXT: RequiredStringRule = { max: MAX_SHORT_FIELD_LEN, untrimmed: true };
 
+// The HTTP surface has no legacy --supersedes <memory-id> constraint, so it supersedes by table id and never weakens a
+// memory mirror.
 function supersededId(body: Record<string, JsonValue>): number | undefined {
   const raw = body['supersedesDecisionId'];
   if (raw === undefined || raw === null) return undefined;
@@ -34,10 +36,6 @@ function supersededId(body: Record<string, JsonValue>): number | undefined {
   return raw;
 }
 
-// Routes: /v1/decisions (create, list, show, supersede, close), Bearer-authed and tenant-scoped; status is validated
-// against VALID_DECISION_STATES.
-// The HTTP surface has no legacy --supersedes <memory-id> constraint, so it supersedes by table id and never weakens a
-// memory mirror.
 export async function handleCreateDecision(rr: AuthedRouteRequest<'objects'>): Promise<void> {
   const { req, res, ctx } = rr;
   const body = await parseJsonBody(req, ctx);

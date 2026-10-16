@@ -3,7 +3,7 @@
 import { openHippoDb, closeHippoDb, withWriteScope, type DatabaseSyncLike } from '../db/index.js';
 import { onHandle } from './open.js';
 import { assertTenantId } from './tenant.js';
-import { errorMessage, log } from '../util/log.js';
+import { errorMessage, log, errorFields } from '../util/log.js';
 import {
   type EntityType,
   type RelationType,
@@ -371,6 +371,7 @@ export function removeGraphEntitiesForObject(
     log.warn(
       `removeGraphEntitiesForObject: failed for tenant=${tenantId} ${sourceObjectType}#${sourceObjectId}: ` +
       `${errorMessage(err)}`,
+      errorFields(err),
     );
   }
 }

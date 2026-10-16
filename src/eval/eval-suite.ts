@@ -3,7 +3,7 @@
  * detection against a saved baseline.
  *  Zero API calls (no LLM judge, no embeddings), deterministic (fixed timestamps, content, IDs) and fast. */
 
-import { createMemory, Layer, type MemoryEntry } from '../core/memory.js';
+import { createMemory, DAG_LEVEL, Layer, type MemoryEntry } from '../core/memory.js';
 import { search } from '../search/bm25-search.js';
 import { multihopSearch } from '../search/multihop.js';
 import { mrr, recallAtK, ndcgAtK } from './eval.js';
@@ -292,7 +292,7 @@ function dagChildEntries(): MemoryEntry[] {
         created: dateOffset(15),
         layer: Layer.Semantic,
         tags: ['topic:api-performance', 'extracted'],
-        dag_level: 1,
+        dag_level: DAG_LEVEL.extracted,
       },
     ),
     mem(
@@ -302,7 +302,7 @@ function dagChildEntries(): MemoryEntry[] {
         created: dateOffset(15),
         layer: Layer.Semantic,
         tags: ['topic:api-performance', 'extracted'],
-        dag_level: 1,
+        dag_level: DAG_LEVEL.extracted,
       },
     ),
     mem(
@@ -312,7 +312,7 @@ function dagChildEntries(): MemoryEntry[] {
         created: dateOffset(15),
         layer: Layer.Semantic,
         tags: ['topic:api-performance', 'extracted'],
-        dag_level: 1,
+        dag_level: DAG_LEVEL.extracted,
       },
     ),
   ];
@@ -329,7 +329,7 @@ function dagSummaryEntry(): MemoryEntry {
       created: dateOffset(16),
       layer: Layer.Semantic,
       tags: ['topic:api-performance'],
-      dag_level: 2,
+      dag_level: DAG_LEVEL.topic,
       dag_parent_id: undefined,
     },
   );

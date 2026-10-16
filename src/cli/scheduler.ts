@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { errorMessage, log } from '../util/log.js';
+import { errorMessage, log, errorFields } from '../util/log.js';
 import { writeFileAtomic } from '../util/atomic-write.js';
 
 export const DAILY_TASK_NAME = 'hippo-daily-runner';
@@ -35,6 +35,7 @@ export function loadWorkspaceRegistry(globalRoot: string): WorkspaceRegistry {
   } catch (err) {
     log.warn(
       `workspace registry ${registryPath} could not be read (${errorMessage(err)}); starting with no workspaces`,
+      errorFields(err),
     );
     return defaultRegistry();
   }
@@ -67,6 +68,7 @@ function setAsideCorruptRegistry<E>(registryPath: string, err: E): void {
       `workspace registry ${registryPath} is corrupt (${reason}) and could not be moved aside ` +
       `(${errorMessage(renameErr)}); ` +
         `starting with no workspaces`,
+      errorFields(renameErr),
     );
   }
 }

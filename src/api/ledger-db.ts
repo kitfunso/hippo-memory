@@ -1,5 +1,5 @@
 // The store the token ledger writes to for a caller's root; context, recall and the session hooks share it.
-import { errorMessage, log } from '../util/log.js';
+import { errorMessage, log, errorFields } from '../util/log.js';
 import {
   noteLedgerRowSkipped, recordLedgerTurn, recordTokensAt, sendWindowAt, type LedgerTurn,
 } from '../store/ledger-turn.js';
@@ -34,7 +34,7 @@ export function onLedgerRoot<T>(
     root = ledgerRoot(hippoRoot, reach);
   } catch (error) {
     // An unreadable store root means no ledger write; the ledger must never break context or recall.
-    log.debug(`token ledger skipped, store root unreadable: ${errorMessage(error)}`);
+    log.debug(`token ledger skipped, store root unreadable: ${errorMessage(error)}`, errorFields(error));
     return undefined;
   }
   if (root === null) return undefined;

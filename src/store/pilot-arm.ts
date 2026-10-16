@@ -3,7 +3,7 @@
 // fixed.
 import { createHash } from 'node:crypto';
 import { HOOK_DB_WAIT_MS, scopedBusyWait, withWriteScope, type DatabaseSyncLike } from '../db/index.js';
-import { errorMessage, log } from '../util/log.js';
+import { errorMessage, log, errorFields } from '../util/log.js';
 import { firstPilotArmHash } from './token-ledger-rows.js';
 import { recordTokenUse } from './token-ledger.js';
 
@@ -61,7 +61,7 @@ export function ensurePilotArm(
     );
   } catch (err) {
     // A prompt hook must not fail on pilot bookkeeping; concurrent callers still agree on the hash arm.
-    log.debug(`pilot arm not stored, using the hash arm: ${errorMessage(err)}`);
+    log.debug(`pilot arm not stored, using the hash arm: ${errorMessage(err)}`, errorFields(err));
     return hashed;
   }
 }

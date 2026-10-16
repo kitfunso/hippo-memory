@@ -7,6 +7,7 @@ import type { ScopeGrantChange } from './key-writes.js';
 import type { AppendAuditOpts, AuditEvent, AuditPrune, ListAuditAfterOpts, QueryAuditOpts } from './audit.js';
 import type { QualityRepairResult } from './quality-repair.js';
 import type { StoreWith } from './narrow.js';
+import type { LocalFiles } from './port/local-files.js';
 import { StoreNotPortedError } from '../util/sqlite-blocked.js';
 import type { EmbeddingIndexState } from './vector-index.js';
 import type { Entity, Relation } from './graph-rows.js';
@@ -634,13 +635,7 @@ export interface VectorViews {
   storedVectorViews(ids: readonly string[]): Promise<Map<string, Float32Array>>;
 }
 
-/** The store is hippo.db and its files under `hippoRoot`, so a path that reopens them by folder (sleep, its child
- * process, the global store) may run. */
-export interface LocalFiles {
-  readonly hippoRoot: string;
-  readonly consolidation: import('./port/consolidation.js').Consolidation;
-}
-export type { Consolidation } from './port/consolidation.js';
+export type { AgentImport, Consolidation, ContainerTx, ImportTarget, LocalFiles } from './port/local-files.js';
 
 /** The reads and writes behind the memory-quality audit, its repair and audit-log retention. */
 export interface AuditMaintenance {
@@ -791,7 +786,7 @@ export interface HippoStore extends Partial<StoreGroups> {
 /** `T` with each method answering its value instead of a Promise of it, groups included: the port as a synchronous
  * store has it. */
 export type Sync<T> = T extends (...args: infer A) => Promise<infer R> ? (...args: A) => R
-  : T extends object ? { [K in keyof T]: Sync<T[K]> } : T;
+  : T extends (...args: never) => void ? T : T extends object ? { [K in keyof T]: Sync<T[K]> } : T;
 
 export interface ContinuityBlock {
   activeSnapshot: TaskSnapshot | null;
