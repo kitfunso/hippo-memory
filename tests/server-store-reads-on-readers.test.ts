@@ -43,6 +43,8 @@ function read<T>(name: string, run: Call<T>, shows: string | RegExp): Read {
   return { name, run: async (store, seed) => shown(await run(store, seed)), shows };
 }
 
+const graphEntities = async (s: Served) => (await s.graphReads.graphRows(TENANT, { limit: 50 })).entities;
+
 const READS: readonly Read[] = [
   read('findApiKey', (s, seed) => s.findApiKey(seed.keyIds[1] ?? ''), "role: 'member'"),
   read('searchRecallEntries', (s) => s.searchRecallEntries('deploy', { limit: 50, tenantId: TENANT, explicitScopeMode: 'exact', includeSuperseded: false, ownScope: undefined }), 'mem_p_plain'),
@@ -70,6 +72,9 @@ const READS: readonly Read[] = [
   read('auditLog.listAuditEvents', (s) => s.auditLog.listAuditEvents({ tenantId: TENANT, limit: 5 }), "tenantId: 'default'"),
   read('quarantine.listQuarantined', (s) => s.quarantine.listQuarantined(TENANT, { status: 'all' }), 'scripts/wipe.sh before every deploy'),
   read('graphReads.graphRows', (s) => s.graphReads.graphRows(TENANT, { limit: 50 }), 'RetryPolicy'),
+  read('graphReads.entitiesForMemories', async (s) => s.graphReads.entitiesForMemories(TENANT, (await graphEntities(s)).flatMap((e) => (e.memoryId === null ? [] : [e.memoryId]))), /memoryId: '[^']+'/),
+  read('graphReads.entitiesByIds', (s) => s.graphReads.entitiesByIds(TENANT, Array.from({ length: 50 }, (_, i) => i + 1)), 'RetryPolicy'),
+  read('graphReads.neighborRelations', async (s) => s.graphReads.neighborRelations(TENANT, (await graphEntities(s)).map((e) => e.id), { limit: 50 }), /relType: '[^']+'/),
   read('objects.listObjects', (s) => s.objects.listObjects(TENANT, 'decision', { limit: 5 }), 'We adopt RetryPolicy'),
   read('objects.objectById', (s) => s.objects.objectById(TENANT, 'policy', 1), 'retry up to 3x'),
   read('objects.objectIdByMemory', async (s) => s.objects.objectIdByMemory(TENANT, 'decision', 'active', (await s.objects.listObjects(TENANT, 'decision', { limit: 1 }))[0]?.memoryId ?? ''), /^[1-9][0-9]*$/),

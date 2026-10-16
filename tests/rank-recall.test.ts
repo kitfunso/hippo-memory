@@ -11,6 +11,7 @@ import { createMemory } from './_helpers/default-half-life-memory.js';
 import { pushGoal } from '../src/store/goals.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { loadConfig } from '../src/core/config.js';
+import { sqliteStore } from '../src/store/sqlite/store.js';
 import { rankRecall, type RankRecallCtx, type RankRecallOpts } from '../src/api/recall/pipeline.js';
 import type { RerankerFn } from '../src/rerankers/types.js';
 
@@ -50,7 +51,7 @@ function goalLogCount(): number {
 }
 
 const ids = (results: { entry: MemoryEntry }[]): string[] => results.map((r) => r.entry.id);
-const ctx = (): RankRecallCtx => ({ hippoRoot, tenantId: 'default' });
+const ctx = (): RankRecallCtx => ({ store: sqliteStore(hippoRoot), config: loadConfig(hippoRoot), tenantId: 'default' });
 
 describe('rankRecall', () => {
   beforeEach(() => {

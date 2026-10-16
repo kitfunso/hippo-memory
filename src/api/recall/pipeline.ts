@@ -5,7 +5,7 @@ import { evalNow } from '../../core/ablation.js';
 import { oneCopyPerMemory } from '../context-select.js';
 import { compareEntryIdentity, compareScoresDesc } from '../../core/compare.js';
 import { isEmbeddingAvailable } from '../../embeddings/local.js';
-import { activeGoalsWithPolicies, type GoalRecallLogRow } from '../../store/goals.js';
+import type { GoalRecallLogRow } from '../../store/goals.js';
 import { boostByGoals } from '../../search/goal-boost.js';
 import { graphExpandRecall } from '../../graph/recall.js';
 import { DEFAULT_GRAPH_STREAM_WEIGHT } from '../../graph/stream.js';
@@ -18,7 +18,7 @@ import { currentEntries } from '../../search/as-of.js';
 import { STRENGTH_RANK_FLOOR, STRENGTH_RANK_SPAN } from '../../search/boosts.js';
 import { hybridSearch, vectorSourceOf } from '../../search/hybrid.js';
 import { searchByEngine } from '../../search/engine.js';
-import type { VectorSource } from '../../search/vector.js';
+import type { HippoConfig } from '../../core/config.js';
 import {
   CONFLICT_PEER_MULTIPLIER,
   SALIENCE_MIN_MULTIPLIER,
@@ -32,16 +32,24 @@ import {
   type SearchResult,
 } from '../../core/search-types.js';
 import { rankBothStores } from '../../sharing/search-both.js';
-import { loadRecallEntries, recallScopeFilter } from '../../store/search-rows.js';
+import { recallScopeFilter } from '../../store/search-rows.js';
+import { DEFAULT_SEARCH_CANDIDATE_LIMIT } from '../../store/rows.js';
+import type { HippoStore } from '../../store/index.js';
 import { isJsonNumber } from '../../util/json.js';
 import { currentSignal } from '../../util/request-scope.js';
 import { textOverlap, tokenize as tokenizeQuery } from '../../util/tokenize.js';
 
+/** A store rankRecall reads, with the config that names its embedding model. */
+export interface RankSource {
+  readonly store: HippoStore;
+  readonly config: HippoConfig;
+}
+
 /** Stores rankRecall reads and where it sends operator notes. */
-export interface RankRecallCtx {
-  hippoRoot: string;
-  /** A second store searched beside `hippoRoot`; leave undefined when there is none. */
-  globalRoot?: string;
+export interface RankRecallCtx extends RankSource {
+  /** A second store searched beside `store`; leave undefined when there is none. Passing `store` itself reads it
+   * twice but walks its graph once. */
+  global?: RankSource;
   tenantId: string;
   /** Receives each operator note when the pipeline reaches it, so it interleaves with other stderr in order. */
   note?: (line: string) => void;
@@ -148,7 +156,7 @@ interface RankState {
  * goal-log rows.
  */
 export async function rankRecall(ctx: RankRecallCtx, opts: RankRecallOpts): Promise<RankRecallResult> {
-  const pool = loadRecallPool(ctx, opts);
+  const pool = await loadRecallPool(ctx, opts);
   const state: RankState = { results: [], droppedPreRank: pool.dropped, graphAdded: 0, goalRecallLog: [] };
   const done = (halted: boolean): RankRecallResult => ({
     results: state.results,
@@ -165,11 +173,11 @@ export async function rankRecall(ctx: RankRecallCtx, opts: RankRecallOpts): Prom
   // A request past its deadline during the search has no caller left for the later stages.
   currentSignal()?.throwIfAborted();
   if (opts.haltBefore === 'expand') return done(true);
-  if (opts.graphHops) expandGraph(ctx, opts, opts.graphHops, state);
+  if (opts.graphHops) await expandGraph(ctx, opts, opts.graphHops, state);
   applyPfcRerankers(opts, state);
   if (opts.haltBefore === 'rerank') return done(true);
   if (opts.reranker) state.results = await applyReranker(opts, opts.reranker, state.results);
-  applyGoalBoosts(ctx, opts, state);
+  await applyGoalBoosts(ctx, opts, state);
   if (opts.haltBefore === 'salience') return done(true);
   if (opts.salienceThreshold !== undefined) state.results = applySalience(opts, opts.salienceThreshold, state.results);
   if (opts.haltBefore === 'outcome') return done(true);
@@ -180,18 +188,20 @@ export async function rankRecall(ctx: RankRecallCtx, opts: RankRecallOpts): Prom
   return done(false);
 }
 
-function loadRecallPool(ctx: RankRecallCtx, opts: RankRecallOpts): RecallPool {
+async function loadRecallPool(ctx: RankRecallCtx, opts: RankRecallOpts): Promise<RecallPool> {
   // An explicit --scope unlocks that envelope scope; the regex-only `<source>:private:*` deny is the JS half below.
   const requested = opts.explicitScope || undefined;
   const loadSuperseded = opts.includeSuperseded || Boolean(opts.asOf);
   const load = {
+    limit: DEFAULT_SEARCH_CANDIDATE_LIMIT,
     tenantId: ctx.tenantId,
     requestedScope: requested,
     explicitScopeMode: 'additive',
     includeSuperseded: loadSuperseded,
+    ownScope: undefined,
   } as const;
-  let local = loadRecallEntries(ctx.hippoRoot, opts.query, load);
-  let global = ctx.globalRoot ? loadRecallEntries(ctx.globalRoot, opts.query, load) : [];
+  let local = await ctx.store.searchRecallEntries(opts.query, load);
+  let global = ctx.global ? await ctx.global.store.searchRecallEntries(opts.query, load) : [];
   // SQL-excluded rows are pre-candidate, so the total is taken before the JS filters, which normally drop nothing.
   const total = local.length + global.length;
   const passes = (e: MemoryEntry): boolean => passesCliRecallScopeFilter(e.scope ?? null, requested);
@@ -211,7 +221,6 @@ function graphStreamSearch(
 ): Promise<SearchResult[]> {
   const { query, budget, cost, includeSuperseded, asOf, activeScope: scope, search } = opts;
   const { mmr, mmrLambda, minResults } = search;
-  const globalRoot = pool.global.length > 0 ? ctx.globalRoot : undefined;
   // Without embeddings hybridSearch falls back to BM25-only and the stream is inert; say so rather than no-op.
   if (!isEmbeddingAvailable()) {
     ctx.note?.(
@@ -219,12 +228,12 @@ function graphStreamSearch(
       '`hippo embed` first.',
     );
   }
-  if (globalRoot) {
+  if (ctx.global && pool.global.length > 0) {
     ctx.note?.('[note] --graph-stream searches the local store only; global graph fusion is a follow-up.');
   }
   // With seedCount or fewer candidates every one is a seed and the stream degrades to the 2-list fusion.
   return hybridSearch(query, pool.local, {
-    budget, cost, hippoRoot: ctx.hippoRoot, mmr, mmrLambda, minResults, scope, includeSuperseded, asOf,
+    budget, cost, source: vectorSourceOf(ctx), mmr, mmrLambda, minResults, scope, includeSuperseded, asOf,
     scoring: 'rrf',
     graphStream: {
       weight: DEFAULT_GRAPH_STREAM_WEIGHT,
@@ -235,7 +244,7 @@ function graphStreamSearch(
   });
 }
 
-function multihopPoolSearch(ctx: RankRecallCtx, opts: RankRecallOpts, pool: RecallPool): SearchResult[] {
+function multihopPoolSearch(opts: RankRecallOpts, pool: RecallPool): SearchResult[] {
   const { query, budget, cost, includeSuperseded, asOf, search } = opts;
   const { minResults } = search;
   // Unlike rankBothStores below, multihop ranks one pooled list, so a shared memory's two copies both compete.
@@ -246,7 +255,6 @@ function multihopPoolSearch(ctx: RankRecallCtx, opts: RankRecallOpts, pool: Reca
   const results = multihopSearch(query, allEntries, {
     budget,
     cost: cost && ((r) => cost({ ...r, isGlobal: fromGlobal(r.entry.id) })),
-    hippoRoot: ctx.hippoRoot,
     minResults,
     includeSuperseded,
     asOf,
@@ -267,16 +275,15 @@ function poolVectorCandidates(ctx: RankRecallCtx, opts: RankRecallOpts) {
 async function searchPool(ctx: RankRecallCtx, opts: RankRecallOpts, pool: RecallPool): Promise<SearchResult[]> {
   const { query, budget, cost, includeSuperseded, asOf, activeScope: scope, search } = opts;
   const { mmr, mmrLambda, minResults, explain } = search;
-  const globalRoot = pool.global.length > 0 ? ctx.globalRoot : undefined;
   if (search.graphStream) return graphStreamSearch(ctx, opts, search.graphStream, pool);
-  if (search.multihop) return multihopPoolSearch(ctx, opts, pool);
+  if (search.multihop) return multihopPoolSearch(opts, pool);
   const vectorCandidates = poolVectorCandidates(ctx, opts);
-  if (globalRoot) {
+  if (ctx.global && pool.global.length > 0) {
     // The pool already holds searchBothHybrid's additive-scope load for each store, so rank it rather than read both
     // stores again.
     return rankBothStores(
       query,
-      { local: ctx.hippoRoot, global: globalRoot },
+      { local: vectorSourceOf(ctx), global: vectorSourceOf(ctx.global) },
       { local: pool.local, global: pool.global },
       vectorCandidates,
       {
@@ -302,7 +309,7 @@ async function searchPool(ctx: RankRecallCtx, opts: RankRecallOpts, pool: Recall
     : explain
       ? { asOf }
       : { minResults, includeSuperseded, asOf };
-  return searchByEngine(hippoDbSource(ctx.hippoRoot), query, pool.local, physics, {
+  return searchByEngine(vectorSourceOf(ctx), query, pool.local, physics, {
     budget,
     cost,
     scope,
@@ -312,23 +319,18 @@ async function searchPool(ctx: RankRecallCtx, opts: RankRecallOpts, pool: Recall
   });
 }
 
-/** The CLI core holds no store: it ranks on hippo.db under its root, as its loads above do. */
-function hippoDbSource(hippoRoot: string): VectorSource {
-  const source = vectorSourceOf({ hippoRoot });
-  if (!source) throw new Error('The CLI ranking core needs a hippo root to rank on');
-  return source;
-}
-
 /** Adds memories reached by walking the entity graph out from the lexical seeds. */
-function expandGraph(ctx: RankRecallCtx, opts: RankRecallOpts, graph: RecallGraphHops, state: RankState): void {
+async function expandGraph(
+  ctx: RankRecallCtx, opts: RankRecallOpts, graph: RecallGraphHops, state: RankState,
+): Promise<void> {
   if (graph.hops <= 0) return;
   // Expansion both adds neighbours and evicts weak base rows, so compare id sets: a net count would hide both.
   const beforeGraphIds = new Set(state.results.map((r) => r.entry.id));
-  state.results = graphExpandRecall(state.results, {
+  state.results = await graphExpandRecall(state.results, {
     hops: graph.hops,
     maxNeighbors: graph.maxNeighbors,
-    hippoRoot: ctx.hippoRoot,
-    globalRoot: ctx.globalRoot !== ctx.hippoRoot ? ctx.globalRoot : undefined,
+    store: ctx.store,
+    global: ctx.global?.store,
     tenantId: ctx.tenantId,
     includeSuperseded: opts.includeSuperseded,
     asOf: opts.asOf,
@@ -486,7 +488,7 @@ async function applyReranker(
   return [...withPostRank, ...results.slice(topK)];
 }
 
-function applyGoalBoosts(ctx: RankRecallCtx, opts: RankRecallOpts, state: RankState): void {
+async function applyGoalBoosts(ctx: RankRecallCtx, opts: RankRecallOpts, state: RankState): Promise<void> {
   const goalTag = opts.goalTag ?? '';
   if (goalTag) {
     // Its own trace stage: `goal` is the explicit flag, `goal-boost` the session stack it replaces.
@@ -510,7 +512,7 @@ function applyGoalBoosts(ctx: RankRecallCtx, opts: RankRecallOpts, state: RankSt
   const goalBoostTrace = opts.why ? new Map<string, RerankStep>() : undefined;
   const session = { sessionId: opts.sessionId, tenantId: ctx.tenantId };
   // The log may name global rows; the store drops those when it writes, as it does for api.recall.
-  const boost = boostByGoals(state.results, activeGoalsWithPolicies(ctx.hippoRoot, session), {
+  const boost = boostByGoals(state.results, await ctx.store.activeGoals(session), {
     ...session,
     limit: opts.limit,
     trace: goalBoostTrace,

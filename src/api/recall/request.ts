@@ -15,7 +15,8 @@ import { MAX_ID_LEN } from '../../util/limits.js';
 import { estimateTokens } from '../../util/token-text.js';
 import type { ContextOpts } from '../context-types.js';
 import type { Context, StoreContext } from '../types.js';
-import { rankRecall, type RankRecallResult } from './pipeline.js';
+import { configAtRoot, configOf } from '../config-of.js';
+import { rankRecall, type RankRecallResult, type RankSource } from './pipeline.js';
 import {
   callerOf,
   heldIds,
@@ -201,12 +202,9 @@ export async function retrieveWithCliCore(
 ): Promise<RecallResult> {
   // This ranker applies the operator's scope rule and may search a second store, so no bearer client may reach it.
   if (!ctx.actor.hostAdmin) throw new ForbiddenError('The CLI ranking core serves the host admin only');
-  const globalRoot = core.sources?.globalRoot;
-  // The ranking core reads hippo.db under hippoRoot, yet writes through the caller's store, whose finishRecall skips
-  // any id it does not hold.
   const store = ctx.store;
   const ranking = await rankRecall(
-    { hippoRoot: ctx.hippoRoot, globalRoot, tenantId: ctx.tenantId, note: core.note },
+    { store, config: configOf(ctx), global: rankGlobal(ctx, core.sources), tenantId: ctx.tenantId, note: core.note },
     { ...core.rank, query: opts.query, sessionId: opts.sessionId, goalTag: opts.goalTag },
   );
   if (ranking.halted) {
@@ -300,6 +298,13 @@ async function recordShown(
     ledgerSessionId: core.hostSessionId ?? null,
     written: audited,
   });
+}
+
+/** The second store ranked, as the caller's own store when its root is the one searched, so its graph walks once. */
+function rankGlobal(ctx: StoreContext, sources: CliCoreRanker['sources']): RankSource | undefined {
+  if (sources === undefined) return undefined;
+  if (sources.globalRoot === ctx.hippoRoot) return { store: ctx.store, config: configOf(ctx) };
+  return { store: sources.globalStore, config: configAtRoot(ctx, sources.globalRoot) };
 }
 
 /** The second store takes its own recall rows, unless it is the root being searched already. */

@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { serve } from '../src/server.js';
 import { sqliteStore, type HippoStore, type VectorCandidateSpec, type VectorReads } from '../src/entry/store-kit.js';
 import { __resetSessionRecallHistoryHttp } from '../src/entry/testing.js';
-import { hybridSearch } from '../src/search/hybrid.js';
+import { folderVectorSource, hybridSearch } from '../src/search/hybrid.js';
 import { resolveVectorArm } from '../src/search/vector.js';
 import { markSharedStore } from '../src/core/config.js';
 import { _resetSessionRecallHistoryMcpForTests } from '../src/mcp/server.js';
@@ -293,8 +293,8 @@ describe('the in-memory vector reads answer as sqliteStore does', () => {
       expect(viaViews).toHaveLength(2000);
       expect(viaViews[0]![0]).toBe(PLANTED);
       expect(viaViews[0]![2]).toBeGreaterThan(0.999);
-      expect((await resolveVectorArm(QUERY, entries, { root, store: views }, {})).embeddingIndex[PLANTED]).toBeInstanceOf(Float32Array);
-      expect((await resolveVectorArm(QUERY, entries, { root, store: copies }, {})).embeddingIndex[PLANTED]).toBeInstanceOf(Array);
+      expect((await resolveVectorArm(QUERY, entries, folderVectorSource({ hippoRoot: root, store: views }), {})).embeddingIndex[PLANTED]).toBeInstanceOf(Float32Array);
+      expect((await resolveVectorArm(QUERY, entries, folderVectorSource({ hippoRoot: root, store: copies }), {})).embeddingIndex[PLANTED]).toBeInstanceOf(Array);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

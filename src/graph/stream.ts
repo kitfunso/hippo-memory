@@ -7,8 +7,8 @@
  * fused-score effect.
  */
 import type { MemoryEntry } from '../core/memory.js';
-import { loadEntitiesByMemoryId, loadEntitiesByIds, loadNeighborRelations } from '../store/graph-reads.js';
 import type { Relation } from '../store/graph-rows.js';
+import type { HippoStore } from '../store/index.js';
 import { MAX_HOPS, DEFAULT_MAX_NEIGHBORS } from './recall.js';
 
 /** Default hops expanded from each seed (MVP; hard cap MAX_HOPS=3 reused from graph recall). */
@@ -29,11 +29,13 @@ export interface GraphSeed {
   strength: number;
 }
 
+type GraphStore = Pick<HippoStore, 'graphReads'>;
+
 export interface GraphStreamOpts {
-  hippoRoot: string;
+  store: GraphStore;
   tenantId: string;
-  /** The global store root, when distinct + initialized (where global seeds' graph lives). */
-  globalRoot?: string;
+  /** The global store, when distinct (where global seeds' graph lives). */
+  global?: GraphStore;
   /** Hops to expand from each seed. Clamped to [1, MAX_HOPS]. Default DEFAULT_GRAPH_HOPS. */
   hops?: number;
   /** Per-hop multiplicative decay on the seed strength. Default DEFAULT_GRAPH_DECAY. */
@@ -101,13 +103,13 @@ interface ReachedEntityScoresOptions {
 }
 
 /** BFS from the seed entities: entityId -> best originSeedStrength x decay^depth over every reached entity. */
-function reachedEntityScores(
-  root: string,
+async function reachedEntityScores(
+  store: GraphStore,
   tenantId: string,
   seedIds: number[],
   originStrength: ReadonlyMap<number, number>,
   options: ReachedEntityScoresOptions,
-): Map<number, number> {
+): Promise<Map<number, number>> {
   const { hops, decay, maxNeighbors } = options;
   const visited = new Set<number>(seedIds); // seeds never re-reached
   const reachedScore = new Map<number, number>();                 // entityId -> best score
@@ -116,7 +118,7 @@ function reachedEntityScores(
 
   for (let depth = 1; depth <= hops && frontier.length > 0; depth++) {
     const frontierSet = new Set(frontier);
-    const rels = loadNeighborRelations(root, tenantId, frontier, {
+    const rels = await store.graphReads.neighborRelations(tenantId, frontier, {
       limit: Math.max(maxNeighbors, maxNeighbors * frontier.length),
     });
     const hopFactor = Math.pow(decay, depth);
@@ -143,7 +145,7 @@ function reachedEntityScores(
   return reachedScore;
 }
 
-interface AccumulateForRootOptions {
+interface AccumulateForStoreOptions {
   readonly memIdToIndex: ReadonlyMap<string, number>;
   readonly graphScore: Map<number, number>;
   readonly hops: number;
@@ -158,12 +160,12 @@ interface AccumulateForRootOptions {
  * A neighbour's score = originSeedStrength x decay^(graph distance); the seed strength is carried unchanged along each
  * BFS path.
  */
-function accumulateForRoot(
-  root: string,
+async function accumulateForStore(
+  store: GraphStore,
   seeds: ReadonlyArray<GraphSeed>,
   entries: ReadonlyArray<MemoryEntry>,
-  options: AccumulateForRootOptions,
-): void {
+  options: AccumulateForStoreOptions,
+): Promise<void> {
   const { memIdToIndex, graphScore, hops, decay, maxNeighbors, tenantId } = options;
   if (seeds.length === 0) return;
   // The strongest seed strength per source memory id (a memId could appear once, but
@@ -173,7 +175,7 @@ function accumulateForRoot(
     const memId = entries[s.index].id;
     strengthByMemId.set(memId, Math.max(strengthByMemId.get(memId) ?? 0, s.strength));
   }
-  const seedEntities = loadEntitiesByMemoryId(root, tenantId, [...strengthByMemId.keys()]);
+  const seedEntities = await store.graphReads.entitiesForMemories(tenantId, [...strengthByMemId.keys()]);
   if (seedEntities.length === 0) return;
 
   // entityId -> origin seed strength. Seeds load by memory id so memoryId is non-null here; the guard keeps the widened
@@ -185,8 +187,8 @@ function accumulateForRoot(
     originStrength.set(e.id, Math.max(originStrength.get(e.id) ?? 0, st));
   }
 
-  const reachedScore = reachedEntityScores(
-    root,
+  const reachedScore = await reachedEntityScores(
+    store,
     tenantId,
     seedEntities.map((e) => e.id),
     originStrength,
@@ -195,7 +197,7 @@ function accumulateForRoot(
   if (reachedScore.size === 0) return;
 
   // Reached entity ids -> source memory ids -> in-pool entry indices.
-  const reachedEntities = loadEntitiesByIds(root, tenantId, [...reachedScore.keys()]);
+  const reachedEntities = await store.graphReads.entitiesByIds(tenantId, [...reachedScore.keys()]);
   for (const ent of reachedEntities) {
     if (ent.memoryId === null) continue;         // mirror-less node: no pool memory to re-rank
     const idx = memIdToIndex.get(ent.memoryId);
@@ -212,11 +214,11 @@ function accumulateForRoot(
  * Returns `[]` when there are no seeds/entries, the graph is empty, or nothing reached is in-pool, so the caller skips
  * the 3rd fusion list.
  */
-export function graphRankStream(
+export async function graphRankStream(
   entries: ReadonlyArray<MemoryEntry>,
   seeds: ReadonlyArray<GraphSeed>,
   opts: GraphStreamOpts,
-): number[] {
+): Promise<number[]> {
   if (seeds.length === 0 || entries.length === 0) return [];
   const hops = Math.min(Math.max(opts.hops ?? DEFAULT_GRAPH_HOPS, 1), MAX_HOPS);
   const decay = opts.decay ?? DEFAULT_GRAPH_DECAY;
@@ -226,11 +228,9 @@ export function graphRankStream(
   for (let i = 0; i < entries.length; i++) memIdToIndex.set(entries[i].id, i);
 
   const graphScore = new Map<number, number>();
-  const roots = opts.globalRoot && opts.globalRoot !== opts.hippoRoot
-    ? [opts.hippoRoot, opts.globalRoot]
-    : [opts.hippoRoot];
-  for (const root of roots) {
-    accumulateForRoot(root, seeds, entries, {
+  const stores = opts.global && opts.global !== opts.store ? [opts.store, opts.global] : [opts.store];
+  for (const store of stores) {
+    await accumulateForStore(store, seeds, entries, {
       memIdToIndex,
       graphScore,
       hops,

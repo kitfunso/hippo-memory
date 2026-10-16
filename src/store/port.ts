@@ -612,6 +612,11 @@ export interface GraphReads {
    * entities and relations. From a name: the entities of the ids held (id ascending, 400 at a time) and the newest
    * `limit` relations with both ends among those ids. */
   graphRows(tenantId: string, query: GraphViewQuery): Promise<GraphRows>;
+  entitiesForMemories(tenantId: string, memoryIds: readonly string[]): Promise<Entity[]>;
+  entitiesByIds(tenantId: string, ids: readonly number[]): Promise<Entity[]>;
+  neighborRelations(
+    tenantId: string, entityIds: readonly number[], opts: { readonly limit: number },
+  ): Promise<Relation[]>;
 }
 
 export type {

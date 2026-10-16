@@ -25,6 +25,7 @@ import { estimateTokens } from '../src/util/token-text.js';
 import type { SearchResult } from '../src/core/search-types.js';
 import { insertEntityAt, insertRelationAt } from './_helpers/graph-seed.js';
 import { graphExpandRecall } from '../src/graph/recall.js';
+import { sqliteStore } from '../src/store/sqlite/store.js';
 import { compareEntryIdentity, type EntryIdentity } from '../src/core/compare.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { apiCtx } from './_helpers/api-ctx.js';
@@ -194,7 +195,7 @@ describe('graph-recall.ts:248 graph-hop ordering', () => {
   beforeEach(() => { home = makeRoot('hop-tiebreak'); });
   afterEach(() => safeRmSync(home));
 
-  it('primary wins (hop distance) and the tail decides same-hop ties', () => {
+  it('primary wins (hop distance) and the tail decides same-hop ties', async () => {
     // a (origin, base seed) --1hop--> b, c (tied score: same origin+hop under
     // the score = originScore * (1 - HOP_DISCOUNT*hops) formula) --1hop from
     // b--> d (2 hops from a, therefore strictly lower score than b/c under
@@ -216,8 +217,8 @@ describe('graph-recall.ts:248 graph-hop ordering', () => {
     insertRelationAt(home, T, { fromEntityId: eb, toEntityId: ed, relType: 'supersedes', memoryId: b.id });
 
     const base = [sr(a, 1.0)];
-    const out = graphExpandRecall(base, {
-      hops: 2, hippoRoot: home, tenantId: T, budget: 40_000, includeSuperseded: true,
+    const out = await graphExpandRecall(base, {
+      hops: 2, store: sqliteStore(home), tenantId: T, budget: 40_000, includeSuperseded: true,
     });
 
     const ids = out.map((r) => r.entry.id);

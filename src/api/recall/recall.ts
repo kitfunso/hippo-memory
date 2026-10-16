@@ -13,6 +13,7 @@ import { boostByGoals, type GoalStackBoostOpts } from '../../search/goal-boost.j
 import type { ForwardClaimMatch } from '../../learn/forward-claim-detector.js';
 import { type HippoStore, type RecallSearchArgs, type RecallWrites } from '../../store/index.js';
 import { searchByEngine } from '../../search/engine.js';
+import { vectorSourceOf } from '../../search/hybrid.js';
 import { churnStaleFactor } from '../../search/boosts.js';
 import type { HybridVectorCandidates } from '../../search/vector.js';
 import type { RerankStep } from '../../core/search-types.js';
@@ -111,7 +112,7 @@ async function retrieveBand(
       vectorCandidates: recallVectorSpec(ctx, opts, own),
     };
     const ranked = await searchByEngine(
-      { root: ctx.hippoRoot, store, embeddings: configOf(ctx).embeddings },
+      vectorSourceOf({ store, config: configOf(ctx) }),
       opts.query,
       candidates,
       physicsFor(ctx, opts),
@@ -192,7 +193,7 @@ async function retrieveFromStore(
   // No scope option: the scope boost follows HIPPO_SCOPE and the skill env, as MCP recall always ranked.
   const searchOpts = { budget: Infinity, vectorCandidates: recallVectorSpec(ctx, opts, own) };
   const searched = await searchByEngine(
-    { root: ctx.hippoRoot, store, embeddings: configOf(ctx).embeddings },
+    vectorSourceOf({ store, config: configOf(ctx) }),
     opts.query,
     pool,
     physicsFor(ctx, opts),

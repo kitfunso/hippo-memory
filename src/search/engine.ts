@@ -17,11 +17,9 @@ export function searchByEngine(
   query: string,
   pool: MemoryEntry[],
   physics: PhysicsConfig | null,
-  options: Omit<HybridSearchOptions, 'hippoRoot' | 'store' | 'embeddings'>,
+  options: Omit<HybridSearchOptions, 'hippoRoot' | 'store' | 'embeddings' | 'source'>,
 ): Promise<SearchResult[]> {
   return physics
     ? physicsSearchIn(source, query, pool, { ...options, physicsConfig: physics })
-    : hybridSearch(query, pool, {
-        ...options, hippoRoot: source.root, store: source.store, embeddings: source.embeddings,
-      });
+    : hybridSearch(query, pool, { ...options, source });
 }

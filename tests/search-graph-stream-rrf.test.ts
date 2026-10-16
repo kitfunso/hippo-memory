@@ -21,6 +21,7 @@ import { createMemory } from './_helpers/default-half-life-memory.js';
 import { insertEntityAt, insertRelationAt } from './_helpers/graph-seed.js';
 import { rrfFuse } from '../src/search/rrf.js';
 import { selectGraphSeeds, graphRankStream } from '../src/graph/stream.js';
+import { sqliteStore } from '../src/store/sqlite/store.js';
 import { makeRoot } from './_helpers/make-root.js';
 
 function safeRmSync(p: string): void {
@@ -56,7 +57,7 @@ describe('graph stream x RRF fusion (real SQLite)', () => {
   beforeEach(() => { home = makeRoot('gstream-rrf'); });
   afterEach(() => safeRmSync(home));
 
-  it('Gate-(b) dry-run: a lexically-weak, graph-adjacent answer (rank>5 in 2-list) enters top-5 under the 3-list fusion', () => {
+  it('Gate-(b) dry-run: a lexically-weak, graph-adjacent answer (rank>5 in 2-list) enters top-5 under the 3-list fusion', async () => {
     // 8-entry pool. strong=0 is a top lexical hit; weak=7 is the answer: lexically last
     // but graph-adjacent (1-hop) to strong.
     const strong = mem(home, T, 'primary topic strongly matched by the query terms here');
@@ -81,7 +82,7 @@ describe('graph stream x RRF fusion (real SQLite)', () => {
     // from strong(0). seedCount=3 keeps weak a non-seed.
     const seeds = selectGraphSeeds(bm25Ranked, cosineRanked, 3);
     expect(seeds.map((s) => s.index)).not.toContain(7); // weak is NOT a seed
-    const graphRanked = graphRankStream(entries, seeds, { hippoRoot: home, tenantId: T });
+    const graphRanked = await graphRankStream(entries, seeds, { store: sqliteStore(home), tenantId: T });
     expect(graphRanked).toContain(7); // the graph stream surfaces weak
 
     // 3-list fusion lifts weak into top-5.
@@ -91,7 +92,7 @@ describe('graph stream x RRF fusion (real SQLite)', () => {
     expect(rank3).toBeLessThan(rank2); // strictly improved
   });
 
-  it('no-harm: a strong lexical hit with no graph path keeps its top rank when the stream is added', () => {
+  it('no-harm: a strong lexical hit with no graph path keeps its top rank when the stream is added', async () => {
     const answer = mem(home, T, 'control answer strongly matched by every query term');
     const others = [1, 2, 3, 4].map((i) => mem(home, T, `weaker control distractor ${i}`));
     const entries = [answer, ...others];
@@ -100,14 +101,14 @@ describe('graph stream x RRF fusion (real SQLite)', () => {
     const cosineRanked = [0, 1, 2, 3, 4];
 
     const seeds = selectGraphSeeds(bm25Ranked, cosineRanked, 3);
-    const graphRanked = graphRankStream(entries, seeds, { hippoRoot: home, tenantId: T });
+    const graphRanked = await graphRankStream(entries, seeds, { store: sqliteStore(home), tenantId: T });
     expect(graphRanked).toEqual([]);   // no graph -> empty -> wiring skips the 3rd list
 
     const order2 = fusedOrder(entries.length, [bm25Ranked, cosineRanked], [BM25_W, DENSE_W]);
     expect(order2[0]).toBe(0);         // strong control answer stays rank 1
   });
 
-  it('noise control: a POPULATED graph that boosts a non-answer distractor does NOT displace a strong lexical answer from the top', () => {
+  it('noise control: a POPULATED graph that boosts a non-answer distractor does NOT displace a strong lexical answer from the top', async () => {
     // The empty-graph no-harm case proves the skip path; this proves the harder thing —
     // when the graph IS populated and lifts a graph-adjacent *distractor*, a true lexical
     // answer with no graph path keeps its rank (the stream adds signal, not displacing noise).
@@ -124,7 +125,7 @@ describe('graph stream x RRF fusion (real SQLite)', () => {
     const bm25Ranked = [0, 1, 2, 3, 4, 5];   // answer rank1, adjacent rank6 (tail)
     const cosineRanked = [0, 1, 2, 3, 4, 5];
     const seeds = selectGraphSeeds(bm25Ranked, cosineRanked, 3); // top-3: 0,1,2 ; adjacent(5) NOT a seed
-    const graphRanked = graphRankStream(entries, seeds, { hippoRoot: home, tenantId: T });
+    const graphRanked = await graphRankStream(entries, seeds, { store: sqliteStore(home), tenantId: T });
     expect(graphRanked).toContain(5);        // the graph IS populated and boosts the distractor
 
     const order2 = fusedOrder(entries.length, [bm25Ranked, cosineRanked], [BM25_W, DENSE_W]);
@@ -134,12 +135,12 @@ describe('graph stream x RRF fusion (real SQLite)', () => {
     expect(order3.indexOf(5)).toBeGreaterThan(0); // boosted distractor did not reach the top
   });
 
-  it('empty graphRanked -> the 3rd list is skipped -> fused order is byte-identical to the 2-list path', () => {
+  it('empty graphRanked -> the 3rd list is skipped -> fused order is byte-identical to the 2-list path', async () => {
     const entries = [0, 1, 2, 3].map((i) => mem(home, T, `entry ${i} some lexical content`));
     const bm25Ranked = [0, 1, 2, 3];
     const cosineRanked = [3, 2, 1, 0];
     const seeds = selectGraphSeeds(bm25Ranked, cosineRanked, 2);
-    const graphRanked = graphRankStream(entries, seeds, { hippoRoot: home, tenantId: T });
+    const graphRanked = await graphRankStream(entries, seeds, { store: sqliteStore(home), tenantId: T });
     expect(graphRanked).toEqual([]);
 
     // The wiring's skip branch: rrfFuse over the 2 lists. Identical scores either way.

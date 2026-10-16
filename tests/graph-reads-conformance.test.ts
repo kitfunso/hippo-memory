@@ -4,12 +4,13 @@ import { rmSync } from 'node:fs';
 import type { AuditEvent } from '../src/store/audit.js';
 import type { ScopeActor } from '../src/core/recall-scope.js';
 import type { GraphRows, GraphViewQuery } from '../src/store/port.js';
+import type { Entity, Relation } from '../src/store/graph-rows.js';
 import {
   BULK_TENANT, HELD_SCOPE, inMemoryGraphReadsStore, MANY, seededAt, seedGraphRows, SOLO_TENANT, type SeededGraph,
 } from './_helpers/in-memory-graph-reads-store.js';
 import { onBothStores, seedTwoTenants, TENANT_A, TENANT_B, type GroupCall, type TwoTenantFixture } from './_helpers/store-conformance.js';
 
-type Call = GroupCall<'graphReads', GraphRows>;
+type Call<R = GraphRows> = GroupCall<'graphReads', R>;
 type Edge = readonly [from: number, to: number];
 
 /** The rows by id, which is all most cases need to tell one answer from another. */
@@ -42,7 +43,7 @@ const without = <T>(items: readonly T[], ...gone: readonly T[]): T[] => items.fi
 const ids = (entities: readonly number[], relations: readonly Edge[], truncated = false): RowIds => ({ entities, relations, truncated });
 
 /** Both stores' answers, asserted equal, with nothing appended to either audit log. */
-async function answers(calls: readonly Call[]): Promise<GraphRows[]> {
+async function answers<R>(calls: readonly Call<R>[]): Promise<R[]> {
   const sides = await onBothStores(fixture, 'graphReads', inMemoryGraphReadsStore, calls);
   expect(sides.other).toEqual(sides.sqlite);
   expect(sides.sqlite.audit).toEqual(auditBefore);
@@ -50,6 +51,14 @@ async function answers(calls: readonly Call[]): Promise<GraphRows[]> {
     if ('error' in o) throw new Error(o.error);
     return o.value;
   });
+}
+
+async function entityIds(calls: readonly Call<Entity[]>[]): Promise<number[][]> {
+  return (await answers(calls)).map((read) => read.map((row) => row.id));
+}
+
+async function edges(calls: readonly Call<Relation[]>[]): Promise<Edge[][]> {
+  return (await answers(calls)).map((read) => read.map((r): Edge => [r.fromEntityId, r.toEntityId]));
 }
 
 async function readIds(calls: readonly Call[]): Promise<RowIds[]> {
@@ -225,5 +234,52 @@ describe('GraphReads.graphRows from a name', () => {
     expect(startsOnly).toEqual(ids(many, [], true));
     expect(firstBatch).toEqual(ids(many.slice(0, 400), [], true));
     expect(newestOfBulk).toEqual(ids([last, many[MANY - 2]!, many[MANY - 3]!], [[last, e.tailB], [first, e.tailA]], true));
+  });
+});
+
+describe('GraphReads walk reads', () => {
+  it("maps memory ids to their entities, by id in each 400, inside the asking tenant", async () => {
+    const { e, memories, many } = g;
+    const [both, team, otherTenant, none, bulk] = await entityIds([
+      (r) => r.entitiesForMemories(TENANT_A, [memories.held, memories.team]), (r) => r.entitiesForMemories(TENANT_A, [memories.team]),
+      (r) => r.entitiesForMemories(TENANT_B, [memories.team]), (r) => r.entitiesForMemories(TENANT_A, []), (r) => r.entitiesForMemories(BULK_TENANT, ['mem_gbulk']),
+    ]);
+    expect(both).toEqual([e.hub, e.spoke1, e.spoke2, e.secret, e.twinHeld, e.twinOpen, e.lone, e.shared]);
+    expect(team).toEqual([e.hub, e.spoke1, e.spoke2, e.twinOpen, e.lone, e.shared]);
+    expect([otherTenant, none]).toEqual([[], []]);
+    expect(bulk).toEqual([e.tailA, e.tailB, ...many]);
+  });
+
+  it('reads entities by id, in id order inside each 400 asked, and never from another tenant', async () => {
+    const { e, many } = g;
+    const [scrambled, crossTenant, reversed, none] = await entityIds([
+      (r) => r.entitiesByIds(TENANT_A, [e.shared, e.hub, e.secret]), (r) => r.entitiesByIds(TENANT_A, [e.sharedB, e.hub]),
+      (r) => r.entitiesByIds(BULK_TENANT, [...many].reverse()), (r) => r.entitiesByIds(TENANT_A, []),
+    ]);
+    expect(scrambled).toEqual([e.hub, e.secret, e.shared]);
+    expect(crossTenant).toEqual([e.hub]);
+    // The first 400 asked are the last 400 made, so they come back before the five oldest.
+    expect(reversed).toEqual([...many.slice(MANY - 400), ...many.slice(0, MANY - 400)]);
+    expect(none).toEqual([]);
+  });
+
+  it('reads the newest limit relations touching each 400 ids, keeping a repeat in its first place', async () => {
+    const { e, many } = g;
+    const first = many[0]!;
+    const last = many[MANY - 1]!;
+    const [hub, hubTwo, hubSecret, perBatch, repeated, otherTenant, zero, none] = await edges([
+      (r) => r.neighborRelations(TENANT_A, [e.hub], { limit: 100 }), (r) => r.neighborRelations(TENANT_A, [e.hub], { limit: 2 }),
+      (r) => r.neighborRelations(TENANT_A, [e.hub, e.secret], { limit: 100 }), (r) => r.neighborRelations(BULK_TENANT, many, { limit: 1 }),
+      (r) => r.neighborRelations(BULK_TENANT, [...many.slice(0, 400), e.tailA], { limit: 5 }), (r) => r.neighborRelations(TENANT_B, [e.hub], { limit: 100 }),
+      (r) => r.neighborRelations(TENANT_A, [e.hub], { limit: 0 }), (r) => r.neighborRelations(TENANT_A, [], { limit: 100 }),
+    ]);
+    const hubEdges: Edge[] = [[e.shared, e.hub], [e.hub, e.secret], [e.hub, e.spoke2], [e.hub, e.spoke1]];
+    expect(hub).toEqual(hubEdges);
+    expect(hubTwo).toEqual(hubEdges.slice(0, 2));
+    expect(hubSecret).toEqual([[e.shared, e.hub], [e.secret, e.mine], [e.hub, e.secret], [e.hub, e.spoke2], [e.hub, e.spoke1]]);
+    // The limit holds per 400: the newer TailB relation still comes back, after the first batch's.
+    expect(perBatch).toEqual([[first, e.tailA], [last, e.tailB]]);
+    expect(repeated).toEqual([[first, e.tailA]]);
+    expect([otherTenant, zero, none]).toEqual([[], [], []]);
   });
 });

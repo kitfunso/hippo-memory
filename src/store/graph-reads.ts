@@ -128,7 +128,7 @@ export const IN_LIST_CHUNK = 400;
 export function loadEntitiesByIds(
   hippoRoot: string,
   tenantId: string,
-  ids: number[],
+  ids: readonly number[],
   txDb?: DatabaseSyncLike,
 ): Entity[] {
   assertTenantId('loadEntitiesByIds', tenantId);
@@ -159,7 +159,7 @@ export function loadEntitiesByIds(
 export function loadNeighborRelations(
   hippoRoot: string,
   tenantId: string,
-  entityIds: number[],
+  entityIds: readonly number[],
   opts: { limit?: number } = {},
   txDb?: DatabaseSyncLike,
 ): Relation[] {
@@ -231,7 +231,7 @@ export function loadRelationsAmong(
 export function loadEntitiesByMemoryId(
   hippoRoot: string,
   tenantId: string,
-  memoryIds: string[],
+  memoryIds: readonly string[],
 ): Entity[] {
   assertTenantId('loadEntitiesByMemoryId', tenantId);
   if (memoryIds.length === 0) return [];

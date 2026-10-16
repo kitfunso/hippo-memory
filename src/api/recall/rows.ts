@@ -9,7 +9,6 @@ import { JEV_DEFAULT_TOP_K } from '../../rerankers/jev.js';
 import type { RerankerFn } from '../../rerankers/types.js';
 import { explainMatch } from '../../search/explain.js';
 import { fitBudget } from '../../search/finalize.js';
-import { detectScope } from '../../core/active-scope.js';
 import type { ContinuityBlock } from '../../store/port.js';
 import { passesCliRecallScopeFilter, passesScopeFilterForRecall } from '../../core/recall-scope.js';
 import { loadSearchEntries } from '../../store/search-rows.js';
@@ -24,12 +23,12 @@ export interface CliRecallSetting {
   readonly activeScope: string | null;
 }
 
-/** The active scope merges `--scope` with the detected one, which only boosts. */
-export function cliRecallSetting(ctx: Context, explicitScope: string | null): CliRecallSetting {
+/** The CLI merges `--scope` with the scope it detects into `activeScope`, which only boosts. */
+export function cliRecallSetting(ctx: Context, activeScope: string | null): CliRecallSetting {
   return {
     globalRoot: ctx.reach?.global?.root ?? '',
     primaryIsGlobal: ctx.reach?.isGlobal ?? false,
-    activeScope: explicitScope || detectScope(),
+    activeScope,
   };
 }
 

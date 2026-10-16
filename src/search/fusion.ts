@@ -1,6 +1,6 @@
 import type { MemoryEntry } from '../core/memory.js';
 import { rrfFuse } from './rrf.js';
-import { graphRankStream, selectGraphSeeds, DEFAULT_GRAPH_SEED_COUNT } from '../graph/stream.js';
+import { graphRankStream, selectGraphSeeds, DEFAULT_GRAPH_SEED_COUNT, type GraphStreamOpts } from '../graph/stream.js';
 import { compareEntryIdentity } from '../core/compare.js';
 import type { DenseScores } from './vector.js';
 
@@ -24,7 +24,8 @@ export interface FusionInput {
   dense: DenseScores;
   bm25Weight: number;
   embeddingWeight: number;
-  hippoRoot?: string;
+  /** The stores the graph list walks; without them it ranks nothing. */
+  graph?: Pick<GraphStreamOpts, 'store' | 'global'>;
   graphStream?: GraphStreamOptions;
 }
 
@@ -37,12 +38,12 @@ function rankBy(eligible: number[], scores: number[], entries: MemoryEntry[]): n
 }
 
 /** Reciprocal rank fusion of the BM25 and dense rankings, plus the graph list when it ranks anything. */
-export function fuseRanks(input: FusionInput): Map<number, number> {
+export async function fuseRanks(input: FusionInput): Promise<Map<number, number>> {
   const { entries, bm25Scores, dense } = input;
   const eligible = entries.map((_, i) => i).filter((i) => bm25Scores[i] > 0 || dense.cosine[i] > 0);
   const bm25Ranked = rankBy(eligible, bm25Scores, entries);
   const cosineRanked = rankBy(eligible, dense.cosine, entries);
-  const graphRanked = graphRanking(input, eligible.length, bm25Ranked, cosineRanked);
+  const graphRanked = await graphRanking(input, eligible.length, bm25Ranked, cosineRanked);
   // absentRank stays entries.length + 1 rather than rrfFuse's longest-list default.
   const opts = { absentRank: entries.length + 1 };
   // An all-absent third list would add a constant the later multipliers make non-uniform, so an empty one is skipped.
@@ -55,22 +56,21 @@ export function fuseRanks(input: FusionInput): Map<number, number> {
     : rrfFuse([bm25Ranked, cosineRanked], [input.bm25Weight, input.embeddingWeight], opts);
 }
 
-function graphRanking(
+async function graphRanking(
   input: FusionInput,
   eligibleCount: number,
   bm25Ranked: number[],
   cosineRanked: number[],
-): number[] {
-  const gs = input.graphStream;
+): Promise<number[]> {
+  const { graph, graphStream: gs } = input;
   // Without doc vectors the dense ranking is just entry order, so seeds drawn from it would mean nothing.
   const hasDocVectors = input.dense.hadVec.some(Boolean);
-  if (!gs || gs.weight <= 0 || !input.hippoRoot || !hasDocVectors) return [];
+  if (!gs || gs.weight <= 0 || !graph || !hasDocVectors) return [];
   const seedCount = Math.min(gs.seedCount ?? DEFAULT_GRAPH_SEED_COUNT, eligibleCount);
   const seeds = selectGraphSeeds(bm25Ranked, cosineRanked, seedCount);
   return graphRankStream(input.entries, seeds, {
-    hippoRoot: input.hippoRoot,
+    ...graph,
     tenantId: gs.tenantId,
-    globalRoot: gs.globalRoot,
     hops: gs.hops,
     decay: gs.decay,
     maxNeighbors: gs.maxNeighbors,
