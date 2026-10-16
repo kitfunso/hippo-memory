@@ -1,18 +1,28 @@
-import { afterEach, beforeEach, describe, it, expect } from 'vitest';
+import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { hippoOut } from './_helpers/spawn-hippo.js';
+import { runCli } from '../src/cli.js';
+import { runInProcess } from './_helpers/run-in-process.js';
 
+const savedCwd = process.cwd();
 let home: string;
-let env: NodeJS.ProcessEnv;
 beforeEach(() => {
   home = mkdtempSync(join(tmpdir(), 'hippo-status-'));
-  env = { ...process.env, HIPPO_HOME: join(home, '.hippo') };
+  vi.stubEnv('HIPPO_HOME', join(home, '.hippo'));
+  process.chdir(home);
 });
-afterEach(() => rmSync(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }));
+afterEach(() => {
+  process.chdir(savedCwd);
+  vi.unstubAllEnvs();
+  rmSync(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+});
 
-const run = (...args: string[]): string => hippoOut(args, { cwd: home, env });
+async function run(...args: string[]): Promise<string> {
+  const res = await runInProcess(() => runCli(['node', 'hippo', ...args]));
+  expect(res.status, res.stderr).toBe(0);
+  return res.stdout;
+}
 const field = (out: string, label: string): string => {
   const line = out.split('\n').find((l) => l.trimStart().startsWith(`${label}:`));
   if (line === undefined) throw new Error(`no "${label}" line in:\n${out}`);
@@ -20,12 +30,12 @@ const field = (out: string, label: string): string => {
 };
 
 describe('hippo status', () => {
-  it('reports every count of a seeded store', () => {
-    run('init');
-    run('remember', 'alpha deploys use blue green');
-    run('remember', 'beta pinned rule', '--pin');
-    run('trace', 'record', '--task', 't', '--steps', '[{"action":"a","observation":"o"}]', '--outcome', 'success');
-    const out = run('status');
+  it('reports every count of a seeded store', async () => {
+    await run('init');
+    await run('remember', 'alpha deploys use blue green');
+    await run('remember', 'beta pinned rule', '--pin');
+    await run('trace', 'record', '--task', 't', '--steps', '[{"action":"a","observation":"o"}]', '--outcome', 'success');
+    const out = await run('status');
     expect({
       total: field(out, 'Total memories'),
       buffer: field(out, 'Buffer'),
@@ -44,9 +54,9 @@ describe('hippo status', () => {
     });
   });
 
-  it('reports an empty store as zeros', () => {
-    run('init');
-    const out = run('status');
+  it('reports an empty store as zeros', async () => {
+    await run('init');
+    const out = await run('status');
     expect([field(out, 'Total memories'), field(out, 'Pinned'), field(out, 'Total remembered')]).toEqual(['0', '0', '0']);
   });
 });

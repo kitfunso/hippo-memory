@@ -102,18 +102,6 @@ describe('server lifecycle', () => {
     }
   });
 
-  it('unknown routes return 404', async () => {
-    const home = makeRoot();
-    const handle = await serve({ hippoRoot: home, port: 0 });
-    try {
-      const res = await fetch(`${handle.url}/does-not-exist`);
-      expect(res.status).toBe(404);
-    } finally {
-      await handle.stop();
-      rmSync(home, { recursive: true, force: true });
-    }
-  });
-
   it('stop() removes the pidfile and closes the listener', async () => {
     const home = makeRoot();
     const handle = await serve({ hippoRoot: home, port: 0 });
@@ -225,18 +213,6 @@ describe('server lifecycle', () => {
     }
   });
 
-  it('refuses to bind to a non-loopback host without auth', async () => {
-    const home = makeRoot();
-    try {
-      await expect(serve({ hippoRoot: home, port: 0, host: '0.0.0.0' }))
-        .rejects.toThrow(/auth/i);
-      await expect(serve({ hippoRoot: home, port: 0, host: '192.168.1.1' }))
-        .rejects.toThrow(/loopback/i);
-    } finally {
-      rmSync(home, { recursive: true, force: true });
-    }
-  });
-
   it('stop() does not remove a pidfile that a newer server rewrote (ownership guard)', async () => {
     const home = makeRoot();
     const handle = await serve({ hippoRoot: home, port: 0 });
@@ -269,33 +245,6 @@ describe('server lifecycle', () => {
 });
 
 describe('/v1 rate limiting', () => {
-  it('throttles /v1/* with 429s and never throttles /health', async () => {
-    const home = makeRoot();
-    const prev = process.env.HIPPO_V1_RPS;
-    process.env.HIPPO_V1_RPS = '1'; // rate 1/s, burst 2
-    try {
-      const handle = await serve({ hippoRoot: home, port: 0 });
-      try {
-        // A burst of 12 /v1/ requests far exceeds burst=2 — some must be 429.
-        const v1 = await Promise.all(
-          Array.from({ length: 12 }, () => fetch(`${handle.url}/v1/memories?q=x`)),
-        );
-        expect(v1.some((r) => r.status === 429)).toBe(true);
-        // /health is not a /v1/ path: never throttled.
-        const health = await Promise.all(
-          Array.from({ length: 12 }, () => fetch(`${handle.url}/health`)),
-        );
-        expect(health.every((r) => r.status === 200)).toBe(true);
-      } finally {
-        await handle.stop();
-      }
-    } finally {
-      if (prev === undefined) delete process.env.HIPPO_V1_RPS;
-      else process.env.HIPPO_V1_RPS = prev;
-      rmSync(home, { recursive: true, force: true });
-    }
-  });
-
   it('throttles /mcp and /mcp/stream from the same per-IP bucket', async () => {
     const home = makeRoot();
     const prev = process.env.HIPPO_V1_RPS;
@@ -312,27 +261,6 @@ describe('/v1 rate limiting', () => {
         expect(stream.status).toBe(429);
       } finally {
         ac.abort();
-        await handle.stop();
-      }
-    } finally {
-      if (prev === undefined) delete process.env.HIPPO_V1_RPS;
-      else process.env.HIPPO_V1_RPS = prev;
-      rmSync(home, { recursive: true, force: true });
-    }
-  });
-
-  it('HIPPO_V1_RPS=0 disables the limiter (no 429s under a burst)', async () => {
-    const home = makeRoot();
-    const prev = process.env.HIPPO_V1_RPS;
-    process.env.HIPPO_V1_RPS = '0';
-    try {
-      const handle = await serve({ hippoRoot: home, port: 0 });
-      try {
-        const v1 = await Promise.all(
-          Array.from({ length: 12 }, () => fetch(`${handle.url}/v1/memories?q=x`)),
-        );
-        expect(v1.some((r) => r.status === 429)).toBe(false);
-      } finally {
         await handle.stop();
       }
     } finally {

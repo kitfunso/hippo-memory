@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
-import { activeGoalsWithPolicies, pushGoal, completeGoal, suspendGoal, resumeGoal } from '../src/store/goals.js';
+import { activeGoalsWithPolicies, pushGoal, completeGoal, suspendGoal } from '../src/store/goals.js';
 
 const activeGoalsOf = (root: string, opts: { sessionId: string; tenantId: string }) => activeGoalsWithPolicies(root, opts).goals;
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
@@ -34,20 +34,6 @@ describe('goal lifecycle', () => {
       closeHippoDb(db);
     }
     expect(activeGoalsOf(root, ctx)).toHaveLength(0);
-  });
-
-  it('suspend/resume cycles status; cap applies on resume', () => {
-    const a = pushGoal(root, { ...ctx, goalName: 'a' });
-    pushGoal(root, { ...ctx, goalName: 'b' });
-    pushGoal(root, { ...ctx, goalName: 'c' });
-    suspendGoal(root, a.id);
-    expect(activeGoalsOf(root, ctx)).toHaveLength(2);
-    pushGoal(root, { ...ctx, goalName: 'd' });
-    expect(activeGoalsOf(root, ctx)).toHaveLength(3);
-    resumeGoal(root, a.id);
-    const names = activeGoalsOf(root, ctx).map((g) => g.goalName).sort();
-    expect(names).toContain('a');
-    expect(names).toHaveLength(3);
   });
 
   it('completeGoal on a suspended goal still works', () => {

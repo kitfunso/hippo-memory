@@ -2,33 +2,16 @@
  * E2 process first-class object — store-layer tests.
  * Docs: docs/plans/2026-05-29-e2-process-object.md
  *
- * Covers:
+ * Covers what only processes have; the shared lifecycle rules run per kind in typed-object-store.test.ts.
  * 1. saveProcess creates the memory mirror + processes row (+ process_create audit), version 1
  * 2. memory content: name + numbered steps + description
- * 3. SAVEPOINT atomicity: writeEntry afterWrite throw rolls back BOTH
- * 4. supersede flips predecessor -> superseded, new row v2, change_summary set, process_supersede audit
- * 5. version chain v1 -> v2 -> v3 (server-derived)
- * 6. supersede CAS: re-superseding a superseded row throws not-active; missing id throws not-found
- * 7. self-supersede preflight guard: supersede on an empty store throws not-found, creates nothing
- * 8. closeProcess flips active -> closed (+ process_close audit)
- * 9. close guard: not-found; cannot close a superseded row; cannot re-close
- * 10. cross-tenant INSERT trigger raises ABORT (memory tenant mismatch)
- * 11. supersede tenant-match trigger raises ABORT on cross-tenant superseded_by
- * 12. ON DELETE SET NULL: forget the memory, process + old version survive (loadable)
- * 13. loadProcesses status filter; loadActiveProcesses excludes non-active
- * 14. loadProcesses rejects an invalid status
- * 15. steps validation: non-array / non-string / empty / count cap / length cap; trim-then-store
- * 16. tenant scoping: cross-tenant load returns empty
- * 17. schema v32 produces processes table + 3 triggers + 2 indexes
+ * 3. loadProcesses status filter; loadActiveProcesses excludes non-active
+ * 4. steps validation: non-array / non-string / empty / count cap / length cap; trim-then-store
+ * 5. a damaged steps column reads as no steps and warns once per shape
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
-import { writeEntry } from '../src/store/entry-writes.js';
-import { writeEntryThenFail } from './_helpers/failing-write.js';
-import { deleteEntry } from '../src/store/delete-and-batch.js';
-import { Layer} from '../src/core/memory.js';
-import { createMemory } from './_helpers/default-half-life-memory.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import {
   saveProcess,
@@ -37,7 +20,6 @@ import {
   loadProcesses,
   loadActiveProcesses,
   validateProcessSteps,
-  VALID_PROCESS_STATES,
   MAX_PROCESS_STEPS,
   MAX_PROCESS_STEP_LEN,
 } from '../src/objects/processes.js';
@@ -124,166 +106,6 @@ describe('processes store (first-class object)', () => {
     } finally { closeHippoDb(db); }
   });
 
-  it('SAVEPOINT atomicity: writeEntry throw rolls back both memory and processes row', () => {
-    const memBefore = countRows(home, 'memories');
-    const procBefore = countRows(home, 'processes');
-    const mem = createMemory('throwing process', {
-      tags: ['process'],
-      layer: Layer.Semantic,
-      confidence: 'verified',
-      source: 'process',
-      tenantId: 'default',
-    });
-    expect(() => {
-      writeEntryThenFail(home, mem);
-    }).toThrow('forced');
-    expect(countRows(home, 'memories')).toBe(memBefore);
-    expect(countRows(home, 'processes')).toBe(procBefore);
-  });
-
-  it('supersede: predecessor -> superseded, new row v2 with change_summary + process_supersede audit', async () => {
-    const v1 = await saveProcess(objectsAt(home), home, 'default', { processName: 'Deploy', steps: ['a', 'b'] });
-    const v2 = await saveProcess(objectsAt(home), home, 'default', {
-      processName: 'Deploy',
-      steps: ['a', 'b', 'c'],
-      changeSummary: 'added a rollback step',
-      supersedesProcessId: v1.id,
-    });
-    expect(v2.version).toBe(2);
-    expect(v2.status).toBe('active');
-    expect(v2.changeSummary).toBe('added a rollback step');
-    expect(v2.steps).toEqual(['a', 'b', 'c']);
-
-    const reloadedV1 = (await loadProcessById(objectsAt(home), 'default', v1.id))!;
-    expect(reloadedV1.status).toBe('superseded');
-    expect(reloadedV1.supersededBy).toBe(v2.id);
-    expect(reloadedV1.supersededAt).not.toBeNull();
-
-    const db = openHippoDb(home);
-    try {
-      // SAFETY: metadata_json for a process_supersede audit row always
-      // includes these fields (see src/objects/processes.ts saveProcess audit write).
-      const rows = db.prepare(`SELECT metadata_json FROM audit_log WHERE op = 'process_supersede' AND target_id = ?`)
-        .all(String(v1.id)) as Array<{ metadata_json: string }>;
-      expect(rows.length).toBe(1);
-      // SAFETY: same process_supersede audit contract as above.
-      const meta = JSON.parse(rows[0].metadata_json) as { superseded_by: number; new_version: number };
-      expect(meta.superseded_by).toBe(v2.id);
-      expect(meta.new_version).toBe(2);
-    } finally { closeHippoDb(db); }
-  });
-
-  it('version chain v1 -> v2 -> v3 is server-derived', async () => {
-    const v1 = await saveProcess(objectsAt(home), home, 'default', { processName: 'Chain', steps: ['x'] });
-    const v2 = await saveProcess(objectsAt(home), home, 'default', { processName: 'Chain', steps: ['x', 'y'], supersedesProcessId: v1.id });
-    const v3 = await saveProcess(objectsAt(home), home, 'default', { processName: 'Chain', steps: ['x', 'y', 'z'], supersedesProcessId: v2.id });
-    expect(v1.version).toBe(1);
-    expect(v2.version).toBe(2);
-    expect(v3.version).toBe(3);
-    expect((await loadActiveProcesses(objectsAt(home), 'default')).map((p) => p.id)).toEqual([v3.id]);
-  });
-
-  it('supersede CAS: re-superseding a superseded row throws not-active; missing id throws not-found', async () => {
-    const v1 = await saveProcess(objectsAt(home), home, 'default', { processName: 'Once', steps: ['a'] });
-    await saveProcess(objectsAt(home), home, 'default', { processName: 'Once', steps: ['a', 'b'], supersedesProcessId: v1.id });
-    // v1 is now superseded; superseding it again must fail.
-    await expect(saveProcess(objectsAt(home), home, 'default', {
-      processName: 'Once', steps: ['c'], supersedesProcessId: v1.id,
-    })).rejects.toThrow(/not active/);
-    await expect(saveProcess(objectsAt(home), home, 'default', {
-      processName: 'Ghost', steps: ['c'], supersedesProcessId: 99999,
-    })).rejects.toThrow(/not found/);
-  });
-
-  it('self-supersede preflight guard: supersede on an empty store throws not-found, creates nothing', async () => {
-    const memBefore = countRows(home, 'memories');
-    const procBefore = countRows(home, 'processes');
-    // No process id 1 exists yet: the preflight must reject BEFORE the INSERT
-    // so a new row can never become its own supersede target.
-    await expect(saveProcess(objectsAt(home), home, 'default', {
-      processName: 'SelfRef', steps: ['a'], supersedesProcessId: 1,
-    })).rejects.toThrow(/not found/);
-    expect(countRows(home, 'processes')).toBe(procBefore);
-    expect(countRows(home, 'memories')).toBe(memBefore);
-  });
-
-  it('closeProcess flips active -> closed + emits process_close audit', async () => {
-    const proc = await saveProcess(objectsAt(home), home, 'default', { processName: 'Retire', steps: ['a'] });
-    const closed = await closeProcess(objectsAt(home), 'default', proc.id);
-    expect(closed.status).toBe('closed');
-    expect(closed.closedAt).not.toBeNull();
-    const db = openHippoDb(home);
-    try {
-      // SAFETY: metadata_json for a process_close audit row is always a JSON
-      // object (see src/objects/processes.ts closeProcess audit write).
-      const rows = db.prepare(`SELECT metadata_json FROM audit_log WHERE op = 'process_close' AND target_id = ?`)
-        .all(String(proc.id)) as Array<{ metadata_json: string }>;
-      expect(rows.length).toBe(1);
-    } finally { closeHippoDb(db); }
-  });
-
-  it('close guard: not-found; cannot close a superseded row; cannot re-close', async () => {
-    await expect(closeProcess(objectsAt(home), 'default', 77777)).rejects.toThrow(/not found/);
-
-    const v1 = await saveProcess(objectsAt(home), home, 'default', { processName: 'Sup', steps: ['a'] });
-    await saveProcess(objectsAt(home), home, 'default', { processName: 'Sup', steps: ['a', 'b'], supersedesProcessId: v1.id });
-    // v1 is superseded (terminal in the chain) — closing it is not allowed.
-    await expect(closeProcess(objectsAt(home), 'default', v1.id)).rejects.toThrow(/not active/);
-
-    const c = await saveProcess(objectsAt(home), home, 'default', { processName: 'Close', steps: ['a'] });
-    await closeProcess(objectsAt(home), 'default', c.id);
-    await expect(closeProcess(objectsAt(home), 'default', c.id)).rejects.toThrow(/not active/);
-  });
-
-  it('cross-tenant INSERT trigger raises ABORT on memory tenant mismatch', () => {
-    const mem = createMemory('tenant-a memory', {
-      tags: ['process'],
-      layer: Layer.Semantic,
-      confidence: 'verified',
-      source: 'process',
-      tenantId: 'tenant-a',
-    });
-    writeEntry(home, mem);
-    const db = openHippoDb(home);
-    try {
-      expect(() => {
-        db.prepare(`
-          INSERT INTO processes(memory_id, tenant_id, process_name, steps, version, status, created_at)
-          VALUES (?, 'tenant-b', 'cross-tenant attempt', '[]', 1, 'active', ?)
-        `).run(mem.id, new Date().toISOString());
-      }).toThrow(/tenant_id must match memories\.tenant_id/);
-    } finally { closeHippoDb(db); }
-  });
-
-  it('supersede tenant-match trigger raises ABORT on cross-tenant superseded_by', async () => {
-    const a = await saveProcess(objectsAt(home), home, 'tenant-a', { processName: 'A', steps: ['a'] });
-    const b = await saveProcess(objectsAt(home), home, 'tenant-b', { processName: 'B', steps: ['b'] });
-    const db = openHippoDb(home);
-    try {
-      // Pointing tenant-a's row at tenant-b's row as its successor must ABORT.
-      expect(() => {
-        db.prepare(`UPDATE processes SET superseded_by = ? WHERE id = ?`).run(b.id, a.id);
-      }).toThrow(/superseded_by must reference a process in the same tenant/);
-    } finally { closeHippoDb(db); }
-  });
-
-  it('ON DELETE SET NULL: forgetting the memory orphans the process; old versions stay loadable', async () => {
-    const v1 = await saveProcess(objectsAt(home), home, 'default', { processName: 'Durable', steps: ['a'] });
-    const v2 = await saveProcess(objectsAt(home), home, 'default', { processName: 'Durable', steps: ['a', 'b'], supersedesProcessId: v1.id });
-    // Forget both versions' memory mirrors; the canonical rows must survive.
-    deleteEntry(home, v1.memoryId!);
-    deleteEntry(home, v2.memoryId!);
-    const reV1 = await loadProcessById(objectsAt(home), 'default', v1.id);
-    const reV2 = await loadProcessById(objectsAt(home), 'default', v2.id);
-    expect(reV1).not.toBeNull();
-    expect(reV1!.memoryId).toBeNull();
-    expect(reV1!.status).toBe('superseded');
-    expect(reV1!.supersededBy).toBe(v2.id);
-    expect(reV2).not.toBeNull();
-    expect(reV2!.memoryId).toBeNull();
-    expect(reV2!.status).toBe('active');
-  });
-
   it('loadProcesses status filter; loadActiveProcesses excludes non-active', async () => {
     const a = await saveProcess(objectsAt(home), home, 'default', { processName: 'active-1', steps: ['a'] });
     const b = await saveProcess(objectsAt(home), home, 'default', { processName: 'to-supersede', steps: ['b'] });
@@ -303,16 +125,6 @@ describe('processes store (first-class object)', () => {
     expect((await loadProcesses(objectsAt(home), 'default')).length).toBe(4);
   });
 
-  it('loadProcesses rejects an invalid status', async () => {
-    await expect(async () => {
-      // @ts-expect-error — runtime validation test
-      await loadProcesses(objectsAt(home), 'default', { status: 'retired' });
-    }).rejects.toThrow(/status must be one of/);
-    expect(VALID_PROCESS_STATES.has('active')).toBe(true);
-    expect(VALID_PROCESS_STATES.has('superseded')).toBe(true);
-    expect(VALID_PROCESS_STATES.has('closed')).toBe(true);
-  });
-
   it('steps validation: rejects non-array / non-string / empty / cap breaches; trims-then-stores', async () => {
     expect(() => validateProcessSteps('not an array')).toThrow(/must be an array/);
     expect(() => validateProcessSteps([1, 2])).toThrow(/not a string/);
@@ -329,36 +141,6 @@ describe('processes store (first-class object)', () => {
     const before = countRows(home, 'processes');
     await expect(saveProcess(objectsAt(home), home, 'default', { processName: 'Bad', steps: ['', 'x'] })).rejects.toThrow(/is empty/);
     expect(countRows(home, 'processes')).toBe(before);
-  });
-
-  it('tenant scoping: cross-tenant load returns empty', async () => {
-    await saveProcess(objectsAt(home), home, 'tenant-a', { processName: 'a-proc', steps: ['a'] });
-    await saveProcess(objectsAt(home), home, 'tenant-b', { processName: 'b-proc', steps: ['b'] });
-    expect((await loadProcesses(objectsAt(home), 'tenant-a')).length).toBe(1);
-    expect((await loadProcesses(objectsAt(home), 'tenant-b')).length).toBe(1);
-    expect((await loadProcesses(objectsAt(home), 'tenant-c')).length).toBe(0);
-    const a = (await loadProcesses(objectsAt(home), 'tenant-a'))[0];
-    expect(await loadProcessById(objectsAt(home), 'tenant-b', a.id)).toBeNull();
-  });
-
-  it('schema v32 produces processes table + 3 triggers + 2 indexes', () => {
-    const db = openHippoDb(home);
-    try {
-      expect(db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name='processes'`).get()).toBeDefined();
-      // SAFETY: `SELECT name FROM sqlite_master` always projects a single text
-      // column named `name` for any matching row.
-      const triggers = (db.prepare(`SELECT name FROM sqlite_master WHERE type='trigger' AND name LIKE 'trg_processes_%'`)
-        .all() as Array<{ name: string }>).map((t) => t.name);
-      expect(triggers).toContain('trg_processes_tenant_match_insert');
-      expect(triggers).toContain('trg_processes_tenant_match_update');
-      expect(triggers).toContain('trg_processes_supersede_tenant_match_update');
-      // SAFETY: `SELECT name FROM sqlite_master` always projects a single text
-      // column named `name` for any matching row.
-      const indexes = (db.prepare(`SELECT name FROM sqlite_master WHERE type='index' AND name LIKE 'idx_processes_%'`)
-        .all() as Array<{ name: string }>).map((i) => i.name);
-      expect(indexes).toContain('idx_processes_tenant_status');
-      expect(indexes).toContain('idx_processes_memory');
-    } finally { closeHippoDb(db); }
   });
 
   it('a damaged steps column reads as no steps and warns once per shape', async () => {

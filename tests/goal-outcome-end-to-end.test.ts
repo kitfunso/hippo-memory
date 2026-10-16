@@ -1,46 +1,26 @@
-// tests/goal-outcome-end-to-end.test.ts
-//
-// B3 Task 9: end-to-end outcome propagation through real CLI recall.
-// Verifies the full loop: real CLI recall -> goal_recall_log populated ->
-// completeGoal propagates onto memories.strength.
-//
-// Uses Task-6 isolation harness (separate cwd tempdir + isolated HIPPO_HOME
-// global root + HIPPO_SKIP_AUTO_INTEGRATIONS=1) to keep dev memories out.
-//
-// Strength-clamp note (mirrors Task 5's pattern): remember() creates rows at
-// strength 1.0 (the ceiling). The positive-outcome boost (1.10x) clamps back
-// to 1.0, hiding the lift. Knock the seed down to 0.5 with a direct UPDATE
-// before reading `before` so the boost is observable. The decay test starts
-// from 1.0 and goes to 0.85 — observable as-is.
+// B3 Task 9: the full loop, CLI recall in process -> goal_recall_log -> completeGoal moves memories.strength once.
+// remember() writes strength 1.0, the ceiling the 1.10x boost clamps to, so the positive case knocks the seed to 0.5
+// after the recall; the decay case starts from 1.0 and is visible as-is.
 import type { FullContext } from './_helpers/api-ctx.js';
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
-import { join } from 'node:path';
-import { execFileSync } from 'node:child_process';
 import { remember } from '../src/api/index.js';
+import { resetSessionRings } from '../src/api/recall/finish.js';
+import { runCli } from '../src/cli.js';
 import { pushGoal, completeGoal } from '../src/store/goals.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { makeEnv, type TestEnv } from './_helpers/cli-env.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+import { runInProcess } from './_helpers/run-in-process.js';
 
-const CLI = join(process.cwd(), 'dist', 'cli.js');
+const savedCwd = process.cwd();
 
-function runRecall(env: TestEnv, query: string, sessionId: string) {
-  return execFileSync(
-    'node',
-    [CLI, 'recall', query, '--json', '--budget', '2000'],
-    {
-      cwd: env.cwd,
-      env: {
-        ...process.env,
-        HIPPO_HOME: env.globalRoot,
-        HIPPO_TENANT: 'default',
-        HIPPO_SESSION_ID: sessionId,
-        HIPPO_SKIP_AUTO_INTEGRATIONS: '1',
-      },
-      encoding: 'utf8',
-    },
-  );
+/** `hippo recall <query> --json` in this process, with the empty recall rings a fresh `hippo` starts with. */
+async function runRecall(query: string, sessionId: string): Promise<void> {
+  vi.stubEnv('HIPPO_SESSION_ID', sessionId);
+  resetSessionRings('cli');
+  const res = await runInProcess(() => runCli(['node', 'hippo', 'recall', query, '--json', '--budget', '2000']));
+  expect(res.status, res.stderr).toBe(0);
 }
 
 function readStrength(root: string, memId: string): number {
@@ -71,14 +51,23 @@ describe('outcome propagation E2E (recall -> log -> completeGoal)', () => {
   let env: TestEnv;
 
   beforeEach(() => {
-    env = makeEnv('b3-e2e');
+    // An initialised global store, as the idempotency case had before it merged here, so a recall also finishes on a
+    // store that holds none of its results.
+    env = makeEnv('b3-e2e', { initGlobal: true });
+    vi.stubEnv('HIPPO_HOME', env.globalRoot);
+    vi.stubEnv('HIPPO_TENANT', 'default');
+    vi.stubEnv('HIPPO_SKIP_AUTO_INTEGRATIONS', '1');
+    // The CLI looks for the store in `.hippo` under the working directory.
+    process.chdir(env.cwd);
   });
 
   afterEach(() => {
-    if (env?.cwd) rmSync(env.cwd, { recursive: true, force: true });
+    process.chdir(savedCwd);
+    vi.unstubAllEnvs();
+    rmSync(env.cwd, { recursive: true, force: true });
   });
 
-  it('positive outcome boosts strength of memories actually recalled during goal life', async () => {
+  it('positive outcome boosts strength of memories actually recalled during goal life, and only once', async () => {
     const m = await remember(ctx(env.hippoRoot), { content: 'good lesson', tags: ['rfx'] });
     const g = pushGoal(env.hippoRoot, {
       sessionId: 's-e2e-1',
@@ -86,16 +75,19 @@ describe('outcome propagation E2E (recall -> log -> completeGoal)', () => {
       goalName: 'rfx',
     });
 
-    runRecall(env, 'good lesson', 's-e2e-1');
+    await runRecall('good lesson', 's-e2e-1');
 
-    // Knock strength below the 1.0 ceiling AFTER recall so the 1.10x boost
-    // from completeGoal is observable. Recall itself touches strength, so
-    // setting it before the recall would be a no-op.
+    // Recall itself touches strength, so the knock-down below the ceiling has to come after it.
     setStrength(env.hippoRoot, m.id, 0.5);
 
     const before = readStrength(env.hippoRoot, m.id);
     completeGoal(env.hippoRoot, g.id, { outcomeScore: 0.9 });
-    expect(readStrength(env.hippoRoot, m.id)).toBeGreaterThan(before);
+    const boosted = readStrength(env.hippoRoot, m.id);
+    expect(boosted).toBeGreaterThan(before);
+
+    // A second completeGoal must not re-apply propagation.
+    completeGoal(env.hippoRoot, g.id, { outcomeScore: 0.9 });
+    expect(readStrength(env.hippoRoot, m.id)).toBe(boosted);
   });
 
   it('negative outcome decays strength', async () => {
@@ -106,7 +98,7 @@ describe('outcome propagation E2E (recall -> log -> completeGoal)', () => {
       goalName: 'rfx',
     });
 
-    runRecall(env, 'misleading lesson', 's-e2e-2');
+    await runRecall('misleading lesson', 's-e2e-2');
 
     const before = readStrength(env.hippoRoot, m.id);
     completeGoal(env.hippoRoot, g.id, { outcomeScore: 0.1 });

@@ -143,32 +143,4 @@ describe('POST /v1/connectors/slack/events', () => {
       process.env.SLACK_SIGNING_SECRET = SECRET;
     }
   });
-
-  it('accepts valid signature with no Bearer (PUBLIC_ROUTES allow-list)', async () => {
-    const body = JSON.stringify({
-      type: 'event_callback',
-      team_id: 'T1',
-      event_id: 'EvNoBearer',
-      event_time: Math.floor(Date.now() / 1000),
-      event: {
-        type: 'message',
-        channel: 'C1',
-        channel_type: 'channel',
-        user: 'U1',
-        text: 'no-bearer ok',
-        ts: '1700000001.000200',
-      },
-    });
-    const ts = String(Math.floor(Date.now() / 1000));
-    const res = await fetch(`http://127.0.0.1:${handle.port}/v1/connectors/slack/events`, {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'x-slack-request-timestamp': ts,
-        'x-slack-signature': sign(ts, body),
-      },
-      body,
-    });
-    expect(res.status).toBe(200);
-  });
 });

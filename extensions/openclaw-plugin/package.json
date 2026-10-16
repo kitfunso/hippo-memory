@@ -1,6 +1,6 @@
 {
   "name": "hippo-memory",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "type": "module",
   "description": "Make your agent's memory work like a brain. Hippo is long-term memory for coding agents.",
   "main": "index.ts",

@@ -294,28 +294,6 @@ describe('(c) weights-sync vs the committed JSON artifact', () => {
 // (d) flag-off byte-identical
 // ---------------------------------------------------------------------------
 describe('(d) flag-off byte-identical', () => {
-  it('identical survivor/removed sets and zero mv audit rows with memoryValue.enabled false (default)', async () => {
-    initStore(dir);
-    // DEFAULT_CONFIG.memoryValue.enabled === false. Dormant is pinned off:
-    // this gate was pre-registered on the delete path.
-    fs.writeFileSync(path.join(dir, 'config.json'), JSON.stringify({ dormant: { enabled: false } }), 'utf8');
-    const fresh = createMemory7('a perfectly healthy fresh memory entry', { layer: Layer.Semantic });
-    const ancient = condemnedEntry('an old memory that should decay away in the usual way');
-    const pinned = { ...createMemory('a pinned rule', { pinned: true }), created: ancientDate(3650), last_retrieved: ancientDate(3650), half_life_days: 1 };
-    for (const e of [fresh, ancient, pinned]) writeEntry(dir, e);
-
-    const result = await consolidate(dir, { now: NOW });
-    expect(result.removed).toBe(1);
-    expect(result.details.some((l) => l.includes('🛟'))).toBe(false);
-
-    const remaining = loadAllEntries(dir);
-    expect(remaining.find((e) => e.id === fresh.id)).toBeDefined();
-    expect(remaining.find((e) => e.id === pinned.id)).toBeDefined();
-    expect(remaining.find((e) => e.id === ancient.id)).toBeUndefined();
-
-    expect(auditRescueRows(dir, 'default').length).toBe(0);
-  });
-
   it('bigger mixed store (~40 entries, pinned/condemned/healthy, 3 tenants): survivor set, counts, and full details match a predicate-computed expectation', async () => {
     initStore(dir);
     // Disable the other decay-adjacent passes so result.details is
@@ -407,48 +385,7 @@ describe('(d) flag-off byte-identical', () => {
 // (e) rescue semantics
 // ---------------------------------------------------------------------------
 describe('(e) rescue semantics', () => {
-  it('rescue/delete split by learned rank; deletes-subset property; audit rows carry rank context', async () => {
-    initStore(dir);
-    enableMemoryValue(dir);
-
-    // 10 condemned entries, one tenant, every dim identical except
-    // content_length (10..100 chars) -> ranking is purely by content_length
-    // ascending (see condemnedEntry's doc comment). keepN = ceil(0.3*10) = 3,
-    // so the 3 shortest are rescued and the 7 longest are deleted.
-    const lens = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
-    const built = lens.map((len) => condemnedEntry('w'.repeat(len), { tenantId: 'ta' }));
-    for (const e of built) writeEntry(dir, e);
-
-    const sortedByLen = [...built].sort((a, b) => a.content.length - b.content.length);
-    const expectedRescued = new Set(sortedByLen.slice(0, 3).map((e) => e.id));
-    const expectedDeleted = new Set(sortedByLen.slice(3).map((e) => e.id));
-
-    const result = await consolidate(dir, { now: NOW });
-    expect(result.removed).toBe(7);
-    const rescueLines = result.details.filter((l) => l.includes('🛟'));
-    expect(rescueLines).toHaveLength(3);
-    for (const l of rescueLines) expect(l).toMatch(/ - rescued \(rank [123]\/10 in tenant ta, top 3\)$/);
-
-    const remainingIds = new Set(loadAllEntries(dir).map((e) => e.id));
-    for (const id of expectedRescued) expect(remainingIds.has(id)).toBe(true);
-    for (const id of expectedDeleted) expect(remainingIds.has(id)).toBe(false);
-
-    const events = auditRescueRows(dir, 'ta');
-    expect(events.length).toBe(3);
-    expect(new Set(events.map((e) => e.targetId))).toEqual(expectedRescued);
-    for (const ev of events) {
-      // SAFETY: consolidate.ts's mv_rescue audit always writes metadata as
-      // exactly { rank, totalNonPinned, keepN, score } (consolidate.ts's
-      // rescue-audit write site).
-      const meta = ev.metadata as { rank?: number; totalNonPinned?: number; keepN?: number; score?: number };
-      expect(meta.totalNonPinned).toBe(10);
-      expect(meta.keepN).toBe(3);
-      expect(meta.rank).toBeGreaterThanOrEqual(1);
-      expect(meta.rank!).toBeLessThanOrEqual(3);
-      expect(meta.score).toBeTypeOf('number');
-    }
-  });
-
+  // The rank split, rescue lines and rescue audit metadata are pinned in (i) below, on the real-run store.
   it('a rescue audit row that fails to write is counted and reported, and the other rows still land', async () => {
     initStore(dir);
     enableMemoryValue(dir);
@@ -976,8 +913,22 @@ describe('(i) dry-run parity', () => {
       for (const id of expectedRescued) expect(realIds.has(id)).toBe(true);
       for (const id of expectedDeleted) expect(realIds.has(id)).toBe(false);
 
+      const rescueLines = realResult.details.filter((l) => l.includes('🛟'));
+      expect(rescueLines).toHaveLength(3);
+      for (const l of rescueLines) expect(l).toMatch(/ - rescued \(rank [123]\/10 in tenant ti, top 3\)$/);
+
       const events = auditRescueRows(dirReal, 'ti');
+      expect(events.length).toBe(3);
       expect(new Set(events.map((e) => e.targetId))).toEqual(expectedRescued);
+      for (const ev of events) {
+        // SAFETY: consolidate.ts's mv_rescue audit always writes metadata as exactly { rank, totalNonPinned, keepN, score }.
+        const meta = ev.metadata as { rank?: number; totalNonPinned?: number; keepN?: number; score?: number };
+        expect(meta.totalNonPinned).toBe(10);
+        expect(meta.keepN).toBe(3);
+        expect(meta.rank).toBeGreaterThanOrEqual(1);
+        expect(meta.rank!).toBeLessThanOrEqual(3);
+        expect(meta.score).toBeTypeOf('number');
+      }
     } finally {
       fs.rmSync(dirDry, { recursive: true, force: true });
       fs.rmSync(dirReal, { recursive: true, force: true });

@@ -74,6 +74,19 @@ afterEach(async () => {
   rmSync(globalHome, { recursive: true, force: true });
 });
 
+describe('member keys stop at the audit route', () => {
+  it('answers a member key 403 on its own, another and the __host__ audit log, and an admin key 200', async () => {
+    const member = key('acme', 'member');
+    for (const qs of ['', '?tenant=other', '?tenant=__host__']) {
+      const refused = await audit(qs, member);
+      expect(refused.status).toBe(403);
+      // SAFETY: HttpError responses are always JSON shaped { error: string }.
+      expect((await refused.json() as { error: string }).error).toContain('requires admin role');
+    }
+    expect((await audit('', key('acme', 'admin'))).status).toBe(200);
+  });
+});
+
 describe('tenant admin stops at its own tenant', () => {
   it('refuses a tenant admin another tenant audit log', async () => {
     const res = await audit('?tenant=default', key('acme', 'admin'));

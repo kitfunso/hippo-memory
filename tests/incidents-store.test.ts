@@ -2,29 +2,23 @@
  * E2 incident first-class object — store-layer tests.
  * Docs: docs/plans/2026-05-29-e2-incident-object.md
  *
- * Covers:
+ * Covers what only incidents have; the rules every kind shares run per kind in typed-object-store.test.ts.
  * 1. saveIncident creates both the memory mirror and the incidents row
  * 2. saveIncident without context: bare memory content, has_context false
- * 3. SAVEPOINT atomicity: writeEntry afterWrite throw rolls back BOTH
- * 4. resolveIncident flips open -> resolved + emits incident_resolve audit
- * 5. resolve CAS: re-resolving an already-resolved row throws not-open
- * 6. resolveIncident requires non-empty resolution text
- * 7. closeIncident flips open -> closed + emits incident_close audit
- * 8. closeIncident also works from resolved (resolved -> closed)
- * 9. close guard: not-found vs already-closed
- * 10. cross-tenant INSERT trigger raises ABORT (memory tenant mismatch)
- * 11. ON DELETE SET NULL: forget the memory, incident survives
- * 12. loadIncidents status filter; loadOpenIncidents excludes non-open
- * 13. loadIncidents rejects an invalid status
- * 14. linked_memory_ids round-trip + cross-tenant/nonexistent rejection (mandatory)
- * 15. tenant scoping: cross-tenant load returns empty
- * 16. schema v31 produces incidents table + triggers + indexes
+ * 3. resolveIncident flips open -> resolved + emits incident_resolve audit
+ * 4. resolve CAS: re-resolving an already-resolved row throws not-open
+ * 5. resolveIncident requires non-empty resolution text
+ * 6. closeIncident flips open -> closed + emits incident_close audit
+ * 7. closeIncident also works from resolved (resolved -> closed)
+ * 8. close guard: not-found vs already-closed
+ * 9. ON DELETE SET NULL: forget the memory, incident survives
+ * 10. loadIncidents status filter; loadOpenIncidents excludes non-open
+ * 11. linked_memory_ids round-trip + cross-tenant/nonexistent rejection (mandatory)
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { writeEntryThenFail } from './_helpers/failing-write.js';
 import { deleteEntry } from '../src/store/delete-and-batch.js';
 import { Layer} from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
@@ -37,7 +31,6 @@ import {
   loadIncidents,
   loadOpenIncidents,
   resolveActiveIncidentIdByMemory,
-  VALID_INCIDENT_STATES,
 } from '../src/objects/incidents.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { objectsAt } from './_helpers/objects-at.js';
@@ -159,25 +152,6 @@ describe('incidents store (first-class object)', () => {
     }
   });
 
-  it('SAVEPOINT atomicity: writeEntry throw rolls back both memory and incidents row', () => {
-    const memBefore = countRows(home, 'memories');
-    const incBefore = countRows(home, 'incidents');
-
-    const mem = createMemory('throwing incident', {
-      tags: ['incident'],
-      layer: Layer.Semantic,
-      confidence: 'verified',
-      source: 'incident',
-      tenantId: 'default',
-    });
-    expect(() => {
-      writeEntryThenFail(home, mem);
-    }).toThrow('forced');
-
-    expect(countRows(home, 'memories')).toBe(memBefore);
-    expect(countRows(home, 'incidents')).toBe(incBefore);
-  });
-
   it('resolveIncident flips open -> resolved + emits incident_resolve audit', async () => {
     const inc = await openIncident(objectsAt(home), home, 'default', { incidentText: 'API 500s' }, 'cli');
     const resolved = await resolveOpenIncident(objectsAt(home), 'default', inc.id, 'restarted the worker pool', 'cli');
@@ -246,26 +220,6 @@ describe('incidents store (first-class object)', () => {
     await expect(closeIncident(objectsAt(home), 'default', inc.id)).rejects.toThrow(/already closed/);
   });
 
-  it('cross-tenant INSERT trigger raises ABORT on memory tenant mismatch', () => {
-    const mem = createMemory('tenant-a memory', {
-      tags: ['incident'],
-      layer: Layer.Semantic,
-      confidence: 'verified',
-      source: 'incident',
-      tenantId: 'tenant-a',
-    });
-    writeEntry(home, mem);
-    const db = openHippoDb(home);
-    try {
-      expect(() => {
-        db.prepare(`
-          INSERT INTO incidents(memory_id, tenant_id, incident_text, status, created_at)
-          VALUES (?, 'tenant-b', 'cross-tenant attempt', 'open', ?)
-        `).run(mem.id, new Date().toISOString());
-      }).toThrow(/tenant_id must match memories\.tenant_id/);
-    } finally { closeHippoDb(db); }
-  });
-
   it('ON DELETE SET NULL: forgetting the memory orphans the incident', async () => {
     const inc = await openIncident(objectsAt(home), home, 'default', { incidentText: 'survives memory decay' }, 'cli');
     expect(inc.memoryId).not.toBeNull();
@@ -302,16 +256,6 @@ describe('incidents store (first-class object)', () => {
 
     const all = await loadIncidents(objectsAt(home), 'default');
     expect(all.length).toBe(3);
-  });
-
-  it('loadIncidents rejects an invalid status', async () => {
-    await expect(async () => {
-      // @ts-expect-error — runtime validation test
-      await loadIncidents(objectsAt(home), 'default', { status: 'retired' });
-    }).rejects.toThrow(/status must be one of/);
-    expect(VALID_INCIDENT_STATES.has('open')).toBe(true);
-    expect(VALID_INCIDENT_STATES.has('resolved')).toBe(true);
-    expect(VALID_INCIDENT_STATES.has('closed')).toBe(true);
   });
 
   it('linked_memory_ids round-trips; cross-tenant/nonexistent ids are rejected', async () => {
@@ -354,34 +298,5 @@ describe('incidents store (first-class object)', () => {
 
     await resolveOpenIncident(objectsAt(home), 'default', inc.id, 'fixed', 'cli');
     expect(await resolveActiveIncidentIdByMemory(objectsAt(home), 'default', inc.memoryId!)).toBeNull();
-  });
-
-  it('tenant scoping: cross-tenant load returns empty', async () => {
-    await openIncident(objectsAt(home), home, 'tenant-a', { incidentText: 'a-inc' }, 'cli');
-    await openIncident(objectsAt(home), home, 'tenant-b', { incidentText: 'b-inc' }, 'cli');
-    expect((await loadIncidents(objectsAt(home), 'tenant-a')).length).toBe(1);
-    expect((await loadIncidents(objectsAt(home), 'tenant-b')).length).toBe(1);
-    expect((await loadIncidents(objectsAt(home), 'tenant-c')).length).toBe(0);
-    const a = (await loadIncidents(objectsAt(home), 'tenant-a'))[0];
-    expect(await loadIncidentById(objectsAt(home), 'tenant-b', a.id)).toBeNull();
-  });
-
-  it('schema v31 produces incidents table + triggers + indexes', () => {
-    const db = openHippoDb(home);
-    try {
-      expect(db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name='incidents'`).get()).toBeDefined();
-      const triggers = queryAll<{ name: string }>(
-        db,
-        `SELECT name FROM sqlite_master WHERE type='trigger' AND name LIKE 'trg_incidents_%'`,
-      ).map((t) => t.name);
-      expect(triggers).toContain('trg_incidents_tenant_match_insert');
-      expect(triggers).toContain('trg_incidents_tenant_match_update');
-      const indexes = queryAll<{ name: string }>(
-        db,
-        `SELECT name FROM sqlite_master WHERE type='index' AND name LIKE 'idx_incidents_%'`,
-      ).map((i) => i.name);
-      expect(indexes).toContain('idx_incidents_tenant_status');
-      expect(indexes).toContain('idx_incidents_memory');
-    } finally { closeHippoDb(db); }
   });
 });

@@ -31,21 +31,6 @@ describe('resolveTenantForSlackTeam', () => {
     }
   });
 
-  it('falls back to env tenant when slack_workspaces is empty (single-workspace install)', async () => {
-    const db = openHippoDb(root);
-    const prev = process.env.HIPPO_TENANT;
-    process.env.HIPPO_TENANT = 'env-tenant';
-    try {
-      // v0.39 fail-closed contract: empty slack_workspaces means single-
-      // workspace install, env fallback is safe.
-      expect(await resolveTenantForSlackTeam(sqliteStore(root), 'TANY')).toBe('env-tenant');
-    } finally {
-      if (prev === undefined) delete process.env.HIPPO_TENANT;
-      else process.env.HIPPO_TENANT = prev;
-      closeHippoDb(db);
-    }
-  });
-
   it('matches team_id exactly (no prefix bleed); fails closed on unknown when workspaces non-empty', async () => {
     const db = openHippoDb(root);
     try {

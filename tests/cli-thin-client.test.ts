@@ -7,6 +7,7 @@ import { spawn, execFileSync, type ChildProcessByStdio } from 'node:child_proces
 import { initStore } from '../src/store/open.js';
 import { openHippoDb, closeHippoDb, getMeta } from '../src/db/index.js';
 import { queryAuditEvents } from '../src/store/audit.js';
+import { serve, type ServerHandle } from '../src/server.js';
 import { boundPort } from './_helpers/listen.js';
 import { waitFor } from './_helpers/wait-for.js';
 import { ROUTED_CLI_ENV } from './_helpers/routed-cli-env.js';
@@ -627,6 +628,30 @@ describe('cli thin-client mode', () => {
       }
     } finally {
       if (server) await server.stop();
+      rmSync(workspace, { recursive: true, force: true });
+    }
+  }, 30_000);
+
+  it('remember --scope X relays through a live server and the stored row envelope scope is X', async () => {
+    const workspace = makeWorkspace();
+    const hippoRoot = join(workspace, '.hippo');
+    const handle: ServerHandle = await serve({ hippoRoot, port: 0 });
+    try {
+      const { stdout, stderr } = await runCliAsync(workspace, 'remember', 'thin client scope canary content', '--scope', 'slack:private:CX');
+      expect(stdout, `stderr: ${stderr}`).toMatch(/Remembered/);
+      expect(stdout).toContain(handle.url);
+      const db = openHippoDb(hippoRoot);
+      try {
+        // SAFETY: names one column of the canary row remembered above; undefined only if the row did not land.
+        const row = db.prepare('SELECT scope FROM memories WHERE content = ?').get('thin client scope canary content') as
+          | { scope: string | null }
+          | undefined;
+        expect(row?.scope).toBe('slack:private:CX');
+      } finally {
+        closeHippoDb(db);
+      }
+    } finally {
+      await handle.stop();
       rmSync(workspace, { recursive: true, force: true });
     }
   }, 30_000);

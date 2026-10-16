@@ -8,10 +8,10 @@
  * later one:
  *   - the consolidate decay pass, once a receipt faded below the threshold
  *     (about 30 days unrecalled at the default 7-day half-life);
- *   - the quality audit, for any receipt shorter than 10 characters ("lgtm").
+ *   - the quality audit, for any receipt shorter than 10 characters ("lgtm"),
+ *     which sleep-never-deletes-raw-or-pinned.test.ts pins through api.sleep.
  * Real SQLite throughout, no mocks.
  */
-import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -24,9 +24,6 @@ import { RawAppendOnlyError } from '../src/core/raw-append-only.js';
 import { consolidate } from '../src/consolidate/sleep.js';
 import { Layer, type MemoryEntry } from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { auditMemory } from '../src/core/memory-audit.js';
-import * as api from '../src/api/index.js';
-import { apiCtx } from './_helpers/api-ctx.js';
 
 /** Sleep and decay here run on the pre-1.46 7-day base, so memories fade within the test's horizon. */
 const createMemory7 = (content: string, options: Parameters<typeof createMemory>[1] = {}) => createMemory(content, { baseHalfLifeDays: 7, ...options });
@@ -46,10 +43,6 @@ function tmpHome(prefix: string, config?: string) {
 function aged(entry: MemoryEntry, days: number): MemoryEntry {
   const then = new Date(Date.now() - days * DAY_MS).toISOString();
   return { ...entry, created: then, last_retrieved: then };
-}
-
-function ctxFor(home: string): FullContext {
-  return apiCtx(home, 'default', { subject: 'test', role: 'admin' });
 }
 
 describe('deleting a raw row', () => {
@@ -114,30 +107,4 @@ describe('sleep keeps raw receipts instead of aborting on the append-only trigge
     }
   });
 
-  it('a short raw receipt no longer aborts api.sleep at the quality audit', async () => {
-    const { home, restore } = tmpHome('hippo-raw-audit-');
-    try {
-      const receipt = createMemory7('lgtm', { layer: Layer.Episodic, kind: 'raw' });
-      const junk = createMemory7('wip fix', { layer: Layer.Episodic });
-      writeEntry(home, receipt);
-      writeEntry(home, junk);
-
-      const result = await api.sleep(ctxFor(home), { noShare: true });
-
-      const ids = loadAllEntries(home).map((e) => e.id);
-      expect(ids).toContain(receipt.id);
-      // Ordinary junk is still cleaned up; only the receipt is exempt.
-      expect(ids).not.toContain(junk.id);
-      expect(result.audit?.errorsRemoved).toBe(1);
-    } finally {
-      restore();
-    }
-  });
-
-  it('the quality audit never marks a raw receipt for removal, so `hippo audit --fix` cannot hit the trigger either', () => {
-    const receipt = createMemory7('lgtm', { layer: Layer.Episodic, kind: 'raw' });
-    const junk = createMemory7('wip fix', { layer: Layer.Episodic });
-    expect(auditMemory(receipt)?.severity).not.toBe('error');
-    expect(auditMemory(junk)?.severity).toBe('error');
-  });
 });

@@ -2,30 +2,21 @@
  * E2 project_brief first-class object (repo-scoped / auto-refreshes) - store tests.
  * Docs: docs/plans/2026-05-30-e2-project-brief-object.md
  *
- * Covers:
+ * Covers what only briefs have; the shared lifecycle rules run per kind in typed-object-store.test.ts.
  * 1. saveProjectBrief creates memory + project_briefs row (+ project_brief_create audit), v1
- * 2. SAVEPOINT atomicity
- * 3. supersede chain + version + change_summary + project_brief_supersede audit
- * 4. supersede CAS (re-supersede not-active; missing not-found); self-supersede preflight
- * 5. close + close guard (not-found; cannot-close-superseded; cannot re-close)
- * 6. cross-tenant INSERT trigger + supersede tenant-match trigger
- * 7. ON DELETE SET NULL + old version loadable
- * 8. status + repo filters; loadActiveBriefForRepo; invalid status
- * 9. validation: missing repo/summary; repo single-line (newline rejected); caps
- * 10. assembleBriefFromReceipts: tenant-isolated path:<repo> match, excludes own
+ * 2. status + repo filters; loadActiveBriefForRepo
+ * 3. validation: missing repo/summary; repo single-line (newline rejected); caps
+ * 4. assembleBriefFromReceipts: tenant-isolated path:<repo> match, excludes own
  *     brief mirror (source='project_brief'), deterministic created DESC, headline
  *     truncation, LIKE-escape on %/_, prefix-collision (hip != hippo), markdown
  *     headline verbatim, zero-receipts digest
- * 11. refreshBrief: v1-create when none, supersede on 2nd, change_summary +
+ * 5. refreshBrief: v1-create when none, supersede on 2nd, change_summary +
  *     refreshed metadata, dry-run assemble does NOT write
- * 12. schema v35 table + 3 triggers + 3 indexes
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { writeEntryThenFail } from './_helpers/failing-write.js';
-import { deleteEntry } from '../src/store/delete-and-batch.js';
 import { Layer} from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { openHippoDb, closeHippoDb, withSharedStoreHandles } from '../src/db/index.js';
@@ -36,7 +27,6 @@ import {
   loadProjectBriefs,
   briefFromReceipts,
   refreshedBrief,
-  VALID_BRIEF_STATES,
   MAX_BRIEF_SUMMARY_LEN,
   MAX_RECEIPT_HEADLINE_LEN,
 } from '../src/objects/project-briefs.js';
@@ -116,84 +106,7 @@ describe('project_briefs store (repo-scoped / auto-refreshes first-class object)
     } finally { closeHippoDb(db); }
   });
 
-  it('SAVEPOINT atomicity: writeEntry throw rolls back both', () => {
-    const m0 = countRows(home, 'memories'); const b0 = countRows(home, 'project_briefs');
-    const mem = createMemory('throwing brief', {
-      tags: ['project_brief'], layer: Layer.Semantic, confidence: 'verified', source: 'project_brief', tenantId: 'default',
-    });
-    expect(() => writeEntryThenFail(home, mem)).toThrow('forced');
-    expect(countRows(home, 'memories')).toBe(m0);
-    expect(countRows(home, 'project_briefs')).toBe(b0);
-  });
-
-  it('supersede chain + version + change_summary + project_brief_supersede audit', async () => {
-    const v1 = await saveProjectBrief(objectsAt(home), home, 'default', { repo: 'r', summary: 'old' });
-    const v2 = await saveProjectBrief(objectsAt(home), home, 'default', { repo: 'r', summary: 'new', changeSummary: 'reworded', supersedesBriefId: v1.id });
-    const v3 = await saveProjectBrief(objectsAt(home), home, 'default', { repo: 'r', summary: 'newer', supersedesBriefId: v2.id });
-    expect([v1.version, v2.version, v3.version]).toEqual([1, 2, 3]);
-    expect(v2.changeSummary).toBe('reworded');
-    const reV1 = (await loadProjectBriefById(objectsAt(home), 'default', v1.id))!;
-    expect(reV1.status).toBe('superseded');
-    expect(reV1.supersededBy).toBe(v2.id);
-    expect((await activeBrief(home, 'default', 'r'))!.id).toBe(v3.id);
-    const db = openHippoDb(home);
-    try {
-      expect(db.prepare(`SELECT 1 FROM audit_log WHERE op='project_brief_supersede' AND target_id=?`).all(String(v1.id)).length).toBe(1);
-    } finally { closeHippoDb(db); }
-  });
-
-  it('supersede CAS (re-supersede not-active; missing not-found); self-supersede preflight', async () => {
-    const v1 = await saveProjectBrief(objectsAt(home), home, 'default', { repo: 'o', summary: 'a' });
-    await saveProjectBrief(objectsAt(home), home, 'default', { repo: 'o', summary: 'b', supersedesBriefId: v1.id });
-    await expect(saveProjectBrief(objectsAt(home), home, 'default', { repo: 'o', summary: 'c', supersedesBriefId: v1.id })).rejects.toThrow(/not active/);
-    await expect(saveProjectBrief(objectsAt(home), home, 'default', { repo: 'x', summary: 'c', supersedesBriefId: 99999 })).rejects.toThrow(/not found/);
-    const b0 = countRows(home, 'project_briefs');
-    await expect(saveProjectBrief(objectsAt(home), home, 'default', { repo: 'self', summary: 'a', supersedesBriefId: 1 })).rejects.toThrow(/not active|not found/);
-    expect(countRows(home, 'project_briefs')).toBe(b0);
-  });
-
-  it('close + close guard (not-found; cannot-close-superseded; cannot re-close)', async () => {
-    await expect(closeProjectBrief(objectsAt(home), 'default', 77777)).rejects.toThrow(/not found/);
-    const v1 = await saveProjectBrief(objectsAt(home), home, 'default', { repo: 'sup', summary: 'a' });
-    await saveProjectBrief(objectsAt(home), home, 'default', { repo: 'sup', summary: 'b', supersedesBriefId: v1.id });
-    await expect(closeProjectBrief(objectsAt(home), 'default', v1.id)).rejects.toThrow(/not active/);
-    const c = await saveProjectBrief(objectsAt(home), home, 'default', { repo: 'cl', summary: 'a' });
-    await closeProjectBrief(objectsAt(home), 'default', c.id);
-    await expect(closeProjectBrief(objectsAt(home), 'default', c.id)).rejects.toThrow(/not active/);
-  });
-
-  it('cross-tenant INSERT trigger + supersede tenant-match trigger raise ABORT', async () => {
-    const mem = createMemory('tenant-a', {
-      tags: ['project_brief'], layer: Layer.Semantic, confidence: 'verified', source: 'project_brief', tenantId: 'tenant-a',
-    });
-    writeEntry(home, mem);
-    const db = openHippoDb(home);
-    try {
-      expect(() => {
-        db.prepare(`INSERT INTO project_briefs(memory_id, tenant_id, repo, summary, version, status, created_at)
-          VALUES (?, 'tenant-b', 'x', 'y', 1, 'active', ?)`).run(mem.id, new Date().toISOString());
-      }).toThrow(/tenant_id must match memories\.tenant_id/);
-    } finally { closeHippoDb(db); }
-    const a = await saveProjectBrief(objectsAt(home), home, 'tenant-a', { repo: 'A', summary: 'a' });
-    const b = await saveProjectBrief(objectsAt(home), home, 'tenant-b', { repo: 'B', summary: 'b' });
-    const db2 = openHippoDb(home);
-    try {
-      expect(() => db2.prepare(`UPDATE project_briefs SET superseded_by=? WHERE id=?`).run(b.id, a.id))
-        .toThrow(/superseded_by must reference a project_brief in the same tenant/);
-    } finally { closeHippoDb(db2); }
-  });
-
-  it('ON DELETE SET NULL: forgetting the memory orphans the brief; old versions loadable', async () => {
-    const v1 = await saveProjectBrief(objectsAt(home), home, 'default', { repo: 'd', summary: 'a' });
-    const v2 = await saveProjectBrief(objectsAt(home), home, 'default', { repo: 'd', summary: 'b', supersedesBriefId: v1.id });
-    deleteEntry(home, v1.memoryId!);
-    deleteEntry(home, v2.memoryId!);
-    expect((await loadProjectBriefById(objectsAt(home), 'default', v1.id))!.memoryId).toBeNull();
-    expect((await loadProjectBriefById(objectsAt(home), 'default', v1.id))!.status).toBe('superseded');
-    expect((await loadProjectBriefById(objectsAt(home), 'default', v2.id))!.status).toBe('active');
-  });
-
-  it('status + repo filters; loadActiveBriefForRepo; invalid status', async () => {
+  it('status + repo filters; loadActiveBriefForRepo', async () => {
     const a = await saveProjectBrief(objectsAt(home), home, 'default', { repo: 'alpha', summary: 'x' });
     const b = await saveProjectBrief(objectsAt(home), home, 'default', { repo: 'beta', summary: 'x' });
     const c = await saveProjectBrief(objectsAt(home), home, 'default', { repo: 'gamma', summary: 'x' });
@@ -205,9 +118,6 @@ describe('project_briefs store (repo-scoped / auto-refreshes first-class object)
     expect((await loadProjectBriefs(objectsAt(home), 'default', { repo: 'beta' })).length).toBe(2); // v1 superseded + v2 active
     expect((await loadProjectBriefs(objectsAt(home), 'default', { repo: 'beta', status: 'active' })).length).toBe(1);
     expect((await loadProjectBriefs(objectsAt(home), 'default')).length).toBe(4);
-    // @ts-expect-error runtime validation
-    await expect(loadProjectBriefs(objectsAt(home), 'default', { status: 'retired' })).rejects.toThrow(/status must be one of/);
-    expect(VALID_BRIEF_STATES.has('active')).toBe(true);
   });
 
   it('validation: missing repo/summary; single-line repo; caps', async () => {
@@ -360,26 +270,5 @@ describe('project_briefs store (repo-scoped / auto-refreshes first-class object)
     expect(b.version).toBe(1);
     expect(b.summary.length).toBeLessThanOrEqual(MAX_BRIEF_SUMMARY_LEN);
     expect((await loadProjectBriefById(objectsAt(home), 'default', b.id))!.summary.length).toBeLessThanOrEqual(MAX_BRIEF_SUMMARY_LEN);
-  });
-
-  it('schema v35 produces project_briefs table + 3 triggers + 3 indexes', () => {
-    const db = openHippoDb(home);
-    try {
-      expect(db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name='project_briefs'`).get()).toBeDefined();
-      // SAFETY: the query selects only the `name` column from sqlite_master, so every
-      // row is shaped { name: string }.
-      const triggers = (db.prepare(`SELECT name FROM sqlite_master WHERE type='trigger' AND name LIKE 'trg_project_briefs_%'`)
-        .all() as Array<{ name: string }>).map((t) => t.name);
-      expect(triggers).toContain('trg_project_briefs_tenant_match_insert');
-      expect(triggers).toContain('trg_project_briefs_tenant_match_update');
-      expect(triggers).toContain('trg_project_briefs_supersede_tenant_match_update');
-      // SAFETY: the query selects only the `name` column from sqlite_master, so every
-      // row is shaped { name: string }.
-      const indexes = (db.prepare(`SELECT name FROM sqlite_master WHERE type='index' AND name LIKE 'idx_project_briefs_%'`)
-        .all() as Array<{ name: string }>).map((i) => i.name);
-      expect(indexes).toContain('idx_project_briefs_tenant_status');
-      expect(indexes).toContain('idx_project_briefs_memory');
-      expect(indexes).toContain('idx_project_briefs_repo');
-    } finally { closeHippoDb(db); }
   });
 });
