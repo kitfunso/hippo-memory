@@ -4,40 +4,27 @@
  * preview output, and exact-tag matching through the real CLI surface.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync, existsSync } from 'node:fs';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
-import { execFileSync } from 'node:child_process';
+import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { readEntry } from '../src/store/entry-reads.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
+import { runCli as runCliEntry } from '../src/cli.js';
+import { clearProjectIdentityCache } from '../src/core/project-identity.js';
+import { runInProcess } from './_helpers/run-in-process.js';
 
-const CLI = resolve(__dirname, '..', 'bin', 'hippo.js');
+const savedCwd = process.cwd();
 
-function runCli(
-  cwd: string,
-  args: string[],
-  opts: { ok?: boolean } = {},
-) {
-  if (!existsSync(CLI)) {
-    throw new Error(`bin/hippo.js not found at ${CLI} - run \`npm run build\` first`);
-  }
-  try {
-    const stdout = execFileSync('node', [CLI, ...args], {
-      cwd,
-      encoding: 'utf8',
-      env: { ...process.env, HIPPO_HOME: join(cwd, '.hippo') },
-    });
-    return { stdout, stderr: '' };
-  } catch (err) {
-    // SAFETY: execFileSync attaches stdout/stderr/status to the thrown Error
-    // on a non-zero child exit (Node child_process sync error contract).
-    const e = err as { stdout?: string; stderr?: string; status?: number };
-    if (opts.ok === false) return { stdout: e.stdout ?? '', stderr: e.stderr ?? '' };
-    throw new Error(`CLI exit ${e.status}: ${e.stderr ?? ''}\nstdout: ${e.stdout ?? ''}`);
-  }
+async function runCli(args: string[], opts: { ok?: boolean } = {}): Promise<{ stdout: string; stderr: string }> {
+  // A spawned hippo starts with an empty project-identity cache, so each in-process run clears it first.
+  const res = await runInProcess(() => { clearProjectIdentityCache(); return runCliEntry(['node', 'hippo', ...args]); });
+  if (res.status === 0) return { stdout: res.stdout, stderr: '' };
+  if (opts.ok === false) return { stdout: res.stdout, stderr: res.stderr };
+  throw new Error(`CLI exit ${res.status}: ${res.stderr}
+stdout: ${res.stdout}`);
 }
 
 describe('hippo invalidate CLI contract', () => {
@@ -48,32 +35,36 @@ describe('hippo invalidate CLI contract', () => {
     tmpDir = mkdtempSync(join(tmpdir(), 'hippo-cli-invalidate-'));
     hippoRoot = join(tmpDir, '.hippo');
     initStore(hippoRoot);
+    vi.stubEnv('HIPPO_HOME', hippoRoot);
+    process.chdir(tmpDir);
   });
 
   afterEach(() => {
+    process.chdir(savedCwd);
+    vi.unstubAllEnvs();
     rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  it('rejects pattern + --id together', () => {
-    const { stderr } = runCli(tmpDir, ['invalidate', 'pattern', '--id', 'mem_x'], { ok: false });
+  it('rejects pattern + --id together', async () => {
+    const { stderr } = await runCli(['invalidate', 'pattern', '--id', 'mem_x'], { ok: false });
     expect(stderr).toContain('Pass a pattern OR --id, not both');
   });
 
-  it('rejects neither pattern nor --id', () => {
-    const { stderr } = runCli(tmpDir, ['invalidate'], { ok: false });
+  it('rejects neither pattern nor --id', async () => {
+    const { stderr } = await runCli(['invalidate'], { ok: false });
     expect(stderr).toContain('Usage: hippo invalidate');
   });
 
-  it('rejects a value-less --id instead of falling through to pattern mode', () => {
-    const { stderr } = runCli(tmpDir, ['invalidate', 'pattern', '--id'], { ok: false });
+  it('rejects a value-less --id instead of falling through to pattern mode', async () => {
+    const { stderr } = await runCli(['invalidate', 'pattern', '--id'], { ok: false });
     expect(stderr).toContain('--id requires a memory id');
   });
 
-  it('--dry-run before the pattern previews without writing (parser allowlist end-to-end)', () => {
+  it('--dry-run before the pattern previews without writing (parser allowlist end-to-end)', async () => {
     const mem = createMemory('REST API uses Bearer tokens everywhere', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: ['api'] });
     writeEntry(hippoRoot, mem);
 
-    const { stdout } = runCli(tmpDir, ['invalidate', '--dry-run', 'REST API']);
+    const { stdout } = await runCli(['invalidate', '--dry-run', 'REST API']);
     expect(stdout).toContain('DRY RUN');
     expect(stdout).toContain(mem.id);
     const untouched = readEntry(hippoRoot, mem.id);
@@ -81,23 +72,23 @@ describe('hippo invalidate CLI contract', () => {
     expect(untouched!.confidence).toBe(mem.confidence);
   });
 
-  it('--id invalidates exactly one memory end-to-end', () => {
+  it('--id invalidates exactly one memory end-to-end', async () => {
     const target = createMemory('Unrelated gardening notes', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: ['garden'] });
     const other = createMemory('Unrelated cooking notes', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: ['cooking'] });
     writeEntry(hippoRoot, target);
     writeEntry(hippoRoot, other);
 
-    const { stdout } = runCli(tmpDir, ['invalidate', '--id', target.id]);
+    const { stdout } = await runCli(['invalidate', '--id', target.id]);
     expect(stdout).toContain('Invalidated 1 memories');
     expect(readEntry(hippoRoot, target.id)!.confidence).toBe('stale');
     expect(readEntry(hippoRoot, other.id)!.confidence).toBe(other.confidence);
   });
 
-  it('a pattern merely CONTAINING a tag word does not hit that tag (incident shape)', () => {
+  it('a pattern merely CONTAINING a tag word does not hit that tag (incident shape)', async () => {
     const bystander = createMemory('Weekly grocery budget tracking notes', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: ['hippo'] });
     writeEntry(hippoRoot, bystander);
 
-    const { stdout } = runCli(tmpDir, ['invalidate', 'hippo salience gate experiment']);
+    const { stdout } = await runCli(['invalidate', 'hippo salience gate experiment']);
     expect(stdout).toContain('No memories matched');
     expect(readEntry(hippoRoot, bystander.id)!.tags).not.toContain('invalidated');
   });

@@ -1,32 +1,31 @@
-import { describe, expect, it } from 'vitest';
-import { execFileSync } from 'node:child_process';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { join } from 'node:path';
+import { runCli } from '../src/cli.js';
 import { initStore } from '../src/store/open.js';
+import { clearProjectIdentityCache } from '../src/core/project-identity.js';
+import { runInProcess } from './_helpers/run-in-process.js';
 
-const CLI = resolve(__dirname, '..', 'bin', 'hippo.js');
+const savedCwd = process.cwd();
+let home = '';
+
+afterEach(() => {
+  process.chdir(savedCwd);
+  vi.unstubAllEnvs();
+  rmSync(home, { recursive: true, force: true });
+});
 
 describe('hippo drill CLI', () => {
-  it('rejects fractional depth', () => {
-    const home = mkdtempSync(join(tmpdir(), 'hippo-cli-drill-'));
+  it('rejects fractional depth', async () => {
+    home = mkdtempSync(join(tmpdir(), 'hippo-cli-drill-'));
     initStore(join(home, '.hippo'));
+    vi.stubEnv('HIPPO_HOME', join(home, '.hippo-global'));
+    process.chdir(home);
 
-    try {
-      execFileSync('node', [CLI, 'drill', 'missing', '--depth', '1.5'], {
-        cwd: home,
-        encoding: 'utf8',
-        env: { ...process.env, HIPPO_HOME: join(home, '.hippo-global') },
-      });
-      throw new Error('expected hippo drill to reject fractional depth');
-    } catch (error) {
-      // SAFETY: execFileSync on non-zero exit throws Node's child_process
-      // error, which always carries status/stderr from the spawned CLI.
-      const failure = error as { status?: number; stderr?: string | Buffer };
-      expect(failure.status).toBe(2);
-      expect(String(failure.stderr)).toContain('--depth must be an integer between 1 and 10');
-    } finally {
-      rmSync(home, { recursive: true, force: true });
-    }
+    // A spawned hippo starts with an empty project-identity cache, so each in-process run clears it first.
+    const res = await runInProcess(() => { clearProjectIdentityCache(); return runCli(['node', 'hippo', 'drill', 'missing', '--depth', '1.5']); });
+    expect(res.status).toBe(2);
+    expect(res.stderr).toContain('--depth must be an integer between 1 and 10');
   });
 });

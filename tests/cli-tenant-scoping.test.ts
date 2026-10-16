@@ -1,7 +1,7 @@
 /**
  * v1.11.0 tenant-isolation residue: CLI tenant-scoping via HIPPO_TENANT.
  *
- * Spawns `hippo trace <id>` under different HIPPO_TENANT values and asserts
+ * Runs `hippo trace <id>` under different HIPPO_TENANT values and asserts
  * cross-tenant memories are not found. Covers both the local-store read
  * (cmdTrace at cli.ts:1799) and the cross-store global path (cli.ts:1803 + the
  * parent walk at cli.ts:1829). The cross-store case is the deliberate
@@ -9,65 +9,38 @@
  * to global under tenant_a returns "not found" when traced under
  * HIPPO_TENANT=tenant_b.
  */
-import { describe, it, expect, beforeAll, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync, mkdirSync, existsSync, statSync } from 'node:fs';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { execFileSync } from 'node:child_process';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
+import { runCli as runCliEntry } from '../src/cli.js';
+import { clearProjectIdentityCache } from '../src/core/project-identity.js';
+import { runInProcess } from './_helpers/run-in-process.js';
 
-const REPO_ROOT = join(__dirname, '..');
-const CLI_PATH = join(REPO_ROOT, 'dist', 'cli.js');
+const savedCwd = process.cwd();
 
 interface CliRunResult {
   out: string;
   status: number;
 }
 
-function runCli(
-  cwd: string,
-  env: NodeJS.ProcessEnv,
-  ...args: string[]
-): CliRunResult {
-  try {
-    const stdout = execFileSync(process.execPath, [CLI_PATH, ...args], {
-      cwd,
-      env,
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
-    return { out: stdout, status: 0 };
-  } catch (e) {
-    // SAFETY: execFileSync on failure throws an Error augmented with
-    // stdout/stderr/status per Node's child_process API contract.
-    const err = e as {
-      stdout?: string | Buffer;
-      stderr?: string | Buffer;
-      status?: number;
-    };
-    const stdout = Buffer.isBuffer(err.stdout) ? err.stdout.toString('utf8') : (err.stdout ?? '');
-    const stderr = Buffer.isBuffer(err.stderr) ? err.stderr.toString('utf8') : (err.stderr ?? '');
-    return { out: stdout + stderr, status: err.status ?? 1 };
-  }
+// Mirrors the old spawned helper: stdout alone on success, stdout and stderr together on failure.
+async function runCli(tenant: string, ...args: string[]): Promise<CliRunResult> {
+  vi.stubEnv('HIPPO_TENANT', tenant);
+  // A spawned hippo starts with an empty project-identity cache, so each in-process run clears it first.
+  const res = await runInProcess(() => { clearProjectIdentityCache(); return runCliEntry(['node', 'hippo', ...args]); });
+  return { out: res.status === 0 ? res.stdout : res.stdout + res.stderr, status: res.status };
 }
 
 describe('CLI tenant-scoping', () => {
   let home: string;
   let hippoRoot: string;
   let globalRoot: string;
-  let envBase: NodeJS.ProcessEnv;
-
-  beforeAll(() => {
-    if (!existsSync(CLI_PATH) || !statSync(CLI_PATH).isFile()) {
-      throw new Error(
-        `dist/cli.js not found at ${CLI_PATH}. Run \`npm run build\` first.`,
-      );
-    }
-  });
 
   beforeEach(() => {
     home = mkdtempSync(join(tmpdir(), 'hippo-cli-tenant-'));
@@ -77,16 +50,18 @@ describe('CLI tenant-scoping', () => {
     mkdirSync(globalRoot, { recursive: true });
     initStore(hippoRoot);
     initStore(globalRoot);
-    // Isolate the spawned CLI's global store from the developer's real
-    // ~/.hippo by pointing HIPPO_HOME at a per-test temp.
-    envBase = { ...process.env, HIPPO_HOME: globalRoot };
+    // Isolate the CLI's global store from the developer's real ~/.hippo by pointing HIPPO_HOME at a per-test temp.
+    vi.stubEnv('HIPPO_HOME', globalRoot);
+    process.chdir(home);
   });
 
   afterEach(() => {
+    process.chdir(savedCwd);
+    vi.unstubAllEnvs();
     rmSync(home, { recursive: true, force: true });
   });
 
-  it('cmdTrace local store: HIPPO_TENANT=tenant_b hides a tenant_a memory', () => {
+  it('cmdTrace local store: HIPPO_TENANT=tenant_b hides a tenant_a memory', async () => {
     const a = createMemory('A content (local)', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       tenantId: 'tenant_a',
@@ -101,27 +76,17 @@ describe('CLI tenant-scoping', () => {
     writeEntry(hippoRoot, b);
 
     // Under HIPPO_TENANT=tenant_b, tracing tenant_a's memory returns "not found".
-    const aTrace = runCli(
-      home,
-      { ...envBase, HIPPO_TENANT: 'tenant_b' },
-      'trace',
-      a.id,
-    );
+    const aTrace = await runCli('tenant_b', 'trace', a.id);
     expect(aTrace.status).not.toBe(0);
     expect(aTrace.out).toMatch(/not found/i);
 
     // Tracing tenant_b's own memory under HIPPO_TENANT=tenant_b still works.
-    const bTrace = runCli(
-      home,
-      { ...envBase, HIPPO_TENANT: 'tenant_b' },
-      'trace',
-      b.id,
-    );
+    const bTrace = await runCli('tenant_b', 'trace', b.id);
     expect(bTrace.status, bTrace.out).toBe(0);
     expect(bTrace.out).toMatch(/B content/);
-  }, 30_000);
+  });
 
-  it('cmdTrace global store: HIPPO_TENANT=tenant_b hides a tenant_a-promoted global memory', () => {
+  it('cmdTrace global store: HIPPO_TENANT=tenant_b hides a tenant_a-promoted global memory', async () => {
     // Seed a g_* memory directly into the isolated global store with
     // tenant_id=tenant_a — simulates an entry promoted by another tenant.
     const db = openHippoDb(globalRoot);
@@ -141,15 +106,10 @@ describe('CLI tenant-scoping', () => {
 
     // Under HIPPO_TENANT=tenant_b the cross-tenant global trace returns
     // "not found" — the cross-store tightening behaviour change.
-    const trace = runCli(
-      home,
-      { ...envBase, HIPPO_TENANT: 'tenant_b' },
-      'trace',
-      'g_taPromoted',
-    );
+    const trace = await runCli('tenant_b', 'trace', 'g_taPromoted');
     expect(trace.status).not.toBe(0);
     expect(trace.out).toMatch(/not found/i);
-  }, 30_000);
+  });
 
   function seed(tenantId: string, content: string): string {
     const entry = createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tenantId, tags: ['x'] });
@@ -157,12 +117,10 @@ describe('CLI tenant-scoping', () => {
     return entry.id;
   }
 
-  const envB = () => ({ ...envBase, HIPPO_TENANT: 'tenant_b' });
-
-  it('audit --fix under tenant_b deletes only tenant_b rows, with a reason', () => {
+  it('audit --fix under tenant_b deletes only tenant_b rows, with a reason', async () => {
     const aJunk = seed('tenant_a', 'tiny note');
     const bJunk = seed('tenant_b', 'tiny note');
-    const res = runCli(home, envB(), 'audit', '--fix');
+    const res = await runCli('tenant_b', 'audit', '--fix');
     expect(res.status, res.out).toBe(0);
     expect(res.out).toContain('Removed 1 error-severity');
     expect(loadAllEntries(hippoRoot).map((e) => e.id)).toEqual([aJunk]);
@@ -174,22 +132,22 @@ describe('CLI tenant-scoping', () => {
     } finally {
       closeHippoDb(db);
     }
-  }, 30_000);
+  });
 
-  it('export under tenant_b leaves out tenant_a rows', () => {
+  it('export under tenant_b leaves out tenant_a rows', async () => {
     seed('tenant_a', 'A content for export');
     seed('tenant_b', 'B content for export');
-    const res = runCli(home, envB(), 'export');
+    const res = await runCli('tenant_b', 'export');
     expect(res.status, res.out).toBe(0);
     expect(res.out).toContain('B content for export');
     expect(res.out).not.toContain('A content for export');
-  }, 30_000);
+  });
 
-  it('supersede under tenant_b writes the successor into tenant_b', () => {
+  it('supersede under tenant_b writes the successor into tenant_b', async () => {
     const old = seed('tenant_b', 'B original content');
-    const res = runCli(home, envB(), 'supersede', old, 'B replacement content');
+    const res = await runCli('tenant_b', 'supersede', old, 'B replacement content');
     expect(res.status, res.out).toBe(0);
     const successor = loadAllEntries(hippoRoot).find((e) => e.content === 'B replacement content');
     expect(successor?.tenant_id).toBe('tenant_b');
-  }, 30_000);
+  });
 });

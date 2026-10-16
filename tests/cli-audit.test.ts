@@ -1,46 +1,55 @@
-import { describe, it, expect } from 'vitest';
-import { mkdtempSync, rmSync, existsSync } from 'node:fs';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
-import { execSync } from 'node:child_process';
+import { join } from 'node:path';
+import { runCli } from '../src/cli.js';
+import { clearProjectIdentityCache } from '../src/core/project-identity.js';
+import { runInProcess } from './_helpers/run-in-process.js';
 
-const cli = resolve(__dirname, '..', 'dist', 'cli.js');
+const savedCwd = process.cwd();
+let home = '';
+
+async function hippo(...args: string[]): Promise<string> {
+  // A spawned hippo starts with an empty project-identity cache, so each in-process run clears it first.
+  const res = await runInProcess(() => { clearProjectIdentityCache(); return runCli(['node', 'hippo', ...args]); });
+  expect(res.status, res.stderr).toBe(0);
+  return res.stdout;
+}
+
+beforeEach(() => {
+  home = mkdtempSync(join(tmpdir(), 'hippo-audit-cli-'));
+  vi.stubEnv('HIPPO_TENANT', '');
+  process.chdir(home);
+});
+
+afterEach(() => {
+  process.chdir(savedCwd);
+  vi.unstubAllEnvs();
+  rmSync(home, { recursive: true, force: true });
+});
 
 describe('hippo audit list', () => {
-  it('lists events after remember + recall', () => {
-    if (!existsSync(cli)) throw new Error('build first');
-    const home = mkdtempSync(join(tmpdir(), 'hippo-audit-cli-'));
-    const env = { ...process.env, HIPPO_HOME: home };
-    try {
-      execSync(`node "${cli}" init`, { env, cwd: home });
-      execSync(`node "${cli}" init --global`, { env, cwd: home });
-      execSync(`node "${cli}" remember "audit-list-canary distinguishing token" --global`, { env, cwd: home });
-      execSync(`node "${cli}" recall "audit-list-canary"`, { env, cwd: home });
+  it('lists events after remember + recall', async () => {
+    vi.stubEnv('HIPPO_HOME', home);
+    await hippo('init');
+    await hippo('init', '--global');
+    await hippo('remember', 'audit-list-canary distinguishing token', '--global');
+    await hippo('recall', 'audit-list-canary');
 
-      const out = execSync(`node "${cli}" audit list --json --global`, { env, cwd: home }).toString();
-      const events = JSON.parse(out);
-      const ops = events.map((e: { op: string }) => e.op);
-      expect(ops).toContain('remember');
-      expect(ops).toContain('recall');
-    } finally {
-      rmSync(home, { recursive: true, force: true });
-    }
+    const events = JSON.parse(await hippo('audit', 'list', '--json', '--global'));
+    const ops = events.map((e: { op: string }) => e.op);
+    expect(ops).toContain('remember');
+    expect(ops).toContain('recall');
   });
 });
 
 describe('hippo audit --fix --dry-run', () => {
-  it('reports what it would remove and deletes nothing', () => {
-    if (!existsSync(cli)) throw new Error('build first');
-    const home = mkdtempSync(join(tmpdir(), 'hippo-audit-dry-'));
-    const env = { ...process.env, HIPPO_HOME: join(home, 'global'), HIPPO_SKIP_AUTO_INTEGRATIONS: '1' };
-    try {
-      execSync(`node "${cli}" init --no-hooks --no-schedule --no-learn`, { env, cwd: home });
-      execSync(`node "${cli}" remember "tiny note"`, { env, cwd: home });
-      const dry = execSync(`node "${cli}" audit --fix --dry-run`, { env, cwd: home }).toString();
-      expect(dry).toContain('Would remove 1 error-severity');
-      expect(execSync(`node "${cli}" audit`, { env, cwd: home }).toString()).toContain('tiny note');
-    } finally {
-      rmSync(home, { recursive: true, force: true });
-    }
+  it('reports what it would remove and deletes nothing', async () => {
+    vi.stubEnv('HIPPO_HOME', join(home, 'global'));
+    vi.stubEnv('HIPPO_SKIP_AUTO_INTEGRATIONS', '1');
+    await hippo('init', '--no-hooks', '--no-schedule', '--no-learn');
+    await hippo('remember', 'tiny note');
+    expect(await hippo('audit', '--fix', '--dry-run')).toContain('Would remove 1 error-severity');
+    expect(await hippo('audit')).toContain('tiny note');
   });
 });

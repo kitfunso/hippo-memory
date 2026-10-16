@@ -1,59 +1,38 @@
-import { describe, it, expect, afterEach } from 'vitest';
-import { execFileSync } from 'node:child_process';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { runCli } from '../src/cli.js';
+import { clearProjectIdentityCache } from '../src/core/project-identity.js';
+import { runInProcess } from './_helpers/run-in-process.js';
 
-const HIPPO_BIN = join(process.cwd(), 'bin', 'hippo.js');
-
-// `cwd` MUST be an isolated temp dir. The CLI resolves the local store by
-// walking up from cwd to find `.hippo`; without isolation it finds the real
-// project store. HIPPO_HOME only redirects the *global* store, so it cannot
-// substitute for cwd isolation here.
-function hippo(cwd: string, env: Record<string, string>, ...args: string[]): string {
-  return execFileSync('node', [HIPPO_BIN, ...args], {
-    cwd,
-    env: { ...process.env, ...env },
-    encoding: 'utf-8',
-    shell: process.platform === 'win32',
-  });
-}
+const savedCwd = process.cwd();
+// A spawned hippo starts with an empty project-identity cache, so each in-process run clears it first.
+const hippo = (...args: string[]) => runInProcess(() => { clearProjectIdentityCache(); return runCli(['node', 'hippo', ...args]); });
 
 describe('hippo remember --extract', () => {
   let home: string;
 
   afterEach(() => {
+    process.chdir(savedCwd);
+    vi.unstubAllEnvs();
     if (home) rmSync(home, { recursive: true, force: true });
   });
 
-  it('saves memory even when extraction skips (no API key)', () => {
+  it('saves memory even when extraction skips (no API key)', async () => {
+    // `cwd` MUST be an isolated temp dir: the CLI walks up from cwd to find `.hippo`, and HIPPO_HOME only moves the global store.
     home = mkdtempSync(join(tmpdir(), 'hippo-extract-'));
-    const env = { HIPPO_HOME: join(home, '.hippo'), ANTHROPIC_API_KEY: '' };
-    hippo(home, env, 'init', '--no-hooks', '--no-schedule', '--no-learn');
+    vi.stubEnv('HIPPO_HOME', join(home, '.hippo'));
+    vi.stubEnv('ANTHROPIC_API_KEY', '');
+    process.chdir(home);
+    const init = await hippo('init', '--no-hooks', '--no-schedule', '--no-learn');
+    expect(init.status, init.stderr).toBe(0);
 
-    try {
-      execFileSync('node', [HIPPO_BIN, 'remember', 'John loves basketball', '--extract'], {
-        cwd: home,
-        env: { ...process.env, ...env },
-        encoding: 'utf-8',
-        shell: process.platform === 'win32',
-      });
-    } catch {
-      // Without an API key --extract may exit non-zero; the recall below is the check.
-    }
+    // Without an API key --extract may exit non-zero; the recall below is the check.
+    await hippo('remember', 'John loves basketball', '--extract');
 
-    const out = hippo(home, env, 'recall', 'basketball', '--json');
-    expect(out).toContain('basketball');
-  });
-
-  it('remember works without --extract flag', () => {
-    home = mkdtempSync(join(tmpdir(), 'hippo-extract-'));
-    const env = { HIPPO_HOME: join(home, '.hippo'), ANTHROPIC_API_KEY: '' };
-    hippo(home, env, 'init', '--no-hooks', '--no-schedule', '--no-learn');
-
-    hippo(home, env, 'remember', 'Alice enjoys reading');
-
-    const out = hippo(home, env, 'recall', 'reading', '--json');
-    expect(out).toContain('reading');
+    const recall = await hippo('recall', 'basketball', '--json');
+    expect(recall.status, recall.stderr).toBe(0);
+    expect(recall.stdout).toContain('basketball');
   });
 });

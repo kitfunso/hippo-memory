@@ -2,9 +2,12 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { hippoRun } from './_helpers/spawn-hippo.js';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { runCli } from '../src/cli.js';
+import { clearProjectIdentityCache } from '../src/core/project-identity.js';
+import { runInProcess } from './_helpers/run-in-process.js';
 
+const savedCwd = process.cwd();
 let root: string;
 let settings: string;
 beforeEach(() => {
@@ -15,23 +18,31 @@ beforeEach(() => {
   fs.mkdirSync(path.join(root, 'home', '.claude'), { recursive: true });
   settings = path.join(root, 'home', '.claude', 'settings.json');
 });
-afterEach(() => fs.rmSync(root, { recursive: true, force: true }));
+afterEach(() => {
+  process.chdir(savedCwd);
+  vi.unstubAllEnvs();
+  fs.rmSync(root, { recursive: true, force: true });
+});
 
 // A PATH with no codex on it, and no schedule or git call, so the run touches nothing outside the fake home.
-function hippo(...args: string[]): string {
-  const env: NodeJS.ProcessEnv = { ...process.env };
-  for (const key of Object.keys(env)) if (/^(path|claude_config_dir|codex_home|hippo_skip_auto_integrations)$/i.test(key)) delete env[key];
-  Object.assign(env, {
-    HOME: path.join(root, 'home'),
-    USERPROFILE: path.join(root, 'home'),
-    APPDATA: path.join(root, 'appdata'),
-    LOCALAPPDATA: path.join(root, 'localappdata'),
-    HIPPO_HOME: path.join(root, 'global'),
-    PATH: path.join(root, 'empty-path'),
-  });
-  const r = hippoRun([...args, '--no-schedule', '--no-learn'], { cwd: path.join(root, 'repo'), env });
-  expect(r.status, r.stderr).toBe(0);
-  return r.stdout;
+async function hippo(...args: string[]): Promise<string> {
+  for (const key of ['CLAUDE_CONFIG_DIR', 'CODEX_HOME', 'HIPPO_SKIP_AUTO_INTEGRATIONS']) vi.stubEnv(key, undefined);
+  vi.stubEnv('HOME', path.join(root, 'home'));
+  vi.stubEnv('USERPROFILE', path.join(root, 'home'));
+  vi.stubEnv('APPDATA', path.join(root, 'appdata'));
+  vi.stubEnv('LOCALAPPDATA', path.join(root, 'localappdata'));
+  vi.stubEnv('HIPPO_HOME', path.join(root, 'global'));
+  vi.stubEnv('PATH', path.join(root, 'empty-path'));
+  process.chdir(path.join(root, 'repo'));
+  try {
+    // A spawned hippo starts with an empty project-identity cache, so each in-process run clears it first.
+    const r = await runInProcess(() => { clearProjectIdentityCache(); return runCli(['node', 'hippo', ...args, '--no-schedule', '--no-learn']); });
+    // A verb that sets process.exitCode instead of exiting fails here, as the real process would on exit.
+    expect(r.status || Number(process.exitCode ?? 0), r.stderr).toBe(0);
+    return r.stdout;
+  } finally {
+    process.exitCode = undefined;
+  }
 }
 
 describe.each([
@@ -40,10 +51,10 @@ describe.each([
   ['a null hooks value', '{"hooks":null}'],
   ['broken JSON', '{ "hooks": { "SessionEnd": [ }'],
 ])('a settings.json of %s', (_label, text) => {
-  it.each([['init'], ['hook install claude-code'], ['hook uninstall claude-code'], ['setup']])('hippo %s warns once and leaves it unchanged', (command) => {
+  it.each([['init'], ['hook install claude-code'], ['hook uninstall claude-code'], ['setup']])('hippo %s warns once and leaves it unchanged', async (command) => {
     fs.writeFileSync(settings, text);
 
-    const out = hippo(...command.split(' '));
+    const out = await hippo(...command.split(' '));
 
     expect(out.match(/left unchanged/g)).toHaveLength(1);
     expect(out).toContain(settings);
@@ -54,9 +65,9 @@ describe.each([
 });
 
 describe('hippo hook uninstall on a settings.json it can edit', () => {
-  it('says nothing about an unusable file when there are no hooks to remove', () => {
+  it('says nothing about an unusable file when there are no hooks to remove', async () => {
     fs.writeFileSync(settings, '{"theme":"dark"}');
 
-    expect(hippo('hook', 'uninstall', 'claude-code')).not.toContain('left unchanged');
+    expect(await hippo('hook', 'uninstall', 'claude-code')).not.toContain('left unchanged');
   });
 });

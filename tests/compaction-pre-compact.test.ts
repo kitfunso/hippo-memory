@@ -6,7 +6,6 @@ import { closeHippoDb, HOOK_DB_WAIT_MS, openHippoDb } from '../src/db/index.js';
 import { loadActiveTaskSnapshot } from '../src/store/sessions.js';
 import {
   compactionRows,
-  initProject,
   oneLine,
   postCompactPayload,
   removeScratch,
@@ -15,6 +14,7 @@ import {
   summaryWith,
   type Scratch,
 } from './_helpers/compaction-hooks.js';
+import { initStore } from '../src/store/open.js';
 import { lockWaitAskedMs, tracingLockWaits } from './_helpers/lock-waits.js';
 
 // The instruction Claude Code hands the summariser; pinned word for word.
@@ -45,7 +45,7 @@ function preCompact(session: string | null, transcriptPath: string = transcript,
 
 describe('hippo pre-compact leaves a record and asks for memories', () => {
   it('inserts a started record and prints the instruction once, on fd 1', () => {
-    initProject(s);
+    initStore(s.hippoRoot);
     const result = preCompact('s1', transcript, 'manual');
     expect(result.status).toBe(0);
     expect(result.stdout).toBe(`${INSTRUCTION}\n`);
@@ -66,7 +66,7 @@ describe('hippo pre-compact leaves a record and asks for memories', () => {
   });
 
   it('still saves the working-state snapshot, and no report file is left for post-compact', () => {
-    initProject(s);
+    initStore(s.hippoRoot);
     expect(preCompact('s1').status).toBe(0);
     const snapshot = loadActiveTaskSnapshot(s.hippoRoot, 'default');
     expect(snapshot?.task).toMatch(/npm install/);
@@ -75,7 +75,7 @@ describe('hippo pre-compact leaves a record and asks for memories', () => {
   });
 
   it('records the compaction even when no snapshot is derivable', () => {
-    initProject(s);
+    initStore(s.hippoRoot);
     const empty = path.join(s.proj, 'empty.jsonl');
     fs.writeFileSync(empty, '');
     const result = preCompact('s1', empty);
@@ -94,7 +94,7 @@ describe('hippo pre-compact leaves a record and asks for memories', () => {
   });
 
   it('prints nothing and writes nothing for a malformed payload', () => {
-    initProject(s);
+    initStore(s.hippoRoot);
     for (const input of ['not json', '{"session_id":"s1"}', JSON.stringify({ session_id: 's1', transcript_path: null })]) {
       const result = runHippo(['pre-compact', '--log-file', logFile], s.proj, s.env, input);
       expect(result.status).toBe(0);
@@ -104,7 +104,7 @@ describe('hippo pre-compact leaves a record and asks for memories', () => {
   });
 
   it('a payload naming no session gets no record and no instruction', () => {
-    initProject(s);
+    initStore(s.hippoRoot);
     const result = preCompact(null);
     expect(result.status).toBe(0);
     expect(result.stdout).toBe('');
@@ -112,7 +112,7 @@ describe('hippo pre-compact leaves a record and asks for memories', () => {
   });
 
   it('two sessions compacting keep their own records and their own message', () => {
-    initProject(s);
+    initStore(s.hippoRoot);
     const empty = path.join(s.proj, 'empty.jsonl');
     fs.writeFileSync(empty, '');
     expect(preCompact('s1').status).toBe(0);
@@ -130,7 +130,7 @@ describe('hippo pre-compact leaves a record and asks for memories', () => {
   });
 
   it('exits 0 and still asks for memories when the store is locked', () => {
-    initProject(s);
+    initStore(s.hippoRoot);
     const db = openHippoDb(s.hippoRoot);
     try {
       db.exec('BEGIN IMMEDIATE');
