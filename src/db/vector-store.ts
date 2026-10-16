@@ -256,11 +256,12 @@ function rescoreWithPending(
     offered.add(id);
     best.offer(id, v);
   });
+  // CROSS JOIN pins the queue as the outer loop; left to the planner it scanned every vector row to find a few.
   // SAFETY: the SELECT names exactly these two columns; node:sqlite returns BLOBs as Uint8Array.
   const queued = db.prepare(`
     SELECT v.memory_id AS id, v.vector AS vector
     FROM memory_vector_pending p
-    JOIN memory_vectors v ON v.memory_id = p.memory_id JOIN memories m ON m.id = v.memory_id
+    CROSS JOIN memory_vectors v ON v.memory_id = p.memory_id CROSS JOIN memories m ON m.id = v.memory_id
     WHERE v.dim = ?${filter.where}
   `).iterate(dim, ...filter.params) as Iterable<{ id: string; vector: Uint8Array }>;
   for (const row of queued) {

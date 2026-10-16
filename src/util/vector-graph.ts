@@ -1,5 +1,5 @@
 // Handwritten HNSW graph (Malkov and Yashunin) over plain data: no database, no I/O. Slice 2 persists the lists and
-// supplies vectors through `vectorOf`. Same seed and insert order give the same graph.
+// supplies vectors: `vectorsOf` a batch per expanded node on search. Same seed and insert order give the same graph.
 
 export interface VectorGraphOptions {
   dim: number;
@@ -22,7 +22,7 @@ export interface VectorGraph {
   entry: number;
   maxLevel: number;
   readonly nodes: Map<number, GraphNodeData>;
-  // Unit-length copies of vectors inserted in this process; a restored graph has none and reads through vectorOf.
+  // Unit-length copies of vectors inserted or read through vectorOf in this process; a restored graph starts empty.
   readonly unit: Map<number, Float32Array>;
 }
 
@@ -49,7 +49,8 @@ export interface SearchOptions {
   admit?: (node: number) => boolean;
   /** Most vectors the walk may score; past it the search stops with `aborted`. */
   visitBudget?: number;
-  vectorOf: VectorLookup;
+  /** One call per expanded node with every neighbour not yet scored, so a store reads them in one query. */
+  vectorsOf: BatchLookup;
 }
 
 export interface GraphHit {
@@ -60,6 +61,9 @@ export interface GraphHit {
 export type SearchResult = { aborted: false; hits: GraphHit[] } | { aborted: true };
 
 type VectorLookup = (node: number) => Float32Array;
+
+/** The vectors of `nodes`, in the same order. */
+export type BatchLookup = (nodes: readonly number[]) => readonly Float32Array[];
 
 const MAX_LEVEL = 15;
 
@@ -160,7 +164,7 @@ function cosine(q: Float32Array, qNorm: number, v: Float32Array): number {
 
 interface WalkContext {
   graph: VectorGraph;
-  score: (node: number) => number;
+  score: (nodes: readonly number[]) => number[];
   admit?: (node: number) => boolean;
   /** Vectors still allowed to be scored, shared by every layer of one search; negative means no budget. */
   budget: { left: number };
@@ -179,13 +183,17 @@ function searchLayer(ctx: WalkContext, entries: GraphHit[], ef: number, level: n
   while (frontier.size > 0) {
     const cur = frontier.pop();
     if (result.size >= ef && cur.score < result.peekKey()) break;
-    const links = ctx.graph.nodes.get(cur.node)?.links[level] ?? [];
-    for (const n of links) {
-      if (visited.has(n) || !ctx.graph.nodes.has(n)) continue;
+    const fresh = (ctx.graph.nodes.get(cur.node)?.links[level] ?? []).filter((n) => {
+      if (visited.has(n) || !ctx.graph.nodes.has(n)) return false;
       visited.add(n);
-      if (ctx.budget.left === 0) return null;
-      if (ctx.budget.left > 0) ctx.budget.left--;
-      const s = ctx.score(n);
+      return true;
+    });
+    if (ctx.budget.left >= 0 && fresh.length > ctx.budget.left) return null;
+    if (ctx.budget.left >= 0) ctx.budget.left -= fresh.length;
+    const scores = fresh.length > 0 ? ctx.score(fresh) : [];
+    for (let i = 0; i < fresh.length; i++) {
+      const n = fresh[i];
+      const s = scores[i];
       if (result.size < ef || s > result.peekKey()) {
         frontier.push(s, n);
         if (!ctx.admit || ctx.admit(n)) {
@@ -203,7 +211,7 @@ function searchLayer(ctx: WalkContext, entries: GraphHit[], ef: number, level: n
 /** Walk down from the entry through the upper layers (ef 1, no filter) and return the entries for layer `stop`. */
 function descend(ctx: WalkContext, stop: number): GraphHit[] | null {
   const { graph } = ctx;
-  let cur: GraphHit[] = [{ node: graph.entry, score: ctx.score(graph.entry) }];
+  let cur: GraphHit[] = [{ node: graph.entry, score: ctx.score([graph.entry])[0] }];
   for (let l = graph.maxLevel; l > stop; l--) {
     const next = searchLayer(ctx, cur, 1, l);
     if (!next) return null;
@@ -215,21 +223,10 @@ function descend(ctx: WalkContext, stop: number): GraphHit[] | null {
 export function searchGraph(graph: VectorGraph, query: Float32Array, opts: SearchOptions): SearchResult {
   if (graph.entry < 0 || opts.k <= 0 || query.length !== graph.dim) return { aborted: false, hits: [] };
   const qNorm = normOf(query);
-  const seen = new Map<number, boolean>();
-  const admit = opts.admit;
-  const memo = admit
-    ? (n: number): boolean => {
-        const known = seen.get(n);
-        if (known !== undefined) return known;
-        const ok = admit(n);
-        seen.set(n, ok);
-        return ok;
-      }
-    : undefined;
   const ctx: WalkContext = {
     graph,
-    score: (n) => cosine(query, qNorm, opts.vectorOf(n)),
-    admit: memo,
+    score: (nodes) => opts.vectorsOf(nodes).map((v) => cosine(query, qNorm, v)),
+    admit: opts.admit,
     budget: { left: opts.visitBudget ?? -1 },
   };
   const entry = descend({ ...ctx, admit: undefined }, 0);
@@ -244,7 +241,10 @@ function unitOf(graph: VectorGraph, node: number, vectorOf?: VectorLookup): Floa
   const cached = graph.unit.get(node);
   if (cached) return cached;
   if (!vectorOf) throw new Error(`vector graph: no vector for node ${node}`);
-  return toUnit(vectorOf(node));
+  // A merge reaches the same restored nodes thousands of times; recomputing each unit was most of its time.
+  const unit = toUnit(vectorOf(node));
+  graph.unit.set(node, unit);
+  return unit;
 }
 
 /** Algorithm 4 without extendCandidates or keepPrunedConnections; `cands` must be sorted best first. */
@@ -293,7 +293,7 @@ export function insertNode(graph: VectorGraph, node: number, vector: Float32Arra
     return;
   }
   const unitFor = (n: number) => unitOf(graph, n, vectorOf);
-  const ctx: WalkContext = { graph, score: (n) => dot(q, unitFor(n)), budget: { left: -1 } };
+  const ctx: WalkContext = { graph, score: (nodes) => nodes.map((n) => dot(q, unitFor(n))), budget: { left: -1 } };
   let entries = descend(ctx, level) ?? unreachable();
   for (let l = Math.min(level, graph.maxLevel); l >= 0; l--) {
     const found = searchLayer(ctx, entries, graph.efConstruction, l) ?? unreachable();

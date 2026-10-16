@@ -169,23 +169,18 @@ export function loadGraph(db: DatabaseSyncLike): OwnedGraph | null {
 }
 
 /** Reads a node's stored vector by its memory id; a gone or resized row reads as zeros, which scores 0. */
-export function vectorReader(
+function vectorReader(
   db: DatabaseSyncLike,
   ids: ReadonlyMap<number, string>,
   dim: number,
-  memo?: Map<number, Float32Array>,
 ): (node: number) => Float32Array {
   const read = db.prepare('SELECT vector FROM memory_vectors WHERE memory_id = ?');
   const zero = new Float32Array(dim);
   return (node) => {
-    const hit = memo?.get(node);
-    if (hit) return hit;
     const id = ids.get(node);
     // SAFETY: the SELECT names exactly the one column read; node:sqlite returns BLOBs as Uint8Array.
     const row = id === undefined ? undefined : read.get(id) as { vector: Uint8Array } | undefined;
-    const v = row !== undefined && row.vector.byteLength === dim * 4 ? copyVector(row.vector) : zero;
-    memo?.set(node, v);
-    return v;
+    return row !== undefined && row.vector.byteLength === dim * 4 ? copyVector(row.vector) : zero;
   };
 }
 
@@ -316,8 +311,7 @@ export function mergePending(db: DatabaseSyncLike, cap: number): MergeOutcome | 
   for (let attempt = 0; attempt < MERGE_ATTEMPTS; attempt++) {
     const stored = loadGraph(db);
     if (!stored) return null;
-    const memo = new Map<number, Float32Array>();
-    const vectorOf = vectorReader(db, stored.ids, stored.graph.dim, memo);
+    const vectorOf = vectorReader(db, stored.ids, stored.graph.dim);
     const plan = planMerge(db, stored, cap, vectorOf);
     if (plan.consumed.length === 0) return { merged: 0, recall: 1 };
     const model = plan.model || metaModel(db);
@@ -358,9 +352,11 @@ function sampledRecall(db: DatabaseSyncLike, graph: VectorGraph, vectorOf: (node
     queries.forEach((q, i) => offerTop(exact[i], { node: row.node, score: cosineOf(q, v) }));
   }
   let hit = 0;
+  // The merge left most nodes' unit vectors in graph.unit; cosine reads them as it would the stored ones.
+  const vectorsOf = (nodes: readonly number[]): Float32Array[] => nodes.map((n) => graph.unit.get(n) ?? vectorOf(n));
   queries.forEach((q, i) => {
     const want = new Set(exact[i].map((h) => h.node));
-    const found = searchGraph(graph, q, { k: RECALL_K, ef: RECALL_EF, vectorOf });
+    const found = searchGraph(graph, q, { k: RECALL_K, ef: RECALL_EF, vectorsOf });
     if (!found.aborted) hit += found.hits.filter((h) => want.has(h.node)).length;
   });
   const total = exact.reduce((n, e) => n + e.length, 0);

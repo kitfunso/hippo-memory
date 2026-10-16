@@ -60,7 +60,7 @@ describe('vector graph search under a filter', () => {
     }
   });
 
-  it('HIPPO_VECTOR_INDEX=exact skips the graph, and so does a filter admitting under 10% of nodes', async () => {
+  it('HIPPO_VECTOR_INDEX=exact skips the graph, and so does a filter admitting under half the nodes', async () => {
     const vectors = clusteredVectors(600, 3);
     const ids = seedVectors(root, vectors, (i) => (i % 20 === 0 ? null : 'other'));
     withDb(root, (db) => buildGraph(db));

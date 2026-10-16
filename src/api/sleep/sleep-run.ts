@@ -131,8 +131,9 @@ async function runSleepPhases(
   return result;
 }
 
-/** Queued vectors one sleep merges into the vector graph; the rest wait for the next sleep and stay exact-scanned. */
-const VECTOR_MERGE_CAP = 5_000;
+/** Queued vectors one sleep merges into the vector graph; the rest wait for the next sleep and stay exact-scanned.
+ *  Inserting, not loading, sets a merge's time (docs/ARCHITECTURE.md), so this cap bounds one sleep. */
+const VECTOR_MERGE_CAP = 1_000;
 
 // Phase 7: fold vectors written since the last sleep into the vector graph. SleepResult has no open counter, so the
 // totals go to the log; a failure is a detail line, since search scans whatever the graph lacks.

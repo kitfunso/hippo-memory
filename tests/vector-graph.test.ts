@@ -68,10 +68,10 @@ const queries = Array.from({ length: 40 }, (_, i) => {
   return Float32Array.from(vectors[(i * 73) % N], (x) => x + (gauss(r) * 0.1) / Math.sqrt(DIM));
 });
 const graph = build(vectors, 42);
-const vectorOf = (n: number) => vectors[n];
+const vectorsOf = (nodes: readonly number[]) => nodes.map((n) => vectors[n]);
 
 function ids(g: VectorGraph, q: Float32Array, opts: { k: number; ef: number; admit?: (n: number) => boolean }): number[] {
-  const res = searchGraph(g, q, { ...opts, vectorOf });
+  const res = searchGraph(g, q, { ...opts, vectorsOf });
   if (res.aborted) throw new Error('unexpected abort');
   return res.hits.map((h) => h.node);
 }
@@ -108,6 +108,22 @@ describe('vector graph', () => {
     for (const q of queries.slice(0, 10)) expect(ids(restored, q, { k: 50, ef: 128 })).toEqual(ids(graph, q, { k: 50, ef: 128 }));
   });
 
+  it('reads each restored vector once across inserts and grows the same graph as in memory', () => {
+    const live = build(vectors.slice(0, 1000), 42);
+    const restored = restoreGraph(graphMeta(live), graphNodes(live));
+    const reads = new Map<number, number>();
+    const vectorOf = (n: number): Float32Array => {
+      reads.set(n, (reads.get(n) ?? 0) + 1);
+      return vectors[n];
+    };
+    for (let i = 1000; i < 1100; i++) {
+      insertNode(live, i, vectors[i]);
+      insertNode(restored, i, vectors[i], vectorOf);
+    }
+    expect(Math.max(...reads.values())).toBe(1);
+    expect([...graphNodes(restored)]).toEqual([...graphNodes(live)]);
+  });
+
   it('never returns a rejected node and still fills k', () => {
     for (const q of queries.slice(0, 5)) {
       const banned = new Set(exactTop(vectors, q, 20));
@@ -124,7 +140,7 @@ describe('vector graph', () => {
   });
 
   it('aborts when the visit budget runs out', () => {
-    expect(searchGraph(graph, queries[0], { k: 50, ef: 128, visitBudget: 10, vectorOf })).toEqual({ aborted: true });
+    expect(searchGraph(graph, queries[0], { k: 50, ef: 128, visitBudget: 10, vectorsOf })).toEqual({ aborted: true });
   });
 
   it('rejects a wrong dimension and a repeated node', () => {
