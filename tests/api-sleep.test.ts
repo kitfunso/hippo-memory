@@ -153,14 +153,4 @@ describe('api.sleep', () => {
       restore();
     }
   });
-
-  // NOTE: a partial-failure path test (assert partial:true + errorMessage when
-  // a phase throws) was attempted in v1.11.5 but the api.sleep pipeline is
-  // resilient enough that the obvious sabotage (rm -rf .hippo mid-test) does
-  // not produce a throw — openHippoDb auto-creates state. The path IS reachable
-  // (the try/catch/finally in api.sleep correctly preserves phaseError and
-  // logs audit-emit failures separately, per independent-review HIGH fix).
-  // Tracked in TODOS.md for v1.12.0: forcing a deterministic mid-phase throw
-  // requires either a DI seam (e.g. inject the phase helpers) or a fault-injection
-  // hook in db.ts. Out of v1.11.5 scope; documented contract suffices.
 });

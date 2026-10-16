@@ -12,6 +12,7 @@ import { loadAllEntries } from '../src/store/entry-reads.js';
 import { blockHash } from '../src/util/token-text.js';
 import { realpathOrResolve } from '../src/util/real-path.js';
 import type { JsonValue } from '../src/util/json.js';
+import { trySymlink } from './_helpers/symlink.js';
 import { dispose, hippo, project, withDb, type Config as ProjectConfig, type Project, type RunOpts } from './_helpers/delivery-boundary.js';
 import {
   configure, expectVerdict, fire, listingOf, seed, verdictOf, writeHostTranscript, type ReadOpts, type TurnSpec, type Verdict,
@@ -103,14 +104,7 @@ const doc = (session: string, specs: TurnSpec[]): string => writeHostTranscript(
 
 /** A junction to `target`, or null when this machine cannot create one. */
 function link(target: string, l: string): string | null {
-  try {
-    fs.symlinkSync(target, l, 'junction');
-  } catch (err) {
-    // SAFETY: fs.symlinkSync throws only errno exceptions.
-    if ((err as NodeJS.ErrnoException).code === 'EPERM') return null;
-    throw err;
-  }
-  return l;
+  return trySymlink(target, l, 'junction') ? l : null;
 }
 
 describe('tool-failure listing, lesson and origin', () => {
