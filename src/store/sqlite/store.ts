@@ -1,5 +1,6 @@
 // The built-in SQLite adapter behind the store port.
 import { loadAmbientTalliesAt } from '../ambient.js';
+import { ambientRefusal } from '../../core/read-admission.js';
 import { listApiKeyRows, readApiKeyRecord } from '../auth.js';
 import { existsSync } from 'node:fs';
 import { appendAuditEvent, listAuditEventsAfter, queryAuditEvents } from '../audit.js';
@@ -310,8 +311,10 @@ function sqliteContextReads(on: OnHandle): Sync<ContextReads> {
         { unfinishedOnly: true, maxAgeMs, scopeFilter: 'default-deny' },
         key ?? undefined,
       ), openStore),
-    ambientCandidates: (tenantId, { recentNeeded, admit, recall, origins }) =>
-      on((db) => loadAmbientCandidatesAt(db, tenantId, recentNeeded, admit, recall, origins), openStore),
+    ambientCandidates: (tenantId, { recentNeeded, admit, recall, origins }) => on(
+      (db) => loadAmbientCandidatesAt(db, tenantId, recentNeeded, (e) => ambientRefusal(e, admit), recall, origins),
+      openStore,
+    ),
     contextCandidates: (tenantId, filter) => on((db) => loadContextCandidatesAt(db, tenantId, filter), openStore),
     ambientTallies: (tenantId, filter) => on((db) => loadAmbientTalliesAt(db, tenantId, filter), openStore),
     newestEntries: (tenantId, limit) => on((db) => newestEntriesAt(db, tenantId, limit), openStore),

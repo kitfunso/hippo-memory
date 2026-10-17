@@ -4,8 +4,8 @@ import { listAuditEventsAfter } from '../../src/store/audit.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { rowToSessionHandoff, type SessionHandoffRow } from '../../src/core/handoff.js';
 import {
-  ftsTermParts, passesScopeFilterForRecall, rarestFtsQuery, SECRET_TAGS, tallyAmbientEntries, type AmbientCandidateRequest,
-  type AmbientLoadResult, type AuditEvent, type ContextReads, type ContinuityKey, type HippoStore, type MemoryEntry,
+  ambientRefusal, ftsTermParts, passesScopeFilterForRecall, rarestFtsQuery, SECRET_TAGS, tallyAmbientEntries,
+  type AmbientCandidateRequest, type AmbientCandidates, type AmbientRefusal, type AuditEvent, type ContextReads, type ContinuityKey, type HippoStore, type MemoryEntry,
   type RecentOrigins, type SessionHandoff, type VectorReads,
 } from '../../src/entry/store-kit.js';
 import { withSqliteAllowed } from '../../src/db/open.js';
@@ -175,7 +175,13 @@ export function inMemoryContextStore(hippoRoot: string): InMemoryContextStore {
     return (limit < 0 ? newest : newest.slice(0, limit)).reverse();
   }
 
-  async function ambientCandidates(tenantId: string, { recentNeeded, admit, recall, origins }: AmbientCandidateRequest): Promise<AmbientLoadResult> {
+  async function ambientCandidates(tenantId: string, { recentNeeded, admit: admission, recall, origins }: AmbientCandidateRequest): Promise<AmbientCandidates> {
+    const refused: AmbientRefusal[] = [];
+    const admit = (e: MemoryEntry): boolean => {
+      const reason = ambientRefusal(e, admission);
+      if (reason !== null) refused.push({ id: e.id, reason });
+      return reason === null;
+    };
     const needed = Math.trunc(recentNeeded);
     const live = rows.memories.filter((r) => r.superseded_by === null && r.tenant_id === tenantId);
     const byId = new Map<string, MemoryEntry>();
@@ -183,14 +189,14 @@ export function inMemoryContextStore(hippoRoot: string): InMemoryContextStore {
     for (const e of pins) if (admit(e)) byId.set(e.id, e);
     if (needed > 0) for (const e of recentRows(live, needed, admit, origins)) byId.set(e.id, e);
     const entries = [...byId.values()].sort((a, b) => a.created.localeCompare(b.created) || a.id.localeCompare(b.id));
-    if (!recall) return { entries };
+    if (!recall) return { entries, refused };
     const query = rarestFtsQuery(recall.terms, (part) => rows.docCounts.get(part) ?? 0);
     const found = query
       ? await base.searchRecallEntries(query, {
           limit: recall.limit, tenantId, requestedScope: undefined, explicitScopeMode: 'exact', includeSuperseded: false, originProjects: undefined, ownScope: recall.ownScope,
         })
       : [];
-    return { entries, recall: found };
+    return { entries, recall: found, refused };
   }
 
   const reads: ContextReads = {

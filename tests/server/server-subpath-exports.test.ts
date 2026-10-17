@@ -20,14 +20,15 @@ const SERVER_TYPES = [
   'SessionCaptureResult', 'WorkingState',
 ];
 const STORE_KIT_VALUES = [
-  'bufferToFloat32', 'decodeVector', 'EMBEDDING_MODEL_META_KEY', 'encodeVector', 'entryAfterOutcome', 'float32ToBuffer', 'ftsTermParts',
+  'ambientRefusal', 'bufferToFloat32', 'decodeVector', 'descendantAdmits', 'EMBEDDING_MODEL_META_KEY', 'encodeVector', 'entryAfterOutcome', 'float32ToBuffer', 'ftsTermParts',
   'hasGroup', 'heldTexts', 'isSharedStore', 'normalizeValueForRejection', 'OTHER_STORE_MARKER', 'ownScopeTouches', 'passesScopeFilterForRecall',
   'physicsSearch', 'rankVectorRows', 'rarestFtsQuery',
   'RECALL_DEFAULT_DENY_SCOPES', 'RejectedValueError', 'rejectionDigest', 'replacesIndex', 'requireGroup', 'SECRET_TAGS', 'sqliteStore', 'StoreBusyError',
   'tallyAmbientEntries',
 ];
 const STORE_KIT_TYPES = [
-  'ActiveGoals', 'AmbientCandidateRequest', 'AmbientLoadResult', 'AmbientRecallRequest', 'AmbientStoreFilter', 'AmbientTallies',
+  'ActiveGoals', 'AmbientAdmission', 'AmbientCandidateRequest', 'AmbientCandidates', 'AmbientLoadResult', 'AmbientRefusal',
+  'AmbientRefusalReason', 'DescendantAdmission', 'AmbientRecallRequest', 'AmbientStoreFilter', 'AmbientTallies',
   'ApiKeyListItem', 'ApiKeyListRow', 'ApiKeyRecord', 'AppendAuditOpts', 'AuditEvent', 'ClassResolution', 'ContextCandidateFilter',
   'ContextReads', 'ContinuityBlock', 'ContinuityKey', 'EmbeddingIndexState', 'EntryRemoval', 'EntryTarget', 'EntryWrite', 'EntryWrites',
   'GetActiveGoalsOpts', 'Goal', 'GoalRecallLogRow', 'HippoStore', 'KeyAudit', 'KeyListQuery', 'KeyMint', 'KeyRevoke',

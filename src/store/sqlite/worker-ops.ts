@@ -61,7 +61,7 @@ export const WORKER_OPS = {
   },
   contextReads: {
     unfinishedHandoff: 'read',
-    ambientCandidates: 'server',
+    ambientCandidates: 'read',
     contextCandidates: 'read',
     ambientTallies: 'read',
     newestEntries: 'read',
@@ -79,7 +79,7 @@ export const WORKER_OPS = {
   dagReads: {
     sessionRawEntries: 'read',
     sessionRawCount: 'read',
-    summaryWithDescendants: 'server',
+    summaryWithDescendants: 'read',
   },
   auditLog: {
     listAuditEvents: 'read',

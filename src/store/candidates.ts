@@ -16,9 +16,11 @@ import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry, parseJsonArray } fro
 import { originInSql } from '../core/project-identity.js';
 import { pickRarestFtsQuery, loadRecallSearchEntriesFromDb } from './search-rows.js';
 import type { HeldText } from './port/types.js';
+import type { AmbientRefusalReason } from '../core/read-admission.js';
 import type {
-  AmbientLoadResult,
+  AmbientCandidates,
   AmbientRecallRequest,
+  AmbientRefusal,
   ContextCandidateFilter,
   RecentOrigins,
 } from './port/context-reads.js';
@@ -106,16 +108,30 @@ function keptPastWindow(
   return out;
 }
 
-// The pins plus the `recentNeeded` newest rows that pass `admit`, for ambient injection. One connection;
-// `recall` piggybacks the prompt-recall FTS query on it too. `origins` narrows the recent rows past the first window.
+/** Judges one row an ambient load reads: null keeps it, a reason leaves it out. */
+export type AmbientJudge = (e: MemoryEntry) => AmbientRefusalReason | null;
+
+function noting(judge: AmbientJudge, refused: AmbientRefusal[]): (e: MemoryEntry) => boolean {
+  return (e) => {
+    const reason = judge(e);
+    if (reason !== null) refused.push({ id: e.id, reason });
+    return reason === null;
+  };
+}
+
+// The pins plus the `recentNeeded` newest rows `judge` keeps, for ambient injection, with each refusal in the order the
+// rows were read. One connection; `recall` piggybacks the prompt-recall FTS query on it too. `origins` narrows the
+// recent rows past the first window.
 export function loadAmbientCandidatesAt(
   db: DatabaseSyncLike,
   tenantId: string,
   recentNeeded: number,
-  admit: (e: MemoryEntry) => boolean,
+  judge: AmbientJudge,
   recall?: AmbientRecallRequest,
   origins?: RecentOrigins,
-): AmbientLoadResult {
+): AmbientCandidates {
+  const refused: AmbientRefusal[] = [];
+  const admit = noting(judge, refused);
   // A SQL LIMIT takes an integer; the Array.slice this replaced truncated one,
   // and include_recent is any non-negative finite number at the HTTP edge.
   const needed = Math.trunc(recentNeeded);
@@ -141,7 +157,7 @@ export function loadAmbientCandidatesAt(
     const byCreated = a.created.localeCompare(b.created);
     return byCreated !== 0 ? byCreated : a.id.localeCompare(b.id);
   });
-  if (!recall) return { entries };
+  if (!recall) return { entries, refused };
   const ftsQuery = pickRarestFtsQuery(db, recall.terms);
   const recallEntries = ftsQuery
     ? loadRecallSearchEntriesFromDb(db, ftsQuery, {
@@ -151,7 +167,7 @@ export function loadAmbientCandidatesAt(
         ownScope: recall.ownScope,
       })
     : [];
-  return { entries, recall: recallEntries };
+  return { entries, recall: recallEntries, refused };
 }
 
 // calculateStrength's decay exponent with its reward factor: the strongest rows, without scoring each one in JS. A

@@ -111,9 +111,11 @@ export interface DeliveryObserver {
   sections(shown: number, dropped: number): void;
   /** Returns `admit`'s own answer unchanged and lets its throws through. */
   watchAdmit(admit: (e: MemoryEntry) => boolean): (e: MemoryEntry) => boolean;
+  /** A store's ambient load refused the row with this id under the admission it was sent. */
+  filtered(id: string): void;
   /** The loader's quality floor dropped a row admit let through; with prompt recall on, eligibility reports it
    * instead. */
-  qualityDropped(entry: MemoryEntry, isGlobal: boolean): void;
+  qualityDropped(id: string, isGlobal: boolean): void;
   disabled(): void;
   /** No `pool` means pin or recent by the entry's own flag. */
   offer(entries: readonly MemoryEntry[], isGlobal: boolean, pool?: DeliveryPool): void;
@@ -378,12 +380,12 @@ type CandidateMethods = Pick<
 
 function markQualityDropped(
   state: RecorderState,
-  ...[e, isGlobal]: Parameters<DeliveryObserver['qualityDropped']>
+  ...[id, isGlobal]: Parameters<DeliveryObserver['qualityDropped']>
 ): void {
-  state.filtered.add(e.id);
-  if (!state.candidates.has(e.id)) {
-    state.candidates.set(e.id, {
-      id: e.id,
+  state.filtered.add(id);
+  if (!state.candidates.has(id)) {
+    state.candidates.set(id, {
+      id,
       sourceStore: storeOf(isGlobal),
       pool: 'recent',
       stage: null,
@@ -392,7 +394,7 @@ function markQualityDropped(
       tokens: null,
     });
   }
-  rejectId(state, e.id, { stage: 'load', reason: 'quality', score: null, tokens: null });
+  rejectId(state, id, { stage: 'load', reason: 'quality', score: null, tokens: null });
 }
 
 function offerEntries(state: RecorderState, ...[entries, isGlobal, pool]: Parameters<DeliveryObserver['offer']>): void {
@@ -500,6 +502,7 @@ export function createDeliveryRecorder(init: DeliveryRecorderInit): DeliveryReco
       if (!ok) guard(() => { state.filtered.add(e.id); });
       return ok;
     },
+    filtered: (id) => guard(() => { state.filtered.add(id); }),
     qualityDropped,
     disabled: () => guard(() => { state.disabledSeen = true; }),
     offer,

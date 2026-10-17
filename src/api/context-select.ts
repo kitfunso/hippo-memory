@@ -16,6 +16,7 @@ import { scopeMatch } from '../core/active-scope.js';
 import { scopeBoostFor } from '../search/boosts.js';
 import { type HippoConfig } from '../core/config.js';
 import type { ProjectRef } from '../core/project-identity.js';
+import type { AmbientAdmission } from '../core/read-admission.js';
 import {
   promptTokens,
   contentTokens,
@@ -70,7 +71,8 @@ export interface ContextPlan {
 
 /** The ambient admit rules. */
 export interface ContextAdmission {
-  ambientAdmit: (e: MemoryEntry) => boolean;
+  /** `admit` as data, for a store to apply. */
+  rule: AmbientAdmission;
   admit: (e: MemoryEntry) => boolean;
   /** What the two-store search admits: `admit` without the own-session compaction rule. */
   bothStoresAdmit: (e: MemoryEntry) => boolean;
