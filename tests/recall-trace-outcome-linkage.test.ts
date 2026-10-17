@@ -17,7 +17,7 @@ import { mkdtempSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
-import { loadIndex, saveIndex } from '../src/store/index-and-stats.js';
+import { loadLastRecall, saveIndex } from '../src/store/index-and-stats.js';
 import { openHippoDb, closeHippoDb, getHippoDbPath, withSharedStoreHandles, type DatabaseSyncLike } from '../src/db/index.js';
 import { remember, retrieve, outcome, outcomeForLastRecall } from '../src/api/index.js';
 import { apiCtx } from './_helpers/api-ctx.js';
@@ -89,10 +89,10 @@ describe('outcomeForLastRecall — no prior trace', () => {
       const res = await remember(ctx, { content: 'no-trace-outcome-target' });
       // Seed last_retrieval_ids directly WITHOUT ever calling recall()/getContext()
       // — last_trace_id stays unset (fresh store, pre-v40-flow shape).
-      const idx = loadIndex(home);
+      const idx = loadLastRecall(home);
       idx.last_retrieval_ids = [res.id];
       saveIndex(home, idx);
-      expect(loadIndex(home).last_trace_id).toBeNull();
+      expect(loadLastRecall(home).last_trace_id).toBeNull();
 
       const result = await outcomeForLastRecall(ctx, true);
       expect(result.applied).toBe(1);

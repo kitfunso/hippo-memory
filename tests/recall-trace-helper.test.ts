@@ -9,7 +9,7 @@
  * final review round): last_trace_id now only ever advances atomically with
  * last_retrieval_ids via store.ts's saveIndex, so the standalone meta
  * accessors had no remaining production caller. See tests/recall-trace-
- * wiring.test.ts for last_trace_id coverage via loadIndex/saveIndex.
+ * wiring.test.ts for last_trace_id coverage via loadLastRecall/saveIndex.
  */
 
 import { describe, it, expect, vi, afterEach } from 'vitest';

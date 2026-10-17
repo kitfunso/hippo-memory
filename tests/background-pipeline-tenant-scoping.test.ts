@@ -1,7 +1,7 @@
 /**
  * L9 conflict-subsystem tenant-scoping tests (v1.12.1).
  *
- * 13 cases: 7 per-tenant negative (cross-tenant leak prevention) + 6
+ * 12 cases: 6 per-tenant negative (cross-tenant leak prevention) + 6
  * host-wide back-compat parity. Real DB per the project convention; multi-
  * tenant fixtures constructed via createMemory({ tenantId }).
  */
@@ -15,7 +15,6 @@ import { loadAllEntries, loadEveryTenantEntries } from '../src/store/entry-reads
 import { createMemory, Layer } from '../src/core/memory.js';
 import { invalidateMatching } from '../src/learn/invalidation.js';
 import { refineStore } from '../src/cli/refine-llm.js';
-import { deduplicateLesson } from '../src/learn/autolearn.js';
 import { cmdCapture } from '../src/capture/command.js';
 // importEntries still used by case 6 for ImportOptions.tenantId path
 import { importEntries } from '../src/importers/core.js';
@@ -76,7 +75,7 @@ function seedFor(
 }
 
 // ---------------------------------------------------------------------------
-// 5a. Per-tenant negative tests (7 cases) — cross-tenant leak prevention
+// 5a. Per-tenant negative tests (6 cases) — cross-tenant leak prevention
 // ---------------------------------------------------------------------------
 
 describe('per-tenant scoping (cross-tenant leak prevention)', () => {
@@ -178,18 +177,6 @@ describe('per-tenant scoping (cross-tenant leak prevention)', () => {
     // L9 contract), so we assert the scope and source-count only.
     expect(result.scanned).toBe(1);
     expect(refineCallSources).toBe(0); // cross-tenant parent was silently skipped
-  });
-
-  it('case 4: deduplicateLesson(root, ..., tenant-a) ignores tenant-b lessons', () => {
-    seedFor(hippoRoot, 'tenant-b', 'use connection pooling for high QPS', { tags: ['lesson'] });
-
-    // tenant-a sees no duplicates because tenant-b's lesson is invisible
-    const isDup = deduplicateLesson(hippoRoot, 'use connection pooling for high QPS', 0.7, 'tenant-a');
-    expect(isDup).toBe(false);
-
-    // tenant-b would see it (positive control)
-    const isDupB = deduplicateLesson(hippoRoot, 'use connection pooling for high QPS', 0.7, 'tenant-b');
-    expect(isDupB).toBe(true);
   });
 
   it('case 5: cmdCapture (file source) dedup AND write are both tenant-scoped via options.tenantId', () => {

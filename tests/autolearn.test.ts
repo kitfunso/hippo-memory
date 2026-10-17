@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { execSync, execFileSync } from 'child_process';
-import { captureError, extractLessons, partitionLessons, deduplicateLesson, fetchGitLog, isGitRepo } from '../src/learn/autolearn.js';
+import { captureError, extractLessons, partitionLessons, fetchGitLog, isGitRepo } from '../src/learn/autolearn.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { readEntry, loadAllEntries } from '../src/store/entry-reads.js';
@@ -398,7 +398,7 @@ describe('write-path gate: MCP hippo_learn tool', () => {
 });
 
 // ---------------------------------------------------------------------------
-// deduplicateLesson
+// git repo detection
 // ---------------------------------------------------------------------------
 
 describe('git repo detection', () => {
@@ -436,60 +436,6 @@ describe('git repo detection', () => {
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
     }
-  });
-});
-
-describe('deduplicateLesson', () => {
-  let tmpDir: string;
-
-  beforeEach(() => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-dedup-'));
-    initStore(tmpDir);
-  });
-
-  afterEach(() => {
-    fs.rmSync(tmpDir, { recursive: true, force: true });
-  });
-
-  it('returns false when no similar memory exists', () => {
-    const isDup = deduplicateLesson(tmpDir, 'lesson about cache refresh');
-    expect(isDup).toBe(false);
-  });
-
-  it('returns true when an identical lesson exists', () => {
-    const lesson = 'lesson about cache refresh pipeline error';
-    const entry = createMemory(lesson, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
-    writeEntry(tmpDir, entry);
-
-    const isDup = deduplicateLesson(tmpDir, lesson);
-    expect(isDup).toBe(true);
-  });
-
-  it('returns true for near-duplicate lesson (>0.7 overlap)', () => {
-    const existing = 'lesson about cache refresh pipeline error fix';
-    const entry = createMemory(existing, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
-    writeEntry(tmpDir, entry);
-
-    const similar = 'lesson about cache refresh pipeline error bug';
-    const isDup = deduplicateLesson(tmpDir, similar);
-    expect(isDup).toBe(true);
-  });
-
-  it('returns false for unrelated lesson', () => {
-    const existing = 'lesson about cache refresh pipeline error';
-    const entry = createMemory(existing, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
-    writeEntry(tmpDir, entry);
-
-    const unrelated = 'completely different content about authentication tokens jwt';
-    const isDup = deduplicateLesson(tmpDir, unrelated);
-    expect(isDup).toBe(false);
-  });
-
-  it('matches the full-scan answer for a lesson with SQL wildcard characters and an unrelated row', () => {
-    writeEntry(tmpDir, createMemory('retry_budget 100% spent on cache', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
-    writeEntry(tmpDir, createMemory('zzz qqq', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
-    expect(deduplicateLesson(tmpDir, 'retry_budget 100% spent on cache')).toBe(true);
-    expect(deduplicateLesson(tmpDir, 'retry%budget 100_ spent')).toBe(false);
   });
 });
 

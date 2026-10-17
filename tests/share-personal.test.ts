@@ -5,7 +5,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createMemory, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { autoShare, shareMemory, transferScore } from '../src/sharing/share.js';
-import { getGlobalRoot, promoteToGlobal } from '../src/sharing/global-store.js';
+import { getGlobalRoot } from '../src/sharing/global-store.js';
+import { copyToGlobal } from '../src/store/sqlite/global-promote.js';
 import { BadRequestError } from '../src/core/api-errors.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
@@ -50,10 +51,10 @@ describe('share and promote refuse personal rows', () => {
   });
 
   it('promote refuses a personal row with a 400 and the exact text; a team row still promotes', () => {
-    const err = refusal(() => promoteToGlobal(hippoRoot, mine.id));
+    const err = refusal(() => copyToGlobal(hippoRoot, mine.id));
     expect(err.status).toBe(400);
     expect(err.message).toBe(`Refusing to promote ${mine.id}: it is a personal memory and stays with its owner on this server.`);
-    expect(promoteToGlobal(hippoRoot, team.id).content).toBe(TEAM);
+    expect(copyToGlobal(hippoRoot, team.id).content).toBe(TEAM);
     expect(globalContents()).toEqual([TEAM]);
   });
 

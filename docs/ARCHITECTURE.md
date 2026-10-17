@@ -109,7 +109,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `outcomeForLastRecall` (section banner): outcomeForLastRecall (last-recall wrapper around outcome — Task 3)
 
 ### src/api/memories/promote.ts
-- `PromoteResult`: Note: `promoteToGlobal` does not currently take a tenantId override — it reads the entry from the local root via `readEntry` (no tenant filter) and preserves the entry's existing tenantId on the global side. Task 4 may tighten this once writeEntry/readEntry thread tenant context.
+- `PromoteResult`: Note: `copyToGlobal` does not currently take a tenantId override — it reads the entry from the local root via `readEntry` (no tenant filter) and preserves the entry's existing tenantId on the global side. Task 4 may tighten this once writeEntry/readEntry thread tenant context.
 - `SupersedeResult`: Mirrors `cmdSupersede` in cli.ts (without flag-driven layer/tag/pin overrides — A1 keeps the API minimal; the CLI handler will continue to handle those flags and pass the resolved values once Task 4 lands).
 - `ArchiveRawOpts`: We DO NOT emit a second audit event here to avoid double-emitting the archive_raw op (unlike Task 1 remember/forget where the underlying helpers hardcode actor='cli').
 - `ArchiveRawOpts.event`: Took the place of `afterArchive`, the connector idempotency hook of v0.39 commit 3, which passed the archive's database handle through the api contract. The store's `connectorWrites` group now logs the event in the archive's transaction.
@@ -180,9 +180,6 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `listScopeGrants`: EI2: every restricted scope `keyId` may read.
 - `ApiKeyListItem.role`: v1.12.3: authorization role bound to the key. SELECT extended to read the `role` column (added in schema migration v26 by v1.12.0 sub-1).
 - `ApiKeyListItem.scopes`: EI2: restricted scopes this key may read.
-
-### src/learn/autolearn.ts
-- `deduplicateLesson`: L9: `tenantId` is opt-in.
 
 ### src/api/availability.ts
 - (module header): J2 — Availability-bias detector (Track J: biases-over-memory-state)
@@ -865,16 +862,12 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `parseListLimit`: Parse a `?limit=` query param for the E2 list routes. Defaults to 100; requires a positive INTEGER <= 1000. Number.isInteger rejects fractional values like "1.5" that Number.isFinite would pass but SQLite `LIMIT ?` rejects with a datatype mismatch (a 500).
 - `validateIdSegment`: v1.6.4: charset + length validation for `:id` route captures.
 
-### src/sharing/global-store.ts
-- `promoteToGlobal`: CD5: same veto as shareMemory; a promoted copy would have no quarantine record to review.
-
 ### src/sharing/search-both.ts
-- `searchBoth`: T2 note: PLAIN stable score sort on purpose -- local/global inputs are each deterministically ordered (content tail applied in the underlying search), stability inherits that, and an exact post-bump tie keeps the LOCAL result ahead of the global one (the concat order), preserving the pre-T2 semantics.
 - `HybridSearchOptions.summaryDeboost`: v0.30 / E4 — propagated to underlying hybridSearch calls.
 - `HybridSearchOptions.summaryFreshness`: v0.30 / E4 — propagated.
 - `HybridSearchOptions.recallScope`: v1.25.0 — recall-mode scope filter, consumed by `searchBothHybrid` only.
 - `searchBothHybrid`: v1.25.0 recall mode: push the scope predicate into SQL exactly like api.recall (loadRecallSearchEntries)
-- `rankBothStores`: T2 note: PLAIN stable score sort on purpose -- see searchBoth above; same rationale (deterministic inputs + stability; local-first on ties).
+- `rankBothStores`: T2 note: PLAIN stable score sort on purpose -- local/global inputs are each deterministically ordered, so stability holds and an exact tie keeps the LOCAL result ahead of the global one.
 
 ### src/sharing/share.ts
 - `shareMemory`: v39 S4 producer veto: secrets never go to the global store, not even with --force.
@@ -917,7 +910,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `loadChildrenOf`: Used by `drillDown` (Task 3).
 
 ### src/store/entry-row.ts
-- `upsertEntryRow`: `bypassRejectionGuard` (AT1, plan §3): ONLY `batchWriteAndDelete`'s call site passes `true`. Consolidation merges are DETERMINISTIC CONCATENATION (mergeContents, consolidate.ts:736-751), not LLM paraphrase — the bypass is safe because the producer (consolidate.ts's merge pass) now checks the merged content's rejection digest against the tenant's tombstones BEFORE ever assembling a batch to write, and skips the merge entirely on a hit. Every other caller (writeEntryDbOnly, bootstrapLegacyStore, rebuildIndex) leaves this false and the guard runs live.
+- `upsertEntryRow`: `bypassRejectionGuard` (AT1, plan §3): ONLY `batchWriteAndDelete`'s call site passes `true`. Consolidation merges are DETERMINISTIC CONCATENATION (mergeContents, consolidate.ts:736-751), not LLM paraphrase — the bypass is safe because the producer (consolidate.ts's merge pass) now checks the merged content's rejection digest against the tenant's tombstones BEFORE ever assembling a batch to write, and skips the merge entirely on a hit. Every other caller (writeEntryDbOnly, bootstrapLegacyStore) leaves this false and the guard runs live.
 - `writeEntry` (stray doc above stampOriginProject): The HTTP server (A1) and api.* layer pass the resolved actor (`api_key:<key_id>` / `localhost:cli`) so audit events land with one row per write, no double-emit.
 - `writeEntry` (stray doc above stampOriginProject): Used by E1.3+ connectors to stamp idempotency rows atomically with the memory write.
 
@@ -931,8 +924,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `writeSessionEndHandoff`: Auto-write a handoff at session-end (DF1 T3) from the session's active snapshot, else from `derived`, its transcript state.
 
 ### src/store/index-and-stats.ts
-- `saveIndex`: LC1 F1(c) structural fix: `last_retrieval_ids` and `last_trace_id` must land atomically — callers (getContext, cmdRecall) fold a freshly-written trace id into `index.last_trace_id` before calling this, relying on BOTH meta keys committing together. Wrapped in BEGIN/COMMIT so a crash or a mid-write failure can never advance one key without the other. index.json is left untouched; only `rebuildIndex` writes it.
-- `rebuildIndex`: AT1 (plan §3, round-3 redesign): same guard-with-per-row-skip as bootstrapLegacyStore — rebuildIndex is the other channel through which a stale markdown mirror could resurrect a rejected value. Refusal audit written INLINE (nothing rolls back on a skip).
+- `saveIndex`: LC1 F1(c) structural fix: `last_retrieval_ids` and `last_trace_id` must land atomically — callers (getContext, cmdRecall) fold a freshly-written trace id into `index.last_trace_id` before calling this, relying on BOTH meta keys committing together. Wrapped in BEGIN/COMMIT so a crash or a mid-write failure can never advance one key without the other. index.json is left untouched; no hippo path writes it.
 
 ### src/store/mirrors.ts
 - `getExistingEntryMirrorPaths`: AT1 mirror-purge honesty fix (docs/plans/2026-08-15-at1-rejected-value-tombstone.md): the candidate markdown mirror paths still on disk for `id`, computed the same way `removeEntryMirrors` walks them (one per layer: buffer/episodic/ semantic), filtered to the ones that still `fs.existsSync`. Used to report an EXPLICIT path when a best-effort purge fails and no reaper exists to retry it — plain `removeEntryMirrors` returns void, giving no way to name which file is stuck.
@@ -970,6 +962,9 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `loadFreshActiveTaskSnapshot`: Bounded read for AMBIENT active-task-snapshot surfaces (UserPromptSubmit hook context, MCP recall block) — the never-expires fix for DF1.
 - `closeTaskSnapshotsForSession`: Close the `active` task snapshot(s) owned by `sessionId`, for the T3 session-end death path (DF1, docs/plans/2026-08-23-df1-snapshot-lifecycle.md).
 - `appendSessionEvent`: v1.2: scope is wired through. Default-deny in api.recall + cmdRecall continuity reads applies to slack:private:* and 'unknown:legacy' rows.
+
+### src/store/sqlite/global-promote.ts
+- `copyToGlobal`: CD5: same veto as shareMemory; a promoted copy would have no quarantine record to review.
 
 ### src/store/summaries.ts
 - `summaries.ts` (dirty-flag banner): v0.30 / E1 of DAG live-coupling — dirty-flag helpers for the existing DAG layer's level-2 summaries. Used by E2 (child-write propagation in invalidation.ts / writeEntry / forgetMemory / archiveRawMemory) to mark a summary dirty when one of its children changes, and by E3's sleep-cycle rebuildDirtySummaries phase to enumerate candidates without scanning every memory row.

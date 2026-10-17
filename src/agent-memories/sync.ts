@@ -428,7 +428,7 @@ function afterCommit(
     try {
       target.removeMirror(id);
     } catch (err) {
-      // rebuildIndex would bring the row back live, and the next sync sets it aside again.
+      // A legacy-mirror import on an empty store would bring the row back live, and the next sync sets it aside again.
       report.warnings.push(`mirror of ${id} not removed: ${errorMessage(err)}`);
     }
   }

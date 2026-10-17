@@ -4,7 +4,7 @@
  * Covers the three wired recall paths: api.recall, api.getContext, CLI
  * cmdRecall — one trace row per recall, pinnedOnly writes nothing, the
  * v1.11.5 no-side-effects contract (api.recall must NOT write last_trace_id),
- * the F1 atomic last_trace_id/last_retrieval_ids lockstep (via loadIndex,
+ * the F1 atomic last_trace_id/last_retrieval_ids lockstep (via loadLastRecall,
  * since readLastTraceId was deleted), F2 (suppressRecallTrace), and F5
  * (getContext's bare empty-result early return also traces).
  *
@@ -22,7 +22,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { loadIndex } from '../src/store/index-and-stats.js';
+import { loadLastRecall } from '../src/store/index-and-stats.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { remember, retrieve, getContext } from '../src/api/index.js';
@@ -97,11 +97,11 @@ function resultRowsFor(home: string, traceId: number): SqliteRow[] {
 }
 
 // readLastTraceId was deleted (F1(e) structural fix) — last_trace_id is now
-// read the same way production reads it: via loadIndex, which strict-parses
+// read the same way production reads it: via loadLastRecall, which strict-parses
 // the meta value (store.ts's parseLastTraceId). Returns a number for easy
 // comparison against sqlite row ids, mirroring the deleted helper's shape.
 function lastTraceId(home: string): number | null {
-  const raw = loadIndex(home).last_trace_id;
+  const raw = loadLastRecall(home).last_trace_id;
   return raw !== null ? Number(raw) : null;
 }
 
@@ -149,7 +149,7 @@ describe('api.recall — trace wiring', () => {
       expect(lastTraceId(home)).toBeNull();
       // last_retrieval_ids is also untouched (locked invariant, restated here
       // for context — the authoritative lock lives in api-recall-no-side-effects.test.ts).
-      expect(loadIndex(home).last_retrieval_ids ?? []).toEqual([]);
+      expect(loadLastRecall(home).last_retrieval_ids ?? []).toEqual([]);
     } finally {
       restore();
     }
@@ -203,7 +203,7 @@ describe('api.getContext — trace wiring', () => {
       expect(traces).toHaveLength(1);
       expect(traces[0].result_count).toBe(result.entries.length);
 
-      const idx = loadIndex(home);
+      const idx = loadLastRecall(home);
       expect(idx.last_trace_id).toBe(String(traces[0].id));
       // F1 lockstep: last_retrieval_ids advanced in the SAME saveIndex call.
       expect(idx.last_retrieval_ids.length).toBeGreaterThan(0);
@@ -239,7 +239,7 @@ describe('api.getContext — trace wiring', () => {
       disableEmbeddings(home);
       await remember(ctx, { content: 'context-empty-baseline unrelated content' });
 
-      const before = loadIndex(home);
+      const before = loadLastRecall(home);
       expect(before.last_trace_id).toBeNull();
       expect(before.last_retrieval_ids ?? []).toEqual([]);
 
@@ -255,7 +255,7 @@ describe('api.getContext — trace wiring', () => {
 
       // Deliberately untouched — this path never advances last_retrieval_ids,
       // so last_trace_id must not advance either (lockstep invariant).
-      const after = loadIndex(home);
+      const after = loadLastRecall(home);
       expect(after.last_trace_id).toBeNull();
       expect(after.last_retrieval_ids ?? []).toEqual([]);
     } finally {
@@ -325,7 +325,7 @@ describe('CLI cmdRecall — trace wiring', () => {
     const localStore = join(hippoRoot, '.hippo');
     const traces = traceRows(localStore, 'cli');
     expect(traces).toHaveLength(1);
-    const idx = loadIndex(localStore);
+    const idx = loadLastRecall(localStore);
     expect(idx.last_trace_id).toBe(String(traces[0].id));
     expect(idx.last_retrieval_ids.length).toBeGreaterThan(0);
   });

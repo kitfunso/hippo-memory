@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { loadStats, updateStatsUnlessBusy } from '../src/store/index-and-stats.js';
 import { openHippoDb, closeHippoDb, getHippoDbPath, isSqliteBusy, runWithRequestStores, type DatabaseSyncLike } from '../src/db/index.js';
-import { promoteToGlobal } from '../src/sharing/global-store.js';
+import { copyToGlobal } from '../src/store/sqlite/global-promote.js';
 import { resetLogOnce } from '../src/util/log.js';
 import { serve } from '../src/server.js';
 import * as client from '../src/cli/client.js';
@@ -166,7 +166,7 @@ describe('routed writes under a busy store', () => {
     } finally {
       closeHippoDb(globalDb);
     }
-    expect(() => promoteToGlobal(home, id, { auditAs: { tenantId: 'default', actor: 'tester' } })).toThrow(/forced promote audit failure/);
+    expect(() => copyToGlobal(home, id, { auditAs: { tenantId: 'default', actor: 'tester' } })).toThrow(/forced promote audit failure/);
     expect(count(globalHome, `SELECT COUNT(*) AS n FROM memories WHERE content = ?`, 'promote-audit-busy-canary')).toBe(0);
   });
 

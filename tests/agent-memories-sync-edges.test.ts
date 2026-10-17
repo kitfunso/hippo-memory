@@ -10,7 +10,6 @@ import { createMemory, type MemoryEntry } from '../src/core/memory.js';
 import { removeEntryMirrors } from '../src/store/mirrors.js';
 import { deleteEntryRowInTx, writeEntry } from '../src/store/entry-writes.js';
 import { readEntry } from '../src/store/entry-reads.js';
-import { rebuildIndex } from '../src/store/index-and-stats.js';
 import {
   auditCount, auditTotal, closeWorld, codexSummary, ctxFor, dormantRows, expectedContainer, liveRows, liveTexts, note, openWorld, projectNotes,
   sha, toolTally, withDb, type World,
@@ -137,14 +136,6 @@ describe('agent memory sync: the Added list', () => {
     expect(only()).toMatchObject({ id: row.id, pinned: true });
     expect(only().tags).not.toContain(TAG);
     expect(dormantRows(w.local)).toEqual([]);
-  });
-
-  it('rebuild-index after a set-aside does not bring the row back', () => {
-    const id = importThenDelete();
-    rebuildIndex(w.local);
-
-    expect(liveRows(w.local)).toEqual([]);
-    expect(readEntry(w.local, id)).toBeNull();
   });
 
   it('an unread item (over 256 KB, or holding a NUL byte) leaves its row alone', () => {

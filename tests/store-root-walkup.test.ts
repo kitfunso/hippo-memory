@@ -9,7 +9,7 @@ import { fileURLToPath } from 'url';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { readEntry } from '../src/store/entry-reads.js';
-import { loadIndex } from '../src/store/index-and-stats.js';
+import { loadLastRecall } from '../src/store/index-and-stats.js';
 import { appendSessionEvent, saveActiveTaskSnapshot } from '../src/store/sessions.js';
 import { saveSessionHandoff } from '../src/store/handoffs.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
@@ -188,7 +188,7 @@ describe('CLI end to end', () => {
       const traces = db.prepare("SELECT id FROM recall_traces WHERE pipeline = 'context'").all();
       expect(traces).toHaveLength(priorTraces + 1);
       // SAFETY: the query selects only the numeric id column.
-      expect(loadIndex(globalStore).last_trace_id).toBe(String((traces.at(-1) as { id: number }).id));
+      expect(loadLastRecall(globalStore).last_trace_id).toBe(String((traces.at(-1) as { id: number }).id));
     } finally {
       closeHippoDb(db);
     }

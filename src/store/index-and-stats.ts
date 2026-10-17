@@ -8,23 +8,9 @@ import {
 } from '../db/index.js';
 import { log } from '../util/log.js';
 import type { HippoIndex, LegacyStats } from './rows.js';
-import {
-  buildIndexFromDb,
-  readLastRecall,
-  syncMirrorFiles,
-  writeIndexMirror,
-  writeStatsMirror,
-  buildStatsFromDb,
-} from './mirrors.js';
-import { importLegacyEntries, onHandle, openStore, loadLegacyEntriesFromMarkdown } from './open.js';
+import { readLastRecall, writeStatsMirror, buildStatsFromDb } from './mirrors.js';
+import { onHandle, openStore } from './open.js';
 import { DAY_MS } from '../util/time.js';
-
-/** Load the derived index from SQLite. Read-only: index.json is only ever written by `rebuildIndex`. */
-export function loadIndex(hippoRoot: string): HippoIndex {
-  return onHandle(hippoRoot, (db) => {
-    return buildIndexFromDb(db);
-  }, openStore);
-}
 
 /** The last recall's ids and its trace alone, for a caller that needs no index entry. */
 export function loadLastRecall(hippoRoot: string): Pick<HippoIndex, 'last_retrieval_ids' | 'last_trace_id'> {
@@ -34,34 +20,13 @@ export function loadLastRecall(hippoRoot: string): Pick<HippoIndex, 'last_retrie
 }
 
 /** Persist mutable index metadata (entry rows are derived from SQLite); `last_retrieval_ids` and `last_trace_id` commit
- * in one transaction, as callers rely on both moving together. index.json is left to `rebuildIndex`. */
+ * in one transaction, as callers rely on both moving together. No hippo path writes index.json. */
 export function saveIndex(hippoRoot: string, index: Pick<HippoIndex, 'last_retrieval_ids' | 'last_trace_id'>): void {
   onHandle(hippoRoot, (db) => {
     withWriteScope(db, 'save_index', () => {
       setMeta(db, 'last_retrieval_ids', JSON.stringify(index.last_retrieval_ids ?? []));
       setMeta(db, 'last_trace_id', index.last_trace_id ?? '');
     });
-  }, openStore);
-}
-
-/** Rebuild mirrors from SQLite, importing any legacy markdown files not already present. */
-export function rebuildIndex(hippoRoot: string): HippoIndex {
-  return onHandle(hippoRoot, (db) => {
-    // SAFETY: rows' shape matches the single `id` column selected above.
-    const existingIds = new Set(
-      (db.prepare(`SELECT id FROM memories`).all() as Array<{ id: string }>).map((row) => row.id)
-    );
-    const legacyEntries = loadLegacyEntriesFromMarkdown(hippoRoot).filter((entry) => !existingIds.has(entry.id));
-    if (legacyEntries.length > 0) {
-      withWriteScope(db, 'rebuild_index', () => {
-        importLegacyEntries(db, hippoRoot, legacyEntries, 'rebuildIndex');
-      });
-    }
-
-    syncMirrorFiles(hippoRoot, db);
-    const index = buildIndexFromDb(db);
-    writeIndexMirror(hippoRoot, index);
-    return index;
   }, openStore);
 }
 

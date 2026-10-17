@@ -7,10 +7,11 @@ import {
   wmPush,
   wmRead,
   wmClear,
-  wmFlush,
-  WM_MAX_ENTRIES,
 } from '../src/store/working-memory.js';
 import { openHippoDb, closeHippoDb, getSchemaVersion, getCurrentSchemaVersion } from '../src/db/index.js';
+
+// The store's per-scope cap; a literal here so a change to it fails these tests on purpose.
+const WM_MAX_ENTRIES = 20;
 
 let tmpDir: string;
 
@@ -254,7 +255,7 @@ describe('tenant scoping', () => {
     expect(wmRead(tmpDir, { tenantId: 'acme' }).map((i) => i.content)).toEqual(['acme note']);
     expect(wmRead(tmpDir, { tenantId: 'globex', limit: 100 })).toHaveLength(WM_MAX_ENTRIES);
     expect(wmClear(tmpDir, { tenantId: 'globex' })).toBe(WM_MAX_ENTRIES);
-    expect(wmFlush(tmpDir, { tenantId: 'globex' })).toBe(0);
+    expect(wmRead(tmpDir, { tenantId: 'globex', limit: 100 })).toEqual([]);
     expect(wmRead(tmpDir, { tenantId: 'acme' })).toHaveLength(1);
   });
 
@@ -267,30 +268,5 @@ describe('tenant scoping', () => {
     }
     expect(wmRead(tmpDir).map((i) => i.content)).toEqual(['pre-change row']);
     expect(wmRead(tmpDir, { tenantId: 'acme' })).toEqual([]);
-  });
-});
-
-describe('wmFlush', () => {
-  it('deletes entries just like wmClear', () => {
-    wmPush(tmpDir, { scope: 'flush', content: 'temp note', sessionId: 'sess_done' });
-    wmPush(tmpDir, { scope: 'flush', content: 'another', sessionId: 'sess_done' });
-    wmPush(tmpDir, { scope: 'other', content: 'keep' });
-
-    const count = wmFlush(tmpDir, { sessionId: 'sess_done' });
-    expect(count).toBe(2);
-
-    const remaining = wmRead(tmpDir);
-    expect(remaining).toHaveLength(1);
-    expect(remaining[0]!.scope).toBe('other');
-  });
-
-  it('flushes everything when no filter provided', () => {
-    wmPush(tmpDir, { scope: 'a', content: 'one' });
-    wmPush(tmpDir, { scope: 'b', content: 'two' });
-
-    const count = wmFlush(tmpDir);
-    expect(count).toBe(2);
-
-    expect(wmRead(tmpDir)).toHaveLength(0);
   });
 });

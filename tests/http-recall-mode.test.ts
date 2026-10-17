@@ -10,7 +10,7 @@ import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadEntriesByIds } from '../src/store/entry-reads.js';
-import { loadIndex } from '../src/store/index-and-stats.js';
+import { loadLastRecall } from '../src/store/index-and-stats.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { __resetSessionRecallHistoryHttp } from '../src/entry/testing.js';
 import { retrieve, supersede } from '../src/api/index.js';
@@ -77,6 +77,6 @@ describe('GET /v1/memories honours mode and strengthens', () => {
     const rows = loadEntriesByIds(home, [weakId, strongId]);
     expect(rows.map((r) => r.retrieval_count)).toEqual([1, 1]);
     expect(rows.every((r) => r.last_retrieved > '2026-01-01')).toBe(true);
-    expect(loadIndex(home).last_retrieval_ids).toEqual([]);
+    expect(loadLastRecall(home).last_retrieval_ids).toEqual([]);
   });
 });

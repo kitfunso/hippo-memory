@@ -25,8 +25,7 @@ afterEach(() => {
   fs.rmSync(root, { recursive: true, force: true });
 });
 
-// writes no longer touch index.json per call (only rebuildIndex does), so the
-// failure vector is the markdown mirror: a directory at the entry's own .md path.
+// Writes no longer touch index.json, so the failure vector is a directory at the entry's own .md path.
 function blockMarkdownMirror(entryId: string, layer: string): void {
   fs.mkdirSync(path.join(root, layer, `${entryId}.md`));
 }

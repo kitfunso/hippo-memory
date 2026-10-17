@@ -9,7 +9,7 @@ import { readEntry, loadAllEntries } from '../src/store/entry-reads.js';
 import { deleteEntry } from '../src/store/delete-and-batch.js';
 import { loadSearchEntries } from '../src/store/search-rows.js';
 import { flushStatsMirrors } from '../src/store/mirrors.js';
-import { loadIndex, rebuildIndex, loadStats, updateStats } from '../src/store/index-and-stats.js';
+import { loadLastRecall, loadStats, updateStats } from '../src/store/index-and-stats.js';
 import {
   saveActiveTaskSnapshot,
   loadActiveTaskSnapshot,
@@ -66,10 +66,7 @@ describe('store initialization', () => {
     expect(beta!.conflicts_with).toEqual(['mem_legacy_alpha']);
     expect(beta!.pinned).toBe(true);
 
-    const index = loadIndex(tmpDir);
-    expect(index.last_retrieval_ids).toEqual(['mem_legacy_alpha', 'mem_legacy_beta']);
-    expect(index.entries['mem_legacy_alpha']).toBeDefined();
-    expect(index.entries['mem_legacy_beta']).toBeDefined();
+    expect(loadLastRecall(tmpDir).last_retrieval_ids).toEqual(['mem_legacy_alpha', 'mem_legacy_beta']);
 
     // SAFETY: loadStats' Record<string, unknown> return is buildStatsFromDb's fixed
     // stats-mirror shape (src/store/mirrors.ts), which always includes these counter fields.
@@ -170,45 +167,15 @@ describe('remember + recall round-trip', () => {
   });
 });
 
-describe('index management', () => {
-  it('updates index on write', () => {
-    initStore(tmpDir);
-    const entry = createMemory('index test');
-    writeEntry(tmpDir, entry);
-
-    const index = loadIndex(tmpDir);
-    expect(index.entries[entry.id]).toBeDefined();
-    expect(index.entries[entry.id].id).toBe(entry.id);
-  });
-
-  it('removes from index on delete', () => {
+describe('deleteEntry', () => {
+  it('removes the row so readEntry finds nothing', () => {
     initStore(tmpDir);
     const entry = createMemory('delete me');
     writeEntry(tmpDir, entry);
 
     deleteEntry(tmpDir, entry.id);
 
-    const index = loadIndex(tmpDir);
-    expect(index.entries[entry.id]).toBeUndefined();
-  });
-
-  it('rebuild restores index from disk', () => {
-    initStore(tmpDir);
-
-    const e1 = createMemory('memory one');
-    const e2 = createMemory('memory two');
-    writeEntry(tmpDir, e1);
-    writeEntry(tmpDir, e2);
-
-    const indexPath = path.join(tmpDir, 'index.json');
-    fs.writeFileSync(indexPath, JSON.stringify({ version: 1, entries: {}, last_retrieval_ids: [] }));
-
-    rebuildIndex(tmpDir);
-
-    const index = loadIndex(tmpDir);
-    expect(Object.keys(index.entries)).toHaveLength(2);
-    expect(index.entries[e1.id]).toBeDefined();
-    expect(index.entries[e2.id]).toBeDefined();
+    expect(readEntry(tmpDir, entry.id)).toBeNull();
   });
 });
 

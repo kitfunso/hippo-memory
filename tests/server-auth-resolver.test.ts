@@ -652,13 +652,13 @@ describe('auth resolver stream', () => {
 describe('package surface', () => {
   const root = resolve(__dirname, '..');
 
-  it('resolves hippo-memory/server by name and keeps the server out of the index', () => {
+  it('resolves hippo-memory/server by name and keeps the server and the audit store out of the index', () => {
     const script = [
       "const url = import.meta.resolve('hippo-memory/server');",
       "const srv = await import('hippo-memory/server');",
       "const idx = await import('hippo-memory');",
       "const names = ['appendAuditEvent','queryAuditEvents','listAuditEventsAfter','AUDIT_OPS'];",
-      'console.log(JSON.stringify({ url, serve: typeof srv.serve, authRevoke: typeof srv.authRevoke, authCreateSelf: typeof srv.authCreateSelf, isReservedActor: typeof srv.isReservedActor, forbidden: typeof srv.ForbiddenError, missing: names.filter((n) => idx[n] === undefined), indexServe: "serve" in idx }));',
+      'console.log(JSON.stringify({ url, serve: typeof srv.serve, authRevoke: typeof srv.authRevoke, authCreateSelf: typeof srv.authCreateSelf, isReservedActor: typeof srv.isReservedActor, forbidden: typeof srv.ForbiddenError, leaked: names.filter((n) => idx[n] !== undefined), indexServe: "serve" in idx }));',
     ].join('\n');
     // cwd is the checkout because self-reference resolves from the nearest package.json.
     const child = spawnSync(process.execPath, ['--input-type=module', '-e', script], {
@@ -670,7 +670,7 @@ describe('package surface', () => {
     const lines = child.stdout.trim().split('\n');
     // SAFETY: the child script above is the only writer of the last stdout line and always emits these keys.
     const out = JSON.parse(lines[lines.length - 1]!) as {
-      url: string; serve: string; authRevoke: string; authCreateSelf: string; isReservedActor: string; forbidden: string; missing: string[]; indexServe: boolean;
+      url: string; serve: string; authRevoke: string; authCreateSelf: string; isReservedActor: string; forbidden: string; leaked: string[]; indexServe: boolean;
     };
     expect(out.authRevoke).toBe('function');
     expect(out.authCreateSelf).toBe('function');
@@ -678,7 +678,7 @@ describe('package surface', () => {
     expect(out.forbidden).toBe('function');
     expect(realpathSync(fileURLToPath(out.url))).toBe(realpathSync(join(root, 'dist', 'server.js')));
     expect(out.serve).toBe('function');
-    expect(out.missing).toEqual([]);
+    expect(out.leaked).toEqual([]);
     expect(out.indexServe).toBe(false);
   });
 

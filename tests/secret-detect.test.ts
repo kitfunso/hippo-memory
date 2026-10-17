@@ -16,7 +16,8 @@ import { loadAllEntries } from '../src/store/entry-reads.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { shareMemory, autoShare } from '../src/sharing/share.js';
 import { syncGlobalToLocal } from '../src/sharing/global-sync.js';
-import { promoteToGlobal, getGlobalRoot } from '../src/sharing/global-store.js';
+import { getGlobalRoot } from '../src/sharing/global-store.js';
+import { copyToGlobal } from '../src/store/sqlite/global-promote.js';
 import { getContext } from '../src/api/index.js';
 import { clearProjectIdentityCache } from '../src/core/project-identity.js';
 import { ASSIGNED_SECRET_LINES, ORDINARY_CONFIG_LINES } from './_helpers/secret-shapes.js';
@@ -247,14 +248,14 @@ describe('producer + sync vetoes (real stores)', () => {
     expect(loadAllEntries(getGlobalRoot(), 'default')).toHaveLength(0);
   });
 
-  it('promoteToGlobal refuses a secret row and stamps origin on clean promotes', () => {
+  it('copyToGlobal refuses a secret row and stamps origin on clean promotes', () => {
     writeEntry(projA, createMemory(SECRET_ROW, { pinned: true }));
     writeEntry(projA, createMemory(CLEAN_ROW, { pinned: true }));
     const rows = loadAllEntries(projA, 'default');
     const secretRow = rows.find((e) => e.content === SECRET_ROW)!;
     const cleanRow = rows.find((e) => e.content === CLEAN_ROW)!;
-    expect(() => promoteToGlobal(projA, secretRow.id)).toThrow(/secret/i);
-    const promoted = promoteToGlobal(projA, cleanRow.id);
+    expect(() => copyToGlobal(projA, secretRow.id)).toThrow(/secret/i);
+    const promoted = copyToGlobal(projA, cleanRow.id);
     expect(promoted.origin_project).toBe('proj-a');
     expect(loadAllEntries(getGlobalRoot(), 'default').map((e) => e.content)).toEqual([CLEAN_ROW]);
   });

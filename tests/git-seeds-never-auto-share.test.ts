@@ -12,7 +12,8 @@ import { buildDag, buildEntityProfiles } from '../src/consolidate/dag.js';
 import { storeExtractedFacts, type ExtractedFact } from '../src/learn/extract.js';
 import { createMemory, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { autoShare, shareMemory, transferScore } from '../src/sharing/share.js';
-import { getGlobalRoot, promoteToGlobal } from '../src/sharing/global-store.js';
+import { getGlobalRoot } from '../src/sharing/global-store.js';
+import { copyToGlobal } from '../src/store/sqlite/global-promote.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
@@ -69,7 +70,7 @@ describe('git-learned rows and the global store', () => {
   });
 
   it('a hand-run promote of a git-learned row still copies it', () => {
-    expect(promoteToGlobal(hippoRoot, seed.id).content).toBe(SEED);
+    expect(copyToGlobal(hippoRoot, seed.id).content).toBe(SEED);
     expect(globalContents()).toEqual([SEED]);
   });
 

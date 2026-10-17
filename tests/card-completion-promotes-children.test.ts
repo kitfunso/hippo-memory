@@ -6,7 +6,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Card } from '../src/core/card.js';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
-import { claimCard, completeCard, createCard, loadCard, loadCardDeps, reviewCard } from '../src/store/cards.js';
+import { claimCard, completeCard, createCard, loadCard, reviewCard } from '../src/store/cards.js';
+import { cardDetailOf } from './_helpers/card-detail.js';
 import { initStore } from '../src/store/open.js';
 import { countMatching, recordStatements } from './_helpers/count-statements.js';
 
@@ -76,11 +77,12 @@ function seedFamily(children: number): Family {
 }
 
 describe('completeCard child promotion', () => {
-  it.each([1, 10, 100])('promotes the unblocked backlog children of a parent with %i children, in card_deps order', (children) => {
+  it.each([1, 10, 100])('promotes the unblocked backlog children of a parent with %i children, in card_deps order', async (children) => {
     const family = seedFamily(children);
     const result = completeCard(root, TENANT, family.parent, 'success');
 
-    const inDepsOrder = loadCardDeps(root, TENANT, family.parent).children.filter((id) => family.promotable.has(id));
+    const deps = (await cardDetailOf(root, TENANT, family.parent))?.deps;
+    const inDepsOrder = (deps?.children ?? []).filter((id) => family.promotable.has(id));
     expect(result?.promotedChildren).toEqual(inDepsOrder);
     expect(result?.promotedChildren).toHaveLength(family.promotable.size);
     expect(result?.card.status).toBe('done');
@@ -145,12 +147,12 @@ describe('statements one completion prepares and runs', () => {
     }
   }, 60_000);
 
-  it('prepares the dependency insert of a new card once for 20 parents', () => {
+  it('prepares the dependency insert of a new card once for 20 parents', async () => {
     const parents = Array.from({ length: 20 }, (_, i) => createCard(root, TENANT, { title: `parent ${i}` }).id);
     const log = recordStatements(() => recordPrepares(() => createCard(root, TENANT, { title: 'child', dependsOn: parents })));
     expect(countMatching(log.result.prepared, 'INSERT INTO card_deps')).toBe(1);
     expect(countMatching(log.statements, 'INSERT INTO card_deps')).toBe(20);
     expect(log.result.result.status).toBe('backlog');
-    expect(loadCardDeps(root, TENANT, log.result.result.id).parents.sort()).toEqual([...parents].sort());
+    expect((await cardDetailOf(root, TENANT, log.result.result.id))?.deps.parents.sort()).toEqual([...parents].sort());
   });
 });
