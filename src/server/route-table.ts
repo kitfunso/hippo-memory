@@ -3,7 +3,7 @@ import { handleGitHubEventsWebhook } from '../connectors/github/webhook.js';
 import { handleSlackEventsWebhook } from '../connectors/slack/webhook.js';
 import { hasGroup, type StoreGroup, type HippoStore } from '../store/index.js';
 import { HttpError, JSON_HEADERS, sendJson, STORE_NOT_PORTED_MESSAGE, type WebhookRequest } from '../util/http-util.js';
-import { assertCrossTenantAdmin, buildContextWithAuth, isLoopback } from './auth.js';
+import { assertCrossTenantAdmin, buildContextWithAuth, isLocalCaller } from './auth.js';
 import { matchPath, noteAccess } from './request.js';
 import { routeLookup } from './route-lookup.js';
 import {
@@ -183,7 +183,7 @@ export const V1_ROUTES: readonly Route[] = [
   {
     method: 'POST',
     path: '/v1/auth/keys',
-    auth: 'caller',
+    auth: 'admin',
     loop: 'off',
     handler: handleCreateAuthKey,
   },
@@ -578,8 +578,8 @@ async function passAuthGate(
   { req, opts }: RouteRequest,
 ): Promise<Context> {
   const label = routeLabel(route);
-  // Defence in depth, not the boundary: a socket address says where a request came from, never who sent it.
-  if (route.auth === 'host-admin-local' && !isLoopback(req.socket.remoteAddress)) {
+  // Defence in depth, not the boundary: a proxy or a browser page on this host connects from loopback too.
+  if (route.auth === 'host-admin-local' && !isLocalCaller(req)) {
     throw new HttpError(403, `${label} is loopback-only (host-wide consolidation; see CHANGELOG v1.11.4)`);
   }
   const ctx = await buildContextWithAuth(req, opts);

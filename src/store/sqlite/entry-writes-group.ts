@@ -42,7 +42,7 @@ export function sqliteEntryWrites(hippoRoot: string): Sync<EntryWrites> {
     forget(removal) {
       onHandle(hippoRoot, (db) => withWriteScope(db, 'forget_in_reach', () => {
         assertInReach(db, removal, removal.id);
-        if (!deleteEntryCore(db, removal.id, { actor: removal.actor })) throw notFound(removal.id);
+        if (!deleteEntryCore(db, removal.id, removal.tenantId, { actor: removal.actor })) throw notFound(removal.id);
       }), openStore);
       purgeMirrorBestEffort(hippoRoot, removal.id, false, 'deleteEntry');
       updateStatsUnlessBusy(hippoRoot, { forgotten: 1 }, `removed ${removal.id}`);

@@ -20,7 +20,6 @@ const FLAGS = {
   HIPPO_ANCHORING: false,
   HIPPO_AVAILABILITY: false,
   HIPPO_SKIP_AUTO_INTEGRATIONS: false,
-  HIPPO_SKIP_POSTINSTALL: false,
   HIPPO_SKIP_SCHEDULE: false,
   HIPPO_MCP_STDIO: false,
   HIPPO_REQUIRE_SERVER: false,
@@ -149,7 +148,6 @@ export function envTenant(): string {
 
 // Install and CLI switches.
 export function envSkipAutoIntegrations(): boolean { return flag('HIPPO_SKIP_AUTO_INTEGRATIONS'); }
-export function envSkipPostinstall(): boolean { return flag('HIPPO_SKIP_POSTINSTALL'); }
 export function envSkipSchedule(): boolean { return flag('HIPPO_SKIP_SCHEDULE'); }
 export function envMcpStdio(): boolean { return flag('HIPPO_MCP_STDIO'); }
 export function envRequireServer(): boolean { return flag('HIPPO_REQUIRE_SERVER'); }

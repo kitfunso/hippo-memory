@@ -8,7 +8,7 @@ import { AGENT_MEMORY_TOOLS, toolSourcePrefix } from '../src/core/agent-memory-t
 import {
   COMPACTION_MEMORY_TAG, COMPACTION_SOURCE_PREFIX, KEEP_PAIRS, canAutoDelete, type MemoryEntry
 } from '../src/core/memory.js';
-import { AUTO_DELETABLE_SQL } from '../src/store/rule-sql.js';
+import { AUTO_DELETABLE } from '../src/store/rule-sql.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries, readEntry } from '../src/store/entry-reads.js';
@@ -94,7 +94,7 @@ function sqlDeletableIds(root: string): string[] {
   const db = openHippoDb(root);
   try {
     // SAFETY: rows' shape matches the single id column named in the SELECT.
-    return (db.prepare(`SELECT id FROM memories WHERE ${AUTO_DELETABLE_SQL}`).all() as { id: string }[]).map((r) => r.id).sort();
+    return (db.prepare(`SELECT id FROM memories WHERE ${AUTO_DELETABLE.sql}`).all(...AUTO_DELETABLE.params) as { id: string }[]).map((r) => r.id).sort();
   } finally {
     closeHippoDb(db);
   }
@@ -110,12 +110,13 @@ describe('the keep pairs', () => {
   });
 
   it('the SQL matches the prefix by length and never with LIKE, which ignores case', () => {
-    expect(AUTO_DELETABLE_SQL).toContain(`substr(source, 1, ${PREFIX.length}) = '${PREFIX}'`);
-    expect(AUTO_DELETABLE_SQL).not.toMatch(/LIKE/i);
+    expect(AUTO_DELETABLE.sql).toContain(`substr(source, 1, ${PREFIX.length}) = ?`);
+    expect(AUTO_DELETABLE.params).toContain(PREFIX);
+    expect(AUTO_DELETABLE.sql).not.toMatch(/LIKE/i);
   });
 });
 
-describe('canAutoDelete and AUTO_DELETABLE_SQL agree, over pinned x kind x tags x source', () => {
+describe('canAutoDelete and AUTO_DELETABLE agree, over pinned x kind x tags x source', () => {
   it('canAutoDelete gives the table answer for every row', async () => {
     const root = newRoot();
     const table = await seedTable(root);

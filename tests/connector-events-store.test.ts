@@ -142,9 +142,8 @@ describe('both webhooks under a store that is not hippo.db', () => {
     return { root, url: handle.url };
   };
   const slackSignature = (ts: string, body: string, secret: string): string => `v0=${createHmac('sha256', secret).update(`v0:${ts}:${body}`).digest('hex')}`;
-  const postSlack = async (url: string, payload: JsonValue, secret = secrets.slack) => {
+  const postSlack = async (url: string, payload: JsonValue, secret = secrets.slack, ts = String(Math.floor(Date.now() / 1000))) => {
     const body = JSON.stringify(payload);
-    const ts = String(Math.floor(Date.now() / 1000));
     const headers = { 'content-type': 'application/json', 'x-slack-request-timestamp': ts, 'x-slack-signature': slackSignature(ts, body, secret) };
     const res = await fetch(`${url}/v1/connectors/slack/events`, { method: 'POST', headers, body });
     return { status: res.status, body: await res.json(), sent: { body, ts, signature: headers['x-slack-signature'] } };
@@ -184,7 +183,10 @@ describe('both webhooks under a store that is not hippo.db', () => {
     const stored = await postSlack(served.url, slackEvent('T_ACME', 'Ev_message', posted('1700.000001')));
     expect(stored).toMatchObject({ status: 200, body: { ok: true, status: 'ingested', memoryId: expect.any(String) } });
     const memoryId: string = stored.body.memoryId;
-    expect(await postSlack(served.url, slackEvent('T_ACME', 'Ev_message', posted('1700.000001')))).toMatchObject({ status: 200, body: { ok: true, status: 'duplicate', memoryId } });
+    // Slack signs a retry afresh, so the retry passes the replay window and the event log is what dedupes it.
+    const retryTs = String(Number(stored.sent.ts) - 1);
+    const retry = await postSlack(served.url, slackEvent('T_ACME', 'Ev_message', posted('1700.000001')), secrets.slack, retryTs);
+    expect(retry).toMatchObject({ status: 200, body: { ok: true, status: 'duplicate', memoryId } });
     const stray = await postSlack(served.url, slackEvent('T_OTHER', 'Ev_stray', posted('1700.000003')));
     expect(stray).toMatchObject({ status: 200, body: { ok: true, status: 'dlq' } });
     expect(await postSlack(served.url, slackEvent('T_ACME', 'Ev_deleted', removed('1700.000001')))).toMatchObject({ status: 200, body: { ok: true, status: 'archived' } });

@@ -140,7 +140,7 @@ export const log = {
   warnThenSample,
 } as const;
 
-/** One warning per on/off variable set to an unknown spelling; the CLI and postinstall carry on with the safe side. */
+/** One warning per on/off variable set to an unknown spelling; the CLI carries on with the safe side. */
 export function warnUnknownFlagValues(): void {
   for (const entry of validateFlags()) {
     log.warn(`${entry} is not 1, true, on, 0, false or off; the flag takes its safe side`);
