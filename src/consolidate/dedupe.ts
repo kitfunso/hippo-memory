@@ -50,8 +50,26 @@ export function strengthBucket(strength: number | null | undefined): number {
 const finiteCount = (n: number | null | undefined): number =>
   Number.isFinite(n ?? 0) ? (n ?? 0) : 0;
 
+/** What the survivor order and a pair read of a row: a scan holds these, never the row itself. */
+interface DedupRow {
+  readonly id: string;
+  readonly content: string;
+  readonly layer: MemoryEntry['layer'];
+  readonly strength: number;
+  readonly retrieval_count: number;
+  readonly tags: readonly string[];
+  readonly source: string;
+  readonly deletable: boolean;
+}
+
+function dedupRow(entry: MemoryEntry, backing: ReadonlySet<string>): DedupRow {
+  const { id, content, layer, strength, retrieval_count, tags, source } = entry;
+  const deletable = canAutoDelete(entry) && !backing.has(id);
+  return { id, content, layer, strength, retrieval_count, tags, source, deletable };
+}
+
 /** The v1.26.3 survivor total order: strength bucket desc, then retrieval_count desc, then compareEntryIdentity. */
-function survivorOrder(a: MemoryEntry, b: MemoryEntry): number {
+function survivorOrder(a: DedupRow, b: DedupRow): number {
   const bucketDiff = strengthBucket(b.strength) - strengthBucket(a.strength);
   if (bucketDiff !== 0) return bucketDiff;
   const retrievalDiff = finiteCount(b.retrieval_count) - finiteCount(a.retrieval_count);
@@ -59,22 +77,7 @@ function survivorOrder(a: MemoryEntry, b: MemoryEntry): number {
   return compareEntryIdentity(a, b);
 }
 
-// Tenant partition: group by tenantId before sorting so a duplicate pair never forms across tenants; Map keeps
-// insertion order,
-// so a single-tenant store gets one group and the same result as a global pass.
-function entriesByPartition(entries: readonly MemoryEntry[]): Map<string, MemoryEntry[]> {
-  const entriesByTenant = new Map<string, MemoryEntry[]>();
-  for (const entry of entries) {
-    // EI2: also split by restricted scope, else a private copy can delete the readable one.
-    const key = derivationPartitionKey(entry.tenant_id, entry.scope, entry.origin_project);
-    const bucket = entriesByTenant.get(key);
-    if (bucket) bucket.push(entry);
-    else entriesByTenant.set(key, [entry]);
-  }
-  return entriesByTenant;
-}
-
-function dedupPair(kept: MemoryEntry, dropped: MemoryEntry): DedupPair {
+function dedupPair(kept: DedupRow, dropped: DedupRow): DedupPair {
   return {
     kept: kept.id,
     keptContent: kept.content,
@@ -88,64 +91,67 @@ function dedupPair(kept: MemoryEntry, dropped: MemoryEntry): DedupPair {
   };
 }
 
-/** Pairs within one partition, already in survivor order, grouped by survivor; marks each loser in `removed`. */
-function partitionPairs(
-  tenantEntries: readonly MemoryEntry[],
-  removed: Set<string>,
-  backing: ReadonlySet<string>,
-): DedupPair[] {
-  const groups = new Map<string, { survivor: MemoryEntry; pairs: DedupPair[] }>();
-  for (const entry of tenantEntries) {
-    const key = duplicateKey(entry.content);
-    const group = groups.get(key);
-    if (!group) {
-      groups.set(key, { survivor: entry, pairs: [] });
-      continue;
-    }
-    if (!canAutoDelete(entry) || backing.has(entry.id)) continue;
-    removed.add(entry.id);
-    group.pairs.push(dedupPair(group.survivor, entry));
+/** One partition's same-text groups by duplicateKey: the best row so far and the rows it beat that may go. */
+type PartitionGroups = Map<string, { survivor: DedupRow; losers: DedupRow[] }>;
+
+// The survivor order is total, so the best row so far ends as the row a sorted pass puts first, and every other
+// deletable row ends a loser whichever order the rows came in.
+function addRow(groups: PartitionGroups, key: string, row: DedupRow): void {
+  const group = groups.get(key);
+  if (!group) {
+    groups.set(key, { survivor: row, losers: [] });
+    return;
   }
-  return [...groups.values()].flatMap((group) => group.pairs);
+  const beaten = survivorOrder(row, group.survivor) < 0 ? group.survivor : row;
+  if (beaten !== row) group.survivor = row;
+  if (beaten.deletable) group.losers.push(beaten);
 }
 
-/** Every row of the store, read once by a caller that also needs them, with the ids of rows backing an object. */
-export interface LoadedStore {
-  readonly entries: readonly MemoryEntry[];
-  readonly backing: ReadonlySet<string>;
+/** One partition's pairs in a sorted pass's order: groups by their survivor's rank, each group's losers by rank. */
+function partitionPairs(groups: PartitionGroups): DedupPair[] {
+  return [...groups.values()]
+    .filter((group) => group.losers.length > 0)
+    .sort((a, b) => survivorOrder(a.survivor, b.survivor))
+    .flatMap((group) => group.losers.sort(survivorOrder).map((loser) => dedupPair(group.survivor, loser)));
 }
 
 /** The rows currentDistilledEntries selects, picked from a whole-store read. */
 const isCurrentDistilled = (e: MemoryEntry): boolean => (e.kind ?? 'distilled') === 'distilled' && !e.superseded_by;
 
-/**
- * Remove the weaker copy of same-text (apart from spacing) memories within one tenant; cross-tenant pairs are never
- * duplicates (isolation boundary).
- * Higher strength wins, then more retrievals; `threshold` is accepted for old callers and ignored. */
+/** Pairs from rows fed a page at a time; between pages only each group's survivor and losers are held. */
+function scanPairs(pages: Iterable<readonly MemoryEntry[]>, backing: ReadonlySet<string>): DedupPair[] {
+  // Map order is first appearance, so partitions keep the order a whole read gave them.
+  const partitions = new Map<string, PartitionGroups>();
+  for (const page of pages) {
+    for (const entry of page) {
+      if (!isCurrentDistilled(entry)) continue;
+      // EI2: also split by restricted scope, else a private copy can delete the readable one.
+      const partition = derivationPartitionKey(entry.tenant_id, entry.scope, entry.origin_project);
+      let groups = partitions.get(partition);
+      if (!groups) partitions.set(partition, (groups = new Map()));
+      addRow(groups, duplicateKey(entry.content), dedupRow(entry, backing));
+    }
+  }
+  return [...partitions.values()].flatMap(partitionPairs);
+}
+
+/** Remove the weaker copy of same-text (apart from spacing) memories within one tenant, never across (isolation).
+ * Strength wins, then retrievals; `threshold` is ignored; `pages` feeds every row in place of one current-row read. */
 export function deduplicateStore(
   store: Consolidation,
-  options: { threshold?: number; dryRun?: boolean; actor?: string; loaded?: LoadedStore } = {}
+  options: {
+    threshold?: number;
+    dryRun?: boolean;
+    actor?: string;
+    pages?: Iterable<readonly MemoryEntry[]>;
+    backing?: ReadonlySet<string>;
+  } = {}
 ): DedupResult {
-  const dryRun = options.dryRun ?? false;
   // Only current distilled rows compete: raw rows are append-only (the delete
   // trigger would abort sleep mid-loop) and superseded rows are history.
-  const entries = options.loaded?.entries.filter(isCurrentDistilled) ?? store.currentDistilledEntries();
-  const entriesByTenant = entriesByPartition(entries);
-
-  // Shared across tenant groups: ids are globally unique UUIDs, so `removed` cannot collide across tenants and
-  // deleteEntry deletes by primary key alone.
-  const removed = new Set<string>();
-  const pairs: DedupPair[] = [];
-  const backing = options.loaded?.backing ?? store.objectBackedIds();
-
-  for (const tenantEntries of entriesByTenant.values()) {
-    // The survivor total order (see the file-level docstring), scoped per
-    // tenant group: the total order holds within a tenant only, matching the partition above.
-    tenantEntries.sort(survivorOrder);
-    pairs.push(...partitionPairs(tenantEntries, removed, backing));
-  }
-
-  const done = dryRun ? pairs : deletePairs(store, pairs, options.actor);
+  const pages = options.pages ?? [store.currentDistilledEntries()];
+  const pairs = scanPairs(pages, options.backing ?? store.objectBackedIds());
+  const done = options.dryRun ? pairs : deletePairs(store, pairs, options.actor);
   return { removed: done.length, pairs: done };
 }
 

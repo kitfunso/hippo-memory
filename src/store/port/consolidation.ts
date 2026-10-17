@@ -6,7 +6,7 @@ import type { WriteBudget } from '../../util/write-budget.js';
 import type { AppendAuditOpts, AuditOp } from '../audit.js';
 import type { DetectedConflict } from '../conflicts.js';
 import type { FlushComponent, LoadedRows } from '../delete-and-batch.js';
-import type { EntriesWithBase } from '../entry-reads.js';
+import type { EntriesWithBase, EntryCursor, EntryPage } from '../entry-reads.js';
 import type { HalfLifeMove, HalfLifeRows } from '../half-life.js';
 import type { SessionDecayContext } from '../index-and-stats.js';
 import type { SessionEvent } from '../rows.js';
@@ -63,6 +63,8 @@ export interface Consolidation {
   reportAuditFailure(op: AuditOp, reason: string): void;
   /** Every memory of every tenant, as it stands now. */
   allEntries(): MemoryEntry[];
+  /** Up to `limit` memories of every tenant after `after`, in allEntries' order, so a pass holds one page at a time. */
+  entriesPage(page: { readonly limit: number; readonly after?: EntryCursor }): EntryPage;
   /** The current distilled memories: no raw row and no superseded one. */
   currentDistilledEntries(): MemoryEntry[];
   /** Deletes each target in its own transaction; true where the row went. */

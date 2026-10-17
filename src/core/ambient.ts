@@ -88,12 +88,18 @@ export function isErrorTagged(tags: readonly string[]): boolean {
 
 /** Tallies over loaded entries; superseded rows count toward the total only, as they always have here. */
 export function tallyAmbientEntries(entries: readonly MemoryEntry[], now?: Date): AmbientTallies {
-  const currentTime = now ?? evalNow(); // honors HIPPO_FAKE_NOW (eval-only)
-  const freshAfter = currentTime.getTime() - AMBIENT_FRESH_WINDOW_MS;
   const t: AmbientTallies = {
-    total: entries.length, strengthSum: 0, fresh: 0, negative: 0, highSchemaFit: 0, errors: 0,
+    total: 0, strengthSum: 0, fresh: 0, negative: 0, highSchemaFit: 0, errors: 0,
     semantic: 0, episodic: 0, conflicts: 0, extracted: 0, maxDagLevel: 0, tagCounts: new Map(),
   };
+  foldAmbientRows(t, entries, now ?? evalNow()); // honors HIPPO_FAKE_NOW (eval-only)
+  return t;
+}
+
+/** Adds rows to `t` in order, so a store read a page at a time sums its floats exactly as one whole read does. */
+export function foldAmbientRows(t: AmbientTallies, entries: readonly MemoryEntry[], currentTime: Date): void {
+  const freshAfter = currentTime.getTime() - AMBIENT_FRESH_WINDOW_MS;
+  t.total += entries.length;
   for (const entry of entries) {
     if (entry.superseded_by) continue;
     for (const tag of entry.tags) t.tagCounts.set(tag, (t.tagCounts.get(tag) ?? 0) + 1);
@@ -108,7 +114,6 @@ export function tallyAmbientEntries(entries: readonly MemoryEntry[], now?: Date)
     if (entry.extracted_from) t.extracted++;
     if (entry.dag_level > t.maxDagLevel) t.maxDagLevel = entry.dag_level;
   }
-  return t;
 }
 
 export function computeAmbientState(entries: MemoryEntry[], now?: Date): AmbientState {
