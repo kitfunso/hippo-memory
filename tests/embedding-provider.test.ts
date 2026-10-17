@@ -2,11 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import {
-  resolveEmbeddingProvider,
-  resolveEmbeddingIdentity,
-  isEmbeddingConfigured,
-} from '../src/embeddings/provider.js';
+import { resolveEmbeddingProvider } from '../src/embeddings/provider.js';
 import { embeddingModelRequiresReindex, saveStoredEmbeddingModel } from '../src/store/embeddings/index.js';
 import { saveEmbeddingIndex } from '../src/store/vector-index.js';
 import { loadConfig } from '../src/core/config.js';
@@ -69,13 +65,13 @@ describe('EmbeddingProvider', () => {
   describe('identity', () => {
     it('local provider id is the bare model (back-compat with stored embedding_model)', () => {
       const root = mkRoot({ provider: 'local', model: 'Xenova/all-MiniLM-L6-v2' });
-      expect(resolveEmbeddingIdentity(loadConfig(root).embeddings)).toBe('Xenova/all-MiniLM-L6-v2');
+      expect(resolveEmbeddingProvider(loadConfig(root).embeddings).id).toBe('Xenova/all-MiniLM-L6-v2');
       expect(resolveEmbeddingProvider(loadConfig(root).embeddings).kind).toBe('local');
     });
 
     it('api provider id is `${kind}:${model}`', () => {
       const root = mkRoot({ provider: 'openai', model: 'text-embedding-3-large' });
-      expect(resolveEmbeddingIdentity(loadConfig(root).embeddings)).toBe('openai:text-embedding-3-large');
+      expect(resolveEmbeddingProvider(loadConfig(root).embeddings).id).toBe('openai:text-embedding-3-large');
     });
 
     it('defaults to the local provider when none is configured', () => {
@@ -100,7 +96,7 @@ describe('EmbeddingProvider', () => {
       const root = mkRoot({ provider: 'local', model: 'Xenova/all-MiniLM-L6-v2' });
       // Legacy store: index present, model defaults to MiniLM (the historical default).
       saveEmbeddingIndex(root, { mem_legacy: [0.1, 0.2, 0.3] });
-      const identity = resolveEmbeddingIdentity(loadConfig(root).embeddings);
+      const identity = resolveEmbeddingProvider(loadConfig(root).embeddings).id;
       expect(embeddingModelRequiresReindex(root, identity)).toBe(true);
       // The reindex path persists the versioned identity; after that the
       // same provider id compares clean (no reindex loop).
@@ -111,7 +107,7 @@ describe('EmbeddingProvider', () => {
     it('switching to an api provider flips the identity and triggers a reindex', () => {
       const root = mkRoot({ provider: 'openai', model: 'text-embedding-3-large' });
       saveEmbeddingIndex(root, { mem_legacy: [0.1, 0.2, 0.3] });
-      const identity = resolveEmbeddingIdentity(loadConfig(root).embeddings);
+      const identity = resolveEmbeddingProvider(loadConfig(root).embeddings).id;
       expect(embeddingModelRequiresReindex(root, identity)).toBe(true);
     });
   });
@@ -139,7 +135,6 @@ describe('EmbeddingProvider', () => {
     it('throws on an unknown provider value (no silent local fallback)', () => {
       const root = mkRoot({ provider: 'opneai', model: 'text-embedding-3-large' });
       expect(() => resolveEmbeddingProvider(loadConfig(root).embeddings)).toThrow(/Unknown embeddings.provider/);
-      expect(isEmbeddingConfigured(root, loadConfig(root).embeddings)).toBe(false);
     });
 
     it('honors embeddings.enabled=false even when the api key is present (no paid calls)', () => {

@@ -50,7 +50,7 @@ export interface DetectAvailabilityBiasOpts {
   minOlderPassedOver?: number;
 }
 
-export const DEFAULT_RECENCY_WINDOW_MS = DAY_MS;
+const DEFAULT_RECENCY_WINDOW_MS = DAY_MS;
 export const DEFAULT_RECENT_FRACTION_THRESHOLD = 0.7;
 export const DEFAULT_MIN_RETURNED = 3;
 export const DEFAULT_MIN_POOL = 10;

@@ -56,7 +56,8 @@ export interface ApiKeyVerifyStats {
 
 const verifyStats = { storeLookups: 0, scryptRuns: 0 };
 
-export function apiKeyVerifyStats(): ApiKeyVerifyStats {
+// Test hook: no production surface reads these counts yet.
+export function _readApiKeyVerifyStatsForTests(): ApiKeyVerifyStats {
   return { ...verifyStats };
 }
 

@@ -21,7 +21,7 @@ import { loadLatestHandoff, saveSessionHandoff } from '../src/store/handoffs.js'
 import { briefFromReceipts } from '../src/objects/project-briefs.js';
 import { saveItems, type ItemContext } from '../src/store/compactions-record.js';
 import { _resetSharedStoreCacheForTests } from '../src/core/config.js';
-import { clearProjectIdentityCache } from '../src/core/project-identity.js';
+import { _resetProjectIdentityCacheForTests } from '../src/core/project-identity.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 import { objectsAt } from './_helpers/objects-at.js';
 
@@ -53,7 +53,7 @@ const keysOf = (entries: readonly MemoryEntry[]): string[] =>
 beforeEach(() => {
   dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-personal-sites-'));
   for (const name of ['HOME', 'USERPROFILE', 'HIPPO_HOME']) vi.stubEnv(name, dir);
-  clearProjectIdentityCache();
+  _resetProjectIdentityCacheForTests();
   _resetSharedStoreCacheForTests();
   root = path.join(dir, 'server', '.hippo');
   fs.mkdirSync(root, { recursive: true });

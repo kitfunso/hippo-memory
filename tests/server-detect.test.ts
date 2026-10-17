@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { detectServer, writePidfile, removePidfile, removePidfileIfOwned, ServerUnresponsiveError } from '../src/server/server-detect.js';
+import { detectServer, writePidfile, removePidfileIfOwned, ServerUnresponsiveError } from '../src/server/server-detect.js';
 import { serve } from '../src/server.js';
 
 // hippoRoot is the directory the pidfile sits directly inside, matching the
@@ -168,7 +168,7 @@ describe('server-detect', () => {
       expect(info.schema).toBe(1);
       expect(info.started_at).toBe(startedAt);
       expect(info.pid).toBe(process.pid);
-      removePidfile(home);
+      expect(removePidfileIfOwned(home, { pid: process.pid, startedAt })).toBe(true);
       expect(existsSync(pidfile)).toBe(false);
     } finally {
       rmSync(home, { recursive: true, force: true });

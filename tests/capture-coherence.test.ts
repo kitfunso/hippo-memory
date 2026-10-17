@@ -1,61 +1,61 @@
 import { describe, expect, it } from 'vitest';
 
-import { extractFromText } from '../src/capture/extract.js';
+import { extractFromTexts } from '../src/capture/extract.js';
 
 /**
  * DF2 — capture extractor: keyword-preserving, clause-bounded capture.
  * Plan: docs/plans/2026-08-23-df2-capture-anchoring.md
  *
- * `extractFromText` is a pure function (no store, no I/O) — the exported
- * seam the plan names. These are direct unit tests against it; no store or
+ * `extractFromTexts` is a pure function (no store, no I/O), the exported
+ * entry every capture path calls. These are direct unit tests against it; no store or
  * mocks are needed because nothing here touches persistence.
  */
 describe('capture coherence', () => {
   it('1. inversion pin: a prohibition keeps its keyword, not just the object', () => {
-    const items = extractFromText('Never use --no-verify on git commits in this project.');
+    const items = extractFromTexts(['Never use --no-verify on git commits in this project.']);
     expect(items).toHaveLength(1);
     expect(items[0].content.toLowerCase()).toContain('never');
     expect(items[0].content.toLowerCase()).not.toBe('use --no-verify on git commits in this project');
   });
 
   it('2. fragment self-rejects: clause-bounding shortens it, the write gate then drops it', () => {
-    const items = extractFromText(
-      'The captures had a few problems (two had never got entries), plus one documented exception.'
-    );
+    const items = extractFromTexts([
+      'The captures had a few problems (two had never got entries), plus one documented exception.',
+    ]);
     expect(items).toHaveLength(0);
   });
 
   it('3. a whole sentence keeps its consequence: the "so it is" tail stays attached', () => {
-    const items = extractFromText(
-      'I have never seen this test fail on master before, so it is probably a flake.'
-    );
+    const items = extractFromTexts([
+      'I have never seen this test fail on master before, so it is probably a flake.',
+    ]);
     expect(items.map((i) => i.content)).toEqual(['I have never seen this test fail on master before, so it is probably a flake']);
   });
 
   it('4. periods inside tokens survive clause-bounding', () => {
-    const items = extractFromText(
-      'Never edit capture.ts and audit.ts in the same commit without running npm test.'
-    );
+    const items = extractFromTexts([
+      'Never edit capture.ts and audit.ts in the same commit without running npm test.',
+    ]);
     expect(items).toHaveLength(1);
     expect(items[0].content).toContain('capture.ts');
   });
 
   it('5. genuine rules keep their keyword — must-never and should-always corpus', () => {
-    const mustNever = extractFromText('You must never commit the .env file to the repository.');
+    const mustNever = extractFromTexts(['You must never commit the .env file to the repository.']);
     expect(mustNever).toHaveLength(1);
     expect(mustNever[0].content.toLowerCase()).toContain('must never');
     expect(mustNever[0].content).toContain('.env');
 
-    const shouldAlways = extractFromText(
-      'We should always run the suite twice locally before merging any change.'
-    );
+    const shouldAlways = extractFromTexts([
+      'We should always run the suite twice locally before merging any change.',
+    ]);
     expect(shouldAlways).toHaveLength(1);
     expect(shouldAlways[0].content.toLowerCase()).toContain('always run the suite twice');
   });
 
   it('6. DECISION and ERROR sets follow the same semantic-vs-label split as RULE', () => {
     // SEMANTIC keyword ("decided to") carries the meaning -> preserved.
-    const decision = extractFromText('We decided to pin the version to avoid a repeat of the outage.');
+    const decision = extractFromTexts(['We decided to pin the version to avoid a repeat of the outage.']);
     expect(decision).toHaveLength(1);
     expect(decision[0].category).toBe('decision');
     expect(decision[0].content.toLowerCase()).toContain('decided');
@@ -72,19 +72,19 @@ describe('capture coherence', () => {
     // that motivated label-dropping involved colon labels exclusively
     // (tests/rejection-acceptance.test.ts still passes), so the narrow rule
     // keeps that guarantee without the collateral loss.
-    const error = extractFromText('The issue was that the reserve loop did not dedupe entries.');
+    const error = extractFromTexts(['The issue was that the reserve loop did not dedupe entries.']);
     expect(error).toHaveLength(1);
     expect(error[0].category).toBe('error');
     expect(error[0].content.toLowerCase()).toContain('reserve loop');
 
     // the regression this narrowing exists to prevent
-    const plan = extractFromText('The plan is to ship the DF2 branch on Friday afternoon, pending QA signoff.');
+    const plan = extractFromTexts(['The plan is to ship the DF2 branch on Friday afternoon, pending QA signoff.']);
     expect(plan, 'a "the plan is to ..." memory must not vanish').toHaveLength(1);
     expect(plan[0].content.toLowerCase()).toContain('ship the df2 branch');
   });
 
   it('7. documented behaviour change: a short imperative is now captured', () => {
-    const items = extractFromText('Never force push to main.');
+    const items = extractFromTexts(['Never force push to main.']);
     expect(items).toHaveLength(1);
     expect(items[0].content.toLowerCase()).toContain('never force push to main');
   });
@@ -125,7 +125,7 @@ describe('capture coherence', () => {
     ];
 
     for (const c of cases) {
-      const items = extractFromText(c.text);
+      const items = extractFromTexts([c.text]);
       expect(items, `${c.array} array: expected exactly one item from "${c.text}"`).toHaveLength(1);
       expect(items[0].category).toBe(c.category);
       expect(items[0].content.toLowerCase()).toContain(c.mustContain);
@@ -140,8 +140,8 @@ describe('capture coherence', () => {
 
   it('9. upper bound: a sentence of 500 chars or fewer is stored whole, a longer one is skipped, never cut', () => {
     const kept = `Always keep going ${'x'.repeat(400)} no matter what happens here today`;
-    expect(extractFromText(kept).map((i) => i.content)).toEqual([kept]);
-    expect(extractFromText(`Always keep going ${'x'.repeat(500)} no matter what happens here today`)).toEqual([]);
+    expect(extractFromTexts([kept]).map((i) => i.content)).toEqual([kept]);
+    expect(extractFromTexts([`Always keep going ${'x'.repeat(500)} no matter what happens here today`])).toEqual([]);
   });
 
   /**
@@ -156,10 +156,10 @@ describe('capture coherence', () => {
     // the "the X is/was" label left exactly that residue, so these stored
     // NOTHING while master stored them. Absence of a memory is invisible -
     // no error, no log, nothing to notice in the field.
-    const plan = extractFromText('The plan is to ship the DF2 branch on Friday afternoon, pending QA signoff.');
+    const plan = extractFromTexts(['The plan is to ship the DF2 branch on Friday afternoon, pending QA signoff.']);
     expect(plan, 'a "the plan is to ..." memory must not vanish').toHaveLength(1);
 
-    const fix = extractFromText('The fix was to bump the pool timeout to 30s, because the recycler defaults were too aggressive.');
+    const fix = extractFromTexts(['The fix was to bump the pool timeout to 30s, because the recycler defaults were too aggressive.']);
     expect(fix, 'a "the fix was to ..." memory must not vanish').toHaveLength(1);
     expect(fix[0].content).toContain('pool timeout');
   });
@@ -170,7 +170,7 @@ describe('capture coherence', () => {
     // comma after read as a clause boundary - a mid-literal fragment that
     // then passes the write gate, the exact defect this branch removes, on
     // ordinary prose master handles correctly.
-    const items = extractFromText("Always pass 'user's a, b list' to the parser.");
+    const items = extractFromTexts(["Always pass 'user's a, b list' to the parser."]);
     expect(items).toHaveLength(1);
     expect(items[0].content, 'possessive inside a literal must not close it')
       .toContain("'user's a, b list'");
@@ -182,8 +182,8 @@ describe('capture coherence', () => {
       "Always run 'echo a, b ';then verify.",
       "Always keep 'em enabled, then set ';foo, after restart.",
       "Always pass 'a, ('.trim() to the parser, then verify.",
-    ]) expect(extractFromText(text).map((i) => i.content)).toEqual([text.slice(0, -1)]);
-    expect(extractFromText('Never use --no-verify on git commits in this project.')[0]?.content)
+    ]) expect(extractFromTexts([text]).map((i) => i.content)).toEqual([text.slice(0, -1)]);
+    expect(extractFromTexts(['Never use --no-verify on git commits in this project.'])[0]?.content)
       .toContain('Never');
   });
 
@@ -198,7 +198,7 @@ describe('capture coherence', () => {
       ['Never use arr[0, 1] indexing here.', 'arr[0, 1]'],
     ];
     for (const [text, mustContain] of cases) {
-      const items = extractFromText(text);
+      const items = extractFromTexts([text]);
       expect(items, `expected a capture from "${text}"`).toHaveLength(1);
       expect(items[0].content, `code span must survive clause scanning`).toContain(mustContain);
     }
@@ -215,8 +215,8 @@ describe('capture coherence', () => {
     // It is now resolved by KEEPING both. The invariant the reviewers
     // actually asked for - identical handling - still holds, and is what
     // this test pins.
-    const wasItems = extractFromText('The issue was the config file was missing from the deploy bundle.');
-    const isItems = extractFromText('The issue is the config file goes missing from the deploy bundle.');
+    const wasItems = extractFromTexts(['The issue was the config file was missing from the deploy bundle.']);
+    const isItems = extractFromTexts(['The issue is the config file goes missing from the deploy bundle.']);
     expect(wasItems).toHaveLength(1);
     expect(isItems).toHaveLength(1);
     expect(wasItems[0].content.toLowerCase()).toContain('the issue was');
@@ -251,11 +251,11 @@ describe('capture coherence', () => {
       'Always run the suite twice, then deploy.',
     ];
     for (const text of corpus) {
-      expect(extractFromText(text).map((i) => i.content), text).toEqual([text.slice(0, -1)]);
+      expect(extractFromTexts([text]).map((i) => i.content), text).toEqual([text.slice(0, -1)]);
     }
     for (const text of [
       "Always pass '" + 'a, ' + 'x'.repeat(600) + "' to the parser.",
       "Always keep 'em enabled, then " + 'y'.repeat(520) + " check user's config.",
-    ]) expect(extractFromText(text), 'a sentence over 500 chars is skipped, never cut').toEqual([]);
+    ]) expect(extractFromTexts([text]), 'a sentence over 500 chars is skipped, never cut').toEqual([]);
   });
 });

@@ -10,7 +10,7 @@ import { adminActor, recordTokens } from '../src/api/index.js';
 import { handleMcpRequest } from '../src/mcp/server.js';
 import { bookTokenUse } from '../src/api/ledger-db.js';
 import { promptHookContext } from '../src/api/prompt-hook.js';
-import { resetLogOnce } from '../src/util/log.js';
+import { _resetLogOnceForTests } from '../src/util/log.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { sqliteStore } from '../src/store/sqlite/store.js';
 import { apiCtx } from './_helpers/api-ctx.js';
@@ -42,7 +42,7 @@ beforeEach(() => {
   // No global store, so the hook reads and writes this one alone.
   process.env.HIPPO_HOME = path.join(root, 'no-global');
   stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-  resetLogOnce();
+  _resetLogOnceForTests();
 });
 
 afterEach(() => {

@@ -26,7 +26,6 @@ import {
   embeddingModelRequiresReindex,
   saveStoredEmbeddingModel,
   EMBEDDING_MODEL_META_KEY,
-  EMBED_TEXT_FORMAT,
 } from '../src/store/embeddings/index.js';
 
 describe('embeddingInputText', () => {
@@ -113,7 +112,7 @@ describe('reindex identity consistency', () => {
     expect(embeddingModelRequiresReindex(hippoRoot, 'modelX', fakeIndex)).toBe(false);
   });
 
-  it('embeddingIndexIdentity folds EMBED_TEXT_FORMAT into the provider id', () => {
-    expect(embeddingIndexIdentity('modelX')).toBe(`modelX#t${EMBED_TEXT_FORMAT}`);
+  it('embeddingIndexIdentity folds text format 2 into the provider id', () => {
+    expect(embeddingIndexIdentity('modelX')).toBe('modelX#t2');
   });
 });

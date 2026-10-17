@@ -8,7 +8,7 @@ import { HttpError } from '../src/util/http-util.js';
 import { MAX_ID_LEN } from '../src/util/limits.js';
 import {
   assertClientScope, assertScopeRequestAllowed, canReadScope, canTouchScope, isPersonalScope, passesCliRecallScopeFilter,
-  passesScopeFilterForRecall, PERSONAL_OWNER_MAX, personalScopeOf, ScopeForbiddenError, type ScopeActor,
+  passesScopeFilterForRecall, personalScopeOf, ScopeForbiddenError, type ScopeActor,
 } from '../src/core/recall-scope.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { initStore } from '../src/store/open.js';
@@ -47,7 +47,6 @@ describe('canReadScope decides a personal scope before role and grants', () => {
 
 describe('personalScopeOf', () => {
   it('fits the owner cap to the 256-character scope cap', () => {
-    expect(PERSONAL_OWNER_MAX).toBe(239);
     const longest = 'x'.repeat(239);
     expect(personalScopeOf({ owner: longest })).toBe(`personal:private:${longest}`);
     expect(personalScopeOf({ owner: longest })?.length).toBe(MAX_ID_LEN);

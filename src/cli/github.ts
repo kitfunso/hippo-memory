@@ -4,7 +4,7 @@
 import { envGitHubToken, envGitHubWebhookSecret, envGitHubWebhookSecretPrevious } from '../util/env.js';
 import { adminActor, type StoreContext } from '../api/index.js';
 import { backfillRepo } from '../connectors/github/backfill.js';
-import { realGitHubFetcher, type GitHubFetcher } from '../connectors/github/octokit-client.js';
+import { realGitHubFetcher } from '../connectors/github/octokit-client.js';
 import { listDlq } from '../connectors/dlq.js';
 import { githubDlq, replayDlqEntry, type IngestHook } from '../connectors/github/dlq.js';
 import { ingestEvent, type IngestEvent } from '../connectors/github/ingest.js';
@@ -80,13 +80,7 @@ function maxPerStreamFlag(maxRaw: FlagValue): number | undefined {
   return undefined;
 }
 
-/** `hippo github backfill`; the fetcher is injectable so tests avoid the network (default `realGitHubFetcher`). */
-export async function cmdGitHubBackfill(
-  hippoRoot: string,
-  tenantId: string,
-  flags: Flags,
-  fetcher: GitHubFetcher = realGitHubFetcher,
-): Promise<void> {
+async function cmdGitHubBackfill(hippoRoot: string, tenantId: string, flags: Flags): Promise<void> {
   const repo = flags['repo'];
   if (!isFlagString(repo) || !repo.includes('/')) {
     printGitHubBackfillUsage();
@@ -107,7 +101,7 @@ export async function cmdGitHubBackfill(
   try {
     const result = await backfillRepo(ctx, {
       repoFullName: repo,
-      fetcher,
+      fetcher: realGitHubFetcher,
       token,
       maxPerStream,
       sinceIso,

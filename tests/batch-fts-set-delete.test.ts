@@ -11,7 +11,7 @@ import { readEntry } from '../src/store/entry-reads.js';
 import { batchWriteAndDelete } from '../src/store/delete-and-batch.js';
 import { getHippoDbPath, withSharedStoreHandles } from '../src/db/index.js';
 import type { MemoryEntry } from '../src/core/memory.js';
-import { resetLogOnce } from '../src/util/log.js';
+import { _resetLogOnceForTests } from '../src/util/log.js';
 import { countMatching, recordStatements } from './_helpers/count-statements.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 
@@ -25,7 +25,7 @@ beforeEach(() => {
   root = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-fts-set-delete-'));
   initStore(root);
   stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-  resetLogOnce();
+  _resetLogOnceForTests();
 });
 
 afterEach(() => {

@@ -24,13 +24,13 @@ export const VALID_BRIEF_STATES: ReadonlySet<BriefStatus> = new Set<BriefStatus>
 /** Field caps (untrusted at the HTTP/SDK boundary). summary is a body, so a larger
  *  cap than the 4096 short-field convention. */
 export const MAX_REPO_LEN = 256;
-export const MAX_BRIEF_SUMMARY_LEN = 8192;
+const MAX_BRIEF_SUMMARY_LEN = 8192;
 export const MAX_CHANGE_SUMMARY_LEN = 4096;
 /** Bound the receipts gathered per refresh (a refresh reads memories; cap the scan
  *  + the rendered body). Realistic repos have far fewer recent receipts than this. */
-export const MAX_BRIEF_RECEIPTS = 50;
+const MAX_BRIEF_RECEIPTS = 50;
 /** Truncate each receipt's headline in the assembled digest. */
-export const MAX_RECEIPT_HEADLINE_LEN = 200;
+const MAX_RECEIPT_HEADLINE_LEN = 200;
 
 export interface SaveProjectBriefOpts {
   repo: string;

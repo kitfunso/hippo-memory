@@ -13,7 +13,7 @@ import { planProjectRepair } from '../src/sharing/project-merge.js';
 import { mergeProjectNames, repairProjectNames, repairProjectNamesOnce } from '../src/api/objects/projects.js';
 import { projectTagReads } from '../src/store/project-tags.js';
 import { cliApiContext } from '../src/cli/api-context.js';
-import { clearProjectIdentityCache, resolveProjectIdentity } from '../src/core/project-identity.js';
+import { _resetProjectIdentityCacheForTests, resolveProjectIdentity } from '../src/core/project-identity.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { loadRecallSearchEntries } from '../src/store/search-rows.js';
@@ -30,10 +30,10 @@ let w: World;
 
 beforeEach(() => {
   w = openWorld();
-  clearProjectIdentityCache();
+  _resetProjectIdentityCacheForTests();
 });
 afterEach(() => {
-  clearProjectIdentityCache();
+  _resetProjectIdentityCacheForTests();
   closeWorld(w);
 });
 
@@ -48,7 +48,7 @@ function checkout(url: string, ...segments: string[]): string {
 function globalConfig(remote: boolean): void {
   mkdirSync(w.global, { recursive: true });
   writeFileSync(join(w.global, 'config.json'), JSON.stringify({ projectIdentity: { remote }, embeddings: { enabled: false } }));
-  clearProjectIdentityCache();
+  _resetProjectIdentityCacheForTests();
 }
 
 function pinned(root: string, content: string, origin: string): MemoryEntry {
@@ -197,10 +197,10 @@ describe('the upgrade re-sync', () => {
     const svc = checkout('file:///srv/git/svc.git', 'svc');
     note(projectNotes(w, svc), 'a.md', NOTES[0]);
     writeFileSync(join(svc, '.hippo-project.json'), JSON.stringify({ id: 'old-svc' }));
-    clearProjectIdentityCache();
+    _resetProjectIdentityCacheForTests();
     sync(svc);
     writeFileSync(join(svc, '.hippo-project.json'), JSON.stringify({ id: 'new-svc' }));
-    clearProjectIdentityCache();
+    _resetProjectIdentityCacheForTests();
     const merged = mergeProjectNames(cliApiContext(w.global, T), { from: 'old-svc', into: 'new-svc', dryRun: false });
     expect(merged.setAside).toEqual([]);
 

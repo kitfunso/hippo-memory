@@ -180,7 +180,7 @@ describe('per-tenant scoping (cross-tenant leak prevention)', () => {
   });
 
   it('case 5: cmdCapture (file source) dedup AND write are both tenant-scoped via options.tenantId', () => {
-    // Use a fixture that actually triggers extractFromText.
+    // Use a fixture that actually triggers extractFromTexts.
     // 'we decided to X' matches DECISION_PATTERNS and extracts as a decision.
     const fixtureText = 'we decided to use Bearer tokens for HTTP authentication next quarter.';
     // The extracted content (post-regex-capture) is the post-pattern text:

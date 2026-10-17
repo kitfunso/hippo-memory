@@ -12,7 +12,7 @@ import type { JsonValue } from '../src/util/json.js';
 import { cliStdioHost } from '../src/cli/api-context.js';
 import { sharedStoreRefusal } from '../src/mcp/shared-gate.js';
 import { TOOLS } from '../src/mcp/tools.js';
-import { clearProjectIdentityCache } from '../src/core/project-identity.js';
+import { _resetProjectIdentityCacheForTests } from '../src/core/project-identity.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 
@@ -60,7 +60,7 @@ function repoWithOneFix(): string {
 beforeEach(() => {
   tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-shared-mcp-'));
   process.env.HIPPO_HOME = path.join(tmp, 'global');
-  clearProjectIdentityCache();
+  _resetProjectIdentityCacheForTests();
   _resetSharedStoreCacheForTests();
 });
 

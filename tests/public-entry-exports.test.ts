@@ -94,16 +94,17 @@ describe('package entry re-exports sleep', () => {
 
 // The test seams live on their own subpath; a seam leaking back into /server or the root would ship test hooks to production callers.
 describe('hippo-memory/testing', () => {
-  it('resolves through the package exports map to dist/entry/testing.js and holds every reset seam', () => {
+  it('resolves through the package exports map to dist/entry/testing.js and holds every test seam', () => {
     const script = [
       "const url = import.meta.resolve('hippo-memory/testing');",
       "const m = await import('hippo-memory/testing');",
       "const server = await import('hippo-memory/server');",
-      'console.log(JSON.stringify({ url, names: Object.keys(m).sort(), onServer: Object.keys(server).some((n) => /^_+reset/.test(n)) }));',
+      'console.log(JSON.stringify({ url, names: Object.keys(m).sort(), onServer: Object.keys(server).some((n) => /^_+reset|ForTests$/.test(n)) }));',
     ].join('\n');
     const out = importBuiltEntry<{ url: string; names: string[]; onServer: boolean }>(script);
     expect(realpathSync(fileURLToPath(out.url))).toBe(realpathSync(resolve(REPO_ROOT, 'dist', 'entry', 'testing.js')));
-    expect(out.names.every((n) => /^_+reset\w+/.test(n))).toBe(true);
+    // The seam name rule of scripts/check-test-only-exports.mjs, which also admits a reader or a setter.
+    expect(out.names.every((n) => /^_[a-z][A-Za-z0-9]*ForTests$/.test(n) || n === '__resetSessionRecallHistoryHttp')).toBe(true);
     expect(out.names).toContain('__resetSessionRecallHistoryHttp');
     expect(out.onServer).toBe(false);
     expect(existsSync(resolve(REPO_ROOT, 'dist', 'entry', 'testing.d.ts'))).toBe(true);
@@ -220,7 +221,7 @@ describe('published runtime exports', () => {
       rankVectorRows rarestFtsQuery rejectionDigest replacesIndex requireGroup
       sqliteStore
       tallyAmbientEntries",
-        "./testing": "__resetSessionRecallHistoryHttp _resetAblationCacheForTests _resetLossAversionRatioCacheForTests _resetSessionRecallHistoryMcpForTests _resetSharedStoreCacheForTests",
+        "./testing": "__resetSessionRecallHistoryHttp _readApiKeyVerifyStatsForTests _resetAblationCacheForTests _resetLogOnceForTests _resetLossAversionRatioCacheForTests _resetProjectIdentityCacheForTests _resetSessionRecallHistoryMcpForTests _resetSharedStoreCacheForTests _setDigestExistsProbeForTests",
       }
     `);
   });

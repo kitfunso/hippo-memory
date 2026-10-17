@@ -24,7 +24,7 @@ import { autoShare } from '../src/sharing/share.js';
 import { getGlobalRoot, initGlobal } from '../src/sharing/global-store.js';
 import { searchBothHybrid } from '../src/sharing/search-both.js';
 import { cmdCapture } from '../src/capture/command.js';
-import { extractFromText } from '../src/capture/extract.js';
+import { extractFromTexts } from '../src/capture/extract.js';
 import { computeSalience } from '../src/core/salience.js';
 import { heldTexts, mergedText } from '../src/util/same-text.js';
 import { insertDormantRow } from '../src/store/dormant.js';
@@ -581,7 +581,7 @@ describe('a new value is never skipped as a copy of an old one', () => {
   it('capture', () => {
     const root = newRoot();
     const note = 'decision: cap the connection pool at 15k';
-    const [item] = extractFromText(note);
+    const [item] = extractFromTexts([note]);
     write(root, item.content.replace('15k', '1.5k')); // the old check dropped punctuation, so 1.5k and 15k read as one text
     const file = join(tmp(), 'session.txt');
     writeFileSync(file, `${note}\n`);

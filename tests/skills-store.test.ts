@@ -5,7 +5,7 @@
  * Covers what only skills have; the shared lifecycle rules run per kind in typed-object-store.test.ts.
  * 1. saveSkill creates memory + skills row (+ skill_create audit), v1, trigger null when omitted
  * 2. saveSkill with trigger; memory content has name + when + instructions
- * 3. status filters; loadActiveSkills
+ * 3. status filters
  * 4. validation: missing name/instructions; name single-line (newline rejected); caps
  * 5. EXPORT: active-only, name-ASC, trigger omitted when null, '##' in instructions verbatim, empty -> ''
  */
@@ -17,9 +17,7 @@ import {
   saveSkill,
   closeSkill,
   loadSkills,
-  loadActiveSkills,
   skillsMarkdown,
-  MAX_SKILL_INSTRUCTIONS_LEN,
 } from '../src/objects/skills.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { objectsAt } from './_helpers/objects-at.js';
@@ -93,13 +91,13 @@ describe('skills store (executable/exportable first-class object)', () => {
     } finally { closeHippoDb(db); }
   });
 
-  it('status filters; loadActiveSkills', async () => {
+  it('status filters; status active', async () => {
     const a = await saveSkill(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { skillName: 'a', instructions: 'x' });
     const b = await saveSkill(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { skillName: 'b', instructions: 'x' });
     const c = await saveSkill(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { skillName: 'c', instructions: 'x' });
     await saveSkill(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { skillName: 'b', instructions: 'x2', supersedesSkillId: b.id });
     await closeSkill(objectsAt(home), 'default', c.id);
-    const active = await loadActiveSkills(objectsAt(home), 'default');
+    const active = await loadSkills(objectsAt(home), 'default', { status: 'active' });
     expect(active.some((x) => x.id === a.id)).toBe(true);
     expect(active.some((x) => x.id === b.id)).toBe(false);
     expect((await loadSkills(objectsAt(home), 'default', { status: 'closed' })).map((x) => x.id)).toEqual([c.id]);
@@ -111,7 +109,7 @@ describe('skills store (executable/exportable first-class object)', () => {
     await expect(saveSkill(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { skillName: 'n', instructions: '  ' })).rejects.toThrow(/instructions are required/);
     await expect(saveSkill(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { skillName: 'bad\nname', instructions: 'x' })).rejects.toThrow(/single line/);
     await expect(saveSkill(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { skillName: 'n', instructions: 'x', trigger: 'multi\n## line' })).rejects.toThrow(/trigger must be a single line/);
-    await expect(saveSkill(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { skillName: 'big', instructions: 'y'.repeat(MAX_SKILL_INSTRUCTIONS_LEN + 1) })).rejects.toThrow(/instructions exceed/);
+    await expect(saveSkill(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { skillName: 'big', instructions: 'y'.repeat(8192 + 1) })).rejects.toThrow(/instructions exceed/);
   });
 
   it('exportSkills: active-only, name-ASC, trigger omitted when null, markdown verbatim, empty -> ""', async () => {

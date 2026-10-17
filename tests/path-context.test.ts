@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { extractPathTags, pathOverlapScore, pathBoostMultiplier, PATH_BOOST_WEIGHT } from '../src/search/path-context.js';
+import { extractPathTags, pathOverlapScore, pathBoostMultiplier } from '../src/search/path-context.js';
 
 describe('extractPathTags', () => {
   it('extracts meaningful segments from Unix path', () => {
@@ -92,9 +92,9 @@ describe('pathBoostMultiplier', () => {
     expect(boost).toBe(1.3);
   });
 
-  it('returns 1.3 for exact match (1 + 1.0 * PATH_BOOST_WEIGHT)', () => {
+  it('returns 1.3 for exact match (1 + 1.0 * the 0.3 path weight)', () => {
     const tags = ['path:src', 'path:api'];
-    expect(pathBoostMultiplier(tags, tags)).toBeCloseTo(1 + 1.0 * PATH_BOOST_WEIGHT);
+    expect(pathBoostMultiplier(tags, tags)).toBeCloseTo(1.3);
     expect(pathBoostMultiplier(tags, tags)).toBe(1.3);
   });
 

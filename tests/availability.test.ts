@@ -22,7 +22,6 @@ import { describe, it, expect } from 'vitest';
 import {
   detectAvailabilityBias,
   type AgeRef,
-  DEFAULT_RECENCY_WINDOW_MS,
 } from '../src/api/availability.js';
 
 // Fixed reference "now" so every fixture age is deterministic.
@@ -204,8 +203,11 @@ describe('detectAvailabilityBias — edge cases', () => {
     });
     expect(hint).not.toBeNull();
     expect(hint!.recentCount).toBe(4);
-    // Sanity: the default constant is 24h.
-    expect(DEFAULT_RECENCY_WINDOW_MS).toBe(DAY_MS);
+    // Sanity: the default window is exactly 24h: an entry 24h old is recent, one a millisecond older is not.
+    const agedBy = (ms: number) => [0, 1, 2, 3].map((i) => ({ id: `e${i}`, created: new Date(NOW - ms).toISOString() }));
+    const atAge = (ms: number) => detectAvailabilityBias({ topK: agedBy(ms), pool: [...agedBy(ms), ...oldCluster], now: NOW });
+    expect(atAge(DAY_MS)?.recentCount).toBe(4);
+    expect(atAge(DAY_MS + 1)).toBeNull();
   });
 });
 

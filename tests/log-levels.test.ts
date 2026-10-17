@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { errorFields, formatLogLine, isLevelEnabled, log, logThreshold, resetLogOnce } from '../src/util/log.js';
+import { _resetLogOnceForTests, errorFields, formatLogLine, isLevelEnabled, log } from '../src/util/log.js';
 import { runWithRequestId } from '../src/util/request-scope.js';
 import { ownStderr } from './_helpers/own-stderr.js';
 
@@ -23,7 +23,7 @@ beforeEach(() => {
   vi.stubEnv('HIPPO_LOG_FORMAT', '');
   vi.useFakeTimers({ toFake: ['Date'], now: new Date(AT) });
   stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-  resetLogOnce();
+  _resetLogOnceForTests();
 });
 
 afterEach(() => {
@@ -36,7 +36,7 @@ afterEach(() => {
 
 describe('log level filtering', () => {
   it('defaults to warn: error and warn print, info and debug do not', () => {
-    expect(logThreshold()).toBe('warn');
+    expect([isLevelEnabled('warn'), isLevelEnabled('info')]).toEqual([true, false]);
     log.error('e');
     log.warn('w');
     log.info('i');
@@ -61,8 +61,7 @@ describe('log level filtering', () => {
 
   it('an unknown HIPPO_LOG value falls back to warn', () => {
     process.env.HIPPO_LOG = 'verbose';
-    expect(logThreshold()).toBe('warn');
-    expect(isLevelEnabled('info')).toBe(false);
+    expect([isLevelEnabled('warn'), isLevelEnabled('info')]).toEqual([true, false]);
   });
 
   it('once prints a key a single time per process', () => {
@@ -96,7 +95,7 @@ describe('log level filtering', () => {
     ]);
     stderrSpy.mockClear();
 
-    resetLogOnce();
+    _resetLogOnceForTests();
     log.warnThenDebug('row-1000', 'damaged 1000');
     expect(lines()).toEqual([`[hippo] warn: damaged 1000 ts=${AT}\n`]);
   });

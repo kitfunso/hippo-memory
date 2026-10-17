@@ -153,21 +153,3 @@ export function loadIncidents(
 ): Promise<Incident[]> {
   return listObjects(objects, INCIDENT, tenantId, opts);
 }
-
-export function loadOpenIncidents(
-  objects: Objects,
-  tenantId: string,
-  opts: { limit?: number } = {},
-): Promise<Incident[]> {
-  return loadIncidents(objects, tenantId, { status: 'open', limit: opts.limit });
-}
-
-/** Resolve a memory id to the table id of the OPEN incident backed by it, or null; exported for store-layer tests. */
-export async function resolveActiveIncidentIdByMemory(
-  objects: Objects,
-  tenantId: string,
-  memoryId: string,
-): Promise<number | null> {
-  assertTenantId('resolveActiveIncidentIdByMemory', tenantId);
-  return objects.objectIdByMemory(tenantId, 'incident', 'open', memoryId);
-}

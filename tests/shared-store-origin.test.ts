@@ -14,7 +14,7 @@ import { shareMemory } from '../src/sharing/share.js';
 import { syncGlobalToLocal } from '../src/sharing/global-sync.js';
 import { BadRequestError } from '../src/core/api-errors.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
-import { clearProjectIdentityCache, originFromSource } from '../src/core/project-identity.js';
+import { _resetProjectIdentityCacheForTests, originFromSource } from '../src/core/project-identity.js';
 import { _resetSharedStoreCacheForTests } from '../src/core/config.js';
 import { repairProjectNamesOnce } from '../src/api/objects/projects.js';
 import { cliApiContext } from '../src/cli/api-context.js';
@@ -29,7 +29,7 @@ const origHome = process.env.HIPPO_HOME;
 beforeEach(() => {
   tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-shared-origin-'));
   process.env.HIPPO_HOME = path.join(tmp, 'global');
-  clearProjectIdentityCache();
+  _resetProjectIdentityCacheForTests();
   _resetSharedStoreCacheForTests();
 });
 

@@ -15,7 +15,7 @@ import { retrieve } from '../src/api/index.js';
 import { physicsSearch } from '../src/search/physics-search.js';
 import { embedQueryBy } from '../src/search/vector.js';
 import { searchBothHybrid } from '../src/sharing/search-both.js';
-import { resetLogOnce } from '../src/util/log.js';
+import { _resetLogOnceForTests } from '../src/util/log.js';
 import { hashedVector, startHashedEmbeddings, type HashedEmbeddings } from './_helpers/hashed-embedding-server.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 import { loadConfig } from '../src/core/config.js';
@@ -66,7 +66,7 @@ afterAll(async () => {
 beforeEach(() => {
   vi.stubEnv('OPENAI_API_KEY', 'test-key-not-secret');
   stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-  resetLogOnce();
+  _resetLogOnceForTests();
 });
 
 afterEach(() => {

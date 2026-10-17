@@ -20,7 +20,7 @@ export const VALID_NOTE_STATES: ReadonlySet<NoteStatus> = new Set<NoteStatus>([
 /** Field caps (untrusted at the HTTP/SDK boundary). note is a body, so a larger cap
  *  than the 4096 short-field convention. */
 export const MAX_CUSTOMER_LEN = 256;
-export const MAX_NOTE_LEN = 8192;
+const MAX_NOTE_LEN = 8192;
 export const MAX_CHANGE_SUMMARY_LEN = 4096;
 
 export interface SaveCustomerNoteOpts {
@@ -122,15 +122,4 @@ export function loadCustomerNotes(
     limit: opts.limit,
     after: opts.after,
   });
-}
-
-/** All ACTIVE notes for a customer, newest first. Returns a LIST, unlike project_brief's single-or-null
- *  loadActiveBriefForRepo: a customer accrues many notes. */
-export function loadActiveNotesForCustomer(
-  objects: Objects,
-  tenantId: string,
-  customer: string,
-  opts: { limit?: number } = {},
-): Promise<CustomerNote[]> {
-  return loadCustomerNotes(objects, tenantId, { customer, status: 'active', limit: opts.limit });
 }

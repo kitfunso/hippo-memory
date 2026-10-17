@@ -17,7 +17,7 @@ import { replaceDetectedConflicts, listMemoryConflicts, resolveConflict } from '
 import {
   createMemory, deriveHalfLife, DEFAULT_HALF_LIFE_DAYS, LEGACY_TYPED_HALF_LIFE, type CreateMemoryOptions,
 } from '../src/core/memory.js';
-import { migrateDefaultHalfLife, storeHalfLifeBase, planHalfLifeMigration } from '../src/consolidate/half-life-migration.js';
+import { migrateDefaultHalfLife, planHalfLifeMigration } from '../src/consolidate/half-life-migration.js';
 import { sqliteSyncStore } from '../src/store/sqlite/store.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { consolidate } from '../src/index.js';
@@ -83,8 +83,8 @@ function byContent(root: string): Map<string, number> {
 describe('default half-life migration', () => {
   it('a new store starts on the current default and a pre-1.46 store reads as 7 days', () => {
     expect(DEFAULT_HALF_LIFE_DAYS).toBe(365);
-    expect(storeHalfLifeBase(local(store()))).toBe(365);
-    expect(storeHalfLifeBase(local(legacyStore([legacy('the staging deploy needs the VPN')])))).toBe(7);
+    expect(local(store()).halfLifeBase()).toBe(365);
+    expect(local(legacyStore([legacy('the staging deploy needs the VPN')])).halfLifeBase()).toBe(7);
   });
 
   it('moves only memories still on the old base, once, and logs their ids', () => {
@@ -104,7 +104,7 @@ describe('default half-life migration', () => {
     expect(hl.get(error.content)).toBe(730);
     expect(hl.get(shortened.content)).toBe(3);
     expect(hl.get(fixed.content)).toBe(90);
-    expect(storeHalfLifeBase(local(root))).toBe(365);
+    expect(local(root).halfLifeBase()).toBe(365);
 
     expect(migrateDefaultHalfLife(local(root), 365).rescaled).toBe(0);
 
@@ -162,14 +162,14 @@ describe('default half-life migration', () => {
     migrateDefaultHalfLife(local(root), 365);
     migrateDefaultHalfLife(local(root), 7);
     expect(byContent(root).get(plain.content)).toBe(7);
-    expect(storeHalfLifeBase(local(root))).toBe(7);
+    expect(local(root).halfLifeBase()).toBe(7);
   });
 
   it('a dry run and an unchanged default write nothing', () => {
     const root = legacyStore([legacy('the staging deploy needs the VPN to reach the health check')]);
     expect(migrateDefaultHalfLife(local(root), 365, { dryRun: true })).toMatchObject({ rescaled: 1, dryRun: true });
     expect([...byContent(root).values()]).toEqual([7]);
-    expect(storeHalfLifeBase(local(root))).toBe(7);
+    expect(local(root).halfLifeBase()).toBe(7);
     expect(migrateDefaultHalfLife(local(root), 7)).toMatchObject({ rescaled: 0 });
     expect(planHalfLifeMigration(loadAllEntries(root, 'default'), 7, 7)).toEqual([]);
   });

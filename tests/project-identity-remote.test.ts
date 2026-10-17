@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { clearProjectIdentityCache, projectNames, resolveProjectIdentity } from '../src/core/project-identity.js';
+import { _resetProjectIdentityCacheForTests, projectNames, resolveProjectIdentity } from '../src/core/project-identity.js';
 import { normaliseRemote, originUrlFromConfig } from '../src/core/project-remote.js';
 
 let tmpRoot: string;
@@ -35,13 +35,13 @@ beforeEach(() => {
   home = mkdirs('home');
   savedHippoHome = process.env.HIPPO_HOME;
   process.env.HIPPO_HOME = mkdirs('global');
-  clearProjectIdentityCache();
+  _resetProjectIdentityCacheForTests();
 });
 
 afterEach(() => {
   if (savedHippoHome === undefined) delete process.env.HIPPO_HOME;
   else process.env.HIPPO_HOME = savedHippoHome;
-  clearProjectIdentityCache();
+  _resetProjectIdentityCacheForTests();
   fs.rmSync(tmpRoot, { recursive: true, force: true });
 });
 
@@ -107,7 +107,7 @@ describe('resolveProjectIdentity with an origin remote', () => {
     const root = repo('git@github.com:acme/api.git', 'home', 'api');
     fs.writeFileSync(path.join(root, '.hippo-project.json'), JSON.stringify({ id: 'Acme-API' }));
     expect(identity(root)).toMatchObject({ name: 'acme-api', legacyName: 'api' });
-    clearProjectIdentityCache();
+    _resetProjectIdentityCacheForTests();
     fs.writeFileSync(path.join(root, '.hippo-project.json'), JSON.stringify({ id: 'has a space' }));
     expect(identity(root).name).toBe('github.com/acme/api');
   });
@@ -124,7 +124,7 @@ describe('resolveProjectIdentity with an origin remote', () => {
     expect(projectNames(identity(root))).toEqual(['acme-api', 'github.com/acme/api', 'api']);
     fs.rmSync(path.join(root, '.hippo-project.json'));
     fs.writeFileSync(path.join(process.env.HIPPO_HOME!, 'config.json'), JSON.stringify({ projectIdentity: { remote: false } }));
-    clearProjectIdentityCache();
+    _resetProjectIdentityCacheForTests();
     expect(projectNames(identity(root))).toEqual(['api', 'github.com/acme/api']);
   });
 
@@ -172,10 +172,10 @@ describe('resolveProjectIdentity with an origin remote', () => {
   it('drops the remote rule when the global config sets projectIdentity.remote to false', () => {
     const root = repo('git@github.com:acme/api.git', 'home', 'api');
     fs.writeFileSync(path.join(process.env.HIPPO_HOME!, 'config.json'), JSON.stringify({ projectIdentity: { remote: false } }));
-    clearProjectIdentityCache();
+    _resetProjectIdentityCacheForTests();
     expect(identity(root)).toMatchObject({ name: 'api', legacyName: 'api' });
     fs.writeFileSync(path.join(root, '.hippo-project.json'), JSON.stringify({ id: 'acme-api' }));
-    clearProjectIdentityCache();
+    _resetProjectIdentityCacheForTests();
     expect(identity(root).name).toBe('acme-api');
   });
 });

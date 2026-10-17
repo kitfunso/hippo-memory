@@ -9,7 +9,7 @@ import { StoreBusyError } from '../src/store/port.js';
 import { HttpError } from '../src/util/http-util.js';
 import { judgeAll } from '../src/eval/judgment.js';
 import { createLocalEmbedder } from '../src/embeddings/local.js';
-import { resetLogOnce } from '../src/util/log.js';
+import { _resetLogOnceForTests } from '../src/util/log.js';
 import { installOpencodePlugin, resolveOpencodePluginPath } from '../src/hooks/opencode.js';
 import * as fs from 'node:fs';
 import { withFakeHome } from './_helpers/with-fake-home.js';
@@ -75,7 +75,7 @@ describe('judge failures', () => {
 });
 
 describe('failures that used to log at debug', () => {
-  beforeEach(() => resetLogOnce());
+  beforeEach(() => _resetLogOnceForTests());
 
   it('warns once when a judge reply is not readable, then goes quiet', async () => {
     const fetcher: typeof fetch = async () => new Response('<html>busy</html>', { status: 200 });

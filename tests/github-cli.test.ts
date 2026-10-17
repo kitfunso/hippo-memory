@@ -2,9 +2,8 @@
  * Tests for `hippo github` CLI subcommands (Task 15).
  *
  * Strategy: subprocess via execFileSync (mirrors tests/slack-cli.test.ts) for
- * end-to-end argv/exit-code behaviour. Test 3 (backfill happy path) imports
- * the implementation directly from src/cli/github.ts to inject a fake GitHubFetcher
- * without hitting the network. src/cli/github.ts is intentionally kept side-effect
+ * end-to-end argv/exit-code behaviour. The backfill happy paths call
+ * handleGitHub in-process against a stubbed global fetch, so no request reaches GitHub. src/cli/github.ts is intentionally kept side-effect
  * free so it can be imported in-process.
  */
 
@@ -18,11 +17,8 @@ import { initStore } from '../src/store/open.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { parkInDlq, listDlq } from '../src/connectors/dlq.js';
 import { githubDlq } from '../src/connectors/github/dlq.js';
-import { cmdGitHubBackfill, GitHubPayloadParseError, parseParkedPayload } from '../src/cli/github.js';
-import type {
-  GitHubFetcher,
-  GitHubBackfillPage,
-} from '../src/connectors/github/octokit-client.js';
+import { GitHubPayloadParseError, handleGitHub, parseParkedPayload } from '../src/cli/github.js';
+import type { JsonValue } from '../src/util/json.js';
 import { sqliteStore } from '../src/store/sqlite/store.js';
 
 const CLI = resolve(__dirname, '..', 'bin', 'hippo.js');
@@ -64,10 +60,10 @@ function runCli(
   }
 }
 
-const NO_RATE = { sleepSeconds: 0, reason: 'none' as const };
-
-function emptyPage(): GitHubBackfillPage {
-  return { items: [], next: null, rateLimit: NO_RATE };
+/** Every GitHub list call answers one 200 page with no next link: `issues` on the issues stream, empty elsewhere. */
+function stubGitHubIssues(issues: readonly JsonValue[]): void {
+  vi.stubGlobal('fetch', vi.fn(async (url: string | URL) =>
+    new Response(JSON.stringify(String(url).includes('/issues?') ? issues : []), { status: 200 })));
 }
 
 describe('hippo github CLI', () => {
@@ -81,6 +77,7 @@ describe('hippo github CLI', () => {
   });
 
   afterEach(() => {
+    vi.unstubAllGlobals();
     rmSync(root, { recursive: true, force: true });
   });
 
@@ -116,31 +113,17 @@ describe('hippo github CLI', () => {
     expect(stderr).toMatch(/GITHUB_TOKEN/);
   });
 
-  it('backfill --repo with GITHUB_TOKEN + injected fetcher ingests one issue', async () => {
+  it('backfill --repo with GITHUB_TOKEN + stubbed fetch ingests one issue', async () => {
     // Single issue page, then empty pages on the other two streams.
-    const pages: GitHubBackfillPage[] = [
+    stubGitHubIssues([
       {
-        items: [
-          {
-            number: 1,
-            title: 'hello',
-            body: 'world',
-            user: { login: 'alice', id: 1 },
-            updated_at: '2026-01-01T00:00:00Z',
-          },
-        ],
-        next: null,
-        rateLimit: NO_RATE,
+        number: 1,
+        title: 'hello',
+        body: 'world',
+        user: { login: 'alice', id: 1 },
+        updated_at: '2026-01-01T00:00:00Z',
       },
-    ];
-    let issuesPageIdx = 0;
-    const fetcher: GitHubFetcher = async ({ url }) => {
-      if (url.includes('/issues?')) {
-        const p = pages[issuesPageIdx++];
-        return p ?? emptyPage();
-      }
-      return emptyPage();
-    };
+    ]);
     const prevToken = process.env.GITHUB_TOKEN;
     process.env.GITHUB_TOKEN = 'fake-token';
     // Capture stdout so we can parse the JSON result.
@@ -148,18 +131,13 @@ describe('hippo github CLI', () => {
     const origLog = console.log;
     console.log = (...a: unknown[]) => logs.push(a.map(String).join(' '));
     try {
-      await cmdGitHubBackfill(
-        hippoRoot,
-        'default',
-        { repo: 'acme/widgets' },
-        fetcher,
-      );
+      await handleGitHub({ hippoRoot, tenantId: 'default', args: ['backfill'], flags: { repo: 'acme/widgets' } });
     } finally {
       console.log = origLog;
       if (prevToken === undefined) delete process.env.GITHUB_TOKEN;
       else process.env.GITHUB_TOKEN = prevToken;
     }
-    // SAFETY: cmdGitHubBackfill's only console.log call in this path prints
+    // SAFETY: the backfill command's only console.log call in this path prints
     // its own JSON summary object with `ingested`/`pages` counters (verified
     // by the assertions below); logs is captured exclusively around that call.
     const json = JSON.parse(logs.join('\n')) as {
@@ -329,22 +307,17 @@ describe('hippo github CLI', () => {
 
   /** Backfills one page of three issues in-process and returns how many the command reports ingested. */
   async function ingestedOfThreeIssues(repo: string, max: string | boolean): Promise<number> {
-    const page: GitHubBackfillPage = {
-      items: [1, 2, 3].map((number) => ({
-        number,
-        title: `issue ${number}`,
-        body: 'body text',
-        user: { login: 'alice', id: 1 },
-        updated_at: `2026-01-0${number}T00:00:00Z`,
-      })),
-      next: null,
-      rateLimit: NO_RATE,
-    };
-    const fetcher: GitHubFetcher = async ({ url }) => (url.includes('/issues?') ? page : emptyPage());
+    stubGitHubIssues([1, 2, 3].map((number) => ({
+      number,
+      title: `issue ${number}`,
+      body: 'body text',
+      user: { login: 'alice', id: 1 },
+      updated_at: `2026-01-0${number}T00:00:00Z`,
+    })));
     const printed = vi.spyOn(console, 'log').mockImplementation(() => {});
     vi.stubEnv('GITHUB_TOKEN', 'fake-token');
     try {
-      await cmdGitHubBackfill(hippoRoot, 'default', { repo, max }, fetcher);
+      await handleGitHub({ hippoRoot, tenantId: 'default', args: ['backfill'], flags: { repo, max } });
       return JSON.parse(String(printed.mock.calls[0][0])).ingested.issues;
     } finally {
       vi.unstubAllEnvs();

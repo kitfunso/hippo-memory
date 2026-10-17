@@ -39,7 +39,7 @@ export function pathOverlapScore(memoryPathTags: string[], currentPathTags: stri
 }
 
 /** Weight applied to path overlap score when computing the recall boost multiplier. */
-export const PATH_BOOST_WEIGHT = 0.3;
+const PATH_BOOST_WEIGHT = 0.3;
 
 /**
  * Multiplier (1.0..1.3) applied to a composite recall score for path locality; filters the memory's tags to path:*

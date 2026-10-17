@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cmdCapture } from '../src/capture/command.js';
 import { transcriptWorkingState } from '../src/capture/working-state.js';
 import { maskEmails } from '../src/util/secret-detect.js';
-import { writeSessionDigest } from '../src/capture/session-digest.js';
+import { recordSessionDigest } from '../src/capture/session-digest.js';
 import { initStore } from '../src/store/open.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 
@@ -52,7 +52,9 @@ describe('no stored text holds an email address', () => {
   it('in the session digest', () => {
     const edits = [{ filePath: path.join(repo, 'exports', `${EMAIL}.csv`), base: null }];
     const scan = { turns: [{ role: 'user' as const, text: 'the export keeps failing' }], finalText: REPLY, cwd: repo, edits };
-    expect(writeSessionDigest(hippoRoot, scan, { key: 's1', tenantId: 'default' }).written).toBe(true);
+    const log: string[] = [];
+    recordSessionDigest(hippoRoot, scan, { key: 's1', tenantId: 'default', log: (line) => log.push(line) });
+    expect(log.join('\n')).toMatch(/^digest: wrote /);
     expect(loadAllEntries(hippoRoot, 'default').map((e) => e.content)).toEqual(['Updated [email] in customer.ts because the export failed.\nChanged: exports/[email]']);
   });
 

@@ -13,7 +13,7 @@ export { EMBEDDING_MODEL_META_KEY };
 /** Bump when `embeddingInputText` changes existing vectors; folded into the stored index identity
  * (`embeddingIndexIdentity`) so it reindexes like a model change. Format 2 = `path:*` tags excluded; format 1
  * (implicit, no suffix) included them. */
-export const EMBED_TEXT_FORMAT = 2;
+const EMBED_TEXT_FORMAT = 2;
 
 /** Stored-index identity for a provider id: folds `EMBED_TEXT_FORMAT` in so a model or text-format change invalidates
  * the index. The ONE choke point for compare (`embeddingModelRequiresReindex`) and save (`saveStoredEmbeddingModel`);
@@ -51,7 +51,7 @@ export function indexNeedsRebuild(indexed: string | null, providerId: string): b
   return indexed !== null && indexed !== embeddingIndexIdentity(providerId);
 }
 
-export function resolveIndexedEmbeddingModel(
+function resolveIndexedEmbeddingModel(
   hippoRoot: string,
   index?: Record<string, number[]>,
 ): string | null {

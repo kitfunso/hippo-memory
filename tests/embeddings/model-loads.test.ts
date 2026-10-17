@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { createModelLoads, MODEL_LOAD_POLICY } from '../../src/embeddings/transformers.js';
 import { resolveEmbeddingProvider, type EmbeddingProvider } from '../../src/embeddings/provider.js';
 import { embedQueryBy } from '../../src/search/vector.js';
-import { resetLogOnce } from '../../src/util/log.js';
+import { _resetLogOnceForTests } from '../../src/util/log.js';
 import { loadConfig } from '../../src/core/config.js';
 
 type Pipe = (input: string) => Promise<{ data: number[] }>;
@@ -46,7 +46,7 @@ const logged = (): string[] => stderr.mock.calls.map((c) => String(c[0]));
 beforeEach(() => {
   stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
   vi.stubEnv('HIPPO_MODEL_CACHE', '');
-  resetLogOnce();
+  _resetLogOnceForTests();
 });
 
 afterEach(() => {

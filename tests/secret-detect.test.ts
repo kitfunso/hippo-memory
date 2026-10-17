@@ -9,7 +9,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { detectSecret, redactSecrets, redactSecretsStrict } from '../src/util/secret-detect.js';
+import { detectSecret, redactSecretsStrict } from '../src/util/secret-detect.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
@@ -19,7 +19,7 @@ import { syncGlobalToLocal } from '../src/sharing/global-sync.js';
 import { getGlobalRoot } from '../src/sharing/global-store.js';
 import { copyToGlobal } from '../src/store/sqlite/global-promote.js';
 import { getContext } from '../src/api/index.js';
-import { clearProjectIdentityCache } from '../src/core/project-identity.js';
+import { _resetProjectIdentityCacheForTests } from '../src/core/project-identity.js';
 import { ASSIGNED_SECRET_LINES, ORDINARY_CONFIG_LINES } from './_helpers/secret-shapes.js';
 import { fastestRatio, type TimedRun } from './_helpers/fastest-ratio.js';
 import { apiCtx } from './_helpers/api-ctx.js';
@@ -120,7 +120,7 @@ describe('detectSecret patterns', () => {
   });
 });
 
-describe('redactSecrets / redactSecretsStrict', () => {
+describe('redactSecretsStrict', () => {
   // Built at runtime, so no secret-shaped literal sits in source.
   const AWS = 'AKIA' + '1234567890ABCDEF';
   const GHP = 'ghp_' + 'A'.repeat(36);
@@ -149,18 +149,8 @@ describe('redactSecrets / redactSecretsStrict', () => {
     expect(redactSecretsStrict(`{"authorization": "Basic ${BASIC_CREDENTIAL}"}`)).not.toContain(BASIC_CREDENTIAL);
   });
 
-  it('plain redactSecrets removes the provider tokens too', () => {
-    for (const token of PROVIDER_TOKENS) expect(redactSecrets(`before ${token} after`), token).not.toContain(token);
-  });
-
-  it('plain redactSecrets leaves the co-occurrence-guarded sk shapes alone with no keyword nearby', () => {
-    expect(redactSecrets(`before ${SK_NO_KEYWORD} after`)).toContain(SK_NO_KEYWORD);
-    expect(redactSecrets(`before ${SK_X_NO_KEYWORD} after`)).toContain(SK_X_NO_KEYWORD);
-  });
-
-  it('ordinary prose survives both', () => {
+  it('ordinary prose survives', () => {
     const prose = 'the quarterly review covers risk-free rate assumptions and nothing else';
-    expect(redactSecrets(prose)).toBe(prose);
     expect(redactSecretsStrict(prose)).toBe(prose);
   });
 
@@ -200,7 +190,7 @@ describe('producer + sync vetoes (real stores)', () => {
     initStore(globalStore);
     origHippoHome = process.env.HIPPO_HOME;
     process.env.HIPPO_HOME = globalStore;
-    clearProjectIdentityCache();
+    _resetProjectIdentityCacheForTests();
   });
 
   afterEach(() => {

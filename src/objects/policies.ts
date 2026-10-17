@@ -147,14 +147,6 @@ export function loadPolicies(
   return listObjects(objects, POLICY, tenantId, opts);
 }
 
-export function loadActivePolicies(
-  objects: Objects,
-  tenantId: string,
-  opts: { limit?: number } = {},
-): Promise<Policy[]> {
-  return loadPolicies(objects, tenantId, { status: 'active', limit: opts.limit });
-}
-
 /** The policies in force at `asOfDate` (valid-time, half-open [valid_from, valid_to)); superseded rows still answer
  *  while the successor is not yet effective. `closed` rows are excluded; a date-only asOfDate means the END of that
  *  UTC day (23:59:59.999Z), so a policy created today shows up in "as of today". */

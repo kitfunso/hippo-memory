@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { extractFromText } from '../src/capture/extract.js';
+import { extractFromTexts } from '../src/capture/extract.js';
 
-const contents = (text: string) => extractFromText(text).map((item) => item.content);
+const contents = (text: string) => extractFromTexts([text]).map((item) => item.content);
 const TAG_RULE = 'Always tag releases from main because CI publishes tags.';
 
 describe('capture reads markdown the way it renders', () => {
@@ -61,7 +61,7 @@ describe('capture reads markdown the way it renders', () => {
       'finance, who still read it monthly',
       '- Should we drop the old table?',
     ].join('\n');
-    expect(extractFromText(text).filter((item) => item.category === 'spec').map((item) => item.content)).toEqual([
+    expect(extractFromTexts([text]).filter((item) => item.category === 'spec').map((item) => item.content)).toEqual([
       'Move the cache to Redis so restarts keep warm entries for the API',
       'Keep the CSV export for finance, who still read it monthly',
     ]);
@@ -69,7 +69,7 @@ describe('capture reads markdown the way it renders', () => {
 
   it('reads a 4-space line under prose as its continuation and one after a blank line as code', () => {
     const spec = ['## Plan', '- Move the cache to Redis so restarts keep', '    warm entries for the API'].join('\n');
-    expect(extractFromText(spec).map((item) => item.content)).toEqual(['Move the cache to Redis so restarts keep warm entries for the API']);
+    expect(extractFromTexts([spec]).map((item) => item.content)).toEqual(['Move the cache to Redis so restarts keep warm entries for the API']);
     expect(contents('The API must retry after HTTP 429\n    because the provider enforces a quota.'))
       .toEqual(['The API must retry after HTTP 429 because the provider enforces a quota']);
     expect(contents(`${TAG_RULE}\n\n    Never push from the VM because it has no tests.`)).toEqual([TAG_RULE.slice(0, -1)]);

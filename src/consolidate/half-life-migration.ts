@@ -64,11 +64,6 @@ export function planTypedHalfLifeMigration(entries: readonly MemoryEntry[], to: 
   });
 }
 
-/** The base this store's memories are on. */
-export function storeHalfLifeBase(store: Consolidation): number {
-  return store.halfLifeBase();
-}
-
 /**
  * Move the store's memories, and those of objects on the old flat 90 days, from their recorded base to `to`, once;
  * `dryRun` writes nothing.

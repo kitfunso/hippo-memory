@@ -9,7 +9,7 @@ import { SqliteBlockedError, withSqliteBlocked } from '../src/db/index.js';
 import { recordTokens } from '../src/api/index.js';
 import { recordMcpTokens } from '../src/mcp/request.js';
 import { strengthenRetrieved } from '../src/store/entry-writes.js';
-import { resolveIndexedEmbeddingModel } from '../src/store/embeddings/index.js';
+import { embeddingModelRequiresReindex } from '../src/store/embeddings/index.js';
 import { resolveVectorArm } from '../src/search/vector.js';
 import { sqliteStore } from '../src/store/index.js';
 import { physicsSearch } from '../src/search/physics-search.js';
@@ -35,7 +35,7 @@ const ROWS: readonly Row[] = [
   }, 'returned'],
   ['store/entry-writes.ts strengthenRetrieved', /strengthenRetrieved/,
     async (root) => `found ${strengthenRetrieved(root, [entry.id], { recallBoostAblated: false }).size}`, 'found 0'],
-  ['embeddings.ts loadStoredEmbeddingModel', /loadStoredEmbeddingModel/, async (root) => String(resolveIndexedEmbeddingModel(root, {})), 'null'],
+  ['embeddings.ts loadStoredEmbeddingModel', /loadStoredEmbeddingModel/, async (root) => String(embeddingModelRequiresReindex(root, 'm', {})), 'false'],
   ['search/vector.ts resolveVectorArm', /fillVectorArm/,
     async (root) => `embeddings ${(await resolveVectorArm('deploy', [], folderVectorSource({ hippoRoot: root }), {})).useEmbeddings}`, 'embeddings false'],
   ['search/physics-search.ts physicsQueryVector', /physicsQueryVector/,

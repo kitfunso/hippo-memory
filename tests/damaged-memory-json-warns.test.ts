@@ -9,7 +9,7 @@ import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries, readEntry } from '../src/store/entry-reads.js';
 import { appendSessionEvent, listSessionEvents } from '../src/store/sessions.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
-import { resetLogOnce } from '../src/util/log.js';
+import { _resetLogOnceForTests } from '../src/util/log.js';
 
 const TENANT = 'default';
 const PRIVATE_TEXT = 'private-tag-text';
@@ -35,7 +35,7 @@ function runSql(root: string, sql: string, ...params: Array<string | number>): v
 const damageLines = (): string[] => stderr.mock.calls.map((c) => String(c[0])).filter((line) => line.includes('read as empty'));
 
 beforeEach(() => {
-  resetLogOnce();
+  _resetLogOnceForTests();
   vi.stubEnv('HIPPO_LOG', 'warn');
   stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
 });

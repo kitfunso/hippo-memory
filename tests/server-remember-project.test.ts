@@ -9,7 +9,7 @@ import { loadAllEntries, readEntry } from '../src/store/entry-reads.js';
 import { adminActor } from '../src/api/index.js';
 import { _resetSharedStoreCacheForTests } from '../src/core/config.js';
 import type { JsonValue } from '../src/util/json.js';
-import { clearProjectIdentityCache } from '../src/core/project-identity.js';
+import { _resetProjectIdentityCacheForTests } from '../src/core/project-identity.js';
 import { promptHookContext } from '../src/api/prompt-hook.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { apiCtx } from './_helpers/api-ctx.js';
@@ -58,7 +58,7 @@ async function hookText(project: string): Promise<string> {
 beforeEach(() => {
   tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-remember-project-'));
   process.env.HIPPO_HOME = path.join(tmp, 'global');
-  clearProjectIdentityCache();
+  _resetProjectIdentityCacheForTests();
   _resetSharedStoreCacheForTests();
 });
 

@@ -29,7 +29,7 @@ export const MAX_SENTENCE_CHARS = 300;
 /** At about 20 chars per repo path this keeps the Changed line near 50 tokens. */
 export const MAX_FILES = 10;
 /** 300 tokens at 4 chars each: 20% of the 1500-token default budget of both context surfaces. */
-export const MAX_DIGEST_CHARS = 1200;
+const MAX_DIGEST_CHARS = 1200;
 /** Bounds a detached worker's memory; the final message sits at the end, so a tail read loses nothing. */
 export const READ_CAP_BYTES = 64 * 1024 * 1024;
 
@@ -335,7 +335,7 @@ function isNetworkPath(p: string): boolean {
  * The store root is realpath'd; transcript paths are not, and a deleted file has no realpath of its own. Null for a
  * network path.
  */
-export function realFsPath(p: string): string | null {
+function realFsPath(p: string): string | null {
   if (isNetworkPath(p)) return null;
   const abs = nativePath(p);
   if (isNetworkPath(abs)) return null;
@@ -354,7 +354,7 @@ export function realFsPath(p: string): string | null {
  * Repo-relative with forward slashes, '' for the root itself, null outside the repo or when the path cannot be
  * resolved.
  */
-export function repoRelative(p: string, repoRoot: string): string | null {
+function repoRelative(p: string, repoRoot: string): string | null {
   let rel: string;
   try {
     const real = realFsPath(p);
@@ -529,7 +529,7 @@ export interface DigestDraft {
 }
 
 /** The digest text, or null when nothing survives the filters. Sentences print in reply order. */
-export function buildSessionDigest(sources: DigestSources): DigestDraft | null {
+function buildSessionDigest(sources: DigestSources): DigestDraft | null {
   const ranked = rankedSentences(sources.finalText, echoWindows(sources.echoTexts), sources.repoRoot);
   const files = changedFiles(sources.edits, sources.repoRoot);
   const changed = changedLine(files);
@@ -586,7 +586,7 @@ function skipped(reason: string): DigestOutcome {
   return { written: false, reason, sentences: 0, files: 0 };
 }
 
-export function writeSessionDigest(hippoRoot: string, scan: SessionScan, opts: SessionDigestOptions): DigestOutcome {
+function writeSessionDigest(hippoRoot: string, scan: SessionScan, opts: SessionDigestOptions): DigestOutcome {
   const prompts = scan.turns.filter((t) => t.role === 'user').map((t) => t.text);
   if (prompts.length === 0) return skipped('no human prompt');
   if (!scan.finalText.trim() && scan.edits.length === 0) return skipped('no final message and no edits');

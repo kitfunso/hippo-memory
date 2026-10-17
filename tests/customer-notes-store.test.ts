@@ -5,7 +5,7 @@
  * Covers what only notes have; the shared lifecycle rules run per kind in typed-object-store.test.ts.
  * 1. saveCustomerNote creates memory + customer_notes row (+ create audit), v1
  * 2. memory mirror carries customer:<lc> tag (lowercased; colon-in-customer safe)
- * 3. status + customer filters; MANY notes per customer; loadActiveNotesForCustomer
+ * 3. status + customer filters; MANY notes per customer
  * 4. validation: missing customer/note; single-line customer; caps
  */
 
@@ -16,8 +16,6 @@ import {
   saveCustomerNote,
   closeCustomerNote,
   loadCustomerNotes,
-  loadActiveNotesForCustomer,
-  MAX_NOTE_LEN,
 } from '../src/objects/customer-notes.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { objectsAt } from './_helpers/objects-at.js';
@@ -83,13 +81,13 @@ describe('customer_notes store (entity-scoped first-class object)', () => {
     expect(tags2).toContain('vip');
   });
 
-  it('status + customer filters; MANY active notes per customer; loadActiveNotesForCustomer', async () => {
+  it('status + customer filters; MANY active notes per customer', async () => {
     // a single customer accrues MANY notes (the key difference from project_brief)
     const a1 = await saveCustomerNote(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { customer: 'Acme', note: 'note 1' });
     const a2 = await saveCustomerNote(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { customer: 'Acme', note: 'note 2' });
     const b1 = await saveCustomerNote(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { customer: 'Beta', note: 'b note' });
     await closeCustomerNote(objectsAt(home), 'default', b1.id);
-    const acmeActive = await loadActiveNotesForCustomer(objectsAt(home), 'default', 'Acme');
+    const acmeActive = await loadCustomerNotes(objectsAt(home), 'default', { customer: 'Acme', status: 'active' });
     expect(acmeActive.map((x) => x.id).sort()).toEqual([a1.id, a2.id].sort());
     expect(acmeActive.length).toBe(2); // MANY-per-customer
     expect((await loadCustomerNotes(objectsAt(home), 'default', { customer: 'Beta' })).length).toBe(1);
@@ -102,7 +100,7 @@ describe('customer_notes store (entity-scoped first-class object)', () => {
     await expect(saveCustomerNote(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { customer: '   ', note: 'x' })).rejects.toThrow(/customer is required/);
     await expect(saveCustomerNote(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { customer: 'c', note: '  ' })).rejects.toThrow(/note is required/);
     await expect(saveCustomerNote(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { customer: 'bad\ncustomer', note: 'x' })).rejects.toThrow(/single line/);
-    await expect(saveCustomerNote(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { customer: 'big', note: 'y'.repeat(MAX_NOTE_LEN + 1) })).rejects.toThrow(/note exceeds/);
+    await expect(saveCustomerNote(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { customer: 'big', note: 'y'.repeat(8192 + 1) })).rejects.toThrow(/note exceeds/);
     await expect(saveCustomerNote(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { customer: 'c', note: 'ok', changeSummary: 'z'.repeat(4097), supersedesNoteId: 1 })).rejects.toThrow(/changeSummary exceeds/);
   });
 });

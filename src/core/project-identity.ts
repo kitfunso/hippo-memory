@@ -46,7 +46,7 @@ const identityCache = new Map<string, ProjectIdentity>();
 let remoteSwitch: { readonly globalRoot: string; readonly on: boolean } | null = null;
 
 /** Clear the per-process identity cache and the remote switch it read (test seam). */
-export function clearProjectIdentityCache(): void {
+export function _resetProjectIdentityCacheForTests(): void {
   identityCache.clear();
   remoteSwitch = null;
 }

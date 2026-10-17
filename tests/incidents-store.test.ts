@@ -12,7 +12,7 @@
  * 7. closeIncident also works from resolved (resolved -> closed)
  * 8. close guard: not-found vs already-closed
  * 9. ON DELETE SET NULL: forget the memory, incident survives
- * 10. loadIncidents status filter; loadOpenIncidents excludes non-open
+ * 10. loadIncidents status filter; status 'open' excludes non-open
  * 11. linked_memory_ids round-trip + cross-tenant/nonexistent rejection (mandatory)
  */
 
@@ -29,8 +29,6 @@ import {
   closeIncident,
   loadIncidentById,
   loadIncidents,
-  loadOpenIncidents,
-  resolveActiveIncidentIdByMemory,
 } from '../src/objects/incidents.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { objectsAt } from './_helpers/objects-at.js';
@@ -230,18 +228,18 @@ describe('incidents store (first-class object)', () => {
     expect(reloaded!.memoryId).toBeNull();
     expect(reloaded!.status).toBe('open');
     expect(reloaded!.incidentText).toBe('survives memory decay');
-    const open = await loadOpenIncidents(objectsAt(home), 'default');
+    const open = await loadIncidents(objectsAt(home), 'default', { status: 'open' });
     expect(open.some((x) => x.id === inc.id)).toBe(true);
   });
 
-  it('loadIncidents status filter; loadOpenIncidents excludes non-open', async () => {
+  it('loadIncidents status filter; status open excludes non-open', async () => {
     const a = await openIncident(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { incidentText: 'open-1' }, 'cli');
     const b = await openIncident(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { incidentText: 'to-resolve' }, 'cli');
     const c = await openIncident(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { incidentText: 'to-close' }, 'cli');
     await resolveOpenIncident(objectsAt(home), 'default', b.id, 'fixed', 'cli');
     await closeIncident(objectsAt(home), 'default', c.id);
 
-    const open = await loadOpenIncidents(objectsAt(home), 'default');
+    const open = await loadIncidents(objectsAt(home), 'default', { status: 'open' });
     expect(open.every((x) => x.status === 'open')).toBe(true);
     expect(open.some((x) => x.id === a.id)).toBe(true);
     expect(open.some((x) => x.id === b.id)).toBe(false);
@@ -293,11 +291,11 @@ describe('incidents store (first-class object)', () => {
     }).rejects.toThrow(/linked memory .* not found/);
   });
 
-  it('resolveActiveIncidentIdByMemory: row id for open, null for resolved/closed', async () => {
+  it('objectIdByMemory: row id for an open incident, null for resolved/closed', async () => {
     const inc = await openIncident(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { incidentText: 'open one' }, 'cli');
-    expect(await resolveActiveIncidentIdByMemory(objectsAt(home), 'default', inc.memoryId!)).toBe(inc.id);
+    expect(await objectsAt(home).objectIdByMemory('default', 'incident', 'open', inc.memoryId!)).toBe(inc.id);
 
     await resolveOpenIncident(objectsAt(home), 'default', inc.id, 'fixed', 'cli');
-    expect(await resolveActiveIncidentIdByMemory(objectsAt(home), 'default', inc.memoryId!)).toBeNull();
+    expect(await objectsAt(home).objectIdByMemory('default', 'incident', 'open', inc.memoryId!)).toBeNull();
   });
 });

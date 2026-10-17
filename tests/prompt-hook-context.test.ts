@@ -357,7 +357,7 @@ describe('subpath exports resolve', () => {
     ['hippo-memory/project-identity', 'MAX_PROJECT_ALIASES', 'number'],
     ['hippo-memory/project-identity', 'MCP_PROJECT_SCOPED_HEADER', 'string'],
     ['hippo-memory/project-identity', 'originInSql', 'undefined'],
-    ['hippo-memory/project-identity', 'clearProjectIdentityCache', 'undefined'],
+    ['hippo-memory/project-identity', '_resetProjectIdentityCacheForTests', 'undefined'],
     ['hippo-memory/json-hooks', 'installJsonHooks', 'function'],
     ['hippo-memory/json-hooks', 'uninstallJsonHooks', 'function'],
     ['hippo-memory/json-hooks', 'resolveJsonHookPaths', 'function'],

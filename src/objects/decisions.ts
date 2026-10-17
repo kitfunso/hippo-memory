@@ -109,14 +109,6 @@ export function loadDecisions(
   return listObjects(objects, DECISION, tenantId, opts);
 }
 
-export function loadActiveDecisions(
-  objects: Objects,
-  tenantId: string,
-  opts: { limit?: number } = {},
-): Promise<Decision[]> {
-  return loadDecisions(objects, tenantId, { status: 'active', limit: opts.limit });
-}
-
 /** Resolve a `--supersedes <memory-id>` to the table id of the ACTIVE decision backed by that memory, or null.
  *  Exported so the CLI's backward-compat path is testable at the store layer. */
 export async function resolveActiveDecisionIdByMemory(

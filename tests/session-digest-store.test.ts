@@ -16,8 +16,8 @@ import { loadAllEntries } from '../src/store/entry-reads.js';
 import { listMemoryConflicts } from '../src/store/conflicts.js';
 import { saveSessionHandoff } from '../src/store/handoffs.js';
 import {
+  recordSessionDigest,
   sessionDigestId,
-  writeSessionDigest,
   type SessionScan,
 } from '../src/capture/session-digest.js';
 import { SESSION_DIGEST_TAG, isSessionDigestRow } from '../src/core/session-digest-row.js';
@@ -56,12 +56,19 @@ function scan(finalText: string, over: Partial<SessionScan> = {}): SessionScan {
   };
 }
 
-const write = (key: string, s: SessionScan) => writeSessionDigest(hippoRoot, s, { key, tenantId: 'default' });
+/** The line recordSessionDigest logs for one run: what it wrote, or why it skipped. */
+function write(key: string, s: SessionScan): string {
+  const log: string[] = [];
+  recordSessionDigest(hippoRoot, s, { key, tenantId: 'default', log: (line) => log.push(line) });
+  return log.join('\n');
+}
+const WROTE = /^digest: wrote /;
+const LEFT_NOTHING = 'digest: skip: nothing left after the filters';
 const digests = (): MemoryEntry[] => loadAllEntries(hippoRoot, 'default').filter(isSessionDigestRow);
 
 describe('writing the digest row', () => {
   it('writes one observed Episodic row tagged session-digest, keyed on the session', () => {
-    expect(write('s1', scan(REPLY))).toMatchObject({ written: true, sentences: 1, files: 1 });
+    expect(write('s1', scan(REPLY))).toBe('digest: wrote 1 sentence(s), 1 file(s) for s1');
     const [row] = digests();
     expect(row).toMatchObject({
       id: sessionDigestId('default', 's1'),
@@ -88,21 +95,21 @@ describe('writing the digest row', () => {
     ['the session ran outside this repo', () => scan(REPLY, { cwd: tmp })],
     ['nothing left after the filters', () => scan('This fixes it.', { edits: [] })],
   ])('skips with %s', (reason, make) => {
-    expect(write('s1', make())).toMatchObject({ written: false, reason });
+    expect(write('s1', make())).toBe(`digest: skip: ${reason}`);
     expect(digests()).toEqual([]);
   });
 
   it('skips a digest whose text was rejected', async () => {
     write('s1', scan(REPLY));
     await reject(apiCtx(hippoRoot, 'default', adminActor('test')), { memoryId: sessionDigestId('default', 's1'), reason: 'not useful' });
-    expect(write('s1', scan(REPLY))).toMatchObject({ written: false, reason: 'it matches a rejected value' });
+    expect(write('s1', scan(REPLY))).toBe('digest: skip: it matches a rejected value');
     expect(digests()).toEqual([]);
   });
 
   it('a reject blocks that text only, so a re-run with a new reply writes the row again', async () => {
     write('s1', scan(REPLY));
     await reject(apiCtx(hippoRoot, 'default', adminActor('test')), { memoryId: sessionDigestId('default', 's1'), reason: 'not useful' });
-    expect(write('s1', scan('Pinned `retry()` to three attempts because the queue backs up.')).written).toBe(true);
+    expect(write('s1', scan('Pinned `retry()` to three attempts because the queue backs up.'))).toMatch(WROTE);
     expect(digests()).toHaveLength(1);
   });
 });
@@ -110,8 +117,8 @@ describe('writing the digest row', () => {
 describe('text hippo injected is not stored again', () => {
   it('drops a sentence restating another session digest, but not its own earlier one', () => {
     write('s1', scan(REPLY, { edits: [] }));
-    expect(write('s2', scan(`As before, ${REPLY}`, { edits: [] })).reason).toBe('nothing left after the filters');
-    expect(write('s1', scan(REPLY, { edits: [] })).written).toBe(true);
+    expect(write('s2', scan(`As before, ${REPLY}`, { edits: [] }))).toBe(LEFT_NOTHING);
+    expect(write('s1', scan(REPLY, { edits: [] }))).toMatch(WROTE);
   });
 
   it('drops a restated digest older than the five newest, since prompt recall can inject it', () => {
@@ -131,7 +138,7 @@ describe('text hippo injected is not stored again', () => {
         write(`n${i}`, scan(text, { edits: [] }));
       });
       expect(digests()).toHaveLength(6);
-      expect(write('s2', scan(`As before, ${REPLY}`, { edits: [] })).reason).toBe('nothing left after the filters');
+      expect(write('s2', scan(`As before, ${REPLY}`, { edits: [] }))).toBe(LEFT_NOTHING);
     } finally {
       vi.useRealTimers();
     }
@@ -141,7 +148,7 @@ describe('text hippo injected is not stored again', () => {
     write('s1', scan(REPLY, { edits: [] }));
     const [old] = digests();
     writeEntry(hippoRoot, { ...old, superseded_by: 'mem_successor' });
-    expect(write('s2', scan(`As before, ${REPLY}`, { edits: [] })).written).toBe(true);
+    expect(write('s2', scan(`As before, ${REPLY}`, { edits: [] }))).toMatch(WROTE);
   });
 
   it('drops a sentence restating the ambient handoff of another session, but not its own', () => {
@@ -149,8 +156,8 @@ describe('text hippo injected is not stored again', () => {
       version: 1, sessionId: 'other', summary: 'Moved the lock into the pool so two writers stop racing on the index.',
     });
     const restated = 'Moved the lock into the pool so two writers stop racing, in `pool.ts`.';
-    expect(write('s2', scan(restated, { edits: [] })).reason).toBe('nothing left after the filters');
-    expect(write('other', scan(restated, { edits: [] })).written).toBe(true);
+    expect(write('s2', scan(restated, { edits: [] }))).toBe(LEFT_NOTHING);
+    expect(write('other', scan(restated, { edits: [] }))).toMatch(WROTE);
   });
 });
 

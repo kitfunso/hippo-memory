@@ -21,7 +21,7 @@ function isLogLevel(value: string): value is LogLevel {
 }
 
 /** The active threshold, read on every call so a test or a long-lived server can change it without a restart. */
-export function logThreshold(): LogLevel {
+function logThreshold(): LogLevel {
   const raw = envLogLevel();
   return isLogLevel(raw) ? raw : 'warn';
 }
@@ -163,7 +163,7 @@ export function errorCode(cause: unknown): string {
 }
 
 /** Test hook: forget which once-keys have fired. */
-export function resetLogOnce(): void {
+export function _resetLogOnceForTests(): void {
   onceKeys.clear();
   repeatCounts.clear();
   onceCapReported = false;

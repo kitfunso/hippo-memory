@@ -6,7 +6,7 @@
  * 1. saveDecision creates both the memory mirror and the decisions row
  * 2. a supersede that loses its race after the preflight is a ConflictError (409)
  * 3. saveDecision without context: bare memory content, has_context false
- * 4. loadDecisions status filter; loadActiveDecisions excludes non-active
+ * 4. loadDecisions status filter; status 'active' excludes non-active
  * 5. resolveActiveDecisionIdByMemory (row id first-class, null legacy/superseded)
  */
 
@@ -19,7 +19,6 @@ import {
   saveDecision,
   closeDecision,
   loadDecisions,
-  loadActiveDecisions,
   resolveActiveDecisionIdByMemory,
 } from '../src/objects/decisions.js';
 import { ConflictError } from '../src/core/api-errors.js';
@@ -142,14 +141,14 @@ describe('decisions store (first-class object)', () => {
     }
   });
 
-  it('loadDecisions status filter; loadActiveDecisions excludes non-active', async () => {
+  it('loadDecisions status filter; status active excludes non-active', async () => {
     const a = await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { decisionText: 'active-1' });
     const b = await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { decisionText: 'to-close' });
     const c = await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { decisionText: 'to-supersede' });
     await closeDecision(objectsAt(home), 'default', b.id);
     await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { decisionText: 'successor', supersedesDecisionId: c.id });
 
-    const active = await loadActiveDecisions(objectsAt(home), 'default');
+    const active = await loadDecisions(objectsAt(home), 'default', { status: 'active' });
     expect(active.every((x) => x.status === 'active')).toBe(true);
     expect(active.some((x) => x.id === a.id)).toBe(true);
     expect(active.some((x) => x.id === b.id)).toBe(false);

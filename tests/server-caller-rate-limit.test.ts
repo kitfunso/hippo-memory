@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { existsSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
-import { apiKeyVerifyStats, createApiKey, revokeApiKey, type CreateApiKeyOpts } from '../src/store/auth.js';
+import { _readApiKeyVerifyStatsForTests, createApiKey, revokeApiKey, type CreateApiKeyOpts } from '../src/store/auth.js';
 import { serve, type AddonRoute, type ServeOpts } from '../src/server.js';
 import { sqliteStore, StoreBusyError, type HippoStore } from '../src/entry/store-kit.js';
 import { IncomingMessage } from 'node:http';
@@ -248,7 +248,7 @@ describe('the MCP stream heartbeat', () => {
 });
 
 const wrongSecretOf = (key: string): string => `${key.slice(0, key.indexOf('.'))}.${'a'.repeat(32)}`;
-const scryptRunsSince = (before: number): number => apiKeyVerifyStats().scryptRuns - before;
+const scryptRunsSince = (before: number): number => _readApiKeyVerifyStatsForTests().scryptRuns - before;
 const mintMany = (n: number): string[] => Array.from({ length: n }, () => mint());
 
 /** Wrong secrets for `keys` in turn, so the address bucket under test empties before any one key id's own five tries from that address. */
@@ -266,15 +266,15 @@ describe('the per-address scrypt bucket', () => {
     await start({ perAddress: WIDE, failedAuthPerAddress: { ratePerSec: 0.05, burst: 5 } });
     // The good key's first check runs scrypt, so it spends one of the five tokens.
     expect(await recall(bearer(good))).toEqual(OK);
-    const before = apiKeyVerifyStats().scryptRuns;
+    const before = _readApiKeyVerifyStatsForTests().scryptRuns;
     const flood = await replies(wrongSecretsAcross(targets), 40);
     expect(scryptRunsSince(before)).toBe(4);
     expect(flood.slice(0, 4)).toEqual(Array(4).fill(UNAUTHORISED));
     expect(flood.slice(4).filter((r) => r.status !== 429 || r.retryAfter !== '20')).toEqual([]);
     expect(await recall(bearer(good))).toEqual(OK);
-    const runs = apiKeyVerifyStats().scryptRuns;
+    const runs = _readApiKeyVerifyStatsForTests().scryptRuns;
     expect(await recall(bearer(uncached))).toEqual({ status: 429, retryAfter: '20' });
-    expect(apiKeyVerifyStats().scryptRuns).toBe(runs);
+    expect(_readApiKeyVerifyStatsForTests().scryptRuns).toBe(runs);
   });
 
   it('by default allows 40 scrypt runs from an address, then answers 429 with Retry-After: 1', async () => {
@@ -282,7 +282,7 @@ describe('the per-address scrypt bucket', () => {
     freezeClock();
     const targets = mintMany(9);
     await start();
-    const before = apiKeyVerifyStats().scryptRuns;
+    const before = _readApiKeyVerifyStatsForTests().scryptRuns;
     const flood = await replies(wrongSecretsAcross(targets), 41);
     expect(flood.slice(0, 40)).toEqual(Array(40).fill(UNAUTHORISED));
     expect(flood[40]).toEqual({ status: 429, retryAfter: '1' });
@@ -307,7 +307,7 @@ describe('the per-address scrypt bucket', () => {
     await start({ perAddress: 'off', failedAuthPerAddress: { ratePerSec: 0.005, burst: 40 } }, { authResolver: () => null });
     const office = (token: string): Promise<Reply> => recall(bearer(token, { 'x-forwarded-for': '203.0.113.50' }));
     expect(await office(dev)).toEqual(OK);
-    const before = apiKeyVerifyStats().scryptRuns;
+    const before = _readApiKeyVerifyStatsForTests().scryptRuns;
     // Junk shape, a resolver refusal, an unknown id, a revoked key and an expired key: 63 in all, past the burst.
     const junk = ['hk_junk', 'not-a-key-$HIPPO_KEY', `hk_${'a'.repeat(24)}.${'b'.repeat(32)}`, revoked, expired];
     for (let i = 0; i < 63; i++) expect(await office(junk[i % junk.length]!)).toEqual(UNAUTHORISED);

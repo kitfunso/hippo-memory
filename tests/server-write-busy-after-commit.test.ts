@@ -8,7 +8,7 @@ import { initStore } from '../src/store/open.js';
 import { loadStats, updateStatsUnlessBusy } from '../src/store/index-and-stats.js';
 import { openHippoDb, closeHippoDb, getHippoDbPath, isSqliteBusy, runWithRequestStores, type DatabaseSyncLike } from '../src/db/index.js';
 import { copyToGlobal } from '../src/store/sqlite/global-promote.js';
-import { resetLogOnce } from '../src/util/log.js';
+import { _resetLogOnceForTests } from '../src/util/log.js';
 import { serve } from '../src/server.js';
 import * as client from '../src/cli/client.js';
 import { mcpErrorResponse } from '../src/mcp/server.js';
@@ -124,7 +124,7 @@ describe('routed writes under a busy store', () => {
   }, 15_000);
 
   it('the stats counter after a committed removal skips a busy store with one warning instead of throwing', async () => {
-    resetLogOnce();
+    _resetLogOnceForTests();
     const before = forgottenTotal(home);
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     try {
@@ -139,7 +139,7 @@ describe('routed writes under a busy store', () => {
   });
 
   it('a stats increment a busy store refused is added to the next update for that root', async () => {
-    resetLogOnce();
+    _resetLogOnceForTests();
     // An earlier test left its refused increment pending; land it so this one counts only its own.
     updateStatsUnlessBusy(home, {}, 'drain');
     const before = forgottenTotal(home);
