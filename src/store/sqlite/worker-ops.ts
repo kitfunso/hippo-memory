@@ -64,6 +64,10 @@ export const WORKER_OPS = {
     ambientCandidates: 'server',
     contextCandidates: 'read',
     ambientTallies: 'read',
+    newestEntries: 'read',
+    schemaFit: 'read',
+    liveContentsBySourceAndTag: 'read',
+    rawRowsUnderRef: 'read',
   },
   predictions: {
     savePrediction: 'write',

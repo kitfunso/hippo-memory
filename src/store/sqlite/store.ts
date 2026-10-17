@@ -7,8 +7,10 @@ import { getHippoDbPath, withWriteScope } from '../../db/index.js';
 import { activeGoalsWithPolicies } from '../goals.js';
 import { planningFallacyEvidenceAt } from '../planning-fallacy-evidence.js';
 import { recordTokenUse } from '../token-ledger.js';
-import { loadAmbientCandidates, loadContextCandidates } from '../candidates.js';
-import { loadEntriesByIds, loadFreshRawMemories } from '../entry-reads.js';
+import { loadAmbientCandidates, loadContextCandidates, newestEntriesAt, schemaFitAt } from '../candidates.js';
+import {
+  liveContentsBySourceAndTagAt, loadEntriesByIds, loadFreshRawMemories, rawRowsUnderRefAt,
+} from '../entry-reads.js';
 import { sqliteAgentImport } from './agent-import.js';
 import { sqliteCards } from './cards-group.js';
 import { sqliteConflicts } from './conflicts-group.js';
@@ -44,7 +46,7 @@ import { updateStats } from '../index-and-stats.js';
 import { flushStatsMirrors } from '../mirrors.js';
 import { auditHighIdAt, revokeKeyAt } from '../key-audit.js';
 import { changeScopeGrantAt, createKeyAt, createSelfKeyAt } from '../key-writes.js';
-import { onHandle } from '../open.js';
+import { onHandle, openStore } from '../open.js';
 import {
   type AuditLog, type AuditMaintenance, type ConnectorEvents, type ConnectorWrites, type ContextReads,
   type ContinuityBlock, type DagReads, type EntryWrites, type GraphReads, type HippoStore, type KeyAudit,
@@ -319,6 +321,13 @@ function sqliteContextReads(hippoRoot: string): Sync<ContextReads> {
     ambientTallies(tenantId, filter) {
       return loadAmbientTallies(hippoRoot, tenantId, filter);
     },
+    newestEntries: (tenantId, limit) => onHandle(hippoRoot, (db) => newestEntriesAt(db, tenantId, limit), openStore),
+    schemaFit: (tenantId, content, tags) =>
+      onHandle(hippoRoot, (db) => schemaFitAt(db, tenantId, content, tags), openStore),
+    liveContentsBySourceAndTag: (tenantId, source, tag, exceptSessionId) =>
+      onHandle(hippoRoot, (db) => liveContentsBySourceAndTagAt(db, tenantId, source, tag, exceptSessionId), openStore),
+    rawRowsUnderRef: (tenantId, refPrefix) =>
+      onHandle(hippoRoot, (db) => rawRowsUnderRefAt(db, tenantId, refPrefix), openStore),
   };
 }
 

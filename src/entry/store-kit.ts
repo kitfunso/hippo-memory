@@ -79,7 +79,7 @@ export type { CompleteGoalOpts, PushGoalOpts } from '../store/goals.js';
 export type { HandoffFilter, SessionEndHandoffRequest } from '../store/handoffs.js';
 export type { ResolveConflictOpts, ResolveConflictRequest } from '../store/conflicts.js';
 export type { DormantMemory, DormantRestoreOutcome, DormantSnapshot, ListDormantOpts } from '../store/dormant.js';
-export type { EntryCursor, EntryPage } from '../store/entry-reads.js';
+export type { EntryCursor, EntryPage, RawRefRow } from '../store/entry-reads.js';
 export type { FailureEvent, FailureOutcome, FailureSummary } from '../store/failure-log.js';
 export type { MemoryConflict } from '../store/rows.js';
 export type { SessionEventInput, SnapshotInput } from '../store/sessions.js';

@@ -9,6 +9,7 @@ import type { QualityRepairResult } from './quality-repair.js';
 import type { LocalFiles } from './port/local-files.js';
 import { StoreNotPortedError } from '../util/sqlite-blocked.js';
 import type { EmbeddingIndexState } from './vector-index.js';
+import type { RawRefRow } from './entry-reads.js';
 import type { Entity, Relation, StoredGraph } from './graph-rows.js';
 import type { ActiveGoals, GetActiveGoalsOpts, GoalRecallLogRow } from './goals.js';
 import type { SessionHandoff } from '../core/handoff.js';
@@ -182,6 +183,14 @@ export interface ContextReads {
   /** As `loadAmbientTallies`: one aggregate over the live, unarchived
    * rows `filter` admits, less other projects' secret-tagged rows. */
   ambientTallies(tenantId: string, filter: AmbientStoreFilter): Promise<AmbientTallies>;
+  /** The tenant's `limit` newest rows, oldest first. */
+  newestEntries(tenantId: string, limit: number): Promise<MemoryEntry[]>;
+  /** computeSchemaFit of `content` and `tags` against the tenant's newest 2,000 rows. */
+  schemaFit(tenantId: string, content: string, tags: readonly string[]): Promise<number>;
+  /** Contents of the tenant's live, unextracted rows from `source` tagged `tag`, less one session's, by created, id. */
+  liveContentsBySourceAndTag(tenantId: string, source: string, tag: string, exceptSessionId: string): Promise<string[]>;
+  /** The tenant's raw rows whose artifact_ref starts with `refPrefix`, by created then id. */
+  rawRowsUnderRef(tenantId: string, refPrefix: string): Promise<RawRefRow[]>;
 }
 
 export interface EntryWrite {

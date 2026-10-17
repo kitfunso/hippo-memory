@@ -7,7 +7,9 @@ import type {
   AmbientCandidateRequest, AmbientLoadResult, AmbientStoreFilter, AmbientTallies, AuditEvent, ContinuityKey, MemoryEntry,
 } from '../src/entry/store-kit.js';
 import { CONTEXT_NOW, OWN_SCOPE, OWNER, PROJECT, seedContextRows } from './_helpers/context-fixture.js';
+import { createMemory } from './_helpers/default-half-life-memory.js';
 import { inMemoryContextStore } from './_helpers/in-memory-context-store.js';
+import { writeEntry } from '../src/store/entry-writes.js';
 import { onBothStores, seedTwoTenants, TENANT_A, TENANT_B, type GroupCall, type Outcome, type TwoTenantFixture } from './_helpers/store-conformance.js';
 
 type Call = GroupCall<'contextReads', unknown>;
@@ -17,10 +19,10 @@ let fixture: TwoTenantFixture;
 let fixtureAudit: readonly AuditEvent[];
 
 /** Runs the calls on both stores, asserts they agree and wrote no audit row, and returns hippo.db's outcomes by name. */
-async function conforms(named: readonly Named[]): Promise<Map<string, Outcome<unknown>>> {
-  const sides = await onBothStores(fixture, 'contextReads', inMemoryContextStore, named.map(([, call]) => call));
+async function conforms(named: readonly Named[], on = fixture): Promise<Map<string, Outcome<unknown>>> {
+  const sides = await onBothStores(on, 'contextReads', inMemoryContextStore, named.map(([, call]) => call));
   expect(sides.other).toEqual(sides.sqlite);
-  expect(sides.sqlite.audit).toEqual(fixtureAudit);
+  if (on === fixture) expect(sides.sqlite.audit).toEqual(fixtureAudit);
   return new Map(named.map(([name], i) => [name, sides.sqlite.outcomes[i]]));
 }
 
@@ -198,5 +200,65 @@ describe('ContextReads.ambientTallies', () => {
     expect(tagsOf(out.get('every row'))).not.toContain('token');
     expect(tagsOf(out.get('every row'))).toContain('secret');
     expect(tagsOf(out.get('other current project'))).toContain('token');
+  });
+});
+
+/** Digest, vault and tagged rows over both tenants, apart from the getContext fixture so its windows stay as they are. */
+function seedRowReads(dir: string): void {
+  const at = (minute: number): string => new Date(Date.UTC(2026, 2, 1, 0, minute)).toISOString();
+  const row = (content: string, minute: number, over: Parameters<typeof createMemory>[1] = {}): MemoryEntry =>
+    ({ ...createMemory(content, { tenantId: TENANT_A, ...over }), created: at(minute), id: `mem_r_${minute}` });
+  const digest = { source: 'session-digest', tags: ['session-digest'] };
+  const rows = [
+    row('digest of session one', 1, { ...digest, sourceSessionId: 's1' }),
+    row('digest of session two', 2, { ...digest, sourceSessionId: 's2' }),
+    row('digest with no session', 3, digest),
+    row('digest extracted from a raw row', 4, { ...digest, extractedFrom: 'mem_r_9' }),
+    { ...row('digest replaced since', 5, digest), superseded_by: 'mem_r_2' },
+    row('digest tag only in content: session-digest', 6, { source: 'session-digest', tags: ['other'] }),
+    row('digest of tenant b', 7, { ...digest, tenantId: TENANT_B }),
+    row('vault note a', 8, { kind: 'raw', artifactRef: 'vault:notes:a.md', tags: ['vault', 'pipeline'] }),
+    row('vault note other case', 9, { kind: 'raw', artifactRef: 'vault:Notes:b.md', tags: ['vault'] }),
+    row('vault note under a wildcard name', 10, { kind: 'raw', artifactRef: 'vault:notesX:c.md', tags: ['vault'] }),
+    row('vault note distilled', 11, { artifactRef: 'vault:notes:d.md', tags: ['vault'] }),
+    row('vault note of tenant b', 12, { kind: 'raw', artifactRef: 'vault:notes:e.md', tenantId: TENANT_B }),
+    { ...row('same minute, later id', 13, { tags: ['pipeline'] }), id: 'mem_r_13b' },
+    row('same minute, earlier id', 13, { tags: ['pipeline', 'deploy'] }),
+  ];
+  for (const e of rows) writeEntry(dir, e);
+}
+
+describe('ContextReads row reads', () => {
+  let rowsFixture: TwoTenantFixture;
+
+  beforeAll(() => {
+    rowsFixture = seedTwoTenants();
+    seedRowReads(rowsFixture.dir);
+  });
+
+  afterAll(() => rmSync(rowsFixture.dir, { recursive: true, force: true }));
+
+  it('read the newest rows, schema fit, live digests and raw rows under a ref alike', async () => {
+    const out = await conforms([
+      ['newest 3', (g) => g.newestEntries(TENANT_A, 3)],
+      ['newest all', (g) => g.newestEntries(TENANT_A, -1)],
+      ['newest none', (g) => g.newestEntries(TENANT_A, 0)],
+      ['newest globex', (g) => g.newestEntries(TENANT_B, 5)],
+      ['fit pipeline', (g) => g.schemaFit(TENANT_A, 'a pipeline note', ['pipeline'])],
+      ['fit no tags', (g) => g.schemaFit(TENANT_A, 'vault note', [])],
+      ['fit empty tenant', (g) => g.schemaFit('nobody', 'anything', ['pipeline'])],
+      ['digests but s1', (g) => g.liveContentsBySourceAndTag(TENANT_A, 'session-digest', 'session-digest', 's1')],
+      ['digests other source', (g) => g.liveContentsBySourceAndTag(TENANT_A, 'cli', 'session-digest', 's1')],
+      ['raw under notes', (g) => g.rawRowsUnderRef(TENANT_A, 'vault:notes:')],
+      ['raw under globex notes', (g) => g.rawRowsUnderRef(TENANT_B, 'vault:notes:')],
+      ['raw under nothing', (g) => g.rawRowsUnderRef(TENANT_A, 'vault:none:')],
+      ['raw under a wildcard', (g) => g.rawRowsUnderRef(TENANT_A, 'vault:no_es:')],
+    ], rowsFixture);
+
+    expect(out.get('newest 3')).toMatchObject({ value: [{ id: 'mem_r_11' }, { id: 'mem_r_13' }, { id: 'mem_r_13b' }] });
+    expect(out.get('newest none')).toEqual({ value: [] });
+    expect(out.get('digests but s1')).toEqual({ value: ['digest of session two', 'digest with no session'] });
+    expect(out.get('raw under a wildcard')).toEqual({ value: [] });
+    expect(out.get('raw under notes')).toMatchObject({ value: [{ id: 'mem_r_8', artifact_ref: 'vault:notes:a.md' }] });
   });
 });

@@ -7,7 +7,6 @@ import {
   type LocalRememberInput, type LocalRememberOutcome,
 } from '../src/api/index.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, Layer, type MemoryEntry } from '../src/core/memory.js';
-import { schemaFitInStore } from '../src/store/candidates.js';
 import { loadAllEntries, readEntry } from '../src/store/entry-reads.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { sqliteSyncStore } from '../src/store/sqlite/store.js';
@@ -85,8 +84,8 @@ describe('rememberLocally', () => {
     const ctx = store();
     for (const n of [1, 2, 3]) seed(ctx, `the billing service sends invoice batch ${n}`, ['billing']);
     const stored = ['billing', 'path:acme', 'scope:eng'];
-    const typedFit = schemaFitInStore(ctx.hippoRoot, ctx.tenantId, TEXT, ['billing']);
-    const storedFit = schemaFitInStore(ctx.hippoRoot, ctx.tenantId, TEXT, stored);
+    const typedFit = sqliteSyncStore(ctx.hippoRoot).contextReads.schemaFit(ctx.tenantId, TEXT, ['billing']);
+    const storedFit = sqliteSyncStore(ctx.hippoRoot).contextReads.schemaFit(ctx.tenantId, TEXT, stored);
     expect(typedFit).not.toBe(storedFit);
     expect(storedRow(await rememberLocally(ctx, { content: TEXT, tags: stored, fitTags: ['billing'], force: true })).schema_fit).toBe(typedFit);
     const other = store();

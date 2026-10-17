@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { createHash } from 'node:crypto';
 import { createMemory, MemoryEntry } from '../core/memory.js';
-import { loadVaultRawRows, type VaultRawRow } from '../store/entry-reads.js';
+import type { RawRefRow } from '../store/entry-reads.js';
 import { remember, archiveRaw, isPrivateScope, type Context } from '../api/index.js';
 import { sqliteStore } from '../store/sqlite/store.js';
 import { assertClientScope } from '../core/recall-scope.js';
@@ -16,13 +16,12 @@ import { type ImportResult, type ImportOptions } from './core.js';
 import { splitMarkdownFrontmatter, frontmatterList, parseWikilinks, collectMarkdownFiles } from './markdown-parse.js';
 import { realpathOrResolve } from '../util/real-path.js';
 import { type JsonValue, isJsonString } from '../util/json.js';
-import { escapeLike } from '../util/escape.js';
 
 // K1 vault importer (markdown-vault FOLDER -> kind='raw' memories), following the connector pattern
 // (src/connectors/slack|github). A changed note appends a new raw row after archiveRaw of the old one; NEVER
 // `supersede` a raw row (it yields 'distilled' and escapes the deletion rescan).
 
-type VaultRow = VaultRawRow;
+type VaultRow = RawRefRow;
 
 /** Import a markdown vault FOLDER as `kind='raw'` memories. NOT re-entrant: idempotency rests on the in-memory
  * `existing` Map loaded once, so two concurrent runs over one vault can double-insert. */
@@ -65,7 +64,7 @@ async function syncVaultFolder(
     store: sqliteStore(hippoRoot),
   };
 
-  const existing = loadVaultRows(hippoRoot, tenantId, vaultName);
+  const existing = await loadVaultRows(ctx, vaultName);
   const relpaths = collectMarkdownFiles(folderPath, hippoRoot);
   const tally: VaultTally = { total: 0, imported: 0, skipped: 0, rejected: 0, archived: 0, redacted: 0, entries: [] };
   const baseHalfLifeDays = loadConfig(hippoRoot).defaultHalfLifeDays;
@@ -153,22 +152,16 @@ function vaultIdentityOrThrow(options: ImportOptions): VaultIdentity {
   return { vaultName, scope };
 }
 
-function loadVaultRows(hippoRoot: string, tenantId: string, vaultName: string): Map<string, VaultRow[]> {
-  // One load serves both per-file idempotency and the deletion diff; the vault name is
-  // LIKE-escaped so a `%` or `_` in it cannot over-match.
-  const rows = loadVaultRawRows(hippoRoot, `vault:${escapeLike(vaultName)}:%`, tenantId);
+async function loadVaultRows(ctx: Context, vaultName: string): Promise<Map<string, VaultRow[]>> {
+  // One load serves both per-file idempotency and the deletion diff.
+  const rows = await ctx.store.contextReads.rawRowsUnderRef(ctx.tenantId, `vault:${vaultName}:`);
   // Every live row per artifactRef (more than one only after a concurrent double-insert), because a
   // later changed or deletion pass must archive them all or older raw vault content stays searchable.
   const existing = new Map<string, VaultRow[]>();
-  // LIKE folds ASCII case (vault 'A' also matches 'vault:a:%'), so the exact-case prefix is checked
-  // here; without it deletion-sync would archive a different-cased vault's rows.
-  const exactPrefix = `vault:${vaultName}:`;
   for (const row of rows) {
-    if (row.artifact_ref && row.artifact_ref.startsWith(exactPrefix)) {
-      const bucket = existing.get(row.artifact_ref);
-      if (bucket) bucket.push(row);
-      else existing.set(row.artifact_ref, [row]);
-    }
+    const bucket = existing.get(row.artifact_ref);
+    if (bucket) bucket.push(row);
+    else existing.set(row.artifact_ref, [row]);
   }
   return existing;
 }

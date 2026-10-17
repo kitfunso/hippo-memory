@@ -507,26 +507,25 @@ export function contentsWithTagAt(
   return rows.filter((r) => parseJsonArray(r.tags_json).includes(tag)).map((r) => r.content);
 }
 
-export interface VaultRawRow {
+export interface RawRefRow {
   id: string;
   artifact_ref: string;
   tags_json: string;
   scope: string | null;
 }
 
-/** Live raw rows whose artifact_ref matches a LIKE pattern,
- * for one tenant; the store is set up first when it is new. */
-export function loadVaultRawRows(hippoRoot: string, likeParam: string, tenantId: string): VaultRawRow[] {
-  return onHandle(hippoRoot, (db) => {
-    // SAFETY: query selects exactly the columns of VaultRawRow, in the same
-    // names, from the memories table this module owns.
-    return db
-      .prepare(
-        `SELECT id, artifact_ref, tags_json, scope FROM memories
-           WHERE artifact_ref LIKE ? ESCAPE '\\' AND tenant_id = ? AND kind = 'raw'`,
-      )
-      .all(likeParam, tenantId) as VaultRawRow[];
-  }, openStore);
+/** A tenant's raw rows whose artifact_ref starts with `refPrefix`, by created then id. */
+export function rawRowsUnderRefAt(db: DatabaseSyncLike, tenantId: string, refPrefix: string): RawRefRow[] {
+  // SAFETY: query selects exactly the columns of RawRefRow, in the same
+  // names, from the memories table this module owns.
+  const rows = db
+    .prepare(
+      `SELECT id, artifact_ref, tags_json, scope FROM memories
+         WHERE artifact_ref LIKE ? ESCAPE '\\' AND tenant_id = ? AND kind = 'raw' ORDER BY created ASC, id ASC`,
+    )
+    .all(`${escapeLike(refPrefix)}%`, tenantId) as RawRefRow[];
+  // LIKE folds ASCII case, so the exact prefix is checked here.
+  return rows.filter((r) => r.artifact_ref.startsWith(refPrefix));
 }
 
 export interface PreviewRow {
@@ -608,30 +607,24 @@ export function selectRowsOutsideSourcePrefixAt(
 
 /** Content of a tenant's live rows written by `source` and tagged `tag` that no extraction produced,
  * in loadAllEntries' order and in every scope; `exceptSessionId` drops one session's own rows. */
-export function loadLiveContentsBySourceAndTag(
-  hippoRoot: string,
+export function liveContentsBySourceAndTagAt(
+  db: DatabaseSyncLike,
   tenantId: string,
   source: string,
   tag: string,
   exceptSessionId: string,
 ): string[] {
-  return onHandle(
-    hippoRoot,
-    (db) => {
-      /** SAFETY: rows' shape matches the two columns named in the SELECT below. */
-      const rows = db
-        .prepare(
-          `SELECT content, tags_json FROM memories
-       WHERE tenant_id = ? AND source = ? AND instr(tags_json, ?) > 0
-         AND COALESCE(extracted_from, '') = '' AND COALESCE(superseded_by, '') = ''
-         AND (source_session_id IS NULL OR source_session_id != ?)
-       ORDER BY created ASC, id ASC`,
-        )
-        .all(tenantId, source, JSON.stringify(tag), exceptSessionId) as Array<{ content: string; tags_json: string }>;
-      return rows.filter((r) => parseJsonArray(r.tags_json).includes(tag)).map((r) => r.content);
-    },
-    openStore,
-  );
+  /** SAFETY: rows' shape matches the two columns named in the SELECT below. */
+  const rows = db
+    .prepare(
+      `SELECT content, tags_json FROM memories
+   WHERE tenant_id = ? AND source = ? AND instr(tags_json, ?) > 0
+     AND COALESCE(extracted_from, '') = '' AND COALESCE(superseded_by, '') = ''
+     AND (source_session_id IS NULL OR source_session_id != ?)
+   ORDER BY created ASC, id ASC`,
+    )
+    .all(tenantId, source, JSON.stringify(tag), exceptSessionId) as Array<{ content: string; tags_json: string }>;
+  return rows.filter((r) => parseJsonArray(r.tags_json).includes(tag)).map((r) => r.content);
 }
 
 /** Every tenant's distilled rows nothing has superseded, in

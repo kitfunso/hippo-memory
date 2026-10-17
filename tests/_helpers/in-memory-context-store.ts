@@ -12,6 +12,7 @@ import { withSqliteAllowed } from '../../src/db/open.js';
 import { HANDOFF_COLUMNS } from '../../src/store/handoffs.js';
 import { MEMORY_SELECT_COLUMNS, rowToEntry, type MemoryRow } from '../../src/store/rows.js';
 import { assertTenantId } from '../../src/core/tenant-id.js';
+import { computeSchemaFit } from '../../src/index.js';
 import { inMemoryVectorStore } from './in-memory-vector-store.js';
 import type { StoreSide } from './store-conformance.js';
 
@@ -105,6 +106,11 @@ function decayKey(row: MemoryRow, nowMs: number): number | null {
   return (nowMs - last) / 86_400_000 / (row.half_life_days * (1 + (0.5 * (pos - neg)) / (pos + neg + 1)));
 }
 
+const byCreated = <R extends MemoryRow>(list: readonly R[]): R[] => [...list].sort((a, b) => bytes(a.created, b.created) || bytes(a.id, b.id));
+
+/** schemaFitAt's window: the tenant's newest rows that move the fit. */
+const SCHEMA_FIT_WINDOW_ROWS = 2000;
+
 const nullsLast = (a: number | null, b: number | null): number => (a === null ? (b === null ? 0 : 1) : b === null ? -1 : a - b);
 
 function secretAdmitted(row: MemoryRow, currentProject: readonly string[]): boolean {
@@ -163,6 +169,12 @@ export function inMemoryContextStore(hippoRoot: string): InMemoryContextStore {
     return fn(...args);
   };
 
+  /** The tenant's `limit` newest rows, oldest first; a negative limit is no limit, as SQLite's LIMIT reads it. */
+  function newestRows(tenantId: string, limit: number): MemoryRow[] {
+    const newest = rows.memories.filter((r) => r.tenant_id === tenantId).sort((a, b) => bytes(b.created, a.created) || bytes(b.id, a.id));
+    return (limit < 0 ? newest : newest.slice(0, limit)).reverse();
+  }
+
   async function ambientCandidates(tenantId: string, { recentNeeded, admit, recall, origins }: AmbientCandidateRequest): Promise<AmbientLoadResult> {
     const needed = Math.trunc(recentNeeded);
     const live = rows.memories.filter((r) => r.superseded_by === null && r.tenant_id === tenantId);
@@ -210,6 +222,22 @@ export function inMemoryContextStore(hippoRoot: string): InMemoryContextStore {
       const kept = rows.memories.filter((r) => inEnvelope(r, tenantId, filter) && (r.kind ?? '') !== 'archived' && secretAdmitted(r, filter.currentProject));
       return tallyAmbientEntries(kept.map((r) => utcDates(rowToEntry(r))), filter.now);
     },
+    async newestEntries(tenantId, limit) {
+      return newestRows(tenantId, limit).map(rowToEntry);
+    },
+    async schemaFit(tenantId, content, tags) {
+      return computeSchemaFit(content, [...tags], newestRows(tenantId, SCHEMA_FIT_WINDOW_ROWS).map(rowToEntry));
+    },
+    async liveContentsBySourceAndTag(tenantId, source, tag, exceptSessionId) {
+      const live = rows.memories.filter((r) => r.tenant_id === tenantId && r.source === source && (r.extracted_from ?? '') === ''
+        && (r.superseded_by ?? '') === '' && r.source_session_id !== exceptSessionId && rowToEntry(r).tags.includes(tag));
+      return byCreated(live).map((r) => r.content);
+    },
+    async rawRowsUnderRef(tenantId, refPrefix) {
+      const under = rows.memories.filter((r): r is MemoryRow & { artifact_ref: string } =>
+        r.tenant_id === tenantId && r.kind === 'raw' && r.artifact_ref !== null && r.artifact_ref.startsWith(refPrefix));
+      return byCreated(under).map((r) => ({ id: r.id, artifact_ref: r.artifact_ref, tags_json: r.tags_json, scope: r.scope }));
+    },
   };
 
   const store: InMemoryContextStore['store'] = {
@@ -226,6 +254,10 @@ export function inMemoryContextStore(hippoRoot: string): InMemoryContextStore {
       ambientCandidates: logged('ambientCandidates', reads.ambientCandidates),
       contextCandidates: logged('contextCandidates', reads.contextCandidates),
       ambientTallies: logged('ambientTallies', reads.ambientTallies),
+      newestEntries: logged('newestEntries', reads.newestEntries),
+      schemaFit: logged('schemaFit', reads.schemaFit),
+      liveContentsBySourceAndTag: logged('liveContentsBySourceAndTag', reads.liveContentsBySourceAndTag),
+      rawRowsUnderRef: logged('rawRowsUnderRef', reads.rawRowsUnderRef),
     },
   };
   const auditRows = (): readonly AuditEvent[] => withSqliteAllowed(() => {

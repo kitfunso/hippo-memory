@@ -5,11 +5,11 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import { computeSchemaFit, deriveHalfLife, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../src/core/memory.js';
-import { loadNewestEntries, schemaFitInStore } from '../src/store/candidates.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { writeEntriesTogether, writeEntry } from '../src/store/entry-writes.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { sqliteSyncStore } from '../src/store/sqlite/store.js';
 
 function makePool(): MemoryEntry[] {
   return [
@@ -97,7 +97,7 @@ describe('computeSchemaFit', () => {
   });
 });
 
-describe('schemaFitInStore', () => {
+describe('contextReads.schemaFit', () => {
   const roots: string[] = [];
   afterEach(() => {
     for (const dir of roots.splice(0)) fs.rmSync(dir, { recursive: true, force: true });
@@ -126,12 +126,12 @@ describe('schemaFitInStore', () => {
       ['Walk-forward Sharpe overestimates returns', []],
       ['another tenant', []],
     ];
-    const fits = probes.map(([content, tags]) => schemaFitInStore(root, 'default', content, tags));
+    const fits = probes.map(([content, tags]) => sqliteSyncStore(root).contextReads.schemaFit('default', content, tags));
     expect(fits).toEqual(probes.map(([content, tags]) => computeSchemaFit(content, tags, loaded)));
     expect(fits.filter((fit) => fit > 0 && fit < 1)).toHaveLength(3);
     // No tags and a capped content score: 0.6 * 0 + 0.4 * 1.
-    expect(schemaFitInStore(root, 'default', 'zephyrine refresh', [])).toBe(0.4);
-    expect(schemaFitInStore(root, 'nobody', 'zephyrine refresh', ['data-pipeline'])).toBe(0.5);
+    expect(sqliteSyncStore(root).contextReads.schemaFit('default', 'zephyrine refresh', [])).toBe(0.4);
+    expect(sqliteSyncStore(root).contextReads.schemaFit('nobody', 'zephyrine refresh', ['data-pipeline'])).toBe(0.5);
   });
 
   // A full window of rows is slow to write; a macOS runner went past the 5 s default.
@@ -149,12 +149,12 @@ describe('schemaFitInStore', () => {
       created: new Date(Date.UTC(2025, 0, 1, 0, 0, i)).toISOString(),
     }));
     writeEntriesTogether(root, [...oldest, ...newest]);
-    const window = loadNewestEntries(root, 'default', windowRows);
+    const window = sqliteSyncStore(root).contextReads.newestEntries('default', windowRows);
     expect(window).toHaveLength(windowRows);
     expect(window.some((entry) => entry.tags.includes('oldonly'))).toBe(false);
 
     const tags = ['oldonly', 'recent'];
-    const fit = schemaFitInStore(root, 'default', 'ancient ledger entry', tags);
+    const fit = sqliteSyncStore(root).contextReads.schemaFit('default', 'ancient ledger entry', tags);
     expect(fit).toBe(computeSchemaFit('ancient ledger entry', tags, window));
     expect(fit).not.toBe(computeSchemaFit('ancient ledger entry', tags, loadAllEntries(root, 'default')));
   }, 30_000);

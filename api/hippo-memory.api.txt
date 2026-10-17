@@ -103,6 +103,7 @@ entry/store-kit.d.ts: PredictionBaserate re-export
 entry/store-kit.d.ts: PushGoalOpts re-export
 entry/store-kit.d.ts: RECALL_DEFAULT_DENY_SCOPES re-export
 entry/store-kit.d.ts: RawArchive re-export
+entry/store-kit.d.ts: RawRefRow re-export
 entry/store-kit.d.ts: RecallScopeFilter re-export
 entry/store-kit.d.ts: RecallSearchArgs re-export
 entry/store-kit.d.ts: RecallTraceInput re-export
