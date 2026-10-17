@@ -25,6 +25,7 @@ import {
 } from './rows.js';
 import { serializeEntry } from '../core/markdown.js';
 import { writeFileAtomic } from '../util/atomic-write.js';
+import type { StoreFiles } from './open.js';
 
 const SCORE_DECIMALS = 3;
 
@@ -203,6 +204,10 @@ export function removeEntryMirrors(hippoRoot: string, id: string): void {
   }
 }
 
+export function removeEntryMirrorsIn(files: StoreFiles, id: string): void {
+  removeEntryMirrors(files.hippoRoot, id);
+}
+
 /** Mirror paths for `id` still on disk, walked like `removeEntryMirrors`, so a failed purge with no reaper to retry it
  * can name the stuck file. */
 function getExistingEntryMirrorPaths(hippoRoot: string, id: string): string[] {
@@ -249,6 +254,10 @@ export function purgeMirrorBestEffort(
       return false;
     }
   }
+}
+
+export function purgeMirrorBestEffortIn(files: StoreFiles, id: string, isRaw: boolean, logPrefix: string): boolean {
+  return purgeMirrorBestEffort(files.hippoRoot, id, isRaw, logPrefix);
 }
 
 /** Derive the current `HippoIndex` from SQLite. Exported for the longmemeval benchmark. */

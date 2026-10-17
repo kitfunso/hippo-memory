@@ -5,18 +5,11 @@ import { fileURLToPath } from 'url';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { readEntry, loadAllEntries } from '../src/store/entry-reads.js';
-import { deleteEntry } from '../src/store/delete-and-batch.js';
 import { loadSearchEntries } from '../src/store/search-rows.js';
 import { flushStatsMirrors } from '../src/store/mirrors.js';
-import { loadLastRecall, updateStats } from '../src/store/index-and-stats.js';
+import { updateStats } from '../src/store/index-and-stats.js';
 import { sqliteSyncStore } from '../src/store/sqlite/store.js';
-import {
-  saveActiveTaskSnapshot,
-  loadActiveTaskSnapshot,
-  clearActiveTaskSnapshot,
-  appendSessionEvent,
-  listSessionEvents,
-} from '../src/store/sessions.js';
+import { saveActiveTaskSnapshot, appendSessionEvent } from '../src/store/sessions.js';
 import {
   openHippoDb,
   closeHippoDb,
@@ -28,6 +21,9 @@ import { Layer } from '../src/core/memory.js';
 import { consolidate } from '../src/index.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { makeRoot } from './_helpers/make-root.js';
+import {
+  deleteEntry, loadLastRecall, loadActiveTaskSnapshot, clearActiveTaskSnapshot, listSessionEvents,
+} from './_helpers/root-forms.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const legacyFixtureRoot = path.join(__dirname, 'fixtures', 'legacy-markdown-store');

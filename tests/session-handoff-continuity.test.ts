@@ -1,12 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { initStore } from '../src/store/open.js';
-import {
-  appendSessionEvent,
-  listSessionEvents,
-  loadActiveTaskSnapshot,
-  saveActiveTaskSnapshot,
-} from '../src/store/sessions.js';
-import { saveSessionHandoff, loadLatestHandoff, loadHandoffById } from '../src/store/handoffs.js';
+import { appendSessionEvent, saveActiveTaskSnapshot } from '../src/store/sessions.js';
+import { saveSessionHandoff } from '../src/store/handoffs.js';
 import {
   openHippoDb,
   closeHippoDb,
@@ -16,6 +11,9 @@ import {
 import { rowToSessionHandoff } from '../src/core/handoff.js';
 import { LATEST_SCHEMA_VERSION } from './_helpers/schema-version.js';
 import { makeRoot } from './_helpers/make-root.js';
+import {
+  listSessionEvents, loadActiveTaskSnapshot, loadLatestHandoff, loadHandoffById,
+} from './_helpers/root-forms.js';
 
 let tmpDir: string;
 

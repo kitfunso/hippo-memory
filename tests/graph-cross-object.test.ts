@@ -8,7 +8,6 @@
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
-import { deleteEntry } from '../src/store/delete-and-batch.js';
 import { saveDecision } from '../src/objects/decisions.js';
 import { savePolicy } from '../src/objects/policies.js';
 import { saveCustomerNote } from '../src/objects/customer-notes.js';
@@ -20,6 +19,7 @@ import { makeRoot } from './_helpers/make-root.js';
 import { objectsAt } from './_helpers/objects-at.js';
 import { sqliteStore } from '../src/store/sqlite/store.js';
 import { loadConfig } from '../src/core/config.js';
+import { deleteEntry } from './_helpers/root-forms.js';
 
 const T = 'default';
 /** All `references` edges in a tenant's graph. */

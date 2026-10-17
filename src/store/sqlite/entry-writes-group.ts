@@ -14,90 +14,95 @@ import { markSummaryDirtyInTx } from '../summary-dirty.js';
 import { auditRejectionRefusal } from '../audit-event.js';
 import { deleteEntryCore } from '../delete-and-batch.js';
 import { selectEntriesByIds } from '../entry-reads.js';
-import { stampOriginProject } from '../entry-row.js';
-import { writeEntryDbOnly, writeEntryMirrors, type WriteEntryInternalOptions } from '../entry-writes.js';
-import { updateStatsUnlessBusy } from '../index-and-stats.js';
-import { purgeMirrorBestEffort, removeEntryMirrors } from '../mirrors.js';
-import { onHandle, openStore } from '../open.js';
+import { writeEntryDbOnly, writeEntryMirrorsIn, type WriteEntryInternalOptions } from '../entry-writes.js';
+import { updateStatsUnlessBusyAt } from '../index-and-stats.js';
+import { type OnHandle, openStore, type StoreFiles } from '../open.js';
+import { purgeMirrorBestEffortIn, removeEntryMirrorsIn } from '../mirrors.js';
+import { stampOriginProjectIn } from '../entry-row.js';
 import { selectMemoryReach } from '../tenant-lookup.js';
 
 /** Each call on its own handle; mirrors and the forgotten counter follow the commit, so a rolled-back write leaves
  * neither. */
-export function sqliteEntryWrites(hippoRoot: string): Sync<EntryWrites> {
+export function sqliteEntryWrites(on: OnHandle): Sync<EntryWrites> {
   return {
     writeEntry(write) {
-      writeEntryAt(hippoRoot, write);
+      on((db, files) => writeEntryRowAt(db, files, write), openStore);
     },
     applyOutcome(outcome) {
-      return applyOutcomeAt(hippoRoot, outcome);
+      return on((db, files) => applyOutcomeAt(db, files, outcome), openStore);
     },
     supersede(write) {
-      const successor = stampOriginProject(hippoRoot, write.successor);
-      onHandle(hippoRoot, (db) => commitSupersede(db, { ...write, successor }));
-      writeEntryMirrors(hippoRoot, successor);
+      on((db, files) => {
+        const successor = stampOriginProjectIn(files, write.successor);
+        commitSupersede(db, { ...write, successor });
+        writeEntryMirrorsIn(files, successor);
+      });
     },
     archiveRaw(archive) {
-      return archiveRawAt(hippoRoot, archive);
+      return on((db, files) => archiveRawAt(db, files, archive));
     },
     forget(removal) {
-      onHandle(hippoRoot, (db) => withWriteScope(db, 'forget_in_reach', () => {
-        assertInReach(db, removal, removal.id);
-        if (!deleteEntryCore(db, removal.id, removal.tenantId, { actor: removal.actor })) throw notFound(removal.id);
-      }), openStore);
-      purgeMirrorBestEffort(hippoRoot, removal.id, false, 'deleteEntry');
-      updateStatsUnlessBusy(hippoRoot, { forgotten: 1 }, `removed ${removal.id}`);
+      on((db, files) => {
+        withWriteScope(db, 'forget_in_reach', () => {
+          assertInReach(db, removal, removal.id);
+          if (!deleteEntryCore(db, removal.id, removal.tenantId, { actor: removal.actor })) throw notFound(removal.id);
+        });
+        purgeMirrorBestEffortIn(files, removal.id, false, 'deleteEntry');
+        updateStatsUnlessBusyAt(db, files, { forgotten: 1 }, `removed ${removal.id}`);
+      }, openStore);
     },
   };
 }
 
 /** A store-side hook writes on the row's handle inside its write scope, so its throw undoes the row. */
-export function writeEntryAt(
-  hippoRoot: string,
+export function writeEntryRowAt(
+  db: DatabaseSyncLike,
+  files: StoreFiles,
   { entry, actor }: EntryWrite,
   afterWrite?: WriteEntryInternalOptions['afterWrite'],
 ): void {
-  const stamped = stampOriginProject(hippoRoot, entry);
-  onHandle(hippoRoot, (db) => writeInOwnTenant(db, stamped, actor, afterWrite), openStore);
-  writeEntryMirrors(hippoRoot, stamped);
+  const stamped = stampOriginProjectIn(files, entry);
+  writeInOwnTenant(db, stamped, actor, afterWrite);
+  writeEntryMirrorsIn(files, stamped);
 }
 
 /** A trace link follows the commit on the same handle and names only the ids applied, so a rolled-back outcome leaves
  * none. */
-export function applyOutcomeAt(hippoRoot: string, outcome: OutcomeWrite, traceId?: number): string[] {
-  const applied = onHandle(hippoRoot, (db) => {
-    const rows = applyOutcomeOn(db, outcome);
-    const memoryIds = rows.map((entry) => entry.id);
-    if (traceId !== undefined && rows.length > 0) {
-      recordTraceOutcome(db, {
-        traceId,
-        tenantId: outcome.tenantId,
-        outcome: outcome.good ? 'positive' : 'negative',
-        memoryIds,
-      });
-    }
-    return rows;
-  }, openStore);
-  for (const entry of applied) writeEntryMirrors(hippoRoot, entry);
-  return applied.map((entry) => entry.id);
+export function applyOutcomeAt(
+  db: DatabaseSyncLike,
+  files: StoreFiles,
+  outcome: OutcomeWrite,
+  traceId?: number,
+): string[] {
+  const rows = applyOutcomeOn(db, outcome);
+  const memoryIds = rows.map((entry) => entry.id);
+  if (traceId !== undefined && rows.length > 0) {
+    recordTraceOutcome(db, {
+      traceId,
+      tenantId: outcome.tenantId,
+      outcome: outcome.good ? 'positive' : 'negative',
+      memoryIds,
+    });
+  }
+  for (const entry of rows) writeEntryMirrorsIn(files, entry);
+  return memoryIds;
 }
 
 /** Reach is checked inside the archive's write scope. A store-side hook writes on the same handle inside that scope, so
  * its throw undoes the archive. */
 export function archiveRawAt(
-  hippoRoot: string,
+  db: DatabaseSyncLike,
+  files: StoreFiles,
   archive: RawArchive,
   afterArchive?: ArchiveOptions['afterArchive'],
 ): string {
-  const archivedAt = onHandle(hippoRoot, (db) => {
-    const at = withWriteScope(db, 'archive_raw_in_reach', () => {
-      assertInReach(db, archive, archive.id);
-      return archiveRawMemory(db, archive.id, { reason: archive.reason, who: archive.actor, afterArchive });
-    });
-    cleanArchivedMirrors(db, hippoRoot, archive.id);
-    return at;
+  const at = withWriteScope(db, 'archive_raw_in_reach', () => {
+    assertInReach(db, archive, archive.id);
+    return archiveRawMemory(db, archive.id, { reason: archive.reason, who: archive.actor, afterArchive });
   });
-  updateStatsUnlessBusy(hippoRoot, { forgotten: 1 }, `removed ${archive.id}`);
-  return archivedAt;
+  cleanArchivedMirrors(db, files, archive.id);
+  updateStatsUnlessBusyAt(db, files, { forgotten: 1 }, `removed ${archive.id}`);
+  return at;
 }
 
 function notFound(id: string): NotFoundError {
@@ -129,7 +134,7 @@ export function auditingRefusal<T>(db: DatabaseSyncLike, actor: string, write: (
   }
 }
 
-/** writeEntryAt on the caller's handle, so a sibling group can read on it after the scope has unwound. */
+/** writeEntryRowAt on the caller's handle, so a sibling group can read on it after the scope has unwound. */
 export function writeInOwnTenant(
   db: DatabaseSyncLike,
   entry: MemoryEntry,
@@ -194,9 +199,9 @@ function commitSupersede(db: DatabaseSyncLike, write: SupersedeWrite): void {
 
 /** A mirror left on disk would bring the archived row back on the next import; on failure the reaper retries, as
  * mirror_cleaned_at stays NULL. */
-function cleanArchivedMirrors(db: DatabaseSyncLike, hippoRoot: string, id: string): void {
+function cleanArchivedMirrors(db: DatabaseSyncLike, files: StoreFiles, id: string): void {
   try {
-    removeEntryMirrors(hippoRoot, id);
+    removeEntryMirrorsIn(files, id);
   } catch (mirrorErr) {
     log.error(
       `archiveRaw: mirror cleanup failed for ${id} (will retry via reaper on next openHippoDb): ` +

@@ -1,14 +1,13 @@
 import { openHippoDbReadOnly } from '../../db/index.js';
 import { storeHealthAt, storeInventoryAt } from '../diagnostics.js';
-import { onHandle } from '../open.js';
+import type { OnHandle } from '../open.js';
 import type { Diagnostics } from '../port/diagnostics.js';
 import { projectTagReads } from '../project-tags.js';
 
-export function sqliteDiagnostics(hippoRoot: string): Diagnostics {
+export function sqliteDiagnostics(on: OnHandle): Diagnostics {
   return {
-    health: (cutoffs) => onHandle(hippoRoot, (db) => storeHealthAt(db, cutoffs), openHippoDbReadOnly),
-    inventory: () => onHandle(hippoRoot, storeInventoryAt, openHippoDbReadOnly),
-    projectTags: (tenantId, read) =>
-      onHandle(hippoRoot, (db) => read(projectTagReads(db, tenantId)), openHippoDbReadOnly),
+    health: (cutoffs) => on((db) => storeHealthAt(db, cutoffs), openHippoDbReadOnly),
+    inventory: () => on(storeInventoryAt, openHippoDbReadOnly),
+    projectTags: (tenantId, read) => on((db) => read(projectTagReads(db, tenantId)), openHippoDbReadOnly),
   };
 }

@@ -1,8 +1,6 @@
 import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach } from 'vitest';
 import { adminActor } from '../src/api/index.js';
-import { githubEventRecord } from '../src/store/connectors/github.js';
-import { slackEventRecord } from '../src/store/connectors/slack.js';
 import { parkInDlq, replayParked } from '../src/connectors/dlq.js';
 import { githubDlq } from '../src/connectors/github/dlq.js';
 import { slackDlq } from '../src/connectors/slack/dlq.js';
@@ -11,6 +9,7 @@ import { isJsonObject, type JsonValue } from '../src/util/json.js';
 import { sqliteStore } from '../src/store/sqlite/store.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { githubEventRecord, slackEventRecord } from './_helpers/root-forms.js';
 
 describe('GitHub and Slack share one event log and DLQ vocabulary', () => {
   let root: string;

@@ -9,25 +9,24 @@ import {
 import { log } from '../util/log.js';
 import type { HippoIndex } from './rows.js';
 import { readLastRecall, writeStatsMirror, buildStatsFromDb } from './mirrors.js';
-import { onHandle, openStore } from './open.js';
+import { onHandle, openStore, type StoreFiles } from './open.js';
 import { DAY_MS } from '../util/time.js';
 
 /** The last recall's ids and its trace alone, for a caller that needs no index entry. */
-export function loadLastRecall(hippoRoot: string): Pick<HippoIndex, 'last_retrieval_ids' | 'last_trace_id'> {
-  return onHandle(hippoRoot, (db) => {
-    return readLastRecall(db);
-  }, openStore);
+export function loadLastRecallAt(db: DatabaseSyncLike): Pick<HippoIndex, 'last_retrieval_ids' | 'last_trace_id'> {
+  return readLastRecall(db);
 }
 
 /** Persist mutable index metadata (entry rows are derived from SQLite); `last_retrieval_ids` and `last_trace_id` commit
  * in one transaction, as callers rely on both moving together. No hippo path writes index.json. */
-export function saveIndex(hippoRoot: string, index: Pick<HippoIndex, 'last_retrieval_ids' | 'last_trace_id'>): void {
-  onHandle(hippoRoot, (db) => {
-    withWriteScope(db, 'save_index', () => {
-      setMeta(db, 'last_retrieval_ids', JSON.stringify(index.last_retrieval_ids ?? []));
-      setMeta(db, 'last_trace_id', index.last_trace_id ?? '');
-    });
-  }, openStore);
+export function saveIndexAt(
+  db: DatabaseSyncLike,
+  index: Pick<HippoIndex, 'last_retrieval_ids' | 'last_trace_id'>,
+): void {
+  withWriteScope(db, 'save_index', () => {
+    setMeta(db, 'last_retrieval_ids', JSON.stringify(index.last_retrieval_ids ?? []));
+    setMeta(db, 'last_trace_id', index.last_trace_id ?? '');
+  });
 }
 
 type StatsDelta = { remembered?: number; recalled?: number; forgotten?: number };
@@ -43,16 +42,18 @@ function addDelta(a: StatsDelta, b: StatsDelta): Required<StatsDelta> {
   };
 }
 
-export function updateStats(hippoRoot: string, delta: StatsDelta): void {
-  const total = addDelta(pendingStats.get(hippoRoot) ?? {}, delta);
-  onHandle(hippoRoot, (db) => {
-    updateStatsOn(db, hippoRoot, total);
-  }, openStore);
-  pendingStats.delete(hippoRoot);
+/** updateStats on the caller's open store, so a loop of writes opens the store once. */
+export function updateStatsAt(db: DatabaseSyncLike, files: StoreFiles, delta: StatsDelta): void {
+  const total = addDelta(pendingStats.get(files.hippoRoot) ?? {}, delta);
+  updateStatsOn(db, files.hippoRoot, total);
+  pendingStats.delete(files.hippoRoot);
 }
 
-/** updateStats on the caller's open store, so a loop of writes opens the store once. */
-export function updateStatsOn(db: DatabaseSyncLike, hippoRoot: string, delta: Parameters<typeof updateStats>[1]): void {
+export function updateStats(hippoRoot: string, delta: StatsDelta): void {
+  onHandle(hippoRoot, (db) => updateStatsAt(db, { hippoRoot }, delta), openStore);
+}
+
+export function updateStatsOn(db: DatabaseSyncLike, hippoRoot: string, delta: StatsDelta): void {
   // One atomic statement per named counter: a read-modify-write loses concurrent increments and stamps stale values
   // over the untouched two.
   const increments: ReadonlyArray<readonly [string, number]> = [
@@ -73,34 +74,34 @@ export function updateStatsOn(db: DatabaseSyncLike, hippoRoot: string, delta: Pa
   writeStatsMirror(hippoRoot, buildStatsFromDb(db));
 }
 
-export function updateStatsUnlessBusy(
-  hippoRoot: string,
-  delta: Parameters<typeof updateStats>[1],
+export function updateStatsUnlessBusyAt(
+  db: DatabaseSyncLike,
+  files: StoreFiles,
+  delta: StatsDelta,
   committed: string,
 ): void {
   try {
-    updateStats(hippoRoot, delta);
+    updateStatsAt(db, files, delta);
   } catch (err) {
     if (!isSqliteBusy(err)) throw err;
-    pendingStats.set(hippoRoot, addDelta(pendingStats.get(hippoRoot) ?? {}, delta));
+    pendingStats.set(files.hippoRoot, addDelta(pendingStats.get(files.hippoRoot) ?? {}, delta));
     log.warnThenDebug('stats-busy', `${committed}, but the store was busy; the stats wait for the next update`);
   }
 }
 
-export function appendConsolidationRun(
-  hippoRoot: string,
-  run: { timestamp: string; decayed: number; merged: number; removed: number }
+export function appendConsolidationRunAt(
+  db: DatabaseSyncLike,
+  files: StoreFiles,
+  run: { timestamp: string; decayed: number; merged: number; removed: number },
 ): void {
-  onHandle(hippoRoot, (db) => {
-    db.prepare(`INSERT INTO consolidation_runs(timestamp, decayed, merged, removed) VALUES (?, ?, ?, ?)`).run(
-      run.timestamp,
-      run.decayed,
-      run.merged,
-      run.removed
-    );
-    pruneConsolidationRuns(db);
-    writeStatsMirror(hippoRoot, buildStatsFromDb(db));
-  }, openStore);
+  db.prepare(`INSERT INTO consolidation_runs(timestamp, decayed, merged, removed) VALUES (?, ?, ?, ?)`).run(
+    run.timestamp,
+    run.decayed,
+    run.merged,
+    run.removed
+  );
+  pruneConsolidationRuns(db);
+  writeStatsMirror(files.hippoRoot, buildStatsFromDb(db));
 }
 
 /** Rows a tenant created since the last sleep (runs are host-wide), looking back at most 24 hours. */
@@ -130,37 +131,33 @@ export function lastConsolidationAt(db: DatabaseSyncLike): string | undefined {
 }
 
 /** Load the session decay context; session intervals come from consolidation_runs timestamps. */
-export function loadSessionDecayContext(hippoRoot: string): SessionDecayContext {
-  return onHandle(hippoRoot, (db) => {
-    // Get recent consolidation timestamps (last 20)
-    // SAFETY: rows' shape matches the single `timestamp` column above.
-    const rows = db.prepare(
-      `SELECT timestamp FROM consolidation_runs ORDER BY timestamp DESC, id DESC LIMIT 20`
-    ).all() as Array<{ timestamp: string }>;
+export function loadSessionDecayContextAt(db: DatabaseSyncLike): SessionDecayContext {
+  // Get recent consolidation timestamps (last 20)
+  // SAFETY: rows' shape matches the single `timestamp` column above.
+  const rows = db.prepare(
+    `SELECT timestamp FROM consolidation_runs ORDER BY timestamp DESC, id DESC LIMIT 20`
+  ).all() as Array<{ timestamp: string }>;
 
-    const sleepCount = Number(getMeta(db, 'sleep_count', '0')) || rows.length;
+  const sleepCount = Number(getMeta(db, 'sleep_count', '0')) || rows.length;
 
-    if (rows.length < 2) {
-      return { sleepCount, avgSessionIntervalDays: 0 };
-    }
+  if (rows.length < 2) {
+    return { sleepCount, avgSessionIntervalDays: 0 };
+  }
 
-    // Compute average interval between consecutive sessions
-    const timestamps = rows.map((r) => new Date(r.timestamp).getTime()).reverse();
-    let totalInterval = 0;
-    for (let i = 1; i < timestamps.length; i++) {
-      totalInterval += timestamps[i] - timestamps[i - 1];
-    }
-    const avgMs = totalInterval / (timestamps.length - 1);
-    const avgDays = avgMs / DAY_MS;
+  // Compute average interval between consecutive sessions
+  const timestamps = rows.map((r) => new Date(r.timestamp).getTime()).reverse();
+  let totalInterval = 0;
+  for (let i = 1; i < timestamps.length; i++) {
+    totalInterval += timestamps[i] - timestamps[i - 1];
+  }
+  const avgMs = totalInterval / (timestamps.length - 1);
+  const avgDays = avgMs / DAY_MS;
 
-    return { sleepCount, avgSessionIntervalDays: Math.max(0, avgDays) };
-  }, openStore);
+  return { sleepCount, avgSessionIntervalDays: Math.max(0, avgDays) };
 }
 
 /** Increment the sleep counter after each consolidation run. */
-export function incrementSleepCount(hippoRoot: string): void {
-  onHandle(hippoRoot, (db) => {
-    const current = Number(getMeta(db, 'sleep_count', '0')) || 0;
-    setMeta(db, 'sleep_count', String(current + 1));
-  }, openStore);
+export function incrementSleepCountAt(db: DatabaseSyncLike): void {
+  const current = Number(getMeta(db, 'sleep_count', '0')) || 0;
+  setMeta(db, 'sleep_count', String(current + 1));
 }

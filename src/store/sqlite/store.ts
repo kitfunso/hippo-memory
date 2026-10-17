@@ -1,15 +1,17 @@
 // The built-in SQLite adapter behind the store port.
-import { loadAmbientTallies } from '../ambient.js';
+import { loadAmbientTalliesAt } from '../ambient.js';
 import { listApiKeyRows, readApiKeyRecord } from '../auth.js';
 import { existsSync } from 'node:fs';
 import { appendAuditEvent, listAuditEventsAfter, queryAuditEvents } from '../audit.js';
 import { getHippoDbPath, withWriteScope } from '../../db/index.js';
-import { activeGoalsWithPolicies } from '../goals.js';
+import { activeGoalsWithPoliciesAt } from '../goals.js';
 import { planningFallacyEvidenceAt } from '../planning-fallacy-evidence.js';
 import { recordTokenUse } from '../token-ledger.js';
-import { loadAmbientCandidates, loadContextCandidates, newestEntriesAt, schemaFitAt } from '../candidates.js';
 import {
-  liveContentsBySourceAndTagAt, loadEntriesByIds, loadFreshRawMemories, rawRowsUnderRefAt,
+  loadAmbientCandidatesAt, loadContextCandidatesAt, newestEntriesAt, schemaFitAt,
+} from '../candidates.js';
+import {
+  liveContentsBySourceAndTagAt, loadEntriesByIdsAt, loadFreshRawMemoriesAt, rawRowsUnderRefAt,
 } from '../entry-reads.js';
 import { sqliteAgentImport } from './agent-import.js';
 import { sqliteCaptures } from './captures-group.js';
@@ -28,6 +30,7 @@ import { sqliteConnectorWrites } from './connector-writes-group.js';
 import { sqliteConsolidation } from './consolidation-group.js';
 import { sqliteLearning } from './learning-group.js';
 import { sqlitePromotion } from './promotion-group.js';
+import { sqliteProjectTags } from './project-tags-group.js';
 import { sqliteSharing } from './sharing-group.js';
 import { sqliteDiagnostics } from './diagnostics-group.js';
 import { sqliteEmbeddingIndex } from './embedding-index-group.js';
@@ -45,12 +48,12 @@ import { sqliteObjects } from './objects-group.js';
 import { sqlitePredictions } from './predictions-group.js';
 import { sqliteQuarantine } from './quarantine-group.js';
 import { sqliteVectorReads } from './vector-reads-group.js';
-import { loadLatestHandoff } from '../handoffs.js';
-import { updateStats } from '../index-and-stats.js';
+import { loadLatestHandoffAt } from '../handoffs.js';
+import { updateStatsAt } from '../index-and-stats.js';
 import { flushStatsMirrors } from '../mirrors.js';
 import { auditHighIdAt, revokeKeyAt } from '../key-audit.js';
 import { changeScopeGrantAt, createKeyAt, createSelfKeyAt } from '../key-writes.js';
-import { onHandle, openStore } from '../open.js';
+import { type Handles, handlesOf, type OnHandle, openStore } from '../open.js';
 import {
   type AuditLog, type AuditMaintenance, type ConnectorEvents, type ConnectorWrites, type ContextReads,
   type ContinuityBlock, type DagReads, type EntryWrites, type GraphReads, type HippoStore, type KeyAudit,
@@ -66,9 +69,9 @@ import type { LocalFiles } from '../port/local-files.js';
 import { served } from './served.js';
 import { isSharedStore } from '../../core/config.js';
 import { isGlobalStoreRoot, isInitialized, resolveGlobalRootDir } from '../../core/project-identity.js';
-import { loadRecallEntries } from '../search-rows.js';
-import { type ContinuityKey, listSessionEvents, loadActiveTaskSnapshot } from '../sessions.js';
-import { entriesWithoutVectorAt, loadStoredVectorViews, writeVectorsAt } from '../vector-index.js';
+import { loadRecallEntriesAt } from '../search-rows.js';
+import { type ContinuityKey, listSessionEventsAt, loadActiveTaskSnapshotAt } from '../sessions.js';
+import { entriesWithoutVectorAt, loadStoredVectorViewsAt, writeVectorsAt } from '../vector-index.js';
 
 /** Not on the synchronous store: the nearest-row scan yields to
  * the event loop, so this group answers only through Promises. */
@@ -79,20 +82,22 @@ type AsyncOnly = 'vectors';
 // LocalFiles is written synchronous already, and Sync would erase its plain methods.
 export type SqliteSyncStore = Sync<Omit<HippoStore, AsyncOnly | 'localFiles'>> & Pick<HippoStore, 'localFiles'>;
 
-function sqliteLocalFiles(hippoRoot: string): LocalFiles {
+function sqliteLocalFiles(handles: Handles): LocalFiles {
+  const { on } = handles;
   return {
-    hippoRoot,
-    consolidation: sqliteConsolidation(hippoRoot),
+    hippoRoot: handles.files.hippoRoot,
+    consolidation: sqliteConsolidation(handles),
     agentImport: sqliteAgentImport,
-    captures: sqliteCaptures(hippoRoot),
-    compactionHooks: sqliteCompactionHooks(hippoRoot),
-    promotion: sqlitePromotion(hippoRoot),
-    learning: sqliteLearning(hippoRoot),
-    sharing: sqliteSharing(hippoRoot),
-    diagnostics: sqliteDiagnostics(hippoRoot),
-    graphRebuild: sqliteGraphRebuild(hippoRoot),
-    embeddingIndex: sqliteEmbeddingIndex(hippoRoot),
-    ledger: sqliteLedger(hippoRoot),
+    captures: sqliteCaptures(on),
+    compactionHooks: sqliteCompactionHooks(on),
+    promotion: sqlitePromotion(handles),
+    projectTags: sqliteProjectTags(on),
+    learning: sqliteLearning(on),
+    sharing: sqliteSharing(on),
+    diagnostics: sqliteDiagnostics(on),
+    graphRebuild: sqliteGraphRebuild(on),
+    embeddingIndex: sqliteEmbeddingIndex(on),
+    ledger: sqliteLedger(on),
     globalStore: () => sqliteStore(resolveGlobalRootDir()),
   };
 }
@@ -102,39 +107,41 @@ function sqliteLocalFiles(hippoRoot: string): LocalFiles {
 export function sqliteSyncStore(
   hippoRoot: string,
 ): SqliteSyncStore & Sync<Omit<StoreGroups, AsyncOnly | 'localFiles'>> & Pick<StoreGroups, 'localFiles'> {
+  const handles = handlesOf(hippoRoot);
+  const { on } = handles;
   return {
     kind: 'sqlite',
-    localFiles: sqliteLocalFiles(hippoRoot),
-    ...sqliteBaseReads(hippoRoot),
-    ...sqliteRecallWrites(hippoRoot),
-    keyAudit: sqliteKeyAudit(hippoRoot),
-    keyWrites: sqliteKeyWrites(hippoRoot),
-    keyGrants: sqliteKeyGrants(hippoRoot),
-    vectorViews: sqliteVectorViews(hippoRoot),
-    vectorWrites: sqliteVectorWrites(hippoRoot),
-    entryWrites: sqliteEntryWrites(hippoRoot),
-    contextReads: sqliteContextReads(hippoRoot),
-    predictions: sqlitePredictions(hippoRoot),
-    dagReads: sqliteDagReads(hippoRoot),
-    auditLog: sqliteAuditLog(hippoRoot),
-    quarantine: sqliteQuarantine(hippoRoot),
-    graphReads: sqliteGraphReads(hippoRoot),
-    connectorWrites: sqliteConnectorWrites(hippoRoot),
-    connectorEvents: sqliteConnectorEvents(hippoRoot),
-    objects: sqliteObjects(hippoRoot),
-    readiness: sqliteReadiness(hippoRoot),
-    lastRecall: sqliteLastRecall(hippoRoot),
-    auditMaintenance: sqliteAuditMaintenance(hippoRoot),
-    lessonWrites: sqliteLessonWrites(hippoRoot),
-    sessions: sqliteSessions(hippoRoot),
-    cards: sqliteCards(hippoRoot),
-    goals: sqliteGoals(hippoRoot),
-    conflicts: sqliteConflicts(hippoRoot),
-    dormant: sqliteDormant(hippoRoot),
-    reports: sqliteReports(hippoRoot),
-    rejections: sqliteRejections(hippoRoot),
-    failureLog: sqliteFailureLog(hippoRoot),
-    compactions: sqliteCompactions(hippoRoot),
+    localFiles: sqliteLocalFiles(handles),
+    ...sqliteBaseReads(on),
+    ...sqliteRecallWrites(on),
+    keyAudit: sqliteKeyAudit(on),
+    keyWrites: sqliteKeyWrites(on),
+    keyGrants: sqliteKeyGrants(on),
+    vectorViews: sqliteVectorViews(on),
+    vectorWrites: sqliteVectorWrites(on),
+    entryWrites: sqliteEntryWrites(on),
+    contextReads: sqliteContextReads(on),
+    predictions: sqlitePredictions(on),
+    dagReads: sqliteDagReads(on),
+    auditLog: sqliteAuditLog(on),
+    quarantine: sqliteQuarantine(on),
+    graphReads: sqliteGraphReads(on),
+    connectorWrites: sqliteConnectorWrites(on),
+    connectorEvents: sqliteConnectorEvents(on),
+    objects: sqliteObjects(on),
+    readiness: sqliteReadiness(hippoRoot, on),
+    lastRecall: sqliteLastRecall(on),
+    auditMaintenance: sqliteAuditMaintenance(handles),
+    lessonWrites: sqliteLessonWrites(handles),
+    sessions: sqliteSessions(on),
+    cards: sqliteCards(on),
+    goals: sqliteGoals(on),
+    conflicts: sqliteConflicts(on),
+    dormant: sqliteDormant(on),
+    reports: sqliteReports(on),
+    rejections: sqliteRejections(on),
+    failureLog: sqliteFailureLog(on),
+    compactions: sqliteCompactions(on),
     close() {
       flushStatsMirrors(hippoRoot);
     },
@@ -152,29 +159,17 @@ type SqliteBaseReads = Pick<
   | 'planningFallacyEvidence'
 >;
 
-function sqliteBaseReads(hippoRoot: string): SqliteBaseReads {
+function sqliteBaseReads(on: OnHandle): SqliteBaseReads {
   return {
-    findApiKey(keyId) {
-      return onHandle(hippoRoot, (db) => readApiKeyRecord(db, keyId));
-    },
-    searchRecallEntries(query, args) {
-      return loadRecallEntries(hippoRoot, query, args);
-    },
-    entriesByIds(ids, tenantId) {
-      return loadEntriesByIds(hippoRoot, ids, tenantId);
-    },
-    activeGoals(opts) {
-      return activeGoalsWithPolicies(hippoRoot, opts);
-    },
-    freshRawEntries(count, tenantId, sessionId, origins) {
-      return loadFreshRawMemories(hippoRoot, count, tenantId, sessionId, origins ?? undefined);
-    },
-    continuity(tenantId, eventLimit, key) {
-      return continuityAt(hippoRoot, tenantId, eventLimit, key);
-    },
-    planningFallacyEvidence(tenantId, classQueryTokens) {
-      return planningFallacyEvidenceAt(hippoRoot, tenantId, classQueryTokens);
-    },
+    findApiKey: (keyId) => on((db) => readApiKeyRecord(db, keyId)),
+    searchRecallEntries: (query, args) => on((db) => loadRecallEntriesAt(db, query, args), openStore),
+    entriesByIds: (ids, tenantId) => on((db) => loadEntriesByIdsAt(db, ids, tenantId), openStore),
+    activeGoals: (opts) => on((db) => activeGoalsWithPoliciesAt(db, opts)),
+    freshRawEntries: (count, tenantId, sessionId, origins) =>
+      on((db) => loadFreshRawMemoriesAt(db, count, tenantId, sessionId, origins ?? undefined), openStore),
+    continuity: (tenantId, eventLimit, key) => continuityAt(on, tenantId, eventLimit, key),
+    planningFallacyEvidence: (tenantId, classQueryTokens) =>
+      on((db) => planningFallacyEvidenceAt(db, tenantId, classQueryTokens)),
   };
 }
 
@@ -183,59 +178,51 @@ type SqliteRecallWrites = Pick<
   'appendAuditEvents' | 'finishRecall' | 'bumpRecallStats' | 'recordTokens'
 >;
 
-function sqliteRecallWrites(hippoRoot: string): SqliteRecallWrites {
+function sqliteRecallWrites(on: OnHandle): SqliteRecallWrites {
   return {
     appendAuditEvents(events) {
       if (events.length === 0) return;
-      onHandle(hippoRoot, (db) => withWriteScope(db, 'append_audit_events', () => {
+      on((db) => withWriteScope(db, 'append_audit_events', () => {
         for (const event of events) appendAuditEvent(db, event);
       }));
     },
     finishRecall(writes) {
-      finishRecallAt(hippoRoot, writes);
+      on((db) => finishRecallAt(db, writes));
     },
     bumpRecallStats(recalled) {
-      updateStats(hippoRoot, { recalled });
+      on((db, files) => updateStatsAt(db, files, { recalled }), openStore);
     },
     recordTokens(use) {
-      onHandle(hippoRoot, (db) => recordTokenUse(db, use));
+      on((db) => recordTokenUse(db, use));
     },
   };
 }
 
-function sqliteVectorViews(hippoRoot: string): Sync<VectorViews> {
+function sqliteVectorViews(on: OnHandle): Sync<VectorViews> {
   return {
-    storedVectorViews(ids) {
-      return loadStoredVectorViews(hippoRoot, ids);
-    },
+    storedVectorViews: (ids) => on((db) => loadStoredVectorViewsAt(db, ids)),
   };
 }
 
-function sqliteVectorWrites(hippoRoot: string): Sync<VectorWrites> {
+function sqliteVectorWrites(on: OnHandle): Sync<VectorWrites> {
   return {
-    entriesWithoutVector(query) {
-      return onHandle(hippoRoot, (db) => entriesWithoutVectorAt(db, query));
-    },
-    writeVectors(write) {
-      return onHandle(hippoRoot, (db) => writeVectorsAt(db, write));
-    },
+    entriesWithoutVector: (query) => on((db) => entriesWithoutVectorAt(db, query)),
+    writeVectors: (write) => on((db) => writeVectorsAt(db, write)),
   };
 }
 
-function sqliteAuditLog(hippoRoot: string): Sync<AuditLog> {
+function sqliteAuditLog(on: OnHandle): Sync<AuditLog> {
   return {
-    listAuditEvents(query) {
-      return onHandle(hippoRoot, (db) => queryAuditEvents(db, query));
-    },
+    listAuditEvents: (query) => on((db) => queryAuditEvents(db, query)),
   };
 }
 
-function sqliteReadiness(hippoRoot: string): Sync<Readiness> {
+function sqliteReadiness(hippoRoot: string, on: OnHandle): Sync<Readiness> {
   return {
     ping() {
       // A probe must not create the store; the first write does, so a root with none yet is ready.
       if (!existsSync(getHippoDbPath(hippoRoot))) return;
-      onHandle(hippoRoot, (db) => { db.prepare('SELECT 1').get(); });
+      on((db) => { db.prepare('SELECT 1').get(); });
     },
   };
 }
@@ -261,11 +248,12 @@ export function sqliteReach(hippoRoot: string, store: HippoStore, shared?: boole
 /** `sqliteSyncStore` as a served store: each method runs at once and answers through a Promise, so a throw rejects as
  * another store's would. */
 export function sqliteStore(hippoRoot: string): HippoStore & StoreGroups {
+  const handles = handlesOf(hippoRoot);
   const sync = sqliteSyncStore(hippoRoot);
   return {
     ...served<ServedBaseMethods>(baseMethodsOf(sync)),
     localFiles: sync.localFiles,
-    vectors: sqliteVectorReads(hippoRoot),
+    vectors: sqliteVectorReads(handles),
     vectorViews: served<VectorViews>(sync.vectorViews),
     keyAudit: served<KeyAudit>(sync.keyAudit),
     keyWrites: served<KeyWrites>(sync.keyWrites),
@@ -280,7 +268,7 @@ export function sqliteStore(hippoRoot: string): HippoStore & StoreGroups {
     graphReads: served<GraphReads>(sync.graphReads),
     connectorWrites: served<ConnectorWrites>(sync.connectorWrites),
     connectorEvents: served<ConnectorEvents>(sync.connectorEvents),
-    objects: served<Objects>(sqliteObjects(hippoRoot)),
+    objects: served<Objects>(sqliteObjects(handles.on)),
     readiness: served<Readiness>(sync.readiness),
     lastRecall: served<LastRecall>(sync.lastRecall),
     auditMaintenance: served<AuditMaintenance>(sync.auditMaintenance),
@@ -311,86 +299,70 @@ function baseMethodsOf(sync: SqliteSyncStore): Sync<ServedBaseMethods> {
     planningFallacyEvidence, appendAuditEvents, finishRecall, bumpRecallStats, recordTokens };
 }
 
-function sqliteContextReads(hippoRoot: string): Sync<ContextReads> {
+function sqliteContextReads(on: OnHandle): Sync<ContextReads> {
   return {
-    unfinishedHandoff(tenantId, maxAgeMs, key) {
-      return loadLatestHandoff(
-        hippoRoot,
+    unfinishedHandoff: (tenantId, maxAgeMs, key) =>
+      on((db) => loadLatestHandoffAt(
+        db,
         tenantId,
         undefined,
         { unfinishedOnly: true, maxAgeMs, scopeFilter: 'default-deny' },
         key ?? undefined,
-      );
-    },
-    ambientCandidates(tenantId, { recentNeeded, admit, recall, origins }) {
-      return loadAmbientCandidates(hippoRoot, tenantId, recentNeeded, admit, recall, origins);
-    },
-    contextCandidates(tenantId, filter) {
-      return loadContextCandidates(hippoRoot, tenantId, filter);
-    },
-    ambientTallies(tenantId, filter) {
-      return loadAmbientTallies(hippoRoot, tenantId, filter);
-    },
-    newestEntries: (tenantId, limit) => onHandle(hippoRoot, (db) => newestEntriesAt(db, tenantId, limit), openStore),
-    schemaFit: (tenantId, content, tags) =>
-      onHandle(hippoRoot, (db) => schemaFitAt(db, tenantId, content, tags), openStore),
+      ), openStore),
+    ambientCandidates: (tenantId, { recentNeeded, admit, recall, origins }) =>
+      on((db) => loadAmbientCandidatesAt(db, tenantId, recentNeeded, admit, recall, origins), openStore),
+    contextCandidates: (tenantId, filter) => on((db) => loadContextCandidatesAt(db, tenantId, filter), openStore),
+    ambientTallies: (tenantId, filter) => on((db) => loadAmbientTalliesAt(db, tenantId, filter), openStore),
+    newestEntries: (tenantId, limit) => on((db) => newestEntriesAt(db, tenantId, limit), openStore),
+    schemaFit: (tenantId, content, tags) => on((db) => schemaFitAt(db, tenantId, content, tags), openStore),
     liveContentsBySourceAndTag: (tenantId, source, tag, exceptSessionId) =>
-      onHandle(hippoRoot, (db) => liveContentsBySourceAndTagAt(db, tenantId, source, tag, exceptSessionId), openStore),
-    rawRowsUnderRef: (tenantId, refPrefix) =>
-      onHandle(hippoRoot, (db) => rawRowsUnderRefAt(db, tenantId, refPrefix), openStore),
+      on((db) => liveContentsBySourceAndTagAt(db, tenantId, source, tag, exceptSessionId), openStore),
+    rawRowsUnderRef: (tenantId, refPrefix) => on((db) => rawRowsUnderRefAt(db, tenantId, refPrefix), openStore),
   };
 }
 
-function sqliteKeyWrites(hippoRoot: string): Sync<KeyWrites> {
+function sqliteKeyWrites(on: OnHandle): Sync<KeyWrites> {
   return {
     createApiKey(mint) {
-      onHandle(hippoRoot, (db) => createKeyAt(db, mint));
+      on((db) => createKeyAt(db, mint));
     },
-    createSelfApiKey(mint) {
-      return onHandle(hippoRoot, (db) => createSelfKeyAt(db, mint));
-    },
-    listApiKeys(query) {
-      return onHandle(hippoRoot, (db) => listApiKeyRows(db, query));
-    },
+    createSelfApiKey: (mint) => on((db) => createSelfKeyAt(db, mint)),
+    listApiKeys: (query) => on((db) => listApiKeyRows(db, query)),
   };
 }
 
-function sqliteKeyGrants(hippoRoot: string): Sync<KeyGrants> {
+function sqliteKeyGrants(on: OnHandle): Sync<KeyGrants> {
   return {
     changeScopeGrant(change) {
-      onHandle(hippoRoot, (db) => changeScopeGrantAt(db, change));
+      on((db) => changeScopeGrantAt(db, change));
     },
   };
 }
 
-function sqliteKeyAudit(hippoRoot: string): Sync<KeyAudit> {
+function sqliteKeyAudit(on: OnHandle): Sync<KeyAudit> {
   return {
-    revokeApiKey(revoke) {
-      return onHandle(hippoRoot, (db) => revokeKeyAt(db, revoke));
-    },
-    auditEventsAfter(opts) {
-      return onHandle(hippoRoot, (db) => listAuditEventsAfter(db, opts));
-    },
-    auditHighId() {
-      return onHandle(hippoRoot, auditHighIdAt);
-    },
+    revokeApiKey: (revoke) => on((db) => revokeKeyAt(db, revoke)),
+    auditEventsAfter: (opts) => on((db) => listAuditEventsAfter(db, opts)),
+    auditHighId: () => on(auditHighIdAt),
   };
 }
 
 /** sqliteStore's continuity read, for the synchronous recall that cannot await the port. */
 function continuityAt(
-  hippoRoot: string,
+  on: OnHandle,
   tenantId: string,
   eventLimit: number,
   key: ContinuityKey | null,
 ): ContinuityBlock {
-  const activeSnapshot = loadActiveTaskSnapshot(hippoRoot, tenantId, key ?? undefined);
-  const sessionId = activeSnapshot?.session_id ?? undefined;
-  return {
-    activeSnapshot,
-    sessionHandoff: sessionId ? loadLatestHandoff(hippoRoot, tenantId, sessionId, {}, key ?? undefined) : null,
-    recentSessionEvents: sessionId
-      ? listSessionEvents(hippoRoot, tenantId, { session_id: sessionId, limit: eventLimit })
-      : [],
-  };
+  return on((db, files) => {
+    const activeSnapshot = loadActiveTaskSnapshotAt(db, files, tenantId, key ?? undefined);
+    const sessionId = activeSnapshot?.session_id ?? undefined;
+    return {
+      activeSnapshot,
+      sessionHandoff: sessionId ? loadLatestHandoffAt(db, tenantId, sessionId, {}, key ?? undefined) : null,
+      recentSessionEvents: sessionId
+        ? listSessionEventsAt(db, tenantId, { session_id: sessionId, limit: eventLimit })
+        : [],
+    };
+  }, openStore);
 }

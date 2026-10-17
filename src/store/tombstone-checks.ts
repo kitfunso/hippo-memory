@@ -1,5 +1,5 @@
 // Sleep's tombstone checks run on one handle for the whole pass, owned here so no stage holds a raw one.
-import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../db/index.js';
+import { closeHippoDb, type DatabaseSyncLike } from '../db/index.js';
 import { type AppendAuditOpts, appendAuditEvent, reportAuditWriteFailure } from './audit.js';
 import { findRejectedValue, type RejectedValueRow } from './rejection.js';
 import { errorMessage } from '../util/log.js';
@@ -18,11 +18,11 @@ export interface TombstoneChecks {
 
 // Lazy so a sleep that checks nothing never opens the store; make it IMMEDIATELY before the try whose
 // finally closes it, so a throw in any phase cannot leak the handle.
-export function lazyTombstoneChecks(hippoRoot: string, dryRun: boolean): TombstoneChecks {
+export function lazyTombstoneChecks(open: () => DatabaseSyncLike, dryRun: boolean): TombstoneChecks {
   let handle: DatabaseSyncLike | null = null;
   const opened = (): DatabaseSyncLike | null => {
     if (dryRun) return null;
-    handle ??= openHippoDb(hippoRoot);
+    handle ??= open();
     return handle;
   };
   return {

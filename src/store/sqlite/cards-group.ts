@@ -1,26 +1,33 @@
 // hippo.db's Cards group: the agent work board.
-import { loadCardDetail } from '../card-detail.js';
+import { loadCardDetailAt } from '../card-detail.js';
 import {
-  addCardComment, blockCard, claimCard, completeCard, createCard, heartbeatCard, listCards, loadCard, loadCardRuns,
-  reclaimExpiredCards, reviewCard,
+  addCardCommentAt, blockCardAt, claimCardAt, completeCardAt, createCardAt, heartbeatCardAt, listCardsAt, loadCardAt,
+  loadCardRunsAt,
+  reclaimExpiredCardsAt, reviewCardAt,
 } from '../cards.js';
 import type { Cards } from '../port-groups.js';
 import type { Sync } from '../port.js';
+import { type OnHandle, openStore } from '../open.js';
 
-export function sqliteCards(hippoRoot: string): Sync<Cards> {
+export function sqliteCards(on: OnHandle): Sync<Cards> {
   return {
     create: (tenantId, input) =>
-      createCard(hippoRoot, tenantId, { ...input, dependsOn: input.dependsOn ? [...input.dependsOn] : undefined }),
-    load: (tenantId, id) => loadCard(hippoRoot, tenantId, id),
-    detail: (tenantId, id) => loadCardDetail(hippoRoot, tenantId, id),
-    list: (tenantId, opts) => listCards(hippoRoot, tenantId, opts),
-    runs: (tenantId, id) => loadCardRuns(hippoRoot, tenantId, id),
-    claim: (tenantId, id, runtime, sessionId) => claimCard(hippoRoot, tenantId, id, runtime, sessionId),
-    heartbeat: (tenantId, id, runId) => heartbeatCard(hippoRoot, tenantId, id, runId),
-    block: (tenantId, id, reason, runId) => blockCard(hippoRoot, tenantId, id, reason, runId),
-    review: (tenantId, id, runId) => reviewCard(hippoRoot, tenantId, id, runId),
-    complete: (tenantId, id, outcome, runId) => completeCard(hippoRoot, tenantId, id, outcome, runId),
-    reclaimExpired: (tenantId) => reclaimExpiredCards(hippoRoot, tenantId),
-    comment: (tenantId, cardId, author, body) => addCardComment(hippoRoot, tenantId, cardId, author, body),
+      on(
+        (db) => createCardAt(db, tenantId, { ...input, dependsOn: input.dependsOn ? [...input.dependsOn] : undefined }),
+        openStore,
+      ),
+    load: (tenantId, id) => on((db) => loadCardAt(db, tenantId, id), openStore),
+    detail: (tenantId, id) => on((db) => loadCardDetailAt(db, tenantId, id), openStore),
+    list: (tenantId, opts) => on((db) => listCardsAt(db, tenantId, opts), openStore),
+    runs: (tenantId, id) => on((db) => loadCardRunsAt(db, tenantId, id), openStore),
+    claim: (tenantId, id, runtime, sessionId) =>
+      on((db) => claimCardAt(db, tenantId, id, runtime, sessionId), openStore),
+    heartbeat: (tenantId, id, runId) => on((db) => heartbeatCardAt(db, tenantId, id, runId), openStore),
+    block: (tenantId, id, reason, runId) => on((db) => blockCardAt(db, tenantId, id, reason, runId), openStore),
+    review: (tenantId, id, runId) => on((db) => reviewCardAt(db, tenantId, id, runId), openStore),
+    complete: (tenantId, id, outcome, runId) => on((db) => completeCardAt(db, tenantId, id, outcome, runId), openStore),
+    reclaimExpired: (tenantId) => on((db) => reclaimExpiredCardsAt(db, tenantId), openStore),
+    comment: (tenantId, cardId, author, body) =>
+      on((db) => addCardCommentAt(db, tenantId, cardId, author, body), openStore),
   };
 }

@@ -3,7 +3,6 @@ import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { COMPACTION_DB_WAIT_MS } from '../src/core/compaction-timing.js';
 import { closeHippoDb, HOOK_DB_WAIT_MS, openHippoDb } from '../src/db/index.js';
-import { loadActiveTaskSnapshot } from '../src/store/sessions.js';
 import {
   compactionRows,
   oneLine,
@@ -17,6 +16,7 @@ import {
 import { initStore } from '../src/store/open.js';
 import { lockWaitAskedMs, tracingLockWaits } from './_helpers/lock-waits.js';
 import { runCliAs } from './_helpers/run-cli-as.js';
+import { loadActiveTaskSnapshot } from './_helpers/root-forms.js';
 
 // The instruction Claude Code hands the summarizer; pinned word for word.
 const INSTRUCTION =

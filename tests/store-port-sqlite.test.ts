@@ -8,13 +8,13 @@ import { recordTokens } from '../src/api/index.js';
 import { appendAuditEvent, type AppendAuditOpts } from '../src/store/audit.js';
 import { _resetAblationCacheForTests } from '../src/core/ablation.js';
 import { embeddingIndexIdentity } from '../src/store/embeddings/index.js';
-import { loadStoredVectors } from '../src/store/vector-index.js';
 import { detectForwardClaim } from '../src/learn/forward-claim-detector.js';
-import { activeGoalsWithPolicies, localGoalRecallRows, pushGoal, writeGoalRecallLog } from '../src/store/goals.js';
+import { localGoalRecallRows, writeGoalRecallLog } from '../src/store/goals.js';
 import { boostByGoals } from '../src/search/goal-boost.js';
 import { _resetSessionRecallHistoryMcpForTests } from '../src/mcp/server.js';
 import { lastRecalledIds } from '../src/mcp/session-state.js';
 import { loadPhysicsState, resetAllPhysicsState } from '../src/db/physics-state.js';
+import { handlesOf, onHandle, openStore } from '../src/store/open.js';
 import { planningFallacyEvidenceAt } from '../src/store/planning-fallacy-evidence.js';
 import { writeRecallTrace } from '../src/store/recall-trace.js';
 import { serve } from '../src/server.js';
@@ -23,12 +23,11 @@ import {
   type RecallSearchArgs, type RecallTraceInput, type RecallWrites, type VectorCandidateSpec,
 } from '../src/entry/store-kit.js';
 import { __resetSessionRecallHistoryHttp } from '../src/entry/testing.js';
-import { loadEntriesByIds, loadFreshRawMemories } from '../src/store/entry-reads.js';
 import { strengthenRetrieved, writeEntry } from '../src/store/entry-writes.js';
-import { loadLatestHandoff, saveSessionHandoff } from '../src/store/handoffs.js';
+import { loadLatestHandoffAt, saveSessionHandoff } from '../src/store/handoffs.js';
 import { updateStats } from '../src/store/index-and-stats.js';
-import { loadRecallSearchEntries, loadVectorCandidateEntries } from '../src/store/search-rows.js';
-import { appendSessionEvent, listSessionEvents, loadActiveTaskSnapshot, saveActiveTaskSnapshot } from '../src/store/sessions.js';
+import { loadRecallSearchEntries } from '../src/store/search-rows.js';
+import { appendSessionEvent, listSessionEventsAt, loadActiveTaskSnapshotAt, saveActiveTaskSnapshot } from '../src/store/sessions.js';
 import { EMBEDDING_MODEL_META_KEY, hasStoredVectors, upsertVectors } from '../src/db/vector-store.js';
 import { countMatching, recordStatementsAsync, STORE_OPEN } from './_helpers/count-statements.js';
 import { hashedVector, startHashedEmbeddings, type HashedEmbeddings } from './_helpers/hashed-embedding-server.js';
@@ -37,6 +36,10 @@ import {
 } from './_helpers/recall-golden-seed.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 import { makeRoot } from './_helpers/make-root.js';
+import {
+  activeGoalsWithPolicies, pushGoal, loadEntriesByIds, loadFreshRawMemories, loadStoredVectors,
+  loadVectorCandidateEntries,
+} from './_helpers/root-forms.js';
 
 beforeEach(() => {
   vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
@@ -240,16 +243,16 @@ describe('sqliteStore reads equal the hippo.db functions they wrap and open no m
       recentSessionEvents: [{ content: 'alice noted proj-a' }],
     }],
   ] as const)('continuity with %s', async (_name, tenantId, key, kind, block) => {
-    // The reads recall made before the port, ahead of its scope filter.
-    const { direct, port } = await parity((s) => {
-      const activeSnapshot = loadActiveTaskSnapshot(s.root, tenantId, key ?? undefined);
+    // The reads recall made before the port, ahead of its scope filter, on one handle as the port reads them.
+    const { direct, port } = await parity((s) => handlesOf(s.root).on((db, files) => {
+      const activeSnapshot = loadActiveTaskSnapshotAt(db, files, tenantId, key ?? undefined);
       const sessionId = activeSnapshot?.session_id ?? undefined;
       return {
         activeSnapshot,
-        sessionHandoff: sessionId ? loadLatestHandoff(s.root, tenantId, sessionId, {}, key ?? undefined) : null,
-        recentSessionEvents: sessionId ? listSessionEvents(s.root, tenantId, { session_id: sessionId, limit: 5 }) : [],
+        sessionHandoff: sessionId ? loadLatestHandoffAt(db, tenantId, sessionId, {}, key ?? undefined) : null,
+        recentSessionEvents: sessionId ? listSessionEventsAt(db, tenantId, { session_id: sessionId, limit: 5 }) : [],
       };
-    }, (store) => store.continuity(tenantId, 5, key), kind);
+    }, openStore), (store) => store.continuity(tenantId, 5, key), kind);
     expect(direct.value).toMatchObject(block);
     expect(port.opens).toBe(direct.opens);
   });
@@ -261,7 +264,7 @@ describe('sqliteStore reads equal the hippo.db functions they wrap and open no m
     ['no tokens', [], null],
   ] as const)('planningFallacyEvidence for %s, with no audit row', async (_name, tokens, classTag) => {
     // The planning-fallacy reads of a recall; its audit rows stay with the caller.
-    const { direct, port } = await parity((s) => planningFallacyEvidenceAt(s.root, TENANT, tokens), (store) => store.planningFallacyEvidence(TENANT, tokens));
+    const { direct, port } = await parity((s) => onHandle(s.root, (db) => planningFallacyEvidenceAt(db, TENANT, tokens), openStore), (store) => store.planningFallacyEvidence(TENANT, tokens));
     expect(direct.value).toMatchObject({ classTag, tiebreak: false, baserate: classTag ? { nClosed: 1 } : null });
     expect(port.opens).toBe(direct.opens);
   });

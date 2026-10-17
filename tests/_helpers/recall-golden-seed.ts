@@ -8,14 +8,13 @@ import { initStore } from '../../src/store/open.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, Layer, type MemoryEntry } from '../../src/core/memory.js';
 import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
-import { pushGoal } from '../../src/store/goals.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { appendSessionEvent, saveActiveTaskSnapshot } from '../../src/store/sessions.js';
 import { saveSessionHandoff } from '../../src/store/handoffs.js';
-import { closePrediction } from '../../src/store/predictions.js';
 import { savePrediction } from './save-prediction.js';
 import type { RecallResult } from '../../src/api/index.js';
 import { flushStatsMirrors } from '../../src/store/mirrors.js';
+import { pushGoal, closePrediction } from './root-forms.js';
 
 export const FAKE_NOW = '2026-02-01T00:00:00.000Z';
 export const SESSION = 'golden-session';

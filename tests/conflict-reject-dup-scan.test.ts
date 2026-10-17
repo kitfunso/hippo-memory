@@ -4,11 +4,12 @@ import { createRequire } from 'node:module';
 import type { MemoryEntry } from '../src/core/memory.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { readEntry } from '../src/store/entry-reads.js';
-import { listMemoryConflicts, replaceDetectedConflicts, resolveConflict } from '../src/store/conflicts.js';
+import { listMemoryConflicts, resolveConflict } from '../src/store/conflicts.js';
 import { queryAuditEvents } from '../src/store/audit.js';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { replaceDetectedConflicts } from './_helpers/root-forms.js';
 
 interface StatementProto { readonly sourceSQL: string; all(...params: unknown[]): unknown[] }
 const require = createRequire(import.meta.url);

@@ -21,6 +21,7 @@ import { selectAllEntries, selectPreviewRows } from './entry-reads.js';
 import { ftsRowExists } from './entry-row.js';
 import { MEMORY_SELECT_COLUMNS, parseJsonArray } from './rows.js';
 import { purgeMirrorBestEffort } from './mirrors.js';
+import type { StoreFiles } from './open.js';
 
 /** One automatic row with a defect. `set-aside` moves to dormant storage on apply, `review` is listed only, `protected`
  * is kept. */
@@ -245,7 +246,7 @@ function repairOn(
 /** Preview by default; apply backs the database up, then moves certain defects to dormant storage, without running
  * migrations. */
 export function repairAutomaticMemories(
-  root: string,
+  { hippoRoot: root }: StoreFiles,
   opts: { tenantId: string; apply?: boolean },
 ): QualityRepairResult {
   return withUnmigratedDb(root, !opts.apply, (db) => repairOn(db, root, opts));
@@ -255,7 +256,7 @@ const AUTO_REPAIR_META_KEY = 'quality_repair_auto';
 
 /** Applies the repair once per store, so stores that predate the quality gate are cleaned on upgrade with no command;
  * null once done. */
-export function repairQualityOnce(root: string, tenantId: string): QualityRepairResult | null {
+export function repairQualityOnce({ hippoRoot: root }: StoreFiles, tenantId: string): QualityRepairResult | null {
   return withUnmigratedDb(root, false, (db) => {
     if (getMeta(db, AUTO_REPAIR_META_KEY) === '1') return null;
     // The apply commits the flag with the moves, so a lock taken between them cannot hide what moved.

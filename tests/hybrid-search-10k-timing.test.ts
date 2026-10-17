@@ -1,16 +1,17 @@
 // One hybrid recall over a 10k-row store with 384-dim vectors does a bounded amount of work; prints the measured time.
 
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
+import { handlesOf } from '../src/store/open.js';
 import { batchWriteAndDelete } from '../src/store/delete-and-batch.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { saveStoredEmbeddingModel } from '../src/store/embeddings/index.js';
-import { saveEmbeddingIndex } from '../src/store/vector-index.js';
 import { resolveEmbeddingProvider } from '../src/embeddings/provider.js';
 import { searchBothHybrid } from '../src/sharing/search-both.js';
 import { recordStatementsAsync } from './_helpers/count-statements.js';
 import { loadConfig } from '../src/core/config.js';
 import { sharingStores } from './_helpers/sharing-stores.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { saveEmbeddingIndex } from './_helpers/root-forms.js';
 
 afterAll(() => {
   vi.unstubAllEnvs();
@@ -59,7 +60,7 @@ describe('hybrid recall at 10k rows', () => {
     seed(home, ROWS);
     seed(fewer, FEWER_ROWS);
     vi.stubEnv('OPENAI_API_KEY', 'sk-test');
-    for (const store of [home, fewer]) saveStoredEmbeddingModel(store, resolveEmbeddingProvider(loadConfig(store).embeddings).id);
+    for (const store of [home, fewer]) saveStoredEmbeddingModel(handlesOf(store).on, resolveEmbeddingProvider(loadConfig(store).embeddings).id);
     const queryVector = vector(7);
     vi.stubGlobal('fetch', vi.fn(async () =>
       new Response(JSON.stringify({ data: [{ embedding: queryVector }] }), { status: 200 })));

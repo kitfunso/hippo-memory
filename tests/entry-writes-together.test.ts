@@ -1,10 +1,10 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import { loadAllEntries } from '../src/store/entry-reads.js';
-import { writeEntriesTogether } from '../src/store/entry-writes.js';
 import { onHandle, openStore } from '../src/store/open.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { writeEntriesTogether } from './_helpers/root-forms.js';
 
 describe('writeEntriesTogether', () => {
   const roots: string[] = [];

@@ -1,7 +1,8 @@
 import { BadRequestError } from '../../src/core/api-errors.js';
 import { loadConfig } from '../../src/core/config.js';
 import { assertTenantId } from '../../src/core/tenant-id.js';
-import { predictionMirror, writePrediction, type Prediction, type SavePredictionOptions } from '../../src/store/predictions.js';
+import { handlesOf, openStore } from '../../src/store/open.js';
+import { predictionMirror, writePredictionAt, type Prediction, type SavePredictionOptions } from '../../src/store/predictions.js';
 
 /** A prediction with its recall mirror, the mirror's half-life read from the store's config.json as the CLI would. */
 export function savePrediction(
@@ -15,5 +16,5 @@ export function savePrediction(
   if (!opts.claimText) throw new BadRequestError('savePrediction: claimText is required');
 
   const mirror = predictionMirror(tenantId, opts, loadConfig(hippoRoot).defaultHalfLifeDays);
-  return writePrediction(hippoRoot, tenantId, { ...opts, mirror }, actor);
+  return handlesOf(hippoRoot).on((db, files) => writePredictionAt(db, files, tenantId, { ...opts, mirror }, actor), openStore);
 }

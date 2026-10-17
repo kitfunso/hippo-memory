@@ -5,7 +5,6 @@ import type { EntryWrite, RawArchive } from '../port.js';
 import type { DlqItem as GitHubDlqItem, GitHubDlqInsert, GitHubRouting, HwmColumn, StoredCursors } from './github.js';
 import type { DlqItem as SlackDlqItem, SlackDlqInsert, SlackTeamRoute, SlackWorkspace } from './slack.js';
 import { placeholders } from '../../util/sql.js';
-import { onHandle } from '../open.js';
 
 /** Which log table a connector writes and the column its dedupe key lives in. */
 export interface EventLogSpec {
@@ -42,9 +41,8 @@ export function markEventSeenAt(
   return Number(inserted.changes ?? 0) !== 0;
 }
 
-export function eventRecord(hippoRoot: string, log: EventLogSpec, key: string): ConnectorEventRecord {
-  return onHandle(hippoRoot, (db): ConnectorEventRecord =>
-    eventSeenAt(db, log, key) ? { seen: true, memoryId: eventMemoryAt(db, log, key) } : { seen: false });
+export function eventRecordAt(db: DatabaseSyncLike, log: EventLogSpec, key: string): ConnectorEventRecord {
+  return eventSeenAt(db, log, key) ? { seen: true, memoryId: eventMemoryAt(db, log, key) } : { seen: false };
 }
 
 /** The source event a connector's write answers, by the source's own key. The store logs each key once per connector,

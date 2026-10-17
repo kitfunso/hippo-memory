@@ -16,6 +16,7 @@ import {
   auditFailures, auditRows, cleanups, execOn, get, holdWriteLock, keyFor, newRoot, onDb, patientStore, post, postText, seen, start, undoAll,
 } from './_helpers/store-worker-server.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { handlesOf } from '../src/store/open.js';
 
 beforeEach(() => {
   vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
@@ -206,7 +207,7 @@ describe("the server-thread block of a `loop: 'off'` route", () => {
     const root = newRoot();
     const info = vi.spyOn(log, 'info');
     // The worker-backed store with one group swapped back to the in-process one: the defect the block exists to catch.
-    const store = Object.assign(workerSqliteStore(root), { predictions: served<Predictions>(sqlitePredictions(root)) });
+    const store = Object.assign(workerSqliteStore(root), { predictions: served<Predictions>(sqlitePredictions(handlesOf(root).on)) });
     const server = await start(root, store);
 
     const res = await send(server);

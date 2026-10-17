@@ -2,9 +2,8 @@
 
 import { withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
 import { archiveRawMemory } from '../raw-archive.js';
-import { onHandle } from '../open.js';
 import type { ConnectorEventRecord } from '../port.js';
-import { eventMemoryAt, eventRecord, eventSeenAt, markEventSeenAt, type EventLogSpec } from './event-log.js';
+import { eventMemoryAt, eventRecordAt, eventSeenAt, markEventSeenAt, type EventLogSpec } from './event-log.js';
 import { dlqAccess } from './dlq.js';
 
 /** One github_event_log row to write; `memoryId` is null for an event that produced no memory. */
@@ -33,12 +32,8 @@ export function markGitHubEventSeenAt(db: DatabaseSyncLike, entry: GitHubEventLo
   );
 }
 
-export function githubEventRecord(hippoRoot: string, idempotencyKey: string): ConnectorEventRecord {
-  return eventRecord(hippoRoot, GITHUB_LOG, idempotencyKey);
-}
-
-export function markGitHubEventSeen(hippoRoot: string, entry: GitHubEventLogEntry): void {
-  onHandle(hippoRoot, (db) => { markGitHubEventSeenAt(db, entry); });
+export function githubEventRecordAt(db: DatabaseSyncLike, idempotencyKey: string): ConnectorEventRecord {
+  return eventRecordAt(db, GITHUB_LOG, idempotencyKey);
 }
 
 export interface ArtifactDeletion {
@@ -51,34 +46,34 @@ export interface ArtifactDeletion {
   who: string;
 }
 
+export interface ArtifactDeletionOutcome {
+  duplicate: boolean;
+  archived: number;
+}
+
 /** Archives every active raw row of one tenant's artifact and logs the delete event; a failed archive rolls back the
  * batch and the log row. */
-export function archiveDeletedArtifact(
-  hippoRoot: string,
-  del: ArtifactDeletion,
-): { duplicate: boolean; archived: number } {
-  return onHandle(hippoRoot, (db) => {
-    if (githubEventSeenAt(db, del.idempotencyKey)) return { duplicate: true, archived: 0 };
-    const logged = { idempotencyKey: del.idempotencyKey, deliveryId: del.deliveryId, eventName: del.eventName };
+export function archiveDeletedArtifactAt(db: DatabaseSyncLike, del: ArtifactDeletion): ArtifactDeletionOutcome {
+  if (githubEventSeenAt(db, del.idempotencyKey)) return { duplicate: true, archived: 0 };
+  const logged = { idempotencyKey: del.idempotencyKey, deliveryId: del.deliveryId, eventName: del.eventName };
 
-    // SAFETY: the SELECT projects only the `id` column.
-    const rows = db
-      .prepare(`SELECT id FROM memories WHERE artifact_ref = ? AND tenant_id = ? AND kind = 'raw'`)
-      .all(del.artifactRef, del.tenantId) as Array<{ id: string }>;
-    const memoryIds = rows.map((r) => r.id);
+  // SAFETY: the SELECT projects only the `id` column.
+  const rows = db
+    .prepare(`SELECT id FROM memories WHERE artifact_ref = ? AND tenant_id = ? AND kind = 'raw'`)
+    .all(del.artifactRef, del.tenantId) as Array<{ id: string }>;
+  const memoryIds = rows.map((r) => r.id);
 
-    if (memoryIds.length === 0) {
-      // Still logged, so a retry of the same delete answers 'duplicate'.
-      markGitHubEventSeenAt(db, { ...logged, memoryId: null });
-      return { duplicate: false, archived: 0 };
-    }
+  if (memoryIds.length === 0) {
+    // Still logged, so a retry of the same delete answers 'duplicate'.
+    markGitHubEventSeenAt(db, { ...logged, memoryId: null });
+    return { duplicate: false, archived: 0 };
+  }
 
-    withWriteScope(db, 'github_delete_all', () => {
-      for (const id of memoryIds) archiveRawMemory(db, id, { reason: del.reason, who: del.who });
-      markGitHubEventSeenAt(db, { ...logged, memoryId: memoryIds[0]! });
-    });
-    return { duplicate: false, archived: memoryIds.length };
+  withWriteScope(db, 'github_delete_all', () => {
+    for (const id of memoryIds) archiveRawMemory(db, id, { reason: del.reason, who: del.who });
+    markGitHubEventSeenAt(db, { ...logged, memoryId: memoryIds[0]! });
   });
+  return { duplicate: false, archived: memoryIds.length };
 }
 
 export type DlqBucket = 'parse_error' | 'unroutable' | 'signature_failed' | 'unhandled';
@@ -137,39 +132,37 @@ export interface GitHubRouting {
   tenant: string | null;
 }
 
-export function githubRouting(
-  hippoRoot: string,
+export function githubRoutingAt(
+  db: DatabaseSyncLike,
   args: { installationId?: string | null; repoFullName?: string | null },
 ): GitHubRouting {
-  return onHandle(hippoRoot, (db) => {
-    // SAFETY: the SELECT projects exactly one column, `c`, as a COUNT(*).
-    const instCount = (db
-      .prepare(`SELECT COUNT(*) AS c FROM github_installations`)
-      .get() as { c: number | bigint }).c;
-    // SAFETY: the SELECT projects exactly one column, `c`, as a COUNT(*).
-    const repoCount = (db
-      .prepare(`SELECT COUNT(*) AS c FROM github_repositories`)
-      .get() as { c: number | bigint }).c;
-    const counts = { installations: Number(instCount), repositories: Number(repoCount) };
+  // SAFETY: the SELECT projects exactly one column, `c`, as a COUNT(*).
+  const instCount = (db
+    .prepare(`SELECT COUNT(*) AS c FROM github_installations`)
+    .get() as { c: number | bigint }).c;
+  // SAFETY: the SELECT projects exactly one column, `c`, as a COUNT(*).
+  const repoCount = (db
+    .prepare(`SELECT COUNT(*) AS c FROM github_repositories`)
+    .get() as { c: number | bigint }).c;
+  const counts = { installations: Number(instCount), repositories: Number(repoCount) };
 
-    if (args.installationId) {
-      // SAFETY: the SELECT projects exactly the tenant_id column of github_installations.
-      const row = db
-        .prepare(`SELECT tenant_id FROM github_installations WHERE installation_id = ?`)
-        .get(args.installationId) as { tenant_id?: string } | undefined;
-      return { ...counts, tenant: row?.tenant_id ?? null };
-    }
-    if ((counts.installations === 0 && counts.repositories === 0) || !args.repoFullName) {
-      return { ...counts, tenant: null };
-    }
-    // SAFETY: the SELECT projects exactly the tenant_id column of github_repositories.
+  if (args.installationId) {
+    // SAFETY: the SELECT projects exactly the tenant_id column of github_installations.
     const row = db
-      .prepare(
-        `SELECT tenant_id FROM github_repositories WHERE repo_full_name = ? ORDER BY added_at, tenant_id LIMIT 1`,
-      )
-      .get(args.repoFullName) as { tenant_id?: string } | undefined;
+      .prepare(`SELECT tenant_id FROM github_installations WHERE installation_id = ?`)
+      .get(args.installationId) as { tenant_id?: string } | undefined;
     return { ...counts, tenant: row?.tenant_id ?? null };
-  });
+  }
+  if ((counts.installations === 0 && counts.repositories === 0) || !args.repoFullName) {
+    return { ...counts, tenant: null };
+  }
+  // SAFETY: the SELECT projects exactly the tenant_id column of github_repositories.
+  const row = db
+    .prepare(
+      `SELECT tenant_id FROM github_repositories WHERE repo_full_name = ? ORDER BY added_at, tenant_id LIMIT 1`,
+    )
+    .get(args.repoFullName) as { tenant_id?: string } | undefined;
+  return { ...counts, tenant: row?.tenant_id ?? null };
 }
 
 export type HwmColumn = 'issues_hwm' | 'issue_comments_hwm' | 'pr_review_comments_hwm';

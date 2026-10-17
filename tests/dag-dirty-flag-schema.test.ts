@@ -10,12 +10,12 @@
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { loadAllDirtySummaries } from '../src/store/summaries.js';
 import { markSummaryDirtyInTx } from '../src/store/summary-dirty.js';
 import { openHippoDb } from '../src/db/index.js';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../src/core/memory.js';
 import { queryAuditEvents } from '../src/store/audit.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { loadAllDirtySummaries } from './_helpers/root-forms.js';
 
 // loadAllDirtySummaries is the production reader; the tenant filter stands in for the per-tenant wrapper.
 function dirtyFor(root: string, tenantId: string): MemoryEntry[] {

@@ -17,11 +17,11 @@ import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { loadSessionRawMemories, loadFreshRawMemories } from '../src/store/entry-reads.js';
 import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { retrieve, assemble } from '../src/api/index.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+import { loadSessionRawMemories, loadFreshRawMemories } from './_helpers/root-forms.js';
 
 beforeEach(() => {
   vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');

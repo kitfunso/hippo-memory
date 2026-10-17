@@ -16,6 +16,7 @@ import { sqliteConsolidation } from '../src/store/sqlite/consolidation-group.js'
 import { sqliteSyncStore } from '../src/store/sqlite/store.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { handlesOf } from '../src/store/open.js';
 
 let home: string;
 beforeEach(() => {
@@ -61,7 +62,7 @@ describe('sleep partitions by origin project', () => {
     writeEntry(home, inProject(createMemory(text, { layer: Layer.Semantic }), 'proj-c'));
     writeEntry(home, inProject(createMemory(text, { layer: Layer.Semantic }), 'proj-c'));
 
-    expect(deduplicateStore(sqliteConsolidation(home)).removed).toBe(1);
+    expect(deduplicateStore(sqliteConsolidation(handlesOf(home))).removed).toBe(1);
     expect(live().map((e) => e.origin_project).sort()).toEqual(['proj-b', 'proj-c']);
   });
 

@@ -4,18 +4,20 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { calculateStrength, confidenceFacets, createMemory, DEFAULT_HALF_LIFE_DAYS, Layer, type MemoryEntry } from '../src/core/memory.js';
-import { loadEveryTenantEntries } from '../src/store/entry-reads.js';
 import { sqliteSyncStore } from '../src/store/sqlite/store.js';
 import { recordStatementsAsync } from './_helpers/count-statements.js';
-import { replaceDetectedConflicts, resolveConflict, listMemoryConflicts } from '../src/store/conflicts.js';
-import { appendConsolidationRun, updateStats } from '../src/store/index-and-stats.js';
+import { resolveConflict, listMemoryConflicts } from '../src/store/conflicts.js';
+import { updateStats } from '../src/store/index-and-stats.js';
 import { DAY_MS } from '../src/util/time.js';
-import { saveStoredVectors, storedVectorSummary } from '../src/store/vector-index.js';
 import { handleStatus } from '../src/cli/status.js';
 import { _resetAblationCacheForTests } from '../src/core/ablation.js';
 import { runCli } from '../src/cli.js';
 import { runInProcess } from './_helpers/run-in-process.js';
 import { makeStore } from './_helpers/make-root.js';
+import {
+  loadEveryTenantEntries, replaceDetectedConflicts, appendConsolidationRun, saveStoredVectors,
+  storedVectorSummary,
+} from './_helpers/root-forms.js';
 
 type Walk = (this: Float32Array) => IterableIterator<number>;
 let home: string;

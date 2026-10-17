@@ -2,7 +2,7 @@ import { DEFAULT_TENANT_ID } from '../util/env.js';
 import { type MemoryEntry } from '../core/memory.js';
 import { RawAppendOnlyError } from '../core/raw-append-only.js';
 import { AUTO_DELETABLE, type SqlFragment } from './rule-sql.js';
-import { openHippoDb, closeHippoDb, withWriteScope, type DatabaseSyncLike } from '../db/index.js';
+import { openHippoDb, withWriteScope, type DatabaseSyncLike } from '../db/index.js';
 import { checkRejectionGuard } from './rejection.js';
 import { RejectedValueError } from '../core/api-errors.js';
 import { markSummaryDirtyInTx } from './summary-dirty.js';
@@ -12,7 +12,7 @@ import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry } from './rows.js';
 import { audit } from './audit-event.js';
 import { deleteFtsRow, replaceFtsRows, stampOriginProject, upsertMemoryRow } from './entry-row.js';
 import { purgeMirrorBestEffort, mirrorBestEffort, writeMarkdownMirror } from './mirrors.js';
-import { onHandle, openStore } from './open.js';
+import { onHandle, openStore, type StoreFiles } from './open.js';
 import { clock, type WriteBudget } from '../util/write-budget.js';
 import { chunked } from '../util/chunked.js';
 import { placeholders } from '../util/sql.js';
@@ -42,10 +42,8 @@ const AUTOMATIC_DELETE: SqlFragment = {
 
 /** Ids of memories that back a first-class object, for passes that plan deletes before making them. A table missing
  * from an older schema is skipped. */
-export function memoriesBackingObjects(hippoRoot: string): Set<string> {
-  return onHandle(hippoRoot, (db) => {
-    return memoriesBackingObjectsOn(db);
-  });
+export function memoriesBackingObjectsAt(db: DatabaseSyncLike): Set<string> {
+  return memoriesBackingObjectsOn(db);
 }
 
 /** memoriesBackingObjects on the caller's handle. */
@@ -131,19 +129,6 @@ function deleteTargetRow(
   return { tenantId, dagParentId: row.dag_parent_id ?? null };
 }
 
-/** Delete an entry from SQLite and mirrors; thin wrapper over `deleteEntryCore` (open, core, mirrors, close).
- * `opts.actor` defaults to 'cli'; the api layer threads `ctx.actor` so HTTP callers land as `api_key:<key_id>` in the
- * audit log. */
-export function deleteEntry(
-  hippoRoot: string,
-  id: string,
-  opts?: { actor?: string; reason?: string; automatic?: boolean },
-): boolean {
-  return onHandle(hippoRoot, (db) => {
-    return deleteEntryOn(db, hippoRoot, id, opts);
-  }, openStore);
-}
-
 /** deleteEntry on the caller's open store, so a loop of deletes opens the store once; each delete still commits
  * alone. */
 function deleteEntryOn(
@@ -166,29 +151,24 @@ function deleteEntryOn(
 /** deleteEntry with `automatic` for each removal and its own forget row and reason, all in one transaction after one
  * read of the id set. Returns the ids deleted, in `removals` order; a missing, repeated, pinned, raw or object-backing
  * id is left out. */
-export function deleteEntriesAutomatically(
-  hippoRoot: string,
+export function deleteEntriesAutomaticallyAt(
+  db: DatabaseSyncLike,
+  { hippoRoot }: StoreFiles,
   removals: readonly { id: string; reason: string }[],
   actor: string,
 ): string[] {
-  if (removals.length === 0) return [];
-  const deleted = onHandle(
-    hippoRoot,
-    (db) =>
-      withWriteScope(db, 'delete_entries_automatically', () => {
-        const rows = selectDeleteTargets(
-          db,
-          removals.map((removal) => removal.id),
-        );
-        return removals
-          .filter(({ id, reason }) => {
-            const row = rows.get(id);
-            return row !== undefined && deleteTargetRow(db, row, { actor, reason, automatic: true }) !== null;
-          })
-          .map((removal) => removal.id);
-      }),
-    openStore,
-  );
+  const deleted = withWriteScope(db, 'delete_entries_automatically', () => {
+    const rows = selectDeleteTargets(
+      db,
+      removals.map((removal) => removal.id),
+    );
+    return removals
+      .filter(({ id, reason }) => {
+        const row = rows.get(id);
+        return row !== undefined && deleteTargetRow(db, row, { actor, reason, automatic: true }) !== null;
+      })
+      .map((removal) => removal.id);
+  });
   for (const id of deleted) purgeMirrorBestEffort(hippoRoot, id, false, 'deleteEntry');
   return deleted;
 }
@@ -482,29 +462,25 @@ function isRejectedBatchWrite(db: DatabaseSyncLike, row: MemoryEntry): boolean {
 }
 
 /** Deletes each target in its own transaction on one store handle; `true` where the row went. */
-export function deleteEntriesOneByOne(
-  hippoRoot: string,
+export function deleteEntriesOneByOneAt(
+  db: DatabaseSyncLike,
+  { hippoRoot }: StoreFiles,
   targets: readonly { id: string; reason: string }[],
   opts: { actor?: string; automatic?: boolean },
 ): boolean[] {
-  if (targets.length === 0) return [];
-  return onHandle(hippoRoot, (db) => {
-    return targets.map((target) => deleteEntryOn(db, hippoRoot, target.id, { ...opts, reason: target.reason }));
-  }, openStore);
+  return targets.map((target) => deleteEntryOn(db, hippoRoot, target.id, { ...opts, reason: target.reason }));
 }
 
 /** Commits whole components in transactions of about `budget.holdMs`, letting other writers in between; returns the ids
  * that left `memories`. The snapshot keeps what other writers changed after the caller loaded its rows. */
-export async function commitInChunks(
-  hippoRoot: string,
+export async function commitInChunksAt(
+  db: DatabaseSyncLike,
+  { hippoRoot }: StoreFiles,
   components: readonly FlushComponent[],
-  opts: { snapshot: LoadedRows; budget: WriteBudget; busyWaitMs: number },
+  opts: { snapshot: LoadedRows; budget: WriteBudget },
 ): Promise<string[]> {
-  if (components.length === 0) return [];
   const { snapshot, budget } = opts;
   const removed: string[] = [];
-  // The wait is an option rather than a PRAGMA, so a shared hook handle keeps its own.
-  const db = openStore(hippoRoot, { busyWaitMs: opts.busyWaitMs });
   let next = 0;
   try {
     let committedAt = 0;
@@ -523,8 +499,6 @@ export async function commitInChunks(
     // A unit that threw is already tagged; a throw outside one (a pause, BEGIN or COMMIT) names the chunk's first unit.
     if (err instanceof Error) noteFailedUnit(err, components[next]);
     throw err;
-  } finally {
-    closeHippoDb(db);
   }
   return removed;
 }

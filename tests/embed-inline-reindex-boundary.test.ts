@@ -7,9 +7,10 @@ import { batchWriteAndDelete } from '../src/store/delete-and-batch.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../src/core/memory.js';
 import { embedMemory } from '../src/search/embed-memories.js';
 import { embeddingIndexIdentity, saveStoredEmbeddingModel } from '../src/store/embeddings/index.js';
-import { saveStoredVectors } from '../src/store/vector-index.js';
 import { sqliteSyncStore } from '../src/store/sqlite/store.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { saveStoredVectors } from './_helpers/root-forms.js';
+import { handlesOf } from '../src/store/open.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -41,7 +42,7 @@ function seed(rows: number): MemoryEntry {
   batchWriteAndDelete(root, entries, []);
   const last = entries[rows - 1]!;
   saveStoredVectors(root, [[last.id, [0, 1]]], embeddingIndexIdentity('old-m'));
-  saveStoredEmbeddingModel(root, 'old-m');
+  saveStoredEmbeddingModel(handlesOf(root).on, 'old-m');
   return last;
 }
 

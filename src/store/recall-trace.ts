@@ -3,7 +3,8 @@
  * outcome) triple the learned components train on. All writes are fail-soft: a failed trace write is logged to stderr
  * and swallowed, never breaking the surrounding call. */
 
-import { openHippoDb, closeHippoDb, withWriteScope, type DatabaseSyncLike } from '../db/index.js';
+import { withWriteScope, type DatabaseSyncLike } from '../db/index.js';
+import type { OnHandle } from './open.js';
 import type { RerankStep } from '../core/search-types.js';
 import { DELIVERY_LEDGER_VERSION, isBoundaryEvent, type DeliveryEventInput } from './delivery-recorder.js';
 import { errorFields, errorMessage, log } from '../util/log.js';
@@ -407,18 +408,17 @@ function writeDeliveryEvent(db: DatabaseSyncLike, input: DeliveryEventInput): nu
 
 /** Write on the request's handle, or a short-lived one, waiting at most {@link DELIVERY_LEDGER_WAIT_MS} for the lock.
  * Fail-soft. */
-export function writeDeliveryEventAtRoot(root: string, input: DeliveryEventInput): number | null {
-  let db: DatabaseSyncLike;
+export function writeDeliveryEventVia(on: OnHandle, input: DeliveryEventInput): number | null {
+  let writing = false;
   try {
-    db = openHippoDb(root);
+    return on((db) => {
+      writing = true;
+      return writeDeliveryEventOnHandle(db, input);
+    });
   } catch (error) {
+    if (writing) throw error;
     log.error(`delivery ledger write failed: ${errorMessage(error)}`, errorFields(error));
     return null;
-  }
-  try {
-    return writeDeliveryEventOnHandle(db, input);
-  } finally {
-    closeHippoDb(db);
   }
 }
 

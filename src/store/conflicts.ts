@@ -1,5 +1,5 @@
 import { DEFAULT_TENANT_ID } from '../util/env.js';
-import { closeHippoDb, withWriteScope, type DatabaseSyncLike } from '../db/index.js';
+import { withWriteScope, type DatabaseSyncLike } from '../db/index.js';
 import type { MemoryEntry } from '../core/memory.js';
 import { rejectionDigest, insertRejectedValue, normalizeValueForRejection } from './rejection.js';
 import { archiveRawMemory } from './raw-archive.js';
@@ -8,7 +8,7 @@ import { audit } from './audit-event.js';
 import { syncChangedMirrors, purgeMirrorBestEffort } from './mirrors.js';
 import { selectEntriesByIds } from './entry-reads.js';
 import { chunked } from '../util/chunked.js';
-import { onHandle, openStore } from './open.js';
+import { onHandle, openStore, type StoreFiles } from './open.js';
 import { deleteEntryCore } from './delete-and-batch.js';
 import { BadRequestError } from '../core/api-errors.js';
 import { canTouchScope, isPersonalScope } from '../core/recall-scope.js';
@@ -79,20 +79,22 @@ function selectConflictRowsUnscoped(db: DatabaseSyncLike, status: string, allSta
       `).all(status) as MemoryConflictRow[];
 }
 
-export function listMemoryConflicts(
-  hippoRoot: string,
+export function listMemoryConflictsAt(
+  db: DatabaseSyncLike,
   status: string = 'open',
   tenantId?: string,
 ): MemoryConflict[] {
-  return onHandle(hippoRoot, (db) => {
-    // '*' is a sentinel for no status filter; the 4 SQL branches below
-    // cover {tenanted | unscoped} x {all-statuses | specific-status}.
-    const allStatuses = status === '*';
-    const rows = tenantId !== undefined
-      ? selectConflictRowsInTenant(db, status, allStatuses, tenantId)
-      : selectConflictRowsUnscoped(db, status, allStatuses);
-    return rows.map(rowToMemoryConflict);
-  }, openStore);
+  // '*' is a sentinel for no status filter; the 4 SQL branches below
+  // cover {tenanted | unscoped} x {all-statuses | specific-status}.
+  const allStatuses = status === '*';
+  const rows = tenantId !== undefined
+    ? selectConflictRowsInTenant(db, status, allStatuses, tenantId)
+    : selectConflictRowsUnscoped(db, status, allStatuses);
+  return rows.map(rowToMemoryConflict);
+}
+
+export function listMemoryConflicts(hippoRoot: string, status: string = 'open', tenantId?: string): MemoryConflict[] {
+  return onHandle(hippoRoot, (db) => listMemoryConflictsAt(db, status, tenantId), openStore);
 }
 
 // listMemoryConflicts' tenanted open set: both members in the tenant.
@@ -100,11 +102,6 @@ const OPEN_IN_TENANT = `FROM memory_conflicts mc
   JOIN memories ma ON ma.id = mc.memory_a_id
   JOIN memories mb ON mb.id = mc.memory_b_id
   WHERE mc.status = 'open' AND ma.tenant_id = ? AND mb.tenant_id = ?`;
-
-/** How many open conflicts listMemoryConflicts returns for a tenant, without loading one. */
-export function countOpenConflicts(hippoRoot: string, tenantId: string): number {
-  return onHandle(hippoRoot, (db) => countOpenConflictsAt(db, tenantId), openStore);
-}
 
 /** countOpenConflicts on a handle the caller holds, so it can share a snapshot with other reads. */
 export function countOpenConflictsAt(db: DatabaseSyncLike, tenantId: string): number {
@@ -142,32 +139,37 @@ export function loadOpenConflictsOf(hippoRoot: string, tenantId: string, memoryI
 }
 
 /** Conflicts whose two rows `actor` may both touch; someone else's personal row hides its whole pair. */
+export function listTouchableConflictsAt(
+  db: DatabaseSyncLike,
+  status: string,
+  tenantId: string,
+  actor: { owner?: string },
+): MemoryConflict[] {
+  return listMemoryConflictsAt(db, status, tenantId).filter((c) =>
+    [c.memory_a_id, c.memory_b_id].every((id) => canTouchScope(actor, selectMemoryReach(db, id)?.scope ?? null)),
+  );
+}
+
 export function listTouchableConflicts(
   hippoRoot: string,
   status: string,
   tenantId: string,
   actor: { owner?: string },
 ): MemoryConflict[] {
-  const conflicts = listMemoryConflicts(hippoRoot, status, tenantId);
-  return onHandle(hippoRoot, (db) => {
-    return conflicts.filter((c) =>
-      [c.memory_a_id, c.memory_b_id].every((id) => canTouchScope(actor, selectMemoryReach(db, id)?.scope ?? null)),
-    );
-  });
+  return onHandle(hippoRoot, (db) => listTouchableConflictsAt(db, status, tenantId, actor), openStore);
 }
 
 export type DetectedConflict = { memory_a_id: string; memory_b_id: string; reason: string; score: number };
 type SameTenant = (a: string, b: string) => boolean;
 
-export function replaceDetectedConflicts(
-  hippoRoot: string,
+export function replaceDetectedConflictsAt(
+  db: DatabaseSyncLike,
+  files: StoreFiles,
   detected: Array<DetectedConflict>,
-  detectedAt: string = new Date().toISOString()
+  detectedAt: string = new Date().toISOString(),
 ): void {
-  onHandle(hippoRoot, (db) => {
-    const changedIds = writeConflictRefresh(db, readConflictRefresh(db, detected), detected, detectedAt);
-    syncChangedMirrors(hippoRoot, db, [...selectEntriesByIds(db, changedIds).values()]);
-  }, openStore);
+  const changedIds = writeConflictRefresh(db, readConflictRefresh(db, detected), detected, detectedAt);
+  syncChangedMirrors(files.hippoRoot, db, [...selectEntriesByIds(db, changedIds).values()]);
 }
 
 /** The tenant of every memory the refresh can compare, and each stored conflicts_with_json other than '[]', read
@@ -390,40 +392,43 @@ export interface ResolveConflictRequest {
 /** Resolve a conflict by keeping one memory and halving the loser's half-life; `--forget` removes the loser,
  * `opts.rejectLoserValue` also tombstones its
  * digest. Every path emits a `conflict_resolve` audit row. Returns the resolved conflict, or null if not found. */
-export function resolveConflict(
-  hippoRoot: string,
+export function resolveConflictAt(
+  db: DatabaseSyncLike,
+  files: StoreFiles,
   { conflictId, keepId, forgetLoser = false, tenantId }: ResolveConflictRequest,
   opts?: ResolveConflictOpts,
 ): { conflict: MemoryConflict; loserId: string } | null {
-  const db = openStore(hippoRoot);
   const scope = conflictMemScope(tenantId);
+  const resolvable = findResolvableConflict(db, conflictId, keepId, tenantId);
+  if (!resolvable) return null;
+  const { conflict, loserId } = resolvable;
 
-  try {
-    const resolvable = findResolvableConflict(db, conflictId, keepId, tenantId);
-    if (!resolvable) return null;
-    const { conflict, loserId } = resolvable;
+  const target: ResolveTarget = { conflictId, keepId, loserId, scope, opts };
+  const removal = withWriteScope(db, 'resolve_conflict', () => {
+    // Mark conflict as resolved
+    db.prepare(`UPDATE memory_conflicts SET status = 'resolved', updated_at = datetime('now') WHERE id = ?`)
+      .run(conflictId);
 
-    const target: ResolveTarget = { conflictId, keepId, loserId, scope, opts };
-    const removal = withWriteScope(db, 'resolve_conflict', () => {
-      // Mark conflict as resolved
-      db.prepare(`UPDATE memory_conflicts SET status = 'resolved', updated_at = datetime('now') WHERE id = ?`)
-        .run(conflictId);
+    const removeLoser = forgetLoser || opts?.rejectLoserValue === true;
+    const out = removeLoser ? removeConflictLoser(db, target) : weakenConflictLoser(db, target);
 
-      const removeLoser = forgetLoser || opts?.rejectLoserValue === true;
-      const out = removeLoser ? removeConflictLoser(db, target) : weakenConflictLoser(db, target);
+    stripConflictRefs(db, target, out.loserRemoved);
+    auditConflictResolve(db, target, out, tenantId);
+    return out;
+  });
+  syncChangedMirrors(files.hippoRoot, db, [...selectEntriesByIds(db, [keepId, loserId]).values()]);
 
-      stripConflictRefs(db, target, out.loserRemoved);
-      auditConflictResolve(db, target, out, tenantId);
-      return out;
-    });
-    syncChangedMirrors(hippoRoot, db, [...selectEntriesByIds(db, [keepId, loserId]).values()]);
+  if (removal.loserRemoved) purgeRemovedLoserMirrors(files.hippoRoot, db, loserId, removal);
 
-    if (removal.loserRemoved) purgeRemovedLoserMirrors(hippoRoot, db, loserId, removal);
+  return { conflict: { ...conflict, status: 'resolved' }, loserId };
+}
 
-    return { conflict: { ...conflict, status: 'resolved' }, loserId };
-  } finally {
-    closeHippoDb(db);
-  }
+export function resolveConflict(
+  hippoRoot: string,
+  request: ResolveConflictRequest,
+  opts?: ResolveConflictOpts,
+): { conflict: MemoryConflict; loserId: string } | null {
+  return onHandle(hippoRoot, (db) => resolveConflictAt(db, { hippoRoot }, request, opts), openStore);
 }
 
 interface MemScope {

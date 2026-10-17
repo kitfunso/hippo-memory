@@ -17,10 +17,10 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { retrieve } from '../src/api/index.js';
-import { closePrediction } from '../src/store/predictions.js';
 import { savePrediction } from './_helpers/save-prediction.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+import { closePrediction } from './_helpers/root-forms.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();

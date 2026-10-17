@@ -4,7 +4,6 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { loadLastRecall } from '../src/store/index-and-stats.js';
 import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { estimateTokens } from '../src/util/token-text.js';
@@ -16,6 +15,7 @@ import { runInProcess } from './_helpers/run-in-process.js';
 import { withHookStdin } from './_helpers/hook-stdin.js';
 import { sqliteStore } from '../src/store/sqlite/store.js';
 import { makeStore } from './_helpers/make-root.js';
+import { loadLastRecall } from './_helpers/root-forms.js';
 const TAGS = [
   'deployment-pipeline-infrastructure-alpha', 'database-migration-rollback-procedure',
   'observability-alerting-runbook-owner', 'incident-review-follow-up-action-item',

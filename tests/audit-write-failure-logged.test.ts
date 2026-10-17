@@ -2,11 +2,11 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { readEntry } from '../src/store/entry-reads.js';
-import { deleteEntry } from '../src/store/delete-and-batch.js';
 import { createMemory } from '../src/core/memory.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { auditWriteFailureCount } from '../src/store/audit.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { deleteEntry } from './_helpers/root-forms.js';
 
 let root: string;
 

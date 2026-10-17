@@ -10,6 +10,7 @@ import type { GraphRebuild } from './graph-rebuild.js';
 import type { Learning } from './learning.js';
 import type { Ledger } from './ledger.js';
 import type { Promotion } from './promotion.js';
+import type { ProjectTags } from './project-tags.js';
 import type { Sharing } from './sharing.js';
 
 export type { AgentImport, ContainerTx, ImportTarget } from './agent-import.js';
@@ -22,6 +23,7 @@ export type { GraphRebuild } from './graph-rebuild.js';
 export type { Learning } from './learning.js';
 export type { Ledger } from './ledger.js';
 export type { Promotion } from './promotion.js';
+export type { ProjectTags } from './project-tags.js';
 export type { Sharing } from './sharing.js';
 
 /** The store is hippo.db and its files under `hippoRoot`, so a path that reopens them by folder (sleep, its child
@@ -33,6 +35,7 @@ export interface LocalFiles {
   readonly captures: Captures;
   readonly compactionHooks: CompactionHooks;
   readonly promotion: Promotion;
+  readonly projectTags: ProjectTags;
   readonly learning: Learning;
   readonly sharing: Sharing;
   readonly diagnostics: Diagnostics;

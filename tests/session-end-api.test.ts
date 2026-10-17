@@ -3,8 +3,9 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { rmSync } from 'node:fs';
 import { cliApiContext } from '../src/cli/api-context.js';
 import { sessionEndWork, type SessionEndWork } from '../src/api/session-end.js';
-import { loadActiveTaskSnapshot, saveActiveTaskSnapshot } from '../src/store/sessions.js';
+import { saveActiveTaskSnapshot } from '../src/store/sessions.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { loadActiveTaskSnapshot } from './_helpers/root-forms.js';
 
 const TENANT = 'default';
 let root: string;

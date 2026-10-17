@@ -1,31 +1,31 @@
 // hippo.db's half of the Quarantine store group: each method is one call on its own handle.
+import type { DatabaseSyncLike } from '../../db/index.js';
 import { errorFields, errorMessage, log } from '../../util/log.js';
-import { readEntry } from '../entry-reads.js';
-import { writeEntryMirrors } from '../entry-writes.js';
-import { onHandle } from '../open.js';
+import { readEntryAt } from '../entry-reads.js';
+import { type OnHandle, openStore, type StoreFiles } from '../open.js';
 import type { Quarantine, Sync } from '../port.js';
 import { approveQuarantinedAt, listQuarantinedAt, rejectQuarantinedAt } from '../quarantine.js';
+import { writeEntryMirrorsIn } from '../entry-writes.js';
 
 /** After the commit, best effort: a failed rewrite leaves the markdown mirror showing the quarantine scope, which still
  * hides the memory. */
-function rewriteMirror(hippoRoot: string, tenantId: string, id: string): void {
+function rewriteMirror(db: DatabaseSyncLike, files: StoreFiles, tenantId: string, id: string): void {
   try {
-    const restored = readEntry(hippoRoot, id, tenantId);
-    if (restored) writeEntryMirrors(hippoRoot, restored);
+    const restored = readEntryAt(db, id, tenantId);
+    if (restored) writeEntryMirrorsIn(files, restored);
   } catch (err) {
     log.error(`quarantine: mirror rewrite failed for ${id}: ${errorMessage(err)}`, errorFields(err));
   }
 }
 
-export function sqliteQuarantine(hippoRoot: string): Sync<Quarantine> {
+export function sqliteQuarantine(on: OnHandle): Sync<Quarantine> {
   return {
-    listQuarantined: (tenantId, query) => onHandle(hippoRoot, (db) => listQuarantinedAt(db, tenantId, query)),
-    approveQuarantined(tenantId, id, actor) {
-      const result = onHandle(hippoRoot, (db) => approveQuarantinedAt(db, tenantId, id, actor));
-      if (result.outcome === 'approved') rewriteMirror(hippoRoot, tenantId, id);
+    listQuarantined: (tenantId, query) => on((db) => listQuarantinedAt(db, tenantId, query)),
+    approveQuarantined: (tenantId, id, actor) => on((db, files) => {
+      const result = approveQuarantinedAt(db, tenantId, id, actor);
+      if (result.outcome === 'approved') rewriteMirror(db, files, tenantId, id);
       return result;
-    },
-    rejectQuarantined: (tenantId, id, actor) =>
-      onHandle(hippoRoot, (db) => rejectQuarantinedAt(db, tenantId, id, actor)),
+    }, openStore),
+    rejectQuarantined: (tenantId, id, actor) => on((db) => rejectQuarantinedAt(db, tenantId, id, actor)),
   };
 }

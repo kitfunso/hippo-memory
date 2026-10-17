@@ -8,10 +8,11 @@ import { sessionDigestId } from '../src/capture/session-digest.js';
 import { isSessionDigestRow } from '../src/core/session-digest-row.js';
 import { initStore } from '../src/store/open.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
-import { loadLatestHandoff, saveSessionHandoff } from '../src/store/handoffs.js';
+import { saveSessionHandoff } from '../src/store/handoffs.js';
 import { hippoRun } from './_helpers/spawn-hippo.js';
 import { runCliAs } from './_helpers/run-cli-as.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { loadLatestHandoff } from './_helpers/root-forms.js';
 
 const HIPPO_JS = fileURLToPath(new URL('../bin/hippo.js', import.meta.url));
 const REPLY = 'Raised the upload timeout in `upload.ts` because large files need more than thirty seconds.';

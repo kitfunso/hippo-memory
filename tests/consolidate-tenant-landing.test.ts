@@ -18,13 +18,13 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { loadEveryTenantEntries } from '../src/store/entry-reads.js';
 import { appendSessionEvent } from '../src/store/sessions.js';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { consolidate } from '../src/index.js';
 import { storeExtractedFacts, type ExtractedFact } from '../src/learn/extract.js';
 import { sqliteSyncStore } from '../src/store/sqlite/store.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { loadEveryTenantEntries } from './_helpers/root-forms.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();

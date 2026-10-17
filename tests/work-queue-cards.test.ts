@@ -7,16 +7,6 @@ import { execFileSync, execSync } from 'node:child_process';
 import { Worker } from 'node:worker_threads';
 import { initStore } from '../src/store/open.js';
 import { saveSessionHandoff } from '../src/store/handoffs.js';
-import {
-  createCard,
-  loadCard,
-  loadCardRuns,
-  claimCard,
-  blockCard,
-  reviewCard,
-  completeCard,
-  addCardComment,
-} from '../src/store/cards.js';
 import { openHippoDb, closeHippoDb, getSchemaVersion, getCurrentSchemaVersion, type DatabaseSyncLike } from '../src/db/index.js';
 import { CARD_TRANSITIONS, assertCardTransition, type CardStatus } from '../src/core/card.js';
 import { LATEST_SCHEMA_VERSION } from './_helpers/schema-version.js';
@@ -27,6 +17,10 @@ import { COMMANDS } from '../src/cli/verbs.js';
 import { cardDetailOf } from './_helpers/card-detail.js';
 import { runCliAs } from './_helpers/run-cli-as.js';
 import { makeRoot } from './_helpers/make-root.js';
+import {
+  createCard, loadCard, loadCardRuns, claimCard, blockCard, reviewCard, completeCard,
+  addCardComment,
+} from './_helpers/root-forms.js';
 
 const ALL_STATUSES: CardStatus[] = ['backlog', 'ready', 'running', 'blocked', 'review', 'done', 'shelved'];
 

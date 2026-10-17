@@ -1,7 +1,6 @@
 // src/store/goals.ts
 import { randomUUID } from 'node:crypto';
 import { withWriteScope, type DatabaseSyncLike } from '../db/index.js';
-import { onHandle } from './open.js';
 import { placeholders } from '../util/sql.js';
 
 export type GoalStatus = 'active' | 'suspended' | 'completed';
@@ -82,10 +81,8 @@ export interface PushGoalOpts {
   };
 }
 
-export function pushGoal(hippoRoot: string, opts: PushGoalOpts): Goal {
-  return onHandle(hippoRoot, (db) => {
-    return pushGoalWithDb(db, opts);
-  });
+export function pushGoalAt(db: DatabaseSyncLike, opts: PushGoalOpts): Goal {
+  return pushGoalWithDb(db, opts);
 }
 
 /** Depth-cap enforcer for pushGoalWithDb and resumeGoal: suspends the oldest `overflow` goals; **caller MUST be inside
@@ -212,26 +209,22 @@ export interface ActiveGoals {
 }
 
 /** The active goals and their policies on one handle, so a goal and its policy never disagree. */
-export function activeGoalsWithPolicies(hippoRoot: string, opts: GetActiveGoalsOpts): ActiveGoals {
-  return onHandle(hippoRoot, (db) => {
-    const goals = getActiveGoalsWithDb(db, opts);
-    return { goals, policies: loadGoalPolicies(db, goals) };
-  });
+export function activeGoalsWithPoliciesAt(db: DatabaseSyncLike, opts: GetActiveGoalsOpts): ActiveGoals {
+  const goals = getActiveGoalsWithDb(db, opts);
+  return { goals, policies: loadGoalPolicies(db, goals) };
 }
 
 /** Every goal of a (tenant, session), whatever its status, oldest first. */
-export function getSessionGoals(hippoRoot: string, opts: GetActiveGoalsOpts): Goal[] {
-  return onHandle(hippoRoot, (db) => {
-    // SAFETY: rows come from the SELECT below, which projects exactly GoalRow's columns.
-    const rows = db.prepare(`
-      SELECT id, session_id, tenant_id, goal_name, level, parent_goal_id, status,
-             success_condition, retrieval_policy_id, created_at, completed_at, outcome_score
-      FROM goal_stack
-      WHERE tenant_id = ? AND session_id = ?
-      ORDER BY created_at ASC
-    `).all(opts.tenantId, opts.sessionId) as GoalRow[];
-    return rows.map(rowToGoal);
-  });
+export function getSessionGoalsAt(db: DatabaseSyncLike, opts: GetActiveGoalsOpts): Goal[] {
+  // SAFETY: rows come from the SELECT below, which projects exactly GoalRow's columns.
+  const rows = db.prepare(`
+    SELECT id, session_id, tenant_id, goal_name, level, parent_goal_id, status,
+           success_condition, retrieval_policy_id, created_at, completed_at, outcome_score
+    FROM goal_stack
+    WHERE tenant_id = ? AND session_id = ?
+    ORDER BY created_at ASC
+  `).all(opts.tenantId, opts.sessionId) as GoalRow[];
+  return rows.map(rowToGoal);
 }
 
 function getActiveGoalsWithDb(db: DatabaseSyncLike, opts: GetActiveGoalsOpts): Goal[] {
@@ -333,72 +326,67 @@ export interface CompleteGoalOpts {
   noPropagate?: boolean;
 }
 
-export function completeGoal(hippoRoot: string, goalId: string, opts: CompleteGoalOpts): void {
-  return onHandle(hippoRoot, (db) => {
-    const completedAt = new Date().toISOString();
-    const score = opts.outcomeScore ?? null;
+export function completeGoalAt(db: DatabaseSyncLike, goalId: string, opts: CompleteGoalOpts): void {
+  const completedAt = new Date().toISOString();
+  const score = opts.outcomeScore ?? null;
 
-    withWriteScope(db, 'complete_goal', () => {
-      // SAFETY: the row comes from the SELECT above, which projects exactly
-      // the created_at and status columns of goal_stack.
-      const goalRow = db.prepare(
-        `SELECT created_at, status FROM goal_stack WHERE id = ?`,
-      ).get(goalId) as { created_at: string; status: string } | undefined;
-      if (!goalRow) return;
-      if (goalRow.status === 'completed') {
-        // Already completed -- second call is a no-op for idempotency.
-        return;
+  withWriteScope(db, 'complete_goal', () => {
+    // SAFETY: the row comes from the SELECT above, which projects exactly
+    // the created_at and status columns of goal_stack.
+    const goalRow = db.prepare(
+      `SELECT created_at, status FROM goal_stack WHERE id = ?`,
+    ).get(goalId) as { created_at: string; status: string } | undefined;
+    if (!goalRow) return;
+    if (goalRow.status === 'completed') {
+      // Already completed -- second call is a no-op for idempotency.
+      return;
+    }
+
+    db.prepare(`
+      UPDATE goal_stack
+      SET status = 'completed', completed_at = ?, outcome_score = ?
+      WHERE id = ?
+    `).run(completedAt, score, goalId);
+
+    if (score !== null && !opts.noPropagate) {
+      let multiplier = 1;
+      if (score >= POSITIVE_OUTCOME_THRESHOLD) multiplier = STRENGTH_BOOST;
+      else if (score < NEGATIVE_OUTCOME_THRESHOLD) multiplier = STRENGTH_DECAY;
+
+      if (multiplier !== 1) {
+        // Lifespan window: only recalls during this goal's active life; UNIQUE(memory_id, goal_id) gives one
+        // adjustment per pair.
+        db.prepare(`
+          UPDATE memories
+          SET strength = MIN(1.0, MAX(0.0, strength * ?))
+          WHERE id IN (
+            SELECT memory_id FROM goal_recall_log
+            WHERE goal_id = ?
+              AND recalled_at >= ?
+              AND recalled_at <= ?
+          )
+        `).run(multiplier, goalId, goalRow.created_at, completedAt);
       }
-
-      db.prepare(`
-        UPDATE goal_stack
-        SET status = 'completed', completed_at = ?, outcome_score = ?
-        WHERE id = ?
-      `).run(completedAt, score, goalId);
-
-      if (score !== null && !opts.noPropagate) {
-        let multiplier = 1;
-        if (score >= POSITIVE_OUTCOME_THRESHOLD) multiplier = STRENGTH_BOOST;
-        else if (score < NEGATIVE_OUTCOME_THRESHOLD) multiplier = STRENGTH_DECAY;
-
-        if (multiplier !== 1) {
-          // Lifespan window: only recalls during this goal's active life; UNIQUE(memory_id, goal_id) gives one
-          // adjustment per pair.
-          db.prepare(`
-            UPDATE memories
-            SET strength = MIN(1.0, MAX(0.0, strength * ?))
-            WHERE id IN (
-              SELECT memory_id FROM goal_recall_log
-              WHERE goal_id = ?
-                AND recalled_at >= ?
-                AND recalled_at <= ?
-            )
-          `).run(multiplier, goalId, goalRow.created_at, completedAt);
-        }
-      }
-    });
+    }
   });
 }
 
-export function suspendGoal(hippoRoot: string, goalId: string): void {
-  onHandle(hippoRoot, (db) => {
-    db.prepare(`UPDATE goal_stack SET status = 'suspended' WHERE id = ? AND status = 'active'`).run(goalId);
+export function suspendGoalAt(db: DatabaseSyncLike, goalId: string): void {
+  db.prepare(`UPDATE goal_stack SET status = 'suspended' WHERE id = ? AND status = 'active'`).run(goalId);
+}
+
+export function resumeGoalAt(db: DatabaseSyncLike, goalId: string): void {
+  withWriteScope(db, 'resume_goal', () => {
+    // SAFETY: the row comes from the SELECT above, which projects exactly
+    // the session_id, tenant_id, and status columns of goal_stack.
+    const row = db.prepare(
+      `SELECT session_id, tenant_id, status FROM goal_stack WHERE id = ?`,
+    ).get(goalId) as { session_id: string; tenant_id: string; status: string } | undefined;
+    if (!row || row.status !== 'suspended') return;
+
+    enforceDepthCapWithinTx(db, row.tenant_id, row.session_id);
+
+    db.prepare(`UPDATE goal_stack SET status = 'active' WHERE id = ?`).run(goalId);
   });
 }
 
-export function resumeGoal(hippoRoot: string, goalId: string): void {
-  return onHandle(hippoRoot, (db) => {
-    withWriteScope(db, 'resume_goal', () => {
-      // SAFETY: the row comes from the SELECT above, which projects exactly
-      // the session_id, tenant_id, and status columns of goal_stack.
-      const row = db.prepare(
-        `SELECT session_id, tenant_id, status FROM goal_stack WHERE id = ?`,
-      ).get(goalId) as { session_id: string; tenant_id: string; status: string } | undefined;
-      if (!row || row.status !== 'suspended') return;
-
-      enforceDepthCapWithinTx(db, row.tenant_id, row.session_id);
-
-      db.prepare(`UPDATE goal_stack SET status = 'active' WHERE id = ?`).run(goalId);
-    });
-  });
-}

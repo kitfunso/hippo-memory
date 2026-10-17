@@ -13,7 +13,6 @@ import { DECAY_KEY_HALF_LIVES, DECAY_KEY_SLACK_DAYS, DECAY_KEY_SQL, DECAY_KEY_WH
 import { type DatabaseSyncLike, withReadSnapshot } from '../db/index.js';
 import { rewardFactorSql, scopeAdmitSql, type SqlFragment } from './rule-sql.js';
 import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry, parseJsonArray } from './rows.js';
-import { onHandle, openStore } from './open.js';
 import { originInSql } from '../core/project-identity.js';
 import { pickRarestFtsQuery, loadRecallSearchEntriesFromDb } from './search-rows.js';
 
@@ -118,8 +117,8 @@ function keptPastWindow(
 
 // The pins plus the `recentNeeded` newest rows that pass `admit`, for ambient injection. One connection;
 // `recall` piggybacks the prompt-recall FTS query on it too. `origins` narrows the recent rows past the first window.
-export function loadAmbientCandidates(
-  hippoRoot: string,
+export function loadAmbientCandidatesAt(
+  db: DatabaseSyncLike,
   tenantId: string,
   recentNeeded: number,
   admit: (e: MemoryEntry) => boolean,
@@ -129,41 +128,39 @@ export function loadAmbientCandidates(
   // A SQL LIMIT takes an integer; the Array.slice this replaced truncated one,
   // and include_recent is any non-negative finite number at the HTTP edge.
   const needed = Math.trunc(recentNeeded);
-  return onHandle(hippoRoot, (db) => {
-    // SAFETY: every `where` below starts from MEMORY_SELECT_COLUMNS' table.
-    const run: RunSql = (where, params) =>
-      (db.prepare(
-        `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE ${where}`,
-      ).all(...params) as MemoryRow[]).map(rowToEntry);
+  // SAFETY: every `where` below starts from MEMORY_SELECT_COLUMNS' table.
+  const run: RunSql = (where, params) =>
+    (db.prepare(
+      `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE ${where}`,
+    ).all(...params) as MemoryRow[]).map(rowToEntry);
 
-    const byId = new Map<string, MemoryEntry>();
-    for (const e of run(AMBIENT_PINNED_WHERE, [tenantId])) {
-      if (admit(e)) byId.set(e.id, e);
-    }
+  const byId = new Map<string, MemoryEntry>();
+  for (const e of run(AMBIENT_PINNED_WHERE, [tenantId])) {
+    if (admit(e)) byId.set(e.id, e);
+  }
 
-    if (needed > 0) {
-      const drifted = db.prepare(AMBIENT_DRIFT_SQL).get(tenantId) !== undefined;
-      for (const e of loadRecentRows(run, drifted, tenantId, { needed, admit, origins })) byId.set(e.id, e);
-    }
+  if (needed > 0) {
+    const drifted = db.prepare(AMBIENT_DRIFT_SQL).get(tenantId) !== undefined;
+    for (const e of loadRecentRows(run, drifted, tenantId, { needed, admit, origins })) byId.set(e.id, e);
+  }
 
-    // loadAllEntries' order: rankedPinned's comparator can tie and Array.sort
-    // is stable, so input order is load-bearing downstream.
-    const entries = [...byId.values()].sort((a, b) => {
-      const byCreated = a.created.localeCompare(b.created);
-      return byCreated !== 0 ? byCreated : a.id.localeCompare(b.id);
-    });
-    if (!recall) return { entries };
-    const ftsQuery = pickRarestFtsQuery(db, recall.terms);
-    const recallEntries = ftsQuery
-      ? loadRecallSearchEntriesFromDb(db, ftsQuery, {
-          limit: recall.limit,
-          tenantId,
-          includeSuperseded: false,
-          ownScope: recall.ownScope,
-        })
-      : [];
-    return { entries, recall: recallEntries };
-  }, openStore);
+  // loadAllEntries' order: rankedPinned's comparator can tie and Array.sort
+  // is stable, so input order is load-bearing downstream.
+  const entries = [...byId.values()].sort((a, b) => {
+    const byCreated = a.created.localeCompare(b.created);
+    return byCreated !== 0 ? byCreated : a.id.localeCompare(b.id);
+  });
+  if (!recall) return { entries };
+  const ftsQuery = pickRarestFtsQuery(db, recall.terms);
+  const recallEntries = ftsQuery
+    ? loadRecallSearchEntriesFromDb(db, ftsQuery, {
+        limit: recall.limit,
+        tenantId,
+        includeSuperseded: false,
+        ownScope: recall.ownScope,
+      })
+    : [];
+  return { entries, recall: recallEntries };
 }
 
 /** The rows a non-pinned context read may admit; each predicate is one getContext's admission applies again in JS. */
@@ -244,8 +241,8 @@ function decayKeySubsetRows(db: DatabaseSyncLike, rows: ContextRowsWhere, cap: n
 }
 
 /** Live tenant rows passing `filter`, at most `filter.cap`, in loadAllEntries' order; below the cap, every such row. */
-export function loadContextCandidates(
-  hippoRoot: string,
+export function loadContextCandidatesAt(
+  db: DatabaseSyncLike,
   tenantId: string,
   filter: ContextCandidateFilter,
 ): MemoryEntry[] {
@@ -254,33 +251,27 @@ export function loadContextCandidates(
   const cap = Math.max(0, Math.trunc(filter.cap));
   const whereSql = rowsWhere.where.join(' AND ');
   const now = filter.now.toISOString();
-  return onHandle(
-    hippoRoot,
-    (db) => {
-      // Stops one row past the cap, so a large tenant is not walked to be counted.
-      // SAFETY: the count row has the one column named.
-      const matched = (
-        db.prepare(`SELECT COUNT(*) AS n FROM (SELECT 1 FROM memories WHERE ${whereSql} LIMIT ?)`)
-          .get(...params, cap + 1) as { n: number }
-      ).n;
-      // Under the cap every match is returned, so the per-row decay math and the sort are skipped.
-      const ranked = matched > cap;
-      // The key holds the unablated reward factor, so an ablated rank skips it. An empty answer means the subset could
-      // not prove itself, and the scan below ranks the tenant.
-      const bySubset = ranked && cap > 0 && !isOutcomeSlowAblated() ? decayKeySubsetRows(db, rowsWhere, cap, now) : [];
-      if (bySubset.length > 0) return bySubset.map(rowToEntry);
-      const sql = ranked
-        ? `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id IN (
-        SELECT id FROM memories WHERE ${whereSql} ORDER BY ${decayRankSql()} LIMIT ?
-      ) ORDER BY created ASC, id ASC`
-        : `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE ${whereSql} ORDER BY created ASC, id ASC`;
-      // SAFETY: both SELECTs name exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set; the rank sort carries
-      // ids only.
-      const rows = db.prepare(sql).all(...params, ...(ranked ? [now, cap] : [])) as MemoryRow[];
-      return rows.map(rowToEntry);
-    },
-    openStore,
-  );
+  // Stops one row past the cap, so a large tenant is not walked to be counted.
+  // SAFETY: the count row has the one column named.
+  const matched = (
+    db.prepare(`SELECT COUNT(*) AS n FROM (SELECT 1 FROM memories WHERE ${whereSql} LIMIT ?)`)
+      .get(...params, cap + 1) as { n: number }
+  ).n;
+  // Under the cap every match is returned, so the per-row decay math and the sort are skipped.
+  const ranked = matched > cap;
+  // The key holds the unablated reward factor, so an ablated rank skips it. An empty answer means the subset could
+  // not prove itself, and the scan below ranks the tenant.
+  const bySubset = ranked && cap > 0 && !isOutcomeSlowAblated() ? decayKeySubsetRows(db, rowsWhere, cap, now) : [];
+  if (bySubset.length > 0) return bySubset.map(rowToEntry);
+  const sql = ranked
+    ? `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id IN (
+    SELECT id FROM memories WHERE ${whereSql} ORDER BY ${decayRankSql()} LIMIT ?
+  ) ORDER BY created ASC, id ASC`
+    : `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE ${whereSql} ORDER BY created ASC, id ASC`;
+  // SAFETY: both SELECTs name exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set; the rank sort carries
+  // ids only.
+  const rows = db.prepare(sql).all(...params, ...(ranked ? [now, cap] : [])) as MemoryRow[];
+  return rows.map(rowToEntry);
 }
 
 export type HeldText = Pick<MemoryEntry, 'content' | 'source' | 'origin_project'>;
@@ -294,8 +285,8 @@ export const EVERY_SCOPE: SqlFragment = Object.freeze({ sql: '1', params: [] });
 /** Tenant rows holding any of `words` that `admit` passes (default: team-visible); a row equal to a text apart from
  * spacing holds its every word. With `project`, only rows carrying one of those names plus user-global rows, as
  * loadContextCandidates' filter. No `tenantId` reads every tenant. */
-export function loadTextsHoldingWords(
-  hippoRoot: string,
+export function loadTextsHoldingWordsAt(
+  db: DatabaseSyncLike,
   tenantId: string | undefined,
   words: readonly string[],
   project?: readonly string[],
@@ -306,33 +297,27 @@ export function loadTextsHoldingWords(
   const tenantWhere = tenantId === undefined ? '1' : 'tenant_id = ?';
   const tenantParams = tenantId === undefined ? [] : [tenantId];
   const originWhere = project === undefined ? '' : ` AND (origin_project = '' OR ${originInSql(project)})`;
-  return onHandle(
-    hippoRoot,
-    (db) => {
-      // Chunked so one statement stays far under SQLite's bound-parameter limit.
-      for (let i = 0; i < unique.length; i += 200) {
-        const chunk = unique.slice(i, i + 200);
-        // SAFETY: rows' shape matches the three columns named in the SELECT below.
-        const rows = db
-          .prepare(
-            `SELECT content, source, origin_project FROM memories WHERE ${tenantWhere}${originWhere} AND ` +
-            `${admit.sql} AND (${chunk
-              .map(() => 'instr(content, ?) ' + '> 0')
-              .join(' OR ')})`,
-          )
-          .all(...tenantParams, ...(project ?? []), ...admit.params, ...chunk) as Array<{
-          content: string;
-          source: string | null;
-          origin_project: string | null;
-        }>;
-        for (const row of rows) {
-          out.push({ content: row.content, source: row.source ?? 'cli', origin_project: row.origin_project });
-        }
-      }
-      return out;
-    },
-    openStore,
-  );
+  // Chunked so one statement stays far under SQLite's bound-parameter limit.
+  for (let i = 0; i < unique.length; i += 200) {
+    const chunk = unique.slice(i, i + 200);
+    // SAFETY: rows' shape matches the three columns named in the SELECT below.
+    const rows = db
+      .prepare(
+        `SELECT content, source, origin_project FROM memories WHERE ${tenantWhere}${originWhere} AND ` +
+        `${admit.sql} AND (${chunk
+          .map(() => 'instr(content, ?) ' + '> 0')
+          .join(' OR ')})`,
+      )
+      .all(...tenantParams, ...(project ?? []), ...admit.params, ...chunk) as Array<{
+      content: string;
+      source: string | null;
+      origin_project: string | null;
+    }>;
+    for (const row of rows) {
+      out.push({ content: row.content, source: row.source ?? 'cli', origin_project: row.origin_project });
+    }
+  }
+  return out;
 }
 
 /** A tenant's `limit` newest rows, oldest first: the tail of loadAllEntries' order, without reading the rows before
@@ -388,18 +373,16 @@ export interface SourceTally {
 
 /** Row count and newest `created` per source, for peer listings that need no row; all tenants when `tenantId` is
  * absent. */
-export function tallySources(hippoRoot: string, tenantId?: string): SourceTally[] {
-  return onHandle(hippoRoot, (db) => {
-    const where = tenantId !== undefined ? 'WHERE tenant_id = ?' : '';
-    // SAFETY: rows' shape matches the four aliased columns in the SELECT below.
-    return db
-      .prepare(
-        `SELECT COALESCE(source, 'cli') AS source, COUNT(*) AS count, MAX(created) AS latest, MIN(created || ` +
-        `char(31) || id) AS first
-       FROM memories ${where} GROUP BY COALESCE(source, 'cli')`,
-      )
-      .all(...(tenantId !== undefined ? [tenantId] : [])) as SourceTally[];
-  }, openStore);
+export function tallySourcesAt(db: DatabaseSyncLike, tenantId?: string): SourceTally[] {
+  const where = tenantId !== undefined ? 'WHERE tenant_id = ?' : '';
+  // SAFETY: rows' shape matches the four aliased columns in the SELECT below.
+  return db
+    .prepare(
+      `SELECT COALESCE(source, 'cli') AS source, COUNT(*) AS count, MAX(created) AS latest, MIN(created || ` +
+      `char(31) || id) AS first
+     FROM memories ${where} GROUP BY COALESCE(source, 'cli')`,
+    )
+    .all(...(tenantId !== undefined ? [tenantId] : [])) as SourceTally[];
 }
 
 // A malformed or non-array JSON list reads as empty, as parseJsonArray does, instead of failing json_each.
@@ -418,13 +401,13 @@ export interface StrengthTallies {
 }
 
 /** calculateStrength over every row of a tenant in one aggregate pass, no row loaded. */
-export function loadStrengthTallies(
-  hippoRoot: string,
+export function loadStrengthTalliesAt(
+  db: DatabaseSyncLike,
   tenantId: string,
   now: Date,
   atRiskBelow: number,
 ): StrengthTallies {
-  return onHandle(hippoRoot, (db) => strengthTalliesAt(db, tenantId, now, atRiskBelow), openStore);
+  return strengthTalliesAt(db, tenantId, now, atRiskBelow);
 }
 
 /** loadStrengthTallies on a handle the caller holds, so it can share a snapshot with other reads. */

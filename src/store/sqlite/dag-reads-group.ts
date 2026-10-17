@@ -3,25 +3,22 @@ import type { DatabaseSyncLike } from '../../db/index.js';
 import type { MemoryEntry } from '../../core/memory.js';
 import { pagedDescendants } from '../descendant-page.js';
 import {
-  countSessionRawMemories,
-  loadSessionRawMemories,
+  countSessionRawMemoriesAt,
+  loadSessionRawMemoriesAt,
   selectChildrenByParent,
   selectEntriesByIds,
 } from '../entry-reads.js';
-import { onHandle, openStore } from '../open.js';
+import { type OnHandle, openStore } from '../open.js';
 import type { DagReads, DescendantWalk, SummaryDescendants, Sync } from '../port.js';
 
-export function sqliteDagReads(hippoRoot: string): Sync<DagReads> {
+export function sqliteDagReads(on: OnHandle): Sync<DagReads> {
   return {
-    sessionRawEntries({ tenantId, sessionId, cap, origins }) {
-      return loadSessionRawMemories(hippoRoot, sessionId, tenantId, cap, origins);
-    },
-    sessionRawCount({ tenantId, sessionId, scope, ownScope, origins }) {
-      return countSessionRawMemories(hippoRoot, sessionId, tenantId, scope, ownScope, origins);
-    },
-    summaryWithDescendants(tenantId, id, walk) {
-      return onHandle(hippoRoot, (db) => summaryWithDescendantsAt(db, tenantId, id, walk), openStore);
-    },
+    sessionRawEntries: ({ tenantId, sessionId, cap, origins }) =>
+      on((db) => loadSessionRawMemoriesAt(db, sessionId, tenantId, cap, origins), openStore),
+    sessionRawCount: ({ tenantId, sessionId, scope, ownScope, origins }) =>
+      on((db) => countSessionRawMemoriesAt(db, sessionId, tenantId, scope, ownScope, origins), openStore),
+    summaryWithDescendants: (tenantId, id, walk) =>
+      on((db) => summaryWithDescendantsAt(db, tenantId, id, walk), openStore),
   };
 }
 

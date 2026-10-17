@@ -6,10 +6,11 @@ import { describe, it, expect, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import { computeSchemaFit, deriveHalfLife, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../src/core/memory.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
-import { writeEntriesTogether, writeEntry } from '../src/store/entry-writes.js';
+import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { sqliteSyncStore } from '../src/store/sqlite/store.js';
+import { writeEntriesTogether } from './_helpers/root-forms.js';
 
 function makePool(): MemoryEntry[] {
   return [

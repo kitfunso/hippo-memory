@@ -4,7 +4,6 @@
 import { DEFAULT_TENANT_ID } from '../util/env.js';
 import { createMemory, Layer, MemoryEntry } from '../core/memory.js';
 import { writeEntry } from '../store/entry-writes.js';
-import { loadEntryTextKeys } from '../store/entry-reads.js';
 import { duplicateKey, storedTextKeys } from '../util/same-text.js';
 import { getGlobalRoot } from '../sharing/global-store.js';
 import { initStore } from '../store/open.js';
@@ -120,12 +119,10 @@ function openImportTarget(options: ImportOptions): ImportTarget {
     initStore(targetRoot);
   }
 
-  const keys = storedTextKeys(loadEntryTextKeys(
-    targetRoot,
-    options.global ? undefined : options.tenantId,
-  ));
   // A published synchronous entry, so it reads the port as hippo.db answers it, without a Promise.
-  return { targetRoot, keys, rejections: sqliteSyncStore(targetRoot).rejections };
+  const store = sqliteSyncStore(targetRoot);
+  const keys = storedTextKeys(store.localFiles.sharing.textKeys(options.global ? undefined : options.tenantId));
+  return { targetRoot, keys, rejections: store.rejections };
 }
 
 function skipReason(chunk: string, keys: ReturnType<typeof storedTextKeys>): 'too-short' | 'duplicate' | null {

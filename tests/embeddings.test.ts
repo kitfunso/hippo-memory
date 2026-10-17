@@ -90,7 +90,8 @@ describe('isEmbeddingAvailable', () => {
 
 describe('embedding index persistence', () => {
   it('round-trips an index via save + load', async () => {
-    const { loadEmbeddingIndex, saveEmbeddingIndex } = await import('../src/store/vector-index.js');
+    const { loadEmbeddingIndex } = await import('../src/store/vector-index.js');
+    const { saveEmbeddingIndex } = await import('./_helpers/root-forms.js');
     const fs = await import('fs');
     const os = await import('os');
     const path = await import('path');

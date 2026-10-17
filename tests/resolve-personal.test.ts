@@ -7,11 +7,12 @@ import { listRejectionsForTenant } from '../src/trust/reject-flow.js';
 import { resolveOpenConflict } from '../src/dashboard/dashboard-actions.js';
 import { mapApiError } from '../src/api/error-reply.js';
 import { handleMcpRequest, type McpContext, type McpResponse } from '../src/mcp/server.js';
-import { listMemoryConflicts, replaceDetectedConflicts } from '../src/store/conflicts.js';
+import { listMemoryConflicts } from '../src/store/conflicts.js';
 import { readEntry } from '../src/store/entry-reads.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 import { sqliteStore } from '../src/store/sqlite/store.js';
+import { replaceDetectedConflicts } from './_helpers/root-forms.js';
 
 const A_TEXT = 'always run the deploy script with --dry-run first';
 const NOT_RESOLVED = 'Could not resolve. Check the conflict ID and --keep value.';

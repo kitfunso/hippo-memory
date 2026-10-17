@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { delimiter, dirname, join } from 'node:path';
 import { Layer, type MemoryEntry } from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { initStore } from '../src/store/open.js';
+import { initStore, handlesOf } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries, readEntry } from '../src/store/entry-reads.js';
 import { consolidate } from '../src/index.js';
@@ -123,7 +123,7 @@ async function sleepMany(root: string): Promise<void> {
   const start = Date.now();
   for (const day of [1, 2, 3, 4, 5, 6, 7, 600]) {
     await consolidate(root, { now: new Date(start + day * DAY) });
-    deduplicateStore(sqliteConsolidation(root));
+    deduplicateStore(sqliteConsolidation(handlesOf(root)));
   }
 }
 
@@ -186,7 +186,7 @@ describe('sleep keeps both versions', () => {
     ];
     for (const text of pairs.flat()) writeEntry(root, createMemory(text));
 
-    expect(deduplicateStore(sqliteConsolidation(root)).removed).toBe(0);
+    expect(deduplicateStore(sqliteConsolidation(handlesOf(root))).removed).toBe(0);
     expect(loadAllEntries(root, 'default')).toHaveLength(6);
   });
 
@@ -195,7 +195,7 @@ describe('sleep keeps both versions', () => {
     const text = 'The staging service listens on port 4400.';
     for (const t of [text, text.replace(' ', '  ')]) writeEntry(root, createMemory(t));
 
-    expect(deduplicateStore(sqliteConsolidation(root), { threshold: 1 }).removed).toBe(1);
+    expect(deduplicateStore(sqliteConsolidation(handlesOf(root)), { threshold: 1 }).removed).toBe(1);
     expect(loadAllEntries(root, 'default')).toHaveLength(1);
 
     const cli = newRoot();

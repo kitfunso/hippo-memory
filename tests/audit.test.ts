@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
-import { appendAuditEvent, queryAuditEvents, recordAuditEventsRowByRow } from '../src/store/audit.js';
+import { appendAuditEvent, queryAuditEvents } from '../src/store/audit.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { recordAuditEventsRowByRow } from './_helpers/root-forms.js';
 
 describe('audit log', () => {
   it('appendAuditEvent persists row with required fields', () => {
