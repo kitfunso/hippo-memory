@@ -15,14 +15,14 @@
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
-import { writeEntry } from '../src/store/entry-writes.js';
-import { Layer, type MemoryEntry } from '../src/core/memory.js';
-import { createMemory } from './_helpers/default-half-life-memory.js';
-import { insertEntityAt, insertRelationAt } from './_helpers/graph-seed.js';
-import { rrfFuse } from '../src/search/rrf.js';
-import { selectGraphSeeds, graphRankStream } from '../src/graph/stream.js';
-import { sqliteStore } from '../src/store/sqlite/store.js';
-import { makeRoot } from './_helpers/make-root.js';
+import { writeEntry } from '../../src/store/entry-writes.js';
+import { Layer, type MemoryEntry } from '../../src/core/memory.js';
+import { createMemory } from '../_helpers/default-half-life-memory.js';
+import { insertEntityAt, insertRelationAt } from '../_helpers/graph-seed.js';
+import { rrfFuse } from '../../src/search/rrf.js';
+import { selectGraphSeeds, graphRankStream } from '../../src/graph/stream.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
+import { makeRoot } from '../_helpers/make-root.js';
 
 function safeRmSync(p: string): void {
   try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }

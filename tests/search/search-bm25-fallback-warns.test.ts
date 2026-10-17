@@ -2,14 +2,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi, MockInstance } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
-import { writeEntry } from '../src/store/entry-writes.js';
-import { loadAllEntries } from '../src/store/entry-reads.js';
-import { createMemory } from './_helpers/default-half-life-memory.js';
-import { embedMemory } from '../src/search/embed-memories.js';
-import { hybridSearch } from '../src/entry/folder-search.js';
-import { _resetLogOnceForTests } from '../src/util/log.js';
-import { sqliteSyncStore } from '../src/store/sqlite/store.js';
-import { makeRoot } from './_helpers/make-root.js';
+import { writeEntry } from '../../src/store/entry-writes.js';
+import { loadAllEntries } from '../../src/store/entry-reads.js';
+import { createMemory } from '../_helpers/default-half-life-memory.js';
+import { embedMemory } from '../../src/search/embed-memories.js';
+import { hybridSearch } from '../../src/entry/folder-search.js';
+import { _resetLogOnceForTests } from '../../src/util/log.js';
+import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
+import { makeRoot } from '../_helpers/make-root.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();

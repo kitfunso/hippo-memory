@@ -2,21 +2,21 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { initStore } from '../src/store/open.js';
-import { writeEntry } from '../src/store/entry-writes.js';
-import { createMemory, CHURN_STALE_TAG, type MemoryEntry } from '../src/core/memory.js';
-import { saveStoredEmbeddingModel } from '../src/store/embeddings/index.js';
-import { saveEmbeddingIndex } from '../src/store/vector-index.js';
-import { resolveEmbeddingProvider } from '../src/embeddings/provider.js';
-import { insertEntityAt, insertRelationAt } from './_helpers/graph-seed.js';
-import { openHippoDb, closeHippoDb } from '../src/db/index.js';
-import { savePhysicsState } from '../src/db/physics-state.js';
-import { search } from '../src/search/bm25-search.js';
-import { hybridSearch, physicsSearch } from '../src/entry/folder-search.js';
-import type { SearchResult } from '../src/core/search-types.js';
-import type { RerankerFn } from '../src/rerankers/types.js';
-import { loadConfig } from '../src/core/config.js';
-import { makeRoot } from './_helpers/make-root.js';
+import { initStore } from '../../src/store/open.js';
+import { writeEntry } from '../../src/store/entry-writes.js';
+import { createMemory, CHURN_STALE_TAG, type MemoryEntry } from '../../src/core/memory.js';
+import { saveStoredEmbeddingModel } from '../../src/store/embeddings/index.js';
+import { saveEmbeddingIndex } from '../../src/store/vector-index.js';
+import { resolveEmbeddingProvider } from '../../src/embeddings/provider.js';
+import { insertEntityAt, insertRelationAt } from '../_helpers/graph-seed.js';
+import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
+import { savePhysicsState } from '../../src/db/physics-state.js';
+import { search } from '../../src/search/bm25-search.js';
+import { hybridSearch, physicsSearch } from '../../src/entry/folder-search.js';
+import type { SearchResult } from '../../src/core/search-types.js';
+import type { RerankerFn } from '../../src/rerankers/types.js';
+import { loadConfig } from '../../src/core/config.js';
+import { makeRoot } from '../_helpers/make-root.js';
 
 afterAll(() => {
   vi.unstubAllEnvs();
