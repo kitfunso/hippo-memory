@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { saveActiveTaskSnapshot, appendSessionEvent } from '../src/store/sessions.js';
@@ -7,6 +7,10 @@ import { createMemory } from './_helpers/default-half-life-memory.js';
 import { handleMcpRequest, type McpResponse } from '../src/mcp/server.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { sqliteStore } from '../src/store/sqlite/store.js';
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 type HippoRecallArgs = {
   query: string;
@@ -46,18 +50,14 @@ function extractText(res: McpResponse | null): string {
 
 describe('mcp hippo_recall include_continuity', () => {
   let home: string;
-  let originalHome: string | undefined;
 
   beforeEach(() => {
     home = makeRoot('mcp-recall-cont');
-    originalHome = process.env.HIPPO_HOME;
-    process.env.HIPPO_HOME = home;
+    vi.stubEnv('HIPPO_HOME', home);
   });
 
   afterEach(() => {
     rmSync(home, { recursive: true, force: true });
-    if (originalHome === undefined) delete process.env.HIPPO_HOME;
-    else process.env.HIPPO_HOME = originalHome;
   });
 
   it('omits continuity by default (hot path)', async () => {

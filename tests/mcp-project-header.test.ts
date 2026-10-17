@@ -1,5 +1,5 @@
 // HTTP MCP on a shared store reads the caller's project from two percent-encoded headers and answers a bad one 400 before any JSON-RPC.
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as http from 'node:http';
 import * as os from 'node:os';
@@ -14,11 +14,18 @@ import { writeEntry } from '../src/store/entry-writes.js';
 import { initStore } from '../src/store/open.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 
+beforeEach(() => {
+  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 interface Reply { readonly status: number; readonly text: string; readonly scoped: string | string[] | undefined }
 
 let tmp: string;
 let handle: ServerHandle | null = null;
-const origHome = process.env.HIPPO_HOME;
 
 function makeStore(shared: boolean): string {
   const store = path.join(tmp, 'srv', shared ? 'hippo-team' : 'hippo-solo');
@@ -53,7 +60,7 @@ function post(headers: http.OutgoingHttpHeaders, body: string = REMEMBER): Promi
 
 beforeEach(() => {
   tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-mcp-header-'));
-  process.env.HIPPO_HOME = path.join(tmp, 'global');
+  vi.stubEnv('HIPPO_HOME', path.join(tmp, 'global'));
   _resetProjectIdentityCacheForTests();
   _resetSharedStoreCacheForTests();
 });
@@ -61,8 +68,6 @@ beforeEach(() => {
 afterEach(async () => {
   await handle?.stop();
   handle = null;
-  if (origHome === undefined) delete process.env.HIPPO_HOME;
-  else process.env.HIPPO_HOME = origHome;
   _resetSharedStoreCacheForTests();
   fs.rmSync(tmp, { recursive: true, force: true });
 });

@@ -86,6 +86,9 @@ jobs:
       # One helper makes, inits and removes a test store; a hand-rolled copy leaks its dir when the test throws.
       - name: Tests build temp stores through makeRoot and makeStore
         run: node scripts/check-test-stores.mjs
+      # A hand-written process.env write outlives its test; vi.stubEnv with unstubAllEnvs in afterEach restores the value vitest.config.ts set.
+      - name: Tests set env only through vi.stubEnv
+        run: node scripts/check-test-env.mjs
       # The CLI parses flags and prints; ranking and every row a recall writes belong to retrieve().
       - name: CLI recall ranks and records only through retrieve()
         run: node scripts/check-cli-recall-writes.mjs

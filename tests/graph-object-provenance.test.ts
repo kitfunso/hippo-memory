@@ -195,7 +195,7 @@ describe('graph provenance is anchored to the first-class object, not its memory
     } finally { closeHippoDb(db); }
   });
 
-  it('P2-B guard (codex): memory NULL + source_object_id set + source_object_type NULL ABORTs (incomplete object provenance)', () => {
+  it('guard: memory NULL + source_object_id set + source_object_type NULL ABORTs (incomplete object provenance)', () => {
     // The first guard WHEN requires BOTH source_object columns when memory is null, so an
     // id-set/type-null row cannot slip past (previously the type-keyed CASE arms were all
     // false on a NULL type, accepting a provenance-less row).
@@ -284,7 +284,7 @@ describe('graph provenance is anchored to the first-class object, not its memory
     expect(policyEnt).toBeDefined();
   });
 
-  it('P2 (codex round 2): a VALID memory + a BAD source_object is REJECTED (object validated even when memory present)', () => {
+  it('a VALID memory + a BAD source_object is REJECTED (object validated even when memory present)', () => {
     // The dual-provenance object pointer is validated whenever provided, not only when
     // memory is null - so a wrong/closed/nonexistent object cannot ride along with a live
     // memory and become a forget-blocking landmine after ON DELETE SET NULL.
@@ -304,7 +304,7 @@ describe('graph provenance is anchored to the first-class object, not its memory
     } finally { closeHippoDb(db); }
   });
 
-  it('P2 round-4 (codex): a stale-missing mirror is tolerated when a valid object is present (rebuild not rolled back)', async () => {
+  it('a stale-missing mirror is tolerated when a valid object is present (rebuild not rolled back)', async () => {
     // The extraction race: a memory id that no longer exists (forgotten mid-rebuild) but a valid
     // source object. insertEntity must anchor to the object (memory_id null), NOT throw - else a
     // mirror forgotten during a rebuild would roll back the WHOLE tenant rebuild.
@@ -319,7 +319,7 @@ describe('graph provenance is anchored to the first-class object, not its memory
       .toThrow(/not found/i);
   });
 
-  it('P2 round-4 (codex): an explicit UPDATE re-pointing a row to a bad object ABORTs (object cols changed); memory-only SET NULL still does not', async () => {
+  it('an explicit UPDATE re-pointing a row to a bad object ABORTs (object cols changed); memory-only SET NULL still does not', async () => {
     await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, { policyName: 'Retention', policyText: 'p' });
     await extractGraph(sqliteStore(home), T);
     const polEnt = entityRows(home).find((e) => e.source_object_type === 'policy')!;
@@ -335,7 +335,7 @@ describe('graph provenance is anchored to the first-class object, not its memory
     // (the memory-only SET NULL not-blocked case is covered by the memory-only forget test above.)
   });
 
-  it('P2 round-5 (codex): a tenant-only move of an object-backed (mirrorless) row revalidates the object and ABORTs', async () => {
+  it('a tenant-only move of an object-backed (mirrorless) row revalidates the object and ABORTs', async () => {
     const policy = await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, { policyName: 'Retention', policyText: 'p' });
     // object-only (mirrorless) entity in tenant T - the memory-path tenant check does not apply.
     const ent = insertEntityAt(home, T, { entityType: 'policy', name: 'Retention', sourceObject: { type: 'policy', id: policy.id } });
@@ -349,7 +349,7 @@ describe('graph provenance is anchored to the first-class object, not its memory
     } finally { closeHippoDb(db); }
   });
 
-  it('P2-A close lifecycle (codex): closing a MIRRORLESS object removes its graph rows directly (no rebuild)', async () => {
+  it('close lifecycle: closing a MIRRORLESS object removes its graph rows directly (no rebuild)', async () => {
     const policy = await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, { policyName: 'Data Retention Policy', policyText: 'Delete logs after 90 days' });
     const decision = await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, { decisionText: 'Adopt the Data Retention Policy widely' });
     // Forget the decision mirror, then extract -> the decision is in the graph, mirrorless.
@@ -368,7 +368,7 @@ describe('graph provenance is anchored to the first-class object, not its memory
     expect(entityRows(home).some((e) => e.source_object_type === 'policy' && e.source_object_id === policy.id)).toBe(true);
   });
 
-  it('P1 (codex round 3): forgetting the mirror of a CLOSED-but-not-yet-rebuilt object does NOT block the delete (core sleep/forget safe)', async () => {
+  it('forgetting the mirror of a CLOSED-but-not-yet-rebuilt object does NOT block the delete (core sleep/forget safe)', async () => {
     // A mirror-present close enqueues a rebuild but leaves the graph row pointing at the
     // now-closed object until that rebuild runs. If the mirror is then forgotten or pruned
     // (sleep deletes memories BEFORE the graph drain), the FK ON DELETE SET NULL fires the

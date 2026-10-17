@@ -14,7 +14,7 @@
  */
 
 import type { FullContext } from './_helpers/api-ctx.js';
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
@@ -27,6 +27,10 @@ import {
 } from '../src/api/recall/finish.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 function safeRmSync(p: string): void {
   try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
@@ -69,11 +73,11 @@ describe('api.recall anchoringHint', () => {
   let root: string;
   beforeEach(() => {
     root = makeRoot('j1-api');
-    delete process.env.HIPPO_ANCHORING;
+    vi.stubEnv('HIPPO_ANCHORING', undefined);
   });
   afterEach(() => {
     safeRmSync(root);
-    delete process.env.HIPPO_ANCHORING;
+    vi.stubEnv('HIPPO_ANCHORING', undefined);
   });
 
   it('populates anchoringHint on R2 (memory_dominance) when snapshot has 2 prior wins for same memory', async () => {
@@ -105,7 +109,7 @@ describe('api.recall anchoringHint', () => {
       entry(111, memId),
       entry(222, memId),
     ];
-    process.env.HIPPO_ANCHORING = 'off';
+    vi.stubEnv('HIPPO_ANCHORING', 'off');
     const result = await retrieve(ctxFor(root), {
       query: 'frobnicate baz quux',
       hints: { recallHistory: snapshot },
@@ -143,7 +147,7 @@ describe('api.recall anchoringHint', () => {
     expect(countAuditOps(root, 'recall_anchor_detected_memory_dominance')).toBe(1);
   });
 
-  it('suppressedByInterference is INCREMENTED to 1 on R2 (was always 0 pre-v1.13.2)', async () => {
+  it('suppressedByInterference is INCREMENTED to 1 on R2 (it used to stay 0)', async () => {
     const memId = seedQueryMatchingMemory(root, 'frobnicate baz quux content');
     const snapshot: RecallHistorySnapshot = [
       entry(111, memId),

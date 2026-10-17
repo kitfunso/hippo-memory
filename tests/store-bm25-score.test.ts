@@ -22,6 +22,10 @@ import { Layer, type MemoryEntry } from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { makeRoot } from './_helpers/make-root.js';
 
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 // The LIKE case seeds 6,000 rows, in two transactions, since store size is the thing it varies.
 vi.setConfig({ testTimeout: 30_000 });
 
@@ -81,7 +85,7 @@ describe('loadSearchEntries bm25_score', () => {
     }
   });
 
-  it('No-terms path: honours the LIMIT parameter (self-review fix)', async () => {
+  it('No-terms path: honours the LIMIT parameter', async () => {
     // Self-review found the no-terms path was uncapped pre-v1.7.0 (codex
     // diff-pass only flagged the bottom-of-function full-store fallback).
     // Insert 50 raws, request limit=10, assert exactly 10 returned.
@@ -95,7 +99,7 @@ describe('loadSearchEntries bm25_score', () => {
     }
   });
 
-  it('No-terms path: returns rows ordered by created ASC then id ASC, with stamped created surviving writeEntry (v1.7.1 INFO #3 + P1)', async () => {
+  it('No-terms path: returns rows ordered by created ASC then id ASC, with stamped created surviving writeEntry', async () => {
     // P1[5]: verify stamped `created` survives writeEntry → roundtrip read.
     // upsertEntryRow (store/entry-row.ts) passes entry.created straight through;
     // a future normalizer would silently break this test. Anchor explicitly.
@@ -147,16 +151,10 @@ describe('loadSearchEntries bm25_score', () => {
 
   it('the environment cannot force the LIKE route: with the old variable set, a term query still comes back through FTS', () => {
     writeEntry(root, makeRaw('alphabet soup contents'));
-    const prev = process.env.HIPPO_FORCE_LIKE_PATH;
-    process.env.HIPPO_FORCE_LIKE_PATH = '1';
-    try {
-      const results = loadSearchEntries(root, 'alphabet', 200, 'default');
-      expect(results.map((e) => e.content)).toEqual(['alphabet soup contents']);
-      expect(results[0]!.bm25_score).toEqual(expect.any(Number));
-    } finally {
-      if (prev === undefined) delete process.env.HIPPO_FORCE_LIKE_PATH;
-      else process.env.HIPPO_FORCE_LIKE_PATH = prev;
-    }
+    vi.stubEnv('HIPPO_FORCE_LIKE_PATH', '1');
+    const results = loadSearchEntries(root, 'alphabet', 200, 'default');
+    expect(results.map((e) => e.content)).toEqual(['alphabet soup contents']);
+    expect(results[0]!.bm25_score).toEqual(expect.any(Number));
   });
 
   it('LIKE fallback path: a query matching nothing tests the same number of rows however large the store', () => {
@@ -207,7 +205,7 @@ describe('loadSearchEntries bm25_score', () => {
     }
   });
 
-  it('Full-store fallback path: honours LIMIT (regression for codex P1 — pre-v1.7.0 was uncapped)', () => {
+  it('Full-store fallback path: honours LIMIT (regression: it was once uncapped)', () => {
     // Codex caught that the full-store fallback returned the entire tenant
     // store ignoring `limit`. Pre-v1.7.0 a query with no FTS hit and
     // limit=10 returned all 30 rows; the fix added LIMIT ?. This test

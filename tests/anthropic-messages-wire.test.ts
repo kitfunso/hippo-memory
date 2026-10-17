@@ -1,10 +1,14 @@
 import http from 'node:http';
 import crypto from 'node:crypto';
 import type { AddressInfo } from 'node:net';
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi, MockInstance } from 'vitest';
 import { extractFacts, type ExtractedFact } from '../src/learn/extract.js';
 import { generateDagSummary } from '../src/consolidate/dag-summary.js';
 import { refineSemanticMemory } from '../src/cli/refine-llm.js';
+
+afterAll(() => {
+  vi.unstubAllEnvs();
+});
 
 // Real local HTTP server per case; the callers' own `fetcher` option points them at it, so the request bytes are what a real call sends.
 type Mode = 'ok' | 'http400' | 'http500' | 'badjson' | 'empty' | 'hang' | 'refused';
@@ -152,15 +156,9 @@ const callers: CallerSpec[] = [
 
 const MODES: Mode[] = ['ok', 'http400', 'http500', 'badjson', 'empty', 'hang', 'refused'];
 let stderr: MockInstance<typeof process.stderr.write>;
-let savedTimeout: string | undefined;
 
 beforeAll(() => {
-  savedTimeout = process.env.HIPPO_LLM_TIMEOUT_MS;
-  process.env.HIPPO_LLM_TIMEOUT_MS = '300';
-});
-afterAll(() => {
-  if (savedTimeout === undefined) delete process.env.HIPPO_LLM_TIMEOUT_MS;
-  else process.env.HIPPO_LLM_TIMEOUT_MS = savedTimeout;
+  vi.stubEnv('HIPPO_LLM_TIMEOUT_MS', '300');
 });
 beforeEach(() => { stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true); });
 afterEach(() => { stderr.mockRestore(); });

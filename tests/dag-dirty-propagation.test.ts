@@ -200,7 +200,7 @@ describe('child-write dirty-flag propagation', () => {
     expect(row.summary_dirty).toBe(1);
   });
 
-  it('test #9: batchWriteAndDelete marks parents dirty for writes AND deletes (consolidate/sleep path, independent-review-critic HIGH fold-in)', () => {
+  it('test #9: batchWriteAndDelete marks parents dirty for writes AND deletes', () => {
     // Independent-review-critic R1 HIGH catch: consolidate.ts/sleep flushes
     // pendingWrites + pendingDeletes through batchWriteAndDelete every cycle.
     // Without this hook the dominant mutation source bypasses E2 entirely.

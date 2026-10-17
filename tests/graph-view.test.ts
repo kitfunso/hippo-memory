@@ -6,7 +6,7 @@
  * deterministic layout, the self-contained HTML viewer (XSS-escaped), the JSON
  * Canvas export, and the GET /v1/graph route. Real SQLite, no mocks.
  */
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { saveDecision } from '../src/objects/decisions.js';
 import { savePolicy } from '../src/objects/policies.js';
@@ -24,6 +24,14 @@ import { makeRoot } from './_helpers/make-root.js';
 import { objectsAt } from './_helpers/objects-at.js';
 import { sqliteStore } from '../src/store/sqlite/store.js';
 import { loadConfig } from '../src/core/config.js';
+
+beforeEach(() => {
+  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 const T = 'default';
 
@@ -88,7 +96,7 @@ describe('graph-view: buildGraphModel (real DB)', () => {
     }
   });
 
-  it('15. focus query finds an entity beyond the global limit window (codex P2)', async () => {
+  it('15. focus query finds an entity beyond the global limit window', async () => {
     // Many entities so that a small `limit`, under the old global-cap-then-filter,
     // would miss the focus entity / its neighbor. The by-name focus query (which
     // looks up the entity directly, then its bidirectional edges) must still find it.
@@ -103,7 +111,7 @@ describe('graph-view: buildGraphModel (real DB)', () => {
     expect(m.edges.every((e) => ids.has(e.from) && ids.has(e.to))).toBe(true);
   });
 
-  it('16. focus subgraph includes neighbour-to-neighbour edges, not just focus-touching (codex P2)', async () => {
+  it('16. focus subgraph includes neighbour-to-neighbour edges, not just focus-touching', async () => {
     await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, { policyName: 'PolA', policyText: 'PolA works closely with PolB' });
     await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, { policyName: 'PolB', policyText: 'a standalone policy' });
     await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, { decisionText: 'Adopt PolA and PolB across the org now' });
@@ -118,7 +126,7 @@ describe('graph-view: buildGraphModel (real DB)', () => {
     expect(interNeighbor).toBe(true);
   });
 
-  it('17. focus on a name shared by many entities is capped to the limit (codex P2)', async () => {
+  it('17. focus on a name shared by many entities is capped to the limit', async () => {
     for (let i = 0; i < 8; i++) await saveCustomerNote(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, { customer: 'Acme', note: `note ${i}` });
     await extractGraph(sqliteStore(home), T);
     const m = await buildGraphModel(sqliteStore(home).graphReads, T, { entity: 'Acme', limit: 3 });
@@ -126,7 +134,7 @@ describe('graph-view: buildGraphModel (real DB)', () => {
     expect(m.truncated).toBe(true);
   });
 
-  it('18. focus truncation is reported when the neighbour scan hits the cap (codex P2)', async () => {
+  it('18. focus truncation is reported when the neighbour scan hits the cap', async () => {
     for (const p of ['PolA', 'PolB', 'PolC', 'PolD']) await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, { policyName: p, policyText: 'x' });
     await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, { decisionText: 'Adopt PolA and PolB and PolC and PolD now' });
     await extractGraph(sqliteStore(home), T);
@@ -213,20 +221,16 @@ describe('graph-view: layout + renderers (pure)', () => {
 describe('graph-view: GET /v1/graph (live server)', () => {
   let home: string;
   let globalHome: string;
-  let origHippoHome: string | undefined;
   let handle: ServerHandle;
 
   beforeEach(async () => {
     home = makeRoot('graphview');
     globalHome = makeRoot('graphview');
-    origHippoHome = process.env.HIPPO_HOME;
-    process.env.HIPPO_HOME = globalHome;
+    vi.stubEnv('HIPPO_HOME', globalHome);
     handle = await serve({ hippoRoot: home, port: 0 });
   });
   afterEach(async () => {
     await handle.stop();
-    if (origHippoHome === undefined) delete process.env.HIPPO_HOME;
-    else process.env.HIPPO_HOME = origHippoHome;
     rmSync(home, { recursive: true, force: true });
     rmSync(globalHome, { recursive: true, force: true });
   });
@@ -261,7 +265,7 @@ describe('graph-view: GET /v1/graph (live server)', () => {
     expect(body.edges).toEqual([]);
   });
 
-  it('19. accepts a valid entity name longer than 256 chars (codex P2)', async () => {
+  it('19. accepts a valid entity name longer than 256 chars', async () => {
     const longName = 'Adopt ' + 'X'.repeat(300); // ~306 chars, within MAX_ENTITY_NAME_LEN (512)
     await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, { decisionText: longName });
     await extractGraph(sqliteStore(home), T);

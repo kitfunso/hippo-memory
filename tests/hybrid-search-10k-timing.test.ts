@@ -1,10 +1,6 @@
 // One hybrid recall over a 10k-row store with 384-dim vectors does a bounded amount of work; prints the measured time.
 
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { initStore } from '../src/store/open.js';
 import { batchWriteAndDelete } from '../src/store/delete-and-batch.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { saveStoredEmbeddingModel } from '../src/store/embeddings/index.js';
@@ -15,6 +11,10 @@ import { recordStatementsAsync } from './_helpers/count-statements.js';
 import { loadConfig } from '../src/core/config.js';
 import { sharingStores } from './_helpers/sharing-stores.js';
 import { makeRoot } from './_helpers/make-root.js';
+
+afterAll(() => {
+  vi.unstubAllEnvs();
+});
 
 const ROWS = 10_000;
 const FEWER_ROWS = ROWS / 10;
@@ -34,14 +34,13 @@ function vector(seed: number): number[] {
 }
 
 describe('hybrid recall at 10k rows', () => {
-  const home = mkdtempSync(join(tmpdir(), 'hippo-10k-'));
-  const fewer = mkdtempSync(join(tmpdir(), 'hippo-1k-'));
-  const global = makeRoot('10k-global', { init: false });
+  const config = { embeddings: { provider: 'openai', model: 'text-embedding-3-small' } };
+  const home = makeRoot('10k', { config });
+  const fewer = makeRoot('1k', { config });
+  const global = makeRoot('10k-global');
   afterAll(() => {
     vi.unstubAllGlobals();
-    delete process.env.OPENAI_API_KEY;
-    rmSync(home, { recursive: true, force: true });
-    rmSync(fewer, { recursive: true, force: true });
+    vi.stubEnv('OPENAI_API_KEY', undefined);
   });
 
   const recall = (store: string): ReturnType<typeof searchBothHybrid> =>
@@ -49,8 +48,6 @@ describe('hybrid recall at 10k rows', () => {
   const recallOnce = (): ReturnType<typeof searchBothHybrid> => recall(home);
 
   function seed(store: string, rows: number): void {
-    writeFileSync(join(store, 'config.json'), JSON.stringify({ embeddings: { provider: 'openai', model: 'text-embedding-3-small' } }), 'utf8');
-    initStore(store);
     const entries = Array.from({ length: rows }, (_, i) =>
       createMemory(`note ${i} about ${i % 50 === 0 ? 'deploy pipeline' : 'topic'} ${i % 97}`, { tenantId: 'default', baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
     batchWriteAndDelete(store, entries, []);
@@ -58,10 +55,9 @@ describe('hybrid recall at 10k rows', () => {
   }
 
   beforeAll(() => {
-    initStore(global);
     seed(home, ROWS);
     seed(fewer, FEWER_ROWS);
-    process.env.OPENAI_API_KEY = 'sk-test';
+    vi.stubEnv('OPENAI_API_KEY', 'sk-test');
     for (const store of [home, fewer]) saveStoredEmbeddingModel(store, resolveEmbeddingProvider(loadConfig(store).embeddings).id);
     const queryVector = vector(7);
     vi.stubGlobal('fetch', vi.fn(async () =>

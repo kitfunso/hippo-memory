@@ -15,7 +15,7 @@
 // unauthenticated local requests and the "no credential -> 401" case below
 // would never actually exercise auth.
 
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { fileURLToPath } from 'node:url';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
@@ -24,6 +24,10 @@ import { serve, type ServerHandle } from '../src/server.js';
 import type { JsonValue } from '../src/util/json.js';
 import { waitFor } from './_helpers/wait-for.js';
 import { makeStore } from './_helpers/make-root.js';
+
+afterAll(() => {
+  vi.unstubAllEnvs();
+});
 
 const ADAPTER_PATH = fileURLToPath(new URL('../deploy/aml/adapter/adapter.mjs', import.meta.url));
 
@@ -108,7 +112,6 @@ describe('AML protocol adapter (deploy/aml/adapter/adapter.mjs)', () => {
   let adapterHandle: AdapterHandle;
   let baseUrl: string;
   let validKey: string;
-  const savedRequireAuth = process.env.HIPPO_REQUIRE_AUTH;
 
   beforeAll(async () => {
     hippoRoot = makeStore('aml-adapter').root;
@@ -116,7 +119,7 @@ describe('AML protocol adapter (deploy/aml/adapter/adapter.mjs)', () => {
     // Match the production deployment: hippo requires auth on every route
     // except GET /health. Without this, hippo's loopback no-auth fallback
     // would silently admit the adapter's unauthenticated forwards.
-    process.env.HIPPO_REQUIRE_AUTH = '1';
+    vi.stubEnv('HIPPO_REQUIRE_AUTH', '1');
     hippoHandle = await serve({ hippoRoot, host: '127.0.0.1', port: 0 });
 
     const db = openHippoDb(hippoRoot);
@@ -133,11 +136,6 @@ describe('AML protocol adapter (deploy/aml/adapter/adapter.mjs)', () => {
   afterAll(async () => {
     stopAdapter(adapterHandle);
     await hippoHandle?.stop();
-    if (savedRequireAuth === undefined) {
-      delete process.env.HIPPO_REQUIRE_AUTH;
-    } else {
-      process.env.HIPPO_REQUIRE_AUTH = savedRequireAuth;
-    }
   });
 
   function authHeader(key: string) {
@@ -419,20 +417,16 @@ describe('rate-limit key forwarding and status pass-through', () => {
   let rlAdapterHandle: AdapterHandle;
   let rlBaseUrl: string;
   let rlValidKey: string;
-  const savedRequireAuth = process.env.HIPPO_REQUIRE_AUTH;
-  const savedClientIpHeader = process.env.HIPPO_CLIENT_IP_HEADER;
-  const savedV1Rps = process.env.HIPPO_V1_RPS;
-  const savedTrustedProxies = process.env.HIPPO_TRUSTED_PROXIES;
 
   beforeAll(async () => {
     rlHippoRoot = makeStore('aml-adapter-ratelimit').root;
 
     // Set before serve(), which checks the proxy pair at boot; one place saves and restores them all.
-    process.env.HIPPO_REQUIRE_AUTH = '1';
-    process.env.HIPPO_CLIENT_IP_HEADER = 'cf-connecting-ip';
+    vi.stubEnv('HIPPO_REQUIRE_AUTH', '1');
+    vi.stubEnv('HIPPO_CLIENT_IP_HEADER', 'cf-connecting-ip');
     // The adapter connects from loopback here; deploy/aml lists the compose subnet instead.
-    process.env.HIPPO_TRUSTED_PROXIES = '127.0.0.1,::1';
-    process.env.HIPPO_V1_RPS = '0.5';
+    vi.stubEnv('HIPPO_TRUSTED_PROXIES', '127.0.0.1,::1');
+    vi.stubEnv('HIPPO_V1_RPS', '0.5');
     rlHippoHandle = await serve({ hippoRoot: rlHippoRoot, host: '127.0.0.1', port: 0 });
 
     const db = openHippoDb(rlHippoRoot);
@@ -449,23 +443,6 @@ describe('rate-limit key forwarding and status pass-through', () => {
   afterAll(async () => {
     stopAdapter(rlAdapterHandle);
     await rlHippoHandle?.stop();
-    if (savedRequireAuth === undefined) {
-      delete process.env.HIPPO_REQUIRE_AUTH;
-    } else {
-      process.env.HIPPO_REQUIRE_AUTH = savedRequireAuth;
-    }
-    if (savedClientIpHeader === undefined) {
-      delete process.env.HIPPO_CLIENT_IP_HEADER;
-    } else {
-      process.env.HIPPO_CLIENT_IP_HEADER = savedClientIpHeader;
-    }
-    if (savedTrustedProxies === undefined) delete process.env.HIPPO_TRUSTED_PROXIES;
-    else process.env.HIPPO_TRUSTED_PROXIES = savedTrustedProxies;
-    if (savedV1Rps === undefined) {
-      delete process.env.HIPPO_V1_RPS;
-    } else {
-      process.env.HIPPO_V1_RPS = savedV1Rps;
-    }
   });
 
   // Clears adapter validation on every call so the request always reaches

@@ -1,14 +1,17 @@
 // The project id: `.hippo-project.json`, then the origin remote from hand-written git config files, then the folder name.
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { _resetProjectIdentityCacheForTests, projectNames, resolveProjectIdentity } from '../src/core/project-identity.js';
 import { normalizeRemote, originUrlFromConfig } from '../src/core/project-remote.js';
 
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 let tmpRoot: string;
 let home: string;
-let savedHippoHome: string | undefined;
 
 function mkdirs(...segments: string[]): string {
   const p = path.join(tmpRoot, ...segments);
@@ -33,14 +36,11 @@ const identity = (dir: string) => resolveProjectIdentity(dir, { homeDir: home })
 beforeEach(() => {
   tmpRoot = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-remote-')));
   home = mkdirs('home');
-  savedHippoHome = process.env.HIPPO_HOME;
-  process.env.HIPPO_HOME = mkdirs('global');
+  vi.stubEnv('HIPPO_HOME', mkdirs('global'));
   _resetProjectIdentityCacheForTests();
 });
 
 afterEach(() => {
-  if (savedHippoHome === undefined) delete process.env.HIPPO_HOME;
-  else process.env.HIPPO_HOME = savedHippoHome;
   _resetProjectIdentityCacheForTests();
   fs.rmSync(tmpRoot, { recursive: true, force: true });
 });

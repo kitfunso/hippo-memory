@@ -265,7 +265,7 @@ describe('backfillRepo', () => {
     expect(entries).toHaveLength(3);
   });
 
-  it('3. /issues PRs are skipped (codex P1 #2)', async () => {
+  it('3. /issues PRs are skipped', async () => {
     const plan: FakePlan = {
       issues: [
         {

@@ -16,7 +16,7 @@
  */
 
 import type { FullContext } from './_helpers/api-ctx.js';
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { mkdtempSync, rmSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -41,6 +41,10 @@ import { LATEST_SCHEMA_VERSION } from './_helpers/schema-version.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 import { sharingStores } from './_helpers/sharing-stores.js';
 import { makeRoot } from './_helpers/make-root.js';
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 function ctx(hippoRoot: string, tenantId: string = 'default'): FullContext {
   return apiCtx(hippoRoot, tenantId, { subject: 'cli', role: 'admin' });
@@ -633,43 +637,37 @@ describe('autoShare per-candidate rejection containment', () => {
   it('one rejected + one clean candidate: the sleep-facing autoShare call completes, the clean one shares, the rejected one is counted', async () => {
     const localRoot = makeRoot('rejection-acceptance-autoshare-local');
     const globalRoot = makeRoot('rejection-acceptance-autoshare-global');
-    const prevHippoHome = process.env.HIPPO_HOME;
-    try {
-      // autoShare -> shareMemory resolves its destination via
-      // getGlobalRoot()/HIPPO_HOME (same pattern as shared.test.ts's
-      // copyToGlobal describe block).
-      process.env.HIPPO_HOME = globalRoot;
+    // autoShare -> shareMemory resolves its destination via
+    // getGlobalRoot()/HIPPO_HOME (same pattern as shared.test.ts's
+    // copyToGlobal describe block).
+    vi.stubEnv('HIPPO_HOME', globalRoot);
 
-      const rejectedContent = 'never re-share this specific finding to the global store again';
-      const cleanContent = 'a completely different clean finding worth sharing globally';
-      const rejectedEntry = createMemory(rejectedContent, { layer: Layer.Episodic });
-      const cleanEntry = createMemory(cleanContent, { layer: Layer.Episodic });
-      writeEntry(localRoot, rejectedEntry);
-      writeEntry(localRoot, cleanEntry);
+    const rejectedContent = 'never re-share this specific finding to the global store again';
+    const cleanContent = 'a completely different clean finding worth sharing globally';
+    const rejectedEntry = createMemory(rejectedContent, { layer: Layer.Episodic });
+    const cleanEntry = createMemory(cleanContent, { layer: Layer.Episodic });
+    writeEntry(localRoot, rejectedEntry);
+    writeEntry(localRoot, cleanEntry);
 
-      // Reject in the GLOBAL store — the store shareMemory -> writeEntry
-      // actually writes into.
-      await api.reject(ctx(globalRoot), { value: rejectedContent, reason: 'must not be shared globally' });
+    // Reject in the GLOBAL store, the store shareMemory -> writeEntry
+    // actually writes into.
+    await api.reject(ctx(globalRoot), { value: rejectedContent, reason: 'must not be shared globally' });
 
-      const stats = { secretSkipped: 0, rejectedSkipped: 0 };
-      const errorSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-      const shared = autoShare(...sharingStores(localRoot), { minScore: 0, stats });
-      expect(errorSpy).toHaveBeenCalledWith(
-        expect.stringContaining('skipped 1 candidate(s) refused'),
-      );
-      errorSpy.mockRestore();
+    const stats = { secretSkipped: 0, rejectedSkipped: 0 };
+    const errorSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const shared = autoShare(...sharingStores(localRoot), { minScore: 0, stats });
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining('skipped 1 candidate(s) refused'),
+    );
+    errorSpy.mockRestore();
 
-      // The clean candidate shared; the rejected one did not abort the batch.
-      expect(shared.length).toBe(1);
-      expect(shared[0]!.content).toBe(cleanContent);
-      expect(stats.rejectedSkipped).toBe(1);
+    // The clean candidate shared; the rejected one did not abort the batch.
+    expect(shared.length).toBe(1);
+    expect(shared[0]!.content).toBe(cleanContent);
+    expect(stats.rejectedSkipped).toBe(1);
 
-      const globalContents = loadEveryTenantEntries(globalRoot).map((e) => e.content);
-      expect(globalContents).toContain(cleanContent);
-      expect(globalContents).not.toContain(rejectedContent);
-    } finally {
-      if (prevHippoHome === undefined) delete process.env.HIPPO_HOME;
-      else process.env.HIPPO_HOME = prevHippoHome;
-    }
+    const globalContents = loadEveryTenantEntries(globalRoot).map((e) => e.content);
+    expect(globalContents).toContain(cleanContent);
+    expect(globalContents).not.toContain(rejectedContent);
   });
 });

@@ -1,12 +1,16 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { createApiKey } from '../src/store/auth.js';
 import { resolveTenantId } from '../src/store/tenant.js';
 import { makeRoot } from './_helpers/make-root.js';
 
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 describe('resolveTenantId', () => {
   it('returns "default" with no env, no api key', () => {
-    delete process.env.HIPPO_TENANT;
+    vi.stubEnv('HIPPO_TENANT', undefined);
     expect(resolveTenantId({})).toBe('default');
   });
 
@@ -16,23 +20,23 @@ describe('resolveTenantId', () => {
     ['   ', 'default'],
     ['  acme  ', 'acme'],
   ])('HIPPO_TENANT=%j resolves to %s', (env, expected) => {
-    process.env.HIPPO_TENANT = env;
+    vi.stubEnv('HIPPO_TENANT', env);
     try {
       expect(resolveTenantId({})).toBe(expected);
     } finally {
-      delete process.env.HIPPO_TENANT;
+      vi.stubEnv('HIPPO_TENANT', undefined);
     }
   });
 
   it('api key tenant beats env', () => {
     const home = makeRoot('tenant');
     const db = openHippoDb(home);
-    process.env.HIPPO_TENANT = 'env_tenant';
+    vi.stubEnv('HIPPO_TENANT', 'env_tenant');
     try {
       const { plaintext } = createApiKey(db, { tenantId: 'key_tenant' });
       expect(resolveTenantId({ db, apiKey: plaintext })).toBe('key_tenant');
     } finally {
-      delete process.env.HIPPO_TENANT;
+      vi.stubEnv('HIPPO_TENANT', undefined);
       closeHippoDb(db);
     }
   });

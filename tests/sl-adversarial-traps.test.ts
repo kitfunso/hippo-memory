@@ -23,7 +23,7 @@ describe('adversarial traps schema', () => {
     expect(N_TASKS).toBe(62);
   });
 
-  it('has 13 trap categories (10 v1.7.x + 3 adversarial)', () => {
+  it('has 13 trap categories (10 original + 3 adversarial)', () => {
     expect(TRAP_CATEGORIES.length).toBe(13);
   });
 
@@ -162,7 +162,7 @@ describe('existing-10 categories PRNG-stability vs earlier positions', () => {
     expect(existingPositions.every((p) => p >= 2 && p <= 50 && p % 2 === 0)).toBe(true);
   });
 
-  it('v1.7.x existing-10 placements are unchanged (per-category positions match v1.7.x record)', () => {
+  it('the original 10 placements are unchanged (per-category positions match the recorded ones)', () => {
     const expected = {
       overwrite_production: [2, 22, 42],
       bare_except: [4, 28, 46],

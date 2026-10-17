@@ -6,6 +6,7 @@ import { makeRoot } from './_helpers/make-root.js';
 let handle: ServerHandle;
 
 beforeEach(async () => {
+  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
   vi.stubEnv('HIPPO_LOG', 'info');
   handle = await serve({ hippoRoot: makeRoot('log-route-template'), host: '127.0.0.1', port: 0 });
 });

@@ -5,12 +5,20 @@
  * unknown id, 404 for a leaf id, 400 on bad query params.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { makeRoot } from './_helpers/make-root.js';
+
+beforeEach(() => {
+  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 function safeRmSync(p: string): void {
   try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
@@ -72,7 +80,7 @@ describe('GET /v1/recall/drill/:id', () => {
     expect(res.status).toBe(404);
   });
 
-  it('422 for a leaf id (v1.6.4: distinguishable from missing)', async () => {
+  it('422 for a leaf id (distinguishable from missing)', async () => {
     const leaf = createMemory('plain leaf body', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       layer: Layer.Buffer,

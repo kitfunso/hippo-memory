@@ -1,6 +1,6 @@
 // Z0 memory surfaces with the fake Claude Code: the run ledger, the retry restores and the record contract E7 reads.
 // Costs nothing; no real claude or codex session runs.
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import { appendFileSync, existsSync, lstatSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
@@ -11,6 +11,10 @@ import {
   cleanup, tmp, isolate, makeRepo, task, plain, teach, apply, family, lesson, spec, run,
   readRecords, readPlan, readLedger, rawResult, find, runRoot, type LedgerLine,
 } from './fixtures/z0-harness.js';
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 afterEach(cleanup);
 
@@ -85,7 +89,7 @@ describe('retry restores (prereg 114)', () => {
     it(`a session-1 retry puts back every surface the cut-off attempt wrote (${arm})`, async () => {
       const { out } = isolate(`retry-${arm}`);
       const r = makeRepo();
-      process.env.FAKE_CLAUDE_LIMIT_ONCE = join(out, 'limit-hit');
+      vi.stubEnv('FAKE_CLAUDE_LIMIT_ONCE', join(out, 'limit-hit'));
       await run(spec(r, [], [task(r, 'n1', 'LIMIT LIMIT_SURFACES look around'), plain(r, 'n2')]), [arm], out, { limitWaitMs: 0 });
       const seen = rawResult(out, arm, 'n1.json');
       expect(seen.memory ?? '').not.toContain('cutoff');

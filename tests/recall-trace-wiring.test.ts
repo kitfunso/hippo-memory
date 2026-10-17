@@ -17,8 +17,7 @@
 
 import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadLastRecall } from '../src/store/index-and-stats.js';
@@ -54,15 +53,15 @@ function disableEmbeddings(storeDir: string) {
 function tmpHome() {
   const home = makeRoot('recall-trace-wiring');
   const origHippoHome = process.env.HIPPO_HOME;
-  process.env.HIPPO_HOME = home;
+  vi.stubEnv('HIPPO_HOME', home);
   return {
     home,
     restore: () => {
       rmSync(home, { recursive: true, force: true });
       if (origHippoHome !== undefined) {
-        process.env.HIPPO_HOME = origHippoHome;
+        vi.stubEnv('HIPPO_HOME', origHippoHome);
       } else {
-        delete process.env.HIPPO_HOME;
+        vi.stubEnv('HIPPO_HOME', undefined);
       }
     },
   };
@@ -134,7 +133,7 @@ describe('api.recall — trace wiring', () => {
     }
   });
 
-  it('does NOT write last_trace_id (v1.11.5 no-side-effects contract, extended)', async () => {
+  it('does NOT write last_trace_id', async () => {
     const { home, restore } = tmpHome();
     try {
       const ctx: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
@@ -303,14 +302,13 @@ describe('CLI cmdRecall — trace wiring', () => {
   let hippoRoot: string;
 
   beforeEach(() => {
-    hippoRoot = mkdtempSync(join(tmpdir(), 'hippo-cli-recall-trace-'));
+    hippoRoot = makeRoot('cli-recall-trace', { init: false });
     vi.stubEnv('HIPPO_HOME', hippoRoot);
     resetSessionRings('cli');
   });
 
   afterEach(() => {
     vi.unstubAllEnvs();
-    rmSync(hippoRoot, { recursive: true, force: true });
   });
 
   it('writes ONE trace (pipeline=cli) at hippoRoot + last_trace_id, atomically with last_retrieval_ids', async () => {
@@ -382,7 +380,7 @@ describe('CLI goal-stack boost — ignores the CLAUDE_CODE_SESSION_ID host var',
   let hippoRoot: string;
 
   beforeEach(() => {
-    hippoRoot = mkdtempSync(join(tmpdir(), 'hippo-cli-goalboost-hostvar-'));
+    hippoRoot = makeRoot('cli-goalboost-hostvar', { init: false });
     vi.stubEnv('HIPPO_HOME', hippoRoot);
     vi.stubEnv('HIPPO_SESSION_ID', '');
     vi.stubEnv('CLAUDE_CODE_SESSION_ID', '');
@@ -391,7 +389,6 @@ describe('CLI goal-stack boost — ignores the CLAUDE_CODE_SESSION_ID host var',
 
   afterEach(() => {
     vi.unstubAllEnvs();
-    rmSync(hippoRoot, { recursive: true, force: true });
   });
 
   it('boosts under --session-id but not under a bare CLAUDE_CODE_SESSION_ID host var', async () => {

@@ -3,6 +3,7 @@ import { spawn } from 'node:child_process';
 import { cpSync, existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { vi } from 'vitest';
 import { validateTasks } from '../../scripts/token-eval/ab-run.mjs';
 import { CHECKS, apply, isolate, lesson, makeRepo, plain, run, teach, tmp, type FamilyDef, type FixtureRepo, type TaskDef } from './z0-harness.js';
 
@@ -35,7 +36,9 @@ export async function sharedRun(name: string): Promise<Shared> {
   const { out } = isolate(name);
   const r = makeRepo();
   const dumps = tmp('z0-rg-dumps-');
-  Object.assign(process.env, { Z0_TOGGLE: 'run', Z0_ENV_DUMP_DIR: dumps, CLAUDE_CODE_OAUTH_TOKEN: TOKEN });
+  vi.stubEnv('Z0_TOGGLE', 'run');
+  vi.stubEnv('Z0_ENV_DUMP_DIR', dumps);
+  vi.stubEnv('CLAUDE_CODE_OAUTH_TOKEN', TOKEN);
   const raw = regradeSpec(r);
   await run(validateTasks(structuredClone(raw), CHECKS), ['A0'], out, { passEnv: PASS_ENV });
   return { out, raw, dumps, r };

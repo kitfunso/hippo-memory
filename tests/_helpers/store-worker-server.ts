@@ -24,8 +24,8 @@ export const cleanups: Cleanup[] = [];
 /** For a test file's afterEach: restores mocks and env, then runs the cleanups newest first. */
 export async function undoAll(): Promise<void> {
   vi.restoreAllMocks();
-  vi.unstubAllEnvs();
   for (const undo of cleanups.splice(0).reverse()) await undo();
+  vi.unstubAllEnvs();
 }
 
 export function removeLater(root: string): string {

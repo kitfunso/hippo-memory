@@ -4,7 +4,7 @@ import baselineAdapter from '../benchmarks/sequential-learning/adapters/baseline
 import staticAdapter from '../benchmarks/sequential-learning/adapters/static.mjs';
 
 describe('sequential-learning adapter recall budget', () => {
-  it('hippo adapter honors the budget arg with OBSERVABLE result-count delta at extreme budgets (post-review P0-6)', async () => {
+  it('hippo adapter honors the budget arg with OBSERVABLE result-count delta at extreme budgets', async () => {
     await hippoAdapter.init();
     try {
       // Seed with many memories so an extreme-low budget collapses the result set.

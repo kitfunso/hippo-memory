@@ -9,8 +9,6 @@
 
 import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { sleep, adminActor } from '../src/api/index.js';
 import { writeEntry } from '../src/store/entry-writes.js';
@@ -18,7 +16,7 @@ import { loadAllEntries } from '../src/store/entry-reads.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { getGlobalRoot } from '../src/sharing/global-store.js';
 import { apiCtx } from './_helpers/api-ctx.js';
-import { makeStore } from './_helpers/make-root.js';
+import { makeStore, makeRoot } from './_helpers/make-root.js';
 
 // Same secret shape tests/secret-detect.test.ts proves trips detectSecret;
 // pinned + error/gotcha tags push transferScore over the 0.6 auto-share bar.
@@ -33,7 +31,7 @@ describe('api.sleep secretSkipped counter', () => {
   beforeEach(() => {
     tmpDir = makeStore('sleep-secretskip').base;
     const hippoRoot = join(tmpDir, '.hippo');
-    globalTmp = mkdtempSync(join(tmpdir(), 'hippo-sleep-secretskip-global-'));
+    globalTmp = makeRoot('sleep-secretskip-global', { init: false });
     vi.stubEnv('HIPPO_HOME', globalTmp);
 
     writeEntry(hippoRoot, createMemory(SECRET_ROW, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, pinned: true, tags: ['error', 'gotcha'], tenantId: 'default' }));
@@ -44,7 +42,6 @@ describe('api.sleep secretSkipped counter', () => {
 
   afterEach(() => {
     vi.unstubAllEnvs();
-    rmSync(globalTmp, { recursive: true, force: true });
   });
 
   it('real sleep reports the withheld share and never leaks the secret row to global', async () => {

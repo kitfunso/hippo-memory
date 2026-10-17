@@ -4,6 +4,7 @@ import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
+import { vi } from 'vitest';
 import { codexContext, writeCodexHome } from '../../scripts/token-eval/codex.mjs';
 import { runDirs, freshRunDirs } from '../../scripts/token-eval/homes.mjs';
 import { armEnv } from '../../scripts/token-eval/arms.mjs';
@@ -82,8 +83,8 @@ export function xIsolate(name: string) {
   const { out, log, home } = isolate(name);
   const op = operator(name);
   const codexLog = join(tmp('z0-xlog-'), 'codex.log');
-  process.env.FAKE_CODEX_LOG = codexLog;
-  process.env.FAKE_CODEX_STATE = join(tmp('z0-xstate-'), 'limit');
+  vi.stubEnv('FAKE_CODEX_LOG', codexLog);
+  vi.stubEnv('FAKE_CODEX_STATE', join(tmp('z0-xstate-'), 'limit'));
   return { out, log, home, op, codexLog };
 }
 

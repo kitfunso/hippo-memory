@@ -130,7 +130,7 @@ describe('graphRankStream (real SQLite)', () => {
     expect(await graphRankStream(entries, [seed(0)], { store: sqliteStore(home), tenantId: T })).toEqual([]);
   });
 
-  it('v1.26.1: a graph-reachable OUT-of-pool private-scoped memory never appears in the stream output (pool-only pin)', async () => {
+  it('a graph-reachable OUT-of-pool private-scoped memory never appears in the stream output (pool-only pin)', async () => {
     // graph-stream.ts is re-rank-only: it scores entries[] indices, never loads or
     // surfaces memory content the caller did not already admit into the pool. Unlike
     // graph-recall.ts (which loads reached rows by id and needed a scope predicate added,
@@ -164,7 +164,7 @@ describe('graphRankStream (real SQLite)', () => {
     expect(out).toEqual([2]);          // only c; seeds 0 and 1 excluded
   });
 
-  it('a neighbour reachable from two seeds at the same hop takes the STRONGER seed (codex P2)', async () => {
+  it('a neighbour reachable from two seeds at the same hop takes the STRONGER seed', async () => {
     // nShared is 1-hop from a strong seed AND a weak seed; nWeakOnly is 1-hop from the weak
     // seed only. With the strongest-same-hop-seed fix, nShared outscores nWeakOnly and ranks
     // above it even though nShared has the HIGHER index (so it is strength order, not index

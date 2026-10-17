@@ -1,6 +1,6 @@
 // A captured Slack request stays signed for five minutes, so the route answers its second copy without acting on it.
 import { createHmac } from 'node:crypto';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { serve, type ServerHandle } from '../src/server.js';
 import { listDlq } from '../src/connectors/dlq.js';
 import { slackDlq } from '../src/connectors/slack/dlq.js';
@@ -20,13 +20,13 @@ let handle: ServerHandle;
 
 beforeEach(async () => {
   root = makeRoot('slack-replay');
-  process.env.SLACK_SIGNING_SECRET = SECRET;
+  vi.stubEnv('SLACK_SIGNING_SECRET', SECRET);
   handle = await serve({ hippoRoot: root, host: '127.0.0.1', port: 0 });
 });
 
 afterEach(async () => {
-  delete process.env.SLACK_SIGNING_SECRET;
   await handle.stop();
+  vi.unstubAllEnvs();
 });
 
 async function post(ts: string): Promise<Reply> {

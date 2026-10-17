@@ -6,9 +6,16 @@ import { join } from 'node:path';
 import { serve, type AuthResolver, type ServerHandle } from '../src/server.js';
 import { makeRoot } from './_helpers/make-root.js';
 
+beforeEach(() => {
+  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 let home: string;
 let handle: ServerHandle;
-let savedLevel: string | undefined;
 
 function send(path: string, headers: Record<string, string> = {}): Promise<{ status: number; requestId: string | undefined; sniffing: string | undefined }> {
   return new Promise((resolve, reject) => {
@@ -26,15 +33,12 @@ function send(path: string, headers: Record<string, string> = {}): Promise<{ sta
 }
 
 beforeEach(async () => {
-  savedLevel = process.env.HIPPO_LOG;
   home = makeRoot('request-id');
   handle = await serve({ hippoRoot: home, port: 0, host: '127.0.0.1' });
 });
 
 afterEach(async () => {
   await handle.stop();
-  if (savedLevel === undefined) delete process.env.HIPPO_LOG;
-  else process.env.HIPPO_LOG = savedLevel;
 });
 
 describe('X-Content-Type-Options', () => {
@@ -68,7 +72,7 @@ describe('X-Request-Id', () => {
   });
 
   it('rides on error responses and the failure log line', async () => {
-    process.env.HIPPO_LOG = 'info';
+    vi.stubEnv('HIPPO_LOG', 'info');
     const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     try {
       // An encoded slash is refused by a thrown HttpError, so it reaches the server's failure path.
@@ -103,7 +107,7 @@ describe('the access line', () => {
     spy.mock.calls.map((c) => String(c[0])).filter((l) => l.startsWith('[hippo] info: request '));
 
   it('is one info line per finished request, naming the route pattern and never the path or query the caller sent', async () => {
-    process.env.HIPPO_LOG = 'info';
+    vi.stubEnv('HIPPO_LOG', 'info');
     const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     try {
       await send('/v1/recall/drill/mem_private_id?q=private-query', { 'x-request-id': 'acc-1' });
@@ -132,7 +136,7 @@ describe('the access line', () => {
   });
 
   it('is not written at the default log level', async () => {
-    delete process.env.HIPPO_LOG;
+    vi.stubEnv('HIPPO_LOG', undefined);
     const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     try {
       await send('/health');

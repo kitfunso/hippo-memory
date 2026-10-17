@@ -2,9 +2,8 @@
 import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { rmSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { adminActor, getContext } from '../src/api/index.js';
@@ -17,6 +16,14 @@ import { serve, type ServerHandle } from '../src/server.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+
+beforeEach(() => {
+  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 const REFUSAL = 'hippo_context needs a project on a shared store; use hippo_recall';
 const GATE = "hippo_context needs the caller's project on a shared store; the client sends it in the X-Hippo-Project header";
@@ -39,7 +46,6 @@ async function jsonAs<T>(res: Response): Promise<T> {
 let home: string;
 let globalHome: string;
 let handle: ServerHandle | null = null;
-const origHippoHome = process.env.HIPPO_HOME;
 
 /** A served store holding one row per origin, beside a global store with one user-global row. */
 async function start(flagged: boolean, extra: Record<string, boolean> = {}): Promise<ServerHandle> {
@@ -76,14 +82,12 @@ async function mcpContext(h: ServerHandle, headers: Record<string, string> = {})
 beforeEach(() => {
   _resetSharedStoreCacheForTests();
   globalHome = makeRoot('shared-ctx-global');
-  process.env.HIPPO_HOME = globalHome;
+  vi.stubEnv('HIPPO_HOME', globalHome);
 });
 
 afterEach(async () => {
   await handle?.stop();
   handle = null;
-  if (origHippoHome === undefined) delete process.env.HIPPO_HOME;
-  else process.env.HIPPO_HOME = origHippoHome;
   _resetSharedStoreCacheForTests();
   rmSync(home, { recursive: true, force: true });
   rmSync(globalHome, { recursive: true, force: true });
@@ -225,15 +229,11 @@ describe('the prompt hook on a shared store', () => {
 describe('hippo context on a shared store', () => {
   it('exits 1 with the refusal when the folder names no project', () => {
     home = makeRoot('shared-cli', { config: { sharedStore: true } });
-    const cwd = mkdtempSync(join(tmpdir(), 'hippo-shared-cli-cwd-'));
-    try {
-      const r = spawnSync(process.execPath, [resolve(__dirname, '..', 'bin', 'hippo.js'), 'context'], {
-        cwd, env: { ...process.env, HIPPO_HOME: home }, encoding: 'utf8', timeout: 60_000,
-      });
-      expect(r.status, r.stderr).toBe(1);
-      expect(r.stderr).toContain("a shared store needs the caller's project");
-    } finally {
-      rmSync(cwd, { recursive: true, force: true });
-    }
+    const cwd = makeRoot('shared-cli-cwd', { init: false });
+    const r = spawnSync(process.execPath, [resolve(__dirname, '..', 'bin', 'hippo.js'), 'context'], {
+      cwd, env: { ...process.env, HIPPO_HOME: home }, encoding: 'utf8', timeout: 60_000,
+    });
+    expect(r.status, r.stderr).toBe(1);
+    expect(r.stderr).toContain("a shared store needs the caller's project");
   });
 });

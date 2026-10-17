@@ -17,9 +17,9 @@ beforeEach(() => {
 });
 
 afterEach(async () => {
-  vi.unstubAllEnvs();
   for (const h of handles.splice(0)) await h.stop();
   for (const r of roots.splice(0)) rmSync(r, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  vi.unstubAllEnvs();
 });
 
 /** Starts a server over a fresh root with auto-sleep at threshold 2, and mints a host-tenant key. */

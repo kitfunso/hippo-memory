@@ -1,12 +1,20 @@
 // GET /mcp/stream holds a socket and a timer per stream, so each API key (or each IP
 // when keyless) gets a bounded number of concurrent streams; a closed stream frees its slot.
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { createApiKey } from '../src/store/auth.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { waitFor } from './_helpers/wait-for.js';
 import { makeRoot } from './_helpers/make-root.js';
+
+beforeEach(() => {
+  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 interface OpenStream {
   status: number;
@@ -14,7 +22,6 @@ interface OpenStream {
 }
 
 describe('/mcp/stream concurrent stream cap', () => {
-  const savedMax = process.env.MCP_SSE_MAX_STREAMS;
   let root: string;
   let handle: ServerHandle;
   const open: OpenStream[] = [];
@@ -46,7 +53,7 @@ describe('/mcp/stream concurrent stream cap', () => {
   }
 
   beforeEach(async () => {
-    process.env.MCP_SSE_MAX_STREAMS = '2';
+    vi.stubEnv('MCP_SSE_MAX_STREAMS', '2');
     root = makeRoot('sse-cap');
     handle = await serve({ hippoRoot: root, port: 0 });
   });
@@ -54,8 +61,6 @@ describe('/mcp/stream concurrent stream cap', () => {
   afterEach(async () => {
     for (const s of open.splice(0)) s.abort();
     await handle.stop();
-    if (savedMax === undefined) delete process.env.MCP_SSE_MAX_STREAMS;
-    else process.env.MCP_SSE_MAX_STREAMS = savedMax;
   });
 
   it('answers 429 to the stream past the cap and frees a slot when a stream closes', async () => {

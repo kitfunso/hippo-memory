@@ -1,10 +1,14 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createHmac } from 'node:crypto';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { buildProvenanceCoverage } from '../src/api/provenance-coverage.js';
 import { makeRoot } from './_helpers/make-root.js';
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 const SECRET = 'shhh';
 
@@ -18,12 +22,12 @@ describe('POST /v1/connectors/slack/events', () => {
 
   beforeEach(async () => {
     root = makeRoot('slack-route');
-    process.env.SLACK_SIGNING_SECRET = SECRET;
+    vi.stubEnv('SLACK_SIGNING_SECRET', SECRET);
     handle = await serve({ hippoRoot: root, host: '127.0.0.1', port: 0 });
   });
 
   afterEach(async () => {
-    delete process.env.SLACK_SIGNING_SECRET;
+    vi.stubEnv('SLACK_SIGNING_SECRET', undefined);
     await handle.stop();
   });
 
@@ -125,7 +129,7 @@ describe('POST /v1/connectors/slack/events', () => {
   });
 
   it('returns 404 when SLACK_SIGNING_SECRET is unset (no config leak)', async () => {
-    delete process.env.SLACK_SIGNING_SECRET;
+    vi.stubEnv('SLACK_SIGNING_SECRET', undefined);
     try {
       const body = '{}';
       const res = await fetch(`http://127.0.0.1:${handle.port}/v1/connectors/slack/events`, {
@@ -135,7 +139,7 @@ describe('POST /v1/connectors/slack/events', () => {
       });
       expect(res.status).toBe(404);
     } finally {
-      process.env.SLACK_SIGNING_SECRET = SECRET;
+      vi.stubEnv('SLACK_SIGNING_SECRET', SECRET);
     }
   });
 });

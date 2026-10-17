@@ -39,27 +39,20 @@ async function jsonAs<T>(res: Response): Promise<T> {
 describe('POST /v1/sleep', () => {
   let home: string;
   let globalHome: string;
-  let origHippoHome: string | undefined;
   let handle: ServerHandle;
 
   beforeEach(async () => {
     home = makeRoot('srv-slp');
     globalHome = makeRoot('srv-slp');
-    origHippoHome = process.env.HIPPO_HOME;
-    process.env.HIPPO_HOME = globalHome;
+    vi.stubEnv('HIPPO_HOME', globalHome);
     handle = await serveAsAdmin({ hippoRoot: home, port: 0 });
   });
 
   afterEach(async () => {
-    vi.unstubAllEnvs();
     await handle.stop();
-    if (origHippoHome === undefined) {
-      delete process.env.HIPPO_HOME;
-    } else {
-      process.env.HIPPO_HOME = origHippoHome;
-    }
     rmSync(home, { recursive: true, force: true });
     rmSync(globalHome, { recursive: true, force: true });
+    vi.unstubAllEnvs();
   });
 
   it('empty body returns SleepResult (200)', async () => {
@@ -244,7 +237,7 @@ describe('POST /v1/sleep', () => {
     vi.stubEnv('HIPPO_SLEEP_TIMEOUT_MS', '1');
     const stopped = await postSleep();
     expect([stopped.status, (await jsonAs<{ error: string }>(stopped)).error]).toEqual([504, expect.stringContaining('did not finish within 1 ms')]);
-    vi.unstubAllEnvs();
+    vi.stubEnv('HIPPO_SLEEP_TIMEOUT_MS', undefined);
     expect((await postSleep()).status).toBe(200);
   });
 });

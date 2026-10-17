@@ -7,6 +7,10 @@ import { embeddingModelRequiresReindex, saveStoredEmbeddingModel } from '../src/
 import { saveEmbeddingIndex } from '../src/store/vector-index.js';
 import { loadConfig } from '../src/core/config.js';
 
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 interface EmbeddingsConfig {
   provider?: string;
   model?: string;
@@ -50,14 +54,14 @@ describe('EmbeddingProvider', () => {
     // here uses a mocked fetch; a real integration test is Workstream C.
     for (const k of ENV_KEYS) {
       savedEnv[k] = process.env[k];
-      delete process.env[k];
+      vi.stubEnv(k, undefined);
     }
   });
 
   afterEach(() => {
     for (const k of ENV_KEYS) {
-      if (savedEnv[k] === undefined) delete process.env[k];
-      else process.env[k] = savedEnv[k];
+      if (savedEnv[k] === undefined) vi.stubEnv(k, undefined);
+      else vi.stubEnv(k, savedEnv[k]);
     }
     vi.unstubAllGlobals();
   });
@@ -127,7 +131,7 @@ describe('EmbeddingProvider', () => {
     });
 
     it('is available once the key is present', () => {
-      process.env.OPENAI_API_KEY = 'sk-test';
+      vi.stubEnv('OPENAI_API_KEY', 'sk-test');
       const root = mkRoot({ provider: 'openai', model: 'text-embedding-3-large' });
       expect(resolveEmbeddingProvider(loadConfig(root).embeddings).isAvailable()).toBe(true);
     });
@@ -138,7 +142,7 @@ describe('EmbeddingProvider', () => {
     });
 
     it('honors embeddings.enabled=false even when the api key is present (no paid calls)', () => {
-      process.env.OPENAI_API_KEY = 'sk-test';
+      vi.stubEnv('OPENAI_API_KEY', 'sk-test');
       const root = mkRoot({ provider: 'openai', model: 'text-embedding-3-large', enabled: false });
       expect(resolveEmbeddingProvider(loadConfig(root).embeddings).isAvailable()).toBe(false);
     });
@@ -146,7 +150,7 @@ describe('EmbeddingProvider', () => {
 
   describe('request contract + normalization (openai)', () => {
     it('posts to /embeddings with bearer auth and a batched body, and L2-normalizes the result', async () => {
-      process.env.OPENAI_API_KEY = 'sk-secret-123';
+      vi.stubEnv('OPENAI_API_KEY', 'sk-secret-123');
       const root = mkRoot({ provider: 'openai', model: 'text-embedding-3-large' });
       const fetchMock = vi.fn(async (_url: string, _init: { headers: Record<string, string>; body: string }) =>
         jsonResponse({ data: [{ embedding: [3, 0, 4] }, { embedding: [0, 6, 8] }] }),
@@ -174,7 +178,7 @@ describe('EmbeddingProvider', () => {
     });
 
     it('chunks requests by batchSize', async () => {
-      process.env.OPENAI_API_KEY = 'sk-test';
+      vi.stubEnv('OPENAI_API_KEY', 'sk-test');
       const root = mkRoot({ provider: 'openai', model: 'm', batchSize: 1 });
       const fetchMock = vi.fn(async () => jsonResponse({ data: [{ embedding: [1, 0] }] }));
       vi.stubGlobal('fetch', fetchMock);
@@ -184,7 +188,7 @@ describe('EmbeddingProvider', () => {
     });
 
     it('ignores a fractional batchSize and falls back to the default (no chunk explosion)', async () => {
-      process.env.OPENAI_API_KEY = 'sk-test';
+      vi.stubEnv('OPENAI_API_KEY', 'sk-test');
       const root = mkRoot({ provider: 'openai', model: 'm', batchSize: 0.5 });
       const fetchMock = vi.fn(async () =>
         jsonResponse({ data: [{ embedding: [1, 0] }, { embedding: [1, 0] }, { embedding: [1, 0] }] }),
@@ -199,7 +203,7 @@ describe('EmbeddingProvider', () => {
 
   describe('role -> input_type mapping', () => {
     it('voyage maps query/passage to query/document', async () => {
-      process.env.VOYAGE_API_KEY = 'k';
+      vi.stubEnv('VOYAGE_API_KEY', 'k');
       const root = mkRoot({ provider: 'voyage', model: 'voyage-3' });
       const bodies: EmbedRequestBody[] = [];
       vi.stubGlobal(
@@ -217,7 +221,7 @@ describe('EmbeddingProvider', () => {
     });
 
     it('cohere maps query/passage to search_query/search_document and posts to /embed', async () => {
-      process.env.COHERE_API_KEY = 'k';
+      vi.stubEnv('COHERE_API_KEY', 'k');
       const root = mkRoot({ provider: 'cohere', model: 'embed-v4.0' });
       const bodies: EmbedRequestBody[] = [];
       const urls: string[] = [];
@@ -239,7 +243,7 @@ describe('EmbeddingProvider', () => {
     });
 
     it('openai sends no input_type', async () => {
-      process.env.OPENAI_API_KEY = 'k';
+      vi.stubEnv('OPENAI_API_KEY', 'k');
       const root = mkRoot({ provider: 'openai', model: 'm' });
       let body: EmbedRequestBody = {};
       vi.stubGlobal(
@@ -257,7 +261,7 @@ describe('EmbeddingProvider', () => {
   describe('key redaction + hard-failure semantics', () => {
     it('never leaks the key in an error when the API echoes it back', async () => {
       const key = 'sk-supersecret-DEADBEEF';
-      process.env.OPENAI_API_KEY = key;
+      vi.stubEnv('OPENAI_API_KEY', key);
       const root = mkRoot({ provider: 'openai', model: 'm' });
       vi.stubGlobal('fetch', vi.fn(async () => errorResponse(401, `Invalid key ${key} for org`)));
 
@@ -270,14 +274,14 @@ describe('EmbeddingProvider', () => {
     });
 
     it('throws on a non-2xx response (so a reindex aborts atomically)', async () => {
-      process.env.OPENAI_API_KEY = 'k';
+      vi.stubEnv('OPENAI_API_KEY', 'k');
       const root = mkRoot({ provider: 'openai', model: 'm' });
       vi.stubGlobal('fetch', vi.fn(async () => errorResponse(500, 'server error')));
       await expect(resolveEmbeddingProvider(loadConfig(root).embeddings).embed(['x'])).rejects.toThrow(/500/);
     });
 
     it('throws when a 200 returns fewer vectors than inputs (contract violation, not silent misses)', async () => {
-      process.env.OPENAI_API_KEY = 'sk-test';
+      vi.stubEnv('OPENAI_API_KEY', 'sk-test');
       const root = mkRoot({ provider: 'openai', model: 'm' });
       // 200 OK but only one vector for two inputs.
       vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({ data: [{ embedding: [1, 0] }] })));

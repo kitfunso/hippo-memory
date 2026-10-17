@@ -1,5 +1,5 @@
 // A Context with no reach (an integrator's own store) reads one project and no global store, as the old "other" branch did.
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { getContext } from '../src/api/index.js';
@@ -11,6 +11,10 @@ import { writeEntry } from '../src/store/entry-writes.js';
 import { sqliteStore } from '../src/store/sqlite/store.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 import { makeRoot } from './_helpers/make-root.js';
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 const PROJECT = 'proj-a';
 let tmpRoot: string;
@@ -36,13 +40,13 @@ beforeEach(() => {
   fs.mkdirSync(globalRoot, { recursive: true });
   initStore(local);
   initStore(globalRoot);
-  process.env.HIPPO_HOME = globalRoot;
+  vi.stubEnv('HIPPO_HOME', globalRoot);
   localPin = seedPin(local, 'a local pin that the prompt must carry every turn');
   globalPin = seedPin(globalRoot, 'a global pin that only a reach to the global store brings');
 });
 
 afterEach(() => {
-  delete process.env.HIPPO_HOME;
+  vi.stubEnv('HIPPO_HOME', undefined);
   _resetAblationCacheForTests();
   _resetSharedStoreCacheForTests();
 });

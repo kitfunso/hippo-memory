@@ -92,7 +92,7 @@ describe('heartbeat', () => {
     expect(hb!.updatedAt).toBe(claimed.updatedAt);
   });
 
-  it('adopts a NULL lease left by a 1.40.0-era claim and leaves updatedAt unchanged', async () => {
+  it('adopts a NULL lease left by a claim made before leases existed and leaves updatedAt unchanged', async () => {
     const card = createCard(root, 'default', { title: 'T2 null' });
     const claimed = claimCard(root, 'default', card.id, 'r1')!;
     const db = openHippoDb(root);
@@ -282,7 +282,7 @@ describe('a reclaimed runtime\'s run id is refused', () => {
 });
 
 describe('without a run id', () => {
-  it('block, review and complete behave as in 1.40.0 when runId is omitted', async () => {
+  it('block, review and complete behave as they did before leases when runId is omitted', async () => {
     const card = createCard(root, 'default', { title: 'T6 no run id' });
     claimCard(root, 'default', card.id, 'r1');
     const blocked = blockCard(root, 'default', card.id, 'why');
@@ -710,7 +710,7 @@ describe('CLI cases: card heartbeat and reclaim through the built CLI', () => {
     }
   });
 
-  it('C7 adversarial argv (feedback_drive_built_cli_after_each_fix_round): unknown ids, invalid --run and proto-key subcommands all fail cleanly', async () => {
+  it('C7 adversarial argv: unknown ids, invalid --run and proto-key subcommands all fail cleanly', async () => {
     const { home, env } = await setupCliHome();
     try {
       const ctor = await runCli(home, env, 'card', 'heartbeat', 'constructor', '--run', '1');

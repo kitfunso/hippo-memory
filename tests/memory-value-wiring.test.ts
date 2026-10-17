@@ -533,7 +533,7 @@ describe('(e) rescue semantics', () => {
     expect(found!.reason).toMatch(/enabled\/disabled/);
   });
 
-  it('tenants smaller than MIN_RESCUE_GROUP never rescue (small-tenant degeneracy floor, review-round F1)', async () => {
+  it('tenants smaller than MIN_RESCUE_GROUP never rescue (small-tenant degeneracy floor)', async () => {
     initStore(dir);
     enableMemoryValue(dir);
 

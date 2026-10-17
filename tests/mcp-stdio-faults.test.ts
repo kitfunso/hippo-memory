@@ -1,6 +1,5 @@
 // The stdio MCP server answers a frame it cannot parse, survives stray values, answers a call that outlives its deadline, and exits non-zero with a stack on a crash.
 import * as fs from 'node:fs';
-import * as os from 'node:os';
 import * as path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
@@ -9,6 +8,7 @@ import type { AddressInfo } from 'node:net';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { embedAll } from '../src/search/embed-memories.js';
 import { waitFor } from './_helpers/wait-for.js';
+import { makeRoot } from './_helpers/make-root.js';
 import { sqliteSyncStore } from '../src/store/sqlite/store.js';
 
 const serverPath = path.resolve('dist/mcp/server.js');
@@ -98,9 +98,9 @@ async function heldEmbeddings() {
     hold: (): void => { holding = true; },
     release: (): void => { for (const reply of held.splice(0)) reply(); },
     close: (): void => {
-      vi.unstubAllEnvs();
       server.closeAllConnections();
       server.close();
+      vi.unstubAllEnvs();
     },
   };
 }
@@ -126,7 +126,7 @@ beforeAll(() => {
 });
 
 beforeEach(() => {
-  tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-mcp-faults-'));
+  tmpHome = makeRoot('mcp-faults', { init: false });
 });
 
 afterEach(async () => {
@@ -139,7 +139,6 @@ afterEach(async () => {
       if (proc.exitCode === null) proc.kill('SIGKILL');
     }
   }
-  fs.rmSync(tmpHome, { recursive: true, force: true });
 });
 
 describe('MCP stdio fault handling', () => {

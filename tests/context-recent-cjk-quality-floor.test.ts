@@ -13,10 +13,8 @@
  */
 
 import type { FullContext } from './_helpers/api-ctx.js';
-import { describe, it, expect } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { rmSync } from 'node:fs';
 import { isContentWorthStoring } from '../src/core/memory-quality.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
@@ -24,20 +22,23 @@ import { getContext } from '../src/api/index.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 import { makeRoot } from './_helpers/make-root.js';
 
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 function tmpHome() {
   const home = makeRoot('df3-cjk');
-  const globalTmp = mkdtempSync(join(tmpdir(), 'hippo-df3-cjk-global-'));
+  const globalTmp = makeRoot('df3-cjk-global', { init: false });
   const origHippoHome = process.env.HIPPO_HOME;
-  process.env.HIPPO_HOME = globalTmp;
+  vi.stubEnv('HIPPO_HOME', globalTmp);
   return {
     home,
     restore: () => {
       rmSync(home, { recursive: true, force: true });
-      rmSync(globalTmp, { recursive: true, force: true });
       if (origHippoHome !== undefined) {
-        process.env.HIPPO_HOME = origHippoHome;
+        vi.stubEnv('HIPPO_HOME', origHippoHome);
       } else {
-        delete process.env.HIPPO_HOME;
+        vi.stubEnv('HIPPO_HOME', undefined);
       }
     },
   };

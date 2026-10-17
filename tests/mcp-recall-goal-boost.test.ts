@@ -98,7 +98,7 @@ describe('MCP hippo_recall session_id goal-stack boost', () => {
     }
   });
 
-  it('without session_id, no boost runs and goal_recall_log stays empty (v1.7.3 baseline)', async () => {
+  it('without session_id, no boost runs and goal_recall_log stays empty', async () => {
     const ctx: McpContext = { hippoRoot: home, tenantId, actor: 'mcp', role: 'admin', hostAdmin: true , store: sqliteStore(home) };
     await remember(apiCtx(home, tenantId, { subject: 'test', role: 'admin' }), {
       content: 'auth bug fix details',

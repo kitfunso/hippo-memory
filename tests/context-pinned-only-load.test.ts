@@ -2,7 +2,7 @@
 // return about eleven. These pin what the narrower load must still return.
 
 import type { FullContext } from './_helpers/api-ctx.js';
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { initStore } from '../src/store/open.js';
@@ -15,6 +15,10 @@ import { _resetAblationCacheForTests } from '../src/core/ablation.js';
 import { withSharedStoreHandles } from '../src/db/index.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 import { makeRoot } from './_helpers/make-root.js';
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 const PROJECT = 'proj-a';
 
@@ -42,12 +46,12 @@ beforeEach(() => {
   fs.mkdirSync(globalRoot, { recursive: true });
   initStore(local);
   initStore(globalRoot);
-  process.env.HIPPO_HOME = globalRoot;
+  vi.stubEnv('HIPPO_HOME', globalRoot);
   ctx = apiCtx(local, 'default', { subject: 'cli', role: 'admin' });
 });
 
 afterEach(() => {
-  delete process.env.HIPPO_HOME;
+  vi.stubEnv('HIPPO_HOME', undefined);
   _resetAblationCacheForTests();
 });
 

@@ -1,9 +1,13 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { installJsonHooks, uninstallJsonHooks } from '../src/hooks/json-hooks.js';
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 /**
  * Tests for the mid-session pinned-rule re-injection hook.
@@ -26,15 +30,15 @@ beforeEach(() => {
   fs.mkdirSync(path.join(tmpHome, '.claude'), { recursive: true });
   savedUserProfile = process.env.USERPROFILE;
   savedHome = process.env.HOME;
-  process.env.USERPROFILE = tmpHome;
-  process.env.HOME = tmpHome;
+  vi.stubEnv('USERPROFILE', tmpHome);
+  vi.stubEnv('HOME', tmpHome);
 });
 
 afterEach(() => {
-  if (savedUserProfile !== undefined) process.env.USERPROFILE = savedUserProfile;
-  else delete process.env.USERPROFILE;
-  if (savedHome !== undefined) process.env.HOME = savedHome;
-  else delete process.env.HOME;
+  if (savedUserProfile !== undefined) vi.stubEnv('USERPROFILE', savedUserProfile);
+  else vi.stubEnv('USERPROFILE', undefined);
+  if (savedHome !== undefined) vi.stubEnv('HOME', savedHome);
+  else vi.stubEnv('HOME', undefined);
   fs.rmSync(tmpHome, { recursive: true, force: true });
 });
 

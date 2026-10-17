@@ -6,7 +6,7 @@
  * goal_recall_log writes.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { remember } from '../src/api/index.js';
 import { pushGoal } from '../src/store/goals.js';
@@ -14,6 +14,14 @@ import { serve, type ServerHandle } from '../src/server.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+
+beforeEach(() => {
+  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 function countGoalRecallLogRows(db: DatabaseSyncLike, sessionId: string): number {
   // SAFETY: `SELECT COUNT(*) AS c ...` always returns exactly one row with a
@@ -56,7 +64,7 @@ describe('HTTP /v1/memories session_id', () => {
     }
   });
 
-  it('session_id omitted: no boost, no goal_recall_log row (v1.7.3 baseline)', async () => {
+  it('session_id omitted: no boost, no goal_recall_log row (baseline)', async () => {
     const res = await fetch(`${handle.url}/v1/memories?q=auth`);
     expect(res.status).toBe(200);
     const db = openHippoDb(home);

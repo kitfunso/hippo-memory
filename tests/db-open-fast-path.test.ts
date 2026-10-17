@@ -1,6 +1,6 @@
 // Opening a current, whole store runs one probe and no DDL; anything stale or missing takes the self-healing slow path.
 // Real SQLite stores throughout; the statement spy wraps node:sqlite and passes every call through.
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import * as path from 'node:path';
 import { createRequire } from 'node:module';
 import { openStore } from '../src/store/open.js';
@@ -13,6 +13,10 @@ import { openHippoDb, closeHippoDb, getMeta, setMeta, ftsRowCounts, getCurrentSc
 import { REQUIRED_SCHEMA_OBJECTS } from '../src/db/continuity.js';
 import { MIGRATIONS } from '../src/db/migrations/index.js';
 import { makeStore } from './_helpers/make-root.js';
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 const require = createRequire(import.meta.url);
 // SAFETY: node:sqlite has no bundled types; mirrors tests/fts-sync-check-count.test.ts.
@@ -213,15 +217,9 @@ describe('full-text drift repair moved off the open path', () => {
   });
 
   it('doctor warns on drift and points at sleep', () => {
-    const origHome = process.env.HIPPO_HOME;
-    process.env.HIPPO_HOME = path.join(cwd, 'global');
-    try {
-      expect(runDoctor({ cwd, home: cwd, version: 'test' }).checks.find((c) => c.id === 'fts')).toMatchObject({ status: 'pass' });
-      desyncFts();
-      expect(runDoctor({ cwd, home: cwd, version: 'test' }).checks.find((c) => c.id === 'fts')).toMatchObject({ status: 'warn', fix: expect.stringMatching(/hippo sleep/) });
-    } finally {
-      if (origHome === undefined) delete process.env.HIPPO_HOME;
-      else process.env.HIPPO_HOME = origHome;
-    }
+    vi.stubEnv('HIPPO_HOME', path.join(cwd, 'global'));
+    expect(runDoctor({ cwd, home: cwd, version: 'test' }).checks.find((c) => c.id === 'fts')).toMatchObject({ status: 'pass' });
+    desyncFts();
+    expect(runDoctor({ cwd, home: cwd, version: 'test' }).checks.find((c) => c.id === 'fts')).toMatchObject({ status: 'warn', fix: expect.stringMatching(/hippo sleep/) });
   });
 });

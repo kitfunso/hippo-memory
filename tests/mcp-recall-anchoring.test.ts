@@ -9,7 +9,7 @@
  * - Module-level Map is reset via _resetSessionRecallHistoryMcpForTests helper
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
@@ -18,6 +18,10 @@ import { createMemory } from './_helpers/default-half-life-memory.js';
 import { handleMcpRequest, _resetSessionRecallHistoryMcpForTests, type McpContext, type McpResponse } from '../src/mcp/server.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { sqliteStore } from '../src/store/sqlite/store.js';
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 type RecallToolArgs = {
   query: string;
@@ -59,13 +63,11 @@ function countAuditOps(root: string, op: string): number {
 
 describe('mcp hippo_recall anchoringHint', () => {
   let home: string;
-  let originalHome: string | undefined;
 
   beforeEach(() => {
     home = makeRoot('mcp-j1');
-    originalHome = process.env.HIPPO_HOME;
-    process.env.HIPPO_HOME = home;
-    delete process.env.HIPPO_ANCHORING;
+    vi.stubEnv('HIPPO_HOME', home);
+    vi.stubEnv('HIPPO_ANCHORING', undefined);
     _resetSessionRecallHistoryMcpForTests();
     // Seed a memory that matches the test query so MCP physics/hybrid
     // returns a non-null top-1.
@@ -81,9 +83,7 @@ describe('mcp hippo_recall anchoringHint', () => {
 
   afterEach(() => {
     rmSync(home, { recursive: true, force: true });
-    if (originalHome === undefined) delete process.env.HIPPO_HOME;
-    else process.env.HIPPO_HOME = originalHome;
-    delete process.env.HIPPO_ANCHORING;
+    vi.stubEnv('HIPPO_ANCHORING', undefined);
     _resetSessionRecallHistoryMcpForTests();
   });
 
@@ -121,7 +121,7 @@ describe('mcp hippo_recall anchoringHint', () => {
   });
 
   it('does NOT render anchoring block when HIPPO_ANCHORING=off', async () => {
-    process.env.HIPPO_ANCHORING = 'off';
+    vi.stubEnv('HIPPO_ANCHORING', 'off');
     const ctx: McpContext = { hippoRoot: home, tenantId: 'default', actor: 'mcp', role: 'admin', hostAdmin: true , store: sqliteStore(home) };
     // Repeat 3 distinct queries — would normally fire R2.
     await callTool(1, 'hippo_recall', { query: 'frobnicate baz quux', session_id: 'sess1' }, ctx);

@@ -2,13 +2,21 @@
 // `hippo stats` reported a number that depended on which surface the caller
 // used. Same class as the 1.38.7 archive and 1.38.9 forget counter bugs.
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { openHippoDb, closeHippoDb, getMeta } from '../src/db/index.js';
 import { remember, retrieve } from '../src/api/index.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { __resetSessionRecallHistoryHttp } from '../src/entry/testing.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 import { makeRoot } from './_helpers/make-root.js';
+
+beforeEach(() => {
+  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 let home: string;
 let handle: ServerHandle;

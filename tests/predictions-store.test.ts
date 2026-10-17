@@ -190,7 +190,7 @@ describe('predictions store (first-class object)', () => {
     expect(cResults.length).toBe(0);
   });
 
-  it('UPDATE trigger blocks tenant_id-only mutation (codex round-1 P2 fix)', () => {
+  it('UPDATE trigger blocks tenant_id-only mutation', () => {
     // Create memory under tenant-a + a prediction referencing it
     const memA = createMemory('tenant-a prediction memory', {
       tags: ['prediction', 'x'],
@@ -220,7 +220,7 @@ describe('predictions store (first-class object)', () => {
     }
   });
 
-  it('closePrediction rejects already-closed predictions (codex round-1 P2 fix)', () => {
+  it('closePrediction rejects already-closed predictions', () => {
     const pred = savePrediction(home, 'default', {
       classTag: 'reclose-test',
       claimText: 'predict and close once',

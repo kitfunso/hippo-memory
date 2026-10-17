@@ -1,6 +1,6 @@
 // Z0 runner end to end with a stand-in for Claude Code (tests/fixtures/fake-claude.mjs), so it costs nothing.
 // Real git, hidden-test grading, hippo hooks, ledger and CLI; the stand-in's token numbers are made up.
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync, readdirSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve, dirname, delimiter } from 'node:path';
@@ -15,15 +15,10 @@ import { loadAllEntries } from '../src/store/entry-reads.js';
 const FAKE = resolve(__dirname, 'fixtures', 'fake-claude.mjs');
 const CLAUDE = `"${process.execPath}" "${FAKE}"`;
 const dirs: string[] = [];
-const envKeys = ['HOME', 'USERPROFILE', 'APPDATA', 'PATH', 'Path', 'HIPPO_HOME', 'CLAUDE_CODE_OAUTH_TOKEN', 'FAKE_CLAUDE_LIMIT_ONCE', 'FAKE_CLAUDE_LIMIT_ALWAYS'];
-const savedEnv = Object.fromEntries(envKeys.map((k) => [k, process.env[k]]));
 const savedCwd = process.cwd();
 afterEach(() => {
   process.chdir(savedCwd);
-  for (const [k, v] of Object.entries(savedEnv)) {
-    if (v === undefined) delete process.env[k];
-    else process.env[k] = v;
-  }
+  vi.unstubAllEnvs();
   while (dirs.length) rmSync(dirs.pop()!, { recursive: true, force: true });
 });
 // Long sync tests starve the worker's RPC; a macrotask turn between tests lets its replies through.
@@ -38,9 +33,9 @@ const tmp = (prefix: string): string => {
 /** Temp operator HOME, USERPROFILE, APPDATA and cwd, so nothing reaches the real ones. */
 function isolate(): string {
   const home = tmp('ab-run-home-');
-  process.env.HOME = home;
-  process.env.USERPROFILE = home;
-  process.env.APPDATA = join(home, 'AppData', 'Roaming');
+  vi.stubEnv('HOME', home);
+  vi.stubEnv('USERPROFILE', home);
+  vi.stubEnv('APPDATA', join(home, 'AppData', 'Roaming'));
   process.chdir(tmp('ab-run-cwd-'));
   return home;
 }
@@ -105,7 +100,7 @@ function decoyHippo() {
   writeFileSync(join(dir, 'hippo'), `#!/bin/sh\necho decoy > "${marker}"\n`, { mode: 0o755 });
   writeFileSync(join(dir, 'hippo.cmd'), `@echo decoy> "${marker}"\r\n`);
   const key = Object.keys(process.env).find((k) => k.toUpperCase() === 'PATH') ?? 'PATH';
-  process.env[key] = `${dir}${delimiter}${process.env[key]}`;
+  vi.stubEnv(key, `${dir}${delimiter}${process.env[key]}`);
   return { dir, marker };
 }
 
@@ -185,7 +180,7 @@ describe('Z0 runner end to end (fake Claude Code)', () => {
   it('runs all four arms with their settings, env, homes and PATH, and keeps the token out of every file', async () => {
     const home = isolate();
     const decoy = decoyHippo();
-    process.env.CLAUDE_CODE_OAUTH_TOKEN = 'sentinel-z0-token';
+    vi.stubEnv('CLAUDE_CODE_OAUTH_TOKEN', 'sentinel-z0-token');
     const r = makeRepo();
     const out = tmp('ab-run-out-');
     const dumpDir = tmp('ab-run-dump-');
@@ -308,7 +303,7 @@ describe('Z0 runner end to end (fake Claude Code)', () => {
 
   it('a setup that inits a submodule passes again at the next task', async () => {
     isolate();
-    process.env.HIPPO_HOME = tmp('ab-run-hippo-home-');
+    vi.stubEnv('HIPPO_HOME', tmp('ab-run-hippo-home-'));
     const sub = tmp('ab-run-sub-');
     const sg = (...args: string[]): string => execFileSync('git', args, { cwd: sub, encoding: 'utf8' }).trim();
     sg('init', '-q');
@@ -409,7 +404,7 @@ describe('Z0 runner end to end (fake Claude Code)', () => {
     isolate();
     const r = makeRepo();
     const out = tmp('ab-run-ancestor-limit-');
-    process.env.FAKE_CLAUDE_LIMIT_ONCE = join(out, 'limit-hit');
+    vi.stubEnv('FAKE_CLAUDE_LIMIT_ONCE', join(out, 'limit-hit'));
     const spec = validateTasks({ sequences: [{ id: 'seqB', cluster: 'c', repo: r.repo, fixedOrder: true, tasks: [task(r, 'b1', 'look around only'), task(r, 'b2', 'LIMIT ESCAPE FIX add in lib.js')] }] });
     await run(spec, ['A0'], out, { limitWaitMs: 0 });
     const [b1, b2] = readRecords(out);
@@ -446,7 +441,7 @@ describe('Z0 runner end to end (fake Claude Code)', () => {
     isolate();
     const r = makeRepo();
     const out = tmp('ab-run-limit-out-');
-    process.env.FAKE_CLAUDE_LIMIT_ALWAYS = '1';
+    vi.stubEnv('FAKE_CLAUDE_LIMIT_ALWAYS', '1');
     const spec = validateTasks({ sequences: [{ id: 'seqX', cluster: 'c', repo: r.repo, fixedOrder: true, tasks: [task(r, 'x1', 'LIMIT FIX add in lib.js'), task(r, 'x2', 'look around only')] }] });
     await expect(run(spec, ['A0'], out, { limitWaitMs: 0, limitMaxWaits: 0 })).rejects.toThrow(/seqX x1 A0 seed1: still at the plan limit after 0 waits/);
     expect(existsSync(join(out, 'runs.jsonl'))).toBe(false);
@@ -458,7 +453,7 @@ describe('Z0 runner end to end (fake Claude Code)', () => {
     const r = makeRepo();
     const out = tmp('ab-run-limit-setup-');
     const once = join(out, 'setup-ran');
-    process.env.FAKE_CLAUDE_LIMIT_ONCE = join(out, 'limit-hit');
+    vi.stubEnv('FAKE_CLAUDE_LIMIT_ONCE', join(out, 'limit-hit'));
     const setup = `node -e "const f=require('fs');if(f.existsSync(process.argv[1]))process.exit(1);f.writeFileSync(process.argv[1],'')" "${once}"`;
     const spec = validateTasks({ sequences: [{ id: 'seqS', cluster: 'c', repo: r.repo, fixedOrder: true, tasks: [task(r, 's1', 'LIMIT FIX add in lib.js', { setup }), task(r, 's2', 'look around only')] }] });
     await expect(run(spec, ['A0'], out, { limitWaitMs: 0 })).rejects.toThrow(/setup failed on the usage-limit rerun/);
@@ -470,7 +465,7 @@ describe('Z0 runner end to end (fake Claude Code)', () => {
     const r = makeRepo();
     const out = tmp('ab-run-limit-');
     const spec = validateTasks({ sequences: [{ id: 'seqL', cluster: 'repoL', repo: r.repo, fixedOrder: true, tasks: [task(r, 'l1', 'LIMIT FIX add in lib.js'), task(r, 'l2', 'look around only')] }] });
-    process.env.FAKE_CLAUDE_LIMIT_ONCE = join(out, 'limit-hit');
+    vi.stubEnv('FAKE_CLAUDE_LIMIT_ONCE', join(out, 'limit-hit'));
     await run(spec, ['A0'], out, { limitWaitMs: 0 });
     const records = readRecords(out);
     expect(records).toHaveLength(2);
@@ -484,7 +479,7 @@ describe('Z0 runner end to end (fake Claude Code)', () => {
     isolate();
     const r = makeCarryRepo();
     const carried = tmp('ab-run-limit-carry-');
-    process.env.FAKE_CLAUDE_LIMIT_ONCE = join(carried, 'limit-hit');
+    vi.stubEnv('FAKE_CLAUDE_LIMIT_ONCE', join(carried, 'limit-hit'));
     const spec = (first: string, second: string) => validateTasks({ sequences: [{ id: 'seqL', cluster: 'c', repo: r.repo, fixedOrder: true, tasks: [task(r, 'l1', first), task(r, 'l2', second, { baseRef: r.base2 })] }] });
     await run(spec('CARRY', 'LIMIT look around'), ['A1'], carried, { limitWaitMs: 0 });
     expect(readRecords(carried)[1]).toMatchObject({ taskId: 'l2', limitRetries: 1 });
@@ -493,7 +488,7 @@ describe('Z0 runner end to end (fake Claude Code)', () => {
     expect(agents).not.toContain('limited edit');
 
     const first = tmp('ab-run-limit-init-');
-    process.env.FAKE_CLAUDE_LIMIT_ONCE = join(first, 'limit-hit');
+    vi.stubEnv('FAKE_CLAUDE_LIMIT_ONCE', join(first, 'limit-hit'));
     await run(spec('LIMIT FIX', 'look around only'), ['A2'], first, { limitWaitMs: 0 });
     expect(readRecords(first)[0]).toMatchObject({ taskId: 'l1', limitRetries: 1 });
     const seen = rawResult(first, 'seqL', 'A2', 'l1').files;

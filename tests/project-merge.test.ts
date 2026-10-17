@@ -1,6 +1,6 @@
 /** `hippo projects` merge and repair: fold an old worktree name into its repo, set aside copies, re-tag sleep's user-global merges, reversibly. */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
@@ -13,6 +13,10 @@ import { listDormantSnapshots } from '../src/store/dormant.js';
 import { listProjectNames, mergeProjectNames, repairProjectNames } from '../src/api/objects/projects.js';
 import { cliApiContext } from '../src/cli/api-context.js';
 import { makeRoot } from './_helpers/make-root.js';
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 let home: string;
 let db: DatabaseSyncLike;
@@ -173,55 +177,43 @@ describe('hippo projects repair', () => {
   });
 
   it('in the global store, folds a name whose every recorded folder still on disk resolves to one other project', () => {
-    const saved = process.env.HIPPO_HOME;
-    process.env.HIPPO_HOME = home;
-    try {
-      const repo = join(home, 'work', 'repo');
-      mkdirSync(join(repo, '.git'), { recursive: true });
-      const lesson = row('a lesson saved while the folder had its old name', 'old-name');
-      const kept = row('a lesson under a name with no folder left', 'gone-name');
-      open();
-      const compaction = db.prepare(`INSERT INTO compactions (tenant_id, id, session_id, origin_project, compact_trigger, cwd, started_at) VALUES (?, ?, 's1', ?, 'auto', ?, ?)`);
-      compaction.run(T, 'c1', 'old-name', repo, new Date().toISOString());
-      compaction.run(T, 'c2', 'old-name', join(home, 'removed'), new Date().toISOString());
-      compaction.run(T, 'c3', 'gone-name', join(home, 'removed'), new Date().toISOString());
-      compaction.run(T, 'c4', 'repo', repo, new Date().toISOString());
-      compaction.run(T, 'c5', 'hand-name', repo, new Date().toISOString());
-      mergeProjectNames(ctx(), { from: 'repo-wt-b', into: 'hand-name', dryRun: false });
+    vi.stubEnv('HIPPO_HOME', home);
+    const repo = join(home, 'work', 'repo');
+    mkdirSync(join(repo, '.git'), { recursive: true });
+    const lesson = row('a lesson saved while the folder had its old name', 'old-name');
+    const kept = row('a lesson under a name with no folder left', 'gone-name');
+    open();
+    const compaction = db.prepare(`INSERT INTO compactions (tenant_id, id, session_id, origin_project, compact_trigger, cwd, started_at) VALUES (?, ?, 's1', ?, 'auto', ?, ?)`);
+    compaction.run(T, 'c1', 'old-name', repo, new Date().toISOString());
+    compaction.run(T, 'c2', 'old-name', join(home, 'removed'), new Date().toISOString());
+    compaction.run(T, 'c3', 'gone-name', join(home, 'removed'), new Date().toISOString());
+    compaction.run(T, 'c4', 'repo', repo, new Date().toISOString());
+    compaction.run(T, 'c5', 'hand-name', repo, new Date().toISOString());
+    mergeProjectNames(ctx(), { from: 'repo-wt-b', into: 'hand-name', dryRun: false });
 
-      const r = repairProjectNames(ctx(), { dryRun: false });
-      expect(r.folds).toEqual([{ from: 'old-name', into: 'repo' }]);
-      expect(byId().get(lesson.id)!.origin_project).toBe('repo');
-      expect(byId().get(kept.id)!.origin_project).toBe('gone-name');
-      expect(mirror(lesson.id)).toContain('origin_project: repo');
-    } finally {
-      if (saved === undefined) delete process.env.HIPPO_HOME;
-      else process.env.HIPPO_HOME = saved;
-    }
+    const r = repairProjectNames(ctx(), { dryRun: false });
+    expect(r.folds).toEqual([{ from: 'old-name', into: 'repo' }]);
+    expect(byId().get(lesson.id)!.origin_project).toBe('repo');
+    expect(byId().get(kept.id)!.origin_project).toBe('gone-name');
+    expect(mirror(lesson.id)).toContain('origin_project: repo');
   });
 
   it('skips a fold into a name that itself folds, so the result never depends on run order', () => {
-    const saved = process.env.HIPPO_HOME;
-    process.env.HIPPO_HOME = home;
-    try {
-      for (const name of ['b', 'c']) mkdirSync(join(home, 'work', name, '.git'), { recursive: true });
-      const lesson = row('a lesson two renames back', 'a');
-      open();
-      const compaction = db.prepare(`INSERT INTO compactions (tenant_id, id, session_id, origin_project, compact_trigger, cwd, started_at) VALUES (?, ?, 's1', ?, 'auto', ?, ?)`);
-      compaction.run(T, 'c1', 'a', join(home, 'work', 'b'), new Date().toISOString());
-      compaction.run(T, 'c2', 'b', join(home, 'work', 'c'), new Date().toISOString());
+    vi.stubEnv('HIPPO_HOME', home);
+    for (const name of ['b', 'c']) mkdirSync(join(home, 'work', name, '.git'), { recursive: true });
+    const lesson = row('a lesson two renames back', 'a');
+    open();
+    const compaction = db.prepare(`INSERT INTO compactions (tenant_id, id, session_id, origin_project, compact_trigger, cwd, started_at) VALUES (?, ?, 's1', ?, 'auto', ?, ?)`);
+    compaction.run(T, 'c1', 'a', join(home, 'work', 'b'), new Date().toISOString());
+    compaction.run(T, 'c2', 'b', join(home, 'work', 'c'), new Date().toISOString());
 
-      const merged = row('merged from c and a soon-folded b parent', '', { source: 'consolidation', parents: [row('parent under b', 'b').id, row('parent under c', 'c').id] });
-      const dry = repairProjectNames(ctx(), { dryRun: true });
-      expect(dry.folds).toEqual([{ from: 'b', into: 'c' }]);
-      // Planned against the folded names, as apply sees them: both parents are under c.
-      expect([dry.toProject, dry.setAside]).toEqual([[{ id: merged.id, origin: 'c' }], []]);
-      expect(repairProjectNames(ctx(), { dryRun: false }).toProject).toEqual(dry.toProject);
-      expect(byId().get(lesson.id)!.origin_project).toBe('a');
-    } finally {
-      if (saved === undefined) delete process.env.HIPPO_HOME;
-      else process.env.HIPPO_HOME = saved;
-    }
+    const merged = row('merged from c and a soon-folded b parent', '', { source: 'consolidation', parents: [row('parent under b', 'b').id, row('parent under c', 'c').id] });
+    const dry = repairProjectNames(ctx(), { dryRun: true });
+    expect(dry.folds).toEqual([{ from: 'b', into: 'c' }]);
+    // Planned against the folded names, as apply sees them: both parents are under c.
+    expect([dry.toProject, dry.setAside]).toEqual([[{ id: merged.id, origin: 'c' }], []]);
+    expect(repairProjectNames(ctx(), { dryRun: false }).toProject).toEqual(dry.toProject);
+    expect(byId().get(lesson.id)!.origin_project).toBe('a');
   });
 
   it('folds nothing in a project store, whose names never came from a cwd', () => {

@@ -15,6 +15,10 @@ import { hybridSearch, physicsSearch } from '../src/entry/folder-search.js';
 import { rankRecall, type RankRecallOptions } from '../src/api/recall/pipeline.js';
 import type { SearchResult } from '../src/core/search-types.js';
 
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 const TENANT = 'default';
 const CUT = '2026-06-01T00:00:00.000Z';
 const NOW = new Date('2026-09-01T00:00:00.000Z');
@@ -35,7 +39,7 @@ let root: string;
 
 beforeEach(() => {
   root = makeRoot('physics-asof', { config: { embeddings: { provider: 'openai', model: 'text-embedding-3-small' } } });
-  process.env.OPENAI_API_KEY = 'sk-test';
+  vi.stubEnv('OPENAI_API_KEY', 'sk-test');
   vi.stubGlobal('fetch', vi.fn(async (_url: string, init: { body: string }) => {
     // SAFETY: body is the OpenAI embeddings request the provider just serialised.
     const body = JSON.parse(init.body) as { input: string[] };
@@ -57,7 +61,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
-  delete process.env.OPENAI_API_KEY;
+  vi.stubEnv('OPENAI_API_KEY', undefined);
   rmSync(root, { recursive: true, force: true });
 });
 

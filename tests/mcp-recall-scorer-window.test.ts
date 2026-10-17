@@ -72,7 +72,7 @@ describe('MCP hippo_recall scorer_window', () => {
     await expect(call).rejects.toMatchObject({ code: 'invalid_scorer_window' });
   });
 
-  it('scorer_window+fresh_tail_count exercises the api.recall appendix path — review TESTING P1', async () => {
+  it('scorer_window+fresh_tail_count exercises the api.recall appendix path', async () => {
     // The appendix-marker assertion is non-deterministic in this test
     // because the physics scorer dedupes fresh-tail rows that already
     // appear in the primary ranked block. With all alpha-matching content,

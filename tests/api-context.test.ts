@@ -21,32 +21,33 @@
  */
 
 import type { FullContext } from './_helpers/api-ctx.js';
-import { describe, it, expect } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { rmSync } from 'node:fs';
 import { saveActiveTaskSnapshot } from '../src/store/sessions.js';
 import { remember, getContext } from '../src/api/index.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 import { makeRoot } from './_helpers/make-root.js';
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 function tmpHome() {
   const home = makeRoot('api-ctx');
   // Per-test HIPPO_HOME override pointing to a separate UNINITIALIZED dir
   // so hasGlobal=false inside api.getContext. Keeps the test local-only and
   // prevents any global writes from leaking into the shared baseline.
-  const globalTmp = mkdtempSync(join(tmpdir(), 'hippo-api-ctx-global-'));
+  const globalTmp = makeRoot('api-ctx-global', { init: false });
   const origHippoHome = process.env.HIPPO_HOME;
-  process.env.HIPPO_HOME = globalTmp;
+  vi.stubEnv('HIPPO_HOME', globalTmp);
   return {
     home,
     restore: () => {
       rmSync(home, { recursive: true, force: true });
-      rmSync(globalTmp, { recursive: true, force: true });
       if (origHippoHome !== undefined) {
-        process.env.HIPPO_HOME = origHippoHome;
+        vi.stubEnv('HIPPO_HOME', origHippoHome);
       } else {
-        delete process.env.HIPPO_HOME;
+        vi.stubEnv('HIPPO_HOME', undefined);
       }
     },
   };

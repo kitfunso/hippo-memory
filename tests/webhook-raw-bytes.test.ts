@@ -1,7 +1,7 @@
 // The webhook HMAC covers the bytes the sender signed, so a body that is not valid UTF-8 verifies on its own bytes and
 // on no other text.
 import { createHmac } from 'node:crypto';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { serve, type ServerHandle } from '../src/server.js';
 import { makeRoot } from './_helpers/make-root.js';
 
@@ -19,15 +19,14 @@ const hmac = (payload: readonly (string | Buffer)[]): string => {
 let handle: ServerHandle;
 
 beforeEach(async () => {
-  process.env.SLACK_SIGNING_SECRET = SECRET;
-  process.env.GITHUB_WEBHOOK_SECRET = SECRET;
+  vi.stubEnv('SLACK_SIGNING_SECRET', SECRET);
+  vi.stubEnv('GITHUB_WEBHOOK_SECRET', SECRET);
   handle = await serve({ hippoRoot: makeRoot('webhook-bytes'), host: '127.0.0.1', port: 0 });
 });
 
 afterEach(async () => {
-  delete process.env.SLACK_SIGNING_SECRET;
-  delete process.env.GITHUB_WEBHOOK_SECRET;
   await handle.stop();
+  vi.unstubAllEnvs();
 });
 
 function postSlack(signedOver: Buffer): Promise<Response> {
