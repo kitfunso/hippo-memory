@@ -24,6 +24,7 @@
   "jsPlugins": [
     { "name": "anti-slop", "specifier": "./tools/oxlint/anti-slop/index.ts" }
   ],
+  "plugins": ["typescript", "unicorn", "oxc", "import"],
   "rules": {
     "anti-slop/no-chained-type-assertions": "error",
     "anti-slop/no-conditional-empty-object-spread": "error",
@@ -43,6 +44,7 @@
     "curly": ["error", "multi-line"]
   },
   "overrides": [
+    { "files": ["src/**/*.ts"], "rules": { "import/no-cycle": ["error", { "ignoreTypes": true }] } },
     { "files": ["deploy/**/*.mjs"], "rules": { "anti-slop/no-runtime-typeof": "off" } },
     {
       "files": [

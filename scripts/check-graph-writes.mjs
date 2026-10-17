@@ -10,9 +10,8 @@
  * contains a DATA write (INSERT INTO / UPDATE) to a graph table.
  *
  * The DB triggers are the airtight runtime backstop; this is fast PR-time feedback +
- * the "single graph-writer" rule. Regex-based (mirrors
- * scripts/check-em-dashes-in-release-notes.mjs); a write split across multiple lines
- * would slip the line-scan but is still caught at runtime by the DB guard.
+ * the "single graph-writer" rule. The SQL text is read from the string and template
+ * literals of the TypeScript parse, so a comment that names a write never counts.
  *
  * Ticket: ROADMAP-RESEARCH.md E3.3 success criterion 2.
  */
@@ -20,6 +19,7 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { readFacts } from './lib/ts-facts.mjs';
 
 const GRAPH_TABLES = ['entities', 'relations', 'graph_extraction_queue'];
 /** A DATA write to a graph table: `INSERT INTO <table>`, `UPDATE <table>`, or
@@ -39,6 +39,7 @@ const GRAPH_TABLES = ['entities', 'relations', 'graph_extraction_queue'];
 // concatenation / schema-qualified `main.entities`) is out of scope for a regex lint
 // and irrelevant to the never-raw guarantee. (Backtick-quoted identifiers cannot occur
 // in this codebase's SQL, which lives inside JS backtick template literals.)
+const GRAPH_TABLE_RE = new RegExp(GRAPH_TABLES.join('|'), 'i');
 const WRITE_RE = new RegExp(
   `\\b(INSERT(\\s+OR\\s+\\w+)?\\s+INTO|UPDATE|DELETE\\s+FROM)\\s+["'\\[]?\\s*(${GRAPH_TABLES.join('|')})\\b`,
   'gi',
@@ -47,20 +48,6 @@ const WRITE_RE = new RegExp(
  *  hypothetical `src/sub/store/graph-writes.ts` is NOT a sanctioned writer and must be linted. */
 const SANCTIONED_RELS = new Set(['store/graph-writes.ts', 'store/graph-queue.ts']);
 const WRITER_NAMES = 'src/store/graph-writes.ts and src/store/graph-queue.ts';
-
-/**
- * Blank out comments (block `/* *​/` and line `//`) by replacing their characters with
- * spaces, PRESERVING newlines + byte offsets, so (a) a comment that merely mentions
- * the SQL pattern is not a false positive, and (b) match offsets still map to the
- * original file's line numbers. Naive re: a `//` inside a string literal is also
- * blanked, but that only matters if such a string also contained a real graph-write
- * pattern (absurd) - acceptable for a regex lint (mirrors check-em-dashes).
- */
-function blankComments(text) {
-  let out = text.replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' '));
-  out = out.replace(/\/\/[^\n]*/g, (m) => ' '.repeat(m.length));
-  return out;
-}
 
 function walk(dir, onFile) {
   for (const entry of readdirSync(dir)) {
@@ -83,14 +70,14 @@ export function findGraphWriteViolations(srcDir) {
     // Allow ONLY the sanctioned writers (exact path relative to srcDir).
     if (SANCTIONED_RELS.has(relative(srcDir, file).replace(/\\/g, '/'))) return;
     const text = readFileSync(file, 'utf8');
-    const blanked = blankComments(text);
     const origLines = text.split(/\r?\n/);
-    WRITE_RE.lastIndex = 0;
-    let m;
-    while ((m = WRITE_RE.exec(blanked)) !== null) {
-      // 1-based line of the matched verb (start of the match).
-      const line = blanked.slice(0, m.index).split('\n').length;
-      violations.push({ file, line, text: (origLines[line - 1] ?? m[0]).trim() });
+    // A write to a graph table cannot exist without the table name, so other files skip the parse.
+    if (!GRAPH_TABLE_RE.test(text)) return;
+    for (const literal of readFacts(text, file, ['strings']).strings) {
+      for (const m of literal.text.matchAll(WRITE_RE)) {
+        const line = literal.line + literal.text.slice(0, m.index).split('\n').length - 1;
+        violations.push({ file, line, text: (origLines[line - 1] ?? m[0]).trim() });
+      }
     }
   });
   return violations;
