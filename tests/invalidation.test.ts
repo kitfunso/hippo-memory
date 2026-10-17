@@ -1,13 +1,10 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { extractInvalidationTarget, invalidateMatching } from '../src/learn/invalidation.js';
-import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { readEntry } from '../src/store/entry-reads.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import * as fs from 'fs';
-import * as os from 'os';
-import * as path from 'path';
 import { sqliteSyncStore } from '../src/store/sqlite/store.js';
+import { makeStore } from './_helpers/make-root.js';
 
 describe('extractInvalidationTarget', () => {
   it('extracts "from" target in "migrate X to Y"', () => {
@@ -52,17 +49,10 @@ describe('extractInvalidationTarget', () => {
 });
 
 describe('invalidateMatching', () => {
-  let tmpDir: string;
   let hippoRoot: string;
 
   beforeEach(() => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-invalidation-'));
-    hippoRoot = path.join(tmpDir, '.hippo');
-    initStore(hippoRoot);
-  });
-
-  afterEach(() => {
-    fs.rmSync(tmpDir, { recursive: true, force: true });
+    ({ root: hippoRoot } = makeStore('invalidation'));
   });
 
   it('weakens memories matching the invalidation target', () => {
@@ -107,17 +97,10 @@ describe('invalidateMatching', () => {
 });
 
 describe('invalidateMatching safety (2026-06-09 incident)', () => {
-  let tmpDir: string;
   let hippoRoot: string;
 
   beforeEach(() => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-inv-safety-'));
-    hippoRoot = path.join(tmpDir, '.hippo');
-    initStore(hippoRoot);
-  });
-
-  afterEach(() => {
-    fs.rmSync(tmpDir, { recursive: true, force: true });
+    ({ root: hippoRoot } = makeStore('inv-safety'));
   });
 
   it('BYSTANDER LOCK: a multi-token pattern containing a tag word does not invalidate that tag', () => {
@@ -284,17 +267,10 @@ describe('invalidateMatching safety (2026-06-09 incident)', () => {
 });
 
 describe('invalidateMatching dryRun + onlyId composition', () => {
-  let tmpDir: string;
   let hippoRoot: string;
 
   beforeEach(() => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-inv-compose-'));
-    hippoRoot = path.join(tmpDir, '.hippo');
-    initStore(hippoRoot);
-  });
-
-  afterEach(() => {
-    fs.rmSync(tmpDir, { recursive: true, force: true });
+    ({ root: hippoRoot } = makeStore('inv-compose'));
   });
 
   it('previews a single id without writing (the headline safety workflow)', () => {

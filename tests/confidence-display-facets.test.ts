@@ -3,12 +3,9 @@
 // one indistinguishable at every display site.
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { request as httpRequest } from 'node:http';
 import type { Server } from 'node:http';
-import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, confidenceFacets, resolveConfidence, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { serveDashboard } from '../src/dashboard/dashboard.js';
@@ -19,6 +16,7 @@ import { sqliteStore } from '../src/store/sqlite/store.js';
 import { runCli } from '../src/cli.js';
 import { withHookStdin } from './_helpers/hook-stdin.js';
 import { runInProcess } from './_helpers/run-in-process.js';
+import { makeStore } from './_helpers/make-root.js';
 
 const DASHBOARD_TOKEN = 'test-dashboard-token';
 
@@ -73,10 +71,7 @@ describe('confidence facets', () => {
   let prevNow: string | undefined;
 
   beforeEach(() => {
-    home = mkdtempSync(join(tmpdir(), 'hippo-facets-'));
-    hippoRoot = join(home, '.hippo');
-    mkdirSync(hippoRoot, { recursive: true });
-    initStore(hippoRoot);
+    ({ base: home, root: hippoRoot } = makeStore('facets'));
     prevHome = process.env.HIPPO_HOME;
     process.env.HIPPO_HOME = join(home, '.hippo-global');
     // Fixtures are dated from NOW, so the runtime clock has to be NOW too,
@@ -96,7 +91,6 @@ describe('confidence facets', () => {
     if (prevNow === undefined) delete process.env.HIPPO_FAKE_NOW;
     else process.env.HIPPO_FAKE_NOW = prevNow;
     _resetAblationCacheForTests();
-    rmSync(home, { recursive: true, force: true });
   });
 
   it('splits an aged-out observed row into tier and agedOut', () => {

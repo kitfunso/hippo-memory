@@ -3,16 +3,13 @@
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import * as fs from 'fs';
-import * as path from 'path';
-import * as os from 'os';
 import { type MemoryEntry} from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { sqliteStore } from '../src/store/index.js';
 import { transferScore, listPeers } from '../src/sharing/share.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 let localDir: string;
 let globalDir: string;
@@ -21,10 +18,8 @@ let globalDir: string;
 // We'll use shareMemory with force to test the write path
 
 beforeEach(() => {
-  localDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-local-'));
-  globalDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-global-'));
-  initStore(localDir);
-  initStore(globalDir);
+  localDir = makeRoot('local');
+  globalDir = makeRoot('global');
 });
 
 // ---------------------------------------------------------------------------

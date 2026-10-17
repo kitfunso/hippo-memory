@@ -2,8 +2,7 @@
 // Ids are random per seed, so rows are named by label.
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
@@ -19,6 +18,7 @@ import { _resetAblationCacheForTests } from '../src/core/ablation.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 import { loadConfig } from '../src/core/config.js';
 import { sharingStores } from './_helpers/sharing-stores.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const NOW = '2026-09-01T12:00:00.000Z';
 const TENANT = 'default';
@@ -40,11 +40,10 @@ function add(s: Seeded, label: string, content: string, opts: Partial<CreateMemo
 
 /** S1 and S2 share no word with the query; SC1, PR1 and LG1 sit in scopes default recall denies. */
 function seed(): Seeded {
-  const home = mkdtempSync(join(tmpdir(), 'hippo-vec-cand-'));
-  const global = mkdtempSync(join(tmpdir(), 'hippo-vec-cand-global-'));
+  const home = makeRoot('vec-cand', { init: false });
+  const global = makeRoot('vec-cand-global');
   writeFileSync(join(home, 'config.json'), JSON.stringify({ embeddings: { provider: 'openai', model: 'text-embedding-3-small' } }), 'utf8');
   initStore(home);
-  initStore(global);
   const s: Seeded = { home, global, labelById: new Map(), idByLabel: new Map() };
   add(s, 'L1', 'deploy pipeline uses blue green rollout');
   add(s, 'L2', 'deploy checklist says run migrations before every deploy');

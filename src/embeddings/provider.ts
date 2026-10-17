@@ -21,6 +21,7 @@ import { redactSecretsStrict } from '../util/secret-detect.js';
 import { fetchWithRetry } from '../util/http-retry.js';
 import type { JsonValue } from '../util/json.js';
 import { readCappedJson, readCappedText } from '../util/capped-json.js';
+import { parseOutboundUrl } from '../util/net.js';
 
 const ERROR_DETAIL_CHARS = 300;
 // An error body is read for its first lines only; 4x leaves room for multi-byte text.
@@ -321,23 +322,11 @@ class ApiEmbeddingProvider implements EmbeddingProvider {
   }
 }
 
-/** Validate a user-supplied API base URL: HTTPS only (or explicit localhost). */
+/** A user-supplied API base URL, under the outbound rule every key-carrying endpoint shares. */
 function validateBaseUrl(url: string | undefined, fallback: string): string {
   const candidate = url?.trim();
   if (!candidate) return fallback;
-  let parsed: URL;
-  try {
-    parsed = new URL(candidate);
-  } catch {
-    throw new Error(`config.embeddings.apiBaseUrl is not a valid URL: ${candidate}`);
-  }
-  const isLocalhost = parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1';
-  if (parsed.protocol !== 'https:' && !isLocalhost) {
-    throw new Error(
-      `config.embeddings.apiBaseUrl must use https (got ${parsed.protocol}//${parsed.hostname}). ` +
-        `Plaintext http is only allowed for localhost.`,
-    );
-  }
+  parseOutboundUrl(candidate, 'config.embeddings.apiBaseUrl');
   return candidate;
 }
 

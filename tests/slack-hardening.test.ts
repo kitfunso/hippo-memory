@@ -1,10 +1,6 @@
 import type { FullContext } from './_helpers/api-ctx.js';
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { createHmac } from 'node:crypto';
-import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { remember } from '../src/api/index.js';
@@ -25,6 +21,7 @@ import { LATEST_SCHEMA_VERSION } from './_helpers/schema-version.js';
 import { sqliteStore } from '../src/store/sqlite/store.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 import { stageScratchWinner } from './_helpers/race-winner.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 
 const SECRET = 'shhh-current';
@@ -55,11 +52,7 @@ function withEnv(name: string, value: string | undefined): () => void {
 describe('Slack hardening + migration v19', () => {
   let root: string;
   beforeEach(() => {
-    root = mkdtempSync(join(tmpdir(), 'hippo-v039-slack-'));
-    initStore(root);
-  });
-  afterEach(() => {
-    rmSync(root, { recursive: true, force: true });
+    root = makeRoot('v039-slack');
   });
 
   // 1. Migration v19 schema additions present.
@@ -233,20 +226,15 @@ describe('Slack hardening + migration v19', () => {
     if (!racedOpts) throw new Error('the raced message has text');
     const memBefore = loadAllEntries(root, 'default').length;
     // The other worker's rows come from a scratch store, and a second process commits them while the loser waits for the lock.
-    const scratch = mkdtempSync(join(tmpdir(), 'hippo-slack-winner-'));
-    initStore(scratch);
+    const scratch = makeRoot('slack-winner');
     let settled: IngestResult[];
     let loser: IngestResult;
-    try {
-      const winnerCtx = apiCtx(scratch, 'default', { subject: 'connector:slack', role: 'admin' });
-      const w = await remember(winnerCtx, { ...racedOpts, untrusted: true, event: { connector: 'slack', eventId: racedEventId } });
-      settled = [{ status: w.duplicate ? 'skipped_duplicate' : 'ingested', memoryId: w.id }];
-      const staged = await stageScratchWinner(root, scratch, ['memories', 'slack_event_log']);
-      loser = await ingestMessage(ctx, raced);
-      await staged.committed;
-    } finally {
-      rmSync(scratch, { recursive: true, force: true });
-    }
+    const winnerCtx = apiCtx(scratch, 'default', { subject: 'connector:slack', role: 'admin' });
+    const w = await remember(winnerCtx, { ...racedOpts, untrusted: true, event: { connector: 'slack', eventId: racedEventId } });
+    settled = [{ status: w.duplicate ? 'skipped_duplicate' : 'ingested', memoryId: w.id }];
+    const staged = await stageScratchWinner(root, scratch, ['memories', 'slack_event_log']);
+    loser = await ingestMessage(ctx, raced);
+    await staged.committed;
 
     expect(settled.map((w) => w.status)).toEqual(['ingested']);
     expect(loser).toEqual({ status: 'skipped_duplicate', memoryId: settled[0].memoryId });

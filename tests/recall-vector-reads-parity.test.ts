@@ -1,8 +1,7 @@
 // Recall's vector arm on a store other than hippo.db: an in-memory store with the vector reads must give the replies, ids and rows
 // hippo.db gives, over GET /v1/memories and MCP hippo_recall, with a local hashed-embedding server as the provider.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { serve } from '../src/server.js';
 import { sqliteStore, type HippoStore, type VectorCandidateSpec, type VectorReads } from '../src/entry/store-kit.js';
@@ -24,6 +23,7 @@ import { EMBEDDING_MODEL_META_KEY, upsertVectors } from '../src/db/vector-store.
 import { CLEARED_ENV, FAKE_NOW, freshStore, normalize, rowsOf, seeded, sendRecall, type Templates } from './_helpers/recall-golden-seed.js';
 import { hashedVector, startHashedEmbeddings, type HashedEmbeddings } from './_helpers/hashed-embedding-server.js';
 import { inMemoryVectorStore } from './_helpers/in-memory-vector-store.js';
+import { makeRoot, makeStore } from './_helpers/make-root.js';
 
 const MODEL = 'hashed-16';
 const IDENTITY = embeddingIndexIdentity(`openai:${MODEL}`);
@@ -151,7 +151,7 @@ async function runPass(calls: readonly Call[], physics: boolean, backing: Backin
 
 beforeAll(async () => {
   embeddings = await startHashedEmbeddings();
-  const dir = mkdtempSync(join(tmpdir(), 'hippo-vector-reads-'));
+  const dir = makeRoot('vector-reads', { init: false });
   seedVectorStore(join(dir, 'local'));
   initStore(join(dir, 'global'));
   templates = { dir, goalId: 'no-goal-in-this-seed' };
@@ -264,40 +264,34 @@ describe('the in-memory vector reads answer as sqliteStore does', () => {
   });
 
   it('2,000 stored vectors rank the same read as Float32 views and as number[] copies', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'hippo-vector-views-'));
-    const root = join(dir, '.hippo');
+    const { root } = makeStore('vector-views');
     const PLANTED = 'mem_n_1234';
-    try {
-      initStore(root);
-      writeFileSync(join(root, 'config.json'), JSON.stringify({ embeddings: { provider: 'openai', model: MODEL, apiBaseUrl: embeddings.url } }));
-      // Every row has the same three-token text and day, so BM25 and strength tie and the vectors alone order the result.
-      const rows = Array.from({ length: 2000 }, (_, i) => {
-        const id = `mem_n_${String(i).padStart(4, '0')}`;
-        return seedRow(id, `deploy note ${1000 + i}`, 1, id === PLANTED ? NEAR : hashedVector(`topic ${i} cadence ${(i * 7919) % 613}`));
-      });
-      withDb(root, (db) => {
-        db.exec('BEGIN');
-        for (const r of rows) writeEntryDbOnly(db, r.entry);
-        upsertVectors(db, rows.map((r): [string, readonly number[]] => [r.entry.id, r.vector]), IDENTITY);
-        setMeta(db, EMBEDDING_MODEL_META_KEY, IDENTITY);
-        db.exec('COMMIT');
-      });
-      const entries = rows.map((r) => r.entry);
-      const views = sqliteStore(root);
-      const copies: HippoStore = { ...views, vectorViews: undefined };
-      const ranked = async (store: HippoStore): Promise<[string, number, number][]> =>
-        (await hybridSearch(QUERY, entries, { hippoRoot: root, store, budget: 1_000_000, now: new Date(FAKE_NOW) })).map((r) => [r.entry.id, r.score, r.cosine]);
+    writeFileSync(join(root, 'config.json'), JSON.stringify({ embeddings: { provider: 'openai', model: MODEL, apiBaseUrl: embeddings.url } }));
+    // Every row has the same three-token text and day, so BM25 and strength tie and the vectors alone order the result.
+    const rows = Array.from({ length: 2000 }, (_, i) => {
+      const id = `mem_n_${String(i).padStart(4, '0')}`;
+      return seedRow(id, `deploy note ${1000 + i}`, 1, id === PLANTED ? NEAR : hashedVector(`topic ${i} cadence ${(i * 7919) % 613}`));
+    });
+    withDb(root, (db) => {
+      db.exec('BEGIN');
+      for (const r of rows) writeEntryDbOnly(db, r.entry);
+      upsertVectors(db, rows.map((r): [string, readonly number[]] => [r.entry.id, r.vector]), IDENTITY);
+      setMeta(db, EMBEDDING_MODEL_META_KEY, IDENTITY);
+      db.exec('COMMIT');
+    });
+    const entries = rows.map((r) => r.entry);
+    const views = sqliteStore(root);
+    const copies: HippoStore = { ...views, vectorViews: undefined };
+    const ranked = async (store: HippoStore): Promise<[string, number, number][]> =>
+      (await hybridSearch(QUERY, entries, { hippoRoot: root, store, budget: 1_000_000, now: new Date(FAKE_NOW) })).map((r) => [r.entry.id, r.score, r.cosine]);
 
-      const viaViews = await ranked(views);
-      expect(viaViews).toEqual(await ranked(copies));
-      expect(viaViews).toHaveLength(2000);
-      expect(viaViews[0]![0]).toBe(PLANTED);
-      expect(viaViews[0]![2]).toBeGreaterThan(0.999);
-      expect((await resolveVectorArm(QUERY, entries, folderVectorSource({ hippoRoot: root, store: views }), {})).embeddingIndex[PLANTED]).toBeInstanceOf(Float32Array);
-      expect((await resolveVectorArm(QUERY, entries, folderVectorSource({ hippoRoot: root, store: copies }), {})).embeddingIndex[PLANTED]).toBeInstanceOf(Array);
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
+    const viaViews = await ranked(views);
+    expect(viaViews).toEqual(await ranked(copies));
+    expect(viaViews).toHaveLength(2000);
+    expect(viaViews[0]![0]).toBe(PLANTED);
+    expect(viaViews[0]![2]).toBeGreaterThan(0.999);
+    expect((await resolveVectorArm(QUERY, entries, folderVectorSource({ hippoRoot: root, store: views }), {})).embeddingIndex[PLANTED]).toBeInstanceOf(Float32Array);
+    expect((await resolveVectorArm(QUERY, entries, folderVectorSource({ hippoRoot: root, store: copies }), {})).embeddingIndex[PLANTED]).toBeInstanceOf(Array);
   }, 60_000);
 
   it('storedVectors, embeddingIndexState and physicsParticles', async () => {

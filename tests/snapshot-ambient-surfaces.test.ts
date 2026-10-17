@@ -3,7 +3,6 @@ import * as os from 'os';
 import * as path from 'path';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 
-import { initStore } from '../src/store/open.js';
 import { getHippoRoot } from '../src/core/project-identity.js';
 import { saveActiveTaskSnapshot } from '../src/store/sessions.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
@@ -11,6 +10,7 @@ import { handleMcpRequest, type McpResponse } from '../src/mcp/server.js';
 import { hippoRun } from './_helpers/spawn-hippo.js';
 import { runCliAs } from './_helpers/run-cli-as.js';
 import { sqliteStore } from '../src/store/sqlite/store.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 // DF1 (docs/plans/2026-08-23-df1-snapshot-lifecycle.md) T2 tests: the two
 // ambient surfaces (MCP recall block, CLI `hippo context`) reroute through
@@ -36,13 +36,7 @@ describe('7. MCP hippo_context surface: backdated snapshot is bounded out', () =
   let home: string;
 
   beforeEach(() => {
-    home = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-mcp-snapshot-freshness-'));
-    fs.mkdirSync(path.join(home, '.hippo'), { recursive: true });
-    initStore(home);
-  });
-
-  afterEach(() => {
-    fs.rmSync(home, { recursive: true, force: true });
+    home = makeRoot('mcp-snapshot-freshness');
   });
 
   function callContext(): Promise<McpResponse | null> {

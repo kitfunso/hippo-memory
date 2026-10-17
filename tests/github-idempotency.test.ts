@@ -1,18 +1,13 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { initStore } from '../src/store/open.js';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { githubEventSeenAt as hasSeenKey, markGitHubEventSeenAt as markKeySeen, githubEventMemoryAt as lookupMemoryByKey } from '../src/store/connectors/github.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 describe('github idempotency', () => {
   let root: string;
   beforeEach(() => {
-    root = mkdtempSync(join(tmpdir(), 'hippo-gh-idem-'));
-    initStore(root);
+    root = makeRoot('gh-idem');
   });
-  afterEach(() => rmSync(root, { recursive: true, force: true }));
 
   it('hasSeenKey returns false then true after markKeySeen', () => {
     const db = openHippoDb(root);

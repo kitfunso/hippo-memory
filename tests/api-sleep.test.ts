@@ -19,14 +19,12 @@
 
 import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { initStore } from '../src/store/open.js';
+import { rmSync } from 'node:fs';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { queryAuditEvents } from '../src/store/audit.js';
 import { remember, sleep, getContext } from '../src/api/index.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 // The 'consolidate' audit op's metadata is always the flat scalar phase-counter
 // object built at the appendAuditEvent call site for that op in src/api/index.ts --
@@ -34,8 +32,7 @@ import { apiCtx } from './_helpers/api-ctx.js';
 type AuditMetadataValue = string | number | boolean | null;
 
 function tmpHome() {
-  const home = mkdtempSync(join(tmpdir(), 'hippo-api-sleep-'));
-  initStore(home);
+  const home = makeRoot('api-sleep');
   // api.sleep's auto-share phase promotes memories to the GLOBAL store
   // (resolved via HIPPO_HOME). Without per-test override, those writes
   // leak into the shared baseline HIPPO_HOME and fail the isolation guard.

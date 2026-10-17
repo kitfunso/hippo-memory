@@ -1,19 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'fs';
-import * as os from 'os';
 import * as path from 'path';
-import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { readEntry } from '../src/store/entry-reads.js';
 import { deleteEntry, batchWriteAndDelete } from '../src/store/delete-and-batch.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { layerDir, writeMarkdownMirror } from '../src/store/mirrors.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 let root: string;
 
 beforeEach(() => {
-  root = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-mirror-'));
-  initStore(root);
+  root = makeRoot('mirror');
   // A non-empty store short-circuits initStore's legacy-markdown bootstrap scan,
   // which would otherwise try to read the blocking directory below as a .md file.
   writeEntry(root, createMemory('seed row so legacy bootstrap never rescans'));
@@ -22,7 +20,6 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks();
-  fs.rmSync(root, { recursive: true, force: true });
 });
 
 // Writes no longer touch index.json, so the failure vector is a directory at the entry's own .md path.

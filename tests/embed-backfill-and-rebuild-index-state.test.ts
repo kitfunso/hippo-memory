@@ -1,7 +1,6 @@
 // embedAll and embedMemory on hippo.db with no store: the vectors, model identity and particles a backfill and a model-change rebuild leave.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cpSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { cpSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { _resetAblationCacheForTests } from '../src/core/ablation.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../src/core/memory.js';
@@ -21,6 +20,7 @@ import { loadEmbeddingIndex, resetStoredParticles } from '../src/store/vector-in
 import { recordStatements, recordStatementsAsync } from './_helpers/count-statements.js';
 import { hashedVector, startHashedEmbeddings, type HashedEmbeddings } from './_helpers/hashed-embedding-server.js';
 import { sqliteSyncStore } from '../src/store/sqlite/store.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const SEEDED_AT = '2026-01-15T00:00:00.000Z';
 const FAKE_NOW = '2026-03-01T12:00:00.000Z';
@@ -112,7 +112,7 @@ function rebuiltState(root: string, providerId: string, vectorOf: (entry: Memory
 
 beforeAll(async () => {
   embeddings = await startHashedEmbeddings();
-  home = mkdtempSync(join(tmpdir(), 'hippo-embed-index-state-'));
+  home = makeRoot('embed-index-state', { init: false });
   partly = join(home, 'partly');
   initStore(partly);
   const rows = Array.from({ length: ROWS }, (_, i) => row(i));
@@ -132,7 +132,6 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await embeddings.close();
-  rmSync(home, { recursive: true, force: true });
 });
 
 beforeEach(() => {

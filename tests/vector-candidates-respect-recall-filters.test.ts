@@ -1,24 +1,16 @@
 // The vector arm of hybrid recall applies tenant, scope and superseded rules before its top-k cut.
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import * as fs from 'fs';
-import * as os from 'os';
-import * as path from 'path';
-import { initStore } from '../src/store/open.js';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { batchWriteAndDelete } from '../src/store/delete-and-batch.js';
 import { loadVectorCandidateEntries, recallScopeFilter } from '../src/store/search-rows.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry, type CreateMemoryOptions } from '../src/core/memory.js';
 import { saveEmbeddingIndex } from '../src/store/vector-index.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const QUERY = [1, 0, 0];
 let root: string;
 
 beforeEach(() => {
-  root = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-vec-filters-'));
-  initStore(root);
-});
-
-afterEach(() => {
-  fs.rmSync(root, { recursive: true, force: true });
+  root = makeRoot('vec-filters');
 });
 
 function seed(rows: ReadonlyArray<{ content: string; vector: number[]; opts?: Partial<CreateMemoryOptions>; supersededBy?: string; origin?: string | null }>): MemoryEntry[] {

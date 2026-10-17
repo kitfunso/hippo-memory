@@ -1,15 +1,13 @@
 // Continuity-tables self-heal (2026-08-15 incident): a store stamped past a
 // table's migration but missing it crashed every prompt; ensureContinuityTables fixes it.
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { initStore } from '../src/store/open.js';
 import { saveActiveTaskSnapshot, appendSessionEvent } from '../src/store/sessions.js';
 import { saveSessionHandoff } from '../src/store/handoffs.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
 import { LATEST_SCHEMA_VERSION_STR } from './_helpers/schema-version.js';
+import { makeRoot, makeStore } from './_helpers/make-root.js';
 
 const REPO_ROOT = join(__dirname, '..');
 const CLI_PATH = join(REPO_ROOT, 'dist', 'cli.js');
@@ -58,12 +56,7 @@ describe('continuity tables self-heal, missing table after schema stamp', () => 
   let root: string;
 
   beforeEach(() => {
-    root = mkdtempSync(join(tmpdir(), 'hippo-continuity-heal-'));
-    initStore(root);
-  });
-
-  afterEach(() => {
-    rmSync(root, { recursive: true, force: true });
+    root = makeRoot('continuity-heal');
   });
 
   it('heals a v41 store missing session_handoffs', () => {
@@ -117,23 +110,18 @@ describe('continuity tables self-heal, missing table after schema stamp', () => 
     }
 
     for (const table of CONTINUITY_TABLES) {
-      const healRoot = mkdtempSync(join(tmpdir(), 'hippo-continuity-heal-col-'));
+      const healRoot = makeRoot('continuity-heal-col');
+      const db1 = openHippoDb(healRoot);
       try {
-        initStore(healRoot);
-        const db1 = openHippoDb(healRoot);
-        try {
-          db1.exec(`DROP TABLE ${table}`);
-        } finally {
-          closeHippoDb(db1);
-        }
-        const db2 = openHippoDb(healRoot);
-        try {
-          expect(columns(db2, table)).toEqual(freshColumns[table]);
-        } finally {
-          closeHippoDb(db2);
-        }
+        db1.exec(`DROP TABLE ${table}`);
       } finally {
-        rmSync(healRoot, { recursive: true, force: true });
+        closeHippoDb(db1);
+      }
+      const db2 = openHippoDb(healRoot);
+      try {
+        expect(columns(db2, table)).toEqual(freshColumns[table]);
+      } finally {
+        closeHippoDb(db2);
       }
     }
   });
@@ -150,23 +138,18 @@ describe('continuity tables self-heal, missing table after schema stamp', () => 
     }
 
     for (const table of CONTINUITY_TABLES) {
-      const healRoot = mkdtempSync(join(tmpdir(), 'hippo-continuity-heal-idx-'));
+      const healRoot = makeRoot('continuity-heal-idx');
+      const db1 = openHippoDb(healRoot);
       try {
-        initStore(healRoot);
-        const db1 = openHippoDb(healRoot);
-        try {
-          db1.exec(`DROP TABLE ${table}`);
-        } finally {
-          closeHippoDb(db1);
-        }
-        const db2 = openHippoDb(healRoot);
-        try {
-          expect(indexNames(db2, table)).toEqual(freshIndexes[table]);
-        } finally {
-          closeHippoDb(db2);
-        }
+        db1.exec(`DROP TABLE ${table}`);
       } finally {
-        rmSync(healRoot, { recursive: true, force: true });
+        closeHippoDb(db1);
+      }
+      const db2 = openHippoDb(healRoot);
+      try {
+        expect(indexNames(db2, table)).toEqual(freshIndexes[table]);
+      } finally {
+        closeHippoDb(db2);
       }
     }
   });
@@ -261,9 +244,8 @@ describe('continuity tables self-heal, missing table after schema stamp', () => 
     }
 
     const migrated = openHippoDb(root);
-    const fresh = mkdtempSync(join(tmpdir(), 'hippo-continuity-fresh-'));
+    const fresh = makeRoot('continuity-fresh');
     try {
-      initStore(fresh);
       const a = openHippoDb(fresh);
       try {
         expect(getMeta(migrated, 'schema_version')).toBe(LATEST_SCHEMA_VERSION_STR);
@@ -274,54 +256,47 @@ describe('continuity tables self-heal, missing table after schema stamp', () => 
       }
     } finally {
       closeHippoDb(migrated);
-      rmSync(fresh, { recursive: true, force: true });
     }
   });
 
   it('hippo context runs on the incident shape (compiled CLI, real store)', () => {
     // CLI resolves hippoRoot as <cwd>/.hippo, unlike the direct-hippoRoot
     // calls above, so this case needs its own project/.hippo pair.
-    const projectDir = mkdtempSync(join(tmpdir(), 'hippo-continuity-heal-cli-'));
-    const hippoDir = join(projectDir, '.hippo');
+    const { base: projectDir, root: hippoDir } = makeStore('continuity-heal-cli');
+    saveActiveTaskSnapshot(hippoDir, 'default', {
+      task: 'Resume the current branch cleanly',
+      summary: 'Continuity self-heal regression coverage.',
+      next_step: 'Verify context does not crash on missing tables.',
+      session_id: 'sess-heal',
+      source: 'test',
+    });
+
+    const db = openHippoDb(hippoDir);
     try {
-      initStore(hippoDir);
-      saveActiveTaskSnapshot(hippoDir, 'default', {
-        task: 'Resume the current branch cleanly',
-        summary: 'Continuity self-heal regression coverage.',
-        next_step: 'Verify context does not crash on missing tables.',
-        session_id: 'sess-heal',
-        source: 'test',
-      });
-
-      const db = openHippoDb(hippoDir);
-      try {
-        db.exec('DROP TABLE session_handoffs');
-        db.exec('DROP TABLE session_events');
-      } finally {
-        closeHippoDb(db);
-      }
-
-      const env = { ...process.env, HIPPO_SESSION_ID: 'sess-heal' };
-
-      const runContext = (...args: string[]): string => execFileSync(process.execPath, [CLI_PATH, 'context', ...args, '--budget', '1500'], {
-        cwd: projectDir,
-        env,
-        encoding: 'utf8',
-        stdio: ['ignore', 'pipe', 'pipe'],
-      });
-      const pinned = runContext('--pinned-only');
-      const auto = runContext('--auto');
-
-      const healed = openHippoDb(hippoDir);
-      try {
-        expect(tableNames(healed)).toEqual(expect.arrayContaining(['session_handoffs', 'session_events']));
-      } finally {
-        closeHippoDb(healed);
-      }
-      // The saved task is the one row the context block can only print if the store was readable.
-      expect(pinned + auto).toContain('Resume the current branch cleanly');
+      db.exec('DROP TABLE session_handoffs');
+      db.exec('DROP TABLE session_events');
     } finally {
-      rmSync(projectDir, { recursive: true, force: true });
+      closeHippoDb(db);
     }
+
+    const env = { ...process.env, HIPPO_SESSION_ID: 'sess-heal' };
+
+    const runContext = (...args: string[]): string => execFileSync(process.execPath, [CLI_PATH, 'context', ...args, '--budget', '1500'], {
+      cwd: projectDir,
+      env,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    const pinned = runContext('--pinned-only');
+    const auto = runContext('--auto');
+
+    const healed = openHippoDb(hippoDir);
+    try {
+      expect(tableNames(healed)).toEqual(expect.arrayContaining(['session_handoffs', 'session_events']));
+    } finally {
+      closeHippoDb(healed);
+    }
+    // The saved task is the one row the context block can only print if the store was readable.
+    expect(pinned + auto).toContain('Resume the current branch cleanly');
   });
 });

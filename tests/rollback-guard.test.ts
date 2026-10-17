@@ -6,8 +6,8 @@ import { mkdtempSync, rmSync, readdirSync, readFileSync, writeFileSync, statSync
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { initStore } from '../src/store/open.js';
 import { openHippoDb, closeHippoDb, withWriteScope, withWriteScopeOr, type DatabaseSyncLike } from '../src/db/index.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const repoRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 
@@ -90,18 +90,13 @@ describe('guarded rollback', () => {
 
 /** Runs `run` on a store handle holding an empty scratch table, `scope_probe(v)`. */
 function withProbeDb(run: (db: DatabaseSyncLike) => void): void {
-  const root = mkdtempSync(join(tmpdir(), 'hippo-write-scope-'));
+  const root = makeRoot('write-scope');
+  const db = openHippoDb(root);
   try {
-    initStore(root);
-    const db = openHippoDb(root);
-    try {
-      db.exec('CREATE TABLE scope_probe (v TEXT)');
-      run(db);
-    } finally {
-      closeHippoDb(db);
-    }
+    db.exec('CREATE TABLE scope_probe (v TEXT)');
+    run(db);
   } finally {
-    rmSync(root, { recursive: true, force: true });
+    closeHippoDb(db);
   }
 }
 

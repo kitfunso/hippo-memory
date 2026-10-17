@@ -1,27 +1,22 @@
 import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { mkdtempSync, rmSync } from 'fs';
-import { tmpdir } from 'os';
-import { join } from 'path';
-import { initStore } from '../src/store/open.js';
 import { parkInDlq, listDlq } from '../src/connectors/dlq.js';
 import { githubDlq, replayDlqEntry, type DlqBucket } from '../src/connectors/github/dlq.js';
 import { sqliteStore } from '../src/store/sqlite/store.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 describe('github DLQ', () => {
   let root: string;
   let ctx: FullContext;
 
   beforeEach(() => {
-    root = mkdtempSync(join(tmpdir(), 'hippo-github-dlq-'));
-    initStore(root);
+    root = makeRoot('github-dlq');
     ctx = apiCtx(root, 'default', { subject: 'cli', role: 'admin' });
   });
 
   afterEach(() => {
     vi.useRealTimers();
-    rmSync(root, { recursive: true, force: true });
   });
 
   it('parkInDlq round-trips all rich metadata fields', async () => {

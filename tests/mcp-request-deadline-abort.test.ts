@@ -1,23 +1,18 @@
 // A tool call whose request signal has aborted stops before it reads or writes the store.
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import * as fs from 'node:fs';
-import * as os from 'node:os';
-import * as path from 'node:path';
-import { initStore } from '../src/store/open.js';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { handleMcpRequest, type McpContext } from '../src/mcp/server.js';
 import { runWithRequestId } from '../src/util/request-scope.js';
 import { sqliteStore } from '../src/store/sqlite/store.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 let root: string;
 let ctx: McpContext;
 
 beforeEach(() => {
-  root = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-mcp-abort-'));
-  initStore(root);
+  root = makeRoot('mcp-abort');
   ctx = { hippoRoot: root, tenantId: 'default', actor: 'test', role: 'admin', store: sqliteStore(root) };
 });
-afterEach(() => fs.rmSync(root, { recursive: true, force: true }));
 
 const REMEMBER = { jsonrpc: '2.0' as const, id: 1, method: 'tools/call', params: { name: 'hippo_remember', arguments: { text: 'a fact that must not be stored' } } };
 

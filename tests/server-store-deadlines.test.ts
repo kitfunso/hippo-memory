@@ -1,8 +1,7 @@
 // The store workers' queue cap, a request's deadline in the queue, on a reader and on the writer, and the handler deadline, each held open by a real lock.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createRequire } from 'node:module';
-import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { Worker } from 'node:worker_threads';
 import { closeHippoDb, getHippoDbPath, openHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
@@ -36,12 +35,7 @@ afterEach(async () => {
   for (const undo of cleanups.splice(0).reverse()) await undo();
 });
 
-function removeLater(root: string): string {
-  cleanups.push(() => rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }));
-  return root;
-}
-
-const newRoot = (): string => removeLater(makeRoot('store-deadlines'));
+const newRoot = (): string => makeRoot('store-deadlines');
 
 /** The deadline of every request that arrives from now on; '0' turns it off. */
 function deadline(ms: string): void {
@@ -269,7 +263,7 @@ describe("a store thread's queue", () => {
 describe("a read still running at its request's deadline", () => {
   it('answers 504 while the lock is still held, then serves the next read on a fresh thread', async () => {
     // No hippo.db at boot, so the server holds no connection and another one can lock the whole file.
-    const root = removeLater(mkdtempSync(join(tmpdir(), 'hippo-store-deadlines-bare-')));
+    const root = makeRoot('store-deadlines-bare', { init: false });
     const executor = createSqliteExecutor(root, { busyWaitMs: LONG_WAIT_MS });
     const server = await start(root, { store: workerSqliteStore(root, executor) });
     const before = await counts(server);

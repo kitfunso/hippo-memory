@@ -13,7 +13,6 @@ import { Layer, type MemoryEntry } from '../src/core/memory.js';
 import { consolidate } from '../src/index.js';
 import { runConsolidation } from '../src/consolidate/sleep.js';
 import { runSleep } from '../src/api/sleep/sleep-run.js';
-import { initStore } from '../src/store/open.js';
 import { upsertEntryRow } from '../src/store/entry-row.js';
 import { mergedText } from '../src/util/same-text.js';
 import { queryAuditEvents } from '../src/store/audit.js';
@@ -22,6 +21,7 @@ import { closeHippoDb, getHippoDbPath, getMeta, HOOK_DB_WAIT_MS, openHippoDb, ru
 import { WRITE_BUDGET, type WriteBudget } from '../src/util/write-budget.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const yieldOnce = (): Promise<void> => new Promise((resolve) => setImmediate(resolve));
 
@@ -61,9 +61,8 @@ interface Fixture {
 }
 
 function newRoot(): string {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-chunked-flush-'));
+  const root = makeRoot('chunked-flush');
   roots.push(root);
-  initStore(root);
   return root;
 }
 

@@ -5,15 +5,12 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { readEntry } from '../src/store/entry-reads.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { runCli as runCliEntry } from '../src/cli.js';
 import { runInProcess } from './_helpers/run-in-process.js';
+import { makeStore } from './_helpers/make-root.js';
 
 const savedCwd = process.cwd();
 
@@ -30,9 +27,7 @@ describe('hippo invalidate CLI contract', () => {
   let hippoRoot: string;
 
   beforeEach(() => {
-    tmpDir = mkdtempSync(join(tmpdir(), 'hippo-cli-invalidate-'));
-    hippoRoot = join(tmpDir, '.hippo');
-    initStore(hippoRoot);
+    ({ base: tmpDir, root: hippoRoot } = makeStore('cli-invalidate'));
     vi.stubEnv('HIPPO_HOME', hippoRoot);
     process.chdir(tmpDir);
   });
@@ -40,7 +35,6 @@ describe('hippo invalidate CLI contract', () => {
   afterEach(() => {
     process.chdir(savedCwd);
     vi.unstubAllEnvs();
-    rmSync(tmpDir, { recursive: true, force: true });
   });
 
   it('rejects pattern + --id together', async () => {

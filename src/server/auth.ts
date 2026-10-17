@@ -121,6 +121,9 @@ function hasControlChar(s: string): boolean {
   return false;
 }
 
+// Ample for a member of hundreds of private channels, one scope each; past it the answer is refused, never cut short.
+const MAX_RESOLVED_SCOPES = 1024;
+
 /** Core owns the checks so a resolver cannot mint an actor that collides with a built-in one. */
 function sanitiseResolved(r: ResolvedBearer): ResolvedBearer | null {
   // Each field is read once: a getter on plugin code could answer differently the second time.
@@ -135,7 +138,12 @@ function sanitiseResolved(r: ResolvedBearer): ResolvedBearer | null {
   if (hasControlChar(subject) || subject !== subject.trim()) return null;
   if (isReservedActor(subject)) return null;
   const clean: ResolvedBearer = { tenantId: tenant, subject, role: role === 'admin' ? 'admin' : 'member' };
-  if (Array.isArray(scopes)) clean.scopes = scopes.filter((s) => isJsonString(s));
+  if (Array.isArray(scopes)) {
+    if (scopes.length > MAX_RESOLVED_SCOPES) return null;
+    const kept = scopes.filter((s) => isJsonString(s));
+    if (kept.some((s) => s.length > MAX_ID_LEN)) return null;
+    clean.scopes = kept;
+  }
   return clean;
 }
 

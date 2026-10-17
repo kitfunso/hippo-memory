@@ -2,16 +2,13 @@
 // the rightmost hop no trusted proxy added, so a client cannot mint a fresh bucket per request.
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { IncomingMessage } from 'node:http';
 import { Socket } from 'node:net';
-import { initStore } from '../src/store/open.js';
 import { clientIpForRateLimit, serve, type ServerHandle } from '../src/server.js';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
 import { createApiKey } from '../src/store/auth.js';
 import { lastRecalledIds } from '../src/mcp/session-state.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const ENV_KEYS = ['HIPPO_CLIENT_IP_HEADER', 'HIPPO_TRUSTED_PROXIES', 'HIPPO_V1_RPS'] as const;
 
@@ -92,8 +89,7 @@ describe('the MCP client key, which scopes the last recall per client, behind a 
   let token: string;
 
   beforeEach(() => {
-    root = mkdtempSync(join(tmpdir(), 'hippo-mcp-client-key-'));
-    initStore(root);
+    root = makeRoot('mcp-client-key');
     for (const k of ENV_KEYS) delete process.env[k];
     process.env.HIPPO_V1_RPS = '0';
     const db = openHippoDb(root);
@@ -111,7 +107,6 @@ describe('the MCP client key, which scopes the last recall per client, behind a 
       if (v === undefined) delete process.env[k];
       else process.env[k] = v;
     }
-    rmSync(root, { recursive: true, force: true });
   });
 
   async function newRecallKeys(): Promise<string[]> {
@@ -145,8 +140,7 @@ describe('rate limiting over real HTTP with rotating spoofed X-Forwarded-For', (
   let handle: ServerHandle | undefined;
 
   beforeEach(() => {
-    root = mkdtempSync(join(tmpdir(), 'hippo-trusted-proxy-'));
-    initStore(root);
+    root = makeRoot('trusted-proxy');
     for (const k of ENV_KEYS) delete process.env[k];
     process.env.HIPPO_V1_RPS = '1';
   });
@@ -158,7 +152,6 @@ describe('rate limiting over real HTTP with rotating spoofed X-Forwarded-For', (
       if (v === undefined) delete process.env[k];
       else process.env[k] = v;
     }
-    rmSync(root, { recursive: true, force: true });
   });
 
   async function statusesWithRotatingXff(): Promise<number[]> {

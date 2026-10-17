@@ -1,10 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { createApiKey } from '../src/store/auth.js';
 import { resolveTenantId } from '../src/store/tenant.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 describe('resolveTenantId', () => {
   it('returns "default" with no env, no api key', () => {
@@ -27,7 +25,7 @@ describe('resolveTenantId', () => {
   });
 
   it('api key tenant beats env', () => {
-    const home = mkdtempSync(join(tmpdir(), 'hippo-tenant-'));
+    const home = makeRoot('tenant');
     const db = openHippoDb(home);
     process.env.HIPPO_TENANT = 'env_tenant';
     try {
@@ -36,18 +34,16 @@ describe('resolveTenantId', () => {
     } finally {
       delete process.env.HIPPO_TENANT;
       closeHippoDb(db);
-      rmSync(home, { recursive: true, force: true });
     }
   });
 
   it('invalid api key throws', () => {
-    const home = mkdtempSync(join(tmpdir(), 'hippo-tenant-'));
+    const home = makeRoot('tenant');
     const db = openHippoDb(home);
     try {
       expect(() => resolveTenantId({ db, apiKey: 'hk_bogus.x' })).toThrow(/invalid api key/i);
     } finally {
       closeHippoDb(db);
-      rmSync(home, { recursive: true, force: true });
     }
   });
 });

@@ -1,18 +1,16 @@
 // The dashboard derives its tenant via resolveTenantId({}), which reads HIPPO_TENANT.
 // A pin for another tenant's memory id must return 404 and leave the row untouched.
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { request as httpRequest } from 'node:http';
 import type { Server } from 'node:http';
-import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { serveDashboard } from '../src/dashboard/dashboard.js';
 import { DASHBOARD_TOKEN } from './_helpers/dashboard-fixture.js';
 import { boundPort } from './_helpers/listen.js';
+import { makeStore } from './_helpers/make-root.js';
 
 function post(
   port: number,
@@ -44,10 +42,7 @@ describe('dashboard tenant-scoping', () => {
   let prevHippoHome: string | undefined;
 
   beforeEach(() => {
-    home = mkdtempSync(join(tmpdir(), 'hippo-dash-tenant-'));
-    hippoRoot = join(home, '.hippo');
-    mkdirSync(hippoRoot, { recursive: true });
-    initStore(hippoRoot);
+    ({ base: home, root: hippoRoot } = makeStore('dash-tenant'));
     prevTenant = process.env.HIPPO_TENANT;
     prevHippoHome = process.env.HIPPO_HOME;
     // Isolate the dashboard's resolved global store from the developer's real
@@ -66,7 +61,6 @@ describe('dashboard tenant-scoping', () => {
     else process.env.HIPPO_TENANT = prevTenant;
     if (prevHippoHome === undefined) delete process.env.HIPPO_HOME;
     else process.env.HIPPO_HOME = prevHippoHome;
-    rmSync(home, { recursive: true, force: true });
   });
 
   it('POST /api/memory/:id/pin denies a cross-tenant mutation', async () => {

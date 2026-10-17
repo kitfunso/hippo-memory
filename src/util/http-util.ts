@@ -80,15 +80,20 @@ export interface ReadBodyOptions {
   deadlineMs?: number;
 }
 
+/** The body as UTF-8 text, under readBodyBytes' limits. */
+export async function readBody(req: IncomingMessage, options: ReadBodyOptions = {}): Promise<string> {
+  return (await readBodyBytes(req, options)).toString('utf8');
+}
+
 /**
- * The body as text, refused mid-stream past maxBytes and past deadlineMs, so an oversized or slow sender cannot tie up
+ * The body as sent, refused mid-stream past maxBytes and past deadlineMs, so an oversized or slow sender cannot tie up
  * the server.
  */
-export function readBody(
+function readBodyBytes(
   req: IncomingMessage,
   { maxBytes = MAX_BODY_BYTES, deadlineMs = bodyDeadlineMs() }: ReadBodyOptions = {},
-): Promise<string> {
-  return new Promise<string>((resolve, reject) => {
+): Promise<Buffer> {
+  return new Promise<Buffer>((resolve, reject) => {
     const chunks: Buffer[] = [];
     let total = 0;
     const refuse = (err: Error): void => {
@@ -114,7 +119,7 @@ export function readBody(
     req.on('data', onData);
     req.once('end', () => {
       clearTimeout(timer);
-      resolve(Buffer.concat(chunks).toString('utf8'));
+      resolve(Buffer.concat(chunks));
     });
     req.on('error', (err) => {
       clearTimeout(timer);
@@ -176,9 +181,9 @@ export function closeIfBodyUnread({ req, res }: WebhookRequest): void {
 }
 
 /**
- * A webhook's raw body, exactly as sent, for the receiver's HMAC check; call it only once a secret is configured and
+ * A webhook's raw bytes, exactly as sent, for the receiver's HMAC check; call it only once a secret is configured and
  * the signature headers are present.
  */
-export function readWebhookBody({ req, opts }: WebhookRequest): Promise<string> {
-  return readBody(req, { deadlineMs: opts.webhookBodyDeadlineMs ?? WEBHOOK_BODY_DEADLINE_MS });
+export function readWebhookBody({ req, opts }: WebhookRequest): Promise<Buffer> {
+  return readBodyBytes(req, { deadlineMs: opts.webhookBodyDeadlineMs ?? WEBHOOK_BODY_DEADLINE_MS });
 }

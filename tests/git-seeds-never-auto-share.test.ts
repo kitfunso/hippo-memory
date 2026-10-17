@@ -21,6 +21,7 @@ import { hippoRun } from './_helpers/spawn-hippo.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 import { sqliteSyncStore } from '../src/store/sqlite/store.js';
 import { sharingStores } from './_helpers/sharing-stores.js';
+import { makeRoot } from './_helpers/make-root.js';
 const SEED = 'fix: retry the upload when the storage token expires mid-transfer';
 const ORDINARY = 'gotcha: powershell 5.1 has no pipeline chain operators, use if blocks';
 
@@ -34,7 +35,7 @@ describe('git-learned rows and the global store', () => {
   let seed: MemoryEntry;
 
   beforeEach(() => {
-    tmp = mkdtempSync(join(tmpdir(), 'hippo-gitshare-'));
+    tmp = makeRoot('gitshare', { init: false });
     hippoRoot = join(tmp, 'proj', '.hippo');
     initStore(hippoRoot);
     vi.stubEnv('HIPPO_HOME', join(tmp, 'global'));
@@ -47,7 +48,6 @@ describe('git-learned rows and the global store', () => {
 
   afterEach(() => {
     vi.unstubAllEnvs();
-    rmSync(tmp, { recursive: true, force: true });
   });
 
   it('autoShare copies the ordinary error row and skips the git-learned one', () => {

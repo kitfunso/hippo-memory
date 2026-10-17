@@ -4,7 +4,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { spawn } from 'child_process';
 import { resolveCodexSessionTranscript } from '../hooks/codex-session.js';
-import { resolveCodexWrapperPaths, type CodexWrapperMetadata } from '../hooks/codex-wrapper.js';
+import { installedRealCodexPath, resolveCodexWrapperPaths } from '../hooks/codex-wrapper.js';
 import { resolveJsonHookPaths } from '../hooks/json-hooks.js';
 import { readSessionScan, recordSessionDigest } from '../capture/session-digest.js';
 import { captureToolFailure } from '../capture/capture-error.js';
@@ -423,15 +423,6 @@ function captureEndedSession(
   }
 }
 
-function loadCodexWrapperMetadata(): CodexWrapperMetadata {
-  const { metadataPath } = resolveCodexWrapperPaths();
-  if (!fs.existsSync(metadataPath)) {
-    throw new Error('Codex wrapper is not installed. Run `hippo hook install codex` first.');
-  }
-  // SAFETY: the file is the one installCodexWrapper wrote; handleCodexRun reads only logFile and realCodexPath from it.
-  return JSON.parse(fs.readFileSync(metadataPath, 'utf8')) as CodexWrapperMetadata;
-}
-
 function spawnRealCodex(
   realCodexPath: string,
   forwardArgs: string[],
@@ -459,19 +450,19 @@ function spawnRealCodex(
 }
 
 export function handleCodexRun({ hippoRoot, tenantId, args }: CommandContext): void {
-  const metadata = loadCodexWrapperMetadata();
+  const realCodexPath = installedRealCodexPath();
   const startedAtMs = Date.now();
-  // Codex reads CODEX_HOME at each launch, so resolve it now, not from the install-time metadata.
-  const { historyPath } = resolveCodexWrapperPaths();
+  // Codex reads CODEX_HOME at each launch, so resolve it now; the log path is the installer's own, never the file's.
+  const { historyPath, logFile } = resolveCodexWrapperPaths();
   const startOffsetBytes = fs.existsSync(historyPath) ? fs.statSync(historyPath).size : 0;
 
   try {
-    cmdLastSleep(hippoRoot, { path: metadata.logFile }, 'terminal');
+    cmdLastSleep(hippoRoot, { path: logFile }, 'terminal');
   } catch (err) {
     log.debug(`codex run: the last sleep summary was not shown: ${errorMessage(err)}`, errorFields(err));
   }
 
-  const child = spawnRealCodex(metadata.realCodexPath, args, process.cwd());
+  const child = spawnRealCodex(realCodexPath, args, process.cwd());
   child.on('error', (err) => {
     printError(`Failed to launch Codex: ${err.message}`);
     process.exit(1);
@@ -484,7 +475,7 @@ export function handleCodexRun({ hippoRoot, tenantId, args }: CommandContext): v
       historyPath,
       startOffsetBytes,
       startedAtMs,
-      metadata.logFile,
+      logFile,
     );
     exitLikeChild(code, signal);
   });

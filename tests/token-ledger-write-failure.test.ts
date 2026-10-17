@@ -1,7 +1,6 @@
 // A failed token-ledger write never fails the recall that produced the text, but it is logged instead of swallowed.
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import * as fs from 'node:fs';
-import * as os from 'node:os';
 import * as path from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
@@ -14,6 +13,7 @@ import { _resetLogOnceForTests } from '../src/util/log.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { sqliteStore, sqliteSyncStore } from '../src/store/sqlite/store.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 let root: string;
 let stderrSpy: MockInstance<typeof process.stderr.write>;
@@ -34,8 +34,7 @@ function ledgerLines(): string[] {
 }
 
 beforeEach(() => {
-  root = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-ledger-fail-'));
-  initStore(root);
+  root = makeRoot('ledger-fail');
   const db = openHippoDb(root);
   db.exec('DROP TABLE token_ledger');
   closeHippoDb(db);
@@ -51,7 +50,6 @@ afterEach(() => {
   else process.env.HIPPO_HOME = savedHome;
   if (savedLevel === undefined) delete process.env.HIPPO_LOG;
   else process.env.HIPPO_LOG = savedLevel;
-  fs.rmSync(root, { recursive: true, force: true });
 });
 
 describe('token ledger write failures', () => {
@@ -76,22 +74,17 @@ describe('token ledger write failures', () => {
   });
 
   it('the prompt hook prints its block and warns with the error class when its inject row is refused', async () => {
-    const store = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-ledger-refused-'));
-    try {
-      initStore(store);
-      pinNote(store);
-      const db = openHippoDb(store);
-      // Reads still work, so only the hook's own insert can fail.
-      db.exec("CREATE TRIGGER refuse_ledger BEFORE INSERT ON token_ledger BEGIN SELECT RAISE(ABORT, 'ledger insert refused'); END");
-      closeHippoDb(db);
-      const out = await promptHookContext(apiCtx(store, 'default', adminActor('test')), { sessionId: 's-refused', project: PROJECT });
-      expect(out.stdout).toContain('the deploy window opens on Tuesdays');
-      const lines = skippedLines();
-      expect(lines).toHaveLength(1);
-      expect(lines[0]).toMatch(/^\[hippo\] warn: token ledger row skipped: ledger insert refused ts=\S+ errorClass=\w+ stack=\S/);
-    } finally {
-      fs.rmSync(store, { recursive: true, force: true });
-    }
+    const store = makeRoot('ledger-refused');
+    pinNote(store);
+    const db = openHippoDb(store);
+    // Reads still work, so only the hook's own insert can fail.
+    db.exec("CREATE TRIGGER refuse_ledger BEFORE INSERT ON token_ledger BEGIN SELECT RAISE(ABORT, 'ledger insert refused'); END");
+    closeHippoDb(db);
+    const out = await promptHookContext(apiCtx(store, 'default', adminActor('test')), { sessionId: 's-refused', project: PROJECT });
+    expect(out.stdout).toContain('the deploy window opens on Tuesdays');
+    const lines = skippedLines();
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toMatch(/^\[hippo\] warn: token ledger row skipped: ledger insert refused ts=\S+ errorClass=\w+ stack=\S/);
   });
 
   it('a store with no ledger table is an expected skip: nothing at the default level, one debug line with no stack, and the hook prints its block', async () => {
@@ -110,23 +103,19 @@ describe('token ledger write failures', () => {
   });
 
   it('a hippo.db that is not a database is an expected skip: nothing at the default level, one debug line with no stack', () => {
-    const store = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-ledger-notadb-'));
+    const store = makeRoot('ledger-notadb', { init: false });
     const write = (): void => {
       bookTokenUse({ tenantId: 'default', surface: 'hook', event: 'inject', items: 1, tokens: 40 }, { local: sqliteSyncStore(store).localFiles });
     };
-    try {
-      initStore(store);
-      fs.writeFileSync(path.join(store, 'hippo.db'), 'not a valid sqlite database file, just garbage bytes 0000000');
-      for (const suffix of ['-wal', '-shm']) fs.rmSync(path.join(store, `hippo.db${suffix}`), { force: true });
-      write();
-      expect(stderrSpy.mock.calls).toEqual([]);
+    initStore(store);
+    fs.writeFileSync(path.join(store, 'hippo.db'), 'not a valid sqlite database file, just garbage bytes 0000000');
+    for (const suffix of ['-wal', '-shm']) fs.rmSync(path.join(store, `hippo.db${suffix}`), { force: true });
+    write();
+    expect(stderrSpy.mock.calls).toEqual([]);
 
-      process.env.HIPPO_LOG = 'debug';
-      write();
-      expect(skippedLines()).toHaveLength(1);
-      expect(skippedLines()[0]).toMatch(/^\[hippo\] debug: token ledger row skipped: file is not a database ts=\S+\n$/);
-    } finally {
-      fs.rmSync(store, { recursive: true, force: true });
-    }
+    process.env.HIPPO_LOG = 'debug';
+    write();
+    expect(skippedLines()).toHaveLength(1);
+    expect(skippedLines()[0]).toMatch(/^\[hippo\] debug: token ledger row skipped: file is not a database ts=\S+\n$/);
   });
 });

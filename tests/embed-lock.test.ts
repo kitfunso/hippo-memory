@@ -1,14 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'fs';
-import * as os from 'os';
 import * as path from 'path';
 import { spawn, spawnSync } from 'node:child_process';
-import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { embedAll } from '../src/search/embed-memories.js';
 import { loadEmbeddingIndex } from '../src/store/vector-index.js';
 import { sqliteSyncStore } from '../src/store/sqlite/store.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const KEY_ENV = 'OPENAI_API_KEY';
 let root: string;
@@ -16,8 +15,7 @@ let savedKey: string | undefined;
 let fetchMock: ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
-  root = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-embed-lock-'));
-  initStore(root);
+  root = makeRoot('embed-lock');
   fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ embeddings: { provider: 'openai', model: 'm' } }), 'utf8');
   writeEntry(root, createMemory('embed lock test memory', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
   savedKey = process.env[KEY_ENV];
@@ -31,7 +29,6 @@ afterEach(() => {
   vi.unstubAllGlobals();
   if (savedKey === undefined) delete process.env[KEY_ENV];
   else process.env[KEY_ENV] = savedKey;
-  fs.rmSync(root, { recursive: true, force: true });
 });
 
 // Fake timers drive the waiter's poll loop, so "it waited" is proven by poll count, not by how long a sleep ran.

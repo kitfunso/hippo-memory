@@ -2,12 +2,10 @@
 // awaits the LLM, and a dry run previews the deletes a real sleep would make.
 import type { FullContext } from './_helpers/api-ctx.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { Layer, type MemoryEntry } from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { readEntry, loadEveryTenantEntries } from '../src/store/entry-reads.js';
 import { deleteEntry, batchWriteAndDelete } from '../src/store/delete-and-batch.js';
@@ -21,6 +19,7 @@ import { queryAuditEvents } from '../src/store/audit.js';
 import { sleepResultLines } from '../src/cli/sleep-render.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 import { sqliteConsolidation } from '../src/store/sqlite/consolidation-group.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 /** Sleep and decay here run on the pre-1.46 7-day base, so memories fade within the test's horizon. */
 const createMemory7 = (content: string, options: Parameters<typeof createMemory>[1] = {}) => createMemory(content, { baseHalfLifeDays: 7, ...options });
@@ -29,9 +28,8 @@ const DAY = 86_400_000;
 const roots: string[] = [];
 
 function newRoot(configJson?: string): string {
-  const root = mkdtempSync(join(tmpdir(), 'hippo-c1-'));
+  const root = makeRoot('c1');
   roots.push(root);
-  initStore(root);
   if (configJson) writeFileSync(join(root, 'config.json'), configJson);
   return root;
 }

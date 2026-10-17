@@ -1,7 +1,6 @@
 // W2b leases, heartbeat and reclaim (trajectories/01M2EA6D1PVF2H25CGHE12JJ44/plan.md).
-import { describe, it, expect, beforeEach, afterEach, beforeAll } from 'vitest';
-import { mkdtempSync, rmSync, existsSync, statSync, mkdirSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { describe, it, expect, beforeEach, beforeAll } from 'vitest';
+import { rmSync, existsSync, statSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { execFileSync, execSync } from 'node:child_process';
 import { Worker } from 'node:worker_threads';
@@ -21,15 +20,12 @@ import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { CARD_LEASE_MS } from '../src/core/card.js';
 import { cardDetailOf } from './_helpers/card-detail.js';
 import { runCliAs } from './_helpers/run-cli-as.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 let root: string;
 
 beforeEach(() => {
-  root = mkdtempSync(join(tmpdir(), 'hippo-w2b-leases-'));
-});
-
-afterEach(() => {
-  rmSync(root, { recursive: true, force: true });
+  root = makeRoot('w2b-leases', { init: false });
 });
 
 function pastIso(): string {
@@ -498,7 +494,7 @@ describe('CLI cases: card heartbeat and reclaim through the built CLI', () => {
 
 
   async function setupCliHome() {
-    const home = mkdtempSync(join(tmpdir(), 'hippo-w2b-cli-'));
+    const home = makeRoot('w2b-cli', { init: false });
     const globalDir = join(home, 'global');
     mkdirSync(globalDir, { recursive: true });
     const env = { HIPPO_HOME: globalDir };

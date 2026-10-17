@@ -1,9 +1,5 @@
 import type { FullContext } from './_helpers/api-ctx.js';
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { initStore } from '../src/store/open.js';
+import { describe, it, expect, beforeEach } from 'vitest';
 import {
   backfillChannel,
   type SlackHistoryFetcher,
@@ -11,16 +7,15 @@ import {
 } from '../src/connectors/slack/backfill.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const ctx = (root: string): FullContext => (apiCtx(root, 'default', { subject: 'connector:slack', role: 'admin' }));
 
 describe('backfillChannel cursor / oldest semantics', () => {
   let root: string;
   beforeEach(() => {
-    root = mkdtempSync(join(tmpdir(), 'hippo-slack-bfc-'));
-    initStore(root);
+    root = makeRoot('slack-bfc');
   });
-  afterEach(() => rmSync(root, { recursive: true, force: true }));
 
   it('does NOT feed latest_ts as Slack cursor (would be opaque-token mismatch)', async () => {
     // Seed slack_cursors with a prior latest_ts.

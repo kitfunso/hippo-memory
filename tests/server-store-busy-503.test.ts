@@ -1,11 +1,7 @@
 // A held write lock answers a server write with a quick 503 and Retry-After instead of stalling the event loop for seconds.
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createRequire } from 'node:module';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { MessageChannel } from 'node:worker_threads';
-import { initStore } from '../src/store/open.js';
 import { getHippoDbPath, type DatabaseSyncLike } from '../src/db/index.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { log } from '../src/util/log.js';
@@ -13,6 +9,7 @@ import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { serveJobs } from '../src/store/sqlite/worker-jobs.js';
 import type { Job, Reply } from '../src/store/sqlite/worker-ops.js';
 import { countMatching, recordStatementsAsync, STORE_OPEN } from './_helpers/count-statements.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 // SAFETY: node:sqlite's DatabaseSync is the class db.ts wraps as DatabaseSyncLike.
 const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite') as {
@@ -25,8 +22,7 @@ describe('server under a held write lock', () => {
   let holder: DatabaseSyncLike;
 
   beforeAll(async () => {
-    home = mkdtempSync(join(tmpdir(), 'hippo-busy-503-'));
-    initStore(home);
+    home = makeRoot('busy-503');
     handle = await serve({ hippoRoot: home, port: 0 });
     holder = new DatabaseSync(getHippoDbPath(home));
   });
@@ -35,7 +31,6 @@ describe('server under a held write lock', () => {
     vi.restoreAllMocks();
     if (holder.isOpen !== false) holder.close();
     await handle.stop();
-    rmSync(home, { recursive: true, force: true });
   });
 
   it('returns 503 with Retry-After: 1 well inside the old 5 s wait, logs it as a warning, then succeeds once the lock is gone', async () => {

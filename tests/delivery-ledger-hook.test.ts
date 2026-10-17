@@ -1,7 +1,6 @@
 // The per-prompt hook end to end through the built CLI: what the delivery ledger records, and that it never changes the hook.
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import * as fs from 'node:fs';
-import * as os from 'node:os';
 import * as path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
@@ -14,6 +13,7 @@ import { blockHash, estimateTokens } from '../src/util/token-text.js';
 import { realpathOrResolve } from '../src/util/real-path.js';
 import type { HippoConfig } from '../src/core/config.js';
 import { runCliAs } from './_helpers/run-cli-as.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const HIPPO_JS = path.resolve(__dirname, '..', 'bin', 'hippo.js');
 const HOOK_ARGS = ['context', '--pinned-only', '--include-recent', '5', '--format', 'additional-context'];
@@ -116,16 +116,12 @@ const additionalContext = (stdout: string): string => JSON.parse(stdout).hookSpe
 const rejected = (e: DeliveryEventRow) => e.candidates.filter((c) => c.outcome === 'rejected');
 
 beforeEach(() => {
-  tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-delivery-hook-'));
+  tmp = makeRoot('delivery-hook', { init: false });
   proj = path.join(tmp, 'proj');
   fs.mkdirSync(store(proj), { recursive: true });
   initStore(store(proj));
   configure(true);
   seeded.length = 0;
-});
-
-afterEach(() => {
-  fs.rmSync(tmp, { recursive: true, force: true });
 });
 
 describe('what one hook call records', () => {

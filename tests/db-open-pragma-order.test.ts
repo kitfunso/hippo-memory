@@ -2,11 +2,11 @@
 // so it could throw "database is locked" instantly under concurrent writes
 // instead of waiting (db.ts:2366-2367 order fix).
 import { describe, it, expect, afterEach } from 'vitest';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 let root: string;
 let churners: ChildProcess[] = [];
@@ -14,11 +14,6 @@ let churners: ChildProcess[] = [];
 afterEach(() => {
   for (const c of churners) c.kill();
   churners = [];
-  try {
-    rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
-  } catch {
-    // best-effort cleanup only
-  }
 });
 
 // Pure open/close pragma churn on an already-WAL store takes no lock at all
@@ -81,7 +76,7 @@ function spawnChurner(dbPath: string, goFile: string, stopFile: string) {
 
 describe('openHippoDb pragma order: busy_timeout before journal_mode', () => {
   it('repeated opens survive concurrent writer churn without throwing', async () => {
-    root = mkdtempSync(join(tmpdir(), 'hippo-pragma-order-'));
+    root = makeRoot('pragma-order');
     closeHippoDb(openHippoDb(root));
     const dbPath = join(root, 'hippo.db');
     const goFile = join(root, 'go');

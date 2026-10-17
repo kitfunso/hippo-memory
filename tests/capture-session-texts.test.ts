@@ -1,7 +1,6 @@
 // captureSessionTexts: the session-end capture for a caller that read its transcript on another machine.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
-import * as os from 'node:os';
 import * as path from 'node:path';
 import type { Context } from '../src/api/index.js';
 import { sqliteStore } from '../src/store/sqlite/store.js';
@@ -19,6 +18,7 @@ import { writeEntry } from '../src/store/entry-writes.js';
 import { initStore } from '../src/store/open.js';
 import { initProject, removeScratch, runHippo, scratch } from './_helpers/compaction-hooks.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const TEXTS = [
   'We decided to use pnpm for the billing service because the lockfile is pnpm-lock.yaml.',
@@ -34,7 +34,7 @@ let repo: string;
 let root: string;
 
 beforeEach(() => {
-  dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-session-texts-'));
+  dir = makeRoot('session-texts', { init: false });
   // The store sits in a repo of its own, so a row stamped from its folder would read 'server-repo'.
   repo = path.join(dir, 'srv', 'server-repo');
   fs.mkdirSync(path.join(repo, '.git'), { recursive: true });
@@ -44,7 +44,6 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks();
-  fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
 
 const ctxFor = (hippoRoot: string, tenantId = 'default'): Context => ({ hippoRoot, store: sqliteStore(hippoRoot), tenantId, actor: { subject: ACTOR, role: 'member' } });

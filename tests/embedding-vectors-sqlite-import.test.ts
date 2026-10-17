@@ -1,9 +1,7 @@
 // A store from before schema v52 keeps its embeddings.json vectors: they move into memory_vectors once and the file stays as a backup.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'fs';
-import * as os from 'os';
 import * as path from 'path';
-import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { batchWriteAndDelete, deleteEntry } from '../src/store/delete-and-batch.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
@@ -14,6 +12,7 @@ import { loadEmbeddingIndex, saveEmbeddingIndex } from '../src/store/vector-inde
 import type { EmbeddingProvider } from '../src/embeddings/provider.js';
 import { decodeVector, deleteOrphanVectors, encodeVector, rankVectorRows, topVectorMatches, type VectorMatch, type VectorRow } from '../src/db/vector-store.js';
 import { sqliteSyncStore } from '../src/store/sqlite/store.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 // The scan case seeds 600 rows and their vectors, so that the scan runs long enough to yield part way.
 vi.setConfig({ testTimeout: 30_000 });
@@ -21,14 +20,12 @@ vi.setConfig({ testTimeout: 30_000 });
 let root: string;
 
 beforeEach(() => {
-  root = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-vec-import-'));
-  initStore(root);
+  root = makeRoot('vec-import');
   vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
 });
 
 afterEach(() => {
   vi.restoreAllMocks();
-  fs.rmSync(root, { recursive: true, force: true });
 });
 
 function withDb<T>(fn: (db: ReturnType<typeof openHippoDb>) => T): T {

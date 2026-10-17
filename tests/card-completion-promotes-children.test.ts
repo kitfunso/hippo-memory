@@ -1,15 +1,12 @@
 // Completing a card promotes exactly its backlog children whose parents are all done, in card_deps order, and touches no other child.
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRequire } from 'node:module';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import type { Card } from '../src/core/card.js';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
 import { claimCard, completeCard, createCard, loadCard, reviewCard } from '../src/store/cards.js';
 import { cardDetailOf } from './_helpers/card-detail.js';
-import { initStore } from '../src/store/open.js';
 import { countMatching, recordStatements } from './_helpers/count-statements.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const TENANT = 'default';
 interface Preparer { prepare(sql: string): object }
@@ -18,12 +15,7 @@ const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite') as { Data
 let root: string;
 
 beforeEach(() => {
-  root = mkdtempSync(join(tmpdir(), 'hippo-card-promotion-'));
-  initStore(root);
-});
-
-afterEach(() => {
-  rmSync(root, { recursive: true, force: true });
+  root = makeRoot('card-promotion');
 });
 
 function toReview(id: string): void {

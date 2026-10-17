@@ -1,21 +1,16 @@
 // tests/goal-push.test.ts
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { initStore } from '../src/store/open.js';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { activeGoalsWithPolicies, pushGoal } from '../src/store/goals.js';
 
 const activeGoalsOf = (root: string, opts: { sessionId: string; tenantId: string }) => activeGoalsWithPolicies(root, opts).goals;
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 describe('pushGoal + activeGoalsOf', () => {
   let root: string;
   beforeEach(() => {
-    root = mkdtempSync(join(tmpdir(), 'hippo-b3-push-'));
-    initStore(root);
+    root = makeRoot('b3-push');
   });
-  afterEach(() => rmSync(root, { recursive: true, force: true }));
 
   it('push then list returns the new goal as active', () => {
     const goal = pushGoal(root, {

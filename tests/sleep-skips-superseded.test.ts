@@ -1,26 +1,23 @@
 // Sleep never builds a new memory from a superseded one, so an old claim cannot come back as a current row.
 import type { FullContext } from './_helpers/api-ctx.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { rmSync } from 'node:fs';
 import { Layer } from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { loadChildrenOfSummary, loadAllL2Summaries } from '../src/store/summaries.js';
 import { consolidate } from '../src/index.js';
 import { supersede } from '../src/api/index.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const DAY = 86_400_000;
 const roots: string[] = [];
 
 function newRoot(): string {
-  const root = mkdtempSync(join(tmpdir(), 'hippo-sleep-superseded-'));
+  const root = makeRoot('sleep-superseded');
   roots.push(root);
-  initStore(root);
   return root;
 }
 

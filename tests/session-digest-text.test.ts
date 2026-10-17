@@ -1,13 +1,13 @@
 // How a session digest picks its sentences and the files it lists, read back from the row a fresh store keeps.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'fs';
-import * as os from 'os';
 import * as path from 'path';
 import { isContentWorthStoring } from '../src/core/memory-quality.js';
 import { isSessionDigestRow } from '../src/core/session-digest-row.js';
 import { digestSentences, recordSessionDigest, type DigestEdit } from '../src/capture/session-digest.js';
 import { initStore } from '../src/store/open.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 // The digest keeps to 1200 chars; pinned here so a change to the cap shows up as a test edit.
 const MAX_DIGEST_CHARS = 1200;
@@ -19,7 +19,7 @@ let repo: string;
 let hippoRoot: string;
 
 beforeEach(() => {
-  tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-digest-text-'));
+  tmp = makeRoot('digest-text', { init: false });
   fs.mkdirSync(path.join(tmp, 'repo', 'src'), { recursive: true });
   repo = fs.realpathSync.native(path.join(tmp, 'repo'));
   hippoRoot = path.join(repo, '.hippo');
@@ -28,7 +28,6 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllEnvs();
-  fs.rmSync(tmp, { recursive: true, force: true });
 });
 
 /** The digest a session ending on `finalText` stores, '' for none. A fresh store each call, so no earlier digest echoes. */

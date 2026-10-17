@@ -1,22 +1,17 @@
 // tests/goal-lifecycle.test.ts
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { initStore } from '../src/store/open.js';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { activeGoalsWithPolicies, pushGoal, completeGoal, suspendGoal } from '../src/store/goals.js';
 
 const activeGoalsOf = (root: string, opts: { sessionId: string; tenantId: string }) => activeGoalsWithPolicies(root, opts).goals;
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 describe('goal lifecycle', () => {
   let root: string;
   const ctx = { sessionId: 's1', tenantId: 'default' };
   beforeEach(() => {
-    root = mkdtempSync(join(tmpdir(), 'hippo-b3-life-'));
-    initStore(root);
+    root = makeRoot('b3-life');
   });
-  afterEach(() => rmSync(root, { recursive: true, force: true }));
 
   it('completeGoal sets status, completed_at, outcome_score', () => {
     const g = pushGoal(root, { ...ctx, goalName: 'work' });

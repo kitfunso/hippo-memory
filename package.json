@@ -28,7 +28,6 @@
     "!dist/**/*.map",
     "dist-ui",
     "bin",
-    "scripts/postinstall.cjs",
     "openclaw.plugin.json",
     "extensions/openclaw-plugin"
   ],
@@ -47,7 +46,6 @@
     "lint": "oxlint",
     "sbom": "node scripts/sbom.mjs",
     "audit:security": "npm audit --audit-level=moderate && npm --prefix ui audit --audit-level=moderate",
-    "postinstall": "node scripts/postinstall.cjs",
     "smoke:pack": "node scripts/smoke-pack.mjs",
     "smoke:openclaw-install": "node scripts/smoke-openclaw-install.mjs",
     "build:ui": "cd ui && npm install && npm run build",

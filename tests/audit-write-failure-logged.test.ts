@@ -1,26 +1,21 @@
 // An audit row that fails to write must not undo the mutation, and must not vanish silently either.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import * as fs from 'node:fs';
-import * as os from 'node:os';
-import * as path from 'node:path';
-import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { readEntry } from '../src/store/entry-reads.js';
 import { deleteEntry } from '../src/store/delete-and-batch.js';
 import { createMemory } from '../src/core/memory.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { auditWriteFailureCount } from '../src/store/audit.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 let root: string;
 
 beforeEach(() => {
-  root = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-audit-fail-'));
-  initStore(root);
+  root = makeRoot('audit-fail');
 });
 
 afterEach(() => {
   vi.restoreAllMocks();
-  fs.rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
 
 function breakAuditTable(): void {

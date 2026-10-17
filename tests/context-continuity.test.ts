@@ -1,26 +1,24 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import * as fs from 'fs';
 import * as path from 'path';
-import * as os from 'os';
 import { handleContext } from '../src/cli/context.js';
 import { withHookStdin } from './_helpers/hook-stdin.js';
 import { runInProcess } from './_helpers/run-in-process.js';
 import { initStore } from '../src/store/open.js';
 import { saveActiveTaskSnapshot, appendSessionEvent } from '../src/store/sessions.js';
 import { saveSessionHandoff } from '../src/store/handoffs.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 let tmpDir: string;
 let hippoDir: string;
 
 beforeEach(() => {
-  tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-context-continuity-'));
+  tmpDir = makeRoot('context-continuity', { init: false });
   hippoDir = path.join(tmpDir, '.hippo');
   vi.stubEnv('HIPPO_HOME', path.join(tmpDir, 'global'));
 });
 
 afterEach(() => {
   vi.unstubAllEnvs();
-  fs.rmSync(tmpDir, { recursive: true, force: true });
 });
 
 /** `hippo context` run in this process against the temp store; a non-zero exit fails the test as a spawn would. */

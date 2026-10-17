@@ -1,19 +1,13 @@
 // A real store connection, so isTransaction is the driver's own answer, not a stand-in.
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
-import { initStore } from '../src/store/open.js';
 import { watchCommits } from '../src/store/sqlite/commit-watch.js';
+import { makeRoot } from './_helpers/make-root.js';
 
-const opened: Array<{ dir: string; db: DatabaseSyncLike }> = [];
+const opened: DatabaseSyncLike[] = [];
 
 afterEach(() => {
-  for (const { dir, db } of opened.splice(0)) {
-    closeHippoDb(db);
-    rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
-  }
+  for (const db of opened.splice(0)) closeHippoDb(db);
 });
 
 interface Watched {
@@ -22,10 +16,9 @@ interface Watched {
 }
 
 function watched(): Watched {
-  const dir = mkdtempSync(join(tmpdir(), 'hippo-commit-watch-'));
-  initStore(dir);
+  const dir = makeRoot('commit-watch');
   const db = openHippoDb(dir);
-  opened.push({ dir, db });
+  opened.push(db);
   db.exec('CREATE TABLE t (v INTEGER)');
   let count = 0;
   watchCommits(db, () => { count++; });

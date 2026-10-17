@@ -1,7 +1,6 @@
 // Quarantine answers alike on hippo.db and on a store held in memory: the same records, the same order, the same refusals and the same audit rows.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cpSync, mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { cpSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import type { AuditEvent } from '../src/store/audit.js';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
@@ -13,6 +12,7 @@ import {
   BULK_RECORDS, BULK_TENANT, bulkId, HELD, heldAt, heldContent, inMemoryQuarantineStore, seedQuarantineRecords,
 } from './_helpers/in-memory-quarantine-store.js';
 import { onBothStores, seedTwoTenants, TENANT_A, TENANT_B, type GroupCall, type SideResult, type TwoTenantFixture } from './_helpers/store-conformance.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const NOW = '2026-03-01T12:00:00.000Z';
 const T1 = '2026-03-01T12:00:01.000Z';
@@ -270,7 +270,7 @@ describe('on hippo.db, a decision whose audit row is refused', () => {
   };
 
   beforeEach(() => {
-    root = join(mkdtempSync(join(tmpdir(), 'hippo-quarantine-atomic-')), 'store');
+    root = join(makeRoot('quarantine-atomic', { init: false }), 'store');
     cpSync(fixture.dir, root, { recursive: true });
     const db = openHippoDb(root);
     try {
@@ -278,10 +278,6 @@ describe('on hippo.db, a decision whose audit row is refused', () => {
     } finally {
       closeHippoDb(db);
     }
-  });
-
-  afterEach(() => {
-    rmSync(join(root, '..'), { recursive: true, force: true });
   });
 
   it('approve rejects and leaves the scope and the record as they were', async () => {

@@ -10,22 +10,17 @@
 
 import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { initStore } from '../src/store/open.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { remember, type RecallResult } from '../src/api/index.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 let home: string;
 let handle: ServerHandle;
 let ctx: FullContext;
 
 beforeEach(async () => {
-  home = mkdtempSync(join(tmpdir(), 'hippo-a7-http-'));
-  mkdirSync(join(home, '.hippo'), { recursive: true });
-  initStore(home);
+  home = makeRoot('a7-http');
   ctx = apiCtx(home, 'default', { subject: 'test', role: 'admin' });
   await remember(ctx, { content: 'auth bug fix details', tags: ['fix-auth'] });
   await remember(ctx, { content: 'auth UI polish notes', tags: ['ui'] });
@@ -34,7 +29,6 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await handle.stop();
-  rmSync(home, { recursive: true, force: true });
 });
 
 describe('HTTP /v1/memories rerank-trace wire-format', () => {

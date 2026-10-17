@@ -8,10 +8,8 @@ import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
-import * as os from 'os';
 import { Layer} from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { readEntry } from '../src/store/entry-reads.js';
 import { listMemoryConflicts, replaceDetectedConflicts, resolveConflict } from '../src/store/conflicts.js';
@@ -22,12 +20,12 @@ import { RejectedValueError } from '../src/core/api-errors.js';
 import { listRejectionsForTenant } from '../src/trust/reject-flow.js';
 import { sqliteStore } from '../src/store/sqlite/store.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 let tmpDir: string;
 
 beforeEach(() => {
-  tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-reject-verbs-'));
-  initStore(tmpDir);
+  tmpDir = makeRoot('reject-verbs');
 });
 
 function ctx(tenantId: string = 'default'): FullContext {

@@ -1,6 +1,5 @@
 // No raw email address is stored: the session digest, capture from a transcript and the handoff fields all mask it.
 import * as fs from 'fs';
-import * as os from 'os';
 import * as path from 'path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cmdCapture } from '../src/capture/command.js';
@@ -9,6 +8,7 @@ import { maskEmails } from '../src/util/secret-detect.js';
 import { recordSessionDigest } from '../src/capture/session-digest.js';
 import { initStore } from '../src/store/open.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const EMAIL = 'alice@example.com';
 const REPLY = `Updated ${EMAIL} in customer.ts because the export failed.`;
@@ -19,7 +19,7 @@ let repo: string;
 let hippoRoot: string;
 
 beforeEach(() => {
-  tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-email-mask-'));
+  tmp = makeRoot('email-mask', { init: false });
   repo = path.join(tmp, 'repo');
   hippoRoot = path.join(repo, '.hippo');
   initStore(hippoRoot);
@@ -28,7 +28,6 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllEnvs();
-  fs.rmSync(tmp, { recursive: true, force: true });
 });
 
 function transcript(): string {

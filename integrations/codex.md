@@ -73,7 +73,7 @@ hippo hook install codex
 
 It adds the memory hooks too. With no `codex` launcher on `PATH`, it adds the hooks, says so, and leaves capture off.
 
-`hippo setup` also adds the hooks and wraps Codex when it detects it. After you opt in, a Codex update can put the real binary back over the wrapper, so installs, updates and routine Hippo commands re-apply it; they never apply it for the first time. `HIPPO_SKIP_POSTINSTALL=1` stops the re-apply on install and update, `HIPPO_SKIP_AUTO_INTEGRATIONS=1` stops it in routine commands and stops `hippo init` from writing any agent file or hook, the Codex hooks included, and `hippo hook uninstall codex` restores the original launcher and removes the hooks.
+`hippo setup` also adds the hooks and wraps Codex when it detects it. After you opt in, a Codex update can put the real binary back over the wrapper, so routine Hippo commands re-apply it; they never apply it for the first time, and installing or updating the package runs no script. They only touch the files the installer recorded, and a record that names any other path is left alone with a warning. `HIPPO_SKIP_AUTO_INTEGRATIONS=1` stops the re-apply and stops `hippo init` from writing any agent file or hook, the Codex hooks included, and `hippo hook uninstall codex` restores the original launcher and removes the hooks.
 
 Hippo renames the original launcher to a sibling backup such as `codex.hippo-real.cmd` or `codex.hippo-real.exe`, then drops a wrapper at the command path that users already invoke. No extra `PATH` step is required.
 

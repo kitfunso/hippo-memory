@@ -2,15 +2,14 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { spawn, spawnSync } from 'node:child_process';
 import { generateKeyPairSync, randomBytes, sign } from 'node:crypto';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { request as httpRequest } from 'node:http';
+import { rmSync, writeFileSync } from 'node:fs';
+import { request as httpRequest, type IncomingMessage } from 'node:http';
 import { request as httpsRequest } from 'node:https';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { log } from '../src/util/log.js';
 import { serve, type ServerHandle } from '../src/server.js';
-import { initStore } from '../src/store/open.js';
 import { waitFor } from './_helpers/wait-for.js';
+import { makeStore } from './_helpers/make-root.js';
 
 const CLI_PATH = join(process.cwd(), 'dist', 'cli.js');
 const savedRequireAuth = process.env.HIPPO_REQUIRE_AUTH;
@@ -77,6 +76,20 @@ function healthOverTls(port: number, ca: string): Promise<number> {
   });
 }
 
+/** The Strict-Transport-Security header on a GET /health answer, over TLS when `ca` is given. */
+function hstsOf(port: number, ca?: string): Promise<string | undefined> {
+  return new Promise((resolve, reject) => {
+    const onReply = (res: IncomingMessage): void => {
+      res.resume();
+      resolve(res.headers['strict-transport-security']);
+    };
+    const target = { host: '127.0.0.1', port, path: '/health', agent: false };
+    const req = ca ? httpsRequest({ ...target, ca }, onReply) : httpRequest(target, onReply);
+    req.on('error', reject);
+    req.end();
+  });
+}
+
 function healthInCleartext(port: number): Promise<number> {
   return new Promise<number>((resolve, reject) => {
     const req = httpRequest({ host: '127.0.0.1', port, path: '/health', agent: false }, (res) => {
@@ -102,10 +115,7 @@ describe('hippo serve over TLS', () => {
   });
 
   beforeEach(() => {
-    home = mkdtempSync(join(tmpdir(), 'hippo-serve-tls-'));
-    hippoRoot = join(home, '.hippo');
-    mkdirSync(hippoRoot, { recursive: true });
-    initStore(hippoRoot);
+    ({ base: home, root: hippoRoot } = makeStore('serve-tls'));
     certPath = join(home, 'test-only-cert.pem');
     keyPath = join(home, 'test-only-key.pem');
     writeFileSync(certPath, pair.cert);
@@ -144,6 +154,14 @@ describe('hippo serve over TLS', () => {
     expect(await healthOverTls(handle.port, pair.cert)).toBe(200);
     await expect(healthInCleartext(handle.port)).rejects.toThrow();
     expect(warn.mock.calls.map((call) => String(call[0])).filter((line) => line.includes('cleartext'))).toEqual([]);
+  });
+
+  it('sends HSTS when it terminates TLS, and none in cleartext, where a proxy in front decides', async () => {
+    handle = await serve({ hippoRoot, host: '127.0.0.1', port: 0, tls: pair });
+    expect(await hstsOf(handle.port, pair.cert)).toBe('max-age=31536000');
+    await handle.stop();
+    handle = await serve({ hippoRoot, host: '127.0.0.1', port: 0 });
+    expect(await hstsOf(handle.port)).toBeUndefined();
   });
 
   it('refuses to start on certificate text that is not a certificate, naming TLS as the cause', async () => {

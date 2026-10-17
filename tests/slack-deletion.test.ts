@@ -1,21 +1,17 @@
 import type { FullContext } from './_helpers/api-ctx.js';
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync } from 'fs';
-import { tmpdir } from 'os';
-import { join } from 'path';
-import { initStore } from '../src/store/open.js';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { loadEveryTenantEntries } from '../src/store/entry-reads.js';
 import { ingestMessage } from '../src/connectors/slack/ingest.js';
 import { handleMessageDeleted } from '../src/connectors/slack/deletion.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const ctx = (root: string): FullContext => (apiCtx(root, 'default', { subject: 'connector:slack', role: 'admin' }));
 
 describe('handleMessageDeleted', () => {
   let root: string;
-  beforeEach(() => { root = mkdtempSync(join(tmpdir(), 'hippo-slack-del-')); initStore(root); });
-  afterEach(() => rmSync(root, { recursive: true, force: true }));
+  beforeEach(() => { root = makeRoot('slack-del');  });
 
   it('archives the matching kind=raw row via archiveRawMemory', async () => {
     const ingested = await ingestMessage(ctx(root), {

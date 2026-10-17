@@ -1,7 +1,6 @@
 // What the installed hooks put into the model's context: no consolidation log, one copy of each memory.
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import * as fs from 'node:fs';
-import * as os from 'node:os';
 import * as path from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
@@ -15,6 +14,7 @@ import { graphExpandRecall } from '../src/graph/recall.js';
 import { sqliteStore } from '../src/store/sqlite/store.js';
 import { hippoRun } from './_helpers/spawn-hippo.js';
 import { runCliAs } from './_helpers/run-cli-as.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 let home: string;
 let project: string;
@@ -28,7 +28,7 @@ async function hippo(args: string[], input?: string, spawned = false): Promise<{
 }
 
 beforeEach(async () => {
-  home = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-lean-'));
+  home = makeRoot('lean', { init: false });
   project = path.join(home, 'project');
   fs.mkdirSync(project);
   env = {
@@ -38,7 +38,6 @@ beforeEach(async () => {
   await hippo(['init', '--no-hooks', '--no-schedule', '--no-learn']);
   await hippo(['hook', 'install', 'claude-code']);
 });
-afterEach(() => fs.rmSync(home, { recursive: true, force: true }));
 
 /** The commands `hippo hook install claude-code` wrote for one event. */
 function installedCommands(event: string): string[] {

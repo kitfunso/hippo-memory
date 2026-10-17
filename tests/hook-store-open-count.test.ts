@@ -1,8 +1,7 @@
 // Hook commands run on every prompt and tool failure, so each store they read is opened once per process.
 // Drives the built CLI; a preload counts the DatabaseSync connections per database file.
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import * as fs from 'node:fs';
-import * as os from 'node:os';
 import * as path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
@@ -10,6 +9,7 @@ import { closeHippoDb, openHippoDb } from '../src/db/index.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, type MemoryEntry } from '../src/core/memory.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const HIPPO_JS = path.resolve(__dirname, '..', 'bin', 'hippo.js');
 const FAKE_NOW = '2026-06-01T12:00:00.000Z';
@@ -95,7 +95,7 @@ const promptPayload = (sessionId: string): string =>
 
 beforeEach(() => {
   // Real path: the CLI logs opens by resolved path, and macOS spells the temp root through the /var symlink.
-  tmp = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-hook-open-count-')));
+  tmp = fs.realpathSync.native(makeRoot('hook-open-count', { init: false }));
   projectDir = path.join(tmp, 'proj');
   localRoot = path.join(projectDir, '.hippo');
   globalRoot = path.join(tmp, 'global');
@@ -108,10 +108,6 @@ beforeEach(() => {
   preloadPath = path.join(tmp, 'open-count-preload.mjs');
   fs.writeFileSync(preloadPath, PRELOAD_SRC);
   logPath = path.join(tmp, 'opens.json');
-});
-
-afterEach(() => {
-  fs.rmSync(tmp, { recursive: true, force: true });
 });
 
 describe('per-prompt context hook', () => {

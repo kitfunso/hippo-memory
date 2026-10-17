@@ -16,7 +16,7 @@ function asResult(content: string, score: number): SearchResult {
 describe('llmReranker', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
-    process.env.HIPPO_LLM_RERANKER_URL = 'http://mock';
+    process.env.HIPPO_LLM_RERANKER_URL = 'http://localhost';
     process.env.HIPPO_LLM_RERANKER_KEY = 'mock';
   });
 

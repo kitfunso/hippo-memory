@@ -1,8 +1,6 @@
 // A busy store never fails a routed write that already committed, and a busy 503 always means nothing landed, so the thin client may replay it.
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createRequire } from 'node:module';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { updateStatsUnlessBusy } from '../src/store/index-and-stats.js';
@@ -13,6 +11,7 @@ import { _resetLogOnceForTests } from '../src/util/log.js';
 import { serve } from '../src/server.js';
 import * as client from '../src/cli/client.js';
 import { mcpErrorResponse } from '../src/mcp/server.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 // SAFETY: node:sqlite's DatabaseSync is the class db.ts wraps as DatabaseSyncLike.
 const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite') as {
@@ -77,10 +76,9 @@ describe('routed writes under a busy store', () => {
   const savedHome = process.env.HIPPO_HOME;
 
   beforeAll(async () => {
-    home = mkdtempSync(join(tmpdir(), 'hippo-busy-after-commit-'));
-    globalHome = mkdtempSync(join(tmpdir(), 'hippo-busy-after-commit-global-'));
+    home = makeRoot('busy-after-commit');
+    globalHome = makeRoot('busy-after-commit-global', { init: false });
     process.env.HIPPO_HOME = globalHome;
-    initStore(home);
     initStore(globalHome);
     busyErr = realBusyError(home);
     const handle = await serve({ hippoRoot: home, port: 0 });
@@ -92,8 +90,6 @@ describe('routed writes under a busy store', () => {
     await stop();
     if (savedHome === undefined) delete process.env.HIPPO_HOME;
     else process.env.HIPPO_HOME = savedHome;
-    rmSync(home, { recursive: true, force: true });
-    rmSync(globalHome, { recursive: true, force: true });
   });
 
   it('remember: a lock held across the first tries ends in one stored row, not an error or a duplicate', async () => {

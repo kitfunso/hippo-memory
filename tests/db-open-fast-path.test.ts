@@ -1,11 +1,9 @@
 // Opening a current, whole store runs one probe and no DDL; anything stale or missing takes the self-healing slow path.
 // Real SQLite stores throughout; the statement spy wraps node:sqlite and passes every call through.
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import * as fs from 'node:fs';
-import * as os from 'node:os';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import * as path from 'node:path';
 import { createRequire } from 'node:module';
-import { initStore, openStore } from '../src/store/open.js';
+import { openStore } from '../src/store/open.js';
 import { withRequestStoresSync } from '../src/db/request-stores.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
@@ -14,6 +12,7 @@ import { runDoctor } from '../src/doctor.js';
 import { openHippoDb, closeHippoDb, getMeta, setMeta, ftsRowCounts, getCurrentSchemaVersion, type DatabaseSyncLike } from '../src/db/index.js';
 import { REQUIRED_SCHEMA_OBJECTS } from '../src/db/continuity.js';
 import { MIGRATIONS } from '../src/db/migrations/index.js';
+import { makeStore } from './_helpers/make-root.js';
 
 const require = createRequire(import.meta.url);
 // SAFETY: node:sqlite has no bundled types; mirrors tests/fts-sync-check-count.test.ts.
@@ -29,14 +28,8 @@ let root: string;
 let cwd: string;
 
 beforeEach(() => {
-  cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-open-fast-path-'));
-  root = path.join(cwd, '.hippo');
-  initStore(root);
+  ({ base: cwd, root } = makeStore('open-fast-path'));
   writeEntry(root, createMemory('the quokka deploy key rotates every ninety days', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
-});
-
-afterEach(() => {
-  fs.rmSync(cwd, { recursive: true, force: true });
 });
 
 /** Every SQL string sent through exec or prepare while `fn` runs. */

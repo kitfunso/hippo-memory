@@ -4,7 +4,6 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { createHmac } from 'node:crypto';
-import { initStore } from '../src/store/open.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import {
@@ -23,6 +22,7 @@ import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { addWorkspace } from '../src/connectors/slack/workspaces.js';
 import { replayDlqEntry } from '../src/connectors/slack/dlq.js';
 import { sqliteStore } from '../src/store/sqlite/store.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 // Built at runtime so no token-shaped literal lands in the repo.
 const GHP = 'ghp_' + 'x1Y2z3W4v5'.repeat(3) + 'Q6r7S8';
@@ -33,13 +33,11 @@ let root: string;
 let srcDir: string;
 
 beforeEach(() => {
-  root = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-secret-ingest-'));
+  root = makeRoot('secret-ingest');
   srcDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-secret-src-'));
-  initStore(root);
 });
 
 afterEach(() => {
-  fs.rmSync(root, { recursive: true, force: true });
   fs.rmSync(srcDir, { recursive: true, force: true });
 });
 

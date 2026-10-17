@@ -1,25 +1,15 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import * as fs from 'fs';
-import * as path from 'path';
-import * as os from 'os';
-import { initStore } from '../src/store/open.js';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { Layer } from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { search } from '../src/search/bm25-search.js';
+import { makeStore } from './_helpers/make-root.js';
 
-let tmpDir: string;
 let hippoDir: string;
 
 beforeEach(() => {
-  tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-extract-pref-'));
-  hippoDir = path.join(tmpDir, '.hippo');
-  initStore(hippoDir);
-});
-
-afterEach(() => {
-  fs.rmSync(tmpDir, { recursive: true, force: true });
+  ({ root: hippoDir } = makeStore('extract-pref'));
 });
 
 describe('extraction-aware search preference', () => {

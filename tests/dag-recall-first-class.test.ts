@@ -13,7 +13,6 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { openHippoDb } from '../src/db/index.js';
 import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
@@ -24,6 +23,7 @@ import { searchBothHybrid } from '../src/sharing/search-both.js';
 import { savePhysicsState } from '../src/db/physics-state.js';
 import type { PhysicsParticle } from '../src/core/physics.js';
 import { sharingStores } from './_helpers/sharing-stores.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 function makeL2Summary(
   content: string,
@@ -61,13 +61,11 @@ describe('first-class DAG recall (scoring layer)', () => {
   let savedDeboost: string | undefined;
 
   beforeEach(() => {
-    hippoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-dag-e4-'));
-    initStore(hippoRoot);
+    hippoRoot = makeRoot('dag-e4');
     savedDeboost = process.env.HIPPO_SUMMARY_DEBOOST;
   });
 
   afterEach(() => {
-    fs.rmSync(hippoRoot, { recursive: true, force: true });
     if (savedDeboost !== undefined) process.env.HIPPO_SUMMARY_DEBOOST = savedDeboost;
     else delete process.env.HIPPO_SUMMARY_DEBOOST;
   });

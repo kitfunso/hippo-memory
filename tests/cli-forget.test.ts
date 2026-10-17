@@ -1,12 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { rmSync } from 'node:fs';
 import { join } from 'node:path';
-import { initStore } from '../src/store/open.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { queryAuditEvents } from '../src/store/audit.js';
 import { runCli as runCliEntry } from '../src/cli.js';
 import { runInProcess } from './_helpers/run-in-process.js';
+import { makeStore } from './_helpers/make-root.js';
 
 // A3: `hippo forget` on a raw (append-only) memory must not dead-end with a
 // misleading "Memory not found" — it reports the append-only nature and points
@@ -33,10 +32,7 @@ async function runCli(cwd: string, ...args: string[]): Promise<{ out: string; st
 }
 
 function makeWorkspaceWithRaw(rawId: string, kind = 'raw'): string {
-  const home = mkdtempSync(join(tmpdir(), 'hippo-forget-'));
-  const hippoRoot = join(home, '.hippo');
-  mkdirSync(hippoRoot, { recursive: true });
-  initStore(hippoRoot);
+  const { base: home, root: hippoRoot } = makeStore('forget');
   const db = openHippoDb(hippoRoot);
   try {
     db.prepare(

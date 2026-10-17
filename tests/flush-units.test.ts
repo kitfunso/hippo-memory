@@ -1,17 +1,15 @@
 // Sleep's queued ops group into units that commit whole, and a flush transaction closes at the first unit boundary past its deadline.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'node:fs';
-import * as os from 'node:os';
-import * as path from 'node:path';
 import { createRequire } from 'node:module';
 import { Layer, type MemoryEntry } from '../src/core/memory.js';
 import { familyUnits, groupFlush } from '../src/consolidate/flush-units.js';
 import { commitInChunks, type FlushComponent } from '../src/store/delete-and-batch.js';
-import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { SLEEP_DB_WAIT_MS, type DatabaseSyncLike } from '../src/db/index.js';
 import type { WriteBudget } from '../src/util/write-budget.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 // SAFETY: node:sqlite's StatementSync is the class db.ts's prepare returns, and it carries its SQL text.
 const { StatementSync } = createRequire(import.meta.url)('node:sqlite') as {
@@ -56,9 +54,8 @@ describe('groupFlush', () => {
 
 describe('commitInChunks', () => {
   it('keeps the largest component whole and closes the transaction at the first boundary past the deadline', async () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-flush-units-'));
+    const root = makeRoot('flush-units');
     roots.push(root);
-    initStore(root);
     const sources = Array.from({ length: 5 }, (_, i) => createMemory(`source ${i} alpha${i} text`));
     const retired = Array.from({ length: 5 }, (_, i) => createMemory(`retired ${i} beta${i} text`));
     for (const row of [...sources, ...retired]) writeEntry(root, row);

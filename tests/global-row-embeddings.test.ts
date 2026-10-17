@@ -21,6 +21,7 @@ import { sharingStores } from './_helpers/sharing-stores.js';
 import { startHashedEmbeddings, type HashedEmbeddings } from './_helpers/hashed-embedding-server.js';
 import { runCliAs } from './_helpers/run-cli-as.js';
 import { sqliteSyncStore } from '../src/store/sqlite/store.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 // docs/plans/2026-07-18-global-row-embeddings.md: rows written to the global
 // store by promote/share/autoShare/sync/import must enter that store's
@@ -33,8 +34,7 @@ const HIPPO_BIN = fileURLToPath(new URL('../bin/hippo.js', import.meta.url));
 // ---------------------------------------------------------------------------
 
 function makeTmpStore(): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-gre-'));
-  initStore(dir);
+  const dir = makeRoot('gre');
   return dir;
 }
 
@@ -58,15 +58,10 @@ async function embeddingIsFunctional(): Promise<boolean> {
     _embeddingFunctional = false;
     return false;
   }
-  const probeRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-gre-probe-'));
-  try {
-    initStore(probeRoot);
-    const provider = resolveEmbeddingProvider(loadConfig(probeRoot).embeddings);
-    const [vector] = await provider.embed(['embedding functional probe'], 'passage');
-    _embeddingFunctional = Array.isArray(vector) && vector.length > 0;
-  } finally {
-    fs.rmSync(probeRoot, { recursive: true, force: true });
-  }
+  const probeRoot = makeRoot('gre-probe');
+  const provider = resolveEmbeddingProvider(loadConfig(probeRoot).embeddings);
+  const [vector] = await provider.embed(['embedding functional probe'], 'passage');
+  _embeddingFunctional = Array.isArray(vector) && vector.length > 0;
   return _embeddingFunctional;
 }
 
@@ -248,7 +243,7 @@ describe('global-row-embeddings: the first promote, before any global store exis
   beforeEach(async () => {
     embeddings = await startHashedEmbeddings();
     localRoot = makeTmpStore();
-    globalRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-gre-noglobal-'));
+    globalRoot = makeRoot('gre-noglobal', { init: false });
     // Only hippo.db marks a store as initialized, so the context's reach has no global store yet.
     const config = { embeddings: { provider: 'openai', model: 'hashed-16', apiBaseUrl: embeddings.url } };
     fs.writeFileSync(path.join(globalRoot, 'config.json'), JSON.stringify(config), 'utf8');
@@ -280,7 +275,7 @@ describe('global-row-embeddings: the first promote, before any global store exis
 
 describe('global-row-embeddings: hippo embed --global CLI', () => {
   it('embeds a seeded global row from a cwd with no local store, without requireInit failing', async () => {
-    const home = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-gre-cli-home-'));
+    const home = makeRoot('gre-cli-home', { init: false });
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-gre-cli-cwd-'));
     const globalRoot = path.join(home, '.hippo');
     const env = { ...process.env, HIPPO_HOME: globalRoot };
@@ -325,7 +320,7 @@ describe('global-row-embeddings: promote producer wiring (subprocess)', () => {
   // regression (wrong root, dropped void embed call) would fail this test even
   // when every in-process test above is skipping.
   it('promoting a remembered row lands a vector in the GLOBAL embedding index', async () => {
-    const home = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-gre-wiring-home-'));
+    const home = makeRoot('gre-wiring-home', { init: false });
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-gre-wiring-cwd-'));
     const globalRoot = path.join(home, '.hippo');
     const env = { ...process.env, HIPPO_HOME: globalRoot };

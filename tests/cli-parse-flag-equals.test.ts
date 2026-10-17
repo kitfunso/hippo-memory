@@ -1,17 +1,16 @@
 /** `--flag=value` (glued) form: the first describe unit-tests parseArgs, the last runs the whole CLI entry in process. */
 
 import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { collectVerbReads } from '../scripts/cli-flag-reads.mjs';
 import { parseArgs, runCli as runCliEntry, shouldAutoRepairCodexWrapper } from '../src/cli.js';
 import { COMMANDS } from '../src/cli/verbs.js';
 import { undeclaredFlags, type VerbFlags } from '../src/cli/flags.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
-import { initStore } from '../src/store/open.js';
 import { ownStderr } from './_helpers/own-stderr.js';
 import { runInProcess, type InProcessResult } from './_helpers/run-in-process.js';
+import { makeStore } from './_helpers/make-root.js';
 
 const argv = (...rest: string[]) => ['node', 'hippo', ...rest];
 
@@ -170,8 +169,7 @@ describe('runCli: --flag=value end-to-end guards', () => {
   const runCli = (args: string[]): Promise<InProcessResult> => runInProcess(() => runCliEntry(['node', 'hippo', ...args]));
 
   beforeEach(() => {
-    tmpDir = mkdtempSync(join(tmpdir(), 'hippo-cli-flag-equals-'));
-    initStore(join(tmpDir, '.hippo'));
+    tmpDir = makeStore('cli-flag-equals').base;
     vi.stubEnv('HIPPO_HOME', join(tmpDir, 'global-hippo'));
     vi.stubEnv('HIPPO_SKIP_AUTO_INTEGRATIONS', '1');
     vi.stubEnv('HIPPO_TENANT', '');
@@ -182,7 +180,6 @@ describe('runCli: --flag=value end-to-end guards', () => {
   afterEach(() => {
     process.chdir(savedCwd);
     vi.unstubAllEnvs();
-    rmSync(tmpDir, { recursive: true, force: true });
   });
 
   it.each([

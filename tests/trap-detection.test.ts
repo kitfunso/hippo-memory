@@ -13,16 +13,15 @@
  * the correct preventive memory when given a task-related query.
  */
 
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
-import * as os from 'os';
 import { type MemoryEntry } from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { search } from '../src/search/bm25-search.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 // ---------------------------------------------------------------------------
 // Load trap definitions
@@ -159,13 +158,8 @@ and compare actual output to claimed metrics before accepting any model upgrade.
 }
 
 beforeAll(() => {
-  tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-traps-'));
-  initStore(tmpDir);
+  tmpDir = makeRoot('traps');
   seedTrapMemories(tmpDir);
-});
-
-afterAll(() => {
-  fs.rmSync(tmpDir, { recursive: true, force: true });
 });
 
 // ---------------------------------------------------------------------------
@@ -289,34 +283,24 @@ describe('Memory recall catches traps (with memory)', () => {
 describe('Baseline without memory', () => {
   it('without memory search returns 0 results (empty store)', () => {
     // Create a fresh empty store to simulate no memory
-    const emptyDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-empty-'));
-    initStore(emptyDir);
+    const emptyDir = makeRoot('empty');
 
-    try {
-      const entries = loadAllEntries(emptyDir, 'default');
-      const results = search('deploying model to production overwrite file', entries, { budget: 8000 });
-      // No memories -> no results -> agent has no guidance
-      expect(results.length).toBe(0);
-    } finally {
-      fs.rmSync(emptyDir, { recursive: true, force: true });
-    }
+    const entries = loadAllEntries(emptyDir, 'default');
+    const results = search('deploying model to production overwrite file', entries, { budget: 8000 });
+    // No memories -> no results -> agent has no guidance
+    expect(results.length).toBe(0);
   });
 
   it('score without memory: 0/10 traps caught', () => {
-    const emptyDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-empty2-'));
-    initStore(emptyDir);
+    const emptyDir = makeRoot('empty2');
 
     let caughtWithout = 0;
-    try {
-      for (const trap of trapDefs) {
-        const entries = loadAllEntries(emptyDir, 'default');
-        const topIds = search(trap.recall_query, entries, { budget: 8000 })
-          .slice(0, 5)
-          .map((r) => r.entry.id);
-        if (topIds.includes(trap.memory_id)) caughtWithout++;
-      }
-    } finally {
-      fs.rmSync(emptyDir, { recursive: true, force: true });
+    for (const trap of trapDefs) {
+      const entries = loadAllEntries(emptyDir, 'default');
+      const topIds = search(trap.recall_query, entries, { budget: 8000 })
+        .slice(0, 5)
+        .map((r) => r.entry.id);
+      if (topIds.includes(trap.memory_id)) caughtWithout++;
     }
 
     expect(caughtWithout).toBe(0);

@@ -13,12 +13,8 @@
  *   4. G1 leak sanity            — noise-only store => fact answer absent at floor
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import path from 'node:path';
-import os from 'node:os';
-import fs from 'node:fs';
+import { describe, it, expect, beforeEach } from 'vitest';
 
-import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
@@ -32,6 +28,7 @@ import { DEFAULT_PHYSICS_CONFIG } from '../src/core/physics-config.js';
 
 import { injectStream } from '../scripts/lifecycle-stress/inject.mjs';
 import { sqliteSyncStore } from '../src/store/sqlite/store.js';
+import { makeStore } from './_helpers/make-root.js';
 
 const PC = { ...DEFAULT_PHYSICS_CONFIG, enabled: true };
 const tok = (s: string): number => Math.ceil((s || '').length / 4);
@@ -148,17 +145,10 @@ describe('lifecycle-stress value-based metric', () => {
 });
 
 describe('lifecycle-stress mechanism (real DB, mirrors the probe)', () => {
-  let base: string;
   let root: string;
 
   beforeEach(() => {
-    base = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-lse-test-'));
-    root = path.join(base, '.hippo');
-    initStore(root);
-  });
-
-  afterEach(() => {
-    fs.rmSync(base, { recursive: true, force: true });
+    ({ root } = makeStore('lse-test'));
   });
 
   it('merges near-duplicate clusters and the summary carries each answer token', async (ctx) => {

@@ -1,14 +1,13 @@
 // The sleep child's job body in process: its 'message' listener is captured on import, and send and exit are stubbed.
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import { remember } from '../src/api/index.js';
-import { initStore } from '../src/store/open.js';
 import type { SleepJob, SleepReply } from '../src/server/sleep-offload.js';
 import type { SleepResult } from '../src/api/sleep/sleep.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 import { fire, recordListeners, stubExit, type Listener } from './_helpers/process-stubs.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 let home: string;
 let priorHome: string | undefined;
@@ -18,8 +17,7 @@ let listeners: Map<string, Listener[]>;
 let hadSend: boolean;
 
 beforeEach(async () => {
-  home = mkdtempSync(join(tmpdir(), 'hippo-sleep-child-'));
-  initStore(home);
+  home = makeRoot('sleep-child');
   // Sleep's auto-share writes to the global store, so it points here too.
   priorHome = process.env.HIPPO_HOME;
   process.env.HIPPO_HOME = home;
@@ -46,7 +44,6 @@ afterEach(() => {
   if (!hadSend) Reflect.deleteProperty(process, 'send');
   if (priorHome === undefined) delete process.env.HIPPO_HOME;
   else process.env.HIPPO_HOME = priorHome;
-  rmSync(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
 
 describe('sleep child', () => {

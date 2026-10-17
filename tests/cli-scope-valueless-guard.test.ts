@@ -2,14 +2,13 @@
 // Before it, a value-less `--scope` became the literal scope 'true' at some sites and was dropped at others.
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { runCli } from '../src/cli.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
-import { initStore } from '../src/store/open.js';
 import { runInProcess, type InProcessResult } from './_helpers/run-in-process.js';
+import { makeStore } from './_helpers/make-root.js';
 
 const USAGE_MSG = '--scope requires a non-empty value (e.g. --scope slack:private:C1).';
 
@@ -25,8 +24,7 @@ async function hippo(...args: string[]): Promise<string> {
 }
 
 beforeEach(() => {
-  home = mkdtempSync(join(tmpdir(), 'hippo-scope-guard-'));
-  initStore(join(home, '.hippo'));
+  home = makeStore('scope-guard').base;
   vi.stubEnv('HIPPO_HOME', join(home, 'global-hippo'));
   vi.stubEnv('HIPPO_SKIP_AUTO_INTEGRATIONS', '1');
   vi.stubEnv('HIPPO_TENANT', '');

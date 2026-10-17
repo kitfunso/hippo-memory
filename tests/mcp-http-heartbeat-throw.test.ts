@@ -1,10 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { initStore } from '../src/store/open.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { waitFor } from './_helpers/wait-for.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 describe('SSE heartbeat when its tick throws', () => {
   let root: string;
@@ -14,12 +11,10 @@ describe('SSE heartbeat when its tick throws', () => {
     vi.restoreAllMocks();
     await handle?.stop().catch(() => {});
     delete process.env.MCP_SSE_HEARTBEAT_MS;
-    rmSync(root, { recursive: true, force: true });
   });
 
   it('keeps ticking after a tick rejects', async () => {
-    root = mkdtempSync(join(tmpdir(), 'hippo-heartbeat-throw-'));
-    initStore(root);
+    root = makeRoot('heartbeat-throw');
     process.env.MCP_SSE_HEARTBEAT_MS = '100';
     let failing = false;
     let resolverCalls = 0;

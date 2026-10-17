@@ -1,10 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { runCli } from '../src/cli.js';
 import { runInProcess } from './_helpers/run-in-process.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 let home: string;
 
@@ -23,7 +22,7 @@ async function hippo(...args: string[]): Promise<string> {
 
 describe('hippo recall --why exposes envelope', () => {
   beforeEach(() => {
-    home = mkdtempSync(join(tmpdir(), 'hippo-why-'));
+    home = makeRoot('why', { init: false });
     vi.stubEnv('HIPPO_HOME', home);
     // The local store `init` makes, and the global one `init --global` makes at HIPPO_HOME.
     initStore(join(home, '.hippo'));
@@ -32,7 +31,6 @@ describe('hippo recall --why exposes envelope', () => {
 
   afterEach(() => {
     vi.unstubAllEnvs();
-    rmSync(home, { recursive: true, force: true });
   });
 
   it('text output includes kind, scope, owner, artifact_ref', async () => {

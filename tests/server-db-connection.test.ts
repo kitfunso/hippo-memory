@@ -1,14 +1,13 @@
 // A running server keeps one store connection open, so a request's own close is never SQLite's last-connection close.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { spawn } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
-import { initStore } from '../src/store/open.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { readyProbeFor } from '../src/server/ready.js';
 import { sqliteStore } from '../src/store/index.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const dirs: string[] = [];
 afterEach(() => {
@@ -37,9 +36,8 @@ function inlineCheckpointPages(root: string): number {
 
 describe('hippo serve store connection', () => {
   it('keeps the WAL between requests while running, and releases the store on stop', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'hippo-srv-conn-'));
+    const root = makeRoot('srv-conn');
     dirs.push(root);
-    initStore(root);
     const wal = join(root, 'hippo.db-wal');
     const handle = await serve({ hippoRoot: root, port: 0 });
     try {
@@ -55,7 +53,7 @@ describe('hippo serve store connection', () => {
   });
 
   it('holds the store a first write creates, and never creates one on its own', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'hippo-srv-conn-fresh-'));
+    const root = makeRoot('srv-conn-fresh', { init: false });
     dirs.push(root);
     const handle = await serve({ hippoRoot: root, port: 0 });
     try {
@@ -69,9 +67,8 @@ describe('hippo serve store connection', () => {
   });
 
   it('checkpoints the WAL away from request commits, and gives the inline limit back on stop', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'hippo-srv-conn-ckpt-'));
+    const root = makeRoot('srv-conn-ckpt');
     dirs.push(root);
-    initStore(root);
     const db = join(root, 'hippo.db');
     const inlineLimit = inlineCheckpointPages(root);
     const handle = await serve({ hippoRoot: root, port: 0, rateLimits: { perAddress: 'off' } });
@@ -91,9 +88,8 @@ describe('hippo serve store connection', () => {
   });
 
   it('stops waiting for a locked store after the server lock wait, instead of stalling the event loop until the lock goes', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'hippo-srv-conn-locked-'));
+    const root = makeRoot('srv-conn-locked');
     dirs.push(root);
-    initStore(root);
     // Another process holds an exclusive lock for 6 s; in rollback-journal mode that blocks the journal-mode switch every open makes.
     const script = join(root, 'hold-lock.mjs');
     writeFileSync(script, [
@@ -131,7 +127,7 @@ describe('GET /ready', () => {
   }
 
   it('answers 200 once the served store answers a read, and never creates a store to find out', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'hippo-srv-ready-'));
+    const root = makeRoot('srv-ready', { init: false });
     dirs.push(root);
     const handle = await serve({ hippoRoot: root, port: 0 });
     try {
@@ -146,9 +142,8 @@ describe('GET /ready', () => {
   });
 
   it('runs one store read for any number of calls in the window, and a broken store flips the answer after it', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'hippo-srv-ready-window-'));
+    const root = makeRoot('srv-ready-window');
     dirs.push(root);
-    initStore(root);
     const store = sqliteStore(root);
     const real = store.readiness!;
     const WINDOW_MS = 1000;
@@ -174,9 +169,8 @@ describe('GET /ready', () => {
   });
 
   it('answers 200 with store "unchecked" for a served store that has no readiness group', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'hippo-srv-ready-unchecked-'));
+    const root = makeRoot('srv-ready-unchecked');
     dirs.push(root);
-    initStore(root);
     const handle = await serve({ hippoRoot: root, port: 0, store: { ...sqliteStore(root), readiness: undefined } });
     try {
       expect(await ready(handle)).toEqual({ status: 200, body: '{"ok":true,"store":"unchecked"}' });
@@ -186,7 +180,7 @@ describe('GET /ready', () => {
   });
 
   it('answers 503 store_unavailable and warns with the error class when hippo.db is not a database, while /health stays 200', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'hippo-srv-ready-broken-'));
+    const root = makeRoot('srv-ready-broken', { init: false });
     dirs.push(root);
     writeFileSync(join(root, 'hippo.db'), 'this file is not a database. '.repeat(400));
     const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);

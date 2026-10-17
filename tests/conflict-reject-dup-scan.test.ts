@@ -1,17 +1,14 @@
 // Rejecting a conflict loser's value streams the tenant's rows instead of holding them all, and removes the same duplicates.
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRequire } from 'node:module';
 import type { MemoryEntry } from '../src/core/memory.js';
-import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { readEntry } from '../src/store/entry-reads.js';
 import { listMemoryConflicts, replaceDetectedConflicts, resolveConflict } from '../src/store/conflicts.js';
 import { queryAuditEvents } from '../src/store/audit.js';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 interface StatementProto { readonly sourceSQL: string; all(...params: unknown[]): unknown[] }
 const require = createRequire(import.meta.url);
@@ -25,12 +22,7 @@ const LOSER = 'Use && to chain commands in PowerShell';
 let root: string;
 
 beforeEach(() => {
-  root = mkdtempSync(join(tmpdir(), 'hippo-reject-dup-scan-'));
-  initStore(root);
-});
-
-afterEach(() => {
-  rmSync(root, { recursive: true, force: true });
+  root = makeRoot('reject-dup-scan');
 });
 
 interface ArrayReads<T> {

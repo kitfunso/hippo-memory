@@ -23,6 +23,7 @@ import { inMemoryContextStore, type InMemoryContextStore } from './_helpers/in-m
 import { CLEARED_ENV, statsMirror } from './_helpers/recall-golden-seed.js';
 import { seedTwoTenants, TENANT_A, TENANT_B } from './_helpers/store-conformance.js';
 import { sqliteReach, sqliteStore } from '../src/store/sqlite/store.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 type Block = Exclude<keyof ContextResult, 'entries' | 'tokens'>;
 
@@ -276,39 +277,35 @@ interface PassConfig {
 async function runPass(c: Omit<Case, 'name' | 'expected'>, { withGlobal, embedded, prepare }: PassOptions, makeStore?: (root: string) => HippoStore): Promise<Pass> {
   _resetSharedStoreCacheForTests();
   _resetAblationCacheForTests();
-  const home = mkdtempSync(join(tmpdir(), 'hippo-context-parity-'));
-  try {
-    const root = join(home, 'store');
-    const globalRoot = join(home, 'global');
-    cpSync(embedded ? templates.vectors : templates.local, root, { recursive: true });
-    if (withGlobal) cpSync(templates.global, globalRoot, { recursive: true });
-    vi.stubEnv('HIPPO_HOME', globalRoot);
-    const config: PassConfig = {};
-    if (embedded) config.embeddings = { provider: 'openai', model: MODEL, apiBaseUrl: embeddings.url };
-    if (c.physicsOff) config.physics = { enabled: false };
-    else if (c.physicsOn && embedded) config.physics = { enabled: true };
-    if (Object.keys(config).length > 0) writeFileSync(join(root, 'config.json'), JSON.stringify(config));
-    if (c.shared) markSharedStore(root);
-    prepare?.(root, globalRoot);
-    const store = makeStore?.(root);
-    const served = store ?? sqliteStore(root);
-    // A store of another kind gets no reach: the api reads it as one project with no global store.
-    const reach = served.kind === 'sqlite' ? sqliteReach(root, served) : undefined;
-    const ctx = { hippoRoot: root, tenantId: c.tenantId ?? TENANT_A, actor: c.actor ?? ADMIN, store: served, reach };
-    const opts: ContextOptions = { currentProject: PROJECT, ...c.opts };
-    const result = store && store.kind !== 'sqlite'
-      ? await withSqliteBlocked(store.kind, async () => getContext(ctx, opts))
-      : await getContext(ctx, opts);
-    await store?.close();
-    return {
-      result,
-      rows: { local: contextRowsOf(root), global: withGlobal ? contextRowsOf(globalRoot) : null },
-      lastRecall: lastRecallMeta(root),
-      stats: statsMirror(root),
-    };
-  } finally {
-    rmSync(home, { recursive: true, force: true });
-  }
+  const home = makeRoot('context-parity', { init: false });
+  const root = join(home, 'store');
+  const globalRoot = join(home, 'global');
+  cpSync(embedded ? templates.vectors : templates.local, root, { recursive: true });
+  if (withGlobal) cpSync(templates.global, globalRoot, { recursive: true });
+  vi.stubEnv('HIPPO_HOME', globalRoot);
+  const config: PassConfig = {};
+  if (embedded) config.embeddings = { provider: 'openai', model: MODEL, apiBaseUrl: embeddings.url };
+  if (c.physicsOff) config.physics = { enabled: false };
+  else if (c.physicsOn && embedded) config.physics = { enabled: true };
+  if (Object.keys(config).length > 0) writeFileSync(join(root, 'config.json'), JSON.stringify(config));
+  if (c.shared) markSharedStore(root);
+  prepare?.(root, globalRoot);
+  const store = makeStore?.(root);
+  const served = store ?? sqliteStore(root);
+  // A store of another kind gets no reach: the api reads it as one project with no global store.
+  const reach = served.kind === 'sqlite' ? sqliteReach(root, served) : undefined;
+  const ctx = { hippoRoot: root, tenantId: c.tenantId ?? TENANT_A, actor: c.actor ?? ADMIN, store: served, reach };
+  const opts: ContextOptions = { currentProject: PROJECT, ...c.opts };
+  const result = store && store.kind !== 'sqlite'
+    ? await withSqliteBlocked(store.kind, async () => getContext(ctx, opts))
+    : await getContext(ctx, opts);
+  await store?.close();
+  return {
+    result,
+    rows: { local: contextRowsOf(root), global: withGlobal ? contextRowsOf(globalRoot) : null },
+    lastRecall: lastRecallMeta(root),
+    stats: statsMirror(root),
+  };
 }
 
 describe('getContext on hippo.db returns and records what each case lists', () => {

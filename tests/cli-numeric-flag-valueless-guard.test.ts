@@ -3,13 +3,12 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { runCli as runCliEntry } from '../src/cli.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
-import { initStore } from '../src/store/open.js';
 import { runInProcess, type InProcessResult } from './_helpers/run-in-process.js';
+import { makeStore } from './_helpers/make-root.js';
 
 const savedCwd = process.cwd();
 let home = '';
@@ -18,8 +17,7 @@ let home = '';
 const hippoRun = (...args: string[]): Promise<InProcessResult> => runInProcess(() => runCliEntry(['node', 'hippo', ...args]));
 
 beforeEach(() => {
-  home = mkdtempSync(join(tmpdir(), 'hippo-numeric-guard-'));
-  initStore(join(home, '.hippo'));
+  home = makeStore('numeric-guard').base;
   vi.stubEnv('HIPPO_HOME', join(home, 'global-hippo'));
   vi.stubEnv('HIPPO_SKIP_AUTO_INTEGRATIONS', '1');
   // Blank keys so a guard regression cannot turn into a real network or paid-API call (Jev reranker, refine).

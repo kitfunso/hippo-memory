@@ -1,9 +1,7 @@
 // `hippo status` counts stored vectors from ids and one blob length; it must never decode a vector.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'node:fs';
-import * as os from 'node:os';
 import * as path from 'node:path';
-import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { calculateStrength, confidenceFacets, createMemory, DEFAULT_HALF_LIFE_DAYS, Layer, type MemoryEntry } from '../src/core/memory.js';
 import { loadEveryTenantEntries } from '../src/store/entry-reads.js';
@@ -17,6 +15,7 @@ import { handleStatus } from '../src/cli/status.js';
 import { _resetAblationCacheForTests } from '../src/core/ablation.js';
 import { runCli } from '../src/cli.js';
 import { runInProcess } from './_helpers/run-in-process.js';
+import { makeStore } from './_helpers/make-root.js';
 
 type Walk = (this: Float32Array) => IterableIterator<number>;
 let home: string;
@@ -51,15 +50,12 @@ async function status(): Promise<string[]> {
 }
 
 beforeEach(() => {
-  home = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-status-vec-'));
-  root = path.join(home, '.hippo');
-  initStore(root);
+  ({ base: home, root } = makeStore('status-vec'));
 });
 
 afterEach(() => {
   vi.unstubAllEnvs();
   _resetAblationCacheForTests();
-  fs.rmSync(home, { recursive: true, force: true });
 });
 
 describe('storedVectorSummary', () => {

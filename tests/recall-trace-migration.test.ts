@@ -4,11 +4,9 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { openHippoDb, closeHippoDb, getSchemaVersion, getCurrentSchemaVersion, type DatabaseSyncLike } from '../src/db/index.js';
 import { LATEST_SCHEMA_VERSION, LATEST_SCHEMA_VERSION_STR } from './_helpers/schema-version.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 function tableNames(db: DatabaseSyncLike): string[] {
   // SAFETY: the query selects only the `name` column from sqlite_master, so every
@@ -32,7 +30,7 @@ function setMeta(db: DatabaseSyncLike, key: string, value: string): void {
 
 describe('schema migration v40', () => {
   it('a fresh store lands at v40 with all three tables', () => {
-    const home = mkdtempSync(join(tmpdir(), 'hippo-lc1-mig-'));
+    const home = makeRoot('lc1-mig');
     const db = openHippoDb(home);
     try {
       expect(getSchemaVersion(db)).toBe(LATEST_SCHEMA_VERSION);
@@ -43,12 +41,11 @@ describe('schema migration v40', () => {
       expect(tables).toContain('recall_trace_outcomes');
     } finally {
       closeHippoDb(db);
-      rmSync(home, { recursive: true, force: true });
     }
   });
 
   it('recall_traces has the expected columns + CHECK on pipeline', () => {
-    const home = mkdtempSync(join(tmpdir(), 'hippo-lc1-mig-'));
+    const home = makeRoot('lc1-mig');
     const db = openHippoDb(home);
     try {
       // SAFETY: PRAGMA table_info always returns rows with a `name` text column
@@ -63,12 +60,11 @@ describe('schema migration v40', () => {
       expect(insert).toThrow(/CHECK|constraint/i);
     } finally {
       closeHippoDb(db);
-      rmSync(home, { recursive: true, force: true });
     }
   });
 
   it('recall_trace_results has NO FK on memory_id (traces outlive forgotten memories)', () => {
-    const home = mkdtempSync(join(tmpdir(), 'hippo-lc1-mig-'));
+    const home = makeRoot('lc1-mig');
     const db = openHippoDb(home);
     try {
       const traceId = Number(
@@ -84,12 +80,11 @@ describe('schema migration v40', () => {
       }).not.toThrow();
     } finally {
       closeHippoDb(db);
-      rmSync(home, { recursive: true, force: true });
     }
   });
 
   it('recall_trace_results is WITHOUT ROWID with composite-PK uniqueness on (trace_id, result_rank)', () => {
-    const home = mkdtempSync(join(tmpdir(), 'hippo-lc1-mig-'));
+    const home = makeRoot('lc1-mig');
     const db = openHippoDb(home);
     try {
       const traceId = Number(
@@ -107,12 +102,11 @@ describe('schema migration v40', () => {
       }).toThrow(/UNIQUE|constraint/i);
     } finally {
       closeHippoDb(db);
-      rmSync(home, { recursive: true, force: true });
     }
   });
 
   it('recall_traces -> recall_trace_results / recall_trace_outcomes CASCADE on delete', () => {
-    const home = mkdtempSync(join(tmpdir(), 'hippo-lc1-mig-'));
+    const home = makeRoot('lc1-mig');
     const db = openHippoDb(home);
     try {
       const traceId = Number(
@@ -137,12 +131,11 @@ describe('schema migration v40', () => {
       expect((db.prepare(`SELECT COUNT(*) AS c FROM recall_trace_outcomes`).get() as { c: number }).c).toBe(0);
     } finally {
       closeHippoDb(db);
-      rmSync(home, { recursive: true, force: true });
     }
   });
 
   it('a v39 store upgrades to v40 cleanly without data loss', () => {
-    const home = mkdtempSync(join(tmpdir(), 'hippo-lc1-mig-'));
+    const home = makeRoot('lc1-mig');
     // Open once to reach v40, insert a trace row, then roll schema_version
     // back to 39 and drop the three new tables to simulate a pre-v40 store.
     let db = openHippoDb(home);
@@ -167,18 +160,16 @@ describe('schema migration v40', () => {
       expect(tables).toContain('recall_trace_outcomes');
     } finally {
       closeHippoDb(db);
-      rmSync(home, { recursive: true, force: true });
     }
   });
 
   it('last_trace_id meta key defaults to empty string on a fresh store', () => {
-    const home = mkdtempSync(join(tmpdir(), 'hippo-lc1-mig-'));
+    const home = makeRoot('lc1-mig');
     const db = openHippoDb(home);
     try {
       expect(getMeta(db, 'last_trace_id')).toBe('');
     } finally {
       closeHippoDb(db);
-      rmSync(home, { recursive: true, force: true });
     }
   });
 });

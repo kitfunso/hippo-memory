@@ -1,16 +1,12 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync } from 'fs';
-import { tmpdir } from 'os';
-import { join } from 'path';
-import { initStore } from '../src/store/open.js';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { parkInDlq, listDlq } from '../src/connectors/dlq.js';
 import { slackDlq } from '../src/connectors/slack/dlq.js';
 import { sqliteStore } from '../src/store/sqlite/store.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 describe('slack DLQ', () => {
   let root: string;
-  beforeEach(() => { root = mkdtempSync(join(tmpdir(), 'hippo-slack-dlq-')); initStore(root); });
-  afterEach(() => rmSync(root, { recursive: true, force: true }));
+  beforeEach(() => { root = makeRoot('slack-dlq');  });
 
   it('captures raw payload + error and lists oldest-first', async () => {
     await parkInDlq(slackDlq, sqliteStore(root), { tenantId: 'default', rawPayload: '{"a":1}', error: 'parse fail' });

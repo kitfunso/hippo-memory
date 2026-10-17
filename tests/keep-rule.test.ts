@@ -2,16 +2,14 @@
 // decayed away or made dormant. The tag alone is not enough, since merge copies source tags onto rows sourced 'consolidation'.
 import type { FullContext } from './_helpers/api-ctx.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { AGENT_MEMORY_TOOLS, toolSourcePrefix } from '../src/core/agent-memory-tools.js';
 import {
   COMPACTION_MEMORY_TAG, COMPACTION_SOURCE_PREFIX, KEEP_PAIRS, canAutoDelete, type MemoryEntry
 } from '../src/core/memory.js';
-import { AUTO_DELETABLE_SQL } from '../src/store/rule-sql.js';
+import { AUTO_DELETABLE } from '../src/store/rule-sql.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries, readEntry } from '../src/store/entry-reads.js';
 import { batchWriteAndDelete, deleteEntry } from '../src/store/delete-and-batch.js';
@@ -24,6 +22,7 @@ import { NO_MERGE_TAGS } from '../src/sharing/share.js';
 import { forget, listDormant, sleep, supersede } from '../src/api/index.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 import { sqliteConsolidation } from '../src/store/sqlite/consolidation-group.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 // Each case commits rows to a real store, so its time follows the runner's disk.
 vi.setConfig({ testTimeout: 30_000 });
@@ -40,9 +39,8 @@ const FAKE_KEY = 'sk-ant-' + 'a'.repeat(40);
 const roots: string[] = [];
 
 function newRoot(configJson?: string): string {
-  const root = mkdtempSync(join(tmpdir(), 'hippo-keep-rule-'));
+  const root = makeRoot('keep-rule');
   roots.push(root);
-  initStore(root);
   if (configJson) writeFileSync(join(root, 'config.json'), configJson);
   return root;
 }
@@ -98,7 +96,7 @@ function sqlDeletableIds(root: string): string[] {
   const db = openHippoDb(root);
   try {
     // SAFETY: rows' shape matches the single id column named in the SELECT.
-    return (db.prepare(`SELECT id FROM memories WHERE ${AUTO_DELETABLE_SQL}`).all() as { id: string }[]).map((r) => r.id).sort();
+    return (db.prepare(`SELECT id FROM memories WHERE ${AUTO_DELETABLE.sql}`).all(...AUTO_DELETABLE.params) as { id: string }[]).map((r) => r.id).sort();
   } finally {
     closeHippoDb(db);
   }
@@ -114,12 +112,13 @@ describe('the keep pairs', () => {
   });
 
   it('the SQL matches the prefix by length and never with LIKE, which ignores case', () => {
-    expect(AUTO_DELETABLE_SQL).toContain(`substr(source, 1, ${PREFIX.length}) = '${PREFIX}'`);
-    expect(AUTO_DELETABLE_SQL).not.toMatch(/LIKE/i);
+    expect(AUTO_DELETABLE.sql).toContain(`substr(source, 1, ${PREFIX.length}) = ?`);
+    expect(AUTO_DELETABLE.params).toContain(PREFIX);
+    expect(AUTO_DELETABLE.sql).not.toMatch(/LIKE/i);
   });
 });
 
-describe('canAutoDelete and AUTO_DELETABLE_SQL agree, over pinned x kind x tags x source', () => {
+describe('canAutoDelete and AUTO_DELETABLE agree, over pinned x kind x tags x source', () => {
   it('canAutoDelete gives the table answer for every row', async () => {
     const root = newRoot();
     const table = await seedTable(root);

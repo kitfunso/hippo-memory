@@ -20,8 +20,7 @@
 
 import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
@@ -67,8 +66,6 @@ describe('GET /v1/context', () => {
     } else {
       process.env.HIPPO_HOME = origHippoHome;
     }
-    rmSync(home, { recursive: true, force: true });
-    rmSync(globalHome, { recursive: true, force: true });
   });
 
   it('returns entries within budget (200)', async () => {
@@ -102,7 +99,7 @@ describe('GET /v1/context', () => {
     // this test serves a project-shaped store <tmp>/proj-a/.hippo — the
     // outer describe's bare-tmpdir store resolves to a NON-project session
     // ('' identity), which admits everything by design (pre-v39 parity).
-    const isoTmp = mkdtempSync(join(tmpdir(), 'hippo-srv-iso-'));
+    const isoTmp = makeRoot('srv-iso', { init: false });
     const projHippo = join(isoTmp, 'proj-a', '.hippo');
     mkdirSync(projHippo, { recursive: true });
     initStore(projHippo);
@@ -131,7 +128,6 @@ describe('GET /v1/context', () => {
       expect(withCross).toContain('BRAVO deploykey cross-project fact');
     } finally {
       await projHandle.stop();
-      rmSync(isoTmp, { recursive: true, force: true });
     }
   });
 
@@ -310,8 +306,6 @@ describe('GET /v1/context - ambientState field', () => {
     } else {
       process.env.HIPPO_HOME = origHippoHome;
     }
-    rmSync(home, { recursive: true, force: true });
-    rmSync(globalHome, { recursive: true, force: true });
   });
 
   it('is present with a populated totalMemories when ambient is on and entries are admitted', async () => {

@@ -83,6 +83,9 @@ jobs:
         run: node scripts/check-layers.mjs
       - name: Test-only export ratchet
         run: node scripts/check-test-only-exports.mjs
+      # One helper makes, inits and removes a test store; a hand-rolled copy leaks its dir when the test throws.
+      - name: Tests build temp stores through makeRoot and makeStore
+        run: node scripts/check-test-stores.mjs
       # The CLI parses flags and prints; ranking and every row a recall writes belong to retrieve().
       - name: CLI recall ranks and records only through retrieve()
         run: node scripts/check-cli-recall-writes.mjs

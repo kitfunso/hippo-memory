@@ -11,6 +11,7 @@ import { initStore } from '../src/store/open.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { recordTokenUse } from '../src/store/token-ledger.js';
 import { readTranscript, readProjects, readLedger, report } from '../scripts/token-eval/claude-usage.mjs';
+import { makeRoot } from './_helpers/make-root.js';
 
 const dirs: string[] = [];
 afterEach(() => { while (dirs.length) rmSync(dirs.pop()!, { recursive: true, force: true }); });
@@ -53,7 +54,7 @@ describe('Claude Code usage reader', () => {
 
   it('folds subagents into their session and joins hippo ledger rows by session id', () => {
     const projects = mkdtempSync(join(tmpdir(), 'cc-projects-'));
-    const hippo = mkdtempSync(join(tmpdir(), 'cc-hippo-'));
+    const hippo = makeRoot('cc-hippo', { init: false });
     dirs.push(projects, hippo);
     const pdir = join(projects, '-home-me-app');
     mkdirSync(join(pdir, 'sess-a', 'subagents'), { recursive: true });

@@ -9,7 +9,6 @@
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
-import * as os from 'node:os';
 import * as path from 'node:path';
 import { extractFromTexts } from '../src/capture/extract.js';
 import { PRE_COMPACT_INSTRUCTION } from '../src/capture/compaction-record.js';
@@ -23,6 +22,7 @@ import { loadActiveTaskSnapshot } from '../src/store/sessions.js';
 import { installJsonHooks } from '../src/hooks/json-hooks.js';
 import { runDoctor } from '../src/doctor.js';
 import { runCliAs } from './_helpers/run-cli-as.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 /** A scratch directory and a child environment rooted in it. */
 interface Scratch {
@@ -31,7 +31,7 @@ interface Scratch {
 }
 
 function scratch(): Scratch {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-auto-capture-'));
+  const dir = makeRoot('auto-capture', { init: false });
   const env: NodeJS.ProcessEnv = { ...process.env, HIPPO_HOME: path.join(dir, 'global'), HOME: dir, USERPROFILE: dir };
   delete env.CLAUDE_CODE_SESSION_ID;
   delete env.HIPPO_SESSION_ID;
@@ -251,7 +251,7 @@ describe('both install routes wire compaction and failed-tool capture', () => {
   let dir: string;
   let saved: Pick<NodeJS.ProcessEnv, 'HOME' | 'USERPROFILE'>;
   beforeEach(() => {
-    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-install-parity-'));
+    dir = makeRoot('install-parity', { init: false });
     saved = { HOME: process.env.HOME, USERPROFILE: process.env.USERPROFILE };
     process.env.HOME = dir;
     process.env.USERPROFILE = dir;

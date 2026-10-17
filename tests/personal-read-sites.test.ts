@@ -2,7 +2,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import * as fs from 'node:fs';
-import * as os from 'node:os';
 import * as path from 'node:path';
 import { adminActor, CLI_LEARN, learn, MCP_LEARN, type LearnProfile } from '../src/api/index.js';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
@@ -25,6 +24,7 @@ import { _resetSharedStoreCacheForTests } from '../src/core/config.js';
 import { _resetProjectIdentityCacheForTests } from '../src/core/project-identity.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 import { objectsAt } from './_helpers/objects-at.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const T = 'default';
 const OWN_A = 'personal:private:alice';
@@ -52,7 +52,7 @@ const keysOf = (entries: readonly MemoryEntry[]): string[] =>
   entries.flatMap((e) => e.tags.filter((t) => t.startsWith('who:')).map((t) => t.slice(4))).sort();
 
 beforeEach(() => {
-  dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-personal-sites-'));
+  dir = makeRoot('personal-sites', { init: false });
   for (const name of ['HOME', 'USERPROFILE', 'HIPPO_HOME']) vi.stubEnv(name, dir);
   _resetProjectIdentityCacheForTests();
   _resetSharedStoreCacheForTests();
@@ -65,7 +65,6 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllEnvs();
   _resetSharedStoreCacheForTests();
-  fs.rmSync(dir, { recursive: true, force: true });
 });
 
 describe('owner-taking read sites', () => {

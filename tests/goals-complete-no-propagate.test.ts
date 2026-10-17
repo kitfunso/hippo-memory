@@ -14,15 +14,12 @@
  */
 
 import type { FullContext } from './_helpers/api-ctx.js';
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { initStore } from '../src/store/open.js';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { remember } from '../src/api/index.js';
 import { pushGoal, completeGoal } from '../src/store/goals.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const tenantId = 'default';
 const sessionId = 'sess-no-prop';
@@ -69,12 +66,7 @@ describe('completeGoal noPropagate flag', () => {
   let root: string;
 
   beforeEach(() => {
-    root = mkdtempSync(join(tmpdir(), 'hippo-1.7.4-noprop-'));
-    initStore(root);
-  });
-
-  afterEach(() => {
-    rmSync(root, { recursive: true, force: true });
+    root = makeRoot('1.7.4-noprop');
   });
 
   it('default propagates strength multiplier on positive outcome', async () => {

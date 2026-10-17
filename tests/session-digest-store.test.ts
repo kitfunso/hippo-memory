@@ -1,7 +1,5 @@
 // The digest row in a real store: one per session, echo sources, tombstones, sharing and consolidation.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import * as fs from 'fs';
-import * as os from 'os';
 import * as path from 'path';
 import { adminActor, reject } from '../src/api/index.js';
 import { consolidate } from '../src/index.js';
@@ -25,6 +23,7 @@ import { apiCtx } from './_helpers/api-ctx.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { sharingStores } from './_helpers/sharing-stores.js';
 import { sqliteSyncStore } from '../src/store/sqlite/store.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const REPLY = 'Retry `upload()` with backoff because the storage token expires mid-transfer.';
 
@@ -34,7 +33,7 @@ let hippoRoot: string;
 let origHippoHome: string | undefined;
 
 beforeEach(() => {
-  tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-digest-store-'));
+  tmp = makeRoot('digest-store', { init: false });
   repo = path.join(tmp, 'repo');
   hippoRoot = path.join(repo, '.hippo');
   initStore(hippoRoot);
@@ -45,7 +44,6 @@ beforeEach(() => {
 afterEach(() => {
   if (origHippoHome !== undefined) process.env.HIPPO_HOME = origHippoHome;
   else delete process.env.HIPPO_HOME;
-  fs.rmSync(tmp, { recursive: true, force: true });
 });
 
 function scan(finalText: string, over: Partial<SessionScan> = {}): SessionScan {

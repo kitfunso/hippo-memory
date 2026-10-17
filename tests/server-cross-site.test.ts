@@ -1,14 +1,11 @@
 // The API server's no-key loopback fallback must refuse a page from another site and a rebound Host.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { request } from 'node:http';
-import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { readEntry } from '../src/store/entry-reads.js';
 import { serve, type ServerHandle } from '../src/server.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 let home: string;
 let handle: ServerHandle;
@@ -26,9 +23,7 @@ function send(method: string, path: string, headers: Record<string, string> = {}
 }
 
 beforeEach(async () => {
-  home = mkdtempSync(join(tmpdir(), 'hippo-cross-site-'));
-  mkdirSync(join(home, '.hippo'), { recursive: true });
-  initStore(home);
+  home = makeRoot('cross-site');
   const e = createMemory('the deploy runs on fridays');
   writeEntry(home, e);
   id = e.id;
@@ -37,7 +32,6 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await handle.stop();
-  rmSync(home, { recursive: true, force: true });
 });
 
 describe('API server loopback fallback', () => {

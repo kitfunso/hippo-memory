@@ -5,30 +5,20 @@
  * to avoid cross-test state.
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { initStore } from '../src/store/open.js';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { sqliteStore } from '../src/store/sqlite/store.js';
 import {
   addWorkspace,
   listWorkspaces,
   removeWorkspace,
 } from '../src/connectors/slack/workspaces.js';
+import { makeStore } from './_helpers/make-root.js';
 
 describe('slack workspaces helper', () => {
-  let root: string;
   let hippoRoot: string;
 
   beforeEach(() => {
-    root = mkdtempSync(join(tmpdir(), 'hippo-slack-ws-'));
-    hippoRoot = join(root, '.hippo');
-    initStore(hippoRoot);
-  });
-
-  afterEach(() => {
-    rmSync(root, { recursive: true, force: true });
+    ({ root: hippoRoot } = makeStore('slack-ws'));
   });
 
   it('addWorkspace inserts a new row and returns the envelope', async () => {

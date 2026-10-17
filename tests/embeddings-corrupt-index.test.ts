@@ -1,14 +1,13 @@
 // A corrupt legacy embeddings.json found at import must be kept aside and the vectors rebuilt, never dropped silently.
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import * as fs from 'fs';
-import * as os from 'os';
 import * as path from 'path';
-import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { embedMemory, embedAll } from '../src/search/embed-memories.js';
 import { loadEmbeddingIndex } from '../src/store/vector-index.js';
 import { sqliteSyncStore } from '../src/store/sqlite/store.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const KEY_ENV = 'OPENAI_API_KEY';
 let root: string;
@@ -30,8 +29,7 @@ function asideFiles(): string[] {
 }
 
 beforeEach(() => {
-  root = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-embed-corrupt-'));
-  initStore(root);
+  root = makeRoot('embed-corrupt');
   fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ embeddings: { provider: 'openai', model: 'm' } }), 'utf8');
   savedKey = process.env[KEY_ENV];
   process.env[KEY_ENV] = 'test-key-not-real';
@@ -44,7 +42,6 @@ afterEach(() => {
   stderrSpy.mockRestore();
   if (savedKey === undefined) delete process.env[KEY_ENV];
   else process.env[KEY_ENV] = savedKey;
-  fs.rmSync(root, { recursive: true, force: true });
 });
 
 async function remember(content: string): Promise<string> {

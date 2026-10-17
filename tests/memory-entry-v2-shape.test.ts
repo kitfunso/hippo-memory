@@ -1,7 +1,6 @@
 // 2.0 entry shape: snake_case tenant_id and a boolean summary_dirty, on a real store.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { cliApiContext } from '../src/cli/api-context.js';
@@ -10,13 +9,12 @@ import { closeHippoDb, openHippoDb } from '../src/db/index.js';
 import { listDormantSnapshots } from '../src/store/dormant.js';
 import { readEntry } from '../src/store/entry-reads.js';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { initStore } from '../src/store/open.js';
+import { makeStore } from './_helpers/make-root.js';
 
 let root: string;
 
 beforeEach(() => {
-  root = join(mkdtempSync(join(tmpdir(), 'hippo-entry-shape-')), '.hippo');
-  initStore(root);
+  root = makeStore('entry-shape').root;
 });
 
 afterEach(() => rmSync(join(root, '..'), { recursive: true, force: true }));

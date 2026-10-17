@@ -1,7 +1,6 @@
 // CD11 end to end through the built CLI: the arm row each hook call books, and the holdout's empty stdout.
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import * as fs from 'node:fs';
-import * as os from 'node:os';
 import * as path from 'node:path';
 import { spawn } from 'node:child_process';
 import { initStore } from '../src/store/open.js';
@@ -12,6 +11,7 @@ import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { hashArm } from '../src/store/pilot-arm.js';
 import { hippoRun } from './_helpers/spawn-hippo.js';
 import { runCliAs } from './_helpers/run-cli-as.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const HIPPO_JS = path.resolve(__dirname, '..', 'bin', 'hippo.js');
 const HOOK_ARGS = ['context', '--pinned-only', '--include-recent', '5', '--format', 'additional-context'];
@@ -72,16 +72,12 @@ function sessionFor(arm: 'hippo' | 'holdout', rate: number): string {
 }
 
 beforeEach(() => {
-  tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-pilot-arm-'));
+  tmp = makeRoot('pilot-arm', { init: false });
   proj = path.join(tmp, 'proj');
   fs.mkdirSync(store(proj), { recursive: true });
   initStore(store(proj));
   writeEntry(store(proj), { ...createMemory('PINNED: always check the rollback plan before deploy'), pinned: true });
   setRate(10000);
-});
-
-afterEach(() => {
-  fs.rmSync(tmp, { recursive: true, force: true });
 });
 
 describe('the per-prompt hook', () => {

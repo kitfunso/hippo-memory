@@ -1,22 +1,14 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { initStore } from '../src/store/open.js';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { resolveTenantForSlackTeam } from '../src/connectors/slack/tenant-routing.js';
 import { sqliteStore } from '../src/store/sqlite/store.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 describe('resolveTenantForSlackTeam', () => {
   let root: string;
 
   beforeEach(() => {
-    root = mkdtempSync(join(tmpdir(), 'hippo-slack-tenant-'));
-    initStore(root);
-  });
-
-  afterEach(() => {
-    rmSync(root, { recursive: true, force: true });
+    root = makeRoot('slack-tenant');
   });
 
   it('returns the mapped tenant_id when a row exists', async () => {

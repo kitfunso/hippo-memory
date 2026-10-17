@@ -1,14 +1,12 @@
 // E10 lane A: scopeAdmitSql, run on a real store's memories table, admits exactly what passesScopeFilterForRecall admits.
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { describe, it, expect, beforeAll } from 'vitest';
 import { closeHippoDb } from '../src/db/index.js';
-import { initStore, openStore } from '../src/store/open.js';
+import { openStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { passesScopeFilterForRecall } from '../src/core/recall-scope.js';
 import { scopeAdmitSql } from '../src/store/rule-sql.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const OWN_A = 'personal:private:a';
 const SCOPES: ReadonlyArray<string | null> = [
@@ -32,8 +30,7 @@ describe('scopeAdmitSql parity on a real store', () => {
   }
 
   beforeAll(() => {
-    root = mkdtempSync(join(tmpdir(), 'hippo-scope-parity-'));
-    initStore(root);
+    root = makeRoot('scope-parity');
     SCOPES.forEach((scope, i) => writeEntry(root, createMemory(`parity row number ${i}`, { scope, tenantId: 'default' })));
     const db = openStore(root);
     try {
@@ -43,8 +40,6 @@ describe('scopeAdmitSql parity on a real store', () => {
       closeHippoDb(db);
     }
   });
-
-  afterAll(() => rmSync(root, { recursive: true, force: true }));
 
   it('stores every scope as written, so the parity runs over the whole list', () => {
     expect(stored.map((r) => r.scope).sort()).toEqual([...SCOPES].sort());

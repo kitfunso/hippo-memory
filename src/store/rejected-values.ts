@@ -96,13 +96,13 @@ function removeLiveRows(
       removedRawIds.push(row.id);
     } else {
       // The one reject_value row is the trail for these removals, so no forget row each.
-      deleteEntryCore(db, row.id, { actor, suppressForgetAudit: true });
+      deleteEntryCore(db, row.id, tenantId, { actor, suppressForgetAudit: true });
     }
     removedIds.push(row.id);
   }
   for (const row of merged) {
     const successor = rejection.successorOf(row, holdsValue, new Set(removedIds));
-    deleteEntryCore(db, row.id, { actor, suppressForgetAudit: true });
+    deleteEntryCore(db, row.id, tenantId, { actor, suppressForgetAudit: true });
     removedIds.push(row.id);
     if (!successor) continue;
     const kept = stampOriginProject(hippoRoot, successor);

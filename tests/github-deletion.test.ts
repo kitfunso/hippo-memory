@@ -1,14 +1,11 @@
 import type { FullContext } from './_helpers/api-ctx.js';
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { initStore } from '../src/store/open.js';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { remember, retrieve } from '../src/api/index.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { handleCommentDeleted } from '../src/connectors/github/deletion.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const ARTIFACT = 'github://acme/repo/issue/42/comment/123';
 const SCOPE_PUBLIC = 'github:public:acme/repo';
@@ -62,10 +59,8 @@ function archiveRowCount(root: string, memoryId: string): number {
 describe('handleCommentDeleted', () => {
   let root: string;
   beforeEach(() => {
-    root = mkdtempSync(join(tmpdir(), 'hippo-gh-del-'));
-    initStore(root);
+    root = makeRoot('gh-del');
   });
-  afterEach(() => rmSync(root, { recursive: true, force: true }));
 
   it('1. archives a single matching raw row', async () => {
     const id = await seedMemory(root, { content: 'comment body v1' });

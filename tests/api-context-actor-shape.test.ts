@@ -9,14 +9,11 @@
 
 import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { initStore } from '../src/store/open.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { queryAuditEvents } from '../src/store/audit.js';
 import { adminActor, remember, type Actor } from '../src/api/index.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 describe('Context.actor shape', () => {
   it('Actor is {subject, role}', () => {
@@ -36,24 +33,19 @@ describe('Context.actor shape', () => {
   });
 
   it('round-trip: ctx.actor.subject lands in audit_log as actor string', async () => {
-    const home = mkdtempSync(join(tmpdir(), 'hippo-actor-shape-'));
-    initStore(home);
-    try {
-      const ctx: FullContext = apiCtx(home, 'default', adminActor('cli'));
-      await remember(ctx, { content: 'actor-shape-test-target' });
+    const home = makeRoot('actor-shape');
+    const ctx: FullContext = apiCtx(home, 'default', adminActor('cli'));
+    await remember(ctx, { content: 'actor-shape-test-target' });
 
-      const db = openHippoDb(home);
-      try {
-        const rows = queryAuditEvents(db, { tenantId: 'default', op: 'remember' });
-        expect(rows.length).toBeGreaterThanOrEqual(1);
-        // audit_log.actor column is TEXT storing the subject string (not the
-        // full Actor object). v1.12.0 brainstorm decision #2.
-        expect(rows[0]!.actor).toBe('cli');
-      } finally {
-        closeHippoDb(db);
-      }
+    const db = openHippoDb(home);
+    try {
+      const rows = queryAuditEvents(db, { tenantId: 'default', op: 'remember' });
+      expect(rows.length).toBeGreaterThanOrEqual(1);
+      // audit_log.actor column is TEXT storing the subject string (not the
+      // full Actor object). v1.12.0 brainstorm decision #2.
+      expect(rows[0]!.actor).toBe('cli');
     } finally {
-      rmSync(home, { recursive: true, force: true });
+      closeHippoDb(db);
     }
   });
 });

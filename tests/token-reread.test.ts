@@ -27,6 +27,7 @@ import { isSubagentPayload } from '../src/util/hook-payload.js';
 import { estimateTokens } from '../src/util/token-text.js';
 import { hippoRun } from './_helpers/spawn-hippo.js';
 import { runCliAs } from './_helpers/run-cli-as.js';
+import { makeRoot } from './_helpers/make-root.js';
 const SESSION = 'sess-reread';
 // Noon UTC yesterday: re-read rows are per UTC day, so a run near midnight must not split a test's calls.
 const BASE = Math.floor(Date.now() / 86_400_000) * 86_400_000 - 12 * 3_600_000;
@@ -157,10 +158,8 @@ describe('model calls in a transcript', () => {
 describe('recordRereads', () => {
   let root: string;
   beforeEach(() => {
-    root = mkdtempSync(join(tmpdir(), 'hippo-reread-db-'));
-    initStore(root);
+    root = makeRoot('reread-db');
   });
-  afterEach(() => rmSync(root, { recursive: true, force: true }));
 
   it('books one row per surface, replaces them on a second pass, and leaves TE2 state alone', async () => {
     const calls: ApiCall[] = [
@@ -236,12 +235,11 @@ describe('__session-end-worker counts re-reads', () => {
   let proj: string;
   let globalRoot: string;
   beforeEach(() => {
-    root = mkdtempSync(join(tmpdir(), 'hippo-reread-worker-'));
+    root = makeRoot('reread-worker', { init: false });
     ({ env, proj, globalRoot } = scratch(root));
     initStore(join(proj, '.hippo'));
     initStore(globalRoot);
   });
-  afterEach(() => rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }));
 
   async function worker(transcript: string, spawned = false): Promise<string> {
     const log = join(root, 'session-end.log');
@@ -313,10 +311,9 @@ describe('compact-resume books the block it prints', () => {
   let globalRoot: string;
   const payload = JSON.stringify({ session_id: SESSION, source: 'compact' });
   beforeEach(() => {
-    root = mkdtempSync(join(tmpdir(), 'hippo-reread-resume-'));
+    root = makeRoot('reread-resume', { init: false });
     ({ env, proj, globalRoot } = scratch(root));
   });
-  afterEach(() => rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }));
 
   it('prints the same bytes as before and books them under the payload session id', async () => {
     const store = join(proj, '.hippo');
@@ -432,12 +429,11 @@ describe("a sub-agent's hooks", () => {
   // Inside a sub-agent the payload keeps the parent's session_id and adds agent_id (and agent_type).
   const sub = (fields: Record<string, string> = {}): string => main({ agent_id: 'agent-1', agent_type: 'Explore', ...fields });
   beforeEach(() => {
-    root = mkdtempSync(join(tmpdir(), 'hippo-reread-subagent-'));
+    root = makeRoot('reread-subagent', { init: false });
     ({ env, proj } = scratch(root));
     store = join(proj, '.hippo');
     initStore(store);
   });
-  afterEach(() => rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }));
 
   it('tells a sub-agent payload by agent_id alone, since an --agent session also sends agent_type', async () => {
     expect(isSubagentPayload(sub())).toBe(true);
@@ -497,7 +493,7 @@ describe('re-read reports', () => {
   let env: NodeJS.ProcessEnv;
   let proj: string;
   beforeEach(() => {
-    root = mkdtempSync(join(tmpdir(), 'hippo-reread-report-'));
+    root = makeRoot('reread-report', { init: false });
     ({ env, proj } = scratch(root));
     initStore(join(proj, '.hippo'));
     withDb(join(proj, '.hippo'), (db) => {
@@ -512,7 +508,6 @@ describe('re-read reports', () => {
       book(db, 'hook', 'skip', at, 100, 's4');
     });
   });
-  afterEach(() => rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }));
 
   it('hippo tokens shows re-reads per surface, in total and with coverage, in text and JSON', async () => {
     const json = JSON.parse((await hippo(['tokens', '--json'], proj, env)).stdout);

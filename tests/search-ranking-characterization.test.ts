@@ -1,7 +1,6 @@
 // Pins exact scores, order and breakdowns for every ranking path in the search modules, so a structural move cannot shift a result.
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from 'vitest';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
@@ -17,6 +16,7 @@ import { hybridSearch, physicsSearch } from '../src/entry/folder-search.js';
 import type { SearchResult } from '../src/core/search-types.js';
 import type { RerankerFn } from '../src/rerankers/types.js';
 import { loadConfig } from '../src/core/config.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const NOW = new Date('2026-09-01T12:00:00.000Z');
 const TENANT = 'default';
@@ -101,7 +101,7 @@ describe('search ranking characterization: hybrid without vectors', () => {
 });
 
 function seedStore(): string {
-  const root = mkdtempSync(join(tmpdir(), 'hippo-rank-char-'));
+  const root = makeRoot('rank-char', { init: false });
   writeFileSync(join(root, 'config.json'), JSON.stringify({ embeddings: { provider: 'openai', model: 'text-embedding-3-small' } }), 'utf8');
   initStore(root);
   for (const e of [...ENTRIES, ...OUTSIDE]) writeEntry(root, e);

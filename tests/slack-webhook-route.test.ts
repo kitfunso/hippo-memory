@@ -1,13 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { createHmac } from 'node:crypto';
-import { initStore } from '../src/store/open.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { buildProvenanceCoverage } from '../src/api/provenance-coverage.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const SECRET = 'shhh';
 
@@ -20,8 +17,7 @@ describe('POST /v1/connectors/slack/events', () => {
   let handle: ServerHandle;
 
   beforeEach(async () => {
-    root = mkdtempSync(join(tmpdir(), 'hippo-slack-route-'));
-    initStore(root);
+    root = makeRoot('slack-route');
     process.env.SLACK_SIGNING_SECRET = SECRET;
     handle = await serve({ hippoRoot: root, host: '127.0.0.1', port: 0 });
   });
@@ -29,7 +25,6 @@ describe('POST /v1/connectors/slack/events', () => {
   afterEach(async () => {
     delete process.env.SLACK_SIGNING_SECRET;
     await handle.stop();
-    rmSync(root, { recursive: true, force: true });
   });
 
   it('echoes the URL verification challenge', async () => {

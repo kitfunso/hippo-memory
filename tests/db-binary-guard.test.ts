@@ -1,15 +1,13 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import * as fs from 'fs';
-import * as os from 'os';
+import { beforeEach, describe, expect, it } from 'vitest';
 import * as path from 'path';
 import { createRequire } from 'module';
 import { openHippoDb } from '../src/db/index.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite');
 
 let root: string;
-beforeEach(() => { root = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-binguard-')); });
-afterEach(() => { fs.rmSync(root, { recursive: true, force: true }); });
+beforeEach(() => { root = makeRoot('binguard', { init: false }); });
 
 describe('min_compatible_binary guard under the migration lock', () => {
   it('stops migrating once another binary raises the minimum mid-run', () => {

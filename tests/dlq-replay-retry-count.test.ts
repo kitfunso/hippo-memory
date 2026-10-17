@@ -1,18 +1,14 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync } from 'fs';
-import { tmpdir } from 'os';
-import { join } from 'path';
-import { initStore } from '../src/store/open.js';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { parkInDlq } from '../src/connectors/dlq.js';
 import { githubDlq, replayDlqEntry as replayGitHub } from '../src/connectors/github/dlq.js';
 import { slackDlq, replayDlqEntry as replaySlack } from '../src/connectors/slack/dlq.js';
 import { sqliteStore, sqliteSyncStore } from '../src/store/sqlite/store.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 describe('failed replay bumps retry_count by exactly one, for both connectors', () => {
   let root: string;
-  beforeEach(() => { root = mkdtempSync(join(tmpdir(), 'hippo-dlq-retry-')); initStore(root); });
-  afterEach(() => rmSync(root, { recursive: true, force: true }));
+  beforeEach(() => { root = makeRoot('dlq-retry');  });
 
   const countOf = (items: { id: number; retryCount: number }[], id: number): number =>
     items.find((i) => i.id === id)?.retryCount ?? -1;

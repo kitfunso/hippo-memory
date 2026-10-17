@@ -1,7 +1,6 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
-import * as os from 'os';
 import { fileURLToPath } from 'url';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
@@ -28,6 +27,7 @@ import {
 import { Layer } from '../src/core/memory.js';
 import { consolidate } from '../src/index.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const legacyFixtureRoot = path.join(__dirname, 'fixtures', 'legacy-markdown-store');
@@ -35,11 +35,7 @@ const legacyFixtureRoot = path.join(__dirname, 'fixtures', 'legacy-markdown-stor
 let tmpDir: string;
 
 beforeEach(() => {
-  tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-test-'));
-});
-
-afterEach(() => {
-  fs.rmSync(tmpDir, { recursive: true, force: true });
+  tmpDir = makeRoot('test', { init: false });
 });
 
 describe('store initialization', () => {

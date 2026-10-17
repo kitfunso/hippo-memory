@@ -16,17 +16,14 @@
 // would never actually exercise auth.
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn, type ChildProcess } from 'node:child_process';
-import { initStore } from '../src/store/open.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { createApiKey } from '../src/store/auth.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import type { JsonValue } from '../src/util/json.js';
 import { waitFor } from './_helpers/wait-for.js';
+import { makeStore } from './_helpers/make-root.js';
 
 const ADAPTER_PATH = fileURLToPath(new URL('../deploy/aml/adapter/adapter.mjs', import.meta.url));
 
@@ -114,8 +111,7 @@ describe('AML protocol adapter (deploy/aml/adapter/adapter.mjs)', () => {
   const savedRequireAuth = process.env.HIPPO_REQUIRE_AUTH;
 
   beforeAll(async () => {
-    hippoRoot = join(mkdtempSync(join(tmpdir(), 'hippo-aml-adapter-')), '.hippo');
-    initStore(hippoRoot);
+    hippoRoot = makeStore('aml-adapter').root;
 
     // Match the production deployment: hippo requires auth on every route
     // except GET /health. Without this, hippo's loopback no-auth fallback
@@ -142,7 +138,6 @@ describe('AML protocol adapter (deploy/aml/adapter/adapter.mjs)', () => {
     } else {
       process.env.HIPPO_REQUIRE_AUTH = savedRequireAuth;
     }
-    rmSync(hippoRoot, { recursive: true, force: true });
   });
 
   function authHeader(key: string) {
@@ -430,8 +425,7 @@ describe('rate-limit key forwarding and status pass-through', () => {
   const savedTrustedProxies = process.env.HIPPO_TRUSTED_PROXIES;
 
   beforeAll(async () => {
-    rlHippoRoot = join(mkdtempSync(join(tmpdir(), 'hippo-aml-adapter-ratelimit-')), '.hippo');
-    initStore(rlHippoRoot);
+    rlHippoRoot = makeStore('aml-adapter-ratelimit').root;
 
     // Set before serve(), which checks the proxy pair at boot; one place saves and restores them all.
     process.env.HIPPO_REQUIRE_AUTH = '1';
@@ -472,7 +466,6 @@ describe('rate-limit key forwarding and status pass-through', () => {
     } else {
       process.env.HIPPO_V1_RPS = savedV1Rps;
     }
-    rmSync(rlHippoRoot, { recursive: true, force: true });
   });
 
   // Clears adapter validation on every call so the request always reaches

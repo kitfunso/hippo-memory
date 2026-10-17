@@ -1,22 +1,14 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import * as fs from 'fs';
-import * as os from 'os';
-import * as path from 'path';
-import { initStore } from '../src/store/open.js';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { deleteEntry } from '../src/store/delete-and-batch.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 let root: string;
 
 beforeEach(() => {
-  root = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-fts-sync-'));
-  initStore(root);
-});
-
-afterEach(() => {
-  fs.rmSync(root, { recursive: true, force: true });
+  root = makeRoot('fts-sync');
 });
 
 function ftsContents(id: string): string[] {

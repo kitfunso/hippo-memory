@@ -1,8 +1,7 @@
 // Each sqliteStore recall method returns and writes what the hippo.db function behind it does on the golden seed, and a
 // recall over serve() opens no more hippo.db handles than today, since every open re-runs the PRAGMAs and migrations.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { closeHippoDb, getMeta, openHippoDb, setMeta } from '../src/db/index.js';
 import { recordTokens } from '../src/api/index.js';
@@ -37,6 +36,7 @@ import {
   CLEARED_ENV, FAKE_NOW, freshStore, normalize, rowsOf, seeded, SESSION, seedPortBranches, seedTemplates, statsMirror, TENANT, type Store, type Templates,
 } from './_helpers/recall-golden-seed.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 type Kind = 'local' | 'wide';
 interface Outcome<T> { value: T; rows: unknown; opens: number }
@@ -443,15 +443,11 @@ describe('sqliteStore writes leave the rows the hippo.db functions leave, each o
   });
 
   it('recordTokens throws where the API helper logs and returns, so the caller decides', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'hippo-store-port-'));
-    try {
-      mkdirSync(join(root, 'hippo.db'));
-      const use = { tenantId: TENANT, surface: 'http_recall', event: 'inject', items: 1, tokens: 1 } as const;
-      await expect(sqliteStore(root).recordTokens(use)).rejects.toThrow();
-      await expect(recordTokens(apiCtx(root, TENANT, { subject: 'test', role: 'admin' }), 'http_recall', use)).resolves.toBeUndefined();
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
+    const root = makeRoot('store-port', { init: false });
+    mkdirSync(join(root, 'hippo.db'));
+    const use = { tenantId: TENANT, surface: 'http_recall', event: 'inject', items: 1, tokens: 1 } as const;
+    await expect(sqliteStore(root).recordTokens(use)).rejects.toThrow();
+    await expect(recordTokens(apiCtx(root, TENANT, { subject: 'test', role: 'admin' }), 'http_recall', use)).resolves.toBeUndefined();
   });
 });
 

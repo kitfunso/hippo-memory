@@ -1,11 +1,10 @@
 // Every API response carries an X-Request-Id, the caller's when it is a sane token, else a fresh one, and tells a browser not to guess its type.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { request } from 'node:http';
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { initStore } from '../src/store/open.js';
 import { serve, type AuthResolver, type ServerHandle } from '../src/server.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 let home: string;
 let handle: ServerHandle;
@@ -28,15 +27,12 @@ function send(path: string, headers: Record<string, string> = {}): Promise<{ sta
 
 beforeEach(async () => {
   savedLevel = process.env.HIPPO_LOG;
-  home = mkdtempSync(join(tmpdir(), 'hippo-request-id-'));
-  mkdirSync(join(home, '.hippo'), { recursive: true });
-  initStore(home);
+  home = makeRoot('request-id');
   handle = await serve({ hippoRoot: home, port: 0, host: '127.0.0.1' });
 });
 
 afterEach(async () => {
   await handle.stop();
-  rmSync(home, { recursive: true, force: true });
   if (savedLevel === undefined) delete process.env.HIPPO_LOG;
   else process.env.HIPPO_LOG = savedLevel;
 });
@@ -81,7 +77,8 @@ describe('X-Request-Id', () => {
       expect(res.requestId).toBe('req-err-1');
       const logged = stderrSpy.mock.calls.map((c) => String(c[0])).filter((l) => l.includes('requestId=req-err-1') && l.includes(' failed: '));
       expect(logged).toHaveLength(1);
-      expect(logged[0]).toMatch(/^\[hippo\] info: GET \/v1\/memories\/a%2Fb failed: .* requestId=req-err-1 status=400\n$/);
+      // Refused before any route matched, so the line names no route and never repeats the path sent.
+      expect(logged[0]).toMatch(/^\[hippo\] info: GET unmatched failed: .* requestId=req-err-1 status=400\n$/);
     } finally {
       stderrSpy.mockRestore();
     }
@@ -159,9 +156,7 @@ describe('a request still unanswered past the slow threshold', () => {
     const held = new Promise<void>((ok) => { asked = ok; });
     let gate = new Promise<void>((ok) => { release = ok; });
     const resolver: AuthResolver = async () => { asked(); await gate; return { tenantId: 'default', subject: 'slow-test', role: 'admin' }; };
-    const slowHome = mkdtempSync(join(tmpdir(), 'hippo-request-slow-'));
-    mkdirSync(join(slowHome, '.hippo'), { recursive: true });
-    initStore(slowHome);
+    const slowHome = makeRoot('request-slow');
     const slow = await serve({ hippoRoot: slowHome, port: 0, host: '127.0.0.1', authResolver: resolver, authResolverTimeoutMs: 60_000, slowRequestWarnMs: 40 });
     const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     const warned = (): string[] => stderrSpy.mock.calls.map((c) => String(c[0])).filter((l) => l.includes('is still running'));
@@ -189,7 +184,6 @@ describe('a request still unanswered past the slow threshold', () => {
     } finally {
       stderrSpy.mockRestore();
       await slow.stop();
-      rmSync(slowHome, { recursive: true, force: true });
     }
   }, 20000);
 });

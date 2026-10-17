@@ -1,16 +1,13 @@
 // A broken full-text index never fails a write or a search, but it says so: warn once per kind of failure, then stay quiet.
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
-import * as fs from 'node:fs';
-import * as os from 'node:os';
-import * as path from 'node:path';
 import { createRequire } from 'node:module';
-import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { deleteEntry } from '../src/store/delete-and-batch.js';
 import { loadSearchEntries } from '../src/store/search-rows.js';
 import { getHippoDbPath, withSharedStoreHandles, type DatabaseSyncLike } from '../src/db/index.js';
 import { _resetLogOnceForTests } from '../src/util/log.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 // SAFETY: node:sqlite's DatabaseSync is the class db.ts wraps as DatabaseSyncLike.
 const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite') as {
@@ -36,8 +33,7 @@ function linesWith(text: string): string[] {
 }
 
 beforeEach(() => {
-  root = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-fts-fail-'));
-  initStore(root);
+  root = makeRoot('fts-fail');
   breakFtsIndex();
   stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
   _resetLogOnceForTests();
@@ -45,7 +41,6 @@ beforeEach(() => {
 
 afterEach(() => {
   stderrSpy.mockRestore();
-  fs.rmSync(root, { recursive: true, force: true });
 });
 
 describe('FTS failure logging', () => {

@@ -1,13 +1,13 @@
 // A hook whose delivery recorder cannot start skips the ledger with one leveled warn line and still returns null.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'node:fs';
-import * as os from 'node:os';
 import * as path from 'node:path';
 import { startDeliveryRecorder, startToolFailureRecorder } from '../src/api/prompt-hook.js';
 import { adminActor } from '../src/api/types.js';
 import { initStore } from '../src/store/open.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 import { sqliteStore } from '../src/store/sqlite/store.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 describe('startDeliveryRecorder when the recorder cannot start', () => {
   afterEach(() => { vi.restoreAllMocks(); });
@@ -34,7 +34,7 @@ describe('startToolFailureRecorder', () => {
   });
 
   it('returns null when the ledger store is not the hook store, and a recorder when they are one', () => {
-    tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-tf-recorder-'));
+    tmp = makeRoot('tf-recorder', { init: false });
     const globalRoot = path.join(tmp, 'global');
     fs.mkdirSync(globalRoot);
     initStore(globalRoot);

@@ -1,7 +1,6 @@
 /** Failure log (ROADMAP CD13): every failed tool call is logged as hashes with its session; repeats across sessions count. */
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { existsSync, mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { describe, it, expect, beforeEach } from 'vitest';
+import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
@@ -15,6 +14,7 @@ import { insertRejectedValue, normalizeValueForRejection, rejectionDigest } from
 import { RejectedValueError } from '../src/core/api-errors.js';
 import type { JsonValue } from '../src/util/json.js';
 import { runCliAs } from './_helpers/run-cli-as.js';
+import { makeRoot, makeStore } from './_helpers/make-root.js';
 
 const ago = (days: number): string => new Date(Date.now() - days * 86_400_000).toISOString();
 
@@ -63,10 +63,8 @@ async function capturedInOrder(home: string, payloads: readonly JsonValue[]): Pr
 describe('repeat-error rate', () => {
   let home: string;
   beforeEach(() => {
-    home = mkdtempSync(join(tmpdir(), 'hippo-failure-log-'));
-    initStore(home);
+    home = makeRoot('failure-log');
   });
-  afterEach(() => rmSync(home, { recursive: true, force: true }));
 
   it('counts a repeat only when another session hit the signature first', () => {
     withDb(home, (db) => {
@@ -132,10 +130,8 @@ describe('repeat-error rate', () => {
 describe('capture-error logs every failure, never its text', () => {
   let home: string;
   beforeEach(() => {
-    home = mkdtempSync(join(tmpdir(), 'hippo-failure-capture-'));
-    initStore(home);
+    home = makeRoot('failure-capture');
   });
-  afterEach(() => rmSync(home, { recursive: true, force: true }));
 
   it('logs each outcome with its session, tool and routine rule, and only hashes of the error', async () => {
     const error = 'Exit code 1\nError: connect ECONNREFUSED db.internal.example:5432 as deploy_user';
@@ -208,10 +204,8 @@ describe('capture-error logs every failure, never its text', () => {
 describe('hippo failures', () => {
   let dir: string;
   beforeEach(() => {
-    dir = mkdtempSync(join(tmpdir(), 'hippo-failures-cli-'));
-    initStore(join(dir, '.hippo'));
+    dir = makeStore('failures-cli').base;
   });
-  afterEach(() => rmSync(dir, { recursive: true, force: true }));
   // In process, throwing on a non-zero exit as execFileSync did, so coverage sees the hook and the report.
   // In process, with execFileSync's throw on a non-zero exit, so coverage sees the hook and the report.
   async function run(args: string[], input = '', cwd = dir): Promise<string> {
@@ -257,17 +251,13 @@ describe('hippo failures', () => {
   });
 
   it('reads the store the hook fell back to, never creates one, and names errors without a session', async () => {
-    const bare = mkdtempSync(join(tmpdir(), 'hippo-failures-bare-'));
-    try {
-      await expect(run(['failures', '--global'], '', bare)).rejects.toThrow();
-      expect(existsSync(join(bare, 'global'))).toBe(false);
-      initStore(join(bare, 'global'));
-      await run(['capture-error'], broke('s1'), bare);
-      await run(['capture-error'], broke(undefined, 'another thing broke'), bare);
-      expect(JSON.parse(await run(['failures', '--json'], '', bare))).toMatchObject({ total: 2, rated: 1, repeats: 0, sessions: 1 });
-      expect(await run(['failures'], '', bare)).toContain('Repeats: 0 of 1 errors first happened in another session. 1 more had no session id.');
-    } finally {
-      rmSync(bare, { recursive: true, force: true });
-    }
+    const bare = makeRoot('failures-bare', { init: false });
+    await expect(run(['failures', '--global'], '', bare)).rejects.toThrow();
+    expect(existsSync(join(bare, 'global'))).toBe(false);
+    initStore(join(bare, 'global'));
+    await run(['capture-error'], broke('s1'), bare);
+    await run(['capture-error'], broke(undefined, 'another thing broke'), bare);
+    expect(JSON.parse(await run(['failures', '--json'], '', bare))).toMatchObject({ total: 2, rated: 1, repeats: 0, sessions: 1 });
+    expect(await run(['failures'], '', bare)).toContain('Repeats: 0 of 1 errors first happened in another session. 1 more had no session id.');
   });
 });

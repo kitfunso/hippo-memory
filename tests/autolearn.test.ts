@@ -4,13 +4,13 @@ import * as os from 'os';
 import * as path from 'path';
 import { execSync, execFileSync } from 'child_process';
 import { captureError, extractLessons, partitionLessons, fetchGitLog, isGitRepo } from '../src/learn/autolearn.js';
-import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { readEntry, loadAllEntries } from '../src/store/entry-reads.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { extractInvalidationTarget, invalidateMatching } from '../src/learn/invalidation.js';
 import { handleMcpRequest } from '../src/mcp/server.js';
 import { sqliteStore, sqliteSyncStore } from '../src/store/sqlite/store.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 // ---------------------------------------------------------------------------
 // captureError
@@ -362,8 +362,7 @@ describe('write-path gate: MCP hippo_learn tool', () => {
       'fixed signals',
       'fix --include-recent flag handling in hippo context',
     ]);
-    hippoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-df4-mcp-'));
-    initStore(hippoRoot);
+    hippoRoot = makeRoot('df4-mcp');
     originalCwd = process.cwd();
     process.chdir(repoDir);
   });
@@ -371,7 +370,6 @@ describe('write-path gate: MCP hippo_learn tool', () => {
   afterEach(() => {
     process.chdir(originalCwd);
     fs.rmSync(repoDir, { recursive: true, force: true });
-    fs.rmSync(hippoRoot, { recursive: true, force: true });
   });
 
   it('drops junk subjects and stores detail-carrying ones via the MCP tool', async () => {
@@ -447,12 +445,7 @@ describe('invalidation during git learning', () => {
   let tmpDir: string;
 
   beforeEach(() => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-inv-learn-'));
-    initStore(tmpDir);
-  });
-
-  afterEach(() => {
-    fs.rmSync(tmpDir, { recursive: true, force: true });
+    tmpDir = makeRoot('inv-learn');
   });
 
   it('invalidates old memories when learning a migration commit', () => {

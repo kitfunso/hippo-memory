@@ -8,7 +8,6 @@
  */
 import { describe, it, expect, afterEach } from 'vitest';
 import * as fs from 'node:fs';
-import * as os from 'node:os';
 import * as path from 'node:path';
 import { initStore, HALF_LIFE_BASE_META_KEY, TYPED_HALF_LIFE_META_KEY } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
@@ -31,6 +30,7 @@ import { allocatedBytes } from './_helpers/allocated-bytes.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 import { objectsAt } from './_helpers/objects-at.js';
 import { loadConfig } from '../src/core/config.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const dirs: string[] = [];
 const local = (root: string) => sqliteSyncStore(root).localFiles.consolidation;
@@ -38,7 +38,7 @@ afterEach(() => {
   while (dirs.length) fs.rmSync(dirs.pop()!, { recursive: true, force: true });
 });
 function store(): string {
-  const root = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-hl-')), '.hippo');
+  const root = path.join(makeRoot('hl', { init: false }), '.hippo');
   dirs.push(path.dirname(root));
   initStore(root);
   return root;
@@ -435,7 +435,7 @@ describe('memories of decisions, incidents and other objects pinned to 90 days',
   });
 
   it('written to a store with no memories yet, take the configured default at once', async () => {
-    const root = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-hl-')), '.hippo');
+    const root = path.join(makeRoot('hl', { init: false }), '.hippo');
     dirs.push(path.dirname(root));
     fs.mkdirSync(root);
     fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ defaultHalfLifeDays: 30 }));
