@@ -162,7 +162,7 @@ describe('a request with no key, by default', () => {
     expect(reply.error).toBe(PLAIN_REFUSAL);
   });
 
-  it.each(['0', 'true', 'yes', ''])('stays closed when HIPPO_ALLOW_KEYLESS_LOCAL is %j', async (value) => {
+  it.each(['0', 'yes', ''])('stays closed when HIPPO_ALLOW_KEYLESS_LOCAL is %j', async (value) => {
     process.env.HIPPO_ALLOW_KEYLESS_LOCAL = value;
     expect((await recall()).status).toBe(401);
   });

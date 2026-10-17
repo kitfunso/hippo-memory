@@ -4,10 +4,11 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { detectRealCodexPath, isCodexWrapperInstalled, repairCodexWrapperIfInstalled } from './hooks/codex-wrapper.js';
 import { claudeConfigDir } from './util/agent-homes.js';
-import { errorFields, errorMessage, log } from './util/log.js';
+import { errorFields, errorMessage, log, warnUnknownFlagValues } from './util/log.js';
 
 function main(): void {
   if (envSkipPostinstall()) return;
+  warnUnknownFlagValues();
 
   try {
     // Repair-only, for users who opted in (a Codex update can restore the real binary over our shim): swapping the

@@ -6,13 +6,61 @@ function raw(name: string): string | undefined {
   return process.env[name];
 }
 
-function isOne(name: string): boolean {
-  return raw(name) === '1';
+type FlagState = 'on' | 'off' | 'unset' | 'unknown';
+
+/** Every on/off variable, with the side an unrecognised spelling takes: the safe one, so a typo never opens a door. */
+const FLAGS = {
+  HIPPO_ABLATE_DECAY: false,
+  HIPPO_ABLATE_RECALL_BOOST: false,
+  HIPPO_ABLATE_OUTCOME: false,
+  HIPPO_ABLATE_OUTCOME_SLOW: false,
+  HIPPO_ABLATE_OUTCOME_FAST: false,
+  HIPPO_ABLATE_RECENCY: false,
+  HIPPO_AUTODEBIAS: false,
+  HIPPO_ANCHORING: false,
+  HIPPO_AVAILABILITY: false,
+  HIPPO_SKIP_AUTO_INTEGRATIONS: false,
+  HIPPO_SKIP_POSTINSTALL: false,
+  HIPPO_SKIP_SCHEDULE: false,
+  HIPPO_MCP_STDIO: false,
+  HIPPO_REQUIRE_SERVER: false,
+  HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL: false,
+  HIPPO_REQUIRE_AUTH: true,
+  HIPPO_ALLOW_KEYLESS_LOCAL: false,
+  HIPPO_ALLOW_CLEARTEXT: false,
+  SLACK_ALLOW_UNKNOWN_TEAM_FALLBACK: false,
+  GITHUB_ALLOW_UNKNOWN_INSTALLATION_FALLBACK: false,
+} as const satisfies Record<string, boolean>;
+
+type FlagName = keyof typeof FLAGS;
+
+/** `1`, `true`, `on` and `0`, `false`, `off` (any case, trimmed) are the spellings; unset and empty are unset. */
+function flagState(name: string): FlagState {
+  const value = raw(name)?.trim().toLowerCase();
+  if (!value) return 'unset';
+  if (value === '1' || value === 'true' || value === 'on') return 'on';
+  if (value === '0' || value === 'false' || value === 'off') return 'off';
+  return 'unknown';
 }
 
-function isOneOrTrue(name: string): boolean {
-  const value = raw(name);
-  return value === '1' || value === 'true';
+/** Never throws, since accessors run per request; an unknown spelling takes the flag's safe side. */
+function flag(name: FlagName): boolean {
+  const state = flagState(name);
+  return state === 'unknown' ? FLAGS[name] : state === 'on';
+}
+
+/** True only for an explicit off spelling, for the settings that are on until switched off. */
+function flagIsOff(name: FlagName): boolean {
+  return flagState(name) === 'off';
+}
+
+/** One `NAME="value"` entry per on/off variable set to a spelling no flag accepts; serve refuses to boot on any. */
+export function validateFlags(): string[] {
+  const bad: string[] = [];
+  for (const name of Object.keys(FLAGS)) {
+    if (flagState(name) === 'unknown') bad.push(`${name}=${JSON.stringify(raw(name)!.trim().slice(0, 40))}`);
+  }
+  return bad;
 }
 
 /** parseInt, kept only when above zero; the caller supplies its own default. */
@@ -46,12 +94,12 @@ export function envByName(name: string): string | undefined {
 }
 
 // Eval-only lifecycle switches; ablation.ts caches them per process.
-export function envAblateDecay(): boolean { return isOneOrTrue('HIPPO_ABLATE_DECAY'); }
-export function envAblateRecallBoost(): boolean { return isOneOrTrue('HIPPO_ABLATE_RECALL_BOOST'); }
-export function envAblateOutcome(): boolean { return isOneOrTrue('HIPPO_ABLATE_OUTCOME'); }
-export function envAblateOutcomeSlow(): boolean { return isOneOrTrue('HIPPO_ABLATE_OUTCOME_SLOW'); }
-export function envAblateOutcomeFast(): boolean { return isOneOrTrue('HIPPO_ABLATE_OUTCOME_FAST'); }
-export function envAblateRecency(): boolean { return isOneOrTrue('HIPPO_ABLATE_RECENCY'); }
+export function envAblateDecay(): boolean { return flag('HIPPO_ABLATE_DECAY'); }
+export function envAblateRecallBoost(): boolean { return flag('HIPPO_ABLATE_RECALL_BOOST'); }
+export function envAblateOutcome(): boolean { return flag('HIPPO_ABLATE_OUTCOME'); }
+export function envAblateOutcomeSlow(): boolean { return flag('HIPPO_ABLATE_OUTCOME_SLOW'); }
+export function envAblateOutcomeFast(): boolean { return flag('HIPPO_ABLATE_OUTCOME_FAST'); }
+export function envAblateRecency(): boolean { return flag('HIPPO_ABLATE_RECENCY'); }
 
 /** HIPPO_EVAL_RECENCY_DAYS when it is a positive number, else null. */
 export function envEvalRecencyDays(): number | null {
@@ -70,9 +118,9 @@ export function envFakeNowMs(): number | null {
 
 export function envLossAversionRatio(): string | undefined { return raw('HIPPO_LOSS_AVERSION_RATIO'); }
 export function envSummaryDeboost(): string | undefined { return raw('HIPPO_SUMMARY_DEBOOST'); }
-export function envAutodebiasOff(): boolean { return raw('HIPPO_AUTODEBIAS') === 'off'; }
-export function envAnchoringOff(): boolean { return raw('HIPPO_ANCHORING') === 'off'; }
-export function envAvailabilityOff(): boolean { return raw('HIPPO_AVAILABILITY') === 'off'; }
+export function envAutodebiasOff(): boolean { return flagIsOff('HIPPO_AUTODEBIAS'); }
+export function envAnchoringOff(): boolean { return flagIsOff('HIPPO_ANCHORING'); }
+export function envAvailabilityOff(): boolean { return flagIsOff('HIPPO_AVAILABILITY'); }
 export function envDagRebuildCap(): number | undefined { return positiveInt('HIPPO_DAG_REBUILD_CAP'); }
 
 // Paths. HIPPO_HOME and XDG_DATA_HOME come back trimmed, possibly empty.
@@ -100,13 +148,12 @@ export function envTenant(): string {
 }
 
 // Install and CLI switches.
-export function envSkipAutoIntegrations(): boolean { return isOne('HIPPO_SKIP_AUTO_INTEGRATIONS'); }
-export function envSkipPostinstall(): boolean { return isOne('HIPPO_SKIP_POSTINSTALL'); }
-export function envSkipSchedule(): boolean { return isOne('HIPPO_SKIP_SCHEDULE'); }
-export function envMcpStdio(): boolean { return isOne('HIPPO_MCP_STDIO'); }
-/** `1` or `true`, so `0` and `false` turn it off; `true` stays on for anyone who set it that way. */
-export function envRequireServer(): boolean { return isOneOrTrue('HIPPO_REQUIRE_SERVER'); }
-export function envRequireSessionScopedFreshTail(): boolean { return isOne('HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL'); }
+export function envSkipAutoIntegrations(): boolean { return flag('HIPPO_SKIP_AUTO_INTEGRATIONS'); }
+export function envSkipPostinstall(): boolean { return flag('HIPPO_SKIP_POSTINSTALL'); }
+export function envSkipSchedule(): boolean { return flag('HIPPO_SKIP_SCHEDULE'); }
+export function envMcpStdio(): boolean { return flag('HIPPO_MCP_STDIO'); }
+export function envRequireServer(): boolean { return flag('HIPPO_REQUIRE_SERVER'); }
+export function envRequireSessionScopedFreshTail(): boolean { return flag('HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL'); }
 export function envStdinWaitMs(): number | undefined { return positiveInt('HIPPO_STDIN_WAIT_MS'); }
 export function envLogLevel(): string { return raw('HIPPO_LOG')?.trim().toLowerCase() ?? ''; }
 /** `HIPPO_LOG_FORMAT=json` writes each log line as one JSON object; anything else keeps the text line. */
@@ -119,15 +166,15 @@ export function envPort(): string | undefined { return raw('HIPPO_PORT'); }
  * the default.
  */
 export function envHealthProbeMs(): number | undefined { return positiveInt('HIPPO_HEALTH_PROBE_MS'); }
-export function envRequireAuth(): boolean { return isOne('HIPPO_REQUIRE_AUTH'); }
+export function envRequireAuth(): boolean { return flag('HIPPO_REQUIRE_AUTH'); }
 /** `1` lets a request made on this machine in with no key; HIPPO_REQUIRE_AUTH=1 wins over it. */
-export function envAllowKeylessLocal(): boolean { return isOne('HIPPO_ALLOW_KEYLESS_LOCAL'); }
+export function envAllowKeylessLocal(): boolean { return flag('HIPPO_ALLOW_KEYLESS_LOCAL'); }
 /** The role a keyless local request gets: `admin` (host admin) only when asked for by name, else `member`. */
 export function envKeylessLocalRole(): 'admin' | 'member' {
   return trimmed('HIPPO_KEYLESS_LOCAL_ROLE')?.toLowerCase() === 'admin' ? 'admin' : 'member';
 }
 /** `1` lets a non-loopback bind start without TLS, for TLS that ends at a proxy in front. */
-export function envAllowCleartext(): boolean { return isOne('HIPPO_ALLOW_CLEARTEXT'); }
+export function envAllowCleartext(): boolean { return flag('HIPPO_ALLOW_CLEARTEXT'); }
 export function envV1Rps(): string | undefined { return raw('HIPPO_V1_RPS'); }
 /** Requests per second each authenticated caller may make; `0` turns the per-caller limit off. */
 export function envCallerRps(): string | undefined { return trimmed('HIPPO_CALLER_RPS'); }
@@ -211,7 +258,7 @@ export function envSlackSigningSecretPrevious(): string | undefined {
   return raw('SLACK_SIGNING_SECRET_PREVIOUS');
 }
 export function envSlackAllowUnknownTeamFallback(): boolean {
-  return isOne('SLACK_ALLOW_UNKNOWN_TEAM_FALLBACK');
+  return flag('SLACK_ALLOW_UNKNOWN_TEAM_FALLBACK');
 }
 export function envGitHubToken(): string | undefined {
   return raw('GITHUB_TOKEN');
@@ -223,5 +270,5 @@ export function envGitHubWebhookSecretPrevious(): string | undefined {
   return raw('GITHUB_WEBHOOK_SECRET_PREVIOUS');
 }
 export function envGitHubAllowUnknownInstallationFallback(): boolean {
-  return isOne('GITHUB_ALLOW_UNKNOWN_INSTALLATION_FALLBACK');
+  return flag('GITHUB_ALLOW_UNKNOWN_INSTALLATION_FALLBACK');
 }

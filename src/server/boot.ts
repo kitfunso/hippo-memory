@@ -1,4 +1,4 @@
-import { envAllowCleartext, envCallerRps, envPort, envRequireAuth, envV1Rps } from '../util/env.js';
+import { envAllowCleartext, envCallerRps, envPort, envRequireAuth, envV1Rps, validateFlags } from '../util/env.js';
 import type { IncomingMessage, Server, ServerResponse } from 'node:http';
 import { detectServer, removePidfileIfOwned, writePidfile } from './server-detect.js';
 import { hasGroup, type HippoStore } from '../store/index.js';
@@ -245,6 +245,14 @@ function defaultCallerSpec(): RateLimitSpec | 'off' {
   return rps === 0 ? 'off' : { ratePerSec: rps, burst: Math.max(1, rps * 2) };
 }
 
+/** A flag typo is refused at boot, since the safe side it would take may not be the side the operator meant. */
+function assertFlagsValid(): void {
+  const bad = validateFlags();
+  if (bad.length > 0) {
+    throw new Error(`hippo serve: unknown flag value(s) ${bad.join(', ')}; use 1, true, on, 0, false or off`);
+  }
+}
+
 /** Refuses a bad spec at boot, since a NaN or zero rate would otherwise turn a bucket off or refuse every request. */
 function bootLimiters(rateLimits: ServeOpts['rateLimits']): BootedLimiters {
   const { perCaller = defaultCallerSpec(), perAddress, failedAuthPerAddress = DEFAULT_FAILED_AUTH } = rateLimits ?? {};
@@ -252,6 +260,7 @@ function bootLimiters(rateLimits: ServeOpts['rateLimits']): BootedLimiters {
   if (perAddress !== undefined && perAddress !== 'off') assertRateLimitSpec('perAddress', perAddress);
   assertRateLimitSpec('failedAuthPerAddress', failedAuthPerAddress);
   assertClientIpHeaderPinned();
+  assertFlagsValid();
   return {
     perAddress: bootRateLimiter(perAddress),
     callerLimiter: perCaller === 'off' ? undefined : limiterFor(perCaller),
