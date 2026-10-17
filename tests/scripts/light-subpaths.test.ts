@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
-import { runtimeSpecifiers } from '../../scripts/check-import-cycles.mjs';
+import { runtimeSpecifiers } from '../../scripts/lib/ts-facts.mjs';
 
 const SRC = resolve(__dirname, '..', '..', 'src');
 const HEAVY = /(?:^|\/)(?:store|db|server|api)(?:\/|\.ts$)|(?:^|\/)index\.ts$/;
