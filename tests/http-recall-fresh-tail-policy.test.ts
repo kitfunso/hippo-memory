@@ -35,22 +35,15 @@ async function jsonAs<T>(res: Response): Promise<T> {
 
 let home: string;
 let handle: ServerHandle;
-let prevEnv: string | undefined;
 
 beforeEach(async () => {
   home = makeRoot('http-f5');
-  prevEnv = process.env.HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL;
-  delete process.env.HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL;
+  vi.stubEnv('HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL', undefined);
   handle = await serve({ hippoRoot: home, port: 0 });
 });
 
 afterEach(async () => {
   await handle.stop();
-  if (prevEnv === undefined) {
-    delete process.env.HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL;
-  } else {
-    process.env.HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL = prevEnv;
-  }
   rmSync(home, { recursive: true, force: true });
 });
 
@@ -68,7 +61,7 @@ describe('GET /v1/memories fresh-tail policy', () => {
   });
 
   it('env=1, no session_id, fresh_tail_count > 0 → 400 with structured body', async () => {
-    process.env.HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL = '1';
+    vi.stubEnv('HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL', '1');
     for (let i = 0; i < 3; i++) {
       writeEntry(home, createMemory(`event ${i}`, {
         baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
@@ -88,7 +81,7 @@ describe('GET /v1/memories fresh-tail policy', () => {
   });
 
   it('env=1, session_id provided → 200 (no error)', async () => {
-    process.env.HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL = '1';
+    vi.stubEnv('HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL', '1');
     for (let i = 0; i < 3; i++) {
       writeEntry(home, createMemory(`event ${i}`, {
         baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
@@ -104,7 +97,7 @@ describe('GET /v1/memories fresh-tail policy', () => {
   });
 
   it('env=1, fresh_tail_count=0 (or absent) → 200 (guard fires only when fresh-tail requested)', async () => {
-    process.env.HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL = '1';
+    vi.stubEnv('HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL', '1');
     writeEntry(home, createMemory('event', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       layer: Layer.Buffer,

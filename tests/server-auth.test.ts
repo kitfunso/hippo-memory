@@ -26,24 +26,17 @@ async function jsonAs<T>(res: Response): Promise<T> {
 describe('server auth middleware', () => {
   let home: string;
   let globalHome: string;
-  let originalHippoHome: string | undefined;
   let handle: ServerHandle;
 
   beforeEach(async () => {
     home = makeRoot('srv-auth');
     globalHome = makeRoot('srv-auth');
-    originalHippoHome = process.env.HIPPO_HOME;
-    process.env.HIPPO_HOME = globalHome;
+    vi.stubEnv('HIPPO_HOME', globalHome);
     handle = await serve({ hippoRoot: home, port: 0 });
   });
 
   afterEach(async () => {
     await handle.stop();
-    if (originalHippoHome === undefined) {
-      delete process.env.HIPPO_HOME;
-    } else {
-      process.env.HIPPO_HOME = originalHippoHome;
-    }
     rmSync(home, { recursive: true, force: true });
     rmSync(globalHome, { recursive: true, force: true });
   });
@@ -182,22 +175,18 @@ describe('server auth middleware', () => {
 describe('server auth middleware for a non-loopback peer', () => {
   let home: string;
   let globalHome: string;
-  let originalHippoHome: string | undefined;
   let handle: ServerHandle;
 
   beforeEach(async () => {
     home = makeRoot('srv-auth');
     globalHome = makeRoot('srv-auth');
-    originalHippoHome = process.env.HIPPO_HOME;
-    process.env.HIPPO_HOME = globalHome;
+    vi.stubEnv('HIPPO_HOME', globalHome);
     handle = await serve({ hippoRoot: home, port: 0 });
     presentConnectionsAsRemote(handle.server!);
   });
 
   afterEach(async () => {
     await handle.stop();
-    if (originalHippoHome === undefined) delete process.env.HIPPO_HOME;
-    else process.env.HIPPO_HOME = originalHippoHome;
     rmSync(home, { recursive: true, force: true });
     rmSync(globalHome, { recursive: true, force: true });
   });

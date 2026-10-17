@@ -18,13 +18,17 @@
  */
 
 import type { FullContext } from './_helpers/api-ctx.js';
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { queryAuditEvents } from '../src/store/audit.js';
 import { remember, sleep, getContext } from '../src/api/index.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 import { makeRoot } from './_helpers/make-root.js';
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 // The 'consolidate' audit op's metadata is always the flat scalar phase-counter
 // object built at the appendAuditEvent call site for that op in src/api/index.ts --
@@ -37,15 +41,15 @@ function tmpHome() {
   // (resolved via HIPPO_HOME). Without per-test override, those writes
   // leak into the shared baseline HIPPO_HOME and fail the isolation guard.
   const origHippoHome = process.env.HIPPO_HOME;
-  process.env.HIPPO_HOME = home;
+  vi.stubEnv('HIPPO_HOME', home);
   return {
     home,
     restore: () => {
       rmSync(home, { recursive: true, force: true });
       if (origHippoHome !== undefined) {
-        process.env.HIPPO_HOME = origHippoHome;
+        vi.stubEnv('HIPPO_HOME', origHippoHome);
       } else {
-        delete process.env.HIPPO_HOME;
+        vi.stubEnv('HIPPO_HOME', undefined);
       }
     },
   };

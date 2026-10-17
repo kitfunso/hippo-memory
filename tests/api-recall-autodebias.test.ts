@@ -13,7 +13,7 @@
  */
 
 import type { FullContext } from './_helpers/api-ctx.js';
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { retrieve } from '../src/api/index.js';
@@ -21,6 +21,10 @@ import { closePrediction } from '../src/store/predictions.js';
 import { savePrediction } from './_helpers/save-prediction.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 function safeRmSync(p: string): void {
   try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
@@ -70,11 +74,11 @@ describe('api.recall planningFallacyHint', () => {
   let root: string;
   beforeEach(() => {
     root = makeRoot('j32');
-    delete process.env.HIPPO_AUTODEBIAS;
+    vi.stubEnv('HIPPO_AUTODEBIAS', undefined);
   });
   afterEach(() => {
     safeRmSync(root);
-    delete process.env.HIPPO_AUTODEBIAS;
+    vi.stubEnv('HIPPO_AUTODEBIAS', undefined);
   });
 
   it('populates planningFallacyHint when query has forward-claim AND class resolves AND nClosed > 0', async () => {
@@ -115,7 +119,7 @@ describe('api.recall planningFallacyHint', () => {
 
   it('absent under HIPPO_AUTODEBIAS=off even when conditions otherwise met', async () => {
     seedMigrationEffortBaserate(root);
-    process.env.HIPPO_AUTODEBIAS = 'off';
+    vi.stubEnv('HIPPO_AUTODEBIAS', 'off');
     const result = await retrieve(ctxFor(root), { query: 'migration effort will take 3 days' });
     expect(result.planningFallacyHint).toBeUndefined();
     // No audit fires either — off short-circuits before the regex gate.

@@ -7,7 +7,7 @@
  * boilerplate and missed the user's decision.
  * Real CLI, real stores, real settings files. No mocks.
  */
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { extractFromTexts } from '../src/capture/extract.js';
@@ -22,6 +22,10 @@ import { installJsonHooks } from '../src/hooks/json-hooks.js';
 import { runDoctor } from '../src/doctor.js';
 import { runCliAs } from './_helpers/run-cli-as.js';
 import { makeRoot } from './_helpers/make-root.js';
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 /** A scratch directory and a child environment rooted in it. */
 interface Scratch {
@@ -248,18 +252,12 @@ describe('failed-tool capture', () => {
 
 describe('both install routes wire compaction and failed-tool capture', () => {
   let dir: string;
-  let saved: Pick<NodeJS.ProcessEnv, 'HOME' | 'USERPROFILE'>;
   beforeEach(() => {
     dir = makeRoot('install-parity', { init: false });
-    saved = { HOME: process.env.HOME, USERPROFILE: process.env.USERPROFILE };
-    process.env.HOME = dir;
-    process.env.USERPROFILE = dir;
+    vi.stubEnv('HOME', dir);
+    vi.stubEnv('USERPROFILE', dir);
   });
   afterEach(() => {
-    for (const [k, v] of Object.entries(saved)) {
-      if (v === undefined) delete process.env[k];
-      else process.env[k] = v;
-    }
     fs.rmSync(dir, { recursive: true, force: true });
   });
 

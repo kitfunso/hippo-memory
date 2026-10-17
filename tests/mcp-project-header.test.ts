@@ -26,7 +26,6 @@ interface Reply { readonly status: number; readonly text: string; readonly scope
 
 let tmp: string;
 let handle: ServerHandle | null = null;
-const origHome = process.env.HIPPO_HOME;
 
 function makeStore(shared: boolean): string {
   const store = path.join(tmp, 'srv', shared ? 'hippo-team' : 'hippo-solo');
@@ -61,7 +60,7 @@ function post(headers: http.OutgoingHttpHeaders, body: string = REMEMBER): Promi
 
 beforeEach(() => {
   tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-mcp-header-'));
-  process.env.HIPPO_HOME = path.join(tmp, 'global');
+  vi.stubEnv('HIPPO_HOME', path.join(tmp, 'global'));
   _resetProjectIdentityCacheForTests();
   _resetSharedStoreCacheForTests();
 });
@@ -69,8 +68,6 @@ beforeEach(() => {
 afterEach(async () => {
   await handle?.stop();
   handle = null;
-  if (origHome === undefined) delete process.env.HIPPO_HOME;
-  else process.env.HIPPO_HOME = origHome;
   _resetSharedStoreCacheForTests();
   fs.rmSync(tmp, { recursive: true, force: true });
 });

@@ -28,7 +28,6 @@ const PROMPT = 'how do I restart the zorblaxian quintessor';
 let tmp: string;
 let store: string;
 let handle: ServerHandle | null = null;
-const origHome = process.env.HIPPO_HOME;
 
 /** Serves `<tmp>/srv/hippo-team`, a folder with no project marker, so the folder stamp is '' (user-global). */
 async function start(config: Record<string, JsonValue>): Promise<ServerHandle> {
@@ -65,7 +64,7 @@ async function hookText(project: string): Promise<string> {
 
 beforeEach(() => {
   tmp = makeRoot('remember-project', { init: false });
-  process.env.HIPPO_HOME = path.join(tmp, 'global');
+  vi.stubEnv('HIPPO_HOME', path.join(tmp, 'global'));
   _resetProjectIdentityCacheForTests();
   _resetSharedStoreCacheForTests();
 });
@@ -73,8 +72,6 @@ beforeEach(() => {
 afterEach(async () => {
   await handle?.stop();
   handle = null;
-  if (origHome === undefined) delete process.env.HIPPO_HOME;
-  else process.env.HIPPO_HOME = origHome;
   _resetSharedStoreCacheForTests();
 });
 

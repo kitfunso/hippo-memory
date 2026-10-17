@@ -8,6 +8,10 @@ import { serve, type ServeOpts } from '../src/server.js';
 import { sqliteStore, type HippoStore } from '../src/entry/store-kit.js';
 import { makeRoot } from './_helpers/make-root.js';
 
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 /** Node's own record of scrypt jobs. One that hands its result to a callback ran on the thread pool; `scryptSync` never does, so it stays in `running`. */
 const pool = { running: new Set<number>(), peak: 0, delivered: 0 };
 const scryptJobs = createHook({
@@ -29,17 +33,14 @@ function watchPool(): void {
   scryptJobs.enable();
 }
 
-const ENV_KEYS = ['HIPPO_CLIENT_IP_HEADER', 'HIPPO_TRUSTED_PROXIES', 'HIPPO_REQUIRE_AUTH'] as const;
-const saved = new Map(ENV_KEYS.map((k) => [k, process.env[k]]));
-
 let root: string;
 let url = '';
 let stop: (() => Promise<void>) | undefined;
 
 beforeEach(() => {
-  delete process.env.HIPPO_REQUIRE_AUTH;
-  process.env.HIPPO_CLIENT_IP_HEADER = 'x-forwarded-for';
-  process.env.HIPPO_TRUSTED_PROXIES = '127.0.0.1';
+  vi.stubEnv('HIPPO_REQUIRE_AUTH', undefined);
+  vi.stubEnv('HIPPO_CLIENT_IP_HEADER', 'x-forwarded-for');
+  vi.stubEnv('HIPPO_TRUSTED_PROXIES', '127.0.0.1');
   root = makeRoot('key-bounds');
 });
 
@@ -48,10 +49,6 @@ afterEach(async () => {
   await stop?.();
   stop = undefined;
   vi.useRealTimers();
-  for (const [k, v] of saved) {
-    if (v === undefined) delete process.env[k];
-    else process.env[k] = v;
-  }
   rmSync(root, { recursive: true, force: true });
 });
 

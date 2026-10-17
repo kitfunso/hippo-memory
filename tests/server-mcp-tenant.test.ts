@@ -1,9 +1,13 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { createApiKey } from '../src/store/auth.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { makeRoot } from './_helpers/make-root.js';
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 // Regression: MCP-over-HTTP must thread the auth-resolved tenant into the
 // MCP dispatcher. Before the fix, executeTool resolved tenantId from
@@ -16,22 +20,15 @@ import { makeRoot } from './_helpers/make-root.js';
 describe('MCP-over-HTTP tenant context', () => {
   let home: string;
   let handle: ServerHandle;
-  let prevTenant: string | undefined;
 
   beforeEach(async () => {
     home = makeRoot('mcp-tenant');
-    // Explicitly clear HIPPO_TENANT so any leak from executeTool's old
-    // resolveTenantId({}) path would surface as 'default' rather than
-    // accidentally matching 'alpha'.
-    prevTenant = process.env.HIPPO_TENANT;
-    delete process.env.HIPPO_TENANT;
+    vi.stubEnv('HIPPO_TENANT', undefined);
     handle = await serve({ hippoRoot: home, port: 0 });
   });
 
   afterEach(async () => {
     await handle.stop();
-    if (prevTenant === undefined) delete process.env.HIPPO_TENANT;
-    else process.env.HIPPO_TENANT = prevTenant;
     try { rmSync(home, { recursive: true, force: true }); } catch { /* windows file locks */ }
   });
 

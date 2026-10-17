@@ -1,6 +1,6 @@
 // A request opens each store it reads on the server thread once, however many api helpers it runs, and not at all when its store work runs on worker threads.
 // Counts real DatabaseSync connections per database file by patching the prototype, as the hook open-count test does.
-import { describe, it, expect, beforeAll, afterAll, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, vi, beforeEach } from 'vitest';
 import { createRequire } from 'node:module';
 import { realpathSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
@@ -13,12 +13,12 @@ import { retrieve, remember } from '../src/api/index.js';
 import { sqliteStore } from '../src/store/sqlite/store.js';
 import { makeStore } from './_helpers/make-root.js';
 
-beforeEach(() => {
-  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
+afterAll(() => {
+  vi.unstubAllEnvs();
 });
 
-afterEach(() => {
-  vi.unstubAllEnvs();
+beforeEach(() => {
+  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
 });
 
 interface Connection { location(): string | null }
@@ -46,7 +46,6 @@ function countConnections(): Array<{ mockRestore(): void }> {
 
 let tmp: string;
 let root: string;
-let priorHome: string | undefined;
 let server: ServerHandle;
 let spies: Array<{ mockRestore(): void }>;
 
@@ -80,9 +79,8 @@ beforeAll(async () => {
   const made = makeStore('request-open-count');
   tmp = realpathSync.native(made.base);
   root = realpathSync.native(made.root);
-  priorHome = process.env.HIPPO_HOME;
   // A global store left by another file in this worker would add its own open to every recall.
-  process.env.HIPPO_HOME = join(tmp, 'global');
+  vi.stubEnv('HIPPO_HOME', join(tmp, 'global'));
   const opts = { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS };
   writeEntry(root, createMemory('the postgres migration needs a rollback plan and a dry run', opts));
   writeEntry(root, createMemory('deploy windows are Tuesday and Thursday afternoons only', opts));
@@ -99,8 +97,6 @@ beforeAll(async () => {
 afterAll(async () => {
   await server.stop();
   for (const spy of spies) spy.mockRestore();
-  if (priorHome === undefined) delete process.env.HIPPO_HOME;
-  else process.env.HIPPO_HOME = priorHome;
 });
 
 describe('store opens per request', () => {

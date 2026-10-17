@@ -1,13 +1,17 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { installJsonHooks, uninstallJsonHooks, resolveJsonHookPaths } from '../src/hooks/json-hooks.js';
 import { detectInstalledTools, defaultSleepLogPath, defaultPreCompactLogPath } from '../src/hooks/shared.js';
 import { withFakeHome as withFakeHomeShared } from './_helpers/with-fake-home.js';
 import { trySymlink } from './_helpers/symlink.js';
 import type { JsonValue } from '../src/util/json.js';
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 /**
  * Each test gets its own fake $HOME so we never touch the real
@@ -516,15 +520,10 @@ describe('JSON hook installer', () => {
   });
 
   describe('CLAUDE_CONFIG_DIR', () => {
-    const saved = process.env.CLAUDE_CONFIG_DIR;
-    afterEach(() => {
-      if (saved === undefined) delete process.env.CLAUDE_CONFIG_DIR;
-      else process.env.CLAUDE_CONFIG_DIR = saved;
-    });
 
     it('moves the claude-code settings there, for install and for uninstall', () => {
       const config = fs.mkdtempSync(path.join(env.home, 'claude-config-'));
-      process.env.CLAUDE_CONFIG_DIR = config;
+      vi.stubEnv('CLAUDE_CONFIG_DIR', config);
       const settingsPath = path.join(config, 'settings.json');
       expect(resolveJsonHookPaths('claude-code').settings).toBe(settingsPath);
 
@@ -537,16 +536,15 @@ describe('JSON hook installer', () => {
     });
 
     it.each([['unset', undefined], ['empty', '']])('keeps ~/.claude when it is %s', (_label, value) => {
-      if (value === undefined) delete process.env.CLAUDE_CONFIG_DIR;
-      else process.env.CLAUDE_CONFIG_DIR = value;
+      vi.stubEnv('CLAUDE_CONFIG_DIR', value);
 
       expect(resolveJsonHookPaths('claude-code').settings).toBe(path.join(env.home, '.claude', 'settings.json'));
     });
 
     // Claude Code finds ~/.claude through os.homedir() (USERPROFILE on Windows, HOME elsewhere), so the other variable, as Git Bash sets it, must not move hippo's edit.
     it('keeps ~/.claude under os.homedir() when the other home variable points elsewhere', () => {
-      delete process.env.CLAUDE_CONFIG_DIR;
-      process.env[process.platform === 'win32' ? 'HOME' : 'USERPROFILE'] = fs.mkdtempSync(path.join(env.home, 'stray-'));
+      vi.stubEnv('CLAUDE_CONFIG_DIR', undefined);
+      vi.stubEnv(process.platform === 'win32' ? 'HOME' : 'USERPROFILE', fs.mkdtempSync(path.join(env.home, 'stray-')));
       const expected = path.join(os.homedir(), '.claude');
 
       expect(expected).toBe(path.join(env.home, '.claude'));
@@ -556,7 +554,7 @@ describe('JSON hook installer', () => {
     });
 
     it('makes detectInstalledTools look there for Claude Code', () => {
-      process.env.CLAUDE_CONFIG_DIR = path.join(env.home, 'elsewhere');
+      vi.stubEnv('CLAUDE_CONFIG_DIR', path.join(env.home, 'elsewhere'));
       expect(detectInstalledTools().find((t) => t.name === 'claude-code')?.detected).toBe(false);
 
       fs.mkdirSync(path.join(env.home, 'elsewhere'));

@@ -42,16 +42,16 @@ describe('server hardening', () => {
     if (handle) {
       try { await handle.stop(); } catch { /* already stopped */ }
     }
-    delete process.env.HIPPO_REQUIRE_AUTH;
-    delete process.env.SLACK_SIGNING_SECRET;
-    delete process.env.MCP_SSE_MAX_AGE_SEC;
-    delete process.env.MCP_SSE_HEARTBEAT_MS;
+    vi.stubEnv('HIPPO_REQUIRE_AUTH', undefined);
+    vi.stubEnv('SLACK_SIGNING_SECRET', undefined);
+    vi.stubEnv('MCP_SSE_MAX_AGE_SEC', undefined);
+    vi.stubEnv('MCP_SSE_HEARTBEAT_MS', undefined);
   });
 
   // ---- Fix 5.3: SSE max-age closes stream ------------------------------
   it('SSE max-age closes stream with reason=max_age_exceeded', async () => {
-    process.env.MCP_SSE_MAX_AGE_SEC = '1';
-    process.env.MCP_SSE_HEARTBEAT_MS = '200'; // poll fast
+    vi.stubEnv('MCP_SSE_MAX_AGE_SEC', '1');
+    vi.stubEnv('MCP_SSE_HEARTBEAT_MS', '200'); // poll fast
     handle = await serve({ hippoRoot: root, host: '127.0.0.1', port: 0 });
 
     const ac = new AbortController();
@@ -97,9 +97,9 @@ describe('server hardening', () => {
 
   // ---- Fix 5.3: SSE auth-revoked closes stream -------------------------
   it('SSE heartbeat closes stream with reason=auth_revoked when key revoked', async () => {
-    process.env.HIPPO_REQUIRE_AUTH = '1';
-    process.env.MCP_SSE_HEARTBEAT_MS = '200';
-    process.env.MCP_SSE_MAX_AGE_SEC = '60'; // far enough out of the way
+    vi.stubEnv('HIPPO_REQUIRE_AUTH', '1');
+    vi.stubEnv('MCP_SSE_HEARTBEAT_MS', '200');
+    vi.stubEnv('MCP_SSE_MAX_AGE_SEC', '60'); // far enough out of the way
     handle = await serve({ hippoRoot: root, host: '127.0.0.1', port: 0 });
 
     // Mint a key, open stream with it, then revoke and wait for the
@@ -179,7 +179,7 @@ describe('server hardening', () => {
   // before the connection was force-closed. Post-fix, stop() calls
   // closeAllConnections() and resolves cleanly.
   it('graceful shutdown: stop() resolves while SSE stream is open', async () => {
-    process.env.MCP_SSE_HEARTBEAT_MS = '60000'; // keep stream sleepy
+    vi.stubEnv('MCP_SSE_HEARTBEAT_MS', '60000'); // keep stream sleepy
     handle = await serve({ hippoRoot: root, host: '127.0.0.1', port: 0 });
 
     const ac = new AbortController();
@@ -207,8 +207,8 @@ describe('server hardening', () => {
   // ---- Fix 5.5: PUBLIC_ROUTES bypass attempts --------------------------
   describe('PUBLIC_ROUTES bypass attempts', () => {
     beforeEach(async () => {
-      process.env.SLACK_SIGNING_SECRET = SLACK_SECRET;
-      process.env.HIPPO_REQUIRE_AUTH = '1';
+      vi.stubEnv('SLACK_SIGNING_SECRET', SLACK_SECRET);
+      vi.stubEnv('HIPPO_REQUIRE_AUTH', '1');
       handle = await serve({ hippoRoot: root, host: '127.0.0.1', port: 0 });
     });
 

@@ -3,9 +3,13 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { storeDirOf } from './fixtures/sl-adapter/store-dir.js';
 
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 // HIPPO_BENCH_CLI is read at module load, so each case resets modules and re-imports the adapter.
 async function loadAdapter(cli: string) {
-  process.env.HIPPO_BENCH_CLI = cli;
+  vi.stubEnv('HIPPO_BENCH_CLI', cli);
   vi.resetModules();
   const { default: adapter } = await import('../benchmarks/sequential-learning/adapters/hippo.mjs');
   return adapter;
@@ -13,7 +17,7 @@ async function loadAdapter(cli: string) {
 
 describe('sequential-learning hippo adapter refuses to run without a working CLI', () => {
   afterEach(() => {
-    delete process.env.HIPPO_BENCH_CLI;
+    vi.stubEnv('HIPPO_BENCH_CLI', undefined);
   });
 
   it('init() rejects, names the build step and leaves no temp store when the CLI file is missing', async () => {

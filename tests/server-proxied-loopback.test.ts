@@ -28,7 +28,6 @@ const PROXY_HEADERS: ReadonlyArray<readonly [string, string]> = [
 let home: string;
 let handle: ServerHandle;
 let apiKey: string;
-let savedLevel: string | undefined;
 
 function send(path: string, headers: Record<string, string> = {}): Promise<number> {
   return new Promise((resolve, reject) => {
@@ -43,8 +42,7 @@ function send(path: string, headers: Record<string, string> = {}): Promise<numbe
 }
 
 beforeEach(async () => {
-  savedLevel = process.env.HIPPO_LOG;
-  delete process.env.HIPPO_LOG;
+  vi.stubEnv('HIPPO_LOG', undefined);
   home = makeRoot('proxied-loopback');
   const db = openHippoDb(home);
   try {
@@ -57,8 +55,6 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await handle.stop();
-  if (savedLevel === undefined) delete process.env.HIPPO_LOG;
-  else process.env.HIPPO_LOG = savedLevel;
 });
 
 describe('loopback fallback behind a reverse proxy', () => {

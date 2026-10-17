@@ -85,9 +85,6 @@ export function snapshot(dir: string): string {
 let baseline: Array<readonly [string, string]> = [];
 
 export function setup(): void {
-  // This shell is itself a Claude Code session; the var would leak into every spawned CLI
-  // child and falsify null-session_id trace assertions, so drop it before workers fork.
-  delete process.env.CLAUDE_CODE_SESSION_ID;
   const realHome = process.env.HIPPO_TEST_REAL_HOME || homedir(); // vitest.config.ts fakes HOME
   baseline = watchedStoreDirs(process.cwd(), realHome).map((dir) => [dir, snapshot(dir)] as const);
 }

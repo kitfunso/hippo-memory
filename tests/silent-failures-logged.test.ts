@@ -1,5 +1,5 @@
 // Each failure here used to be swallowed; the test forces it and reads the line it now leaves on stderr.
-import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, MockInstance } from 'vitest';
 import fs from 'node:fs';
 import type { IncomingMessage } from 'node:http';
 import { syncBuiltinESMExports } from 'node:module';
@@ -20,6 +20,10 @@ import { _resetLogOnceForTests } from '../src/util/log.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { makeRoot } from './_helpers/make-root.js';
 
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 let root: string;
 let stderr: MockInstance<typeof process.stderr.write>;
 
@@ -35,7 +39,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
-  delete process.env.HIPPO_LOG;
+  vi.stubEnv('HIPPO_LOG', undefined);
   syncBuiltinESMExports();
 });
 
@@ -59,7 +63,7 @@ function failStat(code: string, target: string): void {
 
 describe('http retry', () => {
   it('logs each retry at debug with method, host and path, never the query', async () => {
-    process.env.HIPPO_LOG = 'debug';
+    vi.stubEnv('HIPPO_LOG', 'debug');
     const replies = [new Response('', { status: 503 }), new Response('', { status: 429 }), new Response('ok')];
     const fetchFn = vi.fn(async () => replies.shift()!);
     const res = await fetchWithRetry('https://api.example.test/v1/items?key=SECRET', { method: 'POST' }, {
@@ -93,19 +97,13 @@ describe('embedding provider', () => {
   it('logs at debug why an error body could not be read', async () => {
     initStore(root);
     fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ embeddings: { provider: 'openai', model: 'm' } }), 'utf8');
-    process.env.HIPPO_LOG = 'debug';
-    const saved = process.env.OPENAI_API_KEY;
-    process.env.OPENAI_API_KEY = 'test-key-not-real';
-    try {
-      const body = new ReadableStream({ start(c) { c.error(new Error('socket reset mid-body')); } });
-      vi.stubGlobal('fetch', vi.fn(async () => new Response(body, { status: 400 })));
-      const provider = resolveEmbeddingProvider(loadConfig(root).embeddings, {});
-      await expect(provider.embed(['x'], 'passage')).rejects.toThrow(/HTTP 400/);
-      expect(logged().some((l) => l.includes('debug:') && l.includes('socket reset mid-body'))).toBe(true);
-    } finally {
-      if (saved === undefined) delete process.env.OPENAI_API_KEY;
-      else process.env.OPENAI_API_KEY = saved;
-    }
+    vi.stubEnv('HIPPO_LOG', 'debug');
+    vi.stubEnv('OPENAI_API_KEY', 'test-key-not-real');
+    const body = new ReadableStream({ start(c) { c.error(new Error('socket reset mid-body')); } });
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(body, { status: 400 })));
+    const provider = resolveEmbeddingProvider(loadConfig(root).embeddings, {});
+    await expect(provider.embed(['x'], 'passage')).rejects.toThrow(/HTTP 400/);
+    expect(logged().some((l) => l.includes('debug:') && l.includes('socket reset mid-body'))).toBe(true);
   });
 });
 

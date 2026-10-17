@@ -11,6 +11,10 @@ import { handleEmbed } from '../src/cli/maintenance.js';
 import { loadConfig } from '../src/core/config.js';
 import { makeRoot } from './_helpers/make-root.js';
 
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 /** A local provider that answers every text with `vector`, or fails the whole call as an unloadable model does. */
 function localProvider(opts: { available?: boolean; loadError?: string; vector?: number[] }): EmbeddingProvider {
   return {
@@ -28,7 +32,6 @@ function localProvider(opts: { available?: boolean; loadError?: string; vector?:
 let root: string;
 let emptyCache: string;
 let stderr: string[];
-const savedCache = process.env.HIPPO_MODEL_CACHE;
 
 beforeEach(() => {
   root = makeRoot('embed-load');
@@ -47,15 +50,13 @@ beforeEach(() => {
 afterEach(() => {
   vi.restoreAllMocks();
   process.exitCode = undefined;
-  if (savedCache === undefined) delete process.env.HIPPO_MODEL_CACHE;
-  else process.env.HIPPO_MODEL_CACHE = savedCache;
   fs.rmSync(emptyCache, { recursive: true, force: true });
 });
 
 describe('the local provider with a model that cannot load', () => {
   it('rejects with the reason instead of returning empty vectors', async () => {
     // An empty offline cache cannot hold the model, whether or not a transformers package is installed.
-    process.env.HIPPO_MODEL_CACHE = emptyCache;
+    vi.stubEnv('HIPPO_MODEL_CACHE', emptyCache);
     await expect(resolveEmbeddingProvider(loadConfig(root).embeddings).embed(['a memory'], 'passage')).rejects.toThrow(/did not load: \S/);
   });
 });

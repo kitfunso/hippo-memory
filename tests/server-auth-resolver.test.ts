@@ -21,6 +21,10 @@ import { listAuditEventsAfter } from '../src/store/audit.js';
 import { waitFor } from './_helpers/wait-for.js';
 import { makeRoot } from './_helpers/make-root.js';
 
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 const EXT = 'ext.good';
 const GOOD: ResolvedBearer = { tenantId: 'ext-tenant', subject: 'user-1', role: 'member', scopes: [] };
 const PRIVATE_SCOPE = 'slack:private:C1';
@@ -28,7 +32,6 @@ const PRIVATE_SCOPE = 'slack:private:C1';
 let home: string;
 let handle: ServerHandle | undefined;
 let apiKey: CreateApiKeyResult;
-const savedEnv = { req: process.env.HIPPO_REQUIRE_AUTH, hb: process.env.MCP_SSE_HEARTBEAT_MS };
 
 async function start(authResolver?: AuthResolver, hippoRoot = home, extra: Partial<ServeOpts> = {}): Promise<ServerHandle> {
   handle = await serve({ hippoRoot, host: '127.0.0.1', port: 0, authResolver, ...extra });
@@ -74,7 +77,7 @@ const HEARTBEAT_MS = 50;
 
 /** Fakes only the heartbeat's interval, so a test fires each tick by hand and counts live intervals; fetch and the polls keep real time. */
 function holdHeartbeat(): void {
-  process.env.MCP_SSE_HEARTBEAT_MS = String(HEARTBEAT_MS);
+  vi.stubEnv('MCP_SSE_HEARTBEAT_MS', String(HEARTBEAT_MS));
   vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
 }
 
@@ -133,10 +136,6 @@ afterEach(async () => {
   await handle?.stop();
   handle = undefined;
   vi.restoreAllMocks();
-  for (const [k, v] of [['HIPPO_REQUIRE_AUTH', savedEnv.req], ['MCP_SSE_HEARTBEAT_MS', savedEnv.hb]] as const) {
-    if (v === undefined) delete process.env[k];
-    else process.env[k] = v;
-  }
 });
 
 describe('auth resolver acceptance', () => {
@@ -160,7 +159,7 @@ describe('auth resolver acceptance', () => {
   });
 
   it('accepts a resolver token under HIPPO_REQUIRE_AUTH=1', async () => {
-    process.env.HIPPO_REQUIRE_AUTH = '1';
+    vi.stubEnv('HIPPO_REQUIRE_AUTH', '1');
     await start(tokenResolver());
     expect((await get('/v1/memories?q=x', EXT)).status).toBe(200);
   });
@@ -489,7 +488,7 @@ describe('auth resolver stream', () => {
   });
 
   it('closes the stream with auth_revoked when the resolver stops vouching', async () => {
-    process.env.MCP_SSE_HEARTBEAT_MS = '100';
+    vi.stubEnv('MCP_SSE_HEARTBEAT_MS', '100');
     let valid = true;
     await start((t) => (t === EXT && valid ? GOOD : null));
     const ac = new AbortController();
@@ -518,7 +517,7 @@ describe('auth resolver stream', () => {
     'keeps the stream open while the resolver %s, then closes it on a later revocation',
     async (failure) => {
       vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-      process.env.MCP_SSE_HEARTBEAT_MS = '50';
+      vi.stubEnv('MCP_SSE_HEARTBEAT_MS', '50');
       let state: 'ok' | 'down' | 'revoked' = 'ok';
       let downCalls = 0;
       await start(
@@ -551,7 +550,7 @@ describe('auth resolver stream', () => {
 
   it('logs a warning when a heartbeat tick is skipped because the resolver is down', async () => {
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-    process.env.MCP_SSE_HEARTBEAT_MS = '50';
+    vi.stubEnv('MCP_SSE_HEARTBEAT_MS', '50');
     let down = false;
     await start((t) => {
       if (t !== EXT) return null;

@@ -14,11 +14,14 @@ import { installOpencodePlugin, resolveOpencodePluginPath } from '../src/hooks/o
 import * as fs from 'node:fs';
 import { withFakeHome } from './_helpers/with-fake-home.js';
 
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 let lines: string[];
-const savedLog = process.env.HIPPO_LOG;
 
 beforeEach(() => {
-  delete process.env.HIPPO_LOG;
+  vi.stubEnv('HIPPO_LOG', undefined);
   lines = [];
   vi.spyOn(process.stderr, 'write').mockImplementation((chunk: string | Uint8Array) => {
     lines.push(String(chunk));
@@ -28,8 +31,6 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks();
-  if (savedLog === undefined) delete process.env.HIPPO_LOG;
-  else process.env.HIPPO_LOG = savedLog;
 });
 
 const fakeReq = Object.assign(new IncomingMessage(new Socket()), { method: 'POST', url: '/v1/memories?x=1' });
@@ -51,7 +52,7 @@ describe('failed requests at the default threshold', () => {
     mcpErrorResponse(1, new StoreBusyError(), 'req-busy', 'tools/call hippo_recall');
     expect(lines.join('')).toMatch(/warn: mcp request \(tools\/call hippo_recall\) failed/);
     lines.length = 0;
-    process.env.HIPPO_LOG = 'info';
+    vi.stubEnv('HIPPO_LOG', 'info');
     mcpErrorResponse(2, new HttpError(404, 'missing'), 'req-404', 'tools/call hippo_get');
     expect(lines.join('')).toMatch(/info: mcp request \(tools\/call hippo_get\) failed.*requestId=req-404/);
   });

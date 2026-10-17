@@ -203,7 +203,7 @@ describe('server lifecycle', () => {
     try {
       // The cap lives in readBody, shared by every route: the generic /v1 route reads a body
       // before any key check, and a webhook route reads one once a secret and a signature header are there.
-      process.env.SLACK_SIGNING_SECRET = 'test-only-webhook-signing-material';
+      vi.stubEnv('SLACK_SIGNING_SECRET', 'test-only-webhook-signing-material');
       const signed = { 'x-slack-signature': 'v0=00', 'x-slack-request-timestamp': '1' };
       for (const [path, headers] of [['/v1/memories', {}], ['/v1/connectors/slack/events', signed]] as const) {
         const reply = await uploadUnpaced(handle.port, path, headers);
@@ -215,7 +215,7 @@ describe('server lifecycle', () => {
       const health = await fetch(`${handle.url}/health`);
       expect(health.status).toBe(200);
     } finally {
-      delete process.env.SLACK_SIGNING_SECRET;
+      vi.stubEnv('SLACK_SIGNING_SECRET', undefined);
       await handle.stop();
       rmSync(home, { recursive: true, force: true });
     }
@@ -255,8 +255,7 @@ describe('server lifecycle', () => {
 describe('/v1 rate limiting', () => {
   it('throttles /mcp and /mcp/stream from the same per-IP bucket', async () => {
     const home = makeRoot();
-    const prev = process.env.HIPPO_V1_RPS;
-    process.env.HIPPO_V1_RPS = '1'; // rate 1/s, burst 2
+    vi.stubEnv('HIPPO_V1_RPS', '1'); // rate 1/s, burst 2
     const ac = new AbortController();
     try {
       const handle = await serve({ hippoRoot: home, port: 0 });
@@ -272,8 +271,6 @@ describe('/v1 rate limiting', () => {
         await handle.stop();
       }
     } finally {
-      if (prev === undefined) delete process.env.HIPPO_V1_RPS;
-      else process.env.HIPPO_V1_RPS = prev;
       rmSync(home, { recursive: true, force: true });
     }
   });

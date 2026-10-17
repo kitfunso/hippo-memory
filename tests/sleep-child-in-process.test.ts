@@ -1,7 +1,7 @@
 // The sleep child's job body in process: its 'message' listener is captured on import, and send and exit are stubbed.
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, MockInstance } from 'vitest';
 import { remember } from '../src/api/index.js';
 import type { SleepJob, SleepReply } from '../src/server/sleep-offload.js';
 import type { SleepResult } from '../src/api/sleep/sleep.js';
@@ -9,8 +9,11 @@ import { apiCtx } from './_helpers/api-ctx.js';
 import { fire, recordListeners, stubExit, type Listener } from './_helpers/process-stubs.js';
 import { makeRoot } from './_helpers/make-root.js';
 
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 let home: string;
-let priorHome: string | undefined;
 let exit: MockInstance;
 let sent: Array<SleepReply<SleepResult>>;
 let listeners: Map<string, Listener[]>;
@@ -18,9 +21,7 @@ let hadSend: boolean;
 
 beforeEach(async () => {
   home = makeRoot('sleep-child');
-  // Sleep's auto-share writes to the global store, so it points here too.
-  priorHome = process.env.HIPPO_HOME;
-  process.env.HIPPO_HOME = home;
+  vi.stubEnv('HIPPO_HOME', home);
   sent = [];
   hadSend = 'send' in process;
   // A worker that is not an IPC child has no process.send; this stands in for the channel.
@@ -42,8 +43,6 @@ beforeEach(async () => {
 afterEach(() => {
   vi.restoreAllMocks();
   if (!hadSend) Reflect.deleteProperty(process, 'send');
-  if (priorHome === undefined) delete process.env.HIPPO_HOME;
-  else process.env.HIPPO_HOME = priorHome;
 });
 
 describe('sleep child', () => {

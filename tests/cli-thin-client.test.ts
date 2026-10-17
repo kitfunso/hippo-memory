@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, vi, beforeEach } from 'vitest';
+import { describe, it, expect, beforeAll, vi, beforeEach, afterEach } from 'vitest';
 import { mintAdminKey } from './_helpers/admin-server.js';
 import { rmSync, existsSync, writeFileSync, statSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -11,6 +11,10 @@ import { boundPort } from './_helpers/listen.js';
 import { waitFor } from './_helpers/wait-for.js';
 import { ROUTED_CLI_ENV } from './_helpers/routed-cli-env.js';
 import { makeStore } from './_helpers/make-root.js';
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 beforeEach(() => {
   vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
@@ -323,13 +327,13 @@ describe('cli thin-client mode', () => {
       // No server running. With HIPPO_REQUIRE_SERVER set the CLI must NOT
       // quietly drop to direct mode — that masks a misconfiguration (and
       // silently discards a configured HIPPO_API_KEY). It must fail loudly.
-      process.env.HIPPO_REQUIRE_SERVER = '1';
+      vi.stubEnv('HIPPO_REQUIRE_SERVER', '1');
       const run = runCli(workspace, 'remember', 'require-server-canary-66');
       expect(run.stdout + run.stderr).toMatch(/HIPPO_REQUIRE_SERVER/);
       // The memory must not have been written via the direct path.
       expect(getActorForContent(workspace, 'require-server-canary-66')).toBeNull();
     } finally {
-      delete process.env.HIPPO_REQUIRE_SERVER;
+      vi.stubEnv('HIPPO_REQUIRE_SERVER', undefined);
       rmSync(workspace, { recursive: true, force: true });
     }
   }, 15_000);
@@ -399,7 +403,7 @@ describe('cli thin-client mode', () => {
 
       // No server running. --archive must now honour HIPPO_REQUIRE_SERVER the
       // same way plain forget does, instead of silently writing directly.
-      process.env.HIPPO_REQUIRE_SERVER = '1';
+      vi.stubEnv('HIPPO_REQUIRE_SERVER', '1');
       const run = runCli(workspace, 'forget', 'mem_rsarchive', '--archive', '--reason', 'require-server archive test');
       expect(run.stdout + run.stderr).toMatch(/HIPPO_REQUIRE_SERVER/);
 
@@ -410,7 +414,7 @@ describe('cli thin-client mode', () => {
         closeHippoDb(db2);
       }
     } finally {
-      delete process.env.HIPPO_REQUIRE_SERVER;
+      vi.stubEnv('HIPPO_REQUIRE_SERVER', undefined);
       rmSync(workspace, { recursive: true, force: true });
     }
   }, 15_000);

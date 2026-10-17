@@ -1,5 +1,5 @@
 // A refused caller learns when to come back, and a throttled heartbeat never reads as a revoked key.
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readdirSync, readFileSync, rmSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -11,6 +11,10 @@ import { createRateLimiter } from '../src/server/rate-limit.js';
 import { heartbeatVerdict } from '../src/server/auth.js';
 import { sqliteStore } from '../src/store/index.js';
 import { makeRoot } from './_helpers/make-root.js';
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 const repoRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 const limiter = (ratePerSec: number, burst = 1) => createRateLimiter({ ratePerSec, burst, idleEvictMs: 60000, maxKeys: 10 });
@@ -92,17 +96,14 @@ describe('every 429 in core src', () => {
 });
 
 describe('heartbeatVerdict', () => {
-  const saved = process.env.HIPPO_CLIENT_IP_HEADER;
   let root: string;
 
   beforeEach(() => {
-    delete process.env.HIPPO_CLIENT_IP_HEADER;
+    vi.stubEnv('HIPPO_CLIENT_IP_HEADER', undefined);
     root = makeRoot('heartbeat-429');
   });
 
   afterEach(() => {
-    if (saved === undefined) delete process.env.HIPPO_CLIENT_IP_HEADER;
-    else process.env.HIPPO_CLIENT_IP_HEADER = saved;
     rmSync(root, { recursive: true, force: true });
   });
 

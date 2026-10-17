@@ -1,5 +1,5 @@
 // A store flagged `"sharedStore": true` stamps NULL on a write that names no project, never the folder that holds it.
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { initStore } from '../src/store/open.js';
@@ -24,19 +24,20 @@ import { summaryWith } from './_helpers/compaction-hooks.js';
 import { sharingStores } from './_helpers/sharing-stores.js';
 import { makeRoot } from './_helpers/make-root.js';
 
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 let tmp: string;
-const origHome = process.env.HIPPO_HOME;
 
 beforeEach(() => {
   tmp = makeRoot('shared-origin', { init: false });
-  process.env.HIPPO_HOME = path.join(tmp, 'global');
+  vi.stubEnv('HIPPO_HOME', path.join(tmp, 'global'));
   _resetProjectIdentityCacheForTests();
   _resetSharedStoreCacheForTests();
 });
 
 afterEach(() => {
-  if (origHome === undefined) delete process.env.HIPPO_HOME;
-  else process.env.HIPPO_HOME = origHome;
   _resetSharedStoreCacheForTests();
 });
 

@@ -34,16 +34,16 @@ function tmpHome() {
   // hasGlobal=false inside api.getContext (same pattern as api-context.test.ts).
   const globalTmp = makeRoot('df3-global', { init: false });
   const origHippoHome = process.env.HIPPO_HOME;
-  process.env.HIPPO_HOME = globalTmp;
+  vi.stubEnv('HIPPO_HOME', globalTmp);
   return {
     home,
     restore: () => {
       rmSync(home, { recursive: true, force: true });
       rmSync(globalTmp, { recursive: true, force: true });
       if (origHippoHome !== undefined) {
-        process.env.HIPPO_HOME = origHippoHome;
+        vi.stubEnv('HIPPO_HOME', origHippoHome);
       } else {
-        delete process.env.HIPPO_HOME;
+        vi.stubEnv('HIPPO_HOME', undefined);
       }
     },
   };
@@ -410,13 +410,13 @@ describe('pinned budget reserve dedupes mirrored entries', () => {
     // and pinnedGlobal is populated.
     globalTmp = makeRoot('df3-dedupe-global');
     origHippoHome = process.env.HIPPO_HOME;
-    process.env.HIPPO_HOME = globalTmp;
+    vi.stubEnv('HIPPO_HOME', globalTmp);
   });
 
   afterEach(() => {
     rmSync(home, { recursive: true, force: true });
-    if (origHippoHome !== undefined) process.env.HIPPO_HOME = origHippoHome;
-    else delete process.env.HIPPO_HOME;
+    if (origHippoHome !== undefined) vi.stubEnv('HIPPO_HOME', origHippoHome);
+    else vi.stubEnv('HIPPO_HOME', undefined);
   });
 
   it('a pin mirrored in local+global reserves its cost ONCE, so a recent entry still fits', async () => {

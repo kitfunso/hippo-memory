@@ -1,10 +1,14 @@
 // Test-isolation guard ancestor coverage (episode 01M31DR9BAD95WQ5DJTX03Z1FC). Real filesystem in a
 // mkdtemp sandbox; exercises watchedStoreDirs() directly, not the globalSetup leak check itself.
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, vi, afterEach } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { snapshot, watchedStoreDirs } from './_real-store-guard.js';
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 function globalStoreRootLocal(): string {
   const hippoHome = process.env.HIPPO_HOME?.trim();
@@ -73,27 +77,15 @@ describe('watchedStoreDirs ancestor coverage', () => {
   });
 
   it('arm 6: HIPPO_HOME colliding with an ancestor store is listed once, not twice', () => {
-    const prevHome = process.env.HIPPO_HOME;
-    process.env.HIPPO_HOME = path.join(outer, '.hippo');
-    try {
-      const dirs = watchedStoreDirs(fixture, home);
-      expect(dirs).toEqual([path.join(fixture, '.hippo'), path.join(checkout, '.hippo'), path.join(outer, '.hippo')]);
-    } finally {
-      if (prevHome === undefined) delete process.env.HIPPO_HOME;
-      else process.env.HIPPO_HOME = prevHome;
-    }
+    vi.stubEnv('HIPPO_HOME', path.join(outer, '.hippo'));
+    const dirs = watchedStoreDirs(fixture, home);
+    expect(dirs).toEqual([path.join(fixture, '.hippo'), path.join(checkout, '.hippo'), path.join(outer, '.hippo')]);
   });
 
   describe.skipIf(process.platform !== 'win32')('case-insensitive collision (win32 only)', () => {
     it('arm 7: HIPPO_HOME differing only in case still collides with the ancestor store', () => {
-      const prevHome = process.env.HIPPO_HOME;
-      process.env.HIPPO_HOME = path.join(outer, '.HIPPO');
-      try {
-        expect(watchedStoreDirs(fixture, home).length).toBe(3);
-      } finally {
-        if (prevHome === undefined) delete process.env.HIPPO_HOME;
-        else process.env.HIPPO_HOME = prevHome;
-      }
+      vi.stubEnv('HIPPO_HOME', path.join(outer, '.HIPPO'));
+      expect(watchedStoreDirs(fixture, home).length).toBe(3);
     });
   });
 

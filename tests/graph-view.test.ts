@@ -221,20 +221,16 @@ describe('graph-view: layout + renderers (pure)', () => {
 describe('graph-view: GET /v1/graph (live server)', () => {
   let home: string;
   let globalHome: string;
-  let origHippoHome: string | undefined;
   let handle: ServerHandle;
 
   beforeEach(async () => {
     home = makeRoot('graphview');
     globalHome = makeRoot('graphview');
-    origHippoHome = process.env.HIPPO_HOME;
-    process.env.HIPPO_HOME = globalHome;
+    vi.stubEnv('HIPPO_HOME', globalHome);
     handle = await serve({ hippoRoot: home, port: 0 });
   });
   afterEach(async () => {
     await handle.stop();
-    if (origHippoHome === undefined) delete process.env.HIPPO_HOME;
-    else process.env.HIPPO_HOME = origHippoHome;
     rmSync(home, { recursive: true, force: true });
     rmSync(globalHome, { recursive: true, force: true });
   });

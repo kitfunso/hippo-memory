@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, MockInstance } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import { writeEntry } from '../src/store/entry-writes.js';
@@ -8,26 +8,26 @@ import { embedMemory } from '../src/search/embed-memories.js';
 import { loadEmbeddingIndex } from '../src/store/vector-index.js';
 import { makeRoot } from './_helpers/make-root.js';
 
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 const KEY_ENV = 'OPENAI_API_KEY';
 // Built from parts so the repo's secret scan does not flag the test file.
 const KEY = ['sk', 'proj', 'A1b2C3d4E5f6G7h8I9j0K1l2'].join('-');
 let root: string;
-let savedKey: string | undefined;
 let errorSpy: MockInstance<typeof console.error>;
 
 beforeEach(() => {
   root = makeRoot('embed-warn');
   fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ embeddings: { provider: 'openai', model: 'm' } }), 'utf8');
-  savedKey = process.env[KEY_ENV];
-  process.env[KEY_ENV] = KEY;
+  vi.stubEnv(KEY_ENV, KEY);
   errorSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
 });
 
 afterEach(() => {
   vi.unstubAllGlobals();
   errorSpy.mockRestore();
-  if (savedKey === undefined) delete process.env[KEY_ENV];
-  else process.env[KEY_ENV] = savedKey;
 });
 
 function warnings(): string[] {

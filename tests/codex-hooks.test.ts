@@ -1,5 +1,5 @@
 // Codex gets hippo's memory from two hooks in its own hooks.json; hippo appends them and never edits the user's entries.
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -14,6 +14,10 @@ import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import type { JsonValue } from '../src/util/json.js';
 import { hippoRun } from './_helpers/spawn-hippo.js';
 import { runCliAs } from './_helpers/run-cli-as.js';
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 const START = '<!-- hippo:start -->';
 const END = '<!-- hippo:end -->';
 const EM_DASH = String.fromCodePoint(0x2014);
@@ -68,17 +72,15 @@ function writeFile(file: string, text: string): void {
 }
 
 describe('installJsonHooks(codex)', () => {
-  const prevCodexHome = process.env.CODEX_HOME;
   let fake: FakeHomeHandle;
   let hooksFile: string;
   beforeEach(() => {
     fake = withFakeHome('hippo-codex-hooks-');
-    process.env.CODEX_HOME = path.join(fake.home, 'codex-home');
-    hooksFile = path.join(process.env.CODEX_HOME, 'hooks.json');
+    const codexHome = path.join(fake.home, 'codex-home');
+    vi.stubEnv('CODEX_HOME', codexHome);
+    hooksFile = path.join(codexHome, 'hooks.json');
   });
   afterEach(() => {
-    if (prevCodexHome === undefined) delete process.env.CODEX_HOME;
-    else process.env.CODEX_HOME = prevCodexHome;
     fake.cleanup();
   });
 
@@ -171,7 +173,7 @@ describe('installJsonHooks(codex)', () => {
     installJsonHooks('codex');
     expect(fs.existsSync(hooksFile)).toBe(true);
     expect(fs.existsSync(path.join(fake.home, '.codex', 'hooks.json'))).toBe(false);
-    delete process.env.CODEX_HOME;
+    vi.stubEnv('CODEX_HOME', undefined);
     expect(installJsonHooks('codex').settingsPath).toBe(path.join(fake.home, '.codex', 'hooks.json'));
   });
 

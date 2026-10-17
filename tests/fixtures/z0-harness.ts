@@ -3,16 +3,13 @@ import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync, existsSync
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { execFileSync } from 'node:child_process';
+import { vi } from 'vitest';
 import { runAll, validateTasks } from '../../scripts/token-eval/ab-run.mjs';
-import { pathKey } from '../../scripts/token-eval/exec.mjs';
 import type { Z0Record, Z0PlanCell } from './z0-contract.js';
 
 export const FAKE = resolve(__dirname, 'fake-claude.mjs');
 export const CLAUDE = `"${process.execPath}" "${FAKE}"`;
 export const CHECKS = resolve(__dirname, 'z0-checks');
-const PATH_KEY = pathKey(process.env);
-const ENV_KEYS = ['HOME', 'USERPROFILE', 'APPDATA', 'HIPPO_HOME', PATH_KEY, 'FAKE_CLAUDE_LOG', 'FAKE_CLAUDE_LIMIT_ONCE', 'FAKE_CLAUDE_LIMIT_ALWAYS', 'FAKE_WT_DIR', 'Z0_ANCESTOR_STOP', 'GIT_CONFIG_GLOBAL', 'Z0_ENV_DUMP_DIR', 'Z0_TOGGLE', 'Z0_TOGGLE_TO', 'CODEX_HOME', 'FAKE_CODEX_LOG', 'FAKE_CODEX_STATE', 'FAKE_CODEX_INTERNAL_SOURCE'];
-const savedEnv = Object.fromEntries(ENV_KEYS.map((k) => [k, process.env[k]]));
 const savedCwd = process.cwd();
 const dirs: string[] = [];
 const pids: string[] = [];
@@ -20,10 +17,7 @@ const pids: string[] = [];
 /** For afterEach: cwd, env and temp dirs back, and any grandchild a hung fake left behind killed. */
 export function cleanup() {
   process.chdir(savedCwd);
-  for (const [k, v] of Object.entries(savedEnv)) {
-    if (v === undefined) delete process.env[k];
-    else process.env[k] = v;
-  }
+  vi.unstubAllEnvs();
   while (pids.length) {
     const f = pids.pop()!;
     if (!existsSync(f)) continue;
@@ -46,14 +40,14 @@ export const tmp = (prefix: string): string => {
 /** Temp HOME, USERPROFILE, APPDATA, HIPPO_HOME and cwd, and a fresh fake-Claude log; returns the out dir and the log path. */
 export function isolate(name: string) {
   const home = tmp(`z0-surf-home-${name}-`);
-  process.env.HOME = home;
-  process.env.USERPROFILE = home;
-  process.env.APPDATA = join(home, 'AppData', 'Roaming');
-  process.env.HIPPO_HOME = tmp('z0-surf-hippo-');
+  vi.stubEnv('HOME', home);
+  vi.stubEnv('USERPROFILE', home);
+  vi.stubEnv('APPDATA', join(home, 'AppData', 'Roaming'));
+  vi.stubEnv('HIPPO_HOME', tmp('z0-surf-hippo-'));
   process.chdir(tmp('z0-surf-cwd-'));
   const out = tmp(`z0-surf-out-${name}-`);
   const logDir = tmp('z0-surf-log-');
-  process.env.FAKE_CLAUDE_LOG = join(logDir, 'fake.log');
+  vi.stubEnv('FAKE_CLAUDE_LOG', join(logDir, 'fake.log'));
   pids.push(join(out, 'grandchild.pid'));
   return { out, log: join(logDir, 'fake.log'), home };
 }

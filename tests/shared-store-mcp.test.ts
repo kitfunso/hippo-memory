@@ -30,7 +30,6 @@ const OPEN = new Map<string, Record<string, JsonValue>>([['hippo_predict_baserat
 
 let tmp: string;
 let handle: ServerHandle | null = null;
-const origHome = process.env.HIPPO_HOME;
 
 /** `<tmp>/srv/hippo-team`, a folder with no project marker, so the folder stamp is '' (user-global). */
 function flaggedStore(): string {
@@ -67,7 +66,7 @@ function repoWithOneFix(): string {
 
 beforeEach(() => {
   tmp = makeRoot('shared-mcp', { init: false });
-  process.env.HIPPO_HOME = path.join(tmp, 'global');
+  vi.stubEnv('HIPPO_HOME', path.join(tmp, 'global'));
   _resetProjectIdentityCacheForTests();
   _resetSharedStoreCacheForTests();
 });
@@ -75,8 +74,6 @@ beforeEach(() => {
 afterEach(async () => {
   await handle?.stop();
   handle = null;
-  if (origHome === undefined) delete process.env.HIPPO_HOME;
-  else process.env.HIPPO_HOME = origHome;
   _resetSharedStoreCacheForTests();
 });
 

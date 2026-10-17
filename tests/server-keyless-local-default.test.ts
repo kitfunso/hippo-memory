@@ -1,6 +1,6 @@
 // A request with no key is refused by default, on loopback too; HIPPO_ALLOW_KEYLESS_LOCAL=1 lets this machine's own user in as a member,
 // and HIPPO_KEYLESS_LOCAL_ROLE=admin no longer does anything: that user is always a member.
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { request } from 'node:http';
 import { rmSync } from 'node:fs';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
@@ -9,6 +9,10 @@ import { queryAuditEvents } from '../src/store/audit.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { presentConnectionsAsRemote } from './_helpers/listen.js';
 import { makeRoot } from './_helpers/make-root.js';
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 const MODE_KEYS = ['HIPPO_ALLOW_KEYLESS_LOCAL', 'HIPPO_KEYLESS_LOCAL_ROLE', 'HIPPO_REQUIRE_AUTH'] as const;
 const PLAIN_REFUSAL = 'auth required';
@@ -89,7 +93,7 @@ function rememberActors(): string[] {
 beforeEach(async () => {
   for (const key of MODE_KEYS) {
     saved.set(key, process.env[key]);
-    delete process.env[key];
+    vi.stubEnv(key, undefined);
   }
   home = makeRoot('keyless-default');
   const db = openHippoDb(home);
@@ -106,8 +110,8 @@ afterEach(async () => {
   rmSync(home, { recursive: true, force: true });
   for (const key of MODE_KEYS) {
     const value = saved.get(key);
-    if (value === undefined) delete process.env[key];
-    else process.env[key] = value;
+    if (value === undefined) vi.stubEnv(key, undefined);
+    else vi.stubEnv(key, value);
   }
 });
 
@@ -163,14 +167,14 @@ describe('a request with no key, by default', () => {
   });
 
   it.each(['0', 'yes', ''])('stays closed when HIPPO_ALLOW_KEYLESS_LOCAL is %j', async (value) => {
-    process.env.HIPPO_ALLOW_KEYLESS_LOCAL = value;
+    vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', value);
     expect((await recall()).status).toBe(401);
   });
 });
 
 describe('a request with no key under HIPPO_ALLOW_KEYLESS_LOCAL=1', () => {
   beforeEach(() => {
-    process.env.HIPPO_ALLOW_KEYLESS_LOCAL = '1';
+    vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
   });
 
   /** The keys GET /v1/auth/keys shows this caller: a member sees only keys it owns, the admin every key in the tenant. */
@@ -190,7 +194,7 @@ describe('a request with no key under HIPPO_ALLOW_KEYLESS_LOCAL=1', () => {
   });
 
   it('is still a member when HIPPO_KEYLESS_LOCAL_ROLE=admin is set, which nothing reads any more', async () => {
-    process.env.HIPPO_KEYLESS_LOCAL_ROLE = 'admin';
+    vi.stubEnv('HIPPO_KEYLESS_LOCAL_ROLE', 'admin');
     expect(await listedKeyCount()).toBe(0);
     expect((await call('/v1/sleep', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{"dry_run":true}' })).status).toBe(403);
   });
@@ -212,7 +216,7 @@ describe('a request with no key under HIPPO_ALLOW_KEYLESS_LOCAL=1', () => {
   });
 
   it('loses to HIPPO_REQUIRE_AUTH=1, which answers with the plain refusal', async () => {
-    process.env.HIPPO_REQUIRE_AUTH = '1';
+    vi.stubEnv('HIPPO_REQUIRE_AUTH', '1');
     expect(await recall()).toMatchObject({ status: 401, error: PLAIN_REFUSAL });
     expect((await recall({ authorization: `Bearer ${apiKey}` })).status).toBe(200);
   });
@@ -221,7 +225,7 @@ describe('a request with no key under HIPPO_ALLOW_KEYLESS_LOCAL=1', () => {
 describe('GET /health', () => {
   it('gives this machine its version and pid with no key, in either mode', async () => {
     expect((await call('/health')).json).toMatchObject({ ok: true, pid: process.pid, version: expect.any(String) });
-    process.env.HIPPO_ALLOW_KEYLESS_LOCAL = '1';
+    vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
     expect((await call('/health')).json).toMatchObject({ ok: true, pid: process.pid, version: expect.any(String) });
   });
 

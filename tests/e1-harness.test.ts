@@ -8,11 +8,15 @@
  * clears them in its finally; tests also clear in beforeEach/afterEach.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { generateProtocol } from '../scripts/e1-lifecycle/generate.mjs';
 import { runArmSeed } from '../scripts/e1-lifecycle/run.mjs';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { _resetAblationCacheForTests } from '../src/core/ablation.js';
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 const ABLATION_ENV_VARS = [
   'HIPPO_ABLATE_DECAY',
@@ -26,7 +30,7 @@ const ABLATION_ENV_VARS = [
 ] as const;
 
 function clearAblationEnv(): void {
-  for (const v of ABLATION_ENV_VARS) delete process.env[v];
+  for (const v of ABLATION_ENV_VARS) vi.stubEnv(v, undefined);
   _resetAblationCacheForTests();
 }
 beforeEach(clearAblationEnv);

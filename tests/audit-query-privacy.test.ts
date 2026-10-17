@@ -28,7 +28,6 @@ const QUERY = `${CANARY} private customer question`;
 let home: string;
 let localRoot: string;
 let globalRoot: string;
-let savedHome: string | undefined;
 let ctx: FullContext;
 
 interface RecallMetadata {
@@ -74,16 +73,10 @@ beforeEach(async () => {
   mkdirSync(join(home, '.hippo'), { recursive: true });
   localRoot = join(home, '.hippo');
   globalRoot = join(home, 'global-hippo');
-  savedHome = process.env.HIPPO_HOME;
-  process.env.HIPPO_HOME = globalRoot;
+  vi.stubEnv('HIPPO_HOME', globalRoot);
   initStore(localRoot);
   ctx = apiCtx(localRoot, 'default', { subject: 'test', role: 'admin' });
   await remember(ctx, { content: `${CANARY} stored memory body` });
-});
-
-afterEach(() => {
-  if (savedHome === undefined) delete process.env.HIPPO_HOME;
-  else process.env.HIPPO_HOME = savedHome;
 });
 
 describe('auditQueryFields', () => {

@@ -32,6 +32,8 @@ const AGENT_HOME_KEYS = [
 ];
 for (const k of AGENT_HOME_KEYS) delete process.env[k];
 delete process.env.HIPPO_AGENT_MEMORY_TOOLS;
+// This shell may itself be a Claude Code session; the var would leak into every spawned CLI child and falsify null-session_id trace assertions.
+delete process.env.CLAUDE_CODE_SESSION_ID;
 const PROVIDER_ENV_KEYS = ['ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'VOYAGE_API_KEY', 'COHERE_API_KEY', 'TYPESAFE_API_KEY', 'HIPPO_LLM_RERANKER_URL', 'HIPPO_LLM_RERANKER_KEY', 'CLOUDFLARE_ACCOUNT_ID', 'CLOUDFLARE_API_TOKEN', 'HIPPO_CLEF_ENDPOINT', 'HIPPO_CLEF_ENDPOINT_TOKEN'];
 for (const k of PROVIDER_ENV_KEYS) delete process.env[k];
 // No test may reach the real schtasks or crontab, whatever flags it passes; a test of the schedule clears this and fakes the scheduler.

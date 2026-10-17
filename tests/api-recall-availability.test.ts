@@ -14,7 +14,7 @@
  */
 
 import type { FullContext } from './_helpers/api-ctx.js';
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
@@ -22,6 +22,10 @@ import { createMemory, DEFAULT_HALF_LIFE_DAYS, Layer } from '../src/core/memory.
 import { retrieve } from '../src/api/index.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 function safeRmSync(p: string): void {
   try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
@@ -69,8 +73,8 @@ function seedFiringFixture(root: string): void {
 
 describe('api.recall availabilityHint', () => {
   let root: string;
-  beforeEach(() => { root = makeRoot('j2-api'); delete process.env.HIPPO_AVAILABILITY; });
-  afterEach(() => { safeRmSync(root); delete process.env.HIPPO_AVAILABILITY; });
+  beforeEach(() => { root = makeRoot('j2-api'); vi.stubEnv('HIPPO_AVAILABILITY', undefined); });
+  afterEach(() => { safeRmSync(root); vi.stubEnv('HIPPO_AVAILABILITY', undefined); });
 
   it('fires and emits exactly one audit row on a recency-biased recall', async () => {
     seedFiringFixture(root);
@@ -85,7 +89,7 @@ describe('api.recall availabilityHint', () => {
 
   it('HIPPO_AVAILABILITY=off suppresses the hint and the audit', async () => {
     seedFiringFixture(root);
-    process.env.HIPPO_AVAILABILITY = 'off';
+    vi.stubEnv('HIPPO_AVAILABILITY', 'off');
     const result = await retrieve(ctxFor(root), { query: QUERY, window: { limit: 4 } });
     expect(result.availabilityHint).toBeUndefined();
     expect(countAuditOps(root, 'recall_availability_detected')).toBe(0);
@@ -112,7 +116,7 @@ describe('api.recall availabilityHint', () => {
   it('does not change result ordering (soft warning only)', async () => {
     seedFiringFixture(root);
     const withHint = await retrieve(ctxFor(root), { query: QUERY, window: { limit: 4 } });
-    process.env.HIPPO_AVAILABILITY = 'off';
+    vi.stubEnv('HIPPO_AVAILABILITY', 'off');
     const without = await retrieve(ctxFor(root), { query: QUERY, window: { limit: 4 } });
     expect(withHint.results.map((r) => r.id)).toEqual(without.results.map((r) => r.id));
   });

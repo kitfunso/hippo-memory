@@ -156,16 +156,12 @@ describe('countSessionRawMemories helper', () => {
 
 describe('MCP hippo_recall exposes fresh_tail_session_id', () => {
   let home: string;
-  let originalHome: string | undefined;
   beforeEach(() => {
     home = makeRoot('v163-mcp');
-    originalHome = process.env.HIPPO_HOME;
-    process.env.HIPPO_HOME = home;
+    vi.stubEnv('HIPPO_HOME', home);
   });
   afterEach(() => {
     safeRmSync(home);
-    if (originalHome === undefined) delete process.env.HIPPO_HOME;
-    else process.env.HIPPO_HOME = originalHome;
   });
 
   it('hippo_recall tool schema lists fresh_tail_session_id', async () => {

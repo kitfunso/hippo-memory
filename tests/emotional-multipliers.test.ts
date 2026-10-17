@@ -27,7 +27,7 @@
  */
 
 import type { FullContext } from './_helpers/api-ctx.js';
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import {
   calculateStrength,
@@ -42,6 +42,10 @@ import { writeEntry } from '../src/store/entry-writes.js';
 import { retrieve } from '../src/api/index.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 const ENV_KEY = 'HIPPO_LOSS_AVERSION_RATIO';
 // One instant for every entry age and strength call: two real-clock reads a pause apart moved a ratio past its tolerance.
@@ -73,11 +77,11 @@ function makeEntry(valence: EmotionalValence, opts: Partial<MemoryEntry> = {}): 
 
 describe('EMOTIONAL_MULTIPLIERS defaults', () => {
   beforeEach(() => {
-    delete process.env[ENV_KEY];
+    vi.stubEnv(ENV_KEY, undefined);
     _resetLossAversionRatioCacheForTests();
   });
   afterEach(() => {
-    delete process.env[ENV_KEY];
+    vi.stubEnv(ENV_KEY, undefined);
     _resetLossAversionRatioCacheForTests();
   });
 
@@ -97,10 +101,10 @@ describe('EMOTIONAL_MULTIPLIERS defaults', () => {
 
   it('2. env var scaling: HIPPO_LOSS_AVERSION_RATIO=0.5 halves negative multiplier', () => {
     const e = makeEntry('negative');
-    process.env[ENV_KEY] = '0.5';
+    vi.stubEnv(ENV_KEY, '0.5');
     _resetLossAversionRatioCacheForTests();
     const scaled = calculateStrength(e, NOW);
-    delete process.env[ENV_KEY];
+    vi.stubEnv(ENV_KEY, undefined);
     _resetLossAversionRatioCacheForTests();
     const baseline = calculateStrength(e, NOW);
     // negative_multiplier baseline = 2.0; scaled (0.5x) = 1.0. Strength ratio = 0.5.
@@ -111,7 +115,7 @@ describe('EMOTIONAL_MULTIPLIERS defaults', () => {
   it('3. env var off (no env set): defaults to 1.0 ratio (negative multiplier intact)', () => {
     const e = makeEntry('negative');
     const strength = calculateStrength(e, NOW);
-    process.env[ENV_KEY] = '1.0';
+    vi.stubEnv(ENV_KEY, '1.0');
     _resetLossAversionRatioCacheForTests();
     const explicit = calculateStrength(e, NOW);
     expect(strength).toBeCloseTo(explicit, 6);
@@ -127,11 +131,11 @@ describe('EMOTIONAL_MULTIPLIERS defaults', () => {
     // multiplier). To genuinely soften loss aversion below v1.13.4 levels,
     // a future J5-v2 env override would be needed; this env var's tuning
     // range is intentionally constrained to the deletion-safe regime.
-    process.env[ENV_KEY] = '0';
+    vi.stubEnv(ENV_KEY, '0');
     _resetLossAversionRatioCacheForTests();
     const e = makeEntry('negative');
     const rejected = calculateStrength(e, NOW);
-    process.env[ENV_KEY] = '1.0';
+    vi.stubEnv(ENV_KEY, '1.0');
     _resetLossAversionRatioCacheForTests();
     const baseline = calculateStrength(e, NOW);
     expect(rejected).toBeCloseTo(baseline, 6);
@@ -147,12 +151,12 @@ describe('EMOTIONAL_MULTIPLIERS defaults', () => {
     const invalidValues = ['', 'abc', '0', '0.1', '0.25', '0.49', '-1', '-0.5', 'NaN', 'Infinity', '-Infinity', '1e1000'];
     for (const v of invalidValues) {
       it(`5.${v || '(empty)'}: invalid value "${v}" falls back to ratio=1.0`, () => {
-        process.env[ENV_KEY] = v;
+        vi.stubEnv(ENV_KEY, v);
         _resetLossAversionRatioCacheForTests();
         const e = makeEntry('negative', { strength: 0.3 });
         const fallback = calculateStrength(e, NOW);
         // Compare against explicit ratio=1.0.
-        process.env[ENV_KEY] = '1.0';
+        vi.stubEnv(ENV_KEY, '1.0');
         _resetLossAversionRatioCacheForTests();
         const baseline = calculateStrength(e, NOW);
         expect(fallback).toBeCloseTo(baseline, 6);
@@ -168,11 +172,11 @@ describe('EMOTIONAL_MULTIPLIERS defaults', () => {
   // some of these but introduce its own asymmetries.
   describe('5b. env permissive parse semantics (Number() coercion)', () => {
     it('whitespace tolerated: " 0.5 " parses as 0.5', () => {
-      process.env[ENV_KEY] = ' 0.5 ';
+      vi.stubEnv(ENV_KEY, ' 0.5 ');
       _resetLossAversionRatioCacheForTests();
       const e = makeEntry('negative');
       const scaled = calculateStrength(e, NOW);
-      delete process.env[ENV_KEY];
+      vi.stubEnv(ENV_KEY, undefined);
       _resetLossAversionRatioCacheForTests();
       const baseline = calculateStrength(e, NOW);
       expect(scaled / baseline).toBeCloseTo(0.5, 6);
@@ -183,11 +187,11 @@ describe('EMOTIONAL_MULTIPLIERS defaults', () => {
       // semantics without colliding with the rejection floor. Sub-floor
       // values like '1.5e-1' (= 0.15) are correctly rejected; they appear
       // in test 5 invalid enumeration.
-      process.env[ENV_KEY] = '1.5e0';
+      vi.stubEnv(ENV_KEY, '1.5e0');
       _resetLossAversionRatioCacheForTests();
       const e = makeEntry('negative');
       const scaled = calculateStrength(e, NOW);
-      delete process.env[ENV_KEY];
+      vi.stubEnv(ENV_KEY, undefined);
       _resetLossAversionRatioCacheForTests();
       const baseline = calculateStrength(e, NOW);
       // scaled / baseline = 1.5 if neither clamps; with aged entry the
@@ -201,11 +205,11 @@ describe('EMOTIONAL_MULTIPLIERS defaults', () => {
       // on any non-zero decay. This asserts the parser accepts the value
       // (rather than silent-fallback). User-facing impact: hex inputs are
       // legal but always saturate; if you want subtle tuning use decimals.
-      process.env[ENV_KEY] = '0x10';
+      vi.stubEnv(ENV_KEY, '0x10');
       _resetLossAversionRatioCacheForTests();
       const e = makeEntry('negative');
       const scaled = calculateStrength(e, NOW);
-      delete process.env[ENV_KEY];
+      vi.stubEnv(ENV_KEY, undefined);
       _resetLossAversionRatioCacheForTests();
       const baseline = calculateStrength(e, NOW);
       // scaled >= baseline (32x multiplier saturates at clamp; baseline is unclamped at ~0.63).
@@ -215,10 +219,10 @@ describe('EMOTIONAL_MULTIPLIERS defaults', () => {
 
   it('6. negative-only invariant: env var does NOT affect positive multiplier', () => {
     const e = makeEntry('positive');
-    process.env[ENV_KEY] = '0.1';
+    vi.stubEnv(ENV_KEY, '0.1');
     _resetLossAversionRatioCacheForTests();
     const withEnv = calculateStrength(e, NOW);
-    delete process.env[ENV_KEY];
+    vi.stubEnv(ENV_KEY, undefined);
     _resetLossAversionRatioCacheForTests();
     const withoutEnv = calculateStrength(e, NOW);
     expect(withEnv).toBeCloseTo(withoutEnv, 6);
@@ -226,10 +230,10 @@ describe('EMOTIONAL_MULTIPLIERS defaults', () => {
 
   it('7. negative-only invariant: env var does NOT affect critical multiplier', () => {
     const e = makeEntry('critical');
-    process.env[ENV_KEY] = '0.1';
+    vi.stubEnv(ENV_KEY, '0.1');
     _resetLossAversionRatioCacheForTests();
     const withEnv = calculateStrength(e, NOW);
-    delete process.env[ENV_KEY];
+    vi.stubEnv(ENV_KEY, undefined);
     _resetLossAversionRatioCacheForTests();
     const withoutEnv = calculateStrength(e, NOW);
     expect(withEnv).toBeCloseTo(withoutEnv, 6);
@@ -237,10 +241,10 @@ describe('EMOTIONAL_MULTIPLIERS defaults', () => {
 
   it('8. negative-only invariant: env var does NOT affect neutral multiplier', () => {
     const e = makeEntry('neutral');
-    process.env[ENV_KEY] = '0.1';
+    vi.stubEnv(ENV_KEY, '0.1');
     _resetLossAversionRatioCacheForTests();
     const withEnv = calculateStrength(e, NOW);
-    delete process.env[ENV_KEY];
+    vi.stubEnv(ENV_KEY, undefined);
     _resetLossAversionRatioCacheForTests();
     const withoutEnv = calculateStrength(e, NOW);
     expect(withEnv).toBeCloseTo(withoutEnv, 6);
@@ -251,12 +255,12 @@ describe('behavioral: env=0 ranking effect', () => {
   let root: string;
   beforeEach(() => {
     root = makeRoot('j5-behavioral');
-    delete process.env[ENV_KEY];
+    vi.stubEnv(ENV_KEY, undefined);
     _resetLossAversionRatioCacheForTests();
   });
   afterEach(() => {
     safeRmSync(root);
-    delete process.env[ENV_KEY];
+    vi.stubEnv(ENV_KEY, undefined);
     _resetLossAversionRatioCacheForTests();
   });
 
@@ -269,7 +273,7 @@ describe('behavioral: env=0 ranking effect', () => {
     // tagged memories should rank somewhat lower than under default ratio=1.0,
     // and the strength field reflects that (but stays safely above
     // DECAY_THRESHOLD).
-    process.env[ENV_KEY] = '0.5';
+    vi.stubEnv(ENV_KEY, '0.5');
     _resetLossAversionRatioCacheForTests();
     const marker = (v: string) => `shared ranking keyword variant ${v} test`;
     const valences: EmotionalValence[] = ['positive', 'negative', 'critical', 'neutral'];
@@ -313,7 +317,7 @@ describe('behavioral: env=0 ranking effect', () => {
     // unclamped strength values are visible and strict reduction is testable.
     safeRmSync(root);
     const root2 = makeRoot('j5-behavioral-baseline');
-    process.env[ENV_KEY] = '1.0';
+    vi.stubEnv(ENV_KEY, '1.0');
     _resetLossAversionRatioCacheForTests();
     const baselineEntry = createMemory('shared ranking keyword variant negative test', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,

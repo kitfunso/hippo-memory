@@ -12,13 +12,17 @@
  * Unknown / un-extractable team → null → '__unroutable__' sentinel.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createHmac } from 'node:crypto';
 import { serve, type ServerHandle } from '../src/server.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { listDlq } from '../src/connectors/dlq.js';
 import { slackDlq } from '../src/connectors/slack/dlq.js';
 import { makeRoot } from './_helpers/make-root.js';
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 const SECRET = 'shhh';
 
@@ -32,13 +36,13 @@ describe('POST /v1/connectors/slack/events parse-failure tenant attribution', ()
 
   beforeEach(async () => {
     root = makeRoot('slack-parsefail');
-    process.env.SLACK_SIGNING_SECRET = SECRET;
+    vi.stubEnv('SLACK_SIGNING_SECRET', SECRET);
     handle = await serve({ hippoRoot: root, host: '127.0.0.1', port: 0 });
   });
 
   afterEach(async () => {
-    delete process.env.SLACK_SIGNING_SECRET;
-    delete process.env.HIPPO_TENANT;
+    vi.stubEnv('SLACK_SIGNING_SECRET', undefined);
+    vi.stubEnv('HIPPO_TENANT', undefined);
     await handle.stop();
   });
 
@@ -56,7 +60,7 @@ describe('POST /v1/connectors/slack/events parse-failure tenant attribution', ()
     } finally {
       closeHippoDb(db);
     }
-    process.env.HIPPO_TENANT = 'deployment-default';
+    vi.stubEnv('HIPPO_TENANT', 'deployment-default');
 
     // Send an invalid-JSON body that still carries a recognisable team_id.
     const badBody = '{"team_id":"T_ACME","event":{broken-json-here';
@@ -94,7 +98,7 @@ describe('POST /v1/connectors/slack/events parse-failure tenant attribution', ()
     } finally {
       closeHippoDb(db);
     }
-    process.env.HIPPO_TENANT = 'deployment-default';
+    vi.stubEnv('HIPPO_TENANT', 'deployment-default');
 
     const badBody = '{"team_id":"T_UNKNOWN","event":{not-json';
     const ts = String(Math.floor(Date.now() / 1000));
@@ -114,7 +118,7 @@ describe('POST /v1/connectors/slack/events parse-failure tenant attribution', ()
   });
 
   it('parse failure with un-extractable team_id (totally garbage body) lands as __unroutable__', async () => {
-    process.env.HIPPO_TENANT = 'deployment-default';
+    vi.stubEnv('HIPPO_TENANT', 'deployment-default');
 
     // No team_id substring at all → teamIdFromRaw is null.
     const badBody = 'totally garbage body no team id here at all';
@@ -138,7 +142,7 @@ describe('POST /v1/connectors/slack/events parse-failure tenant attribution', ()
     // resolveTenantForSlackTeam's empty-workspaces branch returns HIPPO_TENANT.
     // This preserves single-workspace install ergonomics (no DLQ landing in
     // __unroutable__ when there's no multi-tenant routing intent).
-    process.env.HIPPO_TENANT = 'single-deployment';
+    vi.stubEnv('HIPPO_TENANT', 'single-deployment');
 
     const badBody = '{"team_id":"T_SOMETHING","event":{bad-json';
     const ts = String(Math.floor(Date.now() / 1000));

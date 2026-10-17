@@ -22,7 +22,6 @@ interface OpenStream {
 }
 
 describe('/mcp/stream concurrent stream cap', () => {
-  const savedMax = process.env.MCP_SSE_MAX_STREAMS;
   let root: string;
   let handle: ServerHandle;
   const open: OpenStream[] = [];
@@ -54,7 +53,7 @@ describe('/mcp/stream concurrent stream cap', () => {
   }
 
   beforeEach(async () => {
-    process.env.MCP_SSE_MAX_STREAMS = '2';
+    vi.stubEnv('MCP_SSE_MAX_STREAMS', '2');
     root = makeRoot('sse-cap');
     handle = await serve({ hippoRoot: root, port: 0 });
   });
@@ -62,8 +61,6 @@ describe('/mcp/stream concurrent stream cap', () => {
   afterEach(async () => {
     for (const s of open.splice(0)) s.abort();
     await handle.stop();
-    if (savedMax === undefined) delete process.env.MCP_SSE_MAX_STREAMS;
-    else process.env.MCP_SSE_MAX_STREAMS = savedMax;
   });
 
   it('answers 429 to the stream past the cap and frees a slot when a stream closes', async () => {

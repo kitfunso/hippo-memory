@@ -6,6 +6,10 @@ import { getReranker } from '../../src/rerankers/index.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import type { SearchResult } from '../../src/core/search-types.js';
 
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 // The instance the registry serves, whose outage state lasts the process.
 const llmReranker = getReranker('llm')!;
 
@@ -16,8 +20,8 @@ function asResult(content: string, score: number): SearchResult {
 describe('llmReranker', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
-    process.env.HIPPO_LLM_RERANKER_URL = 'http://mock';
-    process.env.HIPPO_LLM_RERANKER_KEY = 'mock';
+    vi.stubEnv('HIPPO_LLM_RERANKER_URL', 'http://mock');
+    vi.stubEnv('HIPPO_LLM_RERANKER_KEY', 'mock');
   });
 
   it('parses model output as a permutation and reorders accordingly', async () => {
@@ -56,8 +60,8 @@ describe('llmReranker', () => {
   });
 
   it('refuses to run when HIPPO_LLM_RERANKER_URL is unset', async () => {
-    delete process.env.HIPPO_LLM_RERANKER_URL;
-    delete process.env.HIPPO_LLM_RERANKER_KEY;
+    vi.stubEnv('HIPPO_LLM_RERANKER_URL', undefined);
+    vi.stubEnv('HIPPO_LLM_RERANKER_KEY', undefined);
     await expect(llmReranker('q', [asResult('xyz', 1.0)])).rejects.toThrow(/HIPPO_LLM_RERANKER_URL/);
   });
 
@@ -65,7 +69,7 @@ describe('llmReranker', () => {
     // Tiny timeout + a fetch that respects AbortSignal proves the
     // AbortController is wired through. Falls back to identity ordering,
     // does NOT throw.
-    process.env.HIPPO_LLM_RERANKER_TIMEOUT_MS = '5';
+    vi.stubEnv('HIPPO_LLM_RERANKER_TIMEOUT_MS', '5');
     let abortedFromSignal = false;
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, init) => {
       return new Promise((_resolve, reject) => {
@@ -83,7 +87,7 @@ describe('llmReranker', () => {
     expect(abortedFromSignal).toBe(true);
     expect(out.map((r) => r.entry.content)).toEqual(['alpha', 'beta']);
 
-    delete process.env.HIPPO_LLM_RERANKER_TIMEOUT_MS;
+    vi.stubEnv('HIPPO_LLM_RERANKER_TIMEOUT_MS', undefined);
   });
 
   it('warns once with the status when two calls fail close together, and keeps the input order', async () => {
@@ -103,13 +107,13 @@ describe('llmReranker', () => {
   });
 
   it('names the timeout in its warning', async () => {
-    process.env.HIPPO_LLM_RERANKER_TIMEOUT_MS = '5';
+    vi.stubEnv('HIPPO_LLM_RERANKER_TIMEOUT_MS', '5');
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, init) => new Promise((_resolve, reject) => {
       init?.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
     }));
     await createLlmReranker()('q', [asResult('alpha', 1.0)]);
-    delete process.env.HIPPO_LLM_RERANKER_TIMEOUT_MS;
+    vi.stubEnv('HIPPO_LLM_RERANKER_TIMEOUT_MS', undefined);
     expect(stderr.mock.calls.map((c) => String(c[0])).join('')).toContain('no answer within 5 ms');
   });
 });
@@ -140,14 +144,14 @@ describe('llmReranker against a local endpoint', () => {
       res.writeHead(answer === 'unavailable' ? 503 : 400).end();
     });
     server.listen(0, '127.0.0.1');
-    process.env.HIPPO_LLM_RERANKER_URL = `http://127.0.0.1:${await boundPort(server)}`;
+    vi.stubEnv('HIPPO_LLM_RERANKER_URL', `http://127.0.0.1:${await boundPort(server)}`);
   });
 
   afterEach(async () => {
     vi.useRealTimers();
     server.closeAllConnections();
     await new Promise<void>((resolve) => server.close(() => resolve()));
-    delete process.env.HIPPO_LLM_RERANKER_URL;
+    vi.stubEnv('HIPPO_LLM_RERANKER_URL', undefined);
   });
 
   const inputs = (): SearchResult[] => [asResult('alpha', 1.0), asResult('beta', 0.5)];
@@ -164,12 +168,12 @@ describe('llmReranker against a local endpoint', () => {
 
   it('bounds the whole call, retries included, by the configured timeout', async () => {
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-    process.env.HIPPO_LLM_RERANKER_TIMEOUT_MS = '100';
+    vi.stubEnv('HIPPO_LLM_RERANKER_TIMEOUT_MS', '100');
     script = ['unavailable'];
     try {
       expect(order(await createLlmReranker()('q', inputs()))).toEqual(['alpha', 'beta']);
     } finally {
-      delete process.env.HIPPO_LLM_RERANKER_TIMEOUT_MS;
+      vi.stubEnv('HIPPO_LLM_RERANKER_TIMEOUT_MS', undefined);
     }
     // The first backoff alone outlasts 100 ms, so the second attempt never reaches the endpoint.
     expect(hits).toBe(1);
@@ -238,13 +242,13 @@ describe('llmReranker reply size cap', () => {
       pump();
     });
     server.listen(0, '127.0.0.1');
-    process.env.HIPPO_LLM_RERANKER_URL = `http://127.0.0.1:${await boundPort(server)}`;
+    vi.stubEnv('HIPPO_LLM_RERANKER_URL', `http://127.0.0.1:${await boundPort(server)}`);
   });
 
   afterEach(async () => {
     server.closeAllConnections();
     await new Promise<void>((resolve) => server.close(() => resolve()));
-    delete process.env.HIPPO_LLM_RERANKER_URL;
+    vi.stubEnv('HIPPO_LLM_RERANKER_URL', undefined);
   });
 
   it('keeps the input order, names the cap in its warning and stops reading early', async () => {

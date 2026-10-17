@@ -1,6 +1,6 @@
 // hippo setup gives Copilot one hooks file hippo owns, one key in the shared mcp-config.json and an instructions block,
 // plus one key in each VS Code mcp.json and one instructions file; uninstall takes back only those.
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -11,6 +11,10 @@ import { HOOKS } from '../src/hooks/hook-blocks.js';
 import { withFakeHome, type FakeHomeHandle } from './_helpers/with-fake-home.js';
 import type { JsonValue } from '../src/util/json.js';
 import { runCliAs } from './_helpers/run-cli-as.js';
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 // The committed text installCopilot must write; edit it with the instructions in src/hooks/copilot.ts.
 const COPILOT_INSTRUCTIONS = fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures', 'copilot', 'instructions.md'), 'utf8').trim();
 const VSCODE_INSTRUCTIONS = `---\napplyTo: "**"\n---\n${COPILOT_INSTRUCTIONS}\n`;
@@ -87,18 +91,18 @@ describe('installCopilot and uninstallCopilot', () => {
     fake = withFakeHome('hippo-copilot-');
     copilotHome = path.join(fake.home, 'copilot-home');
     vscodeData = path.join(fake.home, 'vscode-data');
-    process.env.COPILOT_HOME = copilotHome;
-    process.env.HIPPO_HOME = path.join(fake.home, 'hippo-global');
+    vi.stubEnv('COPILOT_HOME', copilotHome);
+    vi.stubEnv('HIPPO_HOME', path.join(fake.home, 'hippo-global'));
     // VS Code's own override, so its User folders sit under the fake home on every platform.
-    process.env.VSCODE_APPDATA = vscodeData;
+    vi.stubEnv('VSCODE_APPDATA', vscodeData);
     files = { hooks: path.join(copilotHome, 'hooks', 'hippo.json'), mcp: path.join(copilotHome, 'mcp-config.json'), instructions: path.join(copilotHome, 'copilot-instructions.md') };
     // The Copilot CLI's folder, there before setup; the VS Code-only tests take it away.
     fs.mkdirSync(copilotHome);
   });
   afterEach(() => {
-    process.env.COPILOT_HOME = prev.copilot ?? '';
-    process.env.HIPPO_HOME = prev.hippo ?? '';
-    process.env.VSCODE_APPDATA = prev.vscode ?? '';
+    vi.stubEnv('COPILOT_HOME', prev.copilot ?? '');
+    vi.stubEnv('HIPPO_HOME', prev.hippo ?? '');
+    vi.stubEnv('VSCODE_APPDATA', prev.vscode ?? '');
     fake.cleanup();
   });
 
@@ -288,8 +292,8 @@ describe('installCopilot and uninstallCopilot', () => {
   it('the Copilot folder is $COPILOT_HOME when set, else .copilot under os.homedir() whatever HOME says', () => {
     expect(copilotPaths().hooks).toBe(files.hooks);
     expect(copilotHomeDir(undefined, { COPILOT_HOME: copilotHome })).toBe(copilotHome);
-    process.env.COPILOT_HOME = '';
-    process.env.HOME = path.join(fake.home, 'corporate-home');
+    vi.stubEnv('COPILOT_HOME', '');
+    vi.stubEnv('HOME', path.join(fake.home, 'corporate-home'));
     expect(copilotHomeDir()).toBe(path.join(os.homedir(), '.copilot'));
     expect(copilotPaths().hooks).toBe(path.join(os.homedir(), '.copilot', 'hooks', 'hippo.json'));
   });
@@ -303,7 +307,7 @@ describe('installCopilot and uninstallCopilot', () => {
     fs.rmSync(copilotHome);
     fs.mkdirSync(copilotHome);
     expect(copilot()?.detected).toBe(true);
-    process.env.COPILOT_HOME = '';
+    vi.stubEnv('COPILOT_HOME', '');
     expect(copilot()).toMatchObject({ detected: false, configDir: path.join(fake.home, '.copilot') });
     fs.mkdirSync(path.join(fake.home, '.copilot'));
     expect(copilot()?.detected).toBe(true);

@@ -8,17 +8,19 @@ import { embedAll } from '../src/search/embed-memories.js';
 import { loadEmbeddingIndex } from '../src/store/vector-index.js';
 import { makeRoot } from './_helpers/make-root.js';
 
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 const KEY_ENV = 'OPENAI_API_KEY';
 let root: string;
-let savedKey: string | undefined;
 let fetchMock: ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
   root = makeRoot('embed-lock');
   fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ embeddings: { provider: 'openai', model: 'm' } }), 'utf8');
   writeEntry(root, createMemory('embed lock test memory', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
-  savedKey = process.env[KEY_ENV];
-  process.env[KEY_ENV] = ['sk', 'test'].join('-');
+  vi.stubEnv(KEY_ENV, ['sk', 'test'].join('-'));
   fetchMock = vi.fn(async () => new Response(JSON.stringify({ data: [{ embedding: [1, 0] }] })));
   vi.stubGlobal('fetch', fetchMock);
 });
@@ -26,8 +28,6 @@ beforeEach(() => {
 afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllGlobals();
-  if (savedKey === undefined) delete process.env[KEY_ENV];
-  else process.env[KEY_ENV] = savedKey;
 });
 
 // Fake timers drive the waiter's poll loop, so "it waited" is proven by poll count, not by how long a sleep ran.

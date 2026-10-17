@@ -3,7 +3,7 @@
  * Also covers confidence tiers, dedup, dry-run, --global, and min-length filter.
  */
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import {
@@ -16,6 +16,10 @@ import { importMarkdown } from '../src/importers/markdown.js';
 import { importEntries, ImportOptions } from '../src/importers/core.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { makeRoot } from './_helpers/make-root.js';
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 // ---------------------------------------------------------------------------
 // Setup
@@ -350,38 +354,32 @@ describe('dry-run: nothing written', () => {
 describe('--global: writes to global store', () => {
   it('persists entries to a custom global root, not local root', () => {
     const globalRoot = makeRoot('global-test');
-    const prevHippoHome = process.env.HIPPO_HOME;
-    try {
-      // importChatGPT({ global: true }) resolves its destination via
-      // getGlobalRoot() -> HIPPO_HOME. Without this it writes into the
-      // developer's real ~/.hippo store.
-      process.env.HIPPO_HOME = globalRoot;
+    // importChatGPT({ global: true }) resolves its destination via
+    // getGlobalRoot() -> HIPPO_HOME. Without this it writes into the
+    // developer's real ~/.hippo store.
+    vi.stubEnv('HIPPO_HOME', globalRoot);
 
-      const file = writeTmp('prefs.json', JSON.stringify([
-        'Prefer explicit over implicit in all code',
-        'Document public APIs with JSDoc',
-      ]));
+    const file = writeTmp('prefs.json', JSON.stringify([
+      'Prefer explicit over implicit in all code',
+      'Document public APIs with JSDoc',
+    ]));
 
-      importChatGPT(file, {
-        hippoRoot: tmpDir,
-        global: true,
-        dryRun: false,
-        // Override global root by patching - we test this by providing a real initStore'd dir
-        // and using the function's global=true path which calls initGlobal() -> getGlobalRoot()
-        // Instead, test the non-global result directly in custom dir
-      });
+    importChatGPT(file, {
+      hippoRoot: tmpDir,
+      global: true,
+      dryRun: false,
+      // Override global root by patching - we test this by providing a real initStore'd dir
+      // and using the function's global=true path which calls initGlobal() -> getGlobalRoot()
+      // Instead, test the non-global result directly in custom dir
+    });
 
-      // Since we can't easily override getGlobalRoot() in tests, verify that
-      // global=false writes to local root correctly
-      const resultLocal = importChatGPT(file, makeOpts({ global: false }));
-      expect(resultLocal.imported).toBe(2);
+    // Since we can't easily override getGlobalRoot() in tests, verify that
+    // global=false writes to local root correctly
+    const resultLocal = importChatGPT(file, makeOpts({ global: false }));
+    expect(resultLocal.imported).toBe(2);
 
-      const localEntries = loadAllEntries(tmpDir, 'default');
-      expect(localEntries).toHaveLength(2);
-    } finally {
-      if (prevHippoHome === undefined) delete process.env.HIPPO_HOME;
-      else process.env.HIPPO_HOME = prevHippoHome;
-    }
+    const localEntries = loadAllEntries(tmpDir, 'default');
+    expect(localEntries).toHaveLength(2);
   });
 });
 

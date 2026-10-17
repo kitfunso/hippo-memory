@@ -56,24 +56,17 @@ async function jsonAs<T>(res: Response): Promise<T> {
 describe('GET /v1/context', () => {
   let home: string;
   let globalHome: string;
-  let origHippoHome: string | undefined;
   let handle: ServerHandle;
 
   beforeEach(async () => {
     home = makeRoot('srv-ctx');
     globalHome = makeRoot('srv-ctx');
-    origHippoHome = process.env.HIPPO_HOME;
-    process.env.HIPPO_HOME = globalHome;
+    vi.stubEnv('HIPPO_HOME', globalHome);
     handle = await serve({ hippoRoot: home, port: 0 });
   });
 
   afterEach(async () => {
     await handle.stop();
-    if (origHippoHome === undefined) {
-      delete process.env.HIPPO_HOME;
-    } else {
-      process.env.HIPPO_HOME = origHippoHome;
-    }
   });
 
   it('returns entries within budget (200)', async () => {
@@ -295,25 +288,18 @@ describe('GET /v1/context', () => {
 describe('GET /v1/context - ambientState field', () => {
   let home: string;
   let globalHome: string;
-  let origHippoHome: string | undefined;
   let handle: ServerHandle;
 
   async function startServer(ambientEnabled: boolean): Promise<void> {
     home = makeRoot('srv-ctx');
     globalHome = makeRoot('srv-ctx');
     writeFileSync(join(home, 'config.json'), JSON.stringify({ ambient: { enabled: ambientEnabled } }), 'utf8');
-    origHippoHome = process.env.HIPPO_HOME;
-    process.env.HIPPO_HOME = globalHome;
+    vi.stubEnv('HIPPO_HOME', globalHome);
     handle = await serve({ hippoRoot: home, port: 0 });
   }
 
   afterEach(async () => {
     await handle.stop();
-    if (origHippoHome === undefined) {
-      delete process.env.HIPPO_HOME;
-    } else {
-      process.env.HIPPO_HOME = origHippoHome;
-    }
   });
 
   it('is present with a populated totalMemories when ambient is on and entries are admitted', async () => {

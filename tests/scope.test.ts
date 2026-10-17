@@ -1,5 +1,9 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { detectScope, scopeMatch } from '../src/core/active-scope.js';
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 function isString<T>(value: T): value is T & string {
   return typeof value === 'string';
@@ -12,15 +16,15 @@ describe('detectScope', () => {
     // Save and clear relevant env vars
     for (const key of ['HIPPO_SCOPE', 'GSTACK_SKILL', 'OPENCLAW_SKILL']) {
       savedEnv[key] = process.env[key];
-      delete process.env[key];
+      vi.stubEnv(key, undefined);
     }
   });
 
   afterEach(() => {
     // Restore env vars
     for (const [key, val] of Object.entries(savedEnv)) {
-      if (val === undefined) delete process.env[key];
-      else process.env[key] = val;
+      if (val === undefined) vi.stubEnv(key, undefined);
+      else vi.stubEnv(key, val);
     }
   });
 
@@ -35,34 +39,34 @@ describe('detectScope', () => {
   });
 
   it('returns HIPPO_SCOPE when set', () => {
-    process.env['HIPPO_SCOPE'] = 'plan-eng-review';
+    vi.stubEnv('HIPPO_SCOPE', 'plan-eng-review');
     expect(detectScope()).toBe('plan-eng-review');
   });
 
   it('trims HIPPO_SCOPE whitespace', () => {
-    process.env['HIPPO_SCOPE'] = '  qa  ';
+    vi.stubEnv('HIPPO_SCOPE', '  qa  ');
     expect(detectScope()).toBe('qa');
   });
 
   it('returns GSTACK_SKILL when set and no HIPPO_SCOPE', () => {
-    process.env['GSTACK_SKILL'] = 'design-review';
+    vi.stubEnv('GSTACK_SKILL', 'design-review');
     expect(detectScope()).toBe('design-review');
   });
 
   it('HIPPO_SCOPE takes priority over GSTACK_SKILL', () => {
-    process.env['HIPPO_SCOPE'] = 'explicit-scope';
-    process.env['GSTACK_SKILL'] = 'gstack-scope';
+    vi.stubEnv('HIPPO_SCOPE', 'explicit-scope');
+    vi.stubEnv('GSTACK_SKILL', 'gstack-scope');
     expect(detectScope()).toBe('explicit-scope');
   });
 
   it('returns OPENCLAW_SKILL when set and no higher-priority vars', () => {
-    process.env['OPENCLAW_SKILL'] = 'oc-skill';
+    vi.stubEnv('OPENCLAW_SKILL', 'oc-skill');
     expect(detectScope()).toBe('oc-skill');
   });
 
   it('ignores empty/whitespace-only env vars', () => {
-    process.env['HIPPO_SCOPE'] = '   ';
-    process.env['GSTACK_SKILL'] = '';
+    vi.stubEnv('HIPPO_SCOPE', '   ');
+    vi.stubEnv('GSTACK_SKILL', '');
     const result = detectScope();
     // Should fall through to git branch or null
     expect(result !== '   ' && result !== '').toBe(true);

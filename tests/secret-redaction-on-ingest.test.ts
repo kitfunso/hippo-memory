@@ -1,5 +1,5 @@
 // Text no person typed into hippo (connector events, imported files, tool failures, git log lessons) loses its secret shapes before it is stored.
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -22,6 +22,10 @@ import { addWorkspace } from '../src/connectors/slack/workspaces.js';
 import { replayDlqEntry } from '../src/connectors/slack/dlq.js';
 import { sqliteStore } from '../src/store/sqlite/store.js';
 import { makeRoot } from './_helpers/make-root.js';
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 // Built at runtime so no token-shaped literal lands in the repo.
 const GHP = 'ghp_' + 'x1Y2z3W4v5'.repeat(3) + 'Q6r7S8';
@@ -55,14 +59,14 @@ describe('connector webhooks', () => {
   let handle: ServerHandle;
 
   beforeEach(async () => {
-    process.env.SLACK_SIGNING_SECRET = SIGNING;
-    process.env.GITHUB_WEBHOOK_SECRET = SIGNING;
+    vi.stubEnv('SLACK_SIGNING_SECRET', SIGNING);
+    vi.stubEnv('GITHUB_WEBHOOK_SECRET', SIGNING);
     handle = await serve({ hippoRoot: root, host: '127.0.0.1', port: 0 });
   });
 
   afterEach(async () => {
-    delete process.env.SLACK_SIGNING_SECRET;
-    delete process.env.GITHUB_WEBHOOK_SECRET;
+    vi.stubEnv('SLACK_SIGNING_SECRET', undefined);
+    vi.stubEnv('GITHUB_WEBHOOK_SECRET', undefined);
     await handle.stop();
   });
 

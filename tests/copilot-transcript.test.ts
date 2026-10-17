@@ -2,26 +2,27 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { collectSessionTurns } from '../src/capture/transcript.js';
 import { transcriptWorkingState } from '../src/capture/working-state.js';
 import { copilotTranscriptFor, copilotTurn } from '../src/capture/copilot-transcript.js';
 import { copilotEventsJsonl, copilotEventsTail, writeCopilotSessionLog } from './_helpers/copilot-hooks.js';
 
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 const TASK = 'fix the flaky login test in auth.spec.ts';
 const DECISION = 'We decided to keep the retry budget at three attempts for the login client. Next I will rerun the auth suite.';
 
 let dir: string;
-const origCopilotHome = process.env.COPILOT_HOME;
 
 beforeEach(() => {
   dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-copilot-transcript-'));
-  process.env.COPILOT_HOME = path.join(dir, '.copilot');
+  vi.stubEnv('COPILOT_HOME', path.join(dir, '.copilot'));
 });
 
 afterEach(() => {
-  if (origCopilotHome === undefined) delete process.env.COPILOT_HOME;
-  else process.env.COPILOT_HOME = origCopilotHome;
   fs.rmSync(dir, { recursive: true, force: true });
 });
 

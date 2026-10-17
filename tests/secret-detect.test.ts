@@ -5,7 +5,7 @@
  */
 
 import type { FullContext } from './_helpers/api-ctx.js';
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import { detectSecret, redactSecretsStrict } from '../src/util/secret-detect.js';
@@ -24,6 +24,10 @@ import { fastestRatio, type TimedRun } from './_helpers/fastest-ratio.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 import { sharingStores } from './_helpers/sharing-stores.js';
 import { makeRoot } from './_helpers/make-root.js';
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 // Built at runtime, so no secret-shaped literal sits in source.
 const HIPPO_KEY = 'hk_' + 'a'.repeat(24) + '.' + 'b'.repeat(32);
@@ -190,15 +194,15 @@ describe('producer + sync vetoes (real stores)', () => {
     globalStore = path.join(tmpRoot, 'globalstore');
     initStore(globalStore);
     origHippoHome = process.env.HIPPO_HOME;
-    process.env.HIPPO_HOME = globalStore;
+    vi.stubEnv('HIPPO_HOME', globalStore);
     _resetProjectIdentityCacheForTests();
   });
 
   afterEach(() => {
     if (origHippoHome !== undefined) {
-      process.env.HIPPO_HOME = origHippoHome;
+      vi.stubEnv('HIPPO_HOME', origHippoHome);
     } else {
-      delete process.env.HIPPO_HOME;
+      vi.stubEnv('HIPPO_HOME', undefined);
     }
   });
 

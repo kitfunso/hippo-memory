@@ -1,5 +1,5 @@
 // Z0 G5 regrade (prereg 166): resuming, idempotence, the lock, the evidence guard, tree checks and the post-fix pass.
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { cleanup, tmp } from './fixtures/z0-harness.js';
@@ -9,7 +9,9 @@ import { evidenceOf } from '../scripts/token-eval/regrade.mjs';
 import { parseZ0Records } from '../scripts/token-eval/z0-records.mjs';
 import { runCli as analyze } from '../scripts/token-eval/z0-analyze.mjs';
 
-const savedToken = process.env.CLAUDE_CODE_OAUTH_TOKEN;
+afterAll(() => {
+  vi.unstubAllEnvs();
+});
 let shared: Shared;
 const rowsText = (out: string) => readFileSync(join(out, 'g5', 'regrade.jsonl'), 'utf8');
 const node = (js: string) => `node -e "${js}"`;
@@ -24,8 +26,6 @@ describe('z0-regrade resume, guards and post-fix', () => {
   }, 600_000);
   afterAll(() => {
     cleanup();
-    if (savedToken === undefined) delete process.env.CLAUDE_CODE_OAUTH_TOKEN;
-    else process.env.CLAUDE_CODE_OAUTH_TOKEN = savedToken;
   });
 
   it('a cut-off regrade resumes: done cells are skipped, a torn last line is dropped once, a third run adds nothing (13, R8)', async () => {

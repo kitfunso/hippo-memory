@@ -20,25 +20,29 @@
  */
 
 import type { FullContext } from './_helpers/api-ctx.js';
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { loadLastRecall } from '../src/store/index-and-stats.js';
 import { remember, retrieve, getContext } from '../src/api/index.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 import { makeRoot } from './_helpers/make-root.js';
 
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 function tmpHome() {
   const home = makeRoot('api-recall-noside');
   const origHippoHome = process.env.HIPPO_HOME;
-  process.env.HIPPO_HOME = home;
+  vi.stubEnv('HIPPO_HOME', home);
   return {
     home,
     restore: () => {
       rmSync(home, { recursive: true, force: true });
       if (origHippoHome !== undefined) {
-        process.env.HIPPO_HOME = origHippoHome;
+        vi.stubEnv('HIPPO_HOME', origHippoHome);
       } else {
-        delete process.env.HIPPO_HOME;
+        vi.stubEnv('HIPPO_HOME', undefined);
       }
     },
   };

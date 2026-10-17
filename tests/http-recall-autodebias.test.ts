@@ -40,14 +40,14 @@ let handle: ServerHandle;
 
 beforeEach(async () => {
   home = makeRoot('http-j32');
-  delete process.env.HIPPO_AUTODEBIAS;
+  vi.stubEnv('HIPPO_AUTODEBIAS', undefined);
   handle = await serve({ hippoRoot: home, port: 0 });
 });
 
 afterEach(async () => {
   await handle.stop();
   rmSync(home, { recursive: true, force: true });
-  delete process.env.HIPPO_AUTODEBIAS;
+  vi.stubEnv('HIPPO_AUTODEBIAS', undefined);
 });
 
 async function jsonAs<T>(res: Response): Promise<T> {
@@ -87,7 +87,7 @@ describe('HTTP /v1/memories planningFallacyHint', () => {
 
   it('planningFallacyHint absent when HIPPO_AUTODEBIAS=off', async () => {
     seedBaserate(home);
-    process.env.HIPPO_AUTODEBIAS = 'off';
+    vi.stubEnv('HIPPO_AUTODEBIAS', 'off');
     const q = encodeURIComponent('migration effort will take 3 days');
     const res = await fetch(`${handle.url}/v1/memories?q=${q}`);
     const body = await jsonAs<Partial<RecallResult>>(res);

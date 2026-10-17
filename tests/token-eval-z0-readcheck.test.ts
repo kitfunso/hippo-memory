@@ -1,5 +1,5 @@
 // Z0 G1 read check and delivery voids (prereg 113, 159-162) with the fake Claude Code: a session that read past its own memory is void.
-import { describe, it, expect, beforeAll, afterAll, afterEach } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from 'vitest';
 import { symlinkSync, writeFileSync, rmSync, readdirSync, mkdirSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -10,6 +10,10 @@ import { __setSettleHook } from '../scripts/token-eval/runs.mjs';
 import { g1 } from '../scripts/token-eval/z0-gates.mjs';
 import { validateCorpus } from './fixtures/z0-contract.js';
 import { cleanup, tmp, isolate, makeRepo, task, plain, spec, oneLesson, run, readRecords, readPlan, find, logLines, runRoot, type RunRecord } from './fixtures/z0-harness.js';
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 const classes = (r: RunRecord) => (r.voidHits ?? []).map((h) => h.class);
 interface SettledRun { arm: string }
@@ -279,7 +283,7 @@ describe('delivery voids and the worktree read', () => {
   it('a worktree made outside the workspace voids later reads of it; a canary wins over a read in its session', async () => {
     const { out } = isolate('worktree');
     const r = makeRepo();
-    process.env.FAKE_WT_DIR = `${tmp('z0-wt-')}/wt`;
+    vi.stubEnv('FAKE_WT_DIR', `${tmp('z0-wt-')}/wt`);
     const s = spec(r, [], [
       task(r, 't1', 'WORKTREE'), task(r, 't2', 'READ:{WT}/lib.js'),
       task(r, 't3', 'ECHO:zz-canary-1\nREAD:{OUT}/runs/seqF/A2/seed1/claude-config/x'), plain(r, 't4'),
@@ -302,7 +306,7 @@ describe('delivery voids and the worktree read', () => {
     const [shortOut, shortWt] = [out, wtParent].map(shortName);
     if (shortOut === out || shortWt === wtParent) t.skip();
     // The run and the worktree live under short names, while git prints and the agent reads the long forms.
-    process.env.FAKE_WT_DIR = `${shortWt}/wt`;
+    vi.stubEnv('FAKE_WT_DIR', `${shortWt}/wt`);
     await run(spec(r, [], [
       task(r, 't1', 'WORKTREE'), task(r, 't2', `READ:${out}/runs/seqF/A2/seed1/claude-config/x`), task(r, 't3', `READ:${shortWt}/wt/lib.js`),
       task(r, 't4', `READ:${out}/runs/seqF/A1/seed1/work/lib.js`),

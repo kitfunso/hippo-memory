@@ -49,6 +49,10 @@ import type { MemoryEntry } from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { clearAblationEnv, QUESTIONS, QUESTION_C, cleanupScratch, runPipeline, TEST_SIM_ROUNDS } from './memory-value-fixtures.js';
 
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 // Each case ingests, simulates and extracts a question against real stores on disk.
 vi.setConfig({ testTimeout: 30_000 });
 
@@ -57,7 +61,7 @@ const HARNESS_SCRATCH_ROOT = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-mv-har
 
 beforeEach(clearAblationEnv);
 beforeEach(() => {
-  process.env.HIPPO_MV_SCRATCH_ROOT = HARNESS_SCRATCH_ROOT;
+  vi.stubEnv('HIPPO_MV_SCRATCH_ROOT', HARNESS_SCRATCH_ROOT);
 });
 afterEach(clearAblationEnv);
 
@@ -450,7 +454,7 @@ describe('scratch-cleanup containment guard', () => {
 describe('scratch-store hygiene', () => {
   it('scratch stores live under the OS temp dir, never under the repo', () => {
     // Drop this file's override so the production default path is what gets checked.
-    delete process.env.HIPPO_MV_SCRATCH_ROOT;
+    vi.stubEnv('HIPPO_MV_SCRATCH_ROOT', undefined);
     // SAFETY: scratchRootDir() (common.mjs) always returns the scratch-root
     // path as a string; it never returns a filesystem handle or undefined.
     const root = scratchRootDir() as string;

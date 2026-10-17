@@ -23,7 +23,7 @@
  * a new top-placement guard added below.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { Layer} from '../src/core/memory.js';
@@ -31,6 +31,10 @@ import { createMemory } from './_helpers/default-half-life-memory.js';
 import { handleMcpRequest, type McpContext, type McpResponse } from '../src/mcp/server.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { sqliteStore } from '../src/store/sqlite/store.js';
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 function callTool(
   reqId: number,
@@ -58,18 +62,14 @@ function extractText(res: McpResponse | null): string {
 
 describe('mcp hippo_recall Cutoff suppressionSummary', () => {
   let home: string;
-  let originalHome: string | undefined;
 
   beforeEach(() => {
     home = makeRoot('mcp-c5');
-    originalHome = process.env.HIPPO_HOME;
-    process.env.HIPPO_HOME = home;
+    vi.stubEnv('HIPPO_HOME', home);
   });
 
   afterEach(() => {
     rmSync(home, { recursive: true, force: true });
-    if (originalHome === undefined) delete process.env.HIPPO_HOME;
-    else process.env.HIPPO_HOME = originalHome;
   });
 
   it('MCP text response includes Cutoff block when filter activity is non-zero', async () => {

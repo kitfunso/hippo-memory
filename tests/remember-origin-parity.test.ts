@@ -21,7 +21,6 @@ afterEach(() => {
 
 let tmp: string;
 let handle: ServerHandle | null = null;
-const origHome = process.env.HIPPO_HOME;
 
 /** `<tmp>/proj/.hippo` inside a git checkout, so the folder stamp is `proj`; no embedder, so a write starts no model load. */
 function projectStore(config: Record<string, JsonValue>): string {
@@ -71,7 +70,7 @@ async function bothOrigins(store: string): Promise<ReadonlyArray<string | null |
 
 beforeEach(() => {
   tmp = makeRoot('origin-parity', { init: false });
-  process.env.HIPPO_HOME = path.join(tmp, 'global');
+  vi.stubEnv('HIPPO_HOME', path.join(tmp, 'global'));
   _resetProjectIdentityCacheForTests();
   _resetSharedStoreCacheForTests();
 });
@@ -79,8 +78,6 @@ beforeEach(() => {
 afterEach(async () => {
   await handle?.stop();
   handle = null;
-  if (origHome === undefined) delete process.env.HIPPO_HOME;
-  else process.env.HIPPO_HOME = origHome;
   _resetSharedStoreCacheForTests();
 });
 

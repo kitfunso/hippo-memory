@@ -15,6 +15,7 @@
  * retention design note (why Q_A/Q_B are shaped the way they are).
  */
 import * as fs from 'node:fs';
+import { vi } from 'vitest';
 
 import { formatLmeDate, questionDir } from '../benchmarks/memory-value/common.mjs';
 import { ingestQuestion } from '../benchmarks/memory-value/ingest.mjs';
@@ -29,7 +30,7 @@ import { _resetAblationCacheForTests } from '../dist/core/ablation.js';
 // into another test if it throws before its own finally runs.
 export const RESET_ENV_VARS = ['HIPPO_FAKE_NOW', 'HIPPO_MV_SCRATCH_ROOT'] as const;
 export function clearAblationEnv(): void {
-  for (const v of RESET_ENV_VARS) delete process.env[v];
+  for (const v of RESET_ENV_VARS) vi.stubEnv(v, undefined);
   _resetAblationCacheForTests();
 }
 

@@ -1,6 +1,6 @@
 // The dashboard derives its tenant via resolveTenantId({}), which reads HIPPO_TENANT.
 // A pin for another tenant's memory id must return 404 and leave the row untouched.
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { join } from 'node:path';
 import { request as httpRequest } from 'node:http';
 import type { Server } from 'node:http';
@@ -11,6 +11,10 @@ import { serveDashboard } from '../src/dashboard/dashboard.js';
 import { DASHBOARD_TOKEN } from './_helpers/dashboard-fixture.js';
 import { boundPort } from './_helpers/listen.js';
 import { makeStore } from './_helpers/make-root.js';
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 function post(
   port: number,
@@ -38,16 +42,12 @@ describe('dashboard tenant-scoping', () => {
   let home: string;
   let hippoRoot: string;
   let server: Server | undefined;
-  let prevTenant: string | undefined;
-  let prevHippoHome: string | undefined;
 
   beforeEach(() => {
     ({ base: home, root: hippoRoot } = makeStore('dash-tenant'));
-    prevTenant = process.env.HIPPO_TENANT;
-    prevHippoHome = process.env.HIPPO_HOME;
     // Isolate the dashboard's resolved global store from the developer's real
     // ~/.hippo for the duration of the test.
-    process.env.HIPPO_HOME = join(home, '.hippo-global');
+    vi.stubEnv('HIPPO_HOME', join(home, '.hippo-global'));
   });
 
   afterEach(async () => {
@@ -57,10 +57,6 @@ describe('dashboard tenant-scoping', () => {
       );
       server = undefined;
     }
-    if (prevTenant === undefined) delete process.env.HIPPO_TENANT;
-    else process.env.HIPPO_TENANT = prevTenant;
-    if (prevHippoHome === undefined) delete process.env.HIPPO_HOME;
-    else process.env.HIPPO_HOME = prevHippoHome;
   });
 
   it('POST /api/memory/:id/pin denies a cross-tenant mutation', async () => {
@@ -73,7 +69,7 @@ describe('dashboard tenant-scoping', () => {
     writeEntry(hippoRoot, a);
 
     // Run the dashboard under HIPPO_TENANT=tenant_b on an ephemeral port.
-    process.env.HIPPO_TENANT = 'tenant_b';
+    vi.stubEnv('HIPPO_TENANT', 'tenant_b');
     server = serveDashboard(hippoRoot, 0, DASHBOARD_TOKEN);
     const port = await boundPort(server);
 

@@ -12,6 +12,10 @@ import type { JsonValue } from '../src/util/json.js';
 import { countMatching, recordStatements } from './_helpers/count-statements.js';
 import { makeStore } from './_helpers/make-root.js';
 
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 let tmp: string;
 let root: string;
 let db: DatabaseSyncLike;
@@ -183,14 +187,14 @@ describe('pilot arm helpers', () => {
   });
 
   it('says at debug level why an arm or a ledger row was not stored', () => {
-    process.env.HIPPO_LOG = 'debug';
+    vi.stubEnv('HIPPO_LOG', 'debug');
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     db.exec('DROP TABLE token_ledger');
     try {
       ensurePilotArm(db, 'default', 's1', 10000);
       bookTokenUse(root, { tenantId: 'default', surface: 'hook', event: 'inject', items: 1, tokens: 40 }, { hasLocal: true });
     } finally {
-      delete process.env.HIPPO_LOG;
+      vi.stubEnv('HIPPO_LOG', undefined);
     }
     const text = stderr.mock.calls.map((c) => String(c[0])).join('');
     expect(text).toMatch(/debug: pilot arm not stored, using the hash arm: .*token_ledger/);
@@ -230,14 +234,8 @@ describe('ledger readers skip arm rows', () => {
 
 describe('doctor', () => {
   const pilotCheck = () => {
-    const prev = process.env.HIPPO_HOME;
-    process.env.HIPPO_HOME = path.join(tmp, 'global');
-    try {
-      return runDoctor({ cwd: tmp, home: tmp, version: 'test' }).checks.find((c) => c.id === 'pilot');
-    } finally {
-      if (prev === undefined) delete process.env.HIPPO_HOME;
-      else process.env.HIPPO_HOME = prev;
-    }
+    vi.stubEnv('HIPPO_HOME', path.join(tmp, 'global'));
+    return runDoctor({ cwd: tmp, home: tmp, version: 'test' }).checks.find((c) => c.id === 'pilot');
   };
 
   it('reports the pilot only when the rate is above 0', () => {

@@ -14,6 +14,10 @@ import { resolveEmbeddingProvider } from '../src/embeddings/provider.js';
 import type { JsonValue } from '../src/util/json.js';
 import { loadConfig } from '../src/core/config.js';
 
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 const SECRET = 'AKIA' + 'Q7'.repeat(8);
 // Bearer and JWT shapes only the strict redaction catches; a path on the store redaction would leak them.
 const BEARER = 'b'.repeat(24);
@@ -49,15 +53,15 @@ beforeEach(() => {
   bodies = [];
   for (const k of ENV) {
     saved[k] = process.env[k];
-    delete process.env[k];
+    vi.stubEnv(k, undefined);
   }
   root = mkdtempSync(join(tmpdir(), 'hippo-egress-'));
 });
 
 afterEach(() => {
   for (const k of ENV) {
-    if (saved[k] === undefined) delete process.env[k];
-    else process.env[k] = saved[k];
+    if (saved[k] === undefined) vi.stubEnv(k, undefined);
+    else vi.stubEnv(k, saved[k]);
   }
   vi.unstubAllGlobals();
   rmSync(root, { recursive: true, force: true });
@@ -80,10 +84,10 @@ describe('secret redaction before memory text leaves the box', () => {
   });
 
   it('the hosted rerankers scrub the query and every candidate', async () => {
-    process.env.HIPPO_LLM_RERANKER_URL = 'http://127.0.0.1:9';
+    vi.stubEnv('HIPPO_LLM_RERANKER_URL', 'http://127.0.0.1:9');
     vi.stubGlobal('fetch', capture({ choices: [{ message: { content: '[0]' } }] }));
     await getReranker('llm')!(TEXT, [hit(TEXT)]);
-    process.env.TYPESAFE_API_KEY = 'test-' + 'k'.repeat(8);
+    vi.stubEnv('TYPESAFE_API_KEY', 'test-' + 'k'.repeat(8));
     vi.stubGlobal('fetch', capture({ answers: { c1: { noul: 0.5 } } }));
     await createJevReranker(async () => [])(TEXT, [hit(TEXT)]);
     expect(bodies).toHaveLength(2);
@@ -91,7 +95,7 @@ describe('secret redaction before memory text leaves the box', () => {
   });
 
   it('an API embedder scrubs what it sends', async () => {
-    process.env.OPENAI_API_KEY = 'test-' + 'k'.repeat(8);
+    vi.stubEnv('OPENAI_API_KEY', 'test-' + 'k'.repeat(8));
     writeFileSync(join(root, 'config.json'), JSON.stringify({ embeddings: { provider: 'openai' } }));
     vi.stubGlobal('fetch', capture({ data: [{ embedding: [1, 0] }] }));
     await resolveEmbeddingProvider(loadConfig(root).embeddings).embed([TEXT], 'passage');

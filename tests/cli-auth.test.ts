@@ -1,9 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { runCli } from '../src/cli.js';
 import { runInProcess, type InProcessResult } from './_helpers/run-in-process.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const savedCwd = process.cwd();
 let home = '';
@@ -17,7 +15,7 @@ async function hippo(...args: string[]): Promise<string> {
 }
 
 beforeEach(() => {
-  home = mkdtempSync(join(tmpdir(), 'hippo-auth-cli-'));
+  home = makeRoot('auth-cli', { init: false });
   vi.stubEnv('HIPPO_HOME', home);
   vi.stubEnv('HIPPO_TENANT', '');
   process.chdir(home);
@@ -26,7 +24,6 @@ beforeEach(() => {
 afterEach(() => {
   process.chdir(savedCwd);
   vi.unstubAllEnvs();
-  rmSync(home, { recursive: true, force: true });
 });
 
 describe('hippo auth CLI', () => {

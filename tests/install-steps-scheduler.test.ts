@@ -4,6 +4,10 @@ import type { ExecFileSyncOptionsWithStringEncoding } from 'node:child_process';
 import { setupDailySchedule } from '../src/cli/install-steps.js';
 import { DAILY_TASK_NAME } from '../src/cli/scheduler.js';
 
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 interface Call {
   readonly file: string;
   readonly args: readonly string[];
@@ -11,7 +15,6 @@ interface Call {
 }
 
 const platform = Object.getOwnPropertyDescriptor(process, 'platform')!;
-const savedSkip = process.env.HIPPO_SKIP_SCHEDULE;
 
 function scheduleOn(name: NodeJS.Platform, globalRoot: string): Call[] {
   Object.defineProperty(process, 'platform', { ...platform, value: name });
@@ -25,14 +28,12 @@ function scheduleOn(name: NodeJS.Platform, globalRoot: string): Call[] {
 
 describe('setupDailySchedule', () => {
   beforeEach(() => {
-    delete process.env.HIPPO_SKIP_SCHEDULE;
+    vi.stubEnv('HIPPO_SKIP_SCHEDULE', undefined);
     vi.spyOn(console, 'log').mockImplementation(() => {});
   });
 
   afterEach(() => {
     Object.defineProperty(process, 'platform', platform);
-    if (savedSkip === undefined) delete process.env.HIPPO_SKIP_SCHEDULE;
-    else process.env.HIPPO_SKIP_SCHEDULE = savedSkip;
     vi.restoreAllMocks();
   });
 

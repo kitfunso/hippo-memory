@@ -1,10 +1,14 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createHmac } from 'node:crypto';
 import { serve, type ServerHandle } from '../src/server.js';
 import { listDlq } from '../src/connectors/dlq.js';
 import { githubDlq } from '../src/connectors/github/dlq.js';
 import { slackDlq } from '../src/connectors/slack/dlq.js';
 import { makeRoot } from './_helpers/make-root.js';
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 const GH_SECRET = 'gh-secret';
 const SLACK_SECRET = 'slack-secret';
@@ -40,22 +44,18 @@ function slackPost(port: number, body: string): Promise<Response> {
 describe.each(['', '   '])('webhook DLQ rows with HIPPO_TENANT=%j', (envValue) => {
   let root: string;
   let handle: ServerHandle;
-  let savedTenant: string | undefined;
 
   beforeEach(async () => {
-    savedTenant = process.env.HIPPO_TENANT;
     root = makeRoot('empty-tenant');
-    process.env.GITHUB_WEBHOOK_SECRET = GH_SECRET;
-    process.env.SLACK_SIGNING_SECRET = SLACK_SECRET;
-    process.env.HIPPO_TENANT = envValue;
+    vi.stubEnv('GITHUB_WEBHOOK_SECRET', GH_SECRET);
+    vi.stubEnv('SLACK_SIGNING_SECRET', SLACK_SECRET);
+    vi.stubEnv('HIPPO_TENANT', envValue);
     handle = await serve({ hippoRoot: root, host: '127.0.0.1', port: 0 });
   });
 
   afterEach(async () => {
-    delete process.env.GITHUB_WEBHOOK_SECRET;
-    delete process.env.SLACK_SIGNING_SECRET;
-    if (savedTenant === undefined) delete process.env.HIPPO_TENANT;
-    else process.env.HIPPO_TENANT = savedTenant;
+    vi.stubEnv('GITHUB_WEBHOOK_SECRET', undefined);
+    vi.stubEnv('SLACK_SIGNING_SECRET', undefined);
     await handle.stop();
   });
 
