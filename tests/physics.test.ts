@@ -497,9 +497,6 @@ describe('Simulation', () => {
       expect(stats.particleCount).toBe(0);
       expect(stats.avgVelocityMagnitude).toBe(0);
       expect(stats.maxVelocityMagnitude).toBe(0);
-      expect(stats.energy.kinetic).toBe(0);
-      expect(stats.energy.potential).toBe(0);
-      expect(stats.energy.total).toBe(0);
       expect(stats.substepsRun).toBe(0);
     });
 

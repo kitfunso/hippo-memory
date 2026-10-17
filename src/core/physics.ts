@@ -39,7 +39,6 @@ export interface SimulationStats {
   particleCount: number;
   avgVelocityMagnitude: number;
   maxVelocityMagnitude: number;
-  energy: SystemEnergy;
   substepsRun: number;
 }
 
@@ -302,7 +301,6 @@ export function simulate(
       particleCount: 0,
       avgVelocityMagnitude: 0,
       maxVelocityMagnitude: 0,
-      energy: { kinetic: 0, potential: 0, total: 0 },
       substepsRun: 0,
     };
   }
@@ -331,17 +329,15 @@ export function simulate(
     if (mag > maxVelMag) maxVelMag = mag;
   }
 
-  const energy = computeSystemEnergy(particles, ctx.config.G_memory);
-
   return {
     particleCount: particles.length,
     avgVelocityMagnitude: sumVelMag / particles.length,
     maxVelocityMagnitude: maxVelMag,
-    energy,
     substepsRun: ctx.config.substeps,
   };
 }
 
+/** Kinetic plus pairwise potential energy; all pairs, so a caller reads it only on demand and under a particle cap. */
 export function computeSystemEnergy(
   particles: PhysicsParticle[],
   G_memory: number,
