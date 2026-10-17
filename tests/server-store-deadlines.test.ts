@@ -35,8 +35,8 @@ const cleanups: Cleanup[] = [];
 
 afterEach(async () => {
   vi.restoreAllMocks();
-  vi.unstubAllEnvs();
   for (const undo of cleanups.splice(0).reverse()) await undo();
+  vi.unstubAllEnvs();
 });
 
 const newRoot = (): string => makeRoot('store-deadlines');

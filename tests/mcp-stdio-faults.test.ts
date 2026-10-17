@@ -97,9 +97,9 @@ async function heldEmbeddings() {
     hold: (): void => { holding = true; },
     release: (): void => { for (const reply of held.splice(0)) reply(); },
     close: (): void => {
-      vi.unstubAllEnvs();
       server.closeAllConnections();
       server.close();
+      vi.unstubAllEnvs();
     },
   };
 }

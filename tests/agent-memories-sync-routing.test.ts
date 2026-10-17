@@ -35,8 +35,8 @@ beforeEach(() => {
   w = openWorld();
 });
 afterEach(() => {
-  vi.unstubAllEnvs();
   closeWorld(w);
+  vi.unstubAllEnvs();
 });
 
 const claude = (report: ImportReport) => toolTally(report, 'claude-code');

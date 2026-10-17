@@ -35,10 +35,10 @@ describe('POST /v1/sleep admin-role gate', () => {
   });
 
   afterEach(async () => {
-    vi.unstubAllEnvs();
     await handle.stop();
     rmSync(home, { recursive: true, force: true });
     rmSync(globalHome, { recursive: true, force: true });
+    vi.unstubAllEnvs();
   });
 
   const keyless = (path: string, method = 'POST'): Promise<Response> =>

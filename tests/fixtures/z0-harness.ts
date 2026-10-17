@@ -17,7 +17,6 @@ const pids: string[] = [];
 /** For afterEach: cwd, env and temp dirs back, and any grandchild a hung fake left behind killed. */
 export function cleanup() {
   process.chdir(savedCwd);
-  vi.unstubAllEnvs();
   while (pids.length) {
     const f = pids.pop()!;
     if (!existsSync(f)) continue;
@@ -29,6 +28,7 @@ export function cleanup() {
     }
   }
   while (dirs.length) rmSync(dirs.pop()!, { recursive: true, force: true, maxRetries: 5 });
+  vi.unstubAllEnvs();
 }
 
 export const tmp = (prefix: string): string => {

@@ -658,9 +658,9 @@ describe('cli thin-client mode', () => {
         closeHippoDb(db);
       }
     } finally {
-      vi.unstubAllEnvs();
       await handle.stop();
       rmSync(workspace, { recursive: true, force: true });
+      vi.unstubAllEnvs();
     }
   }, 30_000);
 });

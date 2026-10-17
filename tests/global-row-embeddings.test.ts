@@ -235,9 +235,9 @@ describe('global-row-embeddings: the first promote, before any global store exis
   });
 
   afterEach(async () => {
-    vi.unstubAllEnvs();
     await embeddings.close();
     cleanUp(localRoot, globalRoot);
+    vi.unstubAllEnvs();
   });
 
   it('embeds the copy into the global store the promote created', async () => {
