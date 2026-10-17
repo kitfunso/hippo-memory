@@ -2,11 +2,11 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { _setDigestExistsProbeForTests, recordSessionDigest, type DigestEdit } from '../src/capture/session-digest.js';
-import { isSessionDigestRow } from '../src/core/session-digest-row.js';
-import { initStore } from '../src/store/open.js';
-import { loadAllEntries } from '../src/store/entry-reads.js';
-import { makeRoot } from './_helpers/make-root.js';
+import { _setDigestExistsProbeForTests, recordSessionDigest, type DigestEdit } from '../../src/capture/session-digest.js';
+import { isSessionDigestRow } from '../../src/core/session-digest-row.js';
+import { initStore } from '../../src/store/open.js';
+import { loadAllEntries } from '../../src/store/entry-reads.js';
+import { makeRoot } from '../_helpers/make-root.js';
 
 const HOST = /fileserver|example\.com|[\\/]opt[\\/]/i;
 const probes: string[] = [];

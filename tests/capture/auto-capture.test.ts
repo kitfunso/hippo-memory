@@ -10,19 +10,19 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { extractFromTexts } from '../src/capture/extract.js';
-import { PRE_COMPACT_INSTRUCTION } from '../src/capture/compaction-record.js';
-import { captureToolFailure } from '../src/capture/capture-error.js';
-import { failureTarget } from './_helpers/failure-target.js';
-import { lessonFromFailure, failureSignature } from '../src/capture/failure-reading.js';
-import { initStore } from '../src/store/open.js';
-import { getHippoRoot } from '../src/core/project-identity.js';
-import { loadAllEntries } from '../src/store/entry-reads.js';
-import { loadActiveTaskSnapshot } from '../src/store/sessions.js';
-import { installJsonHooks } from '../src/hooks/json-hooks.js';
-import { runDoctor } from '../src/doctor.js';
-import { runCliAs } from './_helpers/run-cli-as.js';
-import { makeRoot } from './_helpers/make-root.js';
+import { extractFromTexts } from '../../src/capture/extract.js';
+import { PRE_COMPACT_INSTRUCTION } from '../../src/capture/compaction-record.js';
+import { captureToolFailure } from '../../src/capture/capture-error.js';
+import { failureTarget } from '../_helpers/failure-target.js';
+import { lessonFromFailure, failureSignature } from '../../src/capture/failure-reading.js';
+import { initStore } from '../../src/store/open.js';
+import { getHippoRoot } from '../../src/core/project-identity.js';
+import { loadAllEntries } from '../../src/store/entry-reads.js';
+import { loadActiveTaskSnapshot } from '../../src/store/sessions.js';
+import { installJsonHooks } from '../../src/hooks/json-hooks.js';
+import { runDoctor } from '../../src/doctor.js';
+import { runCliAs } from '../_helpers/run-cli-as.js';
+import { makeRoot } from '../_helpers/make-root.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();

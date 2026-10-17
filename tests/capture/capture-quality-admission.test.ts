@@ -1,19 +1,19 @@
-import type { FullContext } from './_helpers/api-ctx.js';
+import type { FullContext } from '../_helpers/api-ctx.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { join } from 'node:path';
-import { cmdCapture } from '../src/capture/command.js';
-import { extractFromTexts } from '../src/capture/extract.js';
-import { sessionTail, summarizeSessionTurns, type SessionTurn } from '../src/capture/transcript.js';
-import { extractLessons, partitionLessons } from '../src/learn/autolearn.js';
-import { getContext } from '../src/api/index.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS, Layer } from '../src/core/memory.js';
-import { initStore, openStore } from '../src/store/open.js';
-import { closeHippoDb } from '../src/db/index.js';
-import { gatedWrite } from '../src/store/gated-write.js';
-import { loadAllEntries } from '../src/store/entry-reads.js';
-import { writeEntry } from '../src/store/entry-writes.js';
-import { apiCtx } from './_helpers/api-ctx.js';
-import { makeRoot } from './_helpers/make-root.js';
+import { cmdCapture } from '../../src/capture/command.js';
+import { extractFromTexts } from '../../src/capture/extract.js';
+import { sessionTail, summarizeSessionTurns, type SessionTurn } from '../../src/capture/transcript.js';
+import { extractLessons, partitionLessons } from '../../src/learn/autolearn.js';
+import { getContext } from '../../src/api/index.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS, Layer } from '../../src/core/memory.js';
+import { initStore, openStore } from '../../src/store/open.js';
+import { closeHippoDb } from '../../src/db/index.js';
+import { gatedWrite } from '../../src/store/gated-write.js';
+import { loadAllEntries } from '../../src/store/entry-reads.js';
+import { writeEntry } from '../../src/store/entry-writes.js';
+import { apiCtx } from '../_helpers/api-ctx.js';
+import { makeRoot } from '../_helpers/make-root.js';
 
 const captureTurns = (turns: readonly SessionTurn[]) => {
   const { users, assistants } = sessionTail(turns);

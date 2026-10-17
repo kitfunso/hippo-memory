@@ -2,13 +2,13 @@
 // auto-captured tags. Real SQLite store, no mocks.
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { createRequire } from 'module';
-import { writeEntry } from '../src/store/entry-writes.js';
-import { sqliteSyncStore } from '../src/store/sqlite/store.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
-import { captureToolFailure } from '../src/capture/capture-error.js';
-import { failureTarget } from './_helpers/failure-target.js';
-import type { DatabaseSyncLike } from '../src/db/index.js';
-import { makeRoot } from './_helpers/make-root.js';
+import { writeEntry } from '../../src/store/entry-writes.js';
+import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
+import { captureToolFailure } from '../../src/capture/capture-error.js';
+import { failureTarget } from '../_helpers/failure-target.js';
+import type { DatabaseSyncLike } from '../../src/db/index.js';
+import { makeRoot } from '../_helpers/make-root.js';
 
 const require = createRequire(import.meta.url);
 // SAFETY: node:sqlite has no bundled types; mirrors tests/db-open-write-free.test.ts.

@@ -5,9 +5,9 @@ import nodeFs from 'node:fs';
 import { syncBuiltinESMExports } from 'node:module';
 import * as path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { loadTurnPosition, runSessionWorker, saveTurnPosition, turnPosition, turnsAfter, type WorkerMode } from '../src/capture/session-worker.js';
-import type { SessionTurn } from '../src/capture/transcript.js';
-import { withFakeHome, type FakeHomeHandle } from './_helpers/with-fake-home.js';
+import { loadTurnPosition, runSessionWorker, saveTurnPosition, turnPosition, turnsAfter, type WorkerMode } from '../../src/capture/session-worker.js';
+import type { SessionTurn } from '../../src/capture/transcript.js';
+import { withFakeHome, type FakeHomeHandle } from '../_helpers/with-fake-home.js';
 
 const ID = 'vscode-sess-1';
 let fake: FakeHomeHandle;

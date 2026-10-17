@@ -2,23 +2,23 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import type { Context } from '../src/api/index.js';
-import { sqliteStore } from '../src/store/sqlite/store.js';
-import { BadRequestError } from '../src/core/api-errors.js';
-import { queryAuditEvents } from '../src/store/audit.js';
-import { extractFromTexts } from '../src/capture/extract.js';
-import { captureSessionTexts, type SessionCaptureRequest } from '../src/capture/session-texts.js';
-import { collectSessionTurns, sessionTail } from '../src/capture/transcript.js';
-import { closeHippoDb, openHippoDb } from '../src/db/index.js';
-import { deriveOriginProject } from '../src/core/project-identity.js';
-import { insertRejectedValue, normalizeValueForRejection, rejectionDigest } from '../src/store/rejection.js';
-import { mergedText } from '../src/util/same-text.js';
-import { loadAllEntries, loadEveryTenantEntries } from '../src/store/entry-reads.js';
-import { writeEntry } from '../src/store/entry-writes.js';
-import { initStore } from '../src/store/open.js';
-import { initProject, removeScratch, runHippo, scratch } from './_helpers/compaction-hooks.js';
-import { createMemory } from './_helpers/default-half-life-memory.js';
-import { makeRoot } from './_helpers/make-root.js';
+import type { Context } from '../../src/api/index.js';
+import { sqliteStore } from '../../src/store/sqlite/store.js';
+import { BadRequestError } from '../../src/core/api-errors.js';
+import { queryAuditEvents } from '../../src/store/audit.js';
+import { extractFromTexts } from '../../src/capture/extract.js';
+import { captureSessionTexts, type SessionCaptureRequest } from '../../src/capture/session-texts.js';
+import { collectSessionTurns, sessionTail } from '../../src/capture/transcript.js';
+import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
+import { deriveOriginProject } from '../../src/core/project-identity.js';
+import { insertRejectedValue, normalizeValueForRejection, rejectionDigest } from '../../src/store/rejection.js';
+import { mergedText } from '../../src/util/same-text.js';
+import { loadAllEntries, loadEveryTenantEntries } from '../../src/store/entry-reads.js';
+import { writeEntry } from '../../src/store/entry-writes.js';
+import { initStore } from '../../src/store/open.js';
+import { initProject, removeScratch, runHippo, scratch } from '../_helpers/compaction-hooks.js';
+import { createMemory } from '../_helpers/default-half-life-memory.js';
+import { makeRoot } from '../_helpers/make-root.js';
 
 const TEXTS = [
   'We decided to use pnpm for the billing service because the lockfile is pnpm-lock.yaml.',

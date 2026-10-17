@@ -8,8 +8,8 @@ import {
   WORKING_STATE_CAPS,
   transcriptWorkingState,
   truncateKeepNewest,
-} from '../src/capture/working-state.js';
-import { collectHandoffEvidence } from '../src/capture/handoff-evidence.js';
+} from '../../src/capture/working-state.js';
+import { collectHandoffEvidence } from '../../src/capture/handoff-evidence.js';
 
 const made: string[] = [];
 const tmp = (): string => {

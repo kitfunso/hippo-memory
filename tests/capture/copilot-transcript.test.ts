@@ -3,10 +3,10 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { collectSessionTurns } from '../src/capture/transcript.js';
-import { transcriptWorkingState } from '../src/capture/working-state.js';
-import { copilotTranscriptFor, copilotTurn } from '../src/capture/copilot-transcript.js';
-import { copilotEventsJsonl, copilotEventsTail, writeCopilotSessionLog } from './_helpers/copilot-hooks.js';
+import { collectSessionTurns } from '../../src/capture/transcript.js';
+import { transcriptWorkingState } from '../../src/capture/working-state.js';
+import { copilotTranscriptFor, copilotTurn } from '../../src/capture/copilot-transcript.js';
+import { copilotEventsJsonl, copilotEventsTail, writeCopilotSessionLog } from '../_helpers/copilot-hooks.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();

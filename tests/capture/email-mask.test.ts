@@ -2,13 +2,13 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cmdCapture } from '../src/capture/command.js';
-import { transcriptWorkingState } from '../src/capture/working-state.js';
-import { maskEmails } from '../src/util/secret-detect.js';
-import { recordSessionDigest } from '../src/capture/session-digest.js';
-import { initStore } from '../src/store/open.js';
-import { loadAllEntries } from '../src/store/entry-reads.js';
-import { makeRoot } from './_helpers/make-root.js';
+import { cmdCapture } from '../../src/capture/command.js';
+import { transcriptWorkingState } from '../../src/capture/working-state.js';
+import { maskEmails } from '../../src/util/secret-detect.js';
+import { recordSessionDigest } from '../../src/capture/session-digest.js';
+import { initStore } from '../../src/store/open.js';
+import { loadAllEntries } from '../../src/store/entry-reads.js';
+import { makeRoot } from '../_helpers/make-root.js';
 
 const EMAIL = 'alice@example.com';
 const REPLY = `Updated ${EMAIL} in customer.ts because the export failed.`;

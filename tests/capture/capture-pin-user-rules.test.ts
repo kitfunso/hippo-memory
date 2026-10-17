@@ -1,16 +1,16 @@
 // A rule the person states is pinned at capture, so the prompt hook injects it on a later prompt that shares none of its words.
 // Real SQLite stores in tmp dirs, no mocks.
-import type { FullContext } from './_helpers/api-ctx.js';
+import type { FullContext } from '../_helpers/api-ctx.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { cmdCapture } from '../src/capture/command.js';
-import { collectSessionTurns, type SessionTurn } from '../src/capture/transcript.js';
-import { getContext } from '../src/api/index.js';
-import { initStore } from '../src/store/open.js';
-import { loadAllEntries } from '../src/store/entry-reads.js';
-import { apiCtx } from './_helpers/api-ctx.js';
-import { makeRoot } from './_helpers/make-root.js';
+import { cmdCapture } from '../../src/capture/command.js';
+import { collectSessionTurns, type SessionTurn } from '../../src/capture/transcript.js';
+import { getContext } from '../../src/api/index.js';
+import { initStore } from '../../src/store/open.js';
+import { loadAllEntries } from '../../src/store/entry-reads.js';
+import { apiCtx } from '../_helpers/api-ctx.js';
+import { makeRoot } from '../_helpers/make-root.js';
 
 const TAUGHT = 'No: Put each change note in its own new file under changelog.d/ and never edit CHANGELOG.md by hand, because the release script builds CHANGELOG.md from those files. Please fix it.';
 const USER_DECISION = "Let's go with SQLite for the cache because the app must work offline.";

@@ -5,9 +5,9 @@ import { fileURLToPath } from 'url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { spawnSync } from 'child_process';
-import { summariseTranscript, resolveLastSessionTranscript } from '../src/capture/transcript.js';
-import { trySymlink } from './_helpers/symlink.js';
-import { runCliAs } from './_helpers/run-cli-as.js';
+import { summariseTranscript, resolveLastSessionTranscript } from '../../src/capture/transcript.js';
+import { trySymlink } from '../_helpers/symlink.js';
+import { runCliAs } from '../_helpers/run-cli-as.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -385,7 +385,7 @@ describe('hippo capture --last-session --log-file (end-to-end via CLI)', () => {
 
     // Init a hippo store in the tmp cwd so capture doesn't bail out
     // on `No .hippo directory found`.
-    const binPath = fileURLToPath(new URL('../bin/hippo.js', import.meta.url));
+    const binPath = fileURLToPath(new URL('../../bin/hippo.js', import.meta.url));
     const init = spawnSync(
       process.execPath,
       [binPath, 'init', '--no-hooks', '--no-schedule', '--no-learn'],
