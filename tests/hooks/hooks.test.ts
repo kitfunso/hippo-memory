@@ -3,11 +3,11 @@ import * as os from 'os';
 import * as path from 'path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { installJsonHooks, uninstallJsonHooks, resolveJsonHookPaths } from '../src/hooks/json-hooks.js';
-import { detectInstalledTools, defaultSleepLogPath, defaultPreCompactLogPath } from '../src/hooks/shared.js';
-import { withFakeHome as withFakeHomeShared } from './_helpers/with-fake-home.js';
-import { trySymlink } from './_helpers/symlink.js';
-import type { JsonValue } from '../src/util/json.js';
+import { installJsonHooks, uninstallJsonHooks, resolveJsonHookPaths } from '../../src/hooks/json-hooks.js';
+import { detectInstalledTools, defaultSleepLogPath, defaultPreCompactLogPath } from '../../src/hooks/shared.js';
+import { withFakeHome as withFakeHomeShared } from '../_helpers/with-fake-home.js';
+import { trySymlink } from '../_helpers/symlink.js';
+import type { JsonValue } from '../../src/util/json.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();

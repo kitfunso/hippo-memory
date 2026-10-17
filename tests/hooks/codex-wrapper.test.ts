@@ -14,17 +14,17 @@ import {
   repairCodexWrapperIfInstalled,
   uninstallCodexWrapper,
   resolveCodexWrapperPaths,
-} from '../src/hooks/codex-wrapper.js';
-import { resolveCodexSessionTranscript } from '../src/hooks/codex-session.js';
-import { initStore } from '../src/store/open.js';
-import { loadAllEntries } from '../src/store/entry-reads.js';
-import { waitFor } from './_helpers/wait-for.js';
+} from '../../src/hooks/codex-wrapper.js';
+import { resolveCodexSessionTranscript } from '../../src/hooks/codex-session.js';
+import { initStore } from '../../src/store/open.js';
+import { loadAllEntries } from '../../src/store/entry-reads.js';
+import { waitFor } from '../_helpers/wait-for.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-const HIPPO_JS = path.resolve(__dirname, '..', 'bin', 'hippo.js');
+const HIPPO_JS = path.resolve(__dirname, '..', '..', 'bin', 'hippo.js');
 
 function setCodexHome(value: string | undefined): void {
   if (value === undefined) vi.stubEnv('CODEX_HOME', undefined);

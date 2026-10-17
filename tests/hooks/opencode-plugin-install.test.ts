@@ -13,14 +13,14 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { withFakeHome } from './_helpers/with-fake-home.js';
+import { withFakeHome } from '../_helpers/with-fake-home.js';
 import {
   HIPPO_OPENCODE_PLUGIN_MARKER,
   installOpencodePlugin,
   uninstallOpencodePlugin,
   resolveOpencodePluginPath,
-} from '../src/hooks/opencode.js';
-import { detectInstalledTools } from '../src/hooks/shared.js';
+} from '../../src/hooks/opencode.js';
+import { detectInstalledTools } from '../../src/hooks/shared.js';
 
 /** The plugin text installOpencodePlugin writes into the current (fake) home. */
 function installedSource(): string {

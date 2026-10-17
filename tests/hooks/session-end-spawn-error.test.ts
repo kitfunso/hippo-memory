@@ -4,10 +4,10 @@ import { spawnSync, type SpawnSyncReturns } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { makeRoot } from './_helpers/make-root.js';
-import { installCodexWrapper } from '../src/hooks/codex-wrapper.js';
+import { makeRoot } from '../_helpers/make-root.js';
+import { installCodexWrapper } from '../../src/hooks/codex-wrapper.js';
 
-const HIPPO_JS = path.resolve(__dirname, '..', 'bin', 'hippo.js');
+const HIPPO_JS = path.resolve(__dirname, '..', '..', 'bin', 'hippo.js');
 
 let dir: string;
 

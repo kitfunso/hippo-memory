@@ -3,7 +3,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { installJsonHooks, uninstallJsonHooks } from '../src/hooks/json-hooks.js';
+import { installJsonHooks, uninstallJsonHooks } from '../../src/hooks/json-hooks.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();

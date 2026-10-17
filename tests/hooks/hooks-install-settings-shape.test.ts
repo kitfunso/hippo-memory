@@ -2,13 +2,13 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { parseArgs } from '../src/cli.js';
-import { COMMANDS } from '../src/cli/verbs.js';
-import { undeclaredFlags, type VerbFlags } from '../src/cli/flags.js';
-import { HOOKS } from '../src/hooks/hook-blocks.js';
-import { installJsonHooks, resolveJsonHookPaths } from '../src/hooks/json-hooks.js';
-import { installOpencodePlugin, resolveOpencodePluginPath } from '../src/hooks/opencode.js';
-import { withFakeHome, type FakeHomeHandle } from './_helpers/with-fake-home.js';
+import { parseArgs } from '../../src/cli.js';
+import { COMMANDS } from '../../src/cli/verbs.js';
+import { undeclaredFlags, type VerbFlags } from '../../src/cli/flags.js';
+import { HOOKS } from '../../src/hooks/hook-blocks.js';
+import { installJsonHooks, resolveJsonHookPaths } from '../../src/hooks/json-hooks.js';
+import { installOpencodePlugin, resolveOpencodePluginPath } from '../../src/hooks/opencode.js';
+import { withFakeHome, type FakeHomeHandle } from '../_helpers/with-fake-home.js';
 
 let env: FakeHomeHandle;
 
@@ -49,7 +49,7 @@ describe('first-party hook command lines', () => {
       installJsonHooks(target);
       lines.push(...hippoCommandsIn(settings));
     }
-    lines.push(...hippoCommandsIn(path.resolve(__dirname, '..', 'extensions', 'claude-code-plugin', 'hooks', 'hooks.json')));
+    lines.push(...hippoCommandsIn(path.resolve(__dirname, '..', '..', 'extensions', 'claude-code-plugin', 'hooks', 'hooks.json')));
     installOpencodePlugin();
     const opencodePlugin = fs.readFileSync(resolveOpencodePluginPath(), 'utf8');
     for (const text of [...Object.values(HOOKS).map((hook) => hook.content), opencodePlugin]) {

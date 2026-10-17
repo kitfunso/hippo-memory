@@ -3,17 +3,17 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { CODEX_TRUST_LINE } from '../src/hooks/shared.js';
-import { installJsonHooks, uninstallJsonHooks } from '../src/hooks/json-hooks.js';
-import { formatDoctor, runDoctor } from '../src/doctor.js';
-import { withFakeHome, type FakeHomeHandle } from './_helpers/with-fake-home.js';
-import { initStore } from '../src/store/open.js';
-import { writeEntry } from '../src/store/entry-writes.js';
-import { saveSessionHandoff } from '../src/store/handoffs.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
-import type { JsonValue } from '../src/util/json.js';
-import { hippoRun } from './_helpers/spawn-hippo.js';
-import { runCliAs } from './_helpers/run-cli-as.js';
+import { CODEX_TRUST_LINE } from '../../src/hooks/shared.js';
+import { installJsonHooks, uninstallJsonHooks } from '../../src/hooks/json-hooks.js';
+import { formatDoctor, runDoctor } from '../../src/doctor.js';
+import { withFakeHome, type FakeHomeHandle } from '../_helpers/with-fake-home.js';
+import { initStore } from '../../src/store/open.js';
+import { writeEntry } from '../../src/store/entry-writes.js';
+import { saveSessionHandoff } from '../../src/store/handoffs.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
+import type { JsonValue } from '../../src/util/json.js';
+import { hippoRun } from '../_helpers/spawn-hippo.js';
+import { runCliAs } from '../_helpers/run-cli-as.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();

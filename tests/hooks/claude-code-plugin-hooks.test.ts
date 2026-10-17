@@ -11,7 +11,7 @@ interface HookGroup {
 // SAFETY: the plugin's hooks.json is a checked-in file; the tests below fail if its shape differs.
 const manifest = JSON.parse(
   fs.readFileSync(
-    path.join(fileURLToPath(new URL('..', import.meta.url)), 'extensions', 'claude-code-plugin', 'hooks', 'hooks.json'),
+    path.join(fileURLToPath(new URL('../..', import.meta.url)), 'extensions', 'claude-code-plugin', 'hooks', 'hooks.json'),
     'utf8',
   ),
 ) as { hooks: Record<string, HookGroup[]> };

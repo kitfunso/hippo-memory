@@ -4,9 +4,9 @@ import * as os from 'os';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
 import { afterEach, describe, expect, it } from 'vitest';
-import { detectInstalledTools } from '../src/hooks/shared.js';
+import { detectInstalledTools } from '../../src/hooks/shared.js';
 
-const REPO = fileURLToPath(new URL('..', import.meta.url));
+const REPO = fileURLToPath(new URL('../..', import.meta.url));
 const SCRIPT = path.join(REPO, 'scripts', 'check-agent-inventory.mjs');
 const FRAMEWORKS = ['Alpha', 'Bravo', 'Charlie', 'Delta', 'Echo', 'Foxtrot'];
 

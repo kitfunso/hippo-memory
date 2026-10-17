@@ -7,8 +7,8 @@ import {
   ensureCodexWrapperInstalled,
   resolveCodexWrapperPaths,
   uninstallCodexWrapper,
-} from '../src/hooks/codex-wrapper.js';
-import { withFakeHome, type FakeHomeHandle } from './_helpers/with-fake-home.js';
+} from '../../src/hooks/codex-wrapper.js';
+import { withFakeHome, type FakeHomeHandle } from '../_helpers/with-fake-home.js';
 
 const LAUNCHER = process.platform === 'win32' ? 'codex.cmd' : 'codex';
 const BACKUP = process.platform === 'win32' ? 'codex.hippo-real.cmd' : 'codex.hippo-real';
