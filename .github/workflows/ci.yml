@@ -14,7 +14,7 @@ name: CI
 on:
   pull_request:
   push:
-    branches: [master]
+    branches: [master, 'next/**']
   workflow_call:
 
 # Read-only by default. Workflow does not need contents:write or id-token.
@@ -96,6 +96,8 @@ jobs:
       - run: node scripts/check-agent-inventory.mjs
       - run: node website/scripts/check-readme-sync.mjs
       - run: npm run build
+      # The committed API report must match the built declarations.
+      - run: npm run check:dts
       # Tests are type-checked so a wrong-shaped call cannot pass.
       - run: npm run typecheck:tests
       - run: node scripts/check-openclaw-dist.mjs

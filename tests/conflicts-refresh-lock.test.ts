@@ -8,7 +8,8 @@ import { createRequire } from 'node:module';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { replaceDetectedConflicts } from '../src/store/conflicts.js';
-import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
+import { closeHippoDb, getHippoDbPath, openHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
+import { stageWinner } from './_helpers/race-winner.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 
 interface StatementProto {
@@ -134,28 +135,16 @@ describe('conflict refresh', () => {
     expect(refsOf(root, 'mem_bulk_7')).toBe('[]');
   });
 
-  it('keeps a value another writer set between the read and the write', () => {
+  it('keeps a value another process set between the read and the write', async () => {
     const root = bulkStore(4);
-    const { exec } = DatabaseSync.prototype;
-    let injected = false;
-    // The other writer lands once the refresh has read the table and not yet taken the write lock.
-    vi.spyOn(DatabaseSync.prototype, 'exec').mockImplementation(function (this: DatabaseSyncLike, sql: string) {
-      if (sql === 'BEGIN IMMEDIATE' && !injected) {
-        injected = true;
-        const other = openHippoDb(root);
-        try {
-          other.prepare(`UPDATE memories SET conflicts_with_json = '["mem_bulk_3"]' WHERE id = 'mem_bulk_1'`).run();
-        } finally {
-          closeHippoDb(other);
-        }
-      }
-      exec.call(this, sql);
-    });
+    // The other writer holds the lock before the refresh starts, so the refresh reads the old table and waits to write.
+    const winner = await stageWinner(getHippoDbPath(root), [
+      `UPDATE memories SET conflicts_with_json = '["mem_bulk_3"]' WHERE id = 'mem_bulk_1'`,
+    ]);
 
     replaceDetectedConflicts(root, [pair(1, 2)], NOW);
-    vi.restoreAllMocks();
+    await winner.committed;
 
-    expect(injected).toBe(true);
     expect(refsOf(root, 'mem_bulk_1')).toBe('["mem_bulk_3"]');
     expect(refsOf(root, 'mem_bulk_2')).toBe('["mem_bulk_1"]');
   });

@@ -1,0 +1,28 @@
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { rmSync } from 'node:fs';
+import { ConflictError } from '../src/core/api-errors.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { readEntry } from '../src/store/entry-reads.js';
+import { apiCtx } from './_helpers/api-ctx.js';
+import { createMemory } from './_helpers/default-half-life-memory.js';
+import { makeRoot } from './_helpers/make-root.js';
+import { supersedeNow } from './_helpers/supersede-now.js';
+
+let root: string;
+beforeEach(() => {
+  root = makeRoot('store-supersede-conflict');
+});
+afterEach(() => rmSync(root, { recursive: true, force: true }));
+
+describe('store supersede', () => {
+  it('refuses a second supersede of one row and keeps the first successor', () => {
+    const ctx = apiCtx(root, 'default', { subject: 'cli', role: 'admin' });
+    const old = createMemory('the deploy runs on Tuesdays', { tenantId: 'default' });
+    writeEntry(root, old);
+
+    const first = supersedeNow(ctx, old.id, 'the deploy runs on Wednesdays');
+    expect(() => supersedeNow(ctx, old.id, 'the deploy runs on Thursdays')).toThrow(ConflictError);
+
+    expect(readEntry(root, old.id, 'default')?.superseded_by).toBe(first);
+  });
+});

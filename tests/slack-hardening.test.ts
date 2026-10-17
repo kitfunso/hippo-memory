@@ -4,14 +4,13 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createHmac } from 'node:crypto';
-import { createRequire } from 'node:module';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { remember } from '../src/api/index.js';
 import { Layer } from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { openHippoDb, closeHippoDb, getCurrentSchemaVersion, getSchemaVersion, type DatabaseSyncLike } from '../src/db/index.js';
+import { openHippoDb, closeHippoDb, getCurrentSchemaVersion, getSchemaVersion } from '../src/db/index.js';
 import { resolveTenantForSlackTeam } from '../src/connectors/slack/tenant-routing.js';
 import { ingestMessage, type IngestInput } from '../src/connectors/slack/ingest.js';
 import type { IngestResult } from '../src/connectors/ingest.js';
@@ -25,9 +24,8 @@ import { serve, type ServerHandle } from '../src/server.js';
 import { LATEST_SCHEMA_VERSION } from './_helpers/schema-version.js';
 import { sqliteStore } from '../src/store/sqlite/store.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+import { stageScratchWinner } from './_helpers/race-winner.js';
 
-// SAFETY: node:sqlite's DatabaseSync is the class db.ts wraps as DatabaseSyncLike.
-const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite') as { DatabaseSync: { prototype: DatabaseSyncLike } };
 
 const SECRET = 'shhh-current';
 const PREVIOUS_SECRET = 'shhh-old';
@@ -234,22 +232,21 @@ describe('Slack hardening + migration v19', () => {
     const racedOpts = messageToRememberOpts(raced);
     if (!racedOpts) throw new Error('the raced message has text');
     const memBefore = loadAllEntries(root, 'default').length;
-    const winners: Promise<IngestResult>[] = [];
-    let winnerRan = false;
-    const { exec } = DatabaseSync.prototype;
-    const spy = vi.spyOn(DatabaseSync.prototype, 'exec').mockImplementation(function (this: DatabaseSyncLike, sql: string) {
-      // The loser's first lock request: the winner stores the same event on its own connection, then the loser goes on.
-      if (sql === 'BEGIN IMMEDIATE' && !winnerRan) {
-        winnerRan = true;
-        // remember's first store call is the write, which hippo.db runs before it returns, so the winner commits before this lock request goes through.
-        const stored = remember(ctx, { ...racedOpts, untrusted: true, event: { connector: 'slack', eventId: racedEventId } });
-        winners.push(stored.then((w): IngestResult => ({ status: w.duplicate ? 'skipped_duplicate' : 'ingested', memoryId: w.id })));
-      }
-      exec.call(this, sql);
-    });
-    const loser = await ingestMessage(ctx, raced);
-    spy.mockRestore();
-    const settled = await Promise.all(winners);
+    // The other worker's rows come from a scratch store, and a second process commits them while the loser waits for the lock.
+    const scratch = mkdtempSync(join(tmpdir(), 'hippo-slack-winner-'));
+    initStore(scratch);
+    let settled: IngestResult[];
+    let loser: IngestResult;
+    try {
+      const winnerCtx = apiCtx(scratch, 'default', { subject: 'connector:slack', role: 'admin' });
+      const w = await remember(winnerCtx, { ...racedOpts, untrusted: true, event: { connector: 'slack', eventId: racedEventId } });
+      settled = [{ status: w.duplicate ? 'skipped_duplicate' : 'ingested', memoryId: w.id }];
+      const staged = await stageScratchWinner(root, scratch, ['memories', 'slack_event_log']);
+      loser = await ingestMessage(ctx, raced);
+      await staged.committed;
+    } finally {
+      rmSync(scratch, { recursive: true, force: true });
+    }
 
     expect(settled.map((w) => w.status)).toEqual(['ingested']);
     expect(loser).toEqual({ status: 'skipped_duplicate', memoryId: settled[0].memoryId });
