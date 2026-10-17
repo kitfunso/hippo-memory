@@ -12,8 +12,15 @@ import { runDoctor } from '../src/doctor.js';
 import { Layer } from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import {
-  carryingCalls, lastSentState, readApiCalls, recordTokenUse, shouldSkipUnchanged, type ApiCall,
-  type TokenEvent, type TokenSummary, type TokenSurface,
+  carryingCalls,
+  lastSentState,
+  readApiCalls,
+  recordTokenUse,
+  shouldSkipUnchanged,
+  type ApiCall,
+  type TokenEvent,
+  type TokenSummary,
+  type TokenSurface,
 } from '../src/store/token-ledger.js';
 import { isSubagentPayload } from '../src/util/hook-payload.js';
 import { estimateTokens } from '../src/util/token-text.js';
