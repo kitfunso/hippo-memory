@@ -10,12 +10,16 @@ export const REWARD_FACTOR_SQL =
   `(CASE WHEN ${POS} = 0 AND ${NEG} = 0 THEN 1.0 ELSE 1.0 + ${REWARD_SLOPE} * (${POS} - ${NEG}) / (${POS} + ` +
   `${NEG} + 1.0) END)`;
 
-/** Half-lives of decay the index key measures to: 2 read a 50,000-row tenant in 100 ms against 132 ms at 4; a tenant
+/** Half-lives of decay the index key measures to: a narrower window reads fewer rows of a large tenant, and a tenant
  * with fewer rows inside it than the cap is small enough to scan. */
 export const DECAY_KEY_HALF_LIVES = 2;
 
 /** Far above julianday's rounding (5e-10 day), so a row the key leaves out has decayed past DECAY_KEY_HALF_LIVES. */
 export const DECAY_KEY_SLACK_DAYS = 1e-3;
+
+/** True of every row (pinned is 0 or 1); only a query that repeats it can pick the index, so no other read, such as the
+ * ambient drift probe, changes plan. */
+export const DECAY_KEY_WHERE = 'pinned >= 0';
 
 /** The day a row reaches DECAY_KEY_HALF_LIVES of decay, reward factor included, so `key >= julianday(now)` is exactly
  * `decay exponent <= DECAY_KEY_HALF_LIVES`; migration v60 and the context read must share this one text. */

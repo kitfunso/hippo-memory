@@ -180,7 +180,8 @@ describe('loadContextCandidates past the cap', () => {
       (db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...Array<string>(marks).fill('x')) as Array<{ detail: string }>)
         .map((r) => r.detail),
     );
-    expect(plan.some((line) => line.includes(`USING INDEX ${DECAY_KEY_INDEX}`))).toBe(true);
+    expect(plan.filter((line) => line.includes(`USING INDEX ${DECAY_KEY_INDEX} (tenant_id=? AND pinned=?`))).toHaveLength(2);
+    expect(plan.some((line) => line.includes('AND <expr>>?)'))).toBe(true);
     expect(plan.filter((line) => /SCAN memories/.test(line))).toEqual([]);
   });
 });

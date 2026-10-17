@@ -2,7 +2,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { openHippoDb, closeHippoDb, getSchemaVersion, type DatabaseSyncLike } from '../src/db/index.js';
-import { DECAY_KEY_INDEX, DECAY_KEY_SQL } from '../src/db/decay-key.js';
+import { DECAY_KEY_INDEX, DECAY_KEY_SQL, DECAY_KEY_WHERE } from '../src/db/decay-key.js';
 import { v60 } from '../src/db/migrations/v60.js';
 import { writeEntryDbOnly } from '../src/store/entry-writes.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
@@ -34,10 +34,10 @@ afterEach(() => {
 });
 
 describe('schema v60', () => {
-  it('a fresh store has the decay-key index, led by tenant and pinned', () => {
+  it('a fresh store has the decay-key index, led by tenant and pinned, over rows with a half-life', () => {
     withDb((db) => {
       expect(getSchemaVersion(db)).toBe(LATEST_SCHEMA_VERSION);
-      expect(indexSql(db)).toContain(`ON memories(tenant_id, pinned, (${DECAY_KEY_SQL}))`);
+      expect(indexSql(db)).toContain(`ON memories(tenant_id, pinned, (${DECAY_KEY_SQL})) WHERE ${DECAY_KEY_WHERE}`);
     });
   });
 

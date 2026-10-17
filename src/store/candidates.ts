@@ -9,7 +9,7 @@ import {
 } from '../core/memory.js';
 import { strengthSql } from './rule-sql.js';
 import { isOutcomeSlowAblated } from '../core/ablation.js';
-import { DECAY_KEY_HALF_LIVES, DECAY_KEY_SLACK_DAYS, DECAY_KEY_SQL } from '../db/decay-key.js';
+import { DECAY_KEY_HALF_LIVES, DECAY_KEY_SLACK_DAYS, DECAY_KEY_SQL, DECAY_KEY_WHERE } from '../db/decay-key.js';
 import { type DatabaseSyncLike, withReadSnapshot } from '../db/index.js';
 import { rewardFactorSql, scopeAdmitSql, type SqlFragment } from './rule-sql.js';
 import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry, parseJsonArray } from './rows.js';
@@ -222,11 +222,12 @@ const RANK_COLUMNS = 'id, pinned, half_life_days, last_retrieved, outcome_positi
 // every unpinned winner is within it too, since then each row left out has decayed further and the rank is the scan's.
 function decayKeySubsetSql(whereSql: string): string {
   const arm = (extra: string): string => `SELECT ${RANK_COLUMNS} FROM memories WHERE ${whereSql} AND ${extra}`;
+  // pinned is 0 or 1 (entry-row.ts), so the two arms hold every pinned row and every unpinned row with a key.
   return `WITH top AS MATERIALIZED (
       SELECT id, pinned, ${decayExponentSql()} AS d FROM (
-        ${arm('pinned > 0')}
+        ${arm(`pinned = 1 AND ${DECAY_KEY_WHERE}`)}
         UNION ALL
-        ${arm(`pinned = 0 AND half_life_days > 0 AND ${DECAY_KEY_SQL} >= julianday(?) - ?`)}
+        ${arm(`pinned = 0 AND half_life_days > 0 AND ${DECAY_KEY_WHERE} AND ${DECAY_KEY_SQL} >= julianday(?) - ?`)}
       ) ORDER BY pinned DESC, d ASC NULLS LAST, id ASC LIMIT ?
     )
     SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id IN (SELECT id FROM top)
