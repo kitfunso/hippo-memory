@@ -2,21 +2,18 @@
 import { policiesAsOf, POLICY, type SavePolicyOptions } from '../../objects/policies.js';
 import { HttpError, sendJson } from '../../util/http-util.js';
 import type { AuthedRouteRequest } from '../types.js';
-import { MAX_SHORT_FIELD_LEN, parseJsonBody } from '../validation.js';
+import { MAX_SHORT_FIELD_LEN, parseJsonBody, MAX_DATE_LEN, getString, requiredString } from '../validation.js';
 import { objectsOf, saveFor } from '../../api/objects/objects.js';
 import {
   closeRoute,
   getRoute,
   listRoute,
-  optionalString,
-  requiredString,
   supersedeRoute,
   type VersionedRouteConfig,
 } from './object-routes.js';
 
 // The date fields get a type and length check only: the store parses the date, and the cap bounds a junk string before
 // it reaches the Date parser.
-const MAX_DATE_LEN = 64;
 
 const policyRoutes: VersionedRouteConfig<'policy', SavePolicyOptions> = {
   noun: 'policy',
@@ -25,9 +22,9 @@ const policyRoutes: VersionedRouteConfig<'policy', SavePolicyOptions> = {
   object: POLICY,
   revise: (body) => {
     const policyText = requiredString(body, 'policyText', { max: MAX_SHORT_FIELD_LEN });
-    const validFrom = optionalString(body, 'validFrom', MAX_DATE_LEN);
-    const validTo = optionalString(body, 'validTo', MAX_DATE_LEN);
-    const changeSummary = optionalString(body, 'changeSummary', MAX_SHORT_FIELD_LEN);
+    const validFrom = getString(body, 'validFrom', MAX_DATE_LEN);
+    const validTo = getString(body, 'validTo', MAX_DATE_LEN);
+    const changeSummary = getString(body, 'changeSummary', MAX_SHORT_FIELD_LEN);
     return (existing, id) => ({
       policyName: existing.policyName,
       policyText,
@@ -45,8 +42,8 @@ export async function handleCreatePolicy(rr: AuthedRouteRequest): Promise<void> 
   const policy = await saveFor(ctx, POLICY, {
     policyName: requiredString(body, 'policyName', { max: MAX_SHORT_FIELD_LEN }),
     policyText: requiredString(body, 'policyText', { max: MAX_SHORT_FIELD_LEN }),
-    validFrom: optionalString(body, 'validFrom', MAX_DATE_LEN),
-    validTo: optionalString(body, 'validTo', MAX_DATE_LEN),
+    validFrom: getString(body, 'validFrom', MAX_DATE_LEN),
+    validTo: getString(body, 'validTo', MAX_DATE_LEN),
   });
   sendJson(rr.res, 201, { policy });
 }

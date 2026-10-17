@@ -19,6 +19,7 @@ import { resolveEmbeddingProvider } from '../src/embeddings/provider.js';
 import { loadConfig } from '../src/core/config.js';
 import { sharingStores } from './_helpers/sharing-stores.js';
 import { startHashedEmbeddings, type HashedEmbeddings } from './_helpers/hashed-embedding-server.js';
+import { runCliAs } from './_helpers/run-cli-as.js';
 
 // docs/plans/2026-07-18-global-row-embeddings.md: rows written to the global
 // store by promote/share/autoShare/sync/import must enter that store's
@@ -277,7 +278,7 @@ describe('global-row-embeddings: the first promote, before any global store exis
 // ---------------------------------------------------------------------------
 
 describe('global-row-embeddings: hippo embed --global CLI', () => {
-  it('embeds a seeded global row from a cwd with no local store, without requireInit failing', () => {
+  it('embeds a seeded global row from a cwd with no local store, without requireInit failing', async () => {
     const home = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-gre-cli-home-'));
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-gre-cli-cwd-'));
     const globalRoot = path.join(home, '.hippo');
@@ -290,18 +291,8 @@ describe('global-row-embeddings: hippo embed --global CLI', () => {
       const entry = createMemory('cli embed --global test content delta', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
       writeEntry(globalRoot, entry);
 
-      let exitCode = 0;
-      let stderr = '';
-      try {
-        execFileSync('node', [HIPPO_BIN, 'embed', '--global'], { cwd, env, encoding: 'utf-8' });
-      } catch (err) {
-        // SAFETY: `err` is unknown per catch-clause typing; execFileSync
-        // throws a Node child_process error whose `status`/`stderr` fields
-        // are read optionally, so this is safe for any thrown shape.
-        const e = err as { status?: number | null; stderr?: string };
-        exitCode = e.status ?? 1;
-        stderr = e.stderr ?? '';
-      }
+      // In process, so coverage sees the embed verb; the promote wiring case below keeps the real child.
+      const { status: exitCode, stderr } = await runCliAs(['embed', '--global'], { cwd, env });
 
       // Ungated: cwd has no local .hippo at all, so --global must skip
       // requireInit entirely (the r1 must-fix), regardless of embedding

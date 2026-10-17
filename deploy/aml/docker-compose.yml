@@ -15,12 +15,13 @@ services:
     restart: unless-stopped
     volumes:
       - hippo-aml-data:/data
+    networks: [aml]
     environment:
       # The adapter forwards Cloudflare's cf-connecting-ip on every call, so
       # the /v1 rate limiter keys per real client.
       HIPPO_CLIENT_IP_HEADER: cf-connecting-ip
-      # The adapter is hippo's only peer, so any peer that sends the header is the adapter.
-      HIPPO_TRUSTED_PROXIES: "*"
+      # The adapter is the only container on this pinned subnet that sends the header.
+      HIPPO_TRUSTED_PROXIES: 172.30.77.0/24
       # AML drives up to 256 concurrent searches; the default 20 rps bucket
       # would 429 the evaluation. hippo is only reachable through the
       # adapter, so a generous ceiling is safe.
@@ -41,8 +42,15 @@ services:
       HIPPO_URL: http://hippo:8080
     ports:
       - "127.0.0.1:18081:8090"
+    networks: [aml]
     depends_on:
       - hippo
+
+networks:
+  aml:
+    ipam:
+      config:
+        - subnet: 172.30.77.0/24
 
 volumes:
   hippo-aml-data:

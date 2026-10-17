@@ -3,7 +3,6 @@
 import { installCrashHandlers } from '../util/crash-handlers.js';
 import {
   envAllowKeylessLocal,
-  envKeylessLocalRole,
   envPort,
   envRequireAuth,
   envTlsCert,
@@ -65,11 +64,7 @@ function readTlsFiles(flags: CommandContext['flags']): { cert: Buffer; key: Buff
 function keyRuleLine(): string {
   if (envRequireAuth()) return 'every request needs an API key (HIPPO_REQUIRE_AUTH=1)';
   if (envAllowKeylessLocal()) {
-    const role = envKeylessLocalRole() === 'admin'
-      ? 'act as host admin (HIPPO_ALLOW_KEYLESS_LOCAL=1, HIPPO_KEYLESS_LOCAL_ROLE=admin)'
-      : 'act as a member (HIPPO_ALLOW_KEYLESS_LOCAL=1; ' +
-        'HIPPO_KEYLESS_LOCAL_ROLE=admin opens sleep and the quarantine routes)';
-    return `requests from this machine need no API key and ${role}; ` +
+    return 'requests from this machine need no API key and act as a member (HIPPO_ALLOW_KEYLESS_LOCAL=1); ' +
       'unset HIPPO_ALLOW_KEYLESS_LOCAL to require a key on every request';
   }
   return 'every request needs an API key: mint one with `hippo auth create` and send it as ' +

@@ -436,8 +436,8 @@ describe('rate-limit key forwarding and status pass-through', () => {
     // Set before serve(), which checks the proxy pair at boot; one place saves and restores them all.
     process.env.HIPPO_REQUIRE_AUTH = '1';
     process.env.HIPPO_CLIENT_IP_HEADER = 'cf-connecting-ip';
-    // The adapter is hippo's only peer here, as in deploy/aml.
-    process.env.HIPPO_TRUSTED_PROXIES = '*';
+    // The adapter connects from loopback here; deploy/aml lists the compose subnet instead.
+    process.env.HIPPO_TRUSTED_PROXIES = '127.0.0.1,::1';
     process.env.HIPPO_V1_RPS = '0.5';
     rlHippoHandle = await serve({ hippoRoot: rlHippoRoot, host: '127.0.0.1', port: 0 });
 

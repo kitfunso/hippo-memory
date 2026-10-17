@@ -6,7 +6,8 @@ import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory } from '../src/core/memory.js';
-import { serve, type ServerHandle } from '../src/server.js';
+import type { ServerHandle } from '../src/server.js';
+import { serveAsAdmin } from './_helpers/admin-server.js';
 
 type Json = string | number | boolean | null | Json[] | JsonObject;
 interface JsonObject { [key: string]: Json }
@@ -214,7 +215,7 @@ describe('HTTP route status table: status and error text per route', () => {
     }
     savedRps = process.env.HIPPO_V1_RPS;
     process.env.HIPPO_V1_RPS = '0';
-    handle = await serve({ hippoRoot: home, port: 0, keylessLocalRole: 'admin' });
+    handle = await serveAsAdmin({ hippoRoot: home, port: 0 });
   });
 
   afterAll(async () => {
@@ -453,7 +454,7 @@ describe('HTTP route status table under the rate limiter', () => {
     initStore(home);
     const saved = process.env.HIPPO_V1_RPS;
     process.env.HIPPO_V1_RPS = '0.5';
-    const handle = await serve({ hippoRoot: home, port: 0, keylessLocalRole: 'admin' });
+    const handle = await serveAsAdmin({ hippoRoot: home, port: 0 });
     try {
       expect(await runCases(handle.url, LIMITED)).toEqual(expected(LIMITED));
     } finally {

@@ -1,5 +1,5 @@
 // The reader's tool-failure listing, lesson link and origin field, on rows the built `hippo capture-error` wrote.
-import { describe, it, expect, afterEach, vi } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -13,13 +13,12 @@ import { blockHash } from '../src/util/token-text.js';
 import { realpathOrResolve } from '../src/util/real-path.js';
 import type { JsonValue } from '../src/util/json.js';
 import { trySymlink } from './_helpers/symlink.js';
-import { dispose, hippo, project, withDb, type Config as ProjectConfig, type Project, type RunOptions } from './_helpers/delivery-boundary.js';
+import { dispose, hippo, hippoIn, project, withDb, type Config as ProjectConfig, type Project, type RunOptions } from './_helpers/delivery-boundary.js';
 import {
-  configure, expectVerdict, fire, listingOf, seed, verdictOf, writeHostTranscript, type ReadOptions, type TurnSpec, type Verdict,
+  configure, expectVerdict, fireIn, listingOf, seed, verdictOf, writeHostTranscript, type ReadOptions, type TurnSpec, type Verdict,
 } from './_helpers/host-transcript.js';
 
-// Each case spawns the built CLI several times.
-vi.setConfig({ testTimeout: 90_000 });
+// Capture-error runs in process; TF1, TF12 and TF13 spawn it once each, far inside the 30 s process-project timeout.
 
 const SCRIPT = path.resolve(__dirname, '..', 'scripts', 'z10-reconstruct.mjs');
 const V = DELIVERY_LEDGER_VERSION;
@@ -70,10 +69,10 @@ const payload = (session: string, over: Over = {}): string => JSON.stringify({
   error: ERR_ALPHA, tool_use_id: 'toolu_1', ...over,
 });
 
-/** One `hippo capture-error` run; the hook prints nothing and always exits 0. */
-function fail(at: Project, session: string, over: Over = {}, opts: RunOptions & { args?: string[] } = {}) {
-  const { args = ['capture-error'], ...run } = opts;
-  const r = hippo(at, args, { ...run, input: payload(session, over) });
+/** One `hippo capture-error` run, in process unless `spawned`; the hook prints nothing and always exits 0. */
+async function fail(at: Project, session: string, over: Over = {}, opts: RunOptions & { args?: string[]; spawned?: boolean } = {}) {
+  const { args = ['capture-error'], spawned = false, ...run } = opts;
+  const r = spawned ? hippo(at, args, { ...run, input: payload(session, over) }) : await hippoIn(at, args, { ...run, input: payload(session, over) });
   expect([r.status, r.stdout]).toEqual([0, '']);
   return r;
 }
@@ -108,12 +107,12 @@ function link(target: string, l: string): string | null {
 }
 
 describe('tool-failure listing, lesson and origin', () => {
-  it('TF1 a stored failure is listed after prompt 1, and its lesson reaches prompt 2 with the failure as origin', () => {
+  it('TF1 a stored failure is listed after prompt 1, and its lesson reaches prompt 2 with the failure as origin', async () => {
     p = mk();
     configure(p, { promptRecall: true });
-    const r1 = fire(p, 'tf1', P1);
-    fail(p, 'tf1', { tool_use_id: 'toolu_tf1' });
-    const r2 = fire(p, 'tf1', RECALL_PROMPT);
+    const r1 = await fireIn(p, 'tf1', P1);
+    await fail(p, 'tf1', { tool_use_id: 'toolu_tf1' }, { spawned: true });
+    const r2 = await fireIn(p, 'tf1', RECALL_PROMPT);
     const ev = events('tf1');
     const log = logs();
     expect(ev.map((e) => [e.event_type, e.turn_seq, e.duplicate_of, e.tool_use_id, e.failure_id, e.ledger_version, e.runtime])).toEqual([
@@ -145,9 +144,9 @@ describe('tool-failure listing, lesson and origin', () => {
     expect(v.notes).toContain(`tool-failure:${ev[1].id}`);
   });
 
-  it('TF2 a routine failure is listed as skipped-routine with no lesson and no memory', () => {
+  it('TF2 a routine failure is listed as skipped-routine with no lesson and no memory', async () => {
     p = mk();
-    fail(p, 'tf2', ROUTINE);
+    await fail(p, 'tf2', ROUTINE);
     const [row] = events('tf2');
     expect([callKey(row), row.failure_id, row.ledger_version]).toEqual([['tool-failure', 1, null, 'toolu_1'], logs()[0].id, V]);
     expect(lessons()).toEqual([]);
@@ -157,9 +156,9 @@ describe('tool-failure listing, lesson and origin', () => {
     }]);
   });
 
-  it('TF3 duplicated fires of two tool calls give two entries; a repeated error text is a duplicate with no lesson', () => {
+  it('TF3 duplicated fires of two tool calls give two entries; a repeated error text is a duplicate with no lesson', async () => {
     p = mk();
-    for (const id of ['toolu_a', 'toolu_a', 'toolu_b', 'toolu_b']) fail(p, 'tf3', { tool_use_id: id });
+    for (const id of ['toolu_a', 'toolu_a', 'toolu_b', 'toolu_b']) await fail(p, 'tf3', { tool_use_id: id });
     const ev = events('tf3');
     const log = logs();
     expect(ev.map(callKey)).toEqual([
@@ -184,10 +183,10 @@ describe('tool-failure listing, lesson and origin', () => {
     ]));
   });
 
-  it('TF4 two lesson-worthy failures with distinct ids link to their own memories', () => {
+  it('TF4 two lesson-worthy failures with distinct ids link to their own memories', async () => {
     p = mk();
-    fail(p, 'tf4', { tool_use_id: 'toolu_alpha', error: ERR_ALPHA });
-    fail(p, 'tf4', { tool_use_id: 'toolu_beta', error: ERR_BETA });
+    await fail(p, 'tf4', { tool_use_id: 'toolu_alpha', error: ERR_ALPHA });
+    await fail(p, 'tf4', { tool_use_id: 'toolu_beta', error: ERR_BETA });
     const ev = events('tf4');
     expect(ev.map(callKey)).toEqual([['tool-failure', 1, null, 'toolu_alpha'], ['tool-failure', 2, null, 'toolu_beta']]);
     const { entries } = list('tf4');
@@ -197,10 +196,10 @@ describe('tool-failure listing, lesson and origin', () => {
     expect(new Set(entries.map((e) => e.lesson)).size).toBe(2);
   });
 
-  it('TF5 with no tool_use_id two fires give two numbered rows', () => {
+  it('TF5 with no tool_use_id two fires give two numbered rows', async () => {
     p = mk();
-    fail(p, 'tf5', { tool_use_id: undefined });
-    fail(p, 'tf5', { tool_use_id: undefined });
+    await fail(p, 'tf5', { tool_use_id: undefined });
+    await fail(p, 'tf5', { tool_use_id: undefined });
     const ev = events('tf5');
     expect(ev.map(callKey)).toEqual([['tool-failure', 1, null, null], ['tool-failure', 2, null, null]]);
     const { entries } = list('tf5');
@@ -209,10 +208,10 @@ describe('tool-failure listing, lesson and origin', () => {
     ]);
   });
 
-  it('TF6 a sub-agent failure is an unnumbered row, not listed, and noted on a class read', () => {
+  it('TF6 a sub-agent failure is an unnumbered row, not listed, and noted on a class read', async () => {
     p = mk();
-    fire(p, 'tf6', P1);
-    fail(p, 'tf6', { agent_id: 'agent-1', tool_use_id: 'toolu_sub' });
+    await fireIn(p, 'tf6', P1);
+    await fail(p, 'tf6', { agent_id: 'agent-1', tool_use_id: 'toolu_sub' });
     const ev = events('tf6');
     expect(ev.map((e) => [e.event_type, e.session_state, e.turn_seq, e.duplicate_of])).toEqual([
       ['prompt-submit', 'payload', 1, null], ['tool-failure', 'subagent', null, null],
@@ -225,22 +224,22 @@ describe('tool-failure listing, lesson and origin', () => {
     expect([v.origin, v.turns.length]).toEqual([null, 1]);
   });
 
-  it('TF7 prompt, failure, prompt, failure: after_prompt_turn is 1 then 2', () => {
+  it('TF7 prompt, failure, prompt, failure: after_prompt_turn is 1 then 2', async () => {
     p = mk();
-    fire(p, 'tf7', P1);
-    fail(p, 'tf7', { tool_use_id: 'toolu_7a', error: ERR_ALPHA });
-    fire(p, 'tf7', P2);
-    fail(p, 'tf7', { tool_use_id: 'toolu_7b', error: ERR_BETA });
+    await fireIn(p, 'tf7', P1);
+    await fail(p, 'tf7', { tool_use_id: 'toolu_7a', error: ERR_ALPHA });
+    await fireIn(p, 'tf7', P2);
+    await fail(p, 'tf7', { tool_use_id: 'toolu_7b', error: ERR_BETA });
     const ev = events('tf7');
     expect(ev.map((e) => [e.event_type, e.turn_seq])).toEqual([['prompt-submit', 1], ['tool-failure', 1], ['prompt-submit', 2], ['tool-failure', 2]]);
     expect(list('tf7').entries.map((e) => [e.event_id, e.turn_seq, e.after_prompt_turn])).toEqual([[ev[1].id, 1, 1], [ev[3].id, 2, 2]]);
   });
 
-  it('TF8 a Copilot failure carries runtime copilot and no tool_use_id, so two fires stay two rows', () => {
+  it('TF8 a Copilot failure carries runtime copilot and no tool_use_id, so two fires stay two rows', async () => {
     p = mk();
     const copilot = JSON.stringify({ sessionId: 'tf8', toolName: 'bash', toolArgs: JSON.stringify({ command: 'make all' }), error: ERR_ALPHA });
     for (let i = 0; i < 2; i++) {
-      const r = hippo(p, ['capture-error', '--runtime', 'copilot'], { input: copilot });
+      const r = await hippoIn(p, ['capture-error', '--runtime', 'copilot'], { input: copilot });
       expect([r.status, r.stdout]).toEqual([0, '']);
     }
     const ev = events('tf8');
@@ -254,14 +253,14 @@ describe('tool-failure listing, lesson and origin', () => {
 });
 
 describe('lesson links and the ledger loss window', () => {
-  it('TF11 a forgotten lesson is not replaced by a later failure with the same signature', () => {
+  it('TF11 a forgotten lesson is not replaced by a later failure with the same signature', async () => {
     p = mk();
-    fail(p, 'tf11', { tool_use_id: 'toolu_first' });
+    await fail(p, 'tf11', { tool_use_id: 'toolu_first' });
     const first = String(lessons()[0].id);
-    const gone = hippo(p, ['forget', first]);
+    const gone = await hippoIn(p, ['forget', first]);
     expect(gone.status, gone.stderr).toBe(0);
     expect(lessons()).toEqual([]);
-    fail(p, 'tf11', { tool_use_id: 'toolu_second' });
+    await fail(p, 'tf11', { tool_use_id: 'toolu_second' });
     const ev = events('tf11');
     const log = logs();
     expect(log.map((l) => l.outcome)).toEqual(['stored', 'stored']);
@@ -276,7 +275,7 @@ describe('lesson links and the ledger loss window', () => {
     expect(v.notes).toContain(note);
   });
 
-  it('TF12 when the failure_log write throws the hook still writes one row with no failure_id, listed as log-missing', () => {
+  it('TF12 when the failure_log write throws the hook still writes one row with no failure_id, listed as log-missing', async () => {
     p = mk();
     failWhere(p, 'tf12', 'INSERT INTO failure_log', { tool_use_id: 'toolu_loss' });
     const ev = events('tf12');
@@ -284,11 +283,11 @@ describe('lesson links and the ledger loss window', () => {
     expect(list('tf12').entries.map((e) => [e.event_id, e.outcome, e.lesson])).toEqual([[ev[0].id, 'log-missing', null]]);
   });
 
-  it('TF13 a stored log row whose ledger row flushed second still names the entry, its lesson and its origin', () => {
+  it('TF13 a stored log row whose ledger row flushed second still names the entry, its lesson and its origin', async () => {
     p = mk();
     failWhere(p, 'tf13', 'INSERT INTO delivery_events', { tool_use_id: 'toolu_race' });
     expect(events('tf13')).toEqual([]);
-    fail(p, 'tf13', { tool_use_id: 'toolu_race' });
+    await fail(p, 'tf13', { tool_use_id: 'toolu_race' });
     const log = logs();
     expect(log.map((l) => l.outcome)).toEqual(['stored', 'duplicate']);
     const numbered = events('tf13');
@@ -314,13 +313,13 @@ describe('lesson links and the ledger loss window', () => {
 });
 
 describe('store paths through a link', () => {
-  it('TF9a a project reached through a junction and directly writes one store hash, and both paths read every row', (ctx) => {
+  it('TF9a a project reached through a junction and directly writes one store hash, and both paths read every row', async (ctx) => {
     p = mk();
     const L = link(p.proj, path.join(p.dir, 'proj-link'));
     if (L === null) return ctx.skip();
     try {
-      fail(p, 'tf9a', { tool_use_id: 'toolu_via_link' }, { cwd: L });
-      fail(p, 'tf9a', { tool_use_id: 'toolu_direct', error: ERR_BETA });
+      await fail(p, 'tf9a', { tool_use_id: 'toolu_via_link' }, { cwd: L });
+      await fail(p, 'tf9a', { tool_use_id: 'toolu_direct', error: ERR_BETA });
       const ev = events('tf9a');
       expect(ev.map((e) => [e.event_type, e.turn_seq, e.ledger_version])).toEqual([['tool-failure', 1, V], ['tool-failure', 2, V]]);
       expect(ev.map((e) => e.store_hash)).toEqual(Array(2).fill(blockHash(realpathOrResolve(p.hippoRoot))));
@@ -334,7 +333,7 @@ describe('store paths through a link', () => {
     }
   });
 
-  it('TF9b a project .hippo that links to the global store reads its own rows in a class read', (ctx) => {
+  it('TF9b a project .hippo that links to the global store reads its own rows in a class read', async (ctx) => {
     p = mk();
     initStore(p.globalRoot);
     fs.writeFileSync(path.join(p.globalRoot, 'config.json'), JSON.stringify({ deliveryLedger: { enabled: true }, pinnedInject: { promptRecall: false } }));
@@ -343,7 +342,7 @@ describe('store paths through a link', () => {
     const H = link(p.globalRoot, path.join(proj2, '.hippo'));
     if (H === null) return ctx.skip();
     try {
-      fail(p, 'tf9b', {}, { cwd: proj2 });
+      await fail(p, 'tf9b', {}, { cwd: proj2 });
       const ev = events('tf9b', p.globalRoot);
       expect(ev.map((e) => [e.event_type, e.turn_seq, e.ledger_version])).toEqual([['tool-failure', 1, V]]);
       const want = blockHash(realpathOrResolve(p.globalRoot));
@@ -360,7 +359,7 @@ describe('store paths through a link', () => {
     }
   });
 
-  it('TF10 version 3 rows keep the two-path rule behind a linked HIPPO_HOME, and a version 3 row with the version 4 hash is foreign', (ctx) => {
+  it('TF10 version 3 rows keep the two-path rule behind a linked HIPPO_HOME, and a version 3 row with the version 4 hash is foreign', async (ctx) => {
     p = mk();
     initStore(p.globalRoot);
     fs.writeFileSync(path.join(p.globalRoot, 'config.json'), JSON.stringify({ deliveryLedger: { enabled: true }, pinnedInject: { promptRecall: false } }));
@@ -370,7 +369,7 @@ describe('store paths through a link', () => {
       const bare = path.join(p.dir, 'bare');
       fs.mkdirSync(bare);
       for (const [id, error] of [['toolu_t10a', ERR_ALPHA], ['toolu_t10b', ERR_BETA], ['toolu_t10c', 'Command failed with exit code 4: the gamma queue worker ran out of memory']]) {
-        fail(p, 'tf10', { tool_use_id: id, error }, { cwd: bare, env: { HIPPO_HOME: G } });
+        await fail(p, 'tf10', { tool_use_id: id, error }, { cwd: bare, env: { HIPPO_HOME: G } });
       }
       const ev = events('tf10', p.globalRoot);
       const v4 = blockHash(realpathOrResolve(G));
@@ -408,23 +407,23 @@ describe('controls', () => {
     notes: v.notes.filter((n) => !n.startsWith('tool-failure')),
   });
 
-  it('N-TF1 a routine failure between two prompts leaves a delivered and a never-loaded class read unchanged, turns included', () => {
+  it('N-TF1 a routine failure between two prompts leaves a delivered and a never-loaded class read unchanged, turns included', async () => {
     p = mk();
     for (let i = 0; i < 3; i++) seed(p.hippoRoot, `office note ${i}: the coffee machine schedule changes for team lunch on friday`, { created: `2026-06-0${i + 1}T00:00:00.000Z` });
     const away = seed(p.hippoRoot, 'a lesson from another repo: the staging cluster needs a manual warmup', { origin_project: 'some-other-project', created: '2026-07-01T00:00:00.000Z' });
     const pin = String(rows('SELECT id FROM memories WHERE pinned = 1')[0].id);
-    const turns = (session: string, withFailure: boolean): TurnSpec[] => {
-      const a = fire(p, session, P1);
-      if (withFailure) fail(p, session, ROUTINE);
-      const b = fire(p, session, P2);
+    const turns = async (session: string, withFailure: boolean): Promise<TurnSpec[]> => {
+      const a = await fireIn(p, session, P1);
+      if (withFailure) await fail(p, session, ROUTINE);
+      const b = await fireIn(p, session, P2);
       return [{ prompt: P1, stdout: a.stdout }, { prompt: P2, stdout: b.stdout }];
     };
     const reads = (session: string, specs: TurnSpec[]) => ({
       pinned: read(session, pin, { transcript: doc(session, specs) }),
       away: read(session, away.id),
     });
-    const plain = reads('ntf1-plain', turns('ntf1-plain', false));
-    const failed = reads('ntf1-fail', turns('ntf1-fail', true));
+    const plain = reads('ntf1-plain', await turns('ntf1-plain', false));
+    const failed = reads('ntf1-fail', await turns('ntf1-fail', true));
     expect(events('ntf1-fail').map((e) => [e.event_type, e.turn_seq])).toEqual([['prompt-submit', 1], ['tool-failure', 1], ['prompt-submit', 2]]);
     expect(rows("SELECT outcome FROM failure_log WHERE outcome != 'skipped-routine'")).toEqual([]);
     expect([plain.pinned.class, plain.pinned.reason, plain.away.class, plain.away.reason]).toEqual(['application-unknown', null, 'not-retrieved', 'not-loaded']);
@@ -435,10 +434,10 @@ describe('controls', () => {
     expect(failed.away.notes).toContain(`tool-failure:${row.id}`);
   });
 
-  it('N-TF3 a failure whose log row is gone, or never had one, reads log-missing with no lesson', () => {
+  it('N-TF3 a failure whose log row is gone, or never had one, reads log-missing with no lesson', async () => {
     p = mk();
-    fail(p, 'ntf3', { tool_use_id: 'toolu_gone' });
-    fail(p, 'ntf3', { tool_use_id: 'toolu_none', error: ERR_BETA });
+    await fail(p, 'ntf3', { tool_use_id: 'toolu_gone' });
+    await fail(p, 'ntf3', { tool_use_id: 'toolu_none', error: ERR_BETA });
     const ev = events('ntf3');
     const log = logs();
     expect(list('ntf3').entries.map((e) => [e.outcome, e.lesson === null])).toEqual([['stored', false], ['stored', false]]);
@@ -458,10 +457,10 @@ describe('controls', () => {
     expect(read('ntf3', lessonWith('alpha')).origin).toBeNull();
   });
 
-  it('N-TF4 another tenant\'s failure under the same session id is not listed', () => {
+  it('N-TF4 another tenant\'s failure under the same session id is not listed', async () => {
     p = mk();
-    fail(p, 'ntf4', { tool_use_id: 'toolu_mine' });
-    fail(p, 'ntf4', { tool_use_id: 'toolu_theirs', error: ERR_BETA }, { env: { HIPPO_TENANT: 'other' } });
+    await fail(p, 'ntf4', { tool_use_id: 'toolu_mine' });
+    await fail(p, 'ntf4', { tool_use_id: 'toolu_theirs', error: ERR_BETA }, { env: { HIPPO_TENANT: 'other' } });
     expect(events('ntf4').map((e) => e.tool_use_id)).toEqual(['toolu_mine']);
     const theirs = events('ntf4', p.hippoRoot, 'other');
     expect(theirs.map((e) => [e.tenant_id, e.tool_use_id])).toEqual([['other', 'toolu_theirs']]);
@@ -469,9 +468,9 @@ describe('controls', () => {
     expect(list('ntf4', { tenant: 'other' }).entries.map((e) => [e.event_id, e.tool_use_id])).toEqual([[theirs[0].id, 'toolu_theirs']]);
   });
 
-  it('N-TF5 a copied store lists nothing and notes the foreign row', () => {
+  it('N-TF5 a copied store lists nothing and notes the foreign row', async () => {
     p = mk();
-    fail(p, 'ntf5', { tool_use_id: 'toolu_copy' });
+    await fail(p, 'ntf5', { tool_use_id: 'toolu_copy' });
     const [row] = events('ntf5');
     const copyProj = path.join(p.dir, 'copy', 'proj');
     fs.cpSync(p.proj, copyProj, { recursive: true });
@@ -491,31 +490,32 @@ describe('invariance I4 and the command line', () => {
     tf3: [payload('i4', A), payload('i4', A), payload('i4', B), payload('i4', B)],
   };
 
-  function drive(at: Project, calls: string[]) {
-    const runs = calls.map((input) => {
-      const r = hippo(at, ['capture-error'], { input });
-      return [r.status, r.stdout, r.stderr.split(at.dir).join('<dir>').replace(/\(node:\d+\)/g, '(node:<pid>)')];
-    });
+  async function drive(at: Project, calls: string[]) {
+    const runs: Array<[number, string, string]> = [];
+    for (const input of calls) {
+      const r = await hippoIn(at, ['capture-error'], { input });
+      runs.push([r.status, r.stdout, r.stderr.split(at.dir).join('<dir>').replace(/\(node:\d+\)/g, '(node:<pid>)')]);
+    }
     const log = rowsAt(at.hippoRoot, 'SELECT * FROM failure_log ORDER BY id').map((r) => Object.fromEntries(Object.entries(r).filter(([k]) => k !== 'id' && k !== 'ts')));
     const memories = loadAllEntries(at.hippoRoot, 'default').filter((m) => m.source === 'tool-failure').map((m) => ({ content: m.content, tags: m.tags, source: m.source, confidence: m.confidence }));
     return { runs, log, memories };
   }
   const count = (at: Project): number => num(rowsAt(at.hippoRoot, 'SELECT COUNT(*) AS c FROM delivery_events')[0].c);
 
-  it.each(Object.entries(CALLS))('I4 %s: capture-error with the ledger off and on gives the same output, log row and memory', (_name, calls) => {
+  it.each(Object.entries(CALLS))('I4 %s: capture-error with the ledger off and on gives the same output, log row and memory', async (_name, calls) => {
     const off = mk({ ledger: false });
     const on = mk();
-    const a = drive(off, calls);
-    const b = drive(on, calls);
+    const a = await drive(off, calls);
+    const b = await drive(on, calls);
     expect([count(off), count(on)]).toEqual([0, calls.length]);
     expect(a.runs.map((r) => r[0])).toEqual(calls.map(() => 0));
     expect(b).toEqual(a);
     expect(a.log).toHaveLength(calls.length);
   });
 
-  it('TF-CLI the script prints the listing and refuses --memory, --key or a missing session', () => {
+  it('TF-CLI the script prints the listing and refuses --memory, --key or a missing session', async () => {
     p = mk();
-    fail(p, 'cli', { tool_use_id: 'toolu_cli' });
+    await fail(p, 'cli', { tool_use_id: 'toolu_cli' });
     const run = (...args: string[]) => spawnSync(process.execPath, [SCRIPT, ...args], { encoding: 'utf8' });
     const ok = run('--store', p.hippoRoot, '--session', 'cli', '--tool-failures', '--no-global');
     expect(ok.status, ok.stderr).toBe(0);

@@ -28,7 +28,7 @@ import { extractFromTexts } from '../src/capture/extract.js';
 import { computeSalience } from '../src/core/salience.js';
 import { heldTexts, mergedText } from '../src/util/same-text.js';
 import { insertDormantRow } from '../src/store/dormant.js';
-import { hippoOut } from './_helpers/spawn-hippo.js';
+import { runCliAs } from './_helpers/run-cli-as.js';
 import { sqliteStore } from '../src/store/sqlite/store.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 import { sqliteConsolidation } from '../src/store/sqlite/consolidation-group.js';
@@ -75,8 +75,11 @@ function hermeticEnv(): NodeJS.ProcessEnv {
   return env;
 }
 
-function hippo(root: string, ...args: string[]): string {
-  return hippoOut(args, { cwd: dirname(root), env: hermeticEnv() });
+// In process, throwing on a non-zero exit as hippoOut did, so coverage sees each verb.
+async function hippo(root: string, ...args: string[]): Promise<string> {
+  const r = await runCliAs(args, { cwd: dirname(root), env: hermeticEnv() });
+  if (r.status !== 0) throw new Error(`hippo ${args.join(' ')} exited ${r.status}: ${r.stderr}`);
+  return r.stdout;
 }
 
 const json = (out: string): { results: { id: string; content: string }[] } => JSON.parse(out.trim().split('\n').pop()!);
@@ -187,7 +190,7 @@ describe('sleep keeps both versions', () => {
     expect(loadAllEntries(root, 'default')).toHaveLength(6);
   });
 
-  it('dedup removes a copy of the same text whatever the threshold says', () => {
+  it('dedup removes a copy of the same text whatever the threshold says', async () => {
     const root = newRoot();
     const text = 'The staging service listens on port 4400.';
     for (const t of [text, text.replace(' ', '  ')]) writeEntry(root, createMemory(t));
@@ -197,7 +200,7 @@ describe('sleep keeps both versions', () => {
 
     const cli = newRoot();
     for (const t of [text, text.replace(' ', '  ')]) writeEntry(cli, createMemory(t));
-    hippo(cli, 'dedup', '--threshold', '1');
+    await hippo(cli, 'dedup', '--threshold', '1');
     expect(loadAllEntries(cli, 'default')).toHaveLength(1);
   });
 });
@@ -366,7 +369,7 @@ describe('a retired version leaves the merged row', () => {
     const { root, old, next, row } = await mergedPair();
     await api.forget(ctx(root), next.id); // as if the demoted source had faded, so only the merged row still holds the new value
 
-    const out = hippo(root, 'reject', old.id, '--reason', 'the port moved');
+    const out = await hippo(root, 'reject', old.id, '--reason', 'the port moved');
 
     const [kept] = merged(root);
     expect(out).toContain(`keep their other texts in: ${kept.id}`);
@@ -388,7 +391,7 @@ describe('a retired version leaves the merged row', () => {
     }
     await api.forget(ctx(root), row.id); // sleep's decay pass moves a row this way: dormant copy in, live row out
 
-    const out = hippo(root, 'reject', old.id, '--reason', 'the port moved');
+    const out = await hippo(root, 'reject', old.id, '--reason', 'the port moved');
     const [dormant] = await api.listDormant(ctx(root));
     const restored = await api.restoreDormant(ctx(root), dormant.id);
 
@@ -453,19 +456,19 @@ describe('recall and context show a merged row, not the sources it holds', () =>
 
   it('CLI recall and explain', async () => {
     const { root, row } = await mergedStore();
-    for (const cmd of ['recall', 'explain']) expect(json(hippo(root, cmd, QUERY, '--json')).results.map((r) => r.id), cmd).toEqual([row.id]);
+    for (const cmd of ['recall', 'explain']) expect(json(await hippo(root, cmd, QUERY, '--json')).results.map((r) => r.id), cmd).toEqual([row.id]);
   });
 
   it('CLI recall whose budget cuts the merged row still shows the sources it holds', async () => {
     const { root } = await mergedStore();
     // 140 tokens print both source lines but not the merged row ranked after them.
-    const shown = json(hippo(root, 'recall', QUERY, '--json', '--budget', '140', '--min-results', '0')).results.map((r) => r.content);
+    const shown = json(await hippo(root, 'recall', QUERY, '--json', '--budget', '140', '--min-results', '0')).results.map((r) => r.content);
     expect(shown.sort()).toEqual([...FACTS].sort());
   });
 
   it('CLI recall filtered to the episodic layer still shows the sources', async () => {
     const { root } = await mergedStore();
-    const shown = json(hippo(root, 'recall', QUERY, '--json', '--layer', 'episodic')).results.map((r) => r.content);
+    const shown = json(await hippo(root, 'recall', QUERY, '--json', '--layer', 'episodic')).results.map((r) => r.content);
     expect(shown.sort()).toEqual([...FACTS].sort());
   });
 
@@ -534,13 +537,13 @@ describe('a new value is never skipped as a copy of an old one', () => {
     git('commit', '-q', '-m', message);
   }
 
-  it('CLI learn --git', () => {
+  it('CLI learn --git', async () => {
     const root = newRoot();
     write(root, OLD);
     commit(dirname(root), `fix: ${NEW}`);
 
-    hippo(root, 'learn', '--git', '--days', '30');
-    hippo(root, 'learn', '--git', '--days', '30');
+    await hippo(root, 'learn', '--git', '--days', '30');
+    await hippo(root, 'learn', '--git', '--days', '30');
 
     expect(texts(root).sort()).toEqual([NEW, OLD].sort());
   });

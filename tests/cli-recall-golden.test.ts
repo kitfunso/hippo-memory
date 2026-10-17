@@ -1,5 +1,6 @@
 // Pins `hippo recall` and `hippo explain` stdout, stderr and exit code over a flag matrix, plus the rows a recall
-// writes, so a refactor of the recall pipeline that changes any byte fails here.
+// writes, so a refactor of the recall pipeline that changes any byte fails here. The cases in SPAWNED run the built CLI; the
+// rest run it in process.
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { spawnSync } from 'node:child_process';
@@ -12,11 +13,15 @@ import { createMemory, DEFAULT_HALF_LIFE_DAYS, Layer, type MemoryEntry } from '.
 import { pushGoal } from '../src/store/goals.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { ownStderr } from './_helpers/own-stderr.js';
+import { runCliAs } from './_helpers/run-cli-as.js';
 
 const CLI = join(process.cwd(), 'dist', 'cli.js');
 const FAKE_NOW = '2026-02-01T00:00:00.000Z';
 const SESSION = 'golden-session';
 const DROP_ENV = ['HIPPO_SESSION_ID', 'CLAUDE_CODE_SESSION_ID', 'HIPPO_TENANT', 'HIPPO_ANCHORING', 'HIPPO_AVAILABILITY', 'HIPPO_HOME'];
+
+// One case per verb pins that the built CLI prints the bytes the in-process run does.
+const SPAWNED = new Set(['recall default', 'explain default']);
 
 let template: string;
 let goalId = '';
@@ -118,10 +123,10 @@ function freshStore(c: Pick<Case, 'global'>): FreshStore {
 interface RunOutput { status: number | null; stdout: string; stderr: string }
 interface RunResult { home: string; out: RunOutput }
 
-function run(c: Case): RunResult {
+async function run(c: Case): Promise<RunResult> {
   const { home, env } = freshStore(c);
   if (c.session) env.HIPPO_SESSION_ID = SESSION;
-  const res = spawnSync('node', [CLI, ...c.args], { cwd: home, env, encoding: 'utf-8' });
+  const res = SPAWNED.has(c.name) ? spawnSync('node', [CLI, ...c.args], { cwd: home, env, encoding: 'utf-8' }) : await runCliAs(c.args, { cwd: home, env });
   return { home, out: { status: res.status, stdout: normalize(res.stdout, home), stderr: normalize(res.stderr, home) } };
 }
 
@@ -150,8 +155,8 @@ function writtenRows(hippoRoot: string): WrittenRows {
 
 interface RowsAfter<T> { status: number | null; rows: T }
 
-function rowsAfter<T>(c: Case, pick: (rows: WrittenRows) => T): RowsAfter<T> {
-  const { home, out } = run(c);
+async function rowsAfter<T>(c: Case, pick: (rows: WrittenRows) => T): Promise<RowsAfter<T>> {
+  const { home, out } = await run(c);
   try {
     const rows = pick(writtenRows(join(home, '.hippo')));
     return { status: out.status, rows: JSON.parse(normalize(JSON.stringify(rows), home)) };
@@ -170,27 +175,27 @@ describe('cli recall and explain golden output', () => {
     if (template) rmSync(join(template, '..'), { recursive: true, force: true });
   });
 
-  it.each(CASES)('$name', (c) => {
-    const { home, out } = run(c);
+  it.each(CASES)('$name', async (c) => {
+    const { home, out } = await run(c);
     try {
       expect(out).toMatchSnapshot();
     } finally {
       rmSync(home, { recursive: true, force: true });
     }
-  }, 60_000);
+  });
 
-  it('rows one goal-stack recall writes', () => {
-    const got = rowsAfter({ name: 'writes', args: ['recall', 'deploy', '--json', '--why'], session: true }, (rows) => rows);
+  it('rows one goal-stack recall writes', async () => {
+    const got = await rowsAfter({ name: 'writes', args: ['recall', 'deploy', '--json', '--why'], session: true }, (rows) => rows);
     expect(got.status).toBe(0);
     expect(got.rows).toMatchSnapshot();
-  }, 60_000);
+  });
 
-  it('rows a goal-stack recall with an invalid late flag writes', () => {
-    const got = rowsAfter(
+  it('rows a goal-stack recall with an invalid late flag writes', async () => {
+    const got = await rowsAfter(
       { name: 'late-invalid', args: ['recall', 'deploy', '--layer', 'bogus'], session: true },
       (rows) => ({ goalRecallLog: rows.goalRecallLog, audit: rows.audit, traces: rows.traces }),
     );
     expect(got.status).toBe(1);
     expect(got.rows).toMatchSnapshot();
-  }, 60_000);
+  });
 });

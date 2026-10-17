@@ -124,7 +124,7 @@ jobs:
         if: always()
         run: node scripts/check-expiring-keys-floor.mjs
 
-  # The suite is about 28 minutes of test time on a 4-core runner; three shards run it in parallel.
+  # The suite is about 9 minutes of test time summed over three shards, which run in parallel.
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 25

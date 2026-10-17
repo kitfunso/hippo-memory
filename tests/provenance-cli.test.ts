@@ -5,7 +5,7 @@ import * as path from 'path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { hippoOut } from './_helpers/spawn-hippo.js';
+import { runCliAs } from './_helpers/run-cli-as.js';
 
 let tmpDir: string;
 let hippoDir: string;
@@ -25,34 +25,26 @@ interface RunResult {
   status: number;
 }
 
-function runHippo(args: string[]): RunResult {
-  const globalDir = path.join(tmpDir, 'global');
-  try {
-    const stdout = hippoOut(args, { env: { ...process.env, HIPPO_HOME: globalDir }, cwd: tmpDir });
-    return { stdout, stderr: '', status: 0 };
-  } catch (err) {
-    // SAFETY: execFileSync throws a Node child_process error augmented with
-    // stdout/stderr/status on non-zero exit; that shape is guaranteed by the
-    // Node API contract for a failed synchronous subprocess call.
-    const e = err as { stdout?: string; stderr?: string; status?: number };
-    return { stdout: e.stdout ?? '', stderr: e.stderr ?? '', status: e.status ?? 1 };
-  }
+// In process, so coverage sees the verb; the shape matches the spawned run it replaced.
+async function runHippo(args: string[]): Promise<RunResult> {
+  const r = await runCliAs(args, { env: { ...process.env, HIPPO_HOME: path.join(tmpDir, 'global') }, cwd: tmpDir });
+  return { stdout: r.stdout, stderr: r.stderr, status: r.status ?? 1 };
 }
 
 describe('hippo provenance CLI', () => {
-  it('reports the trivially-satisfied gate when no raw rows exist', () => {
+  it('reports the trivially-satisfied gate when no raw rows exist', async () => {
     initStore(hippoDir);
     writeEntry(
       hippoDir,
       createMemory('legacy distilled memory predating envelope', { kind: 'distilled' }),
     );
 
-    const r = runHippo(['provenance', '--strict']);
+    const r = await runHippo(['provenance', '--strict']);
     expect(r.status).toBe(0);
     expect(r.stdout).toContain('No kind=raw memories present');
   });
 
-  it('emits machine-readable coverage with --json including gap detail', () => {
+  it('emits machine-readable coverage with --json including gap detail', async () => {
     initStore(hippoDir);
 
     writeEntry(
@@ -72,7 +64,7 @@ describe('hippo provenance CLI', () => {
       }),
     );
 
-    const r = runHippo(['provenance', '--json']);
+    const r = await runHippo(['provenance', '--json']);
     expect(r.status).toBe(0);
     const parsed = JSON.parse(r.stdout);
     expect(parsed.rawTotal).toBe(2);
@@ -82,20 +74,20 @@ describe('hippo provenance CLI', () => {
     expect(parsed.gaps[0].missing.sort()).toEqual(['artifact_ref', 'owner']);
   });
 
-  it('exits non-zero under --strict when raw coverage drops below 100%', () => {
+  it('exits non-zero under --strict when raw coverage drops below 100%', async () => {
     initStore(hippoDir);
     writeEntry(
       hippoDir,
       createMemory('raw row missing envelope', { kind: 'raw' }),
     );
 
-    const r = runHippo(['provenance', '--strict']);
+    const r = await runHippo(['provenance', '--strict']);
     expect(r.status).toBe(1);
     expect(r.stdout).toContain('Provenance coverage');
     expect(r.stdout).toContain('missing');
   });
 
-  it('exits zero under --strict when every raw receipt is envelope-complete', () => {
+  it('exits zero under --strict when every raw receipt is envelope-complete', async () => {
     initStore(hippoDir);
     writeEntry(
       hippoDir,
@@ -106,7 +98,7 @@ describe('hippo provenance CLI', () => {
       }),
     );
 
-    const r = runHippo(['provenance', '--strict']);
+    const r = await runHippo(['provenance', '--strict']);
     expect(r.status).toBe(0);
     expect(r.stdout).toContain('1/1 raw rows envelope-complete (100.0%)');
   });

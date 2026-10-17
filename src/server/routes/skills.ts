@@ -2,15 +2,18 @@
 import { MAX_SKILL_NAME_LEN, type SaveSkillOptions, SKILL, skillsMarkdown } from '../../objects/skills.js';
 import { sendJson } from '../../util/http-util.js';
 import type { AuthedRouteRequest } from '../types.js';
-import { MAX_SHORT_FIELD_LEN, parseJsonBody } from '../validation.js';
+import {
+  MAX_SHORT_FIELD_LEN,
+  parseJsonBody,
+  getString,
+  requiredString,
+  type RequiredStringRule,
+} from '../validation.js';
 import { objectsOf, saveFor } from '../../api/objects/objects.js';
 import {
   closeRoute,
   getRoute,
   listRoute,
-  optionalString,
-  type RequiredStringRule,
-  requiredString,
   supersedeRoute,
   type VersionedRouteConfig,
 } from './object-routes.js';
@@ -24,8 +27,8 @@ const skillRoutes: VersionedRouteConfig<'skill', SaveSkillOptions> = {
   object: SKILL,
   revise: (body) => {
     const instructions = requiredString(body, 'instructions', INSTRUCTIONS);
-    const trigger = optionalString(body, 'trigger', 1024);
-    const changeSummary = optionalString(body, 'changeSummary', MAX_SHORT_FIELD_LEN);
+    const trigger = getString(body, 'trigger', 1024);
+    const changeSummary = getString(body, 'changeSummary', MAX_SHORT_FIELD_LEN);
     return (existing, id) => ({
       skillName: existing.skillName,
       instructions,
@@ -46,7 +49,7 @@ export async function handleCreateSkill(rr: AuthedRouteRequest): Promise<void> {
   const skill = await saveFor(ctx, SKILL, {
     skillName: requiredString(body, 'skillName', { max: MAX_SKILL_NAME_LEN }),
     instructions: requiredString(body, 'instructions', INSTRUCTIONS),
-    trigger: optionalString(body, 'trigger', 1024),
+    trigger: getString(body, 'trigger', 1024),
   });
   sendJson(rr.res, 201, { skill });
 }

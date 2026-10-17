@@ -106,22 +106,13 @@ export interface SecretVet {
   warnings: string[];
 }
 
-/**
- * Write-time veto: `scrub` text no person typed gets capture's strict redaction; typed text is a person's own call, so
- * it is kept and flagged.
- */
-export function vetSecrets(content: string, tags: readonly string[], scrub: boolean): SecretVet {
-  const kept = scrub ? redactSecretsStrict(content) : content;
+/** Write-time veto: every caller's text gets the strict redaction, typed or not, so no secret reaches the store. */
+export function vetSecrets(content: string): SecretVet {
+  const kept = redactSecretsStrict(content);
   const warnings: string[] = [];
   if (kept !== content) {
     const found = detectSecret({ content, tags: [] }).reason;
     warnings.push(`secret-shaped text was redacted before storing${found ? ` (${found})` : ''}`);
-  }
-  const left = detectSecret({ content: kept, tags: [...tags] });
-  if (left.flagged) {
-    warnings.push(
-      `content looks like a secret (${left.reason}) and was stored as sent; forget it if it should not be kept`,
-    );
   }
   return { content: kept, warnings };
 }

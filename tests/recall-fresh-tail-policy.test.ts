@@ -126,11 +126,9 @@ describe('fresh-tail policy', () => {
     }
   });
 
-  it('env=anything-other-than-"1" → treated as unset, no throw', async () => {
-    // Stricter than truthy: only the literal string "1" enables the guard.
-    // Defensive against env values like "true" / "yes" / "0" that callers
-    // might set expecting "any truthy" semantics.
-    for (const val of ['true', 'yes', '0', '', 'false']) {
+  it('env=an off or unknown spelling → treated as unset, no throw', async () => {
+    // Only the on spellings (1, true, on) enable the guard; "yes" is unknown and takes the off side.
+    for (const val of ['yes', '0', '', 'false']) {
       process.env.HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL = val;
       for (let i = 0; i < 3; i++) writeEntry(root, makeRaw(`v-${val}-event ${i}`));
       const none = await retrieve(ctxFor(root), { query: 'event' });

@@ -31,11 +31,10 @@ afterEach(() => {
 });
 
 describe('api.remember', () => {
-  it('stores typed text as sent and warns', async () => {
+  it('redacts typed text and warns', async () => {
     const result = await remember(ctx(), { content: TYPED });
-    expect(result.warnings).toHaveLength(1);
-    expect(result.warnings![0]).toContain('pattern:github-token');
-    expect(loadAllEntries(root, 'default')[0].content).toBe(TYPED);
+    expect(result.warnings).toEqual([expect.stringContaining('pattern:github-token')]);
+    expect(loadAllEntries(root, 'default')[0].content).not.toContain(GHP);
   });
 
   it('redacts untrusted text and warns', async () => {

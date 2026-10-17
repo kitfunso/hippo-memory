@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { spawnSync } from 'child_process';
 import { summariseTranscript, resolveLastSessionTranscript } from '../src/capture/transcript.js';
 import { trySymlink } from './_helpers/symlink.js';
-import { hippoRun } from './_helpers/spawn-hippo.js';
+import { runCliAs } from './_helpers/run-cli-as.js';
 
 /**
  * Per-test tmpdir so the fake transcript fixtures don't leak between cases.
@@ -317,12 +317,12 @@ describe('resolveLastSessionTranscript', () => {
 
 describe('session workers never capture a transcript they were not handed', () => {
   let tmp: { dir: string; cleanup: () => void };
-  const binPath = fileURLToPath(new URL('../bin/hippo.js', import.meta.url));
 
-  beforeEach(() => {
+  // In process, so coverage sees both workers; the capture end-to-end case below keeps the real child.
+  beforeEach(async () => {
     tmp = withTmpDir();
     const env = { ...process.env, HIPPO_HOME: tmp.dir, HOME: tmp.dir, USERPROFILE: tmp.dir };
-    const init = spawnSync(process.execPath, [binPath, 'init', '--no-hooks', '--no-schedule', '--no-learn'], { cwd: tmp.dir, env });
+    const init = await runCliAs(['init', '--no-hooks', '--no-schedule', '--no-learn'], { cwd: tmp.dir, env });
     expect(init.status).toBe(0);
     const other = path.join(tmp.dir, '.claude', 'projects', 'other-project');
     fs.mkdirSync(other, { recursive: true });
@@ -336,29 +336,29 @@ describe('session workers never capture a transcript they were not handed', () =
     tmp.cleanup();
   });
 
-  function runWorker(args: string[]): string {
+  async function runWorker(args: string[]): Promise<string> {
     const logFile = path.join(tmp.dir, 'worker.log');
     const env = { ...process.env, HIPPO_HOME: tmp.dir, HOME: tmp.dir, USERPROFILE: tmp.dir };
-    const result = hippoRun([...args, '--log-file', logFile], { cwd: tmp.dir, env });
+    const result = await runCliAs([...args, '--log-file', logFile], { cwd: tmp.dir, env });
     expect(result.status).toBe(0);
     return fs.readFileSync(logFile, 'utf8');
   }
 
-  it('the session-end worker skips capture without --transcript', () => {
-    const log = runWorker(['__session-end-worker']);
+  it('the session-end worker skips capture without --transcript', async () => {
+    const log = await runWorker(['__session-end-worker']);
     expect(log).toContain('skip capture: no transcript for this session');
     expect(log).not.toContain('capturing session');
   });
 
-  it('positive control: the session-end worker captures the transcript it is handed', () => {
+  it('positive control: the session-end worker captures the transcript it is handed', async () => {
     const handed = path.join(tmp.dir, '.claude', 'projects', 'other-project', 'newest.jsonl');
-    const log = runWorker(['__session-end-worker', '--transcript', handed]);
+    const log = await runWorker(['__session-end-worker', '--transcript', handed]);
     expect(log).toContain('capturing session');
   });
 
-  it('the Codex worker skips capture when no Codex transcript is found', () => {
+  it('the Codex worker skips capture when no Codex transcript is found', async () => {
     const codexHome = path.join(tmp.dir, '.codex');
-    const log = runWorker(['__codex-session-end-worker', '--codex-home', codexHome, '--history-path', path.join(codexHome, 'history.jsonl')]);
+    const log = await runWorker(['__codex-session-end-worker', '--codex-home', codexHome, '--history-path', path.join(codexHome, 'history.jsonl')]);
     expect(log).toContain('skip capture: no Codex transcript for this session');
     expect(log).not.toContain('capturing session');
   });

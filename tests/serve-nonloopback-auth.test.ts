@@ -172,12 +172,12 @@ function fakeReq(headers: Record<string, string | string[]>, remoteAddress = '10
   return { headers, socket: { remoteAddress } } as IncomingMessage;
 }
 
-describe('clientIpForRateLimit from a peer HIPPO_TRUSTED_PROXIES=* trusts', () => {
+describe('clientIpForRateLimit from a peer HIPPO_TRUSTED_PROXIES lists', () => {
   const saved = process.env.HIPPO_CLIENT_IP_HEADER;
   const savedProxies = process.env.HIPPO_TRUSTED_PROXIES;
 
   beforeEach(() => {
-    process.env.HIPPO_TRUSTED_PROXIES = '*';
+    process.env.HIPPO_TRUSTED_PROXIES = '10.0.0.0/24';
   });
 
   afterEach(() => {
