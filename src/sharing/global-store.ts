@@ -1,13 +1,10 @@
-// The global store: where it lives, creating it, and embedding a copy promoted into it.
+// The global store: where it lives and creating it.
 
 import * as fs from 'fs';
-import type { MemoryEntry } from '../core/memory.js';
 import { resolveGlobalRootDir } from '../core/project-identity.js';
 import { initStore } from '../store/open.js';
-import { embedMemory } from '../search/embed-memories.js';
 
-/** Returns the path to the global Hippo store.
- *  Resolution order: $HIPPO_HOME > $XDG_DATA_HOME/hippo > ~/.hippo/ */
+/** The global store's folder: $HIPPO_HOME, else $XDG_DATA_HOME/hippo, else ~/.hippo/. */
 export function getGlobalRoot(): string {
   // Single source of truth lives in project-identity.ts (leaf) so db migrations
   // can resolve the same path without a shared.ts import cycle.
@@ -23,9 +20,4 @@ export function initGlobal(): void {
     // Ensure subdirectories exist in case partially initialized
     initStore(globalRoot);
   }
-}
-
-/** Fire-and-forget: embedMemory gates on availability and never rejects. */
-export function embedGlobalCopy(globalEntry: MemoryEntry): void {
-  void embedMemory(getGlobalRoot(), globalEntry);
 }

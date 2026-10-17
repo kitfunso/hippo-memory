@@ -4,7 +4,7 @@ import { ConflictError, NotFoundError } from '../../core/api-errors.js';
 import { stampOriginProject } from '../../store/entry-row.js';
 import type { ConnectorEvent } from '../../store/port.js';
 import { createSuccessor, type Layer, type MemoryEntry } from '../../core/memory.js';
-import { embedGlobalCopy } from '../../sharing/global-store.js';
+import { embedMemory } from '../../search/embed-memories.js';
 import { configOf } from '../config-of.js';
 import { requireGroup } from '../../store/index.js';
 import type { StoreContext } from '../types.js';
@@ -22,7 +22,8 @@ export function promote(
   ctx: StoreContext,
   id: string,
 ): PromoteResult {
-  const { promotion } = requireGroup(ctx.store, 'localFiles');
+  const local = requireGroup(ctx.store, 'localFiles');
+  const { promotion } = local;
   // copyToGlobal reads without a tenant filter, so pre-check the row's tenant_id and deny cross-tenant access with
   // archiveRaw's not-found wording (no leak about whether the id exists in another tenant).
   const reach = promotion.reach(id);
@@ -38,7 +39,8 @@ export function promote(
     auditAs: { tenantId: ctx.tenantId, actor: ctx.actor.subject },
   });
 
-  embedGlobalCopy(globalEntry);
+  // The store a promote first creates is in no reach yet, so the group builds it; embedMemory never rejects.
+  void embedMemory(requireGroup(local.globalStore(), 'localFiles').hippoRoot, globalEntry);
   return { ok: true, sourceId: id, globalId: globalEntry.id };
 }
 
