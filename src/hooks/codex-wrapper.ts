@@ -2,7 +2,7 @@ import { envPath } from '../util/env.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import { PACKAGE_ROOT } from '../core/package-root.js';
-import { errorMessage, log, errorFields } from '../util/log.js';
+import { errorCode, errorMessage, log, errorFields } from '../util/log.js';
 import { HIPPO_CODEX_WRAPPER_MARKER, ensureDir } from './shared.js';
 import { homeDir, codexHomeDir } from '../util/agent-homes.js';
 import { isJsonString } from '../util/json.js';
@@ -79,8 +79,11 @@ function readCodexWrapperMetadata(): CodexWrapperMetadata | null {
     // field and the referenced paths.
     const parsed: CodexWrapperMetadata = JSON.parse(fs.readFileSync(metadataPath, 'utf8'));
     return parsed;
-  } catch {
-    // Unreadable metadata is treated like the missing-file case above.
+  } catch (err) {
+    // Unreadable metadata is treated like the missing-file case above, after the cause is logged.
+    if (errorCode(err) !== 'ENOENT') {
+      log.warn(`codex wrapper metadata ${metadataPath} unreadable: ${errorMessage(err)}`, errorFields(err));
+    }
     return null;
   }
 }
@@ -88,8 +91,11 @@ function readCodexWrapperMetadata(): CodexWrapperMetadata | null {
 function readTextFile(filePath: string): string | null {
   try {
     return fs.readFileSync(filePath, 'utf8');
-  } catch {
-    // Callers treat an unreadable file as absent.
+  } catch (err) {
+    // Callers treat an unreadable file as absent; only a missing one is silent.
+    if (errorCode(err) !== 'ENOENT') {
+      log.warn(`cannot read ${filePath}: ${errorMessage(err)}`, errorFields(err));
+    }
     return null;
   }
 }

@@ -9,7 +9,7 @@ import { replayCompactionsAt } from '../capture/compaction-record.js';
 import * as api from '../api/index.js';
 import { cliApiContext, cliSyncOptions } from './api-context.js';
 import { sleepResultLines } from './sleep-render.js';
-import { errorMessage, log } from '../util/log.js';
+import { errorFields, errorMessage, log } from '../util/log.js';
 import { teeStdStreams } from '../util/stream-tee.js';
 import { type CliFlags, boolFlag, stringFlag, type CommandContext } from './flag-values.js';
 import { requireInit, learnFromRepo, runChurnStaleForRepo, skipLearnOnSharedStore } from './shared.js';
@@ -30,7 +30,7 @@ export async function cmdSleep(hippoRoot: string, tenantId: string, flags: CliFl
       fs.writeFileSync(logFile, `[hippo] ${new Date().toISOString()} consolidating memory...\n`, 'utf8');
       restoreStdout = teeStdStreams(logFile);
     } catch (err) {
-      log.warn(`could not open log file ${logFile}: ${errorMessage(err)}`);
+      log.warn(`could not open log file ${logFile}: ${errorMessage(err)}`, errorFields(err));
     }
   }
 
@@ -38,7 +38,7 @@ export async function cmdSleep(hippoRoot: string, tenantId: string, flags: CliFl
     await cmdSleepCore(hippoRoot, tenantId, flags);
     if (logFile) console.log('[hippo] sleep complete');
   } catch (err) {
-    if (logFile) console.log(`[hippo] sleep failed: ${errorMessage(err)}`);
+    if (logFile) printError(`[hippo] sleep failed: ${errorMessage(err)}`);
     throw err;
   } finally {
     if (restoreStdout) restoreStdout();
@@ -67,7 +67,7 @@ function repairProjectTagsOnce(hippoRoot: string, tenantId: string): void {
     ].filter((p) => p !== '');
     console.log(`Repaired project tags once after the upgrade: ${parts.join('; ')} (backup: ${r.backup}).`);
   } catch (err) {
-    log.warn(`project tag repair skipped, retried next sleep: ${errorMessage(err)}`);
+    log.warn(`project tag repair skipped, retried next sleep: ${errorMessage(err)}`, errorFields(err));
   }
 }
 

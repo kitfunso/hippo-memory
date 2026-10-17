@@ -420,7 +420,7 @@ export function mirrorBestEffort(what: string, write: () => void): void {
   try {
     write();
   } catch (err) {
-    log.warn(`${what} not refreshed (${errorMessage(err)}); the database write succeeded`);
+    log.warn(`${what} not refreshed (${errorMessage(err)}); the database write succeeded`, errorFields(err));
   }
 }
 

@@ -67,6 +67,7 @@ function answerUnroutable(frame: JsonValue): void {
 /** How long stdin's end waits for calls still running, so a client that closes right after its last request still
  * gets the reply. */
 const STDIN_END_DRAIN_MS = 5000;
+const CRASH_DRAIN_SLACK_MS = 1000;
 
 // Calls dispatched and not yet answered, each with the method the drain names if it is still running at the bound.
 const inFlight = new Map<Promise<void>, string>();
@@ -76,7 +77,7 @@ function track(method: string, call: Promise<void>): void {
   void call.finally(() => inFlight.delete(call));
 }
 
-async function exitWhenDrained(): Promise<void> {
+async function drainInFlight(): Promise<void> {
   if (inFlight.size > 0) {
     let bound: NodeJS.Timeout | undefined;
     const timedOut = new Promise<void>((resolve) => { bound = setTimeout(resolve, STDIN_END_DRAIN_MS); });
@@ -89,6 +90,10 @@ async function exitWhenDrained(): Promise<void> {
       { method },
     );
   }
+}
+
+async function exitWhenDrained(): Promise<void> {
+  await drainInFlight();
   exitAfterFlush(0);
 }
 
@@ -220,6 +225,12 @@ export function startStdioLoop(host: McpHost): void {
 
   process.stdin.on('end', () => { void exitWhenDrained(); });
 
+  exitOnStreamError();
+  // A crash waits for the calls in flight as stdin's end does, so a client is not left without its reply.
+  installCrashHandlers('mcp', { run: drainInFlight, boundMs: STDIN_END_DRAIN_MS + CRASH_DRAIN_SLACK_MS });
+}
+
+function exitOnStreamError(): void {
   // A client that hangs up mid-reply makes the next write fail; an unhandled stream error would crash the server.
   process.stdout.on('error', (err: NodeJS.ErrnoException) => {
     if (err.code === 'EPIPE' || err.code === 'ERR_STREAM_DESTROYED') {
@@ -231,5 +242,8 @@ export function startStdioLoop(host: McpHost): void {
     exitAfterFlush(1);
   });
 
-  installCrashHandlers('mcp');
+  // A closed stderr cannot carry a log line, so the loop leaves quietly; any other fault is an exit code.
+  process.stderr.on('error', (err: NodeJS.ErrnoException) => {
+    exitAfterFlush(err.code === 'EPIPE' || err.code === 'ERR_STREAM_DESTROYED' ? 0 : 1);
+  });
 }
