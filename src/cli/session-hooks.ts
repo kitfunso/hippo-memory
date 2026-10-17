@@ -45,7 +45,7 @@ import type { DeliveryRecorder } from '../store/delivery-recorder.js';
 import { printError } from './output.js';
 import { cmdLastSleep } from './last-sleep.js';
 import { readCompactResumePayload } from './compact-resume-payload.js';
-import { cliApiContext, cliLedgerReach, cliSyncOptions } from './api-context.js';
+import { cliApiContext, cliLedgerReach, cliStore, cliSyncOptions } from './api-context.js';
 import {
   type CliFlags,
   type CommandContext,
@@ -355,7 +355,8 @@ async function sleepIfDue(
   if (!isInitialized(hippoRoot)) return sleepProjectStore(hippoRoot, tenantId, flags, closeLogFile, transcriptPath);
   const prefix = `turn close, session ${sessionId}`;
   try {
-    const { enabled, count, threshold, due } = autoSleepDue(hippoRoot, tenantId, loadConfig(hippoRoot).autoSleep);
+    const { enabled, count, threshold, due } =
+      await autoSleepDue(cliStore(hippoRoot), tenantId, loadConfig(hippoRoot).autoSleep);
     if (!due) {
       const why = enabled ? `${count} new memories, threshold ${threshold}` : 'auto-sleep is off';
       appendSessionEndCloseLog(closeLogFile, `${prefix}: skip sleep, ${why}`, { startFresh: true });

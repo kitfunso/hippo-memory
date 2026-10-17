@@ -8,7 +8,7 @@ import { join } from 'node:path';
 import { spawn } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import { initStore } from '../src/store/open.js';
-import { loadStats } from '../src/store/index-and-stats.js';
+import { sqliteSyncStore } from '../src/store/sqlite/store.js';
 import { openHippoDb, closeHippoDb, getMeta } from '../src/db/index.js';
 
 let root: string;
@@ -62,9 +62,9 @@ describe('updateStats under concurrent writers', () => {
       { field: 'remembered', iterations: 40 },
     ]);
 
-    expect(loadStats(root).total_remembered).toBe(160);
+    expect(sqliteSyncStore(root).reports.stats().total_remembered).toBe(160);
 
-    // loadStats coerces with Number(), so it would not notice the column
+    // reports.stats() coerces with Number(), so it would not notice the column
     // holding "160.0"; node:sqlite binds a JS number as REAL.
     const db = openHippoDb(root);
     try {
@@ -83,7 +83,7 @@ describe('updateStats under concurrent writers', () => {
       { field: 'forgotten', iterations: 60 },
     ]);
 
-    const stats = loadStats(root);
+    const stats = sqliteSyncStore(root).reports.stats();
     expect(stats.total_remembered).toBe(60);
     expect(stats.total_forgotten).toBe(60);
   }, 60_000);

@@ -10,7 +10,7 @@ import { createMemory, DEFAULT_HALF_LIFE_DAYS, Layer, type MemoryEntry } from '.
 import { schemaFitInStore } from '../src/store/candidates.js';
 import { loadAllEntries, readEntry } from '../src/store/entry-reads.js';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { loadStats } from '../src/store/index-and-stats.js';
+import { sqliteSyncStore } from '../src/store/sqlite/store.js';
 import { RejectedValueError } from '../src/core/api-errors.js';
 import { loadEmbeddingIndex } from '../src/store/vector-index.js';
 import { startHashedEmbeddings, type HashedEmbeddings } from './_helpers/hashed-embedding-server.js';
@@ -32,7 +32,7 @@ function store(config?: MakeRootOptions['config']): FullContext {
   return apiCtx(hippoRoot, 'default', adminActor('cli'));
 }
 
-const counted = (ctx: FullContext): number => Number(loadStats(ctx.hippoRoot).total_remembered);
+const counted = (ctx: FullContext): number => Number(sqliteSyncStore(ctx.hippoRoot).reports.stats().total_remembered);
 const rows = (ctx: FullContext): MemoryEntry[] => loadAllEntries(ctx.hippoRoot, ctx.tenantId);
 
 function seed(ctx: FullContext, content: string, tags: string[]): void {

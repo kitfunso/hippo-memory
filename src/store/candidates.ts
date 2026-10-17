@@ -543,22 +543,20 @@ function tallyStatusRows(
 
 /** The counts `hippo status` prints, from one pass over ten narrow columns: no text is read and no row array is
  * built. */
-export function loadStatusCounts(hippoRoot: string, now: Date, atRiskBelow: number): StatusCounts {
-  return onHandle(hippoRoot, (db) => {
-    // One read transaction, so the row tallies and the two counts describe the same store.
-    return withReadSnapshot(db, () => {
-      // loadAllEntries' order, so the strengths add up in the order they did and the average rounds the same.
-      // SAFETY: the SELECT names exactly StatusRow's columns, and the store writes `layer` only from the Layer enum.
-      const rows = db.prepare(
-        `SELECT ${STATUS_ROW_COLUMNS.join(', ')} FROM memories ORDER BY created ASC, id ASC`,
-      ).iterate() as Iterable<StatusRow>;
-      const tallies = tallyStatusRows(rows, now, atRiskBelow);
-      // SAFETY: one row whose columns are the two aliases named below.
-      const counts = db.prepare(`SELECT
-        (SELECT COUNT(*) FROM memory_conflicts WHERE status = 'open') AS openConflicts,
-        (SELECT COUNT(*) FROM memory_vectors WHERE memory_id IN (SELECT id FROM memories)) AS embedded`,
-      ).get() as Record<'openConflicts' | 'embedded', number | bigint>;
-      return { ...tallies, openConflicts: Number(counts.openConflicts), embedded: Number(counts.embedded) };
-    });
-  }, openStore);
+export function statusCountsAt(db: DatabaseSyncLike, now: Date, atRiskBelow: number): StatusCounts {
+  // One read transaction, so the row tallies and the two counts describe the same store.
+  return withReadSnapshot(db, () => {
+    // loadAllEntries' order, so the strengths add up in the order they did and the average rounds the same.
+    // SAFETY: the SELECT names exactly StatusRow's columns, and the store writes `layer` only from the Layer enum.
+    const rows = db.prepare(
+      `SELECT ${STATUS_ROW_COLUMNS.join(', ')} FROM memories ORDER BY created ASC, id ASC`,
+    ).iterate() as Iterable<StatusRow>;
+    const tallies = tallyStatusRows(rows, now, atRiskBelow);
+    // SAFETY: one row whose columns are the two aliases named below.
+    const counts = db.prepare(`SELECT
+      (SELECT COUNT(*) FROM memory_conflicts WHERE status = 'open') AS openConflicts,
+      (SELECT COUNT(*) FROM memory_vectors WHERE memory_id IN (SELECT id FROM memories)) AS embedded`,
+    ).get() as Record<'openConflicts' | 'embedded', number | bigint>;
+    return { ...tallies, openConflicts: Number(counts.openConflicts), embedded: Number(counts.embedded) };
+  });
 }

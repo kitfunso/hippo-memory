@@ -1,10 +1,8 @@
 // Store-wide status reads: counts, stats, vector index state and the correction and provenance reports.
 
 import type { PhysicsParticle } from '../core/physics.js';
-import { loadCorrectionEntries, loadRawEntries } from '../store/report-reads.js';
-import { loadStats } from '../store/index-and-stats.js';
 import type { LegacyStats } from '../store/rows.js';
-import { loadStatusCounts, type StatusCounts } from '../store/candidates.js';
+import type { StatusCounts } from '../store/candidates.js';
 import { embeddingModelRequiresReindex } from '../store/embeddings/index.js';
 import { loadStoredParticles, storedVectorSummary, type StoredVectorSummary } from '../store/vector-index.js';
 import { buildCorrectionLatency, type CorrectionLatencyReport } from './correction-latency.js';
@@ -17,9 +15,10 @@ export interface StoreStatus {
 }
 
 /** Lifetime stats and row counts for the whole store. Every tenant, so the host admin only. */
-export function storeStatus(ctx: Context, now: Date, atRiskBelow: number): StoreStatus {
+export async function storeStatus(ctx: Context, now: Date, atRiskBelow: number): Promise<StoreStatus> {
   requireHostAdmin(ctx, 'Reading every tenant');
-  return { stats: loadStats(ctx.hippoRoot), counts: loadStatusCounts(ctx.hippoRoot, now, atRiskBelow) };
+  const { reports } = ctx.store;
+  return { stats: await reports.stats(), counts: await reports.statusCounts(now, atRiskBelow) };
 }
 
 /** Ids and dimension of the stored vectors. Every tenant, so the host admin only. */
@@ -43,13 +42,13 @@ export function storedParticles(ctx: Context): PhysicsParticle[] {
 }
 
 /** Correction latency over every superseded row in the store. Every tenant, so the host admin only. */
-export function correctionLatencyReport(ctx: Context): CorrectionLatencyReport {
+export async function correctionLatencyReport(ctx: Context): Promise<CorrectionLatencyReport> {
   requireHostAdmin(ctx, 'Reading every tenant');
-  return buildCorrectionLatency(loadCorrectionEntries(ctx.hippoRoot));
+  return buildCorrectionLatency(await ctx.store.reports.correctionEntries());
 }
 
 /** Provenance coverage over every kind=raw row in the store. Every tenant, so the host admin only. */
-export function provenanceCoverageReport(ctx: Context): ProvenanceCoverage {
+export async function provenanceCoverageReport(ctx: Context): Promise<ProvenanceCoverage> {
   requireHostAdmin(ctx, 'Reading every tenant');
-  return buildProvenanceCoverage(loadRawEntries(ctx.hippoRoot));
+  return buildProvenanceCoverage(await ctx.store.reports.rawEntries());
 }

@@ -7,8 +7,8 @@ import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { calculateStrength, confidenceFacets, createMemory, DEFAULT_HALF_LIFE_DAYS, Layer, type MemoryEntry } from '../src/core/memory.js';
 import { loadEveryTenantEntries } from '../src/store/entry-reads.js';
-import { loadStatusCounts } from '../src/store/candidates.js';
-import { recordStatements } from './_helpers/count-statements.js';
+import { sqliteSyncStore } from '../src/store/sqlite/store.js';
+import { recordStatementsAsync } from './_helpers/count-statements.js';
 import { replaceDetectedConflicts, resolveConflict, listMemoryConflicts } from '../src/store/conflicts.js';
 import { appendConsolidationRun, updateStats } from '../src/store/index-and-stats.js';
 import { DAY_MS } from '../src/util/time.js';
@@ -87,7 +87,7 @@ describe('hippo status embedding lines', () => {
     ]);
   });
 
-  it('reads no vector element while counting them', () => {
+  it('reads no vector element while counting them', async () => {
     const [a, b] = liveIds(2);
     saveStoredVectors(root, [[a, [1, 2, 3, 4]], [b, [4, 3, 2, 1]]], 'm');
     // Array.from over a decoded Float32Array walks this iterator once per vector, so a decode shows as a call.
@@ -98,7 +98,7 @@ describe('hippo status embedding lines', () => {
     proto[Symbol.iterator] = function (this: Float32Array) { walks++; return original.call(this); };
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
     try {
-      handleStatus({ hippoRoot: root, tenantId: 'default', args: [], flags: {} });
+      await handleStatus({ hippoRoot: root, tenantId: 'default', args: [], flags: {} });
     } finally {
       proto[Symbol.iterator] = original;
       log.mockRestore();
@@ -212,7 +212,7 @@ describe('hippo status full text', () => {
   });
 });
 
-describe('loadStatusCounts', () => {
+describe('reports.statusCounts', () => {
   it('equals a tally over every loaded entry, to the last bit of the average', () => {
     seedEveryCase();
     // Written weakest first and created strongest first: a sum over rows in any other order than loadAllEntries' ends on other last bits.
@@ -220,7 +220,7 @@ describe('loadStatusCounts', () => {
     const now = new Date(NOW);
     const entries = loadEveryTenantEntries(root);
     const strengths = entries.map((e) => calculateStrength(e, now));
-    const counts = loadStatusCounts(root, now, 0.2);
+    const counts = sqliteSyncStore(root).reports.statusCounts(now, 0.2);
     expect(counts.total).toBe(52);
     expect(counts.avgStrength).toBe(strengths.reduce((sum, x) => sum + x, 0) / entries.length);
     expect(counts.atRisk).toBe(strengths.filter((x) => x < 0.2).length);
@@ -233,12 +233,12 @@ describe('loadStatusCounts', () => {
 });
 
 describe('hippo status read bound', () => {
-  it('selects no memory text and no JSON column from the memories table', () => {
+  it('selects no memory text and no JSON column from the memories table', async () => {
     seedEveryCase();
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
-    const { statements } = (() => {
+    const { statements } = await (async () => {
       try {
-        return recordStatements(() => handleStatus({ hippoRoot: root, tenantId: 'default', args: [], flags: {} }));
+        return await recordStatementsAsync(() => handleStatus({ hippoRoot: root, tenantId: 'default', args: [], flags: {} }));
       } finally {
         log.mockRestore();
       }

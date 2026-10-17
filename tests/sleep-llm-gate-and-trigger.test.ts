@@ -10,7 +10,7 @@ import { createMemory } from './_helpers/default-half-life-memory.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { readEntry } from '../src/store/entry-reads.js';
-import { countCreatedSinceLastSleep } from '../src/store/index-and-stats.js';
+import { sqliteSyncStore } from '../src/store/sqlite/store.js';
 import { consolidate } from '../src/index.js';
 import { remember } from '../src/api/index.js';
 import { apiCtx } from './_helpers/api-ctx.js';
@@ -124,20 +124,20 @@ describe('the auto-sleep trigger', () => {
     const root = newRoot();
     writeEntry(root, createMemory('first memory about the release train schedule'));
     writeEntry(root, createMemory('second memory about the staging cluster restarts'));
-    expect(countCreatedSinceLastSleep(root, 'default')).toBe(2);
+    expect(sqliteSyncStore(root).reports.createdSinceLastSleep('default', new Date())).toBe(2);
 
     await consolidate(root);
-    expect(countCreatedSinceLastSleep(root, 'default')).toBe(0);
+    expect(sqliteSyncStore(root).reports.createdSinceLastSleep('default', new Date())).toBe(0);
 
     writeEntry(root, createMemory('third memory about invoices exported as csv'));
-    expect(countCreatedSinceLastSleep(root, 'default')).toBe(1);
+    expect(sqliteSyncStore(root).reports.createdSinceLastSleep('default', new Date())).toBe(1);
   });
 
   it('never counts memories older than 24 hours', () => {
     const root = newRoot();
     const old = createMemory('an old memory about the quarterly budget review');
     writeEntry(root, { ...old, created: new Date(Date.now() - 2 * DAY).toISOString() });
-    expect(countCreatedSinceLastSleep(root, 'default')).toBe(0);
+    expect(sqliteSyncStore(root).reports.createdSinceLastSleep('default', new Date())).toBe(0);
   });
 });
 

@@ -44,7 +44,7 @@ const STORE_KIT_TYPES = [
   'SessionEndHandoffRequest', 'SessionEventInput', 'Sessions', 'SnapshotInput', 'StrengthTallies', 'TokenSummary',
   'WorkingMemoryFilter', 'WorkingMemoryItem', 'WorkingMemoryPush',
   'AppliedRejection', 'LiftedRejection', 'Rejection', 'RejectionCheck', 'Rejections', 'RejectionSource', 'RejectedValueRow',
-  'FailureEvent', 'FailureLog', 'FailureOutcome',
+  'FailureEvent', 'FailureLog', 'FailureOutcome', 'LegacyStats', 'StatusCounts',
 ];
 
 const sorted = (names: readonly string[]): string[] => [...names].sort();

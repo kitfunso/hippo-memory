@@ -40,11 +40,11 @@ import { CliExit, fail } from './exit.js';
 
 const AT_RISK_BELOW = 0.2;
 
-export function handleStatus({ hippoRoot, tenantId }: CommandContext): void {
+export async function handleStatus({ hippoRoot, tenantId }: CommandContext): Promise<void> {
   requireInit(hippoRoot);
 
   const ctx = cliApiContext(hippoRoot, tenantId);
-  const { stats, counts } = storeStatus(ctx, evalNow(), AT_RISK_BELOW);
+  const { stats, counts } = await storeStatus(ctx, evalNow(), AT_RISK_BELOW);
   const { byLayer, byConfidence, pinned, atRisk, agedOut, avgStrength } = counts;
 
   console.log('Hippo Status');
@@ -285,9 +285,9 @@ export async function handleFailures({ hippoRoot, tenantId, flags }: CommandCont
   }
 }
 
-export function handleCorrectionLatency({ hippoRoot, tenantId, flags }: CommandContext): void {
+export async function handleCorrectionLatency({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
   requireInit(hippoRoot);
-  const report = correctionLatencyReport(cliApiContext(hippoRoot, tenantId));
+  const report = await correctionLatencyReport(cliApiContext(hippoRoot, tenantId));
   if (flags['json']) {
     console.log(JSON.stringify(report, null, 2));
   } else if (report.count === 0) {
@@ -313,9 +313,9 @@ export function handleCorrectionLatency({ hippoRoot, tenantId, flags }: CommandC
   }
 }
 
-export function handleProvenance({ hippoRoot, tenantId, flags }: CommandContext): void {
+export async function handleProvenance({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
   requireInit(hippoRoot);
-  const coverage = provenanceCoverageReport(cliApiContext(hippoRoot, tenantId));
+  const coverage = await provenanceCoverageReport(cliApiContext(hippoRoot, tenantId));
   if (flags['json']) {
     console.log(JSON.stringify(coverage, null, 2));
   } else if (coverage.rawTotal === 0) {
