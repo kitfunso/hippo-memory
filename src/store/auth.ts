@@ -325,7 +325,8 @@ const verifiedKeys = new VerifiedKeyCache(VERIFIED_KEY_CACHE_CAP);
  * queue. */
 type DerivationBound = (keyId: string, derive: () => Promise<Buffer>) => Promise<Buffer>;
 
-// By stored hash and token, so a burst of requests with one unproved key derives once and is charged once.
+// By stored hash and a digest of the token, never the token, so a burst with one unproved key derives once and is
+// charged once.
 const checksInFlight = new Map<string, Promise<boolean>>();
 
 /** Whether `plaintext` is the secret `keyHash` was minted from: a proved token skips scrypt, any other derives on the
@@ -339,7 +340,7 @@ async function secretMatches(
   if (verifiedKeys.has(keyHash, plaintext)) return true;
   const parsed = storedScrypt(keyHash);
   if (!parsed) return false;
-  const id = `${keyHash}\u0000${plaintext}`;
+  const id = `${keyHash}\u0000${secretDigest(plaintext).toString('hex')}`;
   const running = checksInFlight.get(id);
   if (running) return running;
   const derive = (): Promise<Buffer> => {
