@@ -5,11 +5,14 @@ import * as path from 'path';
 import * as fs from 'fs';
 import type { AddressInfo } from 'net';
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'crypto';
+import { adminActor, type Context } from '../api/index.js';
+import { cliStore } from '../cli/api-context.js';
 import { evalNow } from '../core/ablation.js';
+import { loadConfig } from '../core/config.js';
 import { readEntry } from '../store/entry-reads.js';
 import { listCards } from '../store/cards.js';
-import { resolveTenantId } from '../store/tenant.js';
 import { loadCardDetail } from '../store/card-detail.js';
+import { envTenant } from '../util/env.js';
 import { bodyDeadlineMs, BodyTimeoutError, closeAfterReply, isCrossSite, LOOPBACK_HOST_HEADER } from '../util/http-util.js';
 import { errorFields, errorMessage, log } from '../util/log.js';
 import { createSnapshotService, isLiveMemory, type SnapshotService } from './dashboard-snapshot.js';
@@ -41,6 +44,8 @@ const MIME_TYPES = {
   '.woff2': 'font/woff2',
 } as const;
 
+// The audit log's actor for every dashboard write.
+const DASHBOARD_ACTOR = 'dashboard';
 const BODY_MAX_BYTES = 4096;
 const BODY_DRAIN_MAX_BYTES = 64 * 1024;
 const JSON_CONTENT_TYPE = /^application\/json\s*(;|$)/i;
@@ -94,20 +99,20 @@ function readActionBody(req: http.IncomingMessage): Promise<ActionBody> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
     let size = 0;
-    let aborted = false;
     const deadlineMs = bodyDeadlineMs();
-    const timer = setTimeout(() => reject(new BodyTimeoutError(`request body not received within ${deadlineMs} ms`)), deadlineMs);
-    // Unref: a request that already failed another way must not hold the process open for the rest of the deadline.
-    timer.unref();
+    const fail = (err: Error): void => {
+      clearTimeout(timer);
+      reject(err);
+    };
+    const timer = setTimeout(() => fail(new BodyTimeoutError(`request body not received within ${deadlineMs} ms`)), deadlineMs);
     req.on('data', (chunk: Buffer) => {
       size += chunk.length;
       if (size <= BODY_MAX_BYTES) chunks.push(chunk);
-      if (size > BODY_DRAIN_MAX_BYTES && !aborted) {
-        aborted = true;
-        reject(new BodyDrainExceeded(`Body must be at most ${BODY_DRAIN_MAX_BYTES} bytes`));
-      }
+      if (size > BODY_DRAIN_MAX_BYTES) fail(new BodyDrainExceeded(`Body must be at most ${BODY_DRAIN_MAX_BYTES} bytes`));
     });
-    req.on('error', reject);
+    req.on('error', fail);
+    // A client that hangs up mid-body sends no 'end'; after a whole body this reject is a no-op.
+    req.on('close', () => fail(new ParamError('Request body was cut off')));
     req.on('end', () => {
       clearTimeout(timer);
       if (size > BODY_MAX_BYTES) return reject(new ParamError(`Body must be at most ${BODY_MAX_BYTES} bytes`));
@@ -120,10 +125,18 @@ function readActionBody(req: http.IncomingMessage): Promise<ActionBody> {
   });
 }
 
-interface RouteContext {
-  hippoRoot: string;
-  snapshots: SnapshotService;
-  now: () => number;
+/** What every request shares; built once in openDashboardRoot. */
+interface DashboardRoot {
+  readonly hippoRoot: string;
+  /** A fresh api Context on the server's one store, so a config edit shows on the next request. */
+  readonly context: () => Context;
+  readonly snapshots: SnapshotService;
+  readonly now: () => number;
+  /** Closes the snapshot cache and the store. */
+  readonly release: () => void;
+}
+
+interface RouteContext extends DashboardRoot {
   req: http.IncomingMessage;
   res: http.ServerResponse;
   url: URL;
@@ -137,7 +150,7 @@ function sendOrNotFound<T extends object>(res: http.ServerResponse, body: T | nu
 
 function handleRead(ctx: RouteContext, segments: string[]): boolean {
   const { hippoRoot, snapshots, req, res, url } = ctx;
-  const tenantId = resolveTenantId({});
+  const tenantId = envTenant();
   // A cross-site <img src=...?fresh=1> must not force a full rebuild.
   const fresh = url.searchParams.get('fresh') === '1' && !isCrossSite(req);
   const [, head, a, b] = segments;
@@ -173,15 +186,13 @@ function handleRead(ctx: RouteContext, segments: string[]): boolean {
 }
 
 // Names the action only; nothing runs until the cross-site, content-type and body guards pass.
-function matchAction(segments: string[]): ((hippoRoot: string, tenantId: string, body: ActionBody) => ActionResult | Promise<ActionResult>) | null {
+function matchAction(segments: string[]): ((ctx: Context, body: ActionBody) => Promise<ActionResult>) | null {
   const [, head, id, verb] = segments;
   if (segments.length !== 4 || id === undefined) return null;
-  if (head === 'memory' && verb === 'pin') return (root, tenant, body) => pinMemory(root, tenant, id, body);
-  if (head === 'memory' && verb === 'wrong') return (root, tenant) => markWrong(root, tenant, id);
-  if (head === 'memory' && verb === 'forget') return (root, tenant) => forgetMemory(root, tenant, id);
-  if (head === 'conflicts' && verb === 'resolve') {
-    return (root, tenant, body) => resolveOpenConflict(root, tenant, parseConflictId(id), body);
-  }
+  if (head === 'memory' && verb === 'pin') return (ctx, body) => pinMemory(ctx, id, body);
+  if (head === 'memory' && verb === 'wrong') return (ctx) => markWrong(ctx, id);
+  if (head === 'memory' && verb === 'forget') return (ctx) => forgetMemory(ctx, id);
+  if (head === 'conflicts' && verb === 'resolve') return (ctx, body) => resolveOpenConflict(ctx, parseConflictId(id), body);
   return null;
 }
 
@@ -199,8 +210,9 @@ async function handlePost(ctx: RouteContext, segments: string[]): Promise<boolea
     return true;
   }
   const body = await readActionBody(req);
-  const tenantId = resolveTenantId({});
-  const result = await action(hippoRoot, tenantId, body);
+  const context = ctx.context();
+  const { tenantId } = context;
+  const result = await action(context, body);
   if (result.changed) snapshots.invalidate();
   if (result.entry) {
     // The write is committed, so a rebuild failure must not turn it into a 500: the next read rebuilds.
@@ -387,14 +399,14 @@ function stopOnSignal(server: http.Server): void {
   });
 }
 
-/** Gives the listener the API server's socket deadlines and one close of the store's connection; with `handleSignals`, a signal stops it too. */
-function superviseListener(server: http.Server, snapshots: SnapshotService, port: number, handleSignals: boolean): void {
+/** Gives the listener the API server's socket deadlines and one `release` of the store; with `handleSignals`, a signal stops it too. */
+function superviseListener(server: http.Server, release: () => void, port: number, handleSignals: boolean): void {
   setKeepAliveTimeouts(server);
   let storeClosed = false;
   const closeStore = (): void => {
     if (storeClosed) return;
     storeClosed = true;
-    snapshots.close();
+    release();
   };
   server.on('close', closeStore);
   server.on('error', (err) => {
@@ -406,17 +418,44 @@ function superviseListener(server: http.Server, snapshots: SnapshotService, port
   });
   if (handleSignals) stopOnSignal(server);
 }
+interface DashboardOptions {
+  readonly now?: () => number;
+  readonly cacheClock?: () => number;
+  readonly handleSignals?: boolean;
+}
+
+/** The composition root: one store, built as the CLI builds it, a Context per request with the actor every write
+ * audits as, and the snapshot cache over the same store. */
+function openDashboardRoot(hippoRoot: string, opts: DashboardOptions): DashboardRoot {
+  const store = cliStore(hippoRoot);
+  const now = opts.now ?? ((): number => evalNow().getTime());
+  const snapshots = createSnapshotService(hippoRoot, now, opts.cacheClock);
+  return {
+    hippoRoot,
+    now,
+    snapshots,
+    context: () => ({
+      hippoRoot, tenantId: envTenant(), actor: adminActor(DASHBOARD_ACTOR), store, config: loadConfig(hippoRoot),
+    }),
+    release: () => {
+      snapshots.close();
+      store.close().catch((err) => {
+        log.error(`dashboard: closing the store failed: ${errorMessage(err)}`, errorFields(err));
+      });
+    },
+  };
+}
+
 /** Serves the dashboard on 127.0.0.1 behind a per-start `token` (tests pass one), since loopback alone lets any local process read every memory; `opts` sets the projection and cache clocks. */
 export function serveDashboard(
   hippoRoot: string,
   port: number = 3333,
   token: string = randomBytes(32).toString('base64url'),
-  opts?: { now?: () => number; cacheClock?: () => number; handleSignals?: boolean },
+  opts?: DashboardOptions,
 ): http.Server {
   const distUiDir = path.join(PACKAGE_ROOT, 'dist-ui');
   const hasDistUi = fs.existsSync(path.join(distUiDir, 'index.html'));
-  const now = opts?.now ?? ((): number => evalNow().getTime());
-  const snapshots = createSnapshotService(hippoRoot, now, opts?.cacheClock);
+  const root = openDashboardRoot(hippoRoot, opts ?? {});
 
   const handleRequest = async (req: http.IncomingMessage, res: http.ServerResponse): Promise<void> => {
     const host = req.headers.host;
@@ -428,7 +467,7 @@ export function serveDashboard(
     if (url.pathname.startsWith('/api/')) {
       // A malformed % sequence throws URIError here; the caller answers 400.
       const segments = url.pathname.split('/').filter((s) => s !== '').map((s) => decodeURIComponent(s));
-      const ctx: RouteContext = { hippoRoot, snapshots, now, req, res, url };
+      const ctx: RouteContext = { ...root, req, res, url };
       const handled = req.method === 'GET' ? handleRead(ctx, segments)
         : req.method === 'POST' ? await handlePost(ctx, segments)
         : false;
@@ -446,7 +485,7 @@ export function serveDashboard(
   };
   // One id per request, so the lines it logs can be told apart from a concurrent request's.
   const server = http.createServer((req, res) => runWithRequestId(randomUUID(), () => onRequest(req, res)));
-  superviseListener(server, snapshots, port, opts?.handleSignals === true);
+  superviseListener(server, root.release, port, opts?.handleSignals === true);
 
   server.listen(port, '127.0.0.1', () => {
     // SAFETY: listen() was given a TCP port, so address() is AddressInfo, never a pipe name.

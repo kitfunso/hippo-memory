@@ -10,9 +10,7 @@ import { selectEntriesByIds } from './entry-reads.js';
 import { chunked } from '../util/chunked.js';
 import { onHandle, openStore, type StoreFiles } from './open.js';
 import { deleteEntryCore } from './delete-and-batch.js';
-import { canTouchScope } from '../core/recall-scope.js';
 import { placeholders } from '../util/sql.js';
-import { CLI_ACTOR } from '../core/actor.js';
 import type { KeysetClause, KeysetPosition } from '../util/keyset.js';
 import { MAX_LIST_LIMIT } from '../util/limits.js';
 import type { DetectedConflict } from './port/consolidation.js';
@@ -169,18 +167,6 @@ export function loadOpenConflictsOf(hippoRoot: string, tenantId: string, memoryI
   }, openStore);
 }
 
-/** Conflicts whose two rows `actor` may both touch. Only src/dashboard calls it, by folder; the api applies the same
- * rule over `conflictPageAt`, and the dashboard's api slice deletes this. */
-export function listTouchableConflicts(
-  hippoRoot: string,
-  status: string,
-  tenantId: string,
-  actor: { owner?: string },
-): MemoryConflict[] {
-  return onHandle(hippoRoot, (db) => everyConflictRowAt(db, tenantId, status)
-    .filter((r) => [r.a, r.b].every((m) => canTouchScope(actor, m?.scope ?? null)))
-    .map((r) => r.conflict), openStore);
-}
 type SameTenant = (a: string, b: string) => boolean;
 
 export function replaceDetectedConflictsAt(
@@ -399,30 +385,6 @@ export function resolveConflictAt(
   syncChangedMirrors(files.hippoRoot, db, [...selectEntriesByIds(db, [keep.id, loser.id]).values()]);
   if (removal.loserRemoved) purgeRemovedLoserMirrors(files.hippoRoot, db, loser.id, removal);
   return true;
-}
-
-/** The dashboard's weaken-only resolve by folder, after it ran the reach, status, pair and liveness checks itself; the
- * dashboard's api slice moves it to resolveMemoryConflict and deletes this. */
-export function resolveConflict(
-  hippoRoot: string,
-  { conflictId, keepId, tenantId }: { readonly conflictId: number; readonly keepId: string; readonly tenantId: string },
-  opts: { readonly rejectedBy?: string } = {},
-): { conflict: MemoryConflict; loserId: string } | null {
-  return onHandle(hippoRoot, (db) => {
-    const row = conflictByIdAt(db, tenantId, conflictId);
-    if (!row?.a || !row.b) return null;
-    const sides = [
-      { id: row.conflict.memory_a_id, scope: row.a.scope },
-      { id: row.conflict.memory_b_id, scope: row.b.scope },
-    ];
-    const keep = sides.find((side) => side.id === keepId);
-    const loser = sides.find((side) => side.id !== keepId);
-    if (!keep || !loser) return null;
-    const actor = opts.rejectedBy ?? CLI_ACTOR;
-    const resolution: ConflictResolution = { conflictId, keep, loser, fate: { kind: 'weaken' }, actor, reason: '' };
-    if (!resolveConflictAt(db, { hippoRoot }, tenantId, resolution)) return null;
-    return { conflict: { ...row.conflict, status: 'resolved' }, loserId: loser.id };
-  }, openStore);
 }
 
 /** What removing the loser did; drives the conflicts_with_json skip, the audit row and the mirror purge. */

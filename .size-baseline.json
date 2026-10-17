@@ -23,7 +23,7 @@
     "src/cli/verbs/memory.ts": 1,
     "src/connectors/github/backfill.ts": 1,
     "src/connectors/github/webhook.ts": 1,
-    "src/dashboard/dashboard-actions.ts": 6,
+    "src/dashboard/dashboard-actions.ts": 2,
     "src/dashboard/dashboard-queries.ts": 5,
     "src/dashboard/dashboard-snapshot.ts": 15,
     "src/dashboard/dashboard.ts": 23,

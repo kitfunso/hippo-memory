@@ -10,6 +10,7 @@ import { ownScopeTouches } from '../../core/recall-scope.js';
 import { recordTraceOutcome } from '../recall-trace.js';
 import { RejectedValueError } from '../../core/api-errors.js';
 import type { EntryTarget, EntryWrite, EntryWrites, OutcomeWrite, RawArchive, SupersedeWrite, Sync } from '../port.js';
+import type { PinWrite } from '../port/entry-writes.js';
 import { markSummaryDirtyInTx } from '../summary-dirty.js';
 import { auditRejectionRefusal } from '../audit-event.js';
 import { deleteEntryCore } from '../delete-and-batch.js';
@@ -30,6 +31,13 @@ export function sqliteEntryWrites(on: OnHandle): Sync<EntryWrites> {
     },
     applyOutcome(outcome) {
       return on((db, files) => applyOutcomeAt(db, files, outcome), openStore);
+    },
+    setPinned(pin) {
+      return on((db, files) => {
+        const entry = commitPinned(db, pin);
+        writeEntryMirrorsIn(files, entry);
+        return entry;
+      }, openStore);
     },
     supersede(write) {
       on((db, files) => {
@@ -171,6 +179,19 @@ function applyOutcomeOn(db: DatabaseSyncLike, outcome: OutcomeWrite): MemoryEntr
       applied.push(updated);
     }
     return applied;
+  }));
+}
+
+function commitPinned(db: DatabaseSyncLike, pin: PinWrite): MemoryEntry {
+  const { tenantId, actor, id, pinned } = pin;
+  return auditingRefusal(db, actor, () => withWriteScope(db, 'set_pinned', () => {
+    assertInReach(db, pin, id);
+    const entry = selectEntriesByIds(db, [id], tenantId).get(id);
+    if (!entry) throw notFound(id);
+    const updated = { ...entry, pinned };
+    writeEntryDbOnly(db, updated, { actor });
+    appendAuditEvent(db, { tenantId, actor, op: 'pin', targetId: id, metadata: { pinned } });
+    return updated;
   }));
 }
 

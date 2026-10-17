@@ -2,7 +2,7 @@
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
-import { remember, type Actor } from '../../src/api/index.js';
+import { adminActor, remember, type Actor } from '../../src/api/index.js';
 import { listRejectionsForTenant } from '../../src/trust/reject-flow.js';
 import { resolveOpenConflict } from '../../src/dashboard/dashboard-actions.js';
 import { mapApiError } from '../../src/api/error-reply.js';
@@ -139,12 +139,13 @@ describe('resolving conflicts next to personal rows', () => {
 
   it('the dashboard resolve answers a pair holding a personal row as it answers a missing conflict, open or resolved', async () => {
     const { personalId, teamId, conflictId } = await personalPair();
-    const missing = resolveOpenConflict(root, 'default', conflictId + 1000, { keep: teamId });
+    const dashboard = ctxFor(adminActor('dashboard'));
+    const missing = await resolveOpenConflict(dashboard, conflictId + 1000, { keep: teamId });
     expect(missing.status).toBe(404);
-    expect(resolveOpenConflict(root, 'default', conflictId, { keep: teamId })).toEqual(missing);
+    expect(await resolveOpenConflict(dashboard, conflictId, { keep: teamId })).toEqual(missing);
     expect(listMemoryConflicts(root, 'open', 'default').map((c) => c.id)).toEqual([conflictId]);
 
     await callTool(actorA, 'hippo_resolve', { conflict_id: conflictId, keep: personalId });
-    expect(resolveOpenConflict(root, 'default', conflictId, { keep: teamId })).toEqual(missing);
+    expect(await resolveOpenConflict(dashboard, conflictId, { keep: teamId })).toEqual(missing);
   });
 });
