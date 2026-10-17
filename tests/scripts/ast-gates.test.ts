@@ -1,4 +1,9 @@
 import { describe, expect, it } from 'vitest';
+import { failPairLines } from '../../scripts/check-cli-fail.mjs';
+import { handFlagLines } from '../../scripts/check-cli-flags.mjs';
+import { namedOnLines } from '../../scripts/check-cli-recall-writes.mjs';
+import { envReadLines } from '../../scripts/check-env-reads.mjs';
+import { processExitLines } from '../../scripts/check-process-exit.mjs';
 import { readFacts, runtimeSpecifiers } from '../../scripts/lib/ts-facts.mjs';
 
 const imports = (text: string) => readFacts(text).imports.map((i) => [i.kind, i.spec, i.line, i.typeOnly, i.names.join(',')]);
@@ -103,5 +108,28 @@ describe('ts-facts calls, env reads and functions', () => {
       { name: 'c', firstParam: 'ctx' },
       { name: 'f', firstParam: null },
     ]);
+  });
+});
+
+describe('gates read code, not text that looks like code', () => {
+  it('process.exit and process.env gates skip strings, template text and comments', () => {
+    const text = ["const s = 'process.exit(1) and process.env';", 'const t = `process.exit(2)`;', '// process.env', 'process.exit(3);', 'const e = process.env.X;'].join('\n');
+    expect(processExitLines(text)).toEqual([4]);
+    expect(envReadLines(text)).toEqual([5]);
+  });
+
+  it('the flag gate flags String(flags.x), a template span and an as-string cast, and not a list cast or a string', () => {
+    const text = ["const a = String(flags.x ?? '');", 'const b = `${flags.y}`;', 'const c = flags.z as string;', 'const d = flags.w as string[];', "const e = 'String(flags.q)';"].join('\n');
+    expect(handFlagLines(text)).toEqual([1, 2, 3]);
+  });
+
+  it('the fail gate pairs printError with the next statement only, inside a multi-line call too', () => {
+    const text = ['printError(', "  `bad ${x}`,", ');', 'throw new CliExit(1);', 'if (c) printError(y);', 'throw new CliExit(1);', "printError('z');", 'throw new CliExit(2);'].join('\n');
+    expect(failPairLines(text)).toEqual([1]);
+  });
+
+  it('the recall gate matches identifiers, imports included, and not the same word in a string', () => {
+    const text = ["import { writeEntry } from './w.js';", "const msg = 'writeEntry failed';", '// writeEntry', 'writeEntry(x);'].join('\n');
+    expect(namedOnLines(text, ['writeEntry'])).toEqual([{ line: 1, name: 'writeEntry' }, { line: 4, name: 'writeEntry' }]);
   });
 });

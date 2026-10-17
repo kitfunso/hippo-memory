@@ -60,8 +60,8 @@ jobs:
       # Publish and site-deploy gates that need no build, so a PR learns about them before release day.
       - run: node scripts/check-manifest-versions.mjs
       - run: node scripts/check-graph-writes.mjs
-      - name: No runtime import cycles in src
-        run: node scripts/check-import-cycles.mjs
+      - name: No runtime import cycles between src folders
+        run: node scripts/check-folder-cycles.mjs
       # Files over 800 lines and functions over 50 in src/ (80 in scripts/) may shrink but never grow, and no new one may appear.
       - name: Size ratchet
         run: node scripts/check-size-ratchet.mjs
