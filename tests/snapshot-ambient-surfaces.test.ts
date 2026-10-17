@@ -1,7 +1,6 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { type SpawnSyncReturns } from 'child_process';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 
 import { initStore } from '../src/store/open.js';
@@ -10,6 +9,7 @@ import { saveActiveTaskSnapshot } from '../src/store/sessions.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { handleMcpRequest, type McpResponse } from '../src/mcp/server.js';
 import { hippoRun } from './_helpers/spawn-hippo.js';
+import { runCliAs } from './_helpers/run-cli-as.js';
 import { sqliteStore } from '../src/store/sqlite/store.js';
 
 // DF1 (docs/plans/2026-08-23-df1-snapshot-lifecycle.md) T2 tests: the two
@@ -108,17 +108,19 @@ function withScratchEnv() {
   return { dir, env };
 }
 
-function runHippo(
+// In process unless `spawned`: the snapshot show case pins the CLI in a real child, the rest read bytes only.
+async function runHippo(
   args: string[],
   cwd: string,
   env: NodeJS.ProcessEnv,
   input?: string,
-): SpawnSyncReturns<string> {
-  return hippoRun(args, { cwd, env, input });
+  spawned = false,
+): Promise<{ status: number | null; stdout: string; stderr: string }> {
+  return spawned ? hippoRun(args, { cwd, env, input }) : runCliAs(args, { cwd, env, input });
 }
 
-function initHippo(cwd: string, env: NodeJS.ProcessEnv): void {
-  const result = runHippo(['init', '--no-hooks', '--no-schedule', '--no-learn'], cwd, env);
+async function initHippo(cwd: string, env: NodeJS.ProcessEnv): Promise<void> {
+  const result = await runHippo(['init', '--no-hooks', '--no-schedule', '--no-learn'], cwd, env);
   expect(result.status).toBe(0);
 }
 
@@ -126,16 +128,16 @@ describe('8. explicit-surface regression: unaffected by the freshness bound (rea
   let dir: string;
   let env: NodeJS.ProcessEnv;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     ({ dir, env } = withScratchEnv());
-    initHippo(dir, env);
+    await initHippo(dir, env);
   });
 
   afterEach(() => {
     fs.rmSync(dir, { recursive: true, force: true });
   });
 
-  it('`snapshot show` still returns a 7d-old backdated active row', () => {
+  it('`snapshot show` still returns a 7d-old backdated active row', async () => {
     const hippoRoot = getHippoRoot(dir);
     const saved = saveActiveTaskSnapshot(hippoRoot, 'default', {
       task: 'stale but explicitly requested task',
@@ -146,7 +148,7 @@ describe('8. explicit-surface regression: unaffected by the freshness bound (rea
     });
     backdateSnapshot(hippoRoot, saved.id, isoAgo(SEVEN_DAYS_MS));
 
-    const result = runHippo(['snapshot', 'show', '--json'], dir, env);
+    const result = await runHippo(['snapshot', 'show', '--json'], dir, env, undefined, true);
     expect(result.status).toBe(0);
     // SAFETY: `hippo snapshot show --json` prints `{ snapshot }` via
     // JSON.stringify (cli.ts handleSnapshot) — the shape asserted here matches
@@ -156,7 +158,7 @@ describe('8. explicit-surface regression: unaffected by the freshness bound (rea
     expect(parsed.snapshot!.task).toBe('stale but explicitly requested task');
   });
 
-  it('`compact-resume` no longer exempts a same-session 7d-old backdated row: the 15-min age gate has no owner exemption', () => {
+  it('`compact-resume` no longer exempts a same-session 7d-old backdated row: the 15-min age gate has no owner exemption', async () => {
     const hippoRoot = getHippoRoot(dir);
     const saved = saveActiveTaskSnapshot(hippoRoot, 'default', {
       task: 'stale same-session compact-resume task',
@@ -168,7 +170,7 @@ describe('8. explicit-surface regression: unaffected by the freshness bound (rea
     backdateSnapshot(hippoRoot, saved.id, isoAgo(SEVEN_DAYS_MS));
 
     const payload = JSON.stringify({ session_id: 'sess-compact-resume-stale', source: 'compact' });
-    const result = runHippo(['compact-resume'], dir, env, payload);
+    const result = await runHippo(['compact-resume'], dir, env, payload);
 
     expect(result.status).toBe(0);
     expect(result.stdout).not.toContain('stale same-session compact-resume task');
@@ -187,16 +189,16 @@ describe('bonus: `hippo context` ambient CLI surface end-to-end', () => {
   let dir: string;
   let env: NodeJS.ProcessEnv;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     ({ dir, env } = withScratchEnv());
-    initHippo(dir, env);
+    await initHippo(dir, env);
   });
 
   afterEach(() => {
     fs.rmSync(dir, { recursive: true, force: true });
   });
 
-  it('cross-session: a 7d-old snapshot does not inject into `hippo context` for a different session_id on stdin', () => {
+  it('cross-session: a 7d-old snapshot does not inject into `hippo context` for a different session_id on stdin', async () => {
     const hippoRoot = getHippoRoot(dir);
     const saved = saveActiveTaskSnapshot(hippoRoot, 'default', {
       task: 'DF1 CLI context cross-session marker',
@@ -208,13 +210,13 @@ describe('bonus: `hippo context` ambient CLI surface end-to-end', () => {
     backdateSnapshot(hippoRoot, saved.id, isoAgo(SEVEN_DAYS_MS));
 
     const payload = JSON.stringify({ session_id: 'sess-other', hook_event_name: 'UserPromptSubmit' });
-    const result = runHippo(['context', '--format', 'json'], dir, env, payload);
+    const result = await runHippo(['context', '--format', 'json'], dir, env, payload);
 
     expect(result.status).toBe(0);
     expect(result.stdout).not.toContain('DF1 CLI context cross-session marker');
   });
 
-  it('same-session (owner match): the same 7d-old snapshot DOES inject when stdin session_id matches the owner', () => {
+  it('same-session (owner match): the same 7d-old snapshot DOES inject when stdin session_id matches the owner', async () => {
     const hippoRoot = getHippoRoot(dir);
     const saved = saveActiveTaskSnapshot(hippoRoot, 'default', {
       task: 'DF1 CLI context owner-match marker',
@@ -226,13 +228,13 @@ describe('bonus: `hippo context` ambient CLI surface end-to-end', () => {
     backdateSnapshot(hippoRoot, saved.id, isoAgo(SEVEN_DAYS_MS));
 
     const payload = JSON.stringify({ session_id: 'sess-owner', hook_event_name: 'UserPromptSubmit' });
-    const result = runHippo(['context', '--format', 'json'], dir, env, payload);
+    const result = await runHippo(['context', '--format', 'json'], dir, env, payload);
 
     expect(result.status).toBe(0);
     expect(result.stdout).toContain('DF1 CLI context owner-match marker');
   });
 
-  it('host-var fallback: CLAUDE_CODE_SESSION_ID alone (no stdin payload) owner-matches the snapshot', () => {
+  it('host-var fallback: CLAUDE_CODE_SESSION_ID alone (no stdin payload) owner-matches the snapshot', async () => {
     const hippoRoot = getHippoRoot(dir);
     const saved = saveActiveTaskSnapshot(hippoRoot, 'default', {
       task: 'DF1 CLI context host-var owner-match marker',
@@ -247,13 +249,13 @@ describe('bonus: `hippo context` ambient CLI surface end-to-end', () => {
     delete env.CLAUDE_CODE_SESSION_ID;
     env.CLAUDE_CODE_SESSION_ID = 'sess-owner-hostvar';
     // Empty string, not omitted: guarantees stdin EOF instead of a hung read on fd 0.
-    const result = runHippo(['context', '--format', 'json'], dir, env, '');
+    const result = await runHippo(['context', '--format', 'json'], dir, env, '');
 
     expect(result.status).toBe(0);
     expect(result.stdout).toContain('DF1 CLI context host-var owner-match marker');
   });
 
-  it('payload wins over the host var: a different payload session_id still excludes the env owner\'s snapshot', () => {
+  it('payload wins over the host var: a different payload session_id still excludes the env owner\'s snapshot', async () => {
     const hippoRoot = getHippoRoot(dir);
     const saved = saveActiveTaskSnapshot(hippoRoot, 'default', {
       task: 'DF1 CLI context payload-beats-hostvar marker',
@@ -268,13 +270,13 @@ describe('bonus: `hippo context` ambient CLI surface end-to-end', () => {
     delete env.CLAUDE_CODE_SESSION_ID;
     env.CLAUDE_CODE_SESSION_ID = 'sess-owner-hostvar2';
     const payload = JSON.stringify({ session_id: 'sess-other', hook_event_name: 'UserPromptSubmit' });
-    const result = runHippo(['context', '--format', 'json'], dir, env, payload);
+    const result = await runHippo(['context', '--format', 'json'], dir, env, payload);
 
     expect(result.status).toBe(0);
     expect(result.stdout).not.toContain('DF1 CLI context payload-beats-hostvar marker');
   });
 
-  it('blank payload session_id counts as absent: falls back to CLAUDE_CODE_SESSION_ID and owner-matches', () => {
+  it('blank payload session_id counts as absent: falls back to CLAUDE_CODE_SESSION_ID and owner-matches', async () => {
     const hippoRoot = getHippoRoot(dir);
     const saved = saveActiveTaskSnapshot(hippoRoot, 'default', {
       task: 'DF1 CLI context blank-payload-falls-back marker',
@@ -289,7 +291,7 @@ describe('bonus: `hippo context` ambient CLI surface end-to-end', () => {
     delete env.CLAUDE_CODE_SESSION_ID;
     env.CLAUDE_CODE_SESSION_ID = 'sess-owner-hostvar3';
     const payload = JSON.stringify({ session_id: '', hook_event_name: 'UserPromptSubmit' });
-    const result = runHippo(['context', '--format', 'json'], dir, env, payload);
+    const result = await runHippo(['context', '--format', 'json'], dir, env, payload);
 
     expect(result.status).toBe(0);
     expect(result.stdout).toContain('DF1 CLI context blank-payload-falls-back marker');
