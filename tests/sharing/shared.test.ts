@@ -2,14 +2,14 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { getGlobalRoot } from '../src/sharing/global-store.js';
-import { copyToGlobal } from '../src/store/sqlite/global-promote.js';
-import { syncGlobalToLocal } from '../src/sharing/global-sync.js';
-import { writeEntry } from '../src/store/entry-writes.js';
-import { loadAllEntries } from '../src/store/entry-reads.js';
-import { createMemory } from './_helpers/default-half-life-memory.js';
-import { sharingStores } from './_helpers/sharing-stores.js';
-import { makeRoot } from './_helpers/make-root.js';
+import { getGlobalRoot } from '../../src/sharing/global-store.js';
+import { copyToGlobal } from '../../src/store/sqlite/global-promote.js';
+import { syncGlobalToLocal } from '../../src/sharing/global-sync.js';
+import { writeEntry } from '../../src/store/entry-writes.js';
+import { loadAllEntries } from '../../src/store/entry-reads.js';
+import { createMemory } from '../_helpers/default-half-life-memory.js';
+import { sharingStores } from '../_helpers/sharing-stores.js';
+import { makeRoot } from '../_helpers/make-root.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
