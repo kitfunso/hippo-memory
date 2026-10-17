@@ -315,3 +315,13 @@ S9 sizing found no feasible design with the repository as the unit. Two set R re
 7. **The bootstrap twin** (line 189) draws families within each repository and keeps the repositories fixed.
 8. **H4's power,** open in Amendment 1, is sized under these tests at S9.
 9. **Limits** gain one: the verdicts cover the scored repositories only.
+
+## Amendment 3 (2026-10-17), before any scored session
+
+Stage 3 ended with fewer repositories than the go fixed (`z0-scored-set-record.md`). Five screens finished. They kept 15 of 33 families: rustfs 6 of 7, conductor 3 of 8, zotero 3 of 6, leakcanary 2 of 6 and maigret 1 of 6. In 17 of the 18 dropped families, A0 broke the rule at most once in 4 attempts, so the model followed it with no memory. Only rustfs has an admissible split. Magnetissimo's screen is running again after a fault. Under the record's "Fewer than 10" rule, stage 3 stops. On 2026-10-17 the founder approved a pilot in place of a wider shortlist.
+
+1. **A pilot, not the scored run of the go.** Stage 4 runs on each repository with an admissible split when magnetissimo's screen ends: rustfs, and magnetissimo if it has one. This run is the Z0 pilot. Its results do not answer questions 1 to 4 as a confirmatory test.
+2. **What runs.** Every arm runs on wave 1's seeds: three for A1, A2, A5, X1, X2 and X3, and two for A0, A4 and X4. Each repository's set R with its 6 set N tasks is one runner invocation, and its set X is another, since the two share no sequence and no store. Wave 2 and the seed rule do not run.
+3. **What it reports.** The analyzer runs unchanged and blind first. G1 to G5 apply in full, and a failed gate makes the pilot invalid. The analyzer's estimates, intervals and p-values for H1, H2, attribution, H3 and H4 are reported as pilot estimates. None is called a win, loss or tie. With one repository per set, the test of Amendment 2, item 2 does not hold its level (0.040 against 0.025). With two, it meets Amendment 2, item 4, but the run is far smaller than the size the go fixed.
+4. **The families are spent.** Each pilot family is scored once. None can join a later confirmatory run, which needs new repositories and families.
+5. **Limits** gain one: the pilot covers one or two repositories, with 3 families per set in each.
