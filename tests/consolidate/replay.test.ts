@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { sampleForReplay, replayPriority } from '../src/consolidate/replay.js';
-import { Layer, type MemoryEntry} from '../src/core/memory.js';
-import { createMemory } from './_helpers/default-half-life-memory.js';
+import { sampleForReplay, replayPriority } from '../../src/consolidate/replay.js';
+import { Layer, type MemoryEntry} from '../../src/core/memory.js';
+import { createMemory } from '../_helpers/default-half-life-memory.js';
 
 function fakeEntry(overrides: Partial<MemoryEntry>): MemoryEntry {
   // Pad short content to satisfy createMemory's min-3-char check.

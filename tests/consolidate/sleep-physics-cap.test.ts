@@ -2,17 +2,17 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { particlesToSimulate, physicsPass } from '../src/consolidate/physics-pass.js';
-import { newConsolidationResult, type SleepRun } from '../src/consolidate/run.js';
-import { loadConfig } from '../src/core/config.js';
-import { Layer, type MemoryEntry } from '../src/core/memory.js';
-import type { PhysicsParticle } from '../src/core/physics.js';
-import { closeHippoDb, openHippoDb } from '../src/db/index.js';
-import { loadPhysicsState, savePhysicsState } from '../src/db/physics-state.js';
-import { writeEntriesTogether } from '../src/store/entry-writes.js';
-import { sqliteSyncStore } from '../src/store/sqlite/store.js';
-import { createMemory } from './_helpers/default-half-life-memory.js';
-import { makeRoot } from './_helpers/make-root.js';
+import { particlesToSimulate, physicsPass } from '../../src/consolidate/physics-pass.js';
+import { newConsolidationResult, type SleepRun } from '../../src/consolidate/run.js';
+import { loadConfig } from '../../src/core/config.js';
+import { Layer, type MemoryEntry } from '../../src/core/memory.js';
+import type { PhysicsParticle } from '../../src/core/physics.js';
+import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
+import { loadPhysicsState, savePhysicsState } from '../../src/db/physics-state.js';
+import { writeEntriesTogether } from '../../src/store/entry-writes.js';
+import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
+import { createMemory } from '../_helpers/default-half-life-memory.js';
+import { makeRoot } from '../_helpers/make-root.js';
 
 const roots: string[] = [];
 afterEach(() => {
