@@ -5,7 +5,7 @@ import * as path from 'path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
-import { hippoOut } from './_helpers/spawn-hippo.js';
+import { runCliAs } from './_helpers/run-cli-as.js';
 
 let tmpDir: string;
 let hippoDir: string;
@@ -24,17 +24,10 @@ interface RunResult {
   status: number;
 }
 
-function runHippo(args: string[]): RunResult {
-  const globalDir = path.join(tmpDir, 'global');
-  try {
-    const stdout = hippoOut(args, { env: { ...process.env, HIPPO_HOME: globalDir }, cwd: tmpDir });
-    return { stdout, status: 0 };
-  } catch (err) {
-    // SAFETY: execFileSync throws a Node ChildProcess error on non-zero exit, which
-    // always carries optional stdout/status fields from the spawned hippo.js process.
-    const e = err as { stdout?: string; status?: number };
-    return { stdout: e.stdout ?? '', status: e.status ?? 1 };
-  }
+// In process, so coverage sees the verb; the shape matches the spawned run it replaced.
+async function runHippo(args: string[]): Promise<RunResult> {
+  const r = await runCliAs(args, { env: { ...process.env, HIPPO_HOME: path.join(tmpDir, 'global') }, cwd: tmpDir });
+  return { stdout: r.stdout, status: r.status ?? 1 };
 }
 
 function withCreated<T extends MemoryEntry>(entry: T, iso: string): T {
@@ -45,16 +38,16 @@ function withCreated<T extends MemoryEntry>(entry: T, iso: string): T {
 }
 
 describe('hippo correction-latency CLI', () => {
-  it('reports the empty case when no supersessions exist', () => {
+  it('reports the empty case when no supersessions exist', async () => {
     initStore(hippoDir);
     writeEntry(hippoDir, createMemory('a single belief, never corrected', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
 
-    const r = runHippo(['correction-latency']);
+    const r = await runHippo(['correction-latency']);
     expect(r.status).toBe(0);
     expect(r.stdout).toContain('No supersessions found');
   });
 
-  it('emits JSON percentiles for an extraction-driven correction', () => {
+  it('emits JSON percentiles for an extraction-driven correction', async () => {
     initStore(hippoDir);
 
     const raw = withCreated(
@@ -81,7 +74,7 @@ describe('hippo correction-latency CLI', () => {
     writeEntry(hippoDir, oldFact);
     writeEntry(hippoDir, newFact);
 
-    const r = runHippo(['correction-latency', '--json']);
+    const r = await runHippo(['correction-latency', '--json']);
     expect(r.status).toBe(0);
     const parsed = JSON.parse(r.stdout);
     expect(parsed.count).toBe(1);
@@ -93,7 +86,7 @@ describe('hippo correction-latency CLI', () => {
     expect(parsed.pairs[0].via).toBe('extraction');
   });
 
-  it('flags manual-only stores and explains how to surface latency', () => {
+  it('flags manual-only stores and explains how to surface latency', async () => {
     initStore(hippoDir);
 
     const oldFact = withCreated(
@@ -109,7 +102,7 @@ describe('hippo correction-latency CLI', () => {
     writeEntry(hippoDir, oldFact);
     writeEntry(hippoDir, newFact);
 
-    const r = runHippo(['correction-latency']);
+    const r = await runHippo(['correction-latency']);
     expect(r.status).toBe(0);
     expect(r.stdout).toContain('1 manual');
     expect(r.stdout).toContain('extracted_from');

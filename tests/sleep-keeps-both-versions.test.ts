@@ -28,7 +28,6 @@ import { extractFromTexts } from '../src/capture/extract.js';
 import { computeSalience } from '../src/core/salience.js';
 import { heldTexts, mergedText } from '../src/util/same-text.js';
 import { insertDormantRow } from '../src/store/dormant.js';
-import { hippoOut } from './_helpers/spawn-hippo.js';
 import { runCliAs } from './_helpers/run-cli-as.js';
 import { sqliteStore } from '../src/store/sqlite/store.js';
 import { apiCtx } from './_helpers/api-ctx.js';
@@ -76,11 +75,7 @@ function hermeticEnv(): NodeJS.ProcessEnv {
   return env;
 }
 
-function hippoSpawned(root: string, ...args: string[]): string {
-  return hippoOut(args, { cwd: dirname(root), env: hermeticEnv() });
-}
-
-// In process, with hippoOut's throw on a non-zero exit; the dedup case keeps the real child as the CLI pin.
+// In process, throwing on a non-zero exit as hippoOut did, so coverage sees each verb.
 async function hippo(root: string, ...args: string[]): Promise<string> {
   const r = await runCliAs(args, { cwd: dirname(root), env: hermeticEnv() });
   if (r.status !== 0) throw new Error(`hippo ${args.join(' ')} exited ${r.status}: ${r.stderr}`);
@@ -195,7 +190,7 @@ describe('sleep keeps both versions', () => {
     expect(loadAllEntries(root, 'default')).toHaveLength(6);
   });
 
-  it('dedup removes a copy of the same text whatever the threshold says', () => {
+  it('dedup removes a copy of the same text whatever the threshold says', async () => {
     const root = newRoot();
     const text = 'The staging service listens on port 4400.';
     for (const t of [text, text.replace(' ', '  ')]) writeEntry(root, createMemory(t));
@@ -205,7 +200,7 @@ describe('sleep keeps both versions', () => {
 
     const cli = newRoot();
     for (const t of [text, text.replace(' ', '  ')]) writeEntry(cli, createMemory(t));
-    hippoSpawned(cli, 'dedup', '--threshold', '1');
+    await hippo(cli, 'dedup', '--threshold', '1');
     expect(loadAllEntries(cli, 'default')).toHaveLength(1);
   });
 });
