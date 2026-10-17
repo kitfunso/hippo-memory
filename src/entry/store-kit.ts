@@ -8,8 +8,10 @@ export {
   requireGroup,
   sqliteStore,
   type AmbientCandidateRequest,
+  type CallerItemsSaved,
   type CardCreate,
   type Cards,
+  type Compactions,
   type Conflicts,
   type ContextReads,
   type Dormant,
@@ -81,6 +83,8 @@ export type { ResolveConflictOpts, ResolveConflictRequest } from '../store/confl
 export type { DormantMemory, DormantRestoreOutcome, DormantSnapshot, ListDormantOpts } from '../store/dormant.js';
 export type { EntryCursor, EntryPage, RawRefRow } from '../store/entry-reads.js';
 export type { FailureEvent, FailureOutcome, FailureSummary } from '../store/failure-log.js';
+export type { CallerItems } from '../store/compaction-caller.js';
+export type { CompactionStart } from '../store/compactions-record.js';
 export type { MemoryConflict } from '../store/rows.js';
 export type { SessionEventInput, SnapshotInput } from '../store/sessions.js';
 export type { StatusCounts, StrengthTallies } from '../store/candidates.js';

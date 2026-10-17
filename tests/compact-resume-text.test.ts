@@ -68,7 +68,7 @@ describe('compactResumeText', () => {
 });
 
 describe('preCompactForCaller', () => {
-  it('stores the snapshot local pre-compact stores for the same transcript, email masked in both', () => {
+  it('stores the snapshot local pre-compact stores for the same transcript, email masked in both', async () => {
     const email = 'dev@acme.io';
     const transcript = path.join(s.proj, 't.jsonl');
     const turns = [
@@ -86,7 +86,7 @@ describe('preCompactForCaller', () => {
     initStore(server);
     fs.writeFileSync(path.join(server, 'config.json'), JSON.stringify({ sharedStore: true }));
     const ctx: Context = { hippoRoot: server, store: sqliteStore(server), tenantId: 'acme', actor: { subject: 'api_key:hk_alice', role: 'member', owner: 'alice' } };
-    preCompactForCaller(ctx, { sessionId: 's1', project: { name: 'proj', legacyName: 'proj' }, trigger: 'auto', workingState: transcriptWorkingState(transcript, () => {}) });
+    await preCompactForCaller(ctx, { sessionId: 's1', project: { name: 'proj', legacyName: 'proj' }, trigger: 'auto', workingState: transcriptWorkingState(transcript, () => {}) });
     const stored = loadActiveTaskSnapshot(server, 'acme', { owner: 'alice', project: ['proj'] });
 
     const fields = (x: TaskSnapshot | null) => ({ task: x?.task, summary: x?.summary, next_step: x?.next_step, source: x?.source, session_id: x?.session_id });

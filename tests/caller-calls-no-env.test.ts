@@ -83,9 +83,9 @@ describe('caller calls under a foreign environment', () => {
     const ctx: Context = { hippoRoot: root, store: sqliteStore(root), tenantId: TENANT, actor: { subject: 'api_key:hk_alice', role: 'member', owner: 'alice' }, reach: { hasLocal: true, isGlobal: false, shared: true } };
     const base = { sessionId: SESSION, project: PROJECT };
 
-    expect(preCompactForCaller(ctx, { ...base, trigger: 'auto', workingState: STATE })).toEqual({ stdout: PRE_COMPACT_INSTRUCTION });
+    expect(await preCompactForCaller(ctx, { ...base, trigger: 'auto', workingState: STATE })).toEqual({ stdout: PRE_COMPACT_INSTRUCTION });
     expect(compactResumeForCaller(ctx, { ...base, source: 'compact' }).stdout).toContain(STATE.task);
-    expect(saveCompactionItemsForCaller(ctx, { ...base, trigger: 'auto', items: ITEMS, requestId: 'cmp-1' })).toEqual({ written: 2 });
+    expect(await saveCompactionItemsForCaller(ctx, { ...base, trigger: 'auto', items: ITEMS, requestId: 'cmp-1' })).toEqual({ written: 2 });
     expect(await captureFailureForCaller(ctx, { ...base, tool: 'Bash', text: LESSON, skip: null, rule: null, detailHash: null, requestId: 'fail-1' })).toEqual({ outcome: 'stored' });
     const evidence = { gitRef: 'b'.repeat(40), dirtyTree: true, testStatus: 'pass' } as const;
     expect(sessionEndHandoffForCaller(ctx, { ...base, workingState: STATE, evidence })).toEqual({ handoffWritten: true, snapshotsClosed: 1 });

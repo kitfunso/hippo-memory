@@ -45,6 +45,7 @@ const STORE_KIT_TYPES = [
   'WorkingMemoryFilter', 'WorkingMemoryItem', 'WorkingMemoryPush',
   'AppliedRejection', 'LiftedRejection', 'Rejection', 'RejectionCheck', 'Rejections', 'RejectionSource', 'RejectedValueRow',
   'FailureEvent', 'FailureLog', 'FailureOutcome', 'LegacyStats', 'StatusCounts', 'RawRefRow',
+  'CallerItems', 'CallerItemsSaved', 'CompactionStart', 'Compactions',
 ];
 
 const sorted = (names: readonly string[]): string[] => [...names].sort();

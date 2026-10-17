@@ -231,9 +231,9 @@ describe('snapshot_saved under a tenant the environment does not name', () => {
 });
 
 describe('preCompactForCaller', () => {
-  it("saves the owner's snapshot and returns the instruction", () => {
+  it("saves the owner's snapshot and returns the instruction", async () => {
     const bobs = saveActiveTaskSnapshot(root, TENANT, { task: 'Bob task', summary: 'b', next_step: 'b', session_id: 'sB' }, BOB);
-    expect(preCompact(owned('alice'))).toEqual({ stdout: PRE_COMPACT_INSTRUCTION });
+    expect(await preCompact(owned('alice'))).toEqual({ stdout: PRE_COMPACT_INSTRUCTION });
     const mine = loadActiveTaskSnapshot(root, TENANT, ALICE);
     expect(mine).toMatchObject({ ...STATE, source: 'pre-compact', session_id: 'sA' });
     withDb((db) => expect(snapshotRow(db, mine?.id ?? 0)).toMatchObject({ owner_subject: 'alice', origin_project: 'acme/app' }));
@@ -241,30 +241,30 @@ describe('preCompactForCaller', () => {
     expect(loadActiveTaskSnapshot(root, TENANT, BOB)?.id).toBe(bobs.id);
   });
 
-  it("keeps the owner's earlier field for the same session when a sent field is empty", () => {
+  it("keeps the owner's earlier field for the same session when a sent field is empty", async () => {
     saveActiveTaskSnapshot(root, TENANT, { task: 'Earlier task', summary: 'old', next_step: 'Earlier step', session_id: 'sA' }, ALICE);
-    preCompact(owned('alice'), { task: '', summary: 'New summary', next_step: '' });
+    await preCompact(owned('alice'), { task: '', summary: 'New summary', next_step: '' });
     expect(loadActiveTaskSnapshot(root, TENANT, ALICE)).toMatchObject({ task: 'Earlier task', summary: 'New summary', next_step: 'Earlier step' });
   });
 
-  it("holdout gives '' and writes no snapshot", () => {
+  it("holdout gives '' and writes no snapshot", async () => {
     holdout();
-    expect(preCompact(owned('alice'))).toEqual({ stdout: '' });
+    expect(await preCompact(owned('alice'))).toEqual({ stdout: '' });
     expect(rowCounts()).toMatchObject({ compactions: 0, task_snapshots: 0 });
   });
 
-  it('an over-cap field names the field', () => {
+  it('an over-cap field names the field', async () => {
     const summary = 'x'.repeat(WORKING_STATE_CAPS.summary + 1);
-    const err = thrown(() => preCompact(owned('alice'), { ...STATE, summary }));
+    const err = await caught(() => preCompact(owned('alice'), { ...STATE, summary }));
     expect(err).toBeInstanceOf(BadRequestError);
     expect(err).toMatchObject({ status: 400, message: `working state summary: at most ${WORKING_STATE_CAPS.summary} characters` });
-    expect(preCompact(owned('alice'), { ...STATE, summary: summary.slice(1) })).toEqual({ stdout: PRE_COMPACT_INSTRUCTION });
+    expect(await preCompact(owned('alice'), { ...STATE, summary: summary.slice(1) })).toEqual({ stdout: PRE_COMPACT_INSTRUCTION });
   });
 
-  it('cuts each field back to its cap after the scrub, the summary keeping its newest turns', () => {
+  it('cuts each field back to its cap after the scrub, the summary keeping its newest turns', async () => {
     // a@b.co masks to [email], one longer, so a field sent at its cap runs one over after the scrub.
     const atCap = (cap: number, tail: string): string => `Mail a@b.co first. ${'Then run the build. '.repeat(120)}`.slice(0, cap - tail.length) + tail;
-    preCompact(owned('alice'), { task: atCap(WORKING_STATE_CAPS.task, 'T'), summary: atCap(WORKING_STATE_CAPS.summary, 'NEWEST'), next_step: atCap(WORKING_STATE_CAPS.next_step, 'N') });
+    await preCompact(owned('alice'), { task: atCap(WORKING_STATE_CAPS.task, 'T'), summary: atCap(WORKING_STATE_CAPS.summary, 'NEWEST'), next_step: atCap(WORKING_STATE_CAPS.next_step, 'N') });
     const saved = loadActiveTaskSnapshot(root, TENANT, ALICE);
     expect(saved?.task).toHaveLength(WORKING_STATE_CAPS.task);
     expect(saved?.task.startsWith('Mail [email] first.')).toBe(true);
@@ -273,9 +273,9 @@ describe('preCompactForCaller', () => {
     expect(saved?.summary.endsWith('NEWEST')).toBe(true);
   });
 
-  it('a snapshot failure still returns the instruction', () => {
+  it('a snapshot failure still returns the instruction', async () => {
     failOn('task_snapshots', 'INSERT', 'snapshot boom');
-    expect(preCompact(owned('alice'))).toEqual({ stdout: PRE_COMPACT_INSTRUCTION });
+    expect(await preCompact(owned('alice'))).toEqual({ stdout: PRE_COMPACT_INSTRUCTION });
     withDb((db) => {
       expect(count(db, 'task_snapshots')).toBe(0);
       expect(count(db, 'compactions', 'tenant_id = ? AND snapshot_saved = 0', TENANT)).toBe(1);
@@ -288,9 +288,9 @@ describe('preCompactForCaller', () => {
     expect(rowCounts()).toMatchObject({ compactions: 0, task_snapshots: 0 });
   });
 
-  it('snapshot_saved = 1 on the ctx.tenantId record, whatever the environment names (F9)', () => {
+  it('snapshot_saved = 1 on the ctx.tenantId record, whatever the environment names (F9)', async () => {
     vi.stubEnv('HIPPO_TENANT', 'env-tenant');
-    preCompact(owned('alice'));
+    await preCompact(owned('alice'));
     withDb((db) => {
       expect(count(db, 'compactions', `tenant_id = ? AND snapshot_saved = 1 AND origin_project = 'acme/app' AND cwd IS NULL`, TENANT)).toBe(1);
       expect(count(db, 'compactions', 'tenant_id = ?', 'env-tenant')).toBe(0);
@@ -329,10 +329,10 @@ describe('compactResumeForCaller', () => {
 });
 
 describe('saveCompactionItemsForCaller', () => {
-  it('writes with ownerOrSubject as actor and the project as origin', () => {
-    expect(postCompact(owned('alice'))).toEqual({ written: 2 });
+  it('writes with ownerOrSubject as actor and the project as origin', async () => {
+    expect(await postCompact(owned('alice'))).toEqual({ written: 2 });
     const unowned: Context = { hippoRoot: root, store: sqliteStore(root), tenantId: TENANT, actor: { subject: 'api_key:hk_carol', role: 'member' }, reach: SHARED_REACH };
-    saveCompactionItemsForCaller(unowned, { sessionId: 'sC', project: { name: 'acme/web', legacyName: 'web' }, trigger: 'auto', items: [ITEMS[0]], requestId: 'cmp-c' });
+    await saveCompactionItemsForCaller(unowned, { sessionId: 'sC', project: { name: 'acme/web', legacyName: 'web' }, trigger: 'auto', items: [ITEMS[0]], requestId: 'cmp-c' });
     withDb((db) => {
       expect(writtenRows(db, 'compaction:sA')).toEqual([
         { content: ITEMS[1], origin_project: 'acme/app', actor: 'alice' },
@@ -343,51 +343,51 @@ describe('saveCompactionItemsForCaller', () => {
     });
   });
 
-  it("held rows read from the caller's project", () => {
+  it("held rows read from the caller's project", async () => {
     seed(ITEMS[0], 'app');
     seed(ITEMS[1], 'other/project');
-    expect(postCompact(owned('alice'))).toEqual({ written: 1 });
+    expect(await postCompact(owned('alice'))).toEqual({ written: 1 });
     withDb((db) => expect(writtenRows(db, 'compaction:sA')).toEqual([{ content: ITEMS[1], origin_project: 'acme/app', actor: 'alice' }]));
   });
 
-  it('holdout writes nothing', () => {
+  it('holdout writes nothing', async () => {
     holdout();
-    expect(postCompact(owned('alice'))).toEqual({ written: 0 });
+    expect(await postCompact(owned('alice'))).toEqual({ written: 0 });
     expect(rowCounts()).toMatchObject({ compactions: 0, memories: 0 });
   });
 
-  it('a repeat request_id writes nothing and returns the earlier result (F10)', () => {
-    expect(postCompact(owned('alice'))).toEqual({ written: 2 });
-    expect(postCompact(owned('alice'))).toEqual({ written: 2 });
+  it('a repeat request_id writes nothing and returns the earlier result (F10)', async () => {
+    expect(await postCompact(owned('alice'))).toEqual({ written: 2 });
+    expect(await postCompact(owned('alice'))).toEqual({ written: 2 });
     expect(rowCounts()).toMatchObject({ compactions: 1, memories: 2 });
     // A new request id is a new compaction; its items are already held.
-    expect(postCompact(owned('alice'), 'cmp-2')).toEqual({ written: 0 });
+    expect(await postCompact(owned('alice'), 'cmp-2')).toEqual({ written: 0 });
     expect(rowCounts()).toMatchObject({ compactions: 2, memories: 2 });
   });
 
-  it('a retry reuses the summarised record', () => {
+  it('a retry reuses the summarised record', async () => {
     const undo = failOn('memories', 'INSERT', 'items boom');
-    expect(() => postCompact(owned('alice'))).toThrow('items boom');
+    await expect(postCompact(owned('alice'))).rejects.toThrow('items boom');
     undo();
-    expect(postCompact(owned('alice'))).toEqual({ written: 2 });
+    expect(await postCompact(owned('alice'))).toEqual({ written: 2 });
     withDb((db) => {
       expect(count(db, 'compactions')).toBe(1);
       expect(count(db, 'compactions', `status = 'done' AND items_written = 2 AND request_id = 'cmp-1'`)).toBe(1);
     });
   });
 
-  it('cuts an item back to its cap after the scrub, so one a mask runs past the cap still becomes a row', () => {
+  it('cuts an item back to its cap after the scrub, so one a mask runs past the cap still becomes a row', async () => {
     const item = `Mail a@b.co before the deploy. ${ITEMS.join(' ')} ${ITEMS.join(' ')} ${ITEMS.join(' ')}`.slice(0, COMPACTION_ITEM_MAX_CHARS);
     expect(item).toHaveLength(COMPACTION_ITEM_MAX_CHARS);
     const req = { sessionId: 'sA', project: PROJECT, trigger: 'auto', items: [item], requestId: 'cmp-1' };
-    expect(saveCompactionItemsForCaller(owned('alice'), req)).toEqual({ written: 1 });
+    expect(await saveCompactionItemsForCaller(owned('alice'), req)).toEqual({ written: 1 });
     const stored = item.replace('a@b.co', '[email]').slice(0, COMPACTION_ITEM_MAX_CHARS);
     withDb((db) => expect(writtenRows(db, 'compaction:sA').map((r) => r.content)).toEqual([stored]));
   });
 
-  it('refuses an item past its cap before the scrub, naming the field, before it binds the session', () => {
+  it('refuses an item past its cap before the scrub, naming the field, before it binds the session', async () => {
     const req = { sessionId: 'sA', project: PROJECT, trigger: 'auto', items: ['x'.repeat(COMPACTION_ITEM_MAX_CHARS + 1)], requestId: 'cmp-1' };
-    const err = thrown(() => saveCompactionItemsForCaller(owned('alice'), req));
+    const err = await caught(() => saveCompactionItemsForCaller(owned('alice'), req));
     expect(err).toBeInstanceOf(BadRequestError);
     expect(err).toMatchObject({ status: 400, message: expect.stringMatching(/^items:/) });
     withDb((db) => expect(count(db, 'session_owners')).toBe(0));
@@ -395,15 +395,15 @@ describe('saveCompactionItemsForCaller', () => {
 
   it('busy throws, no spool file', async () => {
     bindSessionOwner(owned('alice'), 'sA');
-    const err = await whileLocked(() => thrown(() => postCompact(owned('alice'))));
+    const err = await whileLocked(() => caught(() => postCompact(owned('alice'))));
     expect(isStoreBusy(err)).toBe(true);
     expect(fs.existsSync(path.join(root, 'compactions-spool'))).toBe(false);
     expect(rowCounts()).toMatchObject({ compactions: 0, memories: 0 });
   });
 
-  it("summarises pre-compact's record and stamps the request id on it", () => {
-    preCompact(owned('alice'));
-    postCompact(owned('alice'));
+  it("summarises pre-compact's record and stamps the request id on it", async () => {
+    await preCompact(owned('alice'));
+    await postCompact(owned('alice'));
     withDb((db) => {
       expect(count(db, 'compactions')).toBe(1);
       expect(count(db, 'compactions', `request_id = 'cmp-1' AND status = 'done' AND snapshot_saved = 1`)).toBe(1);
@@ -601,22 +601,22 @@ describe('a request id another session sent', () => {
     expect((await captureFailureForCaller(owned('alice'), failure())).outcome).toBe('stored');
   });
 
-  it('post-compact: the same id with different items from the same session gets the first count and writes none of them', () => {
-    expect(items('alice', 'sA')).toEqual({ written: 2 });
-    expect(items('alice', 'sA', ['The staging deploy needs the VPN up first or the health check times out.'])).toEqual({ written: 2 });
+  it('post-compact: the same id with different items from the same session gets the first count and writes none of them', async () => {
+    expect(await items('alice', 'sA')).toEqual({ written: 2 });
+    expect(await items('alice', 'sA', ['The staging deploy needs the VPN up first or the health check times out.'])).toEqual({ written: 2 });
     expect(rowCounts()).toMatchObject({ compactions: 1, memories: 2 });
   });
 
-  it.each(senders)('post-compact: the same id from %s is a 409 and never finishes the first record', (_who, owner, sessionId) => {
+  it.each(senders)('post-compact: the same id from %s is a 409 and never finishes the first record', async (_who, owner, sessionId) => {
     // Items that failed leave the record summarized, which a foreign id would otherwise finish under its own session.
     const undo = failOn('memories', 'INSERT', 'items boom');
-    expect(() => items('alice', 'sA')).toThrow('items boom');
+    await expect(items('alice', 'sA')).rejects.toThrow('items boom');
     undo();
-    const err = thrown(() => items(owner, sessionId));
+    const err = await caught(() => items(owner, sessionId));
     expect(err).toBeInstanceOf(ConflictError);
     expect(err).toMatchObject({ status: 409, message: 'request id belongs to another session' });
     withDb((db) => expect(count(db, 'compactions', `status = 'summarised' AND session_id = 'sA'`)).toBe(1));
     expect(rowCounts()).toMatchObject({ compactions: 1, memories: 0 });
-    expect(items('alice', 'sA')).toEqual({ written: 2 });
+    expect(await items('alice', 'sA')).toEqual({ written: 2 });
   });
 });

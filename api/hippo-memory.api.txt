@@ -39,6 +39,8 @@ entry/store-kit.d.ts: ApiKeyRecord re-export
 entry/store-kit.d.ts: AppendAuditOpts re-export
 entry/store-kit.d.ts: AppliedRejection re-export
 entry/store-kit.d.ts: AuditEvent re-export
+entry/store-kit.d.ts: CallerItems re-export
+entry/store-kit.d.ts: CallerItemsSaved re-export
 entry/store-kit.d.ts: Card re-export
 entry/store-kit.d.ts: CardComment re-export
 entry/store-kit.d.ts: CardCreate re-export
@@ -47,6 +49,8 @@ entry/store-kit.d.ts: CardRun re-export
 entry/store-kit.d.ts: CardStatus re-export
 entry/store-kit.d.ts: Cards re-export
 entry/store-kit.d.ts: ClassResolution re-export
+entry/store-kit.d.ts: CompactionStart re-export
+entry/store-kit.d.ts: Compactions re-export
 entry/store-kit.d.ts: CompleteGoalOpts re-export
 entry/store-kit.d.ts: Conflicts re-export
 entry/store-kit.d.ts: ContextCandidateFilter re-export

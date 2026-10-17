@@ -19,6 +19,7 @@ import { sqliteDormant } from './dormant-group.js';
 import { sqliteGoals } from './goals-group.js';
 import { sqliteRejections } from './rejections-group.js';
 import { sqliteFailureLog } from './failure-log-group.js';
+import { sqliteCompactions } from './compactions-group.js';
 import { sqliteReports } from './reports-group.js';
 import { sqliteSessions } from './sessions-group.js';
 import { sqliteConnectorEvents } from './connector-events-group.js';
@@ -59,6 +60,7 @@ import {
 import type { Cards, Conflicts, Dormant, Goals, Reports, Sessions } from '../port-groups.js';
 import type { Rejections } from '../port/rejections.js';
 import type { FailureLog } from '../port/failure-log.js';
+import type { Compactions } from '../port/compactions.js';
 import type { LocalFiles } from '../port/local-files.js';
 import { served } from './served.js';
 import { isSharedStore } from '../../core/config.js';
@@ -130,6 +132,7 @@ export function sqliteSyncStore(
     reports: sqliteReports(hippoRoot),
     rejections: sqliteRejections(hippoRoot),
     failureLog: sqliteFailureLog(hippoRoot),
+    compactions: sqliteCompactions(hippoRoot),
     close() {
       flushStatsMirrors(hippoRoot);
     },
@@ -288,6 +291,7 @@ export function sqliteStore(hippoRoot: string): HippoStore & StoreGroups {
     reports: served<Reports>(sync.reports),
     rejections: served<Rejections>(sync.rejections),
     failureLog: served<FailureLog>(sync.failureLog),
+    compactions: served<Compactions>(sync.compactions),
     close: async () => sync.close(),
   };
 }

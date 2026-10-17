@@ -6,7 +6,6 @@ import * as path from 'node:path';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
 import { initStore } from '../src/store/open.js';
 import { latestCompactionRows } from '../src/store/compactions.js';
-import { markSnapshotSavedAt, saveCallerItems, startCompactionAt } from '../src/store/compaction-caller.js';
 import { failuresBySession } from '../src/store/failure-log.js';
 import { sqliteSyncStore } from '../src/store/sqlite/store.js';
 import { insertRejectedValue, normalizeValueForRejection, rejectionDigest } from '../src/store/rejection.js';
@@ -66,24 +65,26 @@ describe('failure log functions', () => {
   });
 });
 
-describe('startCompactionAt and markSnapshotSavedAt', () => {
+describe('compactions.start and compactions.markSnapshotSaved', () => {
   it('inserts a started record and marks its snapshot saved', () => {
-    const id = startCompactionAt(root, 'default', { sessionId: 's1', originProject: 'acme/app', trigger: 'auto', cwd: null, transcriptPath: null });
+    const { compactions } = sqliteSyncStore(root);
+    const id = compactions.start('default', { sessionId: 's1', originProject: 'acme/app', trigger: 'auto', cwd: null, transcriptPath: null });
     expect(read((db) => latestCompactionRows(db, 'default', 's1'))[0]).toMatchObject({ id, status: 'started', snapshot_saved: 0 });
-    markSnapshotSavedAt(root, 'default', id);
+    compactions.markSnapshotSaved('default', id);
     expect(read((db) => latestCompactionRows(db, 'default', 's1'))[0]?.snapshot_saved).toBe(1);
   });
 });
 
-describe('saveCallerItems', () => {
+describe('compactions.saveCallerItems', () => {
   const req = {
     sessionId: 's1', trigger: 'auto', requestId: 'req-1', project: 'acme/app', owner: 'bob@acme', origins: ['acme/app'], baseHalfLifeDays: 365,
     items: ['The deploy script must run from the repo root, never from a subfolder.'],
   };
 
   it('writes the items once and answers a retry with the first count', () => {
-    expect(saveCallerItems(root, 'default', req, () => undefined)).toBe(1);
-    expect(saveCallerItems(root, 'default', req, () => undefined)).toBe(1);
+    const { compactions } = sqliteSyncStore(root);
+    expect(compactions.saveCallerItems('default', req)).toEqual({ written: 1, notes: [] });
+    expect(compactions.saveCallerItems('default', req)).toEqual({ written: 1, notes: [] });
     expect(loadAllEntries(root, 'default')).toHaveLength(1);
   });
 });

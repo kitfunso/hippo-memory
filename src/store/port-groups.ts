@@ -12,6 +12,7 @@ import type { FailureSummary } from './failure-log.js';
 import type { CompleteGoalOpts, Goal, PushGoalOpts } from './goals.js';
 import type { HandoffFilter, SessionEndHandoffRequest } from './handoffs.js';
 import type { FailureLog } from './port/failure-log.js';
+import type { Compactions } from './port/compactions.js';
 import type { Rejections } from './port/rejections.js';
 import type { LegacyStats, MemoryConflict, SessionEvent, TaskSnapshot } from './rows.js';
 import type { ContinuityKey, SessionEventInput, SnapshotInput } from './sessions.js';
@@ -202,4 +203,5 @@ export interface SessionAndAdminGroups {
   readonly reports: Reports;
   readonly rejections: Rejections;
   readonly failureLog: FailureLog;
+  readonly compactions: Compactions;
 }
