@@ -104,7 +104,7 @@ export {
   repairMemoryQualityOnce,
 } from './auth/audit.js';
 export type { AuditListOpts, AuditPass, PruneAuditOpts, PruneAuditResult } from './auth/audit.js';
-export type { ContextCost, ContextOpts, ContextResult, ContextResultEntry } from './context-types.js';
+export type { ContextCost, ContextOpts, ContextResult, ContextResultEntry, HandoffMode } from './context-types.js';
 export { DEFAULT_CONTEXT_BUDGET, NO_QUERY, ambientSecretAdmit, getContext, oneCopyPerMemory } from './context.js';
 export { failureSummary, recordTokens, tokenSummary } from './tokens.js';
 export { forgetDormant, isDormant, listDormant, restoreDormant } from './sleep/dormant.js';

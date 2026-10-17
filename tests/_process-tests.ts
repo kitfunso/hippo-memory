@@ -306,6 +306,7 @@ export const PROCESS_TESTS: readonly string[] = [
   'trace.test.ts',
   'trial-and-busy-scope.test.ts',
   'typed-object-characterization.test.ts',
+  'vector-graph-sync.test.ts',
   'vector-writes-conformance.test.ts',
   'work-queue-cards.test.ts',
   'writers-configured-half-life.test.ts',

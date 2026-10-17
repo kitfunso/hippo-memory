@@ -8,7 +8,7 @@ import { formatHandoffEvidenceLine, type SessionHandoff } from '../core/handoff.
 import type { SessionEvent, TaskSnapshot } from '../store/rows.js';
 import type {
   AssembleCost, AssembleResult, AssembledContextItem, ContextCost, ContextResultEntry, DrillDownChild, DrillDownCost,
-  DrillDownResult, DrillDownSummary,
+  DrillDownResult, DrillDownSummary, HandoffMode,
 } from './index.js';
 import { DATE_PREFIX_CHARS } from '../util/token-text.js';
 
@@ -40,6 +40,21 @@ export function handoffText(h: SessionHandoff): string {
   if (h.evidence) lines.push('', '### Evidence', formatHandoffEvidenceLine(h.evidence));
   lines.push('');
   return lines.join('\n');
+}
+
+// Another session's handoff rarely bears on this prompt, so the hook prints only where to read it.
+function handoffPointerText(h: SessionHandoff): string {
+  const at = h.updatedAt.slice(0, 16).replace('T', ' ');
+  return [
+    '## Session Handoff\n',
+    `- Another session left a handoff at ${at} UTC. ` +
+      `If this task continues it, run \`hippo handoff latest --session ${h.sessionId}\`.`,
+    '',
+  ].join('\n');
+}
+
+export function handoffSectionText(h: SessionHandoff, mode: HandoffMode): string {
+  return mode === 'pointer' ? handoffPointerText(h) : handoffText(h);
 }
 
 /** Needs at least one event; the header reads the latest. */
@@ -233,7 +248,7 @@ export function contextCost(format: 'markdown' | 'additional-context', framing: 
       + (hook && can.promptRecall ? price(contextHeading('Prompt-Relevant Memory', budget, budget)) : 0)
       + (!hook && can.ambient ? price(`\n${renderAmbientSummary(WIDEST_AMBIENT)}`) : 0),
     snapshot: (s) => price(snapshotText(s)),
-    handoff: (h) => price(handoffText(h)),
+    handoff: (h, mode) => price(handoffSectionText(h, mode)),
     trail: (events) => price(sessionTrailText(events)),
   };
 }

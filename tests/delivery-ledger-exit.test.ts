@@ -341,14 +341,17 @@ describe('context availability: was the block that carried the lesson delivered'
     const q1 = 'how should the postgres migration rollback work';
     const q2 = 'does the postgres migration rollback need a review';
     const r1 = fire(p, 'x17', q1);
+    // Written after turn 1, so turn 2's recall has a memory the context window does not hold yet.
+    const fresh = seed(p.hippoRoot, 'the postgres migration rollback needs a review from the database team');
     const r2 = fire(p, 'x17', q2);
     const [e1, e2] = events('x17');
     expect([e1.block_state, e2.block_state]).toEqual(['sent', 'reused-recall-sent']);
-    expect(stages('x17', recall.id)).toEqual([['emitted', 'final'], ['emitted', 'final']]);
+    expect(stages('x17', recall.id)).toEqual([['emitted', 'final'], ['reused', 'final']]);
+    expect(stages('x17', fresh.id)).toEqual([['emitted', 'final']]);
     expect(stages('x17', pinId())).toEqual([['emitted', 'final'], ['reused', 'final']]);
     const t = doc('x17', [turnOf(q1, r1.stdout, { attach: null }), turnOf(q2, r2.stdout)]);
-    const rv = read('x17', recall.id, { transcript: t });
-    ok(rv, 'x17', recall.id, { class: 'application-unknown', reason: null, turn: at(e2.id, 2), stage: 'final' });
+    const rv = read('x17', fresh.id, { transcript: t });
+    ok(rv, 'x17', fresh.id, { class: 'application-unknown', reason: null, turn: at(e2.id, 2), stage: 'final' });
     expect([rv.turns[1].delivery, rv.turns[1].via_event_id]).toEqual(['confirmed', null]);
     const pv = read('x17', pinId(), { transcript: doc('x17-b', [turnOf(q1, r1.stdout), turnOf(q2, r2.stdout)]) });
     ok(pv, 'x17', pinId(), { class: 'application-unknown', reason: null, turn: at(e1.id, 1), stage: 'final' });

@@ -30,7 +30,12 @@ export async function runInProcess(fn: () => void | Promise<void>): Promise<InPr
     vi.spyOn(console, 'log').mockImplementation((...parts: unknown[]) => { keep(out, `${format(...parts)}\n`); }),
     vi.spyOn(console, 'error').mockImplementation(toErr),
     vi.spyOn(console, 'warn').mockImplementation(toErr),
-    vi.spyOn(process.stdout, 'write').mockImplementation((chunk: string | Uint8Array) => { keep(out, String(chunk)); return true; }),
+    vi.spyOn(process.stdout, 'write').mockImplementation((chunk: string | Uint8Array, ...rest: unknown[]) => {
+      keep(out, String(chunk));
+      // The stream calls a write's callback once it took the chunk; the hook books its rows only then.
+      rest.find((arg): arg is () => void => arg instanceof Function)?.();
+      return true;
+    }),
     vi.spyOn(process.stderr, 'write').mockImplementation((chunk: string | Uint8Array) => { keep(err, String(chunk)); return true; }),
     vi.spyOn(process, 'exit').mockImplementation((code?: string | number | null) => { throw (exited ??= new ExitCalled(Number(code ?? 0))); }),
   ];

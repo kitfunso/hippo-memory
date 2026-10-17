@@ -7,6 +7,7 @@ import { MAX_BODY_BYTES } from '../util/http-util.js';
 import { parseFrame, type FrameRemainder } from './framing.js';
 import { findHippoRoot, mcpErrorResponse, type McpHost, type McpRequest, type McpResponse } from './protocol.js';
 import { resolveTenantId } from '../store/tenant.js';
+import { keepVectorGraphLoaded } from '../store/vector-index.js';
 import { getGlobalRoot, initGlobal } from '../sharing/global-store.js';
 import { handleMcpRequest } from './request.js';
 import { type JsonValue, isJsonNumber, isJsonString, isJsonObject } from '../util/json.js';
@@ -185,6 +186,7 @@ function dispatch(body: string, abort: AbortController, host: McpHost): void {
  * (which imports `handleMcpRequest`) does not steal stdin or exit when its parent closes a pipe. The caller picks
  * the host, so src/mcp names no store adapter and no scope plumbing. */
 export function startStdioLoop(host: McpHost): void {
+  keepVectorGraphLoaded();
   process.stdin.on('data', (raw: Buffer) => {
     const chunk = withoutRefused(raw);
     pending.push(chunk);

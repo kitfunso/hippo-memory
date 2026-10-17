@@ -7,6 +7,7 @@ import {
   createStoreHolder, offLoopFor, outsideRouteBlock, type StoreHolder,
 } from '../store/sqlite/held-connection.js';
 import { workerSqliteStore } from '../store/sqlite/worker-store.js';
+import { keepVectorGraphLoaded } from '../store/vector-index.js';
 import { markSharedStore } from '../core/config.js';
 import { auditWriteFailureCount } from '../store/audit.js';
 import { PACKAGE_VERSION } from '../util/version.js';
@@ -412,6 +413,7 @@ function exitOnSignalOrCrash(stop: () => Promise<void>, drainMs: number): void {
  * either `tls` or allowCleartext is given, and refuses HIPPO_CLIENT_IP_HEADER without HIPPO_TRUSTED_PROXIES.
  * Use port: 0 in tests for an ephemeral port. See docs/ARCHITECTURE.md#srcserverbootts. */
 export async function serve(opts: ServeOpts): Promise<ServerHandle> {
+  keepVectorGraphLoaded();
   const host = opts.host ?? DEFAULT_SERVER_HOST;
   const requestedPort = opts.port ?? Number(envPort() ?? DEFAULT_SERVER_PORT);
 

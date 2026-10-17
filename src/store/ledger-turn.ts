@@ -3,7 +3,9 @@
 import { isSqliteBusy, noteStoreBusy } from '../db/index.js';
 import { errorFields, errorMessage, log } from '../util/log.js';
 import type { DeliveryEventInput } from './delivery-recorder.js';
-import { lastSentState, recordTokenUse, type LastSent, type TokenSurface, type TokenUse } from './token-ledger.js';
+import {
+  commitPendingKeys, recordTokenUse, sentInWindow, type SendWindow, type TokenSurface, type TokenUse,
+} from './token-ledger.js';
 import { onHandle } from './open.js';
 import { ensurePilotArm, hashArm, readPilotArm, type PilotArm } from './pilot-arm.js';
 import { writeDeliveryEventOnHandle } from './recall-trace.js';
@@ -75,11 +77,14 @@ export function recordTokensAt(hippoRoot: string, use: TokenUse): void {
   onHandle(hippoRoot, (db) => recordTokenUse(db, use));
 }
 
-/** What the session last sent on `surface`, or null, as lastSentState reads it. */
-export function lastSentOnSurface(
-  hippoRoot: string, tenantId: string, sessionId: string | null | undefined, surface: TokenSurface,
-): LastSent | null {
-  return onHandle(hippoRoot, (db) => lastSentState(db, tenantId, sessionId, surface));
+/** The session's send window on `surface`, after committing the pending row whose hash the caller echoed, if any. */
+export function sendWindowAt(
+  hippoRoot: string, tenantId: string, sessionId: string, surface: TokenSurface, echoed: string | null,
+): SendWindow {
+  return onHandle(hippoRoot, (db) => {
+    if (echoed !== null) commitPendingKeys(db, tenantId, sessionId, surface, echoed);
+    return sentInWindow(db, tenantId, sessionId, surface);
+  });
 }
 
 /** The session's pilot arm: `write` books it as ensurePilotArm does, else the stored arm or the hash arm. */

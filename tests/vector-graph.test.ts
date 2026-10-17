@@ -1,0 +1,150 @@
+import { describe, it, expect } from 'vitest';
+import {
+  createVectorGraph,
+  graphMeta,
+  graphNodes,
+  insertNode,
+  restoreGraph,
+  searchGraph,
+  type VectorGraph,
+} from '../src/util/vector-graph.js';
+
+const DIM = 64;
+const N = 3000;
+
+function rng(seed: number): () => number {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = Math.imul(a ^ (a >>> 15), a | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function gauss(r: () => number): number {
+  return Math.sqrt(-2 * Math.log(1 - r())) * Math.cos(2 * Math.PI * r());
+}
+
+function clustered(n: number, seed: number): Float32Array[] {
+  const r = rng(seed);
+  const centres = Array.from({ length: n / 100 }, () => Float32Array.from({ length: DIM }, () => gauss(r) / Math.sqrt(DIM)));
+  return Array.from({ length: n }, (_, i) => {
+    const c = centres[i % centres.length];
+    return Float32Array.from(c, (x) => x + (gauss(r) * 0.15) / Math.sqrt(DIM) * 1.0);
+  });
+}
+
+function cosine(a: Float32Array, b: Float32Array): number {
+  let d = 0;
+  let na = 0;
+  let nb = 0;
+  for (let i = 0; i < a.length; i++) {
+    d += a[i] * b[i];
+    na += a[i] * a[i];
+    nb += b[i] * b[i];
+  }
+  return d / (Math.sqrt(na) * Math.sqrt(nb));
+}
+
+function exactTop(vectors: Float32Array[], q: Float32Array, k: number, skip = new Set<number>()): number[] {
+  const scored: { node: number; score: number }[] = [];
+  vectors.forEach((v, node) => {
+    if (!skip.has(node)) scored.push({ node, score: cosine(q, v) });
+  });
+  scored.sort((a, b) => b.score - a.score || a.node - b.node);
+  return scored.slice(0, k).map((s) => s.node);
+}
+
+function build(vectors: Float32Array[], seed: number): VectorGraph {
+  const g = createVectorGraph({ dim: DIM, m: 16, efConstruction: 100, seed });
+  vectors.forEach((v, i) => insertNode(g, i, v));
+  return g;
+}
+
+const vectors = clustered(N, 7);
+const queries = Array.from({ length: 40 }, (_, i) => {
+  const r = rng(1000 + i);
+  return Float32Array.from(vectors[(i * 73) % N], (x) => x + (gauss(r) * 0.1) / Math.sqrt(DIM));
+});
+const graph = build(vectors, 42);
+const vectorsOf = (nodes: readonly number[]) => nodes.map((n) => vectors[n]);
+
+function ids(g: VectorGraph, q: Float32Array, opts: { k: number; ef: number; admit?: (n: number) => boolean }): number[] {
+  const res = searchGraph(g, q, { ...opts, vectorsOf });
+  if (res.aborted) throw new Error('unexpected abort');
+  return res.hits.map((h) => h.node);
+}
+
+describe('vector graph', () => {
+  it('returns exactly the brute-force top 50 when ef covers every node', () => {
+    for (const q of queries.slice(0, 5)) expect(ids(graph, q, { k: 50, ef: N })).toEqual(exactTop(vectors, q, 50));
+  });
+
+  it('reaches recall@50 of at least .98 at ef 128', () => {
+    let hit = 0;
+    for (const q of queries) {
+      const truth = new Set(exactTop(vectors, q, 50));
+      hit += ids(graph, q, { k: 50, ef: 128 }).filter((n) => truth.has(n)).length;
+    }
+    expect(hit / (queries.length * 50)).toBeGreaterThanOrEqual(0.98);
+  });
+
+  it('builds the same graph from the same seed and insert order', () => {
+    const again = build(vectors, 42);
+    expect([...graphNodes(again)]).toEqual([...graphNodes(graph)]);
+    expect(graphMeta(again)).toEqual(graphMeta(graph));
+  });
+
+  it('changes the graph when the seed changes', () => {
+    const other = build(vectors.slice(0, 500), 43);
+    const same = build(vectors.slice(0, 500), 42);
+    expect([...graphNodes(other)]).not.toEqual([...graphNodes(same)]);
+  });
+
+  it('round-trips through restoreGraph and answers identically', () => {
+    const restored = restoreGraph(graphMeta(graph), graphNodes(graph));
+    expect([...graphNodes(restored)]).toEqual([...graphNodes(graph)]);
+    for (const q of queries.slice(0, 10)) expect(ids(restored, q, { k: 50, ef: 128 })).toEqual(ids(graph, q, { k: 50, ef: 128 }));
+  });
+
+  it('reads each restored vector once across inserts and grows the same graph as in memory', () => {
+    const live = build(vectors.slice(0, 1000), 42);
+    const restored = restoreGraph(graphMeta(live), graphNodes(live));
+    const reads = new Map<number, number>();
+    const vectorOf = (n: number): Float32Array => {
+      reads.set(n, (reads.get(n) ?? 0) + 1);
+      return vectors[n];
+    };
+    for (let i = 1000; i < 1100; i++) {
+      insertNode(live, i, vectors[i]);
+      insertNode(restored, i, vectors[i], vectorOf);
+    }
+    expect(Math.max(...reads.values())).toBe(1);
+    expect([...graphNodes(restored)]).toEqual([...graphNodes(live)]);
+  });
+
+  it('never returns a rejected node and still fills k', () => {
+    for (const q of queries.slice(0, 5)) {
+      const banned = new Set(exactTop(vectors, q, 20));
+      const got = ids(graph, q, { k: 50, ef: 128, admit: (n) => !banned.has(n) });
+      expect(got).toHaveLength(50);
+      expect(got.some((n) => banned.has(n))).toBe(false);
+    }
+  });
+
+  it('returns exactly the admitted brute-force top 50 when ef covers every node', () => {
+    const q = queries[0];
+    const banned = new Set(exactTop(vectors, q, 20));
+    expect(ids(graph, q, { k: 50, ef: N, admit: (n) => !banned.has(n) })).toEqual(exactTop(vectors, q, 50, banned));
+  });
+
+  it('aborts when the visit budget runs out', () => {
+    expect(searchGraph(graph, queries[0], { k: 50, ef: 128, visitBudget: 10, vectorsOf })).toEqual({ aborted: true });
+  });
+
+  it('rejects a wrong dimension and a repeated node', () => {
+    expect(() => insertNode(graph, 1, new Float32Array(3))).toThrow(/dim/);
+    expect(() => insertNode(graph, 1, vectors[1])).toThrow(/already/);
+  });
+});

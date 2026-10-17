@@ -79,7 +79,7 @@ $ context pinned-only hook -> 0
 
 $ context pinned-only hook (unchanged) -> 0
 --- stdout
-{"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":"## Prompt-Relevant Memory (1 entries, 33 tokens)\\n\\n- **[verified] the deploy pipeline uses blue green rollout for the api** [deploy]"}}
+
 --- stderr
 
 $ context pinned-only markdown -> 0

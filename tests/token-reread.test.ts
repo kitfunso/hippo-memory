@@ -14,12 +14,12 @@ import { Layer } from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import {
   carryingCalls,
-  lastSentState,
   readApiCalls,
   recordRereads,
   recordTokenUse,
-  shouldSkipUnchanged,
+  sentInWindow,
   type ApiCall,
+  type SendWindow,
   type TokenEvent,
   type TokenSummary,
   type TokenSurface,
@@ -47,7 +47,9 @@ function withDb<T>(root: string, fn: (db: Db) => T): T {
 }
 
 function book(db: Db, surface: TokenSurface, event: TokenEvent, at: number, tokens: number, sessionId = SESSION, tenantId = 'default'): void {
-  recordTokenUse(db, { tenantId, sessionId, surface, event, items: 1, tokens, hash: 'h1', now: iso(at) });
+  // A hook inject marks one memory sent and a hook skip marks none, as the per-prompt hook books them.
+  const sentKeys = surface !== 'hook' ? undefined : event === 'inject' ? ['mem:a:1'] : event === 'skip' ? [] : undefined;
+  recordTokenUse(db, { tenantId, sessionId, surface, event, items: 1, tokens, hash: 'h1', sentKeys, now: iso(at) });
 }
 
 function ledgerRows(root: string, where: string): LedgerRow[] {
@@ -176,9 +178,9 @@ describe('recordRereads', () => {
       book(db, 'hook', 'skip', minute(6.5), 100);
       book(db, 'hook', 'inject', minute(0.5), 999, 'other-session');
       book(db, 'hook', 'inject', minute(0.5), 999, SESSION, 'other-tenant');
-      return lastSentState(db, 'default', SESSION, 'hook');
+      return sentInWindow(db, 'default', SESSION, 'hook');
     });
-    expect(before).toEqual({ hash: 'h1', skipsSince: 1 });
+    expect(before).toEqual({ turn: 2, sent: new Map([['mem:a:1', { turn: 1 }]]) });
 
     for (let pass = 0; pass < 2; pass++) {
       expect(recordRereads(root, 'default', SESSION, calls)).toBe(430);
@@ -189,10 +191,7 @@ describe('recordRereads', () => {
       { tenant_id: 'default', session_id: SESSION, surface: 'hook_recall', items: 2, tokens: 80 },
     ]);
     expect(rereadStamps(root)).toEqual([['compact_resume', iso(minute(7))], ['hook', iso(minute(7))], ['hook_recall', iso(minute(3))]]);
-    withDb(root, (db) => {
-      expect(lastSentState(db, 'default', SESSION, 'hook')).toEqual(before);
-      expect(shouldSkipUnchanged(lastSentState(db, 'default', SESSION, 'hook'), 'h1', 0)).toBe(true);
-    });
+    withDb(root, (db) => expect(sentInWindow(db, 'default', SESSION, 'hook')).toEqual(before));
   });
 
   it("dates each row at its UTC day's last re-read or send, and keeps an empty row on the day of a send nothing re-read", () => {
@@ -480,14 +479,15 @@ describe("a sub-agent's hooks", () => {
     expect(hippo(['compact-resume'], proj, env, main({ source: 'compact' })).stdout).toContain('parent task');
   });
 
-  it("leaves the parent's inject-only-on-change state alone when a sub-agent compacts", () => {
+  it("leaves the parent's send window alone when a sub-agent compacts", () => {
     withDb(store, (db) => book(db, 'hook', 'inject', Date.now() - 60_000, 100));
     expect(hippo(['pre-compact'], proj, env, sub({ hook_event_name: 'PreCompact' })).status).toBe(0);
     expect(hippo(['compact-resume'], proj, env, sub({ source: 'compact' })).status).toBe(0);
-    expect(withDb(store, (db) => lastSentState(db, 'default', SESSION, 'hook'))).toEqual({ hash: 'h1', skipsSince: 0 });
+    const window = (): SendWindow => withDb(store, (db) => sentInWindow(db, 'default', SESSION, 'hook'));
+    expect(window()).toEqual({ turn: 1, sent: new Map([['mem:a:1', { turn: 1 }]]) });
     // Control: the parent's own compaction resets it.
     hippo(['compact-resume'], proj, env, main({ source: 'compact' }));
-    expect(withDb(store, (db) => lastSentState(db, 'default', SESSION, 'hook'))).toBeNull();
+    expect(window()).toEqual({ turn: 0, sent: new Map() });
   });
 });
 

@@ -9,6 +9,8 @@ import type { DatabaseSyncLike } from './index.js';
 import { withWriteScope } from './busy.js';
 import { errorCode, errorFields, log } from '../util/log.js';
 import { placeholders } from '../util/sql.js';
+import { clearGraph } from './vector-graph-rows.js';
+import { graphCandidates, type VectorSearchOptions } from './vector-graph-search.js';
 
 /** Legacy whole-file index; imported once into `memory_vectors`, then kept beside the store as a renamed backup. */
 const LEGACY_EMBEDDINGS_FILE = 'embeddings.json';
@@ -57,7 +59,8 @@ export function upsertVectors(
   return written;
 }
 
-/** Replace the whole table with `index` in one transaction, as a full rebuild does. */
+/** Replace the whole table with `index` in one transaction, as a full rebuild does; search scans until the next graph
+ * build. */
 export function replaceAllVectors(
   db: DatabaseSyncLike,
   index: Readonly<Record<string, readonly number[]>>,
@@ -66,6 +69,7 @@ export function replaceAllVectors(
   withWriteScope(db, 'replace_all_vectors', () => {
     db.exec('DELETE FROM memory_vectors');
     upsertVectors(db, Object.entries(index), model);
+    clearGraph(db);
   });
 }
 
@@ -208,11 +212,13 @@ export async function topVectorMatches(
   k: number,
   where: string,
   params: readonly (string | number)[],
+  opts: VectorSearchOptions = {},
 ): Promise<VectorMatch[]> {
   const best = bestMatches(query, k);
   if (!best) return [];
-  // SHORTCUT: brute-force cosine over every admitted vector, a chunk per event-loop turn; latency
-  // still grows with rows, fine to ~100k, and an ANN index (sqlite-vec, HNSW) is the upgrade.
+  const fromGraph = graphCandidates(db, query, k, { where, params }, opts);
+  if (fromGraph) return rescoreWithPending(db, best, fromGraph, query.length, { where, params });
+  // The exact path: every admitted vector scored, a chunk per event-loop turn; the graph above takes large stores.
   // SAFETY: the SELECT names exactly these two columns; node:sqlite returns BLOBs as Uint8Array.
   const rows = db.prepare(`
     SELECT v.memory_id AS id, v.vector AS vector
@@ -232,6 +238,34 @@ export async function topVectorMatches(
     } else {
       best.offer(row.id, decodeVector(row.vector));
     }
+  }
+  return best.top;
+}
+
+// Graph hits and every admitted queued row are scored from their current vectors, so scores and id tie-breaks match the
+// exact scan's.
+function rescoreWithPending(
+  db: DatabaseSyncLike,
+  best: BestMatches,
+  ids: readonly string[],
+  dim: number,
+  filter: { readonly where: string; readonly params: readonly (string | number)[] },
+): VectorMatch[] {
+  const offered = new Set<string>();
+  eachStoredVector(db, ids, (id, v) => {
+    offered.add(id);
+    best.offer(id, v);
+  });
+  // CROSS JOIN pins the queue as the outer loop; left to the planner it scanned every vector row to find a few.
+  // SAFETY: the SELECT names exactly these two columns; node:sqlite returns BLOBs as Uint8Array.
+  const queued = db.prepare(`
+    SELECT v.memory_id AS id, v.vector AS vector
+    FROM memory_vector_pending p
+    CROSS JOIN memory_vectors v ON v.memory_id = p.memory_id CROSS JOIN memories m ON m.id = v.memory_id
+    WHERE v.dim = ?${filter.where}
+  `).iterate(dim, ...filter.params) as Iterable<{ id: string; vector: Uint8Array }>;
+  for (const row of queued) {
+    if (!offered.has(row.id)) best.offer(row.id, decodeVector(row.vector));
   }
   return best.top;
 }

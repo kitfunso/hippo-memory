@@ -8,7 +8,9 @@ import { spawnSync } from 'node:child_process';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { saveActiveTaskSnapshot } from '../src/store/sessions.js';
-import { openHippoDb, closeHippoDb } from '../src/db/index.js';
+import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
+import { recordTokenUse } from '../src/store/token-ledger.js';
+import type { JsonValue } from '../src/util/json.js';
 import { adminActor } from '../src/api/index.js';
 import { BadRequestError } from '../src/core/api-errors.js';
 import { MAX_ID_LEN } from '../src/util/limits.js';
@@ -73,6 +75,30 @@ function ledger(store: string, where: string): LedgerRow[] {
   }
 }
 
+function withDb<T>(store: string, fn: (db: DatabaseSyncLike) => T): T {
+  const db = openHippoDb(store);
+  try {
+    return fn(db);
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+/** The parsed sent_keys of a session's `hook` rows in booking order; null for a row that carries none. */
+function sentKeys(store: string, sessionId: string): Array<JsonValue | null> {
+  // SAFETY: the SELECT names exactly this one nullable TEXT column.
+  const rows = withDb(store, (db) => db.prepare(
+    `SELECT sent_keys FROM token_ledger WHERE surface = 'hook' AND session_id = ? ORDER BY id`,
+  ).all(sessionId) as Array<{ sent_keys: string | null }>);
+  // SAFETY: the hook writes sent_keys with JSON.stringify.
+  return rows.map((r) => (r.sent_keys === null ? null : (JSON.parse(r.sent_keys) as JsonValue)));
+}
+
+/** The row a host compaction books (cli/hook-runtime.ts resetHookInjection). */
+function bookReset(store: string, sessionId: string): void {
+  withDb(store, (db) => recordTokenUse(db, { tenantId: 'default', sessionId, surface: 'hook', event: 'reset', items: 0, tokens: 0 }));
+}
+
 function localHook(projectDir: string, payload: HookPayload): string {
   const r = hippoRun(HOOK_ARGS, { cwd: projectDir, env: { ...CLI_ENV, HIPPO_HOME: path.join(tmp, 'global') }, input: JSON.stringify(payload) });
   expect(r.status, r.stderr).toBe(0);
@@ -86,6 +112,7 @@ function sessionFor(arm: 'hippo' | 'holdout', rate: number): string {
 
 const PROJECT_P = { name: 'p', legacyName: 'p' };
 const BLOCK_HASH_RE = /^[0-9a-f]{16}$/;
+const MEM_KEY_RE = /^mem:[^:]+:[0-9a-f]{16}$/;
 const NOTHING = { stdout: '', staticHash: null };
 
 describe('promptHookContext', () => {
@@ -191,15 +218,17 @@ describe('promptHookContext', () => {
     expect(ledger(store, `event = 'arm'`).map((r) => r.session_id)).toEqual(['parent']);
   });
 
-  it('skips the unchanged block on a repeat prompt once the caller says it printed it', async () => {
+  it('holds a printed pin back on a repeat prompt, its mark pending until the caller echoes the hash', async () => {
     const store = makeProject(path.join(tmp, 'p'));
     pin(store, 'PINNED: always check the rollback plan', 'p');
     const ctx = ctxFor(store);
     const first = await promptHookContext(ctx, { sessionId: 'again', project: PROJECT_P });
     expect(first.stdout).toContain('rollback plan');
     expect(first.staticHash).toMatch(BLOCK_HASH_RE);
+    expect(sentKeys(store, 'again')).toEqual([{ pending: [expect.stringMatching(MEM_KEY_RE)] }]);
     const printedHash = first.staticHash ?? undefined;
     expect(await promptHookContext(ctx, { sessionId: 'again', project: PROJECT_P, printedHash })).toEqual({ arm: null, ...NOTHING });
+    expect(sentKeys(store, 'again')).toEqual([[expect.stringMatching(MEM_KEY_RE)], []]);
     expect(ledger(store, `event = 'skip'`).map((r) => [r.session_id, r.surface])).toEqual([['again', 'hook']]);
   });
 
@@ -215,7 +244,7 @@ describe('promptHookContext', () => {
     expect(ledger(store, `event = 'skip'`)).toEqual([]);
   });
 
-  it('sends a changed block when the caller printed an older one, and books no skip row', async () => {
+  it('sends only the new pin when the caller printed an older block, and books the held one as a skip', async () => {
     const store = makeProject(path.join(tmp, 'p'));
     pin(store, 'PINNED: always check the rollback plan', 'p');
     const ctx = ctxFor(store);
@@ -223,9 +252,72 @@ describe('promptHookContext', () => {
     pin(store, 'PINNED: the canary runs for an hour before the full rollout', 'p');
     const second = await promptHookContext(ctx, { sessionId: 'old', project: PROJECT_P, printedHash: first.staticHash ?? undefined });
     expect(second.stdout).toContain('canary runs');
+    expect(second.stdout).not.toContain('rollback plan');
     expect(second.staticHash).toMatch(BLOCK_HASH_RE);
     expect(second.staticHash).not.toBe(first.staticHash);
-    expect(ledger(store, `event = 'skip'`)).toEqual([]);
+    expect(ledger(store, `event = 'skip'`).map((r) => [r.surface, r.items])).toEqual([['hook', 1]]);
+  });
+
+  it('prints an edited memory again at once, as its key carries the content hash', async () => {
+    const store = makeProject(path.join(tmp, 'p'));
+    const entry = { ...createMemory('PINNED: always check the rollback plan'), pinned: true, origin_project: 'p' };
+    writeEntry(store, entry);
+    const ctx = ctxFor(store);
+    const first = await promptHookContext(ctx, { sessionId: 'edit', project: PROJECT_P });
+    writeEntry(store, { ...entry, content: 'PINNED: always check the rollback plan and the canary' });
+    const second = await promptHookContext(ctx, { sessionId: 'edit', project: PROJECT_P, printedHash: first.staticHash ?? undefined });
+    expect(second.stdout).toContain('rollback plan and the canary');
+  });
+
+  it('prints a pin again 10 turns after its last send, and any other memory once its mark lapses at 25', async () => {
+    const store = makeProject(path.join(tmp, 'p'));
+    pin(store, 'PINNED: always check the rollback plan', 'p');
+    writeEntry(store, { ...createMemory('Kafka consumers in the billing service must be paused first'), origin_project: 'p' });
+    const ctx = ctxFor(store);
+    const pinTurns: number[] = [];
+    const recentTurns: number[] = [];
+    let printedHash: string | undefined;
+    for (let turn = 0; turn < 27; turn++) {
+      const reply = await promptHookContext(ctx, { sessionId: 'long', project: PROJECT_P, printedHash });
+      if (reply.stdout.includes('rollback plan')) pinTurns.push(turn);
+      if (reply.stdout.includes('Kafka consumers')) recentTurns.push(turn);
+      printedHash = reply.staticHash ?? printedHash;
+    }
+    expect(pinTurns).toEqual([0, 11, 22]);
+    expect(recentTurns).toEqual([0, 26]);
+  });
+
+  it('a reset reopens the window, so the next prompt prints the held pin again', async () => {
+    const store = makeProject(path.join(tmp, 'p'));
+    pin(store, 'PINNED: always check the rollback plan', 'p');
+    const ctx = ctxFor(store);
+    const first = await promptHookContext(ctx, { sessionId: 'compacted', project: PROJECT_P });
+    const printedHash = first.staticHash ?? undefined;
+    expect((await promptHookContext(ctx, { sessionId: 'compacted', project: PROJECT_P, printedHash })).stdout).toBe('');
+    bookReset(store, 'compacted');
+    expect((await promptHookContext(ctx, { sessionId: 'compacted', project: PROJECT_P, printedHash })).stdout).toBe(first.stdout);
+  });
+
+  it('an older binary\'s hook row, which carries no keys, never holds a part back', async () => {
+    const store = makeProject(path.join(tmp, 'p'));
+    pin(store, 'PINNED: always check the rollback plan', 'p');
+    const ctx = ctxFor(store);
+    const probe = await promptHookContext(ctx, { sessionId: 'probe', project: PROJECT_P });
+    withDb(store, (db) => recordTokenUse(db, {
+      tenantId: 'default', sessionId: 'old-binary', surface: 'hook', event: 'inject', items: 1, tokens: 10, hash: probe.staticHash,
+    }));
+    const printedHash = probe.staticHash ?? undefined;
+    expect((await promptHookContext(ctx, { sessionId: 'old-binary', project: PROJECT_P, printedHash })).stdout).toBe(probe.stdout);
+  });
+
+  it('prints every part on every prompt with skipUnchanged off, and books no marks', async () => {
+    const store = makeProject(path.join(tmp, 'p'));
+    fs.writeFileSync(path.join(store, 'config.json'), JSON.stringify({ pinnedInject: { skipUnchanged: false } }));
+    pin(store, 'PINNED: always check the rollback plan', 'p');
+    const ctx = ctxFor(store);
+    const first = await promptHookContext(ctx, { sessionId: 'off', project: PROJECT_P });
+    expect(await promptHookContext(ctx, { sessionId: 'off', project: PROJECT_P, printedHash: first.staticHash ?? undefined })).toEqual(first);
+    expect(sentKeys(store, 'off')).toEqual([null, null]);
   });
 
   it('books no skip row for a well-formed hash the caller never got', async () => {
@@ -238,7 +330,7 @@ describe('promptHookContext', () => {
     expect(ledger(store, `event = 'skip'`)).toEqual([]);
   });
 
-  it('still resends an acknowledged block after refreshTurns skips', async () => {
+  it('still resends an acknowledged pin after refreshTurns skips', async () => {
     const store = makeProject(path.join(tmp, 'p'));
     fs.writeFileSync(path.join(store, 'config.json'), JSON.stringify({ pinnedInject: { refreshTurns: 2 } }));
     pin(store, 'PINNED: always check the rollback plan', 'p');
@@ -262,10 +354,14 @@ describe('promptHookContext', () => {
     await expect(promptHookContext(ctxFor(store), { sessionId: 's', project: PROJECT_P, printedHash })).rejects.toBeInstanceOf(BadRequestError);
   });
 
-  it('gives a sub-agent the block but no hash to record', async () => {
+  it('gives a sub-agent the whole block, though its parent\'s window holds it, and no hash to record', async () => {
     const store = makeProject(path.join(tmp, 'p'), 0);
     pin(store, 'PINNED: always check the rollback plan', 'p');
-    const sub = await promptHookContext(ctxFor(store), { sessionId: 'parent', project: PROJECT_P, payload: { session_id: 'parent', agent_id: 'a1' } });
+    const ctx = ctxFor(store);
+    const parent = await promptHookContext(ctx, { sessionId: 'parent', project: PROJECT_P });
+    const printedHash = parent.staticHash ?? undefined;
+    expect((await promptHookContext(ctx, { sessionId: 'parent', project: PROJECT_P, printedHash })).stdout).toBe('');
+    const sub = await promptHookContext(ctx, { sessionId: 'parent', project: PROJECT_P, payload: { session_id: 'parent', agent_id: 'a1' } });
     expect(sub.stdout).toContain('rollback plan');
     expect(sub.staticHash).toBeNull();
   });
@@ -337,6 +433,16 @@ describe('promptHookContext on a shared store', () => {
     expect(other.stdout).toContain('rollback plan');
     expect(other.stdout).not.toContain('Active Task Snapshot');
     expect((await ask(store, 'owner-next-session', true)).stdout).toContain('Active Task Snapshot');
+  });
+
+  it('marks each send with the caller\'s owner, so another owner on the same session id still gets the block', async () => {
+    const store = makeProject(path.join(tmp, 'p'));
+    pin(store, 'PINNED: always check the rollback plan', 'p');
+    const first = await promptHookContext(ctxFor(store), { sessionId: 'same', project: PROJECT_P }, SHARED);
+    expect(sentKeys(store, 'same')).toEqual([{ pending: [expect.stringMatching(/^mem:[^:]+:[0-9a-f]{16}@prompt-hook-test$/)] }]);
+    const otherCtx: FullContext = { ...ctxFor(store), actor: { subject: 'api_key:hk_other', role: 'member' } };
+    const other = await promptHookContext(otherCtx, { sessionId: 'same', project: PROJECT_P, printedHash: first.staticHash ?? undefined }, SHARED);
+    expect(other.stdout).toContain('rollback plan');
   });
 
   it('records nothing and books no arm when the served root has no store, never falling back to the global one', async () => {

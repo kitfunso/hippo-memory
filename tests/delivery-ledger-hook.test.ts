@@ -176,6 +176,8 @@ describe('what one hook call records', () => {
     const pin = seed('PINNED: always check the rollback plan before deploy', { pinned: true });
     const relevant = seed('the postgres migration script needs a rollback plan before deploy');
     expect(run(proj, claude('f3b', 'how should the postgres migration rollback work')).status).toBe(0);
+    // Written after turn 1, so turn 2's recall has a memory the context window does not hold yet.
+    const fresh = seed('the postgres migration rollback needs a review from the database team');
     const r = run(proj, claude('f3b', 'does the postgres migration rollback need a review'));
     expect(r.status).toBe(0);
     const recallSent = additionalContext(r.stdout);
@@ -184,7 +186,8 @@ describe('what one hook call records', () => {
     expect(second.static_hash).toBe(first.static_hash);
     expect([second.recall_hash, second.emitted_hash]).toEqual([blockHash(recallSent), blockHash(recallSent)]);
     expect(second.candidates.find((c) => c.memory_id === pin.id)?.outcome).toBe('reused');
-    expect(second.candidates.find((c) => c.memory_id === relevant.id)).toMatchObject({ outcome: 'emitted', pool: 'prompt-recall' });
+    expect(second.candidates.find((c) => c.memory_id === relevant.id)).toMatchObject({ outcome: 'reused', pool: 'prompt-recall' });
+    expect(second.candidates.find((c) => c.memory_id === fresh.id)).toMatchObject({ outcome: 'emitted', pool: 'prompt-recall' });
   });
 
   it('F3c: a skip whose token row fails still records one reused event, through the render fallback', () => {

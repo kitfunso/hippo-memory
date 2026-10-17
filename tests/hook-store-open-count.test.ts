@@ -115,13 +115,13 @@ afterEach(() => {
 });
 
 describe('per-prompt context hook', () => {
-  it('opens the local store once and prints the same block on a new and a repeat turn', () => {
+  it('opens the local store once on a new turn and on a repeat turn, which prints nothing the window holds', () => {
     const first = runHook(PROMPT_HOOK, promptPayload('sess-open-1'));
     expect(first.stdout).toMatchInlineSnapshot(`"{"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":"## Project Memory (1 entries, 28 tokens)\\n\\n- **[verified] PINNED: always check the rollback plan before deploy**\\n\\n## Prompt-Relevant Memory (1 entries, 32 tokens)\\n\\n- **[verified] the postgres migration needs a rollback plan and a dry run**"}}"`);
     expect(first.opens).toEqual({ local: 1 });
 
     const repeat = runHook(PROMPT_HOOK, promptPayload('sess-open-1'));
-    expect(repeat.stdout).toMatchInlineSnapshot(`"{"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":"## Prompt-Relevant Memory (1 entries, 32 tokens)\\n\\n- **[verified] the postgres migration needs a rollback plan and a dry run**"}}"`);
+    expect(repeat.stdout).toBe('');
     expect(repeat.opens).toEqual({ local: 1 });
   });
 

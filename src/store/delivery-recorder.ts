@@ -143,8 +143,8 @@ export interface DeliveryOutcomeInput {
   recallHash?: string | null;
   /** The exact text the agent receives: the hook's additionalContext, or every stdout byte, newline included. */
   emittedText?: string | null;
-  /** The static block was skipped as unchanged, so its entries are reused, not sent. */
-  staticReused?: boolean;
+  /** Memories the agent's context window already held, so they are reused, not sent. */
+  reusedIds?: readonly string[];
 }
 
 export interface DeliveryRecorder extends DeliveryObserver {
@@ -275,7 +275,7 @@ function pickedPool(p: Picked, held: Candidate | undefined): DeliveryPool {
 }
 
 function pickedRows(state: RecorderState): DeliveryCandidateInput[] {
-  const staticReused = state.outcome.staticReused === true;
+  const reused = new Set(state.outcome.reusedIds ?? []);
   const rows: DeliveryCandidateInput[] = [];
   for (const p of state.picked.values()) {
     rows.push({
@@ -283,7 +283,7 @@ function pickedRows(state: RecorderState): DeliveryCandidateInput[] {
       sourceStore: p.sourceStore,
       pool: pickedPool(p, state.candidates.get(p.entry.id)),
       stage: 'final',
-      outcome: staticReused && !p.promptRecall ? 'reused' : 'emitted',
+      outcome: reused.has(p.entry.id) ? 'reused' : 'emitted',
       reason: null,
       rank: p.rank,
       score: p.score,

@@ -230,6 +230,11 @@ exports[`fresh store schema > matches the pinned sqlite_master and user_version 
       "type": "index",
     },
     {
+      "name": "idx_memories_artifact_ref",
+      "sql": "CREATE INDEX idx_memories_artifact_ref ON memories(tenant_id, artifact_ref) WHERE artifact_ref IS NOT NULL",
+      "type": "index",
+    },
+    {
       "name": "idx_memories_created_drift",
       "sql": "CREATE INDEX idx_memories_created_drift
           ON memories(tenant_id) WHERE superseded_by IS NULL AND (length(created) <> 24 OR created NOT LIKE '%Z')",
@@ -625,6 +630,21 @@ exports[`fresh store schema > matches the pinned sqlite_master and user_version 
     },
     {
       "name": "sqlite_autoindex_memory_physics_1",
+      "sql": null,
+      "type": "index",
+    },
+    {
+      "name": "sqlite_autoindex_memory_vector_index_meta_1",
+      "sql": null,
+      "type": "index",
+    },
+    {
+      "name": "sqlite_autoindex_memory_vector_nodes_1",
+      "sql": null,
+      "type": "index",
+    },
+    {
+      "name": "sqlite_autoindex_memory_vector_pending_1",
       "sql": null,
       "type": "index",
     },
@@ -1169,6 +1189,26 @@ exports[`fresh store schema > matches the pinned sqlite_master and user_version 
       "type": "table",
     },
     {
+      "name": "memory_vector_index_meta",
+      "sql": "CREATE TABLE memory_vector_index_meta (key TEXT PRIMARY KEY, value)",
+      "type": "table",
+    },
+    {
+      "name": "memory_vector_nodes",
+      "sql": "CREATE TABLE memory_vector_nodes (
+          node      INTEGER PRIMARY KEY,
+          memory_id TEXT NOT NULL UNIQUE,
+          level     INTEGER NOT NULL,
+          nbrs      BLOB NOT NULL
+        )",
+      "type": "table",
+    },
+    {
+      "name": "memory_vector_pending",
+      "sql": "CREATE TABLE memory_vector_pending (memory_id TEXT PRIMARY KEY)",
+      "type": "table",
+    },
+    {
       "name": "memory_vectors",
       "sql": "CREATE TABLE memory_vectors (
     memory_id TEXT PRIMARY KEY,
@@ -1522,7 +1562,7 @@ exports[`fresh store schema > matches the pinned sqlite_master and user_version 
           items      INTEGER NOT NULL DEFAULT 0,
           tokens     INTEGER NOT NULL DEFAULT 0,
           block_hash TEXT
-        )",
+        , sent_keys TEXT)",
       "type": "table",
     },
     {
@@ -1819,10 +1859,25 @@ exports[`fresh store schema > matches the pinned sqlite_master and user_version 
       "type": "trigger",
     },
     {
+      "name": "trg_memory_vector_nodes_delete",
+      "sql": "CREATE TRIGGER trg_memory_vector_nodes_delete AFTER DELETE ON memory_vectors BEGIN
+          DELETE FROM memory_vector_nodes WHERE memory_id = old.memory_id;
+          DELETE FROM memory_vector_pending WHERE memory_id = old.memory_id;
+        END",
+      "type": "trigger",
+    },
+    {
       "name": "trg_memory_vectors_delete",
       "sql": "CREATE TRIGGER trg_memory_vectors_delete AFTER DELETE ON memories BEGIN
     DELETE FROM memory_vectors WHERE memory_id = old.id;
   END",
+      "type": "trigger",
+    },
+    {
+      "name": "trg_memory_vectors_pending",
+      "sql": "CREATE TRIGGER trg_memory_vectors_pending AFTER INSERT ON memory_vectors BEGIN
+          INSERT OR IGNORE INTO memory_vector_pending (memory_id) VALUES (new.memory_id);
+        END",
       "type": "trigger",
     },
     {
@@ -2104,6 +2159,6 @@ exports[`fresh store schema > matches the pinned sqlite_master and user_version 
       "type": "trigger",
     },
   ],
-  "userVersion": 56,
+  "userVersion": 59,
 }
 `;
