@@ -1,14 +1,27 @@
-// Conflict resolution for every front end, so the reach, status, pair and liveness checks live in one place.
+// Conflict listing and resolution for every front end, so the reach, status, pair and liveness rules live here.
 import { BadRequestError, ConflictError, NotFoundError } from '../../core/api-errors.js';
-import type { MemoryEntry } from '../../core/memory.js';
-import { chunked } from '../../util/chunked.js';
-import { passesScopeFilterForRecall, personalScopeOf } from '../../core/recall-scope.js';
+import { canTouchScope, passesScopeFilterForRecall, personalScopeOf } from '../../core/recall-scope.js';
 import type { MemoryConflict } from '../../store/rows.js';
+import type { ConflictMember, ConflictRow } from '../../store/port/conflicts.js';
 import { classifyOriginProject } from '../../core/project-identity.js';
 import type { CallerProject } from '../prompt-hook.js';
 import { isQuarantineScope } from '../../trust/quarantine.js';
-import { requireHostAdmin, type Context } from '../types.js';
+import { DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT, resolveListLimit } from '../../util/limits.js';
+import type { KeysetPosition } from '../../util/keyset.js';
+import { requireHostAdmin, type Actor, type Context } from '../types.js';
 import type { TenantReach } from './memories.js';
+
+/** A page of a conflict list: `limit` (default 100, at most 1000) and the position the previous page ended on. */
+export interface ConflictPageOptions {
+  limit?: number;
+  after?: KeysetPosition;
+}
+
+export interface ConflictPage {
+  conflicts: MemoryConflict[];
+  /** Where the next page starts, or null after the last; a filtered page can be short and still go on. */
+  next: KeysetPosition | null;
+}
 
 export interface ResolveMemoryConflictOptions {
   /** One of the conflict's two memories; the other is the loser. */
@@ -27,33 +40,48 @@ export interface ResolveMemoryConflictResult {
   loserId: string;
 }
 
-function isLive(entry: Pick<MemoryEntry, 'superseded_by' | 'kind' | 'scope'>): boolean {
-  return (
-    !entry.superseded_by && (entry.kind === 'raw' || entry.kind === 'distilled') && !isQuarantineScope(entry.scope)
-  );
+function isLive(member: ConflictMember | null): boolean {
+  return member !== null && !member.superseded_by && (member.kind === 'raw' || member.kind === 'distilled') &&
+    !isQuarantineScope(member.scope);
 }
 
-/**
- * Keeps `keepId` and weakens, deletes or rejects the other side of an open conflict in the caller's tenant, auditing as
- * `ctx.actor`.
- * NotFound: missing, untouchable or no longer live. Conflict: already resolved. BadRequest: `keepId` outside the pair.
- */
+/** Someone else's personal row hides its whole pair. */
+function touchable(actor: Actor, row: ConflictRow): boolean {
+  return [row.a, row.b].every((member) => member !== null && canTouchScope(actor, member.scope));
+}
+
+function pageLimit(limit: number | undefined): number {
+  const resolved = resolveListLimit(limit, DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT);
+  if (resolved === undefined) throw new BadRequestError(`limit must be a positive integer <= ${MAX_LIST_LIMIT}`);
+  return resolved;
+}
+
+async function touchableConflict(ctx: Context, conflictId: number): Promise<ConflictRow | null> {
+  const row = await ctx.store.conflicts.get(ctx.tenantId, conflictId);
+  return row !== null && touchable(ctx.actor, row) ? row : null;
+}
+
+/** Conflict `conflictId` in the caller's tenant, any status; null when missing or a row of it is out of reach. */
+export async function getConflict(ctx: Context, conflictId: number): Promise<MemoryConflict | null> {
+  return (await touchableConflict(ctx, conflictId))?.conflict ?? null;
+}
+
+/** Keeps `keepId` and weakens, deletes or rejects the other side, auditing as `ctx.actor`. NotFound: missing,
+ * untouchable or no longer live. Conflict: already resolved. BadRequest: `keepId` outside the pair. */
 export async function resolveMemoryConflict(
   ctx: Context,
   conflictId: number,
   opts: ResolveMemoryConflictOptions,
 ): Promise<ResolveMemoryConflictResult> {
-  // Read with every status, so a resolved conflict answers 409 while one holding another person's personal row stays a
-  // 404.
-  const touchable = await ctx.store.conflicts.listTouchable(ctx.tenantId, '*', ctx.actor);
-  const conflict = touchable.find((c) => c.id === conflictId);
-  if (!conflict) throw new NotFoundError(`conflict not found: ${conflictId}`);
-  if (conflict.status !== 'open') throw new ConflictError(`conflict ${conflictId} is already resolved`);
-  const pair = [conflict.memory_a_id, conflict.memory_b_id];
+  // Any status, so a resolved conflict answers 409 while one holding another person's personal row stays a 404.
+  const row = await touchableConflict(ctx, conflictId);
+  if (!row) throw new NotFoundError(`conflict not found: ${conflictId}`);
+  if (row.conflict.status !== 'open') throw new ConflictError(`conflict ${conflictId} is already resolved`);
+  const pair = [row.conflict.memory_a_id, row.conflict.memory_b_id];
   if (!pair.includes(opts.keepId)) {
     throw new BadRequestError(`keep must be one of the two memories in conflict ${conflictId}: ${pair.join(', ')}`);
   }
-  if ((await ctx.store.entriesByIds(pair, ctx.tenantId)).filter(isLive).length < pair.length) {
+  if (!isLive(row.a) || !isLive(row.b)) {
     throw new NotFoundError(`conflict ${conflictId} names a memory that is superseded, archived or quarantined`);
   }
   const resolved = await ctx.store.conflicts.resolve(
@@ -70,35 +98,49 @@ export async function resolveMemoryConflict(
   return { conflictId, keptId: opts.keepId, loserId: resolved.loserId };
 }
 
-/** Open conflicts whose two rows the caller may touch; with `project`, only pairs it could also recall:
+/** One page of open conflicts whose two rows the caller may touch; with `project`, only pairs it could also recall:
  *  its repo or user-global, and no scope it was not asked for. */
 export async function listOpenConflicts(
   ctx: Context,
-  project?: CallerProject,
-): Promise<MemoryConflict[]> {
-  const touchable = await ctx.store.conflicts.listTouchable(ctx.tenantId, 'open', ctx.actor);
-  if (!project) return touchable;
+  opts: ConflictPageOptions & { project?: CallerProject } = {},
+): Promise<ConflictPage> {
+  const { project } = opts;
+  const page = await ctx.store.conflicts.list({
+    tenantId: ctx.tenantId, status: 'open', limit: pageLimit(opts.limit), after: opts.after,
+  });
   const own = personalScopeOf(ctx.actor);
-  const ids = [...new Set(touchable.flatMap((c) => [c.memory_a_id, c.memory_b_id]))];
-  // entriesByIds reads at most one chunk of ids per call.
-  const chunks = await Promise.all(chunked(ids).map((chunk) => ctx.store.entriesByIds(chunk, ctx.tenantId)));
-  const rows = new Map(chunks.flat().map((row) => [row.id, row]));
-  const shown = (id: string): boolean => {
-    const row = rows.get(id);
-    return row !== undefined && classifyOriginProject(row.origin_project, project) !== 'cross-project'
-      && passesScopeFilterForRecall(row.scope ?? null, undefined, own);
-  };
-  return touchable.filter((c) => shown(c.memory_a_id) && shown(c.memory_b_id));
+  const recallable = (member: ConflictMember | null): boolean => !project || (member !== null &&
+    classifyOriginProject(member.origin_project, project) !== 'cross-project' &&
+    passesScopeFilterForRecall(member.scope, undefined, own));
+  const shown = (row: ConflictRow): boolean => touchable(ctx.actor, row) && recallable(row.a) && recallable(row.b);
+  return { conflicts: page.rows.filter(shown).map((row) => row.conflict), next: page.next };
 }
 
-/**
- * Conflicts with `status` ('*' for any) in reach, with no scope filter: the host's own view, so the host admin only.
- */
+/** One page of conflicts with `status` ('*' for any) in reach, with no scope filter: the host's own view, so the host
+ * admin only. */
 export async function listConflicts(
   ctx: Context,
   status: string,
   reach: TenantReach = {},
-): Promise<MemoryConflict[]> {
+  opts: ConflictPageOptions = {},
+): Promise<ConflictPage> {
   requireHostAdmin(ctx, 'Listing conflicts past the scope check');
-  return ctx.store.conflicts.list(reach.everyTenant ? null : ctx.tenantId, status);
+  const page = await ctx.store.conflicts.list({
+    tenantId: reach.everyTenant ? null : ctx.tenantId, status, limit: pageLimit(opts.limit), after: opts.after,
+  });
+  return { conflicts: page.rows.map((row) => row.conflict), next: page.next };
+}
+
+/** Every conflict a paged list returns, read the largest page at a time, for the verbs that print the whole list. */
+export async function everyConflict(
+  read: (page: ConflictPageOptions) => Promise<ConflictPage>,
+): Promise<MemoryConflict[]> {
+  const all: MemoryConflict[] = [];
+  let after: KeysetPosition | undefined;
+  do {
+    const page = await read({ limit: MAX_LIST_LIMIT, after });
+    all.push(...page.conflicts);
+    after = page.next ?? undefined;
+  } while (after);
+  return all;
 }

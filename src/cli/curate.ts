@@ -152,7 +152,8 @@ export async function handleConflicts({ hippoRoot, tenantId, flags }: CommandCon
   requireInit(hippoRoot);
 
   const status = stringFlagOrExit(flags, 'status') ?? 'open';
-  const conflicts = await api.listConflicts(cliApiContext(hippoRoot, tenantId), status, { everyTenant: true });
+  const ctx = cliApiContext(hippoRoot, tenantId);
+  const conflicts = await api.everyConflict((page) => api.listConflicts(ctx, status, { everyTenant: true }, page));
   if (flags['json']) {
     console.log(JSON.stringify({ conflicts }, null, 2));
     return;
@@ -174,9 +175,9 @@ export async function handleConflicts({ hippoRoot, tenantId, flags }: CommandCon
 
 /** Shown when --keep is missing, to help the user decide. */
 async function showConflictForResolve(hippoRoot: string, conflictId: number, tenantId: string): Promise<void> {
-  const conflicts = await api.listConflicts(cliApiContext(hippoRoot, tenantId), 'open');
-  const conflict = conflicts.find((c) => c.id === conflictId);
-  if (!conflict) {
+  const ctx = cliApiContext(hippoRoot, tenantId);
+  const conflict = await api.getConflict(ctx, conflictId);
+  if (!conflict || conflict.status !== 'open') {
     fail(`Conflict ${conflictId} not found or already resolved.`);
   }
 
@@ -185,7 +186,6 @@ async function showConflictForResolve(hippoRoot: string, conflictId: number, ten
   console.log(`  Reason: ${conflict.reason}`);
   console.log('');
 
-  const ctx = cliApiContext(hippoRoot, tenantId);
   const entryA = await getMemory(ctx, conflict.memory_a_id);
   const entryB = await getMemory(ctx, conflict.memory_b_id);
   if (entryA) {

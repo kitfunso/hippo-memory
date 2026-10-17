@@ -95,13 +95,17 @@ describe('conflicts group', () => {
     replaceDetectedConflicts(r, [{ memory_a_id: a.id, memory_b_id: b.id, reason: 'contradiction', score: 0.9 }]);
     const sync = sqliteSyncStore(r).conflicts;
     const served = sqliteStore(r).conflicts;
-    const [open] = sync.list(T, 'open');
-    expect(open).toBeDefined();
-    expect(await served.list(null, 'open')).toHaveLength(1);
-    expect(await served.list('other', 'open')).toHaveLength(0);
-    const resolved = await served.resolve(T, { conflictId: open!.id, keepId: a.id }, {});
+    const query = (tenantId: string | null) => ({ tenantId, status: 'open', limit: 10 });
+    const [open] = sync.list(query(T)).rows;
+    expect(open?.a).not.toBeNull();
+    expect(open?.b).not.toBeNull();
+    expect((await served.list(query(null))).rows).toHaveLength(1);
+    expect((await served.list(query('other'))).rows).toHaveLength(0);
+    expect((await served.get(T, open!.conflict.id))?.conflict.id).toBe(open!.conflict.id);
+    expect(await served.get('other', open!.conflict.id)).toBeNull();
+    const resolved = await served.resolve(T, { conflictId: open!.conflict.id, keepId: a.id }, {});
     expect(resolved?.loserId).toBe(b.id);
-    expect(await served.list(T, 'open')).toHaveLength(0);
+    expect((await served.list(query(T))).rows).toHaveLength(0);
   });
 });
 

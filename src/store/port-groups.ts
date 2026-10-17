@@ -13,6 +13,7 @@ import type { HandoffFilter, SessionEndHandoffRequest } from './handoffs.js';
 import type { FailureLog } from './port/failure-log.js';
 import type { Compactions } from './port/compactions.js';
 import type { Rejections } from './port/rejections.js';
+import type { ConflictListQuery, ConflictRow, ConflictRowPage } from './port/conflicts.js';
 import type { LegacyStats, MemoryConflict, SessionEvent, TaskSnapshot } from './rows.js';
 import type { SessionEventInput, SnapshotInput } from './sessions.js';
 import type { TokenSummary } from './token-ledger.js';
@@ -135,10 +136,10 @@ export interface Goals {
 }
 
 export interface Conflicts {
-  /** `tenantId` null reads every tenant (host admin; the api checks). */
-  list(tenantId: string | null, status: string): Promise<MemoryConflict[]>;
-  /** Conflicts whose both rows the actor may touch; status '*' reads every status. */
-  listTouchable(tenantId: string, status: string, actor: { readonly owner?: string }): Promise<MemoryConflict[]>;
+  /** One page, newest change first, each conflict with both members' columns from the same read. */
+  list(query: ConflictListQuery): Promise<ConflictRowPage>;
+  /** Conflict `conflictId`, any status, when both its members are in the tenant; else null. */
+  get(tenantId: string, conflictId: number): Promise<ConflictRow | null>;
   resolve(
     tenantId: string,
     request: Omit<ResolveConflictRequest, 'tenantId'>,

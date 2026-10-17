@@ -38,6 +38,7 @@ const STORE_KIT_TYPES = [
   'VectorMatch', 'VectorReads', 'VectorRow', 'VectorRowWrite', 'VectorWrite', 'VectorWriteResult', 'VectorWrites',
   // The session and admin groups (port-groups.ts).
   'Card', 'CardComment', 'CardCreate', 'CardDetail', 'CardRun', 'CardStatus', 'Cards', 'CompleteGoalOpts',
+  'ConflictListQuery', 'ConflictMember', 'ConflictRow', 'ConflictRowPage',
   'Conflicts', 'Dormant', 'DormantMemory', 'DormantRestoreOutcome', 'DormantRestoreRequest', 'DormantSnapshot',
   'EntryCursor', 'EntryPage', 'FailureSummary', 'Goals', 'HandoffFilter', 'HandoffOutcome', 'ListDormantOpts',
   'MemoryConflict', 'PushGoalOpts', 'Reports', 'ResolveConflictOpts', 'ResolveConflictRequest',

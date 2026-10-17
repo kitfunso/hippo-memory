@@ -12,10 +12,12 @@ import { onHandle, openStore, type StoreFiles } from './open.js';
 import { deleteEntryCore } from './delete-and-batch.js';
 import { BadRequestError } from '../core/api-errors.js';
 import { canTouchScope, isPersonalScope } from '../core/recall-scope.js';
-import { selectMemoryReach } from './tenant-lookup.js';
 import { placeholders } from '../util/sql.js';
 import { CLI_ACTOR } from '../core/actor.js';
+import type { KeysetClause, KeysetPosition } from '../util/keyset.js';
+import { MAX_LIST_LIMIT } from '../util/limits.js';
 import type { DetectedConflict } from './port/consolidation.js';
+import type { ConflictListQuery, ConflictMember, ConflictRow, ConflictRowPage } from './port/conflicts.js';
 
 // The one place MemoryConflictRow's columns are listed; CONFLICT_COLS_MC is the same list under the `mc` alias.
 const CONFLICT_COLS = 'id, memory_a_id, memory_b_id, reason, score, status, detected_at, updated_at';
@@ -27,75 +29,102 @@ function canonicalConflictPair(aId: string, bId: string): { memory_a_id: string;
     : { memory_a_id: bId, memory_b_id: aId };
 }
 
-function selectConflictRowsInTenant(
+// Each member's columns the api's conflict rules read, aliased per side so one JOIN carries both.
+const MEMBER_COLS = ['id', 'scope', 'kind', 'superseded_by', 'origin_project'] as const;
+const memberCols = (alias: string, side: string): string =>
+  MEMBER_COLS.map((c) => `${alias}.${c} AS ${side}_${c}`).join(', ');
+const CONFLICT_ROW_COLS = `${CONFLICT_COLS_MC}, ${memberCols('ma', 'a')}, ${memberCols('mb', 'b')}`;
+
+interface ConflictJoinRow extends MemoryConflictRow {
+  a_id: string | null;
+  a_scope: string | null;
+  a_kind: string | null;
+  a_superseded_by: string | null;
+  a_origin_project: string | null;
+  b_id: string | null;
+  b_scope: string | null;
+  b_kind: string | null;
+  b_superseded_by: string | null;
+  b_origin_project: string | null;
+}
+
+function memberOf(
+  id: string | null,
+  scope: string | null,
+  kind: string | null,
+  supersededBy: string | null,
+  originProject: string | null,
+): ConflictMember | null {
+  if (id === null || kind === null) return null;
+  return { scope, kind, superseded_by: supersededBy, origin_project: originProject };
+}
+
+function toConflictRow(r: ConflictJoinRow): ConflictRow {
+  return {
+    conflict: rowToMemoryConflict(r),
+    a: memberOf(r.a_id, r.a_scope, r.a_kind, r.a_superseded_by, r.a_origin_project),
+    b: memberOf(r.b_id, r.b_scope, r.b_kind, r.b_superseded_by, r.b_origin_project),
+  };
+}
+
+/** A conflict read's SELECT with its WHERE. With a tenant both members must be in it, so no cross-tenant or stale pair
+ * surfaces; with none, every conflict comes back with whichever members still exist. */
+function conflictSelect(tenantId: string | null, filters: readonly KeysetClause[]): KeysetClause {
+  const join = tenantId === null ? 'LEFT JOIN' : 'JOIN';
+  const where: KeysetClause[] = tenantId === null
+    ? [...filters]
+    : [{ sql: 'ma.tenant_id = ? AND mb.tenant_id = ?', params: [tenantId, tenantId] }, ...filters];
+  return {
+    sql:
+      `SELECT ${CONFLICT_ROW_COLS} FROM memory_conflicts mc ${join} memories ma ON ma.id = mc.memory_a_id ` +
+      `${join} memories mb ON mb.id = mc.memory_b_id` +
+      (where.length > 0 ? ` WHERE ${where.map((f) => f.sql).join(' AND ')}` : ''),
+    params: where.flatMap((f) => f.params),
+  };
+}
+
+/** One page of conflicts, newest change first, each with both members' columns from the same JOIN. */
+export function conflictPageAt(
   db: DatabaseSyncLike,
-  status: string,
-  allStatuses: boolean,
-  tenantId: string,
-): MemoryConflictRow[] {
-  // Tenanted query: JOIN memories on both members and require each in-tenant, so no cross-tenant or stale pre-fix pair
-  // surfaces.
-  // SAFETY: both branches select CONFLICT_COLS_MC, MemoryConflictRow's columns.
-  return allStatuses
-    ? (db
-        .prepare(
-          `
-        SELECT ${CONFLICT_COLS_MC}
-        FROM memory_conflicts mc
-        JOIN memories ma ON ma.id = mc.memory_a_id
-        JOIN memories mb ON mb.id = mc.memory_b_id
-        WHERE ma.tenant_id = ? AND mb.tenant_id = ?
-        ORDER BY mc.updated_at DESC, mc.id DESC
-      `,
-        )
-        .all(tenantId, tenantId) as MemoryConflictRow[])
-    : (db
-        .prepare(
-          `
-        SELECT ${CONFLICT_COLS_MC}
-        FROM memory_conflicts mc
-        JOIN memories ma ON ma.id = mc.memory_a_id
-        JOIN memories mb ON mb.id = mc.memory_b_id
-        WHERE mc.status = ? AND ma.tenant_id = ? AND mb.tenant_id = ?
-        ORDER BY mc.updated_at DESC, mc.id DESC
-      `,
-        )
-        .all(status, tenantId, tenantId) as MemoryConflictRow[]);
+  { tenantId, status, limit, after }: ConflictListQuery,
+): ConflictRowPage {
+  const filters: KeysetClause[] = [];
+  if (status !== '*') filters.push({ sql: 'mc.status = ?', params: [status] });
+  if (after) filters.push({ sql: '(mc.updated_at, mc.id) < (?, ?)', params: [after.key, after.id] });
+  const select = conflictSelect(tenantId, filters);
+  // SAFETY: conflictSelect names CONFLICT_ROW_COLS, ConflictJoinRow's columns.
+  const rows = db
+    .prepare(`${select.sql} ORDER BY mc.updated_at DESC, mc.id DESC LIMIT ?`)
+    .all(...select.params, limit + 1) as ConflictJoinRow[];
+  const page = rows.slice(0, limit).map(toConflictRow);
+  const last = page[page.length - 1]?.conflict;
+  return { rows: page, next: rows.length > limit && last ? { key: last.updated_at, id: last.id } : null };
 }
 
-function selectConflictRowsUnscoped(db: DatabaseSyncLike, status: string, allStatuses: boolean): MemoryConflictRow[] {
-  // Unscoped query — legacy direct-mode (CLI, tests, consolidate).
-  // SAFETY: both branches select CONFLICT_COLS, MemoryConflictRow's columns.
-  return allStatuses
-    ? db.prepare(`
-        SELECT ${CONFLICT_COLS}
-        FROM memory_conflicts
-        ORDER BY updated_at DESC, id DESC
-      `).all() as MemoryConflictRow[]
-    : db.prepare(`
-        SELECT ${CONFLICT_COLS}
-        FROM memory_conflicts
-        WHERE status = ?
-        ORDER BY updated_at DESC, id DESC
-      `).all(status) as MemoryConflictRow[];
+/** Conflict `conflictId`, any status, when both its members are in `tenantId`. */
+export function conflictByIdAt(db: DatabaseSyncLike, tenantId: string, conflictId: number): ConflictRow | null {
+  const select = conflictSelect(tenantId, [{ sql: 'mc.id = ?', params: [conflictId] }]);
+  // SAFETY: conflictSelect names CONFLICT_ROW_COLS, ConflictJoinRow's columns.
+  const row = db.prepare(select.sql).get(...select.params) as ConflictJoinRow | undefined;
+  return row ? toConflictRow(row) : null;
 }
 
-export function listMemoryConflictsAt(
-  db: DatabaseSyncLike,
-  status: string = 'open',
-  tenantId?: string,
-): MemoryConflict[] {
-  // '*' is a sentinel for no status filter; the 4 SQL branches below
-  // cover {tenanted | unscoped} x {all-statuses | specific-status}.
-  const allStatuses = status === '*';
-  const rows = tenantId !== undefined
-    ? selectConflictRowsInTenant(db, status, allStatuses, tenantId)
-    : selectConflictRowsUnscoped(db, status, allStatuses);
-  return rows.map(rowToMemoryConflict);
+/** Every conflict with `status` (tenant null: every tenant's), read a page at a time. */
+function everyConflictRowAt(db: DatabaseSyncLike, tenantId: string | null, status: string): ConflictRow[] {
+  const out: ConflictRow[] = [];
+  let after: KeysetPosition | undefined;
+  do {
+    const page = conflictPageAt(db, { tenantId, status, limit: MAX_LIST_LIMIT, after });
+    out.push(...page.rows);
+    after = page.next ?? undefined;
+  } while (after);
+  return out;
 }
 
+/** Every conflict with `status` under `hippoRoot`, for the callers that still read the store by folder. */
 export function listMemoryConflicts(hippoRoot: string, status: string = 'open', tenantId?: string): MemoryConflict[] {
-  return onHandle(hippoRoot, (db) => listMemoryConflictsAt(db, status, tenantId), openStore);
+  const rows = onHandle(hippoRoot, (db) => everyConflictRowAt(db, tenantId ?? null, status), openStore);
+  return rows.map((r) => r.conflict);
 }
 
 // listMemoryConflicts' tenanted open set: both members in the tenant.
@@ -139,25 +168,17 @@ export function loadOpenConflictsOf(hippoRoot: string, tenantId: string, memoryI
   }, openStore);
 }
 
-/** Conflicts whose two rows `actor` may both touch; someone else's personal row hides its whole pair. */
-export function listTouchableConflictsAt(
-  db: DatabaseSyncLike,
-  status: string,
-  tenantId: string,
-  actor: { owner?: string },
-): MemoryConflict[] {
-  return listMemoryConflictsAt(db, status, tenantId).filter((c) =>
-    [c.memory_a_id, c.memory_b_id].every((id) => canTouchScope(actor, selectMemoryReach(db, id)?.scope ?? null)),
-  );
-}
-
+/** Conflicts whose two rows `actor` may both touch. Only src/dashboard calls it, by folder; the api applies the same
+ * rule over `conflictPageAt`, and the dashboard's api slice deletes this. */
 export function listTouchableConflicts(
   hippoRoot: string,
   status: string,
   tenantId: string,
   actor: { owner?: string },
 ): MemoryConflict[] {
-  return onHandle(hippoRoot, (db) => listTouchableConflictsAt(db, status, tenantId, actor), openStore);
+  return onHandle(hippoRoot, (db) => everyConflictRowAt(db, tenantId, status)
+    .filter((r) => [r.a, r.b].every((m) => canTouchScope(actor, m?.scope ?? null)))
+    .map((r) => r.conflict), openStore);
 }
 type SameTenant = (a: string, b: string) => boolean;
 
