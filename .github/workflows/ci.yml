@@ -297,11 +297,17 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
-      # EXPERIMENT arm 2: test stores on the C: system disk, away from the D: temp disk that stalls (#903).
-      - name: Temp dir on the C drive
+      # EXPERIMENT arm 3: test stores on a RAM disk, the Windows twin of TMPDIR=/dev/shm on Linux (#214).
+      - name: Temp dir on a RAM disk
         if: runner.os == 'Windows'
         run: |
-          $d = 'C:\hippo-test-tmp'
+          $t = [Diagnostics.Stopwatch]::StartNew()
+          choco install imdisk -y --no-progress
+          if ($LASTEXITCODE) { throw "choco install imdisk failed: $LASTEXITCODE" }
+          imdisk -a -s 4G -m R: -p "/fs:ntfs /q /y"
+          if ($LASTEXITCODE) { throw "imdisk mount failed: $LASTEXITCODE" }
+          "RAM disk install and mount: $([int]$t.Elapsed.TotalSeconds) s"
+          $d = 'R:\tmp'
           New-Item -ItemType Directory -Force $d | Out-Null
           "TEMP=$d" >> $env:GITHUB_ENV
           "TMP=$d" >> $env:GITHUB_ENV
