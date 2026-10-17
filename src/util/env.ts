@@ -194,7 +194,7 @@ export function envStoreQueueMax(): number | undefined { return positiveInt('HIP
 export function envDailyStepTimeoutMs(): number | undefined { return positiveInt('HIPPO_DAILY_STEP_TIMEOUT_MS'); }
 export function envApiKey(): string | undefined { return raw('HIPPO_API_KEY'); }
 export function envClientIpHeader(): string | undefined { return raw('HIPPO_CLIENT_IP_HEADER')?.trim().toLowerCase(); }
-/** The peers whose HIPPO_CLIENT_IP_HEADER is believed: IPs or CIDRs, or `*` for any peer. */
+/** The peers whose HIPPO_CLIENT_IP_HEADER is believed: IPs or CIDRs. */
 export function envTrustedProxies(): string | undefined { return raw('HIPPO_TRUSTED_PROXIES'); }
 /** Paths to the PEM certificate and key `hippo serve` answers HTTPS with; the --tls-cert and --tls-key flags win. */
 export function envTlsCert(): string | undefined { return trimmed('HIPPO_TLS_CERT'); }
