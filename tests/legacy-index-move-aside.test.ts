@@ -1,13 +1,12 @@
 // Moving the imported embeddings.json aside: a rename blocked by an open handle is logged and copied; any other rename failure leaves the file for the next open.
 import fs from 'node:fs';
 import { syncBuiltinESMExports } from 'node:module';
-import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
-import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { loadEmbeddingIndex } from '../src/store/vector-index.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 let root: string;
 let legacy: string;
@@ -38,16 +37,14 @@ function failOnLegacy(op: 'renameSync' | 'rmSync', code: string): void {
 }
 
 beforeEach(() => {
-  root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-move-aside-')));
+  root = fs.realpathSync(makeRoot('move-aside'));
   legacy = path.join(root, 'embeddings.json');
-  initStore(root);
   stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
 });
 
 afterEach(() => {
   vi.restoreAllMocks();
   syncBuiltinESMExports();
-  fs.rmSync(root, { recursive: true, force: true });
 });
 
 function seedLegacyIndex(): string {

@@ -5,11 +5,10 @@
  * host-wide back-compat parity. Real DB per the project convention; multi-
  * tenant fixtures constructed via createMemory({ tenantId }).
  */
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries, loadEveryTenantEntries } from '../src/store/entry-reads.js';
 import { sqliteStore } from '../src/store/index.js';
@@ -31,13 +30,6 @@ import { makeStore } from './_helpers/make-root.js';
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-function newRoot(prefix: string) {
-  const tmpDir = mkdtempSync(join(tmpdir(), prefix));
-  const hippoRoot = join(tmpDir, '.hippo');
-  initStore(hippoRoot);
-  return { tmpDir, hippoRoot };
-}
 
 /**
  * Per-test HIPPO_HOME override to isolate any global-store writes (autoShare,
@@ -87,11 +79,7 @@ describe('per-tenant scoping (cross-tenant leak prevention)', () => {
   let hippoRoot: string;
 
   beforeEach(() => {
-    ({ tmpDir, hippoRoot } = newRoot('hippo-l9-neg-'));
-  });
-
-  afterEach(() => {
-    rmSync(tmpDir, { recursive: true, force: true });
+    ({ base: tmpDir, root: hippoRoot } = makeStore('l9-neg'));
   });
 
   it('case 1: invalidateMatching(..., tenant-a) does NOT weaken tenant-b matches', () => {
@@ -305,15 +293,10 @@ describe('per-tenant scoping (cross-tenant leak prevention)', () => {
 // ---------------------------------------------------------------------------
 
 describe('host-wide back-compat parity (current behaviour preserved)', () => {
-  let tmpDir: string;
   let hippoRoot: string;
 
   beforeEach(() => {
-    ({ tmpDir, hippoRoot } = newRoot('hippo-l9-pos-'));
-  });
-
-  afterEach(() => {
-    rmSync(tmpDir, { recursive: true, force: true });
+    ({ root: hippoRoot } = makeStore('l9-pos'));
   });
 
   it('case 8: invalidateMatching(...) without tenantId weakens all tenants (host-wide)', () => {
@@ -433,24 +416,17 @@ describe('host-wide back-compat parity (current behaviour preserved)', () => {
     const isolated = tmpHippoHome('hippo-l9-sync-global-');
     try {
       // Set up two separate roots to simulate global → local sync
-      const { tmpDir: globalTmp, hippoRoot: globalRoot } = newRoot('hippo-l9-global-');
-      try {
-        // Seed global with two tenants' worth of entries. Under v39 they
-        // are stamped with the seed store's own (different) project origin,
-        // so the default sync gates them as cross-project...
-        seedFor(globalRoot, 'tenant-a', 'global memory from tenant-a', {});
-        seedFor(globalRoot, 'tenant-b', 'global memory from tenant-b', {});
+      const { root: globalRoot } = makeStore('l9-global');
+      seedFor(globalRoot, 'tenant-a', 'global memory from tenant-a', {});
+      seedFor(globalRoot, 'tenant-b', 'global memory from tenant-b', {});
 
-        expect(syncGlobalToLocal(...sharingStores(hippoRoot, globalRoot))).toBe(0);
+      expect(syncGlobalToLocal(...sharingStores(hippoRoot, globalRoot))).toBe(0);
 
-        // ...but this case's original guarantee - the global read is
-        // host-wide across TENANTS - still holds once the origin gate is
-        // explicitly lifted: both tenants' rows copy.
-        const copied = syncGlobalToLocal(...sharingStores(hippoRoot, globalRoot), { includeCrossProject: true });
-        expect(copied).toBe(2);
-      } finally {
-        rmSync(globalTmp, { recursive: true, force: true });
-      }
+      // Under v39 the seeded rows carry the seed store's own project origin, so the default sync gates them above; this case's
+      // original guarantee - the global read is host-wide across TENANTS - still holds once the origin gate is explicitly
+      // lifted: both tenants' rows copy.
+      const copied = syncGlobalToLocal(...sharingStores(hippoRoot, globalRoot), { includeCrossProject: true });
+      expect(copied).toBe(2);
     } finally {
       isolated.restore();
     }
@@ -458,15 +434,10 @@ describe('host-wide back-compat parity (current behaviour preserved)', () => {
 });
 
 describe('invalidate onlyId', () => {
-  let tmpDir: string;
   let hippoRoot: string;
 
   beforeEach(() => {
-    ({ base: tmpDir, root: hippoRoot } = makeStore('l9-onlyid'));
-  });
-
-  afterEach(() => {
-    rmSync(tmpDir, { recursive: true, force: true });
+    ({ root: hippoRoot } = makeStore('l9-onlyid'));
   });
 
   it('onlyId naming a tenant-B memory under tenant-A scope invalidates nothing', () => {

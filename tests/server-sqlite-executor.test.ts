@@ -1,8 +1,6 @@
 // The predictions routes run their SQLite work on worker threads: the server answers through a held write lock, and a client sees what the in-process store gave.
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { existsSync, mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { existsSync, rmSync } from 'node:fs';
 import { closeHippoDb, getHippoDbPath, openHippoDb } from '../src/db/index.js';
 import { log } from '../src/util/log.js';
 import { serve, type ServerHandle } from '../src/server.js';
@@ -15,8 +13,9 @@ import type { Predictions } from '../src/store/port.js';
 import { sqliteStore } from '../src/store/sqlite/store.js';
 import { workerSqliteStore } from '../src/store/sqlite/worker-store.js';
 import {
-  auditFailures, auditRows, cleanups, execOn, get, holdWriteLock, keyFor, newRoot, onDb, patientStore, post, postText, removeLater, seen, start, undoAll,
+  auditFailures, auditRows, cleanups, execOn, get, holdWriteLock, keyFor, newRoot, onDb, patientStore, post, postText, seen, start, undoAll,
 } from './_helpers/store-worker-server.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const SAVE = 'predictions.savePrediction';
 
@@ -227,7 +226,7 @@ describe("the server-thread block of a `loop: 'off'` route", () => {
   });
 
   it('still holds the store connection when the first response of a new store is a worker-backed route', async () => {
-    const root = removeLater(mkdtempSync(join(tmpdir(), 'hippo-sqlite-executor-bare-')));
+    const root = makeRoot('sqlite-executor-bare', { init: false });
     const warn = vi.spyOn(log, 'warn');
     const server = await start(root);
     expect(existsSync(getHippoDbPath(root))).toBe(false);

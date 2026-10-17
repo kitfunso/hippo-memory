@@ -456,6 +456,7 @@ describe('HIPPO_FAKE_NOW', () => {
     m.last_retrieved = '2026-06-11T00:00:00.000Z';
     m.half_life_days = 7;
     const tmp = makeRoot('abl');
+    // Local-only store via the wrapper (global root nonexistent path).
     const { writeEntry } = await import('../src/store/entry-writes.js');
     writeEntry(tmp, m);
     const results = await searchBothHybrid('wrapper clock consistency check', ...sharingStores(tmp, path.join(tmp, 'no-global')), {

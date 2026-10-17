@@ -159,6 +159,8 @@ describe('audit log captures every mutation', () => {
     }
     const home = makeRoot('audit-forget', { init: false });
     const env = { ...process.env, HIPPO_HOME: home };
+    // Local store flow (cmdForget is local-store only). Remember + forget
+    // both target the local .hippo dir under cwd=home.
     execSync(`node "${cli}" init`, { env, cwd: home });
     execSync(
       `node "${cli}" remember "audit-forget-canary-77 distinguishing token"`,

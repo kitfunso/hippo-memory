@@ -1,12 +1,8 @@
 // Sleep, sync down and one-id invalidation read only the rows they need: counted in statements and rows, never timed.
 import type { FullContext } from './_helpers/api-ctx.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { recordStatements, recordStatementsAsync, countMatching, STORE_OPEN } from './_helpers/count-statements.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { initStore } from '../src/store/open.js';
 import { writeEntriesTogether, writeEntry } from '../src/store/entry-writes.js';
 import { loadEveryTenantEntries } from '../src/store/entry-reads.js';
 import { MEMORY_SELECT_COLUMNS } from '../src/store/rows.js';
@@ -21,25 +17,16 @@ import { syncGlobalToLocal } from '../src/sharing/global-sync.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 import { sharingStores } from './_helpers/sharing-stores.js';
 import { sqliteSyncStore } from '../src/store/sqlite/store.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const FULL_ROW = `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories`;
 /** A full-row read of every row in the store, or of every current distilled row: no id, tenant or parent filter. */
 const WHOLE_STORE_READ = /FROM memories\s+(WHERE COALESCE\(kind, 'distilled'\) = 'distilled' AND COALESCE\(superseded_by, ''\) = ''\s+)?ORDER BY created ASC, id ASC$/;
-const roots: string[] = [];
-
 afterEach(() => {
   vi.unstubAllEnvs();
   vi.restoreAllMocks();
   _resetAblationCacheForTests();
-  for (const r of roots.splice(0)) rmSync(r, { recursive: true, force: true });
 });
-
-function newRoot(label: string): string {
-  const root = mkdtempSync(join(tmpdir(), `hippo-batch-${label}-`));
-  roots.push(root);
-  initStore(root);
-  return root;
-}
 
 const wholeStoreReads = (statements: readonly string[]): number =>
   statements.filter((sql) => sql.startsWith(FULL_ROW) && WHOLE_STORE_READ.test(sql)).length;
@@ -49,12 +36,11 @@ describe('sleep after consolidation', () => {
     (apiCtx(hippoRoot, 'default', { subject: 'batch-test', role: 'admin' }));
 
   function seeded(): string {
-    const home = mkdtempSync(join(tmpdir(), 'hippo-batch-home-'));
-    roots.push(home);
+    const home = makeRoot('batch-home', { init: false });
     vi.stubEnv('HIPPO_HOME', home);
     vi.stubEnv('HIPPO_FAKE_NOW', '2026-06-01T12:00:00.000Z');
     _resetAblationCacheForTests();
-    const root = newRoot('sleep');
+    const root = makeRoot('batch-sleep');
     // Every row shares the fake clock's timestamp, so ids in write order keep the merge and survivor picks off random UUIDs.
     let seq = 0;
     const put = (text: string, options: { tags?: string[]; tenantId: string }): void =>
@@ -111,7 +97,7 @@ describe('invalidateMatching with onlyId', () => {
   const target = { from: 'zephyrine cache', to: null, type: 'removal' as const };
 
   function seeded(n: number) {
-    const root = newRoot('invalidate');
+    const root = makeRoot('batch-invalidate');
     const rows = Array.from({ length: n }, (_, i) => createMemory(`row ${i} about the zephyrine cache`));
     writeEntriesTogether(root, rows);
     return { root, rows };
@@ -131,7 +117,7 @@ describe('invalidateMatching with onlyId', () => {
   });
 
   it('cannot see another tenant\'s id, reports a pinned id and writes nothing on a dry run', () => {
-    const root = newRoot('invalidate-edges');
+    const root = makeRoot('batch-invalidate-edges');
     const other = createMemory('acme row about the zephyrine cache', { tenantId: 'acme' });
     const pinned = createMemory('pinned row about the zephyrine cache', { pinned: true });
     const plain = createMemory('plain row about the zephyrine cache');
@@ -157,8 +143,8 @@ describe('invalidateMatching with onlyId', () => {
 
 describe('syncGlobalToLocal', () => {
   function stores(n: number) {
-    const localRoot = newRoot('sync-local');
-    const globalRoot = newRoot('sync-global');
+    const localRoot = makeRoot('batch-sync-local');
+    const globalRoot = makeRoot('batch-sync-global');
     const rows = Array.from({ length: n }, (_, i) => createMemory(`global lesson ${i} about the zephyrine cache`));
     writeEntriesTogether(globalRoot, rows);
     return { localRoot, globalRoot, rows };

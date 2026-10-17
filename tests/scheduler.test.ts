@@ -1,6 +1,5 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { runCliAs } from './_helpers/run-cli-as.js';
 import { initStore } from '../src/store/open.js';
@@ -12,6 +11,7 @@ import {
   runDailyMaintenance,
   workspaceRegistryPath,
 } from '../src/cli/scheduler.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 // The registry stores forward-slash paths on every platform.
 const norm = (p: string): string => resolve(p).replace(/\\/g, '/');
@@ -23,11 +23,8 @@ describe('scheduler', () => {
   let root: string;
   let globalRoot: string;
   beforeEach(() => {
-    root = realpathSync(mkdtempSync(join(tmpdir(), 'hippo-scheduler-')));
+    root = realpathSync(makeRoot('scheduler', { init: false }));
     globalRoot = join(root, 'global');
-  });
-  afterEach(() => {
-    rmSync(root, { recursive: true, force: true });
   });
 
   it('registerWorkspace stores unique project roots in the global registry file', () => {
@@ -92,33 +89,29 @@ describe('scheduler', () => {
 // About 2 s solo, two runs of two short child steps, so the 30 s process-project timeout is a 15x margin.
 describe('hippo daily-runner', () => {
   it('stops a child step at its deadline, names the workspace and reason, and exits 1 so the scheduler sees the failure', async () => {
-    const dir = realpathSync(mkdtempSync(join(tmpdir(), 'hippo-daily-runner-')));
-    try {
-      const globalRoot = join(dir, 'global');
-      const workspace = join(dir, 'repo');
-      mkdirSync(globalRoot);
-      mkdirSync(join(workspace, '.hippo'), { recursive: true });
-      initStore(join(workspace, '.hippo'));
-      writeFileSync(workspaceRegistryPath(globalRoot), JSON.stringify({ version: 1, workspaces: [workspace] }));
-      // The runner runs in process so coverage sees it; each step it starts is still a real child with a real deadline.
-      const run = (extraEnv: Record<string, string>) => runCliAs(['daily-runner'], {
-        cwd: dir,
-        env: { ...process.env, HIPPO_HOME: globalRoot, HIPPO_SKIP_AUTO_INTEGRATIONS: '1', HIPPO_LOG: 'warn', HIPPO_LOG_FORMAT: '', ...extraEnv },
-      });
+    const dir = realpathSync(makeRoot('daily-runner', { init: false }));
+    const globalRoot = join(dir, 'global');
+    const workspace = join(dir, 'repo');
+    mkdirSync(globalRoot);
+    mkdirSync(join(workspace, '.hippo'), { recursive: true });
+    initStore(join(workspace, '.hippo'));
+    writeFileSync(workspaceRegistryPath(globalRoot), JSON.stringify({ version: 1, workspaces: [workspace] }));
+    // The runner runs in process so coverage sees it; each step it starts is still a real child with a real deadline.
+    const run = (extraEnv: Record<string, string>) => runCliAs(['daily-runner'], {
+      cwd: dir,
+      env: { ...process.env, HIPPO_HOME: globalRoot, HIPPO_SKIP_AUTO_INTEGRATIONS: '1', HIPPO_LOG: 'warn', HIPPO_LOG_FORMAT: '', ...extraEnv },
+    });
 
-      // One millisecond is less than a node start, so both child steps are stopped at the deadline.
-      const cut = await run({ HIPPO_DAILY_STEP_TIMEOUT_MS: '1' });
-      expect(cut.stdout).toContain('0 workspaces processed, 2 command failures.');
-      expect(cut.stderr).toMatch(/error: daily-runner failed in .*repo during `sleep`: timed out after 1 ms and was stopped .*workspace=.*repo/);
-      expect(cut.stderr).toMatch(/daily-runner failed in .*workspace=.* errorClass=\w+ stack=\S*Error.* at /);
-      expect(cut.status).toBe(1);
+    // One millisecond is less than a node start, so both child steps are stopped at the deadline.
+    const cut = await run({ HIPPO_DAILY_STEP_TIMEOUT_MS: '1' });
+    expect(cut.stdout).toContain('0 workspaces processed, 2 command failures.');
+    expect(cut.stderr).toMatch(/error: daily-runner failed in .*repo during `sleep`: timed out after 1 ms and was stopped .*workspace=.*repo/);
+    expect(cut.stderr).toMatch(/daily-runner failed in .*workspace=.* errorClass=\w+ stack=\S*Error.* at /);
+    expect(cut.status).toBe(1);
 
-      // Control: the same workspace inside the default deadline is a clean run.
-      const clean = await run({});
-      expect(clean.stdout).toContain('1 workspace processed, 0 command failures.');
-      expect(clean.status).toBe(0);
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
+    // Control: the same workspace inside the default deadline is a clean run.
+    const clean = await run({});
+    expect(clean.stdout).toContain('1 workspace processed, 0 command failures.');
+    expect(clean.status).toBe(0);
   });
 });
