@@ -14,6 +14,10 @@ import type { DatabaseSyncLike } from '../src/db/index.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 import { makeRoot } from './_helpers/make-root.js';
 
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 const require = createRequire(import.meta.url);
 // SAFETY: node:sqlite has no bundled types; mirrors tests/db-open-write-free.test.ts.
 const { DatabaseSync } = require('node:sqlite') as {
@@ -42,12 +46,12 @@ beforeEach(() => {
   fs.mkdirSync(globalRoot, { recursive: true });
   initStore(local);
   initStore(globalRoot);
-  process.env.HIPPO_HOME = globalRoot;
+  vi.stubEnv('HIPPO_HOME', globalRoot);
   ctx = apiCtx(local, 'default', { subject: 'cli', role: 'admin' });
 });
 
 afterEach(() => {
-  delete process.env.HIPPO_HOME;
+  vi.stubEnv('HIPPO_HOME', undefined);
   _resetAblationCacheForTests();
 });
 

@@ -5,7 +5,7 @@
  */
 
 import type { FullContext } from './_helpers/api-ctx.js';
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import { detectSecret, redactSecretsStrict } from '../src/util/secret-detect.js';
@@ -24,6 +24,10 @@ import { fastestRatio, type TimedRun } from './_helpers/fastest-ratio.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 import { sharingStores } from './_helpers/sharing-stores.js';
 import { makeRoot } from './_helpers/make-root.js';
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 // Built at runtime, so no secret-shaped literal sits in source.
 const HIPPO_KEY = 'hk_' + 'a'.repeat(24) + '.' + 'b'.repeat(32);
@@ -68,7 +72,7 @@ describe('detectSecret patterns', () => {
     expect(flagged('npm_config_cache and hf_hub_download are names; the hk_ prefix marks hippo keys')).toBe(false);
   });
 
-  it('does not flag code snippets or prose in assignment position (post-merge review FPs)', () => {
+  it('does not flag code snippets or prose in assignment position', () => {
     // Both were verified false positives of the pre-fix generic pattern:
     // ordinary code-lesson memories would silently vanish from ambient
     // context everywhere. The value must now LOOK like a credential
@@ -191,15 +195,15 @@ describe('producer + sync vetoes (real stores)', () => {
     globalStore = path.join(tmpRoot, 'globalstore');
     initStore(globalStore);
     origHippoHome = process.env.HIPPO_HOME;
-    process.env.HIPPO_HOME = globalStore;
+    vi.stubEnv('HIPPO_HOME', globalStore);
     _resetProjectIdentityCacheForTests();
   });
 
   afterEach(() => {
     if (origHippoHome !== undefined) {
-      process.env.HIPPO_HOME = origHippoHome;
+      vi.stubEnv('HIPPO_HOME', origHippoHome);
     } else {
-      delete process.env.HIPPO_HOME;
+      vi.stubEnv('HIPPO_HOME', undefined);
     }
   });
 
@@ -218,7 +222,7 @@ describe('producer + sync vetoes (real stores)', () => {
     expect(shared.map((e) => e.content)).toEqual([CLEAN_ROW]);
   });
 
-  it('autoShare stats counts only shares actually withheld by the secret veto (v1.25.0)', () => {
+  it('autoShare stats counts only shares actually withheld by the secret veto', () => {
     writeEntry(projA, createMemory(SECRET_ROW, { pinned: true, tags: ['error', 'gotcha'] }));
     writeEntry(projA, createMemory(CLEAN_ROW, { pinned: true, tags: ['error', 'gotcha'] }));
     // Below the transfer bar: secret-flagged but never a share candidate, so
@@ -230,7 +234,7 @@ describe('producer + sync vetoes (real stores)', () => {
     expect(stats.secretSkipped).toBe(1);
   });
 
-  it('autoShare fills stats identically under dryRun (v1.25.0)', () => {
+  it('autoShare fills stats identically under dryRun', () => {
     writeEntry(projA, createMemory(SECRET_ROW, { pinned: true, tags: ['error', 'gotcha'] }));
     const stats = { secretSkipped: 0 };
     const candidates = autoShare(...sharingStores(projA), { minScore: 0.6, dryRun: true, stats });

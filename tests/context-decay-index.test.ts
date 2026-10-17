@@ -1,5 +1,5 @@
 // Past the cap, loadContextCandidates reads the v60 decay-key subset and must return the rows the full-tenant rank would.
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
 import { DECAY_KEY_HALF_LIVES, DECAY_KEY_INDEX } from '../src/db/decay-key.js';
@@ -11,6 +11,10 @@ import { rewardFactorSql } from '../src/store/rule-sql.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { recordStatements } from './_helpers/count-statements.js';
 import { makeRoot } from './_helpers/make-root.js';
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 const DAY = 86_400_000;
 const BASE = Date.UTC(2026, 5, 1);
@@ -104,7 +108,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  delete process.env.HIPPO_ABLATE_OUTCOME_SLOW;
+  vi.stubEnv('HIPPO_ABLATE_OUTCOME_SLOW', undefined);
   _resetAblationCacheForTests();
   rmSync(home, { recursive: true, force: true });
 });
@@ -159,7 +163,7 @@ describe('loadContextCandidates past the cap', () => {
   });
 
   it('ranks by the scan with the outcome-slow ablation on, and still matches it', () => {
-    process.env.HIPPO_ABLATE_OUTCOME_SLOW = '1';
+    vi.stubEnv('HIPPO_ABLATE_OUTCOME_SLOW', '1');
     _resetAblationCacheForTests();
     for (const now of NOWS) {
       for (const cap of CAPS) {

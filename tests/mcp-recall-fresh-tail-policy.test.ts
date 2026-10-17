@@ -14,7 +14,7 @@
  *      error's message.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { Layer} from '../src/core/memory.js';
@@ -24,6 +24,10 @@ import { RecallContractError } from '../src/api/index.js';
 import { _resetSharedStoreCacheForTests } from '../src/core/config.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { sqliteStore } from '../src/store/sqlite/store.js';
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 type HippoRecallToolArgs = {
   query?: string;
@@ -49,25 +53,18 @@ function callTool(
 
 describe('mcp hippo_recall fresh-tail policy', () => {
   let home: string;
-  let prevEnv: string | undefined;
 
   beforeEach(() => {
     home = makeRoot('mcp-f5');
-    prevEnv = process.env.HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL;
-    delete process.env.HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL;
+    vi.stubEnv('HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL', undefined);
   });
 
   afterEach(() => {
-    if (prevEnv === undefined) {
-      delete process.env.HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL;
-    } else {
-      process.env.HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL = prevEnv;
-    }
     rmSync(home, { recursive: true, force: true });
   });
 
   it('env=1, no session_id, fresh_tail_count > 0 → throws typed RecallContractError to the transport', async () => {
-    process.env.HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL = '1';
+    vi.stubEnv('HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL', '1');
     for (let i = 0; i < 3; i++) {
       writeEntry(home, createMemory(`event ${i}`, {
         layer: Layer.Buffer,
@@ -98,7 +95,7 @@ describe('mcp hippo_recall fresh-tail policy', () => {
   });
 
   it('env=1, session_id provided → no error, content returned', async () => {
-    process.env.HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL = '1';
+    vi.stubEnv('HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL', '1');
     for (let i = 0; i < 3; i++) {
       writeEntry(home, createMemory(`event ${i}`, {
         layer: Layer.Buffer,

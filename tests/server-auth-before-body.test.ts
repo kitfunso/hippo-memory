@@ -1,7 +1,7 @@
 // No unauthenticated caller can make the server buffer a large body or wait long for one: every keyed route checks
 // the credential before it reads. The two webhook routes take no API key, so they check the signing secret and the signature headers first.
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { connect } from 'node:net';
 import { serve, type ServerHandle } from '../src/server.js';
 import { makeRoot } from './_helpers/make-root.js';
@@ -17,6 +17,14 @@ function adminKey(root: string): string {
     closeHippoDb(db);
   }
 }
+
+beforeEach(() => {
+  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 /** Sends headers that promise a 2 MB body plus a few bytes of it, never the rest, and resolves with the status line. */
 function statusBeforeBodyArrives(port: number, path: string, timeoutMs = 3000): Promise<string> {
@@ -68,7 +76,6 @@ const WEBHOOKS = [
   ['/v1/connectors/slack/events', 'SLACK_SIGNING_SECRET', 'X-Slack-Signature: v0=00\r\nX-Slack-Request-Timestamp: 1\r\n'],
   ['/v1/connectors/github/events', 'GITHUB_WEBHOOK_SECRET', `X-Hub-Signature-256: sha256=${'0'.repeat(64)}\r\n`],
 ] as const;
-const savedSecrets = new Map(WEBHOOKS.map(([, name]) => [name, process.env[name]]));
 
 describe('no route reads an unauthenticated body beyond a stated cap and deadline', () => {
   let root: string;
@@ -81,10 +88,6 @@ describe('no route reads an unauthenticated body beyond a stated cap and deadlin
 
   afterEach(async () => {
     await handle.stop();
-    for (const [name, value] of savedSecrets) {
-      if (value === undefined) delete process.env[name];
-      else process.env[name] = value;
-    }
   });
 
   it.each([
@@ -119,11 +122,11 @@ describe('no route reads an unauthenticated body beyond a stated cap and deadlin
 
   // Past auth (a keyless loopback store accepts the caller) every other route reads through one shared reader, so one route stands for all.
   it('POST /mcp answers 408 and drops the socket when an accepted caller never sends the promised body', async () => {
-    process.env.HIPPO_BODY_TIMEOUT_MS = '50';
+    vi.stubEnv('HIPPO_BODY_TIMEOUT_MS', '50');
     try {
       expect(await statusUntilServerCloses(handle.port, '/mcp', '')).toBe('HTTP/1.1 408 Request Timeout');
     } finally {
-      delete process.env.HIPPO_BODY_TIMEOUT_MS;
+      vi.stubEnv('HIPPO_BODY_TIMEOUT_MS', undefined);
     }
   });
 
@@ -131,10 +134,10 @@ describe('no route reads an unauthenticated body beyond a stated cap and deadlin
   it.each(WEBHOOKS)('POST %s drops a caller whose body never arrives: 404 with no signing secret, 401 with no signature, 408 once a signed body stalls', async (path, secretEnv, signatureHeaders) => {
     await handle.stop();
     handle = await serve({ hippoRoot: root, port: 0, webhookBodyDeadlineMs: 50 });
-    delete process.env[secretEnv];
+    vi.stubEnv(secretEnv, undefined);
     expect(await statusUntilServerCloses(handle.port, path, signatureHeaders)).toBe('HTTP/1.1 404 Not Found');
     // Test-only signing material, not a real secret.
-    process.env[secretEnv] = 'test-only-webhook-signing-material';
+    vi.stubEnv(secretEnv, 'test-only-webhook-signing-material');
     expect(await statusUntilServerCloses(handle.port, path, '')).toBe('HTTP/1.1 401 Unauthorized');
     expect(await statusUntilServerCloses(handle.port, path, signatureHeaders)).toBe('HTTP/1.1 408 Request Timeout');
   });
@@ -142,7 +145,7 @@ describe('no route reads an unauthenticated body beyond a stated cap and deadlin
   it('POST /v1/connectors/github/events answers 401 to a signature header that is no SHA-256 digest, without waiting for the body', async () => {
     await handle.stop();
     handle = await serve({ hippoRoot: root, port: 0, webhookBodyDeadlineMs: 50 });
-    process.env.GITHUB_WEBHOOK_SECRET = 'test-only-webhook-signing-material';
+    vi.stubEnv('GITHUB_WEBHOOK_SECRET', 'test-only-webhook-signing-material');
     for (const malformed of ['sha256=00', 'sha1=' + '0'.repeat(40), `sha256=${'g'.repeat(64)}`]) {
       expect(await statusUntilServerCloses(handle.port, '/v1/connectors/github/events', `X-Hub-Signature-256: ${malformed}\r\n`)).toBe('HTTP/1.1 401 Unauthorized');
     }

@@ -11,8 +11,15 @@ import { Socket } from 'node:net';
 import { clientLimitKey } from '../src/server/client-ip.js';
 import { makeRoot } from './_helpers/make-root.js';
 
+beforeEach(() => {
+  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 const ENV_KEYS = ['HIPPO_V1_RPS', 'HIPPO_CALLER_RPS', 'HIPPO_CLIENT_IP_HEADER', 'HIPPO_TRUSTED_PROXIES', 'HIPPO_REQUIRE_AUTH', 'MCP_SSE_HEARTBEAT_MS', 'MCP_SSE_MAX_STREAMS'] as const;
-const saved = new Map(ENV_KEYS.map((k) => [k, process.env[k]]));
 
 const WIDE = { ratePerSec: 1000, burst: 1000 };
 // A slow refill, so a test that takes a while still sees the bucket it drained.
@@ -25,7 +32,7 @@ let url = '';
 let stop: (() => Promise<void>) | undefined;
 
 beforeEach(() => {
-  for (const k of ENV_KEYS) delete process.env[k];
+  for (const k of ENV_KEYS) vi.stubEnv(k, undefined);
   root = makeRoot('caller-rate');
 });
 
@@ -34,10 +41,6 @@ afterEach(async () => {
   stop = undefined;
   vi.useRealTimers();
   vi.restoreAllMocks();
-  for (const [k, v] of saved) {
-    if (v === undefined) delete process.env[k];
-    else process.env[k] = v;
-  }
   rmSync(root, { recursive: true, force: true });
 });
 
@@ -92,8 +95,8 @@ function freezeClock(): void {
 
 describe('per-caller buckets', () => {
   it('gives two owners behind one proxy address their own buckets, though they share its address bucket', async () => {
-    process.env.HIPPO_CLIENT_IP_HEADER = 'x-forwarded-for';
-    process.env.HIPPO_TRUSTED_PROXIES = '127.0.0.1';
+    vi.stubEnv('HIPPO_CLIENT_IP_HEADER', 'x-forwarded-for');
+    vi.stubEnv('HIPPO_TRUSTED_PROXIES', '127.0.0.1');
     freezeClock();
     const a = mint({ ownerSubject: 'oid-a' });
     const b = mint({ ownerSubject: 'oid-b' });
@@ -206,7 +209,7 @@ describe('per-caller buckets under a store that is not hippo.db', () => {
 
 describe('the MCP stream heartbeat', () => {
   it('never charges, so a quiet stream outlives its burst and a POST afterwards still passes', async () => {
-    process.env.MCP_SSE_HEARTBEAT_MS = '50';
+    vi.stubEnv('MCP_SSE_HEARTBEAT_MS', '50');
     const a = mint({ ownerSubject: 'oid-stream' });
     await start({ perCaller: SLOW, perAddress: WIDE });
     const ac = new AbortController();
@@ -233,7 +236,7 @@ describe('the MCP stream heartbeat', () => {
   });
 
   it('answers the stream past the slot cap with 429 and Retry-After: 60', async () => {
-    process.env.MCP_SSE_MAX_STREAMS = '1';
+    vi.stubEnv('MCP_SSE_MAX_STREAMS', '1');
     await start({ perAddress: WIDE });
     const ac = new AbortController();
     try {
@@ -278,7 +281,7 @@ describe('the per-address scrypt bucket', () => {
   });
 
   it('by default allows 40 scrypt runs from an address, then answers 429 with Retry-After: 1', async () => {
-    process.env.HIPPO_V1_RPS = '0';
+    vi.stubEnv('HIPPO_V1_RPS', '0');
     freezeClock();
     const targets = mintMany(9);
     await start();
@@ -290,8 +293,8 @@ describe('the per-address scrypt bucket', () => {
   });
 
   it('never charges a token that ran no scrypt, so a colleague behind the same address keeps a proved key while junk floods it', async () => {
-    process.env.HIPPO_CLIENT_IP_HEADER = 'x-forwarded-for';
-    process.env.HIPPO_TRUSTED_PROXIES = '127.0.0.1';
+    vi.stubEnv('HIPPO_CLIENT_IP_HEADER', 'x-forwarded-for');
+    vi.stubEnv('HIPPO_TRUSTED_PROXIES', '127.0.0.1');
     freezeClock();
     const dev = mint({ ownerSubject: 'oid-dev' });
     const revoked = mint({ ownerSubject: 'oid-gone' });
@@ -323,8 +326,8 @@ describe('the per-address scrypt bucket', () => {
   });
 
   it('keys an IPv6 address on its /64, so rotating inside one /64 buys no fresh scrypt budget', async () => {
-    process.env.HIPPO_CLIENT_IP_HEADER = 'x-forwarded-for';
-    process.env.HIPPO_TRUSTED_PROXIES = '127.0.0.1';
+    vi.stubEnv('HIPPO_CLIENT_IP_HEADER', 'x-forwarded-for');
+    vi.stubEnv('HIPPO_TRUSTED_PROXIES', '127.0.0.1');
     freezeClock();
     const key = mint({ ownerSubject: 'oid-v6' });
     await start({ perAddress: 'off', failedAuthPerAddress: { ratePerSec: 0.1, burst: 2 } });
@@ -361,8 +364,8 @@ describe('clientLimitKey on a direct peer', () => {
 
 describe('the per-address bucket', () => {
   it('keys an IPv6 address on its /64 and an IPv4-mapped one on its IPv4 address', async () => {
-    process.env.HIPPO_CLIENT_IP_HEADER = 'x-forwarded-for';
-    process.env.HIPPO_TRUSTED_PROXIES = '127.0.0.1';
+    vi.stubEnv('HIPPO_CLIENT_IP_HEADER', 'x-forwarded-for');
+    vi.stubEnv('HIPPO_TRUSTED_PROXIES', '127.0.0.1');
     freezeClock();
     const key = mint();
     await start({ perCaller: WIDE, perAddress: SLOW });
@@ -375,13 +378,13 @@ describe('the per-address bucket', () => {
   });
 
   it("turns off with perAddress 'off' and never reads HIPPO_V1_RPS", async () => {
-    process.env.HIPPO_V1_RPS = '1';
+    vi.stubEnv('HIPPO_V1_RPS', '1');
     await start({ perAddress: 'off' });
     expect(await statuses(() => recall(), 5)).toEqual([200, 200, 200, 200, 200]);
   });
 
   it('keeps HIPPO_V1_RPS when perAddress is unset, and its 429 carries Retry-After', async () => {
-    process.env.HIPPO_V1_RPS = '1';
+    vi.stubEnv('HIPPO_V1_RPS', '1');
     freezeClock();
     await start();
     expect(await statuses(() => recall(), 2)).toEqual([200, 200]);
@@ -389,12 +392,12 @@ describe('the per-address bucket', () => {
   });
 
   it('takes a set perAddress over HIPPO_V1_RPS, looser or stricter', async () => {
-    process.env.HIPPO_V1_RPS = '1';
+    vi.stubEnv('HIPPO_V1_RPS', '1');
     freezeClock();
     await start({ perAddress: WIDE });
     expect(await statuses(() => recall(), 5)).toEqual([200, 200, 200, 200, 200]);
     await stop?.();
-    process.env.HIPPO_V1_RPS = '1000';
+    vi.stubEnv('HIPPO_V1_RPS', '1000');
     await start({ perAddress: { ratePerSec: 0.5, burst: 1 } });
     expect((await recall()).status).toBe(200);
     expect(await recall()).toEqual({ status: 429, retryAfter: '2' });
@@ -419,7 +422,7 @@ describe('the per-caller default', () => {
   });
 
   it('turns off with HIPPO_CALLER_RPS=0', async () => {
-    process.env.HIPPO_CALLER_RPS = '0';
+    vi.stubEnv('HIPPO_CALLER_RPS', '0');
     const key = mint();
     freezeClock();
     await start({ perAddress: WIDE });
@@ -427,7 +430,7 @@ describe('the per-caller default', () => {
   });
 
   it('takes HIPPO_CALLER_RPS as the rate, with a burst of twice it', async () => {
-    process.env.HIPPO_CALLER_RPS = '1';
+    vi.stubEnv('HIPPO_CALLER_RPS', '1');
     const key = mint();
     freezeClock();
     await start({ perAddress: WIDE });
@@ -435,19 +438,19 @@ describe('the per-caller default', () => {
   });
 
   it.each(['-1', 'fast', 'NaN'])('refuses HIPPO_V1_RPS=%s at boot instead of turning the limit off', async (value) => {
-    process.env.HIPPO_V1_RPS = value;
+    vi.stubEnv('HIPPO_V1_RPS', value);
     await expect(serve({ hippoRoot: root, port: 0 })).rejects.toThrow(/HIPPO_V1_RPS/);
   });
 
   it('turns the per-address limit off with HIPPO_V1_RPS=0', async () => {
-    process.env.HIPPO_V1_RPS = '0';
-    process.env.HIPPO_CALLER_RPS = '0';
+    vi.stubEnv('HIPPO_V1_RPS', '0');
+    vi.stubEnv('HIPPO_CALLER_RPS', '0');
     await start();
     expect(await statuses(() => recall(bearer(mint())), 60)).not.toContain(429);
   });
 
   it.each(['-1', 'fast'])('refuses HIPPO_CALLER_RPS=%s at boot', async (value) => {
-    process.env.HIPPO_CALLER_RPS = value;
+    vi.stubEnv('HIPPO_CALLER_RPS', value);
     await expect(serve({ hippoRoot: root, port: 0 })).rejects.toThrow(/HIPPO_CALLER_RPS/);
   });
 });

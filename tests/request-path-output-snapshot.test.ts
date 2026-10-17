@@ -1,5 +1,5 @@
 // Pins what the whole-store MCP tools return on a small fixed store, so bounding their loads cannot move it.
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
@@ -14,6 +14,10 @@ import { _resetAblationCacheForTests } from '../src/core/ablation.js';
 import { withSharedStoreHandles } from '../src/db/index.js';
 import { sqliteReach, sqliteStore } from '../src/store/sqlite/store.js';
 import { makeRoot } from './_helpers/make-root.js';
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 // Newest first, as git log prints them.
 const COMMIT_SUBJECTS = [
@@ -111,8 +115,8 @@ describe('request-path output on a fixed store', () => {
     localRoot = join(tmp, 'proj', '.hippo');
     const globalRoot = join(tmp, 'global');
     mkdirSync(join(tmp, 'proj'), { recursive: true });
-    process.env.HIPPO_HOME = globalRoot;
-    process.env.HIPPO_FAKE_NOW = NOW;
+    vi.stubEnv('HIPPO_HOME', globalRoot);
+    vi.stubEnv('HIPPO_FAKE_NOW', NOW);
     _resetAblationCacheForTests();
     initStore(localRoot);
     initStore(globalRoot);
@@ -127,9 +131,9 @@ describe('request-path output on a fixed store', () => {
 
   afterEach(() => {
     process.chdir(cwd);
-    process.env.HIPPO_HOME = saved.home;
-    if (saved.now === undefined) delete process.env.HIPPO_FAKE_NOW;
-    else process.env.HIPPO_FAKE_NOW = saved.now;
+    vi.stubEnv('HIPPO_HOME', saved.home);
+    if (saved.now === undefined) vi.stubEnv('HIPPO_FAKE_NOW', undefined);
+    else vi.stubEnv('HIPPO_FAKE_NOW', saved.now);
     _resetAblationCacheForTests();
   });
 

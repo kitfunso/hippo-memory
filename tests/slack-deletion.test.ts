@@ -53,7 +53,7 @@ describe('handleMessageDeleted', () => {
     expect(r.status).toBe('not_found');
   });
 
-  it('cross-tenant deletion event cannot archive another tenants row (review patch #1)', async () => {
+  it('cross-tenant deletion event cannot archive another tenants row', async () => {
     // Ingest under tenant 'acme'.
     const acmeCtx: FullContext = apiCtx(root, 'acme', { subject: 'connector:slack', role: 'admin' });
     const ingested = await ingestMessage(acmeCtx, {

@@ -5,7 +5,7 @@ import staticAdapter from '../benchmarks/sequential-learning/adapters/static.mjs
 
 describe('sequential-learning adapter recall budget', () => {
   // Starts the built CLI nine times: init, six stores and two recalls.
-  it('hippo adapter honors the budget arg with OBSERVABLE result-count delta at extreme budgets (post-review P0-6)', async () => {
+  it('hippo adapter honors the budget arg with OBSERVABLE result-count delta at extreme budgets', async () => {
     await hippoAdapter.init();
     try {
       // One more memory than the adapter's five-result cap, so budget 2000 fills the cap and budget 1 must cut it.

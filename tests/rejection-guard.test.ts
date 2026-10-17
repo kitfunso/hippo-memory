@@ -80,7 +80,7 @@ describe('rejection guard', () => {
     expect(readEntry(home, entry.id)!.retrieval_count).toBe(entry.retrieval_count + 1);
   });
 
-  it('batchWriteAndDelete probes for a rejected value in-transaction and skips a re-persist that races a reject, instead of resurrecting it (P1 batch-transaction race fix)', () => {
+  it('batchWriteAndDelete probes for a rejected value in-transaction and skips a re-persist that races a reject, instead of resurrecting it', () => {
     const home = makeRoot('rejection');
     const raceText = 'batch race content rejected between the producer check and the batch commit';
     const entry = createMemory(raceText, { layer: Layer.Semantic });
@@ -228,7 +228,7 @@ describe('rejection guard', () => {
     }
   });
 
-  it('a same-id upsert that only changes tenantId is refused when the destination tenant rejected the unchanged content (P2 fix)', () => {
+  it('a same-id upsert that only changes tenantId is refused when the destination tenant rejected the unchanged content', () => {
     const home = makeRoot('rejection');
     // Content lives quietly in tenant A — never rejected there.
     const entry = createMemory('shared content across a tenant move', { layer: Layer.Episodic });

@@ -2,16 +2,15 @@
 // it starts only the backup the installer made.
 import { spawnSync } from 'node:child_process';
 import * as fs from 'node:fs';
-import * as os from 'node:os';
 import * as path from 'node:path';
-import { afterEach, beforeEach, expect, it } from 'vitest';
+import { beforeEach, expect, it } from 'vitest';
+import { makeRoot } from './_helpers/make-root.js';
 
 const HIPPO_JS = path.resolve(__dirname, '..', 'bin', 'hippo.js');
 
 let dir: string;
 
-beforeEach(() => { dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-codex-run-')); });
-afterEach(() => fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }));
+beforeEach(() => { dir = makeRoot('codex-run', { init: false }); });
 
 it.each([
   // Node stands in for the hostile launcher, so a started launcher runs the script that leaves the sentinel.

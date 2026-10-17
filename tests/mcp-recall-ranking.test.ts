@@ -19,6 +19,10 @@ import { sqliteStore } from '../src/store/sqlite/store.js';
 import { loadConfig } from '../src/core/config.js';
 import { makeRoot } from './_helpers/make-root.js';
 
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 // Every case seeds 26 rows, two of them up to 210 more, in a real store, so its time follows the runner's disk.
 vi.setConfig({ testTimeout: 7_000 });
 
@@ -148,14 +152,14 @@ describe('MCP hippo_recall ranking', () => {
   const track = (s: Seeded): Seeded => { homes.push(s.home); return s; };
 
   beforeEach(() => {
-    process.env.HIPPO_FAKE_NOW = NOW;
+    vi.stubEnv('HIPPO_FAKE_NOW', NOW);
     _resetAblationCacheForTests();
     _resetSessionRecallHistoryMcpForTests();
   });
 
   afterEach(() => {
-    delete process.env.HIPPO_FAKE_NOW;
-    delete process.env.OPENAI_API_KEY;
+    vi.stubEnv('HIPPO_FAKE_NOW', undefined);
+    vi.stubEnv('OPENAI_API_KEY', undefined);
     _resetAblationCacheForTests();
     vi.unstubAllGlobals();
     for (const h of homes.splice(0)) rmSync(h, { recursive: true, force: true });
@@ -194,14 +198,14 @@ describe('MCP hippo_recall ranking', () => {
   });
 
   it('hybrid mode with embeddings returns the semantic-only row', async () => {
-    process.env.OPENAI_API_KEY = 'sk-test';
+    vi.stubEnv('OPENAI_API_KEY', 'sk-test');
     const s = track(seed(EMBED_CONFIG));
     withEmbeddings(s);
     expect(observe(s, textOf(await call(s.home, { query: QUERY })))).toEqual(EXPECTED.hybridEmbeddings);
   });
 
   it('physics mode with embeddings returns the semantic-only row', async () => {
-    process.env.OPENAI_API_KEY = 'sk-test';
+    vi.stubEnv('OPENAI_API_KEY', 'sk-test');
     const s = track(seed({ ...EMBED_CONFIG, physics: { enabled: true } }));
     withEmbeddings(s);
     expect(observe(s, textOf(await call(s.home, { query: QUERY })))).toEqual(EXPECTED.physicsEmbeddings);

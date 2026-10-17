@@ -637,7 +637,7 @@ describe('importVault (u) — importing the store path preserves existing vault 
     expect(archivedRows().length).toBe(0);
   });
 
-  it('treats a junction/symlink to the store as self-store (codex R9 P2)', async () => {
+  it('treats a junction/symlink to the store as self-store', async () => {
     writeNote('keep.md', '# Keep\na real note that must survive an aliased self-import');
     expect((await importVault(vaultDir, opts({ name: 'v' }))).imported).toBe(1);
 
@@ -795,7 +795,7 @@ describe('importVault (x) — explicit name + envelope-aware idempotency', () =>
     expect(third.archived).toBe(0);
   });
 
-  it('rejects a bare-private scope recall would not treat as private (codex R13 P2)', async () => {
+  it('rejects a bare-private scope recall would not treat as private', async () => {
     writeNote('note.md', '# Note\nsensitive content the user wants private');
     // Bare `private` / `private:<x>` are NOT default-denied by recall, so reject
     // them rather than store public-visible "private" notes.
@@ -824,7 +824,7 @@ describe('importVault (x) — explicit name + envelope-aware idempotency', () =>
     expect(live[0].tags).toContain('campaign:q3');
   });
 
-  it('re-imports an unchanged file when an extra tag is REMOVED (codex R11 P2)', async () => {
+  it('re-imports an unchanged file when an extra tag is REMOVED', async () => {
     writeNote('note.md', '# Note\nstable content across the tag removal');
     expect(
       (await importVault(vaultDir, opts({ name: 'v', extraTags: ['campaign:q3'] }))).imported,

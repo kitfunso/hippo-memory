@@ -2,16 +2,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { spawnSync, type SpawnSyncReturns } from 'node:child_process';
 import * as fs from 'node:fs';
-import * as os from 'node:os';
 import * as path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { makeRoot } from './_helpers/make-root.js';
 import { installCodexWrapper } from '../src/hooks/codex-wrapper.js';
 
 const HIPPO_JS = path.resolve(__dirname, '..', 'bin', 'hippo.js');
 
 let dir: string;
 
-beforeEach(() => { dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-spawn-error-')); });
+beforeEach(() => { dir = makeRoot('spawn-error', { init: false }); });
 afterEach(() => fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }));
 
 /** Runs hippo with a Node binary gone from disk (upgraded mid-session): every worker spawn fails with ENOENT, reported as an 'error' event. */

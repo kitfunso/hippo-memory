@@ -1,5 +1,5 @@
 // A corrupt legacy embeddings.json found at import must be kept aside and the vectors rebuilt, never dropped silently.
-import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, MockInstance } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import { writeEntry } from '../src/store/entry-writes.js';
@@ -9,9 +9,12 @@ import { loadEmbeddingIndex } from '../src/store/vector-index.js';
 import { sqliteSyncStore } from '../src/store/sqlite/store.js';
 import { makeRoot } from './_helpers/make-root.js';
 
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 const KEY_ENV = 'OPENAI_API_KEY';
 let root: string;
-let savedKey: string | undefined;
 let stderrSpy: MockInstance<typeof process.stderr.write>;
 
 // One vector per input, derived from the text so each memory gets a distinct one.
@@ -31,8 +34,7 @@ function asideFiles(): string[] {
 beforeEach(() => {
   root = makeRoot('embed-corrupt');
   fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ embeddings: { provider: 'openai', model: 'm' } }), 'utf8');
-  savedKey = process.env[KEY_ENV];
-  process.env[KEY_ENV] = 'test-key-not-real';
+  vi.stubEnv(KEY_ENV, 'test-key-not-real');
   stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
   vi.stubGlobal('fetch', fakeEmbeddings());
 });
@@ -40,8 +42,6 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllGlobals();
   stderrSpy.mockRestore();
-  if (savedKey === undefined) delete process.env[KEY_ENV];
-  else process.env[KEY_ENV] = savedKey;
 });
 
 async function remember(content: string): Promise<string> {

@@ -242,7 +242,7 @@ describe('renderSleepResult snapshots', () => {
     expect(out).toMatchSnapshot();
   });
 
-  it('secret-veto withheld line when secretSkipped > 0 (v1.25.0)', () => {
+  it('secret-veto withheld line when secretSkipped > 0', () => {
     const result: SleepResult = {
       active: 30,
       removed: 1,

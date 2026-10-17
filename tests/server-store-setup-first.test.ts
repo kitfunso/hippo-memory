@@ -1,5 +1,5 @@
 // The store's open-time setup runs on the writer thread before any reader thread is sent a job, since a reader's connection refuses the writes setup makes.
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, beforeEach, vi } from 'vitest';
 import { mkdirSync, mkdtempSync, rmdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -12,6 +12,14 @@ import { HALF_LIFE_BASE_META_KEY } from '../src/store/open.js';
 import { createSqliteExecutor } from '../src/store/sqlite/executor.js';
 import { mintAdminKey } from './_helpers/admin-server.js';
 import { cleanups, execOn, get, holdWriteLock, newRoot, onDb, post, removeLater, start, undoAll } from './_helpers/store-worker-server.js';
+
+beforeEach(() => {
+  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 afterEach(undoAll);
 

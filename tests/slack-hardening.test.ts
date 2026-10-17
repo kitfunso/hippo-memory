@@ -1,5 +1,5 @@
 import type { FullContext } from './_helpers/api-ctx.js';
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { createHmac } from 'node:crypto';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
@@ -23,6 +23,10 @@ import { apiCtx } from './_helpers/api-ctx.js';
 import { stageScratchWinner } from './_helpers/race-winner.js';
 import { makeRoot } from './_helpers/make-root.js';
 
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 
 const SECRET = 'shhh-current';
 const PREVIOUS_SECRET = 'shhh-old';
@@ -40,12 +44,9 @@ interface SlackDlqUnroutableRow {
 }
 
 function withEnv(name: string, value: string | undefined): () => void {
-  const prev = process.env[name];
-  if (value === undefined) delete process.env[name];
-  else process.env[name] = value;
+  if (value === undefined) vi.stubEnv(name, undefined);
+  else vi.stubEnv(name, value);
   return () => {
-    if (prev === undefined) delete process.env[name];
-    else process.env[name] = prev;
   };
 }
 

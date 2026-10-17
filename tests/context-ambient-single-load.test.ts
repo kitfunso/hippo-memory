@@ -17,6 +17,10 @@ import { withHookStdin } from './_helpers/hook-stdin.js';
 import { runInProcess } from './_helpers/run-in-process.js';
 import { makeRoot } from './_helpers/make-root.js';
 
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 const FAKE_NOW = '2026-09-06T12:00:00.000Z';
 
 describe('`hippo context` prints the ambient summary getContext computed', () => {
@@ -49,7 +53,7 @@ describe('ambient summary: byte-identical, both v39 exclusion classes excluded',
   let ctx: FullContext;
 
   beforeEach(() => {
-    process.env.HIPPO_FAKE_NOW = FAKE_NOW;
+    vi.stubEnv('HIPPO_FAKE_NOW', FAKE_NOW);
     _resetAblationCacheForTests();
     tmpRoot = makeRoot('ambient-summary', { init: false });
     projA = path.join(tmpRoot, 'proj-a', '.hippo');
@@ -59,7 +63,7 @@ describe('ambient summary: byte-identical, both v39 exclusion classes excluded',
   });
 
   afterEach(() => {
-    delete process.env.HIPPO_FAKE_NOW;
+    vi.stubEnv('HIPPO_FAKE_NOW', undefined);
     _resetAblationCacheForTests();
   });
 
@@ -94,13 +98,13 @@ describe('ambient summary: avgStrength reflects post-retrieval strength, not the
   let tmpRoot: string;
 
   afterEach(() => {
-    delete process.env.HIPPO_FAKE_NOW;
+    vi.stubEnv('HIPPO_FAKE_NOW', undefined);
     _resetAblationCacheForTests();
   });
 
   it('avgStrength matches computeAmbientState over the returned (post-markRetrieved) entries, not the pre-retrieval ones', async () => {
     const AGED_NOW = '2026-01-01T00:00:00.000Z';
-    process.env.HIPPO_FAKE_NOW = AGED_NOW;
+    vi.stubEnv('HIPPO_FAKE_NOW', AGED_NOW);
     _resetAblationCacheForTests();
 
     tmpRoot = makeRoot('ambient-strength', { init: false });
@@ -114,7 +118,7 @@ describe('ambient summary: avgStrength reflects post-retrieval strength, not the
     const aged = { ...createMemory('AGED-ROW decayed far past its half-life', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), origin_project: 'proj-a' };
     writeEntry(projA, aged);
 
-    process.env.HIPPO_FAKE_NOW = FAKE_NOW;
+    vi.stubEnv('HIPPO_FAKE_NOW', FAKE_NOW);
     _resetAblationCacheForTests();
 
     const result = await getContext(ctx, { currentProject: 'proj-a', budget: 5000 });

@@ -1,16 +1,14 @@
 // HIPPO_LOG picks the stderr threshold; the timestamp and fields such as the request id ride on the same line.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { _resetLogOnceForTests, errorFields, formatLogLine, isLevelEnabled, log } from '../src/util/log.js';
 import { runWithRequestId } from '../src/util/request-scope.js';
 import { ownStderr } from './_helpers/own-stderr.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const AT = '2026-01-02T03:04:05.678Z';
-
-let saved: string | undefined;
 let stderrSpy: ReturnType<typeof vi.spyOn>;
 
 function lines(): string[] {
@@ -18,8 +16,7 @@ function lines(): string[] {
 }
 
 beforeEach(() => {
-  saved = process.env.HIPPO_LOG;
-  delete process.env.HIPPO_LOG;
+  vi.stubEnv('HIPPO_LOG', undefined);
   vi.stubEnv('HIPPO_LOG_FORMAT', '');
   vi.useFakeTimers({ toFake: ['Date'], now: new Date(AT) });
   stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
@@ -30,8 +27,6 @@ afterEach(() => {
   stderrSpy.mockRestore();
   vi.useRealTimers();
   vi.unstubAllEnvs();
-  if (saved === undefined) delete process.env.HIPPO_LOG;
-  else process.env.HIPPO_LOG = saved;
 });
 
 describe('log level filtering', () => {
@@ -45,14 +40,14 @@ describe('log level filtering', () => {
   });
 
   it('HIPPO_LOG=debug prints every level, case-insensitively', () => {
-    process.env.HIPPO_LOG = ' DEBUG ';
+    vi.stubEnv('HIPPO_LOG', ' DEBUG ');
     log.info('i');
     log.debug('d');
     expect(lines()).toEqual([`[hippo] info: i ts=${AT}\n`, `[hippo] debug: d ts=${AT}\n`]);
   });
 
   it('HIPPO_LOG=error drops warnings', () => {
-    process.env.HIPPO_LOG = 'error';
+    vi.stubEnv('HIPPO_LOG', 'error');
     log.warn('w');
     log.error('e');
     expect(lines()).toEqual([`[hippo] error: e ts=${AT}\n`]);
@@ -60,7 +55,7 @@ describe('log level filtering', () => {
   });
 
   it('an unknown HIPPO_LOG value falls back to warn', () => {
-    process.env.HIPPO_LOG = 'verbose';
+    vi.stubEnv('HIPPO_LOG', 'verbose');
     expect([isLevelEnabled('warn'), isLevelEnabled('info')]).toEqual([true, false]);
   });
 
@@ -72,7 +67,7 @@ describe('log level filtering', () => {
   });
 
   it('caps the once-only keys at 1,000: the next new key writes one cap line, and new keys then log at debug unrecorded', () => {
-    process.env.HIPPO_LOG = 'debug';
+    vi.stubEnv('HIPPO_LOG', 'debug');
     for (let i = 0; i < 1_000; i++) log.warnThenDebug(`row-${i}`, `damaged ${i}`);
     expect(lines().filter((line) => line.startsWith('[hippo] warn: damaged '))).toHaveLength(1_000);
     expect(lines()).toHaveLength(1_000);
@@ -103,7 +98,7 @@ describe('log level filtering', () => {
 
 describe('warnThenSample', () => {
   it('warns on the first failure, then again with the count on every 100th', () => {
-    process.env.HIPPO_LOG = 'warn';
+    vi.stubEnv('HIPPO_LOG', 'warn');
     for (let i = 0; i < 250; i++) log.warnThenSample('fts-sync', 'FTS update failed');
     expect(lines()).toEqual([
       `[hippo] warn: FTS update failed ts=${AT}
@@ -154,25 +149,21 @@ describe('errorFields cause chain', () => {
 describe('a command that fails at the top level', () => {
   it('prints only the message by default, and adds the error class and stack under HIPPO_LOG=debug', () => {
     vi.useRealTimers();
-    const dir = mkdtempSync(join(tmpdir(), 'hippo-cli-top-error-'));
-    try {
-      // A store file that is not a database makes the first read throw past every verb.
-      mkdirSync(join(dir, '.hippo'));
-      writeFileSync(join(dir, '.hippo', 'hippo.db'), 'x'.repeat(4096));
-      const run = (level: string) => spawnSync(process.execPath, [resolve('dist', 'cli.js'), 'recall', 'anything'], {
-        cwd: dir,
-        env: { ...process.env, HIPPO_HOME: join(dir, 'home'), HIPPO_SKIP_AUTO_INTEGRATIONS: '1', HIPPO_LOG: level, HIPPO_LOG_FORMAT: '' },
-        encoding: 'utf8',
-      });
+    const dir = makeRoot('cli-top-error', { init: false });
+    // A store file that is not a database makes the first read throw past every verb.
+    mkdirSync(join(dir, '.hippo'));
+    writeFileSync(join(dir, '.hippo', 'hippo.db'), 'x'.repeat(4096));
+    const run = (level: string) => spawnSync(process.execPath, [resolve('dist', 'cli.js'), 'recall', 'anything'], {
+      cwd: dir,
+      env: { ...process.env, HIPPO_HOME: join(dir, 'home'), HIPPO_SKIP_AUTO_INTEGRATIONS: '1', HIPPO_LOG: level, HIPPO_LOG_FORMAT: '' },
+      encoding: 'utf8',
+    });
 
-      const plain = run('warn');
-      expect([plain.status, ownStderr(plain.stderr)]).toEqual([1, 'Error: file is not a database\n']);
+    const plain = run('warn');
+    expect([plain.status, ownStderr(plain.stderr)]).toEqual([1, 'Error: file is not a database\n']);
 
-      const debug = run('debug');
-      expect(debug.status).toBe(1);
-      expect(ownStderr(debug.stderr)).toMatch(/Error: file is not a database\n {2}thrown as Error\nError: file is not a database\n\s+at /);
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
+    const debug = run('debug');
+    expect(debug.status).toBe(1);
+    expect(ownStderr(debug.stderr)).toMatch(/Error: file is not a database\n {2}thrown as Error\nError: file is not a database\n\s+at /);
   });
 });

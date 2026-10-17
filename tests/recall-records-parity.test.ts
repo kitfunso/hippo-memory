@@ -22,6 +22,10 @@ import {
 import type { CliFlags } from '../src/cli/flag-values.js';
 import { makeRoot } from './_helpers/make-root.js';
 
+beforeEach(() => {
+  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
+});
+
 type Surface = 'http' | 'cli';
 const SURFACES: readonly Surface[] = ['http', 'cli'];
 const HOST_SESSION = 'host-agent-session';

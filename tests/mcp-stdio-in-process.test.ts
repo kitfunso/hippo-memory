@@ -1,12 +1,16 @@
 // The stdio loop in process: stdin's listeners are captured and fed frames, stdout is read, and exit is stubbed.
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, MockInstance } from 'vitest';
 import { startStdioLoop } from '../src/mcp/stdio.js';
 import { cliStdioHost } from '../src/cli/api-context.js';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
 import { captureWrites, fire, recordListeners, stubExit, type Listener } from './_helpers/process-stubs.js';
 import { makeRoot } from './_helpers/make-root.js';
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 interface Reply {
   readonly id: number | string | null;
@@ -15,7 +19,6 @@ interface Reply {
 }
 
 let dir: string;
-let priorHome: string | undefined;
 let stdin: Map<string, Listener[]>;
 let written: string[];
 let exit: MockInstance;
@@ -23,8 +26,7 @@ let exit: MockInstance;
 beforeEach(() => {
   dir = makeRoot('mcp-stdio', { init: false });
   mkdirSync(join(dir, 'project'));
-  priorHome = process.env.HIPPO_HOME;
-  process.env.HIPPO_HOME = join(dir, 'global');
+  vi.stubEnv('HIPPO_HOME', join(dir, 'global'));
   // A cwd under the temp dir has no project store above it, so the first tool call creates the global store.
   vi.spyOn(process, 'cwd').mockReturnValue(join(dir, 'project'));
   stdin = recordListeners(process.stdin, 'on');
@@ -38,8 +40,6 @@ beforeEach(() => {
 afterEach(() => {
   vi.restoreAllMocks();
   process.exitCode = undefined;
-  if (priorHome === undefined) delete process.env.HIPPO_HOME;
-  else process.env.HIPPO_HOME = priorHome;
 });
 
 function feed(...frames: string[]): void {

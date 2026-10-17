@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
@@ -8,6 +8,10 @@ import { strengthBucket } from '../src/consolidate/dedupe.js';
 import { initStore } from '../src/store/open.js';
 import { sqliteStore } from '../src/store/sqlite/store.js';
 import { makeRoot } from './_helpers/make-root.js';
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -62,15 +66,15 @@ describe('package entry re-exports sleep', () => {
   it('runs a Context on the hippo.db its store reads', async () => {
     const home = makeRoot('entry-sleep', { init: false });
     const origHippoHome = process.env.HIPPO_HOME;
-    process.env.HIPPO_HOME = home;
+    vi.stubEnv('HIPPO_HOME', home);
     try {
       initStore(home);
       const result = await entry.sleep({ hippoRoot: home, store: sqliteStore(home), tenantId: 'default', actor: { subject: 'test', role: 'admin' } }, { dryRun: true });
       expect(result.dryRun).toBe(true);
       expect(result.active).toBe(0);
     } finally {
-      if (origHippoHome !== undefined) process.env.HIPPO_HOME = origHippoHome;
-      else delete process.env.HIPPO_HOME;
+      if (origHippoHome !== undefined) vi.stubEnv('HIPPO_HOME', origHippoHome);
+      else vi.stubEnv('HIPPO_HOME', undefined);
     }
   });
 

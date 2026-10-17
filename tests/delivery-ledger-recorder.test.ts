@@ -19,6 +19,10 @@ import { apiCtx } from './_helpers/api-ctx.js';
 import { sqliteSyncStore } from '../src/store/sqlite/store.js';
 import { makeRoot } from './_helpers/make-root.js';
 
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 const PROJECT = 'proj-a';
 const PROMPT = 'how should the postgres migration rollback plan work';
 
@@ -93,7 +97,7 @@ function storeCounts(root: string): string {
 }
 
 beforeEach(() => {
-  process.env.HIPPO_FAKE_NOW = '2026-07-01T00:00:00.000Z';
+  vi.stubEnv('HIPPO_FAKE_NOW', '2026-07-01T00:00:00.000Z');
   _resetAblationCacheForTests();
   tmpRoot = makeRoot('delivery-recorder', { init: false });
   local = path.join(tmpRoot, 'local', '.hippo');
@@ -102,14 +106,14 @@ beforeEach(() => {
   fs.mkdirSync(globalRoot, { recursive: true });
   initStore(local);
   initStore(globalRoot);
-  process.env.HIPPO_HOME = globalRoot;
+  vi.stubEnv('HIPPO_HOME', globalRoot);
   ctx = apiCtx(local, 'default', { subject: 'cli', role: 'admin' });
 });
 
 afterEach(() => {
   vi.restoreAllMocks();
-  delete process.env.HIPPO_HOME;
-  delete process.env.HIPPO_FAKE_NOW;
+  vi.stubEnv('HIPPO_HOME', undefined);
+  vi.stubEnv('HIPPO_FAKE_NOW', undefined);
   _resetAblationCacheForTests();
 });
 

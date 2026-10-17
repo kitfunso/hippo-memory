@@ -1,5 +1,5 @@
 // Z0 set X session driver: codex args and preflight, the rollout parser on fake-codex sessions, the wait, auth and launcher rules.
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import { readFileSync, existsSync, writeFileSync, mkdirSync, readdirSync, copyFileSync, chmodSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { spawn } from 'node:child_process';
@@ -14,6 +14,10 @@ import { cleanup, tmp, isolate, makeRepo } from './fixtures/z0-harness.js';
 import { operator, wrapOperator, codexCtx, codexRun, xTask, fakeSeen, filesHolding, xTrio } from './fixtures/z0-codex-harness.js';
 import type { CodexCtx, CodexOptions } from './fixtures/z0-codex-harness.js';
 import { waitFor } from './_helpers/wait-for.js';
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 afterEach(cleanup);
 
@@ -61,7 +65,7 @@ async function withUnreadable<T>(file: string, fn: () => T): Promise<T | null> {
 /** An isolated operator, ctx and X1 run; `out` is the run's out dir. */
 function setup(name: string, opts: CodexOptions = {}, extra: { sessionTimeoutMs?: number } = {}) {
   const { out, log } = isolate(name);
-  process.env.FAKE_CODEX_LOG = log;
+  vi.stubEnv('FAKE_CODEX_LOG', log);
   const op = operator(name);
   const ctx = codexCtx(op, opts, extra);
   opened.push(ctx);
@@ -304,7 +308,7 @@ describe('the Codex login (test 15)', () => {
 describe('the launcher behind hippo\'s wrapper (test 24)', () => {
   it('follows the wrapper metadata to the real codex, and the session never starts the wrapper', async () => {
     const { out, log } = isolate('wrap');
-    process.env.FAKE_CODEX_LOG = log;
+    vi.stubEnv('FAKE_CODEX_LOG', log);
     const op = operator('wrap');
     const { real, sentinel } = wrapOperator(op);
     const found = resolveCodex('codex', op.env);
@@ -365,7 +369,7 @@ describe('setup faults stop the run (tests 26, 27)', () => {
   });
 
   it('retries a limit on the error event only, never on NOISE stdout, with the raw limit file redacted', async () => {
-    process.env.FAKE_CODEX_STATE = join(tmp('z0-codex-state-'), 'limit-once');
+    vi.stubEnv('FAKE_CODEX_STATE', join(tmp('z0-codex-state-'), 'limit-once'));
     const { run, ctx, op } = setup('limit');
     const noisy = await runCodexSession(ctx, run, xTask('NOISE'), () => false);
     expect(noisy.limitRetries).toBe(0);

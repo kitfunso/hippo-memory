@@ -8,6 +8,10 @@ import { boundPort } from './_helpers/listen.js';
 import { resolveEmbeddingProvider } from '../src/embeddings/provider.js';
 import { loadConfig } from '../src/core/config.js';
 
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 const KEY = 'sk-reply-cap-test';
 // One input may reply with up to 64 KiB + 512 KiB; two inputs with 64 KiB + 1 MiB.
 const ONE_INPUT_CAP = 64 * 1024 + 512 * 1024;
@@ -18,7 +22,6 @@ describe('embedding provider reply cap', () => {
   let sent = 0;
   let closedEarly = false;
   let handler: (req: http.IncomingMessage, res: http.ServerResponse) => void;
-  let savedKey: string | undefined;
 
   /** Streams `status` and spaces until the client hangs up or 200 MiB went out. */
   function streamForever(res: http.ServerResponse, status: number, contentType: string): void {
@@ -38,8 +41,7 @@ describe('embedding provider reply cap', () => {
   beforeEach(async () => {
     sent = 0;
     closedEarly = false;
-    savedKey = process.env.OPENAI_API_KEY;
-    process.env.OPENAI_API_KEY = KEY;
+    vi.stubEnv('OPENAI_API_KEY', KEY);
     server = http.createServer((req, res) => { req.resume(); handler(req, res); });
     server.listen(0, '127.0.0.1');
     const port = await boundPort(server);
@@ -54,8 +56,6 @@ describe('embedding provider reply cap', () => {
     server.closeAllConnections();
     await new Promise<void>((resolve) => server.close(() => resolve()));
     fs.rmSync(root, { recursive: true, force: true });
-    if (savedKey === undefined) delete process.env.OPENAI_API_KEY;
-    else process.env.OPENAI_API_KEY = savedKey;
   });
 
   it('fails a one-input request whose reply passes the cap, and the server sees the hang-up', async () => {

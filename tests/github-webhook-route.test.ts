@@ -5,6 +5,10 @@ import { serve, type ServerHandle } from '../src/server.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
 import { makeRoot } from './_helpers/make-root.js';
 
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 const SECRET = 'github-webhook-secret';
 
 /** Parse a fetch Response body against a caller-declared shape. */
@@ -151,13 +155,13 @@ describe('POST /v1/connectors/github/events', () => {
 
   beforeEach(async () => {
     root = makeRoot('gh-route');
-    process.env.GITHUB_WEBHOOK_SECRET = SECRET;
+    vi.stubEnv('GITHUB_WEBHOOK_SECRET', SECRET);
     handle = await serve({ hippoRoot: root, host: '127.0.0.1', port: 0 });
   });
 
   afterEach(async () => {
-    delete process.env.GITHUB_WEBHOOK_SECRET;
-    delete process.env.GITHUB_WEBHOOK_SECRET_PREVIOUS;
+    vi.stubEnv('GITHUB_WEBHOOK_SECRET', undefined);
+    vi.stubEnv('GITHUB_WEBHOOK_SECRET_PREVIOUS', undefined);
     await handle.stop();
   });
 
@@ -234,7 +238,7 @@ describe('POST /v1/connectors/github/events', () => {
   });
 
   it('7. missing GITHUB_WEBHOOK_SECRET env → 404', async () => {
-    delete process.env.GITHUB_WEBHOOK_SECRET;
+    vi.stubEnv('GITHUB_WEBHOOK_SECRET', undefined);
     try {
       const body = '{}';
       const res = await postWebhook(handle.port, body, {
@@ -244,7 +248,7 @@ describe('POST /v1/connectors/github/events', () => {
       });
       expect(res.status).toBe(404);
     } finally {
-      process.env.GITHUB_WEBHOOK_SECRET = SECRET;
+      vi.stubEnv('GITHUB_WEBHOOK_SECRET', SECRET);
     }
   });
 

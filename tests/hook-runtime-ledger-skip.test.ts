@@ -9,6 +9,10 @@ import { apiCtx } from './_helpers/api-ctx.js';
 import { sqliteStore } from '../src/store/sqlite/store.js';
 import { makeRoot } from './_helpers/make-root.js';
 
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 describe('startDeliveryRecorder when the recorder cannot start', () => {
   afterEach(() => { vi.restoreAllMocks(); });
 
@@ -25,11 +29,8 @@ describe('startDeliveryRecorder when the recorder cannot start', () => {
 });
 
 describe('startToolFailureRecorder', () => {
-  const saved = process.env.HIPPO_HOME;
   let tmp = '';
   afterEach(() => {
-    if (saved === undefined) delete process.env.HIPPO_HOME;
-    else process.env.HIPPO_HOME = saved;
     fs.rmSync(tmp, { recursive: true, force: true });
   });
 
@@ -39,7 +40,7 @@ describe('startToolFailureRecorder', () => {
     fs.mkdirSync(globalRoot);
     initStore(globalRoot);
     fs.writeFileSync(path.join(globalRoot, 'config.json'), JSON.stringify({ deliveryLedger: { enabled: true } }));
-    process.env.HIPPO_HOME = globalRoot;
+    vi.stubEnv('HIPPO_HOME', globalRoot);
     const noStore = path.join(tmp, 'proj', '.hippo');
     const start = { stdinText: '{}', runtime: 'claude-code' as const, envSessionId: undefined };
     expect(startToolFailureRecorder(apiCtx(noStore), start)).toBeNull();

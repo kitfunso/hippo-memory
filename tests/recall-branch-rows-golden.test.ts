@@ -13,6 +13,10 @@ import {
   CLEARED_ENV, FAKE_NOW, freshStore, normalize, RECALL_BRANCHES, rowsOf, seedPortBranches, seedTemplates, statsMirror, type Templates,
 } from './_helpers/recall-golden-seed.js';
 
+beforeEach(() => {
+  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
+});
+
 type Surface = 'http' | 'mcp';
 type Args = Record<string, string | number | boolean>;
 interface HttpReply { status: number; body: RecallResult }

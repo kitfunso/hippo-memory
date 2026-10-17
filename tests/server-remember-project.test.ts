@@ -1,6 +1,6 @@
 // POST /v1/memories stamps the caller's `project.name`, or NULL on a shared store, and never the served folder.
 import type { FullContext } from './_helpers/api-ctx.js';
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { initStore } from '../src/store/open.js';
@@ -14,13 +14,20 @@ import { serve, type ServerHandle } from '../src/server.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 import { makeRoot } from './_helpers/make-root.js';
 
+beforeEach(() => {
+  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 const ROW = 'the zorblaxian quintessor needs a restart every monday';
 const PROMPT = 'how do I restart the zorblaxian quintessor';
 
 let tmp: string;
 let store: string;
 let handle: ServerHandle | null = null;
-const origHome = process.env.HIPPO_HOME;
 
 /** Serves `<tmp>/srv/hippo-team`, a folder with no project marker, so the folder stamp is '' (user-global). */
 async function start(config: Record<string, JsonValue>): Promise<ServerHandle> {
@@ -57,7 +64,7 @@ async function hookText(project: string): Promise<string> {
 
 beforeEach(() => {
   tmp = makeRoot('remember-project', { init: false });
-  process.env.HIPPO_HOME = path.join(tmp, 'global');
+  vi.stubEnv('HIPPO_HOME', path.join(tmp, 'global'));
   _resetProjectIdentityCacheForTests();
   _resetSharedStoreCacheForTests();
 });
@@ -65,8 +72,6 @@ beforeEach(() => {
 afterEach(async () => {
   await handle?.stop();
   handle = null;
-  if (origHome === undefined) delete process.env.HIPPO_HOME;
-  else process.env.HIPPO_HOME = origHome;
   _resetSharedStoreCacheForTests();
 });
 

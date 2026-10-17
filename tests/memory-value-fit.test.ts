@@ -15,7 +15,7 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { describe, it, expect, beforeEach, afterEach, afterAll } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, afterAll, vi } from 'vitest';
 
 import { CONFIG } from '../benchmarks/memory-value/config.mjs';
 import { evaluateAll, buildScorers, evaluateStore } from '../benchmarks/memory-value/evaluate.mjs';
@@ -39,6 +39,10 @@ import {
 
 import { clearAblationEnv, QUESTIONS, cleanupScratch, runPipeline } from './memory-value-fixtures.js';
 
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 // A case on the real fixture ingests, simulates and extracts a question against real stores on disk.
 const REAL_FIXTURE_MS = 10_000;
 
@@ -59,7 +63,7 @@ const FIT_SCRATCH_ROOT = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-mv-fit-tes
 
 beforeEach(clearAblationEnv);
 beforeEach(() => {
-  process.env.HIPPO_MV_SCRATCH_ROOT = FIT_SCRATCH_ROOT;
+  vi.stubEnv('HIPPO_MV_SCRATCH_ROOT', FIT_SCRATCH_ROOT);
 });
 afterEach(clearAblationEnv);
 afterAll(() => {

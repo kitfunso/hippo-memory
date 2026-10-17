@@ -62,14 +62,14 @@ describe('check-graph-writes lint', () => {
       expect(v.map((x) => x.file.replace(/\\/g, '/').endsWith('/graph/write.ts'))).toEqual([true]);
     });
 
-    it('catches a MULTI-LINE write (verb and table on separate lines) - codex P2', () => {
+    it('catches a MULTI-LINE write (verb and table on separate lines)', () => {
       file('multiline.ts', `db.prepare(\`\n  INSERT INTO\n  entities(name)\n  VALUES (?)\`).run(n);\n`);
       const v = findGraphWriteViolations(dir);
       expect(v.length).toBe(1);
       expect(v[0].file.replace(/\\/g, '/').endsWith('multiline.ts')).toBe(true);
     });
 
-    it('catches SQLite write variants: INSERT OR IGNORE/REPLACE + quoted/bracketed identifiers - codex retry P2', () => {
+    it('catches SQLite write variants: INSERT OR IGNORE/REPLACE + quoted/bracketed identifiers', () => {
       file('or-ignore.ts', `db.prepare('INSERT OR IGNORE INTO entities(name) VALUES (?)').run(n);\n`);
       file('or-replace.ts', `db.prepare('INSERT OR REPLACE INTO relations(rel_type) VALUES (?)').run(r);\n`);
       file('quoted.ts', `db.prepare('INSERT INTO "entities"(name) VALUES (?)').run(n);\n`);

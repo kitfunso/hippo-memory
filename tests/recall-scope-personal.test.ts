@@ -1,5 +1,5 @@
 // Personal scopes answer to their owner alone, and an HttpError can carry Retry-After.
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, beforeEach, vi, afterEach } from 'vitest';
 import { BadRequestError } from '../src/core/api-errors.js';
 import { HttpError } from '../src/util/http-util.js';
 import { MAX_ID_LEN } from '../src/util/limits.js';
@@ -9,6 +9,14 @@ import {
 } from '../src/core/recall-scope.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { makeRoot } from './_helpers/make-root.js';
+
+beforeEach(() => {
+  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 const A_SCOPE = 'personal:private:a';
 const B_SCOPE = 'personal:private:b';

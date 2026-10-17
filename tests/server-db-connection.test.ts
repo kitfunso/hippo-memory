@@ -1,5 +1,5 @@
 // A running server keeps one store connection open, so a request's own close is never SQLite's last-connection close.
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi, beforeEach } from 'vitest';
 import { spawn } from 'node:child_process';
 import { existsSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -8,6 +8,14 @@ import { serve, type ServerHandle } from '../src/server.js';
 import { readyProbeFor } from '../src/server/ready.js';
 import { sqliteStore } from '../src/store/index.js';
 import { makeRoot } from './_helpers/make-root.js';
+
+beforeEach(() => {
+  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 const dirs: string[] = [];
 afterEach(() => {

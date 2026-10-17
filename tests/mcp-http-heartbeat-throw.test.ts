@@ -3,6 +3,10 @@ import { serve, type ServerHandle } from '../src/server.js';
 import { waitFor } from './_helpers/wait-for.js';
 import { makeRoot } from './_helpers/make-root.js';
 
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 describe('SSE heartbeat when its tick throws', () => {
   let root: string;
   let handle: ServerHandle | undefined;
@@ -10,12 +14,12 @@ describe('SSE heartbeat when its tick throws', () => {
   afterEach(async () => {
     vi.restoreAllMocks();
     await handle?.stop().catch(() => {});
-    delete process.env.MCP_SSE_HEARTBEAT_MS;
+    vi.stubEnv('MCP_SSE_HEARTBEAT_MS', undefined);
   });
 
   it('keeps ticking after a tick rejects', async () => {
     root = makeRoot('heartbeat-throw');
-    process.env.MCP_SSE_HEARTBEAT_MS = '100';
+    vi.stubEnv('MCP_SSE_HEARTBEAT_MS', '100');
     let failing = false;
     let resolverCalls = 0;
     handle = await serve({

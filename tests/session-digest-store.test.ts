@@ -25,6 +25,10 @@ import { sharingStores } from './_helpers/sharing-stores.js';
 import { sqliteSyncStore } from '../src/store/sqlite/store.js';
 import { makeRoot } from './_helpers/make-root.js';
 
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 const REPLY = 'Retry `upload()` with backoff because the storage token expires mid-transfer.';
 
 let tmp: string;
@@ -38,12 +42,12 @@ beforeEach(() => {
   hippoRoot = path.join(repo, '.hippo');
   initStore(hippoRoot);
   origHippoHome = process.env.HIPPO_HOME;
-  process.env.HIPPO_HOME = path.join(tmp, 'global');
+  vi.stubEnv('HIPPO_HOME', path.join(tmp, 'global'));
 });
 
 afterEach(() => {
-  if (origHippoHome !== undefined) process.env.HIPPO_HOME = origHippoHome;
-  else delete process.env.HIPPO_HOME;
+  if (origHippoHome !== undefined) vi.stubEnv('HIPPO_HOME', origHippoHome);
+  else vi.stubEnv('HIPPO_HOME', undefined);
 });
 
 function scan(finalText: string, over: Partial<SessionScan> = {}): SessionScan {

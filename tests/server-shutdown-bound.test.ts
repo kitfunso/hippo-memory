@@ -1,5 +1,5 @@
 // A signal or crash shutdown that cannot finish ends the process at its bound; one that can finish still exits 0 on a signal.
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, beforeEach, vi } from 'vitest';
 import { rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -7,6 +7,14 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { waitFor } from './_helpers/wait-for.js';
+
+beforeEach(() => {
+  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 // The script's shutdownDrainMs plus the 10 s the store's threads get to close.
 const DRAIN_MS = 200;

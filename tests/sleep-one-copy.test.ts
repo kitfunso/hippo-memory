@@ -1,9 +1,7 @@
 // Sleep keeps no deep copy of the store: the "as loaded" copy of a row is rebuilt from the row that was read.
 import type { FullContext } from './_helpers/api-ctx.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { rmSync } from 'node:fs';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries, loadAllEntriesWithBase } from '../src/store/entry-reads.js';
@@ -72,7 +70,7 @@ describe('loadAllEntriesWithBase', () => {
 
 describe('sleep after consolidation', () => {
   it('gives the ambient summary of the rows the audit left', async () => {
-    const home = mkdtempSync(join(tmpdir(), 'hippo-one-copy-home-'));
+    const home = makeRoot('one-copy-home', { init: false });
     roots.push(home);
     vi.stubEnv('HIPPO_HOME', home);
     vi.stubEnv('HIPPO_FAKE_NOW', '2026-06-01T12:00:00.000Z');
@@ -92,7 +90,7 @@ describe('sleep after consolidation', () => {
   });
 
   it('adds no whole-store read for the share phase', async () => {
-    const home = mkdtempSync(join(tmpdir(), 'hippo-one-copy-home-'));
+    const home = makeRoot('one-copy-home', { init: false });
     roots.push(home);
     vi.stubEnv('HIPPO_HOME', home);
     vi.stubEnv('HIPPO_FAKE_NOW', '2026-06-01T12:00:00.000Z');

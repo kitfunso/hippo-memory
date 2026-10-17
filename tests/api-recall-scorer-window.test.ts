@@ -110,7 +110,7 @@ describe('RecallOptions.scorerWindow', () => {
     expect(freshOnes).toHaveLength(5);
   });
 
-  it('scorerWindow=1 (smallest legal value) is accepted and honoured (v1.7.1 INFO #2)', async () => {
+  it('scorerWindow=1 (smallest legal value) is accepted and honoured', async () => {
     // Validator at src/api/index.ts accepts `>= 1` integers. A regression flipping
     // `< 1` to `<= 1` or `< 2` would not be caught by the existing 0-rejection
     // test alone. Pin the lower bound: scorerWindow=1 must NOT throw and the

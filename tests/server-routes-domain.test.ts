@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { remember as apiRemember } from '../src/api/index.js';
@@ -6,6 +6,10 @@ import type { ServerHandle } from '../src/server.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 import { serveAsAdmin } from './_helpers/admin-server.js';
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 async function jsonAs<T>(res: Response): Promise<T> {
   // SAFETY: every call site below targets one of this file's routes under
@@ -18,24 +22,17 @@ async function jsonAs<T>(res: Response): Promise<T> {
 describe('server HTTP routes — memories', () => {
   let home: string;
   let globalHome: string;
-  let originalHippoHome: string | undefined;
   let handle: ServerHandle;
 
   beforeEach(async () => {
     home = makeRoot('srv-routes');
     globalHome = makeRoot('srv-routes');
-    originalHippoHome = process.env.HIPPO_HOME;
-    process.env.HIPPO_HOME = globalHome;
+    vi.stubEnv('HIPPO_HOME', globalHome);
     handle = await serveAsAdmin({ hippoRoot: home, port: 0 });
   });
 
   afterEach(async () => {
     await handle.stop();
-    if (originalHippoHome === undefined) {
-      delete process.env.HIPPO_HOME;
-    } else {
-      process.env.HIPPO_HOME = originalHippoHome;
-    }
     rmSync(home, { recursive: true, force: true });
     rmSync(globalHome, { recursive: true, force: true });
   });
@@ -189,23 +186,16 @@ describe('server HTTP routes — memories', () => {
 
 describe('server HTTP routes — auth + audit', () => {
   let home: string;
-  let originalHippoHome: string | undefined;
   let handle: ServerHandle;
 
   beforeEach(async () => {
     home = makeRoot('srv-routes');
-    originalHippoHome = process.env.HIPPO_HOME;
-    process.env.HIPPO_HOME = home;
+    vi.stubEnv('HIPPO_HOME', home);
     handle = await serveAsAdmin({ hippoRoot: home, port: 0 });
   });
 
   afterEach(async () => {
     await handle.stop();
-    if (originalHippoHome === undefined) {
-      delete process.env.HIPPO_HOME;
-    } else {
-      process.env.HIPPO_HOME = originalHippoHome;
-    }
     rmSync(home, { recursive: true, force: true });
   });
 

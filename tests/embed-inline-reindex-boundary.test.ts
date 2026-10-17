@@ -11,15 +11,17 @@ import { saveStoredVectors } from '../src/store/vector-index.js';
 import { sqliteSyncStore } from '../src/store/sqlite/store.js';
 import { makeRoot } from './_helpers/make-root.js';
 
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 const KEY_ENV = 'OPENAI_API_KEY';
 let root: string;
-let savedKey: string | undefined;
 
 beforeEach(() => {
   root = makeRoot('inline-reindex');
   fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ embeddings: { provider: 'openai', model: 'new-m' } }), 'utf8');
-  savedKey = process.env[KEY_ENV];
-  process.env[KEY_ENV] = ['sk', 'test'].join('-');
+  vi.stubEnv(KEY_ENV, ['sk', 'test'].join('-'));
   vi.stubGlobal('fetch', vi.fn(async (_url: string | URL, init?: RequestInit) => {
     // SAFETY: the stub only receives the embeddings request body, which is JSON.
     const body = JSON.parse(String(init?.body)) as JsonValue;
@@ -30,8 +32,6 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
-  if (savedKey === undefined) delete process.env[KEY_ENV];
-  else process.env[KEY_ENV] = savedKey;
 });
 
 function seed(rows: number): MemoryEntry {

@@ -1,5 +1,5 @@
 // autoShare above the neutral score reads only rows that carry a score signal or a never-share mark, and picks the same rows.
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { join } from 'node:path';
 import type { MemoryEntry } from '../src/core/memory.js';
 import { autoShare } from '../src/sharing/share.js';
@@ -15,6 +15,10 @@ import { countMatching, recordStatements } from './_helpers/count-statements.js'
 import { sharingStores } from './_helpers/sharing-stores.js';
 import { makeRoot } from './_helpers/make-root.js';
 
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 type AutoShareStats = NonNullable<NonNullable<Parameters<typeof autoShare>[2]>['stats']>;
 
 /** loadAllEntries' statements: every full row of the store, or of one tenant. */
@@ -27,15 +31,15 @@ let origHippoHome: string | undefined;
 beforeEach(() => {
   tmp = makeRoot('autoshare-prefilter', { init: false });
   origHippoHome = process.env.HIPPO_HOME;
-  process.env.HIPPO_HOME = join(tmp, 'global');
+  vi.stubEnv('HIPPO_HOME', join(tmp, 'global'));
   initStore(getGlobalRoot());
   root = join(tmp, 'proj', '.hippo');
   initStore(root);
 });
 
 afterEach(() => {
-  if (origHippoHome !== undefined) process.env.HIPPO_HOME = origHippoHome;
-  else delete process.env.HIPPO_HOME;
+  if (origHippoHome !== undefined) vi.stubEnv('HIPPO_HOME', origHippoHome);
+  else vi.stubEnv('HIPPO_HOME', undefined);
 });
 
 function put(label: string, extra: Partial<MemoryEntry> = {}, tags: string[] = [], tenantId = 'default'): string {

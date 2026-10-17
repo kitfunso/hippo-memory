@@ -14,6 +14,10 @@ import { runInProcess } from './_helpers/run-in-process.js';
 import { LATEST_SCHEMA_VERSION } from './_helpers/schema-version.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 let home: string;
 
 function withDb<T>(fn: (db: DatabaseSyncLike) => T): T {
@@ -218,12 +222,9 @@ describe('key lists', () => {
 
 describe('expired keys over MCP and the stream', () => {
   let handle: ServerHandle;
-  const savedHeartbeat = process.env.MCP_SSE_HEARTBEAT_MS;
 
   afterEach(async () => {
     await handle.stop();
-    if (savedHeartbeat === undefined) delete process.env.MCP_SSE_HEARTBEAT_MS;
-    else process.env.MCP_SSE_HEARTBEAT_MS = savedHeartbeat;
   });
 
   it('refuses an expired key on POST /mcp and GET /mcp/stream', async () => {
@@ -237,7 +238,7 @@ describe('expired keys over MCP and the stream', () => {
   });
 
   it('closes an open stream once its key expires', async () => {
-    process.env.MCP_SSE_HEARTBEAT_MS = '100';
+    vi.stubEnv('MCP_SSE_HEARTBEAT_MS', '100');
     handle = await serve({ hippoRoot: home, port: 0 });
     const key = mint(new Date(Date.now() + 3_600_000).toISOString());
     const ac = new AbortController();

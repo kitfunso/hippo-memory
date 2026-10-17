@@ -1,7 +1,7 @@
 // Regression bar: with the loopback no-auth fallback off (HIPPO_REQUIRE_AUTH=1) every
 // /v1 and /mcp route must 401 without a valid Bearer. The route list is derived from
 // the route table so a new route missing buildContextWithAuth/requireAuth fails here.
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -9,6 +9,10 @@ import { serve, type ServerHandle } from '../src/server.js';
 import { routeLabel } from '../src/server/route-table.js';
 import { V1_ROWS } from './_helpers/v1-route-rows.js';
 import { makeRoot } from './_helpers/make-root.js';
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 const repoRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 
@@ -108,16 +112,16 @@ describe('server Bearer lockdown', () => {
 
   beforeEach(async () => {
     root = makeRoot('lockdown');
-    process.env.HIPPO_REQUIRE_AUTH = '1';
+    vi.stubEnv('HIPPO_REQUIRE_AUTH', '1');
     // '0' disables the default limiter (20 rps/burst 40), which would
     // 429 the ~120 /v1 requests this file sends.
-    process.env.HIPPO_V1_RPS = '0';
+    vi.stubEnv('HIPPO_V1_RPS', '0');
     handle = await serve({ hippoRoot: root, host: '127.0.0.1', port: 0 });
   });
 
   afterEach(async () => {
-    delete process.env.HIPPO_REQUIRE_AUTH;
-    delete process.env.HIPPO_V1_RPS;
+    vi.stubEnv('HIPPO_REQUIRE_AUTH', undefined);
+    vi.stubEnv('HIPPO_V1_RPS', undefined);
     await handle.stop();
   });
 

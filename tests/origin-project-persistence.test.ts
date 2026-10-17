@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -12,6 +12,10 @@ import { batchWriteAndDelete } from '../src/store/delete-and-batch.js';
 import { openHippoDb, closeHippoDb, getSchemaVersion } from '../src/db/index.js';
 import { _resetProjectIdentityCacheForTests } from '../src/core/project-identity.js';
 import { makeRoot } from './_helpers/make-root.js';
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 let tmpRoot: string;
 
@@ -217,7 +221,7 @@ describe('v39 migration backfill', () => {
     fs.mkdirSync(path.join(dotfiles, '.git'), { recursive: true });
     const globalRoot = path.join(dotfiles, 'hippo-global');
     const origHippoHome = process.env.HIPPO_HOME;
-    process.env.HIPPO_HOME = globalRoot;
+    vi.stubEnv('HIPPO_HOME', globalRoot);
     try {
       initStore(globalRoot);
       writeEntry(globalRoot, { ...createMemory('a user-global lesson in a dotfiles-managed store'), origin_project: '' });
@@ -226,8 +230,8 @@ describe('v39 migration backfill', () => {
       const [entry] = loadAllEntries(globalRoot, 'default');
       expect(entry.origin_project).toBe('');
     } finally {
-      if (origHippoHome !== undefined) process.env.HIPPO_HOME = origHippoHome;
-      else delete process.env.HIPPO_HOME;
+      if (origHippoHome !== undefined) vi.stubEnv('HIPPO_HOME', origHippoHome);
+      else vi.stubEnv('HIPPO_HOME', undefined);
     }
   });
 

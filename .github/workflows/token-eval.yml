@@ -5,7 +5,7 @@ name: Token eval
 
 on:
   push:
-    branches: [master, next/2.0]
+    branches: [master, next/2.0, next/3.0]
   pull_request:
     paths:
       - 'src/**'
@@ -21,6 +21,11 @@ on:
       - 'tests/fixtures/z0-harness.ts'
       - 'vitest.config.ts'
       - 'vitest.eval.config.ts'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'tests/_helpers/**'
+      - 'tests/_*.ts'
+      - 'tests/_*.mjs'
       - '.github/workflows/token-eval.yml'
   workflow_dispatch:
   workflow_call:

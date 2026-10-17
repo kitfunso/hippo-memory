@@ -5,6 +5,10 @@ import { getReranker } from '../../src/rerankers/index.js';
 import { createJevReranker } from '../../src/rerankers/jev.js';
 import type { RerankerFn } from '../../src/rerankers/types.js';
 
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 // The stand-in fallback REVERSES its input, so a fallback is distinguishable
 // from both a Jev ordering and an identity ordering.
 const reversingFallback: RerankerFn = async (_query, results) =>
@@ -46,15 +50,15 @@ describe('jev reranker', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     warnSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-    process.env.TYPESAFE_API_KEY = FAKE_KEY;
-    delete process.env.HIPPO_JEV_TIMEOUT_MS;
-    delete process.env.HIPPO_JEV_MODEL;
+    vi.stubEnv('TYPESAFE_API_KEY', FAKE_KEY);
+    vi.stubEnv('HIPPO_JEV_TIMEOUT_MS', undefined);
+    vi.stubEnv('HIPPO_JEV_MODEL', undefined);
   });
 
   afterEach(() => {
-    delete process.env.TYPESAFE_API_KEY;
-    delete process.env.HIPPO_JEV_TIMEOUT_MS;
-    delete process.env.HIPPO_JEV_MODEL;
+    vi.stubEnv('TYPESAFE_API_KEY', undefined);
+    vi.stubEnv('HIPPO_JEV_TIMEOUT_MS', undefined);
+    vi.stubEnv('HIPPO_JEV_MODEL', undefined);
   });
 
   it('orders candidates by the returned probabilities, in one batched request', async () => {
@@ -80,7 +84,7 @@ describe('jev reranker', () => {
   });
 
   it('falls back to the local reranker, without a request, when the key is unset', async () => {
-    delete process.env.TYPESAFE_API_KEY;
+    vi.stubEnv('TYPESAFE_API_KEY', undefined);
     const fetchMock = vi.spyOn(globalThis, 'fetch');
     const out = await freshReranker()('q', inputs());
 
@@ -110,7 +114,7 @@ describe('jev reranker', () => {
   });
 
   it('aborts on timeout and falls back instead of hanging or throwing', async () => {
-    process.env.HIPPO_JEV_TIMEOUT_MS = '5';
+    vi.stubEnv('HIPPO_JEV_TIMEOUT_MS', '5');
     let aborted = false;
     vi.spyOn(globalThis, 'fetch').mockImplementation(
       async (_url, init) =>
@@ -171,7 +175,7 @@ describe('jev reranker', () => {
   });
 
   it('hands the fallback the same slice Jev was given', async () => {
-    delete process.env.TYPESAFE_API_KEY;
+    vi.stubEnv('TYPESAFE_API_KEY', undefined);
     const fallback = vi.fn(reversingFallback);
     await createJevReranker(fallback)('q', many(45));
     expect(fallback.mock.calls[0][1]).toHaveLength(40);
@@ -179,7 +183,7 @@ describe('jev reranker', () => {
 
   it('ignores a zero, negative or non-numeric timeout', async () => {
     for (const value of ['0', '-5', 'abc']) {
-      process.env.HIPPO_JEV_TIMEOUT_MS = value;
+      vi.stubEnv('HIPPO_JEV_TIMEOUT_MS', value);
       let signal: AbortSignal | undefined;
       vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, init) => {
         signal = init?.signal ?? undefined;
@@ -201,7 +205,7 @@ describe('jev reranker', () => {
   });
 
   it('sends HIPPO_JEV_MODEL when it is set', async () => {
-    process.env.HIPPO_JEV_MODEL = 'jev-override-sentinel';
+    vi.stubEnv('HIPPO_JEV_MODEL', 'jev-override-sentinel');
     const fetchMock = vi
       .spyOn(globalThis, 'fetch')
       .mockResolvedValue(jevResponse([0.1, 0.9, 0.5]));
@@ -231,7 +235,7 @@ describe('jev reranker', () => {
 describe('jev reranker reply size cap', () => {
   it('falls back, names the cap and stops pulling the body once it passes 1 MiB', async () => {
     const warn = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-    process.env.TYPESAFE_API_KEY = FAKE_KEY;
+    vi.stubEnv('TYPESAFE_API_KEY', FAKE_KEY);
     let pulled = 0;
     let cancelled = false;
     const body = new ReadableStream<Uint8Array>({
@@ -244,7 +248,7 @@ describe('jev reranker reply size cap', () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(body, { status: 200 }));
     const items = [asResult('alpha', 1.0), asResult('beta', 0.9), asResult('gamma', 0.8)];
     const out = await createJevReranker(reversingFallback)('q', items);
-    delete process.env.TYPESAFE_API_KEY;
+    vi.stubEnv('TYPESAFE_API_KEY', undefined);
     expect(contents(out)).toEqual(['gamma', 'beta', 'alpha']);
     expect(warn.mock.calls.map((c) => String(c[0])).join('')).toContain('reply over 1048576 bytes');
     expect(cancelled).toBe(true);

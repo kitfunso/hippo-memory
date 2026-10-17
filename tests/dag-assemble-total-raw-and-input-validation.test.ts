@@ -8,7 +8,7 @@
  */
 
 import type { FullContext } from './_helpers/api-ctx.js';
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { countSessionRawMemories } from '../src/store/entry-reads.js';
@@ -19,6 +19,14 @@ import { serve, type ServerHandle } from '../src/server.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { sqliteStore } from '../src/store/sqlite/store.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+
+beforeEach(() => {
+  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 function safeRmSync(p: string): void { try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ } }
 function ctxFor(root: string, tenantId: string = 'default'): FullContext {
@@ -148,16 +156,12 @@ describe('countSessionRawMemories helper', () => {
 
 describe('MCP hippo_recall exposes fresh_tail_session_id', () => {
   let home: string;
-  let originalHome: string | undefined;
   beforeEach(() => {
     home = makeRoot('v163-mcp');
-    originalHome = process.env.HIPPO_HOME;
-    process.env.HIPPO_HOME = home;
+    vi.stubEnv('HIPPO_HOME', home);
   });
   afterEach(() => {
     safeRmSync(home);
-    if (originalHome === undefined) delete process.env.HIPPO_HOME;
-    else process.env.HIPPO_HOME = originalHome;
   });
 
   it('hippo_recall tool schema lists fresh_tail_session_id', async () => {
@@ -203,7 +207,7 @@ describe('HTTP /v1/memories input validation', () => {
     safeRmSync(home);
   });
 
-  it('400 on fresh_tail_session_id > 256 chars (P1-3)', async () => {
+  it('400 on fresh_tail_session_id > 256 chars', async () => {
     const big = 'x'.repeat(257);
     const res = await fetch(`${handle.url}/v1/memories?q=test&fresh_tail_session_id=${big}`);
     expect(res.status).toBe(400);
@@ -215,7 +219,7 @@ describe('HTTP /v1/memories input validation', () => {
     expect(res.status).toBe(200);
   });
 
-  it('summarize_overflow=banana is treated as false (P1-4)', async () => {
+  it('summarize_overflow=banana is treated as false', async () => {
     // No fixture rows; just verify the request succeeds and the parse
     // doesn't throw. Pre-v1.6.3, banana → true; post-v1.6.3, banana → false.
     // Caller can't observe summarize_overflow directly in a row-less

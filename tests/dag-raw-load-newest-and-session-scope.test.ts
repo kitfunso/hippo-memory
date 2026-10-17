@@ -14,7 +14,7 @@
  */
 
 import type { FullContext } from './_helpers/api-ctx.js';
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadSessionRawMemories, loadFreshRawMemories } from '../src/store/entry-reads.js';
@@ -22,6 +22,14 @@ import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '.
 import { retrieve, assemble } from '../src/api/index.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+
+beforeEach(() => {
+  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 function safeRmSync(p: string): void { try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ } }
 function ctxFor(root: string, tenantId: string = 'default'): FullContext {
@@ -88,7 +96,7 @@ describe('loadFreshRawMemories sessionId scope', () => {
   beforeEach(() => { root = makeRoot('v162-sess'); });
   afterEach(() => safeRmSync(root));
 
-  it('without sessionId: tenant-wide (legacy v1.5.2 behaviour)', () => {
+  it('without sessionId: tenant-wide (legacy behaviour)', () => {
     const a = makeRaw('row in session A', 'sess-A');
     a.created = '2026-01-01T00:00:00.000Z';
     const b = makeRaw('row in session B', 'sess-B');

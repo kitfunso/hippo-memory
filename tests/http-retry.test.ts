@@ -5,6 +5,10 @@ import type { AddressInfo } from 'node:net';
 import { fetchWithRetry, isRetryableStatus, llmTimeoutMs, llmTotalMs, parseRetryAfterMs } from '../src/util/http-retry.js';
 import { classifyTransportFailure } from '../src/cli/client.js';
 
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 interface Reply {
   status: number;
   headers?: Record<string, string>;
@@ -44,7 +48,7 @@ afterEach(async () => {
     await new Promise<void>((resolve) => server?.close(() => resolve()));
   }
   server = null;
-  delete process.env.HIPPO_LLM_TIMEOUT_MS;
+  vi.stubEnv('HIPPO_LLM_TIMEOUT_MS', undefined);
   vi.restoreAllMocks();
 });
 
@@ -299,15 +303,15 @@ describe('retry helpers', () => {
 
   it('takes the LLM timeout from HIPPO_LLM_TIMEOUT_MS and ignores junk', () => {
     expect(llmTimeoutMs()).toBe(60_000);
-    process.env.HIPPO_LLM_TIMEOUT_MS = '1500';
+    vi.stubEnv('HIPPO_LLM_TIMEOUT_MS', '1500');
     expect(llmTimeoutMs()).toBe(1500);
-    process.env.HIPPO_LLM_TIMEOUT_MS = 'zero';
+    vi.stubEnv('HIPPO_LLM_TIMEOUT_MS', 'zero');
     expect(llmTimeoutMs()).toBe(60_000);
   });
 
   it('gives one LLM call, retries included, two attempts and the longest wait', () => {
     expect(llmTotalMs()).toBe(128_000);
-    process.env.HIPPO_LLM_TIMEOUT_MS = '1500';
+    vi.stubEnv('HIPPO_LLM_TIMEOUT_MS', '1500');
     expect(llmTotalMs()).toBe(11_000);
   });
 });

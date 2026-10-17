@@ -6,6 +6,14 @@ import { createApiKey } from '../src/store/auth.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { makeRoot } from './_helpers/make-root.js';
 
+beforeEach(() => {
+  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 const PROXY_HEADERS: ReadonlyArray<readonly [string, string]> = [
   ['Forwarded', 'for=203.0.113.7;proto=https'],
   ['X-Forwarded-For', '203.0.113.7'],
@@ -20,7 +28,6 @@ const PROXY_HEADERS: ReadonlyArray<readonly [string, string]> = [
 let home: string;
 let handle: ServerHandle;
 let apiKey: string;
-let savedLevel: string | undefined;
 
 function send(path: string, headers: Record<string, string> = {}): Promise<number> {
   return new Promise((resolve, reject) => {
@@ -35,8 +42,7 @@ function send(path: string, headers: Record<string, string> = {}): Promise<numbe
 }
 
 beforeEach(async () => {
-  savedLevel = process.env.HIPPO_LOG;
-  delete process.env.HIPPO_LOG;
+  vi.stubEnv('HIPPO_LOG', undefined);
   home = makeRoot('proxied-loopback');
   const db = openHippoDb(home);
   try {
@@ -49,8 +55,6 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await handle.stop();
-  if (savedLevel === undefined) delete process.env.HIPPO_LOG;
-  else process.env.HIPPO_LOG = savedLevel;
 });
 
 describe('loopback fallback behind a reverse proxy', () => {

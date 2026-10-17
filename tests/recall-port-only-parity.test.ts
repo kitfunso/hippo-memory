@@ -16,6 +16,10 @@ import {
 } from './_helpers/recall-golden-seed.js';
 import { portOnlyStore } from './_helpers/port-only-store.js';
 
+beforeEach(() => {
+  vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');
+});
+
 type Args = Record<string, string | number | boolean>;
 type Call = { via: 'http'; args: Args } | { via: 'mcp'; args: Args };
 type Surface = Call['via'];

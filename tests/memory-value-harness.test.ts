@@ -31,7 +31,7 @@
  * retention is exact and reproducible regardless of which random ids win a
  * tie.
  */
-import { describe, it, expect, beforeEach, afterEach, afterAll } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, afterAll, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -49,13 +49,16 @@ import type { MemoryEntry } from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { clearAblationEnv, QUESTIONS, QUESTION_C, cleanupScratch, runPipeline, TEST_SIM_ROUNDS } from './memory-value-fixtures.js';
 
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 // mkdtemp per process (two worktrees at once must not share a root); re-set in a LATER beforeEach because clearAblationEnv deletes it.
 const HARNESS_SCRATCH_ROOT = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-mv-harness-test-scratch-'));
 
 beforeEach(clearAblationEnv);
 beforeEach(() => {
-  process.env.HIPPO_MV_SCRATCH_ROOT = HARNESS_SCRATCH_ROOT;
+  vi.stubEnv('HIPPO_MV_SCRATCH_ROOT', HARNESS_SCRATCH_ROOT);
 });
 afterEach(clearAblationEnv);
 
@@ -449,7 +452,7 @@ describe('scratch-cleanup containment guard', () => {
 describe('scratch-store hygiene', () => {
   it('scratch stores live under the OS temp dir, never under the repo', () => {
     // Drop this file's override so the production default path is what gets checked.
-    delete process.env.HIPPO_MV_SCRATCH_ROOT;
+    vi.stubEnv('HIPPO_MV_SCRATCH_ROOT', undefined);
     // SAFETY: scratchRootDir() (common.mjs) always returns the scratch-root
     // path as a string; it never returns a filesystem handle or undefined.
     const root = scratchRootDir() as string;

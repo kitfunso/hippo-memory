@@ -1,11 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execSync } from 'node:child_process';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { markRetrieved } from '../src/core/memory.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 const CLI = join(process.cwd(), 'dist', 'cli.js');
 
@@ -20,8 +19,8 @@ function hippo(home: string, globalHome: string, cmd: string): string {
 
 describe('recall with bi-temporal filter', () => {
   it('default recall excludes superseded memories', () => {
-    const home = mkdtempSync(join(tmpdir(), 'hippo-btr-'));
-    const globalHome = mkdtempSync(join(tmpdir(), 'hippo-btr-global-'));
+    const home = makeRoot('btr', { init: false });
+    const globalHome = makeRoot('btr-global', { init: false });
     hippo(home, globalHome, 'init --no-hooks --no-schedule --no-learn');
     hippo(home, globalHome, 'remember "database is Postgres"');
     const hippoRoot = join(home, '.hippo');
@@ -32,13 +31,11 @@ describe('recall with bi-temporal filter', () => {
     const out = hippo(home, globalHome, 'recall database');
     expect(out).toContain('MySQL');
     expect(out).not.toContain('Postgres');
-    rmSync(home, { recursive: true, force: true });
-    rmSync(globalHome, { recursive: true, force: true });
   });
 
   it('--include-superseded returns superseded with marker', () => {
-    const home = mkdtempSync(join(tmpdir(), 'hippo-btr-'));
-    const globalHome = mkdtempSync(join(tmpdir(), 'hippo-btr-global-'));
+    const home = makeRoot('btr', { init: false });
+    const globalHome = makeRoot('btr-global', { init: false });
     hippo(home, globalHome, 'init --no-hooks --no-schedule --no-learn');
     hippo(home, globalHome, 'remember "database is Postgres"');
     const hippoRoot = join(home, '.hippo');
@@ -50,8 +47,6 @@ describe('recall with bi-temporal filter', () => {
     expect(out).toContain('MySQL');
     expect(out).toContain('Postgres');
     expect(out).toContain('[superseded]');
-    rmSync(home, { recursive: true, force: true });
-    rmSync(globalHome, { recursive: true, force: true });
   });
 
   it('markRetrieved is no-op for superseded memories', () => {

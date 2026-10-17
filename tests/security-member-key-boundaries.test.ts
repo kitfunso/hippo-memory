@@ -12,7 +12,7 @@
  * access. Real HTTP server on port 0, real SQLite, no mocks.
  */
 import type { FullContext } from './_helpers/api-ctx.js';
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
@@ -23,6 +23,10 @@ import { serve, type ServerHandle } from '../src/server.js';
 import * as api from '../src/api/index.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 const PRIVATE_SCOPE = 'slack:private:CSECRET1';
 const PUBLIC_SCOPE = 'slack:public:CGENERAL';
@@ -50,22 +54,18 @@ function seedScopedMemories(home: string): void {
 describe('member-key boundaries over HTTP', () => {
   let home: string;
   let globalHome: string;
-  let origHippoHome: string | undefined;
   let handle: ServerHandle;
 
   beforeEach(async () => {
     home = makeRoot('member-bounds');
     globalHome = makeRoot('member-bounds');
-    origHippoHome = process.env.HIPPO_HOME;
-    process.env.HIPPO_HOME = globalHome;
+    vi.stubEnv('HIPPO_HOME', globalHome);
     seedScopedMemories(home);
     handle = await serve({ hippoRoot: home, port: 0 });
   });
 
   afterEach(async () => {
     await handle.stop();
-    if (origHippoHome === undefined) delete process.env.HIPPO_HOME;
-    else process.env.HIPPO_HOME = origHippoHome;
     rmSync(home, { recursive: true, force: true });
     rmSync(globalHome, { recursive: true, force: true });
   });

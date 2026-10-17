@@ -6,6 +6,10 @@ import { createMemory } from './_helpers/default-half-life-memory.js';
 import type { MemoryDetail, Overview } from '../src/dashboard/dashboard-types.js';
 import { get, makeStore, parse, startDashboard, type RunningDashboard, type TmpStore } from './_helpers/dashboard-fixture.js';
 
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 let tmp: TmpStore;
 let dash: RunningDashboard;
 
@@ -24,7 +28,7 @@ function seedTwoTenants() {
 
 beforeEach(async () => {
   tmp = makeStore('hippo-dash-conflicts');
-  process.env.HIPPO_TENANT = 'tenant_a';
+  vi.stubEnv('HIPPO_TENANT', 'tenant_a');
   dash = await startDashboard(tmp.hippoRoot, () => Date.now());
 });
 
