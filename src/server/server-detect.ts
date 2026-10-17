@@ -214,7 +214,7 @@ export function writePidfile(
  * Best-effort pidfile removal, silent on any error so shutdown paths can call it. Identity-blind: a shutdown that must
  * not clobber a newer server's pidfile
  * uses removePidfileIfOwned. */
-export function removePidfile(hippoRoot: string): void {
+function removePidfile(hippoRoot: string): void {
   const path = join(hippoRoot, PIDFILE);
   try { unlinkSync(path); } catch { /* already gone or undeletable; the next detectServer probe re-checks */ }
 }

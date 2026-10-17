@@ -1,22 +1,14 @@
 {
-  "count": 18,
+  "count": 10,
   "exports": [
-    "src/api/availability.ts:DEFAULT_RECENCY_WINDOW_MS",
-    "src/cli/github.ts:cmdGitHubBackfill",
     "src/cli/refine-llm.ts:refineSemanticMemory",
-    "src/cli/scheduler.ts:loadWorkspaceRegistry",
-    "src/consolidate/half-life-migration.ts:storeHalfLifeBase",
     "src/consolidate/memory-value.ts:MV_FEATURE_NAMES",
     "src/consolidate/memory-value.ts:computeMvFeatures",
     "src/dashboard/dashboard-snapshot.ts:buildSnapshot",
-    "src/embeddings/provider.ts:isEmbeddingConfigured",
-    "src/embeddings/provider.ts:resolveEmbeddingIdentity",
     "src/graph/extract.ts:MAX_REFERENCES_PER_OBJECT",
     "src/graph/extract.ts:MAX_REF_NAME_LEN",
     "src/graph/extract.ts:MIN_REF_NAME_LEN",
     "src/mcp/request.ts:recordMcpTokens",
-    "src/search/path-context.ts:PATH_BOOST_WEIGHT",
-    "src/server/server-detect.ts:removePidfile",
     "src/store/failure-log.ts:failuresBySession",
     "src/store/recall-trace.ts:readDeliveryEvents"
   ]

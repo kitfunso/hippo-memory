@@ -25,7 +25,7 @@ function normalizeWorkspace(projectDir: string): string {
   return path.resolve(projectDir).replace(/\\/g, '/');
 }
 
-export function loadWorkspaceRegistry(globalRoot: string): WorkspaceRegistry {
+function loadWorkspaceRegistry(globalRoot: string): WorkspaceRegistry {
   const registryPath = workspaceRegistryPath(globalRoot);
   if (!fs.existsSync(registryPath)) return defaultRegistry();
 

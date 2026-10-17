@@ -391,29 +391,6 @@ export function resolveEmbeddingProvider(
   return new ApiEmbeddingProvider(kind, model, baseUrl, batchSize, enabled);
 }
 
-/** The reindex identity for the active provider; use it, NOT
- * resolveEmbeddingModel, wherever `embeddingModelRequiresReindex`
- * / stored-model comparisons happen. */
-export function resolveEmbeddingIdentity(embeddings: EmbeddingsConfig, opts: ResolveProviderOptions = {}): string {
-  return resolveEmbeddingProvider(embeddings, opts).id;
-}
-
-/** Provider-aware availability for a store (local: dependency installed; api: key present); use where the decision
- * to embed is made. */
-export function isEmbeddingConfigured(hippoRoot: string, embeddings: EmbeddingsConfig): boolean {
-  try {
-    return resolveEmbeddingProvider(embeddings).isAvailable();
-  } catch (err) {
-    // An invalid embedding config must not crash the best-effort ingestion guard, so it reads as not configured.
-    log.warnThenDebug(
-      `embedding-config-unusable:${hippoRoot}`,
-      `embedding config unusable: ${errorMessage(err)}`,
-      errorFields(err),
-    );
-    return false;
-  }
-}
-
 /** The caller's embeddings config, else `hippoRoot`'s file: the fallback for the published embed and search entries. */
 export function embeddingsConfigOf(hippoRoot: string, given?: EmbeddingsConfig): EmbeddingsConfig {
   return given ?? loadConfig(hippoRoot).embeddings;

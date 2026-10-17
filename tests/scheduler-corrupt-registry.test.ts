@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } fr
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { loadWorkspaceRegistry, registerWorkspace, workspaceRegistryPath } from '../src/cli/scheduler.js';
+import { listRegisteredWorkspaces, registerWorkspace, workspaceRegistryPath } from '../src/cli/scheduler.js';
 
 let globalRoot: string;
 let stderrSpy: MockInstance<typeof process.stderr.write>;
@@ -24,7 +24,7 @@ describe('corrupt workspace registry', () => {
     const corrupt = '{"version":1,"workspaces":["/repo/a",';
     fs.writeFileSync(registryFile, corrupt, 'utf8');
 
-    expect(loadWorkspaceRegistry(globalRoot).workspaces).toEqual([]);
+    expect(listRegisteredWorkspaces(globalRoot)).toEqual([]);
 
     const asides = fs.readdirSync(globalRoot).filter((f) => f.startsWith('workspaces.json.corrupt-'));
     expect(asides).toHaveLength(1);
