@@ -11,11 +11,11 @@ import {
   importClaude,
   importCursor,
   importGenericFile,
-} from '../src/importers/sources.js';
-import { importMarkdown } from '../src/importers/markdown.js';
-import { importEntries, ImportOptions } from '../src/importers/core.js';
-import { loadAllEntries } from '../src/store/entry-reads.js';
-import { makeRoot } from './_helpers/make-root.js';
+} from '../../src/importers/sources.js';
+import { importMarkdown } from '../../src/importers/markdown.js';
+import { importEntries, ImportOptions } from '../../src/importers/core.js';
+import { loadAllEntries } from '../../src/store/entry-reads.js';
+import { makeRoot } from '../_helpers/make-root.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();

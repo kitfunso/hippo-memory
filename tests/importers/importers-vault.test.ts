@@ -13,26 +13,26 @@
  *   (i) LIKE-escape isolation (vault `a%` does not archive vault `ab`'s rows)
  */
 
-import type { FullContext } from './_helpers/api-ctx.js';
+import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
-import { importVault } from '../src/importers/vault.js';
-import { type ImportOptions } from '../src/importers/core.js';
-import { initStore } from '../src/store/open.js';
-import { loadAllEntries } from '../src/store/entry-reads.js';
-import { openHippoDb, closeHippoDb } from '../src/db/index.js';
-import { remember } from '../src/api/index.js';
-import { apiCtx } from './_helpers/api-ctx.js';
-import { makeRoot } from './_helpers/make-root.js';
+import { importVault } from '../../src/importers/vault.js';
+import { type ImportOptions } from '../../src/importers/core.js';
+import { initStore } from '../../src/store/open.js';
+import { loadAllEntries } from '../../src/store/entry-reads.js';
+import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
+import { remember } from '../../src/api/index.js';
+import { apiCtx } from '../_helpers/api-ctx.js';
+import { makeRoot } from '../_helpers/make-root.js';
 
 let tmpDir: string; // hippo root (the store)
 let vaultDir: string; // a scratch vault folder we mutate per-test
 
-const FIXTURES = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures', 'vault-imports');
+const FIXTURES = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'fixtures', 'vault-imports');
 
 beforeEach(() => {
   tmpDir = makeRoot('vault-store');
