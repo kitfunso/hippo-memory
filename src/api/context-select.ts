@@ -6,10 +6,10 @@ import { calculateStrength, type MemoryEntry } from '../core/memory.js';
 import { auditQueryFields, type AppendAuditOpts } from '../store/audit.js';
 import type { ContextReads, HippoStore } from '../store/index.js';
 import { isWorthSurfacing } from '../core/memory-quality.js';
-import { rankBothStores } from '../sharing/search-both.js';
+import { localFilesVectorSource, rankBothStores } from '../sharing/search-both.js';
 import { evalNow, strengthAblation } from '../core/ablation.js';
 import { searchByEngine } from '../search/engine.js';
-import { folderVectorSource, vectorSourceOf } from '../search/hybrid.js';
+import { vectorSourceOf } from '../search/hybrid.js';
 import type { HybridVectorCandidates } from '../search/vector.js';
 import { DEFAULT_LOCAL_BUMP, type SearchResult } from '../core/search-types.js';
 import { compareScoredResults } from '../core/compare.js';
@@ -425,7 +425,7 @@ async function searchBothStores(
   const sources = {
     local: vectorSourceOf({ store: plan.local.store, config: plan.config }),
     // Its own config.json names the global store's embedding model, read only when the vector arm runs.
-    global: folderVectorSource({ hippoRoot: plan.globalRoot, store: ctx.reach?.global?.store }),
+    global: localFilesVectorSource(globalStoreInReach(ctx)),
   };
   const merged = await rankBothStores(
     plan.query,
