@@ -5,7 +5,7 @@
  * Covers what only policies have; the shared lifecycle rules run per kind in typed-object-store.test.ts.
  * 1. savePolicy creates memory + policies row (+ policy_create audit); v1; valid_from defaults to now; valid_to null
  * 2. savePolicy with explicit from/to; memory content has name + text + range
- * 3. status filters; loadActivePolicies
+ * 3. status filters
  * 4. DATE validation: inverted valid_to rejected (writes nothing); malformed rejected; overflow rolls; default now
  * 5. normalizePolicyDate canonicalization (date-only -> midnight Z; invalid throws)
  * 6. AS-OF query: half-open boundary; open-ended; name filter; excludes superseded/not-yet/expired
@@ -19,7 +19,6 @@ import {
   savePolicy,
   closePolicy,
   loadPolicies,
-  loadActivePolicies,
   policiesAsOf,
   normalizePolicyDate,
 } from '../src/objects/policies.js';
@@ -111,13 +110,13 @@ describe('policies store (bi-temporal first-class object)', () => {
     expect(p.validTo).toBe('2026-06-01T00:00:00.000Z');
   });
 
-  it('status filters; loadActivePolicies', async () => {
+  it('status filters; status active', async () => {
     const a = await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { policyName: 'a', policyText: 'x' });
     const b = await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { policyName: 'b', policyText: 'x' });
     const c = await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { policyName: 'c', policyText: 'x' });
     await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { policyName: 'b', policyText: 'x2', supersedesPolicyId: b.id });
     await closePolicy(objectsAt(home), 'default', c.id);
-    const active = await loadActivePolicies(objectsAt(home), 'default');
+    const active = await loadPolicies(objectsAt(home), 'default', { status: 'active' });
     expect(active.some((x) => x.id === a.id)).toBe(true);
     expect(active.some((x) => x.id === b.id)).toBe(false);
     expect(active.some((x) => x.id === c.id)).toBe(false);

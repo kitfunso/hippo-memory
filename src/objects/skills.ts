@@ -22,7 +22,7 @@ export const VALID_SKILL_STATES: ReadonlySet<SkillStatus> = new Set<SkillStatus>
 /** Field caps (untrusted at the HTTP/SDK boundary). instructions is a body, so a
  *  larger cap than the 4096 short-field convention. */
 export const MAX_SKILL_NAME_LEN = 256;
-export const MAX_SKILL_INSTRUCTIONS_LEN = 8192;
+const MAX_SKILL_INSTRUCTIONS_LEN = 8192;
 export const MAX_SKILL_TRIGGER_LEN = 1024;
 /** Aggregate bound on a single export render so the export body is never unbounded.
  *  Realistic active-skill counts are tens; 1000 is a generous bound. */
@@ -134,14 +134,6 @@ export function loadSkills(
   opts: ListSkillsOpts = {},
 ): Promise<Skill[]> {
   return listObjects(objects, SKILL, tenantId, opts);
-}
-
-export function loadActiveSkills(
-  objects: Objects,
-  tenantId: string,
-  opts: { limit?: number } = {},
-): Promise<Skill[]> {
-  return loadSkills(objects, tenantId, { status: 'active', limit: opts.limit });
 }
 
 /** Render the tenant's ACTIVE skills into one AGENTS.md / CLAUDE.md-style markdown block (H2 per skill, ordered by

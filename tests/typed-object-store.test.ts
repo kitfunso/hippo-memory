@@ -7,15 +7,15 @@ import { Layer } from '../src/core/memory.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import type { CustomerNote, Decision, Policy, Process, ProjectBrief, Skill } from '../src/core/object-types.js';
 import {
-  saveCustomerNote, closeCustomerNote, loadCustomerNoteById, loadCustomerNotes, loadActiveNotesForCustomer, VALID_NOTE_STATES,
+  saveCustomerNote, closeCustomerNote, loadCustomerNoteById, loadCustomerNotes, VALID_NOTE_STATES,
 } from '../src/objects/customer-notes.js';
-import { saveSkill, closeSkill, loadSkillById, loadSkills, loadActiveSkills, VALID_SKILL_STATES } from '../src/objects/skills.js';
-import { savePolicy, closePolicy, loadPolicyById, loadPolicies, loadActivePolicies, VALID_POLICY_STATES } from '../src/objects/policies.js';
+import { saveSkill, closeSkill, loadSkillById, loadSkills, VALID_SKILL_STATES } from '../src/objects/skills.js';
+import { savePolicy, closePolicy, loadPolicyById, loadPolicies, VALID_POLICY_STATES } from '../src/objects/policies.js';
 import {
   saveProjectBrief, closeProjectBrief, loadProjectBriefById, loadProjectBriefs, VALID_BRIEF_STATES,
 } from '../src/objects/project-briefs.js';
-import { saveProcess, closeProcess, loadProcessById, loadProcesses, loadActiveProcesses, VALID_PROCESS_STATES } from '../src/objects/processes.js';
-import { saveDecision, closeDecision, loadDecisionById, loadDecisions, loadActiveDecisions, VALID_DECISION_STATES } from '../src/objects/decisions.js';
+import { saveProcess, closeProcess, loadProcessById, loadProcesses, VALID_PROCESS_STATES } from '../src/objects/processes.js';
+import { saveDecision, closeDecision, loadDecisionById, loadDecisions, VALID_DECISION_STATES } from '../src/objects/decisions.js';
 import { openIncident, loadIncidentById, loadIncidents, VALID_INCIDENT_STATES } from '../src/objects/incidents.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { writeEntryThenFail } from './_helpers/failing-write.js';
@@ -128,7 +128,7 @@ const LINEAGES: readonly Lineage[] = [
     })),
     close: async (id) => note(await closeCustomerNote(objectsAt(home), 'default', id)),
     byId: async (id) => { const r = await loadCustomerNoteById(objectsAt(home), 'default', id); return r && note(r); },
-    activeIds: async () => ids(await loadActiveNotesForCustomer(objectsAt(home), 'default', 'c')),
+    activeIds: async () => ids(await loadCustomerNotes(objectsAt(home), 'default', { customer: 'c', status: 'active' })),
   },
   {
     kind: 'skill', table: 'skills', versioned: true,
@@ -137,7 +137,7 @@ const LINEAGES: readonly Lineage[] = [
     })),
     close: async (id) => skill(await closeSkill(objectsAt(home), 'default', id)),
     byId: async (id) => { const r = await loadSkillById(objectsAt(home), 'default', id); return r && skill(r); },
-    activeIds: async () => ids(await loadActiveSkills(objectsAt(home), 'default')),
+    activeIds: async () => ids(await loadSkills(objectsAt(home), 'default', { status: 'active' })),
   },
   {
     kind: 'policy', table: 'policies', versioned: true,
@@ -146,7 +146,7 @@ const LINEAGES: readonly Lineage[] = [
     })),
     close: async (id) => policy(await closePolicy(objectsAt(home), 'default', id)),
     byId: async (id) => { const r = await loadPolicyById(objectsAt(home), 'default', id); return r && policy(r); },
-    activeIds: async () => ids(await loadActivePolicies(objectsAt(home), 'default')),
+    activeIds: async () => ids(await loadPolicies(objectsAt(home), 'default', { status: 'active' })),
   },
   {
     kind: 'project_brief', table: 'project_briefs', versioned: true,
@@ -164,7 +164,7 @@ const LINEAGES: readonly Lineage[] = [
     })),
     close: async (id) => proc(await closeProcess(objectsAt(home), 'default', id)),
     byId: async (id) => { const r = await loadProcessById(objectsAt(home), 'default', id); return r && proc(r); },
-    activeIds: async () => ids(await loadActiveProcesses(objectsAt(home), 'default')),
+    activeIds: async () => ids(await loadProcesses(objectsAt(home), 'default', { status: 'active' })),
   },
   {
     kind: 'decision', table: 'decisions', versioned: false,
@@ -173,7 +173,7 @@ const LINEAGES: readonly Lineage[] = [
     })),
     close: async (id) => decision(await closeDecision(objectsAt(home), 'default', id)),
     byId: async (id) => { const r = await loadDecisionById(objectsAt(home), 'default', id); return r && decision(r); },
-    activeIds: async () => ids(await loadActiveDecisions(objectsAt(home), 'default')),
+    activeIds: async () => ids(await loadDecisions(objectsAt(home), 'default', { status: 'active' })),
   },
 ];
 

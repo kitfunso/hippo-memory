@@ -5,7 +5,7 @@
  * Covers what only processes have; the shared lifecycle rules run per kind in typed-object-store.test.ts.
  * 1. saveProcess creates the memory mirror + processes row (+ process_create audit), version 1
  * 2. memory content: name + numbered steps + description
- * 3. loadProcesses status filter; loadActiveProcesses excludes non-active
+ * 3. loadProcesses status filter; status 'active' excludes non-active
  * 4. steps validation: non-array / non-string / empty / count cap / length cap; trim-then-store
  * 5. a damaged steps column reads as no steps and warns once per shape
  */
@@ -18,7 +18,6 @@ import {
   closeProcess,
   loadProcessById,
   loadProcesses,
-  loadActiveProcesses,
   validateProcessSteps,
   MAX_PROCESS_STEPS,
   MAX_PROCESS_STEP_LEN,
@@ -107,14 +106,14 @@ describe('processes store (first-class object)', () => {
     } finally { closeHippoDb(db); }
   });
 
-  it('loadProcesses status filter; loadActiveProcesses excludes non-active', async () => {
+  it('loadProcesses status filter; status active excludes non-active', async () => {
     const a = await saveProcess(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { processName: 'active-1', steps: ['a'] });
     const b = await saveProcess(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { processName: 'to-supersede', steps: ['b'] });
     const c = await saveProcess(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { processName: 'to-close', steps: ['c'] });
     await saveProcess(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { processName: 'to-supersede', steps: ['b', 'b2'], supersedesProcessId: b.id });
     await closeProcess(objectsAt(home), 'default', c.id);
 
-    const active = await loadActiveProcesses(objectsAt(home), 'default');
+    const active = await loadProcesses(objectsAt(home), 'default', { status: 'active' });
     expect(active.every((x) => x.status === 'active')).toBe(true);
     expect(active.some((x) => x.id === a.id)).toBe(true);
     expect(active.some((x) => x.id === b.id)).toBe(false);

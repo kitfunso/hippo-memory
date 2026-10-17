@@ -147,11 +147,3 @@ export function loadProcesses(
 ): Promise<Process[]> {
   return listObjects(objects, PROCESS, tenantId, opts);
 }
-
-export function loadActiveProcesses(
-  objects: Objects,
-  tenantId: string,
-  opts: { limit?: number } = {},
-): Promise<Process[]> {
-  return loadProcesses(objects, tenantId, { status: 'active', limit: opts.limit });
-}
