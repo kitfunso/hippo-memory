@@ -79,7 +79,7 @@ jobs:
         run: node scripts/check-floating-api.mjs
       - name: Store-port ratchet
         run: node scripts/check-store-port.mjs
-      - name: Layer order ratchet
+      - name: Layer order
         run: node scripts/check-layers.mjs
       - name: Test-only export ratchet
         run: node scripts/check-test-only-exports.mjs

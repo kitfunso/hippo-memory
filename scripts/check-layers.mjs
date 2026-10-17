@@ -1,57 +1,25 @@
 #!/usr/bin/env node
 // CI layer gate. A src/ file imports only from its own layer or a lower one (order and the folder and root-file
-// map are in layers.json). Existing upward imports sit in .layers-baseline.json and may go but never grow.
+// map are in layers.json). Any upward import, runtime or type-only, fails; there is no baseline of edges.
+// .layers-baseline.json holds one number, the cap on root files in layers.json, which may fall but never rise.
 // A file under src/server/routes/ that names requireGroup or storeFor also fails: routes reach the store through src/api.
 // So does a runtime import from src/cli/** or src/cli.ts into src/store or src/db, unless .cli-store-allowlist.json names it with a reason.
 // So does a runtime import from src/api/**, src/connectors/** or src/mcp/** into src/store/sqlite/**, unless SQLITE_PINNED names it with a reason: they take the store from the Context.
 // layers.json `dbReach` names the folders that reach the db layer only through the store, and each import that may stay, with why.
-// Usage: check-layers.mjs [--list] [--update]. --update rewrites the baseline; it refuses to add an edge or raise a number.
+// Usage: check-layers.mjs [--list] [--update]. --update lowers the root-file cap; it refuses to raise it.
 
 import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
-import { stripComments } from './lib/source-text.mjs';
+import { isLocalSpec, readFacts } from './lib/ts-facts.mjs';
 
 const BASELINE = '.layers-baseline.json';
 const MAP = 'layers.json';
-const QUOTED = `['"]([^'"\\n]+)['"]`;
-const IMPORT_CLAUSE = String.raw`(type\s+)?((?:[\w$]+\s*,\s*)?(?:\{[^}]*\}|\*\s*as\s+[\w$]+)|[\w$]+)`;
-const EXPORT_CLAUSE = String.raw`(type\s+)?(\{[^}]*\}|\*(?:\s*as\s+[\w$]+)?)`;
-const STATIC_RES = [
-  new RegExp(String.raw`^[ \t]*import\s+${IMPORT_CLAUSE}\s*from\s*${QUOTED}`, 'gm'),
-  new RegExp(String.raw`^[ \t]*export\s+${EXPORT_CLAUSE}\s*from\s*${QUOTED}`, 'gm'),
-];
-const SIDE_EFFECT_RE = new RegExp(String.raw`^[ \t]*import\s*${QUOTED}`, 'gm');
-const DYNAMIC_RE = /\bimport\s*\(\s*['"]([^'"\n]+)['"]\s*\)/g;
-
-/** True when tsc erases the statement: `import type`, or a brace list whose every specifier is `type X`. */
-function isTypeOnly(typeKeyword, clause) {
-  if (typeKeyword) return true;
-  const braces = /^\{([^}]*)\}$/.exec(clause.trim());
-  if (!braces) return false;
-  const specs = braces[1].split(',').map((s) => s.trim()).filter(Boolean);
-  return specs.length > 0 && specs.every((s) => /^type\s/.test(s));
-}
-
-/** The names a clause binds; a default or namespace binding is '*', since it reaches every export. */
-function clauseNames(clause) {
-  const braces = /\{([^}]*)\}/.exec(clause);
-  const names = braces ? braces[1].split(',').map((s) => s.trim().replace(/^type\s+/, '').split(/\s+as\s+/)[0]).filter(Boolean) : [];
-  return clause.replace(/\{[^}]*\}/, '').replace(',', '').trim() ? [...names, '*'] : names;
-}
 
 /** Every relative import of one source as { spec, line, kind: 'runtime' | 'typeOnly', names }. */
 function importsOf(text) {
-  const code = stripComments(text);
-  const lineAt = (i) => code.slice(0, i).split('\n').length;
-  const out = [];
-  for (const re of STATIC_RES) {
-    for (const m of code.matchAll(re)) {
-      out.push({ spec: m[3], line: lineAt(m.index), kind: isTypeOnly(m[1], m[2]) ? 'typeOnly' : 'runtime', names: clauseNames(m[2]) });
-    }
-  }
-  for (const m of code.matchAll(SIDE_EFFECT_RE)) out.push({ spec: m[1], line: lineAt(m.index), kind: 'runtime', names: ['*'] });
-  for (const m of code.matchAll(DYNAMIC_RE)) out.push({ spec: m[1], line: lineAt(m.index), kind: 'runtime', names: ['*'] });
-  return out.filter((i) => i.spec.startsWith('./') || i.spec.startsWith('../'));
+  return readFacts(text)
+    .imports.filter((i) => isLocalSpec(i.spec))
+    .map((i) => ({ spec: i.spec, line: i.line, kind: i.typeOnly ? 'typeOnly' : 'runtime', names: i.names }));
 }
 
 function resolveSpecifier(fromFile, spec) {
@@ -115,7 +83,7 @@ function findUpwardEdges(map, srcDir) {
 }
 
 const ROUTES_DIR = 'server/routes';
-const ROUTE_STORE_RE = /\b(requireGroup|storeFor)\b/;
+const ROUTE_STORE_NAMES = new Set(['requireGroup', 'storeFor']);
 
 /** Lines under src/server/routes/ that name requireGroup or storeFor: a route reaches the store through src/api, never the port. */
 function findRouteStoreReaches(srcDir) {
@@ -124,10 +92,8 @@ function findRouteStoreReaches(srcDir) {
   if (!existsSync(dir)) return [];
   const out = [];
   for (const file of tsFiles(dir)) {
-    const lines = stripComments(readFileSync(file, 'utf8')).split('\n');
-    lines.forEach((text, i) => {
-      if (ROUTE_STORE_RE.test(text)) out.push(`${relative(root, file).replaceAll('\\', '/')}:${i + 1}`);
-    });
+    const lines = new Set(readFacts(readFileSync(file, 'utf8')).identifiers.filter((id) => ROUTE_STORE_NAMES.has(id.name)).map((id) => id.line));
+    for (const line of [...lines].sort((x, y) => x - y)) out.push(`${relative(root, file).replaceAll('\\', '/')}:${line}`);
   }
   return out;
 }
@@ -231,7 +197,6 @@ function findDbReaches(map, srcDir) {
   return { reaches, stale };
 }
 
-const edgeKey = (e) => `${e.from}\t${e.to}\t${e.kind}`;
 const describe = (e) => `${e.from}:${e.line} -> ${e.to} (${e.layerFrom} -> ${e.layerTo}, ${e.kind === 'typeOnly' ? 'type' : 'runtime'})`;
 
 const args = process.argv.slice(2);
@@ -280,29 +245,16 @@ if (dbReach.reaches.length + dbReach.stale.length > 0 && !args.includes('--updat
 }
 
 const edges = findUpwardEdges(map, 'src');
-const current = {
-  runtime: edges.filter((e) => e.kind === 'runtime').length,
-  typeOnly: edges.filter((e) => e.kind === 'typeOnly').length,
-  rootFiles: Object.keys(map.rootFiles).length,
-};
-const NUMBERS = ['runtime', 'typeOnly', 'rootFiles'];
-const total = `${current.runtime} runtime and ${current.typeOnly} type-only upward imports, ${current.rootFiles} root files`;
-const baseline = readJson(BASELINE, null);
-const was = baseline ?? { edges: [], runtime: 0, typeOnly: 0, rootFiles: 0 };
-const wasKeys = new Set(was.edges.map(edgeKey));
-const added = edges.filter((e) => !wasKeys.has(edgeKey(e)));
-const rose = NUMBERS.filter((k) => current[k] > was[k]);
+const rootFiles = Object.keys(map.rootFiles).length;
+const cap = readJson(BASELINE, { rootFiles: 0 }).rootFiles;
 
 if (args.includes('--update')) {
-  if (baseline && (added.length > 0 || rose.length > 0)) {
-    console.error('Refusing to update: the baseline may only shrink.');
-    for (const e of added) console.error(`  new: ${describe(e)}`);
-    for (const k of rose) console.error(`  ${k}: ${was[k]} -> ${current[k]}`);
+  if (rootFiles > cap) {
+    console.error(`Refusing to update: root files ${cap} -> ${rootFiles}; the cap may only fall.`);
     process.exit(1);
   }
-  const listed = edges.map(({ from, to, kind }) => ({ from, to, kind }));
-  writeFileSync(BASELINE, JSON.stringify({ ...current, edges: listed }, null, 2) + '\n');
-  console.log(`Wrote ${BASELINE}: ${total}.`);
+  writeFileSync(BASELINE, JSON.stringify({ rootFiles }, null, 2) + '\n');
+  console.log(`Wrote ${BASELINE}: ${rootFiles} root files.`);
   process.exit(0);
 }
 
@@ -311,16 +263,15 @@ if (args.includes('--list')) {
   process.exit(0);
 }
 
-if (added.length > 0 || rose.length > 0) {
-  console.error('Imports go up a layer, or root files grew, past the baseline:');
-  for (const e of added) console.error(`  ${describe(e)}`);
-  for (const k of rose) console.error(`  ${k}: ${was[k]} -> ${current[k]}`);
+if (edges.length > 0 || rootFiles > cap) {
+  console.error('Imports go up a layer, or root files grew past the cap:');
+  for (const e of edges) console.error(`  ${describe(e)}`);
+  if (rootFiles > cap) console.error(`  rootFiles: ${cap} -> ${rootFiles}`);
   console.error(`Import only from the same layer or a lower one (order: ${map.order.join(' < ')}); move the shared piece down instead.`);
   console.error('`node scripts/check-layers.mjs --list` shows every upward import.');
   process.exit(1);
 }
-const currentKeys = new Set(edges.map(edgeKey));
-if (was.edges.some((e) => !currentKeys.has(edgeKey(e))) || NUMBERS.some((k) => current[k] < was[k])) {
-  console.log('Upward imports or root files went down; run `node scripts/check-layers.mjs --update` to lock that in.');
+if (rootFiles < cap) {
+  console.log('Root files went down; run `node scripts/check-layers.mjs --update` to lock that in.');
 }
-console.log(`Layer ratchet OK: ${total}, none above ${BASELINE}.`);
+console.log(`Layer order OK: no upward imports, ${rootFiles} root files (cap ${cap} in ${BASELINE}).`);
