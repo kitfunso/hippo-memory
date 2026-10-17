@@ -5,7 +5,8 @@ import { duplicateKey, longestWord, storedTextKeys } from '../util/same-text.js'
 import { writeCapturedItems } from '../store/capture-write.js';
 import { embedMemory } from '../search/embed-memories.js';
 import { EVERY_SCOPE, loadTextsHoldingWords } from '../store/candidates.js';
-import { getGlobalRoot, initGlobal } from '../sharing/global-store.js';
+import { getGlobalRoot } from '../sharing/global-store.js';
+import { initStore } from '../store/open.js';
 import { maskEmails, redactSecretsStrict } from '../util/secret-detect.js';
 import { withRejectionProbe } from '../store/rejection-probe.js';
 import { loadConfig } from '../core/config.js';
@@ -90,7 +91,7 @@ function cmdCaptureCore(
   const targetRoot = useGlobal ? getGlobalRoot() : hippoRoot;
 
   if (useGlobal) {
-    initGlobal();
+    initStore(targetRoot);
   } else {
     if (!isInitialized(hippoRoot)) {
       console.error(

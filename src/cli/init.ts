@@ -12,11 +12,11 @@ import { installOpencodePlugin } from '../hooks/opencode.js';
 import { initMemoryStore } from '../api/store-init.js';
 import { isInitialized } from '../core/project-identity.js';
 import { listMemories } from '../api/memories/memories.js';
-import { cliApiContext, cliSyncOptions } from './api-context.js';
+import { cliApiContext, cliInitGlobal, cliSyncOptions } from './api-context.js';
 import { isGitRepo } from '../learn/autolearn.js';
 import { currentMachine, importForStore, importProjectMemories, importUserMemories } from '../agent-memories/sync.js';
 import { emptyReport, mergeReports } from '../agent-memories/report.js';
-import { getGlobalRoot, initGlobal } from '../sharing/global-store.js';
+import { getGlobalRoot } from '../sharing/global-store.js';
 import { registerWorkspace } from './scheduler.js';
 import { type CliFlags, numberFlag, stringFlag, type CommandContext } from './flag-values.js';
 import { printAgentImport } from './print.js';
@@ -106,7 +106,7 @@ function installScanHooks(repos: readonly string[]): void {
 function initGlobalFirst(): string {
   const globalRoot = getGlobalRoot();
   if (!isInitialized(globalRoot)) {
-    initGlobal();
+    cliInitGlobal();
     console.log(`Initialized global store at ${globalRoot}\n`);
   }
   return globalRoot;
@@ -172,7 +172,7 @@ function initGlobalOnly(flags: CliFlags): void {
   if (isInitialized(globalRoot)) {
     console.log('Already initialized global store at', globalRoot);
   } else {
-    initGlobal();
+    cliInitGlobal();
     console.log('Initialized global Hippo store at', globalRoot);
   }
   if (!flags['no-learn']) {

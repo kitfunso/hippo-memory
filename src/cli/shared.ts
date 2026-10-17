@@ -6,11 +6,11 @@ import { execFileSync } from 'child_process';
 import { isSharedStore } from '../core/config.js';
 import { type ChurnStaleResult, detectChurnStale } from '../learn/invalidation.js';
 import { resolveProjectIdentity, isInitialized } from '../core/project-identity.js';
-import { getGlobalRoot, initGlobal } from '../sharing/global-store.js';
+import { getGlobalRoot } from '../sharing/global-store.js';
 import * as client from './client.js';
 import { type ServerInfo, detectServer, removePidfileIfOwned } from '../server/server-detect.js';
 import { learn, CLI_LEARN } from '../api/index.js';
-import { cliApiContext, cliLocalFiles } from './api-context.js';
+import { cliApiContext, cliInitGlobal, cliLocalFiles } from './api-context.js';
 import { errorMessage, log, errorFields } from '../util/log.js';
 import { printError } from './output.js';
 import type { CliFlags } from './flag-values.js';
@@ -155,7 +155,7 @@ export async function learnFromRepo(
 
 export function resolveAuthRoot(hippoRoot: string, flags: CliFlags): string {
   if (flags['global']) {
-    initGlobal();
+    cliInitGlobal();
     return getGlobalRoot();
   }
   requireInit(hippoRoot);

@@ -21,7 +21,7 @@ import { importProjectMemories } from '../src/agent-memories/sync.js';
 import { totalTally } from '../src/agent-memories/report.js';
 import { importEntries } from '../src/importers/core.js';
 import { autoShare } from '../src/sharing/share.js';
-import { getGlobalRoot, initGlobal } from '../src/sharing/global-store.js';
+import { getGlobalRoot } from '../src/sharing/global-store.js';
 import { searchBothHybrid } from '../src/sharing/search-both.js';
 import { cmdCapture } from '../src/capture/command.js';
 import { extractFromTexts } from '../src/capture/extract.js';
@@ -596,7 +596,7 @@ describe('a new value is never skipped as a copy of an old one', () => {
 
   it('autoShare', () => {
     vi.stubEnv('HIPPO_HOME', join(tmp(), 'global'));
-    initGlobal();
+    initStore(getGlobalRoot());
     write(getGlobalRoot(), LONG_OLD);
     const root = newRoot();
     write(root, LONG_NEW);
@@ -607,7 +607,7 @@ describe('a new value is never skipped as a copy of an old one', () => {
 
   it('search across the local and global stores', async () => {
     vi.stubEnv('HIPPO_HOME', join(tmp(), 'global'));
-    initGlobal();
+    initStore(getGlobalRoot());
     write(getGlobalRoot(), LONG_OLD);
     const root = newRoot();
     write(root, LONG_NEW);

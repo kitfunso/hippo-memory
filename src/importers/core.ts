@@ -6,7 +6,8 @@ import { createMemory, Layer, MemoryEntry } from '../core/memory.js';
 import { writeEntry } from '../store/entry-writes.js';
 import { loadEntryTextKeys } from '../store/entry-reads.js';
 import { duplicateKey, storedTextKeys } from '../util/same-text.js';
-import { getGlobalRoot, initGlobal } from '../sharing/global-store.js';
+import { getGlobalRoot } from '../sharing/global-store.js';
+import { initStore } from '../store/open.js';
 import { withRequestStoresSync } from '../db/request-stores.js';
 import { RejectedValueError } from '../core/api-errors.js';
 import { rejectionGuardRefuses } from '../store/rejected-values.js';
@@ -107,7 +108,7 @@ function openImportTarget(options: ImportOptions) {
   const targetRoot = options.global ? getGlobalRoot() : options.hippoRoot;
 
   if (options.global) {
-    initGlobal();
+    initStore(targetRoot);
   }
 
   const keys = storedTextKeys(loadEntryTextKeys(

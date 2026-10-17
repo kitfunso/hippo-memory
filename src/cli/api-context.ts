@@ -3,6 +3,7 @@ import type { Machine, SyncOptions } from '../agent-memories/sync.js';
 import { ledgerReachOf, type LedgerReach } from '../api/ledger-db.js';
 import { loadConfig } from '../core/config.js';
 import { runConsolidation } from '../consolidate/sleep.js';
+import { getGlobalRoot } from '../sharing/global-store.js';
 import type { McpHost } from '../mcp/protocol.js';
 import type { HippoStore, StoreGroups } from '../store/index.js';
 import type { LocalFiles } from '../store/port.js';
@@ -18,6 +19,11 @@ export function cliStore(hippoRoot: string): HippoStore & StoreGroups {
 /** The folder's hippo.db for a verb that runs a sleep pass by itself. */
 export function cliLocalFiles(hippoRoot: string): LocalFiles {
   return sqliteSyncStore(hippoRoot).localFiles;
+}
+
+/** Creates the global store, or finishes one that was partly made: what a first share needs of it. */
+export function cliInitGlobal(): void {
+  cliLocalFiles(getGlobalRoot()).sharing.ensureFiles();
 }
 
 /** A CLI verb's agent-memory import options: each target reads its own config.json and opens through the SQLite
