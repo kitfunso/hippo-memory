@@ -8,7 +8,6 @@ import { remember, archiveRaw, isPrivateScope, type Context } from '../api/index
 import { sqliteStore } from '../store/sqlite/store.js';
 import { assertClientScope } from '../core/recall-scope.js';
 import { RejectedValueError } from '../core/api-errors.js';
-import { rejectionGuardRefuses } from '../store/rejected-values.js';
 import { runWithRequestStores } from '../db/request-stores.js';
 import { loadConfig } from '../core/config.js';
 import { vetSecrets } from '../util/secret-detect.js';
@@ -311,7 +310,12 @@ async function storeVaultNote(
 ): Promise<boolean> {
   // A dry run writes nothing; it asks the guard remember() uses,
   // so its `rejected` count matches what a real run would refuse.
-  if (run.dryRun) return !rejectionGuardRefuses(run.ctx.hippoRoot, run.ctx.tenantId, echo.id, echo.content);
+  if (run.dryRun) {
+    const [refused] = await run.ctx.store.rejections.refusedAmong([
+      { tenantId: run.ctx.tenantId, entryId: echo.id, content: echo.content },
+    ]);
+    return !refused;
+  }
   try {
     // A rejected note must not stop the scan or the deletion sync. Its priors are archived by now, so a rerun meets
     // the same refusal and counts it again.

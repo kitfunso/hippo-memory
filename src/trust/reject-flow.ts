@@ -1,21 +1,14 @@
 // The reject, unreject and list flow the CLI verbs and the api functions share: the rules and their wording live here,
-// and src/store/rejected-values.ts runs each one on a single handle.
+// and the store's rejections group runs each one in one write.
 
 import { BadRequestError } from '../core/api-errors.js';
 import { isPersonalScope } from '../core/recall-scope.js';
 import { mergedSuccessor } from '../core/merged-row.js';
+import type { HippoStore } from '../store/index.js';
 import { normalizeValueForRejection, type RejectedValueRow } from '../store/rejection.js';
-import {
-  applyRejection,
-  liftRejection,
-  loadRejectedValues,
-  type AppliedRejection,
-  type LiftedRejection,
-  type RejectionSource,
-} from '../store/rejected-values.js';
+import type { AppliedRejection, LiftedRejection, RejectionSource } from '../store/rejected-values.js';
 
 export interface RejectFlowOptions {
-  hippoRoot: string;
   tenantId: string;
   actor: string;
   reason: string;
@@ -74,9 +67,9 @@ function inReach(opts: RejectFlowOptions, scope: string | null | undefined): boo
  * `hippo reject` and `api.reject`: refuses a bad request, then tombstones the value and removes every row in reach that
  * holds it.
  */
-export function rejectValue(opts: RejectFlowOptions): RejectFlowResult {
+export async function rejectValue(store: HippoStore, opts: RejectFlowOptions): Promise<RejectFlowResult> {
   assertRejectOpts(opts);
-  return applyRejection(opts.hippoRoot, {
+  return store.rejections.apply({
     tenantId: opts.tenantId,
     actor: opts.actor,
     reason: opts.reason,
@@ -93,20 +86,20 @@ export type UnrejectOutcome = LiftedRejection;
  * `hippo unreject` and `api.unreject`: lifts the one tombstone a digest or prefix names. The only way to allow a
  * rejected value again.
  */
-export function unrejectValue(
-  hippoRoot: string,
+export async function unrejectValue(
+  store: HippoStore,
   tenantId: string,
   digestOrPrefix: string,
   actor: string,
-): UnrejectOutcome {
+): Promise<UnrejectOutcome> {
   // A blank prefix would match every digest and list the whole tombstone set as ambiguous.
   if (digestOrPrefix.trim().length === 0) {
     return { status: 'not_found' };
   }
-  return liftRejection(hippoRoot, tenantId, digestOrPrefix, actor);
+  return store.rejections.lift(tenantId, digestOrPrefix, actor);
 }
 
 /** `hippo rejections` / `api.listRejections` — list tombstones for a tenant. */
-export function listRejectionsForTenant(hippoRoot: string, tenantId: string): RejectedValueRow[] {
-  return loadRejectedValues(hippoRoot, tenantId);
+export function listRejectionsForTenant(store: HippoStore, tenantId: string): Promise<RejectedValueRow[]> {
+  return store.rejections.list(tenantId);
 }

@@ -8,6 +8,7 @@ import { batchWriteAndDelete, deleteEntry } from '../src/store/delete-and-batch.
 import { loadLastRecall, saveIndex } from '../src/store/index-and-stats.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { rejectValue } from '../src/trust/reject-flow.js';
+import { sqliteStore } from '../src/store/sqlite/store.js';
 
 let root: string;
 const indexPath = (): string => path.join(root, 'index.json');
@@ -47,14 +48,14 @@ describe('index.json is written by no hippo path', () => {
     expect(fs.existsSync(indexPath())).toBe(false);
   });
 
-  it('reject leaves no index.json', () => {
+  it('reject leaves no index.json', async () => {
     const entry = createMemory('reject leaves index.json alone');
     writeEntry(root, entry);
-    rejectValue({ hippoRoot: root, tenantId: entry.tenant_id, actor: 'test', reason: 'index-mirror-writers test', memoryId: entry.id });
+    await rejectValue(sqliteStore(root), { tenantId: entry.tenant_id, actor: 'test', reason: 'index-mirror-writers test', memoryId: entry.id });
     expect(fs.existsSync(indexPath())).toBe(false);
   });
 
-  it('a pre-existing index.json is byte-identical after every write path runs', () => {
+  it('a pre-existing index.json is byte-identical after every write path runs', async () => {
     const sentinel = 'not valid json, just a sentinel that must survive untouched';
     fs.writeFileSync(indexPath(), sentinel, 'utf8');
 
@@ -66,7 +67,7 @@ describe('index.json is written by no hippo path', () => {
     saveIndex(root, loadLastRecall(root));
     const toReject = createMemory('sentinel reject');
     writeEntry(root, toReject);
-    rejectValue({ hippoRoot: root, tenantId: toReject.tenant_id, actor: 'test', reason: 'sentinel', memoryId: toReject.id });
+    await rejectValue(sqliteStore(root), { tenantId: toReject.tenant_id, actor: 'test', reason: 'sentinel', memoryId: toReject.id });
 
     expect(fs.readFileSync(indexPath(), 'utf8')).toBe(sentinel);
   });

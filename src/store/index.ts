@@ -42,5 +42,6 @@ export type {
   WorkingMemoryFilter,
   WorkingMemoryPush,
 } from './port-groups.js';
+export type { RejectionCheck, Rejections } from './port/rejections.js';
 export { hasGroup, requireGroup, type OptionalGroup } from './port.js';
 export { sqliteStore } from './sqlite/store.js';

@@ -32,6 +32,8 @@ export {
   type RawArchive,
   type RecallSearchArgs,
   type RecallWrites,
+  type RejectionCheck,
+  type Rejections,
   type Reports,
   type SelfKeyMint,
   type Sessions,
@@ -49,7 +51,9 @@ export {
 } from '../store/index.js';
 // An add-on store's entry writes apply an outcome, guard tombstones and check reach exactly as hippo.db does.
 export { entryAfterOutcome } from '../core/memory.js';
-export { rejectionDigest } from '../store/rejection.js';
+export { normalizeValueForRejection, rejectionDigest } from '../store/rejection.js';
+// An add-on's rejections find the texts a sleep-merged row holds with hippo.db's rule.
+export { heldTexts } from '../util/same-text.js';
 export { RejectedValueError } from '../core/api-errors.js';
 export { ownScopeTouches } from '../core/recall-scope.js';
 export type { ApiKeyListItem, ApiKeyListRow, ApiKeyRecord, ListApiKeysOpts, NewApiKey } from '../store/auth.js';
@@ -81,6 +85,8 @@ export type { SessionEventInput, SnapshotInput } from '../store/sessions.js';
 export type { StrengthTallies } from '../store/candidates.js';
 export type { TokenSummary } from '../store/token-ledger.js';
 export type { WorkingMemoryItem } from '../store/working-memory.js';
+export type { AppliedRejection, LiftedRejection, Rejection, RejectionSource } from '../store/rejected-values.js';
+export type { RejectedValueRow } from '../store/rejection.js';
 export type {
   AmbientLoadResult,
   AmbientRecallRequest,

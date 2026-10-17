@@ -11,6 +11,7 @@ import type { EntryCursor, EntryPage } from './entry-reads.js';
 import type { FailureSummary } from './failure-log.js';
 import type { CompleteGoalOpts, Goal, PushGoalOpts } from './goals.js';
 import type { HandoffFilter, SessionEndHandoffRequest } from './handoffs.js';
+import type { Rejections } from './port/rejections.js';
 import type { MemoryConflict, SessionEvent, TaskSnapshot } from './rows.js';
 import type { ContinuityKey, SessionEventInput, SnapshotInput } from './sessions.js';
 import type { TokenSummary } from './token-ledger.js';
@@ -188,4 +189,5 @@ export interface SessionAndAdminGroups {
   readonly dormant: Dormant;
   /** Status, tokens, failures and the memory listings. */
   readonly reports: Reports;
+  readonly rejections: Rejections;
 }

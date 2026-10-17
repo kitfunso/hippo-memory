@@ -24,6 +24,7 @@ import { loadAllEntries, readEntry } from '../src/store/entry-reads.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { initStore } from '../src/store/open.js';
 import { listRejectionsForTenant } from '../src/trust/reject-flow.js';
+import { sqliteStore } from '../src/store/sqlite/store.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { runInProcess } from './_helpers/run-in-process.js';
 import { apiCtx } from './_helpers/api-ctx.js';
@@ -341,7 +342,7 @@ describe('personal memories walk (plan lane T)', () => {
       for (const who of OTHERS) await sameAsMissing(id, (x) => p.call(keys[who].plaintext, x), p.othersStatus);
       const kept = readEntry(store, id);
       expect([kept?.outcome_positive, kept?.scope, kept?.superseded_by ?? null], `${p.name} row untouched`).toEqual([0, A_SCOPE, null]);
-      expect(listRejectionsForTenant(store, 'default'), `${p.name} made no rejection`).toHaveLength(0);
+      expect(await listRejectionsForTenant(sqliteStore(store), 'default'), `${p.name} made no rejection`).toHaveLength(0);
       const mine = await p.call(keys.A.plaintext, id);
       expect(mine.status, `${p.name}: ${mine.text}`).toBe(p.aStatus);
       if (p.name === 'outcome') expect(json<{ applied: number }>(mine).applied).toBe(1);

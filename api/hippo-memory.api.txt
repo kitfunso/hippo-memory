@@ -37,6 +37,7 @@ entry/store-kit.d.ts: ApiKeyListItem re-export
 entry/store-kit.d.ts: ApiKeyListRow re-export
 entry/store-kit.d.ts: ApiKeyRecord re-export
 entry/store-kit.d.ts: AppendAuditOpts re-export
+entry/store-kit.d.ts: AppliedRejection re-export
 entry/store-kit.d.ts: AuditEvent re-export
 entry/store-kit.d.ts: Card re-export
 entry/store-kit.d.ts: CardComment re-export
@@ -81,6 +82,7 @@ entry/store-kit.d.ts: KeyWrites re-export
 entry/store-kit.d.ts: KeysetPosition re-export
 entry/store-kit.d.ts: LastRecall re-export
 entry/store-kit.d.ts: LastRecallWrites re-export
+entry/store-kit.d.ts: LiftedRejection re-export
 entry/store-kit.d.ts: ListApiKeysOpts re-export
 entry/store-kit.d.ts: ListAuditAfterOpts re-export
 entry/store-kit.d.ts: ListDormantOpts re-export
@@ -103,6 +105,11 @@ entry/store-kit.d.ts: RecallTraceInput re-export
 entry/store-kit.d.ts: RecallWrites re-export
 entry/store-kit.d.ts: RecentOrigins re-export
 entry/store-kit.d.ts: RejectedValueError re-export
+entry/store-kit.d.ts: RejectedValueRow re-export
+entry/store-kit.d.ts: Rejection re-export
+entry/store-kit.d.ts: RejectionCheck re-export
+entry/store-kit.d.ts: RejectionSource re-export
+entry/store-kit.d.ts: Rejections re-export
 entry/store-kit.d.ts: Reports re-export
 entry/store-kit.d.ts: ResolveConflictOpts re-export
 entry/store-kit.d.ts: ResolveConflictRequest re-export
@@ -143,7 +150,9 @@ entry/store-kit.d.ts: entryAfterOutcome re-export
 entry/store-kit.d.ts: float32ToBuffer re-export
 entry/store-kit.d.ts: ftsTermParts re-export
 entry/store-kit.d.ts: hasGroup re-export
+entry/store-kit.d.ts: heldTexts re-export
 entry/store-kit.d.ts: isSharedStore re-export
+entry/store-kit.d.ts: normalizeValueForRejection re-export
 entry/store-kit.d.ts: ownScopeTouches re-export
 entry/store-kit.d.ts: passesScopeFilterForRecall re-export
 entry/store-kit.d.ts: physicsSearch re-export
