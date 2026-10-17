@@ -7,6 +7,7 @@ import { rerankerPost, RERANKER_MAX_REPLY_BYTES } from './remote.js';
 import { readCappedJson } from '../util/capped-json.js';
 import { type JsonValue, isJsonObject, isJsonString } from '../util/json.js';
 import { errorMessage } from '../util/log.js';
+import { parseOutboundUrl } from '../util/net.js';
 
 const DEFAULT_LLM_RERANK_TOP_K = 20;
 
@@ -62,6 +63,7 @@ function replyText(body: JsonValue): string {
 
 /** One chat-completions call; rejects with the reason when the reply holds no usable permutation. */
 async function requestPermutation(url: string, query: string, head: readonly SearchResult[]): Promise<number[]> {
+  parseOutboundUrl(url, 'HIPPO_LLM_RERANKER_URL', 'HIPPO_LLM_RERANKER_KEY');
   const key = envLlmRerankerKey();
   const prompt = [
     `Rerank the candidates below by relevance to the query. Output a JSON array of indices (zero-indexed) in ` +

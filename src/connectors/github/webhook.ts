@@ -13,6 +13,7 @@ import {
 import { ingestEvent as ingestGitHubEvent, type IngestEvent as GitHubIngestEvent } from './ingest.js';
 import { handleCommentDeleted as handleGitHubCommentDeleted } from './deletion.js';
 import { parkInDlq } from '../dlq.js';
+import { createReplayWindow } from '../replay-window.js';
 import { githubDlq, type DlqBucket } from './dlq.js';
 import { resolveTenantForGitHub } from './tenant-routing.js';
 import { computeDeletionKey as computeGitHubDeletionKey } from './signature.js';
@@ -32,12 +33,12 @@ import type { JsonValue } from '../../util/json.js';
 
 /** Reads the raw body and refuses it unless the signature matches the current or the previous secret. */
 async function readSignedBody(request: WebhookRequest, secret: string, sigStr: string): Promise<string> {
-  const rawBody = await readWebhookBody(request);
+  const rawBytes = await readWebhookBody(request);
   const previousSecret = envGitHubWebhookSecretPrevious();
-  if (!verifyGitHubSignature({ rawBody, signature: sigStr, webhookSecret: secret, previousSecret })) {
+  if (!verifyGitHubSignature({ rawBody: rawBytes, signature: sigStr, webhookSecret: secret, previousSecret })) {
     throw new HttpError(401, 'invalid GitHub signature');
   }
-  return rawBody;
+  return rawBytes.toString('utf8');
 }
 
 /** GitHub webhook receiver: HMAC SHA-256 over the raw body, event type from the X-GitHub-Event header, tenant by
@@ -69,7 +70,7 @@ export async function handleGitHubEventsWebhook(request: WebhookRequest, store: 
   // Signature OK from here on. Everything else is ACK-200; bad envelopes go
   // to the DLQ and a human can replay later.
   const replayKey = deliveryId === null ? null : `${opts.hippoRoot}\n${deliveryId}`;
-  if (replayKey !== null && !claimDelivery(replayKey, Date.now())) {
+  if (replayKey !== null && !seenDeliveries.claim(replayKey, Date.now())) {
     throw new HttpError(409, 'duplicate X-GitHub-Delivery');
   }
   try {
@@ -84,31 +85,14 @@ export async function handleGitHubEventsWebhook(request: WebhookRequest, store: 
     });
   } catch (err) {
     // A delivery that failed left nothing stored, so GitHub's redelivery of the same id must get through.
-    if (replayKey !== null) seenDeliveries.delete(replayKey);
+    if (replayKey !== null) seenDeliveries.release(replayKey);
     throw err;
   }
 }
 
-// GitHub signs no timestamp, so a captured delivery verifies forever; this window is what refuses its replay.
-const DELIVERY_REPLAY_TTL_MS = DAY_MS;
-const DELIVERY_REPLAY_MAX_IDS = 10_000;
-// A fast path only: the durable dedupe is the connector event log's content-derived idempotency key (ingest.ts, and the
-// deletion key below), so a replay after a restart or an eviction is a stored 'duplicate' with no new rows.
-const seenDeliveries = new Map<string, number>();
-
-/** Claims a delivery id for the window; false when it was claimed within the window already. The oldest claim goes
- * first at the cap. */
-function claimDelivery(key: string, now: number): boolean {
-  const seenAt = seenDeliveries.get(key);
-  if (seenAt !== undefined && now - seenAt < DELIVERY_REPLAY_TTL_MS) return false;
-  seenDeliveries.delete(key);
-  if (seenDeliveries.size >= DELIVERY_REPLAY_MAX_IDS) {
-    const oldest = seenDeliveries.keys().next();
-    if (!oldest.done) seenDeliveries.delete(oldest.value);
-  }
-  seenDeliveries.set(key, now);
-  return true;
-}
+// GitHub signs no timestamp, so a captured delivery verifies forever; this window is what refuses its replay. The
+// durable dedupe is the event log's content-derived idempotency key (ingest.ts, and the deletion key below).
+const seenDeliveries = createReplayWindow(DAY_MS, 10_000);
 
 const ALLOWED_EVENTS: ReadonlySet<string> = new Set([
   'issues',

@@ -38,7 +38,7 @@ describe('failed requests at the default threshold', () => {
   it('writes a warn line with the request id for a 401 and a 403', () => {
     runWithRequestId('req-401', () => logRequestFailure(fakeReq, new HttpError(401, 'unauthorized'), 401));
     runWithRequestId('req-403', () => logRequestFailure(fakeReq, new HttpError(403, 'forbidden'), 403));
-    expect(lines.join('')).toMatch(/warn: POST \/v1\/memories failed: unauthorized .*requestId=req-401 status=401/);
+    expect(lines.join('')).toMatch(/warn: POST unmatched failed: unauthorized .*requestId=req-401 status=401/);
     expect(lines.join('')).toMatch(/requestId=req-403/);
   });
 

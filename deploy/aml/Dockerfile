@@ -13,8 +13,7 @@
 FROM node:22-slim AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
-# --ignore-scripts: the postinstall hook is a dist/ trampoline whose script
-# file is not in this layer yet; it no-ops on fresh builds regardless.
+# --ignore-scripts: no dependency install script runs in the build.
 RUN npm ci --ignore-scripts
 COPY . .
 RUN npm run build:all

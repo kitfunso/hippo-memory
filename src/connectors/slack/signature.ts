@@ -3,7 +3,8 @@ import { matchesHmacSha256 } from '../hmac.js';
 const DEFAULT_SKEW_SECONDS = 5 * 60;
 
 export interface VerifyOptions {
-  rawBody: string;
+  /** The body's bytes as received; a string is hashed as its UTF-8 encoding. */
+  rawBody: string | Uint8Array;
   timestamp: string;
   signature: string;
   signingSecret: string;
@@ -19,12 +20,12 @@ export interface VerifyOptions {
 }
 
 function verifyOne(
-  rawBody: string,
+  rawBody: string | Uint8Array,
   signature: string,
   timestamp: string,
   secret: string,
 ): boolean {
-  return matchesHmacSha256('v0=', `v0:${timestamp}:${rawBody}`, secret, signature);
+  return matchesHmacSha256('v0=', [`v0:${timestamp}:`, rawBody], secret, signature);
 }
 
 export function verifySlackSignature(opts: VerifyOptions): boolean {
