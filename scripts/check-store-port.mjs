@@ -6,6 +6,9 @@
 // carrierFiles counts src files that name andThen, onStore or StoreReply, the removed sync-or-async reply carrier; the list is pinned so a new file fails even when another stops.
 // storeImportsInDomain counts value imports, re-exports and import() calls from every folder layers.json marks domain into src/store or src/db: domain code reaches hippo.db through the port.
 // storeFilesWithoutSql counts src/store files that run no SQL on hippo.db and are not on DB_DEFINITION_FILES; the list is pinned, so a pure helper filed under src/store fails.
+// portImportsFromSql counts imports and re-exports in src/store/port.ts and src/store/port/ of a src/store or src/db file that runs SQL (.prepare, .exec or node:sqlite): the port defines its own types.
+// buildsOutsideRoots counts calls of sqliteStore, sqliteSyncStore or initStore (as imported from src/store or src/db) in src files outside the data layer and the composition roots.
+// groupChecksInApi counts requireGroup and hasGroup calls in files that layers.json puts in the api or a domain layer.
 // A file under src/server/routes or src/cli that feeds a recall ring, counts recall stats or books a recall token row fails outright.
 // Usage: check-store-port.mjs [--list] [--update]. --update lowers the baseline and refuses to raise any number.
 
@@ -17,7 +20,8 @@ const BASELINE = '.store-port-baseline.json';
 const OPENERS = new Set(['openHippoDb', 'openHippoDbReadOnly', 'openStore', 'onHandle']);
 const TWIN_SUFFIX = /(ThroughStore|OnHippoDb|UnderStore|OnStore)$/;
 const NUMBERS = ['openersOutside', 'openersInCli', 'storeBranches', 'routesNeedingHippoDb', 'sqliteOnlyRoutes', 'routesOnLoop', 'twinFunctions',
-  'sqlOutside', 'txLiterals', 'tenantResolvesInCli', 'storeImportsInCli', 'storeImportsInDomain', 'handleHoldersOutside', 'storeFilesWithoutSql'];
+  'sqlOutside', 'txLiterals', 'tenantResolvesInCli', 'storeImportsInCli', 'storeImportsInDomain', 'handleHoldersOutside', 'storeFilesWithoutSql',
+  'portImportsFromSql', 'buildsOutsideRoots', 'groupChecksInApi'];
 const BY_FILE_KEYS = ['openersOutsideByFile', 'sqlOutsideByFile', 'handleHoldersOutsideByFile'];
 const HANDLE_TYPES = new Set(['DatabaseSyncLike', 'DatabaseSync']);
 // Routes dispatched outside V1_ROUTES. Named here so the count cannot read 0 while they answer on the server thread; a name leaves when its route does.
@@ -176,6 +180,78 @@ function countDomainStoreImports(file, sf) {
   return n;
 }
 
+const STORE_BUILDERS = new Set(['sqliteStore', 'sqliteSyncStore', 'initStore']);
+const GROUP_CHECKS = new Set(['requireGroup', 'hasGroup']);
+const COMPOSITION_ROOTS = new Set(['src/cli/api-context.ts', 'src/server/boot.ts', 'src/mcp/stdio.ts']);
+const LAYERS = JSON.parse(readFileSync('layers.json', 'utf8'));
+const layerOf = (f) => {
+  const rel = f.slice('src/'.length);
+  return rel.includes('/') ? LAYERS.folders[rel.split('/')[0]] : LAYERS.rootFiles?.[rel];
+};
+const parse = (file) => ts.createSourceFile(file, readFileSync(file, 'utf8'), ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+const lineOf = (sf, node) => sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1;
+
+/** The src file a relative specifier names, with .js read as .ts; undefined when it is not a file on disk. */
+function resolveSpec(file, spec) {
+  if (!spec.startsWith('.')) return undefined;
+  const base = posix.join(posix.dirname(file), spec).replace(/\.js$/, '');
+  return [`${base}.ts`, `${base}/index.ts`].find((c) => existsSync(c));
+}
+
+const sqlCache = new Map();
+/** True when the file calls `<x>.prepare(` or `<x>.exec(` or imports node:sqlite; comments and strings never match. */
+function runsSql(file) {
+  if (!sqlCache.has(file)) {
+    const sf = parse(file);
+    let found = sf.statements.some((s) => ts.isImportDeclaration(s) && ts.isStringLiteral(s.moduleSpecifier) && s.moduleSpecifier.text === 'node:sqlite');
+    const visit = (node) => {
+      if (found) return;
+      if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression) && /^(prepare|exec)$/.test(node.expression.name.text)) found = true;
+      else ts.forEachChild(node, visit);
+    };
+    visit(sf);
+    sqlCache.set(file, found);
+  }
+  return sqlCache.get(file);
+}
+
+/** `file:line` of each import or re-export in a port file whose target, under src/store or src/db, runs SQL. */
+function portSqlImports(file, sf) {
+  if (file !== 'src/store/port.ts' && !file.startsWith('src/store/port/')) return [];
+  return sf.statements.filter((s) => (ts.isImportDeclaration(s) || ts.isExportDeclaration(s)) && s.moduleSpecifier && ts.isStringLiteral(s.moduleSpecifier))
+    .filter((s) => {
+      const target = resolveSpec(file, s.moduleSpecifier.text);
+      return target && isDataLayer(target) && runsSql(target);
+    })
+    .map((s) => `${file}:${lineOf(sf, s)}`);
+}
+
+/** Local names bound to a src/store or src/db export of a builder name, so a same-named local function never counts. */
+function builderNames(file, sf) {
+  const names = new Set();
+  for (const s of sf.statements) {
+    if (!ts.isImportDeclaration(s) || !ts.isStringLiteral(s.moduleSpecifier) || !reachesDataLayer(file, s.moduleSpecifier.text)) continue;
+    const bindings = s.importClause?.namedBindings;
+    if (bindings && ts.isNamedImports(bindings)) for (const e of bindings.elements) if (STORE_BUILDERS.has((e.propertyName ?? e.name).text)) names.add(e.name.text);
+  }
+  return names;
+}
+
+/** `file:line` of each call of a name in `names`, as an identifier callee. */
+function callsOf(file, sf, names) {
+  const hits = [];
+  if (names.size === 0) return hits;
+  const visit = (node) => {
+    if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && names.has(node.expression.text)) hits.push(`${file}:${lineOf(sf, node)}`);
+    ts.forEachChild(node, visit);
+  };
+  visit(sf);
+  return hits;
+}
+
+const buildsOutsideRootsHere = (file) => !isDataLayer(file) && !COMPOSITION_ROOTS.has(file);
+const checksGroupsHere = (file) => ['api', 'domain'].includes(layerOf(file));
+
 function countTwins(sf) {
   let n = 0;
   const visit = (node) => {
@@ -304,6 +380,7 @@ function measure() {
   let sqliteOnlyRoutesList = [];
   const carrierFilesList = [];
   const storeFilesWithoutSqlList = [];
+  const sites = { portImportsFromSql: [], buildsOutsideRoots: [], groupChecksInApi: [] };
   for (const file of existsSync('src') ? tsFiles('src') : []) {
     const text = readFileSync(file, 'utf8');
     const sf = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
@@ -337,9 +414,13 @@ function measure() {
       out.routesOnLoop = routes.onLoop;
     }
     sqliteLocalMethods.push(...localMethods(sf));
+    sites.portImportsFromSql.push(...portSqlImports(file, sf));
+    if (buildsOutsideRootsHere(file)) sites.buildsOutsideRoots.push(...callsOf(file, sf, builderNames(file, sf)));
+    if (checksGroupsHere(file)) sites.groupChecksInApi.push(...callsOf(file, sf, GROUP_CHECKS));
   }
+  for (const k of Object.keys(sites)) out[k] = sites[k].length;
   out.storeFilesWithoutSql = storeFilesWithoutSqlList.length;
-  return { ...out, storeFilesWithoutSqlList, openersOutsideByFile: byFile, sqlOutsideByFile: sqlByFile, handleHoldersOutsideByFile: holdersByFile, sqliteLocalMethods: sqliteLocalMethods.sort(), sqliteOnlyRoutesList, carrierFiles: carrierFilesList.length, carrierFilesList };
+  return { ...out, sites, storeFilesWithoutSqlList, openersOutsideByFile: byFile, sqlOutsideByFile: sqlByFile, handleHoldersOutsideByFile: holdersByFile, sqliteLocalMethods: sqliteLocalMethods.sort(), sqliteOnlyRoutesList, carrierFiles: carrierFilesList.length, carrierFilesList };
 }
 
 /** Numbers, files and SqliteLocal methods that went above the baseline, as [label, was, now]. */
@@ -383,6 +464,7 @@ const total = NUMBERS.map((k) => `${k} ${current[k]}`).join(', ');
 if (args.includes('--list')) {
   for (const k of NUMBERS) console.log(`${current[k]}\t${k}`);
   console.log(`${current.carrierFiles}\tcarrierFiles`);
+  for (const [counter, where] of Object.entries(current.sites)) for (const site of where) console.log(`${counter}\t${site}`);
   for (const f of current.storeFilesWithoutSqlList) console.log(`no SQL\t${f}`);
   for (const key of BY_FILE_KEYS) {
     for (const [f, n] of Object.entries(current[key]).sort(([, a], [, b]) => b - a)) console.log(`${n}\t${f}`);
@@ -398,7 +480,8 @@ if (args.includes('--update')) {
     for (const [key, was, n] of rose) console.error(`  ${key}: ${was} -> ${n}`);
     process.exit(1);
   }
-  writeFileSync(BASELINE, JSON.stringify(current, null, 2) + '\n');
+  const { sites: _sites, ...pinned } = current;
+  writeFileSync(BASELINE, JSON.stringify(pinned, null, 2) + '\n');
   console.log(`Wrote ${BASELINE}: ${total}.`);
   process.exit(0);
 }
