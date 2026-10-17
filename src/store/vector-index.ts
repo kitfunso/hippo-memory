@@ -24,7 +24,8 @@ import { selectEntriesByIds } from './entry-reads.js';
 import { chunked } from '../util/chunked.js';
 import { MEMORY_SELECT_COLUMNS, rowToEntry, type MemoryRow } from './rows.js';
 import { placeholders } from '../util/sql.js';
-import type { StoredVectorSummary } from './port/embedding-index.js';
+import type { PendingIdsPage, StoredVectorSummary } from './port/embedding-index.js';
+import type { EntryCursor } from './port/consolidation.js';
 import type { EmbeddingIndexState } from './port/vector-reads.js';
 
 const MAX_BACKFILL_PAGE = 500;
@@ -99,18 +100,30 @@ export function saveStoredVectorsAt(
   return upsertVectors(db, rows, model);
 }
 
-/** Drops the vectors of deleted memories under `hippoRoot`, then returns the ids with no vector, oldest first. */
-export function pruneStoredVectorsListPendingAt(db: DatabaseSyncLike): string[] {
+/** Drops the vectors of deleted memories. */
+export function pruneOrphanVectorsAt(db: DatabaseSyncLike): void {
   deleteOrphanVectors(db);
-  // SAFETY: the SELECT names exactly the one column read.
+}
+
+/** The ids with no vector, oldest first, `page.limit` at a time after `page.after`. */
+export function pendingVectorIdsAt(
+  db: DatabaseSyncLike,
+  page: { readonly limit: number; readonly after?: EntryCursor },
+): PendingIdsPage {
+  const after = page.after === undefined ? '' : ' AND (created > ? OR (created = ? AND id > ?))';
+  const afterArgs = page.after === undefined ? [] : [page.after.created, page.after.created, page.after.id];
+  // SAFETY: the SELECT names exactly the two columns read.
   const rows = db
     .prepare(
-      `SELECT id FROM memories
-       WHERE NOT EXISTS (SELECT 1 FROM memory_vectors v WHERE v.memory_id = memories.id)
-       ORDER BY created ASC, id ASC`,
+      `SELECT id, created FROM memories
+       WHERE NOT EXISTS (SELECT 1 FROM memory_vectors v WHERE v.memory_id = memories.id)${after}
+       ORDER BY created ASC, id ASC LIMIT ?`,
     )
-    .all() as Array<{ id: string }>;
-  return rows.map((r) => r.id);
+    .all(...afterArgs, page.limit + 1) as Array<{ id: string; created: string }>;
+  const kept = rows.slice(0, page.limit);
+  const last = kept[kept.length - 1];
+  const next = rows.length > page.limit && last ? { created: last.created, id: last.id } : null;
+  return { ids: kept.map((r) => r.id), next };
 }
 
 export function entriesWithoutVectorAt(db: DatabaseSyncLike, query: VectorBackfillQuery): MemoryEntry[] {

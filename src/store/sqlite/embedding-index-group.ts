@@ -3,7 +3,7 @@ import { embeddingModelRequiresReindex, saveStoredEmbeddingModel } from '../embe
 import { countAllEntriesAt, loadAllEntryIdsAt, loadEntriesByIdsAt } from '../entry-reads.js';
 import type { EmbeddingIndex } from '../port/embedding-index.js';
 import {
-  loadEmbeddingIndexAt, loadStoredParticlesAt, pruneStoredVectorsListPendingAt, resetStoredParticlesAt,
+  loadEmbeddingIndexAt, loadStoredParticlesAt, pendingVectorIdsAt, pruneOrphanVectorsAt, resetStoredParticlesAt,
   saveEmbeddingIndexAt,
   saveStoredVectorsAt, seedStoredParticleAt, storedVectorSummaryAt,
 } from '../vector-index.js';
@@ -21,7 +21,8 @@ export function sqliteEmbeddingIndex(on: OnHandle): EmbeddingIndex {
     particles: () => on((db) => loadStoredParticlesAt(db)),
     saveVectors: (rows, model) => on((db) => saveStoredVectorsAt(db, rows, model)),
     replaceVectors: (index, model) => on((db) => saveEmbeddingIndexAt(db, index, model)),
-    pruneListPending: () => on((db) => pruneStoredVectorsListPendingAt(db)),
+    pruneOrphans: () => on((db) => pruneOrphanVectorsAt(db)),
+    pendingIds: (page) => on((db) => pendingVectorIdsAt(db, page)),
     resetParticles: (ids, index) => on((db) => resetStoredParticlesAt(db, ids, index)),
     seedParticle: (entry, vector) => on((db) => seedStoredParticleAt(db, entry, vector)),
   };

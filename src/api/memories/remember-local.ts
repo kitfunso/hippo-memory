@@ -14,6 +14,9 @@ import type { Context } from '../types.js';
 import { requireGroup } from '../../store/port.js';
 
 const WEAK_HALF_LIFE_FACTOR = 0.5;
+// The newest rows the gate compares against, whatever `recentWindow` says: a window below 1 once meant the whole
+// tenant, and a window past this reads more than a duplicate check needs.
+const MAX_SALIENCE_ROWS = 500;
 
 /** One write by a caller in this process, every field already parsed and checked by it. */
 export interface LocalRememberInput {
@@ -60,12 +63,10 @@ export type LocalRememberOutcome =
 async function salienceVerdict(ctx: Context, input: LocalRememberInput): Promise<SalienceResult | null> {
   const { salience } = configOf(ctx);
   if (!salience.enabled || input.pinned || input.force) return null;
-  // computeSalience compares against the last `recentWindow` rows only; below 1 its slice takes every row, so that case
-  // still loads them all.
+  // computeSalience compares against the last `recentWindow` rows only.
   const window = Math.trunc(salience.recentWindow);
-  const recent = Number.isSafeInteger(window) && window >= 1
-    ? await ctx.store.contextReads.newestEntries(ctx.tenantId, window)
-    : await ctx.store.lessonWrites.tenantEntries(ctx.tenantId);
+  const rows = Number.isSafeInteger(window) && window >= 1 ? Math.min(window, MAX_SALIENCE_ROWS) : MAX_SALIENCE_ROWS;
+  const recent = await ctx.store.contextReads.newestEntries(ctx.tenantId, rows);
   return computeSalience(input.content, [...input.tags], recent, {
     recentWindow: salience.recentWindow,
     overlapThreshold: salience.overlapThreshold,

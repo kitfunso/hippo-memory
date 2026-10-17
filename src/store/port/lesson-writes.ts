@@ -3,8 +3,6 @@ import type { HeldText } from './types.js';
 
 /** The reads and writes behind git auto-learn's batch. */
 export interface LessonWrites {
-  /** Every memory of the tenant, in `loadAllEntries` order. */
-  tenantEntries(tenantId: string): Promise<MemoryEntry[]>;
   /** Content, source and origin of the tenant's rows holding any of `words`, among the rows a team member or
    * `ownScope`'s owner may touch. */
   textsHoldingWords(tenantId: string, words: readonly string[], ownScope: string | null): Promise<HeldText[]>;

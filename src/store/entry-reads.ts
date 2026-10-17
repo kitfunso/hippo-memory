@@ -2,6 +2,7 @@ import type { MemoryEntry } from '../core/memory.js';
 import { isFtsAvailable, isFtsInSync, type DatabaseSyncLike } from '../db/index.js';
 import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry, parseJsonArray } from './rows.js';
 import { onHandle, openStore } from './open.js';
+import { cachedStatement } from './statement-cache.js';
 import { escapeLike } from '../util/escape.js';
 import { originInSql } from '../core/project-identity.js';
 import { scopeAdmitSql } from './rule-sql.js';
@@ -50,7 +51,8 @@ export function selectEntriesByIds(
   for (const chunk of chunked([...new Set(ids)])) {
     const marks = placeholders(chunk.length);
     // SAFETY: selects exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
-    const rows = db.prepare(
+    const rows = cachedStatement(
+      db,
       `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id IN (${marks})${tenantClause}`,
     ).all(...chunk, ...tenantArgs) as MemoryRow[];
     for (const row of rows) byId.set(row.id, rowToEntry(row));
@@ -70,12 +72,11 @@ export function selectChildrenByParent(
   for (const chunk of chunked([...new Set(parentIds)])) {
     const marks = placeholders(chunk.length);
     // SAFETY: selects exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
-    const rows = db
-      .prepare(
-        `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories ` +
-          `WHERE dag_parent_id IN (${marks})${tenantClause} ORDER BY created ASC, id ASC`,
-      )
-      .all(...chunk, ...tenantArgs) as MemoryRow[];
+    const rows = cachedStatement(
+      db,
+      `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories ` +
+        `WHERE dag_parent_id IN (${marks})${tenantClause} ORDER BY created ASC, id ASC`,
+    ).all(...chunk, ...tenantArgs) as MemoryRow[];
     for (const row of rows) {
       const entry = rowToEntry(row);
       const parentId = entry.dag_parent_id ?? '';
@@ -281,15 +282,16 @@ function ftsMentionQuery(tokens: readonly string[], tag: string | null): string 
   return parts.length === 0 ? null : parts.join(' OR ');
 }
 
-/** A superset, in loadAllEntries' order, of the rows whose lowercased content holds any of `tokens` or whose lowercased
- * tags hold `tag`.
+/** A page of a superset, in loadAllEntries' order, of the rows whose lowercased content holds any of `tokens` or whose
+ * lowercased tags hold `tag`; `next` is where the following page starts.
  * The caller re-checks each row exactly; this only spares decoding rows that cannot match. */
 export function loadEntriesMentioningAt(
   db: DatabaseSyncLike,
   tokens: readonly string[],
   tag: string,
-  tenantId?: string,
-): MemoryEntry[] {
+  tenantId: string | undefined,
+  page: { readonly limit: number; readonly after?: EntryCursor },
+): EntryPage {
   const likes = [...new Set(tokens)].map((t) => `%${escapeLike(t)}%`);
   const clauses = likes.map(() => `content LIKE ? ESCAPE '\\'`);
   const params: string[] = [...likes];
@@ -311,14 +313,23 @@ export function loadEntriesMentioningAt(
     ? clauses.join(' OR ')
     : `id IN (SELECT id FROM memories_fts WHERE memories_fts MATCH ?) OR ${hasNonAscii('content')} OR ` +
       hasNonAscii('tags_json');
+  const afterClause = page.after ? ' AND (created > ? OR (created = ? AND id > ?))' : '';
+  const afterParams = page.after ? [page.after.created, page.after.created, page.after.id] : [];
   // SAFETY: selects exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
   const rows = db
     .prepare(
       `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories ` +
-        `WHERE ${tenantClause}(${where}) ORDER BY created ASC, id ASC`,
+        `WHERE ${tenantClause}(${where})${afterClause} ORDER BY created ASC, id ASC LIMIT ?`,
     )
-    .all(...tenantParams, ...(ftsQuery === null ? params : [ftsQuery])) as MemoryRow[];
-  return rows.map(rowToEntry);
+    // One extra row says whether another page follows without a count.
+    .all(...tenantParams, ...(ftsQuery === null ? params : [ftsQuery]), ...afterParams, page.limit + 1) as MemoryRow[];
+  return pageOf(rows.map(rowToEntry), page.limit);
+}
+
+function pageOf(rows: MemoryEntry[], limit: number): EntryPage {
+  const entries = rows.slice(0, limit);
+  const last = entries[entries.length - 1];
+  return { entries, next: rows.length > limit && last ? { created: last.created, id: last.id } : null };
 }
 
 /** The rows in loadAllEntries' order (every tenant unless one is named), with only the columns that say whether
@@ -387,9 +398,7 @@ export function loadEntriesPageAt(
   const rows = db
     .prepare(`SELECT ${MEMORY_SELECT_COLUMNS} FROM memories ${clause}ORDER BY created ASC, id ASC LIMIT ?`)
     .all(...params) as MemoryRow[];
-  const entries = rows.slice(0, page.limit).map(rowToEntry);
-  const last = entries[entries.length - 1];
-  return { entries, next: rows.length > page.limit && last ? { created: last.created, id: last.id } : null };
+  return pageOf(rows.map(rowToEntry), page.limit);
 }
 
 /** Every memory row on an open connection, so a caller can read inside its own transaction. */
