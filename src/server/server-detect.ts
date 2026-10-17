@@ -240,9 +240,11 @@ function startingClaim(path: string): ServerInfo | undefined {
         : undefined;
     }
     const info: ServerInfo = JSON.parse(raw);
-    return info.port === 0 && pidIsAlive(info.pid) ? info : undefined;
-  } catch {
-    return undefined;
+    return info?.port === 0 && pidIsAlive(info.pid) ? info : undefined;
+  } catch (err) {
+    // Expected: the file vanished after EEXIST, or it is corrupt and detectServer clears it.
+    if (errorCode(err) === 'ENOENT' || err instanceof SyntaxError) return undefined;
+    throw err;
   }
 }
 

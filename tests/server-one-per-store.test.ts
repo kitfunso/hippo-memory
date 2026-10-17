@@ -54,6 +54,12 @@ describe('one server per store', () => {
     expect(JSON.parse(readFileSync(join(root, 'server.pid'), 'utf8')).port).toBe(handle.port);
   });
 
+  it('clears a corrupt pidfile and boots', async () => {
+    writeFileSync(join(root, 'server.pid'), '{not json');
+    const handle = await boot();
+    expect(JSON.parse(readFileSync(join(root, 'server.pid'), 'utf8')).port).toBe(handle.port);
+  });
+
   it('releases its claim when the bind fails, so the next boot is not refused', async () => {
     const otherRoot = makeRoot('one-per-store-other');
     const blocker = await serve({ hippoRoot: otherRoot, port: 0, host: '127.0.0.1' });
