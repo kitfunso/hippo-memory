@@ -82,7 +82,7 @@ describe('CJK-aware substantiveWordCount (src/store/audit.ts)', () => {
   });
 
   it('(c) existing latin classification is unchanged (before/after parity)', () => {
-    // Pulled from tests/context-recent-quality-floor.test.ts's existing fixtures.
+    // Pulled from tests/store/context-recent-quality-floor.test.ts's existing fixtures.
     const expectations: Array<[string, boolean]> = [
       ['fixed signals', false],
       ['clean memory number one with plenty of specific detail worth keeping', true],

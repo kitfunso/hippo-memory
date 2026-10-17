@@ -8,11 +8,11 @@
  * cases 9-11 pin the metadata keys; 12-13 pin the candidate filter). Real-DB per project
  * convention (measure-ties-before-fixing / real-store-guard): each test
  * isolates a fresh hippoRoot via mkdtempSync + initStore, following the
- * tmpHome idiom in tests/api-sleep.test.ts.
+ * tmpHome idiom in tests/api/api-sleep.test.ts.
  *
  * T2 (src/consolidate.ts mergeContents tie key) is exercised through the
  * public `consolidate()` merge pass (test 7), following the Merge-pass
- * idiom in tests/consolidate.test.ts -- `mergeContents` itself stays
+ * idiom in tests/api/consolidate.test.ts -- `mergeContents` itself stays
  * file-private.
  */
 
@@ -70,7 +70,7 @@ function permutationsOf3(): number[][] {
 
 // Duplicate probe pair: the same sentence, B with a double space before "this".
 // Dedup removes only text that matches apart from spacing; a swapped word is a
-// changed value and both copies stay (tests/sleep-keeps-both-versions.test.ts).
+// changed value and both copies stay (tests/core/sleep-keeps-both-versions.test.ts).
 const CONTENT_A =
   'The quarterly finance report shows revenue grew steadily across all four regions this year';
 const CONTENT_B = CONTENT_A.replace(' this year', '  this year');

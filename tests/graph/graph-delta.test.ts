@@ -72,7 +72,7 @@ function entityIdOf(home: string, type: SourceObjectType, objectId: number): num
   });
 }
 
-/** The object fixtures of tests/graph-cross-object.test.ts, one per case. */
+/** The object fixtures of tests/graph/graph-cross-object.test.ts, one per case. */
 const CROSS_OBJECT_FIXTURES: Array<[string, (h: string) => Promise<void>]> = [
   ['a decision names a policy', async (h) => {
     await savePolicy(objectsAt(h), loadConfig(h).defaultHalfLifeDays, T, { policyName: 'RetryPolicy', policyText: 'retry up to 3x' });

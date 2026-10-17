@@ -1,5 +1,5 @@
 // A7 recall-trace: CLI `recall --why` on a hero memory that fires every CLI-drivable rerank stage, so its trace is the
-// full ordered chain. No-trace default output and the `--goal` stage are pinned in tests/cli-recall-golden.test.ts.
+// full ordered chain. No-trace default output and the `--goal` stage are pinned in tests/cli/cli-recall-golden.test.ts.
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';

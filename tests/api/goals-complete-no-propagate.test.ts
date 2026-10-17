@@ -1,4 +1,4 @@
-// tests/goals-complete-no-propagate.test.ts
+// tests/api/goals-complete-no-propagate.test.ts
 /**
  * v1.7.4 -- `completeGoal` honours `noPropagate` to skip strength
  * multiplier side-effects on recalled memories.

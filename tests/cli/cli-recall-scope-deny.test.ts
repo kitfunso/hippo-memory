@@ -79,7 +79,7 @@ describe('cli recall scope default-deny', () => {
     expect(out).toContain(PRIV_SLACK);
     // ...the default-admitted set stays (the CLI flag is historically a
     // tag-boost hint; narrowing to the envelope column would empty every
-    // tag-scoped recall — see tests/scope-boost.test.ts)...
+    // tag-scoped recall — see tests/store/scope-boost.test.ts)...
     expect(out).toContain(CLEAN);
     // ...and OTHER private scopes + quarantine buckets stay denied.
     expect(out).not.toContain(PRIV_GITHUB);

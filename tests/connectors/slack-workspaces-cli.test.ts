@@ -1,7 +1,7 @@
 /**
  * CLI integration tests for `hippo slack workspaces <add|list|remove>` (T2B 2026-05-24).
  *
- * Mirror of tests/slack-cli.test.ts pattern: spawns the built bin, asserts
+ * Mirror of tests/connectors/slack-cli.test.ts pattern: spawns the built bin, asserts
  * stdout/stderr. Requires `npm run build` to have produced bin/hippo.js.
  */
 

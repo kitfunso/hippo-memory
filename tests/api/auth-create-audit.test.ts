@@ -2,7 +2,7 @@
  * v1.12.4: tests for the auth_create audit emit.
  *
  * Closes the v1.12.3 CHANGELOG-flagged deferral. Mirrors auth_revoke audit
- * coverage (already locked in tests/audit.test.ts and the M1 fix history).
+ * coverage (already locked in tests/db/audit.test.ts and the M1 fix history).
  */
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect } from 'vitest';

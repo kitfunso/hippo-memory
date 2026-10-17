@@ -45,7 +45,7 @@ function idsOf(sql: string): string[] {
   }
 }
 
-/** The same plain stand-in as tests/store-fts-failure-logging.test.ts: it refuses every delete while the store still reports FTS on. */
+/** The same plain stand-in as tests/store/store-fts-failure-logging.test.ts: it refuses every delete while the store still reports FTS on. */
 function breakFtsIndex(): void {
   const db = new DatabaseSync(getHippoDbPath(root));
   db.exec(`

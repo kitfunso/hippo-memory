@@ -10,14 +10,14 @@
  * consolidate.ts's mergeCandidatesByTenant and dag.ts's unparentedByTenant,
  * then runs the existing v1.26.3 survivor total order within each group.
  *
- * tests/dedupe-survivor-determinism.test.ts stays the single-tenant pin for
+ * tests/store/dedupe-survivor-determinism.test.ts stays the single-tenant pin for
  * the total order itself; this file is the tenant-partition regression
  * suite, kept separate so the total-order pin file does not grow multi-
  * tenant setup it does not otherwise need.
  *
  * Real-DB per project convention: each test isolates a fresh hippoRoot via
  * mkdtempSync + initStore, following the tmpHome idiom in
- * tests/dedupe-survivor-determinism.test.ts and tests/api-sleep.test.ts.
+ * tests/store/dedupe-survivor-determinism.test.ts and tests/api/api-sleep.test.ts.
  */
 
 import type { FullContext } from '../_helpers/api-ctx.js';
@@ -43,7 +43,7 @@ function setStrength(home: string, id: string, strength: number): void {
   }
 }
 
-// Same probe pair as tests/dedupe-survivor-determinism.test.ts: one sentence,
+// Same probe pair as tests/store/dedupe-survivor-determinism.test.ts: one sentence,
 // B with a double space, so the two differ in bytes but match apart from spacing.
 const CONTENT_A =
   'The quarterly finance report shows revenue grew steadily across all four regions this year';

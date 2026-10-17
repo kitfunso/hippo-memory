@@ -1,4 +1,4 @@
-// tests/cli-recall-cutoff-counters.test.ts
+// tests/cli/cli-recall-cutoff-counters.test.ts
 //
 // C5 (2026-08-24 follow-up, episode 01M0SB83EW4JF1RCFC1GAWTAQN): the CLI
 // `hippo recall` path dropped almost every candidate and reported it via
@@ -19,7 +19,7 @@
 //   3. The line does NOT print when nothing was truncated (guard against
 //      always-on noise).
 //
-// Same isolation harness as tests/goal-retrieval-policy.test.ts: per-test cwd
+// Same isolation harness as tests/api/goal-retrieval-policy.test.ts: per-test cwd
 // tempdir, separate HIPPO_HOME global root, HIPPO_SKIP_AUTO_INTEGRATIONS=1,
 // initStore + api.remember for seeding, the CLI entry run in process for
 // the recall itself (real DB, real CLI, project convention).
@@ -143,7 +143,7 @@ describe('graph-expanded recall keeps the published accounting honest', () => {
   // The graph fix has to be proven by EXECUTION, with a real edge. Two
   // earlier attempts to verify it used fixtures with no entity relations, so
   // the hops path added nothing and the checks were vacuous. This seeds the
-  // same shape as tests/graph-recall.test.ts: B is lexically orthogonal to
+  // same shape as tests/graph/graph-recall.test.ts: B is lexically orthogonal to
   // the query and reachable only through a supersedes edge.
   it('a row surfaced by edge is included in the published total and the invariant closes', async () => {
     // Same root convention as makeEnv: the store ROOT is the .hippo directory

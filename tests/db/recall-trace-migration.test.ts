@@ -1,6 +1,6 @@
 /**
  * LC1 schema migration v40 (docs/plans/2026-08-02-lc1-recall-trace-persistence.md).
- * Mirrors tests/goal-stack-migration.test.ts conventions.
+ * Mirrors tests/db/goal-stack-migration.test.ts conventions.
  */
 
 import { describe, it, expect } from 'vitest';

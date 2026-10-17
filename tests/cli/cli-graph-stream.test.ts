@@ -1,5 +1,5 @@
 // L1 `recall --graph-stream` range checks the golden matrix misses (docs/plans/2026-06-02-l1-graph-rrf-stream.md).
-// The flag on a real store and the non-integer cases are pinned in tests/cli-recall-golden.test.ts.
+// The flag on a real store and the non-integer cases are pinned in tests/cli/cli-recall-golden.test.ts.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';

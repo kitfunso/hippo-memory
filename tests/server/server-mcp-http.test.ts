@@ -24,7 +24,7 @@ async function jsonAs<T>(res: Response): Promise<T> {
 //
 // Both routes — POST /mcp and GET /mcp/stream — dispatch through the same
 // transport-agnostic handler that backs the stdio MCP loop. The stdio path is
-// covered by tests/mcp-stdio.test.ts; this file pins the HTTP transport
+// covered by tests/mcp/mcp-stdio.test.ts; this file pins the HTTP transport
 // surface: synchronous JSON-RPC responses on POST, keepalive-only SSE on GET,
 // and the auth middleware reuse.
 

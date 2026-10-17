@@ -11,7 +11,7 @@ import { runCliAs } from '../_helpers/run-cli-as.js';
 import { waitFor } from '../_helpers/wait-for.js';
 
 // Plan: hippo/trajectories/01M2ZSMFG8JXSM7PH10EVZNZBW/plan.md. Real spawn,
-// real store, no mocks, same idiom as tests/pre-compact-e2e.test.ts.
+// real store, no mocks, same idiom as tests/core/pre-compact-e2e.test.ts.
 const HIPPO_JS = path.resolve(__dirname, '..', '..', 'bin', 'hippo.js');
 
 function withScratchEnv() {

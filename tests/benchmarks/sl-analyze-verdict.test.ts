@@ -1,4 +1,4 @@
-// tests/sl-analyze-verdict.test.ts
+// tests/benchmarks/sl-analyze-verdict.test.ts
 import { describe, it, expect } from 'vitest';
 import { computeVerdict } from '../../benchmarks/sequential-learning/analyze-v1.7.7.mjs';
 

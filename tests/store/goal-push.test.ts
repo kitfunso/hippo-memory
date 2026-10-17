@@ -1,4 +1,4 @@
-// tests/goal-push.test.ts
+// tests/store/goal-push.test.ts
 import { describe, it, expect, beforeEach } from 'vitest';
 import { activeGoalsWithPolicies, pushGoal } from '../../src/store/goals.js';
 

@@ -1,4 +1,4 @@
-// tests/sl-calibrate.test.ts
+// tests/benchmarks/sl-calibrate.test.ts
 import { describe, it, expect } from 'vitest';
 import { selectBStar } from '../../benchmarks/sequential-learning/calibrate.mjs';
 

@@ -3,7 +3,7 @@
  * per candidate. K is the standard 60,
  * the value hybridSearch already uses; do NOT tune it without a cross-corpus eval. Generic over the id type
  * (hybridSearch uses number, the LongMemEval
- * benchmark string). Behaviour MUST stay byte-identical to the inline hybridSearch code it replaced; tests/rrf.test.ts
+ * benchmark string). Behaviour MUST stay byte-identical to the inline hybridSearch code it replaced; tests/search/rrf.test.ts
  * is the contract.
  */
 

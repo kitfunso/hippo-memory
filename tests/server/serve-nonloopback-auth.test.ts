@@ -1,4 +1,4 @@
-// tests/serve-nonloopback-auth.test.ts
+// tests/server/serve-nonloopback-auth.test.ts
 //
 // serve()'s non-loopback guard used to refuse EVERY non-loopback host
 // unconditionally, citing the A5 v2 auth middleware as "not yet built".
@@ -13,7 +13,7 @@
 //   3. the loopback default path is unaffected (no regression),
 //   4. a non-loopback bind with no TLS refuses unless cleartext is allowed.
 //
-// Store-root convention follows tests/cli-recall-cutoff-counters.test.ts's
+// Store-root convention follows tests/cli/cli-recall-cutoff-counters.test.ts's
 // makeEnv: the store root passed to initStore/serve IS the .hippo directory
 // itself, not its parent.
 

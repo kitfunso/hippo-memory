@@ -125,7 +125,7 @@ function getLossAversionRatio(): number {
 
 /**
  * Test-only: a test that sets HIPPO_LOSS_AVERSION_RATIO calls this in beforeEach and afterEach
- * (tests/emotional-multipliers.test.ts).
+ * (tests/core/emotional-multipliers.test.ts).
  */
 export function _resetLossAversionRatioCacheForTests(): void {
   _lossAversionRatioCache = undefined;

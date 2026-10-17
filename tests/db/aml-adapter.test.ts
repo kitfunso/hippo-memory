@@ -1,4 +1,4 @@
-// tests/aml-adapter.test.ts
+// tests/db/aml-adapter.test.ts
 //
 // Exercises deploy/aml/adapter/adapter.mjs against a real hippo store and a
 // real hippo HTTP server, spawned in a child process exactly the way it runs
@@ -6,7 +6,7 @@
 // its own process in front of it). Every request in this suite goes over
 // real HTTP, no mocks.
 //
-// Store-root convention follows tests/serve-nonloopback-auth.test.ts's
+// Store-root convention follows tests/server/serve-nonloopback-auth.test.ts's
 // makeEnv: the store root passed to initStore/serve IS the .hippo directory
 // itself, not its parent. HIPPO_REQUIRE_AUTH=1 is set the same way that test
 // sets it, so the throwaway hippo server in this suite enforces Bearer auth

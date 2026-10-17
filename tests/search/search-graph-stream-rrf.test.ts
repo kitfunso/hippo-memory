@@ -3,7 +3,7 @@
  * Docs: docs/plans/2026-06-02-l1-graph-rrf-stream.md
  *
  * hybridSearch's rrf path requires a loaded embedding model (unavailable in CI — same
- * constraint tests/hybrid-search.test.ts documents), so we exercise the EXACT fusion the
+ * constraint tests/entry/hybrid-search.test.ts documents), so we exercise the EXACT fusion the
  * wiring performs at the rrfFuse layer: build bm25Ranked + cosineRanked + a real-DB
  * graphRanked (via graphRankStream), then compare the 2-list vs 3-list fused ordering.
  * This is also the plan's Gate-(b) dry-run "structural work" criterion: a lexically-weak

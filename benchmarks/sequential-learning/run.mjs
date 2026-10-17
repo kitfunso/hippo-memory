@@ -355,7 +355,7 @@ function trapHitRate(results) {
  * last N traps; early/mid re-split to "first ceil((total-N)/2)" / "remainder"
  * so the three slices stay disjoint and exhaustive.
  *
- * Post-review P2-2 -- `tests/agent-eval.test.ts` defines a local namesake
+ * Post-review P2-2 -- `tests/core/agent-eval.test.ts` defines a local namesake
  * `hitRateByPhase`. If you import this module function from elsewhere, alias
  * to avoid shadowing the local in that test file.
  *

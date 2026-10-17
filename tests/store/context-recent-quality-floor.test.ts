@@ -10,8 +10,8 @@
  * Real-DB per project convention. Tests 1-6 seed entries directly via
  * `createMemory` + `writeEntry` (so `pinned` and `created` can be set) and
  * assert on `api.getContext`, following the `tmpHome` isolation pattern from
- * tests/api-context.test.ts. Test 7 goes through the CLI entry, following
- * tests/pinned-inject.test.ts's `runHippo` pattern.
+ * tests/api/api-context.test.ts. Test 7 goes through the CLI entry, following
+ * tests/store/pinned-inject.test.ts's `runHippo` pattern.
  */
 
 import type { FullContext } from '../_helpers/api-ctx.js';

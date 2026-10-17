@@ -1,4 +1,4 @@
-// tests/sl-adversarial-traps.test.ts
+// tests/benchmarks/sl-adversarial-traps.test.ts
 //
 // v1.8.0 — Schema invariants + uniform-distribution invariants for the
 // adversarial-categories release. Tightened per outside voice B2/B3/E3.

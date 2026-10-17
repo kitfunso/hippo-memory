@@ -15,7 +15,7 @@
  * Pure module, no DB, no global state. Determinism via the `now` opt + fixed
  * ISO strings (no reliance on wall-clock Date.now()).
  *
- * Mirrors tests/recall-history.test.ts (the J1 pure-detector suite).
+ * Mirrors tests/api/recall-history.test.ts (the J1 pure-detector suite).
  */
 
 import { describe, it, expect } from 'vitest';

@@ -1,7 +1,7 @@
 /**
  * Tests for `hippo github` CLI subcommands (Task 15).
  *
- * Strategy: subprocess via execFileSync (mirrors tests/slack-cli.test.ts) for
+ * Strategy: subprocess via execFileSync (mirrors tests/connectors/slack-cli.test.ts) for
  * end-to-end argv/exit-code behaviour. The backfill happy paths call
  * handleGitHub in-process against a stubbed global fetch, so no request reaches GitHub. src/cli/github.ts is intentionally kept side-effect
  * free so it can be imported in-process.

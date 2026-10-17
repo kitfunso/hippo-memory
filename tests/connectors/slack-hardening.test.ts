@@ -380,7 +380,7 @@ describe('Slack hardening + migration v19', () => {
     const calls: string[] = [];
     // A real Response satisfies typeof fetch's return type directly (no cast
     // needed), and vi.fn<typeof fetch>(...) types the mock's call signature
-    // to match fetch exactly (same pattern as tests/dag-rebuild-summaries.test.ts).
+    // to match fetch exactly (same pattern as tests/store/dag-rebuild-summaries.test.ts).
     const fakeFetch = vi.fn<typeof fetch>(async (url) => {
       calls.push(String(url));
       return new Response(JSON.stringify({ ok: true, messages: [], response_metadata: {} }), {

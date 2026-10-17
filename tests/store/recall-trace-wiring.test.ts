@@ -8,7 +8,7 @@
  * since readLastTraceId was deleted), F2 (suppressRecallTrace), and F5
  * (getContext's bare empty-result early return also traces).
  *
- * This is a NEW file beside the locked tests/api-recall-no-side-effects.test.ts
+ * This is a NEW file beside the locked tests/api/api-recall-no-side-effects.test.ts
  * — that file is never edited (v1.11.5 lock); this file extends the
  * invariant to the new last_trace_id meta key.
  *

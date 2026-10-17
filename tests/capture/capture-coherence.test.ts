@@ -70,7 +70,7 @@ describe('capture coherence', () => {
     // every prior version stored them. Silent loss on two high-traffic
     // patterns, found only at the ship gate. The AT1 rejected-value evidence
     // that motivated label-dropping involved colon labels exclusively
-    // (tests/rejection-acceptance.test.ts still passes), so the narrow rule
+    // (tests/db/rejection-acceptance.test.ts still passes), so the narrow rule
     // keeps that guarantee without the collateral loss.
     const error = extractFromTexts(['The issue was that the reserve loop did not dedupe entries.']);
     expect(error).toHaveLength(1);
@@ -110,7 +110,7 @@ describe('capture coherence', () => {
         // than prefixing it onto the content. Contrast the RULE case above,
         // where 'always' IS the meaning and must survive. Preserving label
         // prefixes also broke AT1's rejected-value digest, which hashes the
-        // bare content — see tests/rejection-acceptance.test.ts.
+        // bare content — see tests/db/rejection-acceptance.test.ts.
         text: 'Error: the migration silently dropped the last batch of rows.',
         category: 'error',
         mustContain: 'migration silently dropped',

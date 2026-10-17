@@ -271,7 +271,7 @@ describe('JSON hook installer', () => {
   // The former 'installJsonHooks(opencode)' describe block was removed
   // 2026-05-23 when opencode flipped from JSON-hook integration to a TS plugin.
   // Coverage for the new plugin installer lives in
-  // tests/opencode-plugin-install.test.ts.
+  // tests/hooks/opencode-plugin-install.test.ts.
 
   describe('uninstallJsonHooks', () => {
     it('removes SessionEnd, SessionStart, and legacy Stop entries', () => {

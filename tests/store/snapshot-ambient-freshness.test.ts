@@ -12,7 +12,7 @@ import { makeRoot } from '../_helpers/make-root.js';
 
 // DF1 (docs/plans/2026-08-23-df1-snapshot-lifecycle.md) T1 tests: the
 // never-expires fix for the active task snapshot ambient-injection surfaces.
-// All real SQLite, no mocks — matches tests/snapshot-tenant-isolation.test.ts.
+// All real SQLite, no mocks — matches tests/store/snapshot-tenant-isolation.test.ts.
 
 const TENANT = 'default';
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
@@ -23,7 +23,7 @@ beforeEach(() => {
 });
 
 /** Direct SQL backdate of a row's `updated_at` — the project convention for
- * age tests (see tests/snapshot-tenant-isolation.test.ts sibling files). */
+ * age tests (see tests/store/snapshot-tenant-isolation.test.ts sibling files). */
 function backdateSnapshot(hippoRoot: string, id: number, isoTimestamp: string): void {
   const db = openHippoDb(hippoRoot);
   try {

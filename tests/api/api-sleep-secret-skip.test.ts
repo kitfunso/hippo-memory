@@ -4,7 +4,7 @@
  * autoShare's secret veto used to be silent; api.sleep now surfaces the count
  * of shares the veto actually withheld. Real store + real sleep (no mocks),
  * per project convention. Store/HIPPO_HOME isolation pattern per
- * tests/api-sleep-phase-faults.test.ts.
+ * tests/api/api-sleep-phase-faults.test.ts.
  */
 
 import type { FullContext } from '../_helpers/api-ctx.js';
@@ -18,7 +18,7 @@ import { getGlobalRoot } from '../../src/sharing/global-store.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeStore, makeRoot } from '../_helpers/make-root.js';
 
-// Same secret shape tests/secret-detect.test.ts proves trips detectSecret;
+// Same secret shape tests/util/secret-detect.test.ts proves trips detectSecret;
 // pinned + error/gotcha tags push transferScore over the 0.6 auto-share bar.
 const SECRET_ROW = 'service api key sk_vendor_deadbeef123456 for the ingest worker';
 const CLEAN_ROW = 'gotcha: powershell 5.1 has no pipeline chain operators, use if blocks';

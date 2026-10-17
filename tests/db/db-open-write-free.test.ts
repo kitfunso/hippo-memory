@@ -12,7 +12,7 @@ import { makeRoot } from '../_helpers/make-root.js';
 
 const require = createRequire(import.meta.url);
 // SAFETY: node:sqlite has no bundled types; this require + cast mirrors
-// tests/store-migration.test.ts's documented boundary.
+// tests/store/store-migration.test.ts's documented boundary.
 const { DatabaseSync } = require('node:sqlite') as {
   DatabaseSync: new (path: string) => {
     exec(sql: string): void;

@@ -15,7 +15,7 @@ import { waitFor } from '../_helpers/wait-for.js';
 // SessionEnd hook's stdin JSON and passes `--session-id` to the detached
 // `__session-end-worker`; the worker closes that session's own active
 // snapshot AFTER sleep+capture. Real built CLI, real detached child, no
-// mocks — same idiom as tests/pre-compact-e2e.test.ts.
+// mocks — same idiom as tests/core/pre-compact-e2e.test.ts.
 
 function withScratchEnv() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-session-end-e2e-'));
@@ -44,7 +44,7 @@ function initHippo(cwd: string, env: NodeJS.ProcessEnv): void {
 
 // The detached session-end worker can still hold a brief Windows lock on the
 // SQLite WAL/shm files after our poll condition is satisfied (same class of
-// issue as tests/github-rollback-guard-and-deletion-atomicity.test.ts's safeRmSync). Best-effort.
+// issue as tests/store/github-rollback-guard-and-deletion-atomicity.test.ts's safeRmSync). Best-effort.
 function safeRmSync(p: string): void {
   try {
     fs.rmSync(p, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });

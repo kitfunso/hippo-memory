@@ -1,4 +1,4 @@
-// tests/goal-outcome-propagation.test.ts
+// tests/api/goal-outcome-propagation.test.ts
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach } from 'vitest';
 import { remember } from '../../src/api/index.js';

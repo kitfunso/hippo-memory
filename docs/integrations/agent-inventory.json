@@ -28,14 +28,14 @@
           "name": "terminal and IDE extensions, local, hooks from hippo setup",
           "checkpointBeforeLoss": "shipped",
           "lessonsBeforeLoss": "planned",
-          "fixtureEvidence": ["tests/hooks.test.ts", "tests/compaction-pre-compact.test.ts", "tests/pre-compact-e2e.test.ts", "tests/capture-contract-conformance.test.ts"],
+          "fixtureEvidence": ["tests/hooks/hooks.test.ts", "tests/core/compaction-pre-compact.test.ts", "tests/core/pre-compact-e2e.test.ts", "tests/core/capture-contract-conformance.test.ts"],
           "liveEvidence": []
         },
         {
           "name": "Claude Code plugin install, local",
           "checkpointBeforeLoss": "shipped",
           "lessonsBeforeLoss": "planned",
-          "fixtureEvidence": ["tests/claude-code-plugin-hooks.test.ts", "tests/compaction-pre-compact.test.ts", "tests/pre-compact-e2e.test.ts"],
+          "fixtureEvidence": ["tests/hooks/claude-code-plugin-hooks.test.ts", "tests/core/compaction-pre-compact.test.ts", "tests/core/pre-compact-e2e.test.ts"],
           "liveEvidence": []
         },
         {
@@ -326,7 +326,7 @@
           "name": "agent chat and Copilot Local",
           "checkpointBeforeLoss": "shipped",
           "lessonsBeforeLoss": "shipped",
-          "fixtureEvidence": ["tests/copilot-hooks-cli.test.ts", "tests/session-worker.test.ts", "tests/copilot-setup.test.ts", "tests/capture-contract-conformance.test.ts", "tests/copilot-transcript.test.ts"],
+          "fixtureEvidence": ["tests/db/copilot-hooks-cli.test.ts", "tests/capture/session-worker.test.ts", "tests/hooks/copilot-setup.test.ts", "tests/core/capture-contract-conformance.test.ts", "tests/capture/copilot-transcript.test.ts"],
           "liveEvidence": []
         },
         { "name": "remote extension hosts", "checkpointBeforeLoss": "unknown", "lessonsBeforeLoss": "unknown", "fixtureEvidence": [], "liveEvidence": [] }
@@ -360,14 +360,14 @@
           "name": "Copilot CLI, and Copilot CLI sessions in VS Code: all four hooks, the MCP server and the instructions block",
           "checkpointBeforeLoss": "planned",
           "lessonsBeforeLoss": "planned",
-          "fixtureEvidence": ["tests/copilot-setup.test.ts", "tests/copilot-hooks-cli.test.ts", "tests/copilot-stdin-normaliser.test.ts", "tests/copilot-transcript.test.ts", "tests/copilot-failure-reading.test.ts"],
+          "fixtureEvidence": ["tests/hooks/copilot-setup.test.ts", "tests/db/copilot-hooks-cli.test.ts", "tests/cli/copilot-stdin-normaliser.test.ts", "tests/capture/copilot-transcript.test.ts", "tests/capture/copilot-failure-reading.test.ts"],
           "liveEvidence": []
         },
         {
           "name": "VS Code Local agent: sessionStart, PreCompact and capture after each reply on agentStop, with the hippo server in the User mcp.json and prompts/hippo.instructions.md",
           "checkpointBeforeLoss": "shipped",
           "lessonsBeforeLoss": "shipped",
-          "fixtureEvidence": ["tests/copilot-setup.test.ts", "tests/copilot-hooks-cli.test.ts", "tests/session-worker.test.ts", "tests/capture-contract-conformance.test.ts", "tests/copilot-stdin-normaliser.test.ts", "tests/copilot-transcript.test.ts"],
+          "fixtureEvidence": ["tests/hooks/copilot-setup.test.ts", "tests/db/copilot-hooks-cli.test.ts", "tests/capture/session-worker.test.ts", "tests/core/capture-contract-conformance.test.ts", "tests/cli/copilot-stdin-normaliser.test.ts", "tests/capture/copilot-transcript.test.ts"],
           "liveEvidence": []
         },
         { "name": "cloud coding agent", "checkpointBeforeLoss": "unknown", "lessonsBeforeLoss": "unknown", "fixtureEvidence": [], "liveEvidence": [] },

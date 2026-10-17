@@ -8,7 +8,7 @@
  *
  * Why fixtures inline: avoids a tests/fixtures dependency for what is
  * intentionally a tiny smoke seed. The unit-level parity tests
- * (tests/github-provenance-parity.test.ts, tests/slack-provenance-parity.test.ts)
+ * (tests/store/github-provenance-parity.test.ts, tests/connectors/slack-provenance-parity.test.ts)
  * cover the wide matrix.
  *
  * cwd routing: src/core/project-identity.ts's getHippoRoot is `path.join(cwd, '.hippo')`

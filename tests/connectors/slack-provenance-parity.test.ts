@@ -1,5 +1,5 @@
 /**
- * Slack provenance parity. Mirrors tests/github-provenance-parity.test.ts.
+ * Slack provenance parity. Mirrors tests/store/github-provenance-parity.test.ts.
  *
  * After ingesting a representative batch of Slack messages, every kind='raw'
  * row must satisfy the v0.40.0 envelope contract: owner + artifact_ref

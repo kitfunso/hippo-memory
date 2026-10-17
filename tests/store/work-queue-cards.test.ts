@@ -1,5 +1,5 @@
 // W2a work-queue cards (trajectories/01M2D5VSYJFK4YXQ0RG2NGCPYJ/plan.md), tests 1,2,4-12.
-// Test 3 (self-heal parity) lives in tests/db-continuity-tables-self-heal.test.ts's CONTINUITY_TABLES.
+// Test 3 (self-heal parity) lives in tests/db/db-continuity-tables-self-heal.test.ts's CONTINUITY_TABLES.
 import { describe, it, expect, beforeEach, beforeAll, vi } from 'vitest';
 import { rmSync, existsSync, statSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';

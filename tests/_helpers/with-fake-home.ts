@@ -8,7 +8,7 @@ import * as path from 'node:path';
  * ~/.config/opencode/plugins/ on the machine running the tests.
  *
  * Sets HOME on POSIX and USERPROFILE on Windows; restores both on cleanup.
- * Extracted from tests/hooks.test.ts 2026-05-23 so the new opencode plugin
+ * Extracted from tests/hooks/hooks.test.ts 2026-05-23 so the new opencode plugin
  * install tests use the same isolation pattern.
  */
 export interface FakeHomeHandle {

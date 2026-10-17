@@ -3,17 +3,17 @@
  *
  * Closes the test gap explicitly tracked in TODOS.md:
  *
- *   "Multi-workspace tenant-routing e2e test. tests/slack-tenant-routing.test.ts
+ *   "Multi-workspace tenant-routing e2e test. tests/connectors/slack-tenant-routing.test.ts
  *   covers the helper unit; no end-to-end webhook test populates slack_workspaces
  *   and asserts the resolved tenant lands on the memory row. Add one webhook test
  *   that mints a row in slack_workspaces and asserts the ingested memory's
  *   tenant_id matches."
  *
  * Existing coverage map (what we already had):
- *   - tests/slack-tenant-routing.test.ts: resolveTenantForSlackTeam helper unit only
- *   - tests/slack-hardening.test.ts: unroutable foreign team → __unroutable__ DLQ
- *   - tests/slack-webhook-parse-failure-tenant.test.ts (v1.12.6 B4): parse-failure paths
- *   - tests/slack-workspaces-cli.test.ts (v1.12.5): CLI add/list/remove unit
+ *   - tests/connectors/slack-tenant-routing.test.ts: resolveTenantForSlackTeam helper unit only
+ *   - tests/connectors/slack-hardening.test.ts: unroutable foreign team → __unroutable__ DLQ
+ *   - tests/connectors/slack-webhook-parse-failure-tenant.test.ts (v1.12.6 B4): parse-failure paths
+ *   - tests/connectors/slack-workspaces-cli.test.ts (v1.12.5): CLI add/list/remove unit
  *
  * What was missing (and is added here):
  *   - happy path: registered team → webhook arrives with valid envelope →

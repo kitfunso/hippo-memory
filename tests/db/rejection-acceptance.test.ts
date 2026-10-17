@@ -2,8 +2,8 @@
  * AT1 T3 acceptance-critical tests: docs/plans/2026-08-15-at1-rejected-value-tombstone.md
  * §7 (tests) + the six cases assigned to T3.
  *
- * Real DB, per the project convention (mirrors tests/rejection-guard.test.ts
- * and tests/rejection-verbs.test.ts, which already cover guard mechanics,
+ * Real DB, per the project convention (mirrors tests/db/rejection-guard.test.ts
+ * and tests/core/rejection-verbs.test.ts, which already cover guard mechanics,
  * verbs, and resolveConflict — none of that is repeated here).
  *
  * Six cases:

@@ -28,7 +28,7 @@ const createMemory7 = (content: string, options: Parameters<typeof createMemory>
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 // Replay off keeps the decay assertions deterministic (replay re-strengthens a random sample of survivors).
-// Dormant off: these tests pin the delete path (tests/dormant-memories.test.ts covers the dormant default).
+// Dormant off: these tests pin the delete path (tests/store/dormant-memories.test.ts covers the dormant default).
 const RAW_CONFIG = { replay: { count: 0 }, dormant: { enabled: false } };
 
 function aged(entry: MemoryEntry, days: number): MemoryEntry {

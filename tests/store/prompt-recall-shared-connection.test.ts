@@ -19,7 +19,7 @@ afterEach(() => {
 });
 
 const require = createRequire(import.meta.url);
-// SAFETY: node:sqlite has no bundled types; mirrors tests/db-open-write-free.test.ts.
+// SAFETY: node:sqlite has no bundled types; mirrors tests/db/db-open-write-free.test.ts.
 const { DatabaseSync } = require('node:sqlite') as {
   DatabaseSync: { prototype: { prepare: (sql: string) => object } };
 };

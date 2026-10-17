@@ -544,7 +544,7 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
     // whose LLM-synthesized summary then landed in 'default' regardless of
     // source (memory.ts:535's implicit default when createMemory isn't
     // passed a tenantId). Mirrors T1(a)'s cross-tenant shape
-    // (tests/consolidate-tenant-landing.test.ts) but for the DAG producer
+    // (tests/store/consolidate-tenant-landing.test.ts) but for the DAG producer
     // (dag.ts buildDag) instead of consolidate.ts's merge pass.
     const aFacts = ['alice did X', 'alice said Y', 'alice noted Z'].map((c) =>
       createMemory(c, {

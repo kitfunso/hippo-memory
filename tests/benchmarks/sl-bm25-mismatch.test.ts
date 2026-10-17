@@ -1,4 +1,4 @@
-// tests/sl-bm25-mismatch.test.ts
+// tests/benchmarks/sl-bm25-mismatch.test.ts
 //
 // v1.8.0 — Independent verification beyond Jaccard: confirm that the new
 // adversarial categories' lessons are NOT trivially BM25-matched by the
