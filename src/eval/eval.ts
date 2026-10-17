@@ -4,6 +4,7 @@
 import type { MemoryEntry } from '../core/memory.js';
 import { hybridSearch } from '../search/hybrid.js';
 import { searchBothHybrid } from '../sharing/search-both.js';
+import { sqliteStore } from '../store/index.js';
 import { isInitialized } from '../core/project-identity.js';
 
 // Generous so metrics are not truncated.
@@ -146,7 +147,7 @@ export async function runEval(
 function rankForCase(query: string, entries: MemoryEntry[], options: RunEvalOptions, useBothStores: boolean) {
   const budget = options.budget ?? DEFAULT_EVAL_BUDGET;
   return useBothStores
-    ? searchBothHybrid(query, options.hippoRoot!, options.globalRoot!, {
+    ? searchBothHybrid(query, sqliteStore(options.hippoRoot!), sqliteStore(options.globalRoot!), {
         budget,
         now: options.now,
         embeddingWeight: options.embeddingWeight,

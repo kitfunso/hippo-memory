@@ -14,8 +14,9 @@ import { closeHippoDb, openHippoDb } from '../src/db/index.js';
 import { quarantineScopeFor } from '../src/trust/quarantine.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { countMatching, recordStatements } from './_helpers/count-statements.js';
+import { sharingStores } from './_helpers/sharing-stores.js';
 
-type AutoShareStats = NonNullable<NonNullable<Parameters<typeof autoShare>[1]>['stats']>;
+type AutoShareStats = NonNullable<NonNullable<Parameters<typeof autoShare>[2]>['stats']>;
 
 /** loadAllEntries' statements: every full row of the store, or of one tenant. */
 const WHOLE_READ = new RegExp(`^SELECT ${MEMORY_SELECT_COLUMNS} FROM memories (WHERE tenant_id = \\? )?ORDER BY created ASC, id ASC$`);
@@ -95,7 +96,7 @@ describe('autoShare prefilter', () => {
         const wanted = new Set(labels.map((l) => ids.get(l)!));
         if (tenantId === undefined && minScore <= 0.6) wanted.add(ids.get('other error 0.6')!);
         const stats: AutoShareStats = { secretSkipped: 0 };
-        const picked = autoShare(root, { minScore, dryRun: true, tenantId, stats });
+        const picked = autoShare(...sharingStores(root), { minScore, dryRun: true, tenantId, stats });
         const inOrder = (tenantId === undefined ? loadEveryTenantEntries(root) : loadAllEntries(root, tenantId)).filter((e) => wanted.has(e.id));
         expect(picked.map((e) => e.id), `minScore ${minScore} tenant ${tenantId}`).toEqual(inOrder.map((e) => e.id));
         expect(picked).toEqual(inOrder);
@@ -108,7 +109,7 @@ describe('autoShare prefilter', () => {
     for (let i = 0; i < 60; i++) put(`plain ${i}`);
     const errorId = put('error', {}, ['error']);
     for (const tenantId of ['default', undefined]) {
-      const { result, statements, rowsRead } = recordStatements(() => autoShare(root, { dryRun: true, tenantId }));
+      const { result, statements, rowsRead } = recordStatements(() => autoShare(...sharingStores(root), { dryRun: true, tenantId }));
       expect(result.map((e) => e.id)).toEqual([errorId]);
       expect(countMatching(statements, WHOLE_READ)).toBe(0);
       expect(rowsRead).toBeLessThan(10);

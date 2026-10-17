@@ -23,6 +23,7 @@ import {
 import { SESSION_DIGEST_TAG, isSessionDigestRow } from '../src/core/session-digest-row.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
+import { sharingStores } from './_helpers/sharing-stores.js';
 
 const REPLY = 'Retry `upload()` with backoff because the storage token expires mid-transfer.';
 
@@ -166,7 +167,7 @@ describe('sharing', () => {
     write('s1', scan(REPLY));
     writeEntry(hippoRoot, createMemory('gotcha: powershell 5.1 has no pipeline chain operators', { tenantId: 'default' }));
     const stats = { secretSkipped: 0, neverAutoShareSkipped: 0 };
-    autoShare(hippoRoot, { minScore: 0, stats });
+    autoShare(...sharingStores(hippoRoot), { minScore: 0, stats });
     expect(loadAllEntries(getGlobalRoot(), 'default').map((e) => e.content)).toEqual(['gotcha: powershell 5.1 has no pipeline chain operators']);
     expect(stats.neverAutoShareSkipped).toBe(1);
   });
@@ -180,7 +181,7 @@ describe('sharing', () => {
     ], DEFAULT_HALF_LIFE_DAYS);
     expect(fact.tags).toContain(SESSION_DIGEST_TAG);
     expect(isSessionDigestRow(fact)).toBe(false);
-    autoShare(hippoRoot, { minScore: 0 });
+    autoShare(...sharingStores(hippoRoot), { minScore: 0 });
     expect(loadAllEntries(getGlobalRoot(), 'default')).toEqual([]);
   });
 });

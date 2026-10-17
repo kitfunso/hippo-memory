@@ -5,16 +5,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { MemoryEntry, generateId, COMPACTION_MEMORY_TAG } from '../core/memory.js';
 import { AGENT_MEMORY_SOURCE_PREFIX, AGENT_MEMORY_TAGS } from '../core/agent-memory-tools.js';
-import { writeEntriesSkippingRejected, writeEntry } from '../store/entry-writes.js';
-import {
-  loadAllEntries,
-  loadEveryTenantEntries,
-  loadEntriesWithSignals,
-  loadEntryTextKeys,
-  readEntry,
-  type EntrySignals,
-} from '../store/entry-reads.js';
-import { tallySources } from '../store/candidates.js';
+import type { EntrySignals } from '../store/entry-reads.js';
+import { requireGroup, type HippoStore, type LocalFiles } from '../store/port.js';
 import { isPersonalScope } from '../core/recall-scope.js';
 import { fallbackOrigin } from '../core/project-identity.js';
 import { detectSecret } from '../util/secret-detect.js';
@@ -23,7 +15,6 @@ import { embedMemory, embedAll } from '../search/embed-memories.js';
 import { duplicateKey, storedTextKeys } from '../util/same-text.js';
 import { isReusable } from '../core/memory-quality.js';
 import { log } from '../util/log.js';
-import { getGlobalRoot, initGlobal } from './global-store.js';
 import { logEmbedAllFailure } from './search-both.js';
 
 /** Tags that indicate project-specific memories (poor transfer candidates) */
@@ -98,27 +89,29 @@ export function transferScore(entry: MemoryEntry): number {
 /** Share a memory to the global store with attribution (source enriched with project path and timestamp).
  *  Returns the new entry, or null if the transfer score is too low. */
 export function shareMemory(
-  localRoot: string,
+  store: HippoStore,
+  global: HippoStore,
   id: string,
   options: { force?: boolean; tenantId?: string; skipEmbed?: boolean } = {}
 ): MemoryEntry | null {
   // tenantId is optional for single-tenant callers (autoShare passes only `{ force: true }`); MCP/REST hosts MUST pass
   // it so tenant A cannot share
   // tenant B's memory to global (readEntry returns null on a cross-tenant lookup).
-  const entry = readEntry(localRoot, id, options.tenantId);
+  const local = requireGroup(store, 'localFiles');
+  const entry = local.learning.readEntry(id, options.tenantId);
   if (!entry) throw new NotFoundError(`Memory not found: ${id}`);
 
-  const globalEntry = toGlobalEntry(localRoot, entry, options.force === true);
+  const globalEntry = toGlobalEntry(local.hippoRoot, entry, options.force === true);
   if (!globalEntry) return null;
 
-  initGlobal();
-  const globalRoot = getGlobalRoot();
-  writeEntry(globalRoot, globalEntry);
+  const to = requireGroup(global, 'localFiles');
+  to.sharing.ensureFiles();
+  to.learning.writeEntry(globalEntry);
 
   // Embed here unless the caller opts out: autoShare sets skipEmbed to batch one embedAll(), since embedMemory rewrites
   // the whole index per call.
   if (!options.skipEmbed) {
-    void embedMemory(globalRoot, globalEntry);
+    void embedMemory(to.hippoRoot, globalEntry);
   }
 
   return globalEntry;
@@ -174,15 +167,16 @@ function assertShareable(entry: MemoryEntry, id: string): void {
  * 'promoted:<path>' sources.
  *  `tenantId` filters to one tenant; undefined is host-wide (legacy callers: CLI standalone, dashboard). */
 export function listPeers(
-  globalRoot?: string,
+  global: HippoStore,
   tenantId?: string,
 ): Array<{ project: string; count: number; latest: string }> {
-  const root = globalRoot ?? getGlobalRoot();
-  if (!fs.existsSync(root)) return [];
+  const files = requireGroup(global, 'localFiles');
+  if (!fs.existsSync(files.hippoRoot)) return [];
 
   // Tenant-scoped by default when tenantId provided. Host-wide when
   // undefined (preserves back-compat).
-  const tallies = tallySources(root, tenantId).sort((a, b) => (a.first < b.first ? -1 : a.first > b.first ? 1 : 0));
+  const tallies = files.sharing.sourceTallies(tenantId)
+    .sort((a, b) => (a.first < b.first ? -1 : a.first > b.first ? 1 : 0));
   const peerMap = new Map<string, { count: number; latest: string }>();
 
   for (const tally of tallies) {
@@ -251,13 +245,13 @@ function isAutoShareCandidate(
 // The candidates are rows already held, written in one transaction; the caller embeds once via embedAll() afterwards.
 function shareCandidates(
   localRoot: string,
-  globalRoot: string,
+  to: LocalFiles,
   candidates: readonly MemoryEntry[],
   stats: AutoShareStats | undefined,
 ): MemoryEntry[] {
   const shared: MemoryEntry[] = [];
   let rejectedSkipped = 0;
-  writeEntriesSkippingRejected(globalRoot, (put) => {
+  to.sharing.writeSkippingRejected((put) => {
     for (const entry of candidates) {
       const globalEntry = toGlobalEntry(localRoot, entry, true);
       if (!globalEntry) continue;
@@ -281,7 +275,8 @@ function shareCandidates(
  * `options.stats` is an opt-in out-param: `secretSkipped` counts shares the secret veto prevented, `rejectedSkipped`
  * rejection refusals (0 under `dryRun`). */
 export function autoShare(
-  localRoot: string,
+  store: HippoStore,
+  global: HippoStore,
   options: {
     minScore?: number;
     dryRun?: boolean;
@@ -293,14 +288,15 @@ export function autoShare(
 
   // A row with none of these signals scores at most 0.5, so above that
   // bar only signal rows can share or count as never-auto-share skips.
+  const local = requireGroup(store, 'localFiles');
   const localEntries = minScore > 0.5
-    ? loadEntriesWithSignals(localRoot, AUTO_SHARE_SIGNALS, options.tenantId)
-    : options.tenantId === undefined ? loadEveryTenantEntries(localRoot) : loadAllEntries(localRoot, options.tenantId);
-  initGlobal();
-  const globalRoot = getGlobalRoot();
+    ? local.sharing.entriesWithSignals(AUTO_SHARE_SIGNALS, options.tenantId)
+    : local.learning.allEntries(options.tenantId);
+  const to = requireGroup(global, 'localFiles');
+  to.sharing.ensureFiles();
   // Host-wide read. The global store IS the union across all tenants;
   // per-tenant filtering on the global root would defeat the purpose.
-  const globalContentSet = storedTextKeys(loadEntryTextKeys(globalRoot));
+  const globalContentSet = storedTextKeys(to.sharing.textKeys());
 
   const candidates = localEntries.filter((entry) =>
     isAutoShareCandidate(entry, globalContentSet, minScore, options.stats),
@@ -308,10 +304,10 @@ export function autoShare(
 
   if (dryRun) return candidates;
 
-  const shared = shareCandidates(localRoot, globalRoot, candidates, options.stats);
+  const shared = shareCandidates(local.hippoRoot, to, candidates, options.stats);
 
   if (shared.length > 0) {
-    void embedAll(globalRoot).catch((err) => logEmbedAllFailure('autoShare', err));
+    void embedAll(to.hippoRoot).catch((err) => logEmbedAllFailure('autoShare', err));
   }
 
   return shared;

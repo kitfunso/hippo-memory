@@ -3,7 +3,8 @@
 import { compareScoresDesc } from '../core/compare.js';
 import * as fs from 'fs';
 import { MemoryEntry } from '../core/memory.js';
-import { loadSearchEntries, loadRecallEntries, recallScopeFilter } from '../store/search-rows.js';
+import { recallScopeFilter } from '../store/search-rows.js';
+import { requireGroup, type HippoStore } from '../store/port.js';
 import { passesScopeFilterForRecall, passesCliRecallScopeFilter } from '../core/recall-scope.js';
 import { folderVectorSource, hybridSearch } from '../search/hybrid.js';
 import { fitBudget } from '../search/finalize.js';
@@ -68,8 +69,8 @@ export interface HybridSearchOptions extends SearchOptions {
  *  Each store ranks through hybridSearch, then the local bump, one copy per text and the shared budget apply. */
 export async function searchBothHybrid(
   query: string,
-  localRoot: string,
-  globalRoot: string,
+  store: HippoStore,
+  global: HippoStore,
   options: HybridSearchOptions = {}
 ): Promise<SearchResult[]> {
   const { includeSuperseded, asOf, tenantId, entryFilter, recallScope } = options;
@@ -80,10 +81,11 @@ export async function searchBothHybrid(
   // Recall mode: push the scope predicate into SQL like api.recall, so quarantine/private rows never enter the
   // candidates, shadow duplicates or use budget.
   // The JS post-filter below is the regex-only `<source>:private:*` half plus defense in depth on exact match.
-  const loadEntries = (root: string): MemoryEntry[] => {
-    if (!fs.existsSync(root)) return [];
+  const loadEntries = (from: HippoStore): MemoryEntry[] => {
+    const { hippoRoot, sharing } = requireGroup(from, 'localFiles');
+    if (!fs.existsSync(hippoRoot)) return [];
     return recallScope
-      ? loadRecallEntries(root, query, {
+      ? sharing.recallEntries(query, {
           limit: searchWindow,
           tenantId,
           requestedScope: recallScope.requested,
@@ -91,7 +93,7 @@ export async function searchBothHybrid(
           includeSuperseded: Boolean(includeSuperseded) || Boolean(asOf),
           ownScope: recallScope.ownScope,
         })
-      : loadSearchEntries(root, query, searchWindow, tenantId);
+      : sharing.searchEntries(query, searchWindow, tenantId);
   };
   const passesScope = (e: MemoryEntry): boolean =>
     !recallScope ||
@@ -100,8 +102,8 @@ export async function searchBothHybrid(
         passesScopeFilterForRecall(e.scope ?? null, undefined, recallScope.ownScope)
       : passesScopeFilterForRecall(e.scope ?? null, recallScope.requested, recallScope.ownScope));
   const admit = (e: MemoryEntry): boolean => passesScope(e) && (!entryFilter || entryFilter(e));
-  const localEntries = loadEntries(localRoot).filter(admit);
-  const globalEntries = loadEntries(globalRoot).filter(admit);
+  const localEntries = loadEntries(store).filter(admit);
+  const globalEntries = loadEntries(global).filter(admit);
 
   // The vector arm loads under the same SQL rules as loadEntries, then the same JS admission.
   const vectorCandidates = {
@@ -112,9 +114,13 @@ export async function searchBothHybrid(
     includeSuperseded: !recallScope || Boolean(includeSuperseded) || Boolean(asOf),
     admit,
   };
-  const folder = (hippoRoot: string) => folderVectorSource({ hippoRoot });
-  const sources = { local: folder(localRoot), global: folder(globalRoot) };
+  const sources = { local: vectorSourceOf(store), global: vectorSourceOf(global) };
   return rankBothStores(query, sources, { local: localEntries, global: globalEntries }, vectorCandidates, options);
+}
+
+/** The store's own vectors, with the embedding provider its folder's config names. */
+function vectorSourceOf(store: HippoStore): VectorSource | undefined {
+  return folderVectorSource({ hippoRoot: requireGroup(store, 'localFiles').hippoRoot, store });
 }
 
 /** Each store prices its rows already tagged, so a price that reads the store origin sees it before the merge. */

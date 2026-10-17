@@ -12,6 +12,7 @@ import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries, loadEveryTenantEntries } from '../src/store/entry-reads.js';
+import { sqliteStore } from '../src/store/index.js';
 import { createMemory, Layer } from '../src/core/memory.js';
 import { invalidateMatching } from '../src/learn/invalidation.js';
 import { refineStore } from '../src/cli/refine-llm.js';
@@ -23,6 +24,7 @@ import { consolidate } from '../src/index.js';
 import { listPeers } from '../src/sharing/share.js';
 import { syncGlobalToLocal } from '../src/sharing/global-sync.js';
 import { embedAll } from '../src/search/embed-memories.js';
+import { sharingStores } from './_helpers/sharing-stores.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -285,7 +287,7 @@ describe('per-tenant scoping (cross-tenant leak prevention)', () => {
       seedFor(hippoRoot, 'tenant-b', 'b-lesson: do not commit secrets to git', { tags: ['lesson', 'global-relevant'] });
 
       // dryRun returns the candidate list without writing
-      const candidates = autoShare(hippoRoot, { tenantId: 'tenant-a', minScore: 0, dryRun: true });
+      const candidates = autoShare(...sharingStores(hippoRoot), { tenantId: 'tenant-a', minScore: 0, dryRun: true });
       // Only tenant-a candidates should appear
       const contents = candidates.map((c) => c.content);
       expect(contents.some((c) => c.startsWith('a-lesson:'))).toBe(true);
@@ -416,7 +418,7 @@ describe('host-wide back-compat parity (current behaviour preserved)', () => {
     writeEntry(hippoRoot, b);
 
     // Both tenants' shared entries surface as peers (host-wide aggregation)
-    const peers = listPeers(hippoRoot);
+    const peers = listPeers(sqliteStore(hippoRoot));
     const peerNames = peers.map((p) => p.project);
     expect(peerNames).toContain('project-foo');
     expect(peerNames).toContain('project-bar');
@@ -437,12 +439,12 @@ describe('host-wide back-compat parity (current behaviour preserved)', () => {
         seedFor(globalRoot, 'tenant-a', 'global memory from tenant-a', {});
         seedFor(globalRoot, 'tenant-b', 'global memory from tenant-b', {});
 
-        expect(syncGlobalToLocal(hippoRoot, globalRoot)).toBe(0);
+        expect(syncGlobalToLocal(...sharingStores(hippoRoot, globalRoot))).toBe(0);
 
         // ...but this case's original guarantee - the global read is
         // host-wide across TENANTS - still holds once the origin gate is
         // explicitly lifted: both tenants' rows copy.
-        const copied = syncGlobalToLocal(hippoRoot, globalRoot, { includeCrossProject: true });
+        const copied = syncGlobalToLocal(...sharingStores(hippoRoot, globalRoot), { includeCrossProject: true });
         expect(copied).toBe(2);
       } finally {
         rmSync(globalTmp, { recursive: true, force: true });

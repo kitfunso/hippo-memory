@@ -19,6 +19,7 @@ import { _resetAblationCacheForTests } from '../src/core/ablation.js';
 import { invalidateMatching } from '../src/learn/invalidation.js';
 import { syncGlobalToLocal } from '../src/sharing/global-sync.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+import { sharingStores } from './_helpers/sharing-stores.js';
 
 const FULL_ROW = `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories`;
 /** A full-row read of every row in the store, or of every current distilled row: no id, tenant or parent filter. */
@@ -187,7 +188,7 @@ describe('syncGlobalToLocal', () => {
     }
     const warn = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
 
-    expect(syncGlobalToLocal(localRoot, globalRoot)).toBe(3);
+    expect(syncGlobalToLocal(...sharingStores(localRoot, globalRoot))).toBe(3);
 
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('skipped 2 rejected value'));
     const local = new Map(loadEveryTenantEntries(localRoot).map((e) => [e.id, e]));
@@ -207,7 +208,7 @@ describe('syncGlobalToLocal', () => {
   it('opens each store a fixed number of times and commits every copy in one transaction', () => {
     const counts = [10, 200].map((n) => {
       const { localRoot, globalRoot } = stores(n);
-      const { result, statements } = recordStatements(() => syncGlobalToLocal(localRoot, globalRoot));
+      const { result, statements } = recordStatements(() => syncGlobalToLocal(...sharingStores(localRoot, globalRoot)));
       expect(result).toBe(n);
       return { opens: countMatching(statements, STORE_OPEN), begins: countMatching(statements, 'BEGIN IMMEDIATE') };
     });
@@ -217,8 +218,8 @@ describe('syncGlobalToLocal', () => {
 
   it('reads no full row of either store when every global row is already local', () => {
     const { localRoot, globalRoot } = stores(50);
-    syncGlobalToLocal(localRoot, globalRoot);
-    const { result, statements } = recordStatements(() => syncGlobalToLocal(localRoot, globalRoot));
+    syncGlobalToLocal(...sharingStores(localRoot, globalRoot));
+    const { result, statements } = recordStatements(() => syncGlobalToLocal(...sharingStores(localRoot, globalRoot)));
     expect(result).toBe(0);
     expect(countMatching(statements, FULL_ROW)).toBe(0);
   });

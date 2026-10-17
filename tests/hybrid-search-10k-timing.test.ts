@@ -13,6 +13,7 @@ import { resolveEmbeddingProvider } from '../src/embeddings/provider.js';
 import { searchBothHybrid } from '../src/sharing/search-both.js';
 import { recordStatementsAsync } from './_helpers/count-statements.js';
 import { loadConfig } from '../src/core/config.js';
+import { sharingStores } from './_helpers/sharing-stores.js';
 
 const ROWS = 10_000;
 const FEWER_ROWS = ROWS / 10;
@@ -44,7 +45,7 @@ describe('hybrid recall at 10k rows', () => {
   });
 
   const recall = (store: string): ReturnType<typeof searchBothHybrid> =>
-    searchBothHybrid('deploy pipeline', store, global, { budget: 4000, tenantId: 'default', recallScope: {}, scope: null });
+    searchBothHybrid('deploy pipeline', ...sharingStores(store, global), { budget: 4000, tenantId: 'default', recallScope: {}, scope: null });
   const recallOnce = (): ReturnType<typeof searchBothHybrid> => recall(home);
 
   function seed(store: string, rows: number): void {

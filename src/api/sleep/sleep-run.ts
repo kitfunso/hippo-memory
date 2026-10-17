@@ -226,12 +226,15 @@ async function runQualityAudit(
   return { removed, remaining: allEntries.filter((e) => !deleted.has(e.id)) };
 }
 
-function shareOnSleep(ctx: Context, phases: SleepPhases, result: SleepResult): void {
+function shareOnSleep(ctx: SleepContext, phases: SleepPhases, result: SleepResult): void {
   const sleepConfig = phases.configOf(ctx);
   if (!sleepConfig.autoShareOnSleep) return;
   // Both skip counters are surfaced so the secret veto and the rejection tombstone are observable, not silent.
   const autoShareStats = { secretSkipped: 0, rejectedSkipped: 0 };
-  const shared = phases.autoShare(ctx.hippoRoot, { minScore: AUTO_SHARE_MIN_SCORE, stats: autoShareStats });
+  const shared = phases.autoShare(ctx.store, ctx.local.globalStore(), {
+    minScore: AUTO_SHARE_MIN_SCORE,
+    stats: autoShareStats,
+  });
   if (shared.length > 0) {
     result.shared = shared.length;
   }
