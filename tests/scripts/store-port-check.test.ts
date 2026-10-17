@@ -165,10 +165,10 @@ describe('check-store-port.mjs', () => {
       "  { method: 'GET', path: '/e', loop: 'on', handler: e },",
     ];
     const host = "const HOST_ROUTES = {\n  health: { method: 'GET', path: '/health', loop: 'off' },\n  mcp: { method: 'POST', path: '/mcp' },\n} as const;\n";
-    const tools = "const TOOL_HANDLERS: ReadonlyMap<string, ToolEntry> = new Map<string, ToolEntry>([\n  ['a', { run: a }],\n  ['b', toolOn('localFiles', b)],\n  ['c', { storeReady: 'localFiles', run: c }],\n  ['d', toolOn('lastRecall', d)],\n]);\n";
+    const tools = "const TOOL_HANDLERS: ReadonlyMap<string, ToolEntry> = new Map<string, ToolEntry>([\n  ['a', { run: a }],\n  ['b', toolOn('localFiles', b)],\n  ['c', { storeReady: 'localFiles', run: c }],\n  ['d', toolOn('lastRecall', d)],\n  ['e', { run: e, onServerThread: 'takes a function' }],\n]);\n";
     const files = { 'src/server/route-table.ts': `const V1_ROUTES: readonly Route[] = [\n${rows.join('\n')}\n];\n${host}`, 'src/mcp/request.ts': tools };
     withFixture(files, null, ({ run }) => {
-      expect(list(run).routesOnLoop).toBe('6');
+      expect(list(run).routesOnLoop).toBe('7');
     });
     withFixture({ 'src/a.ts': 'export const a = 1;\n' }, null, ({ run }) => {
       expect(list(run).routesOnLoop).toBe('0');
@@ -363,13 +363,15 @@ describe('check-store-port.mjs', () => {
     });
   });
 
-  it('exits 1 naming the table when HOST_ROUTES is missing or spread, or a TOOL_HANDLERS entry is no known form', () => {
+  it('exits 1 naming the table when HOST_ROUTES is missing or spread, or a TOOL_HANDLERS entry is no known literal form', () => {
     const v1 = "const V1_ROUTES = [\n  { method: 'GET', path: '/a', loop: 'off', handler: a },\n];\n";
     const cases: [Record<string, string>, string][] = [
       [{ 'src/server/route-table.ts': v1 }, 'HOST_ROUTES'],
       [{ 'src/server/route-table.ts': `${v1}const HOST_ROUTES = { ...MORE };\n` }, 'HOST_ROUTES'],
       [{ 'src/server/route-table.ts': v1 + HOST, 'src/mcp/request.ts': 'const TOOL_HANDLERS = new Map(ENTRIES);\n' }, 'TOOL_HANDLERS'],
       [{ 'src/server/route-table.ts': v1 + HOST, 'src/mcp/request.ts': "const TOOL_HANDLERS = new Map([\n  ['a', entryFor('a')],\n]);\n" }, 'TOOL_HANDLERS'],
+      [{ 'src/server/route-table.ts': v1 + HOST, 'src/mcp/request.ts': "const TOOL_HANDLERS = new Map([\n  ['a', { run: a, onServerThread: why }],\n]);\n" }, 'line 2'],
+      [{ 'src/server/route-table.ts': v1 + HOST, 'src/mcp/request.ts': "const TOOL_HANDLERS = new Map([\n  ['a', { run: a, onServerThread: '' }],\n]);\n" }, 'line 2'],
     ];
     for (const [files, named] of cases) {
       withFixture(files, null, ({ run }) => {

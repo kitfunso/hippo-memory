@@ -7,7 +7,7 @@ import { handleMcpRequest, mcpErrorResponse, type McpContext, type McpRequest } 
 import { HttpError, readBody, sendJson } from '../util/http-util.js';
 import { errorFields, log } from '../util/log.js';
 import { callName } from '../mcp/protocol.js';
-import { callsLocalFilesTool } from '../mcp/request.js';
+import { runsOnServerThread } from '../mcp/request.js';
 import { onServerThread } from '../store/sqlite/held-connection.js';
 import { assertCallerProject } from '../core/project-identity.js';
 import type { CallerProject } from '../api/prompt-hook.js';
@@ -123,7 +123,7 @@ export async function handleMcpPost(
   const run = () => handleMcpRequest(rpcReq, mcpContextFor(ctx, buildMcpClientKey(req), opts.autoSleep, project));
   let mcpRes;
   try {
-    mcpRes = await (callsLocalFilesTool(rpcReq) ? onServerThread(run) : run());
+    mcpRes = await (runsOnServerThread(rpcReq) ? onServerThread(run) : run());
   } catch (err) {
     mcpRes = mcpErrorResponse(rpcReq.id, err, undefined, callName(rpcReq));
   }

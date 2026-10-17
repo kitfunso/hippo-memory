@@ -60,8 +60,19 @@ export { outcome, outcomeForLastRecall } from './memories/outcome.js';
 export type { OutcomeForLastRecallResult, OutcomeResult } from './memories/outcome.js';
 export { forget, reject, rejectOnHost, unreject } from './memories/forget.js';
 export type { ForgetResult, RejectOptions, RejectResult } from './memories/forget.js';
-export { listConflicts, listOpenConflicts, resolveMemoryConflict } from './memories/conflicts.js';
-export type { ResolveMemoryConflictOptions, ResolveMemoryConflictResult } from './memories/conflicts.js';
+export {
+  everyConflict,
+  getConflict,
+  listConflicts,
+  listOpenConflicts,
+  resolveMemoryConflict,
+} from './memories/conflicts.js';
+export type {
+  ConflictPage,
+  ConflictPageOptions,
+  ResolveMemoryConflictOptions,
+  ResolveMemoryConflictResult,
+} from './memories/conflicts.js';
 export { listProjectNames, mergeProjectNames, repairProjectNames, repairProjectNamesOnce } from './objects/projects.js';
 export type {
   MergeProjectNamesOptions,

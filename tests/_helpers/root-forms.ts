@@ -259,6 +259,18 @@ export function replaceDetectedConflicts(
   onHandle(hippoRoot, (db) => replaceDetectedConflictsAt(db, { hippoRoot }, detected, detectedAt), openStore);
 }
 
+/** Keeps `keepId` and weakens the other member through the store port, as a plain `hippo resolve` does; for a
+ * fixture that needs a resolved conflict and no api checks. */
+export function resolveConflictKeeping(hippoRoot: string, tenantId: string, conflictId: number, keepId: string): boolean {
+  const conflicts = sqliteSyncStore(hippoRoot).conflicts;
+  const row = conflicts.get(tenantId, conflictId);
+  if (!row) return false;
+  const a = { id: row.conflict.memory_a_id, scope: row.a?.scope ?? null };
+  const b = { id: row.conflict.memory_b_id, scope: row.b?.scope ?? null };
+  const [keep, loser] = keepId === a.id ? [a, b] : [b, a];
+  return conflicts.resolve(tenantId, { conflictId, keep, loser, fate: { kind: 'weaken' }, actor: CLI_ACTOR, reason: '' });
+}
+
 export function memoriesBackingObjects(hippoRoot: string): Set<string> {
   return onHandle(hippoRoot, (db) => memoriesBackingObjectsAt(db));
 }

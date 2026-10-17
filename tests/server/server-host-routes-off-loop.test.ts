@@ -35,7 +35,8 @@ const as = (who: keyof Callers = 'main'): string => seed.keys[who];
 const drill = (tail: string, who?: keyof Callers): Send => (s) => get(s, `/v1/recall/drill/${tail}`, as(who));
 const context = (query: string, who?: keyof Callers): Send => (s) => get(s, `/v1/context${query}`, as(who));
 const outcome = (body: JsonValue, who?: keyof Callers): Send => (s) => post(s, '/v1/outcome', body, as(who));
-const rpc = (method: string, params?: JsonValue) => ({ jsonrpc: '2.0', id: 1, method, ...(params === undefined ? {} : { params }) });
+const rpc = (method: string, params?: JsonValue): JsonValue =>
+  (params === undefined ? { jsonrpc: '2.0', id: 1, method } : { jsonrpc: '2.0', id: 1, method, params });
 const tool = (name: string, args: JsonValue = {}, who?: keyof Callers): Send =>
   (s) => post(s, '/mcp', rpc('tools/call', { name, arguments: args }), as(who));
 
@@ -117,6 +118,8 @@ const HOST_STEPS: readonly Step[] = [
   ['mcp outcome', tool('hippo_outcome', { good: true }), 200],
   ['mcp remember', tool('hippo_remember', { text: 'the canary needs ten minutes of traffic' }), 200],
   ['mcp peers, on the server thread', tool('hippo_peers'), 200],
+  ['mcp resolve, on the server thread', tool('hippo_resolve', { conflict_id: 1, keep: 'mem_p_plain' }), 200],
+  ['mcp resolve, rejecting the loser', tool('hippo_resolve', { conflict_id: 2, keep: 'mem_p_fill0', rejectLoser: true }), 200],
   ['mcp unknown tool', tool('hippo_nope'), 200],
   ['mcp with a bad body', (s) => postText(s, '/mcp', '{not json', as()), 400],
   ['mcp with an unknown key', tool('hippo_peers', {}, 'unknown'), 401],
@@ -128,12 +131,18 @@ const HOST_STEPS: readonly Step[] = [
 
 const STEPS = [...V1_STEPS, ...WEBHOOK_STEPS, ...HOST_STEPS];
 
-/** A fresh copy of the seed whose Slack team T_ACME and GitHub installation 101 route to the default tenant. */
+const CONFLICT = `INSERT INTO memory_conflicts (memory_a_id, memory_b_id, reason, score, status, detected_at, updated_at, tenant_id)
+  VALUES (?, ?, 'seeded contradiction', 0.9, 'open', ?, ?, ?)`;
+
+/** A fresh copy of the seed with two open conflicts, whose Slack team T_ACME and GitHub installation 101 route to the default tenant. */
 function copy() {
   const made = freshStore(seed.templates, 'local');
   homes.push(made.home);
   sqliteSyncStore(made.root).connectorEvents.registerSlackWorkspace('T_ACME', TENANT);
-  onDb(made.root, (db) => db.prepare('INSERT INTO github_installations (installation_id, tenant_id, added_at) VALUES (?, ?, ?)').run('101', TENANT, FAKE_NOW));
+  onDb(made.root, (db) => {
+    db.prepare('INSERT INTO github_installations (installation_id, tenant_id, added_at) VALUES (?, ?, ?)').run('101', TENANT, FAKE_NOW);
+    for (const [a, b] of [['mem_p_plain', 'mem_p_noise'], ['mem_p_fill0', 'mem_x_cafe']]) db.prepare(CONFLICT).run(a, b, FAKE_NOW, FAKE_NOW, TENANT);
+  });
   return made;
 }
 
@@ -211,6 +220,8 @@ describe('the routes moved off the server thread, on store workers against the i
     expect(bodyOf['slack redelivery']).toContain('"status":"duplicate"');
     expect(bodyOf['github deletion']).toContain('"status":"archived"');
     expect(bodyOf['mcp stream']).toBe(': ping\n\n');
+    expect(bodyOf['mcp resolve, on the server thread']).toContain('weakened');
+    expect(bodyOf['mcp resolve, rejecting the loser']).toContain('rejected (tombstoned) and removed');
   });
 });
 

@@ -1,12 +1,19 @@
 // The store work of the learn passes, kept apart from port.ts. Plain return values, like the rest of LocalFiles.
 import type { MemoryEntry } from '../../core/memory.js';
+import type { EntryCursor, EntryPage } from './consolidation.js';
 
 /** What auto-learn, extraction and invalidation read and write on hippo.db. */
 export interface Learning {
   /** Every memory of `tenantId`, or of every tenant when it is undefined. */
   allEntries(tenantId?: string): MemoryEntry[];
-  /** The memories whose content shares a token with `tokens`, plus those carrying exactly `tag`. */
-  entriesMentioning(tokens: readonly string[], tag: string, tenantId?: string): MemoryEntry[];
+  /** A page of the memories whose content shares a token with `tokens`, plus those carrying exactly `tag`, by created
+   * then id; read `next` until it is null for all of them. */
+  entriesMentioning(
+    tokens: readonly string[],
+    tag: string,
+    tenantId: string | undefined,
+    page: { readonly limit: number; readonly after?: EntryCursor },
+  ): EntryPage;
   readEntry(id: string, tenantId?: string): MemoryEntry | null;
   /** Rows of `tenantId` that are current and whose origin project is one of `origins`. */
   currentEntriesFromOrigins(tenantId: string, origins: readonly string[]): MemoryEntry[];

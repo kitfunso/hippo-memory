@@ -152,7 +152,6 @@ export const WORKER_OPS = {
     repairQualityOnce: 'write',
   },
   lessonWrites: {
-    tenantEntries: 'read',
     textsHoldingWords: 'read',
     contentsWithTag: 'read',
     writeSkippingRejected: 'write',
@@ -201,8 +200,9 @@ export const WORKER_OPS = {
   },
   conflicts: {
     list: 'read',
-    listTouchable: 'read',
-    resolve: 'write',
+    get: 'read',
+    // The reject fate carries the caller's inReach test.
+    resolve: 'server',
   },
   dormant: {
     list: 'read',

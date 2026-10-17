@@ -15,7 +15,7 @@ import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '.
 import { readEntry, loadAllEntries } from '../../src/store/entry-reads.js';
 import { adminActor } from '../../src/api/types.js';
 import { learn, CLI_LEARN } from '../../src/api/sleep/learn.js';
-import { handleRemember } from '../../src/cli/remember.js';
+import { handleRemember, handleTrace } from '../../src/cli/remember.js';
 import { cmdCapture } from '../../src/capture/command.js';
 import { outcome } from '../../src/api/memories/outcome.js';
 import { quarantineList } from '../../src/api/auth/quarantine.js';
@@ -26,7 +26,7 @@ import { importEntries } from '../../src/importers/core.js';
 import { importVault } from '../../src/importers/vault.js';
 import { withRequestStoresSync } from '../../src/db/request-stores.js';
 import { invalidateMatching, detectChurnStale } from '../../src/learn/invalidation.js';
-import { resolveConflict, listMemoryConflicts } from '../../src/store/conflicts.js';
+import { listMemoryConflicts } from '../../src/store/conflicts.js';
 import { deduplicateStore } from '../../src/consolidate/dedupe.js';
 import { buildDag } from '../../src/consolidate/dag.js';
 import { buildMemoryDetail } from '../../src/dashboard/dashboard-queries.js';
@@ -36,15 +36,16 @@ import { recordSessionDigest } from '../../src/capture/session-digest.js';
 import { sqliteStore, sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { sqliteConsolidation } from '../../src/store/sqlite/consolidation-group.js';
-import { loadEntriesByIds, replaceDetectedConflicts } from '../_helpers/root-forms.js';
+import { loadEntriesByIds, replaceDetectedConflicts, resolveConflictKeeping } from '../_helpers/root-forms.js';
 
 const SIZES = [10, 200] as const;
 const ROW_READ = MEMORY_SELECT_COLUMNS;
-/** loadAllEntries' statement: every full row of one tenant. */
-const TENANT_READ = /FROM memories WHERE tenant_id = \? ORDER BY created ASC, id ASC$/;
+/** The tenant scan's statement: one page of full rows of one tenant, which holds all of a small tenant. */
+const TENANT_READ = /FROM memories WHERE tenant_id = \? (AND \(created .*\) )?ORDER BY created ASC, id ASC LIMIT \?$/;
 const roots: string[] = [];
 
 afterEach(() => {
+  vi.unstubAllEnvs();
   for (const dir of roots.splice(0)) fs.rmSync(dir, { recursive: true, force: true });
 });
 
@@ -283,8 +284,7 @@ describe('replaceDetectedConflicts', () => {
       replaceDetectedConflicts(root, [{ memory_a_id: entries[0].id, memory_b_id: entries[1].id, reason: 'test', score: 0.9 }]);
       const [conflict] = listMemoryConflicts(root);
       const mirrorsRewritten = ageMirrors(root);
-      const resolved = resolveConflict(root, { conflictId: conflict.id, keepId: conflict.memory_a_id });
-      expect(resolved?.conflict.status).toBe('resolved');
+      expect(resolveConflictKeeping(root, 'default', conflict.id, conflict.memory_a_id)).toBe(true);
       expect(mirrorsRewritten()).toBe(2);
     }
   });
@@ -342,12 +342,12 @@ describe('learn', () => {
     return repo;
   }
 
-  async function learnInto(repo: string, n: number) {
+  async function learnInto(repo: string, n: number, pageRows?: number) {
     const root = freshRoot('qc-learn');
     fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ embeddings: { enabled: false } }));
     seed(ctxFor(root), [...rows(n, 'learn'), memory('the quuxlib client retries twice'), memory('quuxlib client timeouts are 30s')]);
     const { result, statements } = await recordStatementsAsync(() =>
-      cliRequest(() => learn(ctxFor(root), { repoPath: repo, days: 7, profile: CLI_LEARN })));
+      cliRequest(() => learn(ctxFor(root), { repoPath: repo, days: 7, profile: CLI_LEARN, pageRows })));
     return { root, result, statements, opens: countMatching(statements, STORE_OPEN), tenantReads: countMatching(statements, TENANT_READ) };
   }
 
@@ -365,6 +365,16 @@ describe('learn', () => {
       counts.push(batch.opens);
     }
     expect(counts[1]).toBe(counts[0]);
+  });
+
+  it('reads the tenant in pages and answers as one unpaged read did', async () => {
+    const repo = repoWith(3);
+    const unpaged = await learnInto(repo, 10);
+    const paged = await learnInto(repo, 10, 4);
+    // 12 rows at 4 per page is three reads, where the default page holds the tenant in one.
+    expect(unpaged.tenantReads).toBe(1);
+    expect(paged.tenantReads).toBe(3);
+    expect(paged.result).toEqual(unpaged.result);
   });
 
   it('commits lessons that invalidate nothing in one write transaction, however many there are', async () => {
@@ -427,6 +437,28 @@ describe('cmdRemember', () => {
       const beforeWindow = await remember(root, stored[n - 4].content);
       expect(beforeWindow.printed[0]).toMatch(/^Remembered \[/);
     }
+  });
+});
+
+describe('trace lineage', () => {
+  it('reads every parent in one query, however many there are', async () => {
+    const reads: number[] = [];
+    for (const parents of [1, 20]) {
+      const root = freshRoot('qc-trace-lineage');
+      vi.stubEnv('HIPPO_HOME', path.join(root, 'global'));
+      const sources = rows(parents, 'parent');
+      const child = memory('a child merged from the parents', { parents: sources.map((p) => p.id) });
+      seed(ctxFor(root), [...sources, child]);
+      const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+      try {
+        const { statements } = await recordStatementsAsync(() => cliRequest(() => handleTrace({ hippoRoot: root, tenantId: 'default', args: [child.id], flags: {} })));
+        expect(log.mock.calls.map((call) => String(call[0])).join(' ')).toContain('parent memory number 0');
+        reads.push(countMatching(statements, ROW_READ));
+      } finally {
+        log.mockRestore();
+      }
+    }
+    expect(reads[1]).toBe(reads[0]);
   });
 });
 

@@ -1,4 +1,5 @@
 import type { Learning } from '../store/port/learning.js';
+import type { EntryCursor } from '../store/port/consolidation.js';
 import type { HippoStore } from '../store/index.js';
 import { chunked } from '../util/chunked.js';
 import { CHURN_STALE_TAG, type MemoryEntry } from '../core/memory.js';
@@ -13,6 +14,8 @@ import {
 } from './churn-git.js';
 
 const HEADLINE_CHARS = 60;
+// Rows decoded per read of the rows that may mention a target; the match pass runs page by page.
+const MENTION_PAGE_ROWS = 500;
 
 export interface InvalidationTarget {
   from: string;
@@ -96,10 +99,29 @@ export function invalidateMatching(
 ): InvalidationResult {
   // tenantId opt-in: when set, only that tenant's memories are weakened; undefined is host-wide.
   // The onlyId read is tenant-scoped too, so another tenant's id is invisible here.
-  const entries = options?.onlyId === undefined
-    ? learning.entriesMentioning(invalidationTokenize(target.from), target.from.toLowerCase().trim(), tenantId)
-    : [learning.readEntry(options.onlyId, tenantId)].filter((entry) => entry !== null);
-  const { result, weakened } = weakenMatches(entries, target, options);
+  if (options?.onlyId !== undefined) {
+    const entries = [learning.readEntry(options.onlyId, tenantId)].filter((entry) => entry !== null);
+    const { result, weakened } = weakenMatches(entries, target, options);
+    learning.writeEntriesTogether(weakened);
+    return result;
+  }
+  const tokens = invalidationTokenize(target.from);
+  const tag = target.from.toLowerCase().trim();
+  const dryRun = options?.dryRun === true;
+  const result: InvalidationResult = { invalidated: 0, targets: [], skippedPinned: [], dryRun, preview: [] };
+  const weakened: MemoryEntry[] = [];
+  let after: EntryCursor | undefined;
+  do {
+    const page = learning.entriesMentioning(tokens, tag, tenantId, { limit: MENTION_PAGE_ROWS, after });
+    const found = weakenMatches(page.entries, target, options);
+    result.invalidated += found.result.invalidated;
+    result.targets.push(...found.result.targets);
+    result.skippedPinned.push(...found.result.skippedPinned);
+    result.preview.push(...found.result.preview);
+    weakened.push(...found.weakened);
+    after = page.next ?? undefined;
+  } while (after);
+  // One write for every page, so a failed invalidation weakens none of them.
   learning.writeEntriesTogether(weakened);
   return result;
 }
@@ -126,6 +148,12 @@ export async function invalidateMatchingAmong(
   const byId = new Map(weakened.map((entry) => [entry.id, entry]));
   for (let i = 0; i < live.length; i++) live[i] = byId.get(live[i].id) ?? live[i];
   return result;
+}
+
+/** Whether `entry` is a row any of `targets` would weaken or skip, by the match pass's own test. */
+export function invalidationMatcher(targets: readonly InvalidationTarget[]): (entry: MemoryEntry) => boolean {
+  const patterns = targets.map((t) => ({ tokens: invalidationTokenize(t.from), tag: t.from.toLowerCase().trim() }));
+  return (entry) => patterns.some((p) => referencesPattern(entry, p.tokens, p.tag));
 }
 
 function referencesPattern(entry: MemoryEntry, fromTokens: string[], exactTag: string): boolean {

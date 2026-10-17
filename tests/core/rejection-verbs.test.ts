@@ -12,7 +12,7 @@ import { Layer} from '../../src/core/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
 import { readEntry } from '../../src/store/entry-reads.js';
-import { listMemoryConflicts, resolveConflict } from '../../src/store/conflicts.js';
+import { listMemoryConflicts } from '../../src/store/conflicts.js';
 import { queryAuditEvents } from '../../src/store/audit.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import * as api from '../../src/api/index.js';
@@ -159,11 +159,10 @@ describe('resolveConflict rejection wiring', () => {
     return { aId: a.id, bId: b.id, conflictId: conflicts[0]!.id };
   }
 
-  it('legacy 5-arg call shape still works and now writes a conflict_resolve audit (previously zero)', () => {
-    const { aId, conflictId } = seedConflict();
-    const result = resolveConflict(tmpDir, { conflictId, keepId: aId, tenantId: 'default' }); // 5 args, no opts
-    expect(result).not.toBeNull();
-    expect(result!.conflict.status).toBe('resolved');
+  it('a plain resolve writes a conflict_resolve audit with disposition=weakened', async () => {
+    const { aId, bId, conflictId } = seedConflict();
+    expect(await api.resolveMemoryConflict(ctx(), conflictId, { keepId: aId })).toEqual({ conflictId, keptId: aId, loserId: bId });
+    expect(listMemoryConflicts(tmpDir, 'open')).toEqual([]);
 
     const db = openHippoDb(tmpDir);
     try {
@@ -176,9 +175,9 @@ describe('resolveConflict rejection wiring', () => {
     }
   });
 
-  it('resolveConflict --forget writes a conflict_resolve audit with disposition=deleted', () => {
+  it('resolveConflict --forget writes a conflict_resolve audit with disposition=deleted', async () => {
     const { aId, bId, conflictId } = seedConflict();
-    resolveConflict(tmpDir, { conflictId, keepId: aId, forgetLoser: true, tenantId: 'default' });
+    await api.resolveMemoryConflict(ctx(), conflictId, { keepId: aId, forget: true });
     expect(readEntry(tmpDir, bId)).toBeNull();
 
     const db = openHippoDb(tmpDir);
@@ -193,11 +192,7 @@ describe('resolveConflict rejection wiring', () => {
 
   it('rejectLoserValue tombstones + removes the loser; re-remember of its content is refused', async () => {
     const { aId, bId, conflictId } = seedConflict();
-    const result = resolveConflict(tmpDir, { conflictId, keepId: aId, tenantId: 'default' }, {
-      rejectLoserValue: true,
-      reason: 'loser rejected',
-    });
-    expect(result).not.toBeNull();
+    await api.resolveMemoryConflict(ctx(), conflictId, { keepId: aId, rejectLoser: true, reason: 'loser rejected' });
     expect(readEntry(tmpDir, bId)).toBeNull();
 
     await expect(api.remember(ctx(), { content: 'Use && to chain commands in PowerShell' }),
@@ -226,11 +221,11 @@ describe('resolveConflict rejection wiring', () => {
     const otherTenantDup = createMemory(loserContent, { tags: ['dup'], tenantId: 'other-tenant' });
     writeEntry(tmpDir, otherTenantDup);
 
-    const result = resolveConflict(tmpDir, { conflictId, keepId: aId, tenantId: 'default' }, {
-      rejectLoserValue: true,
+    await api.resolveMemoryConflict(ctx(), conflictId, {
+      keepId: aId,
+      rejectLoser: true,
       reason: 'loser + same-tenant duplicates rejected',
     });
-    expect(result).not.toBeNull();
 
     expect(readEntry(tmpDir, bId)).toBeNull();
     expect(readEntry(tmpDir, dup.id)).toBeNull();
@@ -251,7 +246,7 @@ describe('resolveConflict rejection wiring', () => {
     await expect(api.remember(ctx(), { content: loserContent })).rejects.toThrow(RejectedValueError);
   });
 
-  it('raw loser via resolve --forget no longer throws (kind-aware removal)', () => {
+  it('raw loser via resolve --forget no longer throws (kind-aware removal)', async () => {
     const a = createMemory('keeper content for raw conflict', { tags: ['x'] });
     const rawLoser = createMemory('raw loser content', { tags: ['x'], kind: 'raw' });
     writeEntry(tmpDir, a);
@@ -265,7 +260,7 @@ describe('resolveConflict rejection wiring', () => {
     const conflicts = listMemoryConflicts(tmpDir, 'open');
     const conflictId = conflicts[0]!.id;
 
-    expect(() => resolveConflict(tmpDir, { conflictId, keepId: a.id, forgetLoser: true, tenantId: 'default' })).not.toThrow();
+    await expect(api.resolveMemoryConflict(ctx(), conflictId, { keepId: a.id, forget: true })).resolves.toBeDefined();
     expect(readEntry(tmpDir, rawLoser.id)).toBeNull();
 
     const db = openHippoDb(tmpDir);
@@ -278,7 +273,7 @@ describe('resolveConflict rejection wiring', () => {
     }
   });
 
-  it('raw loser via PLAIN resolve --forget (no --reject-loser) purges its mirror + stamps mirror_cleaned_at (P1b fix)', () => {
+  it('raw loser via PLAIN resolve --forget (no --reject-loser) purges its mirror + stamps mirror_cleaned_at (P1b fix)', async () => {
     const a = createMemory('keeper content for raw mirror-purge conflict', { tags: ['x'] });
     const rawLoser = createMemory('raw loser content for the mirror-purge test', { tags: ['x'], kind: 'raw' });
     writeEntry(tmpDir, a);
@@ -299,7 +294,7 @@ describe('resolveConflict rejection wiring', () => {
     // post-commit purge gate required rejectLoserValue too, so this path
     // left the raw mirror orphaned (only the reaper would eventually catch
     // it; a non-raw loser would never be caught at all).
-    resolveConflict(tmpDir, { conflictId, keepId: a.id, forgetLoser: true, tenantId: 'default' });
+    await api.resolveMemoryConflict(ctx(), conflictId, { keepId: a.id, forget: true });
     expect(readEntry(tmpDir, rawLoser.id)).toBeNull();
     expect(fs.existsSync(mirrorPath)).toBe(false);
 
@@ -333,12 +328,11 @@ describe('resolveConflict rejection wiring', () => {
     const conflicts = listMemoryConflicts(tmpDir, 'open');
     const conflictId = conflicts[0]!.id;
 
-    expect(() =>
-      resolveConflict(tmpDir, { conflictId, keepId: a.id, tenantId: 'default' }, {
-        rejectLoserValue: true,
-        reason: 'raw loser rejected via GDPR-adjacent path',
-      }),
-    ).not.toThrow();
+    await expect(api.resolveMemoryConflict(ctx(), conflictId, {
+      keepId: a.id,
+      rejectLoser: true,
+      reason: 'raw loser rejected via GDPR-adjacent path',
+    })).resolves.toBeDefined();
 
     // Archived, not hard-deleted: the row is gone from `memories` but a
     // raw_archive row exists (append-only trigger respected).

@@ -2,7 +2,7 @@
 // CI store-port gate. Every server route should reach the database through the store port, so the leftovers
 // (database openers outside the data layer, store branches in the API, routes that need hippo.db (storeReady 'localFiles' or sqliteOnly; sqliteOnly rows are counted apart too, and their list is pinned), twin
 // functions, SQL prepared outside the data layer, hand-written BEGIN literals) are counted and may fall but never rise above .store-port-baseline.json.
-// routesOnLoop counts the built-in routes whose SQLite work still runs on the server thread: V1_ROUTES rows and HOST_ROUTES entries without `loop: 'off'`, plus each MCP tool on the localFiles group, which POST /mcp runs on the server thread. Add-on routes declare their own.
+// routesOnLoop counts the built-in routes whose SQLite work still runs on the server thread: V1_ROUTES rows and HOST_ROUTES entries without `loop: 'off'`, plus each MCP tool that POST /mcp runs on the server thread (on the localFiles group, or naming onServerThread). Add-on routes declare their own.
 // carrierFiles counts src files that name andThen, onStore or StoreReply, the removed sync-or-async reply carrier; the list is pinned so a new file fails even when another stops.
 // storeImportsInDomain counts value imports, re-exports and import() calls from every folder layers.json marks domain into src/store or src/db: domain code reaches hippo.db through the port.
 // storeFilesWithoutSql counts src/store files that run no SQL on hippo.db and are not on DB_DEFINITION_FILES; the list is pinned, so a pure helper filed under src/store fails.
@@ -303,7 +303,15 @@ function hostRoutesOnLoop(sf) {
   return onLoop;
 }
 
-/** Entries of src/mcp/request.ts TOOL_HANDLERS on the localFiles group, given as toolOn('localFiles', run) or { storeReady: 'localFiles', run }: POST /mcp runs those on the server thread. */
+const literalText = (node) => (node && ts.isStringLiteralLike(node) ? node.text : undefined);
+// null when the entry does not name the property, undefined when it names it with no string literal.
+const literalProp = (obj, name) => {
+  const p = propNamed(obj, name);
+  return p ? (ts.isPropertyAssignment(p) ? literalText(p.initializer) : undefined) : null;
+};
+
+/** Entries of src/mcp/request.ts TOOL_HANDLERS that POST /mcp runs on the server thread: on the localFiles group, as toolOn('localFiles', run) or
+ *  { storeReady: 'localFiles', run }, or naming a non-empty onServerThread reason. */
 function mcpToolsOnLoop(sf) {
   const file = 'src/mcp/request.ts';
   const made = declaredValue(sf, 'TOOL_HANDLERS');
@@ -312,15 +320,18 @@ function mcpToolsOnLoop(sf) {
   let onLoop = 0;
   for (const entry of entries.elements) {
     const value = ts.isArrayLiteralExpression(entry) ? entry.elements[1] : undefined;
-    const literal = (node) => (node && ts.isStringLiteralLike(node) ? node.text : undefined);
     let group;
-    if (value && ts.isCallExpression(value) && value.expression.getText(sf) === 'toolOn') group = literal(value.arguments[0]);
+    let reason = null;
+    if (value && ts.isCallExpression(value) && value.expression.getText(sf) === 'toolOn') group = literalText(value.arguments[0]);
     else if (value && ts.isObjectLiteralExpression(value)) {
-      const ready = propNamed(value, 'storeReady');
-      group = ready ? (ts.isPropertyAssignment(ready) ? literal(ready.initializer) : undefined) : null;
+      group = literalProp(value, 'storeReady');
+      reason = literalProp(value, 'onServerThread');
     }
-    if (group === undefined) return routeFail(`TOOL_HANDLERS has an entry that is not [name, toolOn(literal, run)] or [name, { run }] (line ${sf.getLineAndCharacterOfPosition(entry.getStart(sf)).line + 1})`, file);
-    if (group === 'localFiles') onLoop++;
+    if (group === undefined || reason === undefined || reason === '') {
+      const at = sf.getLineAndCharacterOfPosition(entry.getStart(sf)).line + 1;
+      return routeFail(`TOOL_HANDLERS has an entry that is not [name, toolOn(literal, run)] or [name, { run }] with literal fields (line ${at})`, file);
+    }
+    if (group === 'localFiles' || reason !== null) onLoop++;
   }
   return onLoop;
 }

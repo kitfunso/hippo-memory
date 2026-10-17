@@ -143,12 +143,14 @@ describe('an add-on route behind serve()', () => {
 
 describe("an add-on route with `loop: 'off'`", () => {
   const LABELS = '/v1/x-labels';
-  const labels = (loop?: 'off'): AddonRoute => ({
-    path: LABELS,
-    storeReady: 'keyWrites',
-    ...(loop === undefined ? {} : { loop }),
-    handler: async ({ ctx }) => (await ctx.store.keyWrites.listApiKeys({ tenantId: ctx.tenantId, active: true })).map((row) => row.key.label),
-  });
+  const labels = (loop?: 'off'): AddonRoute => {
+    const route: AddonRoute = {
+      path: LABELS,
+      storeReady: 'keyWrites',
+      handler: async ({ ctx }) => (await ctx.store.keyWrites.listApiKeys({ tenantId: ctx.tenantId, active: true })).map((row) => row.key.label),
+    };
+    return loop === undefined ? route : { ...route, loop };
+  };
   const blockedLines = (info: { readonly mock: { readonly calls: ReadonlyArray<readonly unknown[]> } }): string[] =>
     info.mock.calls.map((call) => String(call[0])).filter((line) => line.includes('opened on the server thread by a route'));
 
@@ -184,8 +186,8 @@ describe("an add-on route with `loop: 'off'`", () => {
   });
 
   it("refuses at boot a `loop` other than 'off'", async () => {
-    // SAFETY: an untyped add-on can pass any value here; this is the typo the boot check exists for.
-    const err = await bootError([{ ...echo(), loop: 'on' } as unknown as AddonRoute]);
+    // An untyped add-on's typo, which Object.assign lets past the field's type as plain JavaScript would.
+    const err = await bootError([Object.assign(echo(), { loop: 'on' })]);
     expect(err?.message).toBe("add-on route '/v1/x-echo' has loop 'on'; set 'off' or leave it unset");
     expect(existsSync(join(root, 'server.pid'))).toBe(false);
   });

@@ -13,6 +13,7 @@ import {
   withWriteScope,
   pruneConsolidationRuns,
 } from '../db/index.js';
+import { reproveStoreSchema } from '../db/connect.js';
 import { openHippoDbWithFacts } from '../db/open.js';
 import { RejectedValueError } from '../core/api-errors.js';
 import { errorFields, errorMessage, log } from '../util/log.js';
@@ -25,6 +26,7 @@ import { isJsonObject, type JsonValue } from '../util/json.js';
 import { CLI_ACTOR } from '../core/actor.js';
 
 export function initStore(hippoRoot: string): void {
+  reproveStoreSchema(hippoRoot);
   closeHippoDb(openStore(hippoRoot));
 }
 

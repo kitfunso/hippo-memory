@@ -14,7 +14,9 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { Layer, type MemoryEntry } from '../../src/core/memory.js';
 import { savePrediction } from '../_helpers/save-prediction.js';
 import { mergedText } from '../../src/util/same-text.js';
-import { restoreDormant } from '../../src/api/index.js';
+import { repairMemoryQuality, restoreDormant } from '../../src/api/index.js';
+import { repairProtection } from '../../src/api/auth/audit.js';
+import type { RepairProtection } from '../../src/store/port/audit-maintenance.js';
 import { apiCtx, type FullContext } from '../_helpers/api-ctx.js';
 import { importForStore } from '../../src/agent-memories/sync.js';
 import { closeWorld, note, openWorld, projectNotes } from '../_helpers/agent-memories-world.js';
@@ -47,7 +49,8 @@ function withDb<T>(fn: (db: InstanceType<typeof DatabaseSync>) => T): T {
 }
 
 const ctx = (): FullContext => apiCtx(root, 'default', { subject: 'test', role: 'admin' });
-const run = (apply = false) => repairAutomaticMemories({ hippoRoot: root }, { tenantId: 'default', apply });
+const run = (apply = false, protect: RepairProtection = repairProtection) =>
+  repairAutomaticMemories({ hippoRoot: root }, { tenantId: 'default', apply, protect });
 const dispositionOf = (id: string) => run().issues.find((issue) => issue.id === id)?.disposition;
 
 describe('recoverable automatic memory quality repair', () => {
@@ -100,6 +103,27 @@ describe('recoverable automatic memory quality repair', () => {
     for (const row of [imported, kept]) expect(result.issues.map((issue) => issue.id)).not.toContain(row.id);
     expect(loadEveryTenantEntries(root)).toHaveLength(6);
     expect(withDb((db) => db.prepare('SELECT memory_id FROM predictions WHERE id = ?').get(prediction.id))).toEqual({ memory_id: backing.id });
+  });
+
+  it('the api keeps a pinned row, and a store told to let it go still cannot delete it', async () => {
+    const content = 'bump build 78 for testflight deploy';
+    const pinned = seed(content, { pinned: true });
+    const plain = seed(content);
+    expect((await repairMemoryQuality(ctx(), false)).issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: pinned.id, disposition: 'protected', protection: 'pinned' }),
+      expect.objectContaining({ id: plain.id, disposition: 'set-aside' }),
+    ]));
+
+    const held = run(false, (entry) => (entry.id === plain.id ? 'held by the caller' : undefined));
+    expect(held.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: plain.id, disposition: 'protected', protection: 'held by the caller' }),
+      expect.objectContaining({ id: pinned.id, disposition: 'set-aside' }),
+    ]));
+
+    const letGo = run(true, () => undefined);
+    expect(letGo.appliedIds).toEqual([plain.id]);
+    expect(letGo.warnings).toContain(`Kept ${pinned.id}: the store's delete guard protects it.`);
+    expect(loadEveryTenantEntries(root).map((entry) => entry.id)).toEqual([pinned.id]);
   });
 
   it('never judges hand-written memories, only rows hippo wrote itself', () => {
@@ -242,7 +266,8 @@ describe('recoverable automatic memory quality repair', () => {
     try {
       const bad = createMemory('succeeds (inserts or updates)', { source: 'capture', confidence: 'observed' });
       writeEntry(world.local, bad);
-      expect(repairAutomaticMemories({ hippoRoot: world.local }, { tenantId: 'default', apply: true }).appliedIds).toEqual([bad.id]);
+      const repair = { tenantId: 'default', apply: true, protect: repairProtection };
+      expect(repairAutomaticMemories({ hippoRoot: world.local }, repair).appliedIds).toEqual([bad.id]);
       note(projectNotes(world), 'result.md', bad.content);
       importForStore(world.local, { configAt: loadConfig, agentImport: sqliteAgentImport, machine: world.machine });
       expect(loadEveryTenantEntries(world.local).map((entry) => entry.content)).toEqual([bad.content]);

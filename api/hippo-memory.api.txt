@@ -56,6 +56,12 @@ entry/store-kit.d.ts: ClassResolution re-export
 entry/store-kit.d.ts: CompactionStart re-export
 entry/store-kit.d.ts: Compactions re-export
 entry/store-kit.d.ts: CompleteGoalOpts re-export
+entry/store-kit.d.ts: ConflictListQuery re-export
+entry/store-kit.d.ts: ConflictMember re-export
+entry/store-kit.d.ts: ConflictResolution re-export
+entry/store-kit.d.ts: ConflictRow re-export
+entry/store-kit.d.ts: ConflictRowPage re-export
+entry/store-kit.d.ts: ConflictSide re-export
 entry/store-kit.d.ts: Conflicts re-export
 entry/store-kit.d.ts: ContextCandidateFilter re-export
 entry/store-kit.d.ts: ContextReads re-export
@@ -99,6 +105,7 @@ entry/store-kit.d.ts: LiftedRejection re-export
 entry/store-kit.d.ts: ListApiKeysOpts re-export
 entry/store-kit.d.ts: ListAuditAfterOpts re-export
 entry/store-kit.d.ts: ListDormantOpts re-export
+entry/store-kit.d.ts: LoserFate re-export
 entry/store-kit.d.ts: MemoryConflict re-export
 entry/store-kit.d.ts: MemoryEntry re-export
 entry/store-kit.d.ts: NewApiKey re-export
@@ -125,8 +132,6 @@ entry/store-kit.d.ts: RejectionCheck re-export
 entry/store-kit.d.ts: RejectionSource re-export
 entry/store-kit.d.ts: Rejections re-export
 entry/store-kit.d.ts: Reports re-export
-entry/store-kit.d.ts: ResolveConflictOpts re-export
-entry/store-kit.d.ts: ResolveConflictRequest re-export
 entry/store-kit.d.ts: RetrievalPolicy re-export
 entry/store-kit.d.ts: SECRET_TAGS re-export
 entry/store-kit.d.ts: SelfKeyMint re-export
