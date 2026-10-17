@@ -457,8 +457,18 @@ if (strays.length > 0) {
 }
 
 const current = measure();
+/** The committed counts, or null when the file is absent; one read, so no exists-then-write race. */
+function readBaseline() {
+  try {
+    return JSON.parse(readFileSync(BASELINE, 'utf8'));
+  } catch (err) {
+    if (err?.code === 'ENOENT') return null;
+    throw err;
+  }
+}
+
 const args = process.argv.slice(2);
-const baseline = existsSync(BASELINE) ? JSON.parse(readFileSync(BASELINE, 'utf8')) : null;
+const baseline = readBaseline();
 const total = NUMBERS.map((k) => `${k} ${current[k]}`).join(', ');
 
 if (args.includes('--list')) {
