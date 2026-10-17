@@ -128,7 +128,7 @@ async function restoreCompactSnapshot(
   // Printed in one write so the ledger books exactly the text the model is handed.
   console.log(text);
   rec?.delivered({ state: 'sent', emittedText: `${text}\n` });
-  bookLedgerTurn(hippoRoot, {
+  bookLedgerTurn({
     uses: [{
       tenantId,
       sessionId: payloadSessionId,

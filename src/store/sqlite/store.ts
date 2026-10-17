@@ -29,6 +29,7 @@ import { sqliteSharing } from './sharing-group.js';
 import { sqliteDiagnostics } from './diagnostics-group.js';
 import { sqliteEmbeddingIndex } from './embedding-index-group.js';
 import { sqliteGraphRebuild } from './graph-rebuild-group.js';
+import { sqliteLedger } from './ledger-group.js';
 import { sqliteDagReads } from './dag-reads-group.js';
 import { sqliteEntryWrites } from './entry-writes-group.js';
 import {
@@ -85,6 +86,7 @@ function sqliteLocalFiles(hippoRoot: string): LocalFiles {
     diagnostics: sqliteDiagnostics(hippoRoot),
     graphRebuild: sqliteGraphRebuild(hippoRoot),
     embeddingIndex: sqliteEmbeddingIndex(hippoRoot),
+    ledger: sqliteLedger(hippoRoot),
     globalStore: () => sqliteStore(resolveGlobalRootDir()),
   };
 }

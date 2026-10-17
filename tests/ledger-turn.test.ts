@@ -1,13 +1,13 @@
-// One turn's token rows and delivery event by store root (src/store/ledger-turn.ts), on a real SQLite store.
+// One turn's token rows and delivery event through hippo.db's Ledger (src/store/sqlite/ledger-group.ts).
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import * as fs from 'node:fs';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
 import { createDeliveryRecorder, type DeliveryRecorder } from '../src/store/delivery-recorder.js';
-import { lastSentOnSurface, recordLedgerTurn } from '../src/store/ledger-turn.js';
 import { readDeliveryEvents } from '../src/store/recall-trace.js';
 import type { TokenUse } from '../src/store/token-ledger.js';
 import { countMatching, recordStatements } from './_helpers/count-statements.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { sqliteSyncStore } from '../src/store/sqlite/store.js';
 
 const HASH = 'aaaaaaaaaaaaaaaa';
 // Run once per connection open; the delivery writer resets busy_timeout, so that pragma would overcount.
@@ -42,7 +42,7 @@ function deliveryCount(): number {
 
 function recorder(): DeliveryRecorder {
   return createDeliveryRecorder({
-    root, storeHash: HASH, writeStore: 'local', tenantId: 'default',
+    ledger: sqliteSyncStore(root).localFiles.ledger, storeHash: HASH, writeStore: 'local', tenantId: 'default',
     stdinText: JSON.stringify({ session_id: 's1', prompt: 'the raw prompt text', hook_event_name: 'UserPromptSubmit' }),
   });
 }
@@ -54,10 +54,10 @@ function failRowsOn(surface: string): void {
   ));
 }
 
-describe('recordLedgerTurn', () => {
+describe('Ledger.recordTurn', () => {
   it('books the rows in order and then the delivery event, on one store open', () => {
     const rec = recorder();
-    const log = recordStatements(() => recordLedgerTurn(root, {
+    const log = recordStatements(() => sqliteSyncStore(root).localFiles.ledger.recordTurn({
       uses: [use(), use({ surface: 'hook_recall' })],
       delivery: (write) => rec.flush(write),
     }));
@@ -71,7 +71,7 @@ describe('recordLedgerTurn', () => {
   it('without onRowError the first failed row throws: no later row and no delivery event', () => {
     failRowsOn('hook');
     const rec = recorder();
-    expect(() => recordLedgerTurn(root, {
+    expect(() => sqliteSyncStore(root).localFiles.ledger.recordTurn({
       uses: [use(), use({ surface: 'hook_recall' })],
       delivery: (write) => rec.flush(write),
     })).toThrow('row boom');
@@ -83,7 +83,7 @@ describe('recordLedgerTurn', () => {
     failRowsOn('hook');
     const rec = recorder();
     const failed: string[] = [];
-    recordLedgerTurn(root, {
+    sqliteSyncStore(root).localFiles.ledger.recordTurn({
       uses: [use(), use({ surface: 'hook_recall' })],
       onRowError: (error) => { failed.push(String(error)); },
       delivery: (write) => rec.flush(write),
@@ -95,12 +95,12 @@ describe('recordLedgerTurn', () => {
   });
 });
 
-describe('lastSentOnSurface', () => {
+describe('Ledger.lastSent', () => {
   it('reads the last injected hash and the skips since it, and null for a session with no rows', () => {
-    recordLedgerTurn(root, { uses: [use(), use({ event: 'skip' })] });
-    expect(lastSentOnSurface(root, 'default', 's1', 'hook')).toEqual({ hash: HASH, skipsSince: 1 });
-    expect(lastSentOnSurface(root, 'default', 's1', 'context')).toBeNull();
-    expect(lastSentOnSurface(root, 'default', 'other', 'hook')).toBeNull();
-    expect(lastSentOnSurface(root, 'default', undefined, 'hook')).toBeNull();
+    sqliteSyncStore(root).localFiles.ledger.recordTurn({ uses: [use(), use({ event: 'skip' })] });
+    expect(sqliteSyncStore(root).localFiles.ledger.lastSent('default', 's1', 'hook')).toEqual({ hash: HASH, skipsSince: 1 });
+    expect(sqliteSyncStore(root).localFiles.ledger.lastSent('default', 's1', 'context')).toBeNull();
+    expect(sqliteSyncStore(root).localFiles.ledger.lastSent('default', 'other', 'hook')).toBeNull();
+    expect(sqliteSyncStore(root).localFiles.ledger.lastSent('default', undefined, 'hook')).toBeNull();
   });
 });

@@ -9,6 +9,7 @@ import { readClaudeCodePreCompact } from '../src/core/capture-contract.js';
 import { lessonFromFailure, payloadString } from '../src/capture/failure-reading.js';
 import type { JsonValue } from '../src/util/json.js';
 import { claudeCodePayload, copilotPayload } from './_helpers/copilot-hooks.js';
+import { sqliteSyncStore } from '../src/store/sqlite/store.js';
 
 const CWD = 'C:\\Users\\user\\proj';
 const TRANSCRIPT = 'C:\\Users\\user\\.copilot\\session-state\\copilot-sess-1\\events.jsonl';
@@ -22,7 +23,7 @@ function normalized(text: string): JsonValue {
 }
 
 function deliveryEvent(stdinText: string | undefined, runtime?: DeliveryRuntime): DeliveryEventInput {
-  const rec = createDeliveryRecorder({ root: CWD, storeHash: 'aaaaaaaaaaaaaaaa', writeStore: 'local', tenantId: 'default', stdinText, runtime });
+  const rec = createDeliveryRecorder({ ledger: sqliteSyncStore(CWD).localFiles.ledger, storeHash: 'aaaaaaaaaaaaaaaa', writeStore: 'local', tenantId: 'default', stdinText, runtime });
   let input: DeliveryEventInput | null = null;
   rec.flush((i) => { input = i; return 1; });
   if (input === null) throw new Error('recorder wrote nothing');

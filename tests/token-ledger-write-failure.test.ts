@@ -12,7 +12,7 @@ import { bookTokenUse } from '../src/api/ledger-db.js';
 import { promptHookContext } from '../src/api/prompt-hook.js';
 import { _resetLogOnceForTests } from '../src/util/log.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { sqliteStore } from '../src/store/sqlite/store.js';
+import { sqliteStore, sqliteSyncStore } from '../src/store/sqlite/store.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 
 let root: string;
@@ -112,7 +112,7 @@ describe('token ledger write failures', () => {
   it('a hippo.db that is not a database is an expected skip: nothing at the default level, one debug line with no stack', () => {
     const store = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-ledger-notadb-'));
     const write = (): void => {
-      bookTokenUse(store, { tenantId: 'default', surface: 'hook', event: 'inject', items: 1, tokens: 40 }, { hasLocal: true });
+      bookTokenUse({ tenantId: 'default', surface: 'hook', event: 'inject', items: 1, tokens: 40 }, { local: sqliteSyncStore(store).localFiles });
     };
     try {
       initStore(store);

@@ -640,7 +640,7 @@ export interface VectorViews {
 }
 
 export type {
-  AgentImport, Consolidation, ContainerTx, EmbeddingIndex, ImportTarget, LocalFiles,
+  AgentImport, Consolidation, ContainerTx, EmbeddingIndex, ImportTarget, Ledger, LocalFiles,
 } from './port/local-files.js';
 
 /** The reads and writes behind the memory-quality audit, its repair and audit-log retention. */

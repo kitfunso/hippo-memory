@@ -6,6 +6,7 @@ import type { Diagnostics } from './diagnostics.js';
 import type { EmbeddingIndex } from './embedding-index.js';
 import type { GraphRebuild } from './graph-rebuild.js';
 import type { Learning } from './learning.js';
+import type { Ledger } from './ledger.js';
 import type { Promotion } from './promotion.js';
 import type { Sharing } from './sharing.js';
 
@@ -15,6 +16,7 @@ export type { Diagnostics } from './diagnostics.js';
 export type { EmbeddingIndex } from './embedding-index.js';
 export type { GraphRebuild } from './graph-rebuild.js';
 export type { Learning } from './learning.js';
+export type { Ledger } from './ledger.js';
 export type { Promotion } from './promotion.js';
 export type { Sharing } from './sharing.js';
 
@@ -30,6 +32,7 @@ export interface LocalFiles {
   readonly diagnostics: Diagnostics;
   readonly graphRebuild: GraphRebuild;
   readonly embeddingIndex: EmbeddingIndex;
+  readonly ledger: Ledger;
   /** The operator's global store, built at each call because a share may have to create it first. */
   globalStore(): HippoStore;
 }

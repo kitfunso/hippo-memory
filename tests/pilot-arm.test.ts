@@ -12,6 +12,7 @@ import { recordTokenUse, summarizeTokenUse, tokensBySession } from '../src/store
 import { runDoctor } from '../src/doctor.js';
 import type { JsonValue } from '../src/util/json.js';
 import { countMatching, recordStatements } from './_helpers/count-statements.js';
+import { sqliteSyncStore } from '../src/store/sqlite/store.js';
 
 let tmp: string;
 let root: string;
@@ -193,7 +194,7 @@ describe('pilot arm helpers', () => {
     db.exec('DROP TABLE token_ledger');
     try {
       ensurePilotArm(db, 'default', 's1', 10000);
-      bookTokenUse(root, { tenantId: 'default', surface: 'hook', event: 'inject', items: 1, tokens: 40 }, { hasLocal: true });
+      bookTokenUse({ tenantId: 'default', surface: 'hook', event: 'inject', items: 1, tokens: 40 }, { local: sqliteSyncStore(root).localFiles });
     } finally {
       delete process.env.HIPPO_LOG;
     }
