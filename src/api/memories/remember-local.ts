@@ -51,6 +51,8 @@ export type LocalRememberOutcome =
       readonly entry: MemoryEntry;
       readonly embedding: Promise<EmbedOutcome>;
       readonly startedWeak?: StartedWeak;
+      /** What remember said about secret material it redacted. */
+      readonly warnings: readonly string[];
     }
   | { readonly status: 'skipped'; readonly reason: string; readonly score: number };
 
@@ -105,7 +107,7 @@ export async function rememberLocally(
   if (verdict?.decision === 'skip') return { status: 'skipped', reason: verdict.reason, score: verdict.score };
   const startedWeak =
     verdict?.decision === 'start_weak' ? { reason: verdict.reason, strength: verdict.score } : undefined;
-  const { id } = await remember(ctx, {
+  const { id, warnings = [] } = await remember(ctx, {
     content: input.content,
     kind: input.kind,
     scope: input.scope,
@@ -124,7 +126,9 @@ export async function rememberLocally(
   const entry = await storedEntry(ctx, id);
   await ctx.store.lessonWrites.bumpRemembered(1);
   const embedding = indexInBackground(ctx, entry);
-  return startedWeak ? { status: 'stored', entry, embedding, startedWeak } : { status: 'stored', entry, embedding };
+  return startedWeak
+    ? { status: 'stored', entry, embedding, warnings, startedWeak }
+    : { status: 'stored', entry, embedding, warnings };
 }
 
 /** What a caller asks of fact extraction. The key comes from the caller, which read it from its own environment. */

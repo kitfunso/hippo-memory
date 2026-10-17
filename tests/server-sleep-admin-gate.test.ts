@@ -1,8 +1,7 @@
 /**
  * Runtime test for v1.12.0 A5 v2 sub-1: admin-role gate on POST /v1/sleep.
  *
- * The keyless loopback caller is a member unless HIPPO_KEYLESS_LOCAL_ROLE=admin
- * or keylessLocalRole: 'admin' opts it in, and member-role Bearer tokens are
+ * The keyless loopback caller is always a member, and member-role Bearer tokens are
  * 403'd at the route boundary BEFORE any host-wide consolidation runs.
  *
  * Member keys are constructed via direct DB insert per brainstorm decision #3
@@ -11,7 +10,7 @@
  * Real HTTP server (serve port:0), per-test isolated local + global stores.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { createApiKey } from '../src/store/auth.js';
@@ -36,6 +35,7 @@ describe('POST /v1/sleep admin-role gate', () => {
   });
 
   afterEach(async () => {
+    vi.unstubAllEnvs();
     await handle.stop();
     if (origHippoHome === undefined) {
       delete process.env.HIPPO_HOME;
@@ -52,7 +52,7 @@ describe('POST /v1/sleep admin-role gate', () => {
       ? { method }
       : { method, headers: { 'content-type': 'application/json' }, body: JSON.stringify({ dry_run: true }) });
 
-  it('loopback no-Bearer with HIPPO_KEYLESS_LOCAL_ROLE unset is a member: 403 on sleep and the quarantine routes, 200 on a member route', async () => {
+  it('loopback no-Bearer is a member: 403 on sleep and the quarantine routes, 200 on a member route', async () => {
     expect(process.env.HIPPO_KEYLESS_LOCAL_ROLE).toBeUndefined();
     expect((await keyless('/v1/sleep')).status).toBe(403);
     expect((await keyless('/v1/quarantine', 'GET')).status).toBe(403);
@@ -61,16 +61,10 @@ describe('POST /v1/sleep admin-role gate', () => {
     expect((await keyless('/v1/memories?q=deploy', 'GET')).status).toBe(200);
   });
 
-  it('loopback no-Bearer → 200 once HIPPO_KEYLESS_LOCAL_ROLE=admin', async () => {
-    const saved = process.env.HIPPO_KEYLESS_LOCAL_ROLE;
-    process.env.HIPPO_KEYLESS_LOCAL_ROLE = 'admin';
-    try {
-      expect((await keyless('/v1/sleep')).status).toBe(200);
-      expect((await keyless('/v1/quarantine', 'GET')).status).toBe(200);
-    } finally {
-      if (saved === undefined) delete process.env.HIPPO_KEYLESS_LOCAL_ROLE;
-      else process.env.HIPPO_KEYLESS_LOCAL_ROLE = saved;
-    }
+  it('loopback no-Bearer stays a member when HIPPO_KEYLESS_LOCAL_ROLE=admin is set, which nothing reads any more', async () => {
+    vi.stubEnv('HIPPO_KEYLESS_LOCAL_ROLE', 'admin');
+    expect((await keyless('/v1/sleep')).status).toBe(403);
+    expect((await keyless('/v1/quarantine', 'GET')).status).toBe(403);
   });
 
   it('member Bearer → 403 with admin-role-required message', async () => {

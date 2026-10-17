@@ -4,15 +4,13 @@ import {
 } from '../../objects/project-briefs.js';
 import { sendJson } from '../../util/http-util.js';
 import type { AuthedRouteRequest } from '../types.js';
-import { parseJsonBody } from '../validation.js';
+import { parseJsonBody, getString, requiredString } from '../validation.js';
 import { objectsOf, saveFor } from '../../api/objects/objects.js';
 import { configOf } from '../../api/config-of.js';
 import {
   closeRoute,
   getRoute,
   listRoute,
-  optionalString,
-  requiredString,
   supersedeRoute,
   type VersionedRouteConfig,
 } from './object-routes.js';
@@ -25,7 +23,7 @@ const briefRoutes: VersionedRouteConfig<'project_brief', SaveProjectBriefOptions
   filterParam: 'repo',
   revise: (body) => {
     const summary = requiredString(body, 'summary', { max: 8192 });
-    const changeSummary = optionalString(body, 'changeSummary', MAX_CHANGE_SUMMARY_LEN);
+    const changeSummary = getString(body, 'changeSummary', MAX_CHANGE_SUMMARY_LEN);
     return (existing, id) => ({ repo: existing.repo, summary, changeSummary, supersedesBriefId: id });
   },
 };

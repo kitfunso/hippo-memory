@@ -1,6 +1,6 @@
 // List, get, close and supersede handlers shared by the typed-object routes; each route file passes one config.
 import { HttpError, sendJson } from '../../util/http-util.js';
-import { type JsonValue, isJsonString } from '../../util/json.js';
+import type { JsonValue } from '../../util/json.js';
 import type { ObjectDescriptor, ObjectListOptions, SavableDescriptor } from '../../objects/descriptor.js';
 import { objectsOf, saveFor } from '../../api/objects/objects.js';
 import { closeObject, listObjects, objectById } from '../../objects/lifecycle.js';
@@ -30,33 +30,6 @@ export interface VersionedRouteConfig<K extends SavableKind, W> extends ObjectRo
    * answers 404.
    */
   readonly revise: (body: Record<string, JsonValue>) => (existing: ObjectByKind[K], id: number) => W;
-}
-
-export interface RequiredStringRule {
-  readonly max: number;
-  /** The field name is a plural noun, so the replies read "are required" and "exceed". */
-  readonly plural?: boolean;
-  /** The blank check does not trim, so a value of only spaces passes it. */
-  readonly untrimmed?: boolean;
-}
-
-export function requiredString(body: Record<string, JsonValue>, key: string, rule: RequiredStringRule): string {
-  const value = body[key];
-  if (!isJsonString(value) || (rule.untrimmed ? value : value.trim()).length === 0) {
-    throw new HttpError(400, `${key} ${rule.plural ? 'are' : 'is'} required (non-empty string)`);
-  }
-  if (value.length > rule.max) {
-    throw new HttpError(400, `${key} ${rule.plural ? 'exceed' : 'exceeds'} ${rule.max}-character cap`);
-  }
-  return value;
-}
-
-export function optionalString(body: Record<string, JsonValue>, key: string, max: number): string | undefined {
-  const value = body[key];
-  if (value === undefined || value === null) return undefined;
-  if (!isJsonString(value)) throw new HttpError(400, `${key} must be a string`);
-  if (value.length > max) throw new HttpError(400, `${key} exceeds ${max}-character cap`);
-  return value;
 }
 
 async function found<K extends ObjectKind>(

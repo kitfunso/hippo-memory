@@ -12,7 +12,15 @@ import { HttpError, sendJson } from '../../util/http-util.js';
 import { MAX_ID_LEN } from '../../util/limits.js';
 import { byCreatedAt, pageOf, parseCursor } from '../cursor.js';
 import type { AuthedRouteRequest } from '../types.js';
-import { isSetMember, MAX_SHORT_FIELD_LEN, parseJsonBody, parseListLimit } from '../validation.js';
+import {
+  getString,
+  isSetMember,
+  MAX_DATE_LEN,
+  MAX_SHORT_FIELD_LEN,
+  parseJsonBody,
+  parseListLimit,
+  requiredString,
+} from '../validation.js';
 import { isJsonString, isJsonNumber } from '../../util/json.js';
 
 // Routes: /v1/predictions (create, list, show, close), Bearer-authed and tenant-scoped; closure_state is validated
@@ -22,17 +30,8 @@ export async function handleCreatePrediction(
   { req, res, ctx }: AuthedRouteRequest
 ): Promise<void> {
   const body = await parseJsonBody(req, ctx);
-  const claim = body['claim'];
-  if (!isJsonString(claim) || claim.length === 0) {
-    throw new HttpError(400, 'claim is required (non-empty string)');
-  }
-  if (claim.length > MAX_SHORT_FIELD_LEN) {
-    throw new HttpError(400, `claim exceeds ${MAX_SHORT_FIELD_LEN}-character cap`);
-  }
-  const classTag = body['classTag'];
-  if (!isJsonString(classTag) || classTag.length === 0) {
-    throw new HttpError(400, 'classTag is required (non-empty string)');
-  }
+  const claim = requiredString(body, 'claim', { max: MAX_SHORT_FIELD_LEN, untrimmed: true });
+  const classTag = requiredString(body, 'classTag', { max: MAX_ID_LEN, untrimmed: true });
   const estimate = body['estimate'];
   let estimateValue: number | undefined;
   if (estimate !== undefined && estimate !== null) {
@@ -41,22 +40,12 @@ export async function handleCreatePrediction(
     }
     estimateValue = estimate;
   }
-  const unit = body['unit'];
-  let estimateUnit: string | undefined;
-  if (unit !== undefined && unit !== null) {
-    if (!isJsonString(unit)) {
-      throw new HttpError(400, 'unit must be a string');
-    }
-    estimateUnit = unit;
-  }
+  const estimateUnit = getString(body, 'unit', MAX_ID_LEN);
   const targetDate = body['targetDate'];
-  let targetDateValue: string | undefined;
-  if (targetDate !== undefined && targetDate !== null) {
-    if (!isJsonString(targetDate)) {
-      throw new HttpError(400, 'targetDate must be an ISO date string');
-    }
-    targetDateValue = targetDate;
+  if (targetDate !== undefined && targetDate !== null && !isJsonString(targetDate)) {
+    throw new HttpError(400, 'targetDate must be an ISO date string');
   }
+  const targetDateValue = getString(body, 'targetDate', MAX_DATE_LEN);
   const claimed = { classTag, claimText: claim, estimateValue, estimateUnit, targetDate: targetDateValue };
   const prediction = await recordPrediction(ctx, claimed);
   sendJson(res, 201, { prediction });
@@ -133,17 +122,7 @@ export async function handleClosePrediction(
     }
     actualValue = actual;
   }
-  const note = body['note'];
-  let closureNote: string | undefined;
-  if (note !== undefined && note !== null) {
-    if (!isJsonString(note)) {
-      throw new HttpError(400, 'note must be a string');
-    }
-    if (note.length > 2048) {
-      throw new HttpError(400, 'note exceeds 2048-character cap');
-    }
-    closureNote = note;
-  }
+  const closureNote = getString(body, 'note', 2048);
   const close = { closureState: state, actualValue, closureNote };
   const prediction = await closePrediction(ctx, id, close);
   sendJson(res, 200, { prediction });

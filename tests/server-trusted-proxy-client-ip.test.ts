@@ -1,14 +1,13 @@
-// The rate-limit key trusts a forwarded header only from a listed proxy peer (or any peer under *), and then takes
+// The rate-limit key trusts a forwarded header only from a listed proxy peer and then takes
 // the rightmost hop no trusted proxy added, so a client cannot mint a fresh bucket per request.
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { IncomingMessage } from 'node:http';
 import { Socket } from 'node:net';
 import { initStore } from '../src/store/open.js';
-import { log } from '../src/util/log.js';
 import { clientIpForRateLimit, serve, type ServerHandle } from '../src/server.js';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
 import { createApiKey } from '../src/store/auth.js';
@@ -47,9 +46,9 @@ describe('clientIpForRateLimit behind a trusted proxy', () => {
     expect(clientIpForRateLimit(fakeReq({ 'x-forwarded-for': '6.6.6.6, 203.0.113.7' }, '10.0.0.9'))).toBe('10.0.0.9');
   });
 
-  it('with HIPPO_TRUSTED_PROXIES=* takes the rightmost hop from any peer, which the fronting proxy appended, not the client-supplied first hop', () => {
+  it('with a CIDR listing the peer takes the rightmost hop, which the fronting proxy appended, not the client-supplied first hop', () => {
     process.env.HIPPO_CLIENT_IP_HEADER = 'x-forwarded-for';
-    process.env.HIPPO_TRUSTED_PROXIES = '*';
+    process.env.HIPPO_TRUSTED_PROXIES = '10.0.0.0/24';
     const req = fakeReq({ 'x-forwarded-for': '6.6.6.6, 203.0.113.7' }, '10.0.0.9');
     expect(clientIpForRateLimit(req)).toBe('203.0.113.7');
   });
@@ -182,9 +181,9 @@ describe('rate limiting over real HTTP with rotating spoofed X-Forwarded-For', (
     expect(await statusesWithRotatingXff()).toContain(429);
   });
 
-  it('gives each forwarded address its own bucket when HIPPO_TRUSTED_PROXIES is *', async () => {
+  it('gives each forwarded address its own bucket when the socket peer is a listed proxy', async () => {
     process.env.HIPPO_CLIENT_IP_HEADER = 'x-forwarded-for';
-    process.env.HIPPO_TRUSTED_PROXIES = '*';
+    process.env.HIPPO_TRUSTED_PROXIES = '127.0.0.1,::1';
     expect(await statusesWithRotatingXff()).not.toContain(429);
   });
 
@@ -192,24 +191,20 @@ describe('rate limiting over real HTTP with rotating spoofed X-Forwarded-For', (
     process.env.HIPPO_CLIENT_IP_HEADER = 'x-forwarded-for';
     await expect(serve({ hippoRoot: root, port: 0 })).rejects.toMatchObject({
       name: 'UntrustedClientIpHeaderError',
-      message: expect.stringMatching(/HIPPO_CLIENT_IP_HEADER is x-forwarded-for but HIPPO_TRUSTED_PROXIES is unset.*or to \*/),
+      message: expect.stringMatching(/HIPPO_CLIENT_IP_HEADER is x-forwarded-for but HIPPO_TRUSTED_PROXIES is unset.*addresses or CIDRs/),
     });
   });
 
-  it('warns once at start when * trusts any peer, and stays quiet with no header or with a list', async () => {
-    const warn = vi.spyOn(log, 'warn').mockImplementation(() => {});
-    try {
-      await (await serve({ hippoRoot: root, port: 0 })).stop();
-      process.env.HIPPO_CLIENT_IP_HEADER = 'x-forwarded-for';
-      process.env.HIPPO_TRUSTED_PROXIES = '192.0.2.1';
-      await (await serve({ hippoRoot: root, port: 0 })).stop();
-      process.env.HIPPO_TRUSTED_PROXIES = '*';
-      await (await serve({ hippoRoot: root, port: 0 })).stop();
-      expect(warn.mock.calls.map((call) => String(call[0])).filter((line) => line.includes('HIPPO_TRUSTED_PROXIES'))).toEqual([
-        expect.stringMatching(/HIPPO_TRUSTED_PROXIES is \*, so x-forwarded-for is read from any peer: .*reaches this port without the proxy can .*escape every per-address limit/),
-      ]);
-    } finally {
-      warn.mockRestore();
+  it('refuses to start when HIPPO_TRUSTED_PROXIES lists *, with or without the header, and boots with a list', async () => {
+    for (const header of [undefined, 'x-forwarded-for']) {
+      if (header) process.env.HIPPO_CLIENT_IP_HEADER = header;
+      process.env.HIPPO_TRUSTED_PROXIES = '192.0.2.1, *';
+      await expect(serve({ hippoRoot: root, port: 0 })).rejects.toMatchObject({
+        name: 'WildcardTrustedProxiesError',
+        message: expect.stringMatching(/must list the proxy's addresses or CIDRs, not \*/),
+      });
     }
+    process.env.HIPPO_TRUSTED_PROXIES = '192.0.2.1';
+    await (await serve({ hippoRoot: root, port: 0 })).stop();
   });
 });

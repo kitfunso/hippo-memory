@@ -18,9 +18,10 @@ import type { FullContext } from './_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { remember, sleep, outcome } from '../src/api/index.js';
-import { serve, type ServerHandle } from '../src/server.js';
+import type { ServerHandle } from '../src/server.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { apiCtx } from './_helpers/api-ctx.js';
+import { serveAsAdmin } from './_helpers/admin-server.js';
 
 describe('GET /v1/audit?op=<op> — consolidate + outcome wiring', () => {
   let home: string;
@@ -33,7 +34,7 @@ describe('GET /v1/audit?op=<op> — consolidate + outcome wiring', () => {
     globalHome = makeRoot('audit-route');
     origHippoHome = process.env.HIPPO_HOME;
     process.env.HIPPO_HOME = globalHome;
-    handle = await serve({ hippoRoot: home, port: 0, keylessLocalRole: 'admin' });
+    handle = await serveAsAdmin({ hippoRoot: home, port: 0 });
   });
 
   afterEach(async () => {

@@ -1,7 +1,7 @@
 // Request-body and path-segment validators shared by the /v1 route handlers.
 import type { IncomingMessage } from 'node:http';
 import type { Context, RememberOptions } from '../api/index.js';
-import { HttpError, readBody } from '../util/http-util.js';
+import { HttpError, MAX_BODY_BYTES, readBody } from '../util/http-util.js';
 import { DEFAULT_LIST_LIMIT, MAX_ID_LEN, MAX_LIST_LIMIT, resolveListLimit } from '../util/limits.js';
 import { type JsonValue, isJsonString, isJsonObject } from '../util/json.js';
 
@@ -16,6 +16,15 @@ export function isSetMember<T extends string>(set: ReadonlySet<T>, value: string
 
 // Cap for short free-text HTTP fields (names, text, context, change summaries) on the object routes.
 export const MAX_SHORT_FIELD_LEN = 4096;
+
+// A content-like field can be as long as the body that carries it.
+export const MAX_CONTENT_LEN = MAX_BODY_BYTES;
+
+// ISO dates and similar short stamps.
+export const MAX_DATE_LEN = 64;
+
+// Most entries a string-array field takes (tags, aliases).
+export const MAX_ARRAY_ITEMS = 100;
 
 export function parseListLimit(
   limitRaw: string | null,
@@ -47,18 +56,47 @@ export function parseJsonObjectText(raw: string): Record<string, JsonValue> {
   }
 }
 
-/** Absent (undefined or null) is undefined; a present value of the wrong type is a 400, never a silent default. */
-export function getString(obj: Record<string, JsonValue>, key: string): string | undefined {
+/** Absent (undefined or null) is undefined; a present value of the wrong type or over `max` characters is a 400. */
+export function getString(obj: Record<string, JsonValue>, key: string, max: number): string | undefined {
   const v = obj[key];
   if (v === undefined || v === null) return undefined;
   if (!isJsonString(v)) throw new HttpError(400, `${key} must be a string`);
+  if (v.length > max) throw new HttpError(400, `${key} exceeds ${max}-character cap`);
   return v;
 }
 
-export function getStringArray(obj: Record<string, JsonValue>, key: string): string[] | undefined {
+export interface RequiredStringRule {
+  readonly max: number;
+  /** The field name is a plural noun, so the replies read "are required" and "exceed". */
+  readonly plural?: boolean;
+  /** The blank check does not trim, so a value of only spaces passes it. */
+  readonly untrimmed?: boolean;
+}
+
+export function requiredString(body: Record<string, JsonValue>, key: string, rule: RequiredStringRule): string {
+  const value = body[key];
+  if (!isJsonString(value) || (rule.untrimmed ? value : value.trim()).length === 0) {
+    throw new HttpError(400, `${key} ${rule.plural ? 'are' : 'is'} required (non-empty string)`);
+  }
+  if (value.length > rule.max) {
+    throw new HttpError(400, `${key} ${rule.plural ? 'exceed' : 'exceeds'} ${rule.max}-character cap`);
+  }
+  return value;
+}
+
+export function getStringArray(
+  obj: Record<string, JsonValue>,
+  key: string,
+  maxItems: number,
+  maxItemLen: number,
+): string[] | undefined {
   const v = obj[key];
   if (v === undefined || v === null) return undefined;
   if (!Array.isArray(v) || !v.every(isJsonString)) throw new HttpError(400, `${key} must be an array of strings`);
+  if (v.length > maxItems) throw new HttpError(400, `${key} exceeds ${maxItems}-item cap`);
+  if (v.some((item) => item.length > maxItemLen)) {
+    throw new HttpError(400, `each ${key} entry exceeds ${maxItemLen}-character cap`);
+  }
   return v;
 }
 
@@ -71,11 +109,13 @@ export function getCallerProject(body: Record<string, JsonValue>): RememberOptio
   if (!isJsonObject(v) || !isJsonString(v.name)) {
     throw new HttpError(400, 'project must be an object with a "name" string');
   }
+  if (v.name.length > MAX_ID_LEN) throw new HttpError(400, `project.name exceeds ${MAX_ID_LEN}-character cap`);
   if (v.aliases === undefined) return { name: v.name };
   if (!Array.isArray(v.aliases) || !v.aliases.every(isJsonString)) {
     throw new HttpError(400, 'project.aliases must be an array of strings');
   }
-  return { name: v.name, aliases: v.aliases };
+  const aliases = getStringArray(v, 'aliases', MAX_ARRAY_ITEMS, MAX_ID_LEN);
+  return { name: v.name, aliases };
 }
 
 /**

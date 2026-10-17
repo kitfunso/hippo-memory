@@ -42,9 +42,9 @@ per real client.
   client address in this header, so the /v1 rate limiter keys per client
   instead of collapsing every request into the tunnel's single source address.
   Set it only behind a proxy that overwrites the header on every request.
-- **`HIPPO_TRUSTED_PROXIES=*`**: hippo refuses to start with the header set and
-  no trusted proxy listed. The adapter is hippo's only peer on the compose
-  network, so every peer is trusted.
+- **`HIPPO_TRUSTED_PROXIES=172.30.77.0/24`**: hippo refuses to start with the header set and
+  no trusted proxy listed, and refuses `*`. The compose file pins the `aml` network to this
+  subnet, so only the adapter's header is believed.
 - **`HIPPO_CALLER_RPS=500`**: the per-caller limit is on by default at 20 rps,
   and the evaluation runs on one key, so it is raised to match `HIPPO_V1_RPS`.
 - **`--allow-cleartext`** (in the entrypoint): hippo refuses a non-loopback bind

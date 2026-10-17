@@ -1,6 +1,6 @@
-import { envAllowCleartext, envCallerRps, envPort, envRequireAuth, envV1Rps } from '../util/env.js';
+import { envAllowCleartext, envCallerRps, envPort, envRequireAuth, envV1Rps, validateFlags } from '../util/env.js';
 import type { IncomingMessage, Server, ServerResponse } from 'node:http';
-import { detectServer, removePidfileIfOwned, writePidfile } from './server-detect.js';
+import { claimPidfile, removePidfileIfOwned, writePidfile } from './server-detect.js';
 import { hasGroup, type HippoStore } from '../store/index.js';
 import { isStoreBusy } from '../store/busy.js';
 import {
@@ -179,21 +179,7 @@ function assertBindable(host: string): void {
   }
 }
 
-async function assertNoLiveServer(hippoRoot: string): Promise<void> {
-  // Refuse to start if a live hippo server already serves this hippoRoot (detectServer probes the recorded /health and
-  // unlinks a stale pidfile):
-  // a concurrent `hippo serve` would race for the port and clobber the pidfile.
-  const existing = await detectServer(hippoRoot);
-  if (existing) {
-    throw new Error(
-      `hippo serve: already running on port ${existing.port} (pid ${existing.pid}). ` +
-      `Stop that server before starting another on the same hippoRoot.`,
-    );
-  }
-}
-
-// SHORTCUT: buckets live in this process and reset on restart or LRU eviction; move them to the store if serve ever
-// runs as several processes.
+// The buckets see every request because serve() holds the store's pidfile lock (claimPidfile): one server per store.
 function limiterFor({ ratePerSec, burst }: RateLimitSpec): RateLimiter {
   return createRateLimiter({ ratePerSec, burst, idleEvictMs: MINUTE_MS, maxKeys: LIMITER_MAX_KEYS });
 }
@@ -245,6 +231,14 @@ function defaultCallerSpec(): RateLimitSpec | 'off' {
   return rps === 0 ? 'off' : { ratePerSec: rps, burst: Math.max(1, rps * 2) };
 }
 
+/** A flag typo is refused at boot, since the safe side it would take may not be the side the operator meant. */
+function assertFlagsValid(): void {
+  const bad = validateFlags();
+  if (bad.length > 0) {
+    throw new Error(`hippo serve: unknown flag value(s) ${bad.join(', ')}; use 1, true, on, 0, false or off`);
+  }
+}
+
 /** Refuses a bad spec at boot, since a NaN or zero rate would otherwise turn a bucket off or refuse every request. */
 function bootLimiters(rateLimits: ServeOpts['rateLimits']): BootedLimiters {
   const { perCaller = defaultCallerSpec(), perAddress, failedAuthPerAddress = DEFAULT_FAILED_AUTH } = rateLimits ?? {};
@@ -252,6 +246,7 @@ function bootLimiters(rateLimits: ServeOpts['rateLimits']): BootedLimiters {
   if (perAddress !== undefined && perAddress !== 'off') assertRateLimitSpec('perAddress', perAddress);
   assertRateLimitSpec('failedAuthPerAddress', failedAuthPerAddress);
   assertClientIpHeaderPinned();
+  assertFlagsValid();
   return {
     perAddress: bootRateLimiter(perAddress),
     callerLimiter: perCaller === 'off' ? undefined : limiterFor(perCaller),
@@ -420,12 +415,32 @@ export async function serve(opts: ServeOpts): Promise<ServerHandle> {
   const limiters = bootLimiters(opts.rateLimits);
   assertBindable(host);
   assertTlsOrCleartextAllowed(host, opts.tls, LOOPBACK_HOSTS, opts.allowCleartext ?? envAllowCleartext());
-  await assertNoLiveServer(opts.hippoRoot);
 
   // Single source of truth for the start time: returned by GET /health and written into the pidfile, so detectServer
   // can prove a pid-reusing impostor is not
   // this server.
   const startedAt = new Date().toISOString();
+  await claimPidfile(opts.hippoRoot, startedAt);
+  try {
+    return await bindClaimed(opts, { host, requestedPort, routes, publicJsonBodies, limiters, startedAt });
+  } catch (err) {
+    removePidfileIfOwned(opts.hippoRoot, { pid: process.pid, startedAt });
+    throw err;
+  }
+}
+
+interface BootPlan {
+  host: string;
+  requestedPort: number;
+  routes: ReturnType<typeof frozenAddonRoutes>;
+  publicJsonBodies: ReturnType<typeof assertPublicJson>;
+  limiters: ReturnType<typeof bootLimiters>;
+  startedAt: string;
+}
+
+/** Everything after the pidfile claim; a throw here releases the claim in serve(). */
+async function bindClaimed(opts: ServeOpts, plan: BootPlan): Promise<ServerHandle> {
+  const { host, requestedPort, routes, publicJsonBodies, limiters, startedAt } = plan;
 
   // Open /mcp/stream count per client key, so the cap is per server rather than per process.
   const streamSlots = new Map<string, number>();

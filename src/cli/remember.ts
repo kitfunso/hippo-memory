@@ -22,7 +22,6 @@ import { extractPathTags } from '../search/path-context.js';
 import { detectScope } from '../core/active-scope.js';
 import { assertClientScope } from '../core/recall-scope.js';
 import { getGlobalRoot } from '../sharing/global-store.js';
-import { vetSecrets } from '../util/secret-detect.js';
 import * as client from './client.js';
 import { cliApiContext, cliInitGlobal } from './api-context.js';
 import { validateOwner, isStrictOwnerEnv } from './owner-validation.js';
@@ -159,13 +158,13 @@ async function cmdRemember(
   }
   const weak = outcome.startedWeak;
   if (weak) console.log(`Weakened (salience: ${weak.reason}, strength ${weak.strength.toFixed(2)})`);
-  printRemembered(outcome.entry, useGlobal);
+  printRemembered(outcome.entry, useGlobal, outcome.warnings);
 
   const request = { requested: boolFlag(flags, 'extract'), apiKey: envAnthropicApiKey() };
   printExtraction(await api.extractRememberedFacts(ctx, outcome.entry, request));
 }
 
-function printRemembered(entry: MemoryEntry, useGlobal: boolean): void {
+function printRemembered(entry: MemoryEntry, useGlobal: boolean, warnings: readonly string[]): void {
   const prefix = useGlobal ? '[global] ' : '';
   console.log(`${prefix}Remembered [${entry.id}]`);
   console.log(
@@ -174,7 +173,7 @@ function printRemembered(entry: MemoryEntry, useGlobal: boolean): void {
   );
   if (entry.tags.length > 0) console.log(`   Tags: ${entry.tags.join(', ')}`);
   if (entry.pinned) console.log('   Pinned (no decay)');
-  for (const w of vetSecrets(entry.content, entry.tags, false).warnings) printError(`Warning: ${w}`);
+  for (const w of warnings) printError(`Warning: ${w}`);
 }
 
 function printExtraction(extraction: api.FactExtraction): void {

@@ -74,9 +74,6 @@ export interface ServeOpts {
   /** Lets a non-loopback bind start without `tls`, for TLS that ends at a
    * proxy in front; else serve() refuses it. Also HIPPO_ALLOW_CLEARTEXT=1. */
   allowCleartext?: boolean;
-  /** The role a keyless local request (HIPPO_ALLOW_KEYLESS_LOCAL=1) gets; defaults to HIPPO_KEYLESS_LOCAL_ROLE, else
-   * 'member'. Only 'admin' is host admin. */
-  keylessLocalRole?: 'member' | 'admin';
   /** Static JSON served to anyone at GET <path>; built once at
    * boot and never authenticated, so it must hold nothing secret. */
   publicJson?: Readonly<Record<string, JsonValue>>;
