@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { HippoPluginDeps } from '../extensions/openclaw-plugin/index.js';
+import type { HippoPluginDeps } from '../../extensions/openclaw-plugin/index.js';
 
 type ToolCtx = { workspaceDir?: string; agentId?: string; sessionId?: string; sessionKey?: string };
 
@@ -16,7 +16,7 @@ const existsSyncMock = vi.fn((target: string) => target.includes('.hippo'));
 // test always calls through real function references and only the
 // execFileSync/spawn/existsSync implementations are swapped.
 async function loadPlugin() {
-  const mod = await import('../extensions/openclaw-plugin/index.js');
+  const mod = await import('../../extensions/openclaw-plugin/index.js');
   mod.__setHippoPluginDeps({
     execFileSync: execFileSyncMock,
     spawn: spawnMock,
