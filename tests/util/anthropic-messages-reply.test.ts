@@ -1,6 +1,6 @@
 // sendAnthropicMessage reads its reply under a byte cap and through shape checks, and reports a bad reply as a typed failure.
 import { describe, expect, it, vi } from 'vitest';
-import { type AnthropicMessageFailure, isPermanentFailure, sendAnthropicMessage } from '../src/util/anthropic-messages.js';
+import { type AnthropicMessageFailure, isPermanentFailure, sendAnthropicMessage } from '../../src/util/anthropic-messages.js';
 
 const REPLY_CAP_BYTES = 1024 * 1024;
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { dumpFrontmatter, parseFrontmatter } from '../src/util/yaml.js';
+import { dumpFrontmatter, parseFrontmatter } from '../../src/util/yaml.js';
 
 const parse = (lines: string[]): ReturnType<typeof parseFrontmatter>['data'] => parseFrontmatter(`---\n${lines.join('\n')}\n---\nbody`).data;
 

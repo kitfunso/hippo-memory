@@ -1,6 +1,6 @@
 // RequestDeadline.onceIdle must run every function registered while store calls are in flight, not only the last one.
 import { describe, expect, it } from 'vitest';
-import { RequestDeadline } from '../src/util/request-scope.js';
+import { RequestDeadline } from '../../src/util/request-scope.js';
 
 function pendingCall() {
   let settle!: () => void;

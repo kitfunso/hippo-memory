@@ -4,26 +4,26 @@
  * Real-DB per project convention for the store-level tests.
  */
 
-import type { FullContext } from './_helpers/api-ctx.js';
+import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
-import { detectSecret, redactSecretsStrict } from '../src/util/secret-detect.js';
-import { initStore } from '../src/store/open.js';
-import { writeEntry } from '../src/store/entry-writes.js';
-import { loadAllEntries } from '../src/store/entry-reads.js';
-import { createMemory } from './_helpers/default-half-life-memory.js';
-import { shareMemory, autoShare } from '../src/sharing/share.js';
-import { syncGlobalToLocal } from '../src/sharing/global-sync.js';
-import { getGlobalRoot } from '../src/sharing/global-store.js';
-import { copyToGlobal } from '../src/store/sqlite/global-promote.js';
-import { getContext } from '../src/api/index.js';
-import { _resetProjectIdentityCacheForTests } from '../src/core/project-identity.js';
-import { ASSIGNED_SECRET_LINES, ORDINARY_CONFIG_LINES } from './_helpers/secret-shapes.js';
-import { fastestRatio, type TimedRun } from './_helpers/fastest-ratio.js';
-import { apiCtx } from './_helpers/api-ctx.js';
-import { sharingStores } from './_helpers/sharing-stores.js';
-import { makeRoot } from './_helpers/make-root.js';
+import { detectSecret, redactSecretsStrict } from '../../src/util/secret-detect.js';
+import { initStore } from '../../src/store/open.js';
+import { writeEntry } from '../../src/store/entry-writes.js';
+import { loadAllEntries } from '../../src/store/entry-reads.js';
+import { createMemory } from '../_helpers/default-half-life-memory.js';
+import { shareMemory, autoShare } from '../../src/sharing/share.js';
+import { syncGlobalToLocal } from '../../src/sharing/global-sync.js';
+import { getGlobalRoot } from '../../src/sharing/global-store.js';
+import { copyToGlobal } from '../../src/store/sqlite/global-promote.js';
+import { getContext } from '../../src/api/index.js';
+import { _resetProjectIdentityCacheForTests } from '../../src/core/project-identity.js';
+import { ASSIGNED_SECRET_LINES, ORDINARY_CONFIG_LINES } from '../_helpers/secret-shapes.js';
+import { fastestRatio, type TimedRun } from '../_helpers/fastest-ratio.js';
+import { apiCtx } from '../_helpers/api-ctx.js';
+import { sharingStores } from '../_helpers/sharing-stores.js';
+import { makeRoot } from '../_helpers/make-root.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();

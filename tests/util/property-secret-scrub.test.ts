@@ -1,9 +1,9 @@
 // Generated secrets of every shape the scrub names, placed among ordinary words: none reaches the output, a second pass changes nothing, and ordinary text passes untouched.
 import { describe, it, expect } from 'vitest';
-import { redactSecretsStrict } from '../src/util/secret-detect.js';
-import { scrubForSharing } from '../src/capture/share-scrub.js';
-import { arr, both, forAll, int, map, oneOf, pick, str, type Gen } from './_helpers/property.js';
-import { ASSIGNED_SECRET, ASSIGNED_SECRET_LINES, ORDINARY_CONFIG_LINES } from './_helpers/secret-shapes.js';
+import { redactSecretsStrict } from '../../src/util/secret-detect.js';
+import { scrubForSharing } from '../../src/capture/share-scrub.js';
+import { arr, both, forAll, int, map, oneOf, pick, str, type Gen } from '../_helpers/property.js';
+import { ASSIGNED_SECRET, ASSIGNED_SECRET_LINES, ORDINARY_CONFIG_LINES } from '../_helpers/secret-shapes.js';
 
 const UPPER = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 const LOWER = 'abcdefghijklmnopqrstuvwxyz';

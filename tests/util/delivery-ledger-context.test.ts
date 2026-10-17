@@ -1,14 +1,14 @@
 // `hippo context` without --pinned-only through the built CLI: its delivery_events row and the recall trace it links.
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
-import { blockHash, estimateTokens } from '../src/util/token-text.js';
-import { DELIVERY_LEDGER_VERSION } from '../src/store/delivery-recorder.js';
-import { writeEntry } from '../src/store/entry-writes.js';
-import { initStore } from '../src/store/open.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
+import { blockHash, estimateTokens } from '../../src/util/token-text.js';
+import { DELIVERY_LEDGER_VERSION } from '../../src/store/delivery-recorder.js';
+import { writeEntry } from '../../src/store/entry-writes.js';
+import { initStore } from '../../src/store/open.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
 import {
   PROMPT_HOOK, dispose, eventCount, eventsN, hippo, hippoIn, project, promptPayload, tableRows, writeConfig, type Project,
-} from './_helpers/delivery-boundary.js';
+} from '../_helpers/delivery-boundary.js';
 
 // After every seeded `created`, real or fixed, so no memory is dated in the future.
 const FAKE_NOW = '2099-01-01T00:00:00.000Z';

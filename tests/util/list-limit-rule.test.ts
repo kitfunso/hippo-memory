@@ -1,10 +1,10 @@
 // The list-limit rule lives once in util/limits.ts; the CLI and HTTP parsers are thin adapters over it.
 import { describe, it, expect, vi } from 'vitest';
-import { resolveListLimit, DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT } from '../src/util/limits.js';
-import { pct } from '../src/util/format.js';
-import { parseListLimit as parseHttpLimit } from '../src/server/validation.js';
-import { parseListLimit as parseCliLimit } from '../src/cli/flag-values.js';
-import { CliExit } from '../src/cli/exit.js';
+import { resolveListLimit, DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT } from '../../src/util/limits.js';
+import { pct } from '../../src/util/format.js';
+import { parseListLimit as parseHttpLimit } from '../../src/server/validation.js';
+import { parseListLimit as parseCliLimit } from '../../src/cli/flag-values.js';
+import { CliExit } from '../../src/cli/exit.js';
 
 describe('resolveListLimit', () => {
   it('falls back to the default when absent', () => {

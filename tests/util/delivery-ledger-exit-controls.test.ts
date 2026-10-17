@@ -2,10 +2,10 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { PROMPT_HOOK, dispose, hippo, preCompactPayload, project, tableRows, writeConfig, type Project } from './_helpers/delivery-boundary.js';
+import { PROMPT_HOOK, dispose, hippo, preCompactPayload, project, tableRows, writeConfig, type Project } from '../_helpers/delivery-boundary.js';
 import {
   additionalContextOf, expectVerdict, fire, seed, verdictOf, writeHostTranscript, type Oracle, type ReadOptions, type TurnSpec, type Verdict,
-} from './_helpers/host-transcript.js';
+} from '../_helpers/host-transcript.js';
 
 const PROMPT = 'how should the postgres migration rollback plan work';
 const P1 = 'first question about deploys';

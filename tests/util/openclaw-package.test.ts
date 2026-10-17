@@ -3,9 +3,9 @@ import { existsSync, readFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 import { describe, expect, it } from 'vitest';
-import { PACKAGE_VERSION } from '../src/util/version.js';
+import { PACKAGE_VERSION } from '../../src/util/version.js';
 
-const repoRoot = dirname(dirname(fileURLToPath(import.meta.url)));
+const repoRoot = dirname(dirname(dirname(fileURLToPath(import.meta.url))));
 
 describe('openclaw package metadata', () => {
   it('exposes root package metadata for direct npm plugin install', () => {

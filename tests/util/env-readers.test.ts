@@ -13,7 +13,7 @@ import {
   envQueryEmbedTimeoutMs,
   envRequireServer,
   envTypesafeApiKey,
-} from '../src/util/env.js';
+} from '../../src/util/env.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();

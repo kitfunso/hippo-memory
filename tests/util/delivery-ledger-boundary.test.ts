@@ -2,14 +2,14 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { blockHash, estimateTokens } from '../src/util/token-text.js';
-import { DELIVERY_LEDGER_VERSION } from '../src/store/delivery-recorder.js';
-import { copilotPayload } from './_helpers/copilot-hooks.js';
+import { blockHash, estimateTokens } from '../../src/util/token-text.js';
+import { DELIVERY_LEDGER_VERSION } from '../../src/store/delivery-recorder.js';
+import { copilotPayload } from '../_helpers/copilot-hooks.js';
 import {
   PROMPT_HOOK, SNAPSHOT_TASK, dispose, eventCount, eventsN, hippo, hippoAsync, hippoIn, hippoInNoWorker, hippoNoWorker, installCopilotHooksFile, preCompactPayload,
   project, promptPayload, resumePayload, saveSnapshot, sessionEndPayload, tableRows, writeConfig, writeTranscript, writeVscodeTranscript,
   type Project,
-} from './_helpers/delivery-boundary.js';
+} from '../_helpers/delivery-boundary.js';
 
 let p: Project;
 

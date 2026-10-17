@@ -3,10 +3,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { _resetLogOnceForTests, errorFields, formatLogLine, isLevelEnabled, log } from '../src/util/log.js';
-import { runWithRequestId } from '../src/util/request-scope.js';
-import { ownStderr } from './_helpers/own-stderr.js';
-import { makeRoot } from './_helpers/make-root.js';
+import { _resetLogOnceForTests, errorFields, formatLogLine, isLevelEnabled, log } from '../../src/util/log.js';
+import { runWithRequestId } from '../../src/util/request-scope.js';
+import { ownStderr } from '../_helpers/own-stderr.js';
+import { makeRoot } from '../_helpers/make-root.js';
 
 const AT = '2026-01-02T03:04:05.678Z';
 let stderrSpy: ReturnType<typeof vi.spyOn>;

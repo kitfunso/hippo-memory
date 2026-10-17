@@ -2,14 +2,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
-import { isJsonObject, type JsonValue } from '../src/util/json.js';
-import { batchWriteAndDelete } from '../src/store/delete-and-batch.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../src/core/memory.js';
-import { embedMemory } from '../src/search/embed-memories.js';
-import { embeddingIndexIdentity, saveStoredEmbeddingModel } from '../src/store/embeddings/index.js';
-import { saveStoredVectors } from '../src/store/vector-index.js';
-import { sqliteSyncStore } from '../src/store/sqlite/store.js';
-import { makeRoot } from './_helpers/make-root.js';
+import { isJsonObject, type JsonValue } from '../../src/util/json.js';
+import { batchWriteAndDelete } from '../../src/store/delete-and-batch.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../../src/core/memory.js';
+import { embedMemory } from '../../src/search/embed-memories.js';
+import { embeddingIndexIdentity, saveStoredEmbeddingModel } from '../../src/store/embeddings/index.js';
+import { saveStoredVectors } from '../../src/store/vector-index.js';
+import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
+import { makeRoot } from '../_helpers/make-root.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();

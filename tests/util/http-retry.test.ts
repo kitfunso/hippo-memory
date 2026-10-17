@@ -2,8 +2,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as http from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { fetchWithRetry, isRetryableStatus, llmTimeoutMs, llmTotalMs, parseRetryAfterMs } from '../src/util/http-retry.js';
-import { classifyTransportFailure } from '../src/cli/client.js';
+import { fetchWithRetry, isRetryableStatus, llmTimeoutMs, llmTotalMs, parseRetryAfterMs } from '../../src/util/http-retry.js';
+import { classifyTransportFailure } from '../../src/cli/client.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();

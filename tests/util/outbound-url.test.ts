@@ -3,12 +3,12 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { parseOutboundUrl } from '../src/util/net.js';
-import { resolveEmbeddingProvider } from '../src/embeddings/provider.js';
-import { createLlmReranker } from '../src/rerankers/llm.js';
-import { loadConfig } from '../src/core/config.js';
-import { createMemory } from './_helpers/default-half-life-memory.js';
-import type { SearchResult } from '../src/core/search-types.js';
+import { parseOutboundUrl } from '../../src/util/net.js';
+import { resolveEmbeddingProvider } from '../../src/embeddings/provider.js';
+import { createLlmReranker } from '../../src/rerankers/llm.js';
+import { loadConfig } from '../../src/core/config.js';
+import { createMemory } from '../_helpers/default-half-life-memory.js';
+import type { SearchResult } from '../../src/core/search-types.js';
 
 describe('parseOutboundUrl', () => {
   it.each(['https://api.example.com/v1', 'http://localhost:8080', 'http://127.0.0.1:9', 'http://[::1]:1234/v1'])(
