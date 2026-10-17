@@ -235,6 +235,7 @@ export const PROCESS_TESTS: readonly string[] = [
   'server-mcp-http.test.ts',
   'server-mcp-tenant.test.ts',
   'server-object-routes-off-loop.test.ts',
+  'server-one-per-store.test.ts',
   'server-other-store-fails-closed.test.ts',
   'server-outcome-route.test.ts',
   'server-proxied-loopback.test.ts',

@@ -60,7 +60,7 @@ function spend(b: Bucket): boolean {
  */
 export function createRateLimiter(opts: RateLimiterOptions): RateLimiter {
   const { ratePerSec, burst, idleEvictMs, maxKeys } = opts;
-  // SHORTCUT: one process, buckets reset on restart; a shared store table if the server runs as several processes.
+  // Every request reaches these buckets because serve() holds the store's pidfile lock (claimPidfile).
   const buckets = new Map<string, Bucket>();
   // Unseen keys draw from this while the map is full of buckets still below burst, so key churn buys no fresh bucket.
   const overflow: Bucket = { tokens: burst, last: 0 };

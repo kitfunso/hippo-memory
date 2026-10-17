@@ -1,4 +1,6 @@
-import { existsSync, readFileSync, writeFileSync, unlinkSync, renameSync } from 'node:fs';
+import {
+  closeSync, existsSync, openSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync, writeSync,
+} from 'node:fs';
 import { join } from 'node:path';
 import { envHealthProbeMs } from '../util/env.js';
 import { errorCode, errorFields, errorMessage, log } from '../util/log.js';
@@ -53,15 +55,30 @@ export class ServerUnresponsiveError extends Error {
   }
 }
 
+/** A second serve() found a server on this store, or one that has claimed the pidfile and is still binding. */
+export class ServerAlreadyRunningError extends Error {
+  constructor(info: ServerInfo) {
+    super(
+      `hippo serve: already running ${info.port > 0 ? `on port ${info.port}` : 'on this store, still starting'} ` +
+      `(pid ${info.pid}). Stop that server before starting another on the same hippoRoot.`,
+    );
+    this.name = 'ServerAlreadyRunningError';
+  }
+}
+
+/** Signal 0 throws ESRCH for a dead pid and EPERM for a live process of another user, which still holds the store. */
+function pidIsAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (err) {
+    return errorCode(err) === 'EPERM';
+  }
+}
+
 /** False when the pidfile's pid is dead or its url could not be one serve() wrote. */
 function isLiveLoopbackTarget(info: ServerInfo): boolean {
-  // Signal 0 throws if the pid is dead or owned by another user we cannot signal; either way, treat as stale.
-  // process.kill(pid, 0) works cross-platform for the dead-pid case (OpenProcess + GetExitCodeProcess on Windows).
-  try {
-    process.kill(info.pid, 0);
-  } catch {
-    return false;
-  }
+  if (!pidIsAlive(info.pid)) return false;
 
   // The pid may have been reused and the recorded url is read from a forgeable file; serve() only binds loopback, so a
   // url that is not http on a loopback
@@ -181,12 +198,70 @@ export async function detectServer(hippoRoot: string): Promise<ServerInfo | null
     return null;
   }
 
+  // Port 0 is a claim from a serve() still binding: nothing answers yet, but a live claimant keeps the file.
+  if (info.port === 0 && pidIsAlive(info.pid)) return null;
+
   if (!isLiveLoopbackTarget(info)) {
     removePidfile(hippoRoot);
     return null;
   }
 
   return (await healthMatchesPidfile(hippoRoot, info)) ? info : null;
+}
+
+/** A claim written but not yet filled in is empty for an instant; it is only stale once it has sat that way. */
+const EMPTY_CLAIM_STALE_MS = 5_000;
+
+/** Creates the pidfile with exclusive create; false when one exists. Its port is 0 until writePidfile fills it. */
+function tryCreateClaim(path: string, startedAt: string): boolean {
+  let fd: number;
+  try {
+    fd = openSync(path, 'wx');
+  } catch (err) {
+    if (errorCode(err) === 'EEXIST') return false;
+    throw err;
+  }
+  try {
+    const claim: ServerInfo = { schema: 1, pid: process.pid, port: 0, url: '', started_at: startedAt };
+    writeSync(fd, JSON.stringify(claim));
+  } finally {
+    closeSync(fd);
+  }
+  return true;
+}
+
+/** The claim of a serve() that is still binding, or undefined when the file is a finished or stale pidfile. */
+function startingClaim(path: string): ServerInfo | undefined {
+  try {
+    const raw = readFileSync(path, 'utf8');
+    if (raw === '') {
+      return Date.now() - statSync(path).mtimeMs < EMPTY_CLAIM_STALE_MS
+        ? { pid: 0, port: 0, url: '', started_at: '' }
+        : undefined;
+    }
+    const info: ServerInfo = JSON.parse(raw);
+    return info.port === 0 && pidIsAlive(info.pid) ? info : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Takes the store's one-server lock before serve() binds: the pidfile is created with exclusive create, so of two
+ * boots started together exactly one wins. On a clash a live or still-starting server refuses, and a stale pidfile
+ * is removed by detectServer and the create retried once. Throws ServerAlreadyRunningError.
+ */
+export async function claimPidfile(hippoRoot: string, startedAt: string): Promise<void> {
+  const path = join(hippoRoot, PIDFILE);
+  for (let attempt = 0; attempt < 2; attempt++) {
+    if (tryCreateClaim(path, startedAt)) return;
+    const starting = startingClaim(path);
+    if (starting) throw new ServerAlreadyRunningError(starting);
+    const live = await detectServer(hippoRoot);
+    if (live) throw new ServerAlreadyRunningError(live);
+  }
+  const winner = startingClaim(path) ?? (await detectServer(hippoRoot));
+  throw new ServerAlreadyRunningError(winner ?? { pid: 0, port: 0, url: '', started_at: '' });
 }
 
 /**
