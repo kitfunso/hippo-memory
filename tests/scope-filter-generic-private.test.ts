@@ -103,7 +103,7 @@ describe('scope filter — generic *:private:* default-deny', () => {
   it('api.recall returns acme:private:demo when scope matches exactly', async () => {
     writeEntry(home, createMemory('acme private secret content', { scope: 'acme:private:demo' }));
 
-    const result = await retrieve(ctx(home), { query: 'secret content', scope: 'acme:private:demo' });
+    const result = await retrieve(ctx(home), { query: 'secret content', filter: { scope: 'acme:private:demo' } });
     const contents = result.results.map((r) => r.content);
     expect(contents).toContain('acme private secret content');
   });
@@ -111,7 +111,7 @@ describe('scope filter — generic *:private:* default-deny', () => {
   it('api.recall does NOT leak acme:private:demo to a different explicit scope', async () => {
     writeEntry(home, createMemory('acme private secret content', { scope: 'acme:private:demo' }));
 
-    const result = await retrieve(ctx(home), { query: 'secret content', scope: 'slack:public:Cgeneral' });
+    const result = await retrieve(ctx(home), { query: 'secret content', filter: { scope: 'slack:public:Cgeneral' } });
     const contents = result.results.map((r) => r.content);
     expect(contents).not.toContain('acme private secret content');
   });
@@ -126,7 +126,7 @@ describe('scope filter — generic *:private:* default-deny', () => {
       scope: 'github:private:acme/secret-repo',
     });
 
-    const result = await retrieve(ctx(home), { query: 'anything', includeContinuity: true });
+    const result = await retrieve(ctx(home), { query: 'anything', window: { includeContinuity: true } });
     expect(result.continuity?.activeSnapshot).toBeNull();
   });
 
@@ -140,7 +140,7 @@ describe('scope filter — generic *:private:* default-deny', () => {
       scope: 'acme:private:demo',
     });
 
-    const result = await retrieve(ctx(home), { query: 'anything', includeContinuity: true });
+    const result = await retrieve(ctx(home), { query: 'anything', window: { includeContinuity: true } });
     expect(result.continuity?.activeSnapshot).toBeNull();
   });
 
@@ -154,7 +154,7 @@ describe('scope filter — generic *:private:* default-deny', () => {
       scope: 'acme:private:demo',
     });
 
-    const result = await retrieve(ctx(home), { query: 'anything', includeContinuity: true, scope: 'acme:private:demo' });
+    const result = await retrieve(ctx(home), { query: 'anything', window: { includeContinuity: true }, filter: { scope: 'acme:private:demo' } });
     expect(result.continuity?.activeSnapshot?.task).toBe('ACME private task');
   });
 

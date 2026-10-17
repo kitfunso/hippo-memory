@@ -29,7 +29,7 @@ const setting = (activeScope: string | null, primaryIsGlobal = false): CliRecall
 async function rankDeploy() {
   const config = loadConfig(hippoRoot);
   return rankRecall({ store: sqliteStore(hippoRoot), config, tenantId: 'default' }, {
-    query: 'deploy', budget: 4000, cost: (r) => r.tokens, limit: 10, includeSuperseded: false, explicitScope: null, activeScope: null,
+    query: 'deploy', budget: 4000, cost: (r) => r.tokens, window: { limit: 10 }, includeSuperseded: false, explicitScope: null, activeScope: null,
     search: { usePhysics: false, physicsConfig: config.physics, multihop: false, mmr: false, mmrLambda: 0.7, localBump: 1.2, explain: false },
   });
 }
@@ -105,7 +105,7 @@ describe('cliRecallSetting and cliRecallOrigin', () => {
     const config = loadConfig(hippoRoot);
     const global = { store: sqliteStore(globalRoot), config: loadConfig(globalRoot) };
     const ranked = await rankRecall({ store: sqliteStore(hippoRoot), config, global, tenantId: 'default' }, {
-      query: 'deploy', budget: 4000, cost: (r) => r.tokens, limit: 10, includeSuperseded: false, explicitScope: null, activeScope: null,
+      query: 'deploy', budget: 4000, cost: (r) => r.tokens, window: { limit: 10 }, includeSuperseded: false, explicitScope: null, activeScope: null,
       search: { usePhysics: false, physicsConfig: config.physics, multihop: false, mmr: false, mmrLambda: 0.7, localBump: 1.2, explain: false },
     });
     const origin = cliRecallOrigin(ctx(), cliRecallSetting(ctx(), null));

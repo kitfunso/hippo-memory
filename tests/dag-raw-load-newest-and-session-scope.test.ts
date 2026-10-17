@@ -123,8 +123,7 @@ describe('loadFreshRawMemories sessionId scope', () => {
     writeEntry(root, b);
     const r = await retrieve(ctxFor(root), {
       query: 'totally unmatched query string',
-      freshTailCount: 5,
-      freshTailSessionId: 'sess-A',
+      window: { freshTailCount: 5, freshTailSessionId: 'sess-A' },
     });
     const tailIds = r.results.filter((it) => it.isFreshTail).map((it) => it.id);
     expect(tailIds).toContain(a.id);
@@ -140,7 +139,7 @@ describe('loadFreshRawMemories sessionId scope', () => {
     writeEntry(root, b);
     const r = await retrieve(ctxFor(root), {
       query: 'totally unmatched query string',
-      freshTailCount: 5,
+      window: { freshTailCount: 5 },
     });
     const tailIds = r.results.filter((it) => it.isFreshTail).map((it) => it.id);
     expect(tailIds).toContain(a.id);

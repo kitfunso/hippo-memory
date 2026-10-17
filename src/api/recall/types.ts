@@ -16,18 +16,13 @@ import type { CallerProject } from '../prompt-hook.js';
 import type { RankRecallOptions, RankRecallResult } from './pipeline.js';
 import type { RecallRecording } from './finish.js';
 
-export interface RecallOptions {
-  query: string;
+/** How many rows a recall loads and returns, and the bands it adds beside them. */
+export interface RecallWindowOptions {
   limit?: number;
   /** Candidates the scorer loads (default: the store's 200-row window), decoupled from `limit`; NOT a hard cap, as
    * fresh-tail and summaries can exceed `limit`. Must be a positive finite integer (else `RecallContractError`,
    * `invalid_scorer_window`). Library-only: HTTP, MCP and `client.ts` do not serialize it. */
   scorerWindow?: number;
-  /** Candidate order. `recall` always keeps the BM25 order; `retrieve` honours this. */
-  mode?: 'bm25' | 'hybrid' | 'physics';
-  /** Exact-match scope filter; when undefined or empty, default-deny drops `slack:private:*` memories so an unscoped
-   * caller cannot surface private channels. */
-  scope?: string;
   /** DAG-aware recall (default true): entries overflowing `limit` that share a level-2 parent get that summary appended
    * instead, capped at ceil(limit 0.3) extra rows. */
   summarizeOverflow?: boolean;
@@ -41,7 +36,21 @@ export interface RecallOptions {
    * to keep the hot path cheap. With no active snapshot, sessionHandoff is null and recentSessionEvents is [], so a
    * stale handoff is not resurrected (use `hippo session resume`). */
   includeContinuity?: boolean;
+}
+
+/** Which rows a recall may return. */
+export interface RecallFilterOptions {
+  /** Exact-match scope filter; when undefined or empty, default-deny drops `slack:private:*` memories so an unscoped
+   * caller cannot surface private channels. */
+  scope?: string;
   project?: CallerProject; // keeps rows to this project and user-global ones, and keys the continuity block
+  /** Set only by the MCP recall tool, which ranks with its own scorer and drops copies from its own final list: this
+   * call then keeps a memory that a merged row in the same result holds word for word. Other callers leave it unset. */
+  keepHeldCopies?: boolean;
+}
+
+/** The goal-stack boost; the CLI ranking core reads the same part. */
+export interface RecallBoostOptions {
   /** With an active goal stack for `(ctx.tenantId, sessionId)` and `goalTag` unset, `api.recall` applies the goal-stack
    * boost; undefined means no boost. Lives on RecallOptions, not Context, because Context is shared by
    * remember/recall/assemble/outcome and the boost is recall-only. */
@@ -49,6 +58,10 @@ export interface RecallOptions {
   /** Explicit goal-tag override: when set, the goal-stack boost is SUPPRESSED (mirrors the CLI's `goalTag === ''`
    * gate), pinning ranking to one goal. */
   goalTag?: string;
+}
+
+/** Inputs to the bias hints the reply carries. */
+export interface RecallHintOptions {
   /** Caller-supplied snapshot of the per-(tenant, session) recall ring; when present, api.recall computes
    * `anchoringHint` from it, else no anchoring runs here. Pure read: api.recall never mutates it; the caller appends to
    * its own ring afterwards, passing the hint's memoryId as `anchoredOn` for the cooldown. */
@@ -57,6 +70,10 @@ export interface RecallOptions {
    * different result set (e.g. the MCP handler), to avoid a double audit emission and a hint about a set the caller
    * never surfaces. HTTP and direct SDK callers leave it unset. */
   suppressAvailabilityHint?: boolean;
+}
+
+/** What the recall records about itself: the rerank trace, the recall_traces row and the audit rows. */
+export interface RecallTraceOptions {
   /** Capture the lifecycle re-ranking trace (api applies only goal-boost) as `rerankTrace` plus `rerankPipeline:'api'`
    * on each item; both fields are absent when unset. The richer CLI stages are not traced here. */
   explain?: boolean;
@@ -64,13 +81,22 @@ export interface RecallOptions {
    *  trace mislabeled 'api'.
    *  Under `showRanked` it also drops the 'mcp' trace of the shown list. HTTP and direct SDK callers leave it unset. */
   suppressRecallTrace?: boolean;
-  /** Set only by the MCP recall tool, which ranks with its own scorer and drops copies from its own final list: this
-   * call then keeps a memory that a merged row in the same result holds word for word. Other callers leave it unset. */
-  keepHeldCopies?: boolean;
   // Rows this recall writes first in its one write, so a failed recall writes none; `recordAs` fills it.
   leadingAudit?: readonly AppendAuditOpts[];
   // The default ranker then records the recall in full (recall-finish.ts) and fills `recallHistory` and `leadingAudit`.
   recordAs?: RecallRecording;
+}
+
+/** One recall, its options grouped by the stage that reads them. */
+export interface RecallOptions {
+  query: string;
+  /** Candidate order. `recall` always keeps the BM25 order; `retrieve` honours this. */
+  mode?: 'bm25' | 'hybrid' | 'physics';
+  window?: RecallWindowOptions;
+  filter?: RecallFilterOptions;
+  boost?: RecallBoostOptions;
+  hints?: RecallHintOptions;
+  trace?: RecallTraceOptions;
   /** MCP recall only: `retrieve` ranks the whole scoped store and strengthens and traces
    * (pipeline 'mcp') just the ids this returns; `results` stays the window band. */
   showRanked?: (ranking: StoreRanking, result: RecallResult) => ShownRanking;
@@ -80,7 +106,7 @@ export interface RecallOptions {
 }
 
 interface CliCoreRanking {
-  rank: Omit<RankRecallOptions, 'query' | 'sessionId' | 'goalTag'>;
+  rank: Omit<RankRecallOptions, 'query' | 'boost'>;
   /** A second store searched beside `ctx.store`: ranking reads `globalStore` with `globalRoot`'s config, and its
    * recall rows go to it. */
   sources?: { readonly globalRoot: string; readonly globalStore: HippoStore };
@@ -102,7 +128,7 @@ export interface CliCoreInspection extends CliCoreRanking {
 }
 
 /** The CLI ranking core (`rankRecall`) as a ranker of `retrieve`: host admin only, on
- * hippo.db. Of the other RecallOptions it reads `query`, `sessionId` and `goalTag`. */
+ * hippo.db. Of the other RecallOptions it reads `query` and `boost`. */
 export type CliCoreRanker = CliCoreRecall | CliCoreInspection;
 
 /** `results`: the rows the caller shows, best first; `audit`: its hint rows, written
@@ -147,7 +173,7 @@ export interface RecallResultItem {
    * than the BM25 match; render them in a separate "recent" band. */
   isFreshTail?: boolean;
   /** Ordered lifecycle re-ranking steps that mutated this row's `score` after candidate generation (on the api
-   * pipeline, only goal-boost). Populated ONLY when `RecallOptions.explain` is set; absent otherwise. */
+   * pipeline, only goal-boost). Populated ONLY when `RecallOptions.trace.explain` is set; absent otherwise. */
   rerankTrace?: RerankStep[];
   /** Pipeline that produced `rerankTrace`: 'api' when api.recall set `explain`; the CLI carries its trace on
    * `SearchResult` and leaves this absent. */

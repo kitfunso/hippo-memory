@@ -28,7 +28,7 @@ function cliCore(): CliCoreRecall {
   const config = loadConfig(hippoRoot);
   return {
     rank: {
-      budget: 4000, cost: (r) => r.tokens, limit: 10, includeSuperseded: false, explicitScope: null, activeScope: null,
+      budget: 4000, cost: (r) => r.tokens, window: { limit: 10 }, includeSuperseded: false, explicitScope: null, activeScope: null,
       search: { usePhysics: false, physicsConfig: config.physics, multihop: false, mmr: false, mmrLambda: 0.7, localBump: 1.2, explain: false },
     },
     show: (ranking) => ({ results: ranking.results, audit: [], tokens: 0 }),

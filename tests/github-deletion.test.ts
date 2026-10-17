@@ -232,7 +232,7 @@ describe('handleCommentDeleted', () => {
     });
 
     // Pre-condition: scoped recall finds it (sanity).
-    const before = await retrieve(ctxFor(root), { query: distinctive, scope: SCOPE_PRIVATE });
+    const before = await retrieve(ctxFor(root), { query: distinctive, filter: { scope: SCOPE_PRIVATE } });
     expect(before.results.some((r) => r.content.includes(distinctive))).toBe(true);
 
     // Archive via deletion.

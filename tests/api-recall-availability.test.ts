@@ -74,7 +74,7 @@ describe('api.recall availabilityHint', () => {
 
   it('fires and emits exactly one audit row on a recency-biased recall', async () => {
     seedFiringFixture(root);
-    const result = await retrieve(ctxFor(root), { query: QUERY, limit: 4 });
+    const result = await retrieve(ctxFor(root), { query: QUERY, window: { limit: 4 } });
     expect(result.availabilityHint).toBeDefined();
     expect(result.availabilityHint!.recentCount).toBe(4);
     expect(result.availabilityHint!.returnedCount).toBe(4);
@@ -86,14 +86,14 @@ describe('api.recall availabilityHint', () => {
   it('HIPPO_AVAILABILITY=off suppresses the hint and the audit', async () => {
     seedFiringFixture(root);
     process.env.HIPPO_AVAILABILITY = 'off';
-    const result = await retrieve(ctxFor(root), { query: QUERY, limit: 4 });
+    const result = await retrieve(ctxFor(root), { query: QUERY, window: { limit: 4 } });
     expect(result.availabilityHint).toBeUndefined();
     expect(countAuditOps(root, 'recall_availability_detected')).toBe(0);
   });
 
   it('opts.suppressAvailabilityHint suppresses hint + audit (MCP double-emit guard)', async () => {
     seedFiringFixture(root);
-    const result = await retrieve(ctxFor(root), { query: QUERY, limit: 4, suppressAvailabilityHint: true });
+    const result = await retrieve(ctxFor(root), { query: QUERY, window: { limit: 4 }, hints: { suppressAvailabilityHint: true } });
     expect(result.availabilityHint).toBeUndefined();
     expect(countAuditOps(root, 'recall_availability_detected')).toBe(0);
   });
@@ -104,16 +104,16 @@ describe('api.recall availabilityHint', () => {
     for (let i = 0; i < 3; i++) seedAged(root, `zephyr older weak private ${i}`, 40, 'slack:private:x');
     // No scope on the recall = default-deny private rows. With the fix (pool=entries)
     // only the 6 public olds count; the buggy pool=all would have counted 9.
-    const result = await retrieve(ctxFor(root), { query: QUERY, limit: 4 });
+    const result = await retrieve(ctxFor(root), { query: QUERY, window: { limit: 4 } });
     expect(result.availabilityHint).toBeDefined();
     expect(result.availabilityHint!.olderCandidatesPassedOver).toBe(6);
   });
 
   it('does not change result ordering (soft warning only)', async () => {
     seedFiringFixture(root);
-    const withHint = await retrieve(ctxFor(root), { query: QUERY, limit: 4 });
+    const withHint = await retrieve(ctxFor(root), { query: QUERY, window: { limit: 4 } });
     process.env.HIPPO_AVAILABILITY = 'off';
-    const without = await retrieve(ctxFor(root), { query: QUERY, limit: 4 });
+    const without = await retrieve(ctxFor(root), { query: QUERY, window: { limit: 4 } });
     expect(withHint.results.map((r) => r.id)).toEqual(without.results.map((r) => r.id));
   });
 });

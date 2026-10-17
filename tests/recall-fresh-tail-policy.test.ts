@@ -61,8 +61,8 @@ describe('fresh-tail policy', () => {
 
   it('back-compat: env unset, freshTailCount > 0, no sessionId → tenant-wide rows, no throw', async () => {
     for (let i = 0; i < 3; i++) writeEntry(root, makeRaw(`event ${i}`));
-    await expect(retrieve(ctxFor(root), { query: 'event', freshTailCount: 3 })).resolves.toBeDefined();
-    const r = await retrieve(ctxFor(root), { query: 'event', freshTailCount: 3 });
+    await expect(retrieve(ctxFor(root), { query: 'event', window: { freshTailCount: 3 } })).resolves.toBeDefined();
+    const r = await retrieve(ctxFor(root), { query: 'event', window: { freshTailCount: 3 } });
     // At least one row should be tagged isFreshTail under tenant-wide policy.
     expect(r.results.some((it) => it.isFreshTail === true)).toBe(true);
   });
@@ -72,7 +72,7 @@ describe('fresh-tail policy', () => {
     for (let i = 0; i < 3; i++) writeEntry(root, makeRaw(`event ${i}`));
     let thrown = null;
     try {
-      await retrieve(ctxFor(root), { query: 'event', freshTailCount: 3 });
+      await retrieve(ctxFor(root), { query: 'event', window: { freshTailCount: 3 } });
     } catch (err) {
       thrown = err;
     }
@@ -102,8 +102,7 @@ describe('fresh-tail policy', () => {
     }
     const r = await retrieve(ctxFor(root), {
       query: 'session',
-      freshTailCount: 5,
-      freshTailSessionId: sess,
+      window: { freshTailCount: 5, freshTailSessionId: sess },
     });
     const freshIds = r.results.filter((it) => it.isFreshTail).map((it) => it.id);
     // Every fresh-tail row must come from sess-A.
@@ -120,7 +119,7 @@ describe('fresh-tail policy', () => {
     process.env.HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL = '1';
     for (let i = 0; i < 3; i++) writeEntry(root, makeRaw(`event ${i}`));
     const unset = await retrieve(ctxFor(root), { query: 'event' });
-    const zero = await retrieve(ctxFor(root), { query: 'event', freshTailCount: 0 });
+    const zero = await retrieve(ctxFor(root), { query: 'event', window: { freshTailCount: 0 } });
     for (const r of [unset, zero]) {
       expect(r.results.map((it) => it.content).sort()).toEqual(['event 0', 'event 1', 'event 2']);
       expect(r.results.filter((it) => it.isFreshTail)).toEqual([]);
@@ -136,7 +135,7 @@ describe('fresh-tail policy', () => {
       expect(none.results.length).toBeGreaterThanOrEqual(3);
       expect(none.results.filter((it) => it.isFreshTail)).toEqual([]);
       // The guard is off, so the newest three raw rows come back tagged, each exactly once.
-      const r = await retrieve(ctxFor(root), { query: 'event', freshTailCount: 3 });
+      const r = await retrieve(ctxFor(root), { query: 'event', window: { freshTailCount: 3 } });
       const tail = r.results.filter((it) => it.isFreshTail);
       expect(tail).toHaveLength(3);
       expect(new Set(tail.map((it) => it.id)).size).toBe(3);

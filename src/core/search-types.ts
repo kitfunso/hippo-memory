@@ -17,7 +17,7 @@ export const SALIENCE_MIN_MULTIPLIER = 0.5;
 
 /**
  * One score mutation applied after candidate generation; allocated only under `recall --why` or
- * `RecallOptions.explain`.
+ * `RecallOptions.trace.explain`.
  */
 export interface RerankStep {
   /** One of: interference, value, utility, reranker, goal-boost, retrieval-count-downweight. */

@@ -70,7 +70,7 @@ describe('the recall candidate window drops superseded rows before its LIMIT', (
     const root = newRoot();
     const { current } = seedVersions(root, false);
 
-    expect((await retrieve(ctxFor(root), { query: 'deploy', limit: 1, scorerWindow: 1 })).results.map((r) => r.id)).toEqual([current.id]);
+    expect((await retrieve(ctxFor(root), { query: 'deploy', window: { limit: 1, scorerWindow: 1 } })).results.map((r) => r.id)).toEqual([current.id]);
   });
 });
 
@@ -79,7 +79,7 @@ describe('a superseded summary never stands in for its children', () => {
     const root = newRoot();
     const summary = summaryWithChildren(root, 'invoice detail', {});
     const summaryIds = async (): Promise<string[]> =>
-      (await retrieve(ctxFor(root), { query: 'invoice detail', limit: 1 })).results.filter((r) => r.isSummary).map((r) => r.id);
+      (await retrieve(ctxFor(root), { query: 'invoice detail', window: { limit: 1 } })).results.filter((r) => r.isSummary).map((r) => r.id);
 
     expect(await summaryIds()).toEqual([summary.id]);
     await supersede(ctxFor(root), summary.id, 'billing rollup, revised');

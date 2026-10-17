@@ -55,7 +55,7 @@ function onDb(root: string, write: (db: ReturnType<typeof openHippoDb>) => void)
 describe('rankRecall with a global store', () => {
   function recallOpts(root: string): RankRecallOptions {
     return {
-      query: 'zephyrine cache', budget: 4000, cost: (r) => r.tokens, limit: 10, includeSuperseded: false, explicitScope: null, activeScope: null,
+      query: 'zephyrine cache', budget: 4000, cost: (r) => r.tokens, window: { limit: 10 }, includeSuperseded: false, explicitScope: null, activeScope: null,
       search: { usePhysics: false, physicsConfig: loadConfig(root).physics, multihop: false, mmr: false, mmrLambda: 0.7, localBump: 1.2, explain: false },
     };
   }
