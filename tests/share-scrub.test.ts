@@ -111,6 +111,7 @@ describe('scrubForSharing', () => {
   });
 });
 
+// Timed, since JavaScript counts no regex backtracking steps and a rescan from every repeat needs no nested quantifier.
 describe('scrubForSharing on hostile input', () => {
   const SIZE = 64 * 1024;
   const fillTo = (unit: string, size: number): string => unit.repeat(Math.ceil(size / unit.length)).slice(0, size);

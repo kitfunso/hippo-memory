@@ -161,6 +161,7 @@ describe('redactSecretsStrict', () => {
     }
   });
 
+  // Timed, since JavaScript counts no regex backtracking steps and a rescan from every repeat needs no nested quantifier.
   it('redactSecretsStrict scrubs crafted 128 KiB runs of eyJ- and token= within 50x the time of prose', () => {
     const fill = (unit: string): string => unit.repeat(Math.ceil(131072 / unit.length)).slice(0, 131072);
     const prose = fill('the quarterly review covers risk-free rate assumptions and nothing else. ');

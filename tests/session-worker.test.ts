@@ -90,20 +90,23 @@ describe('runSessionWorker', () => {
     expect(fs.readdirSync(sessions)).toEqual([]);
   });
 
-  it('lets only one of two acquirers in one process run at a time', async () => {
-    let active = 0;
-    let peak = 0;
-    const runs: WorkerMode[] = [];
+  it('lets only one of two acquirers in one process run at a time: the second queues and its run waits for the first', async () => {
+    const events: string[] = [];
+    let release = (): void => undefined;
+    const firstHeld = new Promise<void>((resolve) => { release = resolve; });
     const work = async (mode: WorkerMode): Promise<void> => {
-      active++;
-      peak = Math.max(peak, active);
-      await new Promise((resolve) => setTimeout(resolve, 20));
-      runs.push(mode);
-      active--;
+      const run = events.filter((e) => e.startsWith('start')).length + 1;
+      events.push(`start ${run} ${mode}`);
+      if (run === 1) await firstHeld;
+      events.push(`end ${run}`);
     };
-    await Promise.all([runSessionWorker(ID, 'turn', work), runSessionWorker(ID, 'turn', work)]);
-    expect(peak).toBe(1);
-    expect(runs.length).toBeGreaterThanOrEqual(1);
+    const first = runSessionWorker(ID, 'turn', work);
+    await runSessionWorker(ID, 'turn', work);
+    events.push('second returned');
+    expect(fs.readFileSync(file('.queued'), 'utf8')).toBe('turn');
+    release();
+    await first;
+    expect(events).toEqual(['start 1 turn', 'second returned', 'end 1', 'start 2 turn', 'end 2']);
     expect(fs.readdirSync(sessions)).toEqual([]);
   });
 
