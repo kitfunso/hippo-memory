@@ -19,7 +19,7 @@ const TRAP_CATEGORIES: TrapCategory[] = UNTYPED_CATEGORIES;
 const NEW_IDS = ['timezone_naive', 'idempotency_retry', 'float_accumulation'];
 
 // Simple BM25-like score: shared-token count, tokens lower-cased, length>2.
-// Not full BM25 (no IDF, no length normalization) — sufficient as a sanity sim.
+// Not full BM25 (no IDF, no length normalization), sufficient as a sanity sim.
 function score(query: string, docTokens: Set<string>): number {
   const queryTokens = query
     .toLowerCase()

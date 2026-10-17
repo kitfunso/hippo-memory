@@ -1,5 +1,5 @@
 /**
- * F3 (v1.7.0) — `RecallOptions.scorerWindow` opt-in for the candidate pool
+ * F3 (v1.7.0): `RecallOptions.scorerWindow` opt-in for the candidate pool
  * the scorer evaluates, separate from `limit` (results returned).
  *
  * Codex mk2-pass P0-1: defaulting `scorerWindow` to `limit` would have
