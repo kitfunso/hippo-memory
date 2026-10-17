@@ -40,17 +40,12 @@ import {
   reclaimExpiredCardsAt,
   reviewCardAt,
 } from '../../src/store/cards.js';
-import { countOpenConflictsAt, replaceDetectedConflictsAt } from '../../src/store/conflicts.js';
+import { replaceDetectedConflictsAt } from '../../src/store/conflicts.js';
 import type { DetectedConflict } from '../../src/store/conflicts.js';
 import { commitInChunksAt, deleteEntriesOneByOneAt, memoriesBackingObjectsAt } from '../../src/store/delete-and-batch.js';
 import type { FlushComponent, LoadedRows } from '../../src/store/delete-and-batch.js';
-import type {
-  DormantMemory,
-  DormantRestore,
-  DormantRestoreOutcome,
-  ListDormantOpts,
-} from '../../src/store/dormant.js';
-import { loadDormantMemoriesAt, restoreDormantMemoryAt } from '../../src/store/dormant.js';
+import type { DormantMemory, ListDormantOpts } from '../../src/store/dormant.js';
+import { loadDormantMemoriesAt } from '../../src/store/dormant.js';
 import {
   countSessionRawMemoriesAt,
   loadAllEntriesWithBaseAt,
@@ -254,10 +249,6 @@ export function addCardComment(
   return onHandle(hippoRoot, (db) => addCardCommentAt(db, tenantId, cardId, author, body), openStore);
 }
 
-export function countOpenConflicts(hippoRoot: string, tenantId: string): number {
-  return onHandle(hippoRoot, (db) => countOpenConflictsAt(db, tenantId), openStore);
-}
-
 export function replaceDetectedConflicts(
   hippoRoot: string,
   detected: Array<DetectedConflict>,
@@ -286,10 +277,6 @@ export function loadDormantMemories(
   admit?: SqlFragment,
 ): DormantMemory[] {
   return onHandle(hippoRoot, (db) => loadDormantMemoriesAt(db, tenantId, opts, admit));
-}
-
-export function restoreDormantMemory(hippoRoot: string, restore: DormantRestore): DormantRestoreOutcome {
-  return onHandle(hippoRoot, (db) => restoreDormantMemoryAt(db, { hippoRoot }, restore));
 }
 
 export function loadEntriesByIds(hippoRoot: string, ids: readonly string[], tenantId?: string): MemoryEntry[] {
