@@ -34,7 +34,7 @@ export interface RememberLocal {
   weaken?: { readonly strength: number; readonly halfLifeFactor: number };
 }
 
-export interface RememberOpts {
+export interface RememberOptions {
   content: string;
   kind?: MemoryKind;
   scope?: string;
@@ -75,7 +75,7 @@ export interface RememberResult {
 
 /** The scope a write lands in: the caller's own personal scope when asked for, else the client's, which may not be a
  * personal or quarantine one and must be one the same actor could read (a private scope needs its grant). */
-function rememberScope(ctx: Context, opts: RememberOpts): string | null {
+function rememberScope(ctx: Context, opts: RememberOptions): string | null {
   if (!opts.personal) {
     assertClientScope(opts.scope);
     const scope = opts.scope ?? null;
@@ -105,7 +105,7 @@ interface PreparedRemember {
   readonly warnings: readonly string[];
 }
 
-function prepareRemember(ctx: Context, opts: RememberOpts): PreparedRemember {
+function prepareRemember(ctx: Context, opts: RememberOptions): PreparedRemember {
   if (opts.project) assertCallerProject(opts.project);
   const requestedScope = rememberScope(ctx, opts);
   const vetted = vetSecrets(opts.content, opts.tags ?? [], opts.untrusted === true);
@@ -170,7 +170,7 @@ function quarantineOf({ requestedScope, detection }: PreparedRemember): Connecto
 /** Store one memory: the store's entryWrites group writes the row and its one remember audit row, under the caller's
  * subject. A write that carries a connector event or untrusted content goes through connectorWrites, which commits its
  * companion rows with it. */
-export async function remember(ctx: StoreContext, opts: RememberOpts): Promise<RememberResult> {
+export async function remember(ctx: StoreContext, opts: RememberOptions): Promise<RememberResult> {
   const store = ctx.store;
   const entryWrites = store.entryWrites;
   const prepared = prepareRemember(ctx, opts);

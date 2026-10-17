@@ -165,7 +165,7 @@ export function freshStore(templates: Templates, kind: 'local' | 'wide'): Store 
   return { home, root, globalRoot, goalId: templates.goalId };
 }
 
-export function normalise<T>(value: T, s: Store): T {
+export function normalize<T>(value: T, s: Store): T {
   const text = JSON.stringify(value)
     .split(JSON.stringify(s.home).slice(1, -1)).join('<home>')
     .split(s.home.replace(/\\/g, '/')).join('<home>')

@@ -1,6 +1,6 @@
 // The write half every connector's ingest shares, after its own pre-check of the event log.
 
-import { remember, type RememberOpts, type StoreContext } from '../api/index.js';
+import { remember, type RememberOptions, type StoreContext } from '../api/index.js';
 import type { ConnectorEvent } from '../store/port.js';
 import { RejectedValueError } from '../core/api-errors.js';
 
@@ -16,7 +16,7 @@ export interface IngestResult {
 export async function rememberWithEventLog(
   ctx: StoreContext,
   event: ConnectorEvent,
-  opts: RememberOpts | null,
+  opts: RememberOptions | null,
 ): Promise<IngestResult> {
   if (!opts) return markSkipped(ctx, event);
   try {

@@ -9,7 +9,7 @@ import { findHippoStoreDir, isGlobalStoreRoot, isInitialized } from './core/proj
 import { realpathOrResolve } from './util/real-path.js';
 import { getGlobalRoot } from './sharing/global-store.js';
 import { readStoreInventory } from './store/diagnostics.js';
-import { runDoctor, type DoctorOpts } from './doctor.js';
+import { runDoctor, type DoctorOptions } from './doctor.js';
 import { loadConfig } from './core/config.js';
 import { redactSecretsStrict } from './util/secret-detect.js';
 import type { JsonObject } from './store/working-memory.js';
@@ -17,7 +17,7 @@ import { type JsonValue, isJsonString, isJsonObject } from './util/json.js';
 import { escapeRegex } from './util/escape.js';
 import { errorMessage } from './util/log.js';
 
-export interface SupportBundleOpts extends DoctorOpts {
+export interface SupportBundleOptions extends DoctorOptions {
   readonly cwd: string;
   readonly home: string;
   readonly now: Date;
@@ -104,7 +104,7 @@ function buildStoreEntry(kind: 'project' | 'global', storeDir: string): JsonObje
   }
 }
 
-function buildStores(opts: SupportBundleOpts): JsonValue[] {
+function buildStores(opts: SupportBundleOptions): JsonValue[] {
   const stores: JsonValue[] = [];
   const projectDir = findHippoStoreDir(opts.cwd, { homeDir: opts.home });
   if (projectDir !== null) stores.push(buildStoreEntry('project', projectDir));
@@ -160,7 +160,7 @@ function tailLogFile(file: string): string[] {
   );
 }
 
-function buildLogsSection(opts: SupportBundleOpts): JsonObject {
+function buildLogsSection(opts: SupportBundleOptions): JsonObject {
   const dir = path.join(opts.home, '.hippo', 'logs');
   const names = listLogFileNames(dir);
   const files: JsonObject[] = names.map((name) => {
@@ -310,7 +310,7 @@ function redactStrings(value: JsonValue, homePattern: RegExp | null): JsonValue 
 }
 
 /** Read-only: builds one redacted support-ticket snapshot. Never reads a memory content column. */
-export function buildSupportBundle(opts: SupportBundleOpts): JsonObject {
+export function buildSupportBundle(opts: SupportBundleOptions): JsonObject {
   // Before doctor: its read-only open leaves an empty -wal that the store's file list would then report.
   const stores = buildStores(opts);
   const bundle: JsonObject = {

@@ -45,7 +45,7 @@ export interface DoctorReport {
 }
 
 /** Inputs for {@link runDoctor}; defaults come from the process. */
-export interface DoctorOpts {
+export interface DoctorOptions {
   cwd?: string;
   /**
    * Home directory used to find agent configuration (~/.claude unless CLAUDE_CONFIG_DIR is set, ~/.codex unless
@@ -470,7 +470,7 @@ function claudeCodeCheck(home: string): DoctorCheck {
 }
 
 /** Run every check. Never throws for a broken install; broken parts become failed checks. */
-export function runDoctor(opts: DoctorOpts): DoctorReport {
+export function runDoctor(opts: DoctorOptions): DoctorReport {
   const cwd = opts.cwd ?? process.cwd();
   const home = opts.home ?? os.homedir();
   const now = opts.now ?? new Date();

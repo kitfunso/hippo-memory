@@ -22,7 +22,7 @@ export interface RrfFuseOptions {
 /**
  * Fuses N ranked lists (each in descending-score order; index 0 is rank 1) into a Map of candidate id -> RRF score;
  * sort by value descending for the fused
- * order. `weights` has one entry per list and is summed without normalisation; `options` overrides k and absentRank. */
+ * order. `weights` has one entry per list and is summed without normalization; `options` overrides k and absentRank. */
 export function rrfFuse<T>(
   rankedLists: ReadonlyArray<ReadonlyArray<T>>,
   weights: ReadonlyArray<number>,

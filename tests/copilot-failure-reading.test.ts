@@ -1,7 +1,7 @@
 // A quiet Copilot search or shell failure reads as routine, as the Claude Code tool of the same kind does (critic test 5, unit half).
 import { describe, it, expect } from 'vitest';
 import { lessonFromFailure } from '../src/capture/failure-reading.js';
-import { normaliseHookPayload } from '../src/cli/stdin.js';
+import { normalizeHookPayload } from '../src/cli/stdin.js';
 import type { JsonValue } from '../src/util/json.js';
 import { copilotPayload } from './_helpers/copilot-hooks.js';
 
@@ -17,7 +17,7 @@ function failure(tool: string, error: string, command?: string): JsonValue {
 }
 
 function fixture(name: 'postToolUseFailureGrep' | 'postToolUseFailureBash' | 'postToolUseFailureBuild' | 'syntheticClaudeStyleTerminalFailure'): JsonValue {
-  const text = normaliseHookPayload(copilotPayload(name, CWD));
+  const text = normalizeHookPayload(copilotPayload(name, CWD));
   if (text === undefined) throw new Error('normaliser dropped the payload');
   // SAFETY: JSON.parse returns a JSON value by definition.
   return JSON.parse(text) as JsonValue;

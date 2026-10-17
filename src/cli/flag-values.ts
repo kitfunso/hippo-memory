@@ -1,7 +1,7 @@
 // Readers that turn parsed CLI flags into typed values, and the flag types they share.
 
 import { resolveListLimit } from '../util/limits.js';
-import type { RecallSearchOpts } from '../api/recall/pipeline.js';
+import type { RecallSearchOptions } from '../api/recall/pipeline.js';
 import type { HippoConfig } from '../core/config.js';
 import { fail } from './exit.js';
 
@@ -47,7 +47,7 @@ export function parseBudgetFlag(value: string | boolean | string[] | undefined, 
 export type CliFlags = Record<string, string | boolean | string[]>;
 
 // Whole-arg digits only: parseInt alone reads "1abc" as 1 and a mutating verb would hit the wrong row.
-// Digits past 2^53 round to a neighbouring id, so they are refused too.
+// Digits past 2^53 round to a neighboring id, so they are refused too.
 export function parsePositiveId(idRaw: string | undefined, label: string): number {
   const s = String(idRaw ?? '').trim();
   const id = parseInt(s, 10);
@@ -117,7 +117,7 @@ export interface CommandContext {
   readonly flags: CliFlags;
 }
 
-export type EngineFlags = Pick<RecallSearchOpts, 'usePhysics' | 'physicsConfig' | 'mmr' | 'mmrLambda' | 'localBump'>;
+export type EngineFlags = Pick<RecallSearchOptions, 'usePhysics' | 'physicsConfig' | 'mmr' | 'mmrLambda' | 'localBump'>;
 
 export function parseAsOfFlag(flags: CliFlags): string | undefined {
   const asOf = stringFlag(flags, 'as-of');

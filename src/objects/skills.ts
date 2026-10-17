@@ -28,7 +28,7 @@ export const MAX_SKILL_TRIGGER_LEN = 1024;
  *  Realistic active-skill counts are tens; 1000 is a generous bound. */
 export const MAX_EXPORT_SKILLS = 1000;
 
-export interface SaveSkillOpts {
+export interface SaveSkillOptions {
   skillName: string;
   instructions: string;
   /** Optional "when to apply" trigger. */
@@ -41,7 +41,7 @@ export interface SaveSkillOpts {
   extraTags?: string[];
 }
 
-export interface ListSkillsOpts {
+export interface ListSkillsOptions {
   status?: SkillStatus;
   limit?: number;
   /** Resume after this row: the position the previous page ended on. */
@@ -69,7 +69,7 @@ function buildSkillContent(skillName: string, instructions: string, trigger: str
   return content;
 }
 
-export const SKILL: SavableDescriptor<'skill', SaveSkillOpts> = {
+export const SKILL: SavableDescriptor<'skill', SaveSkillOptions> = {
   kind: 'skill',
   label: 'skill',
   plural: 'skills',
@@ -104,7 +104,7 @@ export function saveSkill(
   objects: Objects,
   baseHalfLifeDays: number,
   tenantId: string,
-  opts: SaveSkillOpts,
+  opts: SaveSkillOptions,
   actor: string = 'cli',
 ): Promise<Skill> {
   return saveObject(objects, SKILL, { baseHalfLifeDays, tenantId, actor }, opts);
@@ -131,7 +131,7 @@ export function loadSkillById(
 export function loadSkills(
   objects: Objects,
   tenantId: string,
-  opts: ListSkillsOpts = {},
+  opts: ListSkillsOptions = {},
 ): Promise<Skill[]> {
   return listObjects(objects, SKILL, tenantId, opts);
 }

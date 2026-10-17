@@ -1,5 +1,5 @@
 // /v1/skills routes.
-import { MAX_SKILL_NAME_LEN, type SaveSkillOpts, SKILL, skillsMarkdown } from '../../objects/skills.js';
+import { MAX_SKILL_NAME_LEN, type SaveSkillOptions, SKILL, skillsMarkdown } from '../../objects/skills.js';
 import { sendJson } from '../../util/http-util.js';
 import type { AuthedRouteRequest } from '../types.js';
 import { MAX_SHORT_FIELD_LEN, parseJsonBody } from '../validation.js';
@@ -17,7 +17,7 @@ import {
 
 const INSTRUCTIONS: RequiredStringRule = { max: 8192, plural: true };
 
-const skillRoutes: VersionedRouteConfig<'skill', SaveSkillOpts> = {
+const skillRoutes: VersionedRouteConfig<'skill', SaveSkillOptions> = {
   noun: 'skill',
   field: 'skill',
   listField: 'skills',

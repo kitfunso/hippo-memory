@@ -44,7 +44,7 @@ process.stdout.write(JSON.stringify({ length: vector.length, first3: vector.slic
 
     expect(parsed.length).toBe(384);
 
-    // Spot-check: values should be floats in [-1, 1] (model normalises output).
+    // Spot-check: values should be floats in [-1, 1] (model normalizes output).
     for (const v of parsed.first3) {
       expect(Number.isFinite(v)).toBe(true);
       expect(v).toBeGreaterThanOrEqual(-1);

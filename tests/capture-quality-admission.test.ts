@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { cmdCapture } from '../src/capture/command.js';
 import { extractFromTexts } from '../src/capture/extract.js';
-import { sessionTail, summariseSessionTurns, type SessionTurn } from '../src/capture/transcript.js';
+import { sessionTail, summarizeSessionTurns, type SessionTurn } from '../src/capture/transcript.js';
 import { extractLessons, partitionLessons } from '../src/learn/autolearn.js';
 import { getContext } from '../src/api/index.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, Layer } from '../src/core/memory.js';
@@ -67,7 +67,7 @@ describe('capture retains complete supported assertions', () => {
     const user = `Decision: the release app ${'uses the shared configuration '.repeat(22)}because the signed package must match the manifest.`;
     const assistant = `The storage service must ${'retain the source details '.repeat(95)}until verification finishes.`;
     const turns: SessionTurn[] = [{ role: 'user', text: user }, { role: 'assistant', text: assistant }];
-    const summary = summariseSessionTurns(turns);
+    const summary = summarizeSessionTurns(turns);
     expect(summary).toContain(user);
     expect(summary).toContain(assistant);
     expect(captureTurns(turns)).toEqual([]);

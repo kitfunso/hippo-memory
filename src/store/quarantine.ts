@@ -100,7 +100,7 @@ function listQuarantineRows(
   return (rows as QuarantineDbRow[]).map(fromDbRow);
 }
 
-export interface RecordQuarantineOpts {
+export interface RecordQuarantineOptions {
   tenantId: string;
   memoryId: string;
   originalScope: string | null;
@@ -109,7 +109,7 @@ export interface RecordQuarantineOpts {
 }
 
 /** Insert the quarantine row + its audit event; caller runs this inside the memory's own write transaction. */
-export function recordQuarantine(db: DatabaseSyncLike, opts: RecordQuarantineOpts): void {
+export function recordQuarantine(db: DatabaseSyncLike, opts: RecordQuarantineOptions): void {
   db.prepare(
     `INSERT INTO memory_quarantine (tenant_id, memory_id, original_scope, reason, status, quarantined_at)
      VALUES (?, ?, ?, ?, 'pending', ?)`,

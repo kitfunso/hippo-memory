@@ -85,7 +85,7 @@ import {
   handleSupersedeSkill,
 } from './routes/skills.js';
 import { parseJsonBody } from './validation.js';
-import type { AuthedRouteRequest, ResolvedServeOpts, Route, RouteRequest, RouteEndpoint } from './types.js';
+import type { AuthedRouteRequest, ResolvedServeOptions, Route, RouteRequest, RouteEndpoint } from './types.js';
 
 function webhook(
   handle: (r: WebhookRequest, store: HippoStore) => Promise<void>,
@@ -644,6 +644,6 @@ function routeGroup(route: Route): StoreGroup | undefined {
 }
 
 /** A route answers 501 without running when the store lacks the group it needs. */
-function assertRoutePorted(opts: ResolvedServeOpts, group: StoreGroup | undefined): void {
+function assertRoutePorted(opts: ResolvedServeOptions, group: StoreGroup | undefined): void {
   if (group !== undefined && !hasGroup(opts.store, group)) throw new HttpError(501, STORE_NOT_PORTED_MESSAGE);
 }

@@ -100,13 +100,13 @@ describe('hippo doctor', () => {
     begin('started-live', ago(2));
     begin('started-transcript-gone', ago(40 * 24 * 60));
     begin('started-no-transcript', ago(20), null);
-    const summarisedStuck = begin('summarised-stuck', ago(30));
-    const summarisedLive = begin('summarised-live', ago(30));
+    const summarizedStuck = begin('summarised-stuck', ago(30));
+    const summarizedLive = begin('summarised-live', ago(30));
     const finished = begin('finished', ago(30));
     const closed = begin('closed-no-summary', ago(30));
     const setStatus = db.prepare(`UPDATE compactions SET status = ?, summarised_at = ? WHERE id = ?`);
-    setStatus.run('summarised', ago(20).toISOString(), summarisedStuck);
-    setStatus.run('summarised', ago(3).toISOString(), summarisedLive);
+    setStatus.run('summarised', ago(20).toISOString(), summarizedStuck);
+    setStatus.run('summarised', ago(3).toISOString(), summarizedLive);
     setStatus.run('done', ago(20).toISOString(), finished);
     setStatus.run('no-summary', ago(20).toISOString(), closed);
     closeHippoDb(db);

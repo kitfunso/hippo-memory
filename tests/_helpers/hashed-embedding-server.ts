@@ -5,7 +5,7 @@ import type { AddressInfo } from 'node:net';
 
 export const HASHED_DIM = 16;
 
-/** The vector the server answers for `text`, L2-normalised; all zeros only for empty text. */
+/** The vector the server answers for `text`, L2-normalized; all zeros only for empty text. */
 export function hashedVector(text: string): number[] {
   const v = Array.from({ length: HASHED_DIM }, () => 0);
   const s = ` ${text.toLowerCase()} `;

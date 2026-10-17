@@ -1,4 +1,4 @@
-import type { RememberOpts } from '../../api/index.js';
+import type { RememberOptions } from '../../api/index.js';
 import { scopeFromRepository } from './scope.js';
 import type {
   GitHubIssueEvent,
@@ -9,7 +9,7 @@ import type {
 } from './types.js';
 
 /**
- * Convert GitHub webhook events into RememberOpts; each returns null when the event has no usable body so the caller
+ * Convert GitHub webhook events into RememberOptions; each returns null when the event has no usable body so the caller
  * marks it seen and skips the insert.
  * artifact_ref formats (github://<owner/repo>/issue|pull/<n>[/comment|review_comment/<id>]) are stable because deletion
  * looks rows up by them.
@@ -27,7 +27,7 @@ interface OptsParts {
 function rememberOpts(
   repository: GitHubRepository | undefined,
   { content, refPath, event, login }: OptsParts,
-): RememberOpts {
+): RememberOptions {
   const repoFull = repository?.full_name ?? UNKNOWN_REPO;
   return {
     content,
@@ -50,7 +50,7 @@ function titleAndBody(item: { title: string | null; body: string | null }): stri
 
 export function issueEventToRememberOpts(
   evt: GitHubIssueEvent,
-): RememberOpts | null {
+): RememberOptions | null {
   const content = titleAndBody(evt.issue);
   if (!content) return null;
   return rememberOpts(evt.repository, {
@@ -63,7 +63,7 @@ export function issueEventToRememberOpts(
 
 export function issueCommentEventToRememberOpts(
   evt: GitHubIssueCommentEvent,
-): RememberOpts | null {
+): RememberOptions | null {
   const content = evt.comment.body?.trim();
   if (!content) return null;
   return rememberOpts(evt.repository, {
@@ -76,7 +76,7 @@ export function issueCommentEventToRememberOpts(
 
 export function pullRequestEventToRememberOpts(
   evt: GitHubPullRequestEvent,
-): RememberOpts | null {
+): RememberOptions | null {
   const content = titleAndBody(evt.pull_request);
   if (!content) return null;
   return rememberOpts(evt.repository, {
@@ -89,7 +89,7 @@ export function pullRequestEventToRememberOpts(
 
 export function prReviewCommentEventToRememberOpts(
   evt: GitHubPullRequestReviewCommentEvent,
-): RememberOpts | null {
+): RememberOptions | null {
   const content = evt.comment.body?.trim();
   if (!content) return null;
   return rememberOpts(evt.repository, {

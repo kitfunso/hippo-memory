@@ -1,4 +1,4 @@
-// The rows one graph view shows: the newest of the whole graph, or the neighbourhood of one entity name.
+// The rows one graph view shows: the newest of the whole graph, or the neighborhood of one entity name.
 import type { DatabaseSyncLike } from '../db/index.js';
 import {
   IN_LIST_CHUNK,
@@ -55,7 +55,7 @@ function wholeGraphRows({ hippoRoot, db, tenantId }: GraphSource, limit: number)
   return { entities, relations, truncated: entities.length >= limit || relations.length >= limit };
 }
 
-/** The named entities with their 1-hop neighbours and the edges among that union; null when the caller may read none of
+/** The named entities with their 1-hop neighbors and the edges among that union; null when the caller may read none of
  * the named ones. */
 function focusRows(
   { hippoRoot, db, tenantId }: GraphSource,
@@ -66,16 +66,16 @@ function focusRows(
   // The name is queried directly, so it is found on a graph larger than `limit`; one name can map to many entities, so
   // the matches are capped.
   const named = loadEntitiesByName(hippoRoot, tenantId, name, { limit }, db);
-  // A hidden focus must not answer through its neighbours that the name exists.
+  // A hidden focus must not answer through its neighbors that the name exists.
   const focus = readableOnly(db, tenantId, named, canRead);
   if (focus.length === 0) return null;
   const focusIds = focus.map((e) => e.id);
   const hop = loadNeighborRelations(hippoRoot, tenantId, focusIds, { limit }, db);
   const union = new Set<number>(focusIds);
-  let neighboursCapped = false;
+  let neighborsCapped = false;
   for (const r of hop) {
     if (union.size >= limit) {
-      neighboursCapped = true; // node cap filled before all neighbours were added
+      neighborsCapped = true; // node cap filled before all neighbors were added
       break;
     }
     union.add(r.fromEntityId);
@@ -83,13 +83,13 @@ function focusRows(
   }
   const unionIds = [...union].slice(0, limit);
   const entities = loadEntitiesByIds(hippoRoot, tenantId, unionIds, db);
-  // Both endpoints in the set: neighbour-to-neighbour edges are included, and the LIMIT never drops one for an
+  // Both endpoints in the set: neighbor-to-neighbor edges are included, and the LIMIT never drops one for an
   // out-of-union row.
   const relations = loadRelationsAmong(hippoRoot, tenantId, unionIds, { limit }, db);
   const truncated =
     named.length >= limit ||
-    hop.length >= limit || // neighbour scan capped -> a 1-hop neighbour may be omitted
-    neighboursCapped || // node cap filled before all neighbours were consumed
+    hop.length >= limit || // neighbor scan capped -> a 1-hop neighbor may be omitted
+    neighborsCapped || // node cap filled before all neighbors were consumed
     union.size > unionIds.length ||
     relations.length >= limit;
   return { entities, relations, truncated };

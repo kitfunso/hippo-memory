@@ -1,4 +1,4 @@
-// A checkout's `origin` remote, read from its git config file and normalised into a project id; no git process, so the
+// A checkout's `origin` remote, read from its git config file and normalized into a project id; no git process, so the
 // prompt hook can call it.
 import * as fs from 'fs';
 import * as path from 'path';
@@ -94,7 +94,7 @@ function azureDevOps(hostPath: string): string {
 
 /** `host/path` for a network remote, so ssh, scp and https forms agree; null for a local path, which would put a
  * user path into rows. */
-export function normaliseRemote(url: string): string | null {
+export function normalizeRemote(url: string): string | null {
   // A query or fragment can carry a token (`?private_token=`) and never names the repo.
   const u = url.trim().replace(/[?#].*$/, '');
   if (u === '' || u.includes('::') || /^file:/i.test(u) || /^[A-Za-z]:[\\/]/.test(u) || /^[./\\~]/.test(u)) return null;
@@ -121,13 +121,13 @@ export function normaliseRemote(url: string): string | null {
   return /^[^/]+\/./.test(id) && !/[:\s@]/.test(id) ? id : null;
 }
 
-/** The normalised origin of the checkout rooted at gitRoot, or null when it has none a project can be named by. */
+/** The normalized origin of the checkout rooted at gitRoot, or null when it has none a project can be named by. */
 export function originRemoteId(gitRoot: string): string | null {
   const file = gitConfigPath(gitRoot);
   if (file === null) return null;
   try {
     const url = originUrlFromConfig(fs.readFileSync(file, 'utf8'));
-    return url === null ? null : normaliseRemote(url);
+    return url === null ? null : normalizeRemote(url);
   } catch (err) {
     // A checkout whose .git holds no config has no origin; the project is then named by its folder.
     log.debug(`project remote: ${file} not read: ${errorMessage(err)}`, errorFields(err));

@@ -69,7 +69,7 @@ export function payloadString(payload: JsonValue, key: 'session_id' | 'tool_name
   return isJsonString(value) && value.trim() !== '' ? value : null;
 }
 
-/** Normalised form used to spot repeats. The failure log keeps only its hash, so changing it breaks repeat counts. */
+/** Normalized form used to spot repeats. The failure log keeps only its hash, so changing it breaks repeat counts. */
 export function failureSignature(text: string): string {
   return text.toLowerCase().replace(/[0-9a-f]{7,}/g, '#').replace(/\d+/g, '#').replace(/\s+/g, ' ').trim();
 }

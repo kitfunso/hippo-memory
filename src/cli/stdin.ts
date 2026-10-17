@@ -84,7 +84,7 @@ function snakeCaseFields(payload: JsonObject): JsonObject {
 
 /** A hook payload with Copilot's camelCase fields copied to the snake_case keys hippo reads. The camelCase keys stay,
  * so the sessionStart reply can follow the sender's casing; text that needs no change comes back exactly as sent. */
-export function normaliseHookPayload(text: string | undefined): string | undefined {
+export function normalizeHookPayload(text: string | undefined): string | undefined {
   if (text === undefined || text.trim() === '') return text;
   let payload: JsonValue;
   try {
@@ -101,9 +101,9 @@ export function normaliseHookPayload(text: string | undefined): string | undefin
 
 /**
  * The stdin read every hook verb uses: {@link readStdinBounded}, with the payload passed through {@link
- * normaliseHookPayload}.
+ * normalizeHookPayload}.
  */
 export async function readHookStdin(waitMs?: number): Promise<BoundedStdin> {
   const read = await readStdinBounded(waitMs);
-  return { text: normaliseHookPayload(read.text), timedOut: read.timedOut };
+  return { text: normalizeHookPayload(read.text), timedOut: read.timedOut };
 }

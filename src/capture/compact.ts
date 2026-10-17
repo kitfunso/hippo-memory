@@ -61,7 +61,7 @@ function isReadableFile(filePath: string): boolean {
   }
 }
 
-/** PreCompact stdout is the summariser's instructions; sent before the snapshot work because a locked store can run the
+/** PreCompact stdout is the summarizer's instructions; sent before the snapshot work because a locked store can run the
  * hook past its 30 s limit, and via writeSync because process.exit drops buffered pipe output. */
 function printPreCompactInstruction(logFile: string): string | null {
   const text = `${PRE_COMPACT_INSTRUCTION}\n`;
@@ -84,7 +84,7 @@ function snapshotJustSaved(hippoRoot: string, sessionId: string | null): boolean
     Date.now() - Date.parse(active.updated_at) < TWIN_FIRE_MS;
 }
 
-/** Runs the PreCompact producer: records the compaction, asks the summariser for memories, saves a working-state
+/** Runs the PreCompact producer: records the compaction, asks the summarizer for memories, saves a working-state
  * snapshot. Never extracts memories itself; SessionEnd capture owns that. */
 function runPreCompact(hippoRoot: string, options: PreCompactOptions, logFile: string): void {
   const { stdinText, stdinTimedOut = false, runtime = 'claude-code' } = options;
@@ -102,7 +102,7 @@ function runPreCompact(hippoRoot: string, options: PreCompactOptions, logFile: s
   }
   const { sessionId, transcriptPath: payloadTranscriptPath } = receipt.input;
   // With chat.useClaudeHooks on, VS Code runs Claude Code's hooks too; it never sends PostCompact to close a record,
-  // nor reads the summariser text.
+  // nor reads the summarizer text.
   const vscode = runtime === 'claude-code' && isVscodeTranscript(payloadTranscriptPath);
   if (vscode && fs.existsSync(vscodeUserHooksFile())) {
     appendPreCompactLog(logFile, 'skip: VS Code payload, hippo.json runs pre-compact for this chat');

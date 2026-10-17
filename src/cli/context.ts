@@ -212,7 +212,7 @@ interface ContextOptsInput {
   readonly rec: DeliveryRecorder | null;
 }
 
-function buildContextOpts(flags: CliFlags, input: ContextOptsInput): api.ContextOpts {
+function buildContextOpts(flags: CliFlags, input: ContextOptsInput): api.ContextOptions {
   // Scope detection uses cwd, so it is resolved here and passed in via opts.scope.
   const ctxExplicitScope = stringFlagOrExit(flags, 'scope') ?? null;
   const ctxActiveScope = ctxExplicitScope || detectScope();

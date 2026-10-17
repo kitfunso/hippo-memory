@@ -70,7 +70,7 @@ export function selectGraphSeeds(
     .map(([index, best]) => ({ index, strength: 1 / (best + 1) }));
 }
 
-// Pass 1: take the STRONGEST reaching-seed strength per new neighbour across ALL relations at this depth before
+// Pass 1: take the STRONGEST reaching-seed strength per new neighbor across ALL relations at this depth before
 // committing any to `visited`;
 // marking mid-loop would lock a node to whichever relation SQLite returned first and drop a stronger seed's later edge.
 function bestStrengthAtDepth(
@@ -124,7 +124,7 @@ async function reachedEntityScores(
     const hopFactor = Math.pow(decay, depth);
     const bestStrengthThisDepth = bestStrengthAtDepth(rels, frontierSet, visited, frontierStrength, originStrength);
     // Pass 2: commit strongest-first (then id asc — deterministic), so the per-hop fanout cap
-    // keeps the highest-scoring neighbours rather than whichever SQLite happened to return.
+    // keeps the highest-scoring neighbors rather than whichever SQLite happened to return.
     const nextFrontier: number[] = [];
     const nextStrength = new Map<number, number>();
     const ordered = [...bestStrengthThisDepth.keys()].sort((a, b) => {
@@ -157,7 +157,7 @@ interface AccumulateForStoreOptions {
 /**
  * Accumulate per-entryIndex graph-proximity scores from ONE store's graph into `graphScore`; only seeds whose entities
  * live in THIS store are expanded.
- * A neighbour's score = originSeedStrength x decay^(graph distance); the seed strength is carried unchanged along each
+ * A neighbor's score = originSeedStrength x decay^(graph distance); the seed strength is carried unchanged along each
  * BFS path.
  */
 async function accumulateForStore(
@@ -242,7 +242,7 @@ export async function graphRankStream(
 
   // Seed-exclusion guard: graphScore is keyed by entryIndex across roots but each root's visited-set is per-root, so a
   // seed in one store
-  // could score as a neighbour in the other; drop every seed index so "seeds are never graph-scored" holds across
+  // could score as a neighbor in the other; drop every seed index so "seeds are never graph-scored" holds across
   // roots.
   for (const s of seeds) graphScore.delete(s.index);
 

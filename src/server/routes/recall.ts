@@ -5,9 +5,9 @@ import { isSharedStore } from '../../core/config.js';
 import { assembleCost, contextCost, drillCost } from '../../api/context-render.js';
 import {
   assemble,
-  type AssembleOpts,
+  type AssembleOptions,
   drillDown,
-  type DrillDownOpts,
+  type DrillDownOptions,
   getContext,
   recordTokens,
   retrieve,
@@ -65,7 +65,7 @@ export async function handleAssembleSession(
     : (sumOlderRaw === '1' || sumOlderRaw === 'true');
   const scopeQ = query.get('scope');
   const scope = scopeQ !== null && scopeQ.length > 0 ? scopeQ : undefined;
-  const assembleExtra: Pick<AssembleOpts, 'budget' | 'freshTailCount' | 'summarizeOlder' | 'scope'> = {};
+  const assembleExtra: Pick<AssembleOptions, 'budget' | 'freshTailCount' | 'summarizeOlder' | 'scope'> = {};
   if (budget !== undefined) assembleExtra.budget = budget;
   if (freshTailCount !== undefined) assembleExtra.freshTailCount = freshTailCount;
   if (summarizeOlder !== undefined) assembleExtra.summarizeOlder = summarizeOlder;
@@ -111,7 +111,7 @@ export async function handleDrillRecall(
     }
     depth = parsed;
   }
-  const drillExtra: Pick<DrillDownOpts, 'limit' | 'budget' | 'depth'> = {};
+  const drillExtra: Pick<DrillDownOptions, 'limit' | 'budget' | 'depth'> = {};
   if (limit !== undefined) drillExtra.limit = limit;
   if (budget !== undefined) drillExtra.budget = budget;
   if (depth !== undefined) drillExtra.depth = depth;

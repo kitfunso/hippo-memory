@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { existsSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
-import { _readApiKeyVerifyStatsForTests, createApiKey, revokeApiKey, type CreateApiKeyOpts } from '../src/store/auth.js';
+import { _readApiKeyVerifyStatsForTests, createApiKey, revokeApiKey, type CreateApiKeyOptions } from '../src/store/auth.js';
 import { serve, type AddonRoute, type ServeOpts } from '../src/server.js';
 import { sqliteStore, StoreBusyError, type HippoStore } from '../src/entry/store-kit.js';
 import { IncomingMessage } from 'node:http';
@@ -47,7 +47,7 @@ async function start(rateLimits?: ServeOpts['rateLimits'], extra: Partial<ServeO
   stop = handle.stop;
 }
 
-function mint(opts: Partial<CreateApiKeyOpts> = {}): string {
+function mint(opts: Partial<CreateApiKeyOptions> = {}): string {
   const db = openHippoDb(root);
   try {
     return createApiKey(db, { tenantId: 'default', role: 'member', ...opts }).plaintext;

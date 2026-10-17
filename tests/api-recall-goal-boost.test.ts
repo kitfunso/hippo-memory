@@ -1,5 +1,5 @@
 /**
- * v1.7.4 -- api.recall plumbs RecallOpts.sessionId through to the
+ * v1.7.4 -- api.recall plumbs RecallOptions.sessionId through to the
  * boostByGoals helper on its primary BM25 band, BEFORE projection to
  * RecallResultItem and BEFORE fresh-tail / summary appendix rows are
  * appended. Pinned end-to-end through the api surface (not through CLI/MCP/
@@ -25,7 +25,7 @@ function countRows(db: DatabaseSyncLike, sql: string, ...params: unknown[]): num
   return (row as { c: number }).c;
 }
 
-describe('api.recall + RecallOpts.sessionId goal-stack boost', () => {
+describe('api.recall + RecallOptions.sessionId goal-stack boost', () => {
   let hippoRoot: string;
   let ctx: FullContext;
   const tenantId = 'default';

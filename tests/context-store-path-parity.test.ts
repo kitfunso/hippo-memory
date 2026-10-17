@@ -5,7 +5,7 @@ import { cpSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { _resetAblationCacheForTests } from '../src/core/ablation.js';
-import { getContext, type Actor, type ContextOpts, type ContextResult } from '../src/api/index.js';
+import { getContext, type Actor, type ContextOptions, type ContextResult } from '../src/api/index.js';
 import { _resetSharedStoreCacheForTests, markSharedStore } from '../src/core/config.js';
 import { closeHippoDb, openHippoDb, setMeta, withSqliteBlocked } from '../src/db/index.js';
 import { embeddingIndexIdentity } from '../src/store/embeddings/index.js';
@@ -42,7 +42,7 @@ interface Expected {
 
 interface Case {
   readonly name: string;
-  readonly opts: ContextOpts;
+  readonly opts: ContextOptions;
   readonly expected: Expected;
   readonly actor?: Actor;
   readonly tenantId?: string;
@@ -257,7 +257,7 @@ afterEach(() => {
   _resetAblationCacheForTests();
 });
 
-interface PassOpts {
+interface PassOptions {
   /** HIPPO_HOME points at a copy of the global store, else at no store. */
   readonly withGlobal: boolean;
   /** The store carries vectors and the local hashed-embedding server is its provider. */
@@ -273,7 +273,7 @@ interface PassConfig {
 }
 
 /** One getContext on a fresh copy of the fixture. */
-async function runPass(c: Omit<Case, 'name' | 'expected'>, { withGlobal, embedded, prepare }: PassOpts, makeStore?: (root: string) => HippoStore): Promise<Pass> {
+async function runPass(c: Omit<Case, 'name' | 'expected'>, { withGlobal, embedded, prepare }: PassOptions, makeStore?: (root: string) => HippoStore): Promise<Pass> {
   _resetSharedStoreCacheForTests();
   _resetAblationCacheForTests();
   const home = mkdtempSync(join(tmpdir(), 'hippo-context-parity-'));
@@ -295,7 +295,7 @@ async function runPass(c: Omit<Case, 'name' | 'expected'>, { withGlobal, embedde
     // A store of another kind gets no reach: the api reads it as one project with no global store.
     const reach = served.kind === 'sqlite' ? sqliteReach(root, served) : undefined;
     const ctx = { hippoRoot: root, tenantId: c.tenantId ?? TENANT_A, actor: c.actor ?? ADMIN, store: served, reach };
-    const opts: ContextOpts = { currentProject: PROJECT, ...c.opts };
+    const opts: ContextOptions = { currentProject: PROJECT, ...c.opts };
     const result = store && store.kind !== 'sqlite'
       ? await withSqliteBlocked(store.kind, async () => getContext(ctx, opts))
       : await getContext(ctx, opts);

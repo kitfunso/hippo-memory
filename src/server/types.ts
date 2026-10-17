@@ -89,7 +89,7 @@ export interface ServeOpts {
   };
 }
 
-export type ResolvedServeOpts = ServeOpts & {
+export type ResolvedServeOptions = ServeOpts & {
   store: HippoStore;
   /** Fences a loop-off route's work from hippo.db on the server thread when the store has workers. */
   offLoop: <T>(run: () => T) => T;
@@ -102,7 +102,7 @@ export type ResolvedServeOpts = ServeOpts & {
 export interface RouteRequest {
   req: IncomingMessage;
   res: ServerResponse;
-  opts: ResolvedServeOpts;
+  opts: ResolvedServeOptions;
   query: URLSearchParams;
 }
 

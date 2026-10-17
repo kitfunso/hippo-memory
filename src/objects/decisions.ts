@@ -24,7 +24,7 @@ export const VALID_DECISION_STATES: ReadonlySet<DecisionStatus> = new Set<Decisi
   'closed',
 ]);
 
-export interface SaveDecisionOpts {
+export interface SaveDecisionOptions {
   decisionText: string;
   context?: string;
   /** Table id of an ACTIVE decision this one supersedes; the CLI resolves a `--supersedes <memory-id>`
@@ -35,14 +35,14 @@ export interface SaveDecisionOpts {
   extraTags?: string[];
 }
 
-export interface ListDecisionsOpts {
+export interface ListDecisionsOptions {
   status?: DecisionStatus;
   limit?: number;
   /** Resume after this row: the position the previous page ended on. */
   after?: KeysetPosition;
 }
 
-export const DECISION: SavableDescriptor<'decision', SaveDecisionOpts> = {
+export const DECISION: SavableDescriptor<'decision', SaveDecisionOptions> = {
   kind: 'decision',
   label: 'decision',
   plural: 'decisions',
@@ -67,7 +67,7 @@ export function saveDecision(
   objects: Objects,
   baseHalfLifeDays: number,
   tenantId: string,
-  opts: SaveDecisionOpts,
+  opts: SaveDecisionOptions,
   actor: string = 'cli',
 ): Promise<Decision> {
   return saveObject(objects, DECISION, { baseHalfLifeDays, tenantId, actor }, opts);
@@ -104,7 +104,7 @@ export function loadDecisionById(
 export function loadDecisions(
   objects: Objects,
   tenantId: string,
-  opts: ListDecisionsOpts = {},
+  opts: ListDecisionsOptions = {},
 ): Promise<Decision[]> {
   return listObjects(objects, DECISION, tenantId, opts);
 }

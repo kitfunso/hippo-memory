@@ -2,12 +2,12 @@ import { envTenant } from '../util/env.js';
 import type { DatabaseSyncLike } from '../db/index.js';
 import { validateApiKey } from './auth.js';
 
-export interface ResolveOpts {
+export interface ResolveOptions {
   db?: DatabaseSyncLike;
   apiKey?: string;
 }
 
-export function resolveTenantId(opts: ResolveOpts): string {
+export function resolveTenantId(opts: ResolveOptions): string {
   if (opts.apiKey) {
     if (!opts.db) throw new Error('resolveTenantId: db required when apiKey is set');
     const ctx = validateApiKey(opts.db, opts.apiKey);

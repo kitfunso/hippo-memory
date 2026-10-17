@@ -12,7 +12,7 @@ import { _resetAblationCacheForTests } from '../src/core/ablation.js';
 import type { RecallResult } from '../src/api/index.js';
 import { saveActiveTaskSnapshot } from '../src/store/sessions.js';
 import {
-  CLEARED_ENV, FAKE_NOW, freshStore, normalise, RECALL_BRANCHES, RECALL_INPUTS, rowsOf, SESSION, seedPortBranches, sendRecall, seedTemplates, TENANT, type Templates,
+  CLEARED_ENV, FAKE_NOW, freshStore, normalize, RECALL_BRANCHES, RECALL_INPUTS, rowsOf, SESSION, seedPortBranches, sendRecall, seedTemplates, TENANT, type Templates,
 } from './_helpers/recall-golden-seed.js';
 import { portOnlyStore } from './_helpers/port-only-store.js';
 
@@ -92,7 +92,7 @@ async function runPass(scenario: Scenario, makeStore?: (root: string) => HippoSt
       await handle.stop();
       await store?.close();
     }
-    return normalise({ replies, rows: { local: rowsOf(s.root), global: rowsOf(s.globalRoot) } }, s);
+    return normalize({ replies, rows: { local: rowsOf(s.root), global: rowsOf(s.globalRoot) } }, s);
   } finally {
     rmSync(s.home, { recursive: true, force: true });
   }

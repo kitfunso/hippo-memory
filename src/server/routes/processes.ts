@@ -1,5 +1,5 @@
 // /v1/processes routes.
-import { MAX_PROCESS_STEP_LEN, MAX_PROCESS_STEPS, PROCESS, type SaveProcessOpts } from '../../objects/processes.js';
+import { MAX_PROCESS_STEP_LEN, MAX_PROCESS_STEPS, PROCESS, type SaveProcessOptions } from '../../objects/processes.js';
 import { HttpError, sendJson } from '../../util/http-util.js';
 import type { AuthedRouteRequest } from '../types.js';
 import { MAX_SHORT_FIELD_LEN, parseJsonBody } from '../validation.js';
@@ -40,7 +40,7 @@ function validateProcessStepsBody(raw: JsonValue | undefined): string[] {
   return raw as string[];
 }
 
-const processRoutes: VersionedRouteConfig<'process', SaveProcessOpts> = {
+const processRoutes: VersionedRouteConfig<'process', SaveProcessOptions> = {
   noun: 'process',
   field: 'process',
   listField: 'processes',

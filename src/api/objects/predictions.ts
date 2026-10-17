@@ -2,7 +2,7 @@ import {
   predictionMirror,
   type Prediction,
   type PredictionBaserate,
-  type SavePredictionOpts,
+  type SavePredictionOptions,
 } from '../../store/predictions.js';
 import { configOf } from '../config-of.js';
 import type { PredictionClose, PredictionSave, Predictions } from '../../store/port.js';
@@ -17,7 +17,7 @@ export async function savePrediction(ctx: StoreContext, input: PredictionSave): 
 /** A claim saved with its recall mirror, built under the store root's half-life as the HTTP create route builds it. */
 export async function recordPrediction(
   ctx: StoreContext,
-  claim: SavePredictionOpts,
+  claim: SavePredictionOptions,
 ): Promise<Prediction> {
   return savePrediction(ctx, {
     ...claim,

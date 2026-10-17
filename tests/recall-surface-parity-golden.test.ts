@@ -18,7 +18,7 @@ import { _resetAblationCacheForTests } from '../src/core/ablation.js';
 import { _resetSharedStoreCacheForTests } from '../src/core/config.js';
 import { runInProcess, type InProcessResult } from './_helpers/run-in-process.js';
 import {
-  CLEARED_ENV, FAKE_NOW, freshStore, normalise, RECALL_INPUTS, rowsOf, seeded, SESSION, seedTemplates, TENANT, type Store, type Templates,
+  CLEARED_ENV, FAKE_NOW, freshStore, normalize, RECALL_INPUTS, rowsOf, seeded, SESSION, seedTemplates, TENANT, type Store, type Templates,
 } from './_helpers/recall-golden-seed.js';
 import type { CliFlags } from '../src/cli/flag-values.js';
 import { sqliteStore } from '../src/store/sqlite/store.js';
@@ -116,7 +116,7 @@ function auditOps(root: string): AuditOp[] {
 async function onFreshStore<T>(kind: 'local' | 'wide', fn: (s: Store) => Promise<T>): Promise<T> {
   const s = freshStore(templates, kind);
   try {
-    return normalise(await fn(s), s);
+    return normalize(await fn(s), s);
   } finally {
     rmSync(s.home, { recursive: true, force: true });
   }
@@ -330,12 +330,12 @@ describe('recall and context validation drift, MCP vs HTTP', () => {
 
   it.each(RECALL_INPUTS)('recall: %s', async (_name, args) => {
     const got = { mcp: await mcpOutcome(s.root, 'hippo_recall', args), http: await httpOutcome(handle, '/v1/memories', args) };
-    expect(normalise(got, s)).toMatchSnapshot();
+    expect(normalize(got, s)).toMatchSnapshot();
   }, 60_000);
 
   it.each(CONTEXT_INPUTS)('context: %s', async (_name, args) => {
     const got = { mcp: await mcpOutcome(s.root, 'hippo_context', args), http: await httpOutcome(handle, '/v1/context', args) };
-    expect(normalise(got, s)).toMatchSnapshot();
+    expect(normalize(got, s)).toMatchSnapshot();
   }, 60_000);
 });
 

@@ -3,7 +3,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { cpSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { archiveRaw, remember, type Actor, type RememberOpts } from '../src/api/index.js';
+import { archiveRaw, remember, type Actor, type RememberOptions } from '../src/api/index.js';
 import { issueCommentEventToRememberOpts, issueEventToRememberOpts } from '../src/connectors/github/transform.js';
 import { messageToRememberOpts } from '../src/connectors/slack/transform.js';
 import { withSqliteBlocked } from '../src/db/index.js';
@@ -34,7 +34,7 @@ function markedFolder(): string {
 }
 
 /** What a connector hands to remember: its transform's fields, marked untrusted, with the event it answers. */
-function ingestOpts(opts: RememberOpts | null, event: ConnectorEvent): RememberOpts {
+function ingestOpts(opts: RememberOptions | null, event: ConnectorEvent): RememberOptions {
   if (!opts) throw new Error('the transform kept nothing of this event');
   return { ...opts, untrusted: true, event };
 }

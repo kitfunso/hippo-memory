@@ -32,7 +32,7 @@ const MAX_BRIEF_RECEIPTS = 50;
 /** Truncate each receipt's headline in the assembled digest. */
 const MAX_RECEIPT_HEADLINE_LEN = 200;
 
-export interface SaveProjectBriefOpts {
+export interface SaveProjectBriefOptions {
   repo: string;
   summary: string;
   /** The delta note for a supersession; ignored (stored NULL) on a fresh create. */
@@ -46,7 +46,7 @@ export interface SaveProjectBriefOpts {
   refreshReceiptCount?: number;
 }
 
-export interface ListProjectBriefsOpts {
+export interface ListProjectBriefsOptions {
   status?: BriefStatus;
   /** Filter to a single repo. */
   repo?: string;
@@ -55,7 +55,7 @@ export interface ListProjectBriefsOpts {
   after?: KeysetPosition;
 }
 
-export const PROJECT_BRIEF: SavableDescriptor<'project_brief', SaveProjectBriefOpts> = {
+export const PROJECT_BRIEF: SavableDescriptor<'project_brief', SaveProjectBriefOptions> = {
   kind: 'project_brief',
   label: 'brief',
   plural: 'briefs',
@@ -99,7 +99,7 @@ export function saveProjectBrief(
   objects: Objects,
   baseHalfLifeDays: number,
   tenantId: string,
-  opts: SaveProjectBriefOpts,
+  opts: SaveProjectBriefOptions,
   actor: string = 'cli',
 ): Promise<ProjectBrief> {
   return saveObject(objects, PROJECT_BRIEF, { baseHalfLifeDays, tenantId, actor }, opts);
@@ -126,7 +126,7 @@ export function loadProjectBriefById(
 export function loadProjectBriefs(
   objects: Objects,
   tenantId: string,
-  opts: ListProjectBriefsOpts = {},
+  opts: ListProjectBriefsOptions = {},
 ): Promise<ProjectBrief[]> {
   return listObjects(objects, PROJECT_BRIEF, tenantId, {
     status: opts.status,
@@ -236,7 +236,11 @@ function briefDigest(normalizedRepo: string, receipts: readonly BriefReceipt[]):
 }
 
 /** The version a refresh saves: a successor of the repo's active brief when it has one, else a first version. */
-function refreshWrite(normalizedRepo: string, digest: BriefDigest, active: ProjectBrief | null): SaveProjectBriefOpts {
+function refreshWrite(
+  normalizedRepo: string,
+  digest: BriefDigest,
+  active: ProjectBrief | null,
+): SaveProjectBriefOptions {
   return {
     repo: normalizedRepo,
     summary: digest.markdown,

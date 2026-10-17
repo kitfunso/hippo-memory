@@ -52,7 +52,7 @@ export interface ExtractResult {
   skipped?: number;
 }
 
-/** A consolidated object row normalised to the fields extraction needs. */
+/** A consolidated object row normalized to the fields extraction needs. */
 export interface ExtractRow {
   entityType: EntityType;
   /** The object table id (unique only WITHIN its table, hence keyed with entityType). */
@@ -102,12 +102,12 @@ interface SourceRow {
 }
 
 /** The slice of each loader's options extraction uses, assignable to every loader's own. */
-interface SourceLoadOpts {
+interface SourceLoadOptions {
   status: 'active' | 'superseded';
   limit: number;
 }
 
-/** One object type's rows, loaded and normalised. */
+/** One object type's rows, loaded and normalized. */
 export interface LoadedType {
   entityType: EntityType;
   rows: ExtractRow[];
@@ -120,7 +120,7 @@ export interface LoadedType {
  *  either load is full. */
 function source<T extends SourceRow>(
   entityType: EntityType,
-  load: (objects: Objects, tenant: string, opts: SourceLoadOpts) => Promise<T[]>,
+  load: (objects: Objects, tenant: string, opts: SourceLoadOptions) => Promise<T[]>,
   nameOf: (row: T) => string,
   textOf: (row: T) => string,
 ): (objects: Objects, tenantId: string) => Promise<LoadedType> {
@@ -267,7 +267,7 @@ function deriveSupersedes(pass: DerivedEntities): SupersedesPass {
   return { relations, supersededPairs };
 }
 
-/** Normalised name to its single target; a name two entities share is ambiguous and dropped. */
+/** Normalized name to its single target; a name two entities share is ambiguous and dropped. */
 function referenceTargets(created: readonly DerivedEntity[]): Map<string, DerivedEntity> {
   const byName = new Map<string, DerivedEntity>();
   const ambiguous = new Set<string>();

@@ -141,7 +141,7 @@ export function addAuditWriteFailures(count: number): void {
   auditWriteFailures += count;
 }
 
-export interface QueryAuditOpts {
+export interface QueryAuditOptions {
   tenantId: string;
   op?: AuditOp;
   since?: string; // ISO timestamp
@@ -160,7 +160,7 @@ export interface AuditEvent {
   metadata: JsonObject;
 }
 
-export function queryAuditEvents(db: DatabaseSyncLike, opts: QueryAuditOpts): AuditEvent[] {
+export function queryAuditEvents(db: DatabaseSyncLike, opts: QueryAuditOptions): AuditEvent[] {
   const where: string[] = ['tenant_id = ?'];
   const params: unknown[] = [opts.tenantId];
   if (opts.op) {

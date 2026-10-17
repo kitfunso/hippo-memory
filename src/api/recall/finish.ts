@@ -47,7 +47,7 @@ export interface RecallHistoryEntry {
 
 export type RecallHistorySnapshot = readonly RecallHistoryEntry[];
 
-export interface DetectAnchoringOpts {
+export interface DetectAnchoringOptions {
   /** memory_dominance threshold: number of distinct queryHashes that must have returned
    *  the same topMemoryId. Default 3. */
   minDominance?: number;
@@ -111,7 +111,7 @@ export function detectAnchoring(
   history: RecallHistorySnapshot,
   currentQueryHash: number,
   currentTopMemoryId: string | null,
-  opts: DetectAnchoringOpts = {},
+  opts: DetectAnchoringOptions = {},
 ): AnchoringHint | null {
   if (currentTopMemoryId === null) return null;
   const minDominance = opts.minDominance ?? DEFAULT_MIN_DOMINANCE;

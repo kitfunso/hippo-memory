@@ -42,7 +42,7 @@ export interface FailureEvent {
 
 /** Prune rows past {@link FAILURE_LOG_RETENTION_DAYS}, then append one failure row; returns the new row's id. */
 export function recordFailure(db: DatabaseSyncLike, event: FailureEvent): number {
-  // Normalised, because the window and prune compare timestamps as strings.
+  // Normalized, because the window and prune compare timestamps as strings.
   const now = new Date(event.now ?? Date.now()).toISOString();
   // Prune first: nothing after the insert can throw, so a returned id always means a committed row.
   const cutoff = new Date(Date.parse(now) - FAILURE_LOG_RETENTION_DAYS * DAY_MS).toISOString();

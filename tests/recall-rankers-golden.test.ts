@@ -5,8 +5,8 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { retrieve } from '../src/api/recall/recall.js';
-import { adminActor, type RecallOpts } from '../src/api/index.js';
-import type { RankRecallOpts } from '../src/api/recall/pipeline.js';
+import { adminActor, type RecallOptions } from '../src/api/index.js';
+import type { RankRecallOptions } from '../src/api/recall/pipeline.js';
 import { loadConfig } from '../src/core/config.js';
 import { _resetAblationCacheForTests } from '../src/core/ablation.js';
 import { setMeta } from '../src/db/index.js';
@@ -42,8 +42,8 @@ function seedVectors(root: string, url: string): void {
   writeFileSync(join(root, 'config.json'), JSON.stringify({ embeddings: { provider: 'openai', model: MODEL, apiBaseUrl: url }, physics: { enabled: true } }));
 }
 
-type BandCase = readonly [string, Omit<RecallOpts, 'cliCore' | 'showRanked'>];
-interface CoreSetup { rank?: Partial<RankRecallOpts>; physics?: boolean; global?: boolean; sessionId?: string }
+type BandCase = readonly [string, Omit<RecallOptions, 'cliCore' | 'showRanked'>];
+interface CoreSetup { rank?: Partial<RankRecallOptions>; physics?: boolean; global?: boolean; sessionId?: string }
 type CoreCase = readonly [string, string, CoreSetup];
 
 const BAND: readonly BandCase[] = [
@@ -95,7 +95,7 @@ async function onStore<T>(fn: (s: Store) => Promise<T>): Promise<T> {
   }
 }
 
-function rankOpts(s: Store, c: CoreSetup): Omit<RankRecallOpts, 'query' | 'sessionId' | 'goalTag'> {
+function rankOpts(s: Store, c: CoreSetup): Omit<RankRecallOptions, 'query' | 'sessionId' | 'goalTag'> {
   const search = {
     usePhysics: c.physics === true, physicsConfig: loadConfig(s.root).physics, multihop: false, mmr: false, mmrLambda: 0.7, localBump: 1.2,
     explain: c.rank?.why === true,

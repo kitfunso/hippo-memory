@@ -52,7 +52,7 @@ const CASES: Case[] = [
   { name: 'sleep on an uninitialised store', args: ['sleep'], uninitialised: true },
 ];
 
-function normalise(text: string, home: string): string {
+function normalize(text: string, home: string): string {
   return ownStderr(text)
     .split(home).join('<home>')
     .split(home.replace(/\\/g, '/')).join('<home>')
@@ -78,8 +78,8 @@ function run(c: Case): RunOutput {
     const logPath = join(home, 'logs', 'sleep.log');
     const args = c.logFile ? [...c.args, '--log-file', logPath] : c.args;
     const res = spawnSync('node', [CLI, ...args], { cwd: home, env, encoding: 'utf-8' });
-    const out: RunOutput = { status: res.status, stdout: normalise(res.stdout, home), stderr: normalise(res.stderr, home) };
-    if (c.logFile) out.log = existsSync(logPath) ? normalise(readFileSync(logPath, 'utf8'), home) : '<missing>';
+    const out: RunOutput = { status: res.status, stdout: normalize(res.stdout, home), stderr: normalize(res.stderr, home) };
+    if (c.logFile) out.log = existsSync(logPath) ? normalize(readFileSync(logPath, 'utf8'), home) : '<missing>';
     return out;
   } finally {
     rmSync(home, { recursive: true, force: true });

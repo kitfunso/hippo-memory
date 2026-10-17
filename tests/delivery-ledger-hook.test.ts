@@ -37,7 +37,7 @@ interface Payload {
   error?: string;
 }
 
-interface RunOpts {
+interface RunOptions {
   args?: string[];
   env?: NodeJS.ProcessEnv;
 }
@@ -70,7 +70,7 @@ function clone(ledger: boolean, pinnedInject: Partial<HippoConfig['pinnedInject'
   return dir;
 }
 
-function run(dir: string, payload: Payload | null, opts: RunOpts = {}): SpawnSyncReturns<string> {
+function run(dir: string, payload: Payload | null, opts: RunOptions = {}): SpawnSyncReturns<string> {
   return spawnSync(process.execPath, [HIPPO_JS, ...(opts.args ?? HOOK_ARGS)], {
     cwd: dir,
     env: { ...BASE_ENV, HIPPO_HOME: path.join(dir, 'global'), ...opts.env },

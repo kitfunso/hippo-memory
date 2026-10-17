@@ -5,7 +5,7 @@
  *
  * Implementation note (option 2 from plan Task 2): the plan's reference
  * tests call `recall(ctx, { query: 'auth', sessionId })` which depends on
- * `RecallOpts.sessionId` being added by Task 1. Task 1 is not yet shipped,
+ * `RecallOptions.sessionId` being added by Task 1. Task 1 is not yet shipped,
  * so we seed `goal_recall_log` directly (mirroring the existing
  * `goal-outcome-propagation.test.ts` pattern via `seedRecallLog`). This
  * makes Task 2 tests independent of Task 1 and exercises the propagation

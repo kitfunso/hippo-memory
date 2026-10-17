@@ -102,7 +102,7 @@ function assertSupersedable(ctx: StoreContext, oldId: string, old: MemoryEntry |
 
 /** Archive a kind='raw' memory: its metadata moves to raw_archive and the row is
  * deleted. The store writes the one archive_raw audit row, under the caller's subject. */
-export interface ArchiveRawOpts {
+export interface ArchiveRawOptions {
   /** The connector event this archive answers. The store logs it in the archive's own transaction, so a redelivery
    * finds it logged. */
   event?: ConnectorEvent;
@@ -116,7 +116,7 @@ export async function archiveRaw(
   ctx: StoreContext,
   id: string,
   reason: string,
-  opts: ArchiveRawOpts = {},
+  opts: ArchiveRawOptions = {},
 ): Promise<ArchiveRawResult> {
   const store = ctx.store;
   const entryWrites = store.entryWrites;

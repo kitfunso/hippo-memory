@@ -45,7 +45,7 @@ export interface Knobs {
   readonly cost?: number | ((slot: Slot) => number);
 }
 
-export interface GenOpts {
+export interface GenOptions {
   readonly arms?: readonly string[];
   readonly knobs?: Readonly<Partial<Record<string, Knobs>>>;
   readonly repos?: number;
@@ -123,7 +123,7 @@ function record(arm: string, repo: string, sequence: string, seed: number, slot:
 }
 
 /** 6 repos x 3 seeds; sets R and N share one sequence per repo and set X has its own, 36 (sequence, seed) runs. */
-export function generate(opts: GenOpts = {}): Generated {
+export function generate(opts: GenOptions = {}): Generated {
   const arms = opts.arms ?? ARMS;
   const records: Z0Record[] = [];
   for (let i = 1; i <= (opts.repos ?? 6); i++) {

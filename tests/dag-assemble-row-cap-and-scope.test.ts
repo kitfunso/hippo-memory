@@ -3,7 +3,7 @@
  *
  *   #1 loadSessionRawMemories row cap → AssembleResult.truncated
  *   #2 totalRaw is now POST-scope-filter
- *   #3 AssembleOpts.scope parity with recall (authorised access to private)
+ *   #3 AssembleOptions.scope parity with recall (authorised access to private)
  */
 
 import type { FullContext } from './_helpers/api-ctx.js';

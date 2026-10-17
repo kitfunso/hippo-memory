@@ -11,12 +11,12 @@ import { blockHash } from '../../src/util/token-text.js';
 import { realpathOrResolve } from '../../src/util/real-path.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../../src/core/memory.js';
 import { reconstruct, toolFailures } from '../../scripts/z10-reconstruct.mjs';
-import { hippo, promptPayload, PROMPT_HOOK, type Project, type RunOpts } from './delivery-boundary.js';
+import { hippo, promptPayload, PROMPT_HOOK, type Project, type RunOptions } from './delivery-boundary.js';
 
 interface Json { [key: string]: JsonValue }
 
 /** What the exit tests hand the reader beyond the store, session and memory. */
-export interface ReadOpts {
+export interface ReadOptions {
   transcript?: string;
   labels?: Json[];
   global?: string | false;
@@ -105,7 +105,7 @@ export function expectVerdict(v: Verdict, want: Oracle & { store: string; sessio
   });
 }
 
-export interface VerdictOpts extends ReadOpts {
+export interface VerdictOptions extends ReadOptions {
   store: string;
   session: string;
   memory?: string;
@@ -113,7 +113,7 @@ export interface VerdictOpts extends ReadOpts {
 }
 
 /** The reader's verdict, typed here because the script is plain JavaScript. */
-export function verdictOf(opts: VerdictOpts): Verdict {
+export function verdictOf(opts: VerdictOptions): Verdict {
   // SAFETY: reconstruct returns exactly the verdict shape the script documents.
   return reconstruct({ global: false, ...opts }) as Verdict;
 }
@@ -141,7 +141,7 @@ export interface TurnSpec {
   queued?: boolean;
 }
 
-export interface TranscriptOpts {
+export interface TranscriptOptions {
   name?: string;
   /** The per-file command, shell and notification lines, before the first prompt. Default true. */
   noise?: boolean;
@@ -188,7 +188,7 @@ const NOISE = [
 ];
 
 /** Writes the transcript under the project's scratch folder and returns its path. */
-export function writeHostTranscript(p: Project, turns: TurnSpec[], opts: TranscriptOpts = {}): string {
+export function writeHostTranscript(p: Project, turns: TurnSpec[], opts: TranscriptOptions = {}): string {
   const file = path.join(p.dir, `${opts.name ?? 'host'}.jsonl`);
   const lines = [...(opts.noise === false ? [] : NOISE), ...turns.flatMap(turnLines)];
   fs.writeFileSync(file, `${lines.join('\n')}\n`);
@@ -222,7 +222,7 @@ export function seed(root: string, content: string, extra: Partial<MemoryEntry> 
 }
 
 /** One per-prompt hook call; the run must exit 0. */
-export function fire(p: Project, sessionId: string, prompt: string, opts: RunOpts & { args?: string[] } = {}): SpawnSyncReturns<string> {
+export function fire(p: Project, sessionId: string, prompt: string, opts: RunOptions & { args?: string[] } = {}): SpawnSyncReturns<string> {
   const { args = PROMPT_HOOK, ...run } = opts;
   const r = hippo(p, args, { ...run, input: promptPayload(sessionId, prompt) });
   expect(r.status).toBe(0);

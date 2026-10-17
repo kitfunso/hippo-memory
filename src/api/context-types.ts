@@ -13,7 +13,7 @@ import type { ProjectRef } from '../core/project-identity.js';
  * Rendering opts (`format`, `framing`, `rendered`) and host-side opts (`auto`) stay in the CLI, whose print helpers are
  * shared.
  */
-export interface ContextOpts {
+export interface ContextOptions {
   q?: string;
   /** Default 1500 tokens. */
   budget?: number;
@@ -74,7 +74,7 @@ export interface ContextCost {
 export interface ContextResultEntry {
   entry: MemoryEntry;
   score: number;
-  /** What this entry cost the budget: its printed line under `ContextOpts.cost`, else its memory text. */
+  /** What this entry cost the budget: its printed line under `ContextOptions.cost`, else its memory text. */
   tokens: number;
   isGlobal?: boolean;
   isFreshTail?: boolean;

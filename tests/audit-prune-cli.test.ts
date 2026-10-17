@@ -12,7 +12,7 @@ import { hippoOut } from './_helpers/spawn-hippo.js';
 
 const CLI = resolve(__dirname, '..', 'bin', 'hippo.js');
 
-interface RunOpts {
+interface RunOptions {
   ok?: boolean;
   env?: Record<string, string>;
 }
@@ -22,7 +22,7 @@ interface CliRunResult {
   stderr: string;
 }
 
-function runCli(cwd: string, args: string[], opts: RunOpts = {}): CliRunResult {
+function runCli(cwd: string, args: string[], opts: RunOptions = {}): CliRunResult {
   if (!existsSync(CLI)) {
     throw new Error(`bin/hippo.js not found at ${CLI} - run \`npm run build\` first`);
   }

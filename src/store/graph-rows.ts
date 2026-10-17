@@ -156,7 +156,7 @@ export function rowToQueueItem(row: QueueRow): GraphQueueItem {
 
 export const QUEUE_COLS = `id, tenant_id, memory_id, kind, status, enqueued_at, processed_at`;
 
-export interface InsertEntityOpts {
+export interface InsertEntityOptions {
   entityType: EntityType;
   name: string;
   /** A consolidated (distilled/superseded) memory; raw is rejected. NULL/omitted when
@@ -168,12 +168,12 @@ export interface InsertEntityOpts {
 }
 
 /** What an in-place entity update may change; type and source object are the row's identity and stay. */
-export interface UpdateEntityOpts {
+export interface UpdateEntityOptions {
   name: string;
   memoryId?: string | null;
 }
 
-export interface InsertRelationOpts {
+export interface InsertRelationOptions {
   fromEntityId: number;
   toEntityId: number;
   relType: RelationType;

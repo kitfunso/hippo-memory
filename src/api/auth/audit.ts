@@ -8,7 +8,7 @@ import { DAY_MS } from '../../util/time.js';
 import type { KeysetPosition } from '../../util/keyset.js';
 import type { StoreContext } from '../types.js';
 
-export interface AuditListOpts {
+export interface AuditListOptions {
   op?: AuditOp;
   /** ISO timestamp lower bound. */
   since?: string;
@@ -18,7 +18,7 @@ export interface AuditListOpts {
 }
 
 /** Read audit events scoped to `ctx.tenantId` on the store the request runs on. Read-only, no audit emit. */
-export async function auditList(ctx: StoreContext, opts: AuditListOpts): Promise<AuditEvent[]> {
+export async function auditList(ctx: StoreContext, opts: AuditListOptions): Promise<AuditEvent[]> {
   return ctx.store.auditLog.listAuditEvents({
     tenantId: ctx.tenantId, op: opts.op, since: opts.since, limit: opts.limit, after: opts.after,
   });
@@ -67,7 +67,7 @@ export async function repairMemoryQualityOnce(
   return maintenanceOf(ctx).repairQualityOnce(ctx.tenantId);
 }
 
-export interface PruneAuditOpts {
+export interface PruneAuditOptions {
   /** Cutoff in days. Rows with `ts < (now - N days)` are deleted. */
   olderThanDays: number;
   /** When true, count matching rows but do NOT delete. Default false. */
@@ -94,7 +94,7 @@ export function computeCutoff(days: number, now: Date = new Date()): string {
  * never prunes its own record. Throws on non-positive days or an empty tenant. */
 export async function pruneAuditLog(
   ctx: StoreContext,
-  opts: PruneAuditOpts,
+  opts: PruneAuditOptions,
 ): Promise<PruneAuditResult> {
   if (!Number.isFinite(opts.olderThanDays) || opts.olderThanDays <= 0) {
     throw new Error(`pruneAuditLog: olderThanDays must be a positive number, got ${opts.olderThanDays}`);

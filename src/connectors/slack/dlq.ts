@@ -26,7 +26,7 @@ export const slackDlq: ConnectorDlq<Pick<SlackDlqInsert, 'teamId' | 'slackTimest
   bump: markSlackDlqRetried,
 };
 
-export interface ReplayDlqOpts {
+export interface ReplayDlqOptions {
   /** Skip signature verification when the row's signature/timestamp are missing or stale. */
   force?: boolean;
   /** Current signing secret. If omitted, signature check is skipped (force-only path). */
@@ -42,7 +42,7 @@ export interface ReplayDlqOpts {
 export async function replayDlqEntry(
   ctx: Pick<StoreContext, 'hippoRoot' | 'store'>,
   id: number,
-  opts: ReplayDlqOpts = {},
+  opts: ReplayDlqOptions = {},
 ): Promise<ReplayResult> {
   return replayParked<DlqItem, JsonValue & SlackEventEnvelope>({
     dlq: slackDlq,
@@ -54,7 +54,7 @@ export async function replayDlqEntry(
 }
 
 /** A missing signature or timestamp refuses even without a secret; a mismatch needs the current secret to show. */
-function refuseSignature(row: DlqItem, opts: ReplayDlqOpts): SignatureRefusal | null {
+function refuseSignature(row: DlqItem, opts: ReplayDlqOptions): SignatureRefusal | null {
   if (!row.signature || !row.slackTimestamp) {
     return {
       status: 'sig_missing',

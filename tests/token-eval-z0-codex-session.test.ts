@@ -12,7 +12,7 @@ import { codexPreflight, chooseArms } from '../scripts/token-eval/ab-run.mjs';
 import { foldPath } from '../scripts/token-eval/readcheck.mjs';
 import { cleanup, tmp, isolate, makeRepo } from './fixtures/z0-harness.js';
 import { operator, wrapOperator, codexCtx, codexRun, xTask, fakeSeen, filesHolding, xTrio } from './fixtures/z0-codex-harness.js';
-import type { CodexCtx, CodexOpts } from './fixtures/z0-codex-harness.js';
+import type { CodexCtx, CodexOptions } from './fixtures/z0-codex-harness.js';
 import { waitFor } from './_helpers/wait-for.js';
 
 afterEach(cleanup);
@@ -59,7 +59,7 @@ async function withUnreadable<T>(file: string, fn: () => T): Promise<T | null> {
 }
 
 /** An isolated operator, ctx and X1 run; `out` is the run's out dir. */
-function setup(name: string, opts: CodexOpts = {}, extra: { sessionTimeoutMs?: number } = {}) {
+function setup(name: string, opts: CodexOptions = {}, extra: { sessionTimeoutMs?: number } = {}) {
   const { out, log } = isolate(name);
   process.env.FAKE_CODEX_LOG = log;
   const op = operator(name);

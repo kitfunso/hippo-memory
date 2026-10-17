@@ -13,7 +13,7 @@ const DEFAULT_ROW_CAP = 5000;
 
 export const DEFAULT_ASSEMBLE_BUDGET = 4000;
 
-export interface AssembleOpts {
+export interface AssembleOptions {
   /** Token budget. Default DEFAULT_ASSEMBLE_BUDGET. */
   budget?: number;
   /** Recent raw rows always kept verbatim. Default 10. */
@@ -73,7 +73,7 @@ export interface AssembleResult {
 export async function assemble(
   ctx: StoreContext,
   sessionId: string,
-  opts: AssembleOpts = {},
+  opts: AssembleOptions = {},
 ): Promise<AssembleResult> {
   assertScopeRequestAllowed(ctx.actor, opts.scope);
   const budget = opts.budget ?? DEFAULT_ASSEMBLE_BUDGET;
@@ -124,7 +124,7 @@ interface ScopedRaws {
 async function loadScopedRaws(
   ctx: StoreContext,
   sessionId: string,
-  opts: AssembleOpts,
+  opts: AssembleOptions,
   own: string | undefined,
 ): Promise<ScopedRaws> {
   const rowCap = opts.rowCap ?? DEFAULT_ROW_CAP;

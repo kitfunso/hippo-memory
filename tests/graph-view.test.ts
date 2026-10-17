@@ -90,7 +90,7 @@ describe('graph-view: buildGraphModel (real DB)', () => {
 
   it('15. focus query finds an entity beyond the global limit window (codex P2)', async () => {
     // Many entities so that a small `limit`, under the old global-cap-then-filter,
-    // would miss the focus entity / its neighbour. The by-name focus query (which
+    // would miss the focus entity / its neighbor. The by-name focus query (which
     // looks up the entity directly, then its bidirectional edges) must still find it.
     await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, { policyName: 'FocusPol', policyText: 'the focus policy' });
     for (let i = 0; i < 6; i++) await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, { policyName: `Filler${i}`, policyText: 'x' });
@@ -110,12 +110,12 @@ describe('graph-view: buildGraphModel (real DB)', () => {
     await extractGraph(sqliteStore(home), T);
     const m = await buildGraphModel(sqliteStore(home).graphReads, T, { entity: 'Adopt PolA and PolB across the org now' });
     const nameById = new Map(m.nodes.map((n) => [n.id, n.name]));
-    // PolA --references--> PolB connects two NEIGHBOURS (neither is the focus decision);
+    // PolA --references--> PolB connects two NEIGHBORS (neither is the focus decision);
     // it would be missing if only focus-touching edges were loaded.
-    const interNeighbour = m.edges.some(
+    const interNeighbor = m.edges.some(
       (e) => nameById.get(e.from) === 'PolA' && nameById.get(e.to) === 'PolB',
     );
-    expect(interNeighbour).toBe(true);
+    expect(interNeighbor).toBe(true);
   });
 
   it('17. focus on a name shared by many entities is capped to the limit (codex P2)', async () => {
@@ -130,8 +130,8 @@ describe('graph-view: buildGraphModel (real DB)', () => {
     for (const p of ['PolA', 'PolB', 'PolC', 'PolD']) await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, { policyName: p, policyText: 'x' });
     await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, { decisionText: 'Adopt PolA and PolB and PolC and PolD now' });
     await extractGraph(sqliteStore(home), T);
-    // limit 3: the decision references 4 policies; one 1-hop neighbour cannot fit,
-    // so the model must report truncated (not silently omit a neighbour).
+    // limit 3: the decision references 4 policies; one 1-hop neighbor cannot fit,
+    // so the model must report truncated (not silently omit a neighbor).
     const m = await buildGraphModel(sqliteStore(home).graphReads, T, { entity: 'Adopt PolA and PolB and PolC and PolD now', limit: 3 });
     expect(m.nodes.length).toBeLessThanOrEqual(3);
     expect(m.truncated).toBe(true);

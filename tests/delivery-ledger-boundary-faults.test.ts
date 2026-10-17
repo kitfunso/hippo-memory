@@ -5,7 +5,7 @@ import * as path from 'node:path';
 import { cmdPreCompact } from '../src/capture/compact.js';
 import { PRE_COMPACT_INSTRUCTION } from '../src/capture/compaction-record.js';
 import { loadActiveTaskSnapshot } from '../src/store/sessions.js';
-import { normaliseHookPayload } from '../src/cli/stdin.js';
+import { normalizeHookPayload } from '../src/cli/stdin.js';
 import { copilotEventsJsonl, copilotPayload, writeCopilotSessionLog } from './_helpers/copilot-hooks.js';
 import {
   SNAPSHOT_TASK, dispose, eventCount, events, eventsN, hippo, hippoAsync, ledgerLines, preCompactPayload, project, resumePayload,
@@ -140,7 +140,7 @@ describe('B11 and U1', () => {
       const transcript = writeCopilotSessionLog(path.join(p.dir, '.copilot'), 'copilot-sess-1', copilotEventsJsonl());
       const logFile = path.join(p.dir, 'u1.log');
       await cmdPreCompact(p.hippoRoot, {
-        stdinText: normaliseHookPayload(copilotPayload('preCompact', p.cwd, transcript)),
+        stdinText: normalizeHookPayload(copilotPayload('preCompact', p.cwd, transcript)),
         runtime: 'copilot',
         logFile,
         onBoundary: () => { throw new Error('boom'); },

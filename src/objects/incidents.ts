@@ -18,7 +18,7 @@ export const VALID_INCIDENT_STATES: ReadonlySet<IncidentStatus> = new Set<Incide
   'closed',
 ]);
 
-export interface SaveIncidentOpts {
+export interface SaveIncidentOptions {
   incidentText: string;
   context?: string;
   /** Memory ids (linked receipts) that are this incident's evidence. Each must
@@ -29,7 +29,7 @@ export interface SaveIncidentOpts {
   extraTags?: string[];
 }
 
-export interface ListIncidentsOpts {
+export interface ListIncidentsOptions {
   status?: IncidentStatus;
   limit?: number;
   /** Resume after this row: the position the previous page ended on. */
@@ -48,7 +48,12 @@ export const INCIDENT: ObjectDescriptor<'incident'> = {
 };
 
 /** One open, checked before a store is asked; `baseHalfLifeDays` is the config default a new mirror starts on. */
-function incidentOpen(baseHalfLifeDays: number, tenantId: string, opts: SaveIncidentOpts, actor: string): IncidentOpen {
+function incidentOpen(
+  baseHalfLifeDays: number,
+  tenantId: string,
+  opts: SaveIncidentOptions,
+  actor: string,
+): IncidentOpen {
   assertTenantId('saveIncident', tenantId);
   if (!opts.incidentText) throw new BadRequestError('saveIncident: incidentText is required');
   const at = new Date().toISOString();
@@ -80,7 +85,7 @@ export async function openIncident(
   objects: Objects,
   baseHalfLifeDays: number,
   tenantId: string,
-  opts: SaveIncidentOpts,
+  opts: SaveIncidentOptions,
   actor: string,
 ): Promise<Incident> {
   return opened(tenantId, await objects.openIncident(tenantId, incidentOpen(baseHalfLifeDays, tenantId, opts, actor)));
@@ -142,7 +147,7 @@ export function loadIncidentById(
 export function loadIncidents(
   objects: Objects,
   tenantId: string,
-  opts: ListIncidentsOpts = {},
+  opts: ListIncidentsOptions = {},
 ): Promise<Incident[]> {
   return listObjects(objects, INCIDENT, tenantId, opts);
 }

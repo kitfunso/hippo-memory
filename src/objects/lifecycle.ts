@@ -15,13 +15,13 @@ import {
 } from '../core/object-types.js';
 import type { ObjectClose, ObjectListQuery, Objects, ObjectSave } from '../store/port.js';
 import { assertTenantId } from '../core/tenant-id.js';
-import type { ObjectDescriptor, ObjectDraft, ObjectListOpts, SavableDescriptor } from './descriptor.js';
+import type { ObjectDescriptor, ObjectDraft, ObjectListOptions, SavableDescriptor } from './descriptor.js';
 
 /** An empty status or filter lists every row, as an absent one does. */
 function listQuery<K extends ObjectKind>(
   d: ObjectDescriptor<K>,
   tenantId: string,
-  opts: ObjectListOpts<K>,
+  opts: ObjectListOptions<K>,
 ): ObjectListQuery<K> {
   assertTenantId(d.fn.list, tenantId);
   if (opts.status && !d.states.has(opts.status)) {
@@ -42,7 +42,7 @@ export async function listObjects<K extends ObjectKind>(
   objects: Objects,
   d: ObjectDescriptor<K>,
   tenantId: string,
-  opts: ObjectListOpts<K>
+  opts: ObjectListOptions<K>
 ): Promise<ObjectByKind[K][]> {
   return objects.listObjects(tenantId, d.kind, listQuery(d, tenantId, opts));
 }

@@ -72,7 +72,7 @@ async function loadByIdsChunked(store: GraphStore, tenantId: string, ids: string
   return out;
 }
 
-type HitOpts = Required<Pick<GraphExpandOpts, 'hops' | 'maxNeighbors' | 'tenantId' | 'includeSuperseded'>> & {
+type HitOptions = Required<Pick<GraphExpandOpts, 'hops' | 'maxNeighbors' | 'tenantId' | 'includeSuperseded'>> & {
   asOfDate: Date | null;
   recallScope: { requested?: string; additive?: boolean; ownScope?: string };
   /** True when the store being walked is the global one. */
@@ -135,7 +135,7 @@ function passesRecallFilters(
   mem: MemoryEntry,
   via: GraphVia,
   successorValidFrom: Map<string, string>,
-  opts: HitOpts,
+  opts: HitOptions,
 ): boolean {
   const { includeSuperseded, asOfDate, recallScope } = opts;
   // The `to` endpoint of a `supersedes` edge IS the superseded version; the graph is authoritative because `hippo
@@ -171,7 +171,7 @@ async function produceHitsForStore(
   store: GraphStore,
   baseResults: SearchResult[],
   accumulators: HitAccumulators,
-  opts: HitOpts,
+  opts: HitOptions,
 ): Promise<void> {
   const { baseScoreByMemId, seenMemoryIds, seenContent, hitsByOrigin } = accumulators;
   const { hops, maxNeighbors, tenantId, asOfDate } = opts;

@@ -18,7 +18,7 @@ import { estimateTokens } from '../src/util/token-text.js';
 import { _resetAblationCacheForTests } from '../src/core/ablation.js';
 import { runInProcess } from './_helpers/run-in-process.js';
 import {
-  CLEARED_ENV, FAKE_NOW, freshStore, normalise, rowsOf, seedTemplates, SESSION, statsMirror, TENANT, type Store, type Templates,
+  CLEARED_ENV, FAKE_NOW, freshStore, normalize, rowsOf, seedTemplates, SESSION, statsMirror, TENANT, type Store, type Templates,
 } from './_helpers/recall-golden-seed.js';
 import type { CliFlags } from '../src/cli/flag-values.js';
 
@@ -115,7 +115,7 @@ function emptyStore(): Store {
 async function onStore<T>(s: Store, fn: (s: Store) => Promise<T>): Promise<T> {
   process.chdir(s.home);
   try {
-    return normalise(await fn(s), s);
+    return normalize(await fn(s), s);
   } finally {
     process.chdir(launchFolder);
     rmSync(s.home, { recursive: true, force: true });
@@ -191,7 +191,7 @@ describe('what a recall records, HTTP and CLI', () => {
   it.each(SURFACES)('%s: a recall with continuity', async (surface) => {
     const got = await onSeeded(async (s) => {
       const [reply] = await recallOn(surface, s, [{ query: 'deploy', http: { include_continuity: 'true' }, cli: { continuity: true } }]);
-      // Priced before the times in the printed block are normalised; console.log adds the one newline the estimate leaves out.
+      // Priced before the times in the printed block are normalized; console.log adds the one newline the estimate leaves out.
       const printed = surface === 'cli' ? estimateTokens(String(reply!.body).replace(/\n$/, '')) : null;
       return { reply, printed, rows: recorded(s), ledger: ledgerOf(s), recalled: totalRecalled(s) };
     });

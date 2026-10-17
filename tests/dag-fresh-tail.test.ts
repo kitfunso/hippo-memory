@@ -1,7 +1,7 @@
 /**
  * v1.5.2 fresh-tail recall — Task 4 of docs/plans/2026-05-05-dag-recall.md.
  *
- * RecallOpts.freshTailCount (default 0): when > 0, prepend the last N
+ * RecallOptions.freshTailCount (default 0): when > 0, prepend the last N
  * kind='raw' rows so an agent's "what did I just see" path always covers
  * the recent window even when query terms don't match. Tenant + scope
  * filtered, deduplicated against the BM25 hits.

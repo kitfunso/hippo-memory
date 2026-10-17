@@ -59,20 +59,20 @@ export function dispose(p: Project): void {
   removeScratch(p);
 }
 
-export interface RunOpts {
+export interface RunOptions {
   input?: string;
   env?: NodeJS.ProcessEnv;
   cwd?: string;
 }
 
-export function hippo(p: Project, args: string[], opts: RunOpts = {}): SpawnSyncReturns<string> {
+export function hippo(p: Project, args: string[], opts: RunOptions = {}): SpawnSyncReturns<string> {
   return spawnSync(process.execPath, [HIPPO_JS, ...args], {
     cwd: opts.cwd ?? p.cwd, env: { ...p.env, ...opts.env }, input: opts.input ?? '', encoding: 'utf8',
   });
 }
 
 /** A run whose detached session-end worker cannot start, so no worker sleeps on the store while the test reads it. */
-export function hippoNoWorker(p: Project, args: string[], opts: RunOpts = {}): SpawnSyncReturns<string> {
+export function hippoNoWorker(p: Project, args: string[], opts: RunOptions = {}): SpawnSyncReturns<string> {
   const preload = path.join(p.dir, 'no-worker.mjs');
   fs.writeFileSync(preload, `process.execPath = ${JSON.stringify(path.join(p.dir, 'no-such-node'))};\n`);
   return spawnSync(process.execPath, ['--import', pathToFileURL(preload).href, HIPPO_JS, ...args], {
@@ -86,7 +86,7 @@ export const sessionEndPayload = (sessionId: string, extra: { [field: string]: s
 export interface AsyncRun { status: number | null; stdout: string; stderr: string }
 
 /** One CLI run that does not block the test thread; `input: null` leaves stdin open and idle. */
-export function hippoAsync(p: Project, args: string[], opts: Omit<RunOpts, 'input'> & { input: string | null }): Promise<AsyncRun> {
+export function hippoAsync(p: Project, args: string[], opts: Omit<RunOptions, 'input'> & { input: string | null }): Promise<AsyncRun> {
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [HIPPO_JS, ...args], { cwd: p.cwd, env: { ...p.env, ...opts.env } });
     let stdout = '';

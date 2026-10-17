@@ -16,7 +16,7 @@ export { classifyOriginProject } from '../core/project-identity.js';
 export { RecallContractError, adminActor, ownerOrSubject, requireHostAdmin } from './types.js';
 export type { Actor, Context, HippoDbContext, StoreContext } from './types.js';
 export { remember } from './memories/remember.js';
-export type { RememberLocal, RememberOpts, RememberResult } from './memories/remember.js';
+export type { RememberLocal, RememberOptions, RememberResult } from './memories/remember.js';
 export { extractRememberedFacts, rememberLocally } from './memories/remember-local.js';
 export type {
   FactExtraction,
@@ -30,7 +30,7 @@ export type {
   CliCoreRanker,
   CliCoreRecall,
   ContinuityBlock,
-  RecallOpts,
+  RecallOptions,
   RecallResult,
   RecallResultItem,
   RecallSuppressionSummary,
@@ -40,13 +40,13 @@ export type {
 } from './recall/types.js';
 export { retrieve } from './recall/recall.js';
 export { DEFAULT_ASSEMBLE_BUDGET, assemble } from './assemble.js';
-export type { AssembleCost, AssembleOpts, AssembleResult, AssembledContextItem } from './assemble.js';
+export type { AssembleCost, AssembleOptions, AssembleResult, AssembledContextItem } from './assemble.js';
 export { drillDown } from './objects/drill-down.js';
 export type {
   DrillDownChild,
   DrillDownCost,
   DrillDownFailure,
-  DrillDownOpts,
+  DrillDownOptions,
   DrillDownOutcome,
   DrillDownResult,
   DrillDownSummary,
@@ -54,12 +54,12 @@ export type {
 export { outcome, outcomeForLastRecall } from './memories/outcome.js';
 export type { OutcomeForLastRecallResult, OutcomeResult } from './memories/outcome.js';
 export { forget, reject, rejectOnHost, unreject } from './memories/forget.js';
-export type { ForgetResult, RejectOpts, RejectResult } from './memories/forget.js';
+export type { ForgetResult, RejectOptions, RejectResult } from './memories/forget.js';
 export { listConflicts, listOpenConflicts, resolveMemoryConflict } from './memories/conflicts.js';
-export type { ResolveMemoryConflictOpts, ResolveMemoryConflictResult } from './memories/conflicts.js';
+export type { ResolveMemoryConflictOptions, ResolveMemoryConflictResult } from './memories/conflicts.js';
 export { listProjectNames, mergeProjectNames, repairProjectNames, repairProjectNamesOnce } from './objects/projects.js';
 export type {
-  MergeProjectNamesOpts,
+  MergeProjectNamesOptions,
   MergeResult,
   ProjectCollision,
   ProjectFold,
@@ -68,7 +68,7 @@ export type {
 } from './objects/projects.js';
 export { archiveRaw, promote, supersede } from './memories/promote.js';
 export type {
-  ArchiveRawOpts,
+  ArchiveRawOptions,
   ArchiveRawResult,
   PromoteResult,
   SupersedeOverrides,
@@ -103,8 +103,8 @@ export {
   repairMemoryQuality,
   repairMemoryQualityOnce,
 } from './auth/audit.js';
-export type { AuditListOpts, AuditPass, PruneAuditOpts, PruneAuditResult } from './auth/audit.js';
-export type { ContextCost, ContextOpts, ContextResult, ContextResultEntry } from './context-types.js';
+export type { AuditListOptions, AuditPass, PruneAuditOptions, PruneAuditResult } from './auth/audit.js';
+export type { ContextCost, ContextOptions, ContextResult, ContextResultEntry } from './context-types.js';
 export { DEFAULT_CONTEXT_BUDGET, NO_QUERY, ambientSecretAdmit, getContext, oneCopyPerMemory } from './context.js';
 export { failureSummary, recordTokens, tokenSummary } from './tokens.js';
 export { forgetDormant, isDormant, listDormant, restoreDormant } from './sleep/dormant.js';
@@ -113,13 +113,13 @@ export type { QuarantineListItem } from './auth/quarantine.js';
 export { sleep } from './sleep/sleep.js';
 export type { SleepOpts, SleepResult } from './sleep/sleep.js';
 export { goalComplete, goalList, goalPush, goalResume, goalSuspend } from './objects/goals.js';
-export type { GoalPushOpts } from './objects/goals.js';
+export type { GoalPushOptions } from './objects/goals.js';
 export { CLI_LEARN, MCP_LEARN, invalidateMemories, learn } from './sleep/learn.js';
 export type {
   InvalidationOptions,
   InvalidationResult,
   InvalidationTarget,
-  LearnOpts,
+  LearnOptions,
   LearnProfile,
   LearnResult,
 } from './sleep/learn.js';

@@ -1,7 +1,7 @@
 import { createHash } from 'crypto';
 import { matchesHmacSha256 } from '../hmac.js';
 
-export interface VerifyOpts {
+export interface VerifyOptions {
   rawBody: string;
   /** Value of X-Hub-Signature-256, e.g. 'sha256=ab12...' */
   signature: string;
@@ -24,7 +24,7 @@ function verifyOne(rawBody: string, signature: string, secret: string): boolean 
   return matchesHmacSha256('sha256=', rawBody, secret, signature);
 }
 
-export function verifyGitHubSignature(opts: VerifyOpts): boolean {
+export function verifyGitHubSignature(opts: VerifyOptions): boolean {
   if (verifyOne(opts.rawBody, opts.signature, opts.webhookSecret)) return true;
   if (opts.previousSecret && verifyOne(opts.rawBody, opts.signature, opts.previousSecret)) return true;
   return false;

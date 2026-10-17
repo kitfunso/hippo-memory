@@ -4,7 +4,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { _resetProjectIdentityCacheForTests, projectNames, resolveProjectIdentity } from '../src/core/project-identity.js';
-import { normaliseRemote, originUrlFromConfig } from '../src/core/project-remote.js';
+import { normalizeRemote, originUrlFromConfig } from '../src/core/project-remote.js';
 
 let tmpRoot: string;
 let home: string;
@@ -45,7 +45,7 @@ afterEach(() => {
   fs.rmSync(tmpRoot, { recursive: true, force: true });
 });
 
-describe('normaliseRemote', () => {
+describe('normalizeRemote', () => {
   it.each([
     ['ssh', 'ssh://git@github.com/Acme/API.git', 'github.com/acme/api'],
     ['ssh with a port', 'ssh://git@github.com:22/acme/api.git', 'github.com/acme/api'],
@@ -61,7 +61,7 @@ describe('normaliseRemote', () => {
     ['https with a token in the query', 'https://gitlab.example.com/acme/api.git?private_token=not-a-real-token', 'gitlab.example.com/acme/api'],
     ['scp with a fragment', 'git@github.com:acme/api.git#main', 'github.com/acme/api'],
   ])('%s', (_form, url, id) => {
-    expect(normaliseRemote(url)).toBe(id);
+    expect(normalizeRemote(url)).toBe(id);
   });
 
   it.each([
@@ -76,7 +76,7 @@ describe('normaliseRemote', () => {
     ['nothing', '  '],
     ['an @ left in the path', 'https://github.com/acme/user:pass@api'],
   ])('names no project from %s', (_form, url) => {
-    expect(normaliseRemote(url)).toBeNull();
+    expect(normalizeRemote(url)).toBeNull();
   });
 });
 

@@ -371,7 +371,7 @@ function appendSessionHooks(hooks: ClaudeHooks, logFile: string) {
 }
 
 function appendCompactionHooks(hooks: ClaudeHooks) {
-  // PreCompact: fires on manual AND auto compaction (no matcher); records it, asks the summariser for a "Memories for
+  // PreCompact: fires on manual AND auto compaction (no matcher); records it, asks the summarizer for a "Memories for
   // hippo" list and saves a snapshot. The exit-0 contract lives in the verb itself (cmdPreCompact,
   // src/capture/compact.ts), not in this install-time wiring.
   const installedPreCompact = appendHookIfMissing(hooks, 'PreCompact', HIPPO_PRE_COMPACT_MARKER,
@@ -383,8 +383,8 @@ function appendCompactionHooks(hooks: ClaudeHooks) {
   const installedCompactResume = appendHookIfMissing(hooks, 'SessionStart', HIPPO_COMPACT_RESUME_MARKER,
     claudeCommandGroup('hippo compact-resume', 10, 'compact'));
 
-  // PostCompact: saves the memories the summariser listed and prints one line, which Claude Code only shows. PreCompact
-  // stdout, by contrast, is handed to the summariser as instructions, so pre-compact prints just the request.
+  // PostCompact: saves the memories the summarizer listed and prints one line, which Claude Code only shows. PreCompact
+  // stdout, by contrast, is handed to the summarizer as instructions, so pre-compact prints just the request.
   const installedPostCompact = appendHookIfMissing(hooks, 'PostCompact', HIPPO_POST_COMPACT_MARKER,
     claudeCommandGroup(`hippo post-compact --log-file "${defaultPreCompactLogPath()}"`, 10));
   return { installedPreCompact, installedCompactResume, installedPostCompact };

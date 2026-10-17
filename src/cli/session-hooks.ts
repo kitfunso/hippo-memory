@@ -36,7 +36,7 @@ import { loadConfig } from '../core/config.js';
 import { autoSleepDue } from '../api/sleep/auto-sleep.js';
 import { COMPACTION_DB_WAIT_MS } from '../core/compaction-timing.js';
 import { compactResumeBlock, sessionEndWork as runSessionEnd } from '../api/session-end.js';
-import { normaliseHookPayload, readHookStdin, readStdinBounded, type BoundedStdin } from './stdin.js';
+import { normalizeHookPayload, readHookStdin, readStdinBounded, type BoundedStdin } from './stdin.js';
 import { errorMessage, log, errorFields } from '../util/log.js';
 import { cmdShimArgs } from '../util/spawn-argv.js';
 import { bookLedgerTurn } from '../api/ledger-db.js';
@@ -153,11 +153,11 @@ export async function handleSessionEnd({ hippoRoot, tenantId, flags }: CommandCo
 
   // Bounded read: extracts transcript_path + session_id for the detached worker's argv.
   const raw = await readStdinBounded();
-  // Read before normalising: the Copilot CLI's agentStop shares this hook line, and camelCase keys would pass as VS
+  // Read before normalizing: the Copilot CLI's agentStop shares this hook line, and camelCase keys would pass as VS
   // Code's.
   const stop = turn ? vscodeStopInput(raw) : null;
   if (turn && !stop) return;
-  const stdinText = normaliseHookPayload(raw.text);
+  const stdinText = normalizeHookPayload(raw.text);
   // Before the spawn, since the worker finds its store from the folder it inherits.
   const root = payloadCwdRoot(hippoRoot, stdinText, runtime);
   const input = stop ?? sessionEndInput(stdinText, raw.timedOut, runtime);

@@ -15,9 +15,9 @@ import {
   GRAPH_RELATION_TYPES,
   type Entity,
   type Relation,
-  type InsertEntityOpts,
-  type InsertRelationOpts,
-  type UpdateEntityOpts,
+  type InsertEntityOptions,
+  type InsertRelationOptions,
+  type UpdateEntityOptions,
   type EntityRow,
   type RelationRow,
   rowToEntity,
@@ -137,7 +137,7 @@ function assertSourceObjectUsable(
 
 /** Insert a graph entity on the caller's handle; throws if the source memory is missing / cross-tenant / raw (the DB
  * trigger is the backstop). */
-export function insertEntityRow(db: DatabaseSyncLike, tenantId: string, opts: InsertEntityOpts): Entity {
+export function insertEntityRow(db: DatabaseSyncLike, tenantId: string, opts: InsertEntityOptions): Entity {
   assertTenantId('insertEntity', tenantId);
   if (!GRAPH_ENTITY_TYPES.has(opts.entityType)) {
     throw new Error(
@@ -195,7 +195,7 @@ export function updateEntityRow(
   db: DatabaseSyncLike,
   tenantId: string,
   id: number,
-  opts: UpdateEntityOpts,
+  opts: UpdateEntityOptions,
 ): Entity | null {
   assertTenantId('updateEntity', tenantId);
   const name = checkedName('updateEntity', opts.name);
@@ -219,7 +219,7 @@ export function updateEntityRow(
   return { ...entity, name, memoryId: resolved.memoryId, sourceKind: resolved.sourceKind };
 }
 
-function assertEndpointsInTenant(db: DatabaseSyncLike, tenantId: string, opts: InsertRelationOpts): void {
+function assertEndpointsInTenant(db: DatabaseSyncLike, tenantId: string, opts: InsertRelationOptions): void {
   for (const [eid, role] of [[opts.fromEntityId, 'from'], [opts.toEntityId, 'to']] as const) {
     // SAFETY: ent's shape matches the single `tenant_id` column named in
     // the SELECT above.
@@ -233,7 +233,7 @@ function assertEndpointsInTenant(db: DatabaseSyncLike, tenantId: string, opts: I
 
 /** Insert a graph relation between two same-tenant entities on the caller's handle, sourced from a consolidated
  * memory. */
-export function insertRelationRow(db: DatabaseSyncLike, tenantId: string, opts: InsertRelationOpts): Relation {
+export function insertRelationRow(db: DatabaseSyncLike, tenantId: string, opts: InsertRelationOptions): Relation {
   assertTenantId('insertRelation', tenantId);
   if (!GRAPH_RELATION_TYPES.has(opts.relType)) {
     throw new Error(

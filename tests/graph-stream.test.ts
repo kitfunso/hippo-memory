@@ -2,7 +2,7 @@
  * L1 — graph-retrieval stream producer tests (real SQLite, no mocks).
  * Docs: docs/plans/2026-06-02-l1-graph-rrf-stream.md
  *
- * Covers selectGraphSeeds (pure top-by-lexical-rank) and graphRankStream (seed->neighbour
+ * Covers selectGraphSeeds (pure top-by-lexical-rank) and graphRankStream (seed->neighbor
  * scoring, per-hop decay ordering, fanout cap, local+global expansion, dedup max-score,
  * deterministic ties, empty-graph no-op, not-in-pool ignored, seeds-never-scored incl.
  * the seed-linked-to-another-seed case).
@@ -103,7 +103,7 @@ describe('graphRankStream (real SQLite)', () => {
     }
     const entries = [a, ...ns];
     const out = await graphRankStream(entries, [seed(0)], { store: sqliteStore(home), tenantId: T, maxNeighbors: 2 });
-    expect(out.length).toBe(2);        // capped at 2 of the 3 neighbours
+    expect(out.length).toBe(2);        // capped at 2 of the 3 neighbors
   });
 
   it('deterministic ties: equal hop+strength neighbours order by index asc', async () => {
@@ -135,9 +135,9 @@ describe('graphRankStream (real SQLite)', () => {
     // surfaces memory content the caller did not already admit into the pool. Unlike
     // graph-recall.ts (which loads reached rows by id and needed a scope predicate added,
     // v1.26.1), this module has no such load path — the caller's own scope-filtered
-    // candidate pool is what keeps a private-scoped neighbour out, by construction. The
+    // candidate pool is what keeps a private-scoped neighbor out, by construction. The
     // pin asserts on a NON-EMPTY output (code-review-critic: empty-output would be
-    // vacuous): the public in-pool neighbour must rank while the equally-graph-reachable
+    // vacuous): the public in-pool neighbor must rank while the equally-graph-reachable
     // private row, absent from the pool, must not appear.
     const a = mem(home, T, 'alpha cache invalidation decision');
     const pub = mem(home, T, 'public in-pool neighbour of alpha');

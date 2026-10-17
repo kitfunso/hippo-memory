@@ -18,7 +18,7 @@ import { MINUTE_MS } from '../../util/time.js';
 
 const API = 'https://api.github.com';
 
-export interface BackfillOpts {
+export interface BackfillOptions {
   /** e.g. 'acme/repo'. */
   repoFullName: string;
   fetcher: GitHubFetcher;
@@ -247,7 +247,7 @@ function prReviewCommentItemToEvent(item: JsonValue, repository: GitHubRepositor
 /** Drains one stream, then persists its HWM only when the stream ran to the end. */
 async function backfillStream(
   ctx: StoreContext,
-  opts: BackfillOpts,
+  opts: BackfillOptions,
   sleep: (ms: number) => Promise<void>,
   stream: { url: string; column: HwmColumn; toIngestEvent: (item: JsonValue) => IngestEvent | null },
 ): Promise<{ ingested: number; pages: number }> {
@@ -267,7 +267,7 @@ async function backfillStream(
 
 export async function backfillRepo(
   ctx: StoreContext,
-  opts: BackfillOpts,
+  opts: BackfillOptions,
 ): Promise<BackfillResult> {
   const sleep =
     opts.sleepMs ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));

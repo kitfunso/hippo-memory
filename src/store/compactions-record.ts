@@ -29,15 +29,15 @@ import {
   compactionRowsByRequest,
   heldMemoryRows,
   insertStartedCompaction,
-  insertSummarisedCompaction,
+  insertSummarizedCompaction,
   latestCompactionRows,
   latestStartedRows,
   markCompactionDone,
-  markCompactionSummarised,
+  markCompactionSummarized,
   markSnapshotSavedRow,
   nextCompactionStart,
   openTranscriptRows,
-  stalledSummarisedRows,
+  stalledSummarizedRows,
   type CompactionRow,
   type CompactionStatus,
 } from './compactions.js';
@@ -62,7 +62,7 @@ export interface CompactionRecord {
   transcriptPath: string | null;
   snapshotSaved: boolean;
   startedAt: string;
-  summarisedAt: string | null;
+  summarizedAt: string | null;
   summary: string | null;
   items: string[];
   itemsWritten: number;
@@ -110,7 +110,7 @@ function toRecord(row: CompactionRow): CompactionRecord {
     transcriptPath: row.transcript_path,
     snapshotSaved: row.snapshot_saved === 1,
     startedAt: row.started_at,
-    summarisedAt: row.summarised_at,
+    summarizedAt: row.summarised_at,
     summary: row.summary,
     items: Array.isArray(listed) ? listed.filter(isStringValue) : [],
     itemsWritten: row.items_written,
@@ -174,18 +174,18 @@ function latestStarted(db: DatabaseSyncLike, tenantId: string, sessionId: string
 
 /** Moves a `started` record to `summarised`; false when another process already moved it.
  * The request id lands in the same statement, so no crash leaves the record unfindable by its retry. */
-interface MarkSummarisedOptions {
+interface MarkSummarizedOptions {
   readonly text: CompactionText;
-  readonly summarisedAt: string;
+  readonly summarizedAt: string;
   readonly requestId?: string;
 }
 
-function markSummarised(db: DatabaseSyncLike, tenantId: string, id: string, options: MarkSummarisedOptions): boolean {
-  const { text, summarisedAt, requestId } = options;
-  return markCompactionSummarised(db, tenantId, id, {
+function markSummarized(db: DatabaseSyncLike, tenantId: string, id: string, options: MarkSummarizedOptions): boolean {
+  const { text, summarizedAt, requestId } = options;
+  return markCompactionSummarized(db, tenantId, id, {
     summary: text.summary,
     itemsJson: JSON.stringify(text.items),
-    summarisedAt,
+    summarizedAt,
     requestId,
   });
 }
@@ -259,16 +259,16 @@ export function recordSummary(
   const itemsJson = JSON.stringify(text.items);
   const { requestId } = caller;
   const started = latestStarted(db, tenantId, meta.sessionId, at);
-  if (started && markSummarised(db, tenantId, started.id, { text, summarisedAt: now, requestId })) {
-    return { ...started, summary: text.summary, items: text.items, summarisedAt: now, status: 'summarised' };
+  if (started && markSummarized(db, tenantId, started.id, { text, summarizedAt: now, requestId })) {
+    return { ...started, summary: text.summary, items: text.items, summarizedAt: now, status: 'summarised' };
   }
   const originProject = caller.originProject ?? compactionOrigin(hippoRoot, meta.cwd);
   const id = generateId('cmp');
-  insertSummarisedCompaction(
+  insertSummarizedCompaction(
     db,
     tenantId,
     { ...meta, originProject, startedAt: at.toISOString() },
-    { id, summary: text.summary, itemsJson, summarisedAt: now, requestId },
+    { id, summary: text.summary, itemsJson, summarizedAt: now, requestId },
   );
   return {
     id,
@@ -280,7 +280,7 @@ export function recordSummary(
     transcriptPath: meta.transcriptPath,
     snapshotSaved: false,
     startedAt: at.toISOString(),
-    summarisedAt: now,
+    summarizedAt: now,
     summary: text.summary,
     items: text.items,
     itemsWritten: 0,
@@ -651,7 +651,7 @@ function replayEach(
 }
 
 function replayStalled(run: ReplayRun): number {
-  const stalled = stalledSummarisedRows(run.db, run.tenantId, new Date(run.now - REPLAY_AFTER_MS).toISOString());
+  const stalled = stalledSummarizedRows(run.db, run.tenantId, new Date(run.now - REPLAY_AFTER_MS).toISOString());
   return replayEach(run, stalled, 'replay', (record) => {
     saveItems(run.db, run.hippoRoot, itemContext(run.tenantId, record), run.log, run.baseHalfLifeDays);
     return true;
@@ -685,7 +685,7 @@ function fillFromTranscript(run: ReplayRun, record: CompactionRecord): boolean {
   }
   const { text, listed } = found;
   if (!listed) log(`no memories section in the transcript summary for ${record.id}`);
-  if (!markSummarised(db, tenantId, record.id, { text, summarisedAt: new Date().toISOString() })) {
+  if (!markSummarized(db, tenantId, record.id, { text, summarizedAt: new Date().toISOString() })) {
     log(`${record.id} was filled by another process`);
     return false;
   }

@@ -99,7 +99,7 @@ describe('transcript mining', () => {
   });
 
   it('after compaction the user is told what hippo saved, and the summariser is asked for memories', () => {
-    // PreCompact stdout goes to the summarising model as instructions; the user's line comes from PostCompact.
+    // PreCompact stdout goes to the summarizing model as instructions; the user's line comes from PostCompact.
     const { dir, env } = scratch();
     try {
       expect(run(['init', '--no-hooks', '--no-schedule', '--no-learn'], dir, env).status).toBe(0);

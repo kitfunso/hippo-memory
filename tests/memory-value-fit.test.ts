@@ -42,9 +42,9 @@ import { clearAblationEnv, QUESTIONS, cleanupScratch, runPipeline } from './memo
 // Each case ingests, simulates and extracts a question against real stores on disk.
 vi.setConfig({ testTimeout: 30_000 });
 
-type GateOpts = { splitRegistered?: object; registeredResults?: object; expectedFitDims?: readonly string[]; needTrainRows?: boolean };
+type GateOptions = { splitRegistered?: object; registeredResults?: object; expectedFitDims?: readonly string[]; needTrainRows?: boolean };
 // SAFETY: fit.mjs destructures all four options, but its inferred parameter type omits splitRegistered and registeredResults.
-const gate = runIntegrityGate as (opts?: GateOpts) => ReturnType<typeof runIntegrityGate>;
+const gate = runIntegrityGate as (opts?: GateOptions) => ReturnType<typeof runIntegrityGate>;
 
 // File-unique scratch root. Vitest runs test FILES in parallel workers, and
 // memory-value-harness.test.ts uses the DEFAULT root with the same fixture

@@ -109,9 +109,9 @@ function decoyHippo() {
   return { dir, marker };
 }
 
-type RunOpts = Parameters<typeof runAll>[0];
+type RunOptions = Parameters<typeof runAll>[0];
 
-async function run(spec: RunOpts['spec'], arms: string[], out: string, extra: Partial<RunOpts> = {}) {
+async function run(spec: RunOptions['spec'], arms: string[], out: string, extra: Partial<RunOptions> = {}) {
   return runAll({ spec, arms, seeds: 1, outDir: out, model: null, claudeBin: CLAUDE, settleMs: 0, warmup: false, log: () => {}, ...extra });
 }
 

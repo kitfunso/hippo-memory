@@ -1,4 +1,4 @@
-import type { RememberOpts } from '../../api/index.js';
+import type { RememberOptions } from '../../api/index.js';
 import { scopeFromChannel, type ChannelMeta } from './scope.js';
 import type { SlackMessageEvent } from './types.js';
 
@@ -9,12 +9,12 @@ export interface TransformInput {
 }
 
 /**
- * Convert a SlackMessageEvent into RememberOpts; returns null when the message has no usable body so the caller marks
- * it seen and skips it.
+ * Convert a SlackMessageEvent into RememberOptions; returns null when the message has no usable body so the caller
+ * marks it seen and skips it.
  * artifact_ref MUST be `slack://${teamId}/${channelId}/${ts}` (deletion looks it up); owner is never null: `user:<id>`,
  * `bot:<bot_id>`, else `bot:unknown`.
  */
-export function messageToRememberOpts(input: TransformInput): RememberOpts | null {
+export function messageToRememberOpts(input: TransformInput): RememberOptions | null {
   const text = input.message.text?.trim();
   if (!text) return null;
   const artifactRef = `slack://${input.teamId}/${input.channel.id}/${input.message.ts}`;

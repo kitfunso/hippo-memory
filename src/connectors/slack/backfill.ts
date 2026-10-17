@@ -18,7 +18,7 @@ export type SlackHistoryFetcher = (args: {
   oldest?: string;
 }) => Promise<SlackHistoryPage>;
 
-export interface BackfillOpts {
+export interface BackfillOptions {
   teamId: string;
   channel: ChannelMeta;
   fetcher: SlackHistoryFetcher;
@@ -30,7 +30,7 @@ export interface BackfillOpts {
  *  The synthesized eventId `backfill:${teamId}:${channelId}:${ts}` makes reruns dedupe via the `slack_event_log` PK. */
 export async function backfillChannel(
   ctx: StoreContext,
-  opts: BackfillOpts,
+  opts: BackfillOptions,
 ): Promise<{ ingested: number; pages: number }> {
   // `oldest` (numeric ts) is the resume bound for the first page only; `cursor` starts null and Slack mints the
   // next-page token. Mixing the two would feed a numeric ts as an opaque cursor and break on rerun.
