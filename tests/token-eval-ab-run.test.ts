@@ -612,6 +612,30 @@ describe('Z0 runner end to end (fake Claude Code)', () => {
     expect(existsSync(join(out, 'plan.json'))).toBe(false);
   }, 60_000);
 
+  it('--check-homes prints a block per planned run that names its own homes and shell hippo', () => {
+    const scratch = tmp('ab-run-report-');
+    const r = makeRepo();
+    const tasksFile = join(scratch, 'tasks.json');
+    writeFileSync(tasksFile, JSON.stringify({ sequences: [{ id: 'seqA', cluster: 'c', repo: r.repo, fixedOrder: true, tasks: [task(r, 'a1', 'x'), task(r, 'a2', 'y')] }] }));
+    const out = join(scratch, 'out');
+    const res = spawnSync(process.execPath, [resolve(__dirname, '..', 'scripts', 'token-eval', 'ab-run.mjs'), '--tasks', tasksFile, '--out', out, '--arms', 'A0,A2', '--seeds', '1', '--check-homes'], { encoding: 'utf8', env: { ...process.env, Z0_ANCESTOR_STOP: scratch } });
+    expect(res.status, res.stderr).toBe(0);
+    expect(res.stdout).toContain('Homes check passed for 2 runs.');
+    const norm = (s: string) => s.replace(/\\/g, '/').toLowerCase();
+    const text = norm(res.stdout);
+    const blocks = text.split(/\n(?=  seq)/).slice(1);
+    expect(blocks).toHaveLength(2);
+    for (const arm of ['A0', 'A2']) {
+      const root = norm(join(out, 'runs', 'seqA', arm, 'seed1'));
+      const block = blocks.find((b) => b.startsWith(`  seqa/${arm.toLowerCase()}/`)) ?? '';
+      expect(block).toContain(`seqa/${arm.toLowerCase()}/seed1: claude-config, codex-home, hippo-home fresh and empty under ${root}`);
+      expect(block).toContain(`hippo import --agents sees claude code at ${root}/claude-config, codex at ${root}/codex-home`);
+      expect(block).toContain('after the check: empty');
+    }
+    expect(blocks.find((b) => b.includes('/a0/'))).toContain('shell hippo: none');
+    expect(blocks.find((b) => b.includes('/a2/'))).toContain(`shell hippo: ${norm(join(out, 'runs', 'seqA', 'A2', 'seed1', 'bin'))}`);
+  }, 60_000);
+
   it('a real run refuses before the run starts, so it writes no ABANDONED: the ancestor check first, then a symlinked instruction file', () => {
     const scratch = tmp('ab-run-link-cli-');
     const r = linkRepo({ 'docs/AGENTS.md': 'policy.md' });

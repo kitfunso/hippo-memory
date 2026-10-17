@@ -5,7 +5,7 @@
 > - **Part I (Grant-Tied Deliverables)** is the former `ROADMAP.md`: work organized by funding status (committed, grant-conditional, speculative) plus the grant work packages (Frontier AI Discovery, AI Champions Phase 1).
 > - **Part II (Canonical Execution Roadmap)** is the former `ROADMAP-RESEARCH.md`: the engineering execution plan (Tracks A-F, north star, benchmark priority, schema-migration order, test commitments, bets, non-goals).
 >
-> **Top priority since 2026-09-26: Part XV, Track Z (zero-touch memory), starting with Z0: prove hippo beats the memory Claude Code and Codex already have.** Z0 was redesigned on 2026-09-29 (`docs/evals/2026-09-29-z0-built-in-memory-prereg.md`). The next to-do is its stage 0, the runner fixes, then the smoke stage. Start there.
+> **Top priority since 2026-09-26: Part XV, Track Z (zero-touch memory), starting with Z0: prove hippo beats the memory Claude Code and Codex already have.** Z0 was redesigned on 2026-09-29 (`docs/evals/2026-09-29-z0-built-in-memory-prereg.md`). Its stage 0 is closed by [`docs/evals/2026-10-10-z0-stage0-check.md`](docs/evals/2026-10-10-z0-stage0-check.md); the next step is the smoke stage.
 >
 > **2026-09-30 execution addendum:** Parts XVI-XVIII reconcile delivery tracing, compact-memory experiments and runtime adapters with the current Z0 design. Instrument first; defaults remain frozen pending the separate retrieval and task gates.
 >
