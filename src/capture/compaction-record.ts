@@ -3,15 +3,10 @@ import * as fs from 'fs';
 import { isStringValue } from '../core/capture-contract.js';
 import { COMPACTION_ITEM_MAX_CHARS, compactSummaryBody, parseCompactionItems } from '../util/compaction-items.js';
 import { importSpool, spool } from './compaction-spool.js';
-import {
-  replayStoredCompactions,
-  saveCompactionAt,
-  type CompactionSaveResult,
-  type CompactionText,
-  type Log,
-  type ReplayOptions,
-  type ReplaySources,
+import type {
+  CompactionSaveResult, CompactionText, Log, ReplayOptions, ReplaySources,
 } from '../store/compactions-record.js';
+import type { LocalFiles } from '../store/port.js';
 import { loadConfig } from '../core/config.js';
 import { resolveTenantId } from '../store/tenant.js';
 import { maskEmails, redactSecretsStrict } from '../util/secret-detect.js';
@@ -86,7 +81,7 @@ function spoolSummary(
 
 /** The PostCompact work: record the summary, then write its items. Each step is independent; a busy store spools or
  * defers. Never throws. */
-export function saveCompaction(hippoRoot: string, payload: PostCompactPayload, log: Log): CompactionSaveResult {
+export function saveCompaction(local: LocalFiles, payload: PostCompactPayload, log: Log): CompactionSaveResult {
   if (payload.compactSummary === null) {
     log('skip: payload has no compact_summary');
     return { written: null, deferred: false, snapshotSaved: false };
@@ -95,9 +90,9 @@ export function saveCompaction(hippoRoot: string, payload: PostCompactPayload, l
   const { found, ...text } = readCompactionText(payload.compactSummary);
   if (!found) log('no memories section');
 
-  const { defaultHalfLifeDays } = loadConfig(hippoRoot);
-  const { result, spoolReason } = saveCompactionAt(hippoRoot, payload, text, at, log, defaultHalfLifeDays);
-  if (spoolReason !== null) spoolSummary(hippoRoot, payload, text, at, spoolReason, result, log);
+  const { defaultHalfLifeDays } = loadConfig(local.hippoRoot);
+  const { result, spoolReason } = local.compactionHooks.save(payload, text, at, log, defaultHalfLifeDays);
+  if (spoolReason !== null) spoolSummary(local.hippoRoot, payload, text, at, spoolReason, result, log);
   return result;
 }
 
@@ -162,10 +157,10 @@ function replaySources(hippoRoot: string, log: Log): ReplaySources {
 }
 
 /** For `hippo sleep` and post-compact: finishes what a killed hook or a busy store left, never throws. */
-export function replayCompactionsAt(
-  hippoRoot: string, log: Log, opts: Omit<ReplayOptions, 'baseHalfLifeDays'> = {},
+export function replayCompactions(
+  local: LocalFiles, log: Log, opts: Omit<ReplayOptions, 'baseHalfLifeDays'> = {},
 ): number {
-  return replayStoredCompactions(hippoRoot, replaySources(hippoRoot, log), log, {
-    ...opts, baseHalfLifeDays: loadConfig(hippoRoot).defaultHalfLifeDays,
+  return local.compactionHooks.replay(replaySources(local.hippoRoot, log), log, {
+    ...opts, baseHalfLifeDays: loadConfig(local.hippoRoot).defaultHalfLifeDays,
   });
 }

@@ -12,6 +12,7 @@ import {
   liveContentsBySourceAndTagAt, loadEntriesByIds, loadFreshRawMemories, rawRowsUnderRefAt,
 } from '../entry-reads.js';
 import { sqliteAgentImport } from './agent-import.js';
+import { sqliteCompactionHooks } from './compaction-hooks-group.js';
 import { sqliteCards } from './cards-group.js';
 import { sqliteConflicts } from './conflicts-group.js';
 import { sqliteDormant } from './dormant-group.js';
@@ -80,6 +81,7 @@ function sqliteLocalFiles(hippoRoot: string): LocalFiles {
     hippoRoot,
     consolidation: sqliteConsolidation(hippoRoot),
     agentImport: sqliteAgentImport,
+    compactionHooks: sqliteCompactionHooks(hippoRoot),
     promotion: sqlitePromotion(hippoRoot),
     learning: sqliteLearning(hippoRoot),
     sharing: sqliteSharing(hippoRoot),

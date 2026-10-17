@@ -5,9 +5,9 @@ import * as fs from 'fs';
 import { loadConfig } from '../core/config.js';
 import { isGitRepo } from '../learn/autolearn.js';
 import { importForStore, currentMachine } from '../agent-memories/sync.js';
-import { replayCompactionsAt } from '../capture/compaction-record.js';
+import { replayCompactions } from '../capture/compaction-record.js';
 import * as api from '../api/index.js';
-import { cliApiContext, cliSyncOptions } from './api-context.js';
+import { cliApiContext, cliLocalFiles, cliSyncOptions } from './api-context.js';
 import { sleepResultLines } from './sleep-render.js';
 import { errorFields, errorMessage, log } from '../util/log.js';
 import { teeStdStreams } from '../util/stream-tee.js';
@@ -110,7 +110,8 @@ async function cmdSleepCore(
 
   // Finishes compactions a killed or busy post-compact hook left; never throws, and a dry run writes nothing.
   if (!flags['dry-run']) {
-    const finished = replayCompactionsAt(hippoRoot, (message) => log.warn(`compaction replay: ${message}`));
+    const warn = (message: string): void => log.warn(`compaction replay: ${message}`);
+    const finished = replayCompactions(cliLocalFiles(hippoRoot), warn);
     if (finished > 0) {
       console.log(
         `Finished saving ${plural(finished, 'compaction')} left over from earlier sessions.`,

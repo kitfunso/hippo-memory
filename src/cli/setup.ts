@@ -43,9 +43,9 @@ import {
 import { isInitialized } from '../core/project-identity.js';
 import { currentMachine, importUserMemories } from '../agent-memories/sync.js';
 import { getGlobalRoot } from '../sharing/global-store.js';
-import { cliSyncOptions } from './api-context.js';
+import { cliLocalFiles, cliSyncOptions } from './api-context.js';
 import { listRegisteredWorkspaces, runDailyMaintenance } from './scheduler.js';
-import { replayCompactionsAt } from '../capture/compaction-record.js';
+import { replayCompactions } from '../capture/compaction-record.js';
 import { errorFields, errorMessage, log } from '../util/log.js';
 import { envDailyStepTimeoutMs } from '../util/env.js';
 import { writeFileAtomic } from '../util/atomic-write.js';
@@ -555,7 +555,8 @@ export async function handleDailyRunner({ tenantId }: CommandContext): Promise<v
   const globalRoot = getGlobalRoot();
   // No workspace sleep ever opens the global store, yet hooks in folders without a store compact into it.
   if (isInitialized(globalRoot)) {
-    const finished = replayCompactionsAt(globalRoot, (message) => log.warn(`compaction replay: ${message}`));
+    const warn = (message: string): void => log.warn(`compaction replay: ${message}`);
+    const finished = replayCompactions(cliLocalFiles(globalRoot), warn);
     if (finished > 0) {
       console.log(`Finished saving ${plural(finished, 'compaction')} left over in the global store.`);
     }
