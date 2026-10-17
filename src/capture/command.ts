@@ -3,11 +3,8 @@ import * as path from 'path';
 import { createMemory, Layer, type MemoryEntry } from '../core/memory.js';
 import { duplicateKey, longestWord, storedTextKeys } from '../util/same-text.js';
 import { embedMemory } from '../search/embed-memories.js';
-import { sqliteSyncStore } from '../store/sqlite/store.js';
 import type { LocalFiles, Sync } from '../store/port.js';
 import type { Rejections } from '../store/port/rejections.js';
-import { getGlobalRoot } from '../sharing/global-store.js';
-import { initStore } from '../store/open.js';
 import { maskEmails, redactSecretsStrict } from '../util/secret-detect.js';
 import { loadConfig } from '../core/config.js';
 import { classifyOriginProject, projectId, type ProjectRef, isInitialized } from '../core/project-identity.js';
@@ -41,15 +38,21 @@ export interface CaptureOptions {
   originProject?: ProjectRef;
 }
 
+/** The folder a capture writes to, the global one under `global`, and its store, which the CLI root builds. */
+export interface CaptureTarget {
+  readonly root: string;
+  readonly store: { readonly localFiles: LocalFiles; readonly rejections: Sync<Rejections> };
+}
+
 export function cmdCapture(
-  hippoRoot: string,
+  target: CaptureTarget,
   options: CaptureOptions
 ): void {
   // Tee to a log file for the SessionEnd hook; APPEND, because `hippo sleep` runs first in that sequence and already
   // wrote its header and body.
   const restoreStdio = options.logFile ? beginLogTee(options.logFile) : null;
   try {
-    cmdCaptureCore(hippoRoot, options);
+    cmdCaptureCore(target, options);
     if (options.logFile) console.log('[hippo] capture complete');
   } catch (err) {
     if (options.logFile) console.log(`[hippo] capture failed: ${errorMessage(err)}`);
@@ -84,24 +87,19 @@ function writeLogBanner(logFile: string): boolean {
 
 // Console lines here are the `hippo capture` command's printed result, so they stay off the logger.
 function cmdCaptureCore(
-  hippoRoot: string,
+  target: CaptureTarget,
   options: CaptureOptions
 ): void {
-  const useGlobal = options.global;
-  const targetRoot = useGlobal ? getGlobalRoot() : hippoRoot;
-
-  if (useGlobal) {
-    initStore(targetRoot);
-  } else {
-    if (!isInitialized(hippoRoot)) {
-      console.error(
-        `No hippo store at ${hippoRoot} (searched ${process.cwd()} and its parents up to your home directory). ` +
-          `Run \`hippo init\` first.`,
-      );
-      // Set, not exit, so cmdCapture's finally restores the tee'd stdio.
-      process.exitCode = 1;
-      return;
-    }
+  if (options.global) {
+    target.store.localFiles.ensureFiles();
+  } else if (!isInitialized(target.root)) {
+    console.error(
+      `No hippo store at ${target.root} (searched ${process.cwd()} and its parents up to your home directory). ` +
+        `Run \`hippo init\` first.`,
+    );
+    // Set, not exit, so cmdCapture's finally restores the tee'd stdio.
+    process.exitCode = 1;
+    return;
   }
 
   const read = readCaptureTexts(options);
@@ -122,14 +120,13 @@ function cmdCaptureCore(
     return;
   }
 
-  const keys = storedKeysInView(targetRoot, options, extracted);
+  const keys = storedKeysInView(target.store.localFiles, options, extracted);
 
-  printCaptureTally(options, captureFromCli(targetRoot, options, extracted, keys));
+  printCaptureTally(options, captureFromCli(target, options, extracted, keys));
 }
 
-/** The CLI's store is the target folder's hippo.db, built once here. */
 function captureFromCli(
-  targetRoot: string,
+  { root, store }: CaptureTarget,
   options: CaptureOptions,
   extracted: readonly ExtractedItem[],
   keys: Set<string>,
@@ -139,20 +136,19 @@ function captureFromCli(
     originProject: options.originProject,
     lean: false,
   };
-  const store = sqliteSyncStore(targetRoot);
   if (!options.dryRun) return captureExtractedItems(store.localFiles, writeOpts, extracted, keys);
-  return previewCapture(store.rejections, writeOpts, extracted, keys, loadConfig(targetRoot).defaultHalfLifeDays);
+  return previewCapture(store.rejections, writeOpts, extracted, keys, loadConfig(root).defaultHalfLifeDays);
 }
 
 // Dedup only against rows this capture's reader sees: another tenant's or project's rows are hidden, so they must not
 // stop its own copy.
 // Only a row holding an item's longest word can hold that item, so the store returns those rows and no others.
 function storedKeysInView(
-  targetRoot: string,
+  local: LocalFiles,
   options: CaptureOptions,
   extracted: readonly ExtractedItem[],
 ): Set<string> {
-  const stored = sqliteSyncStore(targetRoot).localFiles.captures.textsHolding(
+  const stored = local.captures.textsHolding(
     options.global ? undefined : options.tenantId,
     extracted.map((item) => longestWord(item.content)),
     { everyScope: true },

@@ -11,9 +11,9 @@ import {
   importClaude,
   importCursor,
   importGenericFile,
-} from '../../src/importers/sources.js';
-import { importMarkdown } from '../../src/importers/markdown.js';
-import { importVault } from '../../src/importers/vault.js';
+  importMarkdown,
+  importVault,
+} from '../../src/entry/importers.js';
 import { type ImportOptions, type ImportResult } from '../../src/importers/core.js';
 import { captureToolFailure } from '../../src/capture/capture-error.js';
 import { failureTarget } from '../_helpers/failure-target.js';

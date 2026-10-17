@@ -20,7 +20,7 @@ import * as path from 'path';
 import * as os from 'os';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
-import { importVault } from '../../src/importers/vault.js';
+import { importVault } from '../../src/entry/importers.js';
 import { type ImportOptions } from '../../src/importers/core.js';
 import { initStore } from '../../src/store/open.js';
 import { loadAllEntries } from '../../src/store/entry-reads.js';

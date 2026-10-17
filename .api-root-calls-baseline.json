@@ -4,6 +4,5 @@
   "src/api/memories/promote.ts": 1,
   "src/api/memories/remember.ts": 1,
   "src/api/recall/rows.ts": 1,
-  "src/api/sleep/dormant.ts": 1,
-  "src/api/store-init.ts": 1
+  "src/api/sleep/dormant.ts": 1
 }

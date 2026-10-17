@@ -8,7 +8,8 @@ import {
   type CreateMemoryOptions,
   type MemoryEntry,
 } from './core/memory.js';
-import { sqliteSyncStore } from './store/sqlite/store.js';
+import { sqliteStore } from './store/sqlite/store.js';
+import { requireGroup, type HippoStore } from './store/port.js';
 import { runConsolidation, type ConsolidateOptions } from './consolidate/sleep.js';
 import { loadConfig } from './core/config.js';
 import type { ConsolidationResult } from './consolidate/run.js';
@@ -61,10 +62,18 @@ export {
 } from './core/card.js';
 export { ConsolidationResult } from './consolidate/run.js';
 export { sleep, type SleepOpts, type SleepResult } from './api/sleep/sleep.js';
-/** Run a full consolidation pass on the hippo.db under `hippoRoot`. */
-export async function consolidate(hippoRoot: string, options: ConsolidateOptions = {}): Promise<ConsolidationResult> {
-  const config = options.config ?? loadConfig(hippoRoot);
-  return runConsolidation(sqliteSyncStore(hippoRoot).localFiles, { ...options, config });
+/** Run a full consolidation pass on `store`, or on the hippo.db under a folder. A store with no `localFiles` group
+ * throws `StoreNotPortedError`; with no `options.config`, a folder reads its config.json and a store the defaults. */
+export async function consolidate(
+  target: string | HippoStore,
+  options: ConsolidateOptions = {},
+): Promise<ConsolidationResult> {
+  const [store, root] = isFolder(target) ? [sqliteStore(target), target] : [target, ''];
+  const config = options.config ?? loadConfig(root);
+  return runConsolidation(requireGroup(store, 'localFiles'), { ...options, config });
+}
+function isFolder(target: string | HippoStore): target is string {
+  return typeof target === 'string';
 }
 // Announced public in CHANGELOG 1.26.3 but never re-exported; the rest of dedupe.js stays internal.
 export { strengthBucket } from './consolidate/dedupe.js';
@@ -85,10 +94,11 @@ export {
   importClaude,
   importCursor,
   importGenericFile,
-} from './importers/sources.js';
-export { importMarkdown } from './importers/markdown.js';
-export { importVault } from './importers/vault.js';
-export { importEntries, ImportResult, ImportOptions } from './importers/core.js';
+  importMarkdown,
+  importVault,
+  importEntries,
+} from './entry/importers.js';
+export { ImportResult, ImportOptions } from './importers/core.js';
 
 // Feature eval suite
 export {

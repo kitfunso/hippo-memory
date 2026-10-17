@@ -10,7 +10,7 @@ import { readHookStdin } from './stdin.js';
 import { isJsonObject, isJsonString, type JsonValue } from '../util/json.js';
 import * as api from '../api/index.js';
 import { DEFAULT_CONTEXT_BUDGET, NO_QUERY } from '../api/context.js';
-import { cliApiContext } from './api-context.js';
+import { cliApiContext, cliHookRequest } from './api-context.js';
 import { renderAmbientSummary } from '../core/ambient.js';
 import { contextBlockLines, contextCost, crossProjectLines, settleTokens } from '../api/context-render.js';
 import {
@@ -39,7 +39,6 @@ import {
   hookStoreRoot,
   hookRuntime,
   payloadCwdRoot,
-  runHookWithStores,
   inPilotHoldout,
 } from './hook-runtime.js';
 
@@ -310,5 +309,5 @@ export async function handleContext({ hippoRoot, tenantId, args, flags }: Comman
   // Bounded, not a TTY guard: the hot stdin path and a manual run share this one command.
   const { text: stdinText } = await readHookStdin();
   const root = payloadCwdRoot(hippoRoot, stdinText, hookRuntime(flags));
-  await runHookWithStores(() => cmdContext(hookStoreRoot(root), tenantId, args, flags, stdinText));
+  await cliHookRequest(() => cmdContext(hookStoreRoot(root), tenantId, args, flags, stdinText));
 }

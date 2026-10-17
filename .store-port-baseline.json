@@ -9,12 +9,12 @@
   "sqlOutside": 0,
   "txLiterals": 0,
   "tenantResolvesInCli": 0,
-  "storeImportsInCli": 4,
+  "storeImportsInCli": 0,
   "storeImportsInDomain": 0,
   "handleHoldersOutside": 0,
   "storeFilesWithoutSql": 1,
   "portImportsFromSql": 0,
-  "buildsOutsideRoots": 24,
+  "buildsOutsideRoots": 2,
   "groupChecksInApi": 14,
   "storeFilesWithoutSqlList": [
     "src/store/delivery-recorder.ts"

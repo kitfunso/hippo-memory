@@ -10,7 +10,7 @@ import {
 } from '../../src/api/index.js';
 import { mapApiError } from '../../src/api/error-reply.js';
 import { rememberLocally } from '../../src/api/memories/remember-local.js';
-import { importVault } from '../../src/importers/vault.js';
+import { importVault } from '../../src/entry/importers.js';
 import { sqliteStore, type HippoStore, type StoreGroups } from '../../src/store/index.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
 import { workerSqliteStore } from '../../src/store/sqlite/worker-store.js';

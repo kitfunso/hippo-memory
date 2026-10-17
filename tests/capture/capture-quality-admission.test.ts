@@ -2,6 +2,7 @@ import type { FullContext } from '../_helpers/api-ctx.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { join } from 'node:path';
 import { cmdCapture } from '../../src/capture/command.js';
+import { captureTarget } from '../_helpers/cli-stores.js';
 import { extractFromTexts } from '../../src/capture/extract.js';
 import { sessionTail, summarizeSessionTurns, type SessionTurn } from '../../src/capture/transcript.js';
 import { extractLessons, partitionLessons } from '../../src/learn/autolearn.js';
@@ -184,7 +185,7 @@ describe('automatic quality does not govern manual or trusted import storage', (
       { role: 'user', text: 'Here is the log:\n```\nError: build failed' },
       { role: 'user', text: 'Never deploy on Fridays because the on-call rota is thin.' },
     ];
-    cmdCapture(root, { source: 'last-session', sessionTurns: turns, dryRun: false, global: false });
+    cmdCapture(captureTarget(root), { source: 'last-session', sessionTurns: turns, dryRun: false, global: false });
     expect(loadAllEntries(root, 'default').map((entry) => entry.content)).toEqual(['Never deploy on Fridays because the on-call rota is thin']);
   });
 });

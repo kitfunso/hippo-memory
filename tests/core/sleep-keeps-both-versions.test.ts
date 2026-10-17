@@ -19,11 +19,12 @@ import * as api from '../../src/api/index.js';
 import { handleMcpRequest } from '../../src/mcp/server.js';
 import { importProjectMemories } from '../../src/agent-memories/sync.js';
 import { totalTally } from '../../src/agent-memories/report.js';
-import { importEntries } from '../../src/importers/core.js';
+import { importEntries } from '../../src/entry/importers.js';
 import { autoShare } from '../../src/sharing/share.js';
 import { getGlobalRoot } from '../../src/sharing/global-store.js';
 import { searchBothHybrid } from '../../src/sharing/search-both.js';
 import { cmdCapture } from '../../src/capture/command.js';
+import { captureTarget } from '../_helpers/cli-stores.js';
 import { extractFromTexts } from '../../src/capture/extract.js';
 import { computeSalience } from '../../src/core/salience.js';
 import { heldTexts, mergedText } from '../../src/util/same-text.js';
@@ -592,7 +593,7 @@ describe('a new value is never skipped as a copy of an old one', () => {
     writeFileSync(file, `${note}\n`);
     vi.spyOn(console, 'log').mockImplementation(() => {});
 
-    cmdCapture(root, { source: 'file', filePath: file, dryRun: false, global: false });
+    cmdCapture(captureTarget(root), { source: 'file', filePath: file, dryRun: false, global: false });
 
     expect(texts(root)).toContain(item.content);
   });

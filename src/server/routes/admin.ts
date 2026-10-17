@@ -15,8 +15,8 @@ import { pageOf, parseCursor, setNextCursorHeader } from '../cursor.js';
 import type { AuthedRouteRequest } from '../types.js';
 import { getString, isSetMember, parseJsonObjectText, parseListLimit, validateIdSegment } from '../validation.js';
 import { isJsonBoolean, isJsonNumber } from '../../util/json.js';
-import { AUDIT_OPS } from '../../store/port/audit-ops.js';
-import type { AuditOp } from '../../store/port/audit-ops.js';
+import { AUDIT_OPS } from '../../core/audit-ops.js';
+import type { AuditOp } from '../../core/audit-ops.js';
 
 const VALID_AUDIT_OPS: ReadonlySet<AuditOp> = new Set<AuditOp>(AUDIT_OPS);
 

@@ -10,9 +10,7 @@ import { bookTokenUse, ledgerReachOf } from '../api/ledger-db.js';
 import { errorMessage, log, errorFields } from '../util/log.js';
 import type { CallerProject } from '../api/prompt-hook.js';
 import type { Sessions } from '../store/port-groups.js';
-import type { Sync } from '../store/port.js';
 import type { SessionEvent } from '../store/rows.js';
-import { sqliteSyncStore } from '../store/sqlite/store.js';
 import { estimateTokens } from '../util/token-text.js';
 import { truncateCodePointSafe } from '../util/transcript-tail.js';
 import { bindCaller, callerInHoldout } from './caller-session.js';
@@ -25,17 +23,20 @@ export interface CallerCompactResumeRequest {
   readonly source: string;
 }
 
-export function compactResumeForCaller(ctx: Context, req: CallerCompactResumeRequest): CallerHookOutput {
+export async function compactResumeForCaller(
+  ctx: Context,
+  req: CallerCompactResumeRequest,
+): Promise<CallerHookOutput> {
   const key = bindCaller(ctx, req.sessionId, req.project);
   if (req.source !== 'compact' || callerInHoldout(ctx, req.sessionId)) return { stdout: '' };
-  const { sessions } = sqliteSyncStore(ctx.hippoRoot);
-  const snapshot = sessions.loadFreshSnapshot(ctx.tenantId, { maxAgeMs: COMPACT_RESUME_MAX_AGE_MS }, key);
+  const { sessions } = ctx.store;
+  const snapshot = await sessions.loadFreshSnapshot(ctx.tenantId, { maxAgeMs: COMPACT_RESUME_MAX_AGE_MS }, key);
   // One owner's concurrent sessions must not cross-restore; a
   // snapshot with no session still restores, as on the local path.
   if (snapshot === null || (snapshot.session_id !== null && snapshot.session_id !== req.sessionId)) {
     return { stdout: '' };
   }
-  const text = compactResumeText(snapshot, sessionTrail(ctx, sessions, snapshot.session_id));
+  const text = compactResumeText(snapshot, await sessionTrail(ctx, sessions, snapshot.session_id));
   bookTokenUse({
     tenantId: ctx.tenantId,
     sessionId: req.sessionId,
@@ -48,10 +49,10 @@ export function compactResumeForCaller(ctx: Context, req: CallerCompactResumeReq
 }
 
 /** A bad trail row costs the trail, not the snapshot. */
-function sessionTrail(ctx: Context, sessions: Sync<Sessions>, sessionId: string | null): SessionEvent[] {
+async function sessionTrail(ctx: Context, sessions: Sessions, sessionId: string | null): Promise<SessionEvent[]> {
   if (!sessionId) return [];
   try {
-    return sessions.listEvents(ctx.tenantId, { sessionId })
+    return (await sessions.listEvents(ctx.tenantId, { sessionId }))
       .map((e) => ({ ...e, content: truncateCodePointSafe(e.content, COMPACT_RESUME_EVENT_CONTENT_CAP) }));
   } catch (err) {
     log.warn(`compact-resume: trail skipped: ${errorMessage(err)}`, errorFields(err));

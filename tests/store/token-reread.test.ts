@@ -9,6 +9,7 @@ import { writeEntry } from '../../src/store/entry-writes.js';
 import { appendSessionEvent, saveActiveTaskSnapshot } from '../../src/store/sessions.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { runDoctor } from '../../src/doctor.js';
+import { diagnosticsAt } from '../_helpers/cli-stores.js';
 import { Layer } from '../../src/core/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import {
@@ -528,7 +529,7 @@ describe('re-read reports', () => {
   });
 
   it('hippo doctor reports tokens sent and re-read', async () => {
-    const tokens = runDoctor({ cwd: proj, home: join(root, 'home'), version: 'test' }).checks.find((c) => c.id === 'tokens');
+    const tokens = runDoctor({ diagnosticsAt, cwd: proj, home: join(root, 'home'), version: 'test' }).checks.find((c) => c.id === 'tokens');
     expect(tokens?.detail).toBe('3 memory blocks sent to agents in 7 days, about 180 tokens sent and 250 re-read by later model calls (hippo tokens for detail)');
   });
 });

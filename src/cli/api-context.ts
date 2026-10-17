@@ -9,7 +9,7 @@ import type { McpHost } from '../mcp/protocol.js';
 import type { HippoStore, StoreGroups } from '../store/index.js';
 import type { FolderStore, LocalFiles } from '../store/port.js';
 import {
-  runDetachedSqliteRequest, runSqliteRequest, sqliteReach, sqliteStore, sqliteSyncStore,
+  runDetachedSqliteRequest, runSqliteHookRequest, runSqliteRequest, sqliteReach, sqliteStore, sqliteSyncStore,
 } from '../store/sqlite/store.js';
 import { CLI_ACTOR } from '../core/actor.js';
 
@@ -23,14 +23,25 @@ export function cliFolder(hippoRoot: string): FolderStore {
   return { root: hippoRoot, store: cliStore(hippoRoot) };
 }
 
+/** hippo.db whose calls answer at once, for a hook or verb that counts each statement against its own time. */
+export function cliSyncStore(hippoRoot: string): ReturnType<typeof sqliteSyncStore> {
+  return sqliteSyncStore(hippoRoot);
+}
+
 /** The folder's hippo.db for a verb that runs a sleep pass by itself. */
 export function cliLocalFiles(hippoRoot: string): LocalFiles {
-  return sqliteSyncStore(hippoRoot).localFiles;
+  return cliSyncStore(hippoRoot).localFiles;
 }
 
 /** Creates the global store, or finishes one that was partly made: what a first share needs of it. */
 export function cliInitGlobal(): void {
-  cliLocalFiles(getGlobalRoot()).sharing.ensureFiles();
+  cliLocalFiles(getGlobalRoot()).ensureFiles();
+}
+
+/** One handle per store at the hook's lock wait; a store still busy after it skips the hook's work and answers
+ * undefined. */
+export function cliHookRequest<T>(run: () => T | Promise<T>): Promise<T | undefined> {
+  return runSqliteHookRequest(run);
 }
 
 /** A CLI verb's agent-memory import options: each target reads its own config.json and opens through the SQLite

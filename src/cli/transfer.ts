@@ -19,11 +19,13 @@ import {
 } from '../importers/sources.js';
 import { importMarkdown } from '../importers/markdown.js';
 import { importVault } from '../importers/vault.js';
-import { ImportOptions, type ImportResult } from '../importers/core.js';
+import type { ImportOptions, ImportResult, TargetedImport } from '../importers/core.js';
 import * as api from '../api/index.js';
 import { getMemory, listMemories } from '../api/memories/memories.js';
 import * as client from './client.js';
-import { cliApiContext, cliFolder, cliInitGlobal, cliSyncOptions } from './api-context.js';
+import {
+  cliApiContext, cliFolder, cliInitGlobal, cliStore, cliSyncOptions, cliSyncStore,
+} from './api-context.js';
 import { printError } from './output.js';
 import { errorMessage, log } from '../util/log.js';
 import { requireInit, runViaServerIfAvailable, learnFromRepo } from './shared.js';
@@ -204,11 +206,12 @@ export async function handleImport({ hippoRoot, tenantId, args, flags }: Command
     requireInit(hippoRoot);
   }
 
-  const importOptions: ImportOptions = {
+  const importOptions: TargetedImport = {
     dryRun,
     global: useGlobal,
     extraTags,
     hippoRoot,
+    target: { root: targetRoot, store: cliSyncStore(targetRoot) },
   };
 
   // Vault import is a FOLDER importer that dispatches apart from the single-file slot below; it writes through
@@ -219,7 +222,7 @@ export async function handleImport({ hippoRoot, tenantId, args, flags }: Command
   importFromFile(targetRoot, args, flags, { importOptions, useGlobal, dryRun, tenantId });
 }
 
-type FileImporter = (fp: string, opts: ImportOptions) => ReturnType<typeof importChatGPT>;
+type FileImporter = (fp: string, opts: TargetedImport) => ReturnType<typeof importChatGPT>;
 
 interface PickedImporter {
   filePath: string | undefined;
@@ -250,7 +253,7 @@ function pickImporter(args: string[], flags: CliFlags): PickedImporter {
 }
 
 interface ImportFromFileOptions {
-  readonly importOptions: ImportOptions;
+  readonly importOptions: TargetedImport;
   readonly useGlobal: boolean;
   readonly dryRun: boolean;
   readonly tenantId: string;
@@ -339,7 +342,7 @@ async function importVaultFolder(
     name: nonEmptyStringFlag(flags, 'name'),
     scope: nonEmptyStringFlag(flags, 'scope'),
   };
-  const vaultResult = await importVault(folderPath, vaultOptions);
+  const vaultResult = await importVault(folderPath, vaultOptions, cliStore(hippoRoot));
   printVaultSummary(vaultResult, folderPath, cliApiContext(hippoRoot, tenantId), dryRun);
 }
 

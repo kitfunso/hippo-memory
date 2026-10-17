@@ -8,6 +8,7 @@ import { bookTokenUse } from '../../src/api/ledger-db.js';
 import { ensurePilotArm, hashArm, readPilotArm } from '../../src/store/pilot-arm.js';
 import { recordTokenUse, summarizeTokenUse, tokensBySession } from '../../src/store/token-ledger.js';
 import { runDoctor } from '../../src/doctor.js';
+import { diagnosticsAt } from '../_helpers/cli-stores.js';
 import type { JsonValue } from '../../src/util/json.js';
 import { countMatching, recordStatements } from '../_helpers/count-statements.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
@@ -236,7 +237,7 @@ describe('ledger readers skip arm rows', () => {
 describe('doctor', () => {
   const pilotCheck = () => {
     vi.stubEnv('HIPPO_HOME', path.join(tmp, 'global'));
-    return runDoctor({ cwd: tmp, home: tmp, version: 'test' }).checks.find((c) => c.id === 'pilot');
+    return runDoctor({ diagnosticsAt, cwd: tmp, home: tmp, version: 'test' }).checks.find((c) => c.id === 'pilot');
   };
 
   it('reports the pilot only when the rate is above 0', () => {

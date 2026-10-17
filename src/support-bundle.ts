@@ -8,7 +8,6 @@ import { pathToFileURL } from 'url';
 import { findHippoStoreDir, isGlobalStoreRoot, isInitialized } from './core/project-identity.js';
 import { realpathOrResolve } from './util/real-path.js';
 import { getGlobalRoot } from './sharing/global-store.js';
-import { sqliteStore } from './store/sqlite/store.js';
 import { runDoctor, type DoctorOptions } from './doctor.js';
 import { loadConfig } from './core/config.js';
 import { redactSecretsStrict } from './util/secret-detect.js';
@@ -85,7 +84,7 @@ function readStoreConfig(storeDir: string): StoreConfigReport {
   return { configFile, config: redactConfigValue(effective) };
 }
 
-function buildStoreEntry(kind: 'project' | 'global', storeDir: string): JsonObject {
+function buildStoreEntry(opts: SupportBundleOptions, kind: 'project' | 'global', storeDir: string): JsonObject {
   const dbPath = path.join(storeDir, 'hippo.db');
   if (!fs.existsSync(dbPath)) {
     return { kind, path: storeDir, error: 'no hippo.db here (hippo init has not run)' };
@@ -96,7 +95,7 @@ function buildStoreEntry(kind: 'project' | 'global', storeDir: string): JsonObje
   if (fs.existsSync(walPath)) files['hippo.db-wal'] = fs.statSync(walPath).size;
 
   try {
-    const { schemaVersion, minCompatibleBinary, tables } = sqliteStore(storeDir).localFiles.diagnostics.inventory();
+    const { schemaVersion, minCompatibleBinary, tables } = opts.diagnosticsAt(storeDir).inventory();
     const { configFile, config } = readStoreConfig(storeDir);
     return { kind, path: storeDir, schemaVersion, minCompatibleBinary, files, tables, configFile, config };
   } catch (err) {
@@ -107,11 +106,11 @@ function buildStoreEntry(kind: 'project' | 'global', storeDir: string): JsonObje
 function buildStores(opts: SupportBundleOptions): JsonValue[] {
   const stores: JsonValue[] = [];
   const projectDir = findHippoStoreDir(opts.cwd, { homeDir: opts.home });
-  if (projectDir !== null) stores.push(buildStoreEntry('project', projectDir));
+  if (projectDir !== null) stores.push(buildStoreEntry(opts, 'project', projectDir));
 
   const globalDir = getGlobalRoot();
   const alreadyListed = projectDir !== null && isGlobalStoreRoot(projectDir);
-  if (isInitialized(globalDir) && !alreadyListed) stores.push(buildStoreEntry('global', globalDir));
+  if (isInitialized(globalDir) && !alreadyListed) stores.push(buildStoreEntry(opts, 'global', globalDir));
 
   return stores;
 }

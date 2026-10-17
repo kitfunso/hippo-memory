@@ -22,8 +22,7 @@ import { quarantineList } from '../../src/api/auth/quarantine.js';
 import { drillDown } from '../../src/api/objects/drill-down.js';
 import { quarantineScopeFor } from '../../src/trust/quarantine.js';
 import { recordQuarantine } from '../../src/store/quarantine.js';
-import { importEntries } from '../../src/importers/core.js';
-import { importVault } from '../../src/importers/vault.js';
+import { importEntries, importVault } from '../../src/entry/importers.js';
 import { withRequestStoresSync } from '../../src/db/request-stores.js';
 import { invalidateMatching, detectChurnStale } from '../../src/learn/invalidation.js';
 import { resolveConflict, listMemoryConflicts } from '../../src/store/conflicts.js';
@@ -33,6 +32,7 @@ import { buildMemoryDetail } from '../../src/dashboard/dashboard-queries.js';
 import { createSnapshotService } from '../../src/dashboard/dashboard-snapshot.js';
 import { handleMcpRequest } from '../../src/mcp/server.js';
 import { recordSessionDigest } from '../../src/capture/session-digest.js';
+import { captureTarget, syncStore } from '../_helpers/cli-stores.js';
 import { sqliteStore, sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { sqliteConsolidation } from '../../src/store/sqlite/consolidation-group.js';
@@ -440,7 +440,7 @@ describe('cmdCapture', () => {
       const sessionTurns = Array.from({ length: items + 1 }, (_, i) => ({ role: 'user' as const, text: `Never deploy service ${i} on Fridays because the on-call rota is thin.` }));
       const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
       try {
-        const { statements } = recordStatements(() => cmdCapture(root, { source: 'last-session', sessionTurns, dryRun: false, global: false, tenantId: 'default' }));
+        const { statements } = recordStatements(() => cmdCapture(captureTarget(root), { source: 'last-session', sessionTurns, dryRun: false, global: false, tenantId: 'default' }));
         expect(log.mock.calls.at(-1)?.[0]).toContain(`Captured ${items} items (1 skipped as duplicates)`);
         expect(countMatching(statements, ROW_READ)).toBe(0);
         return countMatching(statements, STORE_OPEN);
@@ -574,7 +574,7 @@ describe('recordSessionDigest', () => {
         edits: [],
       };
       const log: string[] = [];
-      const { statements } = recordStatements(() => recordSessionDigest(root, scan, { key: 's1', tenantId: 'default', log: (line) => log.push(line) }));
+      const { statements } = recordStatements(() => recordSessionDigest(root, syncStore(root), scan, { key: 's1', tenantId: 'default', log: (line) => log.push(line) }));
       expect(log.join('\n')).toMatch(/^digest: wrote /);
       expect(countMatching(statements, TENANT_READ)).toBe(0);
     }

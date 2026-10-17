@@ -30,6 +30,8 @@ export type { Sharing } from './sharing.js';
  * process, the global store) may run. */
 export interface LocalFiles {
   readonly hippoRoot: string;
+  /** Creates the store's files when they are missing, as `hippo init`, a first share or a global capture needs. */
+  ensureFiles(): void;
   readonly consolidation: Consolidation;
   readonly agentImport: AgentImport;
   readonly captures: Captures;

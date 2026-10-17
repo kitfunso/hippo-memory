@@ -13,9 +13,9 @@ import { errorMessage } from '../util/log.js';
 import { fail } from './exit.js';
 import { plural } from '../util/format.js';
 import { CLI_ACTOR } from '../core/actor.js';
-import { AUDIT_OPS } from '../store/port/audit-ops.js';
+import { AUDIT_OPS } from '../core/audit-ops.js';
 import type { AuditEvent } from '../store/port/types.js';
-import type { AuditOp } from '../store/port/audit-ops.js';
+import type { AuditOp } from '../core/audit-ops.js';
 
 // Audit log subcommands (`hippo audit list`)
 

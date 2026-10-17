@@ -15,9 +15,9 @@ import * as api from '../../src/api/index.js';
 import { consolidate } from '../../src/index.js';
 import { buildDag, buildEntityProfiles } from '../../src/consolidate/dag.js';
 import { storeExtractedFacts } from '../../src/learn/extract.js';
-import { importGenericFile } from '../../src/importers/sources.js';
-import { importVault } from '../../src/importers/vault.js';
+import { importGenericFile, importVault } from '../../src/entry/importers.js';
 import { cmdCapture } from '../../src/capture/command.js';
+import { captureTarget } from '../_helpers/cli-stores.js';
 import { importProjectMemories } from '../../src/agent-memories/sync.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
@@ -130,7 +130,7 @@ const writers: [string, (root: string) => Promise<MemoryEntry[]>][] = [
     const file = path.join(tmp(), 'session.txt');
     fs.writeFileSync(file, 'decision: rotate deploy keys every 90 days\n');
     vi.spyOn(console, 'log').mockImplementation(() => {});
-    return added(root, () => cmdCapture(root, { source: 'file', filePath: file, dryRun: false, global: false }));
+    return added(root, () => cmdCapture(captureTarget(root), { source: 'file', filePath: file, dryRun: false, global: false }));
   }],
   ['file import', (root) => {
     const file = path.join(tmp(), 'notes.txt');

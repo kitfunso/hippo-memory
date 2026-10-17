@@ -9,6 +9,7 @@ import { heartbeatVerdict } from '../../src/server/auth.js';
 import { resolveEmbeddingProvider } from '../../src/embeddings/provider.js';
 import { handleInit } from '../../src/cli/init.js';
 import { cmdCapture } from '../../src/capture/command.js';
+import { captureTarget } from '../_helpers/cli-stores.js';
 import { loadConfig } from '../../src/core/config.js';
 import { DEFAULT_EMBEDDING_MODEL, resolveEmbeddingModel } from '../../src/embeddings/local.js';
 import { countTableRows } from '../../src/db/tables.js';
@@ -146,7 +147,7 @@ describe('capture log append', () => {
     // The test runner replaces console, so route its lines through the stream the tee wraps.
     vi.spyOn(console, 'log').mockImplementation((line: string) => process.stdout.write(`${line}
 `));
-    cmdCapture(root, { source: 'file', filePath: blank, dryRun: true, global: false, logFile });
+    cmdCapture(captureTarget(root), { source: 'file', filePath: blank, dryRun: true, global: false, logFile });
     expect(logged().filter((l) => l.includes('is no longer writable'))).toHaveLength(1);
   });
 });

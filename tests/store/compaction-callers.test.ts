@@ -180,16 +180,6 @@ async function caught(fn: () => object): Promise<Error | null> {
   return null;
 }
 
-function thrown(fn: () => void): Error | null {
-  try {
-    fn();
-  } catch (err) {
-    if (err instanceof Error) return err;
-    throw err;
-  }
-  return null;
-}
-
 describe('recordSummary for a caller', () => {
   it("takes the caller's project with no request id, on a store that may predate the column", () => {
     withDb((db) => {
@@ -302,27 +292,27 @@ describe('preCompactForCaller', () => {
 describe('compactResumeForCaller', () => {
   const resume = (ctx: Context, source = 'compact') => compactResumeForCaller(ctx, { sessionId: 'sA', project: PROJECT, source });
 
-  it("source not compact gives ''", () => {
+  it("source not compact gives ''", async () => {
     saveActiveTaskSnapshot(root, TENANT, { ...STATE, session_id: 'sA' }, ALICE);
-    expect(resume(owned('alice'), 'startup')).toEqual({ stdout: '' });
-    expect(resume(owned('alice')).stdout).toContain(STATE.task);
+    expect(await resume(owned('alice'), 'startup')).toEqual({ stdout: '' });
+    expect((await resume(owned('alice'))).stdout).toContain(STATE.task);
   });
 
-  it("holdout gives ''", () => {
+  it("holdout gives ''", async () => {
     saveActiveTaskSnapshot(root, TENANT, { ...STATE, session_id: 'sA' }, ALICE);
     holdout();
-    expect(resume(owned('alice'))).toEqual({ stdout: '' });
+    expect(await resume(owned('alice'))).toEqual({ stdout: '' });
   });
 
-  it("another session's snapshot gives ''", () => {
+  it("another session's snapshot gives ''", async () => {
     saveActiveTaskSnapshot(root, TENANT, { ...STATE, session_id: 'sOld' }, ALICE);
-    expect(resume(owned('alice'))).toEqual({ stdout: '' });
+    expect(await resume(owned('alice'))).toEqual({ stdout: '' });
   });
 
-  it("renders the owner's snapshot and books one compact_resume row", () => {
+  it("renders the owner's snapshot and books one compact_resume row", async () => {
     const mine = saveActiveTaskSnapshot(root, TENANT, { ...STATE, session_id: 'sA' }, ALICE);
     saveActiveTaskSnapshot(root, TENANT, { task: 'Bob task', summary: 'b', next_step: 'b', session_id: 'sB' }, BOB);
-    const { stdout } = resume(owned('alice'));
+    const { stdout } = await resume(owned('alice'));
     expect(stdout).toBe(compactResumeText(mine, []));
     expect(stdout).not.toContain('Bob task');
     withDb((db) => expect(count(db, 'token_ledger', `tenant_id = ? AND session_id = 'sA' AND surface = 'compact_resume' AND event = 'inject'`, TENANT)).toBe(1));
@@ -513,11 +503,11 @@ describe('captureFailureForCaller', () => {
 });
 
 describe('sessionEndHandoffForCaller', () => {
-  it("writes the owner's handoff and closes only the owner's snapshot", () => {
+  it("writes the owner's handoff and closes only the owner's snapshot", async () => {
     const mine = saveActiveTaskSnapshot(root, TENANT, { ...STATE, session_id: 'sA' }, ALICE);
     // Bob's row names the same session id, so only the key keeps the close off it.
     const bobs = saveActiveTaskSnapshot(root, TENANT, { task: 'Bob task', summary: 'b', next_step: 'b', session_id: 'sA' }, BOB);
-    expect(sessionEnd(owned('alice'))).toEqual({ handoffWritten: true, snapshotsClosed: 1 });
+    expect(await sessionEnd(owned('alice'))).toEqual({ handoffWritten: true, snapshotsClosed: 1 });
     withDb((db) => {
       expect(snapshotRow(db, mine.id)?.status).toBe('session-ended');
       expect(snapshotRow(db, bobs.id)?.status).toBe('active');
@@ -525,30 +515,30 @@ describe('sessionEndHandoffForCaller', () => {
     });
   });
 
-  it('writes the handoff from the working state when the owner has no snapshot for the session', () => {
+  it('writes the handoff from the working state when the owner has no snapshot for the session', async () => {
     const req = { sessionId: 'sA', project: PROJECT, workingState: STATE, evidence: null };
-    expect(sessionEndHandoffForCaller(owned('alice'), req)).toEqual({ handoffWritten: true, snapshotsClosed: 0 });
-    expect(sessionEndHandoffForCaller(owned('alice'), req)).toEqual({ handoffWritten: false, snapshotsClosed: 0 });
+    expect(await sessionEndHandoffForCaller(owned('alice'), req)).toEqual({ handoffWritten: true, snapshotsClosed: 0 });
+    expect(await sessionEndHandoffForCaller(owned('alice'), req)).toEqual({ handoffWritten: false, snapshotsClosed: 0 });
     withDb((db) => expect(handoffRows(db)).toEqual([{ session_id: 'sA', task_id: STATE.task, owner_subject: 'alice', origin_project: 'acme/app' }]));
   });
 
-  it('retry after a failed close writes no second handoff', () => {
+  it('retry after a failed close writes no second handoff', async () => {
     const mine = saveActiveTaskSnapshot(root, TENANT, { ...STATE, session_id: 'sA' }, ALICE);
     // An earlier save time, so the handoff is strictly newer than the snapshot it covers.
     withDb((db) => db.prepare(`UPDATE task_snapshots SET updated_at = ? WHERE id = ?`).run(new Date(Date.now() - 60_000).toISOString(), mine.id));
     const undo = failOn('task_snapshots', 'UPDATE', 'close boom');
-    expect(() => sessionEnd(owned('alice'))).toThrow('close boom');
+    await expect(sessionEnd(owned('alice'))).rejects.toThrow('close boom');
     undo();
-    expect(sessionEnd(owned('alice'))).toEqual({ handoffWritten: false, snapshotsClosed: 1 });
+    expect(await sessionEnd(owned('alice'))).toEqual({ handoffWritten: false, snapshotsClosed: 1 });
     withDb((db) => {
       expect(handoffRows(db)).toHaveLength(1);
       expect(snapshotRow(db, mine.id)?.status).toBe('session-ended');
     });
   });
 
-  it('refuses a git ref that is not a commit id, naming the field', () => {
+  it('refuses a git ref that is not a commit id, naming the field', async () => {
     const evidence = { gitRef: 'main', dirtyTree: null, testStatus: null };
-    const err = thrown(() => sessionEndHandoffForCaller(owned('alice'), { sessionId: 'sA', project: PROJECT, workingState: null, evidence }));
+    const err = await caught(() => sessionEndHandoffForCaller(owned('alice'), { sessionId: 'sA', project: PROJECT, workingState: null, evidence }));
     expect(err).toBeInstanceOf(BadRequestError);
     expect(err).toMatchObject({ status: 400, message: expect.stringMatching(/^evidence gitRef:/) });
   });

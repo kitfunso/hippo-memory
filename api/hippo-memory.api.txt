@@ -1,6 +1,13 @@
 entry/folder-search.d.ts: folderVectorSource function
 entry/folder-search.d.ts: hybridSearch function
 entry/folder-search.d.ts: physicsSearch function
+entry/importers.d.ts: importChatGPT function
+entry/importers.d.ts: importClaude function
+entry/importers.d.ts: importCursor function
+entry/importers.d.ts: importEntries function
+entry/importers.d.ts: importGenericFile function
+entry/importers.d.ts: importMarkdown function
+entry/importers.d.ts: importVault function
 entry/json-hooks.d.ts: InstallResult re-export
 entry/json-hooks.d.ts: JsonHookPaths re-export
 entry/json-hooks.d.ts: installJsonHooks re-export

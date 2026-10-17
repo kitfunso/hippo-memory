@@ -63,7 +63,7 @@ function scan(finalText: string, over: Partial<SessionScan> = {}): SessionScan {
 /** The line recordSessionDigest logs for one run: what it wrote, or why it skipped. */
 function write(key: string, s: SessionScan): string {
   const log: string[] = [];
-  recordSessionDigest(hippoRoot, s, { key, tenantId: 'default', log: (line) => log.push(line) });
+  recordSessionDigest(hippoRoot, sqliteSyncStore(hippoRoot), s, { key, tenantId: 'default', log: (line) => log.push(line) });
   return log.join('\n');
 }
 const WROTE = /^digest: wrote /;

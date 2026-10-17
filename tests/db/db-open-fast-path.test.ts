@@ -9,6 +9,7 @@ import { writeEntry } from '../../src/store/entry-writes.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
 import { consolidate } from '../../src/index.js';
 import { runDoctor } from '../../src/doctor.js';
+import { diagnosticsAt } from '../_helpers/cli-stores.js';
 import { openHippoDb, closeHippoDb, getMeta, setMeta, ftsRowCounts, getCurrentSchemaVersion, type DatabaseSyncLike } from '../../src/db/index.js';
 import { REQUIRED_SCHEMA_OBJECTS } from '../../src/db/continuity.js';
 import { MIGRATIONS } from '../../src/db/migrations/index.js';
@@ -218,8 +219,8 @@ describe('full-text drift repair moved off the open path', () => {
 
   it('doctor warns on drift and points at sleep', () => {
     vi.stubEnv('HIPPO_HOME', path.join(cwd, 'global'));
-    expect(runDoctor({ cwd, home: cwd, version: 'test' }).checks.find((c) => c.id === 'fts')).toMatchObject({ status: 'pass' });
+    expect(runDoctor({ diagnosticsAt, cwd, home: cwd, version: 'test' }).checks.find((c) => c.id === 'fts')).toMatchObject({ status: 'pass' });
     desyncFts();
-    expect(runDoctor({ cwd, home: cwd, version: 'test' }).checks.find((c) => c.id === 'fts')).toMatchObject({ status: 'warn', fix: expect.stringMatching(/hippo sleep/) });
+    expect(runDoctor({ diagnosticsAt, cwd, home: cwd, version: 'test' }).checks.find((c) => c.id === 'fts')).toMatchObject({ status: 'warn', fix: expect.stringMatching(/hippo sleep/) });
   });
 });

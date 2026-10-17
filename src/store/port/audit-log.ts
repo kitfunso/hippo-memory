@@ -1,4 +1,4 @@
-import type { AuditOp } from './audit-ops.js';
+import type { AuditOp } from '../../core/audit-ops.js';
 import type { KeysetPosition } from '../../util/keyset.js';
 import type { AuditEvent } from './types.js';
 

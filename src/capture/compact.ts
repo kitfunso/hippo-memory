@@ -3,8 +3,8 @@ import * as path from 'path';
 import { type TaskSnapshot } from '../store/rows.js';
 import { isInitialized } from '../core/project-identity.js';
 import { PRE_COMPACT_INSTRUCTION, postCompactLine, saveCompaction, replayCompactions } from './compaction-record.js';
-import type { LocalFiles } from '../store/port.js';
-import { sqliteSyncStore } from '../store/sqlite/store.js';
+import type { LocalFiles, Sync } from '../store/port.js';
+import type { Sessions } from '../store/port-groups.js';
 import { COMPACTION_DB_WAIT_MS } from '../core/compaction-timing.js';
 import { resolveTenantId } from '../store/tenant.js';
 import { defaultPreCompactLogPath, vscodeUserHooksFile } from '../hooks/shared.js';
@@ -81,18 +81,24 @@ function printPreCompactInstruction(logFile: string): string | null {
 /** The Copilot CLI accepts both preCompact and PreCompact, so hippo.json's pair can run twice for one compaction. */
 const TWIN_FIRE_MS = 10_000;
 
-function snapshotJustSaved(hippoRoot: string, sessionId: string | null): boolean {
+/** The folder's store as a compaction hook reaches it, built by the CLI root; each call answers at once, since the hook
+ * counts its own time. */
+export interface CompactionStore {
+  readonly localFiles: LocalFiles;
+  readonly sessions: Sync<Sessions>;
+}
+
+function snapshotJustSaved(sessions: Sync<Sessions>, sessionId: string | null): boolean {
   if (sessionId === null || sessionId === '') return false;
-  const active = sqliteSyncStore(hippoRoot).sessions.loadSnapshot(resolveTenantId({}), null);
+  const active = sessions.loadSnapshot(resolveTenantId({}), null);
   return active?.session_id === sessionId && active.source === 'pre-compact' &&
     Date.now() - Date.parse(active.updated_at) < TWIN_FIRE_MS;
 }
 
 /** Runs the PreCompact producer: records the compaction, asks the summarizer for memories, saves a working-state
  * snapshot. Never extracts memories itself; SessionEnd capture owns that. */
-function runPreCompact(local: LocalFiles, options: PreCompactOptions, logFile: string): void {
+function runPreCompact(hippoRoot: string, store: CompactionStore, options: PreCompactOptions, logFile: string): void {
   const { stdinText, stdinTimedOut = false, runtime = 'claude-code' } = options;
-  const { hippoRoot } = local;
   // PreCompact fires in every Claude Code project, including ones that never ran `hippo init`; gate before any call
   // that would create a store.
   if (!isInitialized(hippoRoot)) {
@@ -113,7 +119,7 @@ function runPreCompact(local: LocalFiles, options: PreCompactOptions, logFile: s
     appendPreCompactLog(logFile, 'skip: VS Code payload, hippo.json runs pre-compact for this chat');
     return;
   }
-  if (runtime === 'copilot' && snapshotJustSaved(hippoRoot, sessionId)) {
+  if (runtime === 'copilot' && snapshotJustSaved(store.sessions, sessionId)) {
     appendPreCompactLog(
       logFile,
       `skip: snapshot for session ${sessionId} saved under ${TWIN_FIRE_MS / 1000} s ago, by the other preCompact entry`,
@@ -122,7 +128,7 @@ function runPreCompact(local: LocalFiles, options: PreCompactOptions, logFile: s
   }
 
   const closable = runtime === 'claude-code' && !vscode;
-  const recordId = markCompactionBoundary(local, options, logFile, receipt.input, closable);
+  const recordId = markCompactionBoundary(store.localFiles, options, logFile, receipt.input, closable);
 
   const transcriptPath = resolvePreCompactTranscript(payloadTranscriptPath, stdinText, logFile, runtime);
   if (!transcriptPath) return;
@@ -131,7 +137,7 @@ function runPreCompact(local: LocalFiles, options: PreCompactOptions, logFile: s
   const derived = transcriptWorkingState(transcriptPath, (message) => appendPreCompactLog(logFile, message));
   if (!derived) return;
 
-  saveDerivedSnapshot(local, logFile, sessionId, recordId, derived);
+  saveDerivedSnapshot(store, logFile, sessionId, recordId, derived);
 }
 
 /** Starts the compaction record when the host will close one (`closable`), then tells `onBoundary` what was printed;
@@ -196,14 +202,13 @@ function resolvePreCompactTranscript(
 }
 
 function saveDerivedSnapshot(
-  local: LocalFiles,
+  { localFiles: local, sessions }: CompactionStore,
   logFile: string,
   sessionId: string | null,
   recordId: string | null,
   derived: WorkingState,
 ): void {
   const tenantId = resolveTenantId({});
-  const { sessions } = sqliteSyncStore(local.hippoRoot);
 
   let existing: TaskSnapshot | null = null;
   try {
@@ -248,10 +253,14 @@ export interface PreCompactOptions {
 /** PreCompact hook entry point. Exit code 2 BLOCKS compaction, so every path (bad stdin, missing transcript, store
  * error) must exit 0 as a logged no-op. Callers must not wrap this in anything that turns a caught-and-logged failure
  * into a non-zero exit. */
-export async function cmdPreCompact(hippoRoot: string, options: PreCompactOptions): Promise<void> {
+export async function cmdPreCompact(
+  hippoRoot: string,
+  store: CompactionStore,
+  options: PreCompactOptions,
+): Promise<void> {
   const logFile = options.logFile ?? defaultPreCompactLogPath();
   try {
-    runPreCompact(sqliteSyncStore(hippoRoot).localFiles, options, logFile);
+    runPreCompact(hippoRoot, store, options, logFile);
   } catch (err) {
     appendPreCompactLog(logFile, `pre-compact failed: ${errorMessage(err)}`);
   }
@@ -271,7 +280,7 @@ const POST_COMPACT_REPLAY_BUDGET_MS = 6000;
 
 /** PostCompact entry point: saves the summary and its items, replays earlier leftovers, returns the one line to show.
  * Never throws, so the hook exits 0. */
-export function cmdPostCompact(hippoRoot: string, options: PostCompactOptions): string | null {
+export function cmdPostCompact(hippoRoot: string, store: CompactionStore, options: PostCompactOptions): string | null {
   const logFile = options.logFile ?? defaultPreCompactLogPath();
   const log = (message: string): void => appendPreCompactLog(logFile, `post-compact: ${message}`);
   const deadline = Date.now() + POST_COMPACT_REPLAY_BUDGET_MS;
@@ -281,7 +290,7 @@ export function cmdPostCompact(hippoRoot: string, options: PostCompactOptions): 
       return null;
     }
     const receipt = readClaudeCodePostCompact(options.stdinText, options.stdinTimedOut ?? false);
-    const local = sqliteSyncStore(hippoRoot).localFiles;
+    const local = store.localFiles;
     let line: string | null = null;
     let storeBusy = false;
     if (receipt.status !== 'received') {

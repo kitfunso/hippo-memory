@@ -87,6 +87,7 @@ function sqliteLocalFiles(handles: Handles): LocalFiles {
   const { on } = handles;
   return {
     hippoRoot: handles.files.hippoRoot,
+    ensureFiles: () => on(() => undefined, openStore),
     consolidation: sqliteConsolidation(handles),
     agentImport: sqliteAgentImport,
     captures: sqliteCaptures(on),
@@ -229,7 +230,7 @@ function sqliteReadiness(hippoRoot: string, on: OnHandle): Sync<Readiness> {
 }
 
 /** The composition roots reach the request scope through the adapter's one entry. */
-export { runDetachedSqliteRequest, runSqliteRequest } from './request-scope.js';
+export { runDetachedSqliteRequest, runSqliteHookRequest, runSqliteRequest } from './request-scope.js';
 
 /** What a call on `store` reaches, probed as the api's own context plan did (`shared` is the transport's flag). */
 export function sqliteReach(hippoRoot: string, store: HippoStore, shared?: boolean): StoreReach {

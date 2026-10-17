@@ -4,7 +4,7 @@ import { appendAuditEvent, reportAuditWriteFailure } from './audit.js';
 import { RejectedValueError } from '../core/api-errors.js';
 import type { JsonValue } from '../util/json.js';
 import { CLI_ACTOR } from '../core/actor.js';
-import type { AuditOp } from './port/audit-ops.js';
+import type { AuditOp } from '../core/audit-ops.js';
 
 export interface AuditOptions {
   readonly targetId?: string;

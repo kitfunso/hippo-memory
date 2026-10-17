@@ -13,8 +13,9 @@ import { createMemory, Layer } from '../../src/core/memory.js';
 import { invalidateMatching } from '../../src/learn/invalidation.js';
 import { refineStore } from '../../src/cli/refine-llm.js';
 import { cmdCapture } from '../../src/capture/command.js';
+import { captureTarget } from '../_helpers/cli-stores.js';
 // importEntries still used by case 6 for ImportOptions.tenantId path
-import { importEntries } from '../../src/importers/core.js';
+import { importEntries } from '../../src/entry/importers.js';
 import { autoShare } from '../../src/sharing/share.js';
 import { consolidate } from '../../src/index.js';
 import { listPeers } from '../../src/sharing/share.js';
@@ -186,7 +187,7 @@ describe('per-tenant scoping (cross-tenant leak prevention)', () => {
     // Capture with tenant-a scope. The dedup branch in cmdCaptureCore calls
     // loadAllEntries(targetRoot, options.tenantId='tenant-a') and sees NOTHING
     // (tenant-b's seed is invisible), so the extracted decision IS written.
-    cmdCapture(hippoRoot, {
+    cmdCapture(captureTarget(hippoRoot), {
       source: 'file',
       filePath: fixturePath,
       dryRun: false,
@@ -213,7 +214,7 @@ describe('per-tenant scoping (cross-tenant leak prevention)', () => {
     // sees both tenant-a's and tenant-b's entries).
     const fixturePath2 = join(tmpDir, 'capture-fixture2.txt');
     fs.writeFileSync(fixturePath2, fixtureText, 'utf8');
-    cmdCapture(hippoRoot, {
+    cmdCapture(captureTarget(hippoRoot), {
       source: 'file',
       filePath: fixturePath2,
       dryRun: false,

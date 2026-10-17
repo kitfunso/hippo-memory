@@ -103,7 +103,7 @@ export function shareMemory(
   if (!globalEntry) return null;
 
   const to = global.store.localFiles;
-  to.sharing.ensureFiles();
+  to.ensureFiles();
   to.learning.writeEntry(globalEntry);
 
   // Embed here unless the caller opts out: autoShare sets skipEmbed to batch one embedAll(), since embedMemory rewrites
@@ -290,7 +290,7 @@ export function autoShare(
     ? local.sharing.entriesWithSignals(AUTO_SHARE_SIGNALS, options.tenantId)
     : local.learning.allEntries(options.tenantId);
   const to = global.store.localFiles;
-  to.sharing.ensureFiles();
+  to.ensureFiles();
   // Host-wide read. The global store IS the union across all tenants;
   // per-tenant filtering on the global root would defeat the purpose.
   const globalContentSet = storedTextKeys(to.sharing.textKeys());

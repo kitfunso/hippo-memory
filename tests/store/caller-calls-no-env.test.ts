@@ -83,11 +83,11 @@ describe('caller calls under a foreign environment', () => {
     const base = { sessionId: SESSION, project: PROJECT };
 
     expect(await preCompactForCaller(ctx, { ...base, trigger: 'auto', workingState: STATE })).toEqual({ stdout: PRE_COMPACT_INSTRUCTION });
-    expect(compactResumeForCaller(ctx, { ...base, source: 'compact' }).stdout).toContain(STATE.task);
+    expect((await compactResumeForCaller(ctx, { ...base, source: 'compact' })).stdout).toContain(STATE.task);
     expect(await saveCompactionItemsForCaller(ctx, { ...base, trigger: 'auto', items: ITEMS, requestId: 'cmp-1' })).toEqual({ written: 2 });
     expect(await captureFailureForCaller(ctx, { ...base, tool: 'Bash', text: LESSON, skip: null, rule: null, detailHash: null, requestId: 'fail-1' })).toEqual({ outcome: 'stored' });
     const evidence = { gitRef: 'b'.repeat(40), dirtyTree: true, testStatus: 'pass' } as const;
-    expect(sessionEndHandoffForCaller(ctx, { ...base, workingState: STATE, evidence })).toEqual({ handoffWritten: true, snapshotsClosed: 1 });
+    expect(await sessionEndHandoffForCaller(ctx, { ...base, workingState: STATE, evidence })).toEqual({ handoffWritten: true, snapshotsClosed: 1 });
 
     withDb((db) => {
       expect(rowsByTenant(db, TENANT)).toEqual({

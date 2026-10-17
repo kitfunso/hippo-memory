@@ -11,6 +11,7 @@ import type {
   RecallBoostOptions, RecallFilterOptions, RecallHintOptions, RecallOptions, RecallTraceOptions, RecallWindowOptions,
 } from '../../src/api/index.js';
 import type { ConsolidationResult } from '../../src/consolidate/run.js';
+import type { HippoStore } from '../../src/entry/store-kit.js';
 
 describe('hippo-memory entry types', () => {
   it('createMemory takes content then optional partial options and returns a MemoryEntry', () => {
@@ -50,7 +51,7 @@ describe('hippo-memory entry types', () => {
   });
 
   it('consolidate and sleep are async', () => {
-    expectTypeOf(consolidate).parameter(0).toEqualTypeOf<string>();
+    expectTypeOf(consolidate).parameter(0).toEqualTypeOf<string | HippoStore>();
     expectTypeOf(consolidate).returns.toEqualTypeOf<Promise<ConsolidationResult>>();
     expectTypeOf(sleep).parameter(0).toEqualTypeOf<Context>();
     expectTypeOf(sleep).parameter(1).toEqualTypeOf<SleepOpts | undefined>();

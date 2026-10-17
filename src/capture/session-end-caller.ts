@@ -4,7 +4,6 @@ import { BadRequestError } from '../core/api-errors.js';
 import type { Context } from '../api/types.js';
 import type { HandoffEvidence } from '../core/handoff.js';
 import type { CallerProject } from '../api/prompt-hook.js';
-import { sqliteSyncStore } from '../store/sqlite/store.js';
 import { bindCaller, checkedWorkingState } from './caller-session.js';
 import type { WorkingState } from './working-state.js';
 
@@ -48,17 +47,20 @@ function checkedEvidence(evidence: CallerEvidence | null): CallerEvidence | null
  * Call on a session's final end only, since it closes the snapshot. A failed close throws so the sender retries, and
  * the retry writes no second handoff.
  */
-export function sessionEndHandoffForCaller(ctx: Context, req: CallerSessionEndRequest): CallerSessionEndResult {
+export async function sessionEndHandoffForCaller(
+  ctx: Context,
+  req: CallerSessionEndRequest,
+): Promise<CallerSessionEndResult> {
   const state = checkedWorkingState(req.workingState);
   const evidence = checkedEvidence(req.evidence);
   const key = bindCaller(ctx, req.sessionId, req.project);
-  const { sessions } = sqliteSyncStore(ctx.hippoRoot);
-  const handoff = sessions.writeSessionEndHandoff(ctx.tenantId, {
+  const { sessions } = ctx.store;
+  const handoff = await sessions.writeSessionEndHandoff(ctx.tenantId, {
     sessionId: req.sessionId,
     evidence,
     derived: state,
     key,
   });
-  const snapshotsClosed = sessions.closeSessionSnapshots(ctx.tenantId, req.sessionId, 'session-ended', key);
+  const snapshotsClosed = await sessions.closeSessionSnapshots(ctx.tenantId, req.sessionId, 'session-ended', key);
   return { handoffWritten: handoff !== null, snapshotsClosed };
 }
