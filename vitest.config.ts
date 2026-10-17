@@ -71,15 +71,13 @@ export default defineConfig({
       ...Object.fromEntries(PROVIDER_ENV_KEYS.map((k) => [k, ''])),
     },
     globalSetup: ['tests/_build-freshness.ts', 'tests/_real-store-guard.ts'],
-    server: { deps: { external: [/tests[\\/]_coverage-provider\.mjs$/] } },
     // About a fifth of the files spawn git/hippo/nested-vitest children, so one fork per core oversubscribes a big box (CHANGELOG 1.38.3).
     maxWorkers: 6,
     coverage: {
-      provider: 'custom',
-      customProviderModule: './tests/_coverage-provider.mjs',
-      // Without include, untested src files would not count; dist/ lets spawned-CLI results through to remap.
-      include: ['src/**/*.ts', 'dist/**/*.js'],
-      autoAttachSubprocess: true,
+      // CLI output checks run in process through runCliAs, so plain v8 sees that code without following spawned children.
+      provider: 'v8',
+      // Without include, untested src files would not count.
+      include: ['src/**/*.ts'],
       excludeAfterRemap: true,
       reporter: ['text-summary', 'json-summary'],
       thresholds: { lines: 90, branches: 82, functions: 95, statements: 89 },
