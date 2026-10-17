@@ -35,7 +35,8 @@ describe('check-folder-cycles', () => {
     expect(findFolderCycles(dir).map((c) => c.folders)).toEqual([['a', 'b']]);
   });
 
-  it('finds no folder cycle in src', () => {
+  // Parses every src file (about 0.7 s locally), which a loaded CI runner stretches past the 5 s unit default.
+  it('finds no folder cycle in src', { timeout: 15_000 }, () => {
     expect(findFolderCycles(join(import.meta.dirname, '..', '..', 'src'))).toEqual([]);
   });
 });

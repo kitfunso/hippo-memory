@@ -22,7 +22,10 @@ function tsFiles(dir, out = []) {
 function rootKeyedNames() {
   const names = new Set();
   for (const file of tsFiles('src/store')) {
-    for (const fn of readFacts(readFileSync(file, 'utf8'), file).exportedFunctions) if (fn.firstParam === 'hippoRoot') names.add(fn.name);
+    const text = readFileSync(file, 'utf8');
+    // A first parameter named hippoRoot cannot exist without that text, so other files skip the parse.
+    if (!text.includes('hippoRoot')) continue;
+    for (const fn of readFacts(text, file, ['exportedFunctions']).exportedFunctions) if (fn.firstParam === 'hippoRoot') names.add(fn.name);
   }
   return names;
 }
@@ -31,7 +34,7 @@ function rootKeyedNames() {
 function findCalls(names) {
   const counts = {};
   for (const file of tsFiles('src/api')) {
-    const imports = readFacts(readFileSync(file, 'utf8'), file).imports.filter((i) => i.kind === 'import');
+    const imports = readFacts(readFileSync(file, 'utf8'), file, ['imports']).imports.filter((i) => i.kind === 'import');
     const n = imports.flatMap((i) => i.specifiers).filter((s) => !s.typeOnly && names.has(s.name)).length;
     if (n > 0) counts[file] = n;
   }

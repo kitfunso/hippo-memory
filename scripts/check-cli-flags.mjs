@@ -35,7 +35,9 @@ function isHandRead(n) {
  * @returns {number[]}
  */
 export function handFlagLines(text) {
-  const { sourceFile } = readFacts(text);
+  // A flags.x read cannot exist without the word flags, so other files skip the parse.
+  if (!text.includes('flags')) return [];
+  const { sourceFile } = readFacts(text, 'file.ts', []);
   const lines = new Set();
   const visit = (n) => {
     if (isHandRead(n)) lines.add(sourceFile.getLineAndCharacterOfPosition(n.getStart(sourceFile)).line + 1);

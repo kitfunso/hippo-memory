@@ -33,7 +33,9 @@ function findReads(map) {
   const counts = {};
   for (const file of tsFiles('src')) {
     if (ALLOWED.has(file) || layerOf(map, file) === 'surface') continue;
-    const n = readFacts(readFileSync(file, 'utf8'), file).calls.filter((c) => c.callee.split('.').at(-1) === 'loadConfig').length;
+    const text = readFileSync(file, 'utf8');
+    // A loadConfig call cannot exist without its text, so other files skip the parse.
+    const n = text.includes('loadConfig') ? readFacts(text, file, ['calls']).calls.filter((c) => c.callee.split('.').at(-1) === 'loadConfig').length : 0;
     if (n > 0) counts[file] = n;
   }
   return counts;

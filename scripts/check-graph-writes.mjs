@@ -39,6 +39,7 @@ const GRAPH_TABLES = ['entities', 'relations', 'graph_extraction_queue'];
 // concatenation / schema-qualified `main.entities`) is out of scope for a regex lint
 // and irrelevant to the never-raw guarantee. (Backtick-quoted identifiers cannot occur
 // in this codebase's SQL, which lives inside JS backtick template literals.)
+const GRAPH_TABLE_RE = new RegExp(GRAPH_TABLES.join('|'), 'i');
 const WRITE_RE = new RegExp(
   `\\b(INSERT(\\s+OR\\s+\\w+)?\\s+INTO|UPDATE|DELETE\\s+FROM)\\s+["'\\[]?\\s*(${GRAPH_TABLES.join('|')})\\b`,
   'gi',
@@ -70,7 +71,9 @@ export function findGraphWriteViolations(srcDir) {
     if (SANCTIONED_RELS.has(relative(srcDir, file).replace(/\\/g, '/'))) return;
     const text = readFileSync(file, 'utf8');
     const origLines = text.split(/\r?\n/);
-    for (const literal of readFacts(text, file).strings) {
+    // A write to a graph table cannot exist without the table name, so other files skip the parse.
+    if (!GRAPH_TABLE_RE.test(text)) return;
+    for (const literal of readFacts(text, file, ['strings']).strings) {
       for (const m of literal.text.matchAll(WRITE_RE)) {
         const line = literal.line + literal.text.slice(0, m.index).split('\n').length - 1;
         violations.push({ file, line, text: (origLines[line - 1] ?? m[0]).trim() });

@@ -23,7 +23,9 @@ const isThrowExit1 = (stmt) => {
  * @returns {number[]}
  */
 export function failPairLines(text) {
-  const { sourceFile } = readFacts(text);
+  // A printError statement cannot exist without its text, so other files skip the parse.
+  if (!text.includes('printError')) return [];
+  const { sourceFile } = readFacts(text, 'file.ts', []);
   const lines = [];
   const visit = (n) => {
     const list = ts.isSourceFile(n) || ts.isBlock(n) || ts.isModuleBlock(n) || ts.isCaseOrDefaultClause(n) ? n.statements : [];

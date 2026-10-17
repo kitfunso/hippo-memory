@@ -15,11 +15,19 @@ import { isLocalSpec, readFacts } from './lib/ts-facts.mjs';
 const BASELINE = '.layers-baseline.json';
 const MAP = 'layers.json';
 
+// Several checks below read the same files, so each source is parsed once.
+const IMPORT_CACHE = new Map();
+
 /** Every relative import of one source as { spec, line, kind: 'runtime' | 'typeOnly', names }. */
 function importsOf(text) {
-  return readFacts(text)
-    .imports.filter((i) => isLocalSpec(i.spec))
-    .map((i) => ({ spec: i.spec, line: i.line, kind: i.typeOnly ? 'typeOnly' : 'runtime', names: i.names }));
+  let found = IMPORT_CACHE.get(text);
+  if (!found) {
+    found = readFacts(text, 'file.ts', ['imports', 'dynamic'])
+      .imports.filter((i) => isLocalSpec(i.spec))
+      .map((i) => ({ spec: i.spec, line: i.line, kind: i.typeOnly ? 'typeOnly' : 'runtime', names: i.names }));
+    IMPORT_CACHE.set(text, found);
+  }
+  return found;
 }
 
 function resolveSpecifier(fromFile, spec) {
@@ -92,7 +100,10 @@ function findRouteStoreReaches(srcDir) {
   if (!existsSync(dir)) return [];
   const out = [];
   for (const file of tsFiles(dir)) {
-    const lines = new Set(readFacts(readFileSync(file, 'utf8')).identifiers.filter((id) => ROUTE_STORE_NAMES.has(id.name)).map((id) => id.line));
+    const text = readFileSync(file, 'utf8');
+    // An identifier cannot exist without its text, so a route file with neither name skips the parse.
+    if (![...ROUTE_STORE_NAMES].some((name) => text.includes(name))) continue;
+    const lines = new Set(readFacts(text, 'file.ts', ['identifiers']).identifiers.filter((id) => ROUTE_STORE_NAMES.has(id.name)).map((id) => id.line));
     for (const line of [...lines].sort((x, y) => x - y)) out.push(`${relative(root, file).replaceAll('\\', '/')}:${line}`);
   }
   return out;

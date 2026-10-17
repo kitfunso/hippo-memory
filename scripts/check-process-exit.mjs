@@ -25,7 +25,9 @@ export const ALLOWED = {
  * @returns {number[]}
  */
 export function processExitLines(text) {
-  return readFacts(text).calls.filter((c) => c.callee === 'process.exit').map((c) => c.line);
+  // Every spelling of process.exit contains the word exit, so other files skip the parse.
+  if (!text.includes('exit')) return [];
+  return readFacts(text, 'file.ts', ['calls']).calls.filter((c) => c.callee === 'process.exit').map((c) => c.line);
 }
 
 function listSourceFiles(dir) {

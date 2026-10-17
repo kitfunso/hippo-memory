@@ -55,7 +55,9 @@ export const STORE_WRITER_EXCEPTIONS = {};
 export function namedOnLines(text, names) {
   const wanted = new Set(names);
   const seen = new Set();
-  return readFacts(text).identifiers.flatMap(({ name, line }) => {
+  // An identifier cannot exist without its text, so a file that holds none of the names skips the parse.
+  if (!names.some((name) => text.includes(name))) return [];
+  return readFacts(text, 'file.ts', ['identifiers']).identifiers.flatMap(({ name, line }) => {
     const key = `${line}	${name}`;
     if (!wanted.has(name) || seen.has(key)) return [];
     seen.add(key);

@@ -61,10 +61,49 @@ function isProcessEnvRead(node) {
   return ts.isObjectLiteralExpression(pattern) && pattern.properties.some((p) => p.name?.text === 'env' || (ts.isShorthandPropertyAssignment(p) && p.name.text === 'env'));
 }
 
+const ALL = ['imports', 'dynamic', 'calls', 'envReads', 'exportedFunctions', 'strings', 'identifiers'];
+const DYNAMIC_IMPORT = /\bimport\s*\(/;
+const WALKED = ['calls', 'envReads', 'strings', 'identifiers'];
+
+/** Static imports, re-exports and exported functions sit at the top level, so no tree walk is needed for them. */
+function readTopLevel(sourceFile, want, facts, lineOf) {
+  for (const n of sourceFile.statements) {
+    if (want.has('imports') && ts.isImportDeclaration(n) && ts.isStringLiteral(n.moduleSpecifier)) facts.imports.push(importFact(n, lineOf(n)));
+    else if (want.has('imports') && ts.isExportDeclaration(n) && n.moduleSpecifier && ts.isStringLiteral(n.moduleSpecifier)) facts.imports.push(exportFact(n, lineOf(n)));
+    else if (want.has('exportedFunctions') && ts.isFunctionDeclaration(n) && n.name && hasModifier(n, K.ExportKeyword)) {
+      const first = n.parameters[0]?.name;
+      facts.exportedFunctions.push({ name: n.name.text, firstParam: first && ts.isIdentifier(first) ? first.text : null });
+    }
+  }
+}
+
+/** One walk for the facts that can sit at any depth; `calls` also carries the dynamic `import('x')` with a literal. */
+function readDeep(sourceFile, want, facts, lineOf) {
+  const visit = (n) => {
+    if (ts.isCallExpression(n)) {
+      const arg = n.arguments[0];
+      if (n.expression.kind === K.ImportKeyword) {
+        if (want.has('dynamic') && arg && ts.isStringLiteralLike(arg)) facts.imports.push({ spec: arg.text, line: lineOf(n), kind: 'dynamic', typeOnly: false, names: ['*'], hasDefault: false, specifiers: [] });
+      } else if (want.has('calls')) {
+        const callee = nameOf(n.expression);
+        if (callee) facts.calls.push({ callee, line: lineOf(n) });
+      }
+    } else if (want.has('strings') && (ts.isStringLiteralLike(n) || ts.isTemplateHead(n) || ts.isTemplateMiddle(n) || ts.isTemplateTail(n))) {
+      facts.strings.push({ text: n.text, line: lineOf(n) });
+    } else if (want.has('identifiers') && ts.isIdentifier(n)) facts.identifiers.push({ name: n.text, line: lineOf(n) });
+    if (want.has('envReads') && isProcessEnvRead(n)) facts.envReads.push({ line: lineOf(n) });
+    ts.forEachChild(n, visit);
+  };
+  visit(sourceFile);
+}
+
 /**
- * Parses a source once and lists what the gates ask for. Lines are 1-based.
+ * Parses a source once and lists the facts named in `wanted`; the others stay empty and cost nothing. Lines are 1-based.
+ * `imports` is the top-level import and export-from statements, `dynamic` adds `import('x')` with a literal, `exportedFunctions` the
+ * top-level `export function` declarations. A gate that looks for one token should skip the call when the raw text lacks it.
  * @param {string} text
  * @param {string} [fileName] decides the script kind, so pass the real name for `.tsx` or `.mjs`
+ * @param {readonly string[]} [wanted] any of imports, dynamic, calls, envReads, exportedFunctions, strings, identifiers; default all
  * @returns {{
  *   sourceFile: ts.SourceFile,
  *   imports: { spec: string, line: number, kind: 'import' | 'export' | 'side-effect' | 'dynamic', typeOnly: boolean, names: string[], hasDefault: boolean, specifiers: { name: string, typeOnly: boolean }[] }[],
@@ -75,35 +114,19 @@ function isProcessEnvRead(node) {
  *   identifiers: { name: string, line: number }[],
  * }}
  */
-export function readFacts(text, fileName = 'file.ts') {
-  const sourceFile = ts.createSourceFile(fileName, text, ts.ScriptTarget.Latest, true);
+export function readFacts(text, fileName = 'file.ts', wanted = ALL) {
+  // No parent pointers: no fact needs them, and setting them costs a second pass over every node.
+  const sourceFile = ts.createSourceFile(fileName, text, ts.ScriptTarget.Latest, false);
   const facts = { sourceFile, imports: [], calls: [], envReads: [], exportedFunctions: [], strings: [], identifiers: [] };
+  const want = new Set(wanted);
   const lineOf = (n) => sourceFile.getLineAndCharacterOfPosition(n.getStart(sourceFile)).line + 1;
-  const visit = (n) => {
-    if (ts.isImportDeclaration(n) && ts.isStringLiteral(n.moduleSpecifier)) facts.imports.push(importFact(n, lineOf(n)));
-    else if (ts.isExportDeclaration(n) && n.moduleSpecifier && ts.isStringLiteral(n.moduleSpecifier)) facts.imports.push(exportFact(n, lineOf(n)));
-    else if (ts.isCallExpression(n)) {
-      const arg = n.arguments[0];
-      if (n.expression.kind === K.ImportKeyword && arg && ts.isStringLiteralLike(arg)) {
-        facts.imports.push({ spec: arg.text, line: lineOf(n), kind: 'dynamic', typeOnly: false, names: ['*'], hasDefault: false, specifiers: [] });
-      } else {
-        const callee = nameOf(n.expression);
-        if (callee) facts.calls.push({ callee, line: lineOf(n) });
-      }
-    } else if (ts.isFunctionDeclaration(n) && n.name && hasModifier(n, K.ExportKeyword)) {
-      const first = n.parameters[0]?.name;
-      facts.exportedFunctions.push({ name: n.name.text, firstParam: first && ts.isIdentifier(first) ? first.text : null });
-    } else if (ts.isStringLiteralLike(n) || ts.isTemplateHead(n) || ts.isTemplateMiddle(n) || ts.isTemplateTail(n)) {
-      facts.strings.push({ text: n.text, line: lineOf(n) });
-    } else if (ts.isIdentifier(n)) facts.identifiers.push({ name: n.text, line: lineOf(n) });
-    if (isProcessEnvRead(n)) facts.envReads.push({ line: lineOf(n) });
-    ts.forEachChild(n, visit);
-  };
-  visit(sourceFile);
+  readTopLevel(sourceFile, want, facts, lineOf);
+  // A dynamic import() cannot exist without its text, so a file that lacks it needs no walk for it.
+  if (WALKED.some((k) => want.has(k)) || (want.has('dynamic') && DYNAMIC_IMPORT.test(text))) readDeep(sourceFile, want, facts, lineOf);
   return facts;
 }
 
 /** The relative specifiers a source loads at startup: type-only imports are erased and a dynamic `import()` is lazy. */
 export function runtimeSpecifiers(text) {
-  return readFacts(text).imports.filter((i) => !i.typeOnly && i.kind !== 'dynamic' && isLocalSpec(i.spec)).map((i) => i.spec);
+  return readFacts(text, 'file.ts', ['imports']).imports.filter((i) => !i.typeOnly && isLocalSpec(i.spec)).map((i) => i.spec);
 }

@@ -18,7 +18,9 @@ export const ALLOWED = {
  * @returns {number[]}
  */
 export function envReadLines(text) {
-  return [...new Set(readFacts(text).envReads.map((r) => r.line))];
+  // Every spelling of process.env (member, bracket, destructure) contains the word env, so other files skip the parse.
+  if (!text.includes('env')) return [];
+  return [...new Set(readFacts(text, 'file.ts', ['envReads']).envReads.map((r) => r.line))];
 }
 
 function listSourceFiles(dir) {
