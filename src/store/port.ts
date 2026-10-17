@@ -620,6 +620,8 @@ export type {
   ArtifactArchive,
   ConnectorDeadLetter,
   ConnectorEvents,
+  DeadLetterConnector,
+  DeadLetterRows,
 } from './connectors/event-log.js';
 
 /** `storedVectors` with no number[] copy, for a store that holds vectors as Float32 bytes. */

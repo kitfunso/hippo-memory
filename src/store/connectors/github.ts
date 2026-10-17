@@ -113,7 +113,7 @@ export interface GitHubDlqInsert {
   bucket: DlqBucket;
 }
 
-const DLQ = dlqAccess<DlqItem, GitHubDlqInsert>('github_dlq', [
+export const GITHUB_DLQ = dlqAccess<DlqItem, GitHubDlqInsert>('github_dlq', [
   { field: 'id', column: 'id', kind: 'int' },
   { field: 'tenantId', column: 'tenant_id', kind: 'text', insert: true },
   { field: 'rawPayload', column: 'raw_payload', kind: 'text', insert: true },
@@ -128,22 +128,6 @@ const DLQ = dlqAccess<DlqItem, GitHubDlqInsert>('github_dlq', [
   { field: 'retriedAt', column: 'retried_at', kind: 'nullableText' },
   { field: 'bucket', column: 'bucket', kind: 'bucket', insert: true },
 ]);
-
-export function insertGitHubDlq(hippoRoot: string, row: GitHubDlqInsert): number {
-  return onHandle(hippoRoot, (db) => DLQ.insert(db, row));
-}
-
-export function listGitHubDlq(hippoRoot: string, tenantId: string, limit: number): DlqItem[] {
-  return onHandle(hippoRoot, (db) => DLQ.list(db, tenantId, limit));
-}
-
-export function githubDlqEntry(hippoRoot: string, id: number): DlqItem | null {
-  return onHandle(hippoRoot, (db) => DLQ.get(db, id));
-}
-
-export function markGitHubDlqRetried(hippoRoot: string, id: number): void {
-  onHandle(hippoRoot, (db) => DLQ.markRetried(db, id));
-}
 
 /** What the routing tables say about one webhook; `tenant` is the installation match, or the repo match when no
  * installation was sent. */
@@ -196,52 +180,52 @@ export interface StoredCursors {
   prReviewComments: string | null;
 }
 
-export function readCursors(hippoRoot: string, tenantId: string, repo: string): StoredCursors {
-  return onHandle(hippoRoot, (db) => {
-    // SAFETY: the SELECT names exactly the three HWM columns.
-    const row = db
-      .prepare(
-        `SELECT issues_hwm, issue_comments_hwm, pr_review_comments_hwm
-         FROM github_cursors WHERE tenant_id = ? AND repo_full_name = ?`,
-      )
-      .get(tenantId, repo) as
-      | {
-          issues_hwm?: string | null;
-          issue_comments_hwm?: string | null;
-          pr_review_comments_hwm?: string | null;
-        }
-      | undefined;
-    return {
-      issues: row?.issues_hwm ?? null,
-      issueComments: row?.issue_comments_hwm ?? null,
-      prReviewComments: row?.pr_review_comments_hwm ?? null,
-    };
-  });
+export function githubCursorsAt(db: DatabaseSyncLike, tenantId: string, repo: string): StoredCursors {
+  // SAFETY: the SELECT names exactly the three HWM columns.
+  const row = db
+    .prepare(
+      `SELECT issues_hwm, issue_comments_hwm, pr_review_comments_hwm
+       FROM github_cursors WHERE tenant_id = ? AND repo_full_name = ?`,
+    )
+    .get(tenantId, repo) as
+    | {
+        issues_hwm?: string | null;
+        issue_comments_hwm?: string | null;
+        pr_review_comments_hwm?: string | null;
+      }
+    | undefined;
+  return {
+    issues: row?.issues_hwm ?? null,
+    issueComments: row?.issue_comments_hwm ?? null,
+    prReviewComments: row?.pr_review_comments_hwm ?? null,
+  };
 }
 
-export function writeHwm(hippoRoot: string, tenantId: string, repo: string, column: HwmColumn, value: string): void {
-  onHandle(hippoRoot, (db) => {
-    db.prepare(
-      `INSERT INTO github_cursors (tenant_id, repo_full_name, ${column}, updated_at)
-       VALUES (?, ?, ?, ?)
-       ON CONFLICT(tenant_id, repo_full_name)
-       DO UPDATE SET ${column} = excluded.${column}, updated_at = excluded.updated_at`,
-    ).run(tenantId, repo, value, new Date().toISOString());
-  });
+export function saveGitHubHwmAt(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  repo: string,
+  column: HwmColumn,
+  value: string,
+): void {
+  db.prepare(
+    `INSERT INTO github_cursors (tenant_id, repo_full_name, ${column}, updated_at)
+     VALUES (?, ?, ?, ?)
+     ON CONFLICT(tenant_id, repo_full_name)
+     DO UPDATE SET ${column} = excluded.${column}, updated_at = excluded.updated_at`,
+  ).run(tenantId, repo, value, new Date().toISOString());
 }
 
 /** Sets all three HWMs to `since` for a first run; COALESCE keeps any HWM a stream has already saved. */
-export function seedCursors(hippoRoot: string, tenantId: string, repo: string, since: string): void {
-  onHandle(hippoRoot, (db) => {
-    db.prepare(
-      `INSERT INTO github_cursors (tenant_id, repo_full_name, issues_hwm, issue_comments_hwm, ` +
-      `pr_review_comments_hwm, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?)
-         ON CONFLICT(tenant_id, repo_full_name) DO UPDATE SET
-           issues_hwm = COALESCE(github_cursors.issues_hwm, excluded.issues_hwm),
-           issue_comments_hwm = COALESCE(github_cursors.issue_comments_hwm, excluded.issue_comments_hwm),
-           pr_review_comments_hwm = COALESCE(github_cursors.pr_review_comments_hwm, excluded.pr_review_comments_hwm),
-           updated_at = excluded.updated_at`,
-    ).run(tenantId, repo, since, since, since, new Date().toISOString());
-  });
+export function seedGitHubCursorsAt(db: DatabaseSyncLike, tenantId: string, repo: string, since: string): void {
+  db.prepare(
+    `INSERT INTO github_cursors (tenant_id, repo_full_name, issues_hwm, issue_comments_hwm, ` +
+    `pr_review_comments_hwm, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?)
+       ON CONFLICT(tenant_id, repo_full_name) DO UPDATE SET
+         issues_hwm = COALESCE(github_cursors.issues_hwm, excluded.issues_hwm),
+         issue_comments_hwm = COALESCE(github_cursors.issue_comments_hwm, excluded.issue_comments_hwm),
+         pr_review_comments_hwm = COALESCE(github_cursors.pr_review_comments_hwm, excluded.pr_review_comments_hwm),
+         updated_at = excluded.updated_at`,
+  ).run(tenantId, repo, since, since, since, new Date().toISOString());
 }

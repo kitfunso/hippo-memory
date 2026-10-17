@@ -5,9 +5,7 @@ import { join } from 'node:path';
 import { createHmac } from 'node:crypto';
 import { initStore } from '../src/store/open.js';
 import { serve, type ServerHandle } from '../src/server.js';
-import { listDlq } from '../src/connectors/dlq.js';
-import { githubDlq } from '../src/connectors/github/dlq.js';
-import { slackDlq } from '../src/connectors/slack/dlq.js';
+import { sqliteSyncStore } from '../src/store/sqlite/store.js';
 
 const GH_SECRET = 'gh-secret';
 const SLACK_SECRET = 'slack-secret';
@@ -71,16 +69,16 @@ describe.each(['', '   '])('webhook DLQ rows with HIPPO_TENANT=%j', (envValue) =
   it('github unhandled-event DLQ row lands under tenant default', async () => {
     const res = await ghPost(handle.port, '{}', 'not-an-allowed-event');
     expect(res.status).toBe(200);
-    expect(tenantsOf((t) => listDlq(githubDlq, root, { tenantId: t }))).toEqual({ def: 1, empty: 0 });
+    expect(tenantsOf((t) => sqliteSyncStore(root).connectorEvents.deadLetters('github', t, 100))).toEqual({ def: 1, empty: 0 });
   });
 
   it('github invalid-JSON DLQ row lands under tenant default', async () => {
     await ghPost(handle.port, '{broken', 'issues');
-    expect(tenantsOf((t) => listDlq(githubDlq, root, { tenantId: t }))).toEqual({ def: 1, empty: 0 });
+    expect(tenantsOf((t) => sqliteSyncStore(root).connectorEvents.deadLetters('github', t, 100))).toEqual({ def: 1, empty: 0 });
   });
 
   it('slack non-envelope DLQ row lands under tenant default', async () => {
     await slackPost(handle.port, '{"foo":1}');
-    expect(tenantsOf((t) => listDlq(slackDlq, root, { tenantId: t }))).toEqual({ def: 1, empty: 0 });
+    expect(tenantsOf((t) => sqliteSyncStore(root).connectorEvents.deadLetters('slack', t, 100))).toEqual({ def: 1, empty: 0 });
   });
 });

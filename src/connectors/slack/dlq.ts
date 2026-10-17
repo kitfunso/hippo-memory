@@ -1,12 +1,5 @@
 import { adminActor, type Context } from '../../api/index.js';
-import {
-  listSlackDlq,
-  markSlackDlqRetried,
-  slackDlqEntry,
-  type DlqBucket,
-  type DlqItem,
-  type SlackDlqInsert,
-} from '../../store/connectors/slack.js';
+import type { DlqBucket, DlqItem, SlackDlqInsert } from '../../store/connectors/slack.js';
 import { replayParked, type ConnectorDlq, type Reingest, type ReplayResult, type SignatureRefusal } from '../dlq.js';
 import { ingestMessage } from './ingest.js';
 import { resolveTenantForSlackTeam } from './tenant-routing.js';
@@ -19,11 +12,9 @@ import { YEAR_S } from '../../util/time.js';
 export type { DlqBucket, DlqItem };
 
 /** Slack's dead-letter table; `teamId` and `slackTimestamp` are the columns only it has. */
-export const slackDlq: ConnectorDlq<Pick<SlackDlqInsert, 'teamId' | 'slackTimestamp'>, DlqBucket, DlqItem> = {
+export const slackDlq: ConnectorDlq<'slack', Pick<SlackDlqInsert, 'teamId' | 'slackTimestamp'>, DlqBucket> = {
+  connector: 'slack',
   letter: (row) => ({ connector: 'slack', ...row }),
-  list: listSlackDlq,
-  entry: slackDlqEntry,
-  bump: markSlackDlqRetried,
 };
 
 export interface ReplayDlqOptions {
@@ -44,13 +35,13 @@ export async function replayDlqEntry(
   id: number,
   opts: ReplayDlqOptions = {},
 ): Promise<ReplayResult> {
-  return replayParked<DlqItem, JsonValue & SlackEventEnvelope>({
+  return replayParked<'slack', JsonValue & SlackEventEnvelope>({
     dlq: slackDlq,
     refuseSignature: (row) => refuseSignature(row, opts),
     isEnvelope: isSlackEventEnvelope,
     notEnvelope: 'not an event_callback envelope',
     reingest: (_row, envelope) => reingest(ctx, envelope),
-  }, ctx.hippoRoot, id, opts.force === true);
+  }, ctx.store, id, opts.force === true);
 }
 
 /** A missing signature or timestamp refuses even without a secret; a mismatch needs the current secret to show. */

@@ -14,7 +14,7 @@ import {
 import { printError } from './output.js';
 import { printSlackBackfillUsage, printSlackWorkspacesUsage } from './usage.js';
 import { type CliFlags, stringFlag, type CommandContext } from './flag-values.js';
-import { cliApiContext } from './api-context.js';
+import { cliApiContext, cliStore } from './api-context.js';
 import { CliExit, fail } from './exit.js';
 
 // Slack subcommands (`hippo slack backfill` / `hippo slack dlq list`)
@@ -51,8 +51,8 @@ function cmdSlackBackfill(hippoRoot: string, tenantId: string, flags: CliFlags):
     });
 }
 
-function cmdSlackDlqList(hippoRoot: string, tenantId: string, _flags: CliFlags): void {
-  const items = listDlq(slackDlq, hippoRoot, { tenantId });
+async function cmdSlackDlqList(hippoRoot: string, tenantId: string, _flags: CliFlags): Promise<void> {
+  const items = await listDlq(slackDlq, cliStore(hippoRoot), { tenantId });
   for (const it of items) {
     console.log(`${it.id}\t${it.receivedAt}\t${it.error}`);
   }
@@ -91,21 +91,21 @@ async function cmdSlackDlqReplay(
   );
 }
 
-function cmdSlackWorkspacesAdd(
+async function cmdSlackWorkspacesAdd(
   hippoRoot: string,
   flags: CliFlags,
-): void {
+): Promise<void> {
   const teamId = (stringFlag(flags, 'team') ?? '').trim();
   const tenantId = (stringFlag(flags, 'tenant') ?? '').trim();
   if (!teamId || !tenantId) {
     fail('Usage: hippo slack workspaces add --team <T> --tenant <t>');
   }
-  const ws = addSlackWorkspace(hippoRoot, { teamId, tenantId });
+  const ws = await addSlackWorkspace(cliStore(hippoRoot), { teamId, tenantId });
   console.log(`added: ${ws.teamId} -> ${ws.tenantId} (${ws.addedAt})`);
 }
 
-function cmdSlackWorkspacesList(hippoRoot: string): void {
-  const items = listSlackWorkspaces(hippoRoot);
+async function cmdSlackWorkspacesList(hippoRoot: string): Promise<void> {
+  const items = await listSlackWorkspaces(cliStore(hippoRoot));
   if (items.length === 0) {
     console.log('(no registered workspaces; routing via HIPPO_TENANT fallback)');
     return;
@@ -115,15 +115,15 @@ function cmdSlackWorkspacesList(hippoRoot: string): void {
   }
 }
 
-function cmdSlackWorkspacesRemove(
+async function cmdSlackWorkspacesRemove(
   hippoRoot: string,
   flags: CliFlags,
-): void {
+): Promise<void> {
   const teamId = (stringFlag(flags, 'team') ?? '').trim();
   if (!teamId) {
     fail('Usage: hippo slack workspaces remove --team <T>');
   }
-  const removed = removeSlackWorkspace(hippoRoot, teamId);
+  const removed = await removeSlackWorkspace(cliStore(hippoRoot), teamId);
   if (!removed) {
     fail(`no workspace registered for team ${teamId}`);
   }
@@ -137,7 +137,7 @@ export async function handleSlack({ hippoRoot, tenantId, args, flags }: CommandC
     return;
   }
   if (sub === 'dlq' && args[1] === 'list') {
-    cmdSlackDlqList(hippoRoot, tenantId, flags);
+    await cmdSlackDlqList(hippoRoot, tenantId, flags);
     return;
   }
   if (sub === 'dlq' && args[1] === 'replay') {
@@ -147,15 +147,15 @@ export async function handleSlack({ hippoRoot, tenantId, args, flags }: CommandC
   if (sub === 'workspaces') {
     const action = args[1];
     if (action === 'add') {
-      cmdSlackWorkspacesAdd(hippoRoot, flags);
+      await cmdSlackWorkspacesAdd(hippoRoot, flags);
       return;
     }
     if (action === 'list') {
-      cmdSlackWorkspacesList(hippoRoot);
+      await cmdSlackWorkspacesList(hippoRoot);
       return;
     }
     if (action === 'remove') {
-      cmdSlackWorkspacesRemove(hippoRoot, flags);
+      await cmdSlackWorkspacesRemove(hippoRoot, flags);
       return;
     }
     printSlackWorkspacesUsage();

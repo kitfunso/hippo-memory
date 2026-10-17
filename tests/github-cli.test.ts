@@ -15,11 +15,11 @@ import { execFileSync } from 'node:child_process';
 import { createHmac } from 'node:crypto';
 import { initStore } from '../src/store/open.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
-import { parkInDlq, listDlq } from '../src/connectors/dlq.js';
+import { parkInDlq } from '../src/connectors/dlq.js';
 import { githubDlq } from '../src/connectors/github/dlq.js';
 import { GitHubPayloadParseError, handleGitHub, parseParkedPayload } from '../src/cli/github.js';
 import type { JsonValue } from '../src/util/json.js';
-import { sqliteStore } from '../src/store/sqlite/store.js';
+import { sqliteStore, sqliteSyncStore } from '../src/store/sqlite/store.js';
 
 const CLI = resolve(__dirname, '..', 'bin', 'hippo.js');
 
@@ -236,7 +236,7 @@ describe('hippo github CLI', () => {
   const liveRaws = (artifactRef: string) =>
     loadAllEntries(hippoRoot, 'default').filter((e) => e.kind === 'raw' && e.artifact_ref === artifactRef);
   const retryCountOf = (id: number) =>
-    listDlq(githubDlq, hippoRoot, { tenantId: 'default' }).find((row) => row.id === id)?.retryCount;
+    sqliteSyncStore(hippoRoot).connectorEvents.deadLetters('github', 'default', 100).find((row) => row.id === id)?.retryCount;
 
   it('dlq replay re-ingests a parked delivery and counts the retry', async () => {
     const id = await parkDelivery('issues', issueOpenedBody);

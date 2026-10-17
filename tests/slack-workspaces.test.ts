@@ -10,6 +10,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
+import { sqliteStore } from '../src/store/sqlite/store.js';
 import {
   addWorkspace,
   listWorkspaces,
@@ -30,51 +31,51 @@ describe('slack workspaces helper', () => {
     rmSync(root, { recursive: true, force: true });
   });
 
-  it('addWorkspace inserts a new row and returns the envelope', () => {
-    const ws = addWorkspace(hippoRoot, { teamId: 'T01', tenantId: 'acme' });
+  it('addWorkspace inserts a new row and returns the envelope', async () => {
+    const ws = await addWorkspace(sqliteStore(hippoRoot), { teamId: 'T01', tenantId: 'acme' });
     expect(ws.teamId).toBe('T01');
     expect(ws.tenantId).toBe('acme');
     expect(ws.addedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
   });
 
-  it('addWorkspace upserts on team_id conflict (operator moves workspace)', () => {
-    addWorkspace(hippoRoot, { teamId: 'T01', tenantId: 'acme' });
-    addWorkspace(hippoRoot, { teamId: 'T01', tenantId: 'globex' });
-    const items = listWorkspaces(hippoRoot);
+  it('addWorkspace upserts on team_id conflict (operator moves workspace)', async () => {
+    await addWorkspace(sqliteStore(hippoRoot), { teamId: 'T01', tenantId: 'acme' });
+    await addWorkspace(sqliteStore(hippoRoot), { teamId: 'T01', tenantId: 'globex' });
+    const items = (await listWorkspaces(sqliteStore(hippoRoot)));
     expect(items).toHaveLength(1);
     expect(items[0]!.teamId).toBe('T01');
     expect(items[0]!.tenantId).toBe('globex');
   });
 
-  it('listWorkspaces returns empty array on empty table', () => {
-    expect(listWorkspaces(hippoRoot)).toEqual([]);
+  it('listWorkspaces returns empty array on empty table', async () => {
+    expect((await listWorkspaces(sqliteStore(hippoRoot)))).toEqual([]);
   });
 
-  it('listWorkspaces sorts by team_id for stable output', () => {
-    addWorkspace(hippoRoot, { teamId: 'TZZ', tenantId: 't1' });
-    addWorkspace(hippoRoot, { teamId: 'TAA', tenantId: 't2' });
-    addWorkspace(hippoRoot, { teamId: 'TMM', tenantId: 't3' });
-    const items = listWorkspaces(hippoRoot);
+  it('listWorkspaces sorts by team_id for stable output', async () => {
+    await addWorkspace(sqliteStore(hippoRoot), { teamId: 'TZZ', tenantId: 't1' });
+    await addWorkspace(sqliteStore(hippoRoot), { teamId: 'TAA', tenantId: 't2' });
+    await addWorkspace(sqliteStore(hippoRoot), { teamId: 'TMM', tenantId: 't3' });
+    const items = (await listWorkspaces(sqliteStore(hippoRoot)));
     expect(items.map((w) => w.teamId)).toEqual(['TAA', 'TMM', 'TZZ']);
   });
 
-  it('removeWorkspace returns true when a row was deleted', () => {
-    addWorkspace(hippoRoot, { teamId: 'T01', tenantId: 'acme' });
-    expect(removeWorkspace(hippoRoot, 'T01')).toBe(true);
-    expect(listWorkspaces(hippoRoot)).toEqual([]);
+  it('removeWorkspace returns true when a row was deleted', async () => {
+    await addWorkspace(sqliteStore(hippoRoot), { teamId: 'T01', tenantId: 'acme' });
+    expect(await removeWorkspace(sqliteStore(hippoRoot), 'T01')).toBe(true);
+    expect((await listWorkspaces(sqliteStore(hippoRoot)))).toEqual([]);
   });
 
-  it('removeWorkspace returns false when no row matched', () => {
-    expect(removeWorkspace(hippoRoot, 'T_UNKNOWN')).toBe(false);
+  it('removeWorkspace returns false when no row matched', async () => {
+    expect(await removeWorkspace(sqliteStore(hippoRoot), 'T_UNKNOWN')).toBe(false);
   });
 
   it('addWorkspace generates monotonically-increasing addedAt timestamps', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     try {
       vi.setSystemTime(new Date('2026-01-01T00:00:00.000Z'));
-      const first = addWorkspace(hippoRoot, { teamId: 'T01', tenantId: 'a' });
+      const first = await addWorkspace(sqliteStore(hippoRoot), { teamId: 'T01', tenantId: 'a' });
       vi.setSystemTime(new Date('2026-01-01T00:00:01.000Z'));
-      const second = addWorkspace(hippoRoot, { teamId: 'T02', tenantId: 'b' });
+      const second = await addWorkspace(sqliteStore(hippoRoot), { teamId: 'T02', tenantId: 'b' });
       expect(second.addedAt > first.addedAt).toBe(true);
     } finally {
       vi.useRealTimers();

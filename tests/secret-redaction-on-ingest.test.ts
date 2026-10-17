@@ -142,7 +142,7 @@ describe('connector webhooks', () => {
   };
 
   it('an unroutable Slack message lands in the dead-letter table redacted, and replays once routed', async () => {
-    addWorkspace(root, { teamId: 'T_OTHER', tenantId: 'default' });
+    await addWorkspace(sqliteStore(root), { teamId: 'T_OTHER', tenantId: 'default' });
     const body = JSON.stringify({
       type: 'event_callback',
       team_id: 'T1',
@@ -158,7 +158,7 @@ describe('connector webhooks', () => {
     expect(row.signature).toBeNull();
     expect(JSON.parse(row.raw_payload).event.text).toBe('bot token [REDACTED] expires on friday');
 
-    addWorkspace(root, { teamId: 'T1', tenantId: 'default' });
+    await addWorkspace(sqliteStore(root), { teamId: 'T1', tenantId: 'default' });
     expect((await replayDlqEntry({ hippoRoot: root, store: sqliteStore(root) }, row.id, { signingSecret: SIGNING })).status).toBe('sig_missing');
     expect((await replayDlqEntry({ hippoRoot: root, store: sqliteStore(root) }, row.id, { force: true })).ok).toBe(true);
     expectRedacted(storedContents(), SLACK_TOKEN, 'expires on friday');
