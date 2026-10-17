@@ -12,7 +12,7 @@ import { writeEntry } from '../src/store/entry-writes.js';
 import { readEntry, loadEveryTenantEntries } from '../src/store/entry-reads.js';
 import { deleteEntry, batchWriteAndDelete } from '../src/store/delete-and-batch.js';
 import { loadAllDirtySummaries } from '../src/store/summaries.js';
-import { consolidate } from '../src/consolidate/sleep.js';
+import { consolidate } from '../src/index.js';
 import { deduplicateStore } from '../src/consolidate/dedupe.js';
 import { sleep, supersede } from '../src/api/index.js';
 import { runSleep } from '../src/api/sleep/sleep-run.js';

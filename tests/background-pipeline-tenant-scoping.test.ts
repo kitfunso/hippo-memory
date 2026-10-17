@@ -20,7 +20,7 @@ import { cmdCapture } from '../src/capture/command.js';
 // importEntries still used by case 6 for ImportOptions.tenantId path
 import { importEntries } from '../src/importers/core.js';
 import { autoShare } from '../src/sharing/share.js';
-import { consolidate } from '../src/consolidate/sleep.js';
+import { consolidate } from '../src/index.js';
 import { listPeers } from '../src/sharing/share.js';
 import { syncGlobalToLocal } from '../src/sharing/global-sync.js';
 import { embedAll } from '../src/search/embed-memories.js';

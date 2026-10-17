@@ -8,7 +8,7 @@ import {
   isHandoffOutcome,
 } from '../core/handoff.js';
 import { scopeAdmitSql } from './rule-sql.js';
-import { assertTenantId } from './tenant.js';
+import { assertTenantId } from '../core/tenant-id.js';
 import type { TaskSnapshot } from './rows.js';
 import { onHandle, openStore } from './open.js';
 import { type ContinuityKey, continuityStamp, continuityWhere, loadActiveTaskSnapshot } from './sessions.js';

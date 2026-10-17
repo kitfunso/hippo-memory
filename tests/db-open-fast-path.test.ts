@@ -9,7 +9,7 @@ import { initStore, openStore } from '../src/store/open.js';
 import { withRequestStoresSync } from '../src/db/request-stores.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
-import { consolidate } from '../src/consolidate/sleep.js';
+import { consolidate } from '../src/index.js';
 import { runDoctor } from '../src/doctor.js';
 import { openHippoDb, closeHippoDb, getMeta, setMeta, ftsRowCounts, getCurrentSchemaVersion, type DatabaseSyncLike } from '../src/db/index.js';
 import { REQUIRED_SCHEMA_OBJECTS } from '../src/db/continuity.js';

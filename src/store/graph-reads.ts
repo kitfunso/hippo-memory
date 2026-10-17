@@ -3,7 +3,7 @@
 import { DEFAULT_LIST_LIMIT } from '../util/limits.js';
 import { openHippoDb, closeHippoDb, withReadSnapshot, type DatabaseSyncLike } from '../db/index.js';
 import { onHandle } from './open.js';
-import { assertTenantId } from './tenant.js';
+import { assertTenantId } from '../core/tenant-id.js';
 import {
   type EntityType,
   GRAPH_ENTITY_TYPES,

@@ -16,7 +16,7 @@ import { serve, type ServerHandle } from '../src/server.js';
 import { refreshedBrief } from '../src/objects/project-briefs.js';
 import { extractGraph } from '../src/graph/extract.js';
 import * as api from '../src/api/index.js';
-import { consolidate } from '../src/consolidate/sleep.js';
+import { consolidate } from '../src/index.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 import { objectsAt } from './_helpers/objects-at.js';

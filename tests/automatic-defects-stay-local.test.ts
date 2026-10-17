@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { consolidate } from '../src/consolidate/sleep.js';
+import { consolidate } from '../src/index.js';
 import { Layer } from '../src/core/memory.js';
 import { autoShare, transferScore } from '../src/sharing/share.js';
 import { initStore } from '../src/store/open.js';

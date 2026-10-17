@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { consolidate } from '../src/consolidate/sleep.js';
+import { consolidate } from '../src/index.js';
 import { calculateStrength, Layer, type MemoryEntry } from '../src/core/memory.js';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
 import { initStore } from '../src/store/open.js';

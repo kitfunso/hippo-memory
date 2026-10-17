@@ -2,7 +2,7 @@
 import { ConflictError } from '../../core/api-errors.js';
 import { ownerOrSubject, type Context, type StoreContext } from '../types.js';
 import { sessionOwnerOrBind } from '../../store/sessions.js';
-import { assertTenantId } from '../../store/tenant.js';
+import { assertTenantId } from '../../core/tenant-id.js';
 import { DAY_MS } from '../../util/time.js';
 
 /** Bindings older than this are pruned when a new session binds. */

@@ -6,7 +6,7 @@ import { createRequire } from 'node:module';
 import { restoreDormant } from '../src/api/index.js';
 import { supersedeNow } from './_helpers/supersede-now.js';
 import type { DatabaseSyncLike } from '../src/db/index.js';
-import { consolidate } from '../src/consolidate/sleep.js';
+import { consolidate } from '../src/index.js';
 import { importAtSessionEnd, importForStore, importProjectMemories, type Machine } from '../src/agent-memories/sync.js';
 import type { ImportReport } from '../src/agent-memories/report.js';
 import { insertDormantRow } from '../src/store/dormant.js';

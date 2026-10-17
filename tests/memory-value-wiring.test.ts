@@ -14,7 +14,7 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, it, expect, beforeEach, afterEach, afterAll, vi } from 'vitest';
 
-import { consolidate } from '../src/consolidate/sleep.js';
+import { consolidate } from '../src/index.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadEveryTenantEntries } from '../src/store/entry-reads.js';

@@ -2,7 +2,7 @@
 // the schema triggers are the backstop for a write that skips this module.
 import { openHippoDb, closeHippoDb, withWriteScope, type DatabaseSyncLike } from '../db/index.js';
 import { onHandle } from './open.js';
-import { assertTenantId } from './tenant.js';
+import { assertTenantId } from '../core/tenant-id.js';
 import { errorMessage, log, errorFields } from '../util/log.js';
 import {
   type EntityType,

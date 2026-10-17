@@ -15,7 +15,7 @@ import {
   type Objects,
   type ObjectSave,
 } from '../store/port.js';
-import { assertTenantId } from '../store/tenant.js';
+import { assertTenantId } from '../core/tenant-id.js';
 import type { ObjectDescriptor, ObjectDraft, ObjectListOpts, SavableDescriptor } from './descriptor.js';
 
 /** An empty status or filter lists every row, as an absent one does. */

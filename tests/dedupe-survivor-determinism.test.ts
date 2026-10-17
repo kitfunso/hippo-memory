@@ -28,7 +28,7 @@ import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { remember } from '../src/api/index.js';
 import { deduplicateStore, strengthBucket } from '../src/consolidate/dedupe.js';
 import { compareEntryIdentity } from '../src/core/compare.js';
-import { consolidate } from '../src/consolidate/sleep.js';
+import { consolidate } from '../src/index.js';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 import { sqliteConsolidation } from '../src/store/sqlite/consolidation-group.js';

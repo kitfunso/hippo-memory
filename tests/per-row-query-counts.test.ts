@@ -407,7 +407,7 @@ describe('cmdRemember', () => {
       expect(printed[0]).toMatch(/^Remembered \[/);
       // The write goes through the api, which answers an id, so the printout reads that one row by id.
       expect(countMatching(statements, ROW_READ)).toBe(1);
-      expect(countMatching(statements, /FROM memories WHERE id = \? AND tenant_id = \?$/)).toBe(1);
+      expect(countMatching(statements, /FROM memories WHERE id IN \(\?\) AND /)).toBe(1);
     }
   });
 

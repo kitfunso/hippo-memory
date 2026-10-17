@@ -25,7 +25,7 @@ import { loadPolicies } from '../objects/policies.js';
 import { loadCustomerNotes } from '../objects/customer-notes.js';
 import { loadProjectBriefs } from '../objects/project-briefs.js';
 import type { Objects } from '../store/port.js';
-import { assertTenantId } from '../store/tenant.js';
+import { assertTenantId } from '../core/tenant-id.js';
 import { escapeRegex } from '../util/escape.js';
 
 /** Per-type load cap (the loaders default to 100); a type over it is truncated and

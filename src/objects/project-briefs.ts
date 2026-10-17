@@ -5,7 +5,7 @@
 
 import { truncateWithEllipsis } from '../util/ellipsize.js';
 import { BadRequestError } from '../core/api-errors.js';
-import { assertTenantId } from '../store/tenant.js';
+import { assertTenantId } from '../core/tenant-id.js';
 import type { KeysetPosition } from '../util/keyset.js';
 import type { SavableDescriptor } from './descriptor.js';
 import { checkText, requireLine } from './fields.js';

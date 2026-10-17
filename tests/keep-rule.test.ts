@@ -16,7 +16,7 @@ import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries, readEntry } from '../src/store/entry-reads.js';
 import { batchWriteAndDelete, deleteEntry } from '../src/store/delete-and-batch.js';
 import { listMemoryConflicts } from '../src/store/conflicts.js';
-import { consolidate } from '../src/consolidate/sleep.js';
+import { consolidate } from '../src/index.js';
 import { deduplicateStore } from '../src/consolidate/dedupe.js';
 import { auditMemory } from '../src/core/memory-audit.js';
 import { closeHippoDb, openHippoDb, withSharedStoreHandles } from '../src/db/index.js';
