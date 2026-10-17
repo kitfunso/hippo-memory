@@ -3,7 +3,7 @@ import { INCIDENT, openIncident, resolveOpenIncident } from '../../objects/incid
 import { HttpError, sendJson } from '../../util/http-util.js';
 import { NotFoundError } from '../../core/api-errors.js';
 import type { AuthedRouteRequest } from '../types.js';
-import { MAX_SHORT_FIELD_LEN, parseJsonBody } from '../validation.js';
+import { MAX_SHORT_FIELD_LEN, parseJsonBody, getString, requiredString } from '../validation.js';
 import { type JsonValue, isJsonString } from '../../util/json.js';
 import { objectsOf } from '../../api/objects/objects.js';
 import { configOf } from '../../api/config-of.js';
@@ -12,8 +12,6 @@ import {
   getRoute,
   listRoute,
   type ObjectRouteConfig,
-  optionalString,
-  requiredString,
 } from './object-routes.js';
 
 const MAX_LINKED_MEMORY_IDS = 256;
@@ -50,7 +48,7 @@ export async function handleCreateIncident(rr: AuthedRouteRequest): Promise<void
   const body = await parseJsonBody(req, ctx);
   const write = {
     incidentText: requiredString(body, 'text', { max: MAX_SHORT_FIELD_LEN, untrimmed: true }),
-    context: optionalString(body, 'context', MAX_SHORT_FIELD_LEN),
+    context: getString(body, 'context', MAX_SHORT_FIELD_LEN),
     linkedMemoryIds: linkedMemoryIds(body),
   };
   try {

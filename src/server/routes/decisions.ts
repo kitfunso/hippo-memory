@@ -4,16 +4,19 @@ import { HttpError, sendJson } from '../../util/http-util.js';
 import { NotFoundError } from '../../core/api-errors.js';
 import { type JsonValue, isJsonNumber } from '../../util/json.js';
 import type { AuthedRouteRequest } from '../types.js';
-import { MAX_SHORT_FIELD_LEN, parseJsonBody } from '../validation.js';
+import {
+  MAX_SHORT_FIELD_LEN,
+  parseJsonBody,
+  getString,
+  requiredString,
+  type RequiredStringRule,
+} from '../validation.js';
 import { saveFor } from '../../api/objects/objects.js';
 import {
   closeRoute,
   getRoute,
   listRoute,
   type ObjectRouteConfig,
-  optionalString,
-  requiredString,
-  type RequiredStringRule,
 } from './object-routes.js';
 
 const decisionRoutes: ObjectRouteConfig<'decision'> = {
@@ -41,7 +44,7 @@ export async function handleCreateDecision(rr: AuthedRouteRequest): Promise<void
   const body = await parseJsonBody(req, ctx);
   const write = {
     decisionText: requiredString(body, 'text', TEXT),
-    context: optionalString(body, 'context', MAX_SHORT_FIELD_LEN),
+    context: getString(body, 'context', MAX_SHORT_FIELD_LEN),
     supersedesDecisionId: supersededId(body),
   };
   try {
@@ -69,7 +72,7 @@ export async function handleSupersedeDecision(
   const body = await parseJsonBody(rr.req, ctx);
   const decision = await saveFor(ctx, DECISION, {
     decisionText: requiredString(body, 'text', TEXT),
-    context: optionalString(body, 'context', MAX_SHORT_FIELD_LEN),
+    context: getString(body, 'context', MAX_SHORT_FIELD_LEN),
     supersedesDecisionId: oldId,
   });
   sendJson(rr.res, 201, { decision });

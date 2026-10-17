@@ -1,5 +1,5 @@
 // Admin routes: API keys, quarantine and the audit log.
-import { DEFAULT_LIST_LIMIT } from '../../util/limits.js';
+import { DEFAULT_LIST_LIMIT, MAX_ID_LEN } from '../../util/limits.js';
 import { AUDIT_OPS, type AuditOp } from '../../store/audit.js';
 import {
   auditList,
@@ -14,8 +14,8 @@ import { HttpError, readBody, sendJson } from '../../util/http-util.js';
 import { assertCrossTenantAdmin, recheckContextWithAuth } from '../auth.js';
 import { pageOf, parseCursor, setNextCursorHeader } from '../cursor.js';
 import type { AuthedRouteRequest } from '../types.js';
-import { isSetMember, parseJsonObjectText, parseListLimit, validateIdSegment } from '../validation.js';
-import { isJsonBoolean, isJsonNumber, isJsonString } from '../../util/json.js';
+import { getString, isSetMember, parseJsonObjectText, parseListLimit, validateIdSegment } from '../validation.js';
+import { isJsonBoolean, isJsonNumber } from '../../util/json.js';
 
 const VALID_AUDIT_OPS: ReadonlySet<AuditOp> = new Set<AuditOp>(AUDIT_OPS);
 
@@ -42,10 +42,7 @@ export async function handleCreateAuthKey({ req, res, opts }: AuthedRouteRequest
   });
   const ctx = await recheckContextWithAuth(req, opts);
   const body = parseJsonObjectText(raw);
-  const labelRaw = body['label'];
-  if (labelRaw !== undefined && !isJsonString(labelRaw)) {
-    throw new HttpError(400, 'label must be a string');
-  }
+  const labelRaw = getString(body, 'label', MAX_ID_LEN);
   // Optional body.role mirrors the --role CLI flag and is validated strictly: anything but 'admin'|'member' is a 400;
   // authCreate refuses a member caller
   // with a 403.
