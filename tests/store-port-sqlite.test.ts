@@ -34,7 +34,7 @@ import { EMBEDDING_MODEL_META_KEY, hasStoredVectors, upsertVectors } from '../sr
 import { countMatching, recordStatementsAsync, STORE_OPEN } from './_helpers/count-statements.js';
 import { hashedVector, startHashedEmbeddings, type HashedEmbeddings } from './_helpers/hashed-embedding-server.js';
 import {
-  CLEARED_ENV, FAKE_NOW, freshStore, normalise, rowsOf, seeded, SESSION, seedPortBranches, seedTemplates, statsMirror, TENANT, type Store, type Templates,
+  CLEARED_ENV, FAKE_NOW, freshStore, normalize, rowsOf, seeded, SESSION, seedPortBranches, seedTemplates, statsMirror, TENANT, type Store, type Templates,
 } from './_helpers/recall-golden-seed.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 
@@ -61,7 +61,7 @@ async function onCopy<T>(kind: Kind, fn: (s: Store) => T | Promise<T>): Promise<
   try {
     const { result, statements } = await recordStatementsAsync(async () => fn(s));
     const rows = { ...rowsOf(s.root), auditOps: auditOps(s.root), statsMirror: statsMirror(s.root) };
-    return normalise({ value: result, rows, opens: countMatching(statements, STORE_OPEN) }, s);
+    return normalize({ value: result, rows, opens: countMatching(statements, STORE_OPEN) }, s);
   } finally {
     rmSync(s.home, { recursive: true, force: true });
   }
@@ -84,7 +84,7 @@ function idsOf(entries: readonly MemoryEntry[]): string[] {
   return entries.map((e) => e.id);
 }
 
-/** A Map as sorted entries, since normalise's JSON round trip turns a Map into {}. */
+/** A Map as sorted entries, since normalize's JSON round trip turns a Map into {}. */
 function entriesOf<V>(map: ReadonlyMap<string, V>): [string, V][] {
   return [...map].sort(([a], [b]) => (a < b ? -1 : 1));
 }

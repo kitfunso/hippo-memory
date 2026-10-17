@@ -9,7 +9,7 @@ import {
   readVscodeStop,
   type CaptureReceipt,
 } from '../src/core/capture-contract.js';
-import { normaliseHookPayload } from '../src/cli/stdin.js';
+import { normalizeHookPayload } from '../src/cli/stdin.js';
 
 interface Fixture {
   readonly stdin: string | null;
@@ -23,8 +23,8 @@ const READERS = new Map<string, (fixture: Fixture) => CaptureReceipt>([
   ['vscode/stop', (f) => readVscodeStop(f.stdin ?? undefined, f.timedOut)],
   ['claude-code/post-compact', (f) => readClaudeCodePostCompact(f.stdin ?? undefined, f.timedOut)],
   ['claude-code/session-end', (f) => readSessionEnd(f.stdin ?? undefined, f.timedOut)],
-  // Normalised first, as the hook command does, so the fixture holds what the host sends.
-  ['copilot/session-end', (f) => readSessionEnd(normaliseHookPayload(f.stdin ?? undefined), f.timedOut, 'copilot')],
+  // Normalized first, as the hook command does, so the fixture holds what the host sends.
+  ['copilot/session-end', (f) => readSessionEnd(normalizeHookPayload(f.stdin ?? undefined), f.timedOut, 'copilot')],
 ]);
 
 const ROOT = path.join(fileURLToPath(new URL('.', import.meta.url)), 'fixtures', 'capture');

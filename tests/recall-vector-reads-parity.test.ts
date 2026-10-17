@@ -21,7 +21,7 @@ import { resetAllPhysicsState } from '../src/db/physics-state.js';
 import { writeEntry, writeEntryDbOnly } from '../src/store/entry-writes.js';
 import { initStore } from '../src/store/open.js';
 import { EMBEDDING_MODEL_META_KEY, upsertVectors } from '../src/db/vector-store.js';
-import { CLEARED_ENV, FAKE_NOW, freshStore, normalise, rowsOf, seeded, sendRecall, type Templates } from './_helpers/recall-golden-seed.js';
+import { CLEARED_ENV, FAKE_NOW, freshStore, normalize, rowsOf, seeded, sendRecall, type Templates } from './_helpers/recall-golden-seed.js';
 import { hashedVector, startHashedEmbeddings, type HashedEmbeddings } from './_helpers/hashed-embedding-server.js';
 import { inMemoryVectorStore } from './_helpers/in-memory-vector-store.js';
 
@@ -143,7 +143,7 @@ async function runPass(calls: readonly Call[], physics: boolean, backing: Backin
       stderr.mockRestore();
     }
     const requests = embeddings.requests() - before;
-    return normalise({ replies, mcpIds, rows: rowsOf(s.root), requests, log: lines.join(''), calls: memory?.calls ?? [] }, s);
+    return normalize({ replies, mcpIds, rows: rowsOf(s.root), requests, log: lines.join(''), calls: memory?.calls ?? [] }, s);
   } finally {
     rmSync(s.home, { recursive: true, force: true });
   }

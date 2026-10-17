@@ -93,7 +93,7 @@ const CASES: Case[] = [
   { name: 'explain no match', args: ['explain', 'zzqqxx'] },
 ];
 
-function normalise(text: string, home: string): string {
+function normalize(text: string, home: string): string {
   return ownStderr(text)
     .split(home).join('<home>')
     .split(home.replace(/\\/g, '/')).join('<home>')
@@ -122,7 +122,7 @@ function run(c: Case): RunResult {
   const { home, env } = freshStore(c);
   if (c.session) env.HIPPO_SESSION_ID = SESSION;
   const res = spawnSync('node', [CLI, ...c.args], { cwd: home, env, encoding: 'utf-8' });
-  return { home, out: { status: res.status, stdout: normalise(res.stdout, home), stderr: normalise(res.stderr, home) } };
+  return { home, out: { status: res.status, stdout: normalize(res.stdout, home), stderr: normalize(res.stderr, home) } };
 }
 
 interface WrittenRows {
@@ -154,7 +154,7 @@ function rowsAfter<T>(c: Case, pick: (rows: WrittenRows) => T): RowsAfter<T> {
   const { home, out } = run(c);
   try {
     const rows = pick(writtenRows(join(home, '.hippo')));
-    return { status: out.status, rows: JSON.parse(normalise(JSON.stringify(rows), home)) };
+    return { status: out.status, rows: JSON.parse(normalize(JSON.stringify(rows), home)) };
   } finally {
     rmSync(home, { recursive: true, force: true });
   }

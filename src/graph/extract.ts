@@ -52,7 +52,7 @@ export interface ExtractResult {
   skipped?: number;
 }
 
-/** A consolidated object row normalised to the fields extraction needs. */
+/** A consolidated object row normalized to the fields extraction needs. */
 export interface ExtractRow {
   entityType: EntityType;
   /** The object table id (unique only WITHIN its table, hence keyed with entityType). */
@@ -107,7 +107,7 @@ interface SourceLoadOptions {
   limit: number;
 }
 
-/** One object type's rows, loaded and normalised. */
+/** One object type's rows, loaded and normalized. */
 export interface LoadedType {
   entityType: EntityType;
   rows: ExtractRow[];
@@ -267,7 +267,7 @@ function deriveSupersedes(pass: DerivedEntities): SupersedesPass {
   return { relations, supersededPairs };
 }
 
-/** Normalised name to its single target; a name two entities share is ambiguous and dropped. */
+/** Normalized name to its single target; a name two entities share is ambiguous and dropped. */
 function referenceTargets(created: readonly DerivedEntity[]): Map<string, DerivedEntity> {
   const byName = new Map<string, DerivedEntity>();
   const ambiguous = new Set<string>();

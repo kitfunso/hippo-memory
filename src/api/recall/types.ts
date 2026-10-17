@@ -168,7 +168,7 @@ export interface RecallResult {
   windowSize?: number;
   /** WYSIATI cutoff transparency: what was excluded from `results[]` and why, always populated by `api.recall`,
    * `cmdRecall` and the MCP `hippo_recall` handler. Counters are per-pipeline reports of that pipeline's own filter
-   * sites, not normalised across pipelines. Optional for test fakes. */
+   * sites, not normalized across pipelines. Optional for test fakes. */
   suppressionSummary?: RecallSuppressionSummary;
   /** Planning-fallacy hint: base-rate stats when the query carries a forward-prediction phrase and the closest
    * prediction class has closed data. Pipeline-invariant (depends only on queryText, tenantId, predictions state), so
@@ -191,7 +191,7 @@ export interface RecallResult {
 
 /** WYSIATI cutoff transparency: what the pipeline excluded from `results[]`, so the agent does not treat the cutoff as
  * the full picture. Counters are honest per-path reports of the pipeline that produced this RecallResult, not
- * normalised across pipelines. */
+ * normalized across pipelines. */
 export interface RecallSuppressionSummary {
   /** Candidates loaded from the store before any post-load filter or limit cut;
    *  each pipeline counts at its own load (api.recall: after `loadRecallSearchEntries`). */

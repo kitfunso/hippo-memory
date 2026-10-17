@@ -10,7 +10,7 @@ import { lastRecalledIds } from '../src/mcp/session-state.js';
 import { _resetAblationCacheForTests } from '../src/core/ablation.js';
 import type { RecallResult } from '../src/api/index.js';
 import {
-  CLEARED_ENV, FAKE_NOW, freshStore, normalise, RECALL_BRANCHES, rowsOf, seedPortBranches, seedTemplates, statsMirror, type Templates,
+  CLEARED_ENV, FAKE_NOW, freshStore, normalize, RECALL_BRANCHES, rowsOf, seedPortBranches, seedTemplates, statsMirror, type Templates,
 } from './_helpers/recall-golden-seed.js';
 
 type Surface = 'http' | 'mcp';
@@ -94,7 +94,7 @@ describe('recall branch replies and rows match the code before the store port', 
       // MCP replies with text, so only the HTTP body proves the branch ran.
       if ('body' in reply && branch.reaches) expect(branch.reaches(reply.body)).toBe(true);
       const got = { reply, local: rowsOf(s.root), global: rowsOf(s.globalRoot), statsMirror: statsMirror(s.root) };
-      expect(withPredictionId(normalise(got, s), s.root)).toMatchSnapshot();
+      expect(withPredictionId(normalize(got, s), s.root)).toMatchSnapshot();
     } finally {
       rmSync(s.home, { recursive: true, force: true });
     }
