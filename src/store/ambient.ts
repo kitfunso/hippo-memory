@@ -21,15 +21,20 @@ function secretTaggedSql() {
   };
 }
 
-/** How many times each tag occurs across the rows `scope` admits, grouped in SQL and listed in first-seen order; an
- * item reads as its String() form, as parseJsonArray maps it. */
+/** How many times each tag occurs across the rows `scope` admits, grouped in SQL and returned as one row in first-seen
+ * order; an item reads as its String() form, as parseJsonArray maps it. */
 function countTags(db: DatabaseSyncLike, scope: string, params: readonly (string | number)[]): Map<string, number> {
-  // SAFETY: rows' shape matches the two aliased columns named in the SELECT.
-  const rows = db.prepare(`WITH kept AS (SELECT rowid AS r, tags_json FROM memories WHERE ${scope})
-    SELECT CAST(j.value AS TEXT) AS tag, COUNT(*) AS n
-    FROM kept, json_each(${jsonList('kept.tags_json')}) AS j
-    GROUP BY tag ORDER BY MIN(r), MIN(j.key)`).all(...params) as Array<{ tag: string; n: number }>;
-  return new Map(rows.map((row) => [row.tag, Number(row.n)]));
+  // One row of [tag, count] pairs in first-seen order: an array, since an object would reorder integer-like keys. The
+  // aggregate ORDER BY needs SQLite 3.44; Node 22.5 and later bundle 3.46.
+  // SAFETY: one row whose only column is that JSON text.
+  const row = db.prepare(`WITH kept AS (SELECT rowid AS r, tags_json FROM memories WHERE ${scope})
+    SELECT json_group_array(json_array(tag, n) ORDER BY first_r, first_key) AS pairs FROM (
+      SELECT CAST(j.value AS TEXT) AS tag, COUNT(*) AS n, MIN(r) AS first_r, MIN(j.key) AS first_key
+      FROM kept, json_each(${jsonList('kept.tags_json')}) AS j GROUP BY tag)`)
+    .get(...params) as { pairs: string | null };
+  // SAFETY: json_group_array of json_array(tag, n) parses to [string, number] pairs.
+  const pairs = JSON.parse(row.pairs ?? '[]') as Array<[string, number]>;
+  return new Map(pairs.map(([tag, n]) => [tag, Number(n)]));
 }
 
 /** Whole-store ambient tallies in two aggregate passes, no row loaded. Content-pattern secrets and session-local
