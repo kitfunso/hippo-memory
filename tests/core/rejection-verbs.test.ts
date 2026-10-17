@@ -12,7 +12,7 @@ import { Layer} from '../../src/core/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
 import { readEntry } from '../../src/store/entry-reads.js';
-import { listMemoryConflicts, replaceDetectedConflicts, resolveConflict } from '../../src/store/conflicts.js';
+import { listMemoryConflicts, resolveConflict } from '../../src/store/conflicts.js';
 import { queryAuditEvents } from '../../src/store/audit.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import * as api from '../../src/api/index.js';
@@ -21,6 +21,7 @@ import { listRejectionsForTenant } from '../../src/trust/reject-flow.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { replaceDetectedConflicts } from '../_helpers/root-forms.js';
 
 let tmpDir: string;
 

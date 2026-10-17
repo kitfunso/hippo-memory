@@ -9,7 +9,6 @@ import { reject } from '../../src/api/index.js';
 import { closeHippoDb, openHippoDb, withSqliteBlocked } from '../../src/db/index.js';
 import type { MemoryEntry } from '../../src/core/memory.js';
 import type { AuditEvent } from '../../src/entry/store-kit.js';
-import { markSlackEventSeen } from '../../src/store/connectors/slack.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
 import type { ConnectorEvent, ConnectorWrite, ConnectorWriteOutcome } from '../../src/store/port.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
@@ -18,6 +17,7 @@ import {
 } from '../_helpers/in-memory-connector-writes-store.js';
 import { outcomeOf, seedTwoTenants, TENANT_A, TENANT_B, type GroupCall, type Outcome, type TwoTenantFixture } from '../_helpers/store-conformance.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
+import { markSlackEventSeen } from '../_helpers/root-forms.js';
 
 const NOW = '2026-03-01T12:00:05.000Z';
 const ACTOR = 'connector:slack';

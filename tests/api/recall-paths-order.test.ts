@@ -11,13 +11,12 @@ import { _resetAblationCacheForTests } from '../../src/core/ablation.js';
 import { loadConfig } from '../../src/core/config.js';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { queryAuditEvents, type AppendAuditOpts, type AuditEvent } from '../../src/store/audit.js';
-import { loadEntriesByIds } from '../../src/store/entry-reads.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
-import { loadLastRecall } from '../../src/store/index-and-stats.js';
 import { isJsonNumber } from '../../src/util/json.js';
 import { apiCtx, type FullContext } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { CLEARED_ENV, FAKE_NOW, pinUpdatedAt, seeded, TENANT } from '../_helpers/recall-golden-seed.js';
+import { loadEntriesByIds, loadLastRecall } from '../_helpers/root-forms.js';
 
 const ROWS = [
   seeded('deploy pipeline uses blue green rollout', 'mem_o_a', '2026-01-28T00:00:00.000Z'),

@@ -7,6 +7,7 @@ import { queryAuditEvents, type AppendAuditOpts } from '../../src/store/audit.js
 import { insertRejectedValue, rejectionDigest } from '../../src/store/rejection.js';
 import { lazyTombstoneChecks } from '../../src/store/tombstone-checks.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { handlesOf } from '../../src/store/open.js';
 
 const roots: string[] = [];
 const DIGEST = rejectionDigest('the staging password is hunter2');
@@ -42,7 +43,7 @@ const refusal = (targetId: string): AppendAuditOpts => ({ tenantId: 'ta', actor:
 describe('lazyTombstoneChecks', () => {
   it('finds a tombstone only under the tenant that rejected the value, and writes the refusal row', () => {
     const root = storeWithTombstone();
-    const checks = lazyTombstoneChecks(root, false);
+    const checks = lazyTombstoneChecks(handlesOf(root).open, false);
     try {
       expect(checks.find('ta', DIGEST)?.reason).toBe('leaked');
       expect(checks.find('tb', DIGEST)).toBeNull();
@@ -56,7 +57,7 @@ describe('lazyTombstoneChecks', () => {
 
   it('under a dry run finds nothing, writes nothing and never opens the store', () => {
     const root = storeWithTombstone();
-    const checks = lazyTombstoneChecks(path.join(root, 'no-store-here'), true);
+    const checks = lazyTombstoneChecks(handlesOf(path.join(root, 'no-store-here')).open, true);
     expect(checks.find('ta', DIGEST)).toBeNull();
     checks.audit(refusal('m1'));
     checks.close();
@@ -65,7 +66,7 @@ describe('lazyTombstoneChecks', () => {
 
   it('an unused set of checks closes without ever opening the store', () => {
     const root = storeWithTombstone();
-    lazyTombstoneChecks(path.join(root, 'no-store-here'), false).close();
+    lazyTombstoneChecks(handlesOf(path.join(root, 'no-store-here')).open, false).close();
     expect(fs.existsSync(path.join(root, 'no-store-here'))).toBe(false);
   });
 });

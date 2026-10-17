@@ -14,11 +14,11 @@ import fs from 'node:fs';
 import { initStore } from '../../src/store/open.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
-import { pushGoal } from '../../src/store/goals.js';
 import { sessionGoalBoost } from '../_helpers/session-goal-boost.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import type { MemoryEntry } from '../../src/core/memory.js';
 import type { RerankStep } from '../../src/core/search-types.js';
+import { pushGoal } from '../_helpers/root-forms.js';
 
 describe('session goal boost trace parity (side-channel)', () => {
   let hippoRoot: string;

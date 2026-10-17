@@ -5,9 +5,9 @@ import { join } from 'node:path';
 import { consolidate } from '../../src/index.js';
 import { calculateStrength, Layer, type MemoryEntry } from '../../src/core/memory.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import { writeEntriesTogether } from '../../src/store/entry-writes.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { writeEntriesTogether } from '../_helpers/root-forms.js';
 
 const roots: string[] = [];
 afterEach(() => {

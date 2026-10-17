@@ -11,8 +11,8 @@ export interface Sharing {
   ensureFiles(): void;
   /** The memories that carry any of `signals`, of `tenantId` or of every tenant. */
   entriesWithSignals(signals: EntrySignals, tenantId?: string): MemoryEntry[];
-  /** The id, tenant, source and text of every memory of every tenant, oldest first. */
-  textKeys(): EntryTextKey[];
+  /** The id, tenant, source and text of every memory of `tenantId` or of every tenant, oldest first. */
+  textKeys(tenantId?: string): EntryTextKey[];
   /** The memories with these ids, in any tenant; at most 500 ids a call. */
   entriesByIds(ids: readonly string[]): MemoryEntry[];
   /** Writes the rows `fill` puts in one transaction; a rejected value is audited and `put` answers false. Returns how

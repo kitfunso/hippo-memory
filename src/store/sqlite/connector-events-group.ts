@@ -1,30 +1,30 @@
 // hippo.db's half of the ConnectorEvents store group: each call on a handle of its own.
 import type { DatabaseSyncLike } from '../../db/index.js';
 import {
-  archiveDeletedArtifact,
+  archiveDeletedArtifactAt,
   githubCursorsAt,
-  githubEventRecord,
+  githubEventRecordAt,
   githubEventSeenAt,
-  githubRouting,
+  githubRoutingAt,
   GITHUB_DLQ,
-  markGitHubEventSeen,
+  markGitHubEventSeenAt,
   saveGitHubHwmAt,
   seedGitHubCursorsAt,
 } from '../connectors/github.js';
 import {
   listSlackWorkspacesAt,
-  markSlackEventSeen,
+  markSlackEventSeenAt,
   rawMemoryIdForArtifactAt,
   removeSlackWorkspaceAt,
   saveSlackCursorAt,
   slackCursorAt,
-  slackEventRecord,
+  slackEventRecordAt,
   slackEventSeenAt,
-  slackTeamRoute,
+  slackTeamRouteAt,
   SLACK_DLQ,
   upsertSlackWorkspaceAt,
 } from '../connectors/slack.js';
-import { onHandle } from '../open.js';
+import type { OnHandle } from '../open.js';
 import type {
   ArtifactArchive,
   ConnectorEvent,
@@ -37,32 +37,33 @@ import type {
   Sync,
 } from '../port.js';
 
-function eventRecord(hippoRoot: string, event: ConnectorEvent): ConnectorEventRecord {
+function eventRecordAt(db: DatabaseSyncLike, event: ConnectorEvent): ConnectorEventRecord {
   return event.connector === 'slack'
-    ? slackEventRecord(hippoRoot, event.eventId)
-    : githubEventRecord(hippoRoot, event.idempotencyKey);
+    ? slackEventRecordAt(db, event.eventId)
+    : githubEventRecordAt(db, event.idempotencyKey);
 }
 
-function markEventSeen(hippoRoot: string, event: ConnectorEvent): void {
-  if (event.connector === 'slack') return markSlackEventSeen(hippoRoot, event.eventId, null);
+function markEventSeenAt(db: DatabaseSyncLike, event: ConnectorEvent): void {
+  if (event.connector === 'slack') {
+    markSlackEventSeenAt(db, event.eventId, null);
+    return;
+  }
   const { idempotencyKey, deliveryId, eventName } = event;
-  markGitHubEventSeen(hippoRoot, { idempotencyKey, deliveryId, eventName, memoryId: null });
+  markGitHubEventSeenAt(db, { idempotencyKey, deliveryId, eventName, memoryId: null });
 }
 
-function deletionTarget(hippoRoot: string, { event, artifactRef, tenantId }: DeletionLookup): DeletionTarget {
-  return onHandle(hippoRoot, (db): DeletionTarget => {
-    const seen =
-      event.connector === 'slack' ? slackEventSeenAt(db, event.eventId) : githubEventSeenAt(db, event.idempotencyKey);
-    return seen ? { seen: true } : { seen: false, memoryId: rawMemoryIdForArtifactAt(db, artifactRef, tenantId) };
-  });
+function deletionTargetAt(db: DatabaseSyncLike, { event, artifactRef, tenantId }: DeletionLookup): DeletionTarget {
+  const seen =
+    event.connector === 'slack' ? slackEventSeenAt(db, event.eventId) : githubEventSeenAt(db, event.idempotencyKey);
+  return seen ? { seen: true } : { seen: false, memoryId: rawMemoryIdForArtifactAt(db, artifactRef, tenantId) };
 }
 
-function archiveArtifact(
-  hippoRoot: string,
+function archiveArtifactAt(
+  db: DatabaseSyncLike,
   { tenantId, actor, artifactRef, reason, event }: ArtifactArchive,
 ): { duplicate: boolean; archived: number } {
   const { idempotencyKey, deliveryId, eventName } = event;
-  return archiveDeletedArtifact(hippoRoot, {
+  return archiveDeletedArtifactAt(db, {
     tenantId,
     artifactRef,
     idempotencyKey,
@@ -78,8 +79,7 @@ const queueOf = (connector: DeadLetterConnector) => (connector === 'slack' ? SLA
 type DeliveryMethods = 'eventRecord' | 'markEventSeen' | 'deletionTarget' | 'archiveDeletedArtifact' | 'slackTeamRoute'
   | 'githubRouting' | 'parkDeadLetter';
 
-function sqliteConnectorState(hippoRoot: string): Omit<Sync<ConnectorEvents>, DeliveryMethods> {
-  const on = <T>(fn: (db: DatabaseSyncLike) => T): T => onHandle(hippoRoot, fn);
+function sqliteConnectorState(on: OnHandle): Omit<Sync<ConnectorEvents>, DeliveryMethods> {
   return {
     deadLetters: (connector, tenantId, limit): DeadLetterRows[DeadLetterConnector][] =>
       on((db) => queueOf(connector).list(db, tenantId, limit)),
@@ -98,17 +98,16 @@ function sqliteConnectorState(hippoRoot: string): Omit<Sync<ConnectorEvents>, De
   };
 }
 
-export function sqliteConnectorEvents(hippoRoot: string): Sync<ConnectorEvents> {
+export function sqliteConnectorEvents(on: OnHandle): Sync<ConnectorEvents> {
   return {
-    eventRecord: (event) => eventRecord(hippoRoot, event),
-    markEventSeen: (event) => markEventSeen(hippoRoot, event),
-    deletionTarget: (lookup) => deletionTarget(hippoRoot, lookup),
-    archiveDeletedArtifact: (archive) => archiveArtifact(hippoRoot, archive),
-    slackTeamRoute: (teamId) => slackTeamRoute(hippoRoot, teamId),
-    githubRouting: (query) => githubRouting(hippoRoot, query),
+    eventRecord: (event) => on((db) => eventRecordAt(db, event)),
+    markEventSeen: (event) => on((db) => markEventSeenAt(db, event)),
+    deletionTarget: (lookup) => on((db) => deletionTargetAt(db, lookup)),
+    archiveDeletedArtifact: (archive) => on((db) => archiveArtifactAt(db, archive)),
+    slackTeamRoute: (teamId) => on((db) => slackTeamRouteAt(db, teamId)),
+    githubRouting: (query) => on((db) => githubRoutingAt(db, query)),
     parkDeadLetter: (letter) =>
-      onHandle(hippoRoot, (db) =>
-        letter.connector === 'slack' ? SLACK_DLQ.insert(db, letter) : GITHUB_DLQ.insert(db, letter)),
-    ...sqliteConnectorState(hippoRoot),
+      on((db) => (letter.connector === 'slack' ? SLACK_DLQ.insert(db, letter) : GITHUB_DLQ.insert(db, letter))),
+    ...sqliteConnectorState(on),
   };
 }

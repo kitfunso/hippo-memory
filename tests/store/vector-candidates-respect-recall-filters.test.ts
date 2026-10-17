@@ -1,10 +1,10 @@
 // The vector arm of hybrid recall applies tenant, scope and superseded rules before its top-k cut.
 import { beforeEach, describe, expect, it } from 'vitest';
 import { batchWriteAndDelete } from '../../src/store/delete-and-batch.js';
-import { loadVectorCandidateEntries, recallScopeFilter } from '../../src/store/search-rows.js';
+import { recallScopeFilter } from '../../src/store/search-rows.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry, type CreateMemoryOptions } from '../../src/core/memory.js';
-import { saveEmbeddingIndex } from '../../src/store/vector-index.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { saveEmbeddingIndex, loadVectorCandidateEntries } from '../_helpers/root-forms.js';
 
 const QUERY = [1, 0, 0];
 let root: string;

@@ -5,10 +5,10 @@ import { spawn } from 'child_process';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getHippoRoot } from '../../src/core/project-identity.js';
-import { loadActiveTaskSnapshot } from '../../src/store/sessions.js';
 import { compactionRows } from '../_helpers/compaction-hooks.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import { waitFor } from '../_helpers/wait-for.js';
+import { loadActiveTaskSnapshot } from '../_helpers/root-forms.js';
 
 // Plan: hippo/trajectories/01M2ZSMFG8JXSM7PH10EVZNZBW/plan.md. Real spawn,
 // real store, no mocks, same idiom as tests/core/pre-compact-e2e.test.ts.

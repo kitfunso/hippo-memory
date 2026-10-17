@@ -13,9 +13,9 @@ import os from 'node:os';
 import fs from 'node:fs';
 import { initStore } from '../../src/store/open.js';
 import { remember, retrieve } from '../../src/api/index.js';
-import { pushGoal } from '../../src/store/goals.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
+import { pushGoal } from '../_helpers/root-forms.js';
 
 function countRows(db: DatabaseSyncLike, sql: string, ...params: unknown[]): number {
   const row = db.prepare(sql).get(...params);

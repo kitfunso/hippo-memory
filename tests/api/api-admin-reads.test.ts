@@ -5,9 +5,9 @@ import { rmSync } from 'node:fs';
 import { remember, listOpenConflicts, type Actor } from '../../src/api/index.js';
 import { getMemoryStatus, getTouchableMemory } from '../../src/api/memories/memories.js';
 import { NotFoundError } from '../../src/core/api-errors.js';
-import { replaceDetectedConflicts } from '../../src/store/conflicts.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
+import { replaceDetectedConflicts } from '../_helpers/root-forms.js';
 
 let root: string;
 const actorA: Actor = { subject: 'api_key:hk_a', role: 'member', owner: 'a' };

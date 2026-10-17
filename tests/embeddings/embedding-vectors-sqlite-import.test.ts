@@ -3,16 +3,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import { writeEntry } from '../../src/store/entry-writes.js';
-import { batchWriteAndDelete, deleteEntry } from '../../src/store/delete-and-batch.js';
+import { batchWriteAndDelete } from '../../src/store/delete-and-batch.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
 import { openHippoDb, closeHippoDb, getMeta, setMeta, getSchemaVersion, getCurrentSchemaVersion } from '../../src/db/index.js';
 import { embeddingInputText, saveStoredEmbeddingModel } from '../../src/store/embeddings/index.js';
 import { embedAll } from '../../src/search/embed-memories.js';
-import { loadEmbeddingIndex, saveEmbeddingIndex } from '../../src/store/vector-index.js';
+import { loadEmbeddingIndex } from '../../src/store/vector-index.js';
 import type { EmbeddingProvider } from '../../src/embeddings/provider.js';
 import { decodeVector, deleteOrphanVectors, encodeVector, rankVectorRows, topVectorMatches, type VectorMatch, type VectorRow } from '../../src/db/vector-store.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { deleteEntry, saveEmbeddingIndex } from '../_helpers/root-forms.js';
+import { handlesOf } from '../../src/store/open.js';
 
 
 let root: string;
@@ -117,7 +119,7 @@ describe('memory_vectors upkeep', () => {
     const b = createMemory('beta note', { tenantId: 'default', baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     writeEntry(root, a);
     writeEntry(root, b);
-    saveStoredEmbeddingModel(root, 'upkeep-test-model');
+    saveStoredEmbeddingModel(handlesOf(root).on, 'upkeep-test-model');
     saveEmbeddingIndex(root, { [a.id]: [1, 0], mem_gone: [0, 1] });
     const embedded: string[] = [];
     const provider: EmbeddingProvider = {

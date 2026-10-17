@@ -5,7 +5,7 @@ import { COMPACTION_DB_WAIT_MS, REPLAY_AFTER_MS, TRANSCRIPT_FILL_WINDOW_MS } fro
 import { isStringValue } from '../core/capture-contract.js';
 import { itemWords, restates, writableItemRows } from '../util/compaction-items.js';
 import { isSharedStore } from '../core/config.js';
-import { closeHippoDb, isSqliteBusy, openHippoDb, withWriteScopeOr, type DatabaseSyncLike } from '../db/index.js';
+import { isSqliteBusy, withWriteScopeOr, type DatabaseSyncLike } from '../db/index.js';
 import { gatedWrite } from './gated-write.js';
 import {
   COMPACTION_MEMORY_TAG,
@@ -44,6 +44,7 @@ import {
 import { strengthenRetrievedOn, writeEntryMirrors } from './entry-writes.js';
 import { isRecallBoostAblated } from '../core/ablation.js';
 import { updateStats } from './index-and-stats.js';
+import { type OnHandle, waitingOpener } from './open.js';
 import { resolveTenantId } from './tenant.js';
 import { errorMessage, reportCompactionFailure } from '../util/log.js';
 
@@ -189,22 +190,18 @@ function markSummarized(db: DatabaseSyncLike, tenantId: string, id: string, opti
 
 /** Best effort, never throws: a compaction must not fail because its record could not be written. */
 export function recordCompactionStart(
-  hippoRoot: string,
+  on: OnHandle,
   start: Omit<CompactionStart, 'originProject'>,
   log: Log,
 ): string | null {
-  let db: DatabaseSyncLike | undefined;
   try {
-    db = openHippoDb(hippoRoot, { busyWaitMs: COMPACTION_DB_WAIT_MS });
-    return startCompaction(db, resolveTenantId({}), {
+    return on((db, files) => startCompaction(db, resolveTenantId({}), {
       ...start,
-      originProject: compactionOrigin(hippoRoot, start.cwd),
-    });
+      originProject: compactionOrigin(files.hippoRoot, start.cwd),
+    }), waitingOpener(COMPACTION_DB_WAIT_MS));
   } catch (err) {
     log(`compaction record not started: ${errorMessage(err)}`);
     return null;
-  } finally {
-    if (db) closeHippoDb(db);
   }
 }
 
@@ -213,15 +210,11 @@ export function markSnapshotSaved(db: DatabaseSyncLike, tenantId: string, record
   markSnapshotSavedRow(db, tenantId, recordId);
 }
 
-export function recordSnapshotSaved(hippoRoot: string, tenantId: string, recordId: string, log: Log): void {
-  let db: DatabaseSyncLike | undefined;
+export function recordSnapshotSaved(on: OnHandle, tenantId: string, recordId: string, log: Log): void {
   try {
-    db = openHippoDb(hippoRoot, { busyWaitMs: COMPACTION_DB_WAIT_MS });
-    markSnapshotSaved(db, tenantId, recordId);
+    on((db) => { markSnapshotSaved(db, tenantId, recordId); }, waitingOpener(COMPACTION_DB_WAIT_MS));
   } catch (err) {
     log(`compaction record not marked with its snapshot: ${errorMessage(err)}`);
-  } finally {
-    if (db) closeHippoDb(db);
   }
 }
 
@@ -490,7 +483,7 @@ function itemsStep(step: SaveStep, record: CompactionRecord | null): void {
 /** The PostCompact store work, on a handle of its own: record the summary, then write its items. Each step is
  * independent. Never throws. */
 export function saveCompactionAt(
-  hippoRoot: string,
+  on: OnHandle,
   meta: Omit<CompactionStart, 'originProject'>,
   text: CompactionText,
   at: Date,
@@ -498,17 +491,19 @@ export function saveCompactionAt(
   baseHalfLifeDays: number,
 ): CompactionSaveOutcome {
   const result: CompactionSaveResult = { written: null, deferred: false, snapshotSaved: false };
-  let db: DatabaseSyncLike | undefined;
+  let opened = false;
   try {
-    db = openHippoDb(hippoRoot, { busyWaitMs: COMPACTION_DB_WAIT_MS });
-    const tenantId = resolveTenantId({});
-    const step: SaveStep = { db, hippoRoot, tenantId, meta, text, at, result, log, baseHalfLifeDays };
-    itemsStep(step, recordStep(step));
+    on((db, files) => {
+      opened = true;
+      const tenantId = resolveTenantId({});
+      const step: SaveStep = {
+        db, hippoRoot: files.hippoRoot, tenantId, meta, text, at, result, log, baseHalfLifeDays,
+      };
+      itemsStep(step, recordStep(step));
+    }, waitingOpener(COMPACTION_DB_WAIT_MS));
   } catch (err) {
-    if (isSqliteBusy(err) || db === undefined) return { result, spoolReason: errorMessage(err) };
+    if (isSqliteBusy(err) || !opened) return { result, spoolReason: errorMessage(err) };
     reportCompactionFailure(log, 'items step', errorMessage(err));
-  } finally {
-    if (db) closeHippoDb(db);
   }
   return { result, spoolReason: null };
 }
@@ -686,20 +681,19 @@ export interface ReplayOptions {
 
 /** For `hippo sleep` and post-compact: opens the store itself and never throws. */
 export function replayStoredCompactions(
-  hippoRoot: string,
+  on: OnHandle,
   sources: ReplaySources,
   log: Log,
   opts: ReplayOptions,
 ): number {
-  let db: DatabaseSyncLike | undefined;
   try {
-    db = openHippoDb(hippoRoot, { busyWaitMs: opts.busyWaitMs });
     const deadline = opts.deadline ?? Number.POSITIVE_INFINITY;
-    return replayCompactions(db, hippoRoot, sources, log, deadline, opts.baseHalfLifeDays);
+    return on(
+      (db, files) => replayCompactions(db, files.hippoRoot, sources, log, deadline, opts.baseHalfLifeDays),
+      waitingOpener(opts.busyWaitMs),
+    );
   } catch (err) {
     log(`replay failed: ${errorMessage(err)}`);
     return 0;
-  } finally {
-    if (db) closeHippoDb(db);
   }
 }

@@ -1,8 +1,11 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { initStore } from '../../src/store/open.js';
-import { appendSessionEvent, listSessionEvents, findPromotableSessions } from '../../src/store/sessions.js';
-import { saveSessionHandoff, loadLatestHandoff, loadHandoffById } from '../../src/store/handoffs.js';
+import { appendSessionEvent } from '../../src/store/sessions.js';
+import { saveSessionHandoff } from '../../src/store/handoffs.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import {
+  listSessionEvents, findPromotableSessions, loadLatestHandoff, loadHandoffById,
+} from '../_helpers/root-forms.js';
 
 let tmpDir: string;
 beforeEach(() => {

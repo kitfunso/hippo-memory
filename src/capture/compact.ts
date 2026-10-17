@@ -2,7 +2,6 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { type TaskSnapshot } from '../store/rows.js';
 import { isInitialized } from '../core/project-identity.js';
-import { saveActiveTaskSnapshot, loadActiveTaskSnapshot } from '../store/sessions.js';
 import { PRE_COMPACT_INSTRUCTION, postCompactLine, saveCompaction, replayCompactions } from './compaction-record.js';
 import type { LocalFiles } from '../store/port.js';
 import { sqliteSyncStore } from '../store/sqlite/store.js';
@@ -84,7 +83,7 @@ const TWIN_FIRE_MS = 10_000;
 
 function snapshotJustSaved(hippoRoot: string, sessionId: string | null): boolean {
   if (sessionId === null || sessionId === '') return false;
-  const active = loadActiveTaskSnapshot(hippoRoot, resolveTenantId({}));
+  const active = sqliteSyncStore(hippoRoot).sessions.loadSnapshot(resolveTenantId({}), null);
   return active?.session_id === sessionId && active.source === 'pre-compact' &&
     Date.now() - Date.parse(active.updated_at) < TWIN_FIRE_MS;
 }
@@ -204,11 +203,11 @@ function saveDerivedSnapshot(
   derived: WorkingState,
 ): void {
   const tenantId = resolveTenantId({});
-  const { hippoRoot } = local;
+  const { sessions } = sqliteSyncStore(local.hippoRoot);
 
   let existing: TaskSnapshot | null = null;
   try {
-    existing = loadActiveTaskSnapshot(hippoRoot, tenantId);
+    existing = sessions.loadSnapshot(tenantId, null);
   } catch (err) {
     logger.warn(
       `pre-compact: stored snapshot unreadable, saving the derived one alone: ${errorMessage(err)}`,
@@ -226,7 +225,7 @@ function saveDerivedSnapshot(
     );
   } else {
     try {
-      saveActiveTaskSnapshot(hippoRoot, tenantId, { ...merged, source: 'pre-compact', session_id: sessionId });
+      sessions.saveSnapshot(tenantId, { ...merged, source: 'pre-compact', session_id: sessionId }, null);
       appendPreCompactLog(logFile, 'snapshot saved');
       if (recordId !== null) {
         local.compactionHooks.markSnapshotSaved(tenantId, recordId, (message) => appendPreCompactLog(logFile, message));

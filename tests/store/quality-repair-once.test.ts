@@ -35,14 +35,14 @@ describe('repairQualityOnce', () => {
   it('sets aside certain defects on the first run only, and never a person\'s words', () => {
     const bad = seed(root, CUT);
     const person = seed(root, CUT, { source: 'cli' });
-    const first = repairQualityOnce(root, 'default');
+    const first = repairQualityOnce({ hippoRoot: root }, 'default');
     expect(first?.appliedIds).toEqual([bad.id]);
     expect(existsSync(first!.backup!)).toBe(true);
     expect(ids(root)).toEqual([person.id]);
     expect(flag(root)).toBe('1');
 
     const later = seed(root, CUT);
-    expect(repairQualityOnce(root, 'default')).toBeNull();
+    expect(repairQualityOnce({ hippoRoot: root }, 'default')).toBeNull();
     expect(ids(root)).toEqual([person.id, later.id].sort());
   });
 
@@ -51,10 +51,10 @@ describe('repairQualityOnce', () => {
     const spy = vi.spyOn(DatabaseSync.prototype, 'prepare');
     const fullReads = () => spy.mock.calls.map((call) => String(call[0])).filter((text) => /FROM memories\s+WHERE tenant_id = \? ORDER BY created/.test(text)).length;
     try {
-      repairAutomaticMemories(root, { tenantId: 'default' });
+      repairAutomaticMemories({ hippoRoot: root }, { tenantId: 'default' });
       expect(fullReads()).toBe(1);
       spy.mockClear();
-      repairAutomaticMemories(root, { tenantId: 'default', apply: true });
+      repairAutomaticMemories({ hippoRoot: root }, { tenantId: 'default', apply: true });
       expect(fullReads()).toBe(2);
     } finally {
       spy.mockRestore();
@@ -63,7 +63,7 @@ describe('repairQualityOnce', () => {
 
   it('marks a clean store done without a backup', () => {
     seed(root, 'Keep test schema setup outside production migrations because production applies every sorted migration.');
-    expect(repairQualityOnce(root, 'default')).toMatchObject({ appliedIds: [], backup: null });
+    expect(repairQualityOnce({ hippoRoot: root }, 'default')).toMatchObject({ appliedIds: [], backup: null });
     expect(existsSync(join(root, 'backups'))).toBe(false);
     expect(flag(root)).toBe('1');
   });
@@ -73,20 +73,20 @@ describe('repairQualityOnce', () => {
     const holder = new DatabaseSync(join(root, 'hippo.db'));
     holder.exec('BEGIN IMMEDIATE');
     try {
-      expect(() => repairQualityOnce(root, 'default')).toThrow();
+      expect(() => repairQualityOnce({ hippoRoot: root }, 'default')).toThrow();
     } finally {
       holder.exec('ROLLBACK');
       holder.close();
     }
     expect(flag(root)).toBe('');
-    expect(repairQualityOnce(root, 'default')?.appliedIds).toEqual([bad.id]);
+    expect(repairQualityOnce({ hippoRoot: root }, 'default')?.appliedIds).toEqual([bad.id]);
   });
 
   it('leaves a store whose schema it cannot repair unmarked', () => {
     const bad = seed(root, CUT);
     const db = new DatabaseSync(join(root, 'hippo.db'));
     try { db.exec('DROP TABLE audit_log'); } finally { db.close(); }
-    expect(repairQualityOnce(root, 'default')).toMatchObject({ supported: false, appliedIds: [] });
+    expect(repairQualityOnce({ hippoRoot: root }, 'default')).toMatchObject({ supported: false, appliedIds: [] });
     expect(flag(root)).toBe('');
     expect(ids(root)).toEqual([bad.id]);
   });

@@ -1,12 +1,13 @@
-// The built-in store's promotion: the two existing functions, bound to this hippo root.
+// The built-in store's promotion: the two existing functions, bound to this store.
 
-import { copyToGlobal } from './global-promote.js';
+import { copyToGlobal } from '../global-promote.js';
 import type { Promotion } from '../port/promotion.js';
-import { memoryReach } from '../tenant-lookup.js';
+import { memoryReachAt } from '../tenant-lookup.js';
+import { type Handles } from '../open.js';
 
-export function sqlitePromotion(hippoRoot: string): Promotion {
+export function sqlitePromotion({ on, files }: Handles): Promotion {
   return {
-    reach: (id) => memoryReach(hippoRoot, id),
-    copyToGlobal: (id, opts) => copyToGlobal(hippoRoot, id, opts),
+    reach: (id) => on((db) => memoryReachAt(db, id)),
+    copyToGlobal: (id, opts) => copyToGlobal(on, files, id, opts),
   };
 }

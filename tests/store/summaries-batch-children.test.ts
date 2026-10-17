@@ -1,8 +1,10 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { writeEntriesTogether } from '../../src/store/entry-writes.js';
-import { childrenKey, loadChildrenOfSummaries, loadChildrenOfSummary } from '../../src/store/summaries.js';
+import { childrenKey } from '../../src/store/summaries.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import {
+  writeEntriesTogether, loadChildrenOfSummary, loadChildrenOfSummaries,
+} from '../_helpers/root-forms.js';
 
 describe('loadChildrenOfSummaries', () => {
   let root: string;

@@ -16,7 +16,6 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
 import { loadAllEntries } from '../../src/store/entry-reads.js';
 import { hybridSearch, physicsSearch } from '../../src/entry/folder-search.js';
-import { saveEmbeddingIndex } from '../../src/store/vector-index.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import {
   loadPhysicsState,
@@ -26,6 +25,7 @@ import {
 import { computeSystemEnergy, simulate, type ForceContext } from '../../src/core/physics.js';
 import { DEFAULT_PHYSICS_CONFIG } from '../../src/core/physics-config.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { saveEmbeddingIndex } from '../_helpers/root-forms.js';
 
 
 // ---------------------------------------------------------------------------

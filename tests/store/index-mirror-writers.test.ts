@@ -2,12 +2,12 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import { writeEntry } from '../../src/store/entry-writes.js';
-import { batchWriteAndDelete, deleteEntry } from '../../src/store/delete-and-batch.js';
-import { loadLastRecall, saveIndex } from '../../src/store/index-and-stats.js';
+import { batchWriteAndDelete } from '../../src/store/delete-and-batch.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { rejectValue } from '../../src/trust/reject-flow.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { deleteEntry, loadLastRecall, saveIndex } from '../_helpers/root-forms.js';
 
 let root: string;
 const indexPath = (): string => path.join(root, 'index.json');

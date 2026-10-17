@@ -13,10 +13,10 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { handleMcpRequest, type McpContext, type McpResponse } from '../../src/mcp/server.js';
-import { closePrediction } from '../../src/store/predictions.js';
 import { savePrediction } from '../_helpers/save-prediction.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
+import { closePrediction } from '../_helpers/root-forms.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();

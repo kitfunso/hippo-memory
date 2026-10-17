@@ -1,11 +1,11 @@
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach } from 'vitest';
-import { loadEveryTenantEntries } from '../../src/store/entry-reads.js';
 import { ingestMessage } from '../../src/connectors/slack/ingest.js';
 import { handleMessageDeleted } from '../../src/connectors/slack/deletion.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { loadEveryTenantEntries } from '../_helpers/root-forms.js';
 
 const ctx = (root: string): FullContext => (apiCtx(root, 'default', { subject: 'connector:slack', role: 'admin' }));
 

@@ -16,9 +16,10 @@ import { rmSync } from 'node:fs';
 import { serve, type ServerHandle } from '../../src/server.js';
 import { createApiKey, type CreateApiKeyResult } from '../../src/store/auth.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import { closePrediction, type Prediction } from '../../src/store/predictions.js';
+import { type Prediction } from '../../src/store/predictions.js';
 import { savePrediction } from '../_helpers/save-prediction.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { closePrediction } from '../_helpers/root-forms.js';
 
 /** Parse a fetch Response body against a caller-declared shape. */
 async function jsonAs<T>(res: Response): Promise<T> {

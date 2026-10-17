@@ -3,13 +3,15 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { Layer, type MemoryEntry } from '../../src/core/memory.js';
-import { listMemoryConflicts, replaceDetectedConflicts, resolveConflict } from '../../src/store/conflicts.js';
+import { listMemoryConflicts, resolveConflict } from '../../src/store/conflicts.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
-import { appendConsolidationRun, updateStats } from '../../src/store/index-and-stats.js';
-import { saveStoredVectors } from '../../src/store/vector-index.js';
+import { updateStats } from '../../src/store/index-and-stats.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { inMemoryReportsStore } from '../_helpers/in-memory-reports-store.js';
 import { onBothStores, seedTwoTenants, TENANT_A, TENANT_B, type GroupCall, type Outcome, type TwoTenantFixture } from '../_helpers/store-conformance.js';
+import {
+  replaceDetectedConflicts, appendConsolidationRun, saveStoredVectors,
+} from '../_helpers/root-forms.js';
 
 const NOW = '2026-03-01T12:00:05.000Z';
 const HOUR = 60 * 60 * 1000;

@@ -3,9 +3,9 @@ import type { MessagePort } from 'node:worker_threads';
 import { auditWriteFailureCount } from '../audit.js';
 import { type DatabaseSyncLike, RequestStores } from '../../db/index.js';
 import type { OpenedDb } from '../../db/connect.js';
-import { loadStoredVectorViews } from '../vector-index.js';
+import { loadStoredVectorViewsAt } from '../vector-index.js';
 import { requestScopes } from '../../util/request-scope.js';
-import { initStore } from '../open.js';
+import { handlesOf, initStore } from '../open.js';
 import { watchCommits } from './commit-watch.js';
 import { flushStatsMirrors } from '../mirrors.js';
 import { encodeError } from './error-codec.js';
@@ -25,10 +25,11 @@ import {
 /** Every method the op table can name: the synchronous store, and the vector reads, which answer only through Promises.
  *  The two reads that return vectors answer with a pack, which worker-store.ts turns back into the port's Map. */
 function workerOps(hippoRoot: string) {
-  const packed = (ids: readonly string[]) => packVectors(loadStoredVectorViews(hippoRoot, ids));
+  const handles = handlesOf(hippoRoot);
+  const packed = (ids: readonly string[]) => packVectors(handles.on((db) => loadStoredVectorViewsAt(db, ids)));
   return {
     ...sqliteSyncStore(hippoRoot),
-    vectors: { ...sqliteVectorReads(hippoRoot), storedVectors: packed },
+    vectors: { ...sqliteVectorReads(handles), storedVectors: packed },
     vectorViews: { storedVectorViews: packed },
   };
 }

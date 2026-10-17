@@ -5,7 +5,6 @@ import { spawnSync } from 'node:child_process';
 import { repairAutomaticMemories } from '../../src/store/quality-repair.js';
 import { initStore } from '../../src/store/open.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
-import { loadEveryTenantEntries } from '../../src/store/entry-reads.js';
 import { entryMirrorFiles } from '../_helpers/entry-mirror-files.js';
 import { DatabaseSync } from '../../src/db/sqlite.js';
 import { STORE_BUSY_MESSAGE } from '../../src/store/port.js';
@@ -23,6 +22,7 @@ import { loadConfig } from '../../src/core/config.js';
 import { sqliteAgentImport } from '../../src/store/sqlite/agent-import.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { loadEveryTenantEntries } from '../_helpers/root-forms.js';
 
 const HIPPO_JS = resolve(__dirname, '..', '..', 'bin', 'hippo.js');
 const HEADER = '[Consolidated from 2 related memories, newest first]';
@@ -47,7 +47,7 @@ function withDb<T>(fn: (db: InstanceType<typeof DatabaseSync>) => T): T {
 }
 
 const ctx = (): FullContext => apiCtx(root, 'default', { subject: 'test', role: 'admin' });
-const run = (apply = false) => repairAutomaticMemories(root, { tenantId: 'default', apply });
+const run = (apply = false) => repairAutomaticMemories({ hippoRoot: root }, { tenantId: 'default', apply });
 const dispositionOf = (id: string) => run().issues.find((issue) => issue.id === id)?.disposition;
 
 describe('recoverable automatic memory quality repair', () => {
@@ -242,7 +242,7 @@ describe('recoverable automatic memory quality repair', () => {
     try {
       const bad = createMemory('succeeds (inserts or updates)', { source: 'capture', confidence: 'observed' });
       writeEntry(world.local, bad);
-      expect(repairAutomaticMemories(world.local, { tenantId: 'default', apply: true }).appliedIds).toEqual([bad.id]);
+      expect(repairAutomaticMemories({ hippoRoot: world.local }, { tenantId: 'default', apply: true }).appliedIds).toEqual([bad.id]);
       note(projectNotes(world), 'result.md', bad.content);
       importForStore(world.local, { configAt: loadConfig, agentImport: sqliteAgentImport, machine: world.machine });
       expect(loadEveryTenantEntries(world.local).map((entry) => entry.content)).toEqual([bad.content]);

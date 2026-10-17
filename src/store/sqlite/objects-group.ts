@@ -7,10 +7,10 @@ import { chunked } from '../../util/chunked.js';
 import { calculateStrength, deriveHalfLife, LEGACY_TYPED_HALF_LIFE, type MemoryEntry } from '../../core/memory.js';
 import { scopeAdmitSql } from '../rule-sql.js';
 import type { JsonObject } from '../working-memory.js';
-import { stampOriginProject, upsertEntryRow } from '../entry-row.js';
-import { auditEntryWrite, writeEntryMirrors } from '../entry-writes.js';
-import { markGraphDirty } from '../graph-queue.js';
-import { removeGraphEntitiesForObject } from '../graph-writes.js';
+import { stampOriginProjectIn, upsertEntryRow } from '../entry-row.js';
+import { auditEntryWrite, writeEntryMirrorsIn } from '../entry-writes.js';
+import { markGraphDirtyAt } from '../graph-queue.js';
+import { removeGraphEntitiesForObjectAt } from '../graph-writes.js';
 import {
   isObjectRefusal,
   type BriefReceipt,
@@ -22,7 +22,7 @@ import {
   type SavableKind,
   type Skill,
 } from '../../core/object-types.js';
-import { onHandle, openStore, TYPED_HALF_LIFE_META_KEY } from '../open.js';
+import { type OnHandle, openStore, TYPED_HALF_LIFE_META_KEY } from '../open.js';
 import type {
   IncidentOpen,
   IncidentOpenRefusal,
@@ -61,22 +61,22 @@ export interface SyncObjects {
   ): number | null;
 }
 
-export function sqliteObjects(hippoRoot: string): SyncObjects {
+export function sqliteObjects(on: OnHandle): SyncObjects {
   return {
-    listObjects: (tenantId, kind, query) => onHandle(hippoRoot, (db) => listRows(db, tenantId, kind, query)),
+    listObjects: (tenantId, kind, query) => on((db) => listRows(db, tenantId, kind, query)),
     objectById(tenantId, kind, id) {
-      const row = onHandle(hippoRoot, (db) => selectRow(db, kind, tenantId, id));
+      const row = on((db) => selectRow(db, kind, tenantId, id));
       return row ? rowSpec(kind).rowTo(row) : null;
     },
-    closeObject: (tenantId, kind, id, close) => closeAt(hippoRoot, tenantId, kind, id, close),
-    saveObject: (tenantId, kind, save) => saveAt(hippoRoot, tenantId, kind, save),
-    openIncident: (tenantId, open) => openIncidentAt(hippoRoot, tenantId, open),
-    resolveIncident: (tenantId, id, resolve) => onHandle(hippoRoot, (db) => resolveRow(db, tenantId, id, resolve)),
-    policiesInForce: (tenantId, query) => onHandle(hippoRoot, (db) => policiesInForce(db, tenantId, query)),
-    activeSkillsByName: (tenantId, limit) => onHandle(hippoRoot, (db) => activeSkillsByName(db, tenantId, limit)),
-    briefReceipts: (tenantId, tag, limit) => onHandle(hippoRoot, (db) => briefReceipts(db, tenantId, tag, limit)),
+    closeObject: (tenantId, kind, id, close) => closeAt(on, tenantId, kind, id, close),
+    saveObject: (tenantId, kind, save) => saveAt(on, tenantId, kind, save),
+    openIncident: (tenantId, open) => openIncidentAt(on, tenantId, open),
+    resolveIncident: (tenantId, id, resolve) => on((db) => resolveRow(db, tenantId, id, resolve)),
+    policiesInForce: (tenantId, query) => on((db) => policiesInForce(db, tenantId, query)),
+    activeSkillsByName: (tenantId, limit) => on((db) => activeSkillsByName(db, tenantId, limit)),
+    briefReceipts: (tenantId, tag, limit) => on((db) => briefReceipts(db, tenantId, tag, limit)),
     objectIdByMemory: (tenantId, kind, status, memoryId) =>
-      onHandle(hippoRoot, (db) => idByMemory(db, tenantId, kind, status, memoryId)),
+      on((db) => idByMemory(db, tenantId, kind, status, memoryId)),
   };
 }
 
@@ -180,20 +180,20 @@ function closeRow<K extends ObjectKind>(
 }
 
 function closeAt<K extends ObjectKind>(
-  hippoRoot: string,
+  on: OnHandle,
   tenantId: string,
   kind: K,
   id: number,
   close: ObjectClose<K>,
 ): ObjectByKind[K] | ObjectRefusal {
   const { graphType } = rowSpec(kind);
-  return onHandle(hippoRoot, (db) => {
+  return on((db) => {
     const closed = closeRow(db, tenantId, kind, id, close);
     if (isObjectRefusal(closed) || !graphType) return closed;
     // Each graph write takes its own write lock, so both wait for the commit. The rows
     // go at once because the rebuild queue is keyed by a mirror memory that may be gone.
-    removeGraphEntitiesForObject(hippoRoot, tenantId, graphType, closed.id);
-    markGraphDirty(hippoRoot, tenantId, closed.memoryId);
+    removeGraphEntitiesForObjectAt(db, tenantId, graphType, closed.id);
+    markGraphDirtyAt(db, tenantId, closed.memoryId);
     return closed;
   });
 }
@@ -331,12 +331,12 @@ function onStoreHalfLife(db: DatabaseSyncLike, mirror: MemoryEntry): MemoryEntry
 /** One write scope on one handle holds the mirror, the row `writeRow` adds, the successor link and every audit row, the
  * mirror's remember row last. */
 function withMirror<R extends object, F extends Refused>(
-  hippoRoot: string,
+  on: OnHandle,
   write: MirroredWrite,
   writeRow: (db: DatabaseSyncLike, memoryId: string) => R | F
 ): R | F {
-  return onHandle(hippoRoot, (db) => auditingRefusal(db, write.actor, () => {
-    let mirror = stampOriginProject(hippoRoot, write.mirror);
+  return on((db, files) => auditingRefusal(db, write.actor, () => {
+    let mirror = stampOriginProjectIn(files, write.mirror);
     const written = withWriteScopeOr(db, 'write_entry', (rollback) => {
       mirror = onStoreHalfLife(db, mirror);
       upsertEntryRow(db, mirror);
@@ -347,14 +347,14 @@ function withMirror<R extends object, F extends Refused>(
     });
     if (refusalOf<R, F>(written)) return written;
     // The graph mark takes its own write lock, so it waits for the commit.
-    if (write.graphTenant !== undefined) markGraphDirty(hippoRoot, write.graphTenant, mirror.id);
-    writeEntryMirrors(hippoRoot, mirror);
+    if (write.graphTenant !== undefined) markGraphDirtyAt(db, write.graphTenant, mirror.id);
+    writeEntryMirrorsIn(files, mirror);
     return written;
   }), openStore);
 }
 
 function saveAt<K extends SavableKind>(
-  hippoRoot: string,
+  on: OnHandle,
   tenantId: string,
   kind: K,
   save: ObjectSave<K>,
@@ -365,7 +365,7 @@ function saveAt<K extends SavableKind>(
     actor: save.actor,
     graphTenant: spec.graphType ? tenantId : undefined,
   };
-  const written = withMirror<RowByKind[K], ObjectRefusal>(hippoRoot, write, (db, memoryId) =>
+  const written = withMirror<RowByKind[K], ObjectRefusal>(on, write, (db, memoryId) =>
     writeObjectRow(db, tenantId, kind, memoryId, save),
   );
   return isObjectRefusal(written) ? written : spec.rowTo(written);
@@ -417,9 +417,9 @@ function openIncidentRow(
   return row;
 }
 
-function openIncidentAt(hippoRoot: string, tenantId: string, open: IncidentOpen): Incident | IncidentOpenRefusal {
+function openIncidentAt(on: OnHandle, tenantId: string, open: IncidentOpen): Incident | IncidentOpenRefusal {
   const write: MirroredWrite = { mirror: open.mirror, actor: open.actor };
-  const written = withMirror<RowByKind['incident'], IncidentOpenRefusal>(hippoRoot, write, (db, memoryId) =>
+  const written = withMirror<RowByKind['incident'], IncidentOpenRefusal>(on, write, (db, memoryId) =>
     openIncidentRow(db, tenantId, memoryId, open),
   );
   return 'refused' in written ? written : rowSpec('incident').rowTo(written);

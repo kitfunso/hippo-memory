@@ -25,6 +25,7 @@ import { apiCtx } from '../_helpers/api-ctx.js';
 import { sqliteConsolidation } from '../../src/store/sqlite/consolidation-group.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { handlesOf } from '../../src/store/open.js';
 
 function makeOkFetcher(content: string = 'synthetic-entity-profile-content-xyz') {
   return vi.fn<typeof fetch>(async () => {
@@ -273,7 +274,7 @@ describe('level-3 entity profiles + drillDown depth', () => {
       );
     });
 
-    const result = await rebuildDirtySummaries(sqliteConsolidation(hippoRoot), {
+    const result = await rebuildDirtySummaries(sqliteConsolidation(handlesOf(hippoRoot)), {
       apiKey: 'k',
       fetcher,
       cap: 20,

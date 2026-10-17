@@ -13,8 +13,8 @@ import os from 'node:os';
 import fs from 'node:fs';
 import { initStore } from '../../src/store/open.js';
 import { remember, retrieve } from '../../src/api/index.js';
-import { pushGoal } from '../../src/store/goals.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
+import { pushGoal } from '../_helpers/root-forms.js';
 
 describe('api.recall explain', () => {
   let hippoRoot: string;

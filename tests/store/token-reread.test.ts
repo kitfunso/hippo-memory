@@ -15,7 +15,6 @@ import {
   carryingCalls,
   lastSentState,
   readApiCalls,
-  recordRereads,
   recordTokenUse,
   shouldSkipUnchanged,
   type ApiCall,
@@ -28,6 +27,7 @@ import { estimateTokens } from '../../src/util/token-text.js';
 import { hippoRun } from '../_helpers/spawn-hippo.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { recordRereads } from '../_helpers/root-forms.js';
 const SESSION = 'sess-reread';
 // Noon UTC yesterday: re-read rows are per UTC day, so a run near midnight must not split a test's calls.
 const BASE = Math.floor(Date.now() / 86_400_000) * 86_400_000 - 12 * 3_600_000;

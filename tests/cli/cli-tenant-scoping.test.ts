@@ -14,12 +14,12 @@ import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { initStore } from '../../src/store/open.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
-import { loadEveryTenantEntries } from '../../src/store/entry-reads.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
 import { runCli as runCliEntry } from '../../src/cli.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { loadEveryTenantEntries } from '../_helpers/root-forms.js';
 
 const savedCwd = process.cwd();
 

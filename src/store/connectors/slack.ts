@@ -1,11 +1,9 @@
 // Every statement the Slack connector runs on hippo.db: backfill cursors, the event log, the dead-letter queue and
-// workspace routing. `xAt(db, ...)` runs on the caller's handle; the same name without `At` opens hippo.db for that one
-// call.
+// workspace routing. Each `xAt(db, ...)` runs on the caller's handle.
 
 import type { DatabaseSyncLike } from '../../db/index.js';
-import { onHandle } from '../open.js';
 import type { ConnectorEventRecord } from '../port.js';
-import { eventMemoryAt, eventRecord, eventSeenAt, markEventSeenAt, type EventLogSpec } from './event-log.js';
+import { eventMemoryAt, eventRecordAt, eventSeenAt, markEventSeenAt, type EventLogSpec } from './event-log.js';
 import { dlqAccess } from './dlq.js';
 
 // Backfill cursors
@@ -43,12 +41,8 @@ export function slackEventMemoryAt(db: DatabaseSyncLike, eventId: string): strin
   return eventMemoryAt(db, SLACK_LOG, eventId);
 }
 
-export function slackEventRecord(hippoRoot: string, eventId: string): ConnectorEventRecord {
-  return eventRecord(hippoRoot, SLACK_LOG, eventId);
-}
-
-export function markSlackEventSeen(hippoRoot: string, eventId: string, memoryId: string | null): void {
-  onHandle(hippoRoot, (db) => markSlackEventSeenAt(db, eventId, memoryId));
+export function slackEventRecordAt(db: DatabaseSyncLike, eventId: string): ConnectorEventRecord {
+  return eventRecordAt(db, SLACK_LOG, eventId);
 }
 
 // Deletion lookup
@@ -123,10 +117,6 @@ export function slackTeamRouteAt(db: DatabaseSyncLike, teamId: string): SlackTea
     .prepare(`SELECT COUNT(*) AS c FROM slack_workspaces`)
     .get() as { c: number | bigint }).c;
   return { tenantId: null, workspaceCount: Number(total) };
-}
-
-export function slackTeamRoute(hippoRoot: string, teamId: string): SlackTeamRoute {
-  return onHandle(hippoRoot, (db) => slackTeamRouteAt(db, teamId));
 }
 
 export interface SlackWorkspace {

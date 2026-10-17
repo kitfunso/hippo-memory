@@ -3,9 +3,10 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import {
   readDeliveryEvents,
-  writeDeliveryEventAtRoot,
   writeDeliveryEventOnHandle,
+  writeDeliveryEventVia,
 } from '../../src/store/recall-trace.js';
+import { handlesOf } from '../../src/store/open.js';
 import {
   createDeliveryRecorder,
   DELIVERY_LEDGER_VERSION,
@@ -277,13 +278,13 @@ describe('writeDeliveryEventOnHandle', () => {
 
 describe('writeDeliveryEventAtRoot under a held write lock', () => {
   it('drops the row fast, then numbers the next written turn after the last recorded one', () => {
-    expect(writeDeliveryEventAtRoot(root, event({ promptHash: 'p1' }))).not.toBeNull();
+    expect(writeDeliveryEventVia(handlesOf(root).on, event({ promptHash: 'p1' }))).not.toBeNull();
     const err = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     const holder = openHippoDb(root);
     holder.exec('BEGIN IMMEDIATE');
     let dropped: StatementLog<number | null>;
     try {
-      dropped = recordStatements(() => writeDeliveryEventAtRoot(root, event({ promptHash: 'p2', ts: at(5000) })));
+      dropped = recordStatements(() => writeDeliveryEventVia(handlesOf(root).on, event({ promptHash: 'p2', ts: at(5000) })));
     } finally {
       holder.exec('COMMIT');
       closeHippoDb(holder);
@@ -292,7 +293,7 @@ describe('writeDeliveryEventAtRoot under a held write lock', () => {
     expectOneShortWait(dropped.statements);
     expect(err).toHaveBeenCalledTimes(1);
     expect(String(err.mock.calls[0][0])).toMatch(/^\[hippo\] error: delivery ledger write failed: /);
-    const next = writeDeliveryEventAtRoot(root, event({ promptHash: 'p3', ts: at(10_000) }));
+    const next = writeDeliveryEventVia(handlesOf(root).on, event({ promptHash: 'p3', ts: at(10_000) }));
     expect(next).not.toBeNull();
     expect(readDeliveryEvents(db, 'default', 'sess-1').map((r) => r.turn_seq)).toEqual([1, 2]);
   });

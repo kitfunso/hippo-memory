@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { activeGoalsWithPolicies, pushGoal, resumeGoal, suspendGoal } from '../../src/store/goals.js';
 
 const activeGoalsOf = (root: string, opts: { sessionId: string; tenantId: string }) => activeGoalsWithPolicies(root, opts).goals;
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { activeGoalsWithPolicies, pushGoal, resumeGoal, suspendGoal } from '../_helpers/root-forms.js';
 
 describe('goal stack depth cap', () => {
   let root: string;

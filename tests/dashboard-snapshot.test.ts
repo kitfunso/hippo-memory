@@ -2,7 +2,7 @@
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { Layer } from '../src/core/memory.js';
-import { listMemoryConflicts, replaceDetectedConflicts, resolveConflict } from '../src/store/conflicts.js';
+import { listMemoryConflicts, resolveConflict } from '../src/store/conflicts.js';
 import { quarantineScopeFor } from '../src/trust/quarantine.js';
 import { buildSnapshot, createSnapshotService } from '../src/dashboard/dashboard-snapshot.js';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
@@ -11,6 +11,7 @@ import { loadAllEntries } from '../src/store/entry-reads.js';
 import { buildOverview } from '../src/dashboard/dashboard-queries.js';
 import { embed, isoAgo, makeStore, NOW, seed, type TmpStore } from './_helpers/dashboard-fixture.js';
 import { countMatching, recordStatements } from './_helpers/count-statements.js';
+import { replaceDetectedConflicts } from './_helpers/root-forms.js';
 
 let store: TmpStore;
 

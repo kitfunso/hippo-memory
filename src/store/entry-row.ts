@@ -1,9 +1,10 @@
 import { DEFAULT_TENANT_ID } from '../util/env.js';
 import type { MemoryEntry } from '../core/memory.js';
-import { closeHippoDb, ftsRowCounts, openHippoDb, isFtsAvailable, repairFtsDrift } from '../db/index.js';
+import { type DatabaseSyncLike, ftsRowCounts, openHippoDb, isFtsAvailable, repairFtsDrift } from '../db/index.js';
 import { fallbackOrigin, originFromSource } from '../core/project-identity.js';
 import { checkRejectionGuard } from './rejection.js';
 import { errorMessage, log, errorFields } from '../util/log.js';
+import type { StoreFiles } from './open.js';
 
 /** A 1.x JS caller's `tenantId` would otherwise fall through to the default tenant without a sound. */
 function rejectLegacyTenantKey(entry: MemoryEntry): void {
@@ -203,17 +204,12 @@ export function replaceFtsRows(
 
 /** Row counts of a full-text index that has drifted from `memories`, re-synced after the count when `repair`; null when
  * the two agree or there is no index. */
-export function ftsDrift(hippoRoot: string, repair: boolean): { memories: number; fts: number } | null {
-  const db = openHippoDb(hippoRoot);
-  try {
-    if (!isFtsAvailable(db)) return null;
-    const counts = ftsRowCounts(db);
-    if (counts === null || counts.memories === counts.fts) return null;
-    if (repair) repairFtsDrift(db);
-    return counts;
-  } finally {
-    closeHippoDb(db);
-  }
+export function ftsDriftAt(db: DatabaseSyncLike, repair: boolean): { memories: number; fts: number } | null {
+  if (!isFtsAvailable(db)) return null;
+  const counts = ftsRowCounts(db);
+  if (counts === null || counts.memories === counts.fts) return null;
+  if (repair) repairFtsDrift(db);
+  return counts;
 }
 
 /** Stamp origin_project from the store's own location (parent of `<project>/.hippo`; the home store is '' =
@@ -222,6 +218,10 @@ export function ftsDrift(hippoRoot: string, repair: boolean): { memories: number
 export function stampOriginProject(hippoRoot: string, entry: MemoryEntry): MemoryEntry {
   if (entry.origin_project !== undefined) return entry;
   return { ...entry, origin_project: fallbackOrigin(hippoRoot) };
+}
+
+export function stampOriginProjectIn(files: StoreFiles, entry: MemoryEntry): MemoryEntry {
+  return stampOriginProject(files.hippoRoot, entry);
 }
 
 /** Import-time variant for a mirror with no origin field (an explicit null stays null), for rows predating the origin

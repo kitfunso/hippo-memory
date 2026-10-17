@@ -20,6 +20,7 @@ import { sqliteConsolidation } from '../../src/store/sqlite/consolidation-group.
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { loadConfig } from '../../src/core/config.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { handlesOf } from '../../src/store/open.js';
 
 function makeOkFetcher(content: string) {
   return vi.fn<typeof fetch>(async () => new Response(
@@ -100,7 +101,7 @@ describe('dedupe partitions by restricted scope', () => {
     writeEntry(home, { ...priv, strength: 0.9 });
     writeEntry(home, { ...pub, strength: 0.1 });
 
-    expect(deduplicateStore(sqliteConsolidation(home)).removed).toBe(0);
+    expect(deduplicateStore(sqliteConsolidation(handlesOf(home))).removed).toBe(0);
     expect(loadAllEntries(home, 'default').map((e) => e.scope).sort()).toEqual([null, 'slack:private:C1'].sort());
   });
 });

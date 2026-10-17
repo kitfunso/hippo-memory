@@ -9,15 +9,13 @@ import { createMemory, DEFAULT_HALF_LIFE_DAYS, type CreateMemoryOptions, type Me
 import { initStore } from '../../src/store/open.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
 import { batchWriteAndDelete } from '../../src/store/delete-and-batch.js';
-import { saveEmbeddingIndex } from '../../src/store/vector-index.js';
-import { loadRecallSearchEntries, loadVectorCandidateEntries, recallScopeFilter } from '../../src/store/search-rows.js';
-import { loadAmbientCandidates, loadContextCandidates, loadTextsHoldingWords } from '../../src/store/candidates.js';
+import { loadRecallSearchEntries, recallScopeFilter } from '../../src/store/search-rows.js';
 import { loadAmbientTallies } from '../../src/store/ambient.js';
-import { countSessionRawMemories, loadAllEntries } from '../../src/store/entry-reads.js';
+import { loadAllEntries } from '../../src/store/entry-reads.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { canReadScope, personalScopeOf, type ScopeActor } from '../../src/core/recall-scope.js';
 import { touchableScopeSql } from '../../src/store/rule-sql.js';
-import { loadLatestHandoff, saveSessionHandoff } from '../../src/store/handoffs.js';
+import { saveSessionHandoff } from '../../src/store/handoffs.js';
 import { briefFromReceipts } from '../../src/objects/project-briefs.js';
 import { saveItems, type ItemContext } from '../../src/store/compactions-record.js';
 import { _resetSharedStoreCacheForTests } from '../../src/core/config.js';
@@ -25,6 +23,10 @@ import { _resetProjectIdentityCacheForTests } from '../../src/core/project-ident
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { objectsAt } from '../_helpers/objects-at.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import {
+  saveEmbeddingIndex, loadAmbientCandidates, loadContextCandidates, loadTextsHoldingWords,
+  countSessionRawMemories, loadLatestHandoff, loadVectorCandidateEntries,
+} from '../_helpers/root-forms.js';
 
 const T = 'default';
 const OWN_A = 'personal:private:alice';

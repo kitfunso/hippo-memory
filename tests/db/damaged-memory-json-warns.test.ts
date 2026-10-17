@@ -4,10 +4,11 @@ import { rmSync } from 'node:fs';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
 import { loadAllEntries, readEntry } from '../../src/store/entry-reads.js';
-import { appendSessionEvent, listSessionEvents } from '../../src/store/sessions.js';
+import { appendSessionEvent } from '../../src/store/sessions.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
 import { _resetLogOnceForTests } from '../../src/util/log.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { listSessionEvents } from '../_helpers/root-forms.js';
 
 const TENANT = 'default';
 const PRIVATE_TEXT = 'private-tag-text';

@@ -2,8 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { openHippoDb, closeHippoDb, getSchemaVersion } from '../../src/db/index.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
 import { readEntry } from '../../src/store/entry-reads.js';
-import { deleteEntry, batchWriteAndDelete } from '../../src/store/delete-and-batch.js';
-import { applyRebuildResult } from '../../src/store/summaries.js';
+import { batchWriteAndDelete } from '../../src/store/delete-and-batch.js';
 import { Layer} from '../../src/core/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { queryAuditEvents } from '../../src/store/audit.js';
@@ -11,6 +10,7 @@ import { insertRejectedValue, rejectionDigest, normalizeValueForRejection } from
 import { RejectedValueError } from '../../src/core/api-errors.js';
 import { LATEST_SCHEMA_VERSION } from '../_helpers/schema-version.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { deleteEntry, applyRebuildResult } from '../_helpers/root-forms.js';
 
 function reject(home: string, text: string, reason: string): string {
   const digest = rejectionDigest(text);

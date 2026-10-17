@@ -12,12 +12,14 @@ import { loadConfig } from '../../src/core/config.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { rankRecall, type RankRecallOptions } from '../../src/api/recall/pipeline.js';
 import { searchBothHybrid } from '../../src/sharing/search-both.js';
-import { pushGoal, activeGoalsWithPolicies } from '../../src/store/goals.js';
-import { updateStats, appendConsolidationRun } from '../../src/store/index-and-stats.js';
+import { updateStats } from '../../src/store/index-and-stats.js';
+import { handlesOf } from '../../src/store/open.js';
 import { finishRecallAt } from '../../src/store/sqlite/last-recall-group.js';
-import { loadAmbientCandidates } from '../../src/store/candidates.js';
 import { flushStatsMirrors } from '../../src/store/mirrors.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
+import {
+  pushGoal, activeGoalsWithPolicies, appendConsolidationRun, loadAmbientCandidates,
+} from '../_helpers/root-forms.js';
 
 const roots: string[] = [];
 
@@ -136,12 +138,12 @@ describe('finishRecallAt', () => {
     const entries = [memory('first zephyrine cache row'), memory('second zephyrine cache row')];
     seed(root, entries);
     const ids = entries.map((e) => e.id);
-    const { result, statements } = recordStatements(() => finishRecallAt(root, {
+    const { result, statements } = recordStatements(() => handlesOf(root).on((db) => finishRecallAt(db, {
       goalLog: [],
       audit: [{ tenantId: 'default', actor: 'cli', op: 'recall' }],
       trace: { tenantId: 'default', pipeline: 'api', query: 'zephyrine', results: ids.map((memoryId) => ({ memoryId, score: 1 })) },
       strengthen: { ids, opts: { tenantId: 'default', recallBoostAblated: false } },
-    }));
+    })));
     expect(countMatching(statements, /^BEGIN/)).toBe(1);
     expect(result.traceId).not.toBeNull();
     expect([...result.strengthened].sort()).toEqual([...ids].sort());

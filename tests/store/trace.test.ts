@@ -3,11 +3,11 @@ import * as path from 'node:path';
 import { initStore } from '../../src/store/open.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
 import { loadAllEntries } from '../../src/store/entry-reads.js';
-import { listSessionEvents } from '../../src/store/sessions.js';
 import { createMemory } from '../../src/core/memory.js';
 import { renderTraceContent, parseSteps } from '../../src/consolidate/trace.js';
 import { hippoOut } from '../_helpers/spawn-hippo.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { listSessionEvents } from '../_helpers/root-forms.js';
 
 let tmpDir: string;
 let hippoDir: string;

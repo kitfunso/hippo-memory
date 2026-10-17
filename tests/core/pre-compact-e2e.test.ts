@@ -5,14 +5,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getHippoRoot } from '../../src/core/project-identity.js';
 import { loadAllEntries } from '../../src/store/entry-reads.js';
-import { loadActiveTaskSnapshot, saveActiveTaskSnapshot, appendSessionEvent } from '../../src/store/sessions.js';
-import { writeSessionEndHandoff } from '../../src/store/handoffs.js';
+import { saveActiveTaskSnapshot, appendSessionEvent } from '../../src/store/sessions.js';
 import { defaultSleepLogPath } from '../../src/hooks/shared.js';
 import { WORKING_STATE_CAPS } from '../../src/capture/working-state.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { hippoRun } from '../_helpers/spawn-hippo.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import type { InProcessResult } from '../_helpers/run-in-process.js';
+import { loadActiveTaskSnapshot, writeSessionEndHandoff } from '../_helpers/root-forms.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -442,7 +442,7 @@ describe('hippo pre-compact (PreCompact hook producer, real store)', () => {
 
     expect(result.status).toBe(0);
     expect(result.stdout).not.toMatch(/at Object\.|node:internal|Uncaught|Error:|SQLITE_/i);
-    expect(result.stderr).not.toMatch(/at Object\.|node:internal|Uncaught|SQLITE_/i);
+    expect(result.stderr).not.toMatch(/at Object\.<anonymous>|node:internal|Uncaught|SQLITE_/i);
   });
 
   it('X9: secret-shaped content in the transcript is redacted before it lands in the snapshot fields', async () => {

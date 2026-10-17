@@ -11,6 +11,7 @@ import { entryRejectRowAt, selectEntriesByIds, selectTenantTexts } from './entry
 import { stampOriginProject } from './entry-row.js';
 import { writeEntryDbOnly, writeEntryMirrors } from './entry-writes.js';
 import { purgeMirrorBestEffort } from './mirrors.js';
+import type { StoreFiles } from './open.js';
 import { archiveRawMemory, markMirrorCleaned } from './raw-archive.js';
 import {
   deleteRejectedValue,
@@ -151,7 +152,8 @@ function purgeRemovedMirrors(db: DatabaseSyncLike, hippoRoot: string, removal: R
 /** Applies one rejection in one write scope: the rejected-value row, the removal of every row in reach that holds the
  * text (live or dormant, whole or inside a merged row) and one reject_value audit row. Markdown mirrors follow the
  * commit. */
-export function applyRejectionAt(db: DatabaseSyncLike, hippoRoot: string, rejection: Rejection): AppliedRejection {
+export function applyRejectionAt(db: DatabaseSyncLike, files: StoreFiles, rejection: Rejection): AppliedRejection {
+  const { hippoRoot } = files;
   const { tenantId, actor, reason, memoryId } = rejection;
   const content = rejection.textOf(memoryId === undefined ? undefined : entryRejectRowAt(db, memoryId));
   const digest = rejectionDigest(content);

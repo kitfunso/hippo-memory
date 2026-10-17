@@ -4,7 +4,6 @@
  * rows never hold content or query text. Writes are best-effort: a ledger failure must not break recall. */
 import { open } from 'node:fs/promises';
 import { withWriteScope, type DatabaseSyncLike } from '../db/index.js';
-import { onHandle } from './open.js';
 import { type JsonValue, isJsonString, isJsonObjectLiteral } from '../util/json.js';
 import { DAY_MS } from '../util/time.js';
 import {
@@ -288,15 +287,13 @@ interface RereadDay {
 
 /** Replace a session's `reread` rows in `hippoRoot`'s store, one per {@link REREAD_SURFACES} surface and UTC day;
  * returns the tokens booked. */
-export function recordRereads(
-  hippoRoot: string,
+export function recordRereadsAt(
+  db: DatabaseSyncLike,
   tenantId: string,
   sessionId: string,
   calls: readonly ApiCall[],
 ): number {
-  return onHandle(hippoRoot, (db) => {
-    return replaceRereadRows(db, tenantId, sessionId, calls);
-  });
+  return replaceRereadRows(db, tenantId, sessionId, calls);
 }
 
 /** One transaction, so a refused row leaves the session's earlier re-read rows in place. */

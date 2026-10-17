@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { initStore } from '../../src/store/open.js';
+import { initStore, handlesOf } from '../../src/store/open.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { closeHippoDb, openHippoDb, runWithRequestStores, type DatabaseSyncLike } from '../../src/db/index.js';
@@ -18,7 +18,7 @@ import { failureHash, failureReport } from '../../src/capture/failure-reading.js
 import { WORKING_STATE_CAPS } from '../../src/capture/working-state.js';
 import { COMPACTION_ITEM_MAX_CHARS } from '../../src/util/compaction-items.js';
 import { compactResumeText } from '../../src/api/context-render.js';
-import { loadActiveTaskSnapshot, saveActiveTaskSnapshot, type ContinuityKey } from '../../src/store/sessions.js';
+import { saveActiveTaskSnapshot, type ContinuityKey } from '../../src/store/sessions.js';
 import { BadRequestError, ConflictError } from '../../src/core/api-errors.js';
 import type { Context } from '../../src/api/types.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
@@ -36,6 +36,7 @@ import {
   type CallerFailureRequest,
 } from '../../src/server.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { loadActiveTaskSnapshot } from '../_helpers/root-forms.js';
 
 const TENANT = 'acme-tenant';
 const META = { sessionId: 's1', trigger: 'auto', cwd: null, transcriptPath: null };
@@ -223,7 +224,7 @@ describe('snapshot_saved under a tenant the environment does not name', () => {
       const a = startCompaction(db, TENANT, { ...META, originProject: 'acme/app' });
       const b = startCompaction(db, TENANT, { ...META, sessionId: 's3', originProject: 'acme/app' });
       markSnapshotSaved(db, TENANT, a);
-      recordSnapshotSaved(root, TENANT, b, (m) => { throw new Error(m); });
+      recordSnapshotSaved(handlesOf(root).on, TENANT, b, (m) => { throw new Error(m); });
       expect([recordRow(db, a)?.snapshot_saved, recordRow(db, b)?.snapshot_saved]).toEqual([1, 1]);
     });
   });

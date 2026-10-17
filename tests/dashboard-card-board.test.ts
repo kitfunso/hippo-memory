@@ -10,18 +10,12 @@ import { execFileSync } from 'node:child_process';
 import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { saveSessionHandoff } from '../src/store/handoffs.js';
-import {
-  createCard,
-  claimCard,
-  addCardComment,
-  blockCard,
-  reviewCard,
-  completeCard,
-  heartbeatCard,
-} from '../src/store/cards.js';
 import { serveDashboard } from '../src/dashboard/dashboard.js';
 import { resolveTenantId } from '../src/store/tenant.js';
 import { makeRoot, makeStore } from './_helpers/make-root.js';
+import {
+  createCard, claimCard, addCardComment, blockCard, reviewCard, completeCard, heartbeatCard,
+} from './_helpers/root-forms.js';
 
 afterAll(() => {
   vi.unstubAllEnvs();

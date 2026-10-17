@@ -12,7 +12,7 @@ import * as path from 'node:path';
 import { initStore, HALF_LIFE_BASE_META_KEY, TYPED_HALF_LIFE_META_KEY } from '../../src/store/open.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
 import { readEntry, loadAllEntries } from '../../src/store/entry-reads.js';
-import { replaceDetectedConflicts, listMemoryConflicts, resolveConflict } from '../../src/store/conflicts.js';
+import { listMemoryConflicts, resolveConflict } from '../../src/store/conflicts.js';
 import {
   createMemory, deriveHalfLife, DEFAULT_HALF_LIFE_DAYS, LEGACY_TYPED_HALF_LIFE, type CreateMemoryOptions,
 } from '../../src/core/memory.js';
@@ -31,6 +31,7 @@ import { apiCtx } from '../_helpers/api-ctx.js';
 import { objectsAt } from '../_helpers/objects-at.js';
 import { loadConfig } from '../../src/core/config.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { replaceDetectedConflicts } from '../_helpers/root-forms.js';
 
 const dirs: string[] = [];
 const local = (root: string) => sqliteSyncStore(root).localFiles.consolidation;

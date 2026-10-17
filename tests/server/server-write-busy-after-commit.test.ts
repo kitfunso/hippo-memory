@@ -3,15 +3,14 @@ import { afterAll, beforeAll, describe, expect, it, vi, beforeEach } from 'vites
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { initStore } from '../../src/store/open.js';
-import { updateStatsUnlessBusy } from '../../src/store/index-and-stats.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { openHippoDb, closeHippoDb, getHippoDbPath, isSqliteBusy, runWithRequestStores, type DatabaseSyncLike } from '../../src/db/index.js';
-import { copyToGlobal } from '../../src/store/sqlite/global-promote.js';
 import { _resetLogOnceForTests } from '../../src/util/log.js';
 import { serve } from '../../src/server.js';
 import * as client from '../../src/cli/client.js';
 import { mcpErrorResponse } from '../../src/mcp/server.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { updateStatsUnlessBusy, copyToGlobal } from '../_helpers/root-forms.js';
 
 afterAll(() => {
   vi.unstubAllEnvs();

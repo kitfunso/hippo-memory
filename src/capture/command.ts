@@ -6,7 +6,6 @@ import { embedMemory } from '../search/embed-memories.js';
 import { sqliteSyncStore } from '../store/sqlite/store.js';
 import type { LocalFiles, Sync } from '../store/port.js';
 import type { Rejections } from '../store/port/rejections.js';
-import { EVERY_SCOPE, loadTextsHoldingWords } from '../store/candidates.js';
 import { getGlobalRoot } from '../sharing/global-store.js';
 import { initStore } from '../store/open.js';
 import { maskEmails, redactSecretsStrict } from '../util/secret-detect.js';
@@ -153,12 +152,10 @@ function storedKeysInView(
   options: CaptureOptions,
   extracted: readonly ExtractedItem[],
 ): Set<string> {
-  const stored = loadTextsHoldingWords(
-    targetRoot,
+  const stored = sqliteSyncStore(targetRoot).localFiles.captures.textsHolding(
     options.global ? undefined : options.tenantId,
     extracted.map((item) => longestWord(item.content)),
-    undefined,
-    EVERY_SCOPE,
+    { everyScope: true },
   );
   const origin = options.originProject;
   return storedTextKeys(origin === undefined

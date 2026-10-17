@@ -18,11 +18,11 @@ import { lessonFromFailure, failureSignature } from '../../src/capture/failure-r
 import { initStore } from '../../src/store/open.js';
 import { getHippoRoot } from '../../src/core/project-identity.js';
 import { loadAllEntries } from '../../src/store/entry-reads.js';
-import { loadActiveTaskSnapshot } from '../../src/store/sessions.js';
 import { installJsonHooks } from '../../src/hooks/json-hooks.js';
 import { runDoctor } from '../../src/doctor.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { loadActiveTaskSnapshot } from '../_helpers/root-forms.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();

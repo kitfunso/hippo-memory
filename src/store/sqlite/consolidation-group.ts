@@ -1,69 +1,91 @@
 import { SLEEP_DB_WAIT_MS } from '../../db/index.js';
-import { recordAuditEventsRowByRow, reportAuditWriteFailure } from '../audit.js';
-import { replaceDetectedConflicts } from '../conflicts.js';
-import { commitInChunks, deleteEntriesOneByOne, failedUnitOf, memoriesBackingObjects } from '../delete-and-batch.js';
-import { expireDormantBefore } from '../dormant.js';
-import { loadAllEntriesWithBase, loadCurrentDistilledEntries, loadEntriesPage } from '../entry-reads.js';
-import { ftsDrift } from '../entry-row.js';
-import { writeEntriesTogether, writeEntry } from '../entry-writes.js';
-import { loadPendingExtractionTenants, markPendingProcessedUpTo } from '../graph-queue.js';
-import { moveHalfLives, recordedHalfLifeBase } from '../half-life.js';
-import { appendConsolidationRun, incrementSleepCount, loadSessionDecayContext } from '../index-and-stats.js';
-import type { Consolidation } from '../port/consolidation.js';
-import { findPromotableSessions, listSessionEvents, traceExistsForSession } from '../sessions.js';
+import { recordAuditEventsRowByRowAt, reportAuditWriteFailure } from '../audit.js';
+import { replaceDetectedConflictsAt } from '../conflicts.js';
 import {
-  applyRebuildResult, childrenKey, clearSummaryDirtyAfterBuild, loadAllDirtySummaries, loadAllL2Summaries,
-  loadChildrenOfSummaries, loadChildrenOfSummary,
+  commitInChunksAt, deleteEntriesOneByOneAt, failedUnitOf, memoriesBackingObjectsAt,
+} from '../delete-and-batch.js';
+import { expireDormantBeforeAt } from '../dormant.js';
+import { loadAllEntriesWithBaseAt, loadCurrentDistilledEntriesAt, loadEntriesPageAt } from '../entry-reads.js';
+import { ftsDriftAt } from '../entry-row.js';
+import { writeEntriesTogetherAt, writeEntryAt } from '../entry-writes.js';
+import { loadPendingExtractionTenantsAt, markPendingProcessedUpToAt } from '../graph-queue.js';
+import { moveHalfLivesAt, recordedHalfLifeBaseAt } from '../half-life.js';
+import { appendConsolidationRunAt, incrementSleepCountAt, loadSessionDecayContextAt } from '../index-and-stats.js';
+import type { Consolidation } from '../port/consolidation.js';
+import { findPromotableSessionsAt, listSessionEventsAt, traceExistsForSessionAt } from '../sessions.js';
+import {
+  applyRebuildResultAt, childrenKey, clearSummaryDirtyAfterBuildAt, loadAllDirtySummariesAt, loadAllL2SummariesAt,
+  loadChildrenOfSummariesAt, loadChildrenOfSummaryAt,
 } from '../summaries.js';
 import { lazyTombstoneChecks } from '../tombstone-checks.js';
-import { loadStoredParticles, saveStoredParticles } from '../vector-index.js';
+import { loadStoredParticlesAt, saveStoredParticlesAt } from '../vector-index.js';
 import { errorMessage } from '../../util/log.js';
+import { type Handles, type OnHandle, openStore, waitingOpener } from '../open.js';
 
-/** Sleep's store work on the hippo.db under `hippoRoot`, each call on its own short-lived handle. */
-export function sqliteConsolidation(hippoRoot: string): Consolidation {
+/** Sleep's store work on its hippo.db, each call on its own short-lived handle. */
+export function sqliteConsolidation({ on, onAsync, open }: Handles): Consolidation {
+  // The wait is sleep's own, not a server request's 250 ms.
+  const sleepOpener = waitingOpener(SLEEP_DB_WAIT_MS);
+  const sleepStoreOpener = waitingOpener(SLEEP_DB_WAIT_MS, openStore);
   return {
-    entriesWithBase: () => loadAllEntriesWithBase(hippoRoot),
-    objectBackedIds: () => memoriesBackingObjects(hippoRoot),
-    ftsDrift: (repair) => ftsDrift(hippoRoot, repair),
-    sessionDecayContext: () => loadSessionDecayContext(hippoRoot),
-    tombstoneChecks: (dryRun) => lazyTombstoneChecks(hippoRoot, dryRun),
-    halfLifeBase: () => recordedHalfLifeBase(hippoRoot),
-    moveHalfLives: (to, opts, plan) => moveHalfLives(hippoRoot, to, opts, plan),
-    promotableSessions: (tenantId, sinceMs) => findPromotableSessions(hippoRoot, tenantId, sinceMs),
-    traceExists: (tenantId, sessionId) => traceExistsForSession(hippoRoot, tenantId, sessionId),
-    sessionEvents: (tenantId, opts) => listSessionEvents(hippoRoot, tenantId, opts),
-    storedParticles: () => loadStoredParticles(hippoRoot),
-    saveParticles: (particles) => saveStoredParticles(hippoRoot, particles),
-    // The wait is sleep's own, not a server request's 250 ms.
-    commitFlush: (components, opts) => commitInChunks(hippoRoot, components, { ...opts, busyWaitMs: SLEEP_DB_WAIT_MS }),
-    expireDormant: (cutoffIso, opts) =>
-      expireDormantBefore(hippoRoot, cutoffIso, { ...opts, busyWaitMs: SLEEP_DB_WAIT_MS }),
-    replaceConflicts: (detected, detectedAt) => replaceDetectedConflicts(hippoRoot, detected, detectedAt),
-    recordRun: (run) => appendConsolidationRun(hippoRoot, run),
-    countSleep: () => incrementSleepCount(hippoRoot),
+    entriesWithBase: () => on((db) => loadAllEntriesWithBaseAt(db), openStore),
+    objectBackedIds: () => on((db) => memoriesBackingObjectsAt(db)),
+    ftsDrift: (repair) => on((db) => ftsDriftAt(db, repair)),
+    sessionDecayContext: () => on((db) => loadSessionDecayContextAt(db), openStore),
+    tombstoneChecks: (dryRun) => lazyTombstoneChecks(open, dryRun),
+    halfLifeBase: () => on((db) => recordedHalfLifeBaseAt(db)),
+    moveHalfLives: (to, opts, plan) => on((db) => moveHalfLivesAt(db, to, opts, plan), openStore),
+    promotableSessions: (tenantId, sinceMs) => on((db) => findPromotableSessionsAt(db, tenantId, sinceMs), openStore),
+    traceExists: (tenantId, sessionId) => on((db) => traceExistsForSessionAt(db, tenantId, sessionId), openStore),
+    sessionEvents: (tenantId, opts) => on((db) => listSessionEventsAt(db, tenantId, opts), openStore),
+    storedParticles: () => on((db) => loadStoredParticlesAt(db)),
+    saveParticles: (particles) => on((db) => saveStoredParticlesAt(db, particles)),
+    commitFlush: async (components, opts) =>
+      components.length === 0
+        ? []
+        : onAsync((db, files) => commitInChunksAt(db, files, components, opts), sleepStoreOpener),
+    expireDormant: (cutoffIso, opts) => onAsync((db) => expireDormantBeforeAt(db, cutoffIso, opts), sleepOpener),
+    replaceConflicts: (detected, detectedAt) =>
+      on((db, files) => replaceDetectedConflictsAt(db, files, detected, detectedAt), openStore),
+    recordRun: (run) => on((db, files) => appendConsolidationRunAt(db, files, run), openStore),
+    countSleep: () => on((db) => incrementSleepCountAt(db), openStore),
     auditEachRow(events) {
-      const failed = recordAuditEventsRowByRow(hippoRoot, events);
+      const failed = on((db) => recordAuditEventsRowByRowAt(db, events));
       for (const { event, error } of failed) reportAuditWriteFailure(event.op, errorMessage(error), event.targetId);
       return failed.length;
     },
     reportAuditFailure: (op, reason) => reportAuditWriteFailure(op, reason),
-    entriesPage: (page) => loadEntriesPage(hippoRoot, undefined, page),
-    currentDistilledEntries: () => loadCurrentDistilledEntries(hippoRoot),
-    deleteOneByOne: (targets, opts) => deleteEntriesOneByOne(hippoRoot, targets, opts),
+    entriesPage: (page) => on((db) => loadEntriesPageAt(db, undefined, page), openStore),
+    currentDistilledEntries: () => on((db) => loadCurrentDistilledEntriesAt(db), openStore),
+    deleteOneByOne: (targets, opts) =>
+      targets.length === 0 ? [] : on((db, files) => deleteEntriesOneByOneAt(db, files, targets, opts), openStore),
     failedUnitOf,
-    dirtyGraphTenants: () => loadPendingExtractionTenants(hippoRoot),
-    markGraphDrained: (tenantId, maxId) => markPendingProcessedUpTo(hippoRoot, tenantId, maxId),
-    writeEntry: (entry) => writeEntry(hippoRoot, entry),
-    writeTogether: (entries) => writeEntriesTogether(hippoRoot, entries),
-    dirtySummaries: (limit) => loadAllDirtySummaries(hippoRoot, limit),
-    childrenOfSummary: (summaryId, tenantId) => loadChildrenOfSummary(hippoRoot, summaryId, tenantId),
+    dirtyGraphTenants: () => on((db) => loadPendingExtractionTenantsAt(db)),
+    markGraphDrained: (tenantId, maxId) => on((db) => markPendingProcessedUpToAt(db, tenantId, maxId)),
+    writeEntry: (entry) => on((db, files) => writeEntryAt(db, files, entry), openStore),
+    writeTogether: (entries) =>
+      entries.length === 0 ? 0 : on((db, files) => writeEntriesTogetherAt(db, files, entries), openStore),
+    ...summaryOps(on),
+  };
+}
+
+type SummaryOps = Pick<
+  Consolidation,
+  | 'dirtySummaries' | 'childrenOfSummary' | 'childrenOfSummaries' | 'applyRebuild' | 'clearSummaryDirty'
+  | 'unprofiledTopicSummaries'
+>;
+
+function summaryOps(on: OnHandle): SummaryOps {
+  return {
+    dirtySummaries: (limit) => on((db) => loadAllDirtySummariesAt(db, limit), openStore),
+    childrenOfSummary: (summaryId, tenantId) => on((db) => loadChildrenOfSummaryAt(db, summaryId, tenantId), openStore),
     childrenOfSummaries(summaries) {
-      const byParent = loadChildrenOfSummaries(hippoRoot, summaries);
+      const byParent = on((db) => loadChildrenOfSummariesAt(db, summaries), openStore);
       return (summary) => byParent.get(childrenKey(summary.tenant_id, summary.id)) ?? [];
     },
-    applyRebuild: (summary, patch) => applyRebuildResult(hippoRoot, summary, patch),
+    applyRebuild: (summary, patch) => on((db) => applyRebuildResultAt(db, summary, patch), openStore),
     clearSummaryDirty: (summaryId, tenantId, actor, source) =>
-      clearSummaryDirtyAfterBuild(hippoRoot, summaryId, tenantId, actor, source),
-    unprofiledTopicSummaries: () => loadAllL2Summaries(hippoRoot),
+      on((db) => clearSummaryDirtyAfterBuildAt(db, summaryId, tenantId, actor, source), openStore),
+    unprofiledTopicSummaries: () => on((db) => loadAllL2SummariesAt(db), openStore),
   };
 }

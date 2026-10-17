@@ -13,9 +13,10 @@ import { mapApiError } from '../../src/api/error-reply.js';
 import { importVault } from '../../src/importers/vault.js';
 import type { JsonValue } from '../../src/util/json.js';
 import { serve, type ServerHandle } from '../../src/server.js';
-import { loadEveryTenantEntries, readEntry } from '../../src/store/entry-reads.js';
+import { readEntry } from '../../src/store/entry-reads.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
+import { loadEveryTenantEntries } from '../_helpers/root-forms.js';
 
 const NO_OWNER_TEXT = 'personal memories need a key its owner minted, or a sign-in; owner ids over 239 characters or with control characters cannot hold them';
 

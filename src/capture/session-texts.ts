@@ -6,7 +6,6 @@ import { assertCallerIds, type CallerProject } from '../api/prompt-hook.js';
 import { assertCallerProject, projectNames } from '../core/project-identity.js';
 import { longestWord, storedTextKeys } from '../util/same-text.js';
 import { scrubForSharing } from './share-scrub.js';
-import { loadTextsHoldingWords } from '../store/candidates.js';
 import { requireGroup } from '../store/port.js';
 import { captureExtractedItems, type CaptureTally } from './command.js';
 import { extractFromTexts } from './extract.js';
@@ -55,12 +54,9 @@ export function captureSessionTexts(ctx: Context, req: SessionCaptureRequest): S
   const local = requireGroup(ctx.store, 'localFiles');
   // The project filter is classifyOriginProject's in SQL: the caller's rows and user-global rows block a copy, other
   // projects' rows do not.
-  const held = loadTextsHoldingWords(
-    local.hippoRoot,
-    ctx.tenantId,
-    items.map((i) => longestWord(i.content)),
-    projectNames(req.project),
-  );
+  const held = local.captures.textsHolding(ctx.tenantId, items.map((i) => longestWord(i.content)), {
+    project: projectNames(req.project),
+  });
   const tally = captureExtractedItems(
     local,
     {

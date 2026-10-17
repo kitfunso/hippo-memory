@@ -5,16 +5,13 @@ import { join } from 'node:path';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { recordFailure } from '../../src/store/failure-log.js';
 import type { SessionHandoff } from '../../src/core/handoff.js';
-import {
-  clearActiveTaskSnapshot,
-  closeTaskSnapshotsForSession,
-  loadActiveTaskSnapshot,
-  loadFreshActiveTaskSnapshot,
-  saveActiveTaskSnapshot,
-  type ContinuityKey,
-} from '../../src/store/sessions.js';
-import { loadLatestHandoff, saveSessionHandoff, writeSessionEndHandoff } from '../../src/store/handoffs.js';
+import { saveActiveTaskSnapshot, type ContinuityKey } from '../../src/store/sessions.js';
+import { saveSessionHandoff } from '../../src/store/handoffs.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import {
+  clearActiveTaskSnapshot, closeTaskSnapshotsForSession, loadActiveTaskSnapshot,
+  loadFreshActiveTaskSnapshot, loadLatestHandoff, writeSessionEndHandoff,
+} from '../_helpers/root-forms.js';
 
 const T = 'default';
 const A: ContinuityKey = { owner: 'alice', project: ['p'] };

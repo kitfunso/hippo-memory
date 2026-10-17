@@ -8,11 +8,11 @@ import {
 import { refreshParticleProperties } from '../../src/core/particle-refresh.js';
 import { float32ToBuffer, bufferToFloat32 } from '../../src/util/vector-codec.js';
 import { initializeParticle } from '../../src/core/physics.js';
-import { loadStoredParticles, resetStoredParticles, seedStoredParticle } from '../../src/store/vector-index.js';
 import type { PhysicsParticle } from '../../src/core/physics.js';
 import type { MemoryEntry } from '../../src/core/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { loadStoredParticles, resetStoredParticles, seedStoredParticle } from '../_helpers/root-forms.js';
 
 // ---------------------------------------------------------------------------
 // Helpers

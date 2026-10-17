@@ -7,10 +7,10 @@ import { createRequire, syncBuiltinESMExports } from 'module';
 import { openStore } from '../../src/store/open.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
 import { loadAllEntries } from '../../src/store/entry-reads.js';
-import { loadAmbientCandidates } from '../../src/store/candidates.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { loadAmbientCandidates } from '../_helpers/root-forms.js';
 
 const require = createRequire(import.meta.url);
 // SAFETY: node:sqlite has no bundled types; mirrors tests/db/db-open-write-free.test.ts.

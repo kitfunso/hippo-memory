@@ -13,7 +13,6 @@ import { storeExtractedFacts, type ExtractedFact } from '../../src/learn/extract
 import { createMemory, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
 import { autoShare, shareMemory, transferScore } from '../../src/sharing/share.js';
 import { getGlobalRoot } from '../../src/sharing/global-store.js';
-import { copyToGlobal } from '../../src/store/sqlite/global-promote.js';
 import { initStore } from '../../src/store/open.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
 import { loadAllEntries } from '../../src/store/entry-reads.js';
@@ -22,6 +21,7 @@ import { apiCtx } from '../_helpers/api-ctx.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { copyToGlobal } from '../_helpers/root-forms.js';
 const SEED = 'fix: retry the upload when the storage token expires mid-transfer';
 const ORDINARY = 'gotcha: powershell 5.1 has no pipeline chain operators, use if blocks';
 

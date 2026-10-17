@@ -10,7 +10,6 @@ import { queryAuditEvents } from '../../src/store/audit.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { loadConfig } from '../../src/core/config.js';
 import { sqliteStore, type HippoStore, type LastRecallWrites, type RecallWrites } from '../../src/store/index.js';
-import { loadLastRecall } from '../../src/store/index-and-stats.js';
 import { outcomeForLastRecall } from '../../src/api/index.js';
 import { withSqliteAllowed } from '../../src/db/index.js';
 import { adminActor } from '../../src/api/index.js';
@@ -20,6 +19,7 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { portOnlyStore } from '../_helpers/port-only-store.js';
 import { apiCtx, type FullContext } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { loadLastRecall } from '../_helpers/root-forms.js';
 
 let home: string;
 let hippoRoot: string;

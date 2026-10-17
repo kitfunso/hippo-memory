@@ -4,8 +4,7 @@ import { BadRequestError } from '../core/api-errors.js';
 import type { Context } from '../api/types.js';
 import type { HandoffEvidence } from '../core/handoff.js';
 import type { CallerProject } from '../api/prompt-hook.js';
-import { writeSessionEndHandoff } from '../store/handoffs.js';
-import { closeTaskSnapshotsForSession } from '../store/sessions.js';
+import { sqliteSyncStore } from '../store/sqlite/store.js';
 import { bindCaller, checkedWorkingState } from './caller-session.js';
 import type { WorkingState } from './working-state.js';
 
@@ -53,19 +52,13 @@ export function sessionEndHandoffForCaller(ctx: Context, req: CallerSessionEndRe
   const state = checkedWorkingState(req.workingState);
   const evidence = checkedEvidence(req.evidence);
   const key = bindCaller(ctx, req.sessionId, req.project);
-  const handoff = writeSessionEndHandoff(ctx.hippoRoot, {
-    tenantId: ctx.tenantId,
+  const { sessions } = sqliteSyncStore(ctx.hippoRoot);
+  const handoff = sessions.writeSessionEndHandoff(ctx.tenantId, {
     sessionId: req.sessionId,
     evidence,
     derived: state,
     key,
   });
-  const snapshotsClosed = closeTaskSnapshotsForSession(
-    ctx.hippoRoot,
-    ctx.tenantId,
-    req.sessionId,
-    'session-ended',
-    key,
-  );
+  const snapshotsClosed = sessions.closeSessionSnapshots(ctx.tenantId, req.sessionId, 'session-ended', key);
   return { handoffWritten: handoff !== null, snapshotsClosed };
 }

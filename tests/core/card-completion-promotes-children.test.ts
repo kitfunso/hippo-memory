@@ -3,10 +3,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRequire } from 'node:module';
 import type { Card } from '../../src/core/card.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import { claimCard, completeCard, createCard, loadCard, reviewCard } from '../../src/store/cards.js';
 import { cardDetailOf } from '../_helpers/card-detail.js';
 import { countMatching, recordStatements } from '../_helpers/count-statements.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { claimCard, completeCard, createCard, loadCard, reviewCard } from '../_helpers/root-forms.js';
 
 const TENANT = 'default';
 interface Preparer { prepare(sql: string): object }

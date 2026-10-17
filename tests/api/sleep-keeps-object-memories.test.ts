@@ -13,12 +13,14 @@ import { openIncident } from '../../src/objects/incidents.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
 import { loadAllEntries, readEntry } from '../../src/store/entry-reads.js';
-import { batchWriteAndDelete, deleteEntry, memoriesBackingObjects } from '../../src/store/delete-and-batch.js';
+import { batchWriteAndDelete } from '../../src/store/delete-and-batch.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { objectsAt } from '../_helpers/objects-at.js';
 import { sqliteConsolidation } from '../../src/store/sqlite/consolidation-group.js';
 import { loadConfig } from '../../src/core/config.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { deleteEntry, memoriesBackingObjects } from '../_helpers/root-forms.js';
+import { handlesOf } from '../../src/store/open.js';
 
 const roots: string[] = [];
 
@@ -124,6 +126,6 @@ it('control: a plain weaker copy is still removed by dedupe', () => {
   writeEntry(root, keeper);
   writeEntry(root, copy);
 
-  expect(deduplicateStore(sqliteConsolidation(root)).removed).toBe(1);
+  expect(deduplicateStore(sqliteConsolidation(handlesOf(root))).removed).toBe(1);
   expect(readEntry(root, copy.id)).toBeNull();
 });

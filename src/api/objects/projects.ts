@@ -1,6 +1,6 @@
 // Project names for every front end: list them, fold one into another, and repair old tags; the store opens hippo.db
 // and owns each transaction.
-// SHORTCUT: hippo.db only, since the store port has no project calls; a projects group when a served store needs them.
+// SHORTCUT: hippo.db only, through localFiles; a served group when another store needs project calls.
 import {
   listProjects,
   mergeProjects,
@@ -10,7 +10,8 @@ import {
   type ProjectSummary,
   type RepairResult,
 } from '../../sharing/project-merge.js';
-import { onProjectTags, type ProjectTagStore } from '../../store/project-tags.js';
+import { requireGroup } from '../../store/port.js';
+import type { ProjectTagStore } from '../../store/project-tags.js';
 import type { Context } from '../types.js';
 
 export type { MergeResult, ProjectCollision, ProjectSummary, RepairResult } from '../../sharing/project-merge.js';
@@ -24,7 +25,7 @@ export interface MergeProjectNamesOptions {
 }
 
 function onProjects<T>(ctx: Context, fn: (store: ProjectTagStore) => T): T {
-  return onProjectTags({ hippoRoot: ctx.hippoRoot, tenantId: ctx.tenantId, actor: ctx.actor.subject }, fn);
+  return requireGroup(ctx.store, 'localFiles').projectTags.on({ tenantId: ctx.tenantId, actor: ctx.actor.subject }, fn);
 }
 
 /** Live rows per project name in the caller's tenant, newest write first. */

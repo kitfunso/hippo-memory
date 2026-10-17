@@ -3,10 +3,11 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { writeEntry } from '../../src/store/entry-writes.js';
 import { readEntry } from '../../src/store/entry-reads.js';
-import { deleteEntry, batchWriteAndDelete } from '../../src/store/delete-and-batch.js';
+import { batchWriteAndDelete } from '../../src/store/delete-and-batch.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { layerDir, writeMarkdownMirror } from '../../src/store/mirrors.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { deleteEntry } from '../_helpers/root-forms.js';
 
 let root: string;
 

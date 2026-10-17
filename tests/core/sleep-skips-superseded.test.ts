@@ -6,11 +6,11 @@ import { Layer } from '../../src/core/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
 import { loadAllEntries } from '../../src/store/entry-reads.js';
-import { loadChildrenOfSummary, loadAllL2Summaries } from '../../src/store/summaries.js';
 import { consolidate } from '../../src/index.js';
 import { supersede } from '../../src/api/index.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { loadChildrenOfSummary, loadAllL2Summaries } from '../_helpers/root-forms.js';
 
 const DAY = 86_400_000;
 const roots: string[] = [];

@@ -1,7 +1,6 @@
 // The writer of the entities and relations tables. Every row resolves a consolidated source first, never a raw memory;
 // the schema triggers are the backstop for a write that skips this module.
 import { withWriteScope, type DatabaseSyncLike } from '../db/index.js';
-import { onHandle } from './open.js';
 import { assertTenantId } from '../core/tenant-id.js';
 import { MAX_ENTITY_NAME_LEN } from '../core/entity-name.js';
 import { errorMessage, log, errorFields } from '../util/log.js';
@@ -345,21 +344,19 @@ export function runGraphRebuildTransaction<T>(
 /** Remove graph rows sourced from one MIRRORLESS object by (type, id) on close: with no mirror memory `markGraphDirty`
  * cannot enqueue a rebuild. Fail-soft like `markGraphDirty`; the explicit relations DELETE also covers a relation whose
  * OWN provenance is this object. */
-export function removeGraphEntitiesForObject(
-  hippoRoot: string,
+export function removeGraphEntitiesForObjectAt(
+  db: DatabaseSyncLike,
   tenantId: string,
   sourceObjectType: SourceObjectType,
   sourceObjectId: number,
 ): void {
   try {
     assertTenantId('removeGraphEntitiesForObject', tenantId);
-    onHandle(hippoRoot, (db) => {
-      withWriteScope(db, 'remove_graph_entities', () => {
-        db.prepare(`DELETE FROM relations WHERE tenant_id = ? AND source_object_type = ? AND source_object_id = ?`)
-          .run(tenantId, sourceObjectType, sourceObjectId);
-        db.prepare(`DELETE FROM entities WHERE tenant_id = ? AND source_object_type = ? AND source_object_id = ?`)
-          .run(tenantId, sourceObjectType, sourceObjectId);
-      });
+    withWriteScope(db, 'remove_graph_entities', () => {
+      db.prepare(`DELETE FROM relations WHERE tenant_id = ? AND source_object_type = ? AND source_object_id = ?`)
+        .run(tenantId, sourceObjectType, sourceObjectId);
+      db.prepare(`DELETE FROM entities WHERE tenant_id = ? AND source_object_type = ? AND source_object_id = ?`)
+        .run(tenantId, sourceObjectType, sourceObjectId);
     });
   } catch (err) {
     log.warn(

@@ -25,10 +25,10 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createHmac } from 'node:crypto';
-import { loadEveryTenantEntries } from '../../src/store/entry-reads.js';
 import { serve, type ServerHandle } from '../../src/server.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { loadEveryTenantEntries } from '../_helpers/root-forms.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();

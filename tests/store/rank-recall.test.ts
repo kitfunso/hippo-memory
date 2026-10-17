@@ -4,13 +4,13 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { writeEntry } from '../../src/store/entry-writes.js';
 import { Layer, type MemoryEntry} from '../../src/core/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import { pushGoal } from '../../src/store/goals.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { loadConfig } from '../../src/core/config.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { rankRecall, type RankRecallCtx, type RankRecallOptions } from '../../src/api/recall/pipeline.js';
 import type { RerankerFn } from '../../src/rerankers/types.js';
 import { makeStore } from '../_helpers/make-root.js';
+import { pushGoal } from '../_helpers/root-forms.js';
 
 let hippoRoot: string;
 

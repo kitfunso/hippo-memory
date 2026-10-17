@@ -24,6 +24,7 @@ import {
   EMBEDDING_MODEL_META_KEY,
 } from '../../src/store/embeddings/index.js';
 import { makeStore } from '../_helpers/make-root.js';
+import { handlesOf } from '../../src/store/open.js';
 
 describe('embeddingInputText', () => {
   it('excludes tags starting with path: but keeps other tags', () => {
@@ -72,15 +73,15 @@ describe('reindex identity consistency', () => {
   });
 
   it('a store saved via saveStoredEmbeddingModel reports no reindex needed for the same model', () => {
-    saveStoredEmbeddingModel(hippoRoot, 'modelX');
+    saveStoredEmbeddingModel(handlesOf(hippoRoot).on, 'modelX');
     const fakeIndex = { some_id: [0.1, 0.2, 0.3] };
-    expect(embeddingModelRequiresReindex(hippoRoot, 'modelX', fakeIndex)).toBe(false);
+    expect(embeddingModelRequiresReindex(handlesOf(hippoRoot).on, 'modelX', fakeIndex)).toBe(false);
   });
 
   it('a store saved via saveStoredEmbeddingModel still requires reindex for a different model', () => {
-    saveStoredEmbeddingModel(hippoRoot, 'modelX');
+    saveStoredEmbeddingModel(handlesOf(hippoRoot).on, 'modelX');
     const fakeIndex = { some_id: [0.1, 0.2, 0.3] };
-    expect(embeddingModelRequiresReindex(hippoRoot, 'modelY', fakeIndex)).toBe(true);
+    expect(embeddingModelRequiresReindex(handlesOf(hippoRoot).on, 'modelY', fakeIndex)).toBe(true);
   });
 
   it('a legacy store with a bare (unversioned) stored model id requires reindex exactly once', () => {
@@ -94,12 +95,12 @@ describe('reindex identity consistency', () => {
     }
     const fakeIndex = { some_id: [0.1, 0.2, 0.3] };
 
-    expect(embeddingModelRequiresReindex(hippoRoot, 'modelX', fakeIndex)).toBe(true);
+    expect(embeddingModelRequiresReindex(handlesOf(hippoRoot).on, 'modelX', fakeIndex)).toBe(true);
 
     // The migration reindex re-saves the identity in the current format —
     // after that, the same model no longer requires reindex.
-    saveStoredEmbeddingModel(hippoRoot, 'modelX');
-    expect(embeddingModelRequiresReindex(hippoRoot, 'modelX', fakeIndex)).toBe(false);
+    saveStoredEmbeddingModel(handlesOf(hippoRoot).on, 'modelX');
+    expect(embeddingModelRequiresReindex(handlesOf(hippoRoot).on, 'modelX', fakeIndex)).toBe(false);
   });
 
   it('embeddingIndexIdentity folds text format 2 into the provider id', () => {

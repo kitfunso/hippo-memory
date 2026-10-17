@@ -5,22 +5,15 @@ import { join } from 'node:path';
 import { execFileSync, execSync } from 'node:child_process';
 import { Worker } from 'node:worker_threads';
 import { saveSessionHandoff } from '../../src/store/handoffs.js';
-import {
-  createCard,
-  loadCard,
-  loadCardRuns,
-  claimCard,
-  heartbeatCard,
-  blockCard,
-  reviewCard,
-  completeCard,
-  reclaimExpiredCards,
-} from '../../src/store/cards.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { CARD_LEASE_MS } from '../../src/core/card.js';
 import { cardDetailOf } from '../_helpers/card-detail.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import {
+  createCard, loadCard, loadCardRuns, claimCard, heartbeatCard, blockCard, reviewCard,
+  completeCard, reclaimExpiredCards,
+} from '../_helpers/root-forms.js';
 
 let root: string;
 

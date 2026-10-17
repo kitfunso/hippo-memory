@@ -7,11 +7,11 @@ import { rmSync } from 'node:fs';
 import { remember } from '../../src/api/index.js';
 import { resetSessionRings } from '../../src/api/recall/finish.js';
 import { runCli } from '../../src/cli.js';
-import { pushGoal } from '../../src/store/goals.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { makeEnv, type TestEnv } from '../_helpers/cli-env.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
+import { pushGoal } from '../_helpers/root-forms.js';
 
 const savedCwd = process.cwd();
 

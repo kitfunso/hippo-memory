@@ -22,13 +22,15 @@
 
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect } from 'vitest';
-import { loadAllEntries, loadEveryTenantEntries } from '../../src/store/entry-reads.js';
+import { loadAllEntries } from '../../src/store/entry-reads.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { remember } from '../../src/api/index.js';
 import { deduplicateStore, type DedupPair } from '../../src/consolidate/dedupe.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { sqliteConsolidation } from '../../src/store/sqlite/consolidation-group.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { loadEveryTenantEntries } from '../_helpers/root-forms.js';
+import { handlesOf } from '../../src/store/open.js';
 
 function ctxFor(home: string, tenantId: string): FullContext {
   return apiCtx(home, tenantId, { subject: 'test', role: 'admin' });
@@ -59,7 +61,7 @@ describe('deduplicateStore tenant partition', () => {
     const a = await remember(ctxFor(home, 'tenant-a'), { content: SHARED_CONTENT });
     const b = await remember(ctxFor(home, 'tenant-b'), { content: SHARED_CONTENT });
 
-    const result = deduplicateStore(sqliteConsolidation(home));
+    const result = deduplicateStore(sqliteConsolidation(handlesOf(home)));
 
     expect(result.removed).toBe(0);
     expect(result.pairs).toEqual([]);
@@ -90,7 +92,7 @@ describe('deduplicateStore tenant partition', () => {
     setStrength(home, bWeak.id, 0.5);
     setStrength(home, bStrong.id, 1.0);
 
-    const result = deduplicateStore(sqliteConsolidation(home));
+    const result = deduplicateStore(sqliteConsolidation(handlesOf(home)));
 
     expect(result.removed).toBe(2);
     expect(result.pairs.length).toBe(2);
@@ -123,8 +125,8 @@ describe('deduplicateStore tenant partition', () => {
     setStrength(home, bWeak.id, 0.5);
     setStrength(home, bStrong.id, 1.0);
 
-    const dry = deduplicateStore(sqliteConsolidation(home), { dryRun: true });
-    const real = deduplicateStore(sqliteConsolidation(home), { dryRun: false });
+    const dry = deduplicateStore(sqliteConsolidation(handlesOf(home)), { dryRun: true });
+    const real = deduplicateStore(sqliteConsolidation(handlesOf(home)), { dryRun: false });
 
     expect(dry.removed).toBe(2);
     expect(real.removed).toBe(2);

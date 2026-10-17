@@ -3,8 +3,7 @@ import type { FullContext } from '../_helpers/api-ctx.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { recordStatements, recordStatementsAsync, countMatching, STORE_OPEN } from '../_helpers/count-statements.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import { writeEntriesTogether, writeEntry } from '../../src/store/entry-writes.js';
-import { loadEveryTenantEntries } from '../../src/store/entry-reads.js';
+import { writeEntry } from '../../src/store/entry-writes.js';
 import { MEMORY_SELECT_COLUMNS } from '../../src/store/rows.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { insertRejectedValue, rejectionDigest } from '../../src/store/rejection.js';
@@ -18,6 +17,7 @@ import { apiCtx } from '../_helpers/api-ctx.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
 import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { writeEntriesTogether, loadEveryTenantEntries } from '../_helpers/root-forms.js';
 
 const FULL_ROW = `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories`;
 /** A full-row read of every row in the store, or of every current distilled row: no id, tenant or parent filter. */

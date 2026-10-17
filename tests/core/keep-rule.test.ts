@@ -12,7 +12,7 @@ import { AUTO_DELETABLE } from '../../src/store/rule-sql.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
 import { loadAllEntries, readEntry } from '../../src/store/entry-reads.js';
-import { batchWriteAndDelete, deleteEntry } from '../../src/store/delete-and-batch.js';
+import { batchWriteAndDelete } from '../../src/store/delete-and-batch.js';
 import { listMemoryConflicts } from '../../src/store/conflicts.js';
 import { consolidate } from '../../src/index.js';
 import { deduplicateStore } from '../../src/consolidate/dedupe.js';
@@ -23,6 +23,8 @@ import { forget, listDormant, sleep, supersede } from '../../src/api/index.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { sqliteConsolidation } from '../../src/store/sqlite/consolidation-group.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { deleteEntry } from '../_helpers/root-forms.js';
+import { handlesOf } from '../../src/store/open.js';
 
 
 /** Sleep and decay here run on the pre-1.46 7-day base, so memories fade within the test's horizon. */
@@ -280,7 +282,7 @@ describe('dedupe and audit leave a kept row alone', () => {
     writeEntry(root, keeper);
     writeEntry(root, copy);
 
-    deduplicateStore(sqliteConsolidation(root));
+    deduplicateStore(sqliteConsolidation(handlesOf(root)));
 
     expect(readEntry(root, keeper.id)).not.toBeNull();
     expect(readEntry(root, copy.id) !== null).toBe(survives);

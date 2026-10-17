@@ -11,10 +11,10 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { serve, type ServerHandle } from '../../src/server.js';
-import { closePrediction } from '../../src/store/predictions.js';
 import { savePrediction } from '../_helpers/save-prediction.js';
 import type { RecallResult } from '../../src/api/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { closePrediction } from '../_helpers/root-forms.js';
 
 beforeEach(() => {
   vi.stubEnv('HIPPO_ALLOW_KEYLESS_LOCAL', '1');

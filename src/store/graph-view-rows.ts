@@ -2,12 +2,12 @@
 import type { DatabaseSyncLike } from '../db/index.js';
 import {
   IN_LIST_CHUNK,
-  loadEntities,
-  loadEntitiesByIds,
-  loadEntitiesByName,
-  loadNeighborRelations,
-  loadRelations,
-  loadRelationsAmong,
+  loadEntitiesAt,
+  loadEntitiesByIdsAt,
+  loadEntitiesByNameAt,
+  loadNeighborRelationsAt,
+  loadRelationsAt,
+  loadRelationsAmongAt,
 } from './graph-reads.js';
 import type { GraphRows } from './port.js';
 import { placeholders } from '../util/sql.js';
@@ -20,9 +20,8 @@ export interface GraphViewSpec {
   readonly canRead?: CanRead;
 }
 
-/** The loaders take the root; `db` is the handle the caller's snapshot is open on, which every read here must use. */
+/** `db` is the handle the caller's snapshot is open on, which every read here must use. */
 interface GraphSource {
-  readonly hippoRoot: string;
   readonly db: DatabaseSyncLike;
   readonly tenantId: string;
 }
@@ -49,28 +48,28 @@ function readableOnly<T extends { memoryId: string | null }>(
   return items.filter((i) => i.memoryId === null || readable.has(i.memoryId));
 }
 
-function wholeGraphRows({ hippoRoot, db, tenantId }: GraphSource, limit: number): GraphRows {
-  const entities = loadEntities(hippoRoot, tenantId, { limit }, db);
-  const relations = loadRelations(hippoRoot, tenantId, { limit }, db);
+function wholeGraphRows({ db, tenantId }: GraphSource, limit: number): GraphRows {
+  const entities = loadEntitiesAt(db, tenantId, { limit });
+  const relations = loadRelationsAt(db, tenantId, { limit });
   return { entities, relations, truncated: entities.length >= limit || relations.length >= limit };
 }
 
 /** The named entities with their 1-hop neighbors and the edges among that union; null when the caller may read none of
  * the named ones. */
 function focusRows(
-  { hippoRoot, db, tenantId }: GraphSource,
+  { db, tenantId }: GraphSource,
   name: string,
   limit: number,
   canRead: CanRead | undefined,
 ): GraphRows | null {
   // The name is queried directly, so it is found on a graph larger than `limit`; one name can map to many entities, so
   // the matches are capped.
-  const named = loadEntitiesByName(hippoRoot, tenantId, name, { limit }, db);
+  const named = loadEntitiesByNameAt(db, tenantId, name, { limit });
   // A hidden focus must not answer through its neighbors that the name exists.
   const focus = readableOnly(db, tenantId, named, canRead);
   if (focus.length === 0) return null;
   const focusIds = focus.map((e) => e.id);
-  const hop = loadNeighborRelations(hippoRoot, tenantId, focusIds, { limit }, db);
+  const hop = loadNeighborRelationsAt(db, tenantId, focusIds, { limit });
   const union = new Set<number>(focusIds);
   let neighborsCapped = false;
   for (const r of hop) {
@@ -82,10 +81,10 @@ function focusRows(
     union.add(r.toEntityId);
   }
   const unionIds = [...union].slice(0, limit);
-  const entities = loadEntitiesByIds(hippoRoot, tenantId, unionIds, db);
+  const entities = loadEntitiesByIdsAt(db, tenantId, unionIds);
   // Both endpoints in the set: neighbor-to-neighbor edges are included, and the LIMIT never drops one for an
   // out-of-union row.
-  const relations = loadRelationsAmong(hippoRoot, tenantId, unionIds, { limit }, db);
+  const relations = loadRelationsAmongAt(db, tenantId, unionIds, { limit });
   const truncated =
     named.length >= limit ||
     hop.length >= limit || // neighbor scan capped -> a 1-hop neighbor may be omitted
@@ -97,13 +96,8 @@ function focusRows(
 
 /** What `GraphReads.graphRows` answers, read on `db`: the caller opens the one
  * snapshot that keeps entity ids and relation ids from two different rebuilds apart. */
-export function graphViewRows(
-  hippoRoot: string,
-  db: DatabaseSyncLike,
-  tenantId: string,
-  spec: GraphViewSpec,
-): GraphRows {
-  const source = { hippoRoot, db, tenantId };
+export function graphViewRows(db: DatabaseSyncLike, tenantId: string, spec: GraphViewSpec): GraphRows {
+  const source = { db, tenantId };
   const raw =
     spec.entity !== undefined
       ? focusRows(source, spec.entity, spec.limit, spec.canRead)

@@ -4,13 +4,13 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { cmdPreCompact } from '../../src/capture/compact.js';
 import { PRE_COMPACT_INSTRUCTION } from '../../src/capture/compaction-record.js';
-import { loadActiveTaskSnapshot } from '../../src/store/sessions.js';
 import { normalizeHookPayload } from '../../src/cli/stdin.js';
 import { copilotEventsJsonl, copilotPayload, writeCopilotSessionLog } from '../_helpers/copilot-hooks.js';
 import {
   SNAPSHOT_TASK, dispose, eventCount, events, eventsN, hippo, hippoAsync, ledgerLines, preCompactPayload, project, resumePayload,
   tableRows, withDb, writeTranscript, type Project,
 } from '../_helpers/delivery-boundary.js';
+import { loadActiveTaskSnapshot } from '../_helpers/root-forms.js';
 
 const T0 = '2099-01-01T00:00:00.000Z';
 const T0_PLUS_3S = '2099-01-01T00:00:03.000Z';

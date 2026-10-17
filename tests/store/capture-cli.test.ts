@@ -4,10 +4,10 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { initStore } from '../../src/store/open.js';
-import { loadEveryTenantEntries } from '../../src/store/entry-reads.js';
 import { runCli } from '../../src/cli.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { loadEveryTenantEntries } from '../_helpers/root-forms.js';
 
 const savedCwd = process.cwd();
 let cwd: string;

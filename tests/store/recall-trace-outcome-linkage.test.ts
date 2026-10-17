@@ -15,13 +15,13 @@ import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, vi } from 'vitest';
 import { rmSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { loadLastRecall, saveIndex } from '../../src/store/index-and-stats.js';
 import { openHippoDb, closeHippoDb, getHippoDbPath, withSharedStoreHandles, type DatabaseSyncLike } from '../../src/db/index.js';
 import { remember, retrieve, outcome, outcomeForLastRecall } from '../../src/api/index.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { runCli } from '../../src/cli.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { loadLastRecall, saveIndex } from '../_helpers/root-forms.js';
 
 /** `hippo <args>` run in this process from `cwd`, the call bin/hippo.js makes; a non-zero exit fails the test. */
 async function hippo(cwd: string, ...args: string[]): Promise<string> {

@@ -5,12 +5,12 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { serializeEntry } from '../../src/core/markdown.js';
-import { writeEntriesTogether } from '../../src/store/entry-writes.js';
 import { syncMirrorFiles } from '../../src/store/mirrors.js';
 import { writeRecallTrace } from '../../src/store/recall-trace.js';
 import { loadAllEntries } from '../../src/store/entry-reads.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { makeStore } from '../_helpers/make-root.js';
+import { writeEntriesTogether } from '../_helpers/root-forms.js';
 
 let home: string;
 

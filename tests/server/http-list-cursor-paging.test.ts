@@ -16,13 +16,13 @@ import { loadPolicies, savePolicy } from '../../src/objects/policies.js';
 import { loadSkills, saveSkill } from '../../src/objects/skills.js';
 import { loadProjectBriefs, saveProjectBrief } from '../../src/objects/project-briefs.js';
 import { loadCustomerNotes, saveCustomerNote } from '../../src/objects/customer-notes.js';
-import { loadAllPredictions } from '../../src/store/predictions.js';
 import { savePrediction } from '../_helpers/save-prediction.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { type JsonValue, isJsonString, isJsonObject } from '../../src/util/json.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { objectsAt } from '../_helpers/objects-at.js';
 import { loadConfig } from '../../src/core/config.js';
+import { loadAllPredictions } from '../_helpers/root-forms.js';
 
 const ROWS = 7;
 const PAGE = 3;

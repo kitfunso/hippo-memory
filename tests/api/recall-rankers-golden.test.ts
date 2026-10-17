@@ -13,7 +13,6 @@ import { setMeta } from '../../src/db/index.js';
 import { resetAllPhysicsState } from '../../src/db/physics-state.js';
 import { EMBEDDING_MODEL_META_KEY, upsertVectors } from '../../src/db/vector-store.js';
 import { embeddingIndexIdentity } from '../../src/store/embeddings/index.js';
-import { loadEntriesByIds } from '../../src/store/entry-reads.js';
 import { hashedVector, startHashedEmbeddings, type HashedEmbeddings } from '../_helpers/hashed-embedding-server.js';
 import { onDb } from '../_helpers/store-worker-server.js';
 import {
@@ -21,6 +20,7 @@ import {
 } from '../_helpers/recall-golden-seed.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
+import { loadEntriesByIds } from '../_helpers/root-forms.js';
 
 const MODEL = 'hashed-16';
 // Rows with a vector and no particle rank in physics' classic pool, so both physics pools are pinned.

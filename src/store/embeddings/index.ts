@@ -4,7 +4,8 @@
 
 import { cosineOf } from '../../core/cosine.js';
 import { EMBEDDING_MODEL_META_KEY } from '../../db/vector-store.js';
-import { indexedModel, saveIndexIdentity, storedIndexState } from '../vector-index.js';
+import type { OnHandle } from '../open.js';
+import { indexedModel, saveIndexIdentityAt, storedIndexStateAt } from '../vector-index.js';
 import { errorMessage, log, errorFields } from '../../util/log.js';
 import { rethrowIfSqliteBlocked } from '../../util/sqlite-blocked.js';
 
@@ -30,9 +31,9 @@ export function embeddingInputText(entry: { content: string; tags: string[] }): 
   return `${entry.content} ${tags.join(' ')}`.trim();
 }
 
-function loadStoredEmbeddingModel(hippoRoot: string): string | null {
+function loadStoredEmbeddingModel(on: OnHandle): string | null {
   try {
-    return storedIndexState(hippoRoot).storedModel;
+    return on((db) => storedIndexStateAt(db).storedModel);
   } catch (err) {
     rethrowIfSqliteBlocked(err);
     log.debug(`stored embedding model unreadable: ${errorMessage(err)}`, errorFields(err));
@@ -42,8 +43,8 @@ function loadStoredEmbeddingModel(hippoRoot: string): string | null {
 
 /** Persist the stored-index identity for `model` (see `embeddingIndexIdentity`); versioning happens here, not at call
  * sites, and must stay consistent with the compare side in `embeddingModelRequiresReindex`. */
-export function saveStoredEmbeddingModel(hippoRoot: string, model: string): void {
-  saveIndexIdentity(hippoRoot, embeddingIndexIdentity(model));
+export function saveStoredEmbeddingModel(on: OnHandle, model: string): void {
+  on((db) => { saveIndexIdentityAt(db, embeddingIndexIdentity(model)); });
 }
 
 /** The one rebuild rule every store applies to its indexed model. */
@@ -52,23 +53,23 @@ export function indexNeedsRebuild(indexed: string | null, providerId: string): b
 }
 
 function resolveIndexedEmbeddingModel(
-  hippoRoot: string,
+  on: OnHandle,
   index?: Record<string, number[]>,
 ): string | null {
-  const storedModel = loadStoredEmbeddingModel(hippoRoot);
+  const storedModel = loadStoredEmbeddingModel(on);
   if (storedModel) return storedModel;
   return indexedModel({
     storedModel,
-    hasVectors: index ? Object.keys(index).length > 0 : storedIndexState(hippoRoot).hasVectors,
+    hasVectors: index ? Object.keys(index).length > 0 : on((db) => storedIndexStateAt(db).hasVectors),
   });
 }
 
 export function embeddingModelRequiresReindex(
-  hippoRoot: string,
+  on: OnHandle,
   model: string,
   index?: Record<string, number[]>,
 ): boolean {
-  return indexNeedsRebuild(resolveIndexedEmbeddingModel(hippoRoot, index), model);
+  return indexNeedsRebuild(resolveIndexedEmbeddingModel(on, index), model);
 }
 
 /** Cosine similarity; handles unnormalized vectors, returns 0 for empty or mismatched vectors. */
