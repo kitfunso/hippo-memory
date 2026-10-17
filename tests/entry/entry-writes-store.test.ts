@@ -7,15 +7,15 @@ import { join } from 'node:path';
 import {
   archiveRaw, forget, outcome, outcomeForLastRecall, remember, supersede, type Actor, type ArchiveRawResult, type ForgetResult,
   type OutcomeResult, type RememberResult, type SupersedeResult,
-} from '../src/api/index.js';
-import { closeHippoDb, openHippoDb, withSqliteBlocked } from '../src/db/index.js';
-import { StoreNotPortedError } from '../src/util/sqlite-blocked.js';
-import { handleMcpRequest, type McpContext } from '../src/mcp/server.js';
-import { lastRecalledIds, resolveClientKey } from '../src/mcp/session-state.js';
-import { serve, type ServerHandle } from '../src/server.js';
-import { OTHER_STORE_MARKER } from '../src/entry/store-kit.js';
-import { inMemoryEntryWritesStore } from './_helpers/in-memory-entry-writes-store.js';
-import { seedTwoTenants, TENANT_A, type TwoTenantFixture } from './_helpers/store-conformance.js';
+} from '../../src/api/index.js';
+import { closeHippoDb, openHippoDb, withSqliteBlocked } from '../../src/db/index.js';
+import { StoreNotPortedError } from '../../src/util/sqlite-blocked.js';
+import { handleMcpRequest, type McpContext } from '../../src/mcp/server.js';
+import { lastRecalledIds, resolveClientKey } from '../../src/mcp/session-state.js';
+import { serve, type ServerHandle } from '../../src/server.js';
+import { OTHER_STORE_MARKER } from '../../src/entry/store-kit.js';
+import { inMemoryEntryWritesStore } from '../_helpers/in-memory-entry-writes-store.js';
+import { seedTwoTenants, TENANT_A, type TwoTenantFixture } from '../_helpers/store-conformance.js';
 
 const NOW = '2026-03-01T12:00:00.000Z';
 const admin: Actor = { subject: 'cli', role: 'admin' };

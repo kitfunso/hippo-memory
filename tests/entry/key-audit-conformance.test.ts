@@ -1,11 +1,11 @@
 // KeyAudit answers alike on hippo.db and on a store held in memory: the same values, the same errors and the same audit rows.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
-import type { AuditEvent } from '../src/entry/store-kit.js';
-import { inMemoryKeyAuditStore } from './_helpers/in-memory-key-audit-store.js';
+import type { AuditEvent } from '../../src/entry/store-kit.js';
+import { inMemoryKeyAuditStore } from '../_helpers/in-memory-key-audit-store.js';
 import {
   FIXTURE_REVOKED_AT, onBothStores, seedTwoTenants, TENANT_A, TENANT_B, type GroupCall, type SideResult, type TwoTenantFixture,
-} from './_helpers/store-conformance.js';
+} from '../_helpers/store-conformance.js';
 
 const NOW = '2026-03-01T12:00:05.000Z';
 const AT = '2026-03-01T12:00:00.000Z';

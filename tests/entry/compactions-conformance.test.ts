@@ -2,14 +2,14 @@
 // that restate held rows, meet a tombstone or fail the gate, over two tenants.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
-import type { CallerItems, CallerItemsSaved, MemoryEntry } from '../src/entry/store-kit.js';
-import { closeHippoDb, openHippoDb } from '../src/db/index.js';
-import { writeEntry } from '../src/store/entry-writes.js';
-import { insertRejectedValue, normalizeValueForRejection, rejectionDigest } from '../src/store/rejection.js';
-import { sqliteSyncStore } from '../src/store/sqlite/store.js';
-import { createMemory } from './_helpers/default-half-life-memory.js';
-import { inMemoryCompactionsStore } from './_helpers/in-memory-compactions-store.js';
-import { onBothStores, seedTwoTenants, TENANT_A, TENANT_B, type TwoTenantFixture } from './_helpers/store-conformance.js';
+import type { CallerItems, CallerItemsSaved, MemoryEntry } from '../../src/entry/store-kit.js';
+import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
+import { writeEntry } from '../../src/store/entry-writes.js';
+import { insertRejectedValue, normalizeValueForRejection, rejectionDigest } from '../../src/store/rejection.js';
+import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
+import { createMemory } from '../_helpers/default-half-life-memory.js';
+import { inMemoryCompactionsStore } from '../_helpers/in-memory-compactions-store.js';
+import { onBothStores, seedTwoTenants, TENANT_A, TENANT_B, type TwoTenantFixture } from '../_helpers/store-conformance.js';
 
 const SEEDED = '2026-03-01T11:58:00.000Z';
 const NOW = '2026-03-01T12:00:00.000Z';
