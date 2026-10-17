@@ -9,6 +9,7 @@ import { RECALL_RECORDING } from '../src/api/recall/finish.js';
 import type { CliCoreRecall } from '../src/api/recall/types.js';
 import { _resetAblationCacheForTests } from '../src/core/ablation.js';
 import { loadConfig } from '../src/core/config.js';
+import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
 import { queryAuditEvents, type AppendAuditOpts, type AuditEvent } from '../src/store/audit.js';
 import { loadEntriesByIds } from '../src/store/entry-reads.js';
 import { writeEntry } from '../src/store/entry-writes.js';
@@ -16,8 +17,7 @@ import { loadLastRecall } from '../src/store/index-and-stats.js';
 import { isJsonNumber } from '../src/util/json.js';
 import { apiCtx, type FullContext } from './_helpers/api-ctx.js';
 import { makeRoot } from './_helpers/make-root.js';
-import { CLEARED_ENV, FAKE_NOW, seeded, TENANT } from './_helpers/recall-golden-seed.js';
-import { onDb } from './_helpers/store-worker-server.js';
+import { CLEARED_ENV, FAKE_NOW, pinUpdatedAt, seeded, TENANT } from './_helpers/recall-golden-seed.js';
 
 const ROWS = [
   seeded('deploy pipeline uses blue green rollout', 'mem_o_a', '2026-01-28T00:00:00.000Z'),
@@ -59,6 +59,16 @@ function cliCore(): Pick<CliCoreRecall, 'rank'> {
   };
 }
 
+// Opened here: the store-worker helper also starts servers, so importing it would class this file as a process test.
+function onDb<T>(root: string, use: (db: DatabaseSyncLike) => T): T {
+  const db = openHippoDb(root);
+  try {
+    return use(db);
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
 function auditRows(): AuditEvent[] {
   return onDb(root, (db) => queryAuditEvents(db, { tenantId: TENANT })).reverse();
 }
@@ -90,6 +100,7 @@ beforeEach(() => {
   root = makeRoot('recall-paths-order');
   vi.stubEnv('HIPPO_HOME', join(root, 'global-home'));
   for (const row of ROWS) writeEntry(root, row);
+  pinUpdatedAt(root);
   seededAuditId = Math.max(0, ...auditRows().map((e) => e.id));
 });
 

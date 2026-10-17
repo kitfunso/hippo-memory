@@ -120,7 +120,7 @@ export function seedPortBranches(root: string): void {
 }
 
 /** writeEntry stamps updated_at from SQLite's real clock and recall breaks bm25 ties on it, so one stamp keeps the order fixed. */
-function pinUpdatedAt(root: string): void {
+export function pinUpdatedAt(root: string): void {
   const db = openHippoDb(root);
   try {
     db.prepare('UPDATE memories SET updated_at = ?').run('2026-02-01 00:00:00');
