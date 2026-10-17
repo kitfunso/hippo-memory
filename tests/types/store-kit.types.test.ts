@@ -7,6 +7,8 @@ import {
   type HippoStore, type MemoryEntry, type OptionalGroup, type StoreGroup, type StoreGroups, type SupersedeWrite,
 } from '../../src/entry/store-kit.js';
 
+declare const store: HippoStore;
+
 describe('hippo-memory/store-kit entry types', () => {
   it('sqliteStore takes a root path and returns a store with every optional group', () => {
     expectTypeOf(sqliteStore).parameters.toEqualTypeOf<[hippoRoot: string]>();
@@ -20,9 +22,9 @@ describe('hippo-memory/store-kit entry types', () => {
     expectTypeOf(hasGroup).returns.toEqualTypeOf<boolean>();
     expectTypeOf(requireGroup<'lastRecall'>).returns.toEqualTypeOf<StoreGroups['lastRecall']>();
     // @ts-expect-error the group comes after the store
-    typeOnly(() => hasGroup('base', {} as HippoStore));
+    typeOnly(() => hasGroup('base', store));
     // @ts-expect-error 'base' is always present, so it is not an optional group
-    typeOnly(() => requireGroup({} as HippoStore, 'base'));
+    typeOnly(() => requireGroup(store, 'base'));
   });
 
   it('the optional groups are a closed set of four names', () => {
@@ -34,7 +36,7 @@ describe('hippo-memory/store-kit entry types', () => {
     expectTypeOf<SupersedeWrite['successor']>().toEqualTypeOf<MemoryEntry>();
     // @ts-expect-error a supersede needs both the old id and the successor
     typeOnly((): SupersedeWrite => ({ oldId: 'm_1' }));
-    expect(typeof sqliteStore).toBe('function');
+    expect(sqliteStore).toBeTypeOf('function');
   });
 
   it('entryAfterOutcome takes the entry then a boolean and returns an entry', () => {

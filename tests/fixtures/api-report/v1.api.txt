@@ -2,7 +2,7 @@ entry/testing.d.ts: Box class
 entry/testing.d.ts: gone const
 index.d.ts: * from './all.js' star-re-export
 index.d.ts: Alias type
-index.d.ts: Shape interface
+index.d.ts: Options interface
 index.d.ts: Two re-export
 index.d.ts: default default
 index.d.ts: four re-export
