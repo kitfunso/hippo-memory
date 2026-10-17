@@ -15,7 +15,7 @@ import {
 import { configOf } from '../config-of.js';
 import { vetSecrets } from '../../util/secret-detect.js';
 import { assertCallerProject } from '../../core/project-identity.js';
-import { BadRequestError } from '../../core/api-errors.js';
+import { BadRequestError, ForbiddenError } from '../../core/api-errors.js';
 import { assertClientScope, canReadScope, personalScopeOf, ScopeForbiddenError } from '../../core/recall-scope.js';
 import { isQuarantineScope } from '../../trust/quarantine.js';
 import type { Context, StoreContext } from '../types.js';
@@ -97,6 +97,13 @@ function rememberScope(ctx: Context, opts: RememberOptions): string | null {
   return own;
 }
 
+/** A row's owner is the person behind the caller's key; only an admin may write one for someone else. */
+function assertOwnerIsCallers(ctx: Context, owner: string | undefined): void {
+  if (owner === undefined || owner === ctx.actor.owner) return;
+  if (ctx.actor.role === 'admin' || ctx.actor.hostAdmin) return;
+  throw new ForbiddenError("owner must be the caller's own unless the caller is an admin");
+}
+
 /** The vetted row a remember writes, with its scope and quarantine verdict, decided the same way on both paths. */
 interface PreparedRemember {
   readonly entry: MemoryEntry;
@@ -107,6 +114,7 @@ interface PreparedRemember {
 
 function prepareRemember(ctx: Context, opts: RememberOptions): PreparedRemember {
   if (opts.project) assertCallerProject(opts.project);
+  assertOwnerIsCallers(ctx, opts.owner);
   const requestedScope = rememberScope(ctx, opts);
   const vetted = vetSecrets(opts.content, opts.tags ?? [], opts.untrusted === true);
   const detection = opts.untrusted ? detectInstruction(vetted.content) : { flagged: false, reason: null };
