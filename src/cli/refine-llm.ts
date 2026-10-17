@@ -4,7 +4,7 @@
  * Uses fetch directly (no SDK dependency); on any failure the original memory is untouched. */
 
 import { MemoryEntry, Layer } from '../core/memory.js';
-import { REFINED_TAG, storeRefinement, type StoreContext } from '../api/index.js';
+import { REFINED_TAG, storeRefinement, type Context } from '../api/index.js';
 import { listMemories, listMemoriesByIds, type TenantReach } from '../api/memories/memories.js';
 import { cliApiContext } from './api-context.js';
 import { chunked } from '../util/chunked.js';
@@ -152,7 +152,7 @@ export async function refineStore(
 }
 
 async function refineOneEntry(
-  ctx: StoreContext,
+  ctx: Context,
   reach: TenantReach,
   entry: MemoryEntry,
   opts: RefineOptions,

@@ -55,13 +55,6 @@ import { loadRecallEntries } from '../search-rows.js';
 import { type ContinuityKey, listSessionEvents, loadActiveTaskSnapshot } from '../sessions.js';
 import { entriesWithoutVectorAt, loadStoredVectorViews, writeVectorsAt } from '../vector-index.js';
 
-/** `ctx` with its store filled: the one it carries, else hippo.db under its root. */
-export function withStore<C extends { readonly hippoRoot: string; readonly store?: HippoStore }>(
-  ctx: C,
-): C & { readonly store: HippoStore } {
-  return { ...ctx, store: ctx.store ?? sqliteStore(ctx.hippoRoot) };
-}
-
 /** Not on the synchronous store: the nearest-row scan yields to
  * the event loop, so this group answers only through Promises. */
 type AsyncOnly = 'vectors';

@@ -1,4 +1,4 @@
-import { archiveRaw, type StoreContext } from '../../api/index.js';
+import { archiveRaw, type Context } from '../../api/index.js';
 import type { ConnectorEvent } from '../../store/port.js';
 
 export interface DeletionInput {
@@ -17,7 +17,7 @@ export interface DeletionResult {
 
 /** Handles Slack `message_deleted`. The store logs the event in the archive's own transaction, so a crash cannot leave
  * a retry answering `not_found` where `duplicate` is due. */
-export async function handleMessageDeleted(ctx: StoreContext, input: DeletionInput): Promise<DeletionResult> {
+export async function handleMessageDeleted(ctx: Context, input: DeletionInput): Promise<DeletionResult> {
   const events = ctx.store.connectorEvents;
   const event: ConnectorEvent = { connector: 'slack', eventId: input.eventId };
   // The tenant in the lookup is load-bearing: without it a deletion event from

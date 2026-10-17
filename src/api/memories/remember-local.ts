@@ -11,7 +11,7 @@ import { embedMemory, type EmbedOutcome } from '../../search/embed-memories.js';
 import { errorMessage, log } from '../../util/log.js';
 import { getMemory } from './memories.js';
 import { remember } from './remember.js';
-import type { StoreContext } from '../types.js';
+import type { Context } from '../types.js';
 import { requireGroup } from '../../store/port.js';
 
 const WEAK_HALF_LIFE_FACTOR = 0.5;
@@ -58,7 +58,7 @@ export type LocalRememberOutcome =
 
 /** The gate's verdict on one write, or null where it does not
  * judge: the store has it off, or the write is pinned or forced. */
-async function salienceVerdict(ctx: StoreContext, input: LocalRememberInput): Promise<SalienceResult | null> {
+async function salienceVerdict(ctx: Context, input: LocalRememberInput): Promise<SalienceResult | null> {
   const { salience } = configOf(ctx);
   if (!salience.enabled || input.pinned || input.force) return null;
   // computeSalience compares against the last `recentWindow` rows only; below 1 its slice takes every row, so that case
@@ -77,7 +77,7 @@ async function salienceVerdict(ctx: StoreContext, input: LocalRememberInput): Pr
 
 /** The row `remember` just wrote, as the store holds it: the
  * report, the embedding and the extraction all work on that. */
-async function storedEntry(ctx: StoreContext, id: string): Promise<MemoryEntry> {
+async function storedEntry(ctx: Context, id: string): Promise<MemoryEntry> {
   const entry = await getMemory(ctx, id);
   if (!entry) throw new Error(`memory ${id} was written but cannot be read back`);
   return entry;
@@ -85,7 +85,7 @@ async function storedEntry(ctx: StoreContext, id: string): Promise<MemoryEntry> 
 
 /** Best-effort and slow (a model load or a network call), so the
  * caller is not held for it; a row left out of the index is logged. */
-function indexInBackground(ctx: StoreContext, entry: MemoryEntry): Promise<EmbedOutcome> {
+function indexInBackground(ctx: Context, entry: MemoryEntry): Promise<EmbedOutcome> {
   return embedMemory(ctx.hippoRoot, entry, undefined, undefined, configOf(ctx).embeddings).then((outcome) => {
     if (outcome === 'failed') {
       log.warn(
@@ -99,7 +99,7 @@ function indexInBackground(ctx: StoreContext, entry: MemoryEntry): Promise<Embed
 /** One local write on hippo.db: gate, write, read-back, counter, then the embedding, started and never awaited. A
  * refused value throws as `remember` does. */
 export async function rememberLocally(
-  ctx: StoreContext,
+  ctx: Context,
   input: LocalRememberInput,
 ): Promise<LocalRememberOutcome> {
   const schemaFit = schemaFitInStore(ctx.hippoRoot, ctx.tenantId, input.content, input.fitTags ?? input.tags);
@@ -149,7 +149,7 @@ export type FactExtraction =
 /** Extracts facts from a row just stored and stores them beside it.
  * Best-effort: a failure is named in the result, never thrown. */
 export async function extractRememberedFacts(
-  ctx: StoreContext,
+  ctx: Context,
   entry: MemoryEntry,
   request: FactExtractionRequest,
 ): Promise<FactExtraction> {

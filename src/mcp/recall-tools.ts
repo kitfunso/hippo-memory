@@ -9,7 +9,7 @@ import {
   drillDown as apiDrillDown,
   assemble as apiAssemble,
   getContext as apiGetContext,
-  type StoreContext,
+  type Context,
   type RecallOptions,
   type RecallSuppressionSummary,
 } from '../api/index.js';
@@ -177,7 +177,7 @@ export async function runRecallTool(call: ToolCall): Promise<string> {
   const { opts: recallOpts } = parseRecallRequest(toolParams(args));
   const { query, includeContinuity, sessionId } = recallOpts;
   const budget = Number(args.budget) || config.defaultBudget;
-  const apiCtx: StoreContext = {
+  const apiCtx: Context = {
     hippoRoot,
     tenantId,
     actor: mcpActor(ctx),
@@ -226,7 +226,7 @@ export async function runAssembleTool(
   const budget = Number(args.budget);
   const freshTailCount = Number(args.fresh_tail_count);
   const summarizeOlder = args.summarize_older !== false;
-  const apiCtx: StoreContext = {
+  const apiCtx: Context = {
     hippoRoot,
     tenantId,
     actor: mcpActor(ctx),
@@ -255,7 +255,7 @@ export async function runDrillTool({ args, ctx, hippoRoot, tenantId, store }: To
   const budget = Number(args.budget);
   // The inputSchema rejects a depth outside 1..10 before this runs, so no silent clamp hides the cap.
   const depth = args.depth === undefined ? undefined : Number(args.depth);
-  const apiCtx: StoreContext = {
+  const apiCtx: Context = {
     hippoRoot,
     tenantId,
     actor: mcpActor(ctx),

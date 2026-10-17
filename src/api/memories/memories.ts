@@ -4,17 +4,17 @@ import type { StrengthTallies } from '../../store/candidates.js';
 import { NotFoundError } from '../../core/api-errors.js';
 import { canTouchScope } from '../../core/recall-scope.js';
 import type { EntryCursor } from '../../store/entry-reads.js';
-import { requireHostAdmin, type Context, type StoreContext } from '../types.js';
+import { requireHostAdmin, type Context } from '../types.js';
 
 /** The row `id` in the caller's tenant, or null when it is missing or another tenant's. */
-export async function getMemory(ctx: StoreContext, id: string): Promise<MemoryEntry | null> {
+export async function getMemory(ctx: Context, id: string): Promise<MemoryEntry | null> {
   const [entry] = await ctx.store.entriesByIds([id], ctx.tenantId);
   return entry ?? null;
 }
 
 /** getMemory, but NotFound when the row is another person's
  * personal one, so the reply does not reveal that the id exists. */
-export async function getTouchableMemory(ctx: StoreContext, id: string): Promise<MemoryEntry | null> {
+export async function getTouchableMemory(ctx: Context, id: string): Promise<MemoryEntry | null> {
   const entry = await getMemory(ctx, id);
   if (!canTouchScope(ctx.actor, entry?.scope ?? null)) throw new NotFoundError(`Memory not found: ${id}`);
   return entry;
@@ -26,7 +26,7 @@ export interface MemoryStatus extends StrengthTallies {
 
 /** Tenant-wide counts behind the status verbs: strength tallies
  * at `now` (at risk is under `atRiskBelow`) and open conflicts. */
-export function getMemoryStatus(ctx: StoreContext, now: Date, atRiskBelow: number): Promise<MemoryStatus> {
+export function getMemoryStatus(ctx: Context, now: Date, atRiskBelow: number): Promise<MemoryStatus> {
   return ctx.store.reports.memoryStatus(ctx.tenantId, now, atRiskBelow);
 }
 
@@ -46,7 +46,7 @@ const LIST_PAGE_SIZE = 1000;
 
 /** Every memory row in reach, oldest first, read `pageSize` rows per query so no single read grows with the store. */
 export async function listMemories(
-  ctx: StoreContext,
+  ctx: Context,
   reach: TenantReach = {},
   opts: { pageSize?: number } = {},
 ): Promise<MemoryEntry[]> {
@@ -63,14 +63,14 @@ export async function listMemories(
 }
 
 /** How many memory rows the whole store holds, counted in SQL. */
-export async function countAllMemories(ctx: StoreContext): Promise<number> {
+export async function countAllMemories(ctx: Context): Promise<number> {
   requireHostAdmin(ctx, 'Reading every tenant');
   return ctx.store.reports.countEntries();
 }
 
 /** The rows in reach among `ids`; a missing id or one out of reach is absent. */
 export async function listMemoriesByIds(
-  ctx: StoreContext,
+  ctx: Context,
   ids: readonly string[],
   reach: TenantReach = {},
 ): Promise<MemoryEntry[]> {

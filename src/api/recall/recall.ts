@@ -35,7 +35,7 @@ import type {
   RecallResultItem,
   ContinuityBlock,
 } from './types.js';
-import { type Context, type StoreContext, ownerOrSubject, RecallContractError } from '../types.js';
+import { type Context, ownerOrSubject, RecallContractError } from '../types.js';
 import {
   anchoringRows,
   availabilityRows,
@@ -65,7 +65,7 @@ function inCallerProject(entry: MemoryEntry, opts: RecallOptions): boolean {
 
 /** The one recall entry: ranks with the ranker `opts` names, then writes the recall, and records it in full for a
  * surface that sets `recordAs`. Only the CLI core ranker writes last_retrieval_ids (contract lock). */
-export async function retrieve(ctx: StoreContext, opts: RecallOptions): Promise<RecallResult> {
+export async function retrieve(ctx: Context, opts: RecallOptions): Promise<RecallResult> {
   assertScopeRequestAllowed(ctx.actor, opts.scope);
   if (opts.cliCore) return retrieveWithCliCore(ctx, opts, opts.cliCore);
   const windowSize = recallWindowSize(opts);
@@ -104,7 +104,7 @@ function shownBand(opts: RecallOptions, result: RecallResult): ShownList {
 
 /** The default ranker: the SQL BM25 band, reordered by hybrid or physics search when `mode` asks. */
 async function retrieveBand(
-  ctx: StoreContext,
+  ctx: Context,
   store: HippoStore,
   opts: RecallOptions,
   windowSize: number,
@@ -168,7 +168,7 @@ function recallSearchArgs(ctx: Context, opts: RecallOptions, limit: number, own:
 }
 
 /** api.retrieve's vector arm: the recall load's exact-scope rule, current rows only. */
-function recallVectorSpec(ctx: StoreContext, opts: RecallOptions, own: string | undefined): HybridVectorCandidates {
+function recallVectorSpec(ctx: Context, opts: RecallOptions, own: string | undefined): HybridVectorCandidates {
   return {
     tenantId: ctx.tenantId,
     scope: recallScopeFilter(opts.scope, 'exact', own),
@@ -184,7 +184,7 @@ const SHOW_RANKED_LEXICAL_WINDOW = 1000;
 /** `retrieve` under `showRanked`: physics when `mode` says so, hybrid
  * otherwise, over a wide lexical window plus the nearest vectors. */
 async function retrieveFromStore(
-  ctx: StoreContext,
+  ctx: Context,
   opts: RecallOptions,
   windowSize: number,
   show: NonNullable<RecallOptions['showRanked']>,
@@ -233,7 +233,7 @@ async function retrieveFromStore(
 type RankedResults = Awaited<ReturnType<typeof searchByEngine>>;
 
 // One goal read serves both boosts; the ranked list's log rows come first, so its scores win the log's first-write.
-async function boostRankedByGoals(ctx: StoreContext, opts: RecallOptions, ranked: RankedResults) {
+async function boostRankedByGoals(ctx: Context, opts: RecallOptions, ranked: RankedResults) {
   const noLog: GoalRecallLogRow[] = [];
   const goals =
     opts.sessionId && !opts.goalTag
@@ -255,7 +255,7 @@ function withVectorCandidates(pool: MemoryEntry[], ranked: RankedResults): Memor
 }
 
 function shownAuditAndTrace(
-  ctx: StoreContext,
+  ctx: Context,
   opts: RecallOptions,
   shownIds: readonly string[],
   ranked: RankedResults,

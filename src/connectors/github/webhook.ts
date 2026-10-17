@@ -16,7 +16,7 @@ import { parkInDlq } from '../dlq.js';
 import { githubDlq, type DlqBucket } from './dlq.js';
 import { resolveTenantForGitHub } from './tenant-routing.js';
 import { computeDeletionKey as computeGitHubDeletionKey } from './signature.js';
-import type { StoreContext } from '../../api/index.js';
+import type { Context } from '../../api/index.js';
 import type { HippoStore } from '../../store/index.js';
 import { resolveTenantId } from '../../store/tenant.js';
 import {
@@ -176,7 +176,7 @@ async function routeSignedDelivery(d: SignedDelivery): Promise<void> {
     return;
   }
 
-  const ctx: StoreContext = {
+  const ctx: Context = {
     hippoRoot: d.hippoRoot,
     tenantId: resolvedTenant,
     actor: { subject: 'connector:github', role: 'admin' },
@@ -245,7 +245,7 @@ async function parseEnvelopeOrPark(d: SignedDelivery): Promise<SignedEnvelope | 
 /** Ingests, archives or parks by event header; false when no guard matched the body. */
 async function dispatchGitHubEvent(
   d: SignedDelivery,
-  ctx: StoreContext,
+  ctx: Context,
   body: SignedEnvelope,
   deliveryId: string,
   routing: DlqRouting,

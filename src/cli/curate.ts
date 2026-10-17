@@ -95,7 +95,7 @@ async function cmdForget(
 }
 
 async function archiveForgottenRaw(
-  ctx: api.StoreContext,
+  ctx: api.Context,
   id: string,
   reason: string | null,
 ): Promise<void> {
@@ -110,7 +110,7 @@ async function archiveForgottenRaw(
   }
 }
 
-async function reportForgetFailure(ctx: api.StoreContext, id: string, cause: unknown): Promise<void> {
+async function reportForgetFailure(ctx: api.Context, id: string, cause: unknown): Promise<void> {
   if (cause instanceof RawAppendOnlyError) {
     // The delete was refused by the append-only trigger — this is a raw
     // memory, not a missing one. Point the user at the archive path.
@@ -371,7 +371,7 @@ export async function handleDormant({ hippoRoot, tenantId, args, flags }: Comman
   printDormantRows(rows, queryArgs.length > 0, root);
 }
 
-async function changeDormant(ctx: api.StoreContext, sub: 'restore' | 'forget', id: string): Promise<void> {
+async function changeDormant(ctx: api.Context, sub: 'restore' | 'forget', id: string): Promise<void> {
   if (!id) {
     fail(`Usage: hippo dormant ${sub} <id>`);
   }
@@ -448,7 +448,7 @@ export async function handleQuarantine({ hippoRoot, tenantId, args, flags }: Com
 }
 
 async function decideQuarantined(
-  ctx: api.StoreContext,
+  ctx: api.Context,
   sub: 'approve' | 'reject',
   id: string,
 ): Promise<void> {

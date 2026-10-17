@@ -52,7 +52,6 @@ export { entryAfterOutcome } from '../core/memory.js';
 export { rejectionDigest } from '../store/rejection.js';
 export { RejectedValueError } from '../core/api-errors.js';
 export { ownScopeTouches } from '../core/recall-scope.js';
-export type { HippoDbContext, StoreContext } from '../api/types.js';
 export type { ApiKeyListItem, ApiKeyListRow, ApiKeyRecord, ListApiKeysOpts, NewApiKey } from '../store/auth.js';
 export type { KeysetPosition } from '../util/keyset.js';
 // The types HippoStore's methods take and return, so an add-on store can implement them from this subpath.

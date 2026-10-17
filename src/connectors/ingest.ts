@@ -1,6 +1,6 @@
 // The write half every connector's ingest shares, after its own pre-check of the event log.
 
-import { remember, type RememberOptions, type StoreContext } from '../api/index.js';
+import { remember, type RememberOptions, type Context } from '../api/index.js';
 import type { ConnectorEvent } from '../store/port.js';
 import { RejectedValueError } from '../core/api-errors.js';
 
@@ -14,7 +14,7 @@ export interface IngestResult {
 /** Stores `opts` once per event key; null `opts` (an empty body) and a tombstoned value are logged with no memory,
  * so a redelivery acks instead of retrying. */
 export async function rememberWithEventLog(
-  ctx: StoreContext,
+  ctx: Context,
   event: ConnectorEvent,
   opts: RememberOptions | null,
 ): Promise<IngestResult> {
@@ -32,7 +32,7 @@ export async function rememberWithEventLog(
   }
 }
 
-async function markSkipped(ctx: StoreContext, event: ConnectorEvent): Promise<IngestResult> {
+async function markSkipped(ctx: Context, event: ConnectorEvent): Promise<IngestResult> {
   await ctx.store.connectorEvents.markEventSeen(event);
   return { status: 'skipped', memoryId: null };
 }

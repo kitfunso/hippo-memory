@@ -14,7 +14,7 @@ export type { FailureSummary } from '../store/failure-log.js';
 export { classifyOriginProject } from '../core/project-identity.js';
 
 export { RecallContractError, adminActor, ownerOrSubject, requireHostAdmin } from './types.js';
-export type { Actor, Context, HippoDbContext, StoreContext } from './types.js';
+export type { Actor, Context, StoreContext } from './types.js';
 export { remember } from './memories/remember.js';
 export type { RememberLocal, RememberOptions, RememberResult } from './memories/remember.js';
 export { extractRememberedFacts, rememberLocally } from './memories/remember-local.js';

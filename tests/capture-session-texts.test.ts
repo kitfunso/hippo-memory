@@ -4,6 +4,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import type { Context } from '../src/api/index.js';
+import { sqliteStore } from '../src/store/sqlite/store.js';
 import { BadRequestError } from '../src/core/api-errors.js';
 import { queryAuditEvents } from '../src/store/audit.js';
 import { extractFromTexts } from '../src/capture/extract.js';
@@ -46,7 +47,7 @@ afterEach(() => {
   fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
 
-const ctxFor = (hippoRoot: string, tenantId = 'default'): Context => ({ hippoRoot, tenantId, actor: { subject: ACTOR, role: 'member' } });
+const ctxFor = (hippoRoot: string, tenantId = 'default'): Context => ({ hippoRoot, store: sqliteStore(hippoRoot), tenantId, actor: { subject: ACTOR, role: 'member' } });
 const req = (texts: readonly string[], over: Partial<SessionCaptureRequest> = {}): SessionCaptureRequest =>
   ({ sessionId: 'sess-1', project: CALLER, texts, ...over });
 const contents = (hippoRoot: string, tenantId = 'default'): string[] => loadAllEntries(hippoRoot, tenantId).map((e) => e.content).sort();

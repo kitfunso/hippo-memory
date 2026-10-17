@@ -14,7 +14,7 @@ import { type JsonValue, isJsonString } from '../../util/json.js';
 import { MAX_ID_LEN } from '../../util/limits.js';
 import { estimateTokens } from '../../util/token-text.js';
 import type { ContextOptions } from '../context-types.js';
-import type { Context, StoreContext } from '../types.js';
+import type { Context } from '../types.js';
 import { configAtRoot, configOf } from '../config-of.js';
 import { rankRecall, type RankRecallResult, type RankSource } from './pipeline.js';
 import {
@@ -196,7 +196,7 @@ export function parseContextRequest(params: RequestParams): ParsedContextRequest
 }
 
 export async function retrieveWithCliCore(
-  ctx: StoreContext,
+  ctx: Context,
   opts: RecallOptions,
   core: CliCoreRanker,
 ): Promise<RecallResult> {
@@ -260,7 +260,7 @@ interface ShownRanking {
 /** Audit rows first: a recall they cannot be written for leaves no
  * strengthen, trace, marker or count, as under the other rankers. */
 async function recordShown(
-  ctx: StoreContext,
+  ctx: Context,
   store: HippoStore,
   opts: RecallOptions,
   core: CliCoreRecall,
@@ -301,7 +301,7 @@ async function recordShown(
 }
 
 /** The second store ranked, as the caller's own store when its root is the one searched, so its graph walks once. */
-function rankGlobal(ctx: StoreContext, sources: CliCoreRanker['sources']): RankSource | undefined {
+function rankGlobal(ctx: Context, sources: CliCoreRanker['sources']): RankSource | undefined {
   if (sources === undefined) return undefined;
   if (sources.globalRoot === ctx.hippoRoot) return { store: ctx.store, config: configOf(ctx) };
   return { store: sources.globalStore, config: configAtRoot(ctx, sources.globalRoot) };
@@ -348,7 +348,7 @@ function traceOf(
 
 // A non-empty list is also the last recall, one write with its trace so `hippo outcome` never pairs these ids with an
 // older trace; an empty one leaves the marker on the previous recall.
-function finishShown(ctx: StoreContext, writes: LastRecallWrites, marks: boolean): Promise<number | null | void> {
+function finishShown(ctx: Context, writes: LastRecallWrites, marks: boolean): Promise<number | null | void> {
   if (!marks) return ctx.store.finishRecall(writes);
   return requireGroup(ctx.store, 'lastRecall').finishRecall(writes, undefined);
 }
