@@ -5,6 +5,8 @@ import { isSlackEventEnvelope, isSlackMessageEvent, type SlackEventEnvelope } fr
 import { ingestMessage } from './ingest.js';
 import { handleMessageDeleted } from './deletion.js';
 import { parkInDlq } from '../dlq.js';
+import { createReplayWindow } from '../replay-window.js';
+import { DAY_MS } from '../../util/time.js';
 import { slackDlq, type DlqBucket } from './dlq.js';
 import { resolveTenantForSlackTeam } from './tenant-routing.js';
 import type { Context } from '../../api/index.js';
@@ -55,7 +57,7 @@ export async function handleSlackEventsWebhook(request: WebhookRequest, store: H
   ) {
     throw new HttpError(401, 'invalid Slack signature');
   }
-  await routeSignedSlackPayload({
+  await routeUnlessReplayed({
     hippoRoot: opts.hippoRoot,
     store,
     res,
@@ -63,6 +65,26 @@ export async function handleSlackEventsWebhook(request: WebhookRequest, store: H
     signature: sigStr,
     slackTimestamp: tsStr,
   });
+}
+
+// The timestamp check alone lets a captured request replay for five minutes; this window refuses the second copy.
+const seenSignatures = createReplayWindow(DAY_MS, 10_000);
+
+/** Routes a verified request once: the signature covers the timestamp and the body, so a repeat is the same request. */
+async function routeUnlessReplayed(d: SignedSlackRequest): Promise<void> {
+  const replayKey = `${d.hippoRoot}
+${d.signature}`;
+  if (!seenSignatures.claim(replayKey, Date.now())) {
+    sendJson(d.res, 200, { ok: true, status: 'duplicate' });
+    return;
+  }
+  try {
+    await routeSignedSlackPayload(d);
+  } catch (err) {
+    // A request that failed left nothing stored, so Slack's retry must get through.
+    seenSignatures.release(replayKey);
+    throw err;
+  }
 }
 
 /** One signed request and where to answer it; every stage below parks into the DLQ through it. */

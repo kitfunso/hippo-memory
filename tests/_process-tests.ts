@@ -285,6 +285,7 @@ export const PROCESS_TESTS: readonly string[] = [
   'slack-hardening.test.ts',
   'slack-webhook-multi-workspace-tenant.test.ts',
   'slack-webhook-parse-failure-tenant.test.ts',
+  'slack-webhook-replay.test.ts',
   'slack-webhook-route.test.ts',
   'slack-workspaces-cli.test.ts',
   'sleep-chunked-flush.test.ts',
