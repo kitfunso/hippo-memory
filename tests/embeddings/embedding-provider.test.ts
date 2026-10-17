@@ -2,10 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { resolveEmbeddingProvider } from '../src/embeddings/provider.js';
-import { embeddingModelRequiresReindex, saveStoredEmbeddingModel } from '../src/store/embeddings/index.js';
-import { saveEmbeddingIndex } from '../src/store/vector-index.js';
-import { loadConfig } from '../src/core/config.js';
+import { resolveEmbeddingProvider } from '../../src/embeddings/provider.js';
+import { embeddingModelRequiresReindex, saveStoredEmbeddingModel } from '../../src/store/embeddings/index.js';
+import { saveEmbeddingIndex } from '../../src/store/vector-index.js';
+import { loadConfig } from '../../src/core/config.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();

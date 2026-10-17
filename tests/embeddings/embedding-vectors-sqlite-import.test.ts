@@ -2,17 +2,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
-import { writeEntry } from '../src/store/entry-writes.js';
-import { batchWriteAndDelete, deleteEntry } from '../src/store/delete-and-batch.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
-import { openHippoDb, closeHippoDb, getMeta, setMeta, getSchemaVersion, getCurrentSchemaVersion } from '../src/db/index.js';
-import { embeddingInputText, saveStoredEmbeddingModel } from '../src/store/embeddings/index.js';
-import { embedAll } from '../src/search/embed-memories.js';
-import { loadEmbeddingIndex, saveEmbeddingIndex } from '../src/store/vector-index.js';
-import type { EmbeddingProvider } from '../src/embeddings/provider.js';
-import { decodeVector, deleteOrphanVectors, encodeVector, rankVectorRows, topVectorMatches, type VectorMatch, type VectorRow } from '../src/db/vector-store.js';
-import { sqliteSyncStore } from '../src/store/sqlite/store.js';
-import { makeRoot } from './_helpers/make-root.js';
+import { writeEntry } from '../../src/store/entry-writes.js';
+import { batchWriteAndDelete, deleteEntry } from '../../src/store/delete-and-batch.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
+import { openHippoDb, closeHippoDb, getMeta, setMeta, getSchemaVersion, getCurrentSchemaVersion } from '../../src/db/index.js';
+import { embeddingInputText, saveStoredEmbeddingModel } from '../../src/store/embeddings/index.js';
+import { embedAll } from '../../src/search/embed-memories.js';
+import { loadEmbeddingIndex, saveEmbeddingIndex } from '../../src/store/vector-index.js';
+import type { EmbeddingProvider } from '../../src/embeddings/provider.js';
+import { decodeVector, deleteOrphanVectors, encodeVector, rankVectorRows, topVectorMatches, type VectorMatch, type VectorRow } from '../../src/db/vector-store.js';
+import { sqliteSyncStore } from '../../src/store/sqlite/store.js';
+import { makeRoot } from '../_helpers/make-root.js';
 
 
 let root: string;

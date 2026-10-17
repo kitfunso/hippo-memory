@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
+import { DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { loadConfig } from '../src/core/config.js';
+import { loadConfig } from '../../src/core/config.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -100,7 +100,7 @@ describe('embedding model configuration', () => {
   it('resolves the configured embedding model when no explicit override is provided', async () => {
     writeConfig(tmpDir, 'custom/model');
 
-    const { resolveEmbeddingModel } = await import('../src/embeddings/local.js');
+    const { resolveEmbeddingModel } = await import('../../src/embeddings/local.js');
 
     expect(resolveEmbeddingModel(loadConfig(tmpDir).embeddings)).toBe('custom/model');
   });
@@ -110,11 +110,11 @@ describe('embedding model configuration', () => {
     try {
       writeVoyageConfig(tmpDir, 'custom/model', stub.url);
 
-      const { resolveEmbeddingProvider } = await import('../src/embeddings/provider.js');
-      const { saveStoredEmbeddingModel } = await import('../src/store/embeddings/index.js');
-      const { saveEmbeddingIndex } = await import('../src/store/vector-index.js');
-      const { hybridSearch } = await import('../src/entry/folder-search.js');
-      const { createMemory } = await import('../src/core/memory.js');
+      const { resolveEmbeddingProvider } = await import('../../src/embeddings/provider.js');
+      const { saveStoredEmbeddingModel } = await import('../../src/store/embeddings/index.js');
+      const { saveEmbeddingIndex } = await import('../../src/store/vector-index.js');
+      const { hybridSearch } = await import('../../src/entry/folder-search.js');
+      const { createMemory } = await import('../../src/core/memory.js');
 
       // The provider is built from the configured model (real resolver, no
       // interception): 'voyage:custom/model' proves 'custom/model' flowed
@@ -145,8 +145,8 @@ describe('embedding model configuration', () => {
   it('treats a legacy embedding index as stale when the configured model changes', async () => {
     writeConfig(tmpDir, 'custom/model');
 
-    const { embeddingModelRequiresReindex } = await import('../src/store/embeddings/index.js');
-    const { saveEmbeddingIndex } = await import('../src/store/vector-index.js');
+    const { embeddingModelRequiresReindex } = await import('../../src/store/embeddings/index.js');
+    const { saveEmbeddingIndex } = await import('../../src/store/vector-index.js');
     saveEmbeddingIndex(tmpDir, { mem_legacy: [1, 0, 0] });
 
     expect(embeddingModelRequiresReindex(tmpDir, 'custom/model')).toBe(true);
@@ -157,10 +157,10 @@ describe('embedding model configuration', () => {
     try {
       writeVoyageConfig(tmpDir, 'custom/model', stub.url);
 
-      const { saveStoredEmbeddingModel } = await import('../src/store/embeddings/index.js');
-      const { saveEmbeddingIndex } = await import('../src/store/vector-index.js');
-      const { hybridSearch } = await import('../src/entry/folder-search.js');
-      const { createMemory } = await import('../src/core/memory.js');
+      const { saveStoredEmbeddingModel } = await import('../../src/store/embeddings/index.js');
+      const { saveEmbeddingIndex } = await import('../../src/store/vector-index.js');
+      const { hybridSearch } = await import('../../src/entry/folder-search.js');
+      const { createMemory } = await import('../../src/core/memory.js');
 
       // Real staleness: the cached index was built under a DIFFERENT model
       // identity than the one config.json now selects, so
@@ -184,10 +184,10 @@ describe('embedding model configuration', () => {
     try {
       writeVoyageConfig(tmpDir, 'custom/model', stub.url);
 
-      const { resolveEmbeddingProvider } = await import('../src/embeddings/provider.js');
-      const { saveStoredEmbeddingModel } = await import('../src/store/embeddings/index.js');
-      const { hybridSearch } = await import('../src/entry/folder-search.js');
-      const { createMemory } = await import('../src/core/memory.js');
+      const { resolveEmbeddingProvider } = await import('../../src/embeddings/provider.js');
+      const { saveStoredEmbeddingModel } = await import('../../src/store/embeddings/index.js');
+      const { hybridSearch } = await import('../../src/entry/folder-search.js');
+      const { createMemory } = await import('../../src/core/memory.js');
 
       // In sync (no reindex needed) but genuinely empty: no embeddings.json
       // was ever written for this store, so no candidate has a cached vector.

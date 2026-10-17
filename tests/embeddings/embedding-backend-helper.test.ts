@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { skipWithoutEmbeddings } from './_helpers/embedding-backend.js';
+import { skipWithoutEmbeddings } from '../_helpers/embedding-backend.js';
 
 describe('skipWithoutEmbeddings', () => {
   it('skips when the backend is missing and the variable is unset', () => {
