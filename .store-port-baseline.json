@@ -4,7 +4,7 @@
   "storeBranches": 0,
   "routesNeedingHippoDb": 2,
   "sqliteOnlyRoutes": 0,
-  "routesOnLoop": 12,
+  "routesOnLoop": 3,
   "twinFunctions": 0,
   "sqlOutside": 0,
   "txLiterals": 0,

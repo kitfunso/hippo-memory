@@ -461,8 +461,13 @@ async function bindClaimed(opts: ServeOpts, plan: BootPlan): Promise<ServerHandl
 function frozenAddonRoutes(addonRoutes: ServeOpts['routes']): NonNullable<ServeOpts['routes']> {
   // A frozen copy, so a route the caller adds or renames after boot never skips the check below.
   const routes = Object.freeze(
-    (addonRoutes ?? []).map(({ path, handler, storeReady }) =>
-      Object.freeze(storeReady === undefined ? { path, handler } : { path, handler, storeReady }),
+    (addonRoutes ?? []).map(({ path, handler, storeReady, loop }) =>
+      Object.freeze({
+        path,
+        handler,
+        ...(storeReady !== undefined && { storeReady }),
+        ...(loop !== undefined && { loop }),
+      }),
     ),
   );
   assertAddonRoutes(routes);

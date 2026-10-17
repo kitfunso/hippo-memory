@@ -627,11 +627,15 @@ export async function dispatchAddonRoute(
   const route = method === 'POST' ? opts.routes?.find((r) => r.path === path) : undefined;
   if (!route) return false;
   noteAccess(req, { route: route.path });
-  const ctx = await buildContextWithAuth(req, opts);
-  assertRoutePorted(opts, route.storeReady ?? 'localFiles');
-  noteAccess(req, { tenant: ctx.tenantId });
-  const body = await parseJsonBody(req, ctx);
-  sendJson(res, 200, await route.handler({ ctx, body }));
+  const answer = async (): Promise<void> => {
+    const ctx = await buildContextWithAuth(req, opts);
+    assertRoutePorted(opts, route.storeReady ?? 'localFiles');
+    noteAccess(req, { tenant: ctx.tenantId });
+    const body = await parseJsonBody(req, ctx);
+    sendJson(res, 200, await route.handler({ ctx, body }));
+  };
+  // The add-on, not core, knows whether its handler reaches hippo.db only through the store's worker-backed methods.
+  await (route.loop === 'off' ? opts.offLoop(answer) : answer());
   return true;
 }
 

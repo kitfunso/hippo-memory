@@ -81,6 +81,9 @@ function withFixture(files: Record<string, string>, baseline: Partial<Counts> | 
   }
 }
 
+/** A built-in route outside V1_ROUTES, off the loop, as route-table.ts declares them. */
+const HOST = "const HOST_ROUTES = {\n  health: { method: 'GET', path: '/health', loop: 'off' },\n} as const satisfies Readonly<Record<string, HostRoute>>;\n";
+
 const list = (run: Run) =>
   Object.fromEntries(
     run('--list')
@@ -147,13 +150,13 @@ describe('check-store-port.mjs', () => {
 
   it('counts store ternaries and kind checks in src/api, twins, and routes that need hippo.db', () => {
     const api = "export function fooThroughStore() {}\nexport const f = (ctx: any) => (ctx.store ? 1 : 2);\nexport const g = (store: any) => store.kind !== 'sqlite';\nexport const h = ({ store }: any) => (store ? 1 : 2);\n";
-    const server = "const V1_ROUTES = [\n  { method: 'GET', path: '/a', handler: a },\n  { method: 'GET', path: '/b', storeReady: 'localFiles', handler: b },\n];\n";
+    const server = "const V1_ROUTES = [\n  { method: 'GET', path: '/a', handler: a },\n  { method: 'GET', path: '/b', storeReady: 'localFiles', handler: b },\n];\n" + HOST;
     withFixture({ 'src/api/a.ts': api, 'src/server/route-table.ts': server }, null, ({ run }) => {
       expect(list(run)).toMatchObject({ storeBranches: '3', twinFunctions: '1', routesNeedingHippoDb: '1' });
     });
   });
 
-  it("counts routes on the loop: rows without `loop: 'off'` plus the five routes outside the table, and reads 0 with no route table", () => {
+  it("counts routes on the loop: rows and host routes without `loop: 'off'` plus MCP tools on localFiles, and reads 0 with no route table", () => {
     const rows = [
       "  { method: 'GET', path: '/a', handler: a },",
       "  { method: 'GET', path: '/b', storeReady: 'base', loop: 'off', handler: b },",
@@ -161,8 +164,11 @@ describe('check-store-port.mjs', () => {
       "  { method: 'GET', path: \"/loop: 'off'\", handler: d },",
       "  { method: 'GET', path: '/e', loop: 'on', handler: e },",
     ];
-    withFixture({ 'src/server/route-table.ts': `const V1_ROUTES: readonly Route[] = [\n${rows.join('\n')}\n];\n` }, null, ({ run }) => {
-      expect(list(run).routesOnLoop).toBe('8');
+    const host = "const HOST_ROUTES = {\n  health: { method: 'GET', path: '/health', loop: 'off' },\n  mcp: { method: 'POST', path: '/mcp' },\n} as const;\n";
+    const tools = "const TOOL_HANDLERS: ReadonlyMap<string, ToolEntry> = new Map<string, ToolEntry>([\n  ['a', { run: a }],\n  ['b', toolOn('localFiles', b)],\n  ['c', { storeReady: 'localFiles', run: c }],\n  ['d', toolOn('lastRecall', d)],\n]);\n";
+    const files = { 'src/server/route-table.ts': `const V1_ROUTES: readonly Route[] = [\n${rows.join('\n')}\n];\n${host}`, 'src/mcp/request.ts': tools };
+    withFixture(files, null, ({ run }) => {
+      expect(list(run).routesOnLoop).toBe('6');
     });
     withFixture({ 'src/a.ts': 'export const a = 1;\n' }, null, ({ run }) => {
       expect(list(run).routesOnLoop).toBe('0');
@@ -170,17 +176,17 @@ describe('check-store-port.mjs', () => {
   });
 
   it("fails when a row drops `loop: 'off'`, and --update locks in a row that gains it", () => {
-    const table = (second: string) => `const V1_ROUTES = [\n  { method: 'GET', path: '/a', loop: 'off', handler: a },\n  { method: 'GET', path: '/b', ${second}handler: b },\n];\n`;
-    withFixture({ 'src/server/route-table.ts': table('') }, { routesOnLoop: 5 }, ({ run }) => {
+    const table = (second: string) => `const V1_ROUTES = [\n  { method: 'GET', path: '/a', loop: 'off', handler: a },\n  { method: 'GET', path: '/b', ${second}handler: b },\n];\n${HOST}`;
+    withFixture({ 'src/server/route-table.ts': table('') }, { routesOnLoop: 0 }, ({ run }) => {
       const r = run();
       expect(r.status).toBe(1);
-      expect(r.stderr).toContain('routesOnLoop: 5 -> 6');
+      expect(r.stderr).toContain('routesOnLoop: 0 -> 1');
       expect(run('--update').status).toBe(1);
     });
-    withFixture({ 'src/server/route-table.ts': table("loop: 'off', ") }, { routesOnLoop: 6 }, ({ run, baseline }) => {
+    withFixture({ 'src/server/route-table.ts': table("loop: 'off', ") }, { routesOnLoop: 1 }, ({ run, baseline }) => {
       expect(run().status).toBe(0);
       expect(run('--update').status).toBe(0);
-      expect(baseline().routesOnLoop).toBe(5);
+      expect(baseline().routesOnLoop).toBe(0);
     });
   });
 
@@ -307,7 +313,7 @@ describe('check-store-port.mjs', () => {
   });
 
   it('reads route status from the syntax tree: localFiles and sqliteOnly rows need hippo.db, a comment does not', () => {
-    const table = "const V1_ROUTES = [\n  { method: 'GET', path: '/a', /* storeReady: 'localFiles' */ handler: a },\n  { method: 'GET', path: '/b', storeReady: 'localFiles', handler: b },\n  { method: 'GET', path: '/e', storeReady: 'vectorViews', handler: e },\n  { method: 'POST', path: '/c', sqliteOnly: 'runs the local process', handler: c },\n];\n";
+    const table = "const V1_ROUTES = [\n  { method: 'GET', path: '/a', /* storeReady: 'localFiles' */ handler: a },\n  { method: 'GET', path: '/b', storeReady: 'localFiles', handler: b },\n  { method: 'GET', path: '/e', storeReady: 'vectorViews', handler: e },\n  { method: 'POST', path: '/c', sqliteOnly: 'runs the local process', handler: c },\n];\n" + HOST;
     withFixture({ 'src/server/route-table.ts': table }, null, ({ run }) => {
       expect(list(run)).toMatchObject({ routesNeedingHippoDb: '2', sqliteOnlyRoutes: '1' });
     });
@@ -338,7 +344,7 @@ describe('check-store-port.mjs', () => {
   });
 
   it('fails and names a sqliteOnly route the baseline does not list, and --update will not add it', () => {
-    const table = "const V1_ROUTES = [\n  { method: 'POST', path: '/x', sqliteOnly: 'local only', handler: x },\n  { method: 'POST', path: '/y', sqliteOnly: 'local only', handler: y },\n];\n";
+    const table = "const V1_ROUTES = [\n  { method: 'POST', path: '/x', sqliteOnly: 'local only', handler: x },\n  { method: 'POST', path: '/y', sqliteOnly: 'local only', handler: y },\n];\n" + HOST;
     withFixture({ 'src/server/route-table.ts': table }, { sqliteOnlyRoutes: 2, sqliteOnlyRoutesList: ['POST /x'] }, ({ run, baseline }) => {
       const r = run();
       expect(r.status).toBe(1);
@@ -355,6 +361,23 @@ describe('check-store-port.mjs', () => {
       expect(list(run).storeImportsInDomain).toBe('1');
       expect(run().stderr).toContain('storeImportsInDomain: 0 -> 1');
     });
+  });
+
+  it('exits 1 naming the table when HOST_ROUTES is missing or spread, or a TOOL_HANDLERS entry is no known form', () => {
+    const v1 = "const V1_ROUTES = [\n  { method: 'GET', path: '/a', loop: 'off', handler: a },\n];\n";
+    const cases: [Record<string, string>, string][] = [
+      [{ 'src/server/route-table.ts': v1 }, 'HOST_ROUTES'],
+      [{ 'src/server/route-table.ts': `${v1}const HOST_ROUTES = { ...MORE };\n` }, 'HOST_ROUTES'],
+      [{ 'src/server/route-table.ts': v1 + HOST, 'src/mcp/request.ts': 'const TOOL_HANDLERS = new Map(ENTRIES);\n' }, 'TOOL_HANDLERS'],
+      [{ 'src/server/route-table.ts': v1 + HOST, 'src/mcp/request.ts': "const TOOL_HANDLERS = new Map([\n  ['a', entryFor('a')],\n]);\n" }, 'TOOL_HANDLERS'],
+    ];
+    for (const [files, named] of cases) {
+      withFixture(files, null, ({ run }) => {
+        const r = run('--list');
+        expect(r.status, JSON.stringify(files)).toBe(1);
+        expect(r.stderr).toContain(named);
+      });
+    }
   });
 
   it('exits 1 when src/server/route-table.ts has no V1_ROUTES', () => {

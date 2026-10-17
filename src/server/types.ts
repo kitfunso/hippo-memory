@@ -35,12 +35,13 @@ export interface AddonCall {
   readonly body: Readonly<Record<string, JsonValue>>;
 }
 
-/** A POST /v1 route an add-on mounts through serve(): core authenticates and parses first, then sends the
- * returned value as 200 JSON. Unset, `storeReady` means hippo.db's local files; a required group always passes. */
+/** A POST /v1 route an add-on mounts through serve(): core authenticates and parses first, then sends the returned
+ * value as 200 JSON. Unset, `storeReady` means hippo.db's local files; `loop: 'off'` fences it as a built-in row's. */
 export interface AddonRoute {
   readonly path: string;
   readonly handler: (call: AddonCall) => Promise<JsonValue>;
   readonly storeReady?: StoreGroup;
+  readonly loop?: 'off';
 }
 
 export interface RateLimitSpec { ratePerSec: number; burst: number }
