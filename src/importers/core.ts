@@ -77,7 +77,7 @@ export function importEntries(
   // handle.
   return withRequestStoresSync(() => {
     for (const raw of chunks) {
-      const { chunk, wasRedacted } = prepareImportChunk(raw, allTags);
+      const { chunk, wasRedacted } = prepareImportChunk(raw);
 
       const skip = skipReason(chunk, keys);
       if (skip !== 'too-short') total++;
@@ -125,9 +125,9 @@ function skipReason(chunk: string, keys: ReturnType<typeof storedTextKeys>): 'to
 }
 
 /** The secret-vetted chunk capped at 1000 chars, and whether vetting changed it. */
-function prepareImportChunk(raw: string, allTags: string[]) {
+function prepareImportChunk(raw: string) {
   const original = raw.trim();
-  const trimmed = vetSecrets(original, allTags, true).content;
+  const trimmed = vetSecrets(original).content;
   const wasRedacted = trimmed !== original;
   if (trimmed.length > 1000) {
     log.warn(`imported memory truncated from ${trimmed.length} to 1000 chars`);

@@ -224,7 +224,7 @@ async function writeChangedNote(
 
   // remember() owns the write; the `echo` from createMemory only fills the ImportResult, with its id reconciled to the
   // row that landed.
-  const content = vetSecrets(body, tags, true).content;
+  const content = vetSecrets(body).content;
   const echo = createMemory(content, {
     kind: 'raw',
     tags,

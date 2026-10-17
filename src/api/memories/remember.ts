@@ -66,7 +66,7 @@ export interface RememberResult {
   tags: string[];
   /** Set only when untrusted content was flagged and quarantined instead of stored under its requested scope. */
   quarantined?: { reason: string };
-  /** Set only when the content held secret material: untrusted text had it redacted, typed text was stored as sent. */
+  /** Set only when the content held secret material, which was redacted before storing. */
   warnings?: string[];
   /** Set only when the write's event was logged before: nothing was stored, so `id` names no row; `memoryId` is the id
    * the first write logged. */
@@ -116,7 +116,7 @@ function prepareRemember(ctx: Context, opts: RememberOptions): PreparedRemember 
   if (opts.project) assertCallerProject(opts.project);
   assertOwnerIsCallers(ctx, opts.owner);
   const requestedScope = rememberScope(ctx, opts);
-  const vetted = vetSecrets(opts.content, opts.tags ?? [], opts.untrusted === true);
+  const vetted = vetSecrets(opts.content);
   const detection = opts.untrusted ? detectInstruction(vetted.content) : { flagged: false, reason: null };
   const local = opts.local ?? {};
   const created = createMemory(vetted.content, {
