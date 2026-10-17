@@ -15,6 +15,7 @@ import {
   rowToEntry,
 } from './rows.js';
 import { onHandle, openStore } from './open.js';
+import { cachedStatement } from './statement-cache.js';
 import { escapeLike } from '../util/escape.js';
 import { placeholders } from '../util/sql.js';
 import type { OriginFilter } from './port/types.js';
@@ -140,22 +141,6 @@ function searchPredicates(
     archivedClauseAlias, archivedClauseTenantOnly,
     aliasScope, plainScope, scopeParams, currentAlias, currentNoAlias,
   };
-}
-
-const STATEMENT_CACHE_MAX = 32;
-const statementCache = new WeakMap<DatabaseSyncLike, Map<string, ReturnType<DatabaseSyncLike['prepare']>>>();
-
-/** The hot candidate queries run on every recall; keyed by handle, so a closed handle takes its statements along. */
-function cachedStatement(db: DatabaseSyncLike, sql: string): ReturnType<DatabaseSyncLike['prepare']> {
-  let byText = statementCache.get(db);
-  if (!byText) statementCache.set(db, (byText = new Map()));
-  let stmt = byText.get(sql);
-  if (!stmt) {
-    // Tenant and scope clauses vary the text, so the cap keeps a long-lived handle from growing without bound.
-    if (byText.size >= STATEMENT_CACHE_MAX) byText.clear();
-    byText.set(sql, (stmt = db.prepare(sql)));
-  }
-  return stmt;
 }
 
 /** Every admitted row, oldest first; the no-terms path and the last-resort fallback share it. */

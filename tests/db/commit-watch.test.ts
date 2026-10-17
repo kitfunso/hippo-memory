@@ -47,6 +47,20 @@ describe('watchCommits', () => {
     expect(db.prepare('SELECT COUNT(*) AS n FROM t').get()).toEqual({ n: 2 });
   });
 
+  it('marks every autocommit run of a statement prepared once, as a cached statement runs in later jobs', () => {
+    const { db, marks } = watched();
+    const insert = db.prepare('INSERT INTO t (v) VALUES (?)');
+    expect(marks()).toBe(0);
+    insert.run(1);
+    insert.run(2);
+    expect(marks()).toBe(2);
+    db.exec('BEGIN');
+    insert.run(3);
+    expect(marks()).toBe(2);
+    db.exec('COMMIT');
+    expect(marks()).toBe(3);
+  });
+
   it('counts reads and pragmas as never committing, and an unknown statement as a commit', () => {
     const { db, marks } = watched();
     db.exec('PRAGMA user_version');
