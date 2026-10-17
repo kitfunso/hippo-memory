@@ -6,6 +6,7 @@ import { isSharedStore } from '../core/config.js';
 import { handleMcpRequest, mcpErrorResponse, type McpContext, type McpRequest } from '../mcp/server.js';
 import { HttpError, readBody, sendJson } from '../util/http-util.js';
 import { errorFields, log } from '../util/log.js';
+import { callName } from '../mcp/protocol.js';
 import { assertCallerProject } from '../core/project-identity.js';
 import type { CallerProject } from '../api/prompt-hook.js';
 import { buildContextWithAuth, heartbeatVerdict, readAuthHeader, requireAuth } from './auth.js';
@@ -117,13 +118,7 @@ export async function handleMcpPost(req: IncomingMessage, res: ServerResponse, o
   try {
     mcpRes = await handleMcpRequest(rpcReq, mcpContextFor(ctx, buildMcpClientKey(req), opts.autoSleep, project));
   } catch (err) {
-    const tool = rpcReq.params?.name;
-    mcpRes = mcpErrorResponse(
-      rpcReq.id,
-      err,
-      undefined,
-      isJsonString(tool) ? `${rpcReq.method} ${tool.slice(0, 128)}` : rpcReq.method,
-    );
+    mcpRes = mcpErrorResponse(rpcReq.id, err, undefined, callName(rpcReq));
   }
   if (mcpRes === null) {
     // Notification — no body, 202 Accepted.

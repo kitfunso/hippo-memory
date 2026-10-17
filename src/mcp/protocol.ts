@@ -10,7 +10,7 @@ import { getGlobalRoot } from '../sharing/global-store.js';
 import { loadConfig } from '../core/config.js';
 import type { Actor as ApiActor } from '../api/index.js';
 import { findHippoStoreDir, type ResolveProjectIdentityOpts } from '../core/project-identity.js';
-import { type JsonValue } from '../util/json.js';
+import { type JsonValue, isJsonString } from '../util/json.js';
 import type { CallerProject } from '../api/prompt-hook.js';
 import type { HippoStore } from '../store/index.js';
 import type { StoreReach } from '../store/port.js';
@@ -44,6 +44,12 @@ interface McpResponse {
   id: number | string | null;
   result?: unknown;
   error?: { code: number; message: string; data?: { requestId: string } };
+}
+
+/** The method, with the tool's name for a tool call, so a failure or timeout names what ran. */
+export function callName(req: McpRequest): string {
+  const tool = req.params?.name;
+  return isJsonString(tool) ? `${req.method} ${tool.slice(0, 128)}` : req.method;
 }
 
 /** JSON-RPC reply for a request that threw: typed API errors keep

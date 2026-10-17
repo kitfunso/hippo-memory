@@ -365,12 +365,11 @@ export interface ConfidenceFacets {
 }
 
 export function confidenceFacets(entry: ConfidenceInputs, now: Date = evalNow()): ConfidenceFacets {
-  return facetsOf(entry, now);
-}
-
-export function facetsOf(entry: ConfidenceInputs, now: Date): ConfidenceFacets {
   return { tier: entry.confidence, agedOut: isAgedOut(entry, now) };
 }
+
+// SHORTCUT: alias only for src/dashboard (another session's file); delete when it calls confidenceFacets.
+export { confidenceFacets as facetsOf };
 
 // An aged-out row warns on its own, since its stored tier alone would hide it.
 export function confidenceLabel(entry: MemoryEntry, now: Date = evalNow()) {
