@@ -5,11 +5,19 @@ import { createServer as createHttpsServer } from 'node:https';
 import { errorMessage, log } from '../util/log.js';
 import type { ServeOpts } from './types.js';
 
+// A year; no includeSubDomains, since hippo cannot speak for the other hosts under its domain.
+const HSTS = 'max-age=31536000';
+
 export function createListener(tls: ServeOpts['tls'], onRequest: RequestListener): Server {
   if (!tls) return createHttpServer(onRequest);
+  // Only a listener that holds the certificate can promise https; behind a proxy, the proxy sends this header.
+  const withHsts: RequestListener = (req, res) => {
+    res.setHeader('Strict-Transport-Security', HSTS);
+    onRequest(req, res);
+  };
   try {
     // Explicit so the floor does not move with the runtime's default.
-    return createHttpsServer({ cert: tls.cert, key: tls.key, minVersion: 'TLSv1.2' }, onRequest);
+    return createHttpsServer({ cert: tls.cert, key: tls.key, minVersion: 'TLSv1.2' }, withHsts);
   } catch (err) {
     // OpenSSL's own text names no file, so the operator would not know which input was refused.
     throw new Error(`hippo serve: the TLS certificate or key was refused: ${errorMessage(err)}`, { cause: err });
