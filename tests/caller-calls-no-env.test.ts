@@ -6,7 +6,7 @@ import * as path from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
 import { _resetSharedStoreCacheForTests } from '../src/core/config.js';
-import { clearProjectIdentityCache } from '../src/core/project-identity.js';
+import { _resetProjectIdentityCacheForTests } from '../src/core/project-identity.js';
 import { PRE_COMPACT_INSTRUCTION } from '../src/capture/compaction-record.js';
 import type { Context } from '../src/api/types.js';
 import {
@@ -38,7 +38,7 @@ beforeEach(() => {
   dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-caller-no-env-'));
   for (const name of ['HOME', 'USERPROFILE', 'HIPPO_HOME']) vi.stubEnv(name, dir);
   vi.stubEnv('HIPPO_TENANT', ENV_TENANT);
-  clearProjectIdentityCache();
+  _resetProjectIdentityCacheForTests();
   _resetSharedStoreCacheForTests();
   root = path.join(dir, 'server', '.hippo');
   fs.mkdirSync(root, { recursive: true });

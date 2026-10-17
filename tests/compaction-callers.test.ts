@@ -10,7 +10,7 @@ import { closeHippoDb, openHippoDb, runWithRequestStores, type DatabaseSyncLike 
 import { isStoreBusy } from '../src/store/busy.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { _resetSharedStoreCacheForTests } from '../src/core/config.js';
-import { clearProjectIdentityCache } from '../src/core/project-identity.js';
+import { _resetProjectIdentityCacheForTests } from '../src/core/project-identity.js';
 import { PRE_COMPACT_INSTRUCTION } from '../src/capture/compaction-record.js';
 import { markSnapshotSaved, recordSnapshotSaved, recordSummary, saveItems, startCompaction, type ItemContext } from '../src/store/compactions-record.js';
 import { captureToolFailure, storeLesson } from '../src/capture/capture-error.js';
@@ -54,7 +54,7 @@ let root: string;
 beforeEach(() => {
   dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-compaction-callers-'));
   for (const name of ['HOME', 'USERPROFILE', 'HIPPO_HOME']) vi.stubEnv(name, dir);
-  clearProjectIdentityCache();
+  _resetProjectIdentityCacheForTests();
   _resetSharedStoreCacheForTests();
   root = path.join(dir, 'server', '.hippo');
   fs.mkdirSync(root, { recursive: true });

@@ -3,7 +3,7 @@ import {
   vecDot, vecNorm, vecScale, vecAdd, vecSub, vecZero, vecNormalize, vecClampMagnitude,
   computeMass, computeCharge, computeTemperature,
   queryGravityMagnitude, velocityAlignmentBonus, attractionForce, repulsionForce, dragForce,
-  physicsScore, simulate, computeSystemEnergy, applyOutcomeFeedback,
+  physicsScore, simulate, computeSystemEnergy,
   type PhysicsParticle, type ForceContext,
 } from '../src/core/physics.js';
 import { DEFAULT_PHYSICS_CONFIG } from '../src/core/physics-config.js';
@@ -638,64 +638,6 @@ describe('Simulation', () => {
       expect(energy.kinetic).toBe(0);
       expect(energy.potential).toBe(0);
       expect(energy.total).toBe(0);
-    });
-  });
-});
-
-// ---------------------------------------------------------------------------
-// 6. Outcome feedback
-// ---------------------------------------------------------------------------
-
-describe('Outcome feedback', () => {
-  describe('applyOutcomeFeedback', () => {
-    it('good outcome nudges position toward query', () => {
-      const p = makeParticle({ memoryId: 'a', position: [1, 0, 0], temperature: 1.0 });
-      const query = [0, 1, 0];
-      const posBefore = [...p.position];
-
-      applyOutcomeFeedback(p, query, true, 0.1);
-
-      // After nudge toward [0,1,0], the y component should increase
-      expect(p.position[1]).toBeGreaterThan(posBefore[1]);
-      // Position should still be normalized
-      expect(vecNorm(p.position)).toBeCloseTo(1.0, 10);
-    });
-
-    it('bad outcome nudges position away from query', () => {
-      const p = makeParticle({ memoryId: 'a', position: vecNormalize([1, 1, 0]), temperature: 1.0 });
-      const query = [0, 1, 0];
-      const cosBefore = vecDot(p.position, vecNormalize(query));
-
-      applyOutcomeFeedback(p, query, false, 0.1);
-
-      const cosAfter = vecDot(p.position, vecNormalize(query));
-      // Should be farther from query direction
-      expect(cosAfter).toBeLessThan(cosBefore);
-      // Position should still be normalized
-      expect(vecNorm(p.position)).toBeCloseTo(1.0, 10);
-    });
-
-    it('cold particle (low temperature) barely moves', () => {
-      const pHot = makeParticle({ memoryId: 'hot', position: [1, 0, 0], temperature: 1.0 });
-      const pCold = makeParticle({ memoryId: 'cold', position: [1, 0, 0], temperature: 0.01 });
-      const query = [0, 1, 0];
-
-      applyOutcomeFeedback(pHot, query, true, 0.1);
-      applyOutcomeFeedback(pCold, query, true, 0.1);
-
-      // Hot particle should move more (higher y component)
-      expect(pHot.position[1]).toBeGreaterThan(pCold.position[1]);
-    });
-
-    it('feedbackAlpha controls nudge magnitude', () => {
-      const pSmall = makeParticle({ memoryId: 'sm', position: [1, 0, 0], temperature: 1.0 });
-      const pLarge = makeParticle({ memoryId: 'lg', position: [1, 0, 0], temperature: 1.0 });
-      const query = [0, 1, 0];
-
-      applyOutcomeFeedback(pSmall, query, true, 0.001);
-      applyOutcomeFeedback(pLarge, query, true, 0.5);
-
-      expect(pLarge.position[1]).toBeGreaterThan(pSmall.position[1]);
     });
   });
 });

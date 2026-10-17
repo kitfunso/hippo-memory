@@ -20,7 +20,7 @@ import { writeEntry } from '../src/store/entry-writes.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { getContext } from '../src/api/index.js';
-import { clearProjectIdentityCache } from '../src/core/project-identity.js';
+import { _resetProjectIdentityCacheForTests } from '../src/core/project-identity.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 
 let tmpRoot: string;
@@ -47,7 +47,7 @@ beforeEach(() => {
   initStore(globalStore);
   origHippoHome = process.env.HIPPO_HOME;
   process.env.HIPPO_HOME = globalStore;
-  clearProjectIdentityCache();
+  _resetProjectIdentityCacheForTests();
 
   writeEntry(projA, createMemory(ALPHA, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, pinned: true }));
   writeEntry(globalStore, { ...createMemory(GLOBAL_PREF, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, pinned: true }), origin_project: '' });

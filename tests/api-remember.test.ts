@@ -8,7 +8,7 @@ import { loadAllEntries, readEntry } from '../src/store/entry-reads.js';
 import { remember } from '../src/api/index.js';
 import { BadRequestError } from '../src/core/api-errors.js';
 import { _resetSharedStoreCacheForTests } from '../src/core/config.js';
-import { clearProjectIdentityCache } from '../src/core/project-identity.js';
+import { _resetProjectIdentityCacheForTests } from '../src/core/project-identity.js';
 import { apiCtx } from './_helpers/api-ctx.js';
 
 describe('api.remember', () => {
@@ -51,7 +51,7 @@ describe("api.remember stamps the caller's project", () => {
   let tmp: string;
   beforeEach(() => {
     tmp = mkdtempSync(join(tmpdir(), 'hippo-api-rem-proj-'));
-    clearProjectIdentityCache();
+    _resetProjectIdentityCacheForTests();
     _resetSharedStoreCacheForTests();
     return () => {
       _resetSharedStoreCacheForTests();

@@ -4,14 +4,15 @@ import {
   promptTokens,
   scoreOverlap,
   gatePromptRecall,
-  promptRecallFtsQuery,
   rarestPromptTerms,
   ftsTermParts,
   rarestFtsQuery,
   RAREST_TERM_COUNT,
-  PROMPT_RECALL_MAX_CHARS,
   type PromptRecallGate,
 } from '../src/core/prompt-recall.js';
+
+// promptTokens reads only this many prompt chars; pinned here so a change to the cut shows up as a test edit.
+const PROMPT_RECALL_MAX_CHARS = 4000;
 
 function cand(id: string, tokens: string[]) {
   return { id, tokens: new Set(tokens) };
@@ -124,18 +125,6 @@ describe('gatePromptRecall', () => {
     const g = gate({ threshold: 0, minShared: 2, maxItems: 5 });
     const out = gatePromptRecall(p, items, g);
     expect(out.map((r) => r.item.id)).toEqual(['aaa', 'zzz']);
-  });
-});
-
-describe('promptRecallFtsQuery', () => {
-  it('joins the first maxTerms tokens in insertion order', () => {
-    const p = new Set(['alpha', 'beta', 'gamma', 'delta']);
-    expect(promptRecallFtsQuery(p, 2)).toBe('alpha beta');
-  });
-
-  it('defaults the cap to 32 terms', () => {
-    const p = new Set(Array.from({ length: 40 }, (_, i) => `tok${i}`));
-    expect(promptRecallFtsQuery(p).split(' ')).toHaveLength(32);
   });
 });
 

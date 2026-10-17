@@ -14,7 +14,7 @@ import { saveEmbeddingIndex } from '../src/store/vector-index.js';
 import type { JsonValue } from '../src/util/json.js';
 import { Layer, type CreateMemoryOptions, type MemoryEntry } from '../src/core/memory.js';
 import { lastRecalledIds } from '../src/mcp/session-state.js';
-import { clearProjectIdentityCache } from '../src/core/project-identity.js';
+import { _resetProjectIdentityCacheForTests } from '../src/core/project-identity.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { listMemoryConflicts, replaceDetectedConflicts } from '../src/store/conflicts.js';
 import { loadAllEntries, readEntry } from '../src/store/entry-reads.js';
@@ -105,7 +105,7 @@ beforeAll(async () => {
   process.env.HIPPO_HOME = path.join(tmp, 'global');
   process.env.HIPPO_V1_RPS = '0';
   process.env.OPENAI_API_KEY = 'test-key-not-real';
-  clearProjectIdentityCache();
+  _resetProjectIdentityCacheForTests();
   _resetSharedStoreCacheForTests();
   // The server shares this process, so its own requests pass through and only the embedding call is faked.
   vi.stubGlobal('fetch', vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
@@ -185,7 +185,7 @@ afterAll(async () => {
   vi.unstubAllGlobals();
   for (const [name, value] of Object.entries(origEnv)) restoreEnv(name, value);
   _resetSharedStoreCacheForTests();
-  clearProjectIdentityCache();
+  _resetProjectIdentityCacheForTests();
   fs.rmSync(tmp, { recursive: true, force: true });
 });
 

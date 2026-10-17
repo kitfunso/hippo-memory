@@ -12,7 +12,7 @@ export interface PromptRecallGate {
 }
 
 // Latency bound, not tuned: fixed in the prereg regardless of gate config.
-export const PROMPT_RECALL_MAX_CHARS = 4000;
+const PROMPT_RECALL_MAX_CHARS = 4000;
 
 /** Distinct content tokens: longer than 2 chars, not a stop word. */
 export function contentTokens(text: string): Set<string> {
@@ -62,16 +62,6 @@ export function gatePromptRecall<T extends { id: string; tokens: ReadonlySet<str
   }
   kept.sort((a, b) => (b.score - a.score) || (a.item.id < b.item.id ? -1 : a.item.id > b.item.id ? 1 : 0));
   return kept.slice(0, gate.maxItems);
-}
-
-/** The prompt's content tokens as an FTS pre-select query, capped at `maxTerms`. */
-export function promptRecallFtsQuery(p: ReadonlySet<string>, maxTerms = 32): string {
-  const terms: string[] = [];
-  for (const t of p) {
-    if (terms.length >= maxTerms) break;
-    terms.push(t);
-  }
-  return terms.join(' ');
 }
 
 // bm25 ranks every row matching any term, so fewer and rarer terms bound latency; 8 is a bound, not tuned.

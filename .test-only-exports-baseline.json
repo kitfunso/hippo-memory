@@ -1,5 +1,5 @@
 {
-  "count": 40,
+  "count": 35,
   "exports": [
     "src/api/availability.ts:DEFAULT_RECENCY_WINDOW_MS",
     "src/capture/extract.ts:extractFromText",
@@ -15,11 +15,6 @@
     "src/consolidate/half-life-migration.ts:storeHalfLifeBase",
     "src/consolidate/memory-value.ts:MV_FEATURE_NAMES",
     "src/consolidate/memory-value.ts:computeMvFeatures",
-    "src/core/physics.ts:applyOutcomeFeedback",
-    "src/core/project-identity.ts:clearProjectIdentityCache",
-    "src/core/prompt-recall.ts:PROMPT_RECALL_MAX_CHARS",
-    "src/core/prompt-recall.ts:promptRecallFtsQuery",
-    "src/core/recall-scope.ts:PERSONAL_OWNER_MAX",
     "src/dashboard/dashboard-snapshot.ts:buildSnapshot",
     "src/embeddings/provider.ts:isEmbeddingConfigured",
     "src/embeddings/provider.ts:resolveEmbeddingIdentity",

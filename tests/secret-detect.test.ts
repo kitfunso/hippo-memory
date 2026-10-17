@@ -19,7 +19,7 @@ import { syncGlobalToLocal } from '../src/sharing/global-sync.js';
 import { getGlobalRoot } from '../src/sharing/global-store.js';
 import { copyToGlobal } from '../src/store/sqlite/global-promote.js';
 import { getContext } from '../src/api/index.js';
-import { clearProjectIdentityCache } from '../src/core/project-identity.js';
+import { _resetProjectIdentityCacheForTests } from '../src/core/project-identity.js';
 import { ASSIGNED_SECRET_LINES, ORDINARY_CONFIG_LINES } from './_helpers/secret-shapes.js';
 import { fastestRatio, type TimedRun } from './_helpers/fastest-ratio.js';
 import { apiCtx } from './_helpers/api-ctx.js';
@@ -200,7 +200,7 @@ describe('producer + sync vetoes (real stores)', () => {
     initStore(globalStore);
     origHippoHome = process.env.HIPPO_HOME;
     process.env.HIPPO_HOME = globalStore;
-    clearProjectIdentityCache();
+    _resetProjectIdentityCacheForTests();
   });
 
   afterEach(() => {

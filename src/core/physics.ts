@@ -444,23 +444,6 @@ function applyClusterAmplification(
 }
 
 /**
- * Nudges a particle toward (good outcome) or away from (bad outcome) the query embedding; new memories respond more
- * (temperature). Mutates in place.
- */
-export function applyOutcomeFeedback(
-  particle: PhysicsParticle,
-  queryEmbedding: number[],
-  good: boolean,
-  feedbackAlpha: number,
-): void {
-  if (particle.position.length === 0 || particle.position.length !== queryEmbedding.length) return;
-  const sign = good ? 1 : -1;
-  const direction = vecSub(queryEmbedding, particle.position);
-  const nudge = vecScale(direction, sign * feedbackAlpha * particle.temperature);
-  particle.position = vecNormalize(vecAdd(particle.position, nudge));
-}
-
-/**
  * Initialize physics state for a memory from its embedding vector; returns the new particle without persisting (the
  * caller must save).
  */

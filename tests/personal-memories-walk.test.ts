@@ -15,7 +15,7 @@ import { closeHippoDb, openHippoDb } from '../src/db/index.js';
 import { insertEntityAt } from './_helpers/graph-seed.js';
 import type { JsonValue } from '../src/util/json.js';
 import { Layer, generateId, type CreateMemoryOptions, type MemoryEntry } from '../src/core/memory.js';
-import { clearProjectIdentityCache } from '../src/core/project-identity.js';
+import { _resetProjectIdentityCacheForTests } from '../src/core/project-identity.js';
 import { promptHookContext } from '../src/api/prompt-hook.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import type { AuthResolver } from '../src/server/types.js';
@@ -141,7 +141,7 @@ beforeAll(async () => {
   // File-wide, not per test: the one server reads both at boot and on every request.
   process.env.HIPPO_HOME = path.join(tmp, 'global');
   process.env.HIPPO_V1_RPS = '0'; // every call comes from one address, so the per-address limiter would cut the walk short
-  clearProjectIdentityCache();
+  _resetProjectIdentityCacheForTests();
   _resetSharedStoreCacheForTests();
   store = path.join(tmp, 'srv', 'hippo-team');
   fs.mkdirSync(store, { recursive: true });
@@ -172,7 +172,7 @@ afterAll(async () => {
   restoreEnv('HIPPO_HOME');
   restoreEnv('HIPPO_V1_RPS');
   _resetSharedStoreCacheForTests();
-  clearProjectIdentityCache();
+  _resetProjectIdentityCacheForTests();
   fs.rmSync(tmp, { recursive: true, force: true });
 });
 
